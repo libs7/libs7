@@ -10,6 +10,17 @@
 #include <notcurses/direct.h>
 #include "s7.h"
 
+/* notcurses does not export its version number */
+#ifndef NC_1_7_4
+  #define NC_1_7_4 0
+#endif
+#ifndef NC_1_7_2
+  #define NC_1_7_2 1
+#endif
+#ifndef NC_2_0_0
+  #define NC_2_0_0 0
+#endif
+
 static s7_int s7_integer_checked(s7_scheme *sc, s7_pointer val)
 {
   if (!s7_is_integer(val))
@@ -30,17 +41,6 @@ static const char *s7_string_checked(s7_scheme *sc, s7_pointer val)
     s7_wrong_type_arg_error(sc, __func__, 0, val, "a string");
   return(s7_string(val));
 }
-
-/* notcurses does not export its version number */
-#ifndef NC_1_7_4
-  #define NC_1_7_4 0
-#endif
-#ifndef NC_1_7_2
-  #define NC_1_7_2 1
-#endif
-#ifndef NC_2_0_0
-  #define NC_2_0_0 0
-#endif
 
 static s7_pointer g_notcurses_version(s7_scheme *sc, s7_pointer args)
 {
@@ -151,11 +151,6 @@ static s7_pointer g_ncdirect_flush(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_ncdirect_inputready_fd(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncdirect_inputready_fd((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
-}
-
-static s7_pointer g_ncdirect_getc_nonblocking(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncdirect_flush((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
 }
 
 static s7_pointer g_ncdirect_getc(s7_scheme *sc, s7_pointer args)
@@ -1118,11 +1113,6 @@ static s7_pointer g_ncplane_channels(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, ncplane_channels((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1))));
 }
 
-static s7_pointer g_ncplane_attr(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncplane_attr((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1))));
-}
-
 static s7_pointer g_ncplane_erase(s7_scheme *sc, s7_pointer args)
 {
   ncplane_erase((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1));
@@ -1189,6 +1179,28 @@ static s7_pointer g_ncplane_set_bg(s7_scheme *sc, s7_pointer args)
 }
 #endif
 
+#if NC_2_0_0
+static s7_pointer g_ncplane_set_styles(s7_scheme *sc, s7_pointer args)
+{
+  ncplane_set_styles((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1),
+		     (unsigned)s7_integer_checked(sc, s7_cadr(args)));
+  return(s7_f(sc));
+}
+
+static s7_pointer g_ncplane_on_styles(s7_scheme *sc, s7_pointer args)
+{
+  ncplane_on+styles((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
+		    (unsigned)s7_integer_checked(sc, s7_cadr(args)));
+  return(s7_f(sc));
+}
+
+static s7_pointer g_ncplane_off_styles(s7_scheme *sc, s7_pointer args)
+{
+  ncplane_off_styles((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
+		     (unsigned)s7_integer_checked(sc, s7_cadr(args)));
+  return(s7_f(sc));
+}
+#else
 static s7_pointer g_ncplane_styles_set(s7_scheme *sc, s7_pointer args)
 {
   ncplane_styles_set((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1),
@@ -1209,6 +1221,7 @@ static s7_pointer g_ncplane_styles_off(s7_scheme *sc, s7_pointer args)
 		     (unsigned)s7_integer_checked(sc, s7_cadr(args)));
   return(s7_f(sc));
 }
+#endif
 
 static s7_pointer g_ncplane_set_fg_palindex(s7_scheme *sc, s7_pointer args)
 {
@@ -1237,12 +1250,6 @@ static s7_pointer g_ncplane_set_bg_alpha(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_ncplane_set_channels(s7_scheme *sc, s7_pointer args)
 {
   ncplane_set_channels((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), (uint64_t)s7_integer_checked(sc, s7_cadr(args)));
-  return(s7_f(sc));
-}
-
-static s7_pointer g_ncplane_set_attr(s7_scheme *sc, s7_pointer args)
-{
-  ncplane_set_attr((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), (uint32_t)s7_integer_checked(sc, s7_cadr(args)));
   return(s7_f(sc));
 }
 
@@ -4114,7 +4121,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(CELL_BG_ALPHA_MASK);
   nc_int(CELL_FG_ALPHA_MASK);
 
-#if NC_1_7_4
+#if (!NC_1_7_2)
   nc_int(CHANNEL_ALPHA_MASK);
 #else
   nc_int(NCCHANNEL_ALPHA_MASK);
@@ -4125,7 +4132,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(CELL_ALPHA_BLEND);
   nc_int(CELL_ALPHA_OPAQUE);
 
-#if NC_1_7_4
+#if (!NC_1_7_2)
   nc_int(NCPLANE_OPTION_HORALIGNED);
 #endif
 
@@ -4280,7 +4287,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncdirect_palette_size, 1, 0, false);
   nc_func(ncdirect_flush, 1, 0, false);
   nc_func(ncdirect_inputready_fd, 1, 0, false);
-  nc_func(ncdirect_getc_nonblocking, 1, 0, false);
   nc_func(ncdirect_getc, 4, 0, false);
   nc_func(ncdirect_fg_default, 1, 0, false);
   nc_func(ncdirect_bg_default, 1, 0, false);
@@ -4423,7 +4429,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_home, 1, 0, false);
   nc_func(ncplane_below, 1, 0, false);
   nc_func(ncplane_channels, 1, 0, false);
-  nc_func(ncplane_attr, 1, 0, false);
   nc_func(ncplane_erase, 1, 0, false);
   nc_func(ncplane_set_fg_default, 1, 0, false);
   nc_func(ncplane_set_bg_default, 1, 0, false);
@@ -4436,15 +4441,20 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_set_fg, 2, 0, false);
   nc_func(ncplane_set_bg, 2, 0, false);
 #endif
+#if NC_2_0_0_0
+  nc_func(ncplane_set_styles, 2, 0, false);
+  nc_func(ncplane_on_styles, 2, 0, false);
+  nc_func(ncplane_off_styles, 2, 0, false);
+#else
   nc_func(ncplane_styles_set, 2, 0, false);
   nc_func(ncplane_styles_on, 2, 0, false);
   nc_func(ncplane_styles_off, 2, 0, false);
+#endif
   nc_func(ncplane_set_fg_palindex, 2, 0, false);
   nc_func(ncplane_set_bg_palindex, 2, 0, false);
   nc_func(ncplane_set_fg_alpha, 2, 0, false);
   nc_func(ncplane_set_bg_alpha, 2, 0, false);
   nc_func(ncplane_set_channels, 2, 0, false);
-  nc_func(ncplane_set_attr, 2, 0, false);
   nc_func(ncplane_dim_yx, 1, 0, false);
 
   nc_func(ncplane_set_base_cell, 2, 0, false);

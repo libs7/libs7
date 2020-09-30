@@ -73634,7 +73634,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
        (c_function_all_args(func) >= 2)) ||
       ((is_c_function_star(func)) &&
        (c_function_all_args(func) == 2) &&
-       (!is_pair(arg1)) && (!is_symbol(arg1))))  /* trying to protect against arg1 evaluating to a keyword */
+       (!is_pair(arg1)) && (!is_symbol(arg1) && (!is_keyword(arg2)))))  /* trying to protect against arg1 evaluating to a keyword, or arg2 being a keyword */
     {
       /* this is a mess */
       bool func_is_safe;
@@ -74300,7 +74300,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
     }
 
   if ((is_c_function_star(func)) &&
-      (fx_count(sc, expr) == 2))
+      (fx_count(sc, expr) == 2) &&
+      (!is_keyword(arg2)))
     {
       if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
       set_optimized(expr);
@@ -98086,6 +98087,7 @@ int main(int argc, char **argv)
  * in OSX:    gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
  *   (clang also needs LDFLAGS="-Wl,-export-dynamic" in Linux and "-fPIC")
  * (s7.c compile time 17-Jun-20 48 secs)
+ * musl works, but there is some problem in libgsl.scm with gsl/gsl_blas.h I think
  */
 #endif
 
@@ -98140,5 +98142,5 @@ int main(int argc, char **argv)
  * nrepl+notcurses, menu items, (if selection, C-space+move also), 
  *  colorize: offer hook into all repl output and example of colorizing
  *    nc-display, but what about input?
- * t725 gaps
+ * t725 gaps, tmv.scm? f->mv in t725, also f(a)->case a etc
  */
