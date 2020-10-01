@@ -303,7 +303,7 @@
 #endif
 
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+  #define _GNU_SOURCE
 /* for qsort_r, grumble... */
 #endif
 
@@ -4491,7 +4491,6 @@ static const char* op_names[NUM_OPS] =
 #endif
 
 
-/* #define in_reader(Sc)     ((sc->cur_op >= OP_READ_LIST) && (sc->cur_op <= OP_READ_DONE) && (is_input_port(current_input_port(sc)))) */
 #define is_safe_c_op(op)  ((op >= OP_SAFE_C_D) && (op < OP_THUNK))
 #define is_unknown_op(op) ((op >= OP_UNKNOWN) && (op <= OP_UNKNOWN_FP))
 #define is_h_safe_c_d(P)  (optimize_op(P) == HOP_SAFE_C_D)
@@ -71764,7 +71763,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 
       if ((is_safe_procedure(func)) ||
 	  (c_function_call(func) == g_list))          /* (list) is safe, (values) is not (in this context -- possibly used as list-values arg) */
-	{
+	{	
 	  set_safe_optimize_op(expr, hop + OP_SAFE_C_D);
 	  choose_c_function(sc, expr, func, 0);
 	  return(OPT_T);
@@ -72084,6 +72083,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
     {
       if (func_is_safe)                  /* safe c function */
 	{
+	  if ((is_keyword(arg1)) && (is_c_function_star(func))) return(OPT_F);
 	  set_safe_optimize_op(expr, hop + ((symbols == 0) ? OP_SAFE_C_D : OP_SAFE_C_S));
 	  choose_c_function(sc, expr, func, 1);
 	  return(OPT_T);
@@ -72091,6 +72091,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       /* c function is not safe */
       if (symbols == 0)
 	{
+	  if ((is_keyword(arg1)) && (is_c_function_star(func))) return(OPT_F);
 	  set_unsafe_optimize_op(expr, hop + OP_C_A); /* OP_C_C never happens */
 	  fx_annotate_arg(sc, cdr(expr), e);
 	  set_opt3_arglen(expr, small_one);
@@ -73469,10 +73470,11 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
     }
 
   if ((is_c_function_star(func)) &&  /* we checked above for c_function_all_args == 1 */
-      (fx_count(sc, expr) == 1))
+      (fx_count(sc, expr) == 1) &&
+      (!is_keyword(arg1)))           /* the only arg should not be a keyword (needs error checks later) */
     {
       if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
-      set_safe_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_A); /* if one arg passed, it's obviously not a keyword-as-parameter-name */
+      set_safe_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_A); 
       fx_annotate_arg(sc, cdr(expr), e);
       set_opt3_arglen(expr, small_one);
       set_c_function(expr, func);
@@ -74411,7 +74413,10 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	    {
 	      set_optimized(expr);
 	      if (symbols == 0)
-		set_optimize_op(expr, hop + OP_SAFE_C_D);
+		{
+		  if ((is_keyword(arg3)) && (is_c_function_star(func))) return(OPT_F);
+		  set_optimize_op(expr, hop + OP_SAFE_C_D);
+		}
 	      else
 		{
 		  if (symbols == 3)
@@ -74576,6 +74581,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	    set_optimize_op(expr, hop + OP_C_SCS);
 	  else
 	    {
+	      if ((is_keyword(arg3)) && (is_c_function_star(func))) return(OPT_F);
 	      fx_annotate_args(sc, cdr(expr), e);
 	      set_opt3_arglen(expr, small_three);
 	      set_optimize_op(expr, hop + OP_C_FX);
@@ -87548,6 +87554,10 @@ static void op_closure_fx(s7_scheme *sc)
     }
   sc->curlet = e;
   sc->z = sc->nil;
+  /* let_id set above can be out-of-date if setting up the let uses unrelated-but-same-name symbols,
+   *   just_another_slot and just_add_slot do not set or use the id's
+   */
+  let_set_id(e, ++sc->let_number);
   id = let_id(e);
   for (slot = let_slots(e); tis_slot(slot); slot = next_slot(slot))
     {
@@ -97786,6 +97796,8 @@ void s7_free(s7_scheme *sc)
   s7_int i;
   gc_list_t *gp;
 
+  /* in the gmp case, we also need to free sc->bigints and friends and each element of those lists, and maybe mpz|*_clear them as well */
+
   g_gc(sc, sc->nil); /* probably not needed (my simple tests work fine if the gc call is omitted) */
 
   gp = sc->vectors;
@@ -98143,4 +98155,5 @@ int main(int argc, char **argv)
  *  colorize: offer hook into all repl output and example of colorizing
  *    nc-display, but what about input?
  * t725 gaps, tmv.scm? f->mv in t725, also f(a)->case a etc
+ * s7_free in gmp case
  */
