@@ -2086,6 +2086,9 @@ int main(int argc, char **argv)
     if ((!str) || (strcmp(str, "(* 3 (+ 1 2))") != 0))
       fprintf(stderr, "pretty_print: \"%s\"\n", str);
   }
+
+  s7_free(sc);
+
   return(0);
 }
 

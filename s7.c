@@ -15,18 +15,7 @@
  * (MINISCM) This is a revised and modified version by Akira KIDA.
  * (MINISCM)	current version is 0.85k4 (15 May 1994)
  * --------------------------------------------------------------------------------
- *
- * apparently tinyScheme is under the BSD license, so I guess s7 is too.
- * Here is Snd's verbiage which can apply here:
- *
- *     The authors hereby grant permission to use, copy, modify, distribute,
- *     and license this software and its documentation for any purpose.  No
- *     written agreement, license, or royalty fee is required.  Modifications
- *     to this software may be copyrighted by their authors and need not
- *     follow the licensing terms described here.
- *
- * followed by the usual all-caps shouting about liability.
- *
+ * License: 0-clause BSD
  * --------------------------------------------------------------------------------
  *
  * s7, Bill Schottstaedt, Aug-08, bil@ccrma.stanford.edu
@@ -15193,6 +15182,16 @@ static rat_locals_t *init_rat_locals_t(s7_scheme *sc)
   mpq_init(r->q);
   mpfr_inits2(sc->bignum_precision, r->error, r->ux, r->x0, r->x1, r->val, r->e0, r->e1, r->e0p, r->e1p, r->old_e0, r->old_e1, r->old_e0p, NULL);
   return(r);
+}
+
+static void free_rat_locals(s7_scheme *sc)
+{ 
+  rat_locals_t *r;
+  r = sc->ratloc;
+  mpz_clears(r->i, r->i0, r->i1, r->n, r->p0, r->q0, r->r, r->r1, r->p1, r->q1, r->old_p1, r->old_q1, NULL);
+  mpq_clear(r->q);
+  mpfr_clears(r->error, r->ux, r->x0, r->x1, r->val, r->e0, r->e1, r->e0p, r->e1p, r->old_e0, r->old_e1, r->old_e0p, NULL);
+  free(r);
 }
 
 static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
@@ -44109,7 +44108,11 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  sc->v = vec;
 	  local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 	  for (p = data, i = 0; i < len; i++, p = cdr(p))
-	    set_car(p, elements[i]);
+	    {
+	      if (is_immutable(p))
+		return(immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->sort_symbol, data)));
+	      set_car(p, elements[i]);
+	    }
 	  sc->v = sc->nil;
 	  unstack(sc); /* not pop_stack! */
 	  return(data);
@@ -44341,7 +44344,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 }
 
 /* these are for the eval sort -- sort a vector, then if necessary put that data into the original sequence */
-static s7_pointer vector_into_list(s7_pointer vect, s7_pointer lst)
+static s7_pointer vector_into_list(s7_scheme *sc, s7_pointer vect, s7_pointer lst)
 {
   s7_pointer p;
   s7_pointer *elements;
@@ -44350,7 +44353,11 @@ static s7_pointer vector_into_list(s7_pointer vect, s7_pointer lst)
   elements = s7_vector_elements(vect);
   len = vector_length(vect);
   for (i = 0, p = lst; i < len; i++, p = cdr(p))
-    set_car(p, elements[i]);
+    {
+      if (is_immutable(p))
+	return(immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->sort_symbol, lst)));
+      set_car(p, elements[i]);
+    }
   return(lst);
 }
 
@@ -93674,7 +93681,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SORT2: if (op_sort2(sc)) continue; goto HEAPSORT;
 	case OP_SORT:  if (!op_sort(sc)) goto HEAPSORT;
 	case OP_SORT3: if (op_sort3(sc)) continue; goto HEAPSORT;
-	case OP_SORT_PAIR_END:   sc->value = vector_into_list(sc->value, car(sc->args)); continue;
+	case OP_SORT_PAIR_END:   sc->value = vector_into_list(sc, sc->value, car(sc->args)); continue;
 	case OP_SORT_VECTOR_END: sc->value = vector_into_fi_vector(sc->value, car(sc->args)); continue;
 	case OP_SORT_STRING_END: sc->value = vector_into_string(sc->value, car(sc->args)); continue;
 
@@ -97266,7 +97273,7 @@ s7_scheme *s7_init(void)
 #if (!MS_WINDOWS)
   pthread_mutex_unlock(&init_lock);
 #endif
-  sc = (s7_scheme *)calloc(1, sizeof(s7_scheme)); /* malloc is not recommended here */
+  sc = (s7_scheme *)calloc(1, sizeof(s7_scheme)); /* not malloc! */
 #if S7_DEBUGGING
   cur_sc = sc;                                    /* for gdb/debugging */
 #endif
@@ -97786,6 +97793,9 @@ s7_scheme *s7_init(void)
   return(sc);
 }
 
+
+/* -------------------------------- s7_free -------------------------------- */
+
 void s7_free(s7_scheme *sc)
 {
   /* free the memory associated with sc
@@ -97857,6 +97867,51 @@ void s7_free(s7_scheme *sc)
     }
   free(gp->list);
   free(gp);
+
+#if WITH_GMP
+  /* free lists */
+  {bigint *p, *np; for (p = sc->bigints; p; p = np) {mpz_clear(p->n); np = p->nxt; free(p);}}
+  {bigrat *p, *np; for (p = sc->bigrats; p; p = np) {mpq_clear(p->q); np = p->nxt; free(p);}}
+  {bigflt *p, *np; for (p = sc->bigflts; p; p = np) {mpfr_clear(p->x); np = p->nxt; free(p);}}
+  {bigcmp *p, *np; for (p = sc->bigcmps; p; p = np) {mpc_clear(p->z); np = p->nxt; free(p);}}
+
+  /* in-use lists */
+  gp = sc->big_integers;
+  for (i = 0; i < gp->loc; i++) {bigint *p; p = big_integer_bgi(gp->list[i]); mpz_clear(p->n); free(p);}
+  free(gp->list);
+  free(gp);
+
+  gp = sc->big_ratios;
+  for (i = 0; i < gp->loc; i++) {bigrat *p; p = big_ratio_bgr(gp->list[i]); mpq_clear(p->q); free(p);}
+  free(gp->list);
+  free(gp);
+
+  gp = sc->big_reals;
+  for (i = 0; i < gp->loc; i++) {bigflt *p; p = big_real_bgf(gp->list[i]); mpfr_clear(p->x); free(p);}
+  free(gp->list);
+  free(gp);
+
+  gp = sc->big_complexes;
+  for (i = 0; i < gp->loc; i++) {bigcmp *p; p = big_complex_bgc(gp->list[i]); mpc_clear(p->z); free(p);}
+  free(gp->list);
+  free(gp);
+
+  gp = sc->big_random_states;
+  for (i = 0; i < gp->loc; i++) gmp_randclear(random_gmp_state(gp->list[i]));
+  free(gp->list);
+  free(gp);
+
+  gmp_randclear(random_gmp_state(sc->default_rng));
+
+  /* temps */
+  if (sc->ratloc) free_rat_locals(sc);
+  mpz_clears(sc->mpz_1, sc->mpz_2, sc->mpz_3, sc->mpz_4, NULL);
+  mpq_clears(sc->mpq_1, sc->mpq_2, sc->mpq_3, NULL);
+  mpfr_clears(sc->mpfr_1, sc->mpfr_2, sc->mpfr_3, NULL);
+  mpc_clear(sc->mpc_1);
+  mpc_clear(sc->mpc_2);
+  /* I claim the leftovers (864 bytes, all from mpfr_cosh) are gmp's fault */
+#endif
 
   free(undefined_name(sc->undefined));
   gp = sc->undefineds;
@@ -98155,5 +98210,4 @@ int main(int argc, char **argv)
  *  colorize: offer hook into all repl output and example of colorizing
  *    nc-display, but what about input?
  * t725 gaps, tmv.scm? f->mv in t725, also f(a)->case a etc
- * s7_free in gmp case
  */
