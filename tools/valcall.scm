@@ -62,18 +62,9 @@
      (format *stderr* "~%~NC~%~NC ~A ~NC~%~NC~%" 40 #\- 16 #\- (cadr caller+file) 16 #\- 40 #\-)
      (system (format #f "valgrind --tool=callgrind ./~A ~A" (car caller+file) (cadr caller+file)))
 
-     ;; valgrind 3.12 blathers endlessly -- I made this change:
-     ;;   /home/bil/test/valgrind-3.12.0/coregrind/m_syswrap/syswrap-generic.c
-     ;;   comment out lines 1333 to 1341
-
      (let ((outfile (cdr (assoc (cadr caller+file) file-names))))
        (let ((next (next-file outfile)))
 	 (system (format #f "callgrind_annotate --auto=yes --threshold=100 ~A > ~A~D" (last-callg) outfile next))
-
-	 ;; new callgrind blathers endlessly -- I made this change:
-         ;;   (line 825) my $space = ' ' x ($CC_col_widths->[$i] - length($count));
-         ;;              my $space = ' ' x max($CC_col_widths->[$i] - length($count), 0);
-
 	 (format *stderr* "~NC ~A~D -> ~A~D: ~NC~%" 8 #\space outfile (- next 1) outfile next 8 #\space)
 	 (system (format #f "./snd compare-calls.scm -e '(compare-calls \"~A~D\" \"~A~D\")'" outfile (- next 1) outfile next)))))
 
@@ -97,8 +88,8 @@
 	 (list "repl" "tset.scm")
 	 (list "repl" "tmac.scm")
 	 (list "repl" "tnum.scm")
-	 (list "repl" "teq.scm")
 	 (list "repl" "dup.scm")
+	 (list "repl" "teq.scm")
 	 (list "repl" "tfft.scm")
 	 (list "repl" "tmisc.scm")
 	 (list "repl" "tio.scm")

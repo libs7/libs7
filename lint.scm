@@ -704,10 +704,6 @@
     
     
     ;; -------- trees --------
-    (define (copy-tree lis)
-      (if (pair? lis)
-	  (copy lis) ;:readable)
-	  lis))
 
     (define (proper-tree? tree)
       (or (not (pair? tree))
@@ -1269,7 +1265,7 @@
 	     tree)
 
 	    ((eq? (car tree) 'quote)
-	     (copy-tree tree))
+	     (copy tree))
 	    
 	    (else (cons (tree-subst new old (car tree))
 			(tree-subst new old (cdr tree))))))
@@ -15564,7 +15560,7 @@
 			((not (pair? tree)) 
 			 tree)
 			((eq? (car tree) 'quote)
-			 (copy-tree tree))
+			 (copy tree))
 			(else (cons (tree-subst-eq new old (car tree))
 				    (tree-subst-eq new old (cdr tree))))))
 
@@ -22102,7 +22098,8 @@
 					 (args (args->proper-list (var-arglist fvar)) (cdr args)))
 					((not (pair? args)) e)
 				      (set! e (cons (list (car args) (symbol "<" (number->string i) ">") i ()) e)))
-				    (list (list () '<1>) (list () '<2>) (list () '<3>) (list () '<4>))))
+				    (copy '((() <1>) (() <2>) (() <3>) (() <4>)) :readable)))
+				    ;(list (list () '<1>) (list () '<2>) (list () '<3>) (list () '<4>))))
 	       (set! local-ctr 0)
 	       (set! line (pair-line-number orig-form))
 	       (set! reduced-form (reduce-walker new-form outer-vars))
