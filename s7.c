@@ -1370,7 +1370,6 @@ struct s7_scheme {
   s7_pointer prepackaged_type_names[NUM_TYPES];
 
 #if S7_DEBUGGING
-  int32_t input_pushes;
   int *tc_rec_calls;
 #endif
 };
@@ -6693,8 +6692,6 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 /* #define main_stack_args(Sc) (Sc->stack_end[-2]) */
 /* #define main_stack_let(Sc)  (Sc->stack_end[-3]) */
 /* #define main_stack_code(Sc) (Sc->stack_end[-4]) */
-/* #define pop_main_stack(Sc)  Sc->stack_end -= 4 */
-
 /* beware of main_stack_code!  If a function has a tail-call, the main_stack_code that form sees
  *   if main_stack_op==op-begin1 can change from call to call -- the begin actually refers
  *   to the caller, which is dependent on where the current function was called, so we can't hard-wire
@@ -11264,6 +11261,7 @@ static s7_pointer mpz_to_rational(s7_scheme *sc, mpz_t n, mpz_t d) /* mpz_3 and 
   return(mpq_to_rational(sc, sc->mpq_1));
 }
 
+#if (!WITH_PURE_S7)
 static s7_pointer mpq_to_big_real(s7_scheme *sc, mpq_t val)
 {
   s7_pointer x;
@@ -11273,6 +11271,7 @@ static s7_pointer mpq_to_big_real(s7_scheme *sc, mpq_t val)
   mpfr_set_q(big_real(x), val, MPFR_RNDN);
   return(x);
 }
+#endif
 
 static s7_pointer any_rational_to_mpq(s7_scheme *sc, s7_pointer z, mpq_t bigq)
 {
@@ -29443,10 +29442,6 @@ static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
 
 static inline void push_input_port(s7_scheme *sc, s7_pointer new_port)
 {
-#if S7_DEBUGGING
-  sc->input_pushes++;
-  if (!is_input_port(new_port)) fprintf(stderr, "%s[%d]: push %s\n", __func__, __LINE__, display(new_port));
-#endif
   if (sc->input_port_stack_loc >= sc->input_port_stack_size)
     {
       sc->input_port_stack_size *= 2;
@@ -29461,10 +29456,6 @@ static void pop_input_port(s7_scheme *sc)
   if (sc->input_port_stack_loc > 0)
     set_current_input_port(sc, sc->input_port_stack[--(sc->input_port_stack_loc)]);
   else set_current_input_port(sc, sc->standard_input);
-#if S7_DEBUGGING
-  sc->input_pushes--;
-  if (sc->input_pushes < 0) fprintf(stderr, "%s[%d] %s %d\n", __func__, __LINE__, display(current_input_port(sc)), sc->input_pushes);
-#endif
 }
 
 static s7_pointer input_port_if_not_loading(s7_scheme *sc)
@@ -40912,10 +40903,7 @@ static void normal_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
   len = vector_length(vec);
   if (len == 0) return;
 
-  if ((is_typed_vector(vec)) &&
-      (typed_vector_typer_call(sc, vec, set_plist_1(sc, obj)) == sc->F))
-    s7_wrong_type_arg_error(sc, "vector fill!", 2, obj, make_type_name(sc, typed_vector_typer_name(sc, vec), INDEFINITE_ARTICLE));
-  /* splitting out this part made no difference in speed */
+  /* splitting out this part made no difference in speed; type check of obj is handled elsewhere */
   orig = vector_elements(vec);
   left = len - 8;
   i = 0;
@@ -40971,6 +40959,11 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
     return(immutable_object_error(sc, set_elist_3(sc, immutable_error_string, caller, x)));
 
   fill = cadr(args);
+
+  if ((is_typed_vector(x)) &&
+      (typed_vector_typer_call(sc, x, set_plist_1(sc, fill)) == sc->F))
+    s7_wrong_type_arg_error(sc, "vector fill!", 2, fill, make_type_name(sc, typed_vector_typer_name(sc, x), INDEFINITE_ARTICLE));
+
   if (is_float_vector(x))
     {
       if (!s7_is_real(fill)) /* possibly a bignum */
@@ -41004,10 +40997,6 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
       s7_int i;
       if (is_normal_vector(x))
 	{
-	  if ((is_typed_vector(x)) &&
-	      (typed_vector_typer_call(sc, x, set_plist_1(sc, fill)) == sc->F))
-	    s7_wrong_type_arg_error(sc, "vector fill!", 2, fill, make_type_name(sc, typed_vector_typer_name(sc, x), INDEFINITE_ARTICLE));
-
 	  for (i = start; i < end; i++)
 	    vector_element(x, i) = fill;
 	}
@@ -44060,7 +44049,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 		  sc->sort_body = car(closure_body(lessp));
 		  sc->sort_begin = cdr(closure_body(lessp));
 		  sort_func = (is_null(sc->sort_begin)) ? closure_sort : closure_sort_begin;
-		  sc->sort_op = (is_syntactic_pair(sc->sort_body)) ? (opcode_t)optimize_op(sc->sort_body) : OP_EVAL;
+		  sc->sort_op = (is_syntactic_pair(sc->sort_body)) ? (opcode_t)optimize_op(sc->sort_body) : (opcode_t)OP_EVAL;
 		  sc->sort_v1 = let_slots(sc->curlet);
 		  sc->sort_v2 = next_slot(let_slots(sc->curlet));
 		}}}}
@@ -50748,6 +50737,13 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  if (have_indices)                 /* it seems to me that the start/end args here don't make any sense so... */
 	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			    set_elist_3(sc, wrap_string(sc, "~S: start/end indices make no sense with :readable: ~S", 54), caller, args)));
+#if S7_DEBUGGING
+	  if (tree_is_cyclic(sc, source))
+	    {
+	      fprintf(stderr, "cyclic copy_tree: %s\n", display(source));
+	      if (sc->stop_at_error) abort();
+	    }
+#endif
 	  return(copy_tree(sc, source));    /* does not check for cyclic trees (copy_body does) */
 	}
       end = s7_list_length(sc, source);
@@ -56627,6 +56623,8 @@ static s7_pointer fx_cons_ts(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_l
 static s7_pointer fx_cons_tU(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), __func__, arg), U_lookup(sc, caddr(arg), __func__, arg)));}
 
 static s7_pointer fx_multiply_ss(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_multiply_ts(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_multiply_Ts(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, T_lookup(sc, cadr(arg), __func__, arg), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_multiply_fs(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, lookup(sc, opt2_sym(cdr(arg))), real(cadr(arg))));}
 static s7_pointer fx_multiply_sf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, lookup(sc, cadr(arg)), real(opt2_con(cdr(arg)))));}
 static s7_pointer fx_multiply_si(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, cadr(arg)), integer(opt2_con(cdr(arg)))));}
@@ -59939,7 +59937,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 
 #if S7_DEBUGGING
 #define with_c_call(P, F) with_c_call_1(sc, P, F)
-static bool with_c_call_1(s7_scheme *sc, s7_pointer p, s7_function f)
+static bool with_c_call_1(s7_scheme *sc, s7_pointer p, s7_function f) /* sc needed for set_opt2 under debugger = set_opt2_1(sc,...) */
 #else
 static bool with_c_call(s7_pointer p, s7_function f)
 #endif
@@ -60029,6 +60027,7 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 	  if (c_callee(tree) == fx_add_s1) return(with_c_call(tree, fx_add_T1));
 	  if (c_callee(tree) == fx_c_sca) return(with_c_call(tree, fx_c_Tca));
 	  if (c_callee(tree) == fx_num_eq_si) return(with_c_call(tree, fx_num_eq_Ti));
+	  if (c_callee(tree) == fx_multiply_ss) return(with_c_call(tree, fx_multiply_Ts));
 	}
       else
 	{
@@ -60230,6 +60229,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if (c_callee(tree) == fx_multiply_ss) return(with_c_call(tree, fx_multiply_tu));
 	      if (c_callee(tree) == fx_num_eq_ss) return(with_c_call(tree, fx_num_eq_tu));
 	    }
+	  if (c_callee(tree) == fx_multiply_ss) return(with_c_call(tree, fx_multiply_ts));
 	  if (c_callee(tree) == fx_num_eq_ss) return(with_c_call(tree, (is_global(caddr(p))) ? fx_num_eq_tg : fx_num_eq_ts));
 	  if (c_callee(tree) == fx_geq_ss) return(with_c_call(tree, fx_geq_ts));
 	  if (c_callee(tree) == fx_leq_ss) return(with_c_call(tree, fx_leq_ts));
@@ -82794,6 +82794,9 @@ static s7_pointer check_do(s7_scheme *sc)
 			    fx_annotate_arg(sc, body, collect_variables(sc, vars, sc->nil));
 			}
 		      fx_tree(sc, body, car(v), NULL); /* ?? */
+		      /* an experiment (this never works...) */
+		      if (stack_op(sc->stack, current_stack_top(sc) - 1) == OP_SAFE_DO_STEP)
+			fx_tree_outer(sc, body, caaar(stack_code(sc->stack, (current_stack_top(sc) - 1))), NULL);
 		    }}
 	      return(sc->nil);
 	    }}}
@@ -97300,10 +97303,6 @@ s7_scheme *s7_init(void)
   sc->last_error_line = -1;
   sc->stop_at_error = true;
 
-#if S7_DEBUGGING
-  sc->input_pushes = 0;
-#endif
-
   sc->nil =         make_unique(sc, "()",             T_NIL);
   sc->unused =      make_unique(sc, "#<unused>",      T_UNUSED);
   sc->T =           make_unique(sc, "#t",             T_BOOLEAN);
@@ -98155,7 +98154,7 @@ int main(int argc, char **argv)
  * tsort    4156 | 3043 | 3031  2989  2989           3690
  * tset     6616 | 3083 | 3168  3175  3175           3166
  * tmac     3391 | 3186 | 3176  3171  3167           3257
- * tnum          |      |       3518  3257           61.3
+ * tnum          |      |       3518  3257 3237      61.3
  * dup           |      |       3232  3170           3926
  * teq      4081 | 3804 | 3806  3804  3800           3813
  * tfft     4288 | 3816 | 3785  3846  3844           11.5
@@ -98178,4 +98177,6 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), 
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
+ * t718 segfaults
+ * s7test check for 0 or 2 calls in typers/setters
  */

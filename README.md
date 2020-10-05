@@ -2,7 +2,7 @@
 
 s7 is a Scheme interpreter.
 
-documentation: [s7.html](https://ccrma.stanford.edu/software/snd/snd/s7.html)
+[documentation](https://ccrma.stanford.edu/software/snd/snd/s7.html)
 
 [git repository](https://cm-gitlab.stanford.edu/bil/s7.git)
 
@@ -10,9 +10,9 @@ documentation: [s7.html](https://ccrma.stanford.edu/software/snd/snd/s7.html)
 
 [monthly tarball](https://ccrma.stanford.edu/software/s7/s7-6Sep20.tar.gz)
 
-mailing list: cmdist@ccrma.stanford.edu
-  [ archives ](https://cm-mail.stanford.edu/pipermail/cmdist/)
-  [ to subscribe ](http://ccrma-mail.stanford.edu/mailman/listinfo/cmdist)
+[mailing list](http://ccrma-mail.stanford.edu/mailman/listinfo/cmdist)
+
+[mailing list archive](https://cm-mail.stanford.edu/pipermail/cmdist/)
 
 docker container: docker run -it schemers/s7:head (Lassi Kortela)
 

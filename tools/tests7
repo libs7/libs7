@@ -4,6 +4,7 @@ touch mus-config.h
 cp tools/ffitest.c .
 cp tools/tauto.scm .
 cp ~/cl/t923.scm .
+cp ~/cl/t101.scm .
 
 echo ' '
 echo '-------- base case --------'
@@ -88,7 +89,7 @@ gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl fulltest.scm
 
 echo ' '
-echo '-------- sily stuff --------'
+echo '-------- silly stuff --------'
 echo ' '
 gcc s7.c -c -I. -DEXTRA_EXPONENT_MARKERS=1 -DS7_ALIGNED=1 -DWITH_VECTORIZE=0 -g3 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
