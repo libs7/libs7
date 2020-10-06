@@ -20,4 +20,6 @@ docker container: docker run -it schemers/s7:head (Lassi Kortela)
 
 [svn site (Snd)](https://sourceforge.net/p/snd/svn1/)
 
+[scheme-for-max](https://github.com/iainctduncan/scheme-for-max)
+
 [the original](https://en.wikipedia.org/wiki/Sunbeam_S7_and_S8)

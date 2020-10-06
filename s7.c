@@ -66398,12 +66398,14 @@ static bool p_implicit(s7_scheme *sc, s7_pointer car_x, int32_t len)
 			   *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize
 			   */
 			  opc->v[0].fp = opt_p_call_any;
+			  /* fprintf(stderr, "%s\n", display(car_x)); */
 			  switch (type(obj))     /* string can't happen here (no multidimensional strings) */
 			    {
 			    case T_PAIR:         opc->v[2].call = g_list_ref;           break;
 			    case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
-			      /* case T_LET:       opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
+			    /* case T_LET:       opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
 			    case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
+			    case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
 			    case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
 			    case T_VECTOR:       opc->v[2].call = g_vector_ref;         break;
 			    default:             return(return_false(sc, car_x));
@@ -85252,10 +85254,9 @@ static goto_t op_dynamic_wind(s7_scheme *sc)
 static goto_t op_read_s(s7_scheme *sc)
 {
   /* another lint opt */
-  s7_pointer port, code;
+  s7_pointer port;
 
-  code = sc->code;
-  port = lookup(sc, cadr(code));
+  port = lookup(sc, cadr(sc->code));
 
   if (!is_input_port(port)) /* was also not stdin */
     {
@@ -85295,11 +85296,10 @@ static goto_t op_read_s(s7_scheme *sc)
 static goto_t op_implicit_string_ref_a(s7_scheme *sc)
 {
   s7_int index;
-  s7_pointer s, x, code;
-  code = sc->code;
+  s7_pointer s, x;
 
-  s = lookup_checked(sc, car(code));
-  x = fx_call(sc, cdr(code));
+  s = lookup_checked(sc, car(sc->code));
+  x = fx_call(sc, cdr(sc->code));
   if (!is_string(s))
     {
       sc->last_function = s;
@@ -85327,16 +85327,15 @@ static inline goto_t op_implicit_vector_ref_a(s7_scheme *sc) __attribute__((alwa
 
 static inline goto_t op_implicit_vector_ref_a(s7_scheme *sc)
 {
-  s7_pointer v, x, code;
+  s7_pointer v, x;
 
-  code = sc->code;
-  v = lookup_checked(sc, car(code));
+  v = lookup_checked(sc, car(sc->code));
   if (!is_any_vector(v))
     {
       sc->last_function = v;
       return(fall_through);
     }
-  x = fx_call(sc, cdr(code));
+  x = fx_call(sc, cdr(sc->code));
   if ((s7_is_integer(x)) &&
       (vector_rank(v) == 1))
     {
@@ -85356,15 +85355,15 @@ static goto_t op_implicit_vector_ref_aa(s7_scheme *sc)
 {
   s7_pointer v, x, y, code;
 
-  code = sc->code;
-  v = lookup_checked(sc, car(code));
+  v = lookup_checked(sc, car(sc->code));
   if (!is_any_vector(v))
     {
       sc->last_function = v;
       return(fall_through);
     }
-  x = fx_call(sc, cdr(code));
-  y = fx_call(sc, cddr(code));
+  code = cdr(sc->code);
+  x = fx_call(sc, code);
+  y = fx_call(sc, cdr(code));
   if ((s7_is_integer(x)) &&
       (s7_is_integer(y)) &&
       (vector_rank(v) == 2))
@@ -85389,16 +85388,17 @@ static goto_t op_implicit_vector_ref_aa(s7_scheme *sc)
 
 static inline bool op_implicit_vector_set_3(s7_scheme *sc)
 {
-  s7_pointer v, i1;
-  v = lookup(sc, caadr(sc->code));
+  s7_pointer v, i1, code;
+  code = cdr(sc->code);
+  v = lookup(sc, caar(code));
   if (!is_any_vector(v))
     {
+      /* this could be improved -- set_pair_p_3 perhaps: pair_p_3 set opt3? but this calls g_vector_set_3 */
       pair_set_syntax_op(sc->code, OP_SET_UNCHECKED);
       return(true);
     }
-  sc->code = cdr(sc->code);
-  i1 = fx_call(sc, cdar(sc->code));
-  set_car(sc->t3_3, fx_call(sc, cdr(sc->code)));
+  i1 = fx_call(sc, cdar(code));
+  set_car(sc->t3_3, fx_call(sc, cdr(code)));
   set_car(sc->t3_1, v);
   set_car(sc->t3_2, i1);
   sc->value = g_vector_set_3(sc, sc->t3_1);
@@ -85407,17 +85407,17 @@ static inline bool op_implicit_vector_set_3(s7_scheme *sc)
 
 static bool op_implicit_vector_set_4(s7_scheme *sc)
 {
-  s7_pointer v, i1, i2;
-  v = lookup(sc, caadr(sc->code));
+  s7_pointer v, i1, i2, code;
+  code = cdr(sc->code);
+  v = lookup(sc, caar(code));
   if (!is_any_vector(v))
     {
       pair_set_syntax_op(sc->code, OP_SET_UNCHECKED);
       return(true);
     }
-  sc->code = cdr(sc->code);
-  i1 = fx_call(sc, cdar(sc->code));
-  i2 = fx_call(sc, cddar(sc->code));
-  set_car(sc->t3_3, fx_call(sc, cdr(sc->code)));
+  i1 = fx_call(sc, cdar(code));
+  i2 = fx_call(sc, cddar(code)); /* todo: opt3? */
+  set_car(sc->t3_3, fx_call(sc, cdr(code)));
   set_car(sc->t4_1, v);
   set_car(sc->t3_1, i1);
   set_car(sc->t3_2, i2);
@@ -85503,22 +85503,22 @@ static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
 static void op_set_pws(s7_scheme *sc)
 {
   /* this is (set! (getter) val) where getter is a global c_function (a built-in pws) and val is not a pair: (set! (mus-clipping) #f) */
-  s7_pointer obj;
-  sc->code = cdr(sc->code);
-  obj = caar(sc->code);
+  s7_pointer obj, code;
+  code = cdr(sc->code);
+  obj = caar(code);
   if (is_symbol(obj))
     {
       obj = symbol_to_slot(sc, obj);
       if (is_slot(obj))
 	obj = slot_value(obj);
-      else s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(obj)]));
+      else s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(code), sc->prepackaged_type_names[type(obj)]));
     }
 
   if ((is_c_function(obj)) &&
       (is_procedure(c_function_setter(obj))))
     {
       s7_pointer value;
-      value = cadr(sc->code);
+      value = cadr(code);
       if (is_symbol(value))
 	value = lookup_checked(sc, value);
 
@@ -98174,4 +98174,6 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), 
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
+ * nested do in t725?
+ * op_dox if do setter and its current slot, fx_add_z1? -- currently it "s1"!
  */
