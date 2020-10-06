@@ -22098,8 +22098,7 @@
 					 (args (args->proper-list (var-arglist fvar)) (cdr args)))
 					((not (pair? args)) e)
 				      (set! e (cons (list (car args) (symbol "<" (number->string i) ">") i ()) e)))
-				    (copy '((() <1>) (() <2>) (() <3>) (() <4>)) :readable)))
-				    ;(list (list () '<1>) (list () '<2>) (list () '<3>) (list () '<4>))))
+				    (list (list () '<1>) (list () '<2>) (list () '<3>) (list () '<4>)))) ; avoid cyclic-tree check in copy+:readable
 	       (set! local-ctr 0)
 	       (set! line (pair-line-number orig-form))
 	       (set! reduced-form (reduce-walker new-form outer-vars))
