@@ -598,6 +598,35 @@ static s7_pointer g_notcurses_drop_planes(s7_scheme *sc, s7_pointer args)
 }
 
 #if 0
+static s7_pointer g_notcurses_render_to_buffer(s7_scheme *sc, s7_pointer args)
+{
+  notcurses_render_to_buffer((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
+			     (char **)s7_c_pointer(sc, s7_cadr(args)),
+			     (size_t *)s7_c_pointer(sc, s7_caddr(args)));
+  return(s7_f(sc));
+}
+
+static s7_pointer g_ncstats_writeout_ns(s7_scheme *sc, s7_pointer args) 
+{
+  return(s7_make_integer(sc, ((ncstats *)s7_c_pointer_with_type(sc, s7_car(args), ncstats_symbol, __func__, 1))->writeout_ns));
+}
+
+static s7_pointer g_ncstats_writeout_max_ns(s7_scheme *sc, s7_pointer args) 
+{
+  return(s7_make_integer(sc, ((ncstats *)s7_c_pointer_with_type(sc, s7_car(args), ncstats_symbol, __func__, 1))->writeout_max_ns));
+}
+
+static s7_pointer g_ncstats_writeout_min_ns(s7_scheme *sc, s7_pointer args) 
+{
+  return(s7_make_integer(sc, ((ncstats *)s7_c_pointer_with_type(sc, s7_car(args), ncstats_symbol, __func__, 1))->writeout_min_ns));
+}
+
+  nc_func(ncstats_writeout_ns, 1, 0, false);
+  nc_func(ncstats_writeout_max_ns, 1, 0, false);
+  nc_func(ncstats_writeout_min_ns, 1, 0, false);
+#endif
+
+#if 0
 typedef struct palette256 {uint32_t chans[NCPALETTESIZE];} palette256;
 #endif
 

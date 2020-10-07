@@ -43063,7 +43063,7 @@ static inline s7_int ref_check_index(s7_scheme *sc, s7_pointer v, s7_int i)
 static s7_double float_vector_ref_d_7pi(s7_scheme *sc, s7_pointer v, s7_int i) {return(float_vector(v, ref_check_index(sc, v, i)));}
 static s7_pointer float_vector_ref_unchecked_p(s7_scheme *sc, s7_pointer v, s7_int i) {return(make_real(sc, float_vector(v, i)));}
 
-static s7_double float_vector_ref_d_7pii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2)
+static inline s7_double float_vector_ref_d_7pii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2)
 {
   if ((i1 >= 0) && (i1 < vector_dimension(v, 0)))
     {
@@ -63529,7 +63529,17 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 
 static s7_double opt_d_7pii_sss(opt_info *o)
 {
+#if 0
   return(o->v[4].d_7pii_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p))));
+#else
+  /* currently this can only be float_vector_ref_d_7pii (d_7pii is not exported at this time) */
+  s7_int i1, i2;
+  s7_pointer v;
+  v = slot_value(o->v[1].p);
+  i1 = integer(slot_value(o->v[2].p));
+  i2 = integer(slot_value(o->v[3].p));
+  return(float_vector_ref_d_7pii(opt_sc(o), v, i1, i2));
+#endif
 }
 
 static s7_double opt_d_7pii_scs(opt_info *o)
@@ -66398,7 +66408,6 @@ static bool p_implicit(s7_scheme *sc, s7_pointer car_x, int32_t len)
 			   *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize
 			   */
 			  opc->v[0].fp = opt_p_call_any;
-			  /* fprintf(stderr, "%s\n", display(car_x)); */
 			  switch (type(obj))     /* string can't happen here (no multidimensional strings) */
 			    {
 			    case T_PAIR:         opc->v[2].call = g_list_ref;           break;
@@ -81599,13 +81608,13 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   s7_int argnum;
 
   if (is_null(cdr(sc->code)))     /* (set! (v 0)) */
-    s7_wrong_number_of_args_error(sc, "no value for vector-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no value for vector-set!: ~S", form);
   if (!is_null(cddr(sc->code)))   /* (set! (v 0) 1 2) */
-    s7_wrong_number_of_args_error(sc, "too many values for vector-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "too many values for vector-set!: ~S", form);
 
   settee = car(sc->code);
   if (is_null(cdr(settee)))
-    s7_wrong_number_of_args_error(sc, "no index for vector-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no index for vector-set!: ~S", form);
   if (is_immutable(cx))
     immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, cx));
 
@@ -81632,6 +81641,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 	{
 	  fx_annotate_args(sc, cdr(settee), sc->curlet);
 	  fx_annotate_arg(sc, cdr(sc->code), sc->curlet);
+	  set_opt3_pair(form, cddr(settee));
 	  pair_set_syntax_op(form, OP_IMPLICIT_VECTOR_SET_4);
 	}
       if ((argnum == vector_rank(cx)) &&
@@ -81652,7 +81662,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 		  if (is_symbol(index))
 		    index = lookup_checked(sc, index);
 		  if (!s7_is_integer(index))
-		    eval_error_any(sc, sc->wrong_type_arg_symbol, "vector-set!: index must be an integer: ~S", 41, sc->code);
+		    eval_error_any(sc, sc->wrong_type_arg_symbol, "vector-set!: index must be an integer: ~S", 41, form);
 		  car(pa) = index;
 		}
 	      car(pa) = cadr(sc->code);
@@ -85416,7 +85426,11 @@ static bool op_implicit_vector_set_4(s7_scheme *sc)
       return(true);
     }
   i1 = fx_call(sc, cdar(code));
-  i2 = fx_call(sc, cddar(code)); /* todo: opt3? */
+#if S7_DEBUGGING
+  if (cddar(code) != opt3_pair(sc->code))
+    fprintf(stderr, "%s[%d]: %p %p\n", __func__, __LINE__, cddar(code), opt3_pair(sc->code));
+#endif
+  i2 = fx_call(sc, opt3_pair(sc->code)); /* cddar(code) */
   set_car(sc->t3_3, fx_call(sc, cdr(code)));
   set_car(sc->t4_1, v);
   set_car(sc->t3_1, i1);
@@ -98140,7 +98154,7 @@ int main(int argc, char **argv)
  * lt       2205 | 2116 | 2082  2093  2093           2108
  * tform    2472 | 2289 | 2298  2274  2271           3256
  * tcopy    2434 | 2264 | 2277  2285  2271           2342 
- * tmat     6072 | 2478 | 2465  2354  2360           2505
+ * tmat     6072 | 2478 | 2465  2354  2360 2342      2505
  * tread    2449 | 2394 | 2379  2389  2419           2583
  * tvect    6189 | 2430 | 2435  2463  2463           2695
  * fbench   2974 | 2643 | 2628  2684  2677           3088
@@ -98149,9 +98163,9 @@ int main(int argc, char **argv)
  * tmap     3238 | 2883 | 2874  2838  2838           3762
  * titer    3962 | 2911 | 2884  2900  2892           2918
  * tsort    4156 | 3043 | 3031  2989  2989           3690
- * tset     6616 | 3083 | 3168  3175  3175           3166
  * tmac     3391 | 3186 | 3176  3171  3167           3257
- * tnum          |      |       3518  3257 3237      61.3
+ * tset     6616 | 3083 | 3168  3175  3175           3166
+ * tnum          |      |       3518  3257 3234      61.3
  * dup           |      |       3232  3170           3926
  * teq      4081 | 3804 | 3806  3804  3800           3813
  * tfft     4288 | 3816 | 3785  3846  3844           11.5
@@ -98174,6 +98188,4 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), 
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * nested do in t725?
- * op_dox if do setter and its current slot, fx_add_z1? -- currently it "s1"!
  */
