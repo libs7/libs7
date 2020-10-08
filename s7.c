@@ -2829,8 +2829,8 @@ void s7_show_history(s7_scheme *sc);
 #define set_pair_macro(P, Name)        set_opt2_sym(P, Name)
 
 #if S7_DEBUGGING
-#define opt3_byte(p)                   opt3_byte_1(sc, T_Pair(p),          G_BYTE, __func__, __LINE__)
-#define set_opt3_byte(p, x)            set_opt3_byte_1(T_Pair(p), x,   G_BYTE, __func__, __LINE__)
+#define opt3_byte(p)                   opt3_byte_1(sc, T_Pair(p), G_BYTE, __func__, __LINE__)
+#define set_opt3_byte(p, x)            set_opt3_byte_1(T_Pair(p), x, G_BYTE, __func__, __LINE__)
 #else
 #define opt3_byte(P)                   T_Pair(P)->object.cons_ext.opt_type /* op_if_is_type */
 #define set_opt3_byte(P, X)            do {T_Pair(P)->object.cons_ext.opt_type = X; clear_type_bit(P, T_LOCATION);} while (0)
@@ -4574,7 +4574,7 @@ static s7_pointer set_qlist_3(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
   return(sc->qlist_3);
 }
 
-static s7_pointer set_clist_1(s7_scheme *sc, s7_pointer x1)
+static s7_pointer set_clist_1(s7_scheme *sc, s7_pointer x1) /* for c_object length method */
 {
   set_car(sc->clist_1, x1);
   return(sc->clist_1);
@@ -6724,13 +6724,7 @@ static void resize_stack(s7_scheme *sc)
   stack_block(sc->stack) = nb;
   stack_elements(sc->stack) = (s7_pointer *)block_data(nb);
   if (!stack_elements(sc->stack))
-    {
-      s7_warn(sc, 32, "can't allocate additional stack\n");
-#if S7_DEBUGGING
-      abort();
-#endif
-      s7_error(sc, make_symbol(sc, "stack-too-big"), set_elist_1(sc, wrap_string(sc, "no room to expand stack?", 24)));
-    }
+    s7_error(sc, make_symbol(sc, "stack-too-big"), set_elist_1(sc, wrap_string(sc, "no room to expand stack?", 24)));
   {
     s7_pointer *orig;
     s7_int i, left;
@@ -13871,12 +13865,7 @@ static s7_pointer unknown_sharp_constant(s7_scheme *sc, char *name, s7_pointer p
 	      res = make_undefined(sc, (const char *)buf);  
 	      free(buf);
 	      return(res);
-	    }
-#if S7_DEBUGGING
-	  /* load files are always string-ports, so how can we get here? */
-	  else fprintf(stderr, "%s[%d]: reading %s at %" print_s7_int "\n", __func__, __LINE__, string_value(sc->file_names[port_file_number(pt)]), port_position(pt));
-#endif	      
-	}}
+	    }}}
   return(make_undefined(sc, name));
 }
 
@@ -54192,6 +54181,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
    *   call its error-handler, else if *error-hook* is bound, call it,
    *   else send out the error info ourselves.
    */
+
   /* fprintf(stderr, "s7_error[55013]: %s %s\n", display(type), display(info)); */
   sc->format_depth = -1;
   sc->gc_off = false;             /* this is in case we were triggered from the sort function -- clumsy! */
@@ -55600,37 +55590,12 @@ static s7_pointer V_lookup(s7_scheme *sc, s7_pointer symbol, const char *func, s
   check_v_1(sc, let_outlet(sc->curlet), func, expr, symbol);
   return(slot_value(next_slot(next_slot(let_slots(let_outlet(sc->curlet))))));
 }
-
-static void check_W(s7_scheme *sc, const char* func, s7_pointer expr, s7_pointer symbol)
-{
-  s7_pointer e;
-  e = sc->curlet;
-  if ((let_id(e) == symbol_id(symbol)) ||
-      (let_id(let_outlet(e)) == symbol_id(symbol)))
-    {
-      fprintf(stderr, "%s %s W_lookup %s is confused (%s == %s)\n",
-	      func,
-	      display(expr),
-	      display(symbol),
-	      (let_id(e) == symbol_id(symbol)) ? display(e) : display(let_outlet(e)),
-	      (let_id(e) == symbol_id(symbol)) ? "curlet" : "outlet(curlet)");
-      if (sc->stop_at_error) abort();
-    }
-}
-
-static s7_pointer W_lookup(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
-{
-  check_W(sc, func, expr, symbol);
-  return(lookup_from(sc, symbol, let_outlet(let_outlet(sc->curlet))));
-}
-
 #else
 #define t_lookup(Sc, Symbol, Func, Expr) slot_value(let_slots(sc->curlet))
 #define u_lookup(Sc, Symbol, Func, Expr) slot_value(next_slot(let_slots(sc->curlet)))
 #define T_lookup(Sc, Symbol, Func, Expr) slot_value(let_slots(let_outlet(sc->curlet)))
 #define U_lookup(Sc, Symbol, Func, Expr) slot_value(next_slot(let_slots(let_outlet(sc->curlet))))
 #define V_lookup(Sc, Symbol, Func, Expr) slot_value(next_slot(next_slot(let_slots(let_outlet(sc->curlet)))))
-#define W_lookup(Sc, Symbol, Func, Expr) lookup_from(Sc, Symbol, let_outlet(let_outlet(sc->curlet)))
 #endif
 
 /* arg here is the full expression */
@@ -55645,7 +55610,6 @@ static s7_pointer fx_t(s7_scheme *sc, s7_pointer arg) {return(t_lookup(sc, arg, 
 static s7_pointer fx_u(s7_scheme *sc, s7_pointer arg) {return(u_lookup(sc, arg, __func__, arg));}
 static s7_pointer fx_T(s7_scheme *sc, s7_pointer arg) {return(T_lookup(sc, arg, __func__, arg));}
 static s7_pointer fx_U(s7_scheme *sc, s7_pointer arg) {return(U_lookup(sc, arg, __func__, arg));}
-static s7_pointer fx_W(s7_scheme *sc, s7_pointer arg) {return(W_lookup(sc, arg, __func__, arg));}
 
 static s7_pointer fx_c_d(s7_scheme *sc, s7_pointer arg) {return(d_call(sc, arg));}
 
@@ -56577,11 +56541,6 @@ static s7_pointer fx_c_st(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_1, lookup(sc, cadr(arg)));
   set_car(sc->t2_2, t_lookup(sc, opt2_sym(cdr(arg)), __func__, arg));
   return(c_call(arg)(sc, sc->t2_1));
-}
-
-static s7_pointer fx_c_Wt_vref(s7_scheme *sc, s7_pointer arg) /* dup */
-{
-  return(vector_ref_p_pp(sc, W_lookup(sc, cadr(arg), __func__, arg), t_lookup(sc, caddr(arg), __func__, arg)));
 }
 
 static s7_pointer fx_c_ts(s7_scheme *sc, s7_pointer arg)
@@ -59944,58 +59903,6 @@ static bool with_c_call(s7_pointer p, s7_function f)
   static bool tu_tree(s7_scheme *sc, s7_pointer p);
 #endif
 
-static bool no_p_in_1(s7_scheme *sc, s7_pointer p, s7_pointer e1)
-{
-  s7_pointer y;
-  if (is_let(e1))
-    {
-      if (symbol_id(p) == let_id(e1)) return(false);
-      for (y = let_slots(e1); tis_slot(y); y = next_slot(y))
-	if (slot_symbol(y) == p)
-	  return(false);
-    }
-  else
-    {
-      if (is_pair(e1))
-	{
-	  for (y = e1; is_pair(y); y = cdr(y))
-	    if ((p == car(y)) || ((is_pair(car(y))) && (p == caar(y))))
-	      return(false);
-	}}
-  return(true);
-}
-
-static bool no_p_in(s7_scheme *sc, s7_pointer p, s7_pointer e1, s7_pointer e2)
-{
-  return((is_symbol(p)) && 
-	 ((no_p_in_1(sc, p, e1)) &&
-	  (no_p_in_1(sc, p, e2))));
-}
-
-static bool fx_tree_out2(s7_scheme *sc, s7_pointer tree, s7_pointer e1, s7_pointer e2)
-{
-  /* this assumes there is no definer in e2's (entire) body */
-  s7_pointer p;
-  p = car(tree);
-#if 0
-  if ((is_pair(p)) && (has_fx(tree)))
-    fprintf(stderr, "%s[%d] %s: vars: %s %s %s, tree: %s\n",  __func__, __LINE__,
-	    (is_pair(cdr(p))) ? display(cadr(p)) : display(p),
-	    display(e1), (e2) ? display(e2) : "",
-	    (is_optimized(p)) ? op_names[optimize_op(p)] : "unopt",
-	    display(tree));
-#endif
-  /* currently the time spent here is much larger than the time saved by using these choices */
-  if ((is_symbol(p)) && (c_callee(tree) == fx_s) && (no_p_in(sc, p, e1, e2)))
-    return(with_c_call(tree, fx_W));
-
-  /* if ((is_pair(tree)) && (c_callee(tree) == fx_num_eq_ss) && (no_p_in(sc, cadr(p), e1, e2))) fprintf(stderr, "num_eq sW\n"); */
-  if ((is_pair(tree)) && (c_callee(tree) == fx_vref_st) && (no_p_in(sc, cadr(p), e1, e2)))
-    return(with_c_call(tree, fx_c_Wt_vref)); /* dup */
-
-  return(false);
-}
-
 static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2)
 {
   s7_pointer p;
@@ -60098,7 +60005,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_is_vector_s) return(with_c_call(tree, fx_is_vector_t));
 	  if (c_callee(tree) == fx_is_type_s) return(with_c_call(tree, fx_is_type_t));
 	  if (c_callee(tree) == fx_length_s) return(with_c_call(tree, fx_length_t));
-	  /* return(false); */
 	}
       if (cadr(p) == var2)
 	{
@@ -60124,7 +60030,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_is_type_s) return(with_c_call(tree, fx_is_type_u));
 	  if (c_callee(tree) == fx_is_pair_s) return(with_c_call(tree, fx_is_pair_u));
 	}
-      /* return(false); */
       break;
 
     case HOP_SAFE_C_SC:
@@ -60166,7 +60071,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_leq_si) return(with_c_call(tree, fx_leq_ti));
 	  if (c_callee(tree) == fx_gt_si) return(with_c_call(tree, fx_gt_ti));
 	  if (c_callee(tree) == fx_num_eq_si) return(with_c_call(tree, fx_num_eq_ti));
-	  /* return(false); */
 	}
       if (cadr(p) == var2)
 	{
@@ -60175,7 +60079,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_add_s1) return(with_c_call(tree, fx_add_u1));
 	  if (c_callee(tree) == fx_subtract_s1) return(with_c_call(tree, fx_subtract_u1));
 	}
-      /* return(false); */
       break;
 
     case HOP_SAFE_C_CS:
@@ -60228,7 +60131,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_lt_ss) return(with_c_call(tree, fx_lt_ts));
 	  if (c_callee(tree) == fx_gt_ss) return(with_c_call(tree, (is_global(caddr(p))) ? fx_gt_tg : fx_gt_ts));
 	  if (c_callee(tree) == fx_sqr_s) return(with_c_call(tree, fx_sqr_t));
-	  /* return(false); */
 	}
       if (caddr(p) == var1)
 	{
@@ -60303,7 +60205,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_c_car_s) return(with_c_call(tree, fx_c_car_t));
 	  if (c_callee(tree) == fx_c_cdr_s) return(with_c_call(tree, fx_c_cdr_t));
 	  if (c_callee(tree) == fx_is_type_opsq) return(with_c_call(tree, fx_is_type_optq));
-	  /* return(false); */
 	}
       if (cadadr(p) == var2)
 	{
@@ -60568,18 +60469,6 @@ static void fx_tree_outer(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_po
       (!fx_tree_out(sc, tree, var1, var2)))
     fx_tree_outer(sc, car(tree), var1, var2);
   fx_tree_outer(sc, cdr(tree), var1, var2);
-}
-
-static void fx_tree_outest(s7_scheme *sc, s7_pointer tree, s7_pointer e1, s7_pointer e2)
-{
-  if ((!is_pair(tree)) ||
-      ((is_symbol(car(tree))) &&
-       (is_definer_or_binder(car(tree)))))
-    return;
-  if ((!has_fx(tree)) ||
-      (!fx_tree_out2(sc, tree, e1, e2)))
-    fx_tree_outest(sc, car(tree), e1, e2);
-  fx_tree_outest(sc, cdr(tree), e1, e2);
 }
 
 
@@ -63532,9 +63421,12 @@ static s7_double opt_d_7pii_sss(opt_info *o)
 #if 0
   return(o->v[4].d_7pii_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p))));
 #else
-  /* currently this can only be float_vector_ref_d_7pii (d_7pii is not exported at this time) */
   s7_int i1, i2;
   s7_pointer v;
+#if S7_DEBUGGING
+  /* currently this can only be float_vector_ref_d_7pii (d_7pii is not exported at this time) */
+  if (o->v[4].d_7pii_f != float_vector_ref_d_7pii) {fprintf(stderr, "%s[%d]: func mismatch\n", __func__, __LINE__); if (opt_sc(o)->stop_at_error) abort();}
+#endif
   v = slot_value(o->v[1].p);
   i1 = integer(slot_value(o->v[2].p));
   i2 = integer(slot_value(o->v[3].p));
@@ -78665,7 +78557,6 @@ static void op_let_temp_fx(s7_scheme *sc) /* all entries are of the form (symbol
   s7_pointer *end;
 
   sc->code = cdr(sc->code);
-
   end = sc->stack_end;
   for (p = car(sc->code); is_pair(p); p = cdr(p))
     {
@@ -78865,7 +78756,7 @@ static bool op_and_ap(s7_scheme *sc)
 
 static void op_and_safe_p1(s7_scheme *sc) /* sc->code: (and (func...) (fx...)...) */
 {
-  sc->code = cdr(sc->code);
+  sc->code = cdr(sc->code); /* new value will be pushed below */
   push_stack_no_args_direct(sc, OP_AND_SAFE_P_REST);
   sc->code = car(sc->code);
 }
@@ -80062,15 +79953,17 @@ static goto_t macroexpand(s7_scheme *sc)
 
 static goto_t op_macroexpand(s7_scheme *sc)
 {
+  s7_pointer form;
+  form = sc->code;
   sc->code = cdr(sc->code);
   /* mimic APPLY, but don't push OP_EVAL_MACRO or OP_EXPANSION
    *   (define-macro (mac a) `(+ ,a 1)) (macroexpand (mac 3)), sc->code: ((mac 3))
    */
   if ((!is_pair(sc->code)) ||
       (!is_pair(car(sc->code))))
-    eval_error(sc, "macroexpand argument is not a macro call: ~A", 44, sc->code);
+    eval_error(sc, "macroexpand argument is not a macro call: ~A", 44, form);
   if (!is_null(cdr(sc->code)))
-    eval_error(sc, "macroexpand: too many arguments: ~A", 35, sc->code);
+    eval_error(sc, "macroexpand: too many arguments: ~A", 35, form);
 
   if (is_pair(caar(sc->code)))                            /* (macroexpand ((symbol->value 'mac) (+ 1 2))) */
     {
@@ -81542,14 +81435,14 @@ static bool safe_stepper_expr(s7_pointer expr, s7_pointer vars)
   return(true);
 }
 
-static goto_t set_implicit_c_object(s7_scheme *sc, s7_pointer cx)
+static goto_t set_implicit_c_object(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 {
   s7_pointer settee, index, val;
 
   if (is_null(cdr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "no value for object-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no value for object-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "too many values for object-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "too many values for object-set!: ~S", form);
 
   settee = car(sc->code);
   if ((is_null(cdr(settee))) ||
@@ -81728,7 +81621,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   return(goto_top_no_pop);
 }
 
-static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx)
+static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 {
   /* sc->code = cons(sc, sc->string_set_function, pair_append(sc, car(sc->code), cdr(sc->code)));
    *
@@ -81738,12 +81631,12 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx)
    */
   s7_pointer settee, index, val;
 
-  if (is_null(cdr(sc->code))) s7_wrong_number_of_args_error(sc, "no value for string-set!: ~S", sc->code);
-  if (!is_null(cddr(sc->code))) s7_wrong_number_of_args_error(sc, "too many values for string-set!: ~S", sc->code);
+  if (is_null(cdr(sc->code))) s7_wrong_number_of_args_error(sc, "no value for string-set!: ~S", form);
+  if (!is_null(cddr(sc->code))) s7_wrong_number_of_args_error(sc, "too many values for string-set!: ~S", form);
 
   settee = car(sc->code);
-  if (is_null(cdr(settee))) s7_wrong_number_of_args_error(sc, "no index for string-set!: ~S", sc->code);
-  if (!is_null(cddr(settee))) s7_wrong_number_of_args_error(sc, "too many indices for string-set!: ~S", sc->code);
+  if (is_null(cdr(settee))) s7_wrong_number_of_args_error(sc, "no index for string-set!: ~S", form);
+  if (!is_null(cddr(settee))) s7_wrong_number_of_args_error(sc, "too many indices for string-set!: ~S", form);
 
   /* if there's one index (the standard case), and it is not a pair, and there's one value (also standard)
    *    and it is not a pair, let's optimize this thing!
@@ -81757,7 +81650,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx)
       if (is_symbol(index))
 	index = lookup_checked(sc, index);
       if (!s7_is_integer(index))
-	eval_error_any(sc, sc->wrong_type_arg_symbol, "index must be an integer: ~S", 28, sc->code);
+	eval_error_any(sc, sc->wrong_type_arg_symbol, "index must be an integer: ~S", 28, form);
       ind = s7_integer_checked(sc, index);
       if ((ind < 0) ||
 	  (ind >= string_length(cx)))
@@ -81776,7 +81669,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx)
 	      sc->value = val;
 	      return(goto_start);
 	    }
-	  eval_error_any(sc, sc->wrong_type_arg_symbol, "value must be a character: ~S", 29, sc->code);
+	  eval_error_any(sc, sc->wrong_type_arg_symbol, "value must be a character: ~S", 29, form);
 	}
       push_op_stack(sc, sc->string_set_function);
       sc->args = list_2(sc, index, cx);
@@ -81790,18 +81683,18 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx)
   return(goto_top_no_pop);
 }
 
-static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx)      /* code: ((lst 1) 32) from (let ((lst (list 1 2 3))) (set! (lst 1) 32)) */
+static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)      /* code: ((lst 1) 32) from (let ((lst (list 1 2 3))) (set! (lst 1) 32)) */
 {
   s7_pointer settee, index, val;
 
   if (is_null(cdr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "no value for list-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no value for list-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "too many values for list-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "too many values for list-set!: ~S", form);
 
   settee = car(sc->code);
   if (is_null(cdr(settee)))
-    s7_wrong_number_of_args_error(sc, "no index for list-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no index for list-set!: ~S", form);
 
   if (!is_null(cddr(settee)))
     {
@@ -81839,18 +81732,18 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx)      /* code: ((ls
   return(goto_start);
 }
 
-static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx)
+static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 {
   s7_pointer settee, key;
 
   if (is_null(cdr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "no value for hash-table-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no value for hash-table-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "too many values for hash-table-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "too many values for hash-table-set!: ~S", form);
 
   settee = car(sc->code);
   if (is_null(cdr(settee)))
-    s7_wrong_number_of_args_error(sc, "no key for hash-table-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no key for hash-table-set!: ~S", form);
   if (is_immutable(cx))
     immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, cx));
 
@@ -81888,19 +81781,19 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx)
   return(goto_top_no_pop);
 }
 
-static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx)     /* sc->code = cons(sc, sc->let_set_function, pair_append(sc, car(sc->code), cdr(sc->code))); */
+static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)     /* sc->code = cons(sc, sc->let_set_function, pair_append(sc, car(sc->code), cdr(sc->code))); */
 {
   s7_pointer settee, key;
   /* code: ((gen 'input) input) from (set! (gen 'input) input) */
 
   if (is_null(cdr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "no value for let-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no value for let-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
-    s7_wrong_number_of_args_error(sc, "too many values for let-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "too many values for let-set!: ~S", form);
 
   settee = car(sc->code);
   if (is_null(cdr(settee)))
-    s7_wrong_number_of_args_error(sc, "no symbol (variable name) for let-set!: ~S", sc->code);
+    s7_wrong_number_of_args_error(sc, "no symbol (variable name) for let-set!: ~S", form);
   if (!is_null(cddr(settee)))
     {
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
@@ -82141,23 +82034,16 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
 
   switch (type(cx))
     {
-    case T_C_OBJECT:
-      return(set_implicit_c_object(sc, cx));
+    case T_STRING:     return(set_implicit_string(sc, cx, form));
+    case T_PAIR:       return(set_implicit_pair(sc, cx, form));
+    case T_HASH_TABLE: return(set_implicit_hash_table(sc, cx, form));
+    case T_LET:        return(set_implicit_let(sc, cx, form));
+    case T_C_OBJECT:   return(set_implicit_c_object(sc, cx, form));
+    case T_ITERATOR:   return(set_implicit_iterator(sc, cx));    /* not sure this makes sense */
+    case T_SYNTAX:     return(set_implicit_syntax(sc, cx));
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
       return(set_implicit_vector(sc, cx, form));
-
-    case T_STRING:
-      return(set_implicit_string(sc, cx));
-
-    case T_PAIR:
-      return(set_implicit_pair(sc, cx));
-
-    case T_HASH_TABLE:
-      return(set_implicit_hash_table(sc, cx));
-
-    case T_LET:
-      return(set_implicit_let(sc, cx));
 
     case T_C_MACRO: case T_C_OPT_ARGS_FUNCTION: case T_C_RST_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION: case T_C_FUNCTION: case T_C_FUNCTION_STAR:
@@ -82166,12 +82052,6 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
     case T_MACRO: case T_MACRO_STAR: case T_BACRO: case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       return(set_implicit_closure(sc, cx));
-
-    case T_ITERATOR:     /* not sure this makes sense */
-      return(set_implicit_iterator(sc, cx));
-
-    case T_SYNTAX:
-      return(set_implicit_syntax(sc, cx));
 
     default:                                         /* (set! (1 2) 3) */
       s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar_code, sc->prepackaged_type_names[type(cx)]));
@@ -82736,9 +82616,7 @@ static s7_pointer check_do(s7_scheme *sc)
 			fx_tree(sc, cadr(var), var1, var2);
 			if (is_pair(cddr(var)))
 			  fx_tree_outer(sc, caddr(var), var1, var2);
-		      }}}
-	    fx_tree_outest(sc, end, vars, sc->curlet); /* no definers in form, so vars won't change, similarly for let out to funclet */
-	  }
+		      }}}}
 	break;
       }
 
@@ -92008,11 +91886,6 @@ static bool op_unknown_a(s7_scheme *sc)
 #endif
 
   code = sc->code;
-#if S7_DEBUGGING
-  if (!has_fx(cdr(code)))
-    fprintf(stderr, "op_unknown_a missing _a support? %s\n", display_80(code));
-#endif
-
   switch (type(f))
     {
     case T_C_FUNCTION:
@@ -98150,14 +98023,14 @@ int main(int argc, char **argv)
  * tref     1093 |  779 |  779   671   671            720
  * tshoot   1296 |  880 |  841   823   823           1628
  * index     939 | 1013 |  990  1002  1006           1065
- * s7test   1776 | 1711 | 1700  1804  1812           4570
- * lt       2205 | 2116 | 2082  2093  2093           2108
- * tform    2472 | 2289 | 2298  2274  2271           3256
- * tcopy    2434 | 2264 | 2277  2285  2271           2342 
- * tmat     6072 | 2478 | 2465  2354  2360 2342      2505
- * tread    2449 | 2394 | 2379  2389  2419           2583
- * tvect    6189 | 2430 | 2435  2463  2463           2695
- * fbench   2974 | 2643 | 2628  2684  2677           3088
+ * s7test   1776 | 1711 | 1700  1804  1824           4570
+ * lt       2205 | 2116 | 2082  2093  2089           2108
+ * tform    2472 | 2289 | 2298  2274  2278           3256
+ * tcopy    2434 | 2264 | 2277  2285  2270           2342 
+ * tmat     6072 | 2478 | 2465  2354  2345           2505
+ * tread    2449 | 2394 | 2379  2389  2416           2583
+ * tvect    6189 | 2430 | 2435  2463  2461           2695
+ * fbench   2974 | 2643 | 2628  2684  2676           3088
  * tb       3251 | 2799 | 2767  2690  2685           3513
  * trclo    7985 | 2791 | 2670  2711  2704           4496
  * tmap     3238 | 2883 | 2874  2838  2838           3762
@@ -98165,24 +98038,24 @@ int main(int argc, char **argv)
  * tsort    4156 | 3043 | 3031  2989  2989           3690
  * tmac     3391 | 3186 | 3176  3171  3167           3257
  * tset     6616 | 3083 | 3168  3175  3175           3166
- * tnum          |      |       3518  3257 3234      61.3
- * dup           |      |       3232  3170           3926
+ * tnum          |      |       3518  3234           61.3
+ * dup           |      |       3232  3335           3926
  * teq      4081 | 3804 | 3806  3804  3800           3813
  * tfft     4288 | 3816 | 3785  3846  3844           11.5
  * tmisc         |      |       4465  4455           4911
  * tio           | 5227 |       4586  4527           4613
- * tcase         |      |       4812  4900           4900
+ * tcase         |      |       4812  4895           4900
  * tlet     5409 | 4613 | 4578  4879  4887           5836
  * tclo     6246 | 5188 | 5187  4984  4954           5299
  * tgc           |      |       4997  4995           5319
  * trec     17.8 | 6318 | 6317  5918  5937           7780
- * tgen     11.7 | 11.0 | 11.0  11.2  11.2           12.0
+ * tgen     11.7 | 11.0 | 11.0  11.2  11.1           12.0
  * thash         |      |       12.1  12.2           36.6
  * tall     16.4 | 15.4 | 15.3  15.3  15.4           27.2    
- * calls    40.3 | 35.9 | 35.8  36.0  36.0           60.7
- * sg       85.8 | 70.4 | 70.6  70.6  70.7           97.7
+ * calls    40.3 | 35.9 | 35.8  36.0  36.1           60.7
+ * sg       85.8 | 70.4 | 70.6  70.6  70.8           97.7
  * lg      115.9 |104.9 |104.6 104.8 104.6          105.9
- * tbig    264.5 |178.0 |177.2 174.1 173.9          618.3
+ * tbig    264.5 |178.0 |177.2 174.1 174.0          618.3
  *
  * --------------------------------------------------------------------------
  *

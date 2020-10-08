@@ -14,12 +14,14 @@ s7 is a Scheme interpreter.
 
 [mailing list archive](https://cm-mail.stanford.edu/pipermail/cmdist/)
 
+[svn site (Snd)](https://sourceforge.net/p/snd/svn1/)
+
+[scheme-for-max](https://github.com/iainctduncan/scheme-for-max) (Iain Duncan)
+
+[radium](https://users.notam02.no/~kjetism/radium/) (Kjetil Matheussen)
+
 docker container: docker run -it schemers/s7:head (Lassi Kortela)
 
 [web assembly](https://github.com/actonDev/s7-playground/) (Christos Vaigas)
-
-[svn site (Snd)](https://sourceforge.net/p/snd/svn1/)
-
-[scheme-for-max](https://github.com/iainctduncan/scheme-for-max)
 
 [the original](https://en.wikipedia.org/wiki/Sunbeam_S7_and_S8)

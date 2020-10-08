@@ -598,13 +598,28 @@ static s7_pointer g_notcurses_drop_planes(s7_scheme *sc, s7_pointer args)
 }
 
 #if 0
+
 static s7_pointer g_notcurses_render_to_buffer(s7_scheme *sc, s7_pointer args)
 {
-  notcurses_render_to_buffer((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
-			     (char **)s7_c_pointer(sc, s7_cadr(args)),
-			     (size_t *)s7_c_pointer(sc, s7_caddr(args)));
-  return(s7_f(sc));
+  return(s7_make_integer(sc, notcurses_render_to_buffer((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
+							(char **)s7_c_pointer(sc, s7_cadr(args)),
+							(size_t *)s7_c_pointer(sc, s7_caddr(args)))));
 }
+
+static s7_pointer g_notcurses_stats_reset(s7_scheme *sc, s7_pointer args)
+{
+  notcurses_stats_reset((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
+			(ncstats *)s7_c_pointer_with_type(sc, s7_cadr(args), ncstats_symbol, __func__, 2));
+  return(s7_cadr(args));
+}
+
+static s7_pointer g_notcurses_stats_alloc(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_c_pointer_with_type(sc, notcurses_stats_alloc((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1)),
+				     ncstats_symbol, s7_f(sc)));
+}
+
+/* remove current ncstats_make */
 
 static s7_pointer g_ncstats_writeout_ns(s7_scheme *sc, s7_pointer args) 
 {
@@ -624,6 +639,10 @@ static s7_pointer g_ncstats_writeout_min_ns(s7_scheme *sc, s7_pointer args)
   nc_func(ncstats_writeout_ns, 1, 0, false);
   nc_func(ncstats_writeout_max_ns, 1, 0, false);
   nc_func(ncstats_writeout_min_ns, 1, 0, false);
+
+  nc_int(NCDIRECT_OPTION_INHIBIT_SETLOCALE);
+  nc_int(NCDIRECT_OPTION_INHIBIT_CBREAK);
+
 #endif
 
 #if 0
