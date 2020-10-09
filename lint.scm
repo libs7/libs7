@@ -8860,8 +8860,9 @@
 		      ((2)                                               ; (append (list x) ()) -> (list x)
 		       (let ((arg2 (cadr new-args))
 			     (arg1 (car new-args)))
-			 (cond ((or (any-null? arg2)           
-				    (equal? arg2 '(list)))               ; (append x ()) -> (copy x)
+
+			 (cond ((or (any-null? arg2) 
+				    (member arg2 '((list) "" (string) #() (vector)))) ; (append '(1 2) ()) -> (copy '(1 2)), #() includes #i() et al
 				(lint-format "perhaps clearer: ~A" caller (lists->string form (list 'copy arg1))))
 			       
 			       ((null? arg1)                             ; (append () x) -> x
@@ -17481,14 +17482,14 @@
 				      (not (and (pair? (cdr clause))
 						(eq? (cadr clause) '=>))) ; case sends selector, but cond sends test result
 				      (cond-eqv? (car clause) eqv-select #t)))
-		   (unless all-eqv
-		     (when (and eqv-select 
-				(pair? (car clause))
-				(eq? (caar clause) 'not)
-				(pair? (cdar clause))
-				(pair? (cadar clause))
-				(cond-eqv? (cadar clause) eqv-select #t))
-		     (set! eqv-change ctr))))
+		   (when (and (not all-eqv)
+			      eqv-select 
+			      (pair? (car clause))
+			      (eq? (caar clause) 'not)
+			      (pair? (cdar clause))
+			      (pair? (cadar clause))
+			      (cond-eqv? (cadar clause) eqv-select #t))
+		     (set! eqv-change ctr)))
 
 		 ;; look for successive clause tests where the earlier includes the current (number? followed by integer? etc)
 		 ;;   slightly sloppy I guess -- the arg could be self-modifying!
