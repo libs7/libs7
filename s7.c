@@ -272,10 +272,6 @@
 
 #define SHOW_EVAL_OPS 0
 
-#ifndef OP_NAMES
-  #define OP_NAMES (S7_DEBUGGING || SHOW_EVAL_OPS)
-#endif
-
 #ifndef _GNU_SOURCE
   #define _GNU_SOURCE
 /* for qsort_r, grumble... */
@@ -4071,7 +4067,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_SSP, HOP_SAFE_C_SSP, OP_ANY_C_FP, HOP_ANY_C_FP,
       /* end of h_opts */
 
-      OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, OP_opIF_A_SSq_A, OP_opIF_A_ssq_a_a,
+      OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, OP_opIF_A_SSq_A, OP_opIF_A_SSq_A_A,
       OP_MACRO_D, OP_MACRO_STAR_D, 
       OP_WITH_INPUT_FROM_STRING, OP_WITH_INPUT_FROM_STRING_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_INPUT_FROM_STRING_C, OP_CALL_WITH_OUTPUT_STRING,
       OP_S, OP_S_S, OP_S_C, OP_S_A, OP_C_FA_1, OP_S_AA,
@@ -4216,8 +4212,6 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 #define is_tc_op(Op) ((Op >= OP_TC_AND_A_OR_A_LA) && (Op <= OP_TC_CASE_LA))
 
 typedef enum{E_C_P, E_C_PP, E_C_CP, E_C_SP, E_C_PC, E_C_PS} combine_op_t;
-
-#if S7_DEBUGGING || OP_NAMES
 
 static const char* op_names[NUM_OPS] =
      {"unopt", "gc_protect",
@@ -4456,8 +4450,6 @@ static const char* op_names[NUM_OPS] =
       "recur_cond_a_a_a_a_opla_laq", "recur_cond_a_a_a_a_oplaa_laaq", "recur_cond_a_a_a_a_opa_laaq",
       "recur_cond_a_a_a_laa_lopa_laaq", "recur_cond_a_a_a_laa_opa_laaq",
 };
-#endif
-
 
 #define is_safe_c_op(op)  ((op >= OP_SAFE_C_D) && (op < OP_THUNK))
 #define is_unknown_op(op) ((op >= OP_UNKNOWN) && (op <= OP_UNKNOWN_FP))
@@ -34433,14 +34425,10 @@ void s7_show_history(s7_scheme *sc)
 
 void s7_show_stack(s7_scheme *sc)
 {
-#if S7_DEBUGGING || OP_NAMES
   int64_t i;
   fprintf(stderr, "stack:\n");
   for (i = current_stack_top(sc) - 1; i >= 3; i -= 4)
     fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
-#else
-  fprintf(stderr, "can't show stack ops (OP_NAMES: 0)\n");
-#endif
 }
 
 #if S7_DEBUGGING
@@ -55926,6 +55914,10 @@ static s7_pointer fx_subtract_tf(s7_scheme *sc, s7_pointer arg)
 }
 
 static s7_pointer fx_subtract_ss(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_subtract_ts(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_subtract_tu(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), u_lookup(sc, caddr(arg), __func__, arg)));}
+static s7_pointer fx_subtract_ut(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, u_lookup(sc, cadr(arg), __func__, arg), t_lookup(sc, caddr(arg), __func__, arg)));}
+static s7_pointer fx_subtract_us(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, u_lookup(sc, cadr(arg), __func__, arg), lookup(sc, opt2_sym(cdr(arg)))));}
 
 static s7_pointer fx_subtract_fs(s7_scheme *sc, s7_pointer arg)
 {
@@ -56655,11 +56647,9 @@ static s7_pointer fx_geq_tT(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, 
 static s7_pointer fx_geq_tu(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), u_lookup(sc, caddr(arg), __func__, arg)));}
 static s7_pointer fx_gt_ss(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_gt_ts(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), lookup(sc, opt2_sym(cdr(arg)))));}
-
-static s7_pointer fx_gt_tg(s7_scheme *sc, s7_pointer arg)
-{
-  return(gt_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), slot_value(global_slot(opt2_sym(cdr(arg))))));
-}
+static s7_pointer fx_gt_tu(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), u_lookup(sc, caddr(arg), __func__, arg)));}
+static s7_pointer fx_gt_ut(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, u_lookup(sc, cadr(arg), __func__, arg), t_lookup(sc, caddr(arg), __func__, arg)));}
+static s7_pointer fx_gt_tg(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), slot_value(global_slot(opt2_sym(cdr(arg))))));}
 
 static s7_pointer fx_gt_tT(s7_scheme *sc, s7_pointer arg)
 {
@@ -56668,8 +56658,6 @@ static s7_pointer fx_gt_tT(s7_scheme *sc, s7_pointer arg)
   p2 = T_lookup(sc, caddr(arg), __func__, arg);
   return(((is_t_integer(p1)) && (is_t_integer(p2))) ? make_boolean(sc, p1 > p2) : gt_p_pp(sc, p1, p2));
 }
-
-static s7_pointer fx_gt_tu(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, t_lookup(sc, cadr(arg), __func__, arg), u_lookup(sc, caddr(arg), __func__, arg)));}
 
 static s7_pointer fx_gt_ti(s7_scheme *sc, s7_pointer arg)
 {
@@ -60117,6 +60105,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_c_ss_direct) return(with_c_call(tree, fx_c_ts_direct));
 	  if (c_callee(tree) == fx_is_eq_ss) return(with_c_call(tree, (caddr(p) == var2) ? fx_is_eq_tu : fx_is_eq_ts));
 	  if (c_callee(tree) == fx_add_ss) return(with_c_call(tree, (caddr(p) == var2) ? fx_add_tu : fx_add_ts));
+	  if (c_callee(tree) == fx_subtract_ss) return(with_c_call(tree, (caddr(p) == var2) ? fx_subtract_tu : fx_subtract_ts));
 	  if (c_callee(tree) == fx_cons_ss) return(with_c_call(tree, fx_cons_ts));
 	  if (caddr(p) == var2)
 	    {
@@ -60141,12 +60130,14 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_c_ss_direct) {return(with_c_call(tree, (is_global(cadr(p))) ? fx_c_gt_direct : fx_c_st_direct));}
 	  if (c_callee(tree) == fx_hash_table_ref_ss) return(with_c_call(tree, fx_hash_table_ref_st));
 	  if (c_callee(tree) == fx_vref_ss) return(with_c_call(tree, (is_global(cadr(p))) ? fx_vref_gt : fx_vref_st));
+	  if ((c_callee(tree) == fx_gt_ss) && (cadr(p) == var2)) return(with_c_call(tree, fx_gt_ut));
 	}
       if (cadr(p) == var2)
 	{
 	  if (c_callee(tree) == fx_num_eq_ss) return(with_c_call(tree, fx_num_eq_us));
 	  if (c_callee(tree) == fx_geq_ss) return(with_c_call(tree, fx_geq_us));
 	  if (c_callee(tree) == fx_add_ss) {set_c_call_direct(tree, (caddr(p) == var1) ? fx_add_ut : fx_add_us); return(true);}
+	  if (c_callee(tree) == fx_subtract_ss) {set_c_call_direct(tree, (caddr(p) == var1) ? fx_subtract_ut : fx_subtract_us); return(true);}
 	}
       break;
 
@@ -60439,15 +60430,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
   return(false);
 }
 
-/* #define fx_tree(Sc, Tree, Var1, Var2) fx_tree_1(Sc, Tree, Var1, Var2, __func__, __LINE__) */
-static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2)  /* , const char *func, int line) */
+#define fx_tree(Sc, Tree, Var1, Var2) fx_tree_1(Sc, Tree, Var1, Var2, __func__, __LINE__)
+static void fx_tree_1(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2 , const char *func, int line)
 {
 #if 0
   if (is_pair(tree))
-    fprintf(stderr, "%s[%d]: %s %s %d %s %s\n", func, line,
-	    display_80(tree), (is_optimized(tree)) ? op_names[optimize_op(tree)] : "unopt",
-	    has_fx(tree), /* (has_fx(tree)) ? fx_name(sc, tree) : "", */
-	    display(var1), (var2) ? display(var2) : "");
+    fprintf(stderr, "%s[%d]: %s %s %d %s %s\n", func, line, display_80(tree), (is_optimized(tree)) ? op_names[optimize_op(tree)] : "unopt", has_fx(tree), display(var1), (var2) ? display(var2) : "");
 #endif
 
   if ((!is_pair(tree)) ||
@@ -75700,7 +75688,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 			{
 			  set_opt1_con(expr, ptrue);
 			  set_opt2_con(expr, pfalse);
-			  set_safe_optimize_op(expr, (is_null(cddr(expr))) ? OP_opIF_A_SSq_A : OP_opIF_A_ssq_a_a);
+			  set_safe_optimize_op(expr, (is_null(cddr(expr))) ? OP_opIF_A_SSq_A : OP_opIF_A_SSq_A_A);
 			  fx_annotate_arg(sc, cdr(car_expr), e);
 			  fx_annotate_args(sc, cdr(expr), e);
 			  return(OPT_T);
@@ -76425,10 +76413,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		{
 		  if (nvars > 0)
 		    {
-		      fx_annotate_args(sc, body, cleared_args);
-		      /* this does not do what we want, but full tree annotation clobbers optimizer settings! -- ?? what does this refer to?
-		       *    we need a syntax-aware tree walker that does what check* does
-		       */
+		      fx_annotate_args(sc, body, cleared_args); /* this is incomplete (optimize_expression misses fx_choose cases) */
 		      fx_tree(sc, body,
 			      (is_pair(car(args))) ? caar(args) : car(args),
 			      (nvars > 1) ? ((is_pair(cadr(args))) ? caadr(args) : cadr(args)) : NULL);
@@ -78825,6 +78810,23 @@ static bool op_or_ap(s7_scheme *sc)
 
 
 /* -------------------------------- if -------------------------------- */
+
+static void fx_safe_closure_tree(s7_scheme *sc)
+{
+  s7_pointer e;
+  e = sc->curlet;
+  if ((is_funclet(e)) &&       /* TODO: extend this! */
+      (tis_slot(let_slots(e))))
+    {
+      s7_pointer f;
+      f = lookup(sc, funclet_function(e));
+      if (is_safe_closure(f))
+	fx_tree(sc, closure_body(f), 
+		slot_symbol(let_slots(e)), 
+		(tis_slot(next_slot(let_slots(e)))) ? slot_symbol(next_slot(let_slots(e))) : NULL);
+    }
+}
+
 #define choose_if_optc(Opc, One, Reversed, Not) ((One) ? ((Reversed) ? OP_ ## Opc ## _R : ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) :  ((Not) ? OP_ ## Opc ## _N_N : OP_ ## Opc ## _P_P))
 
 static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool reversed) /* cdr(form) == sc->code */
@@ -78917,18 +78919,8 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		  pair_set_syntax_op(form, OP_IF_A_A);
 		  fx_annotate_arg(sc, cdr(code), sc->curlet);
 		  set_opt1_pair(form, cdr(code));
-
-		  if ((is_funclet(sc->curlet)) &&       /* TODO: extend this! */
-		      (is_slot(let_slots(sc->curlet))))
-		    {
-		      s7_pointer f;
-		      f = lookup(sc, funclet_function(sc->curlet));
-		      if (is_safe_closure(f))
-			fx_tree(sc, closure_body(f), 
-				slot_symbol(let_slots(sc->curlet)), 
-				(is_slot(next_slot(let_slots(sc->curlet)))) ? slot_symbol(next_slot(let_slots(sc->curlet))) : NULL);
-		    }}
-
+		  fx_safe_closure_tree(sc);
+		}
 	      if (optimize_op(form) == OP_IF_A_P_P)
 		{
 		  if (is_fxable(sc, cadr(code)))
@@ -78939,11 +78931,12 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			  pair_set_syntax_op(form, OP_IF_A_A_A);
 			  fx_annotate_args(sc, cdr(code), sc->curlet);
 			  set_opt2_pair(form, cddr(code));
+			  /* fx_safe_closure_tree(sc); */
 			}
 		      else
 			{
 			  pair_set_syntax_op(form, OP_IF_A_A_P);
-			  fx_annotate_arg(sc, cdr(code), sc->curlet);
+			  fx_annotate_args(sc, cdr(code), sc->curlet);
 			}
 		    }
 		  else
@@ -78951,8 +78944,10 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		      if (is_fxable(sc, caddr(code)))
 			{
 			  pair_set_syntax_op(form, OP_IF_A_P_A);
-			  fx_annotate_arg(sc, cddr(code), sc->curlet);
+			  /* fprintf(stderr, "annotate %s\n", display(code)); */
+			  fx_annotate_args(sc, cdr(code), sc->curlet);
 			  set_opt2_pair(form, cddr(code));
+			  /* fx_safe_closure_tree(sc); */
 			}}}}
 	  else
 	    {
@@ -93004,7 +92999,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_C_FX: op_c_fx(sc); continue;
 
 	case OP_opIF_A_SSq_A: sc->value = fx_opif_a_ssq_a(sc, sc->code); continue;
-	case OP_opIF_A_ssq_a_a: sc->value = fx_opif_a_ssq_a_a(sc, sc->code); continue;
+	case OP_opIF_A_SSq_A_A: sc->value = fx_opif_a_ssq_a_a(sc, sc->code); continue;
 
 	case OP_APPLY_SS: op_apply_ss(sc); goto APPLY;
 	case OP_APPLY_SA: op_apply_sa(sc); goto APPLY;
@@ -94475,7 +94470,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  return(sc->F);
 	}
 
-#if ((OP_NAMES) && (UNOPT_PRINT > 1))
+#if (UNOPT_PRINT > 1)
       fprintf(stderr, "clear: %s %s\n", op_names[optimize_op(sc->code)], display_80(sc->code));
 #endif
       clear_all_optimizations(sc, sc->code);
@@ -95573,7 +95568,7 @@ static void init_fx_function(void)
 
   fx_function[OP_COND_FX_FX] = fx_cond_fx_fx;
   fx_function[OP_opIF_A_SSq_A] = fx_opif_a_ssq_a;
-  fx_function[OP_opIF_A_ssq_a_a] = fx_opif_a_ssq_a_a;
+  fx_function[OP_opIF_A_SSq_A_A] = fx_opif_a_ssq_a_a;
   fx_function[OP_IF_A_C_C] = fx_if_a_c_c;
   fx_function[OP_IF_A_A] = fx_if_a_a;
   fx_function[OP_IF_S_A_A] = fx_if_s_a_a;
@@ -98101,4 +98096,5 @@ int main(int argc, char **argv)
  * nrepl+notcurses, menu items, (if selection, C-space+move also), 
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
  * expand if_a_a fx_tree cases
+ * t718 (t725+lint)
  */
