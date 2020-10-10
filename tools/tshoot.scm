@@ -310,11 +310,11 @@
 ;;; from Joe Marshall (not a "standard benchmark", but interesting)
 
 (let ()
-  (define (palindrome? string)
-    (or (< (string-length string) 2)
-	(and (char=? (string-ref string 0)
-		     (string-ref string (- (string-length string) 1)))
-	     (palindrome? (substring string 1 (- (string-length string) 1))))))
+  (define (palindrome? str)
+    (or (< (string-length str) 2)
+	(and (char=? (string-ref str 0)
+		     (string-ref str (- (string-length str) 1)))
+	     (palindrome? (substring str 1 (- (string-length str) 1))))))
 
   (define (pal-test)
     (do ((i 0 (+ i 1)))
