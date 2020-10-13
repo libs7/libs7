@@ -7576,6 +7576,10 @@
 			       (if (eq? head 'zero?)
 				   (lint-format "perhaps ~A" caller (lists->string form (cons 'zero? (cdr arg))))))
 
+			      ((imag-part)              ; (zero? (imag-part x)) -> (real? x)
+			       (if (eq? head 'zero?)
+				   (lint-format "perhaps ~A" caller (lists->string form (cons 'real? (cdr arg))))))
+
 			      ((numerator)              ; (negative? (numerator x)) -> (negative? x)
 			       (lint-format "perhaps ~A" caller (lists->string form (list head (cadr arg)))))
 			      

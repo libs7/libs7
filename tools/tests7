@@ -5,6 +5,7 @@ cp tools/ffitest.c .
 cp tools/tauto.scm .
 cp ~/cl/t923.scm .
 cp ~/cl/t101.scm .
+cp tools/*.scm .
 
 echo ' '
 echo '-------- base case --------'

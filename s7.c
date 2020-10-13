@@ -1,9 +1,9 @@
 /* s7, a Scheme interpreter
  *
  *   derived from TinyScheme 1.39, but not a single byte of that code remains
- *   License: 0-clause BSD
+ *   SPDX-License-Identifier: 0BSD
  *
- * Bill Schottstaedt, Aug-08, bil@ccrma.stanford.edu
+ * Bill Schottstaedt, bil@ccrma.stanford.edu
  *
  * Mike Scholz provided the FreeBSD support (complex trig funcs, etc)
  * Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci provided the MS Visual C++ support
@@ -468,10 +468,7 @@ typedef struct block_t {
   union {
     s7_pointer ex_ptr;
     void *ex_info;
-    struct {
-      uint32_t i3;
-      int32_t i4;
-    } jx;
+    s7_int ckey;
   } ex;
 } block_t;
 
@@ -3307,8 +3304,9 @@ static s7_pointer slot_expression(s7_pointer p)    {if (slot_has_expression(p)) 
 #define continuation_op_stack(p)       (T_Con(p))->object.cwcc.op_stack
 #define continuation_stack_size(p)     continuation_block(p)->nx.ix.i1
 #define continuation_op_loc(p)         continuation_block(p)->nx.ix.i2
-#define continuation_op_size(p)        continuation_block(p)->ex.jx.i3
-#define continuation_key(p)            continuation_block(p)->ex.jx.i4
+#define continuation_op_size(p)        continuation_block(p)->ln.tag
+#define continuation_key(p)            continuation_block(p)->ex.ckey
+/* this can overflow int32_t -- baffle_key is s7_int, so ckey should be also */
 #define continuation_name(p)           continuation_block(p)->dx.d_ptr
 
 #define call_exit_goto_loc(p)          (T_Got(p))->object.rexit.goto_loc
@@ -10826,12 +10824,14 @@ static void apply_continuation(s7_scheme *sc) /* sc->code is the continuation */
 	c = sc->code;
 	if (is_continuation(c))
 	  {
-	    fprintf(stderr, "key: %d\n", continuation_key(c));
-	    fprintf(stderr, "find_baffle: %d\n", find_baffle(sc, continuation_key(c)));
+	    fprintf(stderr, "key: %" print_s7_int "\n", continuation_key(c));
+	    fprintf(stderr, "find_baffle: %d\n", find_baffle(sc, continuation_key(c))); /* bool=int43_t */
 	  }
 	else fprintf(stderr, "sc->code is not a continuation?\n");
 	s7_show_stack(sc);
 	fprintf(stderr, "last_baffle: %s\n", display(sc->last_baffle));
+ 	s7_show_history(sc);
+ 	if (sc->stop_at_error) abort();
       }
 #endif
       s7_error(sc, sc->baffled_symbol,
@@ -46920,7 +46920,12 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
   local_args = s7_eval_c_string(sc, internal_arglist);
   gc_loc = s7_gc_protect_1(sc, local_args);
   liberate(sc, b);
-  n_args = safe_list_length(local_args);  /* currently rest arg not supported, and we don't notice :allow-other-keys etc */
+  n_args = s7_list_length(sc, local_args);
+  if (n_args < 0)
+    {
+      s7_warn(sc, 256, "%s rest arg is not supported in C-side define*: %s\n", name, arglist);
+      n_args = -n_args;
+    }
   func = s7_make_function(sc, name, fnc, 0, n_args, false, doc);
 
   if (n_args > 0)
@@ -46970,6 +46975,8 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
 		    }}
 	      else
 		{
+		  if (arg == sc->key_rest_symbol)
+		    s7_warn(sc, 256, "%s :rest is not supported in C-side define*: %s\n", name, arglist);
 		  names[i] = symbol_to_keyword(sc, arg);
 		  defaults[i] = sc->F;
 		}}}}
@@ -57308,6 +57315,16 @@ static s7_pointer fx_c_opscq(s7_scheme *sc, s7_pointer arg)
   return(c_call(arg)(sc, sc->t1_1));
 }
 
+static s7_pointer fx_c_optcq(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer largs;
+  largs = cadr(arg);
+  set_car(sc->t2_1, t_lookup(sc, cadr(largs), __func__, arg));
+  set_car(sc->t2_2, opt2_con(cdr(largs)));
+  set_car(sc->t1_1, c_call(largs)(sc, sc->t2_1));
+  return(c_call(arg)(sc, sc->t1_1));
+}
+
 static s7_pointer fx_c_opcsq(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer largs;
@@ -59920,7 +59937,7 @@ static bool with_c_call(s7_pointer p, s7_function f)
   return(true);
 }
 
-#if S7_DEBUGGING
+#if S7_DEBUGGING && (0)
 typedef s7_pointer (*s7_fx_f)(s7_scheme *sc, s7_pointer p);
 static s7_fx_f tu_names[] = {
 	fx_t, fx_u, fx_T, fx_U, fx_num_eq_ti, fx_num_eq_ui, fx_num_eq_Ti, fx_add_t1, fx_add_u1, fx_add_T1, fx_add_U1, fx_add_V1, fx_add_tf, fx_add_ti, fx_add_ts, 
@@ -59940,6 +59957,7 @@ static s7_fx_f tu_names[] = {
 	fx_c_optq_c, fx_c_optq_c_direct, fx_c_optq_i_direct, fx_vref_g_vref_gt, fx_c_t_car_u, fx_add_u_car_t, fx_c_optq_optq_direct, fx_c_opsq_optuq_direct, 
 	fx_num_eq_car_s_add_tu, fx_num_eq_car_s_subtract_tu, fx_c_Tca, fx_c_ta, fx_c_at, NULL
 };
+
 static bool is_tu_name(s7_fx_f f)
 {
   int i;
@@ -60001,6 +60019,12 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 			  if (c_callee(tree) == fx_c_ts_direct) return(with_c_call(tree, fx_c_tU_direct));
 			  if (c_callee(tree) == fx_lt_ts) return(with_c_call(tree, fx_lt_tU));
 			}}}}}}
+#if S7_DEBUGGING && (0)
+  if ((!is_tu_name(c_callee(tree))) &&
+      ((s7_tree_memq(sc, var1, p)) ||
+       ((var2) && (s7_tree_memq(sc, var2, p)))))
+    fprintf(stderr, "outer %s [%s %s] %s\n", op_names[optimize_op(p)], display(var1), (var2) ? display(var2) : "", display_80(p));
+#endif
   return(false);
 }
 
@@ -60381,6 +60405,11 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if (c_callee(cadr(p)) == g_less_2) set_c_call_direct(tree, fx_not_lt_ut); else set_c_call_direct(tree, fx_not_oputq);
 	      return(true);
 	    }}
+      break;
+
+    case HOP_SAFE_C_opSCq:
+      if (cadr(p) == var1)
+	return(with_c_call(tree, fx_c_optcq)); /* there currently isn't any fx_c_opscq_direct */
       break;
 
     case HOP_SAFE_C_opSSq_C:
@@ -90386,7 +90415,12 @@ static void op_safe_c_function_star(s7_scheme *sc)
 
 static void op_safe_c_function_star_a(s7_scheme *sc)
 {
-  sc->args = list_1(sc, fx_call(sc, cdr(sc->code)));
+  s7_pointer p;
+  p = fx_call(sc, cdr(sc->code));
+  if (is_keyword(p))
+    s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, value_is_missing_string, car(sc->code), p));
+  /* scheme-level define* here also gives "not a parameter name" */
+  sc->args = list_1(sc, p);
   sc->code = opt1_cfunc(sc->code);
   /* one arg, so it's not a keyword; all we need to do is fill in defaults */
   apply_c_function_star_fill_defaults(sc, 1);
@@ -98101,52 +98135,55 @@ int main(int argc, char **argv)
 /* ------------------------------------------------------------------------------------------
  *
  * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-<date>.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
+ *   tests7 compsnd testsnd autotest
  *
- * --------------------------------------------------------
- *           18  |  19  |  20.0  20.7  20.8           gmp
- * --------------------------------------------------------
- * tpeak     167 |  117 |  116   116   115            128
- * tauto     748 |  633 |  638   662   665  662      1261
- * tref     1093 |  779 |  779   671   671            720
- * tshoot   1296 |  880 |  841   823   823           1628
- * index     939 | 1013 |  990  1002  1006           1065
- * s7test   1776 | 1711 | 1700  1804  1824 1807      4570
- * lt       2205 | 2116 | 2082  2093  2089 2085      2108
- * tform    2472 | 2289 | 2298  2274  2278           3256
- * tcopy    2434 | 2264 | 2277  2285  2270           2342 
- * tmat     6072 | 2478 | 2465  2354  2345           2505
- * tread    2449 | 2394 | 2379  2389  2416           2583
- * tvect    6189 | 2430 | 2435  2463  2461           2695
- * fbench   2974 | 2643 | 2628  2684  2676           3088
- * tb       3251 | 2799 | 2767  2690  2685 2677      3513
- * trclo    7985 | 2791 | 2670  2711  2704 2698      4496
- * tmap     3238 | 2883 | 2874  2838  2838           3762
- * titer    3962 | 2911 | 2884  2900  2892           2918
- * tsort    4156 | 3043 | 3031  2989  2989           3690
- * tmac     3391 | 3186 | 3176  3171  3167 3162      3257
- * tset     6616 | 3083 | 3168  3175  3175 3167      3166
- * tnum          |      |       3518  3234 3227      61.3
- * dup           |      |       3232  3335           3926
- * teq      4081 | 3804 | 3806  3804  3800           3813
- * tfft     4288 | 3816 | 3785  3846  3844           11.5
- * tmisc         |      |       4465  4455 4442      4911
- * tio           | 5227 |       4586  4527 4516      4613
- * tcase         |      |       4812  4895 4885      4900
- * tlet     5409 | 4613 | 4578  4879  4887           5836
- * tclo     6246 | 5188 | 5187  4984  4954 4761      5299
- * tgc           |      |       4997  4995 4988      5319
- * trec     17.8 | 6318 | 6317  5918  5937           7780
- * tgen     11.7 | 11.0 | 11.0  11.2  11.1           12.0
- * thash         |      |       12.1  12.2           36.6
- * tall     16.4 | 15.4 | 15.3  15.3  15.4           27.2    
- * calls    40.3 | 35.9 | 35.8  36.0  36.1 36.0      60.7
- * sg       85.8 | 70.4 | 70.6  70.6  70.8 70.7      97.7
- * lg      115.9 |104.9 |104.6 104.8 104.6 104.4    105.9
- * tbig    264.5 |178.0 |177.2 174.1 174.0 173.9    618.3
+ * --------------------------------------------------------------
+ *           18  |  19  |  20.0  20.7  20.8  20.9          gmp
+ * --------------------------------------------------------------
+ * tpeak     167 |  117 |  116   116   115                  128
+ * tauto     748 |  633 |  638   662   665   662           1261
+ * tref     1093 |  779 |  779   671   671                  720
+ * tshoot   1296 |  880 |  841   823   823                 1628
+ * index     939 | 1013 |  990  1002  1006                 1065
+ * s7test   1776 | 1711 | 1700  1804  1824  1807           4570
+ * lt       2205 | 2116 | 2082  2093  2089  2085           2108
+ * tform    2472 | 2289 | 2298  2274  2278  2268           3256
+ * tcopy    2434 | 2264 | 2277  2285  2270                 2342 
+ * tmat     6072 | 2478 | 2465  2354  2345  2338           2505
+ * tread    2449 | 2394 | 2379  2389  2416                 2583
+ * tvect    6189 | 2430 | 2435  2463  2461                 2695
+ * fbench   2974 | 2643 | 2628  2684  2676  2673           3088
+ * tb       3251 | 2799 | 2767  2690  2685  2677           3513
+ * trclo    7985 | 2791 | 2670  2711  2704  2698           4496
+ * tmap     3238 | 2883 | 2874  2838  2838                 3762
+ * titer    3962 | 2911 | 2884  2900  2892                 2918
+ * tsort    4156 | 3043 | 3031  2989  2989                 3690
+ * tmac     3391 | 3186 | 3176  3171  3167  3162           3257
+ * tset     6616 | 3083 | 3168  3175  3175  3167           3166
+ * tnum          |      |       3518  3234  3227           61.3
+ * dup           |      |       3232  3335  3276           3926
+ * teq      4081 | 3804 | 3806  3804  3800                 3813
+ * tfft     4288 | 3816 | 3785  3846  3844  3841           11.5
+ * tmisc         |      |       4465  4455  4442           4911
+ * tio           | 5227 |       4586  4527  4516           4613
+ * tcase         |      |       4812  4895  4885           4900
+ * tlet     5409 | 4613 | 4578  4879  4887                 5836
+ * tclo     6246 | 5188 | 5187  4984  4954  4761           5299
+ * tgc           |      |       4997  4995  4987           5319
+ * trec     17.8 | 6318 | 6317  5918  5937                 7780
+ * tgen     11.7 | 11.0 | 11.0  11.2  11.1                 12.0
+ * thash         |      |       12.1  12.2                 36.6
+ * tall     16.4 | 15.4 | 15.3  15.3  15.4                 27.2    
+ * calls    40.3 | 35.9 | 35.8  36.0  36.1  35.9           60.7
+ * sg       85.8 | 70.4 | 70.6  70.6  70.8  70.7           97.7
+ * lg      115.9 |104.9 |104.6 104.8 104.6 104.3          105.9
+ * tbig    264.5 |178.0 |177.2 174.1 174.0 173.9          618.3
  *
- * --------------------------------------------------------------------------
+ * ----------------------------------------------------------------
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), 
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * check fx_tree further [tca cta t_opsq sta optcq optcq_c opssq_optq(fb)? optsq opstq_t? optq_opuq(set) optq_optq? tuc? tc(tnum)?? lt_su? add_ui?(thash)]
+ * fx_tree: [tca cta t_opsq sta(_direct) optcq_c opssq_optq(fb)? optsq opstq_t? optq_opuq(set) 
+ *           optq_optq--this exists via _direct? tuc? tc(tnum)?? lt_su? add_ui?(thash)]
+ *    tmp/t718/fxs
  */
