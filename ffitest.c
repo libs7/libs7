@@ -503,7 +503,7 @@ static const char *pretty_print(s7_scheme *sc, s7_pointer obj) /* (pretty-print 
             "(catch #t                                \
                (lambda ()                             \
                  (unless (defined? 'pp)		      \
-                   (load \"/home/bil/cl/write.scm\")) \
+                   (load \"write.scm\"))	      \
                  (pp obj))			      \
                (lambda (type info)		      \
                  (apply format #f info)))",

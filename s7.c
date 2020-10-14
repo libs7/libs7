@@ -1365,9 +1365,6 @@ struct s7_scheme {
 #if S7_DEBUGGING
   int *tc_rec_calls;
 #endif
-#if TRACE_BAFFLE
-  s7_pointer last_baffle;
-#endif
 };
 
 #if S7_DEBUGGING
@@ -6021,9 +6018,6 @@ static int64_t gc(s7_scheme *sc)
 	if (is_gensym(pd->funcs[i]))
 	  set_mark(pd->funcs[i]);
     }
-#if TRACE_BAFFLE
-  gc_mark(sc->last_baffle);
-#endif
 
   /* free up all unmarked objects */
   old_free_heap_top = sc->free_heap_top;
@@ -10522,9 +10516,6 @@ static s7_int find_any_baffle(s7_scheme *sc)
 
 static void check_with_baffle(s7_scheme *sc)
 {
-#if TRACE_BAFFLE
-  sc->last_baffle = sc->code;
-#endif
   if (!s7_is_proper_list(sc, sc->code))
     eval_error(sc, "with-baffle: unexpected dot? ~A", 31, sc->code);
   pair_set_syntax_op(sc->code, OP_WITH_BAFFLE_UNCHECKED);
@@ -10532,9 +10523,6 @@ static void check_with_baffle(s7_scheme *sc)
 
 static bool op_with_baffle_unchecked(s7_scheme *sc)
 {
-#if TRACE_BAFFLE
-  sc->last_baffle = sc->code;
-#endif
   sc->code = cdr(sc->code);
   if (is_null(sc->code))
     {
@@ -10810,35 +10798,13 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
  *   in a lambda form that is being exported.  See b-func in s7test for an example.
  */
 
-#if TRACE_BAFFLE
-  void s7_show_stack(s7_scheme *sc);
-#endif
-
 static void apply_continuation(s7_scheme *sc) /* sc->code is the continuation */
 {
   if (!call_with_current_continuation(sc))
-    {
-#if TRACE_BAFFLE
-      {
-	s7_pointer c;
-	c = sc->code;
-	if (is_continuation(c))
-	  {
-	    fprintf(stderr, "key: %" print_s7_int "\n", continuation_key(c));
-	    fprintf(stderr, "find_baffle: %d\n", find_baffle(sc, continuation_key(c))); /* bool=int43_t */
-	  }
-	else fprintf(stderr, "sc->code is not a continuation?\n");
-	s7_show_stack(sc);
-	fprintf(stderr, "last_baffle: %s\n", display(sc->last_baffle));
- 	s7_show_history(sc);
- 	if (sc->stop_at_error) abort();
-      }
-#endif
-      s7_error(sc, sc->baffled_symbol,
-	       (is_symbol(continuation_name(sc->code))) ?
-  	       set_elist_2(sc, wrap_string(sc, "continuation ~S can't jump into with-baffle", 43), continuation_name(sc->code)) :
-	       set_elist_1(sc, wrap_string(sc, "continuation can't jump into with-baffle", 40)));
-    }
+    s7_error(sc, sc->baffled_symbol,
+	     (is_symbol(continuation_name(sc->code))) ?
+	     set_elist_2(sc, wrap_string(sc, "continuation ~S can't jump into with-baffle", 43), continuation_name(sc->code)) :
+	     set_elist_1(sc, wrap_string(sc, "continuation can't jump into with-baffle", 40)));
 }
 
 static bool op_implicit_continuation_a(s7_scheme *sc)
@@ -26285,7 +26251,7 @@ static void init_strings(void)
   its_nan_string =                make_permanent_string("NaN usually indicates a numerical error");
   its_infinite_string =           make_permanent_string("it is infinite");
   too_many_indices_string =       make_permanent_string("too many indices");
-  value_is_missing_string =       make_permanent_string("~A argument '~A's value is missing");
+  value_is_missing_string =       make_permanent_string("~A argument ~S's value is missing"); /* not '~A because it's normally a keyword */
   parameter_set_twice_string =    make_permanent_string("parameter set twice, ~S in ~S");
   immutable_error_string =        make_permanent_string("can't ~S ~S (it is immutable)");
   no_setter_string =              make_permanent_string("~A (~A) does not have a setter");
@@ -55178,6 +55144,8 @@ static s7_pointer set_c_function_star_args(s7_scheme *sc)
 		      if (c_function_allows_other_keys(func))
 			{
 			  karg = cdr(karg);
+			  if (is_null(karg)) /* (f* :x) where f* arglist includes :allow-other-keys */
+			    return(s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, value_is_missing_string, func, car(arg))));
 			  ki--;
 			}
 		      else return(s7_error(sc, sc->wrong_type_arg_symbol,
@@ -94702,7 +94670,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-time"), make_integer(sc, sc->gc_total_time));
 
-  /* show how many active cells there are of each type */
+  /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
   for (i = 0; i < NUM_TYPES; i++) ts[i] = 0;
   for (k = 0; k < sc->heap_size; k++)
     ts[unchecked_type(sc->heap[k])]++;
@@ -97631,9 +97599,6 @@ s7_scheme *s7_init(void)
 #if S7_DEBUGGING
   init_tc_rec(sc);
 #endif
-#if TRACE_BAFFLE
-  sc->last_baffle = sc->nil;
-#endif
 
 #if (!WITH_PURE_S7)
   s7_define_variable(sc, "make-rectangular", slot_value(global_slot(sc->complex_symbol)));
@@ -98137,53 +98102,53 @@ int main(int argc, char **argv)
  * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-<date>.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
  *   tests7 compsnd testsnd autotest
  *
- * --------------------------------------------------------------
- *           18  |  19  |  20.0  20.7  20.8  20.9          gmp
- * --------------------------------------------------------------
- * tpeak     167 |  117 |  116   116   115                  128
- * tauto     748 |  633 |  638   662   665   662           1261
- * tref     1093 |  779 |  779   671   671                  720
- * tshoot   1296 |  880 |  841   823   823                 1628
- * index     939 | 1013 |  990  1002  1006                 1065
- * s7test   1776 | 1711 | 1700  1804  1824  1807           4570
- * lt       2205 | 2116 | 2082  2093  2089  2085           2108
- * tform    2472 | 2289 | 2298  2274  2278  2268           3256
- * tcopy    2434 | 2264 | 2277  2285  2270                 2342 
- * tmat     6072 | 2478 | 2465  2354  2345  2338           2505
- * tread    2449 | 2394 | 2379  2389  2416                 2583
- * tvect    6189 | 2430 | 2435  2463  2461                 2695
- * fbench   2974 | 2643 | 2628  2684  2676  2673           3088
- * tb       3251 | 2799 | 2767  2690  2685  2677           3513
- * trclo    7985 | 2791 | 2670  2711  2704  2698           4496
- * tmap     3238 | 2883 | 2874  2838  2838                 3762
- * titer    3962 | 2911 | 2884  2900  2892                 2918
- * tsort    4156 | 3043 | 3031  2989  2989                 3690
- * tmac     3391 | 3186 | 3176  3171  3167  3162           3257
- * tset     6616 | 3083 | 3168  3175  3175  3167           3166
- * tnum          |      |       3518  3234  3227           61.3
- * dup           |      |       3232  3335  3276           3926
- * teq      4081 | 3804 | 3806  3804  3800                 3813
- * tfft     4288 | 3816 | 3785  3846  3844  3841           11.5
- * tmisc         |      |       4465  4455  4442           4911
- * tio           | 5227 |       4586  4527  4516           4613
- * tcase         |      |       4812  4895  4885           4900
- * tlet     5409 | 4613 | 4578  4879  4887                 5836
- * tclo     6246 | 5188 | 5187  4984  4954  4761           5299
- * tgc           |      |       4997  4995  4987           5319
- * trec     17.8 | 6318 | 6317  5918  5937                 7780
- * tgen     11.7 | 11.0 | 11.0  11.2  11.1                 12.0
- * thash         |      |       12.1  12.2                 36.6
- * tall     16.4 | 15.4 | 15.3  15.3  15.4                 27.2    
- * calls    40.3 | 35.9 | 35.8  36.0  36.1  35.9           60.7
- * sg       85.8 | 70.4 | 70.6  70.6  70.8  70.7           97.7
- * lg      115.9 |104.9 |104.6 104.8 104.6 104.3          105.9
- * tbig    264.5 |178.0 |177.2 174.1 174.0 173.9          618.3
+ * --------------------------------------------------------
+ *           18  |  19  |  20.0  20.8  20.9           gmp
+ * --------------------------------------------------------
+ * tpeak     167 |  117 |  116   115                  128
+ * tauto     748 |  633 |  638   665   662           1261
+ * tref     1093 |  779 |  779   671                  720
+ * tshoot   1296 |  880 |  841   823                 1628
+ * index     939 | 1013 |  990  1006                 1065
+ * s7test   1776 | 1711 | 1700  1824  1807           4570
+ * lt       2205 | 2116 | 2082  2089  2085           2108
+ * tform    2472 | 2289 | 2298  2278  2268           3256
+ * tcopy    2434 | 2264 | 2277  2270                 2342 
+ * tmat     6072 | 2478 | 2465  2345  2338           2505
+ * tread    2449 | 2394 | 2379  2416                 2583
+ * tvect    6189 | 2430 | 2435  2461                 2695
+ * fbench   2974 | 2643 | 2628  2676  2673           3088
+ * tb       3251 | 2799 | 2767  2685  2677           3513
+ * trclo    7985 | 2791 | 2670  2704  2698           4496
+ * tmap     3238 | 2883 | 2874  2838                 3762
+ * titer    3962 | 2911 | 2884  2892                 2918
+ * tsort    4156 | 3043 | 3031  2989                 3690
+ * tset     6616 | 3083 | 3168  3175  3167           3166
+ * tnum          |      |       3234  3227           61.3
+ * tmac     3503 | 3291 | 3281  3272  3267           3383
+ * dup           |      |       3335  3276           3926
+ * teq      4081 | 3804 | 3806  3800                 3813
+ * tfft     4288 | 3816 | 3785  3844  3841           11.5
+ * tmisc         |      |       4455  4442           4911
+ * tio           | 5227 |       4527  4516           4613
+ * tcase         |      |       4895  4885           4900
+ * tlet     5409 | 4613 | 4578  4887                 5836
+ * tclo     6246 | 5188 | 5187  4954  4761           5299
+ * tgc           |      |       4995  4987           5319
+ * trec     17.8 | 6318 | 6317  5937                 7780
+ * tgen     11.7 | 11.0 | 11.0  11.1                 12.0
+ * thash         |      |       12.2                 36.6
+ * tall     16.4 | 15.4 | 15.3  15.4                 27.2    
+ * calls    40.3 | 35.9 | 35.8  36.1  35.9           60.7
+ * sg       85.8 | 70.4 | 70.6  70.8  70.7           97.7
+ * lg      115.9 |104.9 |104.6 104.6 104.3          105.9
+ * tbig    264.5 |178.0 |177.2 174.0 173.9          618.3
  *
  * ----------------------------------------------------------------
  *
- * nrepl+notcurses, menu items, (if selection, C-space+move also), 
+ * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * fx_tree: [tca cta t_opsq sta(_direct) optcq_c opssq_optq(fb)? optsq opstq_t? optq_opuq(set) 
- *           optq_optq--this exists via _direct? tuc? tc(tnum)?? lt_su? add_ui?(thash)]
- *    tmp/t718/fxs
+ * can simple/safe macro bodies be fx_treed -- and apply-values in this context is probably safe
+ *   tmac: op_macro checks every time! full_unknopt won't collide? it only is set if closure? (unknown_g) and collision->op_s
+ *         place it on cdr which can't be confused, (macro arg...) or (macro (...args...) ...) 
  */
