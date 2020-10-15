@@ -349,9 +349,16 @@ static int nrepl(s7_scheme *sc)
 #ifdef S7_LOAD_PATH
       s7_add_to_load_path(sc, S7_LOAD_PATH);
 #endif
+#if (!USE_SND)
+      /* maybe eventually just include the bits in this file (5000 lines) */
+      #include "nrepl-bits.h"
+      /* xxd -i nrepl.scm > nrepl-bits.h, then add null termination and increment the length */
+      s7_load_from_string(sc, (const char *)nrepl_scm, nrepl_scm_len);
+#else
       if (!s7_load(sc, "nrepl.scm"))
 	return(1);
-      s7_eval_c_string(sc, "((*nrepl* 'run))");
+#endif
+      /* s7_eval_c_string(sc, "((*nrepl* 'run))"); */ /* already in nrepl.scm I think */
 #endif
     }
   return(0);

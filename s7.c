@@ -2610,6 +2610,11 @@ void s7_show_history(s7_scheme *sc);
 #define is_unknopt(p)                  has_type1_bit(T_Pair(p), T_UNKNOPT)
 #define set_is_unknopt(p)              set_type1_bit(T_Pair(p), T_UNKNOPT)
 
+#define T_MAC_OK                       T_UNKNOPT
+#define mac_is_ok(p)                   has_type1_bit(T_Pair(p), T_MAC_OK)
+#define set_mac_is_ok(p)               set_type1_bit(T_Pair(p), T_MAC_OK)
+/* marks a macro (via (macro...)) that has been checked -- easier (and slower) than making 4 or 5 more ops, op_macro_unchecked and so on */
+
 /* T_LOCAL has room (except symbol/pair) */
 #define UNUSED_BITS                    0x3000000000000000
 
@@ -30168,6 +30173,41 @@ s7_pointer s7_load(s7_scheme *sc, const char *filename)
   return(s7_load_with_environment(sc, filename, sc->nil));
 }
 
+#if (!MS_WINDOWS) 
+s7_pointer s7_load_from_string(s7_scheme *sc, const char *content, s7_int bytes)
+{
+  s7_pointer port;
+  s7_int port_loc;
+  declare_jump_info();
+  TRACK(sc);
+
+  port = open_input_string(sc, content, bytes);
+  port_loc = s7_gc_protect_1(sc, port);
+  set_loader_port(port);
+  push_input_port(sc, port);
+  sc->curlet = sc->nil; /* placeholder */
+  push_stack(sc, OP_LOAD_RETURN_IF_EOF, port, sc->code);
+  s7_gc_unprotect_at(sc, port_loc);
+
+  store_jump_info(sc);
+  set_jump_info(sc, LOAD_SET_JUMP);
+  if (jump_loc != NO_JUMP)
+    {
+      if (jump_loc != ERROR_JUMP)
+	eval(sc, sc->cur_op);
+    }
+  else eval(sc, OP_READ_INTERNAL);
+
+  pop_input_port(sc);
+  if (is_input_port(port))
+    s7_close_input_port(sc, port);
+
+  restore_jump_info(sc);
+  if (is_multiple_value(sc->value))
+    sc->value = splice_in_values(sc, multiple_value(sc->value));
+  return(sc->value);
+}
+#endif
 
 static s7_pointer g_load(s7_scheme *sc, s7_pointer args)
 {
@@ -71998,6 +72038,17 @@ static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 	(s7_is_proper_list(sc, cddr(arg2))));
 }
 
+static bool tree_has_keyword(s7_scheme *sc, s7_pointer tree)
+{
+  s7_pointer p;
+  for (p = tree; is_pair(p); p = cdr(p))
+    if (tree_has_keyword(sc, car(p)))
+      return(true);
+  return((is_keyword(tree)) ||           /* a symbol can evaluate to a keyword... */
+	 (tree == sc->string_to_keyword_symbol) ||
+	 (tree == sc->symbol_to_keyword_symbol));
+}
+
 static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer func,
 					 int32_t hop, int32_t pairs, int32_t symbols, int32_t quotes, int32_t bad_pairs, s7_pointer e)
 {
@@ -72010,9 +72061,9 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 
   if (pairs == 0)
     {
+      if ((is_keyword(arg1)) && (is_c_function_star(func))) return(OPT_F);
       if (func_is_safe)                  /* safe c function */
 	{
-	  if ((is_keyword(arg1)) && (is_c_function_star(func))) return(OPT_F);
 	  set_safe_optimize_op(expr, hop + ((symbols == 0) ? OP_SAFE_C_D : OP_SAFE_C_S));
 	  choose_c_function(sc, expr, func, 1);
 	  return(OPT_T);
@@ -72020,7 +72071,6 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       /* c function is not safe */
       if (symbols == 0)
 	{
-	  if ((is_keyword(arg1)) && (is_c_function_star(func))) return(OPT_F);
 	  set_unsafe_optimize_op(expr, hop + OP_C_A); /* OP_C_C never happens */
 	  fx_annotate_arg(sc, cdr(expr), e);
 	  set_opt3_arglen(expr, small_one);
@@ -72036,6 +72086,8 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       return(OPT_F);
     }
   /* pairs == 1 */
+  if ((is_c_function_star(func)) && (tree_has_keyword(sc, arg1))) return(OPT_F); 
+  /* this is incomplete -- safe would be to quit for any func* but that seems too draconian */
   if (bad_pairs == 0)
     {
       if (func_is_safe)
@@ -79835,10 +79887,14 @@ static bool op_define_macro(s7_scheme *sc)
   return(true);
 }
 
-static bool op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */ /* TODO: OP_MACRO_UNCHECKED? */
+static bool op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
 {
   sc->code = cdr(sc->code);
-  check_macro(sc, sc->cur_op);
+  if ((!is_pair(sc->code)) || (!mac_is_ok(sc->code))) /* (macro)? or (macro . #\a)? */
+    {
+      check_macro(sc, sc->cur_op);
+      if (is_pair(sc->code)) set_mac_is_ok(sc->code);
+    }
   sc->value = make_macro(sc, sc->cur_op, true);
   return(true);
 }
@@ -98125,7 +98181,7 @@ int main(int argc, char **argv)
  * tsort    4156 | 3043 | 3031  2989                 3690
  * tset     6616 | 3083 | 3168  3175  3167           3166
  * tnum          |      |       3234  3227           61.3
- * tmac     3503 | 3291 | 3281  3272  3267           3383
+ * tmac     3503 | 3291 | 3281  3272  3267 3261      3383
  * dup           |      |       3335  3276           3926
  * teq      4081 | 3804 | 3806  3800                 3813
  * tfft     4288 | 3816 | 3785  3844  3841           11.5
@@ -98148,7 +98204,5 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * can simple/safe macro bodies be fx_treed -- and apply-values in this context is probably safe
- *   tmac: op_macro checks every time! full_unknopt won't collide? it only is set if closure? (unknown_g) and collision->op_s
- *         place it on cdr which can't be confused, (macro arg...) or (macro (...args...) ...) 
+ * add nrepl-bits.h at ccrma
  */
