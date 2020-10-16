@@ -354,21 +354,36 @@ static int nrepl(s7_scheme *sc)
 #endif
 #if (!NREPL_DEBUGGING)
       s7_add_to_load_path(sc, "/usr/local/share/s7");
-      /* maybe eventually just include the bits in this file (5000 lines) */
       #include "nrepl-bits.h"
-      /* xxd -i nrepl.scm > nrepl-bits.h, then add null termination and increment the length */
       s7_load_from_string(sc, (const char *)nrepl_scm, nrepl_scm_len);
 #else
       if (!s7_load(sc, "nrepl.scm"))
 	return(1);
 #endif
-      /* s7_eval_c_string(sc, "((*nrepl* 'run))"); */ /* already in nrepl.scm I think */
 #endif
     }
   return(0);
 }
 
+#if 0
 /*
   gcc -c s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl
   gcc -o s7 nrepl.c s7.o -lnotcurses -lm -I. -ldl
+
+  nrepl-bits.h is generated from:
+
+(call-with-output-file "nrepl-bits.h"
+  (lambda (op)
+    (call-with-input-file "nrepl.scm"
+      (lambda (ip)
+	(format op "unsigned char nrepl_scm[] = {~%  ")
+	(do ((c (read-char ip) (read-char ip))
+	     (i 0 (+ i 1)))
+	    ((eof-object? c)
+	     (format op "0};~%unsigned int nrepl_scm_len = ~D;~%" (+ i 1)))
+	  (format op "0x~X, " (char->integer c))
+	  (if (char=? c #\newline)
+	      (format op "~%  ")))))))
+
 */
+#endif
