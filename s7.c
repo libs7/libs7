@@ -23975,27 +23975,15 @@ static bool is_nan_b_7p(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_INTEGER:
-    case T_RATIO:
-      return(false);
-
-    case T_REAL:
-      return(is_NaN(real(x)));
-
-    case T_COMPLEX:
-      return((is_NaN(real_part(x))) || (is_NaN(imag_part(x))));
-
+    case T_RATIO:   return(false);
+    case T_REAL:    return(is_NaN(real(x)));
+    case T_COMPLEX: return((is_NaN(real_part(x))) || (is_NaN(imag_part(x))));
 #if WITH_GMP
     case T_BIG_INTEGER:
-    case T_BIG_RATIO:
-      return(false);
-
-    case T_BIG_REAL:
-      return(mpfr_nan_p(big_real(x)) != 0);
-
-    case T_BIG_COMPLEX:
-      return((mpfr_nan_p(mpc_realref(big_complex(x))) != 0) || (mpfr_nan_p(mpc_imagref(big_complex(x))) != 0));
+    case T_BIG_RATIO:   return(false);
+    case T_BIG_REAL:    return(mpfr_nan_p(big_real(x)) != 0);
+    case T_BIG_COMPLEX: return((mpfr_nan_p(mpc_realref(big_complex(x))) != 0) || (mpfr_nan_p(mpc_imagref(big_complex(x))) != 0));
 #endif
-
     default:
       if (s7_is_number(x))
 	return(method_or_bust_with_type_one_arg(sc, x, sc->is_nan_symbol, list_1(sc, x), a_number_string) != sc->F);
@@ -24017,28 +24005,17 @@ static bool is_infinite_b_7p(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_INTEGER:
-    case T_RATIO:
-      return(false);
-
-    case T_REAL:
-      return(is_inf(real(x)));
-
-    case T_COMPLEX:
-      return((is_inf(real_part(x))) || (is_inf(imag_part(x))));
-
+    case T_RATIO:    return(false);
+    case T_REAL:     return(is_inf(real(x)));
+    case T_COMPLEX:  return((is_inf(real_part(x))) || (is_inf(imag_part(x))));
 #if WITH_GMP
     case T_BIG_INTEGER:
-    case T_BIG_RATIO:
-      return(false);
-
-    case T_BIG_REAL:
-      return(mpfr_inf_p(big_real(x)) != 0);
-
+    case T_BIG_RATIO: return(false);
+    case T_BIG_REAL:  return(mpfr_inf_p(big_real(x)) != 0);
     case T_BIG_COMPLEX:
       return((mpfr_inf_p(mpc_realref(big_complex(x))) != 0) ||
 	     (mpfr_inf_p(mpc_imagref(big_complex(x))) != 0));
 #endif
-
     default:
       if (s7_is_number(x))
 	return(method_or_bust_with_type_one_arg(sc, x, sc->is_infinite_symbol, list_1(sc, x), a_number_string) != sc->F);
@@ -30173,9 +30150,9 @@ s7_pointer s7_load(s7_scheme *sc, const char *filename)
   return(s7_load_with_environment(sc, filename, sc->nil));
 }
 
-#if (!MS_WINDOWS) 
 s7_pointer s7_load_from_string(s7_scheme *sc, const char *content, s7_int bytes)
 {
+#if (!MS_WINDOWS) 
   s7_pointer port;
   s7_int port_loc;
   declare_jump_info();
@@ -30206,8 +30183,10 @@ s7_pointer s7_load_from_string(s7_scheme *sc, const char *content, s7_int bytes)
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
   return(sc->value);
-}
+#else
+  return(sc->F);
 #endif
+}
 
 static s7_pointer g_load(s7_scheme *sc, s7_pointer args)
 {
@@ -72061,7 +72040,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 
   if (pairs == 0)
     {
-      if ((is_keyword(arg1)) && (is_c_function_star(func))) return(OPT_F);
+      if ((is_c_function_star(func)) && (is_symbol(arg1))) return(OPT_F); /* symbol can evaluate to keyword, groan */
       if (func_is_safe)                  /* safe c function */
 	{
 	  set_safe_optimize_op(expr, hop + ((symbols == 0) ? OP_SAFE_C_D : OP_SAFE_C_S));
@@ -76299,7 +76278,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	      set_rec_tc_args(sc, safe_list_length(cdr(x)));
 	      return(result);
 	    }
-	  if (result != UNSAFE_BODY)  result = RECUR_BODY; 
+	  if (result != UNSAFE_BODY) result = RECUR_BODY; 
 	  return(result);
 	}
 
@@ -77234,7 +77213,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
       eval_error(sc, "let form is an improper list? ~A", 32, sc->code);
     }
 
-  if (!is_pair(cdr(code)))          /* (let () ) */
+  if (!is_pair(cdr(code)))          /* (let () ) or (let () . 1) */
     eval_error(sc, "let has no body: ~A", 19, sc->code);
 
   if ((!is_list(car(code))) &&      /* (let 1 ...) */
@@ -77292,10 +77271,10 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
     }
   /* (let ('1) quote) -> 1 */
 
-  if (is_not_null(x))                  /* (let* ((a 1) . b) a) */
+  if (is_not_null(x))                     /* (let* ((a 1) . b) a) */
     eval_error(sc, "let variable list improper?: ~A", 31, sc->code);
 
-  if (!s7_is_proper_list(sc, cdr(code)))
+  if (!s7_is_proper_list(sc, cdr(code))) /* (let ((a 1)) a . 1) */
     eval_error(sc, "stray dot in let body: ~S", 25, cdr(code));
 
   if (named_let)
@@ -77347,6 +77326,10 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 		    set_c_call_direct(cdr(x), fx_choose(sc, cdr(x), sc->curlet, let_symbol_is_safe));
 		}}}}
 
+
+  /* if safe_c or safe_closure as car(body), null cdr(body), see if only vars as args 
+   *   symbol_list is intact??
+   */
   if (optimize_op(sc->code) >= OP_LET_FX_OLD)
     {
       /* if body_is_safe, we could use sc->lamlets here to save the let, even if not unheaped, but
@@ -77354,7 +77337,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
        *   is somewhat expensive.  So in most timing tests, the saved let is not an improvement.
        */
       if ((not_in_heap(sc->code)) &&
-	  (body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY))
+	  (body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY)) /* recur_body is apparently never hit */
 	set_opt3_let(code, make_permanent_let(sc, car(code)));
       else
 	{
@@ -85614,14 +85597,6 @@ static void apply_c_macro(s7_scheme *sc)  	                    /* -------- C-bas
     s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
 
   sc->code = c_macro_call(sc->code)(sc, sc->args);
-  if (is_multiple_value(sc->code)) /* can this happen? s7_values splices before returning, and `(values ...) is handled later */
-    {
-#if S7_DEBUGGING
-      fprintf(stderr, "%d unexpected mv code: %s\n", __LINE__, display(sc->code));
-#endif
-      push_stack(sc, OP_EVAL_MACRO_MV, sc->nil, cdr(sc->code));
-      sc->code = car(sc->code);
-    }
 }
 
 static void apply_syntax(s7_scheme *sc)                            /* -------- syntactic keyword as applicable object -------- */
@@ -97349,16 +97324,16 @@ s7_scheme *s7_init(void)
 
   sc->temp_cell_2 = permanent_cons(sc, sc->nil, sc->nil, T_PAIR | T_IMMUTABLE);
 
-  sc->t1_1 = permanent_cons(sc, sc->nil, sc->nil, T_PAIR | T_IMMUTABLE);
-  sc->t2_2 = permanent_cons(sc, sc->nil, sc->nil, T_PAIR | T_IMMUTABLE);
+  sc->t1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->t2_1 = permanent_cons(sc, sc->nil, sc->t2_2, T_PAIR | T_IMMUTABLE);
-  sc->z2_2 = permanent_cons(sc, sc->nil, sc->nil, T_PAIR | T_IMMUTABLE);
+  sc->z2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->z2_1 = permanent_cons(sc, sc->nil, sc->z2_2, T_PAIR | T_IMMUTABLE);
-  sc->t3_3 = permanent_cons(sc, sc->nil, sc->nil, T_PAIR | T_IMMUTABLE);
+  sc->t3_3 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->t3_2 = permanent_cons(sc, sc->nil, sc->t3_3, T_PAIR | T_IMMUTABLE);
   sc->t3_1 = permanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
   sc->t4_1 = permanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
-  sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil, T_PAIR | T_IMMUTABLE);
+  sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->u2_1 = permanent_cons(sc, sc->nil, sc->u1_1, T_PAIR | T_IMMUTABLE);
 
   sc->safe_lists[0] = sc->nil;
@@ -98204,5 +98179,5 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *  colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * add nrepl-bits.h at ccrma
+ * is inline needed in raw_string_hash?
  */

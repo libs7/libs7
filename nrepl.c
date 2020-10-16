@@ -292,6 +292,9 @@ static void init_nlibc(s7_scheme *sc)
   s7_gc_unprotect_at(sc, gc_loc);
 }
 
+#ifndef NREPL_DEBUGGING
+  #define NREPL_DEBUGGING USE_SND
+#endif
 
 #if (!USE_SND)
 int main(int argc, char **argv)
@@ -349,7 +352,8 @@ static int nrepl(s7_scheme *sc)
 #ifdef S7_LOAD_PATH
       s7_add_to_load_path(sc, S7_LOAD_PATH);
 #endif
-#if (!USE_SND)
+#if (!NREPL_DEBUGGING)
+      s7_add_to_load_path(sc, "/usr/local/share/s7");
       /* maybe eventually just include the bits in this file (5000 lines) */
       #include "nrepl-bits.h"
       /* xxd -i nrepl.scm > nrepl-bits.h, then add null termination and increment the length */
@@ -364,3 +368,7 @@ static int nrepl(s7_scheme *sc)
   return(0);
 }
 
+/*
+  gcc -c s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl
+  gcc -o s7 nrepl.c s7.o -lnotcurses -lm -I. -ldl
+*/

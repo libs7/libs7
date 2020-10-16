@@ -37,6 +37,7 @@
 (define startup-symbols (copy (symbol-table)))
 ;(autoload 'lint "lint.scm")
 (require lint.scm) 
+(define with-lint (defined? '*lint*)) ; maybe require should return #f if no luck? (or a list since it takes any number of args)
 
 (autoload 'pretty-print "write.scm")
 (autoload 'pp "write.scm")
@@ -1524,24 +1525,26 @@
 				(ncplane_putc_yx ncp (caar pars) (cadar pars) red-paren)
 				(set! prev-pars (car pars))
 				
-				(when (= row (caar pars))
-				  (let ((expr (ncplane_contents ncp row (cadar pars) 1 (- col (cadar pars)))))
-				    (catch #t
-				      (lambda ()
-					(let ((result (call-with-output-string
-						       (lambda (op)
-							 (call-with-input-string expr
-							   (lambda (ip)
-							     (let-temporarily ((*report-laconically* #t)
-									       (*report-combinable-lets* #f)
-									       (*report-boolean-functions-misbehaving* #f)
-									       (*report-quasiquote-rewrites* #f))
-							       (lint ip op #f))))))))
-					  (unless (string=? result expr)
-					    (set! (top-level-let 'status-text) result)
-					    (display-status (first-line result)))))
-				      (lambda (type info)
-					#f)))))))
+				(if (not with-lint)
+				    (notcurses_render nc)
+				    (when (= row (caar pars))
+				      (let ((expr (ncplane_contents ncp row (cadar pars) 1 (- col (cadar pars)))))
+					(catch #t
+					  (lambda ()
+					    (let ((result (call-with-output-string
+							   (lambda (op)
+							     (call-with-input-string expr
+							       (lambda (ip)
+								 (let-temporarily ((*report-laconically* #t)
+										   (*report-combinable-lets* #f)
+										   (*report-boolean-functions-misbehaving* #f)
+										   (*report-quasiquote-rewrites* #f))
+								   (lint ip op #f))))))))
+					      (unless (string=? result expr)
+						(set! (top-level-let 'status-text) result)
+						(display-status (first-line result)))))
+					  (lambda (type info)
+					    #f))))))))
 			  
 			  (move-cursor row col)
 			  (repl-loop))))))

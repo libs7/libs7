@@ -8810,7 +8810,7 @@ If "test.scm" is not in the current directory, s7 looks at the entries in its <a
 trying each in turn until it finds the file.  If it fails, it returns NULL.
 s7_load_from_string takes an array of bytes representing some scheme code (xxd -i file.scm can generate these arrays),
 and treats it as if it were the contents of a file of scheme code.  So, unlike s7_eval_c_string, it can handle
-multiple statements, and things like double-quote don't need to be quoted.  See nrepl.c for example
+multiple statements, and things like double-quote don't need to be quoted.  nrepl.c for example
 embeds the contents of nrepl.scm at compile time, then calls s7_load_from_string at program startup.  It also
 includes notcurses_s7.c.  The end result is a stand-alone program that doesn't need to load either nrepl.scm
 or notcurses_s7.so.
