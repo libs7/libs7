@@ -37,7 +37,7 @@
 (define startup-symbols (copy (symbol-table)))
 ;(autoload 'lint "lint.scm")
 (require lint.scm) 
-(define with-lint (defined? '*lint*)) ; maybe require should return #f if no luck? (or a list since it takes any number of args)
+(define with-lint (defined? '*lint*)) ; maybe require should return #f if no luck? (or a list since it takes any number of args), or an error??
 
 (autoload 'pretty-print "write.scm")
 (autoload 'pp "write.scm")
@@ -1050,7 +1050,7 @@
 				   (lambda ()
 				     
 				     (let-temporarily (((hook-functions *missing-close-paren-hook*) (list badexpr))
-						       ((hook-functions *read-error-hook*) ()))  ; lint sets this and messes up our error reporting
+						       ((hook-functions *read-error-hook*) ()))    ; lint sets this and messes up our error reporting
 
 				       ;; catch and report reader errors as well as eval troubles
 				       (let-temporarily ((*stderr* (open-output-string))           ; capture *stderr* output
@@ -1524,28 +1524,25 @@
 					 (visible? (caar pars) (cadar pars)))
 				(ncplane_putc_yx ncp (caar pars) (cadar pars) red-paren)
 				(set! prev-pars (car pars))
-				
-				(if (not with-lint)
-				    (notcurses_render nc)
-				    (when (= row (caar pars))
-				      (let ((expr (ncplane_contents ncp row (cadar pars) 1 (- col (cadar pars)))))
-					(catch #t
-					  (lambda ()
-					    (let ((result (call-with-output-string
-							   (lambda (op)
-							     (call-with-input-string expr
-							       (lambda (ip)
-								 (let-temporarily ((*report-laconically* #t)
-										   (*report-combinable-lets* #f)
-										   (*report-boolean-functions-misbehaving* #f)
-										   (*report-quasiquote-rewrites* #f))
-								   (lint ip op #f))))))))
-					      (unless (string=? result expr)
-						(set! (top-level-let 'status-text) result)
-						(display-status (first-line result)))))
-					  (lambda (type info)
-					    #f))))))))
-			  
+				(notcurses_render nc)
+				(when (and with-lint (= row (caar pars)))
+				  (let ((expr (ncplane_contents ncp row (cadar pars) 1 (- col (cadar pars)))))
+				    (catch #t
+				      (lambda ()
+					(let ((result (call-with-output-string
+						       (lambda (op)
+							 (call-with-input-string expr
+							   (lambda (ip)
+							     (let-temporarily ((*report-laconically* #t)
+									       (*report-combinable-lets* #f)
+									       (*report-boolean-functions-misbehaving* #f)
+									       (*report-quasiquote-rewrites* #f))
+							       (lint ip op #f))))))))
+					  (unless (string=? result expr)
+					    (set! (top-level-let 'status-text) result)
+					    (display-status (first-line result)))))
+				      (lambda (type info)
+					#f)))))))
 			  (move-cursor row col)
 			  (repl-loop))))))
 	      
@@ -1617,8 +1614,10 @@
 		(set! statp-row (- nc-rows status-rows)))
 	      (set! statp (ncplane_new nc nc-rows nc-cols 0 0 (c-pointer 0)))
 	      (cells_double_box statp 0 0 (status-cells 0) (status-cells 1) (status-cells 2) (status-cells 3) (status-cells 4) (status-cells 5))
-	      (ncplane_putstr_yx statp 1 1 (make-string (- nc-cols 5) #\space)))))
-
+	      (ncplane_putstr_yx statp 1 1 (make-string (- nc-cols 5) #\space))
+	      (when (string-position "rxvt" (getenv "TERM"))
+		(ncplane_putstr_yx statp 1 2 (substring "rxvt doesn't support the mouse" 0 (min 30 (- nc-cols 3))))
+		(notcurses_render nc)))))
       (curlet)))
   
   (with-let *nrepl*
@@ -1638,7 +1637,6 @@
 ;;   start at row/col, get contents, go to current match else increment, save row/col of match
 ;;
 ;; begin_hook for stepper: at each call, drop back into the debugger with curlet -- how to keep our place? (step=continue+break -- ambiguous)
-;;
 ;; colorize, perhaps make a vector for each color indexed by char; for colorized name, for each char get cell from vector (or make it if needed)
 
 (set! (*s7* 'debug) old-debug)

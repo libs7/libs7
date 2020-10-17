@@ -1,19 +1,13 @@
 /* s7 FFI for the notcurses library
  *
  *   Fedora: notcurses notcurses-devel notcurses-utils
- *   tested in 1.7.4 (fedora 33 via fedora-rawhide) -- this calls itself 1.7.5
- *          in fedora 32, they say 1.7.4, but I think it is 1.7.3, and we don't support that version
+ *   tested in fedora 32/33
  */
 
 #include <locale.h>
 #include <notcurses/notcurses.h>
 #include <notcurses/direct.h>
 #include "s7.h"
-
-/* notcurses does not export its version number */
-#ifndef NC_1_7_4
-  #define NC_1_7_4 1
-#endif
 
 static s7_int s7_integer_checked(s7_scheme *sc, s7_pointer val)
 {
@@ -1190,6 +1184,7 @@ static s7_pointer g_ncplane_set_bg_rgb(s7_scheme *sc, s7_pointer args)
 					    (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
 }
 
+#if 0
 static s7_pointer g_ncplane_set_styles(s7_scheme *sc, s7_pointer args)
 {
   ncplane_set_styles((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1),
@@ -1210,6 +1205,7 @@ static s7_pointer g_ncplane_off_styles(s7_scheme *sc, s7_pointer args)
 		     (unsigned)s7_integer_checked(sc, s7_cadr(args)));
   return(s7_f(sc));
 }
+#endif
 
 static s7_pointer g_ncplane_set_fg_palindex(s7_scheme *sc, s7_pointer args)
 {
@@ -3198,13 +3194,13 @@ static s7_pointer g_nctablet_userptr(s7_scheme *sc, s7_pointer args)
   return(s7_make_c_pointer_with_type(sc, nctablet_userptr((struct nctablet *)s7_c_pointer_with_type(sc, s7_car(args), nctablet_symbol, __func__, 1)), 
 				     void_symbol, s7_f(sc)));
 }
-
+#if 0
 static s7_pointer g_nctablet_plane(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_c_pointer_with_type(sc, nctablet_plane((struct nctablet *)s7_c_pointer_with_type(sc, s7_car(args), nctablet_symbol, __func__, 1)), 
 				     ncplane_symbol, s7_f(sc)));
 }
-
+#endif
 
 #if 0
 /* typedef int (*tabletcb)(struct nctablet* t, int begx, int begy, int maxx, int maxy, bool cliptop);
@@ -4112,9 +4108,11 @@ void notcurses_s7_init(s7_scheme *sc)
 
   nc_func(ncplane_set_fg_rgb, 2, 0, false);
   nc_func(ncplane_set_bg_rgb, 2, 0, false);
+#if 0
   nc_func(ncplane_set_styles, 2, 0, false);
   nc_func(ncplane_on_styles, 2, 0, false);
   nc_func(ncplane_off_styles, 2, 0, false);
+#endif
   nc_func(ncplane_set_fg_palindex, 2, 0, false);
   nc_func(ncplane_set_bg_palindex, 2, 0, false);
   nc_func(ncplane_set_fg_alpha, 2, 0, false);
@@ -4349,7 +4347,9 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncreel_del, 2, 0, false);
   nc_func(ncreel_offer_input, 2, 0, false);
   nc_func(nctablet_userptr, 1, 0, false);
+#if 0
   nc_func(nctablet_plane, 1, 0, false);
+#endif
 
   nc_func(ncvisual_options_make, 0, 0, false);
   nc_func(ncvisual_options_free, 1, 0, false);
