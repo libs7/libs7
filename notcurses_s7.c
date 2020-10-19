@@ -9,6 +9,8 @@
 #include <notcurses/direct.h>
 #include "s7.h"
 
+/* version.h: NOTCURSES_VERSION_MAJOR|MINOR */
+
 static s7_int s7_integer_checked(s7_scheme *sc, s7_pointer val)
 {
   if (!s7_is_integer(val))
@@ -115,11 +117,13 @@ static s7_pointer g_ncdirect_init(s7_scheme *sc, s7_pointer args)
   uint64_t flags = 0;
   termtype = s7_car(args);
   if (s7_is_pair(s7_cdr(args)))
-    fp = (FILE *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, "FILE*"), __func__, 2);
+    {
+      fp = (FILE *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, "FILE*"), __func__, 2);
+      if (s7_is_pair(s7_cddr(args)))
+	flags = s7_integer_checked(sc, s7_caddr(args));
+    }
   else fp = stdout;
 
-  if (s7_is_pair(s7_cddr(args)))
-    flags = s7_integer_checked(sc, s7_caddr(args));
   if ((s7_is_c_pointer(termtype)) &&
       (s7_c_pointer(termtype) == NULL))
     return(s7_make_c_pointer_with_type(sc, ncdirect_init(NULL, fp, flags), ncdirect_symbol, s7_f(sc)));
@@ -591,7 +595,7 @@ static s7_pointer g_notcurses_drop_planes(s7_scheme *sc, s7_pointer args)
   return(s7_f(sc));
 }
 
-#if 0
+#if 0 /* defined(NOTCURSES_VERSION_MAJOR) && (NOTCURSES_VERSION_MAJOR >= 2) */
 
 static s7_pointer g_notcurses_render_to_buffer(s7_scheme *sc, s7_pointer args)
 {
@@ -630,12 +634,24 @@ static s7_pointer g_ncstats_writeout_min_ns(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, ((ncstats *)s7_c_pointer_with_type(sc, s7_car(args), ncstats_symbol, __func__, 1))->writeout_min_ns));
 }
 
+static s7_pointer g_ncmenu_item_set_status(s7_scheme *sc, s7_pointer args) 
+{
+  return(s7_make_integer(sc, ncmenu_item_set_status((struct ncmenu *)s7_c_pointer_with_type(sc, s7_car(args), ncmenu_symbol, __func__, 1),
+						    (const char *)s7_string(s7_cadr(args)),
+						    (const char *)s7_string(s7_caddr(args)),
+						    s7_boolean(s7_cadddr(args)))));
+}
+
   nc_func(ncstats_writeout_ns, 1, 0, false);
   nc_func(ncstats_writeout_max_ns, 1, 0, false);
   nc_func(ncstats_writeout_min_ns, 1, 0, false);
+  nc_func(ncmenu_item_set_status, 4, 0, false);
 
   nc_int(NCDIRECT_OPTION_INHIBIT_SETLOCALE);
   nc_int(NCDIRECT_OPTION_INHIBIT_CBREAK);
+  nc_int(NOTCURSES_VERSION_MAJOR);
+  nc_int(NOTCURSES_VERSION_MINOR);
+  nc_int(NOTCURSES_VERSION_PATCH);
 
 #endif
 

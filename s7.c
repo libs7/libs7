@@ -3968,6 +3968,10 @@ static s7_pointer simple_out_of_range_error_prepackaged(s7_scheme *sc, s7_pointe
 
 /* ---------------- evaluator ops ---------------- */
 
+#ifndef SO1
+  #define SO1 S7_DEBUGGING
+#endif
+
 /* C=constant, S=symbol, A=fx-callable, Q=quote, D=list of constants, FX=list of A's, P=parlous?, O=one form, M=multiform */
 enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_protect used below as boundary marker */
 
@@ -4185,6 +4189,9 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_PA_1, OP_SAFE_C_PA_MV, OP_ANY_CLOSURE_FP_2,
       OP_ANY_CLOSURE_3P_1, OP_ANY_CLOSURE_3P_2, OP_ANY_CLOSURE_3P_3,
       OP_ANY_CLOSURE_4P_1, OP_ANY_CLOSURE_4P_2, OP_ANY_CLOSURE_4P_3, OP_ANY_CLOSURE_4P_4,
+#if SO1
+      OP_CLOSURE_S_O_1,
+#endif
 
       OP_SET_WITH_LET_1, OP_SET_WITH_LET_2,
 
@@ -4428,7 +4435,9 @@ static const char* op_names[NUM_OPS] =
       "safe_c_pa_1", "safe_c_pa_mv", "any_closure_fp_2",
       "any_closure_3p_1", "any_closure_3p_2", "any_closure_3p_3",
       "any_closure_4p_1", "any_closure_4p_2", "any_closure_4p_3", "any_closure_4p_4",
-
+#if SO1
+      "closure_s_o_1",
+#endif
       "set_with_let_1", "set_with_let_2",
 
       "tc_and_a_or_a_la", "tc_or_a_and_a_la", "tc_and_a_or_a_laa", "tc_or_a_and_a_laa", "tc_or_a_a_and_a_a_la",
@@ -52107,7 +52116,9 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
   gc_loc = s7_gc_protect_1(sc, let);
   if (is_subvector(obj))
     {
-      s7_varlet(sc, let, sc->position_symbol, make_integer(sc, (s7_int)(vector_elements(obj) - vector_elements(subvector_vector(obj)))));
+      s7_int pos;
+      pos = (s7_int)((intptr_t)(vector_elements(obj) - vector_elements(subvector_vector(obj))));
+      s7_varlet(sc, let, sc->position_symbol, make_integer(sc, pos));
       s7_varlet(sc, let, sc->vector_symbol, subvector_vector(obj));
     }
   if (is_typed_vector(obj))
@@ -93178,8 +93189,43 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CLOSURE_S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 1)) {if (op_unknown_g(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_S: op_closure_s(sc); goto EVAL;
 
-	case OP_CLOSURE_S_O: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 1)) {if (op_unknown_g(sc)) goto EVAL; continue;}
+#if SO1
+        /* an experiment to reduce closure lookup overhead */
+	case OP_CLOSURE_S_O: 
+	  if ((symbol_ctr(car(sc->code)) != 1) ||
+	      (unchecked_slot_value(local_slot(car(sc->code))) != opt1_lambda_unchecked(sc->code)))
+            {
+	      /* symbol_ctr==1 but here anyway if one definition + set after use (see *x4* s7test) */
+	      set_optimize_op(sc->code, OP_CLOSURE_S_O_1);
+	      goto EVAL;
+	    }
+	    
+        case HOP_CLOSURE_S_O: 
+	  op_closure_s_o(sc); goto EVAL;
+
+        case OP_CLOSURE_S_O_1:
+	  {
+	    s7_pointer f;
+	    f = lookup_unexamined(sc, car(sc->code));
+	    if ((f == opt1_lambda_unchecked(sc->code)) ||
+		((f) &&
+		 (typesflag(f) == OK_UNSAFE_CLOSURE_P) &&
+		 ((closure_arity(f) == 1) || (closure_arity_to_int(sc, f) == 1)) &&
+		 (set_opt1_lambda(sc->code, f))))
+	      {
+		sc->curlet = make_let_with_slot(sc, closure_let(f), car(closure_args(f)), lookup(sc, opt2_sym(sc->code)));
+		sc->code = car(closure_body(f));
+		goto EVAL;
+	      }
+	    sc->last_function = f;
+	    if (op_unknown_g(sc)) goto EVAL; 
+	    continue;
+	  }
+#else
+	case OP_CLOSURE_S_O: 
+	  if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 1)) {if (op_unknown_g(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_S_O: op_closure_s_o(sc); goto EVAL;
+#endif
 
 	case OP_SAFE_CLOSURE_S: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 1)) {if (op_unknown_g(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_S: op_safe_closure_s(sc); goto EVAL;
@@ -98183,5 +98229,6 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- *   ncmenu_item_set_status, ncinput_equal_p, ncmenu_offer_input (version macros in notcurses_s7.c)
+ * tmock/tstr + t725 + bignums, t101 object->let? pe reopt, do+func+tmock
+ * try closure_s_o_1 again: can ok_unsafe_closure_p not work with 1 arg? (-1 somewhere -- get rid of that possibility)
  */

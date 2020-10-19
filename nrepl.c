@@ -368,7 +368,7 @@ static int nrepl(s7_scheme *sc)
 #if 0
 /*
   gcc -c s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl
-  gcc -o s7 nrepl.c s7.o -lnotcurses -lm -I. -ldl
+  gcc -o nrepl nrepl.c s7.o -lnotcurses -lm -I. -ldl
 
   nrepl-bits.h is generated from:
 
