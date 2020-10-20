@@ -64,7 +64,7 @@
 
      (let ((outfile (cdr (assoc (cadr caller+file) file-names))))
        (let ((next (next-file outfile)))
-	 (system (format #f "callgrind_annotate --auto=yes --threshold=100 ~A > ~A~D" (last-callg) outfile next))
+	 (system (format #f "callgrind_annotate --auto=yes --show-percs=no --threshold=100 ~A > ~A~D" (last-callg) outfile next))
 	 (format *stderr* "~NC ~A~D -> ~A~D: ~NC~%" 8 #\space outfile (- next 1) outfile next 8 #\space)
 	 (system (format #f "./snd compare-calls.scm -e '(compare-calls \"~A~D\" \"~A~D\")'" outfile (- next 1) outfile next)))))
 
