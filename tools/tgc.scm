@@ -8,8 +8,8 @@
 		 (equal? c2 c3))
       (format *stderr* "cyclic: ~S: ~S ~S ~S~%" p1 c1 c2 c3))))
 
-(define (tgc tries)
-  (let ((wait (make-vector 100 #f)))
+(define (tgc tries vsize)
+  (let ((wait (make-vector vsize #f)))
     (do ((i 0 (+ i 1)))
 	((= i tries))
       (let ((p1 (cons 1 2))
@@ -80,7 +80,10 @@
 				    (let ((b1 (block 1 2 3)))
 				      (check-cyclic b1)
 				      (map (lambda (a)
-					     (vector-set! wait (random 100) a)
+					     (let ((pos (random vsize)))
+					       (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
+						   (format *stderr* "~S?" (vector-ref wait pos)))
+					       (vector-set! wait pos a))
 					     (dynamic-wind
 						 (lambda () #f)
 						 (lambda ()
@@ -94,7 +97,7 @@
 						 (lambda () #f)))
 					   (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
 
-(tgc 50000)
+(tgc 50000 200)
 ;(tgc 1000000000)
 
 (exit)

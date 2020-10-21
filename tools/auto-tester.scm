@@ -20,7 +20,6 @@
 
 ;(define debugging (provided? 'debugging))
 ;(when (provided? 'profiling) (load "profile.scm"))
-
 ;(set! (hook-functions *load-hook*) (list (lambda (hook) (format () "loading ~S...~%" (hook 'name)))))
 
 (define (cycler size)
@@ -124,10 +123,31 @@
 (define (free1) (set! x (- (+ x 1) 1)))
 (define (free2) (x i))
 (define (free3) (local-func 0))
+
 (define (_vals_) (values #f 1 2))
 (define (_vals1_) (values 1 #f 2))
 (define (_vals2_) (values 1 2 #f))
 (define (finite? n) (not (or (nan? n) (infinite? n))))
+(define (more-values) (values 1 2 3 4))
+(define (_vals3_ x) (values x x))
+(define (_vals4_ x y) (values x y))
+(define (_vals5_ x y z) (values x y z))
+(define (_vals6_ w x y z) (values w x y z))
+
+(define* (_vals3s_ x) (values x x))
+(define* (_vals4s_ x y) (values x y))
+(define* (_vals5s_ x y z) (values x y z))
+(define* (_vals6s_ w x y z) (values w x y z))
+
+(define (_svals3_ x) (* x x))
+(define (_svals4_ x y) (* x y))
+(define (_svals5_ x y z) (* x y z))
+(define (_svals6_ w x y z) (* w x y z))
+
+(define* (_svals3s_ x) (* x x))
+(define* (_svals4s_ x y) (* x y))
+(define* (_svals5s_ x y z) (* x y z))
+(define* (_svals6s_ w x y z) (* w x y z))
 
 (define (s7-print-length) (*s7* 'print-length))
 (define (s7-max-string-length) (*s7* 'max-string-length))
@@ -271,6 +291,19 @@
 (define (checked-procedure-source . args) (copy (procedure-source (car args)) :readable))
 
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))
+
+
+(define lint-no-read-error #t)
+(define linter (let ()
+		 (let-temporarily (((*s7* 'autoloading?) #t))
+		   (load "lint.scm"))
+		 (lambda (str)
+		   (call-with-output-string
+		    (lambda (op)
+		      (call-with-input-string str
+			(lambda (ip)
+			  (lint ip op))))))))
+
 
 (define-expansion (_dw_ . args)
   `(dynamic-wind (lambda () #f) (lambda () ,@args) (lambda () #f)))
@@ -557,7 +590,6 @@
 |#
 
 (set! (hook-functions *unbound-variable-hook*) ())
-(define x 0)
 (define max-stack (*s7* 'stack-top))
 (define last-error-type #f)
 (define old-definee #f)
@@ -572,7 +604,9 @@
 ;(define* (make-string len (char #\space)) (#_make-string len char))
 ;(define* (make-byte-vector len (byte 0)) (#_make-byte-vector len byte))
 (define with-bignums (provided? 'bignums))
-(define (boolean|integer? x) (or (boolean? x) (integer? x)))
+(define (bool/int? x) (or (boolean? x) (integer? x)))
+
+(set! (hook-functions *read-error-hook*) ())
 
 (let ((functions (vector 'not '= '+ 'cdr 'real? 'rational? 'number? '> '- 'integer? 'apply 'subvector? 'subvector-position 'subvector-vector
 			  'abs '* 'null? 'imag-part '/ 'vector-set! 'equal? 'magnitude 'real-part 'pair? 'max 'nan? 'string->number 'list
@@ -605,7 +639,8 @@
 			  'string-length 'list->string 'inexact? 
 			  'with-input-from-file 'type-of
 			  'vector-fill! 
-			  'symbol 'peek-char 'make-hash-table 'make-weak-hash-table 'weak-hash-table?
+			  'symbol ;'peek-char 
+			  'make-hash-table 'make-weak-hash-table 'weak-hash-table?
 			  'macro? 
 			  'quasiquote 
 			  'immutable? 'char-position 'string-position
@@ -692,18 +727,19 @@
                           'help ;-- snd goes crazy
 			  ;'macroexpand ;-- uninteresting objstr stuff
 			  'signature ; -- circular lists cause infinite loops with (e.g.) for-each??
-			  ;'rootlet  ; cyclic-sequences oddness and rootlet can be stepped on
+			  ;'rootlet  ; cyclic-sequences oddness and rootlet can be stepped on -- how?
 			  'eval-string 
 			  'tree-memq 'tree-set-memq 'tree-count 'tree-leaves
 			  'tree-cyclic?
                           'require
 			  'else '_mac_ '_mac*_ '_bac_ '_bac*_ 
 			  '_fnc_ '_fnc*_ '_fnc1_ '_fnc2_ '_fnc3_ '_fnc4_ '_fnc5_ ;'_fnc6_
-			  'block 'make-block 'block? 'block-ref 'block-set!
+			  'block 'make-block 'block? 'block-ref 'block-set! 
+                          'blocks 'unsafe-blocks 'blocks1 'unsafe-blocks1 'blocks3 'unsafe-blocks3 'blocks4 'unsafe-blocks3 'blocks5 
 			  
 			  'constant?
 			  'openlet 
-			  '*unbound-variable-hook* '*load-hook* '*rootlet-redefinition-hook* '*missing-close-paren-hook* '*read-error-hook* ;'*after-gc-hook*
+			  '*unbound-variable-hook* '*load-hook* '*rootlet-redefinition-hook* '*missing-close-paren-hook* ;'*read-error-hook* ;'*after-gc-hook*
 			  '*autoload*
 			  'sequence? 'directory? 'hash-table-entries 
 			  'arity 'logbit? 
@@ -769,7 +805,7 @@
 			  ;'s7-rootlet-size 's7-heap-size 's7-free-heap-size 's7-gc-freed 's7-stack-size 's7-max-stack-size 's7-gc-stats
 
 			  'block-reverse! 'subblock 'unquote 'block-append 'block-let
-			  ;'simple-block? 'make-simple-block 'make-c-tag ; -- uninteresting diffs
+			  'simple-block? 'make-simple-block ;'make-c-tag ; -- uninteresting diffs
 
 			  'undefined-function
 			  ;'subsequence 
@@ -787,11 +823,13 @@
 			  'weak-hash-table 'byte? 'the 'lognand 'logeqv 
 			  'local-random 'local-read-string 'local-varlet 'local-let-set!
 			  ;'pp
-			  'kar '_dilambda_ '_vals_ '_vals1_ '_vals2_
+			  'kar '_dilambda_ '_vals_ '_vals1_ '_vals2_ 
+                          '_vals3_ '_vals4_ '_vals5_ '_vals6_ '_vals3s_ '_vals4s_ '_vals5s_ '_vals6s_ 
+                          '_svals3_ '_svals4_ '_svals5_ '_svals6_ '_svals3s_ '_svals4s_ '_svals5s_ '_svals6s_ 
 			  'free1 'free2 'free3
 			  ;'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
-			  
+			  'linter
 			  ;'*function*
 			  ;; '<cycle> 'cycle-set! 'cycle-ref 'make-cycle -- none are protected against randomness
 			  ))
@@ -866,6 +904,13 @@
 		    "`(x . 1)" "`((x . 1))" "`(1)" "`((1))" "`((1) . x)" ;; "'(- 1)" 
 		    "(+ i 1)" "(pi)"
 		    "'(())" "'((()))" "(random-state 1234)" 
+                    "((if (> 3 2) abs log) 1)" "((if (> 3 2) + -) 3 2)" ; op_opif_a_ssq_aa
+
+                    ;; experiments -- trying to hit every eval branch
+                    "(apply + (make-list 2 3))" "(let ((a 1) (b 2) (c 3)) (+ a b c))" "(let ((x '(\"asdf\"))) (apply format #f x))"
+                    "(cons (cons + -) *)" "(list (list quasiquote +) -1)" "(let ((s '(1 2))) (list (car s) (cdr s)))"
+                    "(let ((i 3)) (list i (expt 2 i)))" "(more-values)" "(- (+ x x) (* x x))"
+
 		    "(c-pointer 0 'integer?)" "(c-pointer -1)" "(c-pointer 1234 1.0 2.0 3.0)" "(c-pointer (bignum 1) (vector) (vector 1) (vector 2))"
 		    "(inlet 'integer? (lambda (f) #f))" "(inlet 'a 1)" 
 		    "(openlet (inlet 'abs (lambda (x) (if (real? x) (if (< x 0.0) (- x) x) (error 'wrong-type-arg \"not a real\")))))"
@@ -1008,7 +1053,15 @@
 		    "(make-hash-table 8 #f (cons symbol? block?))"
 		    "(let ((i 32)) (set! (setter 'i) integer?) (curlet))"
 
-		    "(make-vector 3 #f boolean|integer?)"
+		    "(make-vector 3 #f bool/int?)"
+		    "(make-float-vector 3 1.0 (lambda (x) (< x pi)))"
+		    "(make-int-vector 3 1 (lambda (x) (< x 3)))"
+		    "(make-byte-vector 3 1 (lambda (x) (> x 0)))"
+		    "(let ((a 1.0)) (set! (setter 'a) (lambda (x) (real? x))) (curlet))"
+		    "(make-hash-table 8 #f (cons (lambda (x) (symbol? x)) (lambda (x) (integer? x))))"
+		    "(make-vector 3 #f (lambda (x) #f))" ; if not an error, someone forgot to call it
+		    "(make-hash-table 8 #f (cons (lambda (x) #f) (lambda (x) #f)))" ; same
+		    "(make-vector 3 #f (let ((calls 0)) (lambda (x) (set! calls (+ calls 1)) (= calls 1))))" ; 2 calls = error I hope
 
 		    "(immutable! #(1 2))" "(immutable! #r(1 2))" "(immutable! \"asdf\")" "(immutable! '(1 2))" "(immutable! (hash-table 'a 1))"
 		    ;"(lambda (x) (fill! x 0))"
@@ -1092,6 +1145,7 @@
 	      ;(list "(cond ((= x 0) " "(begin (when (= x 0) ")
 	      ;(list "(_fe1_ " "(_fe2_ ")
 	      ;(list "(_fe3_ " "(_fe4_ ")
+              (list "(begin ((lambda (a) (sort! a >)) " "(begin ((lambda (a) (sort! a (lambda (x y) (not (<= x y))))) ")
 	      
 	      (list "(begin (_iter_ " "(begin (_map_ ")
 	      (list "(begin (_cat1_ " "(begin (_cat2_ ")
@@ -1265,7 +1319,11 @@
 			   (eq? val2 'error)
 			   (eq? val3 'error)
 			   (eq? val4 'error))
-		       (format *stderr* "    ~S: ~S~%" error-type (tp (apply format #f (car error-info) (cdr error-info))))))))
+		       (catch #t
+			 (lambda ()
+			   (format *stderr* "    ~S: ~S~%" error-type (tp (apply format #f (car error-info) (cdr error-info)))))
+			 (lambda args
+			   (format *stderr* "error in format in t725: ~S~%" (list str val1 val2 val3 val4))))))))
 	    
 	    ((sequence? val1) ; there are too many unreadable/unequivalent-but the same cases to check these by element (goto, continuation, ...)
 	     (let ((len1 (length val1)))

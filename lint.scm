@@ -7562,7 +7562,7 @@
 			  (when (proper-pair? (cdr arg))
 			    (case (car arg)
 			      ((-)
-			       (lint-format "perhaps ~A" caller  ; (zero? (- x)) -> (zero? x)
+			       (lint-format "perhaps ~A" caller  ; (zero? (- x)) -> (zero? x), (positive? (- x y)) -> (> x y)
 					    (lists->string form
 							   (let ((op '((zero? = zero?) (positive? > negative?) (negative? < positive?))))
 							     (if (null? (cddr arg))
