@@ -355,7 +355,7 @@ static int nrepl(s7_scheme *sc)
 #if (!NREPL_DEBUGGING)
       s7_add_to_load_path(sc, "/usr/local/share/s7");
       #include "nrepl-bits.h"
-      s7_load_from_string(sc, (const char *)nrepl_scm, nrepl_scm_len);
+      s7_load_c_string(sc, (const char *)nrepl_scm, nrepl_scm_len);
 #else
       if (!s7_load(sc, "nrepl.scm"))
 	return(1);

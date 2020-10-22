@@ -344,8 +344,7 @@
 				     (max header-row (+ y ncp-row)) 
 				     (if (and wc (= y (+ watch-row 1)))
 					 (min (- watch-col 1) (+ x ncp-col))
-					 (+ x ncp-col)))
-	    )
+					 (+ x ncp-col))))
 	  
 	  (when header
 	    (set! hc-cells (vector (cell_make) (cell_make) (cell_make) (cell_make) (cell_make) (cell_make)))
@@ -628,7 +627,7 @@
 	    
 	    (define (reprompt y)
 	      (ncplane_cursor_move_yx ncp y 0)
-	      (clear-line y)
+	      ;(clear-line y)
 	      (ncplane_putstr_yx ncp y 0 prompt)
 	      (notcurses_render nc)
 	      (let ((prompt-len (+ (length prompt) 1)))
@@ -1469,7 +1468,9 @@
 				  (lambda (type info) ; this is usually an internal (nrepl) error, or sometimes a read error
 				    (display-error ncp row info)
 				    (increment-row 1)
-				    (reprompt row)))))
+				    (reprompt row)))
+				;(display-status (format #f "unhandled ~D" c))
+				))
 			
 			  (notcurses_render nc)
 			  
@@ -1629,8 +1630,10 @@
 ;;   (currently works by dragging mouse and using C-y, but text is not highlighted)
 ;;   xclip to access the clipboard?? (system "xclip -o")=current contents, (system "echo ... | xclip")=set contents
 ;;   so if mouse(2)=get from xclip if it exists etc, or maybe add example function, or can we do this in nrepl.c?
-;;   right button doesn't work, does middle?
+;;     right button is nckey_button2, scroll=nckey_button3 (lxterminal -- not rxvt)
 ;;   C_<space>+move cursor -- need highlighting too
+;;   some terminals have "zoom" -- can we tell this has happened? apparently not
+;;     (ncplane_dim_yx (notcurses_stdplane (*nrepl* 'nc))) doesn't change, but cursor movement is confused and status area gets lost
 ;;
 ;; add signatures and help for notcurses
 ;; C-s|r? [need positions as adding chars, backspace=remove and backup etc, display current search string in status]

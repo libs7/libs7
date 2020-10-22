@@ -1566,6 +1566,10 @@ static inline char *permalloc(s7_scheme *sc, size_t len)
   return(result);
 }
 
+#if WITH_GCC
+static inline block_t *mallocate(s7_scheme *sc, size_t bytes) __attribute__((always_inline));
+#endif
+
 static inline block_t *mallocate(s7_scheme *sc, size_t bytes)
 {
   block_t *p;
@@ -30149,7 +30153,7 @@ s7_pointer s7_load(s7_scheme *sc, const char *filename)
   return(s7_load_with_environment(sc, filename, sc->nil));
 }
 
-s7_pointer s7_load_from_string(s7_scheme *sc, const char *content, s7_int bytes)
+s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes)
 {
 #if (!MS_WINDOWS) 
   s7_pointer port;
@@ -80014,15 +80018,8 @@ static goto_t op_expansion(s7_scheme *sc)
   caller = (is_pair(stack_args(sc->stack, loc))) ? car(stack_args(sc->stack, loc)) : sc->F; /* this can be garbage */
   
   if ((loc >= 3) &&
-#if 1
       (stack_op(sc->stack, loc) != OP_READ_QUOTE) &&        /* '(expansion ...) */
-      /* (stack_op(sc->stack, loc) != OP_READ_QUASIQUOTE) && */   /* (define-macro (mac) `(expansion...)) which probably should be `(,'expansion...) */
       (stack_op(sc->stack, loc) != OP_READ_VECTOR) &&       /* #(expansion ...) */
-#else
-      /* read_quote|vector anywhere in the current stack is trouble, I think */
-      (stack_op(sc->stack, loc) != OP_READ_QUASIQUOTE) &&   /* (define-macro (mac) `(expansion...)) */
-      (!read_quote_or_vector_is_in_stack(sc)) &&            /* #(expansion...) */
-#endif
       (caller != sc->quote_symbol) &&                       /* (quote (expansion ...)) */
       (caller != sc->macroexpand_symbol) &&                 /* (macroexpand (expansion ...)) */
       (caller != sc->define_expansion_symbol) &&            /* (define-expansion ...) being reloaded/redefined */
@@ -81526,14 +81523,10 @@ static void op_increment_sp_1(s7_scheme *sc)
 
 static void op_increment_sp_mv(s7_scheme *sc)
 {
-#if 1
   set_car(sc->u1_1, slot_value(sc->args));
   set_cdr(sc->u1_1, sc->value);
   sc->value = c_call(cadr(sc->code))(sc, sc->u1_1);
   set_car(sc->u1_1, sc->F);
-#else
-  sc->value = c_call(cadr(sc->code))(sc, cons(sc, slot_value(sc->args), sc->value));
-#endif
   slot_set_value(sc->args, sc->value);
 }
 
@@ -82697,7 +82690,7 @@ static s7_pointer do_end_bad(s7_scheme *sc, s7_pointer form)
 	      (is_null(cddr(code))))
 	    {
 	      if (sc->safety > 0)
-		s7_warn(sc, 256, "infinite do loop: %s\n", display(form));
+		s7_warn(sc, 256, "%s: infinite do loop: %s\n", __func__, display(form));
 	      return(code);
 	    }
 
@@ -85199,9 +85192,7 @@ static goto_t op_do_end1(s7_scheme *sc)
 	{
 	  if (is_multiple_value(sc->value))  /* (define (f) (+ 1 (do ((i 2 (+ i 1))) ((values i (+ i 1)))))) -> 6 */
 	    sc->value = splice_in_values(sc, multiple_value(sc->value));
-	  /* similarly, if the result is a multiple value:
-	   * (define (f) (+ 1 (do ((i 2 (+ i 1))) ((= i 3) (values i (+ i 1)))))) -> 8
-	   */
+	  /* similarly, if the result is a multiple value: (define (f) (+ 1 (do ((i 2 (+ i 1))) ((= i 3) (values i (+ i 1)))))) -> 8 */
 	  return(goto_start);
 	}
       /* might be => here as in cond and case */
@@ -86465,7 +86456,7 @@ static void set_let_file_and_line(s7_scheme *sc, s7_pointer new_let, s7_pointer 
 {
   if (port_file(current_input_port(sc)) != stdin)
     {
-      /* unbound_variable will be called if *function*is encountered, and will return this info as if *function* had some meaning */
+      /* unbound_variable will be called if *function* is encountered, and will return this info as if *function* had some meaning */
       if ((is_pair(closure_args(new_func))) &&
 	  (has_location(closure_args(new_func))))
 	{
@@ -90502,9 +90493,6 @@ static bool op_safe_c_ps(s7_scheme *sc)
 static void op_safe_c_ps_1(s7_scheme *sc)
 {
   set_car(sc->t2_2, lookup(sc, caddr(sc->code)));
-  /* we have to wait because we say the evaluation order is left to right (in lambda*)
-   *   and the first arg's evaluation might change the value of the second arg.
-   */
   set_car(sc->t2_1, sc->value);
   sc->value = c_call(sc->code)(sc, sc->t2_1);
 }
@@ -91480,7 +91468,6 @@ static void op_pair_pair(s7_scheme *sc)
   push_stack(sc, OP_EVAL_ARGS, sc->nil, car(sc->code));
   sc->code = caar(sc->code);
 }
-
 
 static goto_t trailers(s7_scheme *sc)
 {
@@ -98190,50 +98177,48 @@ int main(int argc, char **argv)
  *           18  |  19  |  20.0  20.8  20.9           gmp
  * --------------------------------------------------------
  * tpeak     167 |  117 |  116   115   115            128
- * tauto     748 |  633 |  638   665   662           1261
- * tref     1093 |  779 |  779   671   671            720
- * tshoot   1296 |  880 |  841   823   824           1628
- * index     939 | 1013 |  990  1006  1011           1065
- * s7test   1776 | 1711 | 1700  1824  1816           4570
- * lt       2205 | 2116 | 2082  2089  2097           2108
- * tform    2472 | 2289 | 2298  2278  2281           3256
- * tcopy    2434 | 2264 | 2277  2270  2282           2342 
+ * tauto     748 |  633 |  638   665   649           1261
+ * tref     1093 |  779 |  779   671   691            720
+ * tshoot   1296 |  880 |  841   823   846           1628
+ * index     939 | 1013 |  990  1006  1026           1065
+ * tmock         |      |             1205
+ * s7test   1776 | 1711 | 1700  1824  1841           4570
+ * lt       2205 | 2116 | 2082  2089  2104           2108
+ * tform    2472 | 2289 | 2298  2278  2288           3256
+ * tcopy    2434 | 2264 | 2277  2270  2280           2342 
  * tmat     6072 | 2478 | 2465  2345  2338           2505
- * tread    2449 | 2394 | 2379  2416  2404           2583
- * tvect    6189 | 2430 | 2435  2461  2461           2695
- * fbench   2974 | 2643 | 2628  2676  2685           3088
- * tb       3251 | 2799 | 2767  2685  2688           3513
- * trclo    7985 | 2791 | 2670  2704  2700           4496
- * tmap     3238 | 2883 | 2874  2838  2838           3762
- * titer    3962 | 2911 | 2884  2892  2900           2918
- * tsort    4156 | 3043 | 3031  2989  2990           3690
- * tset     6616 | 3083 | 3168  3175  3172           3166
+ * tread    2449 | 2394 | 2379  2416  2457           2583
+ * tvect    6189 | 2430 | 2435  2461  2456           2695
+ * fbench   2974 | 2643 | 2628  2676  2711           3088
+ * tb       3251 | 2799 | 2767  2685  2738           3513
+ * trclo    7985 | 2791 | 2670  2704  2719           4496
+ * tmap     3238 | 2883 | 2874  2838  2885           3762
+ * titer    3962 | 2911 | 2884  2892  2865           2918
+ * tsort    4156 | 3043 | 3031  2989  3107           3690
+ * tset     6616 | 3083 | 3168  3175  3264           3166
  * tnum          |      |       3234  3239           61.3
- * tmac     3503 | 3291 | 3281  3272  3269           3383
- * dup           |      |       3335  3328           3926
- * teq      4081 | 3804 | 3806  3800  3800           3813
- * tfft     4288 | 3816 | 3785  3844  3851           11.5
- * tmisc         |      |       4455  4465           4911
- * tio           | 5227 |       4527  4525           4613
- * tcase         |      |       4895  4909           4900
- * tlet     5409 | 4613 | 4578  4887  4903           5836
- * tclo     6246 | 5188 | 5187  4954  4789           5299
- * tgc           |      |       4995  5001           5319
- * trec     17.8 | 6318 | 6317  5937  5937           7780
- * tgen     11.7 | 11.0 | 11.0  11.1  11.1           12.0
- * thash         |      |       12.2  12.2           36.6
- * tall     16.4 | 15.4 | 15.3  15.4  15.4           27.2    
- * calls    40.3 | 35.9 | 35.8  36.1  36.1           60.7
- * sg       85.8 | 70.4 | 70.6  70.8  70.9           97.7
- * lg      115.9 |104.9 |104.6 104.6 105.0          105.9
- * tbig    264.5 |178.0 |177.2 174.0 174.1          618.3
+ * tmac     3503 | 3291 | 3281  3272  3361           3383
+ * dup           |      |       3335  3276           3926
+ * teq      4081 | 3804 | 3806  3800  4088           3813
+ * tfft     4288 | 3816 | 3785  3844  4142           11.5
+ * tmisc         |      |       4455  4674           4911
+ * tio           | 5227 |       4527  4633           4613
+ * tcase         |      |       4895  4990           4900
+ * tlet     5409 | 4613 | 4578  4887  4967           5836
+ * tclo     6246 | 5188 | 5187  4954  4808           5299
+ * tgc           |      |       4995  5510           5319
+ * trec     17.8 | 6318 | 6317  5937  5976           7780
+ * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
+ * thash         |      |       12.2  12.0           36.6
+ * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.2    
+ * calls    40.3 | 35.9 | 35.8  36.1  36.9           60.7
+ * sg       85.8 | 70.4 | 70.6  70.8  71.8           97.7
+ * lg      115.9 |104.9 |104.6 104.6 105.9          105.9
+ * tbig    264.5 |178.0 |177.2 174.0 178.0          618.3
  *
  * ----------------------------------------------------------------
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * tmock/tstr + t725 + bignums, do+func+tmock
  * gcc 10.2 needs inline added in many places (10.2 is slower) check attribute flatten
- * in nrepl if overwriting existing result, don't clear next line? (and spaces are still there?)
- * s7_load_c_string not s7_load_from_string
  */

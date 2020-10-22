@@ -36,6 +36,7 @@
 		     ("tio.scm" . "v-io")
 		     ("tgc.scm" . "v-gc")
 		     ("tnum.scm" . "v-num")
+		     ("tmock.scm" . "v-mock")
 		     ))
 
 (define (last-callg)
@@ -73,6 +74,7 @@
 	 (list "repl" "tref.scm")
 	 (list "repl" "tshoot.scm")
 	 (list "snd -noinit" "make-index.scm")
+	 (list "repl" "tmock.scm")
 	 (list "repl" "s7test.scm")
 	 (list "repl" "lt.scm")
 	 (list "repl" "tform.scm")

@@ -236,6 +236,21 @@
 (format *stderr* "~NC tshoot ~NC~%" 20 #\- 20 #\-)
 (system "./repl tshoot.scm")
 
+(format *stderr* "~NC tnum ~NC~%" 20 #\- 20 #\-)
+(system "./repl tnum.scm")
+
+(format *stderr* "~NC tmock ~NC~%" 20 #\- 20 #\-)
+(system "./repl tmock.scm")
+
+(format *stderr* "~NC tgc ~NC~%" 20 #\- 20 #\-)
+(system "./repl tgc.scm")
+
+(format *stderr* "~NC tio ~NC~%" 20 #\- 20 #\-)
+(system "./repl tio.scm")
+
+(format *stderr* "~NC tmisc ~NC~%" 20 #\- 20 #\-)
+(system "./repl tmisc.scm")
+
 (format *stderr* "~NC index ~NC~%" 20 #\- 20 #\-)
 (system "./snd make-index.scm")
 

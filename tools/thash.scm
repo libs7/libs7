@@ -62,6 +62,7 @@
 	  (counts (make-hash-table)))
       (do ((expr (read port) (read port)))
 	  ((eof-object? expr) 
+	   (close-input-port port)
 	   counts)
 	(walk expr counts))))
   
