@@ -18,6 +18,13 @@ repl fulltest.scm
 repl tauto.scm
 
 echo ' '
+echo '-------- base case + nrepl --------'
+echo ' '
+gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
+gcc -o nrepl nrepl.c -g3 -Wall s7.o -I. -Wl,-export-dynamic -lnotcurses -lm -ldl
+nrepl s7test.scm
+
+echo ' '
 echo '-------- s7-debugging/system-extras --------'
 echo ' '
 gcc s7.c -c -I. -DS7_DEBUGGING -DWITH_SYSTEM_EXTRAS -g3 -ldl -lm -Wl,-export-dynamic

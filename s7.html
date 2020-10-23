@@ -8777,6 +8777,7 @@ so don't leave the GC off for a long time!
 s7_pointer s7_load(s7_scheme *sc, const char *file);
 s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_pointer e);
 s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes);
+s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content, s7_int bytes, s7_pointer e);
 s7_pointer s7_load_path(s7_scheme *sc);
 s7_pointer s7_add_to_load_path(s7_scheme *sc, const char *dir);
 s7_pointer s7_autoload(s7_scheme *sc, s7_pointer symbol, s7_pointer file_or_function);
@@ -8792,6 +8793,39 @@ libc's tcsetattr, so it looks for libc_s7.so (created by libc.scm).  If found,
   s7_load_with_environment(sc, "libc_s7.so", 
     s7_inlet(sc, s7_list(sc, 2, s7_make_symbol(sc, "init_func"), 
                                 s7_make_symbol(sc, "libc_s7_init")));
+</pre>
+<p>You can also include an 'init_args field to pass arguments to init_func.  Here's an example that
+includes init_args:
+</p>
+<pre class="indented">
+/* tlib.c */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include "s7.h"
+
+static s7_pointer a_function(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_car(args));
+}
+
+void tlib_init(s7_scheme *sc, s7_pointer args); /* void tlib_init(s7_scheme *sc) if no init_args */
+void tlib_init(s7_scheme *sc, s7_pointer args)
+{
+  fprintf(stderr, "tlib_init: %s\n", s7_object_to_c_string(sc, args));
+  s7_define_function(sc, "a-function", a_function, 1, 0, true, "");
+}
+
+/* in Linux:
+   gcc -fPIC -c tlib.c
+   gcc tlib.o -shared -o tlib.so -ldl -lm -Wl,-export-dynamic
+
+   /home/bil/cl/ repl
+   &lt;1&gt; (load "tlib.so" (inlet 'init_func 'tlib_init 'init_args (list 1 2 3)))
+   tlib_init: (1 2 3)
+   #f
+   &lt;2&gt; (a-function 1 2 3)
+   1
+*/
 </pre>
 <p>
 s7_load returns the last value produced during the load; so given "test.scm" with the contents: 
@@ -10623,10 +10657,6 @@ Eventually I'll probably retire repl.scm.
 
 <!--
 (load "/home/bil/test/sndlib/libsndlib.so" (inlet 'init_func 's7_init_sndlib))
-
-not tested:
-(load "/home/bil/test/libxm/libxm.so" (inlet 'init_func 'Init_libxm))
-
 -->
 
 

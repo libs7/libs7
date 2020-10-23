@@ -1632,13 +1632,12 @@
 ;;   so if mouse(2)=get from xclip if it exists etc, or maybe add example function, or can we do this in nrepl.c?
 ;;     right button is nckey_button2, scroll=nckey_button3 (lxterminal -- not rxvt)
 ;;   C_<space>+move cursor -- need highlighting too
-;;   some terminals have "zoom" -- can we tell this has happened? apparently not
-;;     (ncplane_dim_yx (notcurses_stdplane (*nrepl* 'nc))) doesn't change, but cursor movement is confused and status area gets lost
 ;;
+;; some terminals have "zoom" -- can we tell this has happened? apparently not
+;;     (ncplane_dim_yx (notcurses_stdplane (*nrepl* 'nc))) doesn't change, but cursor movement is confused and status area gets lost
 ;; add signatures and help for notcurses
 ;; C-s|r? [need positions as adding chars, backspace=remove and backup etc, display current search string in status]
 ;;   start at row/col, get contents, go to current match else increment, save row/col of match
-;;
 ;; begin_hook for stepper: at each call, drop back into the debugger with curlet -- how to keep our place? (step=continue+break -- ambiguous)
 ;; colorize, perhaps make a vector for each color indexed by char; for colorized name, for each char get cell from vector (or make it if needed)
 
