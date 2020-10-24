@@ -37,6 +37,7 @@
 		     ("tgc.scm" . "v-gc")
 		     ("tnum.scm" . "v-num")
 		     ("tmock.scm" . "v-mock")
+		     ("concordance.scm" . "v-str")
 		     ))
 
 (define (last-callg)
@@ -76,6 +77,7 @@
 	 (list "snd -noinit" "make-index.scm")
 	 (list "repl" "tmock.scm")
 	 (list "repl" "s7test.scm")
+	 (list "repl" "concordance.scm")
 	 (list "repl" "lt.scm")
 	 (list "repl" "tform.scm")
 	 (list "repl" "tcopy.scm")

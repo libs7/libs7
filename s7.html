@@ -8808,11 +8808,12 @@ static s7_pointer a_function(s7_scheme *sc, s7_pointer args)
   return(s7_car(args));
 }
 
-void tlib_init(s7_scheme *sc, s7_pointer args); /* void tlib_init(s7_scheme *sc) if no init_args */
-void tlib_init(s7_scheme *sc, s7_pointer args)
+s7_pointer tlib_init(s7_scheme *sc, s7_pointer args); /* void tlib_init(s7_scheme *sc) if no init_args */
+s7_pointer tlib_init(s7_scheme *sc, s7_pointer args)
 {
   fprintf(stderr, "tlib_init: %s\n", s7_object_to_c_string(sc, args));
   s7_define_function(sc, "a-function", a_function, 1, 0, true, "");
+  return(s7_car(args));
 }
 
 /* in Linux:
@@ -8822,7 +8823,7 @@ void tlib_init(s7_scheme *sc, s7_pointer args)
    /home/bil/cl/ repl
    &lt;1&gt; (load "tlib.so" (inlet 'init_func 'tlib_init 'init_args (list 1 2 3)))
    tlib_init: (1 2 3)
-   #f
+   1
    &lt;2&gt; (a-function 1 2 3)
    1
 */

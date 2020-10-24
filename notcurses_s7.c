@@ -1,7 +1,7 @@
 /* s7 FFI for the notcurses library
  *
  *   Fedora: notcurses notcurses-devel notcurses-utils
- *   tested in fedora 32/33
+ *   tested in fedora 32/33, Ubuntu 20.10
  */
 
 #include <locale.h>
@@ -2603,8 +2603,8 @@ static s7_pointer g_list_to_ncmenu_items(s7_scheme *sc, s7_pointer args)
 {
   /* car = list of items (c_pointers) */
   int32_t i, len;
-  s7_pointer lst, items;
-  struct ncmenu_item *p, *pp;
+  s7_pointer lst;
+  struct ncmenu_item *p;
 
   lst = s7_car(args);
   len = s7_list_length(sc, lst);
@@ -2727,8 +2727,8 @@ static s7_pointer g_list_to_ncmenu_sections(s7_scheme *sc, s7_pointer args)
 {
   /* car = list of sections (c_pointers) */
   int32_t i, len;
-  s7_pointer lst, items;
-  struct ncmenu_section *p, *pp;
+  s7_pointer lst;
+  struct ncmenu_section *p;
 
   lst = s7_car(args);
   len = s7_list_length(sc, lst);
