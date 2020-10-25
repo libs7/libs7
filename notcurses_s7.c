@@ -955,12 +955,14 @@ static s7_pointer g_notcurses_stats(s7_scheme *sc, s7_pointer args)
   return(s7_cadr(args));
 }
 
+#if 0
 static s7_pointer g_notcurses_reset_stats(s7_scheme *sc, s7_pointer args)
 {
   notcurses_reset_stats((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
 			(ncstats *)s7_c_pointer_with_type(sc, s7_cadr(args), ncstats_symbol, __func__, 2));
   return(s7_cadr(args));
 }
+#endif
 
 
 /* -------- ncplane_options -------- */
@@ -4075,7 +4077,9 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncstats_make, 0, 0, false);
   nc_func(ncstats_free, 1, 0, false);
   nc_func(notcurses_stats, 2, 0, false);
+#if 0
   nc_func(notcurses_reset_stats, 2, 0, false);
+#endif
   nc_func(ncstats_renders, 1, 0, false);
   nc_func(ncstats_failed_renders, 1, 0, false);
   nc_func(ncstats_render_bytes, 1, 0, false);

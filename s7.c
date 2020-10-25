@@ -1864,46 +1864,14 @@ void s7_show_history(s7_scheme *sc);
 #define TYPE_MASK    0xff
 
 #if S7_DEBUGGING
-  static const char *check_name(s7_scheme *sc, int32_t typ);
+  static bool printing_gc_info = false;
+  static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line);
   static s7_pointer check_ref(s7_pointer p, uint8_t expected_type, const char *func, int32_t line, const char *func1, const char *func2);
-  static s7_pointer check_ref2(s7_pointer p, uint8_t expected_type, int32_t other_type, const char *func, int32_t line, const char *func1, const char *func2);
-  static s7_pointer check_ref3(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref4(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref5(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref6(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_ref7(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref8(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref9(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref10(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref11(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref12(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref13(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref14(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref15(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_ref16(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_ref17(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_let_ref(s7_pointer p, uint64_t role, const char *func, int32_t line);
-  static s7_pointer check_let_set(s7_pointer p, uint64_t role, const char *func, int32_t line);
-  static s7_pointer check_cell(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
-  static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line);
-  static bool printing_gc_info = false;
 
-  static s7_pointer opt1_1(s7_scheme *sc, s7_pointer p, uint32_t role, const char *func, int32_t line);
-  static s7_pointer set_opt1_1(s7_pointer p, s7_pointer x, uint32_t role);
-  static s7_pointer opt2_1(s7_scheme *sc, s7_pointer p, uint32_t role, const char *func, int32_t line);
-  static void set_opt2_1(s7_scheme *sc, s7_pointer p, s7_pointer x, uint32_t role, const char *func, int32_t line);
-  static s7_pointer opt3_1(s7_scheme *sc, s7_pointer p, uint32_t role, const char *func, int32_t line);
-  static void set_opt3_1(s7_pointer p, s7_pointer x, uint32_t role);
-
-  static uint64_t s_hash_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
-  static void set_s_hash_1(s7_pointer p, uint64_t x);
-  static const char *s_name_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
-  static void set_s_name_1(s7_pointer p, const char *str);
-  static uint64_t s_location_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
-  static void set_s_location_1(s7_pointer p, uint64_t x);
-  static uint64_t s_len_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
-  static void set_s_len_1(s7_pointer p, uint64_t x);
   #define unchecked_type(p) ((p)->tf.type_field)
 #if WITH_GCC
   #define type(p) ({uint8_t _t_; _t_ = (p)->tf.type_field; if ((!printing_gc_info) && ((_t_ == T_FREE) || (_t_ >= NUM_TYPES))) print_gc_info(cur_sc, p, __LINE__); _t_;})
@@ -4470,6 +4438,8 @@ static bool is_h_optimized(s7_pointer p)
 }
 
 
+/* -------------------------------- internal debugging apparatus -------------------------------- */
+
 static int64_t heap_location(s7_scheme *sc, s7_pointer p)
 {
   heap_block_t *hp;
@@ -4479,8 +4449,6 @@ static int64_t heap_location(s7_scheme *sc, s7_pointer p)
   return(((s7_big_pointer)p)->big_hloc);
 }
 
-
-/* -------------------------------- internal debugging apparatus -------------------------------- */
 #if TRAP_SEGFAULT
 #include <signal.h>
 static sigjmp_buf senv; /* global here is not a problem -- it is used only to protect s7_is_valid */
@@ -8212,15 +8180,16 @@ static s7_pointer g_is_symbol(s7_scheme *sc, s7_pointer args)
 }
 
 const char *s7_symbol_name(s7_pointer p) {return(symbol_name(p));}
-
-s7_pointer s7_name_to_value(s7_scheme *sc, const char *name)
-{
-  return(s7_symbol_value(sc, make_symbol(sc, name)));
-}
+s7_pointer s7_name_to_value(s7_scheme *sc, const char *name) {return(s7_symbol_value(sc, make_symbol(sc, name)));}
 
 
 /* -------------------------------- symbol->string -------------------------------- */
-static inline s7_pointer make_string_with_length(s7_scheme *sc, const char *str, s7_int len)
+
+#if WITH_GCC
+static inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const char *str, s7_int len) __attribute__((always_inline));
+#endif
+
+static inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const char *str, s7_int len)
 {
   s7_pointer x;
   new_cell(sc, x, T_STRING | T_SAFE_PROCEDURE);
@@ -8235,6 +8204,11 @@ static inline s7_pointer make_string_with_length(s7_scheme *sc, const char *str,
   return(x);
 }
 
+static inline s7_pointer make_string_with_length(s7_scheme *sc, const char *str, s7_int len)
+{
+  return(inline_make_string_with_length(sc, str, len));
+}
+
 static s7_pointer g_symbol_to_string(s7_scheme *sc, s7_pointer args)
 {
   #define H_symbol_to_string "(symbol->string sym) returns the symbol sym converted to a string"
@@ -8245,7 +8219,7 @@ static s7_pointer g_symbol_to_string(s7_scheme *sc, s7_pointer args)
   if (!is_symbol(sym))
     return(method_or_bust_one_arg(sc, sym, sc->symbol_to_string_symbol, args, T_SYMBOL));
   /* s7_make_string uses strlen which stops at an embedded null */
-  return(make_string_with_length(sc, symbol_name(sym), symbol_name_length(sym)));    /* return a copy */
+  return(inline_make_string_with_length(sc, symbol_name(sym), symbol_name_length(sym)));    /* return a copy */
 }
 
 static s7_pointer g_symbol_to_string_uncopied(s7_scheme *sc, s7_pointer args)
@@ -8264,7 +8238,7 @@ static s7_pointer symbol_to_string_p(s7_scheme *sc, s7_pointer sym)
 {
   if (!is_symbol(sym))
     simple_wrong_type_argument(sc, sc->symbol_to_string_symbol, sym, T_SYMBOL);
-  return(make_string_with_length(sc, symbol_name(sym), symbol_name_length(sym)));
+  return(inline_make_string_with_length(sc, symbol_name(sym), symbol_name_length(sym)));
 }
 
 static s7_pointer symbol_to_string_uncopied_p(s7_scheme *sc, s7_pointer sym)
@@ -8297,10 +8271,7 @@ static s7_pointer g_string_to_symbol(s7_scheme *sc, s7_pointer args)
   return(g_string_to_symbol_1(sc, car(args), sc->string_to_symbol_symbol));
 }
 
-static s7_pointer string_to_symbol_p_p(s7_scheme *sc, s7_pointer p)
-{
-  return(g_string_to_symbol_1(sc, p, sc->string_to_symbol_symbol));
-}
+static s7_pointer string_to_symbol_p_p(s7_scheme *sc, s7_pointer p) {return(g_string_to_symbol_1(sc, p, sc->string_to_symbol_symbol));}
 
 
 /* -------------------------------- symbol -------------------------------- */
@@ -14576,7 +14547,7 @@ static s7_pointer g_number_to_string(s7_scheme *sc, s7_pointer args)
     }
   else res = number_to_string_base_10(sc, x, 0, sc->float_format_precision, 'g', &nlen, P_WRITE);
 #endif
-  return(make_string_with_length(sc, res, nlen));
+  return(inline_make_string_with_length(sc, res, nlen));
 }
 
 static s7_pointer number_to_string_p_p(s7_scheme *sc, s7_pointer p)
@@ -14589,7 +14560,7 @@ static s7_pointer number_to_string_p_p(s7_scheme *sc, s7_pointer p)
   if (!is_number(p))
     return(wrong_type_argument_with_type(sc, sc->number_to_string_symbol, 1, p, a_number_string));
   res = number_to_string_base_10(sc, p, 0, sc->float_format_precision, 'g', &nlen, P_WRITE);
-  return(make_string_with_length(sc, res, nlen));
+  return(inline_make_string_with_length(sc, res, nlen));
 #endif
 }
 
@@ -14598,7 +14569,7 @@ static s7_pointer number_to_string_p_i(s7_scheme *sc, s7_int p)
   s7_int nlen = 0;
   char *res;
   res = integer_to_string(sc, p, &nlen);
-  return(make_string_with_length(sc, res, nlen));
+  return(inline_make_string_with_length(sc, res, nlen));
 }
 /* not number_to_string_p_d! */
 
@@ -27705,7 +27676,7 @@ end: (substring \"01234\" 1 2) -> \"1\""
     }
   s = string_value(str);
   len = end - start;
-  x = make_string_with_length(sc, (char *)(s + start), len);
+  x = inline_make_string_with_length(sc, (char *)(s + start), len);
   string_value(x)[len] = 0;
   return(x);
 }
@@ -29146,18 +29117,18 @@ static s7_pointer string_read_line(s7_scheme *sc, s7_pointer port, bool with_eol
 
   cur = (uint8_t *)strchr((const char *)start, (int)'\n'); /* this can run off the end making valgrind unhappy, but I think it's innocuous */
   if (cur)
-      {
-	port_line_number(port)++;
-	i = cur - port_str;
-	port_position(port) = i + 1;
-	return(make_string_with_length(sc, (const char *)start, ((with_eol) ? i + 1 : i) - port_start));
-      }
+    {
+      port_line_number(port)++;
+      i = cur - port_str;
+      port_position(port) = i + 1;
+      return(make_string_with_length(sc, (const char *)start, ((with_eol) ? i + 1 : i) - port_start));
+    }
   i = port_data_size(port);
   port_position(port) = i;
   if (i <= port_start)         /* the < part can happen -- if not caught we try to create a string of length - 1 -> segfault */
     return(eof_object);
 
-  return(make_string_with_length(sc, (const char *)start, i - port_start));
+  return(inline_make_string_with_length(sc, (const char *)start, i - port_start));
 }
 
 
@@ -40535,6 +40506,10 @@ static s7_pointer byte_vector_setter(s7_scheme *sc, s7_pointer str, s7_int loc, 
     }
   return(s7_wrong_type_arg_error(sc, "byte-vector-set!", 3, val, "an integer"));
 }
+
+#if WITH_GCC
+static inline block_t *mallocate_vector(s7_scheme *sc, s7_int len) __attribute__((always_inline));
+#endif
 
 static inline block_t *mallocate_vector(s7_scheme *sc, s7_int len)
 {
@@ -60309,8 +60284,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      set_opt1_sym(cdr(p), var2);
 	      return(with_c_call(tree, (car(p) == sc->cons_symbol) ?
 				 ((caadr(p) == sc->car_symbol) ? fx_cons_car_u_t : fx_cons_opuq_t) : fx_c_opuq_t_direct));
-	    }
-	}
+	    }}
       break;
 
     case HOP_SAFE_C_S_opSq:
@@ -60321,10 +60295,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if (c_callee(tree) == fx_c_s_car_s) return(with_c_call(tree, fx_c_t_car_u));
 	      if (c_callee(tree) == fx_c_s_opsq_direct) return(with_c_call(tree, fx_c_t_opuq_direct));
 	    }}
-      if (cadr(p) == var2)
-	{
-	  if ((c_callee(tree) == fx_add_s_car_s) && (cadaddr(p) == var1)) return(with_c_call(tree, fx_add_u_car_t));
-	}
+      if ((cadr(p) == var2) && (c_callee(tree) == fx_add_s_car_s) && (cadaddr(p) == var1)) return(with_c_call(tree, fx_add_u_car_t));
       break;
 
     case HOP_SAFE_C_opSq_opSq:
@@ -60378,8 +60349,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      set_opt3_sym(p, var1);
 	      set_opt1_sym(cdr(p), var2);
 	      return(with_c_call(tree, fx_c_optuq));
-	    }
-	}
+	    }}
       if (c_callee(tree) == fx_c_opssq_direct)
 	{
 	  if (caddadr(p) == var1)
@@ -96262,11 +96232,9 @@ static void init_features(s7_scheme *sc)
 #ifdef __MINGW32__
   s7_provide(sc, "mingw");
 #endif
-
 #if POINTER_32
   s7_provide(sc, "32-bit");
 #endif
-
 #ifdef __SUNPRO_C
   s7_provide(sc, "sunpro_c");
 #endif
@@ -98154,8 +98122,8 @@ int main(int argc, char **argv)
 
 /* --------------------------------------------------------
  *
- * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-<date>.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
- *   tests7 compsnd testsnd autotest
+ * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-YYYYMMDD.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
+ *   tests7 compsnd testsnd autotest, parens: search.scm
  *
  * --------------------------------------------------------
  *           18  |  19  |  20.0  20.8  20.9           gmp
@@ -98205,8 +98173,6 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * gcc 10.2 needs inline added in many places (10.2 is slower because it no longer inlines on its own) check attribute flatten
- * inline in make_string_with_length, maybe eval_args_pair_car, and mallocate_vector
  * chandle: find handle but don't decrement top? (catch has pre-body and current tops, so we can handle either case)
- *  (catch #t body[local error type=hash...] (lambda (type info) type=hash...))
+ *   (catch #t body[local error type=hash...] (lambda (type info) type=hash...)), outlet(owlet) is let at point of error
  */

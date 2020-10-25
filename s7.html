@@ -3654,7 +3654,7 @@ notices it has exceeded this limit, it returns the partial string.
 ~G        float to string, (format #f "~G" 100.1) -&gt; "100.1",        (%g in C)
 ~T        insert spaces (padding)
 ~N        get numeric argument from argument list (similar to ~V in CL)
-~W        object-&gt;string with :readable (write readably; s7 is the intended reader)
+~W        object-&gt;string with :readable (write readably: "serialization"; s7 is the intended reader)
 </pre>
 
 <p>The eight directives before ~W take the usual numeric arguments to specify field width and precision.
