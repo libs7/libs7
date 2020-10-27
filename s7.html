@@ -9904,9 +9904,12 @@ s7_values is values, s7_copy is copy, s7_fill is fill!, s7_type_of is type-of, s
 is syntax?. 
 </p>
 <p>s7_is_valid is a debugging aid; it tries to tell if an arbitrary value is pointing to
-an s7 object.  s7_optimize is the third-level optimizer.  It is a bit hard to explain,
+an s7 object.  Set the compile-time switch TRAP_SEGFAULT to 1 before using this function!
+</p>
+<p>s7_optimize is the third-level optimizer.  It is a bit hard to explain,
 but basically you pass it some scheme code, and it returns either NULL or a function that can be called
-to evaluate that code.  There are several examples in snd-sig.c.  Finally, the begin_hook
+to evaluate that code.  There are several examples in snd-sig.c.  
+Finally, the begin_hook
 functions are explained <a href="#beginhook">above</a>.
 </p>
 
@@ -10666,8 +10669,17 @@ Eventually I'll probably retire repl.scm.
 <p>Unlike repl, nrepl has support for the mouse, traversable, scrollable, and resizable panes, built-in ties to
 lint.scm, debug.scm, and profile.scm, and various other enhancements.
 Since it includes all the libc, notcurses FFI code, and nrepl.scm at compile-time, there
-are no problems running it anywhere.
+are no problems running it anywhere.  To build nrepl: touch mus-config.h, then
 </p>
+<pre class="indented">
+gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses
+</pre>
+<p>If that is too easy, try:
+</p>
+<pre class="indented">
+gcc -c s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl
+gcc -o nrepl nrepl.c s7.o -lnotcurses -lm -I. -ldl
+</pre>
 
 <p>When nrepl starts up, you have a prompt at the top of the terminal, and a status box
 at the bottom.  You can move around the pane via C-p and C-n (no need for repl.scm's M-p and M-n),

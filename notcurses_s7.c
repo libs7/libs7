@@ -11,12 +11,14 @@
 
 /* version.h: NOTCURSES_VERSION_MAJOR|MINOR */
 
+#if (!S7_MAIN)
 static s7_int s7_integer_checked(s7_scheme *sc, s7_pointer val)
 {
   if (!s7_is_integer(val))
     s7_wrong_type_arg_error(sc, __func__, 0, val, "an integer");
   return(s7_integer(val));
 }
+#endif
 
 static s7_double s7_real_checked(s7_scheme *sc, s7_pointer val)
 {

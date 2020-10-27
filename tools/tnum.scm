@@ -403,5 +403,62 @@
 (test-fm-components)
 
 
+(define (pisum)             ; from Julia microbenchmarks
+  (let ((sum 0.0))
+    (do ((j 0 (+ j 1)))
+	((= j 500)
+	 sum)
+      (set! sum 0.0)
+      (do ((k 1 (+ k 1)))
+	  ((> k 10000))
+	(set! sum (+ sum (/ (* k k))))))))
+
+(define (quicksort a lo hi) ; from Julia microbenchmarks
+  (let ((i lo)
+	(j hi))
+    (do ()
+	((>= i hi))
+      (let ((pivot (a (floor (/ (+ lo hi) 2)))))
+	(do ()
+	    ((> i j))
+	  (do ()
+	      ((>= (a i) pivot))
+	    (set! i (+ i 1)))
+	  (do ()
+	      ((<= (a j) pivot))
+	    (set! j (- j 1)))
+	  (when (<= i j)
+	    (let ((t (a i)))
+	      (set! (a i) (a j))
+	      (set! (a j) t)
+	      (set! i (+ i 1))
+	      (set! j (- j 1)))))
+	(if (< lo j)
+	    (quicksort a lo j))
+	(set! lo i)
+	(set! j hi)))))
+
+(define (jtests)
+  (let-temporarily (((*s7* 'equivalent-float-epsilon) 1e-12))
+    (unless (equivalent? (pisum) 1.6448340718480652)
+      (format *stderr* "pisum: ~S~%" (pisum))))
+
+  (do ((n 0 (+ n 1))) ; Julia original only runs it once = .007 secs in s7
+      ((= n 10))
+    (let ((a (make-float-vector 5000)))
+      (do ((i 0 (+ i 1)))
+	  ((= i 5000))
+	(set! (a i) (random 5000.0)))
+
+      (quicksort a 0 4999)
+      
+      (when (zero? n)
+	;; make sure it worked...
+	(do ((i 1 (+ i 1)))
+	    ((= i 5000))
+	  (if (< (a i) (a (- i 1)))
+	      (display ".")))))))
+
+(jtests)
 
 (exit)
