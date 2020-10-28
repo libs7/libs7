@@ -443,15 +443,13 @@
     (unless (equivalent? (pisum) 1.6448340718480652)
       (format *stderr* "pisum: ~S~%" (pisum))))
 
-  (do ((n 0 (+ n 1))) ; Julia original only runs it once = .007 secs in s7
+  (do ((n 0 (+ n 1))) ; Julia original only runs it once!
       ((= n 10))
     (let ((a (make-float-vector 5000)))
       (do ((i 0 (+ i 1)))
 	  ((= i 5000))
 	(set! (a i) (random 5000.0)))
-
       (quicksort a 0 4999)
-      
       (when (zero? n)
 	;; make sure it worked...
 	(do ((i 1 (+ i 1)))
@@ -461,4 +459,238 @@
 
 (jtests)
 
+
+(define (mean v)
+  (let ((len (length v))
+	(sum 0))
+    (do ((i 0 (+ i 1)))
+	((= i len)
+	 (/ sum len))
+      (set! sum (+ sum (v i))))))
+
+(define (medium v)
+  (let ((len (length v)))
+    (quicksort v 0 (- len 1))
+    (if (odd? len)
+	(v (ceiling (/ len 2)))
+	(/ (+ (v (/ len 2)) (v (+ (/ len 2) 1))) 2))))
+
+(define (mtests)
+  (let ((v (make-float-vector 5000)))
+    (do ((n 0 (+ n 1)))
+	((= n 10))
+      (do ((i 0 (+ i 1)))
+	  ((= i 5000))
+	(set! (v i) (- (random 2.0) 1.0)))
+      (mean v) 
+      (medium v))))
+
+(mtests)
+
+
+(define (gammln xx)			;Ln(gamma(xx)), xx>0 
+  (let* ((stp 2.5066282746310005)
+	 (x xx)
+	 (tmp (+ x 5.5))
+	 (tmp1 (- tmp (* (+ x 0.5) (log tmp))))
+	 (ser (+ 1.000000000190015
+		 (/ 76.18009172947146 (+ x 1.0))
+		 (/ -86.50532032941677 (+ x 2.0))
+		 (/ 24.01409824083091 (+ x 3.0))
+		 (/ -1.231739572450155 (+ x 4))
+		 (/ 0.1208650973866179e-2 (+ x 5.0))
+		 (/ -0.5395239384953e-5 (+ x 6.0)))))
+    (- (log (/ (* stp ser) x)) tmp1)))
+
+(define (gser a x)			;P(a,x) evaluated as series, also Ln(gamma)
+  (if (< x 0.0) 
+      (format #f "~F is less than 0" x)
+      (if (= x 0.0) 
+	  0.0
+	  (let* ((gln (gammln a))
+		 (itmax 100)
+		 (eps 3.0e-7)
+		 (ap a)
+		 (sum (/ 1.0 a))
+		 (del sum))
+	    (do ((n 1 (+ n 1)))
+		((or (> n itmax)
+		     (< (abs del) (* (abs sum) eps)))
+		 (* sum (exp (+ (- x) (* a (log x)) (- gln)))))
+	      (set! ap (+ ap 1))
+	      (set! del (* del (/ x ap)))
+	      (set! sum (+ sum del)))))))
+
+(define (gcf a x)			;Q(a,x) evaluated as continued fraction
+  (let* ((itmax 100)
+	 (eps 3.0e-7)
+	 (gln (gammln a))
+	 (gold 0.0)			;previous value of g, tested for convergence
+	 (a0 1.0)
+	 (a1 x)
+	 (b0 0.0)
+	 (b1 1.0)			;setting up continued fraction
+	 (fac 1.0)
+	 (ana 0.0) (g 0.0) (anf 0.0))
+    (call-with-exit
+     (lambda (return)
+       (do ((n 1 (+ n 1)))
+	   ((> n itmax) 
+	    (* g (exp (+ (- x) (* a (log x)) (- gln)))))
+	 (set! ana (- n a))
+	 (set! a0 (* fac (+ a1 (* a0 ana))))
+	 (set! b0 (* fac (+ b1 (* b0 ana))))
+	 (set! anf (* fac n))
+	 (set! a1 (+ (* x a0) (* anf a1)))
+	 (set! b1 (+ (* x b0) (* anf b1)))
+	 (if (not (= 0.0 a1))		;renormalize?
+	     (begin
+	       (set! fac (/ 1.0 a1))
+	       (set! g (* b1 fac))
+	       (if (< (abs (/ (- g gold) g)) eps)
+		   (return (* g (exp (+ (- x) (* a (log x)) (- gln)))))))))))))
+	 
+(define (gammp a x)			; incomplete gamma function P(a,x)
+  (if (or (<= a 0.0) 
+	  (< x 0.0))
+      (format #f "Invalid argument to gammp: ~F" (if (<= 0.0 a) a x))
+      (if (< x (+ a 1.0))
+	  (gser a x)			;use series
+	  (- 1.0 (gcf a x)))))		;use continued fraction
+  
+(define (erf x)			        ; error function erf(x)
+  (if (< x 0.0)
+      (- (gammp 0.5 (* x x)))
+      (gammp 0.5 (* x x))))
+
+(define (gammq a x)                     ;incomplete gamma function Q(a,x) = 1 - P(a,x)
+  (- 1.0 (gammp a x)))
+
+(define (erfc x)                        ;complementary error function erfc(x)
+  (if (< x 0.0)
+      (+ 1.0 (gammp 0.5 (* x x)))
+      (gammq 0.5 (* x x))))
+
+(define (test-erf)
+  (let-temporarily (((*s7* 'equivalent-float-epsilon) 1e-12))
+    (unless (equivalent? (erf 0) 0.0) (format *stderr* "erf 0: ~S~%" (erf 0)))
+    (unless (equivalent? (erf 1) 0.8427007900291826) (format *stderr* "erf 1: ~S~%" (erf 1)))
+    (unless (equivalent? (erfc 1) 0.15729920997081737) (format *stderr* "erfc 1: ~S~%" (erfc 1)))
+    (unless (equivalent? (erf 0.5) 0.5204998760683841) (format *stderr* "erf 0.5: ~S~%" (erf 0.5)))
+    (unless (equivalent? (erf 2) 0.9953222650189529) (format *stderr* "erf 2: ~S~%" (erf 2)))
+    (unless (equivalent? (erf 0.35) 0.3793820529938486) (format *stderr* "erf 0.35: ~S~%" (erf 0.35)))
+
+    (do ((i 0 (+ i 1))
+	 (x 0.0 (+ x .001)))
+	((= i 3000))
+      (unless (equivalent? (+ (erf x) (erfc x)) 1.0)
+	(format *stderr* "erf: ~S trouble\n" x)))))
+
+(test-erf)
+
+
+(define show-digits-of-pi-starting-at-digit
+  ;; piqpr8.c
+  ;;    This program implements the BBP algorithm to generate a few hexadecimal
+  ;;    digits beginning immediately after a given position id, or in other words
+  ;;    beginning at position id + 1.  On most systems using IEEE 64-bit floating-
+  ;;    point arithmetic, this code works correctly so long as d is less than
+  ;;    approximately 1.18 x 10^7.  If 80-bit arithmetic can be employed, this limit
+  ;;    is significantly higher.  Whatever arithmetic is used, results for a given
+  ;;    position id can be checked by repeating with id-1 or id+1, and verifying 
+  ;;    that the hex digits perfectly overlap with an offset of one, except possibly
+  ;;    for a few trailing digits.  The resulting fractions are typically accurate 
+  ;;    to at least 11 decimal digits, and to at least 9 hex digits.  
+  ;;  David H. Bailey     2006-09-08
+
+  (let ((ihex (lambda (x nhx chx)
+		;; This returns, in chx, the first nhx hex digits of the fraction of x.
+		(do ((y (abs x))
+		     (hx "0123456789ABCDEF")
+		     (i 0 (+ i 1)))
+		    ((= i nhx) chx)
+		  (set! y (* 16.0 (- y (floor y))))
+		  (set! (chx i) (hx (floor y))))))
+	(series (lambda (m id)
+		  ;; This routine evaluates the series sum_k 16^(id-k)/(8*k+m) using the modular exponentiation technique.
+		  (let ((expm (let ((ntp 25))
+				(let ((tp1 0)
+				      (tp (make-vector ntp)))
+				  (lambda (p ak)
+				    ;; expm = 16^p mod ak.  This routine uses the left-to-right binary exponentiation scheme.
+				    ;; If this is the first call to expm, fill the power of two table tp.
+				    (if (= tp1 0)
+					(begin
+					  (set! tp1 1)
+					  (set! (tp 0) 1.0)
+					  (do ((i 1 (+ i 1)))
+					      ((= i ntp))
+					    (set! (tp i) (* 2.0 (tp (- i 1)))))))
+				    
+				    (if (= ak 1.0)
+					0.0
+					(let ((pl -1))
+					  ;;  Find the greatest power of two less than or equal to p.
+					  (do ((i 0 (+ i 1)))
+					      ((or (not (= pl -1)) 
+						   (= i ntp)))
+					    (if (> (tp i) p)
+						(set! pl i)))
+					  
+					  (if (= pl -1) (set! pl ntp))
+					  (let ((pt (tp (- pl 1)))
+						(p1 p)
+						(r 1.0))
+					    ;;  Perform binary exponentiation algorithm modulo ak.
+					    
+					    (do ((j 1 (+ j 1)))
+						((> j pl) r)
+					      (if (>= p1 pt)
+						  (begin
+						    (set! r (* 16.0 r))
+						    (set! r (- r (* ak (floor (/ r ak)))))
+						    (set! p1 (- p1 pt))))
+					      (set! pt (* 0.5 pt))
+					      (if (>= pt 1.0)
+						  (begin
+						    (set! r (* r r))
+						    (set! r (- r (* ak (floor (/ r ak)))))))))))))))
+			(eps 1e-17)
+			(s 0.0))
+		    (do ((k 0 (+ k 1)))
+			((= k id))
+		      (let* ((ak (+ (* 8 k) m))
+			     (t (expm (- id k) ak)))
+			(set! s (+ s (/ t ak)))
+			(set! s (- s (floor s)))))
+		    
+		    ;; Compute a few terms where k >= id.
+		    (do ((happy #f)
+			 (k id (+ k 1)))
+			((or (> k (+ id 100)) happy) s)
+		      (let ((t (/ (expt 16.0 (- id k)) (+ (* 8 k) m))))
+			(set! happy (< t eps))
+			(set! s (+ s t))
+			(set! s (- s (floor s)))))))))
+    (lambda (id)  
+      ;; id is the digit position.  Digits generated follow immediately after id.
+      (let ((chx (make-string 10 #\space))
+	    (pid (let ((s1 (series 1 id))
+		       (s2 (series 4 id))
+		       (s3 (series 5 id))
+		       (s4 (series 6 id)))
+		   (- (+ (* 4.0 s1) (* -2.0 s2)) s3 s4))))
+	(set! pid (- (+ 1.0 pid) (floor pid)))
+	(ihex pid 10 chx)
+	chx))))
+
+(define (test-digits)
+  (do ((i 0 (+ i 1)))
+      ((= i 5))
+    (show-digits-of-pi-starting-at-digit (* i 1000))))
+
+(test-digits)
+
+
 (exit)
+

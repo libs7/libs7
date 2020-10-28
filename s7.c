@@ -4455,13 +4455,11 @@ static sigjmp_buf senv; /* global here is not a problem -- it is used only to pr
 static volatile sig_atomic_t can_jump = 0;
 static void segv(int32_t ignored) {if (can_jump) siglongjmp(senv, 1);}
 #endif
-static uint64_t lowest_pointer = 0;
 
 bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
 {
   bool result = false;
   if (!arg) return(false);
-  if ((uint64_t)(intptr_t)arg < lowest_pointer) return(false);
 #if TRAP_SEGFAULT
   if (sigsetjmp(senv, 1) == 0)
     {
@@ -14606,7 +14604,6 @@ static void init_ctables(void)
   int32_t i;
 
   exponent_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
-  lowest_pointer = (uint64_t)(intptr_t)exponent_table;
   slashify_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
   symbol_slashify_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
   char_ok_in_a_name = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
@@ -15311,7 +15308,6 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
   if (int_len <= max_len)
     {
       int32_t int_exponent;
-
       /* a better algorithm (since the inaccuracies are in the radix^exponent portion):
        *   strip off leading zeros and possible sign,
        *   strip off digits beyond max_len, then remove any trailing zeros.
@@ -62487,6 +62483,7 @@ static s7_double opt_d_dd_ss_add(opt_info *o) {return(real(slot_value(o->v[1].p)
 static s7_double opt_d_dd_ss_mul(opt_info *o) {return(real(slot_value(o->v[1].p)) * real(slot_value(o->v[2].p)));}
 
 static s7_double opt_d_dd_cf(opt_info *o) {return(o->v[3].d_dd_f(o->v[1].x, o->v[5].fd(o->v[4].o1)));}
+static s7_double opt_d_dd_1f_subtract(opt_info *o) {return(1.0 - o->v[5].fd(o->v[4].o1));}
 static s7_double opt_d_dd_fc(opt_info *o) {return(o->v[3].d_dd_f(o->v[5].fd(o->v[4].o1), o->v[2].x));}
 
 #if WITH_GMP
@@ -62600,6 +62597,13 @@ static s7_double opt_d_dd_ff_mul(opt_info *o)
   s7_double x1;
   x1 = o->v[9].fd(o->v[8].o1);
   return(x1 * o->v[11].fd(o->v[10].o1));
+}
+
+static s7_double opt_d_dd_ff_square(opt_info *o)
+{
+  s7_double x1;
+  x1 = o->v[9].fd(o->v[8].o1);
+  return(x1 * x1);
 }
 
 static s7_double opt_d_dd_ff_add(opt_info *o)
@@ -62879,6 +62883,7 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	      opc->v[4].o1 = sc->opts[start];
 	      opc->v[5].fd = sc->opts[start]->v[0].fd;
 	      opc->v[0].fd = (func) ? opt_d_dd_cf : opt_d_7dd_cf;
+	      if ((opc->v[1].x == 1.0) && (func == subtract_d_dd)) opc->v[0].fd = opt_d_dd_1f_subtract;
 	      return(true);
 	    }
 	  pc_fallback(sc, start);
@@ -62946,7 +62951,8 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 		    }
 		  if (func == subtract_d_dd)
 		    {
-		      opc->v[0].fd = opt_d_dd_fc_subtract; /* if o1->v[0].fd = opt_d_7d_c and its o->v[3].d_7d_f = random_d_7d it's (- (random f1) f2) */
+		      opc->v[0].fd = opt_d_dd_fc_subtract; 
+		      /* if o1->v[0].fd = opt_d_7d_c and its o->v[3].d_7d_f = random_d_7d it's (- (random f1) f2) */
 		      if ((opc == sc->opts[sc->pc - 2]) &&
 			  (sc->opts[start]->v[0].fd == opt_d_7d_c) &&
 			  (sc->opts[start]->v[3].d_7d_f == random_d_7d))
@@ -62986,7 +62992,7 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 		  opc->v[0].fd = opt_d_dd_ff;
 		  if (func == multiply_d_dd)
 		    {
-		      opc->v[0].fd = opt_d_dd_ff_mul;
+		      opc->v[0].fd = (arg1 == arg2) ? opt_d_dd_ff_square : opt_d_dd_ff_mul;
 		      return(true);
 		    }
 		  else
@@ -67979,16 +67985,24 @@ static s7_pointer opt_do_1(opt_info *o)
   if ((o->v[8].i == 1) &&
       (is_t_integer(slot_value(vp))))
     {
-      if (ostep->v[0].fp == opt_p_ii_ss_add) /* tmap */
+      if ((ostep->v[0].fp == opt_p_ii_ss_add) || /* tmap */
+	  (ostep->v[0].fp == i_to_p))
 	{
 	  s7_pointer step_val;
 	  step_val = make_mutable_integer(sc, integer(slot_value(vp)));
 	  slot_set_value(vp, step_val);
-	  while (!ostart->v[0].fb(ostart))
-	    {
-	      body->v[0].fp(body);
-	      integer(step_val) = opt_i_ii_ss_add(ostep);
-	    }
+	  if (ostep->v[0].fp == opt_p_ii_ss_add)
+	    while (!ostart->v[0].fb(ostart))
+	      {
+		body->v[0].fp(body);
+		integer(step_val) = opt_i_ii_ss_add(ostep);
+	      }
+	  else
+	    while (!ostart->v[0].fb(ostart))
+	      {
+		body->v[0].fp(body);
+		integer(step_val) = ostep->v[O_WRAP].fi(ostep);
+	      }
 	  unstack(sc);
 	  sc->curlet = old_e;
 	  return(sc->T);
@@ -68611,6 +68625,8 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       expr = cadddr(car_x);
       if ((is_pair(expr)) &&
 	  ((is_safe_setter(car(expr))) ||
+	   ((car(expr) == sc->set_symbol) &&
+	    (cadr(expr) != caaadr(car_x))) || /* caadr: (stepper init ...) */
 	   ((car(expr) == sc->vector_set_symbol) &&
 	    (is_null(cddddr(expr))) &&
 	    (is_code_constant(sc, cadddr(expr))))))
@@ -98119,45 +98135,45 @@ int main(int argc, char **argv)
  *           18  |  19  |  20.0  20.8  20.9           gmp
  * --------------------------------------------------------
  * tpeak     167 |  117 |  116   115   115            128
- * tauto     748 |  633 |  638   665   649           1261
- * tref     1093 |  779 |  779   671   691            720
- * tshoot   1296 |  880 |  841   823   843           1628
- * index     939 | 1013 |  990  1006  1025           1065
- * tmock         |      |             1205
- * s7test   1776 | 1711 | 1700  1824  1830           4570
- * tstr          |      |             2032
- * lt       2205 | 2116 | 2082  2089  2104           2108
+ * tauto     748 |  633 |  638   665   649            ...(at least 193.5! -- expt is the culprit)
+ * tref     1093 |  779 |  779   671   691            741
+ * tshoot   1296 |  880 |  841   823   843           1673
+ * index     939 | 1013 |  990  1006  1025           1087
+ * tmock         |      |             1205           7733
+ * s7test   1776 | 1711 | 1700  1824  1830           4525
+ * tstr          |      |             2032           2032
+ * lt       2205 | 2116 | 2082  2089  2104           2111
  * tform    2472 | 2289 | 2298  2278  2280           3256
- * tcopy    2434 | 2264 | 2277  2270  2256           2342
- * tmat     6072 | 2478 | 2465  2345  2335           2505
- * tread    2449 | 2394 | 2379  2416  2443           2583
- * tvect    6189 | 2430 | 2435  2461  2456           2695
- * fbench   2974 | 2643 | 2628  2676  2719           3088
- * tb       3251 | 2799 | 2767  2685  2737           3513
- * trclo    7985 | 2791 | 2670  2704  2719           4496
- * tmap     3238 | 2883 | 2874  2838  2885           3762
- * titer    3962 | 2911 | 2884  2892  2865           2918
- * tsort    4156 | 3043 | 3031  2989  3091           3690
- * tset     6616 | 3083 | 3168  3175  3264           3166
- * tmac     3503 | 3291 | 3281  3272  3322           3383
- * dup           |      |       3335  3280           3926
- * teq      4081 | 3804 | 3806  3800  4068           3813
+ * tcopy    2434 | 2264 | 2277  2270  2256           2313
+ * tmat     6072 | 2478 | 2465  2345  2335           2485
+ * tread    2449 | 2394 | 2379  2416  2443           2639
+ * tvect    6189 | 2430 | 2435  2461  2456           2687
+ * fbench   2974 | 2643 | 2628  2676  2719           3091
+ * trclo    7985 | 2791 | 2670  2704  2719           4502
+ * tb       3251 | 2799 | 2767  2685  2737           3554
+ * titer    3962 | 2911 | 2884  2892  2865           2883
+ * tmap     3238 | 2883 | 2874  2838  2885           3825
+ * tsort    4156 | 3043 | 3031  2989  3091           3809
+ * tset     6616 | 3083 | 3168  3175  3264           3253
+ * dup           |      |       3335  3280           3548
+ * tmac     3503 | 3291 | 3281  3272  3322           3430
+ * teq      4081 | 3804 | 3806  3800  4068           4078
  * tfft     4288 | 3816 | 3785  3844  4142           11.5
- * tnum          |      |             4532           61.3
- * tmisc         |      |       4455  4674           4911
- * tio           | 5227 |       4527  4570           4613
- * tcase         |      |       4895  4977           4900
- * tlet     5409 | 4613 | 4578  4887  4927           5836
- * tclo     6246 | 5188 | 5187  4954  4808           5299
+ * tio           | 5227 |       4527  4570           4595
+ * tmisc         |      |       4455  4674           5077
+ * tclo     6246 | 5188 | 5187  4954  4808           5119
+ * tlet     5409 | 4613 | 4578  4887  4927           5863
+ * tcase         |      |       4895  4977           5010
  * tgc           |      |       4995  5491           5319
- * trec     17.8 | 6318 | 6317  5937  5976           7780
+ * trec     17.8 | 6318 | 6317  5937  5976           7825
+ * tnum          |      |             6647           58.3
  * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
- * thash         |      |       12.2  11.9           36.6
- * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.2
- * calls    40.3 | 35.9 | 35.8  36.1  36.9           60.7
- * sg       85.8 | 70.4 | 70.6  70.8  71.8           97.7
- * lg      115.9 |104.9 |104.6 104.6 105.8          105.9
- * tbig    264.5 |178.0 |177.2 174.0 177.4          618.3
+ * thash         |      |       12.2  11.9           37.5
+ * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.0
+ * calls    40.3 | 35.9 | 35.8  36.1  36.9           60.6
+ * sg       85.8 | 70.4 | 70.6  70.8  71.8           97.9
+ * lg      115.9 |104.9 |104.6 104.6 105.8          106.7
+ * tbig    264.5 |178.0 |177.2 174.0 177.4          603.6
  *
  * -------------------------------------------------------
  *
