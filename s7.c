@@ -24690,8 +24690,7 @@ static s7_pointer geq_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
 }
 
 
-/* ---------------------------------------- real-part imag-part ---------------------------------------- */
-
+/* ---------------------------------------- real-part ---------------------------------------- */
 s7_double s7_real_part(s7_pointer x)
 {
   switch(type(x))
@@ -24708,17 +24707,6 @@ s7_double s7_real_part(s7_pointer x)
     case T_BIG_COMPLEX: return((s7_double)mpfr_get_d(mpc_realref(big_complex(x)), MPFR_RNDN));
 #endif
     }
-  return(0.0);
-}
-
-s7_double s7_imag_part(s7_pointer x)
-{
-  if (is_t_complex(x))
-    return(imag_part(x));
-#if WITH_GMP
-  if (is_t_big_complex(x))
-    return((s7_double)mpfr_get_d(mpc_imagref(big_complex(x)), MPFR_RNDN));
-#endif
   return(0.0);
 }
 
@@ -24763,6 +24751,18 @@ static s7_pointer g_real_part(s7_scheme *sc, s7_pointer args)
   return(real_part_p_p(sc, car(args)));
 }
 
+
+/* ---------------------------------------- imag-part ---------------------------------------- */
+s7_double s7_imag_part(s7_pointer x)
+{
+  if (is_t_complex(x))
+    return(imag_part(x));
+#if WITH_GMP
+  if (is_t_big_complex(x))
+    return((s7_double)mpfr_get_d(mpc_imagref(big_complex(x)), MPFR_RNDN));
+#endif
+  return(0.0);
+}
 
 static s7_pointer imag_part_p_p(s7_scheme *sc, s7_pointer p)
 {
@@ -74022,8 +74022,11 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		      set_opt3_sym(expr, caadr(arg2));
 		      return(OPT_F);
 		    }
-		  set_unsafe_optimize_op(expr, hop + OP_C_AP);
-		  fx_annotate_arg(sc, cdr(expr), e);
+		  if (!is_c_function_star(func))
+		    {
+		      set_unsafe_optimize_op(expr, hop + OP_C_AP);
+		      fx_annotate_arg(sc, cdr(expr), e);
+		    }
 		}
 	      choose_c_function(sc, expr, func, 2);
 	      return(OPT_F);
@@ -98135,7 +98138,7 @@ int main(int argc, char **argv)
  *           18  |  19  |  20.0  20.8  20.9           gmp
  * --------------------------------------------------------
  * tpeak     167 |  117 |  116   115   115            128
- * tauto     748 |  633 |  638   665   649            ...(at least 193.5! -- expt is the culprit)
+ * tauto     748 |  633 |  638   665   649           1200 ; w/o expt
  * tref     1093 |  779 |  779   671   691            741
  * tshoot   1296 |  880 |  841   823   843           1673
  * index     939 | 1013 |  990  1006  1025           1087
@@ -98164,7 +98167,7 @@ int main(int argc, char **argv)
  * tclo     6246 | 5188 | 5187  4954  4808           5119
  * tlet     5409 | 4613 | 4578  4887  4927           5863
  * tcase         |      |       4895  4977           5010
- * tgc           |      |       4995  5491           5319
+ * tgc           |      |       4995  5491 5434      5319
  * trec     17.8 | 6318 | 6317  5937  5976           7825
  * tnum          |      |             6647           58.3
  * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
@@ -98181,4 +98184,5 @@ int main(int argc, char **argv)
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
  * chandle: find handle but don't decrement top? (catch has pre-body and current tops, so we can handle either case)
  *   (catch #t body[local error type=hash...] (lambda (type info) type=hash...)), outlet(owlet) is let at point of error
+ * t386 for lint additions
  */

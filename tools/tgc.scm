@@ -79,23 +79,24 @@
 				    (check-cyclic it1)
 				    (let ((b1 (block 1 2 3)))
 				      (check-cyclic b1)
-				      (map (lambda (a)
-					     (let ((pos (random vsize)))
-					       (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
-						   (format *stderr* "~S?" (vector-ref wait pos)))
-					       (vector-set! wait pos a))
-					     (dynamic-wind
-						 (lambda () #f)
+				      (for-each 
+				       (lambda (a)
+					 (let ((pos (random vsize)))
+					   (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
+					       (format *stderr* "~S?" (vector-ref wait pos)))
+					   (vector-set! wait pos a))
+					 (dynamic-wind
+					     (lambda () #f)
+					     (lambda ()
+					       (catch #t
 						 (lambda ()
-						   (catch #t
-						     (lambda ()
-						       (call-with-exit
-							(lambda (r)
-							  (r a))))
-						     (lambda (type info)
-						       (format *stderr* "~A: ~A~%" type (apply format #f info)))))
-						 (lambda () #f)))
-					   (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
+						   (call-with-exit
+						    (lambda (r)
+						      (r a))))
+						 (lambda (type info)
+						   (format *stderr* "~A: ~A~%" type (apply format #f info)))))
+					     (lambda () #f)))
+				       (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
 
 (tgc 50000 200)
 ;(tgc 1000000000)

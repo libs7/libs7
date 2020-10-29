@@ -270,7 +270,7 @@
 	(display "oops")))
     (set! vct-hash #f)))
 
-(define (random-string)
+(define (random-string-1)
   (let* ((len (+ 1 (random 20)))
 	 (s (make-string len)))
     (do ((i 0 (+ i 1)))
@@ -281,7 +281,7 @@
   (when (< size 1000000) ; random-string is not interesting in this context
     (do ((i 0 (+ i 1))) 
 	((= i size)) 
-      (vector-set! strings i (random-string)))
+      (vector-set! strings i (random-string-1)))
     (let ((str-hash (make-hash-table size string=?)))
       (do ((i 0 (+ i 1))) 
 	  ((= i size)) 

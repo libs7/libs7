@@ -189,6 +189,8 @@
 		  ;outlet-member make-method make-object bignum? bignum
 		  define-expansion
 		  ))
+(when (provided? 'gmp)
+  (set! baddies (cons 'expt baddies))) ; TODO: track this down
 
 (define (test-sym sym)
   (if (and (not (memq sym baddies))

@@ -4930,9 +4930,31 @@
 								     (set! minus (cons p1 minus))))
 							       (cddr p)))))))
 				     val)
-			   (simplify-numerics `(- (+ ,@(reverse plus) ,@(if (positive? c) (list c) ()))
-						  ,@(reverse minus) ,@(if (negative? c) (list (abs c)) ()))
-					      env))
+
+			   ;; (format *stderr* "~S ~S ~S ~S~%" form plus minus c)
+			   ;; (+ (- x 1) 1000): plus '(x), minus (), c 999 -> (+ x 999)
+			   ;; (+ (- 1 x) 1000):       ()         '(x), 1001 -> (- 1001 x)
+			   ;; (+ (- x y 1) 2 z)      '(z x)      '(y), 1 -> (- (+ x z 1) y)
+			   
+			   ;; there a lot more like these that aren't handled yet (t386)
+
+			   (when (and (pair? plus) 
+				      (pair? minus))
+			     (do ((p plus (cdr p))
+				  (np ()))
+				 ((null? p)
+				  (set! plus (reverse np)))
+			       (if (memv (car p) minus) ; not member because it matches (random...) etc, perhaps use no-side-effect-functions
+				   (set! minus (remove-one (car p) minus))
+				   (set! np (cons (car p) np)))))
+
+			   (if (null? minus)
+			       (simplify-numerics `(+ ,@(reverse plus) ,c) env)
+			       (if (null? plus)
+				   (simplify-numerics `(- ,c ,@(reverse minus)) env)
+				   (simplify-numerics `(- (+ ,@(reverse plus) ,@(if (positive? c) (list c) ()))
+							  ,@(reverse minus) ,@(if (negative? c) (list (abs c)) ()))
+						      env)))) ; to (let ((plus)... above
 			 
 			 (case (length val)
 			   ((0))                                        ; (+) -> 0
