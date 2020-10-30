@@ -635,8 +635,16 @@ above as an example:
 </pre>
 
 <p>See s7test.scm for many examples.  (s7's define* is very close to srfi-89's define*).
+To mark an argument as required, set its default value to a call on the error function:
 </p>
-
+<pre class="indented">
+&gt; (define* (f a (b (error 'unset-arg "f's b parameter not set"))) (list a b))
+<em class="gray">f</em>
+&gt; (f 1 2)
+(1 2)
+&gt; (f 1)
+<em class=red>error</em><em class="gray">: f's b parameter not set</em>
+</pre>
 
 <blockquote>
 

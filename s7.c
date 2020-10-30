@@ -53704,9 +53704,7 @@ static s7_pointer active_catches(s7_scheme *sc)
 	lst = cons(sc, sc->T, lst);
 	break;
 
-      case OP_CATCH_2:
-      case OP_CATCH_1:
-      case OP_CATCH:
+      case OP_CATCH_2: case OP_CATCH_1: case OP_CATCH:
 	x = stack_code(sc->stack, i);
 	lst = cons(sc, catch_tag(x), lst);
 	break;
@@ -70404,11 +70402,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_DEACTIVATE_GOTO:  /* (+ (call-with-exit (lambda (ret) (values 1 2 3)))) */
       call_exit_active(stack_args(sc->stack, top)) = false;
 
-    case OP_CATCH:
-    case OP_CATCH_1:
-    case OP_CATCH_2:
-    case OP_CATCH_ALL:
-      /* (+ (catch #t (lambda () (values 3 4)) (lambda args args))) */
+    case OP_CATCH: case OP_CATCH_1: case OP_CATCH_2: case OP_CATCH_ALL: /* (+ (catch #t (lambda () (values 3 4)) (lambda args args))) */
       pop_stack(sc);
       return(splice_in_values(sc, args));
 
@@ -98184,5 +98178,6 @@ int main(int argc, char **argv)
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
  * chandle: find handle but don't decrement top? (catch has pre-body and current tops, so we can handle either case)
  *   (catch #t body[local error type=hash...] (lambda (type info) type=hash...)), outlet(owlet) is let at point of error
- * t386 for lint additions
+ * t386 for lint additions for -/ relops mix/min
+ * how to inspect catches? 
  */
