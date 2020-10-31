@@ -411,12 +411,6 @@ typedef long double long_double;
 
 #define MAX_FLOAT_FORMAT_PRECISION 128
 
-#if S7_DEBUGGING
-#define check_print_length(Len, Size, Buf) do {if (Len >= Size) fprintf(stderr, "%s[%d]: %" print_s7_int " = snprintf(%" print_s7_int ", %s)\n", __func__, __LINE__, (s7_int)(Len), (s7_int)(Size), Buf);} while (0)
-#else
-#define check_print_length(Len, Size, Buf)
-#endif
-
 /* types */
 enum {T_FREE = 0,
       T_PAIR, T_NIL, T_UNUSED, T_UNDEFINED, T_UNSPECIFIED, T_EOF,
@@ -5452,7 +5446,6 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
 		  obj->current_alloc_func, obj->current_alloc_line, allocated_bits,
 		  obj->previous_alloc_func, obj->previous_alloc_line, previous_bits,
 		  obj->uses);
-  check_print_length(nlen, len, str);
   free(current_bits);
   free(allocated_bits);
   free(previous_bits);
@@ -14285,7 +14278,6 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
       else len = snprintf(sc->num_to_str, sc->num_to_str_size - 4,
 			  (float_choice == 'g') ? "%*.*g" : ((float_choice == 'f') ? "%*.*f" : "%*.*e"),
 			  (int32_t)width, (int32_t)precision, real(obj)); /* -4 for floatify */
-      check_print_length(len, sc->num_to_str_size - 4, sc->num_to_str);
       (*nlen) = len;
       floatify(sc->num_to_str, nlen);
       return(sc->num_to_str);
@@ -26322,7 +26314,6 @@ static void init_chars(void)
 	    if ((c < 32) || (c >= 127))
 	      len = snprintf((char *)(&(character_name(cp))), P_SIZE, "#\\x%x", c);
 	    else len = snprintf((char *)(&(character_name(cp))), P_SIZE, "#\\%c", c);
-	    check_print_length(len, P_SIZE, (char *)(&(character_name(cp))));
 	    character_name_length(cp) = len;
 	    break;
           }}}
@@ -29697,7 +29688,6 @@ static s7_pointer read_file(s7_scheme *sc, FILE *fp, const char *name, s7_int ma
 	      char tmp[256];
 	      int32_t len;
 	      len = snprintf(tmp, 256, "(%s \"%s\") read %ld bytes of an expected %" print_s7_int "?", caller, name, (long)bytes, size);
-	      check_print_length(len, 256, tmp);
 	      port_write_string(current_output_port(sc))(sc, tmp, len, current_output_port(sc));
 	    }
 	  size = bytes;
@@ -33832,7 +33822,8 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
 {
   s7_int i, len, plen;
   bool too_long;
-  char buf[128];
+  #define FV_BUFSIZE 256
+  char buf[FV_BUFSIZE];
   s7_double *els;
 
   len = print_vector_length(sc, vect, port, use_write);
@@ -33856,8 +33847,7 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
       if (i == vlen)
 	{
 	  make_vector_to_port(sc, vect, port);
-	  plen = snprintf(buf, 128, "%.*g)", sc->float_format_precision, first);
-	  check_print_length(plen, 128, buf);
+	  plen = snprintf(buf, FV_BUFSIZE, "%.*g)", sc->float_format_precision, first);
 	  port_write_string(port)(sc, buf, plen, port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
@@ -33868,14 +33858,12 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
   if (vector_rank(vect) == 1)
     {
       port_write_string(port)(sc, "#r(", 3, port);
-      plen = snprintf(buf, 124, "%.*g", sc->float_format_precision, els[0]); /* 124 so floatify has room */
-      check_print_length(plen, 124, buf);
+      plen = snprintf(buf, FV_BUFSIZE - 4, "%.*g", sc->float_format_precision, els[0]); /* -4 so floatify has room */
       floatify(buf, &plen);
       port_write_string(port)(sc, buf, plen, port);
       for (i = 1; i < len; i++)
 	{
-	  plen = snprintf(buf, 124, " %.*g", sc->float_format_precision, els[i]);
-	  check_print_length(plen, 124, buf);
+	  plen = snprintf(buf, FV_BUFSIZE - 4, " %.*g", sc->float_format_precision, els[i]);
 	  plen--; /* fixup for the initial #\space */
 	  floatify((char *)(buf + 1), &plen);
 	  port_write_string(port)(sc, buf, plen + 1, port);
@@ -35264,7 +35252,6 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 		  ci->init_loc = s7_gc_protect_1(sc, ci->init_port);
 		}
 	      nlen = snprintf(buf, 128, "  (set! <%d> (c-pointer %" print_pointer, -ref, (intptr_t)c_pointer(obj));
-	      check_print_length(nlen, 128, buf);
 	      port_write_string(ci->init_port)(sc, buf, nlen, ci->init_port);
 
 	      if ((c_pointer_type(obj) != sc->F) ||
@@ -35289,7 +35276,6 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
       else
 	{
 	  nlen = snprintf(buf, 128, "(c-pointer %" print_pointer, (intptr_t)c_pointer(obj));
-	  check_print_length(nlen, 128, buf);
 	  port_write_string(port)(sc, buf, nlen, port);
 	  if ((c_pointer_type(obj) != sc->F) ||
 	      (c_pointer_info(obj) != sc->F))
@@ -35306,7 +35292,6 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
       if (is_symbol(c_pointer_type(obj)))
 	nlen = snprintf(buf, 128, "#<%s %p>", symbol_name(c_pointer_type(obj)), c_pointer(obj));
       else nlen = snprintf(buf, 128, "#<c_pointer %p>", c_pointer(obj));
-      check_print_length(nlen, 128, buf);
       port_write_string(port)(sc, buf, nlen, port);
     }
 }
@@ -35324,7 +35309,6 @@ static void rng_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
     nlen = snprintf(buf, 128, "(random-state %" PRIu64 " %" PRIu64 ")", random_seed(obj), random_carry(obj));
   else nlen = snprintf(buf, 128, "#<rng %" PRIu64 " %" PRIu64 ">", random_seed(obj), random_carry(obj));
 #endif
-  check_print_length(nlen, 128, buf);
   port_write_string(port)(sc, buf, nlen, port);
 }
 
@@ -35640,7 +35624,6 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	  port_write_string(port)(sc, "#<", 2, port);
 	  c_object_name_to_port(sc, obj, port);
 	  nlen = snprintf(buf, 128, " %p>", obj);
-	  check_print_length(nlen, 128, buf);
 	  port_write_string(port)(sc, buf, nlen, port);
 	}}
 }
@@ -52368,7 +52351,6 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
 			       (int)sb.st_uid, (int)sb.st_gid,
 			       (long)sb.st_size,
 			       c1, c2);
-	      check_print_length(bytes, 512, str);
 	      s7_varlet(sc, let, sc->file_info_symbol, make_string_with_length(sc, (const char *)str, bytes));
 	    }}
 #endif
@@ -54505,7 +54487,6 @@ static s7_pointer read_error_1(s7_scheme *sc, const char *errmsg, bool string_er
 			       sc->current_file, sc->current_line);
 	      else nlen = snprintf(msg, len, "%s: %s", errmsg, (recent_input) ? recent_input : "");
 	    }
-	  check_print_length(nlen, len, msg);
 	  string_length(p) = nlen;
 	  if (recent_input) free(recent_input);
 	  return(s7_error(sc, sc->read_error_symbol, set_elist_1(sc, p)));
@@ -54526,7 +54507,6 @@ static s7_pointer read_error_1(s7_scheme *sc, const char *errmsg, bool string_er
       else nlen = snprintf(msg, len, "%s %s[%u], last top-level form at %s[%" print_s7_int "]",
 			  errmsg, port_filename(pt), port_line_number(pt),
 			  sc->current_file, sc->current_line);
-      check_print_length(nlen, len, msg);
       string_length(p) = nlen;
       return(s7_error(sc, sc->read_error_symbol, set_elist_1(sc, p)));
     }
@@ -54708,7 +54688,6 @@ static s7_pointer missing_close_paren_error(s7_scheme *sc)
       else nlen = snprintf(msg, len, "missing close paren, %s[%u], last top-level form at %s[%" print_s7_int "]",
 			  port_filename(pt), port_line_number(pt),
 			  sc->current_file, sc->current_line);
-      check_print_length(nlen, len, msg);
       string_length(p) = nlen;
       return(s7_error(sc, sc->read_error_symbol, set_elist_1(sc, p)));
     }
@@ -72016,7 +71995,6 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 
   if (pairs == 0)
     {
-      if ((is_c_function_star(func)) && (is_symbol(arg1))) return(OPT_F); /* symbol can evaluate to keyword, groan */
       if (func_is_safe)                  /* safe c function */
 	{
 	  set_safe_optimize_op(expr, hop + ((symbols == 0) ? OP_SAFE_C_D : OP_SAFE_C_S));
@@ -72041,14 +72019,6 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       return(OPT_F);
     }
   /* pairs == 1 */
-  if (is_c_function_star(func))
-    {
-#if 0
-      set_unsafe_optimize_op(expr, hop + ((func_is_safe) ? OP_SAFE_C_STAR_P : OP_C_STAR_P)); /* _1 for each and _mv serves both cases */
-      choose_c_function(sc, expr, func, 1);
-#endif
-      return(OPT_F);
-    }
   if (bad_pairs == 0)
     {
       if (func_is_safe)
@@ -73359,11 +73329,9 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       return(OPT_F);
     }
 
-  if (((is_c_function(func)) &&
+  if ((is_c_function(func)) &&
        (c_function_required_args(func) <= 1) &&
-       (c_function_all_args(func) >= 1)) ||
-      ((is_c_function_star(func)) &&
-       (c_function_all_args(func) == 1))) /* surely no need to check key here? */
+       (c_function_all_args(func) >= 1))
     return(optimize_c_function_one_arg(sc, expr, func, hop, pairs, symbols, quotes, bad_pairs, e));
 
   if (is_closure(func))
@@ -73401,8 +73369,9 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       return(OPT_F);
     }
 
-  if ((is_c_function_star(func)) &&  /* we checked above for c_function_all_args == 1 */
+  if ((is_c_function_star(func)) &&
       (fx_count(sc, expr) == 1) &&
+      (c_function_all_args(func) >= 1) &&
       (!is_keyword(arg1)))           /* the only arg should not be a keyword (needs error checks later) */
     {
       if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
@@ -73562,12 +73531,9 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
     }
   /* end of bad symbol wrappers */
 
-  if ((is_c_function(func) &&
-       (c_function_required_args(func) <= 2) &&
-       (c_function_all_args(func) >= 2)) ||
-      ((is_c_function_star(func)) &&
-       (c_function_all_args(func) == 2) &&
-       (!is_pair(arg1)) && (!is_symbol(arg1) && (!is_keyword(arg2)))))  /* trying to protect against arg1 evaluating to a keyword, or arg2 being a keyword */
+  if (is_c_function(func) &&
+      (c_function_required_args(func) <= 2) &&
+      (c_function_all_args(func) >= 2))
     {
       /* this is a mess */
       bool func_is_safe;
@@ -74016,11 +73982,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		      set_opt3_sym(expr, caadr(arg2));
 		      return(OPT_F);
 		    }
-		  if (!is_c_function_star(func))
-		    {
-		      set_unsafe_optimize_op(expr, hop + OP_C_AP);
-		      fx_annotate_arg(sc, cdr(expr), e);
-		    }
+		  set_unsafe_optimize_op(expr, hop + OP_C_AP);
+		  fx_annotate_arg(sc, cdr(expr), e);
 		}
 	      choose_c_function(sc, expr, func, 2);
 	      return(OPT_F);
@@ -74236,6 +74199,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 
   if ((is_c_function_star(func)) &&
       (fx_count(sc, expr) == 2) &&
+      (c_function_all_args(func) >= 1) &&
       (!is_keyword(arg2)))
     {
       if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
@@ -74327,13 +74291,9 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       (is_constant_symbol(sc, car(expr))))
     hop = 1;
 
-  if ((is_c_function(func) &&
-       (c_function_required_args(func) <= 3) &&
-       (c_function_all_args(func) >= 3)) ||
-      ((is_c_function_star(func)) &&
-       (c_function_all_args(func) == 3) &&
-       (!is_pair(arg1)) && (!is_symbol(arg1)) &&
-       (!is_pair(arg2)) && (!is_symbol(arg2))))
+  if (is_c_function(func) &&
+      (c_function_required_args(func) <= 3) &&
+      (c_function_all_args(func) >= 3))
     {
       if ((hop == 0) && (symbol_id(car(expr)) == 0))
 	hop = 1;
@@ -74345,10 +74305,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	    {
 	      set_optimized(expr);
 	      if (symbols == 0)
-		{
-		  if ((is_keyword(arg3)) && (is_c_function_star(func))) return(OPT_F);
-		  set_optimize_op(expr, hop + OP_SAFE_C_D);
-		}
+		set_optimize_op(expr, hop + OP_SAFE_C_D);
 	      else
 		{
 		  if (symbols == 3)
@@ -74512,7 +74469,6 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	    set_optimize_op(expr, hop + OP_C_SCS);
 	  else
 	    {
-	      if ((is_keyword(arg3)) && (is_c_function_star(func))) return(OPT_F);
 	      fx_annotate_args(sc, cdr(expr), e);
 	      set_opt3_arglen(expr, int_three);
 	      set_optimize_op(expr, hop + OP_C_FX);
@@ -74677,7 +74633,8 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	}}
 
   if ((is_c_function_star(func)) &&
-      (fx_count(sc, expr) == 3))
+      (fx_count(sc, expr) == 3) &&
+      (c_function_all_args(func) >= 2))
     {
       set_safe_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_FX);
       fx_annotate_args(sc, cdr(expr), e);
@@ -74850,7 +74807,8 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
     return(OPT_F);
 
   if ((is_c_function_star(func)) &&
-      (fx_count(sc, expr) == args))
+      (fx_count(sc, expr) == args) &&
+      (c_function_all_args(func) >= (args / 2)))
     {
       if (is_immutable(func)) hop = 1;
       set_safe_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_FX);
@@ -94636,7 +94594,6 @@ static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
 	    len = snprintf((char *)block_data(b), 128, "%.1fM", bytes / 1000000.0);
 	  else len = snprintf((char *)block_data(b), 128, "%.1fG", bytes / 1000000000.0);
 	}}
-  check_print_length(len, 128, (char *)block_data(b));
   return(cons(sc, make_integer(sc, bytes), block_to_string(sc, b, len)));
 }
 
@@ -98132,20 +98089,20 @@ int main(int argc, char **argv)
  *           18  |  19  |  20.0  20.8  20.9           gmp
  * --------------------------------------------------------
  * tpeak     167 |  117 |  116   115   115            128
- * tauto     748 |  633 |  638   665   649           1200 ; w/o expt
+ * tauto     748 |  633 |  638   665   649           1200
  * tref     1093 |  779 |  779   671   691            741
  * tshoot   1296 |  880 |  841   823   843           1673
  * index     939 | 1013 |  990  1006  1025           1087
- * tmock         |      |             1205           7733
- * s7test   1776 | 1711 | 1700  1824  1830           4525
+ * tmock         |      |             1211           7733
+ * s7test   1776 | 1711 | 1700  1824  1839           4525
  * tstr          |      |             2032           2032
- * lt       2205 | 2116 | 2082  2089  2104           2111
+ * lt       2205 | 2116 | 2082  2089  2121           2111
  * tform    2472 | 2289 | 2298  2278  2280           3256
  * tcopy    2434 | 2264 | 2277  2270  2256           2313
- * tmat     6072 | 2478 | 2465  2345  2335           2485
- * tread    2449 | 2394 | 2379  2416  2443           2639
+ * tmat     6072 | 2478 | 2465  2345  2333           2485
+ * tread    2449 | 2394 | 2379  2416  2447           2639
  * tvect    6189 | 2430 | 2435  2461  2456           2687
- * fbench   2974 | 2643 | 2628  2676  2719           3091
+ * fbench   2974 | 2643 | 2628  2676  2710           3091
  * trclo    7985 | 2791 | 2670  2704  2719           4502
  * tb       3251 | 2799 | 2767  2685  2737           3554
  * titer    3962 | 2911 | 2884  2892  2865           2883
@@ -98157,19 +98114,19 @@ int main(int argc, char **argv)
  * teq      4081 | 3804 | 3806  3800  4068           4078
  * tfft     4288 | 3816 | 3785  3844  4142           11.5
  * tio           | 5227 |       4527  4570           4595
- * tmisc         |      |       4455  4674           5077
+ * tmisc         |      |       4455  4673           5077
  * tclo     6246 | 5188 | 5187  4954  4808           5119
  * tlet     5409 | 4613 | 4578  4887  4927           5863
  * tcase         |      |       4895  4977           5010
- * tgc           |      |       4995  5491 5434      5319
+ * tgc           |      |       4995  5434           5319
  * trec     17.8 | 6318 | 6317  5937  5976           7825
- * tnum          |      |             6647           58.3
+ * tnum          |      |             6563           58.3
  * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
  * thash         |      |       12.2  11.9           37.5
  * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.0
- * calls    40.3 | 35.9 | 35.8  36.1  36.9           60.6
+ * calls    40.3 | 35.9 | 35.8  36.1  36.7           60.6
  * sg       85.8 | 70.4 | 70.6  70.8  71.8           97.9
- * lg      115.9 |104.9 |104.6 104.6 105.8          106.7
+ * lg      115.9 |104.9 |104.6 104.6 106.6          106.7
  * tbig    264.5 |178.0 |177.2 174.0 177.4          603.6
  *
  * -------------------------------------------------------
@@ -98178,6 +98135,5 @@ int main(int argc, char **argv)
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
  * chandle: find handle but don't decrement top? (catch has pre-body and current tops, so we can handle either case)
  *   (catch #t body[local error type=hash...] (lambda (type info) type=hash...)), outlet(owlet) is let at point of error
- * t386 for lint additions for -/ relops mix/min
  * how to inspect catches? 
  */

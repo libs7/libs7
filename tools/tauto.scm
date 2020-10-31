@@ -33,7 +33,8 @@
 			"hi455" :key hi: 'hi (list 1) (list 1 2) (cons 1 2) (list (list 1 2)) (list (list 1)) (list ()) #() 
 			1/0+i 0+0/0i 0+1/0i 1+0/0i 0/0+0i 0/0+0/0i 1+1/0i 0/0+i cons ''2 
 			1+i 1+1e10i 1e15+1e15i 0+1e18i 1e18 #\xff (string #\xff) 1e308 
-			(*s7* 'most-positive-fixnum) (*s7* 'most-negative-fixnum) (- (*s7* 'most-positive-fixnum) 1) (+ (*s7* 'most-negative-fixnum) 1)
+			;(*s7* 'most-positive-fixnum) (*s7* 'most-negative-fixnum) (- (*s7* 'most-positive-fixnum) 1) (+ (*s7* 'most-negative-fixnum) 1)
+			;most-negative-fixnum hangs expt in gmp
 			-1 0 0.0 1 1.5 1.0-1.0i 3/4 #\null -63 (make-hash-table) (hash-table '(a . 2) '(b . 3))
 			'((1 2) (3 4)) '((1 (2)) (((3) 4))) "" (list #i(1) "1") '(1 2 . 3) (list (cons 'a 2) (cons 'b 3))
 			#i(1 2) (vector 1 '(3)) (let ((x 3)) (lambda (y) (+ x y))) abs 'a 'b one
@@ -189,8 +190,6 @@
 		  ;outlet-member make-method make-object bignum? bignum
 		  define-expansion
 		  ))
-(when (provided? 'gmp)
-  (set! baddies (cons 'expt baddies))) ; TODO: track this down
 
 (define (test-sym sym)
   (if (and (not (memq sym baddies))

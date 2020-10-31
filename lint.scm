@@ -4936,27 +4936,35 @@
 							       (cddr p)))))))
 				     val)
 
-			   ;; (+ (- x 1) 1000): plus '(x), minus (), c 999 -> (+ x 999)
-			   ;; (+ (- 1 x) 1000):       ()         '(x), 1001 -> (- 1001 x)
-			   ;; (+ (- x y 1) 2 z)      '(z x)      '(y), 1 -> (- (+ x z 1) y)
-			   (when (and (pair? plus) 
-				      (pair? minus))
-			     (do ((p plus (cdr p))
-				  (np ()))
-				 ((null? p)
-				  (set! plus (reverse np)))
-			       (if (and (member (car p) minus) ; not just member because it matches (random...) etc, perhaps use no-side-effect-functions
-					(not (side-effect? (car p) env)))
-				   (set! minus (remove-one (car p) minus))
-				   (set! np (cons (car p) np)))))
-
-			   (if (null? minus)
-			       (simplify-numerics `(+ ,@(reverse plus) ,c) env)
-			       (if (null? plus)
-				   (simplify-numerics `(- ,c ,@(reverse minus)) env)
-				   (simplify-numerics `(- (+ ,@(reverse plus) ,@(if (positive? c) (list c) ()))
-							  ,@(reverse minus) ,@(if (negative? c) (list (abs c)) ()))
-						      env)))) ; to (let ((plus)... above
+			   (if (not (rational? c)) ; overflow: (+ 9223372036854775806 x (- 12 x))?
+			       (cons '+ val)
+			       (begin
+				 ;; (+ (- x 1) 1000): plus '(x), minus (), c 999 -> (+ x 999)
+				 ;; (+ (- 1 x) 1000):       ()         '(x), 1001 -> (- 1001 x)
+				 ;; (+ (- x y 1) 2 z)      '(z x)      '(y), 1 -> (- (+ x z 1) y)
+				 (when (and (pair? plus) 
+					    (pair? minus))
+				   (do ((p plus (cdr p))
+					(np ()))
+				       ((null? p)
+					(set! plus (reverse np)))
+				     (if (and (member (car p) minus) ; not just member because it matches (random...) etc, perhaps use no-side-effect-functions
+					      (not (side-effect? (car p) env)))
+					 (set! minus (remove-one (car p) minus))
+					 (set! np (cons (car p) np)))))
+				 
+				 ;; perhaps compare tree-length of the new and old versions, and choose the smaller?
+				 (let ((new-form
+					(if (null? minus)
+					    (simplify-numerics `(+ ,@(reverse plus) ,c) env)
+					    (if (null? plus)
+						(simplify-numerics `(- ,c ,@(reverse minus)) env)
+						(simplify-numerics `(- (+ ,@(reverse plus) ,@(if (positive? c) (list c) ()))
+								       ,@(reverse minus) ,@(if (negative? c) (list (abs c)) ()))
+								   env))))) 
+				   (if (> (+ (tree-leaves val) 1) (tree-leaves new-form))
+				       new-form
+				       (cons '+ val))))))  ; to (let ((plus)... above
 			 
 			 (case (length val)
 			   ((0))                                        ; (+) -> 0
@@ -5099,40 +5107,46 @@
 								     (set! minus (cons p1 minus))))
 							       (cddr p)))))))
 				     val)
-
-			   (when (and (pair? plus) 
-				      (pair? minus))
-			     (do ((p plus (cdr p))
-				  (np ()))
-				 ((null? p)
-				  (set! plus (reverse np)))
-			       (if (and (member (car p) minus) ; not just member because it matches (random...) etc, perhaps use no-side-effect-functions
-					(not (side-effect? (car p) env)))
-				   (set! minus (remove-one (car p) minus))
-				   (set! np (cons (car p) np)))))
-
-			   (if (null? minus)
-			       (if (null? plus)                      ; (* (/ x y) (/ y x)) -> 1
-				   c
-				   (if (and (eqv? c 1)
-					    (null? (cdr plus)))
-				       (car plus)                    ; (* x y (/ y)) -> x
-				       (simplify-numerics `(* ,@(if (eqv? c 1) () (list c)) 
-							      ,@(reverse plus)) 
-							  env)))     ; (* x (/ y 2) 2 z) -> (* x y z)
-			       (if (null? plus)
-				   (if (and (eqv? c 1)
-					    (null? (cdr minus)))
-				       `(/ ,(car minus))             ; (* (/ x) (x x y)) -> (/ y)
-				       (simplify-numerics `(/ ,c ,@(reverse minus)) env)) ; (* (/ x) (/ y) (/ z) -> (/ 1 x y z)
-				   (simplify-numerics `(/ ,@(if (and (eqv? c 1)
-								     (null? (cdr plus)))
-								plus
-								(list (cons '* (if (eqv? c 1) 
-										   (reverse plus)
-										   (cons c (reverse plus))))))
-							  ,@(reverse minus))
-						      env)))) ; to (let ((plus)... above
+			   (if (not (rational? c))
+			       (cons '* val)
+			       (begin
+				 (when (and (pair? plus) 
+					    (pair? minus))
+				   (do ((p plus (cdr p))
+					(np ()))
+				       ((null? p)
+					(set! plus (reverse np)))
+				     (if (and (member (car p) minus) ; not just member because it matches (random...) etc, perhaps use no-side-effect-functions
+					      (not (side-effect? (car p) env)))
+					 (set! minus (remove-one (car p) minus))
+					 (set! np (cons (car p) np)))))
+				 
+				 (let ((new-form 
+					(if (null? minus)
+					    (if (null? plus)                      ; (* (/ x y) (/ y x)) -> 1
+						c
+						(if (and (eqv? c 1)
+							 (null? (cdr plus)))
+						    (car plus)                    ; (* x y (/ y)) -> x
+						    (simplify-numerics `(* ,@(if (eqv? c 1) () (list c)) 
+									   ,@(reverse plus)) 
+								       env)))     ; (* x (/ y 2) 2 z) -> (* x y z)
+					    (if (null? plus)
+						(if (and (eqv? c 1)
+							 (null? (cdr minus)))
+						    `(/ ,(car minus))             ; (* (/ x) (x x y)) -> (/ y)
+						    (simplify-numerics `(/ ,c ,@(reverse minus)) env)) ; (* (/ x) (/ y) (/ z) -> (/ 1 x y z)
+						(simplify-numerics `(/ ,@(if (and (eqv? c 1)
+										  (null? (cdr plus)))
+									     plus
+									     (list (cons '* (if (eqv? c 1) 
+												(reverse plus)
+												(cons c (reverse plus))))))
+								       ,@(reverse minus))
+								   env))))) ; to (let ((plus)... above
+				   (if (> (+ (tree-leaves val) 1) (tree-leaves new-form))
+				       new-form
+				       (cons '* val))))))  ; to (let ((plus)... above
 		     
 			 (case (length val)
 			   ((0) 1)
@@ -5341,94 +5355,6 @@
 					(list '- (caddar args) (cadar args)) ; (- (- x y)) -> (- y x)
 					(cons '- args)))
 			       (else (cons '- args))))))
-
-		    ((2) 
-		     (let ((arg1 (car args))
-			   (arg2 (cadr args)))
-		       (cond ((just-rationals? args) (apply - args)) ; (- 3 2) -> 1
-			     
-			     ((eqv? arg1 0) (list '- arg2))          ; (- 0 x) -> (- x)
-			                                             ; (- -1 x) -> (lognot x) but it looks dumb, and assumes x integer
-			     ((eqv? arg2 0) arg1)                    ; (- x 0) -> x
-			     
-			     ((and (equal? arg1 arg2)                ; (- x x) -> 0
-				   (not (side-effect? arg1 env)))
-			      0)
-			     
-			     ((and (len>1? arg2)
-				   (eq? (car arg2) '-))
-			      (if (null? (cddr arg2)) 
-				  (list '+ arg1 (cadr arg2))         ; (- x (- y)) -> (+ x y)
-				  (simplify-numerics `(- (+ ,arg1 ,@(cddr arg2)) ,(cadr arg2)) env))) ; (- x (- y z)) -> (- (+ x z) y)
-			     
-			     ((and (pair? arg2)                      ; (- x (+ y z)) -> (- x y z)
-				   (eq? (car arg2) '+))
-			      (simplify-numerics (cons '- (cons arg1 (cdr arg2))) env))
-			     
-			     ((and (pair? arg1)                      ; (- (- x y) z) -> (- x y z)
-				   (eq? (car arg1) '-))
-			      (if (> (length arg1) 2)
-				  `(- ,@(cdr arg1) ,arg2)
-				  (simplify-numerics `(- (+ ,(cadr arg1) ,arg2)) env)))  ; (- (- x) y) -> (- (+ x y))
-			     
-			     ((and (len>1? arg2)                     ; (- x (truncate x)) -> (remainder x 1)
-				   (eq? (car arg2) 'truncate)
-				   (equal? arg1 (cadr arg2)))
-			      (list 'remainder arg1 1))
-			     
-			     ((and (real? arg2)                      ; (- x -1) -> (+ x 1)
-				   (negative? arg2)
-				   (not (number? arg1)))
-			      (list '+ arg1 (abs arg2)))
-			     
-			     ((and (len>2? arg1) 
-				   (len>2? arg2)
-				   (eq? (car arg1) '/)               ; (- (/ a b) (/ c b)) -> (/ (- a c) b)
-				   (eq? (car arg2) '/)
-				   (equal? (cddr arg1) (cddr arg2)))
-			      (cons '/ (cons (list '- (cadr arg1) (cadr arg2)) (cddr arg1))))
-
-			     ((and (len=3? arg1) 
-				   (len=3? arg2)
-				   (eq? (car arg1) '*)               ; (- (* a b) (* a c)) -> (* a (- b c))
-				   (eq? (car arg2) '*)               ; (- (* b a) (* c a)) -> (* a (- b c)) etc
-				   (or (member (cadr arg1) arg2)
-				       (member (caddr arg1) arg2)))
-			      (if (member (cadr arg1) arg2)
-				  (list '* (cadr arg1) (list '- (caddr arg1) ((if (equal? (cadr arg1) (cadr arg2)) caddr cadr) arg2)))
-				  (list '* (caddr arg1) (list '- (cadr arg1) ((if (equal? (caddr arg1) (cadr arg2)) caddr cadr) arg2)))))
-
-			     ((and (len=2? arg1)                     ; (- (log a) (log b)) -> (log (/ a b))
-				   (eq? (car arg1) 'log)
-				   (len=2? arg2)
-				   (eq? (car arg2) 'log))
-			      (list 'log (list '/ (cadr arg1) (cadr arg2))))
-
-			     ((and (pair? arg2)                      ; (- x (if y 0 z)) -> (if y x (- x z))
-				   (eq? (car arg2) 'if)              ; (- x (if y z 0)) -> (if y (- x z) x)
-				   (= (length arg2) 4)
-				   (or (eqv? (caddr arg2) 0)
-				       (eqv? (cadddr arg2) 0)))
-			      (let ((true (caddr arg2))
-				    (false (cadddr arg2)))
-				`(if ,(cadr arg2)
-				     ,(if (eqv? true 0) arg1 (list '- arg1 true))
-				     ,(if (eqv? true 0) (list '- arg1 false) arg1))))
-
-			     ((and (len=3? arg2)                     ; (- x (* y (quotient x y))) or reversed -> (remainder x y)
-				   (eq? (car arg2) '*)
-				   (or (and (len=3? (caddr arg2))    ; arg2 here is (* y (quotient x y)), arg1 is x
-					    (eq? (caaddr arg2) 'quotient)
-					    (equal? arg1 (cadr (caddr arg2)))
-					    (equal? (cadr arg2) (caddr (caddr arg2)))
-					    `(remainder ,arg1 ,(cadr arg2)))	    
-				       (and (len=3? (cadr arg2))      ; arg2 here is (* (quotient x y) y), arg1 is x
-					    (eq? (caadr arg2) 'quotient)
-					    (equal? arg1 (cadadr arg2))
-					    (equal? (caddr arg2) (caddr (cadr arg2)))
-					    `(remainder ,arg1 ,(caddr arg2))))))
-			     
-			     (else (cons '- args)))))
 		    (else 
 		     (if (just-rationals? args)
 			 (apply - args)
@@ -5442,28 +5368,161 @@
 						     (cons y (collect-if-not-number val))))))))
 			   (let ((first-arg (car args))
 				 (nargs val))
+
 			     (when (and (member first-arg nargs)
 					(not (side-effect? first-arg env)))
 			       (set! nargs (remove-one first-arg nargs))
 			       (set! first-arg 0))
+			     
+			     (let ((plus ())
+				   (minus ())
+				   (c 0))
+			       
+			       (if (pair? first-arg)
+				   (if (eq? (car first-arg) '+)
+				       (set! plus (cdr first-arg))
+				       (if (eq? (car first-arg) '-)
+					   (if (null? (cddr first-arg))
+					       (set! minus (list (cadr first-arg)))
+					       (begin
+						 (set! plus (list (cadr first-arg)))
+						 (set! minus (cddr first-arg))))
+					   (set! plus (list first-arg))))
+				   (set! plus (list first-arg)))
 
-			     (cond ((null? nargs) first-arg)         ; (- x 0 0 0)?
-				   
-				   ((eqv? first-arg 0)
-				    (if (null? (cdr nargs))
-					(if (number? (car nargs))
-					    (- (car nargs))
-					    (list '- (car nargs)))   ; (- 0 0 0 x)?
-					(list '- (cons '+ nargs))))  ; (- 0 x y) -> (- (+ x y))
-				   
-				   ((not (and (pair? first-arg)
-					      (eq? (car first-arg) '-)))
-				    (cons '- (cons first-arg nargs)))
-				   
-				   ((> (length first-arg) 2)         ; (- (- x y) z w) -> (- x y z w)
-				    (simplify-numerics (cons '- (append (cdr first-arg) (cdr args))) env))
-				   
-				   (else (simplify-numerics `(- (+ ,(cadr first-arg) ,@(cdr args))) env))))))))))
+			       (for-each
+				(lambda (arg)
+				  (if (pair? arg)
+				      (if (eq? (car arg) '+)
+					  (set! minus (append (cdr arg) minus))
+					  (if (eq? (car arg) '-)
+					      (if (null? (cddr arg))
+						  (set! plus (cons (cadr arg) plus))
+						  (begin
+						    (set! minus (cons (cadr arg) minus))
+						    (set! plus (append (cddr arg) plus))))
+					   (set! minus (cons arg minus))))
+				   (set! minus (cons arg minus))))
+				nargs)
+
+			       (let ((new-minus ())
+				     (new-plus ()))
+				 (for-each
+				  (lambda (arg)
+				    (if (and (member arg plus)
+					     (not (side-effect? arg env)))
+					(set! plus (remove-one arg plus))
+					(if (rational? arg)
+					    (set! c (- c arg))
+					    (set! new-minus (cons arg new-minus)))))
+				  minus)
+
+				 (for-each
+				  (lambda (arg)
+				    (if (rational? arg)
+					(set! c (+ c arg))
+					(set! new-plus (cons arg new-plus))))
+				  plus)
+				 
+				 (if (not (rational? c))
+				     (cons '- args)
+				     (let ((new-form
+				 (if (null? new-plus)
+				     (if (null? new-minus)
+					 c                                                     ; (- (+ x y) (+ y x)) -> 0
+					 (if (positive? c)
+					     `(- ,c ,@new-minus)                               ; (- (+ x 1) (+ y x)) -> (- 1 y)
+					     (if (negative? c)
+						 `(- (+ ,@new-minus ,(abs c)))                 ; (- x (+ y x 1)) -> (- (+ y 1))
+						 (if (null? (cdr new-minus))
+						     `(- ,(car new-minus))                     ; (- 0 0 x) -> (- x)
+						     `(- (+ ,@new-minus))))))                  ; (- 0 0 x y) -> (- (+ x y))
+				     (if (null? new-minus)
+					 (if (zero? c)
+					     (if (null? (cdr new-plus))
+						 (car new-plus)                                ; (- (+ x 1) (- x y) 1) -> y
+						 `(+ ,@new-plus))                              ; (- (+ x z) (- x y) 0) -> (+ z y)
+					     (if (and (negative? c)
+						      (null? (cdr new-plus)))
+						 `(- ,(car new-plus) ,(abs c))                 ; (- (+ x 1) (- x y) 2) -> (- y 1)
+						 `(+ ,@new-plus ,c)))                          ; (- (+ x 1) (- x y) -2) -> (+ y 3)
+					 (if (positive? c)
+					     `(- (+ ,@new-plus ,c) ,@new-minus)                ; (- (+ x z 2) x y 1) -> (- (+ z 1) y)
+					     (if (negative? c)
+						 (if (null? (cdr new-plus))
+						     `(- ,(car new-plus) ,@new-minus ,(abs c)) ; (- (+ x z) x y 1) -> (- z y 1)
+						     `(- (+ ,@new-plus) ,@new-minus ,(abs c))) ; (- (+ x z w) x y 1) -> (- (+ w z) y 1)
+						 (if (null? (cdr new-plus))
+						     `(- ,(car new-plus) ,@new-minus)          ; (- (+ x z) x y) -> (- z y)
+						     `(- (+ ,@new-plus) ,@new-minus))))))))    ; (- (+ x z w) x y) -> (- (+ w z) y)
+
+				       ;(format *stderr* "new-form: ~S ~S~%" new-form (len=2? new-form))
+
+				       (if (len=3? new-form)
+					   (let ((arg1 (cadr new-form))
+						 (arg2 (caddr new-form)))
+					     (cond 
+					      ((and (len>1? arg2)                     ; (- x (truncate x)) -> (remainder x 1)
+						    (eq? (car arg2) 'truncate)
+						    (equal? arg1 (cadr arg2)))
+					       (list 'remainder arg1 1))
+					      
+					      ((and (len>2? arg1) 
+						    (len>2? arg2)
+						    (eq? (car arg1) '/)               ; (- (/ a b) (/ c b)) -> (/ (- a c) b)
+						    (eq? (car arg2) '/)
+						    (equal? (cddr arg1) (cddr arg2)))
+					       (cons '/ (cons (list '- (cadr arg1) (cadr arg2)) (cddr arg1))))
+					      
+					      ((and (len=3? arg1) 
+						    (len=3? arg2)
+						    (eq? (car arg1) '*)               ; (- (* a b) (* a c)) -> (* a (- b c))
+						    (eq? (car arg2) '*)               ; (- (* b a) (* c a)) -> (* a (- b c)) etc
+						    (or (member (cadr arg1) arg2)
+							(member (caddr arg1) arg2)))
+					       (if (member (cadr arg1) arg2)
+						   (list '* (cadr arg1) (list '- (caddr arg1) ((if (equal? (cadr arg1) (cadr arg2)) caddr cadr) arg2)))
+						   (list '* (caddr arg1) (list '- (cadr arg1) ((if (equal? (caddr arg1) (cadr arg2)) caddr cadr) arg2)))))
+					      
+					      ((and (len=2? arg1)                     ; (- (log a) (log b)) -> (log (/ a b))
+						    (eq? (car arg1) 'log)
+						    (len=2? arg2)
+						    (eq? (car arg2) 'log))
+					       (list 'log (list '/ (cadr arg1) (cadr arg2))))
+					      
+					      ((and (pair? arg2)                      ; (- x (if y 0 z)) -> (if y x (- x z))
+						    (eq? (car arg2) 'if)              ; (- x (if y z 0)) -> (if y (- x z) x)
+						    (= (length arg2) 4)
+						    (or (eqv? (caddr arg2) 0)
+							(eqv? (cadddr arg2) 0)))
+					       (let ((true (caddr arg2))
+						     (false (cadddr arg2)))
+						 `(if ,(cadr arg2)
+						      ,(if (eqv? true 0) arg1 (list '- arg1 true))
+						      ,(if (eqv? true 0) (list '- arg1 false) arg1))))
+					      
+					      ((and (len=3? arg2)                     ; (- x (* y (quotient x y))) or reversed -> (remainder x y)
+						    (eq? (car arg2) '*)
+						    (or (and (len=3? (caddr arg2))    ; arg2 here is (* y (quotient x y)), arg1 is x
+							     (eq? (caaddr arg2) 'quotient)
+							     (equal? arg1 (cadr (caddr arg2)))
+							     (equal? (cadr arg2) (caddr (caddr arg2)))
+							     `(remainder ,arg1 ,(cadr arg2)))	    
+							(and (len=3? (cadr arg2))      ; arg2 here is (* (quotient x y) y), arg1 is x
+							     (eq? (caadr arg2) 'quotient)
+							     (equal? arg1 (cadadr arg2))
+							     (equal? (caddr arg2) (caddr (cadr arg2)))
+							     `(remainder ,arg1 ,(caddr arg2))))))
+					      
+					      (else 
+					       (if (> (tree-leaves form) (tree-leaves new-form))
+						   new-form
+						   form))))
+
+					   (if (or (eqv? c 0)
+						   (> (tree-leaves form) (tree-leaves new-form)))
+					       new-form
+					       form)))))))))))))
 	      (hash-table-set! h '- num-)
 
 	      (define (dumb- args form env) (if (var-member (car form) env) form (num- (undumb args) (undumb form) env)))
