@@ -28393,10 +28393,8 @@ static s7_pointer g_string_to_list(s7_scheme *sc, s7_pointer args)
       if (p != sc->unused) return(p);
       if (start == end) return(sc->nil);
     }
-  else
-    {
-      if (end == 0) return(sc->nil);
-    }
+  else 
+    if (end == 0) return(sc->nil);
   if ((end - start) > sc->max_list_length)
     return(out_of_range(sc, sc->string_to_list_symbol, int_one, car(args), its_too_large_string));
 
@@ -38170,6 +38168,10 @@ static s7_pointer g_tree_count(s7_scheme *sc, s7_pointer args)
       if ((is_pair(cddr(args))) &&
 	  (!s7_is_integer(caddr(args))))
 	return(wrong_type_argument(sc, sc->tree_count_symbol, 3, caddr(args), T_INTEGER));
+      /* here we need eqv? not eq? for integers: (tree-count <0-int-zero> <0-not-int-zero>) 
+       *   perhaps split tree_count|_at_least into eq?/eqv?/equal?/equivalent? cases?
+       *   this is used primarily for symbol counts in lint.scm
+       */
       return((obj == tree) ? int_one : int_zero);
     }
   if ((sc->safety > NO_SAFETY) &&
@@ -50676,9 +50678,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       if (end == 0)
 	end = circular_list_entries(source);
       else
-	{
-	  if (end < 0) end = -end;
-	}
+	if (end < 0) end = -end;
       break;
 
     case T_INT_VECTOR:  case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
@@ -97698,7 +97698,6 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (strcmp(op_names[OP_SAFE_CLOSURE_A_A], "safe_closure_a_a") != 0) fprintf(stderr, "clo op_name: %s\n", op_names[OP_SAFE_CLOSURE_A_A]);
   if (NUM_OPS != 932) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -98120,7 +98119,7 @@ int main(int argc, char **argv)
  * tcase         |      |       4895  4977           5010
  * tgc           |      |       4995  5434           5319
  * trec     17.8 | 6318 | 6317  5937  5976           7825
- * tnum          |      |             6563           58.3
+ * tnum          |      |             6563 6478      58.3
  * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
  * thash         |      |       12.2  11.9           37.5
  * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.0
@@ -98133,7 +98132,5 @@ int main(int argc, char **argv)
  *
  * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
  *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
- * chandle: find handle but don't decrement top? (catch has pre-body and current tops, so we can handle either case)
- *   (catch #t body[local error type=hash...] (lambda (type info) type=hash...)), outlet(owlet) is let at point of error
- * how to inspect catches? 
+ * how to inspect catches? or goto/cc -- need associated code, (*s7* 'catchers)?
  */

@@ -4948,7 +4948,7 @@
 					(np ()))
 				       ((null? p)
 					(set! plus (reverse np)))
-				     (if (and (member (car p) minus) ; not just member because it matches (random...) etc, perhaps use no-side-effect-functions
+				     (if (and (member (car p) minus)            ; not just member because it matches (random...) etc
 					      (not (side-effect? (car p) env)))
 					 (set! minus (remove-one (car p) minus))
 					 (set! np (cons (car p) np)))))
@@ -5116,7 +5116,7 @@
 					(np ()))
 				       ((null? p)
 					(set! plus (reverse np)))
-				     (if (and (member (car p) minus) ; not just member because it matches (random...) etc, perhaps use no-side-effect-functions
+				     (if (and (member (car p) minus)            ; not just member because it matches (random...) etc
 					      (not (side-effect? (car p) env)))
 					 (set! minus (remove-one (car p) minus))
 					 (set! np (cons (car p) np)))))
@@ -5456,8 +5456,6 @@
 						     `(- ,(car new-plus) ,@new-minus)          ; (- (+ x z) x y) -> (- z y)
 						     `(- (+ ,@new-plus) ,@new-minus))))))))    ; (- (+ x z w) x y) -> (- (+ w z) y)
 
-				       ;(format *stderr* "new-form: ~S ~S~%" new-form (len=2? new-form))
-
 				       (if (len=3? new-form)
 					   (let ((arg1 (cadr new-form))
 						 (arg2 (caddr new-form)))
@@ -5508,7 +5506,7 @@
 							     (equal? arg1 (cadr (caddr arg2)))
 							     (equal? (cadr arg2) (caddr (caddr arg2)))
 							     `(remainder ,arg1 ,(cadr arg2)))	    
-							(and (len=3? (cadr arg2))      ; arg2 here is (* (quotient x y) y), arg1 is x
+							(and (len=3? (cadr arg2))     ; arg2 here is (* (quotient x y) y), arg1 is x
 							     (eq? (caadr arg2) 'quotient)
 							     (equal? arg1 (cadadr arg2))
 							     (equal? (caddr arg2) (caddr (cadr arg2)))
@@ -5721,6 +5719,7 @@
 				     (else (cons '/ args))))))))
 		    
 		    (else 
+		     ;; spot check of divides in lg didn't turn up any that need the plus/minus style handling of + et al above
 		     (if (memv arg1 '(0 0.0))                      ; (/ 0 x y) -> 0 (to be consistent with other results)
 			 arg1
 			 (if (and (just-rationals? args)
