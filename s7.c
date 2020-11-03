@@ -1293,7 +1293,7 @@ struct s7_scheme {
   /* optimizer s7_functions */
   s7_pointer add_2, add_3, add_1x, add_x1, subtract_1, subtract_2, subtract_3, subtract_x1, subtract_2f, subtract_f2, simple_char_eq,
              char_equal_2, char_greater_2, char_less_2, char_position_csi, string_equal_2, substring_uncopied, display_2, display_f,
-             string_greater_2, string_less_2, symbol_to_string_uncopied, get_output_string_uncopied, string_equal_2c,
+             string_greater_2, string_less_2, symbol_to_string_uncopied, get_output_string_uncopied, string_equal_2c, string_c1,
              vector_ref_2, vector_ref_3, vector_set_3, vector_set_4, read_char_1, dynamic_wind_unchecked,
              fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, iv_ref_2, iv_ref_3, iv_set_3, bv_ref_2, bv_ref_3, bv_set_3,
              list_0, list_1, list_2, list_3, list_set_i, hash_table_ref_2, hash_table_2, list_ref_0, list_ref_1, list_ref_2,
@@ -4087,7 +4087,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SET_NORMAL, OP_SET_PAIR, OP_SET_DILAMBDA, OP_SET_DILAMBDA_P, OP_SET_DILAMBDA_P_1, OP_SET_DILAMBDA_SA_A,
       OP_SET_PAIR_A, OP_SET_PAIR_P, OP_SET_PAIR_ZA,
       OP_SET_PAIR_P_1, OP_SET_FROM_SETTER, OP_SET_PWS, OP_SET_LET_S, OP_SET_LET_FX, OP_SET_SAFE,
-      OP_INCREMENT_1, OP_DECREMENT_1, OP_SET_CONS,
+      OP_INCREMENT_BY_1, OP_DECREMENT_BY_1, OP_SET_CONS,
       OP_INCREMENT_SS, OP_INCREMENT_SP, OP_INCREMENT_SA, OP_INCREMENT_SAA,
 
       OP_LETREC_UNCHECKED, OP_LETREC_STAR_UNCHECKED, OP_COND_UNCHECKED,
@@ -4133,7 +4133,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SIMPLE_DO, OP_SIMPLE_DO_STEP, OP_SAFE_DOTIMES, OP_SAFE_DOTIMES_STEP, OP_SAFE_DOTIMES_STEP_O,
       OP_SAFE_DO, OP_SAFE_DO_STEP, OP_DOX, OP_DOX_STEP, OP_DOX_STEP_O, OP_DOX_NO_BODY, OP_DOX_PENDING_NO_BODY, OP_DOX_INIT,
       OP_DOTIMES_P, OP_DOTIMES_STEP_O,
-      OP_DO_NO_VARS, OP_DO_NO_VARS_NO_OPT, OP_DO_NO_VARS_NO_OPT_1, OP_DO_NO_BODY_FX_VARS, OP_DO_NO_BODY_FX_VARS_STEP, OP_DO_NO_BODY_FX_VARS_STEP_1,
+      OP_DO_NO_VARS, OP_DO_NO_VARS_NO_OPT, OP_DO_NO_VARS_NO_OPT_1, 
+      OP_DO_NO_BODY_FX_VARS, OP_DO_NO_BODY_FX_VARS_STEP, OP_DO_NO_BODY_FX_VARS_STEP_1,
 
       OP_SAFE_C_P_1, OP_SAFE_C_PP_1, OP_SAFE_C_PP_3_MV, OP_SAFE_C_PP_5, OP_SAFE_C_PP_6_MV,
       OP_SAFE_C_SP_1, OP_SAFE_C_SP_MV, OP_SAFE_CONS_SP_1, OP_SAFE_VECTOR_SP_1, OP_SAFE_ADD_SP_1, OP_SAFE_MULTIPLY_SP_1, OP_SAFE_SUBTRACT_SP_1,
@@ -4376,7 +4377,8 @@ static const char* op_names[NUM_OPS] =
       "simple_do", "simple_do_step", "safe_dotimes", "safe_dotimes_step", "safe_dotimes_step_o",
       "safe_do", "safe_do_step", "dox", "dox_step", "dox_step_o", "dox_no_body", "dox_pending_no_body", "dox_init",
       "dotimes_p", "dotimes_step_o",
-      "do_no_vars", "do_no_vars_no_opt", "do_no_vars_no_opt_1", "do_no_body_fx_vars", "do_no_body_fx_vars_step", "do_no_body_fx_vars_step_1",
+      "do_no_vars", "do_no_vars_no_opt", "do_no_vars_no_opt_1", 
+      "do_no_body_fx_vars", "do_no_body_fx_vars_step", "do_no_body_fx_vars_step_1",
 
       "safe_c_p_1", "safe_c_pp_1", "safe_c_pp_3_mv", "safe_c_pp_5", "safe_c_pp_6_mv",
       "safe_c_sp_1", "safe_c_sp_mv", "safe_cons_sp_1", "safe_vector_sp_1", "safe_add_sp_1", "safe_multiply_sp_1", "safe_subtract_sp_1",
@@ -28338,6 +28340,23 @@ static s7_pointer g_string(s7_scheme *sc, s7_pointer args)
   return((is_null(args)) ? make_string_with_length(sc, "", 0) : g_string_1(sc, args, sc->string_symbol));
 }
 
+static s7_pointer g_string_c1(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer c, str;
+  c = car(args);
+  if (!s7_is_character(c))
+    return(method_or_bust(sc, c, sc->string_symbol, args, T_CHARACTER, 1));
+  str = inline_make_empty_string(sc, 1, 0); /* can't put character(c) here because null is handled specially */
+  string_value(str)[0] = character(c);
+  return(str);
+}
+
+static s7_pointer string_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
+{
+  return((args == 1) ? sc->string_c1 : f);
+}
+
+
 
 /* -------------------------------- list->string -------------------------------- */
 #if (!WITH_PURE_S7)
@@ -47531,6 +47550,10 @@ static void init_choosers(s7_scheme *sc)
   /* string<? */
   f = set_function_chooser(sc, sc->string_lt_symbol, string_less_chooser);
   sc->string_less_2 = make_function_with_class(sc, f, "string<?", g_string_less_2, 2, 0, false);
+
+  /* string */
+  f = set_function_chooser(sc, sc->string_symbol, string_chooser);
+  sc->string_c1 = make_function_with_class(sc, f, "string", g_string_c1, 1, 0, false);
 
   /* string-ref et al */
   set_function_chooser(sc, sc->string_ref_symbol, string_substring_chooser);
@@ -74390,7 +74413,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 			{
 			  set_safe_optimize_op(expr, hop + OP_SAFE_C_opSq_CS);
 			  set_opt1_con(cdr(expr), cadr(arg2)); /* opt1_con is T_Pos (unchecked) */
-			  set_opt2_sym(cdr(expr), arg3);
+		  set_opt2_sym(cdr(expr), arg3);
 			  set_opt3_sym(cdr(expr), cadr(arg1));
 			  choose_c_function(sc, expr, func, 3);
 			  return(OPT_T);
@@ -80900,18 +80923,18 @@ static inline void check_set(s7_scheme *sc)
 			      (cadr(value) == settee))
 			    {
 			      if (opt1_cfunc(value) == sc->add_x1)
-				pair_set_syntax_op(form, OP_INCREMENT_1);
+				pair_set_syntax_op(form, OP_INCREMENT_BY_1);
 			      else
 				{
 				  if (opt1_cfunc(value) == sc->subtract_x1)
-				    pair_set_syntax_op(form, OP_DECREMENT_1);
+				    pair_set_syntax_op(form, OP_DECREMENT_BY_1);
 				}}
 			  else
 			    {
 			      if ((cadr(value) == int_one) &&
 				  (caddr(value) == settee) &&
 				  (opt1_cfunc(value) == sc->add_1x))
-				pair_set_syntax_op(form, OP_INCREMENT_1);
+				pair_set_syntax_op(form, OP_INCREMENT_BY_1);
 			      else
 				{
 				  if ((settee == caddr(value)) &&
@@ -85354,10 +85377,6 @@ static bool op_implicit_vector_set_4(s7_scheme *sc)
       return(true);
     }
   i1 = fx_call(sc, cdar(code));
-#if S7_DEBUGGING
-  if (cddar(code) != opt3_pair(sc->code))
-    fprintf(stderr, "%s[%d]: %p %p\n", __func__, __LINE__, cddar(code), opt3_pair(sc->code));
-#endif
   i2 = fx_call(sc, opt3_pair(sc->code)); /* cddar(code) */
   set_car(sc->t3_3, fx_call(sc, cdr(code)));
   set_car(sc->t4_1, v);
@@ -93821,13 +93840,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    goto APPLY;
 	  continue;
 
-	case OP_SET_LET_FX:   /* (set! (hook 'result) 123) or (set! (H 'c) 32) */
+	case OP_SET_LET_FX:       /* (set! (hook 'result) 123) or (set! (H 'c) 32) */
 	  sc->code = cdr(sc->code);
 	  if (set_pair_p_3(sc, symbol_to_slot(sc, caar(sc->code)), cadr(cadar(sc->code)), fx_call(sc, cdr(sc->code))))
 	    goto APPLY;
 	  continue;
 
-	case OP_SET_PAIR_ZA:     /* unknown setter pair, but value is easy */
+	case OP_SET_PAIR_ZA:      /* unknown setter pair, but value is easy */
 	  sc->code = cdr(sc->code);
 	  sc->value = fx_call(sc, cdr(sc->code));
 
@@ -93849,8 +93868,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    default:         continue;
 	    }
 
-	case OP_INCREMENT_1:      op_increment_by_1(sc);   continue;
-	case OP_DECREMENT_1:      op_decrement_by_1(sc);   continue;
+	case OP_INCREMENT_BY_1:   op_increment_by_1(sc);   continue;
+	case OP_DECREMENT_BY_1:   op_decrement_by_1(sc);   continue;
 	case OP_INCREMENT_SS:     op_increment_ss(sc);     continue;
 	case OP_INCREMENT_SA:     op_increment_sa(sc);     continue;
 	case OP_INCREMENT_SAA:    op_increment_saa(sc);    continue;
@@ -98094,7 +98113,7 @@ int main(int argc, char **argv)
  * index     939 | 1013 |  990  1006  1025           1087
  * tmock         |      |             1211           7733
  * s7test   1776 | 1711 | 1700  1824  1839           4525
- * tstr          |      |             2032           2032
+ * tstr          |      |             2032 1939      2032
  * lt       2205 | 2116 | 2082  2089  2121           2111
  * tform    2472 | 2289 | 2298  2278  2280           3256
  * tcopy    2434 | 2264 | 2277  2270  2256           2313
