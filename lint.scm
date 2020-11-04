@@ -15963,19 +15963,23 @@
 		   (lint-format "perhaps ~A" caller 
 				(lists->string form (simplify-boolean (list 'or false true) () () env))))))
 
-	  ;; -------- big-if->when --------
-	  (define (big-if->when caller form test expr true false)
+	  ;; -------- if->when --------
+	  (define (if->when caller form test expr true false)
 	    (when (and *report-one-armed-if*
 		       (eq? false 'no-false)
 		       (or (not (integer? *report-one-armed-if*))
+			   (and (pair? true) (eq? (car true) 'begin)) ; added 3-Nov-20
 			   (> (tree-leaves true) *report-one-armed-if*)))
 	      ;; (if a (begin (set! x y) z)) -> (when a (set! x y) z)
 	      (lint-format "~A~A~A perhaps ~A" caller
-			   (if (integer? *report-one-armed-if*)
+			   (if (and (integer? *report-one-armed-if*)
+				    (not (and (pair? true) (eq? (car true) 'begin))))
 			       "this one-armed if is too big"
 			       "")
 			   (local-line-number test)
-			   (if (integer? *report-one-armed-if*) ";" "")
+			   (if (and (integer? *report-one-armed-if*) 
+				    (not (and (pair? true) (eq? (car true) 'begin))))
+			       ";" "")
 			   (truncated-lists->string 
 			    form (if (and (pair? expr)
 					  (eq? (car expr) 'not))
@@ -16755,7 +16759,7 @@
 			   (unless (= last-if-line-number line-number)     ; avoid recursive (redundant) call
 			     (easy-if->cond caller form))
 			   (if->or/and caller form test true false env)
-			   (big-if->when caller form test expr true false) ; test is for a reasonable line number, expr is for a corrected test (sigh)
+			   (if->when caller form test expr true false) ; test is for a reasonable line number, expr is for a corrected test (sigh)
 			   (move-cond-outward caller form expr true false env)
 			   
 			 (when (= len 4)
@@ -20567,7 +20571,7 @@
 		  (let ((vars (declare-named-let form env))
 			(varlist ((if named-let caddr cadr) form))
 			(body ((if named-let cdddr cddr) form)))
-		    
+
 		    (if (not (and (proper-list? varlist)
 				  (just-pairs? varlist)))
 			(lint-format "let is messed up: ~A" caller (truncated-list->string form))
@@ -20576,7 +20580,7 @@
 				   (len=1? body)
 				   (not (side-effect? (car body) env))) ; (let xx () z)
 			      (lint-format "perhaps ~A" caller (lists->string form (car body))))
-			  
+		    
 			  (set! vars (walk-let-vars caller form varlist vars env))
 
 			  (when (and (pair? body)
