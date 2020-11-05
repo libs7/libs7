@@ -22537,19 +22537,6 @@
 		;;    need true+false in every case, and need to be contiguous
 		;;    case/cond happen here, but very rarely in a way we can combine via values
 		
-#|
-		;; happens a lot but is it useful? 
-		;;   currently depends on sandbox in stuff.scm
-		(if (and (var? v)
-			 (memq (var-ftype v) '(define-macro define-macro* defmacro defmacro* define-expansion)))
-		    (let ((expansion (sandbox `(let () ,(var-initial-value v) (macroexpand ,form)))))
-		      (if expansion                           ; #f means sandbox is unwilling to evaluate the form
-			  (if (and (code-constant? expansion) ;   really dumb (C macro) and we already complain about this elsewhere
-				   (not (string? expansion))) ; probably the encapsulated error
-			      (lint-format "~A is ~S~%" caller (truncated-list->string form) expansion))
-			  ;; here we could walk the new form.
-			  )))
-|#
 		(unless (any-macro? head env) ; actually most macros are safe here...
 		  (do ((p (cdr form) (cdr p)))
 		      ((or (not (pair? p))

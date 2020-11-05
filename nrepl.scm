@@ -880,8 +880,10 @@
 						     name+args))
 					   (increment 
 					    (cond ((member name '("cond" "when" "unless" "lambda" "lambda*" "begin" "case" "with-let" 
-								  "let" "let*" "letrec" "letrec*" "let-temporarily"
-								  "define" "define*" "define-macro" "catch" "sublet") string=?)
+								  "let" "let*" "letrec" "letrec*" "let-temporarily" 
+								  "call-with-exit" "call/cc" "call-with-current-continuation"
+								  "define" "define*" "define-macro" "catch" "sublet") 
+							   string=?)
 						   2)
 
 						  ((string=? name "do")

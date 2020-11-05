@@ -885,6 +885,7 @@ int main(int argc, char **argv)
   {
     s7_int* dims;
     s7_pointer p;
+    s7_double *els;
     dims = (s7_int *)malloc(2 * sizeof(s7_int));
     dims[0] = 2;
     dims[1] = 3;
@@ -893,6 +894,24 @@ int main(int argc, char **argv)
     p = s7_make_float_vector(sc, 6, 2, dims);
     if (s7_vector_rank(p) != 2) fprintf(stderr, "float vector rank not 2?\n");
     free(dims); /* ?? */
+
+    p = s7_make_float_vector(sc, 6, 1, NULL);
+    s7_float_vector_set(p, 1, 32.0);
+    if (s7_float_vector_ref(p, 1) != 32.0) fprintf(stderr, "float_vector[1] not 32.0?\n");
+    els = s7_float_vector_elements(p);
+    if (els[1] != 32.0) fprintf(stderr, "float_vector els[1] not 32.0?\n");
+    if (!s7_is_float_vector(p)) fprintf(stderr, "not a float_vector?\n");
+  }
+
+  {
+    s7_pointer p;
+    s7_int *els;
+    p = s7_make_int_vector(sc, 6, 1, NULL);
+    s7_int_vector_set(p, 1, 32);
+    if (s7_int_vector_ref(p, 1) != 32) fprintf(stderr, "int_vector[1] not 32?\n");
+    els = s7_int_vector_elements(p);
+    if (els[1] != 32) fprintf(stderr, "int_vector els[1] not 32?\n");
+    if (!s7_is_int_vector(p)) fprintf(stderr, "not an int_vector?\n");
   }
 
   {
