@@ -303,7 +303,7 @@
 #if WITH_GCC && (!S7_DEBUGGING)
   #define Inline inline __attribute__((__always_inline__))
 #else
-  #if MS_WINDOWS
+  #ifdef _MSC_VER
     #define Inline __forceinline
   #else
     #define Inline inline
@@ -10416,8 +10416,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
 	{
 	  symbol_set_id(car_p, THE_UN_ID);
 	  sc->w = cons(sc, add_symbol_to_list(sc, car_p), sc->w);
-	}
-    }
+	}}
   if (is_symbol(p)) /* rest arg */
     {
       symbol_set_id(p, THE_UN_ID);
@@ -54925,15 +54924,6 @@ static s7_pointer g_apply(s7_scheme *sc, s7_pointer args)
 s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
 {
   TRACK(sc);
-#if S7_DEBUGGING
-  {
-    s7_pointer p;
-    int32_t argnum;
-    T_Pos(fnc);       /* not T_App here: (length (openlet (inlet 'length 8))) should raise an error */
-    for (argnum = 0, p = T_Pos(args); is_pair(p); argnum++, p = T_Pos(cdr(p)))
-      T_Pos(car(p));
-  }
-#endif
 
   if (is_c_function(fnc))
     return(c_function_call(fnc)(sc, args));
@@ -55643,7 +55633,8 @@ static s7_pointer fx_num_eq_si(s7_scheme *sc, s7_pointer arg)
   args = cdr(arg);
   val = lookup(sc, car(args));
   y = integer(cadr(args));
-  return((is_t_integer(val)) ? make_boolean(sc, integer(val) == y) : fx_num_eq_xi_1(sc, args, val, y));
+  return((is_t_integer(val)) ? make_boolean(sc, integer(val) == y) : 
+	 ((is_t_real(val)) ? make_boolean(sc, real(val) == y) : fx_num_eq_xi_1(sc, args, val, y)));
 }
 
 static s7_pointer fx_num_eq_ti(s7_scheme *sc, s7_pointer arg)
@@ -56663,6 +56654,7 @@ static s7_pointer fx_gt_si(s7_scheme *sc, s7_pointer arg)
   s7_pointer x;
   x = lookup(sc, cadr(arg));
   if (is_t_integer(x)) return(make_boolean(sc, integer(x) > integer(opt2_con(cdr(arg)))));
+  if (is_t_real(x)) return(make_boolean(sc, real(x) > integer(opt2_con(cdr(arg)))));
   return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
 }
 
@@ -69648,7 +69640,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
   if ((!arity_ok) &&
       (!s7_is_aritable(sc, f, len)))
     return(s7_error(sc, sc->wrong_number_of_args_symbol,
-		    set_elist_3(sc, wrap_string(sc, "for-each ~A: ~A args?", 21), f, make_integer(sc, len))));
+		    set_elist_4(sc, wrap_string(sc, "for-each ~A: ~A argument~P?", 27), f, make_integer(sc, len), make_integer(sc, len))));
 
   /* if function is safe c func, do the for-each locally */
   if ((is_safe_procedure(f)) &&
@@ -69725,7 +69717,6 @@ static bool op_for_each(s7_scheme *sc)
 	{
 	  sc->value = sc->unspecified;
 	  free_cell(sc, sc->args);
-	  /* sc->args = sc->nil; */
 	  return(true);
 	}}
   push_stack_direct(sc, OP_FOR_EACH);
@@ -69755,7 +69746,6 @@ static Inline bool op_for_each_1(s7_scheme *sc)
     {
       sc->value = sc->unspecified;
       free_cell(sc, counter);
-      /* sc->args = sc->nil; */
       return(true);
     }
   code = T_Clo(sc->code);
@@ -69924,7 +69914,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
       if ((c_function_required_args(f) > len) ||
 	  (c_function_all_args(f) < len))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			set_elist_3(sc, wrap_string(sc, "map ~A: ~A args?", 16), f, make_integer(sc, len))));
+			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
 
     case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
@@ -70026,7 +70016,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		((fargs >= 0) ||
 		 (abs(fargs) > len))))
 	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			    set_elist_3(sc, wrap_string(sc, "map ~A: ~A args?", 16), f, make_integer(sc, len))));
+			    set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
 	  if (got_nil) return(sc->nil);
 	}
 	break;
@@ -70038,7 +70028,8 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
       if ((!is_pair(f)) &&
 	  (!s7_is_aritable(sc, f, len)))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			set_elist_3(sc, wrap_string(sc, "map ~A: ~A args?", 16), f, make_integer(sc, len))));
+			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
+
       if (got_nil) return(sc->nil);
       break;
     }
@@ -70638,6 +70629,9 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
 		     set_elist_2(sc, wrap_string(sc, "quote's value is quasiquote, so '~S is trouble", 46), form));
 	  /* (member quasiquote (list 1) (lambda 'ho '(1 2))) so '(1 2) -> `(1 2) -> '(1 2)...
 	   *   but if we use #_quote above, cycle checks elsewhere get confused (they ignore pairs starting with sc->quote_symbol).
+	   * to be more explicit: (assoc val (list (list 1 2)) (lambda (x y)...)) x=val y=1, so
+	   *   (assoc 1 (list (list quasiquote +)) (lambda* (a 'b) 'oops))
+	   * sets quote to quasiquote, qq returns 'oops etc.
 	   */
 	}
       return(list_2(sc, sc->quote_symbol, form));
@@ -78516,28 +78510,21 @@ static bool op_let_temp_done1(s7_scheme *sc)
 
 static void op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 'field) fx-able-value) */
 {
-  s7_pointer p, var, field;
+  s7_pointer p;
   s7_pointer *end;
 
   sc->code = cdr(sc->code);
-
   end = sc->stack_end;
+
   for (p = car(sc->code); is_pair(p); p = cdr(p))
     {
-      s7_pointer old_value;
-      var = caar(p);         /* var: (*s7* 'field) */
-      field = cadadr(var);
+      s7_pointer old_value, field;
+      field = cadadr(caar(p));         /* p: (((*s7* 'expansions?) #f)) -- no keywords here (see check_let_temporarily) */
       old_value = g_s7_let_ref_fallback(sc, set_plist_2(sc, sc->s7_let, field));
       push_stack(sc, OP_LET_TEMP_S7_UNWIND, old_value, field);
     }
   for (p = car(sc->code); is_pair(p); p = cdr(p), end += 4)
-    {
-      s7_pointer new_value;
-      var = car(p);         /* var: ((*s7* 'field) vnew-val) */
-      new_value = fx_call(sc, cdr(var));
-      field = end[0];
-      g_s7_let_set_fallback(sc, set_plist_3(sc, sc->s7_let, field, new_value));
-    }
+    g_s7_let_set_fallback(sc, set_plist_3(sc, sc->s7_let, end[0], fx_call(sc, cdar(p))));
   sc->code = cdr(sc->code);
 }
 
@@ -78667,20 +78654,9 @@ static inline s7_pointer check_quote(s7_scheme *sc, s7_pointer code)
   if (is_not_null(cddr(code)))             /* (quote . (1 2)) or (quote 1 1) */
     eval_error(sc, "quote: too many arguments ~A", 28, code);
 
-#if S7_DEBUGGING
-  if ((!is_global(sc->quote_symbol)) &&
-      (lookup(sc, sc->quote_symbol) != slot_value(initial_slot(sc->quote_symbol))))
-    fprintf(stderr, "local quote ");
-#endif
   pair_set_syntax_op(code, OP_QUOTE_UNCHECKED);
   return(cadr(code));
 }
-
-  /* I think a quoted list in another list can be applied to a function, come here and
-   *   be changed to unchecked, set-cdr! or something clobbers the argument so we get
-   *   here on the next time around with the equivalent of (quote . 0) if unchecked
-   * so set-cdr! of constant -- if marked immutable, we could catch this case and clear.
-   */
 
 
 /* -------------------------------- and -------------------------------- */
@@ -82443,11 +82419,26 @@ static s7_pointer fxify_step_exprs_1(s7_scheme *sc, s7_pointer code, const char 
   return(code);
 }
 
+static bool do_vector_has_definers(s7_scheme *sc, s7_pointer v)
+{
+  s7_int i, len;
+  s7_pointer *els;
+  len = vector_length(v);
+  els = vector_elements(v);
+  for (i = 0; i < len; i++)
+    if ((is_pair(els[i])) &&
+	(is_symbol(car(els[i]))) &&
+	(is_definer(car(els[i])))) /* this is a desperate kludge */
+      return(true);
+  return(false);
+}
+
 static inline bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 {
   /* we can't be very fancy here because quote gloms up everything: (cond '(define x 0) ...) etc, and the tree here can
    *   be arbitrarily messed up, and we need to be reasonably fast.  So we accept some false positives: (case ((define)...)...) or '(define...)
-   * but what about ((f...)...) where (f...) returns a macro that defines something?
+   * but what about ((f...)...) where (f...) returns a macro that defines something? Or (for-each or ...) where for-each and or might be
+   * obfuscated and the args might contain a definer?
    */
   s7_pointer p;
   for (p = tree; is_pair(p); p = cdr(p))
@@ -82465,10 +82456,17 @@ static inline bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	}
       else
 	{
-	  if ((is_pair(pp)) &&
-	      (do_tree_has_definers(sc, pp)))
-	    return(true);
-	}}
+	  if (is_pair(pp))
+	    {
+	      if (do_tree_has_definers(sc, pp))
+		return(true);
+	    }
+	  else
+	    {
+	      if ((is_normal_vector(pp)) &&
+		  (do_vector_has_definers(sc, pp)))
+		return(true);
+	    }}}
   return(false);
 }
 
@@ -85550,7 +85548,7 @@ static void apply_syntax(s7_scheme *sc)                            /* -------- s
     s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
 
   sc->cur_op = (opcode_t)syntax_opcode(sc->code);                  /* (apply begin '((define x 3) (+ x 2))) */
-  /* I used to have elaborate checks here for embedded circular lists, but now i think that is the caller's problem */
+  /* I had elaborate checks here for embedded circular lists, but now I think that is the caller's problem */
   sc->code = cons(sc, sc->code, sc->args);
 
   pair_set_syntax_op(sc->code, sc->cur_op);
@@ -97493,14 +97491,14 @@ s7_scheme *s7_init(void)
     mpc_init(sc->mpc_1);
     mpc_init(sc->mpc_2);
 
-    mpz_set_ui(sc->mpz_1, (uint32_t)time(NULL));
+    mpz_set_ui(sc->mpz_1, (uint64_t)my_clock());
     gmp_randinit_default(random_gmp_state(p));
     gmp_randseed(random_gmp_state(p), sc->mpz_1);
 
     sc->pi_symbol = s7_define_constant(sc, "pi", big_pi(sc));
     s7_provide(sc, "gmp");
 #else
-    random_seed(p) = (uint64_t)time(NULL);
+    random_seed(p) = (uint64_t)my_clock(); /* used to be time(NULL), but that means separate threads can get the same random number sequence */
     random_carry(p) = 1675393560;
     sc->pi_symbol = s7_define_constant(sc, "pi", real_pi);
 #endif
@@ -98039,7 +98037,7 @@ int main(int argc, char **argv)
  * tref     1093 |  779 |  779   671   691            741
  * tshoot   1296 |  880 |  841   823   840           1673
  * index     939 | 1013 |  990  1006  1025           1087
- * tmock         |      |             1211           7733
+ * tmock         |      |             1211 1178      7733
  * s7test   1776 | 1711 | 1700  1824  1839           4525
  * tstr          |      |             1897           2032
  * lt       2205 | 2116 | 2082  2089  2121           2111
@@ -98048,7 +98046,7 @@ int main(int argc, char **argv)
  * tmat     6072 | 2478 | 2465  2345  2333           2485
  * tread    2449 | 2394 | 2379  2416  2444           2639
  * tvect    6189 | 2430 | 2435  2461  2456           2687
- * fbench   2974 | 2643 | 2628  2676  2710           3091
+ * fbench   2974 | 2643 | 2628  2676  2710 2688      3091
  * trclo    7985 | 2791 | 2670  2704  2719           4502
  * tb       3251 | 2799 | 2767  2685  2735           3554
  * titer    3962 | 2911 | 2884  2892  2865           2883
@@ -98077,6 +98075,5 @@ int main(int argc, char **argv)
  *
  * -------------------------------------------------------
  *
- * nrepl+notcurses, menu items, (if selection, C-space+move also), cell_set_*?
- *   colorize: offer hook into all repl output and example of colorizing nc-display, but what about input?
+ * can memory_usage use the new saved_pointers?
  */
