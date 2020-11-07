@@ -1,4 +1,5 @@
 ;;; a first stab at a numerics timing test
+(set! (*s7* 'heap-size) (* 6 1024000))
 
 (define dolph-1
   (let ((+documentation+ "(dolph-1 n gamma) produces a Dolph-Chebyshev FFT data window of 'n' points using 'gamma' as the window parameter."))
