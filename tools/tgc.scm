@@ -8,7 +8,7 @@
 		 (equal? c2 c3))
       (format *stderr* "cyclic: ~S: ~S ~S ~S~%" p1 c1 c2 c3))))
 
-(define (tgc tries vsize)
+(define (tgc-cyclic tries vsize)
   (let ((wait (make-vector vsize #f)))
     (do ((i 0 (+ i 1)))
 	((= i tries))
@@ -98,7 +98,62 @@
 					     (lambda () #f)))
 				       (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
 
-(tgc 50000 200)
-;(tgc 1000000000)
+(tgc-cyclic 25000 200)
+
+
+(define (tgc tries vsize)
+  (let ((wait (make-vector vsize #f)))
+    (do ((i 0 (+ i 1)))
+	((= i tries))
+      (let ((p1 (cons 1 2))
+	    (p2 (list 1 1 1 1 1 1 1))
+	    (p3 (list 1 2)))
+	(set-cdr! (cdr p3) p3)
+	(let ((v1 (vector 1 2))
+	      (v2 (make-vector 7 1))
+	      (v3 (vector 1 2 3))
+	      (v4 (make-vector '(3 2))))
+	  (vector-set! v3 2 v3)
+	  (let ((s1 (string #\a #\s #\d #\f)))
+	    (let ((iv1 (int-vector 1 2))
+		  (iv2 (make-int-vector 7 1)))
+	      (let ((h1 (hash-table 'a 1))
+		    (h2 (weak-hash-table 'b p1)))
+		(let ((i1 (inlet 'a 1 'b 2)))
+		  (let ((in1 (open-output-string)))
+		    (format in1 "asdf\n")
+		    (let ((in2 (open-input-string "asdf\n")))
+		      (read-line in2)
+		      (let ((c1 (c-pointer 0 integer? "info" (cons h1 h2) (vector p3 p2 p1))))
+			(let ((cc (call/cc (lambda (ret) ret))))
+			  (let ((ex1 (call-with-exit 
+				      (lambda (go) 
+					go))))
+			    (let ((f1 (lambda (a b c) (+ a b c))))
+			      (let ((u1 #<asdf>))
+				(let ((g1 (gensym)))
+				  (let ((it1 (make-iterator '(1 2 3))))
+				    (let ((b1 (block 1 2 3)))
+				      (for-each 
+				       (lambda (a)
+					 (let ((pos (random vsize)))
+					   (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
+					       (format *stderr* "~S?" (vector-ref wait pos)))
+					   (vector-set! wait pos a))
+					 (dynamic-wind
+					     (lambda () #f)
+					     (lambda ()
+					       (catch #t
+						 (lambda ()
+						   (call-with-exit
+						    (lambda (r)
+						      (r a))))
+						 (lambda (type info)
+						   (format *stderr* "~A: ~A~%" type (apply format #f info)))))
+					     (lambda () #f)))
+				       (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
+
+(tgc 200000 200)
+;(tgc 1000000000 200)
 
 (exit)

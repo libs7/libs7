@@ -50,6 +50,94 @@
 		    (set! cur-word ""))))))))))
 
 (concord)
+
+
+;;; --------------------------------
+;;; various simple cases
+(define (strup str)
+  (let ((len (length str))
+	(new-str (copy str)))
+    (do ((i 0 (+ i 1)))
+	((= i len)
+	 new-str)
+      (string-set! new-str i (char-upcase (string-ref str i))))))
+
+(define (cpos c str)
+  (call-with-exit
+   (lambda (return)
+     (let ((len (length str)))
+       (do ((i 0 (+ i 1)))
+	   ((= i len)
+	    #f)
+	 (if (char=? c (string-ref str i))
+	     (return i)))))))
+
+(define (strcop str)
+  (let* ((len (length str))
+	 (new-str (make-string len)))
+    (do ((i 0 (+ i 1)))
+	((= i len) new-str)
+      (string-set! new-str i (string-ref str i)))))
+
+(define (spos find str)
+  (call-with-exit
+   (lambda (return)
+     (let* ((len (length str))
+	    (flen (length find))
+	    (slen (- len flen -1)))
+       (do ((i 0 (+ i 1)))
+	   ((>= i slen)
+	    #f)
+	 (if (string=? find (substring str i (+ i flen)))
+	     (return i)))))))
+      
+#|
+(format *stderr* "strup ~S: ~S~%" "abcdefghij" (strup "abcdefghij"))
+(format *stderr* "cpos ~C ~S: ~S~%" #\a "123456789a12343" (cpos #\a "123456789a12343"))
+(format *stderr* "strcop ~S: ~S~%" "asdfghjkl" (strcop "asdfghjkl"))
+(format *stderr* "spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" (spos "asdf" "fdsghjkasdfhjgfrkl"))
+(format *stderr* "spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (spos "asdf" "fdsghjkasdf"))
+(format *stderr* "spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (spos "asdf" "fdsghjkasd"))
+|#
+
+(define-macro (time expr) 
+  `(let ((start (*s7* 'cpu-time)))
+     ,expr
+     (- (*s7* 'cpu-time) start)))
+
+(define (simple-tests size)
+  (let ((bigstr (make-string size)))
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (string-set! bigstr i (integer->char (+ 33 (random 94)))))
+    (string-set! bigstr (- size 10) #\space)
+    (string-set! bigstr (- size 9) #\a)
+    (format *stderr* "strup: ~G ~G~%" 
+	    (time (strup bigstr)) 
+	    (time (string-upcase bigstr)))
+    (format *stderr* "cpos: ~G ~G~%" 
+	    (time (cpos #\space bigstr))
+	    (time (char-position #\space bigstr)))
+    (format *stderr* "spos: ~G ~G~%" 
+	    (time (spos " a" bigstr))
+	    (time (string-position " a" bigstr)))
+    (format *stderr* "strcop: ~G ~G~%"
+	    (time (strcop bigstr))
+	    (time (copy bigstr)))
+    (do ((i 0 (+ i 1)))
+	((= i 20))
+      (strup bigstr)
+      (string-upcase bigstr)
+      (cpos #\space bigstr)
+      (char-position #\space bigstr)
+      (spos " a" bigstr)
+      (string-position " a" bigstr)
+      (strcop bigstr)
+      (copy bigstr))))
+
+(simple-tests 100000)
+
+
 (#_exit)
 
 

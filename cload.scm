@@ -138,7 +138,7 @@
 
   (define (C-type->s7-type type)
 
-    (if (pair? type)                             ; in case the type name does not make its C type obvious: (graph_style_t int)
+    (if (pair? type)                                  ; in case the type name does not make its C type obvious: (graph_style_t int)
 	(C-type->s7-type (cadr type))
 	(let ((type-name (symbol->string type)))
 	  (cond ((string-position "**" type-name)     ; any complicated C pointer is uninterpreted
@@ -289,6 +289,18 @@
 		(format *stderr* "~A twice?~%" name)
 		(set! all-names (cons name all-names)))
 	    name)))
+
+      (define (hyphen->space type)
+	(let* ((name (symbol->string type))
+	       (pos (char-position #\- name)))
+	  (if (not pos)
+	      type
+	      (begin
+		(string-set! name pos #\space)
+		(set! pos (char-position #\- name (+ pos 1)))
+		(if pos
+		    (string-set! name pos #\space))
+		name))))
       
       (define* (add-one-function return-type name arg-types doc)
 	;; (format *stderr* "~A ~A ~A~%" return-type name arg-types): double j0 (double) for example
@@ -311,7 +323,7 @@
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
 		  ((= i num-args))
-		(format p "  ~A ~A_~D;~%" ((if (pair? (car type)) caar car) type) base-name i))
+		(format p "  ~A ~A_~D;~%" (hyphen->space ((if (pair? (car type)) caar car) type)) base-name i))
 	      (if (not (= num-args 1)) (format p "  arg = args;~%"))
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
@@ -320,19 +332,20 @@
 		(let* ((nominal-type ((if (pair? (car type)) caar car) type))  ; double in the example
 		       (true-type    ((if (pair? (car type)) cadar car) type))
 		       (s7-type      (C-type->s7-type true-type)))                    ; real
-		  ;(format *stderr* "~A(~D): ~A ~A ~A~%" func-name i nominal-type true-type s7-type)
+
 		  (if (eq? true-type 's7_pointer)
 		      (format p "    ~A_~D = s7_car(arg);~%" base-name i)
 		      (if (eq? s7-type 'c_pointer)
-			  (format p "    ~A_~D = (~A)s7_c_pointer_with_type(sc, s7_car(arg), s7_make_symbol(sc, ~S), __func__, ~S);~%" 
-				  base-name i nominal-type
+			  (format p "  ~A_~D = (~A)s7_c_pointer_with_type(sc, s7_car(arg), s7_make_symbol(sc, ~S), __func__, ~S);~%" 
+				  base-name i 
+				  (hyphen->space nominal-type)
 				  (symbol->string nominal-type)
 				  (if (= num-args 1) 0 (+ i 1)))
 			  (begin
 			    (format p "  if (~A(s7_car(arg)))~%" (checker true-type))
 			    (format p "    ~A_~D = (~A)~A(~As7_car(arg));~%"
 				    base-name i
-				    nominal-type
+				    (hyphen->space nominal-type)
 				    (s7->C true-type)                               ; s7_number_to_real which requires 
 				    (if (memq s7-type '(boolean real))              ;   the extra sc arg
 					"sc, " ""))

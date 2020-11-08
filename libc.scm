@@ -1402,11 +1402,12 @@
 	   
 	   (C-function ("signal" g_signal "" 2))
 	   
-	   (int getrlimit (int void*))
-	   (int setrlimit (int void*))
+	   (int getrlimit (int struct-rlimit*))
+	   (int setrlimit (int struct-rlimit*))
 	   (reader-cond ((provided? 'linux) 
 			 (int sigwaitinfo (sigset_t* siginfo_t*))
-			 (int waitid (int int siginfo_t* int))))
+			 (int waitid ((idtype_t int) int siginfo_t* int))))
+
 	   (c-pointer (SIG_ERR SIG_DFL SIG_IGN))
 	   
 	   
@@ -1469,16 +1470,16 @@
 	   (protoent* getprotobyname (char*))
 	   (protoent* getprotobynumber (int))
 	   
-	   (void freeaddrinfo (void*))
+	   (void freeaddrinfo (struct-addrinfo*))
 	   (char* gai_strerror (int))
 	   
-	   (int bind (int void* int))
-	   (int connect (int void* int))
+	   (int bind (int const-struct-sockaddr* int))
+	   (int connect (int const-struct-sockaddr* int))
 	   (int send (int void* int int))
 	   (int recv (int void* int int))
-	   (int sendto (int void* int int void* int))
-	   (int sendmsg (int void* int))
-	   (int recvmsg (int void* int))
+	   (int sendto (int void* int int const-struct-sockaddr* int))
+	   (int sendmsg (int const-struct-msghdr* int))
+	   (int recvmsg (int struct-msghdr* int))
 	   
 	   (in-C "static s7_pointer g_ntohl(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, ntohl(s7_integer(s7_car(args)))));}
                   static s7_pointer g_ntohs(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, ntohs(s7_integer(s7_car(args)))));}

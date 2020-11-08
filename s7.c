@@ -97871,7 +97871,7 @@ int main(int argc, char **argv)
 /* --------------------------------------------------------
  *
  * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-YYYYMMDD.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
- *   tests7 compsnd testsnd autotest, parens: search.scm
+ *   tests7 compsnd testsnd autotest
  *
  * --------------------------------------------------------
  *           18  |  19  |  20.0  20.8  20.9           gmp
@@ -97883,7 +97883,6 @@ int main(int argc, char **argv)
  * index     939 | 1013 |  990  1006  1025           1087
  * tmock         |      |             1211 1178      7733
  * s7test   1776 | 1711 | 1700  1824  1839           4525
- * tstr          |      |             1897           2032
  * lt       2205 | 2116 | 2082  2089  2121           2111
  * tcopy    2434 | 2264 | 2277  2270  2256           2313
  * tform    2472 | 2289 | 2298  2278  2278           3256
@@ -97899,6 +97898,7 @@ int main(int argc, char **argv)
  * tset     6616 | 3083 | 3168  3175  3263           3253
  * dup           |      |       3335  3295           3548
  * tmac     3503 | 3291 | 3281  3272  3320           3430
+ * tstr          |      |             3342           
  * teq      4081 | 3804 | 3806  3800  4068           4078
  * tfft     4288 | 3816 | 3785  3844  4142           11.5
  * tio           | 5227 |       4527  4570           4595
@@ -97906,11 +97906,11 @@ int main(int argc, char **argv)
  * tclo     6246 | 5188 | 5187  4954  4788           5119
  * tlet     5409 | 4613 | 4578  4887  4927           5863
  * tcase         |      |       4895  4977           5010
- * tgc           |      |       4995  5434           5319
  * trec     17.8 | 6318 | 6317  5937  5976           7825
  * tnum          |      |             6441 6370      58.3
  * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
  * thash         |      |       12.2  11.9           37.5
+ * tgc           |      |             11.9
  * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.0
  * calls    40.3 | 35.9 | 35.8  36.1  36.7           60.6
  * sg       85.8 | 70.4 | 70.6  70.8  71.9           97.9
@@ -97921,5 +97921,4 @@ int main(int argc, char **argv)
  *
  * can memory_usage use the new saved_pointers?
  * map or: safety?
- * cload needs types such as "struct rlimit*" -- hyphen->space in name?
  */
