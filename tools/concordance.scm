@@ -54,23 +54,6 @@
 
 ;;; --------------------------------
 ;;; various simple cases
-(define (strup str)
-  (let ((len (length str))
-	(new-str (copy str)))
-    (do ((i 0 (+ i 1)))
-	((= i len)
-	 new-str)
-      (string-set! new-str i (char-upcase (string-ref str i))))))
-
-(define (cpos c str)
-  (call-with-exit
-   (lambda (return)
-     (let ((len (length str)))
-       (do ((i 0 (+ i 1)))
-	   ((= i len)
-	    #f)
-	 (if (char=? c (string-ref str i))
-	     (return i)))))))
 
 (define (strcop str)
   (let* ((len (length str))
@@ -79,26 +62,58 @@
 	((= i len) new-str)
       (string-set! new-str i (string-ref str i)))))
 
-(define (spos find str)
-  (call-with-exit
-   (lambda (return)
-     (let* ((len (length str))
-	    (flen (length find))
-	    (slen (- len flen -1)))
-       (do ((i 0 (+ i 1)))
-	   ((>= i slen)
-	    #f)
-	 (if (string=? find (substring str i (+ i flen)))
-	     (return i)))))))
-      
-#|
+(define (strup str)
+  (let ((len (length str))
+	(new-str (copy str)))
+    (do ((i 0 (+ i 1)))
+	((= i len)
+	 new-str)
+      (string-set! new-str i (char-upcase (string-ref str i))))))
+
+(define cpos 
+  (let ((len 0)
+	(c #f)
+	(str #f))
+    (define (cpos-1 pos)
+      (if (>= pos len)
+	  #f
+	  (if (char=? c (string-ref str pos))
+	       pos
+	       (cpos-1 (+ pos 1)))))
+    (lambda (c1 str1)
+      (set! len (length str1))
+      (set! c c1)
+      (set! str str1)
+      (cpos-1 0))))
+
+(define spos
+  (let ((len 0)
+	(flen 0)
+	(slen 0)
+	(find #f)
+	(str #f))
+    (define (spos-1 pos)
+      (if (>= pos slen)
+	  #f
+	   (if (string=? find (substring str pos (+ pos flen)))
+	       pos
+	       (spos-1 (+ pos 1)))))
+    (lambda (find1 str1)
+      (set! len (length str1))
+      (set! flen (length find1))
+      (set! slen (- len flen -1))
+      (set! str str1)
+      (set! find find1)
+      (spos-1 0))))
+
+
 (format *stderr* "strup ~S: ~S~%" "abcdefghij" (strup "abcdefghij"))
 (format *stderr* "cpos ~C ~S: ~S~%" #\a "123456789a12343" (cpos #\a "123456789a12343"))
 (format *stderr* "strcop ~S: ~S~%" "asdfghjkl" (strcop "asdfghjkl"))
 (format *stderr* "spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" (spos "asdf" "fdsghjkasdfhjgfrkl"))
 (format *stderr* "spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (spos "asdf" "fdsghjkasdf"))
 (format *stderr* "spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (spos "asdf" "fdsghjkasd"))
-|#
+
 
 (define-macro (time expr) 
   `(let ((start (*s7* 'cpu-time)))
@@ -112,18 +127,20 @@
       (string-set! bigstr i (integer->char (+ 33 (random 94)))))
     (string-set! bigstr (- size 10) #\space)
     (string-set! bigstr (- size 9) #\a)
-    (format *stderr* "strup: ~G ~G~%" 
-	    (time (strup bigstr)) 
-	    (time (string-upcase bigstr)))
-    (format *stderr* "cpos: ~G ~G~%" 
-	    (time (cpos #\space bigstr))
-	    (time (char-position #\space bigstr)))
-    (format *stderr* "spos: ~G ~G~%" 
-	    (time (spos " a" bigstr))
-	    (time (string-position " a" bigstr)))
-    (format *stderr* "strcop: ~G ~G~%"
-	    (time (strcop bigstr))
-	    (time (copy bigstr)))
+
+    (let ((t1 (time (strup bigstr)))
+	  (t2 (time (string-upcase bigstr))))
+      (format *stderr* "strup: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (set! t1 (time (cpos #\space bigstr)))
+      (set! t2 (time (char-position #\space bigstr)))
+      (format *stderr* "cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (set! t1 (time (spos " a" bigstr)))
+      (set! t2 (time (string-position " a" bigstr)))
+      (format *stderr* "spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (set! t1 (time (strcop bigstr)))
+      (set! t2 (time (copy bigstr)))
+      (format *stderr* "strcop: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2))))
+	    
     (do ((i 0 (+ i 1)))
 	((= i 20))
       (strup bigstr)

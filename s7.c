@@ -3285,7 +3285,6 @@ static s7_pointer slot_expression(s7_pointer p)    {if (slot_has_expression(p)) 
 #define call_exit_op_loc(p)            (T_Got(p))->object.rexit.op_stack_loc
 #define call_exit_active(p)            (T_Got(p))->object.rexit.active
 #define call_exit_name(p)              (T_Got(p))->object.rexit.name
-#define call_exit_set_name(p, Name)    (T_Got(p))->object.rexit.name = T_Sym(Name)
 
 #define is_continuation(p)             (type(p) == T_CONTINUATION)
 #define is_goto(p)                     (type(p) == T_GOTO)
@@ -7065,7 +7064,6 @@ static int64_t gc(s7_scheme *sc)
 #else
   #define gc_call(Tp) p = (*Tp++); if (is_marked(p)) clear_mark(p); else {if (!is_free_and_clear(p)) {clear_type(p); (*fp++) = p;}}
 #endif
-
     while (tp < heap_top)          /* != here or ^ makes no difference, going to 64 doesn't matter (this is less than .1% in all cases) */
       {
 	s7_pointer p;
@@ -7077,6 +7075,7 @@ static int64_t gc(s7_scheme *sc)
     /* I tried using pthreads here, since there is no need for a lock in this loop, but the *fp++ part needs to
      *   be local to each thread, then merged at the end.  In my timing tests, the current version was faster.
      *   If NUM_THREADS=2, and all thread variables are local, surely there's no "false sharing"?
+     * Also marking the is_marked check as unlikely did not speed up the timing tests.
      */
     sc->free_heap_top = fp;
     sweep(sc);
@@ -10092,6 +10091,7 @@ static inline s7_pointer lookup_from(s7_scheme *sc, s7_pointer symbol, s7_pointe
   return(unbound_variable(sc, symbol));
 #endif
 }
+/* perhaps copy low-order symbol-location bit to the slot -- would that be faster than the == above? (callgrind says the struct traversal is more expensive) */
 
 static s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e)
 {
@@ -11379,23 +11379,6 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
   return(new_v);
 }
 
-static inline s7_pointer make_goto(s7_scheme *sc)
-{
-  s7_pointer x;
-  new_cell(sc, x, T_GOTO);
-  call_exit_goto_loc(x) = current_stack_top(sc);
-  call_exit_op_loc(x) = (int32_t)(sc->op_stack_now - sc->op_stack);
-  call_exit_active(x) = true;
-  return(x);
-}
-
-static s7_pointer g_is_goto(s7_scheme *sc, s7_pointer args)
-{
-  #define H_is_goto "(goto? obj) returns #t if obj is a call-with-exit exit function"
-  #define Q_is_goto sc->pl_bt
-  return(make_boolean(sc, is_goto(car(args))));
-}
-
 static s7_pointer copy_op_stack(s7_scheme *sc)
 {
   s7_pointer nv;
@@ -11770,6 +11753,15 @@ static void apply_continuation(s7_scheme *sc) /* sc->code is the continuation */
 	     set_elist_1(sc, wrap_string(sc, "continuation can't jump into with-baffle", 40)));
 }
 
+static void op_call_cc(s7_scheme *sc)
+{
+  sc->w = s7_make_continuation(sc);
+  continuation_name(sc->w) = caar(opt2_pair(sc->code)); /* caadadr(sc->code) */
+  sc->curlet = make_let_with_slot(sc, sc->curlet, continuation_name(sc->w), sc->w);
+  sc->w = sc->nil;
+  sc->code = cdr(opt2_pair(sc->code)); /* cddadr(sc->code) */
+}
+
 static bool op_implicit_continuation_a(s7_scheme *sc)
 {
   s7_pointer s, code;
@@ -11784,6 +11776,7 @@ static bool op_implicit_continuation_a(s7_scheme *sc)
 
 
 /* -------------------------------- call-with-exit -------------------------------- */
+
 static void pop_input_port(s7_scheme *sc);
 
 static void call_with_exit(s7_scheme *sc)
@@ -11899,68 +11892,58 @@ static void call_with_exit(s7_scheme *sc)
     }
 }
 
-static s7_pointer g_call_with_exit(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_is_goto(s7_scheme *sc, s7_pointer args)
+{
+  #define H_is_goto "(goto? obj) returns #t if obj is a call-with-exit exit function"
+  #define Q_is_goto sc->pl_bt
+  return(make_boolean(sc, is_goto(car(args))));
+}
+
+static inline s7_pointer make_goto(s7_scheme *sc, s7_pointer name)
+{
+  s7_pointer x;
+  new_cell(sc, x, T_GOTO);
+  call_exit_goto_loc(x) = current_stack_top(sc);
+  call_exit_op_loc(x) = (int32_t)(sc->op_stack_now - sc->op_stack);
+  call_exit_active(x) = true;
+  call_exit_name(x) = name;
+  return(x);
+}
+
+static s7_pointer g_call_with_exit(s7_scheme *sc, s7_pointer args)   /* (call-with-exit (lambda (return) ...)) */
 {
   #define H_call_with_exit "(call-with-exit (lambda (exiter) ...)) is call/cc without the ability to jump back into a previous computation."
   #define Q_call_with_exit s7_make_signature(sc, 2, sc->values_symbol, sc->is_procedure_symbol)
-
   s7_pointer p, x;
-  /* (call-with-exit (lambda (return) ...)) */
 
   p = car(args);
+  if (is_any_closure(p))
+    {
+      x = make_goto(sc, ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p))))) ? car(closure_args(p)) : sc->F);
+      push_stack(sc, OP_DEACTIVATE_GOTO, x, p); /* this means call-with-exit is not tail-recursive */
+      push_stack(sc, OP_APPLY, cons_unchecked(sc, x, sc->nil), p);
+      return(sc->nil);
+    }
+
   if (!is_t_procedure(p))                  /* this includes continuations */
     return(method_or_bust_with_type_one_arg(sc, p, sc->call_with_exit_symbol, args, a_procedure_string));
 
-  x = make_goto(sc);
-  if ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p)))))
-    call_exit_set_name(x, car(closure_args(p)));
-  else call_exit_name(x) = sc->F;
+  x = make_goto(sc, ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p))))) ? car(closure_args(p)) : sc->F);
+  if ((is_any_c_function(p)) && (s7_is_aritable(sc, p, 1)))
+    {
+      call_exit_active(x) = false;
+      return((is_c_function(p)) ? c_function_call(p)(sc, list_1(sc, x)) : s7_apply_function_star(sc, p, list_1(sc, x)));
+    }
   push_stack(sc, OP_DEACTIVATE_GOTO, x, p); /* this means call-with-exit is not tail-recursive */
   push_stack(sc, OP_APPLY, cons_unchecked(sc, x, sc->nil), p);
-
-  /* if the lambda body calls the argument as a function,
-   *   it is applied to its arguments, apply notices that it is a goto, and...
-   *
-   *      (conceptually...) sc->stack_top = call_exit_goto_loc(sc->code);
-   *      s_pop(sc, (is_not_null(sc->args)) ? car(sc->args) : sc->nil);
-   *
-   *   which jumps to the point of the goto returning car(args).
-   *
-   * There is one gotcha: we can't jump back in from outside, so if the caller saves the goto
-   *   and tries to invoke it outside the call-with-exit block, we have to
-   *   make sure it triggers an error.  So, if the escape is called, it then
-   *   deactivates itself.  Otherwise the block returns, we pop to OP_DEACTIVATE_GOTO,
-   *   and it finds the goto in sc->args.
-   * Even worse:
-       (let ((cc #f))
-         (call-with-exit
-           (lambda (c3)
-             (call/cc (lambda (ret) (set! cc ret)))
-             (c3)))
-         (cc))
-   * where we jump back into a call-with-exit body via call/cc, the goto has to be re-established.
-   *
-   * I think call-with-exit could be based on catch, but it's a simpler notion,
-   *   and certainly at the source level it is easier to read.
-   */
   return(sc->nil);
-}
-
-static void op_call_cc(s7_scheme *sc)
-{
-  sc->w = s7_make_continuation(sc);
-  continuation_name(sc->w) = caar(opt2_pair(sc->code)); /* caadadr(sc->code) */
-  sc->curlet = make_let_with_slot(sc, sc->curlet, continuation_name(sc->w), sc->w);
-  sc->w = sc->nil;
-  sc->code = cdr(opt2_pair(sc->code)); /* cddadr(sc->code) */
 }
 
 static void op_call_with_exit(s7_scheme *sc)
 {
   s7_pointer go, args;
   args = opt2_pair(sc->code);
-  go = make_goto(sc);
-  call_exit_set_name(go, caar(args));
+  go = make_goto(sc, caar(args));
   push_stack_no_let_no_code(sc, OP_DEACTIVATE_GOTO, go); /* was also pushing code */
   sc->curlet = make_let_with_slot(sc, sc->curlet, caar(args), go);
   sc->code = T_Pair(cdr(args));
@@ -19645,6 +19628,8 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
+static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z) {return(add_p_pp(sc, x, add_p_pp(sc, y, z)));}
+
 static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
 {
   #define H_add "(+ ...) adds its arguments"
@@ -21006,6 +20991,8 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	return(method_or_bust_with_type(sc, x, sc->multiply_symbol, list_2(sc, x, y), a_number_string, 1));
     }
 }
+
+static s7_pointer multiply_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z) {return(multiply_p_pp(sc, x, multiply_p_pp(sc, y, z)));}
 
 static s7_pointer multiply_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer caller, s7_pointer args, s7_pointer typ, int32_t num)
 {
@@ -26292,13 +26279,18 @@ static void init_chars(void)
 
 
 /* -------------------------------- char-upcase, char-downcase ----------------------- */
+static s7_pointer char_upcase_p_p(s7_scheme *sc, s7_pointer c)
+{
+  if (!s7_is_character(c))
+    return(method_or_bust_one_arg(sc, c, sc->char_upcase_symbol, list_1(sc, c), T_CHARACTER));
+  return(s7_make_character(sc, upper_character(c)));
+}
+
 static s7_pointer g_char_upcase(s7_scheme *sc, s7_pointer args)
 {
   #define H_char_upcase "(char-upcase c) converts the character c to upper case"
   #define Q_char_upcase sc->pcl_c
-  if (!s7_is_character(car(args)))
-    return(method_or_bust_one_arg(sc, car(args), sc->char_upcase_symbol, args, T_CHARACTER));
-  return(s7_make_character(sc, upper_character(car(args))));
+  return(char_upcase_p_p(sc, car(args)));
 }
 
 static s7_pointer g_char_downcase(s7_scheme *sc, s7_pointer args)
@@ -56496,11 +56488,7 @@ static s7_pointer fx_multiply_sf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf
 static s7_pointer fx_multiply_tf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, t_lookup(sc, cadr(arg), arg), real(opt2_con(cdr(arg)))));}
 static s7_pointer fx_multiply_si(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, cadr(arg)), integer(opt2_con(cdr(arg)))));}
 static s7_pointer fx_multiply_is(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, opt2_sym(cdr(arg))), integer(cadr(arg))));}
-
-static s7_pointer fx_multiply_tu(s7_scheme *sc, s7_pointer arg)
-{
-  return(multiply_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));
-}
+static s7_pointer fx_multiply_tu(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));}
 
 static inline s7_pointer fx_sqr_1(s7_scheme *sc, s7_pointer x)
 {
@@ -56873,10 +56861,18 @@ static s7_pointer fx_c_sss_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_ppp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, cadr(arg)), lookup(sc, opt1_sym(cdr(arg))), lookup(sc, opt2_sym(cdr(arg)))));
 }
 
+static s7_pointer fx_c_sts(s7_scheme *sc, s7_pointer arg)
+{
+  set_car(sc->t3_1, lookup(sc, cadr(arg)));
+  set_car(sc->t3_2, t_lookup(sc, opt1_sym(cdr(arg)), arg)); /* caddr(arg) */
+  set_car(sc->t3_3, lookup(sc, opt2_sym(cdr(arg)))); /* cadddr(arg) */
+  return(c_call(arg)(sc, sc->t3_1));
+}
+
 static s7_pointer fx_c_tus(s7_scheme *sc, s7_pointer arg)
 {
   set_car(sc->t3_1, t_lookup(sc, cadr(arg), arg));
-  set_car(sc->t3_2, u_lookup(sc, caddr(arg), arg));
+  set_car(sc->t3_2, u_lookup(sc, opt1_sym(cdr(arg)), arg)); /* caddr(arg), arg)); */
   set_car(sc->t3_3, lookup(sc, opt2_sym(cdr(arg)))); /* cadddr(arg) */
   return(c_call(arg)(sc, sc->t3_1));
 }
@@ -60131,6 +60127,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      ((c_callee(tree) == fx_c_sss) || (c_callee(tree) == fx_c_sss_direct)))
 	    {set_safe_optimize_op(p, OP_SAFE_C_TUS); return(with_c_call(tree, fx_c_tus));}
 	}
+      if (caddr(p) == var1) return(with_c_call(tree, fx_c_sts));
       break;
 
     case OP_SAFE_C_TUS:
@@ -95607,7 +95604,6 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_i_7ii_function(sc, slot_value(global_slot(sc->quotient_symbol)), quotient_i_7ii);
   s7_set_d_7dd_function(sc, slot_value(global_slot(sc->modulo_symbol)), modulo_d_7dd);
   s7_set_i_ii_function(sc, slot_value(global_slot(sc->modulo_symbol)), modulo_i_ii);
-
   s7_set_p_dd_function(sc, slot_value(global_slot(sc->multiply_symbol)), mul_p_dd);
   s7_set_p_dd_function(sc, slot_value(global_slot(sc->add_symbol)), add_p_dd);
   s7_set_p_dd_function(sc, slot_value(global_slot(sc->subtract_symbol)), subtract_p_dd);
@@ -95618,7 +95614,9 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->quotient_symbol)), quotient_p_pp);
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->subtract_symbol)), subtract_p_pp);
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->add_symbol)), add_p_pp);
+  s7_set_p_ppp_function(sc, slot_value(global_slot(sc->add_symbol)), add_p_ppp);
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->multiply_symbol)), multiply_p_pp);
+  s7_set_p_ppp_function(sc, slot_value(global_slot(sc->multiply_symbol)), multiply_p_ppp);
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->divide_symbol)), divide_p_pp);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->divide_symbol)), invert_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->subtract_symbol)), negate_p_p);
@@ -95788,6 +95786,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, slot_value(global_slot(sc->c_pointer_weak2_symbol)), c_pointer_weak2_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->is_char_alphabetic_symbol)), is_char_alphabetic_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->is_char_whitespace_symbol)), is_char_whitespace_p_p);
+  s7_set_p_p_function(sc, slot_value(global_slot(sc->char_upcase_symbol)), char_upcase_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->read_char_symbol)), read_char_p_p);
   s7_set_p_i_function(sc, slot_value(global_slot(sc->make_string_symbol)), make_string_p_i);
   s7_set_p_ii_function(sc, slot_value(global_slot(sc->make_int_vector_symbol)), make_int_vector_p_ii);
@@ -96777,7 +96776,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->cyclic_sequences_symbol =      defun("cyclic-sequences",  cyclic_sequences,	1, 0, false);
   sc->call_cc_symbol =               unsafe_defun("call/cc",	call_cc,		1, 0, false);
   sc->call_with_current_continuation_symbol = unsafe_defun("call-with-current-continuation", call_cc, 1, 0, false);
-  sc->call_with_exit_symbol =        unsafe_defun("call-with-exit", call_with_exit,	1, 0, false);
+  sc->call_with_exit_symbol =        unsafe_defun("call-with-exit", call_with_exit,     1, 0, false);
 
   sc->load_symbol =                  unsafe_defun("load",	load,			1, 1, false);
   sc->autoload_symbol =              defun("autoload",	        autoload,		2, 0, false);
@@ -97873,52 +97872,52 @@ int main(int argc, char **argv)
  * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-YYYYMMDD.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
  *   tests7 compsnd testsnd autotest
  *
- * --------------------------------------------------------
- *           18  |  19  |  20.0  20.8  20.9           gmp
- * --------------------------------------------------------
- * tpeak     167 |  117 |  116   115   115            128
- * tauto     748 |  633 |  638   665   648           1200
- * tref     1093 |  779 |  779   671   691            741
- * tshoot   1296 |  880 |  841   823   840           1673
- * index     939 | 1013 |  990  1006  1025           1087
- * tmock         |      |             1211 1178      7733
- * s7test   1776 | 1711 | 1700  1824  1839           4525
- * lt       2205 | 2116 | 2082  2089  2121           2111
- * tcopy    2434 | 2264 | 2277  2270  2256           2313
- * tform    2472 | 2289 | 2298  2278  2278           3256
- * tmat     6072 | 2478 | 2465  2345  2333           2485
- * tread    2449 | 2394 | 2379  2416  2444           2639
- * tvect    6189 | 2430 | 2435  2461  2456           2687
- * fbench   2974 | 2643 | 2628  2676  2710 2688      3091
- * trclo    7985 | 2791 | 2670  2704  2719           4502
- * tb       3251 | 2799 | 2767  2685  2735           3554
- * titer    3962 | 2911 | 2884  2892  2865           2883
- * tmap     3238 | 2883 | 2874  2838  2884           3825
- * tsort    4156 | 3043 | 3031  2989  3091           3809
- * tset     6616 | 3083 | 3168  3175  3263           3253
- * dup           |      |       3335  3295           3548
- * tmac     3503 | 3291 | 3281  3272  3320           3430
- * tstr          |      |             3342           
- * teq      4081 | 3804 | 3806  3800  4068           4078
- * tfft     4288 | 3816 | 3785  3844  4142           11.5
- * tio           | 5227 |       4527  4570           4595
- * tmisc         |      |       4455  4673           5077
- * tclo     6246 | 5188 | 5187  4954  4788           5119
- * tlet     5409 | 4613 | 4578  4887  4927           5863
- * tcase         |      |       4895  4977           5010
- * trec     17.8 | 6318 | 6317  5937  5976           7825
- * tnum          |      |             6441 6370      58.3
- * tgen     11.7 | 11.0 | 11.0  11.1  11.2           12.0
- * thash         |      |       12.2  11.9           37.5
- * tgc           |      |             11.9
- * tall     16.4 | 15.4 | 15.3  15.4  15.6           27.0
- * calls    40.3 | 35.9 | 35.8  36.1  36.7           60.6
- * sg       85.8 | 70.4 | 70.6  70.8  71.9           97.9
- * lg      115.9 |104.9 |104.6 104.6 106.6          106.7
- * tbig    264.5 |178.0 |177.2 174.0 177.4          603.6
- *
- * -------------------------------------------------------
+ * -----------------------------------------
+ *           20.0  20.8  20.9           gmp
+ * -----------------------------------------
+ * tpeak     116   115   115            128
+ * tauto     638   665   648           1200
+ * tref      779   671   691            741
+ * tshoot    841   823   840           1673
+ * index     990  1006  1025 1192?     1087
+ * tmock                1178           7733
+ * s7test   1700  1824  1839           4525
+ * lt       2082  2089  2121           2111
+ * tcopy    2277  2270  2256           2313
+ * tform    2298  2278  2278           3256
+ * tmat     2465  2345  2333           2485
+ * tread    2379  2416  2444           2639
+ * tvect    2435  2461  2456           2687
+ * fbench   2628  2676  2688           3091
+ * trclo    2670  2704  2719           4502
+ * tb       2767  2685  2735           3554
+ * titer    2884  2892  2865           2883
+ * tmap     2874  2838  2884           3825
+ * tsort    3031  2989  3091           3809
+ * tset     3168  3175  3263           3253
+ * dup            3335  3315           3548
+ * tmac     3281  3272  3320           3430
+ * tstr                 3342 2876          
+ * teq      3806  3800  4068           4078
+ * tfft     3785  3844  4142           11.5
+ * tio            4527  4570           4595
+ * tmisc          4455  4673           5077
+ * tclo     5187  4954  4788           5119
+ * tlet     4578  4887  4927           5863
+ * tcase          4895  4970           5010
+ * trec     6317  5937  5976           7825
+ * tnum                 6365 6348      58.3
+ * tgen     11.0  11.1  11.2           12.0
+ * thash          12.2  11.9           37.5
+ * tgc                  11.9
+ * tall     15.3  15.4  15.6           27.0
+ * calls    35.8  36.1  36.7           60.6
+ * sg       70.6  70.8  71.9           97.9
+ * lg      104.6 104.6 106.6          106.7
+ * tbig    177.2 174.0 177.4          603.6
+ * ----------------------------------------
  *
  * can memory_usage use the new saved_pointers?
  * map or: safety?
+ * tc_and_a_if_a_z_l3a (perhaps use tc_if_a_z_if_a_z_l3a?)
  */
