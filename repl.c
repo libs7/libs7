@@ -51,7 +51,6 @@ int main(int argc, char **argv)
   s7_scheme *sc;
 
   sc = s7_init();
-  /* fprintf(stderr, "s7: %s\n", S7_DATE); */
 
   if (argc >= 2)
     {
@@ -60,6 +59,11 @@ int main(int argc, char **argv)
 	  s7_pointer x;
 	  x = s7_eval_c_string(sc, argv[2]);
 	  fprintf(stdout, "%s\n", s7_object_to_c_string(sc, x));
+	  return(0);
+	}
+      if (strcmp(argv[1], "--version") == 0)
+	{
+	  fprintf(stdout, "s7: %s, %s\n", S7_VERSION, S7_DATE);
 	  return(0);
 	}
       fprintf(stderr, "load %s\n", argv[1]);  /* repl test.scm */
