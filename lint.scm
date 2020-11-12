@@ -19148,6 +19148,8 @@
 					     (lists->string form 
 							    (if (code-constant? setv)
 								(list 'fill! (cadr body) (cadddr body) start end)
+								;; (do ((i 0 (+ i 1))) ((= i (length str)) s) (string-set! s i (string-ref str i))) -> (copy str s)
+								;; it is a bother to squeeze string-up|downcase into this block, and I doubt it would ever be hit
 								(if (and (eqv? start 0)
 									 (pair? end)
 									 (memq (car end) '(length vector-length string-length))
