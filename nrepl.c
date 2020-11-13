@@ -373,7 +373,7 @@ static int nrepl(s7_scheme *sc)
   To build s7 to nrepl in one line:
     gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses
 
-  nrepl-bits.h is generated from:
+  nrepl-bits.h is generated from (make-nrepl-bits.scm):
 
 (call-with-output-file "nrepl-bits.h"
   (lambda (op)

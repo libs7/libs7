@@ -593,6 +593,19 @@
 			    (set! ncp-max-row (max ncp-max-row row))
 			    (set! start (+ i 1))))))))
 	    
+
+	    ;; -------- lint (redirect output) --------
+	    (set! lint ; force top-level change
+	      (let ((old-lint lint))
+		(lambda* (file (outp :unset) (report-input :unset))
+		  (if (and (eq? outp :unset)
+			   (eq? report-input :unset))
+		      (nc-multiline-display
+		       (call-with-output-string
+			(lambda (p)
+			  (old-lint file p))))
+		      (old-lint file outp report-input)))))
+
 	    
 	    ;; -------- top-level-let --------
 	    (set! (top-level-let 'history)

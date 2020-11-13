@@ -63,9 +63,9 @@
   (let ((len (length str))
 	(new-str (copy str)))
     (do ((i 0 (+ i 1)))
-	((= i len)
-	 new-str)
+	((= i len) new-str)
       (string-set! new-str i (char-upcase (string-ref str i))))))
+
 
 (define tc-cpos ; op_tc_if_a_z_if_a_z_la [opt]
   (let ((len 0)
@@ -173,6 +173,7 @@
        (if (char=? c (string-ref str i))
 	   (return i))))))
 
+
 (define tc-spos ; op_tc_if_a_z_if_a_z_la, substr+start&end [opt]
   (let ((len 0)
 	(flen 0)
@@ -233,10 +234,10 @@
       (cond-spos-1 0))))
 
 (define (do-spos find str)
-  (let* ((len (length str))
-	 (flen (length find))
-	 (slen (- len flen -1)))
-    (do ((i 0 (+ i 1)))
+  (let ((len (length str))
+	(flen (length find)))
+    (do ((slen (- len flen -1))
+	 (i 0 (+ i 1)))
 	((or (= i slen)
 	     (string=? find (substring str i (+ i flen))))
 	 (and (< i slen)
@@ -272,11 +273,11 @@
 (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (tc-spos "asdf" "fdsghjkasdf"))
 (format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (do-spos "asdf" "fdsghjkasdf"))
 (format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (and-spos "asdf" "fdsghjkasdf"))
-(format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (tc-spos "asdf" "fdsghjkasd"))
-(format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (do-spos "asdf" "fdsghjkasd"))
-(format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (and-spos "asdf" "fdsghjkasd"))
-(format *stderr* "call-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (call-spos "asdf" "fdsghjkasd"))
-(format *stderr* "cond-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (cond-spos "asdf" "fdsghjkasd"))
+(format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (tc-spos "asdf" "fdsghjkasd"))
+(format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (do-spos "asdf" "fdsghjkasd"))
+(format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (and-spos "asdf" "fdsghjkasd"))
+(format *stderr* "call-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (call-spos "asdf" "fdsghjkasd"))
+(format *stderr* "cond-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (cond-spos "asdf" "fdsghjkasd"))
 
 
 (define-macro (time . expr) 
@@ -370,19 +371,21 @@
 	    ((eq? this #<eof>))
 	  (let ((len (length this)))
 	    (unless (or (= len 0)
-			(char=? (this 0) #\}))
+			(char=? (string-ref this 0) #\}))
 	      (do ((i 0 (+ i 1)))
 		  ((or (>= i len)
-		       (not (char-whitespace? (this i))))
+		       (not (char-whitespace? (string-ref this i))))
 		   (set! this (substring this i))))
-	      (when (and (> (length this) 0) (char=? (this 0) #\})
-			 (> (length last1) 0) (char=? (last1 0) #\}))
-		(format *stderr* "~D ~S~%" line last1)))
+	      (when (and (> (length this) 0) (char=? (string-ref this 0) #\})
+			 (> (length last1) 0) (char=? (string-ref last1 0) #\}))
+		(format #f "~D ~S~%" line last1)))
 	    (set! last1 this)))))))
 
 
+;;; --------------------------------
+
 (concord)
 (simple-tests 100000)
-
+(searcher)
 
 (#_exit)
