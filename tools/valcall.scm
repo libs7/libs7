@@ -96,9 +96,9 @@
 	 (list "repl" "tio.scm")
 	 (list "repl" "tmisc.scm")
 	 (list "repl" "tclo.scm")
-	 (list "repl" "concordance.scm")
 	 (list "repl" "tlet.scm")
 	 (list "repl" "tcase.scm")
+	 (list "repl" "concordance.scm")
 	 (list "repl" "trec.scm")
 	 (list "repl" "tnum.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower

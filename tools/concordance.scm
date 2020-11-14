@@ -49,6 +49,7 @@
 				       (cons cur-line (or (hash-table-ref words cur-word) ()))))
 		    (set! cur-word ""))))))))))
 
+
 ;;; --------------------------------
 ;;; various simple cases
 
@@ -140,6 +141,21 @@
       (set! str str1)
       (and-cpos-1 0))))
 
+(define andrev-cpos 
+  (let ((len 0)
+	(c #f)
+	(str #f))
+    (define (andrev-cpos-1 pos)
+      (and (< pos len)
+	   (if (not (char=? c (string-ref str pos)))
+	       (andrev-cpos-1 (+ pos 1))
+	       pos)))
+    (lambda (c1 str1)
+      (set! len (length str1))
+      (set! c c1)
+      (set! str str1)
+      (andrev-cpos-1 0))))
+
 (define cond-cpos ; op_tc_if_a_z_if_a_z_la [opt]
   (let ((len 0)
 	(c #f)
@@ -155,6 +171,22 @@
       (set! c c1)
       (set! str str1)
       (cond-cpos-1 0))))
+
+(define condrev-cpos 
+  (let ((len 0)
+	(c #f)
+	(str #f))
+    (define (condrev-cpos-1 pos)
+      (cond ((= pos len)
+	     #f)
+	    ((not (char=? c (string-ref str pos)))
+	     (condrev-cpos-1 (+ pos 1)))
+	    (else pos)))
+    (lambda (c1 str1)
+      (set! len (length str1))
+      (set! c c1)
+      (set! str str1)
+      (condrev-cpos-1 0))))
 
 (define (do-cpos c str) ; op_dox
   (do ((len (length str))
@@ -213,6 +245,25 @@
       (set! find find1)
       (and-spos-1 0))))
 
+(define andrev-spos
+  (let ((len 0)
+	(flen 0)
+	(slen 0)
+	(find #f)
+	(str #f))
+    (define (andrev-spos-1 pos)
+      (and (< pos slen)
+	   (if (not (string=? find (substring str pos (+ pos flen))))
+	       (andrev-spos-1 (+ pos 1))
+	       pos)))
+    (lambda (find1 str1)
+      (set! len (length str1))
+      (set! flen (length find1))
+      (set! slen (- len flen -1))
+      (set! str str1)
+      (set! find find1)
+      (andrev-spos-1 0))))
+
 (define cond-spos ; op_tc_if_a_z_if_a_z_la [opt]
   (let ((len 0)
 	(flen 0)
@@ -263,8 +314,10 @@
 (format *stderr* "tc3-cpos ~C ~S: ~S~%" #\a "123456789a12343" (tc3-cpos #\a "123456789a12343"))
 (format *stderr* "do-cpos ~C ~S: ~S~%" #\a "123456789a12343" (do-cpos #\a "123456789a12343"))
 (format *stderr* "and-cpos ~C ~S: ~S~%" #\a "123456789a12343" (and-cpos #\a "123456789a12343"))
+(format *stderr* "andrev-cpos ~C ~S: ~S~%" #\a "123456789a12343" (andrev-cpos #\a "123456789a12343"))
 (format *stderr* "call-cpos ~C ~S: ~S~%" #\a "123456789a12343" (call-cpos #\a "123456789a12343"))
 (format *stderr* "cond-cpos ~C ~S: ~S~%" #\a "123456789a12343" (cond-cpos #\a "123456789a12343"))
+(format *stderr* "condrev-cpos ~C ~S: ~S~%" #\a "123456789a12343" (condrev-cpos #\a "123456789a12343"))
 (format *stderr* "rev-cpos ~C ~S: ~S~%" #\a "123456789a12343" (rev-cpos #\a "123456789a12343"))
 
 (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" (tc-spos "asdf" "fdsghjkasdfhjgfrkl"))
@@ -273,9 +326,11 @@
 (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (tc-spos "asdf" "fdsghjkasdf"))
 (format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (do-spos "asdf" "fdsghjkasdf"))
 (format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (and-spos "asdf" "fdsghjkasdf"))
+(format *stderr* "andrev-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (andrev-spos "asdf" "fdsghjkasdf"))
 (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (tc-spos "asdf" "fdsghjkasd"))
 (format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (do-spos "asdf" "fdsghjkasd"))
 (format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (and-spos "asdf" "fdsghjkasd"))
+(format *stderr* "andrev-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (andrev-spos "asdf" "fdsghjkasd"))
 (format *stderr* "call-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (call-spos "asdf" "fdsghjkasd"))
 (format *stderr* "cond-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (cond-spos "asdf" "fdsghjkasd"))
 
@@ -320,11 +375,17 @@
       (set! t1 (time (and-cpos #\space bigstr)))
       (format *stderr* "and-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
 
+      (set! t1 (time (andrev-cpos #\space bigstr)))
+      (format *stderr* "andrev-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+
       (set! t1 (time (call-cpos #\space bigstr)))
       (format *stderr* "call-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
 
       (set! t1 (time (cond-cpos #\space bigstr)))
       (format *stderr* "cond-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+
+      (set! t1 (time (condrev-cpos #\space bigstr)))
+      (format *stderr* "condrev-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
 
       (set! t1 (time (rev-cpos #\space bigstr)))
       (format *stderr* "rev-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
@@ -339,6 +400,9 @@
 
       (set! t1 (time (and-spos " a" bigstr)))
       (format *stderr* "and-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+
+      (set! t1 (time (andrev-spos " a" bigstr)))
+      (format *stderr* "andrev-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
 
       (set! t1 (time (call-spos " a" bigstr)))
       (format *stderr* "call-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
@@ -358,6 +422,7 @@
       (string-position " a" bigstr)
       (strcop bigstr)
       (copy bigstr))))
+
 
 ;;; --------------------------------
 
