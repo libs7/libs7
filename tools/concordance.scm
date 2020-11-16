@@ -306,33 +306,108 @@
 	     (return i)))))))
 
 
-(format *stderr* "strcop ~S: ~S~%" "asdfghjkl" (strcop "asdfghjkl"))
-(format *stderr* "strup ~S: ~S~%" "abcdefghij" (strup "abcdefghij"))
+(define (char-count c str)
+  (do ((pos (char-position c str 0) (char-position c str (+ pos 1)))
+       (count 0 (+ count 1)))
+      ((not pos) count)))
 
-(format *stderr* "tc-cpos ~C ~S: ~S~%" #\a "123456789a12343" (tc-cpos #\a "123456789a12343"))
-(format *stderr* "tc2-cpos ~C ~S: ~S~%" #\a "123456789a12343" (tc2-cpos #\a "123456789a12343"))
-(format *stderr* "tc3-cpos ~C ~S: ~S~%" #\a "123456789a12343" (tc3-cpos #\a "123456789a12343"))
-(format *stderr* "do-cpos ~C ~S: ~S~%" #\a "123456789a12343" (do-cpos #\a "123456789a12343"))
-(format *stderr* "and-cpos ~C ~S: ~S~%" #\a "123456789a12343" (and-cpos #\a "123456789a12343"))
-(format *stderr* "andrev-cpos ~C ~S: ~S~%" #\a "123456789a12343" (andrev-cpos #\a "123456789a12343"))
-(format *stderr* "call-cpos ~C ~S: ~S~%" #\a "123456789a12343" (call-cpos #\a "123456789a12343"))
-(format *stderr* "cond-cpos ~C ~S: ~S~%" #\a "123456789a12343" (cond-cpos #\a "123456789a12343"))
-(format *stderr* "condrev-cpos ~C ~S: ~S~%" #\a "123456789a12343" (condrev-cpos #\a "123456789a12343"))
-(format *stderr* "rev-cpos ~C ~S: ~S~%" #\a "123456789a12343" (rev-cpos #\a "123456789a12343"))
+(define (do-count c str)
+  (do ((i 0 (+ i 1))
+       (count 0))
+      ((= i (length str)) count)
+    (if (char=? c (string-ref str i))
+	(set! count (+ count 1)))))
 
-(format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" (tc-spos "asdf" "fdsghjkasdfhjgfrkl"))
-(format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" (do-spos "asdf" "fdsghjkasdfhjgfrkl"))
-(format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" (and-spos "asdf" "fdsghjkasdfhjgfrkl"))
-(format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (tc-spos "asdf" "fdsghjkasdf"))
-(format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (do-spos "asdf" "fdsghjkasdf"))
-(format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (and-spos "asdf" "fdsghjkasdf"))
-(format *stderr* "andrev-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" (andrev-spos "asdf" "fdsghjkasdf"))
-(format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (tc-spos "asdf" "fdsghjkasd"))
-(format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (do-spos "asdf" "fdsghjkasd"))
-(format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (and-spos "asdf" "fdsghjkasd"))
-(format *stderr* "andrev-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (andrev-spos "asdf" "fdsghjkasd"))
-(format *stderr* "call-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (call-spos "asdf" "fdsghjkasd"))
-(format *stderr* "cond-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" (cond-spos "asdf" "fdsghjkasd"))
+(define tc-count
+  (let ((c #f)
+	(str #f)
+	(len 0))
+    (define (tc-count-1 pos count)
+      (if (= pos len)
+	  count
+	  (tc-count-1 (+ pos 1)
+		      (if (char=? c (string-ref str pos)) (+ count 1) count))))
+    (lambda (c1 str1)
+      (set! c c1)
+      (set! str str1)
+      (set! len (length str1))
+      (tc-count-1 0 0))))
+
+
+(let ((val (strcop "asdfghjkl")))
+  (unless (string=? val "asdfghjkl") (format *stderr* "strcop ~S: ~S~%" "asdfghjkl" val))
+  (set! val (strup "abcdefghij"))
+  (unless (string=? val "ABCDEFGHIJ") (format *stderr* "strup ~S: ~S~%" "abcdefghij" val))
+
+  (set! val (tc-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "tc-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (tc2-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "tc2-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (tc3-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "tc3-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (do-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "do-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (and-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "and-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (andrev-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "andrev-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (call-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "call-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (cond-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "cond-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (condrev-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "condrev-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (rev-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "rev-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+
+  (set! val (tc-spos "asdf" "fdsghjkasdfhjgfrkl"))
+  (unless (eqv? val 7) (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" val))
+
+  (set! val (do-spos "asdf" "fdsghjkasdfhjgfrkl"))
+  (unless (eqv? val 7) (format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" val))
+
+  (set! val (and-spos "asdf" "fdsghjkasdfhjgfrkl"))
+  (unless (eqv? val 7) (format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdfhjgfrkl" val))
+
+  (set! val (tc-spos "asdf" "fdsghjkasdf"))
+  (unless (eqv? val 7) (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" val))
+
+  (set! val (do-spos "asdf" "fdsghjkasdf"))
+  (unless (eqv? val 7) (format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" val))
+
+  (set! val (and-spos "asdf" "fdsghjkasdf"))
+  (unless (eqv? val 7) (format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" val))
+
+  (set! val (andrev-spos "asdf" "fdsghjkasdf"))
+  (unless (eqv? val 7) (format *stderr* "andrev-spos ~S ~S: ~S~%" "asdf" "fdsghjkasdf" val))
+
+  (set! val (tc-spos "asdf" "fdsghjkasd"))
+  (when val (format *stderr* "tc-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val))
+
+  (set! val (do-spos "asdf" "fdsghjkasd"))
+  (when val (format *stderr* "do-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val))
+
+  (set! val (and-spos "asdf" "fdsghjkasd"))
+  (when val (format *stderr* "and-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val))
+
+  (set! val (andrev-spos "asdf" "fdsghjkasd"))
+  (when val (format *stderr* "andrev-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val))
+
+  (set! val (call-spos "asdf" "fdsghjkasd"))
+  (when val (format *stderr* "call-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val))
+
+  (set! val (cond-spos "asdf" "fdsghjkasd"))
+  (when val (format *stderr* "cond-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val)))
 
 
 (define-macro (time . expr) 
@@ -408,7 +483,18 @@
       (format *stderr* "call-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
 
       (set! t1 (time (cond-spos " a" bigstr)))
-      (format *stderr* "cond-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2))))
+      (format *stderr* "cond-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+
+
+      (let ((c1 0) (c2 0) (c3 0) (t3 0))
+	(set! t1 (time (set! c1 (char-count #\a bigstr))))
+	(set! t2 (time (set! c2 (do-count #\a bigstr))))
+	(set! t3 (time (set! c3 (tc-count #\a bigstr))))
+	(set! t2 (round (/ t2 t1)))
+	(set! t3 (round (/ t3 t1)))
+	(unless (eqv? t2 t3)
+	  (format *stderr* "counts: ~S ~S ~S, times: ~D ~D~%" c1 c2 c3 t2 t3)))
+      )
 
     (do ((i 0 (+ i 1)))
 	((= i 20))
