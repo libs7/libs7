@@ -242,6 +242,9 @@
 (format *stderr* "~NC tmock ~NC~%" 20 #\- 20 #\-)
 (system "./repl tmock.scm")
 
+(format *stderr* "~NC tstr ~NC~%" 20 #\- 20 #\-)
+(system "./repl concordance.scm")
+
 (format *stderr* "~NC tgc ~NC~%" 20 #\- 20 #\-)
 (system "./repl tgc.scm")
 

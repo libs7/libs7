@@ -2586,8 +2586,13 @@ void s7_show_history(s7_scheme *sc);
 #define set_mac_is_ok(p)               set_type1_bit(T_Pair(p), T_MAC_OK)
 /* marks a macro (via (macro...)) that has been checked -- easier (and slower) than making 4 or 5 more ops, op_macro_unchecked and so on */
 
+#define T_FULL_SAFETY_CHECKED          (1LL << (TYPE_BITS + BIT_ROOM + 36))
+#define T_SAFETY_CHECKED               (1 << 12)
+#define is_safety_checked(p)           has_type1_bit(T_Pair(p), T_SAFETY_CHECKED)
+#define set_safety_checked(p)          set_type1_bit(T_Pair(p), T_SAFETY_CHECKED)
+
 /* T_LOCAL has room (except symbol/pair) */
-#define UNUSED_BITS                    0x3000000000000000
+#define UNUSED_BITS                    0x2000000000000000
 
 #define T_GC_MARK                      0x8000000000000000
 #define is_marked(p)                   has_type_bit(p, T_GC_MARK)
@@ -4567,7 +4572,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 
   /* if debugging, all of these bits are being watched, so we need to access them directly */
   snprintf(buf, 1024,
-	   "type: %s? (%d), opt_op: %d, flags: #x%" PRIx64 "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+	   "type: %s? (%d), opt_op: %d, flags: #x%" PRIx64 "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   type_name(sc, obj, NO_ARTICLE),
 	   typ,
 	   optimize_op(obj),
@@ -4721,11 +4726,14 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	   /* bit 33+16 */
 	   ((full_typ & T_FULL_CASE_KEY) != 0) ?  ((is_symbol(obj)) ? " case-key" : " ?33?") : "",
 
-	   /* bit 33+17 */
+	   /* bit 34+16 */
 	   ((full_typ & T_FULL_HAS_GX) != 0) ?    ((is_pair(obj)) ? " has-gx" : " ?34?") : "",
 
-	   /* bit 33+18 */
+	   /* bit 35+16 */
 	   ((full_typ & T_FULL_UNKNOPT) != 0) ?    ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
+
+	   /* bit 36+16 */
+	   ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
 
 	   ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
 
@@ -4764,6 +4772,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_VERY_SAFE_CLOSURE) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_FULL_CASE_KEY) != 0) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_FULL_UNKNOPT) != 0) && (!is_pair(obj))) return(true);
+  if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_FULL_HAS_GX) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_FULL_DEFINER) != 0) &&
@@ -4781,8 +4790,7 @@ static bool has_odd_bits(s7_pointer obj)
       (!is_pair(obj)) && (!is_input_port(obj)) && (!is_let(obj)) && (!is_any_procedure(obj)) && (!is_symbol(obj)) && (!is_slot(obj)))
     return(true);
   if (((full_typ & T_MUTABLE) != 0) &&
-      (!is_number(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_iterator(obj)) &&
-      (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj)))
+      (!is_number(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_iterator(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj)))
     return(true);
   if (((full_typ & T_GENSYM) != 0) && (!is_slot(obj)) && (!is_any_closure(obj)) &&
       (!is_let(obj)) && (!is_symbol(obj)) && (!is_string(obj)) && (!is_hash_table(obj)) && (!is_pair(obj)) && (!is_any_vector(obj)))
@@ -30271,7 +30279,7 @@ static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
   s7_pointer port, func;
   func = car(args);
 
-  if (!is_procedure(func))
+  if (!is_any_procedure(func)) /* is_procedure is too lenient: we need to flag (open-input-function (block)) for example */
     return(wrong_type_argument_with_type(sc, sc->open_input_function_symbol, 0, func, a_procedure_string));
   if (!s7_is_aritable(sc, func, 1))
     return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port function, ~A, should take one argument", 58), func)));
@@ -30332,7 +30340,7 @@ static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
   s7_pointer port, func;
   func = car(args);
 
-  if (!is_procedure(func))
+  if (!is_any_procedure(func))
     return(wrong_type_argument_with_type(sc, sc->open_output_function_symbol, 0, func, a_procedure_string));
   if (!s7_is_aritable(sc, func, 1))
     return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "output-function-port function, ~A, should take one argument", 59), func)));
@@ -60418,7 +60426,7 @@ static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer 
 {
 #if 0
   if (is_pair(tree))
-    fprintf(stderr, "fx_tree %s %s %d %s %s\n", display_80(tree), (is_optimized(tree)) ? op_names[optimize_op(tree)] : "unopt", has_fx(tree), display(var1), (var2) ? display(var2) : "");
+    fprintf(stderr, "%s[%d]: fx_tree %s %s %d %s %s\n", func, line, display_80(tree), (is_optimized(tree)) ? op_names[optimize_op(tree)] : "unopt", has_fx(tree), display(var1), (var2) ? display(var2) : "");
 #endif
 
   if ((!is_pair(tree)) ||
@@ -68246,6 +68254,18 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
 
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_pointer var_list, bool *has_set);
 
+static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, bool *has_set)
+{
+  if (!is_pair(body)) return(true);
+  if (!is_safety_checked(body))
+    {
+      set_safety_checked(body);
+      if (!(do_is_safe(sc, body, (stepper != sc->nil) ? list_1(sc, stepper) : sc->nil, var_list, has_set)))
+	set_unsafe_do(body);
+    }
+  return(!is_unsafe_do(body));
+}
+
 #define SIZE_O NUM_VUNIONS
 
 static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
@@ -68607,7 +68627,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  (cadr(ind_step) == ind) &&
 	  (caddr(ind_step) == int_one) &&
 	  (is_null(cdddr(ind_step))) &&
-	  (do_is_safe(sc, cdddr(car_x), sc->w = list_1(sc, ind), sc->nil, &has_set)))
+	  (do_passes_safety_check(sc, cdddr(car_x), ind, sc->nil, &has_set)))
 	{
 	  s7_pointer slot;
 	  slot = let_slots(let);
@@ -68648,7 +68668,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	      (cadr(ind_step) == ind) &&
 	      (is_null(cddr(ind_step))) &&
 	      (body_len == 1) &&
-	      (do_is_safe(sc, cdddr(car_x), sc->w = list_1(sc, ind), sc->nil, &has_set)))
+	      (do_passes_safety_check(sc, cdddr(car_x), ind, sc->nil, &has_set)))
 	    opc->v[0].fp = opt_do_list_simple;
 	}}
   return(true);
@@ -77983,14 +78003,7 @@ static void op_let_star_fx(s7_scheme *sc)
       s7_pointer val;
       val = fx_call(sc, cdar(p)); /* eval in outer let */
       if (let_counter == sc->capture_let_counter)
-	/* make_slot_1(sc, sc->curlet, caar(p), val); */
-	{
-#if S7_DEBUGGING
-	  if (let_id(sc->curlet) < symbol_id(caar(p)))
-	    fprintf(stderr, "inversion for %s: %" print_s7_int " %" print_s7_int "\n", display(caar(p)), let_id(sc->curlet), symbol_id(caar(p)));
-#endif
-	  add_slot_checked(sc, sc->curlet, caar(p), val);
-	}
+	add_slot_checked(sc, sc->curlet, caar(p), val);
       else
 	{
 	  sc->curlet = make_let_with_slot(sc, sc->curlet, caar(p), val);
@@ -78093,7 +78106,6 @@ static void check_letrec(s7_scheme *sc, bool letrec)
 }
 
 static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer func_name, s7_pointer outer_let);
-#define SAFETY_FIRST 1
 
 static void letrec_setup_closures(s7_scheme *sc)
 {
@@ -78106,14 +78118,12 @@ static void letrec_setup_closures(s7_scheme *sc)
 	if ((!is_safe_closure(func)) ||
 	    (!is_optimized(car(closure_body(func)))))
 	  optimize_lambda(sc, true, slot_symbol(slot), closure_args(func), closure_body(func));
-#if SAFETY_FIRST
 	if (is_safe_closure_body(closure_body(func)))
 	  {
 	    set_safe_closure(func);
 	    if (is_very_safe_closure_body(closure_body(func)))
 	      set_very_safe_closure(func);
 	  }
-#endif
 	make_funclet(sc, func, slot_symbol(slot), closure_let(func));
 	/*  else closure_set_let(new_func, sc->curlet); -- maybe funclet not needed here? */
       }
@@ -82160,7 +82170,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 				   ((is_c_function(setv)) &&
 				    (is_safe_procedure(c_function_setter(setv)))))))
 			      return(false);
-			    (*has_set) = true;
+			    if (has_set) (*has_set) = true;
 			  }
 			else
 			  {
@@ -82175,7 +82185,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 				  return(false);
 			      }
 
-			    if (!direct_memq(cadr(expr), var_list)) /* is some non-local variable being set? */
+			    if ((has_set) && (!direct_memq(cadr(expr), var_list))) /* is some non-local variable being set? */
 			      (*has_set) = true;
 			  }
 			if (!do_is_safe(sc, cddr(expr), steppers, var_list, has_set))
@@ -82259,7 +82269,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 				 (x == sc->list_symbol) ||
 				 (x == sc->string_symbol));
 			}
-		      if (!direct_memq(cadr(expr), var_list))         /* non-local is being changed */
+		      if ((has_set) && (!direct_memq(cadr(expr), var_list)))         /* non-local is being changed */
 			{
 			  if ((direct_memq(cadr(expr), steppers)) ||  /* stepper is being set? */
 			      (!is_pair(cddr(expr))) ||
@@ -82655,7 +82665,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		      (do_is_safe(sc, body, sc->w = list_1(sc, car(v)), sc->nil, &has_set)))
 		    {
 		      pair_set_syntax_op(form, OP_SAFE_DO);          /* safe_do: body is safe, step by 1 */
-		      /* no permanent let here because apparently do_body_is_safe accepts recursive calls? */
+		      /* no permanent let here because apparently do_is_safe accepts recursive calls? */
 		      if ((!has_set) &&
 			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			{
@@ -82728,16 +82738,12 @@ static s7_pointer check_do(s7_scheme *sc)
       {
 	s7_pointer var;
 	var = car(p);
-
 	set_c_call_direct(cdr(var), fx_choose(sc, cdr(var), sc->curlet, let_symbol_is_safe)); /* init val */
-
 	if (is_pair(cddr(var)))
 	  {
 	    s7_pointer step_expr;
 	    step_expr = caddr(var);
-
 	    set_c_call_direct(cddr(var), fx_choose(sc, cddr(var), vars, do_symbol_is_safe)); /* sets opt2(cddr(var)), not opt1 */
-
 	    if (!is_pair(step_expr))                /* (i 0 0) */
 	      {
 		if (cadr(var) == caddr(var))        /* not types match: (i x y) etc */
@@ -82800,40 +82806,42 @@ static s7_pointer check_do(s7_scheme *sc)
 	else set_opt2_con(cdr(form), int_zero);
       }
 
-    if (last_stepper)
+    if (do_passes_safety_check(sc, body, sc->nil, sc->nil, NULL))
       {
-	fx_tree(sc, end, last_stepper, previous_stepper);
-
-	if ((last_expr) && (is_pair(last_expr)))
+	if (last_stepper)
 	  {
-	    if ((is_funclet(sc->curlet)) && (tis_slot(let_slots(sc->curlet))))
-	      {
-		s7_pointer s1;
-		s1 = let_slots(sc->curlet);
-		fx_tree_in(sc, last_expr, slot_symbol(s1), (tis_slot(next_slot(s1))) ? slot_symbol(next_slot(s1)) : NULL);
-	      }
-	    last_expr = cdr(last_expr);
-	    if (is_pair(last_expr))
-	      fx_tree(sc, last_expr, last_stepper, previous_stepper);
-
-	    if ((previous_expr) && (is_pair(previous_expr)))
+	    fx_tree(sc, end, last_stepper, previous_stepper);
+	    
+	    if ((last_expr) && (is_pair(last_expr)))
 	      {
 		if ((is_funclet(sc->curlet)) && (tis_slot(let_slots(sc->curlet))))
 		  {
 		    s7_pointer s1;
 		    s1 = let_slots(sc->curlet);
-		    fx_tree_in(sc, previous_expr, slot_symbol(s1), (tis_slot(next_slot(s1))) ? slot_symbol(next_slot(s1)) : NULL);
+		    fx_tree_in(sc, last_expr, slot_symbol(s1), (tis_slot(next_slot(s1))) ? slot_symbol(next_slot(s1)) : NULL);
 		  }
-		previous_expr = cdr(previous_expr);
-		if (is_pair(previous_expr))
-		  fx_tree(sc, previous_expr, last_stepper, previous_stepper);
-	      }}}
-    if ((is_pair(body)) && (is_null(cdr(body))) &&
-	(is_fxable(sc, car(body))))
-      {
-	fx_annotate_arg(sc, body, collect_variables(sc, vars, sc->nil));
-	fx_tree(sc, body, last_stepper, previous_stepper);
-      }}
+		last_expr = cdr(last_expr);
+		if (is_pair(last_expr))
+		  fx_tree(sc, last_expr, last_stepper, previous_stepper);
+		
+		if ((previous_expr) && (is_pair(previous_expr)))
+		  {
+		    if ((is_funclet(sc->curlet)) && (tis_slot(let_slots(sc->curlet))))
+		      {
+			s7_pointer s1;
+			s1 = let_slots(sc->curlet);
+			fx_tree_in(sc, previous_expr, slot_symbol(s1), (tis_slot(next_slot(s1))) ? slot_symbol(next_slot(s1)) : NULL);
+		      }
+		    previous_expr = cdr(previous_expr);
+		    if (is_pair(previous_expr))
+		      fx_tree(sc, previous_expr, last_stepper, previous_stepper);
+		  }}}
+	if ((is_pair(body)) && (is_null(cdr(body))) &&
+	    (is_fxable(sc, car(body))))
+	  {
+	    fx_annotate_arg(sc, body, collect_variables(sc, vars, sc->nil));
+	    fx_tree(sc, body, last_stepper, previous_stepper);
+	  }}}
   return(sc->nil);
 }
 
@@ -86363,14 +86371,12 @@ static void op_define_with_setter(s7_scheme *sc)
       s7_pointer new_func, new_let;
       new_func = sc->value;
 
-#if SAFETY_FIRST
       if (is_safe_closure_body(closure_body(new_func)))
 	{
 	  set_safe_closure(new_func);
 	  if (is_very_safe_closure_body(closure_body(new_func)))
 	    set_very_safe_closure(new_func);
 	}
-#endif
       new_let = make_funclet(sc, new_func, code, closure_let(new_func));
 
       /*  else closure_set_let(new_func, sc->curlet); */
@@ -86429,8 +86435,7 @@ static void op_define_with_setter(s7_scheme *sc)
   else
     {
       s7_pointer lx;
-      /* add the newly defined thing to the current environment */
-      lx = symbol_to_local_slot(sc, code, sc->curlet);
+      lx = symbol_to_local_slot(sc, code, sc->curlet); /* add the newly defined thing to the current environment */
       if (is_slot(lx))
 	{
 	  if (is_immutable(lx))
@@ -91270,8 +91275,7 @@ static goto_t trailers(s7_scheme *sc)
 	      return(goto_top_no_pop);
 	    }
 	  sc->value = lookup_global(sc, carc);
-	  set_optimize_op(code, OP_PAIR_SYM);
-	  /* pair_sym -> unknown* check seems to make no difference? maybe split pair_sym? */
+	  set_optimize_op(code, OP_PAIR_SYM);	  /* pair_sym -> unknown* check seems to make no difference? maybe split pair_sym? */
 	  return(goto_eval_args_top);
 	}
       if (is_pair(carc))  /* very uncommon case: car is either itself a pair or some non-symbol */
@@ -97945,25 +97949,25 @@ int main(int argc, char **argv)
  * tpeak     115            128
  * tauto     648           1200
  * tref      691            741
- * tshoot    840           1673
- * index    1025           1087
- * tmock    1178           7733
- * s7test   1858           4525
+ * tshoot    883           1673
+ * index    1026           1087
+ * tmock    1177           7733
+ * s7test   1860           4525
  * lt       2123           2111
  * tcopy    2256           2313
- * tform    2278           3256
- * tmat     2333           2485
+ * tform    2284           3256
+ * tmat     2285           2485
  * tread    2440           2639
  * tvect    2456           2687
  * fbench   2688           3091
- * trclo    2721           4502
+ * trclo    2715           4502
  * tb       2735           3554
  * titer    2865           2883
- * tmap     2886 2889      3825
- * tsort    3091 3105      3809
+ * tmap     2889           3825
+ * tsort    3105           3809
  * tset     3253           3253
- * dup      3315           3548
- * tmac     3320           3430
+ * dup      3337           3548
+ * tmac     3317           3430
  * teq      4068           4078
  * tfft     4142           11.5
  * tio      4570           4595
@@ -97971,11 +97975,11 @@ int main(int argc, char **argv)
  * tclo     4787           5119
  * tlet     4925           5863
  * tcase    4960           5010
- * tstr     4892 4819
+ * tstr     4820
  * trec     5976           7825
  * tnum     6348           58.3
  * tgen     11.2           12.0
- * thash    11.9           37.5
+ * thash    11.8           37.5
  * tgc      11.9
  * tall     15.6           27.0
  * calls    36.7           60.6
@@ -97992,6 +97996,6 @@ int main(int argc, char **argv)
  *   p_p[p]_unchecked could be installed in p_pp_ok (it's only used if sig and symbol cadr??): currently no p_p_unchecked type
  *   there is only one p_pp_unchecked case: hash-table-ref! tmp has char_eq_p_pp_unchecked
  * can we see that *_optimize is being called a lot, and limits are small?
- * why didn't lint output get displayed in nrepl -- stdout|err are trapped?
+ * why didn't lint output get displayed in nrepl -- stdout|err are trapped
  * op_tc_cond_a_z_a_laa_z (the if form is set up already), check_tc_* code is a superfund site
  */
