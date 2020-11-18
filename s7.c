@@ -313,10 +313,16 @@
 
 #ifndef WITH_VECTORIZE
 #if (defined(__GNUC__) && __GNUC__ >= 5)
-  #define WITH_VECTORIZE 1
+  #define Vectorized __attribute__((optimize("tree-vectorize")))
 #else
-  #define WITH_VECTORIZE 0
+  #define Vectorized
 #endif
+#endif
+
+#if WITH_GCC
+  #define Sentinel __attribute__((sentinel))
+#else
+  #define Sentinel
 #endif
 
 #ifndef S7_ALIGNED
@@ -1467,11 +1473,7 @@ static void memclr(void *s, size_t n)
 #if POINTER_32
 #define memclr64 memclr
 #else
-#if WITH_VECTORIZE
-static void memclr64(void *p, size_t bytes) __attribute__((optimize("tree-vectorize")));
-#endif
-
-static void memclr64(void *p, size_t bytes)
+static Vectorized void memclr64(void *p, size_t bytes)
 {
   size_t i, n;
   int64_t *vals;
@@ -3811,10 +3813,7 @@ static bool local_strncmp(const char *s1, const char *s2, size_t n)
 
 #define strings_are_equal_with_length(Str1, Str2, Len) (local_strncmp(Str1, Str2, Len))
 
-#if WITH_GCC
-static size_t catstrs(char *dst, size_t len, ...) __attribute__ ((sentinel));
-#endif
-static size_t catstrs(char *dst, size_t len, ...) /* NULL-terminated arg list */
+static Sentinel size_t catstrs(char *dst, size_t len, ...) /* NULL-terminated arg list */
 {
   const char *s, *dend;
   char *d;
@@ -3830,10 +3829,7 @@ static size_t catstrs(char *dst, size_t len, ...) /* NULL-terminated arg list */
   return(d - dst);
 }
 
-#if WITH_GCC
-static size_t catstrs_direct(char *dst, const char *s1, ...) __attribute__ ((sentinel));
-#endif
-static size_t catstrs_direct(char *dst, const char *s1, ...) /* NULL-terminated arg list, dst is destination only (assumed empty), all args known to fit in dst */
+static Sentinel size_t catstrs_direct(char *dst, const char *s1, ...) /* NULL-terminated arg list, dst is destination only (assumed empty), all args known to fit in dst */
 {
   const char *s;
   char *d;
@@ -7761,7 +7757,7 @@ static inline uint64_t raw_string_hash(const uint8_t *key, s7_int len)
       memcpy((void *)cx, (void *)key, 8);
       y = 0;
       len -= 8;
-      memcpy((void *)cy, (void *)(key + 8), (len > 8) ? 8 : len);
+      memcpy((void *)cy, (void *)(key + 8), (len > 8) ? 8 : len); /* compiler complaint here is bogus */
       x += y;  /* better than |= but still not great if (for example) > 1B gensyms -- maybe add z? */
     }
   return(x);
@@ -15925,7 +15921,7 @@ the optional 'radix' argument is ignored: (string->number \"#x11\" 2) -> 17 not 
 
 
 /* -------------------------------- abs -------------------------------- */
-static s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
+static inline s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
 {
   switch (type(x))
     {
@@ -40725,13 +40721,7 @@ s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *da
 
 
 /* -------------------------------- vector-fill! -------------------------------- */
-#if WITH_VECTORIZE
-static void float_vector_fill(s7_scheme *sc, s7_pointer vec, s7_double x) __attribute__((optimize("tree-vectorize")));
-static void int_vector_fill(s7_scheme *sc, s7_pointer vec, s7_int k) __attribute__((optimize("tree-vectorize")));
-static void normal_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj) __attribute__((optimize("tree-vectorize")));
-#endif
-
-static void float_vector_fill(s7_scheme *sc, s7_pointer vec, s7_double x)
+static Vectorized void float_vector_fill(s7_scheme *sc, s7_pointer vec, s7_double x)
 {
   s7_int len;
   len = vector_length(vec);
@@ -40756,7 +40746,7 @@ static void float_vector_fill(s7_scheme *sc, s7_pointer vec, s7_double x)
     }
 }
 
-static void int_vector_fill(s7_scheme *sc, s7_pointer vec, s7_int k)
+static Vectorized void int_vector_fill(s7_scheme *sc, s7_pointer vec, s7_int k)
 {
   s7_int len;
   len = vector_length(vec);
@@ -40791,7 +40781,7 @@ static void byte_vector_fill(s7_scheme *sc, s7_pointer vec, uint8_t byte)
   else local_memset((void *)(byte_vector_bytes(vec)), byte, len);
 }
 
-static void normal_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
+static Vectorized void normal_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
 {
   s7_pointer *orig;
   s7_int len, i, left;
@@ -42702,12 +42692,7 @@ static s7_pointer g_float_multivector(s7_scheme *sc, s7_int dims, s7_pointer dat
   return(s7_copy_1(sc, sc->float_vector_symbol, set_plist_2(sc, sc->value, sc->args)));
 }
 
-#if WITH_VECTORIZE
-static s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect) __attribute__((optimize("tree-vectorize")));
-static s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect)
-#else
-s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect)
-#endif
+static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect)
 {
   s7_int i, len;
   s7_pointer new_vect;
@@ -42773,9 +42758,7 @@ s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect)
   return(NULL);
 }
 
-#if WITH_VECTORIZE
 s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect) {return(s7_vector_copy_1(sc, old_vect));}
-#endif
 
 static s7_pointer univect_ref(s7_scheme *sc, s7_pointer args, s7_pointer caller, int32_t typ)
 {
@@ -57139,6 +57122,11 @@ static s7_pointer fx_c_opssq_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_p_t)opt2_direct(cdr(arg)))(sc, ((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt3_sym(arg)), lookup(sc, opt1_sym(cdr(arg))))));
 }
 
+static s7_pointer fx_c_optuq_direct(s7_scheme *sc, s7_pointer arg)
+{
+  return(((s7_p_p_t)opt2_direct(cdr(arg)))(sc, ((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, t_lookup(sc, opt3_sym(arg), arg), u_lookup(sc, opt1_sym(cdr(arg)), arg))));
+}
+
 static s7_pointer fx_c_optuq(s7_scheme *sc, s7_pointer arg)
 {
   set_car(sc->t2_1, t_lookup(sc, opt3_sym(arg), arg));
@@ -59127,10 +59115,7 @@ static int32_t fx_count(s7_scheme *sc, s7_pointer x)
   return(count);
 }
 
-static bool is_code_constant(s7_scheme *sc, s7_pointer p)
-{
-  return((is_pair(p)) ? (car(p) == sc->quote_symbol) : is_constant(sc, p));
-}
+static bool is_code_constant(s7_scheme *sc, s7_pointer p) {return((is_pair(p)) ? (car(p) == sc->quote_symbol) : is_constant(sc, p));}
 
 static inline s7_pointer check_quote(s7_scheme *sc, s7_pointer code);
 
@@ -59826,37 +59811,6 @@ static bool with_c_call(s7_pointer p, s7_function f)
   return(true);
 }
 
-#if S7_DEBUGGING && (0)
-typedef s7_pointer (*s7_fx_f)(s7_scheme *sc, s7_pointer p);
-static s7_fx_f tu_names[] = {
-	fx_t, fx_u, fx_T, fx_U, fx_num_eq_ti, fx_num_eq_ui, fx_num_eq_Ti, fx_add_t1, fx_add_u1, fx_add_T1, fx_add_U1, fx_add_V1, fx_add_tf, fx_add_ti, fx_add_ts,
-	fx_add_tu, fx_add_ut, fx_add_us, fx_subtract_t1, fx_subtract_T1, fx_subtract_U1, fx_subtract_u1, fx_subtract_ti, fx_subtract_tf, fx_subtract_ts,
-	fx_subtract_tu, fx_subtract_ut, fx_subtract_us, fx_is_eq_tc, fx_is_eq_car_t_q, fx_is_pair_car_t, fx_is_pair_cdr_t, fx_is_pair_cadr_t, fx_is_pair_cddr_t,
-	fx_is_null_cdr_t, fx_is_null_cddr_t, fx_is_symbol_cadr_t, fx_is_symbol_car_t, fx_c_t, fx_c_T, fx_c_u, fx_c_u_direct, fx_is_positive_u, fx_is_zero_u,
-	fx_c_t_direct, fx_length_t, fx_cdr_t, fx_cdr_u, fx_car_t, fx_car_u, fx_cadr_t, fx_cddr_t, fx_cddr_u, fx_is_null_t, fx_is_null_u, fx_is_symbol_t,
-	fx_is_eof_t, fx_is_type_t, fx_is_type_u, fx_is_string_t, fx_is_pair_t, fx_is_pair_u, fx_is_vector_t, fx_not_t, fx_not_is_pair_t, fx_not_is_null_t,
-	fx_not_is_null_u, fx_not_is_symbol_t, fx_c_tc, fx_c_si_direct, fx_c_ti_direct, fx_c_tc_direct, fx_vector_ref_direct, fx_c_uc, fx_char_eq_tc,
-	fx_c_ct, fx_c_ct_direct, fx_c_ct_cons, fx_c_cu, fx_vref_st, fx_vref_gt, fx_c_ts_direct, fx_c_st_direct, fx_c_gt_direct, fx_c_st, fx_c_ts, fx_c_tu,
-	fx_c_tU, fx_c_tU_direct, fx_cons_ts, fx_cons_tU, fx_multiply_ts, fx_multiply_Ts, fx_multiply_tu, fx_sqr_t, fx_geq_ts, fx_geq_us, fx_geq_tT, fx_geq_tu,
-	fx_gt_ts, fx_gt_tu, fx_gt_ut, fx_gt_tg, fx_gt_tT, fx_gt_ti, fx_leq_ts, fx_leq_tu, fx_leq_ti, fx_lt_ts, fx_lt_tu, fx_lt_tU, fx_lt_tf, fx_lt_ti,
-	fx_geq_tf, fx_geq_ti, fx_num_eq_ts, fx_num_eq_tg, fx_num_eq_tT, fx_num_eq_tu, fx_num_eq_us, fx_is_eq_ts, fx_is_eq_tu, fx_hash_table_ref_st,
-	fx_lint_let_ref_t, fx_c_tus, fx_c_tcu_direct, fx_c_tcs_direct, fx_c_tcs, fx_c_optq, fx_c_optq_direct, fx_c_car_t, fx_c_car_u, fx_c_cdr_t,
-	fx_is_type_optq, fx_is_type_car_t, fx_c_optuq, fx_c_opstq, fx_c_opstq_direct, fx_not_oputq, fx_not_lt_ut, fx_vref_vref_tu_s, fx_vref_vref_gs_t,
-	fx_c_opstq_c, fx_cons_car_t_s, fx_c_optq_s, fx_c_optq_s_direct, fx_c_opuq_t, fx_c_opuq_t_direct, fx_cons_opuq_t, fx_cons_car_u_t, fx_c_optq_cu,
-	fx_c_optq_c, fx_c_optq_c_direct, fx_c_optq_i_direct, fx_vref_g_vref_gt, fx_c_t_car_u, fx_add_u_car_t, fx_c_optq_optq_direct, fx_c_opsq_optuq_direct,
-	fx_num_eq_car_s_add_tu, fx_num_eq_car_s_subtract_tu, fx_c_Tca, fx_c_ta, fx_c_at, fx_car_car_tu, fx_lt_ut, NULL
-};
-
-static bool is_tu_name(s7_fx_f f)
-{
-  int i;
-  for (i = 0; tu_names[i]; i++)
-    if (tu_names[i] == f)
-      return(true);
-  return(false);
-}
-#endif
-
 static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2)
 {
   s7_pointer p;
@@ -59908,12 +59862,6 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 			  if (c_callee(tree) == fx_c_ts_direct) return(with_c_call(tree, fx_c_tU_direct));
 			  if (c_callee(tree) == fx_lt_ts) return(with_c_call(tree, fx_lt_tU));
 			}}}}}}
-#if S7_DEBUGGING && (0)
-  if ((!is_tu_name(c_callee(tree))) &&
-      ((s7_tree_memq(sc, var1, p)) ||
-       ((var2) && (s7_tree_memq(sc, var2, p)))))
-    fprintf(stderr, "outer %s [%s %s] %s\n", op_names[optimize_op(p)], display(var1), (var2) ? display(var2) : "", display_80(p));
-#endif
   return(false);
 }
 
@@ -60286,12 +60234,13 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }}
       if (c_callee(tree) == fx_c_opssq_direct)
 	{
+	  if ((cadadr(p) == var1) && (caddadr(p) == var2)) return(with_c_call(tree, fx_c_optuq_direct));
 	  if (caddadr(p) == var1)
 	    {
 	      set_opt1_sym(cdr(p), var1);
 	      if ((opt2_direct(cdr(p)) == (s7_pointer)is_zero_p_p) && (opt3_direct(cdr(p)) == (s7_pointer)remainder_p_pp))
 		return(with_c_call(tree, fx_is_zero_remainder_1));
-	      return(with_c_call(tree, fx_c_opstq_direct)); /* oputq never happens */
+	      return(with_c_call(tree, fx_c_opstq_direct));
 	    }}
       if (cadadr(p) == var2)
 	{
@@ -60412,12 +60361,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }}
       break;
     }
-#if S7_DEBUGGING && (0)
-  if ((!is_tu_name(c_callee(tree))) &&
-      ((s7_tree_memq(sc, var1, p)) ||
-       ((var2) && (s7_tree_memq(sc, var2, p)))))
-    fprintf(stderr, "%s [%s %s] %s\n", op_names[optimize_op(p)], display(var1), (var2) ? display(var2) : "", display_80(p));
-#endif
   return(false);
 }
 
@@ -75779,7 +75722,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 
   if (!is_list(args))
     {
-      if (is_constant(sc, args))                                  /* (lambda* :a ...) */
+      if (is_constant(sc, args))                                   /* (lambda* :a ...) */
 	eval_error(sc, "lambda* parameter '~S is a constant", 35, args);
       if (is_symbol(args))
 	set_local(args);
@@ -75795,22 +75738,22 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
       if (is_pair(car_w))
 	{
 	  has_defaults = true;
-	  if (is_constant(sc, car(car_w)))                            /* (lambda* ((:a 1)) ...) */
+	  if (is_constant(sc, car(car_w)))                         /* (lambda* ((:a 1)) ...) */
 	    eval_error(sc, "lambda* parameter '~A is a constant", 35, car(car_w));
-	  if (symbol_is_in_arg_list(caar(w), cdr(w)))                 /* (lambda* ((a 1) a) ...) */
+	  if (symbol_is_in_arg_list(caar(w), cdr(w)))              /* (lambda* ((a 1) a) ...) */
 	    eval_error(sc, "lambda* parameter '~A is used twice in the argument list", 56, car(car_w));
 
-	  if (!is_pair(cdr(car_w)))                                  /* (lambda* ((a . 0.0)) a) */
+	  if (!is_pair(cdr(car_w)))                               /* (lambda* ((a . 0.0)) a) */
 	    {
-	      if (is_null(cdr(car_w)))                               /* (lambda* ((a)) ...) */
+	      if (is_null(cdr(car_w)))                            /* (lambda* ((a)) ...) */
 		eval_error(sc, "lambda* parameter default value missing? '~A", 44, car_w);
 	      eval_error(sc, "lambda* parameter is a dotted pair? '~A",39,  car_w);
 	    }
-	  if ((is_pair(cadr(car_w))) &&                              /* (lambda* ((a (quote . -1))) ...) */
+	  if ((is_pair(cadr(car_w))) &&                           /* (lambda* ((a (quote . -1))) ...) */
 	      (s7_list_length(sc, cadr(car_w)) < 0))
 	    eval_error(sc, "lambda* parameter default value is improper? ~A", 47, car_w);
 
-	  if (is_not_null(cddr(car_w)))                              /* (lambda* ((a 0.0 'hi)) a) */
+	  if (is_not_null(cddr(car_w)))                           /* (lambda* ((a 0.0 'hi)) a) */
 	    eval_error(sc, "lambda* parameter has multiple default values? '~A", 50, car_w);
 
 	  set_local(car(car_w));
@@ -75823,17 +75766,17 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 		{
 		  if (car_w == sc->key_allow_other_keys_symbol)
 		    {
-		      if (is_not_null(cdr(w)))                /* (lambda* (:allow-other-keys x) x) */
+		      if (is_not_null(cdr(w)))                    /* (lambda* (:allow-other-keys x) x) */
 			eval_error(sc, ":allow-other-keys should be the last parameter: ~A", 50, args);
 		      if (w == top)
 			eval_error(sc, ":allow-other-keys can't be the only parameter: ~A", 49, args);
 		      set_allow_other_keys(top);
 		      set_cdr(v, sc->nil);
 		    }
-		  else                                        /* (lambda* (pi) ...) */
+		  else                                            /* (lambda* (pi) ...) */
 		    eval_error(sc, "lambda* parameter '~A is a constant", 35, car_w);
 		}
-	      if (symbol_is_in_arg_list(car_w, cdr(w)))       /* (lambda* (a a) ...) or (lambda* (a . a) ...) */
+	      if (symbol_is_in_arg_list(car_w, cdr(w)))           /* (lambda* (a a) ...) or (lambda* (a . a) ...) */
 		eval_error(sc, "lambda* parameter '~A is used twice in the argument list", 56, car_w);
 
 	      if (!is_keyword(car_w)) set_local(car_w);
@@ -75856,7 +75799,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	    }}}
   if (is_not_null(w))
     {
-      if (is_constant(sc, w))                             /* (lambda* (a . 0.0) a) or (lambda* (a . :b) a) */
+      if (is_constant(sc, w))                                     /* (lambda* (a . 0.0) a) or (lambda* (a . :b) a) */
 	eval_error(sc, "lambda* :rest parameter '~A is a constant", 41, w);
       if (is_symbol(w))
 	set_local(w);
@@ -75997,9 +75940,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  }
 
 	case OP_SET:
-	  /* if we set func, we have to make sure we abandon the tail call scan:
-	   * (let () (define (hi a) (let ((v (vector 1 2 3))) (set! hi v) (hi a))) (hi 1))
-	   */
+	  /* if we set func, we have to abandon the tail call scan: (let () (define (hi a) (let ((v (vector 1 2 3))) (set! hi v) (hi a))) (hi 1)) */
 	  if (!is_pair(cddr(x))) return(UNSAFE_BODY);
 	  if (cadr(x) == func)
 	    return(UNSAFE_BODY);
@@ -97975,7 +97916,7 @@ int main(int argc, char **argv)
  * tclo     4787           5119
  * tlet     4925           5863
  * tcase    4960           5010
- * tstr     4820
+ * tstr     5093
  * trec     5976           7825
  * tnum     6348           58.3
  * tgen     11.2           12.0
@@ -97995,7 +97936,6 @@ int main(int argc, char **argv)
  * check char_upcase|eq_unchecked for char_position etc
  *   p_p[p]_unchecked could be installed in p_pp_ok (it's only used if sig and symbol cadr??): currently no p_p_unchecked type
  *   there is only one p_pp_unchecked case: hash-table-ref! tmp has char_eq_p_pp_unchecked
- * can we see that *_optimize is being called a lot, and limits are small?
- * why didn't lint output get displayed in nrepl -- stdout|err are trapped
- * op_tc_cond_a_z_a_laa_z (the if form is set up already), check_tc_* code is a superfund site
+ * op_tc_cond_a_z_a_laa_z (the if form is set up already), cond-a-z-la|a-la-z
+ * floor/ et al happen a lot -- if ints, avoid ratio
  */

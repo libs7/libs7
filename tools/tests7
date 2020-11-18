@@ -9,6 +9,7 @@ cp tools/*.scm .
 cp ~/cl/make-repl .
 cp ~/cl/low-primes.scm .
 cp ~/cl/full-s7test.scm .
+cp ~/cl/lt.scm .
 
 echo ' '
 echo '-------- base case --------'

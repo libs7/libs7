@@ -51,6 +51,29 @@
 
 
 ;;; --------------------------------
+
+(define (searcher)
+  ;; }\n}
+  (call-with-input-file "s7.c"
+    (lambda (p)
+      (let ((last1 ""))
+	(do ((this (read-line p) (read-line p))
+	     (line 0 (+ line 1)))
+	    ((eq? this #<eof>))
+	  (let ((len (length this)))
+	    (unless (or (= len 0)
+			(char=? (string-ref this 0) #\}))
+	      (do ((i 0 (+ i 1)))
+		  ((or (>= i len)
+		       (not (char-whitespace? (string-ref this i))))
+		   (set! this (substring this i))))
+	      (when (and (> (length this) 0) (char=? (string-ref this 0) #\})
+			 (> (length last1) 0) (char=? (string-ref last1 0) #\}))
+		(format #f "~D ~S~%" line last1)))
+	    (set! last1 this)))))))
+
+
+;;; --------------------------------
 ;;; various simple cases
 
 (define (strcop str) ; opt_dotimes
@@ -61,11 +84,20 @@
       (string-set! new-str i (string-ref str i)))))
 
 (define (strup str)
-  (let ((len (length str))
-	(new-str (copy str)))
+  (let* ((len (length str))
+	 (new-str (make-string len)))
     (do ((i 0 (+ i 1)))
 	((= i len) new-str)
       (string-set! new-str i (char-upcase (string-ref str i))))))
+
+(define (let-strup str)
+  (let* ((len (length str))
+	 (new-str (make-string len)))
+    (let loop ((i 0))
+      (cond ((= i len) new-str)
+	    (else 
+	     (string-set! new-str i (char-upcase (string-ref str i)))
+	     (loop (+ i 1)))))))
 
 
 (define tc-cpos ; op_tc_if_a_z_if_a_z_la [opt]
@@ -196,6 +228,13 @@
        (and (< i len)
 	    i))))
 
+(define (let-cpos c str)
+  (let ((len (length str)))
+    (let loop ((i 0))
+      (cond ((= i len) #f)
+	    ((char=? c (string-ref str i)) i)
+	    (else (loop (+ i 1)))))))
+
 (define (call-cpos c str)
   (call-with-exit
    (lambda (return)
@@ -312,11 +351,12 @@
       ((not pos) count)))
 
 (define (do-count c str)
-  (do ((i 0 (+ i 1))
-       (count 0))
-      ((= i (length str)) count)
-    (if (char=? c (string-ref str i))
-	(set! count (+ count 1)))))
+  (let ((len (length str)))
+    (do ((i 0 (+ i 1))
+	 (count 0))
+	((= i len) count)
+      (if (char=? c (string-ref str i))
+	  (set! count (+ count 1))))))
 
 (define tc-count
   (let ((c #f)
@@ -333,11 +373,22 @@
       (set! len (length str1))
       (tc-count-1 0 0))))
 
+(define (let-count c str)
+  (let ((len (length str)))
+    (let loop ((pos 0) (count 0))
+      (if (= pos len)
+	  count
+	  (loop (+ pos 1)
+		(if (char=? c (string-ref str pos)) (+ count 1) count))))))
+    
+
 
 (let ((val (strcop "asdfghjkl")))
   (unless (string=? val "asdfghjkl") (format *stderr* "strcop ~S: ~S~%" "asdfghjkl" val))
   (set! val (strup "abcdefghij"))
   (unless (string=? val "ABCDEFGHIJ") (format *stderr* "strup ~S: ~S~%" "abcdefghij" val))
+  (set! val (let-strup "abcdefghij"))
+  (unless (string=? val "ABCDEFGHIJ") (format *stderr* "let-strup ~S: ~S~%" "abcdefghij" val))
 
   (set! val (tc-cpos #\a "123456789a12343"))
   (unless (eqv? val 9) (format *stderr* "tc-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
@@ -350,6 +401,9 @@
 
   (set! val (do-cpos #\a "123456789a12343"))
   (unless (eqv? val 9) (format *stderr* "do-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (let-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "let-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
 
   (set! val (and-cpos #\a "123456789a12343"))
   (unless (eqv? val 9) (format *stderr* "and-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
@@ -426,75 +480,77 @@
     (string-set! bigstr (- size 9) #\a)
 
     (let ((t1 (time (strup bigstr)))
-	  (t2 (time (string-upcase bigstr))))
-      (format *stderr* "strup: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+	  (t2 (time (string-upcase bigstr)))
+	  (t3 (time (let-strup bigstr))))
+      (format *stderr* "strup: ~D ~D~%" (round (/ t1 t2)) (round (/ t3 t2)))
 
       (set! t1 (time (strcop bigstr)))
       (set! t2 (time (copy bigstr)))
-      (format *stderr* "strcop: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "strcop: ~D~%" (round (/ t1 t2)))
 
       (set! t2 (* 0.5 (time (char-position #\space bigstr) (char-position #\space bigstr))))
       (set! t1 (time (do-cpos #\space bigstr)))
-      (format *stderr* "do-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "do-cpos: ~D~%" (round (/ t1 t2)))
 
 
       (set! t1 (time (tc-cpos #\space bigstr)))
-      (format *stderr* "tc-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "tc-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (tc2-cpos #\space bigstr)))
-      (format *stderr* "tc2-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "tc2-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (tc3-cpos #\space bigstr)))
-      (format *stderr* "tc3-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "tc3-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (and-cpos #\space bigstr)))
-      (format *stderr* "and-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "and-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (andrev-cpos #\space bigstr)))
-      (format *stderr* "andrev-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "andrev-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (call-cpos #\space bigstr)))
-      (format *stderr* "call-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "call-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (cond-cpos #\space bigstr)))
-      (format *stderr* "cond-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "cond-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (condrev-cpos #\space bigstr)))
-      (format *stderr* "condrev-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "condrev-cpos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (rev-cpos #\space bigstr)))
-      (format *stderr* "rev-cpos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "rev-cpos: ~D~%" (round (/ t1 t2)))
+
+      (set! t1 (time (let-cpos #\space bigstr)))
+      (format *stderr* "let-cpos: ~D~%" (round (/ t1 t2)))
 
 
       (set! t2 (* 0.5 (time (string-position " a" bigstr) (string-position " a" bigstr))))
       (set! t1 (time (tc-spos " a" bigstr)))
-      (format *stderr* "tc-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "tc-spos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (do-spos " a" bigstr)))
-      (format *stderr* "do-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "do-spos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (and-spos " a" bigstr)))
-      (format *stderr* "and-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "and-spos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (andrev-spos " a" bigstr)))
-      (format *stderr* "andrev-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "andrev-spos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (call-spos " a" bigstr)))
-      (format *stderr* "call-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "call-spos: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (cond-spos " a" bigstr)))
-      (format *stderr* "cond-spos: ~G ~G: ~D~%" t1 t2 (round (/ t1 t2)))
+      (format *stderr* "cond-spos: ~D~%" (round (/ t1 t2)))
 
-
-      (let ((c1 0) (c2 0) (c3 0) (t3 0))
+      (let ((c1 0) (c2 0) (c3 0) (c4 0) (t3 0) (t4 0))
 	(set! t1 (time (set! c1 (char-count #\a bigstr))))
 	(set! t2 (time (set! c2 (do-count #\a bigstr))))
 	(set! t3 (time (set! c3 (tc-count #\a bigstr))))
-	(set! t2 (round (/ t2 t1)))
-	(set! t3 (round (/ t3 t1)))
-	(unless (eqv? t2 t3)
-	  (format *stderr* "counts: ~S ~S ~S, times: ~D ~D~%" c1 c2 c3 t2 t3)))
-      )
+	(set! t4 (time (set! c4 (let-count #\a bigstr))))
+	(format *stderr* "counts: ~S ~S ~S ~S, times: ~D ~D ~D~%" 
+		c1 c2 c3 c4 
+		(round (/ t2 t1)) (round (/ t3 t1)) (round (/ t4 t1)))))
 
     (do ((i 0 (+ i 1)))
 	((= i 20))
@@ -508,29 +564,6 @@
       (string-position " a" bigstr)
       (strcop bigstr)
       (copy bigstr))))
-
-
-;;; --------------------------------
-
-(define (searcher)
-  ;; }\n}
-  (call-with-input-file "s7.c"
-    (lambda (p)
-      (let ((last1 ""))
-	(do ((this (read-line p) (read-line p))
-	     (line 0 (+ line 1)))
-	    ((eq? this #<eof>))
-	  (let ((len (length this)))
-	    (unless (or (= len 0)
-			(char=? (string-ref this 0) #\}))
-	      (do ((i 0 (+ i 1)))
-		  ((or (>= i len)
-		       (not (char-whitespace? (string-ref this i))))
-		   (set! this (substring this i))))
-	      (when (and (> (length this) 0) (char=? (string-ref this 0) #\})
-			 (> (length last1) 0) (char=? (string-ref last1 0) #\}))
-		(format #f "~D ~S~%" line last1)))
-	    (set! last1 this)))))))
 
 
 ;;; --------------------------------

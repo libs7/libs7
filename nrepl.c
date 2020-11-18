@@ -200,7 +200,7 @@ static s7_pointer unset_sigint_handler(s7_scheme *sc, s7_pointer args)
 
 static void init_nlibc(s7_scheme *sc)
 {
-  s7_pointer cur_env, pl_tx, pcl_s, pl_ix, pcl_x, pcl_i, pl_ssix, pl_is, pl_xi, pcl_xi;
+  s7_pointer cur_env, pl_tx, pcl_s, pl_ix, pcl_x, pcl_i, pl_ssix, pl_is, pcl_xi;
   s7_int gc_loc;
 
   cur_env = s7_inlet(sc, s7_nil(sc));
