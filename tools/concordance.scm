@@ -146,6 +146,30 @@
       (set! str str1)
       (cpos-2 c1 0))))
 
+(define cond2-cpos ; op_tc_cond_a_z_if_a_z_laa
+  (let ((len 0)
+	(str #f))
+    (define (cond2-cpos-2 c pos)
+      (cond ((= pos len) #f)
+	    ((char=? c (string-ref str pos)) pos)
+	    (else (cond2-cpos-2 c (+ pos 1)))))
+    (lambda (c1 str1)
+      (set! len (length str1))
+      (set! str str1)
+      (cond2-cpos-2 c1 0))))
+
+(define cond2-cposrev ; op_tc_cond_a_z_if_a_laa_z
+  (let ((len 0)
+	(str #f))
+    (define (cond2-cposrev-2 c pos)
+      (cond ((= pos len) #f)
+	    ((not (char=? c (string-ref str pos))) (cond2-cposrev-2 c (+ pos 1)))
+	    (else pos)))
+    (lambda (c1 str1)
+      (set! len (length str1))
+      (set! str str1)
+      (cond2-cposrev-2 c1 0))))
+
 (define tc3-cpos ; eval? (there is no op_tc_if_a_z_if_a_z_l3a but the 2 case is slower -- 2 case is not s7_optimized)
   (let ((len 0))
     (define (cpos-3 c str pos)
@@ -396,6 +420,12 @@
   (set! val (tc2-cpos #\a "123456789a12343"))
   (unless (eqv? val 9) (format *stderr* "tc2-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
 
+  (set! val (cond2-cpos #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "cond2-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
+
+  (set! val (cond2-cposrev #\a "123456789a12343"))
+  (unless (eqv? val 9) (format *stderr* "cond2-cposrev ~C ~S: ~S~%" #\a "123456789a12343" val))
+
   (set! val (tc3-cpos #\a "123456789a12343"))
   (unless (eqv? val 9) (format *stderr* "tc3-cpos ~C ~S: ~S~%" #\a "123456789a12343" val))
 
@@ -498,6 +528,12 @@
 
       (set! t1 (time (tc2-cpos #\space bigstr)))
       (format *stderr* "tc2-cpos: ~D~%" (round (/ t1 t2)))
+
+      (set! t1 (time (cond2-cpos #\space bigstr)))
+      (format *stderr* "cond2-cpos: ~D~%" (round (/ t1 t2)))
+
+      (set! t1 (time (cond2-cposrev #\space bigstr)))
+      (format *stderr* "cond2-cposrev: ~D~%" (round (/ t1 t2)))
 
       (set! t1 (time (tc3-cpos #\space bigstr)))
       (format *stderr* "tc3-cpos: ~D~%" (round (/ t1 t2)))

@@ -2,7 +2,7 @@
 
 ;;; -------------------------------- pretty-print --------------------------------
 
-(define pretty-print
+(define pretty-print  ; (lambda* (obj (port (current-output-port)) (column 0))
 
   (let ((*pretty-print-length* 100)
 	(*pretty-print-spacing* 2)
