@@ -1889,7 +1889,7 @@ int main(int argc, char **argv)
     s7_pointer iter, x;
     iter = s7_make_iterator(sc, s7_list(sc, 3, TO_S7_INT(1), TO_S7_INT(2), TO_S7_INT(3)));
     if (!s7_is_iterator(iter))
-      fprintf(stderr, "%d: %s is not an interator\n", __LINE__, TO_STR(iter));
+      fprintf(stderr, "%d: %s is not an iterator\n", __LINE__, TO_STR(iter));
     if (s7_iterator_is_at_end(sc, iter))
       fprintf(stderr, "%d: %s is prematurely done\n", __LINE__, TO_STR(iter));
     x = s7_iterate(sc, iter);

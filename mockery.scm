@@ -620,7 +620,6 @@
   ;; from Wikipedia:
   ;; x + y =	[a+c, b+d]
   ;; x - y =	[a-d, b-c]
-  ;; x × y =	[min(ac, ad, bc, bd), max(ac, ad, bc, bd)]
   ;; x / y =	[min(a/c, a/d, b/c, b/d), max(a/c, a/d, b/c, b/d)]
   
   (define *interval*
