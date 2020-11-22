@@ -311,12 +311,10 @@
   #endif
 #endif
 
-#ifndef WITH_VECTORIZE
-#if (defined(__GNUC__) && __GNUC__ >= 5)
+#if (WITH_VECTORIZE) && (defined(__GNUC__) && __GNUC__ >= 5)
   #define Vectorized __attribute__((optimize("tree-vectorize")))
 #else
   #define Vectorized
-#endif
 #endif
 
 #if WITH_GCC
@@ -11302,8 +11300,8 @@ static void copy_stack_list_set_immutable(s7_scheme *sc, s7_pointer pold, s7_poi
 	  p1 = cdr(p1);
 	  p2 = cdr(p2);
 	  if (is_immutable(p1)) set_immutable(p2);
-	  slow = cdr(slow);
 	  if (p1 == slow) break;
+	  slow = cdr(slow);
 	}}
 }
 
@@ -97957,7 +97955,4 @@ int main(int argc, char **argv)
  *   there is only one p_pp_unchecked case: hash-table-ref! tmp has char_eq_p_pp_unchecked
  * cond-a-z-la|a-la-z
  * floor/ et al happen a lot -- if ints, avoid ratio
- * t718
- * remove pix/note.png from snd svn dist/snd (check snd-20)
- * notcurses 2.0.5 will need some version checks
  */

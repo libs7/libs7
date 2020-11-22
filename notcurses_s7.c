@@ -5,13 +5,20 @@
  */
 
 #include <locale.h>
+
 #include <notcurses/notcurses.h>
 #include <notcurses/direct.h>
+/* notcurses version.h (included only after version 2) has only string version numbers, so if using version 1, pass -DNOTCURSES_1=1 */
+#if (!NOTCURSES_1)
+  #define NOTCURSES_2 1
+  /* version 2.0.5 has an incompatible change to ncplane_options, plus some other functions;
+   *   to get these, define NOTCURSES_2_0_5 before compiling this file.
+   */
+#else
+  #define NOTCURSES_2 0
+#endif
+
 #include "s7.h"
-
-/* notcurses included version.h only after version 2, so we can't depend on it */
-#define VERSION_2 0 /* set to 1 to get various version 2 changes */
-
 
 #if (!S7_MAIN)
 static s7_int s7_integer_checked(s7_scheme *sc, s7_pointer val)
@@ -600,7 +607,7 @@ static s7_pointer g_notcurses_drop_planes(s7_scheme *sc, s7_pointer args)
 }
 
 
-#if VERSION_2
+#if NOTCURSES_2
 static s7_pointer g_notcurses_render_to_buffer(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, notcurses_render_to_buffer((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
@@ -953,10 +960,7 @@ static s7_pointer g_notcurses_stats(s7_scheme *sc, s7_pointer args)
 #if 0
 typedef struct ncplane_options {
   int y;  
-  union {
-    int x;
-    ncalign_e align;
-  } horiz;  
+  int x;
   int rows; 
   int cols; 
   void* userptr;
@@ -1010,27 +1014,18 @@ static s7_pointer g_set_ncplane_options_cols(s7_scheme *sc, s7_pointer args)
   return(s7_car(args));
 }
 
+#if NOTCURSES_2_0_5
 static s7_pointer g_ncplane_options_x(s7_scheme *sc, s7_pointer args) 
 {
-  return(s7_make_integer(sc, ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->horiz.x));
+  return(s7_make_integer(sc, ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->x));
 }
 
 static s7_pointer g_set_ncplane_options_x(s7_scheme *sc, s7_pointer args) 
 {
-  ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->horiz.x = s7_integer_checked(sc, s7_car(args));
+  ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->x = s7_integer_checked(sc, s7_car(args));
   return(s7_car(args));
 }
-
-static s7_pointer g_ncplane_options_align(s7_scheme *sc, s7_pointer args) 
-{
-  return(s7_make_integer(sc, ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->horiz.align));
-}
-
-static s7_pointer g_set_ncplane_options_align(s7_scheme *sc, s7_pointer args) 
-{
-  ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->horiz.align = (ncalign_e)s7_integer_checked(sc, s7_car(args));
-  return(s7_car(args));
-}
+#endif
 
 static s7_pointer g_ncplane_options_userptr(s7_scheme *sc, s7_pointer args) 
 {
@@ -1185,7 +1180,7 @@ static s7_pointer g_ncplane_set_bg_rgb(s7_scheme *sc, s7_pointer args)
 					    (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
 }
 
-#if VERSION_2
+#if NOTCURSES_2
 static s7_pointer g_ncplane_set_styles(s7_scheme *sc, s7_pointer args)
 {
   ncplane_set_styles((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1),
@@ -1597,7 +1592,7 @@ static s7_pointer g_ncplane_putstr_yx(s7_scheme *sc, s7_pointer args)
 					       (const char *)s7_string_checked(sc, s7_cadddr(args)))));
 }
 
-#if VERSION_2
+#if NOTCURSES_2
 static s7_pointer g_ncplane_putnstr_aligned(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncplane_putnstr_aligned((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
@@ -1640,9 +1635,13 @@ static s7_pointer g_ncplane_new(s7_scheme *sc, s7_pointer args)
   {
    ncplane_options nopts = {
      .y = yoff,
+#if NOTCURSES_2_0_5
+     .x = xoff,
+#else
      .horiz = {
        .x = xoff,
      },
+#endif
      .rows = rows,
      .cols = cols,
      .userptr = opaque,
@@ -1654,7 +1653,6 @@ static s7_pointer g_ncplane_new(s7_scheme *sc, s7_pointer args)
 				      ncplane_symbol, s7_f(sc)));
   }
 }
-
 
 static s7_pointer g_ncplane_resize_realign(s7_scheme *sc, s7_pointer args)
 {
@@ -2820,7 +2818,7 @@ static s7_pointer g_ncmenu_offer_input(s7_scheme *sc, s7_pointer args)
 						(const struct ncinput *)s7_c_pointer_with_type(sc, s7_cadr(args), ncinput_symbol, __func__, 2))));
 }
 
-#if VERSION_2
+#if NOTCURSES_2
 static s7_pointer g_ncmenu_mouse_selected(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_boolean(sc, ncmenu_mouse_selected((const struct ncmenu *)s7_c_pointer_with_type(sc, s7_car(args), ncmenu_symbol, __func__, 1), 
@@ -3168,7 +3166,7 @@ static s7_pointer g_nctablet_userptr(s7_scheme *sc, s7_pointer args)
 				     void_symbol, s7_f(sc)));
 }
 
-#if VERSION_2
+#if NOTCURSES_2
 static s7_pointer g_nctablet_plane(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_c_pointer_with_type(sc, nctablet_plane((struct nctablet *)s7_c_pointer_with_type(sc, s7_car(args), nctablet_symbol, __func__, 1)), 
@@ -3769,7 +3767,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCOPTION_VERIFY_SIXEL);
   nc_int(NCOPTION_NO_WINCH_SIGHANDLER);
   nc_int(NCOPTION_NO_QUIT_SIGHANDLERS);
-  /* nc_int(NCOPTION_RETAIN_CURSOR); */
   nc_int(NCOPTION_SUPPRESS_BANNERS);
   nc_int(NCOPTION_NO_ALTERNATE_SCREEN);
   nc_int(NCOPTION_NO_FONT_CHANGES);
@@ -3867,9 +3864,8 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCBLIT_DEFAULT);
   nc_int(NCBLIT_1x1);
   nc_int(NCBLIT_2x1);
-  /* nc_int(NCBLIT_1x1x4); */
   nc_int(NCBLIT_2x2);
-#if VERSION_2
+#if NOTCURSES_2
   nc_int(NCBLIT_3x2);
 #endif
   nc_int(NCBLIT_4x1);
@@ -4058,10 +4054,11 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_options_make, 0, 0, false);
   nc_func(ncplane_options_free, 1, 0, false);
   nc_func2(ncplane_options_y);
+#if NOTCURSES_2_0_5
   nc_func2(ncplane_options_x);
+#endif
   nc_func2(ncplane_options_rows);
   nc_func2(ncplane_options_cols);
-  nc_func2(ncplane_options_align);
   nc_func2(ncplane_options_flags);
   nc_func2(ncplane_options_name);
   nc_func2(ncplane_options_userptr);
@@ -4175,7 +4172,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func2(ncselector_options_secondary);
   nc_func2(ncselector_options_footer);
   nc_func2(ncselector_options_items);
-  /* nc_func2(ncselector_options_itemcount); */
   nc_func(ncselector_options_defidx, 1, 0, false);
   nc_func2(ncselector_options_maxdisplay);
   nc_func(ncselector_options_opchannels, 1, 0, false);
@@ -4206,7 +4202,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func2(ncmultiselector_options_secondary);
   nc_func2(ncmultiselector_options_footer);
   nc_func2(ncmultiselector_options_items);
-  /* nc_func2(ncmultiselector_options_itemcount); */
   nc_func2(ncmultiselector_options_maxdisplay);
   nc_func(ncmultiselector_options_opchannels, 1, 0, false);
   nc_func(ncmultiselector_options_descchannels, 1, 0, false);
@@ -4256,7 +4251,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncmenu_items_to_list, 1, 0, false);
   nc_func(list_to_ncmenu_sections, 1, 0, false);
   nc_func(ncmenu_sections_to_list, 1, 0, false);
-  /* nc_func(ncmenu_mouse_selected, 3, 0, false); */
 
   nc_func(ncplot_options_make, 0, 0, false);
   nc_func(ncplot_options_free, 1, 0, false);
@@ -4367,7 +4361,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncsubproc_plane, 1, 0, false);
   nc_func(ncsubproc_destroy, 1, 0, false);
 
-#if VERSION_2
+#if NOTCURSES_2
   nc_func(ncstats_writeout_ns, 1, 0, false);
   nc_func(ncstats_writeout_max_ns, 1, 0, false);
   nc_func(ncstats_writeout_min_ns, 1, 0, false);
@@ -4385,12 +4379,6 @@ void notcurses_s7_init(s7_scheme *sc)
 
   nc_int(NCDIRECT_OPTION_INHIBIT_SETLOCALE);
   nc_int(NCDIRECT_OPTION_INHIBIT_CBREAK);
-
-#if 0
-  nc_int(NOTCURSES_VERSION_MAJOR);
-  nc_int(NOTCURSES_VERSION_MINOR);
-  nc_int(NOTCURSES_VERSION_PATCH);
-#endif
 #endif
 
   ncp_move_hook = s7_eval_c_string(sc, "(make-hook 'plane 'y 'x)");
