@@ -311,6 +311,10 @@
   #endif
 #endif
 
+#ifndef WITH_VECTORIZE
+  #define WITH_VECTORIZE 1
+#endif
+
 #if (WITH_VECTORIZE) && (defined(__GNUC__) && __GNUC__ >= 5)
   #define Vectorized __attribute__((optimize("tree-vectorize")))
 #else
@@ -10039,7 +10043,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
     return(s7_wrong_type_arg_error(sc, "set! outlet", 2, new_outer, "a let"));
 
   if (let != sc->rootlet)
-    let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);
+    let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);  /* outlet rootlet->() so that slot search can use is_let(outlet) I think */
   return(new_outer);
 }
 
@@ -85327,7 +85331,7 @@ static bool op_implicit_vector_set_4(s7_scheme *sc)
   return(false);
 }
 
-static inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) */
+static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) */
 {
   s7_pointer val, y;
 
@@ -91083,16 +91087,6 @@ static bool op_read_unquote(s7_scheme *sc)
  *    but (immutable? (let-temporarily (((*s7* 'safety) 2)) (eval-string "#(1 2 3)"))) is #t
  *    at run time we just see the vector
  */
-static void free_vlist(s7_scheme *sc, s7_pointer lst)
-{
-  if (is_pair(lst))
-    {
-      s7_pointer p, np;
-      for (p = lst, np = cdr(lst); is_pair(p); p = np, np = unchecked_cdr(np))
-	free_cell(sc, p);
-    }
-}
-
 static bool op_read_vector(s7_scheme *sc)
 {
   if (is_dotted_pair(sc->value))            /* #(1 . 2) */
@@ -91100,7 +91094,6 @@ static bool op_read_vector(s7_scheme *sc)
   sc->v = sc->value;
   sc->value = (sc->args == int_one) ? g_vector(sc, sc->value) : g_multivector(sc, integer(sc->args), sc->value); /* sc->args was sc->w earlier from read_sharp */
   /* here and below all of the sc->value list can be freed, but my tests showed no speed up even in large cases */
-  free_vlist(sc, sc->v);
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
   return(main_stack_op(sc) != OP_READ_LIST);
 }
@@ -91111,7 +91104,6 @@ static bool op_read_int_vector(s7_scheme *sc)
     read_error(sc, "int-vector constant data is not a proper list");
   sc->v = sc->value;
   sc->value = (sc->args == int_one) ? g_int_vector(sc, sc->value) : g_int_multivector(sc, integer(sc->args), sc->value);
-  free_vlist(sc, sc->v);
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
   return(main_stack_op(sc) != OP_READ_LIST);
 }
@@ -91122,7 +91114,6 @@ static bool op_read_float_vector(s7_scheme *sc)
     read_error(sc, "float-vector constant data is not a proper list");
   sc->v = sc->value;
   sc->value = (sc->args == int_one) ? g_float_vector(sc, sc->value) : g_float_multivector(sc, integer(sc->args), sc->value);
-  free_vlist(sc, sc->v);
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
   return(main_stack_op(sc) != OP_READ_LIST);
 }
@@ -91133,7 +91124,6 @@ static bool op_read_byte_vector(s7_scheme *sc)
     read_error(sc, "byte-vector constant data is not a proper list");
   sc->v = sc->value;
   sc->value = (sc->args == int_one) ? g_byte_vector(sc, sc->value) : g_byte_multivector(sc, integer(sc->args), sc->value);
-  free_vlist(sc, sc->v);
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
   return(main_stack_op(sc) != OP_READ_LIST);
 }
@@ -97901,50 +97891,50 @@ int main(int argc, char **argv)
  * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-YYYYMMDD.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
  *   tests7 compsnd testsnd autotest
  *
- * -----------------------------
- *           20.9           gmp
- * -----------------------------
- * tpeak     115            128
- * tauto     648           1200
- * tref      691            741
- * tshoot    883           1673
- * index    1026           1087
- * tmock    1177           7733
- * s7test   1873           4525
- * lt       2123           2111
- * tcopy    2256           2313
- * tform    2281           3256
- * tmat     2285           2485
- * tread    2440           2639
- * tvect    2456           2687
- * fbench   2688           3091
- * trclo    2715           4502
- * tb       2735           3554
- * titer    2865           2883
- * tmap     2886           3825
- * tsort    3105           3809
- * tset     3253           3253
- * dup      3334           3548
- * tmac     3317           3430
- * teq      4068           4078
- * tfft     4142           11.5
- * tio      4575           4595
- * tmisc    4626           5077
- * tclo     4787           5119
- * tlet     4925           5863
- * tcase    4960           5010
- * tstr     5281
- * trec     5976           7825
- * tnum     6348           58.3
- * tgen     11.2           12.0
- * thash    11.8           37.5
- * tgc      11.9
- * tall     15.6           27.0
- * calls    36.7           60.6
- * sg       71.9           97.9
- * lg      106.6          106.7
- * tbig    177.4          603.6
- * -----------------------------
+ * -------------------------------------
+ *           20.9   21.0            gmp
+ * -------------------------------------
+ * tpeak     115    115             128
+ * tauto     648    648            1200
+ * tref      691    693             741
+ * tshoot    883    883            1673
+ * index    1026   1026            1087
+ * tmock    1177   1178            7733
+ * s7test   1873   1841            4525
+ * lt       2123   2123            2111
+ * tcopy    2256   2256            2313
+ * tform    2281   2289            3256
+ * tmat     2285   2279            2485
+ * tread    2440   2439            2639
+ * tvect    2456   2455            2687
+ * fbench   2688   2688            3091
+ * trclo    2715   2715            4502
+ * tb       2735   2740            3554
+ * titer    2865   2868            2883
+ * tmap     2886   2886            3825
+ * tsort    3105   3105            3809
+ * tset     3253   3255            3253
+ * dup      3334   3337            3548
+ * tmac     3317   3316            3430
+ * teq      4068   4068            4078
+ * tfft     4142   4144            11.5
+ * tio      4575   4575            4595
+ * tmisc    4626   4630            5077
+ * tclo     4787   4786            5119
+ * tlet     4925   4927            5863
+ * tcase    4960   4960            5010
+ * tstr     5281   5280
+ * trec     5976   5976            7825
+ * tnum     6348   6348            58.3
+ * tgen     11.2   11.2            12.0
+ * thash    11.8   11.8            37.5
+ * tgc      11.9   11.9
+ * tall     15.6   15.6            27.0
+ * calls    36.7   36.8            60.6
+ * sg       71.9   72.0            97.9
+ * lg      106.6  106.7           106.7
+ * tbig    177.4  177.4           603.6
+ * -------------------------------------
  *
  * map or: safety?
  * perhaps substring_uncopied_unchecked, start_and_end with arg offset preset+whether end is passed, substr in opt_p_call_ssf: substr_p_p[p|i][p|i]

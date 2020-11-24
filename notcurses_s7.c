@@ -4399,6 +4399,9 @@ void notcurses_s7_init(s7_scheme *sc)
 
 /* TODO: ncmenu_item(s) various callbacks palette256-chans? 
  *   list of lists of menu items -> (permanent) c array, arg type checks
+ API void ncplane_set_resizecb(struct ncplane* n, int(*resizecb)(struct ncplane*)); -- these need wrappers
+ API int (*ncplane_resizecb(const struct ncplane* n))(struct ncplane*);
+ API int ncvisual_decode_loop(struct ncvisual* nc);
  */
 #endif
 
