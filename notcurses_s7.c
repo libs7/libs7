@@ -8,14 +8,17 @@
 
 #include <notcurses/notcurses.h>
 #include <notcurses/direct.h>
-/* notcurses version.h (included only after version 2) has only string version numbers, so if using version 1, pass -DNOTCURSES_1=1 */
-#if (!NOTCURSES_1)
-  #define NOTCURSES_2 1
-  /* version 2.0.5 has an incompatible change to ncplane_options, plus some other functions;
-   *   to get these, define NOTCURSES_2_0_5 before compiling this file.
-   */
-#else
+
+/* notcurses version.h was included only by version 2 so if using version 1, pass -DNOTCURSES_1=1 */
+#if NOTCURSES_1
   #define NOTCURSES_2 0
+  #define NOTCURSES_2_0_5 0
+#else
+  #define NOTCURSES_2 1
+  #include <notcurses/version.h>
+  #if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_PATCH >= 5)
+    #define NOTCURSES_2_0_5 1
+  #endif
 #endif
 
 #include "s7.h"
@@ -4379,6 +4382,13 @@ void notcurses_s7_init(s7_scheme *sc)
 
   nc_int(NCDIRECT_OPTION_INHIBIT_SETLOCALE);
   nc_int(NCDIRECT_OPTION_INHIBIT_CBREAK);
+  #if (defined(NOTCURSES_VERNUM_MAJOR))
+    nc_int(NOTCURSES_VERNUM_MAJOR);
+    nc_int(NOTCURSES_VERNUM_MINOR);
+    nc_int(NOTCURSES_VERNUM_PATCH);
+    nc_int(NOTCURSES_VERNUM_TWEAK);
+    nc_int(NOTCURSES_VERNUM_ORDERED);
+  #endif
 #endif
 
   ncp_move_hook = s7_eval_c_string(sc, "(make-hook 'plane 'y 'x)");
