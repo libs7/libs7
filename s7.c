@@ -23933,14 +23933,13 @@ static s7_pointer g_less_or_equal(s7_scheme *sc, s7_pointer args)
     return(make_boolean(sc, leq_b_7pp(sc, x, car(p))));
 
   for (; is_pair(p); x = car(p), p = cdr(p))
-    {
-      if (!leq_b_7pp(sc, x, car(p)))
-	{
-	  for (p = cdr(p); is_pair(p); p = cdr(p))
-	    if (!is_real_via_method(sc, car(p)))
-	      return(wrong_type_argument(sc, sc->leq_symbol, position_of(p, args), car(p), T_REAL));
-	  return(sc->F);
-	}}
+    if (!leq_b_7pp(sc, x, car(p)))
+      {
+	for (p = cdr(p); is_pair(p); p = cdr(p))
+	  if (!is_real_via_method(sc, car(p)))
+	    return(wrong_type_argument(sc, sc->leq_symbol, position_of(p, args), car(p), T_REAL));
+	return(sc->F);
+      }
   return(sc->T);
 }
 
@@ -24193,14 +24192,13 @@ static s7_pointer g_greater(s7_scheme *sc, s7_pointer args)
     return(make_boolean(sc, gt_b_7pp(sc, x, car(p))));
 
   for (; is_pair(p); x = car(p), p = cdr(p))
-    {
-      if (!gt_b_7pp(sc, x, car(p)))
-	{
-	  for (p = cdr(p); is_pair(p); p = cdr(p))
-	    if (!is_real_via_method(sc, car(p)))
-	      return(wrong_type_argument(sc, sc->gt_symbol, position_of(p, args), car(p), T_REAL));
-	  return(sc->F);
-	}}
+    if (!gt_b_7pp(sc, x, car(p)))
+      {
+	for (p = cdr(p); is_pair(p); p = cdr(p))
+	  if (!is_real_via_method(sc, car(p)))
+	    return(wrong_type_argument(sc, sc->gt_symbol, position_of(p, args), car(p), T_REAL));
+	return(sc->F);
+      }
   return(sc->T);
 }
 
@@ -24535,14 +24533,13 @@ static s7_pointer g_greater_or_equal(s7_scheme *sc, s7_pointer args)
     return(make_boolean(sc, geq_b_7pp(sc, x, car(p))));
 
   for (; is_pair(p); x = car(p), p = cdr(p))
-    {
-      if (!geq_b_7pp(sc, x, car(p)))
-	{
-	  for (p = cdr(p); is_pair(p); p = cdr(p))
-	    if (!is_real_via_method(sc, car(p)))
-	      return(wrong_type_argument(sc, sc->geq_symbol, position_of(p, args), car(p), T_REAL));
-	  return(sc->F);
-	}}
+    if (!geq_b_7pp(sc, x, car(p)))
+      {
+	for (p = cdr(p); is_pair(p); p = cdr(p))
+	  if (!is_real_via_method(sc, car(p)))
+	    return(wrong_type_argument(sc, sc->geq_symbol, position_of(p, args), car(p), T_REAL));
+	return(sc->F);
+      }
   return(sc->T);
 }
 
@@ -74164,6 +74161,163 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
   return((is_optimized(expr)) ? OPT_T : OPT_F);
 }
 
+static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t pairs, int32_t symbols, int32_t quotes, s7_pointer e)
+{
+  s7_pointer arg1, arg2, arg3;
+  arg1 = cadr(expr);
+  arg2 = caddr(expr);
+  arg3 = cadddr(expr);
+  if (pairs == 0)
+    {
+      set_optimized(expr);
+      if (symbols == 0)
+	set_optimize_op(expr, hop + OP_SAFE_C_D);
+      else
+	{
+	  if (symbols == 3)
+	    {
+	      set_optimize_op(expr, hop + OP_SAFE_C_SSS);
+	      set_opt1_sym(cdr(expr), arg2);
+	      set_opt2_sym(cdr(expr), arg3);
+	    }
+	  else
+	    {
+	      if (symbols == 2)
+		{
+		  if (!is_normal_symbol(arg1))
+		    {
+		      set_optimize_op(expr, hop + OP_SAFE_C_CSS);
+		      set_opt1_sym(cdr(expr), arg2);
+		      set_opt2_sym(cdr(expr), arg3);
+		    }
+		  else
+		    {
+		      if (!is_normal_symbol(arg3))
+			{
+			  set_opt2_con(cdr(expr), arg3);
+			  set_opt1_sym(cdr(expr), arg2);
+			  set_optimize_op(expr, hop + OP_SAFE_C_SSC);
+			}
+		      else
+			{
+			  set_opt1_con(cdr(expr), arg2);
+			  set_opt2_sym(cdr(expr), arg3);
+			  set_optimize_op(expr, hop + OP_SAFE_C_SCS);
+			}}}
+	      else
+		{
+		  if (is_normal_symbol(arg1))
+		    {
+		      set_opt1_con(cdr(expr), arg2);
+		      set_opt2_con(cdr(expr), arg3);
+		      set_optimize_op(expr, hop + OP_SAFE_C_SCC);
+		    }
+		  else
+		    {
+		      if (is_normal_symbol(arg2))
+			{
+			  set_opt1_sym(cdr(expr), arg2);
+			  set_opt2_con(cdr(expr), arg3);
+			  set_opt3_any(cdr(expr), arg1);
+			  set_optimize_op(expr, hop + OP_SAFE_C_CSC);
+			}
+		      else
+			{
+			  set_opt1_sym(cdr(expr), arg3);
+			  set_opt2_con(cdr(expr), arg2);
+			  set_opt3_any(cdr(expr), arg1);
+			  set_optimize_op(expr, hop + OP_SAFE_C_CCS);
+			}}}}}
+      choose_c_function(sc, expr, func, 3);
+      return(OPT_T);
+    }
+  
+  /* pairs != 0 */
+  if (fx_count(sc, expr) == 3)
+    {
+      set_optimized(expr);
+      if (quotes == 1)
+	{
+	  if ((symbols == 2) &&
+	      (is_normal_symbol(arg1)) &&
+	      (is_normal_symbol(arg3)))
+	    {
+	      set_opt1_con(cdr(expr), cadr(arg2));        /* fx_c_scs uses opt1_con */
+	      set_opt2_sym(cdr(expr), arg3);
+	      set_optimize_op(expr, hop + OP_SAFE_C_SCS); /* used to be SQS */
+	      choose_c_function(sc, expr, func, 3);
+	      return(OPT_T);
+	    }
+	  if (symbols == 1)
+	    {
+	      if ((is_normal_symbol(arg3)) &&
+		  (is_proper_quote(sc, arg2)) &&
+		  (is_safe_c_s(arg1)))
+		{
+		  set_safe_optimize_op(expr, hop + OP_SAFE_C_opSq_CS);
+		  set_opt1_con(cdr(expr), cadr(arg2)); /* opt1_con is T_Pos (unchecked) */
+		  set_opt2_sym(cdr(expr), arg3);
+		  set_opt3_sym(cdr(expr), cadr(arg1));
+		  choose_c_function(sc, expr, func, 3);
+		  return(OPT_T);
+		}
+	      if ((is_normal_symbol(arg2)) &&
+		  (is_proper_quote(sc, arg1)) &&
+		  (!is_pair(arg3)))
+		{
+		  set_optimize_op(expr, hop + OP_SAFE_C_CSC);
+		  set_opt1_sym(cdr(expr), arg2);
+		  set_opt2_con(cdr(expr), arg3);
+		  set_opt3_any(cdr(expr), cadr(arg1));
+		  choose_c_function(sc, expr, func, 3);
+		  return(OPT_T);
+		}}}
+      fx_annotate_args(sc, cdr(expr), e);
+      set_opt3_arglen(expr, int_three);
+      set_opt3_pair(cdr(expr), cdddr(expr));
+      set_optimize_op(expr, hop + OP_SAFE_C_AAA);
+      
+      if (pairs == 1)
+	{
+	  if ((symbols == 0) && (is_pair(arg2)))
+	    set_optimize_op(expr, hop + OP_SAFE_C_CAC);
+	  else
+	    {
+	      if ((symbols == 1) && (is_pair(arg3)))
+		set_optimize_op(expr, hop + ((is_normal_symbol(arg2)) ? OP_SAFE_C_CSA : OP_SAFE_C_SCA));
+	      else
+		{
+		  if (symbols == 2)
+		    {
+		      if (is_normal_symbol(arg1))
+			{
+			  if (is_normal_symbol(arg2))
+			    {
+			      if ((hop == 1) && (s7_p_ppp_function(func)))
+				{
+				  set_optimize_op(expr, HOP_SSA_DIRECT);
+				  set_opt2_direct(cdr(expr), (s7_pointer)(s7_p_ppp_function(func)));
+				}
+			      else set_optimize_op(expr, hop + OP_SAFE_C_SSA);
+			    }
+			  else set_optimize_op(expr, hop + OP_SAFE_C_SAS);
+			}
+		      else
+			{
+			  if (is_pair(arg1))
+			    set_optimize_op(expr, hop + OP_SAFE_C_ASS);
+			}}}}}
+      else
+	{
+	  if ((is_normal_symbol(arg1)) && (pairs == 2))
+	    set_optimize_op(expr, hop + OP_SAFE_C_SAA);
+	}
+      choose_c_function(sc, expr, func, 3);
+      return(OPT_T);
+    }
+  return(OPT_F); /* tell caller to try something else */
+}
+
 static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop,
 				      int32_t pairs, int32_t symbols, int32_t quotes, int32_t bad_pairs, s7_pointer e)
 {
@@ -74239,154 +74393,8 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       if ((is_safe_procedure(func)) ||
 	  ((is_maybe_safe(func)) && (unsafe_is_safe(sc, arg3, e))))
 	{
-	  if (pairs == 0)
-	    {
-	      set_optimized(expr);
-	      if (symbols == 0)
-		set_optimize_op(expr, hop + OP_SAFE_C_D);
-	      else
-		{
-		  if (symbols == 3)
-		    {
-		      set_optimize_op(expr, hop + OP_SAFE_C_SSS);
-		      set_opt1_sym(cdr(expr), arg2);
-		      set_opt2_sym(cdr(expr), arg3);
-		    }
-		  else
-		    {
-		      if (symbols == 2)
-			{
-			  if (!is_normal_symbol(arg1))
-			    {
-			      set_optimize_op(expr, hop + OP_SAFE_C_CSS);
-			      set_opt1_sym(cdr(expr), arg2);
-			      set_opt2_sym(cdr(expr), arg3);
-			    }
-			  else
-			    {
-			      if (!is_normal_symbol(arg3))
-				{
-				  set_opt2_con(cdr(expr), arg3);
-				  set_opt1_sym(cdr(expr), arg2);
-				  set_optimize_op(expr, hop + OP_SAFE_C_SSC);
-				}
-			      else
-				{
-				  set_opt1_con(cdr(expr), arg2);
-				  set_opt2_sym(cdr(expr), arg3);
-				  set_optimize_op(expr, hop + OP_SAFE_C_SCS);
-				}}}
-		      else
-			{
-			  if (is_normal_symbol(arg1))
-			    {
-			      set_opt1_con(cdr(expr), arg2);
-			      set_opt2_con(cdr(expr), arg3);
-			      set_optimize_op(expr, hop + OP_SAFE_C_SCC);
-			    }
-			  else
-			    {
-			      if (is_normal_symbol(arg2))
-				{
-				  set_opt1_sym(cdr(expr), arg2);
-				  set_opt2_con(cdr(expr), arg3);
-				  set_opt3_any(cdr(expr), arg1);
-				  set_optimize_op(expr, hop + OP_SAFE_C_CSC);
-				}
-			      else
-				{
-				  set_opt1_sym(cdr(expr), arg3);
-				  set_opt2_con(cdr(expr), arg2);
-				  set_opt3_any(cdr(expr), arg1);
-				  set_optimize_op(expr, hop + OP_SAFE_C_CCS);
-				}}}}}
-	      choose_c_function(sc, expr, func, 3);
-	      return(OPT_T);
-	    }
-
-	  /* pairs != 0 */
-	  if (fx_count(sc, expr) == 3)
-	    {
-	      set_optimized(expr);
-	      if (quotes == 1)
-		{
-		  if ((symbols == 2) &&
-		      (is_normal_symbol(arg1)) &&
-		      (is_normal_symbol(arg3)))
-		    {
-		      set_opt1_con(cdr(expr), cadr(arg2));        /* fx_c_scs uses opt1_con */
-		      set_opt2_sym(cdr(expr), arg3);
-		      set_optimize_op(expr, hop + OP_SAFE_C_SCS); /* used to be SQS */
-		      choose_c_function(sc, expr, func, 3);
-		      return(OPT_T);
-		    }
-		  if (symbols == 1)
-		    {
-		      if ((is_normal_symbol(arg3)) &&
-			  (is_proper_quote(sc, arg2)) &&
-			  (is_safe_c_s(arg1)))
-			{
-			  set_safe_optimize_op(expr, hop + OP_SAFE_C_opSq_CS);
-			  set_opt1_con(cdr(expr), cadr(arg2)); /* opt1_con is T_Pos (unchecked) */
-		  set_opt2_sym(cdr(expr), arg3);
-			  set_opt3_sym(cdr(expr), cadr(arg1));
-			  choose_c_function(sc, expr, func, 3);
-			  return(OPT_T);
-			}
-		      if ((is_normal_symbol(arg2)) &&
-			  (is_proper_quote(sc, arg1)) &&
-			  (!is_pair(arg3)))
-			{
-			  set_optimize_op(expr, hop + OP_SAFE_C_CSC);
-			  set_opt1_sym(cdr(expr), arg2);
-			  set_opt2_con(cdr(expr), arg3);
-			  set_opt3_any(cdr(expr), cadr(arg1));
-			  choose_c_function(sc, expr, func, 3);
-			  return(OPT_T);
-			}}}
-	      fx_annotate_args(sc, cdr(expr), e);
-	      set_opt3_arglen(expr, int_three);
-	      set_opt3_pair(cdr(expr), cdddr(expr));
-	      set_optimize_op(expr, hop + OP_SAFE_C_AAA);
-
-	      if (pairs == 1)
-		{
-		  if ((symbols == 0) && (is_pair(arg2)))
-		    set_optimize_op(expr, hop + OP_SAFE_C_CAC);
-		  else
-		    {
-		      if ((symbols == 1) && (is_pair(arg3)))
-			set_optimize_op(expr, hop + ((is_normal_symbol(arg2)) ? OP_SAFE_C_CSA : OP_SAFE_C_SCA));
-		      else
-			{
-			  if (symbols == 2)
-			    {
-			      if (is_normal_symbol(arg1))
-				{
-				  if (is_normal_symbol(arg2))
-				    {
-				      if ((hop == 1) && (s7_p_ppp_function(func)))
-					{
-					  set_optimize_op(expr, HOP_SSA_DIRECT);
-					  set_opt2_direct(cdr(expr), (s7_pointer)(s7_p_ppp_function(func)));
-					}
-				      else set_optimize_op(expr, hop + OP_SAFE_C_SSA);
-				    }
-				  else set_optimize_op(expr, hop + OP_SAFE_C_SAS);
-				}
-			      else
-				{
-				  if (is_pair(arg1))
-				    set_optimize_op(expr, hop + OP_SAFE_C_ASS);
-				}}}}}
-	      else
-		{
-		  if ((is_normal_symbol(arg1)) && (pairs == 2))
-		    set_optimize_op(expr, hop + OP_SAFE_C_SAA);
-		}
-	      choose_c_function(sc, expr, func, 3);
-	      return(OPT_T);
-	    }
+	  if (optimize_safe_c_func_three_args(sc, expr, func, hop, pairs, symbols, quotes, e) == OPT_T)
+	    return(OPT_T);
 	  if ((is_normal_symbol(arg1)) && (is_normal_symbol(arg2)))
 	    {
 	      set_opt3_pair(expr, arg3);
@@ -92292,6 +92300,23 @@ static bool op_unknown_fx(s7_scheme *sc)
 	{
 	  if (num_args == 3)
 	    {
+	      int32_t pairs = 0, symbols = 0, quotes = 0; /* specialize aaa->ssc etc, this makes less difference than I expected */
+	      s7_pointer p;
+	      for (p = cdr(code); is_pair(p); p = cdr(p))
+		{
+		  s7_pointer car_p;
+		  car_p = car(p);
+		  if (is_normal_symbol(car_p))
+		    symbols++;
+		  else
+		    if (is_pair(car_p))
+		      {
+			pairs++;
+			if (is_proper_quote(sc, car_p))
+			  quotes++;
+		      }}
+	      if (optimize_safe_c_func_three_args(sc, code, f, 0 /* hop */, pairs, symbols, quotes, sc->curlet) == OPT_T)
+		return(true);
 	      set_opt3_pair(cdr(code), cdddr(code));
 	      set_safe_optimize_op(code, OP_SAFE_C_AAA);
 	    }
@@ -97961,7 +97986,7 @@ int main(int argc, char **argv)
  * tmisc    4626   4630            5077
  * tclo     4787   4783            5119
  * tlet     4925   4927            5863
- * tcase    4960   4960            5010
+ * tcase    4960   4960 4922       5010
  * tstr     5281   5272 5255
  * trec     5976   5976            7825
  * tnum     6348   6348            58.3
@@ -97975,4 +98000,5 @@ int main(int argc, char **argv)
  * tbig    177.4  177.4           603.6
  * -------------------------------------
  *
+ * if mallocate exported, libc et al could use it
  */
