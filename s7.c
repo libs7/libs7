@@ -43460,7 +43460,7 @@ static bool c_function_is_ok(s7_scheme *sc, s7_pointer x)
    *   I tried __builtin_expect throughout eval below.  The result was not faster.
    */
   s7_pointer p;
-  p = lookup_global(sc, car(x));
+  p = lookup_global(sc, car(x)); /* uses global_slot if is_global(car(x)), else lookup_checked */
   /* this is nearly always global and p == opt1_cfunc(x)
    * p can be null if we evaluate some code, optimizing it, then eval it again in a context
    *   where the incoming p was undefined(!) -- explicit use of eval and so on.
@@ -80666,6 +80666,7 @@ static inline void check_set(s7_scheme *sc)
 		  else /* is_pair(cadr(inner)) */
 		    {
 		      if ((caadr(inner) == sc->quote_symbol) &&
+			  (is_global(sc->quote_symbol)) && /* (call/cc (lambda* 'x) ... (set! (setter 'y) ...)...) should return y */
 			  (is_symbol(car(inner))) &&
 			  ((is_normal_symbol(value)) ||
 			   (is_fxable(sc, value))))
@@ -92300,6 +92301,7 @@ static bool op_unknown_fx(s7_scheme *sc)
 	{
 	  if (num_args == 3)
 	    {
+#if 1
 	      int32_t pairs = 0, symbols = 0, quotes = 0; /* specialize aaa->ssc etc, this makes less difference than I expected */
 	      s7_pointer p;
 	      for (p = cdr(code); is_pair(p); p = cdr(p))
@@ -92307,7 +92309,12 @@ static bool op_unknown_fx(s7_scheme *sc)
 		  s7_pointer car_p;
 		  car_p = car(p);
 		  if (is_normal_symbol(car_p))
-		    symbols++;
+		    {
+		      /* lookup_checked(sc, car_p); */ /* this blithely ignores the error? */
+		      if (!lookup_unexamined(sc, car(p)))
+			return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
+		      symbols++;
+		    }
 		  else
 		    if (is_pair(car_p))
 		      {
@@ -92315,8 +92322,10 @@ static bool op_unknown_fx(s7_scheme *sc)
 			if (is_proper_quote(sc, car_p))
 			  quotes++;
 		      }}
+	      /* TODO: make sure this unbound symbol bug doesn't happen elsewhere in unknown */
 	      if (optimize_safe_c_func_three_args(sc, code, f, 0 /* hop */, pairs, symbols, quotes, sc->curlet) == OPT_T)
 		return(true);
+#endif
 	      set_opt3_pair(cdr(code), cdddr(code));
 	      set_safe_optimize_op(code, OP_SAFE_C_AAA);
 	    }
@@ -97950,12 +97959,7 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* --------------------------------------------------------
- *
- * new snd version: snd.h configure.ac HISTORY.Snd NEWS barchive diffs s7-YYYYMMDD.tar.gz, /usr/ccrma/web/html/software/snd/index.html, ln -s (see .cshrc)
- *   tests7 compsnd testsnd autotest
- *
- * -------------------------------------
+/* -------------------------------------
  *           20.9   21.0            gmp
  * -------------------------------------
  * tpeak     115    114             128
@@ -97986,7 +97990,7 @@ int main(int argc, char **argv)
  * tmisc    4626   4630            5077
  * tclo     4787   4783            5119
  * tlet     4925   4927            5863
- * tcase    4960   4960 4922       5010
+ * tcase    4960   4960 4866       5010
  * tstr     5281   5272 5255
  * trec     5976   5976            7825
  * tnum     6348   6348            58.3
