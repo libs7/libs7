@@ -3902,7 +3902,6 @@ static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int
 #endif
 
 static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
-static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b);
 static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
 static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol);
 static s7_pointer find_method_with_let(s7_scheme *sc, s7_pointer let, s7_pointer symbol);
@@ -10581,6 +10580,8 @@ static int32_t closure_length(s7_scheme *sc, s7_pointer e)
   /* there are cases where this should raise a wrong-type-arg error, but for now... */
   return(-1);
 }
+
+static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b);
 
 static s7_pointer copy_tree_with_type(s7_scheme *sc, s7_pointer tree)
 {
@@ -37562,7 +37563,7 @@ static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b)
 
 static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b)
 {
-  /* apparently slightly faster as a function? */
+  /* apparently slightly faster as a function? (used only in copy_tree_with_type) */
   s7_pointer x;
   new_cell_no_check(sc, x, typeflag(p) & (TYPE_MASK | T_IMMUTABLE | T_SAFE_PROCEDURE));
   set_car(x, a);
@@ -71286,6 +71287,9 @@ static s7_pointer unbound_variable_error(s7_scheme *sc, s7_pointer sym)
 {
   if (s7_tree_memq(sc, sym, current_code(sc)))
     return(s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "unbound variable ~S in ~S", 25), sym, current_code(sc))));
+  if ((symbol_name(sym)[symbol_name_length(sym) - 1] == ',') &&
+      (lookup_unexamined(sc, make_symbol_with_length(sc, symbol_name(sym), symbol_name_length(sym) - 1))))
+    return(s7_error(sc, sc->unbound_variable_symbol, set_elist_2(sc, wrap_string(sc, "unbound variable ~S (perhaps a stray comma?)", 44), sym)));
   return(s7_error(sc, sc->unbound_variable_symbol, set_elist_2(sc, wrap_string(sc, "unbound variable ~S", 19), sym)));
 }
 
@@ -91790,7 +91794,7 @@ static bool op_unknown_g(s7_scheme *sc)
       break;
 
     case T_LET:
-      if (is_normal_symbol(cadr(code)))
+      if (sym_case)
 	{
 	  fx_annotate_arg(sc, cdr(code), sc->curlet);
 	  return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_A));
@@ -91836,7 +91840,6 @@ static bool op_unknown_a(s7_scheme *sc)
       if ((c_function_required_args(f) > 1) ||
 	  (c_function_all_args(f) == 0))
 	break;
-
     case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       set_c_function(code, f);
@@ -92272,6 +92275,17 @@ static bool op_unknown_aa(s7_scheme *sc)
   return(fixup_unknown_op(code, f, OP_S_AA));
 }
 
+static bool is_normal_happy_symbol(s7_scheme *sc, s7_pointer sym)
+{
+  if (is_normal_symbol(sym))
+    {
+      if (!is_slot(symbol_to_slot(sc, sym)))
+	unbound_variable_error(sc, sym);
+      return(true);
+    }
+  return(false);
+}
+
 static bool op_unknown_fx(s7_scheme *sc)
 {
   s7_pointer code, f;
@@ -92308,13 +92322,8 @@ static bool op_unknown_fx(s7_scheme *sc)
 		{
 		  s7_pointer car_p;
 		  car_p = car(p);
-		  if (is_normal_symbol(car_p))
-		    {
-		      /* lookup_checked(sc, car_p); */ /* this blithely ignores the error? */
-		      if (!lookup_unexamined(sc, car(p)))
-			return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
-		      symbols++;
-		    }
+		  if (is_normal_happy_symbol(sc, car_p))
+		    symbols++;
 		  else
 		    if (is_pair(car_p))
 		      {
@@ -92322,7 +92331,6 @@ static bool op_unknown_fx(s7_scheme *sc)
 			if (is_proper_quote(sc, car_p))
 			  quotes++;
 		      }}
-	      /* TODO: make sure this unbound symbol bug doesn't happen elsewhere in unknown */
 	      if (optimize_safe_c_func_three_args(sc, code, f, 0 /* hop */, pairs, symbols, quotes, sc->curlet) == OPT_T)
 		return(true);
 #endif
@@ -92347,8 +92355,8 @@ static bool op_unknown_fx(s7_scheme *sc)
 	    {
 	      if (num_args == 3)
 		{
-		  if (is_symbol(cadr(code)))
-		    set_safe_optimize_op(code, hop + ((is_symbol(caddr(code))) ? OP_SAFE_CLOSURE_SSA : OP_SAFE_CLOSURE_SAA));
+		  if (is_normal_happy_symbol(sc, cadr(code)))
+		    set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, caddr(code))) ? OP_SAFE_CLOSURE_SSA : OP_SAFE_CLOSURE_SAA));
 		  else
 		    {
 		      if ((!is_pair(caddr(code))) && (!is_pair(cadddr(code))))
@@ -92362,15 +92370,15 @@ static bool op_unknown_fx(s7_scheme *sc)
 	      set_safe_optimize_op(code, hop + OP_CLOSURE_FX);
 	      if (num_args == 3)
 		{
-		  if ((is_symbol(caddr(code))) && (is_symbol(cadddr(code))))
+		  if ((is_normal_happy_symbol(sc, caddr(code))) && (is_normal_happy_symbol(sc, cadddr(code))))
 		    set_safe_optimize_op(code, hop + OP_CLOSURE_ASS);
 		  else
 		    {
-		      if (is_symbol(cadr(code)))
-			set_safe_optimize_op(code, hop + ((is_symbol(cadddr(code))) ? OP_CLOSURE_SAS : OP_CLOSURE_SAA));
+		      if (is_normal_happy_symbol(sc, cadr(code)))
+			set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, cadddr(code))) ? OP_CLOSURE_SAS : OP_CLOSURE_SAA));
 		      else
 			{
-			  if (is_symbol(cadddr(code)))
+			  if (is_normal_happy_symbol(sc, cadddr(code)))
 			    set_safe_optimize_op(code, hop + OP_CLOSURE_AAS);
 			}}}}
 	  set_opt1_lambda(code, f);
