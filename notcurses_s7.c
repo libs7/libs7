@@ -4408,10 +4408,16 @@ void notcurses_s7_init(s7_scheme *sc)
  */
 
 /* TODO: ncmenu_item(s) various callbacks palette256-chans? 
- *   list of lists of menu items -> (permanent) c array, arg type checks
- API void ncplane_set_resizecb(struct ncplane* n, int(*resizecb)(struct ncplane*)); -- these need wrappers
- API int (*ncplane_resizecb(const struct ncplane* n))(struct ncplane*);
- API int ncvisual_decode_loop(struct ncvisual* nc);
+ *  list of lists of menu items -> (permanent) c array, arg type checks
+ *  API void ncplane_set_resizecb(struct ncplane* n, int(*resizecb)(struct ncplane*)); -- these need wrappers
+ *  API int (*ncplane_resizecb(const struct ncplane* n))(struct ncplane*);
+ *  API int ncvisual_decode_loop(struct ncvisual* nc);
+ * 2_0_8?
+ *  #define NCSTYLE_STRUCK    0x0200u
+ *  API int ncpile_render(struct ncplane* n);
+ *  API int ncpile_rasterize(struct ncplane* n);
+ *  API struct ncplane* ncplane_reparent_family(struct ncplane* n, struct ncplane* newparent);
+ *  API struct ncplane* ncpile_create(struct notcurses* nc, const ncplane_options* nopts);
  */
 #endif
 
