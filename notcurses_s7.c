@@ -16,8 +16,10 @@
 #else
   #define NOTCURSES_2 1
   #include <notcurses/version.h>
-  #if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_PATCH >= 5)
-    #define NOTCURSES_2_0_5 1
+  #ifndef NOTCURSES_2_0_5
+    #if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_PATCH >= 5)
+      #define NOTCURSES_2_0_5 1
+    #endif
   #endif
 #endif
 

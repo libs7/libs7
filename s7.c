@@ -7064,7 +7064,8 @@ static int64_t gc(s7_scheme *sc)
    *   if the sign bit is on, but no other bits, this version will take no action (it thinks the cell is on the free list), but
    *   it means we've marked a free cell as in-use: since types are set as soon as removed from the free list, this has to be a bug
    *   (this case is caught by has_odd_bits).  If ignored, the type will be set, and later the bit cleared, so no problem?
-   *   An alternate form that simply calls clear_mark (no check for < 0) appears to be the same speed.
+   *   An alternate form that simply calls clear_mark (no check for < 0) appears to be the same speed even in cases with lots
+   *   of long-lived objects.
    */
 #endif
     while (tp < heap_top)          /* != here or ^ makes no difference, going to 64 doesn't matter (this is less than .1% in all cases) */
@@ -8441,6 +8442,24 @@ static Inline s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer 
   return(slot);
 }
 
+static inline void make_let_with_three_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3)
+{
+  s7_pointer last_slot, cargs;
+  cargs = closure_args(func);
+  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(cargs), val1, cadr(cargs), val2);
+  last_slot = next_slot(let_slots(sc->curlet));
+  add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(cargs), val3);
+}
+
+static void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
+{
+  s7_pointer last_slot;
+  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(closure_args(func)), val1, cadr(closure_args(func)), val2);
+  last_slot = next_slot(let_slots(sc->curlet));
+  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(closure_args(func)), val3);
+  add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadddr(closure_args(func)), val4);
+}
+
 static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_let)
 {
   /* we're reusing let here as a let -- it was probably a pair */
@@ -8513,6 +8532,24 @@ static s7_pointer update_let_with_three_slots(s7_scheme *sc, s7_pointer let, s7_
   update_slot(x, val2, id);
   x = next_slot(x);
   update_slot(x, val3, id);
+  return(let);
+}
+
+static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
+{
+  s7_pointer x;
+  uint64_t id;
+
+  id = ++sc->let_number;
+  let_set_id(let, id);
+  x = let_slots(let);
+  update_slot(x, val1, id);
+  x = next_slot(x);
+  update_slot(x, val2, id);
+  x = next_slot(x);
+  update_slot(x, val3, id);
+  x = next_slot(x);
+  update_slot(x, val4, id);
   return(let);
 }
 
@@ -65906,7 +65943,7 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 	      slot = opt_simple_symbol(sc, arg);
 	      if (slot)
 		opc->v[1].p = slot;
-	      else {pc_fallback(sc, start); return_false(sc, car_x);}
+	      else return_false(sc, car_x); /* no need for pc_fallback here, I think */
 	    }
 	  else opc->v[1].p = arg;
 	  arg = caddr(car_x);
@@ -83337,7 +83374,6 @@ static goto_t op_dox(s7_scheme *sc)
 	  (is_syntactic_symbol(car(code))))
 	{
 	  push_stack_no_args_direct(sc, OP_DOX_STEP_O);
-
 	  if (is_syntactic_pair(code))
 	    sc->cur_op = (opcode_t)optimize_op(code);
 	  else
@@ -86756,15 +86792,6 @@ static void op_safe_closure_pp_1(s7_scheme *sc)
   sc->code = caddr(sc->code);
 }
 
-static inline void make_let_with_three_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3)
-{
-  s7_pointer last_slot, cargs;
-  cargs = closure_args(func);
-  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(cargs), val1, cadr(cargs), val2);
-  last_slot = next_slot(let_slots(sc->curlet));
-  add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(cargs), val3);
-}
-
 static void op_any_closure_3p(s7_scheme *sc)
 {
   s7_pointer p;
@@ -86849,33 +86876,6 @@ static void op_any_closure_3p_3(s7_scheme *sc)
   free_cell(sc, p);
   sc->args = sc->nil; /* needed if s7_debugging */
   sc->code = T_Pair(closure_body(func));
-}
-
-static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
-{
-  s7_pointer x;
-  uint64_t id;
-
-  id = ++sc->let_number;
-  let_set_id(let, id);
-  x = let_slots(let);
-  update_slot(x, val1, id);
-  x = next_slot(x);
-  update_slot(x, val2, id);
-  x = next_slot(x);
-  update_slot(x, val3, id);
-  x = next_slot(x);
-  update_slot(x, val4, id);
-  return(let);
-}
-
-static void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
-{
-  s7_pointer last_slot;
-  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(closure_args(func)), val1, cadr(closure_args(func)), val2);
-  last_slot = next_slot(let_slots(sc->curlet));
-  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(closure_args(func)), val3);
-  add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadddr(closure_args(func)), val4);
 }
 
 static void op_any_closure_4p(s7_scheme *sc)
@@ -97969,8 +97969,8 @@ int main(int argc, char **argv)
  * trec     5976   5972            7825
  * tnum     6348   6312            58.3
  * tgen     11.2   11.1            12.0
+ * tgc      11.9   11.7 11.2
  * thash    11.8   11.7            37.5
- * tgc      11.9   11.7
  * tall     15.6   15.6            27.0
  * calls    36.7   36.8            60.6
  * sg       71.9   71.8            97.9
@@ -97978,6 +97978,8 @@ int main(int argc, char **argv)
  * tbig    177.4  176.9           603.6
  * -------------------------------------
  *
- * op_dox_step for 1 stepper: op_dox_one_step|_o, need pointer to stepper, or maybe t|u|v? _o cases in place?
- * css doesn't need pc_fallback?
+ * op_dox_step for 1 stepper: op_dox_one_step|_o +let|if|do|set?, need pointer to stepper, or maybe t|u|v? _o cases in place? closure_fx choices?
+ *   why can't we see op_dox?
+ * tdo.scm? more t725 do cases?
+ * t398->s7test
  */
