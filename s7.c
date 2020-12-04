@@ -27346,6 +27346,8 @@ static s7_pointer g_string_upcase(s7_scheme *sc, s7_pointer args)
   return(newstr);
 }
 
+/* string-up|downcase chooser is string_substring_chooser */
+
 
 /* -------------------------------- string-ref -------------------------------- */
 static s7_pointer string_ref_1(s7_scheme *sc, s7_pointer strng, s7_pointer index)
@@ -27786,8 +27788,7 @@ static s7_pointer g_string_copy(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer string_copy_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
-  if (args == 1)
-    check_for_substring_temp(sc, expr);
+  if (args == 1) check_for_substring_temp(sc, expr);
   return(f);
 }
 
@@ -36177,6 +36178,7 @@ static s7_pointer g_display_f(s7_scheme *sc, s7_pointer args) {return(car(args))
 
 static s7_pointer display_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
+  check_for_substring_temp(sc, expr);
   if (args == 2)
     return((caddr(expr) == sc->F) ? sc->display_f : sc->display_2);
   return(f);
@@ -45907,7 +45909,15 @@ static bool op_implicit_hash_table_ref_a(s7_scheme *sc)
 
 static s7_pointer hash_table_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
- return((args == 2) ? sc->hash_table_ref_2 : f);
+  if (args == 2)
+    {
+      s7_pointer key;
+      key = caddr(expr);
+      if ((is_pair(key)) && (car(key) == sc->substring_symbol) && (is_global(sc->substring_symbol)))
+	set_c_function(key, sc->substring_uncopied);
+      return(sc->hash_table_ref_2);
+    }
+ return(f);
 }
 
 
@@ -77574,6 +77584,7 @@ static void op_let_a_fx_new(s7_scheme *sc)
   free_cell(sc, sc->curlet);
 }
 
+/* this and others like it could easily be fx funcs, but check_let is called too late, so it's never seen as fxable */
 static void op_let_a_fx_old(s7_scheme *sc)
 {
   s7_pointer let, p;
@@ -97949,27 +97960,27 @@ int main(int argc, char **argv)
  * tmat     2285   2268            2485
  * tread    2440   2413            2639
  * tvect    2456   2442            2687
- * fbench   2688   2668            3091
  * trclo    2715   2575            4502
+ * fbench   2688   2668            3091
  * tb       2735   2715            3554
  * titer    2865   2858            2883
  * tmap     2886   2878            3825
  * tsort    3105   3104            3809
  * tset     3253   3247            3253
- * dup      3334   3323            3548
  * tmac     3317   3273            3430
+ * dup      3334   3323            3548
  * teq      4068   4067            4078
  * tfft     4142   4128            11.5
  * tio      4575   4560            4595
  * tmisc    4626   4607            5077
  * tclo     4787   4767            5119
- * tlet     4925   4890            5863
  * tcase    4960   4834            5010
- * tstr     5281   5244
+ * tlet     4925   4890            5863
+ * tstr     5281   5244 5219
  * trec     5976   5972            7825
  * tnum     6348   6312            58.3
  * tgen     11.2   11.1            12.0
- * tgc      11.9   11.7 11.2
+ * tgc      11.9   11.7 11.1
  * thash    11.8   11.7            37.5
  * tall     15.6   15.6            27.0
  * calls    36.7   36.8            60.6
@@ -97978,8 +97989,4 @@ int main(int argc, char **argv)
  * tbig    177.4  176.9           603.6
  * -------------------------------------
  *
- * op_dox_step for 1 stepper: op_dox_one_step|_o +let|if|do|set?, need pointer to stepper, or maybe t|u|v? _o cases in place? closure_fx choices?
- *   why can't we see op_dox?
- * tdo.scm? more t725 do cases?
- * t398->s7test
  */

@@ -43,7 +43,7 @@
 		     (set! (b1 loc) b2)
 		     (set! sets (cons (list r1 loc r2) sets)))
 		   (begin
-		     (set-cdr! (list-tail b1 2) (case loc ((0) b1) ((1) (cdr b1)) (else (cddr b1))))
+		     (set-cdr! (cddr b1) (case loc ((0) b1) ((1) (cdr b1)) (else (cddr b1))))
 		     (set! sets (cons (list r1 (+ loc 3) r2) sets)))))
 	      
 	      ((vector?)

@@ -135,7 +135,7 @@
 		(set! object-distance (/ ray-height axis-slope-angle)))))
 	(if (= radius-of-curvature 0)
 	    (let ((rang (- (asin (* (/ from-index to-index) (sin axis-slope-angle))))))
-	      (set! object-distance (* object-distance (/ (* to-index (cos rang)) (* from-index (cos axis-slope-angle)))))
+	      (set! object-distance (/ (* object-distance to-index (cos rang)) (* from-index (cos axis-slope-angle))))
 	      (set! axis-slope-angle (- rang)))
 	    (begin
 	      (if (= object-distance 0)
@@ -223,12 +223,11 @@
 	     (line 1 (+ line 1)))
 	    ((null? received)
 	     (format #t "~D error~A in results.~%" errors (if (> errors 1) "s" ""))) 
-	  (if (not (equal? (car expected) (car received)))
-	      (begin
-		(set! errors (+ errors 1))
-		(format () "Error in results in line ~D...~%" line)
-		(format () "Expected: ~A~%" (car expected))
-		(format () "Received: ~A~%" (car received)))))))))
+	  (unless (equal? (car expected) (car received))
+	    (set! errors (+ errors 1))
+	    (format () "Error in results in line ~D...~%" line)
+	    (format () "Expected: ~A~%" (car expected))
+	    (format () "Received: ~A~%" (car received))))))))
 
 
 (fbench 50000)
