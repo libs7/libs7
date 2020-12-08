@@ -283,11 +283,11 @@
 	(format p "#include \"s7.h\"~%~%"))
       
       (define collides?
-	(let ((all-names ()))
+	(let ((all-names (hash-table)))
 	  (lambda (name)
-	    (if (memq name all-names) 
+	    (if (hash-table-ref all-names name) 
 		(format *stderr* "~A twice?~%" name)
-		(set! all-names (cons name all-names)))
+		(hash-table-set! all-names name #t))
 	    name)))
 
       (define (hyphen->space type)

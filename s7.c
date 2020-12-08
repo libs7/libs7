@@ -30927,15 +30927,15 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
   if (filename[0] == '/')
     {
       len = safe_strlen(filename);
-      block = mallocate(sc, len);
+      block = mallocate(sc, len + 1);
       rtn = (char *)block_data(block);
       memcpy((void *)rtn, (void *)filename, len);
-      rtn[len - 1] = '\0';
+      rtn[len] = '\0';
     }
   else
     {
       char *pwd = getcwd(NULL, 0); /* docs say this means it will return a new string of the right size */
-      len = safe_strlen(pwd) + safe_strlen(filename) + 1;
+      len = safe_strlen(pwd) + safe_strlen(filename) + 2; /* not 1! we need room for the '/' and the terminating 0 */
       block = mallocate(sc, len);
       rtn = (char *)block_data(block);
       if (pwd)
@@ -30944,10 +30944,10 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
           catstrs(rtn, len, pwd, "/", filename, (char *)NULL);
           free(pwd);
 	}
-      else
+      else /* isn't this an error? -- perhaps warn about getcwd, strerror(errno) */
 	{
           memcpy((void *)rtn, (void *)filename, len);
-          rtn[len - 1] = '\0';
+          rtn[len] = '\0';
 	}}
   return(block);
 }
@@ -36174,8 +36174,7 @@ static s7_pointer g_display_f(s7_scheme *sc, s7_pointer args) {return(car(args))
 
 static s7_pointer display_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
-  check_for_substring_temp(sc, expr);
-  if (args == 2)
+  if (args == 2) /* not check_for_substring_temp(sc, expr) here -- display returns arg so can be immutable if substring_uncopied */
     return((caddr(expr) == sc->F) ? sc->display_f : sc->display_2);
   return(f);
 }
@@ -76325,7 +76324,7 @@ static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
 }
 
 static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer func, s7_pointer args, s7_pointer body)
-{
+{                                                                 /* func is either sc->unused or a symbol */
   s7_int len;
   len = s7_list_length(sc, body);
 
@@ -76348,7 +76347,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
       sc->got_tc = false;
       sc->got_rec = false;
       sc->rec_tc_args = -1;
-      result = body_is_safe(sc, func, body, true);
+      result = ((is_symbol(func)) && (symbol_is_in_list(sc, func))) ? UNSAFE_BODY : body_is_safe(sc, func, body, true);  /* (define (f f)...) */
       clear_symbol_list(sc);
 
       /* if the body is safe, we can optimize the calling sequence */
@@ -76411,7 +76410,6 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		       */
 		      /* macros confuse this */
 		    }}
-
 	      if ((unstarred_lambda) || ((is_null(p)) && (nvars == sc->rec_tc_args)))
 		{
 		  if (is_null(cdr(body)))
@@ -91672,8 +91670,7 @@ static bool op_unknown_g(s7_scheme *sc)
 	   *   back out: safe_closure_s_* -> safe_closure_s -> closure_s -> op_s_s.  Ideally we'd know
 	   *   this was a parameter or whatever.  The tricky case is local letrec(f) calling f which initially
 	   *   thinks it is not safe, then later is set safe correctly, now outer func is called again,
-	   *   this time f is safe, symbol_ctr==2, and if all is well-behaved we're ok from then on.
-	   *   (added later): I think this is fixed now, so the symbol_ctr stuff below can be removed.
+	   *   this time f is safe, and we're ok from then on.
 	   */
 	  if (is_unknopt(code))
 	    {
@@ -91682,14 +91679,14 @@ static bool op_unknown_g(s7_scheme *sc)
 	      */
 	      switch (op_no_hop(code))
 		{
-		case OP_CLOSURE_S:              set_optimize_op(code, ((is_safe_closure(f)) && (symbol_ctr(car(code)) == 2)) ? OP_SAFE_CLOSURE_S :  OP_S_S); break;
+		case OP_CLOSURE_S:              set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S :  OP_S_S); break;
 		case OP_CLOSURE_S_O:
 		case OP_SAFE_CLOSURE_S:         set_optimize_op(code, OP_CLOSURE_S); break;
 		case OP_SAFE_CLOSURE_S_O:
 		case OP_SAFE_CLOSURE_S_A:
 		case OP_SAFE_CLOSURE_S_TO_S:
 		case OP_SAFE_CLOSURE_S_TO_SC:   set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S : OP_CLOSURE_S); break;
-		case OP_CLOSURE_C:              set_optimize_op(code, ((is_safe_procedure(f)) && (symbol_ctr(car(code)) == 2)) ? OP_SAFE_CLOSURE_C : OP_S_C); break;
+		case OP_CLOSURE_C:              set_optimize_op(code, (is_safe_procedure(f)) ? OP_SAFE_CLOSURE_C : OP_S_C); break;
 		case OP_CLOSURE_C_O:
 		case OP_SAFE_CLOSURE_C:         set_optimize_op(code, OP_CLOSURE_C); break;
 		case OP_SAFE_CLOSURE_C_O:       set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_C : OP_CLOSURE_C); break;
@@ -97934,35 +97931,35 @@ int main(int argc, char **argv)
  * tpeak     115    114                128
  * tauto     648    646               1200
  * tref      691    691                741
- * tshoot    883    881   878         1673
- * index    1026   1018  1017         1087
- * tmock    1177   1170               7733
- * s7test   1873   1826  1832         4525
- * lt       2123   2122  2118         2111
- * tcopy    2256   2233               2313
- * tform    2281   2273               3256
- * tmat     2285   2268  2262         2485
- * tread    2440   2413  2420         2639
+ * tshoot    883    877               1673
+ * index    1026   1017               1087
+ * tmock    1177   1169               7733
+ * s7test   1873   1835               4525
+ * lt       2123   2118               2111
+ * tcopy    2256   2232               2313
+ * tform    2281   2270               3256
+ * tmat     2285   2260               2485
+ * tread    2440   2422               2639
  * tvect    2456   2442               2687
- * trclo    2715   2575  2572         4502
- * fbench   2688   2668  2658         3091
- * tb       2735   2715  2705         3554
- * titer    2865   2858  2850         2883
- * tmap     2886   2878  2876         3825
+ * trclo    2715   2571               4502
+ * fbench   2688   2658               3091
+ * tb       2735   2706               3554
+ * titer    2865   2850               2883
+ * tmap     2886   2878               3825
  * tsort    3105   3104               3809
- * tset     3253   3247  3245         3253
- * tmac     3317   3273  3271         3430
- * dup      3334   3323  3277         3548
+ * tset     3253   3245               3253
+ * tmac     3317   3271               3430
+ * dup      3334   3308               3548
  * teq      4068   4067               4078
- * tfft     4142   4128  4122         11.5
- * tio      4575   4560               4595
- * tmisc    4626   4600  4560         5077
- * tclo     4787   4767               5119
- * tcase    4960   4834  4825         5010
- * tlet     4925   4890  4885         5863
- * tstr     5281   4937  4924
+ * tfft     4142   4120               11.5
+ * tio      4575   4567               4595
+ * tmisc    4626   4560               5077
+ * tclo     4787   4764               5119
+ * tcase    4960   4825               5010
+ * tlet     4925   4887               5863
+ * tstr     5281   4925
  * trec     5976   5972               7825
- * tnum     6348   6107  6087         58.3
+ * tnum     6348   6084               58.3
  * tgen     11.2   11.1               12.0
  * tgc      11.9   11.1
  * thash    11.8   11.7               37.5
@@ -97974,6 +97971,6 @@ int main(int argc, char **argv)
  * -------------------------------------
  *
  * closure_p test, maybe fx_Z again
- * loaded libgsl_s7.so, but can't find init_func , dlerror: /home/bil/motif-snd/libgsl_s7.so: undefined symbol: , let:
- *   init_func name is #\space? this is independent of the with-let change
+ *   no incr in set_symbol_local_slot.  Increment wherever closure defined. how =1, local=opt1, yet wrong? maybe increment in check-let et al?
+ *   opt can see ctr>1? 
  */
