@@ -2958,7 +2958,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define symbol_tag(p)                  (T_Sym(p))->object.sym.tag
 #define symbol_set_tag(p, Val)         (T_Sym(p))->object.sym.tag = Val
 #define symbol_ctr(p)                  (T_Sym(p))->object.sym.ctr            /* needs to be in the symbol object (not symbol_info) for speed */
-#define symbol_set_ctr(p, Val)         (T_Sym(p))->object.sym.ctr = Val
+#define symbol_clear_ctr(p)            (T_Sym(p))->object.sym.ctr = 0
 #define symbol_increment_ctr(p)        (T_Sym(p))->object.sym.ctr++
 #define symbol_tag2(p)                 symbol_info(p)->ln.tag
 #define symbol_set_tag2(p, Val)        symbol_info(p)->ln.tag = Val
@@ -2971,6 +2971,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 
 #define symbol_set_local_slot_unchecked(Symbol, Id, Slot) do {(Symbol)->object.sym.local_slot = T_Sln(Slot); symbol_set_id_unchecked(Symbol, Id); symbol_increment_ctr(Symbol);} while (0)
 #define symbol_set_local_slot(Symbol, Id, Slot) do {set_local_slot(Symbol, Slot); symbol_set_id(Symbol, Id); symbol_increment_ctr(Symbol);} while (0)
+#define symbol_set_local_slot_unincremented(Symbol, Id, Slot) do {set_local_slot(Symbol, Slot); symbol_set_id(Symbol, Id);} while (0)
 /* set slot before id in case Slot is an expression that tries to find the current Symbol slot (using its old Id obviously) */
 
 #define is_slot(p)                     (type(p) == T_SLOT)
@@ -7810,7 +7811,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
   symbol_set_local_slot_unchecked(x, 0LL, sc->nil);
   symbol_set_tag(x, 0);
   symbol_set_tag2(x, 0);
-  symbol_set_ctr(x, 0);
+  symbol_clear_ctr(x);
   symbol_clear_type(x);
   symbol_set_position(x, PD_POSITION_UNSET);
 
@@ -8114,7 +8115,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   set_global_slot(x, sc->undefined);
   /* set_initial_slot(x, sc->undefined); */
   symbol_set_local_slot_unchecked(x, 0LL, sc->nil);
-  symbol_set_ctr(x, 0);
+  symbol_clear_ctr(x);
   symbol_set_tag(x, 0);
   symbol_set_tag2(x, 0);
   symbol_clear_type(x);
@@ -8492,7 +8493,7 @@ static s7_pointer reuse_as_slot(s7_scheme *sc, s7_pointer slot, s7_pointer symbo
   return(slot);
 }
 
-#define update_slot(X, Val, Id) do {s7_pointer sym; slot_set_value(X, Val); sym = slot_symbol(X); symbol_set_local_slot(sym, Id, X);} while (0)
+#define update_slot(X, Val, Id) do {s7_pointer sym; slot_set_value(X, Val); sym = slot_symbol(X); symbol_set_local_slot_unincremented(sym, Id, X);} while (0)
 
 static s7_pointer update_let_with_slot(s7_scheme *sc, s7_pointer let, s7_pointer val)
 {
@@ -10018,7 +10019,7 @@ static void update_symbol_ids(s7_scheme *sc, s7_pointer e)
       s7_pointer sym;
       sym = slot_symbol(p);
       if (symbol_id(sym) != sc->let_number)
-	symbol_set_local_slot(sym, sc->let_number, p);
+	symbol_set_local_slot_unincremented(sym, sc->let_number, p);
     }
 }
 
@@ -48041,13 +48042,12 @@ static void op_set_dilambda(s7_scheme *sc) /* ([set!] (dilambda-setter g) s) */
 
 static void op_set_dilambda_sa_a(s7_scheme *sc)
 {
-  s7_pointer code, obj, func, val, setter;
+  s7_pointer code, obj, func, setter;
   code = cdr(sc->code);
   func = lookup(sc, caar(code));
   obj = lookup(sc, cadar(code));
-  val = fx_call(sc, cdr(code));
   setter = closure_setter(func);
-  sc->curlet = update_let_with_two_slots(sc, closure_let(setter), obj, val);
+  sc->curlet = update_let_with_two_slots(sc, closure_let(setter), obj, fx_call(sc, cdr(code)));
   sc->value = fx_call(sc, closure_body(setter));
 }
 
@@ -59093,14 +59093,13 @@ static s7_pointer op_safe_closure_3s_a(s7_scheme *sc, s7_pointer code)
 
 static s7_pointer fx_safe_closure_aa_a(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer p;
+  s7_pointer f, p;
   p = cdr(code);
   gc_protect_via_stack(sc, sc->curlet); /* this is needed even if one of the args is a symbol, so nothing is saved by splitting out that case */
   sc->stack_end[-4] = fx_call(sc, cdr(p));
-  sc->stack_end[-3] = fx_call(sc, p);
-  p = opt1_lambda(code);
-  sc->curlet = update_let_with_two_slots(sc, closure_let(p), sc->stack_end[-3], sc->stack_end[-4]);
-  p = fx_call(sc, closure_body(p));
+  f = opt1_lambda(code);
+  sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), sc->stack_end[-4]);
+  p = fx_call(sc, closure_body(f));
   sc->curlet = sc->stack_end[-2];
   sc->stack_end -= 4;
   return(p);
@@ -77714,7 +77713,7 @@ static void op_let_fx_old(s7_scheme *sc)
     {
       /* GC protected because it's a permanent let? or perhaps use sc->args? */
       slot_set_value(slot, fx_call(sc, cdar(p)));
-      symbol_set_local_slot(slot_symbol(slot), id, slot);
+      symbol_set_local_slot_unincremented(slot_symbol(slot), id, slot);
     }
   let_set_outlet(let, sc->curlet);
   sc->curlet = let;
@@ -86619,14 +86618,12 @@ static void op_safe_closure_ssa(s7_scheme *sc)
 
 static void op_safe_closure_saa(s7_scheme *sc)
 {
-  s7_pointer args, z, f, arg2;
+  s7_pointer args, f, arg2;
   f = opt1_lambda(sc->code);
   args = cddr(sc->code);
   arg2 = lookup(sc, cadr(sc->code));
   sc->code = fx_call(sc, args);
-  args = cdr(args);
-  z = fx_call(sc, args);
-  sc->curlet = update_let_with_three_slots(sc, closure_let(f), arg2, sc->code, z);
+  sc->curlet = update_let_with_three_slots(sc, closure_let(f), arg2, sc->code, fx_call(sc, cdr(args)));
   sc->code = T_Pair(closure_body(f));
 }
 
@@ -87158,22 +87155,20 @@ static void op_safe_closure_aa(s7_scheme *sc)
   s7_pointer p, f;
   p = cdr(sc->code);
   f = opt1_lambda(sc->code);
-  sc->code = fx_call(sc, cdr(p));
-  sc->value = fx_call(sc, p); /* fx_call can affect sc->value, but not sc->code, I think */
-  sc->curlet = update_let_with_two_slots(sc, closure_let(f), sc->value, sc->code);
+  sc->code = fx_call(sc, cdr(p)); /* fx_call can affect sc->value, but not sc->code, I think */
+  sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), sc->code);
   p = T_Pair(closure_body(f));
   push_stack_no_args(sc, sc->begin_op, cdr(p));
   sc->code = car(p);
 }
 
-static void op_safe_closure_aa_o(s7_scheme *sc)
+static inline void op_safe_closure_aa_o(s7_scheme *sc)
 {
   s7_pointer p, f;
   p = cdr(sc->code);
   f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p));
-  sc->value = fx_call(sc, p);
-  sc->curlet = update_let_with_two_slots(sc, closure_let(f), sc->value, sc->code);
+  sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), sc->code);
   sc->code = car(closure_body(f));
 }
 
@@ -88593,7 +88588,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
   slot = make_slot(sc, caar(let_vars), sc->F);
   slot_set_next(slot, slot_end(sc));
   let_set_slots(inner_let, slot);
-  symbol_set_local_slot(caar(let_vars), let_id(inner_let), slot);
+  symbol_set_local_slot_unincremented(caar(let_vars), let_id(inner_let), slot);
   for (var = cdr(let_vars); is_pair(var); var = cdr(var))
     slot = add_slot_at_end(sc, let_id(inner_let), slot, caar(var), sc->F);
 
@@ -91340,7 +91335,6 @@ static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t ty
 #if S7_DEBUGGING
   if ((type & (T_ONE_FORM | T_MULTIFORM)) != 0) fprintf(stderr, "%s %s: type has body bits\n", __func__, display(code));
 #endif
-  /* fprintf(stderr, "check %s %ld\n", display_80(code), (long int)symbol_ctr(car(code))); */
   f = lookup_unexamined(sc, car(code));
   if ((f == opt1_lambda_unchecked(code)) ||
       ((f) &&
@@ -91378,6 +91372,7 @@ static inline bool closure_fp_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t ar
  *   The problem may be that set! does not increment symbol_ctr, and also maybe not (define f1 f2),
  *     but those cases will change the local_slot value. So, the combination as it is now is safe but stupid?
  * by adding another operator for each closure set, we can skip the symbol_ctr==1 bit once ctr>1, but that only saves about 1%.
+ * It's also possible to move the ctr stuff into the optimizer code (not runtime), but saves less than .5%.
  */
 
 #define closure_is_ok(Sc, Code, Type, Args)			\
@@ -96114,7 +96109,7 @@ static s7_pointer syntax(s7_scheme *sc, const char *name, opcode_t op, s7_pointe
   /* set_local_slot(x, global_slot(x)); */
   set_type_bit(x, T_SYMBOL | T_SYNTACTIC | T_GLOBAL | T_UNHEAP);
   symbol_set_local_slot_unchecked(x, 0LL, sc->nil);
-  symbol_set_ctr(x, 0;)
+  symbol_clear_ctr(x);
   return(x);
 }
 
@@ -97929,35 +97924,35 @@ int main(int argc, char **argv)
  *           20.9   21.0               gmp
  * -------------------------------------
  * tpeak     115    114                128
- * tauto     648    646               1200
+ * tauto     648    646   644         1200
  * tref      691    691                741
  * tshoot    883    877               1673
- * index    1026   1017               1087
+ * index    1026   1017  1016         1087
  * tmock    1177   1169               7733
- * s7test   1873   1835               4525
- * lt       2123   2118               2111
- * tcopy    2256   2232               2313
+ * s7test   1873   1835  1833         4525
+ * lt       2123   2118  2115         2111
+ * tcopy    2256   2232  2230         2313
  * tform    2281   2270               3256
  * tmat     2285   2260               2485
- * tread    2440   2422               2639
+ * tread    2440   2422  2420         2639
  * tvect    2456   2442               2687
- * trclo    2715   2571               4502
- * fbench   2688   2658               3091
- * tb       2735   2706               3554
- * titer    2865   2850               2883
- * tmap     2886   2878               3825
+ * trclo    2715   2571  2569         4502
+ * fbench   2688   2658  2642         3091
+ * tb       2735   2706  2701         3554
+ * titer    2865   2850  2842         2883
+ * tmap     2886   2878  2876         3825
  * tsort    3105   3104               3809
- * tset     3253   3245               3253
+ * tset     3253   3245  3228         3253
  * tmac     3317   3271               3430
- * dup      3334   3308               3548
+ * dup      3334   3308  3293         3548
  * teq      4068   4067               4078
- * tfft     4142   4120               11.5
- * tio      4575   4567               4595
- * tmisc    4626   4560               5077
- * tclo     4787   4764               5119
- * tcase    4960   4825               5010
+ * tfft     4142   4120  4119         11.5
+ * tio      4575   4567  4561         4595
+ * tmisc    4626   4560  4556         5077
+ * tclo     4787   4764  4753         5119
+ * tcase    4960   4825  4823         5010
  * tlet     4925   4887               5863
- * tstr     5281   4925
+ * tstr     5281   4925  4921
  * trec     5976   5972               7825
  * tnum     6348   6084               58.3
  * tgen     11.2   11.1               12.0
@@ -97965,12 +97960,9 @@ int main(int argc, char **argv)
  * thash    11.8   11.7               37.5
  * tall     15.6   15.6               27.0
  * calls    36.7   36.7               60.6
- * sg       71.9   71.8               97.9
- * lg      106.6  105.9 105.6         106.7
- * tbig    177.4  176.9 176.5         603.6
+ * sg       71.9   71.8  71.7         97.9
+ * lg      106.6  105.6 105.4        106.7
+ * tbig    177.4  176.5              603.6
  * -------------------------------------
  *
- * closure_p test, maybe fx_Z again
- *   no incr in set_symbol_local_slot.  Increment wherever closure defined. how =1, local=opt1, yet wrong? maybe increment in check-let et al?
- *   opt can see ctr>1? 
  */

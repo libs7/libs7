@@ -1886,7 +1886,10 @@ int main(int argc, char **argv)
 
   {
     /* iterators */
-    s7_pointer iter, x;
+    s7_pointer iter, hash, x;
+    s7_int gc1, gc2;
+
+    /* iterate over list */
     iter = s7_make_iterator(sc, s7_list(sc, 3, TO_S7_INT(1), TO_S7_INT(2), TO_S7_INT(3)));
     if (!s7_is_iterator(iter))
       fprintf(stderr, "%d: %s is not an iterator\n", __LINE__, TO_STR(iter));
@@ -1904,6 +1907,25 @@ int main(int argc, char **argv)
     x = s7_iterate(sc, iter);
     if ((x != s7_eof_object(sc)) || (!s7_iterator_is_at_end(sc, iter)))
       fprintf(stderr, "%d: %s should be #<eof> and iter should be done\n", __LINE__, TO_STR(x));
+
+    /* iterate over hash table */
+    hash = s7_make_hash_table(sc, 8);
+    gc1 = s7_gc_protect(sc, hash);
+    s7_hash_table_set(sc, hash, s7_make_symbol(sc, "a"), s7_make_integer(sc, 1));
+    s7_hash_table_set(sc, hash, s7_make_symbol(sc, "b"), s7_make_integer(sc, 2));
+    iter = s7_make_iterator(sc, hash);
+    gc2 = s7_gc_protect(sc, iter);
+    x = s7_iterate(sc, iter);
+    if (!s7_is_pair(x))
+      fprintf(stderr, "x: %s\n", s7_object_to_c_string(sc, x));
+    x = s7_iterate(sc, iter);
+    if (!s7_is_pair(x))
+      fprintf(stderr, "x: %s\n", s7_object_to_c_string(sc, x));
+    x = s7_iterate(sc, iter);
+    if (!s7_is_eq(s7_eof_object(sc), x))
+      fprintf(stderr, "x: %s\n", s7_object_to_c_string(sc, x));
+    s7_gc_unprotect_at(sc, gc1);
+    s7_gc_unprotect_at(sc, gc2);
   }
 
   g_block_type = s7_make_c_type(sc, "<block>");
