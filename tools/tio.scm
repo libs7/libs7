@@ -99,7 +99,7 @@
 
 (define (call-wof) 
   (do ((i 0 (+ i 1)))
-      ((= i fsize))
+      ((= i 10))
     (wof)))
 
 (define (cwof)
@@ -109,7 +109,7 @@
 
 (define (call-cwof) 
   (do ((i 0 (+ i 1)))
-      ((= i fsize))
+      ((= i 10))
     (cwof)))
 
 (define (op1)
@@ -169,7 +169,7 @@
 
 (define (call-op4) 
   (do ((i 0 (+ i 1)))
-      ((= i fsize))
+      ((= i 10))
     (op4)))
 
 #|

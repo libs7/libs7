@@ -4387,8 +4387,7 @@ void notcurses_s7_init(s7_scheme *sc)
   #if (defined(NOTCURSES_VERNUM_MAJOR))
     nc_int(NOTCURSES_VERNUM_MAJOR);
     nc_int(NOTCURSES_VERNUM_MINOR);
-    nc_int(NOTCURSES_VERNUM_PATCH);
-    nc_int(NOTCURSES_VERNUM_TWEAK);
+    nc_int(NOTCURSES_VERNUM_PATCH); /* tweak version "number" can be empty! */
     nc_int(NOTCURSES_VERNUM_ORDERED);
   #endif
 #endif

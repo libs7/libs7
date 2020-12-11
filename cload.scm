@@ -588,6 +588,10 @@
 	
 	(format p "}~%")
 	(close-output-port p)
+
+	(unless (or (file-exists? "s7.h")
+		    (not (pair? *load-path*)))
+	  (set! *cload-cflags* (append *cload-cflags* (format #f " -I~A" (car *load-path*)))))
 	
 	;; now we have the module .c file -- make it into a shared object, load it, delete the temp files
 	
