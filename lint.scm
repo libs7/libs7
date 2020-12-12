@@ -21515,7 +21515,8 @@
 		(lint-format "with-let is messed up: ~A" caller (truncated-list->string form))
 		(let ((e (cadr form)))
 		  (if (or (and (code-constant? e)
-			       (not (let? e)))
+			       (not (let? e))
+			       (not (eq? e '*s7*))) ; (with-let *s7* ... )
 			  (and (pair? e)
 			       (let ((op (return-type (car e) env)))
 				 (and op
