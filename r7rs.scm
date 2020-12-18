@@ -41,7 +41,7 @@
   (if (null? args)
       (#_make-hash-table)
       (if (procedure? (car args))
-	  (#_make-hash-table (if (null? (cdr args)) (*s7 'default-hash-table-length) (cadr args)) (car args))
+	  (#_make-hash-table (if (null? (cdr args)) (*s7* 'default-hash-table-length) (cadr args)) (car args))
 	  (apply #_make-hash-table args))))
 
 (define bytevector byte-vector)
