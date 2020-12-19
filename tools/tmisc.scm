@@ -279,6 +279,39 @@
   (test 100000))
 
 
+;;; -------- built-ins via #_ --------
+
+(define (u0)
+  (do ((i 0 (+ i 1)))
+      ((= i 100000) (#_list))
+    (#_list)))
+
+(unless (null? (u0)) (format *stderr* "u0: ~S~%" (u0)))
+
+(define (u1)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000000) (#_length "asdfghjklijk"))
+    (#_length "asdfghjklijk")))
+
+(unless (eqv? (u1) 12) (format *stderr* "u1: ~S~%" (u1)))
+
+(define (u2)
+  (let ((str "asdfghjklijk"))
+    (do ((i 0 (+ i 1)))
+	((= i 100000) (#_char-position #\h str))
+      (#_char-position #\h str))))
+
+(unless (eqv? (u2) 5) (format *stderr* "u2: ~S~%" (u2)))
+
+(define (u3)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000000) (#_+ i (* -2 i) i))
+    (#_+ i (* -2 i) i)))
+
+(unless (eqv? (u3) 0) (format *stderr* "u3: ~S~%" (u3)))
+
+
+
 ;;; -------- unlet --------
 ;;; incrementally set all globals to 42 -- check that unlet exprs return the same results
 

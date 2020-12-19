@@ -4420,9 +4420,11 @@ void notcurses_s7_init(s7_scheme *sc)
  *  API struct ncplane* ncplane_reparent_family(struct ncplane* n, struct ncplane* newparent);
  *  API struct ncplane* ncpile_create(struct notcurses* nc, const ncplane_options* nopts);
  * 2.1.0
- * cell -> nccell, cell_load/duplicate/release/extended_gcluster
- * ncpile_top|bottom, ncplane_resize_maximize, ncplane_descendent_p?
- * NCPLOT_OPTION_PRINTSAMPLE
+ *  cell -> nccell, cell_load/duplicate/release/extended_gcluster
+ *  ncpile_top|bottom, ncplane_resize_maximize, ncplane_descendent_p?
+ *  NCPLOT_OPTION_PRINTSAMPLE
+ * 2.1.1
+ *  ncprogbar
  */
 #endif
 
