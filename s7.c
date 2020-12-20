@@ -71848,7 +71848,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 
   arg1 = cadr(expr);
   func_is_safe = is_safe_procedure(func);
-  if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
+  if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
 
   if (pairs == 0)
     {
@@ -73323,7 +73323,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       (c_function_all_args(func) >= 1) &&
       (!is_keyword(arg1)))           /* the only arg should not be a keyword (needs error checks later) */
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
+      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
       set_safe_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_A);
       fx_annotate_arg(sc, cdr(expr), e);
       set_opt3_arglen(expr, int_one);
@@ -73484,9 +73484,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       /* this is a mess */
       bool func_is_safe;
 
-      if ((hop == 0) && (symbol_id(car(expr)) == 0))
-	hop = 1;
-
+      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
       func_is_safe = is_safe_procedure(func);
       if (pairs == 0)
 	{
@@ -74145,7 +74143,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       (c_function_all_args(func) >= 1) &&
       (!is_keyword(arg2)))
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
+      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
       set_optimized(expr);
       set_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_AA); /* k+c? = cc */
       fx_annotate_args(sc, cdr(expr), e);
@@ -74390,9 +74388,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       (c_function_required_args(func) <= 3) &&
       (c_function_all_args(func) >= 3))
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0))
-	hop = 1;
-
+      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
       if ((is_safe_procedure(func)) ||
 	  ((is_maybe_safe(func)) && (unsafe_is_safe(sc, arg3, e))))
 	{
@@ -74627,8 +74623,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
       (c_function_required_args(func) <= args) &&
       (c_function_all_args(func) >= args))
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
-
+      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
       if (is_safe_procedure(func))
 	{
 	  if (pairs == 0)
@@ -75334,7 +75329,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 }
 
 
-static opt_t opt_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t orig_hop, s7_pointer e)
+static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t orig_hop, s7_pointer e)
 {
   int32_t pairs = 0, symbols = 0, args = 0, bad_pairs = 0, quotes = 0;
   s7_pointer p;
@@ -75455,7 +75450,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 		   *   This can be confused if lambda is redefined at some point, but...
 		   */
 		}
-	      return(opt_funcs(sc, expr, func, hop, orig_hop, e));
+	      return(optimize_funcs(sc, expr, func, hop, orig_hop, e));
 	    }}
       else
 	{
@@ -75603,10 +75598,10 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
       /* (define (hi a) (case 1 ((1) (if (> a 2) a 2)))) */
       s7_pointer p;
 
-      if (is_c_function(car_expr))
+      if (is_c_function(car_expr)) /* (#_abs x) etc */
 	{
 	  /* fprintf(stderr, "c-func: %s\n", display(expr)); */
-	  return(opt_funcs(sc, expr, car_expr, 1, orig_hop, e));
+	  return(optimize_funcs(sc, expr, car_expr, 1, orig_hop, e));
 	}
 
       for (p = expr; is_pair(p); p = cdr(p))
@@ -97895,11 +97890,11 @@ int main(int argc, char **argv)
  * tio        3843                3820
  * teq        4054         4068   4045
  * tfft       11.3         4142   4111
- * tmisc                   5487   4716
  * tclo       5051         4787   4745
  * tcase      4850         4960   4787
  * tlet       5782         4925   4851
  * tstr       6995         5281   4863
+ * tmisc                   7000   5830
  * trec       7763         5976   5970
  * tnum       59.5         6348   6020
  * tgc        12.6         11.9   11.1
