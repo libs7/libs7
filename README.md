@@ -20,6 +20,8 @@ s7 is a Scheme interpreter.
 
 [radium](https://users.notam02.no/~kjetism/radium/) (Kjetil Matheussen)
 
+[SchemeMosaic](http://xelf.me/scheme-mosaic.html) (David O'Toole)
+
 [Common Music](http://commonmusic.sourceforge.net/) (Rick Taube)
 
 docker container: docker run -it schemers/s7:head (Lassi Kortela)

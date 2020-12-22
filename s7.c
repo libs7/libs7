@@ -3544,7 +3544,11 @@ static s7_pointer make_permanent_integer_unchecked(s7_int i)
 #endif
 static s7_pointer *small_ints = NULL;
 
+#if S7_DEBUGGING
+static s7_pointer small_int(s7_int val) {if ((val < 0) || (val >= NUM_SMALL_INTS)) fprintf(stderr, "small_int: %ld\n", val); return(small_ints[val]);}
+#else
 #define small_int(Val) small_ints[Val]
+#endif
 #define is_small_int(n) ((n & ~(NUM_SMALL_INTS - 1)) == 0)                 /* ((n >= 0) && (n < NUM_SMALL_INTS)) is slower */
 
 static s7_pointer real_zero, real_NaN, complex_NaN, real_pi, real_one, arity_not_set, max_arity, real_infinity, real_minus_infinity;
@@ -47285,7 +47289,7 @@ each a function of no arguments, guaranteeing that finish is called even if body
 
 static bool is_lambda(s7_scheme *sc, s7_pointer sym)
 {
-  return((sym == sc->lambda_symbol) && (symbol_id(sym) == 0));
+  return((sym == sc->lambda_symbol) && (symbol_id(sym) == 0)); /* do we need (!sc->in_with_let) ? */
   /* symbol_id=0 means it has never been rebound (T_GLOBAL might not be set for initial stuff) */
 }
 
@@ -51920,15 +51924,14 @@ static s7_pointer object_to_list(s7_scheme *sc, s7_pointer obj)
 
 	result = make_list(sc, len, sc->nil);
 	sc->temp8 = result;
-	z = list_2(sc, obj, sc->F);
-	zc = cdr(z);
+	z = list_2(sc, obj, zc = make_mutable_integer(sc, 0));
 	gc_z = s7_gc_protect_1(sc, z);
 
 	set_car(sc->z2_1, sc->x);
 	set_car(sc->z2_2, sc->z);
 	for (i = 0, x = result; i < len; i++, x = cdr(x))
 	  {
-	    set_car(zc, make_integer(sc, i));
+	    integer(zc) = i;
 	    set_car(x, (*(c_object_ref(sc, obj)))(sc, z));
 	  }
 	sc->x = car(sc->z2_1);
@@ -61633,7 +61636,7 @@ static s7_int opt_set_i_i_f(opt_info *o)
   return(x);
 }
 
-static s7_int opt_set_i_i_fm(opt_info *o) /* when is this called? increment: (set! sum (+ sum (...))) where are all ints */
+static s7_int opt_set_i_i_fm(opt_info *o) /* called in increment: (set! sum (+ sum (...))) where are all ints */
 {
   s7_int x;
   x = o->v[3].fi(o->v[2].o1);
@@ -75056,7 +75059,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
        */
       {
 	bool old_with_let;
-	old_with_let = sc->in_with_let; /* in_with_let is used only in arg_findable */
+	old_with_let = sc->in_with_let; 
 	sc->in_with_let = (old_with_let) || (!is_pair(body)) || (!is_pair(car(body))) || (caar(body) != sc->unlet_symbol);
 	for (p = body; is_pair(p); p = cdr(p))
 	  if ((is_pair(car(p))) &&
@@ -84255,32 +84258,52 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	    }
 	  clear_mutable_integer(stepper);
 	}
-      else
+      else /* not safe_step */
 	{
 	  s7_int step;
 	  s7_pointer step_slot, end_slot;
 	  step_slot = let_dox_slot1(sc->curlet);
 	  end_slot = let_dox_slot2(sc->curlet);
+	  step = integer(slot_value(step_slot));
+
 	  if (func == opt_cell_any_nr)
 	    {
 	      opt_info *o;
 	      s7_pointer (*fp)(opt_info *o);
 	      o = sc->opts[0];
 	      fp = o->v[0].fp;
-	      if (!opt_do_copy(sc, o, integer(slot_value(step_slot)), integer(slot_value(end_slot))))
-		do {
-		  fp(o);
-		  step = integer(slot_value(step_slot)) + 1;
-		  slot_set_value(step_slot, make_integer(sc, step));
-		} while (step != integer(slot_value(end_slot)));
-	    }
+	      if (!opt_do_copy(sc, o, step, integer(slot_value(end_slot))))
+		{
+		  if ((step >= 0) && (integer(slot_value(end_slot)) < NUM_SMALL_INTS))
+		    while (step < integer(slot_value(end_slot)))
+		      {
+			slot_set_value(step_slot, small_int(step));
+			fp(o);
+			step = integer(slot_value(step_slot)) + 1;
+		      }
+		  else
+		    while (step < integer(slot_value(end_slot)))
+		      {
+			slot_set_value(step_slot, make_integer(sc, step));
+			fp(o);
+			step = integer(slot_value(step_slot)) + 1;
+		      }}}
 	  else
-	    do {
-		func(sc, car(code));
-		step = integer(slot_value(step_slot)) + 1;
-		slot_set_value(step_slot, make_integer(sc, step));
-	      } while (step != integer(slot_value(end_slot)));
-	}
+	    {
+	      if ((step >= 0) && (integer(slot_value(end_slot)) < NUM_SMALL_INTS))
+		while (step < integer(slot_value(end_slot)))
+		  {
+		    slot_set_value(step_slot, small_int(step));
+		    func(sc, car(code));
+		    step = integer(slot_value(step_slot)) + 1;
+		  } 
+	      else
+		while (step < integer(slot_value(end_slot)))
+		  {
+		    slot_set_value(step_slot, make_integer(sc, step));
+		    func(sc, car(code));
+		    step = integer(slot_value(step_slot)) + 1;
+		  }}}
       sc->value = sc->T;
       sc->code = cdadr(scc);
       return(true);
@@ -84329,12 +84352,12 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  s7_int step;
 		  step_slot = let_dox_slot1(sc->curlet);
 		  end_slot = let_dox_slot2(sc->curlet);
-		  do {
-		    for (i = 0; i < body_len; i++)
-		      body[i]->v[0].fd(body[i]);
-		    step = integer(slot_value(step_slot)) + 1;
-		    slot_set_value(step_slot, make_integer(sc, step));
-		  } while (step != integer(slot_value(end_slot)));
+		  for (step = integer(slot_value(step_slot)); step < integer(slot_value(end_slot)); step = integer(slot_value(step_slot)) + 1)
+		    {
+		      slot_set_value(step_slot, make_integer(sc, step));
+		      for (i = 0; i < body_len; i++)
+			body[i]->v[0].fd(body[i]);
+		    } 
 		}
 	      sc->value = sc->T;
 	      sc->code = cdadr(scc);
@@ -84373,20 +84396,16 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	      s7_int step;
 	      step_slot = let_dox_slot1(sc->curlet);
 	      end_slot = let_dox_slot2(sc->curlet);
-	      do {
-		for (i = 0; i < body_len; i++)
-		  body[i]->v[0].fp(body[i]);
-		step = integer(slot_value(step_slot)) + 1;
-		slot_set_value(step_slot, make_integer(sc, step));
-	      } while (step != integer(slot_value(end_slot)));
-	    }
+	      for (step = integer(slot_value(step_slot)); step < integer(slot_value(end_slot)); step = integer(slot_value(step_slot)) + 1)
+		{
+		  slot_set_value(step_slot, make_integer(sc, step));
+		  for (i = 0; i < body_len; i++)
+		    body[i]->v[0].fp(body[i]);
+		}}
 	  sc->value = sc->T;
 	  sc->code = cdadr(scc);
 	  return(true);
 	}}
-  /* (((i 0 (+ i 1))) ((= i 10) 'gad) (set! ctr (+ ctr 1)) (if (= i 1) (exit arg)))
-   * (((k j (+ k 1))) ((= k len2) obj) (set! (obj n) (seq2 k)) (set! n (+ n 1)))
-   */
   return(false);
 }
 
@@ -84734,16 +84753,13 @@ static goto_t op_safe_do(s7_scheme *sc)
   sc->args = let_dox_slot2(sc->curlet);  /* the various safe steps assume sc->args is the end slot */
   old_let = sc->curlet;
 
-  if ((!is_unsafe_do(sc->code)) &&
-      ((!is_optimized(caadr(code))) ||
-       (opt1_cfunc(caadr(code)) != sc->geq_2)))
+  if (!is_unsafe_do(sc->code))
     {
       if (opt_dotimes(sc, cddr(sc->code), sc->code, false))
 	return(goto_safe_do_end_clauses);
-      set_unsafe_do(sc->code);
-      /* opt_dotimes can change sc->curlet (indirectly via s7_optimize I think), but OP_SAFE_DO_STEP assumes dox1 is ok (above), so we can't go on here */
-      if (sc->curlet != old_let)
-	return(goto_do_unchecked);
+
+      if (sc->curlet != old_let) /* apparently s7_optimize can step on sc->curlet? */
+	sc->curlet = old_let;
     }
   if (is_null(cdddr(sc->code)))
     {
@@ -90119,7 +90135,7 @@ static s7_pointer op_s_c(s7_scheme *sc)
   sc->code = lookup_checked(sc, car(code));
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
-  sc->args = (dont_eval_args(sc->code)) ? copy_proper_list(sc, cdr(code)) : list_1(sc, cadr(code));
+  sc->args = list_1(sc, cadr(code));
   return(NULL);
 }
 
@@ -90138,7 +90154,7 @@ static Inline bool op_s_s(s7_scheme *sc)
     }
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
-  sc->args = (dont_eval_args(sc->code)) ? copy_proper_list(sc, cdr(code)) : list_1(sc, lookup(sc, cadr(code)));
+  sc->args = (dont_eval_args(sc->code)) ? list_1(sc, cadr(code)) : list_1(sc, lookup(sc, cadr(code)));
   return(false); /* goto APPLY; */
 }
 
@@ -90149,7 +90165,7 @@ static inline s7_pointer op_s_a(s7_scheme *sc)
   sc->code = lookup_checked(sc, car(code));
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
-  sc->args = (dont_eval_args(sc->code)) ? copy_proper_list(sc, cdr(code)) : list_1(sc, fx_call(sc, cdr(code)));
+  sc->args = (dont_eval_args(sc->code)) ? list_1(sc, cadr(code)) : list_1(sc, fx_call(sc, cdr(code)));
   return(NULL);
 }
 
@@ -90161,7 +90177,7 @@ static s7_pointer op_s_aa(s7_scheme *sc)
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
   if (dont_eval_args(sc->code))
-    sc->args = copy_proper_list(sc, cdr(code));
+    sc->args = list_2(sc, cadr(code), caddr(code));
   else
     {
       sc->args = list_1(sc, fx_call(sc, cddr(code)));
@@ -90782,10 +90798,11 @@ static Inline void op_apply_ss(s7_scheme *sc)
    */
   sc->args = lookup(sc, opt2_sym(sc->code));  /* is this right if code=macro? */
   sc->code = lookup(sc, cadr(sc->code));      /* global search here was slower (e.g. tauto) */
-  if (!s7_is_proper_list(sc, sc->args))       /* (apply + #f) etc */
-    apply_list_error(sc, sc->args);
   if (needs_copied_args(sc->code))
-    sc->args = copy_proper_list(sc, sc->args);
+    sc->args = copy_proper_list_with_arglist_error(sc, sc->args);
+  else 
+    if (!s7_is_proper_list(sc, sc->args))     /* (apply + #f) etc */
+      apply_list_error(sc, sc->args);
 }
 
 static void op_apply_sa(s7_scheme *sc)
@@ -90794,10 +90811,11 @@ static void op_apply_sa(s7_scheme *sc)
   p = cdr(sc->code);
   sc->args = fx_call(sc, cdr(p));
   sc->code = lookup_global(sc, car(p));
-  if (!s7_is_proper_list(sc, sc->args))     /* (apply + #f) etc */
-    apply_list_error(sc, sc->args);
   if (needs_copied_args(sc->code))
-    sc->args = copy_proper_list(sc, sc->args);
+    sc->args = copy_proper_list_with_arglist_error(sc, sc->args);
+  else 
+    if (!s7_is_proper_list(sc, sc->args))     /* (apply + #f) etc */
+      apply_list_error(sc, sc->args);
 }
 
 static void op_apply_sl(s7_scheme *sc)
@@ -97866,46 +97884,48 @@ int main(int argc, char **argv)
  *             gmp         20.9   21.0
  * -------------------------------------
  * tpeak       128          115    114
- * tauto       778          648    643
+ * tauto       778          648    643  642
  * tref        736          691    687
  * tshoot     1663          883    872
  * index      1074         1026   1014
- * tmock      7697         1177   1168 1165
+ * tmock      7697         1177   1166
  * s7test     4546         1873   1831
  * lt         2115         2123   2109
  * tcopy      2290         2256   2230
  * tmat       2412         2285   2257
- * tform      3251         2281   2273
- * tread      2610         2440   2411
- * tvect      2669         2456   2434
+ * tform      3251         2281   2266
+ * tread      2610         2440   2411 2419?
+ * tvect      2669         2456   2434 2413
  * trclo      4309         2715   2561
  * fbench     2983         2688   2591
  * tb         3474         2735   2681
  * titer      2860         2865   2842
  * tmap       3785         2886   2858
  * tsort      3821         3105   3104
- * tset       3093         3253   3104
+ * tset       3093         3253   3103
  * tmac       3343         3317   3263
- * dup        3589         3334   3326
- * tio        3843                3820
+ * dup        3589         3334   3326 3367
+ * tio        3843         3816   3820
  * teq        4054         4068   4045
- * tfft       11.3         4142   4111
- * tclo       5051         4787   4745
- * tcase      4850         4960   4787
- * tlet       5782         4925   4851
+ * tfft       11.3         4142   4110
+ * tclo       5051         4787   4745 4736
+ * tcase      4850         4960   4785
+ * tlet       5782         4925   4851 5336?? [with-let]
  * tstr       6995         5281   4863
- * tmisc                   7000   5830
  * trec       7763         5976   5970
- * tnum       59.5         6348   6020
+ * tnum       59.5         6348   6020 6012
+ * tmisc                   7389   6194
  * tgc        12.6         11.9   11.1
  * tgen       12.0         11.2   11.2 11.3
  * thash      37.4         11.8   11.7
  * tall       26.9         15.6   15.6
- * calls      60.2         36.7   36.6
- * sg         97.4         71.9   71.6
+ * calls      60.2         36.7   36.6 37.3 [same]
+ * sg         97.4         71.9   71.6 72.2 [same]
  * lg        105.5        106.6  105.0
  * tbig      601.8        177.4  175.8
  * -------------------------------------
  *
  * notcurses 2.1.0 diffs
+ * more make_integer? unlet?
+ * how to handle with-let optimization trouble?
  */

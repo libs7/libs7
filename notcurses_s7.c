@@ -4425,6 +4425,8 @@ void notcurses_s7_init(s7_scheme *sc)
  *  NCPLOT_OPTION_PRINTSAMPLE
  * 2.1.1
  *  ncprogbar
+ * 2.1.2
+ *  notcurses_linesigs_enable|disable
  */
 #endif
 

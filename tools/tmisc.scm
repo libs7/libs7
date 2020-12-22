@@ -333,7 +333,7 @@
 (define (m7)
   (let ((L (openlet (inlet :+ (lambda (x y) (#_+ x y 1))))))
     (do ((i 0 (+ i 1)))
-	((= i 400000) ((L :+) 2 3))
+	((= i 500000) ((L :+) 2 3))
       ((L :+) 2 3))))
 
 (unless (eqv? (m7) 6) (format *stderr* "m7: ~S~%" (m7)))
@@ -341,7 +341,7 @@
 (define (m8)
   (let ((L (openlet (inlet :+ (lambda args (apply #_+ 1 args))))))
     (do ((i 0 (+ i 1)))
-	((= i 1) (with-let L (+ 2 3)))
+	((= i 500000) (with-let L (+ 2 3)))
       (with-let L (+ 2 3)))))
 
 (unless (eqv? (m8) 6) (format *stderr* "m8: ~S~%" (m8)))
