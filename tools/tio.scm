@@ -16,19 +16,20 @@
       ((= i ssize))
     (wis)))
 
-(define (cwis)
+(define cwis
   (let ((a (char->integer #\a))
 	(s (char->integer #\s)))
-    (call-with-input-string "asdf"
-      (lambda (p)
-	(if (port-closed? p)
-	     (format *stderr* "cwis port closed\n"))
-	(unless (eqv? (read-byte p) a)
-	  (format *stderr* "call read-char trouble\n"))
-	(unless (eqv? (read-byte p) s)
-	  (format *stderr* "call read-char trouble\n"))
-	(unless (eqv? (port-position p) 2)
-	  (format *stderr* "cwis position: ~A~%" (port-position p)))))))
+    (lambda ()
+      (call-with-input-string "asdf"
+	(lambda (p)
+	  (if (port-closed? p)
+	      (format *stderr* "cwis port closed\n"))
+	  (unless (eqv? (read-byte p) a)
+	    (format *stderr* "call read-char trouble\n"))
+	  (unless (eqv? (read-byte p) s)
+	    (format *stderr* "call read-char trouble\n"))
+	  (unless (= (port-position p) 2)
+	    (format *stderr* "cwis position: ~A~%" (port-position p))))))))
 
 (define (call-cwis) 
   (do ((i 0 (+ i 1)))
@@ -151,9 +152,9 @@
       (format *stderr* "op3 trouble\n"))
     (unless (string=? (read-line port) "fdsa")
       (format *stderr* "op3 2 trouble\n"))
-    (unless (eqv? (port-position port) 10)
+    (unless (= (port-position port) 10)
       (format *stderr* "op3 pos: ~S~%" (port-position port)))
-    (unless (eqv? (port-line-number port) 3) ; 1-based??
+    (unless (= (port-line-number port) 3) ; 1-based??
       (format *stderr* "op3 line: ~S~%" (port-line-number port)))
     (close-input-port port)))
 

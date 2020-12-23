@@ -230,7 +230,7 @@
 ;;; -------- typers --------
 (let ()
   (define (10-or-12? val)
-    (and (integer? val)
+    (and (integer? val) ; hmmm -- this is faster than (memv val '(10 12))
 	 (or (= val 10) 
 	     (= val 12))))
   

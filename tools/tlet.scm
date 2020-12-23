@@ -46,15 +46,14 @@
 	  (sum2 0.0)
 	  (sum3 0.0)
 	  (inc 0.0))
-      (do ((i 0 (+ i 1)))
-	  ((= i size))
-	(set! inc (symbol->value (vector-ref symbols i)))
-	(set! sum1 (+ sum1 inc))
-	(set! sum2 (- sum2 inc))
-	(set! sum3 (+ sum3 (symbol->value (vector-ref symbols (random i))))))
+      (do ((i 0 (#_+ i 1)))
+	  ((#_= i size))
+	(set! inc (#_symbol->value (#_vector-ref symbols i)))
+	(set! sum1 (#_+ sum1 inc))
+	(set! sum2 (#_- sum2 inc))
+	(set! sum3 (#_+ sum3 (symbol->value (vector-ref symbols (random i))))))
       (format *stderr* "~A ~A ~A ~A~%" (/ (- (* size size) size) 2) sum1 sum2 sum3))))
 (in-e)
-
 
 ;;; --------------------------------------------------------------------------------
 (define include-let #t)

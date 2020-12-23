@@ -1606,6 +1606,32 @@ static s7_pointer g_ncplane_putnstr_aligned(s7_scheme *sc, s7_pointer args)
 						     (size_t)s7_integer_checked(sc, s7_cadddr(args)), 
 						     (const char *)s7_string_checked(sc, s7_cadr(s7_cdddr(args))))));
 }
+
+#if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+static s7_pointer g_ncpile_render(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncpile_render((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1))));
+}
+
+static s7_pointer g_ncpile_rasterize(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncpile_rasterize((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1))));
+}
+
+static s7_pointer g_ncpile_create(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_c_pointer_with_type(sc, ncpile_create((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
+						       (const ncplane_options *)s7_c_pointer(s7_cadr(args))),
+				     ncplane_symbol, s7_f(sc)));
+}
+
+static s7_pointer g_ncplane_reparent_family(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_c_pointer_with_type(sc, ncplane_reparent_family((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1),
+						       (struct ncplane *)s7_c_pointer_with_type(sc, s7_cadr(args), ncplane_symbol, __func__, 1)),
+				     ncplane_symbol, s7_f(sc)));
+}
+#endif
 #endif
 
 static s7_pointer g_ncplane_putnstr_yx(s7_scheme *sc, s7_pointer args)
@@ -3492,7 +3518,7 @@ static s7_pointer g_ncvisual_destroy(s7_scheme *sc, s7_pointer args)
   ncvisual_destroy((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1));
   return(s7_f(sc));
 }
-
+ 
 static s7_pointer g_ncvisual_decode(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncvisual_decode((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1))));
@@ -3599,6 +3625,13 @@ static s7_pointer g_ncvisual_geom(s7_scheme *sc, s7_pointer args)
 					  &y, &x, &toy, &tox));
   return(s7_list(sc, 5, res, s7_make_integer(sc, y), s7_make_integer(sc, x), s7_make_integer(sc, toy), s7_make_integer(sc, tox)));
 }
+
+#if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+static s7_pointer g_ncvisual_decode_loop(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncvisual_decode_loop((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1))));
+}
+#endif
 
 /* typedef int (*streamcb)(struct ncvisual*, struct ncvisual_options*, const struct timespec*, void*);
  * int ncvisual_stream(struct notcurses* nc, struct ncvisual* ncv, nc_err_e* ncerr, float timescale, streamcb streamer, const struct ncvisual_options* vopts, void* curry);
@@ -3805,6 +3838,10 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCSTYLE_INVIS);
   nc_int(NCSTYLE_PROTECT);
   nc_int(NCSTYLE_ITALIC);
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+  nc_int(NCSTYLE_STRUCK);
+  nc_int(NCSTYLE_NONE);
+#endif
 
   nc_int(WCHAR_MAX_UTF8BYTES);
 
@@ -4150,6 +4187,13 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_above, 1, 0, false);
   nc_func(ncplane_parent, 1, 0, false);
 
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+  nc_func(ncpile_render, 1, 0, false);
+  nc_func(ncpile_rasterize, 1, 0, false);
+  nc_func(ncpile_create, 2, 0, false);
+  nc_func(ncplane_reparent_family, 2, 0, false);
+#endif
+
   nc_func(cell_make, 0, 0, false);
   nc_func(cell_load, 3, 0, false);
   nc_func(cell_duplicate, 3, 0, false);
@@ -4345,6 +4389,9 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncvisual_render, 3, 0, false);
   nc_func(ncvisual_simple_streamer, 4, 0, false);
   nc_func(ncvisual_geom, 7, 0, false);
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+  nc_func(ncvisual_decode_loop, 1, 0, false);
+#endif
 
   nc_func(ncplane_rgba, 6, 0, false);
   nc_func(ncblit_rgba, 3, 0, false);
@@ -4412,13 +4459,6 @@ void notcurses_s7_init(s7_scheme *sc)
  *  list of lists of menu items -> (permanent) c array, arg type checks
  *  API void ncplane_set_resizecb(struct ncplane* n, int(*resizecb)(struct ncplane*)); -- these need wrappers
  *  API int (*ncplane_resizecb(const struct ncplane* n))(struct ncplane*);
- *  API int ncvisual_decode_loop(struct ncvisual* nc);
- * 2_0_8?
- *  #define NCSTYLE_STRUCK    0x0200u
- *  API int ncpile_render(struct ncplane* n);
- *  API int ncpile_rasterize(struct ncplane* n);
- *  API struct ncplane* ncplane_reparent_family(struct ncplane* n, struct ncplane* newparent);
- *  API struct ncplane* ncpile_create(struct notcurses* nc, const ncplane_options* nopts);
  * 2.1.0
  *  cell -> nccell, cell_load/duplicate/release/extended_gcluster
  *  ncpile_top|bottom, ncplane_resize_maximize, ncplane_descendent_p?

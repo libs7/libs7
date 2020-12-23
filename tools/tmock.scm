@@ -74,11 +74,10 @@
 	(let ((temp (data j)))
 	  (set! (data j) (data i))
 	  (set! (data i) temp)))
-    (do ((m (/ n 2)))
+    (do ((m (/ n 2) (/ m 2)))
 	((or (< m 2) (< j m))
 	 (set! j (+ j m)))
-      (set! j (- j m))
-      (set! m (/ m 2))))
+      (set! j (- j m))))
   
   (let ((ipow (floor (log n 2)))
 	(prev 1))
