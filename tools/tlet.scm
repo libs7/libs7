@@ -51,7 +51,7 @@
 	(set! inc (#_symbol->value (#_vector-ref symbols i)))
 	(set! sum1 (#_+ sum1 inc))
 	(set! sum2 (#_- sum2 inc))
-	(set! sum3 (#_+ sum3 (symbol->value (vector-ref symbols (random i))))))
+	(set! sum3 (#_+ sum3 (#_symbol->value (#_vector-ref symbols (#_random i))))))
       (format *stderr* "~A ~A ~A ~A~%" (/ (- (* size size) size) 2) sum1 sum2 sum3))))
 (in-e)
 
@@ -195,7 +195,7 @@
 		     'xx (* a 2)
 		     'yy (- a 1)
 		     'zz (lambda () 22))
-    (+ x y (z) xx yy (zz))))
+    (#_+ x y (z) xx yy (zz))))
   (define (test51)
     (unless (= (f51 5) 84) (format *stderr* "(f51 5): ~S (expected ~S)~%" (f51 5) 84))
     (do ((i 0 (+ i 1)))
@@ -205,7 +205,7 @@
 
   (define (f52 a)
     (with-let (inlet 'x (+ a 1))
-      (* x 2)))
+      (#_* x 2)))
   (define (test52)
     (unless (= (f52 5) 12) (format *stderr* "(f52 5): ~S (expected ~S)~%" (f52 5) 12))
     (do ((i 0 (+ i 1)))
