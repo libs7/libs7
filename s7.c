@@ -2480,6 +2480,8 @@ void s7_show_history(s7_scheme *sc);
 #define T_DEFINER                      (1 << 2)
 #define is_definer(p)                  has_type1_bit(T_Sym(p), T_DEFINER)
 #define set_is_definer(p)              set_type1_bit(T_Sym(p), T_DEFINER)
+#define is_func_definer(p)             has_type1_bit(T_Fnc(p), T_DEFINER)
+#define set_func_is_definer(p)         do {set_type1_bit(T_Fnc(slot_value(initial_slot(p))), T_DEFINER); set_type1_bit(T_Sym(p), T_DEFINER);} while (0)
 /* this marks "definers" like define and define-macro */
 
 #define T_MACLET                       T_DEFINER
@@ -2488,6 +2490,7 @@ void s7_show_history(s7_scheme *sc);
 /* this marks a maclet */
 
 #define T_HAS_FX                       T_DEFINER
+/* #define set_has_fx(p)                  do {fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(p)); set_type1_bit(T_Pair(p), T_HAS_FX);} while (0) */
 #define set_has_fx(p)                  set_type1_bit(T_Pair(p), T_HAS_FX)
 #define has_fx(p)                      has_type1_bit(T_Pair(p), T_HAS_FX)
 #define clear_has_fx(p)                clear_type1_bit(T_Pair(p), T_HAS_FX)
@@ -4700,7 +4703,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						     ((is_iterator(obj)) ? " weak-hash-iterator" :
 						      ((is_hash_table(obj)) ? " has-key-type" :
 						       ((is_let(obj)) ? " maclet" :
-							" ?26?")))))) : "",
+							((is_c_function(obj)) ? " func_definer" : 
+							 " ?26?"))))))) : "",
 	   /* bit 27+16 */
 	   ((full_typ & T_FULL_BINDER) != 0) ?    ((is_pair(obj)) ? " tree-collected" :
 						   ((is_hash_table(obj)) ? " simple-values" :
@@ -4725,18 +4729,13 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 							     " 32?"))))) : "",
 	   /* bit 33+16 */
 	   ((full_typ & T_FULL_CASE_KEY) != 0) ?  ((is_symbol(obj)) ? " case-key" : " ?33?") : "",
-
 	   /* bit 34+16 */
 	   ((full_typ & T_FULL_HAS_GX) != 0) ?    ((is_pair(obj)) ? " has-gx" : " ?34?") : "",
-
 	   /* bit 35+16 */
 	   ((full_typ & T_FULL_UNKNOPT) != 0) ?    ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
-
 	   /* bit 36+16 */
 	   ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
-
 	   ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
-
 	   /* bit 54 */
 	   ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
 	   /* bit 55 */
@@ -4776,7 +4775,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_FULL_HAS_GX) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_FULL_DEFINER) != 0) &&
-      (!is_normal_symbol(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_iterator(obj)) && (!is_hash_table(obj)) && (!is_let(obj))) return(true);
+      (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_iterator(obj)) && (!is_hash_table(obj)) && (!is_let(obj))) return(true);
   if (((full_typ & T_FULL_HAS_LET_FILE) != 0) &&
       (!is_let(obj)) && (!is_any_vector(obj)) && (!is_hash_table(obj)) && (!is_c_function(obj)) && (!is_slot(obj)) && (!is_pair(obj)) && (!is_closure_star(obj)))
     return(true);
@@ -75586,6 +75585,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
       if (is_any_macro(car_expr))
 	return(OPT_F);
 
+      /* if car is a pair, we can't easily tell whether its value is (say) + or cond, so we need to catch this case and fixup fx settings */
       for (p = expr; is_pair(p); p = cdr(p))
 	if ((is_pair(car(p))) &&
 	    (!is_checked(car(p))) &&
@@ -82300,12 +82300,11 @@ static inline bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	    }
 	  else
 	    {
-	      if ((is_normal_vector(pp)) &&
-		  (do_vector_has_definers(sc, pp)))
+	      if (((is_normal_vector(pp)) && (do_vector_has_definers(sc, pp))) ||
+		  (is_syntax(pp))) /* c_macro? use definer bit on syntax? */
 		return(true);
-	      else
-		if ((is_c_function(pp)) || (is_syntax(pp))) /* c_macro? */
-		  return(true);
+	      if ((is_c_function(pp)) && (is_func_definer(pp)))
+		return(true);
 	    }}}
   return(false);
 }
@@ -84121,6 +84120,7 @@ static Inline bool op_dotimes_step_o(s7_scheme *sc)
 static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool safe_step)
 {
   s7_int end;
+  end = denominator(slot_value(sc->args)); /* s7_optimize below can step on this value! */
 
   if (safe_step)
     set_safe_stepper(sc->args);
@@ -84138,7 +84138,6 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	  set_no_cell_opt(code);
 	  return(false);
 	}
-      end = denominator(slot_value(sc->args));
       if (safe_step)
 	{
 	  s7_pointer stepper;
@@ -84783,6 +84782,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
 {
   s7_pointer end, code, init_val, end_val, slot, old_e;
   /* (do ... (set! args ...)) -- one line, syntactic */
+
   code = cdr(sc->code);
   init_val = fx_call(sc, cdaar(code));
   sc->value = init_val;
@@ -84796,7 +84796,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
     }
   else
     {
-      slot = make_slot(sc, caaar(code), end);
+      slot = make_slot(sc, make_symbol(sc, "_end_"), end);
       end_val = end;
     }
 
@@ -84811,11 +84811,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
   sc->curlet = make_let_slowly(sc, sc->curlet);
   let_set_dox_slot1(sc->curlet, make_slot_2(sc, sc->curlet, caaar(code), init_val));
   let_set_dox_slot2(sc->curlet, slot);
-  if (!is_symbol(end))
-    {
-      slot_set_next(slot, let_slots(sc->curlet));
-      let_set_slots(sc->curlet, slot);
-    }
+
   set_car(sc->t2_1, slot_value(let_dox_slot1(sc->curlet)));
   set_car(sc->t2_2, slot_value(let_dox_slot2(sc->curlet)));
   if (is_true(sc, sc->value = c_call(caadr(code))(sc, sc->t2_1)))
@@ -96470,7 +96466,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->outlet_symbol =                defun("outlet",		outlet,			1, 0, false);
   sc->rootlet_symbol =               defun("rootlet",		rootlet,		0, 0, false);
   sc->curlet_symbol =                defun("curlet",		curlet,			0, 0, false);
-  set_is_definer(sc->curlet_symbol);
+  set_func_is_definer(sc->curlet_symbol);
   sc->unlet_symbol =                 defun("unlet",		unlet,			0, 0, false);
   set_local_slot(sc->unlet_symbol, global_slot(sc->unlet_symbol)); /* for set_locals */
   set_immutable(sc->unlet_symbol);
@@ -96478,9 +96474,9 @@ static void init_rootlet(s7_scheme *sc)
   sc->is_funclet_symbol =            defun("funclet?",          is_funclet,             1, 0, false);
   sc->sublet_symbol =                defun("sublet",		sublet,			1, 0, true);
   sc->varlet_symbol =                unsafe_defun("varlet",	varlet,			1, 0, true);
-  set_is_definer(sc->varlet_symbol);
+  set_func_is_definer(sc->varlet_symbol);
   sc->cutlet_symbol =                unsafe_defun("cutlet",	cutlet,			1, 0, true);
-  set_is_definer(sc->cutlet_symbol);
+  set_func_is_definer(sc->cutlet_symbol);
   sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
   sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false);
@@ -96499,7 +96495,7 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->is_provided_symbol =           defun("provided?",	        is_provided,		1, 0, false);
   sc->provide_symbol =               unsafe_defun("provide",	provide,		1, 0, false); /* can add *features* to curlet */
-  set_is_definer(sc->provide_symbol);
+  set_func_is_definer(sc->provide_symbol);
   sc->is_defined_symbol =            defun("defined?",		is_defined,		1, 2, false);
 
   sc->c_object_type_symbol =         defun("c-object-type",     c_object_type,		1, 0, false);
@@ -96829,13 +96825,13 @@ static void init_rootlet(s7_scheme *sc)
   sc->load_symbol =                  unsafe_defun("load",	load,			1, 1, false);
   sc->autoload_symbol =              defun("autoload",	        autoload,		2, 0, false);
   sc->eval_symbol =                  unsafe_defun("eval",	eval,			1, 1, false);
-  set_is_definer(sc->eval_symbol);
+  set_func_is_definer(sc->eval_symbol);
   sc->eval_string_symbol =           unsafe_defun("eval-string", eval_string,		1, 1, false);
-  set_is_definer(sc->eval_string_symbol);
+  set_func_is_definer(sc->eval_string_symbol);
   sc->apply_symbol =                 unsafe_defun("apply",	apply,			1, 0, true);
   {
     s7_pointer p;
-    set_is_definer(sc->apply_symbol);
+    set_func_is_definer(sc->apply_symbol);
     /* yow... (apply (inlet) (f)) in do body where (f) returns '(define...) -- see s7test.scm under apply
      *   perhaps better: if closure returns a definer in some way set its name as a definer? even this is not fool-proof
      */
@@ -97951,16 +97947,16 @@ int main(int argc, char **argv)
  * tfft       11.3         4142   4109
  * tclo       5051         4787   4735
  * tcase      4850         4960   4781
- * tlet       5782         4925   4851 4908 [with-let] 5003 [do change]
+ * tlet       5782         4925   4851 4908 [with-let]
  * tstr       6995         5281   4863
  * trec       7763         5976   5970
  * tnum       59.5         6348   6006
- * tmisc      6490         7389   6194 6494 [do change]
+ * tmisc      6490         7389   6194
  * tgc        12.6         11.9   11.1
  * tgen       12.0         11.2   11.3
  * thash      37.4         11.8   11.7
  * tall       26.9         15.6   15.6
- * calls      60.2         36.7   36.6 37.4 [same and tree_count?]
+ * calls      60.2         36.7   36.6 37.4 [with-let and tree_count?]
  * sg         97.4         71.9   71.6 72.3 [same]
  * lg        105.5        106.6  105.0
  * tbig      601.8        177.4  175.8
@@ -97971,9 +97967,10 @@ int main(int argc, char **argv)
  * recur_if_a_a_opL3a_L3aq?
  * fx_num_eq_sf? (fb)
  * extend fx_funcs by recur/tc cases, let, etc (s7test?)
- * t725 functional exprs (args too?)
- * check #_syntax opts
+ * check #_syntax opts, do_tree_has_definer syntax definer bit (as in func_definer)?
  * let_fp et al, also can fxable/s7_optimize mark needed ops?
- * find right place for #_ tests in s7test
- * t101, fix do change problem (do_tree_has_definer or something)
+ * qq copy-tree (not car if immutable, or set entire thing immutable?)
+ * t725 do+i+do+i vs i->j case?
+ * t725 functional exprs (args too?)
+ *   fixup ((let () cond)...) fx flags (t718), but not if!)
  */
