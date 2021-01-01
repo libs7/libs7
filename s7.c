@@ -3960,8 +3960,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_SS, HOP_SAFE_C_SS, OP_SAFE_C_SC, HOP_SAFE_C_SC, OP_SAFE_C_CS, HOP_SAFE_C_CS, OP_SAFE_C_CQ, HOP_SAFE_C_CQ,
       OP_SAFE_C_SSS, HOP_SAFE_C_SSS, OP_SAFE_C_SCS, HOP_SAFE_C_SCS, OP_SAFE_C_SSC, HOP_SAFE_C_SSC, OP_SAFE_C_CSS, HOP_SAFE_C_CSS,
       OP_SAFE_C_SCC, HOP_SAFE_C_SCC, OP_SAFE_C_CSC, HOP_SAFE_C_CSC, OP_SAFE_C_CCS, HOP_SAFE_C_CCS,
-      OP_SAFE_C_ALL_S, HOP_SAFE_C_ALL_S,
-      OP_SAFE_C_opDq, HOP_SAFE_C_opDq, OP_SAFE_C_opSq, HOP_SAFE_C_opSq,
+      OP_SAFE_C_ALL_S, HOP_SAFE_C_ALL_S, OP_SAFE_C_opDq, HOP_SAFE_C_opDq, OP_SAFE_C_opSq, HOP_SAFE_C_opSq,
       OP_SAFE_C_opSSq, HOP_SAFE_C_opSSq, OP_SAFE_C_opSCq, HOP_SAFE_C_opSCq,
       OP_SAFE_C_opCSq, HOP_SAFE_C_opCSq, OP_SAFE_C_S_opSq, HOP_SAFE_C_S_opSq,
       OP_SAFE_C_C_opSCq, HOP_SAFE_C_C_opSCq, OP_SAFE_C_S_opSCq, HOP_SAFE_C_S_opSCq, OP_SAFE_C_S_opCSq, HOP_SAFE_C_S_opCSq,
@@ -4202,8 +4201,7 @@ static const char* op_names[NUM_OPS] =
       "safe_c_ss", "h_safe_c_ss", "safe_c_sc", "h_safe_c_sc", "safe_c_cs", "h_safe_c_cs", "safe_c_cq", "h_safe_c_cq",
       "safe_c_sss", "h_safe_c_sss", "safe_c_scs", "h_safe_c_scs", "safe_c_ssc", "h_safe_c_ssc", "safe_c_css", "h_safe_c_css",
       "safe_c_scc", "h_safe_c_scc", "safe_c_csc", "h_safe_c_csc", "safe_c_ccs", "h_safe_c_ccs",
-      "safe_c_all_s", "h_safe_c_all_s",
-      "safe_c_opdq", "h_safe_c_opdq", "safe_c_opsq", "h_safe_c_opsq",
+      "safe_c_all_s", "h_safe_c_all_s", "safe_c_opdq", "h_safe_c_opdq", "safe_c_opsq", "h_safe_c_opsq",
       "safe_c_opssq", "h_safe_c_opssq", "safe_c_opscq", "h_safe_c_opscq",
       "safe_c_opcsq", "h_safe_c_opcsq", "safe_c_s_opsq", "h_safe_c_s_opsq",
       "safe_c_c_opscq", "h_safe_c_c_opscq", "safe_c_s_opscq", "h_safe_c_s_opscq", "safe_c_s_opcsq", "h_safe_c_s_opcsq",
@@ -59588,7 +59586,6 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 
 	default:
 	  /* if ((!fx_function[optimize_op(arg)]) && (is_h_optimized(arg))) fprintf(stderr, "fx_choose %s %s\n", op_names[optimize_op(arg)], display(arg)); */
-	  /* if ((!fx_function[optimize_op(arg)]) && (optimize_op(arg) > OP_SET_WITH_LET_2)) fprintf(stderr, "fx_choose %s %s\n", op_names[optimize_op(arg)], display(arg)); */
 	  return(fx_function[optimize_op(arg)]);
 	}} /* is_optimized */
 
@@ -60169,7 +60166,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 		return(with_c_call(tree, fx_len3));
 	    }}
       break;
-    }
+     }
   return(false);
 }
 
@@ -97231,6 +97228,7 @@ s7_scheme *s7_init(void)
     gmp_randseed(random_gmp_state(p), sc->mpz_1);
 
     sc->pi_symbol = s7_define_constant(sc, "pi", big_pi(sc));
+    set_initial_slot(sc->pi_symbol, make_permanent_slot(sc, sc->pi_symbol, big_pi(sc))); /* s7_make_slot does not handle this */
     s7_provide(sc, "gmp");
 #else
     random_seed(p) = (uint64_t)my_clock(); /* used to be time(NULL), but that means separate threads can get the same random number sequence */
@@ -97768,21 +97766,21 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -------------------------------------
- *             gmp         20.9   21.0
- * -------------------------------------
+/* ---------------------------------------------
+ *             gmp         20.9   21.0   21.1
+ * ---------------------------------------------
  * tpeak       128          115    114
  * tauto       778          648    642
  * tref        736          691    687
  * tshoot     1663          883    872
- * index      1074         1026   1016  1014
+ * index      1074         1026   1016   1014
  * tmock      7697         1177   1165
  * s7test     4546         1873   1831
- * lt         2115         2123   2110  2109
+ * lt         2115         2123   2110   2109
  * tcopy      2290         2256   2230
  * tmat       2412         2285   2258
  * tform      3251         2281   2273
- * tread      2610         2440   2421  2408
+ * tread      2610         2440   2421   2408
  * tvect      2669         2456   2413
  * trclo      4309         2715   2561
  * fbench     2983         2688   2583
@@ -97791,27 +97789,27 @@ int main(int argc, char **argv)
  * tmap       3785         2886   2857
  * tsort      3821         3105   3104
  * tset       3093         3253   3104
- * tmac       3343         3317   3277  3249
- * dup        3589         3334   3332  3319
+ * tmac       3343         3317   3277   3249
+ * dup        3589         3334   3332   3319
  * tio        3843         3816   3752
  * teq        4054         4068   4045
  * tfft       11.3         4142   4109
  * tclo       5051         4787   4735
- * tcase      4850         4960   4793  4772
+ * tcase      4850         4960   4793   4772
  * tlet       5782         4925   4908
  * tstr       6995         5281   4863
  * trec       7763         5976   5970
  * tnum       59.5         6348   6013
- * tmisc      6490         7389   6210  6170
+ * tmisc      6490         7389   6210   6170
  * tgc        12.6         11.9   11.1
  * tgen       12.0         11.2   11.4
  * thash      37.4         11.8   11.7
  * tall       26.9         15.6   15.6
- * calls      60.2         36.7   37.5  37.2
+ * calls      60.2         36.7   37.5   37.2
  * sg         97.4         71.9   72.3
  * lg        105.5        106.6  105.0
  * tbig      601.8        177.4  175.8  175.6
- * -------------------------------------
+ * ---------------------------------------------
  *
  * notcurses 2.1 diffs
  * recur_if_a_a_opL3a_L3aq?
@@ -97821,12 +97819,12 @@ int main(int argc, char **argv)
  *   fx_call not fx* in eval? (check tus case too)
  *   if target func known, why not use direct rather than tn_n?  or specialize t3_n callee etc)
  *   possibly c_op[a|c|s][a|c|s]q 
- *   possibly op_opsq_sq -> not_opsq_s, tu cases in these (see fx_tree_in)
+ *   possibly op_opsq_sq -> not_opsq_s, tu cases in these (see fx_tree_in, hop, maybe check TU)
  * qq copy-tree (not car if immutable, or set entire thing immutable?)
  * t725 functional exprs (args too?)
- *   fixup ((let () cond|with-let)...) fx flags (t718), but not if!
+ *   fixup ((let () cond|with-let|quasiquote)...) fx flags (t718), but not if!
  * with-baffle use baffle flag on empty let, extra let field for id (so baffle is not a definer) [see find_baffle and find_any_baffle, op_with_baffle_unchecked]
  * there are many opt3_any -> con cases, check opt*_any [opt1..3, about 65 of each]
- * more complex eval_done+mv tests
  * need cyclic check in copy_tree
+ * t718
  */

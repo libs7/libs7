@@ -24,7 +24,7 @@
   (display 3 #f))
 
 (define* (f4)
-  (apply + (list 1 2)))
+  (apply procedure? (list +)))
 
 (define* (f5 (a 1))
   (apply + (list a 2)))
