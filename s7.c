@@ -169,7 +169,6 @@
   #define WITH_GMP 0
   /* this includes multiprecision arithmetic for all numeric types and functions, using gmp, mpfr, and mpc
    * WITH_GMP adds the following functions: bignum and bignum?, and (*s7* 'bignum-precision)
-   * using gmp with precision=128 is a lot slower than using C doubles and int64_t.
    */
 #endif
 
@@ -195,9 +194,7 @@
 
 #ifndef WITH_SYSTEM_EXTRAS
   #define WITH_SYSTEM_EXTRAS (!_MSC_VER)
-  /* this adds several functions that access file info, directories, times, etc
-   *    this may be replaced by the cload business below
-   */
+  /* this adds several functions that access file info, directories, times, etc */
 #endif
 
 #ifndef WITH_IMMUTABLE_UNQUOTE
@@ -436,8 +433,7 @@ enum {T_FREE = 0,
       T_INTEGER, T_RATIO, T_REAL, T_COMPLEX, T_BIG_INTEGER, T_BIG_RATIO, T_BIG_REAL, T_BIG_COMPLEX,
       T_STRING, T_C_OBJECT, T_VECTOR, T_INT_VECTOR, T_FLOAT_VECTOR, T_BYTE_VECTOR,
       T_CATCH, T_DYNAMIC_WIND, T_HASH_TABLE, T_LET, T_ITERATOR,
-      T_STACK, T_COUNTER, T_SLOT, T_C_POINTER, T_OUTPUT_PORT, T_INPUT_PORT, T_RANDOM_STATE,
-      T_CONTINUATION, T_GOTO,
+      T_STACK, T_COUNTER, T_SLOT, T_C_POINTER, T_OUTPUT_PORT, T_INPUT_PORT, T_RANDOM_STATE, T_CONTINUATION, T_GOTO,
       T_CLOSURE, T_CLOSURE_STAR, T_MACRO, T_MACRO_STAR, T_BACRO, T_BACRO_STAR, T_C_MACRO,
       T_C_FUNCTION_STAR, T_C_FUNCTION, T_C_ANY_ARGS_FUNCTION, T_C_OPT_ARGS_FUNCTION, T_C_RST_ARGS_FUNCTION,
       NUM_TYPES};
@@ -2168,11 +2164,7 @@ void s7_show_history(s7_scheme *sc);
 
 #define T_DOX_SLOT1                    T_GLOBAL
 #define has_dox_slot1(p)               has_type_bit(T_Let(p), T_DOX_SLOT1)
-#if S7_DEBUGGING
-#define set_has_dox_slot1(p)           do {if (is_baffle_let(p)) fprintf(stderr, "baffle let->dox1\n"); set_type_bit(T_Let(p), T_DOX_SLOT1);} while (0)
-#else
 #define set_has_dox_slot1(p)           set_type_bit(T_Let(p), T_DOX_SLOT1)
-#endif
 /* marks a let that includes the dox_slot1 */
 
 #define T_COLLECTED                    (1 << (TYPE_BITS + 9))
@@ -2259,11 +2251,7 @@ void s7_show_history(s7_scheme *sc);
 
 #define T_DOX_SLOT2                    T_UNSAFE
 #define has_dox_slot2(p)               has_type_bit(T_Let(p), T_DOX_SLOT2)
-#if S7_DEBUGGING
-#define set_has_dox_slot2(p)           do {if (is_baffle_let(p)) fprintf(stderr, "baffle let->dox2\n"); set_type_bit(T_Let(p), T_DOX_SLOT2);} while (0)
-#else
 #define set_has_dox_slot2(p)           set_type_bit(T_Let(p), T_DOX_SLOT2)
-#endif
 /* marks a let that includes the dox_slot2 */
 
 #define T_IMMUTABLE                    (1 << (TYPE_BITS + 16))
@@ -3362,17 +3350,9 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define catch_set_handler(p, val)      (T_Cat(p))->object.rcatch.handler = T_Pos(val)
 
 #define catch_all_goto_loc(p)          (C_Let(p, L_CATCH))->object.envr.edat.ctall.goto_loc
-#if S7_DEBUGGING
-#define catch_all_set_goto_loc(p, L)   do {if (is_baffle_let(p)) fprintf(stderr, "baffle-let->goto_loc\n"); (S_Let(p, L_CATCH))->object.envr.edat.ctall.goto_loc = L;} while (0)
-#else
 #define catch_all_set_goto_loc(p, L)   (S_Let(p, L_CATCH))->object.envr.edat.ctall.goto_loc = L
-#endif
 #define catch_all_op_loc(p)            (C_Let(p, L_CATCH))->object.envr.edat.ctall.op_stack_loc
-#if S7_DEBUGGING
-#define catch_all_set_op_loc(p, L)     do {if (is_baffle_let(p)) fprintf(stderr, "baffle-let->op_stack_loc\n"); (S_Let(p, L_CATCH))->object.envr.edat.ctall.op_stack_loc = L;} while (0)
-#else
 #define catch_all_set_op_loc(p, L)     (S_Let(p, L_CATCH))->object.envr.edat.ctall.op_stack_loc = L
-#endif
 
 #define dynamic_wind_state(p)          (T_Dyn(p))->object.winder.state
 #define dynamic_wind_in(p)             (T_Dyn(p))->object.winder.in
@@ -10651,8 +10631,33 @@ static int32_t closure_length(s7_scheme *sc, s7_pointer e)
 
 static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b);
 
+#if CYCLE_DEBUGGING
+static char *base = NULL, *min_char = NULL;
+#endif
+
 static s7_pointer copy_tree_with_type(s7_scheme *sc, s7_pointer tree)
 {
+#if CYCLE_DEBUGGING
+  char x;
+  if (!base) base = &x; 
+  else 
+    {
+      if (&x > base) base = &x; 
+      else 
+	{
+	  if ((!min_char) || (&x < min_char))
+	    {
+	      min_char = &x;
+	      if ((base - min_char) > 100000)
+		{
+		  fprintf(stderr, "infinite recursion?\n");
+		  abort();
+		}
+	    }
+	}
+    }
+#endif
+
   /* if sc->safety > NO_SAFETY, '(1 2) is set immutable by the reader, but eval (in that safety case) calls
    *   copy_body on the incoming tree, so we have to preserve T_IMMUTABLE in that case.
    * if tree is something like (+ 1 (car '#1=(2 . #1#))), we have to see the quoted list and not copy it.
@@ -32620,16 +32625,6 @@ static void enlarge_shared_info(shared_info_t *ci)
     }
 }
 
-static void add_shared_ref(shared_info_t *ci, s7_pointer x, int32_t ref_x)
-{
-  /* called only in equality check, not printer */
-  if (ci->top == ci->size)
-    enlarge_shared_info(ci);
-  set_collected(x);
-  ci->objs[ci->top] = x;
-  ci->refs[ci->top++] = ref_x;
-}
-
 static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top, bool stop_at_print_length);
 static hash_entry_t *hash_equal(s7_scheme *sc, s7_pointer table, s7_pointer key);
 static hash_entry_t *hash_equivalent(s7_scheme *sc, s7_pointer table, s7_pointer key);
@@ -48966,6 +48961,16 @@ static bool port_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_in
   return(false);
 }
 
+static void add_shared_ref(shared_info_t *ci, s7_pointer x, int32_t ref_x)
+{
+  /* called only in equality check, not printer */
+  if (ci->top == ci->size)
+    enlarge_shared_info(ci);
+  set_collected(x);
+  ci->objs[ci->top] = x;
+  ci->refs[ci->top++] = ref_x;
+}
+
 static Inline bool equal_ref(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
   /* here we know x and y are pointers to the same type of structure */
@@ -50583,7 +50588,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  if (have_indices)                 /* it seems to me that the start/end args here don't make any sense so... */
 	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			    set_elist_3(sc, wrap_string(sc, "~S: start/end indices make no sense with :readable: ~S", 54), caller, args)));
-	  return(copy_body(sc, source));    /* copy_body checks for cyclic lists */
+	  return(copy_body(sc, source));
 	}
       end = s7_list_length(sc, source);
       if (end == 0)
@@ -58004,6 +58009,13 @@ static s7_pointer fx_c_sa(s7_scheme *sc, s7_pointer arg)
   return(c_call(arg)(sc, sc->t2_1));
 }
 
+static s7_pointer fx_c_za(s7_scheme *sc, s7_pointer arg) /* "z"=unsafe_s */
+{
+  set_car(sc->t2_2, fx_call(sc, cddr(arg)));
+  set_car(sc->t2_1, lookup_checked(sc, opt3_sym(arg)));
+  return(c_call(arg)(sc, sc->t2_1));
+}
+
 static s7_pointer fx_c_as(s7_scheme *sc, s7_pointer arg)
 {
   set_car(sc->t2_1, fx_call(sc, cdr(arg)));
@@ -59453,6 +59465,8 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  if (c_callee(arg) == g_add_2) return(fx_add_aa);
 	  if (c_callee(arg) == g_subtract_2) return(fx_subtract_aa);
 	  if (c_callee(arg) == g_number_to_string) return(fx_number_to_string_aa);
+	  /* we can get here from gx_annotate which does not call fx_tree, where A=fx_unsafe_s */
+	  if (c_callee(cdr(arg)) == fx_unsafe_s) {set_opt3_sym(arg, cadr(arg)); return(fx_c_za);}
 	  return((c_callee(arg) == g_multiply_2) ? fx_multiply_aa : fx_c_aa);
 
 	case HOP_SAFE_C_opAAq:
@@ -70095,42 +70109,33 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 	      abort();
 	    }
 #endif
-	  return(copy_tree(sc, args)); /* copy_tree can't handle cyclic trees */
+	  return(copy_tree(sc, args)); /* copy_tree can't handle cyclic trees, not copy_any_list here -- see comment below */
 	}
       return((is_immutable(args)) ? copy_proper_list(sc, args) : args);
     }
   /* if a macro expands into a recursive function with a macro argument as its body (or reasonable facsimile thereof),
    *   and the safety (as in safe_closure) of the body changes from safe to unsafe, then (due to the checked bits
    *   protecting against cycles in optimize_expression|syntax), the possible safe_closure call will not be fixed,
-   *   the safe_closure's assumption about the saved local let will be violated, and we'll get "<arg> unbound".
-   *   examples:
-   *     (define-macro (badmac tst) `(let loop ((x 1)) (if (> x 0) (loop (- x 1)) ,tst)))
-   *     (badmac (vector 0))
-   *     (badmac (let ((x (lambda () 1))) (eq? x x)))
-   *     (define-macro (badmac1 tst) `(let () (define (badf x) (if (> x 0) (badf (- x 1)) ,tst)) (badf 1)))
-   *     (badmac1 (vector 0))
-   *     (badmac1 (let ((x (lambda () 1))) (eq? x x)))
+   *   the safe_closure's assumption about the saved local let will be violated, and we'll get "<arg> unbound" (see tgen.scm).
    * clear_all_optimizations assumes its argument has no cycles, and automatically calling copy_tree slows
-   *   everything down intolerably, so...
-   * if the checked bit is on in a macro expansion, that means we're re-expanding this macro, and therefore
-   *   have to copy the tree.
-   * we can't set_cdr(pc...) as in earlier versions of this code -- might be an embedded permanent list
-   * we can't optimize this to list if only constants/symbols in the list because a symbol's value can be #<no-values>
+   *   everything down intolerably, so if the checked bit is on in a macro expansion, that means we're re-expanding this macro, 
+   *   and therefore have to copy the tree.  But isn't that only the case if the macro expands into closures?
    */
-
-  /* splice out #<no-values>, (list-values (apply-values ())) -> () etc */
-  sc->w = sc->nil;
-  for (x = args; is_pair(x); x = cdr(x))
-    if (car(x) != sc->no_value)
-      sc->w = cons(sc, car(x), sc->w);
-  sc->u = sc->nil;
-  if (is_pair(sc->w))
-    {
-      x = safe_reverse_in_place(sc, sc->w);
-      sc->w = sc->nil;
-      return(x);
-    }
-  return(sc->nil);
+  {
+    s7_pointer p, tp, np;
+    if (is_null(args)) return(sc->nil);
+    while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
+    tp = list_1(sc, car(args));
+    sc->y = tp;
+    for (p = cdr(args), np = tp; is_pair(p); p = cdr(p))
+      if (car(p) != sc->no_value)
+	{
+	  set_cdr(np, list_1(sc, car(p)));
+	  np = cdr(np);
+	}
+    sc->y = sc->nil;
+    return(tp);
+  }
 }
 
 
@@ -73494,7 +73499,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       if (quotes == 2)
 	{
 	  if (func_is_safe)
-	    set_safe_optimize_op(expr, hop + OP_SAFE_C_AA);
+	    set_safe_optimize_op(expr, hop + OP_SAFE_C_AA); /* TODO: need cc */
 	  else set_unsafe_optimize_op(expr, hop + OP_C_AA);
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt3_arglen(expr, int_two);
@@ -97683,14 +97688,14 @@ int main(int argc, char **argv)
  * tmap       3785         2886   2857   2857
  * tsort      3821         3105   3104   3104
  * tset       3093         3253   3104   3104
- * tmac       3343         3317   3277   3249
+ * tmac       3343         3317   3277   3249  3239
  * dup        3589         3334   3332   3317
  * tio        3843         3816   3752   3752
  * teq        4054         4068   4045   4045
  * tfft       11.3         4142   4109   4109
  * tclo       5051         4787   4735   4664
  * tcase      4850         4960   4793   4772
- * tlet       5782         4925   4908   4903
+ * tlet       5782         4925   4908   4903  4896
  * tstr       6995         5281   4863   4863
  * trec       7763         5976   5970   5970
  * tnum       59.5         6348   6013   6007
@@ -97706,19 +97711,21 @@ int main(int argc, char **argv)
  * ---------------------------------------------
  *
  * notcurses 2.1 diffs
- * recur_if_a_a_opL3a_L3aq?
  * extend fx_funcs by recur/tc cases, let, etc (s7test?)
- *   unsafe_s is currently "a"
+ *   perhaps aa_to_ag* in fx_choose?
  *   let_fp et al (using has_gx etc), also can fxable/s7_optimize mark needed ops? if..if..p
  *   fx_call not fx* in eval? (check tus case too)
  *   if target func known, why not use direct rather than tn_n?  or specialize t3_n callee etc)
  *   possibly c_op[a|c|s][a|c|s]q 
- * qq copy-tree (not car if immutable, or set entire thing immutable?)
- * t725 functional exprs (args too?)
- *   fixup ((let () cond|with-let|quasiquote|quote)...) fx flags (t718), but not if!
+ * fixup ((let () cond|with-let|quasiquote|quote)...) fx flags (t718), but not if!
  * there are many opt3_any -> con cases, check opt*_any [opt1..3, about 65 of each]
- * list-values or copy-tree circular list
- * with-let unlet t101
+ * list-values:
+ *   if preceding loop counted len, we could use unchecked if < trigger
+ *   since copy pair shares cycles, if can't completely protect list-values ??
+ *   safety>0 = check list-values for cycles?
+ *   qq copy-tree (not car if immutable, or set entire thing immutable?)
  * more tests like setfib (t408), ideally we'd catch this trope and handle it like define, also t101
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
+ * t409 to a timing test perhaps
+ * copy tree cycling even with cyclic check, t718 segfaults, copy list 1024 #<eof> -- need to copy top list using cdr not recursion
  */
