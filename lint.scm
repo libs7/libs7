@@ -15584,7 +15584,9 @@
 				(symbol? settee))
 			   (set-ref settee caller (cons 'implicit-set (cdr form)) env)))
 
-		   (if (equal? (cadr form) setval) ; not settee here!   ;  (set! a a)
+		   (if (or (equal? (cadr form) setval) ; not settee here!          ;  (set! a a)
+			   (and (symbol? (cadr form))
+				(equal? (caddr form) (list 'copy (cadr form)))))   ;  (set! a (copy a))   
 		       (lint-format "pointless set! ~A" caller (truncated-list->string form)))
 
 		   (when (and (pair? setval)

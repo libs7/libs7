@@ -5781,7 +5781,35 @@ choice here is that speed trumps that ol' hobgoblin consistency.  If you want to
 loading code that calls gcd.  
 I think most Schemes handle macros this way: the macro call is replaced by its expansion using its current
 definition, and a later redefinition does not affect earlier uses.
+Guile behaves like s7:
 </p>
+<pre class="indented">
+(define (add1 x) (+ x 1))
+(set! + -)
+(display (add1 3))) ; 4 in both s7 and Guile 3.0.4
+</pre>
+<p>But if a Scheme function is involved, things get messy:
+</p>
+<pre class="indented">
+(define (fib n) (if (&lt; n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
+(define oldfib fib)
+(set! fib 32)
+(display (oldfib 10))) ; s7 says 55, Guile says "wrong type to apply: 32"
+</pre>
+<p>I can't decide which way is correct: s7 looks more consistent,
+but:
+</p>
+<pre class="indented">
+(define (fib n) 32)
+(set! fib (lambda (n) (if (&lt; n 2) n (+ (fib (- n 1)) (fib (- n 2))))))
+(define oldfib fib)
+(set! fib 32)
+(display (oldfib 10)) ; "attempt to apply an integer 32 to..."
+</pre>
+<p>So s7 is inconsistent too! (Actually this was consistent until Jan 2021 when I suddenly thought it was
+a mistake and "fixed" it; now I'm completely confused).
+</p>
+
 
 <!-- another case:  (with-let (inlet '+ -) (+ 2 3)) -> 5 -->
 <!-- also, (eq? (if #f #f) (apply values ())) is #t, but memq and assq don't treat them as equal -->
