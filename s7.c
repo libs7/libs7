@@ -1279,6 +1279,7 @@ struct s7_scheme {
              weak_hash_table_symbol, with_input_from_file_symbol, with_input_from_string_symbol, with_output_to_file_symbol, with_output_to_string_symbol,
              write_byte_symbol, write_char_symbol, write_string_symbol, write_symbol,
              local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol;
+  s7_pointer hash_code_symbol, dummy_equal_hash_table;
 #if (!WITH_PURE_S7)
   s7_pointer is_char_ready_symbol, char_ci_leq_symbol, char_ci_lt_symbol, char_ci_eq_symbol, char_ci_geq_symbol, char_ci_gt_symbol,
              let_to_list_symbol, integer_length_symbol, string_ci_leq_symbol, string_ci_lt_symbol, string_ci_eq_symbol,
@@ -7841,6 +7842,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
   val[len] = '\0';
 
   typeflag(str) = T_STRING | T_IMMUTABLE | T_UNHEAP;       /* avoid debugging confusion involving set_type (also below) */
+  set_optimize_op(str, OP_CON);
   string_length(str) = len;
   string_value(str) = (char *)val;
   string_hash(str) = hash;
@@ -7863,6 +7865,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
 	{
 	  s7_pointer slot, ksym;
 	  set_type_bit(x, T_IMMUTABLE | T_KEYWORD | T_GLOBAL);
+	  set_optimize_op(str, OP_CON);
 	  ksym = make_symbol_with_length(sc, (name[0] == ':') ? (char *)(name + 1) : name, len - 1);
 	  keyword_set_symbol(x, ksym);
 	  set_has_keyword(ksym);
@@ -26274,6 +26277,7 @@ static void init_chars(void)
       c = (uint8_t)i;
       cp = &cells[i];
       set_type_bit(cp, T_IMMUTABLE | T_CHARACTER | T_UNHEAP);
+      set_optimize_op(cp, OP_CON);
       character(cp) = c;
       upper_character(cp) = (uint8_t)toupper(i);
       is_char_alphabetic(cp) = (bool)isalpha(i);
@@ -27102,6 +27106,7 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
   s7_pointer x;
   x = alloc_pointer(sc);
   set_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
+  set_optimize_op(x, OP_CON);
   if (str)
     {
       s7_int len;
@@ -27136,6 +27141,7 @@ static s7_pointer make_permanent_string(const char *str)
 
   x = (s7_pointer)calloc(1, sizeof(s7_cell));
   set_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
+  set_optimize_op(x, OP_CON);
   len = safe_strlen(str);
   string_length(x) = len;
   string_block(x) = NULL;
@@ -44465,6 +44471,36 @@ static hash_map_t c_function_hash_map[NUM_TYPES];
 static hash_map_t string_ci_eq_hash_map[NUM_TYPES];
 static hash_map_t char_ci_eq_hash_map[NUM_TYPES];
 #endif
+/* also default_hash_map */
+
+
+/* ---------------- hash-code ---------------- */
+/* TODO: eqfunc handling which will require other dummy tables 
+ *       s7test, timing, s7.html
+ */
+
+static s7_pointer make_dummy_hash_table(s7_scheme *sc)
+{
+  s7_pointer table;  /* make the absolute minimal hash-table that can support hash-code */
+  table = (s7_pointer)Calloc(1, sizeof(s7_cell));
+  set_type_bit(table, T_IMMUTABLE | T_HASH_TABLE | T_UNHEAP);
+  hash_table_mapper(table) = default_hash_map;
+  return(table);
+}
+
+s7_int s7_hash_code(s7_scheme *sc, s7_pointer obj, s7_pointer eqfunc)
+{
+  return(default_hash_map[type(obj)](sc, sc->dummy_equal_hash_table, obj));
+}
+
+static s7_pointer g_hash_code(s7_scheme *sc, s7_pointer args)
+{
+  #define H_hash_code "(hash-code obj (eqfunc)) returns an integer suitable for use as a hash code for obj."
+  #define Q_hash_code s7_make_signature(sc, 3, sc->is_integer_symbol, sc->T, sc->T)
+  s7_pointer obj;
+  obj = car(args);
+  return(make_integer(sc, default_hash_map[type(obj)](sc, sc->dummy_equal_hash_table, obj)));
+}
 
 
 static bool (*equals[NUM_TYPES])(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci);
@@ -92318,7 +92354,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       set_current_code(sc, sc->code);
 
     EVAL:
-      sc->cur_op = optimize_op(sc->code);
+      sc->cur_op = optimize_op(sc->code); /* sc->code can be anything, optimize_op examines a type field (opt_choice) */
+#if 0
+      if ((sc->cur_op == OP_UNOPT) &&
+	  (!is_pair(sc->code)))
+	fprintf(stderr, "unopt: %s\n", display(sc->code));
+#endif
 
     TOP_NO_POP:
 #if SHOW_EVAL_OPS
@@ -95901,6 +95942,7 @@ static s7_pointer make_unique(s7_scheme *sc, const char* name, uint64_t typ)
   s7_pointer p;
   p = alloc_pointer(sc);
   set_type(p, typ | T_IMMUTABLE | T_UNHEAP);
+  set_optimize_op(p, OP_CON);
   if (typ == T_UNDEFINED) /* sc->undefined here to avoid the undefined_constant_warning */
     {
       undefined_set_name_length(p, safe_strlen(name));
@@ -96584,6 +96626,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->hash_table_ref_symbol =        defun("hash-table-ref",	hash_table_ref,		2, 0, true);
   sc->hash_table_set_symbol =        defun("hash-table-set!",	hash_table_set,		3, 0, false);
   sc->hash_table_entries_symbol =    defun("hash-table-entries", hash_table_entries,	1, 0, false);
+  sc->hash_code_symbol =             defun("hash-code",         hash_code,              1, 1, false);
+  sc->dummy_equal_hash_table = make_dummy_hash_table(sc);
 
   sc->cyclic_sequences_symbol =      defun("cyclic-sequences",  cyclic_sequences,	1, 0, false);
   sc->call_cc_symbol =               unsafe_defun("call/cc",	call_cc,		1, 0, false);
@@ -97754,7 +97798,9 @@ int main(int argc, char **argv)
  * t409 to a timing test perhaps, t410 has circular list oddities
  * copy tree cycling even with cyclic check, t718 segfaults, copy list 1024 #<eof> -- need to copy top list using cdr not recursion
  *   also clear_all_optimizations needs mark_pair-like rewrite
- *   why doesn't t411 overflow? What is actually causing a stack overflow here?
+ *   why doesn't t411 overflow? What is actually causing a stack overflow here? an embedded (car) list that cyclic did not see!
  *   check that copy uses the y-ref
- * add s7_hash_code(sc, key, optional-type?) or assume equal?
+ * hash-code eqfunc, s7test s7.html timings (t413)
+ * preset OP_CON et al -- some are done now, need timings. type OP_CON<<32 is OP_GLOBAL_SYM a good idea??
+ * setter optimization t412
  */
