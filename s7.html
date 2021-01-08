@@ -2556,6 +2556,7 @@ To insist that all objects are of the same type, use an explicit getter:
 <li>(<em class=def id="hashtableref">hash-table-ref</em> ht key)
 <li>(<em class=def id="hashtableset">hash-table-set!</em> ht key value)
 <li>(<em class=def id="hashtableentries">hash-table-entries</em> ht)
+<li>(<em class=def id="hashcode">hash-code</em> obj eqfunc)
 </ul>
 
 <p>
@@ -2586,6 +2587,12 @@ Implicit indexing gives multilevel hashes:
 &gt; (let ((h (hash-table 'a (hash-table 'b 2 'c 3)))) (set! (h 'a 'b) 4) (h 'a 'b))
 <em class="gray">4</em>
 </pre>
+
+<p>hash-code is like Common Lisp's sxhash.  It returns an integer that can be associated with
+an s7 object when implementing your own hash-tables.  s7test.scm has an example using vectors.
+The eqfunc argument is currently ignored (hash-code assumes equal? is in use).
+</p>
+
 
 <blockquote>
 

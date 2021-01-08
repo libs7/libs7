@@ -640,7 +640,7 @@
 			  'with-input-from-file 'type-of
 			  'vector-fill! 
 			  'symbol ;'peek-char 
-			  'make-hash-table 'make-weak-hash-table 'weak-hash-table?
+			  'make-hash-table 'make-weak-hash-table 'weak-hash-table? 'hash-code
 			  'macro? 
 			  'quasiquote 
 			  'immutable? 'char-position 'string-position
@@ -1179,6 +1179,17 @@
 	    str
 	    (cycler (+ 3 (random 3))))))
 
+    (define (rf-symbol->string sym)
+      (if (or (> (random 100) 5)
+	      (syntax? sym)
+	      (syntax? (symbol->value sym)))
+	  (symbol->string sym)
+	  (if (< (random 10) 3) 
+	      (string-append "(let () " (symbol->string sym) ")")
+	      (if (< (random 10) 3)
+		  (string-append "((vector " (symbol->string sym) ") 0)")
+		  (string-append "#_" (symbol->string sym))))))
+
     (define (fix-op op)
       (case op
 	((set!) "set! _definee_") ;"set!")
@@ -1191,7 +1202,7 @@
 	((eval) "checked-eval")
 	((ifa) "(if (integer? _definee_) + -)")
 	((ifb) "(if (integer? _definee_) when unless)")
-	(else => symbol->string)))
+	(else => rf-symbol->string)))
 
     (define make-expr
       (let ((parens 1)

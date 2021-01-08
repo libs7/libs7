@@ -2827,6 +2827,7 @@ void s7_show_history(s7_scheme *sc);
 #define c_call_unchecked(f)            ((s7_function)((f)->object.cons.opt2))
 #define set_c_call(f, _X_)             do {s7_pointer X; X = (s7_pointer)(_X_); set_opt2(f, X, F_CALL); if (X) set_has_fx(f); else clear_has_fx(f);} while (0)
 #define set_c_call_direct(f, X)        do {set_opt2(f, (s7_pointer)(X), F_CALL); set_has_fx(f);} while (0)
+#define set_c_call_unchecked(f, _X_)   do {s7_pointer X; X = (s7_pointer)(_X_); (f)->object.cons.opt2 = X; if (X) set_has_fx(f); else clear_has_fx(f);} while (0)
 
 #if WITH_GCC
 #define fx_call(Sc, F)                 ({s7_pointer _P_; _P_ = F; c_call(_P_)(Sc, car(_P_));})
@@ -3972,10 +3973,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_op_opSSqq_S, HOP_SAFE_C_op_opSSqq_S, OP_SAFE_C_op_opSqq, HOP_SAFE_C_op_opSqq, 
       OP_SAFE_C_op_S_opSqq, HOP_SAFE_C_op_S_opSqq, OP_SAFE_C_op_opSq_Sq, HOP_SAFE_C_op_opSq_Sq, OP_SAFE_C_opSq_CS, HOP_SAFE_C_opSq_CS,
 
-      OP_SAFE_C_A, HOP_SAFE_C_A, OP_SAFE_C_AA, HOP_SAFE_C_AA,
-      OP_SAFE_C_SA, HOP_SAFE_C_SA, OP_SAFE_C_AS, HOP_SAFE_C_AS,
-      OP_SAFE_C_CA, HOP_SAFE_C_CA, OP_SAFE_C_AC, HOP_SAFE_C_AC,
-      OP_SAFE_C_AAA, HOP_SAFE_C_AAA, OP_SAFE_C_4A, HOP_SAFE_C_4A,
+      OP_SAFE_C_A, HOP_SAFE_C_A, OP_SAFE_C_AA, HOP_SAFE_C_AA, OP_SAFE_C_SA, HOP_SAFE_C_SA, OP_SAFE_C_AS, HOP_SAFE_C_AS,
+      OP_SAFE_C_CA, HOP_SAFE_C_CA, OP_SAFE_C_AC, HOP_SAFE_C_AC, OP_SAFE_C_AAA, HOP_SAFE_C_AAA, OP_SAFE_C_4A, HOP_SAFE_C_4A,
       OP_SAFE_C_FX, HOP_SAFE_C_FX, OP_SAFE_C_ALL_CA, HOP_SAFE_C_ALL_CA, OP_SAFE_C_INLET_CA, HOP_SAFE_C_INLET_CA,
       OP_SAFE_C_SSA, HOP_SAFE_C_SSA, OP_SAFE_C_SAS, HOP_SAFE_C_SAS, OP_SAFE_C_SAA, HOP_SAFE_C_SAA,
       OP_SAFE_C_CSA, HOP_SAFE_C_CSA, OP_SAFE_C_SCA, HOP_SAFE_C_SCA, OP_SAFE_C_ASS, HOP_SAFE_C_ASS,
@@ -4208,10 +4207,8 @@ static const char* op_names[NUM_OPS] =
       "safe_c_op_opssqq_s", "h_safe_c_op_opssqq_s", "safe_c_op_opsqq", "h_safe_c_op_opsqq", 
       "safe_c_op_s_opsqq", "h_safe_c_op_s_opsqq", "safe_c_op_opsq_sq", "h_safe_c_op_opsq_sq", "safe_c_opsq_cs", "h_safe_c_opsq_cs",
 
-      "safe_c_a", "h_safe_c_a", "safe_c_aa", "h_safe_c_aa",
-      "safe_c_sa", "h_safe_c_sa", "safe_c_as", "h_safe_c_as",
-      "safe_c_ca", "h_safe_c_ca", "safe_c_ac", "h_safe_c_ac",
-      "safe_c_aaa", "h_safe_c_aaa", "safe_c_4a", "h_safe_c_4a",
+      "safe_c_a", "h_safe_c_a", "safe_c_aa", "h_safe_c_aa", "safe_c_sa", "h_safe_c_sa", "safe_c_as", "h_safe_c_as",
+      "safe_c_ca", "h_safe_c_ca", "safe_c_ac", "h_safe_c_ac", "safe_c_aaa", "h_safe_c_aaa", "safe_c_4a", "h_safe_c_4a",
       "safe_c_fx", "h_safe_c_fx", "safe_c_all_ca", "h_safe_c_all_ca", "safe_c_inlet_ca", "h_safe_c_inlet_ca",
       "safe_c_ssa", "h_safe_c_ssa", "safe_c_sas", "h_safe_c_sas", "safe_c_saa", "h_safe_c_saa",
       "safe_c_csa", "h_safe_c_csa", "safe_c_sca", "h_safe_c_sca", "safe_c_ass", "h_safe_c_ass",
@@ -7842,7 +7839,6 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
   val[len] = '\0';
 
   typeflag(str) = T_STRING | T_IMMUTABLE | T_UNHEAP;       /* avoid debugging confusion involving set_type (also below) */
-  set_optimize_op(str, OP_CON);
   string_length(str) = len;
   string_value(str) = (char *)val;
   string_hash(str) = hash;
@@ -10638,33 +10634,8 @@ static int32_t closure_length(s7_scheme *sc, s7_pointer e)
 
 static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b);
 
-#if CYCLE_DEBUGGING
-static char *base = NULL, *min_char = NULL;
-#endif
-
 static s7_pointer copy_tree_with_type(s7_scheme *sc, s7_pointer tree)
 {
-#if CYCLE_DEBUGGING
-  char x;
-  if (!base) base = &x; 
-  else 
-    {
-      if (&x > base) base = &x; 
-      else 
-	{
-	  if ((!min_char) || (&x < min_char))
-	    {
-	      min_char = &x;
-	      if ((base - min_char) > 100000)
-		{
-		  fprintf(stderr, "infinite recursion?\n");
-		  abort();
-		}
-	    }
-	}
-    }
-#endif
-
   /* if sc->safety > NO_SAFETY, '(1 2) is set immutable by the reader, but eval (in that safety case) calls
    *   copy_body on the incoming tree, so we have to preserve T_IMMUTABLE in that case.
    * if tree is something like (+ 1 (car '#1=(2 . #1#))), we have to see the quoted list and not copy it.
@@ -10683,32 +10654,8 @@ static s7_pointer copy_tree_with_type(s7_scheme *sc, s7_pointer tree)
 				  (is_unquoted_pair(cdr(tree))) ? COPY_TREE_WITH_TYPE(cdr(tree)) : cdr(tree)));
 }
 
-#if CYCLE_DEBUGGING
-static char *base1 = NULL, *min_char1 = NULL;
-#endif
-
 static s7_pointer copy_tree(s7_scheme *sc, s7_pointer tree)
 {
-#if CYCLE_DEBUGGING
-  char x;
-  if (!base1) base1 = &x; 
-  else 
-    {
-      if (&x > base1) base1 = &x; 
-      else 
-	{
-	  if ((!min_char1) || (&x < min_char1))
-	    {
-	      min_char1 = &x;
-	      if ((base1 - min_char1) > 100000)
-		{
-		  fprintf(stderr, "infinite recursion?\n");
-		  abort();
-		}
-	    }
-	}
-    }
-#endif
 #if WITH_GCC
   #define COPY_TREE(P) ({s7_pointer _p; _p = P; \
                          cons_unchecked(sc, (is_pair(car(_p))) ? copy_tree(sc, car(_p)) : car(_p), \
@@ -44475,9 +44422,7 @@ static hash_map_t char_ci_eq_hash_map[NUM_TYPES];
 
 
 /* ---------------- hash-code ---------------- */
-/* TODO: eqfunc handling which will require other dummy tables 
- *       s7test, timing, s7.html
- */
+/* TODO: eqfunc handling which will require other dummy tables */
 
 static s7_pointer make_dummy_hash_table(s7_scheme *sc)
 {
@@ -55855,8 +55800,8 @@ static s7_pointer fx_not_is_eq_car_q(s7_scheme *sc, s7_pointer arg)
   s7_pointer lst;
   lst = lookup(sc, opt2_sym(cdr(arg)));
   if (is_pair(lst))
-    return(make_boolean(sc, car(lst) != opt3_any(cdr(arg))));
-  return(make_boolean(sc, !s7_is_eq(g_car(sc, set_plist_1(sc, lst)), opt3_any(cdr(arg)))));
+    return(make_boolean(sc, car(lst) != opt3_con(cdr(arg))));
+  return(make_boolean(sc, !s7_is_eq(g_car(sc, set_plist_1(sc, lst)), opt3_con(cdr(arg)))));
 }
 
 static s7_pointer fx_is_pair_car_s(s7_scheme *sc, s7_pointer arg)
@@ -56896,6 +56841,14 @@ static s7_pointer fx_c_ssc(s7_scheme *sc, s7_pointer arg)
 {
   set_car(sc->t3_1, lookup(sc, cadr(arg)));
   set_car(sc->t3_2, lookup(sc, opt1_sym(cdr(arg)))); /* caddr(arg) */
+  set_car(sc->t3_3, opt2_con(cdr(arg)));             /* cadddr(arg) */
+  return(c_call(arg)(sc, sc->t3_1));
+}
+
+static s7_pointer fx_c_tuc(s7_scheme *sc, s7_pointer arg)
+{
+  set_car(sc->t3_1, t_lookup(sc, cadr(arg), arg));
+  set_car(sc->t3_2, u_lookup(sc, opt1_sym(cdr(arg)), arg)); /* caddr(arg) */
   set_car(sc->t3_3, opt2_con(cdr(arg)));             /* cadddr(arg) */
   return(c_call(arg)(sc, sc->t3_1));
 }
@@ -59501,7 +59454,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	      if (c_callee(cdr(arg)) == fx_is_eq_car_q) 
 		{
 		  set_opt2_sym(cdr(arg), cadadr(cadr(arg)));
-		  set_opt3_any(cdr(arg), cadaddr(cadr(arg)));
+		  set_opt3_con(cdr(arg), cadaddr(cadr(arg)));
 		  return(fx_not_is_eq_car_q);
 		}
 	      return(fx_not_a);
@@ -59895,6 +59848,10 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (c_callee(tree) == fx_c_scs) return(with_c_call(tree, fx_c_tcs));
 	  if (c_callee(tree) == fx_c_scs_direct) return(with_c_call(tree, (cadddr(p) == var2) ? fx_c_tcu_direct : fx_c_tcs_direct));
 	}
+      break;
+
+    case HOP_SAFE_C_SSC:
+      if ((cadr(p) == var1) && (caddr(p) == var2)) return(with_c_call(tree, fx_c_tuc));
       break;
 
     case HOP_SAFE_C_SSS:
@@ -71301,9 +71258,8 @@ static void fx_annotate_arg(s7_scheme *sc, s7_pointer arg, s7_pointer e)
   if (has_fx(arg)) return;
   fx = fx_choose(sc, arg, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe);
   if (fx) set_c_call_direct(arg, fx);
-  if ((has_fx(arg)) && (!arg->object.cons.opt2))
-    fprintf(stderr, "%s[%d] fx_call null but has_fx is still on, %s\n", __func__, __LINE__, display(arg));
 #else
+  if (has_fx(arg)) return;
   set_c_call(arg, fx_choose(sc, arg, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe));
 #endif
 }
@@ -71315,9 +71271,9 @@ static void fx_annotate_args(s7_scheme *sc, s7_pointer args, s7_pointer e)
 #if S7_DEBUGGING
     fx_annotate_arg(sc, p, e);
 #else
-    set_c_call(p, fx_choose(sc, p, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe));
+    if (!has_fx(p)) 
+      set_c_call(p, fx_choose(sc, p, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe));
 #endif
-
 }
 
 static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, s7_pointer e)
@@ -71487,7 +71443,7 @@ static int32_t combine_ops(s7_scheme *sc, s7_pointer func, s7_pointer expr, comb
 	case OP_SAFE_C_SC:    return(OP_SAFE_C_opSCq_C);
 	case OP_SAFE_C_SS:    return(OP_SAFE_C_opSSq_C);
 	}
-      set_opt3_any(cdr(expr), caddr(expr));
+      set_opt3_con(cdr(expr), caddr(expr));
       return(OP_SAFE_C_PC);
 
     case E_C_CP:
@@ -73488,7 +73444,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		    }
 		  else
 		    if (op == OP_SAFE_C_PC)
-		      set_opt3_any(cdr(expr), arg2);
+		      set_opt3_con(cdr(expr), arg2);
 
 		  if ((!has_fx(cdr(expr))) && ((op_no_hop(expr) == OP_SAFE_C_PS) || (op_no_hop(expr) == OP_SAFE_C_PC)))
 		    gx_annotate_arg(sc, cdr(expr), e);
@@ -73602,7 +73558,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      if (is_pair(arg1))
 		{
 		  set_optimize_op(expr, hop + OP_SAFE_C_PC);
-		  set_opt3_any(cdr(expr), arg2);
+		  set_opt3_con(cdr(expr), arg2);
 		  if (!has_fx(cdr(expr)))
 		    gx_annotate_arg(sc, cdr(expr), e);
 		}
@@ -73691,7 +73647,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      else
 		{
 		  set_optimize_op(expr, hop + OP_SAFE_C_PC);
-		  set_opt3_any(cdr(expr), cadr(arg2));
+		  set_opt3_con(cdr(expr), cadr(arg2));
 		  gx_annotate_arg(sc, cdr(expr), e);
 		}
 	      set_unsafely_optimized(expr);
@@ -73864,13 +73820,14 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		  if (is_fxable(sc, car(body)))
 		    {
 		      fx_annotate_arg(sc, body, e);
-		      set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_A);
+		      set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_A); /* safe_closure_as|sa_a? */
 		      set_closure_one_form_fx_arg(func);
 		      fx_annotate_args(sc, cdr(expr), e);
 		      set_opt1_lambda(expr, func);
 		      set_opt3_arglen(expr, int_two);
 		      return(OPT_T);
 		    }
+		  /* safe_closure_sa|as_o? if (is_normal_symbol(arg2)) */
 		  set_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_O);
 		}
 	      else set_optimize_op(expr, hop + OP_CLOSURE_AA_O);
@@ -75013,7 +74970,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	      if ((c_callee(b1) == fx_q) &&
 		  (is_pair(b2)))
 		{
-		  set_opt3_any(test, cadar(b1));
+		  set_opt3_con(test, cadar(b1));
 		  if (c_callee(b2) == fx_q)
 		    {
 		      set_safe_optimize_op(expr, OP_IF_A_C_C);
@@ -90200,12 +90157,12 @@ static bool op_safe_c_pc(s7_scheme *sc)
   if ((has_gx(args)) && (symbol_ctr(caar(args)) == 1))
     {
       set_car(sc->t2_1, c_call_unchecked(args)(sc, car(args)));
-      set_car(sc->t2_2, opt3_any(args));
+      set_car(sc->t2_2, opt3_con(args));
       sc->value = c_call(sc->code)(sc, sc->t2_1);
       return(false);
     }
   check_stack_size(sc);
-  push_stack(sc, OP_SAFE_C_PC_1, opt3_any(args), sc->code);
+  push_stack(sc, OP_SAFE_C_PC_1, opt3_con(args), sc->code);
   sc->code = car(args);
   return(true);
 }
@@ -92056,7 +92013,13 @@ static bool op_unknown_aa(s7_scheme *sc)
 		    }}
 	      else set_optimize_op(code, hop + OP_CLOSURE_AA_O);
 	    }
-	  else set_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
+	  else
+	    {
+	      /* TODO: as case */
+	      if ((safe_case) && (is_normal_symbol(cadr(code))))
+		set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_SA);
+	      else set_safe_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
+	    }
 	  set_opt1_lambda(code, f);
 	  return(true);
 	}
@@ -92355,11 +92318,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
     EVAL:
       sc->cur_op = optimize_op(sc->code); /* sc->code can be anything, optimize_op examines a type field (opt_choice) */
-#if 0
-      if ((sc->cur_op == OP_UNOPT) &&
-	  (!is_pair(sc->code)))
-	fprintf(stderr, "unopt: %s\n", display(sc->code));
-#endif
 
     TOP_NO_POP:
 #if SHOW_EVAL_OPS
@@ -97739,7 +97697,7 @@ int main(int argc, char **argv)
  *             gmp         20.9   21.0   21.1
  * ---------------------------------------------
  * tpeak       128          115    114    114
- * tauto       778          648    642    642
+ * tauto       778          648    642    642   648 [eval? others also like s7test]
  * tref        736          691    687    687
  * tshoot     1663          883    872    872
  * index      1074         1026   1016   1014
@@ -97748,10 +97706,10 @@ int main(int argc, char **argv)
  * lt         2115         2123   2110   2109
  * tcopy      2290         2256   2230   2231
  * tmat       2412         2285   2258   2258
- * tform      3251         2281   2273   2273
- * tread      2610         2440   2421   2408
+ * tform      3251         2281   2273   2273  2266
+ * tread      2610         2440   2421   2408  2415 [op_read_internal -- overhead]
  * tvect      2669         2456   2413   2413
- * trclo      4309         2715   2561   2516
+ * trclo      4309         2715   2561   2560
  * fbench     2983         2688   2583   2583
  * tb         3474         2735   2681   2681
  * titer      2860         2865   2842   2842
@@ -97759,25 +97717,25 @@ int main(int argc, char **argv)
  * tsort      3821         3105   3104   3104
  * tset       3093         3253   3104   3104
  * tmac       3343         3317   3277   3249  3239
- * dup        3589         3334   3332   3317
+ * dup        3589         3334   3332   3317  3298
  * tio        3843         3816   3752   3752
  * teq        4054         4068   4045   4045
  * tfft       11.3         4142   4109   4109
  * tclo       5051         4787   4735   4664
  * tcase      4850         4960   4793   4772
- * tlet       5782         4925   4908   4903  4896
+ * tlet       5782         4925   4908   4903  4898
  * tstr       6995         5281   4863   4863
  * trec       7763         5976   5970   5970
- * tnum       59.5         6348   6013   6007
- * tmisc      6490         7389   6210   6173
+ * tnum       59.5         6348   6013   6007  6003
+ * tmisc      6490         7389   6210   6173  6168
  * tgc        12.6         11.9   11.1   11.1
  * tgen       12.0         11.2   11.4   11.4
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
  * calls      60.2         36.7   37.5   37.3
- * sg         97.4         71.9   72.3   72.5
+ * sg         97.4         71.9   72.3   72.5  72.4
  * lg        105.5        106.6  105.0  105.0
- * tbig      601.8        177.4  175.8  175.6
+ * tbig      601.8        177.4  175.8  175.6 175.9 [op_read_internal]
  * ---------------------------------------------
  *
  * notcurses 2.1 diffs
@@ -97786,21 +97744,17 @@ int main(int argc, char **argv)
  *   let_fp et al (using has_gx etc), also can fxable/s7_optimize mark needed ops? if..if..p
  *   fx_call not fx* in eval? (check tus case too)
  *   if target func known, why not use direct rather than tn_n?  or specialize t3_n callee etc)
- *   possibly c_op[a|c|s][a|c|s]q 
  * fixup ((let () cond|with-let|quasiquote|quote)...) fx flags (t718), but not if!
- * there are many opt3_any -> con cases, check opt*_any [opt2..3, about 65 of each]
  * list-values:
  *   if preceding loop counted len, we could use unchecked if < trigger
- *   since copy pair shares cycles, if can't completely protect list-values ??
+ *   since copy pair shares cycles, it can't completely protect list-values ??
  *   safety>0 = check list-values for cycles?
  *   qq copy-tree (not car if immutable, or set entire thing immutable?)
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
  * t409 to a timing test perhaps, t410 has circular list oddities
- * copy tree cycling even with cyclic check, t718 segfaults, copy list 1024 #<eof> -- need to copy top list using cdr not recursion
- *   also clear_all_optimizations needs mark_pair-like rewrite
- *   why doesn't t411 overflow? What is actually causing a stack overflow here? an embedded (car) list that cyclic did not see!
+ * copy tree cycling even with cyclic check: this is apparently caused by define-macro copying its body?
  *   check that copy uses the y-ref
- * hash-code eqfunc, s7test s7.html timings (t413)
- * preset OP_CON et al -- some are done now, need timings. type OP_CON<<32 is OP_GLOBAL_SYM a good idea??
+ * hash-code eqfunc, s7test (t413)
  * setter optimization t412
+ * safe_closure_as, safe_closure_as|sa_a
  */
