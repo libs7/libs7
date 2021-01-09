@@ -2135,10 +2135,13 @@ void s7_show_history(s7_scheme *sc);
   static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int32_t line)
   {
     if (is_global(symbol))
-      fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
-	      func, line,
-	      BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
-	      s7_object_to_c_string(sc, sc->cur_code));
+      {
+	fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
+		func, line,
+		BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
+		s7_object_to_c_string(sc, sc->cur_code));
+	/* gdb_break(); */
+      }
     typeflag(symbol) = (typeflag(symbol) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC));
   }
   #define set_local(Symbol) set_local_1(sc, Symbol, __func__, __LINE__)
@@ -4016,7 +4019,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_CLOSURE_FX, HOP_CLOSURE_FX, OP_CLOSURE_ASS, HOP_CLOSURE_ASS, OP_CLOSURE_SAS, HOP_CLOSURE_SAS ,OP_CLOSURE_AAS, HOP_CLOSURE_AAS,
       OP_CLOSURE_SAA, HOP_CLOSURE_SAA, OP_CLOSURE_ALL_S, HOP_CLOSURE_ALL_S, OP_CLOSURE_ANY_FX, HOP_CLOSURE_ANY_FX,
-      OP_SAFE_CLOSURE_SA, HOP_SAFE_CLOSURE_SA, OP_SAFE_CLOSURE_SAA, HOP_SAFE_CLOSURE_SAA, OP_SAFE_CLOSURE_SSA, HOP_SAFE_CLOSURE_SSA,
+      OP_SAFE_CLOSURE_SAA, HOP_SAFE_CLOSURE_SAA, OP_SAFE_CLOSURE_SSA, HOP_SAFE_CLOSURE_SSA,
       OP_SAFE_CLOSURE_AGG, HOP_SAFE_CLOSURE_AGG, OP_SAFE_CLOSURE_FX, HOP_SAFE_CLOSURE_FX,
       OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_ALL_S, HOP_SAFE_CLOSURE_ALL_S,
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
@@ -4250,7 +4253,7 @@ static const char* op_names[NUM_OPS] =
       "closure_fx", "h_closure_fx", "closure_ass", "h_closure_ass", "closure_sas", "h_closure_sas", "closure_aas", "h_closure_aas",
       "closure_saa", "h_closure_saa", "closure_all_s", "h_closure_all_s", "closure_any_fx", "h_closure_any_fx",
 
-      "safe_closure_sa", "h_safe_closure_sa", "safe_closure_saa", "h_safe_closure_saa", "safe_closure_ssa", "h_safe_closure_ssa",
+      "safe_closure_saa", "h_safe_closure_saa", "safe_closure_ssa", "h_safe_closure_ssa",
       "safe_closure_agg", "h_safe_closure_agg", "safe_closure_fx", "h_safe_closure_fx",
       "safe_closure_3s", "h_safe_closure_3s", "safe_closure_all_s", "h_safe_closure_all_s",
       "safe_closure_3s_a", "h_safe_closure_3s_a",
@@ -10658,14 +10661,14 @@ static s7_pointer copy_tree(s7_scheme *sc, s7_pointer tree)
 {
 #if WITH_GCC
   #define COPY_TREE(P) ({s7_pointer _p; _p = P; \
-                         cons_unchecked(sc, (is_pair(car(_p))) ? copy_tree(sc, car(_p)) : car(_p), \
+                         cons_unchecked(sc, (is_unquoted_pair(car(_p))) ? copy_tree(sc, car(_p)) : car(_p), \
                                             (is_pair(cdr(_p))) ? copy_tree(sc, cdr(_p)) : cdr(_p));})
 #else
   #define COPY_TREE(P) copy_tree(sc, P)
 #endif
 
   return(cons_unchecked(sc,
-			(is_pair(car(tree))) ? COPY_TREE(car(tree)) : car(tree),
+			(is_unquoted_pair(car(tree))) ? COPY_TREE(car(tree)) : car(tree),
 			(is_pair(cdr(tree))) ? COPY_TREE(cdr(tree)) : cdr(tree)));
 }
 
@@ -10783,10 +10786,7 @@ static s7_pointer copy_body(s7_scheme *sc, s7_pointer p)
       abort();
     }
 #endif
-  sc->w = (sc->safety > NO_SAFETY) ? copy_tree_with_type(sc, p) : copy_tree(sc, p);
-  p = sc->w;
-  sc->w = sc->nil;
-  return(p);
+  return((sc->safety > NO_SAFETY) ? copy_tree_with_type(sc, p) : copy_tree(sc, p));
 }
 
 static s7_pointer copy_closure(s7_scheme *sc, s7_pointer fnc)
@@ -28318,7 +28318,7 @@ static s7_pointer g_list_to_string(s7_scheme *sc, s7_pointer args)
 
   if (!s7_is_proper_list(sc, car(args)))
     return(method_or_bust_with_type_one_arg(sc, car(args), sc->list_to_string_symbol, args,
-				     wrap_string(sc, "a (proper, non-circular) list of characters", 43)));
+					    wrap_string(sc, "a (proper, non-circular) list of characters", 43)));
   return(g_string_1(sc, car(args), sc->list_to_string_symbol));
 }
 #endif
@@ -50404,7 +50404,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
       return(s7_vector_copy(sc, source)); /* "shallow" copy */
 
-    case T_PAIR:                    /* top level only, as in the other cases, last arg checks for circles */
+    case T_PAIR:                    /* top level only, as in the other cases, checks for circles */
       return(copy_any_list(sc, source));
 
     case T_INTEGER:
@@ -70119,14 +70119,14 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 	{
 	  sc->u = args;
 	  check_free_heap_size(sc, 8192);
-#if S7_DEBUGGING
-	  if (tree_is_cyclic(sc, args))
+	  if (sc->safety > NO_SAFETY)
 	    {
-	      fprintf(stderr, "%s[%d]: hit a cyclic list?\n", __func__, __LINE__);
-	      abort();
+	      if (tree_is_cyclic(sc, args)) /* we're copying to clear optimizations I think, and a cyclic list here can't be optimized */
+		return(args);
+	      return(copy_tree_with_type(sc, args));
 	    }
-#endif
-	  return(copy_tree(sc, args)); /* copy_tree can't handle cyclic trees, not copy_any_list here -- see comment below */
+	  return(copy_tree(sc, args));
+	  /* not copy_any_list here -- see comment below */
 	}
       return((is_immutable(args)) ? copy_proper_list(sc, args) : args);
     }
@@ -73827,17 +73827,11 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		      set_opt3_arglen(expr, int_two);
 		      return(OPT_T);
 		    }
-		  /* safe_closure_sa|as_o? if (is_normal_symbol(arg2)) */
 		  set_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_O);
 		}
 	      else set_optimize_op(expr, hop + OP_CLOSURE_AA_O);
 	    }
-	  else
-	    {
-	      if ((safe_case) && (is_normal_symbol(arg1)))
-		set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_SA);
-	      else set_safe_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
-	    }
+	  else set_safe_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt1_lambda(expr, func);
 	  set_opt3_arglen(expr, int_two);
@@ -80865,7 +80859,7 @@ static s7_pointer op_set1(s7_scheme *sc)
 		{
 		  /* don't push OP_EVAL_DONE here and call eval(sc, OP_APPLY) below -- setter might hit an error */
 		  push_stack_no_args(sc, OP_SET_FROM_SETTER, lx);
-		  /* fprintf(stderr, "setter %d %d %d %s\n", is_closure(func), is_safe_closure(func), is_safe_closure_body(closure_body(func)), display(closure_body(func))); */
+		  /* fprintf(stderr, "setter %d %d %d %d %s\n", is_closure(func), is_safe_closure(func), is_safe_closure_body(closure_body(func)), has_fx(closure_body(func)), display(closure_body(func))); */
 		  /* TODO: setter not optimized?? (lambda (s v) v) is not safe?? */
 		  if (has_let_arg(func))
 		    sc->args = list_3(sc, sc->code, sc->value, sc->curlet);
@@ -86342,7 +86336,7 @@ static void op_safe_closure_saa(s7_scheme *sc)
   s7_pointer args, f, arg2;
   f = opt1_lambda(sc->code);
   args = cddr(sc->code);
-  arg2 = lookup(sc, cadr(sc->code));
+  arg2 = lookup(sc, cadr(sc->code)); /* I don't see fx_t|u here? */
   sc->code = fx_call(sc, args);
   sc->curlet = update_let_with_three_slots(sc, closure_let(f), arg2, sc->code, fx_call(sc, cdr(args)));
   sc->code = T_Pair(closure_body(f));
@@ -86704,14 +86698,6 @@ static void op_any_closure_4p_4(s7_scheme *sc)
   sc->stack_end -= 4;
 }
 
-
-static void op_safe_closure_sa(s7_scheme *sc)
-{
-  s7_pointer f;
-  f = opt1_lambda(sc->code);
-  sc->curlet = update_let_with_two_slots(sc, closure_let(f), lookup(sc, cadr(sc->code)), fx_call(sc, cddr(sc->code)));
-  sc->code = T_Pair(closure_body(f));
-}
 
 static void op_safe_closure_ss(s7_scheme *sc)
 {
@@ -90358,7 +90344,7 @@ static Inline bool op_any_c_fp_1(s7_scheme *sc)
 
 static void op_any_c_fp_2(s7_scheme *sc)
 {
-  sc->args = safe_reverse_in_place(sc, sc->args = cons(sc, sc->value, sc->args));
+  sc->args = safe_reverse_in_place(sc, sc->args = cons(sc, sc->value, sc->args)); 
   sc->code = pop_op_stack(sc);
   sc->value = c_call(sc->code)(sc, sc->args);
 }
@@ -92013,13 +91999,7 @@ static bool op_unknown_aa(s7_scheme *sc)
 		    }}
 	      else set_optimize_op(code, hop + OP_CLOSURE_AA_O);
 	    }
-	  else
-	    {
-	      /* TODO: as case */
-	      if ((safe_case) && (is_normal_symbol(cadr(code))))
-		set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_SA);
-	      else set_safe_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
-	    }
+	  else set_safe_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
 	  set_opt1_lambda(code, f);
 	  return(true);
 	}
@@ -92878,9 +92858,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_SAFE_CLOSURE_SC_O: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_P, 2)) {if (op_unknown_gg(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_SC_O: op_safe_closure_sc_o(sc); goto EVAL;
-
-	case OP_SAFE_CLOSURE_SA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 2)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_SA: op_safe_closure_sa(sc); goto BEGIN;
 
 	case OP_CLOSURE_AA: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_M, 2)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_AA: op_closure_aa(sc); goto EVAL;
@@ -97303,7 +97280,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 918) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 916) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97697,7 +97674,7 @@ int main(int argc, char **argv)
  *             gmp         20.9   21.0   21.1
  * ---------------------------------------------
  * tpeak       128          115    114    114
- * tauto       778          648    642    642   648 [eval? others also like s7test]
+ * tauto       778          648    642    642   647
  * tref        736          691    687    687
  * tshoot     1663          883    872    872
  * index      1074         1026   1016   1014
@@ -97707,7 +97684,7 @@ int main(int argc, char **argv)
  * tcopy      2290         2256   2230   2231
  * tmat       2412         2285   2258   2258
  * tform      3251         2281   2273   2273  2266
- * tread      2610         2440   2421   2408  2415 [op_read_internal -- overhead]
+ * tread      2610         2440   2421   2408  2415
  * tvect      2669         2456   2413   2413
  * trclo      4309         2715   2561   2560
  * fbench     2983         2688   2583   2583
@@ -97717,44 +97694,33 @@ int main(int argc, char **argv)
  * tsort      3821         3105   3104   3104
  * tset       3093         3253   3104   3104
  * tmac       3343         3317   3277   3249  3239
- * dup        3589         3334   3332   3317  3298
+ * dup        3589         3334   3332   3317  3296
  * tio        3843         3816   3752   3752
  * teq        4054         4068   4045   4045
  * tfft       11.3         4142   4109   4109
  * tclo       5051         4787   4735   4664
  * tcase      4850         4960   4793   4772
- * tlet       5782         4925   4908   4903  4898
- * tstr       6995         5281   4863   4863
+ * tlet       5782         4925   4908   4903  4839
+ * tstr       6995         5281   4863   4863  4859
  * trec       7763         5976   5970   5970
- * tnum       59.5         6348   6013   6007  6003
+ * tnum       59.5         6348   6013   6007  6005
  * tmisc      6490         7389   6210   6173  6168
  * tgc        12.6         11.9   11.1   11.1
- * tgen       12.0         11.2   11.4   11.4
+ * tgen       12.0         11.2   11.4   11.4  11.3
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
  * calls      60.2         36.7   37.5   37.3
  * sg         97.4         71.9   72.3   72.5  72.4
  * lg        105.5        106.6  105.0  105.0
- * tbig      601.8        177.4  175.8  175.6 175.9 [op_read_internal]
+ * tbig      601.8        177.4  175.8  175.6
  * ---------------------------------------------
  *
  * notcurses 2.1 diffs
  * extend fx_funcs by recur/tc cases, let, etc (s7test?)
- *   perhaps aa_to_ag* in fx_choose?
  *   let_fp et al (using has_gx etc), also can fxable/s7_optimize mark needed ops? if..if..p
- *   fx_call not fx* in eval? (check tus case too)
- *   if target func known, why not use direct rather than tn_n?  or specialize t3_n callee etc)
  * fixup ((let () cond|with-let|quasiquote|quote)...) fx flags (t718), but not if!
- * list-values:
- *   if preceding loop counted len, we could use unchecked if < trigger
- *   since copy pair shares cycles, it can't completely protect list-values ??
- *   safety>0 = check list-values for cycles?
- *   qq copy-tree (not car if immutable, or set entire thing immutable?)
+ * list-values: copy tree cycling: try new version, check that copy uses the y-ref
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
- * t409 to a timing test perhaps, t410 has circular list oddities
- * copy tree cycling even with cyclic check: this is apparently caused by define-macro copying its body?
- *   check that copy uses the y-ref
  * hash-code eqfunc, s7test (t413)
- * setter optimization t412
- * safe_closure_as, safe_closure_as|sa_a
+ * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
  */
