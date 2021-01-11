@@ -50,9 +50,6 @@
 ;;   table of functions that are simple (no side effects) is (*lint* 'no-side-effect-functions)
 ;;   see snd-lint.scm.
 
-(when (< (*s7* 'heap-size) (* 4 1024000))
-  (set! (*s7* 'heap-size) (* 4 1024000)))
-
 ;;; --------------------------------------------------------------------------------
 
 (when (provided? 'pure-s7)

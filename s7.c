@@ -1376,9 +1376,7 @@ struct s7_scheme {
 #if S7_DEBUGGING
   static void gdb_break(void) {};
 #endif
-#if POINTER_32 || S7_DEBUGGING
-  static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
-#endif
+static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
 
 #define opt_sc(o) o->sc
 #define opt_set_sc(o, sc) o->sc = sc
@@ -2139,7 +2137,7 @@ void s7_show_history(s7_scheme *sc);
 	fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
 		func, line,
 		BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
-		s7_object_to_c_string(sc, sc->cur_code));
+		s7_object_to_c_string(sc, s7_name_to_value(sc, "estr")));
 	/* gdb_break(); */
       }
     typeflag(symbol) = (typeflag(symbol) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC));
@@ -7230,10 +7228,22 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   sc->previous_free_heap_top = sc->free_heap_top;
 
   if (show_heap_stats(sc))
-    s7_warn(sc, 256, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ")\n", sc->heap_size, old_free, old_size);
+    s7_warn(sc, 256, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ")\n", 
+	    sc->heap_size, old_free, old_size, size);
 
+#if 0
   if (sc->heap_size >= sc->max_heap_size)
-    s7_error(sc, make_symbol(sc, "heap-too-big"), set_elist_1(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size)", 41)));
+    s7_error(sc, make_symbol(sc, "heap-too-big"), 
+	     set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~S > ~S", 50), 
+			 wrap_integer1(sc, sc->max_heap_size), 
+			 wrap_integer2(sc, sc->heap_size)));
+#else
+  if (sc->heap_size >= sc->max_heap_size)
+    {
+      fprintf(stderr, "heap too big\n");
+      abort();
+    }
+#endif
 }
 
 #define resize_heap(Sc) resize_heap_to(Sc, 0)
@@ -8684,11 +8694,11 @@ static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
   return(val);
 }
 
-static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol) /* TODO: can this use standard searchers? */
+static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
   if (symbol_id(symbol) == 0) /* this means the symbol has never been used locally, so how can it be a method? */
     return(sc->undefined);
-
+#if 0
   if (let_id(let) == symbol_id(symbol))
     return(slot_value(local_slot(symbol)));
   if (symbol_id(symbol) < let_id(let))
@@ -8704,6 +8714,14 @@ static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol) 
 	if (slot_symbol(y) == symbol)
 	  return(slot_value(y));
     }
+#else
+  {
+    s7_pointer slot;
+    slot = lookup_slot_from(symbol, let);
+    if (slot != global_slot(symbol))
+      return(slot_value(slot));
+  }
+#endif
   return(sc->undefined);
 }
 
@@ -27487,6 +27505,7 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
 		  unstack(sc);
 		  return(call_method(sc, p, func, set_ulist_1(sc, newstr, x)));
 		}}
+	  unstack(sc);
 	  return(wrong_type_argument(sc, caller, position_of(x, args), p, T_STRING));
 	}
       len += string_length(p);
@@ -31870,10 +31889,11 @@ static s7_pointer g_with_input_from_file(s7_scheme *sc, s7_pointer args)
   return(with_input(sc, open_input_file_1(sc, string_value(car(args)), "r", "with-input-from-file"), args));
 }
 
+/* TODO: arg the opt* fields ok if func is passed? */
 static void op_with_input_from_string_1(s7_scheme *sc)
 {
   s7_pointer old_port;
-  if (car(sc->code) == sc->with_input_from_string_symbol)
+  if ((car(sc->code) == sc->with_input_from_string_symbol) || (car(sc->code) == slot_value(initial_slot(sc->with_input_from_string_symbol))))
     {
       old_port = current_input_port(sc);
       set_current_input_port(sc, open_and_protect_input_string(sc, sc->value));
@@ -31881,7 +31901,7 @@ static void op_with_input_from_string_1(s7_scheme *sc)
     }
   else
     {
-      if (car(sc->code) == sc->with_input_from_file_symbol)
+      if ((car(sc->code) == sc->with_input_from_file_symbol) || (car(sc->code) == slot_value(initial_slot(sc->with_input_from_file_symbol))))
 	{
 	  old_port = current_input_port(sc);
 	  set_current_input_port(sc, open_input_file_1(sc, string_value(sc->value), "r", "with-input-from-file"));
@@ -31889,7 +31909,7 @@ static void op_with_input_from_string_1(s7_scheme *sc)
 	}
       else
 	{
-	  if (car(sc->code) == sc->with_output_to_file_symbol)
+	  if ((car(sc->code) == sc->with_output_to_file_symbol) || (car(sc->code) == slot_value(initial_slot(sc->with_output_to_file_symbol))))
 	    {
 	      old_port = current_output_port(sc);
 	      set_current_output_port(sc, s7_open_output_file(sc, string_value(sc->value), "w"));
@@ -31898,14 +31918,14 @@ static void op_with_input_from_string_1(s7_scheme *sc)
 	  else
 	    {
 	      s7_pointer port;
-	      if (car(sc->code) == sc->call_with_input_string_symbol)
+	      if ((car(sc->code) == sc->call_with_input_string_symbol) || (car(sc->code) == slot_value(initial_slot(sc->call_with_input_string_symbol))))
 		{
 		  port = open_and_protect_input_string(sc, sc->value);
 		  push_stack(sc, OP_UNWIND_INPUT, sc->unused, port);
 		}
 	      else
 		{
-		  if (car(sc->code) == sc->call_with_input_file_symbol)
+		  if ((car(sc->code) == sc->call_with_input_file_symbol) || (car(sc->code) == slot_value(initial_slot(sc->call_with_input_file_symbol))))
 		    {
 		      port = open_input_file_1(sc, string_value(sc->value), "r", "with-input-from-file");
 		      push_stack(sc, OP_UNWIND_INPUT, sc->unused, port);
@@ -35853,7 +35873,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   strport = open_format_port(sc);
   object_out(sc, obj, strport, P_WRITE);
   len = port_position(strport);
-  if (len == 0) return(NULL);
+  if (len == 0) {close_format_port(sc, strport); return(NULL);} /* probably never happens */
   str = (char *)Malloc(len + 1);
   memcpy((void *)str, (void *)port_data(strport), len);
   str[len] = '\0';
@@ -35952,8 +35972,11 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
     {
       s7_int i;
       if (choice == P_READABLE)  /* (object->string #r(1 2 3) :readable 4) */
-	return(out_of_range(sc, sc->object_to_string_symbol, int_three, wrap_integer1(sc, out_len), wrap_string(sc, "the readable string is too long", 31)));
-
+	{
+	  close_format_port(sc, strport);
+	  sc->has_openlets = old_openlets;
+	  return(out_of_range(sc, sc->object_to_string_symbol, int_three, wrap_integer1(sc, out_len), wrap_string(sc, "the readable string is too long", 31)));
+	}
       out_len = pending_max;
       if (out_len < 3)
 	{
@@ -73515,7 +73538,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       if (quotes == 2)
 	{
 	  if (func_is_safe)
-	    set_safe_optimize_op(expr, hop + OP_SAFE_C_AA); /* TODO: need cc */
+	    set_safe_optimize_op(expr, hop + OP_SAFE_C_AA); /* op_safe_c_d -> fx_c_d appears to leave quoted pairs quoted? */
 	  else set_unsafe_optimize_op(expr, hop + OP_C_AA);
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt3_arglen(expr, int_two);
@@ -81952,7 +81975,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		{
 		  /* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and s7_macroexpand */
 		  if ((!is_optimized(expr)) ||
-		      (optimize_op(expr) == OP_UNKNOWN_FP) || /* TODO: move do_let to safe_do*?? */
+		      (optimize_op(expr) == OP_UNKNOWN_FP) ||
 		      (!do_is_safe(sc, cdr(expr), steppers, var_list, has_set)))
 		    return(false);
 		  if (is_setter(x))           /* "setter" includes stuff like cons and vector -- x is a symbol */
@@ -94230,7 +94253,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   make_slot_1(sc, mu_let, make_symbol(sc, "heap-size"), cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
   make_slot_1(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
-  make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-time"), make_integer(sc, sc->gc_total_time));
+  make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
   for (i = 0; i < NUM_TYPES; i++) ts[i] = 0;
@@ -94245,7 +94268,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     }
   make_slot_1(sc, mu_let, make_symbol(sc, "cells-in-use/free"), cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
-    make_slot_1(sc, mu_let, make_symbol(sc, "types"), sc->w);
+    make_slot_1(sc, mu_let, make_symbol(sc, "types"), safe_reverse_in_place(sc, sc->w));
   sc->w = sc->nil;
 
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
@@ -96773,9 +96796,7 @@ s7_scheme *s7_init(void)
   pthread_mutex_unlock(&init_lock);
 #endif
   sc = (s7_scheme *)calloc(1, sizeof(s7_scheme)); /* not malloc! */
-#if S7_DEBUGGING
   cur_sc = sc;                                    /* for gdb/debugging */
-#endif
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
   sc->gc_stats = 0;
 
@@ -97723,4 +97744,10 @@ int main(int argc, char **argv)
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
  * hash-code eqfunc, s7test (t413)
  * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
+ * find where t725 clobbers built-ins
+ * try lookup/lookup_from without sc arg if gcc
+print permanent cell types
+move object->let symbols to sc
+memleak == permanent let in safe closure??
+op_input_from_string_1_method func/not symbol
  */
