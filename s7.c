@@ -1160,7 +1160,7 @@ struct s7_scheme {
   int32_t num_fdats, last_error_line;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1;
   gc_list_t *strings, *vectors, *input_ports, *output_ports, *input_string_ports, *continuations, *c_objects, *hash_tables;
-  gc_list_t *gensyms, *undefineds, *lambdas, *multivectors, *weak_refs, *weak_hash_iterators, *lamlets;
+  gc_list_t *gensyms, *undefineds, *lambdas, *multivectors, *weak_refs, *weak_hash_iterators; /* , *lamlets; */
 #if (WITH_GMP)
   gc_list_t *big_integers, *big_ratios, *big_reals, *big_complexes, *big_random_states;
   mpz_t mpz_1, mpz_2, mpz_3, mpz_4;
@@ -2137,7 +2137,7 @@ void s7_show_history(s7_scheme *sc);
 	fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
 		func, line,
 		BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
-		s7_object_to_c_string(sc, s7_name_to_value(sc, "estr")));
+		s7_object_to_c_string(sc, sc->cur_code));
 	/* gdb_break(); */
       }
     typeflag(symbol) = (typeflag(symbol) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC));
@@ -2807,8 +2807,10 @@ void s7_show_history(s7_scheme *sc);
 #define set_opt3_any(P, X)             set_opt3(P, X,               G_ANY)
 #define opt3_let(P)                    T_Lid(opt3(P,                G_LET))
 #define set_opt3_let(P, X)             set_opt3(P, T_Lid(X),        G_LET)
+#if 0
 #define opt3_lamlet(P)                 T_Pos(opt3(P,                G_LET))
 #define set_opt3_lamlet(P, X)          set_opt3(P, T_Pos(X),        G_LET)
+#endif
 #define opt3_direct(P)                 opt3(P,                      G_DIRECT)
 #define set_opt3_direct(P, X)          set_opt3(P, (s7_pointer)(X), G_DIRECT)
 
@@ -3021,7 +3023,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #if S7_DEBUGGING
 #define tis_slot(p) ((p) && (T_Slt(p)))
 #else
-#define tis_slot(p) (p)
+#define tis_slot(p) (p) /* used for loop through let slots which end in nil, not for general slot recognition */
 #endif
 #define slot_end(sc) NULL
 #define is_slot_end(p) (!(p))
@@ -6193,7 +6195,7 @@ static void free_big_complex(s7_scheme *sc, s7_pointer p)
 #endif
 
 static void free_hash_table(s7_scheme *sc, s7_pointer table);
-static void process_noop(void) {}
+/* static void process_noop(void) {} */
 
 static void sweep(s7_scheme *sc)
 {
@@ -6270,10 +6272,10 @@ static void sweep(s7_scheme *sc)
 
   gp = sc->continuations;
   process_gc_list(process_continuation(sc, s1));
-
+#if 0
   gp = sc->lamlets;
   process_gc_list(process_noop());
-
+#endif
   gp = sc->weak_refs;
   if (gp->loc > 0)
     {
@@ -6355,7 +6357,7 @@ static void add_gensym(s7_scheme *sc, s7_pointer p)
 #define add_multivector(sc, p)   add_to_gc_list(sc->multivectors, p)
 #define add_lambda(sc, p)        add_to_gc_list(sc->lambdas, p)
 #define add_weak_ref(sc, p)      add_to_gc_list(sc->weak_refs, p)
-#define add_lamlet(sc, p)        add_to_gc_list(sc->lamlets, p)
+/* #define add_lamlet(sc, p)        add_to_gc_list(sc->lamlets, p) */
 #define add_weak_hash_iterator(sc, p) add_to_gc_list(sc->weak_hash_iterators, p)
 
 #if WITH_GMP
@@ -6381,7 +6383,7 @@ static void init_gc_caches(s7_scheme *sc)
   sc->c_objects = make_gc_list();
   sc->lambdas = make_gc_list();
   sc->weak_refs = make_gc_list();
-  sc->lamlets = make_gc_list();
+  /* sc->lamlets = make_gc_list(); */
   sc->weak_hash_iterators = make_gc_list();
 #if WITH_GMP
   sc->big_integers = make_gc_list();
@@ -6906,6 +6908,7 @@ static void unmark_permanent_objects(s7_scheme *sc)
   /* used to clear_mark the history lists here */
 }
 
+#if 0
 static void mark_lamlets(s7_scheme *sc)
 {
   s7_int i;
@@ -6931,7 +6934,7 @@ static void mark_lamlets(s7_scheme *sc)
 	  gc_mark(lt);
 	}}
 }
-
+#endif
 
 #if (!MS_WINDOWS)
   #include <time.h>
@@ -7069,7 +7072,7 @@ static int64_t gc(s7_scheme *sc)
   }
   mark_op_stack(sc);
   mark_permanent_objects(sc);
-  mark_lamlets(sc);
+  /* mark_lamlets(sc); */
 
   if (sc->profiling_gensyms)
     {
@@ -7231,19 +7234,11 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
     s7_warn(sc, 256, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ")\n", 
 	    sc->heap_size, old_free, old_size, size);
 
-#if 0
   if (sc->heap_size >= sc->max_heap_size)
     s7_error(sc, make_symbol(sc, "heap-too-big"), 
 	     set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~S > ~S", 50), 
 			 wrap_integer1(sc, sc->max_heap_size), 
 			 wrap_integer2(sc, sc->heap_size)));
-#else
-  if (sc->heap_size >= sc->max_heap_size)
-    {
-      fprintf(stderr, "heap too big\n");
-      abort();
-    }
-#endif
 }
 
 #define resize_heap(Sc) resize_heap_to(Sc, 0)
@@ -31889,7 +31884,7 @@ static s7_pointer g_with_input_from_file(s7_scheme *sc, s7_pointer args)
   return(with_input(sc, open_input_file_1(sc, string_value(car(args)), "r", "with-input-from-file"), args));
 }
 
-/* TODO: arg the opt* fields ok if func is passed? */
+/* TODO: are the opt* fields ok if func is passed? */
 static void op_with_input_from_string_1(s7_scheme *sc)
 {
   s7_pointer old_port;
@@ -76850,7 +76845,7 @@ static s7_pointer check_named_let(s7_scheme *sc, int32_t vars)
       clear_list_in_use(sc->args);
       sc->args = sc->nil;
     }
-  set_opt3_lamlet(code, sc->nil);
+  /* set_opt3_lamlet(code, sc->nil); */
   return(code);
 }
 
@@ -76986,7 +76981,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
    */
   if (optimize_op(sc->code) >= OP_LET_FX_OLD)
     {
-      /* if body_is_safe, we could use sc->lamlets here to save the let, even if not unheaped, but
+      /* if body_is_safe, we could use sc->lamlets (if any) here to save the let, even if not unheaped, but
        *   that means we mark the let one extra time, which matters in random lets, and body_is_safe
        *   is somewhat expensive.  So in most timing tests, the saved let is not an improvement.
        */
@@ -77021,6 +77016,7 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
   s7_pointer body, x;
   s7_int n;
 
+#if 0
   sc->w = opt3_lamlet(sc->code);
   if (is_null(sc->w)) /* save closure_args in opt3_lambda */
     {
@@ -77032,9 +77028,11 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
       add_lamlet(sc, sc->code);
     }
   else n = integer(opt2_arglen(sc->code));      /* might be saved closure_args here as well as saved closure_let */
+#endif
 
   body = cddr(sc->code);
 
+#if 0
   if (is_let(sc->w))
     {
       s7_pointer outer_let, closure, slot;
@@ -77057,7 +77055,14 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
       set_slots_set(outer_let); /* for mark_lamlets */
     }
   else
+#endif
     {
+#if 1
+      sc->w = sc->nil;
+      for (n = 0, x = cadr(sc->code); is_pair(x); n++, x = cdr(x))
+	sc->w = cons(sc, caar(x), sc->w);
+      sc->w = safe_reverse_in_place(sc, sc->w); /* init values (args) are also in "reversed" order */
+#endif
       sc->curlet = make_let_slowly(sc, sc->curlet);
       sc->x = make_closure(sc, sc->w, body, T_CLOSURE | T_COPY_ARGS, n);
       /* make_slot_2(sc, sc->curlet, car(sc->code), sc->x); */ /* let_name */
@@ -77077,9 +77082,10 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
 	}
       closure_set_let(sc->x, sc->curlet);
       let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
-
+#if 0
       if (is_safe_closure_body(body))
 	set_opt3_lamlet(sc->code, let_outlet(closure_let(sc->x)));
+#endif
       sc->x = sc->nil;
     }
   sc->code = T_Pair(body);
@@ -94309,7 +94315,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   /* check the gc lists (finalizations) */
   len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
     sc->continuations->size + sc->c_objects->size + sc->hash_tables->size + sc->gensyms->size + sc->undefineds->size +
-    sc->lambdas->size + sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->lamlets->size;
+    sc->lambdas->size + sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size; /* + sc->lamlets->size; */
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-lists"), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer))));
 
   /* strings */
@@ -94382,6 +94388,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
       if (port_data(v)) len += port_data_size(v);
     }
   make_slot_1(sc, mu_let, make_symbol(sc, "output-ports"), cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
+#if S7_DEBUGGING
+  {
+    s7_pointer p;
+    for (i = 0, p = sc->format_ports; p; p = (s7_pointer)port_next(p));
+    make_slot_1(sc, mu_let, make_symbol(sc, "format-ports"), make_integer(sc, i));
+  }
+#endif
 
   /* continuations (sketchy!) */
   gp = sc->continuations;
@@ -97445,8 +97458,10 @@ void s7_free(s7_scheme *sc)
   free(sc->lambdas);
   free(sc->weak_refs->list);
   free(sc->weak_refs);
+#if 0
   free(sc->lamlets->list);
   free(sc->lamlets);
+#endif
   free(sc->weak_hash_iterators->list);
   free(sc->weak_hash_iterators);
 
@@ -97695,43 +97710,43 @@ int main(int argc, char **argv)
  *             gmp         20.9   21.0   21.1
  * ---------------------------------------------
  * tpeak       128          115    114    114
- * tauto       778          648    642    642   647
+ * tauto       778          648    642    647
  * tref        736          691    687    687
  * tshoot     1663          883    872    872
- * index      1074         1026   1016   1014
- * tmock      7697         1177   1165   1165
- * s7test     4546         1873   1831   1831
- * lt         2115         2123   2110   2109
- * tcopy      2290         2256   2230   2231
- * tmat       2412         2285   2258   2258
- * tform      3251         2281   2273   2273  2266
- * tread      2610         2440   2421   2408  2415
+ * index      1074         1026   1016   1015
+ * tmock      7697         1177   1165   1167
+ * s7test     4546         1873   1831   1831  1824
+ * lt         2115         2123   2110   2110
+ * tcopy      2290         2256   2230   2232
+ * tmat       2412         2285   2258   2254
+ * tform      3251         2281   2273   2266
+ * tread      2610         2440   2421   2419
  * tvect      2669         2456   2413   2413
  * trclo      4309         2715   2561   2560
  * fbench     2983         2688   2583   2583
- * tb         3474         2735   2681   2681
+ * tb         3474         2735   2681   2680
  * titer      2860         2865   2842   2842
  * tmap       3785         2886   2857   2857
  * tsort      3821         3105   3104   3104
- * tset       3093         3253   3104   3104
- * tmac       3343         3317   3277   3249  3239
- * dup        3589         3334   3332   3317  3296
- * tio        3843         3816   3752   3752
+ * tset       3093         3253   3104   3104  3095
+ * tmac       3343         3317   3277   3240
+ * dup        3589         3334   3332   3296
+ * tio        3843         3816   3752   3752  3768 [input_from_string_1]
  * teq        4054         4068   4045   4045
  * tfft       11.3         4142   4109   4109
- * tclo       5051         4787   4735   4664
- * tcase      4850         4960   4793   4772
- * tlet       5782         4925   4908   4903  4839
- * tstr       6995         5281   4863   4863  4859
+ * tclo       5051         4787   4735   4664  4671
+ * tcase      4850         4960   4793   4772  4778 [op_named_let_1]
+ * tlet       5782         4925   4908   4903  4839  4862 [op_named_let_1]
+ * tstr       6995         5281   4863   4863  4859  4815
  * trec       7763         5976   5970   5970
- * tnum       59.5         6348   6013   6007  6005
- * tmisc      6490         7389   6210   6173  6168
+ * tnum       59.5         6348   6013   6002
+ * tmisc      6490         7389   6210   6170
  * tgc        12.6         11.9   11.1   11.1
- * tgen       12.0         11.2   11.4   11.4  11.3
+ * tgen       12.0         11.2   11.4   11.3
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
  * calls      60.2         36.7   37.5   37.3
- * sg         97.4         71.9   72.3   72.5  72.4
+ * sg         97.4         71.9   72.3   72.3
  * lg        105.5        106.6  105.0  105.0
  * tbig      601.8        177.4  175.8  175.6
  * ---------------------------------------------
@@ -97744,10 +97759,10 @@ int main(int argc, char **argv)
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
  * hash-code eqfunc, s7test (t413)
  * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
- * find where t725 clobbers built-ins
  * try lookup/lookup_from without sc arg if gcc
-print permanent cell types
-move object->let symbols to sc
-memleak == permanent let in safe closure??
-op_input_from_string_1_method func/not symbol
+ * print permanent cell types in memory_usage
+ * (#_with_input_from_string <mock-string>)
+ * check that tis_slot makes sense if not debugging [add check to debug version]
+ * cleanup t725, squeeze max-heap-size
+ * t718, notcurses macros
  */
