@@ -3809,7 +3809,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCOPTION_NO_ALTERNATE_SCREEN);
   nc_int(NCOPTION_NO_FONT_CHANGES);
 
-  nc_int(CELL_WIDEASIAN_MASK);
   nc_int(CELL_BGDEFAULT_MASK);
   nc_int(CELL_FGDEFAULT_MASK);
   nc_int(CELL_BG_RGB_MASK);
