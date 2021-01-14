@@ -12,15 +12,9 @@
 /* notcurses version.h was included only by version 2 so if using version 1, pass -DNOTCURSES_1=1 */
 #if NOTCURSES_1
   #define NOTCURSES_2 0
-  #define NOTCURSES_2_0_5 0
 #else
   #define NOTCURSES_2 1
   #include <notcurses/version.h>
-  #ifndef NOTCURSES_2_0_5
-    #if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_PATCH >= 5)
-      #define NOTCURSES_2_0_5 1
-    #endif
-  #endif
 #endif
 
 #include "s7.h"
@@ -134,7 +128,8 @@ static s7_pointer g_ncdirect_init(s7_scheme *sc, s7_pointer args)
   termtype = s7_car(args);
   if (s7_is_pair(s7_cdr(args)))
     {
-      fp = (FILE *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, "FILE*"), __func__, 2);
+      if (s7_is_c_pointer(s7_cadr(args))) /* might be #f */
+	fp = (FILE *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, "FILE*"), __func__, 2);
       if (s7_is_pair(s7_cddr(args)))
 	flags = s7_integer_checked(sc, s7_caddr(args));
     }
@@ -171,6 +166,49 @@ static s7_pointer g_ncdirect_getc(s7_scheme *sc, s7_pointer args)
 				    
 }
 
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 1)
+static s7_pointer g_ncdirect_set_fg_default(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_set_fg_default((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
+}
+
+static s7_pointer g_ncdirect_set_bg_default(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_set_bg_default((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
+}
+
+static s7_pointer g_ncdirect_set_fg_rgb(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_set_fg_rgb((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+					 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_set_bg_rgb(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_set_bg_rgb((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+					 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_set_styles(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_set_styles((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+						 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_on_styles(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_on_styles((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+						(unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_off_styles(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_off_styles((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+						 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+
+#else /* version before 2_1 */
 static s7_pointer g_ncdirect_fg_default(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncdirect_fg_default((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
@@ -180,6 +218,37 @@ static s7_pointer g_ncdirect_bg_default(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncdirect_bg_default((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
 }
+
+static s7_pointer g_ncdirect_fg_rgb(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_fg_rgb((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+					 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_bg_rgb(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_bg_rgb((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+					 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_styles_set(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_styles_set((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+						 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_styles_on(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_styles_on((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+						(unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+
+static s7_pointer g_ncdirect_styles_off(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, ncdirect_styles_off((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
+						 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
+}
+#endif
 
 static s7_pointer g_ncdirect_dim_x(s7_scheme *sc, s7_pointer args)
 {
@@ -219,36 +288,6 @@ static s7_pointer g_ncdirect_clear(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_ncdirect_stop(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncdirect_stop((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
-}
-
-static s7_pointer g_ncdirect_fg_rgb(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncdirect_fg_rgb((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
-					 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
-}
-
-static s7_pointer g_ncdirect_bg_rgb(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncdirect_bg_rgb((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
-					 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
-}
-
-static s7_pointer g_ncdirect_styles_set(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncdirect_styles_set((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
-						 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
-}
-
-static s7_pointer g_ncdirect_styles_on(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncdirect_styles_on((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
-						(unsigned)s7_integer_checked(sc, s7_cadr(args)))));
-}
-
-static s7_pointer g_ncdirect_styles_off(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, ncdirect_styles_off((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1), 
-						 (unsigned)s7_integer_checked(sc, s7_cadr(args)))));
 }
 
 static s7_pointer g_ncdirect_cursor_up(s7_scheme *sc, s7_pointer args)
@@ -1019,7 +1058,7 @@ static s7_pointer g_set_ncplane_options_cols(s7_scheme *sc, s7_pointer args)
   return(s7_car(args));
 }
 
-#if NOTCURSES_2_0_5
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (((NOTCURSES_VERNUM_MINOR == 0) && (NOTCURSES_VERNUM_PATCH >= 5)) || (NOTCURSRS_VERNUM_MINOR > 0))
 static s7_pointer g_ncplane_options_x(s7_scheme *sc, s7_pointer args) 
 {
   return(s7_make_integer(sc, ((ncplane_options *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_options_symbol, __func__, 1))->x));
@@ -1607,7 +1646,7 @@ static s7_pointer g_ncplane_putnstr_aligned(s7_scheme *sc, s7_pointer args)
 						     (const char *)s7_string_checked(sc, s7_cadr(s7_cdddr(args))))));
 }
 
-#if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+#if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
 static s7_pointer g_ncpile_render(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncpile_render((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1))));
@@ -1666,7 +1705,7 @@ static s7_pointer g_ncplane_new(s7_scheme *sc, s7_pointer args)
   {
    ncplane_options nopts = {
      .y = yoff,
-#if NOTCURSES_2_0_5
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (((NOTCURSES_VERNUM_MINOR == 0) && (NOTCURSES_VERNUM_PATCH >= 5)) || (NOTCURSES_VERNUM_MINOR > 0))
      .x = xoff,
 #else
      .horiz = {
@@ -3626,7 +3665,7 @@ static s7_pointer g_ncvisual_geom(s7_scheme *sc, s7_pointer args)
   return(s7_list(sc, 5, res, s7_make_integer(sc, y), s7_make_integer(sc, x), s7_make_integer(sc, toy), s7_make_integer(sc, tox)));
 }
 
-#if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+#if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
 static s7_pointer g_ncvisual_decode_loop(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncvisual_decode_loop((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1))));
@@ -3837,7 +3876,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCSTYLE_INVIS);
   nc_int(NCSTYLE_PROTECT);
   nc_int(NCSTYLE_ITALIC);
-#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
   nc_int(NCSTYLE_STRUCK);
   nc_int(NCSTYLE_NONE);
 #endif
@@ -3981,8 +4020,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncdirect_flush, 1, 0, false);
   nc_func(ncdirect_inputready_fd, 1, 0, false);
   nc_func(ncdirect_getc, 4, 0, false);
-  nc_func(ncdirect_fg_default, 1, 0, false);
-  nc_func(ncdirect_bg_default, 1, 0, false);
   nc_func(ncdirect_dim_x, 1, 0, false);
   nc_func(ncdirect_dim_y, 1, 0, false);
   nc_func(ncdirect_cursor_enable, 1, 0, false);
@@ -3991,11 +4028,23 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncdirect_cursor_pop, 1, 0, false);
   nc_func(ncdirect_clear, 1, 0, false);
   nc_func(ncdirect_stop, 1, 0, false);
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 1)
+  nc_func(ncdirect_set_fg_default, 1, 0, false);
+  nc_func(ncdirect_set_bg_default, 1, 0, false);
+  nc_func(ncdirect_set_fg_rgb, 2, 0, false);
+  nc_func(ncdirect_set_bg_rgb, 2, 0, false);
+  nc_func(ncdirect_set_styles, 2, 0, false);
+  nc_func(ncdirect_on_styles, 2, 0, false);
+  nc_func(ncdirect_off_styles, 2, 0, false);
+#else
+  nc_func(ncdirect_fg_default, 1, 0, false);
+  nc_func(ncdirect_bg_default, 1, 0, false);
   nc_func(ncdirect_fg_rgb, 2, 0, false);
   nc_func(ncdirect_bg_rgb, 2, 0, false);
   nc_func(ncdirect_styles_set, 2, 0, false);
   nc_func(ncdirect_styles_on, 2, 0, false);
   nc_func(ncdirect_styles_off, 2, 0, false);
+#endif
   nc_func(ncdirect_cursor_up, 2, 0, false);
   nc_func(ncdirect_cursor_left, 2, 0, false);
   nc_func(ncdirect_cursor_right, 2, 0, false);
@@ -4095,7 +4144,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_options_make, 0, 0, false);
   nc_func(ncplane_options_free, 1, 0, false);
   nc_func2(ncplane_options_y);
-#if NOTCURSES_2_0_5
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (((NOTCURSES_VERNUM_MINOR == 0) && (NOTCURSES_VERNUM_PATCH >= 5)) || (NOTCURSRS_VERNUM_MINOR > 0))
   nc_func2(ncplane_options_x);
 #endif
   nc_func2(ncplane_options_rows);
@@ -4186,7 +4235,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_above, 1, 0, false);
   nc_func(ncplane_parent, 1, 0, false);
 
-#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
   nc_func(ncpile_render, 1, 0, false);
   nc_func(ncpile_rasterize, 1, 0, false);
   nc_func(ncpile_create, 2, 0, false);
@@ -4388,7 +4437,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncvisual_render, 3, 0, false);
   nc_func(ncvisual_simple_streamer, 4, 0, false);
   nc_func(ncvisual_geom, 7, 0, false);
-#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
   nc_func(ncvisual_decode_loop, 1, 0, false);
 #endif
 
@@ -4430,6 +4479,13 @@ void notcurses_s7_init(s7_scheme *sc)
 
   nc_int(NCDIRECT_OPTION_INHIBIT_SETLOCALE);
   nc_int(NCDIRECT_OPTION_INHIBIT_CBREAK);
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 1) && (NOTCURSES_VERNUM_PATCH >= 5)
+  nc_int(NCDIRECT_OPTION_NO_READLINE);
+#endif
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 1) && (NOTCURSES_VERNUM_PATCH >= 4)
+  nc_int(NCDIRECT_OPTION_NO_QUIT_SIGHANDLERS);
+#endif
+
   #if (defined(NOTCURSES_VERNUM_MAJOR))
     nc_int(NOTCURSES_VERNUM_MAJOR);
     nc_int(NOTCURSES_VERNUM_MINOR);
@@ -4452,6 +4508,7 @@ void notcurses_s7_init(s7_scheme *sc)
  * repl
  *   > (load "notcurses_s7.so" (inlet 'init_func 'notcurses_s7_init))
  *   > (notcurses_version)
+ * repl make-nrepl-bits.scm
  */
 
 /* TODO: ncmenu_item(s) various callbacks palette256-chans? 
@@ -4468,7 +4525,7 @@ void notcurses_s7_init(s7_scheme *sc)
  *  notcurses_linesigs_enable|disable
  * 2.1.4
  *  NCDIRECT_OPTION_NO_QUIT_SIGHANDLERS
- *  HIRES additions, WIDEASIAN out?
+ *  HIRES additions
  *  API int ncplane_at_cursor_cell(struct ncplane* n, nccell* c);
  *  API int ncplane_at_yx_cell(struct ncplane* n, int y, int x, nccell* c);
  *  API ncblitter_e ncvisual_media_defblitter(const struct notcurses* nc, ncscale_e scale);
