@@ -6369,10 +6369,6 @@ how to get pi into a key list?
 <em class="gray">4</em>
 </pre>
 
-<p>catch, dynamic-wind, and many of the other functions that take function
-arguments in standard Scheme, accept macros in s7.
-</p>
-
 <p>Apply let is very similar to eval:
 </p>
 <pre>
@@ -6392,6 +6388,16 @@ use a trailing null instead (mimicking apply* in some ancient lisps):
 &gt; (apply let '((a 2) (b 3)) '(list + a b) ())
 <em class="gray">(+ 2 3)</em>
 </pre>
+
+<p>Scheme claims that it evaluates the car of an expression, then calls the
+result with the rest of the expression.  So <code>((if x + -) y z)</code> calls either 
+<code>(+ y z)</code> or <code>(- y z)</code> depending on x.  
+But only s7, as far as I know, handles <code>((if x or and) y z)</code>.
+</p>
+
+<p>catch, dynamic-wind, and many of the other functions that take function
+arguments in standard Scheme, accept macros in s7.
+</p>
 
 <p>
 Currently, you can't set! a built-in syntactic keyword to some new value:

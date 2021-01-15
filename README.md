@@ -26,6 +26,6 @@ s7 is a Scheme interpreter.
 
 docker container: docker run -it schemers/s7:head (Lassi Kortela)
 
-[web assembly](https://github.com/actonDev/s7-playground/) (Christos Vaigas)
+[web assembly](https://github.com/actonDev/s7-playground/) (Christos Vagias)
 
 [the original](https://en.wikipedia.org/wiki/Sunbeam_S7_and_S8)
