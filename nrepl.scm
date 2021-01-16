@@ -1624,14 +1624,9 @@
 		  (string=? (getenv "TERM") "dumb")))  ; no vt100 codes -- emacs subjob for example
 	    (emacs-repl)
 	    (begin
-	      (set! ncd (ncdirect_init (c-pointer 0) #f 
-				       (logior (if (defined? 'NCDIRECT_OPTION_NO_QUIT_SIGHANDLERS) NCDIRECT_OPTION_NO_QUIT_SIGHANDLERS 0)
-					       (if (defined? 'NCDIRECT_OPTION_NO_READLINE) NCDIRECT_NO_READLINE 0))))
+	      (set! ncd (ncdirect_init (c-pointer 0))) ; version < 2.1 don't pass #f 0 here -- 0 must not be the old default
 	      (let ((noptions (notcurses_options_make)))
-		(set! (notcurses_options_flags noptions) 
-		      (logior NCOPTION_SUPPRESS_BANNERS
-			      (if (defined? 'NCOPTION_NO_READLINE) NCOPTION_NO_READLINE 0)
-			      (if (defined? 'NCOPTION_NO_QUIT_SIGHANDLERS) NCOPTION_NO_QUIT_SIGHANDLERS 0)))
+		(set! (notcurses_options_flags noptions) NCOPTION_SUPPRESS_BANNERS)
 		(set! nc (notcurses_init noptions)))
 	      (notcurses_cursor_enable nc 0 2)
 	      (unless (string-position "rxvt" ((libc-let 'getenv) "TERM"))
