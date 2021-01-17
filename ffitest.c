@@ -2128,6 +2128,21 @@ int main(int argc, char **argv)
       fprintf(stderr, "pretty_print: \"%s\"\n", str);
   }
 
+  {
+    s7_int size = 256, gc_loc, loc, code;
+    s7_pointer hasher, key, result;
+    hasher = s7_make_and_fill_vector(sc, size, s7_nil(sc));
+    gc_loc = s7_gc_protect(sc, hasher);
+    key = s7_make_integer(sc, 3);
+    code = s7_hash_code(sc, key, s7_f(sc));
+    loc = code % size;
+    s7_vector_set(sc, hasher, loc, s7_cons(sc, s7_cons(sc, key, s7_make_symbol(sc, "abc")), s7_vector_ref(sc, hasher, loc)));
+    result = s7_cdr(s7_assoc(sc, key, s7_vector_ref(sc, hasher, loc)));
+    if (result != s7_make_symbol(sc, "abc"))
+      fprintf(stderr, "hash-code: %s\n", s7_object_to_c_string(sc, result));
+    s7_gc_unprotect_at(sc, gc_loc);
+  }
+
   s7_free(sc);
 
   return(0);

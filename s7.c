@@ -1327,7 +1327,8 @@ struct s7_scheme {
   s7_pointer active_symbol, goto_symbol, data_symbol, weak_symbol, dimensions_symbol, info_symbol, c_type_symbol, source_symbol, c_object_ref_symbol,
              at_end_symbol, sequence_symbol, position_symbol, entries_symbol, locked_symbol, function_symbol, open_symbol, alias_symbol, port_type_symbol,
              file_symbol, file_info_symbol, line_symbol, c_object_let_symbol, class_symbol, c_object_length_symbol, c_object_set_symbol, current_value_symbol,
-             c_object_copy_symbol, c_object_fill_symbol, c_object_reverse_symbol, c_object_to_list_symbol, c_object_to_string_symbol, closed_symbol;
+             c_object_copy_symbol, c_object_fill_symbol, c_object_reverse_symbol, c_object_to_list_symbol, c_object_to_string_symbol, closed_symbol,
+             mutable_symbol, size_symbol, original_vector_symbol, pointer_symbol;
 
 #if WITH_SYSTEM_EXTRAS
   s7_pointer is_directory_symbol, file_exists_symbol, delete_file_symbol, getenv_symbol, system_symbol, directory_to_list_symbol, file_mtime_symbol;
@@ -27211,10 +27212,8 @@ static s7_pointer g_string_downcase(s7_scheme *sc, s7_pointer args)
       while (i >= 0) {nstr[i] = lowers[(uint8_t)ostr[i]]; i--;}
     }
   else
-    {
-      for (i = 0; i < len; i++)
-	nstr[i] = lowers[(uint8_t)ostr[i]];
-    }
+    for (i = 0; i < len; i++)
+      nstr[i] = lowers[(uint8_t)ostr[i]];
   return(newstr);
 }
 
@@ -27244,10 +27243,8 @@ static s7_pointer g_string_upcase(s7_scheme *sc, s7_pointer args)
       while (i >= 0) {nstr[i] = uppers[(uint8_t)ostr[i]]; i--;}
     }
   else
-    {
-      for (i = 0; i < len; i++)
-	nstr[i] = uppers[(uint8_t)ostr[i]];
-    }
+    for (i = 0; i < len; i++)
+      nstr[i] = uppers[(uint8_t)ostr[i]];
   return(newstr);
 }
 
@@ -31504,12 +31501,11 @@ static s7_pointer g_is_provided(s7_scheme *sc, s7_pointer args)
     {
       s7_pointer y;
       for (y = let_slots(x); tis_slot(y); y = next_slot(y))
-	if (slot_symbol(y) == sc->features_symbol)
-	  {
-	    if ((slot_value(y) != topf) &&
-		(is_memq(sym, slot_value(y))))
-	      return(sc->T);
-	  }}
+	if ((slot_symbol(y) == sc->features_symbol) &&
+	    (slot_value(y) != topf) &&
+	    (is_memq(sym, slot_value(y))))
+	  return(sc->T);
+    }
   return(sc->F);
 }
 
@@ -36805,12 +36801,11 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		if (isdigit((int32_t)(str[i])))
 		  width = format_numeric_arg(sc, str, str_len, fdat, &i);
 		else
-		  {
-		    if ((str[i] == 'N') || (str[i] == 'n'))
-		      {
-			i++;
-			width = format_n_arg(sc, str, fdat, args);
-		      }}
+		  if ((str[i] == 'N') || (str[i] == 'n'))
+		    {
+		      i++;
+		      width = format_n_arg(sc, str, fdat, args);
+		    }
 		if (str[i] == ',')
 		  {
 		    i++;                                  /* is (format #f "~12,12D" 1) an error?  The precision (or is it the width?) has no use here. */
@@ -40995,8 +40990,10 @@ s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect)
     return(sc->nil);
   check_free_heap_size(sc, len);
   sc->v = sc->nil;
+  s7_gc_protect_via_stack(sc, vect);
   for (i = len - 1; i >= 0; i--)
-    sc->v = cons_unchecked(sc, vector_getter(vect)(sc, vect, i), sc->v);
+    sc->v = cons_unchecked(sc, vector_getter(vect)(sc, vect, i), sc->v); /* vector_getter can cause alloction/GC (int_vector_getter -> make_integer) */
+  unstack(sc);
   result = sc->v;
   sc->v = sc->nil;
   return(result);
@@ -41026,8 +41023,10 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
 
   check_free_heap_size(sc, end - start);
   sc->w = sc->nil;
+  s7_gc_protect_via_stack(sc, vec);
   for (i = end - 1; i >= start; i--)
     sc->w = cons_unchecked(sc, vector_getter(vec)(sc, vec, i), sc->w);
+  unstack(sc);
   p = sc->w;
   sc->w = sc->nil;
   return(p);
@@ -51804,7 +51803,7 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj, s7_pointer args)
       val = s7_symbol_value(sc, obj);
       s7_varlet(sc, let, sc->current_value_symbol, val);
       s7_varlet(sc, let, sc->setter_symbol, g_setter(sc, args));
-      s7_varlet(sc, let, sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable_symbol(obj)));
+      s7_varlet(sc, let, sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_symbol(obj)));
       if (!is_undefined(val))
 	{
 	  const char *doc;
@@ -51840,11 +51839,12 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
 
   if (!sc->dimensions_symbol) sc->dimensions_symbol = make_symbol(sc, "dimensions");
+  if (!sc->original_vector_symbol) sc->original_vector_symbol = make_symbol(sc, "original-vector");
   let = g_local_inlet(sc, 10, sc->value_symbol, obj,
 		      sc->type_symbol, (is_subvector(obj)) ? cons(sc, sc->is_subvector_symbol, s7_type_of(sc, subvector_vector(obj))) : s7_type_of(sc, obj),
-		      sc->length_symbol, s7_length(sc, obj),
+		      sc->size_symbol, s7_length(sc, obj),
 		      sc->dimensions_symbol, g_vector_dimensions(sc, set_plist_1(sc, obj)),
-		      sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable_vector(obj)));
+		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_vector(obj)));
   gc_loc = s7_gc_protect_1(sc, let);
   if (is_subvector(obj))
     {
@@ -51857,7 +51857,7 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
 	  case T_BYTE_VECTOR:  pos = (s7_int)((intptr_t)(byte_vector_bytes(obj) - byte_vector_bytes(subvector_vector(obj))));     break;
 	}
       s7_varlet(sc, let, sc->position_symbol, make_integer(sc, pos));
-      s7_varlet(sc, let, sc->vector_symbol, subvector_vector(obj));
+      s7_varlet(sc, let, sc->original_vector_symbol, subvector_vector(obj));
     }
   if (is_typed_vector(obj))
     s7_varlet(sc, let, sc->signature_symbol, g_signature(sc, set_plist_1(sc, obj)));
@@ -51877,10 +51877,10 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
     }
   let = g_local_inlet(sc, 12, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_hash_table_symbol,
-		      sc->length_symbol, s7_length(sc, obj),
+		      sc->size_symbol, s7_length(sc, obj),
 		      sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
 		      sc->locked_symbol, s7_make_boolean(sc, hash_table_checker_locked(obj)),
-		      sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable(obj)));
+		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = s7_gc_protect_1(sc, let);
   if (is_weak_hash_table(obj))
     s7_varlet(sc, let, sc->weak_symbol, sc->T);
@@ -51951,12 +51951,12 @@ static s7_pointer iterator_to_let(s7_scheme *sc, s7_pointer obj)
 		      sc->sequence_symbol, iterator_sequence(obj));
   gc_loc = s7_gc_protect_1(sc, let);
   if (is_pair(seq))
-    s7_varlet(sc, let, sc->length_symbol, s7_length(sc, seq));
+    s7_varlet(sc, let, sc->size_symbol, s7_length(sc, seq));
   else
     {
       if (is_hash_table(seq))
-	s7_varlet(sc, let, sc->length_symbol, make_integer(sc, hash_table_entries(seq)));
-      else s7_varlet(sc, let, sc->length_symbol, s7_length(sc, obj));
+	s7_varlet(sc, let, sc->size_symbol, make_integer(sc, hash_table_entries(seq)));
+      else s7_varlet(sc, let, sc->size_symbol, s7_length(sc, obj));
     }
   if ((is_string(seq)) ||
       (is_any_vector(seq)) ||
@@ -51987,10 +51987,10 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
     }
   let = g_local_inlet(sc, 12, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_let_symbol,
-		      sc->length_symbol, s7_length(sc, obj),
+		      sc->size_symbol, s7_length(sc, obj),
 		      sc->open_symbol, s7_make_boolean(sc, has_methods(obj)),
 		      sc->outlet_symbol, (obj == sc->rootlet) ? sc->nil : let_outlet(obj),
-		      sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable(obj)));
+		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = s7_gc_protect_1(sc, let);
   if (obj == sc->rootlet)
     s7_varlet(sc, let, sc->alias_symbol, sc->rootlet_symbol);
@@ -52109,7 +52109,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
 		      sc->type_symbol, (is_input_port(obj)) ? sc->is_input_port_symbol : sc->is_output_port_symbol,
 		      sc->port_type_symbol, (is_string_port(obj)) ? sc->string_symbol : ((is_file_port(obj)) ? sc->file_symbol : sc->function_symbol),
 		      sc->closed_symbol, s7_make_boolean(sc, port_is_closed(obj)),
-		      sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable_port(obj)));
+		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_port(obj)));
   gc_loc = s7_gc_protect_1(sc, let);
   if (is_file_port(obj))
     {
@@ -52141,7 +52141,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
       (port_data(obj)) &&
       (port_data_size(obj) > 0))
     {
-      s7_varlet(sc, let, sc->length_symbol, make_integer(sc, port_data_size(obj)));
+      s7_varlet(sc, let, sc->size_symbol, make_integer(sc, port_data_size(obj)));
       s7_varlet(sc, let, sc->position_symbol, make_integer(sc, port_position(obj)));
       /* I think port_data need not be null-terminated, but s7_make_string assumes it is:
        *   both valgrind and lib*san complain about the uninitialized data during strlen.
@@ -52165,7 +52165,7 @@ static s7_pointer closure_to_let(s7_scheme *sc, s7_pointer obj)
   let = g_local_inlet(sc, 8, sc->value_symbol, obj,
 		      sc->type_symbol, (is_t_procedure(obj)) ? sc->is_procedure_symbol : sc->is_macro_symbol,
 		      sc->arity_symbol, s7_arity(sc, obj),
-		      sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable(obj)));
+		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = s7_gc_protect_1(sc, let);
 
   sig = s7_signature(sc, obj);
@@ -52206,9 +52206,10 @@ static s7_pointer c_pointer_to_let(s7_scheme *sc, s7_pointer obj)
       sc->c_type_symbol = make_symbol(sc, "c-type");
       sc->info_symbol = make_symbol(sc, "info");
     }
+  if (!sc->pointer_symbol) sc->pointer_symbol = make_symbol(sc, "pointer");
   return(g_local_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_c_pointer_symbol,
-		       sc->c_pointer_symbol, make_integer(sc, (s7_int)((intptr_t)c_pointer(obj))),
+		       sc->pointer_symbol, make_integer(sc, (s7_int)((intptr_t)c_pointer(obj))),
 		       sc->c_type_symbol, c_pointer_type(obj),
 		       sc->info_symbol, c_pointer_info(obj)));
 }
@@ -52221,7 +52222,7 @@ static s7_pointer c_function_to_let(s7_scheme *sc, s7_pointer obj)
   let = g_local_inlet(sc, 8, sc->value_symbol, obj,
 		      sc->type_symbol, (is_t_procedure(obj)) ? sc->is_procedure_symbol : sc->is_macro_symbol,
 		      sc->arity_symbol, s7_arity(sc, obj),
-		      sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable(obj)));
+		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = s7_gc_protect_1(sc, let);
   sig = c_function_signature(obj);
   if (is_pair(sig))
@@ -52306,13 +52307,13 @@ static s7_pointer g_object_to_let(s7_scheme *sc, s7_pointer args)
     case T_STRING:
       return(g_local_inlet(sc, 8, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_string_symbol,
-			   sc->length_symbol, s7_length(sc, obj),
-			   sc->is_immutable_symbol, s7_make_boolean(sc, is_immutable_string(obj))));
+			   sc->size_symbol, s7_length(sc, obj),
+			   sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_string(obj))));
 
     case T_PAIR:
       return(g_local_inlet(sc, 6, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_pair_symbol,
-			   sc->length_symbol, s7_length(sc, obj)));
+			   sc->size_symbol, s7_length(sc, obj)));
 
     case T_RANDOM_STATE:
       return(random_state_to_let(sc, obj));
@@ -75204,32 +75205,20 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	      {
 		s7_pointer arg1;
 		arg1 = cadr(expr);
-		if (pairs == 1)
+		if ((pairs == 1) &&
+		    (len == 1))
 		  {
-		    if (len == 1)
+		    if ((car(expr) == sc->quote_symbol) &&
+			(direct_memq(sc->quote_symbol, e)))
+		      return(OPT_OOPS);
+		    
+		    if (is_fxable(sc, arg1))
 		      {
-			if ((car(expr) == sc->quote_symbol) &&
-			    (direct_memq(sc->quote_symbol, e)))
-			  return(OPT_OOPS);
-
-			if (is_fxable(sc, arg1))
-			  {
-			    set_opt3_arglen(cdr(expr), int_one);
-			    fx_annotate_arg(sc, cdr(expr), e);
-			    set_unsafe_optimize_op(expr, OP_UNKNOWN_A);
-			    return(OPT_F);
-			  }}
-		    else
-		      {
-			if (len == 2)
-			  {
-			    if ((is_fxable(sc, arg1)) &&
-				(is_fxable(sc, caddr(expr))))
-			      {
-				set_opt3_arglen(cdr(expr), int_two);
-				set_unsafe_optimize_op(expr, OP_UNKNOWN_AA);
-				return(OPT_F);
-			      }}}}
+			set_opt3_arglen(cdr(expr), int_one);
+			fx_annotate_arg(sc, cdr(expr), e);
+			set_unsafe_optimize_op(expr, OP_UNKNOWN_A);
+			return(OPT_F);
+		      }}
 
 		if ((len == 2) &&
 		    (is_fxable(sc, arg1)) &&
@@ -96926,6 +96915,8 @@ s7_scheme *s7_init(void)
   sc->class_name_symbol = make_symbol(sc, "class-name");
   sc->name_symbol = make_symbol(sc, "name");
   sc->trace_in_symbol = make_symbol(sc, "trace-in");
+  sc->size_symbol = make_symbol(sc, "size");
+  sc->mutable_symbol = make_symbol(sc, "mutable?");
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
@@ -97552,7 +97543,7 @@ static int main(int argc, char **argv)
  * tsort      3821         3105   3104   3104
  * tset       3093         3253   3104   3094
  * tmac       3343         3317   3277   3240
- * dup        3589         3334   3332   3261
+ * dup        3589         3334   3332   3261  3232
  * tio        3843         3816   3752   3742
  * teq        4054         4068   4045   4033
  * tfft       11.3         4142   4109   4109
@@ -97578,7 +97569,7 @@ static int main(int argc, char **argv)
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
  * hash-code eqfunc, s7test (t413)
  * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
- * track locals/heap-size t725, popped splice_values [where does obj->port error/unstack?]
+ * heap-size t725, popped splice_values [where does obj->port error/unstack?]
  * if local sig (func) should s7 use it for arg type checks? or maybe provide a function that does that
  * fx_choose can clobber tu/direct opts if has_fx is ignored, and optimize_lambda does not annotate except in trivial cases
  *   but annotate can be confused by syntax and apparently fx_choose cancels that!
