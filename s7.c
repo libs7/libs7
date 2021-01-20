@@ -2481,7 +2481,6 @@ void s7_show_history(s7_scheme *sc);
 /* this marks a maclet */
 
 #define T_HAS_FX                       T_DEFINER
-/* #define set_has_fx(p)               do {fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(p)); set_type1_bit(T_Pair(p), T_HAS_FX);} while (0) */
 #define set_has_fx(p)                  set_type1_bit(T_Pair(p), T_HAS_FX)
 #define has_fx(p)                      has_type1_bit(T_Pair(p), T_HAS_FX)
 #define clear_has_fx(p)                clear_type1_bit(T_Pair(p), T_HAS_FX)
@@ -3269,7 +3268,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args
 #define c_function_arg_names(f)        c_function_data(T_Fst(f))->sam.arg_names
 
-#define set_c_function(X, f)           do {set_opt1_cfunc(X, f); set_c_call_direct(X, c_function_call(f));} while (0)
+#define set_c_function(X, f)           do {set_opt1_cfunc(X, f); set_opt2(X, (s7_pointer)(c_function_call(f)), F_CALL);} while (0) /* this set fx until 19-Jan-21! */
 #define c_function_opt_data(f)         c_function_data(f)->opt_data
 
 #define is_c_macro(p)                  (type(p) == T_C_MACRO)
@@ -5267,13 +5266,8 @@ static s7_pointer opt2_1(s7_scheme *sc, s7_pointer p, uint32_t role, const char 
       (!opt2_role_matches(p, role)))
     {
       show_opt2_bits(p, func, line, role);
-      fprintf(stderr, " p: %s\n", string_value(s7_object_to_string(sc, p, false)));
       if (sc->stop_at_error) abort();
     }
-  if ((role == F_CALL) &&
-      (!has_fx(p)) &&
-      (f_call_func_mismatch(func)))
-    fprintf(stderr, "%s[%d]: f_call but no fx\n", func, line);
   return(p->object.cons.opt2);
 }
 
@@ -7383,11 +7377,18 @@ static void free_cell(s7_scheme *sc, s7_pointer p)
   (*(sc->free_heap_top++)) = p;
 }
 
+#if S7_DEBUGGING
+static s7_int p_slots = 0, p_cons = 0, p_lets = 0, p_functions = 0, p_strings = 0, p_petrified = 0;
+#endif
+
 static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
 {
   s7_pointer p;
   int64_t loc;
   loc = heap_location(sc, x);
+#if S7_DEBUGGING
+  p_petrified++;
+#endif
   p = (s7_pointer)alloc_big_pointer(sc, loc);
   sc->heap[loc] = p;
   free_cell(sc, p);
@@ -7404,6 +7405,9 @@ static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
    *   in blocks, not by the pointer, I think, but s7_define is the point to try).
    */
   if (not_in_heap(x)) return;
+#if S7_DEBUGGING
+  fprintf(stderr, "remove %s\n", display_80(x));
+#endif
   if (is_pair(x))
     {
       s7_pointer p;
@@ -7436,6 +7440,9 @@ static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
 	  gc_list_t *gp;
 	  int64_t loc;
 	  loc = heap_location(sc, x);
+#if S7_DEBUGGING
+	  p_petrified++;
+#endif
 	  sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
 	  free_cell(sc, sc->heap[loc]);
 	  unheap(sc, x);
@@ -7850,6 +7857,10 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
 	  slot = make_permanent_slot(sc, x, x);
 	  set_global_slot(x, slot);
 	  set_local_slot(x, slot);
+#if S7_DEBUGGING
+	  if (s7_name_to_value(sc, "estr") != sc->undefined) fprintf(stderr, "estr: %s\n", display(s7_name_to_value(sc, "estr")));
+	  fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
+#endif
 	}}
 
   typeflag(p) = T_PAIR | T_IMMUTABLE | T_UNHEAP;  /* add x to the symbol table */
@@ -8573,6 +8584,9 @@ static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_p
 static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
+#if S7_DEBUGGING
+  p_slots++;
+#endif
   slot = alloc_pointer(sc);
   set_type(slot, T_SLOT | T_UNHEAP);
   slot_set_symbol(slot, symbol);
@@ -8583,6 +8597,9 @@ static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_point
 static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
 {
   s7_pointer let, var, slot;
+#if S7_DEBUGGING
+  p_lets++;
+#endif
   let = alloc_pointer(sc);
 
   set_type(let, T_LET | T_SAFE_PROCEDURE | T_UNHEAP);
@@ -8592,6 +8609,9 @@ static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
   add_permanent_let_or_slot(sc, slot);
   symbol_set_local_slot(caar(vars), sc->let_number, slot);
   let_set_slots(let, slot);
+#if S7_DEBUGGING
+  fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
+#endif
   for (var = cdr(vars); is_pair(var); var = cdr(var))
     {
       s7_pointer last_slot;
@@ -8600,6 +8620,9 @@ static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
       add_permanent_let_or_slot(sc, slot);
       symbol_set_local_slot(caar(var), sc->let_number, slot);
       slot_set_next(last_slot, slot);
+#if S7_DEBUGGING
+      fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
+#endif
     }
   slot_set_next(slot, slot_end(sc));
   add_permanent_let_or_slot(sc, let); /* need to mark outlet and maybe slot values */
@@ -8810,6 +8833,9 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 
       ge = sc->rootlet;
       slot = make_permanent_slot(sc, symbol, value);
+#if S7_DEBUGGING
+      fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
+#endif
       rootlet_element(ge, sc->rootlet_entries++) = slot;
       if (sc->rootlet_entries >= vector_length(ge))
 	{
@@ -8831,8 +8857,15 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	{
 	  if ((!is_gensym(symbol)) &&
 	      (initial_slot(symbol) == sc->undefined) &&
-	      (not_in_heap(value))) /* else initial_slot value can be GC'd if symbol set! (initial != global, initial unprotected) */
+	      (not_in_heap(value)) &&     /* else initial_slot value can be GC'd if symbol set! (initial != global, initial unprotected) */
+	      ((!sc->unlet) ||            /* init_unlet creates sc->unlet, after that initial_slot is for c_functions?? */
+	       (is_c_function(value))))
+	    {
+#if S7_DEBUGGING
+	      fprintf(stderr, "%s[%d] initial slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
+#endif
 	    set_initial_slot(symbol, make_permanent_slot(sc, symbol, value));
+	    }
 	  set_local_slot(symbol, slot);
 	  set_global(symbol);
 	}
@@ -11189,7 +11222,7 @@ static s7_pointer g_c_pointer_to_list(s7_scheme *sc, s7_pointer args)
   p = car(args);
   if (!is_c_pointer(p))
     return(method_or_bust(sc, p, sc->c_pointer_to_list_symbol, args, T_C_POINTER, 1));
-  return(s7_list(sc, 3, make_integer(sc, (s7_int)((intptr_t)c_pointer(p))), c_pointer_type(p), c_pointer_info(p)));
+  return(list_3(sc, make_integer(sc, (s7_int)((intptr_t)c_pointer(p))), c_pointer_type(p), c_pointer_info(p)));
 }
 
 
@@ -27013,6 +27046,9 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
 {
   /* for the symbol table which is never GC'd */
   s7_pointer x;
+#if S7_DEBUGGING
+  p_strings++;
+#endif
   x = alloc_pointer(sc);
   set_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CON);
@@ -27032,6 +27068,9 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
       string_length(x) = 0;
     }
   string_hash(x) = 0;
+#if S7_DEBUGGING
+  fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, str);
+#endif
   return(x);
 }
 
@@ -33750,7 +33789,9 @@ static void int_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, 
       bool last = false;
       plen = catstrs_direct(buf, "#i", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
+      push_stack_no_let_no_code(sc, OP_GC_PROTECT, vect);
       multivector_to_port(sc, vect, port, len, 0, 0, vector_ndims(vect), &last, P_DISPLAY, NULL);
+      unstack(sc);
     }
 
   if ((use_write == P_READABLE) &&
@@ -33817,7 +33858,9 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
       bool last = false;
       plen = catstrs_direct(buf, "#r", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
+      push_stack_no_let_no_code(sc, OP_GC_PROTECT, vect);
       multivector_to_port(sc, vect, port, len, 0, 0, vector_ndims(vect), &last, P_DISPLAY, NULL);
+      unstack(sc);
     }
 
   if ((use_write == P_READABLE) &&
@@ -37516,6 +37559,9 @@ static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_point
 static s7_pointer permanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type)
 {
   s7_pointer x;
+#if S7_DEBUGGING
+  p_cons++;
+#endif
   x = alloc_pointer(sc);
   set_type(x, type | T_UNHEAP);
   set_car(x, a);
@@ -46350,6 +46396,9 @@ static c_proc_t *alloc_permanent_function(s7_scheme *sc)
 s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function f, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer x;
+#if S7_DEBUGGING
+  p_functions++;
+#endif
   x = alloc_pointer(sc);
   x = make_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_permanent_function(sc));
   unheap(sc, x);
@@ -58778,7 +58827,11 @@ static s7_p_dd_t s7_p_dd_function(s7_pointer f);
 static s7_p_pi_t s7_p_pi_function(s7_pointer f);
 static s7_p_ii_t s7_p_ii_function(s7_pointer f);
 
-#define is_unchanged_global(P) ((is_symbol(P)) && (is_global(P)) && (symbol_id(P) == 0) && (slot_value(initial_slot(P)) == slot_value(global_slot(P))))
+#define is_unchanged_global(P) \
+  ((is_symbol(P)) && (is_global(P)) && (symbol_id(P) == 0) && \
+  (is_slot(initial_slot(P))) && \
+  (slot_value(initial_slot(P)) == slot_value(global_slot(P))))
+
 #define is_global_and_has_func(P, Func) ((is_symbol(P)) && (is_unchanged_global(P)) && (Func(slot_value(global_slot(P))))) /* Func = s7_p_pp_function and friends */
 
 static bool fx_matches(s7_pointer symbol, s7_pointer target_symbol)
@@ -58792,7 +58845,6 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 {
   s7_pointer arg;
   arg = car(holder);
-
   if (!is_pair(arg))
     {
       if (is_symbol(arg))
@@ -72061,7 +72113,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  fx_annotate_arg(sc, cdr(orx), args);
 		  if (len == 4) fx_annotate_arg(sc, cddr(orx), args);
 		  fx_annotate_args(sc, cdr(tc), args);
-		  /* if ((c_callee(cdr(tc)) == fx_c_sca) && (c_callee(cadr(tc)) == g_substring)) set_c_call_direct(cadr(tc), g_substring_uncopied); */
+		  /* if ((c_callee(cdr(tc)) == fx_c_sca) && (c_callee(cadr(tc)) == g_substring)) -> g_substring_uncopied); */
 		  /*   for that to be safe we need to be sure nothing in the body looks for null-termination (e.g.. string->number) */
 		  fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
 		  return(true);
@@ -85030,6 +85082,7 @@ static void apply_c_macro(s7_scheme *sc)  	                    /* -------- C-bas
 static void apply_syntax(s7_scheme *sc)                            /* -------- syntactic keyword as applicable object -------- */
 {                                                                  /* current reader-cond macro uses this via (map quote ...) */
   s7_int len;                                                      /*    ((apply lambda '((x) (+ x 1))) 4) */
+  /* fprintf(stderr, "%s: %s %s\n", __func__, display(sc->code), display(sc->args)); */
   if (is_pair(sc->args))                                           /* this is ((pars) . body) */
     {
       len = s7_list_length(sc, sc->args);
@@ -90499,7 +90552,8 @@ static void op_eval_args5(s7_scheme *sc)      /* sc->value is the last arg, sc->
 
 static bool eval_args_no_eval_args(s7_scheme *sc)
 {
-  if (is_any_macro(sc->value))
+  /* fprintf(stderr, "value: %s, code: %s\n", display(sc->value), display(sc->code)); */
+  if ((is_any_macro(sc->value)) || (is_syntactic(sc->value)))
     {
       sc->args = copy_proper_list_with_arglist_error(sc, cdr(sc->code)); /* check the first time around */
       if (is_symbol(car(sc->code))) /* not ((f p) args...) where (f p) has returned a macro, op_macro_d assumes car is a symbol */
@@ -92894,7 +92948,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	EVAL_ARGS_TOP:
 	case OP_EVAL_ARGS:
-	  /* fprintf(stderr, "%s\n", display_80(sc->code)); */
+	  /* fprintf(stderr, "code: %s, value: %s %d %d\n", display_80(sc->code), display(sc->value), dont_eval_args(sc->value), is_syntactic(sc->value)); */
 	  if (dont_eval_args(sc->value))
 	    {
 	      if (eval_args_no_eval_args(sc)) goto APPLY;
@@ -94034,9 +94088,14 @@ static s7_pointer memory_usage(s7_scheme *sc)
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
   make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
 
-  make_slot_1(sc, mu_let,
-	      make_symbol(sc, "permanent-cells"),
-	      cons(sc, make_integer(sc, (sc->permanent_cells + NUM_SMALL_INTS)), kmg(sc, (sc->permanent_cells + NUM_SMALL_INTS) * sizeof(s7_cell))));
+  make_slot_1(sc, mu_let, make_symbol(sc, "small_ints"), cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
+  make_slot_1(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells), kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
+#if S7_DEBUGGING
+  make_slot_1(sc, mu_let, make_symbol(sc, "p_string/pair/let/slot/function/petrified"), 
+             s7_list(sc, 6, 
+		     make_integer(sc, p_strings), make_integer(sc, p_cons), make_integer(sc, p_lets), 
+		     make_integer(sc, p_slots), make_integer(sc, p_functions), make_integer(sc, p_petrified)));
+#endif
   {
     gc_obj_t *g;
     for (i = 0, g = sc->permanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
@@ -96499,8 +96558,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_set_setter(sc, sc->features_symbol, s7_make_function(sc, "#<set-*features*>", g_features_set, 2, 0, false, "*features* setter"));
 
   /* -------- *load-path* -------- */
-  sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*",
-							       s7_list(sc, 1, s7_make_string(sc, ".")), /* was sc->nil 12-Jul-19 */
+  sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*", list_1(sc, s7_make_string(sc, ".")), /* was sc->nil 12-Jul-19 */
 			   "*load-path* is a list of directories (strings) that the load function searches if it is passed an incomplete file name");
   s7_set_setter(sc, sc->load_path_symbol, s7_make_function(sc, "#<set-*load-path*>", g_load_path_set, 2, 0, false, "*load-path* setter"));
 
@@ -97376,7 +97434,7 @@ void s7_repl(s7_scheme *sc)
   /* try to get lib_s7.so from the repl's directory, and set *libc*.
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
-  e = s7_inlet(sc, s7_list(sc, 2, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
+  e = s7_inlet(sc, list_2(sc, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
@@ -97552,6 +97610,7 @@ static int main(int argc, char **argv)
  *   but annotate can be confused by syntax and apparently fx_choose cancels that!
  *   optimize in optimize_lambda should handle all the fx_chooses before calling fx_tree
  *   fxtree.h
- * t718 cond bugs eventually (and t725 comments), and multivector dims bug (can mallocate->null?), valgrind t725
- * t418 op_pair_a? see eval_car_pair
+ * t718/bugs cond/circular-list bugs eventually (and t725 comments)
+ * t418 op_pair_a? op_a_a? see eval_car_pair
+ * perm string twice (libm.scm etc)
  */
