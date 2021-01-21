@@ -2670,77 +2670,78 @@ void s7_show_history(s7_scheme *sc);
 
 #else
 
-#define S_NAME                         (1 << 25)
-#define S_HASH                         (1 << 26)
-#define S_LOCATION                     (1 << 27)
-#define S_LEN                          (1 << 28)
-
-/* these 3 fields (or 8 counting sym_cons) hold most of the varigated optimizer info, so they are used in many conflicting ways.
+/* the 3 opt fields hold most of the varigated optimizer info, so they are used in many conflicting ways.
  * the bits and funcs here try to track each such use, and report any cross-talk or collisions.
  * all of this machinery vanishes if debugging is turned off.
  */
-#define E_SET                          (1 << 0)
-#define E_FAST                         (1 << 8)   /* fast list in member/assoc circular list check */
-#define E_CFUNC                        (1 << 9)   /* c-function */
-#define E_CLAUSE                       (1 << 10)  /* case clause */
-#define E_LAMBDA                       (1 << 11)  /* lambda(*) */
-#define E_SYM                          (1 << 12)  /* symbol */
-#define E_PAIR                         (1 << 13)  /* pair */
-#define E_CON                          (1 << 14)  /* constant from eval's point of view */
-#define E_GOTO                         (1 << 15)  /* call-with-exit exit func */
-#define E_ANY                          (1 << 16)  /* anything -- deliberate unchecked case */
-#define E_MASK                         (E_FAST | E_CFUNC | E_CLAUSE | E_LAMBDA | E_SYM | E_PAIR | E_CON | E_GOTO | E_ANY | S_HASH)
+#define OPT1_SET                       (1 << 0)
+#define OPT2_SET                       (1 << 1)
+#define OPT3_SET                       (1 << 2)
 
-#define opt1_is_set(p)                 (((p)->debugger_bits & E_SET) != 0)
-#define set_opt1_is_set(p)             (p)->debugger_bits |= E_SET
-#define opt1_role_matches(p, Role)     (((p)->debugger_bits & E_MASK) == Role)
-#define set_opt1_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~E_MASK))
+#define OPT1_FAST                      (1 << 3)   /* fast list in member/assoc circular list check */
+#define OPT1_CFUNC                     (1 << 4)   /* c-function */
+#define OPT1_CLAUSE                    (1 << 5)   /* case clause */
+#define OPT1_LAMBDA                    (1 << 6)   /* lambda(*) */
+#define OPT1_SYM                       (1 << 7)   /* symbol */
+#define OPT1_PAIR                      (1 << 8)   /* pair */
+#define OPT1_CON                       (1 << 9)   /* constant from eval's point of view */
+#define OPT1_GOTO                      (1 << 10)  /* call-with-exit exit func */
+#define OPT1_ANY                       (1 << 11)  /* anything -- deliberate unchecked case */
+#define OPT1_HASH                      (1 << 12)
+#define OPT1_MASK                      (OPT1_FAST | OPT1_CFUNC | OPT1_CLAUSE | OPT1_LAMBDA | OPT1_SYM | OPT1_PAIR | OPT1_CON | OPT1_GOTO | OPT1_ANY | OPT1_HASH)
+
+#define opt1_is_set(p)                 (((p)->debugger_bits & OPT1_SET) != 0)
+#define set_opt1_is_set(p)             (p)->debugger_bits |= OPT1_SET
+#define opt1_role_matches(p, Role)     (((p)->debugger_bits & OPT1_MASK) == Role)
+#define set_opt1_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~OPT1_MASK))
 #define opt1(p, Role)                  opt1_1(sc, T_Pair(p), Role, __func__, __LINE__)
 #define set_opt1(p, x, Role)           set_opt1_1(T_Pair(p), x, Role)
 
-#define F_SET                          (1 << 1)
-#define F_KEY                          (1 << 18)  /* case key */
-#define F_SLOW                         (1 << 19)  /* slow list in member/assoc circular list check */
-#define F_SYM                          (1 << 20)  /* symbol */
-#define F_PAIR                         (1 << 21)  /* pair */
-#define F_CON                          (1 << 22)  /* constant as above */
-#define F_CALL                         (1 << 23)  /* c-func */
-#define F_LAMBDA                       (1 << 24)  /* lambda form */
-#define F_MASK                         (F_KEY | F_SLOW | F_SYM | F_PAIR | F_CON | F_CALL | F_LAMBDA | S_NAME)
+#define OPT2_KEY                       (1 << 13)  /* case key */
+#define OPT2_SLOW                      (1 << 14)  /* slow list in member/assoc circular list check */
+#define OPT2_SYM                       (1 << 15)  /* symbol */
+#define OPT2_PAIR                      (1 << 16)  /* pair */
+#define OPT2_CON                       (1 << 17)  /* constant as above */
+#define OPT2_CALL                      (1 << 18)  /* c-func */
+#define OPT2_CF                        (1 << 19   /* coming soon... */
+#define OPT2_LAMBDA                    (1 << 20)  /* lambda form */
+#define OPT2_NAME                      (1 << 21)
+#define OPT2_MASK                      (OPT2_KEY | OPT2_SLOW | OPT2_SYM | OPT2_PAIR | OPT2_CON | OPT2_CALL | OPT2_LAMBDA | OPT2_NAME)
 
-#define opt2_is_set(p)                 (((p)->debugger_bits & F_SET) != 0)
-#define set_opt2_is_set(p)             (p)->debugger_bits |= F_SET
-#define opt2_role_matches(p, Role)     (((p)->debugger_bits & F_MASK) == Role)
-#define set_opt2_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~F_MASK))
+#define opt2_is_set(p)                 (((p)->debugger_bits & OPT2_SET) != 0)
+#define set_opt2_is_set(p)             (p)->debugger_bits |= OPT2_SET
+#define opt2_role_matches(p, Role)     (((p)->debugger_bits & OPT2_MASK) == Role)
+#define set_opt2_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~OPT2_MASK))
 #define opt2(p, Role)                  opt2_1(sc, T_Pair(p), Role, __func__, __LINE__)
 #define set_opt2(p, x, Role)           set_opt2_1(sc, T_Pair(p), (s7_pointer)(x), Role, __func__, __LINE__)
 
-#define G_SET                          (1 << 2)
-#define G_ARGLEN                       (1 << 3)  /* arglist length */
-#define G_SYM                          (1 << 4)  /* expression symbol access */
-#define G_AND                          (1 << 5)  /* and second clause */
-#define G_DIRECT                       (1 << 6)  /* direct call info */
-#define G_ANY                          (1 << 29)
-#define G_LET                          (1 << 17)  /* let or #f */
-#define G_CON                          (1 << 30)
-#define G_BYTE                         0x80000000 /* not (1LL < 31) ! */
-#define G_MASK                         (G_ARGLEN | G_SYM | G_AND | G_ANY | G_LET | G_BYTE | S_LOCATION | S_LEN | G_DIRECT | G_CON)
+#define OPT3_ARGLEN                    (1 << 22)  /* arglist length */
+#define OPT3_SYM                       (1 << 23)  /* expression symbol access */
+#define OPT3_AND                       (1 << 24)  /* and second clause */
+#define OPT3_DIRECT                    (1 << 25)  /* direct call info */
+#define OPT3_ANY                       (1 << 26)
+#define OPT3_LET                       (1 << 27)  /* let or #f */
+#define OPT3_CON                       (1 << 28)
+#define OPT3_LOCATION                  (1 << 29)
+#define OPT3_LEN                       (1 << 30)
+#define OPT3_BYTE                      0x80000000 /* not (1LL < 31) ! */
+#define OPT3_MASK                      (OPT3_ARGLEN | OPT3_SYM | OPT3_AND | OPT3_ANY | OPT3_LET | OPT3_BYTE | OPT3_LOCATION | OPT3_LEN | OPT3_DIRECT | OPT3_CON)
 
-#define opt3_is_set(p)                 (((p)->debugger_bits & G_SET) != 0)
-#define set_opt3_is_set(p)             (p)->debugger_bits |= G_SET
-#define opt3_role_matches(p, Role)     (((p)->debugger_bits & G_MASK) == Role)
-#define set_opt3_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~G_MASK))
+#define opt3_is_set(p)                 (((p)->debugger_bits & OPT3_SET) != 0)
+#define set_opt3_is_set(p)             (p)->debugger_bits |= OPT3_SET
+#define opt3_role_matches(p, Role)     (((p)->debugger_bits & OPT3_MASK) == Role)
+#define set_opt3_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~OPT3_MASK))
 #define opt3(p, Role)                  opt3_1(sc, T_Pair(p), Role, __func__, __LINE__)
 #define set_opt3(p, x, Role)           set_opt3_1(T_Pair(p), x, Role)
 
-#define pair_location(p)               s_location_1(sc, T_Pair(p), __func__, __LINE__)
-#define pair_set_location(p, X)        set_s_location_1(T_Pair(p), X)
-#define pair_raw_hash(p)               s_hash_1(sc, T_Pair(p), __func__, __LINE__)
-#define pair_set_raw_hash(p, X)        set_s_hash_1(T_Pair(p), X)
-#define pair_raw_len(p)                s_len_1(sc, T_Pair(p), __func__, __LINE__)
-#define pair_set_raw_len(p, X)         set_s_len_1(T_Pair(p), X)
-#define pair_raw_name(p)               s_name_1(sc, T_Pair(p), __func__, __LINE__)
-#define pair_set_raw_name(p, X)        set_s_name_1(T_Pair(p), X)
+#define pair_location(p)               opt3_location_1(sc, T_Pair(p), __func__, __LINE__)
+#define pair_set_location(p, X)        set_opt3_location_1(T_Pair(p), X)
+#define pair_raw_hash(p)               opt1_hash_1(sc, T_Pair(p), __func__, __LINE__)
+#define pair_set_raw_hash(p, X)        set_opt1_hash_1(T_Pair(p), X)
+#define pair_raw_len(p)                opt3_len_1(sc, T_Pair(p), __func__, __LINE__)
+#define pair_set_raw_len(p, X)         set_opt3_len_1(T_Pair(p), X)
+#define pair_raw_name(p)               opt2_name_1(sc, T_Pair(p), __func__, __LINE__)
+#define pair_set_raw_name(p, X)        set_opt2_name_1(T_Pair(p), X)
 
 #define L_HIT                          (1LL < 40) /* "L_SET" is taken */
 #define L_FUNC                         (1LL < 41)
@@ -2749,76 +2750,76 @@ void s7_show_history(s7_scheme *sc);
 #define L_MASK                         (L_FUNC | L_DOX | L_CATCH)
 #endif
 
-#define opt1_fast(P)                   T_Lst(opt1(P,                E_FAST))
-#define set_opt1_fast(P, X)            set_opt1(P, T_Pair(X),       E_FAST)
-#define opt1_cfunc(P)                  T_Pos(opt1(P,                E_CFUNC))
-#define set_opt1_cfunc(P, X)           set_opt1(P, T_Pos(X),        E_CFUNC)
-#define opt1_lambda_unchecked(P)       opt1(P,                      E_LAMBDA) /* can be free/null? from s7_call? */
-#define opt1_lambda(P)                 T_Clo(opt1(P,                E_LAMBDA))
-#define set_opt1_lambda(P, X)          set_opt1(P, T_Clo(X),        E_LAMBDA)
-#define opt1_goto(P)                   T_Pos(opt1(P,                E_GOTO))  /* used when checking for non-goto unknown in eval, so can't be T_Got */
-#define set_opt1_goto(P, X)            set_opt1(P, T_Pos(X),        E_GOTO)
-#define opt1_clause(P)                 T_Pos(opt1(P,                E_CLAUSE))
-#define set_opt1_clause(P, X)          set_opt1(P, T_Pos(X),        E_CLAUSE)
-#define opt1_sym(P)                    T_Sym(opt1(P,                E_SYM))
-#define set_opt1_sym(P, X)             set_opt1(P, T_Sym(X),        E_SYM)
-#define opt1_pair(P)                   T_Lst(opt1(P,                E_PAIR))
-#define set_opt1_pair(P, X)            set_opt1(P, T_Lst(X),        E_PAIR)
-#define opt1_con(P)                    T_Pos(opt1(P,                E_CON))
-#define set_opt1_con(P, X)             set_opt1(P, T_Pos(X),        E_CON)
-#define opt1_any(P)                    opt1(P,                      E_ANY)    /* can be free in closure_is_ok */
-#define set_opt1_any(P, X)             set_opt1(P, X,               E_ANY)
+#define opt1_fast(P)                   T_Lst(opt1(P,                OPT1_FAST))
+#define set_opt1_fast(P, X)            set_opt1(P, T_Pair(X),       OPT1_FAST)
+#define opt1_cfunc(P)                  T_Pos(opt1(P,                OPT1_CFUNC))
+#define set_opt1_cfunc(P, X)           set_opt1(P, T_Pos(X),        OPT1_CFUNC)
+#define opt1_lambda_unchecked(P)       opt1(P,                      OPT1_LAMBDA) /* can be free/null? from s7_call? */
+#define opt1_lambda(P)                 T_Clo(opt1(P,                OPT1_LAMBDA))
+#define set_opt1_lambda(P, X)          set_opt1(P, T_Clo(X),        OPT1_LAMBDA)
+#define opt1_goto(P)                   T_Pos(opt1(P,                OPT1_GOTO))  /* used when checking for non-goto unknown in eval, so can't be T_Got */
+#define set_opt1_goto(P, X)            set_opt1(P, T_Pos(X),        OPT1_GOTO)
+#define opt1_clause(P)                 T_Pos(opt1(P,                OPT1_CLAUSE))
+#define set_opt1_clause(P, X)          set_opt1(P, T_Pos(X),        OPT1_CLAUSE)
+#define opt1_sym(P)                    T_Sym(opt1(P,                OPT1_SYM))
+#define set_opt1_sym(P, X)             set_opt1(P, T_Sym(X),        OPT1_SYM)
+#define opt1_pair(P)                   T_Lst(opt1(P,                OPT1_PAIR))
+#define set_opt1_pair(P, X)            set_opt1(P, T_Lst(X),        OPT1_PAIR)
+#define opt1_con(P)                    T_Pos(opt1(P,                OPT1_CON))
+#define set_opt1_con(P, X)             set_opt1(P, T_Pos(X),        OPT1_CON)
+#define opt1_any(P)                    opt1(P,                      OPT1_ANY)    /* can be free in closure_is_ok */
+#define set_opt1_any(P, X)             set_opt1(P, X,               OPT1_ANY)
 
-#define opt2_any(P)                    opt2(P,                      F_KEY)
-#define set_opt2_any(P, X)             set_opt2(P, X,               F_KEY)
-#define opt2_int(P)                    T_Int(opt2(P,                F_KEY))
-#define set_opt2_int(P, X)             set_opt2(P, T_Int(X),        F_KEY)
-#define opt2_slow(P)                   T_Lst(opt2(P,                F_SLOW))
-#define set_opt2_slow(P, X)            set_opt2(P, T_Pair(X),       F_SLOW)
-#define opt2_sym(P)                    T_Sym(opt2(P,                F_SYM))
-#define set_opt2_sym(P, X)             set_opt2(P, T_Sym(X),        F_SYM)
-#define opt2_pair(P)                   T_Lst(opt2(P,                F_PAIR))
-#define set_opt2_pair(P, X)            set_opt2(P, T_Lst(X),        F_PAIR)
-#define opt2_con(P)                    T_Pos(opt2(P,                F_CON))
-#define set_opt2_con(P, X)             set_opt2(P, T_Pos(X),        F_CON)
-#define opt2_lambda(P)                 T_Pair(opt2(P,               F_LAMBDA))
-#define set_opt2_lambda(P, X)          set_opt2(P, T_Pair(X),       F_LAMBDA)
-#define opt2_direct(P)                 opt2(P,                      F_LAMBDA)
-#define set_opt2_direct(P, X)          set_opt2(P, (s7_pointer)(X), F_LAMBDA)
+#define opt2_any(P)                    opt2(P,                      OPT2_KEY)
+#define set_opt2_any(P, X)             set_opt2(P, X,               OPT2_KEY)
+#define opt2_int(P)                    T_Int(opt2(P,                OPT2_KEY))
+#define set_opt2_int(P, X)             set_opt2(P, T_Int(X),        OPT2_KEY)
+#define opt2_slow(P)                   T_Lst(opt2(P,                OPT2_SLOW))
+#define set_opt2_slow(P, X)            set_opt2(P, T_Pair(X),       OPT2_SLOW)
+#define opt2_sym(P)                    T_Sym(opt2(P,                OPT2_SYM))
+#define set_opt2_sym(P, X)             set_opt2(P, T_Sym(X),        OPT2_SYM)
+#define opt2_pair(P)                   T_Lst(opt2(P,                OPT2_PAIR))
+#define set_opt2_pair(P, X)            set_opt2(P, T_Lst(X),        OPT2_PAIR)
+#define opt2_con(P)                    T_Pos(opt2(P,                OPT2_CON))
+#define set_opt2_con(P, X)             set_opt2(P, T_Pos(X),        OPT2_CON)
+#define opt2_lambda(P)                 T_Pair(opt2(P,               OPT2_LAMBDA))
+#define set_opt2_lambda(P, X)          set_opt2(P, T_Pair(X),       OPT2_LAMBDA)
+#define opt2_direct(P)                 opt2(P,                      OPT2_LAMBDA)
+#define set_opt2_direct(P, X)          set_opt2(P, (s7_pointer)(X), OPT2_LAMBDA)
 
-#define opt3_arglen(P)                 T_Int(opt3(P,                G_ARGLEN))
-#define set_opt3_arglen(P, X)          set_opt3(P, T_Int(X),        G_ARGLEN)
-#define opt3_int(P)                    T_Int(opt3(P,                G_ARGLEN))
-#define set_opt3_int(P, X)             set_opt3(P, T_Int(X),        G_ARGLEN)
-#define opt3_sym(P)                    T_Sym(opt3(P,                G_SYM))
-#define set_opt3_sym(P, X)             set_opt3(P, T_Sym(X),        G_SYM)
-#define opt3_con(P)                    T_Pos(opt3(P,                G_CON))
-#define set_opt3_con(P, X)             set_opt3(P, T_Pos(X),        G_CON)
-#define opt3_pair(P)                   T_Pair(opt3(P,               G_AND))
-#define set_opt3_pair(P, X)            set_opt3(P, T_Pair(X),       G_AND)
-#define opt3_any(P)                    opt3(P,                      G_ANY)
-#define set_opt3_any(P, X)             set_opt3(P, X,               G_ANY)
-#define opt3_let(P)                    T_Lid(opt3(P,                G_LET))
-#define set_opt3_let(P, X)             set_opt3(P, T_Lid(X),        G_LET)
-#define opt3_direct(P)                 opt3(P,                      G_DIRECT)
-#define set_opt3_direct(P, X)          set_opt3(P, (s7_pointer)(X), G_DIRECT)
+#define opt3_arglen(P)                 T_Int(opt3(P,                OPT3_ARGLEN))
+#define set_opt3_arglen(P, X)          set_opt3(P, T_Int(X),        OPT3_ARGLEN)
+#define opt3_int(P)                    T_Int(opt3(P,                OPT3_ARGLEN))
+#define set_opt3_int(P, X)             set_opt3(P, T_Int(X),        OPT3_ARGLEN)
+#define opt3_sym(P)                    T_Sym(opt3(P,                OPT3_SYM))
+#define set_opt3_sym(P, X)             set_opt3(P, T_Sym(X),        OPT3_SYM)
+#define opt3_con(P)                    T_Pos(opt3(P,                OPT3_CON))
+#define set_opt3_con(P, X)             set_opt3(P, T_Pos(X),        OPT3_CON)
+#define opt3_pair(P)                   T_Pair(opt3(P,               OPT3_AND))
+#define set_opt3_pair(P, X)            set_opt3(P, T_Pair(X),       OPT3_AND)
+#define opt3_any(P)                    opt3(P,                      OPT3_ANY)
+#define set_opt3_any(P, X)             set_opt3(P, X,               OPT3_ANY)
+#define opt3_let(P)                    T_Lid(opt3(P,                OPT3_LET))
+#define set_opt3_let(P, X)             set_opt3(P, T_Lid(X),        OPT3_LET)
+#define opt3_direct(P)                 opt3(P,                      OPT3_DIRECT)
+#define set_opt3_direct(P, X)          set_opt3(P, (s7_pointer)(X), OPT3_DIRECT)
 
 #define pair_macro(P)                  opt2_sym(P)
 #define set_pair_macro(P, Name)        set_opt2_sym(P, Name)
 
 #if S7_DEBUGGING
-#define opt3_byte(p)                   opt3_byte_1(sc, T_Pair(p), G_BYTE, __func__, __LINE__)
-#define set_opt3_byte(p, x)            set_opt3_byte_1(T_Pair(p), x, G_BYTE, __func__, __LINE__)
+#define opt3_byte(p)                   opt3_byte_1(sc, T_Pair(p), OPT3_BYTE, __func__, __LINE__)
+#define set_opt3_byte(p, x)            set_opt3_byte_1(T_Pair(p), x, OPT3_BYTE, __func__, __LINE__)
 #else
 #define opt3_byte(P)                   T_Pair(P)->object.cons_ext.opt_type /* op_if_is_type, opt_type == opt3 in cons_ext */
 #define set_opt3_byte(P, X)            do {T_Pair(P)->object.cons_ext.opt_type = X; clear_type_bit(P, T_LOCATION);} while (0)
 #endif
 
-#define c_callee(f)                    ((s7_function)opt2(f, F_CALL))
-#define c_call(f)                      ((s7_function)opt2(f, F_CALL))
+#define c_callee(f)                    ((s7_function)opt2(f, OPT2_CALL))
+#define c_call(f)                      ((s7_function)opt2(f, OPT2_CALL))
 #define c_call_unchecked(f)            ((s7_function)((f)->object.cons.opt2))
-#define set_c_call(f, _X_)             do {s7_pointer X; X = (s7_pointer)(_X_); set_opt2(f, X, F_CALL); if (X) set_has_fx(f); else clear_has_fx(f);} while (0)
-#define set_c_call_direct(f, X)        do {set_opt2(f, (s7_pointer)(X), F_CALL); set_has_fx(f);} while (0)
+#define set_c_call(f, _X_)             do {s7_pointer X; X = (s7_pointer)(_X_); set_opt2(f, X, OPT2_CALL); if (X) set_has_fx(f); else clear_has_fx(f);} while (0)
+#define set_c_call_direct(f, X)        do {set_opt2(f, (s7_pointer)(X), OPT2_CALL); set_has_fx(f);} while (0)
 
 #if WITH_GCC
 #define fx_call(Sc, F)                 ({s7_pointer _P_; _P_ = F; c_call(_P_)(Sc, car(_P_));})
@@ -3268,7 +3269,9 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args
 #define c_function_arg_names(f)        c_function_data(T_Fst(f))->sam.arg_names
 
-#define set_c_function(X, f)           do {set_opt1_cfunc(X, f); set_opt2(X, (s7_pointer)(c_function_call(f)), F_CALL);} while (0) /* this set fx until 19-Jan-21! */
+/* #define set_c_function(X, f)           do {set_opt1_cfunc(X, f); set_opt2(X, (s7_pointer)(c_function_call(f)), F_CALL);} while (0) *//* this set fx until 19-Jan-21! */
+#define set_c_function(X, f)           do {set_opt1_cfunc(X, f); set_c_call_direct(X, c_function_call(f));} while (0)
+/* TODO: separate these two uses of the fx bit! */
 #define c_function_opt_data(f)         c_function_data(f)->opt_data
 
 #define is_c_macro(p)                  (type(p) == T_C_MACRO)
@@ -4037,7 +4040,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, 
       OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
-      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_C_FA_1, OP_S_AA,
+      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_C_FA_1, OP_S_AA, OP_A_A, OP_A_AA,
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A,
       OP_IMPLICIT_ITERATE, OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_STRING_REF_A,
       OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A,
@@ -4116,7 +4119,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_WHEN_S, OP_WHEN_A, OP_WHEN_P, OP_WHEN_AND_AP, OP_WHEN_AND_2, OP_WHEN_AND_3, OP_UNLESS_S, OP_UNLESS_A, OP_UNLESS_P,
 
       OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A,
-      OP_IF_A_A_P, OP_IF_A_P_A, OP_IF_S_P_A, OP_IF_IS_TYPE_S_P_A,
+      OP_IF_A_A_P, OP_IF_A_P_A, OP_IF_S_P_A, OP_IF_IS_TYPE_S_P_A, OP_IF_IS_TYPE_S_A_A,
       OP_IF_S_P, OP_IF_S_P_P, OP_IF_S_R, OP_IF_S_N, OP_IF_S_N_N,
       OP_IF_opSq_P, OP_IF_opSq_P_P, OP_IF_opSq_R, OP_IF_opSq_N, OP_IF_opSq_N_N,
       OP_IF_IS_TYPE_S_P, OP_IF_IS_TYPE_S_P_P, OP_IF_IS_TYPE_S_R, OP_IF_IS_TYPE_S_N, OP_IF_IS_TYPE_S_N_N,
@@ -4269,7 +4272,7 @@ static const char* op_names[NUM_OPS] =
       "apply_ss", "apply_sa", "apply_sl", 
       "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
-      "s", "s_s", "s_c", "s_a", "c_fa_1", "s_aa",
+      "s", "s_s", "s_c", "s_a", "c_fa_1", "s_aa", "a_a", "a_aa",
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a",
       "implicit_iterate", "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_string_ref_a",
       "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_hash_table_ref_a", "implicit_let_ref_c", "implicit_let_ref_a",
@@ -4345,7 +4348,7 @@ static const char* op_names[NUM_OPS] =
       "when_s", "when_a", "when_p", "when_and_ap", "when_and_2", "when_and_3", "unless_s", "unless_a", "unless_p",
 
       "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a",
-      "if_a_a_p", "if_a_p_a", "if_s_p_a", "if_is_type_s_p_a",
+      "if_a_a_p", "if_a_p_a", "if_s_p_a", "if_is_type_s_p_a", "if_is_type_s_a_a",
       "if_s_p", "if_s_p_p", "if_s_r", "if_s_n", "if_s_n_n",
       "if_opsq_p", "if_opsq_p_p", "if_opsq_r", "if_opsq_n", "if_opsq_n_n",
       "if_is_type_s_p", "if_is_type_s_p_p", "if_is_type_s_r", "if_is_type_s_n", "if_is_type_s_n_n",
@@ -5098,42 +5101,42 @@ static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line)
 
 static const char *opt1_role_name(uint32_t role)
 {
-  if (role == E_FAST) return("opt1_fast");
-  if (role == E_CFUNC) return("opt1_cfunc");
-  if (role == E_LAMBDA) return("opt_lambda");
-  if (role == E_CLAUSE) return("opt1_clause");
-  if (role == E_GOTO) return("opt1_goto");
-  if (role == E_SYM) return("opt1_sym");
-  if (role == E_PAIR) return("opt1_pair");
-  if (role == E_CON) return("opt1_con");
-  return((role == E_ANY) ? "opt1_any" : "unknown");
+  if (role == OPT1_FAST) return("opt1_fast");
+  if (role == OPT1_CFUNC) return("opt1_cfunc");
+  if (role == OPT1_LAMBDA) return("opt_lambda");
+  if (role == OPT1_CLAUSE) return("opt1_clause");
+  if (role == OPT1_GOTO) return("opt1_goto");
+  if (role == OPT1_SYM) return("opt1_sym");
+  if (role == OPT1_PAIR) return("opt1_pair");
+  if (role == OPT1_CON) return("opt1_con");
+  if (role == OPT1_ANY) return("opt1_any");
+  return((role == OPT1_HASH) ? "opt1_hash" : "opt1_unknown");
 }
 
 static const char *opt2_role_name(uint32_t role)
 {
-  if (role == F_CALL) return("c_call(ee)");
-  if (role == F_KEY) return("opt2_any");
-  if (role == F_SLOW) return("opt2_slow");
-  if (role == F_SYM) return("opt2_sym");
-  if (role == F_PAIR) return("opt2_pair");
-  if (role == F_CON) return("opt2_con");
-  if (role == F_LAMBDA) return("opt2_lambda");
-  return((role == S_NAME) ? "raw_name" : "unknown");
+  if (role == OPT2_CALL) return("opt2_call");
+  if (role == OPT2_KEY) return("opt2_any");
+  if (role == OPT2_SLOW) return("opt2_slow");
+  if (role == OPT2_SYM) return("opt2_sym");
+  if (role == OPT2_PAIR) return("opt2_pair");
+  if (role == OPT2_CON) return("opt2_con");
+  if (role == OPT2_LAMBDA) return("opt2_lambda");
+  return((role == OPT2_NAME) ? "opt2_raw_name" : "opt2_unknown");
 }
 
 static const char *opt3_role_name(uint32_t role)
 {
-  if (role == G_ARGLEN) return("opt3_arglen");
-  if (role == G_SYM) return("opt3_sym");
-  if (role == G_CON) return("opt3_con");
-  if (role == G_AND) return("opt3_pair");
-  if (role == G_ANY) return("opt3_any");
-  if (role == G_LET) return("opt3_let");
-  if (role == G_BYTE) return("opt3_byte");
-  if (role == G_DIRECT) return("direct_opt3");
-  if (role == S_LEN) return("s_len");
-  if (role == S_LOCATION) return("s_location");
-  return((role == S_HASH) ? "s_hash" : "unknown");
+  if (role == OPT3_ARGLEN) return("opt3_arglen");
+  if (role == OPT3_SYM) return("opt3_sym");
+  if (role == OPT3_CON) return("opt3_con");
+  if (role == OPT3_AND) return("opt3_pair");
+  if (role == OPT3_ANY) return("opt3_any");
+  if (role == OPT3_LET) return("opt3_let");
+  if (role == OPT3_BYTE) return("opt3_byte");
+  if (role == OPT3_DIRECT) return("direct_opt3");
+  if (role == OPT3_LEN) return("opt3_len");
+  return((role == OPT3_LOCATION) ? "opt3_location" : "opt3_unknown");
 }
 
 static char* show_debugger_bits(int64_t bits)
@@ -5141,37 +5144,37 @@ static char* show_debugger_bits(int64_t bits)
   char *bits_str;
   bits_str = (char *)Malloc(512);
   snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
-	   ((bits & E_SET) != 0) ? " e_set" : "",
-	   ((bits & E_FAST) != 0) ? " opt1_fast" : "",
-	   ((bits & E_CFUNC) != 0) ? " opt1_cfunc" : "",
-	   ((bits & E_CLAUSE) != 0) ? " opt1_clause" : "",
-	   ((bits & E_LAMBDA) != 0) ? " opt_lambda" : "",
-	   ((bits & E_SYM) != 0) ? " opt1_sym" : "",
-	   ((bits & E_PAIR) != 0) ? " opt1_pair" : "",
-	   ((bits & E_CON) != 0) ? " opt1_con" : "",
-	   ((bits & E_GOTO) != 0) ? " opt1_goto" : "",
-	   ((bits & E_ANY) != 0) ? " opt1_any" : "",
-	   ((bits & F_SET) != 0) ? " f_set" : "",
-	   ((bits & F_KEY) != 0) ? " opt2_any" : "",
-	   ((bits & F_SLOW) != 0) ? " opt2_slow" : "",
-	   ((bits & F_SYM) != 0) ? " opt2_sym" : "",
-	   ((bits & F_PAIR) != 0) ? " opt2_pair" : "",
-	   ((bits & F_CON) != 0) ? " opt2_con" : "",
-	   ((bits & F_CALL) != 0) ? " c_call(ee)" : "",
-	   ((bits & F_LAMBDA) != 0) ? " opt2_lambda" : "",
-	   ((bits & G_SET) != 0) ? " g_set" : "",
-	   ((bits & G_ARGLEN) != 0) ? " opt3_arglen" : "",
-	   ((bits & G_SYM) != 0) ? " opt3_sym" : "",
-	   ((bits & G_CON) != 0) ? " opt3_con" : "",
-	   ((bits & G_AND) != 0) ? " opt3_pair " : "",
-	   ((bits & G_ANY) != 0) ? " opt3_any " : "",
-	   ((bits & G_LET) != 0) ? " opt3_let " : "",
-	   ((bits & G_BYTE) != 0) ? " opt3_byte " : "",
-	   ((bits & G_DIRECT) != 0) ? " opt3_direct" : "",
-	   ((bits & S_NAME) != 0) ? " raw_name" : "",
-	   ((bits & S_HASH) != 0) ? " raw_hash" : "",
-	   ((bits & S_LOCATION) != 0) ? " location" : "",
-	   ((bits & S_LEN) != 0) ? " len" : "");
+	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
+	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
+	   ((bits & OPT1_CFUNC) != 0) ? " opt1_cfunc" : "",
+	   ((bits & OPT1_CLAUSE) != 0) ? " opt1_clause" : "",
+	   ((bits & OPT1_LAMBDA) != 0) ? " opt_lambda" : "",
+	   ((bits & OPT1_SYM) != 0) ? " opt1_sym" : "",
+	   ((bits & OPT1_PAIR) != 0) ? " opt1_pair" : "",
+	   ((bits & OPT1_CON) != 0) ? " opt1_con" : "",
+	   ((bits & OPT1_GOTO) != 0) ? " opt1_goto" : "",
+	   ((bits & OPT1_ANY) != 0) ? " opt1_any" : "",
+	   ((bits & OPT1_HASH) != 0) ? " opt1_raw_hash" : "",
+	   ((bits & OPT2_SET) != 0) ? " opt2_set" : "",
+	   ((bits & OPT2_KEY) != 0) ? " opt2_any" : "",
+	   ((bits & OPT2_SLOW) != 0) ? " opt2_slow" : "",
+	   ((bits & OPT2_SYM) != 0) ? " opt2_sym" : "",
+	   ((bits & OPT2_PAIR) != 0) ? " opt2_pair" : "",
+	   ((bits & OPT2_CON) != 0) ? " opt2_con" : "",
+	   ((bits & OPT2_CALL) != 0) ? " opt2_call" : "",
+	   ((bits & OPT2_LAMBDA) != 0) ? " opt2_lambda" : "",
+	   ((bits & OPT2_NAME) != 0) ? " opt2_raw_name" : "",
+	   ((bits & OPT3_SET) != 0) ? " opt3_set" : "",
+	   ((bits & OPT3_ARGLEN) != 0) ? " opt3_arglen" : "",
+	   ((bits & OPT3_SYM) != 0) ? " opt3_sym" : "",
+	   ((bits & OPT3_CON) != 0) ? " opt3_con" : "",
+	   ((bits & OPT3_AND) != 0) ? " opt3_pair " : "",
+	   ((bits & OPT3_ANY) != 0) ? " opt3_any " : "",
+	   ((bits & OPT3_LET) != 0) ? " opt3_let " : "",
+	   ((bits & OPT3_BYTE) != 0) ? " opt3_byte " : "",
+	   ((bits & OPT3_DIRECT) != 0) ? " opt3_direct" : "",
+	   ((bits & OPT3_LOCATION) != 0) ? " opt3_location" : "",
+	   ((bits & OPT3_LEN) != 0) ? " opt3_len" : "");
   return(bits_str);
 }
 
@@ -5193,7 +5196,7 @@ static s7_pointer opt1_1(s7_scheme *sc, s7_pointer p, uint32_t role, const char 
 {
   if ((!opt1_is_set(p)) ||
       ((!opt1_role_matches(p, role)) &&
-       (role != E_ANY)))
+       (role != OPT1_ANY)))
     {
       show_opt1_bits(p, func, line, role);
       if (sc->stop_at_error) abort();
@@ -5214,21 +5217,21 @@ static s7_pointer set_opt1_1(s7_pointer p, s7_pointer x, uint32_t role)
   return(x);
 }
 
-static uint64_t s_hash_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
+static uint64_t opt1_hash_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if ((!opt1_is_set(p)) ||
-      (!opt1_role_matches(p, S_HASH)))
+      (!opt1_role_matches(p, OPT1_HASH)))
     {
-      show_opt1_bits(p, func, line, (uint32_t)S_HASH);
+      show_opt1_bits(p, func, line, (uint32_t)OPT1_HASH);
       if (sc->stop_at_error) abort();
     }
   return(p->object.sym_cons.hash);
 }
 
-static void set_s_hash_1(s7_pointer p, uint64_t x)
+static void set_opt1_hash_1(s7_pointer p, uint64_t x)
 {
   p->object.sym_cons.hash = x;
-  base_opt1(p, S_HASH);
+  base_opt1(p, OPT1_HASH);
 }
 
 static void show_opt2_bits(s7_pointer p, const char *func, int32_t line, uint32_t role)
@@ -5279,8 +5282,7 @@ static void base_opt2(s7_pointer p, uint32_t role)
 
 static void set_opt2_1(s7_scheme *sc, s7_pointer p, s7_pointer x, uint32_t role, const char *func, int32_t line)
 {
-  /* fprintf(stderr, "%s[%d]: p: %p %s, %s -> ", func, line, p, display(p), show_debugger_bits(p->debugger_bits)); */
-  if ((role == F_CALL) &&
+  if ((role == OPT2_CALL) &&
       (x == NULL) &&
       (f_call_func_mismatch(func)))
     fprintf(stderr, "%s[%d]: set c_call for %s to null (%s%s%s)\n", func, line,
@@ -5288,28 +5290,27 @@ static void set_opt2_1(s7_scheme *sc, s7_pointer p, s7_pointer x, uint32_t role,
 	    ((is_h_optimized(car(p))) && (is_safe_c_op(optimize_op(car(p))))) ? BOLD_TEXT : "",
 	    op_names[optimize_op(car(p))],
 	    ((is_h_optimized(car(p))) && (is_safe_c_op(optimize_op(car(p))))) ? UNBOLD_TEXT : "");
-  if (role != F_CALL)
+  if (role != OPT2_CALL)
     clear_has_fx(p);
   p->object.cons.opt2 = x;
   base_opt2(p, role);
-  /* fprintf(stderr, "%s\n", show_debugger_bits(p->debugger_bits)); */
 }
 
-static const char *s_name_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
+static const char *opt2_name_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if ((!opt2_is_set(p)) ||
-      (!opt2_role_matches(p, S_NAME)))
+      (!opt2_role_matches(p, OPT2_NAME)))
     {
-      show_opt2_bits(p, func, line, (uint32_t)S_NAME);
+      show_opt2_bits(p, func, line, (uint32_t)OPT2_NAME);
       if (sc->stop_at_error) abort();
     }
   return(p->object.sym_cons.fstr);
 }
 
-static void set_s_name_1(s7_pointer p, const char *str)
+static void set_opt2_name_1(s7_pointer p, const char *str)
 {
   p->object.sym_cons.fstr = str;
-  base_opt2(p, S_NAME);
+  base_opt2(p, OPT2_NAME);
 }
 
 static void show_opt3_bits(s7_pointer p, const char *func, int32_t line, int32_t role)
@@ -5362,45 +5363,44 @@ static void set_opt3_byte_1(s7_pointer p, uint8_t x, uint32_t role, const char *
   base_opt3(p, role);
 }
 
-/* S_LOCATION */
-static uint64_t s_location_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
+static uint64_t opt3_location_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if ((!opt3_is_set(p)) ||
-      ((p->debugger_bits & S_LOCATION) == 0) ||
+      ((p->debugger_bits & OPT3_LOCATION) == 0) ||
       (!has_location(p)))
     {
-      show_opt3_bits(p, func, line, (uint32_t)S_LOCATION);
+      show_opt3_bits(p, func, line, (uint32_t)OPT3_LOCATION);
       if (sc->stop_at_error) abort();
     }
   return(p->object.sym_cons.location);
 
 }
 
-static void set_s_location_1(s7_pointer p, uint64_t x)
+static void set_opt3_location_1(s7_pointer p, uint64_t x)
 {
   p->object.sym_cons.location = x;
-  (p)->debugger_bits = (S_LOCATION | (p->debugger_bits & ~S_LEN)); /* turn on line, cancel len */
+  (p)->debugger_bits = (OPT3_LOCATION | (p->debugger_bits & ~OPT3_LEN)); /* turn on line, cancel len */
   set_opt3_is_set(p);
 }
 
-/* S_LEN (collides with S_LOCATION) */
-static uint64_t s_len_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
+/* OPT3_LEN (collides with OPT3_LOCATION) */
+static uint64_t opt3_len_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if ((!opt3_is_set(p)) ||
-      ((p->debugger_bits & S_LEN) == 0) ||
+      ((p->debugger_bits & OPT3_LEN) == 0) ||
       (has_location(p)))
     {
-      show_opt3_bits(p, func, line, (uint32_t)S_LEN);
+      show_opt3_bits(p, func, line, (uint32_t)OPT3_LEN);
       if (sc->stop_at_error) abort();
     }
   return(p->object.sym_cons.location);
 }
 
-static void set_s_len_1(s7_pointer p, uint64_t x)
+static void set_opt3_len_1(s7_pointer p, uint64_t x)
 {
   clear_type_bit(p, T_LOCATION);
   p->object.sym_cons.location = x;
-  (p)->debugger_bits = (S_LEN | (p->debugger_bits & ~(S_LOCATION)));
+  (p)->debugger_bits = (OPT3_LEN | (p->debugger_bits & ~(OPT3_LOCATION)));
   set_opt3_is_set(p);
 }
 
@@ -7113,9 +7113,6 @@ static int64_t gc(s7_scheme *sc)
 /*   .5+.1: test -3?, dup +86, tmap +45, tsort -3, thash +305
  *   .85+.7: dup -5
  */
-#if S7_DEBUGGING
-static s7_pointer memory_usage(s7_scheme *sc);
-#endif
 
 static void resize_heap_to(s7_scheme *sc, int64_t size)
 {
@@ -7184,19 +7181,8 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   sc->previous_free_heap_top = sc->free_heap_top;
 
   if (show_heap_stats(sc))
-    {
-      s7_warn(sc, 256, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ")\n", 
-	      sc->heap_size, old_free, old_size, size);
-#if S7_DEBUGGING
-      {
-	s7_int old_lim;
-	old_lim = sc->print_length;
-	sc->print_length = 8192;
-	fprintf(stderr, "\n%s\n", display(memory_usage(sc)));
-	sc->print_length = old_lim;
-      }
-#endif
-    }
+    s7_warn(sc, 256, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ")\n", 
+	    sc->heap_size, old_free, old_size, size);
 
   if (sc->heap_size >= sc->max_heap_size)
     s7_error(sc, make_symbol(sc, "heap-too-big"), 
@@ -7377,18 +7363,11 @@ static void free_cell(s7_scheme *sc, s7_pointer p)
   (*(sc->free_heap_top++)) = p;
 }
 
-#if S7_DEBUGGING
-static s7_int p_slots = 0, p_cons = 0, p_lets = 0, p_functions = 0, p_strings = 0, p_petrified = 0;
-#endif
-
 static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
 {
   s7_pointer p;
   int64_t loc;
   loc = heap_location(sc, x);
-#if S7_DEBUGGING
-  p_petrified++;
-#endif
   p = (s7_pointer)alloc_big_pointer(sc, loc);
   sc->heap[loc] = p;
   free_cell(sc, p);
@@ -7405,9 +7384,6 @@ static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
    *   in blocks, not by the pointer, I think, but s7_define is the point to try).
    */
   if (not_in_heap(x)) return;
-#if S7_DEBUGGING
-  fprintf(stderr, "remove %s\n", display_80(x));
-#endif
   if (is_pair(x))
     {
       s7_pointer p;
@@ -7440,9 +7416,6 @@ static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
 	  gc_list_t *gp;
 	  int64_t loc;
 	  loc = heap_location(sc, x);
-#if S7_DEBUGGING
-	  p_petrified++;
-#endif
 	  sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
 	  free_cell(sc, sc->heap[loc]);
 	  unheap(sc, x);
@@ -7857,10 +7830,6 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
 	  slot = make_permanent_slot(sc, x, x);
 	  set_global_slot(x, slot);
 	  set_local_slot(x, slot);
-#if S7_DEBUGGING
-	  if (s7_name_to_value(sc, "estr") != sc->undefined) fprintf(stderr, "estr: %s\n", display(s7_name_to_value(sc, "estr")));
-	  fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
-#endif
 	}}
 
   typeflag(p) = T_PAIR | T_IMMUTABLE | T_UNHEAP;  /* add x to the symbol table */
@@ -8584,9 +8553,6 @@ static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_p
 static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
-#if S7_DEBUGGING
-  p_slots++;
-#endif
   slot = alloc_pointer(sc);
   set_type(slot, T_SLOT | T_UNHEAP);
   slot_set_symbol(slot, symbol);
@@ -8597,9 +8563,6 @@ static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_point
 static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
 {
   s7_pointer let, var, slot;
-#if S7_DEBUGGING
-  p_lets++;
-#endif
   let = alloc_pointer(sc);
 
   set_type(let, T_LET | T_SAFE_PROCEDURE | T_UNHEAP);
@@ -8609,9 +8572,6 @@ static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
   add_permanent_let_or_slot(sc, slot);
   symbol_set_local_slot(caar(vars), sc->let_number, slot);
   let_set_slots(let, slot);
-#if S7_DEBUGGING
-  fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
-#endif
   for (var = cdr(vars); is_pair(var); var = cdr(var))
     {
       s7_pointer last_slot;
@@ -8620,9 +8580,6 @@ static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
       add_permanent_let_or_slot(sc, slot);
       symbol_set_local_slot(caar(var), sc->let_number, slot);
       slot_set_next(last_slot, slot);
-#if S7_DEBUGGING
-      fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
-#endif
     }
   slot_set_next(slot, slot_end(sc));
   add_permanent_let_or_slot(sc, let); /* need to mark outlet and maybe slot values */
@@ -8833,9 +8790,6 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 
       ge = sc->rootlet;
       slot = make_permanent_slot(sc, symbol, value);
-#if S7_DEBUGGING
-      fprintf(stderr, "%s[%d] slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
-#endif
       rootlet_element(ge, sc->rootlet_entries++) = slot;
       if (sc->rootlet_entries >= vector_length(ge))
 	{
@@ -8860,12 +8814,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	      (not_in_heap(value)) &&     /* else initial_slot value can be GC'd if symbol set! (initial != global, initial unprotected) */
 	      ((!sc->unlet) ||            /* init_unlet creates sc->unlet, after that initial_slot is for c_functions?? */
 	       (is_c_function(value))))
-	    {
-#if S7_DEBUGGING
-	      fprintf(stderr, "%s[%d] initial slot: %s %s\n", __func__, __LINE__, display(slot_symbol(slot)), s7_type_names[unchecked_type(slot_value(slot))]);
-#endif
 	    set_initial_slot(symbol, make_permanent_slot(sc, symbol, value));
-	    }
 	  set_local_slot(symbol, slot);
 	  set_global(symbol);
 	}
@@ -10471,7 +10420,7 @@ static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 static void unstack_1(s7_scheme *sc, const char *func, int line)
 {
   sc->stack_end -= 4;
-  if (((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT)
+  if ((((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT) && (((opcode_t)sc->stack_end[3]) != OP_SPLICE_VALUES)) /* splice can happen in object->port */
     {
       fprintf(stderr, "%s%s[%d]: popped %s?%s\n", BOLD_TEXT, func, line, op_names[(opcode_t)sc->stack_end[3]], UNBOLD_TEXT);
       fprintf(stderr, "    code: %s, args: %s\n", display(sc->code), display(sc->args));
@@ -27046,9 +26995,6 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
 {
   /* for the symbol table which is never GC'd */
   s7_pointer x;
-#if S7_DEBUGGING
-  p_strings++;
-#endif
   x = alloc_pointer(sc);
   set_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CON);
@@ -27068,9 +27014,6 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
       string_length(x) = 0;
     }
   string_hash(x) = 0;
-#if S7_DEBUGGING
-  fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, str);
-#endif
   return(x);
 }
 
@@ -37559,9 +37502,6 @@ static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_point
 static s7_pointer permanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type)
 {
   s7_pointer x;
-#if S7_DEBUGGING
-  p_cons++;
-#endif
   x = alloc_pointer(sc);
   set_type(x, type | T_UNHEAP);
   set_car(x, a);
@@ -46396,9 +46336,6 @@ static c_proc_t *alloc_permanent_function(s7_scheme *sc)
 s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function f, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer x;
-#if S7_DEBUGGING
-  p_functions++;
-#endif
   x = alloc_pointer(sc);
   x = make_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_permanent_function(sc));
   unheap(sc, x);
@@ -58375,6 +58312,13 @@ static s7_pointer fx_if_a_c_c(s7_scheme *sc, s7_pointer arg)
   return((is_true(sc, fx_call(sc, cdr(arg)))) ? opt1_con(arg) : opt2_con(arg));
 }
 
+static s7_pointer fx_if_is_type_s_a_a(s7_scheme *sc, s7_pointer arg)
+{
+  if (gen_type_match(sc, lookup(sc, opt2_sym(cdr(arg))), opt3_byte(cdr(arg))))
+    return(fx_call(sc, cddr(arg)));
+  return(fx_call(sc, cdddr(arg)));
+}
+
 static inline s7_pointer fx_and_2(s7_scheme *sc, s7_pointer arg)   /* arg is the full expr: (and ...) */
 {
   return((fx_call(sc, cdr(arg)) == sc->F) ? sc->F : fx_call(sc, cddr(arg)));
@@ -58789,7 +58733,7 @@ static s7_function fx_function[NUM_OPS];
 static bool is_fxable(s7_scheme *sc, s7_pointer p)
 {
   if (!is_pair(p)) return(true);
-  if ((is_optimized(p)) &&  /* this is needed */
+  if ((is_optimized(p)) &&  /* this is needed, why? */
       (fx_function[optimize_op(p)]))
     return(true);
   return(is_proper_quote(sc, p));
@@ -69290,7 +69234,7 @@ static bool op_for_each(s7_scheme *sc)
 	}}
   push_stack_direct(sc, OP_FOR_EACH);
   sc->args = saved_args;
-  if ((needs_copied_args(sc->code)) || (is_syntactic(sc->code))) /* if syntactic, protect against fx_choose */
+  if ((needs_copied_args(sc->code)) /* || (is_syntactic(sc->code)) */) /* if syntactic, protect against fx_choose */
     sc->args = copy_proper_list(sc, sc->args);
   return(false);
 }
@@ -69629,7 +69573,7 @@ static bool op_map(s7_scheme *sc)
   sc->args = sc->x;
   sc->x = sc->nil;
 
-  if ((needs_copied_args(sc->code)) || (is_syntactic(sc->code)))
+  if ((needs_copied_args(sc->code)) /* || (is_syntactic(sc->code)) */)
     sc->args = copy_proper_list(sc, sc->args);
   return(false);
 }
@@ -71164,7 +71108,7 @@ static bool gx_annotate_arg(s7_scheme *sc, s7_pointer p, s7_pointer e)
       if (fxf)
 	{
 	  set_has_gx(p);
-	  set_opt2(p, fxf, F_CALL);
+	  set_opt2(p, fxf, OPT2_CALL);
 	}
       else set_no_gx(p);
       set_optimize_op(car(p), old_op);
@@ -78414,13 +78358,20 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		  if ((optimize_op(form) == OP_IF_IS_TYPE_S_P_P) &&
 		      (is_fxable(sc, caddr(code))))
 		    {
-		      pair_set_syntax_op(form, OP_IF_IS_TYPE_S_P_A);
-		      fx_annotate_arg(sc, cddr(code), sc->curlet);
+		      if (is_fxable(sc, cadr(code)))
+			{
+			  fx_annotate_arg(sc, cdr(code), sc->curlet);
+			  pair_set_syntax_op(form, OP_IF_IS_TYPE_S_A_A);
+			  /* set_optimized(form); */ /* this checks flag==optimized_pair which excludes syntactic?? */
+			  /* fprintf(stderr, "form: %s, opt: %d %p\n", display(form), is_optimized(form), fx_function[optimize_op(form)]); */
+			}
+		      else pair_set_syntax_op(form, OP_IF_IS_TYPE_S_P_A);
 		      set_opt2_pair(form, cddr(code));
+		      fx_annotate_arg(sc, cddr(code), sc->curlet);
 		      fx_safe_closure_tree(sc);
 		    }}
 	      else pair_set_syntax_op(form, choose_if_optc(IF_opSq, one_branch, reversed, not_case));
-	      clear_has_fx(code);
+	      clear_has_fx(code); /* TODO: unnecessary?? */
 	      set_opt2_sym(code, cadr(test));
 	      return;
 	    }
@@ -78540,10 +78491,9 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 
 /* (cond <> (else <>)) only happens in old-fashioned code, so set_if_opts covers if/when/unless but not cond */
 
-static s7_pointer check_if(s7_scheme *sc)
+static s7_pointer check_if(s7_scheme *sc, s7_pointer form)
 {
-  s7_pointer cdr_code, code, form;
-  form = sc->code;
+  s7_pointer cdr_code, code;
   code = cdr(form);
 
   if (!is_pair(code))                                /* (if) or (if . 1) */
@@ -78551,7 +78501,7 @@ static s7_pointer check_if(s7_scheme *sc)
 
   cdr_code = cdr(code);
   if (!is_pair(cdr_code))                            /* (if 1) */
-    eval_error(sc, "(if ~A): if needs another clause", 32, car(sc->code));
+    eval_error(sc, "~S: if needs another clause", 27, form);
 
   if (is_pair(cdr(cdr_code)))
     {
@@ -78569,7 +78519,7 @@ static s7_pointer check_if(s7_scheme *sc)
 
 static void op_if(s7_scheme *sc)
 {
-  sc->code = check_if(sc);
+  sc->code = check_if(sc, sc->code);
   push_stack_no_args(sc, OP_IF1, cdr(sc->code));
   sc->code = car(sc->code);
 }
@@ -85082,7 +85032,6 @@ static void apply_c_macro(s7_scheme *sc)  	                    /* -------- C-bas
 static void apply_syntax(s7_scheme *sc)                            /* -------- syntactic keyword as applicable object -------- */
 {                                                                  /* current reader-cond macro uses this via (map quote ...) */
   s7_int len;                                                      /*    ((apply lambda '((x) (+ x 1))) 4) */
-  /* fprintf(stderr, "%s: %s %s\n", __func__, display(sc->code), display(sc->args)); */
   if (is_pair(sc->args))                                           /* this is ((pars) . body) */
     {
       len = s7_list_length(sc, sc->args);
@@ -89881,6 +89830,34 @@ static s7_pointer op_s_aa(s7_scheme *sc)
   return(NULL);
 }
 
+static s7_pointer op_a_a(s7_scheme *sc)
+{
+  s7_pointer code;
+  code = sc->code;
+  sc->code = fx_call(sc, code);
+  if (!is_applicable(sc->code))
+    apply_error(sc, sc->code, cdr(code));
+  sc->args = (dont_eval_args(sc->code)) ? list_1(sc, cadr(code)) : list_1(sc, fx_call(sc, cdr(code)));
+  return(NULL);
+}
+
+static s7_pointer op_a_aa(s7_scheme *sc)
+{
+  s7_pointer code;
+  code = sc->code;
+  sc->code = fx_call(sc, code);
+  if (!is_applicable(sc->code))
+    apply_error(sc, sc->code, cdr(code));
+  if (dont_eval_args(sc->code))
+    sc->args = list_2(sc, cadr(code), caddr(code));
+  else
+    {
+      sc->args = list_1(sc, fx_call(sc, cddr(code)));
+      sc->args = cons(sc, fx_call(sc, cdr(code)), sc->args);
+    }
+  return(NULL);
+}
+
 static void op_safe_c_function_star_fx(s7_scheme *sc)
 {
   s7_pointer args, p;
@@ -90553,7 +90530,7 @@ static void op_eval_args5(s7_scheme *sc)      /* sc->value is the last arg, sc->
 static bool eval_args_no_eval_args(s7_scheme *sc)
 {
   /* fprintf(stderr, "value: %s, code: %s\n", display(sc->value), display(sc->code)); */
-  if ((is_any_macro(sc->value)) || (is_syntactic(sc->value)))
+  if ((is_any_macro(sc->value)) /* || (is_syntactic(sc->value))*/)
     {
       sc->args = copy_proper_list_with_arglist_error(sc, cdr(sc->code)); /* check the first time around */
       if (is_symbol(car(sc->code))) /* not ((f p) args...) where (f p) has returned a macro, op_macro_d assumes car is a symbol */
@@ -90841,12 +90818,25 @@ static bool eval_car_pair(s7_scheme *sc)
 	   (is_syntactic(cadr(carc)))))
 	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
       sc->code = carc;
-
-      /* fprintf(stderr, "%s %s\n", op_names[optimize_op(carc)], display(carc)); */
-      /* op starts at if_a_a_a but changes to if_is_type_s_p_a! s_p_a can't be better than a_a! */
-      /* perhaps OP_PAIR_A[_A|FX]: push pair_a_1, code=car, goto eval, pair_a_1: get args (as op_s_a) etc */
-      /* but also if_is_type_s_a_a and don't change if already a_a_a */
-	 
+#if S7_DEBUGGING
+      /* an experiment (to replace op_if_a_ssq_a[_a]) */
+      if ((!no_cell_opt(carc)) &&
+	  (car(carc) == sc->if_symbol))
+	{
+	  check_if(sc, carc);
+	  if ((fx_function[optimize_op(carc)]) &&
+	      (is_pair(cdr(code))) &&
+	      (is_fxable(sc, cadr(code))) &&
+	      ((is_null(cddr(code))) || (is_fxable(sc, caddr(code)))))
+	    {
+	      fx_annotate_args(sc, cdr(code), sc->curlet);
+	      set_c_call_direct(code, fx_function[optimize_op(carc)]);
+	      set_optimize_op(code, (is_null(cddr(code))) ? OP_A_A : OP_A_AA);
+	      return(false);  /* goto eval in trailers */
+	    }
+	  set_no_cell_opt(carc);
+      }
+#endif
       sc->cur_op = (opcode_t)symbol_syntax_op_checked(sc->code);
       pair_set_syntax_op(sc->code, sc->cur_op);
       return(true);
@@ -92534,7 +92524,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_S_S:  if (op_s_s(sc)) continue;  goto APPLY;
 	case OP_S_A:  op_s_a(sc);     goto APPLY;
 	case OP_S_AA: op_s_aa(sc);    goto APPLY;
-
+	case OP_A_A:  op_a_a(sc);     goto APPLY;
+	case OP_A_AA: op_a_aa(sc);    goto APPLY;
 
 	case OP_SAFE_C_FUNCTION_STAR: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_FUNCTION_STAR: op_safe_c_function_star(sc); continue;
@@ -93411,6 +93402,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_IS_TYPE_S_N:   if_is_not_type_s_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = sc->unspecified; continue;
 	case OP_IF_IS_TYPE_S_N_N: if_is_not_type_s_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
 
+	case OP_IF_IS_TYPE_S_A_A: if_is_type_s_p(sc) sc->value = fx_call(sc, cddr(sc->code)); else sc->value = fx_call(sc, cdddr(sc->code)); continue;
 	case OP_IF_IS_TYPE_S_P_A: if_is_type_s_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = fx_call(sc, opt2_pair(sc->code)); continue;
 
 	  #define if_opsq_p(sc) set_car(sc->t1_1, lookup(sc, opt2_sym(cdr(sc->code)))); if (is_true(sc, c_call(cadr(sc->code))(sc, sc->t1_1)))
@@ -94090,12 +94082,6 @@ static s7_pointer memory_usage(s7_scheme *sc)
 
   make_slot_1(sc, mu_let, make_symbol(sc, "small_ints"), cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
   make_slot_1(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells), kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
-#if S7_DEBUGGING
-  make_slot_1(sc, mu_let, make_symbol(sc, "p_string/pair/let/slot/function/petrified"), 
-             s7_list(sc, 6, 
-		     make_integer(sc, p_strings), make_integer(sc, p_cons), make_integer(sc, p_lets), 
-		     make_integer(sc, p_slots), make_integer(sc, p_functions), make_integer(sc, p_petrified)));
-#endif
   {
     gc_obj_t *g;
     for (i = 0, g = sc->permanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
@@ -95062,6 +95048,7 @@ static void init_fx_function(void)
   fx_function[OP_IF_AND2_S_A] = fx_if_and2_s_a;
   fx_function[OP_IF_NOT_A_A] = fx_if_not_a_a;
   fx_function[OP_IF_NOT_A_A_A] = fx_if_not_a_a_a;
+  fx_function[OP_IF_IS_TYPE_S_A_A] = fx_if_is_type_s_a_a;
   fx_function[OP_OR_2] = fx_or_2;
   fx_function[OP_OR_S_2] = fx_or_s_2;
   fx_function[OP_OR_S_TYPE_2] = fx_or_s_type_2;
@@ -97166,7 +97153,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 914) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 917) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97563,9 +97550,9 @@ static int main(int argc, char **argv)
  * tshoot     1663          883    872    872
  * index      1074         1026   1016   1015
  * tmock      7697         1177   1165   1166
- * s7test     4546         1873   1831   1817
+ * s7test     4546         1873   1831   1817  1841 [eval]
  * lt         2115         2123   2110   2109
- * tcopy      2290         2256   2230   2232
+ * tcopy      2290         2256   2230   2232  2119
  * tmat       2412         2285   2258   2253
  * tform      3251         2281   2273   2266
  * tread      2610         2440   2421   2416
@@ -97577,7 +97564,7 @@ static int main(int argc, char **argv)
  * tmap       3785         2886   2857   2857
  * tsort      3821         3105   3104   3104
  * tset       3093         3253   3104   3094
- * tmac       3343         3317   3277   3240
+ * tmac       3343         3317   3277   3240  3247 [trailers]
  * dup        3589         3334   3332   3232
  * tio        3843         3816   3752   3742
  * teq        4054         4068   4045   4038
@@ -97590,12 +97577,12 @@ static int main(int argc, char **argv)
  * tnum       59.5         6348   6013   6000
  * tmisc      6490         7389   6210   6170
  * tgc        12.6         11.9   11.1   11.1
- * tgen       12.0         11.2   11.4   11.3
+ * tgen       12.0         11.2   11.4   11.3  11.4 [trailers but this is marginal]
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
  * calls      60.2         36.7   37.5   37.3
- * sg         97.4         71.9   72.3   72.3
- * lg        105.5        106.6  105.0  105.0
+ * sg         97.4         71.9   72.3   72.3  72.2
+ * lg        105.5        106.6  105.0  105.0 105.2 [eval and trailers]
  * tbig      601.8        177.4  175.8  175.5
  * ---------------------------------------------
  *
@@ -97604,13 +97591,17 @@ static int main(int argc, char **argv)
  * in fx_tree, if syntax anywhere in car tree, return? or don't call fx_tree to begin with -- syntax not as car = unsafe
  * hash-code eqfunc, s7test (t413)
  * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
- * popped splice_values [where does obj->port error/unstack?]
  * if local sig (func) should s7 use it for arg type checks? or maybe provide a function that does that
  * fx_choose can clobber tu/direct opts if has_fx is ignored, and optimize_lambda does not annotate except in trivial cases
  *   but annotate can be confused by syntax and apparently fx_choose cancels that!
  *   optimize in optimize_lambda should handle all the fx_chooses before calling fx_tree
- *   fxtree.h
+ *   fxtree.h, which is already out-of-date
  * t718/bugs cond/circular-list bugs eventually (and t725 comments)
- * t418 op_pair_a? op_a_a? see eval_car_pair
- * perm string twice (libm.scm etc)
+ * eval at begin but sc->code nil? sc->cur_op should be truthful here (we got here via goto)
+ * unsafe_func_safe_args?  safe msg -> s7.html
+ * set_c_call sets fx??  fxable can't work with syntactic cases [split set_c_call from set_fx_call?]
+ *   split: if has_fx(p) and cdr not a pair?, set_has_fx for fx, set_has_cf for straight opt, is there a free pair bit? yes -- the last unused bit...
+ *   how to get syntactic changes without slowdown?  most will not be fx if cf bit used??
+ *   but this also requires splitting the setters (set_c_call* currently) 66 currently, but also c_call*: 880
+ *   and opt2 role OPT2_FX_CALL and OPT2_G_CALL  g_call and fx_call set|has_fx_call set|has_g_call
  */
