@@ -9886,8 +9886,17 @@ s7_define_safe_function(sc, "plus1", g_plus_one, 1, 0, false, "");
 s7_set_i_i_function(sc, s7_name_to_value(sc, "plus1"), plus_one);
 </pre>
 <p>s7_define_safe_function defines a Scheme function "plus1",
-telling the optimizer that this function is safe.  s7_set_i_i_function
-then tells the optimizer that if plus1 is seen in a context where the optimizer
+telling the optimizer that this function is safe.  
+A safe function does not push anything on the s7 stack, and treats the arglist 
+passed to it as immutable and temporary (that is, it just grabs the arguments from 
+the list).  A few s7_* functions are unsafe, and that makes anything that calls 
+them also unsafe.  If the optimizer knows a function is safe, it can use prebuilt
+lists to pass the arguments (saving in the GC), and can combine it in various 
+ways with other stuff.  If the safe function knows its return and argument
+types, there is another level of optimization that can call it without 
+setting up an arglist or "unboxing" values, basically a direct call in C.
+In this example, the s7_set_i_i_function call
+tells the optimizer that if plus1 is seen in a context where the optimizer
 knows it is receiving an s7_int argument, and is expected to return
 an s7_int result, it can call plus_one directly, rather than g_plus_one.
 </p>
