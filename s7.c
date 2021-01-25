@@ -1140,7 +1140,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer u, v, w, x, y, z;         /* evaluator local vars */
-  s7_pointer temp1, temp2, temp3, temp4, temp6, temp7, temp8, temp9, temp_cell_2;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp_cell_2;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1;
 
   jmp_buf goto_start;
@@ -6955,6 +6955,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp2);
   gc_mark(sc->temp3);
   gc_mark(sc->temp4);
+  gc_mark(sc->temp5);
   gc_mark(sc->temp6);
   gc_mark(sc->temp7);
   gc_mark(sc->temp8);
@@ -8242,7 +8243,7 @@ static s7_pointer g_symbol_to_string_uncopied(s7_scheme *sc, s7_pointer args)
   return(symbol_name_cell(sym));
 }
 
-static s7_pointer symbol_to_string_p(s7_scheme *sc, s7_pointer sym)
+static s7_pointer symbol_to_string_p_p(s7_scheme *sc, s7_pointer sym)
 {
   if (!is_symbol(sym))
     simple_wrong_type_argument(sc, sc->symbol_to_string_symbol, sym, T_SYMBOL);
@@ -8326,6 +8327,19 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
   sym = make_symbol_with_length(sc, name, len);
   liberate(sc, b);
   return(sym);
+}
+
+/* p_p case can use string_to_symbol_p_p */
+static s7_pointer symbol_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+{
+  char buf[256];
+  s7_int len;
+  if ((!is_string(p1)) || (!is_string(p2))) return(g_symbol(sc, set_plist_2(sc, p1, p2)));
+  len = string_length(p1) + string_length(p2);
+  if ((len == 0) || (len >= 256)) return(g_symbol(sc, set_plist_2(sc, p1, p2)));
+  memcpy((void *)buf, (void *)string_value(p1), string_length(p1));
+  memcpy((void *)(buf + string_length(p1)), (void *)string_value(p2), string_length(p2));
+  return(make_symbol_with_length(sc, buf, len));
 }
 
 
@@ -39971,9 +39985,10 @@ static s7_pointer list_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poi
   return((args == 3) ? sc->list_3 : f);
 }
 
-static s7_pointer list_p_p(s7_scheme *sc, s7_pointer p1) {return(list_1(sc, p1));}
-static s7_pointer list_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(list_2(sc, p1, p2));}
-static s7_pointer list_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3) {return(list_3(sc, p1, p2, p3));}
+/* I think only the last arg here needs GC protection (rest are cons_unchecked) */
+static s7_pointer list_p_p(s7_scheme *sc, s7_pointer p1) {return(list_1(sc, sc->temp5 = p1));}
+static s7_pointer list_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(list_2(sc, p1, sc->temp5 = p2));}
+static s7_pointer list_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3) {return(list_3(sc, p1, p2, sc->temp5 = p3));}
 
 static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer lst)
 {
@@ -57628,6 +57643,11 @@ static s7_pointer fx_c_c_opsq(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
+static s7_pointer fx_c_c_opsq_direct(s7_scheme *sc, s7_pointer arg)
+{
+  return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, cadr(arg), ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt1_sym(cdr(arg))))));
+}
+
 static s7_pointer fx_c_opsq_opsq(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer largs;
@@ -59203,6 +59223,20 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	      return(fx_c_s_opsq_direct);
 	    }
 	  return(fx_c_s_opsq);
+
+	case HOP_SAFE_C_C_opSq:
+	  if (is_global_and_has_func(car(arg), s7_p_pp_function))
+	    {
+	      s7_pointer arg2;
+	      arg2 = caddr(arg);
+	      if (is_global_and_has_func(car(arg2), s7_p_p_function))
+		{
+		  set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(slot_value(global_slot(car(arg))))));
+		  set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_p_function(slot_value(global_slot(car(arg2))))));
+		  set_opt1_sym(cdr(arg), cadr(arg2));
+		  return(fx_c_c_opsq_direct);
+		}}
+	  return(fx_c_c_opsq);
 
 	case HOP_SAFE_C_opSq_C:
 	  if (is_unchanged_global(car(arg)))
@@ -64381,7 +64415,7 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
     {
       opt_info *o1;
       opc->v[2].p_p_f = ppf;
-      if ((ppf == symbol_to_string_p) &&
+      if ((ppf == symbol_to_string_p_p) &&
 	  (is_optimized(car_x)) &&
 	  (fn_proc(car_x) == g_symbol_to_string_uncopied))
 	opc->v[2].p_p_f = symbol_to_string_uncopied_p;
@@ -95229,7 +95263,9 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, slot_value(global_slot(sc->cdadr_symbol)), cdadr_p_p);
 
   s7_set_p_p_function(sc, slot_value(global_slot(sc->string_to_symbol_symbol)), string_to_symbol_p_p);
-  s7_set_p_p_function(sc, slot_value(global_slot(sc->symbol_to_string_symbol)), symbol_to_string_p);
+  s7_set_p_p_function(sc, slot_value(global_slot(sc->symbol_to_string_symbol)), symbol_to_string_p_p);
+  s7_set_p_p_function(sc, slot_value(global_slot(sc->symbol_symbol)), string_to_symbol_p_p);
+  s7_set_p_pp_function(sc, slot_value(global_slot(sc->symbol_symbol)), symbol_p_pp);
   s7_set_p_function(sc, slot_value(global_slot(sc->newline_symbol)), newline_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->newline_symbol)), newline_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->display_symbol)), display_p_p);
@@ -96797,6 +96833,7 @@ s7_scheme *s7_init(void)
   sc->temp2 = sc->nil;
   sc->temp3 = sc->nil;
   sc->temp4 = sc->nil;
+  sc->temp5 = sc->nil;
   sc->temp6 = sc->nil;
   sc->temp7 = sc->nil;
   sc->temp8 = sc->nil;
@@ -97584,7 +97621,7 @@ int main(int argc, char **argv)
  * titer      2860         2865   2842   2842
  * tmap       3785         2886   2857   2857
  * tset       3093         3253   3104   3094
- * tsort      3821         3105   3104   3104
+ * tsort      3821         3105   3104   3104  3097
  * tmac       3343         3317   3277   3240  3247 [trailers]
  * dup        3589         3334   3332   3232  3221
  * tio        3843         3816   3752   3742
@@ -97592,7 +97629,7 @@ int main(int argc, char **argv)
  * tfft       11.3         4142   4109   4107
  * tclo       5051         4787   4735   4666
  * tcase      4850         4960   4793   4778
- * tlet       5782         4925   4908   4857
+ * tlet       5782         4925   4908   4857  4828
  * tstr       6995         5281   4863   4810
  * trec       7763         5976   5970   5970
  * tnum       59.5         6348   6013   6000
@@ -97615,6 +97652,7 @@ int main(int argc, char **argv)
  * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
  * if local sig (func) should s7 use it for arg type checks? or maybe provide a function that does that, s7_enforce_signature(sc, caller?, args, sig)?
  * t725 unravelled
+ * set_any_c_fp et al opt
  * unsafe_func_safe_args?  safe_args flag for c_funcs, maybe split ops: op_c_aa and op_c_safe_args_aa
  *   need a|aa|s|ss ??  add op_c_pp? pa?
  *   s7_function_set_safe_args? but then unhop case has to check this flag or ignore function_class
