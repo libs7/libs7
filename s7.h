@@ -1,8 +1,8 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.8"
-#define S7_DATE "26-1-2021"
+#define S7_VERSION "9.9"
+#define S7_DATE "27-1-2021"
 #define S7_MAJOR_VERSION 9
 #define S7_MINOR_VERSION 8
 
@@ -483,6 +483,9 @@ s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function
 s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
 					   s7_int required_args, s7_int optional_args, bool rest_arg, 
 					   const char *doc, s7_pointer signature);
+s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
+					     s7_int required_args, s7_int optional_args, bool rest_arg,
+					     const char *doc, s7_pointer signature);
 
 s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
 s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
@@ -891,6 +894,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  *
+ * 25-Jan:    s7_semisafe_typed_function.
  * 6-Jan-21:  s7_hash_code.
  * --------
  * 14-Oct:    s7_load_c_string and s7_load_c_string_with_environment.
