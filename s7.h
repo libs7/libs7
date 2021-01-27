@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "9.9"
-#define S7_DATE "27-1-2021"
+#define S7_DATE "28-1-2021"
 #define S7_MAJOR_VERSION 9
 #define S7_MINOR_VERSION 8
 
@@ -894,7 +894,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  *
- * 25-Jan:    s7_semisafe_typed_function.
+ * 25-Jan:    s7_define_semisafe_typed_function.
  * 6-Jan-21:  s7_hash_code.
  * --------
  * 14-Oct:    s7_load_c_string and s7_load_c_string_with_environment.

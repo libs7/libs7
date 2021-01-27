@@ -9028,6 +9028,9 @@ s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function
 s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
 					   s7_int required_args, s7_int optional_args, bool rest_arg, 
 					   const char *doc, s7_pointer signature);
+s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
+					     s7_int required_args, s7_int optional_args, bool rest_arg,
+					     const char *doc, s7_pointer signature);
 
 void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
                              const char *arglist, const char *doc);
@@ -9892,7 +9895,9 @@ passed to it as immutable and temporary (that is, it just grabs the arguments fr
 the list).  A few s7_* functions are unsafe, and that makes anything that calls 
 them also unsafe.  If the optimizer knows a function is safe, it can use prebuilt
 lists to pass the arguments (saving in the GC), and can combine it in various 
-ways with other stuff.  If the safe function knows its return and argument
+ways with other stuff.  If an unsafe function handles its argument list safely,
+declare it with s7_define_semisafe_typed_function.
+If the safe function knows its return and argument
 types, there is another level of optimization that can call it without 
 setting up an arglist or "unboxing" values, basically a direct call in C.
 In this example, the s7_set_i_i_function call
