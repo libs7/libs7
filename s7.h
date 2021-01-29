@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "9.9"
-#define S7_DATE "29-1-2021"
+#define S7_DATE "1-2-2021"
 #define S7_MAJOR_VERSION 9
 #define S7_MINOR_VERSION 8
 
@@ -470,19 +470,29 @@ s7_pointer s7_signature(s7_scheme *sc, s7_pointer func);                    /* (
 s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...);               /* procedure-signature data */
 s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int len, ...);
 
+/* possibly unsafe functions: */
 s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+
+/* safe functions: */
 s7_pointer s7_make_safe_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 s7_pointer s7_make_typed_function(s7_scheme *sc, const char *name, s7_function f, 
 				  s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature);
 
+/* arglist or body possibly unsafe: */
 s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+
+/* arglist and body safe: */
 s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
 				    s7_int required_args, s7_int optional_args, bool rest_arg, 
 				    const char *doc, s7_pointer signature);
+
+/* arglist unsafe or body unsafe: */
 s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
 					   s7_int required_args, s7_int optional_args, bool rest_arg, 
 					   const char *doc, s7_pointer signature);
+
+/* arglist safe, body possibly unsafe: */
 s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
 					     s7_int required_args, s7_int optional_args, bool rest_arg,
 					     const char *doc, s7_pointer signature);
