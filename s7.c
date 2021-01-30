@@ -2730,9 +2730,9 @@ void s7_show_history(s7_scheme *sc);
 #define OPT2_FX                        (1 << 18)  /* fx (fx_*) func (sc, form) */
 #define OPT2_FN                        (1 << 19)  /* fn (s7_function) func (sc, arglist) */
 #define OPT2_LAMBDA                    (1 << 20)  /* lambda form */
+#define OPT2_NAME                      (1 << 21)
 #define OPT2_DIRECT                    (1LL << 32)
 #define OPT2_INT                       (1LL << 33)
-#define OPT2_NAME                      (1 << 21)
 #define OPT2_MASK                      (OPT2_KEY | OPT2_SLOW | OPT2_SYM | OPT2_PAIR | OPT2_CON | OPT2_FX | OPT2_FN | OPT2_LAMBDA | OPT2_DIRECT | OPT2_NAME | OPT2_INT)
 
 #define opt2_is_set(p)                 (((p)->debugger_bits & OPT2_SET) != 0)
@@ -2751,7 +2751,7 @@ void s7_show_history(s7_scheme *sc);
 #define OPT3_CON                       (1 << 28)
 #define OPT3_LOCATION                  (1 << 29)
 #define OPT3_LEN                       (1 << 30)
-#define OPT3_BYTE                      (1LL << 31) /* 0x80000000 */
+#define OPT3_BYTE                      (1LL << 31)
 #define OPT3_INT                       (1LL << 34)
 #define OPT3_MASK                      (OPT3_ARGLEN | OPT3_SYM | OPT3_AND | OPT3_ANY | OPT3_LET | OPT3_BYTE | OPT3_LOCATION | OPT3_LEN | OPT3_DIRECT | OPT3_CON | OPT3_INT)
 
@@ -4200,7 +4200,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_RECUR_IF_A_A_opA_LAq, OP_RECUR_IF_A_opA_LAq_A, OP_RECUR_IF_A_A_opLA_Aq, OP_RECUR_IF_A_opLA_Aq_A,
       OP_RECUR_IF_A_A_opLA_LAq, OP_RECUR_IF_A_opLA_LAq_A,
       OP_RECUR_IF_A_A_opA_LA_LAq, OP_RECUR_IF_A_opA_LA_LAq_A,
-      OP_RECUR_IF_A_A_opLA_LA_LAq,
+      OP_RECUR_IF_A_A_opLA_LA_LAq, OP_RECUR_IF_A_A_IF_A_A_opLAA_LAAq,
       OP_RECUR_IF_A_A_opA_LAAq, OP_RECUR_IF_A_opA_LAAq_A, OP_RECUR_IF_A_A_opA_L3Aq,
       OP_RECUR_IF_A_A_LopL3A_L3A_L3Aq, OP_RECUR_IF_A_A_AND_A_LAA_LAA,
       OP_RECUR_IF_A_A_IF_A_LAA_opA_LAAq, /* same as cond case below */
@@ -4431,7 +4431,7 @@ static const char* op_names[NUM_OPS] =
       "recur_if_a_a_opa_laq", "recur_if_a_opa_laq_a", "recur_if_a_a_opla_aq", "recur_if_a_opla_aq_a",
       "recur_if_a_a_opla_laq", "recur_if_a_opla_laq_a",
       "recur_if_a_a_opa_la_laq", "recur_if_a_opa_la_laq_a",
-      "recur_if_a_a_opla_la_laq",
+      "recur_if_a_a_opla_la_laq", "recur_if_a_a_if_a_a_oplaa_laaq",
       "recur_if_a_a_opa_laaq", "recur_if_a_opa_laaq_a", "recur_if_a_a_opa_l3aq",
       "recur_if_a_a_lopl3a_l3a_l3aq", "recur_if_a_a_and_a_laa_laa",
       "recur_if_a_a_if_a_laa_opa_laaq",
@@ -5439,7 +5439,6 @@ static void set_opt3_location_1(s7_pointer p, uint64_t x)
   set_opt3_is_set(p);
 }
 
-/* OPT3_LEN (collides with OPT3_LOCATION) */
 static uint64_t opt3_len_1(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if ((!opt3_is_set(p)) ||
@@ -7407,14 +7406,6 @@ static void free_cell(s7_scheme *sc, s7_pointer p)
     fprintf(stderr, "free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
   p->debugger_bits = 0;
   p->explicit_free_line = line;
-#if 0
-  if (typ == T_PAIR)
-    {
-      p->object.cons.opt1 = NULL;
-      p->object.cons.opt2 = NULL;
-      p->object.cons.opt3 = NULL;
-    }
-#endif
 #endif
   clear_type(p);
   (*(sc->free_heap_top++)) = p;
@@ -10532,30 +10523,21 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool unnamed)
   s7_pointer mac, body, mac_name = NULL;
   uint64_t typ;
 
-  if ((op == OP_DEFINE_MACRO) || (op == OP_MACRO))
-    typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-  else
+  switch (op)
     {
-      if ((op == OP_DEFINE_MACRO_STAR) || (op == OP_MACRO_STAR))
-	typ = T_MACRO_STAR | T_DONT_EVAL_ARGS | T_COPY_ARGS;
+    case OP_DEFINE_MACRO:      case OP_MACRO:      typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;      break;
+    case OP_DEFINE_MACRO_STAR: case OP_MACRO_STAR: typ = T_MACRO_STAR | T_DONT_EVAL_ARGS | T_COPY_ARGS; break;
+    case OP_DEFINE_BACRO:      case OP_BACRO:      typ = T_BACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;      break;
+    case OP_DEFINE_BACRO_STAR: case OP_BACRO_STAR: typ = T_BACRO_STAR | T_DONT_EVAL_ARGS | T_COPY_ARGS; break;
+    default:
+      if ((op == OP_DEFINE_EXPANSION) && (!is_let(sc->curlet)))  /* local expansions are just normal macros */
+	typ = T_MACRO | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
       else
 	{
-	  if ((op == OP_DEFINE_BACRO) || (op == OP_BACRO))
-	    typ = T_BACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-	  else
-	    {
-	      if ((op == OP_DEFINE_BACRO_STAR) || (op == OP_BACRO_STAR))
-		typ = T_BACRO_STAR | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-	      else
-		{
-		  if ((op == OP_DEFINE_EXPANSION) && (!is_let(sc->curlet)))  /* local expansions are just normal macros */
-		    typ = T_MACRO | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-		  else
-		    {
-		      if ((op == OP_DEFINE_EXPANSION_STAR) && (!is_let(sc->curlet)))
-			typ = T_MACRO_STAR | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-		      else typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-		    }}}}}
+	  if ((op == OP_DEFINE_EXPANSION_STAR) && (!is_let(sc->curlet)))
+	    typ = T_MACRO_STAR | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
+	  else typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;
+	}}
 
   new_cell_no_check(sc, mac, typ);
   sc->temp6 = mac;
@@ -10794,13 +10776,6 @@ static s7_pointer copy_body(s7_scheme *sc, s7_pointer p)
   if (tree_is_cyclic(sc, p))
     s7_error(sc, sc->wrong_type_arg_symbol, wrap_string(sc, "copy: tree is cyclic", 20));
   check_free_heap_size(sc, tree_len(sc, p) * 2);
-#if S7_DEBUGGING
-  if (tree_is_cyclic(sc, p))
-    {
-      fprintf(stderr, "%s[%d]: hit a cyclic list?\n", __func__, __LINE__);
-      abort();
-    }
-#endif
   return((sc->safety > NO_SAFETY) ? copy_tree_with_type(sc, p) : copy_tree(sc, p));
 }
 
@@ -10832,14 +10807,7 @@ static s7_pointer g_is_defined(s7_scheme *sc, s7_pointer args)
   #define Q_is_defined s7_make_signature(sc, 4, sc->is_boolean_symbol, sc->is_symbol_symbol, sc->is_let_symbol, sc->is_boolean_symbol)
 
   /* if the symbol has a global slot and e is unset or rootlet, this returns #t */
-
   s7_pointer sym;
-  /* is this correct?
-   *    (defined? '_x) #f (symbol->value '_x) #<undefined>
-   *    (define x #<undefined>) (defined? 'x) #t
-   * can't return the value here because it might be #f
-   */
-
   sym = car(args);
   if (!is_symbol(sym))
     return(method_or_bust(sc, sym, sc->is_defined_symbol, args, T_SYMBOL, 1));
@@ -54801,7 +54769,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 	  return(sc->value);
 	  /* return(s7_apply_function(sc, obj, indices)); -- needs argnum check */ /* was g_apply 23-Jan-19 which assumes we're not in map */
 	}
-      return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices)));
+      return(apply_error(sc, obj, indices));
     }
 }
 
@@ -72445,36 +72413,38 @@ static bool check_recur_if(s7_scheme *sc, s7_pointer name, int32_t vars, s7_poin
 	      test2 = cadr(false_p);
 	      true2 = caddr(false_p);
 	      false2 = cadddr(false_p);
-	      if ((is_fxable(sc, test2)) &&          /* split here for if_a_a_if_a_oplaa_laaq */
-#if 0
-		  (is_fxable(sc, true2)) &&
-		  (is_proper_list_3(sc, false2)) &&
-		  (is_h_optimized(false2)) && /* ?? */
-		  la1 = cadr(false2);		 la2 = caddr(false2);
-		  (is_proper_list_3(sc, la1)) && (is_proper_list_3(sc, la2)) &&
-		  (car(la1) == name) &&  	 (car(la2) == name) &&
-		  (is_fxable(sc, cadr(la1))) &&  (is_fxable(sc, cadr(la2))) &&
-		  (is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2)))
-		  OP_RECUR_IF_A_A_IF_A_opLAA_LAAq
-		  fx_annotate_args as below except la1 and la2
-		  fx_tree(sc, cdr(body), car(args), cadr(args));
-		  set optn to match cond_a_a_a_a_oplaa_laaq
-		  piggy back on cond_a_a_a_a_oplaa_laaq
-		  add if->cond opinit
-#endif
-		  (is_proper_list_3(sc, true2)) &&   /* laa */
-		  (is_proper_list_3(sc, false2)) &&  /* opa_laaq */
-		  (car(true2) == name) &&
-		  (is_fxable(sc, cadr(true2))) &&
-		  (is_fxable(sc, caddr(true2))) &&
-		  (is_h_optimized(false2)) &&        /* the c-op */
-		  (is_fxable(sc, cadr(false2))))
+	      if ((is_fxable(sc, test2)) &&          
+		  (is_proper_list_3(sc, false2)) &&  /* opa_laaq or oplaa_laaq */
+		  (is_h_optimized(false2)))          /* the c-op */
 		{
-		  s7_pointer laa;
-		  laa = caddr(false2);
-		  if ((is_proper_list_3(sc, laa)) &&
-		      (is_fxable(sc, cadr(laa))) &&
-		      (is_fxable(sc, caddr(laa))))
+		  s7_pointer la1, la2;
+		  la1 = cadr(false2);
+		  la2 = caddr(false2);
+		  if ((is_fxable(sc, true2)) &&
+		      (is_proper_list_3(sc, la1)) && (is_proper_list_3(sc, la2)) &&
+		      (car(la1) == name) &&  	     (car(la2) == name) &&
+		      (is_fxable(sc, cadr(la1))) &&  (is_fxable(sc, cadr(la2))) &&
+		      (is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2))))
+		    {
+		      set_safe_optimize_op(body, OP_RECUR_IF_A_A_IF_A_A_opLAA_LAAq);
+		      fx_annotate_arg(sc, cdr(body), args);
+		      fx_annotate_arg(sc, obody, args);
+		      fx_annotate_args(sc, cdr(false_p), args);
+		      fx_annotate_args(sc, cdr(la1), args);
+		      fx_annotate_args(sc, cdr(la2), args);
+		      fx_tree(sc, cdr(body), car(args), cadr(args));
+		      set_opt3_pair(body, false2);
+		      set_opt3_pair(false2, cdr(la2));
+		      return(true);
+		    }
+		  if ((is_proper_list_3(sc, true2)) &&
+		      (car(true2) == name) &&
+		      (is_fxable(sc, cadr(true2))) && (is_fxable(sc, caddr(true2))) &&
+		      (is_fxable(sc, cadr(false2))) &&
+		      (is_proper_list_3(sc, la2)) &&
+		      (car(la2) == name) &&          /* actually, not needed because func is TC (not RECUR) if not == name */
+		      (is_fxable(sc, cadr(la2))) &&
+		      (is_fxable(sc, caddr(la2))))
 		    {
 		      set_safe_optimize_op(body, OP_RECUR_IF_A_A_IF_A_LAA_opA_LAAq);
 		      fx_annotate_arg(sc, cdr(body), args);       /* if_(A)... */
@@ -72482,12 +72452,13 @@ static bool check_recur_if(s7_scheme *sc, s7_pointer name, int32_t vars, s7_poin
 		      fx_annotate_arg(sc, cdr(false_p), args);    /* if_a_a_if_(A)... */
 		      fx_annotate_args(sc, cdr(true2), args);     /* if_a_a_if_a_l(AA)... */
 		      fx_annotate_arg(sc, cdr(false2), args);     /* if_a_a_if_a_laa_op(A).. */
-		      fx_annotate_args(sc, cdr(laa), args);       /* if_a_a_if_a_laa_opa_l(AA)q */
+		      fx_annotate_args(sc, cdr(la2), args);       /* if_a_a_if_a_laa_opa_l(AA)q */
 		      fx_tree(sc, cdr(body), car(args), cadr(args));
 		      set_opt3_pair(body, false2);
-		      set_opt3_pair(false2, laa);
+		      set_opt3_pair(false2, la2);
 		      return(true);
 		    }}}
+
 	  if (car(false_p) == sc->and_symbol)
 	    {
 	      s7_pointer a1, a2, a3;
@@ -72510,6 +72481,7 @@ static bool check_recur_if(s7_scheme *sc, s7_pointer name, int32_t vars, s7_poin
 		  set_opt3_pair(body, false_p);
 		  return(true);
 		}}}
+
       if ((is_fxable(sc, true_p)) &&
 	  (is_pair(false_p)) &&
 	  (is_h_optimized(false_p)) &&
@@ -72702,23 +72674,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 	  set_opt3_pair(body, or_p);
 	  return(true);
 	}}
-#if 0
-      (car(body) == sc->or_symbol)
-      (proper_list_length(body) == 3) &&
-      (is_fxable(sc, cadr(body)))
-      andp = caddr(body);
-      (proper_list_length(andp) == 3) &&
-      (car(andp) == sc->and_symbol) &&
-      (is_fxable(sc, cadr(andp))) 
-      orp = caddr(andp);
-      (car(orp) == sc->or_symbol)
-      la1 = cadr(orp); la2 = caddr(orp);
-      (is_proper_list_3(sc, la1)) && (is_proper_list_3(sc, la2)) &&
-      (car(la1) == name) &&  	     (car(la2) == name) &&
-      (is_fxable(sc, cadr(la1))) &&  (is_fxable(sc, cadr(la2))) &&
-      (is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2)))
-      OP_RECUR_OR_A_AND_A_OR_LAA_LAA
-#endif
+
   if (car(body) == sc->cond_symbol)
     {
       s7_pointer clause, clause2 = NULL;
@@ -73174,10 +73130,6 @@ static void opt_sp_1(s7_scheme *sc, s7_function g, s7_pointer expr)
 static opt_t set_any_c_fp(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_pointer e, int32_t num_args, opcode_t op)
 {
   s7_pointer p;
-#if S7_DEBUGGING
-  if (num_args != proper_list_length(cdr(expr)))
-    fprintf(stderr, "%s[%d]: %d != %" print_s7_int "\n", __func__, __LINE__, num_args, proper_list_length(cdr(expr)));
-#endif
   for (p = cdr(expr); is_pair(p); p = cdr(p))
     {
       set_fx(p, fx_choose(sc, p, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe));
@@ -89420,14 +89372,23 @@ static s7_pointer op_recur_cond_a_a_a_a_opa_laaq(s7_scheme *sc)
 
 /* -------- cond_a_a_a_a_oplaa_laaq -------- */
 
-static void opinit_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc)
+static void opinit_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc, bool cond_case)
 {
   s7_pointer caller;
-  rec_set_test(sc, cadr(sc->code));
-  rec_set_res(sc, cdadr(sc->code));
-  rec_set_f1(sc, caddr(sc->code));
-  rec_set_f2(sc, cdaddr(sc->code));
-
+  if (cond_case)
+    {
+      rec_set_test(sc, cadr(sc->code));
+      rec_set_res(sc, cdadr(sc->code));
+      rec_set_f1(sc, caddr(sc->code));
+      rec_set_f2(sc, cdaddr(sc->code));
+    }
+  else
+    {
+      rec_set_test(sc, cdr(sc->code));
+      rec_set_res(sc, cddr(sc->code));       /* (if a b...) */
+      rec_set_f1(sc, cdr(cadddr(sc->code))); /* (if a b (if c d...)) */
+      rec_set_f2(sc, cddr(cadddr(sc->code)));
+    }
   caller = opt3_pair(sc->code);  /* cadr(cadddr(sc->code)) = (cfunc laa laa) */
 
   sc->rec_f3p = cdadr(caller);
@@ -89465,9 +89426,17 @@ static s7_pointer oprec_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc)
 
 static s7_pointer op_recur_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc)
 {
-  opinit_cond_a_a_a_a_oplaa_laaq(sc);
+  opinit_cond_a_a_a_a_oplaa_laaq(sc, true);
   return(oprec_cond_a_a_a_a_oplaa_laaq(sc));
 }
+
+static s7_pointer op_recur_if_a_a_if_a_a_oplaa_laaq(s7_scheme *sc)
+{
+  opinit_cond_a_a_a_a_oplaa_laaq(sc, false);
+  return(oprec_cond_a_a_a_a_oplaa_laaq(sc));
+}
+
+
 
 /* -------- cond_a_a_a_laa_opa_laaq -------- */
 
@@ -92925,6 +92894,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_RECUR_COND_A_A_A_LAA_opA_LAAq:  wrap_recur(sc, op_recur_cond_a_a_a_laa_opa_laaq);  continue;
 	case OP_RECUR_COND_A_A_A_LAA_LopA_LAAq: wrap_recur_cond_a_a_a_laa_lopa_laaq(sc);           continue;
 	case OP_RECUR_AND_A_OR_A_LAA_LAA:       wrap_recur(sc, op_recur_and_a_or_a_laa_laa);       continue;
+	case OP_RECUR_IF_A_A_IF_A_A_opLAA_LAAq: wrap_recur(sc, op_recur_if_a_a_if_a_a_oplaa_laaq); continue;
 
 
 	case OP_SAFE_CLOSURE_STAR_A: if (!closure_star_is_fine(sc, sc->code, FINE_SAFE_CLOSURE_STAR, 1)) {if (op_unknown_a(sc)) goto EVAL; continue;}
@@ -96203,7 +96173,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->iterator_is_at_end_symbol =    defun("iterator-at-end?",  iterator_is_at_end,	1, 0, false);
 
   sc->is_provided_symbol =           defun("provided?",	        is_provided,		1, 0, false);
-  sc->provide_symbol =               unsafe_defun("provide",	provide,		1, 0, false); /* can add *features* to curlet */
+  sc->provide_symbol =               semisafe_defun("provide",	provide,		1, 0, false); /* can add *features* to curlet */
   set_func_is_definer(sc->provide_symbol);
   sc->is_defined_symbol =            defun("defined?",		is_defined,		1, 2, false);
 
@@ -96271,7 +96241,7 @@ static void init_rootlet(s7_scheme *sc)
    *   can step on each other.
    */
 
-  sc->call_with_input_string_symbol = semisafe_defun("call-with-input-string", call_with_input_string, 2, 0, false); /* unsafe if func=read */
+  sc->call_with_input_string_symbol = semisafe_defun("call-with-input-string", call_with_input_string, 2, 0, false); /* body unsafe if func=read */
   sc->call_with_input_file_symbol =   semisafe_defun("call-with-input-file",   call_with_input_file,   2, 0, false);
   sc->with_input_from_string_symbol = semisafe_defun("with-input-from-string", with_input_from_string, 2, 0, false);
   sc->with_input_from_file_symbol =   semisafe_defun("with-input-from-file",   with_input_from_file,   2, 0, false);
@@ -96537,7 +96507,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->autoload_symbol =              defun("autoload",	        autoload,		2, 0, false);
   sc->eval_symbol =                  unsafe_defun("eval",	eval,			1, 1, false);
   set_func_is_definer(sc->eval_symbol);
-  sc->eval_string_symbol =           unsafe_defun("eval-string", eval_string,		1, 1, false);
+  sc->eval_string_symbol =           semisafe_defun("eval-string", eval_string,		1, 1, false);
   set_func_is_definer(sc->eval_string_symbol);
   sc->apply_symbol =                 unsafe_defun("apply",	apply,			1, 0, true);
   {
@@ -96557,7 +96527,6 @@ static void init_rootlet(s7_scheme *sc)
   sc->catch_symbol =                 semisafe_defun("catch",	catch,			3, 0, false);
   sc->throw_symbol =                 unsafe_defun("throw",	throw,			1, 0, true);
   sc->error_symbol =                 unsafe_defun("error",	error,			0, 0, true);
-  /* it's faster to leave error/throw unsafe than to set needs_copied_args and use s7_define_safe_function because copy_proper_list overwhelms any other savings */
   sc->stacktrace_symbol =            defun("stacktrace",	stacktrace,		0, 5, false);
 
   /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); /* values_symbol set above for signatures */
@@ -97244,7 +97213,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 925) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 926) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97640,22 +97609,22 @@ int main(int argc, char **argv)
  * tref        736          691    687    687
  * tshoot     1663          883    872    872
  * index      1074         1026   1016   1014
- * tmock      7697         1177   1165   1165
+ * tmock      7697         1177   1165   1166
  * s7test     4546         1873   1831   1817
- * lt         2115         2123   2110   2111
+ * lt         2115         2123   2110   2112
  * tcopy      2290         2256   2230   2219
- * tmat       2412         2285   2258   2268
- * tform      3251         2281   2273   2275
+ * tmat       2412         2285   2258   2271
+ * tform      3251         2281   2273   2266
  * tread      2610         2440   2421   2412
  * tvect      2669         2456   2413   2413
  * trclo      4309         2715   2561   2560
  * fbench     2983         2688   2583   2577
  * tb         3474         2735   2681   2678
  * titer      2860         2865   2842   2842
- * tmap       3785         2886   2857   2845
+ * tmap       3785         2886   2857   2844
  * tsort      3821         3105   3104   3097
  * tset       3093         3253   3104   3202
- * dup        3589         3334   3332   3221  3202
+ * dup        3589         3334   3332   3203
  * tmac       3343         3317   3277   3247
  * tio        3843         3816   3752   3738
  * teq        4054         4068   4045   4038
@@ -97667,7 +97636,7 @@ int main(int argc, char **argv)
  * trec       7763         5976   5970   5970
  * tnum       59.5         6348   6013   6000
  * tmisc      6490         7389   6210   6174
- * tgc        12.6         11.9   11.1   11.1
+ * tgc        12.6         11.9   11.1   11.0
  * tgen       12.0         11.2   11.4   11.3
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
@@ -97679,12 +97648,10 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * hash-code eqfunc extended
- * setter optimization t412; perhaps call body_is_safe, then specialize in op_set1
  * if local sig (func) should s7 use it for arg type checks? or maybe provide a function that does that, s7_enforce_signature(sc, caller?, args, sig)?
  * t718
  * why doesn't nrepl work after the first interrupt?
  *   do_end->do_end_1->do_end -- there is no way to break out via s7_quit!
  *   maybe jump into nrepl.c (no error), at s7_load nrepl.scm
- * t416 cases
  * tsyn [syntax application], tsig [signature opts]
  */
