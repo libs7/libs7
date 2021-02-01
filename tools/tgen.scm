@@ -88,24 +88,24 @@
 ;(define vequal equivalent?)
 
 (define-constant (checkout str V v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11 v12)
-  (if (not (and (vequal V v1)
-		(vequal v1 v2)
-		(vequal v1 v3)
-		(vequal v1 v4)))
-      (format *stderr* "~S:~%    no do:  ~A~%    fv-set: ~A~%    outa->v:~A~%    outa:   ~A~%    list:   ~A~%" str V v1 v2 v3 v4))
-  (if (not (vequal v5 v6)) (format *stderr* "dox ~S:~%   fv-set: ~A~%    outa->v:~A~%" str v5 v6))
-  (if (not (vequal v7 v8)) (format *stderr* "let ~S:~%    ~A~%    ~A~%" str v7 v8))
-  (if (not (vequal v9 v10)) (format *stderr* "env let ~S:~%    ~A~%    ~A~%" str v9 v10))
-  (if (not (vequal v11 v12)) (format *stderr* "letx ~S:~%    ~A~%    ~A~%" str v11 v12)))
+  (unless (and (vequal V v1)
+	       (vequal v1 v2)
+	       (vequal v1 v3)
+	       (vequal v1 v4))
+    (format *stderr* "~S:~%    no do:  ~A~%    fv-set: ~A~%    outa->v:~A~%    outa:   ~A~%    list:   ~A~%" str V v1 v2 v3 v4))
+  (unless (vequal v5 v6) (format *stderr* "dox ~S:~%   fv-set: ~A~%    outa->v:~A~%" str v5 v6))
+  (unless (vequal v7 v8) (format *stderr* "let ~S:~%    ~A~%    ~A~%" str v7 v8))
+  (unless (vequal v9 v10) (format *stderr* "env let ~S:~%    ~A~%    ~A~%" str v9 v10))
+  (unless (vequal v11 v12) (format *stderr* "letx ~S:~%    ~A~%    ~A~%" str v11 v12)))
 
 (define-constant (checkout-1 str V v1 v2 v3 v4 v5 v6 v11 v12)
-  (if (not (and (vequal V v1)
-		(vequal v1 v2)
-		(vequal v1 v3)
-		(vequal v1 v4)))
-      (format *stderr* "~S:~%    no do:  ~A~%    fv-set: ~A~%    outa->v:~A~%    outa:   ~A~%    list:   ~A~%" str V v1 v2 v3 v4))
-  (if (not (vequal v5 v6)) (format *stderr* "dox ~S:~%   fv-set: ~A~%    outa->v:~A~%" str v5 v6))
-  (if (not (vequal v11 v12)) (format *stderr* "letx ~S:~%    ~A~%    ~A~%" str v11 v12)))
+  (unless (and (vequal V v1)
+	       (vequal v1 v2)
+	       (vequal v1 v3)
+	       (vequal v1 v4))
+    (format *stderr* "~S:~%    no do:  ~A~%    fv-set: ~A~%    outa->v:~A~%    outa:   ~A~%    list:   ~A~%" str V v1 v2 v3 v4))
+  (unless (vequal v5 v6) (format *stderr* "dox ~S:~%   fv-set: ~A~%    outa->v:~A~%" str v5 v6))
+  (unless (vequal v11 v12) (format *stderr* "letx ~S:~%    ~A~%    ~A~%" str v11 v12)))
 
 (define-constant F (make-env (float-vector 0.0 .1 1.0 1.0) :length 100))
 (define-constant K (float-vector 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0))
@@ -279,120 +279,113 @@
     (the-body)))
 
 (define (test-gen gen make-gen nargs)
-  (define args1 (list 1.5 (list gen 'p) '(env a) 'x 'i (list gen 'o) '(- 1.0 x) (list gen '(vector-ref oscs k))))
-  (define args2 (list 1.5 (list gen 'q) '(env b) 'y 'i '(ina i K)))
-  (define args3 (list 1.5 (list gen 's) '(env c) 'z 'i '(cos x)))
-  (define args4 (list 1.5 (list gen 't) '(env d) 'x 'i))
+  (let ((args1 (list 1.5 (list gen 'p) '(env a) 'x 'i (list gen 'o) '(- 1.0 x) (list gen '(vector-ref oscs k))))
+	(args2 (list 1.5 (list gen 'q) '(env b) 'y 'i '(ina i K))))
 
-  (if (= nargs 1)
-      (begin
-	(for-each 
-	 (lambda (a)
-	   (try1 a gen make-gen))
-	 args1)
-
-	(for-each 
-	 (lambda (a) 
-	   (for-each 
-	    (lambda (b) 
-	      (try1 `(+ ,a ,b) gen make-gen)
-	      (try1 `(- ,a ,b) gen make-gen)
-	      (try1 `(* ,a ,b) gen make-gen)
-	      (try1 `(cos (+ ,a ,b)) gen make-gen)
-	      (try1 `(sin (* ,a ,b)) gen make-gen)
-	      (try1 `(abs (* ,a ,b)) gen make-gen)
-	      (try1 `(* ,a (abs ,b)) gen make-gen))
-	    args2))
-	 args1))
-
-      (begin
-       (for-each 
-	(lambda (a)
-	  (try2 a gen make-gen)
-	  (try2 `(,gen o ,a) gen make-gen)
-	  (try2 `(abs (,gen o ,a)) gen make-gen))
-	args1)
-       
-       (for-each 
-	(lambda (a) 
+    (if (= nargs 1)
+	(begin
 	  (for-each 
-	   (lambda (b) 
-	     (try2 `(+ ,a ,b) gen make-gen)
-	     (try2 `(- ,a ,b) gen make-gen)
-	     (try2 `(* ,a ,b) gen make-gen)
-	     (try2 `(cos (+ ,a ,b)) gen make-gen)
-	     (try2 `(sin (* ,a ,b)) gen make-gen)
-	     (try2 `(abs (* ,a ,b)) gen make-gen)
-	     (try2 `(* ,a (abs ,b)) gen make-gen)
-	     (try2 `(,gen o (+ ,a ,b)) gen make-gen)
-	     (try2 `(,gen o (* ,a ,b)) gen make-gen)
-	     (try2 `(+ ,a (,gen o ,b)) gen make-gen)
-	     (try2 `(* ,a (,gen o ,b)) gen make-gen)
-	     (try2 `(+ (,gen o ,a) ,b) gen make-gen)
-	     (try2 `(* (,gen o ,a) ,b) gen make-gen)
-	     (try2 `(* (abs (,gen o ,a)) ,b) gen make-gen))
-	   args2))
-	args1)))
-  )
-
+	   (lambda (a)
+	     (try1 a gen make-gen))
+	   args1)
+	  
+	  (for-each 
+	   (lambda (a) 
+	     (for-each 
+	      (lambda (b) 
+		(try1 (list '+ a b) gen make-gen)
+		(try1 (list '- a b) gen make-gen)
+		(try1 (list '* a b) gen make-gen)
+		(try1 (list 'cos (list '+ a b)) gen make-gen)
+		(try1 (list 'sin (list '* a b)) gen make-gen)
+		(try1 (list 'abs (list '* a b)) gen make-gen)
+		(try1 (list '* a (list 'abs b)) gen make-gen))
+	      args2))
+	   args1))
+	
+	(begin
+	  (for-each 
+	   (lambda (a)
+	     (try2 a gen make-gen)
+	     (try2 (list gen 'o a) gen make-gen)
+	     (try2 (list 'abs (list gen 'o a)) gen make-gen))
+	   args1)
+	  
+	  (for-each 
+	   (lambda (a) 
+	     (for-each 
+	      (lambda (b) 
+		(try2 (list '+ a b) gen make-gen)
+		(try2 (list '- a b) gen make-gen)
+		(try2 (list '* a b) gen make-gen)
+		(try2 (list 'cos (list '+ a b)) gen make-gen)
+		(try2 (list 'sin (list '* a b)) gen make-gen)
+		(try2 (list 'abs (list '* a b)) gen make-gen)
+		(try2 (list '* a (list 'abs b)) gen make-gen)
+		(try2 (list gen 'o (list '+ a b)) gen make-gen)
+		(try2 (list gen 'o (list '* a b)) gen make-gen)
+		(try2 (list '+ a (list gen 'o b)) gen make-gen)
+		(try2 (list '* a (list gen 'o b)) gen make-gen)
+		(try2 (list '+ (list gen 'o a) b) gen make-gen)
+		(try2 (list '* (list gen 'o a) b) gen make-gen)
+		(try2 (list '* (list 'abs (list gen 'o a)) b) gen make-gen))
+	      args2))
+	   args1)))
+    ))
+  
 (for-each 
  (lambda (gen make-gen nargs)
-   ;(gc)
+					;(gc)
    (set! start-run (get-internal-real-time))
    (test-gen gen make-gen nargs)
    (format *stderr* "~A: ~20T~,3F~%" gen (* 1.0 (/ (- (get-internal-real-time) start-run) internal-time-units-per-second))))
-; '(adjustable-oscil)
-; '(2)
-
+ 
  '(;rand rand-interp ; the y-as-fm case will be different (ignore printout)
    r2k!cos filter fir-filter iir-filter oscil
-   one-pole-all-pass env pulsed-env 
-   formant firmant 
-   polywave polyshape ncos nsin nrxycos nrxysin rxyk!sin rxyk!cos asymmetric-fm square-wave triangle-wave pulse-train sawtooth-wave
-   one-pole one-zero two-pole two-zero
-   oscil-bank 
-   delay comb notch all-pass filtered-comb
-   moving-max moving-norm moving-average 
-   table-lookup wave-train
-   formant-bank comb-bank filtered-comb-bank all-pass-bank
-   adjustable-oscil
-   readin convolve src granulate ssb-am phase-vocoder
-   )
-
+	   one-pole-all-pass env pulsed-env 
+	   formant firmant 
+	   polywave polyshape ncos nsin nrxycos nrxysin rxyk!sin rxyk!cos asymmetric-fm square-wave triangle-wave pulse-train sawtooth-wave
+	   one-pole one-zero two-pole two-zero
+	   oscil-bank 
+	   delay comb notch all-pass filtered-comb
+	   moving-max moving-norm moving-average 
+	   table-lookup wave-train
+	   formant-bank comb-bank filtered-comb-bank all-pass-bank
+	   adjustable-oscil
+	   readin convolve src granulate ssb-am phase-vocoder
+	   )
+ 
  '(;make-rand make-rand-interp ; the y-as-fm case will be different (ignore printout)
    make-r2k!cos make-filter-1 make-fir-filter-1 make-iir-filter-1 make-oscil
-   make-one-pole-all-pass-1 make-env-1 make-pulsed-env-1 
-   make-formant-1 make-firmant-1 
-   make-polywave make-polyshape make-ncos make-nsin make-nrxycos make-nrxysin make-rxyk!sin make-rxyk!cos make-asymmetric-fm make-square-wave make-triangle-wave make-pulse-train make-sawtooth-wave
-   make-one-pole-1 make-one-zero-1 make-two-pole-1 make-two-zero-1
-   make-oscil-bank-1 
-   make-delay-1 make-comb-1 make-notch-1 make-all-pass-1 make-filtered-comb-1
-   make-moving-max-1 make-moving-norm-1 make-moving-average-1 
-   make-table-lookup-1 make-wave-train-1
-   make-formant-bank-1 make-comb-bank-1 make-filtered-comb-bank-1 make-all-pass-bank-1
-   make-adjustable-oscil
-   make-readin-1 make-convolve-1 make-src-1 make-granulate-1 make-ssb-am-1 make-phase-vocoder-1
-   )
-
+		make-one-pole-all-pass-1 make-env-1 make-pulsed-env-1 
+		make-formant-1 make-firmant-1 
+		make-polywave make-polyshape make-ncos make-nsin make-nrxycos make-nrxysin make-rxyk!sin make-rxyk!cos 
+		make-asymmetric-fm make-square-wave make-triangle-wave make-pulse-train make-sawtooth-wave
+		make-one-pole-1 make-one-zero-1 make-two-pole-1 make-two-zero-1
+		make-oscil-bank-1 
+		make-delay-1 make-comb-1 make-notch-1 make-all-pass-1 make-filtered-comb-1
+		make-moving-max-1 make-moving-norm-1 make-moving-average-1 
+		make-table-lookup-1 make-wave-train-1
+		make-formant-bank-1 make-comb-bank-1 make-filtered-comb-bank-1 make-all-pass-bank-1
+		make-adjustable-oscil
+		make-readin-1 make-convolve-1 make-src-1 make-granulate-1 make-ssb-am-1 make-phase-vocoder-1
+		)
+ 
  '(;2 2 
    2 2 2 2 2 
-   2 1 1 
-   2 2 
-   2 2 2 2 2 2 2 2 2 2 2 2 2 
-   2 2 2 2 
-   1 
-   2 2 2 2 2 
-   2 2 2 
-   2 2 
-   2 2 2 2 
-   2 
-   1 1 2 1 2 1
-   )
-
- )
-
-;(gc)
-
+     2 1 1 
+     2 2 
+     2 2 2 2 2 2 2 2 2 2 2 2 2 
+     2 2 2 2 
+     1 
+     2 2 2 2 2 
+     2 2 2 
+     2 2 
+     2 2 2 2 
+     2 
+     1 1 2 1 2 1
+     ))
+  
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (#_exit)

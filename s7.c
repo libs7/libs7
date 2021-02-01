@@ -2235,7 +2235,7 @@ void s7_show_history(s7_scheme *sc);
 #define clear_collected_and_shared(p)  clear_type_bit(p, T_COLLECTED | T_SHARED) /* this can clear free cells = calloc */
 
 #define T_SAFE_PROCEDURE               (1 << (TYPE_BITS + 13))
-#define is_safe_procedure(p)           has_type_bit(T_Pos(p), T_SAFE_PROCEDURE)
+#define is_safe_procedure(p)           has_type_bit(T_Pos(p), T_SAFE_PROCEDURE) /* used in is_procedure so can't be T_App */
 #define is_safe_or_scope_safe_procedure(p) ((full_type(T_Fnc(p)) & (T_SCOPE_SAFE | T_SAFE_PROCEDURE)) != 0)
 /* applicable objects that do not return or modify their arg list directly (no :rest arg in particular),
  *    and that can't call themselves either directly or via s7_call, and that don't mess with the stack.
@@ -2254,7 +2254,7 @@ void s7_show_history(s7_scheme *sc);
 #define set_unsafely_optimized(p)      full_type(T_Pair(p)) = (full_type(p) | T_UNSAFE | T_OPTIMIZED)
 #define is_unsafe(p)                   has_type_bit(T_Pair(p), T_UNSAFE)
 #define clear_unsafe(p)                clear_type_bit(T_Pair(p), T_UNSAFE)
-#define is_safely_optimized(p)         ((full_type(T_Pos(p)) & (T_OPTIMIZED | T_UNSAFE)) == T_OPTIMIZED)
+#define is_safely_optimized(p)         ((full_type(T_Pair(p)) & (T_OPTIMIZED | T_UNSAFE)) == T_OPTIMIZED) /* was T_Pos 30-Jan-21 */
 /* optimizer flag saying "this expression is not completely self-contained.  It might involve the stack, etc" */
 
 #define T_CLEAN_SYMBOL                 T_UNSAFE
@@ -2381,10 +2381,7 @@ void s7_show_history(s7_scheme *sc);
 #define is_weak_hash_table(p)          has_type_bit(T_Hsh(p), T_WEAK_HASH)
 
 #define T_COPY_ARGS                    (1 << (TYPE_BITS + 20))
-
-/* #define needs_copied_args(p)        ({if (is_syntactic(p)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(p)); has_type_bit(T_Pos(p), T_COPY_ARGS);}) */
-#define needs_copied_args(p)           has_type_bit(T_Pos(p), T_COPY_ARGS)
-
+#define needs_copied_args(p)           has_type_bit(T_Pos(p), T_COPY_ARGS) /* set via explicit T_COPY_ARGS on macros etc */
 #define set_needs_copied_args(p)       set_type_bit(T_Pair(p), T_COPY_ARGS)
 #define clear_needs_copied_args(p)     clear_type_bit(T_Pair(p), T_COPY_ARGS)
 /* this marks something that might mess with its argument list, it should not be in the second byte */
@@ -2423,7 +2420,7 @@ void s7_show_history(s7_scheme *sc);
 
 #define T_HAS_METHODS                  (1 << (TYPE_BITS + 22))
 #define has_methods(p)                 has_type_bit(T_Pos(p), T_HAS_METHODS)
-#define has_active_methods(sc, p)      ((has_type_bit(T_Pos(p), T_HAS_METHODS)) && (sc->has_openlets))
+#define has_active_methods(sc, p)      ((has_type_bit(T_Pos(p), T_HAS_METHODS)) && (sc->has_openlets)) /* g_char #<eof> */
 #define set_has_methods(p)             set_type_bit(T_Met(p), T_HAS_METHODS)
 #define clear_has_methods(p)           clear_type_bit(T_Met(p), T_HAS_METHODS)
 /* this marks an environment or closure that is "open" for generic functions etc, don't reuse this bit */
@@ -2555,7 +2552,7 @@ void s7_show_history(s7_scheme *sc);
 
 #define T_CYCLIC_SET                   (1LL << (TYPE_BITS + BIT_ROOM + 30))
 #define T_SHORT_CYCLIC_SET             (1 << 6)
-#define is_cyclic_set(p)               has_type1_bit(T_Pos(p), T_SHORT_CYCLIC_SET)
+#define is_cyclic_set(p)               has_type1_bit(T_Seq(p), T_SHORT_CYCLIC_SET) /* was T_Pos 30-Jan-21 */
 #define set_cyclic_set(p)              set_type1_bit(T_Seq(p), T_SHORT_CYCLIC_SET)
 #define clear_cyclic_bits(p)           clear_type_bit(p, T_COLLECTED | T_SHARED | T_CYCLIC | T_CYCLIC_SET)
 
@@ -2715,10 +2712,10 @@ void s7_show_history(s7_scheme *sc);
 #define OPT1_HASH                      (1 << 12)
 #define OPT1_MASK                      (OPT1_FAST | OPT1_CFUNC | OPT1_CLAUSE | OPT1_LAMBDA | OPT1_SYM | OPT1_PAIR | OPT1_CON | OPT1_GOTO | OPT1_ANY | OPT1_HASH)
 
-#define opt1_is_set(p)                 (((p)->debugger_bits & OPT1_SET) != 0)
-#define set_opt1_is_set(p)             (p)->debugger_bits |= OPT1_SET
-#define opt1_role_matches(p, Role)     (((p)->debugger_bits & OPT1_MASK) == Role)
-#define set_opt1_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~OPT1_MASK))
+#define opt1_is_set(p)                 (((T_Pair(p))->debugger_bits & OPT1_SET) != 0)
+#define set_opt1_is_set(p)             (T_Pair(p))->debugger_bits |= OPT1_SET
+#define opt1_role_matches(p, Role)     (((T_Pair(p))->debugger_bits & OPT1_MASK) == Role)
+#define set_opt1_role(p, Role)         (T_Pair(p))->debugger_bits = (Role | ((p)->debugger_bits & ~OPT1_MASK))
 #define opt1(p, Role)                  opt1_1(sc, T_Pair(p), Role, __func__, __LINE__)
 #define set_opt1(p, x, Role)           set_opt1_1(T_Pair(p), x, Role)
 
@@ -2735,10 +2732,10 @@ void s7_show_history(s7_scheme *sc);
 #define OPT2_INT                       (1LL << 33)
 #define OPT2_MASK                      (OPT2_KEY | OPT2_SLOW | OPT2_SYM | OPT2_PAIR | OPT2_CON | OPT2_FX | OPT2_FN | OPT2_LAMBDA | OPT2_DIRECT | OPT2_NAME | OPT2_INT)
 
-#define opt2_is_set(p)                 (((p)->debugger_bits & OPT2_SET) != 0)
-#define set_opt2_is_set(p)             (p)->debugger_bits |= OPT2_SET
-#define opt2_role_matches(p, Role)     (((p)->debugger_bits & OPT2_MASK) == Role)
-#define set_opt2_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~OPT2_MASK))
+#define opt2_is_set(p)                 (((T_Pair(p))->debugger_bits & OPT2_SET) != 0)
+#define set_opt2_is_set(p)             (T_Pair(p))->debugger_bits |= OPT2_SET
+#define opt2_role_matches(p, Role)     (((T_Pair(p))->debugger_bits & OPT2_MASK) == Role)
+#define set_opt2_role(p, Role)         (T_Pair(p))->debugger_bits = (Role | ((p)->debugger_bits & ~OPT2_MASK))
 #define opt2(p, Role)                  opt2_1(sc, T_Pair(p), Role, __func__, __LINE__)
 #define set_opt2(p, x, Role)           set_opt2_1(sc, T_Pair(p), (s7_pointer)(x), Role, __func__, __LINE__)
 
@@ -2755,10 +2752,10 @@ void s7_show_history(s7_scheme *sc);
 #define OPT3_INT                       (1LL << 34)
 #define OPT3_MASK                      (OPT3_ARGLEN | OPT3_SYM | OPT3_AND | OPT3_ANY | OPT3_LET | OPT3_BYTE | OPT3_LOCATION | OPT3_LEN | OPT3_DIRECT | OPT3_CON | OPT3_INT)
 
-#define opt3_is_set(p)                 (((p)->debugger_bits & OPT3_SET) != 0)
-#define set_opt3_is_set(p)             (p)->debugger_bits |= OPT3_SET
-#define opt3_role_matches(p, Role)     (((p)->debugger_bits & OPT3_MASK) == Role)
-#define set_opt3_role(p, Role)         (p)->debugger_bits = (Role | ((p)->debugger_bits & ~OPT3_MASK))
+#define opt3_is_set(p)                 (((T_Pair(p))->debugger_bits & OPT3_SET) != 0)
+#define set_opt3_is_set(p)             (T_Pair(p))->debugger_bits |= OPT3_SET
+#define opt3_role_matches(p, Role)     (((T_Pair(p))->debugger_bits & OPT3_MASK) == Role)
+#define set_opt3_role(p, Role)         (T_Pair(p))->debugger_bits = (Role | ((p)->debugger_bits & ~OPT3_MASK))
 #define opt3(p, Role)                  opt3_1(sc, T_Pair(p), Role, __func__, __LINE__)
 #define set_opt3(p, x, Role)           set_opt3_1(T_Pair(p), x, Role)
 
@@ -10207,7 +10204,7 @@ s7_pointer s7_symbol_value(s7_scheme *sc, s7_pointer sym)
   return((is_slot(x)) ? slot_value(x) : sc->undefined);
 }
 
-s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let) /* TODO: can this use the funcs above? */
+s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 {
   /* restrict the search to local let outward */
   if ((let == sc->rootlet) || (is_global(sym)))
@@ -31904,6 +31901,8 @@ static void op_with_io_1_method(s7_scheme *sc)
     {
       s7_pointer method;
       method = car(sc->code);
+      if (is_c_function(method))            /* #_call-with-input-string et al */
+	method = make_symbol(sc, c_function_name(method));
       push_stack(sc, OP_GC_PROTECT, lt, sc->code);
       sc->code = caddr(sc->code);
       op_lambda(sc);                        /* -> sc->value -- don't unstack */
@@ -31911,7 +31910,7 @@ static void op_with_io_1_method(s7_scheme *sc)
     }
   else 
     {
-      if (is_symbol(car(sc->code)))         /* might be e.g. #_call-with-input-string */
+      if (is_symbol(car(sc->code)))         /* might be e.g. #_call-with-input-string so use c_function_name */
 	wrong_type_argument(sc, car(sc->code), 1, lt, T_STRING);
       else wrong_type_arg_error_prepackaged(sc, wrap_string(sc, c_function_name(car(sc->code)), strlen(c_function_name(car(sc->code)))),
 					    int_one, lt, sc->unused, sc->prepackaged_type_names[T_STRING]);
@@ -40160,11 +40159,6 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 		  sc->y = sc->nil;
 		  return(wrong_type_argument_with_type(sc, sc->append_symbol, position_of(y, args), p, a_proper_list_string));
 		}
-	      /* is this error correct?
-	       *     (append '(3) '(1 . 2)) -> '(3 1 . 2) ; (old) guile also returns this
-	       * but (append '(1 . 2) '(3)) -> this error
-	       */
-
 	      if (is_null(tp))
 		{
 		  tp = list_1(sc, car(p));
@@ -41094,7 +41088,7 @@ static s7_pointer g_vector(s7_scheme *sc, s7_pointer args)
   s7_int len;
   s7_pointer vec;
 
-  len = proper_list_length(args); /* was s7_list_length but don't we ensure that arglists are proper? */
+  len = proper_list_length(args);
   vec = make_simple_vector(sc, len);
   if (len > 0)
     {
@@ -47986,7 +47980,7 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
 
     case T_C_ANY_ARGS_FUNCTION:
     case T_C_FUNCTION_STAR:
-      return(s7_cons(sc, int_zero, make_integer(sc, c_function_all_args(x)))); /* should this be *2? */
+      return(s7_cons(sc, int_zero, make_integer(sc, c_function_all_args(x))));
 
     case T_MACRO:
     case T_BACRO:
@@ -89906,7 +89900,6 @@ static void op_safe_c_function_star_aa(s7_scheme *sc)
 static bool op_safe_c_ps(s7_scheme *sc)
 {
   s7_pointer args;
-  /* fprintf(stderr, "%s: %s\n", op_names[optimize_op(cadr(sc->code))], display(sc->code)); */
   args = cdr(sc->code);
   if ((has_gx(args)) && (symbol_ctr(caar(args)) == 1))
     {
@@ -92993,7 +92986,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      goto TOP_NO_POP;
 	    }
 	  sc->code = cdr(sc->code);
-	  /* sc->value is the func
+	  /* sc->value is the func (but can be anything if the code is messed up: (#\a 3))
 	   *   we don't have to delay lookup of the func because arg evaluation order is not specified, so
 	   *     (let ((func +)) (func (let () (set! func -) 3) 2))
 	   *   can return 5.
@@ -93807,9 +93800,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  op_get_output_string(sc);
 	  /* fall through */
 
-	case OP_UNWIND_OUTPUT: op_unwind_output(sc); continue;
-	case OP_UNWIND_INPUT:  op_unwind_input(sc); continue;
-	case OP_DYNAMIC_UNWIND: dynamic_unwind(sc, sc->code, sc->args); continue;
+	case OP_UNWIND_OUTPUT:          op_unwind_output(sc); continue;
+	case OP_UNWIND_INPUT:           op_unwind_input(sc); continue;
+	case OP_DYNAMIC_UNWIND:         dynamic_unwind(sc, sc->code, sc->args); continue;
 	case OP_DYNAMIC_UNWIND_PROFILE: g_profile_out(sc, set_plist_1(sc, sc->args)); continue;
 	case OP_PROFILE_IN:	        g_profile_in(sc, set_plist_1(sc, sc->curlet)); continue;
 
@@ -94315,7 +94308,6 @@ static s7_pointer memory_usage(s7_scheme *sc)
 		list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
 		       cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
     sc->w = sc->nil;
-
     make_slot_1(sc, mu_let, make_symbol(sc, "approximate-s7-size"),
 		kmg(sc, ((sc->permanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
 		    ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
@@ -94334,7 +94326,7 @@ static s7_pointer sl_c_types(s7_scheme *sc)
   sc->w = sc->nil;
   for (i = 0; i < sc->num_c_object_types; i++)                       /*   c-object type (tag) is i */
     sc->w = cons(sc, sc->c_object_types[i]->scheme_name, sc->w);
-  res = proper_list_reverse_in_place(sc, sc->w);                            /*   so car(types) has tag 0 */
+  res = proper_list_reverse_in_place(sc, sc->w);                     /*   so car(types) has tag 0 */
   sc->w = sc->nil;
   return(res);
 }
@@ -97618,7 +97610,7 @@ int main(int argc, char **argv)
  * s7test     4546         1873   1831   1817
  * lt         2115         2123   2110   2112
  * tcopy      2290         2256   2230   2219
- * tmat       2412         2285   2258   2271
+ * tmat       2412         2285   2258   2256
  * tform      3251         2281   2273   2266
  * tread      2610         2440   2421   2412
  * tvect      2669         2456   2413   2413
@@ -97637,9 +97629,9 @@ int main(int argc, char **argv)
  * tclo       5051         4787   4735   4668
  * tlet       5782         4925   4908   4678
  * tcase      4850         4960   4793   4778
- * tstr       6995         5281   4863   4815
+ * tstr       6995         5281   4863   4812
  * trec       7763         5976   5970   5970
- * tnum       59.5         6348   6013   6000
+ * tnum       59.5         6348   6013   6005
  * tmisc      6490         7389   6210   6174
  * tgc        12.6         11.9   11.1   11.0
  * tgen       12.0         11.2   11.4   11.3
@@ -97656,5 +97648,4 @@ int main(int argc, char **argv)
  * why doesn't nrepl work after the first interrupt?
  *   do_end->do_end_1->do_end -- there is no way to break out via s7_quit!
  * tsyn [syntax application], tsig [signature opts]
- * perhaps safety>0 turn lookup->lookup_checked
  */
