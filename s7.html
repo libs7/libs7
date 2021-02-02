@@ -2858,7 +2858,8 @@ Or better,
         (b (+ c 2)))
   (+ a b c)))
 </pre>
-
+<p>It is faster to use <code>(biglet 'a-function)</code> than <code>(with-let biglet a-function)</code>.
+</p>
 
 <p><b>let-temporarily</b> (now built-into s7) is somewhat similar to fluid-let in other Schemes.
 Its syntax looks like

@@ -3258,7 +3258,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define current_input_port(Sc)         Sc->input_port
 #define set_current_input_port(Sc, P)  Sc->input_port = P
 #define current_output_port(Sc)        Sc->output_port
-#define set_current_output_port(Sc, P)  Sc->output_port = P
+#define set_current_output_port(Sc, P) Sc->output_port = P
 
 #define port_read_character(p)         port_port(p)->pf->read_character
 #define port_read_line(p)              port_port(p)->pf->read_line
@@ -4145,7 +4145,6 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IF_UNCHECKED, OP_AND_P, OP_AND_P1, OP_AND_AP, OP_AND_PAIR_P,
       OP_AND_SAFE_P1, OP_AND_SAFE_P2, OP_AND_SAFE_P3, OP_AND_SAFE_P_REST, OP_AND_2, OP_AND_3, OP_AND_N, OP_AND_S_2,
       OP_OR_P, OP_OR_P1, OP_OR_AP, OP_OR_2, OP_OR_3, OP_OR_N, OP_OR_S_2, OP_OR_S_TYPE_2,
-      OP_COND_FEED, OP_COND_FEED_1,
       OP_WHEN_S, OP_WHEN_A, OP_WHEN_P, OP_WHEN_AND_AP, OP_WHEN_AND_2, OP_WHEN_AND_3, OP_UNLESS_S, OP_UNLESS_A, OP_UNLESS_P,
 
       OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A,
@@ -4163,6 +4162,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IF_PP, OP_IF_PPP, OP_IF_PR, OP_IF_PRR, OP_WHEN_PP, OP_UNLESS_PP,
 
       OP_COND_FX_FX, OP_COND_FX_FP, OP_COND_FX_FP_1, OP_COND_FX_2E, OP_COND_FX_3E, OP_COND_FX_FP_O,
+      OP_COND_FEED, OP_COND_FEED_1,
+
       OP_SIMPLE_DO, OP_SIMPLE_DO_STEP, OP_SAFE_DOTIMES, OP_SAFE_DOTIMES_STEP, OP_SAFE_DOTIMES_STEP_O,
       OP_SAFE_DO, OP_SAFE_DO_STEP, OP_DOX, OP_DOX_STEP, OP_DOX_STEP_O, OP_DOX_NO_BODY, OP_DOX_PENDING_NO_BODY, OP_DOX_INIT,
       OP_DOTIMES_P, OP_DOTIMES_STEP_O,
@@ -4376,7 +4377,6 @@ static const char* op_names[NUM_OPS] =
       "if_unchecked", "and_p", "and_p1", "and_ap", "and_pair_p",
       "and_safe_p1", "op_and_safe_p2", "and_safe_p3", "and_safe_p_rest", "and_2", "and_3", "and_n", "and_s_2",
       "or_p", "or_p1", "or_ap", "or_2", "or_3", "or_n", "or_s_2", "or_s_type_2",
-      "cond_feed", "cond_feed_1",
       "when_s", "when_a", "when_p", "when_and_ap", "when_and_2", "when_and_3", "unless_s", "unless_a", "unless_p",
 
       "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a",
@@ -4394,6 +4394,8 @@ static const char* op_names[NUM_OPS] =
       "if_pp", "if_ppp", "if_pr", "if_prr", "when_pp", "unless_pp",
 
       "cond_fx_fx", "cond_fx_fp", "cond_fx_fp_1", "cond_fx_2e", "cond_fx_3e", "cond_fx_fp_o",
+      "cond_feed", "cond_feed_1",
+
       "simple_do", "simple_do_step", "safe_dotimes", "safe_dotimes_step", "safe_dotimes_step_o",
       "safe_do", "safe_do_step", "dox", "dox_step", "dox_step_o", "dox_no_body", "dox_pending_no_body", "dox_init",
       "dotimes_p", "dotimes_step_o",
@@ -6889,43 +6891,54 @@ static void mark_rootlet(s7_scheme *sc)
 
 /* arrays for permanent_objects are not needed yet: init: cells: 0, lets: 0, s7test: cells: 4, lets: 10, snd-test: cells: 14, lets: 1147 */
 
+/* mark_closure calls mark_let on closure_let(func) which marks slot values.
+ *   if we move rootlet to end, unmarked closures at that point could mark let/slot but not slot value?
+ *   or save safe-closure lets to handle all at end?  or a gc_list of safe closure lets and only mark let if not safe?
+ */
+
 static void mark_permanent_objects(s7_scheme *sc)
 {
   gc_obj_t *g;
   for (g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
     gc_mark(g->p);
+  /* permanent_objects also has lets (removed from heap) -- should they be handled like permanent_lets?
+   *    if unmarked should either be removed from the list and perhaps placed on a free list?
+   *    if outlet is free can the let potentially be in use?
+   *    there are many more permanent_lets(slots) than permanent objects
+   */
+#if 0
   for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt))
     if (is_let(g->p))
       gc_mark(let_outlet(g->p));
+#endif
 }
+/* do we mark funclet slot values from the function as root?  Maybe treat them like permanent_lets here? */
 
 static void unmark_permanent_objects(s7_scheme *sc)
 {
   gc_obj_t *g;
   for (g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
     clear_mark(g->p);
-  for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt))
+  for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt)) /* there are lets and slots in this list */
     {
-      if (!is_marked(g->p)) /* this doesn't happen much in current code, so I don't think a bit to avoid the reclear is needed */
+#if 0
+      if (!is_marked(g->p)) /* this doesn't happen much in current code */
 	{
 	  if (is_slot(g->p)) slot_set_value(g->p, sc->F);
+	  /* isn't this purely cosmetic? -- yes */
+#if 0
+	  /* aren't all these slots handled above? */
 	  if (is_let(g->p))
 	    {
 	      s7_pointer slot;
 	      for (slot = let_slots(g->p); tis_slot(slot); slot = next_slot(slot))
 		slot_set_value(slot, sc->F);
-	    }}
+	    }
+#endif
+	}
+#endif
       clear_mark(g->p);
     }
-  /* this is the last thing in gc, so: */
-#if S7_DEBUGGING
-  for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt))
-    if (unchecked_type(g->p) == T_FREE)
-      fprintf(stderr, "permanent let %p is free\n", g->p);
-    else
-      if ((is_let(g->p)) && (unchecked_type(g->p->object.envr.nxt) == T_FREE))
-	fprintf(stderr, "permanent outlet %p is free\n", g->p->object.envr.nxt);
-#endif
   /* used to clear_mark the history lists here */
 }
 
@@ -9248,7 +9261,6 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 
   s7_pointer e, syms;
   s7_int the_un_id;
-  the_un_id = ++sc->let_number;
 
   e = car(args);
   if (is_null(e))
@@ -9265,6 +9277,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
    *   let-ref and others will use the old slot!  What's the un-id?  Perhaps the next one?
    *   (let ((b 1)) (let ((b 2)) (cutlet (curlet) 'b)) b)
    */
+  the_un_id = ++sc->let_number;
 
   for (syms = cdr(args); is_pair(syms); syms = cdr(syms))
     {
@@ -10534,7 +10547,9 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool unnamed)
 	  if ((op == OP_DEFINE_EXPANSION_STAR) && (!is_let(sc->curlet)))
 	    typ = T_MACRO_STAR | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
 	  else typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-	}}
+	}
+      break;
+    }
 
   new_cell_no_check(sc, mac, typ);
   sc->temp6 = mac;
@@ -73076,7 +73091,25 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       set_opt3_sym(expr, sym);
       return(OPT_T);
     }
-  /* unknown_* is set later */
+
+  if (is_let(func))
+    {
+      if ((is_pair(arg1)) && (car(arg1) == sc->quote_symbol))
+	{
+	  set_opt3_con(expr, cadr(arg1));
+	  set_unsafe_optimize_op(expr, OP_IMPLICIT_LET_REF_C);
+	  return(OPT_T);
+	}
+      if (is_fxable(sc, arg1))
+	{
+	  set_unsafe_optimize_op(expr, OP_IMPLICIT_LET_REF_A);
+	  set_opt3_any(expr, arg1);
+	  fx_annotate_arg(sc, cdr(expr), e);
+	  set_opt3_arglen(cdr(expr), int_one);
+	  return(OPT_T);
+	}}
+
+  /* unknown_* for other cases is set later(? -- we're getting eval-args...) */
   /* op_safe_c_p for (< (values 1 2 3)) op_s_s for (op arg) op_s_c for (op 'x) or (op 1) also op_s_a
    *   but is it better to wait for unknown* ?  These are not hit often at this point (except in s7test).
    *   do they end up in op_s_a or whatever after unknown*?
@@ -90821,6 +90854,8 @@ static bool eval_car_pair(s7_scheme *sc)
   s7_pointer code, carc;
   code = sc->code;
   carc = car(code);
+  /* fprintf(stderr, "%s %s\n", display(code), op_names[optimize_op(carc)]); */
+
   /* evaluate the inner list but that list can be circular: carc: #1=(#1# #1#)!
    *   and the cycle can be well-hidden -- #1=((#1 2) . 2) and other such stuff
    */
@@ -90862,6 +90897,12 @@ static bool eval_car_pair(s7_scheme *sc)
       pair_set_syntax_op(sc->code, sc->cur_op);
       return(true);
     }
+  /* TODO: if carc is optimized, and args are fxable, use OP_A_A etc above -- avoid pair_pair! and pair_*! 
+   *   but implicit_let_ref_* are not fxable, so OP_P_A? OP_G_A -- op_implicit_let_ref* in opt3 etc?
+   *   op_oplet_ref_c|aq_c|a? no jumps -- what others get here regularly? vector_ref? 
+   *   (((funclet 'case*) 'case*-helper) x ...)tcase ((funclet old-setter) 'followers)tset ((funclet hook) 'body)tauto ((car pv) 2)lt
+   */
+
   set_optimize_op(code, OP_PAIR_PAIR);
   push_stack(sc, OP_EVAL_ARGS, sc->nil, carc);
   sc->code = car(carc);
@@ -90908,6 +90949,7 @@ static goto_t trailers(s7_scheme *sc)
 {
   s7_pointer code;
   code = sc->code;
+
   if (is_pair(code))
     {
       s7_pointer carc;
@@ -97616,11 +97658,11 @@ int main(int argc, char **argv)
  * tvect      2669         2456   2413   2413
  * trclo      4309         2715   2561   2560
  * fbench     2983         2688   2583   2577
- * tb         3474         2735   2681   2678
+ * tb         3474         2735   2681   2677
  * titer      2860         2865   2842   2842
- * tmap       3785         2886   2857   2844
+ * tmap       3785         2886   2857   2844  2827
  * tsort      3821         3105   3104   3097
- * tset       3093         3253   3104   3202
+ * tset       3093         3253   3104   3202  3197
  * dup        3589         3334   3332   3203
  * tmac       3343         3317   3277   3247
  * tio        3843         3816   3752   3738
@@ -97629,15 +97671,15 @@ int main(int argc, char **argv)
  * tclo       5051         4787   4735   4668
  * tlet       5782         4925   4908   4678
  * tcase      4850         4960   4793   4778
- * tstr       6995         5281   4863   4812
+ * tstr       6995         5281   4863   4812  4764
  * trec       7763         5976   5970   5970
- * tnum       59.5         6348   6013   6005
+ * tnum       59.5         6348   6013   6005  5995
  * tmisc      6490         7389   6210   6174
  * tgc        12.6         11.9   11.1   11.0
  * tgen       12.0         11.2   11.4   11.3
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
- * calls      60.2         36.7   37.5   37.3
+ * calls      60.2         36.7   37.5   37.3  37.2
  * sg         97.4         71.9   72.3   72.2
  * lg        105.5        106.6  105.0  105.1
  * tbig      601.8        177.4  175.8  175.2
@@ -97648,4 +97690,6 @@ int main(int argc, char **argv)
  * why doesn't nrepl work after the first interrupt?
  *   do_end->do_end_1->do_end -- there is no way to break out via s7_quit!
  * tsyn [syntax application], tsig [signature opts]
+ * could optimizer see (a-let 'a-name) and if both exist and a-name is a safe (c-)function, optimize for that?
+ * recur_if_a_a_if_a_a_opla_laq could piggyback on cond_a_a_a_a_opla_laq
  */
