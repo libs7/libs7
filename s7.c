@@ -1371,6 +1371,8 @@ struct s7_scheme {
 
 #if S7_DEBUGGING
   int *tc_rec_calls;
+  opcode_t prev_op;
+  const char *prev_func;
 #endif
 };
 
@@ -4070,7 +4072,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, 
       OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
-      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_MAP_FA, OP_S_AA, OP_A_A, OP_A_AA,
+      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_MAP_FA, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1,
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A,
       OP_IMPLICIT_ITERATE, OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_STRING_REF_A,
       OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A,
@@ -4126,7 +4128,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_LETREC_UNCHECKED, OP_LETREC_STAR_UNCHECKED, OP_COND_UNCHECKED,
       OP_LAMBDA_STAR_UNCHECKED, OP_DO_UNCHECKED, OP_DEFINE_UNCHECKED, OP_DEFINE_STAR_UNCHECKED, OP_DEFINE_FUNCHECKED, OP_DEFINE_CONSTANT_UNCHECKED,
-      OP_DEFINE_WITH_SETTER, OP_DEFINE_MACRO_WITH_SETTER,
+      OP_DEFINE_WITH_SETTER, 
 
       OP_LET_NO_VARS, OP_NAMED_LET, OP_NAMED_LET_NO_VARS, OP_NAMED_LET_FX, OP_NAMED_LET_STAR,
       OP_LET_FX_OLD, OP_LET_FX_NEW, OP_LET_2A_OLD, OP_LET_2A_NEW, OP_LET_3A_OLD, OP_LET_3A_NEW,
@@ -4305,7 +4307,7 @@ static const char* op_names[NUM_OPS] =
       "apply_ss", "apply_sa", "apply_sl", 
       "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
-      "s", "s_s", "s_c", "s_a", "cl_fa_1", "s_aa", "a_a", "a_aa",
+      "s", "s_s", "s_c", "s_a", "cl_fa_1", "s_aa", "a_a", "a_aa", "p_s", "p_s_1",
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a",
       "implicit_iterate", "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_string_ref_a",
       "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_hash_table_ref_a", "implicit_let_ref_c", "implicit_let_ref_a",
@@ -4358,7 +4360,7 @@ static const char* op_names[NUM_OPS] =
       "increment_ss", "increment_sp", "increment_sa", "increment_saa",
       "letrec_unchecked", "letrec*_unchecked", "cond_unchecked",
       "lambda*_unchecked", "do_unchecked", "define_unchecked", "define*_unchecked", "define_funchecked", "define_constant_unchecked",
-      "define_with_setter", "define_macro_with_setter",
+      "define_with_setter", 
 
       "let_no_vars", "named_let", "named_let_no_vars", "named_let_fx", "named_let*",
       "let_fx_old", "let_fx_new", "let_2a_old", "let_2a_new", "let_3a_old", "let_3a_new",
@@ -6906,11 +6908,6 @@ static void mark_permanent_objects(s7_scheme *sc)
    *    if outlet is free can the let potentially be in use?
    *    there are many more permanent_lets(slots) than permanent objects
    */
-#if 0
-  for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt))
-    if (is_let(g->p))
-      gc_mark(let_outlet(g->p));
-#endif
 }
 /* do we mark funclet slot values from the function as root?  Maybe treat them like permanent_lets here? */
 
@@ -6920,26 +6917,7 @@ static void unmark_permanent_objects(s7_scheme *sc)
   for (g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
     clear_mark(g->p);
   for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt)) /* there are lets and slots in this list */
-    {
-#if 0
-      if (!is_marked(g->p)) /* this doesn't happen much in current code */
-	{
-	  if (is_slot(g->p)) slot_set_value(g->p, sc->F);
-	  /* isn't this purely cosmetic? -- yes */
-#if 0
-	  /* aren't all these slots handled above? */
-	  if (is_let(g->p))
-	    {
-	      s7_pointer slot;
-	      for (slot = let_slots(g->p); tis_slot(slot); slot = next_slot(slot))
-		slot_set_value(slot, sc->F);
-	    }
-#endif
-	}
-#endif
-      clear_mark(g->p);
-    }
-  /* used to clear_mark the history lists here */
+    clear_mark(g->p);
 }
 
 #if (!MS_WINDOWS)
@@ -7239,9 +7217,15 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   sc->previous_free_heap_top = sc->free_heap_top;
 
   if (show_heap_stats(sc))
-    s7_warn(sc, 256, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ")\n", 
-	    sc->heap_size, old_free, old_size, size);
-
+    {
+      char *str;
+      str = string_value(object_to_truncated_string(sc, current_code(sc), 80));
+      if (size != 0)
+	s7_warn(sc, 512, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ") from %s\n", 
+		sc->heap_size, old_free, old_size, size, str);
+      else s7_warn(sc, 512, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ") from %s\n", 
+		   sc->heap_size, old_free, old_size, str);
+    }
   if (sc->heap_size >= sc->max_heap_size)
     s7_error(sc, make_symbol(sc, "heap-too-big"), 
 	     set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~S > ~S", 50), 
@@ -7616,6 +7600,7 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
       fprintf(stderr, "%s%s[%d]: push_stack invalid opcode: %" print_pointer " %s\n", BOLD_TEXT, func, line, sc->cur_op, UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
+  if (op == OP_BEGIN_NO_HOOK) sc->prev_func = func;
   /* if (sc->stack_end >= sc->stack_resize_trigger) fprintf(stderr, "%s[%d]: resize missed\n", func, line); */
 
   if (code) sc->stack_end[0] = T_Pos(code);
@@ -10535,23 +10520,21 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool unnamed)
 
   switch (op)
     {
-    case OP_DEFINE_MACRO:      case OP_MACRO:      typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;      break;
-    case OP_DEFINE_MACRO_STAR: case OP_MACRO_STAR: typ = T_MACRO_STAR | T_DONT_EVAL_ARGS | T_COPY_ARGS; break;
-    case OP_DEFINE_BACRO:      case OP_BACRO:      typ = T_BACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;      break;
-    case OP_DEFINE_BACRO_STAR: case OP_BACRO_STAR: typ = T_BACRO_STAR | T_DONT_EVAL_ARGS | T_COPY_ARGS; break;
-    default:
-      if ((op == OP_DEFINE_EXPANSION) && (!is_let(sc->curlet)))  /* local expansions are just normal macros */
-	typ = T_MACRO | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-      else
-	{
-	  if ((op == OP_DEFINE_EXPANSION_STAR) && (!is_let(sc->curlet)))
-	    typ = T_MACRO_STAR | T_EXPANSION | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-	  else typ = T_MACRO | T_DONT_EVAL_ARGS | T_COPY_ARGS;
-	}
+    case OP_DEFINE_MACRO:      case OP_MACRO:      typ = T_MACRO;      break;
+    case OP_DEFINE_MACRO_STAR: case OP_MACRO_STAR: typ = T_MACRO_STAR; break;
+    case OP_DEFINE_BACRO:      case OP_BACRO:      typ = T_BACRO;      break;
+    case OP_DEFINE_BACRO_STAR: case OP_BACRO_STAR: typ = T_BACRO_STAR; break;
+    case OP_DEFINE_EXPANSION:                      typ = T_MACRO | ((is_let(sc->curlet)) ? 0 : T_EXPANSION);      break; /* local expansions are just normal macros */
+    case OP_DEFINE_EXPANSION_STAR:                 typ = T_MACRO_STAR | ((is_let(sc->curlet)) ? 0 : T_EXPANSION); break;
+    default:                                       
+#if S7_DEBUGGING
+      fprintf(stderr, "%s[%d]: got %s\n", __func__, __LINE__, op_names[op]);
+#endif
+      typ = T_MACRO;
       break;
     }
 
-  new_cell_no_check(sc, mac, typ);
+  new_cell_no_check(sc, mac, typ | T_COPY_ARGS | T_DONT_EVAL_ARGS);
   sc->temp6 = mac;
   closure_set_args(mac, (unnamed) ? car(sc->code) : cdar(sc->code));
   body = cdr(sc->code);
@@ -79273,36 +79256,10 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op)
   return(sc->code);
 }
 
-static s7_pointer op_define_macro_with_setter(s7_scheme *sc)
-{
-  sc->code = sc->value;
-  if ((!is_pair(sc->code)) ||
-      (!is_pair(car(sc->code))) ||
-      (!is_symbol(caar(sc->code))))
-    return(eval_error(sc, "define-macro: ~S does not look like a macro?", 44, sc->code)); /* return here for callgrind */
-  if ((is_immutable(sc->curlet)) &&
-      (is_let(sc->curlet))) /* not () */
-    eval_error(sc, "define-macro ~S: let is immutable", 33, caar(sc->code));
-  sc->value = make_macro(sc, sc->cur_op, false);
-  return(NULL);
-}
-
 static bool op_define_macro(s7_scheme *sc)
 {
   sc->code = cdr(sc->code);
   check_define_macro(sc, sc->cur_op);
-  if (symbol_has_setter(caar(sc->code)))
-    {
-      s7_pointer x;
-      x = lookup_slot_from(caar(sc->code), sc->curlet);
-      if ((is_slot(x)) &&
-	  (slot_has_setter(x)))
-	{
-	  sc->value = bind_symbol_with_setter(sc, OP_DEFINE_MACRO_WITH_SETTER, caar(sc->code), sc->code);
-	  if (sc->value == sc->no_value)
-	    return(false);
-	  sc->code = sc->value;
-	}}
   if ((is_immutable(sc->curlet)) &&
       (is_let(sc->curlet))) /* not () */
     eval_error(sc, "define-macro ~S: let is immutable", 33, caar(sc->code)); /* need eval_error_any_with_caller? */
@@ -89866,6 +89823,7 @@ static void op_x_a(s7_scheme *sc, s7_pointer f)
   s7_pointer code;
   code = sc->code;
   sc->code = f;
+  /* if (sc->cur_op == OP_A_A) fprintf(stderr, "op_x_a: %s %s %s %d\n", display(code), display(f), s7_type_names[type(f)], is_applicable(f)); */
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
   sc->args = (dont_eval_args(sc->code)) ? list_1(sc, cadr(code)) : list_1(sc, fx_call(sc, cdr(code)));
@@ -89876,6 +89834,7 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
   s7_pointer code;
   code = sc->code;
   sc->code = f;
+  /* if (sc->cur_op == OP_A_AA) fprintf(stderr, "op_x_aa: %s %s %s %d\n", display(code), display(f), s7_type_names[type(f)], is_applicable(f)); */
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
   if (dont_eval_args(sc->code))
@@ -89886,6 +89845,21 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
       sc->args = cons(sc, fx_call(sc, cdr(code)), sc->args);
     }
 }
+
+static void op_p_s_1(s7_scheme *sc)
+{
+  /* TODO: sc->value might be mv */
+  if (dont_eval_args(sc->value))
+    sc->args = cdr(sc->code);
+  else 
+    {
+      sc->args = lookup_checked(sc, cadr(sc->code));
+      if (needs_copied_args(sc->value))
+	sc->args = list_1(sc, sc->args);
+      else sc->args = set_plist_1(sc, sc->args);
+    }
+  sc->code = sc->value;
+}	  
 
 static void op_safe_c_function_star_all_a(s7_scheme *sc)
 {
@@ -90883,8 +90857,9 @@ static bool eval_car_pair(s7_scheme *sc)
 	      check_if(sc, carc);
 	      if ((fx_function[optimize_op(carc)]) &&
 		  (is_fxable(sc, cadr(code))) &&
-		  ((is_null(cddr(code))) || (is_fxable(sc, caddr(code)))))
+		  ((is_null(cddr(code))) || (is_fxable(sc, caddr(code))))) /* checked cdddr above */
 		{
+		  /* fprintf(stderr, "eval_car_pair[%d]: %s %s\n", __LINE__, display_80(code), op_names[optimize_op(carc)]); */
 		  fx_annotate_args(sc, cdr(code), sc->curlet);
 		  set_fx_direct(code, fx_function[optimize_op(carc)]);
 		  set_optimize_op(code, (is_null(cddr(code))) ? OP_A_A : OP_A_AA);
@@ -90897,13 +90872,30 @@ static bool eval_car_pair(s7_scheme *sc)
       pair_set_syntax_op(sc->code, sc->cur_op);
       return(true);
     }
-  /* TODO: if carc is optimized, and args are fxable, use OP_A_A etc above -- avoid pair_pair! and pair_*! 
-   *   but implicit_let_ref_* are not fxable, so OP_P_A? OP_G_A -- op_implicit_let_ref* in opt3 etc?
-   *   op_oplet_ref_c|aq_c|a? no jumps -- what others get here regularly? vector_ref? 
-   *   (((funclet 'case*) 'case*-helper) x ...)tcase ((funclet old-setter) 'followers)tset ((funclet hook) 'body)tauto ((car pv) 2)lt
-   */
 
-  set_optimize_op(code, OP_PAIR_PAIR);
+  if ((is_pair(cdr(code))) && (is_pair(cdr(code))) && (is_optimized(carc)))
+    {
+      if ((fx_function[optimize_op(carc)]) &&
+	  (is_fxable(sc, cadr(code))) &&
+	  ((is_null(cddr(code))) || 
+	   ((is_fxable(sc, caddr(code))) && (is_null(cdddr(code))))))
+	{
+	  fx_annotate_args(sc, cdr(code), sc->curlet);
+	  set_fx_direct(code, fx_function[optimize_op(carc)]);
+	  set_optimize_op(code, (is_null(cddr(code))) ? OP_A_A : OP_A_AA);
+	  sc->code = carc;
+	  return(false);  /* goto eval in trailers */
+	}
+      /* fprintf(stderr, "%s %s %d\n", display(code), op_names[optimize_op(carc)], is_code_constant(sc, cadr(code))); */
+      if ((is_null(cddr(code))) && (is_symbol(cadr(code))))
+	{
+	  set_optimize_op(code, OP_P_S);
+	  set_opt3_sym(code, cadr(code));
+	}
+      else set_optimize_op(code, OP_PAIR_PAIR);
+    }
+  else set_optimize_op(code, OP_PAIR_PAIR);
+
   push_stack(sc, OP_EVAL_ARGS, sc->nil, carc);
   sc->code = car(carc);
   return(false);
@@ -92219,6 +92211,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       set_current_code(sc, sc->code);
 
     EVAL:
+#if S7_DEBUGGING
+      sc->prev_op = sc->cur_op;
+#endif
       sc->cur_op = optimize_op(sc->code); /* sc->code can be anything, optimize_op examines a type field (opt_choice) */
 
     TOP_NO_POP:
@@ -92608,6 +92603,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_A_A:  op_x_a(sc, fx_call(sc, sc->code));              goto APPLY;
 	case OP_S_AA: op_x_aa(sc, lookup_checked(sc, car(sc->code))); goto APPLY;
 	case OP_A_AA: op_x_aa(sc, fx_call(sc, sc->code));             goto APPLY;
+	case OP_P_S:  push_stack_no_args(sc, OP_P_S_1, sc->code); sc->code = car(sc->code); goto EVAL;
+	case OP_P_S_1: op_p_s_1(sc);                                  goto APPLY;
 
 	case OP_SAFE_C_FUNCTION_STAR: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_FUNCTION_STAR: op_safe_c_function_star(sc); continue;
@@ -93759,7 +93756,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_EVAL_MACRO:               op_eval_macro(sc);                    goto EVAL;
 	case OP_EVAL_MACRO_MV:            if (op_eval_macro_mv(sc)) continue;   goto EVAL;
 	case OP_EXPANSION:                op_finish_expansion(sc);              continue;
-	case OP_DEFINE_MACRO_WITH_SETTER: op_define_macro_with_setter(sc);      continue;
 
 	case OP_DEFINE_BACRO:     case OP_DEFINE_BACRO_STAR:
 	case OP_DEFINE_EXPANSION: case OP_DEFINE_EXPANSION_STAR:
@@ -97252,7 +97248,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 926) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 927) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97660,9 +97656,9 @@ int main(int argc, char **argv)
  * fbench     2983         2688   2583   2577
  * tb         3474         2735   2681   2677
  * titer      2860         2865   2842   2842
- * tmap       3785         2886   2857   2844  2827
+ * tmap       3785         2886   2857   2827
  * tsort      3821         3105   3104   3097
- * tset       3093         3253   3104   3202  3197
+ * tset       3093         3253   3104   3207
  * dup        3589         3334   3332   3203
  * tmac       3343         3317   3277   3247
  * tio        3843         3816   3752   3738
@@ -97670,19 +97666,19 @@ int main(int argc, char **argv)
  * tfft       11.3         4142   4109   4107
  * tclo       5051         4787   4735   4668
  * tlet       5782         4925   4908   4678
- * tcase      4850         4960   4793   4778
- * tstr       6995         5281   4863   4812  4764
+ * tcase      4850         4960   4793   4778  4669 op_p_s_1
+ * tstr       6995         5281   4863   4765
  * trec       7763         5976   5970   5970
- * tnum       59.5         6348   6013   6005  5995
+ * tnum       59.5         6348   6013   5998
  * tmisc      6490         7389   6210   6174
  * tgc        12.6         11.9   11.1   11.0
  * tgen       12.0         11.2   11.4   11.3
  * thash      37.4         11.8   11.7   11.7
  * tall       26.9         15.6   15.6   15.6
- * calls      60.2         36.7   37.5   37.3  37.2
+ * calls      60.2         36.7   37.5   37.2
  * sg         97.4         71.9   72.3   72.2
  * lg        105.5        106.6  105.0  105.1
- * tbig      601.8        177.4  175.8  175.2
+ * tbig      601.8        177.4  175.8  175.2  174.3 op_x_a (old-value in tbig) and gc
  * ---------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
@@ -97690,6 +97686,6 @@ int main(int argc, char **argv)
  * why doesn't nrepl work after the first interrupt?
  *   do_end->do_end_1->do_end -- there is no way to break out via s7_quit!
  * tsyn [syntax application], tsig [signature opts]
- * could optimizer see (a-let 'a-name) and if both exist and a-name is a safe (c-)function, optimize for that?
- * recur_if_a_a_if_a_a_opla_laq could piggyback on cond_a_a_a_a_opla_laq
+ * recur_if_a_a_if_a_a_opla_laq could piggyback on cond_a_a_a_a_opla_laq (and laa case)
+ * free_heap_top problem? t718 or alignment??
  */
