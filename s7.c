@@ -2428,7 +2428,7 @@ void s7_show_history(s7_scheme *sc);
 /* this marks an environment or closure that is "open" for generic functions etc, don't reuse this bit */
 
 #define T_ITER_OK                      (1LL << (TYPE_BITS + 23))
-#define iter_ok(p)                     has_type_bit(T_Pos(p), T_ITER_OK) /* not TItr(p) here because this bit is globally unique */
+#define iter_ok(p)                     has_type_bit(T_Pos(p), T_ITER_OK) /* not T_Itr(p) here because this bit is globally unique */
 #define clear_iter_ok(p)               clear_type_bit(T_Itr(p), T_ITER_OK)
 
 /* its faster here to use the high_flag bits rather than typeflag bits */
@@ -7560,7 +7560,7 @@ static void pop_stack(s7_scheme *sc)
    *   and are carried around as GC protection in other cases.
    */
   sc->code = T_Pos(sc->stack_end[0]);
-  sc->curlet = T_Lid(sc->stack_end[1]);
+  sc->curlet = T_Lid(sc->stack_end[1]); 
   sc->args = T_Pos(sc->stack_end[2]);
   sc->cur_op = (opcode_t)(sc->stack_end[3]);
   if (sc->cur_op >= NUM_OPS)
@@ -7579,7 +7579,7 @@ static void pop_stack_no_op(s7_scheme *sc)
       if (sc->stop_at_error) abort();
     }
   sc->code = T_Pos(sc->stack_end[0]);
-  sc->curlet = T_Lid(sc->stack_end[1]);
+  sc->curlet = T_Pos(sc->stack_end[1]); /* not T_Lid: gc_protect can set this directly (not through push_stack) to anything */
   sc->args = T_Pos(sc->stack_end[2]);
 }
 
@@ -93304,9 +93304,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		return(sc->F);
 	    }
 	case OP_BEGIN_NO_HOOK:
-#if S7_DEBUGGING
-	  T_Pair(sc->code);
-#endif
 	  goto BEGIN;
 
 	case OP_BEGIN_1_UNCHECKED:
@@ -93838,10 +93835,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  op_get_output_string(sc);
 	  /* fall through */
 
-	case OP_UNWIND_OUTPUT:          op_unwind_output(sc); continue;
-	case OP_UNWIND_INPUT:           op_unwind_input(sc); continue;
-	case OP_DYNAMIC_UNWIND:         dynamic_unwind(sc, sc->code, sc->args); continue;
-	case OP_DYNAMIC_UNWIND_PROFILE: g_profile_out(sc, set_plist_1(sc, sc->args)); continue;
+	case OP_UNWIND_OUTPUT:          op_unwind_output(sc);                          continue;
+	case OP_UNWIND_INPUT:           op_unwind_input(sc);                           continue;
+	case OP_DYNAMIC_UNWIND:         dynamic_unwind(sc, sc->code, sc->args);        continue;
+	case OP_DYNAMIC_UNWIND_PROFILE: g_profile_out(sc, set_plist_1(sc, sc->args));  continue;
 	case OP_PROFILE_IN:	        g_profile_in(sc, set_plist_1(sc, sc->curlet)); continue;
 
 	case OP_DYNAMIC_WIND: if (op_dynamic_wind(sc) == goto_apply) goto APPLY; continue;
@@ -97636,9 +97633,9 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ---------------------------------------------
- *             gmp         20.9   21.0   21.1
- * ---------------------------------------------
+/* -----------------------------------------------------
+ *             gmp         20.9   21.0   21.1   21.2
+ * -----------------------------------------------------
  * tpeak       128          115    114    114
  * tauto       778          648    642    647
  * tref        736          691    687    687
@@ -97666,7 +97663,7 @@ int main(int argc, char **argv)
  * tfft       11.3         4142   4109   4107
  * tclo       5051         4787   4735   4668
  * tlet       5782         4925   4908   4678
- * tcase      4850         4960   4793   4778  4669 op_p_s_1
+ * tcase      4850         4960   4793   4669
  * tstr       6995         5281   4863   4765
  * trec       7763         5976   5970   5970
  * tnum       59.5         6348   6013   5998
@@ -97678,8 +97675,8 @@ int main(int argc, char **argv)
  * calls      60.2         36.7   37.5   37.2
  * sg         97.4         71.9   72.3   72.2
  * lg        105.5        106.6  105.0  105.1
- * tbig      601.8        177.4  175.8  175.2  174.3 op_x_a (old-value in tbig) and gc
- * ---------------------------------------------
+ * tbig      601.8        177.4  175.8  174.3
+ * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * hash-code eqfunc extended
@@ -97688,4 +97685,9 @@ int main(int argc, char **argv)
  * tsyn [syntax application], tsig [signature opts]
  * recur_if_a_a_if_a_a_opla_laq could piggyback on cond_a_a_a_a_opla_laq (and laa case)
  * free_heap_top problem? t718 or alignment??
+ * need is_pair(cdr) op_thunk: closure_m (multiform) but its actually _o (closure_p)??
+ * mv in op_p_s_1
+ * let-with-setter?
+ * add checks to thunk for nil cdr and track this down!
+ * define x <expr involving x> 
  */
