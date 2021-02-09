@@ -1,4 +1,5 @@
 ;(set! (*s7* 'profile) 1)
+(set! (*s7* 'heap-size) 1024000)
 
 (define-macro (test expr res)
   `(let ((value ,expr))

@@ -4479,9 +4479,6 @@ void notcurses_s7_init(s7_scheme *sc)
 
   nc_int(NCDIRECT_OPTION_INHIBIT_SETLOCALE);
   nc_int(NCDIRECT_OPTION_INHIBIT_CBREAK);
-#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 1) && (NOTCURSES_VERNUM_PATCH >= 5)
-  nc_int(NCDIRECT_OPTION_NO_READLINE);
-#endif
 #if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 1) && (NOTCURSES_VERNUM_PATCH >= 4)
   nc_int(NCDIRECT_OPTION_NO_QUIT_SIGHANDLERS);
 #endif
@@ -4511,7 +4508,7 @@ void notcurses_s7_init(s7_scheme *sc)
  * repl make-nrepl-bits.scm
  */
 
-/* TODO: ncmenu_item(s) various callbacks palette256-chans? 
+/* TODO: ncmenu_item(s) various callbacks palette256-chans? notcurses_canbraille
  *  list of lists of menu items -> (permanent) c array, arg type checks
  *  API void ncplane_set_resizecb(struct ncplane* n, int(*resizecb)(struct ncplane*)); -- these need wrappers
  *  API int (*ncplane_resizecb(const struct ncplane* n))(struct ncplane*);
