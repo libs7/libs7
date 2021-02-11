@@ -55,3 +55,6 @@
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)
+
+
+;; 3097 if initial heap=64k (3270 if 128k), 3036 if 32k

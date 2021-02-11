@@ -11378,11 +11378,12 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
 	{
 	  s7_pointer p;
 	  p = ov[i];                               /* args */
+	  /* if op_gc_protect, any ov[i] (except op) can be a list, but it isn't the arglist, so it seems to be safe */
 	  if (is_pair(p))                          /* args need not be a list (it can be a port or #f, etc) */
 	    {
 	      has_pairs = true;
 	      if (is_null(cdr(p)))
-		nv[i] = list_1(sc, car(p));
+		nv[i] = cons_unchecked(sc, car(p), sc->nil); /* GC is off -- could uncheck list_2 et al also */
 	      else
 		{
 		  if ((is_pair(cdr(p))) && (is_null(cddr(p))))
@@ -11390,7 +11391,6 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
 		  else nv[i] = copy_any_list(sc, p);  /* args (copy is needed -- see s7test.scm) */
 		  /* if op=eval_args4 for example, this has to be a proper list, and in many cases it doesn't need to be copied */
 		}
-	      /* set_full_type(nv[i], (full_type(p) & (~T_COLLECTED))); */ /* carry over T_IMMUTABLE */
 	      copy_stack_list_set_immutable(sc, p, nv[i]);
 	    }
 	  /* lst can be dotted or circular here.  The circular list only happens in a case like:
@@ -11406,23 +11406,21 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
   else
     {
       for (i = 2; i < top; i += 4)
-	{
-	  s7_pointer p;
-	  p = ov[i];
-	  if (is_pair(p))
-	    {
-	      has_pairs = true;
-	      if (is_null(cdr(p)))
-		nv[i] = list_1(sc, car(p));
-	      else
-		{
-		  if ((is_pair(cdr(p))) && (is_null(cddr(p))))
-		    nv[i] = list_2(sc, car(p), cadr(p));
-		  else nv[i] = copy_any_list(sc, p);  /* args (copy is needed -- see s7test.scm) */
-		}
-	      /* set_full_type(nv[i], (full_type(p) & (~T_COLLECTED))); */ /* carry over T_IMMUTABLE */
-	      copy_stack_list_set_immutable(sc, p, nv[i]);
-	    }}}
+	if (is_pair(ov[i]))
+	  {
+	    s7_pointer p;
+	    p = ov[i];
+	    has_pairs = true;
+	    if (is_null(cdr(p)))
+	      nv[i] = cons_unchecked(sc, car(p), sc->nil);
+	    else
+	      {
+		if ((is_pair(cdr(p))) && (is_null(cddr(p))))
+		  nv[i] = list_2(sc, car(p), cadr(p));
+		else nv[i] = copy_any_list(sc, p);  /* args (copy is needed -- see s7test.scm) */
+	      }
+	    copy_stack_list_set_immutable(sc, p, nv[i]);
+	  }}
   if (has_pairs) stack_set_has_pairs(new_v);
   s7_gc_on(sc, true);
   return(new_v);
@@ -11507,7 +11505,7 @@ static bool op_with_baffle_unchecked(s7_scheme *sc)
 /* -------------------------------- call/cc -------------------------------- */
 static void make_room_for_cc_stack(s7_scheme *sc)
 {
-  if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 8))
+  if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 8)) /* we probably never need this much space -- very often we don't need any */
     {
       int64_t freed_heap;
 #if S7_DEBUGGING
@@ -30675,6 +30673,10 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- read -------------------------------- */
 #define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; jmp_buf old_goto_start
 
+/* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??) */
+#define Setjmp(A)     sigsetjmp(A, 1)
+#define Longjmp(A, B) siglongjmp(A, B)
+
 #define store_jump_info(Sc)						\
   do {									\
       old_longjmp = Sc->longjmp_ok;					\
@@ -30689,14 +30691,14 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
     memcpy((void *)(Sc->goto_start), (void *)old_goto_start, sizeof(jmp_buf)); \
     if ((jump_loc == ERROR_JUMP) &&					\
 	(sc->longjmp_ok))						\
-      longjmp(sc->goto_start, ERROR_JUMP);				\
+      Longjmp(sc->goto_start, ERROR_JUMP);				\
   } while (0)
 
-#define set_jump_info(Sc, Tag)				\
-  do {							\
-    sc->longjmp_ok = true;				\
-    sc->setjmp_loc = Tag;				\
-    jump_loc = setjmp(sc->goto_start);			\
+#define set_jump_info(Sc, Tag)		\
+  do {					\
+    sc->longjmp_ok = true;		\
+    sc->setjmp_loc = Tag;		\
+    jump_loc = Setjmp(sc->goto_start);	\
   } while (0)
 
 s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
@@ -43768,7 +43770,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 			}}
 		  else
 		    {
-		      if (setjmp(sc->opt_exit) == 0)
+		      if (Setjmp(sc->opt_exit) == 0)
 			{
 			  sc->sort_body_len = s7_list_length(sc, closure_body(lessp));
 			  if (sc->sort_body_len < 14)
@@ -53879,7 +53881,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
-	  if (sc->longjmp_ok) longjmp(sc->goto_start, THROW_JUMP);
+	  if (sc->longjmp_ok) Longjmp(sc->goto_start, THROW_JUMP);
 	  return(sc->value);
 	}}
   if (is_let(car(args)))
@@ -54030,7 +54032,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	if ((catcher) &&
 	    (catcher(sc, i, type, info, &reset_error_hook)))
 	  {
-	    if (sc->longjmp_ok) longjmp(sc->goto_start, CATCH_JUMP);
+	    if (sc->longjmp_ok) Longjmp(sc->goto_start, CATCH_JUMP);
 	    /* all the rest of the code expects s7_error to jump, not return, so presumably if we get here, we're in trouble */
 #if S7_DEBUGGING
 	    fprintf(stderr, "fall through in s7_error!\n");
@@ -54194,7 +54196,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
       sc->cur_op = OP_ERROR_QUIT;
     }
 
-  if (sc->longjmp_ok) longjmp(sc->goto_start, ERROR_JUMP);
+  if (sc->longjmp_ok) Longjmp(sc->goto_start, ERROR_JUMP);
   return(type);
 }
 
@@ -54552,7 +54554,7 @@ static void op_error_hook_quit(s7_scheme *sc)
   push_stack_op(sc, OP_ERROR_QUIT);                /* added 3-Dec-16: try to make sure we actually exit! */
   sc->cur_op = OP_ERROR_QUIT;
   if (sc->longjmp_ok)
-    longjmp(sc->goto_start, ERROR_QUIT_JUMP);
+    Longjmp(sc->goto_start, ERROR_QUIT_JUMP);
 }
 
 
@@ -60366,7 +60368,7 @@ static opt_info *alloc_opo(s7_scheme *sc)
 {
   opt_info *o;
   if (sc->pc >= OPTS_SIZE)
-    longjmp(sc->opt_exit, 1);
+    Longjmp(sc->opt_exit, 1);
 #if S7_DEBUGGING
   if (sc->pc < 0)
     {
@@ -63814,22 +63816,29 @@ static bool opt_b_7pp_ff(opt_info *o)
   return(o->v[3].b_7pp_f(opt_sc(o), p1, o->v[11].fp(o->v[10].o1)));
 }
 
-static bool opt_b_pp_sf(opt_info *o)  {return(o->v[3].b_pp_f(slot_value(o->v[1].p), o->v[11].fp(o->v[10].o1)));}
-static bool opt_b_pp_fs(opt_info *o)  {return(o->v[3].b_pp_f(o->v[11].fp(o->v[10].o1), slot_value(o->v[1].p)));}
-static bool opt_b_pp_ss(opt_info *o)  {return(o->v[3].b_pp_f(slot_value(o->v[1].p), slot_value(o->v[2].p)));}
-static bool opt_b_pp_sc(opt_info *o)  {return(o->v[3].b_pp_f(slot_value(o->v[1].p), o->v[2].p));}
-static bool opt_b_pp_sfo(opt_info *o) {return(o->v[3].b_pp_f(slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
-static bool opt_b_7pp_sf(opt_info *o) {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[11].fp(o->v[10].o1)));}
-static bool opt_b_7pp_fs(opt_info *o) {return(o->v[3].b_7pp_f(opt_sc(o), o->v[11].fp(o->v[10].o1), slot_value(o->v[1].p)));}
-static bool opt_b_7pp_ss(opt_info *o) {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p)));}
+static bool opt_b_pp_sf(opt_info *o)      {return(o->v[3].b_pp_f(slot_value(o->v[1].p), o->v[11].fp(o->v[10].o1)));}
+static bool opt_b_pp_fs(opt_info *o)      {return(o->v[3].b_pp_f(o->v[11].fp(o->v[10].o1), slot_value(o->v[1].p)));}
+static bool opt_b_pp_ss(opt_info *o)      {return(o->v[3].b_pp_f(slot_value(o->v[1].p), slot_value(o->v[2].p)));}
+static bool opt_b_pp_sc(opt_info *o)      {return(o->v[3].b_pp_f(slot_value(o->v[1].p), o->v[2].p));}
+static bool opt_b_pp_sfo(opt_info *o)     {return(o->v[3].b_pp_f(slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
+static bool opt_b_7pp_sf(opt_info *o)     {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[11].fp(o->v[10].o1)));}
+static bool opt_b_7pp_fs(opt_info *o)     {return(o->v[3].b_7pp_f(opt_sc(o), o->v[11].fp(o->v[10].o1), slot_value(o->v[1].p)));}
+static bool opt_b_7pp_ss(opt_info *o)     {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p)));}
 static bool opt_b_7pp_ss_lt(opt_info *o)  {return(lt_b_7pp(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p)));}
 static bool opt_b_7pp_ss_gt(opt_info *o)  {return(gt_b_7pp(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p)));}
-static bool opt_b_7pp_sc(opt_info *o) {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[2].p));}
-static bool opt_b_7pp_sfo(opt_info *o) {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
+static bool opt_b_7pp_sc(opt_info *o)     {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[2].p));}
+static bool opt_b_7pp_sfo(opt_info *o)    {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
 static bool opt_is_equal_sfo(opt_info *o) {return(s7_is_equal(opt_sc(o), slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
 
 static s7_pointer opt_p_p_s(opt_info *o);
-static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o);
+
+static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o)
+{
+  return(substring_uncopied_p_pii(opt_sc(o), slot_value(o->v[1].p),
+				  s7_integer_checked(opt_sc(o), slot_value(o->v[2].p)),
+				  s7_integer_checked(opt_sc(o), o->v[6].fp(o->v[5].o1))));
+}
+
 static bool opt_substring_equal_sf(opt_info *o) {return(scheme_strings_are_equal(slot_value(o->v[1].p), opt_p_substring_uncopied_ssf(o->v[10].o1)));}
 
 static bool b_pp_sf_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
@@ -65596,13 +65605,6 @@ static s7_pointer opt_p_call_css(opt_info *o)
 static s7_pointer opt_p_call_ssf(opt_info *o)
 {
   return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[6].fp(o->v[5].o1))));
-}
-
-static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o)
-{
-  return(substring_uncopied_p_pii(opt_sc(o), slot_value(o->v[1].p),
-				  s7_integer_checked(opt_sc(o), slot_value(o->v[2].p)),
-				  s7_integer_checked(opt_sc(o), o->v[6].fp(o->v[5].o1))));
 }
 
 static s7_pointer opt_p_call_ppp(opt_info *o)
@@ -68379,7 +68381,7 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
     default:
       break;
     }
-  /* longjmp(sc->opt_exit, 1); */ /* what good could it do to back up?  But we need to make sure sc->curlet isn't clobbered (in op_do??) */
+  /* Longjmp(sc->opt_exit, 1); */ /* what good could it do to back up?  But we need to make sure sc->curlet isn't clobbered (in op_do??) */
   return_false(sc, car_x);
 }
 
@@ -68842,7 +68844,7 @@ static bool bool_optimize(s7_scheme *sc, s7_pointer expr)
 
 static s7_function s7_bool_optimize(s7_scheme *sc, s7_pointer expr)
 {
-  if (setjmp(sc->opt_exit) == 0)
+  if (Setjmp(sc->opt_exit) == 0)
     {
       sc->pc = 0;
       if (bool_optimize(sc, expr))
@@ -68853,7 +68855,7 @@ static s7_function s7_bool_optimize(s7_scheme *sc, s7_pointer expr)
 
 s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr)
 {
-  if (setjmp(sc->opt_exit) == 0)
+  if (Setjmp(sc->opt_exit) == 0)
     {
       sc->pc = 0;
       if (float_optimize(sc, expr))
@@ -68867,7 +68869,7 @@ static s7_function s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nr)
   if ((!is_pair(expr)) || (no_cell_opt(expr)) || (sc->debug != 0))
     return(NULL);
 
-  if (setjmp(sc->opt_exit) == 0)
+  if (Setjmp(sc->opt_exit) == 0)
     {
       sc->pc = 0;
       if (!no_int_opt(expr))
@@ -68923,7 +68925,7 @@ static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
 
 static s7_function s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
 {
-  if (setjmp(sc->opt_exit) == 0)
+  if (Setjmp(sc->opt_exit) == 0)
     {
       sc->pc = 0;
       if (cell_optimize(sc, expr))
@@ -79627,8 +79629,7 @@ static void check_with_let(s7_scheme *sc)
     pair_set_syntax_op(sc->code, OP_WITH_UNLET_S);
   else
     {
-      if ((is_symbol(car(form))) &&
-	  (is_pair(cadr(form))))
+      if (is_symbol(car(form)))
 	pair_set_syntax_op(sc->code, OP_WITH_LET_S);
       else pair_set_syntax_op(sc->code, OP_WITH_LET_UNCHECKED);
     }
@@ -79650,29 +79651,30 @@ static bool op_with_let_unchecked(s7_scheme *sc)
   return(true);
 }
 
-static inline void op_with_let_s(s7_scheme *sc)
+static bool op_with_let_s(s7_scheme *sc)
 {
   s7_pointer e;
   sc->code = cdr(sc->code);
   e = lookup_checked(sc, car(sc->code));
+  if ((!is_let(e)) && (e != sc->rootlet))
+    eval_error_any(sc, sc->wrong_type_arg_symbol, "with-let takes an environment argument: ~A", 42, e);
+  if ((is_null(cddr(sc->code))) &&
+      (is_symbol(cadr(sc->code))))
+    {
+      sc->value = s7_let_ref(sc, e, cadr(sc->code)); /* (with-let e s) -> (let-ref e s) */
+      return(false);
+    }
   if (e == sc->rootlet)
     sc->curlet = sc->nil;
   else
     {
-      if (!is_let(e))
-	eval_error_any(sc, sc->wrong_type_arg_symbol, "with-let takes an environment argument: ~A", 42, e);
       set_with_let_let(e);
       let_set_id(e, ++sc->let_number);
       sc->curlet = e;
-      /* if the let in question has 10,000 names this loop (which can't be avoided currently)
-       *   will be noticeable in a few cases.  So, instead of saying (with-let *libc* ...) use something
-       *   equivalent to (with-let (sublet *libc*) ...) which is cleaner anyway.  (In my timing tests, even
-       *   when pounding on this one block, the loop only amounts to 1% of the time.  Normally it's
-       *   negligible).
-       */
       update_symbol_ids(sc, e);
     }
   sc->code = T_Pair(cdr(sc->code));
+  return(true);
 }
 
 static s7_pointer with_unlet_s(s7_scheme *sc)
@@ -82901,7 +82903,7 @@ static goto_t op_dox(s7_scheme *sc)
 #endif
 	      (has_safe_steppers(sc, sc->curlet)))
 	    {
-	      if (setjmp(sc->opt_exit) == 0)
+	      if (Setjmp(sc->opt_exit) == 0)
 		{
 		  int32_t k;
 		  sc->pc = 0;
@@ -83981,7 +83983,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
       return(true);
     }
 
-  if (setjmp(sc->opt_exit) == 0)
+  if (Setjmp(sc->opt_exit) == 0)
     {
       s7_pointer p;
       s7_int body_len;
@@ -84107,7 +84109,7 @@ static goto_t do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
   old_e = sc->curlet;
   sc->curlet = make_let_slowly(sc, sc->curlet);
 
-  if (setjmp(sc->opt_exit) != 0)
+  if (Setjmp(sc->opt_exit) != 0)
     return(fall_through);
 
   sc->pc = 0;
@@ -93829,7 +93831,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DEACTIVATE_GOTO: call_exit_active(sc->args) = false; continue; /* deactivate the exiter */
 
 
-	case OP_WITH_LET_S:         op_with_let_s(sc); goto BEGIN;
+	case OP_WITH_LET_S:         if (op_with_let_s(sc)) goto BEGIN; continue;
 	case OP_WITH_LET:           check_with_let(sc);
 	case OP_WITH_LET_UNCHECKED: if (op_with_let_unchecked(sc)) goto EVAL;
 	case OP_WITH_LET1:          if (sc->value != sc->curlet) activate_let(sc, sc->value); goto BEGIN;
@@ -97626,7 +97628,7 @@ int main(int argc, char **argv)
  * tshoot     1663          883    872    872    872
  * index      1074         1026   1016   1014   1015
  * tmock      7697         1177   1165   1166   1161
- * s7test     4546         1873   1831   1817   1811
+ * s7test     4546         1873   1831   1817   1817
  * lt         2115         2123   2110   2112   2108
  * tcopy      2290         2256   2230   2219   2219
  * tmat       2412         2285   2258   2256   2258
@@ -97639,9 +97641,9 @@ int main(int argc, char **argv)
  * tmap       3785         2886   2857   2827   2827
  * titer      2860         2865   2842   2842   2842
  * tsort      3821         3105   3104   3097   3098
- * tset       3093         3253   3104   3207   3208  3270
  * dup        3589         3334   3332   3203   3207
  * tmac       3343         3317   3277   3247   3246
+ * tset       3093         3253   3104   3207   3270
  * tio        3843         3816   3752   3738   3745
  * teq        4054         4068   4045   4038   4039
  * tfft       11.3         4142   4109   4107   4107
@@ -97663,8 +97665,7 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- * why doesn't nrepl work after the first interrupt? do_end->do_end_1->do_end -- there is no way to break out via s7_quit
- * let-with-setter? or optimize the (set! (setter...)...) at the start of the body?
+ * let-with-setter? typed-let? or optimize the (set! (setter...)...) at the start of the body? [see t429]
  * o->sc bug
  * opt1_func_listed maybe unneeded
  */
