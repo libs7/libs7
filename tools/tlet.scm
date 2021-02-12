@@ -55,6 +55,20 @@
       (format *stderr* "~A ~A ~A ~A~%" (/ (- (* size size) size) 2) sum1 sum2 sum3))))
 (in-e)
 
+
+(define (with-biglet)
+  (let ((biglet (inlet)))
+    (do ((i 0 (+ i 1)))
+	((= i 1000))
+      (varlet biglet (symbol "a" (number->string i)) (let ((local-i i)) (lambda (x) (+ x local-i)))))
+    (display ((with-let biglet a10) 1)) 
+    (newline)
+    (do ((i 0 (+ i 1)))
+	((= i 100000))
+      ((with-let biglet a9) i))))
+(with-biglet)
+
+
 ;;; --------------------------------------------------------------------------------
 (define include-let #t)
 (define include-let* #t)
