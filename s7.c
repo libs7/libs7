@@ -1366,7 +1366,7 @@ struct s7_scheme {
 
   jmp_buf opt_exit;
   int32_t pc;
-  #define OPTS_SIZE 256          /* 128 overflows twice in s7test, 64 overflows 4 times in s7test, once in tall, pqw-vox needs 173 */
+  #define OPTS_SIZE 256          /* pqw-vox needs 178 */
   opt_info *opts[OPTS_SIZE + 1]; /* this form is a lot faster than opt_info**! */
   heap_block_t *heap_blocks;
 
@@ -3670,12 +3670,9 @@ static void init_small_ints(void)
   #define ticks_per_second() CLOCKS_PER_SEC
 #endif
 
-/* new_cell has to include the new cell's type.  In the free list, it is 0 (T_FREE).  If we remove it here,
- *   but then hit some error before setting the type, the GC sweep thinks it is a free cell already and
- *   does not return it to the free list: a memory leak.
- */
-
-#define GC_TRIGGER_SIZE 64
+#ifndef GC_TRIGGER_SIZE
+  #define GC_TRIGGER_SIZE 64
+#endif
 
 #if S7_DEBUGGING
 static void try_to_call_gc_1(s7_scheme *sc, const char *func, int line);
@@ -3694,6 +3691,10 @@ static void try_to_call_gc(s7_scheme *sc);
 #define show_heap_stats(Sc)              ((Sc->gc_stats & HEAP_STATS) != 0)
 #define show_protected_objects_stats(Sc) ((Sc->gc_stats & PROTECTED_OBJECTS_STATS) != 0)
 
+/* new_cell has to include the new cell's type.  In the free list, it is 0 (T_FREE).  If we remove it here,
+ *   but then hit some error before setting the type, the GC sweep thinks it is a free cell already and
+ *   does not return it to the free list: a memory leak.
+ */
 #if (!S7_DEBUGGING)
 #define new_cell(Sc, Obj, Type)			\
   do {						\
@@ -4045,7 +4046,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_CLOSURE_ALL_A, HOP_CLOSURE_ALL_A, OP_CLOSURE_ASS, HOP_CLOSURE_ASS, OP_CLOSURE_SAS, HOP_CLOSURE_SAS ,OP_CLOSURE_AAS, HOP_CLOSURE_AAS,
       OP_CLOSURE_SAA, HOP_CLOSURE_SAA, OP_CLOSURE_ASA, HOP_CLOSURE_ASA, OP_CLOSURE_ALL_S, HOP_CLOSURE_ALL_S, OP_CLOSURE_ANY_ALL_A, HOP_CLOSURE_ANY_ALL_A,
-      OP_SAFE_CLOSURE_SAA, HOP_SAFE_CLOSURE_SAA, OP_SAFE_CLOSURE_SSA, HOP_SAFE_CLOSURE_SSA, OP_CLOSURE_3A, HOP_CLOSURE_3A,
+      OP_SAFE_CLOSURE_SAA, HOP_SAFE_CLOSURE_SAA, OP_SAFE_CLOSURE_SSA, HOP_SAFE_CLOSURE_SSA, OP_CLOSURE_3A, HOP_CLOSURE_3A, OP_CLOSURE_4A, HOP_CLOSURE_4A,
       OP_SAFE_CLOSURE_AGG, HOP_SAFE_CLOSURE_AGG, OP_SAFE_CLOSURE_ALL_A, HOP_SAFE_CLOSURE_ALL_A,
       OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_ALL_S, HOP_SAFE_CLOSURE_ALL_S,
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
@@ -4280,7 +4281,7 @@ static const char* op_names[NUM_OPS] =
 
       "closure_all_a", "h_closure_all_a", "closure_ass", "h_closure_ass", "closure_sas", "h_closure_sas", "closure_aas", "h_closure_aas",
       "closure_saa", "h_closure_saa", "closure_asa", "h_closure_asa", "closure_all_s", "h_closure_all_s", "closure_any_all_a", "h_closure_any_all_a",
-      "safe_closure_saa", "h_safe_closure_saa", "safe_closure_ssa", "h_safe_closure_ssa", "closure_3a", "h_closure_3a",
+      "safe_closure_saa", "h_safe_closure_saa", "safe_closure_ssa", "h_safe_closure_ssa", "closure_3a", "h_closure_3a", "closure_4a", "h_closure_4a",
       "safe_closure_agg", "h_safe_closure_agg", "safe_closure_all_a", "h_safe_closure_all_a",
       "safe_closure_3s", "h_safe_closure_3s", "safe_closure_all_s", "h_safe_closure_all_s",
       "safe_closure_3s_a", "h_safe_closure_3s_a",
@@ -30673,7 +30674,9 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- read -------------------------------- */
 #define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; jmp_buf old_goto_start
 
-/* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??) */
+/* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
+ *   unfortunately sigsetjmp is noticeably slower than setjmp
+ */
 #define Setjmp(A)     sigsetjmp(A, 1)
 #define Longjmp(A, B) siglongjmp(A, B)
 
@@ -48492,13 +48495,14 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	  if (!is_any_procedure(func))   /* disallow continuation/goto here */
 	    return(s7_wrong_type_arg_error(sc, "set! setter", 3, func, "a function or #f"));
 
-	  if (s7_is_aritable(sc, func, 3))
-	    set_has_let_arg(func);
-	  else
-	    if (!((s7_is_aritable(sc, func, 2)) ||
-		  ((is_c_function(func)) && (c_function_has_bool_setter(func)))))
-	      return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take 2 or 3 arguments", 49), func)));
-	}
+	  if ((!is_c_function(func)) || (!c_function_has_bool_setter(func)))
+	    {
+	      if (s7_is_aritable(sc, func, 3))
+		set_has_let_arg(func);
+	      else
+		if (!s7_is_aritable(sc, func, 2))
+		  return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take 2 or 3 arguments", 49), func)));
+	    }}
 
       if (slot == global_slot(sym))
 	s7_set_setter(sc, sym, func); /* special GC protection for global vars */
@@ -48533,10 +48537,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	closure_set_no_setter(p);
       break;
 
-    case T_C_FUNCTION:
-    case T_C_ANY_ARGS_FUNCTION:
-    case T_C_OPT_ARGS_FUNCTION:
-    case T_C_RST_ARGS_FUNCTION:
+    case T_C_FUNCTION: case T_C_ANY_ARGS_FUNCTION: case T_C_OPT_ARGS_FUNCTION: case T_C_RST_ARGS_FUNCTION:
     case T_C_FUNCTION_STAR:
       if (p == slot_value(global_slot(sc->setter_symbol)))
 	return(immutable_object_error(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), setter)));
@@ -50026,20 +50027,14 @@ static bool s7_is_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info
   return((*(equals[type(x)]))(sc, x, y, ci));
 }
 
-bool s7_is_equal(s7_scheme *sc, s7_pointer x, s7_pointer y)
-{
-  return(s7_is_equal_1(sc, x, y, NULL));
-}
+bool s7_is_equal(s7_scheme *sc, s7_pointer x, s7_pointer y) {return(s7_is_equal_1(sc, x, y, NULL));}
 
 static bool s7_is_equivalent_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
   return((*(equivalents[type(x)]))(sc, x, y, ci));
 }
 
-bool s7_is_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y)
-{
-  return(s7_is_equivalent_1(sc, x, y, NULL));
-}
+bool s7_is_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y) {return(s7_is_equivalent_1(sc, x, y, NULL));}
 
 static s7_pointer g_is_equal(s7_scheme *sc, s7_pointer args)
 {
@@ -50070,7 +50065,7 @@ static s7_pointer pair_length(s7_scheme *sc, s7_pointer a)
   s7_int i;
   s7_pointer slow, fast;
   slow = a;
-  fast = a; /* we know a is a pair, don't start with fast = cdr(a)! if a len = 3, we never match */
+  fast = a; /* we know a is a pair, don't start with fast = cdr(a)! else if a len = 3, we never match */
   i = 0;
   while (true)
     {
@@ -50156,10 +50151,7 @@ static void init_length_functions(void)
   length_functions[T_OUTPUT_PORT]  = op_length;
 }
 
-static s7_pointer s7_length(s7_scheme *sc, s7_pointer lst)
-{
-  return((*length_functions[unchecked_type(lst)])(sc, lst));
-}
+static s7_pointer s7_length(s7_scheme *sc, s7_pointer lst) {return((*length_functions[unchecked_type(lst)])(sc, lst));}
 
 static s7_pointer g_length(s7_scheme *sc, s7_pointer args)
 {
@@ -50169,8 +50161,6 @@ list has infinite length.  Length of anything else returns #f."
   #define Q_length s7_make_signature(sc, 2, s7_make_signature(sc, 3, sc->is_integer_symbol, sc->is_infinite_symbol, sc->not_symbol), sc->T)
   return((*length_functions[unchecked_type(car(args))])(sc, car(args)));
 }
-
-static s7_pointer length_p_p(s7_scheme *sc, s7_pointer obj) {return((*length_functions[unchecked_type(obj)])(sc, obj));}
 
 
 /* -------------------------------- copy -------------------------------- */
@@ -74121,7 +74111,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	      (!arglist_has_rest(sc, closure_args(func))))
 	    {
 	      set_unsafely_optimized(expr);
-	      set_optimize_op(expr, hop + ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_ALL_A : OP_CLOSURE_ALL_A));
+	      set_optimize_op(expr, hop + ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_ALL_A : OP_CLOSURE_3A));
 	      set_opt1_lambda_add(expr, func);
 	      return(OPT_F);
 	    }
@@ -74468,7 +74458,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	  bool safe_case;
 	  set_unsafely_optimized(expr);
 	  safe_case = is_safe_closure(func);
-	  set_unsafe_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_ALL_A : OP_CLOSURE_ALL_A));
+	  set_unsafe_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_ALL_A : ((args == 4) ? OP_CLOSURE_4A : OP_CLOSURE_ALL_A)));
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt3_arglen(cdr(expr), make_permanent_integer(args));
 	  set_opt1_lambda_add(expr, func);
@@ -74516,7 +74506,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	{
 	  set_unsafely_optimized(expr);
 	  if (func_is_closure)
-	    set_optimize_op(expr, hop + ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_ALL_A : OP_CLOSURE_ALL_A));
+	    set_optimize_op(expr, hop + ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_ALL_A : ((args == 4) ? OP_CLOSURE_4A : OP_CLOSURE_ALL_A)));
 	  else set_optimize_op(expr, hop + ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_STAR_ALL_A : OP_CLOSURE_STAR_ALL_A));
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt3_arglen(cdr(expr), make_permanent_integer(args));
@@ -79640,7 +79630,7 @@ static bool op_with_let_unchecked(s7_scheme *sc)
   return(true);
 }
 
-static bool op_with_let_s(s7_scheme *sc)
+static inline bool op_with_let_s(s7_scheme *sc)
 {
   s7_pointer e;
   sc->code = cdr(sc->code);
@@ -82874,6 +82864,7 @@ static goto_t op_dox(s7_scheme *sc)
 	  bool use_opts = false;
 	  int32_t body_len = 0;
 	  opt_info *body[32];
+          #define MAX_OPT_BODY_SIZE 32
 	  p = code;
 
 	  if ((!no_cell_opt(code)) &&
@@ -82886,7 +82877,7 @@ static goto_t op_dox(s7_scheme *sc)
 		{
 		  int32_t k;
 		  sc->pc = 0;
-		  for (k = 0; (is_pair(p)) && (k < 32); k++, p = cdr(p), body_len++)
+		  for (k = 0; (is_pair(p)) && (k < MAX_OPT_BODY_SIZE); k++, p = cdr(p), body_len++)
 		    {
 		      opt_info *start;
 		      start = sc->opts[sc->pc];
@@ -86918,8 +86909,22 @@ static void op_closure_3a(s7_scheme *sc)
   args = cdr(sc->code);
   f = opt1_lambda(sc->code);
   gc_protect_via_stack(sc, fx_call(sc, args)); /* [-2]=first */
-  sc->stack_end[-4] = fx_call(sc, cdr(args));
+  sc->stack_end[-4] = fx_call(sc, cdr(args));  /* [-4]=second */
   make_let_with_three_slots(sc, f, sc->stack_end[-2], sc->stack_end[-4], fx_call(sc, cddr(args)));
+  sc->stack_end -= 4;
+  sc->code = T_Pair(closure_body(f));
+  if_pair_set_up_begin(sc);
+}
+
+static void op_closure_4a(s7_scheme *sc) /* sass */
+{
+  s7_pointer f, args;
+  args = cdr(sc->code);
+  f = opt1_lambda(sc->code);
+  gc_protect_via_stack(sc, fx_call(sc, args)); /* [-2]=first */
+  sc->stack_end[-3] = fx_call(sc, cdr(args));  /* [-3]=second */
+  sc->stack_end[-4] = fx_call(sc, cddr(args)); /* [-4]=third */
+  make_let_with_four_slots(sc, f, sc->stack_end[-2], sc->stack_end[-3], sc->stack_end[-4], fx_call(sc, cdddr(args)));
   sc->stack_end -= 4;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
@@ -92044,7 +92049,7 @@ static bool op_unknown_all_a(s7_scheme *sc)
 				set_safe_optimize_op(code, hop + OP_CLOSURE_AAS);
 			      else set_safe_optimize_op(code, hop + OP_CLOSURE_3A);
 			    }}}}
-	      else set_safe_optimize_op(code, hop + OP_CLOSURE_ALL_A);
+	      else set_safe_optimize_op(code, hop + ((num_args == 4) ? OP_CLOSURE_4A : OP_CLOSURE_ALL_A));
 	    }
 	  set_opt1_lambda(code, f);
 	  return(true);
@@ -92835,6 +92840,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_CLOSURE_3A:  if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 3)) {if (op_unknown_all_a(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_3A: op_closure_3a(sc); goto EVAL;
+
+ 	case OP_CLOSURE_4A:  if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 4)) {if (op_unknown_all_a(sc)) goto EVAL; continue;}
+ 	case HOP_CLOSURE_4A: op_closure_4a(sc); goto EVAL;
 
 	case OP_CLOSURE_ALL_A: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, integer(opt3_arglen(cdr(sc->code))))) {if (op_unknown_all_a(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_ALL_A: op_closure_all_a(sc); goto EVAL;
@@ -95520,7 +95528,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->memq_symbol)), memq_p_pp);
   s7_set_p_pp_function(sc, slot_value(global_slot(sc->memv_symbol)), memv_p_pp);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->tree_leaves_symbol)), tree_leaves_p_p);
-  s7_set_p_p_function(sc, slot_value(global_slot(sc->length_symbol)), length_p_p);
+  s7_set_p_p_function(sc, slot_value(global_slot(sc->length_symbol)), s7_length);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->pair_line_number_symbol)), pair_line_number_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->c_pointer_info_symbol)), c_pointer_info_p_p);
   s7_set_p_p_function(sc, slot_value(global_slot(sc->c_pointer_type_symbol)), c_pointer_type_p_p);
@@ -97246,7 +97254,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 928) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 930) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97645,10 +97653,10 @@ int main(int argc, char **argv)
  * index      1076         1026   1016   1014   1015
  * tmock      7690         1177   1165   1166   1161
  * s7test     4527         1873   1831   1817   1817
- * lt         2117         2123   2110   2112   2108
+ * lt         2117         2123   2110   2112   2106
  * tcopy      2277         2256   2230   2219   2219
  * tmat       2418         2285   2258   2256   2258
- * tform      3319         2281   2273   2266   2266
+ * tform      3319         2281   2273   2266   2327
  * tread      2610         2440   2421   2412   2415
  * tvect      2649         2456   2413   2413   2413
  * trclo      4292         2715   2561   2560   2557
@@ -97668,18 +97676,17 @@ int main(int argc, char **argv)
  * tlet       5762         7775                 4709
  * tstr       6755         5281   4863   4765   4714
  * trec       7763         5976   5970   5970   5970
- * tnum       59.4         6348   6013   5998   5996
+ * tnum       59.4         6348   6013   5998   6003
  * tmisc      6506         7389   6210   6174   6185
  * tgc        12.5         11.9   11.1   11.0   11.0
  * tgen       12.3         11.2   11.4   11.3   11.4
  * thash      37.4         11.8   11.7   11.7   11.7
  * tall       26.9         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.2
- * sg         98.6         71.9   72.3   72.2   72.2
- * lg        105.4        106.6  105.0  105.1  104.9
+ * sg         98.6         71.9   72.3   72.2   72.8
+ * lg        105.4        106.6  105.0  105.1  104.8
  * tbig      600.0        177.4  175.8  174.3  174.3
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- * closure_4a+gc_protect? [check closure_3a]
  */

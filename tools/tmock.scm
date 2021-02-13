@@ -161,3 +161,4 @@
   (display (sort-counts (lint-reader (make-mock-hash-table)))) (newline))
 
 
+(exit)
