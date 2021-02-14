@@ -1370,7 +1370,7 @@ struct s7_scheme {
   opt_info *opts[OPTS_SIZE + 1]; /* this form is a lot faster than opt_info**! */
   heap_block_t *heap_blocks;
 
-  #define INITIAL_SAVED_POINTERS_SIZE 256
+  #define INITIAL_SAVED_POINTERS_SIZE 256 /* s7test: 838, thash: 55377, trec: 81 */
   void **saved_pointers;
   s7_int saved_pointers_loc, saved_pointers_size;
 
@@ -53918,7 +53918,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
    *   else send out the error info ourselves.
    */
 
-  /* fprintf(stderr, "s7_error[55013]: %s %s\n", display(type), display(info)); */
   sc->format_depth = -1;
   sc->gc_off = false;             /* this is in case we were triggered from the sort function -- clumsy! */
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
@@ -54507,13 +54506,15 @@ static s7_pointer missing_close_paren_error(s7_scheme *sc)
 static void improper_arglist_error(s7_scheme *sc)
 {
   /* sc->code is the last (dotted) arg, sc->args is the arglist reversed not including sc->code
-   *   the original was `(,@(reverse args) . ,code) essentially
+   *   the original was `(func ,@(reverse args) . ,code) essentially where func is sc->value or pop_op_stack(sc)
    */
+  s7_pointer func;
+  func = pop_op_stack(sc);
   if (sc->args == sc->nil)               /* (abs . 1) */
-    s7_error(sc, sc->syntax_error_symbol, set_elist_1(sc, wrap_string(sc, "function call is a dotted list?", 31)));
+    s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "attempt to evaluate (~S . ~S)?", 30), func, sc->code));
   else s7_error(sc, sc->syntax_error_symbol,
-		set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30),
-				append_in_place(sc, sc->args = proper_list_reverse_in_place(sc, sc->args), sc->code)));
+		set_elist_4(sc, wrap_string(sc, "attempt to evaluate (~S ~S . ~S)?", 33),
+			    func, sc->args = proper_list_reverse_in_place(sc, sc->args), sc->code));
 }
 
 static void op_error_hook_quit(s7_scheme *sc)
@@ -67271,12 +67272,12 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
       opt_info *opc;
       int32_t i;
       opc = alloc_opo(sc);
-      opc->v[1].p = lookup_slot_from(caar(cadr(car_x)), sc->curlet);
+      opc->v[1].p = lookup_slot_from(caaadr(car_x), sc->curlet);
       if (!is_slot(opc->v[1].p))
 	return_false(sc, car_x);
 
       opc->v[4].o1 = sc->opts[sc->pc];
-      if (!cell_optimize(sc, cdar(cadr(car_x))))
+      if (!cell_optimize(sc, cdaadr(car_x)))
 	return_false(sc, car_x);
 
       for (i = LET_TEMP_O1, p = cddr(car_x); is_pair(p); i++, p = cdr(p))
@@ -67299,11 +67300,9 @@ static void let_set_has_pending_value(s7_pointer lt)
 {
   s7_pointer vp;
   for (vp = let_slots(lt); tis_slot(vp); vp = next_slot(vp))
-    {
-      if (!slot_pending_value_unchecked(vp))
-	slot_set_pending_value(vp, eof_object);
-      else slot_set_has_pending_value(vp);
-    }
+    if (!slot_pending_value_unchecked(vp))
+      slot_set_pending_value(vp, eof_object);
+    else slot_set_has_pending_value(vp);
 }
 
 static void let_clear_has_pending_value(s7_pointer lt)
@@ -68353,10 +68352,9 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
     case OP_DO:
       return(opt_cell_do(sc, car_x, len));
 
-    default:
+    default: /* lambda let with-let define etc */
       break;
     }
-  /* Longjmp(sc->opt_exit, 1); */ /* what good could it do to back up?  But we need to make sure sc->curlet isn't clobbered (in op_do??) */
   return_false(sc, car_x);
 }
 
@@ -68936,7 +68934,7 @@ static s7_pointer make_iterators(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p;
   sc->temp3 = args;
-  sc->z = sc->nil;                                    /* don't use sc->args here -- it needs GC protection until we get the iterators */
+  sc->z = sc->nil;               /* don't use sc->args here -- it needs GC protection until we get the iterators */
   for (p = cdr(args); is_pair(p); p = cdr(p))
     {
       s7_pointer iter;
@@ -73343,7 +73341,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		  if (is_fxable(sc, arg1))
 		    {
 		      if (is_fxable(sc, arg2))
-			return(check_c_aa(sc, expr, func, hop, e));
+			return(check_c_aa(sc, expr, func, hop, e)); /* AA case */
 		      set_optimize_op(expr, hop + OP_SAFE_C_AP);
 		      fx_annotate_arg(sc, cdr(expr), e);
 		      gx_annotate_arg(sc, cddr(expr), e);
@@ -73358,7 +73356,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 			  gx_annotate_arg(sc, cdr(expr), e);
 			  set_opt3_arglen(cdr(expr), int_two);
 			}
-		      else gx_annotate_args(sc, cdr(expr), e);
+		      else gx_annotate_args(sc, cdr(expr), e); 
 		    }}
 	      choose_c_function(sc, expr, func, 2); /* this might change the op to safe_c_c, so it has to be last */
 	      return(OPT_T);
@@ -74556,7 +74554,6 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 
   op = (opcode_t)syntax_opcode(func);
   /* pair_set_syntax_op(expr, op); */ /* much slower?? */
-  /* fprintf(stderr, "%s: %s\n", op_names[op], display_80(expr)); */
 
   sc->w = e;
   body = cdr(expr);
@@ -75153,8 +75150,6 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	    return(OPT_F);
 
 	  /* we miss implicit indexing here because at this time, the data are not set */
-	  /* if ((is_any_closure(func)) && (!is_safe_procedure(func))) fprintf(stderr, "unsafe: %s %s\n", display(func), display_80(expr)); */
-
 	  if ((is_t_procedure(func)) ||                  /* t_procedure_p: c_funcs, closures, etc */
 	      (is_any_closure(func)) ||                  /* added 11-Mar-20 */
 	      (is_safe_procedure(func)))                 /* built-in applicable objects like vectors */
@@ -75965,7 +75960,6 @@ static body_t body_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer body, bool
   bool follow = false;
   s7_pointer p, sp;
   body_t result = VERY_SAFE_BODY;
-  /* fprintf(stderr, "%s: %s %s %d\n", __func__, display(func), display(body), at_end); */
   for (p = body, sp = body; is_pair(p); p = cdr(p))
     {
       if (is_pair(car(p)))
@@ -78430,7 +78424,6 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			  fx_annotate_arg(sc, cdr(code), sc->curlet);
 			  pair_set_syntax_op(form, OP_IF_IS_TYPE_S_A_A);
 			  /* set_optimized(form); */ /* this checks flag==optimized_pair which excludes syntactic?? */
-			  /* fprintf(stderr, "form: %s, opt: %d %p\n", display(form), is_optimized(form), fx_function[optimize_op(form)]); */
 			}
 		      else pair_set_syntax_op(form, OP_IF_IS_TYPE_S_P_A);
 		      set_opt2_pair(form, cddr(code));
@@ -85910,7 +85903,6 @@ static void op_define_with_setter(s7_scheme *sc)
   code = sc->code;
   if ((is_immutable(sc->curlet)) &&
       (is_let(sc->curlet))) /* not () */
-    /* immutable_error(sc, "define ~S: let is immutable", 27, code); */
     s7_error(sc, sc->immutable_error_symbol, set_elist_2(sc, wrap_string(sc, "can't define ~S: curlet is immutable", 36), code));
 
   if ((is_any_closure(sc->value)) &&
@@ -89881,7 +89873,6 @@ static void op_x_a(s7_scheme *sc, s7_pointer f)
   s7_pointer code;
   code = sc->code;
   sc->code = f;
-  /* if (sc->cur_op == OP_A_A) fprintf(stderr, "op_x_a: %s %s %s %d\n", display(code), display(f), s7_type_names[type(f)], is_applicable(f)); */
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
   sc->args = (dont_eval_args(sc->code)) ? list_1(sc, cadr(code)) : list_1(sc, fx_call(sc, cdr(code)));
@@ -89892,7 +89883,6 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
   s7_pointer code;
   code = sc->code;
   sc->code = f;
-  /* if (sc->cur_op == OP_A_AA) fprintf(stderr, "op_x_aa: %s %s %s %d\n", display(code), display(f), s7_type_names[type(f)], is_applicable(f)); */
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
   if (dont_eval_args(sc->code))
@@ -90613,7 +90603,6 @@ static void op_eval_args5(s7_scheme *sc)      /* sc->value is the last arg, sc->
 
 static bool eval_args_no_eval_args(s7_scheme *sc)
 {
-  /* fprintf(stderr, "value: %s, code: %s\n", display(sc->value), display(sc->code)); */
   if ((is_any_macro(sc->value)) /* || (is_syntactic(sc->value))*/)
     {
       sc->args = copy_proper_list_with_arglist_error(sc, cdr(sc->code)); /* check the first time around */
@@ -90887,7 +90876,6 @@ static bool eval_car_pair(s7_scheme *sc)
   s7_pointer code, carc;
   code = sc->code;
   carc = car(code);
-  /* fprintf(stderr, "%s %s\n", display(code), op_names[optimize_op(carc)]); */
 
   /* evaluate the inner list but that list can be circular: carc: #1=(#1# #1#)!
    *   and the cycle can be well-hidden -- #1=((#1 2) . 2) and other such stuff
@@ -92092,7 +92080,7 @@ static bool op_unknown_all_a(s7_scheme *sc)
     default:
       break;
     }
-  /* closure happens if wrong-number-of-args passed -- probably no need for op_s_fx */
+  /* closure happens if wrong-number-of-args passed -- probably no need for op_s_all_a */
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
 
@@ -92218,9 +92206,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
     TOP_NO_POP:
 #if SHOW_EVAL_OPS
       safe_print(fprintf(stderr, "%s (%d), code: %s\n", op_names[sc->cur_op], (int)(sc->cur_op), display_80(sc->code)));
-#endif
-#if 0
-      scan_opts(sc);
 #endif
       /* it is only slightly faster to use labels as values (computed gotos) here. In my timing tests (June-2018), the best case speedup was in titer.scm
        *    callgrind numbers 4808 to 4669; another good case was tread.scm: 2410 to 2386.  Most timings were a draw.  computed-gotos-s7.c has the code,
@@ -92625,12 +92610,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_THUNK_ANY: op_thunk_any(sc); goto BEGIN;
 
 	case OP_SAFE_THUNK_A: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_A, 0)) {if (op_unknown(sc)) goto EVAL; continue;}
-#if S7_DEBUGGING
-	  if (is_pair(cdr(closure_body(opt1_lambda(sc->code)))))
-	    fprintf(stderr, "%s[%d]: op_safe_thunk_a not one form\n", __func__, __LINE__);
-	  if (!has_fx(closure_body(opt1_lambda(sc->code))))
-	    fprintf(stderr, "%s[%d]: op_safe_thunk_a body not fx\n", __func__, __LINE__);
-#endif
 	case HOP_SAFE_THUNK_A: sc->value = op_safe_thunk_a(sc, sc->code); continue;
 
 	case OP_CLOSURE_S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 1)) {if (op_unknown_g(sc)) goto EVAL; continue;}
@@ -93024,7 +93003,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	EVAL_ARGS_TOP:
 	case OP_EVAL_ARGS:
-	  /* fprintf(stderr, "code: %s, value: %s %d %d\n", display_80(sc->code), display(sc->value), dont_eval_args(sc->value), is_syntactic(sc->value)); */
 	  if (dont_eval_args(sc->value))
 	    {
 	      if (eval_args_no_eval_args(sc)) goto APPLY;
@@ -93078,8 +93056,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      /* drop into APPLY */
 	    }
 	  else                       /* got all args -- go to apply */
-	    {
-	      if (is_not_null(sc->code))
+	    { /* *(--sc->op_stack_now) is the "function" (sc->value perhaps), sc->code is the arglist end, sc->args might be the preceding args reversed? */
+	      if (is_not_null(sc->code))  
 		improper_arglist_error(sc);
 	      else
 		{
@@ -94047,7 +94025,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       clear_all_optimizations(sc, sc->code);
 
     UNOPT:
-      /* fprintf(stderr, "unopt: %s\n", display(sc->code)); */
       switch (trailers(sc))
 	{
 	case goto_top_no_pop:    goto TOP_NO_POP;
@@ -94249,26 +94226,23 @@ static s7_pointer memory_usage(s7_scheme *sc)
   make_slot_1(sc, mu_let, make_symbol(sc, "strings"), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
 
   /* vectors */
-  for (k = 0, gp = sc->vectors; k < 2; k++)
-    {
-      for (i = 0; i < gp->loc; i++)
-	{
-	  s7_pointer v;
-	  v = gp->list[i];
-	  if (is_float_vector(v))
-	    flen += vector_length(v);
-	  else
-	    {
-	      if (is_int_vector(v))
-		ilen += vector_length(v);
-	      else
-		{
-		  if (is_byte_vector(v))
-		    blen += vector_length(v);
-		  else vlen += vector_length(v);
-		}}}
-      gp = sc->multivectors;
-    }
+  for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
+    for (i = 0; i < gp->loc; i++)
+      {
+	s7_pointer v;
+	v = gp->list[i];
+	if (is_float_vector(v))
+	  flen += vector_length(v);
+	else
+	  {
+	    if (is_int_vector(v))
+	      ilen += vector_length(v);
+	    else
+	      {
+		if (is_byte_vector(v))
+		  blen += vector_length(v);
+		else vlen += vector_length(v);
+	      }}}
   make_slot_1(sc, mu_let, make_symbol(sc, "vectors"),
 	      s7_list(sc, 9,
 		      make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
@@ -97689,4 +97663,6 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
+ * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last
+ * fx_old_let_a... et al? other fx_recur* cases? this would be safe_closure...?
  */

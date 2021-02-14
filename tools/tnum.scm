@@ -24,12 +24,11 @@
 	    (do ((k 0 (+ k 1)))
 		((= k N))
 	      (set! sum (+ sum (* (vals k) (exp (/ (* c k i) N))))))
-	    (set! (w i) (magnitude sum))
-	    (set! pk (max pk (w i))))
+	    (set! pk (max pk (vector-set! w i (magnitude sum)))))
 	  ;; scale to 1.0 (it's usually pretty close already, that is pk is close to 1.0)
 	  (do ((i 0 (+ i 1)))
 	      ((= i N))
-	    (set! (w i) (/ (w i) pk)))
+	    (vector-set! w i (/ (vector-ref w i) pk)))
 	  w)))))
 
 (dolph-1 (expt 2 10) 0.5)
@@ -516,16 +515,16 @@
 	      (set! sum (+ sum del)))))))
 
 (define (gcf a x)			;Q(a,x) evaluated as continued fraction
-  (let* ((itmax 100)
-	 (eps 3.0e-7)
-	 (gln (gammln a))
-	 (gold 0.0)			;previous value of g, tested for convergence
-	 (a0 1.0)
-	 (a1 x)
-	 (b0 0.0)
-	 (b1 1.0)			;setting up continued fraction
-	 (fac 1.0)
-	 (ana 0.0) (g 0.0) (anf 0.0))
+  (let ((itmax 100)
+	(eps 3.0e-7)
+	(gln (gammln a))
+	(gold 0.0)			;previous value of g, tested for convergence
+	(a0 1.0)
+	(a1 x)
+	(b0 0.0)
+	(b1 1.0)			;setting up continued fraction
+	(fac 1.0)
+	(ana 0.0) (g 0.0) (anf 0.0))
     (call-with-exit
      (lambda (return)
        (do ((n 1 (+ n 1)))
@@ -670,8 +669,7 @@
 		       (s3 (series 5 id))
 		       (s4 (series 6 id)))
 		   (- (+ (* 4.0 s1) (* -2.0 s2)) s3 s4))))
-	(set! pid (- (+ 1.0 pid) (floor pid)))
-	(ihex pid 10 chx)
+	(ihex (- (+ 1.0 pid) (floor pid)) 10 chx)
 	chx))))
 
 (define (test-digits)
