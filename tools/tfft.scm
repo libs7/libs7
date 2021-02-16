@@ -4,8 +4,8 @@
 (define (b_fft areal aimag)
   (let ((ar 0)
         (ai 0)
-        (i 0)
-        (j 0)
+        (i 1)
+        (j 1)
         (k 0)
         (m 0)
         (n 0)
@@ -28,14 +28,10 @@
     (set! nv2 (quotient n 2))
     (set! nm1 (- n 1))
     
-    (set! m 0)
-    (set! i 1)
     (do ()
 	((>= i n))
       (set! m (+ m 1))
       (set! i (+ i i)))
-    
-    (set! j 1)
     (set! i 1)
     
     (do ()
