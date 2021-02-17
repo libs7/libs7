@@ -2515,9 +2515,10 @@ void s7_show_history(s7_scheme *sc);
 
 #define T_FULL_BINDER                  (1LL << (TYPE_BITS + BIT_ROOM + 27))
 #define T_BINDER                       (1 << 3)
-/* #define is_binder(p)                has_type1_bit(T_Sym(p), T_BINDER) */
-#define set_is_binder(p)               set_type1_bit(T_Sym(p), T_BINDER)
+#define is_syntax_binder(p)            ((is_syntax(p)) && (has_type1_bit(T_Syn(p), T_BINDER)))
+#define set_syntax_is_binder(p)        do {set_type1_bit(T_Syn(slot_value(initial_slot(p))), T_BINDER); set_type1_bit(T_Sym(p), T_BINDER);} while (0)
 #define is_definer_or_binder(p)        has_type1_bit(T_Sym(p), T_DEFINER | T_BINDER)
+#define is_syntax_definer_or_binder(p) ((is_syntax(p)) && (has_type1_bit(T_Syn(p), T_DEFINER | T_BINDER)))
 /* this marks "binders" like let */
 
 #define T_SAFE_ARGS                    T_BINDER
@@ -4771,7 +4772,6 @@ static bool has_odd_bits(s7_pointer obj)
   if ((full_typ & UNUSED_BITS) != 0) return(true);
   if (((full_typ & T_MULTIFORM) != 0) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_KEYWORD) != 0) && ((!is_symbol(obj)) || (!is_global(obj)) || (is_gensym(obj)))) return(true);
-  if (((full_typ & T_FULL_BINDER) != 0) && ((!is_pair(obj)) && (!is_hash_table(obj)) && (!is_normal_symbol(obj)) && (!is_c_function(obj)))) return(true);
   if (((full_typ & T_SYNTACTIC) != 0) && (!is_syntax(obj)) && (!is_pair(obj)) && (!is_normal_symbol(obj))) return(true);
   if (((full_typ & T_SIMPLE_ARG_DEFAULTS) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_OPTIMIZED) != 0) && (!is_c_function(obj)) && (!is_pair(obj))) return(true);
@@ -4790,6 +4790,9 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_FULL_HAS_GX) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
+  if (((full_typ & T_FULL_BINDER) != 0) && 
+      ((!is_pair(obj)) && (!is_hash_table(obj)) && (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))))
+    return(true);
   if (((full_typ & T_FULL_DEFINER) != 0) &&
       (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_iterator(obj)) && 
       (!is_hash_table(obj)) && (!is_let(obj)) && (!is_syntax(obj))) 
@@ -10477,6 +10480,7 @@ static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
   /* I believe that we would not have been optimized to begin with if the tree were circular,
    *   and this tree is supposed to be a function call + args -- a circular list here is a bug.
+   *   but (define x <circular list>)?
    */
   if (is_pair(p))
     {
@@ -10489,6 +10493,19 @@ static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 	}
       clear_all_optimizations(sc, cdr(p));
       clear_all_optimizations(sc, car(p));
+    }
+}
+
+static void really_clear_all_optimizations(s7_scheme *sc, s7_pointer p)
+{
+  if ((is_pair(p)) &&
+      (car(p) != sc->quote_symbol))
+    {
+      clear_optimized(p);
+      clear_optimize_op(p);
+      clear_has_fx(p);
+      really_clear_all_optimizations(sc, cdr(p));
+      really_clear_all_optimizations(sc, car(p));
     }
 }
 
@@ -56081,18 +56098,14 @@ static s7_pointer fx_cddr_t(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer p;
   p = t_lookup(sc, cadr(arg), arg);
-  if ((is_pair(p)) && (is_pair(cdr(p))))
-    return(cddr(p));
-  return(simple_wrong_type_argument(sc, sc->cddr_symbol, p, T_PAIR));
+  return(((is_pair(p)) && (is_pair(cdr(p)))) ? cddr(p) : g_cddr(sc, set_plist_1(sc, p)));
 }
 
 static s7_pointer fx_cddr_u(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer p;
   p = u_lookup(sc, cadr(arg), arg);
-  if ((is_pair(p)) && (is_pair(cdr(p))))
-    return(cddr(p));
-  return(simple_wrong_type_argument(sc, sc->cddr_symbol, p, T_PAIR));
+  return(((is_pair(p)) && (is_pair(cdr(p)))) ? cddr(p) : g_cddr(sc, set_plist_1(sc, p)));
 }
 
 static s7_pointer fx_is_null_s(s7_scheme *sc, s7_pointer arg)   {return((is_null(lookup(sc, cadr(arg)))) ? sc->T : sc->F);}
@@ -56948,7 +56961,18 @@ static s7_pointer fx_c_opstq_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_p_t)opt2_direct(cdr(arg)))(sc, ((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt3_sym(arg)), t_lookup(sc, opt1_sym(cdr(arg)), arg))));
 }
 
-static s7_pointer fx_is_zero_remainder_1(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_is_zero_remainder_car(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer u, t;
+  u = u_lookup(sc, opt3_sym(arg), arg);
+  u = (is_pair(u)) ? car(u) : g_car(sc, set_plist_1(sc, u)); /* g_car much less overhead than car_p_p or simple_error(?) */
+  t = t_lookup(sc, opt1_sym(cdr(arg)), arg);
+  if ((is_t_integer(u)) && (is_t_integer(t)))
+    return(make_boolean(sc, c_rem_int(sc, integer(u), integer(t)) == 0));
+  return(is_zero_p_p(sc, remainder_p_pp(sc, u, t)));
+}
+
+static s7_pointer fx_is_zero_remainder_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer s, t;
   s = lookup(sc, opt3_sym(arg));
@@ -57957,17 +57981,6 @@ static s7_pointer fx_c_at(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_add_as(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, fx_call(sc, cdr(arg)), lookup(sc, opt3_sym(arg))));}
 static s7_pointer fx_add_sa(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, lookup(sc, opt3_sym(arg)), fx_call(sc, cddr(arg))));}
-
-static s7_pointer fx_is_zero_remainder(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer u, t, rarg;
-  rarg = cdadr(arg);
-  u = ((s7_p_p_t)opt3_direct(rarg))(sc, u_lookup(sc, cadar(rarg), arg));
-  t = t_lookup(sc, cadr(rarg), arg);
-  if ((is_t_integer(u)) && (is_t_integer(t)))
-    return(make_boolean(sc, c_rem_int(sc, integer(u), integer(t)) == 0));
-  return(is_zero_p_p(sc, remainder_p_pp(sc, u, t)));
-}
 
 static s7_pointer fx_add_aa(s7_scheme *sc, s7_pointer arg)
 {
@@ -59564,14 +59577,19 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 
 static s7_b_7p_t s7_b_7p_function(s7_pointer f);
 
-/* #define fx_tree_in(Sc, Tree, Var1, Var2) fx_tree_in_1(Sc, Tree, Var1, Var2, __func__, __LINE__) */
-static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2) /* var2 can be NULL */
+#define SHOW_FX_TREE 0
+#if SHOW_FX_TREE
+#define fx_tree_in(Sc, Tree, Var1, Var2) fx_tree_in_1(Sc, Tree, Var1, Var2, __func__, __LINE__) 
+static bool fx_tree_in_1(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2, const char *func, int line)
+#else
+static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2) /* const char *func, int line) */ /* var2 can be NULL */
+#endif
 {
   /* extending this to a third variable did not get many hits */
   s7_pointer p;
-#if 0
+#if SHOW_FX_TREE
   if (is_pair(car(tree)))
-    fprintf(stderr, "  %s[%d] %s %s %d %s: %s\n", __func__, __LINE__, display(var1), (var2) ? display(var2) : "", has_fx(tree), op_names[optimize_op(car(tree))], display(car(tree)));
+    fprintf(stderr, "  %s[%d] %s %s %d %s: %s\n", func, line, display(var1), (var2) ? display(var2) : "", has_fx(tree), op_names[optimize_op(car(tree))], display(car(tree)));
 #endif
 #if S7_DEBUGGING
   if ((!is_symbol(var1)) || ((var2) && (!is_symbol(var2))))
@@ -59965,7 +59983,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    {
 	      set_opt1_sym(cdr(p), var1);
 	      if ((opt2_direct(cdr(p)) == (s7_pointer)is_zero_p_p) && (opt3_direct(cdr(p)) == (s7_pointer)remainder_p_pp))
-		return(with_fx(tree, fx_is_zero_remainder_1));
+		return(with_fx(tree, fx_is_zero_remainder_s));
 	      return(with_fx(tree, fx_c_opstq_direct));
 	    }}
       if ((cadadr(p) == var2) && (fx_proc(tree) == fx_not_opssq) && (caddadr(p) == var1))
@@ -60048,8 +60066,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
     case HOP_SAFE_C_AC:
       if ((fx_proc(tree) == fx_c_ac) && (fn_proc(p) == g_num_eq_xi) && (caddr(p) == int_zero) &&
-	  (fx_proc(cdr(p)) == fx_c_opuq_t_direct) && (caadr(p) == sc->remainder_symbol))
-	return(with_fx(tree, fx_is_zero_remainder));
+	  (fx_proc(cdr(p)) == fx_c_opuq_t_direct) && (caadr(p) == sc->remainder_symbol) && (fn_proc(cadadr(p)) == g_car))
+	{
+	  set_opt3_sym(p, cadr(cadr(cadr(p))));
+	  set_opt1_sym(cdr(p), caddr(cadr(p)));
+	  return(with_fx(tree, fx_is_zero_remainder_car));
+	}
       break;
 
     case HOP_SAFE_CLOSURE_S_A:
@@ -60078,12 +60100,16 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
   return(false);
 }
 
-/* #define fx_tree(Sc, Tree, Var1, Var2) fx_tree_1(Sc, Tree, Var1, Var2, __func__, __LINE__) */
-static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2) /* , const char *func, int line) */
+#if SHOW_FX_TREE
+#define fx_tree(Sc, Tree, Var1, Var2) fx_tree_1(Sc, Tree, Var1, Var2, __func__, __LINE__)
+static void fx_tree_1(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2, const char *func, int line)
+#else
+static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2) /* const char *func, int line) */
+#endif
 {
-#if 0
+#if SHOW_FX_TREE
   if (is_pair(tree))
-    fprintf(stderr, "fx_tree %s, has_fx: %d, vars: %s %s\n", display_80(tree), has_fx(tree), display(var1), (var2) ? display(var2) : "");
+    fprintf(stderr, "%s[%d] fx_tree %s, has_fx: %d, vars: %s %s\n", func, line, display_80(tree), has_fx(tree), display(var1), (var2) ? display(var2) : "");
 #endif
 
   if (!is_pair(tree)) return;
@@ -60094,7 +60120,7 @@ static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer 
 	fx_tree(sc, cddr(tree), caaadr(tree), NULL);
       return;
     }
-  if (is_syntax(car(tree))) return; /* someday let #_when/#_if etc through */
+  if (is_syntax(car(tree))) return; /* someday let #_when/#_if etc through -- the symbol 'if, for example, is not syntax */
 
   if ((!has_fx(tree)) ||
       (!fx_tree_in(sc, tree, var1, var2)))
@@ -74554,8 +74580,6 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
   bool body_export_ok = true;
 
   op = (opcode_t)syntax_opcode(func);
-  /* pair_set_syntax_op(expr, op); */ /* much slower?? */
-
   sc->w = e;
   body = cdr(expr);
 
@@ -75126,7 +75150,6 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
   s7_pointer car_expr;
   int32_t orig_hop;
   orig_hop = hop;
-
   set_checked(expr);
   car_expr = car(expr);
 
@@ -75207,6 +75230,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	      else s7_warn(sc, 1024, "; %s might be undefined\n", display(car_expr));
 	      symbol_set_tag(car_expr, 1);        /* one warning is enough */
 	    }}
+
       /* car_expr is a symbol but it's not a built-in procedure or a "safe" case = vector etc */
       {
 	/* else maybe it's something like a let variable binding: (sqrtfreq (sqrt frequency)) */
@@ -85073,7 +85097,6 @@ static void apply_syntax(s7_scheme *sc)                            /* -------- s
   sc->cur_op = (opcode_t)syntax_opcode(sc->code);                  /* (apply begin '((define x 3) (+ x 2))) */
   /* I had elaborate checks here for embedded circular lists, but now I think that is the caller's problem */
   sc->code = cons(sc, sc->code, sc->args);
-
   pair_set_syntax_op(sc->code, sc->cur_op);
 }
 
@@ -91004,6 +91027,19 @@ static goto_t trailers(s7_scheme *sc)
 	      return(goto_top_no_pop);
 	    }
 	  sc->value = lookup_global(sc, carc);
+#if 0
+	  /* TODO: we really only care about binders here(?) -- things that can confuse fx_tree
+	   *   this block is too intrusive
+	   *   see t718.scm
+	   */
+	  if (is_syntax_binder(sc->value)) /* TODO: a bit to avoid repetition? */
+	    {
+	      if ((sc->safety > NO_SAFETY) &&
+		  (tree_is_cyclic(sc, sc->code)))
+		eval_error(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
+	      really_clear_all_optimizations(sc, code);
+	    }
+#endif
 	  set_optimize_op(code, OP_PAIR_SYM);	  /* mostly stuff outside functions (unopt) */
 	  return(goto_eval_args_top);
 	}
@@ -91567,6 +91603,19 @@ static bool op_unknown_a(s7_scheme *sc)
 	return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_A));
       }
 
+    case T_SYNTAX: /* uhoh... we optimized the args, but unbeknownst to us, it's syntax, so at least any fx_tree opts are bogus if it's a binder/definer */
+      /* fprintf(stderr, "%s[%d]: syntax %s %s\n", __func__, __LINE__, display(code), op_names[optimize_op(code)]); */
+
+      /* TODO: if not definer/binder, use OP_S_A? or use OP_CLEAR_OPTS?? */
+      /*   or perhaps clear fx_tree settings? but that requires a table fx_u->fx_s etc */
+
+      if (is_syntax_binder(f)) /* maybe a bad idea */
+	{
+	  really_clear_all_optimizations(sc, code);
+	  return(fixup_unknown_op(code, f, OP_PAIR_SYM));
+	}
+      return(fixup_unknown_op(code, f, OP_S_A));
+  
     default:
       break;
     }
@@ -95794,7 +95843,7 @@ static s7_pointer binder_syntax(s7_scheme *sc, const char *name, opcode_t op, s7
 {
   s7_pointer x;
   x = syntax(sc, name, op, min_args, max_args, doc);
-  set_is_binder(x);
+  set_syntax_is_binder(x);
   return(x);
 }
 
@@ -95969,12 +96018,12 @@ static void init_syntax(s7_scheme *sc)
   sc->do_symbol =                binder_syntax(sc, "do",               OP_DO,                int_two,  max_arity,  H_do); /* 2 because body can be null */
   sc->lambda_symbol =            binder_syntax(sc, "lambda",           OP_LAMBDA,            int_two,  max_arity,  H_lambda);
   sc->lambda_star_symbol =       binder_syntax(sc, "lambda*",          OP_LAMBDA_STAR,       int_two,  max_arity,  H_lambda_star);
-  sc->macro_symbol =             definer_syntax(sc, "macro",           OP_MACRO,             int_two,  max_arity,  H_macro);
-  sc->macro_star_symbol =        definer_syntax(sc, "macro*",          OP_MACRO_STAR,        int_two,  max_arity,  H_macro_star);
-  sc->bacro_symbol =             definer_syntax(sc, "bacro",           OP_BACRO,             int_two,  max_arity,  H_bacro);
-  sc->bacro_star_symbol =        definer_syntax(sc, "bacro*",          OP_BACRO_STAR,        int_two,  max_arity,  H_bacro_star);
+  sc->macro_symbol =             binder_syntax(sc, "macro",            OP_MACRO,             int_two,  max_arity,  H_macro);
+  sc->macro_star_symbol =        binder_syntax(sc, "macro*",           OP_MACRO_STAR,        int_two,  max_arity,  H_macro_star);
+  sc->bacro_symbol =             binder_syntax(sc, "bacro",            OP_BACRO,             int_two,  max_arity,  H_bacro);
+  sc->bacro_star_symbol =        binder_syntax(sc, "bacro*",           OP_BACRO_STAR,        int_two,  max_arity,  H_bacro_star);
   sc->with_let_symbol =          binder_syntax(sc, "with-let",         OP_WITH_LET,          int_one,  max_arity,  H_with_let);
-  sc->with_baffle_symbol =       definer_syntax(sc, "with-baffle",     OP_WITH_BAFFLE,       int_zero, max_arity,  H_with_baffle); /* (with-baffle) is () */
+  sc->with_baffle_symbol =       binder_syntax(sc, "with-baffle",      OP_WITH_BAFFLE,       int_zero, max_arity,  H_with_baffle); /* (with-baffle) is () */
   set_local_slot(sc->with_let_symbol, global_slot(sc->with_let_symbol)); /* for set_locals */
   set_immutable(sc->with_let_symbol);
   sc->setter_symbol = make_symbol(sc, "setter");
@@ -97660,4 +97709,5 @@ int main(int argc, char **argv)
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
+ * aux 4 and 11 (at least) can't handle aliased syntax
  */
