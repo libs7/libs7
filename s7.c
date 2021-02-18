@@ -1403,7 +1403,7 @@ static int V_ind_1(int index, const char *func, int line) {if (index >= NUM_VUNI
 #define V_ind(I) V_ind_1(I, __func__, __LINE__)
 #else
 #define opt_sc(o) o->sc
-#define V_ind(I)
+#define V_ind(I) I
 #endif
 #define opt_set_sc(o, sc) o->sc = sc
 
