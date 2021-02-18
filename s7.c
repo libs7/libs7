@@ -1399,8 +1399,11 @@ static s7_scheme *opt_sc(opt_info *o)
 }
 
 static void scan_opts(s7_scheme *sc, int lim) {int i; for (i = 0; i < lim; i++) opt_sc(sc->opts[i]);}
+static int V_ind_1(int index, const char *func, int line) {if (index >= NUM_VUNIONS) fprintf(stderr, "%s[%d]: o->v index %d\n", func, line, index); return(index);}
+#define V_ind(I) V_ind_1(I, __func__, __LINE__)
 #else
 #define opt_sc(o) o->sc
+#define V_ind(I)
 #endif
 #define opt_set_sc(o, sc) o->sc = sc
 
@@ -10493,19 +10496,6 @@ static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 	}
       clear_all_optimizations(sc, cdr(p));
       clear_all_optimizations(sc, car(p));
-    }
-}
-
-static void really_clear_all_optimizations(s7_scheme *sc, s7_pointer p)
-{
-  if ((is_pair(p)) &&
-      (car(p) != sc->quote_symbol))
-    {
-      clear_optimized(p);
-      clear_optimize_op(p);
-      clear_has_fx(p);
-      really_clear_all_optimizations(sc, cdr(p));
-      really_clear_all_optimizations(sc, car(p));
     }
 }
 
@@ -43794,7 +43784,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 			  top = alloc_opo(sc);
 			  for (ctr = SORT_O1, p = closure_body(lessp); is_pair(cdr(p)); ctr++, p = cdr(p))
 			    {
-			      top->v[ctr].o1 = sc->opts[sc->pc];
+			      top->v[V_ind(ctr)].o1 = sc->opts[sc->pc];
 			      if (!cell_optimize(sc, p))
 				break;
 			    }
@@ -43802,7 +43792,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 			    {
 			      int32_t start;
 			      start = sc->pc;
-			      top->v[ctr].o1 = sc->opts[start];
+			      top->v[V_ind(ctr)].o1 = sc->opts[start];
 			      if (bool_optimize_nw(sc, p))
 				sort_func = (sc->sort_body_len == 2) ? opt_begin_bool_sort_b2 : opt_begin_bool_sort_b;
 			      else
@@ -61331,7 +61321,7 @@ static bool i_add_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer car_x)
   head = car(car_x);
   for (cur_len = 0, p = cdr(car_x); (is_pair(p)) && (cur_len < 12); p = cdr(p), cur_len++)
     {
-      opc->v[2 + cur_len].o1 = sc->opts[sc->pc];
+      opc->v[V_ind(cur_len + 2)].o1 = sc->opts[sc->pc];
       if (!int_optimize(sc, p))
 	break;
     }
@@ -61342,7 +61332,7 @@ static bool i_add_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer car_x)
 	{
 	  int32_t i;
 	  for (i = 0; i < cur_len; i++)
-	    opc->v[i + 6].fi = opc->v[i + 2].o1->v[0].fi;
+	    opc->v[V_ind(i + 6)].fi = opc->v[i + 2].o1->v[0].fi;
 	}
       if (cur_len == 2)
 	opc->v[0].fi = (head == sc->add_symbol) ? opt_i_add2 : opt_i_mul2;
@@ -63424,7 +63414,7 @@ static bool d_add_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer car_x, int32_t
       int32_t cur_len;
       for (cur_len = 0, p = cdr(car_x); (is_pair(p)) && (cur_len < 12); p = cdr(p), cur_len++)
 	{
-	  opc->v[2 + cur_len].o1 = sc->opts[sc->pc];
+	  opc->v[V_ind(cur_len + 2)].o1 = sc->opts[sc->pc];
 	  if (!float_optimize(sc, p))
 	    break;
 	}
@@ -64277,7 +64267,7 @@ static bool opt_b_or_and(s7_scheme *sc, s7_pointer car_x, int32_t len, int32_t i
   opc->v[1].i = (len - 1);
   for (i = 0, p = cdr(car_x); (is_pair(p)) && (i < 12); i++, p = cdr(p))
     {
-      opc->v[i + 3].o1 = sc->opts[sc->pc];
+      opc->v[V_ind(i + 3)].o1 = sc->opts[sc->pc];
       if (!bool_optimize_nw(sc, p))
 	break;
     }
@@ -65741,7 +65731,7 @@ static bool p_call_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
       opc->v[1].i = (len - 1);
       for (pctr = P_CALL_O1, p = cdr(car_x); is_pair(p); pctr++, p = cdr(p))
 	{
-	  opc->v[pctr].o1 = sc->opts[sc->pc];
+	  opc->v[V_ind(pctr)].o1 = sc->opts[sc->pc];
 	  if (!cell_optimize(sc, p))
 	    break;
 	}
@@ -65932,7 +65922,7 @@ static bool p_implicit(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		      opc->v[1].i = len;
 		      for (pctr = 3, p = car_x; is_pair(p); pctr++, p = cdr(p))
 			{
-			  opc->v[pctr].o1 = sc->opts[sc->pc];
+			  opc->v[V_ind(pctr)].o1 = sc->opts[sc->pc];
 			  if (!cell_optimize(sc, p))
 			    break;
 			}
@@ -66643,7 +66633,7 @@ static bool opt_cell_begin(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	return_false(sc, car_x);
       if (is_pair(cdr(p)))
 	oo_idp_nr_fixup(start);
-      opc->v[i].o1 = start;
+      opc->v[V_ind(i)].o1 = start;
     }
   opc->v[1].i = len - 2;
   if (len == 3)
@@ -66722,7 +66712,7 @@ static bool opt_cell_when(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	return_false(sc, car_x);
       if (is_pair(cdr(p)))
 	oo_idp_nr_fixup(start);
-      opc->v[k].o1 = start;
+      opc->v[V_ind(k)].o1 = start;
     }
   opc->v[4].fb = opc->v[3].o1->v[0].fb;
   opc->v[1].i = len - 2;
@@ -66811,7 +66801,7 @@ static bool opt_cell_cond(s7_scheme *sc, s7_pointer car_x)
 	return_false(sc, clause);
 
       last_clause = clause;
-      top->v[branches + COND_O1].o1 = sc->opts[sc->pc];
+      top->v[V_ind(branches + COND_O1)].o1 = sc->opts[sc->pc];
       opc = alloc_opo(sc);
       opc->v[4].o1 = sc->opts[sc->pc];
       if (!bool_optimize(sc, clause))
@@ -66821,7 +66811,7 @@ static bool opt_cell_cond(s7_scheme *sc, s7_pointer car_x)
 	{
 	  if (blen >= NUM_VUNIONS - COND_CLAUSE_O1)
 	    return_false(sc, cp);
-	  opc->v[blen + COND_CLAUSE_O1].o1 = sc->opts[sc->pc];
+	  opc->v[V_ind(blen + COND_CLAUSE_O1)].o1 = sc->opts[sc->pc];
 	  if (!cell_optimize(sc, cp))
 	    return_false(sc, cp);
 	}
@@ -66849,7 +66839,7 @@ static bool opt_cell_cond(s7_scheme *sc, s7_pointer car_x)
 	{
 	  opt_info *o1;
 	  top->v[6].o1 = top->v[COND_O1].o1->v[COND_CLAUSE_O1].o1;
-	  top->v[7].o1 = top->v[1 + COND_O1].o1->v[COND_CLAUSE_O1].o1;
+	  top->v[7].o1 = top->v[COND_O1 + 1].o1->v[COND_CLAUSE_O1].o1;
 
 	  o1 = sc->opts[start_pc + 1];
 	  top->v[4].o1 = o1;
@@ -66935,7 +66925,7 @@ static bool opt_cell_and(s7_scheme *sc, s7_pointer car_x, int32_t len)
 
       for (i = 3, p = cdr(car_x); is_pair(p); i++, p = cdr(p))
 	{
-	  opc->v[i].o1 = sc->opts[sc->pc];
+	  opc->v[V_ind(i)].o1 = sc->opts[sc->pc];
 	  if (!cell_optimize(sc, p))
 	    return_false(sc, car_x);
 	}
@@ -67219,7 +67209,7 @@ static bool opt_cell_case(s7_scheme *sc, s7_pointer car_x)
 	    return_false(sc, clause);
 
 	  opc = alloc_opo(sc);
-	  top->v[ctr].o1 = opc;
+	  top->v[V_ind(ctr)].o1 = opc;
 	  if (car(clause) == sc->else_symbol)
 	    {
 	      if (!is_null(cdr(p)))
@@ -67235,7 +67225,7 @@ static bool opt_cell_case(s7_scheme *sc, s7_pointer car_x)
 
 	  for (blen = 0, cp = cdr(clause); (is_pair(cp)) && (blen < (NUM_VUNIONS - 3)); blen++, cp = cdr(cp))
 	    {
-	      opc->v[blen + CASE_CLAUSE_O1].o1 = sc->opts[sc->pc];
+	      opc->v[V_ind(blen + CASE_CLAUSE_O1)].o1 = sc->opts[sc->pc];
 	      if (!cell_optimize(sc, cp))
 		return_false(sc, cp);
 	    }
@@ -67311,7 +67301,7 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
 
       for (i = LET_TEMP_O1, p = cddr(car_x); is_pair(p); i++, p = cdr(p))
 	{
-	  opc->v[i].o1 = sc->opts[sc->pc];
+	  opc->v[V_ind(i)].o1 = sc->opts[sc->pc];
 	  if (!cell_optimize(sc, p))
 	    return_false(sc, car_x);
 	}
@@ -67909,13 +67899,13 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
 
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_pointer var_list, bool *has_set);
 
-static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, bool *has_set)
+static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer stepper, bool *has_set)
 {
   if (!is_pair(body)) return(true);
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
-      if (!(do_is_safe(sc, body, (stepper != sc->nil) ? list_1(sc, stepper) : sc->nil, var_list, has_set)))
+      if (!(do_is_safe(sc, body, (stepper != sc->nil) ? list_1(sc, stepper) : sc->nil, sc->nil, has_set)))
 	set_unsafe_do(body);
     }
   return(!is_unsafe_do(body));
@@ -68044,7 +68034,9 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		sc->curlet = old_e;
 		return_false(sc, car_x);
 	      }}}
+#if S7_DEBUGGING
     if (k != var_len) fprintf(stderr, "inits: %d %d\n", k, var_len);
+#endif
   }
 
   /* end test */
@@ -68115,7 +68107,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       opt_info *start;
       start = sc->opts[sc->pc];
       body_o[k] = start;
-      if (i < 5) opc->v[i + 7].o1 = start;
+      if (i < 5) opc->v[V_ind(i + 7)].o1 = start;
       if (!cell_optimize(sc, p))
 	break;
       oo_idp_nr_fixup(start);
@@ -68184,7 +68176,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	{
 	  body = alloc_opo(sc);
 	  for (k = 0; k < body_len; k++)
-	    body->v[k].o1 = body_o[k];
+	    body->v[V_ind(k)].o1 = body_o[k];
 	  opc->v[7].o1 = body;
 	}
       return(true);
@@ -68221,7 +68213,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 
       inits = alloc_opo(sc);
       for (k = 0; k < var_len; k++)
-	inits->v[k].o1 = init_o[k];
+	inits->v[V_ind(k)].o1 = init_o[k];
       opc->v[7].o1 = inits;
 
       if (opc->v[0].fp == opt_do_any)
@@ -68230,17 +68222,17 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 
 	  body = alloc_opo(sc);
 	  for (k = 0; k < body_len; k++)
-	    body->v[k].o1 = body_o[k];
+	    body->v[V_ind(k)].o1 = body_o[k];
 	  opc->v[10].o1 = body;
 
 	  result = alloc_opo(sc);
 	  for (k = 0; k < rtn_len; k++)
-	    result->v[k].o1 = return_o[k];
+	    result->v[V_ind(k)].o1 = return_o[k];
 	  opc->v[11].o1 = result;
 
 	  step = alloc_opo(sc);
 	  for (k = 0; k < var_len; k++)
-	    step->v[k].o1 = step_o[k];
+	    step->v[V_ind(k)].o1 = step_o[k];
 	  opc->v[13].o1 = step;
 	}
       else
@@ -68264,7 +68256,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       opt_info *body;
       body = alloc_opo(sc);
       for (k = 0; k < body_len; k++)
-	body->v[k].o1 = body_o[k];
+	body->v[V_ind(k)].o1 = body_o[k];
       opc->v[7].o1 = body;
     }
   opc->v[11].o1 = sc->opts[init_pc];
@@ -68282,7 +68274,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  (cadr(ind_step) == ind) &&
 	  (caddr(ind_step) == int_one) &&
 	  (is_null(cdddr(ind_step))) &&
-	  (do_passes_safety_check(sc, cdddr(car_x), ind, sc->nil, &has_set)))
+	  (do_passes_safety_check(sc, cdddr(car_x), ind, &has_set)))
 	{
 	  s7_pointer slot;
 	  slot = let_slots(let);
@@ -68322,7 +68314,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    (cadr(ind_step) == ind) &&
 	    (is_null(cddr(ind_step))) &&
 	    (body_len == 1) &&
-	    (do_passes_safety_check(sc, cdddr(car_x), ind, sc->nil, &has_set)))
+	    (do_passes_safety_check(sc, cdddr(car_x), ind, &has_set)))
 	  opc->v[0].fp = opt_do_list_simple;
     }
   return(true);
@@ -81809,6 +81801,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		    case OP_AND:
 		    case OP_OR:
 		    case OP_BEGIN:
+		    case OP_WITH_BAFFLE:
 		      if (!do_is_safe(sc, cdr(expr), steppers, var_list, has_set))
 			return(false);
 		      break;
@@ -81826,6 +81819,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		      (optimize_op(expr) == OP_UNKNOWN_FP) ||
 		      (!do_is_safe(sc, cdr(expr), steppers, var_list, has_set)))
 		    return(false);
+
 		  if (is_setter(x))           /* "setter" includes stuff like cons and vector -- x is a symbol */
 		    {
 		      /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
@@ -82375,11 +82369,27 @@ static s7_pointer check_do(s7_scheme *sc)
 	else set_opt2_con(cdr(form), int_zero);
       }
 
-    if (do_passes_safety_check(sc, body, sc->nil, sc->nil, NULL))
+    if (do_passes_safety_check(sc, body, sc->nil, NULL))
       {
 	if (last_stepper)
 	  {
-	    fx_tree(sc, end, last_stepper, previous_stepper);
+	    if ((is_pair(car(end))) && 
+		(has_fx(end)) &&
+		(!(is_syntax(caar(end)))) &&
+		(!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
+	      {
+		if (!fx_tree_in(sc, end, last_stepper, previous_stepper)) /* just the end-test, not the results */
+		  fx_tree(sc, car(end), last_stepper, previous_stepper);  /* car(end) might be (or ...) */
+	      }
+	    if ((is_pair(cdr(end))) &&
+		(is_pair(cadr(end))) &&
+		(is_null(cddr(end))) &&
+		(has_fx(cdr(end))))
+	      {
+		if (!fx_tree_in(sc, cdr(end), last_stepper, previous_stepper))
+		  fx_tree(sc, cadr(end), last_stepper, previous_stepper);
+	      }
+	    /* the bad case for results: (let ((vals3t with-baffle)) func+do+ (vals3t (* 2 i 3 4))) -> fx_t|u trouble */
 
 	    if ((last_expr) && (is_pair(last_expr)))
 	      {
@@ -91027,19 +91037,6 @@ static goto_t trailers(s7_scheme *sc)
 	      return(goto_top_no_pop);
 	    }
 	  sc->value = lookup_global(sc, carc);
-#if 0
-	  /* TODO: we really only care about binders here(?) -- things that can confuse fx_tree
-	   *   this block is too intrusive
-	   *   see t718.scm
-	   */
-	  if (is_syntax_binder(sc->value)) /* TODO: a bit to avoid repetition? */
-	    {
-	      if ((sc->safety > NO_SAFETY) &&
-		  (tree_is_cyclic(sc, sc->code)))
-		eval_error(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
-	      really_clear_all_optimizations(sc, code);
-	    }
-#endif
 	  set_optimize_op(code, OP_PAIR_SYM);	  /* mostly stuff outside functions (unopt) */
 	  return(goto_eval_args_top);
 	}
@@ -91603,19 +91600,6 @@ static bool op_unknown_a(s7_scheme *sc)
 	return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_A));
       }
 
-    case T_SYNTAX: /* uhoh... we optimized the args, but unbeknownst to us, it's syntax, so at least any fx_tree opts are bogus if it's a binder/definer */
-      /* fprintf(stderr, "%s[%d]: syntax %s %s\n", __func__, __LINE__, display(code), op_names[optimize_op(code)]); */
-
-      /* TODO: if not definer/binder, use OP_S_A? or use OP_CLEAR_OPTS?? */
-      /*   or perhaps clear fx_tree settings? but that requires a table fx_u->fx_s etc */
-
-      if (is_syntax_binder(f)) /* maybe a bad idea */
-	{
-	  really_clear_all_optimizations(sc, code);
-	  return(fixup_unknown_op(code, f, OP_PAIR_SYM));
-	}
-      return(fixup_unknown_op(code, f, OP_S_A));
-  
     default:
       break;
     }
@@ -93333,9 +93317,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		return(sc->F);
 	    }
 	case OP_BEGIN_NO_HOOK:
-#if S7_DEBUGGING
-	  T_Pair(sc->code);
-#endif
 	  goto BEGIN;
 
 	case OP_BEGIN_1_UNCHECKED:
@@ -97665,49 +97646,48 @@ int main(int argc, char **argv)
  *             gmp (2-11)  20.9   21.0   21.1   21.2
  * -----------------------------------------------------
  * tpeak       128          115    114    114    114
- * tauto       786          648    642    647    647
+ * tauto       786          648    642    647    651
  * tref        739          691    687    687    689
  * tshoot     1663          883    872    872    872
- * index      1076         1026   1016   1014   1015  1013
- * tmock      7690         1177   1165   1166   1161  1159
- * s7test     4527         1873   1831   1817   1817  1806
- * lt         2117         2123   2110   2112   2106  2100
- * tcopy      2277         2256   2230   2219   2219
- * tmat       2418         2285   2258   2256   2258  2256
- * tform      3319         2281   2273   2266   2327  2322
+ * index      1076         1026   1016   1014   1013
+ * tmock      7690         1177   1165   1166   1159
+ * s7test     4527         1873   1831   1817   1810
+ * lt         2117         2123   2110   2112   2100
+ * tcopy      2277         2256   2230   2219   2218
+ * tmat       2418         2285   2258   2256   2258
+ * tform      3319         2281   2273   2266   2324
  * tread      2610         2440   2421   2412   2415
- * tvect      2649         2456   2413   2413   2413  2399
- * trclo      4292         2715   2561   2560   2557  2539
+ * tvect      2649         2456   2413   2413   2399
+ * trclo      4292         2715   2561   2560   2539
  * fbench     2980         2688   2583   2577   2573
- * tb         3472         2735   2681   2677   2658  2652
- * tmap       3759         2886   2857   2827   2827  2819
+ * tb         3472         2735   2681   2677   2654
+ * tmap       3759         2886   2857   2827   2819
  * titer      2860         2865   2842   2842   2842
- * tsort      3816         3105   3104   3097   3098  3096
- * dup        3456         3334   3332   3203   3202  3192
- * tmac       3326         3317   3277   3247   3246
- * tset       3287         3253   3104   3207   3270  3268
- * tio        3763         3816   3752   3738   3745  3707
- * teq        4054         4068   4045   4038   4039  4037
- * tfft       11.3         4142   4109   4107   4107  4104
+ * tsort      3816         3105   3104   3097   3096
+ * dup        3456         3334   3332   3203   3194
+ * tmac       3326         3317   3277   3247   3241
+ * tset       3287         3253   3104   3207   3268
+ * tio        3763         3816   3752   3738   3707
+ * teq        4054         4068   4045   4038   4033
+ * tfft       11.3         4142   4109   4107   4104
  * tclo       4949         4787   4735   4668   4583
- * tcase      4671         4960   4793   4669   4588  4580
- * tstr       6755         5281   4863   4765   4714  4652
- * tlet       5762         7775                 4676  4673
+ * tcase      4671         4960   4793   4669   4579
+ * tstr       6755         5281   4863   4765   4652
+ * tlet       5762         7775                 4673
  * trec       7763         5976   5970   5970   5970
- * tnum       59.4         6348   6013   5998   5999
- * tmisc      6506         7389   6210   6174   6216 [op_with_let_s]
+ * tnum       59.4         6348   6013   5998   5998
+ * tmisc      6506         7389   6210   6174   6216
  * tgc        12.5         11.9   11.1   11.0   10.7
- * tgen       12.3         11.2   11.4   11.3   11.4  11.3
+ * tgen       12.3         11.2   11.4   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.7
  * tall       26.9         15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.2  37.3
- * sg         98.6         71.9   72.3   72.2   72.7  72.8
- * lg        105.4        106.6  105.0  105.1  104.7  104.4
+ * calls      61.1         36.7   37.5   37.2   37.3
+ * sg         98.6         71.9   72.3   72.2   72.8
+ * lg        105.4        106.6  105.0  105.1  104.4
  * tbig      600.0        177.4  175.8  174.3  174.3
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
- * aux 4 and 11 (at least) can't handle aliased syntax
  */
