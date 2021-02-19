@@ -2167,7 +2167,19 @@ void s7_show_history(s7_scheme *sc);
   }
   #define set_local(Symbol) set_local_1(sc, Symbol, __func__, __LINE__)
 #else
+#if S7_DEBUGGING
+#define set_local(p)	   \
+  do {			   \
+    if (is_normal_symbol(p)) \
+      full_type(p) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC)); \
+    else								\
+      {									\
+        fprintf(stderr, "%s[%d]: %s set local\n", __func__, __LINE__, display(p)); \
+        if (sc->stop_at_error) abort();					\
+      }} while (0)
+#else
 #define set_local(p)                   full_type(T_Sym(p)) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC))
+#endif
 #endif
 
 #define T_HIGH_C                       T_LOCAL
@@ -2237,6 +2249,7 @@ void s7_show_history(s7_scheme *sc);
 #define set_shared(p)                  set_type_bit(T_Seq(p), T_SHARED)
 #define is_collected_or_shared(p)      has_type_bit(p, T_COLLECTED | T_SHARED)
 #define clear_collected_and_shared(p)  clear_type_bit(p, T_COLLECTED | T_SHARED) /* this can clear free cells = calloc */
+/* T_LOCAL is bit 12 */
 
 #define T_SAFE_PROCEDURE               (1 << (TYPE_BITS + 13))
 #define is_safe_procedure(p)           has_type_bit(T_Pos(p), T_SAFE_PROCEDURE) /* used in is_procedure so can't be T_App */
@@ -29142,7 +29155,7 @@ static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
   (*(port_output_function(port)))(sc, c, port);
 }
 
-static void file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
+static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
   if (port_position(port) == sc->output_port_data_size)
     {
@@ -29152,6 +29165,8 @@ static void file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
     }
   port_data(port)[port_position(port)++] = c;
 }
+
+static void file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port) {return(inline_file_write_char(sc, c, port));}
 
 static void input_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
@@ -57271,7 +57286,9 @@ static s7_pointer fx_c_opsq_s(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_c_opsq_s_direct(s7_scheme *sc, s7_pointer arg)
 {
-  return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt1_sym(cdr(arg)))), lookup(sc, caddr(arg))));
+  return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, 
+	    ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt1_sym(cdr(arg)))), 
+	    lookup(sc, caddr(arg))));
 }
 
 static s7_pointer fx_cons_car_s_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, lookup(sc, opt1_sym(cdr(arg)))), lookup(sc, caddr(arg))));}
@@ -63824,6 +63841,20 @@ static bool opt_b_7pp_sc(opt_info *o)     {return(o->v[3].b_7pp_f(opt_sc(o), slo
 static bool opt_b_7pp_sfo(opt_info *o)    {return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
 static bool opt_is_equal_sfo(opt_info *o) {return(s7_is_equal(opt_sc(o), slot_value(o->v[1].p), o->v[4].p_p_f(opt_sc(o), slot_value(o->v[2].p))));}
 
+static bool opt_car_equal_sf(opt_info *o) 
+{
+  s7_pointer p;
+  p = slot_value(o->v[2].p);
+  return(s7_is_equal(opt_sc(o), slot_value(o->v[1].p), (is_pair(p)) ? car(p) : g_car(opt_sc(o), set_plist_1(opt_sc(o), p))));
+}
+
+static bool opt_b_7pp_car_sf(opt_info *o)
+{
+  s7_pointer p;
+  p = slot_value(o->v[2].p);
+  return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), (is_pair(p)) ? car(p) : g_car(opt_sc(o), set_plist_1(opt_sc(o), p))));
+}
+
 static s7_pointer opt_p_p_s(opt_info *o);
 
 static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o)
@@ -63846,7 +63877,14 @@ static bool b_pp_sf_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
 	{
 	  opc->v[2].p = o1->v[1].p;
 	  opc->v[4].p_p_f = o1->v[2].p_p_f;
-	  opc->v[0].fb = (bpf_case) ? opt_b_pp_sfo : ((opc->v[3].b_7pp_f == s7_is_equal) ? opt_is_equal_sfo : opt_b_7pp_sfo);
+	  if (bpf_case)
+	    opc->v[0].fb = opt_b_pp_sfo;
+	  else
+	    {
+	      if (opc->v[4].p_p_f == car_p_p)	      
+		opc->v[0].fb = ((opc->v[3].b_7pp_f == s7_is_equal) ? opt_car_equal_sf : opt_b_7pp_car_sf);
+	      else opc->v[0].fb = ((opc->v[3].b_7pp_f == s7_is_equal) ? opt_is_equal_sfo : opt_b_7pp_sfo);
+	    }
 	  backup_pc(sc);
 	  return(true);
 	}}
@@ -88137,7 +88175,7 @@ static void op_tc_let_when_laa(s7_scheme *sc, bool when, s7_pointer code)
 	      c = (int32_t)s7_character(slot_value(let_slots(inner_let)));
 	      while (c != EOF)
 		{
-		  file_write_char(sc, (uint8_t)c, a2);
+		  inline_file_write_char(sc, (uint8_t)c, a2);
 		  c = string_read_char(sc, a1);
 		}}
 	  else
@@ -97668,7 +97706,7 @@ int main(int argc, char **argv)
  * tmac       3326         3317   3277   3247   3241
  * tset       3287         3253   3104   3207   3268
  * tio        3763         3816   3752   3738   3707
- * teq        4054         4068   4045   4038   4033
+ * teq        4054         4068   4045   4038   4033  3777
  * tfft       11.3         4142   4109   4107   4104
  * tclo       4949         4787   4735   4668   4583
  * tcase      4671         4960   4793   4669   4579
@@ -97690,4 +97728,6 @@ int main(int argc, char **argv)
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
+ * t718 immutable list oddity
+ * implicit_float|int|normal_vector_ref|set?
  */
