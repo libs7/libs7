@@ -722,6 +722,8 @@ struct opt_info {
   s7_scheme *sc;
 #if S7_DEBUGGING
   int64_t unused2;
+  const char *opo_func;
+  int opo_line;
 #endif
 };
 
@@ -4050,8 +4052,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_SS, HOP_SAFE_CLOSURE_SS, OP_SAFE_CLOSURE_SS_O, HOP_SAFE_CLOSURE_SS_O, OP_SAFE_CLOSURE_SS_A, HOP_SAFE_CLOSURE_SS_A,
       OP_CLOSURE_SC, HOP_CLOSURE_SC, OP_CLOSURE_SC_O, HOP_CLOSURE_SC_O,
       OP_SAFE_CLOSURE_SC, HOP_SAFE_CLOSURE_SC, OP_SAFE_CLOSURE_SC_O, HOP_SAFE_CLOSURE_SC_O,
-      OP_CLOSURE_3S_M, HOP_CLOSURE_3S_M, OP_CLOSURE_3S_O, HOP_CLOSURE_3S_O, OP_CLOSURE_3S, HOP_CLOSURE_3S,
-      OP_CLOSURE_4S_M, HOP_CLOSURE_4S_M, OP_CLOSURE_4S_O, HOP_CLOSURE_4S_O, OP_CLOSURE_4S, HOP_CLOSURE_4S,
+      OP_CLOSURE_3S, HOP_CLOSURE_3S, OP_CLOSURE_4S, HOP_CLOSURE_4S,
 
       OP_CLOSURE_AA, HOP_CLOSURE_AA, OP_CLOSURE_AA_O, HOP_CLOSURE_AA_O,
       OP_SAFE_CLOSURE_AA, HOP_SAFE_CLOSURE_AA, OP_SAFE_CLOSURE_AA_O, HOP_SAFE_CLOSURE_AA_O, OP_SAFE_CLOSURE_AA_A, HOP_SAFE_CLOSURE_AA_A,
@@ -4285,8 +4286,7 @@ static const char* op_names[NUM_OPS] =
       "safe_closure_ss", "h_safe_closure_ss", "safe_closure_ss_o", "h_safe_closure_ss_o", "safe_closure_ss_a", "h_safe_closure_ss_a",
       "closure_sc", "h_closure_sc", "closure_sc_o", "h_closure_sc_o",
       "safe_closure_sc", "h_safe_closure_sc", "safe_closure_sc_o", "h_safe_closure_sc_o",
-      "closure_3s_m", "h_closure_3s_m", "closure_3s_o", "h_closure_3s_o", "closure_3s", "h_closure_3s",
-      "closure_4s_m", "h_closure_4s_m", "closure_4s_o", "h_closure_4s_o", "closure_4s", "h_closure_4s",
+      "closure_3s", "h_closure_3s", "closure_4s", "h_closure_4s",
 
       "closure_aa", "h_closure_aa", "closure_aa_o", "h_closure_aa_o",
       "safe_closure_aa", "h_safe_closure_aa", "safe_closure_aa_o", "h_safe_closure_aa_o", "safe_closure_aa_a", "h_safe_closure_aa_a",
@@ -43642,7 +43642,12 @@ static int32_t closure_sort_begin(const void *v1, const void *v2, void *arg)
 }
 
 static s7_b_7pp_t s7_b_7pp_function(s7_pointer f);
+#if S7_DEBUGGING
+#define alloc_opo(Sc) alloc_opo_1(Sc, __func__, __LINE__)
+static opt_info *alloc_opo_1(s7_scheme *sc, const char *func, int line);
+#else
 static opt_info *alloc_opo(s7_scheme *sc);
+#endif
 
 static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 {
@@ -60396,13 +60401,21 @@ static s7_d_7piid_t s7_d_7piid_function(s7_pointer f) {return((s7_d_7piid_t)opt_
 static void s7_set_p_dd_function(s7_scheme *sc, s7_pointer f, s7_p_dd_t df) {add_opt_func(sc, f, o_p_dd, (void *)df);}
 static s7_p_dd_t s7_p_dd_function(s7_pointer f) {return((s7_p_dd_t)opt_func(f, o_p_dd));}
 
+#if S7_DEBUGGING
+static opt_info *alloc_opo_1(s7_scheme *sc, const char *func, int line)
+#else
 static opt_info *alloc_opo(s7_scheme *sc)
+#endif
 {
   opt_info *o;
   if (sc->pc >= OPTS_SIZE)
     sc->pc = OPTS_SIZE - 1;
   o = sc->opts[sc->pc++];
   o->v[O_WRAP].fd = NULL; /* see bool_optimize -- this is a kludge */
+#if S7_DEBUGGING
+  o->opo_func = func;
+  o->opo_line = line;
+#endif
   return(o);
 }
 
@@ -74335,7 +74348,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	      else set_optimize_op(expr, hop + OP_SAFE_CLOSURE_3S);
 	      return(OPT_T);
 	    }
-	  set_unsafe_optimize_op(expr, hop + ((is_null(cdr(closure_body(func)))) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S_M));
+	  set_unsafe_optimize_op(expr, hop + OP_CLOSURE_3S);
 	  return(OPT_F);
 	}
 
@@ -74541,7 +74554,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	    {
 	      if (safe_case)
 		set_optimize_op(expr, hop + OP_SAFE_CLOSURE_ALL_S);
-	      else set_optimize_op(expr, hop + ((args == 4) ? ((is_null(cdr(closure_body(func)))) ? OP_CLOSURE_4S_O : OP_CLOSURE_4S_M) : OP_CLOSURE_ALL_S));
+	      else set_optimize_op(expr, hop + ((args == 4) ? OP_CLOSURE_4S : OP_CLOSURE_ALL_S));
 	    }
 	  return(OPT_F);
 	}
@@ -86683,7 +86696,9 @@ static void op_closure_sc_o(s7_scheme *sc)
   sc->code = car(closure_body(f));
 }
 
-static void op_closure_3s_1(s7_scheme *sc) /* inline here (and always_inline) makes gcc unhappy elsewhere */
+#define if_pair_set_up_begin(Sc) if (is_pair(cdr(Sc->code))) {check_stack_size(Sc); push_stack_no_args(Sc, Sc->begin_op, cdr(Sc->code));} Sc->code = car(Sc->code);
+
+static void op_closure_3s(s7_scheme *sc)
 {
   s7_pointer p, args, last_slot, v1, v2, v3;
   s7_int id;
@@ -86704,27 +86719,12 @@ static void op_closure_3s_1(s7_scheme *sc) /* inline here (and always_inline) ma
   p = cdr(p);
   last_slot = add_slot_at_end(sc, id, last_slot, car(p), v2);
   add_slot_at_end(sc, id, last_slot, cadr(p), v3);
-}
 
-#define if_pair_set_up_begin(Sc) if (is_pair(cdr(Sc->code))) {check_stack_size(Sc); push_stack_no_args(Sc, Sc->begin_op, cdr(Sc->code));} Sc->code = car(Sc->code);
-
-static void op_closure_3s(s7_scheme *sc)
-{
-  op_closure_3s_1(sc);
   sc->code = T_Pair(closure_body(sc->code));
   if_pair_set_up_begin(sc);
 }
 
-static void op_closure_3s_m(s7_scheme *sc)
-{
-  op_closure_3s_1(sc);
-  sc->code = T_Pair(closure_body(sc->code));
-  check_stack_size(sc);
-  push_stack_no_args(sc, sc->begin_op, T_Pair(cdr(sc->code)));
-  sc->code = car(sc->code);
-}
-
-static void op_closure_4s_1(s7_scheme *sc)
+static void op_closure_4s(s7_scheme *sc)
 {
   s7_pointer p, args, last_slot, v1, v2, v3, v4;
   s7_int id;
@@ -86748,23 +86748,11 @@ static void op_closure_4s_1(s7_scheme *sc)
   p = cdr(p);
   last_slot = add_slot_at_end(sc, id, last_slot, car(p), v3);
   add_slot_at_end(sc, id, last_slot, cadr(p), v4);
-}
 
-static void op_closure_4s(s7_scheme *sc)
-{
-  op_closure_4s_1(sc);
   sc->code = T_Pair(closure_body(sc->code));
   if_pair_set_up_begin(sc);
 }
 
-static void op_closure_4s_m(s7_scheme *sc)
-{
-  op_closure_4s_1(sc);
-  sc->code = T_Pair(closure_body(sc->code));
-  check_stack_size(sc);
-  push_stack_no_args(sc, sc->begin_op, T_Pair(cdr(sc->code)));
-  sc->code = car(sc->code);
-}
 
 static void op_safe_closure_aa(s7_scheme *sc)
 {
@@ -91076,13 +91064,6 @@ static goto_t trailers(s7_scheme *sc)
     {
       s7_pointer carc;
       carc = car(code);
-      if (is_syntactic_symbol(carc))  /* carc can also be syntactic */
-	{
-	  sc->cur_op = (opcode_t)symbol_syntax_op_checked(code);
-	  pair_set_syntax_op(code, sc->cur_op);
-	  return(goto_top_no_pop);
-	}
-
       if (is_symbol(carc))
 	{
 	  /* car is a symbol, sc->code a list */
@@ -91136,118 +91117,8 @@ static Inline void op_map_gather(s7_scheme *sc)
     }
 }
 
-/* -------------------------------------------------------------------------------- */
 
-#if WITH_GCC
-#define h_c_function_is_ok(Sc, P) ({s7_pointer _P_; _P_ = P; ((op_has_hop(_P_)) || (c_function_is_ok(Sc, _P_)));})
-#else
-#define h_c_function_is_ok(Sc, P) ((op_has_hop(P)) || (c_function_is_ok(Sc, P)))
-#endif
-
-#define c_function_is_ok_cadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))))
-#define c_function_is_ok_caddr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, caddr(P))))
-#define c_function_is_ok_cadr_caddr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, caddr(P))))
-#define c_function_is_ok_cadr_cadadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, cadadr(P))))
-#define c_function_is_ok_cadr_caddadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, caddadr(P))))
-
-/* closure_is_ok_1 checks the type and the body length indications
- * closure_is_fine_1 just checks the type (safe or unsafe closure)
- * closure_is_ok calls _ok_1, closure_is_fine calls _fine_1
- * closure_fp_is_ok accepts safe/unsafe etc
- */
-
-static inline bool closure_is_ok_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
-{
-  s7_pointer f;
-#if S7_DEBUGGING
-  if (symbol_ctr(car(code)) == 1) fprintf(stderr, "%s ctr is 1, %p != %p\n", display(car(code)), unchecked_slot_value(local_slot(car(code))), opt1_lambda_unchecked(code));
-#endif
-  f = lookup_unexamined(sc, car(code));
-  if ((f == opt1_lambda_unchecked(code)) ||
-      ((f) &&
-       (typesflag(f) == type) &&
-       ((closure_arity(f) == args) || (closure_arity_to_int(sc, f) == args)) && /* 3 type bits to replace this but not hit enough to warrant them */
-       (set_opt1_lambda(code, f))))
-    return(true);
-  sc->last_function = f;
-  return(false);
-}
-
-static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
-{
-  s7_pointer f;
-  f = lookup_unexamined(sc, car(code));
-  if ((f == opt1_lambda_unchecked(code)) ||
-      ((f) &&
-       ((typesflag(f) & (TYPE_MASK | T_SAFE_CLOSURE)) == type) &&
-       ((closure_arity(f) == args) || (closure_arity_to_int(sc, f) == args)) &&
-       (set_opt1_lambda(code, f))))
-    return(true);
-  sc->last_function = f;
-  return(false);
-}
-
-static inline bool closure_fp_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
-{
-  s7_pointer f;
-  f = lookup_unexamined(sc, car(code));
-  if ((f == opt1_lambda_unchecked(code)) ||
-      ((f) &&
-       (is_closure(f)) &&
-       (set_opt1_lambda(code, f))))
-    return(true);
-  sc->last_function = f;
-  return(false);
-}
-
-#define closure_is_ok(Sc, Code, Type, Args)        ((symbol_ctr(car(Code)) == 1) || (closure_is_ok_1(Sc, Code, Type, Args)))
-#define closure_fp_is_ok(Sc, Code, Args)           ((symbol_ctr(car(Code)) == 1) || (closure_fp_is_ok_1(Sc, Code, Args)))
-#define closure_is_fine(Sc, Code, Type, Args)      ((symbol_ctr(car(Code)) == 1) || (closure_is_fine_1(Sc, Code, Type, Args)))
-#define closure_star_is_fine(Sc, Code, Type, Args) ((symbol_ctr(car(Code)) == 1) || (closure_star_is_fine_1(Sc, Code, Type, Args)))
-
-static inline bool closure_is_eq(s7_scheme *sc)
-{
-  sc->last_function = lookup_unexamined(sc, car(sc->code));
-  return(sc->last_function == opt1_lambda_unchecked(sc->code));
-}
-
-static bool star_arity_is_ok(s7_scheme *sc, s7_pointer val, int32_t args)
-{
-  int32_t arity;
-  arity = closure_star_arity_to_int(sc, val);
-  return((arity < 0) || ((arity * 2) >= args));
-}
-
-static bool closure_star_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
-{
-  s7_pointer val;
-  val = lookup_unexamined(sc, car(code));
-  if ((val == opt1_lambda_unchecked(code)) ||
-      ((val) &&
-       ((typesflag(val) & (T_SAFE_CLOSURE | TYPE_MASK)) == type) &&
-       (star_arity_is_ok(sc, val, args)) &&
-       (set_opt1_lambda(code, val))))
-    return(true);
-  sc->last_function = val;
-  return(false);
-}
-
-/* closure_is_fine: */
-#define FINE_UNSAFE_CLOSURE      (T_CLOSURE)
-#define FINE_SAFE_CLOSURE        (T_CLOSURE      | T_SAFE_CLOSURE)
-
-/* closure_star_is_fine: */
-#define FINE_UNSAFE_CLOSURE_STAR (T_CLOSURE_STAR)
-#define FINE_SAFE_CLOSURE_STAR   (T_CLOSURE_STAR | T_SAFE_CLOSURE)
-
-/* closure_is_ok: */
-#define OK_UNSAFE_CLOSURE_P      (T_CLOSURE                       | T_ONE_FORM)
-#define OK_SAFE_CLOSURE_P        (T_CLOSURE      | T_SAFE_CLOSURE | T_ONE_FORM)
-#define OK_UNSAFE_CLOSURE_M      (T_CLOSURE                       | T_MULTIFORM)
-#define OK_SAFE_CLOSURE_M        (T_CLOSURE      | T_SAFE_CLOSURE | T_MULTIFORM)
-#define OK_SAFE_CLOSURE_A        (T_CLOSURE      | T_SAFE_CLOSURE | T_ONE_FORM_FX_ARG)
-/* since T_HAS_METHODS is on if there might be methods, this can protect us from that case */
-
+/* ---------------- unknown ops ---------------- */
 static bool fixup_unknown_op(s7_pointer code, s7_pointer func, opcode_t op)
 {
   set_optimize_op(code, op);
@@ -91894,9 +91765,6 @@ static bool op_unknown_all_s(s7_scheme *sc)
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if (num_args == 3)
 	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : OP_CLOSURE_3S)));
-	  /* in the main optimizer, we can choose either closure_3s_m=multiform or closure_3s_o=one form, but here
-	   *   it is faster to use closure_3s so that both versions match in OP_CLOSURE_3S (less jumping around)
-	   */
 	  if (num_args == 4)
 	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_ALL_S : OP_CLOSURE_4S)));
 	  return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_ALL_S : OP_CLOSURE_ALL_S)));
@@ -91906,7 +91774,6 @@ static bool op_unknown_all_s(s7_scheme *sc)
 
     case T_CLOSURE_STAR:
       if ((!has_methods(f)) &&
-	  /* (lambda_has_simple_defaults(f)) && */
 	  ((closure_star_arity_to_int(sc, f) < 0) || ((closure_star_arity_to_int(sc, f) * 2) >= num_args)))
 	{
 	  int32_t hop = 0;
@@ -92136,7 +92003,6 @@ static bool op_unknown_all_a(s7_scheme *sc)
 
     case T_CLOSURE_STAR:
       if ((!has_methods(f)) &&
-	  /* (lambda_has_simple_defaults(f)) && */
 	  ((closure_star_arity_to_int(sc, f) < 0) || ((closure_star_arity_to_int(sc, f) * 2) >= num_args)))
 	{
 	  int32_t hop = 0;
@@ -92167,7 +92033,6 @@ static bool op_unknown_all_a(s7_scheme *sc)
   /* closure happens if wrong-number-of-args passed -- probably no need for op_s_all_a */
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
-
 
 static bool op_unknown_fp(s7_scheme *sc)
 {
@@ -92263,8 +92128,119 @@ static bool op_unknown_fp(s7_scheme *sc)
 }
 
 
-/* -------------------------------------------------------------------------------- */
+/* ---------------- eval type checkers ---------------- */
+#if WITH_GCC
+#define h_c_function_is_ok(Sc, P) ({s7_pointer _P_; _P_ = P; ((op_has_hop(_P_)) || (c_function_is_ok(Sc, _P_)));})
+#else
+#define h_c_function_is_ok(Sc, P) ((op_has_hop(P)) || (c_function_is_ok(Sc, P)))
+#endif
 
+#define c_function_is_ok_cadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))))
+#define c_function_is_ok_caddr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, caddr(P))))
+#define c_function_is_ok_cadr_caddr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, caddr(P))))
+#define c_function_is_ok_cadr_cadadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, cadadr(P))))
+#define c_function_is_ok_cadr_caddadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, caddadr(P))))
+
+/* closure_is_ok_1 checks the type and the body length indications
+ * closure_is_fine_1 just checks the type (safe or unsafe closure)
+ * closure_is_ok calls _ok_1, closure_is_fine calls _fine_1
+ * closure_fp_is_ok accepts safe/unsafe etc
+ */
+
+static inline bool closure_is_ok_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
+{
+  s7_pointer f;
+#if S7_DEBUGGING
+  if (symbol_ctr(car(code)) == 1) fprintf(stderr, "%s ctr is 1, %p != %p\n", display(car(code)), unchecked_slot_value(local_slot(car(code))), opt1_lambda_unchecked(code));
+#endif
+  f = lookup_unexamined(sc, car(code));
+  if ((f == opt1_lambda_unchecked(code)) ||
+      ((f) &&
+       (typesflag(f) == type) &&
+       ((closure_arity(f) == args) || (closure_arity_to_int(sc, f) == args)) && /* 3 type bits to replace this but not hit enough to warrant them */
+       (set_opt1_lambda(code, f))))
+    return(true);
+  sc->last_function = f;
+  return(false);
+}
+
+static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
+{
+  s7_pointer f;
+  f = lookup_unexamined(sc, car(code));
+  if ((f == opt1_lambda_unchecked(code)) ||
+      ((f) &&
+       ((typesflag(f) & (TYPE_MASK | T_SAFE_CLOSURE)) == type) &&
+       ((closure_arity(f) == args) || (closure_arity_to_int(sc, f) == args)) &&
+       (set_opt1_lambda(code, f))))
+    return(true);
+  sc->last_function = f;
+  return(false);
+}
+
+static inline bool closure_fp_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
+{
+  s7_pointer f;
+  f = lookup_unexamined(sc, car(code));
+  if ((f == opt1_lambda_unchecked(code)) ||
+      ((f) &&
+       (is_closure(f)) &&
+       (set_opt1_lambda(code, f))))
+    return(true);
+  sc->last_function = f;
+  return(false);
+}
+
+#define closure_is_ok(Sc, Code, Type, Args)        ((symbol_ctr(car(Code)) == 1) || (closure_is_ok_1(Sc, Code, Type, Args)))
+#define closure_fp_is_ok(Sc, Code, Args)           ((symbol_ctr(car(Code)) == 1) || (closure_fp_is_ok_1(Sc, Code, Args)))
+#define closure_is_fine(Sc, Code, Type, Args)      ((symbol_ctr(car(Code)) == 1) || (closure_is_fine_1(Sc, Code, Type, Args)))
+#define closure_star_is_fine(Sc, Code, Type, Args) ((symbol_ctr(car(Code)) == 1) || (closure_star_is_fine_1(Sc, Code, Type, Args)))
+
+static inline bool closure_is_eq(s7_scheme *sc)
+{
+  sc->last_function = lookup_unexamined(sc, car(sc->code));
+  return(sc->last_function == opt1_lambda_unchecked(sc->code));
+}
+
+static bool star_arity_is_ok(s7_scheme *sc, s7_pointer val, int32_t args)
+{
+  int32_t arity;
+  arity = closure_star_arity_to_int(sc, val);
+  return((arity < 0) || ((arity * 2) >= args));
+}
+
+static bool closure_star_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
+{
+  s7_pointer val;
+  val = lookup_unexamined(sc, car(code));
+  if ((val == opt1_lambda_unchecked(code)) ||
+      ((val) &&
+       ((typesflag(val) & (T_SAFE_CLOSURE | TYPE_MASK)) == type) &&
+       (star_arity_is_ok(sc, val, args)) &&
+       (set_opt1_lambda(code, val))))
+    return(true);
+  sc->last_function = val;
+  return(false);
+}
+
+/* closure_is_fine: */
+#define FINE_UNSAFE_CLOSURE      (T_CLOSURE)
+#define FINE_SAFE_CLOSURE        (T_CLOSURE      | T_SAFE_CLOSURE)
+
+/* closure_star_is_fine: */
+#define FINE_UNSAFE_CLOSURE_STAR (T_CLOSURE_STAR)
+#define FINE_SAFE_CLOSURE_STAR   (T_CLOSURE_STAR | T_SAFE_CLOSURE)
+
+/* closure_is_ok: */
+#define OK_UNSAFE_CLOSURE_P      (T_CLOSURE                       | T_ONE_FORM)
+#define OK_SAFE_CLOSURE_P        (T_CLOSURE      | T_SAFE_CLOSURE | T_ONE_FORM)
+#define OK_UNSAFE_CLOSURE_M      (T_CLOSURE                       | T_MULTIFORM)
+#define OK_SAFE_CLOSURE_M        (T_CLOSURE      | T_SAFE_CLOSURE | T_MULTIFORM)
+#define OK_SAFE_CLOSURE_A        (T_CLOSURE      | T_SAFE_CLOSURE | T_ONE_FORM_FX_ARG)
+/* since T_HAS_METHODS is on if there might be methods, this can protect us from that case */
+
+
+/* ---------------- eval ---------------- */
 static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 {
 #if SHOW_EVAL_OPS
@@ -92817,20 +92793,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_CLOSURE_SS_A: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_A, 2)) {if (op_unknown_gg(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_SS_A: sc->value = op_safe_closure_ss_a(sc, sc->code); continue;
 
-	case OP_CLOSURE_3S_M: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_M, 3)) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
-	case HOP_CLOSURE_3S_M: op_closure_3s_m(sc); goto EVAL;
-
-	case OP_CLOSURE_3S_O: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 3)) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
-	case HOP_CLOSURE_3S_O: op_closure_3s_1(sc); sc->code = car(closure_body(sc->code)); goto EVAL;
-
 	case OP_CLOSURE_3S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 3)) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_3S: op_closure_3s(sc); goto EVAL;
-
-	case OP_CLOSURE_4S_M: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_M, 4)) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
-	case HOP_CLOSURE_4S_M: op_closure_4s_m(sc); goto EVAL;
-
-	case OP_CLOSURE_4S_O: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 4)) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
-	case HOP_CLOSURE_4S_O: op_closure_4s_1(sc); sc->code = car(closure_body(sc->code)); goto EVAL;
 
 	case OP_CLOSURE_4S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 4)) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_4S: op_closure_4s(sc); goto EVAL;
@@ -97309,7 +97273,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 930) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 922) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97705,45 +97669,46 @@ int main(int argc, char **argv)
  * tauto       786          648    642    647    651
  * tref        739          691    687    687    689
  * tshoot     1663          883    872    872    872
- * index      1076         1026   1016   1014   1013
- * tmock      7690         1177   1165   1166   1159
+ * index      1076         1026   1016   1014   1012
+ * tmock      7690         1177   1165   1166   1158
  * s7test     4527         1873   1831   1817   1810
  * lt         2117         2123   2110   2112   2100
  * tcopy      2277         2256   2230   2219   2218
  * tmat       2418         2285   2258   2256   2248
  * tform      3319         2281   2273   2266   2324
  * tvect      2649         2456   2413   2413   2395
- * tread      2610         2440   2421   2412   2414
+ * tread      2610         2440   2421   2412   2403
  * trclo      4292         2715   2561   2560   2539
  * fbench     2980         2688   2583   2577   2573
- * tb         3472         2735   2681   2677   2651
+ * tb         3472         2735   2681   2677   2650
  * tmap       3759         2886   2857   2827   2817
  * titer      2860         2865   2842   2842   2842
  * tsort      3816         3105   3104   3097   2982
- * dup        3456         3334   3332   3203   3196
+ * dup        3456         3334   3332   3203   3194
  * tmac       3326         3317   3277   3247   3241
  * tset       3287         3253   3104   3207   3268
- * tio        3763         3816   3752   3738   3707
+ * tio        3763         3816   3752   3738   3699
  * teq        4054         4068   4045   4038   3777
- * tfft       11.3         4142   4109   4107   4104
+ * tfft       11.3         4142   4109   4107   4103
  * tclo       4949         4787   4735   4668   4583
- * tcase      4671         4960   4793   4669   4579
+ * tcase      4671         4960   4793   4669   4582
  * tstr       6755         5281   4863   4765   4652
- * tlet       5762         7775                 4669
- * trec       7763         5976   5970   5970   5970
+ * tlet       5762         7775                 4667
+ * trec       7763         5976   5970   5970   5969
  * tnum       59.4         6348   6013   5998   5998
  * tmisc      6506         7389   6210   6174   6216
  * tgc        12.5         11.9   11.1   11.0   10.7
  * tgen       12.3         11.2   11.4   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.7
  * tall       26.9         15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.3
+ * calls      61.1         36.7   37.5   37.2   37.2
  * sg         98.6         71.9   72.3   72.2   72.8
  * lg        105.4        106.6  105.0  105.1  104.4
- * tbig      600.0        177.4  175.8  174.3  174.3
+ * tbig      600.0        177.4  175.8  174.3  174.2
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
+ * lint might flag (let name ((name ...))) -> (let ((name..))) [it currently says "name not used" which is not ideal]
  */

@@ -212,6 +212,9 @@
 (format *stderr* "~NC tset ~NC~%" 20 #\- 20 #\-)
 (system "./repl tset.scm")
 
+(format *stderr* "~NC dup ~NC~%" 20 #\- 20 #\-)
+(system "./repl dup.scm")
+
 (format *stderr* "~NC tref ~NC~%" 20 #\- 20 #\-)
 (system "./repl tref.scm")
 
