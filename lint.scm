@@ -19260,6 +19260,8 @@
 				    (just-pairs? (caddr form))))))
 		  ()
 		  (let ((vars (map car (caddr form))))
+		    (if (memq named-let vars)
+			(lint-format "perhaps ~S -> ~S" 'let form (cons 'let (cddr form))))
 		    (list (make-fvar named-let (car form) vars form env))))))
 
 

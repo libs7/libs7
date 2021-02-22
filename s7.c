@@ -22007,6 +22007,7 @@ static s7_pointer divide_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
 
 static inline s7_int c_quo_int(s7_scheme *sc, s7_int x, s7_int y)
 {
+  if ((y > 0) || (y < -1)) return(x / y);
   if (y == 0)
     division_by_zero_error(sc, sc->quotient_symbol, set_elist_2(sc, wrap_integer1(sc, x), wrap_integer2(sc, y)));
   if ((y == -1) && (x == S7_INT64_MIN))   /* (quotient most-negative-fixnum -1) */
@@ -22037,7 +22038,6 @@ static s7_int c_quo_dbl(s7_scheme *sc, s7_double x, s7_double y)
 }
 #endif
 
-static s7_int quotient_i_7ii(s7_scheme *sc, s7_int i1, s7_int i2) {return(c_quo_int(sc, i1, i2));}
 static s7_int quotient_i_ii_unchecked(s7_int i1, s7_int i2) {return(i1 / i2);} /* i2 > 0 */
 
 static s7_pointer quotient_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
@@ -22236,9 +22236,10 @@ static s7_pointer big_mod_or_rem(s7_scheme *sc, s7_pointer x, s7_pointer y, bool
 
 static inline s7_int c_rem_int(s7_scheme *sc, s7_int x, s7_int y)
 {
+  if ((y > 1) || (y < -1)) return(x % y);
   if (y == 0)
     division_by_zero_error(sc, sc->remainder_symbol, set_elist_2(sc, wrap_integer1(sc, x), wrap_integer2(sc, y)));
-  return(((y == 1) || (y == -1)) ? 0 : (x % y));  /* (remainder most-negative-fixnum -1) will segfault with arithmetic exception */
+  return(0);
 }
 
 static s7_double c_rem_dbl(s7_scheme *sc, s7_double x, s7_double y)
@@ -22254,7 +22255,6 @@ static s7_double c_rem_dbl(s7_scheme *sc, s7_double x, s7_double y)
   return(x - (y * quo));
 }
 
-static s7_int remainder_i_7ii(s7_scheme *sc, s7_int i1, s7_int i2) {return(c_rem_int(sc, i1, i2));}
 static s7_int remainder_i_ii_unchecked(s7_int i1, s7_int i2) {return(i1 % i2);} /* i2 > 1 */
 static s7_double remainder_d_7dd(s7_scheme *sc, s7_double x1, s7_double x2)
 {
@@ -22451,7 +22451,12 @@ static s7_pointer g_remainder(s7_scheme *sc, s7_pointer args)
   #define H_remainder "(remainder x1 x2) returns the remainder of x1/x2; (remainder 10 3) = 1"
   #define Q_remainder sc->pcl_r
   /* (define (rem x1 x2) (- x1 (* x2 (quo x1 x2)))) ; slib, if x2 is an integer (- x1 (truncate x1 x2)), fractional part: (remainder x 1) */
-  return(remainder_p_pp(sc, car(args), cadr(args)));
+  s7_pointer x, y;
+  x = car(args);
+  y = cadr(args);
+  if ((is_t_integer(x)) && (is_t_integer(y)))
+    return(make_integer(sc, c_rem_int(sc, integer(x), integer(y))));
+  return(remainder_p_pp(sc, x, y));
 }
 
 
@@ -22460,17 +22465,19 @@ static s7_pointer g_remainder(s7_scheme *sc, s7_pointer args)
 static s7_int c_mod(s7_int x, s7_int y)
 {
   s7_int z;
+  if (y > 1)
+    {
+      z = x % y;
+      return((z >= 0) ? z : z + y);
+    }
+  if (y < -1)
+    {
+      z = x % y;
+      return((z > 0) ? z + y : z);
+    }
   if (y == 0) return(x);     /* else arithmetic exception */
-  if ((y == 1) || (y == -1)) /* else (modulo most-negative-fixnum -1) will segfault with arithmetic exception */
-    return(0);
-  z = x % y;
-  if (((y < 0) && (z > 0)) ||
-      ((y > 0) && (z < 0)))
-    return(z + y);
-  return(z);
+  return(0);
 }
-
-static s7_int modulo_i_ii(s7_int i1, s7_int i2) {return(c_mod(i1, i2));}
 
 static s7_int modulo_i_ii_unchecked(s7_int i1, s7_int i2) /* here we know i2 > 1 */
 {
@@ -60882,13 +60889,13 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 			      if (opc->v[2].i > 0)
 				{
 				  /* these assume vunion is a union, not a struct; i_7ii_f otherwise might be leftover from a previous use */
-				  if (opc->v[3].i_7ii_f == quotient_i_7ii)
+				  if (opc->v[3].i_7ii_f == c_quo_int)
 				    {
 				      opc->v[3].i_ii_f = quotient_i_ii_unchecked;
 				      opc->v[0].fi = opt_i_ii_sc;
 				    }
 				  else
-				    if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == remainder_i_7ii))
+				    if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == c_rem_int))
 				      {
 					opc->v[3].i_ii_f = remainder_i_ii_unchecked;
 					opc->v[0].fi = opt_i_ii_sc;
@@ -60946,13 +60953,13 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 			      else opc->v[0].fi = opt_i_7ii_fc;
 			      if (opc->v[2].i > 0)
 				{
-				  if (opc->v[3].i_7ii_f == quotient_i_7ii)
+				  if (opc->v[3].i_7ii_f == c_quo_int)
 				    {
 				      opc->v[3].i_ii_f = quotient_i_ii_unchecked;
 				      opc->v[0].fi = opt_i_ii_fc;
 				    }
 				  else
-				    if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == remainder_i_7ii))
+				    if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == c_rem_int))
 				      {
 					opc->v[3].i_ii_f = remainder_i_ii_unchecked;
 					opc->v[0].fi = opt_i_ii_fc;
@@ -61204,7 +61211,9 @@ static bool i_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 	  s7_pointer fname, slot;
 	  fname = car(car_x);
 
-	  if ((fname == sc->int_vector_set_symbol) || (fname == sc->byte_vector_set_symbol))
+	  if ((fname == sc->int_vector_set_symbol) || (fname == sc->byte_vector_set_symbol) ||
+	      (s_func == slot_value(initial_slot(sc->int_vector_set_symbol))) ||
+	      (s_func == slot_value(initial_slot(sc->byte_vector_set_symbol))))
 	    return(opt_int_vector_set(sc, (fname == sc->int_vector_set_symbol) ? 1 : 0, opc, cadr(car_x), cddr(car_x), NULL, cdddr(car_x)));
 
 	  slot = opt_types_match(sc, cadr(sig), cadr(car_x));
@@ -61215,7 +61224,9 @@ static bool i_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 	      start = sc->pc;
 	      opc->v[1].p = slot;
 
-	      if (((fname == sc->int_vector_ref_symbol) || (fname == sc->byte_vector_ref_symbol)) &&
+	      if (((fname == sc->int_vector_ref_symbol) || (fname == sc->byte_vector_ref_symbol) ||
+		   (s_func == slot_value(initial_slot(sc->int_vector_ref_symbol))) || 
+		   (s_func == slot_value(initial_slot(sc->byte_vector_ref_symbol)))) &&
 		  (vector_rank(slot_value(slot)) != 2))
 		return_false(sc, car_x);
 
@@ -61267,7 +61278,9 @@ static bool i_7piii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_point
       (is_symbol(cadr(car_x))))
     {
       s7_pointer settee;
-      if ((car(car_x) == sc->int_vector_set_symbol) || (car(car_x) == sc->byte_vector_set_symbol))
+      if ((car(car_x) == sc->int_vector_set_symbol) || (car(car_x) == sc->byte_vector_set_symbol) ||
+	  (s_func == slot_value(initial_slot(sc->int_vector_set_symbol))) || 
+	  (s_func == slot_value(initial_slot(sc->byte_vector_set_symbol))))
 	return(opt_int_vector_set(sc, (car(car_x) == sc->int_vector_set_symbol) ? 1 : 0, opc, cadr(car_x), cddr(car_x), cdddr(car_x), cddddr(car_x)));
 
       settee = lookup_slot_from(cadr(car_x), sc->curlet);
@@ -63201,7 +63214,7 @@ static bool d_7pid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
       head = car(car_x);
       opc->v[4].d_7pid_f = f;
 
-      if (head == sc->float_vector_set_symbol)
+      if ((head == sc->float_vector_set_symbol) || (s_func == slot_value(initial_slot(sc->float_vector_set_symbol))))
 	return(opt_float_vector_set(sc, opc, cadr(car_x), cddr(car_x), NULL, cdddr(car_x)));
 
       opc->v[1].p = lookup_slot_from(cadr(car_x), sc->curlet);
@@ -63252,7 +63265,7 @@ static bool d_7piid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_point
       (is_symbol(cadr(car_x))))
     {
       opc->v[4].d_7piid_f = f;
-      if (car(car_x) == sc->float_vector_set_symbol)
+      if ((car(car_x) == sc->float_vector_set_symbol) || (s_func == slot_value(initial_slot(sc->float_vector_set_symbol))))
 	return(opt_float_vector_set(sc, opc, cadr(car_x), cddr(car_x), cdddr(car_x), cddddr(car_x)));
     }
   return_false(sc, car_x);
@@ -68763,7 +68776,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	      break;
 
 	    case 5:
-	      if ((head == sc->float_vector_set_symbol) &&
+	      if (((head == sc->float_vector_set_symbol) || (s_func == slot_value(initial_slot(sc->float_vector_set_symbol)))) &&
 		  (d_7piid_ok(sc, opc, s_func, car_x)))
 		{
 		  opc->v[O_WRAP].fd = opc->v[0].fd;
@@ -68776,7 +68789,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 		  opc->v[0].fp = i_to_p;
 		  return(true);
 		}
-	      if (head == sc->int_vector_set_symbol)
+	      if ((head == sc->int_vector_set_symbol) || (s_func == slot_value(initial_slot(sc->int_vector_set_symbol))))
 		return_false(sc, car_x);
 	      if (p_piip_ok(sc, opc, s_func, car_x))
 		return(true);
@@ -71312,6 +71325,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 		  set_opt1_lambda_add(expr, func);
 		  return(OPT_T);
 		}}
+	  /* thunks with fully fxable bodies are rare apparently, and the time spent here overwhelms run time gains */
 	  set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_THUNK : OP_THUNK));
 	  set_opt1_lambda_add(expr, func);
 	  return(OPT_F);
@@ -95369,10 +95383,10 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, slot_value(global_slot(sc->sqrt_symbol)), sqrt_p_p);
 
   s7_set_d_7dd_function(sc, slot_value(global_slot(sc->remainder_symbol)), remainder_d_7dd);
-  s7_set_i_7ii_function(sc, slot_value(global_slot(sc->remainder_symbol)), remainder_i_7ii);
-  s7_set_i_7ii_function(sc, slot_value(global_slot(sc->quotient_symbol)), quotient_i_7ii);
+  s7_set_i_7ii_function(sc, slot_value(global_slot(sc->remainder_symbol)), c_rem_int);
+  s7_set_i_7ii_function(sc, slot_value(global_slot(sc->quotient_symbol)), c_quo_int);
   s7_set_d_7dd_function(sc, slot_value(global_slot(sc->modulo_symbol)), modulo_d_7dd);
-  s7_set_i_ii_function(sc, slot_value(global_slot(sc->modulo_symbol)), modulo_i_ii);
+  s7_set_i_ii_function(sc, slot_value(global_slot(sc->modulo_symbol)), c_mod);
   s7_set_p_dd_function(sc, slot_value(global_slot(sc->multiply_symbol)), mul_p_dd);
   s7_set_p_dd_function(sc, slot_value(global_slot(sc->add_symbol)), add_p_dd);
   s7_set_p_dd_function(sc, slot_value(global_slot(sc->subtract_symbol)), subtract_p_dd);
@@ -97668,7 +97682,7 @@ int main(int argc, char **argv)
  * tpeak       128          115    114    114    114
  * tauto       786          648    642    647    651
  * tref        739          691    687    687    689
- * tshoot     1663          883    872    872    872
+ * tshoot     1663          883    872    872    863
  * index      1076         1026   1016   1014   1012
  * tmock      7690         1177   1165   1166   1158
  * s7test     4527         1873   1831   1817   1810
@@ -97676,7 +97690,7 @@ int main(int argc, char **argv)
  * tcopy      2277         2256   2230   2219   2218
  * tmat       2418         2285   2258   2256   2248
  * tform      3319         2281   2273   2266   2324
- * tvect      2649         2456   2413   2413   2395
+ * tvect      2649         2456   2413   2413   2392
  * tread      2610         2440   2421   2412   2403
  * trclo      4292         2715   2561   2560   2539
  * fbench     2980         2688   2583   2577   2573
@@ -97710,5 +97724,6 @@ int main(int argc, char **argv)
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
- * lint might flag (let name ((name ...))) -> (let ((name..))) [it currently says "name not used" which is not ideal]
+ * check other symbol cases in s7-optimize t718
+ * perhaps global|initial|local_value? (already have s7_symbol_local_value)
  */
