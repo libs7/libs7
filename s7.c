@@ -60768,7 +60768,6 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	  start = sc->pc;
 	  arg1 = cadr(car_x);
 	  arg2 = caddr(car_x);
-
 	  if (ifunc)
 	    opc->v[3].i_ii_f = ifunc;
 	  else opc->v[3].i_7ii_f = ifunc7;
@@ -67976,6 +67975,21 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
 
 #define SIZE_O NUM_VUNIONS
 
+static bool all_integers(s7_scheme *sc, s7_pointer expr)
+{
+  if ((car(expr) == sc->add_symbol) || (car(expr) == sc->subtract_symbol))
+    {
+      s7_pointer p;
+      for (p = cdr(expr); is_pair(p); p = cdr(p))
+	if (!((is_t_integer(car(p))) ||
+	      ((is_symbol(car(p))) && (is_t_integer(slot_value(lookup_slot_from(car(p), sc->curlet))))) ||
+	      ((is_pair(car(p))) && (all_integers(sc, car(p))))))
+	  break;
+      return(is_null(p));
+    }
+  return(false);
+}
+
 static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 {
   opt_info *opc;
@@ -68037,10 +68051,12 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   {
     s7_pointer slot;
     init_pc = sc->pc;
+
     for (k = 0, p = cadr(car_x), slot = let_slots(let); (is_pair(p)) && (k < SIZE_O); k++, p = cdr(p), slot = next_slot(slot))
       {
 	s7_pointer var;
 	var = car(p);
+
 	init_o[k] = sc->opts[sc->pc];
 	if (!cell_optimize(sc, cdr(var))) /* opt init in outer let */
 	  return_false(sc, car_x);
@@ -68056,6 +68072,9 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    if (!is_null(cddr(var)))
 	      return_false(sc, car_x);
 	  }
+	/* we can't use slot_set_value(slot, init_o[k]->v[0].fp(init_o[k])) to get the init value here: it might involve side-effects,
+	 *   and in some contexts might access variables that aren't set up yet.  So, we kludge around...
+	 */
 	if (is_symbol(cadr(var)))
 	  slot_set_value(slot, slot_value(lookup_slot_from(cadr(var), sc->curlet)));
 	else
@@ -68077,7 +68096,8 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 			if ((is_pair(sig)) &&
 			    ((car(sig) == sc->is_integer_symbol) ||
 			     ((is_pair(car(sig))) &&
-			      (direct_memq(sc->is_integer_symbol, car(sig))))))
+			      (direct_memq(sc->is_integer_symbol, car(sig)))) ||
+			     (all_integers(sc, cadr(var)))))
 			  slot_set_value(slot, int_zero);
 		    }}}}}
     sc->curlet = let;
@@ -68096,11 +68116,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		unstack(sc); /* not pop_stack! */
 		sc->curlet = old_e;
 		return_false(sc, car_x);
-	      }}}
-#if S7_DEBUGGING
-    if (k != var_len) fprintf(stderr, "inits: %d %d\n", k, var_len);
-#endif
-  }
+	      }}}}
 
   /* end test */
   end_test_pc = sc->pc;
@@ -68213,7 +68229,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
     }
   for (rtn_len = 0, p = cdr(end); (is_pair(p)) && (rtn_len < SIZE_O); p = cdr(p), rtn_len++)
     {
-      return_o[rtn_len] = sc->opts[sc->pc];
+      return_o[V_ind(rtn_len)] = sc->opts[sc->pc];
       if (!cell_optimize(sc, p))
 	break;
     }
@@ -68545,11 +68561,9 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
       s7_pointer s_func;
       s7_int len;
       len = s7_list_length(sc, car_x);
-
       if ((is_syntactic_symbol(head)) ||
 	  (is_syntactic_pair(car_x)))
 	return(i_syntax_ok(sc, car_x, len));
-
       if ((is_global(head)) ||
 	  ((is_slot(global_slot(head))) &&
 	   (lookup_slot_from(head, sc->curlet) == global_slot(head))))
@@ -76913,11 +76927,18 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 		  (is_null(cddr(code))))        /* 1 form in body */
 		{
 		  if (vars == 2)
-		    pair_set_syntax_op(sc->code, OP_LET_2A_OLD);
+		    {
+		      pair_set_syntax_op(sc->code, OP_LET_2A_OLD);
+		      set_opt1_pair(code, caar(code));
+		      set_opt2_pair(code, cadar(code));
+		    }
 		  else
 		    if (vars == 3)
-		      pair_set_syntax_op(sc->code, OP_LET_3A_OLD);
-		}}
+		      {
+			pair_set_syntax_op(sc->code, OP_LET_3A_OLD);
+			set_opt1_pair(code, cadar(code));
+			set_opt2_pair(code, caddar(code));
+		      }}}
 	  else
 	    {
 	      pair_set_syntax_op(sc->code, OP_LET_UNCHECKED);
@@ -77384,21 +77405,20 @@ static void op_let_fx_old(s7_scheme *sc)
 
 static void op_let_2a_new(s7_scheme *sc) /* 2 vars, 1 expr in body */
 {
+  /* opt1|2 free */
   s7_pointer a1, a2, code;
   code = cdr(sc->code);
-  a1 = caar(code);
-  a2 = cadar(code);
+  a1 = opt1_pair(code); /* caar(code) */
+  a2 = opt2_pair(code); /* cadar(code) */
   sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(a1), fx_call(sc, cdr(a1)), car(a2), fx_call(sc, cdr(a2)));
   sc->code = cadr(code);
 }
 
 static void op_let_2a_old(s7_scheme *sc) /* 2 vars, 1 expr in body */
 {
-  s7_pointer a1, a2, let, code;
+  s7_pointer let, code;
   code = cdr(sc->code);
-  a1 = caar(code);
-  a2 = cadar(code);
-  let = update_let_with_two_slots(sc, opt3_let(code), fx_call(sc, cdr(a1)), fx_call(sc, cdr(a2)));
+  let = update_let_with_two_slots(sc, opt3_let(code), fx_call(sc, cdr(opt1_pair(code))), fx_call(sc, cdr(opt2_pair(code))));
   let_set_outlet(let, sc->curlet);
   sc->curlet = let;
   sc->code = cadr(code);
@@ -77409,8 +77429,8 @@ static void op_let_3a_new(s7_scheme *sc) /* 3 vars, 1 expr in body */
   s7_pointer a1, a2, a3, code;
   code = cdr(sc->code);
   a1 = caar(code);
-  a2 = cadar(code);
-  a3 = caddar(code);
+  a2 = opt1_pair(code); /* cadar */
+  a3 = opt2_pair(code); /* caddar */
   sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(a1), fx_call(sc, cdr(a1)), car(a2), fx_call(sc, cdr(a2)));
   add_slot(sc, sc->curlet, car(a3), fx_call(sc, cdr(a3)));
   sc->code = cadr(code);
@@ -77418,12 +77438,9 @@ static void op_let_3a_new(s7_scheme *sc) /* 3 vars, 1 expr in body */
 
 static void op_let_3a_old(s7_scheme *sc) /* 3 vars, 1 expr in body */
 {
-  s7_pointer a1, a2, a3, let, code;
+  s7_pointer let, code;
   code = cdr(sc->code);
-  a1 = caar(code);
-  a2 = cadar(code);
-  a3 = caddar(code);
-  let = update_let_with_three_slots(sc, opt3_let(code), fx_call(sc, cdr(a1)), fx_call(sc, cdr(a2)), fx_call(sc, cdr(a3)));
+  let = update_let_with_three_slots(sc, opt3_let(code), fx_call(sc, cdr(caar(code))), fx_call(sc, cdr(opt1_pair(code))), fx_call(sc, cdr(opt2_pair(code))));
   let_set_outlet(let, sc->curlet);
   sc->curlet = let;
   sc->code = cadr(code);
@@ -97646,7 +97663,7 @@ int main(int argc, char **argv)
  * tlet       5762         7775                 4667  4673
  * trec       7763         5976   5970   5970   5969
  * tnum       59.4         6348   6013   5998   5995  5935
- * tmisc      6506         7389   6210   6174   6216  6213
+ * tmisc      6506         7389   6210   6174   6216  6208
  * tgc        12.5         11.9   11.1   11.0   10.7
  * tgen       12.3         11.2   11.4   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.7  11.6
@@ -97661,4 +97678,5 @@ int main(int argc, char **argv)
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
  * check other symbol cases in s7-optimize
+ * op_let_2a_old in check_tc?
  */
