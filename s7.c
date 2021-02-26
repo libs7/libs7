@@ -2169,19 +2169,7 @@ void s7_show_history(s7_scheme *sc);
   }
   #define set_local(Symbol) set_local_1(sc, Symbol, __func__, __LINE__)
 #else
-#if S7_DEBUGGING
-#define set_local(p)	   \
-  do {			   \
-    if (is_normal_symbol(p)) \
-      full_type(p) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC)); \
-    else								\
-      {									\
-        fprintf(stderr, "%s[%d]: %s set local\n", __func__, __LINE__, display(p)); \
-        if (sc->stop_at_error) abort();					\
-      }} while (0)
-#else
 #define set_local(p)                   full_type(T_Sym(p)) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC))
-#endif
 #endif
 
 #define T_HIGH_C                       T_LOCAL
@@ -2267,6 +2255,10 @@ void s7_show_history(s7_scheme *sc);
 #define set_checked_slot(p)            set_type_bit(T_Slt(p), T_CHECKED)
 #define is_checked_slot(p)             has_type_bit(T_Slt(p), T_CHECKED)
 #define clear_checked_slot(p)          clear_type_bit(T_Slt(p), T_CHECKED)
+
+#define T_ALL_INTEGER                  T_CHECKED
+#define is_all_integer(p)              has_type_bit(T_Sym(p), T_ALL_INTEGER)
+#define set_all_integer(p)             set_type_bit(T_Sym(p), T_ALL_INTEGER)
 
 #define T_UNSAFE                       (1 << (TYPE_BITS + 15))
 #define set_unsafe(p)                  set_type_bit(T_Pair(p), T_UNSAFE)
@@ -4627,8 +4619,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	   /* bit 5 */
 	   ((full_typ & T_DONT_EVAL_ARGS) != 0) ? (((is_any_macro(obj)) || (is_syntax(obj))) ? " dont-eval-args" : " ?5?") : "",
 	   /* bit 6 */
-	   ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_either_macro(obj))) ? " expansion" :
-						   " ?6?") : "",
+	   ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_either_macro(obj))) ? " expansion" : " ?6?") : "",
 	   /* bit 7 */
 	   ((full_typ & T_MULTIPLE_VALUE) != 0) ? ((is_symbol(obj)) ? " matched" :
 						   ((is_pair(obj)) ? " values|matched" :
@@ -4648,7 +4639,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						      (((is_normal_symbol(obj)) || (is_slot(obj))) ? " has-setter" :
 						       " ?10?"))))) : "",
 	   /* bit 11 */
-	   ((full_typ & T_SHARED) != 0) ?         " shared" : "",
+	   ((full_typ & T_SHARED) != 0) ?         ((is_sequence(obj)) ? " shared" : " ?11?") : "",
 	   /* bit 12 */
 	   ((full_typ & T_LOCAL) != 0) ?          ((is_normal_symbol(obj)) ? " local" :
 						   ((is_pair(obj)) ? " high-c" :
@@ -4656,7 +4647,9 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	   /* bit 13 */
 	   ((full_typ & T_SAFE_PROCEDURE) != 0) ? " safe-procedure" : "",
 	   /* bit 14 */
-	   ((full_typ & T_CHECKED) != 0) ?        " checked" : "",
+	   ((full_typ & T_CHECKED) != 0) ?        (((is_pair(obj)) || (is_slot(obj))) ? " checked" :
+						   ((is_symbol(obj)) ? " all-integer" :
+						    " ?14?")) : "",
 	   /* bit 15 */
 	   ((full_typ & T_UNSAFE) != 0) ?         ((is_symbol(obj)) ? " clean-symbol" :
 						   ((is_slot(obj)) ? " has-stepper" :
@@ -4806,6 +4799,8 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_FULL_HAS_GX) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
+  if (((full_typ & T_CHECKED) != 0) && (!is_slot(obj)) && (!is_pair(obj)) && (!is_symbol(obj))) return(true);
+  if (((full_typ & T_SHARED) != 0) && (!t_sequence_p[type(obj)]) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_FULL_BINDER) != 0) && 
       ((!is_pair(obj)) && (!is_hash_table(obj)) && (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))))
     return(true);
@@ -4883,7 +4878,7 @@ static void complain(const char* complaint, s7_pointer p, const char *func, int 
   if (cur_sc->stop_at_error) abort();
 }
 
-static char* show_debugger_bits(int64_t bits);
+static char* show_debugger_bits(s7_pointer obj);
 
 static s7_pointer check_ref(s7_pointer p, uint8_t expected_type, const char *func, int32_t line, const char *func1, const char *func2)
 {
@@ -5203,9 +5198,11 @@ static const char *opt3_role_name(uint64_t role)
   return((role == OPT3_LOCATION) ? "opt3_location" : "opt3_unknown");
 }
 
-static char* show_debugger_bits(int64_t bits)
+static char* show_debugger_bits(s7_pointer p)
 {
   char *bits_str;
+  int64_t bits;
+  bits = p->debugger_bits;
   bits_str = (char *)Malloc(512);
   snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
@@ -5256,7 +5253,7 @@ static char* show_debugger_bits(int64_t bits)
 static void show_opt1_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits;
-  bits = show_debugger_bits(p->debugger_bits);
+  bits = show_debugger_bits(p);
   fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %lx",
 	  BOLD_TEXT,
 	  func, line,
@@ -5313,7 +5310,7 @@ static void set_opt1_hash_1(s7_pointer p, uint64_t x)
 static void show_opt2_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits;
-  bits = show_debugger_bits(p->debugger_bits);
+  bits = show_debugger_bits(p);
   fprintf(stderr, "%s%s[%d]%s: opt2: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %lx %s",
 	  BOLD_TEXT,
 	  func, line,
@@ -5393,7 +5390,7 @@ static void set_opt2_name_1(s7_pointer p, const char *str)
 static void show_opt3_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits;
-  bits = show_debugger_bits(p->debugger_bits);
+  bits = show_debugger_bits(p);
   fprintf(stderr, "%s%s[%d]%s: opt3: %s %" PRIx64 "%s", BOLD_TEXT, func, line, UNBOLD_TEXT, opt3_role_name(role), p->debugger_bits, bits);
   free(bits);
 }
@@ -56859,7 +56856,7 @@ static s7_pointer fx_is_type_car_t(s7_scheme *sc, s7_pointer arg)
   val = t_lookup(sc, opt2_sym(cdr(arg)), arg);
   if (is_pair(val))
     return(make_boolean(sc, (uint8_t)(opt3_byte(cdr(arg))) == type(car(val))));
-  if (has_active_methods(sc, val)) /* this verbosity saves 1/3 total compute time (overhead!) -- old comment, maybe use method_or_bust*? */
+  if (has_active_methods(sc, val)) /* this verbosity saves 1/3 total compute time (overhead!) */
     {
       s7_pointer func;
       func = find_method_with_let(sc, val, sc->car_symbol);
@@ -56875,7 +56872,7 @@ static s7_pointer fx_c_weak1_type_s(s7_scheme *sc, s7_pointer arg)
   val = lookup(sc, opt2_sym(cdr(arg)));
   if (is_c_pointer(val))                /* (let? (c-pointer-weak1 val)) etc */
     return(make_boolean(sc, (uint8_t)(opt3_byte(cdr(arg))) == type(c_pointer_weak1(val))));
-  if (has_active_methods(sc, val))
+  if (has_active_methods(sc, val)) /* calling g_c_pointer_weak1 here instead is much slower, error by itself is much faster! splitting out does not help */
     {
       s7_pointer func;
       func = find_method_with_let(sc, val, sc->c_pointer_weak1_symbol);
@@ -67977,7 +67974,7 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
 
 static bool all_integers(s7_scheme *sc, s7_pointer expr)
 {
-  if ((car(expr) == sc->add_symbol) || (car(expr) == sc->subtract_symbol))
+  if ((is_symbol(car(expr))) && (is_all_integer(car(expr))))
     {
       s7_pointer p;
       for (p = cdr(expr); is_pair(p); p = cdr(p))
@@ -68229,7 +68226,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
     }
   for (rtn_len = 0, p = cdr(end); (is_pair(p)) && (rtn_len < SIZE_O); p = cdr(p), rtn_len++)
     {
-      return_o[V_ind(rtn_len)] = sc->opts[sc->pc];
+      return_o[rtn_len] = sc->opts[sc->pc];
       if (!cell_optimize(sc, p))
 	break;
     }
@@ -71900,6 +71897,8 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		      fx_annotate_args(sc, cdr(la), args);
 		      fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
 		      if (zs_fxable) set_optimized(body);
+		      set_opt1_pair(cdr(body), cdadr(body));
+		      set_opt3_pair(cdr(body), cdadr(caddr(body)));
 		      return(zs_fxable);
 		    }}
 	      else
@@ -71917,6 +71916,8 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 			  fx_annotate_args(sc, cdr(la), args);
 			  fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
 			  if (zs_fxable) set_optimized(body);
+			  set_opt1_pair(cdr(body), cdaddr(body));
+			  set_opt3_pair(cdr(body), cdadr(cadr(body)));
 			  return(zs_fxable);
 			}}}}
 	  return(false);
@@ -72336,6 +72337,8 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		{
 		  set_optimize_op(body, OP_TC_IF_A_Z_LAA);
 		  fx_annotate_args(sc, cdr(false_p), args);
+		  set_opt1_pair(cdr(body), cddr(body)); /* body == code in op, if_z */
+		  set_opt3_pair(cdr(body), cdar(cdddr(body))); /* la */
 		  if (!is_fxable(sc, true_p)) return(false);
 		  fx_annotate_arg(sc, cddr(body), args);
 		  fx_tree(sc, cdr(body), car(args), cadr(args));
@@ -72349,6 +72352,8 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		{
 		  set_optimize_op(body, OP_TC_IF_A_LAA_Z);
 		  fx_annotate_args(sc, cdr(true_p), args);
+		  set_opt1_pair(cdr(body), cdddr(body));
+		  set_opt3_pair(cdr(body), cdar(cddr(body)));
 		  if (!is_fxable(sc, false_p)) return(false);
 		  fx_annotate_arg(sc, cdddr(body), args);
 		  fx_tree(sc, cdr(body), car(args), cadr(args));
@@ -72364,6 +72369,8 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		{
 		  set_optimize_op(body, OP_TC_IF_A_Z_L3A);
 		  fx_annotate_args(sc, cdr(false_p), args);
+		  set_opt1_pair(cdr(body), cddr(body)); 
+		  set_opt3_pair(cdr(body), cdar(cdddr(body))); 
 		  if (!is_fxable(sc, true_p)) return(false);
 		  fx_annotate_arg(sc, cddr(body), args);
 		  fx_tree(sc, cdr(body), car(args), cadr(args));
@@ -72376,6 +72383,8 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		{
 		  set_optimize_op(body, OP_TC_IF_A_L3A_Z);
 		  fx_annotate_args(sc, cdr(true_p), args);
+		  set_opt1_pair(cdr(body), cdddr(body));
+		  set_opt3_pair(cdr(body), cdar(cddr(body)));
 		  if (!is_fxable(sc, false_p)) return(false);
 		  fx_annotate_arg(sc, cdddr(body), args);
 		  fx_tree(sc, cdr(body), car(args), cadr(args));
@@ -87521,14 +87530,14 @@ static bool op_tc_if_a_z_laa(s7_scheme *sc, s7_pointer code, bool z_first, tc_ch
   if (cond == TC_IF)
     {
       if_test = cdr(code);
-      if_z = (z_first) ? cdr(if_test) : cddr(if_test);
-      la = (z_first) ? cdaddr(if_test) : cdadr(if_test);
+      if_z = opt1_pair(if_test); /* if_z = (z_first) ? cdr(if_test) : cddr(if_test) */
+      la = opt3_pair(if_test);   /* la = (z_first) ? cdaddr(if_test) : cdadr(if_test) */
     }
   else
     {
       if_test = cadr(code);
-      if_z = (z_first) ? cdr(if_test) : cdr(caddr(code));
-      la = (z_first) ? cdr(cadr(caddr(code))) : cdadr(if_test);
+      if_z = opt1_pair(cdr(code)); /* if_z = (z_first) ? cdr(if_test) : cdr(caddr(code)) */
+      la = opt3_pair(cdr(code));   /* la = (z_first) ? cdr(cadr(caddr(code))) : cdadr(if_test) */
     }
   laa = cdr(la);
   la_slot = let_slots(sc->curlet);
@@ -87707,8 +87716,8 @@ static bool op_tc_if_a_z_l3a(s7_scheme *sc, s7_pointer code, bool z_first)
   s7_pointer if_test, f_z, la, laa, l3a, la_slot, laa_slot, l3a_slot;
   s7_function tf;
   if_test = cdr(code);
-  f_z = (z_first) ? cdr(if_test) : cddr(if_test);
-  la = (z_first) ? cdaddr(if_test) : cdadr(if_test);
+  f_z = opt1_pair(if_test); /* if_z = (z_first) ? cdr(if_test) : cddr(if_test) */
+  la = opt3_pair(if_test);   /* la = (z_first) ? cdaddr(if_test) : cdadr(if_test) */
   laa = cdr(la);
   l3a = cdr(laa);
   la_slot = let_slots(sc->curlet);
@@ -96302,16 +96311,16 @@ static void init_rootlet(s7_scheme *sc)
   sc->is_nan_symbol =                defun("nan?",		is_nan,			1, 0, false);
   sc->complex_symbol =               defun("complex",	        complex,	        2, 0, false);
 
-  sc->add_symbol =                   defun("+",		        add,			0, 0, true);
-  sc->subtract_symbol =              defun("-",		        subtract,		1, 0, true);
-  sc->multiply_symbol =              defun("*",		        multiply,		0, 0, true);
+  sc->add_symbol =                   defun("+",		        add,			0, 0, true); set_all_integer(sc->add_symbol);
+  sc->subtract_symbol =              defun("-",		        subtract,		1, 0, true); set_all_integer(sc->subtract_symbol);
+  sc->multiply_symbol =              defun("*",		        multiply,		0, 0, true); set_all_integer(sc->multiply_symbol);
   sc->divide_symbol =                defun("/",		        divide,			1, 0, true);
-  sc->min_symbol =                   defun("min",		min,			1, 0, true);
-  sc->max_symbol =                   defun("max",		max,			1, 0, true);
+  sc->min_symbol =                   defun("min",		min,			1, 0, true); set_all_integer(sc->min_symbol);
+  sc->max_symbol =                   defun("max",		max,			1, 0, true); set_all_integer(sc->max_symbol);
 
-  sc->quotient_symbol =              defun("quotient",		quotient,		2, 0, false);
-  sc->remainder_symbol =             defun("remainder",	        remainder,		2, 0, false);
-  sc->modulo_symbol =                defun("modulo",		modulo,			2, 0, false);
+  sc->quotient_symbol =              defun("quotient",		quotient,		2, 0, false); set_all_integer(sc->quotient_symbol);
+  sc->remainder_symbol =             defun("remainder",	        remainder,		2, 0, false); set_all_integer(sc->remainder_symbol);
+  sc->modulo_symbol =                defun("modulo",		modulo,			2, 0, false); set_all_integer(sc->modulo_symbol);
   sc->num_eq_symbol =                defun("=",		        num_eq,			2, 0, true);
   sc->lt_symbol =                    defun("<",		        less,			2, 0, true);
   sc->gt_symbol =                    defun(">",		        greater,		2, 0, true);
@@ -97635,48 +97644,49 @@ int main(int argc, char **argv)
  * tpeak       128          115    114    114    114
  * tauto       786          648    642    647    651
  * tref        739          691    687    687    689
- * tshoot     1663          883    872    872    863
+ * tshoot     1663          883    872    872    864
  * index      1076         1026   1016   1014   1012
- * tmock      7690         1177   1165   1166   1158  1147
- * s7test     4527         1873   1831   1817   1814
- * lt         2117         2123   2110   2112   2100
+ * tmock      7690         1177   1165   1166   1148
+ * s7test     4527         1873   1831   1817   1809
+ * lt         2117         2123   2110   2112   2101
  * tcopy      2277         2256   2230   2219   2218
- * tmat       2418         2285   2258   2256   2248
+ * tmat       2418         2285   2258   2256   2239
  * tform      3319         2281   2273   2266   2320
  * tvect      2649         2456   2413   2413   2392
  * tread      2610         2440   2421   2412   2403
- * trclo      4292         2715   2561   2560   2539  2536
- * fbench     2980         2688   2583   2577   2573
- * tb         3472         2735   2681   2677   2649  2648
+ * trclo      4292         2715   2561   2560   2536
+ * fbench     2980         2688   2583   2577   2574
+ * tb         3472         2735   2681   2677   2654
  * tmap       3759         2886   2857   2827   2817
  * titer      2860         2865   2842   2842   2842
  * tsort      3816         3105   3104   3097   2981
- * dup        3456         3334   3332   3203   3174  3153
- * tmac       3326         3317   3277   3247   3241  3221
- * tset       3287         3253   3104   3207   3268  3255
- * tio        3763         3816   3752   3738   3699  3692
+ * dup        3456         3334   3332   3203   3152
+ * tmac       3326         3317   3277   3247   3222
+ * tset       3287         3253   3104   3207   3253
+ * tio        3763         3816   3752   3738   3692
  * teq        4054         4068   4045   4038   3713
- * tfft       11.3         4142   4109   4107   4103  4067
- * tclo       4949         4787   4735   4668   4583
- * tcase      4671         4960   4793   4669   4582  4571
- * tstr       6755         5281   4863   4765   4651
- * tlet       5762         7775                 4667  4673
+ * tfft       11.3         4142   4109   4107   4067
+ * tcase      4671         4960   4793   4669   4571
+ * tclo       4949         4787   4735   4668   4588
+ * tstr       6755         5281   4863   4765   4650
+ * tlet       5762         7775                 4675
  * trec       7763         5976   5970   5970   5969
- * tnum       59.4         6348   6013   5998   5995  5935
- * tmisc      6506         7389   6210   6174   6216  6208
+ * tnum       59.4         6348   6013   5998   5937
+ * tmisc      6506         7389   6210   6174   6208
  * tgc        12.5         11.9   11.1   11.0   10.7
  * tgen       12.3         11.2   11.4   11.3   11.3
- * thash      37.4         11.8   11.7   11.7   11.7  11.6
+ * thash      37.4         11.8   11.7   11.7   11.6
  * tall       26.9         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.2
- * sg         98.6         71.9   72.3   72.2   72.8  72.6
+ * sg         98.6         71.9   72.3   72.2   72.8
  * lg        105.4        106.6  105.0  105.1  104.4
- * tbig      600.0        177.4  175.8  174.3  174.2 174.1
+ * tbig      600.0        177.4  175.8  174.3  173.3
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
  * check other symbol cases in s7-optimize
- * op_let_2a_old in check_tc?
+ * opt1/3 in various op_tc/recur cases
+ * op_cl_sas(tlet) sss(tset)
  */
