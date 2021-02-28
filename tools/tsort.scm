@@ -12,7 +12,7 @@
 	 (<= a b)))
   (define (closure-less a b)
     (and (< a b)
-	 (= (abs (+ (* 2 (- 3)) 1)) 5))) ; force optimizer to give up!
+	 (= (abs (+ (* 2 (- 3)) 1)) 5))) ; force optimizer to give up! [but it is now smarter...]
   (define (begin-less a b)
     (if (and (< a b) (> a b)) (display "oops"))
     (< a b))
