@@ -1319,7 +1319,7 @@ struct s7_scheme {
   s7_pointer add_2, add_3, add_1x, add_x1, subtract_1, subtract_2, subtract_3, subtract_x1, subtract_2f, subtract_f2, simple_char_eq,
              char_equal_2, char_greater_2, char_less_2, char_position_csi, string_equal_2, substring_uncopied, display_2, display_f,
              string_greater_2, string_less_2, symbol_to_string_uncopied, get_output_string_uncopied, string_equal_2c, string_c1, string_append_2,
-             vector_ref_2, vector_ref_3, vector_set_3, vector_set_4, read_char_1, dynamic_wind_unchecked,
+             vector_ref_2, vector_ref_3, vector_set_3, vector_set_4, read_char_1, dynamic_wind_unchecked, append_2,
              fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, iv_ref_2, iv_ref_3, iv_set_3, bv_ref_2, bv_ref_3, bv_set_3,
              list_0, list_1, list_2, list_3, list_set_i, hash_table_ref_2, hash_table_2, list_ref_0, list_ref_1, list_ref_2,
              format_f, format_no_column, format_just_control_string, format_as_objstr, values_uncopied,
@@ -38655,9 +38655,6 @@ static s7_pointer g_cons(s7_scheme *sc, s7_pointer args)
   #define H_cons "(cons a b) returns a pair containing a and b"
   #define Q_cons s7_make_signature(sc, 3, sc->is_pair_symbol, sc->T, sc->T)
 
-  /* set_cdr(args, cadr(args));
-   * this is not safe -- it changes a variable's value directly: (let ((lst (list 1 2))) (list (apply cons lst) lst)) -> '((1 . 2) (1 . 2))
-   */
   s7_pointer x;
   new_cell(sc, x, T_PAIR | T_SAFE_PROCEDURE);
   set_car(x, car(args));
@@ -40154,7 +40151,7 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
   s7_pointer y, tp, np = NULL, pp;
   bool all_args_are_lists = true;
 
-  /* we know here that args is a pair and cdr(args) is not nil; this function does not check sc->max_list_length; called only in g_append */
+  /* we know here that car(args) is a list and cdr(args) is not nil; this function does not check sc->max_list_length; called only in g_append */
   tp = sc->nil;
   push_stack_no_let_no_code(sc, OP_GC_PROTECT, args);
   for (y = args; is_pair(y); y = cdr(y)) /* arglist so not dotted */
@@ -47187,311 +47184,6 @@ s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_p
 }
 
 
-/* -------------------------------- choosers -------------------------------- */
-static s7_pointer make_function_with_class(s7_scheme *sc, s7_pointer cls, const char *name, s7_function f,
-					   int32_t required_args, int32_t optional_args, bool rest_arg)
-{
-  s7_pointer uf;
-#if S7_DEBUGGING
-  if (!is_safe_procedure(global_value(s7_make_symbol(sc, name)))) fprintf(stderr, "%s unsafe: %s\n", __func__, name);
-#endif
-  uf = s7_make_safe_function(sc, name, f, required_args, optional_args, rest_arg, NULL);
-  s7_function_set_class(sc, uf, cls);
-  c_function_signature(uf) = c_function_signature(cls);
-  return(uf);
-}
-
-static s7_pointer make_unsafe_function_with_class(s7_scheme *sc, s7_pointer cls, const char *name, s7_function f,
-					   int32_t required_args, int32_t optional_args, bool rest_arg)
-{
-  s7_pointer uf;
-  uf = s7_make_function(sc, name, f, required_args, optional_args, rest_arg, NULL); /* was s7_make_safe_function! 14-Dec-20 */
-  s7_function_set_class(sc, uf, cls);
-  c_function_signature(uf) = c_function_signature(cls);
-  return(uf);
-}
-
-static s7_pointer set_function_chooser(s7_scheme *sc, s7_pointer sym, s7_pointer (*chooser)(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops))
-{
-  s7_pointer f;
-  f = global_value(sym);
-#if S7_DEBUGGING
-  if (c_function_chooser(f) != fallback_chooser) fprintf(stderr, "%s[%d]: reset %s chooser\n", __func__, __LINE__, display(sym));
-#endif
-  c_function_chooser(f) = chooser;
-  return(f);
-}
-
-static void init_choosers(s7_scheme *sc)
-{
-  s7_pointer f;
-
-  /* + */
-  f = set_function_chooser(sc, sc->add_symbol, add_chooser);
-  sc->add_class = c_function_class(f);
-
-  sc->add_2 = make_function_with_class(sc, f, "+", g_add_2, 2, 0, false);
-  sc->add_3 = make_function_with_class(sc, f, "+", g_add_3, 3, 0, false);
-  sc->add_1x = make_function_with_class(sc, f, "+", g_add_1x, 2, 0, false);
-  sc->add_x1 = make_function_with_class(sc, f, "+", g_add_x1, 2, 0, false);
-  sc->add_i_random = make_function_with_class(sc, f, "+", g_add_i_random, 2, 0, false);
-  sc->add_2_ff = make_function_with_class(sc, f, "+", g_add_2_ff, 2, 0, false);
-  sc->add_2_ii = make_function_with_class(sc, f, "+", g_add_2_ii, 2, 0, false);
-  sc->add_2_if = make_function_with_class(sc, f, "+", g_add_2_if, 2, 0, false);
-  sc->add_2_fi = make_function_with_class(sc, f, "+", g_add_2_fi, 2, 0, false);
-  sc->add_2_xi = make_function_with_class(sc, f, "+", g_add_2_xi, 2, 0, false);
-  sc->add_2_ix = make_function_with_class(sc, f, "+", g_add_2_ix, 2, 0, false);
-  sc->add_2_fx = make_function_with_class(sc, f, "+", g_add_2_fx, 2, 0, false);
-  sc->add_2_xf = make_function_with_class(sc, f, "+", g_add_2_xf, 2, 0, false);
-
-  /* - */
-  f = set_function_chooser(sc, sc->subtract_symbol, subtract_chooser);
-  sc->subtract_class = c_function_class(f);
-  sc->subtract_1 = make_function_with_class(sc, f, "-", g_subtract_1, 1, 0, false);
-  sc->subtract_2 = make_function_with_class(sc, f, "-", g_subtract_2, 2, 0, false);
-  sc->subtract_3 = make_function_with_class(sc, f, "-", g_subtract_3, 3, 0, false);
-  sc->subtract_x1 = make_function_with_class(sc, f, "-", g_subtract_x1, 2, 0, false);
-  sc->subtract_2f = make_function_with_class(sc, f, "-", g_subtract_2f, 2, 0, false);
-  sc->subtract_f2 = make_function_with_class(sc, f, "-", g_subtract_f2, 2, 0, false);
-
-  /* * */
-  f = set_function_chooser(sc, sc->multiply_symbol, multiply_chooser);
-  sc->multiply_class = c_function_class(f);
-  sc->multiply_2 = make_function_with_class(sc, f, "*", g_multiply_2, 2, 0, false);
-  sc->mul_2_ff = make_function_with_class(sc, f, "*", g_mul_2_ff, 2, 0, false);
-  sc->mul_2_ii = make_function_with_class(sc, f, "*", g_mul_2_ii, 2, 0, false);
-  sc->mul_2_if = make_function_with_class(sc, f, "*", g_mul_2_if, 2, 0, false);
-  sc->mul_2_fi = make_function_with_class(sc, f, "*", g_mul_2_fi, 2, 0, false);
-  sc->mul_2_xi = make_function_with_class(sc, f, "*", g_mul_2_xi, 2, 0, false);
-  sc->mul_2_ix = make_function_with_class(sc, f, "*", g_mul_2_ix, 2, 0, false);
-  sc->mul_2_fx = make_function_with_class(sc, f, "*", g_mul_2_fx, 2, 0, false);
-  sc->mul_2_xf = make_function_with_class(sc, f, "*", g_mul_2_xf, 2, 0, false);
-
-  /* / */
-  f = set_function_chooser(sc, sc->divide_symbol, divide_chooser);
-  sc->invert_1 = make_function_with_class(sc, f, "/", g_invert_1, 1, 0, false);
-  sc->divide_2 = make_function_with_class(sc, f, "/", g_divide_2, 2, 0, false);
-  sc->invert_x = make_function_with_class(sc, f, "/", g_invert_x, 2, 0, false);
-  sc->divide_by_2 = make_function_with_class(sc, f, "/", g_divide_by_2, 2, 0, false);
-
-  /* = */
-  f = set_function_chooser(sc, sc->num_eq_symbol, num_eq_chooser);
-  sc->num_eq_class = c_function_class(f);
-  sc->num_eq_2 = make_function_with_class(sc, f, "=", g_num_eq_2, 2, 0, false);
-  sc->num_eq_xi = make_function_with_class(sc, f, "=", g_num_eq_xi, 2, 0, false);
-  sc->num_eq_ix = make_function_with_class(sc, f, "=", g_num_eq_ix, 2, 0, false);
-
-  /* < */
-  f = set_function_chooser(sc, sc->lt_symbol, less_chooser);
-  sc->less_xi = make_function_with_class(sc, f, "<", g_less_xi, 2, 0, false);
-  sc->less_x0 = make_function_with_class(sc, f, "<", g_less_x0, 2, 0, false);
-  sc->less_xf = make_function_with_class(sc, f, "<", g_less_xf, 2, 0, false);
-  sc->less_2 = make_function_with_class(sc, f, "<", g_less_2, 2, 0, false);
-
-  /* > */
-  f = set_function_chooser(sc, sc->gt_symbol, greater_chooser);
-  sc->greater_xi = make_function_with_class(sc, f, ">", g_greater_xi, 2, 0, false);
-  sc->greater_xf = make_function_with_class(sc, f, ">", g_greater_xf, 2, 0, false);
-  sc->greater_2 = make_function_with_class(sc, f, ">", g_greater_2, 2, 0, false);
-
-  /* <= */
-  f = set_function_chooser(sc, sc->leq_symbol, leq_chooser);
-  sc->leq_xi = make_function_with_class(sc, f, "<=", g_leq_xi, 2, 0, false);
-  sc->leq_2 = make_function_with_class(sc, f, "<=", g_leq_2, 2, 0, false);
-
-  /* >= */
-  f = set_function_chooser(sc, sc->geq_symbol, geq_chooser);
-  sc->geq_xi = make_function_with_class(sc, f, ">=", g_geq_xi, 2, 0, false);
-  sc->geq_xf = make_function_with_class(sc, f, ">=", g_geq_xf, 2, 0, false);
-  sc->geq_2 = make_function_with_class(sc, f, ">=", g_geq_2, 2, 0, false);
-
-  /* random */
-  f = set_function_chooser(sc, sc->random_symbol, random_chooser);
-  sc->random_1 = make_function_with_class(sc, f, "random", g_random_1, 1, 0, false);
-  sc->random_i = make_function_with_class(sc, f, "random", g_random_i, 1, 0, false);
-  sc->random_f = make_function_with_class(sc, f, "random", g_random_f, 1, 0, false);
-
-  /* defined? */
-  f = set_function_chooser(sc, sc->is_defined_symbol, is_defined_chooser);
-  sc->is_defined_in_rootlet = make_function_with_class(sc, f, "defined?", g_is_defined_in_rootlet, 2, 0, false);
-
-  /* char=? */
-  f = set_function_chooser(sc, sc->char_eq_symbol, char_equal_chooser);
-  sc->simple_char_eq = make_function_with_class(sc, f, "char=?", g_simple_char_eq, 2, 0, false);
-  sc->char_equal_2 = make_function_with_class(sc, f, "char=?", g_char_equal_2, 2, 0, false);
-
-  /* char>? */
-  f = set_function_chooser(sc, sc->char_gt_symbol, char_greater_chooser);
-  sc->char_greater_2 = make_function_with_class(sc, f, "char>?", g_char_greater_2, 2, 0, false);
-
-  /* char<? */
-  f = set_function_chooser(sc, sc->char_lt_symbol, char_less_chooser);
-  sc->char_less_2 = make_function_with_class(sc, f, "char<?", g_char_less_2, 2, 0, false);
-
-  /* read-char */
-  f = set_function_chooser(sc, sc->read_char_symbol, read_char_chooser);
-  sc->read_char_1 = make_function_with_class(sc, f, "read-char", g_read_char_1, 1, 0, false);
-
-  /* char-position */
-  f = set_function_chooser(sc, sc->char_position_symbol, char_position_chooser);
-  sc->char_position_csi = make_function_with_class(sc, f, "char-position", g_char_position_csi, 2, 1, false);
-
-  /* string=? */
-  f = set_function_chooser(sc, sc->string_eq_symbol, string_equal_chooser);
-  sc->string_equal_2 = make_function_with_class(sc, f, "string=?", g_string_equal_2, 2, 0, false);
-  sc->string_equal_2c = make_function_with_class(sc, f, "string=?", g_string_equal_2c, 2, 0, false);
-
-  /* substring */
-  sc->substring_uncopied = s7_make_function(sc, "substring", g_substring_uncopied, 2, 1, false, NULL);
-  s7_function_set_class(sc, sc->substring_uncopied, global_value(sc->substring_symbol));
-
-  /* string>? */
-  f = set_function_chooser(sc, sc->string_gt_symbol, string_greater_chooser);
-  sc->string_greater_2 = make_function_with_class(sc, f, "string>?", g_string_greater_2, 2, 0, false);
-
-  /* string<? */
-  f = set_function_chooser(sc, sc->string_lt_symbol, string_less_chooser);
-  sc->string_less_2 = make_function_with_class(sc, f, "string<?", g_string_less_2, 2, 0, false);
-
-  /* string */
-  f = set_function_chooser(sc, sc->string_symbol, string_chooser);
-  sc->string_c1 = make_function_with_class(sc, f, "string", g_string_c1, 1, 0, false);
-
-  /* string-append */
-  f = set_function_chooser(sc, sc->string_append_symbol, string_append_chooser);
-  sc->string_append_2 = make_function_with_class(sc, f, "string-append", g_string_append_2, 2, 0, false);
-
-  /* string-ref et al */
-  set_function_chooser(sc, sc->string_ref_symbol, string_substring_chooser);
-  set_function_chooser(sc, sc->string_to_symbol_symbol, string_substring_chooser); /* not string_to_number here */
-  set_function_chooser(sc, sc->string_to_keyword_symbol, string_substring_chooser);
-  set_function_chooser(sc, sc->string_downcase_symbol, string_substring_chooser);
-  set_function_chooser(sc, sc->string_upcase_symbol, string_substring_chooser);
-  /* if the function assumes a null-terminated string, substring needs to return a copy */
-#if (!WITH_PURE_S7)
-  set_function_chooser(sc, sc->string_length_symbol, string_substring_chooser);
-  set_function_chooser(sc, sc->string_to_list_symbol, string_substring_chooser);
-#endif
-  set_function_chooser(sc, sc->string_copy_symbol, string_copy_chooser);
-
-  /* symbol->string */
-  f = global_value(sc->symbol_to_string_symbol);
-  sc->symbol_to_string_uncopied = s7_make_function(sc, "symbol->string", g_symbol_to_string_uncopied, 1, 0, false, NULL);
-  s7_function_set_class(sc, sc->symbol_to_string_uncopied, f);
-
-  /* display */
-  f = set_function_chooser(sc, sc->display_symbol, display_chooser);
-  sc->display_f = make_function_with_class(sc, f, "display", g_display_f, 2, 0, false);
-  sc->display_2 = make_function_with_class(sc, f, "display", g_display_2, 2, 0, false);
-
-  /* vector-ref */
-  f = set_function_chooser(sc, sc->vector_ref_symbol, vector_ref_chooser);
-  sc->vector_ref_2 = make_function_with_class(sc, f, "vector-ref", g_vector_ref_2, 2, 0, false);
-  sc->vector_ref_3 = make_function_with_class(sc, f, "vector-ref", g_vector_ref_3, 3, 0, false);
-
-  /* vector-set! */
-  f = set_function_chooser(sc, sc->vector_set_symbol, vector_set_chooser);
-  sc->vector_set_3 = make_function_with_class(sc, f, "vector-set!", g_vector_set_3, 3, 0, false);
-  sc->vector_set_4 = make_function_with_class(sc, f, "vector-set!", g_vector_set_4, 4, 0, false);
-
-  /* float-vector-ref */
-  f = set_function_chooser(sc, sc->float_vector_ref_symbol, float_vector_ref_chooser);
-  sc->fv_ref_2 = make_function_with_class(sc, f, "float-vector-ref", g_fv_ref_2, 2, 0, false);
-  sc->fv_ref_3 = make_function_with_class(sc, f, "float-vector-ref", g_fv_ref_3, 3, 0, false);
-
-  /* float-vector-set */
-  f = set_function_chooser(sc, sc->float_vector_set_symbol, float_vector_set_chooser);
-  sc->fv_set_3 = make_function_with_class(sc, f, "float-vector-set!", g_fv_set_3, 3, 0, false);
-  sc->fv_set_unchecked = make_function_with_class(sc, f, "float-vector-set!", g_fv_set_unchecked, 3, 0, false);
-
-  /* int-vector-ref */
-  f = set_function_chooser(sc, sc->int_vector_ref_symbol, int_vector_ref_chooser);
-  sc->iv_ref_2 = make_function_with_class(sc, f, "int-vector-ref", g_iv_ref_2, 2, 0, false);
-  sc->iv_ref_3 = make_function_with_class(sc, f, "int-vector-ref", g_iv_ref_3, 3, 0, false);
-
-  /* int-vector-set */
-  f = set_function_chooser(sc, sc->int_vector_set_symbol, int_vector_set_chooser);
-  sc->iv_set_3 = make_function_with_class(sc, f, "int-vector-set!", g_iv_set_3, 3, 0, false);
-
-  /* byte-vector-ref */
-  f = set_function_chooser(sc, sc->byte_vector_ref_symbol, byte_vector_ref_chooser);
-  sc->bv_ref_2 = make_function_with_class(sc, f, "byte-vector-ref", g_bv_ref_2, 2, 0, false);
-  sc->bv_ref_3 = make_function_with_class(sc, f, "byte-vector-ref", g_bv_ref_3, 3, 0, false);
-
-  /* byte-vector-set */
-  f = set_function_chooser(sc, sc->byte_vector_set_symbol, byte_vector_set_chooser);
-  sc->bv_set_3 = make_function_with_class(sc, f, "byte-vector-set!", g_bv_set_3, 3, 0, false);
-
-  /* list-set! */
-  f = set_function_chooser(sc, sc->list_set_symbol, list_set_chooser);
-  sc->list_set_i = make_function_with_class(sc, f, "list-set!", g_list_set_i, 3, 0, false);
-
-  /* hash-table-ref */
-  f = set_function_chooser(sc, sc->hash_table_ref_symbol, hash_table_ref_chooser);
-  sc->hash_table_ref_2 = make_function_with_class(sc, f, "hash-table-ref", g_hash_table_ref_2, 2, 0, false);
-
-  /* hash-table-set! */
-  set_function_chooser(sc, sc->hash_table_set_symbol, hash_table_set_chooser);
-
-  /* hash-table */
-  f = set_function_chooser(sc, sc->hash_table_symbol, hash_table_chooser);
-  sc->hash_table_2 = make_function_with_class(sc, f, "hash-table", g_hash_table_2, 2, 0, false);
-
-  /* format */
-  f = set_function_chooser(sc, sc->format_symbol, format_chooser);
-  sc->format_f = make_function_with_class(sc, f, "format", g_format_f, 1, 0, true);
-  sc->format_no_column = make_function_with_class(sc, f, "format", g_format_no_column, 1, 0, true);
-  sc->format_just_control_string = make_function_with_class(sc, f, "format", g_format_just_control_string, 2, 0, false);
-  sc->format_as_objstr = make_function_with_class(sc, f, "format", g_format_as_objstr, 3, 0, true);
-
-  /* list */
-  f = set_function_chooser(sc, sc->list_symbol, list_chooser);
-  sc->list_0 = make_function_with_class(sc, f, "list", g_list_0, 0, 0, false);
-  sc->list_1 = make_function_with_class(sc, f, "list", g_list_1, 1, 0, false);
-  sc->list_2 = make_function_with_class(sc, f, "list", g_list_2, 2, 0, false);
-  sc->list_3 = make_function_with_class(sc, f, "list", g_list_3, 3, 0, false);
-
-  /* list-ref */
-  f = set_function_chooser(sc, sc->list_ref_symbol, list_ref_chooser);
-  sc->list_ref_0 = make_function_with_class(sc, f, "list", g_list_ref_0, 2, 0, false);
-  sc->list_ref_1 = make_function_with_class(sc, f, "list", g_list_ref_1, 2, 0, false);
-  sc->list_ref_2 = make_function_with_class(sc, f, "list", g_list_ref_2, 2, 0, false);
-
-  /* member */
-  set_function_chooser(sc, sc->member_symbol, member_chooser);
-
-  /* memq */
-  f = set_function_chooser(sc, sc->memq_symbol, memq_chooser);  /* is pure-s7, use member here */
-  sc->memq_2 = make_function_with_class(sc, f, "memq", g_memq_2, 2, 0, false);
-  sc->memq_3 = make_function_with_class(sc, f, "memq", g_memq_3, 2, 0, false);
-  sc->memq_4 = make_function_with_class(sc, f, "memq", g_memq_4, 2, 0, false);
-  sc->memq_any = make_function_with_class(sc, f, "memq", g_memq_any, 2, 0, false);
-
-  /* tree-set-memq */
-  f = set_function_chooser(sc, sc->tree_set_memq_symbol, tree_set_memq_chooser);
-  sc->tree_set_memq_syms = make_function_with_class(sc, f, "tree-set-memq", g_tree_set_memq_1, 2, 0, false);
-
-  /* eval-string */
-  set_function_chooser(sc, sc->eval_string_symbol, eval_string_chooser);
-
-  /* dynamic-wind */
-  f = set_function_chooser(sc, sc->dynamic_wind_symbol, dynamic_wind_chooser);
-  sc->dynamic_wind_unchecked = make_unsafe_function_with_class(sc, f, "dynamic-wind", g_dynamic_wind_unchecked, 3, 0, false);
-
-  /* inlet */
-  f = set_function_chooser(sc, sc->inlet_symbol, inlet_chooser);
-  sc->simple_inlet = make_function_with_class(sc, f, "inlet", g_simple_inlet, 0, 0, true);
-
-  /* let-ref */
-  f = set_function_chooser(sc, sc->let_ref_symbol, let_ref_chooser);
-  sc->lint_let_ref = make_function_with_class(sc, f, "let-ref", g_lint_let_ref, 2, 0, false);
-
-  /* let-set */
-  f = set_function_chooser(sc, sc->let_set_symbol, let_set_chooser);
-  sc->lint_let_set = make_function_with_class(sc, f, "let-set!", g_lint_let_set, 3, 0, false);
-}
-
-
 /* -------------------------------- c-object? -------------------------------- */
 bool s7_is_c_object(s7_pointer p) {return(is_c_object(p));}
 
@@ -51613,42 +51305,67 @@ static s7_pointer g_append(s7_scheme *sc, s7_pointer args)
   a1 = car(args);                      /* first arg determines result type unless all args but last are empty (sigh) */
   if (is_null(cdr(args))) return(a1);  /* (append <anything>) -> <anything> */
 
-  /* args = copy_proper_list(sc, args); */ /* why?? perhaps when inlet/hash-table is first? 1-Mar-21 */
+  args = copy_proper_list(sc, args);   /* if any arg calls the append method, args might be stepped on */
   switch (type(a1))
     {
-    case T_NIL:
-    case T_PAIR:
-      return(g_list_append(sc, args)); /* only list case accepts any trailing arg because dotted lists are special */
-
+    case T_NIL: case T_PAIR: return(g_list_append(sc, args));
+    case T_STRING:           return(g_string_append_1(sc, args, sc->append_symbol));
+    case T_HASH_TABLE:       return(hash_table_append(sc, args));
+    case T_LET:              return(let_append(sc, args));
     case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
       return(vector_append(sc, args, type(a1), sc->append_symbol));
-
-    case T_STRING:
-      return(g_string_append_1(sc, args, sc->append_symbol));
-
-    case T_HASH_TABLE:
-      return(hash_table_append(sc, copy_proper_list(sc, args)));
-
-    case T_LET:
-      return(let_append(sc, copy_proper_list(sc, args)));
-
-     default:
-      check_method(sc, a1, sc->append_symbol, args); /* copy? */
+    default:
+      check_method(sc, a1, sc->append_symbol, args);
     }
   return(wrong_type_argument_with_type(sc, sc->append_symbol, 1, a1, a_sequence_string)); /* (append 1 0) */
 }
 
 static s7_pointer append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3) {return(g_append(sc, set_plist_3(sc, p1, p2, p3)));}
+
+static inline s7_pointer copy_proper_pair_and_append(s7_scheme *sc, s7_pointer lst, s7_pointer rest)
+{
+  s7_pointer p, tp, np;
+#if 0
+  sc->u = lst;
+  sc->w = rest;
+#endif
+  tp = list_1(sc, car(lst));
+  sc->y = tp;
+  for (p = cdr(lst), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
+    set_cdr(np, list_1(sc, car(p)));
+  set_cdr(np, rest);
+#if 0
+  sc->u = sc->nil;
+  sc->w = sc->nil;
+#endif
+  sc->y = sc->nil;
+  return(tp);
+}
+
 s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b) 
 {
-#if 0
-  if ((is_pair(a)) && (is_pair(b))) /* is_list(b)? */
+  if (is_pair(a))
     {
-      s7_pointer c, p;
-      /* only proper lists as args here? copy_proper_list(sc, a) but retain end for (set-cdr! end b) */
+      s7_pointer q;
+      if (!s7_is_proper_list(sc, a))
+	return(wrong_type_argument_with_type(sc, sc->append_symbol, 1, a, a_proper_list_string));
+      if (is_null(b))
+	return(copy_proper_list(sc, a));  /* (append p ()) was the old-fashioned way to copy p */
+      if (!is_pair(b))
+	return(g_list_append(sc, list_2(sc, a, b)));
+      q = copy_proper_pair_and_append(sc, a, b);
+      return(q);
     }
-#endif
+  if (is_null(a)) return(b);
   return(g_append(sc, set_plist_2(sc, a, b)));
+}
+
+static s7_pointer g_append_2(s7_scheme *sc, s7_pointer args) {return(s7_append(sc, car(args), cadr(args)));}
+
+static s7_pointer append_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
+{
+  if (args == 2) return(sc->append_2);
+  return(f);
 }
 
 
@@ -65481,6 +65198,7 @@ static bool p_pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 
 /* -------- p_ppi -------- */
 static s7_pointer opt_p_ppi_psf(opt_info *o) {return(o->v[3].p_ppi_f(opt_sc(o), o->v[2].p, slot_value(o->v[1].p), o->v[5].fi(o->v[4].o1)));}
+static s7_pointer opt_p_ppi_psf_cpos(opt_info *o) {return(char_position_p_ppi(opt_sc(o), o->v[2].p, slot_value(o->v[1].p), o->v[5].fi(o->v[4].o1)));}
 
 static bool p_ppi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
@@ -65501,7 +65219,7 @@ static bool p_ppi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	    {
 	      opc->v[2].p = cadr(car_x);
 	      opc->v[1].p = slot;
-	      opc->v[0].fp = opt_p_ppi_psf;
+	      opc->v[0].fp = (ifunc == char_position_p_ppi) ? opt_p_ppi_psf_cpos : opt_p_ppi_psf;
 	      opc->v[4].o1 = sc->opts[start];
 	      opc->v[5].fi = sc->opts[start]->v[0].fi;
 	      return(true);
@@ -70373,6 +70091,319 @@ static s7_pointer g_quasiquote(s7_scheme *sc, s7_pointer args)
    *   which is an infinite loop.  Guile says syntax error (because it thinks "quote" can't be a parameter name, I think).
    */
   return(g_quasiquote_1(sc, car(args), true));
+}
+
+
+/* -------------------------------- choosers -------------------------------- */
+static s7_pointer make_function_with_class(s7_scheme *sc, s7_pointer cls, const char *name, s7_function f,
+					   int32_t required_args, int32_t optional_args, bool rest_arg)
+{
+  s7_pointer uf;
+#if S7_DEBUGGING
+  if (!is_safe_procedure(global_value(s7_make_symbol(sc, name)))) fprintf(stderr, "%s unsafe: %s\n", __func__, name);
+#endif
+  uf = s7_make_safe_function(sc, name, f, required_args, optional_args, rest_arg, NULL);
+  s7_function_set_class(sc, uf, cls);
+  c_function_signature(uf) = c_function_signature(cls);
+  return(uf);
+}
+
+static s7_pointer make_unsafe_function_with_class(s7_scheme *sc, s7_pointer cls, const char *name, s7_function f,
+					   int32_t required_args, int32_t optional_args, bool rest_arg)
+{
+  s7_pointer uf;
+  uf = s7_make_function(sc, name, f, required_args, optional_args, rest_arg, NULL); /* was s7_make_safe_function! 14-Dec-20 */
+  s7_function_set_class(sc, uf, cls);
+  c_function_signature(uf) = c_function_signature(cls);
+  return(uf);
+}
+
+static s7_pointer set_function_chooser(s7_scheme *sc, s7_pointer sym, s7_pointer (*chooser)(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops))
+{
+  s7_pointer f;
+  f = global_value(sym);
+#if S7_DEBUGGING
+  if (c_function_chooser(f) != fallback_chooser) fprintf(stderr, "%s[%d]: reset %s chooser\n", __func__, __LINE__, display(sym));
+#endif
+  c_function_chooser(f) = chooser;
+  return(f);
+}
+
+static void init_choosers(s7_scheme *sc)
+{
+  s7_pointer f;
+
+  /* + */
+  f = set_function_chooser(sc, sc->add_symbol, add_chooser);
+  sc->add_class = c_function_class(f);
+
+  sc->add_2 = make_function_with_class(sc, f, "+", g_add_2, 2, 0, false);
+  sc->add_3 = make_function_with_class(sc, f, "+", g_add_3, 3, 0, false);
+  sc->add_1x = make_function_with_class(sc, f, "+", g_add_1x, 2, 0, false);
+  sc->add_x1 = make_function_with_class(sc, f, "+", g_add_x1, 2, 0, false);
+  sc->add_i_random = make_function_with_class(sc, f, "+", g_add_i_random, 2, 0, false);
+  sc->add_2_ff = make_function_with_class(sc, f, "+", g_add_2_ff, 2, 0, false);
+  sc->add_2_ii = make_function_with_class(sc, f, "+", g_add_2_ii, 2, 0, false);
+  sc->add_2_if = make_function_with_class(sc, f, "+", g_add_2_if, 2, 0, false);
+  sc->add_2_fi = make_function_with_class(sc, f, "+", g_add_2_fi, 2, 0, false);
+  sc->add_2_xi = make_function_with_class(sc, f, "+", g_add_2_xi, 2, 0, false);
+  sc->add_2_ix = make_function_with_class(sc, f, "+", g_add_2_ix, 2, 0, false);
+  sc->add_2_fx = make_function_with_class(sc, f, "+", g_add_2_fx, 2, 0, false);
+  sc->add_2_xf = make_function_with_class(sc, f, "+", g_add_2_xf, 2, 0, false);
+
+  /* - */
+  f = set_function_chooser(sc, sc->subtract_symbol, subtract_chooser);
+  sc->subtract_class = c_function_class(f);
+  sc->subtract_1 = make_function_with_class(sc, f, "-", g_subtract_1, 1, 0, false);
+  sc->subtract_2 = make_function_with_class(sc, f, "-", g_subtract_2, 2, 0, false);
+  sc->subtract_3 = make_function_with_class(sc, f, "-", g_subtract_3, 3, 0, false);
+  sc->subtract_x1 = make_function_with_class(sc, f, "-", g_subtract_x1, 2, 0, false);
+  sc->subtract_2f = make_function_with_class(sc, f, "-", g_subtract_2f, 2, 0, false);
+  sc->subtract_f2 = make_function_with_class(sc, f, "-", g_subtract_f2, 2, 0, false);
+
+  /* * */
+  f = set_function_chooser(sc, sc->multiply_symbol, multiply_chooser);
+  sc->multiply_class = c_function_class(f);
+  sc->multiply_2 = make_function_with_class(sc, f, "*", g_multiply_2, 2, 0, false);
+  sc->mul_2_ff = make_function_with_class(sc, f, "*", g_mul_2_ff, 2, 0, false);
+  sc->mul_2_ii = make_function_with_class(sc, f, "*", g_mul_2_ii, 2, 0, false);
+  sc->mul_2_if = make_function_with_class(sc, f, "*", g_mul_2_if, 2, 0, false);
+  sc->mul_2_fi = make_function_with_class(sc, f, "*", g_mul_2_fi, 2, 0, false);
+  sc->mul_2_xi = make_function_with_class(sc, f, "*", g_mul_2_xi, 2, 0, false);
+  sc->mul_2_ix = make_function_with_class(sc, f, "*", g_mul_2_ix, 2, 0, false);
+  sc->mul_2_fx = make_function_with_class(sc, f, "*", g_mul_2_fx, 2, 0, false);
+  sc->mul_2_xf = make_function_with_class(sc, f, "*", g_mul_2_xf, 2, 0, false);
+
+  /* / */
+  f = set_function_chooser(sc, sc->divide_symbol, divide_chooser);
+  sc->invert_1 = make_function_with_class(sc, f, "/", g_invert_1, 1, 0, false);
+  sc->divide_2 = make_function_with_class(sc, f, "/", g_divide_2, 2, 0, false);
+  sc->invert_x = make_function_with_class(sc, f, "/", g_invert_x, 2, 0, false);
+  sc->divide_by_2 = make_function_with_class(sc, f, "/", g_divide_by_2, 2, 0, false);
+
+  /* = */
+  f = set_function_chooser(sc, sc->num_eq_symbol, num_eq_chooser);
+  sc->num_eq_class = c_function_class(f);
+  sc->num_eq_2 = make_function_with_class(sc, f, "=", g_num_eq_2, 2, 0, false);
+  sc->num_eq_xi = make_function_with_class(sc, f, "=", g_num_eq_xi, 2, 0, false);
+  sc->num_eq_ix = make_function_with_class(sc, f, "=", g_num_eq_ix, 2, 0, false);
+
+  /* < */
+  f = set_function_chooser(sc, sc->lt_symbol, less_chooser);
+  sc->less_xi = make_function_with_class(sc, f, "<", g_less_xi, 2, 0, false);
+  sc->less_x0 = make_function_with_class(sc, f, "<", g_less_x0, 2, 0, false);
+  sc->less_xf = make_function_with_class(sc, f, "<", g_less_xf, 2, 0, false);
+  sc->less_2 = make_function_with_class(sc, f, "<", g_less_2, 2, 0, false);
+
+  /* > */
+  f = set_function_chooser(sc, sc->gt_symbol, greater_chooser);
+  sc->greater_xi = make_function_with_class(sc, f, ">", g_greater_xi, 2, 0, false);
+  sc->greater_xf = make_function_with_class(sc, f, ">", g_greater_xf, 2, 0, false);
+  sc->greater_2 = make_function_with_class(sc, f, ">", g_greater_2, 2, 0, false);
+
+  /* <= */
+  f = set_function_chooser(sc, sc->leq_symbol, leq_chooser);
+  sc->leq_xi = make_function_with_class(sc, f, "<=", g_leq_xi, 2, 0, false);
+  sc->leq_2 = make_function_with_class(sc, f, "<=", g_leq_2, 2, 0, false);
+
+  /* >= */
+  f = set_function_chooser(sc, sc->geq_symbol, geq_chooser);
+  sc->geq_xi = make_function_with_class(sc, f, ">=", g_geq_xi, 2, 0, false);
+  sc->geq_xf = make_function_with_class(sc, f, ">=", g_geq_xf, 2, 0, false);
+  sc->geq_2 = make_function_with_class(sc, f, ">=", g_geq_2, 2, 0, false);
+
+  /* random */
+  f = set_function_chooser(sc, sc->random_symbol, random_chooser);
+  sc->random_1 = make_function_with_class(sc, f, "random", g_random_1, 1, 0, false);
+  sc->random_i = make_function_with_class(sc, f, "random", g_random_i, 1, 0, false);
+  sc->random_f = make_function_with_class(sc, f, "random", g_random_f, 1, 0, false);
+
+  /* defined? */
+  f = set_function_chooser(sc, sc->is_defined_symbol, is_defined_chooser);
+  sc->is_defined_in_rootlet = make_function_with_class(sc, f, "defined?", g_is_defined_in_rootlet, 2, 0, false);
+
+  /* char=? */
+  f = set_function_chooser(sc, sc->char_eq_symbol, char_equal_chooser);
+  sc->simple_char_eq = make_function_with_class(sc, f, "char=?", g_simple_char_eq, 2, 0, false);
+  sc->char_equal_2 = make_function_with_class(sc, f, "char=?", g_char_equal_2, 2, 0, false);
+
+  /* char>? */
+  f = set_function_chooser(sc, sc->char_gt_symbol, char_greater_chooser);
+  sc->char_greater_2 = make_function_with_class(sc, f, "char>?", g_char_greater_2, 2, 0, false);
+
+  /* char<? */
+  f = set_function_chooser(sc, sc->char_lt_symbol, char_less_chooser);
+  sc->char_less_2 = make_function_with_class(sc, f, "char<?", g_char_less_2, 2, 0, false);
+
+  /* read-char */
+  f = set_function_chooser(sc, sc->read_char_symbol, read_char_chooser);
+  sc->read_char_1 = make_function_with_class(sc, f, "read-char", g_read_char_1, 1, 0, false);
+
+  /* char-position */
+  f = set_function_chooser(sc, sc->char_position_symbol, char_position_chooser);
+  sc->char_position_csi = make_function_with_class(sc, f, "char-position", g_char_position_csi, 2, 1, false);
+
+  /* string=? */
+  f = set_function_chooser(sc, sc->string_eq_symbol, string_equal_chooser);
+  sc->string_equal_2 = make_function_with_class(sc, f, "string=?", g_string_equal_2, 2, 0, false);
+  sc->string_equal_2c = make_function_with_class(sc, f, "string=?", g_string_equal_2c, 2, 0, false);
+
+  /* substring */
+  sc->substring_uncopied = s7_make_function(sc, "substring", g_substring_uncopied, 2, 1, false, NULL);
+  s7_function_set_class(sc, sc->substring_uncopied, global_value(sc->substring_symbol));
+
+  /* string>? */
+  f = set_function_chooser(sc, sc->string_gt_symbol, string_greater_chooser);
+  sc->string_greater_2 = make_function_with_class(sc, f, "string>?", g_string_greater_2, 2, 0, false);
+
+  /* string<? */
+  f = set_function_chooser(sc, sc->string_lt_symbol, string_less_chooser);
+  sc->string_less_2 = make_function_with_class(sc, f, "string<?", g_string_less_2, 2, 0, false);
+
+  /* string */
+  f = set_function_chooser(sc, sc->string_symbol, string_chooser);
+  sc->string_c1 = make_function_with_class(sc, f, "string", g_string_c1, 1, 0, false);
+
+  /* string-append */
+  f = set_function_chooser(sc, sc->string_append_symbol, string_append_chooser);
+  sc->string_append_2 = make_function_with_class(sc, f, "string-append", g_string_append_2, 2, 0, false);
+
+  /* string-ref et al */
+  set_function_chooser(sc, sc->string_ref_symbol, string_substring_chooser);
+  set_function_chooser(sc, sc->string_to_symbol_symbol, string_substring_chooser); /* not string_to_number here */
+  set_function_chooser(sc, sc->string_to_keyword_symbol, string_substring_chooser);
+  set_function_chooser(sc, sc->string_downcase_symbol, string_substring_chooser);
+  set_function_chooser(sc, sc->string_upcase_symbol, string_substring_chooser);
+  /* if the function assumes a null-terminated string, substring needs to return a copy */
+#if (!WITH_PURE_S7)
+  set_function_chooser(sc, sc->string_length_symbol, string_substring_chooser);
+  set_function_chooser(sc, sc->string_to_list_symbol, string_substring_chooser);
+#endif
+  set_function_chooser(sc, sc->string_copy_symbol, string_copy_chooser);
+
+  /* symbol->string */
+  f = global_value(sc->symbol_to_string_symbol);
+  sc->symbol_to_string_uncopied = s7_make_function(sc, "symbol->string", g_symbol_to_string_uncopied, 1, 0, false, NULL);
+  s7_function_set_class(sc, sc->symbol_to_string_uncopied, f);
+
+  /* display */
+  f = set_function_chooser(sc, sc->display_symbol, display_chooser);
+  sc->display_f = make_function_with_class(sc, f, "display", g_display_f, 2, 0, false);
+  sc->display_2 = make_function_with_class(sc, f, "display", g_display_2, 2, 0, false);
+
+  /* vector-ref */
+  f = set_function_chooser(sc, sc->vector_ref_symbol, vector_ref_chooser);
+  sc->vector_ref_2 = make_function_with_class(sc, f, "vector-ref", g_vector_ref_2, 2, 0, false);
+  sc->vector_ref_3 = make_function_with_class(sc, f, "vector-ref", g_vector_ref_3, 3, 0, false);
+
+  /* vector-set! */
+  f = set_function_chooser(sc, sc->vector_set_symbol, vector_set_chooser);
+  sc->vector_set_3 = make_function_with_class(sc, f, "vector-set!", g_vector_set_3, 3, 0, false);
+  sc->vector_set_4 = make_function_with_class(sc, f, "vector-set!", g_vector_set_4, 4, 0, false);
+
+  /* float-vector-ref */
+  f = set_function_chooser(sc, sc->float_vector_ref_symbol, float_vector_ref_chooser);
+  sc->fv_ref_2 = make_function_with_class(sc, f, "float-vector-ref", g_fv_ref_2, 2, 0, false);
+  sc->fv_ref_3 = make_function_with_class(sc, f, "float-vector-ref", g_fv_ref_3, 3, 0, false);
+
+  /* float-vector-set */
+  f = set_function_chooser(sc, sc->float_vector_set_symbol, float_vector_set_chooser);
+  sc->fv_set_3 = make_function_with_class(sc, f, "float-vector-set!", g_fv_set_3, 3, 0, false);
+  sc->fv_set_unchecked = make_function_with_class(sc, f, "float-vector-set!", g_fv_set_unchecked, 3, 0, false);
+
+  /* int-vector-ref */
+  f = set_function_chooser(sc, sc->int_vector_ref_symbol, int_vector_ref_chooser);
+  sc->iv_ref_2 = make_function_with_class(sc, f, "int-vector-ref", g_iv_ref_2, 2, 0, false);
+  sc->iv_ref_3 = make_function_with_class(sc, f, "int-vector-ref", g_iv_ref_3, 3, 0, false);
+
+  /* int-vector-set */
+  f = set_function_chooser(sc, sc->int_vector_set_symbol, int_vector_set_chooser);
+  sc->iv_set_3 = make_function_with_class(sc, f, "int-vector-set!", g_iv_set_3, 3, 0, false);
+
+  /* byte-vector-ref */
+  f = set_function_chooser(sc, sc->byte_vector_ref_symbol, byte_vector_ref_chooser);
+  sc->bv_ref_2 = make_function_with_class(sc, f, "byte-vector-ref", g_bv_ref_2, 2, 0, false);
+  sc->bv_ref_3 = make_function_with_class(sc, f, "byte-vector-ref", g_bv_ref_3, 3, 0, false);
+
+  /* byte-vector-set */
+  f = set_function_chooser(sc, sc->byte_vector_set_symbol, byte_vector_set_chooser);
+  sc->bv_set_3 = make_function_with_class(sc, f, "byte-vector-set!", g_bv_set_3, 3, 0, false);
+
+  /* list-set! */
+  f = set_function_chooser(sc, sc->list_set_symbol, list_set_chooser);
+  sc->list_set_i = make_function_with_class(sc, f, "list-set!", g_list_set_i, 3, 0, false);
+
+  /* hash-table-ref */
+  f = set_function_chooser(sc, sc->hash_table_ref_symbol, hash_table_ref_chooser);
+  sc->hash_table_ref_2 = make_function_with_class(sc, f, "hash-table-ref", g_hash_table_ref_2, 2, 0, false);
+
+  /* hash-table-set! */
+  set_function_chooser(sc, sc->hash_table_set_symbol, hash_table_set_chooser);
+
+  /* hash-table */
+  f = set_function_chooser(sc, sc->hash_table_symbol, hash_table_chooser);
+  sc->hash_table_2 = make_function_with_class(sc, f, "hash-table", g_hash_table_2, 2, 0, false);
+
+  /* format */
+  f = set_function_chooser(sc, sc->format_symbol, format_chooser);
+  sc->format_f = make_function_with_class(sc, f, "format", g_format_f, 1, 0, true);
+  sc->format_no_column = make_function_with_class(sc, f, "format", g_format_no_column, 1, 0, true);
+  sc->format_just_control_string = make_function_with_class(sc, f, "format", g_format_just_control_string, 2, 0, false);
+  sc->format_as_objstr = make_function_with_class(sc, f, "format", g_format_as_objstr, 3, 0, true);
+
+  /* list */
+  f = set_function_chooser(sc, sc->list_symbol, list_chooser);
+  sc->list_0 = make_function_with_class(sc, f, "list", g_list_0, 0, 0, false);
+  sc->list_1 = make_function_with_class(sc, f, "list", g_list_1, 1, 0, false);
+  sc->list_2 = make_function_with_class(sc, f, "list", g_list_2, 2, 0, false);
+  sc->list_3 = make_function_with_class(sc, f, "list", g_list_3, 3, 0, false);
+
+  /* append */
+  f = set_function_chooser(sc, sc->append_symbol, append_chooser);
+  sc->append_2 = make_function_with_class(sc, f, "append", g_append_2, 2, 0, false);
+
+  /* list-ref */
+  f = set_function_chooser(sc, sc->list_ref_symbol, list_ref_chooser);
+  sc->list_ref_0 = make_function_with_class(sc, f, "list", g_list_ref_0, 2, 0, false);
+  sc->list_ref_1 = make_function_with_class(sc, f, "list", g_list_ref_1, 2, 0, false);
+  sc->list_ref_2 = make_function_with_class(sc, f, "list", g_list_ref_2, 2, 0, false);
+
+  /* member */
+  set_function_chooser(sc, sc->member_symbol, member_chooser);
+
+  /* memq */
+  f = set_function_chooser(sc, sc->memq_symbol, memq_chooser);  /* is pure-s7, use member here */
+  sc->memq_2 = make_function_with_class(sc, f, "memq", g_memq_2, 2, 0, false);
+  sc->memq_3 = make_function_with_class(sc, f, "memq", g_memq_3, 2, 0, false);
+  sc->memq_4 = make_function_with_class(sc, f, "memq", g_memq_4, 2, 0, false);
+  sc->memq_any = make_function_with_class(sc, f, "memq", g_memq_any, 2, 0, false);
+
+  /* tree-set-memq */
+  f = set_function_chooser(sc, sc->tree_set_memq_symbol, tree_set_memq_chooser);
+  sc->tree_set_memq_syms = make_function_with_class(sc, f, "tree-set-memq", g_tree_set_memq_1, 2, 0, false);
+
+  /* eval-string */
+  set_function_chooser(sc, sc->eval_string_symbol, eval_string_chooser);
+
+  /* dynamic-wind */
+  f = set_function_chooser(sc, sc->dynamic_wind_symbol, dynamic_wind_chooser);
+  sc->dynamic_wind_unchecked = make_unsafe_function_with_class(sc, f, "dynamic-wind", g_dynamic_wind_unchecked, 3, 0, false);
+
+  /* inlet */
+  f = set_function_chooser(sc, sc->inlet_symbol, inlet_chooser);
+  sc->simple_inlet = make_function_with_class(sc, f, "inlet", g_simple_inlet, 0, 0, true);
+
+  /* let-ref */
+  f = set_function_chooser(sc, sc->let_ref_symbol, let_ref_chooser);
+  sc->lint_let_ref = make_function_with_class(sc, f, "let-ref", g_lint_let_ref, 2, 0, false);
+
+  /* let-set */
+  f = set_function_chooser(sc, sc->let_set_symbol, let_set_chooser);
+  sc->lint_let_set = make_function_with_class(sc, f, "let-set!", g_lint_let_set, 3, 0, false);
+
+  /* values */
+  f = set_function_chooser(sc, sc->values_symbol, values_chooser);
+  sc->values_uncopied = make_unsafe_function_with_class(sc, f, "values", splice_in_values, 0, 0, true);
 }
 
 
@@ -96592,7 +96623,6 @@ static void init_rootlet(s7_scheme *sc)
   sc->stacktrace_symbol =            defun("stacktrace",	stacktrace,		0, 5, false);
 
   /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); /* values_symbol set above for signatures, not semisafe! */
-  sc->values_uncopied = make_unsafe_function_with_class(sc, set_function_chooser(sc, sc->values_symbol, values_chooser), "values", splice_in_values, 0, 0, true);
   sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false);
   set_immutable(sc->apply_values_symbol);
   sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true);
@@ -97670,7 +97700,7 @@ int main(int argc, char **argv)
  * tpeak       128          115    114    114    113
  * tref        739          691    687    687    610
  * tauto       786          648    642    647    651
- * tshoot     1663          883    872    872    861
+ * tshoot     1663          883    872    872    861   856
  * index      1076         1026   1016   1014   1011
  * tmock      7690         1177   1165   1166   1147
  * s7test     4527         1873   1831   1817   1809
@@ -97682,7 +97712,7 @@ int main(int argc, char **argv)
  * tread      2610         2440   2421   2412   2403
  * trclo      4292         2715   2561   2560   2526
  * fbench     2980         2688   2583   2577   2574
- * tb         3472         2735   2681   2677   2648
+ * tb         3472         2735   2681   2677   2648  2640
  * tmap       3759         2886   2857   2827   2786
  * titer      2860         2865   2842   2842   2803
  * tsort      3816         3105   3104   3097   2936
@@ -97705,7 +97735,7 @@ int main(int argc, char **argv)
  * tall       26.9         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.2
  * sg         98.6         71.9   72.3   72.2   72.7
- * lg        105.4        106.6  105.0  105.1  104.4
+ * lg        105.4        106.6  105.0  105.1  104.4  104.3
  * tbig      600.0        177.4  175.8  174.3  173.0
  * -----------------------------------------------------
  *
