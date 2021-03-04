@@ -7600,8 +7600,9 @@
 		       (not (checked-eval cleared-form)))
 		  (lint-format "this comparison can't be true: ~A" caller (truncated-list->string form))))
 
+	    ;; all the ops are upcase|downcase and all ops match.  Not unmatched ops because (string=? (upcase x) (downcase x)) is not (string-ci=? x x)
 	    (if (and (> (length form) 2)
-		     (let ((casef (let ((op #f))         ; (string=? x (string-downcase y)) -> (string-ci=? x y)
+		     (let ((casef (let ((op #f))
 				    (lambda (a)
 				      (and (pair? a)
 					   (memq (car a) '(string-downcase string-upcase))

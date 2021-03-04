@@ -47,7 +47,7 @@
 			       (set! last-c1 c1)))))
 		    (set! last-c c)
 		    (when (positive? (length cur-word))
-		      (hash-table-set! words cur-word 
+		      (hash-table-set! words cur-word ; in non-code text we'd probably want string-downcase here and below
 				       (cons cur-line (or (hash-table-ref words cur-word) ()))))
 		    (set! cur-word ""))))))))))
 

@@ -64154,6 +64154,7 @@ static s7_pointer opt_p_7i_c(opt_info *o) {return(make_integer(opt_sc(o), o->v[2
 static s7_pointer opt_p_d_c(opt_info *o)  {return(make_real(opt_sc(o), o->v[2].d_d_f(o->v[1].x)));}
 static s7_pointer opt_p_7d_c(opt_info *o) {return(make_real(opt_sc(o), o->v[2].d_7d_f(opt_sc(o), o->v[1].x)));}
 static s7_pointer opt_p_p_s(opt_info *o)  {return(o->v[2].p_p_f(opt_sc(o), slot_value(o->v[1].p)));}
+static s7_pointer opt_p_p_s_abs(opt_info *o) {return(abs_p_p(opt_sc(o), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_f(opt_info *o)  {return(o->v[2].p_p_f(opt_sc(o), o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f1(opt_info *o) {return(o->v[2].p_p_f(opt_sc(o), o->v[3].p_p_f(opt_sc(o), slot_value(o->v[1].p))));}
 
@@ -64237,7 +64238,7 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	  opc->v[1].p = opt_simple_symbol(sc, cadr(car_x));
 	  if (!opc->v[1].p)
 	    return_false(sc, car_x);
-	  opc->v[0].fp = opt_p_p_s;
+	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : opt_p_p_s;
 	  return(true);
 	}
       if (!is_pair(cadr(car_x)))
@@ -65234,8 +65235,10 @@ static s7_pointer opt_p_ppp_ssf(opt_info *o) {return(o->v[3].p_ppp_f(opt_sc(o), 
 static s7_pointer opt_p_ppp_hash_table_increment(opt_info *o) {return(fx_hash_table_increment_1(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[5].p));}
 static s7_pointer opt_p_ppp_sfs(opt_info *o) {return(o->v[3].p_ppp_f(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1), slot_value(o->v[2].p)));}
 static s7_pointer opt_p_ppp_scs(opt_info *o) {return(o->v[3].p_ppp_f(opt_sc(o), slot_value(o->v[1].p), o->v[4].p, slot_value(o->v[2].p)));}
+static s7_pointer opt_p_ppp_scs_eset(opt_info *o) {return(let_set_1(opt_sc(o), slot_value(o->v[1].p), o->v[4].p, slot_value(o->v[2].p)));}
 static s7_pointer opt_p_ppp_sss(opt_info *o) {return(o->v[4].p_ppp_f(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p)));}
 static s7_pointer opt_p_ppp_sss_mul(opt_info *o) {return(multiply_p_ppp(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p)));}
+static s7_pointer opt_p_ppp_sss_hset(opt_info *o) {return(s7_hash_table_set(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p)));}
 static s7_pointer opt_p_ppp_ssc(opt_info *o) {return(o->v[3].p_ppp_f(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[4].p));}
 
 static s7_pointer opt_p_ppp_sff(opt_info *o)
@@ -65313,9 +65316,11 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		      slot = opt_simple_symbol(sc, arg3);
 		      if (slot)
 			{
-			  opc->v[4].p_ppp_f = opc->v[3].p_ppp_f;
+			  s7_p_ppp_t func1;
+			  func1 = opc->v[3].p_ppp_f;
+			  opc->v[4].p_ppp_f = func1;
 			  opc->v[3].p = slot;
-			  opc->v[0].fp = (opc->v[4].p_ppp_f == multiply_p_ppp) ? opt_p_ppp_sss_mul : opt_p_ppp_sss;
+			  opc->v[0].fp = (func1 == multiply_p_ppp) ? opt_p_ppp_sss_mul : ((func1 == s7_hash_table_set) ? opt_p_ppp_sss_hset : opt_p_ppp_sss);
 			  return(true);
 			}}
 		  else
@@ -65354,7 +65359,7 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  if (opc->v[3].p_ppp_f == s7_let_set)
 		    {
 		      if (is_symbol(cadr(arg2))) /* checked is_let, has_methods and is_immutable above */
-			opc->v[3].p_ppp_f = let_set_1;
+			opc->v[0].fp = opt_p_ppp_scs_eset;
 		      else return_false(sc, car_x);
 		    }
 		  return(true);
@@ -65826,6 +65831,14 @@ static s7_pointer opt_set_p_d_f(opt_info *o)
   return(x);
 }
 
+static s7_pointer opt_set_p_d_f_sf_add(opt_info *o)
+{
+  s7_pointer x;
+  x = make_real(opt_sc(o), opt_d_dd_sf_add(o->v[4].o1));
+  slot_set_value(o->v[1].p, x);
+  return(x);
+}
+
 static s7_pointer opt_set_p_d_f_mm_add(opt_info *o)
 {
   s7_double x1, x2;
@@ -66080,9 +66093,9 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 		    {
 		      if (!set_p_d_f_combinable(sc, opc))
 			{
-			  opc->v[0].fp = opt_set_p_d_f;
 			  opc->v[4].o1 = sc->opts[start_pc];
 			  opc->v[5].fd = sc->opts[start_pc]->v[0].fd;
+			  opc->v[0].fp = (opc->v[5].fd == opt_d_dd_sf_add) ? opt_set_p_d_f_sf_add : opt_set_p_d_f;
 			  return(true);
 			}
 		      return(true);
@@ -66282,6 +66295,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 			  if (is_symbol(caddr(car_x)))
 			    {
 			      s7_pointer val_slot;
+			      s7_p_ppp_t func1;
 			      val_slot = opt_simple_symbol(sc, caddr(car_x));
 			      if (val_slot)
 				{
@@ -66294,9 +66308,10 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 				      opc->v[0].fp = opt_p_pip_sss;
 				      return(true);
 				    }
-				  opc->v[4].p_ppp_f = opc->v[3].p_ppp_f;
+				  func1 = opc->v[3].p_ppp_f;
+				  opc->v[4].p_ppp_f = func1;
 				  opc->v[3].p = val_slot;
-				  opc->v[0].fp = (opc->v[4].p_ppp_f == multiply_p_ppp) ? opt_p_ppp_sss_mul : opt_p_ppp_sss;
+				  opc->v[0].fp = (func1 == multiply_p_ppp) ? opt_p_ppp_sss_mul : ((func1 == s7_hash_table_set) ? opt_p_ppp_sss_hset : opt_p_ppp_sss);
 				  return(true);
 				}}
 			  else
@@ -66362,7 +66377,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 			    {
 			      opc->v[4].p = cadr(cadr(target));
 			      opc->v[2].p = val_slot;
-			      opc->v[0].fp = opt_p_ppp_scs;
+			      opc->v[0].fp = (opc->v[3].p_ppp_f = let_set_1) ? opt_p_ppp_scs_eset : opt_p_ppp_scs;
 			      return(true);
 			    }}
 		      o1 = sc->opts[sc->pc];
@@ -83602,7 +83617,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	  s7_pointer (*fp)(opt_info *o);
 	  o = sc->opts[0];
 	  fp = o->v[0].fp;
-	  if ((fp == opt_p_ppp_sss) || (fp == opt_p_ppp_sss_mul))
+	  if ((fp == opt_p_ppp_sss) || (fp == opt_p_ppp_sss_mul) || (fp == opt_p_ppp_sss_hset))
 	    {
 	      s7_p_ppp_t fpt;
 	      fpt = o->v[4].p_ppp_f;
@@ -88683,8 +88698,7 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 static s7_int oprec_i_if_a_a_opa_laq(s7_scheme *sc)
 {
   s7_int i1;
-  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))
-    return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
+  if (sc->rec_test_o->v[0].fb(sc->rec_test_o)) return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
   i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);
   integer(sc->rec_val1) = sc->rec_a2_o->v[0].fi(sc->rec_a2_o);
   return(sc->rec_i_ii_f(i1, oprec_i_if_a_a_opa_laq(sc)));
@@ -88693,8 +88707,7 @@ static s7_int oprec_i_if_a_a_opa_laq(s7_scheme *sc)
 static s7_int oprec_i_if_a_opa_laq_a(s7_scheme *sc)
 {
   s7_int i1;
-  if (!sc->rec_test_o->v[0].fb(sc->rec_test_o))
-    return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
+  if (!sc->rec_test_o->v[0].fb(sc->rec_test_o)) return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
   i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);
   integer(sc->rec_val1) = sc->rec_a2_o->v[0].fi(sc->rec_a2_o);
   return(sc->rec_i_ii_f(i1, oprec_i_if_a_opa_laq_a(sc)));
@@ -88702,8 +88715,7 @@ static s7_int oprec_i_if_a_opa_laq_a(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_a_opa_laq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
 
@@ -88723,8 +88735,7 @@ static s7_pointer oprec_if_a_a_opa_laq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_a_opla_aq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
   set_car(sc->t2_1, oprec_if_a_a_opla_aq(sc));
@@ -88734,8 +88745,7 @@ static s7_pointer oprec_if_a_a_opla_aq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_opa_laq_a(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) == sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
 
@@ -88755,8 +88765,7 @@ static s7_pointer oprec_if_a_opa_laq_a(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_opla_aq_a(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) == sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
   set_car(sc->t2_1, oprec_if_a_opla_aq_a(sc));
@@ -88847,8 +88856,7 @@ static void opinit_if_a_a_opa_laaq(s7_scheme *sc, int32_t a_op)
 
 static s7_pointer oprec_if_a_a_opa_laaq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot2, sc->rec_f3f(sc, sc->rec_f3p));
@@ -88871,8 +88879,7 @@ static s7_pointer oprec_if_a_a_opa_laaq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_opa_laaq_a(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) == sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot2, sc->rec_f3f(sc, sc->rec_f3p));
@@ -88921,8 +88928,7 @@ static void opinit_if_a_a_opa_l3aq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_a_opa_l3aq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
@@ -89049,8 +89055,7 @@ static s7_int oprec_i_if_a_a_opla_laq(s7_scheme *sc)
 static s7_int oprec_i_if_a_a_opla_laq_0(s7_scheme *sc)
 {
   s7_int i1, i2;
-  if (sc->rec_fb1(sc->rec_test_o))
-    return(sc->rec_fi1(sc->rec_result_o));
+  if (sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
   i1 = sc->rec_fi2(sc->rec_a1_o);
   integer(sc->rec_val1) = sc->rec_fi3(sc->rec_a2_o);
   if (sc->rec_fb1(sc->rec_test_o))
@@ -89071,8 +89076,7 @@ static s7_int oprec_i_if_a_a_opla_laq_0(s7_scheme *sc)
 static s7_double oprec_d_if_a_a_opla_laq(s7_scheme *sc)
 {
   s7_double x1, x2;
-  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))
-    return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
+  if (sc->rec_test_o->v[0].fb(sc->rec_test_o)) return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
   x1 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
   real(sc->rec_val1) = sc->rec_a2_o->v[0].fd(sc->rec_a2_o);
   if (sc->rec_test_o->v[0].fb(sc->rec_test_o))
@@ -89092,8 +89096,7 @@ static s7_double oprec_d_if_a_a_opla_laq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_a_opla_laq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_if_a_a_opla_laq(sc)));
@@ -89105,8 +89108,7 @@ static s7_pointer oprec_if_a_a_opla_laq(s7_scheme *sc)
 static s7_int oprec_i_if_a_opla_laq_a(s7_scheme *sc)
 {
   s7_int i1, i2;
-  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o)))
-    return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
+  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o))) return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
   i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);
   integer(sc->rec_val1) = sc->rec_a2_o->v[0].fi(sc->rec_a2_o);
   i2 = oprec_i_if_a_opla_laq_a(sc);
@@ -89117,8 +89119,7 @@ static s7_int oprec_i_if_a_opla_laq_a(s7_scheme *sc)
 static s7_int oprec_i_if_a_opla_laq_a_0(s7_scheme *sc)
 {
   s7_int i1, i2;
-  if (!sc->rec_fb1(sc->rec_test_o))
-    return(sc->rec_fi1(sc->rec_result_o));
+  if (!sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
   i1 = sc->rec_fi2(sc->rec_a1_o);
   integer(sc->rec_val1) = sc->rec_fi3(sc->rec_a2_o);
   if (!sc->rec_fb1(sc->rec_test_o))
@@ -89139,8 +89140,7 @@ static s7_int oprec_i_if_a_opla_laq_a_0(s7_scheme *sc)
 static s7_double oprec_d_if_a_opla_laq_a(s7_scheme *sc)
 {
   s7_double x1, x2;
-  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o)))
-    return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
+  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o))) return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
   x1 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
   real(sc->rec_val1) = sc->rec_a2_o->v[0].fd(sc->rec_a2_o);
   x2 = oprec_d_if_a_opla_laq_a(sc);
@@ -89150,8 +89150,7 @@ static s7_double oprec_d_if_a_opla_laq_a(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_opla_laq_a(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) == sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_if_a_opla_laq_a(sc)));
@@ -89200,8 +89199,7 @@ static void opinit_if_a_a_opa_la_laq(s7_scheme *sc, bool a_op)
 
 static s7_pointer oprec_if_a_a_opa_la_laq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot1, sc->rec_f3f(sc, sc->rec_f3p));
@@ -89214,8 +89212,7 @@ static s7_pointer oprec_if_a_a_opa_la_laq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_opa_la_laq_a(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) == sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot1, sc->rec_f3f(sc, sc->rec_f3p));
@@ -89254,8 +89251,7 @@ static void opinit_if_a_a_opla_la_laq(s7_scheme *sc, bool a_op)
 
 static s7_pointer oprec_if_a_a_opla_la_laq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot1, sc->rec_f3f(sc, sc->rec_f3p));
@@ -89334,8 +89330,7 @@ static void opinit_if_a_a_lopl3a_l3a_l3aq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_a_lopl3a_l3a_l3aq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
 
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
@@ -89393,10 +89388,8 @@ static void opinit_if_a_a_and_a_laa_laa(s7_scheme *sc, s7_pointer code)
 
 static s7_pointer oprec_if_a_a_and_a_laa_laa(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
-  if (sc->rec_f1f(sc, sc->rec_f1p) == sc->F)
-    return(sc->F);
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_f1f(sc, sc->rec_f1p) == sc->F) return(sc->F);
   recur_push(sc, slot_value(sc->rec_slot1));
   recur_push(sc, slot_value(sc->rec_slot2));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
@@ -89459,10 +89452,8 @@ static void opinit_cond_a_a_a_a_opla_laq(s7_scheme *sc, s7_pointer code, bool co
 
 static s7_pointer oprec_cond_a_a_a_a_opla_laq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
-  if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
-    return(sc->rec_f2f(sc, sc->rec_f2p));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F) return(sc->rec_f2f(sc, sc->rec_f2p));
   recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
   slot_set_value(sc->rec_slot1, sc->rec_f4f(sc, sc->rec_f4p));
   slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_cond_a_a_a_a_opla_laq(sc)));
@@ -89530,10 +89521,8 @@ static void opinit_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc, bool cond_case)
 
 static s7_pointer oprec_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
-  if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
-    return(sc->rec_f2f(sc, sc->rec_f2p));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F) return(sc->rec_f2f(sc, sc->rec_f2p));
   recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
   recur_push(sc, sc->rec_f4f(sc, sc->rec_f4p));
   recur_push(sc, sc->rec_f5f(sc, sc->rec_f5p));
@@ -89583,10 +89572,8 @@ static void opinit_cond_a_a_a_a_opa_laaq(s7_scheme *sc)
 
 static s7_pointer oprec_cond_a_a_a_a_opa_laaq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
-  if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
-    return(sc->rec_f2f(sc, sc->rec_f2p));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F) return(sc->rec_f2f(sc, sc->rec_f2p));
   recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
   recur_push(sc, sc->rec_f4f(sc, sc->rec_f4p));
   slot_set_value(sc->rec_slot2, sc->rec_f5f(sc, sc->rec_f5p));
@@ -89635,8 +89622,7 @@ static void opinit_cond_a_a_a_laa_opa_laaq(s7_scheme *sc, bool cond)
 
 static s7_pointer oprec_cond_a_a_a_laa_opa_laaq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
     {
       recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
@@ -89770,8 +89756,7 @@ static opt_pid_t opinit_cond_a_a_a_laa_lopa_laaq(s7_scheme *sc)
 static s7_int oprec_i_cond_a_a_a_laa_lopa_laaq(s7_scheme *sc)
 {
   s7_int i1, i2;
-  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))
-    return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
+  if (sc->rec_test_o->v[0].fb(sc->rec_test_o)) return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
   if (sc->rec_a1_o->v[0].fb(sc->rec_a1_o))
     {
       i1 = sc->rec_a2_o->v[0].fi(sc->rec_a2_o);
@@ -89791,8 +89776,7 @@ static s7_int oprec_i_cond_a_a_a_laa_lopa_laaq(s7_scheme *sc)
 static s7_int oprec_i_cond_a_a_a_laa_lopa_laaq_0(s7_scheme *sc)
 {
   s7_int i1, i2;
-  if (sc->rec_fb1(sc->rec_test_o))
-    return(sc->rec_fi1(sc->rec_result_o));
+  if (sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
   if (sc->rec_fb2(sc->rec_a1_o))
     {
       i1 = sc->rec_fi2(sc->rec_a2_o);
@@ -89811,8 +89795,7 @@ static s7_int oprec_i_cond_a_a_a_laa_lopa_laaq_0(s7_scheme *sc)
 
 static s7_pointer oprec_cond_a_a_a_laa_lopa_laaq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
-    return(sc->rec_resf(sc, sc->rec_resp));
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
     {
       recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
@@ -97698,21 +97681,21 @@ int main(int argc, char **argv)
  *             gmp (2-11)  20.9   21.0   21.1   21.2
  * -----------------------------------------------------
  * tpeak       128          115    114    114    113
- * tref        739          691    687    687    610
+ * tref        739          691    687    687    602
  * tauto       786          648    642    647    651
- * tshoot     1663          883    872    872    861   856
+ * tshoot     1663          883    872    872    856
  * index      1076         1026   1016   1014   1011
  * tmock      7690         1177   1165   1166   1147
  * s7test     4527         1873   1831   1817   1809
  * lt         2117         2123   2110   2112   2100
- * tmat       2418         2285   2258   2256   2142
- * tcopy      2277         2256   2230   2219   2218
+ * tmat       2418         2285   2258   2256   2137
+ * tcopy      2277         2256   2230   2219   2217
  * tform      3319         2281   2273   2266   2293
  * tvect      2649         2456   2413   2413   2337
  * tread      2610         2440   2421   2412   2403
  * trclo      4292         2715   2561   2560   2526
  * fbench     2980         2688   2583   2577   2574
- * tb         3472         2735   2681   2677   2648  2640
+ * tb         3472         2735   2681   2677   2640
  * tmap       3759         2886   2857   2827   2786
  * titer      2860         2865   2842   2842   2803
  * tsort      3816         3105   3104   3097   2936
@@ -97726,16 +97709,16 @@ int main(int argc, char **argv)
  * tcase      4671         4960   4793   4669   4570
  * tclo       4949         4787   4735   4668   4588
  * tlet       5762         7775   5640   5585   4632
+ * tnum       59.4         6348   6013   5998   5874
  * trec       7763         5976   5970   5970   5969
- * tnum       59.4         6348   6013   5998   5891
- * tmisc      6506         7389   6210   6174   6197
+ * tmisc      6506         7389   6210   6174   6167
  * tgc        12.5         11.9   11.1   11.0   10.7
  * tgen       12.3         11.2   11.4   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.2
+ * calls      61.1         36.7   37.5   37.2   37.1
  * sg         98.6         71.9   72.3   72.2   72.7
- * lg        105.4        106.6  105.0  105.1  104.4  104.3
+ * lg        105.4        106.6  105.0  105.1  104.3
  * tbig      600.0        177.4  175.8  174.3  173.0
  * -----------------------------------------------------
  *
@@ -97743,5 +97726,4 @@ int main(int argc, char **argv)
  * opt_let? opt_do creates a let and so on -- almost the same code: inits + body + result=last, opt_cell_do, opt_do_any
  *   if let+slots saved, need gc protection, or use permanent cells+free list (what if many lets)
  * check other symbol cases in s7-optimize
- * more all-int uses?
  */
