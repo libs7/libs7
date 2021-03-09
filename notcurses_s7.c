@@ -993,7 +993,11 @@ static s7_pointer g_ncstats_free(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_notcurses_stats(s7_scheme *sc, s7_pointer args)
 {
+#if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && (NOTCURSES_VERNUM_MINOR >= 2) && (NOTCURSES_VERNUM_PATCH >= 2)
+  notcurses_stats((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
+#else
   notcurses_stats((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
+#endif
 		  (ncstats *)s7_c_pointer_with_type(sc, s7_cadr(args), ncstats_symbol, __func__, 2));
   return(s7_cadr(args));
 }
