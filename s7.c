@@ -30678,8 +30678,15 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
  *   But how to optimize s7 for cache hits?  The culprits are eval and gc.  Looking at these numbers,
  *   I think the least affected are able to use opt_info optimization which makes everything local?
  */
+
+#if (defined(__FreeBSD__)) || (defined(__OpenBSD__)) || (defined(__NetBSD__))
+/* these need sigjmp_buf arg -- I think this is only sc->goto_start */
+#define Setjmp(A)     setjmp(A)
+#define Longjmp(A, B) longjmp(A, B)
+#else
 #define Setjmp(A)     sigsetjmp(A, 1)
 #define Longjmp(A, B) siglongjmp(A, B)
+#endif
 
 #define store_jump_info(Sc)						\
   do {									\
@@ -97620,7 +97627,7 @@ int main(int argc, char **argv)
  * tnum       59.4         6348   6013   5998   5860
  * trec       7763         5976   5970   5970   5969
  * tmisc      6506         7389   6210   6174   6167
- * tgc        12.5         11.9   11.1   11.0   10.7  10.5
+ * tgc        12.5         11.9   11.1   11.0   10.7  10.4
  * tgen       12.3         11.2   11.4   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
@@ -97631,8 +97638,9 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
+ * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?  could this be the o_sc problem?]
  * g++ in t725, clang? 
  * maybe case* built-in, but the syntax is not right yet
- * opts false
+ * opts false, opt_print for return info
+ * sigjmp_buf for *BSD
  */

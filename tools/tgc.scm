@@ -8,8 +8,8 @@
 		 (equal? c2 c3))
       (format *stderr* "cyclic: ~S: ~S ~S ~S~%" p1 c1 c2 c3))))
 
-(define (tgc-cyclic tries vsize)
-  (let ((wait (make-vector vsize #f)))
+(define (tgc-cyclic tries)
+  (let ((wait (make-vector 200 #f)))
     (do ((i 0 (+ i 1)))
 	((= i tries))
       (let ((p1 (cons 1 2))
@@ -81,7 +81,7 @@
 				      (check-cyclic b1)
 				      (for-each 
 				       (lambda (a)
-					 (let ((pos (random vsize)))
+					 (let ((pos (random 200)))
 					   (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
 					       (format *stderr* "~S?" (vector-ref wait pos)))
 					   (vector-set! wait pos a))
@@ -98,11 +98,11 @@
 					     (lambda () #f)))
 				       (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
 
-(tgc-cyclic 25000 200)
+(tgc-cyclic 25000)
 
 
-(define (tgc tries vsize)
-  (do ((wait (make-vector vsize #f))
+(define (tgc tries)
+  (do ((wait (make-vector 200 #f))
        (i 0 (+ i 1)))
       ((= i tries))
     (let ((p1 (cons 1 2))
@@ -135,7 +135,7 @@
 	     (c1 (c-pointer 0 integer? "info" (cons h1 h2) (vector p3 p2 p1))))
 	(for-each 
 	 (lambda (a)
-	   (let ((pos (random vsize)))
+	   (let ((pos (random 200)))
 	     (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
 		 (format *stderr* "~S?" (vector-ref wait pos)))
 	     (vector-set! wait pos a))
@@ -152,7 +152,7 @@
 	       (lambda () #f)))
 	 (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1))))))
 
-(tgc 200000 200)
-;(tgc 1000000000 200)
+(tgc 200000)
+;(tgc 1000000000)
 
 (exit)
