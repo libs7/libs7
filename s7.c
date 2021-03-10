@@ -1156,7 +1156,12 @@ struct s7_scheme {
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp_cell_2;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1;
 
-  jmp_buf goto_start;
+  sigjmp_buf goto_start;
+  /* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
+   *   unfortunately sigsetjmp is noticeably slower than setjmp, especially when s7_optimize_1 is called a lot.
+   *   In one case, the sigsetjmp version runs in 24 seconds, but the setjmp version takes 10 seconds, and
+   *   yet callgrind says there is almost no difference, so I removed setjmp from s7_optimize.
+   */
   bool longjmp_ok;
   int32_t setjmp_loc;
 
@@ -11917,7 +11922,7 @@ static void call_with_exit(s7_scheme *sc)
       if (sc->longjmp_ok)
 	{
 	  pop_stack(sc);
-	  longjmp(sc->goto_start, CALL_WITH_EXIT_JUMP);
+	  siglongjmp(sc->goto_start, CALL_WITH_EXIT_JUMP);
 	}
       for (i = 0; i < quit; i++)
 	push_stack_op_let(sc, OP_EVAL_DONE);
@@ -30668,48 +30673,30 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- read -------------------------------- */
-#define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; jmp_buf old_goto_start
-
-/* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
- *   unfortunately sigsetjmp is noticeably slower than setjmp, especially when s7_optimize_1 is called a lot.
- *   In one case, the sigsetjmp version runs in 24 seconds, but the setjmp version takes 10 seconds, and
- *   yet callgrind says there is almost no difference, so I removed setjmp from s7_optimize.
- *   But there was still a problem with cache misses:  A bigger cache reduced the 24 seconds to 17 (cachegrind agrees).
- *   But how to optimize s7 for cache hits?  The culprits are eval and gc.  Looking at these numbers,
- *   I think the least affected are able to use opt_info optimization which makes everything local?
- */
-
-#if (defined(__FreeBSD__)) || (defined(__OpenBSD__)) || (defined(__NetBSD__))
-/* these need sigjmp_buf arg -- I think this is only sc->goto_start */
-#define Setjmp(A)     setjmp(A)
-#define Longjmp(A, B) longjmp(A, B)
-#else
-#define Setjmp(A)     sigsetjmp(A, 1)
-#define Longjmp(A, B) siglongjmp(A, B)
-#endif
+#define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; sigjmp_buf old_goto_start
 
 #define store_jump_info(Sc)						\
   do {									\
       old_longjmp = Sc->longjmp_ok;					\
       old_jump_loc = Sc->setjmp_loc;					\
-      memcpy((void *)old_goto_start, (void *)(Sc->goto_start), sizeof(jmp_buf)); \
+      memcpy((void *)old_goto_start, (void *)(Sc->goto_start), sizeof(sigjmp_buf)); \
   } while (0)
 
 #define restore_jump_info(Sc)						\
   do {									\
     Sc->longjmp_ok = old_longjmp;					\
     Sc->setjmp_loc = old_jump_loc;					\
-    memcpy((void *)(Sc->goto_start), (void *)old_goto_start, sizeof(jmp_buf)); \
+    memcpy((void *)(Sc->goto_start), (void *)old_goto_start, sizeof(sigjmp_buf)); \
     if ((jump_loc == ERROR_JUMP) &&					\
 	(sc->longjmp_ok))						\
-      Longjmp(sc->goto_start, ERROR_JUMP);				\
+      siglongjmp(sc->goto_start, ERROR_JUMP);				\
   } while (0)
 
 #define set_jump_info(Sc, Tag)		\
   do {					\
     sc->longjmp_ok = true;		\
     sc->setjmp_loc = Tag;		\
-    jump_loc = Setjmp(sc->goto_start);	\
+    jump_loc = sigsetjmp(sc->goto_start, 1);	\
   } while (0)
 
 s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
@@ -53446,7 +53433,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
-	  if (sc->longjmp_ok) Longjmp(sc->goto_start, THROW_JUMP);
+	  if (sc->longjmp_ok) siglongjmp(sc->goto_start, THROW_JUMP);
 	  return(sc->value);
 	}}
   if (is_let(car(args)))
@@ -53596,7 +53583,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	if ((catcher) &&
 	    (catcher(sc, i, type, info, &reset_error_hook)))
 	  {
-	    if (sc->longjmp_ok) Longjmp(sc->goto_start, CATCH_JUMP);
+	    if (sc->longjmp_ok) siglongjmp(sc->goto_start, CATCH_JUMP);
 	    /* all the rest of the code expects s7_error to jump, not return, so presumably if we get here, we're in trouble */
 #if S7_DEBUGGING
 	    fprintf(stderr, "fall through in s7_error!\n");
@@ -53760,7 +53747,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
       sc->cur_op = OP_ERROR_QUIT;
     }
 
-  if (sc->longjmp_ok) Longjmp(sc->goto_start, ERROR_JUMP);
+  if (sc->longjmp_ok) siglongjmp(sc->goto_start, ERROR_JUMP);
   return(type);
 }
 
@@ -54120,7 +54107,7 @@ static void op_error_hook_quit(s7_scheme *sc)
   push_stack_op(sc, OP_ERROR_QUIT);                /* added 3-Dec-16: try to make sure we actually exit! */
   sc->cur_op = OP_ERROR_QUIT;
   if (sc->longjmp_ok)
-    Longjmp(sc->goto_start, ERROR_QUIT_JUMP);
+    siglongjmp(sc->goto_start, ERROR_QUIT_JUMP);
 }
 
 
@@ -54817,6 +54804,11 @@ static s7_pointer g_abort(s7_scheme *sc, s7_pointer args) {abort();}
 
 
 /* -------------------------------- optimizer stuff -------------------------------- */
+
+/* There is a problem with cache misses:  a bigger cache reduces one test from 24 seconds to 17 (cachegrind agrees).
+ *   But how to optimize s7 for cache hits?  The culprits are eval and gc.  Looking at the numbers,
+ *   I think the least affected tests are able to use opt_info optimization which makes everything local?
+ */
 
 #if S7_DEBUGGING
 static void check_t_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
@@ -63517,8 +63509,6 @@ static bool opt_b_7pp_car_sf(opt_info *o)
   return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), (is_pair(p)) ? car(p) : g_car(opt_sc(o), set_plist_1(opt_sc(o), p))));
 }
 
-static s7_pointer opt_p_p_s(opt_info *o);
-
 static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o)
 {
   return(substring_uncopied_p_pii(opt_sc(o), slot_value(o->v[1].p),
@@ -63527,6 +63517,8 @@ static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o)
 }
 
 static bool opt_substring_equal_sf(opt_info *o) {return(scheme_strings_are_equal(slot_value(o->v[1].p), opt_p_substring_uncopied_ssf(o->v[10].o1)));}
+
+static s7_pointer opt_p_p_s(opt_info *o);
 
 static bool b_pp_sf_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
 {
@@ -67481,10 +67473,8 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 	{
 	  if ((let_dox_slot1(o->v[2].p) == o1->v[2].p) && (o1->v[2].p == o1->v[4].p))
 	    {
-	      if (((o1->v[5].p_pip_f == float_vector_set_unchecked_p) &&
-		   (o1->v[6].p_pi_f == float_vector_ref_unchecked_p)) ||
-		  ((o1->v[5].p_pip_f == int_vector_set_unchecked_p) &&
-		   (o1->v[6].p_pi_f == int_vector_ref_unchecked_p)))
+	      if (((o1->v[5].p_pip_f == float_vector_set_unchecked_p) && (o1->v[6].p_pi_f == float_vector_ref_unchecked_p)) ||
+		  ((o1->v[5].p_pip_f == int_vector_set_unchecked_p) &&   (o1->v[6].p_pi_f == int_vector_ref_unchecked_p)))
 		{
 		  copy_to_same_type(sc, slot_value(o1->v[1].p), slot_value(o1->v[3].p), integer(vp), end, integer(vp));
 		  unstack(sc);
@@ -97592,55 +97582,54 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -----------------------------------------------------
- *             gmp (2-11)  20.9   21.0   21.1   21.2
- * -----------------------------------------------------
- * tpeak       128          115    114    114    113
- * tref        739          691    687    687    602
- * tauto       786          648    642    647    651
- * tshoot     1663          883    872    872    856
- * index      1076         1026   1016   1014   1013
- * tmock      7690         1177   1165   1166   1147
- * s7test     4527         1873   1831   1817   1809
- * lt         2117         2123   2110   2112   2101
- * tmat       2418         2285   2258   2256   2117
- * tcopy      2277         2256   2230   2219   2217
- * tform      3319         2281   2273   2266   2288
- * tvect      2649         2456   2413   2413   2331
- * tread      2610         2440   2421   2412   2403
- * trclo      4292         2715   2561   2560   2526
- * fbench     2980         2688   2583   2577   2561
- * tb         3472         2735   2681   2677   2640
- * tmap       3759         2886   2857   2827   2786
- * titer      2860         2865   2842   2842   2803
- * tsort      3816         3105   3104   3097   2936
- * dup        3456         3334   3332   3203   3003
- * tmac       3326         3317   3277   3247   3221
- * tset       3287         3253   3104   3207   3253
- * tio        3763         3816   3752   3738   3692
- * teq        4054         4068   4045   4038   3713
- * tfft       11.3         4142   4109   4107   4067
- * tstr       6755         5281   4863   4765   4543
- * tcase      4671         4960   4793   4669   4570
- * tclo       4949         4787   4735   4668   4588  4607
- * tlet       5762         7775   5640   5585   4632
- * tnum       59.4         6348   6013   5998   5860
- * trec       7763         5976   5970   5970   5969
- * tmisc      6506         7389   6210   6174   6167
- * tgc        12.5         11.9   11.1   11.0   10.7  10.4
- * tgen       12.3         11.2   11.4   11.3   11.3
- * thash      37.4         11.8   11.7   11.7   11.4
- * tall       26.9         15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.1
- * sg         98.6         71.9   72.3   72.2   72.7
- * lg        105.4        106.6  105.0  105.1  104.3
- * tbig      600.0        177.4  175.8  174.3  172.9  172.5
- * -----------------------------------------------------
+/* -------------------------------------------------------------
+ *             gmp (2-11)  20.9   21.0   21.1   21.2   21.3
+ * -------------------------------------------------------------
+ * tpeak       128          115    114    114    113    113
+ * tref        739          691    687    687    602    602
+ * tauto       786          648    642    647    651    651
+ * tshoot     1663          883    872    872    856    856
+ * index      1076         1026   1016   1014   1013   1013
+ * tmock      7690         1177   1165   1166   1147   1147
+ * s7test     4527         1873   1831   1817   1809   1810
+ * lt         2117         2123   2110   2112   2101   2100
+ * tmat       2418         2285   2258   2256   2117   2117
+ * tcopy      2277         2256   2230   2219   2217   2217
+ * tform      3319         2281   2273   2266   2288   2283
+ * tvect      2649         2456   2413   2413   2331   2331
+ * tread      2610         2440   2421   2412   2403   2413
+ * trclo      4292         2715   2561   2560   2526   2526
+ * fbench     2980         2688   2583   2577   2561   2561
+ * tb         3472         2735   2681   2677   2640   2639
+ * tmap       3759         2886   2857   2827   2786   2788
+ * titer      2860         2865   2842   2842   2803   2803
+ * tsort      3816         3105   3104   3097   2936   2936
+ * dup        3456         3334   3332   3203   3003   3002
+ * tmac       3326         3317   3277   3247   3221   3221
+ * tset       3287         3253   3104   3207   3253   3254
+ * tio        3763         3816   3752   3738   3692   3691
+ * teq        4054         4068   4045   4038   3713   3712
+ * tfft       11.3         4142   4109   4107   4067   4067
+ * tstr       6755         5281   4863   4765   4543   4546
+ * tcase      4671         4960   4793   4669   4570   4571
+ * tclo       4949         4787   4735   4668   4588   4607
+ * tlet       5762         7775   5640   5585   4632   4632
+ * tnum       59.4         6348   6013   5998   5860   5861
+ * trec       7763         5976   5970   5970   5969   5969
+ * tmisc      6506         7389   6210   6174   6167   6167
+ * tgc        12.5         11.9   11.1   11.0   10.4   10.4
+ * tgen       12.3         11.2   11.4   11.3   11.3   11.3
+ * thash      37.4         11.8   11.7   11.7   11.4   11.4
+ * tall       26.9         15.6   15.6   15.6   15.6   15.6
+ * calls      61.1         36.7   37.5   37.2   37.1   37.4
+ * sg         98.6         71.9   72.3   72.2   72.7   72.8
+ * lg        105.4        106.6  105.0  105.1  104.3  104.3
+ * tbig      600.0        177.4  175.8  174.3  172.5  172.5
+ * -------------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?  could this be the o_sc problem?]
  * g++ in t725, clang? 
  * maybe case* built-in, but the syntax is not right yet
  * opts false, opt_print for return info
- * sigjmp_buf for *BSD
  */
