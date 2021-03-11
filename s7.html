@@ -5947,7 +5947,28 @@ Better ideas are always welcome!
 </p>
 
 <p>(<b><em class=def id="currentfunction">*function*</em></b>) returns the name (or name and location) of the function currently being called.
-It can be treated as a let, similar to *s7* but its first argument is the let to search from:
+Here is an amusing example using a bacro and an openlet to implement a probe; it reports any operation it participates in:
+<p>
+<pre class="indented">
+&gt; (define probe (openlet 
+	          (inlet 'value 42
+		         'abs (bacro (x)
+			        (format *stderr* "(abs ~S) called from ~S~%" 
+				        (x 'value) 
+				        (*function* (outlet (outlet (curlet)))))
+			        (#_abs (x 'value))))))
+<em class="gray">(inlet 'value 42 'abs #&lt;bacro (x)&gt;)</em>
+
+&gt; (define (call-abs y)
+    (abs y))
+<em class="gray">call-abs</em>
+
+&gt; (call-abs probe)
+<em class="gray">(abs 42) called from call-abs</em>
+<em class="gray">42</em>
+</pre>
+<p>
+*function* can be treated as a let, similar to *s7* but its first argument is the let to search from:
 <code>(*function* (curlet) 'name)</code>.
 The following fields can be passed (as symbols):
 <code>name</code> returns the name (a symbol) of the current function; <code>line</code> returns
