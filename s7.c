@@ -42761,7 +42761,7 @@ static s7_pointer g_fv_ref_3(s7_scheme *sc, s7_pointer args)
   return(make_real(sc, float_vector(fv, ind1)));
 }
 
-static s7_double float_vector_ref_unchecked(s7_scheme *sc, s7_pointer v, s7_int i) {return(float_vector(v, i));}
+/* static s7_double float_vector_ref_unchecked(s7_scheme *sc, s7_pointer v, s7_int i) {fprintf(stderr, "float-vector-ref!\n"); abort(); return(float_vector(v, i));} */
 static inline s7_int ref_check_index(s7_scheme *sc, s7_pointer v, s7_int i)
 {
   /* according to valgrind, it is faster to split out the bounds check */
@@ -61339,6 +61339,8 @@ static bool d_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 static s7_double opt_d_7pi_sc(opt_info *o) {return(o->v[3].d_7pi_f(opt_sc(o), slot_value(o->v[1].p), o->v[2].i));}
 static s7_double opt_d_7pi_ss(opt_info *o) {return(o->v[3].d_7pi_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_double opt_d_7pi_sf(opt_info *o) {return(o->v[3].d_7pi_f(opt_sc(o), slot_value(o->v[1].p), o->v[11].fi(o->v[10].o1)));}
+static s7_double opt_d_7pi_ss_fvref(opt_info *o) {return(float_vector_ref_d_7pi(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
+static s7_double opt_d_7pi_ss_fvref_unchecked(opt_info *o) {return(float_vector(slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 
 static s7_double opt_d_7pi_ff(opt_info *o)
 {
@@ -61384,12 +61386,15 @@ static bool d_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		{
 		  opc->v[2].p = p;
 		  opc->v[0].fd = opt_d_7pi_ss;
-		  if ((car(car_x) == sc->float_vector_ref_symbol) &&
-		      (is_step_end(opc->v[2].p)) &&
-		      (denominator(slot_value(opc->v[2].p)) <= vector_length(slot_value(opc->v[1].p))))
+		  if (car(car_x) == sc->float_vector_ref_symbol)
 		    {
-		      opc->v[3].d_7pi_f = float_vector_ref_unchecked;
-		      return(true);
+		      if ((is_step_end(opc->v[2].p)) &&
+			  (denominator(slot_value(opc->v[2].p)) <= vector_length(slot_value(opc->v[1].p))))
+			{
+			  /* opc->v[3].d_7pi_f = float_vector_ref_unchecked; */
+			  opc->v[0].fd = opt_d_7pi_ss_fvref_unchecked;
+			}
+		      else opc->v[0].fd = opt_d_7pi_ss_fvref;
 		    }
 		  return(true);
 		}
@@ -61757,7 +61762,7 @@ static bool d_dd_sf_combinable(s7_scheme *sc, opt_info *opc, s7_d_dd_t func)
     {
       opt_info *o1;
       o1 = sc->opts[sc->pc - 1];
-      if (o1->v[0].fd == opt_d_7pi_ss)
+      if ((o1->v[0].fd == opt_d_7pi_ss) || (o1->v[0].fd == opt_d_7pi_ss_fvref) || (o1->v[0].fd == opt_d_7pi_ss_fvref_unchecked))
 	{
 	  if (func)
 	    {
@@ -61801,7 +61806,7 @@ static bool d_dd_fs_combinable(s7_scheme *sc, opt_info *opc, s7_d_dd_t func)
     {
       opt_info *o1;
       o1 = sc->opts[sc->pc - 1];
-      if (o1->v[0].fd == opt_d_7pi_ss)
+      if ((o1->v[0].fd == opt_d_7pi_ss) || (o1->v[0].fd == opt_d_7pi_ss_fvref) || (o1->v[0].fd == opt_d_7pi_ss_fvref_unchecked))
 	{
 	  if (func)
 	    {
@@ -62560,7 +62565,7 @@ static bool d_7pid_ssf_combinable(s7_scheme *sc, opt_info *opc)
 	  backup_pc(sc);
 	  return(true);
 	}
-      if (o1->v[0].fd == opt_d_7pi_ss)
+      if ((o1->v[0].fd == opt_d_7pi_ss) || (o1->v[0].fd == opt_d_7pi_ss_fvref) || (o1->v[0].fd == opt_d_7pi_ss_fvref_unchecked))
 	{
 	  opc->v[3].d_7pi_f = o1->v[3].d_7pi_f;
 	  opc->v[5].p = o1->v[1].p;
@@ -62580,7 +62585,7 @@ static bool d_7pid_ssf_combinable(s7_scheme *sc, opt_info *opc)
 	  opc->v[3].p = o1->v[3].p;
 	  opc->v[8].p = o1->v[1].p;
 	  opc->v[0].fd = opt_d_7pid_ssfo;
-	  if (((opc->v[5].d_7pi_f == float_vector_ref_unchecked) ||
+	  if ((/* (opc->v[5].d_7pi_f == float_vector_ref_unchecked) || */
 	       (opc->v[5].d_7pi_f == float_vector_ref_d_7pi)) &&
 	      ((opc->v[4].d_7pid_f == float_vector_set_unchecked) ||
 	       (opc->v[4].d_7pid_f == float_vector_set_d_7pid)))
@@ -63170,11 +63175,14 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  slot = opt_integer_symbol(sc, cadr(car_x));
 	  if (slot)
 	    {
-	      opc->v[0].fd = opt_d_7pi_ss;
 	      opc->v[2].p = slot;
 	      if ((is_step_end(opc->v[2].p)) &&
 		  (denominator(slot_value(opc->v[2].p)) <= vector_length(slot_value(opc->v[1].p))))
-		opc->v[3].d_7pi_f = float_vector_ref_unchecked;
+		{
+		  opc->v[0].fd = opt_d_7pi_ss_fvref_unchecked;
+		  /* opc->v[3].d_7pi_f = float_vector_ref_unchecked; */
+		}
+	      else opc->v[0].fd = opt_d_7pi_ss_fvref;
 	      return(true);
 	    }
 	  opc->v[10].o1 = sc->opts[sc->pc];
@@ -67462,25 +67470,36 @@ static s7_pointer opt_do_very_simple(opt_info *o)
       opt_info *o2;
       o2 = o1;
       o1 = o2->v[4].o1;
-      while (integer(vp) < end)
+      if (o2->v[3].p_pip_f == vector_set_unchecked)
 	{
-	  o2->v[3].p_pip_f(o2->sc, slot_value(o2->v[1].p), integer(slot_value(o2->v[2].p)), o1->v[0].fp(o1));
-	  integer(vp)++;
-	}}
+	  s7_pointer v;
+	  v = slot_value(o2->v[1].p);
+	  while (integer(vp) < end)
+	    {
+	      vector_set_unchecked(o2->sc, v, integer(slot_value(o2->v[2].p)), o1->v[0].fp(o1));
+	      integer(vp)++;
+	    }}
+      else
+	{
+	  while (integer(vp) < end)
+	    {
+	      o2->v[3].p_pip_f(o2->sc, slot_value(o2->v[1].p), integer(slot_value(o2->v[2].p)), o1->v[0].fp(o1));
+	      integer(vp)++;
+	    }}}
   else
     {
       if (f == opt_p_pip_sso)
 	{
-	  if ((let_dox_slot1(o->v[2].p) == o1->v[2].p) && (o1->v[2].p == o1->v[4].p))
+	  if (((let_dox_slot1(o->v[2].p) == o1->v[2].p) && (o1->v[2].p == o1->v[4].p)) &&
+	      (((o1->v[5].p_pip_f == float_vector_set_unchecked_p) && (o1->v[6].p_pi_f == float_vector_ref_unchecked_p)) ||
+	       ((o1->v[5].p_pip_f == int_vector_set_unchecked_p) &&   (o1->v[6].p_pi_f == int_vector_ref_unchecked_p))   ||
+	       ((o1->v[5].p_pip_f == string_set_unchecked) &&         (o1->v[6].p_pi_f == string_ref_unchecked))))
 	    {
-	      if (((o1->v[5].p_pip_f == float_vector_set_unchecked_p) && (o1->v[6].p_pi_f == float_vector_ref_unchecked_p)) ||
-		  ((o1->v[5].p_pip_f == int_vector_set_unchecked_p) &&   (o1->v[6].p_pi_f == int_vector_ref_unchecked_p)))
-		{
-		  copy_to_same_type(sc, slot_value(o1->v[1].p), slot_value(o1->v[3].p), integer(vp), end, integer(vp));
-		  unstack(sc);
-		  sc->curlet = old_e;
-		  return(sc->T);
-		}}
+	      copy_to_same_type(sc, slot_value(o1->v[1].p), slot_value(o1->v[3].p), integer(vp), end, integer(vp));
+	      unstack(sc);
+	      sc->curlet = old_e;
+	      return(sc->T);
+	    }
 	  while (integer(vp) < end)
 	    {
 	      o1->v[5].p_pip_f(o1->sc, slot_value(o1->v[1].p), integer(slot_value(o1->v[2].p)),
@@ -97585,50 +97604,51 @@ int main(int argc, char **argv)
 /* -------------------------------------------------------------
  *             gmp (2-11)  20.9   21.0   21.1   21.2   21.3
  * -------------------------------------------------------------
- * tpeak       128          115    114    114    113    113
- * tref        739          691    687    687    602    602
+ * tpeak       128          115    114    114    113    112
+ * tref        739          691    687    687    602    508
  * tauto       786          648    642    647    651    651
- * tshoot     1663          883    872    872    856    856
+ * tshoot     1663          883    872    872    856    849
  * index      1076         1026   1016   1014   1013   1013
  * tmock      7690         1177   1165   1166   1147   1147
  * s7test     4527         1873   1831   1817   1809   1810
  * lt         2117         2123   2110   2112   2101   2100
- * tmat       2418         2285   2258   2256   2117   2113
+ * tmat       2418         2285   2258   2256   2117   2117
  * tcopy      2277         2256   2230   2219   2217   2217
  * tform      3319         2281   2273   2266   2288   2283
- * tvect      2649         2456   2413   2413   2331   2331
- * tread      2610         2440   2421   2412   2403   2413
+ * tvect      2649         2456   2413   2413   2331   2280
+ * tread      2610         2440   2421   2412   2403   2412
  * trclo      4292         2715   2561   2560   2526   2526
  * fbench     2980         2688   2583   2577   2561   2561
- * tb         3472         2735   2681   2677   2640   2639 
- * tmap       3759         2886   2857   2827   2786   2788
+ * tb         3472         2735   2681   2677   2640   2636 
+ * tmap       3759         2886   2857   2827   2786   2785
  * titer      2860         2865   2842   2842   2803   2803
  * tsort      3816         3105   3104   3097   2936   2936
- * dup        3456         3334   3332   3203   3003   3002
+ * dup        3456         3334   3332   3203   3003   2995
  * tmac       3326         3317   3277   3247   3221   3221
  * tset       3287         3253   3104   3207   3253   3254
  * tio        3763         3816   3752   3738   3692   3691
  * teq        4054         4068   4045   4038   3713   3712
- * tfft       11.3         4142   4109   4107   4067   4067
+ * tfft       11.3         4142   4109   4107   4067   4062
  * tstr       6755         5281   4863   4765   4543   4546
  * tcase      4671         4960   4793   4669   4570   4571
  * tclo       4949         4787   4735   4668   4588   4607
  * tlet       5762         7775   5640   5585   4632   4632
- * tnum       59.4         6348   6013   5998   5860   5861
+ * tnum       59.4         6348   6013   5998   5860   5860
  * trec       7763         5976   5970   5970   5969   5969
  * tmisc      6506         7389   6210   6174   6167   6167
  * tgc        12.5         11.9   11.1   11.0   10.4   10.4
  * tgen       12.3         11.2   11.4   11.3   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.1   37.4
+ * calls      61.1         36.7   37.5   37.2   37.1   37.3
  * sg         98.6         71.9   72.3   72.2   72.7   72.7
  * lg        105.4        106.6  105.0  105.1  104.3  104.3
- * tbig      600.0        177.4  175.8  174.3  172.5  172.3
+ * tbig      600.0        177.4  175.8  174.3  172.5  171.8
  * -------------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?  could this be the o_sc problem?]
  * maybe case* built-in, but the syntax is not right yet
  * opts false, opt_print for return info float|int|cell_optimize cases?
+ * tgsl (libm|c also), cload exts, eval-probe s7test
  */

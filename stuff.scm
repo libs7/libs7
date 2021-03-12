@@ -1558,6 +1558,34 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 
 ;;; --------------------------------------------------------------------------------
 
+(define probe-eval
+  ;; an extension of the probe example in s7.html (under *function*)
+  (let ((probe-let (inlet)))
+    (for-each
+     (lambda (sym)
+       (let ((func (symbol->value sym (rootlet))))
+	 (if (and (procedure? func)
+		  (not (immutable? sym))) ; apply-values etc
+	     (varlet probe-let sym
+		     (lambda args
+		       (let-temporarily (((*s7* 'openlets) #f))
+			 (let ((clean-args (map (lambda (arg)
+						  (if (eq? arg probe-let)
+						      (probe-let 'value)
+						      arg))
+						args)))
+			   (format *stderr* "(~S ~{~S~^ ~})~%" sym clean-args)
+			   (apply func clean-args))))))))
+     (symbol-table))
+    (varlet probe-let 'value 42)
+    (openlet probe-let)))
+
+;;(define (call-any x) (+ x 21))
+;;(display (call-any probe-eval)) -> (+ 42 21) 63
+
+
+;;; --------------------------------------------------------------------------------
+
 (define null-environment
   (let ((e #f))
     (lambda ()

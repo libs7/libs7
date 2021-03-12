@@ -220,6 +220,7 @@
 	  (p #f)
 	  (int-funcs ())  ; functions guaranteed to return int
 	  (double-funcs ())  ; functions returning double
+	  (double-int-funcs ()) ; functions return double, args are (integer double)
 	  (sig-symbols (list (cons 'integer? 0) (cons 'boolean? 0) (cons 'real?  0) (cons 'float? 0) 
 			     (cons 'char? 0) (cons 'string? 0) (cons 'c-pointer? 0) (cons 't 0)))
 	  (signatures (make-hash-table)))
@@ -437,6 +438,13 @@
 			 (set! local-name "_i_ii")
 			 (format p "static s7_int ~A~A(s7_int i1, s7_int i2) {return(~A(i1, i2));}~%" func-name local-name func-name)))))
 		(set! int-funcs (cons (list func-name scheme-name local-name) int-funcs))))
+
+	    (when (and (eq? return-type 'double)
+		       (= num-args 2)
+		       (eq? (car arg-types) 'int)
+		       (eq? (cadr arg-types) 'double))
+	      (format p "static s7_double ~A~A(s7_int x1, s7_double x2) {return(~A(x1, x2));}~%" func-name "_d_id" func-name)
+	      (set! double-int-funcs (cons (list func-name scheme-name "_d_id") double-int-funcs)))
 	    
 	    (format p "~%")
 	    (set! functions (cons (list scheme-name base-name 
@@ -585,6 +593,14 @@
 	     (unless (defined? (symbol (cadr f)) (rootlet))
 	       (format p "  s7_set~A_function(sc, s7_name_to_value(sc, ~S), ~A~A);~%" (caddr f) (cadr f) (car f) (caddr f))))
 	   int-funcs))
+
+	(when (pair? double-int-funcs)
+	  (format p "~%  /* double-int optimizer connections */~%")
+	  (for-each
+	   (lambda (f)
+	     (unless (defined? (symbol (cadr f)) (rootlet))
+	       (format p "  s7_set~A_function(sc, s7_name_to_value(sc, ~S), ~A~A);~%" (caddr f) (cadr f) (car f) (caddr f))))
+	   double-int-funcs))
 	
 	(format p "}~%")
 	(close-output-port p)
