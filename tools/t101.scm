@@ -227,6 +227,9 @@
 (format *stderr* "~NC tvect ~NC~%" 20 #\- 20 #\-)
 (system "./repl tvect.scm")
 
+(format *stderr* "~NC tgsl ~NC~%" 20 #\- 20 #\-)
+(system "./repl tgsl.scm")
+
 (format *stderr* "~NC tio ~NC~%" 20 #\- 20 #\-)
 (system "./repl tio.scm")
 

@@ -5947,34 +5947,50 @@ Better ideas are always welcome!
 </p>
 
 <p>(<b><em class=def id="currentfunction">*function*</em></b>) returns the name (or name and location) of the function currently being called.
-Here is an amusing example using a bacro and an openlet to implement a probe; it reports any operation it participates in:
-<p>
+<code>(define (example) (*function*))</code> returns <code>'example</code>.
+Here is an example using a bacro (to access the call-time environment) and an openlet to implement a probe; 
+it reports any operation that the probe participates in:
+</p>
 <pre class="indented">
-&gt; (define probe (openlet 
-	          (inlet 'value 42
-		         'abs (bacro (x)
-			        (format *stderr* "(abs ~S) called from ~S~%" 
-				        (x 'value) 
-				        (*function* (outlet (outlet (curlet)))))
-			        (#_abs (x 'value))))))
-<em class="gray">(inlet 'value 42 'abs #&lt;bacro (x)&gt;)</em>
+(define (probe-eval val)
+  (let ((all-let (inlet)))
+    (for-each
+     (lambda (sym)
+       (unless (immutable? sym) ; apply-values etc
+	 (let ((func (symbol-&gt;value sym (rootlet))))
+	   (when (procedure? func)
+	     (varlet all-let sym
+		     (apply bacro 'args
+		       `((let-temporarily (((*s7* 'openlets) #f))
+			   (let ((clean-args (map (lambda (arg)
+						    (if (eq? arg probe-eval)
+							(probe-eval 'value)
+							arg))
+						  args)))
+			   (format *stderr* "(~S ~{~S~^ ~}) ; ~S~%" 
+                                   ,sym clean-args 
+                                   (<em class=red>*function*</em> (outlet (outlet (curlet)))))
+			   (apply ,func clean-args))))))))))
+     (symbol-table))
+    (varlet all-let 'value val)
+    (openlet all-let)))
 
-&gt; (define (call-abs y)
-    (abs y))
-<em class="gray">call-abs</em>
+(define (call-any x)
+  (+ x 21))
 
-&gt; (call-abs probe)
-<em class="gray">(abs 42) called from call-abs</em>
-<em class="gray">42</em>
+(call-any (probe-eval 42)) ; prints "(+ 42 21) ; call-any", returns 63
 </pre>
 <p>
-*function* can be treated as a let, similar to *s7* but its first argument is the let to search from:
-<code>(*function* (curlet) 'name)</code>.
-The following fields can be passed (as symbols):
-<code>name</code> returns the name (a symbol) of the current function; <code>line</code> returns
-its definition line number; <code>file</code> returns its definition file; <code>signature</code>, <code>documentation</code>,
-<code>arity</code>, <code>arglist</code>, <code>value</code>, and <code>source</code> return 
-various info about the current function; <code>funclet</code> returns the current function's funclet.
+The second argument to *function* is the let from which to start searching for a function. 
+In the example above, we start the search from the let outside the bacro, since we hope to find the bacro's caller.
+As a convenience, *function* takes an optional third argument specifying what information you want 
+about the current function. An example: <code>(*function* (curlet) 'name)</code>.
+<code>name</code> returns the name (a symbol) of the current function.
+<code>line</code> returns the function's definition line number.
+<code>file</code> returns the function's definition file.
+Other possibilities are <code>signature</code>, <code>documentation</code>,
+<code>arity</code>, <code>arglist</code>, <code>value</code>, and <code>source</code>.
+<code>funclet</code> returns the current function's funclet.
 </p>
 
 <p>Currently WITH_PURE_S7:

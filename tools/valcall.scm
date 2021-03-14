@@ -38,6 +38,7 @@
 		     ("tnum.scm" . "v-num")
 		     ("tmock.scm" . "v-mock")
 		     ("concordance.scm" . "v-str")
+		     ("tgsl" . "v-gsl")
 		     ))
 
 (define (last-callg)
@@ -80,8 +81,8 @@
 	 (list "repl" "lt.scm")
 	 (list "repl" "tmat.scm")
 	 (list "repl" "tcopy.scm")
-	 (list "repl" "tform.scm")
 	 (list "repl" "tvect.scm")
+	 (list "repl" "tform.scm")
 	 (list "repl" "tread.scm")
 	 (list "repl" "trclo.scm")
 	 (list "repl" "fbench.scm")
@@ -101,6 +102,7 @@
 	 (list "repl" "tnum.scm")
 	 (list "repl" "trec.scm")
 	 (list "repl" "tmisc.scm")
+	 (list "repl" "tgsl.scm")
 	 (list "repl" "tgc.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
 	 (list "repl" "thash.scm")

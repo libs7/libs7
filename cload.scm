@@ -217,9 +217,11 @@
 	  (constants ())
 	  (macros ())     ; these are protected by #ifdef ... #endif
 	  (inits ())      ; C code (a string in s7) inserted in the library initialization function
+	  (type-symbols ())
 	  (p #f)
+	  (pp (open-output-string))
 	  (int-funcs ())  ; functions guaranteed to return int
-	  (double-funcs ())  ; functions returning double
+	  (double-funcs ())  ; functions returning double, all args double
 	  (double-int-funcs ()) ; functions return double, args are (integer double)
 	  (sig-symbols (list (cons 'integer? 0) (cons 'boolean? 0) (cons 'real?  0) (cons 'float? 0) 
 			     (cons 'char? 0) (cons 'string? 0) (cons 'c-pointer? 0) (cons 't 0)))
@@ -302,6 +304,19 @@
 		(if pos
 		    (string-set! name pos #\space))
 		name))))
+
+      (define (type->type-symbol type)
+	(cond ((assoc type type-symbols) => cdr)
+	      (else 
+	       (let* ((name (symbol->string type))
+		      (len (length name)))
+		 (do ((i 0 (+ i 1)))
+		     ((= i len))
+		   (if (char=? (name i) #\*) (set! (name i) #\_))
+		   (if (char=? (name i) #\-) (set! (name i) #\_)))
+		 (set! name (symbol name "_symbol"))
+		 (set! type-symbols (cons (cons type name) type-symbols))
+		 name))))
       
       (define* (add-one-function return-type name arg-types doc)
 	;; (format *stderr* "~A ~A ~A~%" return-type name arg-types): double j0 (double) for example
@@ -314,18 +329,18 @@
 	    (if (and (= num-args 1) 
 		     (eq? (car arg-types) 'void))
 		(set! num-args 0))
-	    (format p "~%/* -------- ~A -------- */~%" func-name)
-	    (format p "static s7_pointer ~A(s7_scheme *sc, s7_pointer ~A)~%" base-name (if (= num-args 1) 'arg 'args))
-	    (format p "{~%")
+	    (format pp "~%/* -------- ~A -------- */~%" func-name)
+	    (format pp "static s7_pointer ~A(s7_scheme *sc, s7_pointer ~A)~%" base-name (if (= num-args 1) 'arg 'args))
+	    (format pp "{~%")
 	    
 	    ;; get the Scheme args, check their types, assign to local C variables
 	    (when (positive? num-args)
-	      (if (not (= num-args 1)) (format p "  s7_pointer arg;~%"))
+	      (if (not (= num-args 1)) (format pp "  s7_pointer arg;~%"))
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
 		  ((= i num-args))
-		(format p "  ~A ~A_~D;~%" (hyphen->space ((if (pair? (car type)) caar car) type)) base-name i))
-	      (if (not (= num-args 1)) (format p "  arg = args;~%"))
+		(format pp "  ~A ~A_~D;~%" (hyphen->space ((if (pair? (car type)) caar car) type)) base-name i))
+	      (if (not (= num-args 1)) (format pp "  arg = args;~%"))
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
 		  ((= i num-args))
@@ -335,55 +350,54 @@
 		       (s7-type      (C-type->s7-type true-type)))                    ; real
 
 		  (if (eq? true-type 's7_pointer)
-		      (format p "    ~A_~D = s7_car(arg);~%" base-name i)
+		      (format pp "    ~A_~D = s7_car(arg);~%" base-name i)
 		      (if (eq? s7-type 'c_pointer)
-			  (format p "  ~A_~D = (~A)s7_c_pointer_with_type(sc, s7_car(arg), s7_make_symbol(sc, ~S), __func__, ~S);~%" 
+			  (format pp "  ~A_~D = (~A)s7_c_pointer_with_type(sc, s7_car(arg), ~S, __func__, ~S);~%" 
 				  base-name i 
 				  (hyphen->space nominal-type)
-				  (symbol->string nominal-type)
+				  (type->type-symbol nominal-type)  ;(symbol->string nominal-type)
 				  (if (= num-args 1) 0 (+ i 1)))
 			  (begin
-			    (format p "  if (~A(s7_car(arg)))~%" (checker true-type))
-			    (format p "    ~A_~D = (~A)~A(~As7_car(arg));~%"
+			    (format pp "  if (~A(s7_car(arg)))~%" (checker true-type))
+			    (format pp "    ~A_~D = (~A)~A(~As7_car(arg));~%"
 				    base-name i
 				    (hyphen->space nominal-type)
 				    (s7->C true-type)                               ; s7_number_to_real which requires 
 				    (if (memq s7-type '(boolean real))              ;   the extra sc arg
 					"sc, " ""))
-			    (format p "  else return(s7_wrong_type_arg_error(sc, __func__, ~D, s7_car(arg), ~S));~%"
+			    (format pp "  else return(s7_wrong_type_arg_error(sc, __func__, ~D, s7_car(arg), ~S));~%"
 				    (if (= num-args 1) 0 (+ i 1))
 				    (if (symbol? s7-type) 
 					(symbol->string s7-type) 
 					(error 'bad-arg (format #f "in ~S, ~S is not a symbol~%" name s7-type)))))))
 		  (if (< i (- num-args 1))
-		      (format p "  arg = s7_cdr(arg);~%")))))
+		      (format pp "  arg = s7_cdr(arg);~%")))))
 	    
 	    ;; return C value to Scheme
 	    (if (pair? return-type) 
 		(set! return-type (cadr return-type)))
 	    (let ((return-translator (C->s7 return-type)))
-	      ;(format *stderr* "return ~A ~A~%" return-type return-translator)
-	      (format p "  ")
+	      (format pp "  ")
 	      (if (not (eq? return-translator #t))
-		  (format p "return("))
+		  (format pp "return("))
 	      (if (symbol? return-translator)
-		  (format p "~A(sc, (~A)" return-translator (C->s7-cast return-type)))
-	      (format p "~A(" func-name)
+		  (format pp "~A(sc, (~A)" return-translator (C->s7-cast return-type)))
+	      (format pp "~A(" func-name)
 	      (do ((i 0 (+ i 1)))
 		  ((>= i (- num-args 1)))
-		(format p "~A_~D, " base-name i))
+		(format pp "~A_~D, " base-name i))
 	      (if (positive? num-args)
-		  (format p "~A_~D" base-name (- num-args 1)))
-	      (format p ")")
+		  (format pp "~A_~D" base-name (- num-args 1)))
+	      (format pp ")")
 
 	      (if (eq? return-translator 's7_make_c_pointer_with_type)
-		  (format p ", s7_make_symbol(sc, ~S), s7_f(sc))" (symbol->string return-type))
+		  (format pp ", ~S, s7_f(sc))" (type->type-symbol return-type))
 		  (if (symbol? return-translator)
-		      (format p ")")))
-	      (format p (if (not (eq? return-translator #t))
+		      (format pp ")")))
+	      (format pp (if (not (eq? return-translator #t))
 			    ");~%"
 			    ";~%  return(s7_unspecified(sc));~%"))
-	      (format p "}~%"))
+	      (format pp "}~%"))
 	    
 	    ;; add optimizer connection
 	    (define (sig-every? f sequence)
@@ -399,54 +413,57 @@
 		(case num-args
 		  ((0)
 		   (set! local-name "_d")
-		   (format p "static s7_double ~A~A(void) {return(~A());}~%" func-name local-name func-name))
+		   (format pp "static s7_double ~A~A(void) {return(~A());}~%" func-name local-name func-name))
 		  ((1)
 		   (set! local-name "_d_d")
-		   (format p "static s7_double ~A~A(s7_double x) {return(~A(x));}~%" func-name local-name func-name))
+		   (format pp "static s7_double ~A~A(s7_double x) {return(~A(x));}~%" func-name local-name func-name))
 		  ((2)
 		   (set! local-name "_d_dd")
-		   (format p "static s7_double ~A~A(s7_double x1, s7_double x2) {return(~A(x1, x2));}~%" func-name local-name func-name))
+		   (format pp "static s7_double ~A~A(s7_double x1, s7_double x2) {return(~A(x1, x2));}~%" func-name local-name func-name))
 		  ((3)
 		   (set! local-name "_d_ddd")
-		   (format p "static s7_double ~A~A(s7_double x1, s7_double x2, s7_double x3) {return(~A(x1, x2, x3));}~%" func-name local-name func-name))
+		   (format pp "static s7_double ~A~A(s7_double x1, s7_double x2, s7_double x3) {return(~A(x1, x2, x3));}~%" func-name local-name func-name))
 		  ((4)
 		   (set! local-name "_d_dddd")
-		   (format p "static s7_double ~A~A(s7_double x1, s7_double x2, s7_double x3, s7_double x4) {return(~A(x1, x2, x3, x4));}~%" func-name local-name func-name)))
+		   (format pp "static s7_double ~A~A(s7_double x1, s7_double x2, s7_double x3, s7_double x4) {return(~A(x1, x2, x3, x4));}~%" func-name local-name func-name)))
 		(set! double-funcs (cons (list func-name scheme-name local-name) double-funcs))))
 	    
-	    (when (and (eq? return-type 'int)        ; int (f int|double|void)
+	    (when (and (memq return-type '(int size_t))        ; int (f int|double|void)
 		       (or ;(= num-args 0)
 			   (and (= num-args 1)
-				(memq (car arg-types) '(int double)))
+				(memq (car arg-types) '(int size_t double)))
 			   (and (= num-args 2)
-				(eq? (car arg-types) 'int)
-				(eq? (cadr arg-types) 'int))))
+				(memq (car arg-types) '(int size_t))
+				(memq (cadr arg-types) '(int size_t)))))
 	      (let ((local-name #f))
 		(case (car arg-types)
 		  ((void)
 		   (set! local-name "_i")
-		   (format p "static s7_int ~A~A(void) {return(~A());}~%" func-name local-name func-name))
+		   (format pp "static s7_int ~A~A(void) {return(~A());}~%" func-name local-name func-name))
 		  ((double)
 		   (set! local-name "_i_7d")
-		   (format p "static s7_int ~A~A(s7_scheme *sc, s7_double x) {return(~A(x));}~%" func-name local-name func-name))
-		  ((int)
+		   (format pp "static s7_int ~A~A(s7_scheme *sc, s7_double x) {return(~A(x));}~%" func-name local-name func-name))
+		  ((int size_t)
 		   (if (= num-args 1)
 		       (begin
 			 (set! local-name "_i_i")
-			 (format p "static s7_int ~A~A(s7_int i1) {return(~A(i1));}~%" func-name local-name (if (string=? func-name "abs") "llabs" func-name)))
+			 (format pp "static s7_int ~A~A(s7_int i1) {return(~A(i1));}~%" func-name local-name (if (string=? func-name "abs") "llabs" func-name)))
 		       (begin
 			 (set! local-name "_i_ii")
-			 (format p "static s7_int ~A~A(s7_int i1, s7_int i2) {return(~A(i1, i2));}~%" func-name local-name func-name)))))
+			 (format pp "static s7_int ~A~A(s7_int i1, s7_int i2) {return(~A(i1, i2));}~%" func-name local-name func-name)))))
 		(set! int-funcs (cons (list func-name scheme-name local-name) int-funcs))))
 
 	    (when (and (eq? return-type 'double)
 		       (= num-args 2)
-		       (eq? (car arg-types) 'int)
+		       (memq (car arg-types) '(int size_t))
 		       (eq? (cadr arg-types) 'double))
-	      (format p "static s7_double ~A~A(s7_int x1, s7_double x2) {return(~A(x1, x2));}~%" func-name "_d_id" func-name)
+	      (format pp "static s7_double ~A~A(s7_int x1, s7_double x2) {return(~A(x1, x2));}~%" func-name "_d_id" func-name)
 	      (set! double-int-funcs (cons (list func-name scheme-name "_d_id") double-int-funcs)))
+
+	    ;; other possibilities: d_7pi|pii p=double* etc piid=checks in s7 (assumes float-vector)
+	    ;;   d_pd [lots of d_pdd, d_p, p_i and i_p]
 	    
-	    (format p "~%")
+	    (format pp "~%")
 	    (set! functions (cons (list scheme-name base-name 
 					(if (and (string? doc)
 						 (> (length doc) 0))
@@ -457,6 +474,20 @@
 				  functions)))))
       
       (define (end-c-file)
+	(when (pair? type-symbols)
+	  (format p "static s7_pointer ")
+	  (let ((len (length type-symbols))
+		(loc 1))
+	    (for-each
+	     (lambda (sym)
+	       (format p "~A~A~A" (cdr sym) (if (< loc len) (values "," " ") (values ";" #\newline)))
+	       (set! loc (+ loc 1)))
+	     type-symbols)))
+	(newline p)
+
+	(display (get-output-string pp) p)
+	(close-output-port pp)
+
 	;; now the init function
 	;;   the new scheme variables and functions are placed in the current environment
 	
@@ -464,6 +495,7 @@
 	(format p "void ~A(s7_scheme *sc)~%" init-name)
 	(format p "{~%")
 	(format p "  s7_pointer cur_env;~%")
+
 	(format p "  s7_pointer ")
 	(let ((pls (hash-table-entries signatures))
 	      (loc 1))
@@ -508,6 +540,13 @@
 	 (lambda (init-str)
 	   (format p "  ~A~%" init-str))
 	 (reverse inits))
+
+	(when (pair? type-symbols)
+	  (newline p)
+	  (for-each
+	   (lambda (sym)
+	     (format p "  ~S = s7_make_symbol(sc, ~S);~%" (cdr sym) (symbol->string (car sym))))
+	   type-symbols))
 	
 	;; constants
 	(if (pair? constants)
@@ -676,7 +715,7 @@
 	    (if (>= (length func) 3)
 		(apply add-one-function func)
 		(case (car func)
-		  ((in-C)       (format p "~A~%" (cadr func)))
+		  ((in-C)       (format pp "~A~%" (cadr func)))
 		  ((C-init)     (set! inits (cons (cadr func) inits)))
 		  ((C-macro)    (apply add-one-macro (cadr func)))
 		  ((C-function) (collides? (caadr func)) (set! functions (cons (check-doc (cadr func)) functions)))
