@@ -38,7 +38,7 @@
 		     ("tnum.scm" . "v-num")
 		     ("tmock.scm" . "v-mock")
 		     ("concordance.scm" . "v-str")
-		     ("tgsl" . "v-gsl")
+		     ("tgsl.scm" . "v-gsl")
 		     ))
 
 (define (last-callg)

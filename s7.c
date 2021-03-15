@@ -7841,22 +7841,18 @@ static uint64_t raw_string_hash(const uint8_t *key, s7_int len)
 static inline uint64_t raw_string_hash(const uint8_t *key, s7_int len)
 #endif
 {
-  uint64_t x;
-  uint8_t *cx = (uint8_t *)&x;
-  x = 0;
   if (len <= 8)
-    memcpy((void *)cx, (void *)key, len);
+    {
+      uint64_t xs[1] = {0};
+      memcpy((void *)xs, (void *)key, len);
+      return(xs[0]);
+    }
   else
     {
-      uint64_t y;
-      uint8_t *cy = (uint8_t *)&y;
-      memcpy((void *)cx, (void *)key, 8);
-      y = 0;
-      len -= 8;
-      memcpy((void *)cy, (void *)(key + 8), (len > 8) ? 8 : len); /* compiler complaint here is bogus */
-      x += y;  /* better than |= but still not great if (for example) > 1B gensyms -- maybe add z? */
+      uint64_t xs[2] = {0, 0};
+      memcpy((void *)xs, (void *)key, (len > 16) ? 16 : len);  /* compiler complaint here is bogus */
+      return(xs[0] + xs[1]);
     }
-  return(x);
 }
 
 static uint8_t *alloc_symbol(s7_scheme *sc)
@@ -43266,18 +43262,10 @@ static s7_pointer byte_vector_set_chooser(s7_scheme *sc, s7_pointer f, int32_t a
 /* -------------------------------------------------------------------------------- */
 static bool c_function_is_ok(s7_scheme *sc, s7_pointer x)
 {
-  /* macro version of this is much slower! Since this is almost never false,
-   *   I tried __builtin_expect throughout eval below.  The result was not faster.
-   */
   s7_pointer p;
-  p = lookup_global(sc, car(x)); /* uses global_slot if is_global(car(x)), else lookup_checked */
-  /* this is nearly always global and p == opt1_cfunc(x)
-   * p can be null if we evaluate some code, optimizing it, then eval it again in a context
-   *   where the incoming p was undefined(!) -- explicit use of eval and so on.
-   */
+  p = lookup_unexamined(sc, car(x)); /* lookup_global is usually slower (faster in Snd) */
   if ((p == opt1_cfunc(x)) ||
-      ((is_any_c_function(p)) &&
-       (c_function_class(p) == c_function_class(opt1_cfunc(x)))))
+      ((p) && (is_any_c_function(p)) && (c_function_class(p) == c_function_class(opt1_cfunc(x)))))
     return(true);
   sc->last_function = p;
   return(false);
@@ -43285,7 +43273,7 @@ static bool c_function_is_ok(s7_scheme *sc, s7_pointer x)
 
 static bool cl_function_is_ok(s7_scheme *sc, s7_pointer x)
 {
-  sc->last_function = lookup_global(sc, car(x));
+  sc->last_function = lookup_unexamined(sc, car(x));
   return(sc->last_function == opt1_cfunc(x));
 }
 
@@ -58473,7 +58461,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		    {
 		      s7_pointer x;
 		      x = caddadr(o1);
-		      if ((x == caddadr(o2)) && (x == cadr(caddr(o1))) && (x == cadr(caddr(o2))))
+		      if ((x == caddadr(o2)) && (x == cadaddr(o1)) && (x == cadaddr(o2)))
 			{
 			  s7_pointer i, j;
 			  i = caddr(cadadr(o1));
@@ -58773,7 +58761,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		{
 		  if (car(arg) == sc->memq_symbol)
 		    {
-		      if ((is_pair(caddr(arg))) && (is_proper_list_3(sc, cadr(caddr(arg))))) return(fx_memq_sc_3);
+		      if ((is_pair(caddr(arg))) && (is_proper_list_3(sc, cadaddr(arg)))) return(fx_memq_sc_3);
 		      return(fx_memq_sc);
 		    }
 		  if ((car(arg) == sc->char_eq_symbol) && (s7_is_character(caddr(arg)))) return(fx_char_eq_sc);
@@ -58871,7 +58859,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	    {
 	      if (fn_proc(cadr(arg)) == g_is_eq)
 		{
-		  set_opt2_sym(cdr(arg), cadr(cadr(arg)));
+		  set_opt2_sym(cdr(arg), cadadr(arg));
 		  set_opt3_con(cdr(arg), (is_pair(caddadr(arg))) ? cadaddr(cadr(arg)) : caddadr(arg));
 		  return(fx_not_is_eq_sq);
 		}
@@ -58905,7 +58893,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		  set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 		  set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg2)))));
 		  set_opt3_sym(arg, cadr(arg2));
-		  set_opt1_con(cdr(arg), (is_pair(caddr(arg2))) ? cadr(caddr(arg2)) : caddr(arg2));
+		  set_opt1_con(cdr(arg), (is_pair(caddr(arg2))) ? cadaddr(arg2) : caddr(arg2));
 		  return(fx_c_s_opscq_direct);
 		}}
 	  return(fx_c_s_opscq);
@@ -58915,7 +58903,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	    {
 	      if (fn_proc(cadr(arg)) == g_is_eq)
 		{
-		  set_opt2_sym(cdr(arg), cadr(cadr(arg)));
+		  set_opt2_sym(cdr(arg), cadadr(arg));
 		  set_opt3_sym(cdr(arg), caddadr(arg));
 		  return(fx_not_is_eq_ss);
 		}
@@ -58986,7 +58974,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	case HOP_SAFE_C_op_opSSqq_S:
 	  if ((is_global_and_has_func(car(arg), s7_p_pp_function)) &&
 	      (is_global_and_has_func(caadr(arg), s7_p_p_function)) &&
-	      (is_global_and_has_func(car(cadr(cadr(arg))), s7_p_pp_function)))
+	      (is_global_and_has_func(car(cadadr(arg)), s7_p_pp_function)))
 	    {
 	      set_opt3_direct(arg, (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_p_function(global_value(caadr(arg)))));
@@ -59654,9 +59642,9 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_S_opSSq:
-      if (caddr(caddr(p)) == var1)
+      if (caddaddr(p) == var1)
 	{
-	  if ((fn_proc(p) == g_vector_ref_2) && (is_global(cadr(p)) && (is_global(cadr(caddr(p))))))
+	  if ((fn_proc(p) == g_vector_ref_2) && (is_global(cadr(p)) && (is_global(cadaddr(p)))))
 	    {
 	      set_opt3_pair(p, cdaddr(p));
 	      return(with_fx(tree, fx_vref_g_vref_gt));
@@ -59675,8 +59663,8 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       if ((fx_proc(tree) == fx_c_ac) && (fn_proc(p) == g_num_eq_xi) && (caddr(p) == int_zero) &&
 	  (fx_proc(cdr(p)) == fx_c_opuq_t_direct) && (caadr(p) == sc->remainder_symbol) && (fn_proc(cadadr(p)) == g_car))
 	{
-	  set_opt3_sym(p, cadr(cadr(cadr(p))));
-	  set_opt1_sym(cdr(p), caddr(cadr(p)));
+	  set_opt3_sym(p, cadr(cadadr(p)));
+	  set_opt1_sym(cdr(p), caddadr(p));
 	  return(with_fx(tree, fx_is_zero_remainder_car));
 	}
       break;
@@ -66274,7 +66262,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 			  val_slot = opt_simple_symbol(sc, caddr(car_x));
 			  if (val_slot)
 			    {
-			      opc->v[4].p = cadr(cadr(target));
+			      opc->v[4].p = cadadr(target);
 			      opc->v[2].p = val_slot;
 			      opc->v[0].fp = (opc->v[3].p_ppp_f = let_set_1) ? opt_p_ppp_scs_eset : opt_p_ppp_scs;
 			      return(true);
@@ -87511,7 +87499,7 @@ static bool op_tc_if_a_z_laa(s7_scheme *sc, s7_pointer code, bool z_first, tc_ch
     {
       if_test = cadr(code);
       if_z = opt1_pair(cdr(code)); /* if_z = (z_first) ? cdr(if_test) : cdr(caddr(code)) */
-      la = opt3_pair(cdr(code));   /* la = (z_first) ? cdr(cadr(caddr(code))) : cdadr(if_test) */
+      la = opt3_pair(cdr(code));   /* la = (z_first) ? cdr(cadaddr(code)) : cdadr(if_test) */
     }
   laa = cdr(la);
   la_slot = let_slots(sc->curlet);
@@ -90151,7 +90139,7 @@ static void op_cl_sas(s7_scheme *sc)
 {
   set_car(sc->t3_2, fx_call(sc, cddr(sc->code)));
   set_car(sc->t3_1, lookup(sc, cadr(sc->code)));
-  set_car(sc->t3_3, lookup(sc, cadr(cddr(sc->code))));
+  set_car(sc->t3_3, lookup(sc, cadddr(sc->code)));
   sc->value = fn_proc(sc->code)(sc, sc->t3_1);
 }
 
@@ -97598,42 +97586,42 @@ int main(int argc, char **argv)
  * -------------------------------------------------------------
  * tpeak       128          115    114    114    113    112
  * tref        739          691    687    687    602    508
- * tauto       786          648    642    647    651    651
+ * tauto       786          648    642    647    651    646
  * tshoot     1663          883    872    872    856    849
  * index      1076         1026   1016   1014   1013   1013
  * tmock      7690         1177   1165   1166   1147   1147
- * s7test     4527         1873   1831   1817   1809   1810
+ * s7test     4527         1873   1831   1817   1809   1805
  * lt         2117         2123   2110   2112   2101   2100
  * tmat       2418         2285   2258   2256   2117   2117
  * tcopy      2277         2256   2230   2219   2217   2217
  * tvect      2649         2456   2413   2413   2331   2280
  * tform      3319         2281   2273   2266   2288   2283
- * tread      2610         2440   2421   2412   2403   2412
+ * tread      2610         2440   2421   2412   2403   2415
  * trclo      4292         2715   2561   2560   2526   2526
  * fbench     2980         2688   2583   2577   2561   2561
  * tb         3472         2735   2681   2677   2640   2636 
  * tmap       3759         2886   2857   2827   2786   2785
  * titer      2860         2865   2842   2842   2803   2803
  * tsort      3816         3105   3104   3097   2936   2936
- * dup        3456         3334   3332   3203   3003   2995
+ * dup        3456         3334   3332   3203   3003   2976
  * tmac       3326         3317   3277   3247   3221   3221
  * tset       3287         3253   3104   3207   3253   3254
  * tio        3763         3816   3752   3738   3692   3691
  * teq        4054         4068   4045   4038   3713   3712
  * tfft       11.3         4142   4109   4107   4067   4062
  * tstr       6755         5281   4863   4765   4543   4546
- * tcase      4671         4960   4793   4669   4570   4571
+ * tcase      4671         4960   4793   4669   4570   4570
  * tclo       4949         4787   4735   4668   4588   4607
- * tlet       5762         7775   5640   5585   4632   4632
- * tnum       59.4         6348   6013   5998   5860   5860
+ * tlet       5762         7775   5640   5585   4632   4635
+ * tnum       59.4         6348   6013   5998   5860   5859
  * trec       7763         5976   5970   5970   5969   5969
- * tmisc      6506         7389   6210   6174   6167   6167
- * tgsl                    8485                 8422   8248  7395
+ * tmisc      6506         7389   6210   6174   6167   6157
+ * tgsl                    8485                 8422   7350
  * tgc        12.5         11.9   11.1   11.0   10.4   10.4
  * tgen       12.3         11.2   11.4   11.3   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.1   37.3
+ * calls      61.1         36.7   37.5   37.2   37.1   37.4
  * sg         98.6         71.9   72.3   72.2   72.7   72.7
  * lg        105.4        106.6  105.0  105.1  104.3  104.3
  * tbig      600.0        177.4  175.8  174.3  172.5  171.8
@@ -97642,6 +97630,5 @@ int main(int argc, char **argv)
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?  could this be the o_sc problem?]
  * opts false, opt_print for return info float|int|cell_optimize cases?
- * if func in libgsl unchanged, no need to check it? or is this with-let?
- * cload: more opt* tie-ins
+ * tpp from write (it's used in lint)? + obj->let? seq stuff.scm?
  */

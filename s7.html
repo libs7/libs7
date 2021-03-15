@@ -5949,7 +5949,7 @@ Better ideas are always welcome!
 <p>(<b><em class=def id="currentfunction">*function*</em></b>) returns the name (or name and location) of the function currently being called.
 <code>(define (example) (*function*))</code> returns <code>'example</code>.
 Here is an example using a bacro (to access the call-time environment) and an openlet to implement a probe; 
-it reports any operation that the probe participates in:
+it reports any operation that the probe participates in, using *function* to get the calling function name:
 </p>
 <pre class="indented">
 (define (probe-eval val)
@@ -5960,7 +5960,7 @@ it reports any operation that the probe participates in:
 	 (let ((func (symbol-&gt;value sym (rootlet))))
 	   (when (procedure? func)
 	     (varlet all-let sym
-		     (apply bacro 'args
+		     (apply <em class=red>bacro</em> 'args
 		       `((let-temporarily (((*s7* 'openlets) #f))
 			   (let ((clean-args (map (lambda (arg)
 						    (if (eq? arg probe-eval)
@@ -5973,7 +5973,7 @@ it reports any operation that the probe participates in:
 			   (apply ,func clean-args))))))))))
      (symbol-table))
     (varlet all-let 'value val)
-    (openlet all-let)))
+    (<em class=red>openlet</em> all-let)))
 
 (define (call-any x)
   (+ x 21))

@@ -330,17 +330,17 @@
 		     (eq? (car arg-types) 'void))
 		(set! num-args 0))
 	    (format pp "~%/* -------- ~A -------- */~%" func-name)
-	    (format pp "static s7_pointer ~A(s7_scheme *sc, s7_pointer ~A)~%" base-name (if (= num-args 1) 'arg 'args))
+	    (format pp "static s7_pointer ~A(s7_scheme *sc, s7_pointer args)~%" base-name)
 	    (format pp "{~%")
 	    
 	    ;; get the Scheme args, check their types, assign to local C variables
 	    (when (positive? num-args)
-	      (if (not (= num-args 1)) (format pp "  s7_pointer arg;~%"))
+	      (format pp "  s7_pointer p, arg;~%")
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
 		  ((= i num-args))
 		(format pp "  ~A ~A_~D;~%" (hyphen->space ((if (pair? (car type)) caar car) type)) base-name i))
-	      (if (not (= num-args 1)) (format pp "  arg = args;~%"))
+	      (format pp "  p = args;~%")
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
 		  ((= i num-args))
@@ -349,29 +349,30 @@
 		       (true-type    ((if (pair? (car type)) cadar car) type))
 		       (s7-type      (C-type->s7-type true-type)))                    ; real
 
+		  (format pp "  arg = s7_car(p);~%")
 		  (if (eq? true-type 's7_pointer)
-		      (format pp "    ~A_~D = s7_car(arg);~%" base-name i)
+		      (format pp "    ~A_~D = arg;~%" base-name i)
 		      (if (eq? s7-type 'c_pointer)
-			  (format pp "  ~A_~D = (~A)s7_c_pointer_with_type(sc, s7_car(arg), ~S, __func__, ~S);~%" 
+			  (format pp "  ~A_~D = (~A)s7_c_pointer_with_type(sc, arg, ~S, __func__, ~S);~%" 
 				  base-name i 
 				  (hyphen->space nominal-type)
 				  (type->type-symbol nominal-type)  ;(symbol->string nominal-type)
 				  (if (= num-args 1) 0 (+ i 1)))
 			  (begin
-			    (format pp "  if (~A(s7_car(arg)))~%" (checker true-type))
-			    (format pp "    ~A_~D = (~A)~A(~As7_car(arg));~%"
+			    (format pp "  if (~A(arg))~%" (checker true-type))
+			    (format pp "    ~A_~D = (~A)~A(~Aarg);~%"
 				    base-name i
 				    (hyphen->space nominal-type)
 				    (s7->C true-type)                               ; s7_number_to_real which requires 
 				    (if (memq s7-type '(boolean real))              ;   the extra sc arg
 					"sc, " ""))
-			    (format pp "  else return(s7_wrong_type_arg_error(sc, __func__, ~D, s7_car(arg), ~S));~%"
+			    (format pp "  else return(s7_wrong_type_arg_error(sc, __func__, ~D, arg, ~S));~%"
 				    (if (= num-args 1) 0 (+ i 1))
 				    (if (symbol? s7-type) 
 					(symbol->string s7-type) 
 					(error 'bad-arg (format #f "in ~S, ~S is not a symbol~%" name s7-type)))))))
 		  (if (< i (- num-args 1))
-		      (format pp "  arg = s7_cdr(arg);~%")))))
+		      (format pp "  p = s7_cdr(p);~%")))))
 	    
 	    ;; return C value to Scheme
 	    (if (pair? return-type) 
@@ -462,6 +463,7 @@
 
 	    ;; other possibilities: d_7pi|pii p=double* etc piid=checks in s7 (assumes float-vector)
 	    ;;   d_pd [lots of d_pdd, d_p, p_i and i_p]
+	    ;;   but how to recognize the "p" portions? (d_7pi with p="s7_pointer" gets no hits in libgsl)
 	    
 	    (format pp "~%")
 	    (set! functions (cons (list scheme-name base-name 
