@@ -97457,6 +97457,7 @@ void s7_repl(s7_scheme *sc)
       s7_pointer libs;
 #if __cplusplus /* hack around an idiotic g++ warning */
       uint64_t hash;
+      hash = raw_string_hash((const uint8_t *)"*libc*", 6);
       s7_define(sc, sc->nil, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
 #else
       s7_define_variable(sc, "*libc*", e);
