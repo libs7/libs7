@@ -30,21 +30,18 @@
 	    (let ((word (string->symbol (substring line start end))))
 	      (hash-table-set! counts word (+ (or (hash-table-ref counts word) 0) 1)))))
 	(set! new-pos (+ pos 1))))
-    
     (close-input-port port)
-    (let ((res (sort! (copy counts (make-vector (hash-table-entries counts)))
-		      (lambda (a b) (> (cdr a) (cdr b))))))
-      (set! counts #f)
-      res)))
+    (sort! (copy counts (make-vector (hash-table-entries counts)))
+	   (lambda (a b) (> (cdr a) (cdr b))))))
 
 (format *stderr* "reader ")
 
 (let ((counts (reader)))
-  (if (not (and (eq? (car (counts 0)) 'the)
-		(= (cdr (counts 0)) 62063)))
-      (do ((i 0 (+ i 1))) 
-	  ((= i 40)) 
-	(format *stderr* "~A: ~A~%" (car (counts i)) (cdr (counts i))))))
+  (unless (and (eq? (car (counts 0)) 'the)
+	       (= (cdr (counts 0)) 62063))
+    (do ((i 0 (+ i 1))) 
+	((= i 40)) 
+      (format *stderr* "~A: ~A~%" (car (counts i)) (cdr (counts i))))))
 
 ;;; ----------------------------------------
 

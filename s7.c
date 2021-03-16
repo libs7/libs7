@@ -1244,7 +1244,7 @@ struct s7_scheme {
              curlet_symbol, current_error_port_symbol, current_input_port_symbol, current_output_port_symbol, cutlet_symbol, cyclic_sequences_symbol,
              denominator_symbol, dilambda_symbol, display_symbol, divide_symbol, documentation_symbol, dynamic_wind_symbol, dynamic_unwind_symbol,
              num_eq_symbol, error_symbol, eval_string_symbol, eval_symbol, exact_to_inexact_symbol, exit_symbol, exp_symbol, expt_symbol,
-             features_symbol, fill_symbol, float_vector_ref_symbol, float_vector_set_symbol, float_vector_symbol, floor_symbol,
+             features_symbol, file__symbol, fill_symbol, float_vector_ref_symbol, float_vector_set_symbol, float_vector_symbol, floor_symbol,
              flush_output_port_symbol, for_each_symbol, format_symbol, funclet_symbol, _function__symbol,
              gc_symbol, gcd_symbol, gensym_symbol, geq_symbol, get_output_string_symbol, gt_symbol,
              hash_table_entries_symbol, hash_table_ref_symbol, hash_table_set_symbol, hash_table_symbol, help_symbol,
@@ -7835,11 +7835,7 @@ s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x)
 
 /* -------------------------------- symbols -------------------------------- */
 
-#if __cplusplus
-static uint64_t raw_string_hash(const uint8_t *key, s7_int len)
-#else
 static inline uint64_t raw_string_hash(const uint8_t *key, s7_int len)
-#endif
 {
   if (len <= 8)
     {
@@ -28464,7 +28460,7 @@ static s7_pointer g_port_file(s7_scheme *sc, s7_pointer args)
     return(s7_wrong_type_arg_error(sc, "port-file", 0, port, "an open port"));
 #if (!MS_WINDOWS)
   if (is_file_port(port))
-    return(s7_make_c_pointer_with_type(sc, (void *)(port_file(port)), s7_make_symbol(sc, "FILE*"), sc->F));
+    return(s7_make_c_pointer_with_type(sc, (void *)(port_file(port)), sc->file__symbol, sc->F));
 #endif
   return(s7_make_c_pointer(sc, NULL));
 }
@@ -46940,10 +46936,7 @@ static s7_pointer g_signature(s7_scheme *sc, s7_pointer args)
   return(sc->F);
 }
 
-s7_pointer s7_signature(s7_scheme *sc, s7_pointer func)
-{
-  return(g_signature(sc, set_plist_1(sc, func)));
-}
+s7_pointer s7_signature(s7_scheme *sc, s7_pointer func) {return(g_signature(sc, set_plist_1(sc, func)));}
 
 
 /* -------------------------------- dynamic-wind -------------------------------- */
@@ -47732,10 +47725,7 @@ static s7_pointer g_is_aritable(s7_scheme *sc, s7_pointer args)
   return(make_boolean(sc, s7_is_aritable(sc, car(args), num)));
 }
 
-static bool is_aritable_b_7pp(s7_scheme *sc, s7_pointer f, s7_pointer i)
-{
-  return(g_is_aritable(sc, set_plist_2(sc, f, i)) != sc->F);
-}
+static bool is_aritable_b_7pp(s7_scheme *sc, s7_pointer f, s7_pointer i) {return(g_is_aritable(sc, set_plist_2(sc, f, i)) != sc->F);}
 
 static int32_t arity_to_int(s7_scheme *sc, s7_pointer x)
 {
@@ -48237,13 +48227,13 @@ bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
   if (type(a) != type(b))
     return(false);
 
-  if ((a == b) && (!is_number(a)))                   /* if a is NaN, a == b doesn't mean (eqv? a b) */
-    return(true);                                    /* a == b means (let ((x "a")) (let ((y x)) (eqv? x y))) is #t */
+  if ((a == b) && (!is_number(a)))         /* if a is NaN, a == b doesn't mean (eqv? a b) */
+    return(true);                          /* a == b means (let ((x "a")) (let ((y x)) (eqv? x y))) is #t */
 
   if (s7_is_number(a))
     return(numbers_are_eqv(sc, a, b));
 
-  if (is_unspecified(a))                             /* types are the same so we know b is also unspecified */
+  if (is_unspecified(a))                   /* types are the same so we know b is also unspecified */
     return(true);
 
   return(false);
@@ -54100,10 +54090,7 @@ static void op_error_hook_quit(s7_scheme *sc)
 
 /* -------------------------------- leftovers -------------------------------- */
 
-void (*s7_begin_hook(s7_scheme *sc))(s7_scheme *sc, bool *val)
-{
-  return(sc->begin_hook);
-}
+void (*s7_begin_hook(s7_scheme *sc))(s7_scheme *sc, bool *val) {return(sc->begin_hook);}
 
 void s7_set_begin_hook(s7_scheme *sc, void (*hook)(s7_scheme *sc, bool *val))
 {
@@ -57496,7 +57483,7 @@ static s7_pointer fx_c_ca(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_c_ac(s7_scheme *sc, s7_pointer arg)
 {
-  check_stack_size(sc); /* see test-all */
+  /* check_stack_size(sc); */
   set_car(sc->t2_1, fx_call(sc, cdr(arg)));
   set_car(sc->t2_2, opt3_con(arg));
   return(fn_proc(arg)(sc, sc->t2_1));
@@ -57663,9 +57650,7 @@ static s7_pointer fx_c_opaaq(s7_scheme *sc, s7_pointer arg)
   s7_pointer p;
   check_stack_size(sc); /* t101 + s7test full */
   p = cadr(arg);
-  sc->stack_end[3] = (s7_pointer)OP_GC_PROTECT;
-  sc->stack_end += 4;
-  sc->stack_end[-2] = fx_call(sc, cdr(p));
+  gc_protect_via_stack(sc, fx_call(sc, cdr(p)));
   set_car(sc->t2_2, fx_call(sc, cddr(p)));
   set_car(sc->t2_1, sc->stack_end[-2]);
   sc->stack_end -= 4;
@@ -96636,7 +96621,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->local_setter_symbol =        make_symbol(sc, "+setter+");
   sc->local_iterator_symbol =      make_symbol(sc, "+iterator+");
 
-#if (!DISABLE_DEPRECATED)
+#if (!DISABLE_DEPRECATED)  && (!__cplusplus) /* hack around g++ stupidity */
   s7_define_variable(sc, "nan.0", real_NaN);
   s7_define_variable(sc, "inf.0", real_infinity);
 #endif
@@ -96978,6 +96963,7 @@ s7_scheme *s7_init(void)
   sc->trace_in_symbol = make_symbol(sc, "trace-in");
   sc->size_symbol = make_symbol(sc, "size");
   sc->mutable_symbol = make_symbol(sc, "mutable?");
+  sc->file__symbol = make_symbol(sc, "FILE*");
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
@@ -97469,11 +97455,15 @@ void s7_repl(s7_scheme *sc)
   if (val)
     {
       s7_pointer libs;
+#if __cplusplus /* hack around an idiotic g++ warning */
+      uint64_t hash;
+      s7_define(sc, sc->nil, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
+#else
       s7_define_variable(sc, "*libc*", e);
+#endif
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
     }
-
   s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
   s7_gc_unprotect_at(sc, gc_loc);
 
@@ -97606,7 +97596,7 @@ int main(int argc, char **argv)
  * dup        3456         3334   3332   3203   3003   2976
  * tmac       3326         3317   3277   3247   3221   3221
  * tset       3287         3253   3104   3207   3253   3254
- * tio        3763         3816   3752   3738   3692   3691
+ * tio        3763         3816   3752   3738   3692   3691  3682
  * teq        4054         4068   4045   4038   3713   3712
  * tfft       11.3         4142   4109   4107   4067   4062
  * tstr       6755         5281   4863   4765   4543   4546
@@ -97623,12 +97613,11 @@ int main(int argc, char **argv)
  * tall       26.9         15.6   15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.1   37.4
  * sg         98.6         71.9   72.3   72.2   72.7   72.7
- * lg        105.4        106.6  105.0  105.1  104.3  104.3
+ * lg        105.4        106.6  105.0  105.1  104.3  104.3 104.2
  * tbig      600.0        177.4  175.8  174.3  172.5  171.8
  * -------------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?  could this be the o_sc problem?]
  * opts false, opt_print for return info float|int|cell_optimize cases?
- * tpp from write (it's used in lint)? + obj->let? seq stuff.scm?
  */
