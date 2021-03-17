@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.9"
-#define S7_DATE "17-Mar-2021"
+#define S7_VERSION "9.10"
+#define S7_DATE "18-Mar-2021"
 #define S7_MAJOR_VERSION 9
-#define S7_MINOR_VERSION 9
+#define S7_MINOR_VERSION 10
 
 #include <stdint.h>           /* for int64_t */
 
@@ -904,6 +904,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  *
+ * 17-Mar:    removed deprecated nan.0 and inf.0 due to compiler stupidity.
  * 25-Jan:    s7_define_semisafe_typed_function.
  * 6-Jan-21:  s7_hash_code.
  * --------
