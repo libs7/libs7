@@ -1559,7 +1559,6 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 ;;; --------------------------------------------------------------------------------
 
 (define (probe-eval val)
-  ;; an extension of the probe example in s7.html (under *function*)
   (let ((probe-let (inlet)))
     (for-each
      (lambda (sym)

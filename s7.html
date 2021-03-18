@@ -2266,7 +2266,7 @@ but that conflicts with substring, and is confusing (the start position follows 
 the old subvector to the new:
 </p>
 <pre class="indented">
-(define (old-subvector vect len (offset 0))
+(define* (old-subvector vect len (offset 0))
   (if (pair? len)
       (subvector vect offset (+ offset (apply * len)) len)
       (if (not len)
@@ -4769,7 +4769,9 @@ the locals themselves immutable:
   L)
 </pre>
 <p>Now <code>(vars-immutable! let)</code> makes it an error to set! any of the locals, but you
-can add locals to the let.  To completely petrify the let, <code>(immutable! (vars-immutable! let))</code>.
+can add locals to the let.  
+You can speed up evaluation by doing this because it tells the optimizer that the current entries in the let will not change.
+To completely petrify the let, <code>(immutable! (vars-immutable! let))</code>.
 To make a function's documentation immutable: <code>(with-let (funclet 'f2) (immutable! '+documentation+))</code>,
 and similarly for other function closure entries.
 </p>

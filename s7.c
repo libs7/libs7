@@ -141,12 +141,10 @@
 /* 16381: thash +80 [string->symbol] tauto +45[sublet called 4x as often?] tlet +80 [g_symbol] */
 
 #ifndef INITIAL_STACK_SIZE
-  #define INITIAL_STACK_SIZE 2048
+  #define INITIAL_STACK_SIZE 4096  /* was 2048 17-Mar-21 */
 #endif
-/* the stack grows as needed, each frame takes 4 entries, this is its initial size.
- *   this needs to be big enough to handle the eval_c_strings at startup (ca 100)
- *   In s7test.scm, the maximum stack size is ca 440.  In snd-test.scm, it's ca 200.
- */
+/* the stack grows as needed, each frame takes 4 entries, this is its initial size. (*s7* 'stack-top) divides size by 4 */
+
 #define STACK_RESIZE_TRIGGER (INITIAL_STACK_SIZE / 2)
 
 #ifndef INITIAL_PROTECTED_OBJECTS_SIZE
@@ -27631,14 +27629,13 @@ static void check_for_substring_temp(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer nps[NUM_STRING_WRAPPERS];
   s7_pointer p, arg;
-  int32_t pairs = 0, substrs = 0, i;
+  int32_t substrs = 0, i;
   /* don't use substring_uncopied for arg if arg is returned: (reverse! (write-string (substring x ...))) */
   for (p = cdr(expr); is_pair(p); p = cdr(p))
     {
       arg = car(p);
       if (is_pair(arg))
 	{
-	  pairs++;
 	  if ((is_symbol(car(arg))) &&
 	      (is_safely_optimized(arg)) &&
 	      (has_fn(arg)))
@@ -33488,7 +33485,7 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	  return;
 	}}
 
-  /* check_stack_size(sc); */
+  check_stack_size(sc);
   push_stack_no_let_no_code(sc, OP_GC_PROTECT, vect);
   if (use_write == P_READABLE)
     {
@@ -34054,9 +34051,8 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
   if (is_multiple_value(lst))
     port_write_string(port)(sc, "values ", 7, port);
 
-  /* check_stack_size(sc); */
+  check_stack_size(sc);
   push_stack_no_let_no_code(sc, OP_GC_PROTECT, lst);
-  /* (define (f) (display (make-list 1001 (mock-string #\h #\o #\h #\o))) (newline)) (do ((i 0 (+ i 1))) ((= i 1000)) (f)) */
 
   if (use_write == P_READABLE)
     {
@@ -36267,7 +36263,6 @@ static void format_append_char(s7_scheme *sc, char c, s7_pointer port)
    * Clisp does this:
    *   (format nil "1 2~C3 4" (int-char 0)) -> "1 23 4"
    * whereas sbcl says int-char is undefined, and Guile returns "1 2\x003 4"
-   *
    * if -O3 compiler flag, we hit a segfault here during s7test
    */
 }
@@ -42073,11 +42068,10 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 				c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
 			      sig = c_function_signature(typf);
 			      if ((sig != sc->pl_bt) &&
-				  (is_pair(sig)))
-				{
-				  if ((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig))))
-				    return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
-				}}}}}}}}
+				  (is_pair(sig)) &&
+				  ((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
+				return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
+			    }}}}}}}
   /* before making the new vector, if fill is specified and the vector is typed, we have to check for a type error.
    *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the  gc.
    */
@@ -57216,6 +57210,16 @@ static s7_pointer fx_car_car_tu(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(arg))(sc, (is_pair(p1)) ? car(p1) : g_car(sc, set_plist_1(sc, p1)), (is_pair(p2)) ? car(p2) : g_car(sc, set_plist_1(sc, p2))));
 }
 
+static s7_pointer fx_is_eq_car_car_tu(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer p1, p2;
+  p1 = t_lookup(sc, opt1_sym(cdr(arg)), arg);
+  p1 = (is_pair(p1)) ? car(p1) : g_car(sc, set_plist_1(sc, p1));
+  p2 = u_lookup(sc, opt2_sym(cdr(arg)), arg);
+  p2 = (is_pair(p2)) ? car(p2) : g_car(sc, set_plist_1(sc, p2));
+  return(make_boolean(sc, (p1 == p2) || ((is_unspecified(p1)) && (is_unspecified(p2)))));
+}
+
 static s7_pointer fx_c_optq_optq_direct(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x;
@@ -57966,14 +57970,14 @@ static s7_pointer fx_and_or_2_vref(s7_scheme *sc, s7_pointer arg)
 static s7_pointer fx_len2(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer val;
-  val = t_lookup(sc, cadadr(arg), arg);
+  val = t_lookup(sc, opt1_sym(cdr(arg)), arg); /* isn't this unprotected from mock pair? */ /* opt1_sym == cadadr(arg) */
   return(make_boolean(sc, is_pair(val) && (is_pair(cdr(val))) && (is_null(cddr(val)))));
 }
 
 static s7_pointer fx_len3(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer val;
-  val = t_lookup(sc, cadadr(arg), arg);
+  val = t_lookup(sc, opt1_sym(cdr(arg)), arg);
   return(make_boolean(sc, is_pair(val) && (is_pair(cdr(val))) && (is_pair(cddr(val)))));
 }
 
@@ -59493,7 +59497,8 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    {
 	      set_opt1_sym(cdr(p), cadadr(p));
 	      set_opt2_sym(cdr(p), cadaddr(p)); 
-	      return(with_fx(tree, ((cadadr(p) == var1) && (cadaddr(p) == var2)) ? fx_car_car_tu : fx_car_car));
+	      return(with_fx(tree, ((cadadr(p) == var1) && (cadaddr(p) == var2)) ? 
+			     ((opt3_direct(p) == (s7_pointer)is_eq_p_pp) ? fx_is_eq_car_car_tu : fx_car_car_tu) : fx_car_car));
 	    }}
       break;
 
@@ -59655,11 +59660,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
     case OP_AND_3:
       if ((fx_proc(tree) == fx_and_3) &&
 	  (is_pair(cadr(p))) &&
-	  (is_pair(cdadr(p))) && (cadadr(p) == var1))
+	  (is_pair(cdadr(p))) && (cadadr(p) == var1)) /* so "s" below is "t" */
 	{
 	  if (((fx_proc(cdr(p)) == fx_is_pair_t) && (fx_proc(cddr(p)) == fx_is_pair_cdr_t)) ||
 	      ((fx_proc(cdr(p)) == fx_is_pair_s) && (fx_proc(cddr(p)) == fx_is_pair_cdr_s)))
 	    {
+	      set_opt1_sym(cdr(p), cadadr(p));
 	      if ((fx_proc(cdddr(p)) == fx_is_null_cddr_t) || (fx_proc(cdddr(p)) == fx_is_null_cddr_s))
 		return(with_fx(tree, fx_len2));
 	      if ((fx_proc(cdddr(p)) == fx_is_pair_cddr_t) || (fx_proc(cdddr(p)) == fx_is_pair_cddr_s))
@@ -67388,7 +67394,7 @@ static s7_pointer opt_do_list_simple(opt_info *o)
   o1 = o->v[10].o1;
 
   fp = o1->v[0].fp;
-  if (fp == opt_if_bp) fp = opt_if_bp_nr;
+  if (fp == opt_if_bp) fp = opt_if_bp_nr; /* opt_equal_car split out here gains only 12 */
   while (!is_null(slot_value(vp)))
     {
       fp(o1);
@@ -68086,9 +68092,8 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
     case OP_OR:     return(opt_cell_and(sc, car_x, len));
     case OP_IF:     return(opt_cell_if(sc, car_x, len));
     case OP_DO:     return(opt_cell_do(sc, car_x, len));
-    case OP_LET_TEMPORARILY: 
-      return(opt_cell_let_temporarily(sc, car_x, len));
-    default: /* lambda let with-let define etc */
+    case OP_LET_TEMPORARILY: return(opt_cell_let_temporarily(sc, car_x, len));
+    default: /* lambda let/let* with-let define etc */
       break;
     }
   return_false(sc, car_x);
@@ -96867,7 +96872,6 @@ s7_scheme *s7_init(void)
   sc->stack_start = vector_elements(sc->stack); /* stack type set below */
   sc->stack_end = sc->stack_start;
   sc->stack_size = INITIAL_STACK_SIZE;
-  /* sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + sc->stack_size / 2); */
   sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + (INITIAL_STACK_SIZE - STACK_RESIZE_TRIGGER));
   set_full_type(sc->stack, T_STACK);
   sc->max_stack_size = (1 << 30);
@@ -97558,49 +97562,49 @@ int main(int argc, char **argv)
  * -------------------------------------------------------------
  * tpeak       128          115    114    114    113    112
  * tref        739          691    687    687    602    508
- * tauto       786          648    642    647    651    646
- * tshoot     1663          883    872    872    856    849  842
- * index      1076         1026   1016   1014   1013   1013   [fx_c_ac]
- * tmock      7690         1177   1165   1166   1147   1147   1142
- * s7test     4527         1873   1831   1817   1809   1805
- * lt         2117         2123   2110   2112   2101   2100   2096
- * tmat       2418         2285   2258   2256   2117   2117   2113
- * tcopy      2277         2256   2230   2219   2217   2217
+ * tauto       786          648    642    647    651    645
+ * tshoot     1663          883    872    872    856    842
+ * index      1076         1026   1016   1014   1013   1014
+ * tmock      7690         1177   1165   1166   1147   1147
+ * s7test     4527         1873   1831   1817   1809   1815
+ * lt         2117         2123   2110   2112   2101   2098
+ * tmat       2418         2285   2258   2256   2117   2121
+ * tcopy      2277         2256   2230   2219   2217   2216
  * tvect      2649         2456   2413   2413   2331   2280
  * tform      3319         2281   2273   2266   2288   2283
- * tread      2610         2440   2421   2412   2403   2415
+ * tread      2610         2440   2421   2412   2403   2414
  * trclo      4292         2715   2561   2560   2526   2526
- * fbench     2980         2688   2583   2577   2561   2561
- * tb         3472         2735   2681   2677   2640   2636  2628
+ * fbench     2980         2688   2583   2577   2561   2556
+ * tb         3472         2735   2681   2677   2640   2627
  * tmap       3759         2886   2857   2827   2786   2785
  * titer      2860         2865   2842   2842   2803   2803
  * tsort      3816         3105   3104   3097   2936   2936
- * dup        3456         3334   3332   3203   3003   2976
- * tmac       3326         3317   3277   3247   3221   3221
- * tset       3287         3253   3104   3207   3253   3254   3246 [fx_c_aaa]
+ * dup        3456         3334   3332   3203   3003   2975
+ * tmac       3326         3317   3277   3247   3221   3220
+ * tset       3287         3253   3104   3207   3253   3248
  * tio        3763         3816   3752   3738   3692   3682
- * teq        4054         4068   4045   4038   3713   3712   3706 [pair_to_port]    
+ * teq        4054         4068   4045   4038   3713   3712
  * tfft       11.3         4142   4109   4107   4067   4062
  * tstr       6755         5281   4863   4765   4543   4546
- * tcase      4671         4960   4793   4669   4570   4570   4564
- * tclo       4949         4787   4735   4668   4588   4607
- * tlet       5762         7775   5640   5585   4632   4635
- * tnum       59.4         6348   6013   5998   5860   5859
+ * tcase      4671         4960   4793   4669   4570   4568
+ * tclo       4949         4787   4735   4668   4588   4604
+ * tlet       5762         7775   5640   5585   4632   4634
+ * tnum       59.4         6348   6013   5998   5860   5856
  * trec       7763         5976   5970   5970   5969   5969
- * tmisc      6506         7389   6210   6174   6167   6157   6144 [eval]
- * tgsl                    8485                 8422   7350
+ * tmisc      6506         7389   6210   6174   6167   6157
+ * tgsl                    8485                 8422   6467
  * tgc        12.5         11.9   11.1   11.0   10.4   10.4
- * tgen       12.3         11.2   11.4   11.3   11.3   11.3   [fx_c_aaa]
+ * tgen       12.3         11.2   11.4   11.3   11.3   11.3
  * thash      37.4         11.8   11.7   11.7   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.1   37.4
- * sg         98.6         71.9   72.3   72.2   72.7   72.7
- * lg        105.4        106.6  105.0  105.1  104.3  104.3 104.2 .1
- * tbig      600.0        177.4  175.8  174.3  172.5  171.8       .7
+ * calls      61.1         36.7   37.5   37.2   37.1   37.3
+ * sg         98.6         71.9   72.3   72.2   72.7   72.8
+ * lg        105.4        106.6  105.0  105.1  104.3  104.2
+ * tbig      600.0        177.4  175.8  174.3  172.5  171.7
  * -------------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
  * opts false, opt_print for return info float|int|cell_optimize cases?
- * pair|vector_to_port push_stacks for gc_protection could combine by 4s
+ * check psyns, char-pos-2?
  */

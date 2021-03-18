@@ -43,8 +43,14 @@
 
 (testfm)
 
+(define (immutable-let L)
+  (with-let L 
+    (for-each (lambda (f)
+                (immutable! (car f)))
+              (curlet)))
+  L)
 
-(with-let (sublet *libgsl*)
+(with-let (sublet (immutable-let *libgsl*))
   
   (define (eigenvalues M)
     (with-let (sublet *libgsl* (inlet 'M M))
