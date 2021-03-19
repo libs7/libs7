@@ -750,11 +750,6 @@ static s7_pointer g_notcurses_canutf8(s7_scheme *sc, s7_pointer args)
   return(s7_make_boolean(sc, notcurses_canutf8((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
 }
 
-static s7_pointer g_notcurses_cansixel(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_boolean(sc, notcurses_cansixel((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
-}
- 
 static s7_pointer g_notcurses_getc(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, notcurses_getc((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
@@ -3845,7 +3840,6 @@ void notcurses_s7_init(s7_scheme *sc)
   #define nc_int(Name) s7_define(sc, notcurses_let, s7_make_symbol(sc, #Name), s7_make_integer(sc, (s7_int)Name))
 
   nc_int(NCOPTION_INHIBIT_SETLOCALE);
-  nc_int(NCOPTION_VERIFY_SIXEL);
   nc_int(NCOPTION_NO_WINCH_SIGHANDLER);
   nc_int(NCOPTION_NO_QUIT_SIGHANDLERS);
   nc_int(NCOPTION_SUPPRESS_BANNERS);
@@ -3860,8 +3854,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(CELL_FG_PALETTE);
   nc_int(CELL_BG_ALPHA_MASK);
   nc_int(CELL_FG_ALPHA_MASK);
-
-  nc_int(CHANNEL_ALPHA_MASK);
 
   nc_int(CELL_ALPHA_HIGHCONTRAST);
   nc_int(CELL_ALPHA_TRANSPARENT);
@@ -3955,7 +3947,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCBLIT_4x1);
   nc_int(NCBLIT_BRAILLE);
   nc_int(NCBLIT_8x1);
-  nc_int(NCBLIT_SIXEL);
 
   /* notcurses/nckeys.h */
   nc_int(NCKEY_INVALID);
@@ -4094,7 +4085,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_canopen_images, 1, 0, false);
   nc_func(notcurses_canopen_videos, 1, 0, false);
   nc_func(notcurses_canutf8, 1, 0, false);
-  nc_func(notcurses_cansixel, 1, 0, false);
   nc_func(notcurses_top, 1, 0, false);
   nc_func(notcurses_drop_planes, 1, 0, false);
   nc_func(notcurses_stdplane, 1, 0, false);
