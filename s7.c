@@ -1646,11 +1646,10 @@ static block_t *callocate(s7_scheme *sc, size_t bytes)
   p = mallocate(sc, bytes);
   if ((block_data(p)) && (block_index(p) != BLOCK_LIST))
     {
-      if ((block_index(p) >= 6) &&               /* there are at least 64 bytes in the block */
-	  ((block_index(p) != TOP_BLOCK_LIST) || /*   but top_block is by bytes (not powers of 2) */
-	   ((bytes & 0x3f) == 0)))               /*   memclr64 assumes it can clear 64-bytes at a time, memclr64 is much faster than memclr */
-	memclr64((void *)block_data(p), bytes);
-      else memclr((void *)(block_data(p)), bytes);
+      if ((bytes & (~0x3f)) > 0)
+	memclr64((void *)block_data(p), bytes & (~0x3f));
+      if ((bytes & 0x3f) > 0)
+	memclr((void *)((uint8_t *)block_data(p) + (bytes & (~0x3f))), bytes & 0x3f);
     }
   return(p);
 }
@@ -4006,7 +4005,6 @@ static s7_pointer simple_out_of_range_error_prepackaged(s7_scheme *sc, s7_pointe
 #define simple_out_of_range(Sc, Caller, Arg, Description)   simple_out_of_range_error_prepackaged(Sc, symbol_name_cell(Caller), Arg, Description)
 #define out_of_range(Sc, Caller, Arg_Num, Arg, Description) out_of_range_error_prepackaged(Sc, symbol_name_cell(Caller), Arg_Num, Arg, Description)
 
-
 /* ---------------- evaluator ops ---------------- */
 
 /* C=constant, S=symbol, A=fx-callable, Q=quote, D=list of constants, FX=list of A's, P=parlous?, O=one form, M=multiform */
@@ -4617,12 +4615,12 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	   optimize_op(obj),
 	   full_typ,
 	   /* bit 0 (the first 8 bits are easy...) */
-	   ((full_typ & T_MULTIFORM) != 0) ?      ((is_any_closure(obj)) ? (((full_typ & T_ONE_FORM) != 0) ? " clo-has-fx" : " multiform") : " ?0?") : "",
+	   ((full_typ & T_MULTIFORM) != 0) ?      ((is_any_closure(obj)) ? (((full_typ & T_ONE_FORM) != 0) ? " closure-one-form-has-fx" : " closure-multiform") : " ?0?") : "",
 	   /* bit 1 */
 	   ((full_typ & T_SYNTACTIC) != 0) ?      (((is_pair(obj)) || (is_syntax(obj)) || (is_normal_symbol(obj))) ? " syntactic" : " ?1?") : "",
 	   /* bit 2 */
 	   ((full_typ & T_SIMPLE_ARG_DEFAULTS) != 0) ? ((is_pair(obj)) ? " simple-args|in-use" :
-							((is_any_closure(obj)) ? " one-form" :
+							((is_any_closure(obj)) ? " closure-one-form" :
 							 " ?2?")) : "",
 	   /* bit 3 */
 	   ((full_typ & T_OPTIMIZED) != 0) ?      ((is_c_function(obj)) ? " scope-safe" :
@@ -8536,7 +8534,7 @@ static inline void make_let_with_three_slots(s7_scheme *sc, s7_pointer func, s7_
   add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(cargs), val3);
 }
 
-static void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
+static inline void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
 {
   s7_pointer last_slot;
   sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(closure_args(func)), val1, cadr(closure_args(func)), val2);
@@ -47148,6 +47146,7 @@ s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7
   /* c_object_info(x) = &(sc->c_object_types[type]); */
   /* that won't work because c_object_types can move when it is realloc'd and the old stuff is freed by realloc
    *   and since we're checking (for example) ref_2 existence as not null, we can't use a table of c_object_t's!
+   * Using mallocate (s7_make_c_object_with_data) is faster, but not enough to warrant the code.
    */
   c_object_type(x) = type;
   c_object_value(x) = value;
@@ -86109,7 +86108,7 @@ static void op_safe_closure_3s(s7_scheme *sc)
 }
 
 static void op_safe_closure_ssa(s7_scheme *sc)
-{
+{ /* ssa_a is hit once, but is only about 3/4% faster -- there's the fx overhead, etc */
   s7_pointer f, args;
   args = cdr(sc->code);
   f = opt1_lambda(sc->code);
@@ -86562,7 +86561,7 @@ static void op_closure_sc_o(s7_scheme *sc)
 
 #define if_pair_set_up_begin(Sc) if (is_pair(cdr(Sc->code))) {check_stack_size(Sc); push_stack_no_args(Sc, Sc->begin_op, cdr(Sc->code));} Sc->code = car(Sc->code);
 
-static void op_closure_3s(s7_scheme *sc)
+static inline void op_closure_3s(s7_scheme *sc)
 {
   s7_pointer args;
   args = cdr(sc->code);
@@ -92614,13 +92613,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_CLOSURE_AA_A: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_A, 2)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_AA_A: sc->value = fx_safe_closure_aa_a(sc, sc->code); continue;
 
-	case OP_SAFE_CLOSURE_SSA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_fp(sc)) goto EVAL; continue;}
+	case OP_SAFE_CLOSURE_SSA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_all_a(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_SSA: op_safe_closure_ssa(sc); goto BEGIN;
 
-	case OP_SAFE_CLOSURE_SAA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_fp(sc)) goto EVAL; continue;}
+	case OP_SAFE_CLOSURE_SAA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_all_a(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_SAA: op_safe_closure_saa(sc); goto BEGIN;
 
-	case OP_SAFE_CLOSURE_AGG: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_fp(sc)) goto EVAL; continue;}
+	case OP_SAFE_CLOSURE_AGG: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_all_a(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_AGG: op_safe_closure_agg(sc); goto BEGIN;
 
 	case OP_SAFE_CLOSURE_ALL_S:  if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, integer(opt3_arglen(cdr(sc->code))))) {if (op_unknown_all_s(sc)) goto EVAL; continue;}
@@ -97455,33 +97454,33 @@ int main(int argc, char **argv)
  * tauto       786          648    642    647    651    645
  * tshoot     1663          883    872    872    856    842
  * index      1076         1026   1016   1014   1013   1014
- * tmock      7690         1177   1165   1166   1147   1147
- * s7test     4527         1873   1831   1817   1809   1815
- * lt         2117         2123   2110   2112   2101   2098
- * tmat       2418         2285   2258   2256   2117   2121
+ * tmock      7690         1177   1165   1166   1147   1146
+ * s7test     4527         1873   1831   1817   1809   1806
+ * lt         2117         2123   2110   2112   2101   2091
+ * tmat       2418         2285   2258   2256   2117   2114
  * tcopy      2277         2256   2230   2219   2217   2216
  * tvect      2649         2456   2413   2413   2331   2280
  * tform      3319         2281   2273   2266   2288   2283
- * tread      2610         2440   2421   2412   2403   2414
+ * tread      2610         2440   2421   2412   2403   2411
  * trclo      4292         2715   2561   2560   2526   2526
  * fbench     2980         2688   2583   2577   2561   2556
- * tb         3472         2735   2681   2677   2640   2627
+ * tb         3472         2735   2681   2677   2640   2625
  * tmap       3759         2886   2857   2827   2786   2785
  * titer      2860         2865   2842   2842   2803   2803
  * tsort      3816         3105   3104   3097   2936   2936
- * dup        3456         3334   3332   3203   3003   2975
- * tmac       3326         3317   3277   3247   3221   3220
- * tset       3287         3253   3104   3207   3253   3248
- * tio        3763         3816   3752   3738   3692   3682
+ * dup        3456         3334   3332   3203   3003   2971
+ * tmac       3326         3317   3277   3247   3221   3218
+ * tset       3287         3253   3104   3207   3253   3247
+ * tio        3763         3816   3752   3738   3692   3687
  * teq        4054         4068   4045   4038   3713   3712
  * tfft       11.3         4142   4109   4107   4067   4062
  * tstr       6755         5281   4863   4765   4543   4546
- * tcase      4671         4960   4793   4669   4570   4568
- * tclo       4949         4787   4735   4668   4588   4604
- * tlet       5762         7775   5640   5585   4632   4634
- * tnum       59.4         6348   6013   5998   5860   5856  5843
+ * tcase      4671         4960   4793   4669   4570   4563
+ * tclo       4949         4787   4735   4668   4588   4599
+ * tlet       5762         7775   5640   5585   4632   4633
+ * tnum       59.4         6348   6013   5998   5860   5843
  * trec       7763         5976   5970   5970   5969   5969
- * tmisc      6506         7389   6210   6174   6167   6157
+ * tmisc      6506         7389   6210   6174   6167   6156
  * tgsl                    8485                 8422   6467
  * tgc        12.5         11.9   11.1   11.0   10.4   10.4
  * tgen       12.3         11.2   11.4   11.3   11.3   11.3
@@ -97489,12 +97488,10 @@ int main(int argc, char **argv)
  * tall       26.9         15.6   15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.1   37.3
  * sg         98.6         71.9   72.3   72.2   72.7   72.8
- * lg        105.4        106.6  105.0  105.1  104.3  104.2
+ * lg        105.4        106.6  105.0  105.1  104.3  103.8
  * tbig      600.0        177.4  175.8  174.3  172.5  171.7
  * -------------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * opts false, opt_print for return info float|int|cell_optimize cases?
- * [safe]_closure_x_b, ssa_a experiment is sometimes slower?!
  */
