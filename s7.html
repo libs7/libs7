@@ -1715,10 +1715,11 @@ In this case, the setter function does the set! itself (unlike a symbol setter):
   ;; c?r returns a dilambda that gets/sets X
 
   (define (X-marks-the-spot accessor tree)
-    (if (pair? tree)
-	(or (X-marks-the-spot (cons 'car accessor) (car tree))
-	    (X-marks-the-spot (cons 'cdr accessor) (cdr tree)))
-	(and (eq? tree 'X) accessor)))
+    (if (eq? tree 'X)
+        accessor
+        (and (pair? tree)
+	     (or (X-marks-the-spot (cons 'car accessor) (car tree))
+	         (X-marks-the-spot (cons 'cdr accessor) (cdr tree))))))
 
   (let ((body 'lst))
     (for-each
