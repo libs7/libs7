@@ -1,8 +1,204 @@
+(set! (*s7* 'heap-size) (* 8 1024000))
+
+(define (cpy1 x y) ; opt_dox
+  (do ((i 0 (+ i 1))
+       (len (length x)))
+      ((= i len) y)
+    (int-vector-set! y i (int-vector-ref x i))))
+
+(define (tst-cpy1)
+  (let ((x (make-int-vector 1000000 123))
+	(y (make-int-vector 1000000 0)))
+    (cpy1 x y)
+    (unless (equal? y (make-int-vector 1000000 123))
+      (format *stderr* "y1: ~S~%" y))))
+
+(tst-cpy1)
+
+(define (cpy2 x y) ; opt_dotimes
+  (let ((len (length x)))
+    (do ((i 0 (+ i 1)))
+	((= i len) y)
+      (int-vector-set! y i (int-vector-ref x i)))))
+
+(define (tst-cpy2)
+  (let ((x (make-int-vector 1000000 123))
+	(y (make-int-vector 1000000 0)))
+    (cpy2 x y)
+    (unless (equal? y (make-int-vector 1000000 123))
+      (format *stderr* "y2: ~S~%" y))))
+
+(tst-cpy2)
+
+;;; --------------------------------------------------------------------------------
+
+(define (cpy3 x y) ; opt_dotimes
+  (do ((len (length x))
+       (i 0 (+ i 1)))
+      ((= i len) y)
+    (float-vector-set! y i (float-vector-ref x i))))
+
+(define (tst-cpy3)
+  (let ((x (make-float-vector 1000000 123.0))
+	(y (make-float-vector 1000000 0.0)))
+    (cpy3 x y)
+    (unless (equal? y (make-float-vector 1000000 123.0))
+      (format *stderr* "y3: ~S~%" y))))
+
+(tst-cpy3)
+
+(define (cpy4 x y) ; opt_dotimes
+  (let ((len (length x)))
+    (do ((i 0 (+ i 1)))
+	((= i len) y)
+      (float-vector-set! y i (float-vector-ref x i)))))
+
+(define (tst-cpy4)
+  (let ((x (make-float-vector 1000000 123.0))
+	(y (make-float-vector 1000000 0.0)))
+    (cpy4 x y)
+    (unless (equal? y (make-float-vector 1000000 123.0))
+      (format *stderr* "y4: ~S~%" y))))
+
+(tst-cpy4)
+
+;;; --------------------------------------------------------------------------------
+
+(define (cpy5 x y)
+  (do ((len (length x))
+       (i 0 (+ i 1)))
+      ((= i len) y)
+    (vector-set! y i (vector-ref x i))))
+
+(define (tst-cpy5)
+  (let ((x (make-vector 1000000 'a))
+	(y (make-vector 1000000 #f)))
+    (cpy5 x y)
+    (unless (equal? y (make-vector 1000000 'a))
+      (format *stderr* "y5: ~S~%" y))))
+
+(tst-cpy5)
+
+(define (cpy6 x y) ; opt_do_copy
+  (let ((len (length x)))
+    (do ((i 0 (+ i 1)))
+	((= i len) y)
+      (vector-set! y i (vector-ref x i)))))
+
+(define (tst-cpy6)
+  (let ((x (make-vector 1000000 'a))
+	(y (make-vector 1000000 #f)))
+    (cpy6 x y)
+    (unless (equal? y (make-vector 1000000 'a))
+      (format *stderr* "y6: ~S~%" y))))
+
+(tst-cpy6)
+
+;;; --------------------------------------------------------------------------------
+
+(define (cpy7 x y)
+  (do ((len (length x))
+       (i 0 (+ i 1)))
+      ((= i len) y)
+    (string-set! y i (string-ref x i))))
+
+(define (tst-cpy7)
+  (let ((x (make-string 1000000 #\a))
+	(y (make-string 1000000 #\b)))
+    (cpy7 x y)
+    (unless (equal? y (make-string 1000000 #\a))
+      (format *stderr* "y7: ~S~%" y))))
+
+(tst-cpy7)
+
+(define (cpy8 x y) ; opt_do_copy
+  (let ((len (length x)))
+    (do ((i 0 (+ i 1)))
+	((= i len) y)
+      (string-set! y i (string-ref x i)))))
+
+(define (tst-cpy8)
+  (let ((x (make-string 1000000 #\a))
+	(y (make-string 1000000 #\b)))
+    (cpy8 x y)
+    (unless (equal? y (make-string 1000000 #\a))
+      (format *stderr* "y8: ~S~%" y))))
+
+(tst-cpy8)
+
+;;; --------------------------------------------------------------------------------
+
+(define (cpy9 x y)
+  (do ((len (length x))
+       (i 0 (+ i 1)))
+      ((= i len) y)
+    (list-set! y i (list-ref x i))))
+
+(define (tst-cpy9)
+  (let ((x (make-list 10000 #\a))
+	(y (make-list 10000 #\b)))
+    (cpy9 x y)
+    (unless (equal? y (make-list 10000 #\a))
+      (format *stderr* "y9: ~S~%" y))))
+
+(tst-cpy9)
+
+(define (cpy10 x y) ; opt_do_copy
+  (let ((len (length x)))
+    (do ((i 0 (+ i 1)))
+	((= i len) y)
+      (list-set! y i (list-ref x i)))))
+
+(define (tst-cpy10)
+  (let ((x (make-list 10000 #\a))
+	(y (make-list 10000 #\b)))
+    (cpy10 x y)
+    (unless (equal? y (make-list 10000 #\a))
+      (format *stderr* "y10: ~S~%" y))))
+
+(tst-cpy10)
+
+;;; --------------------------------------------------------------------------------
+
+(define (cpy11 x y)
+  (let loop ((x x) (y y))
+    (when (pair? x)
+      (set-car! y (car x))
+      (loop (cdr x) (cdr y))))
+  y)
+
+(define (tst-cpy11)
+  (let ((x (make-list 200000 #\a))
+	(y (make-list 200000 #\b)))
+    (cpy11 x y)
+    (unless (equal? y (make-list 200000 #\a))
+      (format *stderr* "y11: ~S~%" y))))
+
+(tst-cpy11)
+
+(define (cpy12 x y)
+  (let ((len (- (length x) 1)))
+    (when (>= len 0)
+      (let loop ((i 0))
+	(vector-set! y i (vector-ref x i))
+	(if (< i len)
+	    (loop (+ i 1))))))
+  y)
+
+(define (tst-cpy12)
+  (let ((x (make-vector 200000 #\a))
+	(y (make-vector 200000 #\b)))
+    (cpy12 x y)
+    (unless (equal? y (make-vector 200000 #\a))
+      (format *stderr* "y12: ~S~%" y))))
+
+(tst-cpy12)
+
+;;; --------------------------------------------------------------------------------
+
 (let ((new-env (sublet (curlet) (cons 'init_func 'block_init)))) ; load calls init_func if possible
   ;; depends on running s7test first normally
   (load "s7test-block.so" new-env))
-
-;(set! (*s7* 'heap-size) 1024000)
 
 (define (test-copy size)
   (let ((old-string (make-string size #\a))
@@ -194,8 +390,8 @@
 
 (define-expansion (test tst expected)
   `(let ((val ,tst))
-     (if (not (equal? val ,expected))
-	 (format *stderr* "~S: ~S but expected ~S~%" ',tst val ,expected))))
+     (unless (equal? val ,expected)
+       (format *stderr* "~S: ~S but expected ~S~%" ',tst val ,expected))))
 
 (define (test-append size)
   (let ((strs ())

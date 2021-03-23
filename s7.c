@@ -345,6 +345,21 @@
   #define MS_WINDOWS 0
 #endif
 
+#if MS_WINDOWS
+#define Jmp_Buf jmp_buf
+#define SetJmp(A, B) setjmp(A)
+#define LongJmp(A, B) longjmp(A, B)
+#else
+#define Jmp_Buf sigjmp_buf
+#define SetJmp(A, B) sigsetjmp(A, B)
+#define LongJmp(A, B) siglongjmp(A, B)
+  /* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
+   *   unfortunately sigsetjmp is noticeably slower than setjmp, especially when s7_optimize_1 is called a lot.
+   *   In one case, the sigsetjmp version runs in 24 seconds, but the setjmp version takes 10 seconds, and
+   *   yet callgrind says there is almost no difference, so I removed setjmp from s7_optimize.
+   */
+#endif
+
 #if (!MS_WINDOWS)
   #include <pthread.h>
 #endif
@@ -711,17 +726,14 @@ typedef union {
   s7_pointer (*fp)(opt_info *o);
 } vunion;
 
-#ifndef OPT_SC_DEBUGGING
-  #define OPT_SC_DEBUGGING 0
-#endif
 #define NUM_VUNIONS 15
 struct opt_info {
   vunion v[NUM_VUNIONS];
-#if S7_DEBUGGING || OPT_SC_DEBUGGING
+#if S7_DEBUGGING
   int64_t unused1;
 #endif
   s7_scheme *sc;
-#if S7_DEBUGGING || OPT_SC_DEBUGGING
+#if S7_DEBUGGING
   int64_t unused2;
   const char *opo_func;
   int opo_line;
@@ -1154,12 +1166,7 @@ struct s7_scheme {
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp_cell_2;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1;
 
-  sigjmp_buf goto_start;
-  /* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
-   *   unfortunately sigsetjmp is noticeably slower than setjmp, especially when s7_optimize_1 is called a lot.
-   *   In one case, the sigsetjmp version runs in 24 seconds, but the setjmp version takes 10 seconds, and
-   *   yet callgrind says there is almost no difference, so I removed setjmp from s7_optimize.
-   */
+  Jmp_Buf goto_start;
   bool longjmp_ok;
   int32_t setjmp_loc;
 
@@ -1394,7 +1401,7 @@ struct s7_scheme {
 #endif
 static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
 
-#if S7_DEBUGGING || OPT_SC_DEBUGGING
+#if S7_DEBUGGING
 static s7_scheme *opt_sc(opt_info *o) 
 {
   if ((o->sc != cur_sc) || (o->unused1 != 0) || (o->unused2 != 0))
@@ -4493,9 +4500,9 @@ static int64_t heap_location(s7_scheme *sc, s7_pointer p)
 
 #if TRAP_SEGFAULT
 #include <signal.h>
-static sigjmp_buf senv; /* global here is not a problem -- it is used only to protect s7_is_valid */
+static Jmp_Buf senv; /* global here is not a problem -- it is used only to protect s7_is_valid */
 static volatile sig_atomic_t can_jump = 0;
-static void segv(int32_t ignored) {if (can_jump) siglongjmp(senv, 1);}
+static void segv(int32_t ignored) {if (can_jump) LongJmp(senv, 1);}
 #endif
 
 bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
@@ -4503,7 +4510,7 @@ bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
   bool result = false;
   if (!arg) return(false);
 #if TRAP_SEGFAULT
-  if (sigsetjmp(senv, 1) == 0)
+  if (SetJmp(senv, 1) == 0)
     {
       void (*old_segv)(int32_t sig);
       can_jump = 1;
@@ -11893,7 +11900,7 @@ static void call_with_exit(s7_scheme *sc)
       if (sc->longjmp_ok)
 	{
 	  pop_stack(sc);
-	  siglongjmp(sc->goto_start, CALL_WITH_EXIT_JUMP);
+	  LongJmp(sc->goto_start, CALL_WITH_EXIT_JUMP);
 	}
       for (i = 0; i < quit; i++)
 	push_stack_op_let(sc, OP_EVAL_DONE);
@@ -30599,30 +30606,30 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- read -------------------------------- */
-#define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; sigjmp_buf old_goto_start
+#define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; Jmp_Buf old_goto_start
 
 #define store_jump_info(Sc)						\
   do {									\
       old_longjmp = Sc->longjmp_ok;					\
       old_jump_loc = Sc->setjmp_loc;					\
-      memcpy((void *)old_goto_start, (void *)(Sc->goto_start), sizeof(sigjmp_buf)); \
+      memcpy((void *)old_goto_start, (void *)(Sc->goto_start), sizeof(Jmp_Buf)); \
   } while (0)
 
 #define restore_jump_info(Sc)						\
   do {									\
     Sc->longjmp_ok = old_longjmp;					\
     Sc->setjmp_loc = old_jump_loc;					\
-    memcpy((void *)(Sc->goto_start), (void *)old_goto_start, sizeof(sigjmp_buf)); \
+    memcpy((void *)(Sc->goto_start), (void *)old_goto_start, sizeof(Jmp_Buf)); \
     if ((jump_loc == ERROR_JUMP) &&					\
 	(sc->longjmp_ok))						\
-      siglongjmp(sc->goto_start, ERROR_JUMP);				\
+      LongJmp(sc->goto_start, ERROR_JUMP);				\
   } while (0)
 
 #define set_jump_info(Sc, Tag)		\
   do {					\
     sc->longjmp_ok = true;		\
     sc->setjmp_loc = Tag;		\
-    jump_loc = sigsetjmp(sc->goto_start, 1);	\
+    jump_loc = SetJmp(sc->goto_start, 1);	\
   } while (0)
 
 s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
@@ -43459,7 +43466,7 @@ static int32_t closure_sort_begin(const void *v1, const void *v2, void *arg)
 }
 
 static s7_b_7pp_t s7_b_7pp_function(s7_pointer f);
-#if S7_DEBUGGING || OPT_SC_DEBUGGING
+#if S7_DEBUGGING
 #define alloc_opo(Sc) alloc_opo_1(Sc, __func__, __LINE__)
 static opt_info *alloc_opo_1(s7_scheme *sc, const char *func, int line);
 #else
@@ -53295,7 +53302,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
-	  if (sc->longjmp_ok) siglongjmp(sc->goto_start, THROW_JUMP);
+	  if (sc->longjmp_ok) LongJmp(sc->goto_start, THROW_JUMP);
 	  return(sc->value);
 	}}
   if (is_let(car(args)))
@@ -53445,7 +53452,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	if ((catcher) &&
 	    (catcher(sc, i, type, info, &reset_error_hook)))
 	  {
-	    if (sc->longjmp_ok) siglongjmp(sc->goto_start, CATCH_JUMP);
+	    if (sc->longjmp_ok) LongJmp(sc->goto_start, CATCH_JUMP);
 	    /* all the rest of the code expects s7_error to jump, not return, so presumably if we get here, we're in trouble */
 #if S7_DEBUGGING
 	    fprintf(stderr, "fall through in s7_error!\n");
@@ -53609,7 +53616,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
       sc->cur_op = OP_ERROR_QUIT;
     }
 
-  if (sc->longjmp_ok) siglongjmp(sc->goto_start, ERROR_JUMP);
+  if (sc->longjmp_ok) LongJmp(sc->goto_start, ERROR_JUMP);
   return(type);
 }
 
@@ -53969,7 +53976,7 @@ static void op_error_hook_quit(s7_scheme *sc)
   push_stack_op(sc, OP_ERROR_QUIT);                /* added 3-Dec-16: try to make sure we actually exit! */
   sc->cur_op = OP_ERROR_QUIT;
   if (sc->longjmp_ok)
-    siglongjmp(sc->goto_start, ERROR_QUIT_JUMP);
+    LongJmp(sc->goto_start, ERROR_QUIT_JUMP);
 }
 
 
@@ -59856,7 +59863,7 @@ static s7_d_7piid_t s7_d_7piid_function(s7_pointer f) {return((s7_d_7piid_t)opt_
 static void s7_set_p_dd_function(s7_scheme *sc, s7_pointer f, s7_p_dd_t df) {add_opt_func(sc, f, o_p_dd, (void *)df);}
 static s7_p_dd_t s7_p_dd_function(s7_pointer f) {return((s7_p_dd_t)opt_func(f, o_p_dd));}
 
-#if S7_DEBUGGING || OPT_SC_DEBUGGING
+#if S7_DEBUGGING
 static opt_info *alloc_opo_1(s7_scheme *sc, const char *func, int line)
 #else
 static opt_info *alloc_opo(s7_scheme *sc)
@@ -59867,7 +59874,7 @@ static opt_info *alloc_opo(s7_scheme *sc)
     sc->pc = OPTS_SIZE - 1;
   o = sc->opts[sc->pc++];
   o->v[O_WRAP].fd = NULL; /* see bool_optimize -- this is a kludge */
-#if S7_DEBUGGING || OPT_SC_DEBUGGING
+#if S7_DEBUGGING
   o->opo_func = func;
   o->opo_line = line;
 #endif
@@ -97460,12 +97467,12 @@ int main(int argc, char **argv)
  * s7test     4509         1873   1831   1817   1809   1805
  * lt         2107         2123   2110   2112   2101   2091
  * tmat       2278         2285   2258   2256   2117   2118
- * tcopy      2274         2256   2230   2219   2217   2216
  * tvect      2513         2456   2413   2413   2331   2280
  * tform      3277         2281   2273   2266   2288   2283
  * tread      2607         2440   2421   2412   2403   2413
  * trclo      4310         2715   2561   2560   2526   2525
  * fbench     2960         2688   2583   2577   2561   2556
+ * tcopy      3778                              4345   2584
  * tb         3402         2735   2681   2677   2640   2624
  * tmap       3712         2886   2857   2827   2786   2785
  * titer      2821         2865   2842   2842   2803   2803
@@ -97496,6 +97503,6 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * t718/444, 445->tcopy, op_dox ints
+ * t718/444, op_dox ints, cp ala des, tc_when_laa
  * check lint vset(v, i, vref(v, i)) etc
  */
