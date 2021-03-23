@@ -101,25 +101,6 @@
        (let ((p (list-tail c-args args-now))
 	     (checker (and (pair? sig) (car sig)))) ; see map-values
 	 
-	 (define (call-func1 c)
-	   (when (checker c)
-	     (catch #t 
-	       (lambda () 
-		 (set-car! p c)
-		 ;(format *stderr* "c-args: ~A~%" c-args)
-		 (apply func c-args))
-	       (lambda any 
-		 'error))))
-
-	 (define (call-func2 c)
-	   (catch #t 
-	     (lambda () 
-	       (set-car! p c)
-	       ;(format *stderr* "c-args: ~A~%" c-args)
-	       (apply func c-args))
-	     (lambda any 
-	       'error)))
-
 	 (if (= args-left 1)
 	     (call-with-exit
 	      (lambda (quit)
@@ -138,9 +119,24 @@
 				 (< (caddr info) low)))
 			(quit))))
 		 
-		(if checker ; map-values -> function here
-		    (for-each call-func1 cdr-auto-constants)
-		    (for-each call-func2 cdr-auto-constants))))
+		(if checker
+		    (for-each
+		     (lambda (c)
+		       (when (checker c)
+			 (catch #t 
+			   (lambda () 
+			     (set-car! p c)
+			     (apply func c-args))
+			   (lambda any 'error))))
+		     cdr-auto-constants)
+		    (for-each
+		     (lambda (c)
+		       (catch #t 
+			 (lambda () 
+			   (set-car! p c)
+			   (apply func c-args))
+			 (lambda any 'error)))
+		     cdr-auto-constants))))
 
 	     (let ((sig1 (if (pair? sig) (cdr sig) ()))
 		   (c-args1 c-args)
