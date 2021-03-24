@@ -71,6 +71,7 @@
 		       (set! (matrix k (cols i)) temp)))))
 	     (list matrix b))))))))
 
+
 (define (matrix-multiply A B)
   (let ((size (car (vector-dimensions A))))
     (do ((C (make-float-vector (list size size) 0))
@@ -83,6 +84,7 @@
 	    ((= k size)
              (set! (C i j) sum))
 	  (set! sum (+ sum (* (A i k) (B k j)))))))))
+
 
 ;;; Rosetta scheme code + changes
 (define (square-matrix mat)
@@ -139,6 +141,29 @@
 		    (set! mx0 (max mx0 (abs (m1 k n)))))))))))))
   
 (testm)
+
+
+(define (matrix-transpose mat)
+  (let* ((dims (vector-dimensions mat))
+	 (new-mat (make-vector (reverse dims))))
+    (do ((i 0 (+ i 1)))
+	((= i (car dims)) new-mat)
+      (do ((j 0 (+ j 1)))
+	  ((= j (cadr dims)))
+	(set! (new-mat j i) (mat i j))))))
+
+;(matrix-transpose #2d((1 2 3) (4 5 6)))   #2d((1 4) (2 5) (3 6))
+;(matrix-transpose #2d((1 2) (3 4) (5 6))) #2d((1 3 5) (2 4 6))
+;(matrix-transpose #2d((1 2)))             #2d((1) (2))
+
+(define (test-transpose)
+  (do ((i 0 (+ i 1)))
+      ((= i 10000))
+    (matrix-transpose #2d((0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20) 
+			  (0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)))))
+
+(test-transpose)
+
 
 (when (> (*s7* 'profile) 0)
   (show-profile 200))

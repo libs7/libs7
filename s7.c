@@ -345,7 +345,7 @@
   #define MS_WINDOWS 0
 #endif
 
-#if MS_WINDOWS
+#ifdef __MINGW32__
 #define Jmp_Buf jmp_buf
 #define SetJmp(A, B) setjmp(A)
 #define LongJmp(A, B) longjmp(A, B)
@@ -97466,7 +97466,7 @@ int main(int argc, char **argv)
  * tmock      7676         1177   1165   1166   1147   1147
  * s7test     4509         1873   1831   1817   1809   1805
  * lt         2107         2123   2110   2112   2101   2091
- * tmat       2278         2285   2258   2256   2117   2118
+ * tmat                                                2233
  * tvect      2513         2456   2413   2413   2331   2280
  * tform      3277         2281   2273   2266   2288   2283
  * tread      2607         2440   2421   2412   2403   2413
@@ -97503,6 +97503,5 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * t718/444, op_dox ints, cp ala des, tc_when_laa
- * check lint vset(v, i, vref(v, i)) etc
+ * op_dox ints, tc_when_laa
  */
