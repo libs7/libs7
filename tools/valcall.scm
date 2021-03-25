@@ -94,8 +94,8 @@
 	 (list "repl" "tset.scm")
 	 (list "repl" "tio.scm")
 	 (list "repl" "teq.scm")
-	 (list "repl" "tfft.scm")
 	 (list "repl" "concordance.scm")
+	 (list "repl" "tfft.scm")
 	 (list "repl" "tcase.scm")
 	 (list "repl" "tclo.scm")
 	 (list "repl" "tlet.scm")
@@ -104,8 +104,8 @@
 	 (list "repl" "tmisc.scm")
 	 (list "repl" "tgsl.scm")
 	 (list "repl" "tgc.scm")
-	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
 	 (list "repl" "thash.scm")
+	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
 	 (list "snd -noinit" "tall.scm")
 	 (list "snd -l" "snd-test.scm")
 	 (list "snd -l" "full-snd-test.scm")

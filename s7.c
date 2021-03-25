@@ -46950,12 +46950,12 @@ static bool is_lambda(s7_scheme *sc, s7_pointer sym)
 
 static bool is_ok_thunk(s7_scheme *sc, s7_pointer arg)
 {
- return((is_pair(arg)) &&
-	(is_lambda(sc, car(arg))) &&
-	(is_pair(cdr(arg))) &&
-	(is_null(cadr(arg))) &&
-	(is_pair(cddr(arg))) &&
-	(s7_is_proper_list(sc, cddr(arg))));
+  return((is_pair(arg)) &&
+	 (is_lambda(sc, car(arg))) &&
+	 (is_pair(cdr(arg))) &&
+	 (is_null(cadr(arg))) &&
+	 (is_pair(cddr(arg))) &&
+	 (s7_is_proper_list(sc, cddr(arg))));
 }
 
 static s7_pointer dynamic_wind_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
@@ -71482,11 +71482,11 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
 
 static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 {
- return((is_pair(arg2)) &&
-	(is_lambda(sc, car(arg2))) &&
-	(is_pair(cdr(arg2))) &&
-	(is_pair(cddr(arg2))) &&
-	(s7_is_proper_list(sc, cddr(arg2))));
+  return((is_pair(arg2)) &&
+	 (is_lambda(sc, car(arg2))) &&
+	 (is_pair(cdr(arg2))) &&
+	 (is_pair(cddr(arg2))) &&
+	 (s7_is_proper_list(sc, cddr(arg2))));
 }
 
 static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer func,
@@ -81745,11 +81745,9 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		       *   similarly (vector-set! v 0 i) etc
 		       */
 		      if (is_null(cdr(expr)))                         /* (vector) for example */
-			{
-			  return((x == sc->vector_symbol) ||
-				 (x == sc->list_symbol) ||
-				 (x == sc->string_symbol));
-			}
+			return((x == sc->vector_symbol) ||
+			       (x == sc->list_symbol) ||
+			       (x == sc->string_symbol));
 		      if ((has_set) && (!direct_memq(cadr(expr), var_list)))         /* non-local is being changed */
 			{
 			  if ((direct_memq(cadr(expr), steppers)) ||  /* stepper is being set? */
@@ -82725,12 +82723,27 @@ static goto_t op_dox(s7_scheme *sc)
 		      opt_info *o;
 		      o = sc->opts[0];
 		      fp = o->v[0].fp;
-		      do {
-			fp(o);
-			slot_set_value(s1, f1(sc, p1));
-			slot_set_value(s2, f2(sc, p2));
-		      } while ((sc->value = endf(sc, endp)) == sc->F);
-		    }
+		      /* maybe this can be generalized (thash:79) -- explicit integer stepper, but there must be a simpler way */
+		      if ((f2 == fx_add_u1) && (is_t_integer(slot_value(s2))) && (fn_proc(endp) == g_num_eq_xi) && 
+			  (is_symbol(cadr(endp))) && (cadr(endp) == slot_symbol(s2)) && (is_t_integer(caddr(endp))) && (!s7_tree_memq(sc, cadr(endp), body)))
+			{
+			  s7_int i, end;
+			  i = integer(slot_value(s2));
+			  end = integer(caddr(endp));
+			  do {
+			    fp(o);
+			    slot_set_value(s1, f1(sc, p1));
+			    i++;
+			  } while (i < end);
+			}
+		      else
+			{
+			  do {
+			    fp(o);
+			    slot_set_value(s1, f1(sc, p1));
+			    slot_set_value(s2, f2(sc, p2));
+			  } while ((sc->value = endf(sc, endp)) == sc->F);
+			}}
 		  else
 		    do {
 			bodyf(sc, body);
@@ -97466,24 +97479,24 @@ int main(int argc, char **argv)
  * tmock      7676         1177   1165   1166   1147   1147
  * s7test     4509         1873   1831   1817   1809   1805
  * lt         2107         2123   2110   2112   2101   2091
- * tmat                                                2233
+ * tmat       2388         2375                        2233
  * tvect      2513         2456   2413   2413   2331   2280
  * tform      3277         2281   2273   2266   2288   2283
  * tread      2607         2440   2421   2412   2403   2413
  * trclo      4310         2715   2561   2560   2526   2525
  * fbench     2960         2688   2583   2577   2561   2556
- * tcopy      3778                              4345   2584
+ * tcopy      3778         4452                 4345   2584
  * tb         3402         2735   2681   2677   2640   2624
  * tmap       3712         2886   2857   2827   2786   2785
  * titer      2821         2865   2842   2842   2803   2803
  * tsort      3654         3105   3104   3097   2936   2936
- * dup        3201         3334   3332   3203   3003   2955
+ * dup        3201         3334   3332   3203   3003   2944
  * tmac       3295         3317   3277   3247   3221   3218
  * tset       3244         3253   3104   3207   3253   3247
  * tio        3703         3816   3752   3738   3692   3687
  * teq        3728         4068   4045   4038   3713   3712
- * tfft       11.2         4142   4109   4107   4067   4062
  * tstr       6704         5281   4863   4765   4543   4546
+ * tfft       22.2         4569                        4560
  * tcase      4627         4960   4793   4669   4570   4563
  * tclo       4959         4787   4735   4668   4588   4594
  * tlet       5683         7775   5640   5585   4632   4633
@@ -97492,8 +97505,8 @@ int main(int argc, char **argv)
  * tmisc      6458         7389   6210   6174   6167   6158
  * tgsl       25.3         8485                 8422   6467
  * tgc        11.9         11.9   11.1   11.0   10.4   10.4
+ * thash      37.2         11.8   11.7   11.7   11.4   11.3
  * tgen       12.2         11.2   11.4   11.3   11.3   11.3
- * thash      37.2         11.8   11.7   11.7   11.4   11.4
  * tall       26.8         15.6   15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.1   37.3
  * sg         98.7         71.9   72.3   72.2   72.7   72.8
@@ -97503,5 +97516,10 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * op_dox ints, tc_when_laa
+ * tc_when_laa (125 lines)
+ * t_complex_vector (ca 1000 lines), 
+ *   fftw tie-ins (cload changes, libfftw.scm(ca 500 lines?)
+ *   s7_complex in s7.h [for cvect accesses]
+ *   s7test/doc/ffitest/timing test
+ *   but this won't help in gsl
  */
