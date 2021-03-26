@@ -146,7 +146,7 @@
  
 (fft-bench)
 
-;; 2D dft, real data, spot-checked against fftw
+;; 2D dft, real data, spot-checked against fftw ("backward", for "forward" case, use (- (im yout xout)...))
 (define (dft2 in)
   (let* ((dims (vector-dimensions in))
          (h (car dims))
@@ -159,10 +159,12 @@
     (do ((yout 0 (+ yout 1)))
         ((= yout h) 
 	 (do ((i 0 (+ i 1)))
-	     ((= i h) out)
+	     ((= i h) 
+	      out)
 	   (do ((j 0 (+ j 1)))
 	       ((= j w))
-	     (set! (out i j) (+ (* (rl i j) (rl i j)) (* (im i j) (im i j)))))))
+	     (set! (out i j) (+ (* (rl i j) (rl i j)) 
+				(* (im i j) (im i j)))))))
       (do ((xout 0 (+ xout 1)))
           ((= xout w))
         (do ((yin 0 (+ yin 1)))
@@ -171,10 +173,12 @@
               ((= xin w))
             (set! (rl yout xout) (+ (rl yout xout) 
 				    (* (in yin xin) 
-				       (cos (* 2 pi (+ (* xout xin iw) (* yout yin ih)))))))
+				       (cos (* 2 pi (+ (* xout xin iw) 
+						       (* yout yin ih)))))))
             (set! (im yout xout) (+ (im yout xout) 
 				    (* (in yin xin) 
-				       (sin (* 2 pi (+ (* xout xin iw) (* yout yin ih)))))))))))))
+				       (sin (* 2 pi (+ (* xout xin iw) 
+						       (* yout yin ih)))))))))))))
 #|
 (dft2 #2d((1.0 0.0 -1.0 0.0)
 	  (0.0 0.0 0.0 0.0)

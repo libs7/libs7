@@ -747,6 +747,14 @@ typedef struct bigint {mpz_t n; struct bigint *nxt;} bigint;
 typedef struct bigrat {mpq_t q; struct bigrat *nxt;} bigrat;
 typedef struct bigflt {mpfr_t x; struct bigflt *nxt;} bigflt;
 typedef struct bigcmp {mpc_t z; struct bigcmp *nxt;} bigcmp;
+
+typedef struct {
+  mpfr_t error, ux, x0, x1;
+  mpz_t i, i0, i1, n;
+  mpz_t p0, q0, r, r1, p1, q1, old_p1, old_q1;
+  mpfr_t val, e0, e1, e0p, e1p, old_e0, old_e1, old_e0p;
+  mpq_t q;
+} rat_locals_t;
 #endif
 
 
@@ -1190,7 +1198,7 @@ struct s7_scheme {
   mpq_t mpq_1, mpq_2, mpq_3;
   mpfr_t mpfr_1, mpfr_2, mpfr_3;
   mpc_t mpc_1, mpc_2;
-  void *ratloc;
+  rat_locals_t *ratloc;
   bigint *bigints;
   bigrat *bigrats;
   bigflt *bigflts;
@@ -4219,7 +4227,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_TC_AND_A_OR_A_LA, OP_TC_OR_A_AND_A_LA, OP_TC_AND_A_OR_A_LAA, OP_TC_OR_A_AND_A_LAA, OP_TC_OR_A_A_AND_A_A_LA,
       OP_TC_OR_A_AND_A_A_L3A, OP_TC_AND_A_OR_A_A_LA, OP_TC_OR_A_AND_A_A_LA,
-      OP_TC_LET_WHEN_LAA, OP_TC_LET_UNLESS_LAA,
+      OP_TC_WHEN_LAA, OP_TC_LET_WHEN_LAA, OP_TC_LET_UNLESS_LAA,
       OP_TC_COND_A_Z_A_Z_LAA, OP_TC_COND_A_Z_A_LAA_Z, OP_TC_COND_A_Z_A_LAA_LAA, OP_TC_LET_COND,
       OP_TC_IF_A_Z_LA, OP_TC_IF_A_Z_LAA, OP_TC_IF_A_Z_L3A, OP_TC_IF_A_L3A_Z, OP_TC_IF_A_LA_Z, OP_TC_IF_A_LAA_Z,
       OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z, OP_TC_IF_A_Z_IF_A_L3A_L3A,
@@ -4450,7 +4458,7 @@ static const char* op_names[NUM_OPS] =
 
       "tc_and_a_or_a_la", "tc_or_a_and_a_la", "tc_and_a_or_a_laa", "tc_or_a_and_a_laa", "tc_or_a_a_and_a_a_la",
       "tc_or_a_and_a_a_l3a", "tc_and_a_or_a_a_la", "tc_or_a_and_a_a_la",
-      "tc_let_when_laa", "tc_let_unless_laa",
+      "tc_when_laa", "tc_let_when_laa", "tc_let_unless_laa",
       "tc_cond_a_z_a_z_laa", "tc_cond_a_z_a_laa_z", "tc_cond_a_z_a_laa_laa", "tc_let_cond",
       "tc_if_a_z_la", "tc_if_a_z_laa", "tc_if_a_z_l3a", "tc_if_a_l3a_z", "tc_if_a_la_z", "tc_if_a_laa_z",
       "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z", "tc_if_a_z_if_a_l3a_l3a",
@@ -12604,7 +12612,7 @@ static block_t *big_number_to_string_with_radix(s7_scheme *sc, s7_pointer p, int
 	  tmp = (block_t *)mallocate(sc, width + 1);
 	  spaces = width - len;
 	  ((char *)block_data(tmp))[width] = '\0';
-	  memmove((void *)(block_data(tmp) + spaces), (void *)block_data(str), len);
+	  memmove((void *)((char *)block_data(tmp) + spaces), (void *)block_data(str), len);
 	  memset((void *)block_data(tmp), (int)' ', spaces);
 	  (*nlen) = width;
 	  liberate(sc, str);
@@ -16067,19 +16075,11 @@ static s7_pointer g_magnitude(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- rationalize -------------------------------- */
 #if WITH_GMP
 
-typedef struct {
-  mpfr_t error, ux, x0, x1;
-  mpz_t i, i0, i1, n;
-  mpz_t p0, q0, r, r1, p1, q1, old_p1, old_q1;
-  mpfr_t val, e0, e1, e0p, e1p, old_e0, old_e1, old_e0p;
-  mpq_t q;
-} rat_locals_t;
-
 static rat_locals_t *init_rat_locals_t(s7_scheme *sc)
 {
   rat_locals_t *r;
   r = (rat_locals_t *)malloc(sizeof(rat_locals_t));
-  sc->ratloc = (void *)r;
+  sc->ratloc = r;
   mpz_inits(r->i, r->i0, r->i1, r->n, r->p0, r->q0, r->r, r->r1, r->p1, r->q1, r->old_p1, r->old_q1, NULL);
   mpq_init(r->q);
   mpfr_inits2(sc->bignum_precision, r->error, r->ux, r->x0, r->x1, r->val, r->e0, r->e1, r->e0p, r->e1p, r->old_e0, r->old_e1, r->old_e0p, NULL);
@@ -16114,7 +16114,7 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
   s7_pointer pp0;
   rat_locals_t *r;
 
-  if (!sc->ratloc) r = init_rat_locals_t(sc); else r = (rat_locals_t *)sc->ratloc;
+  if (!sc->ratloc) r = init_rat_locals_t(sc); else r = sc->ratloc;
 
   pp0 = car(args);
   switch (type(pp0))
@@ -34875,11 +34875,9 @@ static s7_pointer closure_name(s7_scheme *sc, s7_pointer closure)
 {
   /* this is used by the error handlers to get the current function name */
   s7_pointer x;
-
   x = find_closure(sc, closure, sc->curlet);
   if (is_symbol(x))
     return(x);
-
   if (is_pair(current_code(sc)))
     return(current_code(sc));
   return(closure); /* desperation -- the parameter list (caar here) will cause endless confusion in OP_APPLY errors! */
@@ -34889,10 +34887,11 @@ static s7_pointer pair_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
   s7_pointer p, tp, np;
   if (is_null(a)) return(b);
-
+  p = cdr(a);
+  if (is_null(p)) return(cons(sc, car(a), b));
   tp = list_1(sc, car(a));
   sc->y = tp;
-  for (p = cdr(a), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
+  for (np = tp; is_pair(p); p = cdr(p), np = cdr(np))
     set_cdr(np, list_1(sc, car(p)));
   set_cdr(np, b);
   sc->y = sc->nil;
@@ -49085,7 +49084,7 @@ static bool big_integer_or_ratio_equivalent(s7_scheme *sc, s7_pointer x, s7_poin
       mpfr_set_d(sc->mpfr_2, real(y), MPFR_RNDN);
       return(big_floats_are_equivalent(sc, sc->mpfr_1, sc->mpfr_2));
     case T_COMPLEX:
-      mpfr_set_d(sc->mpfr_2, real_part(y), MPC_RNDNN);
+      mpfr_set_d(sc->mpfr_2, real_part(y), MPFR_RNDN);
       if (big_floats_are_equivalent(sc, sc->mpfr_1, sc->mpfr_2))
 	{
 	  if (is_NaN(imag_part(y))) return(false);
@@ -49139,7 +49138,7 @@ static bool big_real_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, share
       mpfr_set_d(sc->mpfr_2, real(y), MPFR_RNDN);
       return(big_floats_are_equivalent(sc, big_real(x), sc->mpfr_2));
     case T_COMPLEX:
-      mpfr_set_d(sc->mpfr_2, real_part(y), MPC_RNDNN);
+      mpfr_set_d(sc->mpfr_2, real_part(y), MPFR_RNDN);
       if (big_floats_are_equivalent(sc, big_real(x), sc->mpfr_2))
 	{
 	  if (is_NaN(imag_part(y))) return(false);
@@ -49184,8 +49183,8 @@ static bool big_complex_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, sh
       return((big_floats_are_equivalent(sc, mpc_realref(big_complex(x)), sc->mpfr_2)) &&
 	     (big_floats_are_equivalent(sc, mpc_imagref(big_complex(x)), sc->mpfr_1)));
     case T_COMPLEX:
-      mpfr_set_d(sc->mpfr_1, imag_part(y), MPC_RNDNN);
-      mpfr_set_d(sc->mpfr_2, real_part(y), MPC_RNDNN);
+      mpfr_set_d(sc->mpfr_1, imag_part(y), MPFR_RNDN);
+      mpfr_set_d(sc->mpfr_2, real_part(y), MPFR_RNDN);
       return((big_floats_are_equivalent(sc, mpc_realref(big_complex(x)), sc->mpfr_2)) &&
 	     (big_floats_are_equivalent(sc, mpc_imagref(big_complex(x)), sc->mpfr_1)));
     case T_BIG_INTEGER:
@@ -69863,23 +69862,22 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
     if (!dotted)
       {
 	for (orig = form, bq = cdr(sc->w), i = 0; i < len; i++, orig = cdr(orig), bq = cdr(bq))
-	  {
-	    if ((is_pair(cdr(orig))) &&             /* this was is_pair(orig) which seems to be always the case */
-		(cadr(orig) == sc->unquote_symbol)) /* `(1 . ,(+ 1 1)) -> '(1 unquote (+ 1 1)) -> '(1 . 2) etc */
-	      {
-		if (!is_pair(cddr(orig)))
-		  {
-		    sc->w = old_scw;
-		    unstack(sc);
-		    eval_error(sc, "unquote: no argument, ~S", 24, form);
-		  }
-		set_car(bq, g_quasiquote_1(sc, car(orig), false));
-		set_cdr(bq, sc->nil);
-		sc->w = list_3(sc, sc->append_symbol, sc->w, caddr(orig));
-		break;
-	      }
-	    else set_car(bq, g_quasiquote_1(sc, car(orig), false));
-	  }}
+	  if ((is_pair(cdr(orig))) &&             /* this was is_pair(orig) which seems to be always the case */
+	      (cadr(orig) == sc->unquote_symbol)) /* `(1 . ,(+ 1 1)) -> '(1 unquote (+ 1 1)) -> '(1 . 2) etc */
+	    {
+	      if (!is_pair(cddr(orig)))
+		{
+		  sc->w = old_scw;
+		  unstack(sc);
+		  eval_error(sc, "unquote: no argument, ~S", 24, form);
+		}
+	      set_car(bq, g_quasiquote_1(sc, car(orig), false));
+	      set_cdr(bq, sc->nil);
+	      sc->w = list_3(sc, sc->append_symbol, sc->w, caddr(orig));
+	      break;
+	    }
+	  else set_car(bq, g_quasiquote_1(sc, car(orig), false));
+      }
     else
       {
 	/* `(1 2 . 3) */
@@ -71653,6 +71651,36 @@ static bool is_safe_fxable(s7_scheme *sc, s7_pointer p)
   return(false);
 }
 
+static bool check_tc_when(s7_scheme *sc, s7_pointer name, s7_pointer args, s7_pointer body)
+{
+  s7_pointer test_expr;
+  test_expr = cadr(body);
+  if (is_fxable(sc, test_expr))
+    {
+      s7_pointer p;
+      for (p = cddr(body); is_pair(cdr(p)); p = cdr(p))
+	if (!is_fxable(sc, car(p)))
+	  break;
+      if ((is_proper_list_1(sc, p)) &&
+	  (is_proper_list_3(sc, car(p))) &&
+	  (caar(p) == name))
+	{
+	  s7_pointer laa;
+	  laa = car(p);
+	  if ((is_fxable(sc, cadr(laa))) &&
+	      (is_safe_fxable(sc, caddr(laa))))
+	    {
+      	      set_safe_optimize_op(body, OP_TC_WHEN_LAA);
+	      fx_annotate_arg(sc, cdr(body), args);
+	      for (p = cddr(body); is_pair(cdr(p)); p = cdr(p))
+		fx_annotate_arg(sc, p, args);
+	      fx_annotate_args(sc, cdr(laa), args);
+	      fx_tree(sc, cdr(body), car(args), cadr(args));
+	      return(true);
+	    }}}
+  return(false);
+}
+
 static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer args, s7_pointer body)
 {
   /* opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
@@ -71748,7 +71776,8 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		      set_optimize_op(body, (vars == 1) ? OP_TC_COND_A_Z_LA : OP_TC_COND_A_Z_LAA);
 		      if (zs_fxable) fx_annotate_arg(sc, cdr(clause1), args);
 		      fx_annotate_args(sc, cdr(la), args);
-		      fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
+		      fx_tree
+			(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
 		      if (zs_fxable) set_optimized(body);
 		      set_opt1_pair(cdr(body), cdadr(body));
 		      set_opt3_pair(cdr(body), cdadr(caddr(body)));
@@ -72376,6 +72405,12 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
       (is_pair(cdr(body))) &&
       (is_fxable(sc, cadr(body))))
     return(check_tc_case(sc, name, args, body));
+
+  /* when */
+  if ((vars == 2) &&
+      (car(body) == sc->when_symbol) &&
+      (is_fxable(sc, cadr(body))))
+    return(check_tc_when(sc, name, args, body));
   return(false);
 }
 
@@ -79928,18 +79963,17 @@ static Inline bool op_cond_fx_fp_o(s7_scheme *sc)  /* all tests are fxable, resu
 {
   s7_pointer p;
   for (p = cdr(sc->code); is_pair(p); p = cdr(p))
-    {
-      if (is_true(sc, fx_call(sc, car(p))))
-	{
-	  p = cdar(p);
-	  if (has_fx(T_Pair(p)))
-	    {
-	      sc->value = fx_call(sc, p);
-	      return(true);
-	    }
-	  sc->code = car(p);
-	  return(false);
-	}}
+    if (is_true(sc, fx_call(sc, car(p))))
+      {
+	p = cdar(p);
+	if (has_fx(T_Pair(p)))
+	  {
+	    sc->value = fx_call(sc, p);
+	    return(true);
+	  }
+	sc->code = car(p);
+	return(false);
+      }
   sc->value = sc->unspecified;
   return(true);
 }
@@ -81374,7 +81408,7 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer cx)
   if ((setter == sc->F) &&
       (!closure_no_setter(cx)))
     setter = g_setter(sc, set_plist_1(sc, cx));
-  if (is_t_procedure(setter))          /* appears to be caar_code */
+  if (is_t_procedure(setter))
     {
       /* (set! (o g) ...), here cx = o, sc->code = ((o g) ...) */
       push_op_stack(sc, setter);
@@ -87567,6 +87601,29 @@ static s7_pointer fx_tc_cond_a_laa_z(s7_scheme *sc, s7_pointer arg)
   return(sc->value);
 }
 
+static void op_tc_when_laa(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer if_test, body, la_call, la, laa, la_slot, laa_slot;
+  s7_function tf;
+  tf = fx_proc(cdr(code));
+  if_test = cadr(code);
+  body = cddr(code);
+  for (la_call = body; is_pair(cdr(la_call)); la_call = cdr(la_call));
+  la = cdar(la_call);
+  laa = cdr(la);
+  la_slot = let_slots(sc->curlet);
+  laa_slot = next_slot(la_slot);
+  while (tf(sc, if_test) != sc->F)
+    {
+      s7_pointer p;
+      for (p = body; p != la_call; p = cdr(p)) fx_call(sc, p);
+      sc->rec_p1 = fx_call(sc, la);
+      slot_set_value(laa_slot, fx_call(sc, laa));
+      slot_set_value(la_slot, sc->rec_p1);
+    }
+  sc->value = sc->unspecified;
+}
+
 static bool op_tc_if_a_z_l3a(s7_scheme *sc, s7_pointer code, bool z_first)
 {
   s7_pointer if_test, f_z, la, laa, l3a, la_slot, laa_slot, l3a_slot;
@@ -92720,6 +92777,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_TC_IF_A_Z_LAA:            tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_laa(sc, sc->code, true, TC_IF))         continue; goto EVAL;
 	case OP_TC_COND_A_Z_LAA:          tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_laa(sc, sc->code, true, TC_COND))       continue; goto EVAL;
 	case OP_TC_COND_A_LAA_Z:          tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_laa(sc, sc->code, false, TC_COND))      continue; goto EVAL;
+	case OP_TC_WHEN_LAA:              tick_tc(sc, sc->cur_op); op_tc_when_laa(sc, sc->code);                            continue;
 
 	case OP_TC_IF_A_Z_L3A:            tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_l3a(sc, sc->code, true))                continue; goto EVAL;
 	case OP_TC_IF_A_L3A_Z:            tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_l3a(sc, sc->code, false))               continue; goto EVAL;
@@ -97079,7 +97137,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 925) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 926) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97485,7 +97543,7 @@ int main(int argc, char **argv)
  * tread      2607         2440   2421   2412   2403   2413
  * trclo      4310         2715   2561   2560   2526   2525
  * fbench     2960         2688   2583   2577   2561   2556
- * tcopy      3778         4452                 4345   2584
+ * tcopy      3778         4452                 4345   2584  2560
  * tb         3402         2735   2681   2677   2640   2624
  * tmap       3712         2886   2857   2827   2786   2785
  * titer      2821         2865   2842   2842   2803   2803
@@ -97516,10 +97574,4 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * tc_when_laa (125 lines)
- * t_complex_vector (ca 1000 lines), 
- *   fftw tie-ins (cload changes, libfftw.scm(ca 500 lines?)
- *   s7_complex in s7.h [for cvect accesses]
- *   s7test/doc/ffitest/timing test
- *   but this won't help in gsl
  */

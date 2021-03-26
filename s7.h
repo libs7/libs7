@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "9.10"
-#define S7_DATE "26-Mar-2021"
+#define S7_DATE "29-Mar-2021"
 #define S7_MAJOR_VERSION 9
 #define S7_MINOR_VERSION 10
 
@@ -21,6 +21,13 @@ typedef double s7_double;
   #define false	0
 #endif
 #endif
+#endif
+
+#if WITH_GMP
+  /* in g++ these includes need to be outside the extern "C" business */
+  #include <gmp.h>
+  #include <mpfr.h>
+  #include <mpc.h>
 #endif
 
 #ifdef __cplusplus
@@ -863,10 +870,6 @@ s7_pointer s7_apply_n_9(s7_scheme *sc, s7_pointer args,
 				       s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8, s7_pointer a9));
 
 #if WITH_GMP
-  #include <gmp.h>
-  #include <mpfr.h>
-  #include <mpc.h>
-
   mpfr_t *s7_big_real(s7_pointer x);
   mpz_t  *s7_big_integer(s7_pointer x);
   mpq_t  *s7_big_ratio(s7_pointer x);
