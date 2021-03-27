@@ -27463,33 +27463,30 @@ static s7_pointer g_string_append(s7_scheme *sc, s7_pointer args)
   return(g_string_append_1(sc, args, sc->string_append_symbol));
 }
 
-static s7_pointer string_append_p_pp(s7_scheme *sc, s7_pointer s1, s7_pointer s2)
+static inline s7_pointer string_append_1(s7_scheme *sc, s7_pointer s1, s7_pointer s2)
 {
   if ((is_string(s1)) && (is_string(s2)))
     {
       s7_int len, pos;
       s7_pointer newstr;
       pos = string_length(s1);
+      if (pos == 0) return(make_string_with_length(sc, string_value(s2), string_length(s2)));
       len = pos + string_length(s2);
-      if (len == 0) return(s1);
+      if (len == pos) return(make_string_with_length(sc, string_value(s1), string_length(s1)));
       if (len > sc->max_string_length)
 	return(s7_error(sc, sc->out_of_range_symbol,
 			set_elist_4(sc, wrap_string(sc, "~S new string length, ~D, is larger than (*s7* 'max-string-length): ~D", 70),
 				    sc->string_append_symbol, wrap_integer1(sc, len), wrap_integer2(sc, sc->max_string_length))));
       newstr = make_empty_string(sc, len, 0); /* len+1 0-terminated */
-      if (pos > 0)
-	memcpy(string_value(newstr), string_value(s1), pos);
-      if (string_length(s2) > 0)
-	memcpy((char *)(string_value(newstr) + pos), string_value(s2), string_length(s2));
+      memcpy(string_value(newstr), string_value(s1), pos);
+      memcpy((char *)(string_value(newstr) + pos), string_value(s2), string_length(s2));
       return(newstr);
     }
   return(g_string_append_1(sc, list_2(sc, s1, s2), sc->string_append_symbol));
 }
 
-static s7_pointer g_string_append_2(s7_scheme *sc, s7_pointer args)
-{
-  return(string_append_p_pp(sc, car(args), cadr(args)));
-}
+static s7_pointer string_append_p_pp(s7_scheme *sc, s7_pointer s1, s7_pointer s2) {return(string_append_1(sc, s1, s2));}
+static s7_pointer g_string_append_2(s7_scheme *sc, s7_pointer args) {return(string_append_1(sc, car(args), cadr(args)));}
 
 static void check_for_substring_temp(s7_scheme *sc, s7_pointer expr);
 
@@ -34886,7 +34883,9 @@ static s7_pointer closure_name(s7_scheme *sc, s7_pointer closure)
 static s7_pointer pair_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
   s7_pointer p, tp, np;
-  if (is_null(a)) return(b);
+#if S7_DEBUGGING
+  if (is_null(a)) {fprintf(stderr, "pair_append null: %s\n", display(b)); abort();}
+#endif
   p = cdr(a);
   if (is_null(p)) return(cons(sc, car(a), b));
   tp = list_1(sc, car(a));
@@ -71776,8 +71775,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		      set_optimize_op(body, (vars == 1) ? OP_TC_COND_A_Z_LA : OP_TC_COND_A_Z_LAA);
 		      if (zs_fxable) fx_annotate_arg(sc, cdr(clause1), args);
 		      fx_annotate_args(sc, cdr(la), args);
-		      fx_tree
-			(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
+		      fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args));
 		      if (zs_fxable) set_optimized(body);
 		      set_opt1_pair(cdr(body), cdadr(body));
 		      set_opt3_pair(cdr(body), cdadr(caddr(body)));
@@ -80732,7 +80730,7 @@ static goto_t op_set2(s7_scheme *sc)
 	eval_error(sc, "list set!: not enough arguments: ~S", 35, sc->code);
 
       push_op_stack(sc, sc->list_set_function);
-      sc->code = pair_append(sc, cdr(sc->args), sc->code);
+      if (!is_null(cdr(sc->args))) sc->code = pair_append(sc, cdr(sc->args), sc->code);
       push_stack(sc, OP_EVAL_ARGS1, list_1(sc, sc->value), sc->code);
       sc->code = car(sc->args);
       return(goto_eval);
@@ -80747,7 +80745,7 @@ static goto_t op_set2(s7_scheme *sc)
 	eval_error(sc, "vector set!: not enough arguments: ~S", 37, sc->code);
 
       push_op_stack(sc, sc->vector_set_function);
-      sc->code = pair_append(sc, cdr(sc->args), sc->code);
+      if (!is_null(cdr(sc->args))) sc->code = pair_append(sc, cdr(sc->args), sc->code);
       push_stack(sc, OP_EVAL_ARGS1, list_1(sc, sc->value), sc->code);
       sc->code = car(sc->args);
       return(goto_eval);
@@ -81047,7 +81045,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 	      return(goto_start);
 	    }}
       push_op_stack(sc, sc->vector_set_function); /* vector_setter(cx) has wrong args */
-      sc->code = pair_append(sc, cddr(settee), cdr(sc->code)); /* i.e. rest(args) + val */
+      sc->code = (is_null(cddr(settee))) ? cdr(sc->code) : pair_append(sc, cddr(settee), cdr(sc->code)); /* i.e. rest(args) + val */
       push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), sc->code);
       sc->code = cadr(settee);
       sc->cur_op = optimize_op(sc->code);
@@ -81193,7 +81191,7 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
       (is_pair(val)))
     {
       push_op_stack(sc, sc->list_set_function);
-      sc->code = pair_append(sc, cddr(settee), cdr(sc->code));
+      sc->code = (is_null(cddr(settee))) ? cdr(sc->code) : pair_append(sc, cddr(settee), cdr(sc->code));
       push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), sc->code);
       sc->code = index;
       sc->cur_op = optimize_op(sc->code);
@@ -81359,7 +81357,7 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer cx)  /* (let ((lst
 		  return(goto_apply); /* check arg num etc */
 		}}
 	  push_op_stack(sc, c_function_setter(cx));
-	  sc->value = pair_append(sc, cddar(sc->code), cdr(sc->code));
+	  sc->value = (is_null(cddar(sc->code))) ? cdr(sc->code) : pair_append(sc, cddar(sc->code), cdr(sc->code));
 	  push_stack(sc, OP_EVAL_ARGS1, sc->nil, sc->value);
 	  sc->code = cadar(sc->code);
 	}
@@ -82758,7 +82756,7 @@ static goto_t op_dox(s7_scheme *sc)
 		      o = sc->opts[0];
 		      fp = o->v[0].fp;
 		      /* maybe this can be generalized (thash:79) -- explicit integer stepper, but there must be a simpler way */
-		      if ((f2 == fx_add_u1) && (is_t_integer(slot_value(s2))) && (fn_proc(endp) == g_num_eq_xi) && 
+		      if ((f2 == fx_add_u1) && (is_t_integer(slot_value(s2))) && (endf == fx_num_eq_ui) && 
 			  (is_symbol(cadr(endp))) && (cadr(endp) == slot_symbol(s2)) && (is_t_integer(caddr(endp))) && (!s7_tree_memq(sc, cadr(endp), body)))
 			{
 			  s7_int i, end;
@@ -97553,14 +97551,14 @@ int main(int argc, char **argv)
  * tset       3244         3253   3104   3207   3253   3247
  * tio        3703         3816   3752   3738   3692   3687
  * teq        3728         4068   4045   4038   3713   3712
- * tstr       6704         5281   4863   4765   4543   4546
- * tfft       22.2         4569                        4560
+ * tstr       6704         5281   4863   4765   4543   4546  4538
  * tcase      4627         4960   4793   4669   4570   4563
  * tclo       4959         4787   4735   4668   4588   4594
  * tlet       5683         7775   5640   5585   4632   4633
  * tnum       59.3         6348   6013   5998   5860   5843
  * trec       7763         5976   5970   5970   5969   5969
  * tmisc      6458         7389   6210   6174   6167   6158
+ * tfft       62.5         6443                        6423
  * tgsl       25.3         8485                 8422   6467
  * tgc        11.9         11.9   11.1   11.0   10.4   10.4
  * thash      37.2         11.8   11.7   11.7   11.4   11.3
@@ -97574,4 +97572,5 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
+ * why doesn't set_implicit->op_vector_set_4 et al?
  */

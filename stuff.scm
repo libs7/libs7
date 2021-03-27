@@ -1601,6 +1601,8 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 ;;; (sandbox '(let ((x 1)) (+ x 2))) -> 3
 ;;; (sandbox '(let ((x 1)) (+ x 2) (exit))) -> #f
 
+;; perhaps tgsl's (immutable-let (rootlet))? 
+
 (define sandbox
   (let ((+documentation+ "(sandbox code) evaluates code in an environment where nothing outside that code can be affected by its evaluation.")
 	(built-ins
