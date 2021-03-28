@@ -2923,7 +2923,6 @@ void s7_show_history(s7_scheme *sc);
 #define caadar(p)                      car(car(cdr(car(p))))
 #define cadaar(p)                      car(cdr(car(car(p))))
 #define cadddr(p)                      car(cdr(cdr(cdr(p))))
-#define set_cadddr(p, Val)             car(cdr(cdr(cdr(p)))) = T_Pos(Val)
 #define caaddr(p)                      car(car(cdr(cdr(p))))
 #define cddddr(p)                      cdr(cdr(cdr(cdr(p))))
 #define caddar(p)                      car(cdr(cdr(car(p))))
@@ -4139,7 +4138,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_READ_LIST, OP_READ_NEXT, OP_READ_DOT, OP_READ_QUOTE,
       OP_READ_QUASIQUOTE, OP_READ_UNQUOTE, OP_READ_APPLY_VALUES,
       OP_READ_VECTOR, OP_READ_BYTE_VECTOR, OP_READ_INT_VECTOR, OP_READ_FLOAT_VECTOR, OP_READ_DONE,
-      OP_LOAD_RETURN_IF_EOF, OP_LOAD_CLOSE_AND_POP_IF_EOF, OP_EVAL_DONE, OP_SPLICE_VALUES,
+      OP_LOAD_RETURN_IF_EOF, OP_LOAD_CLOSE_AND_POP_IF_EOF, OP_EVAL_DONE, OP_SPLICE_VALUES, OP_NO_VALUES,
       OP_CATCH, OP_DYNAMIC_WIND, OP_DYNAMIC_UNWIND, OP_DYNAMIC_UNWIND_PROFILE, OP_PROFILE_IN,
       OP_DEFINE_CONSTANT, OP_DEFINE_CONSTANT1,
       OP_DO, OP_DO_END, OP_DO_END1, OP_DO_STEP, OP_DO_STEP2, OP_DO_INIT,
@@ -4372,7 +4371,7 @@ static const char* op_names[NUM_OPS] =
       "case", "read_list", "read_next", "read_dot", "read_quote",
       "read_quasiquote", "read_unquote", "read_apply_values",
       "read_vector", "read_byte_vector", "read_int_vector", "read_float_vector", "read_done",
-      "load_return_if_eof", "load_close_and_pop_if_eof", "eval_done", "splice_values",
+      "load_return_if_eof", "load_close_and_pop_if_eof", "eval_done", "splice_values", "no_values",
       "catch", "dynamic_wind", "dynamic_unwind", "dynamic_unwind_profile", "profile_in",
       "define_constant", "define_constant1",
       "do", "do_end", "do_end1", "do_step", "do_step2", "do_init",
@@ -8549,11 +8548,13 @@ static inline void make_let_with_three_slots(s7_scheme *sc, s7_pointer func, s7_
 
 static inline void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
 {
-  s7_pointer last_slot;
-  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(closure_args(func)), val1, cadr(closure_args(func)), val2);
+  s7_pointer last_slot, cargs;
+  cargs = closure_args(func);
+  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(cargs), val1, cadr(cargs), val2);
+  cargs = cddr(cargs);
   last_slot = next_slot(let_slots(sc->curlet));
-  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(closure_args(func)), val3);
-  add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadddr(closure_args(func)), val4);
+  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val3);
+  add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadr(cargs), val4);
 }
 
 static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_let)
@@ -29058,7 +29059,9 @@ static void stderr_write_char(s7_scheme *sc, uint8_t c, s7_pointer port) {fputc(
 
 static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
+  push_stack_no_let_no_code(sc, OP_NO_VALUES, sc->nil);
   (*(port_output_function(port)))(sc, c, port);
+  sc->stack_end -= 4;
 }
 
 static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
@@ -41440,11 +41443,10 @@ a vector that points to the same elements as the original-vector but with differ
       if (is_float_vector(orig))
 	float_vector_floats(x) = (s7_double *)(float_vector_floats(orig) + offset);
       else
-	{
-	  if (is_normal_vector(x))
-	    vector_elements(x) = (s7_pointer *)(vector_elements(orig) + offset);
-	  else byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(orig) + offset);
-	}}
+	if (is_normal_vector(x))
+	  vector_elements(x) = (s7_pointer *)(vector_elements(orig) + offset);
+	else byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(orig) + offset);
+    }
 
   add_multivector(sc, x);
   return(x);
@@ -41678,6 +41680,10 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	return(s7_wrong_number_of_args_error(sc, "too many arguments for vector-set!: ~S", args));
       if (i != vector_ndims(vec))
 	return(s7_wrong_number_of_args_error(sc, "not enough arguments for vector-set!: ~S", args));
+      /* since vector-ref can return a subvector (if not passed enough args), it might be interesting to
+       *   also set a complete subvector via set!, but that might make catching this error harder.  Can't decide...
+       *   (define v (make-vector '(2 3) 0)) (vector-set! v 0 #(1 2 3)) -> error, but (vector-ref v 0) -> #(0 0 0)
+       */
 
       val = car(x);
     }
@@ -69594,6 +69600,8 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       return(car(x));              /* sc->value from OP_READ_LIST point of view */
 
     case OP_EVAL_DONE:
+      if (stack_op(sc->stack, (top - 4)) == OP_NO_VALUES)
+ 	return(s7_error(sc, sc->error_symbol, set_elist_1(sc, wrap_string(sc, "function-port should not return multiple-values", 47))));
       stack_element(sc->stack, top) = (s7_pointer)OP_SPLICE_VALUES; /* tricky -- continue from eval_done with the current splice */
       stack_args(sc->stack, top) = args;
       push_stack_op(sc, OP_EVAL_DONE);
@@ -77909,7 +77917,8 @@ static bool op_let_temp_init1(s7_scheme *sc)
       settee = car(binding);
       new_value = cadr(binding);
       cadr(sc->args) = cons(sc, settee, cadr(sc->args));
-      set_cadddr(sc->args, cons(sc, new_value, cadddr(sc->args)));
+      binding = cdddr(sc->args);
+      set_car(binding, cons(sc, new_value, car(binding)));
       car(sc->args) = cdar(sc->args);
       if (is_symbol(settee))                    /* get initial values */
 	set_caddr(sc->args, cons(sc, lookup_checked(sc, settee), caddr(sc->args)));
@@ -77936,10 +77945,11 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
   /* now eval set car new-val, cadr=settees, cadddr=new_values */
   while (is_pair(car(sc->args)))
     {
-      s7_pointer settee, new_value, slot;
+      s7_pointer settee, new_value, slot, p;
       settee = caar(sc->args);
-      new_value = car(cadddr(sc->args));
-      set_cadddr(sc->args, cdr(cadddr(sc->args)));
+      p = cdddr(sc->args);
+      new_value = caar(p);
+      set_car(p, cdar(p));
       car(sc->args) = cdar(sc->args);
       if ((!is_symbol(settee)) ||                /* (let-temporarily (((*s7* 'print-length) 32)) ...) */
 	  (symbol_has_setter(settee)) ||         /*                  ((*features* #f))... */
@@ -77975,10 +77985,11 @@ static bool op_let_temp_done1(s7_scheme *sc)
 {
   while (is_pair(car(sc->args)))
     {
-      s7_pointer settee;
+      s7_pointer settee, p;
       settee = caar(sc->args);
-      sc->value = caaddr(sc->args);
-      set_caddr(sc->args, cdaddr(sc->args));
+      p = cddr(sc->args);
+      sc->value = caar(p);
+      set_car(p, cdar(p));
       car(sc->args) = cdar(sc->args);
 
       if ((is_pair(settee)) && (car(settee) == sc->s7_let_symbol) &&  /* (let-temporarily (((*s7* (symbol "print-length")) 43))...) */
@@ -86617,39 +86628,26 @@ static void op_closure_sc_o(s7_scheme *sc)
 
 static inline void op_closure_3s(s7_scheme *sc)
 {
-  s7_pointer args;
+  s7_pointer args, v1;
   args = cdr(sc->code);
+  v1 = lookup(sc, car(args));
+  args = cdr(args);
   sc->code = opt1_lambda(sc->code);
-  make_let_with_three_slots(sc, sc->code, lookup(sc, car(args)), lookup(sc, cadr(args)), lookup(sc, caddr(args)));
+  make_let_with_three_slots(sc, sc->code, v1, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
   sc->code = T_Pair(closure_body(sc->code));
   if_pair_set_up_begin(sc);
 }
 
 static void op_closure_4s(s7_scheme *sc)
 {
-  s7_pointer p, args, last_slot, v1, v2, v3, v4;
-  s7_int id;
-
+  s7_pointer args, v1, v2;
   args = cdr(sc->code);
   v1 = lookup(sc, car(args));
   args = cdr(args);
   v2 = lookup(sc, car(args));
   args = cdr(args);
-  v3 = lookup(sc, car(args));
-  v4 = lookup(sc, cadr(args));
-
   sc->code = opt1_lambda(sc->code);
-  sc->curlet = make_let(sc, closure_let(sc->code));
-  id = let_id(sc->curlet);
-  p = closure_args(sc->code);
-  add_slot(sc, sc->curlet, car(p), v1);
-  last_slot = let_slots(sc->curlet);
-  p = cdr(p);
-  last_slot = add_slot_at_end(sc, id, last_slot, car(p), v2);
-  p = cdr(p);
-  last_slot = add_slot_at_end(sc, id, last_slot, car(p), v3);
-  add_slot_at_end(sc, id, last_slot, cadr(p), v4);
-
+  make_let_with_four_slots(sc, sc->code, v1, v2, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
   sc->code = T_Pair(closure_body(sc->code));
   if_pair_set_up_begin(sc);
 }
@@ -90468,8 +90466,8 @@ static void op_c_aa(s7_scheme *sc)
   code = sc->code;
   sc->code = fx_call(sc, cdr(code));
   sc->value = fx_call(sc, cddr(code));
-  sc->args = list_2(sc, sc->code, sc->value);
-  sc->value = fn_proc(code)(sc, sc->args);
+  sc->value = list_2(sc, sc->code, sc->value);
+  sc->value = fn_proc(code)(sc, sc->value);
 }
 
 static inline void op_c_s(s7_scheme *sc)
@@ -93725,7 +93723,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  splice_in_values(sc, sc->args);
 	  continue;
 
-	case OP_GC_PROTECT: case OP_BARRIER:
+	case OP_GC_PROTECT: case OP_BARRIER: case OP_NO_VALUES:
 	case OP_CATCH_ALL: case OP_CATCH: case OP_CATCH_1: case OP_CATCH_2:
 	  continue;
 
@@ -97135,7 +97133,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 926) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 927) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97527,7 +97525,7 @@ int main(int argc, char **argv)
 /* -------------------------------------------------------------
  *             gmp (3-20)  20.9   21.0   21.1   21.2   21.3
  * -------------------------------------------------------------
- * tpeak       126          115    114    114    113    112
+ * tpeak       126          115    114    114    113    111
  * tref        558          691    687    687    602    506
  * tauto       782          648    642    647    651    503
  * tshoot     1516          883    872    872    856    842
@@ -97538,34 +97536,34 @@ int main(int argc, char **argv)
  * tmat       2388         2375                        2233
  * tvect      2513         2456   2413   2413   2331   2280
  * tform      3277         2281   2273   2266   2288   2283
- * tread      2607         2440   2421   2412   2403   2413
+ * tread      2607         2440   2421   2412   2403   2411
  * trclo      4310         2715   2561   2560   2526   2525
- * fbench     2960         2688   2583   2577   2561   2556
- * tcopy      3778         4452                 4345   2584  2560
+ * fbench     2960         2688   2583   2577   2561   2557
+ * tcopy      3778         4452                 4345   2560
  * tb         3402         2735   2681   2677   2640   2624
  * tmap       3712         2886   2857   2827   2786   2785
  * titer      2821         2865   2842   2842   2803   2803
  * tsort      3654         3105   3104   3097   2936   2936
- * dup        3201         3334   3332   3203   3003   2944
+ * dup        3201         3334   3332   3203   3003   2935
  * tmac       3295         3317   3277   3247   3221   3218
- * tset       3244         3253   3104   3207   3253   3247
+ * tset       3244         3253   3104   3207   3253   3246
  * tio        3703         3816   3752   3738   3692   3687
  * teq        3728         4068   4045   4038   3713   3712
- * tstr       6704         5281   4863   4765   4543   4546  4538
+ * tstr       6704         5281   4863   4765   4543   4373
  * tcase      4627         4960   4793   4669   4570   4563
- * tclo       4959         4787   4735   4668   4588   4594
+ * tclo       4959         4787   4735   4668   4588   4596
  * tlet       5683         7775   5640   5585   4632   4633
- * tnum       59.3         6348   6013   5998   5860   5843
+ * tnum       59.3         6348   6013   5998   5860   5845
  * trec       7763         5976   5970   5970   5969   5969
- * tmisc      6458         7389   6210   6174   6167   6158
- * tfft       62.5         6443                        6423
+ * tmisc      6458         7389   6210   6174   6167   6157
+ * tfft       62.5         6443                        6426
  * tgsl       25.3         8485                 8422   6467
  * tgc        11.9         11.9   11.1   11.0   10.4   10.4
  * thash      37.2         11.8   11.7   11.7   11.4   11.3
  * tgen       12.2         11.2   11.4   11.3   11.3   11.3
  * tall       26.8         15.6   15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.2   37.1   37.3
- * sg         98.7         71.9   72.3   72.2   72.7   72.8
+ * sg         98.7         71.9   72.3   72.2   72.7   72.7
  * lg        104.4        106.6  105.0  105.1  104.3  103.8
  * tbig      598.4        177.4  175.8  174.3  172.5  171.7
  * -------------------------------------------------------------

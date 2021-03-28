@@ -6,7 +6,9 @@
       (call-with-input-file "s7.c"
 	(lambda (ip)
 	  (let ((words (make-hash-table))
-		(cur-word "")
+		(cur-word (make-string 512))
+		(word "")
+		(cur-loc 0)
 		(cur-line 1)
 		(last-c #\null))
 	    (do ((c (read-char ip) (read-char ip)))
@@ -18,7 +20,9 @@
 		      (char=? c #\_)
 		      (and (char-numeric? c)
 			   (positive? (length cur-word))))
-		  (set! cur-word (string-append cur-word (string c)))
+		  (begin 
+		    (string-set! cur-word cur-loc c)
+		    (set! cur-loc (+ cur-loc 1)))
 		  (begin
 		    (cond ((char=? c #\newline)
 			   (set! cur-line (+ cur-line 1)))
@@ -46,11 +50,11 @@
 			       (set! last-c2 last-c1)
 			       (set! last-c1 c1)))))
 		    (set! last-c c)
-		    (when (positive? (length cur-word))
-		      (hash-table-set! words cur-word ; in non-code text we'd probably want string-downcase here and below
-				       (cons cur-line (or (hash-table-ref words cur-word) ()))))
-		    (set! cur-word ""))))))))))
-
+		    (when (positive? cur-loc)
+		      (set! word (substring cur-word 0 cur-loc))
+		      (hash-table-set! words word ; in non-code text we'd probably want string-downcase here and below
+				       (cons cur-line (or (hash-table-ref words word) ()))))
+		    (set! cur-loc 0))))))))))
 
 ;;; --------------------------------
 
@@ -614,3 +618,4 @@
 (searcher)
 
 (#_exit)
+
