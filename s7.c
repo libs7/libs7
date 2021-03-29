@@ -12080,7 +12080,7 @@ static bool is_NaN(s7_double x) {return(x != x);}
   static double cbrt(double x) {if (x >= 0.0) return(pow(x, 1.0 / 3.0)); return(-pow(-x, 1.0 / 3.0));}
 #endif
 #endif /* windows */
-#endif /* sun */
+#endif /* not sun */
 
 
 #if WITH_GMP
@@ -12366,7 +12366,6 @@ static bool is_integer_via_method(s7_scheme *sc, s7_pointer p)
 static s7_pointer s7_number_to_big_real(s7_scheme *sc, s7_pointer p)
 {
   s7_pointer x;
-
   new_cell(sc, x, T_BIG_REAL);
   big_real_bgf(x) = alloc_bigflt(sc);
   add_big_real(sc, x);
@@ -12506,7 +12505,6 @@ static s7_pointer make_big_complex(s7_scheme *sc, mpfr_t rl, mpfr_t im)
    *   mpc_set_fr_fr.
    */
   s7_pointer x;
-
   new_cell(sc, x, T_BIG_COMPLEX);
   big_complex_bgc(x) = alloc_bigcmp(sc);
   add_big_complex(sc, x);
@@ -12663,7 +12661,6 @@ static s7_pointer string_to_either_integer(s7_scheme *sc, const char *str, int32
 {
   s7_int val;
   bool overflow = false;
-
   val = string_to_integer(str, radix, &overflow);
   if (!overflow)
     return(make_integer(sc, val));
@@ -12700,7 +12697,6 @@ static s7_pointer string_to_either_real(s7_scheme *sc, const char *str, int32_t 
 {
   bool overflow = false;
   s7_double val;
-
   val = string_to_double_with_radix((char *)str, radix, &overflow);
   if (!overflow)
     return(make_real(sc, val));
@@ -13228,12 +13224,10 @@ static s7_pointer make_mutable_integer(s7_scheme *sc, s7_int n)
 static s7_pointer make_permanent_integer(s7_int i)
 {
   if (is_small_int(i)) return(small_int(i));
-
   if (i == MAX_ARITY) return(max_arity);
   if (i == CLOSURE_ARITY_NOT_SET) return(arity_not_set);
   if (i == -1) return(minus_one);
-  if (i == -2) return(minus_two);
-  /* a few -3 */
+  if (i == -2) return(minus_two);  /* a few -3 */
   return(make_permanent_integer_unchecked(i));
 }
 
@@ -13486,7 +13480,6 @@ s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x)
 s7_int s7_number_to_integer_with_caller(s7_scheme *sc, s7_pointer x, const char *caller)
 {
   if (is_t_integer(x)) return(integer(x));
-
 #if WITH_GMP
   if (is_t_big_integer(x)) return(big_integer_to_s7_int(sc, big_integer(x)));
 #endif
@@ -15877,7 +15870,6 @@ static s7_pointer string_to_number_p_pp(s7_scheme *sc, s7_pointer str1, s7_point
 {
   s7_int radix;
   char *str;
-
   if (!is_string(str1))
     return(wrong_type_argument(sc, sc->string_to_number_symbol, 1, str1, T_STRING));
 
@@ -15897,7 +15889,6 @@ static s7_pointer g_string_to_number_1(s7_scheme *sc, s7_pointer args, s7_pointe
 {
   s7_int radix;
   char *str;
-
   if (!is_string(car(args)))
     return(method_or_bust(sc, car(args), caller, args, T_STRING, 1));
 
@@ -26435,7 +26426,6 @@ static s7_pointer char_with_error_check(s7_scheme *sc, s7_pointer x, s7_pointer 
 static s7_pointer g_char_cmp(s7_scheme *sc, s7_pointer args, int32_t val, s7_pointer sym)
 {
   s7_pointer x, y;
-
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sym, args, T_CHARACTER, 1));
@@ -26453,7 +26443,6 @@ static s7_pointer g_char_cmp(s7_scheme *sc, s7_pointer args, int32_t val, s7_poi
 static s7_pointer g_char_cmp_not(s7_scheme *sc, s7_pointer args, int32_t val, s7_pointer sym)
 {
   s7_pointer x, y;
-
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sym, args, T_CHARACTER, 1));
@@ -26474,7 +26463,6 @@ static s7_pointer g_chars_are_equal(s7_scheme *sc, s7_pointer args)
   #define Q_chars_are_equal sc->pcl_bc
 
   s7_pointer x, y;
-
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sc->char_eq_symbol, args, T_CHARACTER, 1));
@@ -26642,7 +26630,6 @@ static s7_pointer char_greater_chooser(s7_scheme *sc, s7_pointer f, int32_t args
 static s7_pointer g_char_cmp_ci(s7_scheme *sc, s7_pointer args, int32_t val, s7_pointer sym)
 {
   s7_pointer x, y;
-
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sym, args, T_CHARACTER, 1));
@@ -26660,7 +26647,6 @@ static s7_pointer g_char_cmp_ci(s7_scheme *sc, s7_pointer args, int32_t val, s7_
 static s7_pointer g_char_cmp_ci_not(s7_scheme *sc, s7_pointer args, int32_t val, s7_pointer sym)
 {
   s7_pointer x, y;
-
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sym, args, T_CHARACTER, 1));
@@ -41683,6 +41669,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
       /* since vector-ref can return a subvector (if not passed enough args), it might be interesting to
        *   also set a complete subvector via set!, but that might make catching this error harder.  Can't decide...
        *   (define v (make-vector '(2 3) 0)) (vector-set! v 0 #(1 2 3)) -> error, but (vector-ref v 0) -> #(0 0 0)
+       * Other possible additions: complex-vector and string-vector.
        */
 
       val = car(x);
@@ -81015,6 +81002,8 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 
   if ((argnum > 1) || (vector_rank(cx) > 1))
     {
+      /* TODO: if this is false, we should not keep checking it! */
+
       if ((argnum == 2) &&
 	  (is_fxable(sc, cadr(settee))) &&
 	  (is_fxable(sc, caddr(settee))) &&
@@ -97556,7 +97545,7 @@ int main(int argc, char **argv)
  * tnum       59.3         6348   6013   5998   5860   5845
  * trec       7763         5976   5970   5970   5969   5969
  * tmisc      6458         7389   6210   6174   6167   6157
- * tfft       62.5         6443                        6426
+ * tfft       62.5         6443                        6426  5669
  * tgsl       25.3         8485                 8422   6467
  * tgc        11.9         11.9   11.1   11.0   10.4   10.4
  * thash      37.2         11.8   11.7   11.7   11.4   11.3
@@ -97570,5 +97559,10 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * why doesn't set_implicit->op_vector_set_4 et al?
+ * why doesn't set_implicit->op_vector_set_4 et al? (vector input rather than float-vector)
+ *   to optimize fully, need d_7piii and d_7piiid -- at least 50 lines, maybe several hundred, same for int|byte-vector and normal vector
+ *   i_7piii as ref and add i_7piiii, i_7piii does not assume ivset
+ * ttl.scm for setter timings, t444 for implicit vector
+ *   setter can mean no methods
+ * variable tracer history? 
  */
