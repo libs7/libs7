@@ -302,3 +302,110 @@
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)
+
+
+#|
+;;; fft3.c:
+#include <unistd.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <complex.h>
+#include <fftw3.h>
+
+static fftw_complex *c_in_data = NULL, *c_out_data = NULL;
+static fftw_plan c_r_plan, c_i_plan;  
+static int last_c_fft_size = 0;   
+
+static void mus_fftw_with_imag(double *rl, double *im, int h, int w, int d, int dir)
+{
+  int i, j, k;
+
+  c_in_data = (fftw_complex *)fftw_malloc(w * h * d * sizeof(fftw_complex)); /* rl/im data is double */
+  c_out_data = (fftw_complex *)fftw_malloc(w * h * d * sizeof(fftw_complex));
+  c_r_plan = fftw_plan_dft_3d(h, w, d, c_in_data, c_out_data, FFTW_FORWARD, FFTW_ESTIMATE); 
+  c_i_plan = fftw_plan_dft_3d(h, w, d, c_in_data, c_out_data, FFTW_BACKWARD, FFTW_ESTIMATE);
+
+  for (i = 0; i < h; i++)
+    for (j = 0; j < w; j++)
+      for (k = 0; k < d; k++)
+	c_in_data[(i * w * d) + (j * d) + k] = rl[(i * w * d) + (j * d) + k] + _Complex_I * im[(i * w * d) + (j * d) + k];
+
+  if (dir == -1) 
+    fftw_execute(c_r_plan);
+  else fftw_execute(c_i_plan);
+
+  for (i = 0; i < h; i++)
+    for (j = 0; j < w; j++)
+      for (k = 0; k < d; k++)
+	{
+	  rl[(i * w * d) + (j * d) + k] = creal(c_out_data[(i * w * d) + (j * d) + k]);
+	  im[(i * w * d) + (j * d) + k] = cimag(c_out_data[(i * w * d) + (j * d) + k]);
+	}
+}
+
+int main(int argc, char **argv)
+{
+  double *rl, *im;
+  int h, w, d, i, j, k;
+  h = 4;
+  w = 4;
+  d = 4;
+  rl = (double *)calloc(h * w * d, sizeof(double));
+  im = (double *)calloc(h * w * d, sizeof(double));
+  
+  rl[0] = 1.0;
+  rl[1] = 0.5;
+
+  mus_fftw_with_imag(rl, im, h, w, d, -1);
+
+  fprintf(stderr, "#r3d(");
+  for (i = 0; i < h; i++)
+    {
+      fprintf(stderr, "(");
+      for (j = 0; j < w; j++)
+	{
+	  fprintf(stderr, "(");
+	  for (k = 0; k < d; k++)
+	    fprintf(stderr, "%.3f ", rl[(i * w * d) + (j * d) + k]);
+	  fprintf(stderr, ")");
+	}
+      fprintf(stderr, ")");
+    }
+  fprintf(stderr, ")\n");
+
+  fprintf(stderr, "#r3d(");
+  for (i = 0; i < h; i++)
+    {
+      fprintf(stderr, "(");
+      for (j = 0; j < w; j++)
+	{
+	  fprintf(stderr, "(");
+	  for (k = 0; k < d; k++)
+	    fprintf(stderr, "%.3f ", im[(i * w * d) + (j * d) + k]);
+	  fprintf(stderr, ")");
+	}
+      fprintf(stderr, ")");
+    }
+  fprintf(stderr, ")\n");
+
+  fprintf(stderr, "#r3d(");
+  for (i = 0; i < h; i++)
+    {
+      fprintf(stderr, "(");
+      for (j = 0; j < w; j++)
+	{
+	  fprintf(stderr, "(");
+	  for (k = 0; k < d; k++)
+	    fprintf(stderr, "%.3f ", 
+		    rl[(i * w * d) + (j * d) + k] * rl[(i * w * d) + (j * d) + k] + im[(i * w * d) + (j * d) + k] * im[(i * w * d) + (j * d) + k]);
+	  fprintf(stderr, ")");
+	}
+      fprintf(stderr, ")");
+    }
+  fprintf(stderr, ")\n");
+}
+|#

@@ -5474,7 +5474,6 @@ static uint64_t opt3_location_1(s7_scheme *sc, s7_pointer p, const char *func, i
       if (sc->stop_at_error) abort();
     }
   return(p->object.sym_cons.location);
-
 }
 
 static void set_opt3_location_1(s7_pointer p, uint64_t x)
@@ -13055,31 +13054,7 @@ static s7_int c_gcd(s7_int u, s7_int v)
 
 static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *denom)
 {
-  /*
-    (define* (rat ux (err 0.0000001))
-      ;; translated from CL code in Canny, Donald, Ressler, "A Rational Rotation Method for Robust Geometric Algorithms"
-      (let ((x0 (- ux error))
-	    (x1 (+ ux error)))
-        (let ((i (ceiling x0))
-	      (i0 (floor x0))
-	      (i1 (ceiling x1))
-	      (r 0))
-          (if (>= x1 i)
-	      i
-	      (do ((p0 i0 (+ p1 (* r p0)))
-	           (q0 1 (+ q1 (* r q0)))
-	           (p1 i1 p0)
-	           (q1 1 q0)
-	           (e0 (- i1 x0) e1p)
-	           (e1 (- x0 i0) (- e0p (* r e1p)))
-	           (e0p (- i1 x1) e1)
-	           (e1p (- x1 i0) (- e0 (* r e1))))
-	          ((<= x0 (/ p0 q0) x1)
-	           (/ p0 q0))
-	        (set! r (min (floor (/ e0 e1))
-			     (ceiling (/ e0p e1p)))))))))
-  */
-
+  /* from CL code in Canny, Donald, Ressler, "A Rational Rotation Method for Robust Geometric Algorithms" */
   double x0, x1;
   s7_int i, i0, i1, p0, q0, p1, q1;
   double e0, e1, e0p, e1p;
@@ -41188,7 +41163,6 @@ static s7_pointer g_subvector_position(s7_scheme *sc, s7_pointer args)
       /* we can't use vector_elements(sv) - vector_elements(subvector_vector(sv)) because that assumes we're looking at s7_pointer*,
        *   so a subvector of a byte_vector gets a bogus position (0 if position is less than 8 etc).
        *   Since we currently let the user reset s7_int and s7_double, all four cases have to be handled explicitly.
-       *   See also vector_to_let -- same problem, segfault in gcc 10.2 if careless.
        */
       switch (type(sv))
 	{
@@ -41403,7 +41377,6 @@ a vector that points to the same elements as the original-vector but with differ
 	  vector_elements(x) = (s7_pointer *)(vector_elements(orig) + offset);
 	else byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(orig) + offset);
     }
-
   add_multivector(sc, x);
   return(x);
 }
@@ -41631,13 +41604,15 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 
 	  index += n * vector_offset(vec, i);
 	}
-
       if (is_not_null(cdr(x)))
 	return(s7_wrong_number_of_args_error(sc, "too many arguments for vector-set!: ~S", args));
       if (i != vector_ndims(vec))
 	return(s7_wrong_number_of_args_error(sc, "not enough arguments for vector-set!: ~S", args));
+
       /* since vector-ref can return a subvector (if not passed enough args), it might be interesting to
-       *   also set a complete subvector via set!, but that might make catching this error harder.  Can't decide...
+       *   also set a complete subvector via set!, but would that introduce ambiguity?  Only copy the vector
+       *   if at least one index is missing, and the value fits.  It also makes error detection harder,
+       *   but so does the current vector-ref handling.  Can't decide...
        *   (define v (make-vector '(2 3) 0)) (vector-set! v 0 #(1 2 3)) -> error, but (vector-ref v 0) -> #(0 0 0)
        * Other possible additions: complex-vector and string-vector.
        */
@@ -42221,10 +42196,7 @@ static s7_pointer g_is_vector(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- vector-rank -------------------------------- */
-s7_int s7_vector_rank(s7_pointer vect)
-{
-  return((s7_int)(vector_rank(vect)));
-}
+s7_int s7_vector_rank(s7_pointer vect) {return((s7_int)(vector_rank(vect)));}
 
 
 /* -------------------------------- vector-dimensions -------------------------------- */
@@ -42628,7 +42600,7 @@ static s7_pointer g_fv_ref_3(s7_scheme *sc, s7_pointer args)
 
 static inline s7_int ref_check_index(s7_scheme *sc, s7_pointer v, s7_int i)
 {
-  /* according to valgrind, it is faster to split out the bounds check */
+  /* according to callgrind, it is faster to split out the bounds check */
   if ((i < 0) || (i >= vector_length(v)))
     out_of_range(sc, sc->float_vector_ref_symbol, int_two, wrap_integer1(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
   return(i);
@@ -62526,6 +62498,13 @@ static s7_double opt_d_7pii_sss(opt_info *o)
   return(float_vector_ref_d_7pii(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p))));
 }
 
+static s7_double opt_d_7pii_sss_unchecked(opt_info *o)
+{ 
+  s7_pointer v;
+  v = slot_value(o->v[1].p);
+  return(float_vector(v, ((integer(slot_value(o->v[2].p)) * vector_offset(v, 0)) + integer(slot_value(o->v[3].p)))));
+}
+
 static s7_double opt_d_7pii_scs(opt_info *o) 
 {
   return(float_vector_ref_d_7pii(opt_sc(o), slot_value(o->v[1].p), o->v[2].i, integer(slot_value(o->v[3].p))));
@@ -62588,6 +62567,7 @@ static bool d_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 
 /* -------- d_7piid -------- */
 /* currently only float_vector_set */
+
 static s7_double opt_d_7piid_sssf(opt_info *o)
 { /*     o->v[5].d_7piid_f and below */
   return(float_vector_set_d_7piid(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p)), o->v[9].fd(o->v[8].o1)));
@@ -62611,6 +62591,19 @@ static s7_double opt_d_7piid_sfff(opt_info *o)
   return(float_vector_set_d_7piid(opt_sc(o), slot_value(o->v[1].p), i1, i2, o->v[4].fd(o->v[3].o1)));
 }
 
+static s7_double opt_d_7piid_sssf_unchecked(opt_info *o) /* this could be subsumed by the call above if we were using o->v[5] or o->v[0].fd */
+{
+  s7_int i1, i2;
+  s7_pointer vect;
+  s7_double val;
+  vect = slot_value(o->v[1].p);
+  i1 = integer(slot_value(o->v[2].p));
+  i2 = integer(slot_value(o->v[3].p));
+  val = o->v[9].fd(o->v[8].o1);
+  float_vector(vect, (i1 * (vector_offset(vect, 0)) + i2)) = val;
+  return(val);
+}
+
 static bool d_7piid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
   s7_d_7piid_t f;
@@ -62629,6 +62622,16 @@ static bool d_7piid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_point
 static s7_double opt_d_7piii_ssss(opt_info *o)
 {
   return(float_vector_ref_d_7piii(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p)), integer(slot_value(o->v[5].p))));
+}
+
+static s7_double opt_d_7piii_ssss_unchecked(opt_info *o)
+{ 
+  s7_pointer v;
+  s7_int i1, i2;
+  v = slot_value(o->v[1].p);
+  i1 = integer(slot_value(o->v[2].p)) * vector_offset(v, 0);
+  i2 = integer(slot_value(o->v[3].p)) * vector_offset(v, 1); /* offsets accumulate */
+  return(float_vector(v, (i1 + i2 + integer(slot_value(o->v[5].p)))));
 }
 
 static bool d_7piii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
@@ -62669,6 +62672,20 @@ static s7_double opt_d_7piiid_ssssf(opt_info *o)
 { 
   return(float_vector_set_d_7piiid(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), 
 				   integer(slot_value(o->v[3].p)), integer(slot_value(o->v[5].p)), o->v[11].fd(o->v[10].o1)));
+}
+
+static s7_double opt_d_7piiid_ssssf_unchecked(opt_info *o)
+{
+  s7_int i1, i2, i3;
+  s7_pointer vect;
+  s7_double val;
+  vect = slot_value(o->v[1].p);
+  i1 = integer(slot_value(o->v[2].p)) * vector_offset(vect, 0);
+  i2 = integer(slot_value(o->v[3].p)) * vector_offset(vect, 1);
+  i3 = integer(slot_value(o->v[5].p));
+  val = o->v[11].fd(o->v[10].o1);
+  float_vector(vect, (i1 + i2 + i3)) = val;
+  return(val);
 }
 
 static bool d_7piiid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
@@ -62750,6 +62767,9 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 	      (vector_rank(slot_value(settee)) == 2))
 	    {
 	      opc->v[5].d_7piid_f = float_vector_set_d_7piid;
+	      /* could check for step_end/end-ok here for both indices, but the d_7pii* functions currently assume fv_d_7piid
+	       *    perhaps set a different fd? so opc->v[0].fd = fvset_unchecked_d_7piid or whatever
+	       */
 	      slot = opt_integer_symbol(sc, car(indexp2));
 	      if (slot)
 		{
@@ -62780,6 +62800,12 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 			{
 			  opc->v[0].fd = opt_d_7piid_sssf;
 			  opc->v[9].fd = opc->v[8].o1->v[0].fd;
+
+			  if ((is_step_end(opc->v[2].p)) &&
+			      (denominator(slot_value(opc->v[2].p)) <= vector_dimension(slot_value(opc->v[1].p), 0)) &&
+			      (is_step_end(opc->v[3].p)) &&
+			      (denominator(slot_value(opc->v[3].p)) <= vector_dimension(slot_value(opc->v[1].p), 1)))
+			    opc->v[0].fd = opt_d_7piid_sssf_unchecked;
 			  return(true);
 			}
 		      pc_fallback(sc, start);
@@ -62820,8 +62846,17 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 			  opc->v[2].p = slot;
 			  if (float_optimize(sc, valp))
 			    {
+			      s7_pointer vect;
+			      vect = slot_value(opc->v[1].p);
 			      opc->v[0].fd = opt_d_7piiid_ssssf;
 			      opc->v[11].fd = sc->opts[start]->v[0].fd;
+			      if ((is_step_end(opc->v[2].p)) &&
+				  (denominator(slot_value(opc->v[2].p)) <= vector_dimension(vect, 0)) &&
+				  (is_step_end(opc->v[3].p)) &&
+				  (denominator(slot_value(opc->v[3].p)) <= vector_dimension(vect, 1)) &&
+				  (is_step_end(opc->v[5].p)) &&
+				  (denominator(slot_value(opc->v[5].p)) <= vector_dimension(vect, 2)))
+				opc->v[0].fd = opt_d_7piiid_ssssf_unchecked;
 			      return(true);
 			    }}}}}}}
   return_false(sc, NULL);
@@ -63158,6 +63193,11 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		{
 		  opc->v[3].p = slot;
 		  opc->v[0].fd = opt_d_7pii_sss;
+		  if ((is_step_end(opc->v[2].p)) && /* this guarantees that denominator is set, set in opt_cell_do so doesn't reach out 3 levels */
+		      (denominator(slot_value(opc->v[2].p)) <= vector_dimension(slot_value(opc->v[1].p), 0)) &&
+		      (is_step_end(opc->v[3].p)) &&
+		      (denominator(slot_value(opc->v[3].p)) <= vector_dimension(slot_value(opc->v[1].p), 1)))
+		    opc->v[0].fd = opt_d_7pii_sss_unchecked;
 		  return(true);
 		}}
 	  opc->v[10].o1 = sc->opts[sc->pc];
@@ -63189,8 +63229,17 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		  slot = opt_integer_symbol(sc, cadddr(car_x));
 		  if (slot)
 		    {
+		      s7_pointer vect;
+		      vect = slot_value(opc->v[1].p);
 		      opc->v[5].p = slot;
 		      opc->v[0].fd = opt_d_7piii_ssss;
+		      if ((is_step_end(opc->v[2].p)) &&
+			  (denominator(slot_value(opc->v[2].p)) <= vector_dimension(vect, 0)) &&
+			  (is_step_end(opc->v[3].p)) &&
+			  (denominator(slot_value(opc->v[3].p)) <= vector_dimension(vect, 1)) &&
+			  (is_step_end(opc->v[5].p)) &&
+			  (denominator(slot_value(opc->v[5].p)) <= vector_dimension(vect, 2)))
+			opc->v[0].fd = opt_d_7piii_ssss_unchecked;
 		      return(true);
 		    }}}}}
 
@@ -64363,6 +64412,18 @@ static s7_pointer opt_p_pi_sf(opt_info *o) {return(o->v[3].p_pi_f(opt_sc(o), slo
 static s7_pointer opt_p_pi_sf_sref(opt_info *o) {return(string_ref_p_pi_unchecked(opt_sc(o), slot_value(o->v[1].p), o->v[5].fi(o->v[4].o1)));}
 static s7_pointer opt_p_pi_fc(opt_info *o) {return(o->v[3].p_pi_f(opt_sc(o), o->v[5].fp(o->v[4].o1), o->v[2].i));}
 
+static void check_unchecked(s7_scheme *sc, s7_pointer obj, s7_pointer slot, opt_info *opc)
+{
+  switch (type(obj))
+    {
+    case T_STRING:       if (denominator(slot_value(slot)) <= string_length(obj))      opc->v[3].p_pi_f = string_ref_unchecked;         break;
+    case T_BYTE_VECTOR:  if (denominator(slot_value(slot)) <= byte_vector_length(obj)) opc->v[3].p_pi_f = byte_vector_ref_unchecked_p;  break;
+    case T_VECTOR:       if (denominator(slot_value(slot)) <= vector_length(obj))      opc->v[3].p_pi_f = vector_ref_unchecked;         break;
+    case T_FLOAT_VECTOR: if (denominator(slot_value(slot)) <= vector_length(obj))      opc->v[3].p_pi_f = float_vector_ref_unchecked_p; break;
+    case T_INT_VECTOR:   if (denominator(slot_value(slot)) <= vector_length(obj))      opc->v[3].p_pi_f = int_vector_ref_unchecked_p;   break;
+    }
+}
+
 static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer sig, s7_pointer car_x)
 {
   s7_p_pi_t func;
@@ -64408,33 +64469,7 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	  opc->v[2].p = slot1;
 	  if ((obj) &&
 	      (is_step_end(slot1)))
-	    switch (type(obj))
-	      {
-	      case T_VECTOR:
-		if (denominator(slot_value(slot1)) <= vector_length(obj))
-		  opc->v[3].p_pi_f = vector_ref_unchecked;
-		return(true);
-
-	      case T_INT_VECTOR:
-		if (denominator(slot_value(slot1)) <= vector_length(obj))
-		  opc->v[3].p_pi_f = int_vector_ref_unchecked_p;
-		return(true);
-
-	      case T_FLOAT_VECTOR:
-		if (denominator(slot_value(slot1)) <= vector_length(obj))
-		  opc->v[3].p_pi_f = float_vector_ref_unchecked_p;
-		return(true);
-
-	      case T_STRING:
-		if (denominator(slot_value(slot1)) <= string_length(obj))
-		  opc->v[3].p_pi_f = string_ref_unchecked;
-		return(true);
-
-	      case T_BYTE_VECTOR:
-		if (denominator(slot_value(slot1)) <= string_length(obj))
-		  opc->v[3].p_pi_f = byte_vector_ref_unchecked_p;
-		return(true);
-	      }
+	    check_unchecked(sc, obj, slot1, opc);
 	  return(true);
 	}
       if (is_t_integer(caddr(car_x)))
@@ -65530,34 +65565,7 @@ static bool p_implicit(s7_scheme *sc, s7_pointer car_x, int32_t len)
 			    {
 			      opc->v[0].fp = opt_p_pi_ss;
 			      if (is_step_end(opc->v[2].p))
-				{
-				  switch (type(obj))
-				    {
-				    case T_STRING:
-				      if (denominator(slot_value(opc->v[2].p)) <= string_length(obj))
-					opc->v[3].p_pi_f = string_ref_unchecked;
-				      break;
-
-				    case T_BYTE_VECTOR:
-				      if (denominator(slot_value(opc->v[2].p)) <= byte_vector_length(obj))
-					opc->v[3].p_pi_f = byte_vector_ref_unchecked_p;
-				      break;
-
-				    case T_VECTOR:
-				      if (denominator(slot_value(opc->v[2].p)) <= vector_length(obj))
-					opc->v[3].p_pi_f = vector_ref_unchecked;
-				      break;
-
-				    case T_FLOAT_VECTOR:
-				      if (denominator(slot_value(opc->v[2].p)) <= vector_length(obj))
-					opc->v[3].p_pi_f = float_vector_ref_unchecked_p;
-				      break;
-
-				    case T_INT_VECTOR:
-				      if (denominator(slot_value(opc->v[2].p)) <= vector_length(obj))
-					opc->v[3].p_pi_f = int_vector_ref_unchecked_p;
-				      break;
-				    }}
+				check_unchecked(sc, obj, opc->v[2].p, opc);
 			      return(true);
 			    }
 			  return_false(sc, car_x); /* I think this reflects that a non-int index is an error for list-ref et al */
@@ -82818,7 +82826,7 @@ static goto_t op_dox(s7_scheme *sc)
 			  if (!((fp == opt_p_pip_sso) && (o->v[2].p==o->v[4].p) && 
 				(((o->v[5].p_pip_f == string_set_p_pip_unchecked) && (o->v[6].p_pi_f == string_ref_p_pi_unchecked)) ||
 				 ((o->v[5].p_pip_f == vector_set_p_pip_unchecked) && (o->v[6].p_pi_f == normal_vector_ref_p_pi_unchecked)) ||
-				 ((o->v[5].p_pip_f == list_set_p_pip_unchecked) && (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
+				 ((o->v[5].p_pip_f == list_set_p_pip_unchecked) &&   (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
 				(copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper, o))))
 			    do {
 			      fp(o);
@@ -83503,13 +83511,14 @@ static bool opt_do_copy(s7_scheme *sc, opt_info *o, s7_int start, s7_int stop)
       dest = slot_value(o->v[1].p);
       source = slot_value(o->v[3].p);
       if ((is_normal_vector(dest)) &&
-	  ((o->v[5].p_pip_f == vector_set_p_pip_unchecked) &&
-	   ((o->v[6].p_pi_f == normal_vector_ref_p_pi_unchecked) || (o->v[6].p_pi_f == vector_ref_p_pi_unchecked))))
+	  (((o->v[5].p_pip_f == vector_set_p_pip_unchecked) || (o->v[5].p_pip_f == vector_set_unchecked)) &&
+	   ((o->v[6].p_pi_f == normal_vector_ref_p_pi_unchecked) || (o->v[6].p_pi_f == vector_ref_p_pi_unchecked) || (o->v[6].p_pi_f == vector_ref_unchecked))))
 	caller = sc->vector_set_symbol;
       else
 	{
 	  if ((is_string(dest)) &&
-	      ((o->v[5].p_pip_f == string_set_p_pip_unchecked) && (o->v[6].p_pi_f == string_ref_p_pi_unchecked)))
+	      (((o->v[5].p_pip_f == string_set_p_pip_unchecked) || (o->v[5].p_pip_f == string_set_unchecked)) && 
+	       ((o->v[6].p_pi_f == string_ref_p_pi_unchecked) || (o->v[6].p_pi_f == string_ref_unchecked))))
 	    caller = sc->string_set_symbol;
 	  else 
 	    {
@@ -84040,7 +84049,6 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	  step_slot = let_dox_slot1(sc->curlet);
 	  end_slot = let_dox_slot2(sc->curlet);
 	  step = integer(slot_value(step_slot));
-
 	  if (func == opt_cell_any_nr)
 	    {
 	      opt_info *o;
@@ -84519,6 +84527,14 @@ static goto_t op_safe_do(s7_scheme *sc)
     let_set_dox_slot2(sc->curlet, lookup_slot_from(end, sc->curlet));
   else let_set_dox_slot2(sc->curlet, make_slot(sc, caaar(code), end));
   sc->args = let_dox_slot2(sc->curlet);  /* the various safe steps assume sc->args is the end slot */
+
+  {
+    s7_pointer step_slot;
+    step_slot = let_dox_slot1(sc->curlet);
+    /* fprintf(stderr, "%s[%d]: %s %p\n", __func__, __LINE__, display(step_slot), step_slot); */
+    set_step_end(step_slot);
+    denominator(slot_value(step_slot)) = s7_integer(end_val);
+  }
 
   if (!is_unsafe_do(sc->code))
     {
@@ -97619,14 +97635,14 @@ int main(int argc, char **argv)
  *             gmp (3-20)  20.9   21.0   21.1   21.2   21.3
  * -------------------------------------------------------------
  * tpeak       126          115    114    114    113    111
- * tref        558          691    687    687    602    506
  * tauto       782          648    642    647    651    503
+ * tref        558          691    687    687    602    506
  * tshoot     1516          883    872    872    856    842
  * index      1208         1026   1016   1014   1013   1014
  * tmock      7676         1177   1165   1166   1147   1147
  * s7test     4509         1873   1831   1817   1809   1805
  * lt         2107         2123   2110   2112   2101   2091
- * tvect      2513         2456   2413   2413   2331   2212
+ * tvect      2513         2456   2413   2413   2331   2209
  * tmat       2388         2375                        2233
  * tform      3277         2281   2273   2266   2288   2283
  * tread      2607         2440   2421   2412   2403   2411
@@ -97634,23 +97650,23 @@ int main(int argc, char **argv)
  * fbench     2960         2688   2583   2577   2561   2557
  * tcopy      3778         4452                 4345   2560
  * tb         3402         2735   2681   2677   2640   2624
- * tmap       3712         2886   2857   2827   2786   2785
+ * tmap       3712         2886   2857   2827   2786   2776
  * titer      2821         2865   2842   2842   2803   2803
  * tsort      3654         3105   3104   3097   2936   2936
- * dup        3201         3334   3332   3203   3003   2961
+ * dup        3201         3334   3332   3203   3003   2848
  * tmac       3295         3317   3277   3247   3221   3218
  * tset       3244         3253   3104   3207   3253   3246
  * tio        3703         3816   3752   3738   3692   3687
  * teq        3728         4068   4045   4038   3713   3712
- * tstr       6704         5281   4863   4765   4543   4378
- * tfft       63.1         5709                        4533
+ * tstr       6704         5281   4863   4765   4543   4362
+ * tfft       63.1         5709                        4468
  * tcase      4627         4960   4793   4669   4570   4563
  * tclo       4959         4787   4735   4668   4588   4596
  * tlet       5683         7775   5640   5585   4632   4633
- * tnum       59.3         6348   6013   5998   5860   5838
+ * tnum       59.3         6348   6013   5998   5860   5801
  * trec       7763         5976   5970   5970   5969   5969
  * tmisc      6458         7389   6210   6174   6167   6157
- * tgsl       25.3         8485                 8422   6467
+ * tgsl       25.3         8485                 8422   6457
  * tgc        11.9         11.9   11.1   11.0   10.4   10.4
  * thash      37.2         11.8   11.7   11.7   11.4   11.3
  * tgen       12.2         11.2   11.4   11.3   11.3   11.3
@@ -97664,7 +97680,15 @@ int main(int argc, char **argv)
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
  * perhaps i_7piii as ref and add i_7piiii, i_7piii does not assume ivset
- *   perhaps extend the d_iii* cases as in d_ii*
+ *   perhaps extend the d_iii* cases as in d_ii* (at least ffff)
+ *   fvref|set explicit tested [check_unchecked should also work for 2d/3d if enough slots, currently only p_pi_f][add to tref?]
+ *   complex/string vects, vset->dims
  * ttl.scm for setter timings, setter can mean no methods
- * variable tracer history? 
+ * variable tracer history via probe-eval? 
+ * implicit copy/fill maybe reverse?
+ * vector-dimensions is wasteful, need vector-rank=(length (vector-dimensions...)) and vector-dimension or stored list?
+ *   common: (car|length (vector-dimensions v))
+ * how to get the vector(or other) type (setter is incomplete: (setter (make-vector 2 'a symbol?)) -> vector-set!)
+ *   (car (signature v)) perhaps, but it is wasteful too
+ * t718
  */
