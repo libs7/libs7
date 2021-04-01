@@ -438,7 +438,7 @@
 
 		    ((or (int-vector? obj)
 			 (float-vector? obj))
-		     (if (> (length (vector-dimensions obj)) 1)
+		     (if (> (vector-rank obj) 1)
 			 (write obj port)
 			 (let* ((objstr (object->string obj))
 				(strlen (length objstr)))
@@ -497,7 +497,7 @@
 			   (write-char #\) port))))
 		    
 		    ((vector? obj)
-		     (if (> (length (vector-dimensions obj)) 1)
+		     (if (> (vector-rank obj) 1)
 			 (write obj port)
 			 (let* ((objstr (object->string obj))
 				(strlen (length objstr)))

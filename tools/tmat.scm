@@ -145,11 +145,13 @@
 
 (define (matrix-transpose mat)
   (let* ((dims (vector-dimensions mat))
-	 (new-mat (make-vector (reverse dims))))
+	 (new-mat (make-vector (reverse dims)))
+	 (end1 (car dims))
+	 (end2 (cadr dims)))
     (do ((i 0 (+ i 1)))
-	((= i (car dims)) new-mat)
+	((= i end1) new-mat)
       (do ((j 0 (+ j 1)))
-	  ((= j (cadr dims)))
+	  ((= j end2))
 	(set! (new-mat j i) (mat i j))))))
 
 ;(matrix-transpose #2d((1 2 3) (4 5 6)))   #2d((1 4) (2 5) (3 6))

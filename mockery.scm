@@ -113,6 +113,7 @@
 		       'write              (with-mock-wrapper* #_write)
 		       'display            (with-mock-wrapper* #_display)
 		       'vector-dimensions  (with-mock-wrapper #_vector-dimensions)
+		       'vector-rank        (with-mock-wrapper #_vector-rank)
 		       'fill!              (with-mock-wrapper* #_fill!)
 		       'vector-fill!       (with-mock-wrapper* #_vector-fill!)
 		       'vector->list       (with-mock-wrapper* #_vector->list)

@@ -2151,7 +2151,7 @@ an integer as in the one dimensional case:
 <code>(vect i ...)</code> or <code>(vector-ref vect i ...)</code> return the given
 element, and <code>(set! (vect i ...) value)</code> and <code>(vector-set! vect i ... value)</code>
 set it.  vector-length (or just length) returns the total number of elements.
-vector-dimensions returns a list of the dimensions.
+vector-dimensions returns a list of the dimensions; vector-rank returns the length of this list.
 </p>
 
 <pre class="indented">
@@ -2182,6 +2182,8 @@ s7_ints, s7_doubles, or unsigned bytes.
 
 <pre class="indented">
 (<em class=def id="makevector">make-vector</em> length-or-list-of-dimensions initial-value element-type-function)
+(<em class=def id="vectordimensions">vector-dimensions</em> vect)
+(<em class=def id="vectorrank">vector-rank</em> obj)
 
 (<em class=def>float-vector?</em> obj)
 (<em class=def>float-vector</em> . args)
