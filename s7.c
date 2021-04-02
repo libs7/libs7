@@ -60474,6 +60474,13 @@ static s7_int opt_i_7pii_ssf_vset(opt_info *o) {return(int_vector_set_unchecked(
 static s7_int opt_i_7pii_ssc(opt_info *o) {return(o->v[3].i_7pii_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), o->v[4].i));}
 static s7_int opt_i_7pii_sss(opt_info *o) {return(o->v[4].i_7pii_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p))));}
 
+static s7_int int_vector_ref_pii_sss_unchecked(opt_info *o)
+{ 
+  s7_pointer v;
+  v = slot_value(o->v[1].p);
+  return(int_vector(v, ((integer(slot_value(o->v[2].p)) * vector_offset(v, 0)) + integer(slot_value(o->v[3].p)))));
+}
+
 static s7_int opt_i_7pii_sff(opt_info *o)
 {
   s7_int i1, i2;
@@ -60487,6 +60494,16 @@ static s7_int opt_i_7pii_sff(opt_info *o)
 static s7_int opt_i_7piii_sssf(opt_info *o)
 {
   return(o->v[5].i_7piii_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p)), o->v[11].fi(o->v[10].o1)));
+}
+
+static s7_int int_vector_set_7piii_sssf_unchecked(opt_info *o)
+{
+  s7_pointer v;
+  s7_int val;
+  v = slot_value(o->v[1].p);
+  val = o->v[11].fi(o->v[10].o1);
+  int_vector(v, ((integer(slot_value(o->v[2].p)) * vector_offset(v, 0)) + integer(slot_value(o->v[3].p)))) = val;
+  return(val);
 }
 
 static s7_int opt_i_7piii_sssc(opt_info *o)
@@ -60538,6 +60555,10 @@ static bool opt_i_7piii_args(s7_scheme *sc, opt_info *opc, s7_pointer indexp1, s
 	    {
 	      opc->v[11].fi = opc->v[10].o1->v[0].fi;
 	      opc->v[0].fi = opt_i_7piii_sssf;
+	      if ((opc->v[5].i_7piii_f == int_vector_set_i_7piii) &&
+		  (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		opc->v[0].fi = int_vector_set_7piii_sssf_unchecked;
 	      return(true);
 	    }}
       return_false(sc, NULL);
@@ -60672,6 +60693,10 @@ static bool i_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 		      opc->v[3].p = p;
 		      opc->v[4].i_7pii_f = pfunc;
 		      opc->v[0].fi = opt_i_7pii_sss;
+		      if ((pfunc == int_vector_ref_i_7pii) &&
+			  (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+			  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+			opc->v[0].fi = int_vector_ref_pii_sss_unchecked;
 		      return(true);
 		    }
 		  if (int_optimize(sc, cdddr(car_x)))
@@ -60989,6 +61014,10 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		  opc->v[4].i_7pii_f = (int_case) ? int_vector_ref_i_7pii : byte_vector_ref_i_7pii;
 		  opc->v[3].p = slot;
 		  opc->v[0].fi = opt_i_7pii_sss;
+		  if ((int_case) &&
+		      (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		    opc->v[0].fi = int_vector_ref_pii_sss_unchecked;
 		  return(true);
 		}
 	      return_false(sc, car_x);
@@ -63151,10 +63180,6 @@ static bool d_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
   return_false(sc, car_x);
 }
 
-/* we need a unique name for this use of denominator */
-#define do_loop_end(A) denominator(A)
-#define set_do_loop_end(A, B) denominator(A) = B
-
 static bool d_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 {
   s7_pointer s_slot, slot;
@@ -64421,6 +64446,10 @@ static s7_pointer opt_p_pi_sf(opt_info *o) {return(o->v[3].p_pi_f(opt_sc(o), slo
 static s7_pointer opt_p_pi_sf_sref(opt_info *o) {return(string_ref_p_pi_unchecked(opt_sc(o), slot_value(o->v[1].p), o->v[5].fi(o->v[4].o1)));}
 static s7_pointer opt_p_pi_fc(opt_info *o) {return(o->v[3].p_pi_f(opt_sc(o), o->v[5].fp(o->v[4].o1), o->v[2].i));}
 
+/* we need a unique name for this use of denominator (need to remember that any such integer should be new (i.e. mutable, not a small int) */
+#define do_loop_end(A) denominator(A)
+#define set_do_loop_end(A, B) denominator(A) = B
+
 static void check_unchecked(s7_scheme *sc, s7_pointer obj, s7_pointer slot, opt_info *opc)
 {
   switch (type(obj))
@@ -64973,6 +65002,15 @@ static s7_pointer opt_p_piip_sssf(opt_info *o)
   return(o->v[5].p_piip_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p)), o->v[11].fp(o->v[10].o1)));
 }
 
+static s7_pointer vector_set_piip_sssf_unchecked(opt_info *o)
+{
+  s7_pointer v, val;
+  v = slot_value(o->v[1].p);
+  val = o->v[11].fp(o->v[10].o1);
+  vector_element(v, ((integer(slot_value(o->v[2].p)) * vector_offset(v, 0)) + integer(slot_value(o->v[3].p)))) = val;
+  return(val);
+}
+
 static s7_pointer opt_p_piip_sssc(opt_info *o)
 {
   return(o->v[5].p_piip_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p)), o->v[4].p));
@@ -65005,6 +65043,10 @@ static bool p_piip_to_sx(s7_scheme *sc, opt_info *opc, s7_pointer indexp1, s7_po
 		{
 		  opc->v[11].fp = opc->v[10].o1->v[0].fp;
 		  opc->v[0].fp = opt_p_piip_sssf;
+		  if ((is_normal_vector(obj)) &&
+		      (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		    opc->v[0].fp = vector_set_piip_sssf_unchecked;
 		  return(true);
 		}
 	      return_false(sc, indexp1);
@@ -65070,6 +65112,13 @@ static s7_pointer opt_p_pii_sff(opt_info *o)
   return(o->v[4].p_pii_f(opt_sc(o), slot_value(o->v[1].p), i1, i2));
 }
 
+static s7_pointer vector_ref_pii_sss_unchecked(opt_info *o)
+{ 
+  s7_pointer v;
+  v = slot_value(o->v[1].p);
+  return(vector_element(v, ((integer(slot_value(o->v[2].p)) * vector_offset(v, 0)) + integer(slot_value(o->v[3].p)))));
+}
+
 static bool p_pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
   s7_p_pii_t func;
@@ -65101,6 +65150,10 @@ static bool p_pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		{
 		  opc->v[2].p = slot;
 		  opc->v[0].fp = opt_p_pii_sss;
+		  /* normal vector rank 2 (see above) */
+		  if ((step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		    opc->v[0].fp = vector_ref_pii_sss_unchecked;
 		  return(true);
 		}}
 	  opc->v[10].o1 = sc->opts[sc->pc];
@@ -65615,9 +65668,23 @@ static bool p_implicit(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    {
 	      if (len > 2)
 		{
-		  if ((is_normal_vector(obj)) &&
-		      (len == 3) && (vector_rank(obj) == 2))
+		  if ((is_normal_vector(obj)) && (len == 3) && (vector_rank(obj) == 2))
 		    {
+		      s7_pointer slot;
+		      slot = opt_integer_symbol(sc, caddr(car_x));
+		      if (slot)
+			{
+			  opc->v[3].p = slot;
+			  slot = opt_integer_symbol(sc, cadr(car_x));
+			  if (slot)
+			    {
+			      opc->v[2].p = slot;
+			      opc->v[0].fp = opt_p_pii_sss;
+			      if ((step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+				  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+				opc->v[0].fp = vector_ref_pii_sss_unchecked;
+			      return(true);
+			    }}
 		      opc->v[10].o1 = sc->opts[sc->pc];
 		      if (int_optimize(sc, cdr(car_x)))
 			{
@@ -97650,19 +97717,19 @@ int main(int argc, char **argv)
  * index      1208         1026   1016   1014   1013   1014
  * tmock      7676         1177   1165   1166   1147   1147
  * s7test     4509         1873   1831   1817   1809   1805
+ * tvect      2513         2456   2413   2413   2331   2028
  * lt         2107         2123   2110   2112   2101   2091
- * tvect      2513         2456   2413   2413   2331   2209  2151
- * tmat       2388         2375                        2233  2215
  * tform      3277         2281   2273   2266   2288   2283
- * tread      2607         2440   2421   2412   2403   2411
+ * tread      2607         2440   2421   2412   2403   2410
  * trclo      4310         2715   2561   2560   2526   2525
  * fbench     2960         2688   2583   2577   2561   2557
  * tcopy      3778         4452                 4345   2560
+ * tmat       3063         3065                        2591
  * tb         3402         2735   2681   2677   2640   2624
  * tmap       3712         2886   2857   2827   2786   2776
  * titer      2821         2865   2842   2842   2803   2803
  * tsort      3654         3105   3104   3097   2936   2936
- * dup        3201         3334   3332   3203   3003   2893
+ * dup        3201         3334   3332   3203   3003   2932
  * tmac       3295         3317   3277   3247   3221   3218
  * tset       3244         3253   3104   3207   3253   3246
  * tio        3703         3816   3752   3738   3692   3687
@@ -97688,15 +97755,11 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * perhaps i_7piii as ref and add i_7piiii, i_7piii does not assume ivset
- *   perhaps extend the d_iii* cases as in d_ii* (at least ffff)
- *   [check_unchecked should also work for 2d/3d if enough slots, currently only p_pi_f][add to tref?]
- *   complex/string vects, vset->dims
+ * perhaps add i_7piiii and piiip 
+ *   complex/string vects, vset->dims (i.e. set with last index missing etc)
  *   need vector-dimension
  *   how to get the vector(or other) type: (car (signature v)) perhaps, but requires consing
  *   extend *_unchecked
- *   check matrix-transpose (tmat t448)
- * t718
  * ttl.scm for setter timings, setter can mean no methods
  * variable tracer history via probe-eval? 
  * implicit copy/fill maybe reverse?
