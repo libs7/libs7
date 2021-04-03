@@ -4801,6 +4801,18 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 }
 
 #if S7_DEBUGGING
+#define clamp_length(NLen, Len) clamp_length_1(NLen, Len, __func__, __LINE__)
+static s7_int clamp_length_1(s7_int nlen, s7_int len, const char *func, int line)
+{
+  if (nlen > len) {fprintf(stderr, "%s[%d]: %ld > %ld\n", func, line, nlen, len); abort();}
+  return(nlen);
+}
+#else
+/* snprintf returns the number of bytes that would have been written: (display (c-pointer 123123123 (symbol (make-string 130 #\a)))) */
+#define clamp_length(NLen, Len) (((NLen) < (Len)) ? (NLen) : (Len))
+#endif
+
+#if S7_DEBUGGING
 static bool has_odd_bits(s7_pointer obj)
 {
   uint64_t full_typ;
@@ -5539,7 +5551,7 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
   free(previous_bits);
   if (is_null(port))
     fprintf(stderr, "%p: %s\n", obj, str);
-  else port_write_string(port)(sc, str, nlen, port);
+  else port_write_string(port)(sc, str, clamp_length(nlen, len), port);
   liberate(sc, b);
 }
 
@@ -29530,7 +29542,7 @@ static s7_pointer read_file(s7_scheme *sc, FILE *fp, const char *name, s7_int ma
 	      char tmp[256];
 	      int32_t len;
 	      len = snprintf(tmp, 256, "(%s \"%s\") read %ld bytes of an expected %" print_s7_int "?", caller, name, (long)bytes, size);
-	      port_write_string(current_output_port(sc))(sc, tmp, len, current_output_port(sc));
+	      port_write_string(current_output_port(sc))(sc, tmp, clamp_length(len, 256), current_output_port(sc));
 	    }
 	  size = bytes;
 	}
@@ -33697,7 +33709,7 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
 	{
 	  make_vector_to_port(sc, vect, port);
 	  plen = snprintf(buf, FV_BUFSIZE, "%.*g)", sc->float_format_precision, first);
-	  port_write_string(port)(sc, buf, plen, port);
+	  port_write_string(port)(sc, buf, clamp_length(plen, FV_BUFSIZE), port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
 	    port_write_character(port)(sc, ')', port);
@@ -33709,13 +33721,13 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
       port_write_string(port)(sc, "#r(", 3, port);
       plen = snprintf(buf, FV_BUFSIZE - 4, "%.*g", sc->float_format_precision, els[0]); /* -4 so floatify has room */
       floatify(buf, &plen);
-      port_write_string(port)(sc, buf, plen, port);
+      port_write_string(port)(sc, buf, clamp_length(plen, FV_BUFSIZE), port);
       for (i = 1; i < len; i++)
 	{
 	  plen = snprintf(buf, FV_BUFSIZE - 4, " %.*g", sc->float_format_precision, els[i]);
 	  plen--; /* fixup for the initial #\space */
 	  floatify((char *)(buf + 1), &plen);
-	  port_write_string(port)(sc, buf, plen + 1, port);
+	  port_write_string(port)(sc, buf, clamp_length(plen + 1, FV_BUFSIZE), port);
 	}
       if (too_long)
 	port_write_string(port)(sc, " ...)", 5, port);
@@ -35078,8 +35090,9 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 
 static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
+  #define CP_BUFSIZE 128
   int32_t nlen;
-  char buf[128];
+  char buf[CP_BUFSIZE];
   /* c-pointer is special because we can't set the type or info fields from scheme except via the c-pointer function */
 
   if (use_write == P_READABLE)
@@ -35098,7 +35111,7 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 		  ci->init_port = s7_open_output_string(sc);
 		  ci->init_loc = s7_gc_protect_1(sc, ci->init_port);
 		}
-	      nlen = snprintf(buf, 128, "  (set! <%d> (c-pointer %" print_pointer, -ref, (intptr_t)c_pointer(obj));
+	      nlen = snprintf(buf, CP_BUFSIZE, "  (set! <%d> (c-pointer %" print_pointer, -ref, (intptr_t)c_pointer(obj));
 	      port_write_string(ci->init_port)(sc, buf, nlen, ci->init_port);
 
 	      if ((c_pointer_type(obj) != sc->F) ||
@@ -35122,8 +35135,8 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 	    }}
       else
 	{
-	  nlen = snprintf(buf, 128, "(c-pointer %" print_pointer, (intptr_t)c_pointer(obj));
-	  port_write_string(port)(sc, buf, nlen, port);
+	  nlen = snprintf(buf, CP_BUFSIZE, "(c-pointer %" print_pointer, (intptr_t)c_pointer(obj));
+	  port_write_string(port)(sc, buf, clamp_length(nlen, CP_BUFSIZE), port);
 	  if ((c_pointer_type(obj) != sc->F) ||
 	      (c_pointer_info(obj) != sc->F))
 	    {
@@ -35136,10 +35149,11 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 	}}
   else
     {
-      if (is_symbol(c_pointer_type(obj)))
-	nlen = snprintf(buf, 128, "#<%s %p>", symbol_name(c_pointer_type(obj)), c_pointer(obj));
-      else nlen = snprintf(buf, 128, "#<c_pointer %p>", c_pointer(obj));
-      port_write_string(port)(sc, buf, nlen, port);
+      if ((is_symbol(c_pointer_type(obj))) &&
+	  (symbol_name_length(c_pointer_type(obj)) < (CP_BUFSIZE / 2)))
+	nlen = snprintf(buf, CP_BUFSIZE, "#<%s %p>", symbol_name(c_pointer_type(obj)), c_pointer(obj));
+      else nlen = snprintf(buf, CP_BUFSIZE, "#<c_pointer %p>", c_pointer(obj));
+      port_write_string(port)(sc, buf, clamp_length(nlen, CP_BUFSIZE), port);
     }
 }
 
@@ -35156,7 +35170,7 @@ static void rng_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
     nlen = snprintf(buf, 128, "(random-state %" PRIu64 " %" PRIu64 ")", random_seed(obj), random_carry(obj));
   else nlen = snprintf(buf, 128, "#<rng %" PRIu64 " %" PRIu64 ">", random_seed(obj), random_carry(obj));
 #endif
-  port_write_string(port)(sc, buf, nlen, port);
+  port_write_string(port)(sc, buf, clamp_length(nlen, 128), port);
 }
 
 static void display_any(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
@@ -35471,7 +35485,7 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	  port_write_string(port)(sc, "#<", 2, port);
 	  c_object_name_to_port(sc, obj, port);
 	  nlen = snprintf(buf, 128, " %p>", obj);
-	  port_write_string(port)(sc, buf, nlen, port);
+	  port_write_string(port)(sc, buf, clamp_length(nlen, 128), port);
 	}}
 }
 
@@ -84048,23 +84062,21 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 			  (o->v[3].d_7pi_f == float_vector_ref_d_7pi) && (o->v[2].p == o->v[6].p))
 			copy_to_same_type(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), integer(stepper), end, integer(stepper));
 		      else
-			for (; integer(stepper) < end; integer(stepper)++)
-			  fd(o);
-		    }}
+			{
+			  if ((o->v[0].fd == opt_d_7pid_ssc) && (o->v[4].d_7pid_f == float_vector_set_unchecked) && (stepper == slot_value(o->v[2].p)))
+			    s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), make_real(sc, o->v[3].x), stepper, make_integer(sc, end)));
+			  else
+			    for (; integer(stepper) < end; integer(stepper)++)
+			      fd(o);
+		    }}}
 	      else
 		{
 		  s7_pointer (*fp)(opt_info *o);
 		  fp = o->v[0].fp;
-		  if ((fp == opt_p_pip_ssc) &&                     /* or any opt without f? */
+		  if ((fp == opt_p_pip_ssc) &&
 		      (stepper == slot_value(o->v[2].p)) &&        /* i.e. index by do counter */
-		      (o->v[3].p_pip_f == string_set_unchecked) && /* or any similar setter? */
-		      (end <= string_length(slot_value(o->v[1].p))))
-		    {
-		      char *str;
-		      str = (char *)(string_value(slot_value(o->v[1].p) + integer(stepper)));
-		      local_memset((void *)str, character(o->v[4].p), end - integer(stepper));
-		      integer(stepper) = end;
-		    }
+		      ((o->v[3].p_pip_f == string_set_unchecked) || (o->v[3].p_pip_f == vector_set_unchecked) || (o->v[3].p_pip_f == list_set_p_pip_unchecked)))
+		    s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), o->v[4].p, stepper, make_integer(sc, end)));
 		  else
 		    {
 		      if (fp == opt_if_bp)
@@ -84083,24 +84095,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  opt_info *o;
 		  o = sc->opts[0];
 		  fi = o->v[0].fi;
-		  if ((fi == opt_i_7pii_ssc) &&
-		      (stepper == slot_value(o->v[2].p)) &&
-		      (o->v[3].i_7pii_f == int_vector_set_unchecked) &&
-		      (end <= vector_length(slot_value(o->v[1].p))))
-		    {
-		      s7_int val;
-		      s7_int *ex;
-		      ex = int_vector_ints(slot_value(o->v[1].p));
-		      val = o->v[4].i;
-		      if (val == 0)
-			{
-			  memclr((void *)(ex + integer(stepper)), (end - integer(stepper)) * sizeof(s7_int)); /* memclr64 assumes multiple of 8 */
-			  integer(stepper) = end;
-			}
-		      else
-			for (; integer(stepper) < end; integer(stepper)++)
-			  ex[integer(stepper)] = val;
-		    }
+		  if ((fi == opt_i_7pii_ssc) && (stepper == slot_value(o->v[2].p)) && (o->v[3].i_7pii_f == int_vector_set_unchecked))
+		    s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), make_integer(sc, o->v[4].i), stepper, make_integer(sc, end)));
 		  else
 		    {
 		      if ((o->v[3].i_7pii_f == int_vector_set_unchecked) && (o->v[5].fi == ivref_7pi_ss) && (o->v[2].p == o->v[4].o1->v[2].p))
@@ -84108,11 +84104,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		      else
 			for (; integer(stepper) < end; integer(stepper)++)
 			  fi(o);
-		    }
-		  /* if fi = opt_i_i_s for example, -> o->v[2].i_i_f(integer(slot_value(o->v[1].p)))
-		   *   and o->v[2].i_i_f can be pulled out leaving a loop of ov2(integer(slot_value(o->v[1].p)));
-		   */
-		}
+		    }}
 	      else /* what cases are here? */
 		for (; integer(stepper) < end; integer(stepper)++)
 		  func(sc, car(code));
@@ -85264,13 +85256,10 @@ static void apply_c_macro(s7_scheme *sc)  	                    /* -------- C-bas
 {
   s7_int len;
   len = proper_list_length(sc->args);
-
   if (len < c_macro_required_args(sc->code))
     s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
-
   if (c_macro_all_args(sc->code) < len)
     s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
-
   sc->code = c_macro_call(sc->code)(sc, sc->args);
 }
 
@@ -86138,8 +86127,6 @@ static void op_define_with_setter(s7_scheme *sc)
 	}
       new_let = make_funclet(sc, new_func, code, closure_let(new_func));
 
-      /*  else closure_set_let(new_func, sc->curlet); */
-
       /* this should happen only if the closure* default values do not refer in any way to
        *   the enclosing environment (else we can accidentally shadow something that happens
        *   to share an argument name that is being used as a default value -- kinda dumb!).
@@ -86153,7 +86140,6 @@ static void op_define_with_setter(s7_scheme *sc)
 	    {
 	      s7_pointer slot;
 	      sc->let_number++; /* dummy let, force symbol lookup */
-
 	      for (slot = let_slots(sc->curlet); tis_slot(slot); slot = next_slot(slot))
 		if (slot_symbol(slot) == code)
 		  {
@@ -86210,7 +86196,6 @@ static void op_define_with_setter(s7_scheme *sc)
 	  symbol_increment_ctr(code);
 	}
       else s7_make_slot(sc, sc->curlet, code, sc->value);
-
       if ((is_any_macro(sc->value)) && (!is_c_macro(sc->value)))
 	{
 	  set_pair_macro(closure_body(sc->value), code);
@@ -94562,16 +94547,13 @@ static s7_pointer g_s7_let_ref_fallback(s7_scheme *sc, s7_pointer args)
 static s7_pointer s7_let_iterate(s7_scheme *sc, s7_pointer iterator)
 {
   s7_pointer symbol, value, osw;
-
   iterator_position(iterator)++;
   if (iterator_position(iterator) >= SL_NUM_FIELDS)
     return(iterator_quit(iterator));
-
   symbol = make_symbol(sc, s7_let_field_names[iterator_position(iterator)]);
   osw = sc->w;  /* protect against s7_let_field list making */
   value = s7_let_field(sc, symbol);
   sc->w = osw;
-
   if (iterator_let_cons(iterator))
     {
       s7_pointer p;
@@ -97707,60 +97689,59 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -------------------------------------------------------------
- *             gmp (3-20)  20.9   21.0   21.1   21.2   21.3
- * -------------------------------------------------------------
- * tpeak       126          115    114    114    113    111
- * tauto       782          648    642    647    651    503
- * tref        558          691    687    687    602    506
- * tshoot     1516          883    872    872    856    842
- * index      1208         1026   1016   1014   1013   1014
- * tmock      7676         1177   1165   1166   1147   1147
- * s7test     4509         1873   1831   1817   1809   1805
- * tvect      2513         2456   2413   2413   2331   2028
- * lt         2107         2123   2110   2112   2101   2091
- * tform      3277         2281   2273   2266   2288   2283
- * tread      2607         2440   2421   2412   2403   2410
- * trclo      4310         2715   2561   2560   2526   2525
- * fbench     2960         2688   2583   2577   2561   2557
- * tcopy      3778         4452                 4345   2560
- * tmat       3063         3065                        2591
- * tb         3402         2735   2681   2677   2640   2624
- * tmap       3712         2886   2857   2827   2786   2776
- * titer      2821         2865   2842   2842   2803   2803
- * tsort      3654         3105   3104   3097   2936   2936
- * dup        3201         3334   3332   3203   3003   2932
- * tmac       3295         3317   3277   3247   3221   3218
- * tset       3244         3253   3104   3207   3253   3246
- * tio        3703         3816   3752   3738   3692   3687
- * teq        3728         4068   4045   4038   3713   3712
- * tstr       6704         5281   4863   4765   4543   4362
- * tcase      4627         4960   4793   4669   4570   4563
- * tclo       4959         4787   4735   4668   4588   4596
- * tlet       5683         7775   5640   5585   4632   4633
- * tfft       88.7         6858                        4923
- * tnum       59.3         6348   6013   5998   5860   5800
- * trec       7763         5976   5970   5970   5969   5969
- * tmisc      6458         7389   6210   6174   6167   6157
- * tgsl       25.3         8485                 8422   6457
- * tgc        11.9         11.9   11.1   11.0   10.4   10.4
- * thash      37.2         11.8   11.7   11.7   11.4   11.3
- * tgen       12.2         11.2   11.4   11.3   11.3   11.3
- * tall       26.8         15.6   15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.2   37.1   37.3
- * sg         98.7         71.9   72.3   72.2   72.7   72.7
- * lg        104.4        106.6  105.0  105.1  104.3  103.8
- * tbig      598.4        177.4  175.8  174.3  172.5  171.7
- * -------------------------------------------------------------
+/* -----------------------------------------------
+ *             gmp (3-20)  20.9   21.0   21.3
+ * -----------------------------------------------
+ * tpeak       126          115    114    111
+ * tauto       782          648    642    503
+ * tref        558          691    687    506
+ * tshoot     1516          883    872    842
+ * index      1208         1026   1016   1014
+ * tmock      7676         1177   1165   1147
+ * s7test     4509         1873   1831   1805
+ * tvect      2513         2456   2413   2028
+ * lt         2107         2123   2110   2091
+ * tform      3277         2281   2273   2283
+ * tread      2607         2440   2421   2410
+ * trclo      4310         2715   2561   2525
+ * fbench     2960         2688   2583   2557
+ * tmat       3063         3065          2591
+ * tcopy      4898         8035          2600
+ * tb         3402         2735   2681   2624
+ * tmap       3712         2886   2857   2776
+ * titer      2821         2865   2842   2803
+ * tsort      3654         3105   3104   2936
+ * dup        3201         3334   3332   2932
+ * tmac       3295         3317   3277   3218
+ * tset       3244         3253   3104   3246
+ * tio        3703         3816   3752   3687
+ * teq        3728         4068   4045   3712
+ * tstr       6704         5281   4863   4362
+ * tcase      4627         4960   4793   4563
+ * tclo       4959         4787   4735   4596
+ * tlet       5683         7775   5640   4633
+ * tfft       88.7         6858          4923  4857
+ * tnum       59.3         6348   6013   5800
+ * trec       7763         5976   5970   5969
+ * tmisc      6458         7389   6210   6157
+ * tgsl       25.3         8485          6457
+ * tgc        11.9         11.9   11.1   10.4
+ * thash      37.2         11.8   11.7   11.3
+ * tgen       12.2         11.2   11.4   11.3
+ * tall       26.8         15.6   15.6   15.6
+ * calls      61.1         36.7   37.5   37.3
+ * sg         98.7         71.9   72.3   72.7
+ * lg        104.4        106.6  105.0  103.8
+ * tbig      598.4        177.4  175.8  171.7
+ * -----------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * perhaps add i_7piiii and piiip 
- *   complex/string vects, vset->dims (i.e. set with last index missing etc)
- *   need vector-dimension
- *   how to get the vector(or other) type: (car (signature v)) perhaps, but requires consing
- *   extend *_unchecked
+ * vectors: complex/string vects, vset->dims (i.e. set with last index missing etc but is this useful? You want within/across-dims)
+ *      that is you want append/set/ref-by-rows|columns but here outer ranks need to match
+ *   need vector-dimension, vector-element-type [hash-table?] (car (signature v)) perhaps, but requires consing
+ *     hash-key|value-type
+ *   extend *_unchecked [string? byte-vector? 3d? nd?], also type-unchecked cases?
  * ttl.scm for setter timings, setter can mean no methods
- * variable tracer history via probe-eval? 
- * implicit copy/fill maybe reverse?
+ * would be nice: multithread+data-base example, better dup!, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
  */

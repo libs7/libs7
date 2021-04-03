@@ -196,6 +196,78 @@
 
 ;;; --------------------------------------------------------------------------------
 
+(define (f1 v)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000))
+    (vector-set! v i 2.0)))
+
+(define (ftest1)
+  (let ((v (make-vector 1000)))
+    (do ((i 0 (+ i 1)))
+	((= i 10000) v)
+      (f1 v))))
+
+(ftest1)
+
+
+(define (f2 v)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000))
+    (string-set! v i #\a)))
+
+(define (ftest2)
+  (let ((v (make-string 1000)))
+    (do ((i 0 (+ i 1)))
+	((= i 10000) v)
+      (f2 v))))
+
+(ftest2)
+
+
+(define (f3 v)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000))
+    (float-vector-set! v i 2.0)))
+
+(define (ftest3)
+  (let ((v (make-float-vector 1000)))
+    (do ((i 0 (+ i 1)))
+	((= i 10000) v)
+      (f3 v))))
+
+(ftest3)
+
+
+(define (f4 v)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000))
+    (int-vector-set! v i 2)))
+
+(define (ftest4)
+  (let ((v (make-int-vector 1000)))
+    (do ((i 0 (+ i 1)))
+	((= i 10000) v)
+      (f4 v))))
+
+(ftest4)
+
+
+(define (f5 v)
+  (do ((i 0 (+ i 1)))
+      ((= i 1000))
+    (list-set! v i 2.0)))
+
+(define (ftest5)
+  (let ((v (make-list 1000)))
+    (do ((i 0 (+ i 1)))
+	((= i 1000) v)
+      (f5 v))))
+
+(ftest5)
+
+
+;;; --------------------------------------------------------------------------------
+
 (let ((new-env (sublet (curlet) (cons 'init_func 'block_init)))) ; load calls init_func if possible
   ;; depends on running s7test first normally
   (load "s7test-block.so" new-env))
