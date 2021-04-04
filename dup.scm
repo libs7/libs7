@@ -95,7 +95,8 @@
 			(let ((lenseq (subvector lens i (+ i size)))
 			      (lineseq (subvector lines i (+ size i))))
 			  (do ((k (+ i 1) (+ k 1)))
-			      ((>= k last-line))
+			      ((or (>= i k)   ; i incremented by full-size when local matches end
+				   (>= k last-line)))
 			    (let ((jk (all-positive? k size-1)))
 			      (if (not (= jk k))
 				  (set! k jk)
@@ -104,7 +105,7 @@
 				    (vector-set! reported-already k #t)
 				    (let ((full-size size))
 				      (do ((nk (+ k size) (+ nk 1))
-					   (ni (+ i size) (+ ni 1)))
+					   (ni (+ i size) (+ ni 1)))  ; here if i==k we run to the end and quit
 					  ((or (= nk total-lines)
 					       (not (= (int-vector-ref lens ni) (int-vector-ref lens nk)))
 					       (not (string=? (vector-ref lines ni) (vector-ref lines nk))))
@@ -126,9 +127,9 @@
   )
 
 (dup 16 "s7.c" 110000)
-;(dup 3 "s7.c" 110000)
-;(dup 12 "ffitest.c" 2000)
-;(dup 8 "ffitest.c" 2000)
+;(dup 12 "s7.c" 110000)
+;(dup 12 "ffitest.c" 10000)
+;(dup 8 "ffitest.c" 10000)
 ;(dup 1 "s7test.scm" 110000)
 
 (when (> (*s7* 'profile) 0)
