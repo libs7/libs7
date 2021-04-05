@@ -1309,8 +1309,8 @@ struct s7_scheme {
              tan_symbol, tanh_symbol, throw_symbol, string_to_byte_vector_symbol,
              tree_count_symbol, tree_leaves_symbol, tree_memq_symbol, tree_set_memq_symbol, tree_is_cyclic_symbol, truncate_symbol, type_of_symbol,
              unlet_symbol,
-             values_symbol, varlet_symbol, vector_append_symbol, vector_dimensions_symbol, vector_fill_symbol, vector_rank_symbol,
-             vector_ref_symbol, vector_set_symbol, vector_symbol,
+             values_symbol, varlet_symbol, vector_append_symbol, vector_dimension_symbol, vector_dimensions_symbol, vector_fill_symbol, 
+             vector_rank_symbol, vector_ref_symbol, vector_set_symbol, vector_symbol,
              weak_hash_table_symbol, with_input_from_file_symbol, with_input_from_string_symbol, with_output_to_file_symbol, with_output_to_string_symbol,
              write_byte_symbol, write_char_symbol, write_string_symbol, write_symbol,
              local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol;
@@ -2819,7 +2819,7 @@ void s7_show_history(s7_scheme *sc);
 #define opt1_lambda_unchecked(P)       opt1(P,                      OPT1_LAMBDA) /* can be free/null? from s7_call? */
 #define opt1_lambda(P)                 T_Clo(opt1(P,                OPT1_LAMBDA))
 #define set_opt1_lambda(P, X)          set_opt1(P, T_Clo(X),        OPT1_LAMBDA)
-#define set_opt1_lambda_add(P, X)      do {set_opt1(P, T_Clo(X), OPT1_LAMBDA); add_opt1_func(sc, P);} while (0)
+#define set_opt1_lambda_add(P, X)      do {set_opt1(P, T_Clo(X),    OPT1_LAMBDA); add_opt1_func(sc, P);} while (0)
 #define opt1_goto(P)                   T_Pos(opt1(P,                OPT1_GOTO))  /* used when checking for non-goto unknown in eval, so can't be T_Got */
 #define set_opt1_goto(P, X)            set_opt1(P, T_Pos(X),        OPT1_GOTO)
 #define opt1_clause(P)                 T_Pos(opt1(P,                OPT1_CLAUSE))
@@ -42204,6 +42204,29 @@ static s7_pointer g_vector_rank(s7_scheme *sc, s7_pointer args)
 }
 
 
+/* -------------------------------- vector-dimension -------------------------------- */
+
+static s7_pointer g_vector_dimension(s7_scheme *sc, s7_pointer args)
+{
+  #define H_vector_dimension "(vector-dimension vect n) returns the size of the n-th dimension (n is 0-based)"
+  #define Q_vector_dimension s7_make_signature(sc, 3, sc->is_integer_symbol, sc->is_vector_symbol, sc->is_integer_symbol)
+  s7_pointer v, np;
+  s7_int n;
+  v = car(args);
+  if (!is_any_vector(v))
+    return(method_or_bust(sc, v, sc->vector_dimension_symbol, args, T_VECTOR, 1));
+  np = cadr(args);
+  if (!s7_is_integer(np))
+    return(method_or_bust(sc, v, sc->vector_dimension_symbol, args, T_INTEGER, 2));
+  n = s7_integer(np);
+  if ((n < 0) || (n >= vector_rank(v))) 
+    return(s7_out_of_range_error(sc, "vector-dimension", 2, np, "must be between 0 and the vector-rank - 1"));
+  if (vector_has_dimensional_info(v))
+    return(make_integer(sc, vector_dimension(v, n)));
+  return(make_integer(sc, vector_length(v)));
+}
+
+
 /* -------------------------------- vector-dimensions -------------------------------- */
 static s7_pointer g_vector_dimensions(s7_scheme *sc, s7_pointer args)
 {
@@ -51742,13 +51765,13 @@ static s7_pointer g_object_to_let(s7_scheme *sc, s7_pointer args)
     case T_STRING:
       return(g_local_inlet(sc, 8, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_string_symbol,
-			   sc->size_symbol, s7_length(sc, obj),
+			   sc->size_symbol, str_length(sc, obj),
 			   sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_string(obj))));
 
     case T_PAIR:
       return(g_local_inlet(sc, 6, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_pair_symbol,
-			   sc->size_symbol, s7_length(sc, obj)));
+			   sc->size_symbol, pair_length(sc, obj)));
 
     case T_RANDOM_STATE:
       return(random_state_to_let(sc, obj));
@@ -60919,7 +60942,7 @@ static bool i_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  settee = lookup_slot_from(cadr(car_x), sc->curlet);
 	  if ((is_slot(settee)) &&
 	      (!is_immutable(settee)) &&
-	      ((!slot_has_setter(settee)) || (slot_setter(settee) != slot_value(initial_slot(sc->is_integer_symbol)))))
+	      ((!slot_has_setter(settee)) || (slot_setter(settee) != initial_value(sc->is_integer_symbol))))
 	    {
 	      opt_info *o1;
 	      o1 = sc->opts[sc->pc];
@@ -63143,7 +63166,7 @@ static bool d_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  settee = lookup_slot_from(cadr(car_x), sc->curlet);
 	  if ((is_slot(settee)) &&
 	      (!is_immutable(settee)) &&
-	      ((!slot_has_setter(settee)) || (slot_setter(settee) != slot_value(initial_slot(sc->is_float_symbol)))))
+	      ((!slot_has_setter(settee)) || (slot_setter(settee) != initial_value(sc->is_float_symbol))))
 	    /* ttl.scm experiment: if setter is float? (sin float) is a float so we can float_optimize this */
 	    {
 	      opt_info *o1;
@@ -64439,8 +64462,8 @@ static s7_pointer opt_p_pi_sf_sref(opt_info *o) {return(string_ref_p_pi_unchecke
 static s7_pointer opt_p_pi_fc(opt_info *o) {return(o->v[3].p_pi_f(opt_sc(o), o->v[5].fp(o->v[4].o1), o->v[2].i));}
 
 /* we need a unique name for this use of denominator (need to remember that any such integer should be new (i.e. mutable, not a small int) */
-#define do_loop_end(A) denominator(A)
-#define set_do_loop_end(A, B) denominator(A) = B
+#define do_loop_end(A) denominator(T_Int(A))
+#define set_do_loop_end(A, B) denominator(T_Int(A)) = B
 
 static void check_unchecked(s7_scheme *sc, s7_pointer obj, s7_pointer slot, opt_info *opc)
 {
@@ -80458,10 +80481,8 @@ static inline void check_set(s7_scheme *sc)
 		   *   it's (set! <var> (<op> <var> val)) or (<op> val <var>) or (<op> <var>)
 		   *   in the set code, we get the slot as usual, then in case 1 above,
 		   *   car(sc->t2_1) = slot_value(slot), car(sc->t2_2) = increment, call <op>, set slot_value(slot)
-		   * this can be done in all combined cases where a symbol is repeated (do in particular)
-		   */
-
-		  /* (define (hi) (let ((x 1)) (set! x (+ x 1))))
+		   *
+		   * (define (hi) (let ((x 1)) (set! x (+ x 1))))
 		   *   but the value might be values:
 		   *   (let () (define (hi) (let ((x 0)) (set! x (values 1 2)) x)) (catch #t hi (lambda a a)) (hi))
 		   *   which is caught in splice_in_values
@@ -80476,7 +80497,6 @@ static inline void check_set(s7_scheme *sc)
 			}
 		      else
 			{
-			  /* most of these special cases probably don't matter; set_symbol_opscq called 500k times barely registered in callgrind */
 			  if (optimize_op(value) == HOP_SAFE_C_SS)
 			    {
 			      if (settee == cadr(value))
@@ -96523,6 +96543,7 @@ static void init_rootlet(s7_scheme *sc)
 #endif
   sc->vector_ref_symbol =            defun("vector-ref",	vector_ref,		2, 0, true);
   sc->vector_set_symbol =            defun("vector-set!",	vector_set,		3, 0, true);
+  sc->vector_dimension_symbol =      defun("vector-dimension",  vector_dimension,	2, 0, false);
   sc->vector_dimensions_symbol =     defun("vector-dimensions", vector_dimensions,	1, 0, false);
   sc->vector_rank_symbol =           defun("vector-rank",       vector_rank,	        1, 0, false);
   sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false);
@@ -97706,7 +97727,8 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * need vector-dimension, vector-element-type, hash-key|value-type
- * ttl.scm for setter timings, setter can mean no methods
+ * ttl.scm for setter timings, setter can mean no methods, maybe better in fx* than opt*?
  * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
+ * track eval h_safe* sources
+ * track opt1_lambda gc_list?
  */

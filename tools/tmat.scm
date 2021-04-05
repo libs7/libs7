@@ -6,7 +6,7 @@
       ;; translated from Numerical Recipes (gaussj)
       (call-with-exit
        (lambda (return)
-	 (let ((n (car (vector-dimensions matrix))))
+	 (let ((n (vector-dimension matrix 0)))
 	   (let ((cols (make-int-vector n 0))
 		 (rows (make-int-vector n 0))
 		 (pivots (make-int-vector n 0)))
@@ -73,7 +73,7 @@
 
 
 (define (matrix-multiply A B)
-  (let ((size (car (vector-dimensions A))))
+  (let ((size (vector-dimension A 0)))
     (do ((C (make-float-vector (list size size) 0))
          (i 0 (+ i 1)))
 	((= i size) C)

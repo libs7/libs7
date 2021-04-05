@@ -112,6 +112,7 @@
 		       'format             (with-mock-wrapper* #_format)
 		       'write              (with-mock-wrapper* #_write)
 		       'display            (with-mock-wrapper* #_display)
+		       'vector-dimension   (with-mock-wrapper #_vector-dimension)
 		       'vector-dimensions  (with-mock-wrapper #_vector-dimensions)
 		       'vector-rank        (with-mock-wrapper #_vector-rank)
 		       'fill!              (with-mock-wrapper* #_fill!)

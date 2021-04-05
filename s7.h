@@ -907,7 +907,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  *
- * 31-Mar:    vector-rank.
+ * 31-Mar:    vector-rank, vector-dimension.
  * 17-Mar:    removed deprecated nan.0 and inf.0 due to compiler stupidity.
  * 25-Jan:    s7_define_semisafe_typed_function.
  * 6-Jan-21:  s7_hash_code.

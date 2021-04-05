@@ -394,6 +394,7 @@
 	       (set! result (cons `(set! (setter (quote ,(caar var))) (list-ref ,gsetters ,i)) result))))
        ,@body)))
 
+#|
 (define-macro (while test . body)      ; while loop with predefined break and continue
   `(call-with-exit
     (lambda (break)
@@ -403,6 +404,15 @@
 	      (let () ,@body)
 	      (continue))
 	    (break))))))
+|#
+(define-macro (while test . body)      ; while loop with predefined break and continue
+  `(call-with-exit
+    (lambda (break)
+      (let continue ()
+	(when ,test
+	  ,@body
+	  (continue))))))
+
 
 (define-macro (do* spec end . body)
   `(let* ,(map (lambda (var)
@@ -1638,7 +1648,7 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 	      cdddr cdadr cddar caaaar caaadr caadar cadaar caaddr cadddr cadadr caddar cdaaar cdaadr
 	      cdadar cddaar cdaddr cddddr cddadr cdddar assoc member list list-ref list-set! list-tail
 	      make-list length copy fill! reverse reverse! sort! append assq assv memq memv vector-append
-	      list->vector vector-fill! vector-length vector->list vector-ref vector-set! vector-dimensions
+	      list->vector vector-fill! vector-length vector->list vector-ref vector-set! vector-dimension vector-dimensions
 	      make-vector subvector vector float-vector make-float-vector float-vector-set! vector-rank
 	      float-vector-ref int-vector make-int-vector int-vector-set! int-vector-ref string->byte-vector
 	      byte-vector make-byte-vector hash-table make-hash-table hash-table-ref weak-hash-table
