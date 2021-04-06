@@ -1514,6 +1514,7 @@ static void memclr(void *s, size_t n)
 #define LOOP_4(Code) do {Code; Code; Code; Code;} while (0)
 #define LOOP_8(Code) do {Code; Code; Code; Code; Code; Code; Code; Code;} while (0)
 #define STEP_8(Var) (((Var) & 0x7) == 0)
+#define STEP_64(Var) (((Var) & 0x3f) == 0)
 
 #if POINTER_32
 #define memclr64 memclr
@@ -3797,7 +3798,7 @@ static inline s7_pointer wrap_real2(s7_scheme *sc, s7_double x) {real(sc->real_w
 /* --------------------------------------------------------------------------------
  * local versions of some standard C library functions
  * timing tests involving these are very hard to interpret
- * local_memset and memclr are faster using int64_t than int32_t
+ * local_memset is faster using int64_t than int32_t
  */
 
 static void local_memset(void *s, uint8_t val, size_t n)
@@ -28078,10 +28079,7 @@ static s7_pointer g_string_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
       if (start == end) return(chr);
     }
   if (end == 0) return(chr);
-
-  if ((int)(character(chr)) == 0)
-    memclr((void *)(string_value(x) + start), end - start);
-  else local_memset((void *)(string_value(x) + start), (int32_t)character(chr), end - start);
+  local_memset((void *)(string_value(x) + start), (int32_t)character(chr), end - start); /* not memclr even if chr=#\null! */
   return(chr);
 }
 
@@ -40278,7 +40276,7 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 		  vector_setter(x) = byte_vector_setter;
 		  if (filled)
 		    {
-		      if (STEP_8(len))
+		      if (STEP_64(len))
 			memclr64((void *)(byte_vector_bytes(x)), len);
 		      else memclr((void *)(byte_vector_bytes(x)), len);
 		    }}}}}
@@ -40458,7 +40456,11 @@ static void byte_vector_fill(s7_scheme *sc, s7_pointer vec, uint8_t byte)
   len = vector_length(vec);
   if (len == 0) return;
   if (byte == 0)
-    memclr((void *)(byte_vector_bytes(vec)), len);
+    {
+      if (STEP_64(len))
+	memclr64((void *)(byte_vector_bytes(vec)), len);
+      else memclr((void *)(byte_vector_bytes(vec)), len);
+    }
   else local_memset((void *)(byte_vector_bytes(vec)), byte, len);
 }
 
@@ -69023,6 +69025,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 
   /* try the normal case first */
   f = car(args);                                /* the function */
+  sc->value = f;
   len = proper_list_length(cdr(args));
 
   if (is_closure(f))                            /* not lambda* that might get confused about arg names */
@@ -69214,6 +69217,7 @@ static s7_pointer slookup(s7_scheme *sc, s7_pointer s) {return(slot_value(s));}
 static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
 {
   s7_pointer body;
+  sc->value = f;
   body = closure_body(f);
   if ((is_pair(seq)) &&
       (!no_cell_opt(body)) &&
@@ -71703,8 +71707,8 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 
   arg1 = cadr(expr);
   func_is_safe = is_safe_procedure(func);
-  if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
-
+  if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
+  /* hooboy! if c_function func is immutable or we're not in with-let and func's name's id is zero (so func is global), set hop to 1?? */
   if (pairs == 0)
     {
       if (func_is_safe)                  /* safe c function */
@@ -73271,7 +73275,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       (c_function_all_args(func) >= 1) &&
       (!is_keyword(arg1)))           /* the only arg should not be a keyword (needs error checks later) */
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
+      if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       set_safe_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_A);
       fx_annotate_arg(sc, cdr(expr), e);
       set_opt3_arglen(cdr(expr), int_one);
@@ -73432,7 +73436,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       /* this is a mess */
       bool func_is_safe;
 
-      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
+      if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       func_is_safe = is_safe_procedure(func);
       if (pairs == 0)
 	{
@@ -74068,7 +74072,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       (c_function_all_args(func) >= 1) &&
       (!is_keyword(arg2)))
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
+      if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       set_optimized(expr);
       set_optimize_op(expr, hop + OP_SAFE_C_FUNCTION_STAR_AA); /* k+c? = cc */
       fx_annotate_args(sc, cdr(expr), e);
@@ -74315,7 +74319,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       (c_function_required_args(func) <= 3) &&
       (c_function_all_args(func) >= 3))
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
+      if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       if ((is_safe_procedure(func)) ||
 	  ((is_maybe_safe(func)) && (unsafe_is_safe(sc, arg3, e))))
 	{
@@ -74548,7 +74552,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
       (c_function_required_args(func) <= args) &&
       (c_function_all_args(func) >= args))
     {
-      if ((hop == 0) && (symbol_id(car(expr)) == 0) && (!sc->in_with_let)) hop = 1;
+      if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       if (is_safe_procedure(func))
 	{
 	  if (pairs == 0)
@@ -95583,6 +95587,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_ii_function(sc, global_value(sc->make_int_vector_symbol), make_int_vector_p_ii);
   s7_set_p_ii_function(sc, global_value(sc->make_byte_vector_symbol), make_byte_vector_p_ii);
   s7_set_p_pp_function(sc, global_value(sc->vector_symbol), vector_p_pp);
+  s7_set_p_p_function(sc, global_value(sc->signature_symbol), s7_signature);
 
 #if WITH_SYSTEM_EXTRAS
   s7_set_b_7p_function(sc, global_value(sc->is_directory_symbol), is_directory_b_7p);
@@ -97686,10 +97691,10 @@ int main(int argc, char **argv)
  * tauto       782          648    642    503
  * tref        558          691    687    506
  * tshoot     1516          883    872    842
- * index      1208         1026   1016   1014
+ * index      1208         1026   1016   1013
  * tmock      7676         1177   1165   1147
  * s7test     4509         1873   1831   1805
- * tvect      2513         2456   2413   2028
+ * tvect      2513         2456   2413   2028  2013
  * lt         2107         2123   2110   2091
  * tform      3277         2281   2273   2283
  * tread      2607         2440   2421   2410
@@ -97705,7 +97710,7 @@ int main(int argc, char **argv)
  * tset       3244         3253   3104   3246
  * dup        3648         3805   3788   3323
  * tio        3703         3816   3752   3687
- * teq        3728         4068   4045   3712
+ * teq        3728         4068   4045   3712  3718
  * tstr       6704         5281   4863   4362
  * tcase      4627         4960   4793   4563
  * tclo       4959         4787   4735   4596
@@ -97714,21 +97719,19 @@ int main(int argc, char **argv)
  * tnum       59.3         6348   6013   5800
  * trec       7763         5976   5970   5969
  * tmisc      6458         7389   6210   6157
- * tgsl       25.3         8485   7802   6457
+ * tgsl       25.3         8485   7802   6457  6429
  * tgc        11.9         11.9   11.1   10.4
  * thash      37.2         11.8   11.7   11.3
  * tgen       12.2         11.2   11.4   11.3
  * tall       26.8         15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3
  * sg         98.7         71.9   72.3   72.7
- * lg        104.4        106.6  105.0  103.8
+ * lg        104.4        106.6  105.0  103.9
  * tbig      598.4        177.4  175.8  171.7
  * -----------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- * ttl.scm for setter timings, setter can mean no methods, maybe better in fx* than opt*?
+ * ttl.scm for setter timings, maybe better in fx* than opt*?
  * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
- * track eval h_safe* sources
- * track opt1_lambda gc_list?
  */

@@ -46,8 +46,9 @@
 (define (immutable-let L)
   (with-let L 
     (for-each (lambda (f)
-                (immutable! (car f)))
-              (curlet)))
+                (immutable! (car f))
+                (immutable! (cdr f)))
+	      (curlet)))
   L)
 
 (with-let (sublet (immutable-let *libgsl*))
