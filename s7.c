@@ -7637,8 +7637,8 @@ static void pop_stack(s7_scheme *sc)
    *   and are carried around as GC protection in other cases.
    */
   sc->code = T_Pos(sc->stack_end[0]);
-  sc->curlet = T_Pos(sc->stack_end[1]);  /* not T_Lid, see below */
-  sc->args = sc->stack_end[2];           /* t101-aux-36 pops the free cell from op_any_closure_3p_3 */
+  sc->curlet = T_Pos(sc->stack_end[1]);  /* not T_Lid, see op_closure_3p_end et al (stack used to pass args, not curlet) */
+  sc->args = sc->stack_end[2];
   sc->cur_op = (opcode_t)(sc->stack_end[3]);
   if (sc->cur_op >= NUM_OPS)
     {
@@ -7734,7 +7734,6 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
   do { \
       Sc->stack_end[0] = Code; \
       Sc->stack_end[1] = sc->curlet; \
-      /* Sc->stack_end[2] = Sc->unused; */ \
       Sc->stack_end[3] = (s7_pointer)(Op); \
       Sc->stack_end += 4; \
   } while (0)
@@ -7757,7 +7756,6 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 
 #define push_stack_op(Sc, Op) \
   do { \
-      /* Sc->stack_end[2] = Sc->unused; */ \
       Sc->stack_end[3] = (s7_pointer)(Op); \
       Sc->stack_end += 4; \
   } while (0)
@@ -7765,7 +7763,6 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 #define push_stack_op_let(Sc, Op) \
   do { \
       Sc->stack_end[1] = sc->curlet; \
-      /* Sc->stack_end[2] = Sc->unused; */ \
       Sc->stack_end[3] = (s7_pointer)(Op); \
       Sc->stack_end += 4; \
   } while (0)
@@ -15428,7 +15425,7 @@ static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radi
 
 static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_symbol, bool with_error)
 {
-  /* make symbol or number from string */
+  /* make symbol or number from string, a number starts with + - . or digit, but so does 1+ for example */
   #define IS_DIGIT(Chr, Rad) (digits[(uint8_t)Chr] < Rad)
 
   char c, *p;
@@ -15437,12 +15434,10 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
   p = q;
   c = *p++;
 
-  /* a number starts with + - . or digit, but so does 1+ for example */
-
   switch (c)
     {
     case '#':
-      /* #<... here only from string->number, I think */
+      /* from string->number, (string->number #xc) */
       return(make_sharp_constant(sc, p, with_error, NULL, false)); /* make_sharp_constant expects the '#' to be removed */
 
     case '+':
@@ -34070,7 +34065,6 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 	  unstack(sc);
 	  return;
 	}
-
       if (ci)
 	{
 	  for (x = lst, i = 0; (is_pair(x)) && (i < plen) && ((i == 0) || (peek_shared_ref(ci, x) == 0)); i++, x = cdr(x))
@@ -34157,7 +34151,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
       else port_write_string(port)(sc, "(hash-table)", 12, port);
       return;
     }
-
   if (use_write != P_READABLE)
     {
       s7_int plen;
@@ -34172,7 +34165,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  too_long = true;
 	  len = plen;
 	}}
-
   if ((use_write == P_READABLE) &&
       (ci))
     {
@@ -34566,7 +34558,6 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 static void write_macro_readably(s7_scheme *sc, s7_pointer obj, s7_pointer port)
 {
   s7_pointer arglist, body, expr;
-
   body = closure_body(obj);
   arglist = closure_args(obj);
 
@@ -34685,7 +34676,6 @@ static s7_pointer find_closure(s7_scheme *sc, s7_pointer closure, s7_pointer cur
 	if (slot_value(y) == closure)
 	  return(slot_symbol(y));
     }
-
   if ((is_any_macro(closure)) && /* can't be a c_macro here */
       (has_pair_macro(closure))) /* maybe macro never called, so no maclet exists */
     return(pair_macro(closure_body(closure)));
@@ -35080,7 +35070,6 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 	  ((ref = peek_shared_ref(ci, obj)) != 0))
 	{
 	  port_write_string(port)(sc, "#f", 2, port);
-
 	  if (!is_cyclic_set(obj))
 	    {
 	      if (ci->init_port == sc->F)
@@ -35408,7 +35397,6 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		  port_write_string(port)(sc, buf, nlen, port);
 		  return;
 		}
-
 	      port_write_character(port)(sc, '(', port);
 	      c_object_name_to_port(sc, obj, port);
 	      for (i = 0, p = obj_list; is_pair(p); i++, p = cdr(p))
@@ -35843,7 +35831,6 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
       for (i = out_len - 3; i < out_len; i++)
 	port_data(strport)[i] = (uint8_t)'.';
     }
-
   if (out_len >= port_data_size(strport)) /* this can happen (but only == I think) */
     res = block_to_string(sc, reallocate(sc, port_data_block(strport), out_len + 1), out_len);
   else res = block_to_string(sc, port_data_block(strport), out_len);
@@ -36393,14 +36380,9 @@ static format_data_t *open_format_data(s7_scheme *sc)
 #if WITH_GMP
 static bool s7_is_one_or_big_one(s7_scheme *sc, s7_pointer p)
 {
-  if (!is_big_number(p))
-    return(s7_is_one(p));
-
-  if (is_t_big_integer(p))
-    return(mpz_cmp_ui(big_integer(p), 1) == 0);
-
-  if (is_t_big_real(p))
-    return(mpfr_cmp_d(big_real(p), 1.0) == 0);
+  if (!is_big_number(p)) return(s7_is_one(p));
+  if (is_t_big_integer(p)) return(mpz_cmp_ui(big_integer(p), 1) == 0);
+  if (is_t_big_real(p)) return(mpfr_cmp_d(big_real(p), 1.0) == 0);
   return(false);
 }
 #else
@@ -36618,7 +36600,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      if (!is_null(curly_arg))
 			format_error(sc, "'{' directive argument should be a list or something we can turn into a list", 76, str, args, fdat);
 		  }
-
 		i += (curly_len + 2); /* jump past the ending '}' too */
 		fdat->args = cdr(fdat->args);
 		fdat->ctr++;
@@ -36675,7 +36656,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			close_format_port(sc, strport);
 			fdat->strport = NULL;
 		      }
-
 		    fdat->args = cdr(fdat->args);
 		    fdat->ctr++;
 		  }}
@@ -37022,7 +37002,6 @@ is #t, the string is also sent to the current-output-port."
       if (pt == sc->F)                       /*   otherwise () -> #f so we get a returned string, which is confusing */
 	return(pt);                          /*   but this means some error checks are skipped? */
     }
-
   if (!((s7_is_boolean(pt)) ||               /* #f or #t */
 	((is_output_port(pt)) &&             /* (current-output-port) or call-with-open-file arg, etc */
 	 (!port_is_closed(pt)))))
@@ -37106,7 +37085,6 @@ static s7_pointer g_format_no_column(s7_scheme *sc, s7_pointer args)
       if (pt == sc->F)
 	return(sc->F);
     }
-
   if (!((s7_is_boolean(pt)) ||
 	((is_output_port(pt)) &&             /* (current-output-port) or call-with-open-file arg, etc */
 	 (!port_is_closed(pt)))))
@@ -70860,7 +70838,6 @@ static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
 		{
 		  if (len >= sc->strbuf_size)
 		    resize_strbuf(sc, len);
-		  /* for (i = 0; i < len; i++) sc->strbuf[i] = port_data(pt)[port_position(pt)++]; */
 		  memcpy((void *)(sc->strbuf), (void *)(port_data(pt) + port_position(pt)), len);
 		  port_position(pt) += len;
 		}
@@ -86529,10 +86506,11 @@ static void op_any_closure_3p(s7_scheme *sc)
       p = cdr(p);
       if (has_fx(p))
 	{
-	  s7_pointer val;
-	  val = sc->args; /* protect from fx_call? */
-	  sc->args = cons(sc, val, fx_call(sc, p));
-	  push_stack_direct(sc, OP_ANY_CLOSURE_3P_3);
+	  sc->stack_end[0] = sc->code;
+	  sc->stack_end[2] = sc->args;
+	  sc->stack_end[3] = (s7_pointer)(OP_ANY_CLOSURE_3P_3);
+	  sc->stack_end += 4;
+	  sc->stack_end[-3] = fx_call(sc, p); /* this might push_stack gc_protect etc, so push_stack via +4 before the fx_call */
 	  sc->code = cadr(p);
 	}
       else
@@ -86566,8 +86544,8 @@ static bool closure_3p_end(s7_scheme *sc, s7_pointer p)
       sc->code = T_Pair(closure_body(func));
       return(true);
     }
-  sc->args = cons(sc, sc->args, sc->value); /* freed below */
   push_stack_direct(sc, OP_ANY_CLOSURE_3P_3);
+  sc->stack_end[-3] = sc->value; /* curlet stack loc */
   sc->code = car(p);
   return(false);
 }
@@ -86587,20 +86565,15 @@ static bool op_any_closure_3p_1(s7_scheme *sc)
   return(false);
 }
 
-static bool op_any_closure_3p_2(s7_scheme *sc)
-{
-  return(closure_3p_end(sc, cdddr(sc->code)));
-}
+static bool op_any_closure_3p_2(s7_scheme *sc) {return(closure_3p_end(sc, cdddr(sc->code)));}
 
 static void op_any_closure_3p_3(s7_scheme *sc)
 {
-  s7_pointer func, p;
-  p = sc->args;
+  s7_pointer func;   /* incoming: args: sc->args, sc->curlet, sc->value */
   func = opt1_lambda(sc->code);
   if (is_safe_closure(func))
-    sc->curlet = update_let_with_three_slots(sc, closure_let(func), car(p), cdr(p), sc->value);
-  else make_let_with_three_slots(sc, func, car(p), cdr(p), sc->value);
-  free_cell(sc, p);   /* sc->args = sc->nil; */ /* if s7_debugging, the free cell can be confuse pop_stack */
+    sc->curlet = update_let_with_three_slots(sc, closure_let(func), sc->args, sc->curlet, sc->value);
+  else make_let_with_three_slots(sc, func, sc->args, sc->curlet, sc->value);  
   sc->code = T_Pair(closure_body(func));
 }
 
