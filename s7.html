@@ -9279,6 +9279,7 @@ s7_funclet returns the top let within the function (the let containing the argum
 <pre class="indented">
 bool s7_is_c_object(s7_pointer p);
 s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value);
+s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value);
 s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let);
 
 s7_int s7_c_object_type(s7_pointer obj);
@@ -9370,7 +9371,9 @@ s7_c_object_set_let(s7, m, g_mark_methods);
 an appropriate mark of course), object-&gt;let calls the object's object-&gt;let method.
 Don't forget to GC-protect the let!
 </p>
-
+<p>s7_make_c_object_without_gc makes a c-object of the given type, but the gc_free function
+won't be called when the s7_cell that holds the C data is freed for reuse.
+</p>
 
 <div class="shortheader" id="cio">IO</div>
 <pre class="indented">

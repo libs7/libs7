@@ -47118,7 +47118,7 @@ void *s7_c_object_value_checked(s7_pointer obj, s7_int type)
   return(NULL);
 }
 
-s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let)
+static s7_pointer make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let, bool with_gc)
 {
   s7_pointer x;
   new_cell(sc, x, sc->c_object_types[type]->outer_type);
@@ -47132,11 +47132,13 @@ s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7
   c_object_value(x) = value;
   c_object_set_let(x, (let == sc->rootlet) ? sc->nil : let);
   c_object_s7(x) = sc;
-  add_c_object(sc, x);
+  if (with_gc) add_c_object(sc, x);
   return(x);
 }
 
-s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value) {return(s7_make_c_object_with_let(sc, type, value, sc->nil));}
+s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let) {return(make_c_object_with_let(sc, type, value, let, true));}
+s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value) {return(make_c_object_with_let(sc, type, value, sc->nil, true));}
+s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value) {return(make_c_object_with_let(sc, type, value, sc->nil, false));}
 
 s7_pointer s7_c_object_let(s7_pointer obj) {return(c_object_let(obj));}
 
@@ -59943,14 +59945,15 @@ static s7_pointer opt_types_match(s7_scheme *sc, s7_pointer check, s7_pointer sy
   return(NULL);
 }
 
-static s7_double opt_float_any(s7_scheme *sc, s7_pointer expr)     {return(sc->opts[0]->v[0].fd(sc->opts[0]));}
+typedef s7_pointer (*opt_pfunc)(s7_scheme *sc);
+
+/* the expr args are ignored but give compatibility with fx|fn_proc */
 static s7_pointer opt_bool_any(s7_scheme *sc, s7_pointer expr)     {return((sc->opts[0]->v[0].fb(sc->opts[0])) ? sc->T : sc->F);}
 static s7_pointer opt_float_any_nr(s7_scheme *sc, s7_pointer expr) {sc->opts[0]->v[0].fd(sc->opts[0]); return(NULL);}
 static s7_pointer opt_int_any_nr(s7_scheme *sc, s7_pointer expr)   {sc->opts[0]->v[0].fi(sc->opts[0]); return(NULL);}
-static s7_pointer opt_cell_any_nr(s7_scheme *sc, s7_pointer expr)  {return(sc->opts[0]->v[0].fp(sc->opts[0]));}
 static s7_pointer opt_bool_any_nr(s7_scheme *sc, s7_pointer expr)  {sc->opts[0]->v[0].fb(sc->opts[0]); return(NULL);}
+static s7_pointer opt_cell_any_nr(s7_scheme *sc, s7_pointer expr)  {return(sc->opts[0]->v[0].fp(sc->opts[0]));} /* this is faster than returning null */
 
-/* callers for s7_optimize */
 static s7_pointer opt_wrap_float(s7_scheme *sc, s7_pointer expr) {return(make_real(sc, sc->opts[0]->v[0].fd(sc->opts[0])));}
 static s7_pointer opt_wrap_int(s7_scheme *sc, s7_pointer expr)   {return(make_integer(sc, sc->opts[0]->v[0].fi(sc->opts[0])));}
 static s7_pointer opt_wrap_cell(s7_scheme *sc, s7_pointer expr)  {return(sc->opts[0]->v[0].fp(sc->opts[0]));}
@@ -66469,6 +66472,15 @@ static s7_pointer opt_when_p(opt_info *o)
   return(opt_sc(o)->unspecified);
 }
 
+static s7_pointer opt_when_p_1(opt_info *o)
+{
+  opt_info *o1;
+  if (!o->v[4].fb(o->v[3].o1))
+    return(opt_sc(o)->unspecified);
+  o1 = o->v[5].o1;
+  return(o1->v[0].fp(o1));
+}
+
 static s7_pointer opt_unless_p(opt_info *o)
 {
   opt_info *o1;
@@ -66483,6 +66495,15 @@ static s7_pointer opt_unless_p(opt_info *o)
       o1->v[0].fp(o1);
     }
   o1 = o->v[i + 5].o1;
+  return(o1->v[0].fp(o1));
+}
+
+static s7_pointer opt_unless_p_1(opt_info *o)
+{
+  opt_info *o1;
+  if (o->v[4].fb(o->v[3].o1))
+    return(opt_sc(o)->unspecified);
+  o1 = o->v[5].o1;
   return(o1->v[0].fp(o1));
 }
 
@@ -66511,16 +66532,20 @@ static bool opt_cell_when(s7_scheme *sc, s7_pointer car_x, int32_t len)
   opc->v[1].i = len - 2;
   if (car(car_x) == sc->when_symbol)
     {
-      if (len == 4)
+      if (len == 3)
+	opc->v[0].fp = opt_when_p_1;
+      else
 	{
-	  opc->v[0].fp = opt_when_p_2;
-	  opc->v[7].o1 = opc->v[6].o1;
-	  opc->v[8].fp = opc->v[7].o1->v[0].fp;
-	  opc->v[6].fp = opc->v[5].o1->v[0].fp;
-	}
-      else opc->v[0].fp = opt_when_p;
-    }
-  else opc->v[0].fp = opt_unless_p;
+	  if (len == 4)
+	    {
+	      opc->v[0].fp = opt_when_p_2;
+	      opc->v[7].o1 = opc->v[6].o1;
+	      opc->v[8].fp = opc->v[7].o1->v[0].fp;
+	      opc->v[6].fp = opc->v[5].o1->v[0].fp;
+	    }
+	  else opc->v[0].fp = opt_when_p;
+	}}
+  else opc->v[0].fp = (len == 3) ? opt_unless_p_1 : opt_unless_p;
   return(true);
 }
 
@@ -68671,6 +68696,9 @@ static s7_function s7_bool_optimize(s7_scheme *sc, s7_pointer expr)
   return_null(sc, expr);
 }
 
+/* snd-sig.c experiment */
+static s7_double opt_float_any(s7_scheme *sc) {return(sc->opts[0]->v[0].fd(sc->opts[0]));}
+
 s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr)
 {
   sc->pc = 0;
@@ -68730,14 +68758,6 @@ static s7_function s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
     return((nr) ? opt_cell_any_nr : opt_wrap_cell);
   return(NULL);
 }
-
-/* caller: s7_float_optimize(sc, expr, let) to return a function that when called evaluates expr in let
- *   s7_float_optimize returns an s7_float_function (s7_double opt_float_any(s7_scheme *sc, s7_pointer expr) normally)
- *   s7_float_any evaluates the program stored in sc->opts by calling opts[0]->f(opts[0])
- *   each portion of expr resides in an opt_info struct, evalled by calling its "fd" function on itself
- *   fd chooses the basic form of the expr, calling one of the underlying functions in opts[n] such as opt_d_c
- *   finally that calls the actual function such as abs_d
- */
 
 /* ---------------------------------------- for-each ---------------------------------------- */
 
@@ -68804,7 +68824,6 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	{
 	  s7_int (*fi)(opt_info *o);
 	  opt_info *o;
-
 	  if (is_pair(seq))
 	    {
 	      s7_pointer x, y;
@@ -68898,7 +68917,6 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      }
 		  return(sc->unspecified);
 		}
-
 	      for (i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, make_integer(sc, vals[i]));
@@ -68906,6 +68924,21 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		}
 	      return(sc->unspecified);
 	    }
+
+	  if (is_normal_vector(seq))
+	    {
+	      s7_pointer *vals;
+	      s7_int i, len;
+	      len = vector_length(seq);
+	      vals = vector_elements(seq);
+	      for (i = 0; i < len; i++)
+		{
+		  slot_set_value(slot, vals[i]);
+		  func(sc, expr);
+		}
+	      return(sc->unspecified);
+	    }
+	  /* TODO: is the opt_cell_* stuff below worth the code? */
 
 	  sc->z = seq;
 	  if (!is_iterator(sc->z))
@@ -86511,6 +86544,10 @@ static void op_any_closure_3p(s7_scheme *sc)
 	  sc->stack_end[3] = (s7_pointer)(OP_ANY_CLOSURE_3P_3);
 	  sc->stack_end += 4;
 	  sc->stack_end[-3] = fx_call(sc, p); /* this might push_stack gc_protect etc, so push_stack via +4 before the fx_call */
+#if S7_DEBUGGING
+	  if (sc->stack_end[-1] != (s7_pointer)(OP_ANY_CLOSURE_3P_3)) /* did fx_call push then forget to pop? */
+	    fprintf(stderr, "%s[%d]: op: %s, code: %s\n", __func__, __LINE__, op_names[(opcode_t)(sc->stack_end[-1])], display_80(sc->code));
+#endif
 	  sc->code = cadr(p);
 	}
       else
@@ -86577,6 +86614,10 @@ static void op_any_closure_3p_3(s7_scheme *sc)
   sc->code = T_Pair(closure_body(func));
 }
 
+#define clo4_arg1(Sc) Sc->stack_end[-2]
+#define clo4_arg2(Sc) Sc->stack_end[-4]
+#define clo4_arg3(Sc) Sc->stack_end[-3]
+
 static void op_any_closure_4p(s7_scheme *sc)
 {
   s7_pointer p;
@@ -86588,11 +86629,11 @@ static void op_any_closure_4p(s7_scheme *sc)
       p = cdr(p);
       if (has_fx(p))
 	{
-	  sc->stack_end[-4] = fx_call(sc, p);
+	  clo4_arg2(sc) = fx_call(sc, p);
 	  p = cdr(p);
 	  if (has_fx(p))
 	    {
-	      sc->stack_end[-3] = fx_call(sc, p);
+	      clo4_arg3(sc) = fx_call(sc, p);
 	      push_stack_no_args_direct(sc, OP_ANY_CLOSURE_4P_4);
 	      sc->code = cadr(p);
 	    }
@@ -86621,8 +86662,8 @@ static bool closure_4p_end(s7_scheme *sc, s7_pointer p)
       sc->args = fx_call(sc, p);
       func = opt1_lambda(sc->code);
       if (is_safe_closure(func))
-	sc->curlet = update_let_with_four_slots(sc, closure_let(func), sc->stack_end[-2], sc->stack_end[-4], sc->stack_end[-3], sc->args);
-      else make_let_with_four_slots(sc, func, sc->stack_end[-2], sc->stack_end[-4], sc->stack_end[-3], sc->args);
+	sc->curlet = update_let_with_four_slots(sc, closure_let(func), clo4_arg1(sc), clo4_arg2(sc), clo4_arg3(sc), sc->args);
+      else make_let_with_four_slots(sc, func, clo4_arg1(sc), clo4_arg2(sc), clo4_arg3(sc), sc->args);
       sc->code = T_Pair(closure_body(func));
       sc->stack_end -= 4;
       return(true);
@@ -86639,11 +86680,11 @@ static bool op_any_closure_4p_1(s7_scheme *sc)
   p = cddr(sc->code);
   if (has_fx(p))
     {
-      sc->stack_end[-4] = fx_call(sc, p);
+      clo4_arg2(sc) = fx_call(sc, p);
       p = cdr(p);
       if (has_fx(p))
 	{
-	  sc->stack_end[-3] = fx_call(sc, p);
+	  clo4_arg3(sc) = fx_call(sc, p);
 	  return(closure_4p_end(sc, cdr(p)));
 	}
       push_stack_no_args_direct(sc, OP_ANY_CLOSURE_4P_3);
@@ -86660,11 +86701,11 @@ static bool op_any_closure_4p_1(s7_scheme *sc)
 static bool op_any_closure_4p_2(s7_scheme *sc)
 {
   s7_pointer p;
-  sc->stack_end[-4] = sc->value;
+  clo4_arg2(sc) = sc->value;
   p = cdddr(sc->code);
   if (has_fx(p))
     {
-      sc->stack_end[-3] = fx_call(sc, p);
+      clo4_arg3(sc) = fx_call(sc, p);
       return(closure_4p_end(sc, cdr(p)));
     }
   push_stack_no_args_direct(sc, OP_ANY_CLOSURE_4P_3);
@@ -86674,7 +86715,7 @@ static bool op_any_closure_4p_2(s7_scheme *sc)
 
 static bool op_any_closure_4p_3(s7_scheme *sc)
 {
-  sc->stack_end[-3] = sc->value;
+  clo4_arg3(sc) = sc->value;
   return(closure_4p_end(sc, cddddr(sc->code)));
 }
 
@@ -86683,8 +86724,8 @@ static inline void op_any_closure_4p_4(s7_scheme *sc)
   s7_pointer func;
   func = opt1_lambda(sc->code);
   if (is_safe_closure(func))
-    sc->curlet = update_let_with_four_slots(sc, closure_let(func), sc->stack_end[-2], sc->stack_end[-4], sc->stack_end[-3], sc->value);
-  else make_let_with_four_slots(sc, func, sc->stack_end[-2], sc->stack_end[-4], sc->stack_end[-3], sc->value);
+    sc->curlet = update_let_with_four_slots(sc, closure_let(func), clo4_arg1(sc), clo4_arg2(sc), clo4_arg3(sc), sc->value);
+  else make_let_with_four_slots(sc, func, clo4_arg1(sc), clo4_arg2(sc), clo4_arg3(sc), sc->value);
   sc->code = T_Pair(closure_body(func));
   sc->stack_end -= 4;
 }
@@ -97667,13 +97708,13 @@ int main(int argc, char **argv)
  * index      1208         1026   1016   1013
  * tmock      7676         1177   1165   1147
  * s7test     4509         1873   1831   1805
- * tvect      2513         2456   2413   2028  2013
+ * tvect      2513         2456   2413   2013
  * lt         2107         2123   2110   2091
- * tform      3277         2281   2273   2283
+ * tform      3277         2281   2273   2293
  * tread      2607         2440   2421   2410
  * trclo      4310         2715   2561   2525
  * fbench     2960         2688   2583   2557
- * tmat       3063         3065   3042   2591
+ * tmat       3063         3065   3042   2588
  * tcopy      4898         8035   5546   2600
  * tb         3402         2735   2681   2624
  * tmap       3712         2886   2857   2776
@@ -97683,7 +97724,7 @@ int main(int argc, char **argv)
  * tset       3244         3253   3104   3246
  * dup        3648         3805   3788   3323
  * tio        3703         3816   3752   3687
- * teq        3728         4068   4045   3712  3718
+ * teq        3728         4068   4045   3718
  * tstr       6704         5281   4863   4362
  * tcase      4627         4960   4793   4563
  * tclo       4959         4787   4735   4596
@@ -97691,10 +97732,10 @@ int main(int argc, char **argv)
  * tfft       88.7         6858   6636   4857
  * tnum       59.3         6348   6013   5800
  * trec       7763         5976   5970   5969
- * tmisc      6458         7389   6210   6157
- * tgsl       25.3         8485   7802   6457  6429
+ * tmisc      6458         7389   6210   6152
+ * tgsl       25.3         8485   7802   6429
  * tgc        11.9         11.9   11.1   10.4
- * thash      37.2         11.8   11.7   11.3
+ * thash      37.2         11.8   11.7   11.2
  * tgen       12.2         11.2   11.4   11.3
  * tall       26.8         15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3
@@ -97707,4 +97748,6 @@ int main(int argc, char **argv)
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
+ * need to split fn|fx_proc from s7_pfunc to get rid of the expr args
+ * other 3-arg stack cases? tmap basics.
  */
