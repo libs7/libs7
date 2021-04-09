@@ -1193,7 +1193,7 @@ struct s7_scheme {
   shared_info_t *circle_info;
   format_data_t **fdats;
   int32_t num_fdats, last_error_line;
-  s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1;
+  s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, dlist_1;
   gc_list_t *strings, *vectors, *input_ports, *output_ports, *input_string_ports, *continuations, *c_objects, *hash_tables;
   gc_list_t *gensyms, *undefineds, *lambdas, *multivectors, *weak_refs, *weak_hash_iterators, *opt1_funcs;
 #if (WITH_GMP)
@@ -5677,10 +5677,16 @@ static s7_pointer set_qlist_3(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
   return(sc->qlist_3);
 }
 
-static s7_pointer set_clist_1(s7_scheme *sc, s7_pointer x1) /* for c_object length method */
+static s7_pointer set_clist_1(s7_scheme *sc, s7_pointer x1) /* for c_object length method etc */
 {
   set_car(sc->clist_1, x1);
   return(sc->clist_1);
+}
+
+static s7_pointer set_dlist_1(s7_scheme *sc, s7_pointer x1) /* another like clist: temp usage, "weak" (not gc_marked), but permanent list */
+{
+  set_car(sc->dlist_1, x1);
+  return(sc->dlist_1);
 }
 
 static s7_pointer set_ulist_1(s7_scheme *sc, s7_pointer x1, s7_pointer x2)
@@ -7049,7 +7055,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
   gc_mark(car(sc->t3_1)); gc_mark(car(sc->t3_2)); gc_mark(car(sc->t3_3)); gc_mark(car(sc->t4_1));
   gc_mark(car(sc->plist_1));
-  gc_mark(car(sc->clist_1));
+  /* gc_mark(car(sc->clist_1)); */ /* unnecessary, I think */
   gc_mark(car(sc->plist_2)); gc_mark(cadr(sc->plist_2));
   gc_mark(car(sc->qlist_2)); gc_mark(cadr(sc->qlist_2));
   gc_mark(car(sc->qlist_3)); gc_mark(cadr(sc->qlist_3)); gc_mark(caddr(sc->qlist_3));
@@ -7359,7 +7365,7 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   set_plist_1(sc, sc->nil);
   set_elist_2(sc, sc->nil, sc->nil);
   set_plist_2(sc, sc->nil, sc->nil);
-  set_clist_1(sc, sc->nil);
+  /* set_clist_1(sc, sc->nil); */ /* not gc_marked */
   set_qlist_2(sc, sc->nil, sc->nil);
   set_qlist_3(sc, sc->nil, sc->nil, sc->nil);
   set_elist_3(sc, sc->nil, sc->nil, sc->nil);
@@ -16675,7 +16681,7 @@ static s7_pointer exp_p_p(s7_scheme *sc, s7_pointer x)
 #endif
 
     default:
-      return(method_or_bust_with_type_one_arg(sc, x, sc->exp_symbol, list_1(sc, x), a_number_string));
+      return(method_or_bust_with_type_one_arg(sc, x, sc->exp_symbol, set_plist_1(sc, x), a_number_string));
     }
 }
 
@@ -34865,7 +34871,7 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
     }
 
   arglist = closure_args(obj);
-  if (is_symbol(arglist)) arglist = list_1(sc, arglist);
+  if (is_symbol(arglist)) arglist = set_dlist_1(sc, arglist);
   pe = closure_let(obj);
 
   gc_loc = s7_gc_protect_1(sc, sc->nil);
@@ -34878,7 +34884,7 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
       if (has_closure_let(setter))                 /* collect args etc so need the arglist */
 	{
 	  arglist = closure_args(setter);
-	  if (is_symbol(arglist)) arglist = list_1(sc, arglist);
+	  if (is_symbol(arglist)) arglist = set_dlist_1(sc, arglist);
 	  collect_locals(sc, closure_body(setter), pe, arglist, gc_loc);
 	}}
 
@@ -67732,7 +67738,7 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
-      if (!(do_is_safe(sc, body, (stepper != sc->nil) ? list_1(sc, stepper) : sc->nil, sc->nil, has_set)))
+      if (!(do_is_safe(sc, body, (stepper != sc->nil) ? set_dlist_1(sc, stepper) : sc->nil, sc->nil, has_set)))
 	set_unsafe_do(body);
     }
   return(!is_unsafe_do(body));
@@ -68817,9 +68823,8 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	{
 	  expr = cons(sc, sc->begin_symbol, body);
 	  sc->v = expr; /* GC protection? */
-	  func = s7_cell_optimize(sc, cons(sc, expr, sc->nil), true);
+	  func = s7_cell_optimize(sc, set_clist_1(sc, expr), true); /* was list_1 via cons 8-Apr-21 */
 	}
-
       if (func)
 	{
 	  s7_int (*fi)(opt_info *o);
@@ -68838,18 +68843,16 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      func(sc, expr);
 		      y = cdr(y);
 		      x = cdr(x);
-		      if (x == y) return(sc->unspecified);
+		      if (x == y) break;
 		    }}
 	      return(sc->unspecified);
 	    }
-
 	  if (is_float_vector(seq))
 	    {
 	      s7_double *vals;
 	      s7_int i, len;
 	      len = vector_length(seq);
 	      vals = float_vector_floats(seq);
-
 	      if ((len > 1000) &&
 		  (!tree_has_setters(sc, body)))
 		{
@@ -68871,25 +68874,21 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      {
 			real(sv) = vals[i];
 			func(sc, expr);
-		      }
-		  return(sc->unspecified);
-		}
-	      for (i = 0; i < len; i++)
-		{
-		  slot_set_value(slot, make_real(sc, vals[i]));
-		  func(sc, expr);
-		}
+		      }}
+	      else
+		for (i = 0; i < len; i++)
+		  {
+		    slot_set_value(slot, make_real(sc, vals[i]));
+		    func(sc, expr);
+		  }
 	      return(sc->unspecified);
 	    }
-
-	  /* if no set! vector|list|let|hash-table-set! set-car!|cdr! mutable arg? */
 	  if (is_int_vector(seq))
 	    {
 	      s7_int *vals;
 	      s7_int i, len;
 	      len = vector_length(seq);
 	      vals = int_vector_ints(seq);
-
 	      if ((len > 1000) &&
 		  (!tree_has_setters(sc, body)))
 		{
@@ -68914,31 +68913,39 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      {
 			integer(sv) = vals[i];
 			func(sc, expr);
-		      }
-		  return(sc->unspecified);
-		}
-	      for (i = 0; i < len; i++)
-		{
-		  slot_set_value(slot, make_integer(sc, vals[i]));
-		  func(sc, expr);
-		}
+		      }}
+	      else
+		for (i = 0; i < len; i++)
+		  {
+		    slot_set_value(slot, make_integer(sc, vals[i]));
+		    func(sc, expr);
+		  }
 	      return(sc->unspecified);
 	    }
-
 	  if (is_normal_vector(seq))
 	    {
 	      s7_pointer *vals;
 	      s7_int i, len;
 	      len = vector_length(seq);
 	      vals = vector_elements(seq);
-	      for (i = 0; i < len; i++)
+	      if (func == opt_cell_any_nr)
 		{
-		  slot_set_value(slot, vals[i]);
-		  func(sc, expr);
-		}
+		  s7_pointer (*fp)(opt_info *o);
+		  o = sc->opts[0];
+		  fp = o->v[0].fp;
+		  for (i = 0; i < len; i++)
+		    {
+		      slot_set_value(slot, vals[i]);
+		      fp(o);
+		    }}
+	      else
+		for (i = 0; i < len; i++)
+		  {
+		    slot_set_value(slot, vals[i]);
+		    func(sc, expr);
+		  }
 	      return(sc->unspecified);
 	    }
-	  /* TODO: is the opt_cell_* stuff below worth the code? */
 
 	  sc->z = seq;
 	  if (!is_iterator(sc->z))
@@ -68988,7 +68995,6 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       set_no_cell_opt(body);
       sc->curlet = old_e;
     }
-
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -68998,7 +69004,6 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       push_stack(sc, OP_FOR_EACH_2, c, f);
       return(sc->unspecified);
     }
-
   sc->z = seq;
   if (!is_iterator(sc->z))
     sc->z = s7_make_iterator(sc, sc->z);
@@ -69230,16 +69235,19 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
   s7_pointer body;
   sc->value = f;
   body = closure_body(f);
-  if ((is_pair(seq)) &&
-      (!no_cell_opt(body)) &&
-      (is_optimized(car(body)))) /* for index.scm? */
+
+  if (!no_cell_opt(body))
     {
-      s7_function func;
-      s7_pointer slot, old_e, expr;
+      s7_function func = NULL;
+      s7_pointer old_e, expr, pars, val, slot;
 
       old_e = sc->curlet;
-      sc->curlet = make_let_slowly(sc, closure_let(f));
-      slot = make_slot_2(sc, sc->curlet, car(closure_args(f)), sc->F);
+      pars = closure_args(f);
+      if (is_float_vector(seq))
+	val = real_zero;
+      else val = ((is_int_vector(seq)) || (is_byte_vector(seq))) ? int_zero : sc->F;
+      sc->curlet = make_let_with_slot(sc, closure_let(f), car(pars), val);
+      slot = let_slots(sc->curlet);
 
       if (is_null(cdr(body)))
 	{
@@ -69247,7 +69255,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
 	  if (is_symbol(expr))
 	    {
 	      expr = lookup_slot_from(expr, sc->curlet);
-	      func = slookup;
+	      if (is_slot(expr)) func = slookup;
 	    }
 	  else func = s7_optimize(sc, body);
 	}
@@ -69255,33 +69263,78 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
 	{
 	  expr = cons(sc, sc->begin_symbol, body);
 	  sc->w = expr; /* GC protection? */
-	  func = s7_cell_optimize(sc, list_1(sc, expr), false);
+	  func = s7_cell_optimize(sc, set_clist_1(sc, expr), false); /* list_1 8-Apr-21 */
 	}
       if (func)
 	{
-	  s7_pointer fast, slow;
+	  s7_pointer z;
 	  sc->v = sc->nil;
 	  push_stack_no_let(sc, OP_GC_PROTECT, f, seq);
-	  for (fast = seq, slow = seq; is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+	  if (is_pair(seq))
 	    {
-	      s7_pointer z;
-	      slot_set_value(slot, car(fast));
-	      z = func(sc, expr);
-	      if (z != sc->no_value)
-		sc->v = cons(sc, z, sc->v);
-	      if (is_pair(cdr(fast)))
+	      s7_pointer fast, slow;
+	      for (fast = seq, slow = seq; is_pair(fast); fast = cdr(fast), slow = cdr(slow))
 		{
-		  fast = cdr(fast);
-		  if (fast == slow)
-		    break;
 		  slot_set_value(slot, car(fast));
 		  z = func(sc, expr);
-		  if (z != sc->no_value)
-		    sc->v = cons(sc, z, sc->v);
-		}}
-	  unstack(sc);
-	  return(proper_list_reverse_in_place(sc, sc->v));
-	}
+		  if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
+		  if (is_pair(cdr(fast)))
+		    {
+		      fast = cdr(fast);
+		      if (fast == slow)
+			break;
+		      slot_set_value(slot, car(fast));
+		      z = func(sc, expr);
+		      if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
+		    }}
+	      unstack(sc);
+	      return(proper_list_reverse_in_place(sc, sc->v));
+	    }
+	  if (is_float_vector(seq))
+	    {
+	      s7_double *vals;
+	      s7_int i, len;
+	      len = vector_length(seq);
+	      vals = float_vector_floats(seq);
+	      for (i = 0; i < len; i++)
+		{
+		  slot_set_value(slot, make_real(sc, vals[i]));
+		  z = func(sc, expr);
+		  if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
+		}
+	      unstack(sc);
+	      return(proper_list_reverse_in_place(sc, sc->v));
+	    }
+	  if (is_int_vector(seq))
+	    {
+	      s7_int *vals;
+	      s7_int i, len;
+	      len = vector_length(seq);
+	      vals = int_vector_ints(seq);
+	      for (i = 0; i < len; i++)
+		{
+		  slot_set_value(slot, make_integer(sc, vals[i]));
+		  z = func(sc, expr);
+		  if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
+		}
+	      unstack(sc);
+	      return(proper_list_reverse_in_place(sc, sc->v));
+	    }
+	  if (is_normal_vector(seq))
+	    {
+	      s7_pointer *vals;
+	      s7_int i, len;
+	      len = vector_length(seq);
+	      vals = vector_elements(seq);
+	      for (i = 0; i < len; i++)
+		{
+		  slot_set_value(slot, vals[i]);
+		  z = func(sc, expr);
+		  if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
+		}
+	      unstack(sc);
+	      return(proper_list_reverse_in_place(sc, sc->v));
+	    }}
       set_no_cell_opt(body);
       sc->curlet = old_e;
     }
@@ -69293,7 +69346,6 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
       push_stack(sc, OP_MAP_2, make_counter(sc, seq), f);
       return(sc->unspecified);
     }
-
   sc->z = (!is_iterator(seq)) ? s7_make_iterator(sc, seq) : seq;
   push_stack(sc, OP_MAP_1, make_counter(sc, sc->z), f);
   sc->z = sc->nil;
@@ -69474,7 +69526,6 @@ static bool op_map(s7_scheme *sc)
   push_stack_direct(sc, OP_MAP_GATHER);
   sc->args = sc->x;
   sc->x = sc->nil;
-
   if (needs_copied_args(sc->code))
     sc->args = copy_proper_list(sc, sc->args);
   return(false);
@@ -81786,7 +81837,10 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
   /* here any (unsafe?) closure or jumping-op (call/cc) or shadowed variable is trouble */
   s7_pointer p;
   /* sc->code is the complete do form (do ...) */
-
+#if S7_DEBUGGING
+  /* I think the "steppers" list is always either nil or 1 var -- is this intended?  (why direct_memq of it everywhere?) */
+  if ((is_pair(steppers)) && (is_pair(cdr(steppers)))) fprintf(stderr, "%s\n", display(steppers));
+#endif
   for (p = body; is_pair(p); p = cdr(p))
     {
       s7_pointer expr;
@@ -82390,7 +82444,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		    }
 
 		  if (((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one)) &&
-		      (do_is_safe(sc, body, sc->w = list_1(sc, car(v)), sc->nil, &has_set)))
+		      (do_is_safe(sc, body, set_dlist_1(sc, car(v)), sc->nil, &has_set)))
 		    {
 		      pair_set_syntax_op(form, OP_SAFE_DO);          /* safe_do: body is safe, step by 1 */
 		      /* no permanent let here because apparently do_is_safe accepts recursive calls? */
@@ -96706,7 +96760,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_set_setter(sc, sc->features_symbol, s7_make_function(sc, "#<set-*features*>", g_features_set, 2, 0, false, "*features* setter"));
 
   /* -------- *load-path* -------- */
-  sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*", list_1(sc, s7_make_string(sc, ".")), /* was sc->nil 12-Jul-19 */
+  sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*", list_1(sc, s7_make_string(sc, ".")), /* not plist! */
 			   "*load-path* is a list of directories (strings) that the load function searches if it is passed an incomplete file name");
   s7_set_setter(sc, sc->load_path_symbol, s7_make_function(sc, "#<set-*load-path*>", g_load_path_set, 2, 0, false, "*load-path* setter"));
 
@@ -97106,6 +97160,7 @@ s7_scheme *s7_init(void)
   sc->qlist_2 = permanent_list(sc, 2);
   sc->qlist_3 = permanent_list(sc, 3);
   sc->clist_1 = permanent_list(sc, 1);
+  sc->dlist_1 = permanent_list(sc, 1);
   sc->elist_1 = permanent_list(sc, 1);
   sc->elist_2 = permanent_list(sc, 2);
   sc->elist_3 = permanent_list(sc, 3);
@@ -97702,10 +97757,10 @@ int main(int argc, char **argv)
  *             gmp (3-20)  20.9   21.0   21.3
  * -----------------------------------------------
  * tpeak       126          115    114    111
- * tauto       782          648    642    503
+ * tauto       782          648    642    504
  * tref        558          691    687    506
  * tshoot     1516          883    872    842
- * index      1208         1026   1016   1013
+ * index      1208         1026   1016    991
  * tmock      7676         1177   1165   1147
  * s7test     4509         1873   1831   1805
  * tvect      2513         2456   2413   2013
@@ -97717,22 +97772,22 @@ int main(int argc, char **argv)
  * tmat       3063         3065   3042   2588
  * tcopy      4898         8035   5546   2600
  * tb         3402         2735   2681   2624
- * tmap       3712         2886   2857   2776
  * titer      2821         2865   2842   2803
- * tsort      3654         3105   3104   2936
+ * tmap       3910         3164          2910
+ * tsort      3654         3105   3104   2921
  * tmac       3295         3317   3277   3218
  * tset       3244         3253   3104   3246
- * dup        3648         3805   3788   3323
+ * dup        3648         3805   3788   3625
  * tio        3703         3816   3752   3687
  * teq        3728         4068   4045   3718
- * tstr       6704         5281   4863   4362
+ * tstr       6704         5281   4863   4366
  * tcase      4627         4960   4793   4563
  * tclo       4959         4787   4735   4596
- * tlet       5683         7775   5640   4633
+ * tlet       5683         7775   5640   4613
  * tfft       88.7         6858   6636   4857
  * tnum       59.3         6348   6013   5800
  * trec       7763         5976   5970   5969
- * tmisc      6458         7389   6210   6152
+ * tmisc      6458         7389   6210   5988
  * tgsl       25.3         8485   7802   6429
  * tgc        11.9         11.9   11.1   10.4
  * thash      37.2         11.8   11.7   11.2
@@ -97749,5 +97804,7 @@ int main(int argc, char **argv)
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
  * need to split fn|fx_proc from s7_pfunc to get rid of the expr args
- * other 3-arg stack cases? tmap basics.
+ * other 3-arg stack cases? tmap basics. closure* in map etc?
+ * vect for-each: code=func, args=vect, let=index (func holds curlet), maybe mutable int?
+ * more cons/list -> weak clist/mlist? cdadr_p_p are calling methods whereas cadr_p_p and friends are not
  */

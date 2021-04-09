@@ -313,25 +313,13 @@
   (fe13 1))
 
 
+;;; --------------------------------------------------------------------------------
 ;;; this is a revision of some code posted in comp.lang.lisp by melzzzzz for euler project 512
 
-#|
-(define (make-boolean-vector n)
-  (make-int-vector (ceiling (/ n 63))))
-
-(define-expansion (boolean-vector-ref v n)
-  `(logbit? (int-vector-ref ,v (quotient ,n 63)) (remainder ,n 63)))
-
-(define-expansion (boolean-vector-set! v n)
-  `(int-vector-set! ,v (quotient ,n 63)
-		    (logior (int-vector-ref ,v (quotient ,n 63))
-			    (ash 1 (remainder ,n 63)))))
-|#
-;;; this is slightly faster (using int-vector is better for the largest cases)
+;;; using int-vector is better for the largest cases
 (define (make-boolean-vector n) (make-vector n #f))
 (define boolean-vector-ref vector-ref)
 (define-expansion (boolean-vector-set! v j) `(vector-set! ,v ,j #t))
-
 
 (define (odd-get n)
   (let* ((visited-range (+ (ash n -1) 1))
@@ -385,6 +373,89 @@
 ;;; (getr 5000000)    5066059769259     .5 
 ;;; (getr 50000000)   506605921933035    6 
 ;;; (getr 500000000)  50660591862310323  67 (32M, mutable_do)
+
+;;; --------------------------------------------------------------------------------
+;;; some coverage cases
+
+(define fsize 200000)
+(define (f1 lst)
+  (for-each (lambda (p)
+	      (if (integer? p)
+		  (display 'oops)))
+	    lst))
+
+(define lst (make-list fsize ()))
+(f1 lst)
+
+(define (f2 v)
+  (for-each (lambda (p)
+	      (if (integer? p)
+		  (display 'oops)))
+	    v))
+
+(define fv (make-float-vector fsize 1.0))
+(f2 fv)
+
+(define (f3 v)
+  (for-each (lambda (p)
+	      (if (pair? p)
+		  (display 'oops)))
+	    v))
+
+(define iv (make-int-vector fsize 1))
+(f3 iv)
+
+(define (f4 v)
+  (for-each (lambda (p)
+	      (if (integer? p)
+		  (display 'oops)))
+	    v))
+
+(define v (make-vector fsize ()))
+(f4 v)
+
+(define (f5 lst)
+  (for-each (lambda (p)
+	      (if (integer? p)
+		  (throw 'oops p)))
+	    lst))
+(f5 lst)
+
+(define (f11 lst)
+  (map (lambda (p)
+	 (if (integer? p)
+	     (display 'oops)))
+       lst))
+(f11 lst)
+
+(define (f12 v)
+  (map (lambda (p)
+	 (if (integer? p)
+	     (display 'oops)))
+       v))
+(f12 fv)
+
+(define (f13 v)
+  (map (lambda (p)
+	 (if (pair? p)
+	     (display 'oops)))
+       v))
+(f13 iv)
+
+(define (f14 v)
+  (map (lambda (p)
+	 (if (integer? p)
+	     (display 'oops)))
+       v))
+(f14 v)
+
+(define (f15 lst)
+  (map (lambda (p)
+	 (if (integer? p)
+	     (throw 'oops p)))
+       lst))
+(f15 lst)
+
 
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
