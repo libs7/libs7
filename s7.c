@@ -203,12 +203,12 @@
 #ifndef WITH_C_LOADER
   #if WITH_GCC && (!__MINGW32__) && (!__CYGWIN__)
     #define WITH_C_LOADER 1
-  /* (load file.so [e]) looks for (e 'init_func) and if found, calls it
-   *   as the shared object init function.  If WITH_SYSTEM_EXTRAS is 0, the caller
-   *   needs to supply system and delete-file so that cload.scm works.
+  /* (load file.so [e]) looks for (e 'init_func) and if found, calls it as the shared object init function. 
+   * If WITH_SYSTEM_EXTRAS is 0, the caller needs to supply system and delete-file so that cload.scm works.
    */
   #else
     #define WITH_C_LOADER 0
+    /* I think dlopen et al are available in MS C, but I have no way to test them; see load_shared_object below */
   #endif
 #endif
 
@@ -6103,17 +6103,9 @@ s7_pointer s7_gc_unprotect_via_location(s7_scheme *sc, s7_int loc)
 
 static void (*mark_function[NUM_TYPES])(s7_pointer p);
 
-void s7_mark(s7_pointer p)
-{
-  if (!is_marked(p))
-    (*mark_function[unchecked_type(p)])(p);
-}
+void s7_mark(s7_pointer p) {if (!is_marked(p)) (*mark_function[unchecked_type(p)])(p);}
 
-static inline void gc_mark(s7_pointer p)
-{
-  if (!is_marked(p))
-    (*mark_function[unchecked_type(p)])(p);
-}
+static inline void gc_mark(s7_pointer p) {if (!is_marked(p)) (*mark_function[unchecked_type(p)])(p);}
 
 static inline void mark_slot(s7_pointer p)
 {
@@ -6435,10 +6427,7 @@ static gc_list_t *make_gc_list(void)
   return(gp);
 }
 
-static void just_mark(s7_pointer p)
-{
-  set_mark(p);
-}
+static void just_mark(s7_pointer p) {set_mark(p);}
 
 static void add_gensym(s7_scheme *sc, s7_pointer p)
 {
@@ -7117,12 +7106,10 @@ static int64_t gc(s7_scheme *sc)
    */
   {
     s7_pointer *tmps, *tmps_top;
-
     tmps = sc->free_heap_top;
     tmps_top = tmps + sc->gc_temps_size;
     if (tmps_top > sc->previous_free_heap_top)
       tmps_top = sc->previous_free_heap_top;
-
     while (tmps < tmps_top)
       gc_mark(*tmps++);
   }
@@ -7156,7 +7143,6 @@ static int64_t gc(s7_scheme *sc)
   {
     s7_pointer *fp, *tp, *heap_top;
     fp = sc->free_heap_top;
-
     tp = sc->heap;
     heap_top = (s7_pointer *)(sc->heap + sc->heap_size);
 
@@ -7296,7 +7282,6 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   hp->offset = old_size;
   hp->next = sc->heap_blocks;
   sc->heap_blocks = hp;
-
   sc->previous_free_heap_top = sc->free_heap_top;
 
   if (show_heap_stats(sc))
@@ -7777,10 +7762,8 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
  *   sc->code and sc->args to currently free objects.
  */
 
-#define main_stack_op(Sc)   ((opcode_t)(Sc->stack_end[-1]))
-/* #define main_stack_args(Sc) (Sc->stack_end[-2]) */
-/* #define main_stack_let(Sc)  (Sc->stack_end[-3]) */
-/* #define main_stack_code(Sc) (Sc->stack_end[-4]) */
+#define main_stack_op(Sc) ((opcode_t)(Sc->stack_end[-1]))
+/* #define main_stack_args(Sc) (Sc->stack_end[-2]), #define main_stack_let(Sc) (Sc->stack_end[-3]), #define main_stack_code(Sc) (Sc->stack_end[-4]) */
 /* beware of main_stack_code!  If a function has a tail-call, the main_stack_code that form sees
  *   if main_stack_op==op-begin1 can change from call to call -- the begin actually refers
  *   to the caller, which is dependent on where the current function was called, so we can't hard-wire
@@ -7791,7 +7774,6 @@ static void stack_reset(s7_scheme *sc)
 {
   sc->stack_end = sc->stack_start;
   push_stack_op(sc, OP_EVAL_DONE);
-  /* push_stack_op(sc, OP_BARRIER); */
 }
 
 static void resize_stack(s7_scheme *sc)
@@ -7967,13 +7949,11 @@ static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name
 	  return(car(x));
     }
   else
-    {
-      for (x = vector_element(sc->symbol_table, location); is_pair(x); x = cdr(x))
-	if ((hash == pair_raw_hash(x)) &&
-	    ((uint64_t)len == pair_raw_len(x)) &&
-	    (strings_are_equal_with_length(name, pair_raw_name(x), len))) /* length here because name might not be null-terminated */
-	  return(car(x));
-    }
+    for (x = vector_element(sc->symbol_table, location); is_pair(x); x = cdr(x))
+      if ((hash == pair_raw_hash(x)) &&
+	  ((uint64_t)len == pair_raw_len(x)) &&
+	  (strings_are_equal_with_length(name, pair_raw_name(x), len))) /* length here because name might not be null-terminated */
+	return(car(x));
   return(new_symbol(sc, name, len, hash, location));
 }
 
@@ -8069,7 +8049,6 @@ bool s7_for_each_symbol(s7_scheme *sc, bool (*symbol_func)(const char *symbol_na
 {
   int32_t i;
   s7_pointer x;
-
   for (i = 0; i < SYMBOL_TABLE_SIZE; i++)
     for (x = vector_element(sc->symbol_table, i); is_not_null(x); x = cdr(x))
       if (symbol_func(symbol_name(car(x)), data))
@@ -9674,7 +9653,6 @@ static s7_pointer g_let_to_list(s7_scheme *sc, s7_pointer args)
 static s7_pointer call_let_ref_fallback(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
   s7_pointer p;
-  /* args could be protected via let = stack_end[1] */
   push_stack_no_let(sc, OP_GC_PROTECT, sc->value, sc->code);
   p = s7_apply_function(sc, find_method(sc, let, sc->let_ref_fallback_symbol), set_qlist_2(sc, let, symbol));
   sc->stack_end -= 4;
@@ -38741,7 +38719,7 @@ static s7_pointer g_cdddr(s7_scheme *sc, s7_pointer args)
 /* -------- cdadr -------- */
 static s7_pointer cdadr_p_p(s7_scheme *sc, s7_pointer lst)
 {
-  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->cdadr_symbol, list_1(sc, lst), T_PAIR));
+  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->cdadr_symbol, set_plist_1(sc, lst), T_PAIR));
   if (!is_pair(cdr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->cdadr_symbol, lst, cdr_a_list_string));
   return((is_pair(cadr(lst))) ? cdadr(lst) : simple_wrong_type_argument_with_type(sc, sc->cdadr_symbol, lst, cadr_a_list_string));
 }
@@ -38826,7 +38804,7 @@ static s7_pointer g_cadaar(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer caaddr_p_p(s7_scheme *sc, s7_pointer lst)
 {
-  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->caaddr_symbol, list_1(sc, lst), T_PAIR));
+  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->caaddr_symbol, set_plist_1(sc, lst), T_PAIR));
   if (!is_pair(cdr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->caaddr_symbol, lst, cdr_a_list_string));
   if (!is_pair(cddr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->caaddr_symbol, lst, cddr_a_list_string));
   return((is_pair(caddr(lst))) ? caaddr(lst) : simple_wrong_type_argument_with_type(sc, sc->caaddr_symbol, lst, caddr_a_list_string));
@@ -38842,7 +38820,7 @@ static s7_pointer g_caaddr(s7_scheme *sc, s7_pointer args)
 /* -------- cadddr -------- */
 static s7_pointer cadddr_p_p(s7_scheme *sc, s7_pointer lst)
 {
-  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->cadddr_symbol, list_1(sc, lst), T_PAIR));
+  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->cadddr_symbol, set_plist_1(sc, lst), T_PAIR));
   if (!is_pair(cdr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->cadddr_symbol, lst, cdr_a_list_string));
   if (!is_pair(cddr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->cadddr_symbol, lst, cddr_a_list_string));
   return((is_pair(cdddr(lst))) ? cadddr(lst) : simple_wrong_type_argument_with_type(sc, sc->cadddr_symbol, lst, cdddr_a_list_string));
@@ -38858,7 +38836,7 @@ static s7_pointer g_cadddr(s7_scheme *sc, s7_pointer args)
 /* -------- cadadr -------- */
 static s7_pointer cadadr_p_p(s7_scheme *sc, s7_pointer lst)
 {
-  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->cadadr_symbol, list_1(sc, lst), T_PAIR));
+  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->cadadr_symbol, set_plist_1(sc, lst), T_PAIR));
   if (!is_pair(cdr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->cadadr_symbol, lst, cdr_a_list_string));
   if (!is_pair(cadr(lst))) return(simple_wrong_type_argument_with_type(sc, sc->cadadr_symbol, lst, cadr_a_list_string));
   return((is_pair(cdadr(lst))) ? cadadr(lst) : simple_wrong_type_argument_with_type(sc, sc->cadadr_symbol, lst, cdadr_a_list_string));
@@ -38874,7 +38852,7 @@ static s7_pointer g_cadadr(s7_scheme *sc, s7_pointer args)
 /* -------- caddar -------- */
 static s7_pointer caddar_p_p(s7_scheme *sc, s7_pointer lst)
 {
-  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->caddar_symbol, list_1(sc, lst), T_PAIR));
+  if (!is_pair(lst)) return(method_or_bust_one_arg(sc, lst, sc->caddar_symbol, set_plist_1(sc, lst), T_PAIR));
   if (!is_pair(car(lst))) return(simple_wrong_type_argument_with_type(sc, sc->caddar_symbol, lst, car_a_list_string));
   if (!is_pair(cdar(lst))) return(simple_wrong_type_argument_with_type(sc, sc->caddar_symbol, lst, cdar_a_list_string));
   return((is_pair(cddar(lst))) ? caddar(lst) : simple_wrong_type_argument_with_type(sc, sc->caddar_symbol, lst, cddar_a_list_string));
@@ -56190,13 +56168,15 @@ static s7_pointer fx_c_opdq(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t1_1));
 }
 
+#define stack_protected1(Sc) Sc->stack_end[-2]
+#define stack_protected2(Sc) Sc->stack_end[-4]
+#define stack_protected3(Sc) Sc->stack_end[-3]
+
 static inline void gc_protect_via_stack(s7_scheme *sc, s7_pointer val)
 {
   sc->stack_end[2] = val;
   sc->stack_end[3] = (s7_pointer)OP_GC_PROTECT;
   sc->stack_end += 4;
-  /* sc->stack_end[-2] = val; */
-  /* op_stack might also be usable in this context */
 }
 
 static s7_pointer fx_c_opsq(s7_scheme *sc, s7_pointer arg)
@@ -57058,7 +57038,7 @@ static s7_pointer fx_c_opsq_opsq(s7_scheme *sc, s7_pointer arg)
   largs = cadr(largs);
   set_car(sc->t1_1, lookup(sc, cadr(largs)));
   set_car(sc->t2_2, fn_proc(largs)(sc, sc->t1_1));
-  set_car(sc->t2_1, sc->stack_end[-2]);
+  set_car(sc->t2_1, stack_protected1(sc));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t2_1));
 }
@@ -57121,7 +57101,7 @@ static s7_pointer fx_c_opsq_opssq(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_1, lookup(sc, cadr(largs)));
   set_car(sc->t2_2, lookup(sc, opt2_sym(cdr(largs)))); /* caddr(largs) */
   set_car(sc->t2_2, fn_proc(largs)(sc, sc->t2_1));
-  set_car(sc->t2_1, sc->stack_end[-2]);
+  set_car(sc->t2_1, stack_protected1(sc));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t2_1));
 }
@@ -57169,7 +57149,7 @@ static s7_pointer fx_c_opssq_opsq(s7_scheme *sc, s7_pointer arg)
   largs = cadr(largs);
   set_car(sc->t1_1, lookup(sc, cadr(largs)));
   set_car(sc->t2_2, fn_proc(largs)(sc, sc->t1_1));
-  set_car(sc->t2_1, sc->stack_end[-2]);
+  set_car(sc->t2_1, stack_protected1(sc));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t2_1));
 }
@@ -57185,7 +57165,7 @@ static s7_pointer fx_c_opssq_opssq(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_1, lookup(sc, cadr(largs)));
   set_car(sc->t2_2, lookup(sc, opt2_sym(cdr(largs))));
   set_car(sc->t2_2, fn_proc(largs)(sc, sc->t2_1));
-  set_car(sc->t2_1, sc->stack_end[-2]);
+  set_car(sc->t2_1, stack_protected1(sc));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t2_1));
 }
@@ -57271,7 +57251,7 @@ static s7_pointer fx_c_saa(s7_scheme *sc, s7_pointer arg)
   gc_protect_via_stack(sc, fx_call(sc, opt3_pair(arg))); /* opt3_pair=cddr */
   set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg))));
   set_car(sc->t3_1, lookup(sc, cadr(arg)));
-  set_car(sc->t3_2, sc->stack_end[-2]);
+  set_car(sc->t3_2, stack_protected1(sc));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t3_1));
 }
@@ -57347,7 +57327,7 @@ static s7_pointer fx_c_aa(s7_scheme *sc, s7_pointer arg)
   /* check_stack_size(sc); */
   gc_protect_via_stack(sc, fx_call(sc, cdr(arg)));
   set_car(sc->t2_2, fx_call(sc, cddr(arg)));
-  set_car(sc->t2_1, T_Pos(sc->stack_end[-2]));
+  set_car(sc->t2_1, T_Pos(stack_protected1(sc)));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t2_1));
 }
@@ -57476,10 +57456,10 @@ static s7_pointer fx_c_aaa(s7_scheme *sc, s7_pointer arg)
 {
   /* check_stack_size(sc); */
   gc_protect_via_stack(sc, fx_call(sc, cdr(arg)));
-  sc->stack_end[-4] = fx_call(sc, opt3_pair(arg));
+  stack_protected2(sc) = fx_call(sc, opt3_pair(arg));
   set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg))));
-  set_car(sc->t3_2, sc->stack_end[-4]);
-  set_car(sc->t3_1, sc->stack_end[-2]);
+  set_car(sc->t3_2, stack_protected2(sc));
+  set_car(sc->t3_1, stack_protected1(sc));
   sc->stack_end -= 4;
   return(fn_proc(arg)(sc, sc->t3_1));
 }
@@ -57530,7 +57510,7 @@ static s7_pointer fx_c_opaaq(s7_scheme *sc, s7_pointer arg)
   p = cadr(arg);
   gc_protect_via_stack(sc, fx_call(sc, cdr(p)));
   set_car(sc->t2_2, fx_call(sc, cddr(p)));
-  set_car(sc->t2_1, sc->stack_end[-2]);
+  set_car(sc->t2_1, stack_protected1(sc));
   sc->stack_end -= 4;
   set_car(sc->t1_1, fn_proc(p)(sc, sc->t2_1));
   return(fn_proc(arg)(sc, sc->t1_1));
@@ -57551,10 +57531,10 @@ static s7_pointer fx_c_opaaaq(s7_scheme *sc, s7_pointer code)
   s7_pointer arg;
   arg = cadr(code);
   gc_protect_via_stack(sc, fx_call(sc, cdr(arg)));
-  sc->stack_end[-4] = fx_call(sc, opt3_pair(arg));      /* cddr(arg) */
+  stack_protected2(sc) = fx_call(sc, opt3_pair(arg));      /* cddr(arg) */
   set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg)))); 
-  set_car(sc->t3_1, sc->stack_end[-2]);
-  set_car(sc->t3_2, sc->stack_end[-4]);
+  set_car(sc->t3_1, stack_protected1(sc));
+  set_car(sc->t3_2, stack_protected2(sc));
   sc->stack_end -= 4;
   set_car(sc->t1_1, fn_proc(arg)(sc, sc->t3_1));
   return(fn_proc(code)(sc, sc->t1_1));
@@ -57566,7 +57546,7 @@ static s7_pointer fx_c_s_opaaq(s7_scheme *sc, s7_pointer code)
   arg = caddr(code);
   gc_protect_via_stack(sc, fx_call(sc, cdr(arg)));
   set_car(sc->t2_2, fx_call(sc, cddr(arg)));
-  set_car(sc->t2_1, sc->stack_end[-2]);
+  set_car(sc->t2_1, stack_protected1(sc));
   set_car(sc->t2_2, fn_proc(arg)(sc, sc->t2_1));
   set_car(sc->t2_1, lookup(sc, cadr(code)));
   sc->stack_end -= 4;
@@ -57578,10 +57558,10 @@ static s7_pointer fx_c_s_opaaaq(s7_scheme *sc, s7_pointer code)
   s7_pointer arg;
   arg = caddr(code);
   gc_protect_via_stack(sc, fx_call(sc, cdr(arg)));
-  sc->stack_end[-4] = fx_call(sc, opt3_pair(arg));      /* cddr(arg) */
+  stack_protected2(sc) = fx_call(sc, opt3_pair(arg));      /* cddr(arg) */
   set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg))));
-  set_car(sc->t3_1, sc->stack_end[-2]);
-  set_car(sc->t3_2, sc->stack_end[-4]);
+  set_car(sc->t3_1, stack_protected1(sc));
+  set_car(sc->t3_2, stack_protected2(sc));
   sc->stack_end -= 4;
   set_car(sc->t2_2, fn_proc(arg)(sc, sc->t3_1));
   set_car(sc->t2_1, lookup(sc, cadr(code)));
@@ -57594,13 +57574,13 @@ static s7_pointer fx_c_4a(s7_scheme *sc, s7_pointer code)
   /* check_stack_size(sc); */
   res = cdr(code);
   gc_protect_via_stack(sc, fx_call(sc, res));
-  sc->stack_end[-4] = fx_call(sc, cdr(res));
+  stack_protected2(sc) = fx_call(sc, cdr(res));
   res = cddr(res);
-  sc->stack_end[-3] = fx_call(sc, res);
+  stack_protected3(sc) = fx_call(sc, res);
   set_car(sc->t3_3, fx_call(sc, cdr(res)));
-  set_car(sc->t3_2, sc->stack_end[-3]);
-  set_car(sc->t3_1, sc->stack_end[-4]);
-  set_car(sc->t4_1, sc->stack_end[-2]);
+  set_car(sc->t3_2, stack_protected3(sc));
+  set_car(sc->t3_1, stack_protected2(sc));
+  set_car(sc->t4_1, stack_protected1(sc));
   sc->stack_end -= 4;
   res = fn_proc(code)(sc, sc->t4_1);
   set_car(sc->t4_1, sc->F);
@@ -57991,7 +57971,7 @@ static s7_pointer fx_safe_thunk_a(s7_scheme *sc, s7_pointer code)
   f = opt1_lambda(code);
   sc->curlet = closure_let(f);
   result = fx_call(sc, closure_body(f));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58015,7 +57995,7 @@ static s7_pointer fx_safe_closure_s_a(s7_scheme *sc, s7_pointer code) /* also ca
   gc_protect_via_stack(sc, sc->curlet);
   sc->curlet = update_let_with_slot(sc, closure_let(opt1_lambda(code)), lookup(sc, opt2_sym(code)));
   result = fx_call(sc, closure_body(opt1_lambda(code)));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58032,7 +58012,7 @@ static s7_pointer fx_safe_closure_t_a(s7_scheme *sc, s7_pointer code)
   gc_protect_via_stack(sc, sc->curlet);
   sc->curlet = update_let_with_slot(sc, closure_let(opt1_lambda(code)), t_lookup(sc, opt2_sym(code), code));
   result = fx_call(sc, closure_body(opt1_lambda(code)));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58102,7 +58082,7 @@ static s7_pointer fx_closure_s_and_2(s7_scheme *sc, s7_pointer code) /* safe_clo
   result = fx_call(sc, code);  /* have to unwind the stack so this can't return */
   if (result != sc->F)
     result = fx_call(sc, cdr(code));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58116,7 +58096,7 @@ static s7_pointer fx_closure_s_and_pair(s7_scheme *sc, s7_pointer code) /* safe_
   if (is_pair(t_lookup(sc, cadar(code), code))) /* pair? arg = func par, pair? is global, symbol_id=0 */
     result = fx_call(sc, cdr(code));
   else result = sc->F;
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58127,7 +58107,7 @@ static s7_pointer fx_safe_closure_a_a(s7_scheme *sc, s7_pointer code)
   gc_protect_via_stack(sc, sc->curlet);
   sc->curlet = update_let_with_slot(sc, closure_let(opt1_lambda(code)), fx_call(sc, cdr(code)));
   result = fx_call(sc, closure_body(opt1_lambda(code)));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58149,7 +58129,7 @@ static s7_pointer fx_safe_closure_a_and_2(s7_scheme *sc, s7_pointer code)
   and_arg = cdar(closure_body(opt1_lambda(code)));
   result = fx_call(sc, and_arg);
   if (result != sc->F) result = fx_call(sc, cdr(and_arg));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58160,7 +58140,7 @@ static s7_pointer fx_safe_closure_ss_a(s7_scheme *sc, s7_pointer code)
   gc_protect_via_stack(sc, sc->curlet);
   sc->curlet = update_let_with_two_slots(sc, closure_let(opt1_lambda(code)), lookup(sc, cadr(code)), lookup(sc, opt2_sym(code)));
   result = fx_call(sc, closure_body(opt1_lambda(code)));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58177,7 +58157,7 @@ static s7_pointer fx_safe_closure_3s_a(s7_scheme *sc, s7_pointer code)
   gc_protect_via_stack(sc, sc->curlet);
   sc->curlet = update_let_with_three_slots(sc, closure_let(opt1_lambda(code)), lookup(sc, cadr(code)), lookup(sc, opt2_sym(code)), lookup(sc, opt3_sym(code)));
   result = fx_call(sc, closure_body(opt1_lambda(code)));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(result);
 }
@@ -58193,11 +58173,11 @@ static s7_pointer fx_safe_closure_aa_a(s7_scheme *sc, s7_pointer code)
   s7_pointer f, p;
   p = cdr(code);
   gc_protect_via_stack(sc, sc->curlet); /* this is needed even if one of the args is a symbol, so nothing is saved by splitting out that case */
-  sc->stack_end[-4] = fx_call(sc, cdr(p));
+  stack_protected2(sc) = fx_call(sc, cdr(p));
   f = opt1_lambda(code);
-  sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), sc->stack_end[-4]);
+  sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), stack_protected2(sc));
   p = fx_call(sc, closure_body(f));
-  sc->curlet = sc->stack_end[-2];
+  sc->curlet = stack_protected1(sc);
   sc->stack_end -= 4;
   return(p);
 }
@@ -64707,7 +64687,7 @@ static s7_pointer opt_p_call_ff(opt_info *o)
   sc = opt_sc(o);
   gc_protect_via_stack(sc, o->v[11].fp(o->v[10].o1));
   po2 = o->v[9].fp(o->v[8].o1);
-  po2 = o->v[3].call(sc, set_plist_2(sc, sc->stack_end[-2], po2));
+  po2 = o->v[3].call(sc, set_plist_2(sc, stack_protected1(sc), po2));
   sc->stack_end -= 4;
   return(po2);
 }
@@ -65231,8 +65211,8 @@ static s7_pointer opt_p_ppp_fff(opt_info *o)
   s7_scheme *sc;
   sc = opt_sc(o);
   gc_protect_via_stack(sc, T_Pos(o->v[11].fp(o->v[10].o1)));
-  sc->stack_end[-4] = T_Pos(o->v[9].fp(o->v[8].o1));
-  res = o->v[3].p_ppp_f(sc, sc->stack_end[-2], sc->stack_end[-4], o->v[5].fp(o->v[4].o1));
+  stack_protected2(sc) = T_Pos(o->v[9].fp(o->v[8].o1));
+  res = o->v[3].p_ppp_f(sc, stack_protected1(sc), stack_protected2(sc), o->v[5].fp(o->v[4].o1));
   sc->stack_end -= 4;
   return(res);
 }
@@ -65411,9 +65391,9 @@ static s7_pointer opt_p_call_ppp(opt_info *o)
   s7_scheme *sc;
   sc = opt_sc(o);
   gc_protect_via_stack(sc, o->v[4].fp(o->v[3].o1));
-  sc->stack_end[-4] = o->v[6].fp(o->v[5].o1);
+  stack_protected2(sc) = o->v[6].fp(o->v[5].o1);
   res = o->v[11].fp(o->v[10].o1); /* not combinable into next */
-  res = o->v[2].call(sc, set_plist_3(sc, sc->stack_end[-2], sc->stack_end[-4], res));
+  res = o->v[2].call(sc, set_plist_3(sc, stack_protected1(sc), stack_protected2(sc), res));
   sc->stack_end -= 4;
   return(res);
 }
@@ -67730,7 +67710,7 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
   return(tree_set_memq(sc, tree));
 }
 
-static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_pointer var_list, bool *has_set);
+static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, bool *has_set);
 
 static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer stepper, bool *has_set)
 {
@@ -67738,7 +67718,7 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
-      if (!(do_is_safe(sc, body, (stepper != sc->nil) ? set_dlist_1(sc, stepper) : sc->nil, sc->nil, has_set)))
+      if (!(do_is_safe(sc, body, stepper, sc->nil, has_set)))
 	set_unsafe_do(body);
     }
   return(!is_unsafe_do(body));
@@ -70713,7 +70693,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 	  }
 	port_position(pt) += (p - orig_str + 2);
 
-	/* now count newline inside the comment */
+	/* now count newlines inside the comment */
 	str = (const char *)orig_str;
 	pend = p;
 	while (true)
@@ -70754,7 +70734,6 @@ static token_t read_comma(s7_scheme *sc, s7_pointer pt)
       sc->strbuf[0] = ',';  /* was '@' which doesn't make any sense */
       return(TOKEN_COMMA);  /* was TOKEN_ATOM, which also doesn't seem sensible */
     }
-
   backchar(c, pt);
   return(TOKEN_COMMA);
 }
@@ -71244,7 +71223,6 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
        *   by the hook function.  (+ 1 asdf) will end up evaluating (+ asdf asdf) if sc->value
        *   is not protected.  We also need to save/restore sc->curlet in case s7_load is called.
        */
-
       args = (sc->args) ? sc->args : sc->nil;
       code = sc->code;
       value = sc->value;
@@ -71254,7 +71232,6 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
       x = sc->x;
       z = sc->z;
       sc->temp7 = cons(sc, code, cons(sc, args, list_4(sc, value, cur_code, x, z))); /* not s7_list (debugger checks) */
-
       if (!is_pair(cur_code))
 	{
 	  /* isolated typo perhaps -- no pair to hold the position info, so make one. current_code(sc) is GC-protected, so this should be safe. */
@@ -81157,15 +81134,13 @@ static goto_t op_set_dilambda_p_1(s7_scheme *sc)
 
 
 /* -------------------------------- do -------------------------------- */
-static bool safe_stepper_expr(s7_pointer expr, s7_pointer vars)
+static bool safe_stepper_expr(s7_pointer expr, s7_pointer var)
 {
   /* for now, just look for stepper as last element of any list
    *    any embedded set is handled by do_is_safe, so we don't need to descend into the depths
    */
   s7_pointer p;
-  if (direct_memq(cadr(expr), vars))
-    return(false);
-
+  if (cadr(expr) == var) return(false);
   for (p = cdr(expr); is_pair(cdr(p)); p = cdr(p));
 
   if (is_pair(p))
@@ -81175,12 +81150,10 @@ static bool safe_stepper_expr(s7_pointer expr, s7_pointer vars)
 	  (is_safe_c_op(optimize_op(p))))
 	return(true);
 
-      if (direct_memq(car(p), vars))
-	return(false);
+      if (car(p) == var) return(false);
     }
   else
-    if (direct_memq(p, vars))
-      return(false);
+    if (p == var) return(false);
   return(true);
 }
 
@@ -81832,15 +81805,11 @@ static bool tree_match(s7_pointer tree)
 	 ((tree_match(car(tree))) || (tree_match(cdr(tree)))));
 }
 
-static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_pointer var_list, bool *has_set)
+static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, bool *has_set)
 {
   /* here any (unsafe?) closure or jumping-op (call/cc) or shadowed variable is trouble */
   s7_pointer p;
   /* sc->code is the complete do form (do ...) */
-#if S7_DEBUGGING
-  /* I think the "steppers" list is always either nil or 1 var -- is this intended?  (why direct_memq of it everywhere?) */
-  if ((is_pair(steppers)) && (is_pair(cdr(steppers)))) fprintf(stderr, "%s\n", display(steppers));
-#endif
   for (p = body; is_pair(p); p = cdr(p))
     {
       s7_pointer expr;
@@ -81894,7 +81863,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 			    sc->x = nv;
 			  }
 			sc->x = sc->nil;
-			if (!do_is_safe(sc, cddr(expr), steppers, nv, has_set))
+			if (!do_is_safe(sc, cddr(expr), stepper, nv, has_set))
 			  return(false);
 			break;
 		      }
@@ -81911,23 +81880,22 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 			    if (!is_pair(car(vars)))
 			      return(false);
 			    var = caar(vars);
-			    if ((direct_memq(var, nv)) ||
-				(direct_memq(var, steppers)))
+			    if ((direct_memq(var, nv)) || (var == stepper))
 			      return(false);
 
 			    nv = cons(sc, var, nv);
 			    sc->x = nv;
 			    if ((is_pair(cdar(vars))) &&
-				(!do_is_safe(sc, cdar(vars), steppers, nv, has_set)))
+				(!do_is_safe(sc, cdar(vars), stepper, nv, has_set)))
 			      {
 				sc->x = sc->nil;
 				return(false);
 			      }}
 			sc->x = sc->nil;
-			if (!do_is_safe(sc, caddr(expr), steppers, nv, has_set))
+			if (!do_is_safe(sc, caddr(expr), stepper, nv, has_set))
 			  return(false);
 			if ((is_pair(cdddr(expr))) &&
-			    (!do_is_safe(sc, cdddr(expr), steppers, nv, has_set)))
+			    (!do_is_safe(sc, cdddr(expr), stepper, nv, has_set)))
 			  return(false);
 			break;
 		      }
@@ -81968,9 +81936,9 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 			    if ((has_set) && (!direct_memq(cadr(expr), var_list))) /* is some non-local variable being set? */
 			      (*has_set) = true;
 			  }
-			if (!do_is_safe(sc, cddr(expr), steppers, var_list, has_set))
+			if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
 			  return(false);
-			if (!safe_stepper_expr(expr, steppers))      /* is step var's value used as the stored value by set!? */
+			if (!safe_stepper_expr(expr, stepper))      /* is step var's value used as the stored value by set!? */
 			  return(false);
 		      }
 		      break;
@@ -81985,9 +81953,9 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 			for (lp = cadr(expr); is_pair(lp); lp = cdr(lp))
 			  if ((!is_pair(car(lp))) ||
 			      (!is_pair(cdar(lp))) ||
-			      (!do_is_safe(sc, cdar(lp), steppers, var_list, has_set)))
+			      (!do_is_safe(sc, cdar(lp), stepper, var_list, has_set)))
 			    return(false);
-			if (!do_is_safe(sc, cddr(expr), steppers, var_list, has_set))
+			if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
 			  return(false);
 			break;
 		      }
@@ -81996,7 +81964,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		      {
 			s7_pointer cp;
 			for (cp = cdr(expr); is_pair(cp); cp = cdr(cp))
-			  if (!do_is_safe(sc, car(cp), steppers, var_list, has_set))
+			  if (!do_is_safe(sc, car(cp), stepper, var_list, has_set))
 			    return(false);
 			break;
 		      }
@@ -82006,11 +81974,11 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 			s7_pointer cp;
 			if (!is_pair(cdr(expr)))
 			  return(false);
-			if (!do_is_safe(sc, cadr(expr), steppers, var_list, has_set))
+			if (!do_is_safe(sc, cadr(expr), stepper, var_list, has_set))
 			  return(false);
 			for (cp = cddr(expr); is_pair(cp); cp = cdr(cp))
 			  if ((!is_pair(car(cp))) ||      /* (case x #(123)...) */
-			      (!do_is_safe(sc, cdar(cp), steppers, var_list, has_set)))
+			      (!do_is_safe(sc, cdar(cp), stepper, var_list, has_set)))
 			    return(false);
 			break;
 		      }
@@ -82022,7 +81990,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		    case OP_OR:
 		    case OP_BEGIN:
 		    case OP_WITH_BAFFLE:
-		      if (!do_is_safe(sc, cdr(expr), steppers, var_list, has_set))
+		      if (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set))
 			return(false);
 		      break;
 
@@ -82037,7 +82005,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		  /* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and s7_macroexpand */
 		  if ((!is_optimized(expr)) ||
 		      (optimize_op(expr) == OP_UNKNOWN_FP) ||
-		      (!do_is_safe(sc, cdr(expr), steppers, var_list, has_set)))
+		      (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set)))
 		    return(false);
 
 		  if (is_setter(x))           /* "setter" includes stuff like cons and vector -- x is a symbol */
@@ -82045,28 +82013,28 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer steppers, s7_p
 		      /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
 		       *   similarly (vector-set! v 0 i) etc
 		       */
-		      if (is_null(cdr(expr)))                         /* (vector) for example */
+		      if (is_null(cdr(expr)))                                 /* (vector) for example */
 			return((x == sc->vector_symbol) ||
 			       (x == sc->list_symbol) ||
 			       (x == sc->string_symbol));
-		      if ((has_set) && (!direct_memq(cadr(expr), var_list)))         /* non-local is being changed */
+		      if ((has_set) && (!direct_memq(cadr(expr), var_list)))  /* non-local is being changed */
 			{
-			  if ((direct_memq(cadr(expr), steppers)) ||  /* stepper is being set? */
+			  if ((cadr(expr) == stepper) ||                      /* stepper is being set? */
 			      (!is_pair(cddr(expr))) ||
 			      (!is_pair(cdddr(expr))) ||
 			      (is_pair(cddddr(expr))) ||
 			      ((x == sc->hash_table_set_symbol) &&
 			       (is_symbol(caddr(expr))) &&
-			       (direct_memq(caddr(expr), steppers))) ||
+			       (caddr(expr) == stepper)) ||
 			      ((is_symbol(cadddr(expr))) &&
-			       (direct_memq(cadddr(expr), steppers))) ||
+			       (cadddr(expr) == stepper)) ||
 			      ((is_pair(cadddr(expr))) &&
-			       (tree_set_memq_b_7pp(sc, steppers, cadddr(expr)))))
+			       (s7_tree_memq(sc, stepper, cadddr(expr)))))
 			    (*has_set) = true;
 			}
-		      if (!do_is_safe(sc, cddr(expr), steppers, var_list, has_set))
+		      if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
 			return(false);
-		      if (!safe_stepper_expr(expr, steppers))
+		      if (!safe_stepper_expr(expr, stepper))
 			return(false);
 		    }}} /* is_symbol(x=car(expr)) */
 	  else return(false);
@@ -82444,7 +82412,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		    }
 
 		  if (((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one)) &&
-		      (do_is_safe(sc, body, set_dlist_1(sc, car(v)), sc->nil, &has_set)))
+		      (do_is_safe(sc, body, car(v), sc->nil, &has_set)))
 		    {
 		      pair_set_syntax_op(form, OP_SAFE_DO);          /* safe_do: body is safe, step by 1 */
 		      /* no permanent let here because apparently do_is_safe accepts recursive calls? */
@@ -86597,7 +86565,7 @@ static void op_any_closure_3p(s7_scheme *sc)
 	  sc->stack_end[2] = sc->args;
 	  sc->stack_end[3] = (s7_pointer)(OP_ANY_CLOSURE_3P_3);
 	  sc->stack_end += 4;
-	  sc->stack_end[-3] = fx_call(sc, p); /* this might push_stack gc_protect etc, so push_stack via +4 before the fx_call */
+	  stack_protected3(sc) = fx_call(sc, p); /* this might push_stack gc_protect etc, so push_stack via +4 before the fx_call */
 #if S7_DEBUGGING
 	  if (sc->stack_end[-1] != (s7_pointer)(OP_ANY_CLOSURE_3P_3)) /* did fx_call push then forget to pop? */
 	    fprintf(stderr, "%s[%d]: op: %s, code: %s\n", __func__, __LINE__, op_names[(opcode_t)(sc->stack_end[-1])], display_80(sc->code));
@@ -86636,7 +86604,7 @@ static bool closure_3p_end(s7_scheme *sc, s7_pointer p)
       return(true);
     }
   push_stack_direct(sc, OP_ANY_CLOSURE_3P_3);
-  sc->stack_end[-3] = sc->value; /* curlet stack loc */
+  stack_protected3(sc) = sc->value; /* curlet stack loc */
   sc->code = car(p);
   return(false);
 }
@@ -86668,9 +86636,9 @@ static void op_any_closure_3p_3(s7_scheme *sc)
   sc->code = T_Pair(closure_body(func));
 }
 
-#define clo4_arg1(Sc) Sc->stack_end[-2]
-#define clo4_arg2(Sc) Sc->stack_end[-4]
-#define clo4_arg3(Sc) Sc->stack_end[-3]
+#define clo4_arg1(Sc) stack_protected1(sc)
+#define clo4_arg2(Sc) stack_protected2(sc)
+#define clo4_arg3(Sc) stack_protected3(sc)
 
 static void op_any_closure_4p(s7_scheme *sc)
 {
@@ -87106,8 +87074,8 @@ static void op_closure_3a(s7_scheme *sc)
   args = cdr(sc->code);
   f = opt1_lambda(sc->code);
   gc_protect_via_stack(sc, fx_call(sc, args)); /* [-2]=first */
-  sc->stack_end[-4] = fx_call(sc, cdr(args));  /* [-4]=second */
-  make_let_with_three_slots(sc, f, sc->stack_end[-2], sc->stack_end[-4], fx_call(sc, cddr(args)));
+  stack_protected2(sc) = fx_call(sc, cdr(args));  /* [-4]=second */
+  make_let_with_three_slots(sc, f, stack_protected1(sc), stack_protected2(sc), fx_call(sc, cddr(args)));
   sc->stack_end -= 4;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
@@ -87119,9 +87087,9 @@ static void op_closure_4a(s7_scheme *sc) /* sass */
   args = cdr(sc->code);
   f = opt1_lambda(sc->code);
   gc_protect_via_stack(sc, fx_call(sc, args)); /* [-2]=first */
-  sc->stack_end[-3] = fx_call(sc, cdr(args));  /* [-3]=second */
-  sc->stack_end[-4] = fx_call(sc, cddr(args)); /* [-4]=third */
-  make_let_with_four_slots(sc, f, sc->stack_end[-2], sc->stack_end[-3], sc->stack_end[-4], fx_call(sc, cdddr(args)));
+  stack_protected3(sc) = fx_call(sc, cdr(args));  /* [-3]=second */
+  stack_protected2(sc) = fx_call(sc, cddr(args)); /* [-4]=third */
+  make_let_with_four_slots(sc, f, stack_protected1(sc), stack_protected3(sc), stack_protected2(sc), fx_call(sc, cdddr(args)));
   sc->stack_end -= 4;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
@@ -90268,7 +90236,7 @@ static void op_cl_aa(s7_scheme *sc)
 {
   gc_protect_via_stack(sc, fx_call(sc, cdr(sc->code)));
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
-  set_car(sc->t2_1, T_Pos(sc->stack_end[-2]));
+  set_car(sc->t2_1, T_Pos(stack_protected1(sc)));
   sc->stack_end -= 4;
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
@@ -91024,7 +90992,6 @@ static inline void eval_args_pair_car(s7_scheme *sc)
     {
       if (!is_pair(code))            /* (= 0 '(1 . 2) . 3) */
 	improper_arglist_error(sc);
-
       if ((is_null(cdr(code))) &&
 	  (!is_pair(car(code))))
 	push_stack(sc, OP_EVAL_ARGS3, sc->args, car(code));
@@ -91075,7 +91042,6 @@ static bool eval_car_pair(s7_scheme *sc)
 		}}
 	  set_no_cell_opt(carc);
 	}
-
       sc->cur_op = (opcode_t)symbol_syntax_op_checked(sc->code);
       pair_set_syntax_op(sc->code, sc->cur_op);
       return(true);
@@ -93875,6 +93841,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_OR_S_TYPE_2: sc->value = fx_or_s_type_2(sc, sc->code); continue;
 	case OP_OR_3:        sc->value = fx_or_3(sc, sc->code); continue;
 	case OP_OR_N:        sc->value = fx_or_n(sc, sc->code); continue;
+
 
 	case OP_EVAL_MACRO:    op_eval_macro(sc);                  goto EVAL;
 	case OP_EVAL_MACRO_MV: if (op_eval_macro_mv(sc)) continue; goto EVAL;
@@ -96890,7 +96857,6 @@ s7_scheme *s7_init(void)
   sc->max_format_length = 10000;
   sc->max_list_length = 1073741824;
   sc->max_vector_dimensions = 512;
-
   sc->strbuf_size = INITIAL_STRBUF_SIZE;
   sc->strbuf = (char *)calloc(sc->strbuf_size, 1);
   sc->print_width = sc->max_string_length;
@@ -97760,42 +97726,42 @@ int main(int argc, char **argv)
  * tauto       782          648    642    504
  * tref        558          691    687    506
  * tshoot     1516          883    872    842
- * index      1208         1026   1016    991
+ * index      1208         1026   1016    992
  * tmock      7676         1177   1165   1147
  * s7test     4509         1873   1831   1805
  * tvect      2513         2456   2413   2013
- * lt         2107         2123   2110   2091
- * tform      3277         2281   2273   2293
+ * lt         2107         2123   2110   2092
+ * tform      3277         2281   2273   2290
  * tread      2607         2440   2421   2410
  * trclo      4310         2715   2561   2525
  * fbench     2960         2688   2583   2557
- * tmat       3063         3065   3042   2588
+ * tmat       3063         3065   3042   2581
  * tcopy      4898         8035   5546   2600
  * tb         3402         2735   2681   2624
  * titer      2821         2865   2842   2803
- * tmap       3910         3164          2910
- * tsort      3654         3105   3104   2921
+ * tmap       3910         3164          2906
+ * tsort      3654         3105   3104   2915
  * tmac       3295         3317   3277   3218
  * tset       3244         3253   3104   3246
- * dup        3648         3805   3788   3625
+ * dup        3648         3805   3788   3662
  * tio        3703         3816   3752   3687
  * teq        3728         4068   4045   3718
  * tstr       6704         5281   4863   4366
  * tcase      4627         4960   4793   4563
  * tclo       4959         4787   4735   4596
- * tlet       5683         7775   5640   4613
+ * tlet       5683         7775   5640   4605
  * tfft       88.7         6858   6636   4857
  * tnum       59.3         6348   6013   5800
  * trec       7763         5976   5970   5969
  * tmisc      6458         7389   6210   5988
- * tgsl       25.3         8485   7802   6429
+ * tgsl       25.3         8485   7802   6427
  * tgc        11.9         11.9   11.1   10.4
  * thash      37.2         11.8   11.7   11.2
  * tgen       12.2         11.2   11.4   11.3
  * tall       26.8         15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3
  * sg         98.7         71.9   72.3   72.7
- * lg        104.4        106.6  105.0  103.9
+ * lg        104.4        106.6  105.0  104.0
  * tbig      598.4        177.4  175.8  171.7
  * -----------------------------------------------
  *
@@ -97804,7 +97770,6 @@ int main(int argc, char **argv)
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
  * need to split fn|fx_proc from s7_pfunc to get rid of the expr args
- * other 3-arg stack cases? tmap basics. closure* in map etc?
- * vect for-each: code=func, args=vect, let=index (func holds curlet), maybe mutable int?
- * more cons/list -> weak clist/mlist? cdadr_p_p are calling methods whereas cadr_p_p and friends are not
+ * other 3-arg stack cases? tmap basics. closure* in map etc
+ * opt_do_any t454?
  */
