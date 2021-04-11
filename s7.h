@@ -46,6 +46,7 @@ s7_scheme *s7_init(void);
 void s7_free(s7_scheme *sc);
 
 typedef s7_pointer (*s7_function)(s7_scheme *sc, s7_pointer args);   /* that is, obj = func(s7, args) -- args is a list of arguments */
+typedef s7_pointer (*s7_pfunc)(s7_scheme *sc);
 
 s7_pointer s7_f(s7_scheme *sc);                                      /* #f */
 s7_pointer s7_t(s7_scheme *sc);                                      /* #t */
@@ -710,7 +711,7 @@ void s7_c_type_set_setter       (s7_scheme *sc, s7_int tag, s7_pointer setter);
  *   wrapping up the result as a scheme cell.
  */
 
-s7_function s7_optimize(s7_scheme *sc, s7_pointer expr);
+s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr);
 
 typedef s7_double (*s7_float_function)(s7_scheme *sc);
 s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr);
@@ -908,6 +909,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  * 
+ * 12-Apr:    s7_optimize now returns an s7_pfunc, not an s7_function.
  * 7-Apr:     removed the "args" parameter from s7_float_function. added s7_make_c_object_without_gc.
  * 31-Mar:    vector-rank, vector-dimension.
  * 17-Mar:    removed deprecated nan.0 and inf.0 due to compiler stupidity.
