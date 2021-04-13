@@ -731,15 +731,7 @@ typedef union {
 #define NUM_VUNIONS 15
 struct opt_info {
   vunion v[NUM_VUNIONS];
-#if S7_DEBUGGING
-  int64_t unused1;
-#endif
   s7_scheme *sc;
-#if S7_DEBUGGING
-  int64_t unused2;
-  const char *opo_func;
-  int opo_line;
-#endif
 };
 
 #define O_WRAP (NUM_VUNIONS - 1)
@@ -1411,22 +1403,7 @@ struct s7_scheme {
 #endif
 static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
 
-#if S7_DEBUGGING
-static s7_scheme *opt_sc(opt_info *o) 
-{
-  if ((o->sc != cur_sc) || (o->unused1 != 0) || (o->unused2 != 0))
-    {
-      int i;
-      for (i = 0; i < OPTS_SIZE; i++) if (o == cur_sc->opts[i]) break;
-      fprintf(stderr, "o[%d] overwritten: %ld %p %ld %s %p\n", i, o->unused1, o->sc, o->unused2, (o->sc != cur_sc) ? "o->sc != cur_sc" : "", cur_sc);
-      if (cur_sc->stop_at_error) abort();
-    }
-  return(o->sc);
-}
-
-#else
 #define opt_sc(o) o->sc
-#endif
 #define opt_set_sc(o, sc) o->sc = sc
 
 
@@ -43408,12 +43385,7 @@ static int32_t closure_sort_begin(const void *v1, const void *v2, void *arg)
 }
 
 static s7_b_7pp_t s7_b_7pp_function(s7_pointer f);
-#if S7_DEBUGGING
-#define alloc_opo(Sc) alloc_opo_1(Sc, __func__, __LINE__)
-static opt_info *alloc_opo_1(s7_scheme *sc, const char *func, int line);
-#else
 static opt_info *alloc_opo(s7_scheme *sc);
-#endif
 
 static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 {
@@ -59786,21 +59758,13 @@ static s7_d_7piiid_t s7_d_7piiid_function(s7_pointer f) {return((s7_d_7piiid_t)o
 static void s7_set_p_dd_function(s7_scheme *sc, s7_pointer f, s7_p_dd_t df) {add_opt_func(sc, f, o_p_dd, (void *)df);}
 static s7_p_dd_t s7_p_dd_function(s7_pointer f) {return((s7_p_dd_t)opt_func(f, o_p_dd));}
 
-#if S7_DEBUGGING
-static opt_info *alloc_opo_1(s7_scheme *sc, const char *func, int line)
-#else
 static opt_info *alloc_opo(s7_scheme *sc)
-#endif
 {
   opt_info *o;
   if (sc->pc >= OPTS_SIZE)
     sc->pc = OPTS_SIZE - 1;
   o = sc->opts[sc->pc++];
   o->v[O_WRAP].fd = NULL; /* see bool_optimize -- this is a kludge */
-#if S7_DEBUGGING
-  o->opo_func = func;
-  o->opo_line = line;
-#endif
   return(o);
 }
 
@@ -61473,6 +61437,14 @@ static s7_double opt_d_id_sf(opt_info *o)   {return(o->v[3].d_id_f(integer(slot_
 static s7_double opt_d_id_sc(opt_info *o)   {return(o->v[3].d_id_f(integer(slot_value(o->v[1].p)), o->v[2].x));}
 static s7_double opt_d_id_sfo1(opt_info *o) {return(o->v[3].d_id_f(integer(slot_value(o->v[1].p)), o->v[5].d_v_f(o->v[2].obj)));}
 static s7_double opt_d_id_sfo(opt_info *o)  {return(o->v[4].d_id_f(integer(slot_value(o->v[1].p)), o->v[5].d_vd_f(o->v[6].obj, real(slot_value(o->v[3].p)))));}
+static s7_double opt_d_id_cf(opt_info *o)   {return(o->v[3].d_id_f(o->v[1].i, o->v[5].fd(o->v[4].o1)));}
+
+static s7_double opt_d_id_ff(opt_info *o)
+{
+  s7_int x1;
+  x1 = o->v[9].fi(o->v[8].o1);
+  return(o->v[3].d_id_f(x1, o->v[11].fd(o->v[10].o1)));
+}
 
 static bool d_id_sf_combinable(s7_scheme *sc, opt_info *opc)
 {
@@ -61511,12 +61483,12 @@ static bool d_id_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   if (flt_func)
     {
       s7_pointer p;
+      int32_t start;
+      start = sc->pc;
+      opc->v[3].d_id_f = flt_func;
       p = opt_integer_symbol(sc, cadr(car_x));
       if (p)
 	{
-	  int32_t start;
-	  start = sc->pc;
-	  opc->v[3].d_id_f = flt_func;
 	  opc->v[1].p = p;
 	  if (is_t_real(caddr(car_x)))
 	    {
@@ -61531,6 +61503,31 @@ static bool d_id_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	      opc->v[0].fd = opt_d_id_sf;
 	      opc->v[4].o1 = sc->opts[start];
 	      opc->v[5].fd = sc->opts[start]->v[0].fd;
+	      return(true);
+	    }
+	  pc_fallback(sc, start);
+	}
+      if (is_t_integer(cadr(car_x)))
+	{
+	  if (float_optimize(sc, cddr(car_x)))
+	    {
+	      opc->v[0].fd = opt_d_id_cf;
+	      opc->v[1].i = integer(cadr(car_x));
+	      opc->v[4].o1 = sc->opts[start];
+	      opc->v[5].fd = sc->opts[start]->v[0].fd;
+	      return(true);
+	    }
+	  pc_fallback(sc, start);
+	}
+      opc->v[8].o1 = sc->opts[sc->pc];
+      if (int_optimize(sc, cdr(car_x)))
+	{
+	  opc->v[9].fi = opc->v[8].o1->v[0].fi;
+	  opc->v[10].o1 = sc->opts[sc->pc];
+	  if (float_optimize(sc, cddr(car_x)))
+	    {
+	      opc->v[11].fd = opc->v[10].o1->v[0].fd;
+	      opc->v[0].fd = opt_d_id_ff;
 	      return(true);
 	    }
 	  pc_fallback(sc, start);
@@ -68214,8 +68211,8 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 
 	    case 3:
 	      if ((d_dd_ok(sc, opc, s_func, car_x)) ||
-		  (d_vd_ok(sc, opc, s_func, car_x)) ||
 		  (d_id_ok(sc, opc, s_func, car_x)) ||
+		  (d_vd_ok(sc, opc, s_func, car_x)) ||
 		  (d_pd_ok(sc, opc, s_func, car_x)) ||
 		  (d_ip_ok(sc, opc, s_func, car_x)) ||
 		  (d_7pi_ok(sc, opc, s_func, car_x)))
@@ -68756,7 +68753,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       if (is_float_vector(seq))
 	val = real_zero;
       else val = ((is_int_vector(seq)) || (is_byte_vector(seq))) ? int_zero : sc->F;
-      sc->curlet = make_let_with_slot(sc, closure_let(f), car(pars), val);
+      sc->curlet = make_let_with_slot(sc, closure_let(f), (is_pair(car(pars))) ? caar(pars) : car(pars), val);
       slot = let_slots(sc->curlet);
 
       if (is_null(cdr(body)))
@@ -68940,6 +68937,13 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       set_no_cell_opt(body);
       sc->curlet = old_e;
     }
+
+  if (is_closure_star(f))
+    {
+      push_stack(sc, OP_FOR_EACH, cons(sc, make_iterators(sc, set_plist_2(sc, sc->nil, seq)), list_1(sc, sc->nil)), f);
+      return(sc->unspecified);
+    }
+
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -69057,9 +69061,12 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
   if (len == 1)
     {
       if (is_null(cadr(args))) return(sc->unspecified);
-      if ((is_closure(f)) &&                        /* not lambda* that might get confused about arg names */
-	  (closure_arity_to_int(sc, f) == 1) &&     /* not a rest arg: not is_pair: (lambda (x . args) arg) */
-	  (!is_constant_symbol(sc, car(closure_args(f)))))
+      if (((is_closure(f)) && 
+	   (closure_arity_to_int(sc, f) == 1) &&
+	   (!is_constant_symbol(sc, car(closure_args(f))))) ||
+	  ((is_closure_star(f)) && 
+	   (closure_star_arity_to_int(sc, f) == 1) && 
+	   (!is_constant_symbol(sc, (is_pair(car(closure_args(f)))) ? caar(closure_args(f)) : car(closure_args(f))))))
 	return(g_for_each_closure(sc, f, cadr(args)));
     }
   if (for_each_arg_is_null(sc, cdr(args))) return(sc->unspecified);
@@ -69189,7 +69196,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
       if (is_float_vector(seq))
 	val = real_zero;
       else val = ((is_int_vector(seq)) || (is_byte_vector(seq))) ? int_zero : sc->F;
-      sc->curlet = make_let_with_slot(sc, closure_let(f), car(pars), val);
+      sc->curlet = make_let_with_slot(sc, closure_let(f), (is_pair(car(pars))) ? caar(pars) : car(pars), val);
       slot = let_slots(sc->curlet);
 
       if (is_null(cdr(body)))
@@ -69274,6 +69281,14 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
       sc->curlet = old_e;
     }
 
+  if (is_closure_star(f))
+    {
+      sc->z = make_iterators(sc, set_plist_2(sc, sc->nil, seq));
+      push_stack(sc, OP_MAP, make_counter(sc, sc->z), f);
+      sc->z = sc->nil;
+      return(sc->nil);
+    }
+
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -69314,7 +69329,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  (c_function_all_args(f) < len))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
-
+      
     case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       /* if function is safe c func, do the map locally */
@@ -69391,35 +69406,35 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	      return(p);
 	  }
       break;
+      
+    case T_CLOSURE: 
+    case T_CLOSURE_STAR:
+      {
+	int32_t fargs;
+	fargs = (is_closure(f)) ? closure_arity_to_int(sc, f) : closure_star_arity_to_int(sc, f);
+	if ((len == 1) &&
+	    (fargs == 1) &&
+	    (!is_constant_symbol(sc, (is_pair(car(closure_args(f)))) ? caar(closure_args(f)) : car(closure_args(f)))))
+	  {
+	    if (got_nil) return(sc->nil);
+	    if (is_closure_star(f))
+	      return(g_map_closure(sc, f, cadr(args)));
 
-      case T_CLOSURE:
-	{
-	  int32_t fargs;
-	  fargs = closure_arity_to_int(sc, f);
-	  /* if closure call is straightforward, use OP_MAP_1 */
-	  if ((len == 1) &&
-	      (fargs == 1) &&
-	      (!is_constant_symbol(sc, car(closure_args(f)))))
-	    {
-	      /* g_map_closure here if not s7_tree_memq 'map takes more time than it saves */
-	      if (got_nil) return(sc->nil);
-	      /* don't go to OP_MAP_2 here! It assumes no recursion */
-	      sc->z = (!is_iterator(cadr(args))) ? s7_make_iterator(sc, cadr(args)) : cadr(args);
-	      push_stack(sc, OP_MAP_1, make_counter(sc, sc->z), f);
-	      sc->z = sc->nil;
-	      symbol_increment_ctr(car(closure_args(f)));
-	      return(sc->nil);
-	    }
-	  if ((fargs > len) ||
-	       ((fargs < len) &&
-		((fargs >= 0) ||
-		 (abs(fargs) > len))))
-	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			    set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
-	  if (got_nil) return(sc->nil);
-	}
-	break;
-
+	    /* don't go to OP_MAP_2 here! It assumes no recursion */
+	    sc->z = (!is_iterator(cadr(args))) ? s7_make_iterator(sc, cadr(args)) : cadr(args);
+	    push_stack(sc, OP_MAP_1, make_counter(sc, sc->z), f);
+	    sc->z = sc->nil;
+	    symbol_increment_ctr(car(closure_args(f)));
+	    return(sc->nil);
+	  }
+	if (((fargs >= 0) && (fargs < len)) ||
+	    ((is_closure(f)) && (abs(fargs) > len)))
+	  return(s7_error(sc, sc->wrong_number_of_args_symbol,
+			  set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
+	if (got_nil) return(sc->nil);
+      }
+      break;
+      
     default:
       if (!is_applicable(f))
 	return(method_or_bust_with_type(sc, f, sc->map_symbol, args, something_applicable_string, 1));
@@ -73859,34 +73874,33 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	  if ((has_safe_args(func)) &&
 	      (is_symbol(car(expr))) &&
 	      (car(expr) != sc->values_symbol) &&
-	      (is_fxable(sc, arg2)))
+	      (is_fxable(sc, arg2)) &&
+	      (is_pair(arg1)) &&
+	      (car(arg1) == sc->lambda_symbol))
 	    {
-	      if ((is_pair(arg1)) &&
-		  (car(arg1) == sc->lambda_symbol))
+	      s7_pointer p;
+	      fx_annotate_arg(sc, cddr(expr), e);
+	      set_unsafe_optimize_op(expr, hop + OP_CL_FA);
+	      check_lambda(sc, arg1, true);      /* this changes symbol_list */
+	      
+	      clear_symbol_list(sc);               /* so restore it */
+	      for (p = e; is_pair(p); p = cdr(p))
+		if (is_normal_symbol(car(p)))
+		  add_symbol_to_list(sc, car(p));
+	      
+	      choose_c_function(sc, expr, func, 2);
+	      if (((fn_proc(expr) == g_for_each) || (fn_proc(expr) == g_map)) &&
+		  (is_proper_list_1(sc, cadr(arg1))) &&
+		  (is_proper_list_1(sc, cddr(arg1))) &&
+		  (!is_possibly_constant(caadr(arg1))))
 		{
-		  s7_pointer p;
-		  fx_annotate_arg(sc, cddr(expr), e);
-		  set_unsafe_optimize_op(expr, hop + OP_CL_FA);
-		  check_lambda(sc, arg1, true);      /* this changes symbol_list */
-
-		  clear_symbol_list(sc);               /* so restore it */
-		  for (p = e; is_pair(p); p = cdr(p))
-		    if (is_normal_symbol(car(p)))
-		      add_symbol_to_list(sc, car(p));
-
-		  choose_c_function(sc, expr, func, 2);
-		  if (((fn_proc(expr) == g_for_each) || (fn_proc(expr) == g_map)) &&
-		      (is_proper_list_1(sc, cadr(arg1))) &&
-		      (is_proper_list_1(sc, cddr(arg1))) &&
-		      (!is_possibly_constant(caadr(arg1))))
-		    {
-		      /* built-in permanent closure here was not much faster */
-		      set_fn(expr, (fn_proc(expr) == g_for_each) ? g_for_each_closure : NULL);
-		      set_opt3_pair(expr, cdr(arg1));
-		      set_unsafe_optimize_op(expr, OP_MAP_FA);
-		    }
-		  return(OPT_F);
-		}}}
+		  /* built-in permanent closure here was not much faster */
+		  set_fn(expr, (fn_proc(expr) == g_for_each) ? g_for_each_closure : NULL);
+		  set_opt3_pair(expr, cdr(arg1));
+		  set_unsafe_optimize_op(expr, OP_MAP_FA);
+		}
+	      return(OPT_F);
+	    }}
       return(set_any_c_fp(sc, func, expr, e, 2, hop + OP_ANY_C_FP));
     }
 
@@ -97655,28 +97669,28 @@ int main(int argc, char **argv)
  * tref        558          691    687    506
  * tshoot     1516          883    872    838
  * index      1208         1026   1016    992
- * tmock      7676         1177   1165   1147
+ * tmock      7676         1177   1165   1146
  * s7test     4509         1873   1831   1805
  * tvect      2513         2456   2413   2009
- * lt         2107         2123   2110   2092
- * tform      3277         2281   2273   2292
- * tread      2607         2440   2421   2412
+ * lt         2107         2123   2110   2093
+ * tform      3277         2281   2273   2283
+ * tread      2607         2440   2421   2414
  * trclo      4310         2715   2561   2526
  * fbench     2960         2688   2583   2557
  * tmat       3063         3065   3042   2583
  * tcopy      4898         8035   5546   2600
  * tb         3402         2735   2681   2623
  * titer      2821         2865   2842   2803
- * tmap       3910         3164   3133   2901
  * tsort      3654         3105   3104   2915
  * tmac       3295         3317   3277   3219
  * tset       3244         3253   3104   3248
- * dup        3648         3805   3788   3658
+ * dup        3648         3805   3788   3653
  * tio        3703         3816   3752   3686
  * teq        3728         4068   4045   3718
+ * tmap       7465         6862   6804   4083
  * tstr       6704         5281   4863   4365
  * tlet       5683         7775   5640   4552
- * tcase      4627         4960   4793   4563
+ * tcase      4627         4960   4793   4561
  * tclo       4959         4787   4735   4596
  * tfft       88.7         6858   6636   4858
  * tnum       59.3         6348   6013   5798
@@ -97689,7 +97703,7 @@ int main(int argc, char **argv)
  * tall       26.8         15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3
  * sg         98.7         71.9   72.3   72.8
- * lg        104.4        106.6  105.0  104.0
+ * lg        104.4        106.6  105.0  104.1
  * tbig      598.4        177.4  175.8  171.7
  * -----------------------------------------------
  *
@@ -97697,6 +97711,7 @@ int main(int argc, char **argv)
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
- * tmap basics (t453). closure* in map [called via op_map_fa) etc, tmac+while
+ * tmap from t453, tmac+while
  * opt_do_any t454? (2 steppers -> op_dox)
+ * safe_closure_fp direct-to-let?
  */

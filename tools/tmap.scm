@@ -457,6 +457,124 @@
 (f15 lst)
 
 
+
+(define gsize 1000000)
+
+(define (g1 lst)
+  (for-each (lambda* (p)
+	      (if (integer? p)
+		  (display 'oops)))
+	    lst))
+
+(define glst (make-list gsize ()))
+(g1 glst)
+
+(define (g2 v)
+  (for-each (lambda* (p)
+	      (if (integer? p)
+		  (display 'oops)))
+	    v))
+
+(define gfv (make-float-vector gsize 1.0))
+(g2 gfv)
+
+(define (g3 v)
+  (for-each (lambda* (p)
+	      (if (pair? p)
+		  (display 'oops)))
+	    v))
+
+(define giv (make-int-vector gsize 1))
+(g3 giv)
+
+(define (g4 v)
+  (for-each (lambda* (p)
+	      (if (integer? p)
+		  (display 'oops)))
+	    v))
+
+(define gv (make-vector gsize ()))
+(g4 gv)
+
+(define (g5 lst)
+  (for-each (lambda* (p)
+	      (if (integer? p)
+		  (throw 'oops p)))
+	    lst))
+(g5 glst)
+
+(define (g11 lst)
+  (map (lambda* (p)
+	 (if (integer? p)
+	     (display 'oops)
+             0))
+       lst))
+(g11 glst)
+
+(define (g12 v)
+  (map (lambda* (p)
+	 (if (integer? p)
+	     (display 'oops)
+             0))
+       v))
+(g12 gfv)
+
+(define (g13 v)
+  (map (lambda* (p)
+	 (if (pair? p)
+	     (display 'oops)
+             0))
+       v))
+(g13 giv)
+
+(define (g14 v)
+  (map (lambda* (p)
+	 (if (integer? p)
+	     (display 'oops)
+             0))
+       v))
+(g14 gv)
+
+(define (g15 lst)
+  (map (lambda* (p)
+	 (if (integer? p)
+	     (throw 'oops p)
+             0))
+       lst))
+(g15 glst)
+
+(define (g6 lst)
+  (for-each (lambda (p)
+	      (if (integer? p)
+		  (display 'oops))
+	      (if (pair? p)
+		  (display 'oops)))
+	    lst))
+(g6 gv)
+
+(define (g6 lst)
+  (for-each (lambda (p)
+	      (for-each (lambda (q)
+			  (if (integer? q)
+			      (display 'oops)))
+			p))
+	    lst))
+
+(define glst1 (make-list 100 (make-list 100 #\a)))
+(g6 glst1)
+
+(define (g16 lst)
+  (map (lambda (p)
+	 (map (lambda (q)
+		(if (integer? q)
+		    (display 'oops)
+		    0))
+	      p))
+       lst))
+(g16 glst1)
+
+
+
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)

@@ -562,5 +562,21 @@
 
   (testrst))
 
+;; sigh... there's no good place to do this in s7test
+(require libm.scm)
+(define jn (*libm* 'jn)) ; coverage tests for opt_d_id*
+(define (f v) (do ((i 0 (+ i 1))) ((= i 1) v) (float-vector-set! v 0 (jn 0 1.0))))
+(let ((val (f (float-vector 0.0))))
+  (unless (equivalent? val #r(0.7651976865579666))
+    (format *stderr* "jn 1: ~S ~S~%" val (f (float-vector 0.0)))))
+(define (f1 v) (do ((i 0 (+ i 1))) ((= i 1) v) (float-vector-set! v 0 (jn (+ i 1) 1.0))))
+(let ((val (f1 (float-vector 0.0))))
+  (unless (equivalent? val #r(0.4400505857449335))
+    (format *stderr* "jn 2: ~S ~S~%" val (f (float-vector 0.0)))))
+(define (f2 v) (do ((i 0 (+ i 1))) ((= i 1) v) (float-vector-set! v 0 (jn i 1.0))))
+(let ((val (f2 (float-vector 0.0))))
+  (unless (equivalent? val #r(0.7651976865579666))
+    (format *stderr* "jn 3: ~S ~S~%" val (f (float-vector 0.0)))))
+
 (exit)
 
