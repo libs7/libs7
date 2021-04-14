@@ -1,5 +1,6 @@
 ;;; mock data (method call) timing test
 
+(set! (*s7* 'heap-size) 1024000)
 (load "mockery.scm")
 
 (define mock-number (*mock-number* 'mock-number))
@@ -27,9 +28,10 @@
 	  (do ((i 0 (+ i 1))
 	       (sum 0.0 0.0))
 	      ((= i N))
-	    (do ((k 0 (+ k 1)))
+	    (do ((k 0 (+ k 1))
+		 (pii (* pi 0+2.0i)))
 		((= k N))
-	      (set! sum (+ sum (* (vals k) (exp (/ (* 2.0 0+1.0i pi k i) N))))))
+	      (set! sum (+ sum (* (vals k) (exp (/ (* pii k i) N))))))
 	    (set! (w i) (magnitude sum))
 	    (set! pk (max pk (w i))))
 	  ;; scale to 1.0 (it's usually pretty close already, that is pk is close to 1.0)

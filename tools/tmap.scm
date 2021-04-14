@@ -573,6 +573,21 @@
        lst))
 (g16 glst1)
 
+(define fstr (make-string gsize #\a))
+(define (f7 str)
+  (for-each (lambda (p)
+	      (if (not (char? p))
+		  (display 'oops)))
+	    str))
+(f7 fstr)
+
+(define (f17 str)
+  (map (lambda (p)
+	 (if (not (char? p))
+	     (display 'oops)
+	     p))
+       str))
+(f17 fstr)
 
 
 (when (> (*s7* 'profile) 0)

@@ -394,24 +394,16 @@
 	       (set! result (cons `(set! (setter (quote ,(caar var))) (list-ref ,gsetters ,i)) result))))
        ,@body)))
 
-#|
 (define-macro (while test . body)      ; while loop with predefined break and continue
   `(call-with-exit
     (lambda (break)
-      (let continue ()
-	(if (let () ,test)
-	    (begin
-	      (let () ,@body)
-	      (continue))
-	    (break))))))
-|#
-(define-macro (while test . body)      ; while loop with predefined break and continue
-  `(call-with-exit
-    (lambda (break)
-      (let continue ()
-	(when ,test
-	  ,@body
-	  (continue))))))
+      (let loop ()
+	(call-with-exit
+	 (lambda (continue)
+	   (do ()
+	       ((not ,test) (break))
+	     ,@body)))
+	(loop)))))
 
 
 (define-macro (do* spec end . body)

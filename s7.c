@@ -26276,6 +26276,7 @@ static s7_pointer g_is_char(s7_scheme *sc, s7_pointer args)
   check_boolean_method(sc, s7_is_character, sc->is_char_symbol, args);
 }
 
+static s7_pointer is_char_p_p(s7_scheme *sc, s7_pointer p) {return((type(p) == T_CHARACTER) ? sc->T : sc->F);}
 s7_pointer s7_make_character(s7_scheme *sc, uint8_t c) {return(chars[c]);}
 bool s7_is_character(s7_pointer p) {return(type(p) == T_CHARACTER);}
 uint8_t s7_character(s7_pointer p) {return(character(p));}
@@ -68888,6 +68889,19 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		  }
 	      return(sc->unspecified);
 	    }
+	  if (is_string(seq))
+	    {
+	      const char *str;
+	      s7_int i, len;
+	      len = string_length(seq);
+	      str = string_value(seq);
+	      for (i = 0; i < len; i++)
+		{
+		  slot_set_value(slot, chars[(uint8_t)(str[i])]);
+		  func(sc);
+		}
+	      return(sc->unspecified);
+	    }
 
 	  sc->z = seq;
 	  if (!is_iterator(sc->z))
@@ -69271,6 +69285,21 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
 	      for (i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, vals[i]);
+		  z = func(sc);
+		  if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
+		}
+	      unstack(sc);
+	      return(proper_list_reverse_in_place(sc, sc->v));
+	    }
+	  if (is_string(seq))
+	    {
+	      s7_int i, len;
+	      const char *str;
+	      len = string_length(seq);
+	      str = string_value(seq);
+	      for (i = 0; i < len; i++)
+		{
+		  slot_set_value(slot, chars[(uint8_t)(str[i])]);
 		  z = func(sc);
 		  if (z != sc->no_value) sc->v = cons(sc, z, sc->v);
 		}
@@ -74662,7 +74691,6 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	    }
 	  return(OPT_F);
 	}
-
       if (args == 4)
 	return(set_any_closure_fp(sc, func, expr, e, 4, hop + OP_ANY_CLOSURE_4P));
       if (args < GC_TRIGGER_SIZE)
@@ -81217,7 +81245,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   if ((argnum > 1) || (vector_rank(cx) > 1))
     {
       /* TODO: if this is false, we should not keep checking it! */
-
       if ((argnum == 2) &&
 	  (is_fxable(sc, cadr(settee))) &&
 	  (is_fxable(sc, caddr(settee))) &&
@@ -95534,6 +95561,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_b_p_function(sc, global_value(sc->is_immutable_symbol), s7_is_immutable);
 
   s7_set_p_p_function(sc, global_value(sc->is_pair_symbol), is_pair_p_p);
+  s7_set_p_p_function(sc, global_value(sc->is_char_symbol), is_char_p_p);
   s7_set_p_p_function(sc, global_value(sc->is_constant_symbol), is_constant_p_p);
   s7_set_p_p_function(sc, global_value(sc->type_of_symbol), s7_type_of);
   /* s7_set_p_p_function(sc, global_value(sc->openlet_symbol), s7_openlet); -- needs error check */
@@ -97662,56 +97690,55 @@ int main(int argc, char **argv)
 #endif
 
 /* -----------------------------------------------
- *             gmp (3-20)  20.9   21.0   21.3
+ *             gmp (4-13)  20.9   21.0   21.3
  * -----------------------------------------------
  * tpeak       126          115    114    111
- * tauto       782          648    642    504
+ * tauto       775          648    642    504
  * tref        558          691    687    506
  * tshoot     1516          883    872    838
- * index      1208         1026   1016    992
- * tmock      7676         1177   1165   1146
- * s7test     4509         1873   1831   1805
- * tvect      2513         2456   2413   2009
- * lt         2107         2123   2110   2093
- * tform      3277         2281   2273   2283
- * tread      2607         2440   2421   2414
+ * index      1054         1026   1016    992
+ * tmock      7699         1177   1165   1146  1115
+ * s7test     4534         1873   1831   1805
+ * tvect      2208         2456   2413   2009
+ * lt         2102         2123   2110   2093
+ * tform      3271         2281   2273   2283
+ * tread      2610         2440   2421   2414
  * trclo      4310         2715   2561   2526
  * fbench     2960         2688   2583   2557
- * tmat       3063         3065   3042   2583
- * tcopy      4898         8035   5546   2600
- * tb         3402         2735   2681   2623
+ * tmat       2736         3065   3042   2583
+ * tcopy      2689         8035   5546   2600
+ * tb         3398         2735   2681   2623
  * titer      2821         2865   2842   2803
- * tsort      3654         3105   3104   2915
+ * tsort      3632         3105   3104   2915
  * tmac       3295         3317   3277   3219
  * tset       3244         3253   3104   3248
- * dup        3648         3805   3788   3653
+ * dup        4121         3805   3788   3653
  * tio        3703         3816   3752   3686
  * teq        3728         4068   4045   3718
- * tmap       7465         6862   6804   4083
- * tstr       6704         5281   4863   4365
- * tlet       5683         7775   5640   4552
- * tcase      4627         4960   4793   4561
- * tclo       4959         4787   4735   4596
- * tfft       88.7         6858   6636   4858
- * tnum       59.3         6348   6013   5798
- * tmisc      6458         7389   6210   5827
+ * tmap       5143         7051   6993   4171
+ * tstr       6689         5281   4863   4365
+ * tlet       5590         7775   5640   4552
+ * tcase      4622         4960   4793   4561
+ * tclo       4953         4787   4735   4596
+ * tfft       89.6         6858   6636   4858
+ * tnum       59.2         6348   6013   5798
+ * tmisc      6023         7389   6210   5827
  * trec       7763         5976   5970   5969
  * tgsl       25.3         8485   7802   6427
  * tgc        11.9         11.9   11.1   10.4
- * thash      37.2         11.8   11.7   11.2
+ * thash      36.9         11.8   11.7   11.2
  * tgen       12.2         11.2   11.4   11.3
  * tall       26.8         15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3
  * sg         98.7         71.9   72.3   72.8
- * lg        104.4        106.6  105.0  104.1
- * tbig      598.4        177.4  175.8  171.7
+ * lg        104.3        106.6  105.0  104.1
+ * tbig      598.7        177.4  175.8  171.7
  * -----------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
+ *   why did opt_d_id* need to be global -- c_funcs?
  * ttl.scm for setter timings, maybe better in fx* than opt*?
- * would be nice: multithread+data-base example, built-in typed-let|let-with-types? also inlet-with-types (stuff.scm)
- * tmap from t453, tmac+while
+ * tmac+while (t458) -- call/exit lambda -- need texit?
  * opt_do_any t454? (2 steppers -> op_dox)
- * safe_closure_fp direct-to-let?
  */
