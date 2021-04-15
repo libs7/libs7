@@ -8,8 +8,6 @@ s7 is a Scheme interpreter.
 
 [daily tarball](https://ccrma.stanford.edu/software/s7/s7.tar.gz)
 
-[monthly tarball](https://ccrma.stanford.edu/software/s7/s7-15Apr21.tar.gz)
-
 [mailing list](http://ccrma-mail.stanford.edu/mailman/listinfo/cmdist)
 
 [mailing list archive](https://cm-mail.stanford.edu/pipermail/cmdist/)
