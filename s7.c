@@ -17251,13 +17251,9 @@ static s7_pointer c_acos(s7_scheme *sc, s7_double x)
   return(c_complex_to_s7(sc, result));
 }
 
-static s7_pointer g_acos(s7_scheme *sc, s7_pointer args)
+static s7_pointer acos_p_p(s7_scheme *sc, s7_pointer p)
 {
-  #define H_acos "(acos z) returns acos(z); (cos (acos 1)) = 1"
-  #define Q_acos sc->pl_nn
-  s7_pointer p;
-
-  p = car(args);
+  if (is_t_real(p)) return(c_acos(sc, real(p)));
   switch (type(p))
     {
     case T_INTEGER:
@@ -17265,9 +17261,6 @@ static s7_pointer g_acos(s7_scheme *sc, s7_pointer args)
 
     case T_RATIO:
       return(c_acos(sc, fraction(p)));
-
-    case T_REAL:
-      return(c_acos(sc, real(p)));
 
     case T_COMPLEX:
 #if HAVE_COMPLEX_NUMBERS
@@ -17326,6 +17319,13 @@ static s7_pointer g_acos(s7_scheme *sc, s7_pointer args)
     default:
       return(method_or_bust_with_type_one_arg_p(sc, p, sc->acos_symbol, a_number_string));
     }
+}
+
+static s7_pointer g_acos(s7_scheme *sc, s7_pointer args)
+{
+  #define H_acos "(acos z) returns acos(z); (cos (acos 1)) = 1"
+  #define Q_acos sc->pl_nn
+  return(acos_p_p(sc, car(args)));
 }
 
 
@@ -68902,7 +68902,6 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		}
 	      return(sc->unspecified);
 	    }
-
 	  sc->z = seq;
 	  if (!is_iterator(sc->z))
 	    sc->z = s7_make_iterator(sc, sc->z);
@@ -95387,6 +95386,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->cos_symbol), cos_p_p);
   s7_set_p_p_function(sc, global_value(sc->tan_symbol), tan_p_p);
   s7_set_p_p_function(sc, global_value(sc->asin_symbol), asin_p_p);
+  s7_set_p_p_function(sc, global_value(sc->acos_symbol), acos_p_p);
 
   s7_set_p_d_function(sc, global_value(sc->rationalize_symbol), rationalize_p_d);
   s7_set_p_i_function(sc, global_value(sc->rationalize_symbol), rationalize_p_i);
@@ -97689,9 +97689,9 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -----------------------------------------------
- *             gmp (4-13)  20.9   21.0   21.3
- * -----------------------------------------------
+/* -------------------------------------------------------
+ *             gmp (4-13)  20.9   21.0   21.3   21.4
+ * -------------------------------------------------------
  * tpeak       126          115    114    111
  * tauto       775          648    642    504
  * tref        558          691    687    506
@@ -97733,12 +97733,12 @@ int main(int argc, char **argv)
  * sg         98.7         71.9   72.3   72.8
  * lg        104.3        106.6  105.0  104.1
  * tbig      598.7        177.4  175.8  171.7
- * -----------------------------------------------
+ * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
  *   why did opt_d_id* need to be global -- c_funcs?
  * ttl.scm for setter timings, maybe better in fx* than opt*?
- * tmac+while (t458) -- call/exit lambda -- need texit?
- * opt_do_any t454? (2 steppers -> op_dox)
+ * tmac+while (t458) -- need texit?
+ * opt_do_any t454? (2 steppers -> op_dox), opt for map/for-each?
  */
