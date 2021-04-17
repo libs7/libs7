@@ -2440,12 +2440,8 @@ void s7_show_history(s7_scheme *sc);
 /* this marks an environment or closure that is "open" for generic functions etc, don't reuse this bit */
 
 #define T_ITER_OK                      (1LL << (TYPE_BITS + 23))
-#define iter_ok(p)                     has_type_bit(T_Itr(p), T_ITER_OK)
+#define iter_ok(p)                     has_type_bit(T_Itr(p), T_ITER_OK) /* was T_Pos 15-Apr-21 */
 #define clear_iter_ok(p)               clear_type_bit(T_Itr(p), T_ITER_OK)
-
-#define T_OPT_IMPLICIT                 T_ITER_OK
-#define is_opt_implicit(p)             has_type_bit(T_Pair(p), T_OPT_IMPLICIT)
-#define set_is_opt_implicit(p)         set_type_bit(T_Pair(p), T_OPT_IMPLICIT)
 
 /* its faster here to use the high_flag bits rather than typeflag bits */
 #define BIT_ROOM                       16
@@ -2633,6 +2629,7 @@ void s7_show_history(s7_scheme *sc);
 #define has_fn(p)                      has_type1_bit(T_Pair(p), T_HAS_FN)
 
 #define UNUSED_BITS                    0
+/* T_ITER_OK is currently just iterators */
 
 #define T_GC_MARK                      0x8000000000000000
 #define is_marked(p)                   has_type_bit(p, T_GC_MARK)
@@ -4709,8 +4706,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	   ((full_typ & T_HAS_METHODS) != 0) ?    (((is_let(obj)) || (is_c_object(obj)) || (is_any_closure(obj)) ||
 						    (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" : " ?22?") : "",
 	   /* bit 23 */
-	   ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" : 
-						   ((is_pair(obj)) ? " opt-implicit" : " ?23?")) : "",
+	   ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" : " ?23?") : "",
 	   /* bit 24+16 */
 	   ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
 						   ((is_procedure(obj)) ? " has-let-arg" :
@@ -4809,7 +4805,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_EXPANSION) != 0) && (!is_normal_symbol(obj)) && (!is_either_macro(obj))) return(true);
   if (((full_typ & T_MULTIPLE_VALUE) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_GLOBAL) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_syntax(obj))) return(true);
-  if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj))) return(true);
+  if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj))) return(true);
   if (((full_typ & T_FULL_SYMCONS) != 0) && (!is_symbol(obj)) && (!is_procedure(obj)) && (!is_let(obj)) && (!is_hash_table(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_LOCAL) != 0) && (!is_normal_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_COPY_ARGS) != 0) && (!is_pair(obj)) && (!is_any_macro(obj)) && (!is_any_closure(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))) return(true);
@@ -45098,6 +45094,8 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      if (((keyp != sc->T) && (!is_c_function(keyp)) && (!is_any_closure(keyp))) ||
 			  ((valp != sc->T) && (!is_c_function(valp)) && (!is_any_closure(valp))))
 			return(wrong_type_argument_with_type(sc, caller, 3, typers, wrap_string(sc, "(key-type . value-type)", 23)));
+		      if ((keyp != sc->T) && (!s7_is_aritable(sc, keyp, 1)))
+			return(wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a function of 1 argument", 24)));
 		      dproc = cons(sc, sc->T, sc->T);
 		      hash_table_set_procedures(ht, dproc);
 		      hash_table_set_key_typer(dproc, keyp);
@@ -45130,6 +45128,8 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			if ((is_any_closure(keyp)) &&
 			    (!is_symbol(find_closure(sc, keyp, closure_let(keyp)))))
 			  return(wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a named function", 16)));
+		      if ((valp != sc->T) && (!s7_is_aritable(sc, valp, 1)))
+			return(wrong_type_argument_with_type(sc, caller, 3, valp, wrap_string(sc, "a function of 1 argument", 24)));
 		      if (is_c_function(valp))
 			{
 			  if (!c_function_name(valp))
@@ -60867,22 +60867,19 @@ static bool i_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
   return_false(sc, car_x);
 }
 
-static bool i_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
+static bool i_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, int32_t len)
 {
-  s7_pointer s_slot, head;
-  head = car(car_x);
-  s_slot = lookup_slot_from(head, sc->curlet);
-  if ((is_slot(s_slot)) &&
-      ((is_int_vector(slot_value(s_slot))) || (is_byte_vector(slot_value(s_slot)))))
+  s7_pointer obj;
+  obj = slot_value(s_slot);
+  if ((is_int_vector(obj)) || (is_byte_vector(obj)))
     {
       bool int_case;
       s7_pointer slot;
-      int_case = (is_int_vector(slot_value(s_slot)));
+      int_case = is_int_vector(obj);
 
       if ((len == 2) &&
-	  (vector_rank(slot_value(s_slot)) == 1))
+	  (vector_rank(obj) == 1))
 	{
-	  /* implicit int|byte-vector-ref */
 	  opt_info *opc;
 	  opc = alloc_opo(sc);
 	  opc->v[1].p = s_slot;
@@ -60892,7 +60889,7 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	      opc->v[0].fi = opt_i_7pi_ss;
 	      opc->v[3].i_7pi_f = (int_case) ? int_vector_ref_i_7pi : byte_vector_ref_i_7pi;
 	      opc->v[2].p = slot;
-	      if (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p))))
+	      if (step_end_fits(opc->v[2].p, vector_length(obj)))
 		opc->v[3].i_7pi_f = (int_case) ? int_vector_ref_unchecked : byte_vector_ref_unchecked;
 		  /* not opc->v[0].fi = ivref_7pi_ss -- this causes a huge slowdown in dup.scm?? */
 	      return(true);
@@ -60909,7 +60906,7 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	}
 
       if ((len == 3) &&
-	  (vector_rank(slot_value(s_slot)) == 2))
+	  (vector_rank(obj) == 2))
 	{
 	  opt_info *opc;
 	  opc = alloc_opo(sc);
@@ -60926,14 +60923,13 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		  opc->v[3].p = slot;
 		  opc->v[0].fi = opt_i_7pii_sss;
 		  if ((int_case) &&
-		      (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		      (step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+		      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
 		    opc->v[0].fi = int_vector_ref_pii_sss_unchecked;
 		  return(true);
 		}
 	      return_false(sc, car_x);
 	    }
-
 	  opc->v[10].o1 = sc->opts[sc->pc];
 	  if (int_optimize(sc, cdr(car_x)))
 	    {
@@ -63124,14 +63120,16 @@ static bool d_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
   return_false(sc, car_x);
 }
 
-static bool d_implicit_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
+static bool d_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, int32_t len)
 {
-  s7_pointer s_slot, slot, obj;
+  s7_pointer /* s_slot, */ slot, obj;
   opt_info *opc;
+#if 0
   s_slot = lookup_slot_from(car(car_x), sc->curlet);
 
   if (!is_slot(s_slot))
     return_false(sc, car_x);
+#endif
   obj = slot_value(s_slot);
 
   if (is_float_vector(obj))
@@ -65506,172 +65504,167 @@ static bool p_fx_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_poin
 
 /* -------- p_implicit -------- */
 
-static bool p_implicit(s7_scheme *sc, s7_pointer car_x, int32_t len)
+static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, int32_t len)
 {
-  s7_pointer s_slot;
-  s_slot = lookup_slot_from(car(car_x), sc->curlet);
-
-  if (is_slot(s_slot))
+  s7_pointer obj;
+  obj = slot_value(s_slot);
+  
+  if (is_sequence(obj))
     {
-      s7_pointer obj;
-      obj = slot_value(s_slot);
-
-      if (is_sequence(obj))
+      opt_info *opc;
+      int32_t start;
+      opc = alloc_opo(sc);
+      opc->v[1].p = s_slot;
+      start = sc->pc;
+      if (len == 2)
 	{
-	  opt_info *opc;
-	  int32_t start;
-	  opc = alloc_opo(sc);
-	  opc->v[1].p = s_slot;
-	  start = sc->pc;
-	  if (len == 2)
+	  switch (type(obj))
 	    {
-	      switch (type(obj))
+	    case T_PAIR:       opc->v[3].p_pi_f = list_ref_p_pi_unchecked;   break;
+	    case T_HASH_TABLE: opc->v[3].p_pp_f = s7_hash_table_ref;         break;
+	    case T_LET:        opc->v[3].p_pp_f = s7_let_ref;	         break;
+	    case T_STRING:     opc->v[3].p_pi_f = string_ref_p_pi_unchecked; break;
+	      
+	    case T_VECTOR:
+	      if (vector_rank(obj) != 1)
+		return_false(sc, car_x);
+	      opc->v[3].p_pi_f = normal_vector_ref_p_pi_unchecked;
+	      break;
+	      
+	    case T_BYTE_VECTOR:
+	    case T_INT_VECTOR:
+	    case T_FLOAT_VECTOR:
+	      if (vector_rank(obj) != 1)
+		return_false(sc, car_x);
+	      opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
+	      break;
+	      
+	    case T_C_OBJECT:
+	      return_false(sc, car_x); /* no pi_ref because ref assumes pp */
+	      break;
+	      
+	    default:
+	      return_false(sc, car_x);
+	    }
+	  /* now v3.p_pi|pp.f is set */
+	  if (is_symbol(cadr(car_x)))
+	    {
+	      s7_pointer slot;
+	      slot = lookup_slot_from(cadr(car_x), sc->curlet);
+	      if (is_slot(slot))
 		{
-		case T_PAIR:       opc->v[3].p_pi_f = list_ref_p_pi_unchecked;   break;
-		case T_HASH_TABLE: opc->v[3].p_pp_f = s7_hash_table_ref;         break;
-		case T_LET:        opc->v[3].p_pp_f = s7_let_ref;	         break;
-		case T_STRING:     opc->v[3].p_pi_f = string_ref_p_pi_unchecked; break;
-
-		case T_VECTOR:
-		  if (vector_rank(obj) != 1)
-		    return_false(sc, car_x);
-		  opc->v[3].p_pi_f = normal_vector_ref_p_pi_unchecked;
-		  break;
-
-		case T_BYTE_VECTOR:
-		case T_INT_VECTOR:
-		case T_FLOAT_VECTOR:
-		  if (vector_rank(obj) != 1)
-		    return_false(sc, car_x);
-		  opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
-		  break;
-
-		case T_C_OBJECT:
-		  return_false(sc, car_x); /* no pi_ref because ref assumes pp */
-		  break;
-
-		default:
-		  return_false(sc, car_x);
-		}
-	      /* now v3.p_pi|pp.f is set */
-	      if (is_symbol(cadr(car_x)))
-		{
-		  s7_pointer slot;
-		  slot = lookup_slot_from(cadr(car_x), sc->curlet);
-		  if (is_slot(slot))
-		    {
-		      opc->v[2].p = slot;
-		      if ((!is_hash_table(obj)) && /* these because opt_int below */
-			  (!is_let(obj)))
-			{
-			  if (is_t_integer(slot_value(slot)))
-			    {
-			      opc->v[0].fp = opt_p_pi_ss;
-			      if (is_step_end(opc->v[2].p))
-				check_unchecked(sc, obj, opc->v[2].p, opc);
-			      return(true);
-			    }
-			  return_false(sc, car_x); /* I think this reflects that a non-int index is an error for list-ref et al */
-			}
-		      opc->v[0].fp = opt_p_pp_ss;
-		      return(true);
-		    }}
-	      else
-		{
-		  if ((!is_hash_table(obj)) &&
+		  opc->v[2].p = slot;
+		  if ((!is_hash_table(obj)) && /* these because opt_int below */
 		      (!is_let(obj)))
 		    {
-		      opt_info *o1;
-		      if (is_t_integer(cadr(car_x)))
+		      if (is_t_integer(slot_value(slot)))
 			{
-			  opc->v[2].i = integer(cadr(car_x));
-			  opc->v[0].fp = opt_p_pi_sc;
+			  opc->v[0].fp = opt_p_pi_ss;
+			  if (is_step_end(opc->v[2].p))
+			    check_unchecked(sc, obj, opc->v[2].p, opc);
 			  return(true);
 			}
-		      o1 = sc->opts[sc->pc];
-		      if (int_optimize(sc, cdr(car_x)))
-			{
-			  opc->v[0].fp = opt_p_pi_sf;
-			  opc->v[4].o1 = o1;
-			  opc->v[5].fi = o1->v[0].fi;
-			  return(true);
-			}
-		      return_false(sc, car_x);
+		      return_false(sc, car_x); /* I think this reflects that a non-int index is an error for list-ref et al */
 		    }
-		  if (cell_optimize(sc, cdr(car_x)))
-		    {
-		      opc->v[0].fp = opt_p_pp_sf;
-		      opc->v[4].o1 = sc->opts[start];
-		      opc->v[5].fp = sc->opts[start]->v[0].fp;
-		      return(true);
-		    }}} /* len==2 */
+		  opc->v[0].fp = opt_p_pp_ss;
+		  return(true);
+		}}
 	  else
 	    {
-	      if (len > 2)
+	      if ((!is_hash_table(obj)) &&
+		  (!is_let(obj)))
 		{
-		  if ((is_normal_vector(obj)) && (len == 3) && (vector_rank(obj) == 2))
+		  opt_info *o1;
+		  if (is_t_integer(cadr(car_x)))
 		    {
-		      s7_pointer slot;
-		      slot = opt_integer_symbol(sc, caddr(car_x));
+		      opc->v[2].i = integer(cadr(car_x));
+		      opc->v[0].fp = opt_p_pi_sc;
+		      return(true);
+		    }
+		  o1 = sc->opts[sc->pc];
+		  if (int_optimize(sc, cdr(car_x)))
+		    {
+		      opc->v[0].fp = opt_p_pi_sf;
+		      opc->v[4].o1 = o1;
+		      opc->v[5].fi = o1->v[0].fi;
+		      return(true);
+		    }
+		  return_false(sc, car_x);
+		}
+	      if (cell_optimize(sc, cdr(car_x)))
+		{
+		  opc->v[0].fp = opt_p_pp_sf;
+		  opc->v[4].o1 = sc->opts[start];
+		  opc->v[5].fp = sc->opts[start]->v[0].fp;
+		  return(true);
+		}}} /* len==2 */
+      else
+	{
+	  if (len > 2)
+	    {
+	      if ((is_normal_vector(obj)) && (len == 3) && (vector_rank(obj) == 2))
+		{
+		  s7_pointer slot;
+		  slot = opt_integer_symbol(sc, caddr(car_x));
+		  if (slot)
+		    {
+		      opc->v[3].p = slot;
+		      slot = opt_integer_symbol(sc, cadr(car_x));
 		      if (slot)
 			{
-			  opc->v[3].p = slot;
-			  slot = opt_integer_symbol(sc, cadr(car_x));
-			  if (slot)
-			    {
-			      opc->v[2].p = slot;
-			      opc->v[0].fp = opt_p_pii_sss;
-			      if ((step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-				  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
-				opc->v[0].fp = vector_ref_pii_sss_unchecked;
-			      return(true);
-			    }}
-		      opc->v[10].o1 = sc->opts[sc->pc];
-		      if (int_optimize(sc, cdr(car_x)))
-			{
-			  opc->v[8].o1 = sc->opts[sc->pc];
-			  if (int_optimize(sc, cddr(car_x)))
-			    {
-			      opc->v[0].fp = opt_p_pii_sff;
-			      opc->v[11].fi = opc->v[10].o1->v[0].fi;
-			      opc->v[9].fi = opc->v[8].o1->v[0].fi;
-			      /* opc->v[1].p set above */
-			      opc->v[4].p_pii_f = vector_ref_p_pii_direct;
-			      return(true);
-			    }}
-		      pc_fallback(sc, start);
-		    }
-
-		  if (len < (NUM_VUNIONS - 4))  /* mimic p_call_any_ok */
-		    {
-		      int32_t pctr;
-		      s7_pointer p;
-		      opc->v[1].i = len;
-		      for (pctr = 3, p = car_x; is_pair(p); pctr++, p = cdr(p))
-			{
-			  opc->v[pctr].o1 = sc->opts[sc->pc];
-			  if (!cell_optimize(sc, p))
-			    break;
-			}
-		      if (is_null(p))
-			{
-			  /* todo??: here we know the vector rank/type, probably can handle the new value type, and maybe indices/dimensions,
-			   *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize
-			   */
-			  opc->v[0].fp = opt_p_call_any;
-			  switch (type(obj))     /* string can't happen here (no multidimensional strings) */
-			    {
-			    case T_PAIR:         opc->v[2].call = g_list_ref;           break;
-			    case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
-			    /* case T_LET:       opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
-			    case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
-			    case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
-			    case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
-			    case T_VECTOR:       opc->v[2].call = g_vector_ref;         break;
-			    default:             return_false(sc, car_x);
-			    }
+			  opc->v[2].p = slot;
+			  opc->v[0].fp = opt_p_pii_sss;
+			  if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+			      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
+			    opc->v[0].fp = vector_ref_pii_sss_unchecked;
 			  return(true);
-			}}}}}} /* obj is sequence */
+			}}
+		  opc->v[10].o1 = sc->opts[sc->pc];
+		  if (int_optimize(sc, cdr(car_x)))
+		    {
+		      opc->v[8].o1 = sc->opts[sc->pc];
+		      if (int_optimize(sc, cddr(car_x)))
+			{
+			  opc->v[0].fp = opt_p_pii_sff;
+			  opc->v[11].fi = opc->v[10].o1->v[0].fi;
+			  opc->v[9].fi = opc->v[8].o1->v[0].fi;
+			  /* opc->v[1].p set above */
+			  opc->v[4].p_pii_f = vector_ref_p_pii_direct;
+			  return(true);
+			}}
+		  pc_fallback(sc, start);
+		}
+	      
+	      if (len < (NUM_VUNIONS - 4))  /* mimic p_call_any_ok */
+		{
+		  int32_t pctr;
+		  s7_pointer p;
+		  opc->v[1].i = len;
+		  for (pctr = 3, p = car_x; is_pair(p); pctr++, p = cdr(p))
+		    {
+		      opc->v[pctr].o1 = sc->opts[sc->pc];
+		      if (!cell_optimize(sc, p))
+			break;
+		    }
+		  if (is_null(p))
+		    {
+		      /* todo??: here we know the vector rank/type, probably can handle the new value type, and maybe indices/dimensions,
+		       *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize
+		       */
+		      opc->v[0].fp = opt_p_call_any;
+		      switch (type(obj))     /* string can't happen here (no multidimensional strings) */
+			{
+			case T_PAIR:         opc->v[2].call = g_list_ref;           break;
+			case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
+			  /* case T_LET:       opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
+			case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
+			case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
+			case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
+			case T_VECTOR:       opc->v[2].call = g_vector_ref;         break;
+			default:             return_false(sc, car_x);
+			}
+		      return(true);
+		    }}}}} /* obj is sequence */
   return_false(sc, car_x);
 }
 
@@ -66013,14 +66006,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 		  (t_sequence_p[symbol_type(stype)]) &&
 		  (stype != sc->is_null_symbol) &&
 		  (stype != sc->is_pair_symbol)) /* compatible with is_proper_list! */
-		{
-		  /* fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(car_x), display(stype), display(atype)); */
-		  return_false(sc, car_x);
-		}
-#if 0
-	      if (atype != stype)
-		fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(car_x), display(stype), display(atype));
-#endif
+		return_false(sc, car_x);
 	      opc->v[0].fp = opt_set_p_p_f;
 	      opc->v[3].o1 = sc->opts[start_pc];
 	      opc->v[4].fp = sc->opts[start_pc]->v[0].fp;
@@ -68183,32 +68169,17 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
   if (is_symbol(head))
     {
       /* get func, check sig, check all args */
-      s7_pointer s_func;
+      s7_pointer s_func, s_slot;
       s7_int len;
       len = s7_list_length(sc, car_x);
 
       if ((is_syntactic_symbol(head)) ||
 	  (is_syntactic_pair(car_x)))
 	return(d_syntax_ok(sc, car_x, len));
-#if 0
-      if ((is_global(head)) ||
-	  ((is_slot(global_slot(head))) &&
-	   (lookup_slot_from(head, sc->curlet) == global_slot(head))))
-	s_func = global_value(head);
-      else return(d_implicit_ok(sc, car_x, len));
-#else
-      s_func = lookup_unexamined(sc, head);
-      if (!s_func) return_false(sc, car_x);
 
-      if (is_opt_implicit(car_x))
-	return(d_implicit_ok(sc, car_x, len));
-#if 0
-      if ((!is_global(head)) &&
-	  ((!is_slot(global_slot(head))) ||
-	   (!(lookup_slot_from(head, sc->curlet) == global_slot(head)))))
-	fprintf(stderr, "%s\n", display(expr));
-#endif
-#endif
+      s_slot = lookup_slot_from(head, sc->curlet);
+      if (!is_slot(s_slot)) return_false(sc, car_x);
+      s_func = slot_value(s_slot);
       if (is_c_function(s_func))
 	{
 	  opt_info *opc;
@@ -68268,13 +68239,8 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 	  if ((is_macro(s_func)) &&
 	      (!no_cell_opt(expr)))
 	    return(float_optimize(sc, set_plist_1(sc, s7_macroexpand(sc, s_func, cdar(expr))))); /* is this use of plist safe? */
-	  if (d_implicit_ok(sc, car_x, len))
-	    {
-	      set_is_opt_implicit(car_x);
-	      return(true);
-	    }
-	}
-    }
+	  return(d_implicit_ok(sc, s_slot, car_x, len));
+	}}
   return_false(sc, car_x);
 }
 
@@ -68282,7 +68248,7 @@ static bool float_optimize(s7_scheme *sc, s7_pointer expr) {return((float_optimi
 
 static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 {
-  s7_pointer car_x, head;
+  s7_pointer car_x, s_slot, head;
   car_x = car(expr);
 
   if (!is_pair(car_x)) /* wrap constants/symbols */
@@ -68297,17 +68263,10 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
       if ((is_syntactic_symbol(head)) ||
 	  (is_syntactic_pair(car_x)))
 	return(i_syntax_ok(sc, car_x, len));
-#if 0
-      if ((is_global(head)) ||
-	  ((is_slot(global_slot(head))) &&
-	   (lookup_slot_from(head, sc->curlet) == global_slot(head))))
-	s_func = global_value(head);
-      else return(i_implicit_ok(sc, car_x, len));
-#else
-      s_func = lookup_unexamined(sc, head);
-      if (!s_func) return_false(sc, car_x);
-#endif
 
+      s_slot = lookup_slot_from(head, sc->curlet);
+      if (!is_slot(s_slot)) return_false(sc, car_x);
+      s_func = slot_value(s_slot);
       if (is_c_function(s_func))
 	{
 	  opt_info *opc;
@@ -68353,9 +68312,8 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 	  if ((is_macro(s_func)) &&
 	      (!no_cell_opt(expr)))
 	    return(int_optimize(sc, set_plist_1(sc, s7_macroexpand(sc, s_func, cdar(expr)))));
-	  return(i_implicit_ok(sc, car_x, len));
-	}
-    }
+	  return(i_implicit_ok(sc, s_slot, car_x, len));
+	}}
   return_false(sc, car_x);
 }
 
@@ -68371,23 +68329,17 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
   head = car(car_x);
   if (is_symbol(head))
     {
-      s7_pointer s_func = NULL;
+      s7_pointer s_func, s_slot;
       s7_int len;
       len = s7_list_length(sc, car_x);
 
       if ((is_syntactic_symbol(head)) ||
 	  (is_syntactic_pair(car_x)))
 	return(p_syntax(sc, car_x, len));
-#if 0
-      if ((is_global(head)) ||
-	  ((is_slot(global_slot(head))) &&
-	   (lookup_slot_from(head, sc->curlet) == global_slot(head))))
-	s_func = global_value(head);
-      else return(p_implicit(sc, car_x, len));
-#else
-      s_func = lookup_unexamined(sc, head);
-      if (!s_func) return_false(sc, car_x);
-#endif
+
+      s_slot = lookup_slot_from(head, sc->curlet);
+      if (!is_slot(s_slot)) return_false(sc, car_x);
+      s_func = slot_value(s_slot);
       if (is_c_function(s_func))
 	{
 	  opt_info *opc;
@@ -68550,7 +68502,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	    }
 	  if (is_macro(s_func))
 	    return_false(sc, car_x); /* macroexpand+cell_optimize here restarts the optimize process */
-	  return(p_implicit(sc, car_x, len));
+	  return(p_implicit_ok(sc, s_slot, car_x, len));
 	}}
   return_false(sc, car_x);
 }
@@ -68580,16 +68532,8 @@ static bool bool_optimize_nw_1(s7_scheme *sc, s7_pointer expr)
 	    return(opt_b_or(sc, car_x, len));
 	  return_false(sc, car_x);
 	}
-#if 0
-      if ((is_global(head)) ||
-	  ((is_slot(global_slot(head))) &&
-	   (lookup_slot_from(head, sc->curlet) == global_slot(head))))
-	s_func = global_value(head);
-      else return_false(sc, car_x);
-#else
       s_func = lookup_unexamined(sc, head);
       if (!s_func) return_false(sc, car_x);
-#endif
       if (is_c_function(s_func))
 	{
 	  if (symbol_id(head) != 0)             /* (float-vector? (block)) -- both safe c_funcs, but this is a method invocation */
@@ -97731,47 +97675,47 @@ int main(int argc, char **argv)
 /* -------------------------------------------------------
  *             gmp (4-13)  20.9   21.0   21.3   21.4
  * -------------------------------------------------------
- * tpeak       126          115    114    111    113
- * tauto       775          648    642    504
- * tref        558          691    687    506
- * tshoot     1516          883    872    838    840 (cell_opt)
- * index      1054         1026   1016    992
- * tmock      7699         1177   1165   1115
- * s7test     4534         1873   1831   1805
- * tvect      2208         2456   2413   2009   2011 (same)
- * lt         2102         2123   2110   2093   2113 (same)
- * tform      3271         2281   2273   2283
- * tread      2610         2440   2421   2414   (2411)
- * trclo      4310         2715   2561   2526
- * fbench     2960         2688   2583   2557
- * tmat       2736         3065   3042   2583   2644 (float|cell_optimize) 2633 (d_implicit_ok)
- * tcopy      2689         8035   5546   2600
+ * tpeak       126          115    114    111    112
+ * tauto       775          648    642    504    504
+ * tref        558          691    687    506    506
+ * tshoot     1516          883    872    838    840
+ * index      1054         1026   1016    992    992
+ * tmock      7699         1177   1165   1115   1115
+ * s7test     4534         1873   1831   1805   1821
+ * tvect      2208         2456   2413   2009   2011
+ * lt         2102         2123   2110   2093   2113
+ * tform      3271         2281   2273   2283   2292
+ * tread      2610         2440   2421   2414   2411
+ * trclo      4310         2715   2561   2526   2526
+ * fbench     2960         2688   2583   2557   2557
+ * tmac       3295         3317   3277   3219   2598
+ * tcopy      2689         8035   5546   2600   2601
+ * tmat       2736         3065   3042   2583   2624  2616
  * tb         3398         2735   2681   2623   2626
- * titer      2821         2865   2842   2803
- * tsort      3632         3105   3104   2915
- * tmac       3295         3317   3277   3219   (2598)!
- * tset       3244         3253   3104   3248
- * dup        4121         3805   3788   3653   3761
- * tio        3703         3816   3752   3686
- * teq        3728         4068   4045   3718
- * tmap       5143         7051   6993   4171   4182 (g_map_closure??)
- * tstr       6689         5281   4863   4365   4376 (bool_optimize)
- * tlet       5590         7775   5640   4552   4555 (same)
- * tcase      4622         4960   4793   4561
- * tclo       4953         4787   4735   4596
- * tfft       89.6         6858   6636   4858   4865 (float_opt)
- * tnum       59.2         6348   6013   5798   5802 (same)
- * tmisc      6023         7389   6210   5827   (5736) (g_map_closure)
- * trec       7763         5976   5970   5969
- * tgsl       25.3         8485   7802   6427   (6420)
- * tgc        11.9         11.9   11.1   10.4
- * thash      36.9         11.8   11.7   11.2
- * tgen       12.2         11.2   11.4   11.3   11.5 (float|int_opt) [not lookup]
- * tall       26.8         15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.3
- * sg         98.7         71.9   72.3   72.8
- * lg        104.3        106.6  105.0  104.1  105.1 (cell|bool_opt)
- * tbig      598.7        177.4  175.8  171.7
+ * titer      2821         2865   2842   2803   2818
+ * tsort      3632         3105   3104   2915   2941
+ * tset       3244         3253   3104   3248   3248
+ * tio        3703         3816   3752   3686   3686
+ * teq        3728         4068   4045   3718   3718
+ * dup        4121         3805   3788   3653   3740
+ * tmap       5143         7051   6993   4171   4182
+ * tstr       6689         5281   4863   4365   4377
+ * tlet       5590         7775   5640   4552   4555
+ * tcase      4622         4960   4793   4561   4561
+ * tclo       4953         4787   4735   4596   4596
+ * tfft       89.6         6858   6636   4858   4865
+ * tmisc      6023         7389   6210   5827   5736
+ * tnum       59.2         6348   6013   5798   5799
+ * trec       7763         5976   5970   5969   5969
+ * tgsl       25.3         8485   7802   6427   6420
+ * tgc        11.9         11.9   11.1   10.4   10.4
+ * thash      36.9         11.8   11.7   11.2   11.2
+ * tgen       12.2         11.2   11.4   11.3   11.4
+ * tall       26.8         15.6   15.6   15.6   15.6
+ * calls      61.1         36.7   37.5   37.3   37.3
+ * sg         98.7         71.9   72.3   72.8   72.9
+ * lg        104.3        106.6  105.0  104.1  105.1
+ * tbig      598.7        177.4  175.8  171.7  171.7
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
@@ -97780,5 +97724,5 @@ int main(int argc, char **argv)
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * tmac+while (t458) -- need texit?
  * opt_do_any t454? (2 steppers -> op_dox), opt for map/for-each?
- * fixup d_implicit et al to skip the extra lookup
+ * 460+|tgsl->s7test
  */
