@@ -7562,8 +7562,7 @@ static void initialize_op_stack(s7_scheme *sc)
   sc->op_stack_size = OP_STACK_INITIAL_SIZE;
   sc->op_stack_now = sc->op_stack;
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
-  for (i = 0; i < OP_STACK_INITIAL_SIZE; i++)
-    sc->op_stack[i] = sc->nil;
+  for (i = 0; i < OP_STACK_INITIAL_SIZE; i++) sc->op_stack[i] = sc->nil;
 }
 
 static void resize_op_stack(s7_scheme *sc)
@@ -7572,8 +7571,7 @@ static void resize_op_stack(s7_scheme *sc)
   loc = (int32_t)(sc->op_stack_now - sc->op_stack);
   new_size = sc->op_stack_size * 2;
   sc->op_stack = (s7_pointer *)Realloc((void *)(sc->op_stack), new_size * sizeof(s7_pointer));
-  for (i = sc->op_stack_size; i < new_size; i++)
-    sc->op_stack[i] = sc->nil;
+  for (i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->nil;
   sc->op_stack_size = (uint32_t)new_size;
   sc->op_stack_now = (s7_pointer *)(sc->op_stack + loc);
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
@@ -8857,8 +8855,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	  block_info(nb) = NULL;
 	  rootlet_block(ge) = nb;
 	  rootlet_elements(ge) = (s7_pointer *)block_data(nb);
-	  for (i = sc->rootlet_entries; i < len; i++)
-	    rootlet_element(ge, i) = sc->nil;
+	  for (i = sc->rootlet_entries; i < len; i++) rootlet_element(ge, i) = sc->nil;
 	}
       set_global_slot(symbol, slot);
 
@@ -14539,10 +14536,8 @@ static void init_ctables(void)
   exponent_table[(uint8_t)'l'] = true; exponent_table[(uint8_t)'L'] = true;
 #endif
 
-  for (i = 0; i < 32; i++)
-    slashify_table[i] = true;
-  for (i = 127; i < 160; i++)
-    slashify_table[i] = true;
+  for (i = 0; i < 32; i++) slashify_table[i] = true;
+  for (i = 127; i < 160; i++) slashify_table[i] = true;
   slashify_table[(uint8_t)'\\'] = true;
   slashify_table[(uint8_t)'"'] = true;
   slashify_table[(uint8_t)'\n'] = false;
@@ -27084,8 +27079,7 @@ static s7_pointer g_string_downcase(s7_scheme *sc, s7_pointer args)
       while (i >= 0) {nstr[i] = lowers[(uint8_t)ostr[i]]; i--;}
     }
   else
-    for (i = 0; i < len; i++)
-      nstr[i] = lowers[(uint8_t)ostr[i]];
+    for (i = 0; i < len; i++) nstr[i] = lowers[(uint8_t)ostr[i]];
   return(newstr);
 }
 
@@ -27115,8 +27109,7 @@ static s7_pointer g_string_upcase(s7_scheme *sc, s7_pointer args)
       while (i >= 0) {nstr[i] = uppers[(uint8_t)ostr[i]]; i--;}
     }
   else
-    for (i = 0; i < len; i++)
-      nstr[i] = uppers[(uint8_t)ostr[i]];
+    for (i = 0; i < len; i++) nstr[i] = uppers[(uint8_t)ostr[i]];
   return(newstr);
 }
 
@@ -38001,8 +37994,7 @@ static s7_pointer make_big_list(s7_scheme *sc, s7_int len, s7_pointer init)
   s7_int i;
   check_free_heap_size(sc, len);
   sc->v = sc->nil;
-  for (i = 0; i < len; i++)
-    sc->v = cons_unchecked(sc, init, sc->v);
+  for (i = 0; i < len; i++) sc->v = cons_unchecked(sc, init, sc->v);
   result = sc->v;
   sc->v = sc->nil;
   return(result);
@@ -40477,8 +40469,7 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
     {
       s7_int i;
       if (is_normal_vector(x))
-	for (i = start; i < end; i++)
-	  vector_element(x, i) = fill;
+	for (i = start; i < end; i++) vector_element(x, i) = fill;
       else
 	{
 	  if (is_int_vector(x))
@@ -40488,8 +40479,7 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
 	      if (k == 0)
 		memclr((void *)(int_vector_ints(x) + start), (end - start) * sizeof(s7_int));
 	      else
-		for (i = start; i < end; i++)
-		  int_vector(x, i) = k;
+		for (i = start; i < end; i++) int_vector(x, i) = k;
 	    }
 	  else
 	    {
@@ -40573,8 +40563,7 @@ s7_int s7_vector_dimensions(s7_pointer vec, s7_int *dims, s7_int dims_size)
       s7_int i, lim;
       lim = vector_ndims(vec);
       if (lim > dims_size) lim = dims_size;
-      for (i = 0; i < lim; i++)
-	dims[i] = vector_dimension(vec, i);
+      for (i = 0; i < lim; i++)	dims[i] = vector_dimension(vec, i);
       return(lim);
     }
   dims[0] = vector_length(vec);
@@ -40596,8 +40585,7 @@ s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size)
       s7_int i, lim;
       lim = vector_ndims(vec);
       if (lim > offs_size) lim = offs_size;
-      for (i = 0; i < lim; i++)
-	offs[i] = vector_offset(vec, i);
+      for (i = 0; i < lim; i++)	offs[i] = vector_offset(vec, i);
       return(lim);
     }
   offs[0] = 1;
@@ -41252,8 +41240,7 @@ a vector that points to the same elements as the original-vector but with differ
 
 	      v = list_to_dims(sc, dims);
 	      new_len = vdims_dims(v)[0];
-	      for (i = 1; i < vdims_rank(v); i++)
-		new_len *= vdims_dims(v)[i];
+	      for (i = 1; i < vdims_rank(v); i++) new_len *= vdims_dims(v)[i];
 	      if (new_len != new_end - offset)
 		s7_error(sc, sc->wrong_type_arg_symbol,
 			 set_elist_4(sc, wrap_string(sc, "subvector dimensional length, ~S, does not match the start and end positions: ~S to ~S~%", 88),
@@ -43637,11 +43624,8 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	elements = s7_vector_elements(vec);
 
 	if (is_byte_vector(data))
-	  for (i = 0; i < len; i++)
-	    elements[i] = small_int(chrs[i]);
-	else
-	  for (i = 0; i < len; i++)
-	    elements[i] = chars[chrs[i]];
+	  for (i = 0; i < len; i++) elements[i] = small_int(chrs[i]);
+	else for (i = 0; i < len; i++) elements[i] = chars[chrs[i]];
 
 	if (sort_func)
 	  {
@@ -43649,11 +43633,8 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 
 	    if (is_byte_vector(data))
-	      for (i = 0; i < len; i++)
-		chrs[i] = (char)integer(elements[i]);
-	    else
-	      for (i = 0; i < len; i++)
-		chrs[i] = character(elements[i]);
+	      for (i = 0; i < len; i++)	chrs[i] = (char)integer(elements[i]);
+	    else for (i = 0; i < len; i++) chrs[i] = character(elements[i]);
 	    sc->v = sc->nil;
 	    unstack(sc); /* not pop_stack! */
 	    return(data);
@@ -43704,11 +43685,8 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	elements = s7_vector_elements(vec);
 
 	if (is_float_vector(data))
-	  for (i = 0; i < len; i++)
-	    elements[i] = make_real(sc, float_vector(data, i));
-	else
-	  for (i = 0; i < len; i++)
-	    elements[i] = make_integer(sc, int_vector(data, i));
+	  for (i = 0; i < len; i++) elements[i] = make_real(sc, float_vector(data, i));
+	else for (i = 0; i < len; i++) elements[i] = make_integer(sc, int_vector(data, i));
 
 	if (sort_func)
 	  {
@@ -43716,11 +43694,8 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 
 	    if (is_float_vector(data))
-	      for (i = 0; i < len; i++)
-		float_vector(data, i) = real(elements[i]);
-	    else
-	      for (i = 0; i < len; i++)
-		int_vector(data, i) = integer(elements[i]);
+	      for (i = 0; i < len; i++)	float_vector(data, i) = real(elements[i]);
+	    else for (i = 0; i < len; i++) int_vector(data, i) = integer(elements[i]);
 
 	    sc->v = sc->nil;
 	    unstack(sc);
@@ -43836,15 +43811,13 @@ static s7_pointer vector_into_fi_vector(s7_pointer source, s7_pointer dest)
     {
       s7_double *flts;
       flts = float_vector_floats(dest);
-      for (i = 0; i < len; i++)
-	flts[i] = real(elements[i]);
+      for (i = 0; i < len; i++)	flts[i] = real(elements[i]);
     }
   else
     {
       s7_int *ints;
       ints = int_vector_ints(dest);
-      for (i = 0; i < len; i++)
-	ints[i] = integer(elements[i]);
+      for (i = 0; i < len; i++)	ints[i] = integer(elements[i]);
     }
   return(dest);
 }
@@ -43861,14 +43834,12 @@ static s7_pointer vector_into_string(s7_pointer vect, s7_pointer dest)
   if (is_byte_vector(dest))
     {
       str = (uint8_t *)byte_vector_bytes(dest);
-      for (i = 0; i < len; i++)
-	str[i] = (uint8_t)integer(elements[i]);
+      for (i = 0; i < len; i++)	str[i] = (uint8_t)integer(elements[i]);
     }
   else
     {
       str = (uint8_t *)string_value(dest);
-      for (i = 0; i < len; i++)
-	str[i] = character(elements[i]);
+      for (i = 0; i < len; i++)	str[i] = character(elements[i]);
     }
   return(dest);
 }
@@ -51942,8 +51913,7 @@ static block_t *stacktrace_add_func(s7_scheme *sc, s7_pointer f, s7_pointer code
       if (notes)
 	{
 	  s7_int i;
-	  for (i = len; i < code_max - 1; i++)
-	    str[i] = ' ';
+	  for (i = len; i < code_max - 1; i++) str[i] = ' ';
 	  str[i] = '\0';
 	  catstrs(str, newlen, notes, "\n", (char *)NULL);
 	}
@@ -63124,12 +63094,6 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 {
   s7_pointer /* s_slot, */ slot, obj;
   opt_info *opc;
-#if 0
-  s_slot = lookup_slot_from(car(car_x), sc->curlet);
-
-  if (!is_slot(s_slot))
-    return_false(sc, car_x);
-#endif
   obj = slot_value(s_slot);
 
   if (is_float_vector(obj))
@@ -63278,10 +63242,13 @@ static bool opt_b_i_f(opt_info *o)  {return(o->v[2].b_i_f(o->v[11].fi(o->v[10].o
 static bool opt_b_d_s(opt_info *o)  {return(o->v[2].b_d_f(real(slot_value(o->v[1].p))));}
 static bool opt_b_d_f(opt_info *o)  {return(o->v[2].b_d_f(o->v[11].fd(o->v[10].o1)));}
 static bool opt_b_p_s(opt_info *o)  {return(o->v[2].b_p_f(slot_value(o->v[1].p)));}
+static bool opt_b_p_s_is_integer(opt_info *o) {return(s7_is_integer(slot_value(o->v[1].p)));}
+static bool opt_b_p_s_is_pair(opt_info *o) {return(is_pair(slot_value(o->v[1].p)));}
 static bool opt_b_p_f(opt_info *o)  {return(o->v[2].b_p_f(o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_p_f_is_string(opt_info *o) {return(s7_is_string(o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_7p_s(opt_info *o) {return(o->v[2].b_7p_f(opt_sc(o), slot_value(o->v[1].p)));}
 static bool opt_b_7p_f(opt_info *o) {return(o->v[2].b_7p_f(opt_sc(o), o->v[4].fp(o->v[3].o1)));}
+static bool opt_b_7p_s_iter_at_end(opt_info *o) {return(iterator_is_at_end(slot_value(o->v[1].p)));}
 
 static bool opt_zero_mod(opt_info *o)
 {
@@ -63369,7 +63336,8 @@ static bool b_idp_ok(s7_scheme *sc, s7_pointer s_func, s7_pointer car_x, s7_poin
 	  p = opt_simple_symbol(sc, cadr(car_x));
 	  if (!p) return_false(sc, car_x);
 	  opc->v[1].p = p;
-	  opc->v[0].fb = (bpf) ? opt_b_p_s : opt_b_7p_s;
+ 	  opc->v[0].fb = (bpf) ? ((bpf == s7_is_integer) ? opt_b_p_s_is_integer : ((bpf == s7_is_pair) ? opt_b_p_s_is_pair : opt_b_p_s)) : 
+	                         (((bpf7 == iterator_is_at_end_b_7p) && (is_iterator(slot_value(p)))) ? opt_b_7p_s_iter_at_end : opt_b_7p_s);
 	  return(true);
 	}
       opc->v[3].o1 = sc->opts[sc->pc];
@@ -68790,17 +68758,9 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      s7_double (*fd)(opt_info *o);
 		      o = sc->opts[0];
 		      fd = o->v[0].fd;
-		      for (i = 0; i < len; i++)
-			{
-			  real(sv) = vals[i];
-			  fd(o);
-			}}
+		      for (i = 0; i < len; i++)	{real(sv) = vals[i]; fd(o);}}
 		  else
-		    for (i = 0; i < len; i++)
-		      {
-			real(sv) = vals[i];
-			func(sc);
-		      }}
+		    for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}
 	      else
 		for (i = 0; i < len; i++)
 		  {
@@ -68829,17 +68789,9 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		    {
 		      o = sc->opts[0];
 		      fi = o->v[0].fi;
-		      for (i = 0; i < len; i++)
-			{
-			  integer(sv) = vals[i];
-			  fi(o);
-			}}
+		      for (i = 0; i < len; i++)	{integer(sv) = vals[i]; fi(o);}}
 		  else
-		    for (i = 0; i < len; i++)
-		      {
-			integer(sv) = vals[i];
-			func(sc);
-		      }}
+		    for (i = 0; i < len; i++) {integer(sv) = vals[i]; func(sc);}}
 	      else
 		for (i = 0; i < len; i++)
 		  {
@@ -84181,8 +84133,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		s7_pointer stepper;
 		slot_set_value(sc->args, stepper = make_mutable_integer(sc, integer(slot_value(sc->args))));
 		for (; integer(stepper) < end; integer(stepper)++)
-		  for (i = 0; i < body_len; i++)
-		    body[i]->v[0].fd(body[i]);
+		  for (i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
 		clear_mutable_integer(stepper);
 	      }
 	    else
@@ -84194,8 +84145,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		for (step = integer(slot_value(step_slot)); step < integer(slot_value(end_slot)); step = integer(slot_value(step_slot)) + 1)
 		  {
 		    slot_set_value(step_slot, make_integer(sc, step));
-		    for (i = 0; i < body_len; i++)
-		      body[i]->v[0].fd(body[i]);
+		    for (i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
 		  }}
 	    sc->value = sc->T;
 	    sc->code = cdadr(scc);
@@ -84223,8 +84173,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	    s7_pointer stepper;
 	    slot_set_value(sc->args, stepper = make_mutable_integer(sc, integer(slot_value(sc->args))));
 	    for (; integer(stepper) < end; integer(stepper)++)
-	      for (i = 0; i < body_len; i++)
-		body[i]->v[0].fp(body[i]);
+	      for (i = 0; i < body_len; i++) body[i]->v[0].fp(body[i]);
 	    clear_mutable_integer(stepper);
 	  }
 	else
@@ -84236,8 +84185,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	    for (step = integer(slot_value(step_slot)); step < integer(slot_value(end_slot)); step = integer(slot_value(step_slot)) + 1)
 	      {
 		slot_set_value(step_slot, make_integer(sc, step));
-		for (i = 0; i < body_len; i++)
-		  body[i]->v[0].fp(body[i]);
+		for (i = 0; i < body_len; i++) body[i]->v[0].fp(body[i]);
 	      }}
 	sc->value = sc->T;
 	sc->code = cdadr(scc);
@@ -84415,8 +84363,7 @@ static goto_t do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 	    integer(ip) = k;
 	    for (i = 0, p = let_slots(sc->curlet); tis_slot(p); i++, p = next_slot(p))
 	      set_real(slot_value(p), vars[i]->v[0].fd(vars[i]));
-	    for (i = 0; i < body_len; i++)
-	      body[i]->v[0].fd(body[i]);
+	    for (i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
 	  }}
   sc->curlet = old_e;
   sc->value = sc->T;
@@ -97692,13 +97639,13 @@ int main(int argc, char **argv)
  * tcopy      2689         8035   5546   2600   2601
  * tmat       2736         3065   3042   2583   2624  2616
  * tb         3398         2735   2681   2623   2626
- * titer      2821         2865   2842   2803   2818
+ * titer      2821         2865   2842   2803   2818  2741
  * tsort      3632         3105   3104   2915   2941
  * tset       3244         3253   3104   3248   3248
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3718
- * dup        4121         3805   3788   3653   3740
- * tmap       5143         7051   6993   4171   4182
+ * dup        4121         3805   3788   3653   3740  3617
+ * tmap       5143         7051   6993   4171   4182  4134
  * tstr       6689         5281   4863   4365   4377
  * tlet       5590         7775   5640   4552   4555
  * tcase      4622         4960   4793   4561   4561
@@ -97720,9 +97667,8 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
- *   why did opt_d_id* need to be global -- c_funcs?
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * tmac+while (t458) -- need texit?
  * opt_do_any t454? (2 steppers -> op_dox), opt for map/for-each?
- * 460+|tgsl->s7test
+ * as in titer check types in advance? [g_less_or_equal in tbig][does opt_set_p* protect iterator? -- tighten checks]
  */
