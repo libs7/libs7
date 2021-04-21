@@ -394,7 +394,7 @@
 	       (set! result (cons `(set! (setter (quote ,(caar var))) (list-ref ,gsetters ,i)) result))))
        ,@body)))
 
-(define-macro (while test . body)      ; while loop with predefined break and continue
+(define-macro (while test . body)      ; while loop with predefined break and continue.  This really wants to be define-expansion.
   `(call-with-exit
     (lambda (break)
       (let loop ()

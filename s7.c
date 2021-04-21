@@ -2396,7 +2396,7 @@ void s7_show_history(s7_scheme *sc);
 #define set_all_integer_and_float(p)   set_type_bit(T_Sym(p), (T_ALL_INTEGER | T_ALL_FLOAT))
 
 #define T_COPY_ARGS                    (1 << (TYPE_BITS + 20))
-#define needs_copied_args(p)           has_type_bit(T_Pos(p), T_COPY_ARGS) /* set via explicit T_COPY_ARGS on macros etc */
+#define needs_copied_args(p)           has_type_bit(T_Pos(p), T_COPY_ARGS) /* set via explicit T_COPY_ARGS on macros etc, on T_Pos see s7_apply_function */
 #define set_needs_copied_args(p)       set_type_bit(T_Pair(p), T_COPY_ARGS)
 #define clear_needs_copied_args(p)     clear_type_bit(T_Pair(p), T_COPY_ARGS)
 /* this marks something that might mess with its argument list, it should not be in the second byte */
@@ -4596,185 +4596,189 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
   uint64_t full_typ;
   uint8_t typ;
   char *buf;
+  char str[900];
 
-  buf = (char *)Malloc(1024);
+  str[0] = '\0';
   typ = unchecked_type(obj);
   full_typ = full_type(obj);
-
-  /* if debugging, all of these bits are being watched, so we need to access them directly */
+  catstrs(str, 900,	  /* if debugging, all of these bits are being watched, so we need to access them directly */
+	  /* bit 0 (the first 8 bits are easy...) */
+	  ((full_typ & T_MULTIFORM) != 0) ?      ((is_any_closure(obj)) ? (((full_typ & T_ONE_FORM) != 0) ? " closure-one-form-has-fx" : " closure-multiform") : " ?0?") : "",
+	  /* bit 1 */
+	  ((full_typ & T_SYNTACTIC) != 0) ?      (((is_pair(obj)) || (is_syntax(obj)) || (is_normal_symbol(obj))) ? " syntactic" : " ?1?") : "",
+	  /* bit 2 */
+	  ((full_typ & T_SIMPLE_ARG_DEFAULTS) != 0) ? ((is_pair(obj)) ? " simple-args|in-use" :
+						       ((is_any_closure(obj)) ? " closure-one-form" :
+							" ?2?")) : "",
+	  /* bit 3 */
+	  ((full_typ & T_OPTIMIZED) != 0) ?      ((is_c_function(obj)) ? " scope-safe" :
+						  ((is_pair(obj)) ? " optimized" :
+						   " ?3?")) : "",
+	  /* bit 4 */
+	  ((full_typ & T_SAFE_CLOSURE) != 0) ?   (((has_closure_let(obj)) || (is_pair(obj))) ? " safe-closure" : " ?4?") : "",
+	  /* bit 5 */
+	  ((full_typ & T_DONT_EVAL_ARGS) != 0) ? (((is_any_macro(obj)) || (is_syntax(obj))) ? " dont-eval-args" : " ?5?") : "",
+	  /* bit 6 */
+	  ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_either_macro(obj))) ? " expansion" : " ?6?") : "",
+	  /* bit 7 */
+	  ((full_typ & T_MULTIPLE_VALUE) != 0) ? ((is_symbol(obj)) ? " matched" :
+						  ((is_pair(obj)) ? " values|matched" :
+						   " ?7?")) : "",
+	  /* bit 8 */
+	  ((full_typ & T_GLOBAL) != 0) ?         ((is_pair(obj)) ? " unsafe-do" :
+						  (((is_symbol(obj)) || (is_syntax(obj))) ? " global" :
+						   ((is_let(obj)) ? " dox_slot1" :
+						    " ?8?"))) : "",
+	  /* bit 9 */
+	  ((full_typ & T_COLLECTED) != 0) ?      " collected" : "",
+	  /* bit 10 */
+	  ((full_typ & T_LOCATION) != 0) ?       ((is_pair(obj)) ? " line-number" :
+						  ((is_input_port(obj)) ? " loader-port" :
+						   ((is_let(obj)) ? " with-let" :
+						    ((is_any_procedure(obj)) ? " simple-defaults" :
+						     (((is_normal_symbol(obj)) || (is_slot(obj))) ? " has-setter" :
+						      " ?10?"))))) : "",
+	  /* bit 11 */
+	  ((full_typ & T_SHARED) != 0) ?         ((is_sequence(obj)) ? " shared" : " ?11?") : "",
+	  /* bit 12 */
+	  ((full_typ & T_LOCAL) != 0) ?          ((is_normal_symbol(obj)) ? " local" :
+						  ((is_pair(obj)) ? " high-c" :
+						   " ?12?")) : "",
+	  /* bit 13 */
+	  ((full_typ & T_SAFE_PROCEDURE) != 0) ? ((is_applicable(obj)) ? " safe-procedure" : " ?13?") : "",
+	  /* bit 14 */
+	  ((full_typ & T_CHECKED) != 0) ?        (((is_pair(obj)) || (is_slot(obj))) ? " checked" :
+						  ((is_symbol(obj)) ? " all-integer" :
+						   " ?14?")) : "",
+	  /* bit 15 */
+	  ((full_typ & T_UNSAFE) != 0) ?         ((is_symbol(obj)) ? " clean-symbol" :
+						  ((is_slot(obj)) ? " has-stepper" :
+						   ((is_pair(obj)) ? " unsafely-opt|no-float-opt" :
+						    ((is_let(obj)) ? " dox-slot2" :
+						     " ?15?")))) : "",
+	  /* bit 16 */
+	  ((full_typ & T_IMMUTABLE) != 0) ?      " immutable" : "",
+	  /* bit 17 */
+	  ((full_typ & T_SETTER) != 0) ?         ((is_normal_symbol(obj)) ? " setter" :
+						  ((is_pair(obj)) ? " allow-other-keys|no-int-opt" :
+						   ((is_slot(obj)) ? " has-expression" :
+						    ((is_c_function_star(obj)) ? " allow-other-keys" :
+						     " ?17?")))) : "",
+	  /* bit 18 */
+	  ((full_typ & T_MUTABLE) != 0) ?        ((is_number(obj)) ? " mutable" :
+						  ((is_symbol(obj)) ? " has-keyword" :
+						   ((is_let(obj)) ? " let-ref-fallback" :
+						    ((is_iterator(obj)) ? " mark-sequence" :
+						     ((is_slot(obj)) ? " step-end" :
+						      ((is_let(obj)) ? " ref-fallback" :
+						       ((is_pair(obj)) ? " no-opt" :
+							" ?18?"))))))) : "",
+	  /* bit 19 */
+	  ((full_typ & T_SAFE_STEPPER) != 0) ?   ((is_let(obj)) ? " set-fallback" :
+						  ((is_slot(obj)) ? " safe-stepper" :
+						   ((is_c_function(obj)) ? " maybe-safe" :
+						    ((is_number(obj)) ? " print-name" :
+						     ((is_pair(obj)) ? " direct-opt" :
+						      ((is_hash_table(obj)) ? " weak-hash" :
+						       ((is_any_macro(obj)) ? " pair-macro-set" :
+							((is_symbol(obj)) ? " all-float" :
+							 " ?19?")))))))) : "",
+	  /* bit 20, for c_function case see sc->apply */
+	  ((full_typ & T_COPY_ARGS) != 0) ?      (((is_pair(obj)) || (is_any_macro(obj)) || (is_syntax(obj)) ||
+						   (is_any_closure(obj)) || (is_c_function(obj))) ? " copy-args" :
+						  " ?20?") : "",
+	  /* bit 21 */
+	  ((full_typ & T_GENSYM) != 0) ?         ((is_let(obj)) ? " funclet" :
+						  ((is_normal_symbol(obj)) ? " gensym" :
+						   ((is_string(obj)) ? " documented-symbol" :
+						    ((is_hash_table(obj)) ? " hash-chosen" :
+						     ((is_pair(obj)) ? " dotted" :
+						      ((is_any_vector(obj)) ? " subvector" :
+						       ((is_slot(obj)) ? " has-pending-value" :
+							((is_any_closure(obj)) ? " unknopt" :
+							 " ?21?")))))))) : "",
+	  /* bit 22 */
+	  ((full_typ & T_HAS_METHODS) != 0) ?    (((is_let(obj)) || (is_c_object(obj)) || (is_any_closure(obj)) ||
+						   (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" : " ?22?") : "",
+	  /* bit 23 */
+	  ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" : " ?23?") : "",
+	  /* bit 24+16 */
+	  ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
+						  ((is_procedure(obj)) ? " has-let-arg" :
+						   ((is_hash_table(obj)) ? " has-value-type" :
+						    ((is_pair(obj)) ? " int-optable" :
+						     " ?24?")))) : "",
+	  /* bit 25+16 */
+	  ((full_typ & T_FULL_HAS_LET_FILE) != 0) ? ((is_let(obj)) ? " has-let-file" :
+						     ((is_any_vector(obj)) ? " typed-vector" :
+						      ((is_hash_table(obj)) ? " typed-hash-table" :
+						       ((is_c_function(obj)) ? " has-bool-setter" :
+							((is_slot(obj)) ? " rest-slot" :
+							 (((is_pair(obj)) || (is_closure_star(obj))) ? " no-defaults" :
+							  " ?25?")))))) : "",
+	  /* bit 26+16 */
+	  ((full_typ & T_FULL_DEFINER) != 0) ?   ((is_normal_symbol(obj)) ? " definer" :
+						  ((is_pair(obj)) ? " has-fx" :
+						   ((is_slot(obj)) ? " slot-defaults" :
+						    ((is_iterator(obj)) ? " weak-hash-iterator" :
+						     ((is_hash_table(obj)) ? " has-key-type" :
+						      ((is_let(obj)) ? " maclet" :
+						       ((is_c_function(obj)) ? " func-definer" : 
+							((is_syntax(obj)) ? " syntax-definer" : 
+							 " ?26?")))))))) : "",
+	  /* bit 27+16 */
+	  ((full_typ & T_FULL_BINDER) != 0) ?    ((is_pair(obj)) ? " tree-collected" :
+						  ((is_hash_table(obj)) ? " simple-values" :
+						   ((is_normal_symbol(obj)) ? " binder" :
+						    ((is_c_function(obj)) ? " safe-args" : 
+						     " ?27?")))) : "",
+	  /* bit 28+16 */
+	  ((full_typ & T_VERY_SAFE_CLOSURE) != 0) ? (((is_pair(obj)) || (is_any_closure(obj))) ? " very-safe-closure" : 
+						     ((is_let(obj)) ? " baffle-let" :
+						      " ?28?")) : "",
+	  /* bit 29+16 */
+	  ((full_typ & T_CYCLIC) != 0) ?         (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
+						   (is_any_closure(obj))) ? " cyclic" : " ?29?") : "",
+	  /* bit 30+16 */
+	  ((full_typ & T_CYCLIC_SET) != 0) ?     (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
+						   (is_any_closure(obj))) ? " cyclic-set" : " ?30?") : "",
+	  /* bit 31+16 */
+	  ((full_typ & T_KEYWORD) != 0) ?        ((is_symbol(obj)) ? " keyword" : " ?31?") : "",
+	  /* bit 32+16 */
+	  ((full_typ & T_FULL_SIMPLE_ELEMENTS) != 0) ? ((is_normal_vector(obj)) ? " simple-elements" :
+							((is_hash_table(obj)) ? " simple-keys" :
+							 ((is_normal_symbol(obj)) ? " safe-setter" :
+							  ((is_pair(obj)) ? " float-optable" :
+							   ((typ >= T_C_MACRO) ? " function-simple-elements" :
+							    " 32?"))))) : "",
+	  /* bit 33+16 */
+	  ((full_typ & T_FULL_CASE_KEY) != 0) ?  ((is_symbol(obj)) ? " case-key" : 
+						  ((is_pair(obj)) ? " opt1-func-listed" :
+						   " ?33?")) : "",
+	  /* bit 34+16 */
+	  ((full_typ & T_FULL_HAS_GX) != 0) ?    ((is_pair(obj)) ? " has-gx" : " ?34?") : "",
+	  /* bit 35+16 */
+	  ((full_typ & T_FULL_UNKNOPT) != 0) ?    ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
+	  /* bit 36+16 */
+	  ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
+	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
+	  ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
+	  /* bit 54 */
+	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
+	  /* bit 55 */
+	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
+	  
+	  ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "",
+	  NULL);
+  
+  buf = (char *)Malloc(1024);
   snprintf(buf, 1024,
-	   "type: %s? (%d), opt_op: %d, flags: #x%" PRIx64 "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+	   "type: %s? (%d), opt_op: %d, flags: #x%" PRIx64 "%s",
 	   type_name(sc, obj, NO_ARTICLE),
 	   typ,
 	   optimize_op(obj),
 	   full_typ,
-	   /* bit 0 (the first 8 bits are easy...) */
-	   ((full_typ & T_MULTIFORM) != 0) ?      ((is_any_closure(obj)) ? (((full_typ & T_ONE_FORM) != 0) ? " closure-one-form-has-fx" : " closure-multiform") : " ?0?") : "",
-	   /* bit 1 */
-	   ((full_typ & T_SYNTACTIC) != 0) ?      (((is_pair(obj)) || (is_syntax(obj)) || (is_normal_symbol(obj))) ? " syntactic" : " ?1?") : "",
-	   /* bit 2 */
-	   ((full_typ & T_SIMPLE_ARG_DEFAULTS) != 0) ? ((is_pair(obj)) ? " simple-args|in-use" :
-							((is_any_closure(obj)) ? " closure-one-form" :
-							 " ?2?")) : "",
-	   /* bit 3 */
-	   ((full_typ & T_OPTIMIZED) != 0) ?      ((is_c_function(obj)) ? " scope-safe" :
-						   ((is_pair(obj)) ? " optimized" :
-						    " ?3?")) : "",
-	   /* bit 4 */
-	   ((full_typ & T_SAFE_CLOSURE) != 0) ?   (((has_closure_let(obj)) || (is_pair(obj))) ? " safe-closure" : " ?4?") : "",
-	   /* bit 5 */
-	   ((full_typ & T_DONT_EVAL_ARGS) != 0) ? (((is_any_macro(obj)) || (is_syntax(obj))) ? " dont-eval-args" : " ?5?") : "",
-	   /* bit 6 */
-	   ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_either_macro(obj))) ? " expansion" : " ?6?") : "",
-	   /* bit 7 */
-	   ((full_typ & T_MULTIPLE_VALUE) != 0) ? ((is_symbol(obj)) ? " matched" :
-						   ((is_pair(obj)) ? " values|matched" :
-						    " ?7?")) : "",
-	   /* bit 8 */
-	   ((full_typ & T_GLOBAL) != 0) ?         ((is_pair(obj)) ? " unsafe-do" :
-						   (((is_symbol(obj)) || (is_syntax(obj))) ? " global" :
-						    ((is_let(obj)) ? " dox_slot1" :
-						     " ?8?"))) : "",
-	   /* bit 9 */
-	   ((full_typ & T_COLLECTED) != 0) ?      " collected" : "",
-	   /* bit 10 */
-	   ((full_typ & T_LOCATION) != 0) ?       ((is_pair(obj)) ? " line-number" :
-						   ((is_input_port(obj)) ? " loader-port" :
-						    ((is_let(obj)) ? " with-let" :
-						     ((is_any_procedure(obj)) ? " simple-defaults" :
-						      (((is_normal_symbol(obj)) || (is_slot(obj))) ? " has-setter" :
-						       " ?10?"))))) : "",
-	   /* bit 11 */
-	   ((full_typ & T_SHARED) != 0) ?         ((is_sequence(obj)) ? " shared" : " ?11?") : "",
-	   /* bit 12 */
-	   ((full_typ & T_LOCAL) != 0) ?          ((is_normal_symbol(obj)) ? " local" :
-						   ((is_pair(obj)) ? " high-c" :
-						    " ?12?")) : "",
-	   /* bit 13 */
-	   ((full_typ & T_SAFE_PROCEDURE) != 0) ? ((is_applicable(obj)) ? " safe-procedure" : " ?13?") : "",
-	   /* bit 14 */
-	   ((full_typ & T_CHECKED) != 0) ?        (((is_pair(obj)) || (is_slot(obj))) ? " checked" :
-						   ((is_symbol(obj)) ? " all-integer" :
-						    " ?14?")) : "",
-	   /* bit 15 */
-	   ((full_typ & T_UNSAFE) != 0) ?         ((is_symbol(obj)) ? " clean-symbol" :
-						   ((is_slot(obj)) ? " has-stepper" :
-						    ((is_pair(obj)) ? " unsafely-opt|no-float-opt" :
-						     ((is_let(obj)) ? " dox-slot2" :
-						      " ?15?")))) : "",
-	   /* bit 16 */
-	   ((full_typ & T_IMMUTABLE) != 0) ?      " immutable" : "",
-	   /* bit 17 */
-	   ((full_typ & T_SETTER) != 0) ?         ((is_normal_symbol(obj)) ? " setter" :
-						   ((is_pair(obj)) ? " allow-other-keys|no-int-opt" :
-						    ((is_slot(obj)) ? " has-expression" :
-						     ((is_c_function_star(obj)) ? " allow-other-keys" :
-						      " ?17?")))) : "",
-	   /* bit 18 */
-	   ((full_typ & T_MUTABLE) != 0) ?        ((is_number(obj)) ? " mutable" :
-						   ((is_symbol(obj)) ? " has-keyword" :
-						    ((is_let(obj)) ? " let-ref-fallback" :
-						     ((is_iterator(obj)) ? " mark-sequence" :
-						      ((is_slot(obj)) ? " step-end" :
-						       ((is_let(obj)) ? " ref-fallback" :
-							((is_pair(obj)) ? " no-opt" :
-							 " ?18?"))))))) : "",
-	   /* bit 19 */
-	   ((full_typ & T_SAFE_STEPPER) != 0) ?   ((is_let(obj)) ? " set-fallback" :
-						   ((is_slot(obj)) ? " safe-stepper" :
-						    ((is_c_function(obj)) ? " maybe-safe" :
-						     ((is_number(obj)) ? " print-name" :
-						      ((is_pair(obj)) ? " direct-opt" :
-						       ((is_hash_table(obj)) ? " weak-hash" :
-							((is_any_macro(obj)) ? " pair-macro-set" :
-							 ((is_symbol(obj)) ? " all-float" :
-							  " ?19?")))))))) : "",
-	   /* bit 20, for c_function case see sc->apply */
-	   ((full_typ & T_COPY_ARGS) != 0) ?      (((is_pair(obj)) || (is_any_macro(obj)) || (is_syntax(obj)) ||
-						    (is_any_closure(obj)) || (is_c_function(obj))) ? " copy-args" :
-						    " ?20?") : "",
-	   /* bit 21 */
-	   ((full_typ & T_GENSYM) != 0) ?         ((is_let(obj)) ? " funclet" :
-						   ((is_normal_symbol(obj)) ? " gensym" :
-						    ((is_string(obj)) ? " documented-symbol" :
-						     ((is_hash_table(obj)) ? " hash-chosen" :
-						      ((is_pair(obj)) ? " dotted" :
-						       ((is_any_vector(obj)) ? " subvector" :
-							((is_slot(obj)) ? " has-pending-value" :
-							 ((is_any_closure(obj)) ? " unknopt" :
-							  " ?21?")))))))) : "",
-	   /* bit 22 */
-	   ((full_typ & T_HAS_METHODS) != 0) ?    (((is_let(obj)) || (is_c_object(obj)) || (is_any_closure(obj)) ||
-						    (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" : " ?22?") : "",
-	   /* bit 23 */
-	   ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" : " ?23?") : "",
-	   /* bit 24+16 */
-	   ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
-						   ((is_procedure(obj)) ? " has-let-arg" :
-						    ((is_hash_table(obj)) ? " has-value-type" :
-						     ((is_pair(obj)) ? " int-optable" :
-						      " ?24?")))) : "",
-	   /* bit 25+16 */
-	   ((full_typ & T_FULL_HAS_LET_FILE) != 0) ? ((is_let(obj)) ? " has-let-file" :
-						      ((is_any_vector(obj)) ? " typed-vector" :
-						       ((is_hash_table(obj)) ? " typed-hash-table" :
-							((is_c_function(obj)) ? " has-bool-setter" :
-							 ((is_slot(obj)) ? " rest-slot" :
-							  (((is_pair(obj)) || (is_closure_star(obj))) ? " no-defaults" :
-							   " ?25?")))))) : "",
-	   /* bit 26+16 */
-	   ((full_typ & T_FULL_DEFINER) != 0) ?   ((is_normal_symbol(obj)) ? " definer" :
-						   ((is_pair(obj)) ? " has-fx" :
-						    ((is_slot(obj)) ? " slot-defaults" :
-						     ((is_iterator(obj)) ? " weak-hash-iterator" :
-						      ((is_hash_table(obj)) ? " has-key-type" :
-						       ((is_let(obj)) ? " maclet" :
-							((is_c_function(obj)) ? " func-definer" : 
-							 ((is_syntax(obj)) ? " syntax-definer" : 
-							  " ?26?")))))))) : "",
-	   /* bit 27+16 */
-	   ((full_typ & T_FULL_BINDER) != 0) ?    ((is_pair(obj)) ? " tree-collected" :
-						   ((is_hash_table(obj)) ? " simple-values" :
-						    ((is_normal_symbol(obj)) ? " binder" :
-						     ((is_c_function(obj)) ? " safe-args" : 
-						      " ?27?")))) : "",
-	   /* bit 28+16 */
-	   ((full_typ & T_VERY_SAFE_CLOSURE) != 0) ? (((is_pair(obj)) || (is_any_closure(obj))) ? " very-safe-closure" : 
-						      ((is_let(obj)) ? " baffle-let" :
-						      " ?28?")) : "",
-	   /* bit 29+16 */
-	   ((full_typ & T_CYCLIC) != 0) ?         (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
-						    (is_any_closure(obj))) ? " cyclic" : " ?29?") : "",
-	   /* bit 30+16 */
-	   ((full_typ & T_CYCLIC_SET) != 0) ?     (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
-						    (is_any_closure(obj))) ? " cyclic-set" : " ?30?") : "",
-	   /* bit 31+16 */
-	   ((full_typ & T_KEYWORD) != 0) ?        ((is_symbol(obj)) ? " keyword" : " ?31?") : "",
-	   /* bit 32+16 */
-	   ((full_typ & T_FULL_SIMPLE_ELEMENTS) != 0) ? ((is_normal_vector(obj)) ? " simple-elements" :
-							 ((is_hash_table(obj)) ? " simple-keys" :
-							  ((is_normal_symbol(obj)) ? " safe-setter" :
-							   ((is_pair(obj)) ? " float-optable" :
-							    ((typ >= T_C_MACRO) ? " function-simple-elements" :
-							     " 32?"))))) : "",
-	   /* bit 33+16 */
-	   ((full_typ & T_FULL_CASE_KEY) != 0) ?  ((is_symbol(obj)) ? " case-key" : 
-						   ((is_pair(obj)) ? " opt1-func-listed" :
-						    " ?33?")) : "",
-	   /* bit 34+16 */
-	   ((full_typ & T_FULL_HAS_GX) != 0) ?    ((is_pair(obj)) ? " has-gx" : " ?34?") : "",
-	   /* bit 35+16 */
-	   ((full_typ & T_FULL_UNKNOPT) != 0) ?    ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
-	   /* bit 36+16 */
-	   ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
-	   ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
-	   ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
-	   /* bit 54 */
-	   ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
-	   /* bit 55 */
-	   ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
-
-	   ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "");
+	   str);
   return(buf);
 }
 
@@ -39244,7 +39248,7 @@ static bool assoc_if(s7_scheme *sc)
   else push_stack_direct(sc, OP_ASSOC_IF1);
 
   if (!is_pair(car(opt1_fast(orig_args))))     /* (assoc 1 '((2 . 2) 3) =) -- we access caaadr below */
-    eval_error_any(sc, sc->wrong_type_arg_symbol, "assoc: second arg is not an alist: ~S", 37, orig_args);
+    eval_error_any(sc, sc->wrong_type_arg_symbol, "assoc: second argument is not an alist: ~S", 42, orig_args);
   /* not sure about this -- we could simply skip the entry both here and in g_assoc
    *   (assoc 1 '((2 . 2) 3)) -> #f
    *   (assoc 1 '((2 . 2) 3) =) -> error currently
@@ -45233,9 +45237,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 						caller, mapper, type_name_string(sc, mapper))));
 
 		  if (!(s7_is_aritable(sc, checker, 2)))
-		    return(wrong_type_argument_with_type(sc, caller, 2, checker, wrap_string(sc, "a function of 2 args", 20)));
+		    return(wrong_type_argument_with_type(sc, caller, 2, checker, wrap_string(sc, "a function of 2 arguments", 25)));
 		  if (!(s7_is_aritable(sc, mapper, 1)))
-		    return(wrong_type_argument_with_type(sc, caller, 2, mapper, wrap_string(sc, "a function of 1 arg", 19)));
+		    return(wrong_type_argument_with_type(sc, caller, 2, mapper, wrap_string(sc, "a function of 1 argument", 24)));
 
 		  if (is_any_c_function(checker))
 		    {
@@ -46278,7 +46282,7 @@ static s7_pointer g_funclet(s7_scheme *sc, s7_pointer args)
       p = s7_symbol_value(sc, p);
       if (p == sc->undefined)
 	return(s7_error(sc, sc->wrong_type_arg_symbol,
-			set_elist_2(sc, wrap_string(sc, "funclet arg, '~S, is unbound", 28), car(args)))); /* not p here */
+			set_elist_2(sc, wrap_string(sc, "funclet argument, '~S, is unbound", 33), car(args)))); /* not p here */
     }
   check_method(sc, p, sc->funclet_symbol, args);
 
@@ -52977,7 +52981,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
        */
 
       if (!s7_is_aritable(sc, sc->code, 2))
-	s7_wrong_number_of_args_error(sc, "catch error handler should accept 2 args: ~S", sc->code);
+	s7_wrong_number_of_args_error(sc, "catch error handler should accept 2 arguments: ~S", sc->code);
 
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
       sc->cur_op = OP_APPLY;
@@ -53210,7 +53214,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
    *   call its error-handler, else if *error-hook* is bound, call it,
    *   else send out the error info ourselves.
    */
-
   sc->format_depth = -1;
   sc->gc_off = false;             /* this is in case we were triggered from the sort function -- clumsy! */
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
@@ -53973,9 +53976,9 @@ static s7_pointer g_apply(s7_scheme *sc, s7_pointer args)
 s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
 {
   TRACK(sc);
-
   if (is_c_function(fnc))
     return(c_function_call(fnc)(sc, args));
+  /* if [if (!is_applicable(fnc)) apply_error(sc, fnc, sc->args);] here, needs_copied_args can be T_App */
 
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->code = fnc;
@@ -53993,7 +53996,6 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
   s7_pointer res;
   /* (let ((lst '("12" "34"))) (lst 0 1)) -> #\2
    * (let ((lst (list #(1 2) #(3 4)))) (lst 0 1)) -> 2
-   *
    * this can get tricky:
    *   ((list (lambda (a) (+ a 1)) (lambda (b) (* b 2))) 1 2) -> 4
    * but what if func takes rest/optional args, etc?
@@ -54002,7 +54004,6 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
    * but ((lambda (arg) arg) "hi" 0) is currently an error (too many arguments)
    * maybe it should be (((lambda (arg) arg) "hi") 0) -> #\h
    */
-
   switch (type(obj))
     {
     case T_VECTOR:                       /* (#(#(1 2) #(3 4)) 1 1) -> 4 */
@@ -54083,7 +54084,6 @@ static inline void fill_star_defaults(s7_scheme *sc, s7_pointer func, int32_t st
   int32_t i;
   s7_pointer *df;
   df = c_function_arg_defaults(func);
-
   if (c_func_has_simple_defaults(func))
     {
       for (i = start_arg; i < n_args; i++, par = cdr(par))
@@ -54097,11 +54097,10 @@ static inline void fill_star_defaults(s7_scheme *sc, s7_pointer func, int32_t st
 	if (is_symbol(defval))
 	  set_car(par, lookup_checked(sc, defval));
 	else
-	  {
-	    if (is_pair(defval))
-	      set_car(par, s7_eval(sc, defval, sc->nil));
-	    else set_car(par, defval);
-	  }}
+	  if (is_pair(defval))
+	    set_car(par, s7_eval(sc, defval, sc->nil));
+	  else set_car(par, defval);
+      }
 }
 
 static s7_pointer set_c_function_star_args(s7_scheme *sc)
@@ -65954,7 +65953,6 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 		    (stype != sc->is_pair_symbol)) || /* compatible with is_proper_list! */
 		   (stype == sc->is_iterator_symbol)))
 		return_false(sc, car_x);
-	      /* TODO: doesn't this need to be in check_type_uncertainty also? */
 	      opc->v[0].fp = opt_set_p_p_f;
 	      opc->v[3].o1 = sc->opts[start_pc];
 	      opc->v[4].fp = sc->opts[start_pc]->v[0].fp;
@@ -76233,7 +76231,7 @@ static int32_t check_lambda(s7_scheme *sc, s7_pointer form, bool opt)
 
   code = cdr(form);
   if (!is_pair(code))                                 /* (lambda) or (lambda . 1) */
-    eval_error(sc, "lambda: no args? ~A", 19, form);
+    eval_error(sc, "lambda: no arguments? ~A", 24, form);
 
   body = cdr(code);
   if (!is_pair(body))                                 /* (lambda #f) */
@@ -76290,7 +76288,7 @@ static void check_lambda_star(s7_scheme *sc)
   code = cdr(sc->code);
   if ((!is_pair(code)) ||
       (!is_pair(cdr(code))))                                          /* (lambda*) or (lambda* #f) */
-    eval_error(sc, "lambda*: no args or no body? ~A", 31, sc->code);
+    eval_error(sc, "lambda*: no arguments or no body? ~A", 36, sc->code);
 
   set_car(code, check_lambda_star_args(sc, car(code), NULL));
 
@@ -80270,7 +80268,7 @@ static inline void check_set(s7_scheme *sc)
     {
       if ((is_pair(caar(code))) &&
 	  (!is_list(cdar(code))))                                   /* (set! ('(1 2) . 0) 1) */
-	eval_error(sc, "improper list of args to set!: ~A", 33, form);
+	eval_error(sc, "improper list of arguments to set!: ~A", 38, form);
       if (!s7_is_proper_list(sc, car(code)))                        /* (set! ("hi" . 1) #\a) or (set! (#(1 2) . 1) 0) */
 	eval_error(sc, "set! target is an improper list: (set! ~A ...)", 46, car(code));
     }
@@ -97608,7 +97606,7 @@ int main(int argc, char **argv)
  * tref        558          691    687    506    506
  * tshoot     1516          883    872    838    834
  * index      1054         1026   1016    992    992
- * tmock      7699         1177   1165   1115   1115  1117 g_apply
+ * tmock      7699         1177   1165   1115   1117
  * s7test     4534         1873   1831   1805   1812
  * tvect      2208         2456   2413   2009   2010
  * lt         2102         2123   2110   2093   2113
@@ -97632,7 +97630,7 @@ int main(int argc, char **argv)
  * tcase      4622         4960   4793   4561   4561
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
- * tmisc      6023         7389   6210   5827   5736  5739 g_apply
+ * tmisc      6023         7389   6210   5827   5739
  * tnum       59.2         6348   6013   5798   5791
  * trec       7763         5976   5970   5969   5969
  * tgsl       25.3         8485   7802   6427   6420
@@ -97642,15 +97640,12 @@ int main(int argc, char **argv)
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3   37.3
  * sg         98.7         71.9   72.3   72.8   72.8
- * lg        104.3        106.6  105.0  104.1  105.1     ;cell_optimize (no_cell?)
+ * lg        104.3        106.6  105.0  104.1  105.1     ;cell_optimize (no_cell?) g_for_each_closure
  * tbig      598.7        177.4  175.8  171.7  171.4
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- * check other symbol cases in s7-optimize [is_unchanged_global but also allow cur_val=init_val?]
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * tmac+while (t458)[calls op_lambda 10000 times] -- need texit?
- * opt_do_any t454? (2 steppers -> op_dox), opt for map/for-each?
- * as in titer check types in advance?
- * can g_apply applicable check be moved outward? has_methods|dont_eval_args|needs_copied_args->T_App?, is_keyword
+ * opt_do_any t454? (2 steppers -> op_dox), opt for map/for-each? with-in|output-*?
  */
