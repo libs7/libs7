@@ -1901,117 +1901,116 @@ void s7_show_history(s7_scheme *sc);
 #endif
   #define set_full_type(p, f) set_type_1(p, f, __func__, __LINE__)
   /* these check most s7_cell field references (and many type bits) for consistency */
-  #define T_Int(P) check_ref(P, T_INTEGER,           __func__, __LINE__, NULL, NULL)
-  #define T_Rel(P) check_ref(P, T_REAL,              __func__, __LINE__, NULL, NULL)
-  #define T_Frc(P) check_ref2(P, T_RATIO, T_INTEGER, __func__, __LINE__, NULL, NULL)
-  #define T_Cmp(P) check_ref(P, T_COMPLEX,           __func__, __LINE__, NULL, NULL)
+  #define T_Any(P) check_cell(sc, P,                 __func__, __LINE__)                /* any cell */
+  #define T_App(P) check_ref11(P,                    __func__, __LINE__)                /* applicable or #f */
+  #define T_Arg(P) check_ref10(P,                    __func__, __LINE__)                /* closure arg (list, symbol) */
+  #define T_BVc(P) check_ref(P, T_BYTE_VECTOR,       __func__, __LINE__, "sweep", NULL)
+  #define T_Bgf(P) check_ref(P, T_BIG_RATIO,         __func__, __LINE__, "sweep", NULL)
   #define T_Bgi(P) check_ref(P, T_BIG_INTEGER,       __func__, __LINE__, "sweep", NULL)
   #define T_Bgr(P) check_ref(P, T_BIG_REAL,          __func__, __LINE__, "sweep", NULL)
-  #define T_Bgf(P) check_ref(P, T_BIG_RATIO,         __func__, __LINE__, "sweep", NULL)
   #define T_Bgz(P) check_ref(P, T_BIG_COMPLEX,       __func__, __LINE__, "sweep", NULL)
-  #define T_Chr(P) check_ref(P, T_CHARACTER,         __func__, __LINE__, NULL, NULL)
-  #define T_Undf(P) check_ref(P, T_UNDEFINED,        __func__, __LINE__, "sweep", NULL)
-  #define T_Eof(P) check_ref(P, T_EOF,               __func__, __LINE__, "sweep", NULL)
-  #define T_Ctr(P) check_ref(P, T_COUNTER,           __func__, __LINE__, NULL, NULL)
-  #define T_Ptr(P) check_ref(P, T_C_POINTER,         __func__, __LINE__, NULL, NULL)
-  #define T_Got(P) check_ref(P, T_GOTO,              __func__, __LINE__, NULL, NULL)
-  #define T_Stk(P) check_ref(P, T_STACK,             __func__, __LINE__, NULL, NULL)
-  #define T_Pair(P) check_ref(P, T_PAIR,             __func__, __LINE__, NULL, NULL)
-  #define T_Cat(P) check_ref(P, T_CATCH,             __func__, __LINE__, NULL, NULL)
-  #define T_Dyn(P) check_ref(P, T_DYNAMIC_WIND,      __func__, __LINE__, NULL, NULL)
-  #define T_Slt(P) check_ref(P, T_SLOT,              __func__, __LINE__, NULL, NULL)
-  #define T_Sld(P) check_ref2(P, T_SLOT, T_UNDEFINED,__func__, __LINE__, NULL, NULL)
-  #define T_Syn(P) check_ref(P, T_SYNTAX,            __func__, __LINE__, NULL, NULL)
   #define T_CMac(P) check_ref(P, T_C_MACRO,          __func__, __LINE__, NULL, NULL)
-  #define T_Let(P) check_ref(P, T_LET,               __func__, __LINE__, NULL, NULL)
-  #define T_Ran(P) check_ref(P, T_RANDOM_STATE,      __func__, __LINE__, NULL, NULL)
-  #define T_Lst(P) check_ref2(P, T_PAIR, T_NIL,      __func__, __LINE__, "gc", NULL)
-  #define T_Str(P) check_ref(P, T_STRING,            __func__, __LINE__, "sweep", NULL)
-  #define T_BVc(P) check_ref(P, T_BYTE_VECTOR,       __func__, __LINE__, "sweep", NULL)
-  #define T_Obj(P) check_ref(P, T_C_OBJECT,          __func__, __LINE__, "sweep", "s7_c_object_value")
-  #define T_Hsh(P) check_ref(P, T_HASH_TABLE,        __func__, __LINE__, "sweep", "free_hash_table")
-  #define T_Itr(P) check_ref(P, T_ITERATOR,          __func__, __LINE__, "sweep", "process_iterator")
+  #define T_Cat(P) check_ref(P, T_CATCH,             __func__, __LINE__, NULL, NULL)
+  #define T_Chr(P) check_ref(P, T_CHARACTER,         __func__, __LINE__, NULL, NULL)
+  #define T_Clo(P) check_ref5(P,                     __func__, __LINE__)                /* has closure let */
+  #define T_Cmp(P) check_ref(P, T_COMPLEX,           __func__, __LINE__, NULL, NULL)
   #define T_Con(P) check_ref(P, T_CONTINUATION,      __func__, __LINE__, "sweep", "process_continuation")
-  #define T_Fvc(P) check_ref(P, T_FLOAT_VECTOR,      __func__, __LINE__, "sweep", NULL)
-  #define T_Ivc(P) check_ref(P, T_INT_VECTOR,        __func__, __LINE__, "sweep", NULL)
-  #define T_Nvc(P) check_ref(P, T_VECTOR,            __func__, __LINE__, "sweep", NULL)
-  #define T_Sym(P) check_ref(P, T_SYMBOL,            __func__, __LINE__, "sweep", "remove_gensym_from_symbol_table")
+  #define T_Ctr(P) check_ref(P, T_COUNTER,           __func__, __LINE__, NULL, NULL)
+  #define T_Dyn(P) check_ref(P, T_DYNAMIC_WIND,      __func__, __LINE__, NULL, NULL)
+  #define T_Eof(P) check_ref(P, T_EOF,               __func__, __LINE__, "sweep", NULL)
+  #define T_Fnc(P) check_ref6(P,                     __func__, __LINE__)                /* any c_function|c_macro */
+  #define T_Frc(P) check_ref2(P, T_RATIO, T_INTEGER, __func__, __LINE__, NULL, NULL)
   #define T_Fst(P) check_ref(P, T_C_FUNCTION_STAR,   __func__, __LINE__, NULL, NULL)
+  #define T_Fvc(P) check_ref(P, T_FLOAT_VECTOR,      __func__, __LINE__, "sweep", NULL)
+  #define T_Got(P) check_ref(P, T_GOTO,              __func__, __LINE__, NULL, NULL)
+  #define T_Hsh(P) check_ref(P, T_HASH_TABLE,        __func__, __LINE__, "sweep", "free_hash_table")
+  #define T_Int(P) check_ref(P, T_INTEGER,           __func__, __LINE__, NULL, NULL)
+  #define T_Itr(P) check_ref(P, T_ITERATOR,          __func__, __LINE__, "sweep", "process_iterator")
+  #define T_Ivc(P) check_ref(P, T_INT_VECTOR,        __func__, __LINE__, "sweep", NULL)
+  #define T_Let(P) check_ref(P, T_LET,               __func__, __LINE__, NULL, NULL)
+  #define T_Lid(P) check_ref16(P,                    __func__, __LINE__)                /* let/nil */
+  #define T_Lst(P) check_ref2(P, T_PAIR, T_NIL,      __func__, __LINE__, "gc", NULL)
+  #define T_Mac(P) check_ref17(P,                    __func__, __LINE__)                /* and non-C macro */
+  #define T_Met(P) check_ref9(P,                     __func__, __LINE__)                /* anything that might contain a method */
+  #define T_Nmv(P) check_ref15(P,                    __func__, __LINE__)                /* not multiple-value, not free */
+  #define T_Num(P) check_ref7(P,                     __func__, __LINE__)                /* any number (not bignums) */
+  #define T_Nvc(P) check_ref(P, T_VECTOR,            __func__, __LINE__, "sweep", NULL)
+  #define T_Obj(P) check_ref(P, T_C_OBJECT,          __func__, __LINE__, "sweep", "s7_c_object_value")
+  #define T_Pair(P) check_ref(P, T_PAIR,             __func__, __LINE__, NULL, NULL)
   #define T_Pcs(P) check_ref2(P, T_PAIR, T_CLOSURE_STAR, __func__, __LINE__, NULL, NULL)
-  #define T_Prt(P) check_ref3(P,                     __func__, __LINE__) /* input|output_port */
-  #define T_Vec(P) check_ref4(P,                     __func__, __LINE__) /* any vector */
-  #define T_SVec(P) check_ref13(P,                   __func__, __LINE__) /* subvector */
-  #define T_Clo(P) check_ref5(P,                     __func__, __LINE__) /* has closure let */
-  #define T_Fnc(P) check_ref6(P,                     __func__, __LINE__) /* any c_function|c_macro */
-  #define T_Prc(P) check_ref14(P,                    __func__, __LINE__) /* any procedure or #f */
-  #define T_Num(P) check_ref7(P,                     __func__, __LINE__) /* any number (not bignums) */
-  #define T_Seq(P) check_ref8(P,                     __func__, __LINE__) /* any sequence or structure */
-  #define T_Met(P) check_ref9(P,                     __func__, __LINE__) /* anything that might contain a method */
-  #define T_Arg(P) check_ref10(P,                    __func__, __LINE__) /* closure arg (list, symbol) */
-  #define T_App(P) check_ref11(P,                    __func__, __LINE__) /* applicable or #f */
-  #define T_Sln(P) check_ref12(P,                    __func__, __LINE__) /* slot or nil */
-  #define T_Nmv(P) check_ref15(P,                    __func__, __LINE__) /* not multiple-value, not free */
-  #define T_Lid(P) check_ref16(P,                    __func__, __LINE__) /* let/nil */
-  #define T_Mac(P) check_ref17(P,                    __func__, __LINE__) /* and non-C macro */
-  #define T_Pos(P) check_nref(P,                     __func__, __LINE__) /* not free */
-  #define T_Any(P) check_cell(sc, P,                 __func__, __LINE__) /* any cell */
-
+  #define T_Pos(P) check_nref(P,                     __func__, __LINE__)                /* not free */
+  #define T_Prc(P) check_ref14(P,                    __func__, __LINE__)                /* any procedure or #f (setters) */
+  #define T_Prt(P) check_ref3(P,                     __func__, __LINE__)                /* input|output_port */
+  #define T_Ptr(P) check_ref(P, T_C_POINTER,         __func__, __LINE__, NULL, NULL)
+  #define T_Ran(P) check_ref(P, T_RANDOM_STATE,      __func__, __LINE__, NULL, NULL)
+  #define T_Rel(P) check_ref(P, T_REAL,              __func__, __LINE__, NULL, NULL)
+  #define T_SVec(P) check_ref13(P,                   __func__, __LINE__)                /* subvector */
+  #define T_Seq(P) check_ref8(P,                     __func__, __LINE__)                /* any sequence or structure */
+  #define T_Sld(P) check_ref2(P, T_SLOT, T_UNDEFINED,__func__, __LINE__, NULL, NULL)
+  #define T_Sln(P) check_ref12(P,                    __func__, __LINE__)                /* slot or nil */
+  #define T_Slt(P) check_ref(P, T_SLOT,              __func__, __LINE__, NULL, NULL)
+  #define T_Stk(P) check_ref(P, T_STACK,             __func__, __LINE__, NULL, NULL)
+  #define T_Str(P) check_ref(P, T_STRING,            __func__, __LINE__, "sweep", NULL)
+  #define T_Sym(P) check_ref(P, T_SYMBOL,            __func__, __LINE__, "sweep", "remove_gensym_from_symbol_table")
+  #define T_Syn(P) check_ref(P, T_SYNTAX,            __func__, __LINE__, NULL, NULL)
+  #define T_Undf(P) check_ref(P, T_UNDEFINED,        __func__, __LINE__, "sweep", NULL)
+  #define T_Vec(P) check_ref4(P,                     __func__, __LINE__)                /* any vector */
 #else
   /* if not debugging, all those checks go away */
-  #define T_Int(P)  P
-  #define T_Rel(P)  P
-  #define T_Frc(P)  P
-  #define T_Cmp(P)  P
+  #define T_Any(P)  P
+  #define T_App(P)  P
+  #define T_Arg(P)  P
+  #define T_BVc(P)  P
+  #define T_Bgf(P)  P
   #define T_Bgi(P)  P
   #define T_Bgr(P)  P
-  #define T_Bgf(P)  P
   #define T_Bgz(P)  P
-  #define T_Str(P)  P
-  #define T_BVc(P)  P
-  #define T_Syn(P)  P
-  #define T_Chr(P)  P
-  #define T_Undf(P) P
-  #define T_Eof(P) P
-  #define T_Obj(P)  P
-  #define T_Ctr(P)  P
-  #define T_Hsh(P)  P
-  #define T_Itr(P)  P
-  #define T_Ptr(P)  P
-  #define T_Got(P)  P
-  #define T_Con(P)  P
-  #define T_Stk(P)  P
-  #define T_Prt(P)  P
-  #define T_Ivc(P)  P
-  #define T_Fvc(P)  P
-  #define T_Nvc(P)  P
-  #define T_Vec(P)  P
-  #define T_SVec(P) P
-  #define T_Pair(P) P
-  #define T_Ran(P)  P
-  #define T_Dyn(P)  P
+  #define T_CMac(P) P
   #define T_Cat(P)  P
+  #define T_Chr(P)  P
   #define T_Clo(P)  P
+  #define T_Cmp(P)  P
+  #define T_Con(P)  P
+  #define T_Ctr(P)  P
+  #define T_Dyn(P)  P
+  #define T_Eof(P)  P
   #define T_Fnc(P)  P
-  #define T_Prc(P)  P
+  #define T_Frc(P)  P
   #define T_Fst(P)  P
-  #define T_Pcs(P)  P
-  #define T_Slt(P)  P
-  #define T_Sln(P)  P
-  #define T_Sld(P)  P
-  #define T_Sym(P)  P
+  #define T_Fvc(P)  P
+  #define T_Got(P)  P
+  #define T_Hsh(P)  P
+  #define T_Int(P)  P
+  #define T_Itr(P)  P
+  #define T_Ivc(P)  P
   #define T_Let(P)  P
   #define T_Lid(P)  P
   #define T_Lst(P)  P
-  #define T_Num(P)  P
-  #define T_Seq(P)  P
-  #define T_Met(P)  P
   #define T_Mac(P)  P
-  #define T_CMac(P) P
-  #define T_Arg(P)  P
-  #define T_App(P)  P
-  #define T_Pos(P)  P
+  #define T_Met(P)  P
   #define T_Nmv(P)  P
-  #define T_Any(P)  P
+  #define T_Num(P)  P
+  #define T_Nvc(P)  P
+  #define T_Obj(P)  P
+  #define T_Pair(P) P
+  #define T_Pcs(P)  P
+  #define T_Pos(P)  P
+  #define T_Prc(P)  P
+  #define T_Prt(P)  P
+  #define T_Ptr(P)  P
+  #define T_Ran(P)  P
+  #define T_Rel(P)  P
+  #define T_SVec(P) P
+  #define T_Seq(P)  P
+  #define T_Sld(P)  P
+  #define T_Sln(P)  P
+  #define T_Slt(P)  P
+  #define T_Stk(P)  P
+  #define T_Str(P)  P
+  #define T_Sym(P)  P
+  #define T_Syn(P)  P
+  #define T_Undf(P) P
+  #define T_Vec(P)  P
 
   #define unchecked_type(p)            ((p)->tf.type_field)
   #define type(p)                      ((p)->tf.type_field)
@@ -2396,7 +2395,7 @@ void s7_show_history(s7_scheme *sc);
 #define set_all_integer_and_float(p)   set_type_bit(T_Sym(p), (T_ALL_INTEGER | T_ALL_FLOAT))
 
 #define T_COPY_ARGS                    (1 << (TYPE_BITS + 20))
-#define needs_copied_args(p)           has_type_bit(T_Pos(p), T_COPY_ARGS) /* set via explicit T_COPY_ARGS on macros etc, on T_Pos see s7_apply_function */
+#define needs_copied_args(p)           has_type_bit(T_Pos(p), T_COPY_ARGS) /* set via explicit T_COPY_ARGS, on T_Pos see s7_apply_function */
 #define set_needs_copied_args(p)       set_type_bit(T_Pair(p), T_COPY_ARGS)
 #define clear_needs_copied_args(p)     clear_type_bit(T_Pair(p), T_COPY_ARGS)
 /* this marks something that might mess with its argument list, it should not be in the second byte */
@@ -3311,8 +3310,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_block(f)            (f)->object.fnc.c_proc->block /* no type checking here */
 #define c_function_class(f)            c_function_data(f)->id
 #define c_function_chooser(f)          c_function_data(f)->chooser
-#define c_function_base(f)             T_App(c_function_data(f)->generic_ff)
-#define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_App(Val)
+#define c_function_base(f)             T_Fnc(c_function_data(f)->generic_ff)
+#define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_Fnc(Val)
 #define c_function_marker(f)           c_function_data(f)->cam.marker              /* the mark function for the vector (mark_vector_1 etc) */
 #define c_function_set_marker(f, Val)  c_function_data(f)->cam.marker = Val
 #define c_function_symbol(f)           c_function_data(f)->sam.c_sym
@@ -10529,7 +10528,8 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool unnamed)
       break;
     }
 
-  new_cell(sc, mac, typ | T_COPY_ARGS | T_DONT_EVAL_ARGS);
+  /* new_cell(sc, mac, typ | T_COPY_ARGS | T_DONT_EVAL_ARGS); */ /* 21-Apr-21 -- where does this matter? (t461) */
+  new_cell(sc, mac, typ | T_DONT_EVAL_ARGS);
   sc->temp6 = mac;
   closure_set_args(mac, (unnamed) ? car(sc->code) : cdar(sc->code));
   body = cdr(sc->code);
@@ -32142,7 +32142,6 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
 	}
       if (e == sc->s7_let)
 	return(s7_let_make_iterator(sc, iter));
-
       sc->temp6 = iter;
       p = find_make_iterator_method(sc, e);
       sc->temp6 = sc->nil;
@@ -32337,9 +32336,7 @@ static s7_pointer g_iterator_sequence(s7_scheme *sc, s7_pointer args)
 {
   #define H_iterator_sequence "(iterator-sequence iterator) returns the sequence that iterator is traversing."
   #define Q_iterator_sequence s7_make_signature(sc, 2, sc->is_sequence_symbol, sc->is_iterator_symbol)
-
   s7_pointer iter;
-
   iter = car(args);
   if (!is_iterator(iter))
     return(method_or_bust_one_arg(sc, iter, sc->iterator_sequence_symbol, args, T_ITERATOR));
@@ -33600,7 +33597,6 @@ static void int_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, 
       multivector_to_port(sc, vect, port, len, 0, 0, vector_ndims(vect), &last, P_DISPLAY, NULL);
       unstack(sc);
     }
-
   if ((use_write == P_READABLE) &&
       (is_immutable_vector(vect)))
     port_write_character(port)(sc, ')', port);
@@ -52963,7 +52959,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       if (op == OP_CATCH_1)
 	{
 	  s7_pointer p;
-	  new_cell(sc, p, T_CLOSURE | T_COPY_ARGS); /* never a safe_closure, apparently */
+	  new_cell(sc, p, T_CLOSURE /* | T_COPY_ARGS */); /* never a safe_closure, apparently */ /* 21-Apr-21 -- how could this be applied? */
 	  closure_set_args(p, car(error_func));
 	  closure_set_body(p, cdr(error_func));
 	  closure_set_setter(p, sc->F);
@@ -69378,12 +69374,10 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     default:
       if (!is_applicable(f))
 	return(method_or_bust_with_type(sc, f, sc->map_symbol, args, something_applicable_string, 1));
-
       if ((!is_pair(f)) &&
 	  (!s7_is_aritable(sc, f, len)))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
-
       if (got_nil) return(sc->nil);
       break;
     }
@@ -77044,7 +77038,7 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
     sc->w = cons(sc, caar(x), sc->w);
   sc->w = proper_list_reverse_in_place(sc, sc->w); /* init values (args) are also in "reversed" order */
   sc->curlet = make_let_slowly(sc, sc->curlet);
-  sc->x = make_closure(sc, sc->w, body, T_CLOSURE | T_COPY_ARGS, n);
+  sc->x = make_closure(sc, sc->w, body, T_CLOSURE /* | T_COPY_ARGS */, n); /* 21-Apr-21 */
   add_slot(sc, sc->curlet, car(sc->code), sc->x);
   sc->curlet = make_let_slowly(sc, sc->curlet);
   
@@ -79440,7 +79434,8 @@ static inline bool op_macro_d(s7_scheme *sc)
       set_unsafe_optimize_op(sc->code, OP_PAIR_SYM); /* or op_unknown* based on args? */
       return(true);
     }
-  sc->args = copy_proper_list(sc, cdr(sc->code));
+  /* sc->args = copy_proper_list(sc, cdr(sc->code)); */ /* 21-Apr-21 */
+  sc->args = cdr(sc->code);
   sc->code = sc->value;                       /* the macro */
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code));
@@ -79457,7 +79452,8 @@ static bool op_macro_star_d(s7_scheme *sc)
       set_unsafe_optimize_op(sc->code, OP_PAIR_SYM);
       return(true);
     }
-  sc->args = copy_proper_list(sc, cdr(sc->code));
+  /* sc->args = copy_proper_list(sc, cdr(sc->code)); */ /* 21-Apr-21 */
+  sc->args = cdr(sc->code);
   sc->code = sc->value;
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code));
@@ -90134,14 +90130,13 @@ static void op_map_fa(s7_scheme *sc)
   f = cddr(code);
   sc->value = fx_call(sc, f);
   if (is_null(sc->value))
+    sc->value = (fn_proc_unchecked(code)) ? sc->unspecified : sc->nil;
+  else
     {
-      if (fx_proc_unchecked(code)) /* can be null */
-	sc->value = sc->unspecified;
-      return;
+      sc->code = opt3_pair(code); /* cdadr(code); */
+      f = inline_make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, 1);
+      sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, f, sc->value) : g_map_closure(sc, f, sc->value);
     }
-  sc->code = opt3_pair(code); /* cdadr(code); */
-  f = inline_make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, 1);
-  sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, f, sc->value) : g_map_closure(sc, f, sc->value);
 }
 
 static void op_cl_all_a(s7_scheme *sc)
@@ -95794,7 +95789,7 @@ static s7_pointer copy_args_syntax(s7_scheme *sc, const char *name, opcode_t op,
   s7_pointer x, p;
   x = syntax(sc, name, op, min_args, max_args, doc);
   p = global_value(x);
-  full_type(p) |= T_COPY_ARGS;
+  full_type(p) |= T_COPY_ARGS; /* (for-each and ''2) -- maybe this is a mistake? */
   return(x);
 }
 
@@ -96519,8 +96514,8 @@ static void init_rootlet(s7_scheme *sc)
      *   perhaps better: if closure returns a definer in some way set its name as a definer? even this is not fool-proof
      */
     p = global_value(sc->apply_symbol);
-    set_full_type(p, type(p) | T_COPY_ARGS | T_UNHEAP);
-    /* (let ((x '((1 2) 3 4))) (catch #t (lambda () (apply apply apply x)) (lambda args 'error)) x) should not mess up x! */
+    set_full_type(p, type(p) | /* T_COPY_ARGS | */ T_UNHEAP); /* 21-Apr-21 */
+    /* (let ((x '((1 2) 3 4))) (catch #t (lambda () (apply apply apply x)) (lambda args 'error)) x) should not mess up x -- but it doesn't anyway?? */
   }
   sc->for_each_symbol =              semisafe_defun("for-each",	for_each,		2, 0, true);
   sc->map_symbol =                   semisafe_defun("map",	map,			2, 0, true);
@@ -97614,7 +97609,7 @@ int main(int argc, char **argv)
  * tread      2610         2440   2421   2414   2411
  * trclo      4310         2715   2561   2526   2526
  * fbench     2960         2688   2583   2557   2557
- * tmac       3295         3317   3277   3219   2598
+ * tmac       3295         3317   3277   3219   2598  2489 (no copy)
  * tcopy      2689         8035   5546   2600   2601
  * tmat       2736         3065   3042   2583   2604  2615
  * tb         3398         2735   2681   2623   2622
@@ -97646,6 +97641,8 @@ int main(int argc, char **argv)
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * ttl.scm for setter timings, maybe better in fx* than opt*?
- * tmac+while (t458)[calls op_lambda 10000 times] -- need texit?
- * opt_do_any t454? (2 steppers -> op_dox), opt for map/for-each? with-in|output-*?
+ * opt_do_any t454? (2 steppers -> op_dox)
+ * op_map_faa? tmap n-args?
+ * can copied_args be tightened more? closure(*) from lambda all have it? (maybe only if not pair pars?)
+ *   check apply change
  */

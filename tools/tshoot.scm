@@ -326,6 +326,9 @@
 
   (pal-test))
 
+;;; this is 5-6 times faster:
+;;; (define (palindrome? str) (string=? str (reverse str)))
+
 ;;; --------------------------------------------------------------------------------
 
 (when (> (*s7* 'profile) 0)

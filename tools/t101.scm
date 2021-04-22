@@ -188,6 +188,9 @@
 (format *stderr* "~NC tmat ~NC~%" 20 #\- 20 #\-)
 (system "./repl tmat.scm")
 
+(format *stderr* "~NC tmac ~NC~%" 20 #\- 20 #\-)
+(system "./repl tmac.scm")
+
 (format *stderr* "~NC teq ~NC~%" 20 #\- 20 #\-)
 (system "./repl teq.scm")
 
