@@ -73816,7 +73816,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      s7_pointer p;
 	      fx_annotate_arg(sc, cddr(expr), e);
 	      set_unsafe_optimize_op(expr, hop + OP_CL_FA);
-	      check_lambda(sc, arg1, true);      /* this changes symbol_list */
+	      check_lambda(sc, arg1, true);        /* this changes symbol_list */
 	      
 	      clear_symbol_list(sc);               /* so restore it */
 	      for (p = e; is_pair(p); p = cdr(p))
@@ -76267,10 +76267,20 @@ static void op_lambda(s7_scheme *sc)
   arity = check_lambda(sc, sc->code, false);
   sc->code = cdr(sc->code);
   set_opt3_any(sc->code, (s7_pointer)((intptr_t)arity));
-  sc->value = make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, arity);
+  sc->value = make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, arity); /* copy_args for t101-aux-41.scm */
 }
 
-#define op_lambda_unchecked(sc) sc->value = inline_make_closure(sc, cadr(sc->code), cddr(sc->code), T_CLOSURE | T_COPY_ARGS, (int32_t)((intptr_t)opt3_any(cdr(sc->code))))
+#if 0
+#define op_lambda_unchecked(sc) \
+  sc->value = inline_make_closure(sc, cadr(sc->code), cddr(sc->code), T_CLOSURE | T_COPY_ARGS, (int32_t)((intptr_t)opt3_any(cdr(sc->code))))
+#else
+static inline void op_lambda_unchecked(s7_scheme *sc)
+{
+  int32_t arity;
+  arity = (int32_t)((intptr_t)opt3_any(cdr(sc->code)));
+  sc->value = inline_make_closure(sc, cadr(sc->code), cddr(sc->code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity);
+}
+#endif
 
 static void check_lambda_star(s7_scheme *sc)
 {
@@ -79083,12 +79093,19 @@ static bool op_define_unchecked(s7_scheme *sc)
   if ((is_pair(car(code))) && (has_location(car(code))))
     locp = car(code);
   else
+#if 0
     for (locp = cdr(code); is_pair(locp); locp = cdr(locp))
       if ((is_pair(car(locp))) && (has_location(car(locp))))
 	{
+	  fprintf(stderr, "found %s from %s\n", display(car(locp)), display_80(code));
 	  locp = car(locp);
 	  break;
 	}
+#else
+  if ((is_pair(cadr(code))) && (has_location(cadr(code))))
+    locp = cadr(code);
+  else locp = sc->nil;  
+#endif
 
   if ((sc->cur_op == OP_DEFINE_STAR_UNCHECKED) && /* sc->cur_op changed above if define* */
       (is_pair(cdar(code))))
@@ -79111,7 +79128,7 @@ static bool op_define_unchecked(s7_scheme *sc)
       sc->code = cadr(code);
       if (is_pair(sc->code))
 	{
-	  push_stack(sc, OP_DEFINE1, sc->nil, x);
+	  push_stack_no_args(sc, OP_DEFINE1, x);
 	  sc->cur_op = optimize_op(sc->code);
 	  return(true);
 	}
@@ -79128,7 +79145,7 @@ static bool op_define_unchecked(s7_scheme *sc)
        *   is not cleared in the gc.
        */
       args = cdar(code);
-      x = make_closure(sc, args, cdr(code), T_CLOSURE | T_COPY_ARGS, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET);
+      x = make_closure(sc, args, cdr(code), T_CLOSURE | ((is_symbol(args)) ? T_COPY_ARGS : 0), (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET);
       if ((is_pair(locp)) && (has_location(locp)))
 	{
 	  pair_set_location(closure_body(x), pair_location(locp));
@@ -79291,7 +79308,7 @@ static inline void define_funchecked(s7_scheme *sc)
   code = cdr(sc->code);
   sc->value = caar(code); /* func name */
 
-  new_cell(sc, new_func, T_CLOSURE | T_COPY_ARGS);
+  new_cell(sc, new_func, T_CLOSURE | ((is_symbol(cdar(code))) ? T_COPY_ARGS : 0)); 
   closure_set_args(new_func, cdar(code));
   closure_set_body(new_func, cdr(code));
   if (is_pair(cddr(code))) set_closure_has_multiform(new_func); else set_closure_has_one_form(new_func);
@@ -79637,7 +79654,8 @@ static goto_t op_macroexpand(s7_scheme *sc)
       return(goto_eval);
     }
 
-  sc->args = copy_proper_list(sc, cdar(sc->code));        /* apply_lambda reuses args as slots, and these have not been copied yet */
+  /* sc->args = copy_proper_list(sc, cdar(sc->code)); */
+  sc->args = cdar(sc->code);
   if (!is_symbol(caar(sc->code)))
     {
       if (is_any_macro(caar(sc->code)))
@@ -79653,7 +79671,8 @@ static goto_t op_macroexpand(s7_scheme *sc)
 
 static goto_t op_macroexpand_1(s7_scheme *sc)
 {
-  sc->args = copy_proper_list(sc, cdar(sc->code));
+  /* sc->args = copy_proper_list(sc, cdar(sc->code)); */
+  sc->args = cdar(sc->code);
   sc->code = sc->value;
   return(macroexpand(sc));
 }
@@ -86785,7 +86804,7 @@ static inline void op_closure_fa(s7_scheme *sc)
   code = sc->code;
   farg = opt2_pair(code);           /* cdadr(code); */
   aarg = fx_call(sc, cddr(code));
-  new_clo = make_closure(sc, car(farg), cdr(farg), T_CLOSURE | T_COPY_ARGS, CLOSURE_ARITY_NOT_SET);
+  new_clo = make_closure(sc, car(farg), cdr(farg), T_CLOSURE | ((is_symbol(car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET); /* 22-Apr-21 */
   func = opt1_lambda(code);         /* outer func */
   func_args = closure_args(func);
   sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), new_clo, cadr(func_args), aarg);
@@ -90119,7 +90138,8 @@ static void op_cl_fa(s7_scheme *sc)
   s7_pointer code;
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
   code = cdadr(sc->code);
-  set_car(sc->t2_1, make_closure(sc, car(code), cdr(code), T_CLOSURE | T_COPY_ARGS, CLOSURE_ARITY_NOT_SET));
+  set_car(sc->t2_1, make_closure(sc, car(code), cdr(code), T_CLOSURE | ((is_symbol(car(code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET)); /* 22-Apr-21 */
+  /* arg1 lambda can be any arity, but it must be applicable to one arg (the "a" above) */
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
 
@@ -90134,7 +90154,7 @@ static void op_map_fa(s7_scheme *sc)
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = inline_make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, 1);
+      f = inline_make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE /* | T_COPY_ARGS */, 1); /* 22-Apr-21 -- arity=1 checked in optimizer */
       sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, f, sc->value) : g_map_closure(sc, f, sc->value);
     }
 }
@@ -90449,7 +90469,7 @@ static bool op_safe_c_pa(s7_scheme *sc)
       return(false);
     }
   check_stack_size(sc);
-  push_stack(sc, OP_SAFE_C_PA_1, sc->nil, sc->code);
+  push_stack_no_args(sc, OP_SAFE_C_PA_1, sc->code);
   sc->code = car(args);
   return(true);
 }
@@ -95789,7 +95809,7 @@ static s7_pointer copy_args_syntax(s7_scheme *sc, const char *name, opcode_t op,
   s7_pointer x, p;
   x = syntax(sc, name, op, min_args, max_args, doc);
   p = global_value(x);
-  full_type(p) |= T_COPY_ARGS; /* (for-each and ''2) -- maybe this is a mistake? */
+  full_type(p) |= T_COPY_ARGS; /* (for-each and ''2) -- maybe this is a mistake? (currently segfault if not copied) */
   return(x);
 }
 
@@ -97597,52 +97617,52 @@ int main(int argc, char **argv)
  *             gmp (4-13)  20.9   21.0   21.3   21.4
  * -------------------------------------------------------
  * tpeak       126          115    114    111    112
- * tauto       775          648    642    504    504
+ * tauto       775          648    642    504    502
  * tref        558          691    687    506    506
  * tshoot     1516          883    872    838    834
  * index      1054         1026   1016    992    992
- * tmock      7699         1177   1165   1115   1117
+ * tmock      7699         1177   1165   1115   1116
  * s7test     4534         1873   1831   1805   1812
  * tvect      2208         2456   2413   2009   2010
  * lt         2102         2123   2110   2093   2113
- * tform      3271         2281   2273   2283   2290
+ * tform      3271         2281   2273   2283   2289
  * tread      2610         2440   2421   2414   2411
  * trclo      4310         2715   2561   2526   2526
  * fbench     2960         2688   2583   2557   2557
- * tmac       3295         3317   3277   3219   2598  2489 (no copy)
+ * tmac       3295         3317   3277   3219   2486
  * tcopy      2689         8035   5546   2600   2601
- * tmat       2736         3065   3042   2583   2604  2615
+ * tmat       2736         3065   3042   2583   2618
  * tb         3398         2735   2681   2623   2622
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2941      ;tsort string x=y 38
- * tset       3244         3253   3104   3248   3248
- * dup        4121         3805   3788   3653   3617  3595
+ * tset       3244         3253   3104   3248   3229
+ * dup        4121         3805   3788   3653   3598
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3718
  * tmap       5143         7051   6993   4171   4134
  * tstr       6689         5281   4863   4365   4376
- * tlet       5590         7775   5640   4552   4555
- * tcase      4622         4960   4793   4561   4561
+ * tcase      4622         4960   4793   4561   4505
+ * tlet       5590         7775   5640   4552   4563
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
- * tmisc      6023         7389   6210   5827   5739
+ * tmisc      6023         7389   6210   5827   5701
  * tnum       59.2         6348   6013   5798   5791
  * trec       7763         5976   5970   5969   5969
- * tgsl       25.3         8485   7802   6427   6420
+ * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
  * thash      36.9         11.8   11.7   11.2   11.2
  * tgen       12.2         11.2   11.4   11.3   11.4
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.3   37.3
+ * calls      61.1         36.7   37.5   37.3   37.4
  * sg         98.7         71.9   72.3   72.8   72.8
- * lg        104.3        106.6  105.0  104.1  105.1     ;cell_optimize (no_cell?) g_for_each_closure
- * tbig      598.7        177.4  175.8  171.7  171.4
+ * lg        104.3        106.6  105.0  104.1  104.8   ;cell_optimize (no_cell?) g_for_each_closure
+ * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
+ *   call -> nccell, palette256 -> ncpalette, many other changes: need to catch up! and nrepl.scm will support both -- ugh.
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * opt_do_any t454? (2 steppers -> op_dox)
  * op_map_faa? tmap n-args?
- * can copied_args be tightened more? closure(*) from lambda all have it? (maybe only if not pair pars?)
- *   check apply change
+ * copied args in apply: why is the has_fx bit set for "and" and friends? why does t101/41 need copy_args in op_lambda?
  */

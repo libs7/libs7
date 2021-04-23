@@ -1297,12 +1297,14 @@ static s7_pointer g_cell_duplicate(s7_scheme *sc, s7_pointer args)
 				       (const char *)s7_string_checked(sc, s7_caddr(args)))));
 }
 
+#if 0
 static s7_pointer g_cell_release(s7_scheme *sc, s7_pointer args)
 {
   cell_release((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
 	       (cell *)s7_c_pointer_with_type(sc, s7_cadr(args), cell_symbol, __func__, 2));
   return(s7_f(sc));
 }
+#endif
 
 static s7_pointer g_cell_make(s7_scheme *sc, s7_pointer args)
 {
@@ -1433,7 +1435,6 @@ static s7_pointer g_ncplane_box(s7_scheme *sc, s7_pointer args)
   (cells_rounded_box ncp br 0 c1 c2 c3 c4 c5 c6)
   (ncplane_cursor_move_yx ncp 0 0)
   (ncplane_box ncp c1 c2 c3 c4 c5 c6 20 20 0))
-  (cell_release c1) etc??
   PERHAPS: add ncplane_rounded_box et al
 */
 #endif
@@ -3638,6 +3639,7 @@ static s7_pointer g_ncblit_bgrx(s7_scheme *sc, s7_pointer args)
 					 (const struct ncvisual_options *)s7_c_pointer_with_type(sc, s7_caddr(args), ncvisual_options_symbol, __func__, 3))));
 }
 
+#if 0
 static s7_pointer g_ncplane_rgba(s7_scheme *sc, s7_pointer args)
 {
   int begy, begx, leny, lenx;
@@ -3663,6 +3665,7 @@ static s7_pointer g_ncvisual_geom(s7_scheme *sc, s7_pointer args)
 					  &y, &x, &toy, &tox));
   return(s7_list(sc, 5, res, s7_make_integer(sc, y), s7_make_integer(sc, x), s7_make_integer(sc, toy), s7_make_integer(sc, tox)));
 }
+#endif
 
 #if (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
 static s7_pointer g_ncvisual_decode_loop(s7_scheme *sc, s7_pointer args)
@@ -4239,7 +4242,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(cell_make, 0, 0, false);
   nc_func(cell_load, 3, 0, false);
   nc_func(cell_duplicate, 3, 0, false);
-  nc_func(cell_release, 2, 0, false);
+  /* nc_func(cell_release, 2, 0, false); */
   nc_func(cell_extended_gcluster, 2, 0, false);
   nc_func(cells_double_box, 9, 0, false);
   nc_func(cells_rounded_box, 9, 0, false);
@@ -4430,12 +4433,12 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncvisual_at_yx, 3, 0, false);
   nc_func(ncvisual_render, 3, 0, false);
   nc_func(ncvisual_simple_streamer, 4, 0, false);
-  nc_func(ncvisual_geom, 7, 0, false);
+  /* nc_func(ncvisual_geom, 7, 0, false); */
 #if (defined(NOTCURSES_VERNUM_MAJOR)) && (NOTCURSES_VERNUM_MAJOR >= 2) && ((NOTCURSES_VERNUM_MINOR > 0) || (NOTCURSES_VERNUM_PATCH >= 11))
   nc_func(ncvisual_decode_loop, 1, 0, false);
 #endif
 
-  nc_func(ncplane_rgba, 6, 0, false);
+  /* nc_func(ncplane_rgba, 6, 0, false); */
   nc_func(ncblit_rgba, 3, 0, false);
   nc_func(ncblit_bgrx, 3, 0, false);
 
