@@ -3041,11 +3041,11 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
 #define slot_set_value(p, Val)         (T_Slt(p))->object.slt.val = T_Nmv(Val)
 #define slot_set_value_with_hook(Slot, Value) \
-  do {if (hook_has_functions(sc->rootlet_redefinition_hook)) slot_set_value_with_hook_1(sc, Slot, Value); else slot_set_value(Slot, Value);} while (0)
+  do {if (hook_has_functions(sc->rootlet_redefinition_hook)) slot_set_value_with_hook_1(sc, Slot, T_Nmv(Value)); else slot_set_value(Slot, T_Nmv(Value));} while (0)
 #define next_slot(p)                   T_Sln((T_Slt(p))->object.slt.nxt)
 #define slot_set_next(p, Val)          (T_Slt(p))->object.slt.nxt = T_Sln(Val)
-#define slot_set_pending_value(p, Val) do {(T_Slt(p))->object.slt.pending_value = T_Pos(Val); slot_set_has_pending_value(p);} while (0)
-#define slot_simply_set_pending_value(p, Val) (T_Slt(p))->object.slt.pending_value = T_Pos(Val)
+#define slot_set_pending_value(p, Val) do {(T_Slt(p))->object.slt.pending_value = T_Nmv(Val); slot_set_has_pending_value(p);} while (0)
+#define slot_simply_set_pending_value(p, Val) (T_Slt(p))->object.slt.pending_value = T_Nmv(Val)
 #if S7_DEBUGGING
 static s7_pointer slot_pending_value(s7_pointer p) \
   {if (slot_has_pending_value(p)) return(p->object.slt.pending_value); fprintf(stderr, "slot: no pending value\n"); abort();}
@@ -5082,7 +5082,8 @@ static s7_pointer check_ref15(s7_pointer p, const char *func, int32_t line) /* c
   uint8_t typ;
   check_nref(p, func, line);
   typ = unchecked_type(p);
-  if (is_multiple_value(p))
+  if ((is_multiple_value(p)) &&
+      (!safe_strcmp(func, "mark_slot"))) /* match == multiple-values which causes false error messages */
     complain("%s%s[%d]: slot value is a multiple-value, %s (%s)%s?\n", p, func, line, typ);
   if (has_odd_bits(p))
     {char *s; fprintf(stderr, "odd bits: %s\n", s = describe_type_bits(cur_sc, p)); free(s);}
@@ -7801,6 +7802,19 @@ s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x)
   return(x);
 }
 
+#define stack_protected1(Sc) Sc->stack_end[-2]
+#define stack_protected2(Sc) Sc->stack_end[-4]
+#define stack_protected3(Sc) Sc->stack_end[-3]
+
+static inline void gc_protect_via_stack(s7_scheme *sc, s7_pointer val)
+{
+  sc->stack_end[2] = val;
+  sc->stack_end[3] = (s7_pointer)OP_GC_PROTECT;
+  sc->stack_end += 4;
+}
+
+#define gc_protect_2_via_stack(Sc, X, Y) do {push_stack_no_let_no_code(Sc, OP_GC_PROTECT, X); stack_protected2(Sc) = Y;} while (0)
+
 
 /* -------------------------------- symbols -------------------------------- */
 
@@ -8546,7 +8560,7 @@ static s7_pointer reuse_as_slot(s7_scheme *sc, s7_pointer slot, s7_pointer symbo
 #endif
   set_full_type(slot, T_SLOT);
   slot_set_symbol(slot, symbol);
-  slot_set_value(slot, T_Pos(value));
+  slot_set_value(slot, value);
   return(slot);
 }
 
@@ -10562,7 +10576,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool unnamed)
   sc->temp6 = sc->nil;
   if (sc->debug > 1) /* no profile here */
     {
-      s7_gc_protect_via_stack(sc, mac);  /* GC protect func during add_trace */
+      gc_protect_via_stack(sc, mac);  /* GC protect func during add_trace */
       closure_set_body(mac, add_trace(sc, body));
       unstack(sc);
     }
@@ -10591,7 +10605,7 @@ static Inline s7_pointer inline_make_closure(s7_scheme *sc, s7_pointer args, s7_
   closure_set_body(x, code);           /* in case add_trace triggers GC, new func (x) needs some legit body for mark_closure */
   if (sc->debug_or_profile)
     {
-      s7_gc_protect_via_stack(sc, x);  /* GC protect func during add_trace */
+      gc_protect_via_stack(sc, x);     /* GC protect func during add_trace */
       closure_set_body(x, (sc->debug > 1) ? add_trace(sc, code) : add_profile(sc, code));
       set_closure_has_multiform(x);
       unstack(sc);
@@ -40750,7 +40764,7 @@ s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect)
     return(sc->nil);
   check_free_heap_size(sc, len);
   sc->v = sc->nil;
-  s7_gc_protect_via_stack(sc, vect);
+  gc_protect_via_stack(sc, vect);
   for (i = len - 1; i >= 0; i--)
     sc->v = cons_unchecked(sc, vector_getter(vect)(sc, vect, i), sc->v); /* vector_getter can cause alloction/GC (int_vector_getter -> make_integer) */
   unstack(sc);
@@ -40783,7 +40797,7 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
 
   check_free_heap_size(sc, end - start);
   sc->w = sc->nil;
-  s7_gc_protect_via_stack(sc, vec);
+  gc_protect_via_stack(sc, vec);
   for (i = end - 1; i >= start; i--)
     sc->w = cons_unchecked(sc, vector_getter(vec)(sc, vec, i), sc->w);
   unstack(sc);
@@ -44645,11 +44659,11 @@ static s7_int hash_map_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
 static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   s7_pointer f, old_e, args, body;
-
   f = hash_table_procedures_mapper(table);
   if (f == sc->unused)
     s7_error(sc, make_symbol(sc, "hash-map-recursion"),
 	     set_elist_1(sc, wrap_string(sc, "hash-table map function called recursively", 42)));
+  gc_protect_via_stack(sc, f);
   hash_table_set_procedures_mapper(table, sc->unused);
   old_e = sc->curlet;
   args = closure_args(f);
@@ -44660,6 +44674,7 @@ static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
     push_stack_no_args(sc, sc->begin_op, cdr(body));
   sc->code = car(body);
   eval(sc, OP_EVAL);
+  unstack(sc);
   hash_table_set_procedures_mapper(table, f);
   sc->curlet = old_e;
   if (!s7_is_integer(sc->value))
@@ -49643,6 +49658,8 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
   return(source);
 }
 
+static s7_pointer copy_p_p(s7_scheme *sc, s7_pointer source) {return(copy_source_no_dest(sc, sc->copy_symbol, source, set_plist_1(sc, source)));}
+
 static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int dest_start, s7_int dest_end, s7_int source_start)
 {
   /* types equal, but not a let (handled in s7_copy_1), returns NULL if not copied here */
@@ -51331,7 +51348,6 @@ static s7_pointer iterator_to_let(s7_scheme *sc, s7_pointer obj)
   else
     if (is_pair(seq))
       s7_varlet(sc, let, sc->position_symbol, iterator_current(obj));
-
   s7_gc_unprotect_at(sc, gc_loc);
   return(let);
 }
@@ -56061,19 +56077,6 @@ static s7_pointer fx_c_opdq(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t1_1, d_call(sc, cadr(arg)));
   return(fn_proc(arg)(sc, sc->t1_1));
 }
-
-#define stack_protected1(Sc) Sc->stack_end[-2]
-#define stack_protected2(Sc) Sc->stack_end[-4]
-#define stack_protected3(Sc) Sc->stack_end[-3]
-
-static inline void gc_protect_via_stack(s7_scheme *sc, s7_pointer val)
-{
-  sc->stack_end[2] = val;
-  sc->stack_end[3] = (s7_pointer)OP_GC_PROTECT;
-  sc->stack_end += 4;
-}
-
-#define gc_protect_2_via_stack(Sc, X, Y) do {push_stack_no_let_no_code(Sc, OP_GC_PROTECT, X); stack_protected2(Sc) = Y;} while (0)
 
 static s7_pointer fx_c_opsq(s7_scheme *sc, s7_pointer arg)
 {
@@ -65554,6 +65557,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 		      if (slot)
 			{
 			  opc->v[2].p = slot;
+			  opc->v[4].p_pii_f = vector_ref_p_pii;
 			  opc->v[0].fp = opt_p_pii_sss;
 			  if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
 			      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
@@ -69224,7 +69228,6 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
       sc->z = sc->nil;
       return(sc->nil);
     }
-
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -76267,7 +76270,11 @@ static void op_lambda(s7_scheme *sc)
   arity = check_lambda(sc, sc->code, false);
   sc->code = cdr(sc->code);
   set_opt3_any(sc->code, (s7_pointer)((intptr_t)arity));
-  sc->value = make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, arity); /* copy_args for t101-aux-41.scm */
+#if 0
+  sc->value = make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | T_COPY_ARGS, arity);
+#else
+  sc->value = make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity);
+#endif
 }
 
 #if 0
@@ -86459,20 +86466,16 @@ static void op_any_closure_3p(s7_scheme *sc)
       p = cdr(p);
       if (has_fx(p))
 	{
-	  sc->stack_end[0] = sc->code;
-	  sc->stack_end[2] = sc->args;
+	  sc->stack_end[0] = sc->code; /* push_stack_direct(sc, OP_ANY_CLOSURE_3P_3) here but trying to be too clever? */
+	  sc->stack_end[2] = sc->args; /* stack[args] == arg1 to closure) */
 	  sc->stack_end[3] = (s7_pointer)(OP_ANY_CLOSURE_3P_3);
 	  sc->stack_end += 4;
-	  stack_protected3(sc) = fx_call(sc, p); /* this might push_stack gc_protect etc, so push_stack via +4 before the fx_call */
-#if S7_DEBUGGING
-	  if (sc->stack_end[-1] != (s7_pointer)(OP_ANY_CLOSURE_3P_3)) /* did fx_call push then forget to pop? */
-	    fprintf(stderr, "%s[%d]: op: %s, code: %s\n", __func__, __LINE__, op_names[(opcode_t)(sc->stack_end[-1])], display_80(sc->code));
-#endif
+	  stack_protected3(sc) = fx_call(sc, p); /* (i.e. stack[curlet] == arg2 of closure), fx_call might push_stack gc_protect etc, so push_stack via +4 before it */
 	  sc->code = cadr(p);
 	}
       else
 	{
-	  push_stack_direct(sc, OP_ANY_CLOSURE_3P_2);
+	  push_stack_direct(sc, OP_ANY_CLOSURE_3P_2); /* arg1 == stack[args] */
 	  sc->code = car(p);
 	}}
   else
@@ -86484,25 +86487,26 @@ static void op_any_closure_3p(s7_scheme *sc)
 
 static bool closure_3p_end(s7_scheme *sc, s7_pointer p)
 {
+  /* sc->args == arg1, sc->value == arg2 */
   if (has_fx(p))
     {
-      s7_pointer func, arg1, arg2;
-      arg1 = sc->value;
-      arg2 = fx_call(sc, p);
+      s7_pointer func, arg2, arg3;
+      arg2 = sc->value;
+      arg3 = fx_call(sc, p); 
       func = opt1_lambda(sc->code);
       if (is_safe_closure(func))
-	sc->curlet = update_let_with_three_slots(sc, closure_let(func), sc->args, arg1, arg2);
+	sc->curlet = update_let_with_three_slots(sc, closure_let(func), sc->args, arg2, arg3);
       else
 	{
-	  sc->value = arg1;
-	  sc->code = arg2;
-	  make_let_with_three_slots(sc, func, sc->args, arg1, arg2);
+	  sc->value = arg2;
+	  sc->code = arg3;
+	  make_let_with_three_slots(sc, func, sc->args, arg2, arg3);
 	}
       sc->code = T_Pair(closure_body(func));
       return(true);
     }
   push_stack_direct(sc, OP_ANY_CLOSURE_3P_3);
-  stack_protected3(sc) = sc->value; /* curlet stack loc */
+  stack_protected3(sc) = sc->value; /* arg2 == curlet stack loc */
   sc->code = car(p);
   return(false);
 }
@@ -86510,7 +86514,7 @@ static bool closure_3p_end(s7_scheme *sc, s7_pointer p)
 static bool op_any_closure_3p_1(s7_scheme *sc)
 {
   s7_pointer p;
-  sc->args = sc->value; /* sc->value can be clobbered by fx_call? */
+  sc->args = sc->value; /* (arg1 of closure) sc->value can be clobbered by fx_call? */
   p = cddr(sc->code);
   if (has_fx(p))
     {
@@ -86526,7 +86530,8 @@ static bool op_any_closure_3p_2(s7_scheme *sc) {return(closure_3p_end(sc, cdddr(
 
 static void op_any_closure_3p_3(s7_scheme *sc)
 {
-  s7_pointer func;   /* incoming: args: sc->args, sc->curlet, sc->value */
+  /* display(obj) will not work here because sc->curlet is being used as arg2 of the closure3 */
+  s7_pointer func;   /* incoming args (from pop_stack): sc->args, sc->curlet, and sc->value from last evaluation */
   func = opt1_lambda(sc->code);
   if (is_safe_closure(func))
     sc->curlet = update_let_with_three_slots(sc, closure_let(func), sc->args, sc->curlet, sc->value);
@@ -95517,6 +95522,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_ii_function(sc, global_value(sc->make_byte_vector_symbol), make_byte_vector_p_ii);
   s7_set_p_pp_function(sc, global_value(sc->vector_symbol), vector_p_pp);
   s7_set_p_p_function(sc, global_value(sc->signature_symbol), s7_signature);
+  s7_set_p_p_function(sc, global_value(sc->copy_symbol), copy_p_p);
 
 #if WITH_SYSTEM_EXTRAS
   s7_set_b_7p_function(sc, global_value(sc->is_directory_symbol), is_directory_b_7p);
@@ -97627,25 +97633,25 @@ int main(int argc, char **argv)
  * lt         2102         2123   2110   2093   2113
  * tform      3271         2281   2273   2283   2289
  * tread      2610         2440   2421   2414   2411
+ * tmac       3295         3317   3277   3219   2486
  * trclo      4310         2715   2561   2526   2526
  * fbench     2960         2688   2583   2557   2557
- * tmac       3295         3317   3277   3219   2486
  * tcopy      2689         8035   5546   2600   2601
- * tmat       2736         3065   3042   2583   2618
- * tb         3398         2735   2681   2623   2622
+ * tmat       2736         3065   3042   2583   2610
+ * tb         3398         2735   2681   2623   2621
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2941      ;tsort string x=y 38
  * tset       3244         3253   3104   3248   3229
- * dup        4121         3805   3788   3653   3598
+ * dup        4121         3805   3788   3653   3601
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3718
- * tmap       5143         7051   6993   4171   4134
+ * tmap       5143         7051   6993   4171   4115
  * tstr       6689         5281   4863   4365   4376
  * tcase      4622         4960   4793   4561   4505
  * tlet       5590         7775   5640   4552   4563
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
- * tmisc      6023         7389   6210   5827   5701
+ * tmisc      6023         7389   6210   5827   5699
  * tnum       59.2         6348   6013   5798   5791
  * trec       7763         5976   5970   5969   5969
  * tgsl       25.3         8485   7802   6427   6406
@@ -97656,13 +97662,14 @@ int main(int argc, char **argv)
  * calls      61.1         36.7   37.5   37.3   37.4
  * sg         98.7         71.9   72.3   72.8   72.8
  * lg        104.3        106.6  105.0  104.1  104.8   ;cell_optimize (no_cell?) g_for_each_closure
- * tbig      598.7        177.4  175.8  171.7  171.5
+ * tbig      598.7        177.4  175.8  171.7  171.3
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- *   call -> nccell, palette256 -> ncpalette, many other changes: need to catch up! and nrepl.scm will support both -- ugh.
+ *   cell -> nccell, palette256 -> ncpalette, many other changes: need to catch up! and nrepl.scm will support both -- ugh.
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * opt_do_any t454? (2 steppers -> op_dox)
  * op_map_faa? tmap n-args?
- * copied args in apply: why is the has_fx bit set for "and" and friends? why does t101/41 need copy_args in op_lambda?
+ * more gc probes?
+ * float_opt et al could store the list_length
  */

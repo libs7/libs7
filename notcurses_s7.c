@@ -1327,7 +1327,8 @@ static s7_pointer g_cell_extended_gcluster(s7_scheme *sc, s7_pointer args)
   (set! (cell_channels c1) (logior CELL_FGDEFAULT_MASK CELL_BGDEFAULT_MASK #x00ff000000ffffff)) ; red on white
   (set! (cell_stylemask c1) NCSTYLE_UNDERLINE) ; 0 = no funny business
   (ncplane_set_base_cell ncp c1)
-  (notcurses_render nc))
+  (notcurses_render nc)
+  (nccell_release c1))
 */
 #endif
 
