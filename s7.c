@@ -2067,7 +2067,7 @@ void s7_show_history(s7_scheme *sc);
 #define has_type1_bit(p, b)            (((p)->tf.opts.high_flag & (b)) != 0)
 
 #define T_SYNTACTIC                    (1 << (TYPE_BITS + 1))
-#define is_syntactic(p)                has_type0_bit(T_Pos(p), T_SYNTACTIC)
+/* #define is_syntactic(p)                has_type0_bit(T_Pos(p), T_SYNTACTIC) */
 #define is_syntactic_symbol(p)         (typesflag(T_Pos(p)) == (uint16_t)(T_SYMBOL | T_SYNTACTIC))
 #define is_syntactic_pair(p)           (typesflag(T_Pos(p)) == (uint16_t)(T_PAIR | T_SYNTACTIC))
 /* this marks symbols that represent syntax objects, it should be in the second byte */
@@ -9527,7 +9527,7 @@ static s7_pointer inlet_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_po
 		(is_possibly_constant(sym)) ||            /* define-constant etc */
 		(is_syntactic_symbol(sym))  ||            /* (inlet 'if 3) */
 		((is_slot(global_slot(sym))) &&
-		 (is_syntactic(global_value(sym)))) ||
+		 (is_syntax(global_value(sym)))) ||
 		(sym == sc->let_ref_fallback_symbol) ||
 		(sym == sc->let_set_fallback_symbol))
 	      return(f);
@@ -81928,7 +81928,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 
 		    default:
 		      return(false);
-		    }} /* is_syntactic(x=car(expr)) */
+		    }} /* is_syntax(x=car(expr)) */
 	      else
 		{
 		  /* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and s7_macroexpand */
@@ -90630,7 +90630,7 @@ static void op_eval_args5(s7_scheme *sc)      /* sc->value is the last arg, sc->
 
 static bool eval_args_no_eval_args(s7_scheme *sc)
 {
-  if ((is_any_macro(sc->value)) /* || (is_syntactic(sc->value))*/)
+  if ((is_any_macro(sc->value)) /* || (is_syntax(sc->value)) */)
     {
       sc->args = copy_proper_list_with_arglist_error(sc, cdr(sc->code)); /* check the first time around */
       if (is_symbol(car(sc->code))) /* not ((f p) args...) where (f p) has returned a macro, op_macro_d assumes car is a symbol */
@@ -90915,7 +90915,7 @@ static bool eval_car_pair(s7_scheme *sc)
     {
       if ((car(carc) == sc->quote_symbol) &&        /* ('and #f) */
 	  ((!is_pair(cdr(carc))) ||                 /* ((quote . #\h) (2 . #\i)) ! */
-	   (is_syntactic(cadr(carc)))))
+	   (is_syntactic_symbol(cadr(carc)))))      /* ('or #f) but not ('#_or #f) */
 	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
       sc->code = carc;
 
@@ -97666,10 +97666,10 @@ int main(int argc, char **argv)
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- *   cell -> nccell, palette256 -> ncpalette, many other changes: need to catch up! and nrepl.scm will support both -- ugh.
+ *   many other changes: need to catch up!
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * opt_do_any t454? (2 steppers -> op_dox)
  * op_map_faa? tmap n-args?
- * more gc probes?
  * float_opt et al could store the list_length
+ * (map acos nums) -- only timing?, (lint-walk-body caller 'define-method (cddr form) env)?? unsafe could also carry along the new let, rather than a list
  */
