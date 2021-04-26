@@ -4302,13 +4302,13 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func2(nccell_stylemask);
   nc_func2(nccell_channels);
 
-  nc_old_func(nccell_extended_gcluster, cell_extended_gcluster, 2, 0, false);
-  nc_old_func(nccells_double_box, cells_double_box, 9, 0, false);
-  nc_old_func(nccells_rounded_box, cells_rounded_box, 9, 0, false);
-  nc_old_func(nccells_load_box, cells_load_box, 10, 0, false);
-  nc_old_func2(nccell_gcluster, cell_gcluster);
-  nc_old_func2(nccell_stylemask, cell_stylemask);
-  nc_old_func2(nccell_channels, cell_channels);
+  nc_old_func(nccell_extended_gcluster, "cell_extended_gcluster", 2, 0, false);
+  nc_old_func(nccells_double_box, "cells_double_box", 9, 0, false);
+  nc_old_func(nccells_rounded_box, "cells_rounded_box", 9, 0, false);
+  nc_old_func(nccells_load_box, "cells_load_box", 10, 0, false);
+  nc_old_func2(nccell_gcluster, "cell_gcluster");
+  nc_old_func2(nccell_stylemask, "cell_stylemask");
+  nc_old_func2(nccell_channels, "cell_channels");
 #endif
 
   nc_func(ncfadectx_setup, 1, 0, false);
