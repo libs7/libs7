@@ -9902,7 +9902,6 @@ static s7_pointer g_lint_let_set(s7_scheme *sc, s7_pointer args)
 	      else slot_set_value(y, val);
 	      return(slot_value(y));
 	    }
-
       if ((has_methods(lt)) &&
 	  (has_let_set_fallback(lt)))
 	return(call_let_set_fallback(sc, lt, sym, val));
@@ -10066,7 +10065,6 @@ s7_pointer s7_set_curlet(s7_scheme *sc, s7_pointer e)
   s7_pointer old_e;
   old_e = sc->curlet;
   sc->curlet = e;
-
   if ((is_let(e)) && (let_id(e) > 0)) /* might be () [id=-1] or rootlet [id=0?] etc */
     {
       let_set_id(e, ++sc->let_number);
@@ -19639,7 +19637,7 @@ static s7_pointer g_add_x1_1(s7_scheme *sc, s7_pointer x, int pos)
 #endif
     default:
       return(method_or_bust_with_type(sc, x, sc->add_symbol,
-				      (pos == 1) ? list_2(sc, x, int_one) : list_2(sc, int_one, x),
+				      (pos == 1) ? set_plist_2(sc, x, int_one) : set_plist_2(sc, int_one, x),
 				      a_number_string, pos));
     }
   return(x);
@@ -27486,7 +27484,7 @@ static s7_pointer g_substring_uncopied(s7_scheme *sc, s7_pointer args)
 static s7_pointer substring_uncopied_p_pii(s7_scheme *sc, s7_pointer str, s7_int start, s7_int end)
 {
   if (!is_string(str))
-    return(method_or_bust(sc, str, sc->substring_symbol, list_3(sc, str, make_integer(sc, start), make_integer(sc, end)), T_STRING, 1));
+    return(method_or_bust(sc, str, sc->substring_symbol, set_plist_3(sc, str, make_integer(sc, start), make_integer(sc, end)), T_STRING, 1));
   if ((end < start) || (end > string_length(str)))
     return(out_of_range(sc, sc->substring_symbol, int_three, wrap_integer1(sc, end), (end < start) ? its_too_small_string : its_too_large_string));
   if ((start < 0) || (start > end))
@@ -46527,9 +46525,11 @@ static s7_pointer g_is_macro(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer s7_macroexpand(s7_scheme *sc, s7_pointer mac, s7_pointer args)
 {
+  if (!s7_is_proper_list(sc, args))
+    s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), args));
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->code = mac;
-  sc->args = copy_proper_list_with_arglist_error(sc, args);
+  sc->args = args;
   sc->curlet = make_let(sc, closure_let(sc->code));
   eval(sc, OP_APPLY_LAMBDA);
   return(sc->value);
@@ -69788,7 +69788,6 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 
   s7_pointer x;
   bool checked = false;
-
   for (x = args; is_pair(x); x = cdr(x))
     {
       if (is_pair(car(x)))
@@ -70725,9 +70724,7 @@ static s7_pointer unknown_string_constant(s7_scheme *sc, int32_t c)
 
 static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
 {
-  /* sc->F => error
-   *   no check needed here for bad input port and so on
-   */
+  /* sc->F => error, no check needed here for bad input port and so on */
   s7_int i = 0;
 
   if (is_string_port(pt))
@@ -71596,7 +71593,6 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
       s7_pointer y;
       if (let_id(x) == id)
 	return(local_slot(symbol));
-
       for (y = let_slots(x); tis_slot(y); y = next_slot(y))
 	if (slot_symbol(y) == symbol)
 	  return(y);
@@ -78506,7 +78502,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	    }
 
 	  if ((is_h_safe_c_s(test)) &&
-	      (is_symbol(car(test)))) /* TODO: c_func itself here -- can we get type? */
+	      (is_symbol(car(test))))
 	    {
 	      uint8_t typ;
 	      typ = symbol_type(car(test));
@@ -79531,7 +79527,11 @@ static goto_t op_expansion(s7_scheme *sc)
       else
 	{
 	  /* call the reader macro */
+#if 0
 	  sc->args = copy_proper_list(sc, cdr(sc->value));
+#else
+	  sc->args = cdr(sc->value);
+#endif
 	  push_stack_no_code(sc, OP_EXPANSION, sc->nil);
 	  sc->curlet = make_let(sc, closure_let(sc->code));
 	  transfer_macro_info(sc, sc->code);
@@ -81503,10 +81503,16 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer cx)  /* (let ((lst
     {
       if (is_any_macro(c_function_setter(cx)))
 	{
+#if 0
 	  if (is_null(cdar(sc->code)))
 	    sc->args = copy_proper_list(sc, cdr(sc->code));
 	  else sc->args = pair_append(sc, cdar(sc->code), copy_proper_list(sc, cdr(sc->code)));
 	  /* append copies except for its last arg, but for macros, we have to copy everything, hence the extra copy_proper_list */
+#else
+	  if (is_null(cdar(sc->code)))
+	    sc->args = cdr(sc->code);
+	  else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));
+#endif
 	  sc->code = c_function_setter(cx);
 	  return(goto_apply);
 	}
@@ -81547,9 +81553,15 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer cx)
     {
       if (is_any_macro(setter))
 	{
+#if 0
 	  if (is_null(cdar(sc->code)))
 	    sc->args = copy_proper_list(sc, cdr(sc->code));
 	  else sc->args = pair_append(sc, cdar(sc->code), copy_proper_list(sc, cdr(sc->code)));
+#else
+	  if (is_null(cdar(sc->code)))
+	    sc->args = cdr(sc->code);
+	  else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));	  
+#endif
 	  sc->code = setter;
 	  return(goto_apply);
 	}
@@ -81576,7 +81588,11 @@ static goto_t set_implicit_iterator(s7_scheme *sc, s7_pointer cx)
     {
       if (is_any_macro(setter))
 	{
+#if 0
 	  sc->args = list_1(sc, cadr(sc->code));
+#else
+	  sc->args = cdr(sc->code);
+#endif
 	  sc->code = setter;
 	  return(goto_apply);
 	}
@@ -90581,7 +90597,13 @@ static bool eval_args_no_eval_args(s7_scheme *sc)
 {
   if ((is_any_macro(sc->value)) /* || (is_syntax(sc->value)) */)
     {
+#if 0
       sc->args = copy_proper_list_with_arglist_error(sc, cdr(sc->code)); /* check the first time around */
+#else
+      if (!s7_is_proper_list(sc, cdr(sc->code)))
+	s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), sc->code));
+      sc->args = cdr(sc->code);
+#endif
       if (is_symbol(car(sc->code))) /* not ((f p) args...) where (f p) has returned a macro, op_macro_d assumes car is a symbol */
 	{
 	  if (is_macro(sc->value))
@@ -97577,7 +97599,7 @@ int main(int argc, char **argv)
  * lt         2102         2123   2110   2093   2113
  * tform      3271         2281   2273   2283   2285
  * tread      2610         2440   2421   2414   2411
- * tmac       3295         3317   3277   3219   2486
+ * tmac       3295         3317   3277   3219   2483
  * trclo      4310         2715   2561   2526   2526
  * fbench     2960         2688   2583   2557   2557
  * tcopy      2689         8035   5546   2600   2601
@@ -97585,19 +97607,19 @@ int main(int argc, char **argv)
  * tb         3398         2735   2681   2623   2621
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2941
- * tset       3244         3253   3104   3248   3229
- * dup        4121         3805   3788   3653   3598  3266
+ * tset       3244         3253   3104   3248   3229  3254
+ * dup        4121         3805   3788   3653   3283
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3718
  * tmap       5143         7051   6993   4171   4115
- * tstr       6689         5281   4863   4365   4376
+ * tstr       6689         5281   4863   4365   4376  4354
  * tcase      4622         4960   4793   4561   4505
  * tlet       5590         7775   5640   4552   4563
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
- * tmisc      6023         7389   6210   5827   5699  5679
- * tnum       59.2         6348   6013   5798   5789
- * trec       7763         5976   5970   5969   5969
+ * tmisc      6023         7389   6210   5827   5679
+ * tnum       59.2         6348   6013   5798   5790
+ * trec       7763         5976   5970   5969   5964
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
  * thash      36.9         11.8   11.7   11.2   11.2
@@ -97606,7 +97628,7 @@ int main(int argc, char **argv)
  * calls      61.1         36.7   37.5   37.3   37.3
  * sg         98.7         71.9   72.3   72.8   72.7
  * lg        104.3        106.6  105.0  104.1  104.8   ;cell_optimize (no_cell?) g_for_each_closure
- * tbig      598.7        177.4  175.8  171.7  171.3
+ * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
@@ -97616,4 +97638,5 @@ int main(int argc, char **argv)
  * op_map_faa? tmap n-args? t462
  * float_opt et al could store the list_length
  * (map acos nums) -- only timing?, (lint-walk-body caller 'define-method (cddr form) env)?? unsafe could also carry along the new let, rather than a list
+ * can setters use plist? implicits?
  */
