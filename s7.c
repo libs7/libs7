@@ -38149,11 +38149,10 @@ static s7_pointer g_list_ref(s7_scheme *sc, s7_pointer args)
 
 static bool op_implicit_pair_ref_a(s7_scheme *sc)
 {
-  s7_pointer s, x;
+  s7_pointer s;
   s = lookup_checked(sc, car(sc->code));
   if (!is_pair(s)) {sc->last_function = s; return(false);}
-  x = fx_call(sc, cdr(sc->code));
-  sc->value = list_ref_1(sc, s, x);
+  sc->value = list_ref_1(sc, s, fx_call(sc, cdr(sc->code)));
   return(true);
 }
 
@@ -47134,7 +47133,7 @@ static bool op_implicit_c_object_ref_a(s7_scheme *sc)
   c = lookup_checked(sc, car(sc->code));
   if (!is_c_object(c)) {sc->last_function = c; return(false);}
   set_car(sc->t2_2, fx_call(sc, cdr(sc->code)));
-  set_car(sc->t2_1, c); /* fx_call above might use sc->t2* */
+  set_car(sc->t2_1, c);        /* fx_call above might use sc->t2* */
   sc->value = (*(c_object_ref(sc, c)))(sc, sc->t2_1);
   return(true);
 }
@@ -79527,11 +79526,7 @@ static goto_t op_expansion(s7_scheme *sc)
       else
 	{
 	  /* call the reader macro */
-#if 0
-	  sc->args = copy_proper_list(sc, cdr(sc->value));
-#else
 	  sc->args = cdr(sc->value);
-#endif
 	  push_stack_no_code(sc, OP_EXPANSION, sc->nil);
 	  sc->curlet = make_let(sc, closure_let(sc->code));
 	  transfer_macro_info(sc, sc->code);
@@ -80852,14 +80847,14 @@ static goto_t op_set2(s7_scheme *sc)
 
       if (is_multiple_value(sc->value)) /* this has to be at least 2 args, sc->args and sc->code make 2 more, so... */
 	eval_error(sc, "set!: too many arguments: ~S", 28,
-			     set_ulist_1(sc, sc->set_symbol, pair_append(sc, multiple_value(sc->value), pair_append(sc, sc->args, sc->code))));
+		   set_ulist_1(sc, sc->set_symbol, pair_append(sc, multiple_value(sc->value), pair_append(sc, sc->args, sc->code))));
 
       if (sc->args == sc->nil)
 	eval_error(sc, "list set!: not enough arguments: ~S", 35, sc->code);
 
       push_op_stack(sc, sc->list_set_function);
       if (!is_null(cdr(sc->args))) sc->code = pair_append(sc, cdr(sc->args), sc->code);
-      push_stack(sc, OP_EVAL_ARGS1, list_1(sc, sc->value), sc->code);
+      push_stack(sc, OP_EVAL_ARGS4, list_1(sc, sc->value), T_Pair(sc->code));
       sc->code = car(sc->args);
       return(goto_eval);
     }
@@ -80874,7 +80869,7 @@ static goto_t op_set2(s7_scheme *sc)
 
       push_op_stack(sc, sc->vector_set_function);
       if (!is_null(cdr(sc->args))) sc->code = pair_append(sc, cdr(sc->args), sc->code);
-      push_stack(sc, OP_EVAL_ARGS1, list_1(sc, sc->value), sc->code);
+      push_stack(sc, OP_EVAL_ARGS4, list_1(sc, sc->value), T_Pair(sc->code));
       sc->code = car(sc->args);
       return(goto_eval);
     }
@@ -81040,25 +81035,25 @@ static goto_t set_implicit_c_object(s7_scheme *sc, s7_pointer cx, s7_pointer for
 {
   s7_pointer settee, index, val;
 
-  if (is_null(cdr(sc->code)))
+  if (!is_pair(cdr(sc->code)))
     s7_wrong_number_of_args_error(sc, "no value for object-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
     s7_wrong_number_of_args_error(sc, "too many values for object-set!: ~S", form);
 
   settee = car(sc->code);
-  if ((is_null(cdr(settee))) ||
+  if ((!is_pair(cdr(settee))) ||
       (!is_null(cddr(settee))))
     {
       push_op_stack(sc, sc->c_object_set_function);
       if (is_null(cdr(settee)))
 	{
-	  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), cddr(sc->code));
+	  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), sc->nil);
 	  sc->code = cadr(sc->code);
 	}
       else
 	{
 	  sc->code = pair_append(sc, cddr(settee), cdr(sc->code));
-	  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), sc->code);
+	  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), sc->code);
 	  sc->code = cadr(settee);
 	}
       sc->cur_op = optimize_op(sc->code);
@@ -81087,7 +81082,7 @@ static goto_t set_implicit_c_object(s7_scheme *sc, s7_pointer cx, s7_pointer for
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code));
   push_op_stack(sc, sc->c_object_set_function);
   sc->code = cadr(settee);
   sc->cur_op = optimize_op(sc->code);
@@ -81101,13 +81096,13 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   s7_pointer settee, index;
   s7_int argnum;
 
-  if (is_null(cdr(sc->code)))     /* (set! (v 0)) */
+  if (!is_pair(cdr(sc->code)))     /* (set! (v 0)) */
     s7_wrong_number_of_args_error(sc, "no value for vector-set!: ~S", form);
   if (!is_null(cddr(sc->code)))   /* (set! (v 0) 1 2) */
     s7_wrong_number_of_args_error(sc, "too many values for vector-set!: ~S", form);
 
   settee = car(sc->code);
-  if (is_null(cdr(settee)))
+  if (!is_pair(cdr(settee)))
     s7_wrong_number_of_args_error(sc, "no index for vector-set!: ~S", form);
   if (is_immutable(cx))
     immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, cx));
@@ -81171,7 +81166,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 	    }}
       push_op_stack(sc, sc->vector_set_function); /* vector_setter(cx) has wrong args */
       sc->code = (is_null(cddr(settee))) ? cdr(sc->code) : pair_append(sc, cddr(settee), cdr(sc->code)); /* i.e. rest(args) + val */
-      push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), sc->code);
+      push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), sc->code);
       sc->code = cadr(settee);
       sc->cur_op = optimize_op(sc->code);
       return(goto_top_no_pop);
@@ -81216,7 +81211,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
       return(goto_eval_args);
     }
   /* here the index calc might be trivial -- (+ i 1) or (- j 1) but this branch hardly ever happens */
-  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code));
   push_op_stack(sc, sc->vector_set_function);
   sc->code = cadr(settee);
   sc->cur_op = optimize_op(sc->code);
@@ -81228,11 +81223,11 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   /* here only one index makes sense, and it is required, so (set! ("str") #\a), (set! ("str" . 1) #\a) and (set! ("str" 1 2) #\a) are all errors (but see below!) */
   s7_pointer settee, index, val;
 
-  if (is_null(cdr(sc->code))) s7_wrong_number_of_args_error(sc, "no value for string-set!: ~S", form);
+  if (!is_pair(cdr(sc->code))) s7_wrong_number_of_args_error(sc, "no value for string-set!: ~S", form);
   if (!is_null(cddr(sc->code))) s7_wrong_number_of_args_error(sc, "too many values for string-set!: ~S", form);
 
   settee = car(sc->code);
-  if (is_null(cdr(settee))) s7_wrong_number_of_args_error(sc, "no index for string-set!: ~S", form);
+  if (!is_pair(cdr(settee))) s7_wrong_number_of_args_error(sc, "no index for string-set!: ~S", form);
   if (!is_null(cddr(settee))) s7_wrong_number_of_args_error(sc, "too many indices for string-set!: ~S", form);
 
   /* if there's one index (the standard case), and it is not a pair, and there's one value (also standard)
@@ -81273,7 +81268,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx, s7_pointer form)
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code)); /* args4 not 1 because we know cdr(sc->code) is a pair */
   push_op_stack(sc, sc->string_set_function);
   sc->code = cadar(sc->code);
   sc->cur_op = optimize_op(sc->code);
@@ -81284,13 +81279,13 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
 {
   s7_pointer settee, index, val;
 
-  if (is_null(cdr(sc->code)))
+  if (!is_pair(cdr(sc->code)))
     s7_wrong_number_of_args_error(sc, "no value for list-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
     s7_wrong_number_of_args_error(sc, "too many values for list-set!: ~S", form);
 
   settee = car(sc->code);
-  if (is_null(cdr(settee)))
+  if (!is_pair(cdr(settee)))
     s7_wrong_number_of_args_error(sc, "no index for list-set!: ~S", form);
 
   if (!is_null(cddr(settee)))
@@ -81312,7 +81307,7 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
     {
       push_op_stack(sc, sc->list_set_function);
       sc->code = (is_null(cddr(settee))) ? cdr(sc->code) : pair_append(sc, cddr(settee), cdr(sc->code));
-      push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), sc->code);
+      push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), sc->code);
       sc->code = index;
       sc->cur_op = optimize_op(sc->code);
       return(goto_top_no_pop);
@@ -81333,13 +81328,13 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer f
 {
   s7_pointer settee, key;
 
-  if (is_null(cdr(sc->code)))
+  if (!is_pair(cdr(sc->code)))
     s7_wrong_number_of_args_error(sc, "no value for hash-table-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
     s7_wrong_number_of_args_error(sc, "too many values for hash-table-set!: ~S", form);
 
   settee = car(sc->code);
-  if (is_null(cdr(settee)))
+  if (!is_pair(cdr(settee)))
     s7_wrong_number_of_args_error(sc, "no key for hash-table-set!: ~S", form);
   if (is_immutable(cx))
     immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, cx));
@@ -81371,7 +81366,7 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer f
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code));
   push_op_stack(sc, sc->hash_table_set_function);
   sc->code = cadar(sc->code);
   sc->cur_op = optimize_op(sc->code);
@@ -81383,13 +81378,13 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   s7_pointer settee, key;
   /* code: ((gen 'input) input) from (set! (gen 'input) input) */
 
-  if (is_null(cdr(sc->code)))
+  if (!is_pair(cdr(sc->code)))
     s7_wrong_number_of_args_error(sc, "no value for let-set!: ~S", form);
   if (!is_null(cddr(sc->code)))
     s7_wrong_number_of_args_error(sc, "too many values for let-set!: ~S", form);
 
   settee = car(sc->code);
-  if (is_null(cdr(settee)))
+  if (!is_pair(cdr(settee)))
     s7_wrong_number_of_args_error(sc, "no symbol (variable name) for let-set!: ~S", form);
   if (!is_null(cddr(settee)))
     {
@@ -81417,7 +81412,7 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS1, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code));
   push_op_stack(sc, sc->let_set_function);
   sc->code = cadar(sc->code);
   sc->cur_op = optimize_op(sc->code);
@@ -81503,16 +81498,9 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer cx)  /* (let ((lst
     {
       if (is_any_macro(c_function_setter(cx)))
 	{
-#if 0
-	  if (is_null(cdar(sc->code)))
-	    sc->args = copy_proper_list(sc, cdr(sc->code));
-	  else sc->args = pair_append(sc, cdar(sc->code), copy_proper_list(sc, cdr(sc->code)));
-	  /* append copies except for its last arg, but for macros, we have to copy everything, hence the extra copy_proper_list */
-#else
 	  if (is_null(cdar(sc->code)))
 	    sc->args = cdr(sc->code);
 	  else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));
-#endif
 	  sc->code = c_function_setter(cx);
 	  return(goto_apply);
 	}
@@ -81545,7 +81533,7 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer cx)
 	  else
 	    {
 	      sc->value = pair_append(sc, cddar(sc->code), cdr(sc->code));
-	      push_stack(sc, OP_EVAL_ARGS1, sc->nil, sc->value);
+	      push_stack(sc, OP_EVAL_ARGS4, sc->nil, sc->value);
 	    }
 	  sc->code = cadar(sc->code);
 	}}
@@ -81553,15 +81541,9 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer cx)
     {
       if (is_any_macro(setter))
 	{
-#if 0
-	  if (is_null(cdar(sc->code)))
-	    sc->args = copy_proper_list(sc, cdr(sc->code));
-	  else sc->args = pair_append(sc, cdar(sc->code), copy_proper_list(sc, cdr(sc->code)));
-#else
 	  if (is_null(cdar(sc->code)))
 	    sc->args = cdr(sc->code);
 	  else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));	  
-#endif
 	  sc->code = setter;
 	  return(goto_apply);
 	}
@@ -81588,11 +81570,7 @@ static goto_t set_implicit_iterator(s7_scheme *sc, s7_pointer cx)
     {
       if (is_any_macro(setter))
 	{
-#if 0
-	  sc->args = list_1(sc, cadr(sc->code));
-#else
 	  sc->args = cdr(sc->code);
-#endif
 	  sc->code = setter;
 	  return(goto_apply);
 	}
@@ -81629,7 +81607,7 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
   caar_code = caar(sc->code);
   if (is_pair(caar_code))
     {
-      push_stack(sc, OP_SET2, cdar(sc->code), cdr(sc->code));
+      push_stack(sc, OP_SET2, cdar(sc->code), T_Pair(cdr(sc->code)));
       sc->code = caar_code;
       sc->cur_op = optimize_op(sc->code);
       return(goto_top_no_pop);
@@ -90597,13 +90575,9 @@ static bool eval_args_no_eval_args(s7_scheme *sc)
 {
   if ((is_any_macro(sc->value)) /* || (is_syntax(sc->value)) */)
     {
-#if 0
-      sc->args = copy_proper_list_with_arglist_error(sc, cdr(sc->code)); /* check the first time around */
-#else
       if (!s7_is_proper_list(sc, cdr(sc->code)))
 	s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), sc->code));
       sc->args = cdr(sc->code);
-#endif
       if (is_symbol(car(sc->code))) /* not ((f p) args...) where (f p) has returned a macro, op_macro_d assumes car is a symbol */
 	{
 	  if (is_macro(sc->value))
@@ -97637,6 +97611,5 @@ int main(int argc, char **argv)
  * opt_do_any t454? (2 steppers -> op_dox)
  * op_map_faa? tmap n-args? t462
  * float_opt et al could store the list_length
- * (map acos nums) -- only timing?, (lint-walk-body caller 'define-method (cddr form) env)?? unsafe could also carry along the new let, rather than a list
- * can setters use plist? implicits?
+ * can setters use plist [can only be closure of 2/3 args]?
  */
