@@ -287,7 +287,7 @@
 						     (if (string? str)
 							 (length str)
 							 (error 'wrong-type-arg "string-length argument should be a string: ~A" str)))
-						   (with-mock-wrapper #_string-length))
+						   (with-mock-wrapper #_length))
 
 		       'string-append          (with-mock-wrapper* #_string-append)
 		       'string-copy            (with-mock-wrapper #_copy) ; new form -> with-mock-wrapper* ? 

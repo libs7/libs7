@@ -411,8 +411,8 @@
 		  (display 'oops)))
 	    v))
 
-(define v (make-vector fsize ()))
-(f4 v)
+(define nv (make-vector fsize "abc"))
+(f4 nv)
 
 (define (f5 lst)
   (for-each (lambda (p)
@@ -447,7 +447,7 @@
 	 (if (integer? p)
 	     (display 'oops)))
        v))
-(f14 v)
+(f14 nv)
 
 (define (f15 lst)
   (map (lambda (p)
@@ -589,6 +589,68 @@
        str))
 (f17 fstr)
 
+
+(define (f21 lst)
+  (for-each (lambda (p q)
+	      (unless (eq? p q)
+		(display 'oops)))
+	    lst lst))
+(f21 lst)
+
+
+(define (f22 v)
+  (for-each (lambda (p q)
+	      (if (not (= p q))
+		  (display 'oops)))
+	    v v))
+(f22 fv)
+
+
+(define (f23 str)
+  (for-each (lambda (p q)
+	      (if (not (char=? p q))
+		  (display 'oops)))
+	    str str))
+(f23 fstr)
+
+
+(define (f24 v)
+  (for-each (lambda (p q)
+	      (unless (string=? p q)
+		(display 'oops)))
+	    v v))
+(f24 nv)
+
+;; if float-vector arg and only ref is in opt_d context, no need for make_real
+;;   i.e. 2 args even cell_opt outer, is ref b_dd or equivalent?
+
+
+(define hsize 75000)
+(define (f25 v)
+  (do ((i 0 (+ i 1)))
+      ((= i hsize))
+    (for-each (lambda (p)
+		(unless (positive? p)
+		  (display 'oops)))
+	      v)))
+
+(define fgv (make-float-vector 100 1.0))
+(f25 fgv)
+
+
+(define (f26 v1 v2)
+  (for-each (lambda (p q)
+	      (if (not (= p q))
+		  (display 'oops))) ;(format *stderr* "f2: ~S ~S~%" p q)))
+	    v1 v2))
+(f26 fv iv)
+
+(define (f27 lst v)
+  (for-each (lambda (p q)
+	      (if (equal? p q)
+		  (display 'oops))) ;(format *stderr* "f1: ~S ~S~%" p q)))
+	    lst v))
+(f27 lst nv)
 
 (when (> (*s7* 'profile) 0)
   (show-profile 200))

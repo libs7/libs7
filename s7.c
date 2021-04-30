@@ -4089,7 +4089,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, 
       OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
-      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_MAP_FA, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, 
+      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_MAP_OR_FOR_EACH_FA, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, 
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A,
       OP_IMPLICIT_ITERATE, OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_STRING_REF_A,
       OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A,
@@ -4323,7 +4323,7 @@ static const char* op_names[NUM_OPS] =
       "apply_ss", "apply_sa", "apply_sl", 
       "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
-      "s", "s_s", "s_c", "s_a", "cl_fa_1", "s_aa", "a_a", "a_aa", "p_s", "p_s_1",
+      "s", "s_s", "s_c", "s_a", "map_or_for_each_fa", "s_aa", "a_a", "a_aa", "p_s", "p_s_1",
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a",
       "implicit_iterate", "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_string_ref_a",
       "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_hash_table_ref_a", "implicit_let_ref_c", "implicit_let_ref_a",
@@ -5355,7 +5355,7 @@ static bool f_call_func_mismatch(const char *func)
 	 (!safe_strcmp(func, "optimize_func_many_args")) &&
 	 (!safe_strcmp(func, "optimize_func_three_args")) &&
 	 (!safe_strcmp(func, "fx_c_ff")) &&
-	 (!safe_strcmp(func, "op_map_fa")));
+	 (!safe_strcmp(func, "op_map_or_for_each_fa")));
 }
 
 static s7_pointer opt2_1(s7_scheme *sc, s7_pointer p, uint64_t role, const char *func, int32_t line)
@@ -5657,7 +5657,7 @@ static s7_pointer set_qlist_3(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
   return(sc->qlist_3);
 }
 
-static s7_pointer set_clist_1(s7_scheme *sc, s7_pointer x1) /* for c_object length method etc */
+static s7_pointer set_clist_1(s7_scheme *sc, s7_pointer x1) /* for c_object length method etc, a "weak" list */
 {
   set_car(sc->clist_1, x1);
   return(sc->clist_1);
@@ -18077,11 +18077,9 @@ static s7_pointer big_expt(s7_scheme *sc, s7_pointer args)
       if (yval == 1)
 	return(x);
 
-      if (!is_big_number(x))
-	{
-	  if ((s7_is_one(x)) || (s7_is_zero(x)))
-	    return(x);
-	}
+      if ((!is_big_number(x)) &&
+	  ((s7_is_one(x)) || (s7_is_zero(x))))
+	return(x);
 
       if ((yval < S7_INT32_MAX) &&
 	  (yval > S7_INT32_MIN))
@@ -68620,6 +68618,7 @@ static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
   return(NULL);
 }
 
+
 /* ---------------------------------------- for-each ---------------------------------------- */
 
 static Inline s7_pointer make_counter(s7_scheme *sc, s7_pointer iter)
@@ -68660,6 +68659,8 @@ static s7_pointer seq_init(s7_scheme *sc, s7_pointer seq)
   return(sc->F);
 }
 
+#define MUTLIM 32 /* was 1000 */
+
 static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
 {
   s7_pointer body;
@@ -68680,7 +68681,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       else
 	{
 	  set_ulist_1(sc, sc->begin_symbol, body);
-	  func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true); /* was list_1 via cons 8-Apr-21 */
+	  func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true); /* was list_1 via cons 8-Apr-21, true=nr */
 	}
       if (func)
 	{
@@ -68710,7 +68711,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	      s7_int i, len;
 	      len = vector_length(seq);
 	      vals = float_vector_floats(seq);
-	      if ((len > 1000) &&
+	      if ((len > MUTLIM) &&
 		  (!tree_has_setters(sc, body)))
 		{
 		  s7_pointer sv;
@@ -68732,7 +68733,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	      s7_int i, len;
 	      len = vector_length(seq);
 	      vals = int_vector_ints(seq);
-	      if ((len > 1000) &&
+	      if ((len > MUTLIM) &&
 		  (!tree_has_setters(sc, body)))
 		{
 		  s7_pointer sv;
@@ -69784,7 +69785,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
     }
   if (is_null(x))
     {
-      if (checked)
+      if (checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
 	{
 	  sc->u = args;
 	  check_free_heap_size(sc, 8192);
@@ -69796,8 +69797,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 				    (is_unquoted_pair(car(args))) ? copy_tree_with_type(sc, car(args)) : car(args),
 				    (is_unquoted_pair(cdr(args))) ? copy_tree_with_type(sc, cdr(args)) : cdr(args)));
 	    }
-	  return(copy_tree(sc, args));
-	  /* not copy_any_list here -- see comment below */
+	  return(copy_tree(sc, args));      /* not copy_any_list here -- see comment below */
 	}
       return((is_immutable(args)) ? copy_proper_list(sc, args) : args);
     }
@@ -73784,7 +73784,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		  /* built-in permanent closure here was not much faster */
 		  set_fn(expr, (fn_proc(expr) == g_for_each) ? g_for_each_closure : NULL);
 		  set_opt3_pair(expr, cdr(arg1));
-		  set_unsafe_optimize_op(expr, OP_MAP_FA);
+		  set_unsafe_optimize_op(expr, OP_MAP_OR_FOR_EACH_FA);
 		}
 	      return(OPT_F);
 	    }}
@@ -81871,9 +81871,10 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			return((x == sc->vector_symbol) ||
 			       (x == sc->list_symbol) ||
 			       (x == sc->string_symbol));
-		      if ((has_set) && (!direct_memq(cadr(expr), var_list)))  /* non-local is being changed */
-			{
-			  if ((cadr(expr) == stepper) ||                      /* stepper is being set? */
+
+		      if ((has_set) && 
+			  (!direct_memq(cadr(expr), var_list)) &&          /* non-local is being changed */
+			  ((cadr(expr) == stepper) ||                      /* stepper is being set? */
 			      (!is_pair(cddr(expr))) ||
 			      (!is_pair(cdddr(expr))) ||
 			      (is_pair(cddddr(expr))) ||
@@ -81883,9 +81884,9 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			      ((is_symbol(cadddr(expr))) &&
 			       (cadddr(expr) == stepper)) ||
 			      ((is_pair(cadddr(expr))) &&
-			       (s7_tree_memq(sc, stepper, cadddr(expr)))))
-			    (*has_set) = true;
-			}
+			       (s7_tree_memq(sc, stepper, cadddr(expr))))))
+			(*has_set) = true;
+
 		      if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
 			return(false);
 		      if (!safe_stepper_expr(expr, stepper))
@@ -82215,6 +82216,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		      }}}}
 	break;
       }
+
   body = cddr(code);
   if ((is_pair(end)) && (is_pair(car(end))) &&
       (is_pair(vars)) && (is_null(cdr(vars))) &&
@@ -82411,19 +82413,17 @@ static s7_pointer check_do(s7_scheme *sc)
 	    if ((is_pair(car(end))) && 
 		(has_fx(end)) &&
 		(!(is_syntax(caar(end)))) &&
-		(!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
-	      {
-		if (!fx_tree_in(sc, end, last_stepper, previous_stepper)) /* just the end-test, not the results */
-		  fx_tree(sc, car(end), last_stepper, previous_stepper);  /* car(end) might be (or ...) */
-	      }
+		(!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))) &&
+		(!fx_tree_in(sc, end, last_stepper, previous_stepper)))   /* just the end-test, not the results */
+	      fx_tree(sc, car(end), last_stepper, previous_stepper);      /* car(end) might be (or ...) */
+
 	    if ((is_pair(cdr(end))) &&
 		(is_pair(cadr(end))) &&
 		(is_null(cddr(end))) &&
-		(has_fx(cdr(end))))
-	      {
-		if (!fx_tree_in(sc, cdr(end), last_stepper, previous_stepper))
-		  fx_tree(sc, cadr(end), last_stepper, previous_stepper);
-	      }
+		(has_fx(cdr(end))) &&
+		(!fx_tree_in(sc, cdr(end), last_stepper, previous_stepper)))
+	      fx_tree(sc, cadr(end), last_stepper, previous_stepper);
+
 	    /* the bad case for results: (let ((vals3t with-baffle)) func+do+ (vals3t (* 2 i 3 4))) -> fx_t|u trouble */
 
 	    if ((last_expr) && (is_pair(last_expr)))
@@ -90084,7 +90084,7 @@ static void op_cl_fa(s7_scheme *sc)
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
 
-static void op_map_fa(s7_scheme *sc)
+static void op_map_or_for_each_fa(s7_scheme *sc)
 {
   s7_pointer f, code;
   code = sc->code;
@@ -92455,8 +92455,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_CL_ALL_A: op_cl_all_a(sc); continue;
 
 	case OP_CL_FA:  if (!cl_function_is_ok(sc, sc->code)) break;
-	case HOP_CL_FA: op_cl_fa(sc); continue;      /* op_c_fs was not faster if fx_s below */
-	case OP_MAP_FA: op_map_fa(sc); continue;     /* here only if for-each or map */
+	case HOP_CL_FA: op_cl_fa(sc); continue;                              /* op_c_fs was not faster if fx_s below */
+	case OP_MAP_OR_FOR_EACH_FA: op_map_or_for_each_fa(sc); continue;     /* here only if for-each or map */
 
 
 	  /* unsafe c_functions */
@@ -97561,31 +97561,31 @@ int main(int argc, char **argv)
  * tshoot     1516          883    872    838    834
  * index      1054         1026   1016    992    992
  * tmock      7699         1177   1165   1115   1116
- * s7test     4534         1873   1831   1805   1812
- * tvect      2208         2456   2413   2009   2010  1986
+ * s7test     4534         1873   1831   1805   1808
+ * tvect      2208         2456   2413   2009   1986
  * lt         2102         2123   2110   2093   2113
- * tform      3271         2281   2273   2283   2285
+ * tform      3271         2281   2273   2283   2280
  * tread      2610         2440   2421   2414   2411
  * tmac       3295         3317   3277   3219   2483
  * trclo      4310         2715   2561   2526   2526
- * fbench     2960         2688   2583   2557   2557
+ * fbench     2960         2688   2583   2557   2562
  * tcopy      2689         8035   5546   2600   2601
- * tmat       2736         3065   3042   2583   2609
- * tb         3398         2735   2681   2623   2621  2613
+ * tmat       2736         3065   3042   2583   2614
+ * tb         3398         2735   2681   2623   2613
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2941
- * tset       3244         3253   3104   3248   3229  3254
- * dup        4121         3805   3788   3653   3283  3297
+ * tset       3244         3253   3104   3248   3255
+ * dup        4121         3805   3788   3653   3297
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3718
- * tmap       5143         7051   6993   4171   4115  4094
- * tstr       6689         5281   4863   4365   4376  4354
+ * tstr       6689         5281   4863   4365   4352
  * tcase      4622         4960   4793   4561   4505
  * tlet       5590         7775   5640   4552   4563
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
- * tmisc      6023         7389   6210   5827   5679  5656
- * tnum       59.2         6348   6013   5798   5790
+ * tmap       6375         8270   8188          5022
+ * tmisc      6023         7389   6210   5827   5656
+ * tnum       59.2         6348   6013   5798   5795
  * trec       7763         5976   5970   5969   5964
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
@@ -97602,6 +97602,5 @@ int main(int argc, char **argv)
  *   many other changes: need to catch up!
  * ttl.scm for setter timings, maybe better in fx* than opt*?
  * opt_do_any t454? (2 steppers -> op_dox)
- * op_map_faa? tmap n-args? t462
  * float_opt et al could store the list_length
  */
