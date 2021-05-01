@@ -4147,7 +4147,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_LAMBDA_STAR_UNCHECKED, OP_DO_UNCHECKED, OP_DEFINE_UNCHECKED, OP_DEFINE_STAR_UNCHECKED, OP_DEFINE_FUNCHECKED, OP_DEFINE_CONSTANT_UNCHECKED,
       OP_DEFINE_WITH_SETTER, 
 
-      OP_LET_NO_VARS, OP_NAMED_LET, OP_NAMED_LET_NO_VARS, OP_NAMED_LET_FX, OP_NAMED_LET_STAR,
+      OP_LET_NO_VARS, OP_NAMED_LET, OP_NAMED_LET_NO_VARS, OP_NAMED_LET_A, OP_NAMED_LET_FX, OP_NAMED_LET_STAR,
       OP_LET_FX_OLD, OP_LET_FX_NEW, OP_LET_2A_OLD, OP_LET_2A_NEW, OP_LET_3A_OLD, OP_LET_3A_NEW,
       OP_LET_opSSq_OLD, OP_LET_opSSq_NEW, OP_LET_opSSq_E_OLD, OP_LET_opSSq_E_NEW, OP_LET_opaSSq_OLD, OP_LET_opaSSq_NEW, OP_LET_opaSSq_E_OLD, OP_LET_opaSSq_E_NEW,
       OP_LET_ONE_OLD, OP_LET_ONE_NEW, OP_LET_ONE_P_OLD, OP_LET_ONE_P_NEW,
@@ -4378,7 +4378,7 @@ static const char* op_names[NUM_OPS] =
       "lambda*_unchecked", "do_unchecked", "define_unchecked", "define*_unchecked", "define_funchecked", "define_constant_unchecked",
       "define_with_setter", 
 
-      "let_no_vars", "named_let", "named_let_no_vars", "named_let_fx", "named_let*",
+      "let_no_vars", "named_let", "named_let_no_vars", "named_let_a", "named_let_fx", "named_let*",
       "let_fx_old", "let_fx_new", "let_2a_old", "let_2a_new", "let_3a_old", "let_3a_new",
       "let_opssq_old", "let_opssq_new", "let_opssq_e_old", "let_opssq_e_new", "let_opassq_old", "let_opassq_new", "let_opassq_e_old", "let_opassq_e_new",
       "let_one_old", "let_one_new", "let_one_p_old", "let_one_p_new",
@@ -76810,8 +76810,10 @@ static s7_pointer check_named_let(s7_scheme *sc, int32_t vars)
 	  car(exp) = caar(ex);
 	}
       if (fx_ok)
-	pair_set_syntax_op(sc->code, OP_NAMED_LET_FX);
-
+	{
+	  set_opt1_pair(code, caadr(code));
+	  pair_set_syntax_op(sc->code, (vars == 1) ? OP_NAMED_LET_A : OP_NAMED_LET_FX);
+	}
       optimize_lambda(sc, true, car(code), sc->args, cddr(code)); /* car(code) is the name */
       clear_list_in_use(sc->args);
       sc->args = sc->nil;
@@ -76989,8 +76991,8 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
   s7_int n;
 
   body = cddr(sc->code);
-  sc->w = sc->nil;
   n = integer(opt2_int(sc->code));
+  sc->w = sc->nil;
   for (x = cadr(sc->code); is_pair(x); x = cdr(x))
     sc->w = cons(sc, caar(x), sc->w);
   sc->w = proper_list_reverse_in_place(sc, sc->w); /* init values (args) are also in "reversed" order */
@@ -76998,7 +77000,7 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
   sc->x = make_closure(sc, sc->w, body, T_CLOSURE, n);
   add_slot(sc, sc->curlet, car(sc->code), sc->x);
   sc->curlet = make_let_slowly(sc, sc->curlet);
-  
+
   for (x = sc->w; is_not_null(args); x = cdr(x)) /* reuse the value cells as the new let slots */
     {
       s7_pointer sym, new_args;
@@ -77115,6 +77117,8 @@ static bool op_let(s7_scheme *sc)
   return(op_let1(sc));
 }
 
+/* op_let_one_var: op_let_unchecked to fx/eval for arg, op_let_one_var_1: op_let1 as in fx_named_let_a, maybe begin/eval (one liner) choice as well? */
+
 static bool op_let_unchecked(s7_scheme *sc)     /* not named, but has vars */
 {
   s7_pointer x, code;
@@ -77148,17 +77152,33 @@ static void op_named_let_no_vars(s7_scheme *sc)
   body = cdddr(sc->code);
   sc->args = make_closure(sc, sc->nil, body, T_CLOSURE, 0);  /* sc->args is a temp here */
   make_slot_2(sc, sc->curlet, cadr(sc->code), sc->args);
+  sc->code = body;
+}
+
+static void op_named_let_a(s7_scheme *sc)
+{
+  s7_pointer body;
+  sc->code = cdr(sc->code);
+  body = cddr(sc->code);
+  sc->args = fx_call(sc, cdr(opt1_pair(sc->code)));    /* cdaadr(sc->code) */
+  sc->w = list_1(sc, car(opt1_pair(sc->code)));        /* caaadr(sc->code), subsequent calls will need a normal list of pars in closure_args */
+  sc->curlet = make_let_slowly(sc, sc->curlet);
+  sc->x = make_closure(sc, sc->w, body, T_CLOSURE, 1); /* picks up curlet (this is the funclet?) */
+  add_slot(sc, sc->curlet, car(sc->code), sc->x);      /* the function */
+  sc->curlet = make_let_with_slot(sc, sc->curlet, car(sc->w), sc->args); /* why the second let? */
+  closure_set_let(sc->x, sc->curlet);
+  sc->x = sc->nil;
+  sc->w = sc->nil;
   sc->code = T_Pair(body);
 }
 
 static bool op_named_let_fx(s7_scheme *sc)
 {
   s7_pointer p;
-  sc->args = sc->nil;
-  for (p = caddr(sc->code); is_pair(p); p = cdr(p))
+  sc->code = cdr(sc->code);
+  for (p = cadr(sc->code), sc->args = sc->nil; is_pair(p); p = cdr(p))
     sc->args = cons(sc, fx_call(sc, cdar(p)), sc->args);
   sc->args = proper_list_reverse_in_place(sc, sc->args);
-  sc->code = cdr(sc->code);
   return(op_named_let_1(sc, sc->args)); /* sc->code = (name vars . body),  args = vals in decl order */
 }
 
@@ -93494,6 +93514,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_NAMED_LET_NO_VARS: op_named_let_no_vars(sc);   goto BEGIN;
 	case OP_NAMED_LET:	   if (op_named_let(sc))       goto BEGIN; goto EVAL;
+	case OP_NAMED_LET_A:       op_named_let_a(sc);         goto BEGIN;
 	case OP_NAMED_LET_FX:      if (op_named_let_fx(sc))    goto BEGIN; goto EVAL;
 
 	case OP_LET: 	           if (op_let(sc))             goto BEGIN; goto EVAL;
@@ -94517,6 +94538,7 @@ static s7_pointer sl_unsettable_error(s7_scheme *sc, s7_pointer sym)
 static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer sym, val;
+  s7_int iv;
 
   sym = cadr(args);
   if (!is_symbol(sym))
@@ -94536,19 +94558,16 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       return(simple_wrong_type_argument(sc, sym, val, T_BOOLEAN));
 
     case SL_BIGNUM_PRECISION:
-      {
-	s7_int iv;
-	iv = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val));
-	sc->bignum_precision = iv;
+      iv = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val));
+      sc->bignum_precision = iv;
 #if WITH_GMP
-	set_bignum_precision(sc, sc->bignum_precision);
-	mpfr_set_prec(sc->mpfr_1, sc->bignum_precision);
-	mpfr_set_prec(sc->mpfr_2, sc->bignum_precision);
-	mpc_set_prec(sc->mpc_1, sc->bignum_precision);
-	mpc_set_prec(sc->mpc_2, sc->bignum_precision);
+      set_bignum_precision(sc, sc->bignum_precision);
+      mpfr_set_prec(sc->mpfr_1, sc->bignum_precision);
+      mpfr_set_prec(sc->mpfr_2, sc->bignum_precision);
+      mpc_set_prec(sc->mpc_1, sc->bignum_precision);
+      mpc_set_prec(sc->mpc_2, sc->bignum_precision);
 #endif
-	return(val);
-      }
+      return(val);
 
     case SL_CATCHES:  return(sl_unsettable_error(sc, sym));
     case SL_CPU_TIME: return(sl_unsettable_error(sc, sym));
@@ -94592,13 +94611,10 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_FILE_NAMES:
       return(sl_unsettable_error(sc, sym));
 
-    case SL_FLOAT_FORMAT_PRECISION:
-      {
-	s7_int iv; /* float-format-precision should not be huge => hangs in snprintf -- what's a reasonable limit here? */
-	iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
-	sc->float_format_precision = (iv < MAX_FLOAT_FORMAT_PRECISION) ? iv : MAX_FLOAT_FORMAT_PRECISION;
-	return(val);
-      }
+    case SL_FLOAT_FORMAT_PRECISION: /* float-format-precision should not be huge => hangs in snprintf -- what's a reasonable limit here? */
+      iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
+      sc->float_format_precision = (iv < MAX_FLOAT_FORMAT_PRECISION) ? iv : MAX_FLOAT_FORMAT_PRECISION;
+      return(val);
 
     case SL_FREE_HEAP_SIZE:       return(sl_unsettable_error(sc, sym));
     case SL_GC_FREED:             return(sl_unsettable_error(sc, sym));
@@ -94638,13 +94654,10 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       return(val);
 
     case SL_HEAP_SIZE:
-      {
-	s7_int iv;
-	iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
-	if (iv > sc->heap_size)
-	  resize_heap_to(sc, iv);
-	return(val);
-      }
+      iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
+      if (iv > sc->heap_size)
+	resize_heap_to(sc, iv);
+      return(val);
 
     case SL_HISTORY:               /* (set! (*s7* 'history) val) */
       replace_current_code(sc, val);
@@ -94656,16 +94669,13 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       return(simple_wrong_type_argument(sc, sym, val, T_BOOLEAN));
 
     case SL_HISTORY_SIZE:
-      {
-	s7_int iv;
-	iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
+      iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
 #if WITH_HISTORY
-	sl_set_history_size(sc, iv);
+      sl_set_history_size(sc, iv);
 #else
-	sc->history_size = iv;
+      sc->history_size = iv;
 #endif
-	return(val);
-      }
+      return(val);
 
     case SL_INITIAL_STRING_PORT_LENGTH: sc->initial_string_port_length = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val)); return(val);
     case SL_MAX_FORMAT_LENGTH:          sc->max_format_length = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val));          return(val);
@@ -94674,14 +94684,11 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_MAX_PORT_DATA_SIZE:         sc->max_port_data_size = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val));         return(val);
 
     case SL_MAX_STACK_SIZE:
-      {
-	s7_int iv;
-	iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
-	if (iv < INITIAL_STACK_SIZE)
-	  return(simple_out_of_range(sc, sym, val, wrap_string(sc, "should be greater than the initial stack size", 45)));
-	sc->max_stack_size = (uint32_t)iv;
-	return(val);
-      }
+      iv = s7_integer_checked(sc, sl_integer_geq_0(sc, sym, val));
+      if (iv < INITIAL_STACK_SIZE)
+	return(simple_out_of_range(sc, sym, val, wrap_string(sc, "should be greater than the initial stack size", 45)));
+      sc->max_stack_size = (uint32_t)iv;
+      return(val);
 
     case SL_MAX_STRING_LENGTH:     sc->max_string_length = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val));     return(val);
     case SL_MAX_VECTOR_DIMENSIONS: sc->max_vector_dimensions = s7_integer_checked(sc, sl_integer_gt_0(sc, sym, val)); return(val);
@@ -97164,7 +97171,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 927) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 928) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97563,15 +97570,15 @@ int main(int argc, char **argv)
  * tmock      7699         1177   1165   1115   1116
  * s7test     4534         1873   1831   1805   1808
  * tvect      2208         2456   2413   2009   1986
- * lt         2102         2123   2110   2093   2113
+ * lt         2102         2123   2110   2093   2112
  * tform      3271         2281   2273   2283   2280
  * tread      2610         2440   2421   2414   2411
  * tmac       3295         3317   3277   3219   2483
  * trclo      4310         2715   2561   2526   2526
  * fbench     2960         2688   2583   2557   2562
  * tcopy      2689         8035   5546   2600   2601
- * tmat       2736         3065   3042   2583   2614
- * tb         3398         2735   2681   2623   2613
+ * tmat       2736         3065   3042   2583   2613
+ * tb         3398         2735   2681   2623   2612
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2941
  * tset       3244         3253   3104   3248   3255
@@ -97579,13 +97586,13 @@ int main(int argc, char **argv)
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3718
  * tstr       6689         5281   4863   4365   4352
- * tcase      4622         4960   4793   4561   4505
- * tlet       5590         7775   5640   4552   4563
+ * tcase      4622         4960   4793   4561   4496
+ * tlet       5590         7775   5640   4552   4554
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
  * tmap       6375         8270   8188          5022
  * tmisc      6023         7389   6210   5827   5656
- * tnum       59.2         6348   6013   5798   5795
+ * tnum       59.2         6348   6013   5798   5791
  * trec       7763         5976   5970   5969   5964
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
@@ -97599,8 +97606,5 @@ int main(int argc, char **argv)
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
- *   many other changes: need to catch up!
- * ttl.scm for setter timings, maybe better in fx* than opt*?
- * opt_do_any t454? (2 steppers -> op_dox)
- * float_opt et al could store the list_length
+ * let_one_var
  */
