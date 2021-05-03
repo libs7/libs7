@@ -7140,7 +7140,7 @@ static int64_t gc(s7_scheme *sc)
    *   of long-lived objects.
    */
 #endif
-    while (tp < heap_top)          /* != here or ^ makes no difference, going to 64 doesn't matter (this is less than .1% in all cases) */
+    while (tp < heap_top)          /* != here or ^ makes no difference, and going to 64 (from 32) doesn't matter */
       {
 	s7_pointer p;
 	LOOP_8(gc_object(tp));
@@ -8353,7 +8353,6 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
   return(sym);
 }
 
-/* p_p case can use string_to_symbol_p_p */
 static s7_pointer symbol_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   char buf[256];
@@ -68715,7 +68714,15 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      o = sc->opts[0];
 		      fd = o->v[0].fd;
 		      for (i = 0; i < len; i++)	{real(sv) = vals[i]; fd(o);}}
-		  else for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}
+		  else 
+		    {
+		      if (func == opt_cell_any_nr)
+			{
+			  s7_pointer (*fp)(opt_info *o);
+			  o = sc->opts[0];
+			  fp = o->v[0].fp;
+			  for (i = 0; i < len; i++) {real(sv) = vals[i]; fp(o);}}
+		      else for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}}
 	      else for (i = 0; i < len; i++) {slot_set_value(slot, make_real(sc, vals[i])); func(sc);}
 	      return(sc->unspecified);
 	    }
@@ -68817,14 +68824,8 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       set_no_cell_opt(body);
       sc->curlet = old_e;
     }
-
-  if (is_closure_star(f))
-    {
-      push_stack(sc, OP_FOR_EACH, cons_unchecked(sc, make_iterators(sc, set_plist_2(sc, sc->nil, seq)), list_1(sc, sc->nil)), f);
-      return(sc->unspecified);
-    }
-
-  if ((is_null(cdr(body))) &&
+  if ((!is_closure_star(f)) &&
+      (is_null(cdr(body))) &&
       (is_pair(seq)))
     {
       s7_pointer c;
@@ -68945,7 +68946,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	(!is_constant_symbol(sc, (is_pair(car(closure_args(f)))) ? caar(closure_args(f)) : car(closure_args(f)))))))
     return(g_for_each_closure(sc, f, cadr(args)));
 
-  push_stack(sc, OP_FOR_EACH, cons(sc, make_iterators(sc, args), make_list(sc, len, sc->nil)), f);
+  push_stack(sc, OP_FOR_EACH, cons_unchecked(sc, make_iterators(sc, args), make_list(sc, len, sc->nil)), f);
   sc->z = sc->nil;
   return(sc->unspecified);
 }
@@ -68965,9 +68966,9 @@ static bool op_for_each(s7_scheme *sc)
 	  return(true);
 	}}
   push_stack_direct(sc, OP_FOR_EACH);
-  sc->args = saved_args;
   if (needs_copied_args(sc->code))
-    sc->args = copy_proper_list(sc, sc->args);
+    sc->args = copy_proper_list(sc, saved_args);
+  else sc->args = saved_args;
   return(false);
 }
 
@@ -68996,7 +68997,9 @@ static Inline bool op_for_each_1(s7_scheme *sc)
   code = T_Clo(sc->code);
   if (counter_capture(counter) != sc->capture_let_counter)
     {
-      sc->curlet = make_let_with_slot(sc, closure_let(code), car(closure_args(code)), arg);
+      s7_pointer sym;
+      sym = car(closure_args(code));
+      sc->curlet = make_let_with_slot(sc, closure_let(code), (is_symbol(sym)) ? sym : car(sym), arg);
       counter_set_let(counter, sc->curlet);
       counter_set_slots(counter, let_slots(sc->curlet));
       counter_set_capture(counter, sc->capture_let_counter);
@@ -97578,7 +97581,7 @@ int main(int argc, char **argv)
  * tlet       5590         7775   5640   4552   4549
  * tfft       89.6         6858   6636   4858   4588
  * tclo       4953         4787   4735   4596   4596
- * tmap       6375         8270   8188          5022
+ * tmap       6375         8270   8188          5022  4813
  * tmisc      6023         7389   6210   5827   5656
  * tnum       59.2         6348   6013   5798   5791
  * trec       7763         5976   5970   5969   5964
@@ -97589,10 +97592,11 @@ int main(int argc, char **argv)
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3   37.3
  * sg         98.7         71.9   72.3   72.8   72.7
- * lg        104.3        106.6  105.0  104.1  104.8   ;cell_optimize (no_cell?) g_for_each_closure
+ * lg        104.3        106.6  105.0  104.1  104.8
  * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
  * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded
  * safe clo inner let saved? and locals mutable?
+ * capture_let_ctr for do? (t465)
  */
