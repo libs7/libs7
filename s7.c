@@ -57472,7 +57472,7 @@ static s7_pointer fx_c_s_opaaaq(s7_scheme *sc, s7_pointer code)
 static s7_pointer fx_c_4a(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer res;
-  /* check_stack_size(sc); */
+  check_stack_size(sc); /* t718 pp cycles #f */
   res = cdr(code);
   gc_protect_2_via_stack(sc, fx_call(sc, res), fx_call(sc, cdr(res)));
   res = cddr(res);
@@ -97588,7 +97588,7 @@ int main(int argc, char **argv)
  * tmock      7699         1177   1165   1115   1114
  * s7test     4534         1873   1831   1805   1808
  * tvect      2208         2456   2413   2009   1986
- * lt         2102         2123   2110   2093   2112
+ * lt         2102         2123   2110   2093   2112  2124 (added do checks)
  * tform      3271         2281   2273   2283   2280
  * tread      2610         2440   2421   2414   2411
  * tmac       3295         3317   3277   3219   2457
@@ -97610,7 +97610,7 @@ int main(int argc, char **argv)
  * tclo       4953         4787   4735   4596   4596
  * tmap       6375         8270   8188          4813
  * tmisc      6023         7389   6210   5827   5656
- * tnum       59.2         6348   6013   5798   5788  5729
+ * tnum       59.2         6348   6013   5798   5788  5729 5702
  * trec       7763         5976   5970   5969   5964
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
@@ -97627,9 +97627,8 @@ int main(int argc, char **argv)
  * safe clo inner let saved? and locals mutable?
  * pp (write): stack overflow or spaces=10000 if cyclic hash-table and cycles=#f (why does lint set it to #f?)
  *    t718 pp/lint stack/spaces (actually a lint problem -- it should not permanently change this flag, see pp-left-margin also)
- *    add pp comment about cycles
  * t465 do/lambda
- * lint should extract constant exprs in do, t466, vaguely remember doing this already: slow
+ * lint t466 tests
  * get stats from cload about other opt possibilities
  * num_eq_us/ts->v tstr? check if Tc is ever hit
  */

@@ -45,6 +45,9 @@
 
 (define *report-laconically* #f)                          ; leave out introductory verbiage
 
+;; work in progress:
+(define *report-constant-expressions-in-do* #f)
+
 (define *lint* #f)                                        ; the lint let
 ;; this gives other programs a way to extend or edit lint's tables: for example, the
 ;;   table of functions that are simple (no side effects) is (*lint* 'no-side-effect-functions)
@@ -393,7 +396,7 @@
       (require write.scm)
       (set! lint-pp pp)
       (set! lint-pp-funclet (funclet pretty-print))
-      (set! (lint-pp-funclet '*pretty-print-cycles*) #f))
+      (set! (lint-pp-funclet '*pretty-print-cycles*) #f)) ; why this?
 
     (denote (lists->string f1 f2)
       (let ((str1 (lint-truncate-string (object->string f1 #t (+ target-line-length 2)))))
@@ -18887,6 +18890,81 @@
 	    (lint-walk-body caller 'do (cdddr form) (cons (make-lint-var :do form 'do)
 							  inner-env))
 
+	    (when (and *report-constant-expressions-in-do*
+		       (pair? (cdr form)))
+	      (let ((local-vars (let ((lv ()))
+				  (for-each (lambda (p)
+					      (if (pair? p) ; s7test (messed-up do)
+						  (set! lv (cons (car p) lv))))
+					    (cadr form))
+				  lv)))
+		(call-with-exit
+		 (lambda (quit)
+		   (let walker ((code (cdddr form))) ; get anything that changes in the loop
+		     (when (pair? code)
+		       (if (memq (car code) binders)
+			   (if (and (memq (car code) '(define* define-macro define-macro* define-bacro define-bacro* define-expansion))
+				    (pair? (cdr code))             ; lg hits this
+				    (pair? (cadr code)))
+			       (set! local-vars (cons (caadr code) local-vars))
+			       (if (memq (car code) '(load eval eval-string require provide quote))
+				   (quit)
+				   (if (and (memq (car code) '(define define-constant))
+					    (pair? (cdr code)))    ; lg
+				       (set! local-vars (cons (if (pair? (cadr code)) (caadr code) (cadr code)) local-vars)))))
+			   (if (and (eq? (car code) 'set!)
+				    (pair? (cdr code)))            ; lg again
+			       (set! local-vars (cons (cadr code) local-vars))
+			       (begin
+				 (walker (car code))
+				 (walker (cdr code)))))))
+		   (let walker ((code (cdddr form)))  ; look for exprs (or portions thereof) that don't change
+		     (when (and (pair? code)
+				(not (memq (car code) binders))
+				(not (hash-table-ref makers (car code))))
+		       (if (hash-table-ref no-side-effect-functions (car code))
+			   (if (memq (car code) '(* + - /))
+			       (when (> (length code) 3) ; counting '* etc
+				 (let ((cs ()))
+				   (for-each (lambda (p)
+					       (if (or (code-constant? p) 
+						       (and (symbol? p)
+							    (not (memq p local-vars)))
+						       (and (pair? p)
+							    (not (tree-set-memq local-vars p))
+							    (not (side-effect? p env))
+							    (not (eq? 'random (car p)))))
+						   (set! cs (cons p cs))))
+					     (cdr code))
+				   (when (> (length cs) 1)
+				     (lint-format "~S in ~S is constant in the do loop" caller
+						  (let ((expr (if (memq (car code) '(+ *))
+								  (list (car code))
+								  (if (not (or (memq (cadr code) local-vars)
+									       (and (pair? (cadr code))
+										    (or (tree-set-memq local-vars (cadr code))
+											(side-effect? (cadr code) env)))))
+								      (list (car code))
+								      (list (if (eq? (car code) '-) '+ '*))))))
+						    (do ((p (cdr code) (cdr p)))
+							((null? p)
+							 (reverse! expr))
+						      (unless (or (memq (car p) local-vars)
+								  (and (pair? (car p))
+								       (or (tree-set-memq local-vars (car p))
+									   (side-effect? (car p) env))))
+							(set! expr (cons (car p) expr)))))
+						  code))))
+			       (when (and (not (memq (car code) local-vars))
+					  (lint-every? (lambda (v)
+							 (or (code-constant? v)
+							     (and (symbol? v)
+								  (not (memq v local-vars)))))
+						       (cdr code)))
+				 (lint-format "~S could be moved out of the do loop" caller code))))
+		       (walker (car code))
+		       (walker (cdr code))))))))
+	    
 	    ;; before report-usage, check for unused variables, and don't complain about them if
 	    ;;   they are referenced in an earlier step expr.
 	    (do ((v vars (cdr v)))
