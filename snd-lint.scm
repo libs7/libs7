@@ -153,7 +153,8 @@
      mus-channel mus-channels mus-chebyshev-t-sum mus-chebyshev-tu-sum mus-chebyshev-u-sum mus-clipping mus-data
      mus-describe mus-error-type->string mus-expand-filename mus-file-buffer-size mus-file-clipping mus-file-name
      mus-float-equal-fudge-factor mus-frequency mus-generator? mus-header-raw-defaults mus-header-type->string mus-header-type-name mus-header-writable
-     mus-hop mus-increment mus-input? mus-interp-type mus-interpolate mus-length mus-location mus-max-malloc mus-max-table-size mus-name mus-offset mus-order
+     mus-hop mus-increment mus-input? mus-interp-type mus-interpolate mus-length ;mus-location 
+     mus-max-malloc mus-max-table-size mus-name mus-offset mus-order
      mus-output? mus-phase mus-ramp mus-sample-type->string mus-sample-type-name mus-scaler
      mus-sound-chans mus-sound-comment mus-sound-data-location mus-sound-datum-size mus-sound-duration mus-sound-frames
      mus-sound-framples mus-sound-header-type mus-sound-length mus-sound-loop-info mus-sound-mark-info mus-sound-maxamp mus-sound-maxamp-exists?

@@ -2069,6 +2069,7 @@ void s7_show_history(s7_scheme *sc);
 #define T_SYNTACTIC                    (1 << (TYPE_BITS + 1))
 #define is_syntactic_symbol(p)         (typesflag(T_Pos(p)) == (uint16_t)(T_SYMBOL | T_SYNTACTIC))
 #define is_syntactic_pair(p)           (typesflag(T_Pos(p)) == (uint16_t)(T_PAIR | T_SYNTACTIC))
+#define clear_syntactic(p)             clear_type0_bit(T_Pair(p), T_SYNTACTIC)
 /* this marks symbols that represent syntax objects, it should be in the second byte */
 
 #define T_SIMPLE_ARG_DEFAULTS          (1 << (TYPE_BITS + 2))
@@ -55424,13 +55425,6 @@ static s7_pointer fx_c_tc(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
-static s7_pointer fx_c_Tc(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t2_1, T_lookup(sc, cadr(arg), arg));
-  set_car(sc->t2_2, T_Pos(opt2_con(cdr(arg))));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
-
 static s7_pointer fx_c_sc_direct(s7_scheme *sc, s7_pointer arg) {return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, cadr(arg)), opt2_con(cdr(arg))));}
 static s7_pointer fx_c_si_direct(s7_scheme *sc, s7_pointer arg) {return(((s7_p_pi_t)opt3_direct(cdr(arg)))(sc, lookup(sc, cadr(arg)), integer(opt2_con(cdr(arg)))));}
 
@@ -56101,13 +56095,6 @@ static s7_pointer fx_c_opsq(s7_scheme *sc, s7_pointer arg)
 static s7_pointer fx_c_optq(s7_scheme *sc, s7_pointer arg)
 {
   set_car(sc->t1_1, t_lookup(sc, opt1_sym(cdr(arg)), arg)); /* cadadr */
-  set_car(sc->t1_1, fn_proc(cadr(arg))(sc, sc->t1_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
-
-static s7_pointer fx_c_opvq(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, v_lookup(sc, opt1_sym(cdr(arg)), arg)); /* cadadr */
   set_car(sc->t1_1, fn_proc(cadr(arg))(sc, sc->t1_1));
   return(fn_proc(arg)(sc, sc->t1_1));
 }
@@ -58886,7 +58873,6 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 	  if (fx_proc(tree) == fx_c_sca) return(with_fx(tree, fx_c_Tca));
 	  if (fx_proc(tree) == fx_num_eq_si) return(with_fx(tree, fx_num_eq_Ti));
 	  if (fx_proc(tree) == fx_multiply_ss) return(with_fx(tree, fx_multiply_Ts));
-	  if (fx_proc(tree) == fx_c_sc) return(with_fx(tree, fx_c_Tc));
 	}
       else
 	{
@@ -59200,7 +59186,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_c_car_s) return(with_fx(tree, fx_c_car_u));
 	  if (fx_proc(tree) == fx_not_is_null_s) return(with_fx(tree, fx_not_is_null_u));
 	}
-      if (cadadr(p) == var3) {set_opt1_sym(cdr(p), cadadr(p)); return(with_fx(tree, fx_c_opvq));}
       break;
 
     case HOP_SAFE_C_opSq_S:
@@ -67040,9 +67025,7 @@ static void let_set_has_pending_value(s7_pointer lt)
 {
   s7_pointer vp;
   for (vp = let_slots(lt); tis_slot(vp); vp = next_slot(vp))
-    if (!slot_pending_value_unchecked(vp))
-      slot_set_pending_value(vp, eof_object);
-    else slot_set_has_pending_value(vp);
+    slot_set_pending_value(vp, eof_object); /* gc needs a legit value here */
 }
 
 static void let_clear_has_pending_value(s7_pointer lt)
@@ -68084,6 +68067,8 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
   opcode_t op;
   s7_pointer func;
   func = lookup_global(sc, car(car_x));
+  if (!is_syntax(func)) {if (S7_DEBUGGING) fprintf(stderr, "%s not syntax\n", display(car_x)); clear_syntactic(car_x); return(false);}
+  /* I think this is the only case where we don't precede syntax_opcode with syntactic_symbol checks */
   op = (opcode_t)syntax_opcode(func);
   switch (op)
     {
@@ -68283,7 +68268,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
       len = s7_list_length(sc, car_x);
 
       if ((is_syntactic_symbol(head)) ||
-	  (is_syntactic_pair(car_x)))
+	  (is_syntactic_pair(car_x))) /* this can be wrong! */
 	return(p_syntax(sc, car_x, len));
 
       s_slot = lookup_slot_from(head, sc->curlet);
@@ -68399,7 +68384,6 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 			}}
 		  pc_fallback(sc, pstart);
 		}
-
 	      if ((p_ppi_ok(sc, opc, s_func, car_x)) ||
 		  (p_ppp_ok(sc, opc, s_func, car_x)) ||
 		  (p_call_ppp_ok(sc, opc, s_func, car_x)))
@@ -68414,6 +68398,13 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 		  opc->v[0].fp = d_to_p;         /* as above, if d_7piid is ok, we need d_to_p for cell_optimize */
 		  return(true);
 		}
+	      if ((is_target_or_its_alias(head, s_func, sc->float_vector_ref_symbol)) &&
+		  (d_7piii_ok(sc, opc, s_func, car_x)))
+		{
+		  opc->v[O_WRAP].fd = opc->v[0].fd;
+		  opc->v[0].fp = d_to_p;
+		  return(true);
+		}
 	      if (i_7piii_ok(sc, opc, s_func, car_x))
 		{
 		  opc->v[O_WRAP].fi = opc->v[0].fi;
@@ -68425,6 +68416,9 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	      if (p_piip_ok(sc, opc, s_func, car_x))
 		return(true);
 	      pc_fallback(sc, pstart);
+	      if (p_call_any_ok(sc, opc, s_func, car_x, len))
+		return(true);
+	      break;
 
 	    case 6:
 	      if ((is_target_or_its_alias(head, s_func, sc->float_vector_set_symbol)) &&
@@ -68433,7 +68427,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 		  opc->v[O_WRAP].fd = opc->v[0].fd;
 		  opc->v[0].fp = d_to_p;
 		  return(true);
-		}	      
+		}
 
 	    default:  /* >3D vector-set etc */
 	      if (p_call_any_ok(sc, opc, s_func, car_x, len))
@@ -97585,12 +97579,12 @@ int main(int argc, char **argv)
  * tref        558          691    687    506    506
  * tshoot     1516          883    872    838    834
  * index      1054         1026   1016    992    992
- * tmock      7699         1177   1165   1115   1114
+ * tmock      7699         1177   1165   1115   1116
  * s7test     4534         1873   1831   1805   1808
  * tvect      2208         2456   2413   2009   1986
- * lt         2102         2123   2110   2093   2112  2124 (added do checks)
- * tform      3271         2281   2273   2283   2280
- * tread      2610         2440   2421   2414   2411
+ * lt         2102         2123   2110   2093   2126
+ * tform      3271         2281   2273   2283   2279
+ * tread      2610         2440   2421   2414   2412
  * tmac       3295         3317   3277   3219   2457
  * trclo      4310         2715   2561   2526   2523
  * fbench     2960         2688   2583   2557   2562
@@ -97598,9 +97592,9 @@ int main(int argc, char **argv)
  * tmat       2736         3065   3042   2583   2610
  * tb         3398         2735   2681   2623   2612
  * titer      2821         2865   2842   2803   2741
- * tsort      3632         3105   3104   2915   2941
+ * tsort      3632         3105   3104   2915   2926
  * tset       3244         3253   3104   3248   3255
- * dup        4121         3805   3788   3653   3221
+ * dup        4121         3805   3788   3653   3211
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3717
  * tstr       6689         5281   4863   4365   4352
@@ -97610,7 +97604,7 @@ int main(int argc, char **argv)
  * tclo       4953         4787   4735   4596   4596
  * tmap       6375         8270   8188          4813
  * tmisc      6023         7389   6210   5827   5656
- * tnum       59.2         6348   6013   5798   5788  5729 5702
+ * tnum       59.2         6348   6013   5798   5705
  * trec       7763         5976   5970   5969   5964
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
@@ -97618,8 +97612,8 @@ int main(int argc, char **argv)
  * tgen       12.2         11.2   11.4   11.3   11.4
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3   37.3
- * sg         98.7         71.9   72.3   72.8   72.7
- * lg        104.3        106.6  105.0  104.1  104.7
+ * sg         98.7         71.9   72.3   72.8   72.6
+ * lg        104.3        106.6  105.0  104.1  104.9
  * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
@@ -97627,8 +97621,8 @@ int main(int argc, char **argv)
  * safe clo inner let saved? and locals mutable?
  * pp (write): stack overflow or spaces=10000 if cyclic hash-table and cycles=#f (why does lint set it to #f?)
  *    t718 pp/lint stack/spaces (actually a lint problem -- it should not permanently change this flag, see pp-left-margin also)
- * t465 do/lambda
- * lint t466 tests
- * get stats from cload about other opt possibilities
- * num_eq_us/ts->v tstr? check if Tc is ever hit
+ * t465 do/lambda (captured stepper)
+ * can opt pull out const exprs (as in tfft)?
+ * call-with-values syntactic? -> s7test from t718 and try to check other such cases
+ * add slow-d3 to tfft
  */
