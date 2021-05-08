@@ -72,7 +72,9 @@
       (object->string (bases (random 6)) :readable))))
 
 (require stuff.scm)
-;(load "write.scm")
+(load "write.scm")
+(define (pp-checked obj)
+  (let-temporarily ((((funclet pretty-print) '*pretty-print-cycles*) #t)) (pp obj)))
 (require case.scm)
 (define match?  ((funclet 'case*) 'case*-match?))
 
@@ -109,7 +111,7 @@
 (define nostr "")
 
 (define error-type #f)
-(define error-info #f)
+(define error-info ())
 (define false #f)
 (define-constant _undef_ (car (with-input-from-string "(#_asdf 1 2)" read)))
 (define kar car)
@@ -124,6 +126,14 @@
 (define my-with-baffle with-baffle)
 (define* (my-make-byte-vector size (init 0)) (make-byte-vector size init))
 (define* (my-make-string size (init #\a)) (make-string size init))
+
+(define fvref float-vector-ref)
+(define ivref int-vector-ref)
+(define vref vector-ref)
+(define fvset float-vector-set!)
+(define ivset int-vector-set!)
+(define vset vector-set!)
+(define adder +)
 
 (define (_vals_) (values #f 1 2))
 (define (_vals1_) (values 1 #f 2))
@@ -294,6 +304,7 @@
 
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))
 
+#|
 (define lint-no-read-error #t)
 (define linter (let ()
 		 (let-temporarily (((*s7* 'autoloading?) #t))
@@ -304,6 +315,7 @@
 		      (call-with-input-string str
 			(lambda (ip)
 			  (lint ip op))))))))
+|#
 
 (define-expansion (_dw_ . args)
   `(dynamic-wind (lambda () #f) (lambda () ,@args) (lambda () #f)))
@@ -554,9 +566,17 @@
 
 (define-constant ims (immutable! (string #\a #\b #\c)))
 (define-constant imbv (immutable! (byte-vector 0 1 2)))
+(define-constant imbv2 (immutable! #u2d((1 2 3) (4 5 6))))
+(define-constant imbv3 (immutable! #u3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imv (immutable! (vector 0 1 2)))
+(define-constant imv2 (immutable! #2d((1 2 3) (4 5 6))))
+(define-constant imv3 (immutable! #3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imiv (immutable! (int-vector 0 1 2)))
+(define-constant imiv2 (immutable! #i2d((1 2 3) (4 5 6))))
+(define-constant imiv3 (immutable! #i3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imfv (immutable! (float-vector 0 1 2)))
+(define-constant imfv2 (immutable! #r2d((1 2 3) (4 5 6))))
+(define-constant imfv3 (immutable! #r3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imi (immutable! (inlet 'a 3 'b 2)))
 (define-constant imh (immutable! (hash-table 'a 1 'b 2)))
 (define-constant imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
@@ -612,8 +632,10 @@
 (let ((functions (vector 'not '= '+ 'cdr 'real? 'rational? 'number? '> '- 'integer? 'apply 'subvector? 'subvector-position 'subvector-vector
 			  'abs '* 'null? 'imag-part '/ 'vector-set! 'equal? 'magnitude 'real-part 'pair? 'max 'nan? 'string->number 'list
 			  'negative? 'cons 'string-set! 'list-ref 'eqv? 'positive? '>= 'expt 'number->string 'zero? 'floor 'denominator 'integer->char 
-			  'string? 'min '<= 'char->integer 'cos 'rationalize 'cadr 'sin 'char=? 'map 'list-set! 'defined? 'memq 'string-ref 'log 
-			  'for-each 'round 'ceiling 'truncate 'string=? 'atan 'eof-object? 'numerator 'char? 'cosh 'member 'vector 
+			  'string? 'min '<= 'char->integer 'cos 'rationalize 'cadr 'sin 'char=? 
+			  'list-set! 'defined? 'memq 'string-ref 'log 
+			  'for-each 'map
+			  'round 'ceiling 'truncate 'string=? 'atan 'eof-object? 'numerator 'char? 'cosh 'member 'vector 
 			  'even? 'string-append 'char-upcase 'sqrt 'my-make-string
 			  'char-alphabetic? 'odd? 'call-with-exit 'tanh 'copy 'sinh 'make-vector
 			  'string 'char-ci=? 'caddr 'tan 'reverse 'cddr 'append 'vector? 'list? 'exp 'acos 'asin 'symbol? 'char-numeric? 'string-ci=? 
@@ -632,7 +654,7 @@
 			  'string-ci<=? 'cadadr 'cdadr 'provided? 'caaaar 'caaddr 'caddar 'cdaaar 'cdaadr 'cdaddr 'cddar 
 			  ;'fill! ; see _fnc6_
 			  'hash-table-ref 'list->vector 'caaadr 'caaar 'caadar 'cadaar 'cdadar 'cdddar 'string-fill! 'cdaar 'cddaar 'cddadr 
-			  ;;;;;; 'symbol->keyword 'string->keyword
+			  'symbol->keyword ;;; 'string->keyword ; size grows
 			  'keyword->symbol 'keyword?
 			  'logxor  'memv 'char-ready? 
 			  'exact? 'integer-length ;'port-filename 
@@ -663,10 +685,10 @@
 
 			  ;'make-hook 
 			  'let 'let* 'letrec 'letrec*
-			  ;'lambda 'lambda*  ; these cause built-ins to become locals if with-method=#f?
-			  ;'macro 'macro* 'bacro 'bacro* ; -- same as lambda above
+			  'lambda 'lambda*  ; these cause built-ins to become locals if with-method=#f?
+			  'macro 'macro* 'bacro 'bacro* ; -- same as lambda above
 			  ;'define* 'define-macro 'define-macro* 'define-bacro 'define-bacro*
-			  ;'multiple-value-bind 'call-with-values
+			  'multiple-value-bind 'call-with-values
 			  'object->let
 
 			  'open-input-string 'open-output-string 
@@ -717,7 +739,7 @@
 			  ;'immutable!
 			  'checked-procedure-source
 			  ;'owlet ;too many uninteresting diffs
-			  ;'gc
+			  ;'gc  ; slower?
 			  ;'reader-cond ;-- cond test clause can involve unbound vars: (null? i) for example
 			  ;'funclet
 			  ;'random 
@@ -809,9 +831,11 @@
 			  'block-reverse! 'subblock 'block-append 'block-let
 			  'simple-block? 'make-simple-block ;'make-c-tag ; -- uninteresting diffs
 
+			  'fvref 'ivref 'vref 'fvset 'ivset 'vset 'adder
+
 			  'undefined-function
 			  ;'subsequence 
-			  'empty? 'indexable? 'first ; -- why is this acting up?
+			  'empty? 'indexable?
 			  ;'adjoin 'cdr-assoc
 			  ;'progv ;'value->symbol -- correctly different values sometimes, progv localizes
 			  ;'and-let* 'string-case 'concatenate
@@ -824,13 +848,13 @@
 			  'circular-list? ;;'hash-table->alist -- hash map order problem
 			  'weak-hash-table 'byte? 'the 'lognand 'logeqv 
 			  'local-random 'local-read-string 'local-varlet 'local-let-set!
-			  ;'pp
+			  'pp-checked
 			  'kar '_dilambda_ '_vals_ '_vals1_ '_vals2_ 
                           '_vals3_ '_vals4_ '_vals5_ '_vals6_ '_vals3s_ '_vals4s_ '_vals5s_ '_vals6s_ 
                           '_svals3_ '_svals4_ '_svals5_ '_svals6_ '_svals3s_ '_svals4s_ '_svals5s_ '_svals6s_ 
 			  ;'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
-			  'linter
+			  ;'linter
 			  ;;'*function* ; -- lots of pointless diffs
 			  ;; '<cycle> 'cycle-set! 'cycle-ref 'make-cycle -- none are protected against randomness
 			  ;; next are place-holders
@@ -957,7 +981,8 @@
 
 		    "#<eof>" "#<undefined>" "#<unspecified>" "#unknown" "___lst" "#<bignum: 3>" 
 		    "#<>" "#<label:>" "#<...>"
-		    "#o123" "#b101" "#\\newline" "#\\alarm" "#\\delete" "#_cons" "#x123.123" "#\\x65" ;"_1234_" "kar" "#_+"
+		    "#_and" "'#_or" "#_abs"
+		    "#o123" "#b101" "#\\newline" "#\\alarm" "#\\delete" "#_cons" "#x123.123" "#\\x65" ;"_1234_" "kar" "#_+" 
 		    "(provide 'pizza)" "(require pizza)"
 		    
 		    "(call-with-exit (lambda (goto) goto))"
@@ -992,6 +1017,7 @@
 		    "(call-with-output-string (lambda (p) p))"
 
 		    "ims" "imbv" "imv" "imiv" "imfv" "imi" "imp" "imh"
+		    "imv2" "imv3" "imfv2" "imfv3" "imiv2" "imiv3" "imbv2" "imbv3"
 		    "vvv" "vvvi" "vvvf" "typed-hash" "typed-vector" "typed-let" "constant-let"
 		    "a1" "a2" "a3" "a4" "a5" "a6"
 
@@ -1313,7 +1339,10 @@
 				      (eq? val2 'error)
 				      (eq? val3 'error)
 				      (eq? val4 'error))
-				  (format #f "    ~S: ~S~%" error-type (tp (apply format #f (car error-info) (cdr error-info)))))))
+				  (format #f "    ~S: ~S~%" error-type 
+					  (if (pair? error-info)
+					      (tp (apply format #f (car error-info) (cdr error-info)))
+					      error-info)))))
 		 (unless (and errstr
 			      (or (string-position "unbound" errstr)
 				  (string-position "circular" errstr)))
@@ -1350,7 +1379,10 @@
 			   (eq? val4 'error))
 		       (catch #t
 			 (lambda ()
-			   (format *stderr* "    ~S: ~S~%" error-type (tp (apply format #f (car error-info) (cdr error-info)))))
+			   (format *stderr* "    ~S: ~S~%" error-type 
+				   (if (pair? error-info)
+				       (tp (apply format #f (car error-info) (cdr error-info)))
+				       error-info)))
 			 (lambda args
 			   (format *stderr* "error in format in t725: ~S~%" (list str val1 val2 val3 val4))))))))
 	    
@@ -1512,7 +1544,13 @@
     (catch #t
       test-it
       (lambda (type info)
-	(format *stderr* "~%~%outer: ~S ~S from ~S~%" type (apply format #f info) estr)
+	(format *stderr* "~%~%outer: ~S ~S from ~S~%" type 
+		(catch #t
+		  (lambda ()
+		    (apply format #f info))
+		  (lambda (t i)
+		    (list 'outer-format-error t i info)))
+		estr)
 	(format *stderr* "owlet: ~S~%" (owlet))))))
 
 ;;; (let () ((lambda () str))) (let () (define _f_ (lambda () str)) (_f_))

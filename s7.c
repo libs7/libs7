@@ -2067,8 +2067,10 @@ void s7_show_history(s7_scheme *sc);
 #define has_type1_bit(p, b)            (((p)->tf.opts.high_flag & (b)) != 0)
 
 #define T_SYNTACTIC                    (1 << (TYPE_BITS + 1))
-#define is_syntactic_symbol(p)         (typesflag(T_Pos(p)) == (uint16_t)(T_SYMBOL | T_SYNTACTIC))
-#define is_syntactic_pair(p)           (typesflag(T_Pos(p)) == (uint16_t)(T_PAIR | T_SYNTACTIC))
+#define is_symbol_and_syntactic(p)     (typesflag(T_Pos(p)) == (uint16_t)(T_SYMBOL | T_SYNTACTIC))
+/* #define is_pair_and_syntactic(p)       (typesflag(T_Pair(p)) == (uint16_t)(T_PAIR | T_SYNTACTIC)) */
+#define is_syntactic_symbol(p)         has_type0_bit(T_Sym(p), T_SYNTACTIC)
+#define is_syntactic_pair(p)           has_type0_bit(T_Pair(p), T_SYNTACTIC)
 #define clear_syntactic(p)             clear_type0_bit(T_Pair(p), T_SYNTACTIC)
 /* this marks symbols that represent syntax objects, it should be in the second byte */
 
@@ -4920,8 +4922,6 @@ static s7_pointer check_ref(s7_pointer p, uint8_t expected_type, const char *fun
 		      BOLD_TEXT,
 		      func, line, check_name(cur_sc, expected_type), check_name(cur_sc, typ), safe_object_to_string(p),
 		      UNBOLD_TEXT);
-	      if ((typ != T_FREE) && (is_syntactic_pair(p)) && (optimize_op(p) == 0))
-		fprintf(stderr, "syn 0: %s[%d]\n", func, line);
 	      if (cur_sc->stop_at_error) abort();
 	    }
 	  else
@@ -7782,7 +7782,6 @@ static void resize_stack(s7_scheme *sc)
   }
   vector_length(sc->stack) = new_size;
   sc->stack_size = new_size;
-
   sc->stack_start = stack_elements(sc->stack);
   sc->stack_end = (s7_pointer *)(sc->stack_start + loc);
   /* sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + sc->stack_size / 2); */
@@ -8688,7 +8687,6 @@ static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer e, val, p;
   e = car(args);
-
   if ((e == sc->rootlet) || (e == sc->s7_let))
     eval_error(sc, "attempt to fill! ~S?", 20, e);
   if (e == sc->owlet) /* (owlet) copies sc->owlet, so this probably can't happen */
@@ -8990,7 +8988,6 @@ static s7_pointer g_unlet(s7_scheme *sc, s7_pointer args)
 
   sc->w = make_let_slowly(sc, sc->curlet);
   inits = vector_elements(sc->unlet);
-
   for (i = 0; (i < UNLET_ENTRIES) && (is_slot(inits[i])); i++)
     {
       s7_pointer sym;
@@ -9232,12 +9229,11 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
 	    return(s7_error(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "varlet can't shadow ~S", 22), sym)));
 
 	  make_slot_1(sc, e, sym, val);
-	}
+	}}
       /* this used to check for sym already defined, and set its value, but that greatly slows down
        *   the most common use (adding a slot), and makes it hard to shadow explicitly.  Don't use
        *   varlet as a substitute for set!/let-set!.
        */
-    }
   return(e);
 }
 
@@ -11949,7 +11945,8 @@ static bool op_implicit_goto_a(s7_scheme *sc)
   g = lookup_checked(sc, car(sc->code));
   if (!is_goto(g)) {sc->last_function = g; return(false);}
   set_opt1_goto(sc->code, g);
-  sc->args = list_1(sc, fx_call(sc, cdr(sc->code))); /* if dynamic-wind exited, eval might be called, so plist not safe here */
+  sc->value = fx_call(sc, cdr(sc->code)); /* if dynamic-wind exited, eval might be called, so plist not safe here */
+  sc->args = list_1(sc, sc->value);
   sc->code = g;
   call_with_exit(sc);
   return(true);
@@ -12454,10 +12451,7 @@ static s7_pointer any_number_to_mpc(s7_scheme *sc, s7_pointer p, mpc_t bigz)
 
 static s7_pointer make_big_complex(s7_scheme *sc, mpfr_t rl, mpfr_t im)
 {
-  /* there is no mpc_get_str equivalent, so we need to split up str,
-   *   use make_big_real to get the 2 halves, then mpc_init, then
-   *   mpc_set_fr_fr.
-   */
+  /* there is no mpc_get_str equivalent, so we need to split up str, use make_big_real to get the 2 halves, then mpc_init, then mpc_set_fr_fr */
   s7_pointer x;
   new_cell(sc, x, T_BIG_COMPLEX);
   big_complex_bgc(x) = alloc_bigcmp(sc);
@@ -58086,7 +58080,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym);
 static s7_pointer fx_implicit_s7_let_ref_s(s7_scheme *sc, s7_pointer arg) {return(s7_let_field(sc, opt3_sym(arg)));}
 static s7_pointer fx_implicit_s7_let_set_sa(s7_scheme *sc, s7_pointer arg) {return(s7_let_field_set(sc, opt3_sym(cdr(arg)), fx_call(sc, cddr(arg))));}
 
-static s7_function fx_function[NUM_OPS];
+static s7_function *fx_function = NULL;
 
 static bool is_fxable(s7_scheme *sc, s7_pointer p)
 {
@@ -68067,7 +68061,7 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
   opcode_t op;
   s7_pointer func;
   func = lookup_global(sc, car(car_x));
-  if (!is_syntax(func)) {if (S7_DEBUGGING) fprintf(stderr, "%s not syntax\n", display(car_x)); clear_syntactic(car_x); return(false);}
+  if (!is_syntax(func)) {clear_syntactic(car_x); return(false);}
   /* I think this is the only case where we don't precede syntax_opcode with syntactic_symbol checks */
   op = (opcode_t)syntax_opcode(func);
   switch (op)
@@ -75644,7 +75638,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
   if (!is_pair(x)) {fprintf(stderr, "form_is_safe x is not a pair! %s\n", display(x)); abort();}
 #endif
   expr = car(x);
-  if (is_syntactic_symbol(expr))
+  if (is_symbol_and_syntactic(expr))
     {
       if (!is_pair(cdr(x))) return(UNSAFE_BODY);
       /* lambda_unchecked, if_d_p_p define_funchecked */
@@ -77197,7 +77191,7 @@ static bool op_named_let_fx(s7_scheme *sc)
   s7_pointer p;
   sc->code = cdr(sc->code);
   for (p = cadr(sc->code), sc->args = sc->nil; is_pair(p); p = cdr(p))
-    sc->args = cons(sc, fx_call(sc, cdar(p)), sc->args);
+    sc->args = cons(sc, sc->value = fx_call(sc, cdar(p)), sc->args);
   sc->args = proper_list_reverse_in_place(sc, sc->args);
   return(op_named_let_1(sc, sc->args)); /* sc->code = (name vars . body),  args = vals in decl order */
 }
@@ -78078,7 +78072,8 @@ static bool op_let_temp_init1(s7_scheme *sc)
 
 typedef enum {goto_start, goto_begin, fall_through, goto_do_end_clauses, goto_safe_do_end_clauses,
 	      goto_eval, goto_apply_lambda, goto_do_end, goto_top_no_pop, goto_apply,
-	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list, goto_read_tok, goto_feed_to} goto_t;
+	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list, 
+	      goto_read_tok, goto_feed_to} goto_t;
 
 static goto_t op_let_temp_init2(s7_scheme *sc)
 {
@@ -78318,7 +78313,6 @@ static inline s7_pointer check_quote(s7_scheme *sc, s7_pointer code)
     }
   if (is_not_null(cddr(code)))             /* (quote . (1 2)) or (quote 1 1) */
     eval_error(sc, "quote: too many arguments ~A", 28, code);
-
   pair_set_syntax_op(code, OP_QUOTE_UNCHECKED);
   return(cadr(code));
 }
@@ -78344,7 +78338,6 @@ static bool check_and(s7_scheme *sc, s7_pointer expr)
       if (!callee) any_nils++;
       set_fx(p, callee);
     }
-
   if (is_not_null(p))                                    /* (and . 1) (and #t . 1) */
     eval_error(sc, "and: stray dot?: ~A", 19, expr);
 
@@ -78631,7 +78624,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	  clear_has_fx(code);
 	  set_opt2_any(code, (one_branch) ? cadr(code) : cdr(code));
 	  set_opt3_any(code, (not_case) ? cadar(code) : car(code));
-	  if (is_syntactic_symbol(car(test)))
+	  if (is_symbol_and_syntactic(car(test)))
 	    {
 	      pair_set_syntax_op(test, symbol_syntax_op_checked(test));
 	      if ((symbol_syntax_op(car(test)) == OP_AND) ||
@@ -80849,8 +80842,8 @@ static s7_pointer op_set1(s7_scheme *sc)
 		return(NULL); /* goto APPLY */
 	      }}
       else
-	if ((is_syntactic_symbol(sc->code)) ||              /* (set! case 3) */
-	    ((global_slot(sc->code) == lx) &&               /* (begin (let ((case 2)) case) (set! case 3)) */
+	if ((is_syntactic_symbol(sc->code)) ||          /* (set! case 3) */
+	    ((global_slot(sc->code) == lx) &&           /* (begin (let ((case 2)) case) (set! case 3)) */
 	     (is_syntax(slot_value(lx))) &&
 	     (sc->code == syntax_symbol(slot_value(lx)))))
 	  eval_error(sc, "can't set! ~A", 13, sc->code);
@@ -81843,7 +81836,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	  x = car(expr);
 	  if ((is_symbol(x)) || ((is_c_function(x)) && (is_safe_procedure(x))))
 	    {
-	      if (is_syntactic_symbol(x))
+	      if (is_symbol_and_syntactic(x))
 		{
 		  opcode_t op;
 		  s7_pointer func, vars;
@@ -82425,7 +82418,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		{
 		  if ((one_line) &&
 		      ((!is_optimized(car(body))) || (op_no_hop(car(body)) != OP_SAFE_C_D)) && /* this does happen: (if (= i 3) (vector-set! j 0 i)) */
-		      (is_syntactic_symbol(caar(body))) &&
+		      (is_symbol_and_syntactic(caar(body))) &&
 		      (s7_is_integer(caddr(step_expr))) && (s7_integer_checked(sc, caddr(step_expr)) == 1))
 		    {
 		      pair_set_syntax_op(car(body), symbol_syntax_op_checked(car(body)));
@@ -83199,7 +83192,7 @@ static goto_t op_dox(s7_scheme *sc)
     {
       code = car(code);
       if ((is_syntactic_pair(code)) ||
-	  (is_syntactic_symbol(car(code))))
+	  (is_symbol_and_syntactic(car(code))))
 	{
 	  push_stack_no_args_direct(sc, OP_DOX_STEP_O);
 	  if (is_syntactic_pair(code))
@@ -84477,7 +84470,7 @@ static bool dotimes(s7_scheme *sc, s7_pointer code, bool safe_case)
   s7_pointer body;
   body = caddr(code);   /* here we assume one expr in body */
   if (((is_syntactic_pair(body)) ||
-       (is_syntactic_symbol(car(body)))) &&
+       (is_symbol_and_syntactic(car(body)))) &&
       ((symbol_syntax_op_checked(body) == OP_LET) ||
        (symbol_syntax_op(car(body)) == OP_LET_STAR)))
     return(do_let(sc, sc->args, code) == goto_safe_do_end_clauses);
@@ -84532,7 +84525,7 @@ static goto_t op_safe_dotimes(s7_scheme *sc)
 	      set_opt2_pair(code, sc->code); /* is_pair above */
 
 	      if ((is_syntactic_pair(sc->code)) ||
-		  (is_syntactic_symbol(car(sc->code))))
+		  (is_symbol_and_syntactic(car(sc->code))))
 		{
 		  if (!is_unsafe_do(code))
 		    {
@@ -89901,7 +89894,13 @@ static void op_x_a(s7_scheme *sc, s7_pointer f)
   sc->code = f;
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
-  sc->args = (dont_eval_args(sc->code)) ? list_1(sc, cadr(code)) : list_1(sc, fx_call(sc, cdr(code)));
+  if (dont_eval_args(sc->code))
+    sc->args = list_1(sc, cadr(code));
+  else
+    {
+      sc->args = fx_call(sc, cdr(code));
+      sc->args = list_1(sc, sc->args);
+    }
 }
 
 static void op_x_aa(s7_scheme *sc, s7_pointer f)
@@ -89915,8 +89914,10 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
     sc->args = list_2(sc, cadr(code), caddr(code));
   else
     {
-      sc->args = list_1(sc, fx_call(sc, cddr(code)));
-      sc->args = cons(sc, fx_call(sc, cdr(code)), sc->args);
+      sc->args = fx_call(sc, cddr(code));
+      sc->args = list_1(sc, sc->args);
+      sc->value = fx_call(sc, cdr(code));
+      sc->args = cons(sc, sc->value, sc->args);
     }
 }
 
@@ -90237,11 +90238,11 @@ static Inline bool collect_fp_args(s7_scheme *sc, opcode_t op, s7_pointer args)
   sc->args = args;
   for (p = sc->code; is_pair(p); p = cdr(p))
     if (has_fx(p))
-      sc->args = cons(sc, fx_call(sc, p), sc->args); /* reversed before apply in OP_ANY_C_FP_1 */
+      sc->args = cons(sc, sc->value = fx_call(sc, p), sc->args); /* reversed before apply in OP_ANY_C_FP_1 */
     else
       {
 	if ((has_gx(p)) && (symbol_ctr(caar(p)) == 1))
-	  sc->args = cons(sc, fx_proc_unchecked(p)(sc, car(p)), sc->args);
+	  sc->args = cons(sc, sc->value = fx_proc_unchecked(p)(sc, car(p)), sc->args);
 	else
 	  {
 	    push_stack(sc, op, sc->args, cdr(p));
@@ -90257,11 +90258,11 @@ static bool op_any_c_fp(s7_scheme *sc) /* code: (func . args) where at least one
   sc->args = sc->nil;
   for (p = cdr(sc->code); is_pair(p); p = cdr(p))
     if (has_fx(p))
-      sc->args = cons(sc, fx_call(sc, p), sc->args); /* reversed before apply in OP_ANY_C_FP_1 */
+      sc->args = cons(sc, sc->value = fx_call(sc, p), sc->args); /* reversed before apply in OP_ANY_C_FP_1 */
     else
       {
 	if ((has_gx(p)) && (symbol_ctr(caar(p)) == 1))
-	  sc->args = cons(sc, fx_proc_unchecked(p)(sc, car(p)), sc->args);
+	  sc->args = cons(sc, sc->value = fx_proc_unchecked(p)(sc, car(p)), sc->args);
 	else
 	  {
 	    if (sc->op_stack_now >= sc->op_stack_end)
@@ -90336,7 +90337,8 @@ static void op_any_closure_fp(s7_scheme *sc)
   p = cdr(sc->code);
   if (has_fx(p))
     {
-      sc->args = list_1(sc, fx_call(sc, p));
+      sc->args = fx_call(sc, p);
+      sc->args = list_1(sc, sc->args);
       for (p = cdr(p); (is_pair(p)) && (has_fx(p)); p = cdr(p))
 	sc->args = cons_unchecked(sc, fx_call(sc, p), sc->args);
     }
@@ -90462,7 +90464,8 @@ static void op_safe_c_pa_mv(s7_scheme *sc)
 {
   s7_pointer val;
   val = sc->value; /* this is necessary since the fx_proc below can clobber sc->value */
-  sc->args = pair_append(sc, val, list_1(sc, fx_call(sc, cddr(sc->code)))); /* not plist here!  pair_append does not copy it */
+  sc->args = fx_call(sc, cddr(sc->code));
+  sc->args = pair_append(sc, val, list_1(sc, sc->args)); /* not plist here!  pair_append does not copy it */
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
@@ -90495,7 +90498,8 @@ static void op_c_p_mv(s7_scheme *sc) /* op_c_p_1 -> mv case: (define (hi) (forma
 
 static void op_c_a(s7_scheme *sc)
 {
-  sc->args = list_1(sc, fx_call(sc, cdr(sc->code)));
+  sc->value = fx_call(sc, cdr(sc->code)); /* gc protect result before list_1 */
+  sc->args = list_1(sc, sc->value);
   sc->value = fn_proc(sc->code)(sc, sc->args);
 }
 
@@ -90882,16 +90886,14 @@ static bool eval_car_pair(s7_scheme *sc)
     check_for_cyclic_code(sc, code);
   push_stack(sc, OP_EVAL_ARGS, sc->nil, code);
 
-  if (is_syntactic_symbol(car(carc)))
-    /* was checking for is_syntactic here but that can be confused by successive optimizer passes: (define (hi) (((lambda () list)) 1 2 3)) etc */
+  if (is_symbol_and_syntactic(car(carc)))
+    /* was checking for is_syntactic (pair or symbol) here but that can be confused by successive optimizer passes: (define (hi) (((lambda () list)) 1 2 3)) etc */
     {
       if ((car(carc) == sc->quote_symbol) &&        /* ('and #f) */
 	  ((!is_pair(cdr(carc))) ||                 /* ((quote . #\h) (2 . #\i)) ! */
-	   (is_syntactic_symbol(cadr(carc)))))      /* ('or #f) but not ('#_or #f) */
+	   (is_symbol_and_syntactic(cadr(carc)))))  /* ('or #f) but not ('#_or #f) */
 	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
       sc->code = carc;
-
-      /* an experiment (to replace op_if_a_ssq_a[_a]) */
       if (!no_cell_opt(carc))
 	{
 	  if ((car(carc) == sc->if_symbol) &&
@@ -94965,9 +94967,7 @@ char *s7_decode_bt(s7_scheme *sc)
 
 static void init_fx_function(void)
 {
-  int32_t i;
-  for (i = 0; i < NUM_OPS; i++)
-    fx_function[i] = NULL;
+  fx_function = (s7_function *)calloc(NUM_OPS, sizeof(s7_function));
 
   fx_function[HOP_SAFE_C_D] = fx_c_d;
   fx_function[HOP_SAFE_C_S] = fx_c_s;
@@ -97070,7 +97070,8 @@ s7_scheme *s7_init(void)
                                   (complex (* mag (cos ang)) (* mag (sin ang)))                           \n\
                                   (error 'wrong-type-arg \"make-polar arguments should be real\")))))");
 
-  s7_eval_c_string(sc, "(define (call-with-values producer consumer) (consumer (producer)))");
+  s7_eval_c_string(sc, "(define (call-with-values producer consumer) (apply consumer (list (producer))))"); /* (consumer (producer)))"); */
+  /* temporary kludge to get around an optimizer bug */
 
   s7_eval_c_string(sc, "(define-macro (multiple-value-bind vars expression . body)                        \n\
                           (list (cons 'lambda (cons vars body)) expression))");
@@ -97577,52 +97578,51 @@ int main(int argc, char **argv)
  * tpeak       126          115    114    111    112
  * tauto       775          648    642    504    502
  * tref        558          691    687    506    506
- * tshoot     1516          883    872    838    834
+ * tshoot     1516          883    872    838    834   836
  * index      1054         1026   1016    992    992
  * tmock      7699         1177   1165   1115   1116
- * s7test     4534         1873   1831   1805   1808
+ * s7test     4534         1873   1831   1805   1808  1816
  * tvect      2208         2456   2413   2009   1986
  * lt         2102         2123   2110   2093   2126
  * tform      3271         2281   2273   2283   2279
- * tread      2610         2440   2421   2414   2412
- * tmac       3295         3317   3277   3219   2457
+ * tread      2610         2440   2421   2414   2412  2409
+ * tmac       3295         3317   3277   3219   2457  2454
  * trclo      4310         2715   2561   2526   2523
  * fbench     2960         2688   2583   2557   2562
- * tcopy      2689         8035   5546   2600   2599
- * tmat       2736         3065   3042   2583   2610
+ * tcopy      2689         8035   5546   2600   2599  2608
+ * tmat       2736         3065   3042   2583   2610  2625
  * tb         3398         2735   2681   2623   2612
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2926
  * tset       3244         3253   3104   3248   3255
  * dup        4121         3805   3788   3653   3211
  * tio        3703         3816   3752   3686   3686
- * teq        3728         4068   4045   3718   3717
- * tstr       6689         5281   4863   4365   4352
+ * teq        3728         4068   4045   3718   3717  3708
+ * tstr       6689         5281   4863   4365   4352  4355
  * tcase      4622         4960   4793   4561   4491
- * tlet       5590         7775   5640   4552   4549
- * tfft       89.6         6858   6636   4858   4588
+ * tlet       5590         7775   5640   4552   4549  4554
  * tclo       4953         4787   4735   4596   4596
  * tmap       6375         8270   8188          4813
+ * tfft      114.7         7820   7729          5355
  * tmisc      6023         7389   6210   5827   5656
- * tnum       59.2         6348   6013   5798   5705
+ * tnum       59.2         6348   6013   5798   5705  5701
  * trec       7763         5976   5970   5969   5964
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
  * thash      36.9         11.8   11.7   11.2   11.2
  * tgen       12.2         11.2   11.4   11.3   11.4
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      61.1         36.7   37.5   37.3   37.3
+ * calls      61.1         36.7   37.5   37.3   37.1
  * sg         98.7         71.9   72.3   72.8   72.6
  * lg        104.3        106.6  105.0  104.1  104.9
  * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
- * notcurses 2.1 diffs, use notcurses-core if 2.1.6 -- but this requires notcurses_core_init so nrepl needs to know which is loaded -- just use nc-core!
  * safe clo inner let saved? and locals mutable?
  * pp (write): stack overflow or spaces=10000 if cyclic hash-table and cycles=#f (why does lint set it to #f?)
- *    t718 pp/lint stack/spaces (actually a lint problem -- it should not permanently change this flag, see pp-left-margin also)
+ *    t718 pp/lint stack/spaces (partly a lint problem -- it should not permanently change this flag, see pp-left-margin also)
  * t465 do/lambda (captured stepper)
  * can opt pull out const exprs (as in tfft)?
- * call-with-values syntactic? -> s7test from t718 and try to check other such cases
- * add slow-d3 to tfft
+ * call-with-values syntactic? macroexpand because earlier call in s7test 93093, over-eager optimizations
+ *   but the syntactic_pair business is bad
  */

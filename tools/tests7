@@ -25,7 +25,7 @@ echo ' '
 echo '-------- base case + nrepl --------'
 echo ' '
 gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
-gcc -o nrepl nrepl.c -g3 -Wall s7.o -I. -Wl,-export-dynamic -lnotcurses-core -lnotcurses -lm -ldl
+gcc -o nrepl nrepl.c -g3 -Wall s7.o -I. -Wl,-export-dynamic -lnotcurses-core -lm -ldl
 nrepl s7test.scm
 
 echo ' '

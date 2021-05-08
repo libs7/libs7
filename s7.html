@@ -10593,7 +10593,7 @@ Similarly C-lint reads a C file looking for s7_eval_c_string and running lint ov
 
 <p>There are three or four repls included with s7.
 repl.scm is a textual interface based on vt-100 codes, and nrepl.scm is an
-improvement of repl.scm based on the notcurses library.
+improvement of repl.scm based on the notcurses-core library.
 I'll treat repl.scm first, then discuss how nrepl differs from it.
 </p>
 
@@ -10788,16 +10788,15 @@ Since it includes all the libc, notcurses FFI code, and nrepl.scm at compile-tim
 are no problems running it anywhere.  To build nrepl: touch mus-config.h, then
 </p>
 <pre class="indented">
-gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses
+gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core
 </pre>
 <p>If that is too easy, try:
 </p>
 <pre class="indented">
 gcc -c s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl
-gcc -o nrepl nrepl.c s7.o -lnotcurses -lm -I. -ldl
+gcc -o nrepl nrepl.c s7.o -lnotcurses-core -lm -I. -ldl
 </pre>
-<p>notcurses_s7.c assumes you have version 2 of the notcurses library.  If you're running
-version 1, pass -DNOTCURSES_1=1.
+<p>notcurses_s7.c needs version 2.1.6 or later of the notcurses-core library.
 </p>
 
 <p>When nrepl starts up, you have a prompt at the top of the terminal, and a status box

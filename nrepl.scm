@@ -1624,10 +1624,10 @@
 		  (string=? (getenv "TERM") "dumb")))  ; no vt100 codes -- emacs subjob for example
 	    (emacs-repl)
 	    (begin
-	      (set! ncd (ncdirect_init (c-pointer 0))) ; version < 2.1 don't pass #f 0 here -- 0 must not be the old default
+	      (set! ncd (ncdirect_core_init (c-pointer 0))) ; version < 2.1 don't pass #f 0 here -- 0 must not be the old default
 	      (let ((noptions (notcurses_options_make)))
 		(set! (notcurses_options_flags noptions) NCOPTION_SUPPRESS_BANNERS)
-		(set! nc (notcurses_init noptions)))
+		(set! nc (notcurses_core_init noptions)))
 	      (notcurses_cursor_enable nc 0 2)
 	      (unless (string-position "rxvt" ((libc-let 'getenv) "TERM"))
 		(notcurses_mouse_enable nc)) ; 0 if ok, -1 if failure
