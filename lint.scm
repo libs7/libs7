@@ -393,8 +393,7 @@
     (let ()
       (require write.scm)
       (set! lint-pp pp)
-      (set! lint-pp-funclet (funclet pretty-print))
-      (set! (lint-pp-funclet '*pretty-print-cycles*) #f)) ; why this?
+      (set! lint-pp-funclet (funclet pretty-print)))
 
     (denote (lists->string f1 f2)
       (let ((str1 (lint-truncate-string (object->string f1 #t (+ target-line-length 2)))))
@@ -23542,7 +23541,8 @@
 
 	;; -------- call lint --------
 
-	(let ((vars (let-temporarily (((*s7* 'expansions?) #f))
+	(let ((vars (let-temporarily (((*s7* 'expansions?) #f)
+				      ((lint-pp-funclet '*pretty-print-cycles*) #f))
 		      (lint-file file ()))))
 	  (set! lint-left-margin (max lint-left-margin 1))
 
