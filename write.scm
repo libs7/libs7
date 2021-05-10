@@ -8,7 +8,7 @@
 	(*pretty-print-spacing* 2)
 	(*pretty-print-float-format* "~,4F")
 	(*pretty-print-left-margin* 0)
-	(*pretty-print-cycles* #t))
+	(*pretty-print-cycles* #t)) ; if this is #f, you're guaranteeing that there won't be any circular structures
 
     (define pretty-print-1
       (letrec ((messy-number (lambda (z)

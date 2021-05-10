@@ -346,7 +346,7 @@
 				    (* yout yin ih)
 				    (* zout zin id))))))))))))))
 
-(define (dft3ex-1 in)
+(define (dft3ex-1 in) ; due to optimizer stupidity, this is slower than the preceding function
   (let* ((dims (vector-dimensions in))
          (h (car dims))
          (w (cadr dims))
