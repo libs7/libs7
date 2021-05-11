@@ -2071,6 +2071,7 @@ void s7_show_history(s7_scheme *sc);
 #define is_syntactic_symbol(p)         has_type0_bit(T_Sym(p), T_SYNTACTIC)
 #define is_syntactic_pair(p)           has_type0_bit(T_Pair(p), T_SYNTACTIC)
 #define clear_syntactic(p)             clear_type0_bit(T_Pair(p), T_SYNTACTIC)
+#define set_syntactic_pair(p)          full_type(T_Pair(p)) = (T_PAIR | T_SYNTACTIC | (full_type(p) & (0xffffffffffff0000 & ~T_OPTIMIZED))) /* used only in pair_set_syntax_op */
 /* this marks symbols that represent syntax objects, it should be in the second byte */
 
 #define T_SIMPLE_ARG_DEFAULTS          (1 << (TYPE_BITS + 2))
@@ -3079,8 +3080,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define syntax_min_args(p)             (T_Syn(p))->object.syn.min_args
 #define syntax_max_args(p)             (T_Syn(p))->object.syn.max_args
 #define syntax_documentation(p)        (T_Syn(p))->object.syn.documentation
-
-#define set_syntactic_pair(p)          full_type(T_Pair(p)) = (T_PAIR | T_SYNTACTIC | (full_type(p) & (0xffffffffffff0000 & ~T_OPTIMIZED)))
 #define pair_set_syntax_op(p, X)       do {set_optimize_op(p, X); set_syntactic_pair(p);} while (0)
 #define symbol_syntax_op_checked(p)    ((is_syntactic_pair(p)) ? optimize_op(p) : symbol_syntax_op(car(p)))
 #define symbol_syntax_op(p)            syntax_opcode(global_value(p))
@@ -83495,7 +83494,7 @@ static bool do_step1(s7_scheme *sc)
   while (true)
     {
       s7_pointer code;
-      if (is_null(sc->args))
+      if (is_null(sc->args)) /* after getting the new values, transfer them into the slot_values */
 	{
 	  s7_pointer x;
 	  for (x = sc->code; is_pair(x); x = cdr(x))   /* sc->code here is the original sc->args list */
@@ -83506,7 +83505,7 @@ static bool do_step1(s7_scheme *sc)
 	  pop_stack_no_op(sc);
 	  return(true);
 	}
-      code = slot_expression(car(sc->args));
+      code = slot_expression(car(sc->args)); /* get the next stepper new value */
       if (has_fx(code))
 	{
 	  sc->value = fx_call(sc, code);
@@ -86809,25 +86808,6 @@ static Inline void op_closure_all_s(s7_scheme *sc)
   if_pair_set_up_begin(sc);
 }
 
-static void just_another_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
-{
-  s7_pointer slot;
-  new_cell(sc, slot, T_SLOT);
-  slot_set_symbol_and_value(slot, symbol, sc->F); /* sc->F needed if GC runs before true value is set */
-  slot_set_next(slot, let_slots(let));
-  let_set_slots(let, slot);
-}
-
-static s7_pointer just_add_slot_at_end(s7_scheme *sc, s7_pointer last_slot, s7_pointer symbol)
-{
-  s7_pointer slot;
-  new_cell(sc, slot, T_SLOT);
-  slot_set_symbol_and_value(slot, symbol, sc->F);
-  slot_set_next(slot, slot_end(sc));
-  slot_set_next(last_slot, slot);
-  return(slot);
-}
-
 static void op_closure_ass(s7_scheme *sc)
 {
   s7_pointer f, args;
@@ -86906,8 +86886,6 @@ static void op_closure_4a(s7_scheme *sc) /* sass */
   if_pair_set_up_begin(sc);
 }
 
-/* op_closure_any_all_a could also be done this way, but it's not called very often */
-
 static void op_closure_all_a(s7_scheme *sc)
 {
   s7_pointer e, exprs, pars, func, slot, last_slot;
@@ -86917,28 +86895,25 @@ static void op_closure_all_a(s7_scheme *sc)
   func = opt1_lambda(sc->code);
   e = make_let(sc, closure_let(func));
   sc->z = e;
-
   pars = closure_args(func);
-  just_another_slot(sc, e, car(pars));
-  last_slot = let_slots(e);
-  slot_set_pending_value(last_slot, fx_call(sc, exprs));
-
+  new_cell_no_check(sc, last_slot, T_SLOT);
+  slot_set_symbol_and_value(last_slot, car(pars), fx_call(sc, exprs));
+  slot_set_next(last_slot, let_slots(e));                 /* i.e. slot_end */
+  let_set_slots(e, last_slot);
   for (pars = cdr(pars), exprs = cdr(exprs); is_pair(pars); pars = cdr(pars), exprs = cdr(exprs))
     {
-      last_slot = just_add_slot_at_end(sc, last_slot, car(pars));
-      slot_set_pending_value(last_slot, fx_call(sc, exprs));
+      new_cell_no_check(sc, slot, T_SLOT);  /* args < GC_TRIGGER checked in optimizer */
+      slot_set_symbol_and_value(slot, car(pars), fx_call(sc, exprs));
+      /* setting up the let might use unrelated-but-same-name symbols, so wait to set the symbol ids */
+      slot_set_next(slot, slot_end(sc));
+      slot_set_next(last_slot, slot);
+      last_slot = slot;
     }
   sc->curlet = e;
   sc->z = sc->nil;
-  /* let_id set above can be out-of-date if setting up the let uses unrelated-but-same-name symbols,
-   *   just_another_slot and just_add_slot do not set or use the id's
-   */
   let_set_id(e, ++sc->let_number);
-  id = let_id(e);
-  for (slot = let_slots(e); tis_slot(slot); slot = next_slot(slot))
+  for (id = let_id(e), slot = let_slots(e); tis_slot(slot); slot = next_slot(slot))
     {
-      slot_set_value(slot, slot_pending_value(slot));
-      /* symbol_set_id(slot_symbol(slot), id); */ /* included below */
       symbol_set_local_slot(slot_symbol(slot), id, slot);
       set_local(slot_symbol(slot));
     }
@@ -97020,8 +96995,8 @@ s7_scheme *s7_init(void)
                                   (complex (* mag (cos ang)) (* mag (sin ang)))                           \n\
                                   (error 'wrong-type-arg \"make-polar arguments should be real\")))))");
 
-  s7_eval_c_string(sc, "(define (call-with-values producer consumer) (apply consumer (list (producer))))"); /* (consumer (producer)))"); */
-  /* temporary kludge to get around an optimizer bug */
+  s7_eval_c_string(sc, "(define (call-with-values producer consumer) (apply consumer (list (producer))))"); 
+  /* (consumer (producer)) will work in any "normal" context.  If consumer is syntax and then subsequently not syntax, there is confusion */
 
   s7_eval_c_string(sc, "(define-macro (multiple-value-bind vars expression . body)                        \n\
                           (list (cons 'lambda (cons vars body)) expression))");
@@ -97530,15 +97505,15 @@ int main(int argc, char **argv)
  * tmock      7699         1177   1165   1115   1116
  * s7test     4534         1873   1831   1805   1816
  * tvect      2208         2456   2413   2009   1986
- * lt         2102         2123   2110   2093   2126
- * tform      3271         2281   2273   2283   2279
+ * lt         2102         2123   2110   2093   2126  2124
+ * tform      3271         2281   2273   2283   2274
  * tread      2610         2440   2421   2414   2409
  * tmac       3295         3317   3277   3219   2454
  * trclo      4310         2715   2561   2526   2523
  * fbench     2960         2688   2583   2557   2562
+ * tb         3398         2735   2681   2623   2600
  * tcopy      2689         8035   5546   2600   2608
  * tmat       2736         3065   3042   2583   2615
- * tb         3398         2735   2681   2623   2612  2600
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2926
  * dup        4121         3805   3788   3653   3213
@@ -97546,8 +97521,8 @@ int main(int argc, char **argv)
  * tio        3703         3816   3752   3686   3686
  * teq        3728         4068   4045   3718   3709
  * tstr       6689         5281   4863   4365   4354
- * tcase      4622         4960   4793   4561   4491
- * tlet       5590         7775   5640   4552   4552  4543
+ * tcase      4622         4960   4793   4561   4490
+ * tlet       5590         7775   5640   4552   4543
  * tclo       4953         4787   4735   4596   4596
  * tmap       6375         8270   8188          4813
  * tfft      114.7         7820   7729          5355
@@ -97561,14 +97536,10 @@ int main(int argc, char **argv)
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3   37.1
  * sg         98.7         71.9   72.3   72.8   72.6
- * lg        104.3        106.6  105.0  104.1  104.9
+ * lg        104.3        106.6  105.0  104.1  104.9  104.8
  * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
- * t465 do/lambda (captured stepper)
+ * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
  * can opt pull out const exprs (as in tfft)?
- * call-with-values syntactic? macroexpand because earlier call in s7test 93093, over-eager optimizations
- *   but the syntactic_pair business is bad (12 cases), in c_func->unknown*, so if not syntactic_symbol or syntax?
- * named_let_3a?
- * make_closure_unchecked for op_lambda cases|op_cl_fa? more *_unchecked cases?
  */
