@@ -8452,7 +8452,7 @@ static Inline s7_pointer make_let_with_two_slots(s7_scheme *sc, s7_pointer old_l
 }
 
 /* in all these functions, symbol_set_local_slot should follow slot_set_value so that we can evaluate the slot's value in its old state. */
-static inline void another_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value, uint64_t id)
+static inline void add_slot_unchecked(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value, uint64_t id)
 {
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
@@ -8463,9 +8463,9 @@ static inline void another_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol
   symbol_set_local_slot(symbol, id, slot);
 }
 
-#define add_slot(Sc, Let, Symbol, Value) another_slot(Sc, Let, Symbol, Value, let_id(Let))
+#define add_slot(Sc, Let, Symbol, Value) add_slot_unchecked(Sc, Let, Symbol, Value, let_id(Let))
 
-static inline void add_slot_checked(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
+static inline s7_pointer add_slot_checked(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
   new_cell(sc, slot, T_SLOT);
@@ -8473,9 +8473,10 @@ static inline void add_slot_checked(s7_scheme *sc, s7_pointer let, s7_pointer sy
   symbol_set_local_slot(symbol, let_id(let), slot);
   slot_set_next(slot, let_slots(let));
   let_set_slots(let, slot);
+  return(slot);
 }
 
-static inline void add_slot_checked_with_id(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
+static inline s7_pointer add_slot_checked_with_id(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
   new_cell(sc, slot, T_SLOT);
@@ -8485,6 +8486,7 @@ static inline void add_slot_checked_with_id(s7_scheme *sc, s7_pointer let, s7_po
     symbol_set_local_slot(symbol, let_id(let), slot);
   slot_set_next(slot, let_slots(let));
   let_set_slots(let, slot);
+  return(slot);
 }
 
 static Inline s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
@@ -8756,34 +8758,6 @@ static void slot_set_value_with_hook_1(s7_scheme *sc, s7_pointer slot, s7_pointe
   slot_set_value(slot, value);
 }
 
-static s7_pointer make_slot_1(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
-{
-  /* let is not rootlet */
-  s7_pointer slot;
-  new_cell(sc, slot, T_SLOT);
-  slot_set_symbol_and_value(slot, symbol, value);
-  slot_set_next(slot, let_slots(let));
-  let_set_slots(let, slot);
-  set_local(symbol);
-  /* this is called by varlet so we have to be careful about the resultant let_id
-   *   check for greater to ensure shadowing stays in effect, and equal to do updates (set! in effect)
-   */
-  if (let_id(let) >= symbol_id(symbol))
-    symbol_set_local_slot(symbol, let_id(let), slot);
-  return(slot);
-}
-
-static s7_pointer make_slot_2(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
-{
-  s7_pointer slot;
-  new_cell(sc, slot, T_SLOT);
-  slot_set_symbol_and_value(slot, symbol, value);
-  symbol_set_local_slot(symbol, let_id(let), slot);
-  slot_set_next(slot, let_slots(let));
-  let_set_slots(let, slot);
-  return(slot);
-}
-
 static void remove_function_from_heap(s7_scheme *sc, s7_pointer value);
 
 static void remove_let_from_heap(s7_scheme *sc, s7_pointer lt)
@@ -8874,7 +8848,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	s7_remove_from_heap(sc, symbol);
       return(slot);
     }
-  return(make_slot_1(sc, let, symbol, value));
+  return(add_slot_checked_with_id(sc, let, symbol, value));
   /* there are about as many lets as local variables -- this strikes me as surprising, but it holds up across a lot of code. */
 }
 
@@ -8990,7 +8964,7 @@ static s7_pointer g_unlet(s7_scheme *sc, s7_pointer args)
       if ((x != global_value(sym)) ||  /* it has been changed globally */
 	  ((!is_global(sym)) &&        /* it might be shadowed locally */
 	   (s7_symbol_local_value(sc, sym, sc->curlet) != global_value(sym))))
-	make_slot_1(sc, sc->w, sym, x);
+	add_slot_checked_with_id(sc, sc->w, sym, x);
     }
   /* if (set! + -) then + needs to be overridden, but the local bit isn't set, so we have to check the actual values in the non-local case.
    *   (define (f x) (with-let (unlet) (+ x 1)))
@@ -9105,13 +9079,13 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
 	      s7_pointer y;
 	      y = s7_iterate(sc, iter);
 	      if (iterator_is_at_end(iter)) break;
-	      make_slot_1(sc, new_e, car(y), cdr(y));
+	      add_slot_checked_with_id(sc, new_e, car(y), cdr(y));
 	    }
 	  s7_gc_unprotect_at(sc, gc_loc);
 	}
       else
 	for (x = let_slots(old_e); tis_slot(x); x = next_slot(x))
-	  make_slot_1(sc, new_e, slot_symbol(x), slot_value(x)); /* not add_slot here because we might run off the free heap end */
+	  add_slot_checked_with_id(sc, new_e, slot_symbol(x), slot_value(x)); /* not add_slot here because we might run off the free heap end */
     }
 }
 
@@ -9142,7 +9116,7 @@ s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointe
 	slot_set_value(global_slot(symbol), value);
       else s7_make_slot(sc, let, symbol, value);
     }
-  else make_slot_1(sc, let, symbol, value);
+  else add_slot_checked_with_id(sc, let, symbol, value);
   return(value);
 }
 
@@ -9222,7 +9196,7 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
 	      ((sym == sc->let_ref_fallback_symbol) || (sym == sc->let_set_fallback_symbol)))
 	    return(s7_error(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "varlet can't shadow ~S", 22), sym)));
 
-	  make_slot_1(sc, e, sym, val);
+	  add_slot_checked_with_id(sc, e, sym, val);
 	}}
       /* this used to check for sym already defined, and set its value, but that greatly slows down
        *   the most common use (adding a slot), and makes it hard to shadow explicitly.  Don't use
@@ -9356,8 +9330,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	    return(wrong_type_argument_with_type(sc, caller, 2, sym, wrap_string(sc, "a non-syntactic name", 20)));
 
 	  /* here we know new_e is a let and is not rootlet */
-	  /* make_slot_1(sc, new_e, sym, val); *//* add_slot without let_id check or is it set_local will not work here */
-	  add_slot_checked_with_id(sc, new_e, sym, val);
+	  add_slot_checked_with_id(sc, new_e, sym, val); /* add_slot without let_id check or is it set_local will not work here */
 	  if (sym == sc->let_ref_fallback_symbol)
 	    set_has_let_ref_fallback(new_e);
 	  else
@@ -9420,7 +9393,7 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 	symbol = keyword_symbol(symbol);
       if (is_constant_symbol(sc, symbol))     /* (inlet 'pi 1) */
 	return(wrong_type_argument_with_type(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string));
-      another_slot(sc, new_e, symbol, cadr(x), id);
+      add_slot_unchecked(sc, new_e, symbol, cadr(x), id);
     }
   sc->temp3 = sc->nil;
   return(new_e);
@@ -9445,7 +9418,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   let_set_id(x, ++sc->let_number);
   let_set_outlet(x, sc->nil);
   let_set_slots(x, slot_end(sc));
-  another_slot(sc, x, symbol, value, let_id(x));
+  add_slot_unchecked(sc, x, symbol, value, let_id(x));
   sc->temp3 = sc->nil;
   return(x);
 }
@@ -9469,7 +9442,7 @@ static s7_pointer g_local_inlet(s7_scheme *sc, s7_int num_args, ...)
       value = va_arg(ap, s7_pointer);
       if (is_keyword(symbol))                 /* (inlet ':allow-other-keys 3) */
 	symbol = keyword_symbol(symbol);
-      another_slot(sc, new_e, symbol, value, id);
+      add_slot_unchecked(sc, new_e, symbol, value, id);
     }
   va_end(ap);
 
@@ -31321,7 +31294,7 @@ static s7_pointer c_provide(s7_scheme *sc, s7_pointer sym)
       s7_pointer lst;
       lst = slot_value(lookup_slot_from(sc->features_symbol, sc->curlet)); /* in either case, we want the current *features* list */
       if (p == sc->undefined)
-	make_slot_1(sc, sc->curlet, sc->features_symbol, cons(sc, sym, lst));
+	add_slot_checked_with_id(sc, sc->curlet, sc->features_symbol, cons(sc, sym, lst));
       else
 	if ((!is_memq(sym, lst)) && (!is_memq(sym, slot_value(p))))
 	  slot_set_value(p, cons(sc, sym, slot_value(p)));
@@ -49429,7 +49402,7 @@ static s7_pointer let_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_pointer
 	  slot = slot_in_let(sc, e, sym);
 	  if (is_slot(slot))
 	    checked_slot_set_value(sc, slot, cdr(val));
-	  else make_slot_1(sc, e, sym, cdr(val));
+	  else add_slot_checked_with_id(sc, e, sym, cdr(val));
 	  return(cdr(val));
 	}}
   set_car(sc->elist_3, wrap_string(sc, "~S: ~S is not (cons symbol value)", 33));
@@ -49751,11 +49724,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 		  for (slot = let_slots(source); tis_slot(slot); slot = next_slot(slot))
 		    if ((slot_symbol(slot) != sc->let_ref_fallback_symbol) &&
 			(slot_symbol(slot) != sc->let_set_fallback_symbol))
-		      make_slot_1(sc, dest, slot_symbol(slot), slot_value(slot));
+		      add_slot_checked_with_id(sc, dest, slot_symbol(slot), slot_value(slot));
 		}
 	      else
 		for (slot = let_slots(source); tis_slot(slot); slot = next_slot(slot))
-		  make_slot_1(sc, dest, slot_symbol(slot), slot_value(slot));
+		  add_slot_checked_with_id(sc, dest, slot_symbol(slot), slot_value(slot));
 	    }
 	  return(dest);
 	}
@@ -49950,11 +49923,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 		      for (slot = let_slots(source); tis_slot(slot); slot = next_slot(slot))
 			if ((slot_symbol(slot) != sc->let_ref_fallback_symbol) &&
 			    (slot_symbol(slot) != sc->let_set_fallback_symbol))
-			  make_slot_1(sc, dest, slot_symbol(slot), slot_value(slot));
+			  add_slot_checked_with_id(sc, dest, slot_symbol(slot), slot_value(slot));
 		    }
 		  else
 		    for (i = start; i < end; i++, slot = next_slot(slot))
-		      make_slot_1(sc, dest, slot_symbol(slot), slot_value(slot));
+		      add_slot_checked_with_id(sc, dest, slot_symbol(slot), slot_value(slot));
 		}
 	      else
 		{
@@ -50008,7 +49981,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 				    set_elist_4(sc, wrap_string(sc, "~A into ~A: ~A is a constant", 28), caller, dest, symbol)));
 		  if ((symbol != sc->let_ref_fallback_symbol) &&
 		      (symbol != sc->let_set_fallback_symbol))
-		    make_slot_1(sc, dest, symbol, hash_entry_value(x));
+		    add_slot_checked_with_id(sc, dest, symbol, hash_entry_value(x));
 		  x = hash_entry_next(x);
 		}}
 	  else
@@ -52556,16 +52529,16 @@ static s7_pointer init_owlet(s7_scheme *sc)
   s7_pointer e, p;
   e = make_let_slowly(sc, sc->nil);
   sc->temp3 = e;
-  sc->error_type = make_slot_1(sc, e, make_symbol(sc, "error-type"), sc->F);  /* the error type or tag ('division-by-zero) */
-  sc->error_data = make_slot_1(sc, e, make_symbol(sc, "error-data"), sc->F);  /* the message or information passed by the error function */
-  sc->error_code = make_slot_1(sc, e, make_symbol(sc, "error-code"), sc->F);  /* the code that s7 thinks triggered the error */
-  sc->error_line = make_slot_1(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer_unchecked(0));  /* the line number of that code */
+  sc->error_type = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-type"), sc->F);  /* the error type or tag ('division-by-zero) */
+  sc->error_data = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-data"), sc->F);  /* the message or information passed by the error function */
+  sc->error_code = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-code"), sc->F);  /* the code that s7 thinks triggered the error */
+  sc->error_line = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer_unchecked(0));  /* the line number of that code */
   add_saved_pointer(sc, p);
-  sc->error_file = make_slot_1(sc, e, make_symbol(sc, "error-file"), sc->F);  /* the file name of that code */
-  sc->error_position = make_slot_1(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer_unchecked(0));  /* the file-byte position of that code */
+  sc->error_file = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-file"), sc->F);  /* the file name of that code */
+  sc->error_position = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer_unchecked(0));  /* the file-byte position of that code */
   add_saved_pointer(sc, p);
 #if WITH_HISTORY
-  sc->error_history = make_slot_1(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
+  sc->error_history = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
 #endif
   sc->temp3 = sc->nil;
   return(e);
@@ -56469,7 +56442,7 @@ static s7_pointer fx_c_opsq_s(s7_scheme *sc, s7_pointer arg)
   largs = cadr(arg);
   set_car(sc->t1_1, lookup(sc, cadr(largs)));
   set_car(sc->t2_1, fn_proc(largs)(sc, sc->t1_1));
-  set_car(sc->t2_2, lookup(sc, caddr(arg)));
+  set_car(sc->t2_2, lookup(sc, opt3_sym(arg))); /* caddr(arg) */
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
@@ -56477,12 +56450,12 @@ static s7_pointer fx_c_opsq_s_direct(s7_scheme *sc, s7_pointer arg)
 {
   return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, 
 	    ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt1_sym(cdr(arg)))), 
-	    lookup(sc, caddr(arg))));
+	    lookup(sc, opt3_sym(arg))));
 }
 
-static s7_pointer fx_cons_car_s_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, lookup(sc, opt1_sym(cdr(arg)))), lookup(sc, caddr(arg))));}
-static s7_pointer fx_cons_car_t_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, t_lookup(sc, opt1_sym(cdr(arg)), arg)), lookup(sc, caddr(arg))));}
-static s7_pointer fx_cons_car_u_t(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)), t_lookup(sc, caddr(arg), arg)));}
+static s7_pointer fx_cons_car_s_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, lookup(sc, opt1_sym(cdr(arg)))), lookup(sc, opt3_sym(arg))));}
+static s7_pointer fx_cons_car_t_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, t_lookup(sc, opt1_sym(cdr(arg)), arg)), lookup(sc, opt3_sym(arg))));}
+static s7_pointer fx_cons_car_u_t(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)), t_lookup(sc, opt3_sym(arg), arg)));}
 
 static s7_pointer fx_c_optq_s(s7_scheme *sc, s7_pointer arg)
 {
@@ -56490,7 +56463,7 @@ static s7_pointer fx_c_optq_s(s7_scheme *sc, s7_pointer arg)
   largs = cadr(arg);
   set_car(sc->t1_1, t_lookup(sc, cadr(largs), arg));
   set_car(sc->t2_1, fn_proc(largs)(sc, sc->t1_1));
-  set_car(sc->t2_2, lookup(sc, caddr(arg)));
+  set_car(sc->t2_2, lookup(sc, opt3_sym(arg)));
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
@@ -56498,7 +56471,7 @@ static s7_pointer fx_c_optq_s_direct(s7_scheme *sc, s7_pointer arg)
 {
   return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc,
             ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, t_lookup(sc, opt1_sym(cdr(arg)), arg)), /* cadadr */
-            lookup(sc, caddr(arg))));
+            lookup(sc, opt3_sym(arg))));
 }
 
 static s7_pointer fx_c_opuq_t(s7_scheme *sc, s7_pointer arg)
@@ -56507,7 +56480,7 @@ static s7_pointer fx_c_opuq_t(s7_scheme *sc, s7_pointer arg)
   largs = cadr(arg);
   set_car(sc->t1_1, u_lookup(sc, cadr(largs), largs));
   set_car(sc->t2_1, fn_proc(largs)(sc, sc->t1_1));
-  set_car(sc->t2_2, t_lookup(sc, caddr(arg), arg));
+  set_car(sc->t2_2, t_lookup(sc, opt3_sym(arg), arg));
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
@@ -56515,12 +56488,12 @@ static s7_pointer fx_c_opuq_t_direct(s7_scheme *sc, s7_pointer arg)
 {
   return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc,
             ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)),
-            t_lookup(sc, caddr(arg), arg)));
+            t_lookup(sc, opt3_sym(arg), arg)));
 }
 
 static s7_pointer fx_cons_opuq_t(s7_scheme *sc, s7_pointer arg)
 {
-  return(cons(sc, ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)), t_lookup(sc, caddr(arg), arg)));
+  return(cons(sc, ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)), t_lookup(sc, opt3_sym(arg), arg)));
 }
 
 static s7_pointer fx_c_opsq_cs(s7_scheme *sc, s7_pointer arg)
@@ -57497,8 +57470,8 @@ static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
       symbol = (is_keyword(symbol)) ? keyword_symbol(symbol) : cadar(x);  /* (inlet ':allow-other-keys 3) */
       if (is_constant_symbol(sc, symbol))     /* (inlet 'pi 1) */
 	return(wrong_type_argument_with_type(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string));
-      value = fx_call(sc, cdr(x));            /* it's necessary to do this first, before another_slot */
-      another_slot(sc, new_e, symbol, value, symbol_id(symbol));
+      value = fx_call(sc, cdr(x));            /* it's necessary to do this first, before add_slot_unchecked */
+      add_slot_unchecked(sc, new_e, symbol, value, symbol_id(symbol));
     }
 
   id = ++sc->let_number;
@@ -58189,7 +58162,6 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  if ((is_global_and_has_func(car(arg), s7_p_pp_function)) &&
 	      (is_global_and_has_func(caadr(arg), s7_p_p_function)))
 	    {
-	      set_opt1_sym(cdr(arg), cadadr(arg));
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_p_function(global_value(caadr(arg)))));
 	      return(((car(arg) == sc->cons_symbol) && (caadr(arg) == sc->car_symbol)) ? fx_cons_car_s_s : fx_c_opsq_s_direct);
@@ -59108,7 +59080,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if ((is_global_and_has_func(car(p), s7_p_pp_function)) &&
 		  (is_global_and_has_func(caadr(p), s7_p_p_function)))
 		{
-		  set_opt1_sym(p, cadadr(p));
 		  set_opt2_direct(cdr(p), (s7_pointer)(s7_p_pp_function(global_value(car(p)))));
 		  set_opt3_direct(cdr(p), (s7_pointer)(s7_p_p_function(global_value(caadr(p)))));
 		  return(with_fx(tree, fx_c_optq_s_direct));
@@ -59127,7 +59098,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 		{
 		  set_opt2_direct(cdr(p), (s7_pointer)(s7_p_pp_function(global_value(car(p)))));
 		  set_opt3_direct(cdr(p), (s7_pointer)(s7_p_p_function(global_value(caadr(p)))));
-		  set_opt1_sym(cdr(p), var2);
 		  return(with_fx(tree, (car(p) == sc->cons_symbol) ?
 				     ((caadr(p) == sc->car_symbol) ? fx_cons_car_u_t : fx_cons_opuq_t) : fx_c_opuq_t_direct));
 		}
@@ -59135,11 +59105,9 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }
 	  if (((fx_proc(tree) == fx_c_opsq_s_direct) || (fx_proc(tree) == fx_cons_car_s_s)) &&
 	      (caddr(p) == var1))
-	    {
-	      set_opt1_sym(cdr(p), var2);
-	      return(with_fx(tree, (car(p) == sc->cons_symbol) ?
-				 ((caadr(p) == sc->car_symbol) ? fx_cons_car_u_t : fx_cons_opuq_t) : fx_c_opuq_t_direct));
-	    }}
+	    return(with_fx(tree, (car(p) == sc->cons_symbol) ?
+			   ((caadr(p) == sc->car_symbol) ? fx_cons_car_u_t : fx_cons_opuq_t) : fx_c_opuq_t_direct));
+	}
       break;
 
     case HOP_SAFE_C_S_opSq:
@@ -71320,7 +71288,10 @@ static int32_t combine_ops(s7_scheme *sc, s7_pointer func, s7_pointer expr, comb
       arg_op = op_no_hop(arg);
       switch (arg_op)
 	{
-	case OP_SAFE_C_S:     return(OP_SAFE_C_opSq_S);
+	case OP_SAFE_C_S:     
+	  set_opt1_sym(cdr(expr), cadr(e1));
+	  set_opt3_sym(expr, e2);
+	  return(OP_SAFE_C_opSq_S);
 	case OP_SAFE_C_SS:    return(OP_SAFE_C_opSSq_S);
 	case OP_SAFE_C_CS:    return(OP_SAFE_C_opCSq_S);
 	case OP_SAFE_C_A:     return(OP_SAFE_C_opAq_S);
@@ -77046,7 +77017,7 @@ static bool op_let(s7_scheme *sc)
 	  /* if this is a safe closure, we can build its let in advance and name it (a thunk in this case) */
 	  set_funclet(closure_let(sc->x));
 	  funclet_set_function(closure_let(sc->x), car(sc->code));
-	  make_slot_2(sc, sc->curlet, car(sc->code), sc->x);
+	  add_slot_checked(sc, sc->curlet, car(sc->code), sc->x);
 	  sc->code = T_Pair(body);
 	  sc->x = sc->nil;
 	}
@@ -77089,7 +77060,7 @@ static void op_named_let_no_vars(s7_scheme *sc)
   sc->curlet = make_let(sc, sc->curlet);
   body = cdddr(sc->code);
   sc->args = make_closure_unchecked(sc, sc->nil, body, T_CLOSURE, 0);  /* sc->args is a temp here */
-  make_slot_2(sc, sc->curlet, cadr(sc->code), sc->args);
+  add_slot_checked(sc, sc->curlet, cadr(sc->code), sc->args);
   sc->code = body;
 }
 
@@ -77567,7 +77538,7 @@ static bool check_let_star(s7_scheme *sc)
 	  cx = car(code);
 	  sc->curlet = make_let_slowly(sc, sc->curlet);
 	  sc->code = T_Pair(cdr(sc->value));
-	  make_slot_2(sc, sc->curlet, cx, make_closure_unchecked(sc, sc->nil, sc->code, T_CLOSURE_STAR, 0));
+	  add_slot_checked(sc, sc->curlet, cx, make_closure_unchecked(sc, sc->nil, sc->code, T_CLOSURE_STAR, 0));
 	  return(false);
 	}}
   else
@@ -77599,7 +77570,7 @@ static inline bool op_let_star1(s7_scheme *sc)
   while (true)
     {
       if (let_counter == sc->capture_let_counter)
-	make_slot_2(sc, sc->curlet, caar(sc->code), sc->value);
+	add_slot_checked(sc, sc->curlet, caar(sc->code), sc->value);
       else
 	{
 	  sc->curlet = make_let_with_slot(sc, sc->curlet, caar(sc->code), sc->value);
@@ -77628,7 +77599,7 @@ static inline bool op_let_star1(s7_scheme *sc)
       s7_pointer body, args;
       body = cddr(sc->code);
       args = cadr(sc->code);
-      make_slot_2(sc, sc->curlet, car(sc->code), make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
+      add_slot_checked(sc, sc->curlet, car(sc->code), make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
       sc->code = body;
     }
   else sc->code = T_Pair(cdr(sc->code));
@@ -77665,7 +77636,7 @@ static void op_let_star_fx_a(s7_scheme *sc)
       s7_pointer val;
       val = fx_call(sc, cdar(p));
       if (let_counter == sc->capture_let_counter)
-	make_slot_2(sc, sc->curlet, caar(p), val);
+	add_slot_checked(sc, sc->curlet, caar(p), val);
       else
 	{
 	  sc->curlet = make_let_with_slot(sc, sc->curlet, caar(p), val);
@@ -77804,7 +77775,7 @@ static bool op_letrec_unchecked(s7_scheme *sc)
       s7_pointer x, slot;
       for (x = car(code); is_not_null(x); x = cdr(x))
 	{
-	  slot = make_slot_2(sc, sc->curlet, caar(x), sc->undefined);
+	  slot = add_slot_checked(sc, sc->curlet, caar(x), sc->undefined);
 	  slot_set_pending_value(slot, sc->undefined);
 	  slot_set_expression(slot, cdar(x));
 	  set_checked_slot(slot);
@@ -77855,7 +77826,7 @@ static bool op_letrec_star_unchecked(s7_scheme *sc)
       s7_pointer x;
       for (x = car(code); is_not_null(x); x = cdr(x))
 	{
-	  slot = make_slot_2(sc, sc->curlet, caar(x), sc->undefined);
+	  slot = add_slot_checked(sc, sc->curlet, caar(x), sc->undefined);
 	  slot_set_expression(slot, cdar(x));
 	}
       let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
@@ -79135,7 +79106,7 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
 		{
 		  s7_pointer val;
 		  val = cadr(par);
-		  slot = make_slot_2(sc, new_let, car(par), sc->nil);
+		  slot = add_slot_checked(sc, new_let, car(par), sc->nil);
 		  slot_set_expression(slot, val);
 		  if ((is_symbol(val)) || (is_pair(val)))
 		    {
@@ -79150,17 +79121,17 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
 		      if (par == sc->key_rest_symbol)
 			{
 			  arg = cdr(arg);
-			  slot = make_slot_2(sc, new_let, car(arg), sc->nil);
+			  slot = add_slot_checked(sc, new_let, car(arg), sc->nil);
 			  slot_set_expression(slot, sc->nil);
 			}}
 		  else
 		    {
-		      slot = make_slot_2(sc, new_let, par, sc->nil);
+		      slot = add_slot_checked(sc, new_let, par, sc->nil);
 		      slot_set_expression(slot, sc->F);
 		    }}}
 	  if (is_symbol(arg))
 	    {
-	      slot = make_slot_2(sc, new_let, arg, sc->nil);     /* set up rest arg */
+	      slot = add_slot_checked(sc, new_let, arg, sc->nil);     /* set up rest arg */
 	      set_is_rest_slot(slot);
 	      slot_set_expression(slot, sc->nil);
 	    }
@@ -79248,7 +79219,7 @@ static inline void define_funchecked(s7_scheme *sc)
 
   if (let_id(sc->curlet) < symbol_id(sc->value))
     sc->let_number++; /* dummy let, force symbol lookup */
-  another_slot(sc, sc->curlet, sc->value, new_func, sc->let_number);
+  add_slot_unchecked(sc, sc->curlet, sc->value, new_func, sc->let_number);
   sc->value = new_func;
 }
 
@@ -83811,7 +83782,7 @@ static bool op_simple_do(s7_scheme *sc)
   code = cdr(sc->code);
   sc->curlet = make_let_slowly(sc, sc->curlet);
   sc->value = fx_call(sc, cdaar(code));
-  let_set_dox_slot1(sc->curlet, make_slot_2(sc, sc->curlet, caaar(code), sc->value));
+  let_set_dox_slot1(sc->curlet, add_slot_checked(sc, sc->curlet, caaar(code), sc->value));
 
   end = caddr(caadr(code));
   if (is_symbol(end))
@@ -84285,12 +84256,12 @@ static goto_t do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 	  return(fall_through);
 	}
       if (let_star)
-	make_slot_2(sc, sc->curlet, caar(p), s7_make_mutable_real(sc, 1.5));
+	add_slot_checked(sc, sc->curlet, caar(p), s7_make_mutable_real(sc, 1.5));
     }
 
   if (!let_star)
     for (p = let_vars; is_pair(p); p = cdr(p))
-      make_slot_2(sc, sc->curlet, caar(p), s7_make_mutable_real(sc, 1.5));
+      add_slot_checked(sc, sc->curlet, caar(p), s7_make_mutable_real(sc, 1.5));
 
   for (k = 0, p = let_body; is_pair(p); k++, p = cdr(p))
     {
@@ -84452,7 +84423,7 @@ static goto_t op_safe_dotimes(s7_scheme *sc)
 	{
 	  sc->code = cddr(code);
 	  sc->curlet = make_let_slowly(sc, sc->curlet);
-	  sc->args = make_slot_2(sc, sc->curlet, caaar(code), make_mutable_integer(sc, s7_integer_checked(sc, init_val)));
+	  sc->args = add_slot_checked(sc, sc->curlet, caaar(code), make_mutable_integer(sc, s7_integer_checked(sc, init_val)));
 	  set_do_loop_end(slot_value(sc->args), s7_integer_checked(sc, end_val));
 	  set_step_end(sc->args);  /* safe_dotimes step is by 1 */
 
@@ -84561,7 +84532,7 @@ static goto_t op_safe_do(s7_scheme *sc)
 
   /* (let ((sum 0)) (define (hi) (do ((i 10 (+ i 1))) ((= i 10) i) (set! sum (+ sum i)))) (hi)) */
   sc->curlet = make_let_slowly(sc, sc->curlet);
-  let_set_dox_slot1(sc->curlet, make_slot_2(sc, sc->curlet, caaar(code), init_val)); /* define the step var -- might be needed in the end clauses */
+  let_set_dox_slot1(sc->curlet, add_slot_checked(sc, sc->curlet, caaar(code), init_val)); /* define the step var -- might be needed in the end clauses */
 
   if ((s7_integer_checked(sc, init_val) == s7_integer_checked(sc, end_val)) ||
       ((s7_integer_checked(sc, init_val) > s7_integer_checked(sc, end_val)) &&
@@ -84665,7 +84636,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
 
   old_e = sc->curlet;
   sc->curlet = make_let_slowly(sc, sc->curlet);
-  let_set_dox_slot1(sc->curlet, make_slot_2(sc, sc->curlet, caaar(code), init_val));
+  let_set_dox_slot1(sc->curlet, add_slot_checked(sc, sc->curlet, caaar(code), init_val));
   let_set_dox_slot2(sc->curlet, slot);
 
   set_car(sc->t2_1, let_dox1_value(sc->curlet));
@@ -85582,7 +85553,7 @@ static bool apply_unsafe_closure_star_1(s7_scheme *sc)
 	  val = cadr(car_z);
 	  if ((!is_pair(val)) &&
 	      (!is_symbol(val)))
-	    slot = make_slot_2(sc, sc->curlet, car(car_z), val);
+	    slot = add_slot_checked(sc, sc->curlet, car(car_z), val);
 	  else
 	    {
 	      add_slot(sc, sc->curlet, car(car_z), sc->undefined);
@@ -85595,16 +85566,15 @@ static bool apply_unsafe_closure_star_1(s7_scheme *sc)
       else
 	{
 	  if (!is_keyword(car_z))
-	    /* make_slot_1(sc, sc->curlet, car_z, sc->F); */
 	    add_slot(sc, sc->curlet, car_z, sc->F);
 	  else
 	    if (car_z == sc->key_rest_symbol) /* else it's :allow-other-keys? */
 	      {
-		set_is_rest_slot(make_slot_2(sc, sc->curlet, cadr(z), sc->nil));
+		set_is_rest_slot(add_slot_checked(sc, sc->curlet, cadr(z), sc->nil));
 		z = cdr(z);
 	      }}}
   if (is_symbol(z))
-    set_is_rest_slot(make_slot_2(sc, sc->curlet, z, sc->nil));     /* set up rest arg */
+    set_is_rest_slot(add_slot_checked(sc, sc->curlet, z, sc->nil));     /* set up rest arg */
   let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
   return(set_star_args(sc, top));
 }
@@ -85618,19 +85588,19 @@ static void apply_macro_star_1(s7_scheme *sc)
       s7_pointer par;
       par = car(p);
       if (is_pair(par))
-	make_slot_2(sc, sc->curlet, car(par), cadr(par));
+	add_slot_checked(sc, sc->curlet, car(par), cadr(par));
       else
 	{
 	  if (!is_keyword(par))
-	    make_slot_2(sc, sc->curlet, par, sc->F);
+	    add_slot_checked(sc, sc->curlet, par, sc->F);
 	  else
 	    if (par == sc->key_rest_symbol)
 	      {
-		set_is_rest_slot(make_slot_2(sc, sc->curlet, cadr(p), sc->nil));
+		set_is_rest_slot(add_slot_checked(sc, sc->curlet, cadr(p), sc->nil));
 		p = cdr(p);
 	      }}}
   if (is_symbol(p))
-    set_is_rest_slot(make_slot_2(sc, sc->curlet, p, sc->nil));
+    set_is_rest_slot(add_slot_checked(sc, sc->curlet, p, sc->nil));
   let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
   lambda_star_set_args(sc);
   sc->code = T_Pair(closure_body(sc->code));
@@ -86795,9 +86765,8 @@ static Inline void op_closure_all_s(s7_scheme *sc)
   e = make_let(sc, closure_let(sc->code));
   sc->z = e;
   id = let_id(e);
-
   p = closure_args(sc->code);
-  add_slot(sc, e, car(p), lookup(sc, car(args)));
+  add_slot_unchecked(sc, e, car(p), lookup(sc, car(args)), id);
   last_slot = let_slots(e);
   for (p = cdr(p), args = cdr(args); is_pair(p); p = cdr(p), args = cdr(args))
     last_slot = add_slot_at_end(sc, id, last_slot, car(p), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
@@ -86945,11 +86914,21 @@ static bool check_closure_any(s7_scheme *sc)
 static void op_closure_any_all_a(s7_scheme *sc) /* for (lambda a ...) ? */
 {
   s7_pointer p, old_args;
-  sc->w = cdr(sc->code);               /* args aren't evaluated yet */
-  sc->args = make_list(sc, integer(opt3_arglen(cdr(sc->code))), sc->F);
-  for (p = sc->args, old_args = sc->w; is_pair(p); p = cdr(p), old_args = cdr(old_args))
-    set_car(p, fx_call(sc, old_args));
-  sc->w = sc->nil;
+  s7_int num_args;
+  old_args = cdr(sc->code);               /* args aren't evaluated yet */
+  num_args = integer(opt3_arglen(old_args));
+  if (num_args == 1)
+    sc->args = list_1(sc, sc->value = fx_call(sc, old_args));
+  else
+    {
+      if (num_args == 2)
+	sc->args = list_2(sc, sc->value = fx_call(sc, old_args), sc->args = fx_call(sc, cdr(old_args)));
+      else
+	{
+	  sc->args = make_list(sc, num_args, sc->F);
+	  for (p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
+	    set_car(p, fx_call(sc, old_args));
+	}}
   p = opt1_lambda(sc->code);
   sc->curlet = make_let_with_slot(sc, closure_let(p), closure_args(p), sc->args);
   sc->code = T_Pair(closure_body(p));
@@ -94030,31 +94009,31 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #if (!_WIN32) /* (!MS_WINDOWS) */
   getrusage(RUSAGE_SELF, &info);
   ut = info.ru_utime;
-  make_slot_1(sc, mu_let, make_symbol(sc, "process-time"), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "process-time"), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
 #ifdef __APPLE__
-  make_slot_1(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss));
   /* apple docs say this is in kilobytes, but apparently that is an error */
 #else
-  make_slot_1(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss * 1024));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss * 1024));
   /* why does this number sometimes have no relation to RES in top? */
 #endif
-  make_slot_1(sc, mu_let, make_symbol(sc, "IO"), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "IO"), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
 #endif
 
-  make_slot_1(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
-  make_slot_1(sc, mu_let, make_symbol(sc, "heap-size"), cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
-  make_slot_1(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
-  make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
-  make_slot_1(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "heap-size"), cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
 
-  make_slot_1(sc, mu_let, make_symbol(sc, "small_ints"), cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
-  make_slot_1(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells), kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "small_ints"), cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells), kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
   {
     gc_obj_t *g;
     for (i = 0, g = sc->permanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
-    make_slot_1(sc, mu_let, make_symbol(sc, "permanent_objects"), make_integer(sc, i));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects"), make_integer(sc, i));
     for (i = 0, g = sc->permanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
-    make_slot_1(sc, mu_let, make_symbol(sc, "permanent_lets"), make_integer(sc, i));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets"), make_integer(sc, i));
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
@@ -94068,16 +94047,16 @@ static s7_pointer memory_usage(s7_scheme *sc)
       if (ts[i] > 50)
 	sc->w = cons(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)), make_integer(sc, ts[i])), sc->w);
     }
-  make_slot_1(sc, mu_let, make_symbol(sc, "cells-in-use/free"), cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free"), cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
-    make_slot_1(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
   sc->w = sc->nil;
   /* same for permanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
   
-  make_slot_1(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
-	      cons(sc, make_integer(sc, sc->protected_objects_size - sc->gpofl_loc),
-		   make_integer(sc, sc->protected_objects_size)));
-  make_slot_1(sc, mu_let, make_symbol(sc, "setters"), make_integer(sc, sc->protected_setters_loc));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
+			   cons(sc, make_integer(sc, sc->protected_objects_size - sc->gpofl_loc),
+				make_integer(sc, sc->protected_objects_size)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "setters"), make_integer(sc, sc->protected_setters_loc));
 
   /* check the symbol table, counting gensyms etc */
   {
@@ -94094,21 +94073,22 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	  }
 	if (k > mx_list) mx_list = k;
       }
-    make_slot_1(sc, mu_let, make_symbol(sc, "symbol-table"),
-		s7_list(sc, 9,
-			make_integer(sc, SYMBOL_TABLE_SIZE),
-			make_symbol(sc, "max-bin"), make_integer(sc, mx_list),
-			make_symbol(sc, "symbols"), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
-			make_symbol(sc, "gensyms"), make_integer(sc, gens),
-			make_symbol(sc, "keys"),    make_integer(sc, keys)));
+    add_slot_checked_with_id(sc, mu_let, 
+			     make_symbol(sc, "symbol-table"),
+			     s7_list(sc, 9,
+				     make_integer(sc, SYMBOL_TABLE_SIZE),
+				     make_symbol(sc, "max-bin"), make_integer(sc, mx_list),
+				     make_symbol(sc, "symbols"), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
+				     make_symbol(sc, "gensyms"), make_integer(sc, gens),
+				     make_symbol(sc, "keys"),    make_integer(sc, keys)));
   }
-  make_slot_1(sc, mu_let, make_symbol(sc, "stack"), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "stack"), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
 
   len = sc->autoload_names_top * (sizeof(const char **) + sizeof(s7_int) + sizeof(bool));
   for (i = 0; i < sc->autoload_names_loc; i++) len += sc->autoload_names_sizes[i];
-  make_slot_1(sc, mu_let, make_symbol(sc, "autoload"), make_integer(sc, len));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "autoload"), make_integer(sc, len));
 
-  make_slot_1(sc, mu_let, make_symbol(sc, "circle_info"), make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "circle_info"), make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
 
   /* check the gc lists (finalizations) */
   len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
@@ -94119,13 +94099,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
     loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
     sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
     sc->lambdas->loc + sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    make_slot_1(sc, mu_let, make_symbol(sc, "gc-lists"), cons(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"), cons(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
   }
   /* strings */
   gp = sc->strings;
   for (len = 0, i = 0; i < (int32_t)(gp->loc); i++)
     len += string_length(gp->list[i]);
-  make_slot_1(sc, mu_let, make_symbol(sc, "strings"), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "strings"), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
 
   /* vectors */
   for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
@@ -94145,13 +94125,14 @@ static s7_pointer memory_usage(s7_scheme *sc)
 		  blen += vector_length(v);
 		else vlen += vector_length(v);
 	      }}}
-  make_slot_1(sc, mu_let, make_symbol(sc, "vectors"),
-	      s7_list(sc, 9,
-		      make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
-		      make_symbol(sc, "vlen"),  make_integer(sc, vlen),
-		      make_symbol(sc, "fvlen"), make_integer(sc, flen),
-		      make_symbol(sc, "ivlen"), make_integer(sc, ilen),
-		      make_symbol(sc, "bvlen"), make_integer(sc, blen)));
+  add_slot_checked_with_id(sc, mu_let, 
+			   make_symbol(sc, "vectors"),
+			   s7_list(sc, 9,
+				   make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
+				   make_symbol(sc, "vlen"),  make_integer(sc, vlen),
+				   make_symbol(sc, "fvlen"), make_integer(sc, flen),
+				   make_symbol(sc, "ivlen"), make_integer(sc, ilen),
+				   make_symbol(sc, "bvlen"), make_integer(sc, blen)));
 
   /* hash-tables */
   for (i = 0, gp = sc->hash_tables; i < gp->loc; i++)
@@ -94161,7 +94142,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       hlen += ((hash_table_mask(v) + 1) * sizeof(hash_entry_t *));
       hlen += (hash_table_entries(v) * sizeof(hash_entry_t));
     }
-  make_slot_1(sc, mu_let, make_symbol(sc, "hash-tables"), cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "hash-tables"), cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
 
   /* ports */
   gp = sc->input_ports;
@@ -94178,7 +94159,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  make_slot_1(sc, mu_let, make_symbol(sc, "input-ports"), cons(sc, make_integer(sc, sc->input_ports->loc + sc->input_string_ports->loc), make_integer(sc, len)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "input-ports"), cons(sc, make_integer(sc, sc->input_ports->loc + sc->input_string_ports->loc), make_integer(sc, len)));
 
   gp = sc->output_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
@@ -94187,12 +94168,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
       v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  make_slot_1(sc, mu_let, make_symbol(sc, "output-ports"), cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
+  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "output-ports"), cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
 
   {
     s7_pointer p;
     for (i = 0, p = sc->format_ports; p; p = (s7_pointer)port_next(p));
-    make_slot_1(sc, mu_let, make_symbol(sc, "format-ports"), make_integer(sc, i));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "format-ports"), make_integer(sc, i));
   }
 
   /* continuations (sketchy!) */
@@ -94201,16 +94182,17 @@ static s7_pointer memory_usage(s7_scheme *sc)
     if (is_continuation(gp->list[i]))
       len += continuation_stack_size(gp->list[i]);
   if (len > 0)
-    make_slot_1(sc, mu_let, make_symbol(sc, "continuations"), cons(sc, make_integer(sc, sc->continuations->loc), make_integer(sc, len * sizeof(s7_pointer))));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "continuations"), cons(sc, make_integer(sc, sc->continuations->loc), make_integer(sc, len * sizeof(s7_pointer))));
 
   /* c-objects */
   if (sc->c_objects->loc > 0)
-    make_slot_1(sc, mu_let, make_symbol(sc, "c-objects"), make_integer(sc, sc->c_objects->loc));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "c-objects"), make_integer(sc, sc->c_objects->loc));
 #if WITH_GMP
-  make_slot_1(sc, mu_let, make_symbol(sc, "bignums"),
-	      s7_list(sc, 5, make_integer(sc, sc->big_integers->loc), make_integer(sc, sc->big_ratios->loc),
-		      make_integer(sc, sc->big_reals->loc), make_integer(sc, sc->big_complexes->loc),
-		      make_integer(sc, sc->big_random_states->loc)));
+  add_slot_checked_with_id(sc, mu_let,
+			   make_symbol(sc, "bignums"),
+			   s7_list(sc, 5, make_integer(sc, sc->big_integers->loc), make_integer(sc, sc->big_ratios->loc),
+				   make_integer(sc, sc->big_reals->loc), make_integer(sc, sc->big_complexes->loc),
+				   make_integer(sc, sc->big_random_states->loc)));
 #endif
 
   /* free-lists (mallocate) */
@@ -94225,15 +94207,15 @@ static s7_pointer memory_usage(s7_scheme *sc)
     for (b = sc->block_lists[TOP_BLOCK_LIST], k = 0; b; b = block_next(b), k++)
       len += (sizeof(block_t) + block_size(b));
     sc->w = cons(sc, make_integer(sc, k), sc->w);
-    make_slot_1(sc, mu_let, make_symbol(sc, "free-lists"),
-		list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
-		       cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
+    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "free-lists"),
+			     list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
+				    cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
     sc->w = sc->nil;
-    make_slot_1(sc, mu_let, make_symbol(sc, "approximate-s7-size"),
-		kmg(sc, ((sc->permanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
-		    ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
-		    len + hlen +
-		    (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
+    add_slot_checked_with_id(sc, mu_let, 
+			     make_symbol(sc, "approximate-s7-size"),
+			     kmg(sc, ((sc->permanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
+				 ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
+				 len + hlen + (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
   }
 
   s7_gc_unprotect_at(sc, gc_loc);
@@ -97523,7 +97505,7 @@ int main(int argc, char **argv)
  * tstr       6689         5281   4863   4365   4354
  * tcase      4622         4960   4793   4561   4490
  * tlet       5590         7775   5640   4552   4543
- * tclo       4953         4787   4735   4596   4596
+ * tclo       4953         4787   4735   4596   4596  4588
  * tmap       6375         8270   8188          4813
  * tfft      114.7         7820   7729          5355
  * tmisc      6023         7389   6210   5827   5656
