@@ -3747,6 +3747,7 @@ static void try_to_call_gc(s7_scheme *sc);
 #if WITH_GCC
 #define make_integer(Sc, N) ({ s7_int _N_; _N_ = (N); (is_small_int(_N_) ? small_int(_N_) : ({ s7_pointer _I_; new_cell(Sc, _I_, T_INTEGER); integer(_I_) = _N_; _I_;}) ); })
 #define make_real(Sc, X) ({ s7_pointer _R_; s7_double _N_ = (X); new_cell(Sc, _R_, T_REAL); set_real(_R_, _N_); _R_;})
+#define make_real_unchecked(Sc, X) ({ s7_pointer _R_; s7_double _N_ = (X); new_cell_no_check(Sc, _R_, T_REAL); set_real(_R_, _N_); _R_;})
 #define make_complex_unchecked(Sc, R, I) ({ s7_pointer _C_; new_cell(Sc, _C_, T_COMPLEX); set_real_part(_C_, R); set_imag_part(_C_, I); _C_;})
                  /* "unchecked" here means we know the imaginary part is not 0.0 */
 #define make_complex(Sc, R, I)						\
@@ -3760,6 +3761,7 @@ static void try_to_call_gc(s7_scheme *sc);
 
 #define make_integer(Sc, N)           s7_make_integer(Sc, N)
 #define make_real(Sc, X)              s7_make_real(Sc, X)
+#define make_real_unchecked(Sc, X)    s7_make_real(Sc, X)
 #define make_complex(Sc, R, I)        s7_make_complex(Sc, R, I)
 #define make_complex_unchecked(Sc, R, I) s7_make_complex(Sc, R, I)
 #define real_to_double(Sc, X, Caller) s7_number_to_real_with_caller(Sc, X, Caller)
@@ -8489,6 +8491,19 @@ static inline s7_pointer add_slot_checked_with_id(s7_scheme *sc, s7_pointer let,
   return(slot);
 }
 
+static s7_pointer add_slot_unchecked_with_id(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
+{
+  s7_pointer slot;
+  new_cell_no_check(sc, slot, T_SLOT);
+  slot_set_symbol_and_value(slot, symbol, value);
+  set_local(symbol);
+  if (let_id(let) >= symbol_id(symbol))
+    symbol_set_local_slot(symbol, let_id(let), slot);
+  slot_set_next(slot, let_slots(let));
+  let_set_slots(let, slot);
+  return(slot);
+}
+
 static Inline s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
@@ -11174,7 +11189,6 @@ static s7_pointer g_is_continuation(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_continuation "(continuation? obj) returns #t if obj is a continuation"
   #define Q_is_continuation sc->pl_bt
-
   check_boolean_method(sc, is_continuation, sc->is_continuation_symbol, args);
   /* is this the right thing?  It returns #f for call-with-exit ("goto") because
    *   that form of continuation can't continue (via a jump back to its context).
@@ -26823,7 +26837,6 @@ static s7_pointer g_is_string(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_string "(string? obj) returns #t if obj is a string"
   #define Q_is_string sc->pl_bt
-
   check_boolean_method(sc, is_string, sc->is_string_symbol, args);
 }
 
@@ -40839,7 +40852,6 @@ static s7_pointer g_is_byte_vector(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_byte_vector "(byte-vector? obj) returns #t if obj is a byte-vector"
   #define Q_is_byte_vector sc->pl_bt
-
   check_boolean_method(sc, s7_is_byte_vector, sc->is_byte_vector_symbol, args);
 }
 
@@ -40940,7 +40952,6 @@ static s7_pointer g_is_subvector(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_subvector "(subvector? obj) returns #t if obj is a subvector"
   #define Q_is_subvector sc->pl_bt
-
   check_boolean_method(sc, s7_is_subvector, sc->is_subvector_symbol, args);
 }
 
@@ -41758,7 +41769,6 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
     }
 
   s7_vector_fill(sc, vec, fill);
-
   if ((is_pair(x)) &&
       (is_pair(cdr(x))))
     return(make_multivector(sc, vec, x));
@@ -42068,7 +42078,6 @@ static int32_t traverse_vector_data(s7_scheme *sc, s7_pointer vec, s7_int flat_r
     {
       if (!is_pair(x))
 	return(MULTIVECTOR_NOT_ENOUGH_ELEMENTS);
-
       if (dimension == (dimensions - 1))
 	vector_setter(vec)(sc, vec, flat_ref++, car(x));
       else
@@ -47228,14 +47237,10 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
     case T_C_FUNCTION_STAR:
       return(s7_cons(sc, int_zero, make_integer(sc, c_function_all_args(x))));
 
-    case T_MACRO:
-    case T_BACRO:
-    case T_CLOSURE:
+    case T_MACRO: case T_BACRO: case T_CLOSURE:
       return(closure_arity_to_cons(sc, x, closure_args(x)));
 
-    case T_MACRO_STAR:
-    case T_BACRO_STAR:
-    case T_CLOSURE_STAR:
+    case T_MACRO_STAR: case T_BACRO_STAR: case T_CLOSURE_STAR:
       return(closure_star_arity_to_cons(sc, x, closure_args(x)));
 
     case T_C_MACRO:
@@ -47260,13 +47265,10 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
       if (has_simple_elements(x)) return(cons(sc, int_one, make_integer(sc, vector_rank(x))));
       return(s7_cons(sc, int_one, max_arity));
 
-    case T_INT_VECTOR:
-    case T_FLOAT_VECTOR:
-    case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
       return((vector_length(x) == 0) ? sc->F : cons(sc, int_one, make_integer(sc, vector_rank(x))));
 
-    case T_PAIR:
-    case T_HASH_TABLE:
+    case T_PAIR: case T_HASH_TABLE:
       return(s7_cons(sc, int_one, max_arity));
 
     case T_ITERATOR:
@@ -47295,7 +47297,6 @@ static bool closure_is_aritable(s7_scheme *sc, s7_pointer x, s7_pointer x_args, 
 
   if (args == 0)
     return(!is_pair(x_args));
-
   if (is_symbol(x_args))                    /* any number of args is ok */
     return(true);
 
@@ -47334,14 +47335,10 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
     case T_C_FUNCTION_STAR:
       return(c_function_all_args(x) >= args);
 
-    case T_MACRO:
-    case T_BACRO:
-    case T_CLOSURE:
+    case T_MACRO: case T_BACRO: case T_CLOSURE:
       return(closure_is_aritable(sc, x, closure_args(x), args));
 
-    case T_MACRO_STAR:
-    case T_BACRO_STAR:
-    case T_CLOSURE_STAR:
+    case T_MACRO_STAR: case T_BACRO_STAR: case T_CLOSURE_STAR:
       return(closure_star_is_aritable(sc, x, closure_args(x), args));
 
     case T_C_MACRO:
@@ -47369,9 +47366,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	     (vector_length(x) > 0) &&   /* (#() 0) -> error */
 	     (args <= vector_rank(x)));
 
-    case T_LET:
-    case T_HASH_TABLE:
-    case T_PAIR:
+    case T_LET: case T_HASH_TABLE: case T_PAIR:
       return(args == 1);
 
     case T_ITERATOR:
@@ -50065,7 +50060,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	    s7_pointer *dst;
 	    dst = vector_elements(dest);
 	    for (i = start, j = 0; i < end; i++, j++)
-	      dst[j] = make_real(sc, src[i]);
+	      {
+		dst[j++] = make_real(sc, src[i++]);
+		if (i == end) break;
+		dst[j] = make_real_unchecked(sc, src[i]);
+	      }
 	    return(dest);
 	  }}
       break;
@@ -52530,15 +52529,15 @@ static s7_pointer init_owlet(s7_scheme *sc)
   e = make_let_slowly(sc, sc->nil);
   sc->temp3 = e;
   sc->error_type = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-type"), sc->F);  /* the error type or tag ('division-by-zero) */
-  sc->error_data = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-data"), sc->F);  /* the message or information passed by the error function */
-  sc->error_code = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-code"), sc->F);  /* the code that s7 thinks triggered the error */
-  sc->error_line = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer_unchecked(0));  /* the line number of that code */
+  sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-data"), sc->F);  /* the message or information passed by the error function */
+  sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-code"), sc->F);  /* the code that s7 thinks triggered the error */
+  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer_unchecked(0));  /* the line number of that code */
   add_saved_pointer(sc, p);
-  sc->error_file = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-file"), sc->F);  /* the file name of that code */
-  sc->error_position = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer_unchecked(0));  /* the file-byte position of that code */
+  sc->error_file = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-file"), sc->F);  /* the file name of that code */
+  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer_unchecked(0));  /* the file-byte position of that code */
   add_saved_pointer(sc, p);
 #if WITH_HISTORY
-  sc->error_history = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
+  sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
 #endif
   sc->temp3 = sc->nil;
   return(e);
@@ -56373,11 +56372,6 @@ static inline s7_pointer fx_vref_vref_3(s7_scheme *sc, s7_pointer v1, s7_pointer
   return(vector_ref_p_pp(sc, vector_ref_p_pp(sc, v1, p1), p2));
 }
 
-static s7_pointer fx_vref_vref_3_no_let(s7_scheme *sc, s7_pointer code) 
-{
-  return(fx_vref_vref_3(sc, lookup(sc, cadr(code)), lookup(sc, opt2_sym(code)), lookup(sc, opt3_sym(code))));
-}
-
 static s7_pointer fx_vref_vref_ss_s(s7_scheme *sc, s7_pointer arg) 
 {
   return(fx_vref_vref_3(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))), lookup(sc, caddr(arg))));
@@ -56388,12 +56382,17 @@ static s7_pointer fx_vref_vref_gs_t(s7_scheme *sc, s7_pointer arg)
   return(fx_vref_vref_3(sc, lookup_global(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))), t_lookup(sc, caddr(arg), arg)));
 }
 
-/* need var3 here */
-static s7_pointer fx_vref_vref_tu_s(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_vref_vref_3_no_let(s7_scheme *sc, s7_pointer code) /* out one level from vref_vref_tu_v below */
 {
-  s7_pointer slot;
-  slot = let_slots(sc->curlet);
-  return(fx_vref_vref_3(sc, slot_value(slot), slot_value(next_slot(slot)), lookup(sc, caddr(arg))));
+  return(fx_vref_vref_3(sc, lookup(sc, cadr(code)), lookup(sc, opt2_sym(code)), lookup(sc, opt3_sym(code))));
+}
+
+static s7_pointer fx_vref_vref_tu_v(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer slot1, slot2;
+  slot1 = let_slots(sc->curlet);
+  slot2 = next_slot(slot1);
+  return(fx_vref_vref_3(sc, slot_value(slot1), slot_value(slot2), slot_value(next_slot(slot2))));
 }
 
 static s7_pointer fx_c_opscq_c(s7_scheme *sc, s7_pointer arg)
@@ -56440,7 +56439,7 @@ static s7_pointer fx_c_opsq_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer largs;
   largs = cadr(arg);
-  set_car(sc->t1_1, lookup(sc, cadr(largs)));
+  set_car(sc->t1_1, lookup(sc, cadr(largs))); /* also opt1_sym(cdr(arg)) */
   set_car(sc->t2_1, fn_proc(largs)(sc, sc->t1_1));
   set_car(sc->t2_2, lookup(sc, opt3_sym(arg))); /* caddr(arg) */
   return(fn_proc(arg)(sc, sc->t2_1));
@@ -58700,7 +58699,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  {
 	    s7_pointer body;
 	    body = closure_body(opt1_lambda(arg));
-	    if ((has_fx(body)) && (fx_proc(body) == fx_vref_vref_tu_s))
+	    if ((has_fx(body)) && (fx_proc(body) == fx_vref_vref_tu_v))
 	      return(fx_vref_vref_3_no_let);
 	  }
 
@@ -59254,7 +59253,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       if (fx_proc(tree) == fx_vref_vref_ss_s)
 	{
 	  if ((caddr(p) == var1) && (is_global(cadadr(p)))) return(with_fx(tree, fx_vref_vref_gs_t));
-	  if ((cadadr(p) == var1) && (caddadr(p) == var2)) return(with_fx(tree, fx_vref_vref_tu_s));
+	  if ((cadadr(p) == var1) && (caddadr(p) == var2) && (caddr(p) == var3)) return(with_fx(tree, fx_vref_vref_tu_v));
 	}
       break;
 
@@ -59899,8 +59898,8 @@ static s7_int opt_i_ii_cc(opt_info *o)     {return(o->v[3].i_ii_f(o->v[1].i, o->
 static s7_int opt_i_ii_cs(opt_info *o)     {return(o->v[3].i_ii_f(o->v[1].i, integer(slot_value(o->v[2].p))));}
 static s7_int opt_i_ii_cs_mul(opt_info *o) {return(o->v[1].i * integer(slot_value(o->v[2].p)));}
 static s7_int opt_i_ii_sc(opt_info *o)     {return(o->v[3].i_ii_f(integer(slot_value(o->v[1].p)), o->v[2].i));}
-static s7_int opt_i_ii_sc_add(opt_info *o) {return(integer(slot_value(o->v[1].p)) + o->v[2].i);}
-static s7_int opt_i_ii_sc_sub(opt_info *o) {return(integer(slot_value(o->v[1].p)) - o->v[2].i);}
+static s7_int opt_i_ii_sc_add(opt_info *o) {return(integer(slot_value(o->v[1].p)) + o->v[2].i);} /* +1 is not faster */
+static s7_int opt_i_ii_sc_sub(opt_info *o) {return(integer(slot_value(o->v[1].p)) - o->v[2].i);} /* -1 is not faster */
 static s7_int opt_i_ii_ss(opt_info *o)     {return(o->v[3].i_ii_f(integer(slot_value(o->v[1].p)), integer(slot_value(o->v[2].p))));}
 static s7_int opt_i_ii_ss_add(opt_info *o) {return(integer(slot_value(o->v[1].p)) + integer(slot_value(o->v[2].p)));}
 static s7_pointer opt_p_ii_ss_add(opt_info *o) {return(make_integer(opt_sc(o), integer(slot_value(o->v[1].p)) + integer(slot_value(o->v[2].p))));}
@@ -60045,7 +60044,7 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 			{
 			  if (opc->v[3].i_ii_f == add_i_ii)
 			    opc->v[0].fi = opt_i_ii_sc_add;
-			  else opc->v[0].fi = (opc->v[3].i_ii_f == subtract_i_ii) ? opt_i_ii_sc_sub : opt_i_ii_sc; /* sub1 is not faster */
+			  else opc->v[0].fi = (opc->v[3].i_ii_f == subtract_i_ii) ? opt_i_ii_sc_sub : opt_i_ii_sc; /* add1/sub1 are not faster */
 			}
 		      else opc->v[0].fi = opt_i_7ii_sc;
 		      if ((car(car_x) == sc->modulo_symbol) &&
@@ -63631,18 +63630,22 @@ static bool b_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 
 
 /* -------- b_ii -------- */
-static bool opt_b_ii_ss(opt_info *o)     {return(o->v[3].b_ii_f(integer(slot_value(o->v[1].p)), integer(slot_value(o->v[2].p))));}
-static bool opt_b_ii_ss_lt(opt_info *o)  {return(integer(slot_value(o->v[1].p)) < integer(slot_value(o->v[2].p)));}
-static bool opt_b_ii_ss_gt(opt_info *o)  {return(integer(slot_value(o->v[1].p)) > integer(slot_value(o->v[2].p)));}
-static bool opt_b_ii_ss_leq(opt_info *o) {return(integer(slot_value(o->v[1].p)) <= integer(slot_value(o->v[2].p)));}
-static bool opt_b_ii_ss_geq(opt_info *o) {return(integer(slot_value(o->v[1].p)) >= integer(slot_value(o->v[2].p)));}
-static bool opt_b_ii_ss_eq(opt_info *o)  {return(integer(slot_value(o->v[1].p)) == integer(slot_value(o->v[2].p)));}
-static bool opt_b_ii_sc(opt_info *o)     {return(o->v[3].b_ii_f(integer(slot_value(o->v[1].p)), o->v[2].i));}
-static bool opt_b_ii_sc_lt(opt_info *o)  {return(integer(slot_value(o->v[1].p)) < o->v[2].i);}
-static bool opt_b_ii_sc_leq(opt_info *o) {return(integer(slot_value(o->v[1].p)) <= o->v[2].i);}
-static bool opt_b_ii_sc_gt(opt_info *o)  {return(integer(slot_value(o->v[1].p)) > o->v[2].i);}
-static bool opt_b_ii_sc_geq(opt_info *o) {return(integer(slot_value(o->v[1].p)) >= o->v[2].i);}
-static bool opt_b_ii_sc_eq(opt_info *o)  {return(integer(slot_value(o->v[1].p)) == o->v[2].i);}
+static bool opt_b_ii_ss(opt_info *o)      {return(o->v[3].b_ii_f(integer(slot_value(o->v[1].p)), integer(slot_value(o->v[2].p))));}
+static bool opt_b_ii_ss_lt(opt_info *o)   {return(integer(slot_value(o->v[1].p)) < integer(slot_value(o->v[2].p)));}
+static bool opt_b_ii_ss_gt(opt_info *o)   {return(integer(slot_value(o->v[1].p)) > integer(slot_value(o->v[2].p)));}
+static bool opt_b_ii_ss_leq(opt_info *o)  {return(integer(slot_value(o->v[1].p)) <= integer(slot_value(o->v[2].p)));}
+static bool opt_b_ii_ss_geq(opt_info *o)  {return(integer(slot_value(o->v[1].p)) >= integer(slot_value(o->v[2].p)));}
+static bool opt_b_ii_ss_eq(opt_info *o)   {return(integer(slot_value(o->v[1].p)) == integer(slot_value(o->v[2].p)));}
+static bool opt_b_ii_sc(opt_info *o)      {return(o->v[3].b_ii_f(integer(slot_value(o->v[1].p)), o->v[2].i));}
+static bool opt_b_ii_sc_lt(opt_info *o)   {return(integer(slot_value(o->v[1].p)) < o->v[2].i);}
+static bool opt_b_ii_sc_leq(opt_info *o)  {return(integer(slot_value(o->v[1].p)) <= o->v[2].i);}
+static bool opt_b_ii_sc_gt(opt_info *o)   {return(integer(slot_value(o->v[1].p)) > o->v[2].i);}
+static bool opt_b_ii_sc_geq(opt_info *o)  {return(integer(slot_value(o->v[1].p)) >= o->v[2].i);}
+static bool opt_b_ii_sc_eq(opt_info *o)   {return(integer(slot_value(o->v[1].p)) == o->v[2].i);}
+static bool opt_b_ii_sc_lt_2(opt_info *o) {return(integer(slot_value(o->v[1].p)) < 2);}
+static bool opt_b_ii_sc_lt_0(opt_info *o) {return(integer(slot_value(o->v[1].p)) < 0);}
+static bool opt_b_ii_sc_gt_0(opt_info *o) {return(integer(slot_value(o->v[1].p)) > 0);}
+static bool opt_b_ii_sc_eq_0(opt_info *o) {return(integer(slot_value(o->v[1].p)) == 0);}
 
 static bool opt_b_7ii_ss(opt_info *o)    {return(o->v[3].b_7ii_f(opt_sc(o), integer(slot_value(o->v[1].p)), integer(slot_value(o->v[2].p))));}
 static bool opt_b_7ii_sc(opt_info *o)    {return(o->v[3].b_7ii_f(opt_sc(o), integer(slot_value(o->v[1].p)), o->v[2].i));}
@@ -63689,11 +63692,11 @@ static bool b_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	  if (is_t_integer(arg2))
 	    {
 	      opc->v[2].i = integer(arg2);
-	      opc->v[0].fb = (bif == lt_b_ii) ? opt_b_ii_sc_lt :
+	      opc->v[0].fb = (bif == lt_b_ii) ? ((integer(arg2) == 0) ? opt_b_ii_sc_lt_0 : ((integer(arg2) == 2) ? opt_b_ii_sc_lt_2 : opt_b_ii_sc_lt)) :
 		              ((bif == leq_b_ii) ? opt_b_ii_sc_leq :
-			       ((bif == gt_b_ii) ? opt_b_ii_sc_gt :
+			       ((bif == gt_b_ii) ? ((integer(arg2) == 0) ? opt_b_ii_sc_gt_0 : opt_b_ii_sc_gt) :
 				((bif == geq_b_ii) ? opt_b_ii_sc_geq :
-				 ((bif == num_eq_b_ii) ? opt_b_ii_sc_eq :
+				 ((bif == num_eq_b_ii) ? ((integer(arg2) == 0) ? opt_b_ii_sc_eq_0 : opt_b_ii_sc_eq) :
 				  (((b7if == logbit_b_7ii) && (integer(arg2) >= 0) && (integer(arg2) < S7_INT_BITS)) ? opt_b_7ii_sc_bit :
 				   ((bif) ? opt_b_ii_sc : opt_b_7ii_sc))))));
 	      return(true);
@@ -82392,10 +82395,8 @@ static s7_pointer check_do(s7_scheme *sc)
       s7_pointer var;
       var = car(p);
       if ((!is_fxable(sc, cadr(var))) ||
-	  ((is_pair(cddr(var))) &&
-	   (!is_fxable(sc, caddr(var)))) ||
-	  ((is_symbol(cadr(var))) &&
-	   (is_definer_or_binder(cadr(var)))))
+	  ((is_pair(cddr(var))) && (!is_fxable(sc, caddr(var)))) ||
+	  ((is_symbol(cadr(var))) && (is_definer_or_binder(cadr(var)))))
 	{
 	  s7_pointer q;
 	  for (q = vars; q != p; q = cdr(q))
@@ -87426,7 +87427,7 @@ static bool op_tc_if_a_z_laa(s7_scheme *sc, s7_pointer code, bool z_first, tc_ch
 		      fi1 = o1->v[0].fi;
 		      fi2 = o2->v[0].fi;
 		      if ((z_first) &&
-			  (fb == opt_b_ii_sc_lt) &&
+			  ((fb == opt_b_ii_sc_lt) || (fb == opt_b_ii_sc_lt_0)) &&
 			  (fi1 == opt_i_ii_sc_sub))
 			{
 			  s7_int lim, m;
@@ -94009,31 +94010,33 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #if (!_WIN32) /* (!MS_WINDOWS) */
   getrusage(RUSAGE_SELF, &info);
   ut = info.ru_utime;
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "process-time"), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-time"), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
 #ifdef __APPLE__
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss));
   /* apple docs say this is in kilobytes, but apparently that is an error */
 #else
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss * 1024));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss * 1024));
   /* why does this number sometimes have no relation to RES in top? */
 #endif
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "IO"), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "IO"), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
 #endif
 
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "heap-size"), cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size"), cons(sc, make_integer(sc, sc->heap_size), 
+									    kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
 
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "small_ints"), cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells), kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "small_ints"), cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells), 
+										  kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
   {
     gc_obj_t *g;
     for (i = 0, g = sc->permanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects"), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects"), make_integer(sc, i));
     for (i = 0, g = sc->permanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets"), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets"), make_integer(sc, i));
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
@@ -94047,16 +94050,16 @@ static s7_pointer memory_usage(s7_scheme *sc)
       if (ts[i] > 50)
 	sc->w = cons(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)), make_integer(sc, ts[i])), sc->w);
     }
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free"), cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free"), cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
   sc->w = sc->nil;
   /* same for permanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
   
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
-			   cons(sc, make_integer(sc, sc->protected_objects_size - sc->gpofl_loc),
-				make_integer(sc, sc->protected_objects_size)));
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "setters"), make_integer(sc, sc->protected_setters_loc));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
+			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->gpofl_loc),
+				  make_integer(sc, sc->protected_objects_size)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "setters"), make_integer(sc, sc->protected_setters_loc));
 
   /* check the symbol table, counting gensyms etc */
   {
@@ -94073,22 +94076,22 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	  }
 	if (k > mx_list) mx_list = k;
       }
-    add_slot_checked_with_id(sc, mu_let, 
-			     make_symbol(sc, "symbol-table"),
-			     s7_list(sc, 9,
-				     make_integer(sc, SYMBOL_TABLE_SIZE),
-				     make_symbol(sc, "max-bin"), make_integer(sc, mx_list),
-				     make_symbol(sc, "symbols"), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
-				     make_symbol(sc, "gensyms"), make_integer(sc, gens),
-				     make_symbol(sc, "keys"),    make_integer(sc, keys)));
+    add_slot_unchecked_with_id(sc, mu_let, 
+			       make_symbol(sc, "symbol-table"),
+			       s7_list(sc, 9,
+				       make_integer(sc, SYMBOL_TABLE_SIZE),
+				       make_symbol(sc, "max-bin"), make_integer(sc, mx_list),
+				       make_symbol(sc, "symbols"), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
+				       make_symbol(sc, "gensyms"), make_integer(sc, gens),
+				       make_symbol(sc, "keys"),    make_integer(sc, keys)));
   }
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "stack"), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "stack"), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
 
   len = sc->autoload_names_top * (sizeof(const char **) + sizeof(s7_int) + sizeof(bool));
   for (i = 0; i < sc->autoload_names_loc; i++) len += sc->autoload_names_sizes[i];
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "autoload"), make_integer(sc, len));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "autoload"), make_integer(sc, len));
 
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "circle_info"), make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "circle_info"), make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
 
   /* check the gc lists (finalizations) */
   len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
@@ -94099,13 +94102,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
     loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
     sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
     sc->lambdas->loc + sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"), cons(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"), cons(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
   }
   /* strings */
   gp = sc->strings;
   for (len = 0, i = 0; i < (int32_t)(gp->loc); i++)
     len += string_length(gp->list[i]);
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "strings"), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "strings"), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
 
   /* vectors */
   for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
@@ -94125,14 +94128,14 @@ static s7_pointer memory_usage(s7_scheme *sc)
 		  blen += vector_length(v);
 		else vlen += vector_length(v);
 	      }}}
-  add_slot_checked_with_id(sc, mu_let, 
-			   make_symbol(sc, "vectors"),
-			   s7_list(sc, 9,
-				   make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
-				   make_symbol(sc, "vlen"),  make_integer(sc, vlen),
-				   make_symbol(sc, "fvlen"), make_integer(sc, flen),
-				   make_symbol(sc, "ivlen"), make_integer(sc, ilen),
-				   make_symbol(sc, "bvlen"), make_integer(sc, blen)));
+  add_slot_unchecked_with_id(sc, mu_let, 
+			     make_symbol(sc, "vectors"),
+			     s7_list(sc, 9,
+				     make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
+				     make_symbol(sc, "vlen"),  make_integer(sc, vlen),
+				     make_symbol(sc, "fvlen"), make_integer(sc, flen),
+				     make_symbol(sc, "ivlen"), make_integer(sc, ilen),
+				     make_symbol(sc, "bvlen"), make_integer(sc, blen)));
 
   /* hash-tables */
   for (i = 0, gp = sc->hash_tables; i < gp->loc; i++)
@@ -94142,7 +94145,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       hlen += ((hash_table_mask(v) + 1) * sizeof(hash_entry_t *));
       hlen += (hash_table_entries(v) * sizeof(hash_entry_t));
     }
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "hash-tables"), cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "hash-tables"), cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
 
   /* ports */
   gp = sc->input_ports;
@@ -94159,7 +94162,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
       v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "input-ports"), cons(sc, make_integer(sc, sc->input_ports->loc + sc->input_string_ports->loc), make_integer(sc, len)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "input-ports"), 
+			     cons(sc, make_integer(sc, sc->input_ports->loc + sc->input_string_ports->loc), make_integer(sc, len)));
 
   gp = sc->output_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
@@ -94168,12 +94172,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
       v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "output-ports"), cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "output-ports"), 
+			     cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
 
   {
     s7_pointer p;
     for (i = 0, p = sc->format_ports; p; p = (s7_pointer)port_next(p));
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "format-ports"), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "format-ports"), make_integer(sc, i));
   }
 
   /* continuations (sketchy!) */
@@ -94182,19 +94187,20 @@ static s7_pointer memory_usage(s7_scheme *sc)
     if (is_continuation(gp->list[i]))
       len += continuation_stack_size(gp->list[i]);
   if (len > 0)
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "continuations"), cons(sc, make_integer(sc, sc->continuations->loc), make_integer(sc, len * sizeof(s7_pointer))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "continuations"),
+			       cons(sc, make_integer(sc, sc->continuations->loc), make_integer(sc, len * sizeof(s7_pointer))));
 
   /* c-objects */
   if (sc->c_objects->loc > 0)
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "c-objects"), make_integer(sc, sc->c_objects->loc));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-objects"), make_integer(sc, sc->c_objects->loc));
 #if WITH_GMP
-  add_slot_checked_with_id(sc, mu_let,
-			   make_symbol(sc, "bignums"),
-			   s7_list(sc, 5, make_integer(sc, sc->big_integers->loc), make_integer(sc, sc->big_ratios->loc),
-				   make_integer(sc, sc->big_reals->loc), make_integer(sc, sc->big_complexes->loc),
-				   make_integer(sc, sc->big_random_states->loc)));
+  add_slot_unchecked_with_id(sc, mu_let,
+			     make_symbol(sc, "bignums"),
+			     s7_list(sc, 5, make_integer(sc, sc->big_integers->loc), make_integer(sc, sc->big_ratios->loc),
+				     make_integer(sc, sc->big_reals->loc), make_integer(sc, sc->big_complexes->loc),
+				     make_integer(sc, sc->big_random_states->loc)));
 #endif
-
+  
   /* free-lists (mallocate) */
   {
     block_t *b;
@@ -94207,15 +94213,15 @@ static s7_pointer memory_usage(s7_scheme *sc)
     for (b = sc->block_lists[TOP_BLOCK_LIST], k = 0; b; b = block_next(b), k++)
       len += (sizeof(block_t) + block_size(b));
     sc->w = cons(sc, make_integer(sc, k), sc->w);
-    add_slot_checked_with_id(sc, mu_let, make_symbol(sc, "free-lists"),
-			     list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
-				    cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists"),
+			       list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
+				      cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
     sc->w = sc->nil;
-    add_slot_checked_with_id(sc, mu_let, 
-			     make_symbol(sc, "approximate-s7-size"),
-			     kmg(sc, ((sc->permanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
-				 ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
-				 len + hlen + (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
+    add_slot_unchecked_with_id(sc, mu_let, 
+			       make_symbol(sc, "approximate-s7-size"),
+			       kmg(sc, ((sc->permanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
+				   ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
+				   len + hlen + (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
   }
 
   s7_gc_unprotect_at(sc, gc_loc);
@@ -97487,30 +97493,30 @@ int main(int argc, char **argv)
  * tmock      7699         1177   1165   1115   1116
  * s7test     4534         1873   1831   1805   1816
  * tvect      2208         2456   2413   2009   1986
- * lt         2102         2123   2110   2093   2126  2124
+ * lt         2102         2123   2110   2093   2124
  * tform      3271         2281   2273   2283   2274
  * tread      2610         2440   2421   2414   2409
  * tmac       3295         3317   3277   3219   2454
- * trclo      4310         2715   2561   2526   2523
+ * trclo      4310         2715   2561   2526   2518
+ * tcopy      2689         8035   5546   2600   2560
  * fbench     2960         2688   2583   2557   2562
- * tb         3398         2735   2681   2623   2600
- * tcopy      2689         8035   5546   2600   2608
+ * tb         3398         2735   2681   2623   2599
  * tmat       2736         3065   3042   2583   2615
  * titer      2821         2865   2842   2803   2741
  * tsort      3632         3105   3104   2915   2926
  * dup        4121         3805   3788   3653   3213
  * tset       3244         3253   3104   3248   3255
- * tio        3703         3816   3752   3686   3686
+ * tio        3703         3816   3752   3686   3684
  * teq        3728         4068   4045   3718   3709
  * tstr       6689         5281   4863   4365   4354
- * tcase      4622         4960   4793   4561   4490
- * tlet       5590         7775   5640   4552   4543
- * tclo       4953         4787   4735   4596   4596  4588
+ * tcase      4622         4960   4793   4561   4489
+ * tlet       5590         7775   5640   4552   4520
+ * tclo       4953         4787   4735   4596   4588
  * tmap       6375         8270   8188          4813
  * tfft      114.7         7820   7729          5355
  * tmisc      6023         7389   6210   5827   5656
  * tnum       59.2         6348   6013   5798   5701
- * trec       7763         5976   5970   5969   5964
+ * trec       7763         5976   5970   5969   5958
  * tgsl       25.3         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
  * thash      36.9         11.8   11.7   11.2   11.2
@@ -97518,7 +97524,7 @@ int main(int argc, char **argv)
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      61.1         36.7   37.5   37.3   37.1
  * sg         98.7         71.9   72.3   72.8   72.6
- * lg        104.3        106.6  105.0  104.1  104.9  104.8
+ * lg        104.3        106.6  105.0  104.1  104.8
  * tbig      598.7        177.4  175.8  171.7  171.5
  * -------------------------------------------------------
  *
