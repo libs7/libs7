@@ -2429,7 +2429,7 @@ in the latter case, you can't clobber one of the inner vectors.
 &gt; (let ((V #(#(1 2 3) #(4 5 6)))) (set! (V 1) 32) V)
 <em class="gray">#(#(1 2 3) 32)</em>
 &gt; (let ((V #2d((1 2 3) (4 5 6)))) (set! (V 1) 32) V)
-<em class="gray">;not enough args for vector-set!: (#2d((1 2 3) (4 5 6)) 1 32)</em>
+<em class="gray">;not enough arguments for vector-set!: (#2d((1 2 3) (4 5 6)) 1 32)</em>
 </pre>
 </div>
 
