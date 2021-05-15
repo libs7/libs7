@@ -650,7 +650,7 @@
 		    (not (pair? *load-path*)))
 	  (set! *cload-cflags* (append *cload-cflags* (format #f " -I~A" (car *load-path*)))))
 	
-	;; now we have the module .c file -- make it into a shared object, load it, delete the temp files
+	;; now we have the module .c file -- make it into a shared object
 	
 	(cond ((provided? 'osx)
 	       ;; I assume the caller is also compiled with these flags?
@@ -677,7 +677,13 @@
 	       (system (format #f "cc ~A -G -o ~A ~A ~A" 
 			       o-file-name so-file-name *cload-ldflags* ldflags)))
 	      
-	      (else
+	      ((or (provided? 'mingw) (provided? 'msys))
+	       ;; you'll need dlfcn which can be installed with pacman, and remember to build s7 with -DWITH_C_LOADER=1
+	       ;; in msys2:  gcc s7.c -o s7 -DWITH_MAIN -DWITH_C_LOADER=1 -I. -O2 -g -ldl -lm -Wl,-export-all-symbols,--out-implib,s7.lib
+	       (system (format #f "gcc ~A s7.lib -shared -o ~A -I."
+			       c-file-name o-file-name)))
+	       
+	      (else ; linux netbsd
 	       (system (format #f "~A -fPIC -c ~A -o ~A ~A ~A" 
 			       *cload-c-compiler* c-file-name o-file-name *cload-cflags* cflags))
 	       (system (format #f "~A ~A -shared -o ~A ~A ~A" 
