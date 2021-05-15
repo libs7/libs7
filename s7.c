@@ -8,6 +8,7 @@
  * Mike Scholz provided the FreeBSD support (complex trig funcs, etc)
  * Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci provided the MS Visual C++ support
  * Kjetil Matheussen provided the mingw support
+ * chai xiaoxiang provided the msys2 support
  *
  * Documentation is in s7.h and s7.html.
  * s7test.scm is a regression test.

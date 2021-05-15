@@ -677,7 +677,7 @@
 	       (system (format #f "cc ~A -G -o ~A ~A ~A" 
 			       o-file-name so-file-name *cload-ldflags* ldflags)))
 	      
-	      ((or (provided? 'mingw) (provided? 'msys))
+	      ((or (provided? 'mingw) (provided? 'msys)) ; from chai xiaoxiang
 	       ;; you'll need dlfcn which can be installed with pacman, and remember to build s7 with -DWITH_C_LOADER=1
 	       ;; in msys2:  gcc s7.c -o s7 -DWITH_MAIN -DWITH_C_LOADER=1 -I. -O2 -g -ldl -lm -Wl,-export-all-symbols,--out-implib,s7.lib
 	       (system (format #f "gcc ~A s7.lib -shared -o ~A -I."
