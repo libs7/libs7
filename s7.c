@@ -66877,6 +66877,8 @@ static void let_clear_has_pending_value(s7_pointer lt)
     slot_clear_has_pending_value(vp);
 }
 
+#define do_any_inits(o)         o->v[7].o1
+
 static s7_pointer opt_do_any(opt_info *o)
 {
   /* o->v[2].p=let, o->v[1].i=body end index, o->v[3].i=body length, o->v[4].i=return length, o->v[7].i=inits */
@@ -66891,7 +66893,7 @@ static s7_pointer opt_do_any(opt_info *o)
   sc->curlet = T_Let(do_curlet(o));
 
   /* init */
-  inits = o->v[7].o1;
+  inits = do_any_inits(o);
   for (k = 0, vp = let_slots(sc->curlet); tis_slot(vp); k++, vp = next_slot(vp))
     {
       o1 = inits->v[k].o1;
@@ -66956,7 +66958,7 @@ static s7_pointer opt_do_step_1(opt_info *o)
   push_stack_no_let_no_code(sc, OP_GC_PROTECT, old_e);
   sc->curlet = T_Let(do_curlet(o));
 
-  inits = o->v[7].o1;
+  inits = do_any_inits(o);
   for (k = 0, vp = let_slots(sc->curlet); tis_slot(vp); k++, vp = next_slot(vp))
     {
       o1 = inits->v[k].o1;
@@ -66994,7 +66996,7 @@ static s7_pointer opt_do_step_i(opt_info *o)
   push_stack_no_let_no_code(sc, OP_GC_PROTECT, old_e);
   sc->curlet = T_Let(do_curlet(o));
 
-  inits = o->v[7].o1;
+  inits = do_any_inits(o);
   for (k = 0, vp = let_slots(sc->curlet); tis_slot(vp); k++, vp = next_slot(vp))
     {
       o1 = inits->v[k].o1;
@@ -67024,6 +67026,9 @@ static s7_pointer opt_do_step_i(opt_info *o)
   return(result);
 }
 
+#define do_no_vars_test(o) o->v[6].o1
+#define do_no_vars_body(o) o->v[7].o1
+
 static s7_pointer opt_do_no_vars(opt_info *o)
 {
   /* no vars, no return, o->v[2].p=let, o->v[1].i=body end index, o->v[3].i=body length, o->v[4].i=return length=0, o->v[6]=end test */
@@ -67038,7 +67043,7 @@ static s7_pointer opt_do_no_vars(opt_info *o)
   push_stack_no_let_no_code(sc, OP_GC_PROTECT, old_e);
   sc->curlet = do_curlet(o);
   len = do_body_length(o);
-  ostart = o->v[6].o1;
+  ostart = do_no_vars_test(o);
   fb = ostart->v[0].fb;
 
   if (len == 0)       /* titer */
@@ -67046,7 +67051,7 @@ static s7_pointer opt_do_no_vars(opt_info *o)
   else
     {
       opt_info *body;
-      body = o->v[7].o1;
+      body = do_no_vars_body(o);
       while (!(fb(ostart)))   /* tshoot, tfft */
 	{
 	  int32_t i;
@@ -67753,14 +67758,14 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   if ((var_len == 0) && (rtn_len == 0))
     {
       opt_info *body;
-      opc->v[6].o1 = sc->opts[end_test_pc];
+      do_no_vars_test(opc) = sc->opts[end_test_pc];
       opc->v[0].fp = opt_do_no_vars;
       if (body_len > 0)
 	{
 	  body = alloc_opo(sc);
 	  for (k = 0; k < body_len; k++)
 	    body->v[k].o1 = body_o[k];
-	  opc->v[7].o1 = body;
+	  do_no_vars_body(opc) = body;
 	}
       return(true);
     }
@@ -67800,7 +67805,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       inits = alloc_opo(sc);
       for (k = 0; k < var_len; k++)
 	inits->v[k].o1 = init_o[k];
-      opc->v[7].o1 = inits;
+      do_any_inits(opc) = inits;
 
       if (opc->v[0].fp == opt_do_any)
 	{
@@ -82649,6 +82654,113 @@ static bool op_dox_init(s7_scheme *sc)
   return(false); /* goto BEGIN */
 }
 
+static goto_t op_dox_no_body_1(s7_scheme *sc, s7_pointer slots, s7_pointer end, int32_t steppers, s7_pointer stepper)
+{
+  s7_function endf;
+  s7_pointer endp;
+  endp = car(end);
+  endf = fx_proc(end);
+  if (endf == fx_c_d)
+    {
+      endf = fn_proc(endp);
+      endp = cdr(endp);
+    }
+  if (steppers == 1)
+    {
+      s7_function f;
+      s7_pointer a;
+      f = fx_proc(slot_expression(stepper)); /* e.g. fx_add_s1 */
+      a = car(slot_expression(stepper));
+      if (f == fx_c_d)
+	{
+	  f = fn_proc(a);
+	  a = cdr(a);
+	}
+      if (((f == fx_cdr_s) || (f == fx_cdr_t)) &&
+	  (cadr(a) == slot_symbol(stepper)))
+	{
+	  do {slot_set_value(stepper, cdr(slot_value(stepper)));} while (endf(sc, endp) == sc->F);
+	  sc->value = sc->T;
+	}
+      else
+	{
+	  /* (- n 1) tpeak dup */
+	  if (((f == fx_add_t1) || (f == fx_add_u1)) && (is_t_integer(slot_value(stepper))))
+	    {
+	      s7_pointer p;
+	      p = make_mutable_integer(sc, integer(slot_value(stepper)));
+	      slot_set_value(stepper, p);
+	      if (!no_bool_opt(end))
+		{
+		  sc->pc = 0;
+		  if (bool_optimize(sc, end))  /* in dup.scm this costs more than the fb(o) below saves (search is short) */
+		    {                          /*    but tc is much slower (and bool|int_optimize dominates) */
+		      opt_info *o;
+		      bool (*fb)(opt_info *o);
+		      o = sc->opts[0];
+		      fb = o->v[0].fb;
+		      do {integer(p)++;} while (!fb(o)); /* do {integer(p)++;} while ((sc->value = optf(sc, endp)) == sc->F); */
+		      clear_mutable_integer(p);
+		      sc->value = sc->T;
+		      sc->code = cdr(end);
+		      return(goto_do_end_clauses);
+		    }
+		  else set_no_bool_opt(end);
+		}
+	      do {integer(p)++;} while ((sc->value = endf(sc, endp)) == sc->F);
+	      clear_mutable_integer(p);
+	    }
+	  else do {slot_set_value(stepper, f(sc, a));} while ((sc->value = endf(sc, endp)) == sc->F);
+	}
+      sc->code = cdr(end);
+      return(goto_do_end_clauses);
+    }
+  if ((steppers == 2) &&
+      (!tis_slot(next_slot(next_slot(slots)))))
+    {
+      s7_pointer step1, step2, expr1, expr2;
+      step1 = slots;
+      expr1 = slot_expression(step1);
+      step2 = next_slot(step1);
+      expr2 = slot_expression(step2); /* presetting fx_proc/car(expr) is not faster */
+      if ((fx_proc(expr2) == fx_subtract_u1) &&
+	  (is_t_integer(slot_value(step2))) &&
+	  (endf == fx_num_eq_ui))
+	{
+	  s7_int i, lim;
+	  lim = integer(caddr(endp));
+	  for (i = integer(slot_value(step2)) - 1; i >= lim; i--)
+	    slot_set_value(step1, fx_call(sc, expr1));
+	}
+      else
+	do {
+	  slot_set_value(step1, fx_call(sc, expr1));
+	  slot_set_value(step2, fx_call(sc, expr2));
+	} while ((sc->value = endf(sc, endp)) == sc->F);
+      sc->code = cdr(end);
+      if (is_symbol(car(sc->code)))
+	{
+	  step1 = lookup_slot_from(car(sc->code), sc->curlet);
+	  sc->value = slot_value(step1);
+	  if (is_t_real(sc->value))
+	    clear_mutable_number(sc->value);
+	  return(goto_start);
+	}
+      return(goto_do_end_clauses);
+    }
+  do {
+    s7_pointer slt;
+    slt = slots;
+    do {
+      if (slot_has_expression(slt))
+	slot_set_value(slt, fx_call(sc, slot_expression(slt)));
+      slt = next_slot(slt);
+    } while (tis_slot(slt));
+  } while ((sc->value = endf(sc, endp)) == sc->F);
+  sc->code = cdr(end);
+  return(goto_do_end_clauses);
+}
+
 static goto_t op_dox(s7_scheme *sc)
 {
   /* any number of steppers using dox exprs, end also dox, body and end result arbitrary.
@@ -82720,309 +82832,145 @@ static goto_t op_dox(s7_scheme *sc)
       return(goto_do_end_clauses);
     }
   code = cddr(sc->code);
-  if (is_null(code)) /* no body? */
+  if (is_null(code)) /* no body -- how does this happen? */
+    return(op_dox_no_body_1(sc, slots, end, steppers, stepper));
+
+  if ((is_null(cdr(code))) && /* 1 expr, code is cdddr(form) here */
+      (is_pair(car(code))))
     {
-      if (endf == fx_c_d)
-	{
-	  endf = fn_proc(endp);
-	  endp = cdr(endp);
-	}
-      if (steppers == 1)
-	{
-	  s7_function f;
-	  s7_pointer a;
-	  f = fx_proc(slot_expression(stepper)); /* e.g. fx_add_s1 */
-	  a = car(slot_expression(stepper));
-	  if (f == fx_c_d)
-	    {
-	      f = fn_proc(a);
-	      a = cdr(a);
-	    }
-	  if (((f == fx_cdr_s) || (f == fx_cdr_t)) &&
-	      (cadr(a) == slot_symbol(stepper)))
-	    {
-	      do {slot_set_value(stepper, cdr(slot_value(stepper)));} while (endf(sc, endp) == sc->F);
-	      sc->value = sc->T;
-	    }
-	  else
-	    {
-	      /* (- n 1) tpeak dup */
-	      if (((f == fx_add_t1) || (f == fx_add_u1)) && (is_t_integer(slot_value(stepper))))
-		{
-		  s7_pointer p;
-		  p = make_mutable_integer(sc, integer(slot_value(stepper)));
-		  slot_set_value(stepper, p);
-		  if (!no_bool_opt(end))
-		    {
-		      sc->pc = 0;
-		      if (bool_optimize(sc, end))  /* in dup.scm this costs more than the fb(o) below saves (search is short) */
-			{                          /*    but tc is much slower (and bool|int_optimize dominates) */
-			  opt_info *o;
-			  bool (*fb)(opt_info *o);
-			  o = sc->opts[0];
-			  fb = o->v[0].fb;
-			  do {integer(p)++;} while (!fb(o)); /* do {integer(p)++;} while ((sc->value = optf(sc, endp)) == sc->F); */
-			  clear_mutable_integer(p);
-			  sc->value = sc->T;
-			  sc->code = cdr(end);
-			  return(goto_do_end_clauses);
-			}
-		      else set_no_bool_opt(end);
-		    }
-		  do {integer(p)++;} while ((sc->value = endf(sc, endp)) == sc->F);
-		  clear_mutable_integer(p);
-		}
-	      else do {slot_set_value(stepper, f(sc, a));} while ((sc->value = endf(sc, endp)) == sc->F);
-	    }
-	  sc->code = cdr(end);
-	  return(goto_do_end_clauses);
-	}
-      else
-	{
-	  if ((steppers == 2) &&
-	      (!tis_slot(next_slot(next_slot(slots)))))
-	    {
-	      s7_pointer step1, step2, expr1, expr2;
-	      step1 = slots;
-	      expr1 = slot_expression(step1);
-	      step2 = next_slot(step1);
-	      expr2 = slot_expression(step2); /* presetting fx_proc/car(expr) is not faster */
-	      if ((fx_proc(expr2) == fx_subtract_u1) &&
-		  (is_t_integer(slot_value(step2))) &&
-		  (endf == fx_num_eq_ui))
-		{
-		  s7_int i, lim;
-		  lim = integer(caddr(endp));
-		  for (i = integer(slot_value(step2)) - 1; i >= lim; i--)
-		    slot_set_value(step1, fx_call(sc, expr1));
-		}
-	      else
-		do {
-		    slot_set_value(step1, fx_call(sc, expr1));
-		    slot_set_value(step2, fx_call(sc, expr2));
-		  } while ((sc->value = endf(sc, endp)) == sc->F);
-	      sc->code = cdr(end);
-	      if (is_symbol(car(sc->code)))
-		{
-		  step1 = lookup_slot_from(car(sc->code), sc->curlet);
-		  sc->value = slot_value(step1);
-		  if (is_t_real(sc->value))
-		    clear_mutable_number(sc->value);
-		  return(goto_start);
-		}
-	      return(goto_do_end_clauses);
-	    }
-	  do {
-	    s7_pointer slt;
-	    slt = slots;
-	    do {
-	      if (slot_has_expression(slt))
-		slot_set_value(slt, fx_call(sc, slot_expression(slt)));
-	      slt = next_slot(slt);
-	    } while (tis_slot(slt));
-	  } while ((sc->value = endf(sc, endp)) == sc->F);
-	  sc->code = cdr(end);
-	  return(goto_do_end_clauses);
-	}}
-  else /* there is a body */
-    {
-      /* is let activated? also multiexpr body  and other fx? */
-      if ((is_null(cdr(code))) && /* 1 expr, code is cdddr(form) here */
-	  (is_pair(car(code))))
-	{
-	  s7_pointer body;
-	  s7_pfunc bodyf = NULL;
-	  body = car(code);
-	  if ((!no_cell_opt(code)) &&
+      s7_pointer body;
+      s7_pfunc bodyf = NULL;
+      body = car(code);
+      if ((!no_cell_opt(code)) &&
 #if WITH_GMP
-	      (!got_bignum) &&
+	  (!got_bignum) &&
 #endif
-	      (has_safe_steppers(sc, sc->curlet)))
-	    bodyf = s7_optimize_nr(sc, code);
-
-	  if ((!bodyf) &&
-	      (is_fxable(sc, body)) &&     /* happens very rarely, #_* as car etc */
-	      (is_c_function(car(body))))
-	    bodyf = s7_optimize_nr(sc, set_dlist_1(sc, set_ulist_1(sc, make_symbol(sc, c_function_name(car(body))), cdr(body))));
-
-	  if (bodyf)
+	  (has_safe_steppers(sc, sc->curlet)))
+	bodyf = s7_optimize_nr(sc, code);
+      
+      if ((!bodyf) &&
+	  (is_fxable(sc, body)) &&     /* happens very rarely, #_* as car etc */
+	  (is_c_function(car(body))))
+	bodyf = s7_optimize_nr(sc, set_dlist_1(sc, set_ulist_1(sc, make_symbol(sc, c_function_name(car(body))), cdr(body))));
+      
+      if (bodyf)
+	{
+	  if (steppers == 1)                                /* one expr body, 1 stepper */
 	    {
-	      if (steppers == 1)                                /* one expr body, 1 stepper */
+	      s7_pointer stepa;
+	      s7_function stepf;
+	      stepf = fx_proc(slot_expression(stepper));
+	      stepa = car(slot_expression(stepper));
+	      if (((stepf == fx_add_t1) || (stepf == fx_add_u1)) && (is_t_integer(slot_value(stepper))))
 		{
-		  s7_pointer stepa;
-		  s7_function stepf;
-		  stepf = fx_proc(slot_expression(stepper));
-		  stepa = car(slot_expression(stepper));
-		  if (((stepf == fx_add_t1) || (stepf == fx_add_u1)) && (is_t_integer(slot_value(stepper))))
-		    {
-		      s7_int i;
-		      opt_info *o;
-		      o = sc->opts[0];
-		      i = integer(slot_value(stepper));
-		      if (bodyf == opt_cell_any_nr)
-			{
-			  s7_pointer (*fp)(opt_info *o);
-			  fp = o->v[0].fp;
-
-			  /* a laborious experiment... */
-			  if (!((fp == opt_p_pip_sso) && (o->v[2].p == o->v[4].p) && 
-				(((o->v[5].p_pip_f == string_set_p_pip_unchecked) && (o->v[6].p_pi_f == string_ref_p_pi_unchecked)) ||
-				 ((o->v[5].p_pip_f == string_set_unchecked) && (o->v[6].p_pi_f == string_ref_unchecked)) ||
-				 ((o->v[5].p_pip_f == vector_set_p_pip_unchecked) && (o->v[6].p_pi_f == normal_vector_ref_p_pi_unchecked)) ||
-				 ((o->v[5].p_pip_f == vector_set_unchecked) && (o->v[6].p_pi_f == vector_ref_unchecked)) ||
-				 ((o->v[5].p_pip_f == list_set_p_pip_unchecked) &&   (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
-				(copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper, o))))
-			    do {
-			      fp(o);
-			      slot_set_value(stepper, make_integer(sc, ++i));
-			    } while ((sc->value = endf(sc, endp)) == sc->F);
-			  /* TODO: here if has_step_end we can use (integer(stepper) == denominator... */
-			}
-		      else
-			{
-			  if (!(((bodyf == opt_float_any_nr) && (o->v[0].fd == opt_d_7pid_ss_ss) && 
-				 (o->v[2].p == o->v[6].p) &&
-				 ((o->v[4].d_7pid_f == float_vector_set_d_7pid) || (o->v[4].d_7pid_f == float_vector_set_unchecked)) &&
-				 (o->v[3].d_7pi_f == float_vector_ref_d_7pi) &&
-				 (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), i, endp, stepper, o))) ||
-
-				((bodyf == opt_int_any_nr) && ((o->v[0].fi == opt_i_7pii_ssf) || (o->v[0].fi == opt_i_7pii_ssf_vset)) &&
-				 (o->v[2].p == o->v[4].o1->v[2].p) &&
-				 (((o->v[3].i_7pii_f == int_vector_set_i_7pii) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi)) ||
-				  ((o->v[3].i_7pii_f == int_vector_set_unchecked) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_unchecked))) &&
-				 (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper, o)))))
-			    do {
-			      bodyf(sc);
-			      slot_set_value(stepper, make_integer(sc, ++i));
-			    } while ((sc->value = endf(sc, endp)) == sc->F);
-			}
-		      sc->code = cdr(end);
-		      return(goto_do_end_clauses);
-		    }
-		  do {
-		    bodyf(sc);
-		    slot_set_value(stepper, stepf(sc, stepa));
-		  } while ((sc->value = endf(sc, endp)) == sc->F);
-		  sc->code = cdr(end);
-		  return(goto_do_end_clauses);
-		}
-
-	      if ((steppers == 2) &&
-		  (!tis_slot(next_slot(next_slot(slots)))))
-		{
-		  s7_pointer s1, s2, p1, p2;
-		  s7_function f1, f2;
-		  s1 = slots;
-		  s2 = next_slot(s1);
-		  f1 = fx_proc(slot_expression(s1));
-		  f2 = fx_proc(slot_expression(s2));
-		  p1 = car(slot_expression(s1));
-		  p2 = car(slot_expression(s2));
-		  /* split out opt_float_any_nr gained nothing (see tmp), same for opt_cell_any_nr */
+		  s7_int i;
+		  opt_info *o;
+		  o = sc->opts[0];
+		  i = integer(slot_value(stepper));
 		  if (bodyf == opt_cell_any_nr)
 		    {
 		      s7_pointer (*fp)(opt_info *o);
-		      opt_info *o;
-		      o = sc->opts[0];
 		      fp = o->v[0].fp;
-		      /* maybe this can be generalized (thash:79) -- explicit integer stepper, but there must be a simpler way */
-		      if ((f2 == fx_add_u1) && (is_t_integer(slot_value(s2))) && (endf == fx_num_eq_ui) && 
-			  (is_symbol(cadr(endp))) && (cadr(endp) == slot_symbol(s2)) && (is_t_integer(caddr(endp))) && (!s7_tree_memq(sc, cadr(endp), body)))
-			{
-			  s7_int i, endi;
-			  i = integer(slot_value(s2));
-			  endi = integer(caddr(endp));
-			  do {
-			    fp(o);
-			    slot_set_value(s1, f1(sc, p1));
-			    i++;
-			  } while (i < endi);
-			}
-		      else
+		      
+		      /* a laborious experiment... */
+		      if (!((fp == opt_p_pip_sso) && (o->v[2].p == o->v[4].p) && 
+			    (((o->v[5].p_pip_f == string_set_p_pip_unchecked) && (o->v[6].p_pi_f == string_ref_p_pi_unchecked)) ||
+			     ((o->v[5].p_pip_f == string_set_unchecked) && (o->v[6].p_pi_f == string_ref_unchecked)) ||
+			     ((o->v[5].p_pip_f == vector_set_p_pip_unchecked) && (o->v[6].p_pi_f == normal_vector_ref_p_pi_unchecked)) ||
+			     ((o->v[5].p_pip_f == vector_set_unchecked) && (o->v[6].p_pi_f == vector_ref_unchecked)) ||
+			     ((o->v[5].p_pip_f == list_set_p_pip_unchecked) &&   (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
+			    (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper, o))))
 			do {
 			  fp(o);
-			  slot_set_value(s1, f1(sc, p1));
-			  slot_set_value(s2, f2(sc, p2));
+			  slot_set_value(stepper, make_integer(sc, ++i));
 			} while ((sc->value = endf(sc, endp)) == sc->F);
+		      /* TODO: here if has_step_end we can use (integer(stepper) == denominator... */
 		    }
 		  else
-		    do {
-			bodyf(sc);
-			slot_set_value(s1, f1(sc, p1));
-			slot_set_value(s2, f2(sc, p2));
-		      } while ((sc->value = endf(sc, endp)) == sc->F);
+		    {
+		      if (!(((bodyf == opt_float_any_nr) && (o->v[0].fd == opt_d_7pid_ss_ss) && 
+			     (o->v[2].p == o->v[6].p) &&
+			     ((o->v[4].d_7pid_f == float_vector_set_d_7pid) || (o->v[4].d_7pid_f == float_vector_set_unchecked)) &&
+			     (o->v[3].d_7pi_f == float_vector_ref_d_7pi) &&
+			     (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), i, endp, stepper, o))) ||
+			    
+			    ((bodyf == opt_int_any_nr) && ((o->v[0].fi == opt_i_7pii_ssf) || (o->v[0].fi == opt_i_7pii_ssf_vset)) &&
+			     (o->v[2].p == o->v[4].o1->v[2].p) &&
+			     (((o->v[3].i_7pii_f == int_vector_set_i_7pii) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi)) ||
+			      ((o->v[3].i_7pii_f == int_vector_set_unchecked) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_unchecked))) &&
+			     (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper, o)))))
+			do {
+			  bodyf(sc);
+			  slot_set_value(stepper, make_integer(sc, ++i));
+			} while ((sc->value = endf(sc, endp)) == sc->F);
+		    }
 		  sc->code = cdr(end);
 		  return(goto_do_end_clauses);
 		}
+	      do {
+		bodyf(sc);
+		slot_set_value(stepper, stepf(sc, stepa));
+	      } while ((sc->value = endf(sc, endp)) == sc->F);
+	      sc->code = cdr(end);
+	      return(goto_do_end_clauses);
+	    }
+	  
+	  if ((steppers == 2) &&
+	      (!tis_slot(next_slot(next_slot(slots)))))
+	    {
+	      s7_pointer s1, s2, p1, p2;
+	      s7_function f1, f2;
+	      s1 = slots;
+	      s2 = next_slot(s1);
+	      f1 = fx_proc(slot_expression(s1));
+	      f2 = fx_proc(slot_expression(s2));
+	      p1 = car(slot_expression(s1));
+	      p2 = car(slot_expression(s2));
+	      /* split out opt_float_any_nr gained nothing (see tmp), same for opt_cell_any_nr */
 	      if (bodyf == opt_cell_any_nr)
 		{
 		  s7_pointer (*fp)(opt_info *o);
 		  opt_info *o;
 		  o = sc->opts[0];
 		  fp = o->v[0].fp;
-		  do {
-		    s7_pointer slot1;
-		    fp(o);
-		    slot1 = slots;
+		  /* maybe this can be generalized (thash:79) -- explicit integer stepper, but there must be a simpler way */
+		  if ((f2 == fx_add_u1) && (is_t_integer(slot_value(s2))) && (endf == fx_num_eq_ui) && 
+		      (is_symbol(cadr(endp))) && (cadr(endp) == slot_symbol(s2)) && (is_t_integer(caddr(endp))) && (!s7_tree_memq(sc, cadr(endp), body)))
+		    {
+		      s7_int i, endi;
+		      i = integer(slot_value(s2));
+		      endi = integer(caddr(endp));
+		      do {
+			fp(o);
+			slot_set_value(s1, f1(sc, p1));
+			i++;
+		      } while (i < endi);
+		    }
+		  else
 		    do {
-		      if (slot_has_expression(slot1))
-			slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
-		      slot1 = next_slot(slot1);
-		    } while (tis_slot(slot1));
-		  } while ((sc->value = endf(sc, endp)) == sc->F);
+		      fp(o);
+		      slot_set_value(s1, f1(sc, p1));
+		      slot_set_value(s2, f2(sc, p2));
+		    } while ((sc->value = endf(sc, endp)) == sc->F);
 		}
 	      else
 		do {
-		    s7_pointer slot1;
-		    bodyf(sc);
-		    slot1 = slots;
-		    do {
-		      if (slot_has_expression(slot1))
-			slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
-		      slot1 = next_slot(slot1);
-		    } while (tis_slot(slot1));
-		  } while ((sc->value = endf(sc, endp)) == sc->F);
+		  bodyf(sc);
+		  slot_set_value(s1, f1(sc, p1));
+		  slot_set_value(s2, f2(sc, p2));
+		} while ((sc->value = endf(sc, endp)) == sc->F);
 	      sc->code = cdr(end);
 	      return(goto_do_end_clauses);
 	    }
-
-	  if ((steppers == 1) &&
-	      (car(body) == sc->set_symbol) &&
-	      (is_pair(cdr(body))) &&
-	      (is_symbol(cadr(body))) &&
-	      (is_pair(cddr(body))) &&
-	      ((has_fx(cddr(body))) || (is_fxable(sc, caddr(body)))) &&
-	      (is_null(cdddr(body))))
+	  if (bodyf == opt_cell_any_nr)
 	    {
-	      s7_pointer val, slot, stepa;
-	      s7_function stepf, valf;
-
-	      val = cddr(body);
-	      if (!has_fx(val))
-		set_fx(val, fx_choose(sc, val, sc->curlet, let_symbol_is_safe));
-	      valf = fx_proc(val);
-	      val = car(val);
-	      slot = lookup_slot_from(cadr(body), sc->curlet);
-	      if (slot == sc->undefined)
-		unbound_variable_error(sc, cadr(body));
-	      stepf = fx_proc(slot_expression(stepper));
-	      stepa = car(slot_expression(stepper));
-	      do {
-		slot_set_value(slot, valf(sc, val));
-		slot_set_value(stepper, stepf(sc, stepa));
-	      } while ((sc->value = endf(sc, endp)) == sc->F);
-	      sc->code = cdr(end);
-	      return(goto_do_end_clauses);
-	    }
-
-	  /* not fxable body (bodyf nil) but body might be gxable here: is_gxable(body) */
-	  if ((has_gx(body)) || (gx_annotate_arg(sc, code, sc->curlet)))
-	    {
-	      s7_function f;
-	      f = fx_proc_unchecked(code);
+	      s7_pointer (*fp)(opt_info *o);
+	      opt_info *o;
+	      o = sc->opts[0];
+	      fp = o->v[0].fp;
 	      do {
 		s7_pointer slot1;
-		f(sc, body);
+		fp(o);
 		slot1 = slots;
 		do {
 		  if (slot_has_expression(slot1))
@@ -83030,87 +82978,146 @@ static goto_t op_dox(s7_scheme *sc)
 		  slot1 = next_slot(slot1);
 		} while (tis_slot(slot1));
 	      } while ((sc->value = endf(sc, endp)) == sc->F);
-	      sc->code = cdr(end);
-	      return(goto_do_end_clauses);
-	    }}
-      else /* more than one expr */
-	{
-	  s7_pointer p;
-	  bool use_opts = false;
-	  int32_t body_len = 0;
-	  opt_info *body[32];
-          #define MAX_OPT_BODY_SIZE 32
-	  p = code;
-
-	  if ((!no_cell_opt(code)) &&
-#if WITH_GMP
-	      (!got_bignum) &&
-#endif
-	      (has_safe_steppers(sc, sc->curlet)))
-	    {
-	      int32_t k;
-	      sc->pc = 0;
-	      for (k = 0; (is_pair(p)) && (k < MAX_OPT_BODY_SIZE); k++, p = cdr(p), body_len++)
-		{
-		  opt_info *start;
-		  start = sc->opts[sc->pc];
-		  if (!cell_optimize(sc, p))
-		    {
-		      set_no_cell_opt(code);
-		      p = code;
-		      break;
-		    }
-		  oo_idp_nr_fixup(start);
-		  body[k] = start;
-		}
-	      use_opts = is_null(p);
 	    }
-
-	  if (p == code)
-	    for (; is_pair(p); p = cdr(p))
-	      if (!is_fxable(sc, car(p)))
-		break;
-
-	  if (is_null(p))
+	  else
+	    do {
+	      s7_pointer slot1;
+	      bodyf(sc);
+	      slot1 = slots;
+	      do {
+		if (slot_has_expression(slot1))
+		  slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
+		slot1 = next_slot(slot1);
+	      } while (tis_slot(slot1));
+	    } while ((sc->value = endf(sc, endp)) == sc->F);
+	  sc->code = cdr(end);
+	  return(goto_do_end_clauses);
+	}
+      
+      if ((steppers == 1) &&
+	  (car(body) == sc->set_symbol) &&
+	  (is_pair(cdr(body))) &&
+	  (is_symbol(cadr(body))) &&
+	  (is_pair(cddr(body))) &&
+	  ((has_fx(cddr(body))) || (is_fxable(sc, caddr(body)))) &&
+	  (is_null(cdddr(body))))
+	{
+	  s7_pointer val, slot, stepa;
+	  s7_function stepf, valf;
+	  
+	  val = cddr(body);
+	  if (!has_fx(val))
+	    set_fx(val, fx_choose(sc, val, sc->curlet, let_symbol_is_safe));
+	  valf = fx_proc(val);
+	  val = car(val);
+	  slot = lookup_slot_from(cadr(body), sc->curlet);
+	  if (slot == sc->undefined)
+	    unbound_variable_error(sc, cadr(body));
+	  stepf = fx_proc(slot_expression(stepper));
+	  stepa = car(slot_expression(stepper));
+	  do {
+	    slot_set_value(slot, valf(sc, val));
+	    slot_set_value(stepper, stepf(sc, stepa));
+	  } while ((sc->value = endf(sc, endp)) == sc->F);
+	  sc->code = cdr(end);
+	  return(goto_do_end_clauses);
+	}
+      
+      /* not fxable body (bodyf nil) but body might be gxable here: is_gxable(body) */
+      if ((has_gx(body)) || (gx_annotate_arg(sc, code, sc->curlet)))
+	{
+	  s7_function f;
+	  f = fx_proc_unchecked(code);
+	  do {
+	    s7_pointer slot1;
+	    f(sc, body);
+	    slot1 = slots;
+	    do {
+	      if (slot_has_expression(slot1))
+		slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
+	      slot1 = next_slot(slot1);
+	    } while (tis_slot(slot1));
+	  } while ((sc->value = endf(sc, endp)) == sc->F);
+	  sc->code = cdr(end);
+	  return(goto_do_end_clauses);
+	}}
+  else /* more than one expr */
+    {
+      s7_pointer p;
+      bool use_opts = false;
+      int32_t body_len = 0;
+      opt_info *body[32];
+#define MAX_OPT_BODY_SIZE 32
+      p = code;
+      
+      if ((!no_cell_opt(code)) &&
+#if WITH_GMP
+	  (!got_bignum) &&
+#endif
+	  (has_safe_steppers(sc, sc->curlet)))
+	{
+	  int32_t k;
+	  sc->pc = 0;
+	  for (k = 0; (is_pair(p)) && (k < MAX_OPT_BODY_SIZE); k++, p = cdr(p), body_len++)
 	    {
-	      int32_t i;
-	      s7_pointer stepa = NULL;
-	      s7_function stepf = NULL;
-	      if (!use_opts)
-		fx_annotate_args(sc, code, sc->curlet);
-
-	      if (stepper)
+	      opt_info *start;
+	      start = sc->opts[sc->pc];
+	      if (!cell_optimize(sc, p))
 		{
-		  stepf = fx_proc(slot_expression(stepper));
-		  stepa = car(slot_expression(stepper));
+		  set_no_cell_opt(code);
+		  p = code;
+		  break;
 		}
-
-	      while (true)
+	      oo_idp_nr_fixup(start);
+	      body[k] = start;
+	    }
+	  use_opts = is_null(p);
+	}
+      
+      if (p == code)
+	for (; is_pair(p); p = cdr(p))
+	  if (!is_fxable(sc, car(p)))
+	    break;
+      
+      if (is_null(p))
+	{
+	  int32_t i;
+	  s7_pointer stepa = NULL;
+	  s7_function stepf = NULL;
+	  if (!use_opts)
+	    fx_annotate_args(sc, code, sc->curlet);
+	  
+	  if (stepper)
+	    {
+	      stepf = fx_proc(slot_expression(stepper));
+	      stepa = car(slot_expression(stepper));
+	    }
+	  while (true)
+	    {
+	      if (use_opts)
+		for (i = 0; i < body_len; i++)
+		  body[i]->v[0].fp(body[i]);
+	      else
+		for (p = code; is_pair(p); p = cdr(p))
+		  fx_call(sc, p);
+	      
+	      if (steppers == 1)
+		slot_set_value(stepper, stepf(sc, stepa));
+	      else
 		{
-		  if (use_opts)
-		    for (i = 0; i < body_len; i++)
-		      body[i]->v[0].fp(body[i]);
-		  else
-		    for (p = code; is_pair(p); p = cdr(p))
-		      fx_call(sc, p);
-
-		  if (steppers == 1)
-		    slot_set_value(stepper, stepf(sc, stepa));
-		  else
-		    {
-		      s7_pointer slot;
-		      slot = slots;
-		      do {
-			if (slot_has_expression(slot))
-			  slot_set_value(slot, fx_call(sc, slot_expression(slot)));
-			slot = next_slot(slot);
-		      } while (tis_slot(slot));
-		    }
-		  if (is_true(sc, sc->value = endf(sc, endp)))
-		    {
-		      sc->code = cdr(end);
-		      return(goto_do_end_clauses);
-		    }}}}}
+		  s7_pointer slot;
+		  slot = slots;
+		  do {
+		    if (slot_has_expression(slot))
+		      slot_set_value(slot, fx_call(sc, slot_expression(slot)));
+		    slot = next_slot(slot);
+		  } while (tis_slot(slot));
+		}
+	      if (is_true(sc, sc->value = endf(sc, endp)))
+		{
+		  sc->code = cdr(end);
+		  return(goto_do_end_clauses);
+		}}}}
 
   if ((is_null(cdr(code))) && /* one expr */
       (is_pair(car(code))))
@@ -83130,7 +83137,7 @@ static goto_t op_dox(s7_scheme *sc)
 	  sc->code = code;
 	  return(goto_top_no_pop);
 	}}
-
+  
   pair_set_syntax_op(form, OP_DOX_INIT);
   sc->code = T_Pair(cddr(sc->code));
   push_stack_no_args(sc, (intptr_t)((is_null(cdr(sc->code))) ? OP_DOX_STEP_O : OP_DOX_STEP), cdr(form));
@@ -97503,24 +97510,24 @@ int main(int argc, char **argv)
  * tread      2610         2440   2421   2414   2409
  * tmac       2503         3317   3277   3219   2454
  * trclo      4303         2715   2561   2526   2518
+ * tmat       2765         3065   3042   2583   2535
  * tcopy      2628         8035   5546   2600   2560
  * fbench     2965         2688   2583   2557   2562
  * tb         3372         2735   2681   2623   2599
- * tmat       2765         3065   3042   2583   2615       2540
  * titer      2759         2865   2842   2803   2741
  * tsort      3657         3105   3104   2915   2926
- * dup        3515         3805   3788   3653   3213
+ * dup        3515         3805   3788   3653   3209
  * tset       3255         3253   3104   3248   3255
  * tio        3700         3816   3752   3686   3684
  * teq        3722         4068   4045   3718   3709
- * tstr       6670         5281   4863   4365   4354  4359 (dox)
+ * tstr       6670         5281   4863   4365   4358
  * tcase      4555         4960   4793   4561   4489
  * tlet       5553         7775   5640   4552   4520
  * tclo       4949         4787   4735   4596   4588
- * tmap       4816         8270   8188          4813
- * tfft       88.9         7820   7729          5355  5358 (dox)
- * tmisc      5938         7389   6210   5827   5656
- * tnum       59.2         6348   6013   5798   5701       5684 (vector_ref_p_pi_unchecked -> vector_ref_unchecked?? via opt_p_pi_ss and opt_p_pi_ss_vref)
+ * tmap       4816         8270   8188          4812
+ * tfft       88.9         7820   7729          5358
+ * tmisc      5938         7389   6210   5827   5655
+ * tnum       59.2         6348   6013   5798   5693
  * trec       7748         5976   5970   5969   5958
  * tgsl       25.2         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
@@ -97537,6 +97544,5 @@ int main(int argc, char **argv)
  * can opt pull out const exprs (as in tfft)? t470|2
  *   could the funclists use a bit?
  *   can step_end_ok be used elsewhere -- opt_do_any probably?
- *   split op_dox (at least no-body/body, but no-body is the pending-stepper case?)
  *   name all the pointers in do* (who can remember o->v[4].p?)
  */
