@@ -1441,9 +1441,16 @@
 
 	   (C-macro (char* (_PATH_HEQUIV _PATH_HOSTS _PATH_NETWORKS _PATH_NSSWITCH_CONF _PATH_PROTOCOLS _PATH_SERVICES)))
 	   
+	   (reader-cond ((not (provided? 'msys))
+			 (hostent* gethostent (void))
+			 (void setnetent (int))
+			 (void endnetent (void))
+			 (netent* getnetent (void))
+			 (netent* getnetbyname (char*))
+			 (netent* getnetbyaddr (int int))))
+			 
 	   (void sethostent (int))
 	   (void endhostent (void))
-	   (hostent* gethostent (void))
 	   
 	   (void setservent (int))
 	   (void endservent (void))
@@ -1453,9 +1460,6 @@
 	   (void endprotoent (void))
 	   (protoent* getprotoent (void))
 	   
-	   (void setnetent (int))
-	   (void endnetent (void))
-	   (netent* getnetent (void))
 	   
 	   (int socket (int int int))
 	   (int listen (int int))
@@ -1463,8 +1467,6 @@
 	   
 	   (hostent* gethostbyname (char*))
 	   (hostent* gethostbyaddr (void* int int))
-	   (netent* getnetbyname (char*))
-	   (netent* getnetbyaddr (int int))
 	   (servent* getservbyname (char* char*))
 	   (servent* getservbyport (int char*))
 	   (protoent* getprotobyname (char*))
