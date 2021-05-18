@@ -12,16 +12,6 @@
 (unless (defined? '*notcurses*)          ; nrepl.c has notcurses_s7.c (thus *notcurses*) built-in
   (load "notcurses_s7.so" (inlet 'init_func 'notcurses_s7_init)))
 
-(if (and (defined? 'NOTCURSES_VERNUM_MAJOR)
-	 (>= NOTCURSES_VERNUM_MAJOR 2)
-	 (>= NOTCURSES_VERNUM_MINOR 1))
-    (begin
-      (define ncdirect_fg ncdirect_set_fg_rgb)
-      (define ncdirect_bg ncdirect_set_bg_rgb))
-    (begin
-      (define ncdirect_fg ncdirect_fg_rgb)
-      (define ncdirect_bg ncdirect_bg_rgb)))
-
 (define (drop-into-repl call e)
   ((*nrepl* 'run) "break>" (object->string call) e))
 
@@ -345,7 +335,6 @@
 
 	  (define (move-cursor y x)   ; this was (format *stderr* "~C[~D;~DH" #\escape y x) in repl.scm
 	    (notcurses_refresh nc)    ; needed in 1.7.1, not in 1.6.11
-
 	    (ncdirect_cursor_move_yx ncd
 				     (max header-row (+ y ncp-row))
 				     (if (and wc (= y (+ watch-row 1)))

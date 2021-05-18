@@ -514,6 +514,14 @@ static s7_pointer g_set_notcurses_options_flags(s7_scheme *sc, s7_pointer args)
   return(s7_cadr(args));
 }
 
+static s7_pointer g_set_notcurses_options_loglevel(s7_scheme *sc, s7_pointer args)
+{
+  notcurses_options *no;
+  no = (notcurses_options *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_options_symbol, __func__, 1);
+  no->loglevel = (uint64_t)s7_integer_checked(sc, s7_cadr(args));
+  return(s7_cadr(args));
+}
+
 static s7_pointer g_notcurses_options_make(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(notcurses_options)), notcurses_options_symbol, s7_f(sc)));
@@ -4015,7 +4023,6 @@ void notcurses_s7_init(s7_scheme *sc)
 
   nc_func(notcurses_options_termtype, 1, 0, false);
   nc_func(notcurses_options_renderfp, 1, 0, false);
-  nc_func(notcurses_options_loglevel, 1, 0, false);
 
   #define nc_func2(Name) s7_dilambda_with_environment(sc, notcurses_let, #Name, g_ ## Name, 1, 0, g_set_ ## Name, 2, 0, NULL)
   #define nc_func3(NcName, Name) \
@@ -4028,6 +4035,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func2(notcurses_options_margin_b);
   nc_func2(notcurses_options_margin_l);
   nc_func2(notcurses_options_flags);
+  nc_func2(notcurses_options_loglevel);
 
   nc_func(notcurses_core_init, 0, 2, false);
   nc_func(notcurses_stop, 1, 0, false);
