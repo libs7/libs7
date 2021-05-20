@@ -5533,9 +5533,9 @@ file-names                    currently loaded files (a list)
 catches                       a list of the currently active catch tags
 c-types                       a list of c-object type names (from s7_make_c_type, etc)
 
+stack			      the current stack entries
 stack-top                     current stack location
 stack-size                    current stack size
-stack                         the current stack entries
 max-stack-size                maximum stack size
 stacktrace-defaults           stacktrace formatting info for error handler
 
@@ -5628,6 +5628,10 @@ The defaults are '(3 45 80 45 #t).
 				     (set! log10 (log (bignum 10)))
 				     val)))
 </pre>
+
+<p>The stack, history and gc-protected-objects fields are intended for debugging.  Don't keep 
+these hanging around and expect good things to happen!
+</p>
 
 
 <div class="separator"></div>
