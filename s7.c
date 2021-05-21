@@ -4033,7 +4033,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_ALL_A, HOP_SAFE_C_ALL_A, OP_SAFE_C_ALL_CA, HOP_SAFE_C_ALL_CA, OP_SAFE_C_INLET_CA, HOP_SAFE_C_INLET_CA,
       OP_SAFE_C_SSA, HOP_SAFE_C_SSA, OP_SAFE_C_SAS, HOP_SAFE_C_SAS, OP_SAFE_C_SAA, HOP_SAFE_C_SAA,
       OP_SAFE_C_CSA, HOP_SAFE_C_CSA, OP_SAFE_C_SCA, HOP_SAFE_C_SCA, OP_SAFE_C_ASS, HOP_SAFE_C_ASS,
-      OP_SAFE_C_CAC, HOP_SAFE_C_CAC,                                  /* OP_SAFE_C_CCA, HOP_SAFE_C_CCA, */
+      OP_SAFE_C_CAC, HOP_SAFE_C_CAC, OP_SAFE_C_AGG, HOP_SAFE_C_AGG,                                 /* OP_SAFE_C_CCA, HOP_SAFE_C_CCA, */
       OP_SAFE_C_opAq, HOP_SAFE_C_opAq, OP_SAFE_C_opAAq, HOP_SAFE_C_opAAq, OP_SAFE_C_opAAAq, HOP_SAFE_C_opAAAq,
       OP_SAFE_C_S_opAq, HOP_SAFE_C_S_opAq, OP_SAFE_C_opAq_S, HOP_SAFE_C_opAq_S,
       OP_SAFE_C_S_opAAq, HOP_SAFE_C_S_opAAq, OP_SAFE_C_S_opAAAq, HOP_SAFE_C_S_opAAAq,
@@ -4268,7 +4268,7 @@ static const char* op_names[NUM_OPS] =
       "safe_c_all_a", "h_safe_c_all_a", "safe_c_all_ca", "h_safe_c_all_ca", "safe_c_inlet_ca", "h_safe_c_inlet_ca",
       "safe_c_ssa", "h_safe_c_ssa", "safe_c_sas", "h_safe_c_sas", "safe_c_saa", "h_safe_c_saa",
       "safe_c_csa", "h_safe_c_csa", "safe_c_sca", "h_safe_c_sca", "safe_c_ass", "h_safe_c_ass",
-      "safe_c_cac", "h_safe_c_cac",
+      "safe_c_cac", "h_safe_c_cac", "safe_c_agg", "h_safe_c_agg",
       "safe_c_opaq", "h_safe_c_opaq", "safe_c_opaaq", "h_safe_c_opaaq", "safe_c_opaaaq", "h_safe_c_opaaaq",
       "safe_c_s_opaq", "h_safe_c_s_opaq", "safe_c_opaq_s", "h_safe_c_opaq_s",
       "safe_c_s_opaaq", "h_safe_c_s_opaaq", "safe_c_s_opaaaq", "h_safe_c_s_opaaaq",
@@ -56988,6 +56988,14 @@ static s7_pointer fx_c_ass(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t3_1));
 }
 
+static s7_pointer fx_c_agg(s7_scheme *sc, s7_pointer arg)
+{
+  set_car(sc->t3_1, fx_call(sc, cdr(arg)));
+  set_car(sc->t3_2, fx_call(sc, opt3_pair(arg)));
+  set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg))));
+  return(fn_proc(arg)(sc, sc->t3_1));
+}
+
 static s7_pointer fx_c_sas(s7_scheme *sc, s7_pointer arg)
 {
   set_car(sc->t3_2, fx_call(sc, opt3_pair(arg)));
@@ -73976,7 +73984,7 @@ static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_
 
       if (pairs == 1)
 	{
-	  /* if (is_pair(arg1)) fprintf(stderr, "agg: %s\n", display(expr)); *//* could all s/c->g? gag etc */
+	  if (is_pair(arg1)) set_optimize_op(expr, hop + OP_SAFE_C_AGG);
 
 	  if ((symbols == 0) && (is_pair(arg2)))
 	    set_optimize_op(expr, hop + OP_SAFE_C_CAC);
@@ -92207,6 +92215,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_C_ASS: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_ASS: sc->value = fx_c_ass(sc, sc->code); continue;
 
+	case OP_SAFE_C_AGG: if (!c_function_is_ok(sc, sc->code)) break;
+	case HOP_SAFE_C_AGG: sc->value = fx_c_agg(sc, sc->code); continue;
+
 	case OP_SAFE_C_CAC: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_CAC: sc->value = fx_c_cac(sc, sc->code); continue;
 
@@ -94410,8 +94421,8 @@ static s7_pointer s7_let_iterate(s7_scheme *sc, s7_pointer iterator)
   symbol = make_symbol(sc, s7_let_field_names[iterator_position(iterator)]);
   osw = sc->w;  /* protect against s7_let_field list making (why?) */
 
-  if (iterator_position(iterator) == SL_STACK) 
-    value = sc->stack;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
+  if ((iterator_position(iterator) == SL_STACK) || (iterator_position(iterator) == SL_GC_PROTECTED_OBJECTS))
+    value = sc->F;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
   else value = s7_let_field(sc, symbol);
 
   sc->w = osw; 
@@ -94772,7 +94783,7 @@ s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
-/* s7bt, s7fullbt: gdb stacktrace decoding */
+/* s7bt, s7btfull: gdb stacktrace decoding */
 
 static const char *decoded_name(s7_scheme *sc, s7_pointer p)
 {
@@ -94992,6 +95003,7 @@ static void init_fx_function(void)
   fx_function[HOP_SAFE_C_SAA] = fx_c_saa;
   fx_function[HOP_SAFE_C_SSA] = fx_c_ssa;
   fx_function[HOP_SAFE_C_ASS] = fx_c_ass;
+  fx_function[HOP_SAFE_C_AGG] = fx_c_agg;
   fx_function[HOP_SAFE_C_ALL_CA] = fx_c_all_ca;
   fx_function[HOP_SAFE_C_INLET_CA] = fx_inlet_ca;
   fx_function[HOP_SAFE_C_ALL_A] = fx_c_all_a;
@@ -97133,15 +97145,25 @@ s7_scheme *s7_init(void)
   s7_define_constant_with_documentation(sc, "*rootlet-redefinition-hook*", sc->rootlet_redefinition_hook,
 					"*rootlet-redefinition-hook* functions are called when a top-level variable's value is changed, (hook 'name 'value).");
 
-  sc->s7_let = s7_inlet(sc, /* have to use s7_inlet here because we're setting let fallbacks */
-		 s7_list(sc, 4,
-			 sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"),
-			 sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer")));
+  { /* *s7* is permanent -- 20-May-21 */
+    s7_pointer x, slot1, slot2;
+    x = alloc_pointer(sc);
+    set_full_type(x, T_LET | T_SAFE_PROCEDURE | T_UNHEAP | T_HAS_METHODS | T_HAS_LET_REF_FALLBACK | T_HAS_LET_SET_FALLBACK);
+    let_set_id(x, ++sc->let_number);
+    let_set_outlet(x, sc->nil);
+    slot1 = make_permanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
+    symbol_set_local_slot(sc->let_set_fallback_symbol, sc->let_number, slot1);
+    slot_set_next(slot1, slot_end(sc));
+    slot2 = make_permanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
+    symbol_set_local_slot(sc->let_ref_fallback_symbol, sc->let_number, slot2);
+    slot_set_next(slot2, slot1);
+    let_set_slots(x, slot2);
+    sc->s7_let = x;
+  }
   sc->s7_let_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, sc->s7_let));
   set_immutable(let_slots(sc->s7_let)); /* make the *s7* let-ref|set! fallbacks immutable */
   set_immutable(next_slot(let_slots(sc->s7_let)));
   set_immutable(sc->s7_let);
-
   s7_set_history_enabled(sc, true);
 
 #if S7_DEBUGGING
@@ -97149,7 +97171,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 929) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 931) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -97407,7 +97429,6 @@ void s7_repl(s7_scheme *sc)
 #if (!WITH_C_LOADER)
   dumb_repl(sc);
 #else
-
   s7_pointer old_e, e, val;
   s7_int gc_loc;
   /* try to get lib_s7.so from the repl's directory, and set *libc*.
@@ -97543,32 +97564,32 @@ int main(int argc, char **argv)
  * tref        556          691    687    506    506
  * tshoot     1506          883    872    838    836
  * index      1054         1026   1016    992    992
- * tmock      7699         1177   1165   1115   1116
- * s7test     4550         1873   1831   1805   1816
+ * tmock      7699         1177   1165   1115   1115
+ * s7test     4550         1873   1831   1805   1813
  * tvect      2195         2456   2413   2009   1986
- * lt         2132         2123   2110   2093   2124
+ * lt         2132         2123   2110   2093   2126
  * tform      3269         2281   2273   2283   2274
  * tread      2610         2440   2421   2414   2409
- * tmac       2503         3317   3277   3219   2454
- * trclo      4303         2715   2561   2526   2496
- * tmat       2765         3065   3042   2583   2532
+ * tmac       2503         3317   3277   3219   2451
+ * trclo      4303         2715   2561   2526   2494
+ * tmat       2765         3065   3042   2583   2538
+ * tb         3372         2735   2681   2623   2597
  * tcopy      2628         8035   5546   2600   2560
  * fbench     2965         2688   2583   2557   2562
- * tb         3372         2735   2681   2623   2599
  * titer      2759         2865   2842   2803   2741
  * tsort      3657         3105   3104   2915   2926
- * dup        3515         3805   3788   3653   3212
+ * dup        3515         3805   3788   3653   3217
  * tset       3255         3253   3104   3248   3255
  * tio        3700         3816   3752   3686   3684
  * teq        3722         4068   4045   3718   3708
  * tstr       6670         5281   4863   4365   4358
- * tcase      4555         4960   4793   4561   4489
+ * tcase      4555         4960   4793   4561   4488
  * tlet       5553         7775   5640   4552   4520
  * tclo       4949         4787   4735   4596   4588
  * tmap       4816         8270   8188          4812
  * tfft       88.9         7820   7729          4843
- * tmisc      5938         7389   6210   5827   5655
- * tnum       59.2         6348   6013   5798   5688
+ * tmisc      5938         7389   6210   5827   5653
+ * tnum       59.2         6348   6013   5798   5683
  * trec       7748         5976   5970   5969   5870
  * tgsl       25.2         8485   7802   6427   6406
  * tgc        11.9         11.9   11.1   10.4   10.4
@@ -97584,5 +97605,5 @@ int main(int argc, char **argv)
  * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
  * can step_end_ok be used elsewhere -- opt_do_any probably?
  * notcurses: move to the nc names,  what to do about ncdirect_cursor_move_yx?
- s7_let_iterate -> no gc_pro objs
+ * s7tests from t718 
  */
