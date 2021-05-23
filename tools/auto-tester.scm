@@ -96,7 +96,7 @@
 (set! (*s7* 'max-stack-size) 32768)
 (set! (*s7* 'max-heap-size) (ash 1 22)) ; 8M
 (set! (*s7* 'max-port-data-size) (ash 1 28))
-;(set! (*s7* 'gc-stats) 4) ; stack stats
+;(set! (*s7* 'gc-stats) #t)
 (set! (*s7* 'print-length) 4096)
 (set! (*s7* 'max-string-length) 500000)
 (set! (*s7* 'max-list-length) 10000)
@@ -193,17 +193,15 @@
 (define (s7-catches) (*s7* 'catches))
 (define (s7-stack-top) (*s7* 'stack-top))
 (define (s7-stack-size) (*s7* 'stack-size))
-(define (s7-stack) (*s7* 'stack))
 (define (s7-symbol-table) (*s7* 'symbol-table))
 (define (s7-rootlet-size) (*s7* 'rootlet-size))
 (define (s7-heap-size) (*s7* 'heap-size))
 (define (s7-free-heap-size) (*s7* 'free-heap-size))
 (define (s7-gc-freed) (*s7* 'gc-freed))
-(define (s7-gc-protected-objects) (*s7* 'gc-protected-objects))
 |#
 (define (s7-c-types) (*s7* 'c-types))
 (define (s7-profile-info) (*s7* 'profile-info))
-(define (s7-history) (*s7* 'history))
+;(define (s7-history) (*s7* 'history))
 (define (s7-history-size) (*s7* 'history-size))
 
 ;(define (s7-set-equivalent-float-epsilon x) (set! (*s7* 'equivalent-float-epsilon) x))
@@ -654,15 +652,16 @@
 			  'string-ci<=? 'cadadr 'cdadr 'provided? 'caaaar 'caaddr 'caddar 'cdaaar 'cdaadr 'cdaddr 'cddar 
 			  ;'fill! ; see _fnc6_
 			  'hash-table-ref 'list->vector 'caaadr 'caaar 'caadar 'cadaar 'cdadar 'cdddar 'string-fill! 'cdaar 'cddaar 'cddadr 
-			  'symbol->keyword ;;; 'string->keyword ; size grows
+			  'symbol->keyword ; 'string->keyword ; size grows
 			  'keyword->symbol 'keyword?
 			  'logxor  'memv 'char-ready? 
-			  'exact? 'integer-length ;'port-filename 
+			  'exact? 'integer-length 'port-filename 
 			  'char>=? 
 			  'string-length 'list->string 'inexact? 
 			  'with-input-from-file 'type-of
 			  'vector-fill! 
-			  ;;;;;; 'symbol ;'peek-char 
+			  ; 'symbol 
+			  'peek-char 
 			  'make-hash-table 'make-weak-hash-table 'weak-hash-table? 'hash-code
 			  'macro? 
 			  'quasiquote 
@@ -674,7 +673,7 @@
 			  'call-with-input-string 'documentation 
 			  'continuation? 'hash-table? 'port-closed? 'port-position 'port-file
 			  'output-port? 'input-port? 
-			  ;;;;;;'provide 
+			  ;'provide 
 			  'call-with-output-string 
 			  'checked-hash-table
 			  'with-output-to-string 
@@ -688,13 +687,14 @@
 			  'lambda 'lambda*  ; these cause built-ins to become locals if with-method=#f?
 			  'macro 'macro* 'bacro 'bacro* ; -- same as lambda above
 			  ;'define* 'define-macro 'define-macro* 'define-bacro 'define-bacro*
-			  'multiple-value-bind 'call-with-values
+			  ;'multiple-value-bind ; (multiple-value-bind (if) ...) gets all kinds of trouble
+			  'call-with-values
 			  'object->let
 
 			  'open-input-string 'open-output-string 
 			  'open-input-file 
 			  'open-input-function 'open-output-function
-			  ;;;;;;'define
+			  ;'define
 			  'newline
 			  'random-state 
 			  'gensym
@@ -711,13 +711,12 @@
 			  'set-car! 
 			  'call-with-output-file 'with-output-to-file 
 			  ;'read-char 'read-byte 'read-line 'read-string 'read ; stdin=>hangs
-			  'checked-read-char 'checked-read-line 'checked-read-string 'checked-read-byte ;;;;;;'checked-read
+			  'checked-read-char 'checked-read-line 'checked-read-string 'checked-read-byte ;'checked-read
 			  'checked-reverse! 'checked-port-line-number 
-			  ;;'checked-let-set! 
 			  'checked-varlet 'checked-cutlet
 			  'close-input-port 
-			  ;;'current-input-port ;-- too many (read...)
-			  ;;'set-current-input-port ; -- collides with rd8 etc
+			  ;'current-input-port ;-- too many (read...)
+			  ;'set-current-input-port ; -- collides with rd8 etc
                           ;'set-cdr!
                           ;'unlet ;-- spurious diffs
                           ;'port-line-number ;-- too many spurious diffs
@@ -727,7 +726,6 @@
 			  ;'current-output-port 
 			  ;'cutlet 
 			  ;'set-current-error-port ;-- too many bogus eq? complaints
-			  ;'stacktrace ; -- tons of output, with eval-string, causes stack to grow continuously? (length (stacktrace)) 
 			  ;'define-constant 
 			  ;'curlet ; (length (curlet)) too many times
  			  ;'open-output-file
@@ -741,13 +739,13 @@
 			  ;'owlet ;too many uninteresting diffs
 			  ;'gc  ; slower?
 			  ;'reader-cond ;-- cond test clause can involve unbound vars: (null? i) for example
-			  ;'funclet
+			  ;'funclet '*function*
 			  ;'random 
 			  ;'quote
 			  '*error-hook*
 			  ;'cond-expand 
 			  ;'random-state->list 
-                          ;; 'pair-line-number 'pair-filename ; -- too many uninteresting diffs
+                          ; 'pair-line-number 'pair-filename ; -- too many uninteresting diffs
 			  ;'let-set! ;-- rootlet troubles?
 			  ;'coverlet ;-- blocks block's equivalent?
                           'help ;-- snd goes crazy
@@ -790,10 +788,9 @@
 			  's7-catches 
 			  's7-stack-top 's7-stack 
 			  's7-symbol-table 
-			  's7-gc-protected-objects
-			  's7-stacktrace-defaults ; clobbered by reverse!
+			  ;'s7-stacktrace-defaults ; clobbered by reverse!
 			  ;'s7-set-print-length 
-			  's7-set-stacktrace-defaults
+			  ;'s7-set-stacktrace-defaults
 			  ;'s7-set-default-rationalize-error
 			  ;'s7-set-equivalent-float-epsilon 
 			  ;'s7-set-hash-table-float-epsilon 
@@ -839,9 +836,8 @@
 			  ;'adjoin 'cdr-assoc
 			  ;'progv ;'value->symbol -- correctly different values sometimes, progv localizes
 			  ;'and-let* 'string-case 'concatenate
-			  ;'union -- heap overflow if cyclic arg
 			  '2^n? 'lognor 'ldb 'clamp 
-			  ;'*s7*->list ; reverse! etc 
+			  ; reverse! etc 
 
 			  ;;'log-n-of ; uninteresting complaints
 			  ;;'sandbox -- slow
@@ -855,10 +851,7 @@
 			  ;'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
 			  ;'linter
-			  ;;'*function* ; -- lots of pointless diffs
-			  ;; '<cycle> 'cycle-set! 'cycle-ref 'make-cycle -- none are protected against randomness
-			  ;; next are place-holders
-			  'ifa 'ifb
+			  'ifa 'ifb ; place-holders
 			  ))
 	 
       (args (vector "-123" "1234" "-3/4" "-1" "1/2" "1+i" "1-i" "0+i" "0-i" "(expt 2 32)" "4294967297" "1001" "10001"
@@ -923,15 +916,15 @@
 		    "(dilambda (lambda () 1) (lambda (a) a))" "quasiquote" "macroexpand" "(lambda* ((a 1) (b 2)) (+ a b))" 
 		    "(dilambda (lambda args args) (lambda args args))" "(dilambda (lambda* (a b) a) (lambda* (a b c) c))"
 		    "((lambda (a) (+ a 1)) 2)" "((lambda* ((a 1)) (+ a 1)) 1)" "(lambda (a) (values a (+ a 1)))" "((lambda (a) (values a (+ a 1))) 2)"
-		    ;;;;;;"(define-macro (_m1_ a) `(+ ,a 1))" "(define-bacro (_b1_ a) `(* ,a 2))"
+		    "(define-macro (_m1_ a) `(+ ,a 1))" "(define-bacro (_b1_ a) `(* ,a 2))"
 		    "(macro (a) `(+ ,a 1))" "(bacro (a) `(* ,a 2))" "(macro* (a (b 1)) `(+ ,a ,b))" "(bacro* (a (b 2)) `(* ,a ,b))"
 		    "(string #\\c #\\null #\\b)" "#2d((100 200) (3 4))" "#r(0 1)" "#i2d((101 201) (3 4))" "#r2d((.1 .2) (.3 .4))" "#i1d(15 25)"
-		    "(values 1 2)" "(values)" "(values #\\c 3 1.2)" "(values \"ho\")" "(values 1 2 3 4 5 6 7 8 9 10)" ;;;;;;"(values (define b1 3))"
+		    "(values 1 2)" "(values)" "(values #\\c 3 1.2)" "(values \"ho\")" "(values 1 2 3 4 5 6 7 8 9 10)" "(values (define b1 3))"
 		    "(apply values (make-list 128 1/2))"
 		    "(values 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65)"
 		    "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24"
-		    ;;;;"`(x)" "`(+ x 1)" "`(x 1)" "`((x))" "`((+ x 1))" "`(((+ x 1)))" "`((set! x (+ x 1)) (* x 2))" "`((x 1))" "`(((x 1))) "
-		    ;;;;"`(x . 1)" "`((x . 1))" "`(1)" "`((1))" "`((1) . x)" ;; "'(- 1)" 
+		    "`(x)" "`(+ x 1)" "`(x 1)" "`((x))" "`((+ x 1))" "`(((+ x 1)))" "`((set! x (+ x 1)) (* x 2))" "`((x 1))" "`(((x 1))) "
+		    "`(x . 1)" "`((x . 1))" "`(1)" "`((1))" "`((1) . x)" "'(- 1)" 
 		    "(+ i 1)" "(pi)"
 		    "'(())" "'((()))" "(random-state 1234)" 
                     "((if (> 3 2) abs log) 1)" "((if (> 3 2) + -) 3 2)"
@@ -981,8 +974,8 @@
 
 		    "#<eof>" "#<undefined>" "#<unspecified>" "#unknown" "___lst" "#<bignum: 3>" 
 		    "#<>" "#<label:>" "#<...>"
-		    "#_and" "'#_or" "#_abs"
-		    "#o123" "#b101" "#\\newline" "#\\alarm" "#\\delete" "#_cons" "#x123.123" "#\\x65" ;"_1234_" "kar" "#_+" 
+		    "#_and" "'#_or" "#_abs" "#_+" 
+		    "#o123" "#b101" "#\\newline" "#\\alarm" "#\\delete" "#_cons" "#x123.123" "#\\x65"
 		    "(provide 'pizza)" "(require pizza)"
 		    
 		    "(call-with-exit (lambda (goto) goto))"
@@ -998,9 +991,9 @@
 
 		    "1+1e10i" "1e15-1e15i" "0+1e18i" "-1e18" 
 		    "(begin (real-part (random 0+i)))"
-		    ;;"(random 1.0)" ; number->string so lengths differ
+		    ;"(random 1.0)" ; number->string so lengths differ
 		    "(random 1)"
-		    ;;"(else ())" "(else (f x) B)"
+		    ;"(else ())" "(else (f x) B)"
 		    "(else)"
 		    "else" "x" "(+ x 1)" "(+ 1/2 x)" "(abs x)" "(+ x 1 2+i)" "(* 2 x 3.0 4)" "((x 1234))" "((x 1234) (y 1/2))" "'x" "(x 1)"
 		    "_undef_" "(begin |undef1|)"
@@ -1012,7 +1005,7 @@
 		    "(let ((x 1)) (let ((+setter+ (lambda (val) (set! x val)))) (lambda () x)))"
 
 		    "__var2__"
-		    ;; "\"~S~%\"" "\"~A~D~X\"" "\"~{~A~^~}~%\"" "\"~NC~&\"" ; -- creates files by these names?
+		    ; "\"~S~%\"" "\"~A~D~X\"" "\"~{~A~^~}~%\"" "\"~NC~&\"" ; -- creates files by these names?
 		    "(call-with-input-file \"s7test.scm\" (lambda (p) p))"
 		    "(call-with-output-string (lambda (p) p))"
 
@@ -1024,7 +1017,6 @@
 		    "(make-hash-table 8 eq? (cons symbol? integer?))"
 		    "(make-hash-table 8 equivalent? (cons symbol? #t))"
 		    "(let ((a 1)) (set! (setter 'a) integer?) (curlet))"
-		    "(let () (define-constant a 1) (+ a 1))" 
 
 		    "bigi0" "bigi1" "bigi2" "bigrat" "bigflt" "bigcmp" "bigf2"
 		    "(ims 1)" "(imbv 1)" "(imv 1)" "(imb 1)" "(imh 'a)"
@@ -1054,23 +1046,20 @@
 		    "(subvector 0 3 (vector 0 1 2 3 4))" "(substring \"0123\" 2)"
 		    "(let-temporarily ((x 1234)) (+ x 1))"
 		    "(error 'oops \"an error!\")"
-		    ;;;;;;"(define b2 32)"
-
-		    ;;"(catch #t 1 (lambda (a b) b))" "(catch #t (lambda () (fill! (rootlet) 1)) (lambda (type info) info))"
+		    ;"(define b2 32)"
 
 		    ;"quote" "when" ;"'" "(quote)" "(quote . 1)" "(when)" "(when . 1)"
 		    ;"if" ; causes stack overflow when used as lambda arg name and (()... loop)
 		    "begin" "cond" "case" "when" "unless" "letrec" "letrec*" "or" "and" "let-temporarily"
-		    ;;"lambda*" "lambda" ;-- cyclic body etc
-		    ;;"let" "let*" "do" "set!" "with-let" ;"define" "define*" "define-macro" "define-macro*" "define-bacro" "define-bacro*"
-		    ;; "(begin (string? (stacktrace)))" "(and (string? (stacktrace)))" 
+		    ;"lambda*" "lambda" ;-- cyclic body etc
+		    ;"let" "let*" "do" "set!" "with-let" ;"define" "define*" "define-macro" "define-macro*" "define-bacro" "define-bacro*"
 
 		    "(let ((<1> (vector #f))) (set! (<1> 0) <1>) <1>)"
 		    "(let ((<1> (inlet :a #f))) (set! (<1> :a) <1>) <1>)"
 		    "(let ((<1> (hash-table))) (set! (<1> 'a) <1>) <1>)"
 		    "(let ((<1> #f) (<2> (vector #f))) (set! <1> (make-iterator <2>)) (set! (<2> 0) <1>) <1>)"
 		    "(let ((<1> (list 1 #f))) (set! (<1> 1) (let ((<L> (list #f 3))) (set-car! <L> <1>) <L>)) <1>)"
-		    ;"(let ((cp (list 1))) (set-cdr! cp cp) (list '+ 1 (list 'quote cp)))"
+		    "(let ((cp (list 1))) (set-cdr! cp cp) (list '+ 1 (list 'quote cp)))"
 
 		    "(let ((lst (list '+ 1))) (set-cdr! (cdr lst) (cdr lst)) (apply lambda () lst ()))"
 		    "(let ((lst (list '+ 1))) (set-cdr! (cdr lst) (cdr lst)) (apply lambda* () lst ()))"
@@ -1107,17 +1096,13 @@
 
 		    "(begin (list? (*s7* 'catches)))"
 		    "(begin (integer? (*s7* 'stack-top)))"
-		    ;"(begin (string? (object->string (*s7* 'stack))))"
-		    ;"(begin (string? (object->string (*s7* 'stack) :readable)))"
-		    ;"(begin (string? (object->string (*s7* 'catches))))"
-		    "(begin (vector? (*s7* 'gc-protected-objects)))"
 		    "(begin (list? (*s7* 'stacktrace-defaults)))"
 
 		    "(let loop ((i 2)) (if (> i 0) (loop (- i 1)) i))"
 
 		    ;"(rootlet)" ;"(curlet)"
-		    ;"(make-simple-block 3)"
-		    ;"*s7*" ; -- gradually fills up with junk
+		    "(make-simple-block 3)"
+		    "*s7*"
 
 		    "(symbol (make-string 130 #\\a))"
 		    "(symbol \"1\\\\\")" "#\\xff"  "#\\backspace" ":0" "(list (list 1 2) (cons 1 2))" 
@@ -1343,8 +1328,9 @@
 					  (if (pair? error-info)
 					      (tp (apply format #f (car error-info) (cdr error-info)))
 					      error-info)))))
-		 (unless (and errstr
-			      (or (string-position "unbound" errstr)
+		 (unless (and errstr 
+			      (or (not (string? errstr))
+				  (string-position "unbound" errstr)
 				  (string-position "circular" errstr)))
 		   (when (string-position "_definee_" str) (format *stderr* "_definee_: ~W~%" old-definee))
 		   (when (string-position "bigrat" str) (format *stderr* "bigrat: ~W" bigrat))
@@ -1481,7 +1467,8 @@
           'error)))
 
     (define (try-both str)
-      ;(format *stderr* "~A~%" str)
+      ;(if (string-position "*s7*" str) (format *stderr* "~A~%" str))
+      ;(if (> (random 1000) 990) (gc))
       (set! ostr str)
       (set! (current-output-port) #f)
 
