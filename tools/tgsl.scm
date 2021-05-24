@@ -3,6 +3,8 @@
 (require libgsl.scm)
 (require libm.scm)
 
+(set! (*s7* 'heap-size) 1024000)
+
 (define libgsl:jn (*libgsl* 'gsl_sf_bessel_Jn))
 (define libm:jn (*libm* 'jn))
 
@@ -27,7 +29,7 @@
 	((>= k mxa))
       (do ((j (- mxb) (+ j 1)))
 	  ((>= j mxb))
-	(set! sum (+ sum (* (libgsl:jn k a) ; we want d_id here not d_dd
+	(set! sum (+ sum (* (libgsl:jn k a)
 			    (libgsl:jn j (* k b)))))))
 	      
     sum))
@@ -562,7 +564,6 @@
 
   (testrst))
 
-;; sigh... there's no good place to do this in s7test
 (require libm.scm)
 (define jn (*libm* 'jn)) ; coverage tests for opt_d_id*
 (define (f v) (do ((i 0 (+ i 1))) ((= i 1) v) (float-vector-set! v 0 (jn 0 1.0))))

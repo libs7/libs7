@@ -3976,10 +3976,7 @@ static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int
 
 static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
 static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
-static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol);
 static s7_pointer find_method_with_let(s7_scheme *sc, s7_pointer let, s7_pointer symbol);
-static s7_pointer find_let(s7_scheme *sc, s7_pointer obj);
-static s7_pointer prepackaged_type_name(s7_scheme *sc, s7_pointer x);
 static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article);
 
 static s7_pointer simple_wrong_type_arg_error_prepackaged(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typnam, s7_pointer descr);
@@ -18193,7 +18190,6 @@ static s7_pointer g_expt(s7_scheme *sc, s7_pointer args)
 	    return(int_one);
 	  return(real_zero);                                   /* (expt 0.0 0) -> 0.0 */
 	}
-
       if (s7_is_real(pw))
 	{
 	  if (s7_is_negative(pw))                              /* (expt 0 -1) */
@@ -18211,7 +18207,6 @@ static s7_pointer g_expt(s7_scheme *sc, s7_pointer args)
 	      (is_NaN(imag_part(pw))))
 	    return(real_NaN);
 	}
-
       if ((s7_is_integer(n)) && (s7_is_integer(pw)))           /* pw != 0, (expt 0 2312) */
 	return(int_zero);
       return(real_zero);                                       /* (expt 0.0 123123) */
@@ -18225,7 +18220,6 @@ static s7_pointer g_expt(s7_scheme *sc, s7_pointer args)
 	return(make_real(sc, rational_to_double(sc, n)));
       return(n);
     }
-
   if (is_t_integer(pw))
     {
       s7_int y;
@@ -18239,7 +18233,6 @@ static s7_pointer g_expt(s7_scheme *sc, s7_pointer args)
 	    return(n);
 	  return(real_one);                                   /* (expt 3.0 0) */
 	}
-
       switch (type(n))
 	{
 	case T_INTEGER:
@@ -19784,28 +19777,20 @@ static s7_pointer negate_p_p(s7_scheme *sc, s7_pointer p)     /* can't use "nega
 #endif
       return(make_integer(sc, -integer(p)));
 
-    case T_RATIO:
-      return(make_simple_ratio(sc, -numerator(p), denominator(p)));
-
-    case T_REAL:
-      return(make_real(sc, -real(p)));
-
-    case T_COMPLEX:
-      return(s7_make_complex(sc, -real_part(p), -imag_part(p)));
+    case T_RATIO:   return(make_simple_ratio(sc, -numerator(p), denominator(p)));
+    case T_REAL:    return(make_real(sc, -real(p)));
+    case T_COMPLEX: return(s7_make_complex(sc, -real_part(p), -imag_part(p)));
 
 #if WITH_GMP
     case T_BIG_INTEGER:
       mpz_neg(sc->mpz_1, big_integer(p));
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_RATIO:
       mpq_neg(sc->mpq_1, big_ratio(p));
       return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
-
     case T_BIG_REAL:
       mpfr_neg(sc->mpfr_1, big_real(p), MPFR_RNDN);
       return(mpfr_to_big_real(sc, sc->mpfr_1));
-
     case T_BIG_COMPLEX:
       mpc_neg(sc->mpc_1, big_complex(p), MPC_RNDNN);
       return(mpc_to_number(sc, sc->mpc_1));
@@ -28267,7 +28252,7 @@ static s7_pointer g_pair_filename(s7_scheme *sc, s7_pointer args)
       check_method(sc, p, sc->pair_filename_symbol, args);
       return(simple_wrong_type_argument(sc, sc->pair_filename_symbol, p, T_PAIR));
     }
-  return((has_location(p)) ? sc->file_names[pair_file_number(p)] : sc->F);
+  return((has_location(p)) ? sc->file_names[pair_file_number(p)] : sc->F); /* maybe also pair_file_number(p) > 0 */
 }
 
 
@@ -37234,6 +37219,7 @@ s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q)
 
 /* -------------------------------------------------------------------------------- */
 
+/* these are used in clm2xen et al under names like Xen_wrap_5_args -- they should go away! */
 s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1))
 {
   /* not currently used */
@@ -38122,7 +38108,6 @@ static s7_pointer g_list_set_i(s7_scheme *sc, s7_pointer args)
 	return(out_of_range(sc, sc->list_set_symbol, int_two, wrap_integer1(sc, index), its_too_large_string));
       return(wrong_type_argument_with_type(sc, sc->list_set_symbol, 1, lst, a_proper_list_string));
     }
-
   val = caddr(args);
   set_car(p, val);
   return(val);
@@ -39938,50 +39923,48 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 	    s7_vector_fill(sc, x, sc->nil);
 	}
       else
-	{
-	  if (typ == T_FLOAT_VECTOR)
+	if (typ == T_FLOAT_VECTOR)
+	  {
+	    b = mallocate_vector(sc, len * sizeof(s7_double));
+	    vector_block(x) = b;
+	    float_vector_floats(x) = (s7_double *)block_data(b);
+	    if (filled)
+	      {
+		if (STEP_8(len))
+		  memclr64((void *)vector_elements(x), len * sizeof(s7_double));
+		else memclr((void *)vector_elements(x), len * sizeof(s7_double));
+	      }
+	    vector_getter(x) = float_vector_getter;
+	    vector_setter(x) = float_vector_setter;
+	  }
+	else
+	  if (typ == T_INT_VECTOR)
 	    {
-	      b = mallocate_vector(sc, len * sizeof(s7_double));
+	      b = mallocate_vector(sc, len * sizeof(s7_int));
 	      vector_block(x) = b;
-	      float_vector_floats(x) = (s7_double *)block_data(b);
+	      int_vector_ints(x) = (s7_int *)block_data(b);
 	      if (filled)
 		{
 		  if (STEP_8(len))
-		    memclr64((void *)vector_elements(x), len * sizeof(s7_double));
-		  else memclr((void *)vector_elements(x), len * sizeof(s7_double));
+		    memclr64((void *)vector_elements(x), len * sizeof(s7_int));
+		  else memclr((void *)vector_elements(x), len * sizeof(s7_int));
 		}
-	      vector_getter(x) = float_vector_getter;
-	      vector_setter(x) = float_vector_setter;
+	      vector_getter(x) = int_vector_getter;
+	      vector_setter(x) = int_vector_setter;
 	    }
 	  else
 	    {
-	      if (typ == T_INT_VECTOR)
+	      b = mallocate(sc, len);
+	      vector_block(x) = b;
+	      byte_vector_bytes(x) = (uint8_t *)block_data(b);
+	      vector_getter(x) = byte_vector_getter;
+	      vector_setter(x) = byte_vector_setter;
+	      if (filled)
 		{
-		  b = mallocate_vector(sc, len * sizeof(s7_int));
-		  vector_block(x) = b;
-		  int_vector_ints(x) = (s7_int *)block_data(b);
-		  if (filled)
-		    {
-		      if (STEP_8(len))
-			memclr64((void *)vector_elements(x), len * sizeof(s7_int));
-		      else memclr((void *)vector_elements(x), len * sizeof(s7_int));
-		    }
-		  vector_getter(x) = int_vector_getter;
-		  vector_setter(x) = int_vector_setter;
-		}
-	      else
-		{
-		  b = mallocate(sc, len);
-		  vector_block(x) = b;
-		  byte_vector_bytes(x) = (uint8_t *)block_data(b);
-		  vector_getter(x) = byte_vector_getter;
-		  vector_setter(x) = byte_vector_setter;
-		  if (filled)
-		    {
-		      if (STEP_64(len))
-			memclr64((void *)(byte_vector_bytes(x)), len);
-		      else memclr((void *)(byte_vector_bytes(x)), len);
-		    }}}}}
+		  if (STEP_64(len))
+		    memclr64((void *)(byte_vector_bytes(x)), len);
+		  else memclr((void *)(byte_vector_bytes(x)), len);
+		}}}
   vector_set_dimension_info(x, NULL);
   return(x);
 }
@@ -40271,45 +40254,42 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
       if (is_normal_vector(x))
 	for (i = start; i < end; i++) vector_element(x, i) = fill;
       else
-	{
-	  if (is_int_vector(x))
+	if (is_int_vector(x))
+	  {
+	    s7_int k;
+	    k = s7_integer_checked(sc, fill);
+	    if (k == 0)
+	      memclr((void *)(int_vector_ints(x) + start), (end - start) * sizeof(s7_int));
+	    else for (i = start; i < end; i++) int_vector(x, i) = k;
+	  }
+	else
+	  if (is_float_vector(x))
 	    {
-	      s7_int k;
-	      k = s7_integer_checked(sc, fill);
-	      if (k == 0)
-		memclr((void *)(int_vector_ints(x) + start), (end - start) * sizeof(s7_int));
+	      s7_double y;
+	      y = s7_real(fill);
+	      if (y == 0.0)
+		memclr((void *)(float_vector_floats(x) + start), (end - start) * sizeof(s7_double));
 	      else
-		for (i = start; i < end; i++) int_vector(x, i) = k;
-	    }
-	  else
-	    {
-	      if (is_float_vector(x))
 		{
-		  s7_double y;
-		  y = s7_real(fill);
-		  if (y == 0.0)
-		    memclr((void *)(float_vector_floats(x) + start), (end - start) * sizeof(s7_double));
-		  else
-		    {
-		      s7_double *orig;
-		      s7_int left;
-		      orig = float_vector_floats(x);
-		      left = end - 8;
-		      i = start;
-		      while (i <= left)
-			LOOP_8(orig[i++] = y);
-		      for (; i < end; i++)
-			orig[i] = y;
-		    }}
-	      else
-		if (is_byte_vector(x))
-		  {
-		    uint8_t k;
-		    k = (uint8_t)s7_integer_checked(sc, fill);
-		    if (k == 0)
-		      memclr((void *)(byte_vector_bytes(x) + start), end - start);
-		    else local_memset((void *)(byte_vector_bytes(x) + start), k, end - start);
-		  }}}}
+		  s7_double *orig;
+		  s7_int left;
+		  orig = float_vector_floats(x);
+		  left = end - 8;
+		  i = start;
+		  while (i <= left)
+		    LOOP_8(orig[i++] = y);
+		  for (; i < end; i++)
+		    orig[i] = y;
+		}}
+	  else
+	    if (is_byte_vector(x))
+	      {
+		uint8_t k;
+		k = (uint8_t)s7_integer_checked(sc, fill);
+		if (k == 0)
+		  memclr((void *)(byte_vector_bytes(x) + start), end - start);
+		else local_memset((void *)(byte_vector_bytes(x) + start), k, end - start);
+	      }}
   return(fill);
 }
 
@@ -40336,7 +40316,6 @@ s7_pointer s7_vector_set(s7_scheme *sc, s7_pointer vec, s7_int index, s7_pointer
 {
   if (index >= vector_length(vec))
     return(out_of_range(sc, sc->vector_set_symbol, int_two, wrap_integer1(sc, index), its_too_large_string));
-
   if (is_typed_vector(vec))
     return(typed_vector_setter(sc, vec, index, a));
   vector_setter(vec)(sc, vec, index, T_Pos(a));
@@ -40639,6 +40618,7 @@ static s7_pointer vector_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 }
 
 /* expansion into g_vector_2 et al makes almost no difference */
+
 
 /* -------------------------------- float-vector? -------------------------------- */
 static s7_pointer g_is_float_vector(s7_scheme *sc, s7_pointer args)
@@ -41138,7 +41118,6 @@ static s7_pointer g_vector_ref(s7_scheme *sc, s7_pointer args)
   #define Q_vector_ref s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_vector_symbol, sc->is_integer_symbol)
 
   s7_pointer vec;
-
   vec = car(args);
   if (!is_any_vector(vec))
     return(method_or_bust(sc, vec, sc->vector_ref_symbol, args, T_VECTOR, 1));
@@ -41594,34 +41573,33 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 	      /* the name is needed primarily by the error handler: "vector-set! argument 3, ..., is a ... but should be a <...>" */
 	    }
 	  else
-	    {
-	      if (is_c_function(typf))
-		{
-		  if (typf == global_value(sc->is_float_symbol))
-		    result_type = T_FLOAT_VECTOR;
-		  else
-		    {
-		      if (typf == global_value(sc->is_integer_symbol))
-			result_type = (WITH_GMP) ? T_VECTOR : T_INT_VECTOR;
-		      else
-			{
-			  if (typf == global_value(sc->is_byte_symbol))
-			    result_type = T_BYTE_VECTOR;
-			  else
-			    {
-			      s7_pointer sig;
-			      if (!c_function_name(typf))
-				return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named procedure", 17)));
-			      if (!c_function_marker(typf))
-				c_function_set_marker(typf, mark_vector_1);
-			      if (!c_function_symbol(typf))
-				c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
-			      sig = c_function_signature(typf);
-			      if ((sig != sc->pl_bt) &&
-				  (is_pair(sig)) &&
-				  ((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
-				return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
-			    }}}}}}}
+	    if (is_c_function(typf))
+	      {
+		if (typf == global_value(sc->is_float_symbol))
+		  result_type = T_FLOAT_VECTOR;
+		else
+		  {
+		    if (typf == global_value(sc->is_integer_symbol))
+		      result_type = (WITH_GMP) ? T_VECTOR : T_INT_VECTOR;
+		    else
+		      {
+			if (typf == global_value(sc->is_byte_symbol))
+			  result_type = T_BYTE_VECTOR;
+			else
+			  {
+			    s7_pointer sig;
+			    if (!c_function_name(typf))
+			      return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named procedure", 17)));
+			    if (!c_function_marker(typf))
+			      c_function_set_marker(typf, mark_vector_1);
+			    if (!c_function_symbol(typf))
+			      c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
+			    sig = c_function_signature(typf);
+			    if ((sig != sc->pl_bt) &&
+				(is_pair(sig)) &&
+				((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
+			      return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
+			  }}}}}}
   /* before making the new vector, if fill is specified and the vector is typed, we have to check for a type error.
    *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the  gc.
    */
@@ -42874,14 +42852,13 @@ static bool arglist_has_rest(s7_scheme *sc, s7_pointer args)
   return(!is_null(p));
 }
 
+
+/* -------------------------------- sort! -------------------------------- */
 static bool bool_optimize(s7_scheme *sc, s7_pointer expr);
 static bool bool_optimize_nw(s7_scheme *sc, s7_pointer expr);
 static bool cell_optimize(s7_scheme *sc, s7_pointer expr);
-
 static void pc_fallback(s7_scheme *sc, int32_t new_pc) {sc->pc = new_pc;}
 
-
-/* -------------------------------- sort! -------------------------------- */
 static int32_t dbl_less(const void *f1, const void *f2)
 {
   if ((*((s7_double *)f1)) < (*((s7_double *)f2))) return(-1);
@@ -55484,6 +55461,14 @@ static s7_pointer fx_geq_ti(s7_scheme *sc, s7_pointer arg)
   return(g_geq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
 }
 
+static s7_pointer fx_geq_t0(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x;
+  x = t_lookup(sc, cadr(arg), arg);
+  if (is_t_integer(x)) return(make_boolean(sc, integer(x) >= 0));
+  return(g_geq_xi(sc, set_plist_2(sc, x, int_zero)));
+}
+
 static s7_pointer fx_num_eq_ss(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x, y;
@@ -58712,7 +58697,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fn_proc(p) == g_less_xi) 
 	    return(with_fx(tree, (integer(caddr(p)) == 2) ? fx_lt_t2 : ((integer(caddr(p)) == 1) ? fx_lt_t1 : fx_lt_ti)));
 	  if (fn_proc(p) == g_geq_xf) return(with_fx(tree, fx_geq_tf));
-	  if (fn_proc(p) == g_geq_xi) return(with_fx(tree, fx_geq_ti));
+	  if (fn_proc(p) == g_geq_xi) return(with_fx(tree, (integer(caddr(p)) == 0) ? fx_geq_t0 : fx_geq_ti));
 	  if (fn_proc(p) == g_leq_xi) return(with_fx(tree, fx_leq_ti));
 	  if (fn_proc(p) == g_greater_xi) return(with_fx(tree, fx_gt_ti));
 
@@ -93586,19 +93571,16 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		    c = read_atom(sc, pt);
 		    goto READ_C;
 		  }
-
 		if (sc->tok == TOKEN_RIGHT_PAREN)
 		  {
 		    sc->value = sc->nil;
 		    goto READ_LIST;
 		  }
-
 		if (sc->tok == TOKEN_DOT)
 		  {
 		    do {c = inchar(pt);} while ((c != ')') && (c != EOF));
 		    read_error(sc, "stray dot after '('?");      /* (car '( . )) */
 		  }
-
 		if (sc->tok == TOKEN_EOF)
 		  return(missing_close_paren_error(sc));
 
@@ -97372,7 +97354,7 @@ int main(int argc, char **argv)
  * tmisc      5938         7389   6210   5827   5653
  * tnum       59.2         6348   6013   5798   5683  5688
  * trec       7748         5976   5970   5969   5870
- * tgsl       25.2         8485   7802   6427   6404
+ * tgsl       25.2         8485   7802   6427   6404  6393
  * tgc        11.9         11.9   11.1   10.4   10.4
  * thash      36.9         11.8   11.7   11.2   11.2
  * tgen       12.2         11.2   11.4   11.3   11.4
@@ -97385,5 +97367,5 @@ int main(int argc, char **argv)
  *
  * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
  * can step_end_ok be used elsewhere -- opt_do_any probably?
- * notcurses: move to the nc names,  what to do about ncdirect_cursor_move_yx?
+ * notcurses/nrepl: move to the nc names
  */

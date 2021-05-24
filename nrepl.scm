@@ -57,8 +57,7 @@
 
 (unless (defined? '*nrepl*)
   (define *nrepl*
-    (let* ((ncd #f)
-	   (nc #f)
+    (let* ((nc #f)
 	   (nc-cols 0)
 	   (nc-rows 0)
 	   (status-rows 3)
@@ -335,12 +334,11 @@
 
 	  (define (move-cursor y x)   ; this was (format *stderr* "~C[~D;~DH" #\escape y x) in repl.scm
 	    (notcurses_refresh nc)    ; needed in 1.7.1, not in 1.6.11
-	    (ncdirect_cursor_move_yx ncd
+	    (notcurses_cursor_enable nc 
 				     (max header-row (+ y ncp-row))
 				     (if (and wc (= y (+ watch-row 1)))
 					 (min (- watch-col 1) (+ x ncp-col))
 					 (+ x ncp-col))))
-
 	  (when header
 	    (set! hc-cells (vector (cell_make) (cell_make) (cell_make) (cell_make) (cell_make) (cell_make)))
 	    (let ((newline-pos (char-position #\newline header)))
@@ -1613,7 +1611,6 @@
 		  (string=? (getenv "TERM") "dumb")))  ; no vt100 codes -- emacs subjob for example
 	    (emacs-repl)
 	    (begin
-	      (set! ncd (ncdirect_core_init (c-pointer 0))) ; version < 2.1 don't pass #f 0 here -- 0 must not be the old default
 	      (let ((noptions (notcurses_options_make)))
 		(set! (notcurses_options_flags noptions) NCOPTION_SUPPRESS_BANNERS)
 		(set! nc (notcurses_core_init noptions)))

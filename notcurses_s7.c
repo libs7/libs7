@@ -4499,14 +4499,13 @@ void notcurses_s7_init(s7_scheme *sc)
  * 2.1.2
  *  notcurses_linesigs_enable|disable
  * 2.1.4
- *  NCDIRECT_OPTION_NO_QUIT_SIGHANDLERS
  *  HIRES additions
  *  API int ncplane_at_cursor_cell(struct ncplane* n, nccell* c);
  *  API int ncplane_at_yx_cell(struct ncplane* n, int y, int x, nccell* c);
  *  API ncblitter_e ncvisual_media_defblitter(const struct notcurses* nc, ncscale_e scale);
  *  API bool notcurses_cansextant(const struct notcurses* nc);
  *  API int ncdirect_raster_frame(struct ncdirect* n, ncdirectv* ncdv, ncalign_e align);
- *  API ncdirectv* ncdirect_render_frame(struct ncdirect* n, const char* filename, ncblitter_e blitter, ncscale_e scale);
+ *  API ncdirect* ncdirect_render_frame(struct ncdirect* n, const char* filename, ncblitter_e blitter, ncscale_e scale);
  */
 #endif
 
