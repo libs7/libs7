@@ -337,7 +337,7 @@
 		       'string-ci<=?           (with-mock-wrapper* #_string-ci<=?)
 		       'string-ci>=?           (with-mock-wrapper* #_string-ci>=?)
 		       'string?                (with-mock-wrapper #_string?)
-		       'length                 (with-mock-wrapper #_string-length)
+		       'length                 (with-mock-wrapper (if (provided? 'pure-s7) #_length #_string-length))
 		       'append                 (with-mock-wrapper* #_append)
 		       'class-name             '*mock-string*)))
 	  

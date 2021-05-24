@@ -434,6 +434,7 @@ void libarb_s7_init(s7_scheme *sc)
 
 /* gcc -fPIC -c libarb_s7.c
  * gcc libarb_s7.o -shared -o libarb_s7.so -lflint -larb
+ *   this is the gmp version of s7
  * repl
  *   > (load "libarb_s7.so" (inlet 'init_func 'libarb_s7_init))
  *   > (acb_bessel_j 0 1.0)
