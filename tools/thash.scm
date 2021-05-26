@@ -1,4 +1,4 @@
-(set! (*s7* 'heap-size) (* 6 1024000))
+(set! (*s7* 'heap-size) (* 12 1024000))
 
 (define (reader)
   (let ((port (open-input-file "/home/bil/cl/bib"))

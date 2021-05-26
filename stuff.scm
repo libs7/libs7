@@ -1452,10 +1452,9 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
        (L ()))
       ((null? p) 
        (reverse L))
-    (unless (memq (caar p) '(memory-usage stack gc-protected-objects))
-      (set! L (cons (cdar p) 
-		    (cons (symbol->keyword (caar p))
-			  L))))))
+    (set! L (cons (cdar p) 
+		  (cons (symbol->keyword (caar p))
+			L)))))
 
 
 ;;; --------------------------------------------------------------------------------
