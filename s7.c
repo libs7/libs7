@@ -3735,7 +3735,7 @@ static void try_to_call_gc(s7_scheme *sc);
   do {									\
     if (Sc->free_heap_top <= Sc->free_heap_trigger) try_to_call_gc(Sc); \
     Obj = (*(--(Sc->free_heap_top)));					\
-    Obj->debugger_bits = 0;						\
+    Obj->debugger_bits = 0; Obj->gc_func = NULL;			\
     set_full_type(Obj, Type);						\
   } while (0)
 
@@ -3743,7 +3743,7 @@ static void try_to_call_gc(s7_scheme *sc);
   do {							    \
     Obj = (*(--(Sc->free_heap_top)));			    \
     if (Sc->free_heap_top < Sc->free_heap) {fprintf(stderr, "free heap exhausted\n"); abort();}\
-    Obj->debugger_bits = 0;						\
+    Obj->debugger_bits = 0; Obj->gc_func = NULL;	    \
     set_full_type(Obj, Type);				    \
     } while (0)
 #endif
@@ -57882,8 +57882,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 			      set_opt1_sym(o1, j);
 			      set_opt3_sym(o1, i);
 			      return(fx_and_or_2_vref);
-			    }
-			}}}}
+			    }}}}}
 	  return(fx_and_2);
 
 	case HOP_SAFE_C_S:
@@ -69642,7 +69641,7 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
   if (!is_pair(form))
     {
       if (is_normal_symbol(form))
-	return(list_2(sc, sc->quote_symbol, form));
+        return(list_2(sc, (is_global(sc->quote_symbol)) ? sc->quote_symbol : initial_value(sc->quote_symbol), form));
       /* things that evaluate to themselves don't need to be quoted. */
       return(form);
     }
@@ -69666,25 +69665,8 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
    */
   if (((check_cycles) && (tree_is_cyclic(sc, form))) ||
       (is_simple_code(sc, form)))
-    {
-      if ((!is_global(sc->quote_symbol)) && (is_let_unchecked(sc->curlet))) /* in the reader sc->curlet can be junk */
-	{
-	  s7_pointer quote_val;
-	  quote_val = lookup(sc, sc->quote_symbol);                         /* but that means this lookup can segfault? maybe lookup_from sc->rootlet? */
-	  if (((is_global(sc->quasiquote_symbol)) &&
-	       (quote_val == global_value(sc->quasiquote_symbol))) ||
-	      (quote_val == lookup(sc, sc->quasiquote_symbol)))
-	    s7_error(sc, s7_make_symbol(sc, "infinite loop"),
-		     set_elist_2(sc, wrap_string(sc, "quote's value is quasiquote, so '~S is trouble", 46), form));
-	  /* (member quasiquote (list 1) (lambda 'ho '(1 2))) so '(1 2) -> `(1 2) -> '(1 2)...
-	   *   but if we use #_quote above, cycle checks elsewhere get confused (they ignore pairs starting with sc->quote_symbol).
-	   * to be more explicit: (assoc val (list (list 1 2)) (lambda (x y)...)) x=val y=1, so
-	   *   (assoc 1 (list (list quasiquote +)) (lambda* (a 'b) 'oops))
-	   * sets quote to quasiquote, qq returns 'oops etc.
-	   */
-	}
-      return(list_2(sc, sc->quote_symbol, form));
-    }
+    /* we can't lookup sc->quote_symbol because this gets called in op_read_quasiquote (at read-time), and sc->curlet can be junk in that context */
+    return(list_2(sc, (is_global(sc->quote_symbol)) ? sc->quote_symbol : initial_value(sc->quote_symbol), form));
   
   {
     s7_int len, i;
@@ -73542,24 +73524,23 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	  if (symbols == 2)
 	    {
 	      set_opt2_sym(expr, arg2);
-	      if (one_form)
-		{
-		  if (safe_case)
+	      if (!one_form)
+		set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_SS : OP_CLOSURE_SS));
+	      else
+		if (!safe_case)
+		  set_optimize_op(expr, hop + OP_CLOSURE_SS_O);
+		else
+		  if (!is_fxable(sc, car(body)))
+		    set_optimize_op(expr, hop + OP_SAFE_CLOSURE_SS_O);
+		  else
 		    {
-		      if (is_fxable(sc, car(body)))
-			{
-			  fx_annotate_arg(sc, body, e);
-			  fx_tree(sc, body, car(closure_args(func)), cadr(closure_args(func)), NULL);
-			  set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_SS_A);
-			  /* fx_annotate_args(sc, cdr(expr), e); */
-			  set_closure_one_form_fx_arg(func);
-			  return(OPT_T);
-			}
-		      set_optimize_op(expr, hop + OP_SAFE_CLOSURE_SS_O);
+		      fx_annotate_arg(sc, body, e);
+		      fx_tree(sc, body, car(closure_args(func)), cadr(closure_args(func)), NULL);
+		      set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_SS_A);
+		      /* fx_annotate_args(sc, cdr(expr), e); */
+		      set_closure_one_form_fx_arg(func);
+		      return(OPT_T);
 		    }
-		  else set_optimize_op(expr, hop + OP_CLOSURE_SS_O);
-		}
-	      else set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_SS : OP_CLOSURE_SS));
 	      return(OPT_F);
 	    }
 	  if (is_normal_symbol(arg1))
@@ -73574,25 +73555,24 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       if ((!arglist_has_rest(sc, closure_args(func))) &&
 	  (fx_count(sc, expr) == 2))
 	{
-	  if (one_form)
-	    {
-	      if (safe_case)
+	  if (!one_form)
+	    set_safe_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
+	  else
+	    if (!safe_case)
+	      set_optimize_op(expr, hop + OP_CLOSURE_AA_O);
+	    else
+	      if (!is_fxable(sc, car(body)))
+		set_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_O);
+	      else
 		{
-		  if (is_fxable(sc, car(body)))
-		    {
-		      fx_annotate_arg(sc, body, e);
-		      set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_A); /* safe_closure_as|sa_a? */
-		      set_closure_one_form_fx_arg(func);
-		      fx_annotate_args(sc, cdr(expr), e);
-		      set_opt1_lambda_add(expr, func);
-		      set_opt3_arglen(cdr(expr), int_two);
-		      return(OPT_T);
-		    }
-		  set_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_O);
+		  fx_annotate_arg(sc, body, e);
+		  set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_AA_A); /* safe_closure_as|sa_a? */
+		  set_closure_one_form_fx_arg(func);
+		  fx_annotate_args(sc, cdr(expr), e);
+		  set_opt1_lambda_add(expr, func);
+		  set_opt3_arglen(cdr(expr), int_two);
+		  return(OPT_T);
 		}
-	      else set_optimize_op(expr, hop + OP_CLOSURE_AA_O);
-	    }
-	  else set_safe_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt1_lambda_add(expr, func);
 	  set_opt3_arglen(cdr(expr), int_two);
@@ -86656,7 +86636,7 @@ static void op_closure_4a(s7_scheme *sc) /* sass */
 
 static void op_closure_all_a(s7_scheme *sc)
 {
-  s7_pointer e, exprs, pars, func, slot, last_slot;
+  s7_pointer e, exprs, pars, func, slot, last_slot, val;
   s7_int id;
 
   exprs = cdr(sc->code);
@@ -86664,14 +86644,16 @@ static void op_closure_all_a(s7_scheme *sc)
   e = make_let(sc, closure_let(func));
   sc->z = e;
   pars = closure_args(func);
+  val = fx_call(sc, exprs);
   new_cell_no_check(sc, last_slot, T_SLOT);
-  slot_set_symbol_and_value(last_slot, car(pars), fx_call(sc, exprs));
+  slot_set_symbol_and_value(last_slot, car(pars), val);
   slot_set_next(last_slot, let_slots(e));                 /* i.e. slot_end */
   let_set_slots(e, last_slot);
   for (pars = cdr(pars), exprs = cdr(exprs); is_pair(pars); pars = cdr(pars), exprs = cdr(exprs))
     {
+      val = fx_call(sc, exprs);             /* before new_cell since it might call the GC */
       new_cell_no_check(sc, slot, T_SLOT);  /* args < GC_TRIGGER checked in optimizer */
-      slot_set_symbol_and_value(slot, car(pars), fx_call(sc, exprs));
+      slot_set_symbol_and_value(slot, car(pars), val);
       /* setting up the let might use unrelated-but-same-name symbols, so wait to set the symbol ids */
       slot_set_next(slot, slot_end(sc));
       slot_set_next(last_slot, slot);
@@ -91266,23 +91248,21 @@ static bool op_unknown_gg(s7_scheme *sc)
 	  if ((s1) && (s2))
 	    {
 	      set_opt2_sym(code, caddr(code));
-	      if (one_form)
-		{
-		  if (safe_case)
+	      if (!one_form)
+		set_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_SS : OP_CLOSURE_SS));
+	      else
+		if (!safe_case)
+		  set_optimize_op(code, hop + OP_CLOSURE_SS_O);
+		else
+		  if (!is_fxable(sc, car(body)))
+		    set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_SS_O);
+		  else
 		    {
-		      if (is_fxable(sc, car(body)))
-			{
-			  fx_annotate_arg(sc, body, sc->curlet);
-			  fx_tree(sc, body, car(closure_args(f)), cadr(closure_args(f)), NULL);
-			  set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_SS_A);
-			  set_closure_one_form_fx_arg(f);
-			}
-		      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_SS_O);
-		    }
-		  else set_optimize_op(code, hop + OP_CLOSURE_SS_O);
-		}
-	      else set_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_SS : OP_CLOSURE_SS));
-	    }
+		      fx_annotate_arg(sc, body, sc->curlet);
+		      fx_tree(sc, body, car(closure_args(f)), cadr(closure_args(f)), NULL);
+		      set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_SS_A);
+		      set_closure_one_form_fx_arg(f);
+		    }}
 	  else
 	    {
 	      if (s1)
@@ -97369,6 +97349,7 @@ int main(int argc, char **argv)
  * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
  * can step_end_ok be used elsewhere -- opt_do_any probably?
  * funclet oddities -- function may not have a funclet?
- * need to update libarb/flint
  * Snd listener completions window -- could this be some utf8 char?
+ * op_closure_s_o arglist free again? check opt1_lambda bits sc->code
+ * why no fx_tree in tbig?
  */
