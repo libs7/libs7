@@ -36,7 +36,7 @@
 	 (j 0))
 	((= i n))
       (if (> j i)
-	  (let ((temp (data j)))
+	  (let ((temp (vector-ref data j)))
 	    (vector-set! data j (vector-ref data i))
 	    (vector-set! data i temp)))
       (let ((m (/ n 2)))
