@@ -86,7 +86,7 @@
 					       (format *stderr* "~S?" (vector-ref wait pos)))
 					   (vector-set! wait pos a))
 					 (dynamic-wind
-					     (lambda () #f)
+					     #f
 					     (lambda ()
 					       (catch #t
 						 (lambda ()
@@ -95,7 +95,7 @@
 						      (r a))))
 						 (lambda (type info)
 						   (format *stderr* "~A: ~A~%" type (apply format #f info)))))
-					     (lambda () #f)))
+					     #f))
 				       (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1)))))))))))))))))))))
 
 (tgc-cyclic 25000)
@@ -140,7 +140,7 @@
 		 (format *stderr* "~S?" (vector-ref wait pos)))
 	     (vector-set! wait pos a))
 	   (dynamic-wind
-	       (lambda () #f)
+	       #f
 	       (lambda ()
 		 (catch #t
 		   (lambda ()
@@ -149,7 +149,7 @@
 			(r a))))
 		   (lambda (type info)
 		     (format *stderr* "~A: ~A~%" type (apply format #f info)))))
-	       (lambda () #f)))
+	       #f))
 	 (list p1 p2 p3 v1 v2 v3 v4 s1 iv2 iv2 h1 h2 i1 in1 in2 c1 cc ex1 u1 g1 it1 b1))))))
 
 (tgc 200000)

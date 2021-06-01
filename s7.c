@@ -11884,7 +11884,7 @@ static s7_pointer g_call_with_exit(s7_scheme *sc, s7_pointer args)   /* (call-wi
    */
 }
 
-static void op_call_with_exit(s7_scheme *sc)
+static inline void op_call_with_exit(s7_scheme *sc)
 {
   s7_pointer go, args;
   args = opt2_pair(sc->code);
@@ -30282,10 +30282,8 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
   if (port_is_closed(port))
     return(simple_wrong_type_argument_with_type(sc, sc->read_string_symbol, port, an_open_port_string));
 
-  if (nchars == 0)
-    return(make_empty_string(sc, 0, 0));
-
   s = make_empty_string(sc, nchars, 0);
+  if (nchars == 0) return(s);
   str = (uint8_t *)string_value(s);
   if (is_string_port(port))
     {
@@ -44286,10 +44284,8 @@ static hash_entry_t *hash_eq(s7_scheme *sc, s7_pointer table, s7_pointer key)
   /* explicit eq? as hash equality func or (for example) symbols as keys */
   hash_entry_t *x;
   s7_int hash_mask, loc;
-
   hash_mask = hash_table_mask(table);
   loc = pointer_map(key) & hash_mask; /* hash_map_eq */
-
   for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     if (key == hash_entry_key(x))
       return(x);
@@ -44302,13 +44298,18 @@ static hash_entry_t *hash_eqv(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   hash_entry_t *x;
   s7_int hash_mask, loc;
-
   hash_mask = hash_table_mask(table);
   loc = hash_loc(sc, table, key) & hash_mask;
-
-  for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
-    if (s7_is_eqv(sc, key, hash_entry_key(x)))
-      return(x);
+  if (s7_is_number(key))
+    {
+      for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
+	if (numbers_are_eqv(sc, key, hash_entry_key(x)))
+	  return(x);
+    }
+  else
+    for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
+      if (s7_is_eqv(sc, key, hash_entry_key(x)))
+	return(x);
   return(sc->unentry);
 }
 
@@ -46483,21 +46484,17 @@ static bool is_dwind_thunk(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_MACRO: case T_BACRO: case T_CLOSURE: case T_MACRO_STAR: case T_BACRO_STAR:  case T_CLOSURE_STAR:
-      return(is_null(closure_args(x))); /* this is the case that does not match is_aritable -- it could be loosened -- arity=0 below would need fixup */
-
+      return(is_null(closure_args(x)));            /* this is the case that does not match is_aritable -- it could be loosened -- arity=0 below would need fixup */
     case T_C_RST_ARGS_FUNCTION: case T_C_FUNCTION:
       return((c_function_required_args(x) <= 0) && (c_function_all_args(x) >= 0));
-
     case T_C_OPT_ARGS_FUNCTION: case T_C_ANY_ARGS_FUNCTION: case T_C_FUNCTION_STAR:
       return(c_function_all_args(x) >= 0);
-
     case T_C_MACRO:
       return((c_macro_required_args(x) <= 0) && (c_macro_all_args(x) >= 0));
-
     case T_GOTO: case T_CONTINUATION:
       return(true);
     }
-  return(false);
+  return(x == sc->F); /* (dynamic-wind #f (lambda () 3) #f) */
 }
 
 static s7_pointer g_dynamic_wind_unchecked(s7_scheme *sc, s7_pointer args)
@@ -46579,9 +46576,9 @@ static bool is_ok_thunk(s7_scheme *sc, s7_pointer arg)
 static s7_pointer dynamic_wind_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
   if ((args == 3) &&
-      (is_ok_thunk(sc, cadr(expr))) &&
+      ((is_ok_thunk(sc, cadr(expr))) || (cadr(expr) == sc->F)) &&
       (is_ok_thunk(sc, caddr(expr))) &&
-      (is_ok_thunk(sc, cadddr(expr))))
+      ((is_ok_thunk(sc, cadddr(expr))) || (cadddr(expr) == sc->F)))
     return(sc->dynamic_wind_unchecked);
   return(f);
 }
@@ -77117,7 +77114,7 @@ static void op_let_2a_new(s7_scheme *sc) /* 2 vars, 1 expr in body */
   sc->code = cadr(code);
 }
 
-static void op_let_2a_old(s7_scheme *sc) /* 2 vars, 1 expr in body */
+static inline void op_let_2a_old(s7_scheme *sc) /* 2 vars, 1 expr in body */
 {
   s7_pointer let, code;
   code = cdr(sc->code);
@@ -97273,7 +97270,7 @@ int main(int argc, char **argv)
  *             gmp (5-13)  20.9   21.0   21.4   21.5
  * -------------------------------------------------------
  * tpeak       126          115    114    112    112
- * tauto       775          648    642    502    503
+ * tauto       775          648    642    502    501
  * tref        556          691    687    506    506
  * tshoot     1506          883    872    836    836
  * index      1054         1026   1016    992    991
@@ -97282,7 +97279,7 @@ int main(int argc, char **argv)
  * tvect      2195         2456   2413   1986   1986
  * lt         2132         2123   2110   2126   2124
  * tform      3269         2281   2273   2274   2274
- * tread      2610         2440   2421   2409   2405
+ * tread      2610         2440   2421   2409   2411
  * tmac       2503         3317   3277   2451   2451
  * trclo      4303         2715   2561   2494   2494
  * tmat       2765         3065   3042   2538   2529
@@ -97296,22 +97293,22 @@ int main(int argc, char **argv)
  * tio        3700         3816   3752   3684   3685
  * teq        3722         4068   4045   3708   3708
  * tstr       6670         5281   4863   4358   4351
- * tcase      4555         4960   4793   4488   4490
+ * tcase      4555         4960   4793   4488   4485
  * tlet       5553         7775   5640   4520   4520
- * tclo       4949         4787   4735   4588   4583
+ * tclo       4949         4787   4735   4588   4532
  * tmap       4816         8270   8188   4812   4797
  * tfft       88.9         7820   7729   4843   4834
- * tmisc      5938         7389   6210   5653   5615
+ * tmisc      5938         7389   6210   5653   5610
  * tnum       59.2         6348   6013   5683   5639
  * trec       7748         5976   5970   5870   5870
  * tgsl       25.2         8485   7802   6404   6390
- * tgc        11.9         11.9   11.1   10.4   10.4
- * thash      36.9         11.8   11.7   11.2   10.9
+ * tgc        11.9         11.9   11.1   10.4   9439
+ * thash      36.9         11.8   11.7   11.2   10.4
  * tgen       12.2         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
  * calls      60.9         36.7   37.5   37.2   37.1
  * sg         98.4         71.9   72.3   72.6   72.6
- * lg        105.2        106.6  105.0  104.8  104.8
+ * lg        105.2        106.6  105.0  104.8  104.7
  * tbig      598.5        177.4  175.8  171.5  171.4
  * -------------------------------------------------------
  *
@@ -97320,5 +97317,5 @@ int main(int argc, char **argv)
  * funclet oddities -- function may not have a funclet?
  * Snd listener completions window -- could this be some utf8 char?
  * op_closure_s_o arglist free again? check opt1_lambda bits sc->code: probably load 
- * t718 outer, tlamb for dw etc
+ * tlamb->misc? dw s7test
  */
