@@ -75892,7 +75892,6 @@ static s7_pointer op_lambda(s7_scheme *sc, s7_pointer code)
 static inline s7_pointer op_lambda_unchecked(s7_scheme *sc, s7_pointer code)
 {
   int32_t arity;
-  /* fprintf(stderr, "%s\n", display_80(code)); */
   arity = (int32_t)((intptr_t)opt3_any(cdr(code)));
   return(inline_make_closure(sc, cadr(code), cddr(code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity));
 }
@@ -79079,31 +79078,26 @@ static bool op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
   return(true);
 }
 
+static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code);
+static void apply_macro_star_1(s7_scheme *sc);
+
 static inline bool op_macro_d(s7_scheme *sc)
 {
   sc->value = lookup(sc, car(sc->code));
   if (!is_macro(sc->value))   /* for-each (etc) called a macro before, now it's something else -- a very rare case */
-    {
-      set_unsafe_optimize_op(sc->code, OP_PAIR_SYM); /* or op_unknown* based on args? */
-      return(true);
-    }
+    return(unknown_any(sc, sc->value, sc->code));
   sc->args = cdr(sc->code);                   /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
   sc->code = sc->value;                       /* the macro */
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code));
-  return(false);
+  return(false);                              /* fall into apply_lambda */
 }
-
-static void apply_macro_star_1(s7_scheme *sc);
 
 static bool op_macro_star_d(s7_scheme *sc)
 {
   sc->value = lookup(sc, car(sc->code));
   if (!is_macro_star(sc->value))
-    {
-      set_unsafe_optimize_op(sc->code, OP_PAIR_SYM);
-      return(true);
-    }
+    return(unknown_any(sc, sc->value, sc->code));
   sc->args = cdr(sc->code); /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
   sc->code = sc->value;
   push_stack_op_let(sc, OP_EVAL_MACRO);
@@ -79134,53 +79128,8 @@ static goto_t op_expansion(s7_scheme *sc)
   int64_t loc;
   s7_pointer caller;
 
-  /* read-time macro expansion:
-   *   (define-macro (hi a) (format #t "hi...") `(+ ,a 1))
-   *   (define (ho b) (+ 1 (hi b)))
-   * here sc->value is: (ho b), (hi b), (+ 1 (hi b)), (define (ho b) (+ 1 (hi b)))
-   * but... first we can't tell for sure at this point that "hi" really is a macro
-   *   (letrec ((hi ... (hi...))) will be confused about the second hi,
-   *   or (call/cc (lambda (hi) (hi 1))) etc.
-   * second, figuring out that we're quoted is not easy -- we have to march all the
-   * way to the bottom of the stack looking for op_read_quote or op_read_vector
-   *    #(((hi)) 2) or '(((hi)))
-   * or op_read_list with args not equal (quote) or (macroexpand)
-   *    '(hi 3) or (macroexpand (hi 3) or (quote (hi 3))
-   * and those are only the problems I noticed!
-   *
-   * The hardest of these problems involve shadowing, so Rick asked for "define-expansion"
-   *   which is like define-macro, but the programmer guarantees that the macro
-   *   name will not be shadowed.
-   *
-   * to make expansion recognition fast here, define-expansion sets the T_EXPANSION
-   *   bit in the symbol as well as the value:
-   *   set_full_type(sc->code, T_EXPANSION | T_SYMBOL)
-   * but this can lead to confusion because the expansion name is now globally identified as an expansion.
-   *    (let () (define-expansion (ex1 a) `(+ ,a 1)) (display (ex1 3)))
-   *    (define (ex1 b) (* b 2)) (display (ex1 3))
-   * since this happens at the top level, the first line is evaluated, ex1 becomes an expansion.
-   * but the reader has no idea about lets and whatnot, so in the second line, ex1 is still an expansion
-   * to the reader, so it sees (define (+ b 1) ...) -- error!  To support tail-calls, there's no
-   * way in eval to see the let close, so we can't clear the expansion flag when the let is done.
-   * But we don't want define-expansion to mimic define-constant (via T_IMMUTABLE) because programs
-   * like lint need to cancel reader-cond (for example).  So, we allow an expansion to be redefined,
-   * and check here that the expander symbol still refers to an expansion.
-   *
-   * but in (define (ex1 b) b), the reader doesn't know we're in a define call (or it would be
-   *   a bother to notice), so to redefine an expansion, first (set! ex1 #f) or (define ex1 #f),
-   *   then (define (ex1 b) b).
-   *
-   * This is a mess!  Maybe we should insist that expansions are always global.
-   *
-   * run-time expansion and splicing into the code as in CL won't work in s7 because macros
-   *   are first-class objects.  For example (define (f m) (m 1)), call it with a macro, say `(+ ,arg 1),
-   *   and in CL-style, you'd now have f with the body (+ 1 1) or maybe even 2, now call f with a function,
-   *   or some other macro -- oops!
-   */
-
   loc = current_stack_top(sc) - 1;
   caller = (is_pair(stack_args(sc->stack, loc))) ? car(stack_args(sc->stack, loc)) : sc->F; /* this can be garbage */
-
   if ((loc >= 3) &&
       (stack_op(sc->stack, loc) != OP_READ_QUOTE) &&        /* '(expansion ...) */
       (stack_op(sc->stack, loc) != OP_READ_VECTOR) &&       /* #(expansion ...) */
@@ -79191,11 +79140,7 @@ static goto_t op_expansion(s7_scheme *sc)
     {
       s7_pointer symbol, slot;
       /* we're playing fast and loose with sc->curlet in the reader, so here we need a disaster check */
-#if S7_DEBUGGING
-      if (unchecked_type(sc->curlet) != T_LET) sc->curlet = sc->nil;
-#else
       if (!is_let(sc->curlet)) sc->curlet = sc->nil;
-#endif
       symbol = car(sc->value);
 
       if ((symbol_id(symbol) == 0) ||
@@ -79292,12 +79237,10 @@ static goto_t op_macroexpand(s7_scheme *sc)
   sc->args = cdar(sc->code);
   if (!is_symbol(caar(sc->code)))
     {
-      if (is_any_macro(caar(sc->code)))
-	{
-	  sc->code = caar(sc->code);
-	  return(macroexpand(sc));
-	}
-      eval_error(sc, "macroexpand argument is not a macro call: ~A", 44, sc->code);
+      if (!is_any_macro(caar(sc->code)))
+	eval_error(sc, "macroexpand argument is not a macro call: ~A", 44, sc->code);
+      sc->code = caar(sc->code);
+      return(macroexpand(sc));
     }
   sc->code = lookup_checked(sc, caar(sc->code));
   return(macroexpand(sc));
@@ -80381,43 +80324,40 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
     case T_C_RST_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:                       /* (let ((lst (list 1 2))) (set! (list-ref lst 1) 2) lst) */
     case T_C_FUNCTION:
-    case T_C_FUNCTION_STAR:
-      /* obj here is a c_function, but its setter could be a closure and vice versa below */
-      if (is_any_procedure(c_function_setter(obj)))
+    case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
+      if (!is_any_procedure(c_function_setter(obj)))
+	s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(obj)]));
+      if (is_c_function(c_function_setter(obj)))
 	{
-	  if (is_c_function(c_function_setter(obj)))
-	    {
-	      set_car(sc->t2_1, arg);
-	      set_car(sc->t2_2, value);
-	      sc->value = c_function_call(c_function_setter(obj))(sc, sc->t2_1);
-	    }
-	  else
-	    {
-	      sc->code = c_function_setter(obj);
-	      sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
-	      return(true); /* goto APPLY; */
-	    }}
-      else s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(obj)]));
+	  set_car(sc->t2_1, arg);
+	  set_car(sc->t2_2, value);
+	  sc->value = c_function_call(c_function_setter(obj))(sc, sc->t2_1);
+	}
+      else
+	{
+	  sc->code = c_function_setter(obj);
+	  sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
+	  return(true); /* goto APPLY; */
+	}
       break;
 
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      if (is_any_procedure(closure_setter(obj)))
+      if (!is_any_procedure(closure_setter(obj)))
+	s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(obj)]));
+      if (is_c_function(closure_setter(obj)))
 	{
-	  if (is_c_function(closure_setter(obj)))
-	    {
-	      set_car(sc->t2_1, arg);
-	      set_car(sc->t2_2, value);
-	      sc->value = c_function_call(closure_setter(obj))(sc, sc->t2_1);
-	    }
-	  else
-	    {
-	      sc->code = closure_setter(obj);
-	      sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
-	      return(true); /* goto APPLY; */
-	    }}
-      else s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(obj)]));
+	  set_car(sc->t2_1, arg);
+	  set_car(sc->t2_2, value);
+	  sc->value = c_function_call(closure_setter(obj))(sc, sc->t2_1);
+	}
+      else
+	{
+	  sc->code = closure_setter(obj);
+	  sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
+	  return(true); /* goto APPLY; */
+	}
       break;
 
     default:                                         /* (set! (1 2) 3) */
@@ -81286,15 +81226,13 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer cx)  /* (let ((lst
 	}}
   else
     {
-      if (is_any_macro(c_function_setter(cx)))
-	{
-	  if (is_null(cdar(sc->code)))
-	    sc->args = cdr(sc->code);
-	  else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));
-	  sc->code = c_function_setter(cx);
-	  return(goto_apply);
-	}
-      s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+      if (!is_any_macro(c_function_setter(cx)))
+	s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+      if (is_null(cdar(sc->code)))
+	sc->args = cdr(sc->code);
+      else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));
+      sc->code = c_function_setter(cx);
+      return(goto_apply);
     }
   sc->cur_op = optimize_op(sc->code);
   return(goto_top_no_pop);
@@ -81329,15 +81267,13 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer cx)
 	}}
   else
     {
-      if (is_any_macro(setter))
-	{
-	  if (is_null(cdar(sc->code)))
-	    sc->args = cdr(sc->code);
-	  else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));	  
-	  sc->code = setter;
-	  return(goto_apply);
-	}
-      s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+      if (!is_any_macro(setter))
+	s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+      if (is_null(cdar(sc->code)))
+	sc->args = cdr(sc->code);
+      else sc->args = pair_append(sc, cdar(sc->code), cdr(sc->code));	  
+      sc->code = setter;
+      return(goto_apply);
     }
   sc->cur_op = optimize_op(sc->code);
   return(goto_top_no_pop);
@@ -81358,13 +81294,11 @@ static goto_t set_implicit_iterator(s7_scheme *sc, s7_pointer cx)
     }
   else
     {
-      if (is_any_macro(setter))
-	{
-	  sc->args = cdr(sc->code);
-	  sc->code = setter;
-	  return(goto_apply);
-	}
-      s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+      if (!is_any_macro(setter))
+	s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+      sc->args = cdr(sc->code);
+      sc->code = setter;
+      return(goto_apply);
     }
   sc->cur_op = optimize_op(sc->code);
   return(goto_top_no_pop);
@@ -81372,19 +81306,17 @@ static goto_t set_implicit_iterator(s7_scheme *sc, s7_pointer cx)
 
 static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer cx)
 {
-  if (cx == global_value(sc->with_let_symbol))
-    {
-      /* (set! (with-let a b) x), cx = with-let, sc->code = ((with-let a b) x)
-       *   a and x are in the current let, b is in a, we need to evaluate a and x, then
-       *   call (with-let a-value (set! b x-value))
-       */
-      sc->args = cdar(sc->code);
-      sc->code = cadr(sc->code);
-      push_stack_direct(sc, OP_SET_WITH_LET_1);
-      sc->cur_op = optimize_op(sc->code);
-      return(goto_top_no_pop);
-    }
-  s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+  if (cx != global_value(sc->with_let_symbol))
+    s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, no_setter_string, caar(sc->code), sc->prepackaged_type_names[type(cx)]));
+
+  /* (set! (with-let a b) x), cx = with-let, sc->code = ((with-let a b) x)
+   *   a and x are in the current let, b is in a, we need to evaluate a and x, then
+   *   call (with-let a-value (set! b x-value))
+   */
+  sc->args = cdar(sc->code);
+  sc->code = cadr(sc->code);
+  push_stack_direct(sc, OP_SET_WITH_LET_1);
+  sc->cur_op = optimize_op(sc->code);
   return(goto_top_no_pop);
 }
 
@@ -91686,6 +91618,15 @@ static bool op_unknown_fp(s7_scheme *sc)
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
 
+static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code)
+{
+  sc->last_function = f;
+  if (is_null(cdr(code))) return(op_unknown(sc));
+  if ((is_null(cddr(code))) && (!is_pair(cadr(code)))) return(op_unknown_g(sc));
+  set_opt3_arglen(cdr(code), make_integer(sc, proper_list_length(cdr(code))));
+  return(op_unknown_fp(sc));
+}
+
 
 /* ---------------- eval type checkers ---------------- */
 #if WITH_GCC
@@ -97270,7 +97211,7 @@ int main(int argc, char **argv)
  *             gmp (5-13)  20.9   21.0   21.4   21.5
  * -------------------------------------------------------
  * tpeak       126          115    114    112    112
- * tauto       775          648    642    502    501
+ * tauto       775          648    642    502    502
  * tref        556          691    687    506    506
  * tshoot     1506          883    872    836    836
  * index      1054         1026   1016    992    991
@@ -97285,10 +97226,10 @@ int main(int argc, char **argv)
  * tmat       2765         3065   3042   2538   2529
  * tcopy      2628         8035   5546   2560   2559
  * fbench     2965         2688   2583   2560   2560
- * tb         3372         2735   2681   2597   2593
+ * tb         3372         2735   2681   2597   2592
  * titer      2759         2865   2842   2741   2710
  * tsort      3657         3105   3104   2926   2925
- * dup        3515         3805   3788   3217   3132
+ * dup        3515         3805   3788   3217   3135
  * tset       3255         3253   3104   3255   3245
  * tio        3700         3816   3752   3684   3685
  * teq        3722         4068   4045   3708   3708
@@ -97314,8 +97255,9 @@ int main(int argc, char **argv)
  *
  * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
  * can step_end_ok be used elsewhere -- opt_do_any probably?
- * funclet oddities -- function may not have a funclet?
+ * funclet oddities -- function mght not have a funclet?
  * Snd listener completions window -- could this be some utf8 char?
- * op_closure_s_o arglist free again? check opt1_lambda bits sc->code: probably load 
- * tlamb->misc? dw s7test
+ * op_closure_s_o arglist free again? check opt1_lambda bits sc->code: probably load (t474)
+ * tlamb: fx recur/tc cases, more unknowns
+ * maybe features field in *s7* (and deprecate *features*), others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* #-readers?
  */
