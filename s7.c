@@ -3064,7 +3064,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define slot_pending_value(p)          (T_Slt(p))->object.slt.pending_value
 #define slot_expression(p)             (T_Slt(p))->object.slt.expr
 #endif
-#define slot_pending_value_unchecked(p) (T_Slt(p))->object.slt.pending_value
 #define slot_set_expression(p, Val)    do {(T_Slt(p))->object.slt.expr = T_Pos(Val); slot_set_has_expression(p);} while (0)
 #define slot_just_set_expression(p, Val) (T_Slt(p))->object.slt.expr = T_Pos(Val)
 #define slot_setter(p)                 T_Prc(T_Slt(p)->object.slt.expr)
@@ -6783,15 +6782,14 @@ static void mark_hash_table(s7_pointer p)
 
       if ((is_weak_hash_table(p)) &&
 	  (weak_hash_iters(p) == 0))
-	{
-	  while (entries < last)
-	    {
-	      hash_entry_t *xp;
-	      for (xp = *entries++; xp; xp = hash_entry_next(xp))
-		gc_mark(hash_entry_value(xp));
-	      for (xp = *entries++; xp; xp = hash_entry_next(xp))
-		gc_mark(hash_entry_value(xp));
-	    }}
+	while (entries < last)
+	  {
+	    hash_entry_t *xp;
+	    for (xp = *entries++; xp; xp = hash_entry_next(xp))
+	      gc_mark(hash_entry_value(xp));
+	    for (xp = *entries++; xp; xp = hash_entry_next(xp))
+	      gc_mark(hash_entry_value(xp));
+	  }
       else
 	while (entries < last) /* counting entries here was slightly faster */
 	  {
@@ -6972,11 +6970,15 @@ static int64_t gc(s7_scheme *sc)
 #endif
 {
   s7_cell **old_free_heap_top;
+  s7_int i;
+  s7_pointer p;
+
   sc->gc_start = my_clock();
   sc->gc_calls++;
 #if S7_DEBUGGING
   sc->last_gc_line = line;
 #endif
+
   mark_rootlet(sc);
   mark_owlet(sc);
 
@@ -7028,43 +7030,37 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->rec_p1);
   gc_mark(sc->rec_p2);
 
-  {
-    s7_pointer p;
-    for (p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    for (p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    for (p = sc->out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    for (p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    gc_mark(car(sc->elist_1));
-    gc_mark(car(sc->elist_2));
-    gc_mark(cadr(sc->elist_2));
-    for (p = sc->plist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    for (p = sc->elist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    for (p = sc->elist_4; is_pair(p); p = cdr(p)) gc_mark(car(p));
-    for (p = sc->elist_5; is_pair(p); p = cdr(p)) gc_mark(car(p));
-  }
+  for (p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (p = sc->out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  gc_mark(car(sc->elist_1));
+  gc_mark(car(sc->elist_2));
+  gc_mark(cadr(sc->elist_2));
+  for (p = sc->plist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (p = sc->elist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (p = sc->elist_4; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (p = sc->elist_5; is_pair(p); p = cdr(p)) gc_mark(car(p));
 
-  {
-    s7_int i;
-    s7_pointer p;
-    for (i = 1; i < NUM_SAFE_LISTS; i++)
-      if ((is_pair(sc->safe_lists[i])) &&
-	  (list_is_in_use(sc->safe_lists[i])))
-	for (p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
-	  gc_mark(car(p));
-
-    for (i = 0; i < sc->setters_loc; i++)
-      gc_mark(cdr(sc->setters[i]));
-
-    for (i = 0; i < sc->num_fdats; i++)
-      if (sc->fdats[i])
-	gc_mark(sc->fdats[i]->curly_arg);
-
-    if (sc->rec_stack)
-      {
-	just_mark(sc->rec_stack);
-	for (i = 0; i < sc->rec_loc; i++)
-	  gc_mark(sc->rec_els[i]);
-      }}
+  for (i = 1; i < NUM_SAFE_LISTS; i++)
+    if ((is_pair(sc->safe_lists[i])) &&
+	(list_is_in_use(sc->safe_lists[i])))
+      for (p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
+	gc_mark(car(p));
+  
+  for (i = 0; i < sc->setters_loc; i++)
+    gc_mark(cdr(sc->setters[i]));
+  
+  for (i = 0; i < sc->num_fdats; i++)
+    if (sc->fdats[i])
+      gc_mark(sc->fdats[i]->curly_arg);
+  
+  if (sc->rec_stack)
+    {
+      just_mark(sc->rec_stack);
+      for (i = 0; i < sc->rec_loc; i++)
+	gc_mark(sc->rec_els[i]);
+    }
   mark_vector(sc->protected_objects);
   mark_vector(sc->protected_setters);
   set_mark(sc->protected_setter_symbols);
@@ -7101,7 +7097,6 @@ static int64_t gc(s7_scheme *sc)
     }
 
   {
-    s7_int i;
     gc_list_t *gp;
     gp = sc->opt1_funcs;
     for (i = 0; i < gp->loc; i++)
@@ -7227,14 +7222,14 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
     }
 
   cp = (s7_cell **)realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
-  if (!cp)
+  if (cp)
+    sc->heap = cp;
+  else
     {
       s7_warn(sc, 256, "heap reallocation failed! tried to get %" print_s7_int " bytes (will retry with a smaller amount)\n", (int64_t)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
       sc->heap = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
-  else sc->heap = cp;
-
   sc->free_heap = (s7_cell **)Realloc(sc->free_heap, sc->heap_size * sizeof(s7_cell *));
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->free_heap_top = sc->free_heap + old_free; /* incremented below, added old_free 21-Aug-12?!? */
@@ -9064,16 +9059,15 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
     return;
 
   if (new_e == sc->rootlet)
-    {
-      for (x = let_slots(old_e); tis_slot(x); x = next_slot(x))
-	{
-	  s7_pointer sym, val;
-	  sym = slot_symbol(x);
-	  val = slot_value(x);
-	  if (is_slot(global_slot(sym)))
-	    slot_set_value(global_slot(sym), val);
-	  else s7_make_slot(sc, new_e, sym, val);
-	}}
+    for (x = let_slots(old_e); tis_slot(x); x = next_slot(x))
+      {
+	s7_pointer sym, val;
+	sym = slot_symbol(x);
+	val = slot_value(x);
+	if (is_slot(global_slot(sym)))
+	  slot_set_value(global_slot(sym), val);
+	else s7_make_slot(sc, new_e, sym, val);
+      }
   else
     if (old_e == sc->s7_let)
       {
@@ -10512,12 +10506,10 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool unnamed)
       else s7_make_slot(sc, sc->curlet, mac_name, mac); /* was current but we've checked immutable already */
       if (tree_has_definers(sc, body))
 	set_is_definer(mac_name);            /* (list-values 'define ...) aux-13 */
+      if ((!is_either_bacro(mac)) &&
+	  (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
+	clear_all_optimizations(sc, body);
     }
-
-  if ((!is_either_bacro(mac)) &&
-      (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
-    clear_all_optimizations(sc, body);
-
   sc->temp6 = sc->nil;
   if (sc->debug > 1) /* no profile here */
     {
@@ -13906,7 +13898,6 @@ static inline int fpconv_dtoa(double d, char dest[24])
       str_len++;
       neg = true;
     }
-
   spec = dtoa_filter_special(d, dest + str_len, neg);
   if (spec) return(str_len + spec);
   K = 0;
@@ -14614,7 +14605,6 @@ static int32_t inchar(s7_pointer pt)
 	return(EOF);
       c = (uint8_t)port_data(pt)[port_position(pt)++];
     }
-
   if (c == '\n')
     port_line_number(pt)++;
   return(c);
@@ -14656,7 +14646,6 @@ static s7_pointer unknown_sharp_constant(s7_scheme *sc, char *name, s7_pointer p
       if (result != sc->unspecified)
 	return(result);
     }
-
   if (pt) /* #<"..."> which gets here as name="#<" */
     {
       s7_int len;
@@ -16010,7 +15999,9 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
       return(method_or_bust(sc, pp0, sc->rationalize_symbol, args, T_REAL, 1));
     }
 
-  if (is_not_null(cdr(args)))
+  if (is_null(cdr(args)))
+    mpfr_set_d(r->error, sc->default_rationalize_error, MPFR_RNDN);
+  else
     {
       s7_pointer pp1 = NULL;
       pp1 = cadr(args);
@@ -16052,7 +16043,6 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
 	}
       mpfr_abs(r->error, r->error, MPFR_RNDN);
     }
-  else mpfr_set_d(r->error, sc->default_rationalize_error, MPFR_RNDN);
 
   mpfr_set(r->x0, r->ux, MPFR_RNDN);            /* x0 = ux - error */
   mpfr_sub(r->x0, r->x0, r->error, MPFR_RNDN);
@@ -16160,7 +16150,9 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
   if (!s7_is_real(x))
     return(method_or_bust(sc, x, sc->rationalize_symbol, args, T_REAL, 1));
 
-  if (is_not_null(cdr(args)))
+  if (is_null(cdr(args)))
+    err = sc->default_rationalize_error;
+  else
     {
       s7_pointer ex;
       ex = cadr(args);
@@ -16175,7 +16167,6 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	return(out_of_range(sc, sc->rationalize_symbol, int_two, cadr(args), its_nan_string));
       if (err < 0.0) err = -err;
     }
-  else err = sc->default_rationalize_error;
 
   switch (type(x))
     {
@@ -26550,23 +26541,21 @@ static s7_pointer g_char_position(s7_scheme *sc, s7_pointer args)
 static s7_pointer char_position_p_ppi(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_int start)
 {
   /* p1 is char, p2 is string */
-  if (is_string(p2))
-    {
-      if (start >= 0)
-	{
-	  const char *porig, *p;
-	  s7_int len;
-	  char c;
-	  c = character(p1);
-	  len = string_length(p2);
-	  porig = string_value(p2);
-	  if (start >= len) return(sc->F);
-	  p = strchr((const char *)(porig + start), (int)c);
-	  if (p) return(make_integer(sc, p - porig));
-	}
-      else wrong_type_argument_with_type(sc, sc->char_position_symbol, 3, make_integer(sc, start), a_non_negative_integer_string);
-    }
-  else simple_wrong_type_argument(sc, sc->char_position_symbol, p2, T_STRING);
+  const char *porig, *p;
+  s7_int len;
+  char c;
+
+  if (!is_string(p2))
+    simple_wrong_type_argument(sc, sc->char_position_symbol, p2, T_STRING);
+  if (start < 0)
+    wrong_type_argument_with_type(sc, sc->char_position_symbol, 3, make_integer(sc, start), a_non_negative_integer_string);
+  
+  c = character(p1);
+  len = string_length(p2);
+  porig = string_value(p2);
+  if (start >= len) return(sc->F);
+  p = strchr((const char *)(porig + start), (int)c);
+  if (p) return(make_integer(sc, p - porig));
   return(sc->F);
 }
 
@@ -30588,58 +30577,58 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
       if (!pname) fprintf(stderr, "pname is null\n");
 #endif
       library = dlopen((pname) ? pwd_name : fname, RTLD_NOW);
-      if (library)
-	{
-	  if (let) /* look for 'init_func in let */
-	    {
-	      s7_pointer init;
-
-	      init = s7_let_ref(sc, let, make_symbol(sc, "init_func"));
-	      if (is_symbol(init))
-		{
-		  const char *init_name;
-		  void *init_func;
-
-		  if (hook_has_functions(sc->load_hook))
-		    s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, (pname) ? (const char *)pwd_name : fname)));
-
-		  init_name = symbol_name(init);
-		  init_func = dlsym(library, init_name);
-		  if (init_func)
-		    {
-		      typedef void (*dl_func)(s7_scheme *sc);
-		      typedef s7_pointer (*dl_func_with_args)(s7_scheme *sc, s7_pointer args);
-		      s7_pointer init_args, p;
-
-		      init_args = s7_let_ref(sc, let, make_symbol(sc, "init_args"));
-		      if (is_pair(init_args))
-			p = ((dl_func_with_args)init_func)(sc, init_args);
-		      /* if caller includes init_args, but init_func is actually a dl_func, it seems to be ok,
-		       *   but the returned value is whatever was last computed in the init_func.
-		       */
-		      else
-			{
-			  /* if the init_func is expecting args, but caller forgets init_args, this gives a segfault when
-			   *   init_func accesses the forgotten args. s7_is_valid can't catch this currently --
-			   *   we need a better way to tell that a random value can't be a cell pointer (scan permallocs and use heap_location?)
-			   */
-			  ((dl_func)init_func)(sc);
-			  p = sc->F;
-			}
-		      if (pname) liberate(sc, pname);
-		      return(p);
-		    }
-		  s7_warn(sc, 512, "loaded %s, but can't find init_func %s, dlerror: %s, let: %s\n", fname, init_name, dlerror(), display(let));
-		  dlclose(library);
-		}
-	      else s7_warn(sc, 512, "can't load %s: no init function\n", fname);
+      if (!library)
+	s7_warn(sc, 512, "load %s failed: %s\n", (pname) ? pwd_name : fname, dlerror());
+      else
+	if (let) /* look for 'init_func in let */
+	  {
+	    s7_pointer init;
+	    init = s7_let_ref(sc, let, make_symbol(sc, "init_func"));
+	    if (!is_symbol(init))
+	      s7_warn(sc, 512, "can't load %s: no init function\n", fname);
+	    else
+	      {
+		const char *init_name;
+		void *init_func;
+		
+		if (hook_has_functions(sc->load_hook))
+		  s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, (pname) ? (const char *)pwd_name : fname)));
+		
+		init_name = symbol_name(init);
+		init_func = dlsym(library, init_name);
+		if (init_func)
+		  {
+		    typedef void (*dl_func)(s7_scheme *sc);
+		    typedef s7_pointer (*dl_func_with_args)(s7_scheme *sc, s7_pointer args);
+		    s7_pointer init_args, p;
+		    
+		    init_args = s7_let_ref(sc, let, make_symbol(sc, "init_args"));
+		    if (is_pair(init_args))
+		      p = ((dl_func_with_args)init_func)(sc, init_args);
+		    /* if caller includes init_args, but init_func is actually a dl_func, it seems to be ok,
+		     *   but the returned value is whatever was last computed in the init_func.
+		     */
+		    else
+		      {
+			/* if the init_func is expecting args, but caller forgets init_args, this gives a segfault when
+			 *   init_func accesses the forgotten args. s7_is_valid can't catch this currently --
+			 *   we need a better way to tell that a random value can't be a cell pointer (scan permallocs and use heap_location?)
+			 */
+			((dl_func)init_func)(sc);
+			p = sc->F;
+		      }
+		    if (pname) liberate(sc, pname);
+		    return(p);
+		  }
+		s7_warn(sc, 512, "loaded %s, but can't find init_func %s, dlerror: %s, let: %s\n", fname, init_name, dlerror(), display(let));
+		dlclose(library);
+	      }
 #if S7_DEBUGGING
-	      fprintf(stderr, "init_func trouble in %s, %s\n", fname, display(init));
+	    fprintf(stderr, "init_func trouble in %s, %s\n", fname, display(init));
 #endif
-	      if (pname) liberate(sc, pname);
-	      return(sc->undefined);
-	    }}
-      else s7_warn(sc, 512, "load %s failed: %s\n", (pname) ? pwd_name : fname, dlerror());
+	    if (pname) liberate(sc, pname);
+	    return(sc->undefined);
+	  }
       if (pname) liberate(sc, pname);
     }
   return(NULL);
@@ -31132,16 +31121,14 @@ The symbols refer to the argument to \"provide\".  (require lint.scm)"
 	{
 	  s7_pointer f;
 	  f = g_autoloader(sc, set_plist_1(sc, sym));
-	  if (is_string(f))
-	    {
-	      if (hook_has_functions(sc->autoload_hook))
-		s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, f));
-	      s7_load_with_environment(sc, string_value(f), sc->curlet);
-	    }
-	  else return(s7_error(sc, sc->autoload_error_symbol, set_elist_2(sc, wrap_string(sc, "require: no autoload info for ~S", 32), sym)));
+	  if (!is_string(f))
+	    return(s7_error(sc, sc->autoload_error_symbol, set_elist_2(sc, wrap_string(sc, "require: no autoload info for ~S", 32), sym)));
 	  /* it's possible to precede the error with: if (!s7_load_with_environment(sc, symbol_name(sym), sc->curlet))
 	   *   but loading the symbol as a string worries me.
 	   */
+	  if (hook_has_functions(sc->autoload_hook))
+	    s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, f));
+	  s7_load_with_environment(sc, string_value(f), sc->curlet);
 	}}
   if (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT)
     unstack(sc);
@@ -41559,28 +41546,26 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 		if (typf == global_value(sc->is_float_symbol))
 		  result_type = T_FLOAT_VECTOR;
 		else
-		  {
-		    if (typf == global_value(sc->is_integer_symbol))
-		      result_type = (WITH_GMP) ? T_VECTOR : T_INT_VECTOR;
+		  if (typf == global_value(sc->is_integer_symbol))
+		    result_type = (WITH_GMP) ? T_VECTOR : T_INT_VECTOR;
+		  else
+		    if (typf == global_value(sc->is_byte_symbol))
+		      result_type = T_BYTE_VECTOR;
 		    else
 		      {
-			if (typf == global_value(sc->is_byte_symbol))
-			  result_type = T_BYTE_VECTOR;
-			else
-			  {
-			    s7_pointer sig;
-			    if (!c_function_name(typf))
-			      return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named procedure", 17)));
-			    if (!c_function_marker(typf))
-			      c_function_set_marker(typf, mark_vector_1);
-			    if (!c_function_symbol(typf))
-			      c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
-			    sig = c_function_signature(typf);
-			    if ((sig != sc->pl_bt) &&
-				(is_pair(sig)) &&
-				((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
-			      return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
-			  }}}}}}
+			s7_pointer sig;
+			if (!c_function_name(typf))
+			  return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named procedure", 17)));
+			if (!c_function_marker(typf))
+			  c_function_set_marker(typf, mark_vector_1);
+			if (!c_function_symbol(typf))
+			  c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
+			sig = c_function_signature(typf);
+			if ((sig != sc->pl_bt) &&
+			    (is_pair(sig)) &&
+			    ((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
+			  return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
+		      }}}}
   /* before making the new vector, if fill is specified and the vector is typed, we have to check for a type error.
    *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the  gc.
    */
@@ -43197,20 +43182,19 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 			      lessp = lp;
 			    }}
 		      else
-			{
-			  if ((optimize_op(expr) == HOP_SAFE_C_opSq_opSq) &&
-			      ((caadr(expr) == sc->car_symbol) || (caadr(expr) == sc->cdr_symbol)) &&
-			      (caadr(expr) == caaddr(expr)) &&
-			      (car(largs) == cadadr(expr)) &&
-			      (cadr(largs) == cadaddr(expr)))
-			    {
-			      lp = lookup(sc, car(expr));
-			      sc->sort_f = s7_b_7pp_function(lp);
-			      if (sc->sort_f)
-				{
-				  sort_func = ((caadr(expr) == sc->car_symbol) ? vector_car_sort : vector_cdr_sort);
-				  lessp = lp;
-				}}}
+			if ((optimize_op(expr) == HOP_SAFE_C_opSq_opSq) &&
+			    ((caadr(expr) == sc->car_symbol) || (caadr(expr) == sc->cdr_symbol)) &&
+			    (caadr(expr) == caaddr(expr)) &&
+			    (car(largs) == cadadr(expr)) &&
+			    (cadr(largs) == cadaddr(expr)))
+			  {
+			    lp = lookup(sc, car(expr));
+			    sc->sort_f = s7_b_7pp_function(lp);
+			    if (sc->sort_f)
+			      {
+				sort_func = ((caadr(expr) == sc->car_symbol) ? vector_car_sort : vector_cdr_sort);
+				lessp = lp;
+			      }}
 		      set_optimize_op(expr, orig_data);
 		    }}
 
@@ -47897,20 +47881,19 @@ static Inline bool equal_ref(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 	add_shared_ref(ci, y, ref_x);
     }
   else
-    {
-      if (ref_y != 0)
-	add_shared_ref(ci, x, ref_y);
-      else
-	{
-	  /* assume neither x nor y is in the table, and that they should share a ref value, called only in equality check, not printer. */
-	  if (ci->top >= ci->size2) enlarge_shared_info(ci);
-	  set_collected(x);
-	  set_collected(y);
-	  ci->objs[ci->top] = x;
-	  ci->refs[ci->top++] = ++ci->ref;
-	  ci->objs[ci->top] = y;
-	  ci->refs[ci->top++] = ci->ref;
-	}}
+    if (ref_y != 0)
+      add_shared_ref(ci, x, ref_y);
+    else
+      {
+	/* assume neither x nor y is in the table, and that they should share a ref value, called only in equality check, not printer. */
+	if (ci->top >= ci->size2) enlarge_shared_info(ci);
+	set_collected(x);
+	set_collected(y);
+	ci->objs[ci->top] = x;
+	ci->refs[ci->top++] = ++ci->ref;
+	ci->objs[ci->top] = y;
+	ci->refs[ci->top++] = ci->ref;
+      }
   return(false);
 }
 
@@ -52531,20 +52514,18 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		  y = type;
 	    }
 	  else
-	    if (is_symbol(error_body))
-	      {
-		if (error_body == error_args)
-		  y = list_2(sc, type, info);
+	    if (!is_symbol(error_body))
+	      y = error_body; /* not pair or symbol */
+	    else
+	      if (error_body == error_args)
+		y = list_2(sc, type, info);
+	      else
+		if (is_keyword(error_body))
+		  y = error_body;
 		else
-		  if (is_keyword(error_body))
-		    y = error_body;
-		  else
-		    if ((is_pair(error_args)) &&
-			(error_body == car(error_args)))
-		      y = type;
-	      }
-	    else y = error_body; /* not pair or symbol */
-
+		  if ((is_pair(error_args)) &&
+		      (error_body == car(error_args)))
+		    y = type;
 	  if (y)
 	    {
 	      if (loc > 4)
@@ -52890,13 +52871,11 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	  (line != sc->last_error_line))
 	{
 	  sc->last_error_line = line;
-	  if (file >= 0)
-	    {
-	      integer(slot_value(sc->error_line)) = line;
-	      integer(slot_value(sc->error_position)) = position;
-	      slot_set_value(sc->error_file, sc->file_names[file]);
-	    }
-	  else fill_error_location(sc);
+	  if (file < 0)
+	    fill_error_location(sc);
+	  integer(slot_value(sc->error_line)) = line;
+	  integer(slot_value(sc->error_position)) = position;
+	  slot_set_value(sc->error_file, sc->file_names[file]);
 	}
       else fill_error_location(sc);
     }
@@ -58590,8 +58569,9 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
   /* extending this to a third variable did not get many hits */
   s7_pointer p;
 #if 0
-  fprintf(stderr, "fx_tree_in %s %s %s: %s %s\n", 
-	  display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", display_80(car(tree)), op_names[optimize_op(car(tree))]);
+  if ((s7_tree_memq(sc, var1, car(tree))) || ((var2) && (s7_tree_memq(sc, var2, car(tree)))) || ((var3) && (s7_tree_memq(sc, var3, car(tree)))))
+    fprintf(stderr, "fx_tree_in %s %s %s: %s %s\n", 
+	    display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", display_80(car(tree)), op_names[optimize_op(car(tree))]);
 #endif
   p = car(tree);
   if (is_symbol(p))
@@ -70962,16 +70942,14 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	  s7_pointer body;
 	  set_optimized(expr);
 	  body = closure_body(func);
-	  if (is_null(cdr(body)))
+	  if ((is_null(cdr(body))) && (safe_case) && (is_fxable(sc, car(body)))) /* fx stuff is not set yet */
 	    {
-	      if ((safe_case) && (is_fxable(sc, car(body))))          /* fx stuff is not set yet */
-		{
-		  fx_annotate_arg(sc, body, e);
-		  set_optimize_op(expr, hop + OP_SAFE_THUNK_A);
-		  set_closure_one_form_fx_arg(func);
-		  set_opt1_lambda_add(expr, func);
-		  return(OPT_T);
-		}}
+	      fx_annotate_arg(sc, body, e);
+	      set_optimize_op(expr, hop + OP_SAFE_THUNK_A);
+	      set_closure_one_form_fx_arg(func);
+	      set_opt1_lambda_add(expr, func);
+	      return(OPT_T);
+	    }
 	  /* thunks with fully fxable bodies are rare apparently, and the time spent here overwhelms run time gains */
 	  set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_THUNK : OP_THUNK));
 	  set_opt1_lambda_add(expr, func);
@@ -80293,12 +80271,10 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
 	if (is_immutable(obj))
 	  immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, obj));
 
-	if (s7_is_character(value))
-	  {
-	    string_value(obj)[index] = (char)s7_character(value);
-	    sc->value = value;
-	  }
-	else eval_error_any(sc, sc->wrong_type_arg_symbol, "(string-)set!: value must be a character: ~S", 44, sc->code);
+	if (!s7_is_character(value))
+	  eval_error_any(sc, sc->wrong_type_arg_symbol, "(string-)set!: value must be a character: ~S", 44, sc->code);
+	string_value(obj)[index] = (char)s7_character(value);
+	sc->value = value;
       }
 #endif
       break;
@@ -81807,18 +81783,16 @@ static void check_do_for_obvious_errors(s7_scheme *sc, s7_pointer form)
 	  if (is_constant_symbol(sc, car(y)))            /* (do ((pi 3 (+ pi 1))) ((= pi 4)) pi) */
 	    eval_error(sc, "do step variable: ~S is immutable", 33, y);
 
-	  if (is_pair(cdr(y)))
+	  if (!is_pair(cdr(y)))
+	    eval_error(sc, "do: step variable has no initial value: ~A", 42, x);
+	  if (!is_pair(cddr(y)))
 	    {
-	      if (!is_pair(cddr(y)))
-		{
-		  if (is_not_null(cddr(y)))             /* (do ((i 0 . 1)) ...) */
-		    eval_error(sc, "do: step variable info is an improper list?: ~A", 47, x);
-		}
-	      else
-		if (is_not_null(cdddr(y)))              /* (do ((i 0 1 (+ i 1))) ...) */
-		  eval_error(sc, "do: step variable info has extra stuff after the increment: ~A", 62, x);
+	      if (is_not_null(cddr(y)))             /* (do ((i 0 . 1)) ...) */
+		eval_error(sc, "do: step variable info is an improper list?: ~A", 47, x);
 	    }
-	  else eval_error(sc, "do: step variable has no initial value: ~A", 42, x);
+	  else
+	    if (is_not_null(cdddr(y)))              /* (do ((i 0 1 (+ i 1))) ...) */
+	      eval_error(sc, "do: step variable info has extra stuff after the increment: ~A", 62, x);
 	  set_local(car(y));
 
 	  if (symbol_is_in_list(sc, car(y)))            /* (do ((i 0 (+ i 1)) (i 2))...) */
@@ -97254,7 +97228,6 @@ int main(int argc, char **argv)
  * -------------------------------------------------------
  *
  * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
- * can step_end_ok be used elsewhere -- opt_do_any probably?
  * funclet oddities -- function mght not have a funclet?
  * Snd listener completions window -- could this be some utf8 char?
  * op_closure_s_o arglist free again? check opt1_lambda bits sc->code: probably load (t474)

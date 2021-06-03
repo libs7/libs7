@@ -105,7 +105,7 @@
 	  (display "oops")))
     (for-each (lambda (key&value)
 		(unless (= (car key&value) (cdr key&value))
-		    (display "oops"))) ;(format *stderr* "hash iter ~A~%" key&value)))
+		  (display "oops"))) ;(format *stderr* "hash iter ~A~%" key&value)))
 	      (make-iterator int-hash p))
     (set! int-hash #f)))
 
