@@ -21573,9 +21573,8 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  return(method_or_bust_with_type_pp(sc, y, sc->divide_symbol, x, y, a_number_string, 2));
 	}
 #endif
-
-      /* x is not a built-in number */
-    default:
+      
+    default: /* x is not a built-in number */
       return(method_or_bust_with_type_pp(sc, x, sc->divide_symbol, x, y, a_number_string, 1)); /* not args here! y = apply * to cdr(args) */
     }
   return(NULL); /* make the compiler happy */
@@ -24271,7 +24270,6 @@ static s7_pointer g_geq_xf(s7_scheme *sc, s7_pointer args)
 {
   s7_double y;
   s7_pointer x;
-
   x = car(args);
   y = real(cadr(args));
   return(make_boolean(sc, ((is_t_real(x)) ? (real(x) >= y) : geq_b_7pp(sc, car(args), cadr(args)))));
@@ -25636,14 +25634,14 @@ static s7_pointer g_random(s7_scheme *sc, s7_pointer args)
    *   must be true: (let* ((x 0.0) (y (random x))) (and (>= y 0.0) (< y x))).  The definition above is consistent
    *   with (random 0) -> 0, simpler to use in practice, and certainly no worse than (/ 0 0) -> 1.
    */
-  if (is_not_null(cdr(args)))
+  if (is_null(cdr(args)))
+    r = sc->default_rng;
+  else
     {
       r = cadr(args);
       if (!is_random_state(r))
 	return(method_or_bust_with_type(sc, r, sc->random_symbol, args, a_random_state_object_string, 2));
     }
-  else r = sc->default_rng;
-
   num = car(args);
   switch (type(num))
     {
@@ -25832,8 +25830,7 @@ static s7_pointer random_p_p(s7_scheme *sc, s7_pointer num)
 
 static s7_pointer random_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
-  if (!ops) return(f);
-  if (args == 1)
+  if ((ops) && (args == 1))
     {
       s7_pointer arg1;
       arg1 = cadr(expr);
@@ -26131,8 +26128,11 @@ static s7_pointer g_is_char(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_pointer is_char_p_p(s7_scheme *sc, s7_pointer p) {return((type(p) == T_CHARACTER) ? sc->T : sc->F);}
+
 s7_pointer s7_make_character(s7_scheme *sc, uint8_t c) {return(chars[c]);}
+
 bool s7_is_character(s7_pointer p) {return(type(p) == T_CHARACTER);}
+
 uint8_t s7_character(s7_pointer p) {return(character(p));}
 
 
@@ -26175,7 +26175,6 @@ static s7_pointer g_char_cmp(s7_scheme *sc, s7_pointer args, int32_t val, s7_poi
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sym, args, T_CHARACTER, 1));
-
   for (x = cdr(args); is_pair(x); y = car(x), x = cdr(x))
     {
       if (!s7_is_character(car(x)))
@@ -26192,7 +26191,6 @@ static s7_pointer g_char_cmp_not(s7_scheme *sc, s7_pointer args, int32_t val, s7
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sym, args, T_CHARACTER, 1));
-
   for (x = cdr(args); is_pair(x); y = car(x), x = cdr(x))
     {
       if (!s7_is_character(car(x)))
@@ -26212,7 +26210,6 @@ static s7_pointer g_chars_are_equal(s7_scheme *sc, s7_pointer args)
   y = car(args);
   if (!s7_is_character(y))
     return(method_or_bust(sc, y, sc->char_eq_symbol, args, T_CHARACTER, 1));
-
   for (x = cdr(args); is_pair(x); x = cdr(x))
     {
       if (!s7_is_character(car(x)))
@@ -26337,10 +26334,7 @@ static s7_pointer g_char_greater_2(s7_scheme *sc, s7_pointer args)
   return(make_boolean(sc, character(car(args)) > character(cadr(args))));
 }
 
-static bool returns_char(s7_scheme *sc, s7_pointer arg)
-{
-  return(argument_type(sc, arg) == sc->is_char_symbol);
-}
+static bool returns_char(s7_scheme *sc, s7_pointer arg) {return(argument_type(sc, arg) == sc->is_char_symbol);}
 
 static s7_pointer char_equal_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
@@ -26650,13 +26644,12 @@ static s7_pointer g_string_position(s7_scheme *sc, s7_pointer args)
  *   (in index.scm where 11% of the strings are empty).  s7test max 4% empty, elsewhere much less.
  */
 bool s7_is_string(s7_pointer p) {return(is_string(p));}
+
 const char *s7_string(s7_pointer p) {return(string_value(p));}
+
 s7_int s7_string_length(s7_pointer str) {return(string_length(str));}
 
-s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len)
-{
-  return(make_string_with_length(sc, str, len));
-}
+s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len) {return(make_string_with_length(sc, str, len));}
 
 #define NUM_STRING_WRAPPERS 8 /* should be a power of 2 */
 
@@ -26699,10 +26692,7 @@ static Inline s7_pointer inline_make_empty_string(s7_scheme *sc, s7_int len, cha
   return(x);
 }
 
-static s7_pointer make_empty_string(s7_scheme *sc, s7_int len, char fill)
-{
-  return(inline_make_empty_string(sc, len, fill));
-}
+static s7_pointer make_empty_string(s7_scheme *sc, s7_int len, char fill) {return(inline_make_empty_string(sc, len, fill));}
 
 s7_pointer s7_make_string(s7_scheme *sc, const char *str)
 {
@@ -26757,7 +26747,6 @@ static s7_pointer make_permanent_string(const char *str)
 {
   s7_pointer x;
   s7_int len;
-
   x = (s7_pointer)calloc(1, sizeof(s7_cell));
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CON);
@@ -26857,7 +26846,6 @@ static s7_pointer g_make_string(s7_scheme *sc, s7_pointer args)
       check_method(sc, n, sc->make_string_symbol, args);
       return(wrong_type_argument(sc, sc->make_string_symbol, 1, n, T_INTEGER));
     }
-
   len = s7_integer_checked(sc, n);
   if ((len < 0) || (len > sc->max_string_length))
     return(out_of_range(sc, sc->make_string_symbol, int_one, n, (len < 0) ? its_negative_string : its_too_large_string));
@@ -27017,14 +27005,12 @@ static s7_pointer string_ref_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer i1)
 
 static s7_pointer string_ref_p_p0(s7_scheme *sc, s7_pointer p1, s7_pointer i1) /* i1 can be NULL */
 {
-  if (is_string(p1))
-    {
-      if (string_length(p1) > 0)
-	return(chars[((uint8_t *)string_value(p1))[0]]);
-      out_of_range(sc, sc->string_ref_symbol, int_two, int_zero, its_too_large_string);
-      return(p1);
-    }
-  return(method_or_bust_pp(sc, p1, sc->string_ref_symbol, p1, int_zero, T_STRING, 1));
+  if (!is_string(p1))
+    return(method_or_bust_pp(sc, p1, sc->string_ref_symbol, p1, int_zero, T_STRING, 1));
+  if (string_length(p1) > 0)
+    return(chars[((uint8_t *)string_value(p1))[0]]);
+  out_of_range(sc, sc->string_ref_symbol, int_two, int_zero, its_too_large_string);
+  return(p1);
 }
 
 static s7_pointer string_plast_via_method(s7_scheme *sc, s7_pointer p1)
@@ -27036,14 +27022,12 @@ static s7_pointer string_plast_via_method(s7_scheme *sc, s7_pointer p1)
 
 static s7_pointer string_ref_p_plast(s7_scheme *sc, s7_pointer p1, s7_pointer i1)
 {
-  if (is_string(p1))
-    {
-      if (string_length(p1) > 0)
-	return(chars[((uint8_t *)string_value(p1))[string_length(p1) - 1]]);
-      out_of_range(sc, sc->string_ref_symbol, int_two, wrap_integer1(sc, string_length(p1) - 1), its_too_large_string);
-      return(p1);
-    }
-  return(string_plast_via_method(sc, p1));
+  if (!is_string(p1))
+    return(string_plast_via_method(sc, p1));
+  if (string_length(p1) > 0)
+    return(chars[((uint8_t *)string_value(p1))[string_length(p1) - 1]]);
+  out_of_range(sc, sc->string_ref_symbol, int_two, wrap_integer1(sc, string_length(p1) - 1), its_too_large_string);
+  return(p1);
 }
 
 static s7_pointer string_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer p1, s7_int i1)
@@ -27157,13 +27141,11 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
 	}
       len += string_length(p);
     }
-
   if (len == 0)
     {
       unstack(sc);
       return(make_string_with_length(sc, "", 0)); /* not car(args) here since it might be immutable (string_wrapper for example) */
     }
-
   if (len > sc->max_string_length)
     {
       unstack(sc);
@@ -27171,7 +27153,6 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
 		      set_elist_4(sc, wrap_string(sc, "~S new string length, ~D, is larger than (*s7* 'max-string-length): ~D", 70),
 				  caller, wrap_integer1(sc, len), wrap_integer2(sc, sc->max_string_length))));
     }
-
   newstr = inline_make_empty_string(sc, len, 0);
   for (pos = string_value(newstr), x = args; is_not_null(x); x = cdr(x))
     {
@@ -27185,10 +27166,7 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
   return(newstr);
 }
 
-static s7_pointer g_string_append(s7_scheme *sc, s7_pointer args)
-{
-  return(g_string_append_1(sc, args, sc->string_append_symbol));
-}
+static s7_pointer g_string_append(s7_scheme *sc, s7_pointer args) {return(g_string_append_1(sc, args, sc->string_append_symbol));}
 
 static inline s7_pointer string_append_1(s7_scheme *sc, s7_pointer s1, s7_pointer s2)
 {
@@ -27213,6 +27191,7 @@ static inline s7_pointer string_append_1(s7_scheme *sc, s7_pointer s1, s7_pointe
 }
 
 static s7_pointer string_append_p_pp(s7_scheme *sc, s7_pointer s1, s7_pointer s2) {return(string_append_1(sc, s1, s2));}
+
 static s7_pointer g_string_append_2(s7_scheme *sc, s7_pointer args) {return(string_append_1(sc, car(args), cadr(args)));}
 
 static void check_for_substring_temp(s7_scheme *sc, s7_pointer expr);
@@ -28378,28 +28357,26 @@ static s7_pointer g_is_char_ready(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_char_ready "(char-ready? (port (current-input-port))) returns #t if a character is ready for input on the given port"
   #define Q_is_char_ready s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_input_port_symbol)
-  if (is_not_null(args))
-    {
-      s7_pointer pt = car(args);
-      if (!is_input_port(pt))
-	return(method_or_bust_with_type_one_arg(sc, pt, sc->is_char_ready_symbol, args, an_input_port_string));
-      if (port_is_closed(pt))
-	return(simple_wrong_type_argument_with_type(sc, sc->is_char_ready_symbol, pt, an_open_port_string));
+  s7_pointer pt, res;
 
-      if (is_function_port(pt))
-	{
-	  s7_pointer res;
-	  res = (*(port_input_function(pt)))(sc, S7_IS_CHAR_READY, pt);
-	  if (is_multiple_value(res))  /* can only happen if more than one value in res */
-	    {
-	      clear_multiple_value(res);
-	      s7_error(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port char-ready? returned: ~S", 44), res));
-	    }
-	  return(make_boolean(sc, (res != sc->F))); /* char-ready? returns a boolean */
-	}
-      return(make_boolean(sc, is_string_port(pt)));
+  if (is_null(args))
+    return(make_boolean(sc, (is_input_port(current_input_port(sc))) && (is_string_port(current_input_port(sc)))));
+
+  pt = car(args);
+  if (!is_input_port(pt))
+    return(method_or_bust_with_type_one_arg(sc, pt, sc->is_char_ready_symbol, args, an_input_port_string));
+  if (port_is_closed(pt))
+    return(simple_wrong_type_argument_with_type(sc, sc->is_char_ready_symbol, pt, an_open_port_string));
+  if (!is_function_port(pt))
+    return(make_boolean(sc, is_string_port(pt)));
+
+  res = (*(port_input_function(pt)))(sc, S7_IS_CHAR_READY, pt);
+  if (is_multiple_value(res))  /* can only happen if more than one value in res */
+    {
+      clear_multiple_value(res);
+      s7_error(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port char-ready? returned: ~S", 44), res));
     }
-  return(make_boolean(sc, (is_input_port(current_input_port(sc))) && (is_string_port(current_input_port(sc)))));
+  return(make_boolean(sc, (res != sc->F))); /* char-ready? returns a boolean */
 }
 #endif
 
@@ -28587,10 +28564,7 @@ static s7_pointer g_close_output_port(s7_scheme *sc, s7_pointer args)
 
 /* -------- read character functions -------- */
 
-static int32_t file_read_char(s7_scheme *sc, s7_pointer port)
-{
-  return(fgetc(port_file(port)));
-}
+static int32_t file_read_char(s7_scheme *sc, s7_pointer port) {return(fgetc(port_file(port)));}
 
 static int32_t function_read_char(s7_scheme *sc, s7_pointer port)
 {
@@ -28658,7 +28632,6 @@ static s7_pointer stdin_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
       sc->read_line_buf_size = 1024;
       sc->read_line_buf = (char *)Malloc(sc->read_line_buf_size);
     }
-
   if (fgets(sc->read_line_buf, sc->read_line_buf_size, stdin))
     return(s7_make_string(sc, sc->read_line_buf)); /* fgets adds the trailing '\0' */
   return(make_string_with_length(sc, NULL, 0));
@@ -29034,9 +29007,7 @@ static int32_t terminated_string_read_white_space(s7_scheme *sc, s7_pointer pt)
   const uint8_t *str;
   uint8_t c;
   /* here we know we have null termination and white_space[#\null] is false. */
-
   str = (const uint8_t *)(port_data(pt) + port_position(pt));
-
   while (white_space[c = *str++]) /* 255 is not -1 = EOF */
     if (c == '\n')
       port_line_number(pt)++;
@@ -30364,10 +30335,8 @@ s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
 	  push_stack_direct(sc, OP_EVAL_DONE);
 
 	  eval(sc, OP_READ_INTERNAL);
-
 	  if (sc->tok == TOKEN_EOF)
 	    sc->value = eof_object;
-
 	  if ((sc->cur_op == OP_EVAL_DONE) &&
 	      (stack_op(sc->stack, current_stack_top(sc) - 1) == OP_BARRIER))
 	    pop_stack(sc);
@@ -30978,7 +30947,6 @@ static const char *find_autoload_name(s7_scheme *sc, s7_pointer symbol, bool *al
 
   name = symbol_name(symbol);
   libs = sc->autoload_names_loc;
-
   for (lib = 0; lib < libs; lib++)
     {
       const char **names;
@@ -31285,10 +31253,7 @@ s7_pointer s7_eval_c_string_with_environment(s7_scheme *sc, const char *str, s7_
   return(result);
 }
 
-s7_pointer s7_eval_c_string(s7_scheme *sc, const char *str)
-{
-  return(s7_eval_c_string_with_environment(sc, str, sc->nil));
-}
+s7_pointer s7_eval_c_string(s7_scheme *sc, const char *str) {return(s7_eval_c_string_with_environment(sc, str, sc->nil));}
 
 static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
 {
@@ -31376,7 +31341,6 @@ static s7_pointer g_call_with_input_string(s7_scheme *sc, s7_pointer args)
   if (!s7_is_aritable(sc, proc, 1))
     return(wrong_type_argument_with_type(sc, sc->call_with_input_string_symbol, 2, proc,
 					 wrap_string(sc, "a procedure of one argument (the port)", 38)));
-
   if ((is_continuation(proc)) || (is_goto(proc)))
     return(wrong_type_argument_with_type(sc, sc->call_with_input_string_symbol, 2, proc, a_normal_procedure_string));
   return(call_with_input(sc, open_and_protect_input_string(sc, str), args));
@@ -31668,10 +31632,7 @@ static s7_pointer iterator_copy(s7_scheme *sc, s7_pointer p)
   return(iter);
 }
 
-static s7_pointer iterator_finished(s7_scheme *sc, s7_pointer iterator)
-{
-  return(ITERATOR_END);
-}
+static s7_pointer iterator_finished(s7_scheme *sc, s7_pointer iterator) {return(ITERATOR_END);}
 
 static s7_pointer iterator_quit(s7_pointer iterator)
 {
@@ -31684,37 +31645,33 @@ static s7_pointer let_iterate(s7_scheme *sc, s7_pointer iterator)
 {
   s7_pointer slot;
   slot = iterator_current_slot(iterator);
-  if (tis_slot(slot))
+  if (!tis_slot(slot))
+    return(iterator_quit(iterator));
+  iterator_set_current_slot(iterator, next_slot(slot));
+  if (iterator_let_cons(iterator))
     {
-      iterator_set_current_slot(iterator, next_slot(slot));
-      if (iterator_let_cons(iterator))
-	{
-	  s7_pointer p;
-	  p = iterator_let_cons(iterator);
-	  set_car(p, slot_symbol(slot));
-	  set_cdr(p, slot_value(slot));
-	  return(p);
-	}
-      return(cons(sc, slot_symbol(slot), slot_value(slot)));
+      s7_pointer p;
+      p = iterator_let_cons(iterator);
+      set_car(p, slot_symbol(slot));
+      set_cdr(p, slot_value(slot));
+      return(p);
     }
-  return(iterator_quit(iterator));
+  return(cons(sc, slot_symbol(slot), slot_value(slot)));
 }
 
 static s7_pointer rootlet_iterate(s7_scheme *sc, s7_pointer iterator)
 {
   s7_pointer slot;
   slot = iterator_current(iterator);
-  if (is_slot(slot))
+  if (!is_slot(slot))
+    return(iterator_quit(iterator));
+  if (iterator_position(iterator) < sc->rootlet_entries)
     {
-      if (iterator_position(iterator) < sc->rootlet_entries)
-	{
-	  iterator_position(iterator)++;
-	  iterator_current(iterator) = rootlet_element(sc->rootlet, iterator_position(iterator));
-	}
-      else iterator_current(iterator) = sc->nil;
-      return(cons(sc, slot_symbol(slot), slot_value(slot)));
+      iterator_position(iterator)++;
+      iterator_current(iterator) = rootlet_element(sc->rootlet, iterator_position(iterator));
     }
-  return(iterator_quit(iterator));
+  else iterator_current(iterator) = sc->nil;
+  return(cons(sc, slot_symbol(slot), slot_value(slot)));
 }
 
 static s7_pointer hash_entry_to_cons(s7_scheme *sc, hash_entry_t *entry, s7_pointer p)
@@ -32808,51 +32765,49 @@ static void input_port_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, u
 	  if (port_is_closed(obj))
 	    port_write_string(port)(sc, "(call-with-input-string \"\" (lambda (p) p))", 42, port);
 	  else
-	    {
-	      if (is_function_port(obj))
-		port_write_string(port)(sc, "#<input-function-port>", 22, port);
+	    if (is_function_port(obj))
+	      port_write_string(port)(sc, "#<input-function-port>", 22, port);
+	    else
+	      if (is_file_port(obj))
+		{
+		  char str[256];
+		  int32_t nlen;
+		  str[0] = '\0';
+		  nlen = catstrs(str, 256, "(open-input-file \"", port_filename(obj), "\")", (char *)NULL);
+		  port_write_string(port)(sc, str, nlen, port);
+		}
 	      else
 		{
-		  if (is_file_port(obj))
+		  s7_int data_len;
+		  data_len = port_data_size(obj) - port_position(obj);
+		  if (data_len > 100)
 		    {
-		      char str[256];
-		      int32_t nlen;
-		      str[0] = '\0';
-		      nlen = catstrs(str, 256, "(open-input-file \"", port_filename(obj), "\")", (char *)NULL);
-		      port_write_string(port)(sc, str, nlen, port);
-		    }
-		  else
-		    {
-		      s7_int data_len;
-		      data_len = port_data_size(obj) - port_position(obj);
-		      if (data_len > 100)
+		      const char *filename;
+		      filename = (const char *)s7_port_filename(sc, obj);
+		      if (filename)
 			{
-			  const char *filename;
-			  filename = (const char *)s7_port_filename(sc, obj);
-			  if (filename)
+                          #define DO_STR_LEN 1024
+			  char do_str[DO_STR_LEN];
+			  int32_t len;
+			  do_str[0] = '\0';
+			  if (port_position(obj) > 0)
 			    {
-			      #define DO_STR_LEN 1024
-			      char do_str[DO_STR_LEN];
-			      int32_t len;
-			      do_str[0] = '\0';
-			      if (port_position(obj) > 0)
-				{
-				  len = catstrs(do_str, DO_STR_LEN, "(let ((port (open-input-file \"", filename, "\")))", (char *)NULL);
-				  port_write_string(port)(sc, do_str, len, port);
-				  do_str[0] = '\0';
-				  len = catstrs(do_str, DO_STR_LEN, " (do ((i 0 (+ i 1)) (c (read-char port) (read-char port))) ((= i ",
-						pos_int_to_str_direct(sc, port_position(obj) - 1),
-						") port)))", (char *)NULL);
-				}
-			      else len = catstrs(do_str, DO_STR_LEN, "(open-input-file \"", filename, "\")", (char *)NULL);
+			      len = catstrs(do_str, DO_STR_LEN, "(let ((port (open-input-file \"", filename, "\")))", (char *)NULL);
 			      port_write_string(port)(sc, do_str, len, port);
-			      return;
-			    }}
-		      port_write_string(port)(sc, "(open-input-string ", 19, port);
-		      /* not port_write_string here because there might be embedded double-quotes */
-		      slashify_string_to_port(sc, port, (const char *)(port_data(obj) + port_position(obj)), port_data_size(obj) - port_position(obj), IN_QUOTES);
-		      port_write_character(port)(sc, ')', port);
-		    }}}}
+			      do_str[0] = '\0';
+			      len = catstrs(do_str, DO_STR_LEN, " (do ((i 0 (+ i 1)) (c (read-char port) (read-char port))) ((= i ",
+					    pos_int_to_str_direct(sc, port_position(obj) - 1),
+					    ") port)))", (char *)NULL);
+			    }
+			  else len = catstrs(do_str, DO_STR_LEN, "(open-input-file \"", filename, "\")", (char *)NULL);
+			  port_write_string(port)(sc, do_str, len, port);
+			  return;
+			}}
+		  port_write_string(port)(sc, "(open-input-string ", 19, port);
+		  /* not port_write_string here because there might be embedded double-quotes */
+		  slashify_string_to_port(sc, port, (const char *)(port_data(obj) + port_position(obj)), port_data_size(obj) - port_position(obj), IN_QUOTES);
+		  port_write_character(port)(sc, ')', port);
+		}}
       else
 	{
 	  if (is_string_port(obj))
@@ -34291,25 +34246,24 @@ static void write_macro_readably(s7_scheme *sc, s7_pointer obj, s7_pointer port)
       port_write_character(port)(sc, ' ', port);
     }
   else
-    {
-      if (is_pair(arglist))
-	{
-	  port_write_string(port)(sc, " (", 2, port);
-	  for (expr = arglist; is_pair(expr); expr = cdr(expr))
-	    {
-	      object_to_port(sc, car(expr), port, P_WRITE, NULL);
-	      if (is_pair(cdr(expr)))
-		port_write_character(port)(sc, ' ', port);
-	    }
-	  if (!is_null(expr))
-	    {
-	      port_write_string(port)(sc, " . ", 3, port);
-	      object_to_port(sc, expr, port, P_WRITE, NULL);
-	    }
-	  port_write_string(port)(sc, ") ", 2, port);
-	}
-      else port_write_string(port)(sc, " () ", 4, port);
-    }
+    if (is_pair(arglist))
+      {
+	port_write_string(port)(sc, " (", 2, port);
+	for (expr = arglist; is_pair(expr); expr = cdr(expr))
+	  {
+	    object_to_port(sc, car(expr), port, P_WRITE, NULL);
+	    if (is_pair(cdr(expr)))
+	      port_write_character(port)(sc, ' ', port);
+	  }
+	if (!is_null(expr))
+	  {
+	    port_write_string(port)(sc, " . ", 3, port);
+	    object_to_port(sc, expr, port, P_WRITE, NULL);
+	  }
+	port_write_string(port)(sc, ") ", 2, port);
+      }
+    else port_write_string(port)(sc, " () ", 4, port);
+
   for (expr = body; is_pair(expr); expr = cdr(expr))
     object_to_port(sc, car(expr), port, P_WRITE, NULL);
   port_write_character(port)(sc, ')', port);
@@ -36390,22 +36344,21 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		    if (isdigit((int32_t)(str[i])))
 		      precision = format_numeric_arg(sc, str, str_len, fdat, &i);
 		    else
-		      {
-			if ((str[i] == 'N') || (str[i] == 'n'))
+		      if ((str[i] == 'N') || (str[i] == 'n'))
+			{
+			  i++;
+			  precision = format_n_arg(sc, str, fdat, args);
+			}
+		      else
+			if (str[i] == '\'')              /* (format #f "~12,'xD" 1) -> "xxxxxxxxxxx1" */
 			  {
-			    i++;
-			    precision = format_n_arg(sc, str, fdat, args);
+			    pad = str[i + 1];
+			    i += 2;
+			    if (i >= str_len)            /* (format #f "~,'") */
+			      format_error(sc, "incomplete numeric argument", 27, str, args, fdat);
 			  }
-			else
-			  if (str[i] == '\'')              /* (format #f "~12,'xD" 1) -> "xxxxxxxxxxx1" */
-			    {
-			      pad = str[i + 1];
-			      i += 2;
-			      if (i >= str_len)            /* (format #f "~,'") */
-				format_error(sc, "incomplete numeric argument", 27, str, args, fdat);
-			    }
-			/* is (let ((str "~12,'xD")) (set! (str 5) #\null) (format #f str 1)) an error? */
-		      }}
+		    /* is (let ((str "~12,'xD")) (set! (str 5) #\null) (format #f str 1)) an error? */
+		  }
 
 		switch (str[i])
 		  {
@@ -39446,6 +39399,7 @@ static s7_pointer list_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poi
 }
 
 static s7_pointer list_p_p(s7_scheme *sc, s7_pointer p1) {return(list_1(sc, sc->temp5 = p1));}
+
 static s7_pointer list_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(list_2(sc, p1, sc->temp5 = p2));} /* does p1 need GC protection? */
 /* list_p_ppp got few hits and I'm unsure about the GC here */
 
@@ -97231,6 +97185,6 @@ int main(int argc, char **argv)
  * funclet oddities -- function mght not have a funclet?
  * Snd listener completions window -- could this be some utf8 char?
  * op_closure_s_o arglist free again? check opt1_lambda bits sc->code: probably load (t474)
- * tlamb: fx recur/tc cases, more unknowns
+ * tlamb
  * maybe features field in *s7* (and deprecate *features*), others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* #-readers?
  */
