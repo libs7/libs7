@@ -5242,7 +5242,7 @@ Here we scan the symbol table looking for any function that doesn't have documen
 
 <div class="indented">
 
-<p>An automatic software tester (see tauto.scm and auto-tester.scm in snd tools for extensions):
+<p>An automatic software tester (see also tauto.scm and auto-tester.scm in the tools directory):
 </p>
 
 <pre class="indented">
@@ -6570,9 +6570,22 @@ Finally, go back to the benchmarks directory and
 bench s7 all
 </pre>
 
-<p>The benchmark compiler.scm assumes that small
+<p>
+The benchmark compiler.scm assumes that small
 integers can be compared with eq? (via assq), which is incorrect.
 pi.scm and chudnovsky.scm need the gmp version of s7.
+I ran the bench script on an AMD 3950X machine, and got these results (in seconds):
+ack: 6.6, array1: 6.4, browse: 11.2, bv2string: 4.1, cat: 0.4,
+compiler: 16.9, conform: 30.0, cpstak: 42.8, ctak: 16.6, deriv: 9.7,
+destruc: 8.6, diviter: 3.7, divrec: 4.6, dynamic: 12.6, earley: 25.5,
+equal: 0.3, fft: 12.5, fib: 6.1, fibc: 8.6, fibfp: 1.1, gcbench: 12.9,
+grahps: 72.5, lattice: 63.4, matrix: 21.0, maze: 11.4, mazefun: 9.8,
+mbrot: 12.6, mbrotZ: 8.0, mperm: 18.9, nboyer: 20.1, nqueens: 27.0,
+ntakl: 8.0, nucleic: 8.3, paraffins: 4.4, parsing: 20.7, peval: 15.2,
+pnpoly: 9.8, primes: 10.2, puzzle: 10.2, quicksort: 40.0, ray: 8.3,
+read1: 0.2, sboyer: 19.1, scheme: 29.5, simplex: 26.9, slatex: 4.2,
+string: 0.1, sum1: 0.2, sum: 4.1, sumfp: 2.2, tail: 0.1, tak: 7.1,
+takl: 8.1, triangl: 16.4, wc: 4.9.  In the gmp case, chudnovsky: 0.017, pi: .01.
 </p>
 </div>
 
