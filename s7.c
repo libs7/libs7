@@ -43707,7 +43707,7 @@ static hash_map_t char_ci_eq_hash_map[NUM_TYPES];
 
 
 /* ---------------- hash-code ---------------- */
-/* TODO: eqfunc handling which will require other dummy tables */
+/* eqfunc handling which will require other dummy tables */
 
 static s7_pointer make_dummy_hash_table(s7_scheme *sc)
 {
@@ -44016,7 +44016,6 @@ static hash_entry_t *hash_num_eq(s7_scheme *sc, s7_pointer table, s7_pointer key
 
   hash_mask = hash_table_mask(table);
   loc = hash_loc(sc, table, key) & hash_mask;
-
   for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     if (num_eq_b_7pp(sc, key, hash_entry_key(x)))
       return(x);
@@ -44025,7 +44024,6 @@ static hash_entry_t *hash_num_eq(s7_scheme *sc, s7_pointer table, s7_pointer key
 
 static hash_entry_t *hash_real_num_eq(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  /* = compares keys */
 #if WITH_GMP
   if ((is_t_real(key)) && (is_NaN(real(key)))) return(sc->unentry);
   if ((is_t_big_real(key)) && (mpfr_nan_p(big_real(key)))) return(sc->unentry);
@@ -80716,7 +80714,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 
   if ((argnum > 1) || (vector_rank(cx) > 1))
     {
-      /* TODO: if this is false, we should not keep checking it! */
       if ((argnum == 2) &&
 	  (is_fxable(sc, cadr(settee))) &&
 	  (is_fxable(sc, caddr(settee))) &&
@@ -82426,30 +82423,38 @@ static goto_t op_dox(s7_scheme *sc)
 			     ((o->v[5].p_pip_f == vector_set_unchecked) && (o->v[6].p_pi_f == vector_ref_unchecked)) ||
 			     ((o->v[5].p_pip_f == list_set_p_pip_unchecked) &&   (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
 			    (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper, o))))
-			do {
-			  fp(o);
-			  slot_set_value(stepper, make_integer(sc, ++i));
-			} while ((sc->value = endf(sc, endp)) == sc->F);
-		      /* TODO: here if has_step_end we can use (integer(stepper) == denominator... */
-		    }
+			{
+			  if (is_step_end(stepper))
+			    {
+			      s7_int end;
+			      end = do_loop_end(slot_value(stepper));
+			      do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < end);
+			      sc->value = sc->T;
+			    }
+			  else
+			    do {
+			      fp(o);
+			      slot_set_value(stepper, make_integer(sc, ++i));
+			    } while ((sc->value = endf(sc, endp)) == sc->F);
+			}}
 		  else
-		    {
-		      if (!(((bodyf == opt_float_any_nr) && (o->v[0].fd == opt_d_7pid_ss_ss) && 
-			     (o->v[2].p == o->v[6].p) &&
-			     ((o->v[4].d_7pid_f == float_vector_set_d_7pid) || (o->v[4].d_7pid_f == float_vector_set_unchecked)) &&
-			     (o->v[3].d_7pi_f == float_vector_ref_d_7pi) &&
-			     (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), i, endp, stepper, o))) ||
-			    
-			    ((bodyf == opt_int_any_nr) && ((o->v[0].fi == opt_i_7pii_ssf) || (o->v[0].fi == opt_i_7pii_ssf_vset)) &&
-			     (o->v[2].p == o->v[4].o1->v[2].p) &&
-			     (((o->v[3].i_7pii_f == int_vector_set_i_7pii) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi)) ||
-			      ((o->v[3].i_7pii_f == int_vector_set_unchecked) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_unchecked))) &&
-			     (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper, o)))))
-			do {
-			  bodyf(sc);
-			  slot_set_value(stepper, make_integer(sc, ++i));
-			} while ((sc->value = endf(sc, endp)) == sc->F);
-		    }
+		    if (!(((bodyf == opt_float_any_nr) && (o->v[0].fd == opt_d_7pid_ss_ss) && 
+			   (o->v[2].p == o->v[6].p) &&
+			   ((o->v[4].d_7pid_f == float_vector_set_d_7pid) || (o->v[4].d_7pid_f == float_vector_set_unchecked)) &&
+			   (o->v[3].d_7pi_f == float_vector_ref_d_7pi) &&
+			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), i, endp, stepper, o))) ||
+			  
+			  ((bodyf == opt_int_any_nr) && ((o->v[0].fi == opt_i_7pii_ssf) || (o->v[0].fi == opt_i_7pii_ssf_vset)) &&
+			   (o->v[2].p == o->v[4].o1->v[2].p) &&
+			   (((o->v[3].i_7pii_f == int_vector_set_i_7pii) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi)) ||
+			    ((o->v[3].i_7pii_f == int_vector_set_unchecked) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_unchecked))) &&
+			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper, o)))))
+		      /* here the is_step_end business doesn't happen much */
+		      do {
+			bodyf(sc);
+			slot_set_value(stepper, make_integer(sc, ++i));
+		      } while ((sc->value = endf(sc, endp)) == sc->F);
+
 		  sc->code = cdr(end);
 		  return(goto_do_end_clauses);
 		}
@@ -83295,16 +83300,15 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	      fp(o);
 	    }}
       else
-	{
-	  do {
-	    fp(o);
-	    set_car(sc->t2_1, slot_value(ctr_slot));
-	    set_car(sc->t2_2, step_var);
-	    slot_set_value(ctr_slot, stepf(sc, sc->t2_1));
-	    set_car(sc->t2_1, slot_value(ctr_slot));
-	    set_car(sc->t2_2, slot_value(end_slot));
-	  } while ((sc->value = endf(sc, sc->t2_1)) == sc->F);
-	}}
+	do {
+	  fp(o);
+	  set_car(sc->t2_1, slot_value(ctr_slot));
+	  set_car(sc->t2_2, step_var);
+	  slot_set_value(ctr_slot, stepf(sc, sc->t2_1));
+	  set_car(sc->t2_1, slot_value(ctr_slot));
+	  set_car(sc->t2_2, slot_value(end_slot));
+	} while ((sc->value = endf(sc, sc->t2_1)) == sc->F);
+    }
   else
     do {
 	func(sc);
@@ -83511,7 +83515,6 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
   if (is_null(cdr(code)))
     {
       s7_pfunc func;
-
       if (no_cell_opt(code)) return(false);
       func = s7_optimize_nr(sc, code);
       if (!func)
@@ -83905,27 +83908,26 @@ static goto_t do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 		body[0]->v[0].fd(body[0]);
 	      }}} /* end body_len == 1 */
   else
-    {
-      if ((body_len == 2) && (var_len == 1))
-	{
-	  s7_pointer s1;
-	  s1 = let_slots(sc->curlet);
-	  for (k = numerator(stepper); k < end; k++)
-	    {
-	      integer(ip) = k;
-	      set_real(slot_value(s1), vars[0]->v[0].fd(vars[0]));
-	      body[0]->v[0].fd(body[0]);
-	      body[1]->v[0].fd(body[1]);
-	    }}
-      else
+    if ((body_len == 2) && (var_len == 1))
+      {
+	s7_pointer s1;
+	s1 = let_slots(sc->curlet);
 	for (k = numerator(stepper); k < end; k++)
 	  {
-	    int32_t i;
 	    integer(ip) = k;
-	    for (i = 0, p = let_slots(sc->curlet); tis_slot(p); i++, p = next_slot(p))
-	      set_real(slot_value(p), vars[i]->v[0].fd(vars[i]));
-	    for (i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
+	    set_real(slot_value(s1), vars[0]->v[0].fd(vars[0]));
+	    body[0]->v[0].fd(body[0]);
+	    body[1]->v[0].fd(body[1]);
 	  }}
+    else
+      for (k = numerator(stepper); k < end; k++)
+	{
+	  int32_t i;
+	  integer(ip) = k;
+	  for (i = 0, p = let_slots(sc->curlet); tis_slot(p); i++, p = next_slot(p))
+	    set_real(slot_value(p), vars[i]->v[0].fd(vars[i]));
+	  for (i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
+	}
   sc->curlet = old_e;
   sc->value = sc->T;
   sc->code = cdadr(scc);
@@ -86071,7 +86073,6 @@ static inline void op_any_closure_4p_4(s7_scheme *sc)
   sc->stack_end -= 4;
 }
 
-
 static void op_safe_closure_ss(s7_scheme *sc)
 {
   s7_pointer f;
@@ -86730,7 +86731,6 @@ static void op_tc_and_a_or_a_laa(s7_scheme *sc, s7_pointer code)
 	  la_val = cdr(la_val);
 	  laa_val = cdr(laa_val);
 	}}
-
   while (true)
     {
       s7_pointer p;
@@ -91309,35 +91309,33 @@ static bool op_unknown_all_a(s7_scheme *sc)
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if (is_safe_closure(f))
 	    {
-	      if (num_args == 3)
-		{
-		  if (is_normal_happy_symbol(sc, cadr(code)))
-		    set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, caddr(code))) ? OP_SAFE_CLOSURE_SSA : OP_SAFE_CLOSURE_SAA));
-		  else
-		    if ((!is_pair(caddr(code))) && (!is_pair(cadddr(code))))
-		      set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_AGG);
-		    else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_ALL_A);
-		}
-	      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_ALL_A);
+	      if (num_args != 3)
+		set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_ALL_A);
+	      else
+		if (is_normal_happy_symbol(sc, cadr(code)))
+		  set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, caddr(code))) ? OP_SAFE_CLOSURE_SSA : OP_SAFE_CLOSURE_SAA));
+		else
+		  if ((!is_pair(caddr(code))) && (!is_pair(cadddr(code))))
+		    set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_AGG);
+		  else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_ALL_A);
 	    }
 	  else
 	    {
-	      if (num_args == 3)
-		{
-		  if ((is_normal_happy_symbol(sc, caddr(code))) && (is_normal_happy_symbol(sc, cadddr(code))))
-		    set_safe_optimize_op(code, hop + OP_CLOSURE_ASS);
+	      if (num_args != 3)
+		set_safe_optimize_op(code, hop + ((num_args == 4) ? OP_CLOSURE_4A : OP_CLOSURE_ALL_A));
+	      else
+		if ((is_normal_happy_symbol(sc, caddr(code))) && (is_normal_happy_symbol(sc, cadddr(code))))
+		  set_safe_optimize_op(code, hop + OP_CLOSURE_ASS);
+		else
+		  if (is_normal_happy_symbol(sc, cadr(code)))
+		    set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, cadddr(code))) ? OP_CLOSURE_SAS : OP_CLOSURE_SAA));
 		  else
-		    if (is_normal_happy_symbol(sc, cadr(code)))
-		      set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, cadddr(code))) ? OP_CLOSURE_SAS : OP_CLOSURE_SAA));
+		    if (is_normal_happy_symbol(sc, caddr(code)))
+		      set_safe_optimize_op(code, hop + OP_CLOSURE_ASA);
 		    else
-		      if (is_normal_happy_symbol(sc, caddr(code)))
-			set_safe_optimize_op(code, hop + OP_CLOSURE_ASA);
-		      else
-			if (is_normal_happy_symbol(sc, cadddr(code)))
-			  set_safe_optimize_op(code, hop + OP_CLOSURE_AAS);
-			else set_safe_optimize_op(code, hop + OP_CLOSURE_3A);
-		}
-	      else set_safe_optimize_op(code, hop + ((num_args == 4) ? OP_CLOSURE_4A : OP_CLOSURE_ALL_A));
+		      if (is_normal_happy_symbol(sc, cadddr(code)))
+			set_safe_optimize_op(code, hop + OP_CLOSURE_AAS);
+		      else set_safe_optimize_op(code, hop + OP_CLOSURE_3A);
 	    }
 	  set_opt1_lambda(code, f);
 	  return(true);
@@ -93447,6 +93445,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 /* -------------------------------- *s7* let -------------------------------- */
+/* maybe features field in *s7*, others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* #-readers? */
 
 typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS, SL_HEAP_SIZE, SL_FREE_HEAP_SIZE,
 	      SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_ROOTLET_SIZE, SL_C_TYPES, SL_SAFETY,
@@ -97089,14 +97088,14 @@ int main(int argc, char **argv)
  * tset       3255         3253   3104   3255   3245
  * tio        3700         3816   3752   3684   3700
  * teq        3722         4068   4045   3708   3708
- * tstr       6670         5281   4863   4358   4350
+ * tstr       6670         5281   4863   4358   4350  4334
  * tcase      4555         4960   4793   4488   4485
  * tlet       5553         7775   5640   4520   4523
  * tclo       4949         4787   4735   4588   4532
  * tmap       4816         8270   8188   4812   4797
  * tfft       88.9         7820   7729   4843   4834
  * tmisc      5938         7389   6210   5653   5615
- * tnum       59.2         6348   6013   5683   5635
+ * tnum       59.2         6348   6013   5683   5635  5579
  * trec       7748         5976   5970   5870   5870
  * tgsl       25.2         8485   7802   6404   6390
  * tgc        11.9         11.9   11.1   10.4   9443
@@ -97110,11 +97109,8 @@ int main(int argc, char **argv)
  * -------------------------------------------------------
  *
  * t465 do/lambda (captured stepper), op_do_step: copy let and remake sc->args? 
- * funclet oddities -- function mght not have a funclet?
+ * funclet oddities -- function might not have a funclet?
  * Snd listener completions window -- could this be some utf8 char?
  * op_closure_s_o arglist free again? check opt1_lambda bits sc->code: probably load (t474)
- * tlamb
- * hash-equal=float thash etc all go to num_eq ignoring that we know key's type!?
- * maybe features field in *s7*, others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* #-readers?
- * hash_entry_to_cons free_cell (add to t725)
+ *   hash_entry_to_cons free_cell (add to t725)
  */
