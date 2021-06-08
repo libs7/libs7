@@ -4209,7 +4209,6 @@ void notcurses_s7_init(s7_scheme *sc)
     s7_define(sc, notcurses_let,					\
 	      s7_make_symbol(sc, OldName),				\
 	      s7_make_function(sc, #Name, g_ ## Name, Req, Opt, Rst, NULL))
-  #define nc_Old_func2(Name, OldName) s7_dilambda_with_environment(sc, notcurses_let, #OldName, g_ ## Name, 1, 0, g_set_ ## Name, 2, 0, NULL)
 
 #if (NC_CURRENT_VERSION < NC_VERSION(2, 2, 5))
   nc_func(cell_duplicate, 3, 0, false);

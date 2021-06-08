@@ -1,6 +1,4 @@
 ;;; reactive.scm
-;;;
-;;; reimplementation of code formerly in stuff.scm
 
 (provide 'reactive.scm)
 ;(set! (*s7* 'gc-stats) #t)
@@ -46,7 +44,6 @@
 
 	(else 
 	 (gather-symbols (cdr expr) ce (gather-symbols (car expr) ce lst ignore) ignore))))
-
 
 ;;; c-pointer used to hold symbol+let info so that the lets can be a "weak references"
 (define slot-symbol c-pointer-type)
