@@ -37,8 +37,7 @@
     (format *stderr* "fibc ~A~%" f32)))
 
 
-#|
-(define* (tfib n (a 1) (b 1)) ; tail-call version
+(define (tfib n a b) ; tail-call version, a=1 b=1 initially
    (if (= n 0)
        a
        (if (= n 1)
@@ -48,10 +47,6 @@
 ;;; overflow at (tfib 92): (tfib 92) 12200160415121877000.0, (tfib 91) 7540113804746346429 [this numbering is off-by-1]
 ;;;                              93: 12200160415121876738          92: 7540113804746346429 http://www.maths.surrey.ac.uk/hosted-sites/R.Knott/Fibonacci/fibtable.html
 
-(let ((f32 (tfib 31)))
-  (unless (= f32 2178309)
-    (format *stderr* "tfib ~A~%" f32)))
-
 (define (dfib Z)             ; do-loop equivalent to tfib
   (do ((a 1 b)
        (b 1 (+ a b))
@@ -59,7 +54,7 @@
       ((< n 2)
        (if (= n 0) a b))))
 
-(define (dofib n)            ; another do-loop, faster in s7 (twice as fast as tfib)
+(define (dofib n)            ; another do-loop (twice as fast as tfib)
   (if (< n 2)
       1
       (do ((a 1)
@@ -70,7 +65,34 @@
 	(set! c b)
 	(set! b (+ a b))
 	(set! a c))))
-|#
+
+(unless (= (dfib 91) 7540113804746346429)
+  (format *stderr* "(dfib 91): ~D~%" (dfib 91)))
+(unless (= (dofib 91) 7540113804746346429)
+  (format *stderr* "(dofib 91): ~D~%" (dofib 91)))
+(unless (= (tfib 91 1 1) 7540113804746346429)
+  (format *stderr* "(tfib 91 1 1): ~D~%" (tfib 91)))
+
+(define size 10000)
+
+(define (test1)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (dfib 91)))
+
+(define (test2)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (dofib 91)))
+
+(define (test3)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (tfib 91 1 1)))
+
+(test1)
+(test2)
+(test3)
 
 
 (define (trib n)
