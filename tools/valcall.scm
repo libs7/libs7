@@ -99,10 +99,10 @@
 	 (list "repl" "tclo.scm")
 	 (list "repl" "tmap.scm")
 	 (list "repl" "tfft.scm")
-	 (list "repl" "tmisc.scm")
 	 (list "repl" "tnum.scm")
-	 (list "repl" "trec.scm")
+	 (list "repl" "tmisc.scm")
 	 (list "repl" "tgsl.scm")
+	 (list "repl" "trec.scm")
 	 (list "repl" "tgc.scm")
 	 (list "repl" "thash.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower

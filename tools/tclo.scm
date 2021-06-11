@@ -4,12 +4,6 @@
 (define g-size 1000000)
 (define kf-size 30)
 (define k100-size 10000)
-#|
-(define d1-size 0)
-(define g-size 0)
-(define kf-size 30)
-(define k100-size 0)
-|#
 
 (define* (f0 a b)
   (display b #f))

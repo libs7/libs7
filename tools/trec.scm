@@ -95,6 +95,21 @@
 (test3)
 
 
+(define* (tfib* n (a 1) (b 1)) ; tail-call version using lambda*
+   (if (= n 0)
+       a
+       (if (= n 1)
+           b
+           (tfib* (- n 1) b (+ a b)))))
+
+(define (test31)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (tfib* 91)))
+
+(test31)
+
+
 (define (trib n)
   (if (< n 3)
       1
