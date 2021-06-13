@@ -82,7 +82,7 @@
 				      (for-each 
 				       (lambda (a)
 					 (let ((pos (random 200)))
-					   (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
+					   (if (eq? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
 					       (format *stderr* "~S?" (vector-ref wait pos)))
 					   (vector-set! wait pos a))
 					 (dynamic-wind
@@ -136,7 +136,7 @@
 	(for-each 
 	 (lambda (a)
 	   (let ((pos (random 200)))
-	     (if (eqv? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
+	     (if (eq? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
 		 (format *stderr* "~S?" (vector-ref wait pos)))
 	     (vector-set! wait pos a))
 	   (dynamic-wind

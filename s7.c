@@ -56092,6 +56092,13 @@ static s7_pointer fx_c_opstq_c_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(arg))(sc, fn_proc(largs)(sc, set_plist_2(sc, lookup(sc, cadr(largs)), t_lookup(sc, caddr(largs), arg))), caddr(arg)));
 }
 
+static s7_pointer fx_is_eq_opstq_c(s7_scheme *sc, s7_pointer arg) /* experiment, (eqv? <> char) is <>==char without error checks? */
+{
+  s7_pointer largs;
+  largs = cadr(arg);
+  return(make_boolean(sc, fn_proc(largs)(sc, set_plist_2(sc, lookup(sc, cadr(largs)), t_lookup(sc, caddr(largs), arg))) == opt3_con(arg)));
+}
+
 static s7_pointer fx_c_opsq_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer largs;
@@ -56837,6 +56844,7 @@ static s7_pointer fx_c_sa_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt3_sym(arg)), fx_call(sc, cddr(arg))));
 }
 
+static s7_pointer fx_cons_ac(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), opt3_con(arg)));}
 static s7_pointer fx_cons_sa(s7_scheme *sc, s7_pointer arg) {return(cons(sc, lookup(sc, opt3_sym(arg)), fx_call(sc, cddr(arg))));}
 static s7_pointer fx_cons_as(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), lookup(sc, opt3_sym(arg))));}
 
@@ -58274,6 +58282,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  return(fx_c_a);
 
 	case HOP_SAFE_C_AC:
+	  if (fn_proc(arg) == g_cons) return(fx_cons_ac);
 	  return((fx_matches(car(arg), sc->is_eq_symbol)) ? fx_is_eq_ac : fx_c_ac);
 
 	case HOP_SAFE_C_SA:
@@ -58874,6 +58883,11 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	{
 	  if (is_global_and_has_func(car(p), s7_p_pp_function))
 	    {
+	      if ((car(p) == sc->is_eq_symbol) && (!is_unspecified(caddr(p))))
+		{
+		  set_opt3_con(p, caddr(p));
+		  return(with_fx(tree, fx_is_eq_opstq_c));
+		}
 	      set_opt3_direct(p, (s7_pointer)(s7_p_pp_function(global_value(car(p)))));
 	      return(with_fx(tree, fx_c_opstq_c_direct));
 	    }
@@ -97097,32 +97111,32 @@ int main(int argc, char **argv)
  * tmock      7695         1177   1165   1115   1112
  * s7test     4532         1873   1831   1813   1824
  * tvect      2184         2456   2413   1986   1975
- * lt         2128         2123   2110   2126   2122
- * tform      3258         2281   2273   2274   2274
- * tread      2606         2440   2421   2409   2410
+ * lt         2128         2123   2110   2126   2121
+ * tform      3258         2281   2273   2274   2270
+ * tread      2606         2440   2421   2409   2409
  * tmac       2503         3317   3277   2451   2452
  * trclo      4252         2715   2561   2494   2494
  * tmat       2683         3065   3042   2538   2521
  * tcopy      2628         8035   5546   2560   2559
  * fbench     2965         2688   2583   2560   2560
- * tb         3362         2735   2681   2597   2590
+ * tb         3362         2735   2681   2597   2588
  * titer      2727         2865   2842   2741   2710
  * tsort      3657         3105   3104   2926   2925
  * dup        3426         3805   3788   3217   3126
  * tset       3275         3253   3104   3255   3245
  * tio        3717         3816   3752   3684   3700
  * teq        3722         4068   4045   3708   3708
- * tstr       6650         5281   4863   4358   4333
+ * tstr       6650         5281   4863   4358   4330
  * tcase      4550         4960   4793   4488   4485
  * tlet       5555         7775   5640   4520   4523
  * tclo       4841         4787   4735   4588   4532
  * tmap       4816         8270   8188   4812   4797
- * tfft      113.2         7820   7729   4843   4831
+ * tfft      113.2         7820   7729   4843   4830
  * tnum       59.1         6348   6013   5683   5481
  * tmisc      5828         7389   6210   5653   5546
  * tgsl       25.2         8485   7802   6404   6390
  * trec       8493         6936                 6615
- * tgc        10.9         11.9   11.1   10.4   9443
+ * tgc        10.9         11.9   11.1   10.4   9443  9389
  * thash      36.4         11.8   11.7   11.2   10.4
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
@@ -97134,4 +97148,7 @@ int main(int argc, char **argv)
  *
  * Snd listener completions window -- could this be some utf8 char?
  * hash_entry_to_cons free_cell (add to t725)
+ * fx_c_opssq*
+ *   opssq_s|c are using caddr [opt3_con in is_eq], tgc g_vector_ref_2->vector_ref_p_pp?
+ *   tgc fx_c_optq missed a direct case -- object_to_let_p_p is needed
  */
