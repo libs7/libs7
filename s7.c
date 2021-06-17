@@ -19084,6 +19084,23 @@ static s7_pointer integer_ratio_add_if_overflow_to_real_or_rational(s7_scheme *s
 
 static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 {
+  /* an experiment: try to avoid the switch statement */
+  /* this wins in most s7 cases, not so much elsewhere? parallel subtract/multiply code is slower */
+  if (is_t_integer(x))
+    {
+      if (is_t_integer(y))
+	return(add_if_overflow_to_real_or_big_integer(sc, integer(x), integer(y)));
+    }
+  else
+    if (is_t_real(x))
+      {
+	if (is_t_real(y))
+	  return(make_real(sc, real(x) + real(y)));
+      }
+    else
+      if ((is_t_complex(x)) && (is_t_complex(y)))
+	return(make_complex(sc, real_part(x) + real_part(y), imag_part(x) + imag_part(y)));
+
   switch (type(x))
     {
     case T_INTEGER:
@@ -19440,6 +19457,16 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 }
 
 static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z) {return(add_p_pp(sc, add_p_pp(sc, x, y), z));}
+#if 0
+  if ((is_t_integer(x)) && (is_t_integer(y)))
+    {
+     s7_pointer i1;
+     i1 = add_if_overflow_to_real_or_big_integer(sc, integer(x), integer(y));
+     if ((is_t_integer(i1)) && (is_t_integer(z)))
+       return(add_if_overflow_to_real_or_big_integer(sc, integer(i1), integer(z)));
+     return(add_p_pp(sc, i1, z));
+    }
+#endif
 
 static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
 {
@@ -27304,24 +27331,23 @@ static void check_for_substring_temp(s7_scheme *sc, s7_pointer expr)
   for (p = cdr(expr); is_pair(p); p = cdr(p))
     {
       arg = car(p);
-      if (is_pair(arg))
+      if ((is_pair(arg)) &&
+	  (is_symbol(car(arg))) &&
+	  (is_safely_optimized(arg)) &&
+	  (has_fn(arg)))
 	{
-	  if ((is_symbol(car(arg))) &&
-	      (is_safely_optimized(arg)) &&
-	      (has_fn(arg)))
+	  if (fn_proc(arg) == g_substring)
 	    {
-	      if (fn_proc(arg) == g_substring)
-		{
-		  if (substrs < NUM_STRING_WRAPPERS)
-		    nps[substrs++] = arg;
-		}
-	      else
-		if (fn_proc(arg) == g_symbol_to_string)
-		  set_c_function(arg, sc->symbol_to_string_uncopied);
-		else
-		  if ((fn_proc(arg) == g_get_output_string) && (is_null(cddr(arg))))
-		    set_c_function(arg, sc->get_output_string_uncopied);
-	    }}}
+	      if (substrs < NUM_STRING_WRAPPERS)
+		nps[substrs++] = arg;
+	    }
+	  else
+	    if (fn_proc(arg) == g_symbol_to_string)
+	      set_c_function(arg, sc->symbol_to_string_uncopied);
+	    else
+	      if ((fn_proc(arg) == g_get_output_string) && (is_null(cddr(arg))))
+		set_c_function(arg, sc->get_output_string_uncopied);
+	}}
   for (i = 0; i < substrs; i++)
     set_c_function(nps[i], sc->substring_uncopied);
 }
@@ -27341,49 +27367,46 @@ static s7_pointer g_string_copy(s7_scheme *sc, s7_pointer args)
     string-copy copies its first argument into the second, starting at dest-start in the second string and returns dest-str"
   #define Q_string_copy s7_make_signature(sc, 5, sc->is_string_symbol, sc->is_string_symbol, sc->is_string_symbol, sc->is_integer_symbol, sc->is_integer_symbol)
 
-  s7_pointer source;
+  s7_pointer source, p, dest;
+  s7_int start, end;
+
   source = car(args);
   if (!is_string(source))
     return(method_or_bust(sc, source, sc->string_copy_symbol, args, T_STRING, 1));
   if (is_null(cdr(args)))
     return(make_string_with_length(sc, string_value(source), string_length(source)));
 
-  {
-    s7_int start, end;
-    s7_pointer p, dest;
-
-    dest = cadr(args);
-    if (!is_string(dest))
-      return(wrong_type_argument(sc, sc->string_copy_symbol, 2, dest, T_STRING));
-    if (is_immutable(dest))
-      return(immutable_object_error(sc, set_elist_2(sc, wrap_string(sc, "can't string-copy to ~S; it is immutable", 40), dest)));
-
-    end = string_length(dest);
-    p = cddr(args);
-    if (is_null(p))
-      start = 0;
-    else
-      {
-	if (!s7_is_integer(car(p)))
-	  return(wrong_type_argument(sc, sc->string_copy_symbol, 3, car(p), T_INTEGER));
-	start = s7_integer(car(p));
-	if (start < 0) start = 0;
-	p = cdr(p);
-	if (is_null(p))
-	  end = start + string_length(source);
-	else
-	  {
-	    if (!s7_is_integer(car(p)))
-	      return(wrong_type_argument(sc, sc->string_copy_symbol, 4, car(p), T_INTEGER));
-	    end = s7_integer(car(p));
-	    if (end < 0) end = start;
-	  }}
-    if (end > string_length(dest)) end = string_length(dest);
-    if (end <= start) return(dest);
-    if ((end - start) > string_length(source)) end = start + string_length(source);
-    memcpy((void *)(string_value(dest) + start), (void *)(string_value(source)), end - start);
-    return(dest);
-  }
+  dest = cadr(args);
+  if (!is_string(dest))
+    return(wrong_type_argument(sc, sc->string_copy_symbol, 2, dest, T_STRING));
+  if (is_immutable(dest))
+    return(immutable_object_error(sc, set_elist_2(sc, wrap_string(sc, "can't string-copy to ~S; it is immutable", 40), dest)));
+  
+  end = string_length(dest);
+  p = cddr(args);
+  if (is_null(p))
+    start = 0;
+  else
+    {
+      if (!s7_is_integer(car(p)))
+	return(wrong_type_argument(sc, sc->string_copy_symbol, 3, car(p), T_INTEGER));
+      start = s7_integer(car(p));
+      if (start < 0) start = 0;
+      p = cdr(p);
+      if (is_null(p))
+	end = start + string_length(source);
+      else
+	{
+	  if (!s7_is_integer(car(p)))
+	    return(wrong_type_argument(sc, sc->string_copy_symbol, 4, car(p), T_INTEGER));
+	  end = s7_integer(car(p));
+	  if (end < 0) end = start;
+	}}
+  if (end > string_length(dest)) end = string_length(dest);
+  if (end <= start) return(dest);
+  if ((end - start) > string_length(source)) end = start + string_length(source);
+  memcpy((void *)(string_value(dest) + start), (void *)(string_value(source)), end - start);
+  return(dest);
 }
 
 static s7_pointer string_copy_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
@@ -32859,16 +32882,15 @@ static inline void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port
     }
   else
     {
-      char c;
-      c = '\0';
-      if (!is_keyword(obj))
+      char c = '\0';
+      if (use_write == P_READABLE)
 	{
-	  if (use_write == P_READABLE)
+	  if (!is_keyword(obj)) 
 	    c = '\'';
-	  else
-	    if (use_write == P_KEY)
-	      c = ':';
 	}
+      else
+	if ((use_write == P_KEY) && (!is_keyword(obj)))
+	  c = ':';
       if (is_string_port(port))
 	{
 	  s7_int new_len;
@@ -35189,13 +35211,14 @@ static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_
 {
   int32_t ref;
   ref = (is_collected(vr)) ? shared_ref(ci, vr) : 0;
-  if (ref != 0)
+  if (ref == 0)
+    object_to_port(sc, vr, port, use_write, ci);
+  else
     {
       char buf[32];
       int32_t nlen;
       char *p;
       s7_int len;
-
       if (ref > 0)
 	{
 	  if (use_write == P_READABLE)
@@ -35229,7 +35252,6 @@ static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_
 	    *--p = '#';
 	    port_write_string(port)(sc, p, len, port);
 	  }}
-  else object_to_port(sc, vr, port, use_write, ci);
 }
 
 static s7_pointer cyclic_out(s7_scheme *sc, s7_pointer obj, s7_pointer port, shared_info_t *ci)
@@ -35740,7 +35762,6 @@ static s7_pointer g_with_output_to_file(s7_scheme *sc, s7_pointer args)
 static s7_pointer format_error_1(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer args, format_data_t *fdat)
 {
   s7_pointer x = NULL, ctrl_str;
-
   ctrl_str = (fdat->orig_str) ? fdat->orig_str : s7_make_string_wrapper(sc, str);
   if (fdat->loc == 0)
     {
@@ -36361,9 +36382,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			    i += 2;
 			    if (i >= str_len)            /* (format #f "~,'") */
 			      format_error(sc, "incomplete numeric argument", 27, str, args, fdat);
-			  }
-		    /* is (let ((str "~12,'xD")) (set! (str 5) #\null) (format #f str 1)) an error? */
-		  }
+			  }}  /* is (let ((str "~12,'xD")) (set! (str 5) #\null) (format #f str 1)) an error? */
 
 		switch (str[i])
 		  {
@@ -36401,7 +36420,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			format_error(sc, "~~C: missing argument", 21, str, args, fdat);
 		      /* the "~~" here and below protects against "~C" being treated as a directive */
 		      obj = car(fdat->args);
-
 		      if (!s7_is_character(obj))
 			{
 			  if (!format_method(sc, (char *)(str + i), fdat, port)) /* i stepped forward above */
@@ -37145,9 +37163,8 @@ s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q)
 /* -------------------------------------------------------------------------------- */
 
 /* these are used in clm2xen et al under names like Xen_wrap_5_args -- they should go away! */
-s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1))
+s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1)) /* not currently used */
 {
-  /* not currently used */
   return(f1(car(args)));
 }
 
@@ -66962,7 +66979,7 @@ static s7_pointer opt_do_list_simple(opt_info *o)
   o1 = do_any_body(o);
 
   fp = o1->v[0].fp;
-  if (fp == opt_if_bp) fp = opt_if_bp_nr; /* opt_equal_car split out here gains only 12 */
+  if (fp == opt_if_bp) fp = opt_if_bp_nr; /* opt_car_equal split out here gains only 12 */
   while (!is_null(slot_value(vp)))
     {
       fp(o1);
@@ -89028,24 +89045,23 @@ static s7_pointer oprec_cond_a_a_a_laa_opa_laaq(s7_scheme *sc)
   if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
     set_car(sc->t2_2, sc->rec_resf(sc, sc->rec_resp));
   else
-    {
-      if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
-	{
-	  recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
-	  slot_set_value(sc->rec_slot2, sc->rec_f3f(sc, sc->rec_f3p));
-	  slot_set_value(sc->rec_slot1, recur_pop(sc));
-	  set_car(sc->t2_2, oprec_cond_a_a_a_laa_opa_laaq(sc)); /* first laa above */
-	}
-      else
-	{
-	  recur_push(sc, sc->rec_f4f(sc, sc->rec_f4p));
-	  recur_push(sc, sc->rec_f5f(sc, sc->rec_f5p));
-	  slot_set_value(sc->rec_slot2, sc->rec_f6f(sc, sc->rec_f6p));
-	  slot_set_value(sc->rec_slot1, recur_pop(sc));
-	  set_car(sc->t2_2, oprec_cond_a_a_a_laa_opa_laaq(sc));
-	  set_car(sc->t2_1, recur_pop(sc));
-	  set_car(sc->t2_2, sc->rec_fn(sc, sc->t2_1));
-	}}
+    if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F)
+      {
+	recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
+	slot_set_value(sc->rec_slot2, sc->rec_f3f(sc, sc->rec_f3p));
+	slot_set_value(sc->rec_slot1, recur_pop(sc));
+	set_car(sc->t2_2, oprec_cond_a_a_a_laa_opa_laaq(sc)); /* first laa above */
+      }
+    else
+      {
+	recur_push(sc, sc->rec_f4f(sc, sc->rec_f4p));
+	recur_push(sc, sc->rec_f5f(sc, sc->rec_f5p));
+	slot_set_value(sc->rec_slot2, sc->rec_f6f(sc, sc->rec_f6p));
+	slot_set_value(sc->rec_slot1, recur_pop(sc));
+	set_car(sc->t2_2, oprec_cond_a_a_a_laa_opa_laaq(sc));
+	set_car(sc->t2_1, recur_pop(sc));
+	set_car(sc->t2_2, sc->rec_fn(sc, sc->t2_1));
+      }
   set_car(sc->t2_1, recur_pop(sc));
   return(sc->rec_fn(sc, sc->t2_1));
 }
@@ -97090,43 +97106,45 @@ int main(int argc, char **argv)
  * tshoot     1506          883    872    836    837
  * index      1054         1026   1016    992    991
  * tmock      7695         1177   1165   1115   1112
- * s7test     4532         1873   1831   1813   1824
- * tvect      2184         2456   2413   1986   1975
+ * s7test     4532         1873   1831   1813   1824  1821
+ * tvect      2184         2456   2413   1986   1975  1954
  * lt         2128         2123   2110   2126   2121
  * tform      3258         2281   2273   2274   2270
- * tread      2606         2440   2421   2409   2409  2402
- * tmac       2503         3317   3277   2451   2452
- * trclo      4252         2715   2561   2494   2494  2480
- * tmat       2683         3065   3042   2538   2521
- * tcopy      2628         8035   5546   2560   2559
- * fbench     2965         2688   2583   2560   2560
+ * tread      2606         2440   2421   2409   2403  2400
+ * tmac       2503         3317   3277   2451   2452  2435
+ * trclo      4252         2715   2561   2494   2480  2459
+ * tmat       2683         3065   3042   2538   2525
+ * tcopy      2628         8035   5546   2560   2559  2557
+ * fbench     2965         2688   2583   2560   2561  2565
  * tb         3362         2735   2681   2597   2588
  * titer      2727         2865   2842   2741   2710
  * tsort      3657         3105   3104   2926   2925
- * dup        3426         3805   3788   3217   3126
- * tset       3275         3253   3104   3255   3245  3225
+ * dup        3426         3805   3788   3217   3119  3100
+ * tset       3275         3253   3104   3255   3225  3223
  * tio        3717         3816   3752   3684   3700
- * teq        3722         4068   4045   3708   3708
- * tstr       6650         5281   4863   4358   4330
- * tcase      4550         4960   4793   4488   4485
- * tlet       5555         7775   5640   4520   4523
- * tclo       4841         4787   4735   4588   4532
- * tmap       4816         8270   8188   4812   4797
- * tfft      113.2         7820   7729   4843   4830
- * tnum       59.1         6348   6013   5683   5481  5471
- * tmisc      5828         7389   6210   5653   5546
+ * teq        3722         4068   4045   3708   3701
+ * tstr       6650         5281   4863   4358   4331
+ * tcase      4550         4960   4793   4488   4486
+ * tlet       5555         7775   5640   4520   4523  4488
+ * tclo       4841         4787   4735   4588   4536  4511
+ * tmap       4816         8270   8188   4812   4800
+ * tfft      113.2         7820   7729   4843   4830  4816
+ * tnum       59.1         6348   6013   5683   5470  5462
+ * tmisc      5828         7389   6210   5653   5546  5509
  * tgsl       25.2         8485   7802   6404   6390
- * trec       8493         6936                 6615
- * tgc        10.9         11.9   11.1   10.4   9443  9317
+ * trec       8493         6936                 6615  6563
+ * tgc        10.9         11.9   11.1   10.4   9317
  * thash      36.4         11.8   11.7   11.2   10.4
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
- * calls      60.8         36.7   37.5   37.2   37.1
+ * calls      60.8         36.7   37.5   37.2   37.2
  * sg         98.4         71.9   72.3   72.6   72.5
  * lg        105.1        106.6  105.0  104.8  104.6
- * tbig      598.5        177.4  175.8  171.5  171.0
+ * tbig      598.5        177.4  175.8  171.5  171.0  170.8
  * -------------------------------------------------------
  *
  * Snd listener completions window -- could this be some utf8 char?
  * hash_entry_to_cons free_cell (add to t725)
+ * tlst tcobj?
+ * tree-cyclic? could be combined with the caller's stuff and the error exit
  */
