@@ -254,6 +254,9 @@
 (format *stderr* "~NC tstr ~NC~%" 20 #\- 20 #\-)
 (system "./repl concordance.scm")
 
+(format *stderr* "~NC tlist ~NC~%" 20 #\- 20 #\-)
+(system "./repl tlist.scm")
+
 (format *stderr* "~NC tgc ~NC~%" 20 #\- 20 #\-)
 (system "./repl tgc.scm")
 

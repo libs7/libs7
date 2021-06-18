@@ -39,6 +39,7 @@
 		     ("tmock.scm" . "v-mock")
 		     ("concordance.scm" . "v-str")
 		     ("tgsl.scm" . "v-gsl")
+		     ("tlist.scm" . "v-list")
 		     ))
 
 (define (last-callg)
@@ -103,6 +104,7 @@
 	 (list "repl" "tmisc.scm")
 	 (list "repl" "tgsl.scm")
 	 (list "repl" "trec.scm")
+	 (list "repl" "tlist.scm")
 	 (list "repl" "tgc.scm")
 	 (list "repl" "thash.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
