@@ -300,8 +300,7 @@
 
 (test-dft3)
 
-;;; check the explicit case
-
+;;; explicit case
 (define (dft3ex in)
   (let* ((dims (vector-dimensions in))
          (h (car dims))
@@ -348,6 +347,7 @@
 				    (* yout yin ih)
 				    (* zout zin id))))))))))))))
 
+;;; implicit case
 (define (dft3ex-1 in)
   (let* ((dims (vector-dimensions in))
          (h (car dims))
@@ -371,9 +371,9 @@
 	       ((= j w))
 	     (do ((k 0 (+ k 1)))
 	       ((= k d))
-	       (float-vector-set! out i j k
-		     (+ (* (float-vector-ref rl i j k) (float-vector-ref rl i j k)) 
-			(* (float-vector-ref im i j k) (float-vector-ref im i j k))))))))
+	       (set! (out i j k)
+		     (+ (* (rl i j k) (rl i j k)) 
+			(* (im i j k) (im i j k))))))))
       (do ((xout 0 (+ xout 1)))
           ((= xout w))
 	(do ((zout 0 (+ zout 1)))
@@ -387,13 +387,13 @@
 	      (set! xw (+ yh (* xout xin iw)))
 	      (do ((zin 0 (+ zin 1)))
 		  ((= zin d))
-		(float-vector-set! rl yout xout zout
-		      (+ (float-vector-ref rl yout xout zout) 
-			 (* (float-vector-ref in yin xin zin)
+		(set! (rl yout xout zout)
+		      (+ (rl yout xout zout) 
+			 (* (in yin xin zin)
 			    (cos (+ xw (* zin zd))))))
-		(float-vector-set! im yout xout zout
-		      (- (float-vector-ref im yout xout zout) 
-			 (* (float-vector-ref in yin xin zin)  
+		(set! (im yout xout zout)
+		      (- (im yout xout zout) 
+			 (* (in yin xin zin)  
 			    (sin (+ xw (* zin zd))))))))))))))
 
 (define (check-dft3 name vs)
