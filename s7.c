@@ -10631,9 +10631,8 @@ static s7_pointer copy_tree(s7_scheme *sc, s7_pointer tree)
 
 static int tree_is_cyclic_or_has_pairs(s7_scheme *sc, s7_pointer tree)
 {
-  s7_pointer fast, slow;
+  s7_pointer fast, slow; /* we assume tree is a pair */
   bool has_pairs = false;
-  if (!is_pair(tree)) return(TREE_NOT_CYCLIC);
   slow = tree;
   fast = tree;
   while (true)
@@ -10703,6 +10702,7 @@ static bool tree_is_cyclic_1(s7_scheme *sc, s7_pointer tree)
 static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree)
 {
   int32_t i, result;
+  if (!is_pair(tree)) return(false);
   result = tree_is_cyclic_or_has_pairs(sc, tree);
   if (result == TREE_NOT_CYCLIC) return(false);
   if (result == TREE_CYCLIC) return(true);
@@ -30443,16 +30443,20 @@ static block_t *search_load_path(s7_scheme *sc, const char *name)
   if (is_pair(lst))
     {
       block_t *b;
-      char *filename;
+      char *filename;      
       s7_pointer dir_names;
+      s7_int name_len;
+
       /* linux: PATH_MAX: 4096, windows: MAX_PATH: unlimited?, Mac: 1016?, BSD: MAX_PATH_LENGTH: 1024 */
 #if MS_WINDOWS || defined(__linux__)
-      #define S7_FILENAME_MAX 4096
+      #define S7_FILENAME_MAX 4096 /* so we can handle 4095 chars (need trailing null) -- this limit could be added to *s7* */
 #else
       #define S7_FILENAME_MAX 1024
 #endif
       b = mallocate(sc, S7_FILENAME_MAX);
+
       filename = (char *)block_data(b);
+      name_len = safe_strlen(name);
 
       for (dir_names = lst; is_pair(dir_names); dir_names = cdr(dir_names))
 	{
@@ -30460,6 +30464,8 @@ static block_t *search_load_path(s7_scheme *sc, const char *name)
 	  new_dir = string_value(car(dir_names));
 	  if (new_dir)
 	    {
+	      if (string_length(car(dir_names)) + name_len >= S7_FILENAME_MAX)
+		s7_warn(sc, 256, "load file + directory name too long: %ld + *ld > %d\n", name_len, string_length(car(dir_names)), S7_FILENAME_MAX);
 	      filename[0] = '\0';
 	      if (new_dir[strlen(new_dir) - 1] == '/')
 		catstrs(filename, S7_FILENAME_MAX, new_dir, name, (char *)NULL);
@@ -36005,7 +36011,6 @@ static format_data_t *open_format_data(s7_scheme *sc)
       for (k = sc->num_fdats; k < new_num_fdats; k++) sc->fdats[k] = NULL;
       sc->num_fdats = new_num_fdats;
     }
-
   fdat = sc->fdats[sc->format_depth];
   if (!fdat)
     {
@@ -36083,7 +36088,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	    {
 	    case '%':                           /* -------- newline -------- */
 	      /* sbcl apparently accepts numeric args here (including 0) */
-
 	      if ((port_data(port)) &&
 		  (port_position(port) < port_data_size(port)))
 		{
@@ -36367,7 +36371,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		     *   are columns numbered from 1 or 0?  there seems to be disagreement about this directive
 		     *   does "space over to" mean including?
 		     */
-
 		  case 'T': case 't':
 		    if (width == -1) width = 0;
 		    if (precision == -1) precision = 0;
@@ -37801,19 +37804,12 @@ static s7_pointer g_list_ref(s7_scheme *sc, s7_pointer args)
 {
   #define H_list_ref "(list-ref lst i ...) returns the i-th element (0-based) of the list"
   #define Q_list_ref s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_pair_symbol, sc->is_integer_symbol)
+  /* (let ((L '((1 2 3) (4 5 6)))) (list-ref L 1 2)) */
 
-  /* (let ((L '((1 2 3) (4 5 6)))) (list-ref L 1 2))
-    (define (lref L . args)
-      (if (null? (cdr args))
-          (list-ref L (car args))
-          (apply lref (list-ref L (car args)) (cdr args))))
-  */
   s7_pointer lst, inds;
-
   lst = car(args);
   if (!is_pair(lst))
     return(method_or_bust(sc, lst, sc->list_ref_symbol, args, T_PAIR, 1));
-
   inds = cdr(args);
   while (true)
     {
@@ -38653,7 +38649,6 @@ s7_pointer s7_assq(s7_scheme *sc, s7_pointer obj, s7_pointer x)
        *   This breaks if "x" is a dotted list -- the last cdr is not nil, so we lose.
        */
       LOOP_8(if ((obj == unchecked_car(car(x))) && (is_pair(car(x)))) return(car(x)); x = cdr(x); if (!is_pair(x)) return(sc->F));
-
       y = cdr(y);
       if (x == y) return(sc->F);
     }
@@ -38673,8 +38668,7 @@ static s7_pointer g_assq(s7_scheme *sc, s7_pointer args)
   #define Q_assq s7_make_signature(sc, 3, s7_make_signature(sc, 2, sc->is_pair_symbol, sc->not_symbol), sc->T, sc->is_list_symbol)
   return(assq_p_pp(sc, car(args), cadr(args)));
   /* we don't check for (pair? (car x)) here (or in assv) so we get some inconsistency with assoc:
-   *  (assq #f '(#f 2 . 3)) -> #f
-   *  (assoc #f '(#f 2 . 3)) -> 'error
+   *  (assq #f '(#f 2 . 3)) -> #f, (assoc #f '(#f 2 . 3)) -> 'error
    */
 }
 
@@ -38686,7 +38680,6 @@ static s7_pointer assv_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
       if (is_null(y)) return(sc->F);
       return(method_or_bust_with_type_pp(sc, y, sc->assv_symbol, x, y, an_association_list_string, 2));
     }
-
   if (is_simple(x))
     return(s7_assq(sc, x, y));
 
@@ -38801,7 +38794,6 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 		}
 	      return(sc->F);
 	    }
-
 	  if ((is_closure(eq_func)) &&
 	      (is_pair(closure_args(eq_func))) &&
 	      (is_pair(cdr(closure_args(eq_func))))) /* not dotted arg list */
@@ -38881,7 +38873,6 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 	    }
 	  x = cdr(x);
 	  if (!is_pair(x)) return(sc->F);
-
 	  y = cdr(y);
 	  if (x == y) return(sc->F);
 	}
@@ -38897,7 +38888,6 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       if ((is_pair(car(x))) && (s7_is_equal(sc, obj, caar(x)))) return(car(x));
       x = cdr(x);
       if (!is_pair(x)) return(sc->F);
-
       y = cdr(y);
       if (x == y) return(sc->F);
     }
@@ -39175,7 +39165,6 @@ static s7_pointer member(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 	    return(x);
 	  x = cdr(x);
 	  if (!is_pair(x)) return(sc->F);
-
 	  y = cdr(y);
 	  if (x == y) return(sc->F);
 	}
@@ -68327,7 +68316,10 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 			s7_pointer (*fp)(opt_info *o);
 			o = sc->opts[0];
 			fp = o->v[0].fp;
-			for (i = 0; i < len; i++) {real(sv) = vals[i]; fp(o);}}
+			if (fp == opt_unless_p_1)
+			  for (i = 0; i < len; i++) {real(sv) = vals[i]; if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);}
+			else for (i = 0; i < len; i++) {real(sv) = vals[i]; fp(o);}
+		      }
 		    else for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}
 	      else for (i = 0; i < len; i++) {slot_set_value(slot, make_real(sc, vals[i])); func(sc);}
 	      return(sc->unspecified);
@@ -83226,11 +83218,21 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 		    fpt(sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1), slot_value(o->v[2].p));
 		  }}
 	    else
-	      for (i = start; i < stop; i++)
+	      if ((fp == opt_p_pip_sss_vset) && (start >= 0) && (stop <= vector_length(slot_value(o->v[1].p))))
 		{
-		  slot_set_value(ctr_slot, make_integer(sc, i));
-		  fp(o);
-		}}
+		  s7_pointer v;
+		  v = slot_value(o->v[1].p);
+		  for (i = start; i < stop; i++)
+		    {
+		      slot_set_value(ctr_slot, make_integer(sc, i));
+		      vector_element(v, integer(slot_value(o->v[2].p))) = slot_value(o->v[3].p);
+		    }}
+	      else
+		for (i = start; i < stop; i++)
+		  {
+		    slot_set_value(ctr_slot, make_integer(sc, i));
+		    fp(o);
+		  }}
       else
 	/* splitting out opt_float_any_nr here saves almost nothing */
 	for (i = start; i < stop; i++)
@@ -83601,8 +83603,9 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		      else
 			if (fp == opt_if_nbp_fs)
 			  fp = opt_if_nbp_fs_nr;
-		      for (; integer(stepper) < end; integer(stepper)++)
-			fp(o);
+		      if (fp == opt_unless_p_1)
+			for (; integer(stepper) < end; integer(stepper)++) {if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);}
+		      else for (; integer(stepper) < end; integer(stepper)++) fp(o);
 		    }}}
 	  else
 	    {
@@ -96096,9 +96099,7 @@ static void init_rootlet(s7_scheme *sc)
 #endif
   s7_set_setter(sc, sc->cload_directory_symbol, s7_make_function(sc, "#<set-*cload-directory*>", g_cload_directory_set, 2, 0, false, "*cload-directory* setter"));
 
-  /* -------- *autoload* --------
-   * this pretends to be a hash-table or environment, but it's actually a function
-   */
+  /* -------- *autoload* -------- this pretends to be a hash-table or environment, but it's actually a function */
   sc->autoloader_symbol = s7_define_typed_function(sc, "*autoload*", g_autoloader, 1, 0, false, H_autoloader, Q_autoloader);
   c_function_set_setter(global_value(sc->autoloader_symbol), global_value(sc->autoload_symbol)); /* (set! (*autoload* x) y) */
 
@@ -97111,7 +97112,7 @@ int main(int argc, char **argv)
  * tcase      4550         4960   4793   4488   4486
  * tlet       5555         7775   5640   4520   4488
  * tclo       4841         4787   4735   4588   4513
- * tmap       4816         8270   8188   4812   4800
+ * tmap       4816         8270   8188   4812   4800  4728
  * tfft      113.2         7820   7729   4843   4816
  * tnum       59.1         6348   6013   5683   5459
  * tmisc      5828         7389   6210   5653   5508
@@ -97119,7 +97120,7 @@ int main(int argc, char **argv)
  * trec       8493         6936                 6563
  * tlist                   7896                 7349  7218 [inline op_closure_3a 7168]
  * tgc        10.9         11.9   11.1   10.4   9317
- * thash      36.4         11.8   11.7   11.2   10.4
+ * thash      36.4         11.8   11.7   11.2   10.4  10.3
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
  * calls      60.8         36.7   37.5   37.2   37.2
@@ -97128,6 +97129,6 @@ int main(int argc, char **argv)
  * tbig      598.5        177.4  175.8  171.5  170.8
  * -------------------------------------------------------
  *
- * perhaps expand opt_unless_p_1 in thash 86600, maybe also tmap (for-each) [inline+call]
- * check catstrs incoming length
+ * lg: memclr n>8 and divisible, liberate not top_block, mallocate bytes>0(8)etc, fx_c_ca -> fx_cons_ca also fx_c_aa|ff|as, safe_c_ps_1->cons?
+ * maybe reorder mallocate bytes checks (get block hit stats)
  */
