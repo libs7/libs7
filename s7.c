@@ -37708,8 +37708,8 @@ static s7_pointer make_big_list(s7_scheme *sc, s7_int len, s7_pointer init)
   s7_int i;
   check_free_heap_size(sc, len);
   sc->v = sc->nil;
-  for (i = 0; i < len; i++) sc->v = cons_unchecked(sc, init, sc->v);
-  result = sc->v;
+  for (i = 0; i < len - 1; i++) sc->v = cons_unchecked(sc, init, sc->v);
+  result = cons(sc, init, sc->v); /* force recheck in case len=trigger */
   sc->v = sc->nil;
   return(result);
 }
@@ -39397,10 +39397,10 @@ static s7_pointer list_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poi
   return((args == 3) ? sc->list_3 : f);
 }
 
-static s7_pointer list_p_p(s7_scheme *sc, s7_pointer p1) {return(list_1(sc, sc->temp5 = p1));}
-static s7_pointer list_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(list_2(sc, sc->temp5 = p1, sc->temp6 = p2));} 
-static s7_pointer list_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3) {return(list_3(sc, sc->temp5 = p1, sc->temp6 = p2, sc->temp7 = p3));} 
-
+static s7_pointer list_p_p(s7_scheme *sc, s7_pointer p1) {return(list_1(sc, p1));}
+static s7_pointer list_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(list_2(sc, p1, p2));} 
+static s7_pointer list_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3) {return(list_3(sc, p1, p2, p3));} 
+/* these used to GC protect the args, but I think the GC protection belonged in make-list */
 
 static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer lst)
 {
@@ -41514,7 +41514,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 			  return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19)));
 		      }}}}
   /* before making the new vector, if fill is specified and the vector is typed, we have to check for a type error.
-   *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the  gc.
+   *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the gc.
    */
   if ((result_type == T_VECTOR) &&  /* don't put this after the make_vector_1! */
       (!s7_is_boolean(typf)) &&
@@ -43720,10 +43720,7 @@ static hash_entry_t *(*equal_hash_checks[NUM_TYPES])(s7_scheme *sc, s7_pointer t
 
 
 /* ---------------- hash empty ---------------- */
-static hash_entry_t *hash_empty(s7_scheme *sc, s7_pointer table, s7_pointer key)
-{
-  return(sc->unentry);
-}
+static hash_entry_t *hash_empty(s7_scheme *sc, s7_pointer table, s7_pointer key) {return(sc->unentry);}
 
 /* ---------------- hash syntax ---------------- */
 static s7_int hash_map_syntax(s7_scheme *sc, s7_pointer table, s7_pointer key)  {return(pointer_map(syntax_symbol(key)));}
@@ -43755,10 +43752,7 @@ static hash_entry_t *hash_symbol(s7_scheme *sc, s7_pointer table, s7_pointer key
 
 /* ---------------- hash numbers ---------------- */
 
-static s7_int hash_float_location(s7_double x)
-{
-  return(((is_NaN(x)) || (is_inf(x))) ? 0 : (s7_int)floor(fabs(x)));
-}
+static s7_int hash_float_location(s7_double x) {return(((is_NaN(x)) || (is_inf(x))) ? 0 : (s7_int)floor(fabs(x)));}
 
 static s7_int hash_map_int(s7_scheme *sc, s7_pointer table, s7_pointer key)     {return(s7_int_abs(integer(key)));}
 static s7_int hash_map_real(s7_scheme *sc, s7_pointer table, s7_pointer key)    {return(hash_float_location(real(key)));}
@@ -56821,9 +56815,11 @@ static s7_pointer fx_c_sa_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt3_sym(arg)), fx_call(sc, cddr(arg))));
 }
 
+static s7_pointer fx_cons_ca(s7_scheme *sc, s7_pointer arg) {return(cons(sc, opt3_con(arg), fx_call(sc, cddr(arg))));}
 static s7_pointer fx_cons_ac(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), opt3_con(arg)));}
 static s7_pointer fx_cons_sa(s7_scheme *sc, s7_pointer arg) {return(cons(sc, lookup(sc, opt3_sym(arg)), fx_call(sc, cddr(arg))));}
 static s7_pointer fx_cons_as(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), lookup(sc, opt3_sym(arg))));}
+static s7_pointer fx_cons_aa(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), fx_call(sc, opt3_pair(arg))));}
 
 static s7_pointer fx_c_za(s7_scheme *sc, s7_pointer arg) /* "z"=unsafe_s */
 {
@@ -58264,6 +58260,9 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  if (fn_proc(arg) == g_cons) return(fx_cons_ac);
 	  return((fx_matches(car(arg), sc->is_eq_symbol)) ? fx_is_eq_ac : fx_c_ac);
 
+	case HOP_SAFE_C_CA:
+	  return((fn_proc(arg) == g_cons) ? fx_cons_ca : fx_c_ca);
+
 	case HOP_SAFE_C_SA:
 	  if (fn_proc(arg) == g_multiply_2) return(fx_multiply_sa);
 	  if (fn_proc(arg) == g_add_2) return(fx_add_sa);
@@ -58289,6 +58288,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  if (fn_proc(arg) == g_subtract_2) return(fx_subtract_aa);
 	  if (fn_proc(arg) == g_multiply_2) return(fx_multiply_aa);
 	  if (fn_proc(arg) == g_number_to_string) return(fx_number_to_string_aa);
+	  if (fn_proc(arg) == g_cons) return(fx_cons_aa);
 	  /* we can get here from gx_annotate which does not call fx_tree, where A=fx_unsafe_s */
 	  if (fx_proc(cdr(arg)) == fx_unsafe_s) return(fx_c_za);
 	  return(fx_c_aa);
@@ -64284,7 +64284,7 @@ static bool p_pip_ssf_combinable(s7_scheme *sc, opt_info *opc, int32_t start)
       (opc == sc->opts[sc->pc - 2]))
     {
       o1 = sc->opts[sc->pc - 1];
-      if ((o1->v[0].fp == opt_p_pi_ss) || (o1->v[0].fp == opt_p_pi_ss_sref) || (o1->v[0].fp == opt_p_pi_ss_vref))
+      if ((o1->v[0].fp == opt_p_pi_ss) || (o1->v[0].fp == opt_p_pi_ss_sref) || (o1->v[0].fp == opt_p_pi_ss_vref) || (o1->v[0].fp == opt_p_pi_ss_lref))
 	{
 	  opc->v[5].p_pip_f = opc->v[3].p_pip_f;
 	  opc->v[6].p_pi_f = o1->v[3].p_pi_f;
@@ -64349,7 +64349,7 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
       if ((is_normal_vector(obj)) && (checker == sc->is_vector_symbol))
 	opc->v[3].p_pip_f = (is_typed_vector(obj)) ? typed_vector_set_p_pip_unchecked : vector_set_p_pip_unchecked;
       else
-	if ((is_pair(obj)) && (checker == sc->is_pair_symbol))
+	if ((is_pair(obj)) && (checker == sc->is_pair_symbol)) /* avoid dumb mismatch in val_type and sig below, #t integer:any? and integer? integer:any? */
 	  opc->v[3].p_pip_f = s7_p_pip_unchecked_function(s_func);
 	else
 	  {
@@ -64391,10 +64391,10 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  opc->v[3].p_pip_f = string_set_unchecked;
 		break;
 	      case T_BYTE_VECTOR:
-		if (do_loop_end(slot_value(slot2)) <= string_length(obj))
+		if (do_loop_end(slot_value(slot2)) <= vector_length(obj))
 		  opc->v[3].p_pip_f = byte_vector_set_unchecked_p;
 		break;
-	      }
+	      } /* T_PAIR here would require list_length check which sort of defeats the purpose */
 
 	  if (is_symbol(cadddr(car_x)))
 	    {
@@ -86422,7 +86422,7 @@ static void op_closure_sas(s7_scheme *sc)
   if_pair_set_up_begin(sc);
 }
 
-static void op_closure_3a(s7_scheme *sc)
+static void op_closure_3a(s7_scheme *sc) /* if inlined, tlist -50 */
 {
   s7_pointer f, args;
   args = cdr(sc->code);
@@ -97095,7 +97095,7 @@ int main(int argc, char **argv)
  * tvect      2184         2456   2413   1986   1959
  * lt         2128         2123   2110   2126   2121
  * tform      3258         2281   2273   2274   2270
- * tread      2606         2440   2421   2409   2403
+ * tread      2606         2440   2421   2409   2399
  * tmac       2503         3317   3277   2451   2436
  * trclo      4252         2715   2561   2494   2459
  * tmat       2683         3065   3042   2538   2518
@@ -97104,7 +97104,7 @@ int main(int argc, char **argv)
  * tb         3362         2735   2681   2597   2588
  * titer      2727         2865   2842   2741   2710
  * tsort      3657         3105   3104   2926   2925
- * dup        3426         3805   3788   3217   3102
+ * dup        3426         3805   3788   3217   3102  3081
  * tset       3275         3253   3104   3255   3223
  * tio        3717         3816   3752   3684   3701
  * teq        3722         4068   4045   3708   3701
@@ -97112,23 +97112,21 @@ int main(int argc, char **argv)
  * tcase      4550         4960   4793   4488   4486
  * tlet       5555         7775   5640   4520   4488
  * tclo       4841         4787   4735   4588   4513
- * tmap       4816         8270   8188   4812   4800  4728
+ * tmap       4816         8270   8188   4812   4728
  * tfft      113.2         7820   7729   4843   4816
  * tnum       59.1         6348   6013   5683   5459
  * tmisc      5828         7389   6210   5653   5508
  * tgsl       25.2         8485   7802   6404   6390
  * trec       8493         6936                 6563
- * tlist                   7896                 7349  7218 [inline op_closure_3a 7168]
+ * tlist                   7896                 7218  7205
  * tgc        10.9         11.9   11.1   10.4   9317
- * thash      36.4         11.8   11.7   11.2   10.4  10.3
+ * thash      36.4         11.8   11.7   11.2   10.3
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
- * calls      60.8         36.7   37.5   37.2   37.2
+ * calls      60.8         36.7   37.5   37.2   37.1
  * sg         98.4         71.9   72.3   72.6   72.5
- * lg        105.1        106.6  105.0  104.8  104.6
+ * lg        105.1        106.6  105.0  104.8  104.5
  * tbig      598.5        177.4  175.8  171.5  170.8
  * -------------------------------------------------------
  *
- * lg: memclr n>8 and divisible, liberate not top_block, mallocate bytes>0(8)etc, fx_c_ca -> fx_cons_ca also fx_c_aa|ff|as, safe_c_ps_1->cons?
- * maybe reorder mallocate bytes checks (get block hit stats)
  */
