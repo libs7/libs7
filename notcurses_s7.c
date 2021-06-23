@@ -1792,8 +1792,13 @@ static s7_pointer g_ncplane_contents(s7_scheme *sc, s7_pointer args)
   begx = s7_integer_checked(sc, s7_car(arg)); arg = s7_cdr(arg);
   leny = s7_integer_checked(sc, s7_car(arg)); arg = s7_cdr(arg);
   lenx = s7_integer_checked(sc, s7_car(arg)); 
+#if (NC_CURRENT_VERSION <= NC_VERSION(2, 3, 1))
   return(s7_make_string(sc, ncplane_contents((const struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
 					     begy, begx, leny, lenx)));
+#else
+  return(s7_make_string(sc, ncplane_contents((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
+					     begy, begx, leny, lenx)));
+#endif
 }
 
 /* int ncplane_vprintf_yx(struct ncplane* n, int y, int x, const char* format, va_list ap); */
