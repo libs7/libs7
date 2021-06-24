@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "9.12"
-#define S7_DATE "24-Jun-2021"
+#define S7_DATE "25-Jun-2021"
 #define S7_MAJOR_VERSION 9
 #define S7_MINOR_VERSION 12
 
@@ -821,7 +821,6 @@ s7_p_d_t s7_p_d_function(s7_pointer f);
  * <1> (load "plus.so" (inlet 'init_func 'plusone_init))
  * --------
  */
-
 
 /* -------------------------------------------------------------------------------- */
 
