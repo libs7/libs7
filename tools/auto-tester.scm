@@ -316,7 +316,7 @@
 |#
 
 (define-expansion (_dw_ . args)
-  `(dynamic-wind (lambda () #f) (lambda () ,@args) (lambda () #f)))
+  `(dynamic-wind #f (lambda () ,@args) #f))
 
 (define-expansion (_dw_out_ . args)
   `(let ((_port_ #f)
@@ -603,6 +603,16 @@
 (define-constant a5 (subvector #i2d((1 2) (3 4)) 0 4 '(4)))
 (define-constant a6 (subvector #i2d((1 2) (3 4)) 1 3 '(2 1)))
 
+(define-constant x1 12345)
+(define-constant x2 32.123)
+(define-constant x3 2/31)
+(define-constant x4 32.0+2.0i)
+(define-constant x5 +nan.0)
+(define-constant x6 +inf.0)
+(define-constant x7 #\a)
+(define-constant x8 :hi)
+(define-constant x9 'hi)
+
 (define typed-hash (make-hash-table 8 eq? (cons symbol? integer?)))
 (define typed-vector (make-vector 8 'a symbol?))
 (define typed-let (immutable! (let ((a 1)) (set! (setter 'a) integer?) (curlet))))
@@ -652,7 +662,7 @@
 			  'string-ci<=? 'cadadr 'cdadr 'provided? 'caaaar 'caaddr 'caddar 'cdaaar 'cdaadr 'cdaddr 'cddar 
 			  ;'fill! ; see _fnc6_
 			  'hash-table-ref 'list->vector 'caaadr 'caaar 'caadar 'cadaar 'cdadar 'cdddar 'string-fill! 'cdaar 'cddaar 'cddadr 
-			  'symbol->keyword ; 'string->keyword ; size grows
+			  'symbol->keyword ; 'string->keyword 'symbol ; size grows
 			  'keyword->symbol 'keyword?
 			  'logxor  'memv 'char-ready? 
 			  'exact? 'integer-length 'port-filename 
@@ -660,7 +670,6 @@
 			  'string-length 'list->string 'inexact? 
 			  'with-input-from-file 'type-of
 			  'vector-fill! 
-			  ; 'symbol 
 			  'peek-char 
 			  'make-hash-table 'make-weak-hash-table 'weak-hash-table? 'hash-code
 			  'macro? 
@@ -700,7 +709,7 @@
 			  'gensym
 			  'case*
 			  ;'do
-			  'if 'begin 'cond 'case 'or 'and 'with-let 'with-baffle 'when 'unless 'let-temporarily
+			  ;'if 'begin 'cond 'case 'or 'and 'with-let 'with-baffle 'when 'unless 'let-temporarily
 			  'byte-vector-set! 'my-make-byte-vector 
 			  'write-char 'call/cc 'write-byte 'write-string 
 			  'file-mtime
@@ -719,8 +728,8 @@
 			  ;'set-current-input-port ; -- collides with rd8 etc
                           ;'set-cdr!
                           ;'unlet ;-- spurious diffs
-                          ;'port-line-number ;-- too many spurious diffs
-			  ;'load  ;'current-error-port ;-- spurious output
+                          'port-line-number ;-- too many spurious diffs
+			  'load  ;'current-error-port ;-- spurious output
 			  ;'close-output-port 
 			  'hash-table ; -- handled as equivalent via checked-hash-table
 			  ;'current-output-port 
@@ -739,25 +748,25 @@
 			  ;'owlet ;too many uninteresting diffs
 			  ;'gc  ; slower?
 			  ;'reader-cond ;-- cond test clause can involve unbound vars: (null? i) for example
-			  ;'funclet '*function*
+			  ;'funclet ; '*function* ; tons of output
 			  ;'random 
-			  ;'quote
+			  ;;; 'quote
 			  '*error-hook*
 			  ;'cond-expand 
 			  ;'random-state->list 
-                          ; 'pair-line-number 'pair-filename ; -- too many uninteresting diffs
+                          ;'pair-line-number 'pair-filename ; -- too many uninteresting diffs
 			  ;'let-set! ;-- rootlet troubles?
 			  ;'coverlet ;-- blocks block's equivalent?
                           'help ;-- snd goes crazy
-			  ;'macroexpand ;-- uninteresting objstr stuff
+			  'macroexpand ;-- uninteresting objstr stuff
 			  'signature ; -- circular lists cause infinite loops with (e.g.) for-each??
-			  ;'rootlet  ; tons of output
 			  'eval-string 
 			  'tree-memq 'tree-set-memq 'tree-count 'tree-leaves
 			  'tree-cyclic?
                           'require
 			  'else '_mac_ '_mac*_ '_bac_ '_bac*_ 
 			  '_fnc_ '_fnc*_ '_fnc1_ '_fnc2_ '_fnc3_ '_fnc4_ '_fnc5_ ;'_fnc6_
+			  '=>
 			  
 			  'constant?
 			  'openlet 
@@ -783,7 +792,7 @@
 			  'list-values 'byte-vector? 'openlet? 'iterator? 
 			  'string->byte-vector 'byte-vector->string
 
-			  ;'checked-pp
+			  'checked-pp
 #|
 			  's7-catches 
 			  's7-stack-top 's7-stack 
@@ -834,12 +843,12 @@
 			  ;'subsequence 
 			  'empty? 'indexable?
 			  ;'adjoin 'cdr-assoc
-			  ;'progv ;'value->symbol -- correctly different values sometimes, progv localizes
+			  'progv ;'value->symbol -- correctly different values sometimes, progv localizes
 			  ;'and-let* 'string-case 'concatenate
 			  '2^n? 'lognor 'ldb 'clamp 
 			  ; reverse! etc 
 
-			  ;;'log-n-of ; uninteresting complaints
+			  'log-n-of ; uninteresting complaints
 			  ;;'sandbox -- slow
 			  'circular-list? ;;'hash-table->alist -- hash map order problem
 			  'weak-hash-table 'byte? 'the 'lognand 'logeqv 
@@ -898,6 +907,7 @@
 				  ;))
 |#
 
+		    "=>" 
 		    "\"ho\"" ":ho" "'ho" "(list 1)" "(list 1 2)" "(cons 1 2)" "'()" "(list (list 1 2))" "(list (list 1))" "(list ())" "=>" 
 		    "#f" "#t" "()" "#()" "\"\"" "'#()" ; ":write" -- not this because sr2 calls write and this can be an arg to sublet redefining write
 		    ":readable" ":rest" ":allow-other-keys" ":a" ":frequency" ":scaler" ; for blocks5 s7test.scm
@@ -923,6 +933,11 @@
 		    "(apply values (make-list 128 1/2))"
 		    "(values 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65)"
 		    "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24"
+		    "(log 1.0) (log 2.0)"
+		    "(log 1.0) (log 2.0) (log 3.0)"
+		    "(log 1.0) (log 2.0) (log 3.0) (log 4.0)"
+		    "(log 1.0) (log 2.0) (log 3.0) (log 4.0) (log 5.0)"
+		    ;"(log 1.0) (log 2.0) (log 3.0) (log 4.0) (log 5.0) (log 6.0) (log 7.0) (log 8.0) (log 9.0) (log 10.0) (log 11.0) (log 12.0) (log 13.0) (log 14.0) (log 15.0) (log 16.0) (log 17.0) (log 18.0) (log 19.0) (log 20.0) (log 21.0) (log 22.0) (log 23.0) (log 24.0) (log 25.0) (log 26.0) (log 27.0) (log 28.0) (log 29.0) (log 30.0) (log 31.0) (log 32.0) (log 33.0) (log 34.0) (log 35.0) (log 36.0) (log 37.0) (log 38.0) (log 39.0) (log 40.0) (log 41.0) (log 42.0) (log 43.0) (log 44.0) (log 45.0) (log 46.0) (log 47.0) (log 48.0) (log 49.0) (log 50.0) (log 51.0) (log 52.0) (log 53.0) (log 54.0) (log 55.0) (log 56.0) (log 57.0) (log 58.0) (log 59.0) (log 60.0) (log 61.0) (log 62.0) (log 63.0) (log 64.0) (log 65.0) (log 66.0) (log 67.0) (log 68.0) (log 69.0) (log 70.0) (log 71.0) (log 72.0) (log 73.0) (log 74.0) (log 75.0) (log 76.0) (log 77.0) (log 78.0) (log 79.0) (log 80.0) (log 81.0) (log 82.0) (log 83.0) (log 84.0) (log 85.0) (log 86.0) (log 87.0) (log 88.0) (log 89.0) (log 90.0) (log 91.0) (log 92.0) (log 93.0) (log 94.0) (log 95.0) (log 96.0) (log 97.0) (log 98.0) (log 99.0) (log 100.0)"
 		    "`(x)" "`(+ x 1)" "`(x 1)" "`((x))" "`((+ x 1))" "`(((+ x 1)))" "`((set! x (+ x 1)) (* x 2))" "`((x 1))" "`(((x 1))) "
 		    "`(x . 1)" "`((x . 1))" "`(1)" "`((1))" "`((1) . x)" "'(- 1)" 
 		    "(+ i 1)" "(pi)"
@@ -943,7 +958,7 @@
 		    "'(15 26 . 36)" 
 		    ;" . " ; -- read-errors
 		    "((i 0 (+ i 1)))" ;"(null? i)" 
-		    "(= i 2)" "(zero? i)" ;"((null? i) i)"
+		    "(= i 2)" "(zero? i)" "((null? i) i)"
 		    "(#t ())" 
 		    "`(+ ,a ,@b)" "`(+ ,a ,b)" "`(+ ,a ,b ,@c)" "`(+ ,a b ,@c ',d)"
 		    "_definee_"
@@ -1013,6 +1028,7 @@
 		    "imv2" "imv3" "imfv2" "imfv3" "imiv2" "imiv3" "imbv2" "imbv3"
 		    "vvv" "vvvi" "vvvf" "typed-hash" "typed-vector" "typed-let" "constant-let"
 		    "a1" "a2" "a3" "a4" "a5" "a6"
+		    "x1" "x2" "x3" "x4" "x5" "x6" "x7" "x8" "x9"
 
 		    "(make-hash-table 8 eq? (cons symbol? integer?))"
 		    "(make-hash-table 8 equivalent? (cons symbol? #t))"
@@ -1046,7 +1062,7 @@
 		    "(subvector 0 3 (vector 0 1 2 3 4))" "(substring \"0123\" 2)"
 		    "(let-temporarily ((x 1234)) (+ x 1))"
 		    "(error 'oops \"an error!\")"
-		    ;"(define b2 32)"
+		    "(define b2 32)"
 
 		    ;"quote" "when" ;"'" "(quote)" "(quote . 1)" "(when)" "(when . 1)"
 		    ;"if" ; causes stack overflow when used as lambda arg name and (()... loop)
@@ -1127,19 +1143,15 @@
 	      (list "(if (not x) (begin " "(if x #<unspecified> (begin ")
 	      (list "(cond ((not false) " "(unless false (begin ")
 	      (list "(let () (let-temporarily ((x 1)) " "(let () (let ((x 1)) ")
-	      ;(list "(let-temporarily ((x 1)) (call-with-exit (lambda (go) " "(call-with-exit (lambda (go) (let-temporarily ((x 1)) ")
 	      (list "(begin (_let1_ " "(begin (_let2_ ")
 	      (list "(begin (_dw_ " "((lambda () ")
 	      (list "(begin (append " "(apply append (list ")
 	      (list "(begin (with-let (inlet 'i 0) " "(with-let (inlet) (let ((i 0)) ")
 	      (list "(list (_cw_ " "(list (values ")
-	      ;(list "(list (_cw_ " "(list (_cc_ ")
 	      (list "(do () ((not false) " "(begin (when (not false) ")
 	      ;;(list "((define-macro (_m_) " "((define-bacro (_m_) ") ; circular source if signature in body
-	      ;;(list "(begin (letrec ((x 1)) " "(begin (letrec* ((x 1)) ")
 	      (list "(for-each display (list " "(for-each (lambda (x) (display x)) (list ")
 	      (list "(begin (_ct1_ " "(begin (_ct2_ ")
-	      ;(list "(begin (_mem1_ " "(begin (_mem2_ ")
 	      (list "(with-output-to-string (lambda () " "(begin (_dw_out_ ")
 	      (list "(begin (_rf1_ " "(begin (_rf2_ ")
 	      (list "(begin (_rf1_ " "(begin (_rf3_ ")
@@ -1164,7 +1176,6 @@
 	      (list "(begin (values " "(apply values (list ")
 	      (list "(vector (values " "(apply vector (list ")
 	      (list "(vector 1 (values " "(apply vector (list 1 ")
-	      ;(list "(begin (_tr1_ " "(begin (_tr2_ ")
 	      (list "(begin (let ((x 0)) (set! (setter 'x) integer?) " 
 		    "(begin (let ((x 0)) (set! (setter 'x) (lambda (s v) (if (integer? v) v (error \"setter ~A not integer\" v)))) ")
 
@@ -1173,14 +1184,15 @@
 	      ;(list "(cond ((= x 0) " "(begin (when (= x 0) ")
 	      ;(list "(_fe1_ " "(_fe2_ ")
 	      ;(list "(_fe3_ " "(_fe4_ ")
+	      ;(list "(begin (_tr1_ " "(begin (_tr2_ ")
+	      ;(list "(begin (_mem1_ " "(begin (_mem2_ ")
+	      ;(list "(list (_cw_ " "(list (_cc_ ")
+
               (list "(begin ((lambda (a) (sort! a >)) " "(begin ((lambda (a) (sort! a (lambda (x y) (not (<= x y))))) ")
-	      
 	      (list "(begin (_iter_ " "(begin (_map_ ")
 	      (list "(begin (_cat1_ " "(begin (_cat2_ ")
 	      (list "(begin (let ((+ -)) " "(begin (let () (define + -) ")
 	      (list "(let ((+ -)) (let ((cons list)) " "(let ((cons list)) (let ((+ -)) ")
-	      ;(list "(begin (#_vector " "(begin ((with-let (unlet) vector) ")
-	      ;(list "(let-temporarily (((*s7* 'print-length) 3)) (begin " "(let-temporarily (((*s7* 'print-length) 3)) (begin ")
 	      (list "(let () (with-baffle " "(let ((mwb with-baffle)) (mwb ")
 	      ))
       
@@ -1228,7 +1240,7 @@
       (let ((parens 1)
 	    (dqs 0)
 	    (j 1)
-	    (str (make-string 4096 #\space)))
+	    (str (make-string 8192 #\space)))
 	(lambda (size)
 	  (set! parens 1)
 	  (set! dqs 0)
@@ -1471,6 +1483,7 @@
       ;(if (> (random 1000) 990) (gc))
       (set! ostr str)
       (set! (current-output-port) #f)
+      ;(procedure-source pp-checked)
 
       (catch #t 
 	(lambda () 
