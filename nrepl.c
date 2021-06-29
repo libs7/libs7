@@ -1,6 +1,7 @@
 /* nrepl, notcurses-based repl
  *
  * gcc -o nrepl nrepl.c s7.o -Wl,-export-dynamic -lnotcurses-core -lm -I. -ldl
+ *   (s7.o: gcc -c s7.c -o s7.o -I. -O2 -g)
  */
 
 #include <stdio.h>

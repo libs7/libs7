@@ -2540,9 +2540,9 @@ void s7_show_history(s7_scheme *sc);
 #define is_definer_or_binder(p)        has_type1_bit(T_Sym(p), T_DEFINER | T_BINDER)
 /* this marks "binders" like let */
 
-#define T_SAFE_ARGS                    T_BINDER
-#define has_safe_args(p)               has_type1_bit(T_Fnc(p), T_SAFE_ARGS)
-#define set_has_safe_args(p)           set_type1_bit(T_Fnc(p), T_SAFE_ARGS)
+#define T_SEMISAFE                    T_BINDER
+#define is_semisafe(p)               has_type1_bit(T_Fnc(p), T_SEMISAFE)
+#define set_is_semisafe(p)           set_type1_bit(T_Fnc(p), T_SEMISAFE)
 
 /* #define T_TREE_COLLECTED            T_FULL_BINDER */
 #define T_SHORT_TREE_COLLECTED         T_BINDER
@@ -4867,11 +4867,12 @@ static bool has_odd_bits(s7_pointer obj)
 
 static const char *check_name(s7_scheme *sc, int32_t typ)
 {
-  s7_pointer p;
-  if ((typ < 0) || (typ >= NUM_TYPES))
-    return("unknown type!");
-  p = sc->prepackaged_type_names[typ];
-  if (is_string(p)) return(string_value(p));
+  if ((typ >= 0) && (typ < NUM_TYPES))
+    {
+      s7_pointer p;
+      p = sc->prepackaged_type_names[typ];
+      if (is_string(p)) return(string_value(p));
+    }
   return("unknown type!");
 }
 
@@ -24237,18 +24238,14 @@ static s7_pointer real_part_p_p(s7_scheme *sc, s7_pointer p)
 {
   switch (type(p))
     {
-    case T_INTEGER:
-    case T_RATIO:
-    case T_REAL:
+    case T_INTEGER: case T_RATIO: case T_REAL:
       return(p);
 
     case T_COMPLEX:
       return(make_real(sc, real_part(p)));
 
 #if WITH_GMP
-    case T_BIG_INTEGER:
-    case T_BIG_RATIO:
-    case T_BIG_REAL:
+    case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL:
       return(p);
 
     case T_BIG_COMPLEX:
@@ -26470,9 +26467,6 @@ static s7_pointer g_string_position(s7_scheme *sc, s7_pointer args)
 
 /* -------------------------------- strings -------------------------------- */
 
-/* prebuilding sc->empty_string and using it wherever len==0 did not produce more than about %.2 speedup
- *   (in index.scm where 11% of the strings are empty).  s7test max 4% empty, elsewhere much less.
- */
 bool s7_is_string(s7_pointer p) {return(is_string(p));}
 
 const char *s7_string(s7_pointer p) {return(string_value(p));}
@@ -45578,7 +45572,7 @@ s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7
   s7_pointer func, sym;
   func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
   if (signature) c_function_signature(func) = signature;
-  set_has_safe_args(func);
+  set_is_semisafe(func);
   sym = make_symbol(sc, name);
   s7_define(sc, sc->nil, sym, func);
   return(sym);
@@ -56709,10 +56703,10 @@ static s7_pointer fx_c_ns(s7_scheme *sc, s7_pointer arg)
     gc_protect_via_stack(sc, lst);
   for (args = cdr(arg), p = lst; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, lookup(sc, car(args)));
-  p = fn_proc(arg)(sc, lst);
   if (in_heap(lst))
     unstack(sc);
   else clear_list_in_use(lst);
+  p = fn_proc(arg)(sc, lst);
   return(p);
 }
 
@@ -56728,10 +56722,10 @@ static s7_pointer fx_c_all_ca(s7_scheme *sc, s7_pointer code)
       args = cdr(args);
       set_car(cdr(p), fx_call(sc, args));
     }
-  p = fn_proc(code)(sc, lst);
   if (in_heap(lst))
     unstack(sc);
   else clear_list_in_use(lst);
+  p = fn_proc(code)(sc, lst);
   return(p);
 }
 
@@ -56774,10 +56768,10 @@ static s7_pointer fx_c_na(s7_scheme *sc, s7_pointer arg)
     gc_protect_via_stack(sc, val);
   for (args = cdr(arg), p = val; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
-  p = fn_proc(arg)(sc, val);
   if (in_heap(val))
     unstack(sc);
   else clear_list_in_use(val);
+  p = fn_proc(arg)(sc, val);
   return(p);
 }
 
@@ -63632,11 +63626,18 @@ static s7_pointer opt_p_pp_sf(opt_info *o) {return(o->v[3].p_pp_f(opt_sc(o), slo
 static s7_pointer opt_p_pp_fs(opt_info *o) {return(o->v[3].p_pp_f(opt_sc(o), o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_pp_fc(opt_info *o) {return(o->v[3].p_pp_f(opt_sc(o), o->v[5].fp(o->v[4].o1), o->v[2].p));}
 static s7_pointer opt_p_pp_cc(opt_info *o) {return(o->v[3].p_pp_f(opt_sc(o), o->v[1].p, o->v[2].p));}
-static s7_pointer opt_p_pp_ff(opt_info *o) {s7_pointer p1; p1 = o->v[11].fp(o->v[10].o1); return(o->v[3].p_pp_f(opt_sc(o), p1, o->v[9].fp(o->v[8].o1)));}
 static s7_pointer opt_set_car_pp_ss(opt_info *o) {return(inline_set_car(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p)));}
 static s7_pointer opt_p_pp_sf_href(opt_info *o) {return(s7_hash_table_ref(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_fs_vref(opt_info *o) {return(vector_ref_p_pp(opt_sc(o), o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_pp_fs_cons(opt_info *o) {return(cons(opt_sc(o), o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
+
+static s7_pointer opt_p_pp_ff(opt_info *o) 
+{
+  s7_pointer p1;
+  p1 = o->v[11].fp(o->v[10].o1);
+  opt_sc(o)->temp2 = p1; /* feeble GC protection */
+  return(o->v[3].p_pp_f(opt_sc(o), p1, o->v[9].fp(o->v[8].o1)));
+}
 
 static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, int32_t pstart)
 {
@@ -64576,7 +64577,6 @@ static s7_pointer opt_p_call_any(opt_info *o)
       o1 = o->v[i + P_CALL_O1].o1;
       set_car(arg, o1->v[0].fp(o1));
     }
-  arg = o->v[2].call(sc, val);
   if (in_heap(val))
     unstack(sc);
   else
@@ -64584,6 +64584,7 @@ static s7_pointer opt_p_call_any(opt_info *o)
       clear_type_bit(T_Pair(val), T_LIST_IN_USE);
       sc->current_safe_list = 0;
     }
+  arg = o->v[2].call(sc, val);
   return(arg);
 }
 
@@ -68102,24 +68103,6 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
       s7_function func;
       s7_pointer iters;
       func = c_function_call(f);    /* presumably this is either display/write, or method call? */
-
-      /* an experiment */
-      if (len == 1)
-	{
-	  s7_p_p_t ft;
-	  ft = s7_p_p_function(f);
-	  if (ft)
-	    {
-	      sc->z = (is_iterator(cadr(args))) ? cadr(args) : s7_make_iterator(sc, cadr(args));
-	      while (true)
-		{
-		  s7_pointer x;
-		  x = s7_iterate(sc, sc->z);
-		  if (iterator_is_at_end(sc->z))
-		    return(sc->unspecified);
-		  ft(sc, x);
-		}}}
-
       sc->z = make_iterators(sc, args);
       sc->z = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
       push_stack_no_let(sc, OP_GC_PROTECT, sc->args, sc->z); /* temporary GC protection */
@@ -70707,7 +70690,7 @@ static opt_t wrap_bad_args(s7_scheme *sc, s7_pointer func, s7_pointer expr, int3
     {
       set_safe_optimize_op(expr, hop + ((is_safe_procedure(func)) ?
 					((n_args == 1) ? OP_SAFE_C_A : OP_SAFE_C_AA) :
-					((n_args == 1) ? ((has_safe_args(func)) ? OP_CL_A : OP_C_A) : ((has_safe_args(func)) ? OP_CL_AA : OP_C_AA))));
+					((n_args == 1) ? ((is_semisafe(func)) ? OP_CL_A : OP_C_A) : ((is_semisafe(func)) ? OP_CL_AA : OP_C_AA))));
       if (op_no_hop(expr) == OP_SAFE_C_AA)
 	{
 	  set_opt3_pair(expr, cddr(expr));
@@ -70824,7 +70807,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       /* c function is not safe */
       if (symbols == 0)
 	{
-	  set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_A : OP_C_A)); /* OP_C_C never happens */
+	  set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_A : OP_C_A)); /* OP_C_C never happens */
 	  fx_annotate_arg(sc, cdr(expr), e);
 	  set_opt3_arglen(cdr(expr), int_one);
 	}
@@ -70833,7 +70816,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	  set_unsafely_optimized(expr);
 	  if (c_function_call(func) == g_read)
 	    set_optimize_op(expr, hop + OP_READ_S);
-	  else set_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_S : OP_C_S));
+	  else set_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_S : OP_C_S));
 	}
       choose_c_function(sc, expr, func, 1);
       return(OPT_F);
@@ -70857,7 +70840,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	}
       if (is_fxable(sc, arg1))
 	{
-	  set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_A : OP_C_A));
+	  set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_A : OP_C_A));
 	  fx_annotate_arg(sc, cdr(expr), e);
 	  set_opt3_arglen(cdr(expr), int_one);
 	  choose_c_function(sc, expr, func, 1);
@@ -70875,7 +70858,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	      choose_c_function(sc, expr, func, 1);
 	      return(OPT_T);
 	    }
-	  set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_A : OP_C_A));
+	  set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_A : OP_C_A));
 	  choose_c_function(sc, expr, func, 1);
 	  return(OPT_F);
 	}
@@ -72592,7 +72575,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		}
 	      else
 		{
-		  if (has_safe_args(func))
+		  if (is_semisafe(func))
 		    {
 		      set_opt2_sym(cdr(expr), arg2);
 		      set_optimize_op(expr, hop + OP_CL_SS);
@@ -72602,7 +72585,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		}}
 	  else
 	    {
-	      set_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_AA : OP_C_AA));
+	      set_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_AA : OP_C_AA));
 	      fx_annotate_args(sc, cdr(expr), e);
 	      set_opt3_arglen(cdr(expr), int_two);
 	      choose_c_function(sc, expr, func, 2);
@@ -72725,7 +72708,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      (is_normal_symbol(arg1)) &&
 	      (is_safe_c_s(arg2)))
 	    {
-	      set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_S_opSq : OP_C_S_opSq));
+	      set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_S_opSq : OP_C_S_opSq));
 	      set_opt1_sym(cdr(expr), cadr(arg2));
 	      choose_c_function(sc, expr, func, 2);
 	      return(OPT_F);
@@ -72769,7 +72752,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	  else
 	    if (pairs == 1)
 	      {
-		set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_AA : OP_C_AA));
+		set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_AA : OP_C_AA));
 		fx_annotate_args(sc, cdr(expr), e);
 		set_opt3_arglen(cdr(expr), int_two);
 		choose_c_function(sc, expr, func, 2);
@@ -72785,7 +72768,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	    }
 	  else
 	    {
-	      set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_AA : OP_C_AA));
+	      set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_AA : OP_C_AA));
 	      set_opt3_arglen(cdr(expr), int_two);
 	    }
 	  fx_annotate_args(sc, cdr(expr), e);
@@ -72938,7 +72921,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 			}
 		      set_opt1_cfunc(expr, func); /* not quite set_c_function */
 		    }
-		  else set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_AA : OP_C_AA));
+		  else set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_AA : OP_C_AA));
 		  fx_annotate_args(sc, cdr(expr), e);
 		  set_opt3_arglen(cdr(expr), int_two);
 		}
@@ -72978,7 +72961,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      return(OPT_F);
 	    }
 
-	  if ((has_safe_args(func)) &&
+	  if ((is_semisafe(func)) &&
 	      (is_symbol(car(expr))) &&
 	      (car(expr) != sc->values_symbol) &&
 	      (is_fxable(sc, arg2)) &&
@@ -73371,7 +73354,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 		  set_opt3_pair(cdr(expr), cdddr(expr));
 		  set_opt3_pair(expr, cddr(expr));
 		}
-	      else set_safe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_NA : OP_C_NA));
+	      else set_safe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_NA : OP_C_NA));
 	      set_c_function(expr, func);
 	      return(OPT_T);
 	    }
@@ -73428,7 +73411,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	  set_optimized(expr);
 	  fx_annotate_args(sc, cdr(expr), e);
 	  set_opt3_arglen(cdr(expr), int_three);
-	  if (has_safe_args(func))
+	  if (is_semisafe(func))
 	    set_optimize_op(expr, hop + (((is_normal_symbol(arg1)) && (is_normal_symbol(arg3))) ? OP_CL_SAS : OP_CL_NA));
 	  else set_optimize_op(expr, hop + OP_C_NA);
 	  choose_c_function(sc, expr, func, 3);
@@ -73695,7 +73678,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	{
 	  if (fx_count(sc, expr) == args) /* trigger_size doesn't matter for unsafe funcs */
 	    {
-	      set_unsafe_optimize_op(expr, hop + ((has_safe_args(func)) ? OP_CL_NA : OP_C_NA));
+	      set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_NA : OP_C_NA));
 	      fx_annotate_args(sc, cdr(expr), e);
 	      set_opt3_arglen(cdr(expr), make_permanent_integer(args));
 	      choose_c_function(sc, expr, func, args);
@@ -89208,10 +89191,10 @@ static void op_cl_na(s7_scheme *sc)
     gc_protect_via_stack(sc, val);
   for (args = cdr(sc->code), p = val; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
-  sc->value = fn_proc(sc->code)(sc, val);
-  if (in_heap(val))
+  if (in_heap(val)) /* this has to precede the fn_proc call -- the latter might push its own op (e.g. for-each/map) */
     unstack(sc);
   else clear_list_in_use(val);
+  sc->value = fn_proc(sc->code)(sc, val);
 }
 
 static void op_cl_sas(s7_scheme *sc)
@@ -89756,10 +89739,6 @@ static bool pop_read_list(s7_scheme *sc)
 
 static bool op_load_return_if_eof(s7_scheme *sc)
 {
-  /* loop here until eof (via push stack below) */
-  /* load("file"); from C (g_load) -- assume caller will clean up
-   *   read and evaluate exprs until EOF that matches (stack reflects nesting)
-   */
   if (sc->tok != TOKEN_EOF)
     {
       push_stack_op_let(sc, OP_LOAD_RETURN_IF_EOF);
@@ -90552,7 +90531,7 @@ static bool op_unknown_gg(s7_scheme *sc)
 		}}}
       else
 	{
-	  set_optimize_op(code, (has_safe_args(f)) ? OP_CL_NA : OP_C_NA);
+	  set_optimize_op(code, (is_semisafe(f)) ? OP_CL_NA : OP_C_NA);
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	}
       set_opt3_arglen(cdr(code), int_two);
@@ -90681,7 +90660,7 @@ static bool op_unknown_ns(s7_scheme *sc)
 	}
       else
 	{
-	  set_optimize_op(code, (has_safe_args(f)) ? OP_CL_NA : OP_C_NA);
+	  set_optimize_op(code, (is_semisafe(f)) ? OP_CL_NA : OP_C_NA);
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	}
       set_c_function(code, f);
@@ -90756,7 +90735,7 @@ static bool op_unknown_aa(s7_scheme *sc)
 	      set_safe_optimize_op(code, OP_SAFE_C_AA);
 	      set_opt3_pair(code, cddr(code));
 	    }}
-      else set_optimize_op(code, (has_safe_args(f)) ? OP_CL_NA : OP_C_NA);
+      else set_optimize_op(code, (is_semisafe(f)) ? OP_CL_NA : OP_C_NA);
       set_c_function(code, f);
       return(true);
 
@@ -90876,7 +90855,7 @@ static bool op_unknown_na(s7_scheme *sc)
 	    }
 	  else set_safe_optimize_op(code, (num_args == 4) ? OP_SAFE_C_4A : OP_SAFE_C_NA);
 	}
-      else set_safe_optimize_op(code, (has_safe_args(f)) ? OP_CL_NA : OP_C_NA);
+      else set_safe_optimize_op(code, (is_semisafe(f)) ? OP_CL_NA : OP_C_NA);
       fx_annotate_args(sc, cdr(code), sc->curlet);
       set_c_function(code, f);
       return(true);
@@ -96501,8 +96480,12 @@ void s7_repl(s7_scheme *sc)
 #if (!WITH_C_LOADER)
   dumb_repl(sc);
 #else
+#if WITH_NOTCURSES
+  s7_load(sc, "nrepl.scm");
+#else
   s7_pointer old_e, e, val;
   s7_int gc_loc;
+  bool repl_loaded = false;
   /* try to get lib_s7.so from the repl's directory, and set *libc*.
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
@@ -96520,10 +96503,15 @@ void s7_repl(s7_scheme *sc)
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
     }
+  else 
+    {
+      val = s7_load(sc, "repl.scm");
+      if (val) repl_loaded = true;
+    }
   s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
   s7_gc_unprotect_at(sc, gc_loc);
 
-  if (!val) /* s7_load_with_environment was unable to find/load libc_s7.so */
+  if (!val) /* s7_load was unable to find/load libc_s7.so or (n)repl.scm */
     dumb_repl(sc);
   else
     {
@@ -96532,14 +96520,10 @@ void s7_repl(s7_scheme *sc)
       s7_autoload(sc, s7_make_symbol(sc, "get-overheads"), s7_make_string(sc, "compare-calls.scm"));
 #endif
       s7_provide(sc, "libc.scm");
-#if WITH_NREPL
-      s7_load(sc, "nrepl.scm");
-      s7_eval_c_string(sc, "((*nrepl* 'run))");
-#else
-      s7_load(sc, "repl.scm");
+      if (!repl_loaded) s7_load(sc, "repl.scm");
       s7_eval_c_string(sc, "((*repl* 'run))");
-#endif
     }
+#endif
 #endif
 }
 
@@ -96556,14 +96540,8 @@ static char *realdir(const char *filename) /* this code courtesy Lassi Kortela 4
    *   enough to be worth the effort.  If S7_LOAD_PATH is set, it is used instead.
    */
   if (!strchr(filename, '/'))
-    {
-      if (!file_probe("libc_s7.so"))
-	{
-	  fprintf(stderr, "%s needs libc_s7.so (give the explicit pathname)\n", filename); /* env PATH=/home/bil/cl repl */
-	  exit(2);
-	}
-      return(NULL); /* we're in the libc_s7.so directory, I hope (local s7 might not match local libc_s7.so) */
-    }
+    return(NULL);
+
   if (!(path = realpath(filename, NULL))) /* in Windows maybe GetModuleFileName(NULL, buffer, buffer_size) */
     {
       fprintf(stderr, "%s: %s\n", strerror(errno), filename);
@@ -96622,6 +96600,8 @@ int main(int argc, char **argv)
  *   (clang also needs LDFLAGS="-Wl,-export-dynamic" in Linux and "-fPIC")
  * in msys2:  gcc s7.c -o s7 -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-all-symbols,--out-implib,s7.lib
  *
+ * for nrepl: gcc s7.c -o repl -DWITH_MAIN -DWITH_NOTCURSES -I. -O2 -g -lnotcurses-core -ldl -lm -Wl,-export-dynamic
+ *
  * (s7.c compile time 17-Jun-20 48 secs)
  * musl works, but there is some problem in libgsl.scm with gsl/gsl_blas.h I think
  */
@@ -96660,7 +96640,7 @@ int main(int argc, char **argv)
  * tclo       4841         4787   4735   4588   4512
  * tmap       4816         8270   8188   4812   4728
  * tfft      113.2         7820   7729   4843   4816
- * tnum       59.1         6348   6013   5683   5442
+ * tnum       59.1         6348   6013   5683   5442  5449
  * tmisc      5828         7389   6210   5653   5512  5474
  * tgsl       25.2         8485   7802   6404   6394
  * trec       8493         6936                 6563
