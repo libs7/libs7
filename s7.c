@@ -57303,7 +57303,11 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  /* integer->char string->number (string) (list) complex sqrt log expt * + - /
 	   */
 	  if (((fn_proc(arg) == g_abs) && (is_t_integer(cadr(arg)))) ||
+#if WITH_PURE_S7
+	      ((fn_proc(arg) == g_length) && (is_string(cadr(arg)))))
+#else
 	      (((fn_proc(arg) == g_string_length) || (fn_proc(arg) == g_length)) && (is_string(cadr(arg)))))
+#endif
 	    {
 	      set_opt3_con(arg, make_permanent_integer((fn_proc(arg) == g_abs) ? s7_int_abs(integer(cadr(arg))) : string_length(cadr(arg))));
 	      return(fx_in_place);
