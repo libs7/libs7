@@ -1,6 +1,8 @@
 ;;; various standard benchmarks 
 ;;; --------------------------------------------------------------------------------
 
+(set! (*s7* 'heap-size) 512000)
+
 (define (fannkuch n)
   (call-with-exit
    (lambda (return)

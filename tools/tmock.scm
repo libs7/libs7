@@ -1,6 +1,6 @@
 ;;; mock data (method call) timing test
 
-(set! (*s7* 'heap-size) 1024000)
+(set! (*s7* 'heap-size) 2048000)
 (load "mockery.scm")
 
 (define mock-number (*mock-number* 'mock-number))

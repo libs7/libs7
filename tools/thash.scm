@@ -249,10 +249,10 @@
   (let ((rat-hash (make-hash-table size eqv?)))
     (do ((i 0 (+ i 1))) 
 	((= i size))
-      (hash-table-set! rat-hash (/ i 31) i))
+      (hash-table-set! rat-hash (/ i 3) i))
     (do ((i 0 (+ i 1)))
 	((= i size))
-      (unless (= (hash-table-ref rat-hash (/ i 31)) i)
+      (unless (= (hash-table-ref rat-hash (/ i 3)) i)
 	(display "oops")))
     (set! rat-hash #f)))
 

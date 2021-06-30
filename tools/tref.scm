@@ -1,5 +1,3 @@
-(set! (*s7* 'heap-size) 1024000)
-
 (define tries 10)
 
 (define (ft3)
@@ -124,7 +122,7 @@
     (let ((v (make-int-vector size 1)))
       (do ((i 0 (+ i 1)))
 	  ((= i tries))
-	(do ((j 0 (+ j 1)))
+	(do ((j 0 (+ j 1))) ; -> copy via opt_do_very_simple
 	    ((= j size))
 	  (vector-set! v j (vector-ref v j))))
       v)))
@@ -138,7 +136,7 @@
     (let ((v (make-float-vector size 1.0)))
       (do ((i 0 (+ i 1)))
 	  ((= i tries))
-	(do ((j 0 (+ j 1)))
+	(do ((j 0 (+ j 1))) ; same as above
 	    ((= j size))
 	  (vector-set! v j (vector-ref v j))))
       v)))

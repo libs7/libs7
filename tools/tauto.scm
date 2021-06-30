@@ -1,3 +1,4 @@
+(set! (*s7* 'heap-size) 1024000)
 (set! (hook-functions *unbound-variable-hook*) ())
 (set! (*s7* 'print-length) 6)
 ;(set! (*s7* 'gc-stats) #t)
