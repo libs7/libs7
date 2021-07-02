@@ -10,6 +10,7 @@ cp ~/cl/make-repl .
 cp ~/cl/low-primes.scm .
 cp ~/cl/full-s7test.scm .
 cp ~/cl/lt.scm .
+cp ~/cl/peak-phases.scm .
 
 echo ' '
 echo '-------- base case --------'
