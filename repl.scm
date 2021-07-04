@@ -1201,8 +1201,9 @@
 			  (format p "(define ~S ~W)~%" (car var) (cdr var))))
 		      (*repl* 'top-level-let)))))
       
-      (define (restore-repl) 
-	(set! (*repl* 'top-level-let) (load "save.repl")))  
+      (define* (restore-repl (file "save.repl"))
+	(set! (*repl* 'top-level-let) (sublet (rootlet)))
+	(load file))
       ;; I think this could be a merge rather than a reset by using (with-let top-level-let (load ...))
       
       (set! keymap (repl-let 'keymap))

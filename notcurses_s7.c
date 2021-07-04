@@ -634,13 +634,14 @@ static s7_pointer g_notcurses_drop_planes(s7_scheme *sc, s7_pointer args)
   return(s7_f(sc));
 }
 
-
+#if 0
 static s7_pointer g_notcurses_render_to_buffer(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, notcurses_render_to_buffer((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
 							(char **)s7_c_pointer(s7_cadr(args)),
 							(size_t *)s7_c_pointer(s7_caddr(args)))));
 }
+#endif
 
 static s7_pointer g_notcurses_stats_reset(s7_scheme *sc, s7_pointer args)
 {
@@ -770,11 +771,13 @@ static s7_pointer g_notcurses_lex_scalemode(s7_scheme *sc, s7_pointer args)
 						     (ncscale_e *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, "ncscale_e*"), __func__, 2))));
 }
 
+#if 0
 static s7_pointer g_notcurses_render_to_file(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, notcurses_render_to_file((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
 						      (FILE *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, "FILE*"), __func__, 2))));
 }
+#endif
 
 /* TODO: notcurses_ucs32_to_utf8 
  */
@@ -4066,7 +4069,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_at_yx, 5, 0, false);
   nc_func(notcurses_lex_margins, 2, 0, false);
   nc_func(notcurses_lex_scalemode, 2, 0, false);
-  nc_func(notcurses_render_to_file, 2, 0, false);
+  /* nc_func(notcurses_render_to_file, 2, 0, false); */ /* now ncpile_render_to file? */
   nc_func(notcurses_bottom, 1, 0, false);
 #if 0
   nc_func(ncpalette_new, 1, 0, false);
@@ -4460,7 +4463,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_set_styles, 2, 0, false);
   nc_func(ncplane_on_styles, 2, 0, false);
   nc_func(ncplane_off_styles, 2, 0, false);
-  nc_func(notcurses_render_to_buffer, 3, 0, false);
+  /* nc_func(notcurses_render_to_buffer, 3, 0, false); */ /* now ncpile_reneder_to_buffer? */
   nc_func(notcurses_stats_reset, 2, 0, false);
   nc_func(notcurses_stats_alloc, 1, 0, false);
   nc_func(ncplane_putnstr_aligned, 5, 0, false);
