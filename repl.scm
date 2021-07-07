@@ -4,6 +4,13 @@
 
 (set! (*s7* 'history-enabled) #f)
 
+(define stderr-buffered #f)
+(define (fformat port . args)
+  (apply format port args)
+  (when (and stderr-buffered
+	     (eq? port *stderr*))
+    (flush-output-port *stderr*)))
+
 (provide 'repl.scm)
 (require libc.scm)
 
@@ -340,13 +347,13 @@
 		      text #\escape))
 	    
 	    (define (move-cursor y x)
-	      (format *stderr* "~C[~D;~DH" #\escape y x))
+	      (fformat *stderr* "~C[~D;~DH" #\escape y x))
 
 	    (define (cursor-coords)
 	      (let* ((c (string #\null #\null))
 		     (cc (string->c-pointer c))
 		     (terminal-fd (fileno stdin)))
-		(format *stderr* "~C[6n" #\escape)
+		(fformat *stderr* "~C[6n" #\escape)
 		(do ((b (read terminal-fd cc 1) (read terminal-fd cc 1)))
 		    ((char=? (string-ref c 0) #\escape)))
 		(read terminal-fd cc 1) 
@@ -373,8 +380,8 @@
 		  (set! last-col (car bounds))
 		  (set! last-row (cdr bounds)))))
 	    
-	    ;; to enable mouse click coords (in xterm anyway), (format *stderr* "~C[?9h" #\escape)
-	    ;;    disable: (format *stderr* "~C[?9l" #\escape)
+	    ;; to enable mouse click coords (in xterm anyway), (fformat *stderr* "~C[?9h" #\escape)
+	    ;;    disable: (fformat *stderr* "~C[?9l" #\escape)
 	    ;;    this is X10_MOUSE -- probably better to use SET_ANY_EVENT_MOUSE 1003
 	    ;; while enabled, mouse selection instead sends coords to repl (so it's annoying)
 	    ;;    also it's sticky!  exit repl does not clear this flag so mouse is effectively dead
@@ -385,7 +392,7 @@
 	    
 	    ;; -------- display --------
 	    (define (display-prompt)
-	      (format *stderr* "~A" prompt-string))
+	      (fformat *stderr* "~A" prompt-string))
 	    
 	    (define (new-prompt)
 	      (set! cur-line "")
@@ -438,7 +445,7 @@
 	    
 	    (define (display-lines)
 	      (move-cursor prompt-row 0)
-	      (format *stderr* "~C[J" #\escape)
+	      (fformat *stderr* "~C[J" #\escape)
 	      (let ((len (length cur-line))
 		    (new-line ""))
 		(do ((line-end 0)
@@ -446,7 +453,7 @@
 		    ((> i len))
 		  (set! line-end (end-of-line i))
 		  (set! new-line (string-append new-line (display-line i (min (+ line-end 2) len)))))
-		(format *stderr* "~A" new-line)
+		(fformat *stderr* "~A" new-line)
 		(display-cursor)))
 	    
 	    ;; -------- keymap(s) --------
@@ -520,7 +527,7 @@
 	      (set! cur-line (string-append cur-line (string #\space #\newline)))
 	      (set! cursor-pos (length cur-line))
 	      (when (= last-row (+ prompt-row cur-row))
-		(format *stderr* "~%")
+		(fformat *stderr* "~%")
 		(set! prompt-row (- prompt-row 1)))
 	      (set! cur-row (+ cur-row 1)))
 	    
@@ -616,7 +623,7 @@
 	    
 	    (set! (keymap-functions C-l) 
 		  (lambda (c)
-		    (format *stderr* "~C[H~C[J" #\escape #\escape)
+		    (fformat *stderr* "~C[H~C[J" #\escape #\escape)
 		    (new-prompt)))
 	    
 	    ;; -------- deletion
@@ -811,7 +818,7 @@
 						 
 				       (if unbound-case
 					   (set! unbound-case #f)
-					   (format *stderr* "~S~%" val))
+					   (fformat *stderr* "~S~%" val))
 				       (eval `(define ,(string->symbol (format #f "<~D>" (+ (length histtop) 1))) ',val) (rootlet))))))
 			       
 			       (lambda (type info)
@@ -824,14 +831,14 @@
 			   
 			   (lambda (type info)
 			     (with-let (unlet)
-			       (format *stderr* "~A:" (red "error"))
+			       (fformat *stderr* "~A:" (red "error"))
 			       (let ((op (*s7* 'print-length)))
 				 (if (< op 32) (set! (*s7* 'print-length) 32))
 				 (if (and (pair? info)
 					  (string? (car info)))
-				     (format *stderr* " ~A" (apply format #f info))
+				     (fformat *stderr* " ~A" (apply format #f info))
 				     (if (not (null? info))
-					 (format *stderr* " ~A" info)))
+					 (fformat *stderr* " ~A" info)))
 				 (if (< op 32) (set! (*s7* 'print-length) op)))
 			       (eval `(define ,(string->symbol (format #f "<~D>" (+ (length histtop) 1))) 'error) (rootlet))
 			       (newline *stderr*))))
@@ -871,7 +878,7 @@
 		    (set! cursor-pos (length cur-line))
 		    (let ((newlines (count-newlines cur-line)))
 		      (when (< last-row (+ prompt-row newlines))
-			(format *stderr* "~NC" (- (+ prompt-row newlines) last-row) #\newline)
+			(fformat *stderr* "~NC" (- (+ prompt-row newlines) last-row) #\newline)
 			(set! prompt-row (- prompt-row newlines)))
 		      (set! cur-row newlines)))))
 
@@ -963,7 +970,7 @@
 	      ;;   and does not notice in-place edits
 	      ;;   can <cr> get entire expr?
 	      (let ((buf (c-pointer->string (calloc 512 1) 512)))
-		(format *stderr* "> ")
+		(fformat *stderr* "> ")
 		(do ((b (fgets buf 512 stdin) (fgets buf 512 stdin)))
 		    ((zero? (length b))
 		     (#_exit))
@@ -974,14 +981,14 @@
 			       (= i len))
 			   (when (< i len)
 			     (let ((str (substring buf 0 (- (strlen buf) 1))))
-			       ;(format *stderr* "str: ~S~%" str)
+			       ;(fformat *stderr* "str: ~S~%" str)
 			       (catch #t
 				 (lambda ()
 				   (do ()
 				       ((= (string-length str) 0))
 				     (catch 'string-read-error
 				       (lambda ()
-					 (format *stderr* "~S~%> " (eval-string str (*repl* 'top-level-let)))
+					 (fformat *stderr* "~S~%> " (eval-string str (*repl* 'top-level-let)))
 					 (set! str ""))
 				       (lambda (type info)
 					 (fgets buf 512 stdin)
@@ -989,7 +996,7 @@
 				 (lambda (type info)
 				   (set! str "")
 				   (apply format *stderr* info)
-				   (format *stderr* "~%> "))))))))))))
+				   (fformat *stderr* "~%> "))))))))))))
 
 	    ;; -------- rxvt et al --------
 	    (define (terminal-repl file)		
@@ -1109,9 +1116,9 @@
 					 (lambda (type info)
 					   (set! chars 0)
 					   ;(move-cursor prompt-row prompt-col)
-					   (format *stderr* "internal error: ")
+					   (fformat *stderr* "internal error: ")
 					   (apply format *stderr* info)
-					   (format *stderr* "~%line ~A: ~A~%" ((owlet) 'error-line) ((owlet) 'error-code))
+					   (fformat *stderr* "~%line ~A: ~A~%" ((owlet) 'error-line) ((owlet) 'error-code))
 					   (set! chars 0)
 					   (set! ctr 0)
 					   (new-prompt)
@@ -1158,9 +1165,9 @@
 		      
 		      (lambda (type info)
 			;(move-cursor prompt-row prompt-col)
-			(format *stderr* "internal error: ")
+			(fformat *stderr* "internal error: ")
 			(apply format *stderr* info)
-			(format *stderr* "~%line ~A: ~A~%" ((owlet) 'error-line) ((owlet) 'error-code))
+			(fformat *stderr* "~%line ~A: ~A~%" ((owlet) 'error-line) ((owlet) 'error-code))
 			(set! chars 0)
 			(new-prompt))))))))
 
@@ -1243,7 +1250,7 @@
 	    (set! cursor-pos 0)
 	    (set! prompt-string (format #f "break~NC " depth #\>))
 	    (set! prompt-length (length prompt-string)))
-	  (format *stderr* "break: ~A, C-q to exit break~%" call)
+	  (fformat *stderr* "break: ~A, C-q to exit break~%" call)
 	  ((*repl* 'run)))))))
 
 (define (debug.scm-init)
@@ -1404,7 +1411,7 @@
 	      'no-match
 	      (begin
 		(for-each (lambda (b)
-			    (format *stderr*
+			    (fformat *stderr*
 				    (if (zero? (cdr b)) "~C[1m~A~C[0m: ~S~%"                           ; black if exact match somewhere
 					(if (or (< (cdr b) 2) (not have-orange)) "~C[31m~A~C[0m: ~S~%" ; red for near miss
 					    "~C[38;5;208m~A~C[0m: ~S~%"))                              ; orange for less likely choices
@@ -1560,7 +1567,7 @@ to post a help string (kinda tedious, but the helper list is aimed more at posti
 	(with-let (sublet (*repl* 'repl-let))
 	  (let ((next (next-char)))
 	    (when (char=? next (integer->char 6)) ; C-f
-	      (format *stderr* "~%load: ")
+	      (fformat *stderr* "~%load: ")
 	      ;; now recursive call: prompt="load: "
 	      (let ((old-prompt (*repl* 'prompt))
 		    (old-cur-line cur-line)
