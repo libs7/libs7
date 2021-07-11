@@ -1662,6 +1662,51 @@ int main(int argc, char **argv)
       s7_gc_unprotect_at(sc, gc_loc);
     }
 
+    {
+      s7_pointer e;
+      unsigned char another_var[] = {0x28, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x20, 0x61, 0x6e, 0x6f, 0x74, /* (define another-var 123)\n */
+				     0x68, 0x65, 0x72, 0x2d, 0x76, 0x61, 0x72, 0x20, 0x31, 0x32, 0x33, 0x29,
+				     0x0a, 0};
+      unsigned int another_var_len = 25;
+      unsigned char yet_another_var[] = {0x28, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x20, 0x79, 0x65, 0x74, 0x2d, /* (define yet-another-var 123)\n */
+					 0x61, 0x6e, 0x6f, 0x74, 0x68, 0x65, 0x72, 0x2d, 0x76, 0x61, 0x72, 0x20,
+					 0x31, 0x32, 0x33, 0x29, 0x0a, 0};
+      unsigned int yet_another_var_len = 29;
+      unsigned char a_global_var[] = {0x28, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x20, 0x61, 0x2d, 0x67, 0x6c, /* (define a_global_var 321)\n */
+				      0x6f, 0x62, 0x61, 0x6c, 0x2d, 0x76, 0x61, 0x72, 0x20, 0x33, 0x32, 0x31,
+				      0x29, 0x0a, 0};
+      unsigned int a_global_var_len = 26;
+
+      unsigned char a_test_var[] = {0x28, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x20, 0x61, 0x2d, 0x74, 0x65,
+				    0x73, 0x74, 0x2d, 0x76, 0x61, 0x72, 0x20, 0x33, 0x32, 0x31, 0x29, 0x0a, 0};
+      unsigned int a_test_var_len = 24;
+
+      s7_load_c_string(sc, (const char *)another_var, another_var_len);
+      p = s7_symbol_value(sc, s7_make_symbol(sc, "another-var"));
+      if (s7_integer(p) != 123)
+	fprintf(stderr, "load_c_string: %s\n", TO_STR(p));
+
+      e = s7_inlet(sc, s7_nil(sc));
+      gc_loc = s7_gc_protect(sc, e);
+      s7_load_c_string_with_environment(sc, (const char *)yet_another_var, yet_another_var_len, e);
+      p = s7_symbol_local_value(sc, s7_make_symbol(sc, "yet-another-var"), e);
+      if (s7_integer(p) != 123)
+	fprintf(stderr, "load_c_string_with_environment: %s\n", TO_STR(p));
+      s7_gc_unprotect_at(sc, gc_loc);
+
+      s7_load_c_string_with_environment(sc, (const char *)a_global_var, a_global_var_len, s7_nil(sc));
+      p = s7_symbol_value(sc, s7_make_symbol(sc, "a-global-var"));
+      if (s7_integer(p) != 321)
+	fprintf(stderr, "load_c_string_with_environment nil: %s\n", TO_STR(p));
+
+      s7_load_c_string_with_environment(sc, (const char *)a_test_var, a_test_var_len, s7_rootlet(sc));
+      p = s7_symbol_value(sc, s7_make_symbol(sc, "a-test-var"));
+      if (s7_integer(p) != 321)
+	fprintf(stderr, "load_c_string_with_environment rootlet: %s\n", TO_STR(p));
+
+      s7_load_with_environment(sc, "~/cl/ffitest.scm", s7_rootlet(sc));  /* rootlet=segfault 10-Jul-21 */
+    }
+
     port = s7_open_input_string(sc, "(+ 1 2)");
     if (!s7_is_input_port(sc, port))
       {fprintf(stderr, "%d: %s is not an input port?\n", __LINE__, s1 = TO_STR(port)); free(s1);}
