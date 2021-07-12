@@ -4180,7 +4180,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_SAFE_C_P_1, OP_SAFE_C_PP_1, OP_SAFE_C_PP_3_MV, OP_SAFE_C_PP_5, OP_SAFE_C_PP_6_MV,
       OP_SAFE_C_3P_1, OP_SAFE_C_3P_2, OP_SAFE_C_3P_3, OP_SAFE_C_3P_1_MV, OP_SAFE_C_3P_2_MV, OP_SAFE_C_3P_3_MV,
-      OP_SAFE_C_SP_1, OP_SAFE_C_SP_MV, OP_SAFE_CONS_SP_1, OP_SAFE_VECTOR_SP_1, OP_SAFE_ADD_SP_1, OP_SAFE_MULTIPLY_SP_1, OP_SAFE_SUBTRACT_SP_1,
+      OP_SAFE_C_SP_1, OP_SAFE_C_SP_MV, OP_SAFE_CONS_SP_1, OP_SAFE_LIST_SP_1, OP_SAFE_ADD_SP_1, OP_SAFE_MULTIPLY_SP_1,
       OP_SAFE_C_PS_1, OP_SAFE_C_PC_1, OP_SAFE_C_PS_MV, OP_SAFE_C_PC_MV,
       OP_EVAL_MACRO_MV, OP_MACROEXPAND_1, OP_APPLY_LAMBDA,
       OP_INCREMENT_SP_1, OP_INCREMENT_SP_MV, OP_ANY_C_NP_1, OP_ANY_C_NP_MV_1, OP_SAFE_C_SSP_1, OP_SAFE_C_SSP_MV_1,
@@ -4403,7 +4403,7 @@ static const char* op_names[NUM_OPS] =
 
       "safe_c_p_1", "safe_c_pp_1", "safe_c_pp_3_mv", "safe_c_pp_5", "safe_c_pp_6_mv",
       "safe_c_3p_1", "safe_c_3p_2", "safe_c_3p_3", "safe_c_3p_1_mv", "safe_c_3p_2_mv", "safe_c_3p_3_mv",
-      "safe_c_sp_1", "safe_c_sp_mv", "safe_cons_sp_1", "safe_vector_sp_1", "safe_add_sp_1", "safe_multiply_sp_1", "safe_subtract_sp_1",
+      "safe_c_sp_1", "safe_c_sp_mv", "safe_cons_sp_1", "safe_list_sp_1", "safe_add_sp_1", "safe_multiply_sp_1",
       "safe_c_ps_1", "safe_c_pc_1", "safe_c_ps_mv", "safe_c_pc_mv",
       "eval_macro_mv", "macroexpand_1", "apply_lambda",
       "increment_sp_1", "increment_sp_mv", "any_c_np_1", "any_c_np_mv_1", "safe_c_ssp_1", "safe_c_ssp_mv_1",
@@ -11568,7 +11568,7 @@ static void call_with_exit(s7_scheme *sc)
   /* look for dynamic-wind in the stack section that we are jumping out of */
   i = current_stack_top(sc) - 1;
   do {
-    switch (stack_op(sc->stack, i))
+    switch (stack_op(sc->stack, i)) /* avoidable if we group these ops at the end and use op< */
       {
       case OP_DYNAMIC_WIND:
 	{
@@ -11648,7 +11648,6 @@ static void call_with_exit(s7_scheme *sc)
     i -= 4;
   } while (i > new_stack_top);
 
-  /* is this right? maybe the SET_VALUE should skip setting stack_end? */
  SET_VALUE:
   sc->stack_end = (s7_pointer *)(sc->stack_start + new_stack_top);
 
@@ -63910,7 +63909,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 			{
 			case T_PAIR:         opc->v[2].call = g_list_ref;           break;
 			case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
-			  /* case T_LET:       opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
+			  /* case T_LET:     opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
 			case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
 			case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
 			case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
@@ -67767,8 +67766,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_SSP_MV_1;
       return(args);
 
-    case OP_SAFE_C_SP_1:  case OP_SAFE_CONS_SP_1: case OP_SAFE_VECTOR_SP_1:
-    case OP_SAFE_ADD_SP_1: case OP_SAFE_SUBTRACT_SP_1: case OP_SAFE_MULTIPLY_SP_1:
+    case OP_SAFE_C_SP_1:  case OP_SAFE_CONS_SP_1: case OP_SAFE_LIST_SP_1: case OP_SAFE_ADD_SP_1: case OP_SAFE_MULTIPLY_SP_1:
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_SP_MV;
       return(args);
 
@@ -67846,7 +67844,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       stack_element(sc->stack, top) = (s7_pointer)OP_INCREMENT_SP_MV;
       return(args);
 
-    case OP_LET1:                                             /* (let ((var (values 1 2 3))) ...) */
+    case OP_LET1:                         /* (let ((var (values 1 2 3))) ...) */
       {
 	s7_pointer p, let_code, vars, sym;
 	p = stack_args(sc->stack, top);
@@ -67859,15 +67857,10 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 	 */
       }
 
-    case OP_LET_ONE_NEW_1:
+    case OP_LET_ONE_NEW_1:                /* op_let_one_[p]_old_1 can't happen here, I think */
     case OP_LET_ONE_P_NEW_1:
       eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->let_symbol,
 			      opt2_sym(stack_code(sc->stack, top)), set_ulist_1(sc, sc->values_symbol, args));
-
-    case OP_LET_ONE_OLD_1: /* can these happen? */
-    case OP_LET_ONE_P_OLD_1:
-      eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->let_symbol,
-			      opt2_sym(cdr(stack_code(sc->stack, top))), set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_LET_STAR1:             /* here caar(sc->code) is bound to sc->value */
       eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->let_star_symbol,
@@ -71353,13 +71346,8 @@ static bool unsafe_is_safe(s7_scheme *sc, s7_pointer f, s7_pointer e)
 {
   if (!is_symbol(f)) return(false);
   f = find_uncomplicated_symbol(sc, f, e); /* how to catch local c-funcs here? */
-  if (is_slot(f))
-    {
-      f = slot_value(f);
-      return((is_c_function(f)) &&
-	     (is_safe_procedure(f)));
-    }
-  return(false);
+  if (!is_slot(f)) return(false);
+  return((is_c_function(slot_value(f))) && (is_safe_procedure(slot_value(f))));
 }
 
 static opt_t set_any_closure_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_pointer e, int32_t num_args, opcode_t op)
@@ -71383,11 +71371,10 @@ static void opt_sp_1(s7_scheme *sc, s7_function g, s7_pointer expr)
 {
   set_opt1_any(cdr(expr),
 	       (s7_pointer)((intptr_t)((g == g_cons) ? OP_SAFE_CONS_SP_1 :
-				       ((g == g_vector) ? OP_SAFE_VECTOR_SP_1 :
+				       (((g == g_list) || (g == g_list_2)) ? OP_SAFE_LIST_SP_1 :
 					(((g == g_multiply) || (g == g_multiply_2)) ? OP_SAFE_MULTIPLY_SP_1 :
 					 (((g == g_add) || (g == g_add_2)) ? OP_SAFE_ADD_SP_1 :
-					  (((g == g_subtract) || (g == g_subtract_2)) ? OP_SAFE_SUBTRACT_SP_1 :
-					   OP_SAFE_C_SP_1)))))));
+					  OP_SAFE_C_SP_1))))));
 }
 
 static opt_t set_any_c_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_pointer e, int32_t num_args, opcode_t op)
@@ -71944,7 +71931,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      return(OPT_F);
 	    }}
       return(set_any_c_np(sc, func, expr, e, 2, hop + OP_ANY_C_NP)); /* OP_C_PP doesn't exist */
-      /* TODO: gc_annotate */
+      /* TODO: gx_annotate */
     }
 
   if (is_closure(func))
@@ -72431,7 +72418,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	    (unsafe_is_safe(sc, arg3, e)))))
 	return(set_any_c_np(sc, func, expr, e, 3, hop + OP_SAFE_C_3P));
       return(set_any_c_np(sc, func, expr, e, 3, hop + OP_ANY_C_NP));
-      /* TODO: gc_annotate */
+      /* TODO: gx_annotate */
     }
 
   /* not c func */
@@ -87696,7 +87683,7 @@ static void op_safe_c_3p_3(s7_scheme *sc)
   set_car(sc->t3_1, sc->args);
   set_car(sc->t3_2, stack_protected1(sc));
   unstack(sc);
-  sc->value = fn_proc(sc->code)(sc, sc->t3_1); /* TODO: possibly p_ppp here? */
+  sc->value = fn_proc(sc->code)(sc, sc->t3_1);
 }
 
 static void op_safe_c_3p_3_mv(s7_scheme *sc)
@@ -89769,9 +89756,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_C_SP_MV: op_safe_c_sp_mv(sc); goto APPLY;
 
 	case OP_SAFE_CONS_SP_1:     sc->value = cons(sc, sc->args, sc->value); continue;
-	case OP_SAFE_VECTOR_SP_1:   sc->value = vector_p_pp(sc, sc->args, sc->value); continue;
+	case OP_SAFE_LIST_SP_1:     sc->value = list_2(sc, sc->args, sc->value); continue;
 	case OP_SAFE_ADD_SP_1:      op_safe_add_sp_1(sc); continue;
-	case OP_SAFE_SUBTRACT_SP_1: sc->value = subtract_p_pp(sc, sc->args, sc->value); continue;
 	case OP_SAFE_MULTIPLY_SP_1: op_safe_multiply_sp_1(sc); continue;
 
 	case OP_SAFE_C_AP: if (!c_function_is_ok(sc, sc->code)) break;
@@ -94614,7 +94600,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 932) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95011,7 +94997,7 @@ int main(int argc, char **argv)
  * tmock      7695         1177   1165   1111   1098
  * tvect      2184         2456   2413   1867   1796
  * s7test     4532         1873   1831   1817   1815
- * lt         2128         2123   2110   2119   2119
+ * lt         2128         2123   2110   2119   2120
  * tform      3258         2281   2273   2274   2270
  * tmac       2503         3317   3277   2436   2373
  * tread      2606         2440   2421   2409   2404
@@ -95019,25 +95005,25 @@ int main(int argc, char **argv)
  * tmat       2683         3065   3042   2524   2527
  * fbench     2965         2688   2583   2542   2542
  * tcopy      2628         8035   5546   2557   2558
- * tb         3362         2735   2681   2565   2565
+ * tb         3362         2735   2681   2565   2564
  * dup        3426         3805   3788   2962   2703
  * titer      2727         2865   2842   2710   2710
  * tsort      3657         3105   3104   2925   2925
  * tset       3275         3253   3104   3244   3211
  * tio        3717         3816   3752   3703   3701
  * teq        3722         4068   4045   3701   3704
- * tstr       6650         5281   4863   4329   4319  4308
+ * tstr       6650         5281   4863   4329   4308
  * tclo       4841         4787   4735   4512   4417
- * tcase      4550         4960   4793   4480   4475
+ * tcase      4550         4960   4793   4480   4474
  * tlet       5555         7775   5640   4488   4488
  * tmap       4816         8270   8188   4730   4730
  * tfft      113.2         7820   7729   4816   4804
- * tnum       59.1         6348   6013   5449   5450
+ * tnum       59.1         6348   6013   5449   5448
  * tmisc      5828         7389   6210   5477   5484
  * tgsl       25.2         8485   7802   6394   6390
  * trec       8493         6936          6563   6563
- * tlist      7196         7896          7216   7192
- * tgc        10.9         11.9   11.1   9070   8796  8781
+ * tlist      7196         7896          7216   7192  7170
+ * tgc        10.9         11.9   11.1   9070   8781
  * thash      36.4         11.8   11.7   10.3   9838
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
@@ -95047,6 +95033,5 @@ int main(int argc, char **argv)
  * tbig      598.5        177.4  175.8  169.6  169.5
  * -------------------------------------------------------
  *
- * combine tlamb tstuff
  * more random vals in t725?
  */
