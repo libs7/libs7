@@ -229,7 +229,7 @@
     (set-cdr! (list-tail increments 7) increments)
     (lambda (z)
       (or (memq z '(2 3 5 7))          ; memv...
-	  (and (positive? (remainder z 2))
+	  (and (odd? z)
 	       (positive? (remainder z 3))	  
 	       (positive? (remainder z 5))	  
 	       (positive? (remainder z 7))
@@ -242,14 +242,17 @@
 		 (set! L (cdr L))))))))
 
 (let ()
-  (define (count-primes limit)          ; for limit=10000000 10.4 secs 664579, 1M=.45 secs
-    (let ((primes 0))
-      (do ((i 2 (+ i 1)))
+  (define (count-primes limit)          ; for limit=10M 9.2 secs 664579, 1M .36 secs 78497 (+1 for 1?)
+    (let ((primes 1))
+      (when (even? limit) 
+	(set! limit (+ limit 1)))
+      (do ((i 3 (+ i 2)))
 	  ((= i limit)
 	   primes)
 	(if (prime? i)
 	    (set! primes (+ primes 1))))))
-  (display (count-primes 100000)) (newline)) ; 9592, 1M=78497 (+1 I suppose for 1?)
+  (display (count-primes 100000)) (newline)) ; 9592
+
 
 ;;; --------------------------------------------------------------------------------
 ;;;
