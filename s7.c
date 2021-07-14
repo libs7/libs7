@@ -39869,11 +39869,11 @@ static s7_pointer g_byte_vector(s7_scheme *sc, s7_pointer args)
   #define Q_byte_vector s7_make_circular_signature(sc, 1, 2, sc->is_byte_vector_symbol, sc->is_byte_symbol)
 
   s7_int i, len;
-  s7_pointer vec, x, b;
+  s7_pointer vec, x, end;
   uint8_t *str;
 
-  len = proper_list_length_with_end(args, &b);
-  if (!is_null(b))
+  len = proper_list_length_with_end(args, &end);
+  if (!is_null(end))
     return(s7_error(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "byte-vector constant data is not a proper list", 46))));
 
   vec = make_simple_byte_vector(sc, len);
@@ -53533,13 +53533,6 @@ static s7_pointer fx_iterate_s(s7_scheme *sc, s7_pointer arg)
   return(method_or_bust_one_arg_p(sc, iter, sc->iterate_symbol, T_ITERATOR));
 }
 
-static s7_pointer fx_read_char_s(s7_scheme *sc, s7_pointer arg) 
-{
-  s7_pointer port;
-  port = lookup(sc, cadr(arg));
-  return((is_input_port(port)) ? chars[port_read_character(port)(sc, port)] : read_char_p_p(sc, port));
-}
-
 static s7_pointer fx_length_s(s7_scheme *sc, s7_pointer arg) {return(s7_length(sc, lookup(sc, cadr(arg))));}
 static s7_pointer fx_length_t(s7_scheme *sc, s7_pointer arg) {return(s7_length(sc, t_lookup(sc, cadr(arg), arg)));}
 
@@ -54205,6 +54198,14 @@ static s7_pointer fx_num_eq_us(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x, y;
   x = u_lookup(sc, cadr(arg), arg);
+  y = lookup(sc, opt2_sym(cdr(arg)));
+  return(make_boolean(sc, ((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) == integer(y)) : num_eq_b_7pp(sc, x, y)));
+}
+
+static s7_pointer fx_num_eq_vs(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x, y;
+  x = v_lookup(sc, cadr(arg), arg);
   y = lookup(sc, opt2_sym(cdr(arg)));
   return(make_boolean(sc, ((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) == integer(y)) : num_eq_b_7pp(sc, x, y)));
 }
@@ -56613,7 +56614,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	      if (car(arg) == sc->is_keyword_symbol)     return(fx_is_keyword_s);
 	      if (car(arg) == sc->is_procedure_symbol)   return(fx_is_procedure_s);
 	      if (car(arg) == sc->length_symbol)         return(fx_length_s);
-	      if (car(arg) == sc->read_char_symbol)      return(fx_read_char_s);
+	      /* not read_char here... */
 	      typ = symbol_type(car(arg));
 	      if (typ > 0)
 		{
@@ -57506,6 +57507,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_subtract_ss) return(with_fx(tree, (caddr(p) == var1) ? fx_subtract_ut : fx_subtract_us));
 	  if (caddr(p) == var3) return(with_fx(tree, fx_c_uv));
 	}
+      if ((cadr(p) == var3) && (fx_proc(tree) == fx_num_eq_ss)) return(with_fx(tree, fx_num_eq_vs));
       break;
 
     case HOP_SAFE_C_AS:
@@ -64949,7 +64951,6 @@ static bool opt_cell_and(s7_scheme *sc, s7_pointer car_x, int32_t len)
 
 /* -------- cell_if -------- */
 static s7_pointer opt_if_bp(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : opt_sc(o)->unspecified);}
-static s7_pointer opt_if_bp_nr(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : NULL);}
 static s7_pointer opt_if_nbp(opt_info *o) {return((o->v[5].fb(o->v[4].o1)) ? opt_sc(o)->unspecified : o->v[11].fp(o->v[10].o1));}
 
 static s7_pointer opt_if_bp_pb(opt_info *o) /* p_to_b at outer, p_to_b expanded and moved to o[3] */
@@ -64990,11 +64991,6 @@ static s7_pointer opt_if_eq_ii_ss(opt_info *o)  /* b_ii_ss */
 static s7_pointer opt_if_nbp_fs(opt_info *o)    /* b_pi_fs */
 {
   return((o->v[2].b_pi_f(opt_sc(o), o->v[5].fp(o->v[4].o1), integer(slot_value(o->v[3].p)))) ? opt_sc(o)->unspecified : o->v[11].fp(o->v[10].o1));
-}
-
-static s7_pointer opt_if_nbp_fs_nr(opt_info *o) /* b_pi_fs */
-{
-  return((o->v[2].b_pi_f(opt_sc(o), o->v[5].fp(o->v[4].o1), integer(slot_value(o->v[3].p)))) ? NULL : o->v[11].fp(o->v[10].o1));
 }
 
 static s7_pointer opt_if_nbp_sf(opt_info *o)    /* b_pp_sf */
@@ -65702,12 +65698,20 @@ static s7_pointer opt_do_list_simple(opt_info *o)
   o1 = do_any_body(o);
 
   fp = o1->v[0].fp;
-  if (fp == opt_if_bp) fp = opt_if_bp_nr; /* opt_car_equal split out here costs more than is saves?! */
-  while (!is_null(slot_value(vp)))
+  if (fp == opt_if_bp) 
     {
-      fp(o1);
-      slot_set_value(vp, cdr(slot_value(vp)));
-    }
+      while (is_pair(slot_value(vp)))
+	{
+	  if (o1->v[3].fb(o1->v[2].o1))
+	    o1->v[5].fp(o1->v[4].o1);
+	  slot_set_value(vp, cdr(slot_value(vp)));
+	}}
+  else
+    while (!is_null(slot_value(vp)))
+      {
+	fp(o1);
+	slot_set_value(vp, cdr(slot_value(vp)));
+      }
   unstack(sc);
   set_curlet(sc, old_e);
   return(sc->T);
@@ -80788,9 +80792,9 @@ static goto_t op_dox(s7_scheme *sc)
 			{
 			  if (is_step_end(stepper))
 			    {
-			      s7_int end;
-			      end = do_loop_end(slot_value(stepper));
-			      do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < end);
+			      s7_int lim;
+			      lim = do_loop_end(slot_value(stepper));
+			      do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < lim);
 			      sc->value = sc->T;
 			    }
 			  else
@@ -81891,13 +81895,23 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  else
 		    {
 		      if (fp == opt_if_bp)
-			fp = opt_if_bp_nr;
+			{
+			  for (; integer(stepper) < end; integer(stepper)++) 
+			    if (o->v[3].fb(o->v[2].o1)) o->v[5].fp(o->v[4].o1);
+			}
 		      else
 			if (fp == opt_if_nbp_fs)
-			  fp = opt_if_nbp_fs_nr;
-		      if (fp == opt_unless_p_1)
-			for (; integer(stepper) < end; integer(stepper)++) {if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);}
-		      else for (; integer(stepper) < end; integer(stepper)++) fp(o);
+			  {
+			    for (; integer(stepper) < end; integer(stepper)++) 
+			      if (!(o->v[2].b_pi_f(sc, o->v[5].fp(o->v[4].o1), integer(slot_value(o->v[3].p))))) o->v[11].fp(o->v[10].o1);
+			  }
+			else
+			  if (fp == opt_unless_p_1)
+			    {
+			      for (; integer(stepper) < end; integer(stepper)++) 
+				if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);
+			    }
+			  else for (; integer(stepper) < end; integer(stepper)++) fp(o);
 		    }}}
 	  else
 	    {
@@ -95012,7 +95026,7 @@ int main(int argc, char **argv)
 /* -------------------------------------------------------
  *             gmp (6-10)  20.9   21.0   21.5   21.6
  * -------------------------------------------------------
- * tpeak       126          115    114    112    111
+ * tpeak       126          115    114    112    111   109
  * tref        530          691    687    480    477
  * tauto       775          648    642    503    497
  * tshoot     1506          883    872    837    812
@@ -95025,21 +95039,21 @@ int main(int argc, char **argv)
  * tmac       2503         3317   3277   2436   2373
  * tread      2606         2440   2421   2409   2404
  * trclo      4252         2715   2561   2459   2459
- * tmat       2683         3065   3042   2524   2527
+ * tmat       2683         3065   3042   2524   2534
  * fbench     2965         2688   2583   2542   2542
  * tcopy      2628         8035   5546   2557   2558
  * tb         3362         2735   2681   2565   2564
  * dup        3426         3805   3788   2962   2703
  * titer      2727         2865   2842   2710   2710
- * tsort      3657         3105   3104   2925   2925
+ * tsort      3657         3105   3104   2925   2924
  * tset       3275         3253   3104   3244   3211
  * tio        3717         3816   3752   3703   3701
- * teq        3722         4068   4045   3701   3704
- * tstr       6650         5281   4863   4329   4308
+ * teq        3722         4068   4045   3701   3704  3578
+ * tstr       6650         5281   4863   4329   4319
  * tclo       4841         4787   4735   4512   4417
  * tcase      4550         4960   4793   4480   4474
  * tlet       5555         7775   5640   4488   4488
- * tmap       4816         8270   8188   4730   4730
+ * tmap       4816         8270   8188   4730   4730  4719
  * tfft      113.2         7820   7729   4816   4804
  * tnum       59.1         6348   6013   5449   5448
  * tmisc      5828         7389   6210   5477   5484
@@ -95056,6 +95070,8 @@ int main(int argc, char **argv)
  * tbig      598.5        177.4  175.8  169.6  169.5
  * -------------------------------------------------------
  *
- * more random vals in t725?
- * check v for do: fx_add_t_car_v fx_is_eof_u fx_num_eq_vi[check this], add fx_c_vs?
+ * more random vals in t725? and current str!
+ * tests7 
+ * more if*nr? opt_float_any_nr/op_dox/sg, also gsl, opt_bool_any_nr/misc/g_for_each_closure, 
+ *   maybe opt_cell_any_nr/misc/map/list/g_for_each_closure, all same (list traverse)
  */

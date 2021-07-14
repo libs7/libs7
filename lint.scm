@@ -7746,6 +7746,21 @@
 			      ((numerator)              ; (negative? (numerator x)) -> (negative? x)
 			       (lint-format "perhaps ~A" caller (lists->string form (list head (cadr arg)))))
 
+			      ((remainder modulo)
+			       (if (integer? (caddr arg))
+				   (if (and (eq? head 'zero?)
+					    (= (caddr arg) 2))
+				       (lint-format "perhaps (assuming ~A is an integer) ~A"
+						    caller (cadr arg) (lists->string form `(even? ,(cadr arg))))
+				       (if (and (eq? (car arg) 'modulo)
+						(not (eq? head 'zero?))
+						(not (zero? (caddr arg))))
+					   (lint-format "perhaps ~A" caller 
+							(lists->string form (case head
+									      ((positive?) (positive? (caddr arg)))
+									      ((negative?) (negative? (caddr arg)))
+									      (else #f))))))))
+
 			      ((string-length)          ; (zero? (string-length x)) -> (string=? x "")
 			       (if (eq? head 'zero?)
 				   (lint-format "perhaps ~A" caller (lists->string form (list 'string=? (cadr arg) "")))))
@@ -19214,9 +19229,9 @@
 					     (eqv? (caddr step) 1)          ; (- v 1)
 					     (case (car end-test)
 					       ((< = <=)                    ; (< ...) or (negative? ...)
-						(null? (cdddr step)))
-					       ((negative?
-						 (null? (cddr step))))
+						(null? (cdddr end-test)))
+					       ((negative?)
+						(null? (cddr end-test)))
 					       (else #f))))
 				       (else #f))
 				     (or (eq? (cadr end-test) vname)
