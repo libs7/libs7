@@ -51061,7 +51061,7 @@ static void op_c_catch_all(s7_scheme *sc)
   sc->curlet = make_let(sc, sc->curlet);
   catch_all_set_goto_loc(sc->curlet, current_stack_top(sc));
   catch_all_set_op_loc(sc->curlet, sc->op_stack_now - sc->op_stack);
-  push_stack_direct(sc, OP_CATCH_ALL);
+  push_stack_no_args_direct(sc, OP_CATCH_ALL);       /* used to GC protect sc->args here and below, 14-Jul-21 */
   sc->code = T_Pair(opt1_pair(cdr(sc->code)));       /* the body of the first lambda (or car of it if catch_all_o) */
 }
 
@@ -51070,7 +51070,7 @@ static Inline void op_c_catch_all_a(s7_scheme *sc)
   sc->curlet = make_let(sc, sc->curlet);
   catch_all_set_goto_loc(sc->curlet, current_stack_top(sc));
   catch_all_set_op_loc(sc->curlet, sc->op_stack_now - sc->op_stack);
-  push_stack_direct(sc, OP_CATCH_ALL);
+  push_stack_no_args_direct(sc, OP_CATCH_ALL);
   sc->value = fx_call(sc, opt1_pair(cdr(sc->code)));
 }
 
@@ -61790,7 +61790,7 @@ static bool opt_b_7pp_car_sf(opt_info *o)
   return(o->v[3].b_7pp_f(opt_sc(o), slot_value(o->v[1].p), (is_pair(p)) ? car(p) : g_car(opt_sc(o), set_plist_1(opt_sc(o), p))));
 }
 
-static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o)
+static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o) /* "inline" here rather than copying below is much slower? */
 {
   return(substring_uncopied_p_pii(opt_sc(o), slot_value(o->v[1].p),
 				  s7_integer_checked(opt_sc(o), slot_value(o->v[2].p)),
@@ -63789,159 +63789,157 @@ static bool p_fx_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_poin
 
 static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, int32_t len)
 {
-  s7_pointer obj;
-  obj = slot_value(s_slot);
+  s7_pointer obj = slot_value(s_slot);
+  opt_info *opc;
+  int32_t start;
 
-  if (is_sequence(obj))
+  if ((!is_sequence(obj)) || (len < 2))
+    return_false(sc, car_x);
+
+  opc = alloc_opo(sc);
+  opc->v[1].p = s_slot;
+  start = sc->pc;
+  if (len == 2)
     {
-      opt_info *opc;
-      int32_t start;
-      opc = alloc_opo(sc);
-      opc->v[1].p = s_slot;
-      start = sc->pc;
-      if (len == 2)
+      switch (type(obj))
 	{
-	  switch (type(obj))
+	case T_PAIR:       opc->v[3].p_pi_f = list_ref_p_pi_unchecked;   break;
+	case T_HASH_TABLE: opc->v[3].p_pp_f = s7_hash_table_ref;         break;
+	case T_LET:        opc->v[3].p_pp_f = s7_let_ref;	             break;
+	case T_STRING:     opc->v[3].p_pi_f = string_ref_p_pi_unchecked; break;
+	case T_C_OBJECT:   return_false(sc, car_x); /* no pi_ref because ref assumes pp */
+	  
+	case T_VECTOR:
+	  if (vector_rank(obj) != 1)
+	    return_false(sc, car_x);
+	  opc->v[3].p_pi_f = normal_vector_ref_p_pi_unchecked;
+	  break;
+	  
+	case T_BYTE_VECTOR:
+	case T_INT_VECTOR:
+	case T_FLOAT_VECTOR:
+	  if (vector_rank(obj) != 1)
+	    return_false(sc, car_x);
+	  opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
+	  break;
+	  
+	default:
+	  return_false(sc, car_x);
+	}
+      /* now v3.p_pi|pp.f is set */
+      if (is_symbol(cadr(car_x)))
+	{
+	  s7_pointer slot;
+	  slot = lookup_slot_from(cadr(car_x), sc->curlet);
+	  if (is_slot(slot))
 	    {
-	    case T_PAIR:       opc->v[3].p_pi_f = list_ref_p_pi_unchecked;   break;
-	    case T_HASH_TABLE: opc->v[3].p_pp_f = s7_hash_table_ref;         break;
-	    case T_LET:        opc->v[3].p_pp_f = s7_let_ref;	             break;
-	    case T_STRING:     opc->v[3].p_pi_f = string_ref_p_pi_unchecked; break;
-	    case T_C_OBJECT:   return_false(sc, car_x); /* no pi_ref because ref assumes pp */
-
-	    case T_VECTOR:
-	      if (vector_rank(obj) != 1)
-		return_false(sc, car_x);
-	      opc->v[3].p_pi_f = normal_vector_ref_p_pi_unchecked;
-	      break;
-
-	    case T_BYTE_VECTOR:
-	    case T_INT_VECTOR:
-	    case T_FLOAT_VECTOR:
-	      if (vector_rank(obj) != 1)
-		return_false(sc, car_x);
-	      opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
-	      break;
-
-	    default:
-	      return_false(sc, car_x);
-	    }
-	  /* now v3.p_pi|pp.f is set */
-	  if (is_symbol(cadr(car_x)))
-	    {
-	      s7_pointer slot;
-	      slot = lookup_slot_from(cadr(car_x), sc->curlet);
-	      if (is_slot(slot))
-		{
-		  opc->v[2].p = slot;
-		  if ((!is_hash_table(obj)) && /* these because opt_int below */
-		      (!is_let(obj)))
-		    {
-		      if (!is_t_integer(slot_value(slot)))
-			return_false(sc, car_x); /* I think this reflects that a non-int index is an error for list-ref et al */
-		      opc->v[0].fp = opt_p_pi_ss;
-		      if (is_step_end(opc->v[2].p))
-			check_unchecked(sc, obj, opc->v[2].p, opc, NULL);
-		      return(true);
-		    }
-		  opc->v[0].fp = opt_p_pp_ss;
-		  return(true);
-		}}
-	  else
-	    {
-	      if ((!is_hash_table(obj)) &&
+	      opc->v[2].p = slot;
+	      if ((!is_hash_table(obj)) && /* these because opt_int below */
 		  (!is_let(obj)))
 		{
-		  opt_info *o1;
-		  if (is_t_integer(cadr(car_x)))
-		    {
-		      opc->v[2].i = integer(cadr(car_x));
-		      opc->v[0].fp = opt_p_pi_sc;
-		      return(true);
-		    }
-		  o1 = sc->opts[sc->pc];
-		  if (!int_optimize(sc, cdr(car_x)))
-		    return_false(sc, car_x);
-		  opc->v[0].fp = opt_p_pi_sf;
-		  opc->v[4].o1 = o1;
-		  opc->v[5].fi = o1->v[0].fi;
+		  if (!is_t_integer(slot_value(slot)))
+		    return_false(sc, car_x); /* I think this reflects that a non-int index is an error for list-ref et al */
+		  opc->v[0].fp = opt_p_pi_ss;
+		  if (is_step_end(opc->v[2].p))
+		    check_unchecked(sc, obj, opc->v[2].p, opc, NULL);
 		  return(true);
 		}
-	      if (cell_optimize(sc, cdr(car_x)))
-		{
-		  opc->v[0].fp = opt_p_pp_sf;
-		  opc->v[4].o1 = sc->opts[start];
-		  opc->v[5].fp = sc->opts[start]->v[0].fp;
-		  return(true);
-		}}} /* len==2 */
+	      opc->v[0].fp = opt_p_pp_ss;
+	      return(true);
+	    }}
       else
 	{
-	  if (len > 2)
+	  if ((!is_hash_table(obj)) &&
+	      (!is_let(obj)))
 	    {
-	      if ((is_normal_vector(obj)) && (len == 3) && (vector_rank(obj) == 2))
+	      opt_info *o1;
+	      if (is_t_integer(cadr(car_x)))
 		{
-		  s7_pointer slot;
-		  slot = opt_integer_symbol(sc, caddr(car_x));
-		  if (slot)
-		    {
-		      opc->v[3].p = slot;
-		      slot = opt_integer_symbol(sc, cadr(car_x));
-		      if (slot)
-			{
-			  opc->v[2].p = slot;
-			  opc->v[4].p_pii_f = vector_ref_p_pii;
-			  opc->v[0].fp = opt_p_pii_sss;
-			  if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
-			      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
-			    opc->v[0].fp = vector_ref_pii_sss_unchecked;
-			  return(true);
-			}}
-		  opc->v[10].o1 = sc->opts[sc->pc];
-		  if (int_optimize(sc, cdr(car_x)))
-		    {
-		      opc->v[8].o1 = sc->opts[sc->pc];
-		      if (int_optimize(sc, cddr(car_x)))
-			{
-			  opc->v[0].fp = opt_p_pii_sff;
-			  opc->v[11].fi = opc->v[10].o1->v[0].fi;
-			  opc->v[9].fi = opc->v[8].o1->v[0].fi;
-			  /* opc->v[1].p set above */
-			  opc->v[4].p_pii_f = vector_ref_p_pii_direct;
-			  return(true);
-			}}
-		  pc_fallback(sc, start);
+		  opc->v[2].i = integer(cadr(car_x));
+		  opc->v[0].fp = opt_p_pi_sc;
+		  return(true);
 		}
-
-	      if (len < (NUM_VUNIONS - 4))  /* mimic p_call_any_ok */
+	      o1 = sc->opts[sc->pc];
+	      if (!int_optimize(sc, cdr(car_x)))
+		return_false(sc, car_x);
+	      opc->v[0].fp = opt_p_pi_sf;
+	      opc->v[4].o1 = o1;
+	      opc->v[5].fi = o1->v[0].fi;
+	      return(true);
+	    }
+	  if (cell_optimize(sc, cdr(car_x)))
+	    {
+	      opc->v[0].fp = opt_p_pp_sf;
+	      opc->v[4].o1 = sc->opts[start];
+	      opc->v[5].fp = sc->opts[start]->v[0].fp;
+	      return(true);
+	    }}} /* len==2 */
+  else
+    { /* len > 2 */
+      if ((is_normal_vector(obj)) && (len == 3) && (vector_rank(obj) == 2))
+	{
+	  s7_pointer slot;
+	  slot = opt_integer_symbol(sc, caddr(car_x));
+	  if (slot)
+	    {
+	      opc->v[3].p = slot;
+	      slot = opt_integer_symbol(sc, cadr(car_x));
+	      if (slot)
 		{
-		  int32_t pctr;
-		  s7_pointer p;
-		  opc->v[1].i = len;
-		  for (pctr = 3, p = car_x; is_pair(p); pctr++, p = cdr(p))
-		    {
-		      opc->v[pctr].o1 = sc->opts[sc->pc];
-		      if (!cell_optimize(sc, p))
-			break;
-		    }
-		  if (is_null(p))
-		    {
-		      /* todo??: here we know the vector rank/type, probably can handle the new value type, and maybe indices/dimensions,
-		       *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize
-		       */
-		      opc->v[0].fp = opt_p_call_any;
-		      switch (type(obj))     /* string can't happen here (no multidimensional strings) */
-			{
-			case T_PAIR:         opc->v[2].call = g_list_ref;           break;
-			case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
-			  /* case T_LET:     opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
-			case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
-			case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
-			case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
-			case T_VECTOR:       opc->v[2].call = g_vector_ref;         break;
-			default:             return_false(sc, car_x);
-			}
-		      return(true);
-		    }}}}} /* obj is sequence */
+		  opc->v[2].p = slot;
+		  opc->v[4].p_pii_f = vector_ref_p_pii;
+		  opc->v[0].fp = opt_p_pii_sss;
+		  if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+		      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
+		    opc->v[0].fp = vector_ref_pii_sss_unchecked;
+		  return(true);
+		}}
+	  opc->v[10].o1 = sc->opts[sc->pc];
+	  if (int_optimize(sc, cdr(car_x)))
+	    {
+	      opc->v[8].o1 = sc->opts[sc->pc];
+	      if (int_optimize(sc, cddr(car_x)))
+		{
+		  opc->v[0].fp = opt_p_pii_sff;
+		  opc->v[11].fi = opc->v[10].o1->v[0].fi;
+		  opc->v[9].fi = opc->v[8].o1->v[0].fi;
+		  /* opc->v[1].p set above */
+		  opc->v[4].p_pii_f = vector_ref_p_pii_direct;
+		  return(true);
+		}}
+	  pc_fallback(sc, start);
+	}
+      
+      if (len < (NUM_VUNIONS - 4))  /* mimic p_call_any_ok */
+	{
+	  int32_t pctr;
+	  s7_pointer p;
+	  opc->v[1].i = len;
+	  for (pctr = 3, p = car_x; is_pair(p); pctr++, p = cdr(p))
+	    {
+	      opc->v[pctr].o1 = sc->opts[sc->pc];
+	      if (!cell_optimize(sc, p))
+		break;
+	    }
+	  if (is_null(p))
+	    {
+	      /* todo??: here we know the vector rank/type, probably can handle the new value type, and maybe indices/dimensions,
+	       *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize
+	       */
+	      opc->v[0].fp = opt_p_call_any;
+	      switch (type(obj))     /* string can't happen here (no multidimensional strings) */
+		{
+		case T_PAIR:         opc->v[2].call = g_list_ref;           break;
+		case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
+		  /* case T_LET:     opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
+		case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
+		case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
+		case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
+		case T_VECTOR:       opc->v[2].call = g_vector_ref;         break;
+		default:             return_false(sc, car_x);
+		}
+	      return(true);
+	    }}}
   return_false(sc, car_x);
 }
 
@@ -66958,6 +66956,21 @@ static s7_pointer seq_init(s7_scheme *sc, s7_pointer seq)
 
 #define MUTLIM 32 /* was 1000 */
 
+#define for_each_any_list(Code)		        \
+  do {					        \
+      for (x = seq, y = x; is_pair(x); )        \
+        {					\
+          slot_set_value(slot, car(x));		\
+          Code;					\
+          x = cdr(x);				\
+          if (is_pair(x))			\
+            {					\
+              slot_set_value(slot, car(x));	\
+              Code;				\
+              y = cdr(y);	x = cdr(x);	\
+	      if (x == y) break;		\
+            }}} while (0)
+
 static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
 {
   s7_pointer body = closure_body(f);
@@ -66984,19 +66997,12 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	  if (is_pair(seq))
 	    {
 	      s7_pointer x, y;
-	      for (x = seq, y = x; is_pair(x); )
+	      if (func == opt_cell_any_nr) /* this block saves less than 0.5% */
 		{
-		  slot_set_value(slot, car(x));
-		  func(sc);
-		  x = cdr(x);
-		  if (is_pair(x))
-		    {
-		      slot_set_value(slot, car(x));
-		      func(sc);
-		      y = cdr(y);
-		      x = cdr(x);
-		      if (x == y) break;
-		    }}
+		  opt_info *o = sc->opts[0];
+		  for_each_any_list(o->v[0].fp(o));
+		}
+	      else for_each_any_list(func(sc));
 	      return(sc->unspecified);
 	    }
 	  if (is_float_vector(seq))
@@ -67115,10 +67121,12 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	      slot_set_value(slot, s7_iterate(sc, seq));
 	      if (iterator_is_at_end(seq)) {unstack(sc); return(sc->unspecified);}
 	      func(sc);
-	    }}
-      set_no_cell_opt(body);
-      set_curlet(sc, old_e);
-    }
+	    }} /* we never get here -- the while loops above exit via return #<unspecified> */
+      else /* not func -- unneeded "else" but otherwise confusing code */
+	{
+	  set_no_cell_opt(body);
+	  set_curlet(sc, old_e);
+	}}
   if ((!is_closure_star(f)) &&
       (is_null(cdr(body))) &&
       (is_pair(seq)))
@@ -80265,7 +80273,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		  if ((one_line) &&
 		      ((!is_optimized(car(body))) || (op_no_hop(car(body)) != OP_SAFE_C_NC)) && /* this does happen: (if (= i 3) (vector-set! j 0 i)) */
 		      (is_symbol_and_syntactic(caar(body))) &&
-		      (s7_is_integer(caddr(step_expr))) &&
+		      (s7_is_integer(caddr(step_expr))) && /* this currently blocks s7_optimize of float steppers */
 		      (s7_integer_checked(sc, caddr(step_expr)) == 1))
 		    {
 		      pair_set_syntax_op(car(body), symbol_syntax_op_checked(car(body)));
@@ -95053,13 +95061,13 @@ int main(int argc, char **argv)
  * tclo       4841         4787   4735   4512   4417
  * tcase      4550         4960   4793   4480   4474
  * tlet       5555         7775   5640   4488   4488
- * tmap       4816         8270   8188   4730   4730  4719
+ * tmap       4816         8270   8188   4730   4730  4719 4711
  * tfft      113.2         7820   7729   4816   4804
  * tnum       59.1         6348   6013   5449   5448
- * tmisc      5828         7389   6210   5477   5484
+ * tmisc      5828         7389   6210   5477   5484       5472 5449
  * tgsl       25.2         8485   7802   6394   6390
  * trec       8493         6936          6563   6563
- * tlist      7196         7896          7216   7170
+ * tlist      7196         7896          7216   7170       7162
  * tgc        10.9         11.9   11.1   9070   8781
  * thash      36.4         11.8   11.7   10.3   9838
  * tgen       12.3         11.2   11.4   11.4   11.4
@@ -95071,7 +95079,6 @@ int main(int argc, char **argv)
  * -------------------------------------------------------
  *
  * more random vals in t725? and current str!
- * tests7 
- * more if*nr? opt_float_any_nr/op_dox/sg, also gsl, opt_bool_any_nr/misc/g_for_each_closure, 
- *   maybe opt_cell_any_nr/misc/map/list/g_for_each_closure, all same (list traverse)
+ * to add cell/float stepper do opts, so fold opt_dotimes into op_simple_do, as in dotimes or op_dox [calls it at 80778]
+ *   so op_simple_do is incomplete, or maybe it should check for op_dox, but 81705 quits if non-int step -- does op_simple_do_1 care? are there any real cases?
  */
