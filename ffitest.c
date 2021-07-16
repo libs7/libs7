@@ -575,6 +575,13 @@ int main(int argc, char **argv)
   
   sc = s7_init();
   cur_sc = sc;
+
+  {
+    char b1[32];
+    snprintf(b1, 32, "%d.%d", S7_MAJOR_VERSION, S7_MINOR_VERSION);
+    if (strcmp(b1, S7_VERSION) != 0) fprintf(stderr, "version mismatch: %d.%d != %s\n", S7_MAJOR_VERSION, S7_MINOR_VERSION, S7_VERSION);
+    if (strlen(S7_DATE) < 6) fprintf(stderr, "S7_DATE: %s\n", S7_DATE);
+  }
   
   /* try each straight (no errors) case */
 
@@ -720,6 +727,11 @@ int main(int argc, char **argv)
   if (s7_number_to_integer_with_caller(sc, p, "ffitest") != 123)
     {fprintf(stderr, "%d: s7_number_to_integer_with_caller %s is not 123?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
+  if (!s7_is_string(s7_object_to_string(sc, p, false)))
+    fprintf(stderr, "%s is not a string\n", s7_object_to_c_string(sc, s7_object_to_string(sc, p, false)));
+  if (strcmp(s7_string(s7_object_to_string(sc, p, true)), "123") != 0)
+    fprintf(stderr, "%s is not \"123\"", s7_string(s7_object_to_string(sc, p, true)));
+
   s7_gc_unprotect_at(sc, gc_loc);
   
 
@@ -789,6 +801,8 @@ int main(int argc, char **argv)
 
   if (s7_number_to_real(sc, p) != 1.5)
     {fprintf(stderr, "%d: s7_number_to_real %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_number_to_real_with_caller(sc, p, "ffitest") != 1.5)
+    {fprintf(stderr, "%d: s7_number_to_real_with_caller %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   s7_gc_unprotect_at(sc, gc_loc);
 
@@ -981,10 +995,42 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   if (strcmp(s7_string(p), "1234") != 0)
-    {fprintf(stderr, "%d: %s is \"1234\"?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    {fprintf(stderr, "%d: %s is not \"1234\"?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+
+  if (strcmp(s7_string(s7_copy(sc, s7_cons(sc, p, s7_nil(sc)))), "1234") != 0)
+    {fprintf(stderr, "%d: copy(%s) is not \"1234\"?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+
+  s7_fill(sc, s7_cons(sc, p, s7_cons(sc, s7_make_character(sc, 'c'), s7_nil(sc))));
+  if (strcmp(s7_string(p), "cccc") != 0)
+    {fprintf(stderr, "%d: fill(%s) is not \"cccc\"?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   s7_gc_unprotect_at(sc, gc_loc);
 
+  p = s7_make_permanent_string(sc, "asdf");
+  if (!s7_is_string(p))
+    {fprintf(stderr, "%d: %s is not a string?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_string_length(p) != 4)
+    {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+
+  {
+    s7_int gc_loc;
+    s7_pointer q;
+    p = s7_make_string_with_length(sc, "asdf", 4);
+    gc_loc = s7_gc_protect(sc, p);
+    if (!s7_is_string(p))
+      {fprintf(stderr, "%d: %s is not a string?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    if (s7_string_length(p) != 4)
+      {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    s7_gc_protect_via_location(sc, q = s7_make_string(sc, "fdsa"), gc_loc);
+    if (q != s7_gc_protected_at(sc, gc_loc))
+      fprintf(stderr, "%d: wrong thing at gc_loc? %s\n", __LINE__, TO_STR(s7_gc_protected_at(sc, gc_loc)));
+    s7_gc_unprotect_via_location(sc, gc_loc);
+    p = s7_make_string_wrapper(sc, "hiho");
+    if (!s7_is_string(p))
+      {fprintf(stderr, "%d: %s is not a string?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    if (s7_string_length(p) != 4)
+      {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  }
   
   p = s7_make_character(sc, 65);
   if (!s7_is_character(p))
@@ -1025,6 +1071,14 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: (%s 1) is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   
   s7_gc_unprotect_at(sc, gc_loc);
+
+  p = s7_make_list(sc, 3, s7_make_integer(sc, 123));
+  if (!s7_is_list(sc, p))
+    {fprintf(stderr, "%d: %s is not a list?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_list_length(sc, p) != 3)
+    {fprintf(stderr, "%d: (length %s) is not 3?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_integer(s7_list_ref(sc, p, 1)) != 123)
+    {fprintf(stderr, "%d: (%s 1) is not 123?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   p = s7_list_nl(sc, 3, TO_S7_INT(1), TO_S7_INT(2), TO_S7_INT(3), NULL);
   gc_loc = s7_gc_protect(sc, p);
@@ -1236,6 +1290,9 @@ int main(int argc, char **argv)
   if (!s7_is_symbol(p))
     {fprintf(stderr, "%d: %s is not a symbol?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   
+  if (s7_is_syntax(p))
+    {fprintf(stderr, "%d: %s is syntax?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  
   p = s7_gensym(sc, "abs");
   if (!s7_is_symbol(p))
     {fprintf(stderr, "%d: %s is not a symbol?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
@@ -1262,7 +1319,29 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: a_constant is not a constant?\n", __LINE__);}
   if (!s7_is_defined(sc, "a_constant"))
     {fprintf(stderr, "%d: a_constant is not defined?\n", __LINE__);}
-  
+  p = s7_symbol_table_find_name(sc, "a_constant");
+  if (!s7_is_symbol(p))
+    {fprintf(stderr, "%d: %s is not a symbol (from s7_symbol_find_name)?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+
+  s7_define_constant_with_documentation(sc, "another_constant", s7_t(sc), "another constant");
+  if (s7_name_to_value(sc, "another_constant") != s7_t(sc))
+    {fprintf(stderr, "%d: another_constant: %s?\n", __LINE__, s1 = TO_STR(s7_name_to_value(sc, "another_constant"))); free(s1);}
+  {
+    const char *s;
+    s = s7_documentation(sc, s7_make_symbol(sc, "another_constant"));
+    if ((!s) || (strcmp(s1, "another constant") != 0))
+      fprintf(stderr, "%d: another_constant doc: %s\n", __LINE__, s);
+  }
+  s7_define_variable_with_documentation(sc, "another_variable", s7_t(sc), "another variable");
+  if (s7_name_to_value(sc, "another_variable") != s7_t(sc))
+    {fprintf(stderr, "%d: another_variable: %s?\n", __LINE__, s1 = TO_STR(s7_name_to_value(sc, "another_variable"))); free(s1);}
+  {
+    const char *s;
+    s = s7_documentation(sc, s7_make_symbol(sc, "another_variable"));
+    if ((!s) || (strcmp(s, "another variable") != 0))
+      fprintf(stderr, "%d: another_variable doc: %s\n", __LINE__, s);
+  }
+
   s7_define_function(sc, "a_function", a_function, 1, 0, false, "a function");
   if (!s7_is_defined(sc, "a_function"))
     {fprintf(stderr, "%d: a_function is not defined?\n", __LINE__);}
@@ -1571,13 +1650,39 @@ int main(int argc, char **argv)
       free(s1);
       s7_gc_unprotect_at(sc, gloc);
     }
+
+    s7_define_constant_with_environment(sc, new_env, "new-env-var", s7_make_integer(sc, 123));
+    if (s7_integer(s7_name_to_value(sc, "new-env-var")) != 123)
+      fprintf(stderr, "%d: constant: %s\n", __LINE__, TO_STR(s7_name_to_value(sc, "new-env-var")));
+
     s7_set_curlet(sc, old_env);
     s7_gc_unprotect_at(sc, gc_loc);
   }
 
+  {
+    s7_pointer e, yp, old_e, arg;
+    e = s7_sublet(sc, s7_curlet(sc), s7_nil(sc));
+    s7_gc_protect_via_stack(sc, e);
+    old_e = s7_set_curlet(sc, e);
+    arg = s7_make_symbol(sc, "arg");
+    yp = s7_make_slot(sc, e, arg, s7_make_mutable_real(sc, 1.0));
+    if (s7_real(s7_slot_value(yp)) != 1.0)
+      {fprintf(stderr, "%d: mutable real slot-value %s is not 1.0?\n", __LINE__, s1 = TO_STR(s7_slot_value(yp))); free(s1);}
+    s7_slot_set_real_value(sc, yp, 2.0);
+    if (s7_real(s7_slot_value(yp)) != 2.0)
+      {fprintf(stderr, "%d: mutable real slot-value %s is not 2.0?\n", __LINE__, s1 = TO_STR(s7_slot_value(yp))); free(s1);}
+    s7_varlet(sc, e, s7_make_symbol(sc, "new-var"), s7_make_integer(sc, 123));
+    if (s7_integer(s7_name_to_value(sc, "new-var")) != 123)
+      fprintf(stderr, "%d: new-var: %s\n", __LINE__, TO_STR(s7_name_to_value(sc, "new-var")));
+    s7_set_curlet(sc, old_e);
+    s7_gc_unprotect_via_stack(sc, e);
+  }
+
   if (!s7_is_list(sc, p = s7_load_path(sc)))
     {fprintf(stderr, "%d: %s is not a list?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-
+  s7_add_to_load_path(sc, "/home/bil/");
+  if (!s7_is_pair(s7_member(sc, s7_make_string(sc, "/home/bil/"), s7_load_path(sc))))
+    fprintf(stderr, "/home/bil/ not in *load-path*: %s\n", TO_STR(s7_load_path(sc)));
 
   {
     s7_pointer port;
@@ -1614,6 +1719,7 @@ int main(int argc, char **argv)
 	    else
 	      {
 		uint8_t c;
+		const char *filename;
 		gc_loc = s7_gc_protect(sc, port);
 		c = s7_character(s7_peek_char(sc, port));
 		if (c != (int)'(')
@@ -1622,6 +1728,10 @@ int main(int argc, char **argv)
 		c = s7_character(s7_read_char(sc, port));
 		if (c != (uint8_t)'(')
 		  {fprintf(stderr, "%d: read-char sees %c?\n", __LINE__, (unsigned char)c);}
+
+		filename = s7_port_filename(sc, port);
+		if (strcmp(filename, "ffitest.scm") != 0)
+		  fprintf(stderr, "%d: s7_port_filename: %s\n", __LINE__, filename);
 		
 		s7_close_input_port(sc, port);
 		s7_gc_unprotect_at(sc, gc_loc);
@@ -1874,6 +1984,11 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: (aritable? abs 1) = #f?\n", __LINE__);}
   if (s7_is_aritable(sc, p1, 2))
     {fprintf(stderr, "%d: (aritable? abs 2) = #t?\n", __LINE__);}
+  p = s7_arity(sc, p1);
+  if ((!s7_is_pair(p)) || (s7_integer(s7_car(p)) != 1) || (s7_integer(s7_cdr(p)) != 1))
+    {fprintf(stderr, "%d: (arity abs) = %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_is_proper_list(sc, p))
+    fprintf(stderr, "%d: arity is a proper-list?\n", __LINE__);
 
   p = s7_funclet(sc, p1);
   if (p != s7_rootlet(sc))
@@ -2186,6 +2301,16 @@ int main(int argc, char **argv)
     if (result != s7_make_symbol(sc, "abc"))
       fprintf(stderr, "hash-code: %s\n", s7_object_to_c_string(sc, result));
     s7_gc_unprotect_at(sc, gc_loc);
+  }
+
+  {
+    s7_pointer p, q;
+    p = s7_random_state(sc, s7_cons(sc, s7_make_integer(sc, 123456), s7_cons(sc, s7_make_integer(sc, 654321), s7_nil(sc))));
+    if (s7_type_of(sc, p) != s7_make_symbol(sc, "random-state?"))
+      fprintf(stderr, "%d: s7_random_state returned %s\n", __LINE__, TO_STR(p));
+    q = s7_random_state_to_list(sc, s7_cons(sc, p, s7_nil(sc)));
+    if (!s7_is_pair(q))
+      fprintf(stderr, "%d: s7_random_state_to_list is %s\n", __LINE__, TO_STR(q));
   }
 
   s7_free(sc);

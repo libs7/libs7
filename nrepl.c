@@ -389,5 +389,17 @@ static int nrepl(s7_scheme *sc)
 	  (if (char=? c #\newline)
 	      (format op "~%  ")))))))
 
+  xxd can create the array, but you need to tack on the trailing 0
+  Christos Vagias suggests:
+
+    xxd -i < scheme_file.scm > scheme_file.xxd; echo ", 0x00" >>  scheme_file.xxd
+    and scheme_file.xxd will look like
+      0x01, 0x02, 0xAA,.....
+      , 0x00
+    And then in code
+      const char main_scm[] = {
+      #include "./resources/main_scm.xxd"
+      };
+
 */
 #endif
