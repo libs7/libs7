@@ -582,6 +582,9 @@ int main(int argc, char **argv)
     if (strcmp(b1, S7_VERSION) != 0) fprintf(stderr, "version mismatch: %d.%d != %s\n", S7_MAJOR_VERSION, S7_MINOR_VERSION, S7_VERSION);
     if (strlen(S7_DATE) < 6) fprintf(stderr, "S7_DATE: %s\n", S7_DATE);
   }
+
+  s7_set_history_enabled(sc, false);
+  if (s7_history_enabled(sc)) fprintf(stderr, "%d: history is enabled\n", __LINE__);
   
   /* try each straight (no errors) case */
 
@@ -907,6 +910,8 @@ int main(int argc, char **argv)
     if (s7_vector_rank(p) != 2) fprintf(stderr, "int vector rank not 2?\n");
     p = s7_make_float_vector(sc, 6, 2, dims);
     if (s7_vector_rank(p) != 2) fprintf(stderr, "float vector rank not 2?\n");
+    if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %ld\n", __LINE__, s7_vector_dimension(p, 0));
+    if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %ld\n", __LINE__, s7_vector_dimension(p, 1));
     free(dims); /* ?? */
 
     p = s7_make_float_vector(sc, 6, 1, NULL);
@@ -918,7 +923,7 @@ int main(int argc, char **argv)
   }
 
   {
-    s7_pointer p;
+    s7_pointer p, q;
     s7_int *els;
     p = s7_make_int_vector(sc, 6, 1, NULL);
     s7_int_vector_set(p, 1, 32);
@@ -926,6 +931,10 @@ int main(int argc, char **argv)
     els = s7_int_vector_elements(p);
     if (els[1] != 32) fprintf(stderr, "int_vector els[1] not 32?\n");
     if (!s7_is_int_vector(p)) fprintf(stderr, "not an int_vector?\n");
+    q = s7_vector_to_list(sc, p);
+    if (!s7_is_pair(q)) fprintf(stderr, "%d vector->list is not a list %s\n", __LINE__, TO_STR(q));
+    if (s7_list_length(sc, q) != 6) fprintf(stderr, "%d vector->list len != 6 %s\n", __LINE__, TO_STR(q));
+    if (s7_vector_dimension(p, 0) != 6) fprintf(stderr, "%d: s7_vector_dimension: %ld\n", __LINE__, s7_vector_dimension(p, 0));
   }
 
   {
@@ -1342,7 +1351,7 @@ int main(int argc, char **argv)
       fprintf(stderr, "%d: another_variable doc: %s\n", __LINE__, s);
   }
 
-  s7_define_function(sc, "a_function", a_function, 1, 0, false, "a function");
+  s7_define_safe_function(sc, "a_function", a_function, 1, 0, false, "a function");
   if (!s7_is_defined(sc, "a_function"))
     {fprintf(stderr, "%d: a_function is not defined?\n", __LINE__);}
   if (!s7_is_function(s7_name_to_value(sc, "a_function")))
@@ -1363,13 +1372,20 @@ int main(int argc, char **argv)
   s7_c_type_set_to_string(sc, dax_type_tag, dax_to_string);
 
   s7_define_function(sc, "make-dax", make_dax, 2, 0, false, "(make-dax x data) makes a new dax");
-  s7_define_function(sc, "dax?", is_dax, 1, 0, false, "(dax? anything) returns #t if its argument is a dax object");
+  s7_define_typed_function(sc, "dax?", is_dax, 1, 0, false, "(dax? anything) returns #t if its argument is a dax object", s7_make_signature(sc, 1, s7_t(sc)));
+  if (s7_car(s7_signature(sc, s7_name_to_value(sc, "dax?"))) != s7_t(sc))
+    fprintf(stderr, "%d: dax? signature: %s\n", __LINE__, TO_STR(s7_signature(sc, s7_name_to_value(sc, "dax?"))));
 
   s7_define_variable(sc, "dax-x", 
                      s7_dilambda(sc, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field (a real)"));
 
+  s7_define_variable(sc, "dax-xx", 
+                     s7_typed_dilambda(sc, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field (a real)", 
+				       s7_make_signature(sc, 1, s7_make_symbol(sc, "real?")),
+				       s7_make_circular_signature(sc, 0, 1, s7_make_symbol(sc, "real?"))));
+
   s7_define_variable(sc, "dax-data", 
-                     s7_dilambda(sc, "dax-data", dax_data, 1, 0, set_dax_data, 2, 0, "dax data field"));
+                     s7_dilambda_with_environment(sc, s7_nil(sc), "dax-data", dax_data, 1, 0, set_dax_data, 2, 0, "dax data field"));
 
   if (!s7_is_dilambda(s7_name_to_value(sc, "dax-x")))
     {fprintf(stderr, "%d: dax-x is not a pws?\n", __LINE__);}
@@ -1429,10 +1445,18 @@ int main(int argc, char **argv)
 
   {
     s7_pointer old_port, val;
+    const char *doc;
     old_port = s7_current_error_port(sc);
 
     s7_define_function_star(sc, "fs1", fs1, "(opts (inlet 'f \"b\"))", NULL);
-    s7_define_function_star(sc, "fs2", fs2, "", NULL);
+    p = s7_make_symbol(sc, "fs1");
+    s7_set_documentation(sc, p, "new doc");
+    doc = s7_documentation(sc, p);
+    if ((!doc) || (strcmp(s7_documentation(sc, p), "new doc") != 0))
+      fprintf(stderr, "%d: s7_set_documentation: %s\n", __LINE__, s7_documentation(sc, p));
+    s7_define_typed_function_star(sc, "fs2", fs2, "", NULL, s7_make_signature(sc, 1, s7_t(sc)));
+    if (s7_car(s7_signature(sc, s7_name_to_value(sc, "fs2"))) != s7_t(sc))
+      fprintf(stderr, "%d: fs2 signature: %s\n", __LINE__, TO_STR(s7_signature(sc, s7_name_to_value(sc, "fs2"))));
     s7_set_current_error_port(sc, s7_f(sc));
     s7_define_function_star(sc, "fs3", fs3, ":allow-other-keys", NULL);
     s7_set_current_error_port(sc, old_port);
@@ -2121,7 +2145,8 @@ int main(int argc, char **argv)
       {fprintf(stderr, "%d: g_block types: %" print_s7_int " %" print_s7_int "\n", __LINE__, g_block_type, s7_c_object_type(gp));}
     if (s7_c_object_value_checked(gp, g_block_type) != g)
       {fprintf(stderr, "%d: checked g_block types: %" print_s7_int " %" print_s7_int "\n", __LINE__, g_block_type, s7_c_object_type(gp));}
-
+    if (s7_c_object_let(gp) != g_block_methods)
+      fprintf(stderr, "%d: s7_c_object_let trouble\n", __LINE__);
     s7_gc_unprotect_at(sc, gc_loc);
   }
   
@@ -2318,3 +2343,29 @@ int main(int argc, char **argv)
   return(0);
 }
 
+#if 0
+/* unhandled:
+S7_NUM_READ_CHOICES S7_READ_CHAR S7_READ_LINE and peek_char is_char_ready read
+d_dddd d_vd etc
+s7_autoload_set_names
+s7_c_type_set_gc_free
+s7_c_type_set_gc_mark
+s7_c_type_set_getter
+s7_c_type_set_setter
+s7_c_type_set_to_list
+s7_define_semisafe_typed_function
+s7_define_unsafe_typed_function
+s7_error
+s7_float_optimize
+s7_make_c_object_with_let
+s7_make_c_object_without_gc
+s7_make_continuation
+s7_make_function_star
+s7_make_safe_function
+s7_make_safe_function_star
+s7_make_typed_function
+s7_optimize
+s7_repl
+s7_set_current_input_port
+*/
+#endif
