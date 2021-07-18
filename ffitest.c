@@ -566,6 +566,9 @@ static s7_pointer big_add_1(s7_scheme *sc, s7_pointer args)
 }
 #endif
 
+static s7_double opt_d_func(void) {return(1.0);}
+static s7_pointer g_d_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, 1.0));}
+
 int main(int argc, char **argv)
 {
   s7_scheme *sc;
@@ -1375,6 +1378,10 @@ int main(int argc, char **argv)
   s7_define_typed_function(sc, "dax?", is_dax, 1, 0, false, "(dax? anything) returns #t if its argument is a dax object", s7_make_signature(sc, 1, s7_t(sc)));
   if (s7_car(s7_signature(sc, s7_name_to_value(sc, "dax?"))) != s7_t(sc))
     fprintf(stderr, "%d: dax? signature: %s\n", __LINE__, TO_STR(s7_signature(sc, s7_name_to_value(sc, "dax?"))));
+  p = s7_make_function(sc, "make-dax", make_dax, 2, 0, false, "(make-dax x data) makes a new dax");
+  if (!s7_is_procedure(p)) fprintf(stderr, "%d: make-dax is not a procedure\n", __LINE__);
+  p = s7_make_safe_function(sc, "make-dax", make_dax, 2, 0, false, "(make-dax x data) makes a new dax");
+  if (!s7_is_procedure(p)) fprintf(stderr, "%d: make-dax is not a (safe) procedure\n", __LINE__);
 
   s7_define_variable(sc, "dax-x", 
                      s7_dilambda(sc, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field (a real)"));
@@ -1441,6 +1448,15 @@ int main(int argc, char **argv)
 						    s7_make_integer(sc, 6))));
     if (val != 21)
       fprintf(stderr, "plus1: %" print_s7_int "\n", val);
+
+    p = s7_make_c_object_without_gc(sc, dax_type_tag, (void *)malloc(sizeof(dax)));
+    {
+      dax *o;
+      o = (dax *)malloc(sizeof(dax));
+      o->x = 1.0;
+      o->data = s7_nil(sc);
+      p = s7_make_c_object_with_let(sc, dax_type_tag, (void *)o, s7_sublet(sc, s7_curlet(sc), s7_nil(sc)));
+    }
   }
 
   {
@@ -1468,6 +1484,10 @@ int main(int argc, char **argv)
     s7_define_safe_function_star(sc, "fs6", fs6, ":allow-other-keys", NULL);
     s7_set_current_error_port(sc, old_port);
     s7_define_safe_function_star(sc, "fs61", fs61, "(a #(0)) :allow-other-keys", NULL);
+    val = s7_make_function_star(sc, "fs4", fs4, "(opts (inlet 'f \"b\"))", NULL);
+    if (!s7_is_procedure(val)) fprintf(stderr, "%d: fs4 is not a procedure\n", __LINE__);
+    val = s7_make_safe_function_star(sc, "fs4", fs4, "(opts (inlet 'f \"b\"))", NULL);
+    if (!s7_is_procedure(val)) fprintf(stderr, "%d: fs4 is not a (safe) procedure\n", __LINE__);
 
     val = s7_eval_c_string(sc, "(fs1)");
     if (!s7_is_let(val)) fprintf(stderr, "(fs1): %s\n", s7_object_to_c_string(sc, val));
@@ -1548,7 +1568,7 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: %s is not 5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   
 
-  s7_define_function(sc, "open-plus", open_plus, 1, 0, true, plus_help);
+  s7_define_semisafe_typed_function(sc, "open-plus", open_plus, 1, 0, true, plus_help, s7_make_circular_signature(sc, 1, 2, s7_make_symbol(sc, "number?"), s7_t(sc)));
   p = s7_sublet(sc, s7_nil(sc), s7_cons(sc, s7_cons(sc, s7_make_symbol(sc, "plus"), s7_name_to_value(sc, "plus")), s7_nil(sc)));
   s7_openlet(sc, p);
   p1 = s7_apply_function(sc, s7_name_to_value(sc, "open-plus"), s7_list(sc, 3, p, s7_make_integer(sc, 2), s7_make_integer(sc, 3)));
@@ -2172,7 +2192,7 @@ int main(int argc, char **argv)
     s7_pointer old_port, result, func;
     const char *errmsg = NULL;
 
-    s7_define_function(sc, "error-handler", test_error_handler, 1, 0, false, "our error handler");
+    s7_define_unsafe_typed_function(sc, "error-handler", test_error_handler, 1, 0, false, "our error handler", s7_make_signature(sc, 2, s7_t(sc), s7_t(sc)));
 
     s7_eval_c_string(sc, "(set! (hook-functions *error-hook*)                                 \n\
                             (list (lambda (hook)                                              \n\
@@ -2338,6 +2358,18 @@ int main(int argc, char **argv)
       fprintf(stderr, "%d: s7_random_state_to_list is %s\n", __LINE__, TO_STR(q));
   }
 
+  {
+    s7_float_function func;
+    s7_pointer symbol;
+    symbol = s7_define_safe_function(sc, "d-func", g_d_func, 0, 0, false, "opt func");
+    s7_set_d_function(sc, s7_name_to_value(sc, "d-func"), opt_d_func);
+    func = s7_float_optimize(sc, s7_list(sc, 1, s7_list(sc, 1, symbol)));
+    if (!func) fprintf(stderr, "%d: d-func not optimized\n", __LINE__);
+    /* fprintf(stderr, "%f\n", func(sc)); */
+    
+    /* and many more... */
+  }
+
   s7_free(sc);
 
   return(0);
@@ -2345,25 +2377,16 @@ int main(int argc, char **argv)
 
 #if 0
 /* unhandled:
-S7_NUM_READ_CHOICES S7_READ_CHAR S7_READ_LINE and peek_char is_char_ready read
-d_dddd d_vd etc
+S7_NUM_READ_CHOICES S7_READ_CHAR S7_READ_LINE and peek_char is_char_ready read: see s7_open_input_function above
+d_dddd d_vd etc: need called funcs, s7_optimize -> func (and s7_float_optimize)
 s7_autoload_set_names
 s7_c_type_set_gc_free
 s7_c_type_set_gc_mark
 s7_c_type_set_getter
 s7_c_type_set_setter
 s7_c_type_set_to_list
-s7_define_semisafe_typed_function
-s7_define_unsafe_typed_function
 s7_error
-s7_float_optimize
-s7_make_c_object_with_let
-s7_make_c_object_without_gc
 s7_make_continuation
-s7_make_function_star
-s7_make_safe_function
-s7_make_safe_function_star
-s7_make_typed_function
 s7_optimize
 s7_repl
 s7_set_current_input_port

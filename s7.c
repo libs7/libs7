@@ -58368,49 +58368,51 @@ static s7_int opt_i_7pi_sf(opt_info *o) {return(o->v[3].i_7pi_f(opt_sc(o), slot_
 
 static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
+  s7_pointer sig;
   s7_i_7pi_t pfunc;
   pfunc = s7_i_7pi_function(s_func);
-  if (pfunc)
-    {
-      s7_pointer sig = c_function_signature(s_func);
-      if (is_pair(sig))
-	{
-	  s7_pointer slot, arg1 = cadr(car_x), arg2 = caddr(car_x);
-	  int32_t start = sc->pc;
-	  if ((is_symbol(cadr(sig))) &&
-	      (is_symbol(arg1)) &&
-	      (slot = opt_types_match(sc, cadr(sig), arg1)))
-	    {
-	      s7_pointer p;
-	      opc->v[1].p = slot;
-	      if ((car(car_x) == sc->int_vector_ref_symbol) &&
-		  ((!is_int_vector(slot_value(slot))) ||
-		   (vector_rank(slot_value(slot)) > 1)))
-		return_false(sc, car_x);
+  if (!pfunc)
+    return_false(sc, car_x);
 
-	      opc->v[3].i_7pi_f = pfunc;
-	      p = opt_integer_symbol(sc, arg2);
-	      if (p)
+  sig = c_function_signature(s_func);
+  if (is_pair(sig))
+    {
+      s7_pointer slot, arg1 = cadr(car_x), arg2 = caddr(car_x);
+      int32_t start = sc->pc;
+      if ((is_symbol(cadr(sig))) &&
+	  (is_symbol(arg1)) &&
+	  (slot = opt_types_match(sc, cadr(sig), arg1)))
+	{
+	  s7_pointer p;
+	  opc->v[1].p = slot;
+	  if ((car(car_x) == sc->int_vector_ref_symbol) &&
+	      ((!is_int_vector(slot_value(slot))) ||
+	       (vector_rank(slot_value(slot)) > 1)))
+	    return_false(sc, car_x);
+	  
+	  opc->v[3].i_7pi_f = pfunc;
+	  p = opt_integer_symbol(sc, arg2);
+	  if (p)
+	    {
+	      opc->v[2].p = p;
+	      opc->v[0].fi = opt_i_7pi_ss;
+	      if ((car(car_x) == sc->int_vector_ref_symbol) &&
+		  (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
 		{
-		  opc->v[2].p = p;
-		  opc->v[0].fi = opt_i_7pi_ss;
-		  if ((car(car_x) == sc->int_vector_ref_symbol) &&
-		      (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
-		    {
-		      opc->v[0].fi = opt_7pi_ss_ivref;
-		      opc->v[3].i_7pi_f = int_vector_ref_unchecked;
-		    }
-		  return(true);
+		  opc->v[0].fi = opt_7pi_ss_ivref;
+		  opc->v[3].i_7pi_f = int_vector_ref_unchecked;
 		}
-	      opc->v[4].o1 = sc->opts[sc->pc];
-	      if (int_optimize(sc, cddr(car_x)))
-		{
-		  opc->v[0].fi = opt_i_7pi_sf;
-		  opc->v[5].fi = opc->v[4].o1->v[0].fi;
-		  return(true);
-		}
-	      pc_fallback(sc, start);
-	    }}}
+	      return(true);
+	    }
+	  opc->v[4].o1 = sc->opts[sc->pc];
+	  if (int_optimize(sc, cddr(car_x)))
+	    {
+	      opc->v[0].fi = opt_i_7pi_sf;
+	      opc->v[5].fi = opc->v[4].o1->v[0].fi;
+	      return(true);
+	    }
+	  pc_fallback(sc, start);
+	}}
   return_false(sc, car_x);
 }
 
@@ -58493,189 +58495,193 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 {
   s7_i_ii_t ifunc;
   s7_i_7ii_t ifunc7 = NULL;
-  s7_pointer p;
-  ifunc = s7_i_ii_function(s_func);
-  if (!ifunc) ifunc7 = s7_i_7ii_function(s_func);
-  if ((ifunc) || (ifunc7))
-    {
-      s7_pointer sig = c_function_signature(s_func);
-      if (is_pair(sig))
-	{
-	  s7_pointer arg1 = cadr(car_x), arg2 = caddr(car_x);
-	  int32_t start = sc->pc;
-	  if (ifunc)
-	    opc->v[3].i_ii_f = ifunc;
-	  else opc->v[3].i_7ii_f = ifunc7;
+  s7_pointer p, sig;
 
-	  if (is_t_integer(arg1))
+  ifunc = s7_i_ii_function(s_func);
+  if (!ifunc) 
+    {
+      ifunc7 = s7_i_7ii_function(s_func);
+      if (!ifunc7)
+	return_false(sc, car_x);
+    }
+  sig = c_function_signature(s_func);
+  if (is_pair(sig))
+    {
+      s7_pointer arg1 = cadr(car_x), arg2 = caddr(car_x);
+      int32_t start = sc->pc;
+      if (ifunc)
+	opc->v[3].i_ii_f = ifunc;
+      else opc->v[3].i_7ii_f = ifunc7;
+      
+      if (is_t_integer(arg1))
+	{
+	  opc->v[1].i = integer(arg1);
+	  if (is_t_integer(arg2))
 	    {
-	      opc->v[1].i = integer(arg1);
+	      opc->v[2].i = integer(arg2);
+	      opc->v[0].fi = (ifunc) ? opt_i_ii_cc : opt_i_7ii_cc;
+	      return(true);
+	    }
+	  p = opt_integer_symbol(sc, arg2);
+	  if (p)
+	    {
+	      opc->v[2].p = p;
+	      if (ifunc)
+		opc->v[0].fi = (opc->v[3].i_ii_f == multiply_i_ii) ? opt_i_ii_cs_mul : opt_i_ii_cs;
+	      else opc->v[0].fi = opt_i_7ii_cs;
+	      return(true);
+	    }
+	  opc->v[4].o1 = sc->opts[sc->pc];
+	  if (int_optimize(sc, cddr(car_x)))
+	    {
+	      if (ifunc)
+		{
+		  opc->v[0].fi = opt_i_ii_cf;       /* sc->opts[start]->v[0].fi -> opt_i_7i_c -> same_opt->v[2].i_7i_f = random_i_7i tmap */
+		  if ((ifunc == add_i_ii) && (opc == sc->opts[sc->pc - 2]) &&
+		      (sc->opts[start]->v[0].fi == opt_i_7i_c) &&
+		      (sc->opts[start]->v[2].i_7i_f == random_i_7i))
+		    {
+		      opc->v[0].fi = opt_add_i_random_i;
+		      opc->v[2].i = sc->opts[start]->v[1].i;
+		      backup_pc(sc);
+		    }
+		  else if (ifunc == multiply_i_ii) opc->v[0].fi = opt_i_ii_cf_mul;
+		}
+	      else opc->v[0].fi = opt_i_7ii_cf;
+	      opc->v[5].fi = opc->v[4].o1->v[0].fi;
+	      return(true);
+	    }
+	  pc_fallback(sc, start);
+	}
+      else
+	{
+	  p = opt_integer_symbol(sc, arg1);
+	  if (p)
+	    {
+	      opc->v[1].p = p;
 	      if (is_t_integer(arg2))
 		{
 		  opc->v[2].i = integer(arg2);
-		  opc->v[0].fi = (ifunc) ? opt_i_ii_cc : opt_i_7ii_cc;
+		  if (ifunc)
+		    {
+		      if (opc->v[3].i_ii_f == add_i_ii)
+			opc->v[0].fi = opt_i_ii_sc_add;
+		      else opc->v[0].fi = (opc->v[3].i_ii_f == subtract_i_ii) ? opt_i_ii_sc_sub : opt_i_ii_sc; /* add1/sub1 are not faster */
+		    }
+		  else opc->v[0].fi = opt_i_7ii_sc;
+		  if ((car(car_x) == sc->modulo_symbol) &&
+		      (integer(arg2) > 1))
+		    opc->v[3].i_ii_f = modulo_i_ii_unchecked;
+		  else
+		    {
+		      if (car(car_x) == sc->ash_symbol)
+			{
+			  if (opc->v[2].i < 0)
+			    {
+			      opc->v[3].i_ii_f = (opc->v[2].i == -1) ? rsh_i_i2_direct : rsh_i_ii_unchecked;
+			      opc->v[0].fi = opt_i_ii_sc;
+			    }
+			  else
+			    if (opc->v[2].i < S7_INT_BITS)
+			      {
+				opc->v[3].i_ii_f = lsh_i_ii_unchecked;
+				opc->v[0].fi = opt_i_ii_sc;
+			      }}
+		      else
+			if (opc->v[2].i > 0)
+			  {
+			    /* these assume vunion is a union, not a struct; i_7ii_f otherwise might be leftover from a previous use */
+			    if (opc->v[3].i_7ii_f == quotient_i_7ii)
+			      {
+				opc->v[3].i_ii_f = quotient_i_ii_unchecked;
+				opc->v[0].fi = opt_i_ii_sc;
+			      }
+			    else
+			      if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == remainder_i_7ii))
+				{
+				  opc->v[3].i_ii_f = remainder_i_ii_unchecked;
+				  opc->v[0].fi = opt_i_ii_sc;
+				}}}
 		  return(true);
-		}
+		} /* opt_int arg2 */
 	      p = opt_integer_symbol(sc, arg2);
 	      if (p)
 		{
 		  opc->v[2].p = p;
 		  if (ifunc)
-		    opc->v[0].fi = (opc->v[3].i_ii_f == multiply_i_ii) ? opt_i_ii_cs_mul : opt_i_ii_cs;
-		  else opc->v[0].fi = opt_i_7ii_cs;
+		    opc->v[0].fi = (opc->v[3].i_ii_f == add_i_ii) ? opt_i_ii_ss_add : opt_i_ii_ss;
+		  else opc->v[0].fi = opt_i_7ii_ss;
 		  return(true);
 		}
-	      opc->v[4].o1 = sc->opts[sc->pc];
 	      if (int_optimize(sc, cddr(car_x)))
 		{
+		  opc->v[4].o1 = sc->opts[start];
+		  opc->v[5].fi = sc->opts[start]->v[0].fi;
 		  if (ifunc)
-		    {
-		      opc->v[0].fi = opt_i_ii_cf;       /* sc->opts[start]->v[0].fi -> opt_i_7i_c -> same_opt->v[2].i_7i_f = random_i_7i tmap */
-		      if ((ifunc == add_i_ii) && (opc == sc->opts[sc->pc - 2]) &&
-			  (sc->opts[start]->v[0].fi == opt_i_7i_c) &&
-			  (sc->opts[start]->v[2].i_7i_f == random_i_7i))
-			{
-			  opc->v[0].fi = opt_add_i_random_i;
-			  opc->v[2].i = sc->opts[start]->v[1].i;
-			  backup_pc(sc);
-			}
-		      else if (ifunc == multiply_i_ii) opc->v[0].fi = opt_i_ii_cf_mul;
-		    }
-		  else opc->v[0].fi = opt_i_7ii_cf;
-		  opc->v[5].fi = opc->v[4].o1->v[0].fi;
+		    opc->v[0].fi = (opc->v[3].i_ii_f == add_i_ii) ? opt_i_ii_sf_add : opt_i_ii_sf;
+		  else opc->v[0].fi = opt_i_7ii_sf;
 		  return(true);
 		}
 	      pc_fallback(sc, start);
 	    }
 	  else
 	    {
-	      p = opt_integer_symbol(sc, arg1);
-	      if (p)
+	      if (is_t_integer(arg2))
 		{
-		  opc->v[1].p = p;
-		  if (is_t_integer(arg2))
+		  opc->v[2].i = integer(arg2);
+		  opc->v[10].o1 = sc->opts[sc->pc];
+		  if (int_optimize(sc, cdr(car_x)))
 		    {
-		      opc->v[2].i = integer(arg2);
-		      if (ifunc)
+		      opc->v[11].fi = opc->v[10].o1->v[0].fi;
+		      if (!i_ii_fc_combinable(sc, opc, ifunc))
 			{
-			  if (opc->v[3].i_ii_f == add_i_ii)
-			    opc->v[0].fi = opt_i_ii_sc_add;
-			  else opc->v[0].fi = (opc->v[3].i_ii_f == subtract_i_ii) ? opt_i_ii_sc_sub : opt_i_ii_sc; /* add1/sub1 are not faster */
-			}
-		      else opc->v[0].fi = opt_i_7ii_sc;
-		      if ((car(car_x) == sc->modulo_symbol) &&
-			  (integer(arg2) > 1))
-			opc->v[3].i_ii_f = modulo_i_ii_unchecked;
-		      else
-			{
-			  if (car(car_x) == sc->ash_symbol)
+			  if (ifunc)
 			    {
-			      if (opc->v[2].i < 0)
+			      if (opc->v[3].i_ii_f == add_i_ii) {opc->v[0].fi = opt_i_ii_fc_add; return(true);}
+			      if (opc->v[3].i_ii_f == multiply_i_ii) {opc->v[0].fi = opt_i_ii_fc_mul; return(true);}
+			      opc->v[0].fi = opt_i_ii_fc;
+			      
+			      if ((opc->v[3].i_ii_f == subtract_i_ii) && (opc == sc->opts[sc->pc - 2]) &&
+				  (sc->opts[start]->v[0].fi == opt_i_7i_c) &&
+				  (sc->opts[start]->v[2].i_7i_f == random_i_7i))
 				{
-				  opc->v[3].i_ii_f = (opc->v[2].i == -1) ? rsh_i_i2_direct : rsh_i_ii_unchecked;
-				  opc->v[0].fi = opt_i_ii_sc;
+				  opc->v[0].fi = opt_subtract_random_i_i;
+				  opc->v[1].i = sc->opts[start]->v[1].i;
+				  backup_pc(sc);
+				}}
+			  else opc->v[0].fi = opt_i_7ii_fc;
+			  if (opc->v[2].i > 0)
+			    {
+			      if (opc->v[3].i_7ii_f == quotient_i_7ii)
+				{
+				  opc->v[3].i_ii_f = quotient_i_ii_unchecked;
+				  opc->v[0].fi = opt_i_ii_fc;
 				}
 			      else
-				if (opc->v[2].i < S7_INT_BITS)
+				if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == remainder_i_7ii))
 				  {
-				    opc->v[3].i_ii_f = lsh_i_ii_unchecked;
-				    opc->v[0].fi = opt_i_ii_sc;
-				  }}
-			  else
-			    if (opc->v[2].i > 0)
-			      {
-				/* these assume vunion is a union, not a struct; i_7ii_f otherwise might be leftover from a previous use */
-				if (opc->v[3].i_7ii_f == quotient_i_7ii)
-				  {
-				    opc->v[3].i_ii_f = quotient_i_ii_unchecked;
-				    opc->v[0].fi = opt_i_ii_sc;
-				  }
-				else
-				  if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == remainder_i_7ii))
-				    {
-				      opc->v[3].i_ii_f = remainder_i_ii_unchecked;
-				      opc->v[0].fi = opt_i_ii_sc;
-				    }}}
-		      return(true);
-		    } /* opt_int arg2 */
-		  p = opt_integer_symbol(sc, arg2);
-		  if (p)
-		    {
-		      opc->v[2].p = p;
-		      if (ifunc)
-			opc->v[0].fi = (opc->v[3].i_ii_f == add_i_ii) ? opt_i_ii_ss_add : opt_i_ii_ss;
-		      else opc->v[0].fi = opt_i_7ii_ss;
-		      return(true);
-		    }
-		  if (int_optimize(sc, cddr(car_x)))
-		    {
-		      opc->v[4].o1 = sc->opts[start];
-		      opc->v[5].fi = sc->opts[start]->v[0].fi;
-		      if (ifunc)
-			opc->v[0].fi = (opc->v[3].i_ii_f == add_i_ii) ? opt_i_ii_sf_add : opt_i_ii_sf;
-		      else opc->v[0].fi = opt_i_7ii_sf;
+				    opc->v[3].i_ii_f = remainder_i_ii_unchecked;
+				    opc->v[0].fi = opt_i_ii_fc;
+				  }}}
 		      return(true);
 		    }
 		  pc_fallback(sc, start);
 		}
 	      else
 		{
-		  if (is_t_integer(arg2))
+		  opc->v[10].o1 = sc->opts[sc->pc];
+		  if (int_optimize(sc, cdr(car_x)))
 		    {
-		      opc->v[2].i = integer(arg2);
-		      opc->v[10].o1 = sc->opts[sc->pc];
-		      if (int_optimize(sc, cdr(car_x)))
+		      opc->v[11].fi = opc->v[10].o1->v[0].fi;
+		      opc->v[8].o1 = sc->opts[sc->pc];
+		      if (int_optimize(sc, cddr(car_x)))
 			{
-			  opc->v[11].fi = opc->v[10].o1->v[0].fi;
-			  if (!i_ii_fc_combinable(sc, opc, ifunc))
-			    {
-			      if (ifunc)
-				{
-				  if (opc->v[3].i_ii_f == add_i_ii) {opc->v[0].fi = opt_i_ii_fc_add; return(true);}
-				  if (opc->v[3].i_ii_f == multiply_i_ii) {opc->v[0].fi = opt_i_ii_fc_mul; return(true);}
-				  opc->v[0].fi = opt_i_ii_fc;
-
-				  if ((opc->v[3].i_ii_f == subtract_i_ii) && (opc == sc->opts[sc->pc - 2]) &&
-				      (sc->opts[start]->v[0].fi == opt_i_7i_c) &&
-				      (sc->opts[start]->v[2].i_7i_f == random_i_7i))
-				    {
-				      opc->v[0].fi = opt_subtract_random_i_i;
-				      opc->v[1].i = sc->opts[start]->v[1].i;
-				      backup_pc(sc);
-				    }}
-			      else opc->v[0].fi = opt_i_7ii_fc;
-			      if (opc->v[2].i > 0)
-				{
-				  if (opc->v[3].i_7ii_f == quotient_i_7ii)
-				    {
-				      opc->v[3].i_ii_f = quotient_i_ii_unchecked;
-				      opc->v[0].fi = opt_i_ii_fc;
-				    }
-				  else
-				    if ((opc->v[2].i > 1) && (opc->v[3].i_7ii_f == remainder_i_7ii))
-				      {
-					opc->v[3].i_ii_f = remainder_i_ii_unchecked;
-					opc->v[0].fi = opt_i_ii_fc;
-				      }}}
+			  opc->v[9].fi = opc->v[8].o1->v[0].fi;
+			  opc->v[0].fi = (ifunc) ? opt_i_ii_ff : opt_i_7ii_ff;
 			  return(true);
 			}
 		      pc_fallback(sc, start);
-		    }
-		  else
-		    {
-		      opc->v[10].o1 = sc->opts[sc->pc];
-		      if (int_optimize(sc, cdr(car_x)))
-			{
-			  opc->v[11].fi = opc->v[10].o1->v[0].fi;
-			  opc->v[8].o1 = sc->opts[sc->pc];
-			  if (int_optimize(sc, cddr(car_x)))
-			    {
-			      opc->v[9].fi = opc->v[8].o1->v[0].fi;
-			      opc->v[0].fi = (ifunc) ? opt_i_ii_ff : opt_i_7ii_ff;
-			      return(true);
-			    }
-			  pc_fallback(sc, start);
-			}}}}}}
+		    }}}}}
   return_false(sc, car_x);
 }
 
@@ -58900,73 +58906,74 @@ static bool is_target_or_its_alias(s7_pointer symbol, s7_pointer symfunc, s7_poi
 
 static bool i_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
+  s7_pointer sig;
   s7_i_7pii_t pfunc;
   pfunc = s7_i_7pii_function(s_func);
-  if (pfunc)
+  if (!pfunc)
+    return_false(sc, car_x);
+  sig = c_function_signature(s_func);
+  if ((is_pair(sig)) &&
+      (is_symbol(cadr(car_x))))
     {
-      s7_pointer sig = c_function_signature(s_func);
-      if ((is_pair(sig)) &&
-	  (is_symbol(cadr(car_x))))
+      s7_pointer slot, fname = car(car_x);
+      
+      if ((is_target_or_its_alias(fname, s_func, sc->int_vector_set_symbol)) ||
+	  (is_target_or_its_alias(fname, s_func, sc->byte_vector_set_symbol)))
+	return(opt_int_vector_set(sc, (fname == sc->int_vector_set_symbol) ? 1 : 0, opc, cadr(car_x), cddr(car_x), NULL, cdddr(car_x)));
+      
+      slot = opt_types_match(sc, cadr(sig), cadr(car_x));
+      if (slot)
 	{
-	  s7_pointer slot, fname = car(car_x);
-
-	  if ((is_target_or_its_alias(fname, s_func, sc->int_vector_set_symbol)) ||
-	      (is_target_or_its_alias(fname, s_func, sc->byte_vector_set_symbol)))
-	    return(opt_int_vector_set(sc, (fname == sc->int_vector_set_symbol) ? 1 : 0, opc, cadr(car_x), cddr(car_x), NULL, cdddr(car_x)));
-
-	  slot = opt_types_match(sc, cadr(sig), cadr(car_x));
-	  if (slot)
+	  s7_pointer arg2, p;
+	  int32_t start = sc->pc;
+	  opc->v[1].p = slot;
+	  
+	  if (((is_target_or_its_alias(fname, s_func, sc->int_vector_ref_symbol)) ||
+	       (is_target_or_its_alias(fname, s_func, sc->byte_vector_ref_symbol))) &&
+	      (vector_rank(slot_value(slot)) != 2))
+	    return_false(sc, car_x);
+	  
+	  arg2 = caddr(car_x);
+	  p = opt_integer_symbol(sc, arg2);
+	  if (p)
 	    {
-	      s7_pointer arg2, p;
-	      int32_t start = sc->pc;
-	      opc->v[1].p = slot;
-
-	      if (((is_target_or_its_alias(fname, s_func, sc->int_vector_ref_symbol)) ||
-		   (is_target_or_its_alias(fname, s_func, sc->byte_vector_ref_symbol))) &&
-		  (vector_rank(slot_value(slot)) != 2))
-		return_false(sc, car_x);
-
-	      arg2 = caddr(car_x);
-	      p = opt_integer_symbol(sc, arg2);
+	      opc->v[2].p = p;
+	      p = opt_integer_symbol(sc, cadddr(car_x));
 	      if (p)
 		{
-		  opc->v[2].p = p;
-		  p = opt_integer_symbol(sc, cadddr(car_x));
-		  if (p)
-		    {
-		      opc->v[3].p = p;
-		      opc->v[4].i_7pii_f = pfunc;
-		      opc->v[0].fi = opt_i_7pii_sss;
-		      if ((pfunc == int_vector_ref_i_7pii) &&
-			  (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-			  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
-			opc->v[0].fi = opt_i_pii_sss_ivref_unchecked;
-		      return(true);
-		    }
-		  if (int_optimize(sc, cdddr(car_x)))
-		    {
-		      opc->v[3].i_7pii_f = pfunc;
-		      opc->v[0].fi = opt_i_7pii_ssf;
-		      opc->v[4].o1 = sc->opts[start];
-		      opc->v[5].fi = sc->opts[start]->v[0].fi;
-		      return(true);
-		    }
-		  return_false(sc, car_x);
+		  opc->v[3].p = p;
+		  opc->v[4].i_7pii_f = pfunc;
+		  opc->v[0].fi = opt_i_7pii_sss;
+		  if ((pfunc == int_vector_ref_i_7pii) &&
+		      (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		    opc->v[0].fi = opt_i_pii_sss_ivref_unchecked;
+		  return(true);
 		}
-	      opc->v[10].o1 = sc->opts[sc->pc];
-	      if (int_optimize(sc, cddr(car_x)))
+	      if (int_optimize(sc, cdddr(car_x)))
 		{
-		  opc->v[8].o1 = sc->opts[sc->pc];
-		  if (int_optimize(sc, cdddr(car_x)))
-		    {
-		      opc->v[3].i_7pii_f = pfunc;
-		      opc->v[0].fi = opt_i_7pii_sff;
-		      opc->v[11].fi = opc->v[10].o1->v[0].fi;
-		      opc->v[9].fi = opc->v[8].o1->v[0].fi;
-		      return(true);
-		    }}
-	      pc_fallback(sc, start);
-	    }}}
+		  opc->v[3].i_7pii_f = pfunc;
+		  opc->v[0].fi = opt_i_7pii_ssf;
+		  opc->v[4].o1 = sc->opts[start];
+		  opc->v[5].fi = sc->opts[start]->v[0].fi;
+		  return(true);
+		}
+	      return_false(sc, car_x);
+	    }
+	  opc->v[10].o1 = sc->opts[sc->pc];
+	  if (int_optimize(sc, cddr(car_x)))
+	    {
+	      opc->v[8].o1 = sc->opts[sc->pc];
+	      if (int_optimize(sc, cdddr(car_x)))
+		{
+		  opc->v[3].i_7pii_f = pfunc;
+		  opc->v[0].fi = opt_i_7pii_sff;
+		  opc->v[11].fi = opc->v[10].o1->v[0].fi;
+		  opc->v[9].fi = opc->v[8].o1->v[0].fi;
+		  return(true);
+		}}
+	  pc_fallback(sc, start);
+	}}
   return_false(sc, car_x);
 }
 
@@ -59389,25 +59396,26 @@ static s7_double opt_d_v(opt_info *o) {return(o->v[3].d_v_f(o->v[5].obj));}
 
 static bool d_v_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
+  s7_pointer sig;
   s7_d_v_t flt_func;
   flt_func = s7_d_v_function(s_func);
-  if (flt_func)
+  if (!flt_func)
+    return_false(sc, car_x);
+  sig = c_function_signature(s_func);
+  if ((is_pair(sig)) &&
+      (is_symbol(cadr(sig))) &&
+      (is_symbol(cadr(car_x))))           /* look for (oscil g) */
     {
-      s7_pointer sig = c_function_signature(s_func);
-      if ((is_pair(sig)) &&
-	  (is_symbol(cadr(sig))) &&
-	  (is_symbol(cadr(car_x))))           /* look for (oscil g) */
+      s7_pointer slot;
+      slot = opt_types_match(sc, cadr(sig), cadr(car_x));
+      if (slot)
 	{
-	  s7_pointer slot;
-	  slot = opt_types_match(sc, cadr(sig), cadr(car_x));
-	  if (slot)
-	    {
-	      opc->v[1].p = slot;
-	      opc->v[5].obj = (void *)c_object_value(slot_value(slot));
-	      opc->v[3].d_v_f = flt_func;
-	      opc->v[0].fd = opt_d_v;
-	      return(true);
-	    }}}
+	  opc->v[1].p = slot;
+	  opc->v[5].obj = (void *)c_object_value(slot_value(slot));
+	  opc->v[3].d_v_f = flt_func;
+	  opc->v[0].fd = opt_d_v;
+	  return(true);
+	}}
   return_false(sc, car_x);
 }
 
@@ -59420,28 +59428,27 @@ static bool d_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
   s7_d_p_t dpf;
   int32_t start = sc->pc;
   dpf = s7_d_p_function(s_func);
-  if (dpf)
+  if (!dpf)
+    return_false(sc, car_x);
+  opc->v[3].d_p_f = dpf;
+  if (is_symbol(cadr(car_x)))
     {
-      opc->v[3].d_p_f = dpf;
-      if (is_symbol(cadr(car_x)))
-	{
-	  s7_pointer slot;
-	  slot = opt_simple_symbol(sc, cadr(car_x));
-	  if (!slot)
-	    return_false(sc, car_x);
-	  opc->v[1].p = slot;
-	  opc->v[0].fd = opt_d_p_s;
-	  return(true);
-	}
-      opc->v[4].o1 = sc->opts[sc->pc];
-      if (cell_optimize(sc, cdr(car_x)))
-	{
-	  opc->v[0].fd = opt_d_p_f;
-	  opc->v[5].fp = opc->v[4].o1->v[0].fp;
-	  return(true);
-	}
-      pc_fallback(sc, start);
+      s7_pointer slot;
+      slot = opt_simple_symbol(sc, cadr(car_x));
+      if (!slot)
+	return_false(sc, car_x);
+      opc->v[1].p = slot;
+      opc->v[0].fd = opt_d_p_s;
+      return(true);
     }
+  opc->v[4].o1 = sc->opts[sc->pc];
+  if (cell_optimize(sc, cdr(car_x)))
+    {
+      opc->v[0].fd = opt_d_p_f;
+      opc->v[5].fp = opc->v[4].o1->v[0].fp;
+      return(true);
+    }
+  pc_fallback(sc, start);
   return_false(sc, car_x);
 }
 
@@ -59463,78 +59470,77 @@ static s7_double opt_d_7pi_ff(opt_info *o)
 static bool d_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
   /* float-vector-ref is checked for a 1D float-vector arg, but other callers should do type checking */
+  int32_t start = sc->pc;
   s7_d_7pi_t ifunc;
   ifunc = s7_d_7pi_function(s_func); /* ifunc: float_vector_ref_d_7pi, s_func: global_value(sc->float_vector_ref_symbol) */
-  if (ifunc)
+  if (!ifunc)
+    return_false(sc, car_x);
+  opc->v[3].d_7pi_f = ifunc;
+  if (is_symbol(cadr(car_x)))  /* (float-vector-ref v i) */
     {
-      int32_t start = sc->pc;
-      opc->v[3].d_7pi_f = ifunc;
-      if (is_symbol(cadr(car_x)))  /* (float-vector-ref v i) */
-	{
-	  s7_pointer arg2, p, obj;
-	  opc->v[1].p = lookup_slot_from(cadr(car_x), sc->curlet);
-	  if (!is_slot(opc->v[1].p))
-	    return_false(sc, car_x);
-
-	  obj = slot_value(opc->v[1].p);
-	  if ((is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol)) &&
-	      ((!is_float_vector(obj)) ||
-	       (vector_rank(obj) > 1)))
-	    return_false(sc, car_x);
-
-	  arg2 = caddr(car_x);
-	  if (!is_pair(arg2))
-	    {
-	      if (is_t_integer(arg2))
-		{
-		  opc->v[2].i = integer(arg2);
-		  opc->v[0].fd = opt_d_7pi_sc;
-		  return(true);
-		}
-	      p = opt_integer_symbol(sc, arg2);
-	      if (!p)
-		return_false(sc, car_x);
-	      opc->v[2].p = p;
-	      opc->v[0].fd = opt_d_7pi_ss;
-	      if (is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol))
-		{
-		  if (step_end_fits(opc->v[2].p, vector_length(obj)))
-		    opc->v[0].fd = opt_d_7pi_ss_fvref_unchecked;
-		  else opc->v[0].fd = opt_d_7pi_ss_fvref;
-		}
-	      return(true);
-	    }
-	  if (int_optimize(sc, cddr(car_x)))
-	    {
-	      opc->v[0].fd = opt_d_7pi_sf;
-	      opc->v[10].o1 = sc->opts[start];
-	      opc->v[11].fi = opc->v[10].o1->v[0].fi;
-	      return(true);
-	    }
-	  pc_fallback(sc, start);
-	  return_false(sc, car_x);
-	}
-
-      if ((is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol)) &&
-	  ((!is_float_vector(cadr(car_x))) ||
-	   (vector_rank(cadr(car_x)) > 1)))          /* (float-vector-ref #r2d((.1 .2) (.3 .4)) 3) */
+      s7_pointer arg2, p, obj;
+      opc->v[1].p = lookup_slot_from(cadr(car_x), sc->curlet);
+      if (!is_slot(opc->v[1].p))
 	return_false(sc, car_x);
-
-      if (cell_optimize(sc, cdr(car_x)))
+      
+      obj = slot_value(opc->v[1].p);
+      if ((is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol)) &&
+	  ((!is_float_vector(obj)) ||
+	   (vector_rank(obj) > 1)))
+	return_false(sc, car_x);
+      
+      arg2 = caddr(car_x);
+      if (!is_pair(arg2))
 	{
-	  opt_info *o2;
-	  o2 = sc->opts[sc->pc];
-	  if (int_optimize(sc, cddr(car_x)))
+	  if (is_t_integer(arg2))
 	    {
-	      opc->v[0].fd = opt_d_7pi_ff;
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fp = sc->opts[start]->v[0].fp;
-	      opc->v[8].o1 = o2;
-	      opc->v[9].fi = o2->v[0].fi;
+	      opc->v[2].i = integer(arg2);
+	      opc->v[0].fd = opt_d_7pi_sc;
 	      return(true);
-	    }}
+	    }
+	  p = opt_integer_symbol(sc, arg2);
+	  if (!p)
+	    return_false(sc, car_x);
+	  opc->v[2].p = p;
+	  opc->v[0].fd = opt_d_7pi_ss;
+	  if (is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol))
+	    {
+	      if (step_end_fits(opc->v[2].p, vector_length(obj)))
+		opc->v[0].fd = opt_d_7pi_ss_fvref_unchecked;
+	      else opc->v[0].fd = opt_d_7pi_ss_fvref;
+	    }
+	  return(true);
+	}
+      if (int_optimize(sc, cddr(car_x)))
+	{
+	  opc->v[0].fd = opt_d_7pi_sf;
+	  opc->v[10].o1 = sc->opts[start];
+	  opc->v[11].fi = opc->v[10].o1->v[0].fi;
+	  return(true);
+	}
       pc_fallback(sc, start);
+      return_false(sc, car_x);
     }
+  
+  if ((is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol)) &&
+      ((!is_float_vector(cadr(car_x))) ||
+       (vector_rank(cadr(car_x)) > 1)))          /* (float-vector-ref #r2d((.1 .2) (.3 .4)) 3) */
+    return_false(sc, car_x);
+  
+  if (cell_optimize(sc, cdr(car_x)))
+    {
+      opt_info *o2;
+      o2 = sc->opts[sc->pc];
+      if (int_optimize(sc, cddr(car_x)))
+	{
+	  opc->v[0].fd = opt_d_7pi_ff;
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fp = sc->opts[start]->v[0].fp;
+	  opc->v[8].o1 = o2;
+	  opc->v[9].fi = o2->v[0].fi;
+	  return(true);
+	}}
+  pc_fallback(sc, start);
   return_false(sc, car_x);
 }
 
@@ -59673,65 +59679,66 @@ static bool d_vd_f_combinable(s7_scheme *sc, int32_t start)
 
 static bool d_vd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
-  if (is_symbol(cadr(car_x)))
+  s7_pointer sig;
+  s7_d_vd_t vfunc;
+  if (!is_symbol(cadr(car_x)))
+    return_false(sc, car_x);
+  vfunc = s7_d_vd_function(s_func);
+  if (!vfunc)
+    return_false(sc, car_x);
+  sig = c_function_signature(s_func);
+  if ((is_pair(sig)) &&
+      (is_symbol(cadr(sig))))
     {
-      s7_d_vd_t vfunc;
-      vfunc = s7_d_vd_function(s_func);
-      if (vfunc)
+      s7_pointer slot;
+      slot = opt_types_match(sc, cadr(sig), cadr(car_x));
+      if (slot)
 	{
-	  s7_pointer sig = c_function_signature(s_func);
-	  if ((is_pair(sig)) &&
-	      (is_symbol(cadr(sig))))
+	  s7_pointer arg2 = caddr(car_x);
+	  int32_t start = sc->pc;
+	  opc->v[3].d_vd_f = vfunc;
+	  if (!is_pair(arg2))
 	    {
-	      s7_pointer slot;
-	      slot = opt_types_match(sc, cadr(sig), cadr(car_x));
-	      if (slot)
+	      opc->v[1].p = slot;
+	      opc->v[5].obj = (void *)c_object_value(slot_value(slot));
+	      if (is_small_real(arg2))
 		{
-		  s7_pointer arg2 = caddr(car_x);
-		  int32_t start = sc->pc;
-		  opc->v[3].d_vd_f = vfunc;
-		  if (!is_pair(arg2))
+		  opc->v[2].x = s7_number_to_real(sc, arg2);
+		  opc->v[0].fd = opt_d_vd_c;
+		  return(true);
+		}
+	      opc->v[2].p = lookup_slot_from(arg2, sc->curlet);
+	      if (is_slot(opc->v[2].p))
+		{
+		  if (is_t_real(slot_value(opc->v[2].p)))
 		    {
-		      opc->v[1].p = slot;
-		      opc->v[5].obj = (void *)c_object_value(slot_value(slot));
-		      if (is_small_real(arg2))
-			{
-			  opc->v[2].x = s7_number_to_real(sc, arg2);
-			  opc->v[0].fd = opt_d_vd_c;
-			  return(true);
-			}
-		      opc->v[2].p = lookup_slot_from(arg2, sc->curlet);
-		      if (is_slot(opc->v[2].p))
-			{
-			  if (is_t_real(slot_value(opc->v[2].p)))
-			    {
-			      opc->v[0].fd = opt_d_vd_s;
-			      return(true);
-			    }
-			  if (!float_optimize(sc, cddr(car_x)))
-			    return_false(sc, car_x);
-			  if (d_vd_f_combinable(sc, start))
-			    return(true);
-			  opc->v[0].fd = opt_d_vd_f;
-			  opc->v[8].o1 = sc->opts[start];
-			  opc->v[9].fd = sc->opts[start]->v[0].fd;
-			  return(true);
-			}}
-		  else /* is pair arg2 */
-		    {
-		      if (float_optimize(sc, cddr(car_x)))
-			{
-			  opc->v[1].p = slot;
-			  opc->v[5].obj = (void *)c_object_value(slot_value(slot));
-			  if (d_vd_f_combinable(sc, start))
-			    return(true);
-			  opc->v[0].fd = opt_d_vd_f;
-			  opc->v[8].o1 = sc->opts[start];
-			  opc->v[9].fd = sc->opts[start]->v[0].fd;
-			  return(true);
-			}
-		      pc_fallback(sc, start);
-		    }}}}}
+		      opc->v[0].fd = opt_d_vd_s;
+		      return(true);
+		    }
+		  if (!float_optimize(sc, cddr(car_x)))
+		    return_false(sc, car_x);
+		  if (d_vd_f_combinable(sc, start))
+		    return(true);
+		  opc->v[0].fd = opt_d_vd_f;
+		  opc->v[8].o1 = sc->opts[start];
+		  opc->v[9].fd = sc->opts[start]->v[0].fd;
+		  return(true);
+		}}
+	  else /* is pair arg2 */
+	    {
+	      if (float_optimize(sc, cddr(car_x)))
+		{
+		  opc->v[1].p = slot;
+		  opc->v[5].obj = (void *)c_object_value(slot_value(slot));
+		  if (d_vd_f_combinable(sc, start))
+		    return(true);
+		  opc->v[0].fd = opt_d_vd_f;
+		  opc->v[8].o1 = sc->opts[start];
+		  opc->v[9].fd = sc->opts[start]->v[0].fd;
+		  return(true);
+		}
+	      pc_fallback(sc, start);
+	    }}}
   return_false(sc, car_x);
 }
 
@@ -59780,59 +59787,59 @@ static bool d_id_sf_combinable(s7_scheme *sc, opt_info *opc)
 
 static bool d_id_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
+  s7_pointer p;
+  int32_t start = sc->pc;
   s7_d_id_t flt_func;
   flt_func = s7_d_id_function(s_func);
-  if (flt_func)
+  if (!flt_func)
+    return_false(sc, car_x);
+  opc->v[3].d_id_f = flt_func;
+  p = opt_integer_symbol(sc, cadr(car_x));
+  if (p)
     {
-      s7_pointer p;
-      int32_t start = sc->pc;
-      opc->v[3].d_id_f = flt_func;
-      p = opt_integer_symbol(sc, cadr(car_x));
-      if (p)
+      opc->v[1].p = p;
+      if (is_t_real(caddr(car_x)))
 	{
-	  opc->v[1].p = p;
-	  if (is_t_real(caddr(car_x)))
-	    {
-	      opc->v[0].fd = opt_d_id_sc;
-	      opc->v[2].x = real(caddr(car_x));
-	      return(true);
-	    }
-	  if (float_optimize(sc, cddr(car_x)))
-	    {
-	      if (d_id_sf_combinable(sc, opc))
-		return(true);
-	      opc->v[0].fd = opt_d_id_sf;
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fd = sc->opts[start]->v[0].fd;
-	      return(true);
-	    }
-	  pc_fallback(sc, start);
+	  opc->v[0].fd = opt_d_id_sc;
+	  opc->v[2].x = real(caddr(car_x));
+	  return(true);
 	}
-      if (is_t_integer(cadr(car_x)))
+      if (float_optimize(sc, cddr(car_x)))
 	{
-	  if (float_optimize(sc, cddr(car_x)))
-	    {
-	      opc->v[0].fd = opt_d_id_cf;
-	      opc->v[1].i = integer(cadr(car_x));
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fd = sc->opts[start]->v[0].fd;
-	      return(true);
-	    }
-	  pc_fallback(sc, start);
+	  if (d_id_sf_combinable(sc, opc))
+	    return(true);
+	  opc->v[0].fd = opt_d_id_sf;
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fd = sc->opts[start]->v[0].fd;
+	  return(true);
 	}
-      opc->v[8].o1 = sc->opts[sc->pc];
-      if (int_optimize(sc, cdr(car_x)))
+      pc_fallback(sc, start);
+    }
+  if (is_t_integer(cadr(car_x)))
+    {
+      if (float_optimize(sc, cddr(car_x)))
 	{
-	  opc->v[9].fi = opc->v[8].o1->v[0].fi;
-	  opc->v[10].o1 = sc->opts[sc->pc];
-	  if (float_optimize(sc, cddr(car_x)))
-	    {
-	      opc->v[11].fd = opc->v[10].o1->v[0].fd;
-	      opc->v[0].fd = opt_d_id_ff;
-	      return(true);
-	    }
-	  pc_fallback(sc, start);
-	}}
+	  opc->v[0].fd = opt_d_id_cf;
+	  opc->v[1].i = integer(cadr(car_x));
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fd = sc->opts[start]->v[0].fd;
+	  return(true);
+	}
+      pc_fallback(sc, start);
+    }
+  opc->v[8].o1 = sc->opts[sc->pc];
+  if (int_optimize(sc, cdr(car_x)))
+    {
+      opc->v[9].fi = opc->v[8].o1->v[0].fi;
+      opc->v[10].o1 = sc->opts[sc->pc];
+      if (float_optimize(sc, cddr(car_x)))
+	{
+	  opc->v[11].fd = opc->v[10].o1->v[0].fd;
+	  opc->v[0].fd = opt_d_id_ff;
+	  return(true);
+	}
+      pc_fallback(sc, start);
+    }
   return_false(sc, car_x);
 }
 
@@ -60235,225 +60242,226 @@ static bool d_dd_call_combinable(s7_scheme *sc, opt_info *opc, s7_d_dd_t func)
 
 static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
+  s7_pointer slot, arg1 = cadr(car_x), arg2 = caddr(car_x);
+  int32_t start = sc->pc;
+  opt_info *o1;
   s7_d_dd_t func;
   s7_d_7dd_t func7 = NULL;
   func = s7_d_dd_function(s_func);
-  if (!func) func7 = s7_d_7dd_function(s_func);
-  if ((func) || (func7))
+  if (!func) 
     {
-      s7_pointer slot, arg1 = cadr(car_x), arg2 = caddr(car_x);
-      int32_t start = sc->pc;
-      opt_info *o1;
-      if (func)
-	opc->v[3].d_dd_f = func;
-      else opc->v[3].d_7dd_f = func7;
-
-      /* arg1 = real constant */
-      if (is_small_real(arg1))
+      func7 = s7_d_7dd_function(s_func);
+      if (!func7) return_false(sc, car_x);
+    }
+  if (func)
+    opc->v[3].d_dd_f = func;
+  else opc->v[3].d_7dd_f = func7;
+  
+  /* arg1 = real constant */
+  if (is_small_real(arg1))
+    {
+      if (is_small_real(arg2))
 	{
-	  if (is_small_real(arg2))
-	    {
-	      if ((!is_t_real(arg1)) && (!is_t_real(arg2)))
-		return_false(sc, car_x);
-	      opc->v[1].x = s7_number_to_real(sc, arg1);
-	      opc->v[2].x = s7_number_to_real(sc, arg2);
-	      opc->v[0].fd = (func) ? opt_d_dd_cc : opt_d_7dd_cc;
-	      return(true);
-	    }
-	  slot = opt_float_symbol(sc, arg2);
-	  if (slot)
-	    {
-	      opc->v[1].p = slot;
-	      opc->v[2].x = s7_number_to_real(sc, arg1); /* move arg1? */
-	      opc->v[0].fd = (func) ? opt_d_dd_cs : opt_d_7dd_cs;
-	      return(true);
-	    }
-	  if (float_optimize(sc, cddr(car_x)))
-	    {
-	      opc->v[1].x = s7_number_to_real(sc, arg1);
-	      if (d_dd_call_combinable(sc, opc, func))
-		return(true);
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fd = sc->opts[start]->v[0].fd;
-	      opc->v[0].fd = (func) ? opt_d_dd_cf : opt_d_7dd_cf;
-	      if ((opc->v[1].x == 1.0) && (func == subtract_d_dd)) opc->v[0].fd = opt_d_dd_1f_subtract;
-	      return(true);
-	    }
-	  pc_fallback(sc, start);
-	  return_false(sc, car_x);
+	  if ((!is_t_real(arg1)) && (!is_t_real(arg2)))
+	    return_false(sc, car_x);
+	  opc->v[1].x = s7_number_to_real(sc, arg1);
+	  opc->v[2].x = s7_number_to_real(sc, arg2);
+	  opc->v[0].fd = (func) ? opt_d_dd_cc : opt_d_7dd_cc;
+	  return(true);
 	}
-
-      /* arg1 = float symbol */
-      slot = opt_float_symbol(sc, arg1);
+      slot = opt_float_symbol(sc, arg2);
       if (slot)
 	{
 	  opc->v[1].p = slot;
-	  if (is_small_real(arg2))
-	    {
-	      opc->v[2].x = s7_number_to_real(sc, arg2);
-	      if (func)
-		opc->v[0].fd = (func == subtract_d_dd) ? opt_d_dd_sc_sub : opt_d_dd_sc;
-	      else opc->v[0].fd = opt_d_7dd_sc;
-	      return(true);
-	    }
-	  slot = opt_float_symbol(sc, arg2);
-	  if (slot)
-	    {
-	      opc->v[2].p = slot;
-	      if (func)
-		{
-		  if (func == multiply_d_dd)
-		    opc->v[0].fd = opt_d_dd_ss_mul;
-		  else opc->v[0].fd = (func == add_d_dd) ? opt_d_dd_ss_add : opt_d_dd_ss;
-		}
-	      else opc->v[0].fd = opt_d_7dd_ss;
-	      return(true);
-	    }
-	  if (float_optimize(sc, cddr(car_x)))
-	    {
-	      if (d_dd_sf_combinable(sc, opc, func))
-		return(true);
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fd = sc->opts[start]->v[0].fd;
-	      if (func)
-		{
-		  opc->v[0].fd = (func == multiply_d_dd) ? opt_d_dd_sf_mul :
-		                  ((func == add_d_dd) ? opt_d_dd_sf_add :
-				   ((func == subtract_d_dd) ? opt_d_dd_sf_sub : opt_d_dd_sf));
-		  if ((func == multiply_d_dd) && (opc->v[5].fd == opt_d_7pii_scs))
-		    opc->v[0].fd = opt_d_dd_sf_mul_fvref;
-		}
-	      else opc->v[0].fd = opt_d_7dd_sf;
-	      return(true);
-	    }
-	  pc_fallback(sc, start);
-	  return_false(sc, car_x);
+	  opc->v[2].x = s7_number_to_real(sc, arg1); /* move arg1? */
+	  opc->v[0].fd = (func) ? opt_d_dd_cs : opt_d_7dd_cs;
+	  return(true);
 	}
-
-      /* arg1 = float expr or non-float */
-      o1 = sc->opts[sc->pc];
-      if (float_optimize(sc, cdr(car_x)))
+      if (float_optimize(sc, cddr(car_x)))
 	{
-	  int32_t start2 = sc->pc;
-	  if (is_small_real(arg2))
+	  opc->v[1].x = s7_number_to_real(sc, arg1);
+	  if (d_dd_call_combinable(sc, opc, func))
+	    return(true);
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fd = sc->opts[start]->v[0].fd;
+	  opc->v[0].fd = (func) ? opt_d_dd_cf : opt_d_7dd_cf;
+	  if ((opc->v[1].x == 1.0) && (func == subtract_d_dd)) opc->v[0].fd = opt_d_dd_1f_subtract;
+	  return(true);
+	}
+      pc_fallback(sc, start);
+      return_false(sc, car_x);
+    }
+  
+  /* arg1 = float symbol */
+  slot = opt_float_symbol(sc, arg1);
+  if (slot)
+    {
+      opc->v[1].p = slot;
+      if (is_small_real(arg2))
+	{
+	  opc->v[2].x = s7_number_to_real(sc, arg2);
+	  if (func)
+	    opc->v[0].fd = (func == subtract_d_dd) ? opt_d_dd_sc_sub : opt_d_dd_sc;
+	  else opc->v[0].fd = opt_d_7dd_sc;
+	  return(true);
+	}
+      slot = opt_float_symbol(sc, arg2);
+      if (slot)
+	{
+	  opc->v[2].p = slot;
+	  if (func)
 	    {
-	      opc->v[2].x = s7_number_to_real(sc, arg2);
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fd = sc->opts[start]->v[0].fd;
-	      if (func)
+	      if (func == multiply_d_dd)
+		opc->v[0].fd = opt_d_dd_ss_mul;
+	      else opc->v[0].fd = (func == add_d_dd) ? opt_d_dd_ss_add : opt_d_dd_ss;
+	    }
+	  else opc->v[0].fd = opt_d_7dd_ss;
+	  return(true);
+	}
+      if (float_optimize(sc, cddr(car_x)))
+	{
+	  if (d_dd_sf_combinable(sc, opc, func))
+	    return(true);
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fd = sc->opts[start]->v[0].fd;
+	  if (func)
+	    {
+	      opc->v[0].fd = (func == multiply_d_dd) ? opt_d_dd_sf_mul :
+		((func == add_d_dd) ? opt_d_dd_sf_add :
+		 ((func == subtract_d_dd) ? opt_d_dd_sf_sub : opt_d_dd_sf));
+	      if ((func == multiply_d_dd) && (opc->v[5].fd == opt_d_7pii_scs))
+		opc->v[0].fd = opt_d_dd_sf_mul_fvref;
+	    }
+	  else opc->v[0].fd = opt_d_7dd_sf;
+	  return(true);
+	}
+      pc_fallback(sc, start);
+      return_false(sc, car_x);
+    }
+  
+  /* arg1 = float expr or non-float */
+  o1 = sc->opts[sc->pc];
+  if (float_optimize(sc, cdr(car_x)))
+    {
+      int32_t start2 = sc->pc;
+      if (is_small_real(arg2))
+	{
+	  opc->v[2].x = s7_number_to_real(sc, arg2);
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fd = sc->opts[start]->v[0].fd;
+	  if (func)
+	    {
+	      if (func == add_d_dd)
 		{
+		  opc->v[0].fd = (opc->v[5].fd == opt_d_7pi_ss_fvref_unchecked) ? opt_d_dd_fc_fvref_add : opt_d_dd_fc_add;
+		  return(true);
+		}
+	      if (func == subtract_d_dd)
+		{
+		  opc->v[0].fd = opt_d_dd_fc_subtract;
+		  /* if o1->v[0].fd = opt_d_7d_c and its o->v[3].d_7d_f = random_d_7d it's (- (random f1) f2) */
+		  if ((opc == sc->opts[sc->pc - 2]) &&
+		      (sc->opts[start]->v[0].fd == opt_d_7d_c) &&
+		      (sc->opts[start]->v[3].d_7d_f == random_d_7d))
+		    {
+		      opc->v[0].fd = opt_subtract_random_f_f;
+		      opc->v[1].x = sc->opts[start]->v[1].x; /* random arg */
+		      backup_pc(sc);
+		    }}
+	      else opc->v[0].fd = opt_d_dd_fc;
+	    }
+	  else opc->v[0].fd = opt_d_7dd_fc;
+	  return(true);
+	}
+      slot = opt_float_symbol(sc, arg2);
+      if (slot)
+	{
+	  opc->v[1].p = slot;
+	  if (d_dd_fs_combinable(sc, opc, func))
+	    return(true);
+	  opc->v[4].o1 = sc->opts[start];
+	  opc->v[5].fd = sc->opts[start]->v[0].fd;
+	  if (func)
+	    {
+	      opc->v[0].fd = (func == multiply_d_dd) ? opt_d_dd_fs_mul :
+		((func == add_d_dd) ? opt_d_dd_fs_add :
+		 ((func == subtract_d_dd) ? opt_d_dd_fs_sub : opt_d_dd_fs));
+	      if ((func == add_d_dd) && (opc->v[5].fd == opt_d_7pii_scs))
+		opc->v[0].fd = opt_d_dd_fs_add_fvref;
+	    }
+	  else opc->v[0].fd = opt_d_7dd_fs;
+	  return(true);
+	}
+      opc->v[10].o1 = sc->opts[sc->pc];
+      if (float_optimize(sc, cddr(car_x)))
+	{
+	  opc->v[8].o1 = o1;
+	  opc->v[9].fd = o1->v[0].fd;
+	  opc->v[11].fd = opc->v[10].o1->v[0].fd;
+	  if (func)
+	    {
+	      if (d_dd_ff_combinable(sc, opc, start))
+		return(true);
+	      opc->v[0].fd = opt_d_dd_ff;
+	      if (func == multiply_d_dd)
+		{
+		  if (arg1 == arg2)
+		    opc->v[0].fd = opt_d_dd_ff_square;
+		  else
+		    if ((opc->v[9].fd == opt_d_7pii_sss) && (opc->v[11].fd == opt_d_7pii_sss) &&
+			(o1->v[4].d_7pii_f == float_vector_ref_d_7pii)) /* currently redundant */
+		      opc->v[0].fd = opt_d_dd_ff_mul_sss;
+		    else opc->v[0].fd = opt_d_dd_ff_mul;
+		  return(true);
+		}
+	      else
+		{
+		  opt_info *o2;
+		  o2 = sc->opts[start2]; /* this is opc->v[10].o1 */
 		  if (func == add_d_dd)
 		    {
-		      opc->v[0].fd = (opc->v[5].fd == opt_d_7pi_ss_fvref_unchecked) ? opt_d_dd_fc_fvref_add : opt_d_dd_fc_add;
+		      if (o2->v[0].fd == opt_d_dd_ff_mul)
+			{
+			  opc->v[0].fd = opt_d_dd_ff_add_mul;
+			  opc->v[4].o1 = o1;            /* add first arg */
+			  opc->v[5].fd = o1->v[0].fd;
+			  opc->v[8].o1 = o2->v[8].o1;   /* mul first arg */
+			  opc->v[9].fd = o2->v[9].fd;
+			  opc->v[10].o1 = o2->v[10].o1; /* mul second arg */
+			  opc->v[11].fd = o2->v[11].fd;
+			  return(true);
+			}
+		      if ((o2->v[0].fd == opt_d_7pi_sf) &&
+			  (o2->v[3].d_7pi_f == float_vector_ref_d_7pi))
+			{
+			  opc->v[0].fd = opt_d_dd_ff_add_fv_ref;
+			  opc->v[6].p = o2->v[1].p;
+			  opc->v[8].o1 = o2->v[10].o1; /* sc->opts[start2 + 1]; */
+			  opc->v[9].fi = o2->v[11].fi; /* sc->opts[start2 + 1]->v[0].fi; */
+			}
+		      else
+			{
+			  opc->v[0].fd = opt_d_dd_ff_add;
+			  opc->v[10].o1 = o2;
+			  opc->v[11].fd = o2->v[0].fd;
+			}
+		      opc->v[4].o1 = o1;              /* sc->opts[start]; */
+		      opc->v[5].fd = o1->v[0].fd;     /* sc->opts[start]->v[0].fd; */
 		      return(true);
 		    }
 		  if (func == subtract_d_dd)
 		    {
-		      opc->v[0].fd = opt_d_dd_fc_subtract;
-		      /* if o1->v[0].fd = opt_d_7d_c and its o->v[3].d_7d_f = random_d_7d it's (- (random f1) f2) */
-		      if ((opc == sc->opts[sc->pc - 2]) &&
-			  (sc->opts[start]->v[0].fd == opt_d_7d_c) &&
-			  (sc->opts[start]->v[3].d_7d_f == random_d_7d))
-			{
-			  opc->v[0].fd = opt_subtract_random_f_f;
-			  opc->v[1].x = sc->opts[start]->v[1].x; /* random arg */
-			  backup_pc(sc);
-			}}
-		  else opc->v[0].fd = opt_d_dd_fc;
-		}
-	      else opc->v[0].fd = opt_d_7dd_fc;
-	      return(true);
-	    }
-	  slot = opt_float_symbol(sc, arg2);
-	  if (slot)
-	    {
-	      opc->v[1].p = slot;
-	      if (d_dd_fs_combinable(sc, opc, func))
-		return(true);
-	      opc->v[4].o1 = sc->opts[start];
-	      opc->v[5].fd = sc->opts[start]->v[0].fd;
-	      if (func)
-		{
-		  opc->v[0].fd = (func == multiply_d_dd) ? opt_d_dd_fs_mul :
-		                  ((func == add_d_dd) ? opt_d_dd_fs_add :
-		                   ((func == subtract_d_dd) ? opt_d_dd_fs_sub : opt_d_dd_fs));
-		  if ((func == add_d_dd) && (opc->v[5].fd == opt_d_7pii_scs))
-		    opc->v[0].fd = opt_d_dd_fs_add_fvref;
-		}
-	      else opc->v[0].fd = opt_d_7dd_fs;
-	      return(true);
-	    }
-	  opc->v[10].o1 = sc->opts[sc->pc];
-	  if (float_optimize(sc, cddr(car_x)))
-	    {
-	      opc->v[8].o1 = o1;
-	      opc->v[9].fd = o1->v[0].fd;
-	      opc->v[11].fd = opc->v[10].o1->v[0].fd;
-	      if (func)
-		{
-		  if (d_dd_ff_combinable(sc, opc, start))
-		    return(true);
-		  opc->v[0].fd = opt_d_dd_ff;
-		  if (func == multiply_d_dd)
-		    {
-		      if (arg1 == arg2)
-			opc->v[0].fd = opt_d_dd_ff_square;
-		      else
-			if ((opc->v[9].fd == opt_d_7pii_sss) && (opc->v[11].fd == opt_d_7pii_sss) &&
-			    (o1->v[4].d_7pii_f == float_vector_ref_d_7pii)) /* currently redundant */
-			  opc->v[0].fd = opt_d_dd_ff_mul_sss;
-			else opc->v[0].fd = opt_d_dd_ff_mul;
+		      opc->v[0].fd = opt_d_dd_ff_sub;
+		      opc->v[4].o1 = o1;          /* sc->opts[start]; */
+		      opc->v[5].fd = o1->v[0].fd; /* sc->opts[start]->v[0].fd; */
+		      opc->v[10].o1 = o2;
+		      opc->v[11].fd = o2->v[0].fd;
 		      return(true);
-		    }
-		  else
-		    {
-		      opt_info *o2;
-		      o2 = sc->opts[start2]; /* this is opc->v[10].o1 */
-		      if (func == add_d_dd)
-			{
-			  if (o2->v[0].fd == opt_d_dd_ff_mul)
-			    {
-			      opc->v[0].fd = opt_d_dd_ff_add_mul;
-			      opc->v[4].o1 = o1;            /* add first arg */
-			      opc->v[5].fd = o1->v[0].fd;
-			      opc->v[8].o1 = o2->v[8].o1;   /* mul first arg */
-			      opc->v[9].fd = o2->v[9].fd;
-			      opc->v[10].o1 = o2->v[10].o1; /* mul second arg */
-			      opc->v[11].fd = o2->v[11].fd;
-			      return(true);
-			    }
-			  if ((o2->v[0].fd == opt_d_7pi_sf) &&
-			      (o2->v[3].d_7pi_f == float_vector_ref_d_7pi))
-			    {
-			      opc->v[0].fd = opt_d_dd_ff_add_fv_ref;
-			      opc->v[6].p = o2->v[1].p;
-			      opc->v[8].o1 = o2->v[10].o1; /* sc->opts[start2 + 1]; */
-			      opc->v[9].fi = o2->v[11].fi; /* sc->opts[start2 + 1]->v[0].fi; */
-			    }
-			  else
-			    {
-			      opc->v[0].fd = opt_d_dd_ff_add;
-			      opc->v[10].o1 = o2;
-			      opc->v[11].fd = o2->v[0].fd;
-			    }
-			  opc->v[4].o1 = o1;              /* sc->opts[start]; */
-			  opc->v[5].fd = o1->v[0].fd;     /* sc->opts[start]->v[0].fd; */
-			  return(true);
-			}
-		      if (func == subtract_d_dd)
-			{
-			  opc->v[0].fd = opt_d_dd_ff_sub;
-			  opc->v[4].o1 = o1;          /* sc->opts[start]; */
-			  opc->v[5].fd = o1->v[0].fd; /* sc->opts[start]->v[0].fd; */
-			  opc->v[10].o1 = o2;
-			  opc->v[11].fd = o2->v[0].fd;
-			  return(true);
-			}}}
-	      else opc->v[0].fd = opt_d_7dd_ff;
-	      return(true);
-	    }}
-      pc_fallback(sc, start);
-    }
+		    }}}
+	  else opc->v[0].fd = opt_d_7dd_ff;
+	  return(true);
+	}}
+  pc_fallback(sc, start);
   return_false(sc, car_x);
 }
 
@@ -81947,21 +81955,22 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	}
       else /* not safe_step */
 	{
-	  s7_int step;
+	  s7_int step, stop;
 	  s7_pointer step_slot = let_dox_slot1(sc->curlet), end_slot = let_dox_slot2(sc->curlet);
 	  step = integer(slot_value(step_slot));
+	  stop = integer(slot_value(end_slot));
 	  if (func == opt_cell_any_nr)
 	    {
 	      opt_info *o = sc->opts[0];
 	      s7_pointer (*fp)(opt_info *o);
 	      fp = o->v[0].fp;
-	      if (!opt_do_copy(sc, o, step, integer(slot_value(end_slot))))
+	      if (!opt_do_copy(sc, o, step, stop))
 		{
-		  if ((step >= 0) && (integer(slot_value(end_slot)) < NUM_SMALL_INTS))
+		  if ((step >= 0) && (stop < NUM_SMALL_INTS))
 		    {
 		      if (fp == opt_when_p_2)
 			{
-			  while (step < integer(slot_value(end_slot)))
+			  while (step < stop)
 			    {
 			      slot_set_value(step_slot, small_int(step));
 			      if (o->v[4].fb(o->v[3].o1))
@@ -81972,22 +81981,22 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 			      step = integer(slot_value(step_slot)) + 1;
 			    }}
 		      else
-			while (step < integer(slot_value(end_slot)))
+			while (step < stop)
 			  {
 			    slot_set_value(step_slot, small_int(step));
 			    fp(o);
 			    step = integer(slot_value(step_slot)) + 1;
 			  }}
 		  else
-		    while (step < integer(slot_value(end_slot)))
+		    while (step < stop)
 		      {
 			slot_set_value(step_slot, make_integer(sc, step));
 			fp(o);
 			step = integer(slot_value(step_slot)) + 1;
 		      }}}
 	  else
-	    if ((step >= 0) && (integer(slot_value(end_slot)) < NUM_SMALL_INTS))
-	      while (step < integer(slot_value(end_slot)))
+	    if ((step >= 0) && (stop < NUM_SMALL_INTS))
+	      while (step < stop)
 		{
 		  slot_set_value(step_slot, small_int(step));
 		  func(sc);
@@ -81999,19 +82008,23 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  s7_int (*fi)(opt_info *o);
 		  opt_info *o = sc->opts[0];
 		  fi = o->v[0].fi;
-		  while (step < integer(slot_value(end_slot)))
+		  while (step < stop)
 		    {
 		      slot_set_value(step_slot, make_integer(sc, step));
 		      fi(o);
 		      step = integer(slot_value(step_slot)) + 1;
 		    }}
 	      else
-		while (step < integer(slot_value(end_slot)))
+		while (step < stop)
 		  {
 		    slot_set_value(step_slot, make_integer(sc, step));
 		    func(sc);
 		    step = integer(slot_value(step_slot)) + 1;
-		  }}
+		  }
+#if S7_DEBUGGING
+	  if (stop != integer(slot_value(end_slot))) fprintf(stderr, "end: %ld %ld\n", stop, integer(slot_value(end_slot)));
+#endif
+	}
       sc->value = sc->T;
       sc->code = cdadr(scc);
       return(true);
@@ -82053,9 +82066,10 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	      }
 	    else
 	      {
-		s7_int step;
+		s7_int step, stop;
 		s7_pointer step_slot = let_dox_slot1(sc->curlet), end_slot = let_dox_slot2(sc->curlet);
-		for (step = integer(slot_value(step_slot)); step < integer(slot_value(end_slot)); step = integer(slot_value(step_slot)) + 1)
+		stop = integer(slot_value(end_slot));
+		for (step = integer(slot_value(step_slot)); step < stop; step = integer(slot_value(step_slot)) + 1)
 		  {
 		    slot_set_value(step_slot, make_integer(sc, step));
 		    for (i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
@@ -82090,9 +82104,10 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	  }
 	else
 	  {
-	    s7_int step;
+	    s7_int step, stop;
 	    s7_pointer step_slot = let_dox_slot1(sc->curlet), end_slot = let_dox_slot2(sc->curlet);
-	    for (step = integer(slot_value(step_slot)); step < integer(slot_value(end_slot)); step = integer(slot_value(step_slot)) + 1)
+	    stop = integer(slot_value(end_slot));
+	    for (step = integer(slot_value(step_slot)); step < stop; step = integer(slot_value(step_slot)) + 1)
 	      {
 		slot_set_value(step_slot, make_integer(sc, step));
 		for (i = 0; i < body_len; i++) body[i]->v[0].fp(body[i]);
@@ -95040,37 +95055,37 @@ int main(int argc, char **argv)
  * tref        530          691    687    480    477
  * tauto       775          648    642    503    497
  * tshoot     1506          883    872    837    812
- * index      1054         1026   1016    989    983
+ * index      1054         1026   1016    989    985
  * tmock      7695         1177   1165   1111   1098
- * tvect      2184         2456   2413   1867   1796  1772
+ * tvect      2184         2456   2413   1867   1757
  * s7test     4532         1873   1831   1817   1815
  * lt         2128         2123   2110   2119   2121
- * tform      3258         2281   2273   2274   2273  2770
+ * tform      3258         2281   2273   2274   2270
  * tmac       2503         3317   3277   2436   2373
  * tread      2606         2440   2421   2409   2404
  * trclo      4252         2715   2561   2459   2459
  * tmat       2683         3065   3042   2524   2527
  * fbench     2965         2688   2583   2542   2542
  * tcopy      2628         8035   5546   2557   2558
- * tb         3362         2735   2681   2565   2564
- * dup        3426         3805   3788   2962   2694  2697
+ * tb         3362         2735   2681   2565   2563
+ * dup        3426         3805   3788   2962   2691
  * titer      2727         2865   2842   2710   2710
  * tsort      3657         3105   3104   2925   2924
  * tset       3275         3253   3104   3244   3211
  * tio        3717         3816   3752   3703   3701
  * teq        3722         4068   4045   3701   3578
- * tstr       6650         5281   4863   4329   4319
+ * tstr       6650         5281   4863   4329   4316
  * tclo       4841         4787   4735   4512   4417
  * tcase      4550         4960   4793   4480   4474
- * tlet       5555         7775   5640   4488   4488
- * tmap       4816         8270   8188   4730   4711
- * tfft      113.2         7820   7729   4816   4804
- * tnum       59.1         6348   6013   5449   5446
+ * tlet       5555         7775   5640   4488   4487
+ * tmap       4816         8270   8188   4730   4710
+ * tfft      113.2         7820   7729   4816   4803
+ * tnum       59.1         6348   6013   5449   5451
  * tmisc      5828         7389   6210   5477   5472
  * tgsl       25.2         8485   7802   6394   6390
  * trec       8493         6936          6563   6563
- * tlist      7196         7896          7216   7162
- * tgc        10.9         11.9   11.1   9070   8782
+ * tlist      7196         7896          7216   7160
+ * tgc        10.9         11.9   11.1   9070   8781
  * thash      36.4         11.8   11.7   10.3   9838
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.9         15.6   15.6   15.6   15.6
@@ -95080,7 +95095,8 @@ int main(int argc, char **argv)
  * tbig      598.5        177.4  175.8  169.6  169.5
  * -------------------------------------------------------
  *
- * more random vals in t725? and current str! ffitest (tmp), no definers t725?
+ * more random vals in t725? no definers t725?
+ * ffitest (opt cases, func-port choices)
  * terminal app doc?
  * s7.h s7_make_normal_vector for multidim case? make_float|int_vector have dims arg
  *   also s7_is_random_state
