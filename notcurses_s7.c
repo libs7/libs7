@@ -2,7 +2,7 @@
  *
  *   requires notcurses 2.1.6 or later (for notcurses_core)
  *   Fedora: notcurses notcurses-devel notcurses-utils
- *   tested in fedora 32/33, Ubuntu 20.10
+ *   tested in fedora 32/33/34, Ubuntu 20.10/21.04
  */
 
 #include <locale.h>
@@ -4463,7 +4463,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncplane_set_styles, 2, 0, false);
   nc_func(ncplane_on_styles, 2, 0, false);
   nc_func(ncplane_off_styles, 2, 0, false);
-  /* nc_func(notcurses_render_to_buffer, 3, 0, false); */ /* now ncpile_reneder_to_buffer? */
+  /* nc_func(notcurses_render_to_buffer, 3, 0, false); */ /* now ncpile_render_to_buffer? */
   nc_func(notcurses_stats_reset, 2, 0, false);
   nc_func(notcurses_stats_alloc, 1, 0, false);
   nc_func(ncplane_putnstr_aligned, 5, 0, false);

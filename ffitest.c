@@ -81,7 +81,7 @@ typedef struct {
   s7_pointer data;
 } dax;
 
-static s7_int dax_type_tag = 0;
+static s7_int dax_type_tag = 0, dx_type_tag = 0;
 
 static s7_pointer dax_to_string(s7_scheme *sc, s7_pointer args)
 {
@@ -186,6 +186,26 @@ static s7_pointer equality_dax(s7_scheme *sc, s7_pointer args) /* this is the ne
 			 (d1->x == d2->x) &&
 			 (s7_is_equal(sc, d1->data, d2->data))));
 }
+
+
+static s7_pointer free_dx(s7_scheme *sc, s7_pointer obj)
+{
+  free(s7_c_object_value(obj));
+  return(NULL);
+}
+
+static s7_pointer mark_dx(s7_scheme *sc, s7_pointer obj)
+{
+  dax *o = (dax *)s7_c_object_value(obj);
+  if (o) s7_mark(o->data);
+  return(NULL);
+}
+
+static s7_pointer dx_to_list(s7_scheme *sc, s7_pointer obj)
+{
+  return(s7_nil(sc));
+}
+
 
 static s7_pointer plus(s7_scheme *sc, s7_pointer args)
 {
@@ -566,8 +586,95 @@ static s7_pointer big_add_1(s7_scheme *sc, s7_pointer args)
 }
 #endif
 
+static const char *snd_names[8] = {
+    "*clm-array-print-length*", "ws.scm",
+    "*clm-channels*", "ws.scm",          
+    "zone-tailed-hawk", "animals.scm",
+    "zoom-spectrum", "examp.scm",
+};
+
+
 static s7_double opt_d_func(void) {return(1.0);}
 static s7_pointer g_d_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, 1.0));}
+
+static s7_double opt_d_d_func(s7_double x) {return(x + 1.0);}
+static s7_pointer g_d_d_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + 1.0));}
+
+static s7_double opt_d_dd_func(s7_double x, s7_double y) {return(x + y);}
+static s7_pointer g_d_dd_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + s7_real(s7_cadr(args))));}
+
+static s7_double opt_d_ddd_func(s7_double x, s7_double y, s7_double z) {return(x + y + z);}
+static s7_pointer g_d_ddd_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + s7_real(s7_cadr(args)) + s7_real(s7_caddr(args))));}
+
+static s7_double opt_d_dddd_func(s7_double w, s7_double x, s7_double y, s7_double z) {return(w + x + y + z);}
+static s7_pointer g_d_dddd_func(s7_scheme *sc, s7_pointer args) 
+{
+  return(s7_make_real(sc, s7_real(s7_car(args)) + s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + s7_real(s7_cadddr(args))));
+}
+
+static s7_double opt_d_p_func(s7_pointer x) {return(s7_real(x));}
+static s7_pointer g_d_p_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args))));}
+
+static s7_int opt_i_i_func(s7_int x) {return(x + 1);}
+static s7_pointer g_i_i_func(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, s7_integer(s7_car(args)) + 1));}
+
+static s7_int opt_i_ii_func(s7_int x, s7_int y) {return(x + y);}
+static s7_pointer g_i_ii_func(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, s7_integer(s7_car(args)) + s7_integer(s7_cadr(args))));}
+
+static s7_double opt_d_id_func(s7_int x, s7_double y) {return(x + y);}
+static s7_pointer g_d_id_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_integer(s7_car(args)) + s7_real(s7_cadr(args))));}
+
+static s7_double opt_d_ip_func(s7_int x, s7_pointer y) {return(x + s7_real(y));}
+static s7_pointer g_d_ip_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_integer(s7_car(args)) + s7_real(s7_cadr(args))));}
+
+static s7_int opt_i_7d_func(s7_scheme *sc, s7_double x) {return((s7_int)x);}
+static s7_pointer g_i_7d_func(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, (s7_int)s7_real(s7_car(args))));}
+
+static s7_int opt_i_7p_func(s7_scheme *sc, s7_pointer x) {return(s7_integer(x));}
+static s7_pointer g_i_7p_func(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, s7_integer(s7_car(args))));}
+
+static s7_double opt_d_pd_func(s7_pointer x, s7_double y) {return(s7_real(x) + y);}
+static s7_pointer g_d_pd_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + s7_real(s7_cadr(args))));}
+
+static s7_double opt_d_7pi_func(s7_scheme *sc, s7_pointer x, s7_int y) {return(s7_real(x) + y);}
+static s7_pointer g_d_7pi_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + s7_integer(s7_cadr(args))));}
+
+static s7_double opt_d_7pid_func(s7_scheme *sc, s7_pointer x, s7_int y, s7_double z) {return(s7_real(x) + y + z);}
+static s7_pointer g_d_7pid_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + s7_integer(s7_cadr(args)) + s7_real(s7_caddr(args))));}
+
+static bool opt_b_p_func(s7_pointer x) {return(s7_is_real(x));}
+static s7_pointer g_b_p_func(s7_scheme *sc, s7_pointer args) {return(s7_make_boolean(sc, s7_is_real(s7_car(args))));}
+
+static s7_pointer opt_p_d_func(s7_scheme *sc, s7_double x) {return(s7_make_real(sc, x));}
+static s7_pointer g_p_d_func(s7_scheme *sc, s7_pointer args) {return(s7_car(args));}
+
+static s7_double opt_d_v_func(void *x) {g_block *g = (g_block *)x; return(g->data[0]);}
+static s7_pointer g_d_v_func(s7_scheme *sc, s7_pointer args) {g_block *g; g = (g_block *)s7_c_object_value(s7_car(args)); return(s7_make_real(sc, g->data[0]));}
+
+static s7_double opt_d_vd_func(void *x, s7_double y) {g_block *g = (g_block *)x; return(y + g->data[0]);}
+static s7_pointer g_d_vd_func(s7_scheme *sc, s7_pointer args) 
+{
+  g_block *g; 
+  g = (g_block *)s7_c_object_value(s7_car(args)); 
+  return(s7_make_real(sc, s7_real(s7_cadr(args)) + g->data[0]));
+}
+
+static s7_double opt_d_vid_func(void *x, s7_int y, s7_double z) {g_block *g = (g_block *)x; return(z + g->data[y]);}
+static s7_pointer g_d_vid_func(s7_scheme *sc, s7_pointer args) 
+{
+  g_block *g; 
+  g = (g_block *)s7_c_object_value(s7_car(args)); 
+  return(s7_make_real(sc, s7_real(s7_caddr(args)) + g->data[s7_integer(s7_cadr(args))]));
+}
+
+static s7_double opt_d_vdd_func(void *x, s7_double y, s7_double z) {g_block *g = (g_block *)x; return(y + z + g->data[0]);}
+static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args) 
+{
+  g_block *g; 
+  g = (g_block *)s7_c_object_value(s7_car(args)); 
+  return(s7_make_real(sc, s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + g->data[0]));
+}
+
 
 int main(int argc, char **argv)
 {
@@ -1427,6 +1534,13 @@ int main(int argc, char **argv)
 
   s7_gc_unprotect_at(sc, gc_loc);
 
+  s7_define_function(sc, "dx->list", dx_to_list, 1, 0, false, NULL);
+  dx_type_tag = s7_make_c_type(sc, "dx");
+  s7_c_type_set_gc_free(sc, dx_type_tag, free_dx);
+  s7_c_type_set_gc_mark(sc, dx_type_tag, mark_dx);
+  s7_c_type_set_getter(sc, dx_type_tag, s7_name_to_value(sc, "abs"));
+  s7_c_type_set_setter(sc, dx_type_tag, s7_name_to_value(sc, "list-ref"));
+  s7_c_type_set_to_list(sc, dx_type_tag, dx_to_list);
 
   s7_define_function_star(sc, "plus", plus, "(red 32) blue", "an example of define* from C");
   if (!s7_is_procedure(s7_name_to_value(sc, "plus")))
@@ -1958,6 +2072,7 @@ int main(int argc, char **argv)
     if ((!s7_is_integer(val)) ||
 	(s7_integer(val) != 124))
       {fprintf(stderr, "%d: auto_var+1 = %s?\n", __LINE__, s1 = TO_STR(val)); free(s1);}
+    s7_autoload_set_names(sc, snd_names, 8);
   }
     
   {
@@ -2360,15 +2475,127 @@ int main(int argc, char **argv)
 
   {
     s7_float_function func;
+    s7_pfunc sfunc;
     s7_pointer symbol;
-    symbol = s7_define_safe_function(sc, "d-func", g_d_func, 0, 0, false, "opt func");
+    symbol = s7_define_safe_function(sc, "d-func", g_d_func, 0, 0, false, "d opt func");
     s7_set_d_function(sc, s7_name_to_value(sc, "d-func"), opt_d_func);
-    func = s7_float_optimize(sc, s7_list(sc, 1, s7_list(sc, 1, symbol)));
+    func = s7_float_optimize(sc, s7_list(sc, 1, s7_list(sc, 1, symbol))); /* ((d-func)) -- the extra list layer is an historical artifact */
     if (!func) fprintf(stderr, "%d: d-func not optimized\n", __LINE__);
-    /* fprintf(stderr, "%f\n", func(sc)); */
-    
-    /* and many more... */
+
+    symbol = s7_define_safe_function(sc, "d-d-func", g_d_d_func, 1, 0, false, "d-d opt func");
+    s7_set_d_d_function(sc, s7_name_to_value(sc, "d-d-func"), opt_d_d_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((d-d-func 2.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-d-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-dd-func", g_d_dd_func, 2, 0, false, "d-dd opt func");
+    s7_set_d_dd_function(sc, s7_name_to_value(sc, "d-dd-func"), opt_d_dd_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0)))); /* ((d-dd-func 2.0 3.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-dd-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-ddd-func", g_d_ddd_func, 3, 0, false, "d-ddd opt func");
+    s7_set_d_ddd_function(sc, s7_name_to_value(sc, "d-ddd-func"), opt_d_ddd_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 4, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0), s7_make_real(sc, 4.0)))); /* ((d-ddd-func 2.0 3.0 4.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-ddd-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-dddd-func", g_d_dddd_func, 4, 0, false, "d-dddd opt func");
+    s7_set_d_dddd_function(sc, s7_name_to_value(sc, "d-dddd-func"), opt_d_dddd_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, 
+       s7_list(sc, 5, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0), s7_make_real(sc, 4.0), s7_make_real(sc, 5.0)))); /* ((d-dddd-func 2.0 3.0 4.0 5.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-dddd-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "i-i-func", g_i_i_func, 1, 0, false, "i-i opt func");
+    s7_set_i_i_function(sc, s7_name_to_value(sc, "i-i-func"), opt_i_i_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_integer(sc, 2)))); /* ((i-i-func 2)) */
+    if (!sfunc) fprintf(stderr, "%d: i-i-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "i-ii-func", g_i_ii_func, 2, 0, false, "i-ii opt func");
+    s7_set_i_ii_function(sc, s7_name_to_value(sc, "i-ii-func"), opt_i_ii_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_integer(sc, 2), s7_make_integer(sc, 3)))); /* ((i-ii-func 2 3)) */
+    if (!sfunc) fprintf(stderr, "%d: i-ii-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-id-func", g_d_id_func, 2, 0, false, "d-id opt func");
+    s7_set_d_id_function(sc, s7_name_to_value(sc, "d-id-func"), opt_d_id_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_integer(sc, 2), s7_make_real(sc, 3.0)))); /* ((d-id-func 2 3.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-id-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-ip-func", g_d_ip_func, 2, 0, false, "d-ip opt func");
+    s7_set_d_ip_function(sc, s7_name_to_value(sc, "d-ip-func"), opt_d_ip_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_integer(sc, 2), s7_make_real(sc, 3.0)))); /* ((d-ip-func 2 3.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-ip-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "i-7d-func", g_i_7d_func, 1, 0, false, "i-7d opt func");
+    s7_set_i_7d_function(sc, s7_name_to_value(sc, "i-7d-func"), opt_i_7d_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((i-7d-func 2.0)) */
+    if (!sfunc) fprintf(stderr, "%d: i-7d-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "i-7p-func", g_i_7p_func, 1, 0, false, "i-7p opt func");
+    s7_set_i_7p_function(sc, s7_name_to_value(sc, "i-7p-func"), opt_i_7p_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_integer(sc, 2)))); /* ((i-7p-func 2)) */
+    if (!sfunc) fprintf(stderr, "%d: i-7p-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-p-func", g_d_p_func, 1, 0, false, "d-p opt func");
+    s7_set_d_p_function(sc, s7_name_to_value(sc, "d-p-func"), opt_d_p_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((d-p-func 2.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-p-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-pd-func", g_d_pd_func, 2, 0, false, "d-pd opt func");
+    s7_set_d_pd_function(sc, s7_name_to_value(sc, "d-pd-func"), opt_d_pd_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0)))); /* ((d-pd-func 2.0 3.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-pd-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-7pi-func", g_d_7pi_func, 2, 0, false, "d-7pi opt func");
+    s7_set_d_7pi_function(sc, s7_name_to_value(sc, "d-7pi-func"), opt_d_7pi_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_real(sc, 2.0), s7_make_integer(sc, 3)))); /* ((d-7pi-func 2.0 3)) */
+    if (!sfunc) fprintf(stderr, "%d: d-7pi-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-7pid-func", g_d_7pid_func, 3, 0, false, "d-7pid opt func");
+    s7_set_d_7pid_function(sc, s7_name_to_value(sc, "d-7pid-func"), opt_d_7pid_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 4, symbol, s7_make_real(sc, 2.0), s7_make_integer(sc, 3), s7_make_real(sc, 4.0)))); /* ((d-7pid-func 2.0 3 4.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-7pid-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "b-p-func", g_b_p_func, 1, 0, false, "b-p opt func");
+    s7_set_b_p_function(sc, s7_name_to_value(sc, "b-p-func"), opt_b_p_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((b-p-func 2.0)) */
+    if (!sfunc) fprintf(stderr, "%d: b-p-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "p-d-func", g_p_d_func, 1, 0, false, "p-d opt func");
+    s7_set_p_d_function(sc, s7_name_to_value(sc, "p-d-func"), opt_p_d_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((p-d-func 2.0)) */
+    if (!sfunc) fprintf(stderr, "%d: p-d-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-v-func", g_d_v_func, 1, 0, false, "d-v opt func");
+    s7_set_d_v_function(sc, s7_name_to_value(sc, "d-v-func"), opt_d_v_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2))))); /* ((d-v-func (block 2))) */
+    if (!sfunc) fprintf(stderr, "%d: d-v-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-vd-func", g_d_vd_func, 2, 0, false, "d-vd opt func");
+    s7_set_d_vd_function(sc, s7_name_to_value(sc, "d-vd-func"), opt_d_vd_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, 
+                              s7_list(sc, 3, symbol, 
+                                             s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
+				             s7_make_real(sc, 0.0)))); /* ((d-vd-func (block 2) 0.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-vd-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-vid-func", g_d_vid_func, 3, 0, false, "d-vid opt func");
+    s7_set_d_vid_function(sc, s7_name_to_value(sc, "d-vid-func"), opt_d_vid_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, 
+                              s7_list(sc, 4, symbol, 
+                                             s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
+				             s7_make_integer(sc, 0),
+				             s7_make_real(sc, 0.0)))); /* ((d-vid-func (block 2) 0 0.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-vid-func not optimized\n", __LINE__);
+
+    symbol = s7_define_safe_function(sc, "d-vdd-func", g_d_vdd_func, 3, 0, false, "d-vdd opt func");
+    s7_set_d_vdd_function(sc, s7_name_to_value(sc, "d-vdd-func"), opt_d_vdd_func);
+    sfunc = s7_optimize(sc, s7_list(sc, 1, 
+                              s7_list(sc, 4, symbol, 
+                                             s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
+				             s7_make_real(sc, 0.0),
+				             s7_make_real(sc, 0.0)))); /* ((d-vdd-func (block 2) 0.0 0.0)) */
+    if (!sfunc) fprintf(stderr, "%d: d-vdd-func not optimized\n", __LINE__);
   }
+
+  s7_make_continuation(sc);
 
   s7_free(sc);
 
@@ -2378,16 +2605,7 @@ int main(int argc, char **argv)
 #if 0
 /* unhandled:
 S7_NUM_READ_CHOICES S7_READ_CHAR S7_READ_LINE and peek_char is_char_ready read: see s7_open_input_function above
-d_dddd d_vd etc: need called funcs, s7_optimize -> func (and s7_float_optimize)
-s7_autoload_set_names
-s7_c_type_set_gc_free
-s7_c_type_set_gc_mark
-s7_c_type_set_getter
-s7_c_type_set_setter
-s7_c_type_set_to_list
 s7_error
-s7_make_continuation
-s7_optimize
 s7_repl
 s7_set_current_input_port
 */
