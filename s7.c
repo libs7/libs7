@@ -9950,7 +9950,14 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
     return(s7_wrong_type_arg_error(sc, "set! outlet", 2, new_outer, "a let"));
 
   if (let != sc->rootlet)
-    let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);  /* outlet rootlet->() so that slot search can use is_let(outlet) I think */
+    {
+      /* here it's possible to get cyclic let chains; maybe do this check only if safety>0 */
+      s7_pointer lt;
+      for (lt = new_outer; (is_let(lt)) && (lt != sc->rootlet); lt = let_outlet(lt))
+	if (let == lt)
+	  s7_error(sc, s7_make_symbol(sc, "cyclic-let"), set_elist_2(sc, wrap_string(sc, "set! (outlet ~A) creates a cyclic let chain", 43), let));
+      let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);  /* outlet rootlet->() so that slot search can use is_let(outlet) I think */
+    }
   return(new_outer);
 }
 
@@ -25173,7 +25180,7 @@ static s7_pointer g_is_random_state(s7_scheme *sc, s7_pointer args)
   check_boolean_method(sc, is_random_state, sc->is_random_state_symbol, args);
 }
 
-static bool is_random_state_b(s7_pointer p) {return(type(p) == T_RANDOM_STATE);}
+bool s7_is_random_state(s7_pointer p) {return(type(p) == T_RANDOM_STATE);}
 
 
 /* -------------------------------- random-state->list -------------------------------- */
@@ -34730,7 +34737,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
     s7_warn(sc, 256, "bad arg to %s: %p\n", __func__, obj);
 
   strport = open_format_port(sc);
-  object_out(sc, obj, strport, P_WRITE);
+  object_out(sc, T_Pos(obj), strport, P_WRITE);
   len = port_position(strport);
   if (len == 0) {close_format_port(sc, strport); return(NULL);} /* probably never happens */
   str = (char *)Malloc(len + 1);
@@ -39186,10 +39193,10 @@ static vdims_t *make_vdims(s7_scheme *sc, bool elements_should_be_freed, s7_int 
   return(v);
 }
 
-s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)
+static s7_pointer make_any_vector(s7_scheme *sc, int32_t type, s7_int len, s7_int dims, s7_int *dim_info)
 {
   s7_pointer p;
-  p = make_vector_1(sc, len, FILLED, T_INT_VECTOR);
+  p = make_vector_1(sc, len, FILLED, type);
   if (dim_info)
     {
       vector_set_dimension_info(p, make_vdims(sc, false, dims, dim_info));
@@ -39199,18 +39206,9 @@ s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *di
   return(p);
 }
 
-s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)
-{
-  s7_pointer p;
-  p = make_vector_1(sc, len, FILLED, T_FLOAT_VECTOR);
-  if (dim_info)
-    {
-      vector_set_dimension_info(p, make_vdims(sc, false, dims, dim_info));
-      add_multivector(sc, p);
-    }
-  else add_vector(sc, p);
-  return(p);
-}
+s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)    {return(make_any_vector(sc, T_INT_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)  {return(make_any_vector(sc, T_FLOAT_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info) {return(make_any_vector(sc, T_VECTOR, len, dims, dim_info));}
 
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data)
 {
@@ -39221,7 +39219,6 @@ s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *da
   new_cell(sc, x, T_FLOAT_VECTOR | T_SAFE_PROCEDURE);
   b = mallocate_vector(sc, 0);
   vector_block(x) = b;
-  /* block_data(b) = data; */
   float_vector_floats(x) = data;
   vector_getter(x) = float_vector_getter;
   vector_setter(x) = float_vector_setter;
@@ -51035,9 +51032,33 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = (int32_t)(sc->op_stack_now - sc->op_stack);
   catch_set_handler(p, error_handler);
-  push_stack(sc, OP_CATCH, error_handler, p);
-  result = s7_call(sc, body, sc->nil);
-  /* don't unstack here -- if error caught, catch has been popped off already */
+  if (!sc->longjmp_ok) 
+    {
+      declare_jump_info();
+      TRACK(sc);
+      store_jump_info(sc);
+      set_jump_info(sc, S7_CALL_SET_JUMP);
+      if (jump_loc != NO_JUMP)
+	{
+	  if (jump_loc != ERROR_JUMP)
+	    eval(sc, sc->cur_op);
+	  if ((jump_loc == CATCH_JUMP) &&                /* we're returning (back to eval) from an error in catch */
+	      (sc->stack_end == sc->stack_start))
+	    push_stack_op(sc, OP_ERROR_QUIT);
+	  result = sc->value;
+	}
+      else
+	{
+	  push_stack(sc, OP_CATCH, error_handler, p);
+	  result = s7_call(sc, body, sc->nil);
+	}
+      restore_jump_info(sc);
+    }
+  else
+    {
+      push_stack(sc, OP_CATCH, error_handler, p);
+      result = s7_call(sc, body, sc->nil);
+    }
   return(result);
 }
 
@@ -51657,7 +51678,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	  {
 #if S7_DEBUGGING
 	    if (!sc->longjmp_ok) fprintf(stderr, "s7_error jump not available?\n");
-	    /* all the rest of the code expects s7_error to jump, not return, so presumably if we get here, we're in trouble */
 #endif
 	    LongJmp(sc->goto_start, CATCH_JUMP);
 	  }}}
@@ -77441,6 +77461,7 @@ static inline bool op_macro_d(s7_scheme *sc)
     return(unknown_any(sc, sc->value, sc->code));
   sc->args = cdr(sc->code);                   /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
   sc->code = sc->value;                       /* the macro */
+  check_stack_size(sc);                       /* (define-macro (f) (f)) (f) */
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code));
   return(false);                              /* fall into apply_lambda */
@@ -77453,6 +77474,7 @@ static bool op_macro_star_d(s7_scheme *sc)
     return(unknown_any(sc, sc->value, sc->code));
   sc->args = cdr(sc->code); /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
   sc->code = sc->value;
+  check_stack_size(sc);
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code));
   apply_macro_star_1(sc);
@@ -83456,6 +83478,7 @@ static void apply_macro_star_1(s7_scheme *sc)
 static void apply_macro(s7_scheme *sc)
 {
   /* this is not from the reader, so treat expansions here as normal macros */
+  check_stack_size(sc);
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code)); /* closure_let -> sc->curlet, sc->code is the macro */
   transfer_macro_info(sc, sc->code);
@@ -83463,6 +83486,7 @@ static void apply_macro(s7_scheme *sc)
 
 static void apply_bacro(s7_scheme *sc)
 {
+  check_stack_size(sc);
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, sc->curlet);       /* like let* -- we'll be adding macro args, so might as well sequester things here */
   transfer_macro_info(sc, sc->code);
@@ -83470,6 +83494,7 @@ static void apply_bacro(s7_scheme *sc)
 
 static void apply_macro_star(s7_scheme *sc)
 {
+  check_stack_size(sc);
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code));
   transfer_macro_info(sc, sc->code);
@@ -83478,6 +83503,7 @@ static void apply_macro_star(s7_scheme *sc)
 
 static void apply_bacro_star(s7_scheme *sc)
 {
+  check_stack_size(sc);
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, sc->curlet);
   transfer_macro_info(sc, sc->code);
@@ -92890,7 +92916,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_b_7p_function(sc, global_value(sc->is_port_closed_symbol), is_port_closed_b_7p);
   s7_set_b_p_function(sc, global_value(sc->is_procedure_symbol), s7_is_procedure);
   s7_set_b_7p_function(sc, global_value(sc->is_proper_list_symbol), s7_is_proper_list);
-  s7_set_b_p_function(sc, global_value(sc->is_random_state_symbol), is_random_state_b);
+  s7_set_b_p_function(sc, global_value(sc->is_random_state_symbol), s7_is_random_state);
   s7_set_b_p_function(sc, global_value(sc->is_rational_symbol), s7_is_rational);
   s7_set_b_p_function(sc, global_value(sc->is_real_symbol), s7_is_real);
   s7_set_b_p_function(sc, global_value(sc->is_sequence_symbol), is_sequence_b);
@@ -95050,56 +95076,53 @@ int main(int argc, char **argv)
 #endif
 
 /* -------------------------------------------------------
- *             gmp (6-10)  20.9   21.0   21.5   21.6
+ *             gmp (7-19)  20.9   21.0   21.5   21.6
  * -------------------------------------------------------
- * tpeak       126          115    114    112    109
- * tref        530          691    687    480    477
- * tauto       775          648    642    503    497
- * tshoot     1506          883    872    837    812
- * index      1054         1026   1016    989    985
- * tmock      7695         1177   1165   1111   1098
- * tvect      2184         2456   2413   1867   1757
- * s7test     4532         1873   1831   1817   1815
- * lt         2128         2123   2110   2119   2121
- * tform      3258         2281   2273   2274   2270
- * tmac       2503         3317   3277   2436   2373
- * tread      2606         2440   2421   2409   2404
- * trclo      4252         2715   2561   2459   2459
- * tmat       2683         3065   3042   2524   2527
- * fbench     2965         2688   2583   2542   2542
- * tcopy      2628         8035   5546   2557   2558
- * tb         3362         2735   2681   2565   2563
- * dup        3426         3805   3788   2962   2691
+ * tpeak       123          115    114    112    109
+ * tref        527          691    687    480    477
+ * tauto       786          648    642    503    497
+ * tshoot     1484          883    872    837    812
+ * index      1051         1026   1016    989    985
+ * tmock      7748         1177   1165   1111   1098
+ * tvect      1951         2456   2413   1867   1757
+ * s7test     4522         1873   1831   1817   1815
+ * lt         2127         2123   2110   2119   2121
+ * tform      3263         2281   2273   2274   2270
+ * tmac       2413         3317   3277   2436   2373
+ * tread      2594         2440   2421   2409   2404
+ * trclo      4070         2715   2561   2459   2459
+ * tmat       2677         3065   3042   2524   2527
+ * fbench     2868         2688   2583   2542   2542
+ * tcopy      2623         8035   5546   2557   2558
+ * tb         3321         2735   2681   2565   2563
+ * dup        2927         3805   3788   2962   2691
  * titer      2727         2865   2842   2710   2710
- * tsort      3657         3105   3104   2925   2924
- * tset       3275         3253   3104   3244   3211
- * tio        3717         3816   3752   3703   3701
- * teq        3722         4068   4045   3701   3578
- * tstr       6650         5281   4863   4329   4316
- * tclo       4841         4787   4735   4512   4417
- * tcase      4550         4960   4793   4480   4474
- * tlet       5555         7775   5640   4488   4487
- * tmap       4816         8270   8188   4730   4710
- * tfft      113.2         7820   7729   4816   4803
- * tnum       59.1         6348   6013   5449   5451
- * tmisc      5828         7389   6210   5477   5472
+ * tsort      3656         3105   3104   2925   2924
+ * tset       3230         3253   3104   3244   3211
+ * tio        3715         3816   3752   3703   3701
+ * teq        3594         4068   4045   3701   3578
+ * tstr       6591         5281   4863   4329   4316
+ * tclo       4690         4787   4735   4512   4417
+ * tcase      4537         4960   4793   4480   4474
+ * tlet       5471         7775   5640   4488   4487
+ * tmap       5715         8270   8188   4730   4710
+ * tfft      114.8         7820   7729   4816   4803
+ * tnum       56.6         6348   6013   5449   5451
+ * tmisc      6068         7389   6210   5477   5472
  * tgsl       25.2         8485   7802   6394   6390
- * trec       8493         6936          6563   6563
- * tlist      7196         7896          7216   7160
- * tgc        10.9         11.9   11.1   9070   8781
- * thash      36.4         11.8   11.7   10.3   9838
+ * trec       8338         6936          6563   6563
+ * tlist      7140         7896          7216   7160
+ * tgc        10.2         11.9   11.1   9070   8781
+ * thash      35.3         11.8   11.7   10.3   9838
  * tgen       12.3         11.2   11.4   11.4   11.4
- * tall       26.9         15.6   15.6   15.6   15.6
- * calls      60.8         36.7   37.5   37.1   37.1
+ * tall       26.8         15.6   15.6   15.6   15.6
+ * calls      60.7         36.7   37.5   37.1   37.1
  * sg         98.4         71.9   72.3   72.5   72.4
- * lg        105.1        106.6  105.0  104.5  104.5
- * tbig      598.5        177.4  175.8  169.6  169.5
+ * lg        104.9        106.6  105.0  104.5  104.5
+ * tbig      596.1        177.4  175.8  169.6  169.5
  * -------------------------------------------------------
  *
  * more random vals in t725? no definers t725?
- * ffitest (func-port choices)
  * terminal app doc?
- * s7.h s7_make_normal_vector for multidim case? make_float|int_vector have dims arg
- *   also s7_is_random_state
  * dilambda/setter timings
  */

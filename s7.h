@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.12"
-#define S7_DATE "20-Jul-2021"
+#define S7_VERSION "9.14"
+#define S7_DATE "21-Jul-2021"
 #define S7_MAJOR_VERSION 9
-#define S7_MINOR_VERSION 12
+#define S7_MINOR_VERSION 14
 
 #include <stdint.h>           /* for int64_t */
 
@@ -281,6 +281,7 @@ s7_double s7_random(s7_scheme *sc, s7_pointer state);                       /* (
 s7_pointer s7_random_state(s7_scheme *sc, s7_pointer seed);                 /* (random-state seed) */
 s7_pointer s7_random_state_to_list(s7_scheme *sc, s7_pointer args);         /* (random-state->list r) */
 void s7_set_default_random_state(s7_scheme *sc, s7_int seed, s7_int carry);
+bool s7_is_random_state(s7_pointer p);                                      /* (random-state? p) */
 
 bool s7_is_complex(s7_pointer arg);                                         /* (complex? arg) */
 s7_pointer s7_make_complex(s7_scheme *sc, s7_double a, s7_double b);        /* returns the Scheme object a+bi */
@@ -313,6 +314,7 @@ s7_double s7_float_vector_set(s7_pointer vec, s7_int index, s7_double value);
 s7_pointer s7_make_vector(s7_scheme *sc, s7_int len);                                 /* (make-vector len) */
 s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
+s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info); /* make-vector but possibly multidimensional */
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
 s7_pointer s7_make_and_fill_vector(s7_scheme *sc, s7_int len, s7_pointer fill);       /* (make-vector len fill) */
 
@@ -908,6 +910,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  * 
+ * 19-Jul:    s7_is_random_state, s7_make_normal_vector.
  * 12-Apr:    s7_optimize now returns an s7_pfunc, not an s7_function.
  * 7-Apr:     removed the "args" parameter from s7_float_function. added s7_make_c_object_without_gc.
  * 31-Mar:    vector-rank, vector-dimension.

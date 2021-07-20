@@ -54,6 +54,21 @@ static s7_pointer my_read(s7_scheme *sc, s7_read_t peek, s7_pointer port)
   return(s7_make_character(sc, '0'));
 }
 
+static s7_pointer my_error(s7_scheme *sc, s7_pointer args)
+{
+  s7_error(sc, s7_make_symbol(sc, "my-error"), s7_list(sc, 1, s7_make_integer(sc, 60)));
+  return(s7_f(sc));
+}
+
+static s7_pointer my_no_error(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, 30));
+}
+
+static s7_pointer my_error_handler(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_car(s7_cadr(args)));
+}
 
 static bool tested_begin_hook = false;
 static void test_begin_hook(s7_scheme *sc, bool *val)
@@ -1045,6 +1060,25 @@ int main(int argc, char **argv)
     if (!s7_is_pair(q)) fprintf(stderr, "%d vector->list is not a list %s\n", __LINE__, TO_STR(q));
     if (s7_list_length(sc, q) != 6) fprintf(stderr, "%d vector->list len != 6 %s\n", __LINE__, TO_STR(q));
     if (s7_vector_dimension(p, 0) != 6) fprintf(stderr, "%d: s7_vector_dimension: %ld\n", __LINE__, s7_vector_dimension(p, 0));
+  }
+
+  {
+    s7_int* dims;
+    s7_pointer p;
+    s7_pointer *els;
+    dims = (s7_int *)malloc(2 * sizeof(s7_int));
+    dims[0] = 2;
+    dims[1] = 3;
+    p = s7_make_normal_vector(sc, 6, 2, dims);
+    if (s7_vector_rank(p) != 2) fprintf(stderr, "vector rank not 2?\n");
+    if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %ld\n", __LINE__, s7_vector_dimension(p, 0));
+    if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %ld\n", __LINE__, s7_vector_dimension(p, 1));
+    s7_vector_set(sc, p, 1, s7_make_integer(sc, 1));
+    if (s7_integer(s7_vector_ref(sc, p, 1)) != 1) fprintf(stderr, "vector[1] not 1?\n");
+    els = s7_vector_elements(p);
+    if (s7_integer(els[1]) != 1) fprintf(stderr, "vector els[1] not 1?\n");
+    if (!s7_is_vector(p)) fprintf(stderr, "not a vector?\n");
+    free(dims); /* ?? */
   }
 
   {
@@ -2424,17 +2458,63 @@ int main(int argc, char **argv)
 
   {
     s7_pointer body, err, result;
+    s7_int gc_body, gc_err;
     body = s7_eval_c_string(sc, "(lambda () (+ 1 2))");
+    gc_body = s7_gc_protect(sc, body);
     err = s7_eval_c_string(sc, "(lambda (type info) 'oops)");
-    result = s7_call_with_catch(sc, s7_t(sc), body, err);
+    gc_err = s7_gc_protect(sc, err);
+    result = s7_call_with_catch(sc, s7_t(sc), body, err);                                                     /* Ln L */
     if ((!s7_is_integer(result)) || (s7_integer(result) != 3))
       {fprintf(stderr, "catch (3): %s\n", s1 = TO_STR(result)); free(s1);}
+    s7_gc_unprotect_at(sc, gc_body);
+    s7_gc_unprotect_at(sc, gc_err);
 
-    body = s7_eval_c_string(sc, "(lambda () (+ #f 2))");
-    err = s7_eval_c_string(sc, "(lambda (type info) 'oops)");
+    body = s7_eval_c_string(sc, "(lambda () (+ #f 2))");                                                      /* Le L */
+    gc_body = s7_gc_protect(sc, body);
     result = s7_call_with_catch(sc, s7_t(sc), body, err);
     if (result != s7_make_symbol(sc, "oops"))
       {fprintf(stderr, "catch (oops): %s\n", s1 = TO_STR(result)); free(s1);}
+    s7_gc_unprotect_at(sc, gc_body);
+
+    body = s7_make_function(sc, "my-error", my_error, 0, 0, false, "call s7_error");
+    gc_body = s7_gc_protect(sc, body);
+    result = s7_call_with_catch(sc, s7_t(sc), body, s7_eval_c_string(sc, "(lambda (type info) (car info))")); /* Ce L */
+    if (s7_integer(result) != 60)
+      /* '(60) returned from my_error via its error handler, car(info) -> 60 above */
+      fprintf(stderr, "%d: catch my_error via car: %s\n", __LINE__, TO_STR(result));
+    s7_gc_unprotect_at(sc, gc_body);
+
+    err = s7_make_function(sc, "my-error-handler", my_error_handler, 2, 0, false, "handle error");
+    gc_err = s7_gc_protect(sc, err);
+    result = s7_call_with_catch(sc, s7_t(sc), body, err);                                                     /* Ce C */
+    if (s7_integer(result) != 60)
+      fprintf(stderr, "%d: catch my_error via my_error_handler: %s\n", __LINE__, TO_STR(result));
+
+    body = s7_make_function(sc, "my-no-error", my_no_error, 0, 0, false, "don't call s7_error");
+    gc_body = s7_gc_protect(sc, body);
+    result = s7_call_with_catch(sc, s7_t(sc), body, s7_eval_c_string(sc, "(lambda (type info) (car info))")); /* Cn L */
+    if (s7_integer(result) != 30)
+      fprintf(stderr, "%d: catch my_no_error: %s\n", __LINE__, TO_STR(result));
+
+    result = s7_call_with_catch(sc, s7_t(sc), s7_eval_c_string(sc, "(lambda () (+ #f 2))"), err);
+    if ((!s7_is_string(result)) || (strcmp(s7_string(result), "~A argument ~D, ~S, is ~A but should be ~A") != 0))
+      fprintf(stderr, "%d: catch (+ #f 2) via my_error_handler: %s\n", __LINE__, TO_STR(result));
+    s7_gc_unprotect_at(sc, gc_err);
+
+    err = s7_make_function(sc, "my-error-handler", my_error_handler, 2, 0, false, "handle error");
+    gc_err = s7_gc_protect(sc, err);
+    result = s7_call_with_catch(sc, s7_t(sc), body, err);                                                     /* Cn C */
+    if (s7_integer(result) != 30)
+      fprintf(stderr, "%d: catch my_error via my_error_handler: %s\n", __LINE__, TO_STR(result));
+    s7_gc_unprotect_at(sc, gc_body);
+    
+    body = s7_eval_c_string(sc, "(lambda () (+ 1 2))");
+    gc_body = s7_gc_protect(sc, body);
+    result = s7_call_with_catch(sc, s7_t(sc), body, err);                                                     /* Ln C */
+    if ((!s7_is_integer(result)) || (s7_integer(result) != 3))
+      {fprintf(stderr, "%d: catch (3): %s\n", __LINE__, s1 = TO_STR(result)); free(s1);}
+    s7_gc_unprotect_at(sc, gc_body);
+    s7_gc_unprotect_at(sc, gc_err);
   }
 
   {
@@ -2466,6 +2546,8 @@ int main(int argc, char **argv)
   {
     s7_pointer p, q;
     p = s7_random_state(sc, s7_cons(sc, s7_make_integer(sc, 123456), s7_cons(sc, s7_make_integer(sc, 654321), s7_nil(sc))));
+    if (!s7_is_random_state(p))
+      fprintf(stderr, "%d: s7_random_state returned %s\n", __LINE__, TO_STR(p));
     if (s7_type_of(sc, p) != s7_make_symbol(sc, "random-state?"))
       fprintf(stderr, "%d: s7_random_state returned %s\n", __LINE__, TO_STR(p));
     q = s7_random_state_to_list(sc, s7_cons(sc, p, s7_nil(sc)));
@@ -2595,18 +2677,18 @@ int main(int argc, char **argv)
     if (!sfunc) fprintf(stderr, "%d: d-vdd-func not optimized\n", __LINE__);
   }
 
+  {
+    s7_pointer old_port, new_port, res;
+    new_port = s7_open_input_string(sc, "01234");
+    old_port = s7_set_current_input_port(sc, new_port);
+    res = s7_eval_c_string(sc, "(read-char)");
+    if (s7_character(res) != '0') fprintf(stderr, "%d: read-char: %s\n", __LINE__, TO_STR(res));
+    s7_set_current_input_port(sc, old_port);
+  }
+
   s7_make_continuation(sc);
 
   s7_free(sc);
 
   return(0);
 }
-
-#if 0
-/* unhandled:
-S7_NUM_READ_CHOICES S7_READ_CHAR S7_READ_LINE and peek_char is_char_ready read: see s7_open_input_function above
-s7_error
-s7_repl
-s7_set_current_input_port
-*/
-#endif
