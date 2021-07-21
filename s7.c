@@ -74455,10 +74455,8 @@ static s7_pointer check_case(s7_scheme *sc)
 		}}}
       else
 	{
-	  if (!is_simple(car(y)))
-	    keys_simple = false;
-	  if (!is_null(cdr(y)))
-	    keys_single = false;
+	  if (!is_simple(car(y))) keys_simple = false;
+	  if (!is_null(cdr(y)))   keys_single = false;
 	  if (key_type == T_FREE)
 	    key_type = type(car(y));
 	  else
@@ -80187,20 +80185,18 @@ static s7_pointer do_end_bad(s7_scheme *sc, s7_pointer form)
 
 static bool do_expr_tree(s7_scheme *sc, s7_pointer expr)
 {
-  if ((expr) && (is_pair(expr)))
+  if ((!expr) || (!is_pair(expr)))
+    return(false);
+  if ((is_funclet(sc->curlet)) && (tis_slot(let_slots(sc->curlet))))
     {
-      if ((is_funclet(sc->curlet)) && (tis_slot(let_slots(sc->curlet))))
-	{
-	  s7_pointer s1 = let_slots(sc->curlet), s2;
-	  s2 = next_slot(s1);
-	  fx_tree_in(sc, expr,
-		     slot_symbol(s1),
-		     (tis_slot(s2)) ? slot_symbol(s2) : NULL,
-		     ((tis_slot(s2)) && (tis_slot(next_slot(s2)))) ? slot_symbol(next_slot(s2)) : NULL);
-	}
-      return(true);
+      s7_pointer s1 = let_slots(sc->curlet), s2;
+      s2 = next_slot(s1);
+      fx_tree_in(sc, expr,
+		 slot_symbol(s1),
+		 (tis_slot(s2)) ? slot_symbol(s2) : NULL,
+		 ((tis_slot(s2)) && (tis_slot(next_slot(s2)))) ? slot_symbol(next_slot(s2)) : NULL);
     }
-  return(false);
+  return(true);
 }
 
 static s7_pointer check_do(s7_scheme *sc)
@@ -81177,9 +81173,8 @@ static void op_dox_no_body(s7_scheme *sc)
     }
   else
     {
-      s7_function stepf;
+      s7_function stepf = fx_proc(cddr(var));
       s7_pointer step = caddr(var);
-      stepf = fx_proc(cddr(var));
       if (testf == fx_or_and_2a)
 	{
 	  s7_pointer f1_arg = cadr(test), p = opt3_pair(test) /* cdadr(p) */, f2_arg = car(p), f3_arg = cadr(p);
@@ -81702,9 +81697,7 @@ static bool op_simple_do(s7_scheme *sc)
    * simple_do: set up local let, check end (c_c?), goto op_simple_do_1
    *   if latter gets s7_optimize, run locally, else goto simple_do_step.
    */
-  s7_pointer end, code, body;
-
-  code = cdr(sc->code);
+  s7_pointer end, body, code = cdr(sc->code);
   sc->curlet = make_let_slowly(sc, sc->curlet);
   sc->value = fx_call(sc, cdaar(code));
   let_set_dox_slot1(sc->curlet, add_slot_checked(sc, sc->curlet, caaar(code), sc->value));
@@ -81816,8 +81809,7 @@ static bool op_safe_dotimes_step_o(s7_scheme *sc)
 
 static Inline bool op_dotimes_step_o(s7_scheme *sc)
 {
-  s7_pointer ctr, now, end, end_test, code = sc->code;
-  ctr = let_dox_slot1(sc->curlet);
+  s7_pointer now, end, end_test, code = sc->code, ctr = let_dox_slot1(sc->curlet);
   now = slot_value(ctr);
   end = let_dox2_value(sc->curlet);
   end_test = opt2_pair(code);
@@ -83023,23 +83015,20 @@ static void apply_vector(s7_scheme *sc)                            /* -------- v
 
 static void apply_string(s7_scheme *sc)                            /* -------- string as applicable object -------- */
 {
-  if ((is_pair(sc->args)) &&
-      (is_null(cdr(sc->args))))
+  if ((!is_pair(sc->args)) ||
+      (!is_null(cdr(sc->args))))
+    s7_error(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_3(sc, (is_null(sc->args)) ? not_enough_arguments_string : too_many_arguments_string, sc->code, sc->args));
+  if (s7_is_integer(car(sc->args)))
     {
-      if (s7_is_integer(car(sc->args)))
+      s7_int index = s7_integer_checked(sc, car(sc->args));
+      if ((index >= 0) &&
+	  (index < string_length(sc->code)))
 	{
-	  s7_int index = s7_integer_checked(sc, car(sc->args));
-	  if ((index >= 0) &&
-	      (index < string_length(sc->code)))
-	    {
-	      sc->value = s7_make_character(sc, ((uint8_t *)string_value(sc->code))[index]);
-	      return;
-	    }}
-      sc->value = string_ref_1(sc, sc->code, car(sc->args));
-      return;
-    }
-  s7_error(sc, sc->wrong_number_of_args_symbol,
-	   set_elist_3(sc, (is_null(sc->args)) ? not_enough_arguments_string : too_many_arguments_string, sc->code, sc->args));
+	  sc->value = s7_make_character(sc, ((uint8_t *)string_value(sc->code))[index]);
+	  return;
+	}}
+  sc->value = string_ref_1(sc, sc->code, car(sc->args)); /* this also handles indexing errors */
 }
 
 static bool apply_pair(s7_scheme *sc)                               /* -------- list as applicable object -------- */
@@ -95117,7 +95106,7 @@ int main(int argc, char **argv)
  * tgen       12.3         11.2   11.4   11.4   11.4
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      60.7         36.7   37.5   37.1   37.1
- * sg         98.4         71.9   72.3   72.5   72.4
+ * sg                                           56.2
  * lg        104.9        106.6  105.0  104.5  104.5
  * tbig      596.1        177.4  175.8  169.6  169.5
  * -------------------------------------------------------

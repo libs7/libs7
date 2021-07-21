@@ -498,7 +498,8 @@
 	(format p "{~%")
 	(format p "  s7_pointer cur_env;~%")
 
-	(format p "  s7_pointer ")
+	(when (> (hash-table-entries signatures) 0)   ; maybe just constants (no functions)
+	  (format p "  s7_pointer "))
 	(let ((pls (hash-table-entries signatures))
 	      (loc 1))
 	  (for-each
