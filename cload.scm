@@ -499,44 +499,44 @@
 	(format p "  s7_pointer cur_env;~%")
 
 	(when (> (hash-table-entries signatures) 0)   ; maybe just constants (no functions)
-	  (format p "  s7_pointer "))
-	(let ((pls (hash-table-entries signatures))
-	      (loc 1))
-	  (for-each
-	   (lambda (s)
-	     (format p "~A~A~A" (cdr s) (if (< loc pls) (values "," " ") (values ";" #\newline)))
-	     (set! loc (+ loc 1)))
-	   signatures))
-	
-	(let ((syms ())
-	      (names ()))
-	  (for-each
-	   (lambda (q)
-	     (when (positive? (cdr q))
-	       (set! syms (cons (car q) syms))
-	       (set! names (cons (signature->pl (car q)) names))))
-	   sig-symbols)
-	  (when (pair? syms)
-	    (format p "  {~%    s7_pointer ~{~C~^, ~};~%" names)
+	  (format p "  s7_pointer ")
+	  (let ((pls (hash-table-entries signatures))
+		(loc 1))
 	    (for-each
-	     (lambda (name sym)
-	       (format p (if (eq? sym 't)
-			     "    t = s7_t(sc);~%"
-			     (values "    ~C = s7_make_symbol(sc, ~S);~%" name (symbol->string sym)))))
-	     names syms)))
-	(format p "~%")
-	(for-each
-	 (lambda (sig)
-	   (let ((siglen (length (cdar sig)))
-		 (cyclic (char=? ((cdr sig) 1) #\c)))
-	     (format p (if cyclic 
-			   (values "    ~A = s7_make_circular_signature(sc, ~D, ~D" (cdr sig) (- siglen 1) siglen)
-			   (values "    ~A = s7_make_signature(sc, ~D" (cdr sig) siglen)))
-	     (format p "~{~^, ~C~}" (substring (cdr sig) (if cyclic 4 3)))
-	     (format p ");~%")))
-	 signatures)
-	(format p "  }~%~%")
-	(format p "  cur_env = s7_curlet(sc);~%") ; changed from s7_outlet(s7_curlet) 20-Aug-17
+	     (lambda (s)
+	       (format p "~A~A~A" (cdr s) (if (< loc pls) (values "," " ") (values ";" #\newline)))
+	       (set! loc (+ loc 1)))
+	     signatures))
+	  
+	  (let ((syms ())
+		(names ()))
+	    (for-each
+	     (lambda (q)
+	       (when (positive? (cdr q))
+		 (set! syms (cons (car q) syms))
+		 (set! names (cons (signature->pl (car q)) names))))
+	     sig-symbols)
+	    (when (pair? syms)
+	      (format p "  {~%    s7_pointer ~{~C~^, ~};~%" names)
+	      (for-each
+	       (lambda (name sym)
+		 (format p (if (eq? sym 't)
+			       "    t = s7_t(sc);~%"
+			       (values "    ~C = s7_make_symbol(sc, ~S);~%" name (symbol->string sym)))))
+	       names syms)))
+	  (format p "~%")
+	  (for-each
+	   (lambda (sig)
+	     (let ((siglen (length (cdar sig)))
+		   (cyclic (char=? ((cdr sig) 1) #\c)))
+	       (format p (if cyclic 
+			     (values "    ~A = s7_make_circular_signature(sc, ~D, ~D" (cdr sig) (- siglen 1) siglen)
+			     (values "    ~A = s7_make_signature(sc, ~D" (cdr sig) siglen)))
+	       (format p "~{~^, ~C~}" (substring (cdr sig) (if cyclic 4 3)))
+	       (format p ");~%")))
+	   signatures)
+	  (format p "  }~%~%")
+	  (format p "  cur_env = s7_curlet(sc);~%")) ; changed from s7_outlet(s7_curlet) 20-Aug-17
 	
 	;; send out any special initialization code
 	(for-each

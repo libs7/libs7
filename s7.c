@@ -2153,23 +2153,13 @@ void s7_show_history(s7_scheme *sc);
 /* T_LOCAL marks a symbol that has been used locally */
 /* T_GLOBAL marks something defined (bound) at the top-level, and never defined locally */
 
-#if 0
+#define REPORT_ROOTLET_REDEF 0
+#if REPORT_ROOTLET_REDEF
   /* to find who is stomping on our symbols: */
-  static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int32_t line)
-  {
-    if (is_global(symbol))
-      {
-	fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
-		func, line,
-		BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
-		display_80(sc->cur_code));
-	/* gdb_break(); */
-      }
-    full_type(symbol) = (full_type(symbol) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC));
-  }
+  static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int32_t line);
   #define set_local(Symbol) set_local_1(sc, Symbol, __func__, __LINE__)
 #else
-#define set_local(p)                   full_type(T_Sym(p)) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC))
+  #define set_local(p)                 full_type(T_Sym(p)) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC))
 #endif
 
 #define T_HIGH_C                       T_LOCAL
@@ -4850,6 +4840,21 @@ static const char *check_name(s7_scheme *sc, int32_t typ)
   return("unknown type!");
 }
 
+#if REPORT_ROOTLET_REDEF
+static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int32_t line)
+{
+  if (is_global(symbol))
+    {
+      fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
+	      func, line,
+	      BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
+	      display_80(sc->cur_code));
+      /* gdb_break(); */
+    }
+  full_type(symbol) = (full_type(symbol) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC));
+}
+#endif
+
 static char *safe_object_to_string(s7_pointer p)
 {
   char *buf;
@@ -7372,11 +7377,7 @@ static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
 
 static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
 {
-  /* global functions are very rarely redefined, so we can remove the function body from
-   *   the heap when it is defined.  If redefined, we currently lose the memory held by the
-   *   old definition.  (It is not trivial to recover this memory because it is allocated
-   *   in blocks, not by the pointer, I think, but s7_define is the point to try).
-   */
+  /* global functions are very rarely redefined, so we can remove the function body from the heap when it is defined */
   if (not_in_heap(x)) return;
   if (is_pair(x))
     {
@@ -8716,6 +8717,26 @@ static void remove_let_from_heap(s7_scheme *sc, s7_pointer lt)
   let_set_removed(lt);
 }
 
+static void add_slot_to_rootlet(s7_scheme *sc, s7_pointer slot)
+{
+  s7_pointer ge;
+  ge = sc->rootlet;
+  rootlet_element(ge, sc->rootlet_entries++) = slot;
+  if (sc->rootlet_entries >= vector_length(ge))
+    {
+      s7_int i, len;
+      block_t *ob, *nb;
+      vector_length(ge) *= 2;
+      len = vector_length(ge);
+      ob = rootlet_block(ge);
+      nb = reallocate(sc, ob, len * sizeof(s7_pointer));
+      block_info(nb) = NULL;
+      rootlet_block(ge) = nb;
+      rootlet_elements(ge) = (s7_pointer *)block_data(nb);
+      for (i = sc->rootlet_entries; i < len; i++) rootlet_element(ge, i) = sc->nil;
+    }
+}
+
 static void remove_function_from_heap(s7_scheme *sc, s7_pointer value)
 {
   s7_pointer lt;
@@ -8740,7 +8761,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
   if ((!is_let(let)) ||
       (let == sc->rootlet))
     {
-      s7_pointer ge, slot;
+      s7_pointer slot;
       if (is_immutable(sc->rootlet))
 	return(immutable_object_error(sc, set_elist_2(sc, wrap_string(sc, "can't define '~S; rootlet is immutable", 38), symbol)));
       if ((sc->safety == NO_SAFETY) &&
@@ -8756,22 +8777,8 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	  return(slot);
 	}
 
-      ge = sc->rootlet;
       slot = make_permanent_slot(sc, symbol, value);
-      rootlet_element(ge, sc->rootlet_entries++) = slot;
-      if (sc->rootlet_entries >= vector_length(ge))
-	{
-	  s7_int i, len;
-	  block_t *ob, *nb;
-	  vector_length(ge) *= 2;
-	  len = vector_length(ge);
-	  ob = rootlet_block(ge);
-	  nb = reallocate(sc, ob, len * sizeof(s7_pointer));
-	  block_info(nb) = NULL;
-	  rootlet_block(ge) = nb;
-	  rootlet_elements(ge) = (s7_pointer *)block_data(nb);
-	  for (i = sc->rootlet_entries; i < len; i++) rootlet_element(ge, i) = sc->nil;
-	}
+      add_slot_to_rootlet(sc, slot);
       set_global_slot(symbol, slot);
 
       if (symbol_id(symbol) == 0)    /* never defined locally? */
@@ -10346,7 +10353,6 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 {
   s7_pointer mac, body, mac_name = NULL;
   uint64_t typ;
-
   switch (op)
     {
     case OP_DEFINE_MACRO:      case OP_MACRO:      typ = T_MACRO;      break;
@@ -10376,13 +10382,31 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
     {
       s7_pointer cx;
       mac_name = caar(sc->code);
+
       if (((op == OP_DEFINE_EXPANSION) || (op == OP_DEFINE_EXPANSION_STAR)) &&
 	  (!is_let(sc->curlet)))
-	set_full_type(mac_name, T_EXPANSION | T_SYMBOL | (full_type(mac_name) & T_UNHEAP)); /* see comment under READ_TOK */
+	set_full_type(mac_name, T_EXPANSION | T_SYMBOL | (full_type(mac_name) & T_UNHEAP));
+
       /* symbol? macro name has already been checked, find name in let, and define it */
-      cx = symbol_to_local_slot(sc, mac_name, sc->curlet);
+      cx = symbol_to_local_slot(sc, mac_name, sc->curlet); /* returns global_slot(symbol) if sc->curlet == sc->rootlet (or nil) */
       if (is_slot(cx))
-	slot_set_value_with_hook(cx, mac);
+	{
+	  if ((sc->curlet == sc->rootlet) || (sc->curlet == sc->nil))
+	    {
+	      /* TODO: should this check rootlet for cx? we do get collisions (s7test) maybe an in_rootlet flag on slots? (just add_slot_to_rootlet?) */
+	      /* 'm in tform? see make-index! segfault in snd-test not repeatable */
+#if S7_DEBUGGING
+	      s7_pointer *tmp, *top;
+	      tmp = rootlet_elements(sc->rootlet);
+	      top = (s7_pointer *)(tmp + sc->rootlet_entries);
+	      while (tmp < top)
+		if (cx == *tmp++) break;
+	      fprintf(stderr, "add %s%s\n", display(cx), (tmp < top) ? ", already in rootlet!" : "");
+#endif
+	      add_slot_to_rootlet(sc, cx);
+	    }
+	  slot_set_value_with_hook(cx, mac);
+	}
       else s7_make_slot(sc, sc->curlet, mac_name, mac); /* was current but we've checked immutable already */
       if (tree_has_definers(sc, body))
 	set_is_definer(mac_name);            /* (list-values 'define ...) aux-13 */
@@ -10396,7 +10420,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
   sc->temp6 = sc->nil;
   if (sc->debug > 1) /* no profile here */
     {
-      gc_protect_via_stack(sc, mac);  /* GC protect func during add_trace */
+      gc_protect_via_stack(sc, mac); /* GC protect func during add_trace */
       closure_set_body(mac, add_trace(sc, body));
       unstack(sc);
     }
@@ -30503,7 +30527,7 @@ in the file, or by the function."
 
 
 /* -------------------------------- *autoload* -------------------------------- */
-static s7_pointer g_autoloader(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_autoloader(s7_scheme *sc, s7_pointer args) /* the *autoload* function */
 {
   #define H_autoloader "(*autoload* sym) returns the autoload info for the symbol sym, or #f."
   #define Q_autoloader s7_make_signature(sc, 2, sc->T, sc->is_symbol_symbol)
@@ -30567,6 +30591,7 @@ The symbols refer to the argument to \"provide\".  (require lint.scm)"
 	  /* it's possible to precede the error with: if (!s7_load_with_environment(sc, symbol_name(sym), sc->curlet))
 	   *   but loading the symbol as a string worries me.
 	   */
+	  /* TODO: see unbound variable 69446 for function handler */
 	  if (hook_has_functions(sc->autoload_hook))
 	    s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, f));
 	  s7_load_with_environment(sc, string_value(f), sc->curlet);
@@ -77426,7 +77451,7 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op)
   return(sc->code);
 }
 
-static bool op_define_macro(s7_scheme *sc)
+static void op_define_macro(s7_scheme *sc)
 {
   sc->code = cdr(sc->code);
   check_define_macro(sc, sc->cur_op);
@@ -77434,10 +77459,9 @@ static bool op_define_macro(s7_scheme *sc)
       (is_let(sc->curlet))) /* not () */
     eval_error(sc, "define-macro ~S: let is immutable", 33, caar(sc->code)); /* need eval_error_any_with_caller? */
   sc->value = make_macro(sc, sc->cur_op, true);
-  return(true);
 }
 
-static bool op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
+static void op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
 {
   sc->code = cdr(sc->code);
   if ((!is_pair(sc->code)) || (!mac_is_ok(sc->code))) /* (macro)? or (macro . #\a)? */
@@ -77446,7 +77470,6 @@ static bool op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
       if (is_pair(sc->code)) set_mac_is_ok(sc->code);
     }
   sc->value = make_macro(sc, sc->cur_op, false);
-  return(true);
 }
 
 static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code);
@@ -91183,8 +91206,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DEFINE_BACRO:     case OP_DEFINE_BACRO_STAR:
 	case OP_DEFINE_EXPANSION: case OP_DEFINE_EXPANSION_STAR:
 	case OP_DEFINE_MACRO:     case OP_DEFINE_MACRO_STAR:
-	  if (op_define_macro(sc)) continue;
-	  goto APPLY;
+	  op_define_macro(sc);
+	  continue;
 
 	case OP_MACRO: case OP_BACRO: case OP_MACRO_STAR: case OP_BACRO_STAR:
 	  op_macro(sc);
@@ -94102,9 +94125,9 @@ static void init_rootlet(s7_scheme *sc)
   s7_autoload(sc, make_symbol(sc, "case.scm"),        s7_make_permanent_string(sc, "case.scm"));
 
   s7_autoload(sc, make_symbol(sc, "libc.scm"),        s7_make_permanent_string(sc, "libc.scm"));
-  s7_autoload(sc, make_symbol(sc, "libm.scm"),        s7_make_permanent_string(sc, "libm.scm"));
+  s7_autoload(sc, make_symbol(sc, "libm.scm"),        s7_make_permanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
   s7_autoload(sc, make_symbol(sc, "libdl.scm"),       s7_make_permanent_string(sc, "libdl.scm"));
-  s7_autoload(sc, make_symbol(sc, "libgsl.scm"),      s7_make_permanent_string(sc, "libgsl.scm"));
+  s7_autoload(sc, make_symbol(sc, "libgsl.scm"),      s7_make_permanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
   s7_autoload(sc, make_symbol(sc, "libgdbm.scm"),     s7_make_permanent_string(sc, "libgdbm.scm"));
   s7_autoload(sc, make_symbol(sc, "libutf8proc.scm"), s7_make_permanent_string(sc, "libutf8proc.scm"));
 
@@ -95114,4 +95137,7 @@ int main(int argc, char **argv)
  * more random vals in t725? no definers t725?
  * terminal app doc?
  * dilambda/setter timings
+ * require should handle autoload functions, not just strings
+ * (n)repl.scm should have some fancy autoload function for libm and libgsl (libc also for nrepl)
+ * does add_slot_to_rootlet glom up rootlet?
  */
