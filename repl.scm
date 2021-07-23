@@ -2,16 +2,22 @@
 ;;;
 ;;; (load "repl.scm") ((*repl* 'run))
 
+(provide 'repl.scm)
+
+(when (file-exists? ".repl")         ; local (scheme) initialization file for repl
+  (load ".repl"))
+
 (set! (*s7* 'history-enabled) #f)
 
-(define stderr-buffered #f)
+(unless (defined? 'stderr-buffered)
+  (define stderr-buffered #f))
+
 (define (fformat port . args)
   (apply format port args)
   (when (and stderr-buffered
 	     (eq? port *stderr*))
     (flush-output-port *stderr*)))
 
-(provide 'repl.scm)
 (require libc.scm)
 
 (define old-debug (*s7* 'debug))
