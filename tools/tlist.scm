@@ -190,19 +190,21 @@
 
 
 
-(define (c?r path)
-  (define (X-marks-the-spot accessor tree)
-    (if (eq? tree 'X)
-        accessor
-        (and (pair? tree)
-	     (or (X-marks-the-spot (cons 'car accessor) (car tree))
-	         (X-marks-the-spot (cons 'cdr accessor) (cdr tree))))))
-  (let ((body 'lst))
-    (for-each
-     (lambda (f)
-       (set! body (list f body)))
-     (reverse (X-marks-the-spot () path)))
-    body))
+(define c?r
+  (let ()
+    (define (X-marks-the-spot accessor tree)
+      (if (eq? tree 'X)
+	  accessor
+	  (and (pair? tree)
+	       (or (X-marks-the-spot (cons 'car accessor) (car tree))
+		   (X-marks-the-spot (cons 'cdr accessor) (cdr tree))))))
+    (lambda (path)
+      (let ((body 'lst))
+	(for-each
+	 (lambda (f)
+	   (set! body (list f body)))
+	 (reverse (X-marks-the-spot () path)))
+	body))))
 
 (define (find-X tries)
   (let ((val ()))
