@@ -10259,8 +10259,17 @@ Here are some examples:
   "" '("sys/types.h" "dirent.h"))
 </pre>
 
+<p>C-init inserts its string argument into the initialization section of
+the module.  In libgsl.scm, for example,
+</p>
+<pre class="inserted">
+(C-init "gsl_set_error_handler(g_gsl_error);")
+</pre>
+<p>inserts that string (as C code) into libgsl_s7.c toward the beginning of the
+libgsl_s7_init function (line 42346 or so).
+</p>
 
-<p>For the simple cases above, include "-ldl -Wl,-export-dynamic" in the gcc command.  So the first
+<p>When compiling, for the simple cases above, include "-ldl -Wl,-export-dynamic" in the gcc command.  So the first
 FFI example is built (this is in Linux):
 </p>
 
