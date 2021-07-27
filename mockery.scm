@@ -169,6 +169,20 @@
 	 'let-ref-fallback local-ref
 	 'vector-set! local-set!
 	 'let-set-fallback local-set!))))
+
+  ;; vector with data (mimicking Clojure):
+  (define (meta-vector v data)
+    (openlet
+     (sublet (*mock-vector* 'mock-vector-class)
+       'value v
+       'mock-type 'mock-vector?
+       'meta-data data)))
+  
+  (define v (meta-vector #(0 1 2) "hiho"))
+  (v 1): 1
+  (v 'meta-data): "hiho"
+  v: #(0 1 2)
+  (vector? v): #t
 |#
 
 

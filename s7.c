@@ -53208,43 +53208,27 @@ fx_subtract_s1_any(fx_subtract_T1, T_lookup)
 fx_subtract_s1_any(fx_subtract_U1, U_lookup)
 
 
-static s7_pointer fx_subtract_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-#if (!WITH_GMP)
-  if (is_t_integer(x))
-    {
-#if HAVE_OVERFLOW_CHECKS
-      s7_int val;
-      if (!subtract_overflow(integer(x), integer(opt2_con(cdr(arg))), &val))
-	return(make_integer(sc, val));
-#else
-      return(make_integer(sc, integer(x) - integer(opt2_con(cdr(arg)))));
-#endif
-    }
-#endif
-  return(subtract_p_pp(sc, x, opt2_con(cdr(arg)))); /* caddr(arg) */
-}
+#define fx_subtract_si_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x; \
+    x = Lookup(sc, cadr(arg), arg); \
+    if ((!WITH_GMP) && (is_t_integer(x))) \
+      { \
+        if (HAVE_OVERFLOW_CHECKS) \
+  	  { \
+  	    s7_int val; \
+  	    if (!subtract_overflow(integer(x), integer(opt2_con(cdr(arg))), &val)) \
+  	      return(make_integer(sc, val)); \
+  	  } \
+        else return(make_integer(sc, integer(x) - integer(opt2_con(cdr(arg))))); \
+      } \
+    return(subtract_p_pp(sc, x, opt2_con(cdr(arg)))); /* caddr(arg) */ \
+  }
 
-static s7_pointer fx_subtract_ti(s7_scheme *sc, s7_pointer arg) /* trec */
-{
-  s7_pointer x;
-  x = t_lookup(sc, cadr(arg), arg);
-#if (!WITH_GMP)
-  if (is_t_integer(x))
-    {
-#if HAVE_OVERFLOW_CHECKS
-      s7_int val;
-      if (!subtract_overflow(integer(x), integer(opt2_con(cdr(arg))), &val))
-	return(make_integer(sc, val));
-#else
-      return(make_integer(sc, integer(x) - integer(opt2_con(cdr(arg)))));
-#endif
-    }
-#endif
-  return(subtract_p_pp(sc, x, opt2_con(cdr(arg)))); /* caddr(arg) */
-}
+fx_subtract_si_any(fx_subtract_si, s_lookup)
+fx_subtract_si_any(fx_subtract_ti, t_lookup)
+
 
 #define fx_subtract_sf_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -53260,11 +53244,15 @@ fx_subtract_sf_any(fx_subtract_sf, s_lookup)
 fx_subtract_sf_any(fx_subtract_tf, t_lookup)
 
 
-static s7_pointer fx_subtract_ss(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, s_lookup(sc, cadr(arg), arg), s_lookup(sc, opt2_sym(cdr(arg)), arg)));}
-static s7_pointer fx_subtract_ts(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, t_lookup(sc, cadr(arg), arg), s_lookup(sc, opt2_sym(cdr(arg)), arg)));}
-static s7_pointer fx_subtract_tu(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, opt2_sym(cdr(arg)), arg)));}
-static s7_pointer fx_subtract_ut(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, u_lookup(sc, cadr(arg), arg), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
-static s7_pointer fx_subtract_us(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, u_lookup(sc, cadr(arg), arg), s_lookup(sc, opt2_sym(cdr(arg)), arg)));}
+#define fx_subtract_ss_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) {return(subtract_p_pp(sc, Lookup1(sc, cadr(arg), arg), Lookup2(sc, opt2_sym(cdr(arg)), arg)));}
+
+fx_subtract_ss_any(fx_subtract_ss, s_lookup, s_lookup)
+fx_subtract_ss_any(fx_subtract_ts, t_lookup, s_lookup)
+fx_subtract_ss_any(fx_subtract_tu, t_lookup, u_lookup)
+fx_subtract_ss_any(fx_subtract_ut, u_lookup, t_lookup)
+fx_subtract_ss_any(fx_subtract_us, u_lookup, s_lookup)
+
 
 static s7_pointer fx_subtract_fs(s7_scheme *sc, s7_pointer arg)
 {
@@ -53287,28 +53275,29 @@ static s7_pointer fx_subtract_fs(s7_scheme *sc, s7_pointer arg)
   return(x);
 }
 
-static s7_pointer fx_is_eq_sc(s7_scheme *sc, s7_pointer arg)
-{
-  return(make_boolean(sc, lookup(sc, cadr(arg)) == opt2_con(cdr(arg)))); /* fx_choose checks that the second arg is not unspecified */
-}
+#define fx_is_eq_sc_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    return(make_boolean(sc, Lookup(sc, cadr(arg), arg) == opt2_con(cdr(arg)))); /* fx_choose checks that the second arg is not unspecified */ \
+  }
 
-static s7_pointer fx_is_eq_tc(s7_scheme *sc, s7_pointer arg) {return(make_boolean(sc, t_lookup(sc, cadr(arg), arg) == opt2_con(cdr(arg))));}
+fx_is_eq_sc_any(fx_is_eq_sc, s_lookup)
+fx_is_eq_sc_any(fx_is_eq_tc, t_lookup)
 
-static s7_pointer fx_is_eq_car_q(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer lst, a = cdr(arg);
-  lst = lookup(sc, opt3_sym(a));
-  return(make_boolean(sc, (is_pair(lst)) ? (car(lst) == opt2_con(a)) : s7_is_eq(g_car(sc, set_plist_1(sc, lst)), opt2_con(a))));
-}
 
-static s7_pointer fx_is_eq_car_t_q(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer lst, a = cdr(arg);
-  lst = t_lookup(sc, opt3_sym(a), arg);
-  return(make_boolean(sc, (is_pair(lst)) ? (car(lst) == opt2_con(a)) : s7_is_eq(g_car(sc, set_plist_1(sc, lst)), opt2_con(a))));
-}
+#define fx_is_eq_car_sq_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer lst, a = cdr(arg); \
+    lst = Lookup(sc, opt3_sym(a), arg); \
+    return(make_boolean(sc, (is_pair(lst)) ? (car(lst) == opt2_con(a)) : s7_is_eq(g_car(sc, set_plist_1(sc, lst)), opt2_con(a)))); \
+  }
 
-static s7_pointer fx_is_eq_caar_q(s7_scheme *sc, s7_pointer arg)
+fx_is_eq_car_sq_any(fx_is_eq_car_sq, s_lookup)
+fx_is_eq_car_sq_any(fx_is_eq_car_tq, t_lookup)
+
+
+static s7_pointer fx_is_eq_caar_sq(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer lst, a = cdr(arg);
   lst = lookup(sc, opt3_sym(a));
@@ -53317,7 +53306,7 @@ static s7_pointer fx_is_eq_caar_q(s7_scheme *sc, s7_pointer arg)
   return(make_boolean(sc, s7_is_eq(g_caar(sc, set_plist_1(sc, lst)), opt2_con(a))));
 }
 
-static s7_pointer fx_not_is_eq_car_q(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_not_is_eq_car_sq(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer lst;
   lst = lookup(sc, opt1_sym(cdr(arg)));
@@ -53410,19 +53399,16 @@ fx_is_null_cddr_s_any(fx_is_null_cddr_s, s_lookup)
 fx_is_null_cddr_s_any(fx_is_null_cddr_t, t_lookup)
 
 
-static s7_pointer fx_is_symbol_cadr_s(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer p;
-  p = lookup(sc, opt2_sym(cdr(arg)));
-  return(((is_pair(p)) && (is_pair(cdr(p)))) ? make_boolean(sc, is_symbol(cadr(p))) : g_is_symbol(sc, set_plist_1(sc, g_cadr(sc, set_plist_1(sc, p)))));
-}
+#define fx_is_symbol_cadr_s_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer p; \
+    p = Lookup(sc, opt2_sym(cdr(arg)), arg); \
+    return(((is_pair(p)) && (is_pair(cdr(p)))) ? make_boolean(sc, is_symbol(cadr(p))) : g_is_symbol(sc, set_plist_1(sc, g_cadr(sc, set_plist_1(sc, p))))); \
+  }
 
-static s7_pointer fx_is_symbol_cadr_t(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer p;
-  p = t_lookup(sc, opt2_sym(cdr(arg)), arg);
-  return(((is_pair(p)) && (is_pair(cdr(p)))) ? make_boolean(sc, is_symbol(cadr(p))) : g_is_symbol(sc, set_plist_1(sc, g_cadr(sc, set_plist_1(sc, p)))));
-}
+fx_is_symbol_cadr_s_any(fx_is_symbol_cadr_s, s_lookup)
+fx_is_symbol_cadr_s_any(fx_is_symbol_cadr_t, t_lookup)
 
 static s7_pointer fx_is_symbol_car_t(s7_scheme *sc, s7_pointer arg)
 {
@@ -53476,23 +53462,19 @@ static s7_pointer fx_imag_part_s(s7_scheme *sc, s7_pointer arg)
   return((is_t_complex(z)) ? make_real(sc, imag_part(z)) : imag_part_p_p(sc, z));
 }
 
-static s7_pointer fx_iterate_s(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer iter;
-  iter = lookup(sc, cadr(arg));
-  if (is_iterator(iter))
-    return((iterator_next(iter))(sc, iter));
-  return(method_or_bust_one_arg_p(sc, iter, sc->iterate_symbol, T_ITERATOR));
-}
+#define fx_iterate_s_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer iter; \
+    iter = Lookup(sc, cadr(arg), arg); \
+    if (is_iterator(iter)) \
+      return((iterator_next(iter))(sc, iter)); \
+    return(method_or_bust_one_arg_p(sc, iter, sc->iterate_symbol, T_ITERATOR)); \
+  }
 
-static s7_pointer fx_iterate_o(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer iter;
-  iter = o_lookup(sc, cadr(arg), arg);
-  if (is_iterator(iter))
-    return((iterator_next(iter))(sc, iter));
-  return(method_or_bust_one_arg_p(sc, iter, sc->iterate_symbol, T_ITERATOR));
-}
+fx_iterate_s_any(fx_iterate_s, s_lookup)
+fx_iterate_s_any(fx_iterate_o, o_lookup)
+
 
 static s7_pointer fx_length_s(s7_scheme *sc, s7_pointer arg) {return(s7_length(sc, lookup(sc, cadr(arg))));}
 static s7_pointer fx_length_t(s7_scheme *sc, s7_pointer arg) {return(s7_length(sc, t_lookup(sc, cadr(arg), arg)));}
@@ -53807,14 +53789,6 @@ static s7_pointer fx_gt_tT(s7_scheme *sc, s7_pointer arg)
   return(((is_t_integer(p1)) && (is_t_integer(p2))) ? make_boolean(sc, integer(p1) > integer(p2)) : gt_p_pp(sc, p1, p2));
 }
 
-static s7_pointer fx_gt_ti(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = t_lookup(sc, cadr(arg), arg);
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) > integer(opt2_con(cdr(arg)))));
-  return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
-
 static s7_pointer fx_gt_si(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x;
@@ -53824,9 +53798,25 @@ static s7_pointer fx_gt_si(s7_scheme *sc, s7_pointer arg)
   return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
 }
 
+static s7_pointer fx_gt_ti(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x;
+  x = t_lookup(sc, cadr(arg), arg);
+  if (is_t_integer(x)) return(make_boolean(sc, integer(x) > integer(opt2_con(cdr(arg)))));
+  return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
+}
+
 static s7_pointer fx_leq_ss(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_leq_ts(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_leq_tu(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));}
+
+static s7_pointer fx_leq_si(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x;
+  x = lookup(sc, cadr(arg));
+  if (is_t_integer(x)) return(make_boolean(sc, integer(x) <= integer(opt2_con(cdr(arg)))));
+  return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
+}
 
 static s7_pointer fx_leq_ti(s7_scheme *sc, s7_pointer arg)
 {
@@ -53866,13 +53856,17 @@ static s7_pointer fx_lt_tf(s7_scheme *sc, s7_pointer arg)
   return(g_less_xf(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
 }
 
-static s7_pointer fx_lt_ti(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = t_lookup(sc, cadr(arg), arg);
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) < integer(opt2_con(cdr(arg)))));
-  return(g_less_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+#define fx_lt_si_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x; \
+    x = Lookup(sc, cadr(arg), arg); \
+    if (is_t_integer(x)) return(make_boolean(sc, integer(x) < integer(opt2_con(cdr(arg))))); \
+    return(g_less_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */ \
+  }
+
+fx_lt_si_any(fx_lt_si, s_lookup)
+fx_lt_si_any(fx_lt_ti, t_lookup)
 
 static s7_pointer fx_lt_t0(s7_scheme *sc, s7_pointer arg)
 {
@@ -53898,22 +53892,6 @@ static s7_pointer fx_lt_t2(s7_scheme *sc, s7_pointer arg)
   return(g_less_xi(sc, set_plist_2(sc, x, int_two)));
 }
 
-static s7_pointer fx_lt_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) < integer(opt2_con(cdr(arg)))));
-  return(g_less_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
-
-static s7_pointer fx_leq_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) <= integer(opt2_con(cdr(arg)))));
-  return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
-
 static s7_pointer fx_geq_tf(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x;
@@ -53922,21 +53900,17 @@ static s7_pointer fx_geq_tf(s7_scheme *sc, s7_pointer arg)
   return(g_geq_xf(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
 }
 
-static s7_pointer fx_geq_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) >= integer(opt2_con(cdr(arg)))));
-  return(g_geq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+#define fx_geq_si_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x; \
+    x = Lookup(sc, cadr(arg), arg); \
+    if (is_t_integer(x)) return(make_boolean(sc, integer(x) >= integer(opt2_con(cdr(arg))))); \
+    return(g_geq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */ \
+  }
 
-static s7_pointer fx_geq_ti(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = t_lookup(sc, cadr(arg), arg);
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) >= integer(opt2_con(cdr(arg)))));
-  return(g_geq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+fx_geq_si_any(fx_geq_si, s_lookup)
+fx_geq_si_any(fx_geq_ti, t_lookup)
 
 static s7_pointer fx_geq_t0(s7_scheme *sc, s7_pointer arg)
 {
@@ -53983,8 +53957,8 @@ fx_is_eq_ss_any(fx_is_eq_to, t_lookup, o_lookup)
 static s7_pointer fx_not_is_eq_ss(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x, y;
-  x = lookup(sc, opt2_sym(cdr(arg)));
-  y = lookup(sc, opt3_sym(cdr(arg)));
+  x = lookup(sc, opt3_sym(arg));
+  y = lookup(sc, opt1_sym(cdr(arg)));
   return(make_boolean(sc, (x != y) && ((!is_unspecified(x)) || (!is_unspecified(y)))));
 }
 
@@ -54097,21 +54071,18 @@ static s7_pointer fx_vset_oto(s7_scheme *sc, s7_pointer arg)
   return(vector_set_p_ppp(sc, o_lookup(sc, cadr(arg), arg), t_lookup(sc, opt1_sym(cdr(arg)), arg), o_lookup(sc, opt2_sym(cdr(arg)), arg)));
 }
 
-static s7_pointer fx_c_scs(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t3_1, lookup(sc, cadr(arg)));
-  set_car(sc->t3_3, lookup(sc, opt2_sym(cdr(arg)))); /* cadddr(arg) */
-  set_car(sc->t3_2, opt1_con(cdr(arg)));             /* caddr(arg) */
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+#define fx_c_scs_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    set_car(sc->t3_1, Lookup1(sc, cadr(arg), arg)); \
+    set_car(sc->t3_3, Lookup2(sc, opt2_sym(cdr(arg)), arg)); /* cadddr(arg) */ \
+    set_car(sc->t3_2, opt1_con(cdr(arg)));             /* caddr(arg) */ \
+    return(fn_proc(arg)(sc, sc->t3_1)); \
+  }
 
-static s7_pointer fx_c_tcs(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t3_1, t_lookup(sc, cadr(arg), arg));
-  set_car(sc->t3_3, lookup(sc, opt2_sym(cdr(arg)))); /* cadddr(arg) */
-  set_car(sc->t3_2, opt1_con(cdr(arg)));             /* caddr(arg) */
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+fx_c_scs_any(fx_c_scs, s_lookup, s_lookup)
+fx_c_scs_any(fx_c_tcs, t_lookup, s_lookup)
+
 
 #define fx_c_scs_direct_any(Name, Lookup1, Lookup2) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -54156,21 +54127,17 @@ static s7_pointer fx_c_ccs(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t3_1));
 }
 
-static s7_pointer fx_c_ssc(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t3_1, lookup(sc, cadr(arg)));
-  set_car(sc->t3_2, lookup(sc, opt1_sym(cdr(arg)))); /* caddr(arg) */
-  set_car(sc->t3_3, opt2_con(cdr(arg)));             /* cadddr(arg) */
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+#define fx_c_ssc_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    set_car(sc->t3_1, Lookup1(sc, cadr(arg), arg)); \
+    set_car(sc->t3_2, Lookup2(sc, opt1_sym(cdr(arg)), arg)); /* caddr(arg) */ \
+    set_car(sc->t3_3, opt2_con(cdr(arg)));             /* cadddr(arg) */ \
+    return(fn_proc(arg)(sc, sc->t3_1)); \
+  }
 
-static s7_pointer fx_c_tuc(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t3_1, t_lookup(sc, cadr(arg), arg));
-  set_car(sc->t3_2, u_lookup(sc, opt1_sym(cdr(arg)), arg)); /* caddr(arg) */
-  set_car(sc->t3_3, opt2_con(cdr(arg)));             /* cadddr(arg) */
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+fx_c_ssc_any(fx_c_ssc, s_lookup, s_lookup)
+fx_c_ssc_any(fx_c_tuc, t_lookup, u_lookup)
 
 static s7_pointer fx_c_opncq(s7_scheme *sc, s7_pointer arg)
 {
@@ -54178,20 +54145,17 @@ static s7_pointer fx_c_opncq(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t1_1));
 }
 
-static s7_pointer fx_c_opsq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t1_1, lookup(sc, cadr(largs)));
-  set_car(sc->t1_1, fn_proc(largs)(sc, sc->t1_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
+#define fx_c_opsq_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer largs = cadr(arg); \
+    set_car(sc->t1_1, Lookup(sc, cadr(largs), largs)); \
+    set_car(sc->t1_1, fn_proc(largs)(sc, sc->t1_1)); \
+    return(fn_proc(arg)(sc, sc->t1_1)); \
+  }
 
-static s7_pointer fx_c_optq(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, t_lookup(sc, opt1_sym(cdr(arg)), arg)); /* cadadr */
-  set_car(sc->t1_1, fn_proc(cadr(arg))(sc, sc->t1_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
+fx_c_opsq_any(fx_c_opsq, s_lookup)
+fx_c_opsq_any(fx_c_optq, t_lookup)
 
 static s7_pointer fx_c_optq_direct(s7_scheme *sc, s7_pointer arg)
 {
@@ -54211,33 +54175,27 @@ fx_c_car_s_any(fx_c_car_s, s_lookup)
 fx_c_car_s_any(fx_c_car_t, t_lookup)
 fx_c_car_s_any(fx_c_car_u, u_lookup)
 
-static s7_pointer fx_c_cdr_s(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer val;
-  val = lookup(sc, opt2_sym(cdr(arg)));
-  set_car(sc->t1_1, (is_pair(val)) ? cdr(val) : g_cdr(sc, set_plist_1(sc, val)));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
+#define fx_c_cdr_s_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer val; \
+    val = Lookup(sc, opt2_sym(cdr(arg)), arg); \
+    set_car(sc->t1_1, (is_pair(val)) ? cdr(val) : g_cdr(sc, set_plist_1(sc, val))); \
+    return(fn_proc(arg)(sc, sc->t1_1)); \
+  }
 
-static s7_pointer fx_c_cdr_t(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer val;
-  val = t_lookup(sc, opt2_sym(cdr(arg)), arg);
-  set_car(sc->t1_1, (is_pair(val)) ? cdr(val) : g_cdr(sc, set_plist_1(sc, val)));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
+fx_c_cdr_s_any(fx_c_cdr_s, s_lookup)
+fx_c_cdr_s_any(fx_c_cdr_t, t_lookup)
 
-static s7_pointer fx_is_type_opsq(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, lookup(sc, opt2_sym(cdr(arg))));
-  return(make_boolean(sc, (uint8_t)(opt3_byte(cdr(arg))) == type(fn_proc(cadr(arg))(sc, sc->t1_1))));
-}
+#define fx_is_type_opsq_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    set_car(sc->t1_1, Lookup(sc, opt2_sym(cdr(arg)), arg)); \
+    return(make_boolean(sc, (uint8_t)(opt3_byte(cdr(arg))) == type(fn_proc(cadr(arg))(sc, sc->t1_1)))); \
+  }
 
-static s7_pointer fx_is_type_optq(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, t_lookup(sc, opt2_sym(cdr(arg)), arg));
-  return(make_boolean(sc, (uint8_t)(opt3_byte(cdr(arg))) == type(fn_proc(cadr(arg))(sc, sc->t1_1))));
-}
+fx_is_type_opsq_any(fx_is_type_opsq, s_lookup)
+fx_is_type_opsq_any(fx_is_type_optq, t_lookup)
 
 static s7_pointer fx_is_type_car_s(s7_scheme *sc, s7_pointer arg)
 {
@@ -54287,32 +54245,19 @@ static s7_pointer fx_not_opsq(s7_scheme *sc, s7_pointer arg)
   return((fn_proc(largs)(sc, sc->t1_1) == sc->F) ? sc->T : sc->F);
 }
 
-/* TODO: fix the var pointers */
-static s7_pointer fx_c_opssq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, lookup(sc, opt2_sym(cdr(largs)))); /* caddr(largs) */
-  set_car(sc->t1_1, fn_proc(largs)(sc, sc->t2_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
+#define fx_c_opssq_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    set_car(sc->t2_1, Lookup1(sc, opt3_sym(arg), arg)); \
+    set_car(sc->t2_2, Lookup2(sc, opt1_sym(cdr(arg)), arg)); /* or opt2_sym */ \
+    set_car(sc->t1_1, fn_proc(cadr(arg))(sc, sc->t2_1)); \
+    return(fn_proc(arg)(sc, sc->t1_1)); \
+  }
 
-static s7_pointer fx_c_optuq(s7_scheme *sc, s7_pointer arg) /* why are the other 2 different? -- see direct cases below */
-{
-  set_car(sc->t2_1, t_lookup(sc, opt3_sym(arg), arg));
-  set_car(sc->t2_2, u_lookup(sc, opt1_sym(cdr(arg)), arg));
-  set_car(sc->t1_1, fn_proc(cadr(arg))(sc, sc->t2_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
+fx_c_opssq_any(fx_c_opssq, s_lookup, s_lookup)
+fx_c_opssq_any(fx_c_optuq, t_lookup, u_lookup)
+fx_c_opssq_any(fx_c_opstq, s_lookup, t_lookup)
 
-static s7_pointer fx_c_opstq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, t_lookup(sc, caddr(largs), arg));
-  set_car(sc->t1_1, fn_proc(largs)(sc, sc->t2_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
 
 #define fx_c_opssq_direct_any(Name, Lookup1, Lookup2) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -54324,6 +54269,27 @@ fx_c_opssq_direct_any(fx_c_opssq_direct, s_lookup, s_lookup)
 fx_c_opssq_direct_any(fx_c_opstq_direct, s_lookup, t_lookup)
 fx_c_opssq_direct_any(fx_c_optuq_direct, t_lookup, u_lookup)
 
+
+#define fx_not_opssq_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer larg = cadr(arg); \
+    set_car(sc->t2_1, Lookup1(sc, cadr(larg), larg)); \
+    set_car(sc->t2_2, Lookup2(sc, opt2_sym(cdr(larg)), larg)); \
+    return((fn_proc(larg)(sc, sc->t2_1) == sc->F) ? sc->T : sc->F); \
+ }
+
+fx_not_opssq_any(fx_not_opssq, s_lookup, s_lookup)
+fx_not_opssq_any(fx_not_oputq, u_lookup, t_lookup)
+
+
+static s7_pointer fx_not_lt_ut(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x, y;
+  y = u_lookup(sc, opt3_sym(arg), arg);
+  x = t_lookup(sc, opt1_sym(cdr(arg)), arg);
+  return(make_boolean(sc, ((is_t_integer(x)) && (is_t_integer(y))) ? (integer(y) >= integer(x)) : geq_b_7pp(sc, y, x)));
+}
 
 static s7_pointer fx_is_zero_remainder_car(s7_scheme *sc, s7_pointer arg)
 {
@@ -54346,47 +54312,19 @@ static s7_pointer fx_is_zero_remainder_o(s7_scheme *sc, s7_pointer arg)
   return(is_zero_p_p(sc, remainder_p_pp(sc, s, t)));
 }
 
-static s7_pointer fx_not_opssq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, lookup(sc, opt2_sym(cdr(largs))));
-  return((fn_proc(largs)(sc, sc->t2_1) == sc->F) ? sc->T : sc->F);
-}
+#define fx_c_opscq_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer largs = cadr(arg); \
+    set_car(sc->t2_1, Lookup(sc, cadr(largs), largs)); \
+    set_car(sc->t2_2, opt2_con(cdr(largs))); \
+    set_car(sc->t1_1, fn_proc(largs)(sc, sc->t2_1)); \
+    return(fn_proc(arg)(sc, sc->t1_1)); \
+  }
 
-static s7_pointer fx_not_oputq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, u_lookup(sc, cadr(largs), arg));
-  set_car(sc->t2_2, t_lookup(sc, caddr(largs), arg));
-  return((fn_proc(largs)(sc, sc->t2_1) == sc->F) ? sc->T : sc->F);
-}
+fx_c_opscq_any(fx_c_opscq, s_lookup)
+fx_c_opscq_any(fx_c_optcq, t_lookup)
 
-static s7_pointer fx_not_lt_ut(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x, y;
-  y = u_lookup(sc, opt3_sym(arg), arg);
-  x = t_lookup(sc, opt1_sym(cdr(arg)), arg);
-  return(make_boolean(sc, ((is_t_integer(x)) && (is_t_integer(y))) ? (integer(y) >= integer(x)) : geq_b_7pp(sc, y, x)));
-}
-
-static s7_pointer fx_c_opscq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, opt2_con(cdr(largs)));
-  set_car(sc->t1_1, fn_proc(largs)(sc, sc->t2_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
-
-static s7_pointer fx_c_optcq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, t_lookup(sc, cadr(largs), arg));
-  set_car(sc->t2_2, opt2_con(cdr(largs)));
-  set_car(sc->t1_1, fn_proc(largs)(sc, sc->t2_1));
-  return(fn_proc(arg)(sc, sc->t1_1));
-}
 
 static s7_pointer fx_not_opscq(s7_scheme *sc, s7_pointer arg)
 {
@@ -54574,26 +54512,20 @@ static inline s7_pointer fx_vref_vref_3(s7_scheme *sc, s7_pointer v1, s7_pointer
   return(vector_ref_p_pp(sc, vector_ref_p_pp(sc, v1, p1), p2));
 }
 
-static s7_pointer fx_vref_vref_ss_s(s7_scheme *sc, s7_pointer arg)
-{
-  return(fx_vref_vref_3(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))), lookup(sc, caddr(arg))));
-}
+#define fx_vref_vref_ss_s_any(Name, Lookup1, Lookup2, Lookup3) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    return(fx_vref_vref_3(sc, Lookup1(sc, car(opt3_pair(arg)), arg), Lookup2(sc, opt2_sym(opt3_pair(arg)), arg), Lookup3(sc, caddr(arg), arg))); \
+  }
 
-static s7_pointer fx_vref_vref_go_t(s7_scheme *sc, s7_pointer arg)
-{
-  return(fx_vref_vref_3(sc, lookup_global(sc, car(opt3_pair(arg))), o_lookup(sc, opt2_sym(opt3_pair(arg)), arg), t_lookup(sc, caddr(arg), arg)));
-}
+fx_vref_vref_ss_s_any(fx_vref_vref_ss_s, s_lookup, s_lookup, s_lookup)
+fx_vref_vref_ss_s_any(fx_vref_vref_gs_t, g_lookup, s_lookup, t_lookup)
+fx_vref_vref_ss_s_any(fx_vref_vref_go_t, g_lookup, o_lookup, t_lookup)
+fx_vref_vref_ss_s_any(fx_vref_vref_tu_v, t_lookup, u_lookup, v_lookup)
 
-static s7_pointer fx_vref_vref_3_no_let(s7_scheme *sc, s7_pointer code) /* out one level from vref_vref_tu_v below */
+static s7_pointer fx_vref_vref_3_no_let(s7_scheme *sc, s7_pointer code) /* out one level from vref_vref_tu_v */
 {
   return(fx_vref_vref_3(sc, lookup(sc, cadr(code)), lookup(sc, opt2_sym(code)), lookup(sc, opt3_sym(code))));
-}
-
-static s7_pointer fx_vref_vref_tu_v(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer slot1 = let_slots(sc->curlet), slot2;
-  slot2 = next_slot(slot1);
-  return(fx_vref_vref_3(sc, slot_value(slot1), slot_value(slot2), slot_value(next_slot(slot2))));
 }
 
 static s7_pointer fx_c_opscq_c(s7_scheme *sc, s7_pointer arg)
@@ -54606,25 +54538,20 @@ static s7_pointer fx_c_opscq_c(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
-static s7_pointer fx_c_opssq_c(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, lookup(sc, opt2_sym(cdr(largs))));
-  set_car(sc->t2_1, fn_proc(largs)(sc, sc->t2_1));
-  set_car(sc->t2_2, opt3_con(cdr(arg))); /* caddr */
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
+#define fx_c_opssq_c_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer largs = cadr(arg); \
+    set_car(sc->t2_1, Lookup1(sc, cadr(largs), largs)); \
+    set_car(sc->t2_2, Lookup2(sc, opt2_sym(cdr(largs)), largs)); \
+    set_car(sc->t2_1, fn_proc(largs)(sc, sc->t2_1)); \
+    set_car(sc->t2_2, opt3_con(cdr(arg))); /* caddr */ \
+    return(fn_proc(arg)(sc, sc->t2_1)); \
+  }
 
-static s7_pointer fx_c_opstq_c(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = cadr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, t_lookup(sc, caddr(largs), arg));
-  set_car(sc->t2_1, fn_proc(largs)(sc, sc->t2_1));
-  set_car(sc->t2_2, opt3_con(cdr(arg)));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
+fx_c_opssq_c_any(fx_c_opssq_c, s_lookup, s_lookup)
+fx_c_opssq_c_any(fx_c_opstq_c, s_lookup, t_lookup)
+
 
 static s7_pointer fx_c_opstq_c_direct(s7_scheme *sc, s7_pointer arg)
 {
@@ -54665,50 +54592,52 @@ fx_c_opsq_s_direct_any(fx_c_opsq_s_direct, s_lookup, s_lookup)
 fx_c_opsq_s_direct_any(fx_c_optq_s_direct, t_lookup, s_lookup)
 fx_c_opsq_s_direct_any(fx_c_opuq_t_direct, u_lookup, t_lookup)
 
+#define fx_cons_car_s_s_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer p; \
+    p = Lookup1(sc, opt1_sym(cdr(arg)), arg); \
+    if (is_pair(p)) return(cons(sc, car(p), Lookup2(sc, opt3_sym(arg), arg))); \
+    return(cons(sc, car_p_p(sc, p), Lookup2(sc, opt3_sym(arg), arg))); \
+  }
 
-static s7_pointer fx_cons_car_s_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, lookup(sc, opt1_sym(cdr(arg)))), lookup(sc, opt3_sym(arg))));}
-static s7_pointer fx_cons_car_t_s(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, t_lookup(sc, opt1_sym(cdr(arg)), arg)), lookup(sc, opt3_sym(arg))));}
-static s7_pointer fx_cons_car_t_v(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, t_lookup(sc, opt1_sym(cdr(arg)), arg)), v_lookup(sc, opt3_sym(arg), arg)));}
-static s7_pointer fx_cons_car_u_t(s7_scheme *sc, s7_pointer arg) {return(cons(sc, car_p_p(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)), t_lookup(sc, opt3_sym(arg), arg)));}
+fx_cons_car_s_s_any(fx_cons_car_s_s, s_lookup, s_lookup)
+fx_cons_car_s_s_any(fx_cons_car_t_s, t_lookup, s_lookup)
+fx_cons_car_s_s_any(fx_cons_car_t_v, t_lookup, v_lookup)
+fx_cons_car_s_s_any(fx_cons_car_u_t, u_lookup, t_lookup)
+
 
 static s7_pointer fx_cons_opuq_t(s7_scheme *sc, s7_pointer arg)
 {
   return(cons(sc, ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, u_lookup(sc, opt1_sym(cdr(arg)), arg)), t_lookup(sc, opt3_sym(arg), arg)));
 }
 
-static s7_pointer fx_c_opsq_cs(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, lookup(sc, opt3_sym(cdr(arg))));  /* cadadr(arg); */
-  set_car(sc->t3_1, fn_proc(cadr(arg))(sc, sc->t1_1));
-  set_car(sc->t3_2, opt1_con(cdr(arg)));              /* caddr(arg) or cadaddr(arg) */
-  set_car(sc->t3_3, lookup(sc, opt2_sym(cdr(arg))));  /* cadddr(arg); */
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+#define fx_c_opsq_cs_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    set_car(sc->t1_1, Lookup1(sc, opt3_sym(cdr(arg)), arg));  /* cadadr(arg); */ \
+    set_car(sc->t3_1, fn_proc(cadr(arg))(sc, sc->t1_1)); \
+    set_car(sc->t3_2, opt1_con(cdr(arg)));              /* caddr(arg) or cadaddr(arg) */ \
+    set_car(sc->t3_3, Lookup2(sc, opt2_sym(cdr(arg)), arg));  /* cadddr(arg); */ \
+    return(fn_proc(arg)(sc, sc->t3_1)); \
+  }
 
-static s7_pointer fx_c_optq_cu(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, t_lookup(sc, opt3_sym(cdr(arg)), arg));
-  set_car(sc->t3_1, fn_proc(cadr(arg))(sc, sc->t1_1));
-  set_car(sc->t3_2, opt1_con(cdr(arg)));
-  set_car(sc->t3_3, u_lookup(sc, opt2_sym(cdr(arg)), arg));
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+fx_c_opsq_cs_any(fx_c_opsq_cs, s_lookup, s_lookup)
+fx_c_opsq_cs_any(fx_c_optq_cu, t_lookup, u_lookup)
 
-static s7_pointer fx_c_opsq_c(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, lookup(sc, opt1_sym(cdr(arg)))); /* cadadr */
-  set_car(sc->t2_1, fn_proc(cadr(arg))(sc, sc->t1_1));
-  set_car(sc->t2_2, opt2_con(cdr(arg)));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
 
-static s7_pointer fx_c_optq_c(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t1_1, t_lookup(sc, opt1_sym(cdr(arg)), arg));
-  set_car(sc->t2_1, fn_proc(cadr(arg))(sc, sc->t1_1));
-  set_car(sc->t2_2, opt2_con(cdr(arg)));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
+#define fx_c_opsq_c_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    set_car(sc->t1_1, Lookup(sc, opt1_sym(cdr(arg)), arg)); /* cadadr */ \
+    set_car(sc->t2_1, fn_proc(cadr(arg))(sc, sc->t1_1)); \
+    set_car(sc->t2_2, opt2_con(cdr(arg))); \
+    return(fn_proc(arg)(sc, sc->t2_1)); \
+  }
+
+fx_c_opsq_c_any(fx_c_opsq_c, s_lookup)
+fx_c_opsq_c_any(fx_c_optq_c, t_lookup)
+
 
 static s7_pointer fx_c_optq_c_direct(s7_scheme *sc, s7_pointer arg)
 {
@@ -54750,19 +54679,16 @@ static s7_pointer fx_c_s_opssq(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
-static s7_pointer fx_c_s_opssq_direct(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = opt3_pair(arg); /* cdaddr(arg) */
-  arg = cdr(arg);
-  return(((s7_p_pp_t)opt2_direct(arg))(sc, lookup(sc, car(arg)), ((s7_p_pp_t)opt3_direct(arg))(sc, lookup(sc, car(largs)), lookup(sc, opt2_sym(largs)))));
-}
+#define fx_c_s_opssq_direct_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer largs = opt3_pair(arg); /* cdaddr(arg) */ \
+    arg = cdr(arg); \
+    return(((s7_p_pp_t)opt2_direct(arg))(sc, lookup(sc, car(arg)), ((s7_p_pp_t)opt3_direct(arg))(sc, lookup(sc, car(largs)), Lookup(sc, opt2_sym(largs), largs)))); \
+  }
 
-static s7_pointer fx_c_s_opstq_direct(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = opt3_pair(arg); /* cdaddr(arg) */
-  arg = cdr(arg);
-  return(((s7_p_pp_t)opt2_direct(arg))(sc, lookup(sc, car(arg)), ((s7_p_pp_t)opt3_direct(arg))(sc, lookup(sc, car(largs)), t_lookup(sc, opt2_sym(largs), arg))));
-}
+fx_c_s_opssq_direct_any(fx_c_s_opssq_direct, s_lookup)
+fx_c_s_opssq_direct_any(fx_c_s_opstq_direct, t_lookup)
 
 static s7_pointer fx_vref_g_vref_gs(s7_scheme *sc, s7_pointer arg)
 {
@@ -54881,35 +54807,29 @@ static s7_pointer fx_c_s_opsq(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
-static s7_pointer fx_c_s_opsq_direct(s7_scheme *sc, s7_pointer arg)
-{
-  arg = cdr(arg);
-  return(((s7_p_pp_t)opt2_direct(arg))(sc, lookup(sc, car(arg)), ((s7_p_p_t)opt3_direct(arg))(sc, lookup(sc, opt1_sym(arg))))); /* cadadr */
-}
+#define fx_c_s_opsq_direct_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    arg = cdr(arg); \
+    return(((s7_p_pp_t)opt2_direct(arg))(sc, Lookup1(sc, car(arg), arg), ((s7_p_p_t)opt3_direct(arg))(sc, Lookup2(sc, opt1_sym(arg), arg)))); /* cadadr */ \
+  }
 
-static s7_pointer fx_c_t_opuq_direct(s7_scheme *sc, s7_pointer arg)
-{
-  arg = cdr(arg);
-  return(((s7_p_pp_t)opt2_direct(arg))(sc, t_lookup(sc, car(arg), arg), ((s7_p_p_t)opt3_direct(arg))(sc, u_lookup(sc, opt1_sym(arg), arg))));
-}
+fx_c_s_opsq_direct_any(fx_c_s_opsq_direct, s_lookup, s_lookup)
+fx_c_s_opsq_direct_any(fx_c_t_opuq_direct, t_lookup, u_lookup)
 
-static s7_pointer fx_c_s_car_s(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer val;
-  val = lookup(sc, opt2_sym(cdr(arg)));
-  set_car(sc->t2_2, (is_pair(val)) ? car(val) : g_car(sc, set_plist_1(sc, val)));
-  set_car(sc->t2_1, lookup(sc, cadr(arg)));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
+#define fx_c_s_car_s_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer val; \
+    val = Lookup2(sc, opt2_sym(cdr(arg)), arg); \
+    set_car(sc->t2_2, (is_pair(val)) ? car(val) : g_car(sc, set_plist_1(sc, val))); \
+    set_car(sc->t2_1, Lookup1(sc, cadr(arg), arg)); \
+    return(fn_proc(arg)(sc, sc->t2_1)); \
+  }
 
-static s7_pointer fx_c_t_car_u(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer val;
-  val = u_lookup(sc, opt2_sym(cdr(arg)), arg);
-  set_car(sc->t2_2, (is_pair(val)) ? car(val) : g_car(sc, set_plist_1(sc, val)));
-  set_car(sc->t2_1, t_lookup(sc, cadr(arg), arg));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
+fx_c_s_car_s_any(fx_c_s_car_s, s_lookup, s_lookup)
+fx_c_s_car_s_any(fx_c_t_car_u, t_lookup, u_lookup)
+
 
 #define fx_add_s_car_s_any(Name, Lookup1, Lookup2) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -55017,7 +54937,7 @@ static s7_pointer fx_c_optq_optq_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(arg))(sc, ((s7_p_p_t)opt2_direct(cdr(arg)))(sc, x), ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, x)));
 }
 
-static s7_pointer fx_car_car(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_car_s_car_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer p1, p2;
   p1 = lookup(sc, opt1_sym(cdr(arg)));
@@ -55025,20 +54945,20 @@ static s7_pointer fx_car_car(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(arg))(sc, (is_pair(p1)) ? car(p1) : g_car(sc, set_plist_1(sc, p1)), (is_pair(p2)) ? car(p2) : g_car(sc, set_plist_1(sc, p2))));
 }
 
-static s7_pointer fx_cdr_cdr(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer p1, p2;
-  p1 = lookup(sc, opt1_sym(cdr(arg)));
-  p2 = lookup(sc, opt2_sym(cdr(arg)));  /* cadaddr(arg) */
-  return(((s7_p_pp_t)opt3_direct(arg))(sc, (is_pair(p1)) ? cdr(p1) : g_cdr(sc, set_plist_1(sc, p1)), (is_pair(p2)) ? cdr(p2) : g_cdr(sc, set_plist_1(sc, p2))));
-}
-
-static s7_pointer fx_car_car_tu(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_car_t_car_u(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer p1, p2;
   p1 = t_lookup(sc, opt1_sym(cdr(arg)), arg);
   p2 = u_lookup(sc, opt2_sym(cdr(arg)), arg);
   return(((s7_p_pp_t)opt3_direct(arg))(sc, (is_pair(p1)) ? car(p1) : g_car(sc, set_plist_1(sc, p1)), (is_pair(p2)) ? car(p2) : g_car(sc, set_plist_1(sc, p2))));
+}
+
+static s7_pointer fx_cdr_s_cdr_s(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer p1, p2;
+  p1 = lookup(sc, opt1_sym(cdr(arg)));
+  p2 = lookup(sc, opt2_sym(cdr(arg)));  /* cadaddr(arg) */
+  return(((s7_p_pp_t)opt3_direct(arg))(sc, (is_pair(p1)) ? cdr(p1) : g_cdr(sc, set_plist_1(sc, p1)), (is_pair(p2)) ? cdr(p2) : g_cdr(sc, set_plist_1(sc, p2))));
 }
 
 static s7_pointer fx_is_eq_car_car_tu(s7_scheme *sc, s7_pointer arg)
@@ -56633,7 +56553,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		    {
 		      set_opt3_sym(cdr(arg), cadadr(arg));
 		      set_opt2_con(cdr(arg), cadaddr(arg));
-		      return((caadr(arg) == sc->car_symbol) ? fx_is_eq_car_q : fx_is_eq_caar_q);
+		      return((caadr(arg) == sc->car_symbol) ? fx_is_eq_car_sq : fx_is_eq_caar_sq);
 		    }}
 	      if (((car(arg) == sc->lt_symbol) || (car(arg) == sc->num_eq_symbol)) &&
 		  (is_t_integer(caddr(arg))) &&
@@ -56695,12 +56615,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	case HOP_SAFE_C_opSSq:
 	  if (fx_matches(car(arg), sc->not_symbol))
 	    {
-	      if (fn_proc(cadr(arg)) == g_is_eq)
-		{
-		  set_opt2_sym(cdr(arg), cadadr(arg));
-		  set_opt3_sym(cdr(arg), caddadr(arg));
-		  return(fx_not_is_eq_ss);
-		}
+	      if (fn_proc(cadr(arg)) == g_is_eq) return(fx_not_is_eq_ss);
 	      return(fx_not_opssq);
 	    }
 	  if ((is_global_and_has_func(car(arg), s7_p_p_function)) &&
@@ -56708,8 +56623,6 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	    {
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_p_function(global_value(car(arg)))));
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(caadr(arg)))));
-	      set_opt3_sym(arg, cadadr(arg));
-	      set_opt1_sym(cdr(arg), caddadr(arg));
 	      return(fx_c_opssq_direct);
 	    }
 	  return(fx_c_opssq);
@@ -56754,7 +56667,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		{
 		  set_opt1_sym(cdr(arg), cadadr(arg));
 		  set_opt2_sym(cdr(arg), cadaddr(arg));
-		  return(fx_cdr_cdr);
+		  return(fx_cdr_s_cdr_s);
 		}
 	      set_opt1_sym(cdr(arg), cadaddr(arg)); /* opt2 is taken by second func */
 	      return(fx_c_opsq_opsq_direct);
@@ -56779,11 +56692,11 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	case HOP_SAFE_C_A:
 	  if (fx_matches(car(arg), sc->not_symbol))
 	    {
-	      if (fx_proc(cdr(arg)) == fx_is_eq_car_q)
+	      if (fx_proc(cdr(arg)) == fx_is_eq_car_sq)
 		{
 		  set_opt1_sym(cdr(arg), cadadr(cadr(arg)));
 		  set_opt3_con(cdr(arg), cadaddr(cadr(arg)));
-		  return(fx_not_is_eq_car_q);
+		  return(fx_not_is_eq_car_sq);
 		}
 	      return(fx_not_a);
 	    }
@@ -57363,14 +57276,14 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      set_opt1_sym(cdr(p), cadadr(p));
 	      set_opt2_sym(cdr(p), cadaddr(p));
 	      return(with_fx(tree, ((cadadr(p) == var1) && (cadaddr(p) == var2)) ?
-			     ((opt3_direct(p) == (s7_pointer)is_eq_p_pp) ? fx_is_eq_car_car_tu : fx_car_car_tu) : fx_car_car));
+			     ((opt3_direct(p) == (s7_pointer)is_eq_p_pp) ? fx_is_eq_car_car_tu : fx_car_t_car_u) : fx_car_s_car_s));
 	    }}
       break;
 
     case HOP_SAFE_C_opSq_C:
       if (cadadr(p) == var1)
 	{
-	  if (fx_proc(tree) == fx_is_eq_car_q) return(with_fx(tree, fx_is_eq_car_t_q));
+	  if (fx_proc(tree) == fx_is_eq_car_sq) return(with_fx(tree, fx_is_eq_car_tq));
 	  if ((fx_proc(tree) == fx_c_opsq_c) || (fx_proc(tree) == fx_c_optq_c))
 	    {
 	      if (fn_proc(p) != g_lint_let_ref) /* don't step on opt3_sym */
@@ -57403,18 +57316,13 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       if (fx_proc(tree) == fx_c_opssq)
 	{
 	  if (caddadr(p) == var1) return(with_fx(tree, fx_c_opstq));
-	  if ((cadadr(p) == var1) && (caddadr(p) == var2))
-	    {
-	      set_opt3_sym(p, var1);
-	      set_opt1_sym(cdr(p), var2);
-	      return(with_fx(tree, fx_c_optuq));
-	    }}
+	  if ((cadadr(p) == var1) && (caddadr(p) == var2)) return(with_fx(tree, fx_c_optuq));
+	}
       if (fx_proc(tree) == fx_c_opssq_direct)
 	{
 	  if ((cadadr(p) == var1) && (caddadr(p) == var2)) return(with_fx(tree, fx_c_optuq_direct));
 	  if (caddadr(p) == var1)
 	    {
-	      set_opt1_sym(cdr(p), var1);
 	      if ((opt2_direct(cdr(p)) == (s7_pointer)is_zero_p_p) && (opt3_direct(cdr(p)) == (s7_pointer)remainder_p_pp) &&
 		  (!more_vars) && (cadadr(p) != var1) && (cadadr(p) != var2) && (cadadr(p) != var3))
 		return(with_fx(tree, fx_is_zero_remainder_o));
@@ -57423,11 +57331,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       if ((cadadr(p) == var2) && (fx_proc(tree) == fx_not_opssq) && (caddadr(p) == var1))
 	{
 	  if (fn_proc(cadr(p)) == g_less_2)
-	    {
-	      set_opt3_sym(p, var2);
-	      set_opt1_sym(cdr(p), var1);
-	      set_fx_direct(tree, fx_not_lt_ut);
-	    }
+	    set_fx_direct(tree, fx_not_lt_ut);
 	  else set_fx_direct(tree, fx_not_oputq);
 	  return(true);
 	}
@@ -57484,8 +57388,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
     case HOP_SAFE_C_opSSq_S:
       if (fx_proc(tree) == fx_vref_vref_ss_s)
 	{
-	  if (((caddr(p) == var1) && (is_global(cadadr(p)))) && (!more_vars) && (caddadr(p) != var1) && (caddadr(p) != var2) && (caddadr(p) != var3))
-	    return(with_fx(tree, fx_vref_vref_go_t));
+	  if ((caddr(p) == var1) && (is_global(cadadr(p))))
+	    {
+	      if ((!more_vars) && (caddadr(p) != var1) && (caddadr(p) != var2) && (caddadr(p) != var3))
+		return(with_fx(tree, fx_vref_vref_go_t));
+	      return(with_fx(tree, fx_vref_vref_gs_t));
+	    }
 	  if ((cadadr(p) == var1) && (caddadr(p) == var2) && (caddr(p) == var3)) return(with_fx(tree, fx_vref_vref_tu_v));
 	}
       break;
@@ -69304,12 +69212,15 @@ static int32_t combine_ops(s7_scheme *sc, s7_pointer func, s7_pointer expr, comb
 	{
 	case OP_SAFE_C_S:      return(OP_SAFE_C_opSq);
 	case OP_SAFE_C_NC:     return(OP_SAFE_C_opNCq);
-	case OP_SAFE_C_SS:     return(OP_SAFE_C_opSSq);
 	case OP_SAFE_C_SC:     return(OP_SAFE_C_opSCq);
 	case OP_SAFE_C_CS:     return(OP_SAFE_C_opCSq);
 	case OP_SAFE_C_A:      return(OP_SAFE_C_opAq);
 	case OP_SAFE_C_AA:     return(OP_SAFE_C_opAAq);
 	case OP_SAFE_C_AAA:    return(OP_SAFE_C_opAAAq);
+	case OP_SAFE_C_SS:
+	  set_opt3_sym(expr, cadr(e1));
+	  set_opt1_sym(cdr(expr), caddr(e1));
+	  return(OP_SAFE_C_opSSq);
 	case OP_SAFE_C_opSq:
 	  set_opt3_pair(expr, cadr(e1));
 	  set_opt3_sym(cdr(expr), cadadr(e1));
@@ -94757,7 +94668,7 @@ int main(int argc, char **argv)
  * tpeak       123          115    114    112    109
  * tref        527          691    687    480    477
  * tauto       786          648    642    503    497
- * tshoot     1484          883    872    837    812   811
+ * tshoot     1484          883    872    837    811
  * index      1051         1026   1016    989    984
  * tmock      7748         1177   1165   1111   1098
  * tvect      1951         2456   2413   1867   1756
@@ -94770,20 +94681,20 @@ int main(int argc, char **argv)
  * tmat       2677         3065   3042   2524   2524
  * fbench     2868         2688   2583   2542   2542
  * tcopy      2623         8035   5546   2557   2558
- * dup        2927         3805   3788   2962   2652
- * tb         3321         2735   2681   2565   2563
+ * dup        2927         3805   3788   2962   2652  2636
+ * tb         3321         2735   2681   2565   2561
  * titer      2727         2865   2842   2710   2679
  * tsort      3656         3105   3104   2925   2924
  * tset       3230         3253   3104   3244   3211
  * teq        3594         4068   4045   3701   3578
  * tio        3715         3816   3752   3703   3701
- * tstr       6591         5281   4863   4329   4215
+ * tstr       6591         5281   4863   4329   4215  4212
  * tclo       4690         4787   4735   4512   4420
  * tcase      4537         4960   4793   4480   4475
  * tlet       5471         7775   5640   4488   4491
  * tmap       5715         8270   8188   4730   4694
  * tfft      114.8         7820   7729   4816   4803
- * tnum       56.6         6348   6013   5449   5443
+ * tnum       56.6         6348   6013   5449   5443  5449
  * tmisc      6068         7389   6210   5477   5471
  * tgsl       25.2         8485   7802   6394   6390
  * trec       8338         6936          6563   6563
@@ -94798,7 +94709,6 @@ int main(int argc, char **argv)
  * tbig      596.1        177.4  175.8  169.6  169.5
  * -------------------------------------------------------
  *
- * more random vals in t725? no definers t725?
  * terminal app doc?
  * dilambda/setter timings
  * (n)repl.scm should have some fancy autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
