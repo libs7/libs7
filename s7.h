@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.14"
-#define S7_DATE "29-Jul-2021"
+#define S7_VERSION "9.15"
+#define S7_DATE "30-Jul-2021"
 #define S7_MAJOR_VERSION 9
-#define S7_MINOR_VERSION 14
+#define S7_MINOR_VERSION 15
 
 #include <stdint.h>           /* for int64_t */
 
@@ -232,6 +232,7 @@ s7_int s7_list_length(s7_scheme *sc, s7_pointer a);                          /* 
 s7_pointer s7_make_list(s7_scheme *sc, s7_int len, s7_pointer init);         /* (make-list len init) */
 s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...);                   /* (list ...) */
 s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...);                /* (list ...) arglist should be NULL terminated (more error checks than s7_list) */
+s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array); /* array contents -> list */
 s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a);                          /* (reverse a) */
 s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b);             /* (append a b) */
 s7_pointer s7_list_ref(s7_scheme *sc, s7_pointer lst, s7_int num);           /* (list-ref lst num) */
@@ -910,7 +911,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  * 
- * 19-Jul:    s7_is_random_state, s7_make_normal_vector.
+ * 19-Jul:    s7_is_random_state, s7_make_normal_vector. s7_array_to_list.
  * 12-Apr:    s7_optimize now returns an s7_pfunc, not an s7_function.
  * 7-Apr:     removed the "args" parameter from s7_float_function. added s7_make_c_object_without_gc.
  * 31-Mar:    vector-rank, vector-dimension.

@@ -1244,6 +1244,23 @@ int main(int argc, char **argv)
   s7_gc_unprotect_at(sc, gc_loc);
 
   {
+    s7_pointer array[3];
+    for (i = 1; i < 4; i++) array[i - 1] = s7_make_integer(sc, i);
+    p = s7_array_to_list(sc, 3, array);
+    gc_loc = s7_gc_protect(sc, p);
+    if (!s7_is_list(sc, p))
+      {fprintf(stderr, "%d: %s is not a list?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    if (s7_list_length(sc, p) != 3)
+      {fprintf(stderr, "%d: (length %s) is not 3?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    if (s7_integer(s7_list_ref(sc, p, 1)) != 2)
+      {fprintf(stderr, "%d: (%s 1) is not 2?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    s7_gc_unprotect_at(sc, gc_loc);
+  }
+  p = s7_array_to_list(sc, 0, NULL);
+  if (!s7_is_null(sc, p))
+    {fprintf(stderr, "%d: %s is not null?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+
+  {
     s7_pointer c1, c2, c3, c12, c23, c123, c1234, c1d2, c2d3, c3d4, c12d3, c23d4, c123d4, c1234d5;
     s7_gc_on(sc, false);
     c1 = s7_list(sc, 1, TO_S7_INT(1));                                              /* (1) */
