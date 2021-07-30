@@ -128,7 +128,8 @@
 /* ---------------- initial sizes ---------------- */
 
 #ifndef INITIAL_HEAP_SIZE
-  #define INITIAL_HEAP_SIZE 128000
+  /* #define INITIAL_HEAP_SIZE 128000 */
+  #define INITIAL_HEAP_SIZE 64000         /* 29-Jul-21 -- seems faster */
 #endif
 /* the heap grows as needed, this is its initial size. If the initial heap is small, s7 can run in about 2.5 Mbytes of memory.
  * There are many cases where a bigger heap is faster (but harware cache size probably matters more).
@@ -6497,7 +6498,7 @@ static void mark_typed_vector_1(s7_pointer p, s7_int top) /* for typed vectors w
 static void mark_let(s7_pointer let)
 {
   s7_pointer x;
-  for (x = let; is_let(x) && (!is_marked(x)); x = let_outlet(x))
+  for (x = let; is_let(x) && (!is_marked(x)); x = let_outlet(x)) /* let can be sc->nil, e.g. closure_let */
     {
       s7_pointer y;
       set_mark(x);
@@ -6923,7 +6924,7 @@ static int64_t gc(s7_scheme *sc)
 
   gc_mark(sc->code);
   if (sc->args) gc_mark(sc->args);
-  mark_let(sc->curlet);
+  gc_mark(sc->curlet);   /* not mark_let because op_any_closure_3p uses sc->curlet as a temp!! */
   mark_current_code(sc); /* probably redundant if with_history */
 
   mark_stack_1(sc->stack, current_stack_top(sc));
@@ -30044,7 +30045,7 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 
 static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointer let)
 {
-  /* if fname ends in .so, try loading it as a c shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
+  /* if fname ends in .so, try loading it as a C shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
   s7_int fname_len;
 
   fname_len = safe_strlen(fname);
@@ -30092,6 +30093,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 	  {
 	    s7_pointer init;
 	    init = s7_let_ref(sc, let, make_symbol(sc, "init_func"));
+	    /* init is a symbol (surely not a gensym?), so it should not need to be protected */
 	    if (!is_symbol(init))
 	      s7_warn(sc, 512, "can't load %s: no init function\n", fname);
 	    else
@@ -30111,8 +30113,12 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 		    s7_pointer init_args, p;
 
 		    init_args = s7_let_ref(sc, let, make_symbol(sc, "init_args"));
+		    gc_protect_via_stack(sc, init_args);
 		    if (is_pair(init_args))
-		      p = ((dl_func_with_args)init_func)(sc, init_args);
+		      {
+			p = ((dl_func_with_args)init_func)(sc, init_args);
+			stack_protected2(sc) = p;
+		      }
 		    /* if caller includes init_args, but init_func is actually a dl_func, it seems to be ok,
 		     *   but the returned value is whatever was last computed in the init_func.
 		     */
@@ -30125,6 +30131,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 			((dl_func)init_func)(sc);
 			p = sc->F;
 		      }
+		    unstack(sc);
 		    if (pname) liberate(sc, pname);
 		    return(p);
 		  }
@@ -39669,6 +39676,8 @@ s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array)
   for (i = num_values - 1; i >= 0; i--)
     sc->v = cons(sc, array[i], sc->v);
   result = sc->v;
+  if (sc->safety > NO_SAFETY)
+    check_list_validity(sc, "s7_array_to_list", result);
   sc->v = sc->nil;
   return(result);
 }
@@ -52896,31 +52905,8 @@ static void check_t_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
 {
   if (let_slots(e) != lookup_slot_from(var, sc->curlet))
     {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n",
-	      func, display(expr), display(var), display(sc->curlet),
+      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(sc->curlet),
 	      (tis_slot(let_slots(e))) ? display(let_slots(e)) : "no slots");
-      if (sc->stop_at_error) abort();
-    }
-}
-
-static void check_u_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
-{
-  if (next_slot(let_slots(e)) != lookup_slot_from(var, sc->curlet))
-    {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n",
-	      func, display(expr), display(var), display(e),
-	      (tis_slot(next_slot(let_slots(e)))) ? display(next_slot(let_slots(e))) : "no next slot");
-      if (sc->stop_at_error) abort();
-    }
-}
-
-static void check_v_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
-{
-  if (next_slot(next_slot(let_slots(e))) != lookup_slot_from(var, sc->curlet))
-    {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n",
-	      func, display(expr), display(var), display(e),
-	      (tis_slot(next_slot(next_slot(let_slots(e))))) ? display(next_slot(next_slot(let_slots(e)))) : "no next slot");
       if (sc->stop_at_error) abort();
     }
 }
@@ -52931,22 +52917,26 @@ static s7_pointer t_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
   return(slot_value(let_slots(sc->curlet)));
 }
 
-static s7_pointer u_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
-{
-  check_u_1(sc, sc->curlet, func, expr, symbol);
-  return(slot_value(next_slot(let_slots(sc->curlet))));
-}
-
-static s7_pointer v_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
-{
-  check_v_1(sc, sc->curlet, func, expr, symbol);
-  return(slot_value(next_slot(next_slot(let_slots(sc->curlet)))));
-}
-
 static s7_pointer T_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
 {
   check_t_1(sc, let_outlet(sc->curlet), func, expr, symbol);
   return(slot_value(let_slots(let_outlet(sc->curlet))));
+}
+
+static void check_u_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+{
+  if (next_slot(let_slots(e)) != lookup_slot_from(var, sc->curlet))
+    {
+      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(e),
+	      (tis_slot(next_slot(let_slots(e)))) ? display(next_slot(let_slots(e))) : "no next slot");
+      if (sc->stop_at_error) abort();
+    }
+}
+
+static s7_pointer u_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
+{
+  check_u_1(sc, sc->curlet, func, expr, symbol);
+  return(slot_value(next_slot(let_slots(sc->curlet))));
 }
 
 static s7_pointer U_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
@@ -52955,11 +52945,51 @@ static s7_pointer U_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
   return(slot_value(next_slot(let_slots(let_outlet(sc->curlet)))));
 }
 
+static void check_v_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+{
+  if (next_slot(next_slot(let_slots(e))) != lookup_slot_from(var, sc->curlet))
+    {
+      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(e),
+	      (tis_slot(next_slot(next_slot(let_slots(e))))) ? display(next_slot(next_slot(let_slots(e)))) : "no next slot");
+      if (sc->stop_at_error) abort();
+    }
+}
+
+static s7_pointer v_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
+{
+  check_v_1(sc, sc->curlet, func, expr, symbol);
+  return(slot_value(next_slot(next_slot(let_slots(sc->curlet)))));
+}
+
 static s7_pointer V_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
 {
   check_v_1(sc, let_outlet(sc->curlet), func, expr, symbol);
   return(slot_value(next_slot(next_slot(let_slots(let_outlet(sc->curlet))))));
 }
+
+static void check_o_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+{
+  s7_pointer slot;
+  slot = lookup_slot_from(var, sc->curlet);
+  if (lookup_slot_from(var, e) != slot)
+    {
+      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(e), (tis_slot(slot)) ? display(slot) : "undefined");
+      if (sc->stop_at_error) abort();
+    }
+}
+
+static s7_pointer o_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
+{
+  check_o_1(sc, let_outlet(sc->curlet), func, expr, symbol);
+  return(lookup_from(sc, symbol, let_outlet(sc->curlet)));
+}
+
+static s7_pointer O_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
+{
+  check_o_1(sc, let_outlet(let_outlet(sc->curlet)), func, expr, symbol);
+  return(lookup_from(sc, symbol, let_outlet(sc->curlet)));
+}
+
 
 #define t_lookup(Sc, Symbol, Expr) t_lookup_1(Sc, Symbol, __func__, Expr)
 #define u_lookup(Sc, Symbol, Expr) u_lookup_1(Sc, Symbol, __func__, Expr)
@@ -52967,6 +52997,8 @@ static s7_pointer V_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
 #define T_lookup(Sc, Symbol, Expr) T_lookup_1(Sc, Symbol, __func__, Expr)
 #define U_lookup(Sc, Symbol, Expr) U_lookup_1(Sc, Symbol, __func__, Expr)
 #define V_lookup(Sc, Symbol, Expr) V_lookup_1(Sc, Symbol, __func__, Expr)
+#define o_lookup(Sc, Symbol, Expr) o_lookup_1(Sc, Symbol, __func__, Expr)
+#define O_lookup(Sc, Symbol, Expr) O_lookup_1(Sc, Symbol, __func__, Expr)
 #else
 #define t_lookup(Sc, Symbol, Expr) slot_value(let_slots(sc->curlet))
 #define u_lookup(Sc, Symbol, Expr) slot_value(next_slot(let_slots(sc->curlet)))
@@ -52974,11 +53006,11 @@ static s7_pointer V_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
 #define T_lookup(Sc, Symbol, Expr) slot_value(let_slots(let_outlet(sc->curlet)))
 #define U_lookup(Sc, Symbol, Expr) slot_value(next_slot(let_slots(let_outlet(sc->curlet))))
 #define V_lookup(Sc, Symbol, Expr) slot_value(next_slot(next_slot(let_slots(let_outlet(sc->curlet)))))
+#define o_lookup(Sc, Symbol, Expr) lookup_from(Sc, Symbol, let_outlet(Sc->curlet))
+#define O_lookup(Sc, Symbol, Expr) lookup_from(Sc, Symbol, let_outlet(let_outlet(Sc->curlet)))
 #endif
 
 #define s_lookup(Sc, Sym, Expr) lookup(Sc, Sym)
-#define o_lookup(Sc, Sym, Expr) lookup_from(Sc, Sym, let_outlet(Sc->curlet))
-#define O_lookup(Sc, Sym, Expr) lookup_from(Sc, Sym, let_outlet(let_outlet(Sc->curlet)))
 #define g_lookup(Sc, Sym, Expr) lookup_global(Sc, Sym)
 
 /* arg here is the full expression */
@@ -84312,23 +84344,27 @@ static bool check_closure_any(s7_scheme *sc)
 
 static void op_any_closure_na(s7_scheme *sc) /* for (lambda a ...) ? */
 {
-  s7_pointer p, old_args = cdr(sc->code); /* args aren't evaluated yet */
+  s7_pointer func, p, old_args = cdr(sc->code); /* args aren't evaluated yet */
   s7_int num_args;
+  func = opt1_lambda(sc->code);
   num_args = integer(opt3_arglen(old_args));
   if (num_args == 1)
-    sc->args = list_1(sc, sc->value = fx_call(sc, old_args));
+    sc->args = (is_safe_closure(func)) ? set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args));
   else
     if (num_args == 2)
-      sc->args = list_2(sc, sc->value = fx_call(sc, old_args), sc->args = fx_call(sc, cdr(old_args)));
+      {
+	sc->value = fx_call(sc, old_args);
+	sc->args = fx_call(sc, cdr(old_args));
+	sc->args = (is_safe_closure(func)) ? set_plist_2(sc, sc->value, sc->args) : list_2(sc, sc->value, sc->args);
+      }
     else
       {
 	sc->args = make_list(sc, num_args, sc->F);
 	for (p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	  set_car(p, fx_call(sc, old_args));
       }
-  p = opt1_lambda(sc->code);
-  sc->curlet = make_let_with_slot(sc, closure_let(p), closure_args(p), sc->args);
-  sc->code = T_Pair(closure_body(p));
+  sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func), sc->args);
+  sc->code = T_Pair(closure_body(func));
 }
 
 /* -------- */
@@ -87013,7 +87049,9 @@ static Inline bool op_s_s(s7_scheme *sc)
     }
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
-  sc->args = list_1(sc, (dont_eval_args(sc->code)) ? cadr(code) : lookup(sc, cadr(code)));
+  if (dont_eval_args(sc->code))
+    sc->args = list_1(sc, cadr(code));
+  else sc->args = (needs_copied_args(sc->code)) ? list_1(sc, lookup(sc, cadr(code))) : set_plist_1(sc, lookup(sc, cadr(code)));
   return(false); /* goto APPLY; */
 }
 
@@ -87323,7 +87361,7 @@ static void op_safe_c_pp_5(s7_scheme *sc)
 {
   /* 1 mv, 2 normal (else mv->6), sc->args was copied above (and this is a safe c function so its args are in no danger) */
   if (is_null(sc->args))
-    sc->args = list_1(sc, sc->value);
+    sc->args = list_1(sc, sc->value); /* plist here and below, but this is almost never called */
   else
     {
       s7_pointer p;
@@ -94699,31 +94737,31 @@ int main(int argc, char **argv)
 /* -------------------------------------------------------
  *             gmp (7-19)  20.9   21.0   21.5   21.6
  * -------------------------------------------------------
- * tpeak       123          115    114    112    109
+ * tpeak       123          115    114    112    109       110 [gc]
  * tref        527          691    687    480    477
- * tauto       786          648    642    503    497
+ * tauto       786          648    642    503    497       496 [eval]
  * tshoot     1484          883    872    837    810
  * index      1051         1026   1016    989    983
  * tmock      7748         1177   1165   1111   1098
  * tvect      1951         2456   2413   1867   1756
  * s7test     4522         1873   1831   1817   1815
  * lt         2127         2123   2110   2119   2122  2123
- * tform      3263         2281   2273   2274   2266
- * tmac       2413         3317   3277   2436   2381
- * tread      2594         2440   2421   2409   2404
- * trclo      4070         2715   2561   2459   2457  2443
- * tmat       2677         3065   3042   2524   2531
- * fbench     2868         2688   2583   2542   2542
+ * tform      3263         2281   2273   2274   2266            [gc +1]
+ * tmac       2413         3317   3277   2436   2381       2384 [gc]
+ * tread      2594         2440   2421   2409   2404       2410 [g +6]
+ * trclo      4070         2715   2561   2459   2457  2443 2455 [gc +10]
+ * tmat       2677         3065   3042   2524   2531       2526
+ * fbench     2868         2688   2583   2542   2542            [gc +2]
  * tcopy      2623         8035   5546   2557   2558
- * dup        2927         3805   3788   2962   2626  2628
+ * dup        2927         3805   3788   2962   2626  2628 2538 [gc +9]
  * tb         3321         2735   2681   2565   2560
  * titer      2727         2865   2842   2710   2679
- * tsort      3656         3105   3104   2925   2924
- * tset       3230         3253   3104   3244   3210  3232
- * teq        3594         4068   4045   3701   3578
- * tio        3715         3816   3752   3703   3701
- * tstr       6591         5281   4863   4329   4211
- * tclo       4690         4787   4735   4512   4420  4411
+ * tsort      3656         3105   3104   2925   2924       2920 [gc -4]
+ * tset       3230         3253   3104   3244   3210  3232 3090 [gc -a bit, but rest down 100]
+ * teq        3594         4068   4045   3701   3578       3576
+ * tio        3715         3816   3752   3703   3701            [gc +2]
+ * tstr       6591         5281   4863   4329   4211       4205 [gc -7]
+ * tclo       4690         4787   4735   4512   4420  4411              4409
  * tcase      4537         4960   4793   4480   4474
  * tlet       5471         7775   5640   4488   4490
  * tmap       5715         8270   8188   4730   4694
@@ -94732,11 +94770,11 @@ int main(int argc, char **argv)
  * tmisc      6068         7389   6210   5477   5471  5466
  * tgsl       25.2         8485   7802   6394   6390
  * trec       8338         6936          6563   6563
- * tlist      7140         7896          7216   7076
- * tgc        10.2         11.9   11.1   9070   8727
+ * tlist      7140         7896          7216   7076       7086 [gc +10]
+ * tgc        10.2         11.9   11.1   9070   8727       8761 [gc +30] ok now
  * thash      35.3         11.8   11.7   10.3   9838
- * tgen       12.3         11.2   11.4   11.4   11.5
- * tall       26.8         15.6   15.6   15.6   15.6
+ * tgen       12.3         11.2   11.4   11.4   11.5       11.8 [gc +273 ok now]
+ * tall       26.8         15.6   15.6   15.6   15.6            [gc +13]
  * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                           56.1
  * lg        104.9        106.6  105.0  104.5  104.5
@@ -94747,5 +94785,10 @@ int main(int argc, char **argv)
  * dilambda/setter timings
  * (n)repl.scm should have some fancy autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? 
- * op_s_s set_plist_1 op_any_closure_na etc
+ * more rest arg tests
+ * let-as-real through set sigs? 
+ * ffi timing test?
+ * call_setter lists etc
+ * track calls of fx_tree_in|out entries: hash unset cases with memq vars (hash eq??), count, sort, etc
+ * t718
  */

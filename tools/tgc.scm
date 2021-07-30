@@ -1,3 +1,4 @@
+(set! (*s7* 'heap-size) 128000) ; old-style
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))
 
 (define (check-cyclic p1)

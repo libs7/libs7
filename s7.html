@@ -6584,7 +6584,7 @@ mbrot: 12.6, mbrotZ: 8.0, mperm: 18.9, nboyer: 20.1, nqueens: 27.0,
 ntakl: 8.0, nucleic: 8.3, paraffins: 4.4, parsing: 20.7, peval: 15.2,
 pnpoly: 9.8, primes: 10.2, puzzle: 10.2, quicksort: 40.0, ray: 8.3,
 read1: 0.2, sboyer: 19.1, scheme: 29.5, simplex: 26.9, slatex: 4.2,
-string: 0.1, sum1: 0.2, sum: 4.1, sumfp: 2.2, tail: 0.1, tak: 7.1,
+string: 0.8, sum1: 0.2, sum: 4.1, sumfp: 2.2, tail: 0.1, tak: 7.1,
 takl: 8.1, triangl: 16.4, wc: 4.9.  In the gmp case, chudnovsky: 0.017, pi: .01.
 </p>
 </div>
@@ -9713,6 +9713,7 @@ s7_pointer s7_make_list(s7_scheme *sc, s7_int length, s7_pointer initial_value);
 s7_int s7_list_length(s7_scheme *sc, s7_pointer a);
 s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...);
 s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...);
+s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array);
 s7_pointer s7_list_ref(s7_scheme *sc, s7_pointer lst, s7_int num);
 s7_pointer s7_list_set(s7_scheme *sc, s7_pointer lst, s7_int num, s7_pointer val);
 
@@ -9727,7 +9728,8 @@ bool s7_tree_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree);
 <p>These functions are mostly obvious: s7_car corresponds to scheme car, etc.
 s7_list_nl was added to catch a typo that affected s7_list: the latter would accept
 trailing, but ignored list values.  s7_tree_memq is like s7_memq, but searches
-an entire tree structure. not just the top-level list.
+an entire tree structure. not just the top-level list.  s7_array_to_list takes
+an array of s7_pointers and returns a list of them (similar to s7_vector_to_list).
 </p>
 
 

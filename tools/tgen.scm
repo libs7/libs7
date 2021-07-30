@@ -1,3 +1,5 @@
+(set! (*s7* 'heap-size) 128000)
+
 (unless (or (provided? 'snd)
 	    (provided? 'sndlib))
   (format *stderr* "tgen depends on sndlib...~%")
