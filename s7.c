@@ -2087,6 +2087,10 @@ void s7_show_history(s7_scheme *sc);
 #define list_is_in_use(p)              has_type0_bit(T_Pair(p), T_LIST_IN_USE)
 #define set_list_in_use(p)             set_type_bit(T_Pair(p), T_LIST_IN_USE)
 #define clear_list_in_use(p)           do {clear_type_bit(T_Pair(p), T_LIST_IN_USE); sc->current_safe_list = 0;} while (0)
+/* since the safe lists are not in the heap, if the list_in_use bit is off, the list won't ne GC-protected even if
+ *   it is gc_marked explicitly.  This happens, for example, in copy_proper_list where we try to protect the original list
+ *   by sc->u = lst; then in the GC, gc_mark(sc->u); but the safe_list probably is already marked, so its contents are not protected.
+ */
 /* if (!is_immutable(p)) free_vlist(sc, p) seems plausible here, but it got no hits in s7test and other cases */
 
 #define T_ONE_FORM                     T_SIMPLE_ARG_DEFAULTS
@@ -7664,7 +7668,7 @@ static void unstack_1(s7_scheme *sc, const char *func, int line)
 {
   sc->stack_end -= 4;
   if (((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT)
-    {
+     {
       fprintf(stderr, "%s%s[%d]: popped %s?%s\n", BOLD_TEXT, func, line, op_names[(opcode_t)sc->stack_end[3]], UNBOLD_TEXT);
       fprintf(stderr, "    code: %s, args: %s\n", display(sc->code), display(sc->args));
       fprintf(stderr, "    cur_code: %s, estr: %s\n", display(current_code(sc)), display(s7_name_to_value(sc, "estr")));
@@ -11161,6 +11165,10 @@ static s7_pointer copy_counter(s7_scheme *sc, s7_pointer obj)
 static void copy_stack_list_set_immutable(s7_scheme *sc, s7_pointer pold, s7_pointer pnew)
 {
   s7_pointer p1, p2, slow = pold;
+
+  if (is_multiple_value(pold)) /* op_safe_c_3p_1|2_mv push an explicit multiple-value on the stack (bit needed to tell it from normal list when spliced at end) */
+    set_multiple_value(pnew);
+
   for (p1 = pold, p2 = pnew; is_pair(p2); p1 = cdr(p1), p2 = cdr(p2))
     {
       if (is_immutable(p1)) set_immutable(p2);
@@ -14073,7 +14081,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
     case T_REAL:
       {
 	int32_t i;
-	s7_int int_part;
+	s7_int int_part, nsize;
 	s7_double x = real(obj), frac_part, min_frac, base;
 	bool sign = false;
 	char n[128], d[256];
@@ -14109,7 +14117,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 
 	int_part = (s7_int)floor(x);
 	frac_part = x - int_part;
-	integer_to_string_any_base(n, int_part, radix);
+	nsize = integer_to_string_any_base(n, int_part, radix);
 	min_frac = dpow(radix, -precision);
 
 	/* doesn't this assume precision < 128/256 and that we can fit in 256 digits (1e308)? */
@@ -14128,7 +14136,22 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	b = mallocate(sc, 256);
         p = (char *)block_data(b);
 	p[0] = '\0';
+#if 0
 	len = catstrs(p, 256, (sign) ? "-" : "", n, ".", d, (char *)NULL);
+#else
+	/* much faster in this case (because we know the string lengths) than catstrs */
+	{
+	  char *pt = p;
+	  if (sign) {pt[0] = '-'; pt++;}
+	  memcpy(pt, n, nsize);
+	  pt += nsize;
+	  pt[0] = '.';
+	  pt++;
+	  memcpy(pt, d, i);
+	  pt[i] = '\0';
+	  len = ((sign) ? 1 : 0) + 1 + nsize + i;
+	}
+#endif
 	str_len = 256;
       }
       break;
@@ -46582,7 +46605,7 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
 
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->args = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
-  /* safe lists here are much slower! */
+  /* safe lists here are much slower -- the setters are called more often for some reason */
   sc->code = func;
   eval(sc, OP_APPLY);
   return(sc->value);
@@ -55583,10 +55606,10 @@ static s7_pointer fx_c_ns(s7_scheme *sc, s7_pointer arg)
     gc_protect_via_stack(sc, lst);
   for (args = cdr(arg), p = lst; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, lookup(sc, car(args)));
+  p = fn_proc(arg)(sc, lst);
   if (in_heap(lst))
     unstack(sc);
   else clear_list_in_use(lst);
-  p = fn_proc(arg)(sc, lst);
   return(p);
 }
 
@@ -55602,10 +55625,10 @@ static s7_pointer fx_c_all_ca(s7_scheme *sc, s7_pointer code)
       args = cdr(args);
       set_car(cdr(p), fx_call(sc, args));
     }
+  p = fn_proc(code)(sc, lst);
   if (in_heap(lst))
     unstack(sc);
   else clear_list_in_use(lst);
-  p = fn_proc(code)(sc, lst);
   return(p);
 }
 
@@ -55647,10 +55670,10 @@ static s7_pointer fx_c_na(s7_scheme *sc, s7_pointer arg)
     gc_protect_via_stack(sc, val);
   for (args = cdr(arg), p = val; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
+  p = fn_proc(arg)(sc, val);
   if (in_heap(val))
     unstack(sc);
   else clear_list_in_use(val);
-  p = fn_proc(arg)(sc, val);
   return(p);
 }
 
@@ -67749,13 +67772,14 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
       check_free_heap_size(sc, 8192);
       if (sc->safety > NO_SAFETY)
 	{
-	  if (tree_is_cyclic(sc, args)) /* we're copying to clear optimizations I think, and a cyclic list here can't be optimized */
-	    return(args);
-	  return(cons_unchecked(sc,     /* since list-values is a safe function, args can be immutable, which should not be passed through the copy */
-				(is_unquoted_pair(car(args))) ? copy_tree_with_type(sc, car(args)) : car(args),
-				(is_unquoted_pair(cdr(args))) ? copy_tree_with_type(sc, cdr(args)) : cdr(args)));
+	  if (!tree_is_cyclic(sc, args)) /* we're copying to clear optimizations I think, and a cyclic list here can't be optimized */
+	    args = cons_unchecked(sc,     /* since list-values is a safe function, args can be immutable, which should not be passed through the copy */
+				  (is_unquoted_pair(car(args))) ? copy_tree_with_type(sc, car(args)) : car(args),
+				  (is_unquoted_pair(cdr(args))) ? copy_tree_with_type(sc, cdr(args)) : cdr(args));
 	}
-      return(copy_tree(sc, args));      /* not copy_any_list here -- see comment below */
+      else args = copy_tree(sc, args);      /* not copy_any_list here -- see comment below */
+      sc->u = sc->nil;
+      return(args);
     }
   /* if a macro expands into a recursive function with a macro argument as its body (or reasonable facsimile thereof),
    *   and the safety (as in safe_closure) of the body changes from safe to unsafe, then (due to the checked bits
@@ -84349,13 +84373,13 @@ static void op_any_closure_na(s7_scheme *sc) /* for (lambda a ...) ? */
   func = opt1_lambda(sc->code);
   num_args = integer(opt3_arglen(old_args));
   if (num_args == 1)
-    sc->args = (is_safe_closure(func)) ? set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args));
+    sc->args = ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args));
   else
     if (num_args == 2)
       {
 	sc->value = fx_call(sc, old_args);
 	sc->args = fx_call(sc, cdr(old_args));
-	sc->args = (is_safe_closure(func)) ? set_plist_2(sc, sc->value, sc->args) : list_2(sc, sc->value, sc->args);
+	sc->args = ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? set_plist_2(sc, sc->value, sc->args) : list_2(sc, sc->value, sc->args);
       }
     else
       {
@@ -87311,8 +87335,16 @@ static void op_cl_na(s7_scheme *sc)
     gc_protect_via_stack(sc, val);
   for (args = cdr(sc->code), p = val; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
-  if (in_heap(val)) /* this has to precede the fn_proc call -- the latter might push its own op (e.g. for-each/map) */
-    unstack(sc);
+  if (in_heap(val)) 
+    {
+      /* the fn_proc call -- the latter might push its own op (e.g. for-each/map) so we have to check for that */
+      /* perhaps just unstack here without the opcode check? why is there something left over? 
+       *   or if it isn't op_gc_protect don't unstack anything
+       */
+      sc->stack_end -= 4;
+      if (((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT)
+	unstack(sc);
+    }
   else clear_list_in_use(val);
   sc->value = fn_proc(sc->code)(sc, val);
 }
@@ -87436,9 +87468,10 @@ static void op_safe_c_3p_3(s7_scheme *sc)
 
 static void op_safe_c_3p_3_mv(s7_scheme *sc)
 {
-  s7_pointer p1, p2, p3, p;
+  s7_pointer p1, p2, p3, p, ps1;
   if (is_multiple_value(sc->args)) {p1 = sc->args; clear_multiple_value(p1);} else p1 = list_1(sc, sc->args);
-  if (is_multiple_value(stack_protected1(sc))) {p2 = stack_protected1(sc); clear_multiple_value(p2);} else p2 = list_1(sc, stack_protected1(sc));
+  ps1 = stack_protected1(sc);
+  if (is_multiple_value(ps1)) {p2 = ps1; clear_multiple_value(p2);} else p2 = list_1(sc, ps1);
   if (is_multiple_value(sc->value)) {p3 = copy_proper_list(sc, sc->value); clear_multiple_value(sc->value);} else p3 = list_1(sc, sc->value);
   unstack(sc);
   for (p = p1; is_pair(cdr(p)); p = cdr(p));
@@ -94778,7 +94811,7 @@ int main(int argc, char **argv)
  * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                           56.1
  * lg        104.9        106.6  105.0  104.5  104.5
- * tbig      596.1        177.4  175.8  169.6  169.5  169.4
+ * tbig      596.1        177.4  175.8  169.6  169.5  169.4 168.2
  * -------------------------------------------------------
  *
  * terminal app doc?
@@ -94787,8 +94820,9 @@ int main(int argc, char **argv)
  * random -> 0? 
  * more rest arg tests
  * let-as-real through set sigs? 
- * ffi timing test?
- * call_setter lists etc
+ * ffi timing test? [testffi.c for_each_symbol[_name] is slowest -- table is too big] [catstrs 2 strs is slow -- if lens known use memcpy]
  * track calls of fx_tree_in|out entries: hash unset cases with memq vars (hash eq??), count, sort, etc
- * t718
+ * check clear of built-in sc->vwxyz temp1..10 etc
+ * check error msgs, especially attempt to apply
+ * extend gmp to fx/opt?
  */
