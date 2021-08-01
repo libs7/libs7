@@ -1,3 +1,5 @@
+(set! (*s7* 'heap-size) 128000)
+
 (define fsize 100000)
 (define ssize 500000)
 
