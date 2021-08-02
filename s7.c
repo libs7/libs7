@@ -54841,6 +54841,12 @@ static s7_pointer fx_c_s_opsiq_direct(s7_scheme *sc, s7_pointer arg)
 	   ((s7_p_pi_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt3_sym(arg)), integer(opt1_con(cdr(arg))))));
 }
 
+static s7_pointer fx_c_t_opoiq_direct(s7_scheme *sc, s7_pointer arg)
+{
+  return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, t_lookup(sc, cadr(arg), arg),
+	   ((s7_p_pi_t)opt3_direct(cdr(arg)))(sc, o_lookup(sc, opt3_sym(arg), arg), integer(opt1_con(cdr(arg))))));
+}
+
 static s7_pointer fx_vref_p1(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer v, i;
@@ -55730,10 +55736,15 @@ static s7_pointer fx_if_a_a_a(s7_scheme *sc, s7_pointer arg)
   return((is_true(sc, fx_call(sc, cdr(arg)))) ? fx_call(sc, opt1_pair(arg)) : fx_call(sc, opt2_pair(arg)));
 }
 
-static s7_pointer fx_if_s_a_a(s7_scheme *sc, s7_pointer arg)
-{
-  return((lookup(sc, cadr(arg)) != sc->F) ? fx_call(sc, opt1_pair(arg)) : fx_call(sc, opt2_pair(arg)));
-}
+#define fx_if_s_a_a_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    return((Lookup(sc, cadr(arg), arg) != sc->F) ? fx_call(sc, opt1_pair(arg)) : fx_call(sc, opt2_pair(arg))); \
+  }
+
+fx_if_s_a_a_any(fx_if_s_a_a, s_lookup)
+fx_if_s_a_a_any(fx_if_o_a_a, o_lookup) /* diff s->o of ca 3 */
+
 
 static s7_pointer fx_if_and2_s_a(s7_scheme *sc, s7_pointer arg)
 {
@@ -56913,6 +56924,7 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 	{
 	  if (p == var1) return(with_fx(tree, fx_T));
 	  if (p == var2) return(with_fx(tree, fx_U));
+	  /* if O possible, make sure fx_tree_in checked all vars and its own more_vars -- ideally "o" coming in */
 	}
       return(false);
     }
@@ -56964,6 +56976,7 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 }
 
 static s7_b_7p_t s7_b_7p_function(s7_pointer f);
+static bool o_var_ok(s7_pointer p, s7_pointer var1, s7_pointer var2, s7_pointer var3) {return((p != var1) && (p != var2) && (p != var3));}
 
 static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2, s7_pointer var3, bool more_vars)
 {
@@ -57173,12 +57186,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_num_eq_ss)   
 	    {
 	      if (is_global(caddr(p))) return(with_fx(tree, fx_num_eq_tg));
-	      if ((!more_vars) && (caddr(p) != var3) && (caddr(p) != var2) && (caddr(p) != var1)) return(with_fx(tree, fx_num_eq_to));
+	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_num_eq_to));
 	      return(with_fx(tree, fx_num_eq_ts));
 	    }
 	  if (fx_proc(tree) == fx_geq_ss)
 	    {
-	      if ((!more_vars) && (caddr(p) != var1) && (caddr(p) != var2) && (caddr(p) != var3)) return(with_fx(tree, fx_geq_to));
+	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_geq_to));
 	      return(with_fx(tree, fx_geq_ts));
 	    }
 	  if (fx_proc(tree) == fx_leq_ss) return(with_fx(tree, fx_leq_ts));
@@ -57187,7 +57200,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_gt_ss)    
 	    {
 	      if (is_global(caddr(p))) return(with_fx(tree, fx_gt_tg));
-	      if ((!more_vars) && (caddr(p) != var3) && (caddr(p) != var2) && (caddr(p) != var1)) return(with_fx(tree, fx_gt_to));
+	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_gt_to));
 	      return(with_fx(tree, fx_gt_ts));
 	    }
 	  if (fx_proc(tree) == fx_sqr_s) return(with_fx(tree, fx_sqr_t));
@@ -57196,11 +57209,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if (caddr(p) == var2) return(with_fx(tree, fx_is_eq_tu));
 	      if ((!more_vars) && (caddr(p) != var3) && (caddr(p) != var1)) return(with_fx(tree, fx_is_eq_to));
 	      return(with_fx(tree, fx_is_eq_ts));
+	    }
 	  if (fx_proc(tree) == fx_vref_ss) 
 	    {
 	      if (caddr(p) == var2) return(with_fx(tree, fx_vref_tu));
 	      return(with_fx(tree, fx_vref_ts));
-	    }}}
+	    }}
       if (caddr(p) == var1)
 	{
 	  if (fx_proc(tree) == fx_c_ss) return(with_fx(tree, fx_c_st));
@@ -57217,7 +57231,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if ((fx_proc(tree) == fx_lt_ss) && (cadr(p) == var2)) return(with_fx(tree, fx_lt_ut));
 	  if ((fx_proc(tree) == fx_geq_ss)) 
 	    {
-	      if ((!more_vars) && (cadr(p) != var3) && (cadr(p) != var2) && (cadr(p) != var1)) return(with_fx(tree, fx_geq_ot));
+	      if ((!more_vars) && (o_var_ok(cadr(p), var1, var2, var3))) return(with_fx(tree, fx_geq_ot));
 	      return(with_fx(tree, fx_geq_st));
 	    }}
       if (cadr(p) == var2)
@@ -57283,9 +57297,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	{
 	  if (car(p) == sc->vector_set_symbol)
 	    {
-	      if ((!more_vars) && (cadr(p) != var1) && (cadr(p) != var2) && (cadr(p) != var3) &&
-		  (cadddr(p) != var1) && (cadddr(p) != var2) && (cadddr(p) != var3))
-		return(with_fx(tree, fx_vset_oto));
+	      if ((!more_vars) && (o_var_ok(cadr(p), var1, var2, var3)) && (o_var_ok(cadddr(p), var1, var2, var3))) return(with_fx(tree, fx_vset_oto));
 	      return(with_fx(tree, fx_vset_sts));
 	    }
 	  return(with_fx(tree, fx_c_sts));
@@ -57459,7 +57471,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (caddadr(p) == var1)
 	    {
 	      if ((opt2_direct(cdr(p)) == (s7_pointer)is_zero_p_p) && (opt3_direct(cdr(p)) == (s7_pointer)remainder_p_pp) &&
-		  (!more_vars) && (cadadr(p) != var1) && (cadadr(p) != var2) && (cadadr(p) != var3))
+		  (!more_vars) && (o_var_ok(cadadr(p), var1, var2, var3)))
 		return(with_fx(tree, fx_is_zero_remainder_o));
 	      return(with_fx(tree, fx_c_opstq_direct));
 	    }}
@@ -57483,7 +57495,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (is_global_and_has_func(car(p), s7_p_pp_function))
 	    {
 	      if ((car(p) == sc->is_eq_symbol) && (!is_unspecified(caddr(p))) && (caadr(p) == sc->vector_ref_symbol) &&
-		  (!more_vars) && (cadadr(p) != var1) && (cadadr(p) != var2) && (cadadr(p) != var3))
+		  (!more_vars) && (o_var_ok(cadadr(p), var1, var2, var3)))
 		return(with_fx(tree, fx_is_eq_vref_opotq_c));
 	      set_opt3_direct(p, (s7_pointer)(s7_p_pp_function(global_value(car(p)))));
 	      return(with_fx(tree, fx_c_opstq_c_direct));
@@ -57493,8 +57505,11 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_S_opSCq:
-      if ((cadr(p) == var1) && (fx_proc(tree) == fx_c_s_opscq_direct))
-	return(with_fx(tree, (cadaddr(p) == var2) ? fx_c_t_opucq_direct : fx_c_t_opscq_direct));
+      if (cadr(p) == var1)
+	{
+	  if (fx_proc(tree) == fx_c_s_opscq_direct) return(with_fx(tree, (cadaddr(p) == var2) ? fx_c_t_opucq_direct : fx_c_t_opscq_direct));
+      	  if ((fx_proc(tree) == fx_c_s_opsiq_direct) && (!more_vars) && (o_var_ok(cadaddr(p), var1, var2, var3))) return(with_fx(tree, fx_c_t_opoiq_direct));
+	}
       break;
 
     case HOP_SAFE_C_opSq_CS:
@@ -57526,8 +57541,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	{
 	  if ((caddr(p) == var1) && (is_global(cadadr(p))))
 	    {
-	      if ((!more_vars) && (caddadr(p) != var1) && (caddadr(p) != var2) && (caddadr(p) != var3))
-		return(with_fx(tree, fx_vref_vref_go_t));
+	      if ((!more_vars) && (o_var_ok(caddadr(p), var1, var2, var3))) return(with_fx(tree, fx_vref_vref_go_t));
 	      return(with_fx(tree, fx_vref_vref_gs_t));
 	    }
 	  if ((cadadr(p) == var1) && (caddadr(p) == var2) && (caddr(p) == var3)) return(with_fx(tree, fx_vref_vref_tu_v));
@@ -57564,6 +57578,10 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
     case HOP_SAFE_CLOSURE_S_A:
       if ((cadr(p) == var1) && (fx_proc(tree) == fx_safe_closure_s_a)) return(with_fx(tree, fx_safe_closure_t_a));
+      break;
+
+    case OP_IF_S_A_A:
+      if ((!more_vars) && (o_var_ok(cadr(p), var1, var2, var3))) return(with_fx(tree, fx_if_o_a_a));
       break;
 
     case OP_AND_3A:
@@ -70049,7 +70067,7 @@ static bool check_tc_let(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointe
 		    }}}}}
   else
     {
-      if (car(let_body) == sc->cond_symbol)
+      if (car(let_body) == sc->cond_symbol) /* vars=#loop pars, args=names thereof (arglist) */
 	{
 	  s7_pointer p, var_name;
 	  bool all_fxable = true;
@@ -70100,7 +70118,7 @@ static bool check_tc_let(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointe
 		if (is_fxable(sc, result))
 		  fx_annotate_arg(sc, cdr(clause), args);
 		else all_fxable = false;
-	      fx_tree(sc, clause, var_name, NULL, NULL, vars > 3);
+	      fx_tree(sc, clause, var_name, NULL, NULL, false); /* just 1 let var */
 	      if (vars > 0)
 		fx_tree_outer(sc, clause, car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, vars > 3);
 	    }
@@ -94793,52 +94811,52 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -------------------------------------------------------
- *             gmp (7-19)  20.9   21.0   21.5   21.6
- * -------------------------------------------------------
- * tpeak       123          115    114    112    110
- * tref        527          691    687    480    477
- * tauto       786          648    642    503    496
- * tshoot     1484          883    872    837    810
- * index      1051         1026   1016    989    983
- * tmock      7748         1177   1165   1111   1098
- * tvect      1951         2456   2413   1867   1756
- * s7test     4522         1873   1831   1817   1815  1812
- * lt         2127         2123   2110   2119   2123
- * tform      3263         2281   2273   2274   2267
- * tmac       2413         3317   3277   2436   2389
- * tread      2594         2440   2421   2409   2411
- * trclo      4070         2715   2561   2459   2455
- * tmat       2677         3065   3042   2524   2523  2534
- * fbench     2868         2688   2583   2542   2544
- * tcopy      2623         8035   5546   2557   2555
- * dup        2927         3805   3788   2962   2639
- * tb         3321         2735   2681   2565   2560  2576 [op_dox? subtract_u1??]
- * titer      2727         2865   2842   2710   2679
- * tsort      3656         3105   3104   2925   2924
- * tset       3230         3253   3104   3244   3090
- * teq        3594         4068   4045   3701   3576
- * tio        3715         3816   3752   3703   3702
- * tstr       6591         5281   4863   4329   4197
- * tclo       4690         4787   4735   4512   4409
- * tcase      4537         4960   4793   4480   4474
- * tlet       5471         7775   5640   4488   4490
- * tmap       5715         8270   8188   4730   4694
- * tfft      114.8         7820   7729   4816   4798
- * tnum       56.6         6348   6013   5449   5445
- * tmisc      6068         7389   6210   5477   5463
- * tgsl       25.2         8485   7802   6394   6389
- * trec       8338         6936          6563   6553
- * tlist      7140         7896          7216   7087
- * tgc        10.2         11.9   11.1   9070   8726
- * thash      35.3         11.8   11.7   10.3   9838
- * tgen       12.3         11.2   11.4   11.4   11.5
- * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.1
- * sg                                           56.1
- * lg        104.9        106.6  105.0  104.5  104.5
- * tbig      596.1        177.4  175.8  169.6  167.6
- * -------------------------------------------------------
+/* ---------------------------------------------------------------
+ *             gmp (7-19)  20.9   21.0   21.5   21.6   21.7
+ * ---------------------------------------------------------------
+ * tpeak       123          115    114    112    110    110
+ * tref        527          691    687    480    477    477
+ * tauto       786          648    642    503    496    496
+ * tshoot     1484          883    872    837    810    810
+ * index      1051         1026   1016    989    983    983
+ * tmock      7748         1177   1165   1111   1098   1098
+ * tvect      1951         2456   2413   1867   1756   1756
+ * s7test     4522         1873   1831   1817   1812   1838
+ * lt         2127         2123   2110   2119   2123   2123
+ * tform      3263         2281   2273   2274   2267   2272
+ * tmac       2413         3317   3277   2436   2389   2389
+ * tread      2594         2440   2421   2409   2411   2411
+ * trclo      4070         2715   2561   2459   2455   2455
+ * tmat       2677         3065   3042   2524   2523   2530
+ * fbench     2868         2688   2583   2542   2544   2545
+ * tcopy      2623         8035   5546   2557   2557   2558
+ * dup        2927         3805   3788   2962   2639   2639
+ * tb         3321         2735   2681   2565   2560   2576 [op_dox? subtract_u1??]
+ * titer      2727         2865   2842   2710   2679   2679
+ * tsort      3656         3105   3104   2925   2924   2924
+ * tset       3230         3253   3104   3244   3090   3090
+ * teq        3594         4068   4045   3701   3576   2577
+ * tio        3715         3816   3752   3703   3702   3702
+ * tstr       6591         5281   4863   4329   4197   4197
+ * tclo       4690         4787   4735   4512   4409   4409
+ * tcase      4537         4960   4793   4480   4474   4473
+ * tlet       5471         7775   5640   4488   4490   4490
+ * tmap       5715         8270   8188   4730   4694   4694
+ * tfft      114.8         7820   7729   4816   4798   4798
+ * tnum       56.6         6348   6013   5449   5445   5450
+ * tmisc      6068         7389   6210   5477   5463   5463
+ * tgsl       25.2         8485   7802   6394   6389   6389
+ * trec       8338         6936          6563   6553   6553
+ * tlist      7140         7896          7216   7087   7087
+ * tgc        10.2         11.9   11.1   9070   8726   8726
+ * thash      35.3         11.8   11.7   10.3   9838   9838
+ * tgen       12.3         11.2   11.4   11.4   11.5   11.5
+ * tall       26.8         15.6   15.6   15.6   15.6   15.6
+ * calls      60.7         36.7   37.5   37.1   37.1   37.2
+ * sg                                           56.1   56.1
+ * lg        104.9        106.6  105.0  104.5  104.5  104.5
+ * tbig      596.1        177.4  175.8  169.6  167.7  167.7
+ * ---------------------------------------------------------------
  *
  * terminal app doc?
  * dilambda/setter timings
@@ -94846,5 +94864,4 @@ int main(int argc, char **argv)
  * random -> 0? try new form?
  * more rest arg tests
  * extend gmp to fx/opt?
- * remaining fxo cases, safe_closure_t_a?
  */
