@@ -107,6 +107,77 @@
     (w3)))
 
 
+;;; -------- implicit/generalized set! --------
+
+(define (fs1)
+  (let-temporarily (((*s7* 'print-length) 8))
+    123))
+
+(define (fs2)
+  (let ((x 32)) 
+    (set! ((curlet) 'x) 3)
+    x))
+
+(define (fs3)
+  (set! (with-let (curlet) (*s7* 'print-length)) 16)
+  (*s7* 'print-length))
+
+(define (fs4)
+  (let ((e (inlet :v (vector 1 2))))
+    (set! (with-let e (v 0)) 'a)
+    (e 'v)))
+
+(define (fs5)
+  (let ((v (vector (inlet 'a 0))))
+    (set! (v 0 'a) 32)
+    ((v 0) 'a)))
+
+(define (fs6)
+  (let ((e (inlet 'x (inlet 'b 2))))
+    (set! (e 'x 'b) 32)
+    ((e 'x) 'b)))
+
+(define (fs7)
+  (let ((L (list (list 1 2)))) 
+    (set! (L 0 0) 3)
+    L))
+
+(define (fs8)
+  (let ((H (hash-table 'a (hash-table 'b 2))))
+    (set! (H 'a 'b) 32)
+    ((H 'a) 'b)))
+
+(define (fs9)
+  (let ((v (vector 1 2)))
+    (let-temporarily (((v 1) 32))
+      (v 1))))
+
+(define fs10
+  (let ((val 0))
+    (let ((fs (dilambda (lambda () val) (lambda (v) (set! val v)))))
+      (lambda ()
+	(set! (fs) 32)
+	(fs)))))
+
+    
+(define (tf)
+  (do ((i 0 (+ i 1)))
+      ((= i 150000))
+    (fs1)
+    (fs2)
+    (fs3)
+    (fs4)
+    (fs5)
+    (fs6)
+    (fs7)
+    (fs8)
+    (fs9)
+    (fs10)
+    ))
+
+(tf)
+
+
 ;;; -------- => --------
 (define-constant (f1)
   (cond (-2 => abs)))

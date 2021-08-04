@@ -1122,7 +1122,7 @@ struct s7_scheme {
   int32_t format_column;
   uint64_t capture_let_counter;
   bool short_print, is_autoloading, in_with_let, object_out_locked, has_openlets, is_expanding, accept_all_keyword_arguments, got_tc, got_rec, not_tc;
-  s7_int rec_tc_args;
+  s7_int rec_tc_args, continuation_counter;
   int64_t let_number;
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
   s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_port_data_size;
@@ -6911,8 +6911,10 @@ static s7_pointer make_symbol(s7_scheme *sc, const char *name);
 static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 
 #if S7_DEBUGGING
+#define call_gc(Sc) gc(Sc, __func__, __LINE__)
 static int64_t gc(s7_scheme *sc, const char *func, int line)
 #else
+#define call_gc(Sc) gc(Sc)
 static int64_t gc(s7_scheme *sc)
 #endif
 {
@@ -6925,6 +6927,7 @@ static int64_t gc(s7_scheme *sc)
 #if S7_DEBUGGING
   sc->last_gc_line = line;
 #endif
+  sc->continuation_counter = 0;
 
   mark_rootlet(sc);
   mark_owlet(sc);
@@ -7271,11 +7274,7 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
       if (sc->gc_off)
 	return(sc->F);
     }
-#if S7_DEBUGGING
-  gc(sc, __func__, __LINE__);
-#else
-  gc(sc);
-#endif
+  call_gc(sc);
   return(sc->unspecified);
 }
 
@@ -11317,11 +11316,7 @@ static void make_room_for_cc_stack(s7_scheme *sc)
   if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 8)) /* we probably never need this much space -- very often we don't need any */
     {
       int64_t freed_heap;
-#if S7_DEBUGGING
-      freed_heap = gc(sc, __func__, __LINE__);
-#else
-      freed_heap = gc(sc);
-#endif
+      freed_heap = call_gc(sc);
       if (freed_heap < (int64_t)(sc->heap_size / 8))
 	resize_heap(sc);
     }
@@ -11333,7 +11328,10 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   int64_t loc;
   block_t *block;
 
+  sc->continuation_counter++;
   make_room_for_cc_stack(sc);
+  if (sc->continuation_counter > 2000) call_gc(sc); /* gc time up, but run time down -- try big cache */
+
   loc = current_stack_top(sc);
   stack = make_simple_vector(sc, loc);
   set_full_type(stack, T_STACK);
@@ -77901,7 +77899,7 @@ static void set_dilambda_opt(s7_scheme *sc, s7_pointer form, opcode_t opt, s7_po
     }
 }
 
-static inline void check_set(s7_scheme *sc)
+static void check_set(s7_scheme *sc)
 {
   s7_pointer form = sc->code, code;
   code = cdr(form);
@@ -77942,7 +77940,7 @@ static inline void check_set(s7_scheme *sc)
       /* here we have (set! (...) ...) */
       s7_pointer inner = car(code), value = cadr(code);
 
-      pair_set_syntax_op(form, OP_SET_UNCHECKED);
+      pair_set_syntax_op(form, OP_SET_UNCHECKED); /* if not pair car, op_set_normal below */
       if (is_symbol(car(inner)))
 	{
 	  if ((is_null(cdr(inner))) &&
@@ -78765,11 +78763,12 @@ static inline bool op_implicit_vector_set_3(s7_scheme *sc)
       pair_set_syntax_op(sc->code, OP_SET_UNCHECKED);
       return(true);
     }
-  i1 = fx_call(sc, cdar(code));
+  i1 = fx_call(sc, cdar(code)); /* gc protect? */
   set_car(sc->t3_3, fx_call(sc, cdr(code)));
   set_car(sc->t3_1, v);
   set_car(sc->t3_2, i1);
-  sc->value = g_vector_set_3(sc, sc->t3_1);
+  sc->value = g_vector_set_3(sc, sc->t3_1); /* calls vector_setter handling any vector type whereas vector_set_p_ppp wants a normal vector */
+  /* sc->value = vector_set_p_ppp(sc, v, i1, fx_call(sc, cdr(code))); */
   return(false);
 }
 
@@ -84406,9 +84405,10 @@ static void op_any_closure_na(s7_scheme *sc) /* for (lambda a ...) ? */
   else
     if (num_args == 2)
       {
-	sc->value = fx_call(sc, old_args);
+	gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
 	sc->args = fx_call(sc, cdr(old_args));
-	sc->args = ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? set_plist_2(sc, sc->value, sc->args) : list_2(sc, sc->value, sc->args);
+	sc->args = ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? set_plist_2(sc, stack_protected1(sc), sc->args) : list_2(sc, stack_protected1(sc), sc->args);
+	unstack(sc);
       }
     else
       {
@@ -94147,6 +94147,7 @@ s7_scheme *s7_init(void)
   sc->default_hash_table_length = 8;
   sc->gensym_counter = 0;
   sc->capture_let_counter = 0;
+  sc->continuation_counter = 0;
   sc->f_class = 0;
   sc->add_class = 0;
   sc->num_eq_class = 0;
@@ -94836,10 +94837,11 @@ int main(int argc, char **argv)
  * tbig      596.1        177.4  175.8  167.7  167.7
  * --------------------------------------------------------
  *
- * terminal app doc?
- * dilambda/setter timings
+ * dilambda/setter timings [t500.scm -> tmisc.scm]
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
- * random -> 0? try new form?
+ * random -> 0? try new form? 32bit mixup?
  * more rest arg tests
  * extend gmp to fx/opt?
+ * implicit_vector_set_3_t? and others currently calling lookup. op_if...s...
+ *   count s_lookup->other cases
  */
