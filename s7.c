@@ -996,8 +996,8 @@ typedef struct s7_cell {
   } object;
 
 #if S7_DEBUGGING
-  int32_t current_alloc_line, previous_alloc_line, uses, explicit_free_line, gc_line;
-  int64_t current_alloc_type, previous_alloc_type, debugger_bits;
+  int32_t current_alloc_line, previous_alloc_line, uses, explicit_free_line, gc_line, debugger_bits_set_line;
+  int64_t current_alloc_type, previous_alloc_type, debugger_bits, previous_debugger_bits;
   const char *current_alloc_func, *previous_alloc_func, *gc_func;
 #endif
 } s7_cell;
@@ -46554,7 +46554,7 @@ s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
 	{
 	  slot_set_has_setter(global_slot(p));
 	  symbol_set_has_setter(p);
-	  slot_set_has_setter(global_slot(p));
+	  /* slot_set_has_setter(global_slot(p)); */ /* why twice? */
 	  protect_setter(sc, p, setter);
 	  slot_set_setter(global_slot(p), setter);
 	  if (s7_is_aritable(sc, setter, 3))
@@ -70141,7 +70141,18 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  else set_safe_optimize_op(body, (car(body) == sc->and_symbol) ? OP_TC_AND_A_OR_A_LAA : OP_TC_OR_A_AND_A_LAA);
 		  fx_annotate_arg(sc, cdr(body), args);
 		  fx_annotate_arg(sc, cdr(orx), args);
+#if S7_DEBUGGING
+		  if (len == 4) 
+		    {
+		      fx_annotate_arg(sc, cddr(orx), args);
+		      if ((!has_fx(cddr(orx))) || (!opt2(cddr(orx), OPT2_FX)))
+			fprintf(stderr, "%d missed orx fx or opt2\n", __LINE__);
+		    }
+		  if ((optimize_op(body) == OP_TC_AND_A_OR_A_A_LA) && (!has_fx(cddr(orx))))
+		    fprintf(stderr, "%d missed orx fx\n", __LINE__);
+#else
 		  if (len == 4) fx_annotate_arg(sc, cddr(orx), args);
+#endif
 		  fx_annotate_args(sc, cdr(tc), args);
 		  /* if ((fx_proc(cdr(tc)) == fx_c_sca) && (fn_proc(cadr(tc)) == g_substring)) -> g_substring_uncopied); */
 		  /*   for that to be safe we need to be sure nothing in the body looks for null-termination (e.g.. string->number) */
@@ -75852,6 +75863,14 @@ typedef enum {goto_start, goto_begin, fall_through, goto_do_end_clauses, goto_sa
 	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list,
 	      goto_read_tok, goto_feed_to} goto_t;
 
+/* TODO:    [for slot has setter, check op_let_temp_fx_1: apply function]
+ *       get rid of symbol_has_setter?
+ *       for expr new-value, send to eval, then do the set directly
+ *       if settee is pair, get new-value, then op_set_pair*
+ *   if settee is symbol, if new_value=Q, set here, else push OP_SET_SYMBOL_P, code=new_value, go to trailers via OP_UNOPT?
+ *   if settee is pair, use set_implicit?
+ */
+
 static goto_t op_let_temp_init2(s7_scheme *sc)
 {
   /* now eval set car new-val, cadr=settees, cadddr=new_values */
@@ -75862,7 +75881,6 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
       set_car(p, cdar(p));
       car(sc->args) = cdar(sc->args);
       if ((!is_symbol(settee)) ||                /* (let-temporarily (((*s7* 'print-length) 32)) ...) */
-	  (symbol_has_setter(settee)) ||         /*                  ((*features* #f))... */
 	  (is_pair(new_value)))                  /*                  ((line-number (if (eq? caller top-level:) -1 line-number)))... */
 	{
 	  push_stack_direct(sc, OP_LET_TEMP_INIT2);
@@ -75876,7 +75894,10 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
 	immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
       if (is_symbol(new_value))
 	new_value = lookup_checked(sc, new_value);
-      slot_set_value(slot, new_value);
+      /* if ((symbol_has_setter(settee)) && (!slot_has_setter(slot))) settee is local with no setter, but its global binding does have a setter */
+      if (slot_has_setter(slot))
+	slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, new_value)));
+      else slot_set_value(slot, new_value);
     }
   car(sc->args) = cadr(sc->args);
   pop_stack(sc);
@@ -75911,11 +75932,10 @@ static bool op_let_temp_done1(s7_scheme *sc)
       else
 	{
 	  s7_pointer slot;
-	  if ((!is_symbol(settee)) ||
-	      (symbol_has_setter(settee)))                                   /* (let-temporarily ((x 1))...) -> (set! x 0) if x has a setter */
+	  if (!is_symbol(settee))
 	    {
 	      push_stack_direct(sc, OP_LET_TEMP_DONE1);
-	      if ((is_pair(sc->value)) || (is_symbol(sc->value)))            /* (let-temporarily ((*load-path* ())) 32) here: (set! *load-path* '(".")) */
+	      if ((is_pair(sc->value)) || (is_symbol(sc->value)))
 		sc->code = list_3(sc, sc->set_symbol, settee, list_2(sc, sc->quote_symbol, sc->value));
 	      else sc->code = list_3(sc, sc->set_symbol, settee, sc->value);
 	      return(false); /* goto eval */
@@ -75923,7 +75943,9 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	  slot = lookup_slot_from(settee, sc->curlet);
 	  if (is_immutable_slot(slot))
 	    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
-	  slot_set_value(slot, sc->value);
+	  if (slot_has_setter(slot))
+	    slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, sc->value)));
+	  else slot_set_value(slot, sc->value);
 	}}
   pop_stack(sc);   /* remove the gc_protect */
   sc->value = sc->code;
@@ -82854,8 +82876,7 @@ static s7_pointer star_set(s7_scheme *sc, s7_pointer slot, s7_pointer val, bool 
     return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, parameter_set_twice_string, slot_symbol(slot), sc->args)));
   if ((check_rest) && (is_rest_slot(slot)))
     return(s7_error(sc, sc->wrong_type_arg_symbol,
-		    set_elist_3(sc, wrap_string(sc, "can't set rest arg ~S to ~S via keyword", 39),
-				slot_symbol(slot), val)));
+		    set_elist_3(sc, wrap_string(sc, "can't set rest arg ~S to ~S via keyword", 39), slot_symbol(slot), val)));
   set_checked_slot(slot);
   slot_set_value(slot, val);
   return(val);
@@ -82873,7 +82894,7 @@ static s7_pointer lambda_star_argument_set_value(s7_scheme *sc, s7_pointer sym, 
   return(sc->no_value);
 }
 
-static inline s7_pointer lambda_star_set_args(s7_scheme *sc)
+static s7_pointer lambda_star_set_args(s7_scheme *sc)
 {
   bool allow_other_keys;
   s7_pointer lx = sc->args, cx, zx = sc->nil, code = sc->code, args = sc->args, slot = let_slots(sc->curlet);
@@ -83300,8 +83321,7 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
     if ((is_keyword(arg2)) &&
 	(!sc->accept_all_keyword_arguments))
       s7_error(sc, sc->wrong_type_arg_symbol,
-	       set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49),
-			   closure_name(sc, func), arg2, code));
+	       set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, func), arg2, code));
   sc->curlet = update_let_with_two_slots(sc, closure_let(func), arg1, arg2);
   sc->code = T_Pair(closure_body(func));
 }
@@ -83396,8 +83416,7 @@ static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
   if ((is_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
     s7_error(sc, sc->wrong_type_arg_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49),
-			 closure_name(sc, opt1_lambda(code)), val, code));
+	     set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, opt1_lambda(code)), val, code));
   func = opt1_lambda(code);
   p = car(closure_args(func));
   sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
@@ -87586,7 +87605,7 @@ static s7_pointer revappend(s7_scheme *sc, s7_pointer a, s7_pointer b)
   return(p);
 }
 
-static Inline bool op_any_c_np_mv_1(s7_scheme *sc)
+static bool op_any_c_np_mv_1(s7_scheme *sc)
 {
   /* we're looping through fp cases here, so sc->value can be non-mv after the first */
   if (collect_np_args(sc, OP_ANY_C_NP_MV_1, (is_multiple_value(sc->value)) ? revappend(sc, sc->value, sc->args) : cons(sc, sc->value, sc->args)))
@@ -89386,6 +89405,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
        *    then the switch below is not needed, and we free up 16 type bits.  C does not guarantee tail calls (I think)
        *    so we'd have each function return the next, and eval would be (while (true) f = f(sc) but would the function
        *    call overhead be less expensive than the switch? (We get most functions inlined in the current code).
+       * with some fake fx_calls for the P cases, many of these could be
+       *    sc->value = fx_function[sc->cur_op](sc, sc->code); continue;
+       *    so the switch statement is unnecessary -- maybe a table eval_functions[cur_op] eventually
        */
 
       switch (sc->cur_op)
@@ -90549,7 +90571,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    default:              goto EVAL_ARGS;
 	    }
 
-	case OP_SET:  check_set(sc);
+	case OP_SET: check_set(sc);
 	case OP_SET_UNCHECKED:
 	  if (is_pair(cadr(sc->code)))             /* has setter */
 	    switch (set_implicit(sc))
@@ -94795,53 +94817,53 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        527          691    687    477    477
- * tauto       786          648    642    496    496
+ * tauto       786          648    642    496    497
  * tshoot     1484          883    872    810    810
  * index      1051         1026   1016    983    983
  * tmock      7748         1177   1165   1098   1098
  * tvect      1951         2456   2413   1756   1756
- * s7test     4522         1873   1831   1812   1838
+ * s7test     4522         1873   1831   1812   1826
  * lt         2127         2123   2110   2123   2123
- * tform      3263         2281   2273   2267   2272
+ * tform      3263         2281   2273   2267   2268
  * tmac       2413         3317   3277   2389   2389
- * tread      2594         2440   2421   2411   2411
+ * tread      2594         2440   2421   2411   2419
  * trclo      4070         2715   2561   2455   2455
- * tmat       2677         3065   3042   2523   2530
+ * tmat       2677         3065   3042   2523   2518
  * fbench     2868         2688   2583   2544   2545
  * tcopy      2623         8035   5546   2557   2558
- * dup        2927         3805   3788   2639   2639
- * tb         3321         2735   2681   2560   2576 [op_dox? subtract_u1??]
+ * dup        2927         3805   3788   2639   2636
+ * tb         3321         2735   2681   2560   2630
  * titer      2727         2865   2842   2679   2679
  * tsort      3656         3105   3104   2924   2924
  * tset       3230         3253   3104   3090   3090
  * teq        3594         4068   4045   3576   3577
  * tio        3715         3816   3752   3702   3702
  * tstr       6591         5281   4863   4197   4197
- * tclo       4690         4787   4735   4409   4409
+ * tclo       4690         4787   4735   4409   4405
  * tcase      4537         4960   4793   4474   4473
  * tlet       5471         7775   5640   4490   4490
  * tmap       5715         8270   8188   4694   4694
  * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5450
- * tmisc      6068         7389   6210   5463   5463
+ * tnum       56.6         6348   6013   5445   5451
+ * tmisc      7588         8960   7699   6972   6972          was: 6068  7389  6210  5463  5462
  * tgsl       25.2         8485   7802   6389   6389
  * trec       8338         6936          6553   6553
  * tlist      7140         7896          7087   7087
- * tgc        10.2         11.9   11.1   8726   8726
+ * tgc        10.2         11.9   11.1   8726   8727
  * thash      35.3         11.8   11.7   9838   9838
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.2
+ * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.5
  * tbig      596.1        177.4  175.8  167.7  167.7
  * --------------------------------------------------------
  *
- * dilambda/setter timings [t500.scm -> tmisc.scm]
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form? 32bit mixup?
  * more rest arg tests
  * extend gmp to fx/opt?
  * implicit_vector_set_3_t? and others currently calling lookup. op_if...s...
- *   count s_lookup->other cases
+ *   count s_lookup->other cases: can these use fx_call?
+ * tload? need to include various cload choices too
  */
