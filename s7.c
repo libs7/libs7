@@ -996,8 +996,8 @@ typedef struct s7_cell {
   } object;
 
 #if S7_DEBUGGING
-  int32_t current_alloc_line, previous_alloc_line, uses, explicit_free_line, gc_line, debugger_bits_set_line;
-  int64_t current_alloc_type, previous_alloc_type, debugger_bits, previous_debugger_bits;
+  int32_t current_alloc_line, previous_alloc_line, uses, explicit_free_line, gc_line;
+  int64_t current_alloc_type, previous_alloc_type, debugger_bits;
   const char *current_alloc_func, *previous_alloc_func, *gc_func;
 #endif
 } s7_cell;
@@ -46554,7 +46554,6 @@ s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
 	{
 	  slot_set_has_setter(global_slot(p));
 	  symbol_set_has_setter(p);
-	  /* slot_set_has_setter(global_slot(p)); */ /* why twice? */
 	  protect_setter(sc, p, setter);
 	  slot_set_setter(global_slot(p), setter);
 	  if (s7_is_aritable(sc, setter, 3))
@@ -52389,7 +52388,6 @@ s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
   if (is_c_function(fnc))
     return(c_function_call(fnc)(sc, args));
   /* if [if (!is_applicable(fnc)) apply_error(sc, fnc, sc->args);] here, needs_copied_args can be T_App */
-
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->code = fnc;
   sc->args = (needs_copied_args(sc->code)) ? copy_proper_list(sc, args) : args;
@@ -67542,7 +67540,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_SSP_MV_1;
       return(args);
 
-    case OP_SAFE_C_SP_1:  case OP_SAFE_CONS_SP_1: case OP_SAFE_LIST_SP_1: case OP_SAFE_ADD_SP_1: case OP_SAFE_MULTIPLY_SP_1:
+    case OP_SAFE_C_SP_1: case OP_SAFE_CONS_SP_1: case OP_SAFE_LIST_SP_1: case OP_SAFE_ADD_SP_1: case OP_SAFE_MULTIPLY_SP_1:
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_SP_MV;
       return(args);
 
@@ -67799,7 +67797,13 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
   if (is_null(x))
     {
       if (!checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
-	return((is_immutable(args)) ? copy_proper_list(sc, args) : args);
+	{
+	  s7_pointer p;
+	  for (p = args; is_pair(p); p = cdr(p))
+	    if (is_immutable(p))
+	      return(copy_proper_list(sc, args));
+	  return(args);
+	}
       sc->u = args;
       check_free_heap_size(sc, 8192);
       if (sc->safety > NO_SAFETY)
@@ -70141,18 +70145,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  else set_safe_optimize_op(body, (car(body) == sc->and_symbol) ? OP_TC_AND_A_OR_A_LAA : OP_TC_OR_A_AND_A_LAA);
 		  fx_annotate_arg(sc, cdr(body), args);
 		  fx_annotate_arg(sc, cdr(orx), args);
-#if S7_DEBUGGING
-		  if (len == 4) 
-		    {
-		      fx_annotate_arg(sc, cddr(orx), args);
-		      if ((!has_fx(cddr(orx))) || (!opt2(cddr(orx), OPT2_FX)))
-			fprintf(stderr, "%d missed orx fx or opt2\n", __LINE__);
-		    }
-		  if ((optimize_op(body) == OP_TC_AND_A_OR_A_A_LA) && (!has_fx(cddr(orx))))
-		    fprintf(stderr, "%d missed orx fx\n", __LINE__);
-#else
 		  if (len == 4) fx_annotate_arg(sc, cddr(orx), args);
-#endif
 		  fx_annotate_args(sc, cdr(tc), args);
 		  /* if ((fx_proc(cdr(tc)) == fx_c_sca) && (fn_proc(cadr(tc)) == g_substring)) -> g_substring_uncopied); */
 		  /*   for that to be safe we need to be sure nothing in the body looks for null-termination (e.g.. string->number) */
@@ -75863,9 +75856,7 @@ typedef enum {goto_start, goto_begin, fall_through, goto_do_end_clauses, goto_sa
 	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list,
 	      goto_read_tok, goto_feed_to} goto_t;
 
-/* TODO:    [for slot has setter, check op_let_temp_fx_1: apply function]
- *       get rid of symbol_has_setter?
- *       for expr new-value, send to eval, then do the set directly
+/* TODO: for expr new-value, send to eval, then do the set directly (op_set_from_setter -- but we need setter here?)
  *       if settee is pair, get new-value, then op_set_pair*
  *   if settee is symbol, if new_value=Q, set here, else push OP_SET_SYMBOL_P, code=new_value, go to trailers via OP_UNOPT?
  *   if settee is pair, use set_implicit?
@@ -75896,7 +75887,7 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
 	new_value = lookup_checked(sc, new_value);
       /* if ((symbol_has_setter(settee)) && (!slot_has_setter(slot))) settee is local with no setter, but its global binding does have a setter */
       if (slot_has_setter(slot))
-	slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, new_value)));
+	slot_set_value(slot, call_setter(sc, slot, new_value));
       else slot_set_value(slot, new_value);
     }
   car(sc->args) = cadr(sc->args);
@@ -75943,8 +75934,8 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	  slot = lookup_slot_from(settee, sc->curlet);
 	  if (is_immutable_slot(slot))
 	    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
-	  if (slot_has_setter(slot))
-	    slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, sc->value)));
+	  if (slot_has_setter(slot)) /* maybe setter changed in let-temp body? else setter has already checked the init value */
+	    slot_set_value(slot, call_setter(sc, slot, sc->value));
 	  else slot_set_value(slot, sc->value);
 	}}
   pop_stack(sc);   /* remove the gc_protect */
@@ -75987,7 +75978,7 @@ static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value
   if (slot_has_setter(slot)) /* setter has to be called because it might affect other vars (*clm-srate* -> mus-srate etc), but it should not change sc->value */
     {
       s7_pointer old_value = sc->value;
-      slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, slot_symbol(slot), new_value)));
+      slot_set_value(slot, call_setter(sc, slot, new_value)); /* s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, slot_symbol(slot), new_value))); */
       sc->value = old_value;
     }
   else slot_set_value(slot, new_value);
@@ -76017,7 +76008,7 @@ static bool op_let_temp_fx(s7_scheme *sc) /* all entries are of the form (symbol
       new_val = fx_call(sc, cdr(var));
       slot = end[0];
       if (slot_has_setter(slot))
-	slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, new_val)));
+	slot_set_value(slot, call_setter(sc, slot, new_val)); /* s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, new_val))); */
       else slot_set_value(slot, new_val);
     }
   sc->code = cdr(sc->code);
@@ -76038,7 +76029,7 @@ static bool op_let_temp_fx_1(s7_scheme *sc) /* one entry */
   push_stack(sc, OP_LET_TEMP_UNWIND, slot_value(slot), slot);
   new_val = fx_call(sc, cdr(var));
   if (slot_has_setter(slot))
-    slot_set_value(slot, s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, new_val)));
+    slot_set_value(slot, call_setter(sc, slot, new_val)); /* s7_apply_function(sc, slot_setter(slot), set_plist_2(sc, settee, new_val))); */
   else slot_set_value(slot, new_val);
   sc->code = cdr(sc->code);
   return(is_pair(sc->code)); /* sc->code can be null if no body */
@@ -83482,8 +83473,7 @@ static goto_t op_define1(s7_scheme *sc)
     {
       s7_pointer x;
       x = lookup_slot_from(sc->code, sc->curlet);
-      if ((is_slot(x)) &&
-	  (slot_has_setter(x)))
+      if ((is_slot(x)) && (slot_has_setter(x)))
 	{
 	  sc->value = bind_symbol_with_setter(sc, OP_DEFINE_WITH_SETTER, sc->code, sc->value);
 	  if (sc->value == sc->no_value)
@@ -87264,7 +87254,7 @@ static void op_safe_c_sp_1(s7_scheme *sc)
 
 static void op_safe_c_sp_mv(s7_scheme *sc)
 {
-  sc->args = cons(sc, sc->args, sc->value); /* not ulist here */
+  sc->args = cons(sc, sc->args, sc->value); /* not ulist */
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
@@ -94132,7 +94122,8 @@ s7_scheme *s7_init(void)
   vector_getter(sc->symbol_table) = default_vector_getter;
   vector_setter(sc->symbol_table) = default_vector_setter;
   s7_vector_fill(sc, sc->symbol_table, sc->nil);
-  {
+
+  { /* sc->opts */
     opt_info *os;
     os = (opt_info *)calloc(OPTS_SIZE, sizeof(opt_info));
     add_saved_pointer(sc, os);
@@ -94813,7 +94804,7 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------
- *             gmp (7-19)  20.9   21.0   21.6   21.7
+ *             gmp (7-19)  20.9   21.0   21.6   21.7   32k
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        527          691    687    477    477
@@ -94822,32 +94813,32 @@ int main(int argc, char **argv)
  * index      1051         1026   1016    983    983
  * tmock      7748         1177   1165   1098   1098
  * tvect      1951         2456   2413   1756   1756
- * s7test     4522         1873   1831   1812   1826
+ * s7test     4522         1873   1831   1812   1816
  * lt         2127         2123   2110   2123   2123
  * tform      3263         2281   2273   2267   2268
- * tmac       2413         3317   3277   2389   2389
- * tread      2594         2440   2421   2411   2419
+ * tmac       2413         3317   3277   2389   2408
+ * tread      2594         2440   2421   2411   2416
  * trclo      4070         2715   2561   2455   2455
- * tmat       2677         3065   3042   2523   2518
+ * tmat       2677         3065   3042   2523   2528
  * fbench     2868         2688   2583   2544   2545
  * tcopy      2623         8035   5546   2557   2558
  * dup        2927         3805   3788   2639   2636
  * tb         3321         2735   2681   2560   2630
  * titer      2727         2865   2842   2679   2679
  * tsort      3656         3105   3104   2924   2924
- * tset       3230         3253   3104   3090   3090
+ * tset       3230         3253   3104   3090   3094
  * teq        3594         4068   4045   3576   3577
  * tio        3715         3816   3752   3702   3702
  * tstr       6591         5281   4863   4197   4197
- * tclo       4690         4787   4735   4409   4405
- * tcase      4537         4960   4793   4474   4473
+ * tclo       4690         4787   4735   4409   4407
+ * tcase      4537         4960   4793   4474   4475
  * tlet       5471         7775   5640   4490   4490
  * tmap       5715         8270   8188   4694   4694
  * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5451
- * tmisc      7588         8960   7699   6972   6972          was: 6068  7389  6210  5463  5462
+ * tnum       56.6         6348   6013   5445   5449
  * tgsl       25.2         8485   7802   6389   6389
  * trec       8338         6936          6553   6553
+ * tmisc      7588         8960   7699   6972   6969          was: 6068  7389  6210  5463  5462
  * tlist      7140         7896          7087   7087
  * tgc        10.2         11.9   11.1   8726   8727
  * thash      35.3         11.8   11.7   9838   9838
@@ -94863,7 +94854,28 @@ int main(int argc, char **argv)
  * random -> 0? try new form? 32bit mixup?
  * more rest arg tests
  * extend gmp to fx/opt?
- * implicit_vector_set_3_t? and others currently calling lookup. op_if...s...
- *   count s_lookup->other cases: can these use fx_call?
- * tload? need to include various cload choices too
+ * tload?
+
+<3> (let ((x 3)) (immutable! 'x) (set! (setter 'x) float?)) -- error?
+float?
+<4> (let ((x 3)) (immutable! 'x) (set! (setter 'x) float?) (set! x 4.0))
+error: can't set! 'x 3 (it is immutable) -- the slot see below
+<5> (let ((x 3)) (immutable! 'x) (set! (setter 'x) #f) (set! x 4.0))
+error: can't set! 'x 3 (it is immutable) -- this is the slot -- use symbol new-value old-value
+<6> (let () (define-constant x 3) (set! (setter 'x) float?))
+float?
+<7> (let () (define-constant x 3) (set! (setter 'x) float?) (set! x 4.0))
+error: set!: can't alter constant's value: x  -- needs code!
+
+how to have immutable setter?
+<9> (let ((x 3)) (set! (setter 'x) integer?) (immutable! (setter 'x)) (set! (setter 'x) #f))
+#f
+maybe add T_IMMUTABLE_SETTER for slots?
+
+(define x 0)
+(set! (setter 'x) integer?)
+(let ((x "1"))
+  (list (setter 'x) (with-let (outlet (curlet)) (setter 'x)))): (#f integer?)
+
+
  */
