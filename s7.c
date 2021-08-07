@@ -4131,7 +4131,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SET_UNCHECKED, OP_SET_SYMBOL_C, OP_SET_SYMBOL_S, OP_SET_SYMBOL_P, OP_SET_SYMBOL_A,
       OP_SET_NORMAL, OP_SET_PAIR, OP_SET_DILAMBDA, OP_SET_DILAMBDA_P, OP_SET_DILAMBDA_P_1, OP_SET_DILAMBDA_SA_A,
       OP_SET_PAIR_A, OP_SET_PAIR_P, OP_SET_PAIR_ZA,
-      OP_SET_PAIR_P_1, OP_SET_FROM_SETTER, OP_SET_PWS, OP_SET_LET_S, OP_SET_LET_FX, OP_SET_SAFE,
+      OP_SET_PAIR_P_1, OP_SET_FROM_SETTER, OP_SET_FROM_LET_TEMP, OP_SET_PWS, OP_SET_LET_S, OP_SET_LET_FX, OP_SET_SAFE,
       OP_INCREMENT_BY_1, OP_DECREMENT_BY_1, OP_SET_CONS,
       OP_INCREMENT_SS, OP_INCREMENT_SP, OP_INCREMENT_SA, OP_INCREMENT_SAA,
 
@@ -4355,7 +4355,7 @@ static const char* op_names[NUM_OPS] =
       "set_unchecked", "set_symbol_c", "set_symbol_s", "set_symbol_p", "set_symbol_a",
       "set_normal", "set_pair", "set_dilambda", "set_dilambda_p", "set_dilambda_p_1", "set_dilambda_sa_a",
       "set_pair_a", "set_pair_p", "set_pair_za",
-      "set_pair_p_1", "set_from_setter", "set_pws", "set_let_s", "set_let_fx", "set_safe",
+      "set_pair_p_1", "set_from_setter", "set_from_let_temp", "set_pws", "set_let_s", "set_let_fx", "set_safe",
       "increment_1", "decrement_1", "set_cons",
       "increment_ss", "increment_sp", "increment_sa", "increment_saa",
       "letrec_unchecked", "letrec*_unchecked", "cond_unchecked",
@@ -29883,7 +29883,6 @@ s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
 	{
 	  push_stack_no_let_no_code(sc, OP_BARRIER, port);
 	  push_stack_direct(sc, OP_EVAL_DONE);
-
 	  eval(sc, OP_READ_INTERNAL);
 	  if (sc->tok == TOKEN_EOF)
 	    sc->value = eof_object;
@@ -46435,7 +46434,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 
       if (is_pair(cddr(args)))
 	{
-	  s7_pointer e = cadr(args), old_e; /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))) */
+	  s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))) */
 	  func = caddr(args);
 	  if ((e == sc->rootlet) || (e == sc->nil))
 	    slot = global_slot(sym);
@@ -46443,10 +46442,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	    {
 	      if (!is_let(e))
 		return(s7_wrong_type_arg_error(sc, "set! setter", 2, e, "a let"));
-	      old_e = sc->curlet;
-	      set_curlet(sc, e);
-	      slot = lookup_slot_from(sym, sc->curlet);
-	      set_curlet(sc, old_e);
+	      slot = lookup_slot_from(sym, e);
 	    }}
       else
 	{
@@ -55335,6 +55331,8 @@ static s7_pointer fx_c_ac(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t2_1));
 }
 
+static s7_pointer fx_c_ac_direct(s7_scheme *sc, s7_pointer arg) {return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, fx_call(sc, cdr(arg)), opt3_con(arg)));}
+
 static s7_pointer fx_is_eq_ac(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x, y = opt3_con(arg);
@@ -56396,28 +56394,29 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  {
 	    s7_pointer s2 = caddr(arg);
 	    if ((fx_matches(car(s2), sc->multiply_symbol)) && (cadr(s2) == caddr(s2))) return(fx_c_s_sqr);
+
+	    if ((is_global_and_has_func(car(arg), s7_p_pp_function)) &&
+		(is_global_and_has_func(car(s2), s7_p_pp_function)))
+	      {
+		set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
+		set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(s2)))));
+		set_opt3_pair(arg, cdr(s2));
+		if (car(s2) == sc->vector_ref_symbol)
+		  {
+		    if (car(arg) == sc->add_symbol)      return(fx_add_s_vref);
+		    if (car(arg) == sc->subtract_symbol) return(fx_subtract_s_vref);
+		    if (car(arg) == sc->multiply_symbol) return(fx_multiply_s_vref);
+		    if (car(arg) == sc->geq_symbol)      return(fx_geq_s_vref);
+		    if (car(arg) == sc->is_eq_symbol)    return(fx_is_eq_s_vref);
+		    if (car(arg) == sc->hash_table_ref_symbol) return(fx_href_s_vref);
+		    if (car(arg) == sc->let_ref_symbol)  return(fx_lref_s_vref);
+		    if ((is_global(cadr(arg))) && (is_global(cadr(s2))) && (car(arg) == sc->vector_ref_symbol)) return(fx_vref_g_vref_gs);
+		  }
+		if ((car(arg) == sc->vector_ref_symbol) && (car(s2) == sc->add_symbol)) return(fx_vref_s_add);
+		return(fx_c_s_opssq_direct);
+	      }
+	    return(fx_c_s_opssq);
 	  }
-	  if ((is_global_and_has_func(car(arg), s7_p_pp_function)) &&
-	      (is_global_and_has_func(caaddr(arg), s7_p_pp_function)))
-	    {
-	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
-	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(caaddr(arg)))));
-	      set_opt3_pair(arg, cdaddr(arg));
-	      if (caaddr(arg) == sc->vector_ref_symbol)
-		{
-		  if (car(arg) == sc->add_symbol)      return(fx_add_s_vref);
-		  if (car(arg) == sc->subtract_symbol) return(fx_subtract_s_vref);
-		  if (car(arg) == sc->multiply_symbol) return(fx_multiply_s_vref);
-		  if (car(arg) == sc->geq_symbol)      return(fx_geq_s_vref);
-		  if (car(arg) == sc->is_eq_symbol)    return(fx_is_eq_s_vref);
-		  if (car(arg) == sc->hash_table_ref_symbol) return(fx_href_s_vref);
-		  if (car(arg) == sc->let_ref_symbol)  return(fx_lref_s_vref);
-		  if ((is_global(cadr(arg))) && (is_global(cadaddr(arg))) && (car(arg) == sc->vector_ref_symbol)) return(fx_vref_g_vref_gs);
-		}
-	      if ((car(arg) == sc->vector_ref_symbol) && (caaddr(arg) == sc->add_symbol)) return(fx_vref_s_add);
-	      return(fx_c_s_opssq_direct);
-	    }
-	  return(fx_c_s_opssq);
 
 	case HOP_SAFE_C_opSSq_S:
 	  if ((is_global_and_has_func(car(arg), s7_p_pp_function)) &&
@@ -56792,7 +56791,15 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 
 	case HOP_SAFE_C_AC:
 	  if (fn_proc(arg) == g_cons) return(fx_cons_ac);
-	  return((fx_matches(car(arg), sc->is_eq_symbol)) ? fx_is_eq_ac : fx_c_ac);
+	  if (fx_matches(car(arg), sc->is_eq_symbol)) return(fx_is_eq_ac);
+	  if (is_global_and_has_func(car(arg), s7_p_pp_function))
+	    {
+	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
+	      if ((opt3_direct(cdr(arg)) == (s7_pointer)string_ref_p_pp) && (is_t_integer(caddr(arg))) && (integer(caddr(arg)) == 0))
+		set_opt3_direct(cdr(arg), string_ref_p_p0);
+	      return(fx_c_ac_direct);
+	    }
+	  return(fx_c_ac);
 
 	case HOP_SAFE_C_CA:
 	  return((fn_proc(arg) == g_cons) ? fx_cons_ca : fx_c_ca);
@@ -56978,7 +56985,6 @@ static s7_b_7p_t s7_b_7p_function(s7_pointer f);
 
 static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2, s7_pointer var3, bool more_vars)
 {
-  /* extending this to a third variable did not get many hits */
   s7_pointer p = car(tree);
 #if 0
   /* if ((s7_tree_memq(sc, var1, car(tree))) || ((var2) && (s7_tree_memq(sc, var2, car(tree)))) || ((var3) && (s7_tree_memq(sc, var3, car(tree))))) */
@@ -57565,7 +57571,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_AC:
-      if ((fx_proc(tree) == fx_c_ac) && (fn_proc(p) == g_num_eq_xi) && (caddr(p) == int_zero) &&
+      if (((fx_proc(tree) == fx_c_ac) || (fx_proc(tree) == fx_c_ac_direct)) && (fn_proc(p) == g_num_eq_xi) && (caddr(p) == int_zero) &&
 	  (fx_proc(cdr(p)) == fx_c_opuq_t_direct) && (caadr(p) == sc->remainder_symbol) && (fn_proc(cadadr(p)) == g_car))
 	{
 	  set_opt3_sym(p, cadr(cadadr(p)));
@@ -59187,7 +59193,7 @@ static s7_double opt_d_p_f(opt_info *o) {return(o->v[3].d_p_f(o->v[5].fp(o->v[4]
 
 static bool d_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
-  s7_d_p_t dpf;
+  s7_d_p_t dpf; /* mostly clm gens */
   int32_t start = sc->pc;
   dpf = s7_d_p_function(s_func);
   if (!dpf)
@@ -67607,8 +67613,9 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       return(cadr(x));
 
       /* look for errors here rather than glomming up the set! and let code. */
-    case OP_SET_SAFE:             /* symbol is sc->code after pop */
-    case OP_SET1:                 /* (set! var (values 1 2 3)) */
+    case OP_SET_SAFE:                         /* symbol is sc->code after pop */
+    case OP_SET1: 
+    case OP_SET_FROM_LET_TEMP:                /* (set! var (values 1 2 3)) */
       eval_error_with_caller2(sc, "~A: can't set ~A to ~S", 22, sc->set_symbol, stack_code(sc->stack, top), set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_SET_PAIR_P_1:
@@ -70127,7 +70134,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 	{
 	  s7_int len;
 	  len = proper_list_length(orx);
-	  if ((len == 3) || ((vars == 1) && (len == 4) && (tree_count(sc, name, orx, 0) == 1)))
+	  if ((len == 3) || ((vars == 1) && (len == 4) && (tree_count(sc, name, orx, 0) == 1) && (is_fxable(sc, caddr(orx)))))
 	    {
 	      s7_pointer tc;
 	      tc = (len == 3) ? caddr(orx) : cadddr(orx);
@@ -70145,7 +70152,21 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  else set_safe_optimize_op(body, (car(body) == sc->and_symbol) ? OP_TC_AND_A_OR_A_LAA : OP_TC_OR_A_AND_A_LAA);
 		  fx_annotate_arg(sc, cdr(body), args);
 		  fx_annotate_arg(sc, cdr(orx), args);
+#if S7_DEBUGGING
+		  if (len == 4) 
+		    {
+		      fx_annotate_arg(sc, cddr(orx), args);
+		      if ((!has_fx(cddr(orx))) || (!opt2(cddr(orx), OPT2_FX)))
+			{
+			  fprintf(stderr, "%d missed orx fx or opt2 %d %s %s\n", __LINE__, is_fxable(sc, caddr(orx)), display(orx), display(body));
+			  abort();
+			}
+		    }
+		  if ((optimize_op(body) == OP_TC_AND_A_OR_A_A_LA) && (!has_fx(cddr(orx))))
+		    fprintf(stderr, "%d missed orx fx\n", __LINE__);
+#else
 		  if (len == 4) fx_annotate_arg(sc, cddr(orx), args);
+#endif
 		  fx_annotate_args(sc, cdr(tc), args);
 		  /* if ((fx_proc(cdr(tc)) == fx_c_sca) && (fn_proc(cadr(tc)) == g_substring)) -> g_substring_uncopied); */
 		  /*   for that to be safe we need to be sure nothing in the body looks for null-termination (e.g.. string->number) */
@@ -75856,12 +75877,6 @@ typedef enum {goto_start, goto_begin, fall_through, goto_do_end_clauses, goto_sa
 	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list,
 	      goto_read_tok, goto_feed_to} goto_t;
 
-/* TODO: for expr new-value, send to eval, then do the set directly (op_set_from_setter -- but we need setter here?)
- *       if settee is pair, get new-value, then op_set_pair*
- *   if settee is symbol, if new_value=Q, set here, else push OP_SET_SYMBOL_P, code=new_value, go to trailers via OP_UNOPT?
- *   if settee is pair, use set_implicit?
- */
-
 static goto_t op_let_temp_init2(s7_scheme *sc)
 {
   /* now eval set car new-val, cadr=settees, cadddr=new_values */
@@ -75871,20 +75886,24 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
       new_value = caar(p);
       set_car(p, cdar(p));
       car(sc->args) = cdar(sc->args);
-      if ((!is_symbol(settee)) ||                /* (let-temporarily (((*s7* 'print-length) 32)) ...) */
-	  (is_pair(new_value)))                  /*                  ((line-number (if (eq? caller top-level:) -1 line-number)))... */
+      if ((!is_symbol(settee)) || (is_pair(new_value)))
 	{
-	  push_stack_direct(sc, OP_LET_TEMP_INIT2);
+	  if (is_symbol(settee))
+	    {
+	      push_stack_direct(sc, OP_LET_TEMP_INIT2);          /* (let-temporarily (((*s7* 'print-length) 32)) ...) */
+	      push_stack_no_args(sc, OP_SET_FROM_LET_TEMP, settee);
+	      sc->code = new_value;
+	      return(goto_eval);
+	    }
 	  sc->code = list_3(sc, sc->set_symbol, settee, new_value);
-	  return(goto_top_no_pop);
+	  push_stack_direct(sc, OP_EVAL_DONE);
+	  eval(sc, OP_SET_UNCHECKED);
+	  continue;
 	}
       slot = lookup_slot_from(settee, sc->curlet);
-      if (!is_slot(slot))
-	unbound_variable_error(sc, settee);
-      if (is_immutable_slot(slot))
-	immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
-      if (is_symbol(new_value))
-	new_value = lookup_checked(sc, new_value);
+      if (!is_slot(slot)) unbound_variable_error(sc, settee);
+      if (is_immutable_slot(slot)) immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
+      if (is_symbol(new_value))	new_value = lookup_checked(sc, new_value);
       /* if ((symbol_has_setter(settee)) && (!slot_has_setter(slot))) settee is local with no setter, but its global binding does have a setter */
       if (slot_has_setter(slot))
 	slot_set_value(slot, call_setter(sc, slot, new_value));
@@ -75892,7 +75911,6 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
     }
   car(sc->args) = cadr(sc->args);
   pop_stack(sc);
-  /* push_stack_direct(sc, OP_LET_TEMP_DONE); */ /* we fall into LET_TEMP_DONE below so this seems redundant */
   sc->code = cdr(sc->code);
   if (is_pair(sc->code))
     {
@@ -75925,11 +75943,12 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	  s7_pointer slot;
 	  if (!is_symbol(settee))
 	    {
-	      push_stack_direct(sc, OP_LET_TEMP_DONE1);
 	      if ((is_pair(sc->value)) || (is_symbol(sc->value)))
 		sc->code = list_3(sc, sc->set_symbol, settee, list_2(sc, sc->quote_symbol, sc->value));
 	      else sc->code = list_3(sc, sc->set_symbol, settee, sc->value);
-	      return(false); /* goto eval */
+	      push_stack_direct(sc, OP_EVAL_DONE);
+	      eval(sc, OP_SET_UNCHECKED);
+	      continue;
 	    }
 	  slot = lookup_slot_from(settee, sc->curlet);
 	  if (is_immutable_slot(slot))
@@ -78204,6 +78223,18 @@ static void op_set_symbol_a(s7_scheme *sc)
   slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
 }
 
+static void op_set_from_let_temp(s7_scheme *sc)
+{
+  s7_pointer settee, slot;
+  settee = sc->code;
+  slot = lookup_slot_from(settee, sc->curlet);
+  if (!is_slot(slot)) unbound_variable_error(sc, settee);
+  if (is_immutable_slot(slot)) immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
+  if (slot_has_setter(slot))
+    slot_set_value(slot, call_setter(sc, slot, sc->value));
+  else slot_set_value(slot, sc->value);
+}
+
 static inline void op_set_cons(s7_scheme *sc)
 {
   s7_pointer slot;
@@ -78474,7 +78505,7 @@ static s7_pointer op_set1(s7_scheme *sc)
   if (is_slot(lx))
     {
       if (is_immutable(lx))
-	immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->set_symbol, lx));
+	immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->set_symbol, slot_symbol(lx)));
       if (slot_has_setter(lx))
 	{
 	  s7_pointer func = slot_setter(lx);
@@ -87813,11 +87844,11 @@ static void op_c_ap_mv(s7_scheme *sc)
 
 static void op_c_aa(s7_scheme *sc)
 {
-  s7_pointer code = sc->code;
-  sc->code = fx_call(sc, cdr(code));
-  sc->value = fx_call(sc, cddr(code));
-  sc->value = list_2(sc, sc->code, sc->value);
-  sc->value = fn_proc(code)(sc, sc->value);
+  gc_protect_via_stack(sc, fx_call(sc, cdr(sc->code)));
+  stack_protected2(sc) = fx_call(sc, cddr(sc->code));
+  sc->value = list_2(sc, stack_protected1(sc), stack_protected2(sc));
+  unstack(sc); /* fn_proc here is unsafe so clear stack first */
+  sc->value = fn_proc(sc->code)(sc, sc->value);
 }
 
 static inline void op_c_s(s7_scheme *sc)
@@ -90550,6 +90581,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SET_CONS:         op_set_cons(sc);         continue;
  	case OP_SET_SAFE:	  op_set_safe(sc);  	   continue;
 	case OP_SET_FROM_SETTER:  slot_set_value(sc->code, sc->value); continue;
+	case OP_SET_FROM_LET_TEMP: op_set_from_let_temp(sc); continue;
 
 	case OP_SET2:
 	  switch (op_set2(sc))
@@ -90799,7 +90831,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  switch (op_let_temp_init2(sc))
 	    {
 	    case goto_begin: goto BEGIN;
-	    case goto_top_no_pop: sc->cur_op = OP_SET_UNCHECKED; goto TOP_NO_POP;
+	    case goto_eval:  goto EVAL;
 	    default: break;
 	    }
 
@@ -94417,7 +94449,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 932) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -94811,43 +94843,43 @@ int main(int argc, char **argv)
  * tauto       786          648    642    496    497
  * tshoot     1484          883    872    810    810
  * index      1051         1026   1016    983    983
- * tmock      7748         1177   1165   1098   1098
+ * tmock      7748         1177   1165   1098   1097
  * tvect      1951         2456   2413   1756   1756
- * s7test     4522         1873   1831   1812   1816
+ * s7test     4522         1873   1831   1812   1809
  * lt         2127         2123   2110   2123   2123
  * tform      3263         2281   2273   2267   2268
  * tmac       2413         3317   3277   2389   2408
- * tread      2594         2440   2421   2411   2416
+ * tread      2594         2440   2421   2411   2408
  * trclo      4070         2715   2561   2455   2455
  * tmat       2677         3065   3042   2523   2528
  * fbench     2868         2688   2583   2544   2545
  * tcopy      2623         8035   5546   2557   2558
- * dup        2927         3805   3788   2639   2636
  * tb         3321         2735   2681   2560   2630
+ * dup        2927         3805   3788   2639   2638
  * titer      2727         2865   2842   2679   2679
  * tsort      3656         3105   3104   2924   2924
- * tset       3230         3253   3104   3090   3094
+ * tset       3230         3253   3104   3090   3093
  * teq        3594         4068   4045   3576   3577
- * tio        3715         3816   3752   3702   3702
- * tstr       6591         5281   4863   4197   4197
+ * tio        3715         3816   3752   3702   3694
+ * tstr       6591         5281   4863   4197   4198
  * tclo       4690         4787   4735   4409   4407
+ * tlet       5471         7775   5640   4490   4463
  * tcase      4537         4960   4793   4474   4475
- * tlet       5471         7775   5640   4490   4490
  * tmap       5715         8270   8188   4694   4694
  * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5449
+ * tnum       56.6         6348   6013   5445   5449  5462 [g_less_xf -> lt_p_pp+lt_b_7pp]
  * tgsl       25.2         8485   7802   6389   6389
  * trec       8338         6936          6553   6553
- * tmisc      7588         8960   7699   6972   6969          was: 6068  7389  6210  5463  5462
+ * tmisc      7588         8960   7699   6972   6942
  * tlist      7140         7896          7087   7087
  * tgc        10.2         11.9   11.1   8726   8727
- * thash      35.3         11.8   11.7   9838   9838
+ * thash      35.3         11.8   11.7   9838   9836
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
- * lg        104.9        106.6  105.0  104.5  104.5
- * tbig      596.1        177.4  175.8  167.7  167.7
+ * lg        104.9        106.6  105.0  104.5  104.5  similar [fx_c_ac_direct s7_memq from g_memq_4 and others memq_p_pp g_memq_2|3 etc]
+ * tbig      596.1        177.4  175.8  167.7  167.7  simialr [hash_table_ref_p_pp g_hash_table_ref_2]
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
@@ -94855,27 +94887,6 @@ int main(int argc, char **argv)
  * more rest arg tests
  * extend gmp to fx/opt?
  * tload?
-
-<3> (let ((x 3)) (immutable! 'x) (set! (setter 'x) float?)) -- error?
-float?
-<4> (let ((x 3)) (immutable! 'x) (set! (setter 'x) float?) (set! x 4.0))
-error: can't set! 'x 3 (it is immutable) -- the slot see below
-<5> (let ((x 3)) (immutable! 'x) (set! (setter 'x) #f) (set! x 4.0))
-error: can't set! 'x 3 (it is immutable) -- this is the slot -- use symbol new-value old-value
-<6> (let () (define-constant x 3) (set! (setter 'x) float?))
-float?
-<7> (let () (define-constant x 3) (set! (setter 'x) float?) (set! x 4.0))
-error: set!: can't alter constant's value: x  -- needs code!
-
-how to have immutable setter?
-<9> (let ((x 3)) (set! (setter 'x) integer?) (immutable! (setter 'x)) (set! (setter 'x) #f))
-#f
-maybe add T_IMMUTABLE_SETTER for slots?
-
-(define x 0)
-(set! (setter 'x) integer?)
-(let ((x "1"))
-  (list (setter 'x) (with-let (outlet (curlet)) (setter 'x)))): (#f integer?)
-
-
+ * there's no way to make a slot setter (as setter) immutable (t_multiform as bit)
+ * still making lists in let-temp init/done and set_with_let
  */
