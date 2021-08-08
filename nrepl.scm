@@ -17,6 +17,9 @@
 (unless (defined? 'nccell_stylemask)   (define nccell_stylemask cell_stylemask))
 (unless (defined? 'nccells_double_box) (define nccells_double_box cells_double_box))
 
+(unless (defined? 'CELL_FGDEFAULT_MASK) (define CELL_FGDEFAULT_MASK NC_FGDEFAULT_MASK))
+(unless (defined? 'CELL_BGDEFAULT_MASK) (define CELL_BGDEFAULT_MASK NC_BGDEFAULT_MASK))
+
 (define (drop-into-repl call e)
   ((*nrepl* 'run) "break>" (object->string call) e))
 

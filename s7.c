@@ -2452,6 +2452,10 @@ void s7_show_history(s7_scheme *sc);
 #define in_rootlet(p)                  has_type_bit(T_Slt(p), T_IN_ROOTLET)
 #define set_in_rootlet(p)              set_type_bit(T_Slt(p), T_IN_ROOTLET)
 
+#define T_BOOL_FUNCTION                T_ITER_OK
+#define is_bool_function(p)            has_type_bit(T_Pos(p), T_BOOL_FUNCTION)
+#define set_is_bool_function(p)        set_type_bit(T_Fnc(p), T_BOOL_FUNCTION)
+
 /* it's faster here to use the high_flag bits rather than typeflag bits */
 #define BIT_ROOM                       16
 #define T_FULL_SYMCONS                 (1LL << (TYPE_BITS + BIT_ROOM + 24))
@@ -3323,6 +3327,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 
 #define c_function_bool_setter(f)      c_function_data(f)->dam.bool_setter
 #define c_function_set_bool_setter(f, Val) c_function_data(f)->dam.bool_setter = Val
+
 #define c_function_arg_defaults(f)     c_function_data(T_Fst(f))->dam.arg_defaults
 #define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args
 #define c_function_arg_names(f)        c_function_data(T_Fst(f))->sam.arg_names
@@ -4680,7 +4685,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	  ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" :
 						  ((is_pair(obj)) ? " step-end-ok" :
 						   ((is_slot(obj)) ? " in-rootlet" :
-						    " ?23?"))) : "",
+						    ((is_c_function(obj)) ? " bool-function" :
+						     " ?23?")))) : "",
 	  /* bit 24+16 */
 	  ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
 						  ((is_procedure(obj)) ? " has-let-arg" :
@@ -4779,7 +4785,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_EXPANSION) != 0) && (!is_normal_symbol(obj)) && (!is_either_macro(obj))) return(true);
   if (((full_typ & T_MULTIPLE_VALUE) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_GLOBAL) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_syntax(obj))) return(true);
-  if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj))) return(true);
+  if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_c_function(obj))) return(true);
   if (((full_typ & T_LOCAL) != 0) && (!is_normal_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_UNSAFE) != 0) && (!is_symbol(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_VERY_SAFE_CLOSURE) != 0) && (!is_pair(obj)) && (!is_any_closure(obj)) && (!is_let(obj))) return(true);
@@ -5953,6 +5959,9 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
   set_immutable(p);
   return(p);
 }
+
+/* there's no way to make a slot setter (as setter) immutable (t_multiform as bit) */
+
 
 /* -------------------------------- GC -------------------------------- */
 
@@ -9344,7 +9353,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   s7_pointer x;
 
   if (!is_symbol(symbol))
-    return(sublet_1(sc, sc->nil, list_2(sc, symbol, value), sc->inlet_symbol));
+    return(sublet_1(sc, sc->nil, set_plist_2(sc, symbol, value), sc->inlet_symbol));
   if (is_keyword(symbol))
     symbol = keyword_symbol(symbol);
   if (is_constant_symbol(sc, symbol))
@@ -17964,11 +17973,6 @@ static s7_pointer g_expt(s7_scheme *sc, s7_pointer args)
   if (!s7_is_number(pw))
     return(method_or_bust_with_type(sc, pw, sc->expt_symbol, args, a_number_string, 2));
 
-  /* this provides more than 2 args to expt:
-   *  if (is_not_null(cddr(args))) return(g_expt(sc, list_2(sc, car(args), g_expt(sc, cdr(args)))));
-   * but it's unusual in scheme to process args in reverse order, and the syntax by itself is ambiguous (does (expt 2 2 3) = 256 or 64?)
-   */
-
   if (s7_is_zero(n))
     {
       if (s7_is_zero(pw))
@@ -21992,7 +21996,7 @@ static s7_double modulo_d_7dd(s7_scheme *sc, s7_double x1, s7_double x2)
   c = x1 / x2;
   if ((c > 1e19) || (c < -1e19))
     simple_out_of_range(sc, sc->modulo_symbol,
-			list_3(sc, sc->divide_symbol, wrap_real1(sc, x1), wrap_real2(sc, x2)),
+			set_elist_3(sc, sc->divide_symbol, wrap_real1(sc, x1), wrap_real2(sc, x2)),
 			intermediate_too_large_string);
   return(x1 - x2 * (s7_int)floor(c));
 }
@@ -22055,7 +22059,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  if ((n2 < 0) && (n1 < 0) && (n2 < n1)) return(x);
 	  if (n2 == S7_INT64_MIN)
 	    return(simple_out_of_range(sc, sc->modulo_symbol,
-				       list_3(sc, sc->divide_symbol, x, y),
+				       set_elist_3(sc, sc->divide_symbol, x, y),
 				       intermediate_too_large_string));
 	  /* the problem here is that (modulo 3/2 most-negative-fixnum)
 	   * will segfault with signal SIGFPE, Arithmetic exception, so try to trap it.
@@ -22115,7 +22119,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  }
 #endif
 	  return(simple_out_of_range(sc, sc->modulo_symbol,
-				     list_3(sc, sc->divide_symbol, x, y),
+				     set_elist_3(sc, sc->divide_symbol, x, y),
 				     intermediate_too_large_string));
 	case T_REAL:
 	  b = real(y);
@@ -22164,7 +22168,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    c = a / b;
 	    if (fabs(c) > 1e19)
 	      return(simple_out_of_range(sc, sc->modulo_symbol,
-					 list_3(sc, sc->divide_symbol, x, y),
+					 set_elist_3(sc, sc->divide_symbol, x, y),
 					 intermediate_too_large_string));
 	    return(make_real(sc, a - b * (s7_int)floor(c)));
 
@@ -38340,9 +38344,8 @@ static s7_pointer g_memq_3(s7_scheme *sc, s7_pointer args)
   return(sc->F);
 }
 
-static s7_pointer g_memq_4(s7_scheme *sc, s7_pointer args)
+static s7_pointer memq_4_p_pp(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 {
-  s7_pointer x = cadr(args), obj = car(args);
   while (true)
     {
       LOOP_4(if (obj == car(x)) return(x); x = cdr(x));
@@ -38350,6 +38353,8 @@ static s7_pointer g_memq_4(s7_scheme *sc, s7_pointer args)
     }
   return(sc->F);
 }
+
+static s7_pointer g_memq_4(s7_scheme *sc, s7_pointer args) {return(memq_4_p_pp(sc, car(args), cadr(args)));}
 
 static s7_pointer g_memq_any(s7_scheme *sc, s7_pointer args)
 {
@@ -41752,7 +41757,7 @@ static s7_pointer int_vector_set_p_ppp(s7_scheme *sc, s7_pointer v, s7_pointer i
       if (!is_int_vector(v))
 	return(method_or_bust_ppp(sc, v, sc->int_vector_set_symbol, v, index, val, T_INT_VECTOR, 1));
       if (vector_rank(v) != 1)
-	return(univect_set(sc, list_3(sc, v, index, val), sc->int_vector_set_symbol, T_INT_VECTOR));
+	return(univect_set(sc, set_plist_3(sc, v, index, val), sc->int_vector_set_symbol, T_INT_VECTOR));
       if (is_immutable_vector(v))
 	return(immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->int_vector_set_symbol, v)));
       if (!s7_is_integer(index))
@@ -45021,7 +45026,7 @@ static s7_pointer define_bool_function(s7_scheme *sc, const char *name, s7_funct
 				       void (*marker)(s7_pointer p, s7_int top),
 				       bool simple, s7_function bool_setter)
 {
-  s7_pointer func, sym;
+  s7_pointer func, sym, bfunc;
   func = s7_make_typed_function(sc, name, fnc, 1, optional_args, false, doc, signature);
   sym = make_symbol(sc, name);
   s7_define(sc, sc->nil, sym, func);
@@ -45030,8 +45035,10 @@ static s7_pointer define_bool_function(s7_scheme *sc, const char *name, s7_funct
   c_function_symbol(func) = sym;
   c_function_set_marker(func, marker);
   if (simple) c_function_set_has_simple_elements(func);
-  c_function_set_bool_setter(func, s7_make_function(sc, name, bool_setter, 2, 0, false, NULL));
+  c_function_set_bool_setter(func, bfunc = s7_make_function(sc, name, bool_setter, 2, 0, false, NULL));
   c_function_set_has_bool_setter(func);
+  c_function_set_setter(bfunc, func);
+  set_is_bool_function(bfunc);
   return(sym);
 }
 
@@ -46365,7 +46372,7 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 
     case T_SYMBOL:                             /* (setter symbol let) */
       {
-	s7_pointer sym = car(args), slot;
+	s7_pointer sym = car(args), slot, setter;
 	if (is_keyword(sym))
 	  return(sc->F);
 
@@ -46378,9 +46385,10 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 	    slot = lookup_slot_from(sym, sc->curlet);
 	    set_curlet(sc, old_e);
 	  }
-	if (!is_slot(slot))
-	  return(sc->F);
-	return((slot_has_setter(slot)) ? slot_setter(slot) : sc->F);
+	if ((!is_slot(slot)) || (!slot_has_setter(slot))) return(sc->F);
+	setter = slot_setter(slot);
+       	if (is_bool_function(setter)) return(c_function_setter(setter));
+	return(setter);
       }}
   return(s7_wrong_type_arg_error(sc, "setter", 0, p, "something that might have a setter"));
 }
@@ -46591,7 +46599,7 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
 
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->args = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
-  /* safe lists here are much slower -- the setters are called more often for some reason */
+  /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
   sc->code = func;
   eval(sc, OP_APPLY);
   return(sc->value);
@@ -56797,6 +56805,17 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      if ((opt3_direct(cdr(arg)) == (s7_pointer)string_ref_p_pp) && (is_t_integer(caddr(arg))) && (integer(caddr(arg)) == 0))
 		set_opt3_direct(cdr(arg), string_ref_p_p0);
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)memq_p_pp)
+		{
+		  if (fn_proc(arg) == g_memq_2)
+		    set_opt3_direct(cdr(arg), (s7_pointer)memq_2_p_pp);
+		  else
+		    if ((is_pair(caddr(arg))) && (is_proper_list_3(sc, cadaddr(arg)))) 
+		      set_opt3_direct(cdr(arg), memq_3_p_pp);
+		    else
+		      if (fn_proc(arg) == g_memq_4)
+			set_opt3_direct(cdr(arg), memq_4_p_pp); /* this does not parallel 2 and 3 above (sigh) */
+		}
 	      return(fx_c_ac_direct);
 	    }
 	  return(fx_c_ac);
@@ -70152,21 +70171,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  else set_safe_optimize_op(body, (car(body) == sc->and_symbol) ? OP_TC_AND_A_OR_A_LAA : OP_TC_OR_A_AND_A_LAA);
 		  fx_annotate_arg(sc, cdr(body), args);
 		  fx_annotate_arg(sc, cdr(orx), args);
-#if S7_DEBUGGING
-		  if (len == 4) 
-		    {
-		      fx_annotate_arg(sc, cddr(orx), args);
-		      if ((!has_fx(cddr(orx))) || (!opt2(cddr(orx), OPT2_FX)))
-			{
-			  fprintf(stderr, "%d missed orx fx or opt2 %d %s %s\n", __LINE__, is_fxable(sc, caddr(orx)), display(orx), display(body));
-			  abort();
-			}
-		    }
-		  if ((optimize_op(body) == OP_TC_AND_A_OR_A_A_LA) && (!has_fx(cddr(orx))))
-		    fprintf(stderr, "%d missed orx fx\n", __LINE__);
-#else
 		  if (len == 4) fx_annotate_arg(sc, cddr(orx), args);
-#endif
 		  fx_annotate_args(sc, cdr(tc), args);
 		  /* if ((fx_proc(cdr(tc)) == fx_c_sca) && (fn_proc(cadr(tc)) == g_substring)) -> g_substring_uncopied); */
 		  /*   for that to be safe we need to be sure nothing in the body looks for null-termination (e.g.. string->number) */
@@ -75895,7 +75900,7 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
 	      sc->code = new_value;
 	      return(goto_eval);
 	    }
-	  sc->code = list_3(sc, sc->set_symbol, settee, new_value);
+	  sc->code = set_plist_3(sc, sc->set_symbol, settee, new_value);
 	  push_stack_direct(sc, OP_EVAL_DONE);
 	  eval(sc, OP_SET_UNCHECKED);
 	  continue;
@@ -75944,8 +75949,8 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	  if (!is_symbol(settee))
 	    {
 	      if ((is_pair(sc->value)) || (is_symbol(sc->value)))
-		sc->code = list_3(sc, sc->set_symbol, settee, list_2(sc, sc->quote_symbol, sc->value));
-	      else sc->code = list_3(sc, sc->set_symbol, settee, sc->value);
+		sc->code = set_plist_3(sc, sc->set_symbol, settee, set_plist_2(sc, sc->quote_symbol, sc->value));
+	      else sc->code = set_plist_3(sc, sc->set_symbol, settee, sc->value);
 	      push_stack_direct(sc, OP_EVAL_DONE);
 	      eval(sc, OP_SET_UNCHECKED);
 	      continue;
@@ -78614,12 +78619,12 @@ static bool op_set_with_let_1(s7_scheme *sc)
 	  return(true);
 	}
       sc->value = lookup_checked(sc, e);
-      sc->code = list_3(sc, sc->set_symbol, b, ((is_symbol(x)) || (is_pair(x))) ? set_plist_2(sc, sc->quote_symbol, x) : x);
+      sc->code = set_plist_3(sc, sc->set_symbol, b, ((is_symbol(x)) || (is_pair(x))) ? set_plist_2(sc, sc->quote_symbol, x) : x);
       /* (let* ((x (vector 1 2)) (lt (curlet))) (set! (with-let lt (x 0)) 32) x) here: (set! (x 0) 32) */
       return(false); /* goto SET_WITH_LET */
     }
   sc->code = e;                       /* 'e above, an expression we need to evaluate */
-  sc->args = list_2(sc, b, x);        /* can't reuse sc->args here via set-car! etc */
+  sc->args = set_plist_2(sc, b, x);        /* can't reuse sc->args here via set-car! etc */
   push_stack_direct(sc, OP_SET_WITH_LET_2);
   sc->cur_op = optimize_op(sc->code);
   return(true); /* goto top_no_pop */
@@ -78639,8 +78644,8 @@ static bool op_set_with_let_2(s7_scheme *sc)
       return(true); /* goto START */
     }
   if ((is_symbol(x)) || (is_pair(x)))                 /* (set! (with-let (inlet :v (vector 1 2)) (v 0)) 'a) */
-    sc->code = list_3(sc, sc->set_symbol, b, ((is_symbol(x)) || (is_pair(x))) ? set_plist_2(sc, sc->quote_symbol, x) : x);
-  else sc->code = cons(sc, sc->set_symbol, sc->args); /* (set! (with-let (curlet) (*s7* 'print-length)) 16), x=16 b=(*s7* 'print-length) */
+    sc->code = set_plist_3(sc, sc->set_symbol, b, ((is_symbol(x)) || (is_pair(x))) ? set_plist_2(sc, sc->quote_symbol, x) : x);
+  else sc->code = set_ulist_1(sc, sc->set_symbol, sc->args); /* (set! (with-let (curlet) (*s7* 'print-length)) 16), x=16 b=(*s7* 'print-length) */
   return(false); /* fall into SET_WITH_LET */
 }
 
@@ -87534,7 +87539,6 @@ static void op_safe_c_3p_3_mv(s7_scheme *sc)
   ps1 = stack_protected1(sc);
   if ((is_pair(ps1)) && (car(ps1) == sc->unused)) p2 = cdr(ps1); else p2 = list_1(sc, ps1);
   if ((is_pair(sc->value)) && (car(sc->value) == sc->unused)) p3 = cdr(sc->value); else p3 = list_1(sc, sc->value);
-  /* fprintf(stderr, "p1: %s, p2: %s, p3: %s\n", display(p1), display(p2), display(p3)); */
   unstack(sc);
   for (p = p1; is_pair(cdr(p)); p = cdr(p));
   set_cdr(p, p2);
@@ -94716,7 +94720,7 @@ void s7_repl(s7_scheme *sc)
   /* try to get lib_s7.so from the repl's directory, and set *libc*.
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
-  e = s7_inlet(sc, list_2(sc, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
+  e = s7_inlet(sc, set_plist_2(sc, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
@@ -94848,38 +94852,38 @@ int main(int argc, char **argv)
  * s7test     4522         1873   1831   1812   1809
  * lt         2127         2123   2110   2123   2123
  * tform      3263         2281   2273   2267   2268
+ * tread      2594         2440   2421   2411   2405
  * tmac       2413         3317   3277   2389   2408
- * tread      2594         2440   2421   2411   2408
  * trclo      4070         2715   2561   2455   2455
- * tmat       2677         3065   3042   2523   2528
+ * tmat       2677         3065   3042   2523   2526
  * fbench     2868         2688   2583   2544   2545
  * tcopy      2623         8035   5546   2557   2558
  * tb         3321         2735   2681   2560   2630
- * dup        2927         3805   3788   2639   2638
+ * dup        2927         3805   3788   2639   2637
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2924
+ * tsort      3656         3105   3104   2924   2920
  * tset       3230         3253   3104   3090   3093
  * teq        3594         4068   4045   3576   3577
- * tio        3715         3816   3752   3702   3694
+ * tio        3715         3816   3752   3702   3695
  * tstr       6591         5281   4863   4197   4198
  * tclo       4690         4787   4735   4409   4407
  * tlet       5471         7775   5640   4490   4463
  * tcase      4537         4960   4793   4474   4475
  * tmap       5715         8270   8188   4694   4694
  * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5449  5462 [g_less_xf -> lt_p_pp+lt_b_7pp]
+ * tnum       56.6         6348   6013   5445   5449  5458 [g_less_xf -> lt_p_pp+lt_b_7pp]
  * tgsl       25.2         8485   7802   6389   6389
  * trec       8338         6936          6553   6553
- * tmisc      7588         8960   7699   6972   6942
+ * tmisc      7588         8960   7699   6972   6885
  * tlist      7140         7896          7087   7087
  * tgc        10.2         11.9   11.1   8726   8727
- * thash      35.3         11.8   11.7   9838   9836
+ * thash      35.3         11.8   11.7   9838   9835
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
- * lg        104.9        106.6  105.0  104.5  104.5  similar [fx_c_ac_direct s7_memq from g_memq_4 and others memq_p_pp g_memq_2|3 etc]
- * tbig      596.1        177.4  175.8  167.7  167.7  simialr [hash_table_ref_p_pp g_hash_table_ref_2]
+ * lg        104.9        106.6  105.0  104.5  104.5
+ * tbig      596.1        177.4  175.8  167.7  167.4  similar [hash_table_ref_p_pp g_hash_table_ref_2]
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
@@ -94887,6 +94891,6 @@ int main(int argc, char **argv)
  * more rest arg tests
  * extend gmp to fx/opt?
  * tload?
- * there's no way to make a slot setter (as setter) immutable (t_multiform as bit)
- * still making lists in let-temp init/done and set_with_let
+ * fixup direct stuff above
+ * t718
  */

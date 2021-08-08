@@ -3829,6 +3829,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCOPTION_NO_ALTERNATE_SCREEN);
   nc_int(NCOPTION_NO_FONT_CHANGES);
 
+#if (NC_CURRENT_VERSION < NC_VERSION(2, 3, 5))
   nc_int(CELL_BGDEFAULT_MASK);
   nc_int(CELL_FGDEFAULT_MASK);
   nc_int(CELL_BG_RGB_MASK);
@@ -3842,7 +3843,21 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(CELL_ALPHA_TRANSPARENT);
   nc_int(CELL_ALPHA_BLEND);
   nc_int(CELL_ALPHA_OPAQUE);
+#else
+  nc_int(NC_BGDEFAULT_MASK);
+  nc_int(NC_FGDEFAULT_MASK);
+  nc_int(NC_BG_RGB_MASK);
+  nc_int(NC_FG_RGB_MASK);
+  nc_int(NC_BG_PALETTE);
+  nc_int(NC_FG_PALETTE);
+  nc_int(NC_BG_ALPHA_MASK);
+  nc_int(NC_FG_ALPHA_MASK);
 
+  nc_int(NCALPHA_HIGHCONTRAST);
+  nc_int(NCALPHA_TRANSPARENT);
+  nc_int(NCALPHA_BLEND);
+  nc_int(NCALPHA_OPAQUE);
+#endif
   nc_int(NCPLANE_OPTION_HORALIGNED);
 
   nc_int(NCSTYLE_MASK);
