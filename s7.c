@@ -2453,7 +2453,7 @@ void s7_show_history(s7_scheme *sc);
 #define set_in_rootlet(p)              set_type_bit(T_Slt(p), T_IN_ROOTLET)
 
 #define T_BOOL_FUNCTION                T_ITER_OK
-#define is_bool_function(p)            has_type_bit(T_Pos(p), T_BOOL_FUNCTION)
+#define is_bool_function(p)            has_type_bit(T_Prc(p), T_BOOL_FUNCTION)
 #define set_is_bool_function(p)        set_type_bit(T_Fnc(p), T_BOOL_FUNCTION)
 
 /* it's faster here to use the high_flag bits rather than typeflag bits */
@@ -3198,8 +3198,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define stack_clear_flags(p)           (T_Stk(p))->object.stk.flags = 0
 #define stack_has_pairs(p)             (((T_Stk(p))->object.stk.flags & 1) != 0)
 #define stack_set_has_pairs(p)         (T_Stk(p))->object.stk.flags |= 1
-/* #define stack_has_circles(p)        (((T_Stk(p))->object.stk.flags & 4) != 0) */
-/* #define stack_set_has_circles(p)    (T_Stk(p))->object.stk.flags |= 4 */
 #define stack_has_counters(p)          (((T_Stk(p))->object.stk.flags & 2) != 0)
 #define stack_set_has_counters(p)      (T_Stk(p))->object.stk.flags |= 2
 
@@ -3783,8 +3781,7 @@ static inline s7_pointer wrap_real2(s7_scheme *sc, s7_double x) {real(sc->real_w
 
 /* --------------------------------------------------------------------------------
  * local versions of some standard C library functions
- * timing tests involving these are very hard to interpret
- * local_memset is faster using int64_t than int32_t
+ * timing tests involving these are very hard to interpret, local_memset is faster using int64_t than int32_t
  */
 
 static void local_memset(void *s, uint8_t val, size_t n)
@@ -40838,10 +40835,10 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
 	    return(method_or_bust(sc, init, sc->make_float_vector_symbol, args, T_REAL, 2));
 #if WITH_GMP
 	  if (s7_is_bignum(init))
-	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real1(sc, s7_real(init))), sc->make_float_vector_symbol));
+	    return(g_make_vector_1(sc, list_2(sc, p, wrap_real1(sc, s7_real(init))), sc->make_float_vector_symbol)); /* not plist here or below */
 #endif
 	  if (is_rational(init))
-	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real1(sc, rational_to_double(sc, init))), sc->make_float_vector_symbol));
+	    return(g_make_vector_1(sc, list_2(sc, p, wrap_real1(sc, rational_to_double(sc, init))), sc->make_float_vector_symbol));
 	}
       else init = real_zero;
       if (s7_is_integer(p))
@@ -40987,7 +40984,7 @@ static s7_pointer g_make_byte_vector(s7_scheme *sc, s7_pointer args)
   else init = int_zero;
 
  if (!s7_is_integer(p))
-   return(g_make_vector_1(sc, set_plist_2(sc, p, init), sc->make_byte_vector_symbol));
+   return(g_make_vector_1(sc, list_2(sc, p, init), sc->make_byte_vector_symbol));
 
   p = make_simple_byte_vector(sc, len);
   if ((len > 0) && (is_pair(cdr(args))))
@@ -48968,7 +48965,7 @@ s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a)
  *  (let ((lst (list 0))) (set! (cdr lst) lst) (reverse lst)) -> (#1=(0 . #1#) 0 0 0)
  */
 
-static s7_pointer g_reverse(s7_scheme *sc, s7_pointer args)
+static Vectorized s7_pointer g_reverse(s7_scheme *sc, s7_pointer args)
 {
   #define H_reverse "(reverse lst) returns a list with the elements of lst in reverse order.  reverse \
 also accepts a string or vector argument."
@@ -49090,7 +49087,7 @@ static s7_pointer reverse_in_place(s7_scheme *sc, s7_pointer term, s7_pointer li
   return(result);
 }
 
-static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
+static Vectorized s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
 {
   #define H_reverse_in_place "(reverse! lst) reverses lst in place"
   #define Q_reverse_in_place Q_reverse
@@ -58154,12 +58151,14 @@ static bool i_idp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 
 static s7_int opt_i_7pi_ss(opt_info *o) {return(o->v[3].i_7pi_f(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_int opt_7pi_ss_ivref(opt_info *o) {return(int_vector(slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
+static s7_int opt_7pi_ss_bvref(opt_info *o) {return(byte_vector(slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_int opt_i_7pi_sf(opt_info *o) {return(o->v[3].i_7pi_f(opt_sc(o), slot_value(o->v[1].p), o->v[5].fi(o->v[4].o1)));}
 
 static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
   s7_pointer sig;
   s7_i_7pi_t pfunc;
+  
   pfunc = s7_i_7pi_function(s_func);
   if (!pfunc)
     return_false(sc, car_x);
@@ -58175,8 +58174,12 @@ static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	{
 	  s7_pointer p;
 	  opc->v[1].p = slot;
-	  if ((car(car_x) == sc->int_vector_ref_symbol) &&
+	  if ((s_func == slot_value(global_slot(sc->int_vector_ref_symbol))) && /* ivref etc */
 	      ((!is_int_vector(slot_value(slot))) ||
+	       (vector_rank(slot_value(slot)) > 1)))
+	    return_false(sc, car_x);
+	  if ((s_func == slot_value(global_slot(sc->byte_vector_ref_symbol))) && /* bvref etc */
+	      ((!is_byte_vector(slot_value(slot))) ||
 	       (vector_rank(slot_value(slot)) > 1)))
 	    return_false(sc, car_x);
 	  
@@ -58186,12 +58189,19 @@ static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	    {
 	      opc->v[2].p = p;
 	      opc->v[0].fi = opt_i_7pi_ss;
-	      if ((car(car_x) == sc->int_vector_ref_symbol) &&
+	      if ((s_func == slot_value(global_slot(sc->int_vector_ref_symbol))) &&
 		  (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
 		{
 		  opc->v[0].fi = opt_7pi_ss_ivref;
 		  opc->v[3].i_7pi_f = int_vector_ref_unchecked;
 		}
+	      else
+		if ((s_func == slot_value(global_slot(sc->byte_vector_ref_symbol))) &&
+		    (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
+		  {
+		    opc->v[0].fi = opt_7pi_ss_bvref;
+		    opc->v[3].i_7pi_f = byte_vector_ref_unchecked;
+		  }
 	      return(true);
 	    }
 	  opc->v[4].o1 = sc->opts[sc->pc];
@@ -61627,10 +61637,8 @@ static bool opt_b_7pp_ffo(opt_info *o)
 
 static bool opt_b_cadr_cadr(opt_info *o)
 {
-  s7_pointer p1, p2;
-  p1 = slot_value(o->v[1].p);
+  s7_pointer p1 = slot_value(o->v[1].p), p2 = slot_value(o->v[2].p);
   p1 = ((is_pair(p1)) && (is_pair(cdr(p1)))) ? cadr(p1) : g_cadr(opt_sc(o), set_plist_1(opt_sc(o), p1));
-  p2 = slot_value(o->v[2].p);
   p2 = ((is_pair(p2)) && (is_pair(cdr(p2)))) ? cadr(p2) : g_cadr(opt_sc(o), set_plist_1(opt_sc(o), p2));
   return(o->v[3].b_7pp_f(opt_sc(o), p1, p2));
 }
@@ -64541,8 +64549,7 @@ static s7_pointer opt_cond(opt_info *top)
   int32_t clause, len = top->v[2].i;
   for (clause = 0; clause < len; clause++)
     {
-      opt_info *o1, *o2;
-      o1 = top->v[clause + COND_O1].o1;
+      opt_info *o2, *o1 = top->v[clause + COND_O1].o1;
       o2 = o1->v[4].o1;
       if (o2->v[0].fb(o2))
 	{
@@ -65509,8 +65516,7 @@ static s7_pointer opt_do_very_simple(opt_info *o)
       o1 = o2->v[4].o1;
       if (o2->v[3].p_pip_f == vector_set_unchecked)
 	{
-	  s7_pointer v;
-	  v = slot_value(o2->v[1].p);
+	  s7_pointer v = slot_value(o2->v[1].p);
 	  while (integer(vp) < end)
 	    {
 	      vector_set_unchecked(o2->sc, v, integer(slot_value(o2->v[2].p)), o1->v[0].fp(o1));
@@ -80612,7 +80618,6 @@ static goto_t op_dox(s7_scheme *sc)
 			bodyf(sc);
 			slot_set_value(stepper, make_integer(sc, ++i));
 		      } while ((sc->value = endf(sc, endp)) == sc->F);
-
 		  sc->code = cdr(end);
 		  return(goto_do_end_clauses);
 		}
@@ -87731,11 +87736,10 @@ static bool op_safe_c_ap(s7_scheme *sc)
   if ((has_gx(val)) && (symbol_ctr(caar(val)) == 1))
     {
       val = fx_proc_unchecked(val)(sc, car(val));
-      sc->value = val;
-      sc->temp10 = val;
+      gc_protect_via_stack(sc, val);
       set_car(sc->t2_1, fx_call(sc, code));
       set_car(sc->t2_2, val);
-      sc->temp10 = sc->nil;
+      unstack(sc);
       sc->value = fn_proc(sc->code)(sc, sc->t2_1);
       return(false);
     }
@@ -87753,11 +87757,10 @@ static bool op_safe_c_pa(s7_scheme *sc)
     {
       s7_pointer val;
       val = fx_proc_unchecked(args)(sc, car(args));
-      sc->value = val;
-      sc->temp10 = val;
+      gc_protect_via_stack(sc, val);
       set_car(sc->t2_2, fx_call(sc, cdr(args)));
       set_car(sc->t2_1, val);
-      sc->temp10 = sc->nil;
+      unstack(sc);
       sc->value = fn_proc(sc->code)(sc, sc->t2_1);
       return(false);
     }
@@ -92214,9 +92217,7 @@ char *s7_decode_bt(s7_scheme *sc)
 				    if ((is_pair(p)) &&
 					(has_location(p)))
 				      {
-					uint32_t line, file;
-					line = pair_line_number(p);
-					file = pair_file_number(p);
+					uint32_t line = pair_line_number(p), file = pair_file_number(p);
 					if (line > 0)
 					  fprintf(stdout, " %s(%s[%u])%s", BOLD_TEXT, string_value(sc->file_names[file]), line, UNBOLD_TEXT);
 				      }}}}}}}}
@@ -94840,7 +94841,7 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------
- *             gmp (7-19)  20.9   21.0   21.6   21.7   32k
+ *             gmp (7-19)  20.9   21.0   21.6   21.7
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        527          691    687    477    477
@@ -94857,7 +94858,7 @@ int main(int argc, char **argv)
  * trclo      4070         2715   2561   2455   2455
  * tmat       2677         3065   3042   2523   2526
  * fbench     2868         2688   2583   2544   2545
- * tcopy      2623         8035   5546   2557   2558
+ * tcopy      2623         8035   5546   2557   2558  2535
  * tb         3321         2735   2681   2560   2630
  * dup        2927         3805   3788   2639   2637
  * titer      2727         2865   2842   2679   2679
@@ -94871,7 +94872,7 @@ int main(int argc, char **argv)
  * tcase      4537         4960   4793   4474   4475
  * tmap       5715         8270   8188   4694   4694
  * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5449  5458 [g_less_xf -> lt_p_pp+lt_b_7pp]
+ * tnum       56.6         6348   6013   5445   5458
  * tgsl       25.2         8485   7802   6389   6389
  * trec       8338         6936          6553   6553
  * tmisc      7588         8960   7699   6972   6885
@@ -94883,14 +94884,12 @@ int main(int argc, char **argv)
  * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.5
- * tbig      596.1        177.4  175.8  167.7  167.4  similar [hash_table_ref_p_pp g_hash_table_ref_2]
+ * tbig      596.1        177.4  175.8  167.7  167.6
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form? 32bit mixup?
  * more rest arg tests
  * extend gmp to fx/opt?
- * tload?
- * fixup direct stuff above
- * t718
+ * perhaps a bit for rank==1 and normal?
  */
