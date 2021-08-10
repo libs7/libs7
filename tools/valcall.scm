@@ -40,6 +40,7 @@
 		     ("concordance.scm" . "v-str")
 		     ("tgsl.scm" . "v-gsl")
 		     ("tlist.scm" . "v-list")
+		     ("tload.scm" . "v-load")
 		     ))
 
 (define (last-callg)
@@ -92,6 +93,7 @@
 	 (list "repl" "titer.scm")
 	 (list "repl" "tsort.scm")
 	 (list "repl" "tset.scm")
+	 (liad "repl" "tload.scm")
 	 (list "repl" "teq.scm")
 	 (list "repl" "tio.scm")
 	 (list "repl" "concordance.scm")

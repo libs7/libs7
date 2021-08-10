@@ -79,11 +79,12 @@
   
   (format *stderr* "~S #(4.0 2.0)~%" (eigenvalues (float-vector 3 1 1 3)))
 
-  (define (testla)
-    (do ((i 0 (+ i 1)))
-	((= i 30000))
-      (eigenvalues (float-vector 1 2 4 3))))
-
+  (define testla
+    (let ((fv (float-vector 1 2 4 3)))
+      (lambda ()
+	(do ((i 0 (+ i 1)))
+	    ((= i 30000))
+	  (eigenvalues fv)))))
   (testla)
 
   (define (num-test expr result)

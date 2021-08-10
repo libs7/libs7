@@ -257,6 +257,9 @@
 (format *stderr* "~NC tlist ~NC~%" 20 #\- 20 #\-)
 (system "./repl tlist.scm")
 
+(format *stderr* "~NC tload ~NC~%" 20 #\- 20 #\-)
+(system "./repl tload.scm")
+
 (format *stderr* "~NC tgc ~NC~%" 20 #\- 20 #\-)
 (system "./repl tgc.scm")
 

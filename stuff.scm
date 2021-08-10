@@ -150,9 +150,10 @@
     (if (and (procedure? bp)
 	     (signature bp)
 	     (eq? 'boolean? (car (signature bp))))
-	(if (type e)
-	    e
-	    (error 'bad-type "~S is ~S but should be ~S" e (type-of e) bp))
+	(let ((result (if (= (car (arity bp)) 1)
+			  (type e)
+			  (bp 'the e))))
+	  (if result e (error 'bad-type "~S is ~S but should be ~S" e (type-of e) bp)))
 	(error 'bad-type "~S is not a boolean procedure" bp))))
 
 (define iota
@@ -206,7 +207,6 @@
   (let ((+documentation+ "(cyclic obj) returns #t if the sequence obj contains any cycles"))
     (lambda (obj)
       (pair? (cyclic-sequences obj)))))
-
 
 (define copy-tree
   (let ((+documentation+ "(copy-tree lst) returns a full copy of lst"))

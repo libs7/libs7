@@ -3180,7 +3180,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define vector_offset(p, i)            vdims_offsets(vector_dimension_info(p))[i]
 #define vector_offsets(p)              vdims_offsets(vector_dimension_info(p))
 #define vector_rank(p)                 ((vector_dimension_info(p)) ? vector_ndims(p) : 1)
-#define vector_has_dimensional_info(p) (vector_dimension_info(p))
+#define vector_has_dimension_info(p) (vector_dimension_info(p))
 
 #define subvector_vector(p)            T_Vec(((vector_dimension_info(T_SVec(p))) ? vdims_original(vector_dimension_info(p)) : (p)->object.vector.block->nx.ksym))
 #define subvector_set_vector(p, vect)  (T_SVec(p))->object.vector.block->nx.ksym = T_Vec(vect)
@@ -33891,11 +33891,11 @@ static s7_pointer pair_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
   s7_pointer p = cdr(a), tp, np;
   if (is_null(p)) return(cons(sc, car(a), b));
   tp = list_1(sc, car(a));
-  sc->y = tp;
+  gc_protect_via_stack(sc, tp);
   for (np = tp; is_pair(p); p = cdr(p), np = cdr(np))
     set_cdr(np, list_1(sc, car(p)));
   set_cdr(np, b);
-  sc->y = sc->nil;
+  unstack(sc);
   return(tp);
 }
 
@@ -41044,7 +41044,7 @@ static s7_pointer g_vector_dimension(s7_scheme *sc, s7_pointer args)
   n = s7_integer(np);
   if ((n < 0) || (n >= vector_rank(v)))
     return(s7_out_of_range_error(sc, "vector-dimension", 2, np, "must be between 0 and the vector-rank - 1"));
-  if (vector_has_dimensional_info(v))
+  if (vector_has_dimension_info(v))
     return(make_integer(sc, vector_dimension(v, n)));
   return(make_integer(sc, vector_length(v)));
 }
@@ -45949,14 +45949,14 @@ static s7_pointer closure_arity_to_cons(s7_scheme *sc, s7_pointer x, s7_pointer 
   int32_t len;
 
   if (is_symbol(x_args))                    /* any number of args is ok */
-    return(s7_cons(sc, int_zero, max_arity));
+    return(cons(sc, int_zero, max_arity));
 
   if (closure_arity_unknown(x))
     closure_set_arity(x, s7_list_length(sc, x_args));
   len = closure_arity(x);
   if (len < 0)                               /* dotted list => rest arg, (length '(a b . c)) is -2 */
-    return(s7_cons(sc, make_integer(sc, -len), max_arity));
-  return(s7_cons(sc, make_integer(sc, len), make_integer(sc, len)));
+    return(cons(sc, make_integer(sc, -len), max_arity));
+  return(cons(sc, make_integer(sc, len), make_integer(sc, len)));
 }
 
 static void closure_star_arity_1(s7_scheme *sc, s7_pointer x, s7_pointer args)
@@ -45985,7 +45985,7 @@ static void closure_star_arity_1(s7_scheme *sc, s7_pointer x, s7_pointer args)
 static s7_pointer closure_star_arity_to_cons(s7_scheme *sc, s7_pointer x, s7_pointer x_args)
 {
   closure_star_arity_1(sc, x, x_args);
-  return((closure_arity(x) == -1) ? s7_cons(sc, int_zero, max_arity) : s7_cons(sc, int_zero, make_integer(sc, closure_arity(x))));
+  return((closure_arity(x) == -1) ? cons(sc, int_zero, max_arity) : cons(sc, int_zero, make_integer(sc, closure_arity(x))));
 }
 
 static int32_t closure_arity_to_int(s7_scheme *sc, s7_pointer x)
@@ -46021,11 +46021,11 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
     case T_C_OPT_ARGS_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
     case T_C_FUNCTION:
-      return(s7_cons(sc, make_integer(sc, c_function_required_args(x)), make_integer(sc, c_function_all_args(x))));
+      return(cons(sc, make_integer(sc, c_function_required_args(x)), make_integer(sc, c_function_all_args(x))));
 
     case T_C_ANY_ARGS_FUNCTION:
     case T_C_FUNCTION_STAR:
-      return(s7_cons(sc, int_zero, make_integer(sc, c_function_all_args(x))));
+      return(cons(sc, int_zero, make_integer(sc, c_function_all_args(x))));
 
     case T_MACRO: case T_BACRO: case T_CLOSURE:
       return(closure_arity_to_cons(sc, x, closure_args(x)));
@@ -46034,16 +46034,16 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
       return(closure_star_arity_to_cons(sc, x, closure_args(x)));
 
     case T_C_MACRO:
-      return(s7_cons(sc, make_integer(sc, c_macro_required_args(x)), make_integer(sc, c_macro_all_args(x))));
+      return(cons(sc, make_integer(sc, c_macro_required_args(x)), make_integer(sc, c_macro_all_args(x))));
 
     case T_GOTO: case T_CONTINUATION:
-      return(s7_cons(sc, int_zero, max_arity));
+      return(cons(sc, int_zero, max_arity));
 
     case T_STRING:
       return((string_length(x) == 0) ? sc->F : cons(sc, int_one, int_one));
 
     case T_LET:
-      return(s7_cons(sc, int_one, int_one));
+      return(cons(sc, int_one, int_one));
 
     case T_C_OBJECT:
       check_method(sc, x, sc->arity_symbol, set_plist_1(sc, x));
@@ -46052,19 +46052,19 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
     case T_VECTOR:
       if (vector_length(x) == 0) return(sc->F);
       if (has_simple_elements(x)) return(cons(sc, int_one, make_integer(sc, vector_rank(x))));
-      return(s7_cons(sc, int_one, max_arity));
+      return(cons(sc, int_one, max_arity));
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
       return((vector_length(x) == 0) ? sc->F : cons(sc, int_one, make_integer(sc, vector_rank(x))));
 
     case T_PAIR: case T_HASH_TABLE:
-      return(s7_cons(sc, int_one, max_arity));
+      return(cons(sc, int_one, max_arity));
 
     case T_ITERATOR:
-      return(s7_cons(sc, int_zero, int_zero));
+      return(cons(sc, int_zero, int_zero));
 
     case T_SYNTAX:
-      return(s7_cons(sc, small_int(syntax_min_args(x)), (syntax_max_args(x) == -1) ? max_arity : small_int(syntax_max_args(x))));
+      return(cons(sc, small_int(syntax_min_args(x)), (syntax_max_args(x) == -1) ? max_arity : small_int(syntax_max_args(x))));
     }
   return(sc->F);
 }
@@ -47180,13 +47180,13 @@ static bool vector_rank_match(s7_scheme *sc, s7_pointer x, s7_pointer y)
   s7_int x_dims;
   s7_int j;
 
-  if (vector_has_dimensional_info(x))
+  if (vector_has_dimension_info(x))
     x_dims = vector_ndims(x);
-  else return((!vector_has_dimensional_info(y)) || (vector_ndims(y) == 1));
+  else return((!vector_has_dimension_info(y)) || (vector_ndims(y) == 1));
   if (x_dims == 1)
-    return((!vector_has_dimensional_info(y)) || (vector_ndims(y) == 1));
+    return((!vector_has_dimension_info(y)) || (vector_ndims(y) == 1));
 
-  if ((!vector_has_dimensional_info(y)) ||
+  if ((!vector_has_dimension_info(y)) ||
       (x_dims != vector_ndims(y)))
     return(false);
 
@@ -48965,7 +48965,7 @@ s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a)
  *  (let ((lst (list 0))) (set! (cdr lst) lst) (reverse lst)) -> (#1=(0 . #1#) 0 0 0)
  */
 
-static Vectorized s7_pointer g_reverse(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_reverse(s7_scheme *sc, s7_pointer args)
 {
   #define H_reverse "(reverse lst) returns a list with the elements of lst in reverse order.  reverse \
 also accepts a string or vector argument."
@@ -49087,7 +49087,7 @@ static s7_pointer reverse_in_place(s7_scheme *sc, s7_pointer term, s7_pointer li
   return(result);
 }
 
-static Vectorized s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
 {
   #define H_reverse_in_place "(reverse! lst) reverses lst in place"
   #define Q_reverse_in_place Q_reverse
@@ -91375,7 +91375,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     {
       if (i > 0) in_use += ts[i];
       if (ts[i] > 50)
-	sc->w = cons(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)), make_integer(sc, ts[i])), sc->w);
+	sc->w = cons_unchecked(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)), make_integer(sc, ts[i])), sc->w);
     }
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free"), cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
@@ -91429,7 +91429,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
     loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
     sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
     sc->lambdas->loc + sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"), cons(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"), 
+                               cons_unchecked(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
   }
   /* strings */
   gp = sc->strings;
@@ -94849,21 +94850,22 @@ int main(int argc, char **argv)
  * tshoot     1484          883    872    810    810
  * index      1051         1026   1016    983    983
  * tmock      7748         1177   1165   1098   1097
- * tvect      1951         2456   2413   1756   1756
+ * tvect      1951         2456   2413   1756   1753
  * s7test     4522         1873   1831   1812   1809
  * lt         2127         2123   2110   2123   2123
- * tform      3263         2281   2273   2267   2268
+ * tform      3263         2281   2273   2267   2264
  * tread      2594         2440   2421   2411   2405
  * tmac       2413         3317   3277   2389   2408
  * trclo      4070         2715   2561   2455   2455
  * tmat       2677         3065   3042   2523   2526
  * fbench     2868         2688   2583   2544   2545
- * tcopy      2623         8035   5546   2557   2558  2535
+ * tcopy      2623         8035   5546   2557   2558
  * tb         3321         2735   2681   2560   2630
- * dup        2927         3805   3788   2639   2637
+ * dup        2927         3805   3788   2639   2636
  * titer      2727         2865   2842   2679   2679
  * tsort      3656         3105   3104   2924   2920
- * tset       3230         3253   3104   3090   3093
+ * tset       3230         3253   3104   3090   3084
+ * tload                                        3226
  * teq        3594         4068   4045   3576   3577
  * tio        3715         3816   3752   3702   3695
  * tstr       6591         5281   4863   4197   4198
@@ -94872,24 +94874,22 @@ int main(int argc, char **argv)
  * tcase      4537         4960   4793   4474   4475
  * tmap       5715         8270   8188   4694   4694
  * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5458
- * tgsl       25.2         8485   7802   6389   6389
+ * tnum       56.6         6348   6013   5445   5454
+ * tgsl       25.2         8485   7802   6389   6381
  * trec       8338         6936          6553   6553
- * tmisc      7588         8960   7699   6972   6885
+ * tmisc      7588         8960   7699   6972   6884
  * tlist      7140         7896          7087   7087
  * tgc        10.2         11.9   11.1   8726   8727
- * thash      35.3         11.8   11.7   9838   9835
+ * thash      35.3         11.8   11.7   9838   9834
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.5
- * tbig      596.1        177.4  175.8  167.7  167.6
+ * tbig      596.1        177.4  175.8  167.7  167.4
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form? 32bit mixup?
- * more rest arg tests
  * extend gmp to fx/opt?
- * perhaps a bit for rank==1 and normal?
  */
