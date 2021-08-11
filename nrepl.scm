@@ -20,6 +20,8 @@
 (unless (defined? 'CELL_FGDEFAULT_MASK) (define CELL_FGDEFAULT_MASK NC_FGDEFAULT_MASK))
 (unless (defined? 'CELL_BGDEFAULT_MASK) (define CELL_BGDEFAULT_MASK NC_BGDEFAULT_MASK))
 
+(unless (defined? 'notcurses_getc) (define (notcurses_getc a b c d) (notcurses_get a b d)))
+
 (define (drop-into-repl call e)
   ((*nrepl* 'run) "break>" (object->string call) e))
 
@@ -979,7 +981,7 @@
                       (previously-selected #f)
                       (just-selected #f)
 		      (control-key (ash 1 33))
-                      (meta-key (ash 1 34)))    ; notcurses getc returns 32 bits
+                      (meta-key (ash 1 34)))    ; notcurses get returns 32 bits
 
 		  (set! (top-level-let 'ncp-let) (curlet))
 		  (set! display-debug-info local-debug-info)

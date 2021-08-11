@@ -245,6 +245,3 @@ void dax_init(s7_scheme *sc)
 
 
 (exit)
-
-
-

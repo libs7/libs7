@@ -176,6 +176,17 @@ static s7_pointer g_ncdirect_inputready_fd(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, ncdirect_inputready_fd((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1))));
 }
 
+
+#if (NC_CURRENT_VERSION >= NC_VERSION(2, 3, 12))
+static s7_pointer g_ncdirect_get(s7_scheme *sc, s7_pointer args)
+{
+  /* returns char32_t! */
+  return(s7_make_integer(sc, ncdirect_get((struct ncdirect *)s7_c_pointer_with_type(sc, s7_car(args), ncdirect_symbol, __func__, 1),
+					   (const struct timespec *)s7_c_pointer_with_type(sc, s7_cadr(args), timespec_symbol, __func__, 2), 
+					   (ncinput *)s7_c_pointer_with_type(sc, s7_caddr(args), ncinput_symbol, __func__, 3))));
+				    
+}
+#else
 static s7_pointer g_ncdirect_getc(s7_scheme *sc, s7_pointer args)
 {
   /* returns char32_t! */
@@ -185,6 +196,7 @@ static s7_pointer g_ncdirect_getc(s7_scheme *sc, s7_pointer args)
 					   (ncinput *)s7_c_pointer_with_type(sc, s7_cadddr(args), ncinput_symbol, __func__, 4))));
 				    
 }
+#endif
 
 static s7_pointer g_ncdirect_set_fg_default(s7_scheme *sc, s7_pointer args)
 {
@@ -733,6 +745,14 @@ static s7_pointer g_notcurses_canutf8(s7_scheme *sc, s7_pointer args)
   return(s7_make_boolean(sc, notcurses_canutf8((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
 }
 
+#if (NC_CURRENT_VERSION >= NC_VERSION(2, 3, 12))
+static s7_pointer g_notcurses_get(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_make_integer(sc, notcurses_get((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
+					      (const struct timespec *)s7_c_pointer_with_type(sc, s7_cadr(args), timespec_symbol, __func__, 2), 
+					      (ncinput *)s7_c_pointer_with_type(sc, s7_caddr(args), ncinput_symbol, __func__, 3))));
+}
+#else
 static s7_pointer g_notcurses_getc(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, notcurses_getc((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
@@ -740,6 +760,7 @@ static s7_pointer g_notcurses_getc(s7_scheme *sc, s7_pointer args)
 					      (sigset_t *)s7_c_pointer_with_type(sc, s7_caddr(args), sigset_t_symbol, __func__, 3),
 					      (ncinput *)s7_c_pointer_with_type(sc, s7_cadddr(args), ncinput_symbol, __func__, 4))));
 }
+#endif
 
 static s7_pointer g_notcurses_refresh(s7_scheme *sc, s7_pointer args)
 {
@@ -3545,11 +3566,6 @@ static s7_pointer g_ncvisual_decode(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, ncvisual_decode((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1))));
 }
 
-static s7_pointer g_ncvisual_subtitle(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_string(sc, ncvisual_subtitle((const struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1))));
-}
-
 static s7_pointer g_ncvisual_rotate(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncvisual_rotate((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1), 
@@ -4008,7 +4024,11 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncdirect_palette_size, 1, 0, false);
   nc_func(ncdirect_flush, 1, 0, false);
   nc_func(ncdirect_inputready_fd, 1, 0, false);
+#if (NC_CURRENT_VERSION >= NC_VERSION(2, 3, 12))
+  nc_func(ncdirect_get, 3, 0, false);
+#else
   nc_func(ncdirect_getc, 4, 0, false);
+#endif
   nc_func(ncdirect_dim_x, 1, 0, false);
   nc_func(ncdirect_dim_y, 1, 0, false);
   nc_func(ncdirect_cursor_enable, 1, 0, false);
@@ -4079,7 +4099,11 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_stdplane_const, 1, 0, false);
   nc_func(notcurses_cursor_enable, 3, 0, false);
   nc_func(notcurses_cursor_disable, 1, 0, false);
+#if (NC_CURRENT_VERSION >= NC_VERSION(2, 3, 12))
+  nc_func(notcurses_get, 3, 0, false);
+#else
   nc_func(notcurses_getc, 4, 0, false);
+#endif
   nc_func(notcurses_refresh, 1, 0, false);
   nc_func(notcurses_at_yx, 5, 0, false);
   nc_func(notcurses_lex_margins, 2, 0, false);
@@ -4437,7 +4461,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncvisual_from_plane, 6, 0, false);
   nc_func(ncvisual_destroy, 1, 0, false);
   nc_func(ncvisual_decode, 1, 0, false);
-  nc_func(ncvisual_subtitle, 1, 0, false);
   nc_func(ncvisual_rotate, 2, 0, false);
   nc_func(ncvisual_resize, 3, 0, false);
   nc_func(ncvisual_polyfill_yx, 4, 0, false);
