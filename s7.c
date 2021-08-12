@@ -1167,7 +1167,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer u, v, w, x, y, z;         /* evaluator local vars */
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10, temp_cell_2;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp_cell_2;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1;
 
   Jmp_Buf goto_start;
@@ -6961,7 +6961,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp7);
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
-  gc_mark(sc->temp10);
 
   set_mark(current_input_port(sc));
   mark_input_port_stack(sc);
@@ -69335,8 +69334,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	return(OPT_F);
       if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
 
-      if ((is_safe_procedure(func)) ||
-	  (c_function_call(func) == g_list))          /* (list) is safe, (values) is not (in this context -- possibly used as list-values arg) */
+      if (is_safe_procedure(func))
 	{
 	  set_safe_optimize_op(expr, hop + OP_SAFE_C_NC);
 	  choose_c_function(sc, expr, func, 0);
@@ -87764,7 +87762,7 @@ static bool op_safe_c_ap(s7_scheme *sc)
     }
   check_stack_size(sc);
   sc->args = fx_call(sc, code);
-  push_stack_direct(sc, (opcode_t)opt1_any(code));
+  push_stack_direct(sc, (opcode_t)opt1_any(code)); /* safe_c_sp cases, mv->safe_c_sp_mv */
   sc->code = car(val);
   return(true);
 }
@@ -87792,20 +87790,22 @@ static bool op_safe_c_pa(s7_scheme *sc)
 static void op_safe_c_pa_1(s7_scheme *sc)
 {
   s7_pointer val = sc->value;
-  sc->temp10 = val;
+  gc_protect_via_stack(sc, val); /* not a temp */
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
   set_car(sc->t2_1, val);
-  sc->temp10 = sc->nil;
+  unstack(sc);
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
 
 static void op_safe_c_pa_mv(s7_scheme *sc)
 {
-  s7_pointer val = sc->value; /* this is necessary since the fx_proc below can clobber sc->value */
-  sc->temp10 = val;
+  s7_pointer p, val = copy_proper_list(sc, sc->value); /* this is necessary since the fx_proc below can clobber sc->value */
+  gc_protect_via_stack(sc, val);
+  for (p = val; is_pair(cdr(p)); p = cdr(p)); /* must be more than 1 member of list or it's not mv */
   sc->args = fx_call(sc, cddr(sc->code));
-  sc->args = pair_append(sc, val, list_1(sc, sc->args)); /* not plist here!  pair_append does not copy it */
-  sc->temp10 = sc->nil;
+  cdr(p) = list_1(sc, sc->args); /* do we need to copy sc->args if it is immutable (i.e. plist)? */
+  sc->args = val;
+  unstack(sc);
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
@@ -89523,19 +89523,19 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_C_S_opAAAq: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_S_opAAAq: sc->value = fx_c_s_opaaaq(sc, sc->code); continue;
 
-	case OP_SAFE_C_AA: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_AA: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_AA: sc->value = fx_c_aa(sc, sc->code); continue;
 
-	case OP_SAFE_C_SA: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_SA: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_SA: sc->value = fx_c_sa(sc, sc->code); continue;
 
 	case OP_SAFE_C_AS: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_AS: sc->value = fx_c_as(sc, sc->code); continue;
 
-	case OP_SAFE_C_CA: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_CA: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_CA: sc->value = fx_c_ca(sc, sc->code); continue;
 
-	case OP_SAFE_C_AC: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_AC: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_AC: sc->value = fx_c_ac(sc, sc->code); continue;
 
 	case OP_SAFE_C_AAA: if (!c_function_is_ok(sc, sc->code)) break;
@@ -94090,7 +94090,6 @@ s7_scheme *s7_init(void)
   sc->temp7 = sc->nil;
   sc->temp8 = sc->nil;
   sc->temp9 = sc->nil;
-  sc->temp10 = sc->nil;
   sc->rec_p1 = sc->F;
   sc->rec_p2 = sc->F;
 
@@ -94914,4 +94913,13 @@ int main(int argc, char **argv)
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form? 32bit mixup?
  * extend gmp to fx/opt?
+ *
+ * can closures be treated like built-ins: hop safe if defined at call? or safety=-1? or gx globally if in a loop?
+ *   even if not hop, isn't the lookup ok even if redefined -- unknown* would clear fx (reset it) etc.
+ *   so un-h fx_tree* but if unknown, reset to fx_function and if optimize_op changes reset to unfx: but how to back out?
+ *   or have unsafe_fx*? these would first check car-is-ok, if not call unknown but if it differs, how to go on?
+ *   Also, why can't c_function is not ok call unknown* rather than just giving up completely?
+ *
+ * extend unknown* to op_*c*
+ * ruby 2.7
  */
