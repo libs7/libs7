@@ -1168,7 +1168,7 @@ struct s7_scheme {
 
   s7_pointer u, v, w, x, y, z;         /* evaluator local vars */
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp_cell_2;
-  s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1;
+  s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1, u2_2;
 
   Jmp_Buf goto_start;
   bool longjmp_ok;
@@ -5636,6 +5636,14 @@ static s7_pointer set_ulist_1(s7_scheme *sc, s7_pointer x1, s7_pointer x2)
   return(sc->u1_1);
 }
 
+static s7_pointer set_ulist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_pointer x3)
+{
+  set_car(sc->u2_1, x1);
+  set_car(sc->u2_2, x2);
+  set_cdr(sc->u2_2, x3);
+  return(sc->u2_1);
+}
+
 static int32_t position_of(s7_pointer p, s7_pointer args)
 {
   int32_t i;
@@ -6981,6 +6989,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->qlist_2)); gc_mark(cadr(sc->qlist_2));
   gc_mark(car(sc->qlist_3)); gc_mark(cadr(sc->qlist_3)); gc_mark(caddr(sc->qlist_3));
   gc_mark(car(sc->u1_1));
+  gc_mark(car(sc->u2_1));
 
   gc_mark(sc->rec_p1);
   gc_mark(sc->rec_p2);
@@ -40845,10 +40854,10 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
 	    return(method_or_bust(sc, init, sc->make_float_vector_symbol, args, T_REAL, 2));
 #if WITH_GMP
 	  if (s7_is_bignum(init))
-	    return(g_make_vector_1(sc, list_2(sc, p, wrap_real1(sc, s7_real(init))), sc->make_float_vector_symbol)); /* not plist here or below */
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real1(sc, s7_real(init))), sc->make_float_vector_symbol)); /* not plist here or below */
 #endif
 	  if (is_rational(init))
-	    return(g_make_vector_1(sc, list_2(sc, p, wrap_real1(sc, rational_to_double(sc, init))), sc->make_float_vector_symbol));
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real1(sc, rational_to_double(sc, init))), sc->make_float_vector_symbol));
 	}
       else init = real_zero;
       if (s7_is_integer(p))
@@ -40994,7 +41003,7 @@ static s7_pointer g_make_byte_vector(s7_scheme *sc, s7_pointer args)
   else init = int_zero;
 
  if (!s7_is_integer(p))
-   return(g_make_vector_1(sc, list_2(sc, p, init), sc->make_byte_vector_symbol));
+   return(g_make_vector_1(sc, set_plist_2(sc, p, init), sc->make_byte_vector_symbol));
 
   p = make_simple_byte_vector(sc, len);
   if ((len > 0) && (is_pair(cdr(args))))
@@ -53483,20 +53492,23 @@ static s7_pointer fx_is_symbol_car_t(s7_scheme *sc, s7_pointer arg)
   return(make_boolean(sc, (is_pair(val)) ? is_symbol(car(val)) : is_symbol(g_car(sc, set_plist_1(sc, val)))));
 }
 
-#if WITH_GMP
 static s7_pointer fx_floor_sqrt_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer p;
   p = lookup(sc, opt2_sym(cdr(arg)));
+#if WITH_GMP
   if ((is_t_big_integer(p)) &&
       (mpz_cmp_ui(big_integer(p), 0) >= 0)) /* p >= 0 */
     {
       mpz_sqrt(sc->mpz_1, big_integer(p));
       return(mpz_to_integer(sc, sc->mpz_1));
     }
+#else
+  if (!is_negative_b_7p(sc, p))
+    return(make_integer(sc, (s7_int)floor(sqrt(s7_number_to_real_with_caller(sc, p, "sqrt")))));
+#endif
   return(floor_p_p(sc, sqrt_p_p(sc, p)));
 }
-#endif
 
 
 static s7_pointer fx_is_positive_u(s7_scheme *sc, s7_pointer arg)
@@ -55651,6 +55663,27 @@ static s7_pointer fx_c_ns(s7_scheme *sc, s7_pointer arg)
   return(p);
 }
 
+static s7_pointer fx_list_ns(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer p, args, lst;
+  lst = make_list(sc, integer(opt3_arglen(cdr(arg))), sc->nil);
+  for (args = cdr(arg), p = lst; is_pair(args); args = cdr(args), p = cdr(p))
+    set_car(p, lookup(sc, car(args)));
+  return(lst);
+}
+
+static s7_pointer fx_vector_ns(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer args, vec;
+  s7_int i;
+  s7_pointer *els;
+  vec = make_simple_vector(sc, integer(opt3_arglen(cdr(arg))));
+  els = (s7_pointer *)vector_elements(vec);
+  for (args = cdr(arg), i = 0; is_pair(args); args = cdr(args), i++)
+    els[i] = lookup(sc, car(args));
+  return(vec);
+}
+
 static s7_pointer fx_c_all_ca(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer args, p, lst;
@@ -56359,6 +56392,10 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	  /* fx_c_ss_direct via b_7pp is slower than fx_c_ss + g_<> */
 	  return(fx_c_ss);
 
+        case HOP_SAFE_C_NS:
+	  if (fn_proc(arg) == g_list) return(fx_list_ns);
+	  return((fn_proc(arg) == g_vector) ? fx_vector_ns : fx_c_ns);
+
 	case HOP_SAFE_C_opSq_S:
 	  if ((is_global_and_has_func(car(arg), s7_p_pp_function)) &&
 	      (is_global_and_has_func(caadr(arg), s7_p_p_function)))
@@ -56515,10 +56552,8 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		  if (caadr(arg) == sc->is_symbol_symbol) {set_opt3_sym(arg, cadadr(arg)); return(fx_not_is_symbol_s);}
 		  return(fx_not_opsq);
 		}
-#if WITH_GMP
 	      if ((fx_matches(car(arg), sc->floor_symbol)) && (caadr(arg) == sc->sqrt_symbol))
 		{set_opt2_sym(cdr(arg), cadadr(arg)); return(fx_floor_sqrt_s);}
-#endif
 	    }
 	  if (is_unchanged_global(car(arg)))     /* (? (op arg)) where (op arg) might return a let with a ? method etc */
 	    {                          /*    other possibility: fx_c_a */
@@ -78612,7 +78647,11 @@ static goto_t op_set2(s7_scheme *sc)
       sc->code = car(sc->args);
       return(goto_eval);
     }
+#if 0
   sc->code = cons_unchecked(sc, sc->set_symbol, cons_unchecked(sc, cons(sc, sc->value, sc->args), sc->code)); /* (let ((x 32)) (set! ((curlet) 'x) 3) x) */
+#else
+  sc->code = set_ulist_2(sc, sc->set_symbol, set_ulist_1(sc, sc->value, sc->args), sc->code);
+#endif
   return(set_implicit(sc));
 }
 
@@ -78646,7 +78685,7 @@ static bool op_set_with_let_1(s7_scheme *sc)
       /* (let* ((x (vector 1 2)) (lt (curlet))) (set! (with-let lt (x 0)) 32) x) here: (set! (x 0) 32) */
       return(false); /* goto SET_WITH_LET */
     }
-  sc->code = e;                       /* 'e above, an expression we need to evaluate */
+  sc->code = e;                            /* 'e above, an expression we need to evaluate */
   sc->args = set_plist_2(sc, b, x);        /* can't reuse sc->args here via set-car! etc */
   push_stack_direct(sc, OP_SET_WITH_LET_2);
   sc->cur_op = optimize_op(sc->code);
@@ -82563,7 +82602,7 @@ static goto_t op_read_s(s7_scheme *sc)
   port = lookup(sc, cadr(sc->code));
   if (!is_input_port(port)) /* was also not stdin */
     {
-      sc->value = g_read(sc, list_1(sc, port));
+      sc->value = g_read(sc, set_plist_1(sc, port));
       return(goto_start);
     }
   if (port_is_closed(port))  /* I guess the port_is_closed check is needed because we're going down a level below */
@@ -94039,6 +94078,8 @@ s7_scheme *s7_init(void)
   sc->t3_1 = permanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
   sc->t4_1 = permanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
   sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->u2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->u2_1 = permanent_cons(sc, sc->nil, sc->u2_2, T_PAIR | T_IMMUTABLE);
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
@@ -94869,57 +94910,47 @@ int main(int argc, char **argv)
  * tref        527          691    687    477    477
  * tauto       786          648    642    496    497
  * tshoot     1484          883    872    810    810
- * index      1051         1026   1016    983    983
+ * index      1051         1026   1016    983    984
  * tmock      7748         1177   1165   1098   1097
  * tvect      1951         2456   2413   1756   1753
  * s7test     4522         1873   1831   1812   1809
- * lt         2127         2123   2110   2123   2123
+ * lt         2127         2123   2110   2123   2121
  * tform      3263         2281   2273   2267   2264
- * tread      2594         2440   2421   2411   2405
  * tmac       2413         3317   3277   2389   2408
- * trclo      4070         2715   2561   2455   2455
- * tmat       2677         3065   3042   2523   2526
+ * tread      2594         2440   2421   2411   2418
+ * trclo      4070         2715   2561   2455   2454
+ * tmat       2677         3065   3042   2523   2523
  * fbench     2868         2688   2583   2544   2545
- * tcopy      2623         8035   5546   2557   2558
+ * tcopy      2623         8035   5546   2557   2554
  * tb         3321         2735   2681   2560   2630
- * dup        2927         3805   3788   2639   2638
+ * dup        2927         3805   3788   2639   2634
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2920
+ * tsort      3656         3105   3104   2924   2881
  * tset       3230         3253   3104   3090   3084
- * tload                                 3234   3145
- * teq        3594         4068   4045   3576   3577
- * tio        3715         3816   3752   3702   3695
+ * tload                                 3234   3151
+ * teq        3594         4068   4045   3576   3572
+ * tio        3715         3816   3752   3702   3708
  * tstr       6591         5281   4863   4197   4200
  * tclo       4690         4787   4735   4409   4407
  * tlet       5471         7775   5640   4490   4463
- * tcase      4537         4960   4793   4474   4475
- * tmap       5715         8270   8188   4694   4694
- * tfft      114.8         7820   7729   4798   4798
- * tnum       56.6         6348   6013   5445   5462
- * tgsl       25.2         8485   7802   6389   6381
+ * tcase      4537         4960   4793   4474   4497
+ * tmap       5715         8270   8188   4694   4674
+ * tfft      114.8         7820   7729   4798   4795
+ * tnum       56.6         6348   6013   5445   5454
+ * tgsl       25.2         8485   7802   6389   6397
  * trec       8338         6936          6553   6553
- * tmisc      7588         8960   7699   6972   6884
- * tlist      7140         7896          7087   7084
- * tgc        10.2         11.9   11.1   8726   8727
- * thash      35.3         11.8   11.7   9838   9834
+ * tmisc      7588         8960   7699   6972   6876
+ * tlist      7140         7896          7087   7082
+ * tgc        10.2         11.9   11.1   8726   8728  8695
+ * thash      35.3         11.8   11.7   9838   9830
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.1
+ * calls      60.7         36.7   37.5   37.1   37.2
  * sg                                    56.1   56.1
- * lg        104.9        106.6  105.0  104.5  104.5
+ * lg        104.9        106.6  105.0  104.5  104.4
  * tbig      596.1        177.4  175.8  167.7  167.4
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form? 32bit mixup?
- * extend gmp to fx/opt?
- *
- * can closures be treated like built-ins: hop safe if defined at call? or safety=-1? or gx globally if in a loop?
- *   even if not hop, isn't the lookup ok even if redefined -- unknown* would clear fx (reset it) etc.
- *   so un-h fx_tree* but if unknown, reset to fx_function and if optimize_op changes reset to unfx: but how to back out?
- *   or have unsafe_fx*? these would first check car-is-ok, if not call unknown but if it differs, how to go on?
- *   Also, why can't c_function is not ok call unknown* rather than just giving up completely?
- *
- * extend unknown* to op_*c*
- * ruby 2.7
  */
