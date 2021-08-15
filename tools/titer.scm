@@ -33,7 +33,7 @@
       (do ()
 	  ((or (string? (iterate iter)) (iterator-at-end? iter))))))
   
-  (define (test)
+  (define (itest)
     (for-each
      (lambda (size)
        (format *stderr* "~D: " size)
@@ -95,7 +95,7 @@
 	 ))
      (list 1 10 100 1000 10000 100000 1000000)))
   
-  (test)
+  (itest)
 
   (when (> (*s7* 'profile) 0)
     (show-profile 200))

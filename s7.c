@@ -2368,7 +2368,7 @@ void s7_show_history(s7_scheme *sc);
 #define T_NUMBER_NAME                  T_SAFE_STEPPER
 #define has_number_name(p)             has_type_bit(T_Num(p), T_NUMBER_NAME)
 #define set_has_number_name(p)         set_type_bit(T_Num(p), T_NUMBER_NAME)
-/* marks numbers that have a saved version of their string representation */
+/* marks numbers that have a saved version of their string representation; this only matters in teq.scm, maybe tread.scm */
 
 #define T_MAYBE_SAFE                   T_SAFE_STEPPER
 #define is_maybe_safe(p)               has_type_bit(T_Fnc(p), T_MAYBE_SAFE)
@@ -13945,9 +13945,9 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
     }
 
   /* bignums can't happen here */
-  switch (type(obj))
+  if (is_t_integer(obj))
     {
-    case T_INTEGER:
+      char *p;
       if (width == 0)
 	{
 	  if (has_number_name(obj))
@@ -13957,30 +13957,19 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
 	    }
 	  return(integer_to_string(sc, integer(obj), nlen));
 	}
-      {
-	char *p;
-	p = integer_to_string(sc, integer(obj), &len);
-	if (width > len)
-	  {
-	    insert_spaces(sc, p, width, len);
-	    (*nlen) = width;
-	    return(sc->num_to_str);
-	  }
-	(*nlen) = len;
-	return(p);
-      }
-
-    case T_RATIO:
-      len = catstrs_direct(sc->num_to_str, integer_to_string_no_length(sc, numerator(obj)), "/", pos_int_to_str_direct(sc, denominator(obj)), (const char *)NULL);
+      p = integer_to_string(sc, integer(obj), &len);
       if (width > len)
 	{
-	  insert_spaces(sc, sc->num_to_str, width, len);
+	  insert_spaces(sc, p, width, len);
 	  (*nlen) = width;
+	  return(sc->num_to_str);
 	}
-      else (*nlen) = len;
-      return(sc->num_to_str);
+      (*nlen) = len;
+      return(p);
+    }
 
-    case T_REAL:
+  if (is_t_real(obj))
+    {
       if (width == 0)
 	{
 #if WITH_DTOA
@@ -14006,31 +13995,40 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
       (*nlen) = len;
       floatify(sc->num_to_str, nlen);
       return(sc->num_to_str);
-
-    default:
-      {
-	char *imag;
-	sc->num_to_str[0] = '\0';
- 	real(sc->real_wrapper4) = imag_part(obj);
-	imag = copy_string(number_to_string_base_10(sc, sc->real_wrapper4, 0, precision, float_choice, &len, choice));
-
-	sc->num_to_str[0] = '\0';
- 	real(sc->real_wrapper3) = real_part(obj);
-	number_to_string_base_10(sc, sc->real_wrapper3, 0, precision, float_choice, &len, choice);
-
-	sc->num_to_str[len] = '\0';
-	len = catstrs(sc->num_to_str, sc->num_to_str_size, ((imag[0] == '+') || (imag[0] == '-')) ? "" : "+", imag, "i", (char *)NULL);
-	free(imag);
-
-	if (width > len)  /* (format #f "~20g" 1+i) */
-	  {
-	    insert_spaces(sc, sc->num_to_str, width, len); /* this checks sc->num_to_str_size */
-	    (*nlen) = width;
-	  }
-	else (*nlen) = len;
-      }
-      break;
     }
+
+  if (is_t_complex(obj))
+    {
+      char *imag;
+      sc->num_to_str[0] = '\0';
+      real(sc->real_wrapper4) = imag_part(obj);
+      imag = copy_string(number_to_string_base_10(sc, sc->real_wrapper4, 0, precision, float_choice, &len, choice));
+      
+      sc->num_to_str[0] = '\0';
+      real(sc->real_wrapper3) = real_part(obj);
+      number_to_string_base_10(sc, sc->real_wrapper3, 0, precision, float_choice, &len, choice);
+      
+      sc->num_to_str[len] = '\0';
+      len = catstrs(sc->num_to_str, sc->num_to_str_size, ((imag[0] == '+') || (imag[0] == '-')) ? "" : "+", imag, "i", (char *)NULL);
+      free(imag);
+      
+      if (width > len)  /* (format #f "~20g" 1+i) */
+	{
+	  insert_spaces(sc, sc->num_to_str, width, len); /* this checks sc->num_to_str_size */
+	  (*nlen) = width;
+	}
+      else (*nlen) = len;
+      return(sc->num_to_str);
+    }
+  
+  /* ratio */
+  len = catstrs_direct(sc->num_to_str, integer_to_string_no_length(sc, numerator(obj)), "/", pos_int_to_str_direct(sc, denominator(obj)), (const char *)NULL);
+  if (width > len)
+    {
+      insert_spaces(sc, sc->num_to_str, width, len);
+      (*nlen) = width;
+    }
+  else (*nlen) = len;
   return(sc->num_to_str);
 }
 
@@ -14143,7 +14141,8 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	    if (ipart >= radix)         /* rounding confusion */
 	      ipart = radix - 1;
 	    frac_part -= (ipart / base);
-	    d[i] = (ipart < 10) ? (char)('0' + ipart) : (char)('a' + ipart -  10);
+	    /* d[i] = ((const char *)"0123456789abcdef")[ipart]; */
+	    d[i] = dignum[ipart];
 	  }
 	if (i == 0)
 	  d[i++] = '0';
@@ -37535,13 +37534,15 @@ static s7_pointer g_set_cdr(s7_scheme *sc, s7_pointer args)
   return(cdr(p));
 }
 
-static s7_pointer set_cdr_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+static Inline s7_pointer inline_set_cdr(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   if (!is_mutable_pair(p1))
     simple_wrong_type_argument(sc, sc->set_cdr_symbol, p1, T_PAIR);
   set_cdr(p1, p2);
   return(p2);
 }
+
+static s7_pointer set_cdr_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(inline_set_cdr(sc, p1, p2));}
 
 
 /* -------- caar --------*/
@@ -61644,6 +61645,7 @@ static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o) /* "inline" here rat
 static bool opt_substring_equal_sf(opt_info *o) {return(scheme_strings_are_equal(slot_value(o->v[1].p), opt_p_substring_uncopied_ssf(o->v[10].o1)));}
 
 static s7_pointer opt_p_p_s(opt_info *o);
+static s7_pointer opt_p_p_s_cdr(opt_info *o);
 
 static bool b_pp_sf_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
 {
@@ -61705,8 +61707,7 @@ static bool b_pp_ff_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
       (opc == sc->opts[sc->pc - 3]))
     {
       opt_info *o1 = sc->opts[sc->pc - 2], *o2 = sc->opts[sc->pc - 1];
-      if ((o1->v[0].fp == opt_p_p_s) &&
-	  (o2->v[0].fp == opt_p_p_s))
+      if ((o1->v[0].fp == opt_p_p_s) && (o2->v[0].fp == opt_p_p_s))
 	{
 	  opc->v[1].p = o1->v[1].p;
 	  opc->v[4].p_p_f = o1->v[2].p_p_f;
@@ -62182,6 +62183,7 @@ static s7_pointer opt_p_d_c(opt_info *o)  {return(make_real(opt_sc(o), o->v[2].d
 static s7_pointer opt_p_7d_c(opt_info *o) {return(make_real(opt_sc(o), o->v[2].d_7d_f(opt_sc(o), o->v[1].x)));}
 static s7_pointer opt_p_p_s(opt_info *o)  {return(o->v[2].p_p_f(opt_sc(o), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_s_abs(opt_info *o) {return(abs_p_p(opt_sc(o), slot_value(o->v[1].p)));}
+static s7_pointer opt_p_p_s_cdr(opt_info *o) {s7_pointer p = slot_value(o->v[1].p); return((is_pair(p)) ? cdr(p) : cdr_p_p(opt_sc(o), p));}
 static s7_pointer opt_p_p_s_iterate(opt_info *o) {return(iterate_p_p(opt_sc(o), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_f(opt_info *o)  {return(o->v[2].p_p_f(opt_sc(o), o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f1(opt_info *o) {return(o->v[2].p_p_f(opt_sc(o), o->v[3].p_p_f(opt_sc(o), slot_value(o->v[1].p))));}
@@ -62266,7 +62268,7 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	  opc->v[1].p = opt_simple_symbol(sc, cadr(car_x));
 	  if (!opc->v[1].p)
 	    return_false(sc, car_x);
-	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : ((ppf == iterate_p_p) ? opt_p_p_s_iterate : opt_p_p_s);
+	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : ((ppf == cdr_p_p) ? opt_p_p_s_cdr : ((ppf == iterate_p_p) ? opt_p_p_s_iterate : opt_p_p_s));
 	  return(true);
 	}
       if (!is_pair(cadr(car_x)))
@@ -62645,6 +62647,7 @@ static s7_pointer opt_set_car_pp_ss(opt_info *o) {return(inline_set_car(opt_sc(o
 static s7_pointer opt_p_pp_sf_add(opt_info *o) {return(add_p_pp(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_sub(opt_info *o) {return(subtract_p_pp(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_set_car(opt_info *o) {return(inline_set_car(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
+static s7_pointer opt_p_pp_sf_set_cdr(opt_info *o) {return(inline_set_cdr(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_href(opt_info *o) {return(s7_hash_table_ref(opt_sc(o), slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_fs_vref(opt_info *o) {return(vector_ref_p_pp(opt_sc(o), o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_pp_fs_cons(opt_info *o) {return(cons(opt_sc(o), o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
@@ -62705,8 +62708,8 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	}
       if (cell_optimize(sc, cddr(car_x)))
 	{
-	  opc->v[0].fp = (opc->v[3].p_pp_f == s7_hash_table_ref) ? opt_p_pp_sf_href : ((func == set_car_p_pp) ? opt_p_pp_sf_set_car : 
-			   ((func == add_p_pp) ? opt_p_pp_sf_add : ((func == subtract_p_pp) ? opt_p_pp_sf_sub : opt_p_pp_sf)));
+	  opc->v[0].fp = (func == add_p_pp) ? opt_p_pp_sf_add : ((func == subtract_p_pp) ? opt_p_pp_sf_sub : ((func == set_car_p_pp) ? opt_p_pp_sf_set_car : 
+                          ((func == set_cdr_p_pp) ? opt_p_pp_sf_set_cdr : ((opc->v[3].p_pp_f == s7_hash_table_ref) ? opt_p_pp_sf_href : opt_p_pp_sf))));
 	  opc->v[4].o1 = sc->opts[pstart];
 	  opc->v[5].fp = sc->opts[pstart]->v[0].fp;
 	  return(true);
@@ -63423,7 +63426,7 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	      if (val_slot)
 		{
 		  opc->v[2].p = val_slot;
-		  opc->v[0].fp = opt_p_ppp_sfs;
+		  opc->v[0].fp = opt_p_ppp_sfs; /* hset case goes through the case below */
 		  opc->v[4].o1 = o1;
 		  opc->v[5].fp = o1->v[0].fp;
 		  return(true);
@@ -94906,7 +94909,7 @@ int main(int argc, char **argv)
  *             gmp (7-19)  20.9   21.0   21.6   21.7
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
- * tref        527          691    687    477    477
+ * tref        527          691    687    477    476
  * tauto       786          648    642    496    497
  * tshoot     1484          883    872    810    810
  * index      1051         1026   1016    983    984
@@ -94918,20 +94921,20 @@ int main(int argc, char **argv)
  * tmac       2413         3317   3277   2389   2409
  * tread      2594         2440   2421   2411   2418
  * trclo      4070         2715   2561   2455   2454
- * tmat       2677         3065   3042   2523   2532
+ * tmat       2677         3065   3042   2523   2519
  * fbench     2868         2688   2583   2544   2545
  * tcopy      2623         8035   5546   2557   2554
  * tb         3321         2735   2681   2560   2630
- * dup        2927         3805   3788   2639   2634
+ * dup        2927         3805   3788   2639   2559
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2885
+ * tsort      3656         3105   3104   2924   2884
  * tset       3230         3253   3104   3090   3084
  * tload                                 3234   3149
- * teq        3594         4068   4045   3576   3572
+ * teq        3594         4068   4045   3576   3567
  * tio        3715         3816   3752   3702   3708
  * tstr       6591         5281   4863   4197   4200
  * tclo       4690         4787   4735   4409   4407
- * tlet       5471         7775   5640   4490   4440
+ * tlet       5471         7775   5640   4490   4436
  * tcase      4537         4960   4793   4474   4497
  * tmap       5715         8270   8188   4694   4672
  * tfft      114.8         7820   7729   4798   4795
@@ -94939,18 +94942,17 @@ int main(int argc, char **argv)
  * tgsl       25.2         8485   7802   6389   6397
  * trec       8338         6936          6553   6553
  * tmisc      7588         8960   7699   6972   6876
- * tlist      7140         7896          7087   7050
+ * tlist      7140         7896          7087   7016
  * tgc        10.2         11.9   11.1   8726   8695
- * thash      35.3         11.8   11.7   9838   9817
+ * thash      35.3         11.8   11.7   9838   9821
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
  * calls      60.7         36.7   37.5   37.1   37.2
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.3
- * tbig      596.1        177.4  175.8  167.7  167.4
+ * tbig      596.1        177.4  175.8  167.7  166.5
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form?
- * fx_not_opssq_direct with memq division from fx_c_ac
  */
