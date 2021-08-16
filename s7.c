@@ -4160,7 +4160,11 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_OR_P, OP_OR_P1, OP_OR_AP, OP_OR_2A, OP_OR_3A, OP_OR_N, OP_OR_S_2, OP_OR_S_TYPE_2,
       OP_WHEN_S, OP_WHEN_A, OP_WHEN_P, OP_WHEN_AND_AP, OP_WHEN_AND_2A, OP_WHEN_AND_3A, OP_UNLESS_S, OP_UNLESS_A, OP_UNLESS_P,
 
-      OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A, OP_IF_GT_A,
+      OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A, 
+      OP_IF_GT_A, 
+#if 0
+      OP_IF_B_N_N,
+#endif
       OP_IF_A_A_P, OP_IF_A_P_A, OP_IF_S_P_A, OP_IF_IS_TYPE_S_P_A, OP_IF_IS_TYPE_S_A_A,
       OP_IF_S_P, OP_IF_S_P_P, OP_IF_S_R, OP_IF_S_N, OP_IF_S_N_N,
       OP_IF_opSq_P, OP_IF_opSq_P_P, OP_IF_opSq_R, OP_IF_opSq_N, OP_IF_opSq_N_N,
@@ -4383,7 +4387,11 @@ static const char* op_names[NUM_OPS] =
       "or_p", "or_p1", "or_ap", "or_2a", "or_3a", "or_n", "or_s_2", "or_s_type_2",
       "when_s", "when_a", "when_p", "when_and_ap", "when_and_2a", "when_and_3a", "unless_s", "unless_a", "unless_p",
 
-      "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a", "if_gt_a",
+      "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a", 
+      "if_gt_a", 
+#if 0
+      "if_b_n_n",
+#endif
       "if_a_a_p", "if_a_p_a", "if_s_p_a", "if_is_type_s_p_a", "if_is_type_s_a_a",
       "if_s_p", "if_s_p_p", "if_s_r", "if_s_n", "if_s_n_n",
       "if_opsq_p", "if_opsq_p_p", "if_opsq_r", "if_opsq_n", "if_opsq_n_n",
@@ -39005,6 +39013,9 @@ static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_i
 }
 
 static s7_pointer default_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(vector_element(vec, loc));}
+static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)     {return(make_integer(sc, int_vector(vec, loc)));}
+static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)   {return(make_real(sc, float_vector(vec, loc)));}
+static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)     {return(make_integer(sc, (uint8_t)(byte_vector(bv, loc))));}
 
 static s7_pointer int_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
@@ -39014,17 +39025,11 @@ static s7_pointer int_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s
   return(val);
 }
 
-static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(make_integer(sc, int_vector(vec, loc)));}
-
 static s7_pointer float_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
   float_vector(vec, loc) = real_to_double(sc, val, "float-vector-set!");
   return(val);
 }
-
-static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(make_real(sc, float_vector(vec, loc)));}
-
-static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc) {return(make_integer(sc, (uint8_t)(byte_vector(bv, loc))));}
 
 static s7_pointer byte_vector_setter(s7_scheme *sc, s7_pointer str, s7_int loc, s7_pointer val)
 {
@@ -49522,26 +49527,23 @@ static s7_pointer g_append(s7_scheme *sc, s7_pointer args)
   #define H_append "(append ...) returns its argument sequences appended into one sequence"
   #define Q_append s7_make_circular_signature(sc, 0, 1, sc->T)
 
-  s7_pointer a1;
   if (is_null(args)) return(sc->nil);  /* (append) -> () */
-  a1 = car(args);                      /* first arg determines result type unless all args but last are empty (sigh) */
-  if (is_null(cdr(args))) return(a1);  /* (append <anything>) -> <anything> */
-
-  sc->value = args;                    /* does this protect it? maybe gc_protect_via_stack */
-  args = copy_proper_list(sc, args);   /* copied to protect against possible method below which might change it? */
+  if (is_null(cdr(args))) return(car(args));  /* (append <anything>) -> <anything> */
   sc->value = args;
-  switch (type(a1)) /* from old args -- more GC protection? */
+  args = copy_proper_list(sc, args);  /* copied since other args might invoke methods */
+  sc->value = args;
+  switch (type(car(args)))
     {
     case T_NIL: case T_PAIR: return(g_list_append(sc, args));
     case T_STRING:           return(g_string_append_1(sc, args, sc->append_symbol));
     case T_HASH_TABLE:       return(hash_table_append(sc, args));
     case T_LET:              return(let_append(sc, args));
     case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
-      return(vector_append(sc, args, type(a1), sc->append_symbol));
+      return(vector_append(sc, args, type(car(args)), sc->append_symbol));
     default:
-      check_method(sc, a1, sc->append_symbol, args);
+      check_method(sc, car(args), sc->append_symbol, args);
     }
-  return(wrong_type_argument_with_type(sc, sc->append_symbol, 1, a1, a_sequence_string)); /* (append 1 0) */
+  return(wrong_type_argument_with_type(sc, sc->append_symbol, 1, car(args), a_sequence_string)); /* (append 1 0) */
 }
 
 static s7_pointer append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3) {return(g_append(sc, set_plist_3(sc, p1, p2, p3)));}
@@ -61408,7 +61410,6 @@ static bool opt_b_p_s(opt_info *o)  {return(o->v[2].b_p_f(slot_value(o->v[1].p))
 static bool opt_b_p_f(opt_info *o)  {return(o->v[2].b_p_f(o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_7p_s(opt_info *o) {return(o->v[2].b_7p_f(opt_sc(o), slot_value(o->v[1].p)));}
 static bool opt_b_7p_f(opt_info *o) {return(o->v[2].b_7p_f(opt_sc(o), o->v[4].fp(o->v[3].o1)));}
-
 static bool opt_b_d_s_is_positive(opt_info *o) {return(real(slot_value(o->v[1].p)) > 0.0);}
 static bool opt_b_p_s_is_integer(opt_info *o) {return(s7_is_integer(slot_value(o->v[1].p)));}
 static bool opt_b_p_s_is_pair(opt_info *o) {return(is_pair(slot_value(o->v[1].p)));}
@@ -61645,7 +61646,6 @@ static s7_pointer opt_p_substring_uncopied_ssf(opt_info *o) /* "inline" here rat
 static bool opt_substring_equal_sf(opt_info *o) {return(scheme_strings_are_equal(slot_value(o->v[1].p), opt_p_substring_uncopied_ssf(o->v[10].o1)));}
 
 static s7_pointer opt_p_p_s(opt_info *o);
-static s7_pointer opt_p_p_s_cdr(opt_info *o);
 
 static bool b_pp_sf_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
 {
@@ -76464,6 +76464,18 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		  fx_safe_closure_tree(sc);
 		  if (fx_proc(code) == fx_gt_tu) {set_opt2_pair(form, cdr(test)); pair_set_syntax_op(form, OP_IF_GT_A);}
 		}
+#if 0
+	      if (optimize_op(form) == OP_IF_A_N_N)
+		{
+		  if ((fx_proc(cdar(code)) == fx_num_eq_ss) || (fx_proc(cdar(code)) == fx_lt_ss))
+		    {
+		      set_opt3_any(form, (fx_proc(cdar(code)) == fx_num_eq_ss) ? (s7_pointer)num_eq_b_7pp : (s7_pointer)lt_b_7pp);
+		      pair_set_syntax_op(form, OP_IF_B_N_N);
+		      set_opt1_sym(code, cadr(cadar(code)));
+		      set_opt3_sym(code, caddr(cadar(code)));
+		    }}
+	      /* other case: OP_B_A_P num_eq  fx:22 pp:9! perhaps fx_and_2 et al? fxb* */
+#endif
 	      if (optimize_op(form) == OP_IF_A_P_P)
 		{
 		  if (is_fxable(sc, cadr(code)))
@@ -77394,6 +77406,7 @@ static goto_t op_macroexpand(s7_scheme *sc)
   if ((!is_pair(sc->code)) ||
       (!is_pair(car(sc->code))))
     eval_error(sc, "macroexpand argument is not a macro call: ~A", 44, form);
+
   if (!is_null(cdr(sc->code)))
     eval_error(sc, "macroexpand: too many arguments: ~A", 35, form);
 
@@ -77404,8 +77417,10 @@ static goto_t op_macroexpand(s7_scheme *sc)
       return(goto_eval);
     }
 
-  /* sc->args = copy_proper_list(sc, cdar(sc->code)); */
   sc->args = cdar(sc->code);
+  if (!is_list(sc->args))                                  /* (macroexpand (mac . 7)) */
+    eval_error(sc, "can't macroexpand ~S: the macro's argument list is not a list", 61, car(sc->code));
+
   if (!is_symbol(caar(sc->code)))
     {
       if (!is_any_macro(caar(sc->code)))
@@ -77419,7 +77434,6 @@ static goto_t op_macroexpand(s7_scheme *sc)
 
 static goto_t op_macroexpand_1(s7_scheme *sc)
 {
-  /* sc->args = copy_proper_list(sc, cdar(sc->code)); */
   sc->args = cdar(sc->code);
   sc->code = sc->value;
   return(macroexpand(sc));
@@ -90707,7 +90721,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_NOT_A_A_A: sc->value = (is_false(sc, fx_call(sc, opt1_pair(sc->code)))) ? fx_call(sc, opt2_pair(sc->code)) : fx_call(sc, opt3_pair(sc->code)); continue;
 	case OP_IF_AND2_S_A:  sc->value = fx_if_and2_s_a(sc, sc->code); continue;
 
-	case OP_IF_GT_A: /* tclo -- an experiment, test expr = (> t u) */
+	case OP_IF_GT_A: /* tclo -- an experiment, test expr = (> t u) 4501 -> 4407 */
 	  sc->value = (gt_b_7pp(sc, t_lookup(sc, car(opt2_pair(sc->code)), sc->code), u_lookup(sc, cadr(opt2_pair(sc->code)), sc->code))) ? 
 	                fx_call(sc, opt1_pair(sc->code)) : sc->unspecified;
 	  continue;
@@ -90728,7 +90742,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_A_P_P: if_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
 	case OP_IF_A_N:   if_not_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = sc->unspecified; continue;
 	case OP_IF_A_N_N: if_not_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
-
+#if 0
+	case OP_IF_B_N_N: if (((s7_b_7pp_t)opt3_any(sc->code))(sc, lookup(sc, opt1_sym(cdr(sc->code))), lookup(sc, opt3_sym(cdr(sc->code)))))
+	    {sc->code = opt2_any(sc->code); goto EVAL;} sc->code = opt1_any(sc->code); goto EVAL;
+#endif
 	  #define if_is_type_s_p(sc) if (gen_type_match(sc, lookup(sc, opt2_sym(cdr(sc->code))), opt3_byte(cdr(sc->code))))
 	  #define if_is_not_type_s_p(sc) if (!gen_type_match(sc, lookup(sc, opt2_sym(cdr(sc->code))), opt3_byte(cdr(sc->code))))
 
@@ -91502,8 +91519,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
     for (i = 0; i < gp->loc; i++)
       {
-	s7_pointer v;
-	v = gp->list[i];
+	s7_pointer v = gp->list[i];
 	if (is_float_vector(v))
 	  flen += vector_length(v);
 	else
@@ -91525,8 +91541,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   /* hash-tables */
   for (i = 0, gp = sc->hash_tables; i < gp->loc; i++)
     {
-      s7_pointer v;
-      v = gp->list[i];
+      s7_pointer v = gp->list[i];
       hlen += ((hash_table_mask(v) + 1) * sizeof(hash_entry_t *));
       hlen += (hash_table_entries(v) * sizeof(hash_entry_t));
     }
@@ -91536,15 +91551,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
   gp = sc->input_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
     {
-      s7_pointer v;
-      v = gp->list[i];
+      s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
   gp = sc->input_string_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
     {
-      s7_pointer v;
-      v = gp->list[i];
+      s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "input-ports"),
@@ -91552,8 +91565,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   gp = sc->output_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
     {
-      s7_pointer v;
-      v = gp->list[i];
+      s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "output-ports"),
@@ -94955,4 +94967,5 @@ int main(int argc, char **argv)
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form?
+ * 76477: some way to swap fx/b* or fx_b*?
  */
