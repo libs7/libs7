@@ -4161,10 +4161,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_WHEN_S, OP_WHEN_A, OP_WHEN_P, OP_WHEN_AND_AP, OP_WHEN_AND_2A, OP_WHEN_AND_3A, OP_UNLESS_S, OP_UNLESS_A, OP_UNLESS_P,
 
       OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A, 
-      OP_IF_GT_A, 
-#if 0
-      OP_IF_B_N_N,
-#endif
+      OP_IF_B_A, OP_IF_B_R, OP_IF_B_A_P, OP_IF_B_P_A, OP_IF_B_P_P, OP_IF_B_N_N,
       OP_IF_A_A_P, OP_IF_A_P_A, OP_IF_S_P_A, OP_IF_IS_TYPE_S_P_A, OP_IF_IS_TYPE_S_A_A,
       OP_IF_S_P, OP_IF_S_P_P, OP_IF_S_R, OP_IF_S_N, OP_IF_S_N_N,
       OP_IF_opSq_P, OP_IF_opSq_P_P, OP_IF_opSq_R, OP_IF_opSq_N, OP_IF_opSq_N_N,
@@ -4388,10 +4385,7 @@ static const char* op_names[NUM_OPS] =
       "when_s", "when_a", "when_p", "when_and_ap", "when_and_2a", "when_and_3a", "unless_s", "unless_a", "unless_p",
 
       "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a", 
-      "if_gt_a", 
-#if 0
-      "if_b_n_n",
-#endif
+      "if_b_a","if_b_r",  "if_b_a_p", "if_b_p_a", "if_b_p_p", "if_b_n_n",
       "if_a_a_p", "if_a_p_a", "if_s_p_a", "if_is_type_s_p_a", "if_is_type_s_a_a",
       "if_s_p", "if_s_p_p", "if_s_r", "if_s_n", "if_s_n_n",
       "if_opsq_p", "if_opsq_p_p", "if_opsq_r", "if_opsq_n", "if_opsq_n_n",
@@ -66745,6 +66739,53 @@ static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
 }
 
 
+/* ---------------- bool funcs (an experiment) ---------------- */
+typedef bool (*s7_bfunc)(s7_scheme *sc, s7_pointer expr);
+
+static bool fb_lt_ss(s7_scheme *sc, s7_pointer expr) 
+{
+  s7_pointer x, y;
+  x = lookup(sc, cadr(expr));
+  y = lookup(sc, opt2_sym(cdr(expr)));
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) < integer(y)) : lt_b_7pp(sc, x, y));
+}
+
+static bool fb_num_eq_ss(s7_scheme *sc, s7_pointer expr) 
+{
+  s7_pointer x, y;
+  x = lookup(sc, cadr(expr));
+  y = lookup(sc, opt2_sym(cdr(expr)));
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) == integer(y)) : num_eq_b_7pp(sc, x, y));
+}
+
+static bool fb_gt_tu(s7_scheme *sc, s7_pointer expr)
+{
+  s7_pointer x, y;
+  x = t_lookup(sc, cadr(expr), expr);
+  y = u_lookup(sc, opt2_sym(cdr(expr)), expr);
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) > integer(y)) : gt_b_7pp(sc, x, y));
+}
+
+static bool fb_gt_ss(s7_scheme *sc, s7_pointer expr)
+{
+  s7_pointer x, y;
+  x = s_lookup(sc, cadr(expr), expr);
+  y = s_lookup(sc, opt2_sym(cdr(expr)), expr);
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) > integer(y)) : gt_b_7pp(sc, x, y));
+}
+
+static s7_pointer fx_to_b(s7_scheme *sc, s7_function fx) /* eventually parallel arrays? */
+{
+  if (fx == fx_num_eq_ss) return((s7_pointer)fb_num_eq_ss);
+  if (fx == fx_lt_ss) return((s7_pointer)fb_lt_ss);
+  if (fx == fx_gt_ss) return((s7_pointer)fb_gt_ss);
+  if (fx == fx_gt_tu) return((s7_pointer)fb_gt_tu);
+  return(NULL);
+}
+
+/* when/unless_b cond? do end-test? */
+
+
 /* ---------------------------------------- for-each ---------------------------------------- */
 
 static Inline s7_pointer make_counter(s7_scheme *sc, s7_pointer iter)
@@ -76456,26 +76497,37 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	      else set_fx_direct(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
 
 	      if ((optimize_op(form) == OP_IF_A_P) &&
-		  (is_fxable(sc, cadr(code))))
+		  (is_fxable(sc, cadr(code)))) /* TODO: surely this is not needed! */
 		{
+		  s7_pointer bfunc;
 		  pair_set_syntax_op(form, OP_IF_A_A);
 		  fx_annotate_arg(sc, cdr(code), sc->curlet);
 		  set_opt1_pair(form, cdr(code));
 		  fx_safe_closure_tree(sc);
-		  if (fx_proc(code) == fx_gt_tu) {set_opt2_pair(form, cdr(test)); pair_set_syntax_op(form, OP_IF_GT_A);}
-		}
-#if 0
+		  bfunc = fx_to_b(sc, fx_proc(code));
+		  if (bfunc)
+		    {
+		      set_opt3_any(code, bfunc);
+		      pair_set_syntax_op(form, OP_IF_B_A);
+		    }}
+	      if (optimize_op(form) == OP_IF_A_R)
+		{
+		  s7_pointer bfunc;
+		  bfunc = fx_to_b(sc, fx_proc(code));
+		  if (bfunc)
+		    {
+		      set_opt3_any(code, bfunc);
+		      pair_set_syntax_op(form, OP_IF_B_R);
+		    }}
 	      if (optimize_op(form) == OP_IF_A_N_N)
 		{
-		  if ((fx_proc(cdar(code)) == fx_num_eq_ss) || (fx_proc(cdar(code)) == fx_lt_ss))
+		  s7_pointer bfunc;
+		  bfunc = fx_to_b(sc, fx_proc(cdar(code))); /* cdar because (not ...) */
+		  if (bfunc)
 		    {
-		      set_opt3_any(form, (fx_proc(cdar(code)) == fx_num_eq_ss) ? (s7_pointer)num_eq_b_7pp : (s7_pointer)lt_b_7pp);
+		      set_opt3_any(code, bfunc);
 		      pair_set_syntax_op(form, OP_IF_B_N_N);
-		      set_opt1_sym(code, cadr(cadar(code)));
-		      set_opt3_sym(code, caddr(cadar(code)));
 		    }}
-	      /* other case: OP_B_A_P num_eq  fx:22 pp:9! perhaps fx_and_2 et al? fxb* */
-#endif
 	      if (optimize_op(form) == OP_IF_A_P_P)
 		{
 		  if (is_fxable(sc, cadr(code)))
@@ -76486,18 +76538,42 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			  pair_set_syntax_op(form, OP_IF_A_A_A);
 			  set_opt2_pair(form, cddr(code));
 			}
-		      else pair_set_syntax_op(form, OP_IF_A_A_P);
+		      else 
+			{
+			  s7_pointer bfunc;
+			  pair_set_syntax_op(form, OP_IF_A_A_P);
+			  bfunc = fx_to_b(sc, fx_proc(code));
+			  if (bfunc)
+			    {
+			      set_opt3_any(code, bfunc);
+			      pair_set_syntax_op(form, OP_IF_B_A_P);
+			    }}
 		      fx_annotate_args(sc, cdr(code), sc->curlet);
 		      fx_safe_closure_tree(sc);
 		    }
 		  else
 		    if (is_fxable(sc, caddr(code)))
 		      {
+			s7_pointer bfunc;
 			pair_set_syntax_op(form, OP_IF_A_P_A);
 			fx_annotate_args(sc, cdr(code), sc->curlet);
 			set_opt2_pair(form, cddr(code));
 			fx_safe_closure_tree(sc);
-		      }}}
+			bfunc = fx_to_b(sc, fx_proc(code));
+			if (bfunc)
+			  {
+			    set_opt3_any(code, bfunc);
+			    pair_set_syntax_op(form, OP_IF_B_P_A);
+			  }}
+		    else
+		      {
+			s7_pointer bfunc;
+			bfunc = fx_to_b(sc, fx_proc(code));
+			if (bfunc)
+			  {
+			    set_opt3_any(code, bfunc);
+			    pair_set_syntax_op(form, OP_IF_B_P_P);
+			  }}}}
 	  else
 	    {
 	      pair_set_syntax_op(form, choose_if_optc(IF_P, one_branch, reversed, not_case));
@@ -90721,10 +90797,14 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_NOT_A_A_A: sc->value = (is_false(sc, fx_call(sc, opt1_pair(sc->code)))) ? fx_call(sc, opt2_pair(sc->code)) : fx_call(sc, opt3_pair(sc->code)); continue;
 	case OP_IF_AND2_S_A:  sc->value = fx_if_and2_s_a(sc, sc->code); continue;
 
-	case OP_IF_GT_A: /* tclo -- an experiment, test expr = (> t u) 4501 -> 4407 */
-	  sc->value = (gt_b_7pp(sc, t_lookup(sc, car(opt2_pair(sc->code)), sc->code), u_lookup(sc, cadr(opt2_pair(sc->code)), sc->code))) ? 
-	                fx_call(sc, opt1_pair(sc->code)) : sc->unspecified;
-	  continue;
+	case OP_IF_B_A:
+	  sc->value = (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) ? fx_call(sc, opt1_pair(sc->code)) : sc->unspecified; continue;
+	case OP_IF_B_A_P:
+	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->value = fx_call(sc, opt1_pair(sc->code)); continue;} sc->code = opt2_any(sc->code); goto EVAL;
+	case OP_IF_B_P_A:
+	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = fx_call(sc, opt2_pair(sc->code)); continue;
+	case OP_IF_B_P_P:
+	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
 
 	  #define if_s_p(sc) if (is_true(sc, lookup(sc, cadr(sc->code))))
 	  #define if_not_s_p(sc) if (is_false(sc, lookup(sc, opt1_sym(cdr(sc->code))))) /* cadadr(sc->code) */
@@ -90742,10 +90822,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_A_P_P: if_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
 	case OP_IF_A_N:   if_not_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = sc->unspecified; continue;
 	case OP_IF_A_N_N: if_not_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
-#if 0
-	case OP_IF_B_N_N: if (((s7_b_7pp_t)opt3_any(sc->code))(sc, lookup(sc, opt1_sym(cdr(sc->code))), lookup(sc, opt3_sym(cdr(sc->code)))))
-	    {sc->code = opt2_any(sc->code); goto EVAL;} sc->code = opt1_any(sc->code); goto EVAL;
-#endif
+
+	case OP_IF_B_R:
+	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->value = sc->unspecified; continue;} sc->code = opt1_any(sc->code); goto EVAL;
+	case OP_IF_B_N_N: 
+	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, car(opt3_pair(sc->code)))) {sc->code = opt2_any(sc->code); goto EVAL;} sc->code = opt1_any(sc->code); goto EVAL;
+
 	  #define if_is_type_s_p(sc) if (gen_type_match(sc, lookup(sc, opt2_sym(cdr(sc->code))), opt3_byte(cdr(sc->code))))
 	  #define if_is_not_type_s_p(sc) if (!gen_type_match(sc, lookup(sc, opt2_sym(cdr(sc->code))), opt3_byte(cdr(sc->code))))
 
@@ -94531,7 +94613,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 938) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -94922,44 +95004,44 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        527          691    687    477    476
- * tauto       786          648    642    496    497
+ * tauto       786          648    642    496    496
  * tshoot     1484          883    872    810    810
  * index      1051         1026   1016    983    984
  * tmock      7748         1177   1165   1098   1097
  * tvect      1951         2456   2413   1756   1741
- * s7test     4522         1873   1831   1812   1809
- * lt         2127         2123   2110   2123   2121
- * tform      3263         2281   2273   2267   2259
+ * s7test     4522         1873   1831   1812   1806
+ * lt         2127         2123   2110   2123   2120
+ * tform      3263         2281   2273   2267   2263
  * tmac       2413         3317   3277   2389   2409
- * tread      2594         2440   2421   2411   2418
+ * tread      2594         2440   2421   2411   2415
  * trclo      4070         2715   2561   2455   2454
- * tmat       2677         3065   3042   2523   2519
- * fbench     2868         2688   2583   2544   2545
+ * tmat       2677         3065   3042   2523   2517
+ * fbench     2868         2688   2583   2544   2543
+ * dup        2927         3805   3788   2639   2553
  * tcopy      2623         8035   5546   2557   2554
- * tb         3321         2735   2681   2560   2630
- * dup        2927         3805   3788   2639   2559
+ * tb         3321         2735   2681   2560   2629
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2884
+ * tsort      3656         3105   3104   2924   2881
  * tset       3230         3253   3104   3090   3084
  * tload                                 3234   3149
  * teq        3594         4068   4045   3576   3567
  * tio        3715         3816   3752   3702   3708
- * tstr       6591         5281   4863   4197   4200
- * tclo       4690         4787   4735   4409   4407
- * tlet       5471         7775   5640   4490   4436
+ * tstr       6591         5281   4863   4197   4202  [fx_num_eq_vs -> fb_num_eq_ss?]
+ * tclo       4690         4787   4735   4409   4411
+ * tlet       5471         7775   5640   4490   4433
  * tcase      4537         4960   4793   4474   4497
  * tmap       5715         8270   8188   4694   4672
  * tfft      114.8         7820   7729   4798   4795
- * tnum       56.6         6348   6013   5445   5447
+ * tnum       56.6         6348   6013   5445   5452
  * tgsl       25.2         8485   7802   6389   6397
  * trec       8338         6936          6553   6553
  * tmisc      7588         8960   7699   6972   6876
  * tlist      7140         7896          7087   7016
- * tgc        10.2         11.9   11.1   8726   8695
+ * tgc        10.2         11.9   11.1   8726   8693
  * thash      35.3         11.8   11.7   9838   9821
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.2
+ * calls      60.7         36.7   37.5   37.1   37.2 [perhaps fx_num_eq_to?]
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.3
  * tbig      596.1        177.4  175.8  167.7  166.5
@@ -94967,5 +95049,6 @@ int main(int argc, char **argv)
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form?
- * 76477: some way to swap fx/b* or fx_b*?
+ * macro for "B", func for the op set+bfunc -- bool_opt cases?
+ *   in the vs case, can we see the bfunc and update it?  need yet another bit?
  */
