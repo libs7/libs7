@@ -4161,7 +4161,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_WHEN_S, OP_WHEN_A, OP_WHEN_P, OP_WHEN_AND_AP, OP_WHEN_AND_2A, OP_WHEN_AND_3A, OP_UNLESS_S, OP_UNLESS_A, OP_UNLESS_P,
 
       OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A, 
-      OP_IF_B_A, OP_IF_B_R, OP_IF_B_A_P, OP_IF_B_P_A, OP_IF_B_P_P, OP_IF_B_N_N,
+      OP_IF_B_A, OP_IF_B_P, OP_IF_B_R, OP_IF_B_A_P, OP_IF_B_P_A, OP_IF_B_P_P, OP_IF_B_N_N,
       OP_IF_A_A_P, OP_IF_A_P_A, OP_IF_S_P_A, OP_IF_IS_TYPE_S_P_A, OP_IF_IS_TYPE_S_A_A,
       OP_IF_S_P, OP_IF_S_P_P, OP_IF_S_R, OP_IF_S_N, OP_IF_S_N_N,
       OP_IF_opSq_P, OP_IF_opSq_P_P, OP_IF_opSq_R, OP_IF_opSq_N, OP_IF_opSq_N_N,
@@ -4385,7 +4385,7 @@ static const char* op_names[NUM_OPS] =
       "when_s", "when_a", "when_p", "when_and_ap", "when_and_2a", "when_and_3a", "unless_s", "unless_a", "unless_p",
 
       "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a", 
-      "if_b_a","if_b_r",  "if_b_a_p", "if_b_p_a", "if_b_p_p", "if_b_n_n",
+      "if_b_a", "if_b_p", "if_b_r",  "if_b_a_p", "if_b_p_a", "if_b_p_p", "if_b_n_n",
       "if_a_a_p", "if_a_p_a", "if_s_p_a", "if_is_type_s_p_a", "if_is_type_s_a_a",
       "if_s_p", "if_s_p_p", "if_s_r", "if_s_n", "if_s_n_n",
       "if_opsq_p", "if_opsq_p_p", "if_opsq_r", "if_opsq_n", "if_opsq_n_n",
@@ -16101,12 +16101,12 @@ static s7_pointer rationalize_p_i(s7_scheme *sc, s7_int x) {return(make_integer(
 static s7_pointer rationalize_p_d(s7_scheme *sc, s7_double x)
 {
   if ((is_NaN(x)) || (is_inf(x)))
-    return(out_of_range(sc, sc->rationalize_symbol, int_one, make_real(sc, x), a_normal_real_string));
+    return(out_of_range(sc, sc->rationalize_symbol, int_one, wrap_real1(sc, x), a_normal_real_string)); /* was make_real, also below */
   if (fabs(x) > RATIONALIZE_LIMIT)
 #if WITH_GMP
     return(big_rationalize(sc, set_plist_1(sc, wrap_real1(sc, x))));
 #else
-    return(out_of_range(sc, sc->rationalize_symbol, int_one, make_real(sc, x), its_too_large_string));
+    return(out_of_range(sc, sc->rationalize_symbol, int_one, wrap_real1(sc, x), its_too_large_string));
 #endif
   return(s7_rationalize(sc, x, sc->default_rationalize_error));
 }
@@ -39644,7 +39644,7 @@ static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_i
   if (rank != indices)
     {
       va_end(ap);
-      s7_wrong_number_of_args_error(sc, "s7_vector_ref_n: wrong number of indices: ~A", make_integer(sc, indices));
+      s7_wrong_number_of_args_error(sc, "s7_vector_ref_n: wrong number of indices: ~A", wrap_integer1(sc, indices));
     }
   if (rank == 1)
     index = va_arg(ap, s7_int);
@@ -39660,7 +39660,7 @@ static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_i
 	      (ind >= dimensions[i]))
 	    {
 	      va_end(ap);
-	      out_of_range(sc, sc->vector_ref_symbol, make_integer(sc, i), wrap_integer1(sc, ind), (ind < 0) ? its_negative_string : its_too_large_string);
+	      out_of_range(sc, sc->vector_ref_symbol, wrap_integer1(sc, i), wrap_integer1(sc, ind), (ind < 0) ? its_negative_string : its_too_large_string);
 	      return(-1);
 	    }
 	  index += (ind * offsets[i]);
@@ -41023,7 +41023,7 @@ static s7_pointer make_byte_vector_p_ii(s7_scheme *sc, s7_int len, s7_int init)
   if ((len < 0) || (len > sc->max_vector_length))
     return(out_of_range(sc, sc->make_byte_vector_symbol, int_one, wrap_integer1(sc, len), (len < 0) ? its_negative_string : its_too_large_string));
   if ((init < 0) || (init > 255))
-    return(simple_wrong_type_argument_with_type(sc, sc->make_byte_vector_symbol, make_integer(sc, init), an_unsigned_byte_string));
+    return(simple_wrong_type_argument_with_type(sc, sc->make_byte_vector_symbol, wrap_integer1(sc, init), an_unsigned_byte_string));
   p = make_simple_byte_vector(sc, len);
   if (len > 0)
     local_memset((void *)(byte_vector_bytes(p)), init, len);
@@ -43779,7 +43779,7 @@ s7_pointer s7_make_hash_table(s7_scheme *sc, s7_int size)
   hash_table_elements(table) = (hash_entry_t **)(block_data(els));
   if (!hash_table_elements(table))
     s7_error(sc, make_symbol(sc, "memory-error"),
-	     set_elist_2(sc, wrap_string(sc, "hash-table not allocated! size: ~D bytes", 40), make_integer(sc, size * sizeof(hash_entry_t *))));
+	     set_elist_2(sc, wrap_string(sc, "hash-table not allocated! size: ~D bytes", 40), wrap_integer1(sc, size * sizeof(hash_entry_t *))));
   hash_table_checker(table) = hash_empty;
   hash_table_mapper(table) = default_hash_map;
   hash_table_entries(table) = 0;
@@ -51880,7 +51880,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 				   set_plist_3(sc,
 					       s7_make_string_wrapper(sc, call_name),
 					       s7_make_string_wrapper(sc, sc->s7_call_file),
-					       make_integer(sc, sc->s7_call_line)),
+					       wrap_integer1(sc, sc->s7_call_line)),
 				   false, 13);
 		}}
 	  s7_newline(sc, sc->error_port);
@@ -66774,16 +66774,35 @@ static bool fb_gt_ss(s7_scheme *sc, s7_pointer expr)
   return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) > integer(y)) : gt_b_7pp(sc, x, y));
 }
 
-static s7_pointer fx_to_b(s7_scheme *sc, s7_function fx) /* eventually parallel arrays? */
+static bool fb_geq_ss(s7_scheme *sc, s7_pointer expr)
+{
+  s7_pointer x, y;
+  x = s_lookup(sc, cadr(expr), expr);
+  y = s_lookup(sc, opt2_sym(cdr(expr)), expr);
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) >= integer(y)) : geq_b_7pp(sc, x, y));
+}
+
+static bool fb_leq_ss(s7_scheme *sc, s7_pointer expr)
+{
+  s7_pointer x, y;
+  x = s_lookup(sc, cadr(expr), expr);
+  y = s_lookup(sc, opt2_sym(cdr(expr)), expr);
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) <= integer(y)) : leq_b_7pp(sc, x, y));
+}
+
+static s7_pointer fx_to_fb(s7_scheme *sc, s7_function fx) /* eventually parallel arrays? */
 {
   if (fx == fx_num_eq_ss) return((s7_pointer)fb_num_eq_ss);
   if (fx == fx_lt_ss) return((s7_pointer)fb_lt_ss);
   if (fx == fx_gt_ss) return((s7_pointer)fb_gt_ss);
+  if (fx == fx_leq_ss) return((s7_pointer)fb_leq_ss);
+  if (fx == fx_geq_ss) return((s7_pointer)fb_geq_ss);
   if (fx == fx_gt_tu) return((s7_pointer)fb_gt_tu);
   return(NULL);
 }
 
 /* when/unless_b cond? do end-test? */
+/* num_eq_vs|us */
 
 
 /* ---------------------------------------- for-each ---------------------------------------- */
@@ -67369,7 +67388,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
       if ((c_function_required_args(f) > len) ||
 	  (c_function_all_args(f) < len))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
+			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, wrap_integer1(sc, len), wrap_integer2(sc, len))));
 
     case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
@@ -67471,7 +67490,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	if (((fargs >= 0) && (fargs < len)) ||
 	    ((is_closure(f)) && (abs(fargs) > len)))
 	  return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			  set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
+			  set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, wrap_integer1(sc, len), wrap_integer2(sc, len))));
 	if (got_nil) return(sc->nil);
       }
       break;
@@ -67482,7 +67501,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
       if ((!is_pair(f)) &&
 	  (!s7_is_aritable(sc, f, len)))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, make_integer(sc, len), make_integer(sc, len))));
+			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, wrap_integer1(sc, len), wrap_integer2(sc, len))));
       if (got_nil) return(sc->nil);
       break;
     }
@@ -70558,8 +70577,10 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		      for (v = letv; is_pair(v); v = cdr(v))
 			fx_annotate_arg(sc, cdar(v), args);
 		      fx_tree(sc, cdar(letv), car(args), cadr(args), NULL, true); /* first var of let* */
+#if 0
 		      if ((is_pair(cdr(letv))) && (!s7_tree_memq(sc, caar(letv), cdadr(letv))))
 			fx_tree(sc, cdadr(letv), car(args), cadr(args), NULL, true); /* second var of let* */
+#endif
 		      fx_tree(sc, cdr(body), car(args), cadr(args), NULL, true);  /* these are references to the outer let */
 		      fx_tree(sc, cdr(laa), caar(letv), (is_pair(cdr(letv))) ? caadr(letv) : NULL, NULL, true);
 		      fx_tree(sc, cdr(letb), caar(letv), (is_pair(cdr(letv))) ? caadr(letv) : NULL, NULL, true);
@@ -75533,7 +75554,6 @@ static bool check_let_star(s7_scheme *sc)
 		}}
 	  else pair_set_syntax_op(form, OP_LET_STAR2);
 	  set_opt2_con(code, cadaar(code));
-
 	  for (last_var = caaar(code), vars = cdar(code); is_pair(vars); last_var = caar(vars), vars = cdr(vars))
 	    if (has_fx(cdar(vars)))
 	      fx_tree(sc, cdar(vars), last_var, NULL, NULL, true); /* actually there's isn't a new let unless it's needed */
@@ -76393,6 +76413,18 @@ static void fx_safe_closure_tree(s7_scheme *sc)
 	}}
 }
 
+static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_function fx, opcode_t op)
+{
+  s7_pointer bfunc;
+  bfunc = fx_to_fb(sc, fx);
+  if (bfunc)
+    {
+      set_opt3_any(cdr(form), bfunc);
+      pair_set_syntax_op(form, op);
+    }
+  /* else fprintf(stderr, "%s: %s\n", op_names[op], display_80(form)); */
+}
+
 #define choose_if_optc(Opc, One, Reversed, Not) ((One) ? ((Reversed) ? OP_ ## Opc ## _R : ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) :  ((Not) ? OP_ ## Opc ## _N_N : OP_ ## Opc ## _P_P))
 
 static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool reversed) /* cdr(form) == sc->code */
@@ -76496,38 +76528,23 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		}
 	      else set_fx_direct(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
 
-	      if ((optimize_op(form) == OP_IF_A_P) &&
-		  (is_fxable(sc, cadr(code)))) /* TODO: surely this is not needed! */
+	      if (optimize_op(form) == OP_IF_A_P)
 		{
-		  s7_pointer bfunc;
-		  pair_set_syntax_op(form, OP_IF_A_A);
-		  fx_annotate_arg(sc, cdr(code), sc->curlet);
-		  set_opt1_pair(form, cdr(code));
-		  fx_safe_closure_tree(sc);
-		  bfunc = fx_to_b(sc, fx_proc(code));
-		  if (bfunc)
+		  if (is_fxable(sc, cadr(code)))
 		    {
-		      set_opt3_any(code, bfunc);
-		      pair_set_syntax_op(form, OP_IF_B_A);
-		    }}
+		      pair_set_syntax_op(form, OP_IF_A_A);
+		      fx_annotate_arg(sc, cdr(code), sc->curlet);
+		      set_opt1_pair(form, cdr(code));
+		      fx_safe_closure_tree(sc);
+		      fb_annotate(sc, form, fx_proc(code), OP_IF_B_A);
+		    }
+		  else fb_annotate(sc, form, fx_proc(code), OP_IF_B_P);
+		}
 	      if (optimize_op(form) == OP_IF_A_R)
-		{
-		  s7_pointer bfunc;
-		  bfunc = fx_to_b(sc, fx_proc(code));
-		  if (bfunc)
-		    {
-		      set_opt3_any(code, bfunc);
-		      pair_set_syntax_op(form, OP_IF_B_R);
-		    }}
+		fb_annotate(sc, form, fx_proc(code), OP_IF_B_R);
+	      /* a_n -> b_n? */
 	      if (optimize_op(form) == OP_IF_A_N_N)
-		{
-		  s7_pointer bfunc;
-		  bfunc = fx_to_b(sc, fx_proc(cdar(code))); /* cdar because (not ...) */
-		  if (bfunc)
-		    {
-		      set_opt3_any(code, bfunc);
-		      pair_set_syntax_op(form, OP_IF_B_N_N);
-		    }}
+		fb_annotate(sc, form, fx_proc(cdar(code)), OP_IF_B_N_N);
 	      if (optimize_op(form) == OP_IF_A_P_P)
 		{
 		  if (is_fxable(sc, cadr(code)))
@@ -76535,45 +76552,28 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		      set_opt1_pair(form, cdr(code));
 		      if (is_fxable(sc, caddr(code)))
 			{
-			  pair_set_syntax_op(form, OP_IF_A_A_A);
+			  pair_set_syntax_op(form, OP_IF_A_A_A); /* b_a_a never happens? */
 			  set_opt2_pair(form, cddr(code));
 			}
 		      else 
 			{
-			  s7_pointer bfunc;
 			  pair_set_syntax_op(form, OP_IF_A_A_P);
-			  bfunc = fx_to_b(sc, fx_proc(code));
-			  if (bfunc)
-			    {
-			      set_opt3_any(code, bfunc);
-			      pair_set_syntax_op(form, OP_IF_B_A_P);
-			    }}
+			  fb_annotate(sc, form, fx_proc(code), OP_IF_B_A_P);
+			}
 		      fx_annotate_args(sc, cdr(code), sc->curlet);
 		      fx_safe_closure_tree(sc);
 		    }
 		  else
 		    if (is_fxable(sc, caddr(code)))
 		      {
-			s7_pointer bfunc;
 			pair_set_syntax_op(form, OP_IF_A_P_A);
 			fx_annotate_args(sc, cdr(code), sc->curlet);
 			set_opt2_pair(form, cddr(code));
 			fx_safe_closure_tree(sc);
-			bfunc = fx_to_b(sc, fx_proc(code));
-			if (bfunc)
-			  {
-			    set_opt3_any(code, bfunc);
-			    pair_set_syntax_op(form, OP_IF_B_P_A);
-			  }}
-		    else
-		      {
-			s7_pointer bfunc;
-			bfunc = fx_to_b(sc, fx_proc(code));
-			if (bfunc)
-			  {
-			    set_opt3_any(code, bfunc);
-			    pair_set_syntax_op(form, OP_IF_B_P_P);
-			  }}}}
+			fb_annotate(sc, form, fx_proc(code), OP_IF_B_P_A);
+		      }
+		    else fb_annotate(sc, form, fx_proc(code), OP_IF_B_P_P);
+		}}
 	  else
 	    {
 	      pair_set_syntax_op(form, choose_if_optc(IF_P, one_branch, reversed, not_case));
@@ -90797,14 +90797,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_NOT_A_A_A: sc->value = (is_false(sc, fx_call(sc, opt1_pair(sc->code)))) ? fx_call(sc, opt2_pair(sc->code)) : fx_call(sc, opt3_pair(sc->code)); continue;
 	case OP_IF_AND2_S_A:  sc->value = fx_if_and2_s_a(sc, sc->code); continue;
 
-	case OP_IF_B_A:
-	  sc->value = (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) ? fx_call(sc, opt1_pair(sc->code)) : sc->unspecified; continue;
-	case OP_IF_B_A_P:
-	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->value = fx_call(sc, opt1_pair(sc->code)); continue;} sc->code = opt2_any(sc->code); goto EVAL;
-	case OP_IF_B_P_A:
-	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = fx_call(sc, opt2_pair(sc->code)); continue;
-	case OP_IF_B_P_P:
-	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
+	  #define call_bfunc(Sc, Expr) ((s7_bfunc)opt3_any(cdr(Sc->code)))(Sc, Expr)
+	case OP_IF_B_A:   sc->value = (call_bfunc(sc, cadr(sc->code))) ? fx_call(sc, opt1_pair(sc->code)) : sc->unspecified; continue;
+	case OP_IF_B_A_P: if (call_bfunc(sc, cadr(sc->code))) {sc->value = fx_call(sc, opt1_pair(sc->code)); continue;} sc->code = opt2_any(sc->code); goto EVAL;
+	case OP_IF_B_P_A: if (call_bfunc(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = fx_call(sc, opt2_pair(sc->code)); continue;
+	case OP_IF_B_P_P: if (call_bfunc(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
 
 	  #define if_s_p(sc) if (is_true(sc, lookup(sc, cadr(sc->code))))
 	  #define if_not_s_p(sc) if (is_false(sc, lookup(sc, opt1_sym(cdr(sc->code))))) /* cadadr(sc->code) */
@@ -90823,10 +90820,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_A_N:   if_not_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = sc->unspecified; continue;
 	case OP_IF_A_N_N: if_not_a_p(sc) {sc->code = opt1_any(sc->code); goto EVAL;} sc->code = opt2_any(sc->code); goto EVAL;
 
-	case OP_IF_B_R:
-	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, cadr(sc->code))) {sc->value = sc->unspecified; continue;} sc->code = opt1_any(sc->code); goto EVAL;
-	case OP_IF_B_N_N: 
-	  if (((s7_bfunc)opt3_any(cdr(sc->code)))(sc, car(opt3_pair(sc->code)))) {sc->code = opt2_any(sc->code); goto EVAL;} sc->code = opt1_any(sc->code); goto EVAL;
+	case OP_IF_B_P:   if (call_bfunc(sc, cadr(sc->code))) {sc->code = opt1_any(sc->code); goto EVAL;} sc->value = sc->unspecified; continue;
+	case OP_IF_B_R:   if (call_bfunc(sc, cadr(sc->code))) {sc->value = sc->unspecified; continue;} sc->code = opt1_any(sc->code); goto EVAL;
+	case OP_IF_B_N_N: if (call_bfunc(sc, car(opt3_pair(sc->code)))) {sc->code = opt2_any(sc->code); goto EVAL;} sc->code = opt1_any(sc->code); goto EVAL;
 
 	  #define if_is_type_s_p(sc) if (gen_type_match(sc, lookup(sc, opt2_sym(cdr(sc->code))), opt3_byte(cdr(sc->code))))
 	  #define if_is_not_type_s_p(sc) if (!gen_type_match(sc, lookup(sc, opt2_sym(cdr(sc->code))), opt3_byte(cdr(sc->code))))
@@ -94613,7 +94609,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 938) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 939) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95009,16 +95005,16 @@ int main(int argc, char **argv)
  * index      1051         1026   1016    983    984
  * tmock      7748         1177   1165   1098   1097
  * tvect      1951         2456   2413   1756   1741
- * s7test     4522         1873   1831   1812   1806
- * lt         2127         2123   2110   2123   2120
+ * s7test     4522         1873   1831   1812   1804
+ * lt         2127         2123   2110   2123   2119
  * tform      3263         2281   2273   2267   2263
  * tmac       2413         3317   3277   2389   2409
- * tread      2594         2440   2421   2411   2415
+ * tread      2594         2440   2421   2411   2414
  * trclo      4070         2715   2561   2455   2454
  * tmat       2677         3065   3042   2523   2517
  * fbench     2868         2688   2583   2544   2543
- * dup        2927         3805   3788   2639   2553
- * tcopy      2623         8035   5546   2557   2554
+ * dup        2927         3805   3788   2639   2551
+ * tcopy      2623         8035   5546   2557   2551
  * tb         3321         2735   2681   2560   2629
  * titer      2727         2865   2842   2679   2679
  * tsort      3656         3105   3104   2924   2881
@@ -95027,28 +95023,30 @@ int main(int argc, char **argv)
  * teq        3594         4068   4045   3576   3567
  * tio        3715         3816   3752   3702   3708
  * tstr       6591         5281   4863   4197   4202  [fx_num_eq_vs -> fb_num_eq_ss?]
- * tclo       4690         4787   4735   4409   4411
+ * tclo       4690         4787   4735   4409   4414
  * tlet       5471         7775   5640   4490   4433
  * tcase      4537         4960   4793   4474   4497
  * tmap       5715         8270   8188   4694   4672
- * tfft      114.8         7820   7729   4798   4795
- * tnum       56.6         6348   6013   5445   5452
+ * tfft      114.8         7820   7729   4798   4792
+ * tnum       56.6         6348   6013   5445   5445
  * tgsl       25.2         8485   7802   6389   6397
  * trec       8338         6936          6553   6553
  * tmisc      7588         8960   7699   6972   6876
  * tlist      7140         7896          7087   7016
- * tgc        10.2         11.9   11.1   8726   8693
- * thash      35.3         11.8   11.7   9838   9821
+ * tgc        10.2         11.9   11.1   8726   8695
+ * thash      35.3         11.8   11.7   9838   9809
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.2 [perhaps fx_num_eq_to?]
+ * calls      60.7         36.7   37.5   37.1   37.1  [perhaps fx_num_eq_to?]
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.3
- * tbig      596.1        177.4  175.8  167.7  166.5
+ * tbig      596.1        177.4  175.8  167.7  166.7
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * random -> 0? try new form?
- * macro for "B", func for the op set+bfunc -- bool_opt cases?
- *   in the vs case, can we see the bfunc and update it?  need yet another bit?
+ * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), when/unless_a, cond/do tests if result
+ *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
+ *   when_a maybe b_n
+ * t505 loop limits: should these give an error that explains fp->int? if !gmp && start|end > 2^53? 13118 and are ints warn? inexact->exact?
  */
