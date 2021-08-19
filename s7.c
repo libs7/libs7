@@ -259,6 +259,11 @@
   /* debugging aid if using s7 in a multithreaded program -- this code courtesy of Kjetil Matheussen */
 #endif
 
+#ifndef WITH_OVERFLOW_WARNINGS
+  #define WITH_OVERFLOW_WARNINGS 0
+  /* int+int overflows to real, this adds warnings which are ridiculously expensive even though they are never called (procedure overhead skyrockets) */
+#endif
+
 #ifndef S7_DEBUGGING
   #define S7_DEBUGGING 0
 #endif
@@ -1121,7 +1126,8 @@ struct s7_scheme {
   uint32_t gc_stats, gensym_counter, f_class, add_class, multiply_class, subtract_class, num_eq_class;
   int32_t format_column;
   uint64_t capture_let_counter;
-  bool short_print, is_autoloading, in_with_let, object_out_locked, has_openlets, is_expanding, accept_all_keyword_arguments, got_tc, got_rec, not_tc;
+  bool short_print, is_autoloading, in_with_let, object_out_locked, has_openlets, is_expanding, accept_all_keyword_arguments, muffle_warnings;
+  bool got_tc, got_rec, not_tc;
   s7_int rec_tc_args, continuation_counter;
   int64_t let_number;
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
@@ -3772,9 +3778,9 @@ static void try_to_call_gc(s7_scheme *sc);
 #define rational_to_double(Sc, X)     s7_number_to_real(Sc, X)
 #endif
 
-static inline s7_pointer wrap_integer1(s7_scheme *sc, s7_int x) {integer(sc->integer_wrapper1) = x; return(sc->integer_wrapper1);}
-static inline s7_pointer wrap_integer2(s7_scheme *sc, s7_int x) {integer(sc->integer_wrapper2) = x; return(sc->integer_wrapper2);}
-static inline s7_pointer wrap_integer3(s7_scheme *sc, s7_int x) {integer(sc->integer_wrapper3) = x; return(sc->integer_wrapper3);}
+static inline s7_pointer wrap_integer1(s7_scheme *sc, s7_int x) {if (is_small_int(x)) return(small_int(x)); integer(sc->integer_wrapper1) = x; return(sc->integer_wrapper1);}
+static inline s7_pointer wrap_integer2(s7_scheme *sc, s7_int x) {if (is_small_int(x)) return(small_int(x)); integer(sc->integer_wrapper2) = x; return(sc->integer_wrapper2);}
+static inline s7_pointer wrap_integer3(s7_scheme *sc, s7_int x) {if (is_small_int(x)) return(small_int(x)); integer(sc->integer_wrapper3) = x; return(sc->integer_wrapper3);}
 static inline s7_pointer wrap_real1(s7_scheme *sc, s7_double x) {real(sc->real_wrapper1) = x; return(sc->real_wrapper1);}
 static inline s7_pointer wrap_real2(s7_scheme *sc, s7_double x) {real(sc->real_wrapper2) = x; return(sc->real_wrapper2);}
 
@@ -8120,9 +8126,11 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   hash = raw_string_hash((const uint8_t *)name, nlen);
   location = hash % SYMBOL_TABLE_SIZE;
 
+#if S7_DEBUGGING
   if ((sc->safety > 0) &&
       (!is_null(symbol_table_find_by_name(sc, name, hash, location, nlen))))
     s7_warn(sc, nlen + 32, "%s is already in use!", name);
+#endif
 
   /* make-string for symbol name */
 #if S7_DEBUGGING
@@ -13937,7 +13945,6 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
    *   but then even worse: (format #f "~F" 1e308+1e308i)!
    */
   s7_int len;
-
   len = width + precision;
   len = (len > 512) ? (512 + 2 * len) : 1024;
   if (len > sc->num_to_str_size)
@@ -14644,7 +14651,7 @@ static s7_pointer make_sharp_constant(s7_scheme *sc, char *name, bool with_error
 	    char buf[256];
 	    size_t len;
 	    len = snprintf(buf, 256, "#%s is not a number", name);
-	    s7_error(sc, sc->read_error_symbol, set_elist_1(sc, s7_make_string_with_length(sc, buf, len))); /* can't use wrap_string here */
+	    s7_error(sc, sc->read_error_symbol, set_elist_1(sc, s7_make_string_with_length(sc, buf, len))); /* can't use wrap_string here (buf is local) */
 	  }
 	return(res);
       }
@@ -18850,7 +18857,11 @@ static inline s7_pointer add_if_overflow_to_real_or_big_integer(s7_scheme *sc, s
       return(mpz_to_big_integer(sc, sc->mpz_1));
     }
 #else
-  return(make_real(sc, (long_double)x + (long_double)y));
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer add overflow: (+ %ld %ld)\n", x, y);
+      return(make_real(sc, (long_double)x + (long_double)y));
+    }
 #endif
   return(make_integer(sc, val));
 #else
@@ -18874,7 +18885,11 @@ static s7_pointer integer_ratio_add_if_overflow_to_real_or_rational(s7_scheme *s
       return(mpq_to_rational(sc, sc->mpq_1));
     }
 #else
-    return(make_real(sc, (long_double)integer(x) + fraction(y)));
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer + ratio overflow: (+ %ld %ld/%ld)\n", integer(x), numerator(y), denominator(y));
+      return(make_real(sc, (long_double)integer(x) + fraction(y)));
+    }
 #endif
     return(s7_make_ratio(sc, z, denominator(y)));
 #else
@@ -18968,7 +18983,11 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		    return(mpq_to_rational(sc, sc->mpq_1));
 		  }
 #else
-		return(make_real(sc, ((long_double)n1 + (long_double)n2) / (long_double)d1));
+		  {
+ 		    if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		      s7_warn(sc, 128, "ratio + ratio overflow: (/ (+ %ld %ld) %ld)\n", n1, n2, d1);
+		    return(make_real(sc, ((long_double)n1 + (long_double)n2) / (long_double)d1));
+		  }
 #endif
 	        return(s7_make_ratio(sc, q, d1));
 #else
@@ -18991,7 +19010,11 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		  return(mpq_to_rational(sc, sc->mpq_1));
 		}
 #else
-	      return(make_real(sc, ((long_double)n1 / (long_double)d1) + ((long_double)n2 / (long_double)d2)));
+	        {
+ 		  if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		    s7_warn(sc, 128, "ratio + ratio overflow: (+ %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+	          return(make_real(sc, ((long_double)n1 / (long_double)d1) + ((long_double)n2 / (long_double)d2)));
+		}
 #endif
 	      return(s7_make_ratio(sc, q, d1d2));
 	    }
@@ -19268,6 +19291,8 @@ static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointe
       if ((!add_overflow(integer(x), integer(y), &val)) &&
 	  (!add_overflow(val, integer(z), &val)))
 	return(make_integer(sc, val));
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer add overflow: (+ %ld %ld %ld)\n", integer(x), integer(y), integer(z));
       return(make_real(sc, (long_double)integer(x) + (long_double)integer(y) + (long_double)integer(z)));
     }
 #endif
@@ -19319,6 +19344,8 @@ static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args)
       mpz_add(sc->mpz_1, sc->mpz_1, sc->mpz_2);
       return(mpz_to_integer(sc, sc->mpz_1));
 #else
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer add overflow: (+ %ld %ld %ld)\n", integer(p0), integer(p1), integer(p2));
       return(make_real(sc, (long_double)integer(p0) + (long_double)integer(p1) + (long_double)integer(p2)));
 #endif
 #else
@@ -19410,7 +19437,7 @@ static s7_pointer g_add_xf(s7_scheme *sc, s7_pointer x, s7_double y)
     case T_COMPLEX: return(s7_make_complex(sc, real_part(x) + y, imag_part(x)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
-      return(add_p_pp(sc, x, wrap_real1(sc, y)));
+      return(add_p_pp(sc, x, wrap_real2(sc, y)));
 #endif
     default: return(method_or_bust_with_type_pf(sc, x, sc->add_symbol, x, y, a_number_string));
     }
@@ -19624,7 +19651,11 @@ static inline s7_pointer subtract_if_overflow_to_real_or_big_integer(s7_scheme *
       return(mpz_to_big_integer(sc, sc->mpz_1));
     }
 #else
-  return(make_real(sc, (double)x - (double)y));
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer subtract overflow: (- %ld %ld)\n", x, y);
+      return(make_real(sc, (long_double)x - (long_double)y));
+    }
 #endif
   return(make_integer(sc, val));
 #else
@@ -19660,7 +19691,11 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		return(mpq_to_rational(sc, sc->mpq_1));
 	      }
 #else
-	      return(make_real(sc, (long_double)integer(x) - fraction(y)));
+	      {
+		if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		  s7_warn(sc, 128, "integer - ratio overflow: (- %ld %ld/%ld)\n", integer(x), numerator(y), denominator(y));
+		return(make_real(sc, (long_double)integer(x) - fraction(y)));
+	      }
 #endif
 	      return(s7_make_ratio(sc, z, denominator(y)));
 #else
@@ -19719,7 +19754,11 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		return(mpq_to_rational(sc, sc->mpq_1));
 	      }
 #else
-	    return(make_real(sc, fraction(x) - (long_double)integer(y)));
+	      {
+		if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		  s7_warn(sc, 128, "ratio - integer overflow: (- %ld/%ld %ld)\n", numerator(x), denominator(x), integer(y));
+		return(make_real(sc, fraction(x) - (long_double)integer(y)));
+	      }
 #endif
 	    return(s7_make_ratio(sc, z, denominator(x)));
 #else
@@ -19743,7 +19782,11 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		    return(mpq_to_rational(sc, sc->mpq_1));
 		  }
 #else
-		return(make_real(sc, ((long_double)n1 - (long_double)n2) / (long_double)d1));
+		  {
+		    if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		      s7_warn(sc, 128, "ratio - ratio overflow: (- %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+		    return(make_real(sc, ((long_double)n1 - (long_double)n2) / (long_double)d1));
+		  }
 #endif
 	        return(s7_make_ratio(sc, q, d1));
 #else
@@ -19766,7 +19809,11 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		  return(mpq_to_rational(sc, sc->mpq_1));
 		}
 #else
-	      return(make_real(sc, ((long_double)n1 / (long_double)d1) - ((long_double)n2 / (long_double)d2)));
+	        {
+		  if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		    s7_warn(sc, 128, "ratio - ratio overflow: (- %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+		  return(make_real(sc, ((long_double)n1 / (long_double)d1) - ((long_double)n2 / (long_double)d2)));
+		}
 #endif
 	      return(s7_make_ratio(sc, q, d1d2));
 	    }
@@ -20195,7 +20242,11 @@ static inline s7_pointer multiply_if_overflow_to_real_or_big_integer(s7_scheme *
       return(mpz_to_big_integer(sc, sc->mpz_1));
     }
 #else
-    return(make_real(sc, (double)x * (double)y));
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer multiply overflow: (* %ld %ld)\n", x, y);
+      return(make_real(sc, (double)x * (double)y));
+    }
 #endif
     return(make_integer(sc, val));
 #else
@@ -20217,7 +20268,11 @@ static s7_pointer integer_ratio_multiply_if_overflow_to_real_or_ratio(s7_scheme 
       return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
     }
 #else
-    return(make_real(sc, (double)x * fraction(y)));
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer * ratio overflow: (* %ld %ld/%ld)\n", x, numerator(y), denominator(y));
+      return(make_real(sc, (double)x * fraction(y)));
+    }
 #endif
     return(s7_make_ratio(sc, z, denominator(y)));
 #else
@@ -20290,7 +20345,11 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		  return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
 		}
 #else
-	      return(make_real(sc, fraction(x) * fraction(y)));
+	        {
+		  if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		    s7_warn(sc, 128, "ratio * ratio overflow: (* %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+		  return(make_real(sc, fraction(x) * fraction(y)));
+		}
 #endif
 	      return(s7_make_ratio(sc, n1n2, d1d2));
 	    }
@@ -20706,7 +20765,11 @@ static s7_pointer g_mul_2_ii(s7_scheme *sc, s7_pointer args)
 #if HAVE_OVERFLOW_CHECKS
   s7_int val, x = integer(car(args)), y = integer(cadr(args));
   if (multiply_overflow(x, y, &val))
-    return(make_real(sc, (double)x * (double)y));
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	s7_warn(sc, 128, "integer multiply overflow: (* %ld %ld)\n", x, y);
+      return(make_real(sc, (double)x * (double)y));
+    }
   return(make_integer(sc, val));
 #else
   return(make_integer(sc, integer(car(args)) * integer(cadr(args))));
@@ -20719,7 +20782,11 @@ static s7_int multiply_i_ii(s7_int i1, s7_int i2)
 #if HAVE_OVERFLOW_CHECKS
   s7_int val;
   if (multiply_overflow(i1, i2, &val))
-    return(S7_INT64_MAX); /* this is inconsistent with other unopt cases where an overflow -> double result */
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (cur_sc->safety > 0))
+	s7_warn(cur_sc, 64, "integer multiply overflow: (* %ld %ld)\n", i1, i2);
+      return(S7_INT64_MAX); /* this is inconsistent with other unopt cases where an overflow -> double result */
+    }
   /* (let () (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((= j 1)) (even? (* (ash 1 43) (ash 1 43)))))) (define (hi) (func)) (hi)) */
   return(val);
 #else
@@ -20731,10 +20798,13 @@ static s7_int multiply_i_iii(s7_int i1, s7_int i2, s7_int i3)
 {
 #if HAVE_OVERFLOW_CHECKS
   s7_int val1, val2;
-  if (multiply_overflow(i1, i2, &val1))
-    return(S7_INT64_MAX);
-  if (multiply_overflow(val1, i3, &val2))
-    return(S7_INT64_MAX);
+  if ((multiply_overflow(i1, i2, &val1)) ||
+      (multiply_overflow(val1, i3, &val2)))
+    {
+      if ((WITH_OVERFLOW_WARNINGS) && (cur_sc->safety > 0))
+	s7_warn(cur_sc, 64, "integer multiply overflow: (* %ld %ld %ld)\n", i1, i2, i3);
+      return(S7_INT64_MAX);
+    }
   return(val2);
 #else
   return(i1 * i2 * i3);
@@ -20882,7 +20952,11 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
 	      }
 #else
-	      return(make_real(sc, integer(x) * inverted_fraction(y)));
+              {
+		if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		  s7_warn(sc, 128, "integer / ratio overflow: (/ %ld %ld/%ld)\n", integer(x), numerator(y), denominator(y));
+  	        return(make_real(sc, integer(x) * inverted_fraction(y)));
+	      }
 #endif
 	    return(s7_make_ratio(sc, dn, numerator(y)));
 	  }
@@ -20961,7 +21035,11 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		return(mpq_to_rational(sc, sc->mpq_1));
 	      }
 #else
-	      return(make_real(sc, (long_double)numerator(x) / ((long_double)denominator(x) * (long_double)integer(y))));
+              {
+		if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		  s7_warn(sc, 128, "ratio / integer overflow: (/ %ld/%ld %ld)\n", numerator(x), denominator(x), integer(y));
+	        return(make_real(sc, (long_double)numerator(x) / ((long_double)denominator(x) * (long_double)integer(y))));
+	      }
 #endif
 	    return(s7_make_ratio(sc, numerator(x), dn));
 	  }
@@ -20986,6 +21064,8 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		return(mpq_to_rational(sc, sc->mpq_1));
 #else
 		s7_double r1, r2;
+		if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		  s7_warn(sc, 128, "ratio / ratio overflow: (/ %ld/%ld %ld/%ld)\n", numerator(x), denominator(x), numerator(y), denominator(y));
 		r1 = fraction(x);
 		r2 = inverted_fraction(y);
 		return(make_real(sc, r1 * r2));
@@ -21449,7 +21529,11 @@ static s7_pointer g_divide_by_2(s7_scheme *sc, s7_pointer args)
 		return(mpq_to_rational(sc, sc->mpq_1));
 	      }
 #else
-	      return(make_real(sc, ((long_double)numerator(num) * 0.5) / (long_double)denominator(num)));
+	      {
+		if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+		  s7_warn(sc, 128, "ratio / 2 overflow: (/ %ld/%ld 2)\n", numerator(num), denominator(num));
+	        return(make_real(sc, ((long_double)numerator(num) * 0.5) / (long_double)denominator(num)));
+	      }
 #endif
 	    return(s7_make_ratio(sc, numerator(num) / 2, denominator(num)));
 	  }
@@ -25470,7 +25554,7 @@ s7_double s7_random(s7_scheme *sc, s7_pointer state)
 static s7_double random_d_7d(s7_scheme *sc, s7_double x)
 {
 #if WITH_GMP
-  return(real(g_random(sc, set_plist_1(sc, wrap_real1(sc, x)))));
+  return(real(g_random(sc, set_plist_1(sc, wrap_real2(sc, x)))));
 #else
   return(x * next_random(sc->default_rng));
 #endif
@@ -28085,8 +28169,12 @@ void s7_flush_output_port(s7_scheme *sc, s7_pointer p)
     {
       if (port_position(p) > 0)
 	{
+#if WITH_OVERFLOW_WARNINGS
 	  if (fwrite((void *)(port_data(p)), 1, port_position(p), port_file(p)) != (size_t)port_position(p))
-	    s7_warn(sc, 64, "fwrite trouble in flush-output-port\n");
+	    s7_warn(sc, 128, "fwrite trouble in flush-output-port\n");
+#else
+	  fwrite((void *)(port_data(p)), 1, port_position(p), port_file(p));
+#endif
 	  port_position(p) = 0;
 	}
       fflush(port_file(p));
@@ -28121,9 +28209,13 @@ static void close_output_file(s7_scheme *sc, s7_pointer p)
     }
   if (port_file(p))
     {
+#if WITH_OVERFLOW_WARNINGS
       if ((port_position(p) > 0) &&
 	  (fwrite((void *)(port_data(p)), 1, port_position(p), port_file(p)) != (size_t)port_position(p)))
-	s7_warn(sc, 64, "fwrite trouble in close-output-port\n");
+	s7_warn(sc, 128, "fwrite trouble in close-output-port\n");
+#else
+      fwrite((void *)(port_data(p)), 1, port_position(p), port_file(p));
+#endif
       fflush(port_file(p));
       fclose(port_file(p));
       port_file(p) = NULL;
@@ -28357,8 +28449,12 @@ static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer p
 {
   if (port_position(port) == sc->output_port_data_size)
     {
+#if WITH_OVERFLOW_WARNINGS
       if (fwrite((void *)(port_data(port)), 1, sc->output_port_data_size, port_file(port)) != (size_t)sc->output_port_data_size)
-	s7_warn(sc, 64, "fwrite trouble during write-char\n");
+	s7_warn(sc, 128, "fwrite trouble during write-char\n");
+#else
+      fwrite((void *)(port_data(port)), 1, sc->output_port_data_size, port_file(port));
+#endif
       port_position(port) = 0;
     }
   port_data(port)[port_position(port)++] = c;
@@ -28452,12 +28548,20 @@ static void file_write_string(s7_scheme *sc, const char *str, s7_int len, s7_poi
     {
       if (port_position(pt) > 0)
 	{
+#if WITH_OVERFLOW_WARNINGS
 	  if (fwrite((void *)(port_data(pt)), 1, port_position(pt), port_file(pt)) != (size_t)port_position(pt))
-	    s7_warn(sc, 64, "fwrite trouble in write-string\n");
+	    s7_warn(sc, 128, "fwrite trouble in write-string\n");
+#else
+	  fwrite((void *)(port_data(pt)), 1, port_position(pt), port_file(pt));
+#endif
 	  port_position(pt) = 0;
 	}
+#if WITH_OVERFLOW_WARNINGS
       if (fwrite((void *)str, 1, len, port_file(pt)) != (size_t)len)
-	s7_warn(sc, 64, "fwrite trouble in write-string\n");
+	s7_warn(sc, 128, "fwrite trouble in write-string\n");
+#else
+      fwrite((void *)str, 1, len, port_file(pt));
+#endif
     }
   else
     {
@@ -28478,12 +28582,20 @@ static void file_display(s7_scheme *sc, const char *s, s7_pointer port)
     {
       if (port_position(port) > 0)
 	{
+#if WITH_OVERFLOW_WARNINGS
 	  if (fwrite((void *)(port_data(port)), 1, port_position(port), port_file(port)) != (size_t)port_position(port))
-	    s7_warn(sc, 64, "fwrite trouble in display\n");
+	    s7_warn(sc, 128, "fwrite trouble in display\n");
+#else
+	  fwrite((void *)(port_data(port)), 1, port_position(port), port_file(port));
+#endif
 	  port_position(port) = 0;
 	}
+#if WITH_OVERFLOW_WARNINGS
       if (fputs(s, port_file(port)) == EOF)
-	s7_warn(sc, 64, "write to %s: %s\n", port_filename(port), strerror(errno));
+	s7_warn(sc, 128, "write to %s: %s\n", port_filename(port), strerror(errno));
+#else
+      fputs(s, port_file(port));
+#endif
     }
 }
 
@@ -31521,9 +31633,11 @@ in the sequence each time it is called.  When it reaches the end, it returns " I
 	    iterator_let_cons(iter) = carrier;
 	    set_mark_seq(iter);
 	  }
+#if 0
 	else         /* (let-temporarily (((*s7* 'safety) 1)) (make-iterator "asdf" (cons 1 2))) */
 	  if (sc->safety > MORE_SAFETY_WARNINGS)
 	    s7_warn(sc, 256, "(make-iterator %s %s) does not need the second argument\n", display_80(seq), display_80(carrier));
+#endif
     }
   return(iter);
 }
@@ -34807,7 +34921,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   TRACK(sc);
   if ((sc->safety > NO_SAFETY) &&
       (!s7_is_valid(sc, obj)))
-    s7_warn(sc, 256, "bad arg to %s: %p\n", __func__, obj);
+    s7_warn(sc, 256, "bad argument to %s: %p\n", __func__, obj);
 
   strport = open_format_port(sc);
   object_out(sc, T_Pos(obj), strport, P_WRITE);
@@ -34841,7 +34955,7 @@ s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer obj, bool use_write) /*
 
   if ((sc->safety > NO_SAFETY) &&
       (!s7_is_valid(sc, obj)))
-    s7_warn(sc, 256, "bad arg to %s: %p\n", __func__, obj);
+    s7_warn(sc, 256, "bad argument to %s: %p\n", __func__, obj);
 
   strport = open_format_port(sc);
   object_out(sc, obj, strport, (use_write) ? P_WRITE : P_DISPLAY);
@@ -38748,7 +38862,7 @@ static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer ls
   int32_t i;
   for (i = 1, p = lst; is_pair(p); p = cdr(p), i++)
     if (!s7_is_valid(sc, car(p)))
-      s7_warn(sc, 256, "bad arg (#%d) to %s: %p\n", i, caller, car(p));
+      s7_warn(sc, 256, "bad argument (#%d) to %s: %p\n", i, caller, car(p));
 }
 
 s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...)
@@ -40860,10 +40974,10 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
 	    return(method_or_bust(sc, init, sc->make_float_vector_symbol, args, T_REAL, 2));
 #if WITH_GMP
 	  if (s7_is_bignum(init))
-	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real1(sc, s7_real(init))), sc->make_float_vector_symbol));
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real2(sc, s7_real(init))), sc->make_float_vector_symbol));
 #endif
 	  if (is_rational(init))
-	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real1(sc, rational_to_double(sc, init))), sc->make_float_vector_symbol));
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real2(sc, rational_to_double(sc, init))), sc->make_float_vector_symbol));
 	}
       else init = real_zero;
       if (s7_is_integer(p))
@@ -45114,7 +45228,7 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
   n_args = s7_list_length(sc, local_args);
   if (n_args < 0)
     {
-      s7_warn(sc, 256, "%s rest arg is not supported in C-side define*: %s\n", name, arglist);
+      s7_warn(sc, 256, "%s rest argument is not supported in C-side define*: %s\n", name, arglist);
       n_args = -n_args;
     }
   func = s7_make_function(sc, name, fnc, 0, n_args, false, doc);
@@ -51629,20 +51743,21 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
 static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...) /* len = max size of output string (for vsnprintf) */
 {
-  if (sc->error_port != sc->F)
+  if ((sc->error_port != sc->F) && (!sc->muffle_warnings))
     {
+      int bytes;
       va_list ap;
-      s7_pointer warning;
       char *str;
-      warning = make_empty_string(sc, len, 0);
-      string_value(warning)[0] = '\0';
-      str = (char *)string_value(warning);
+      str = (char *)malloc(len);
+      str[0] = '\0';
       va_start(ap, ctrl);
-      vsnprintf(str, len, ctrl, ap);
+      bytes = vsnprintf(str, len, ctrl, ap);
       va_end(ap);
       if (port_is_closed(sc->error_port))
 	sc->error_port = sc->standard_error;
-      s7_display(sc, warning, sc->error_port);
+      if ((bytes > 0) && (sc->error_port != sc->F))
+	port_write_string(sc->error_port)(sc, str, bytes, sc->error_port);
+      free(str);
     }
 }
 
@@ -52667,9 +52782,9 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
   if (sc->safety > NO_SAFETY)
     {
       if (!s7_is_valid(sc, code))
-	s7_warn(sc, 256, "bad code arg to %s: %p\n", __func__, code);
+	s7_warn(sc, 256, "bad code argument to %s: %p\n", __func__, code);
       if (!s7_is_valid(sc, e))
-	s7_warn(sc, 256, "bad environment arg to %s: %p\n", __func__, e);
+	s7_warn(sc, 256, "bad environment argument to %s: %p\n", __func__, e);
     }
 
   store_jump_info(sc);
@@ -53340,7 +53455,7 @@ static s7_pointer fx_subtract_fs(s7_scheme *sc, s7_pointer arg)
     case T_COMPLEX: return(s7_make_complex(sc, n - real_part(x), -imag_part(x)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
-      return(subtract_p_pp(sc, wrap_real1(sc, n), x));
+      return(subtract_p_pp(sc, cadr(arg), x));
 #endif
     default:
       return(method_or_bust_with_type_pp(sc, x, sc->subtract_symbol, cadr(arg), x, a_number_string, 2));
@@ -53545,7 +53660,7 @@ fx_real_part_s_any(fx_real_part_t, t_lookup)
   }
 
 fx_imag_part_s_any(fx_imag_part_s, s_lookup)
-fx_imag_part_s_any(fx_imag_part_t, t_lookup)
+fx_imag_part_s_any(fx_imag_part_t, t_lookup) /* not used in current timing tests */
 
 #define fx_iterate_s_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -53817,7 +53932,11 @@ static inline s7_pointer fx_sqr_1(s7_scheme *sc, s7_pointer x)
       {
 	s7_int val;
 	if (multiply_overflow(integer(x), integer(x), &val))
-	  return(make_real(sc, (long_double)integer(x) * (long_double)integer(x)));
+	  {
+	    if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	      s7_warn(sc, 128, "integer sqr overflow: (* %ld %ld)\n", integer(x), integer(x));
+	    return(make_real(sc, (long_double)integer(x) * (long_double)integer(x)));
+	  }
 	return(make_integer(sc, val));
       }
     case T_RATIO:
@@ -54494,7 +54613,11 @@ static s7_pointer fx_add_mul_opssq_s(s7_scheme *sc, s7_pointer arg)
       s7_int val;
       if ((multiply_overflow(integer(a), integer(b), &val)) ||
 	  (add_overflow(val, integer(c), &val)))
-	return(make_real(sc, ((long_double)integer(a) * (long_double)integer(b)) + (long_double)integer(c)));
+	{
+	  if ((WITH_OVERFLOW_WARNINGS) && (sc->safety > 0))
+	    s7_warn(sc, 128, "integer multiply/add overflow: (+ (* %ld %ld) %ld)\n", integer(a), integer(b), integer(c));
+	  return(make_real(sc, ((long_double)integer(a) * (long_double)integer(b)) + (long_double)integer(c)));
+	}
       return(make_integer(sc, val));
     }
 #else
@@ -70576,11 +70699,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		      fx_annotate_args(sc, cdr(letb), args);
 		      for (v = letv; is_pair(v); v = cdr(v))
 			fx_annotate_arg(sc, cdar(v), args);
-		      fx_tree(sc, cdar(letv), car(args), cadr(args), NULL, true); /* first var of let* */
-#if 0
-		      if ((is_pair(cdr(letv))) && (!s7_tree_memq(sc, caar(letv), cdadr(letv))))
-			fx_tree(sc, cdadr(letv), car(args), cadr(args), NULL, true); /* second var of let* */
-#endif
+		      fx_tree(sc, cdar(letv), car(args), cadr(args), NULL, true); /* first var of let*, second var of let* can't be fx_treed */
 		      fx_tree(sc, cdr(body), car(args), cadr(args), NULL, true);  /* these are references to the outer let */
 		      fx_tree(sc, cdr(laa), caar(letv), (is_pair(cdr(letv))) ? caadr(letv) : NULL, NULL, true);
 		      fx_tree(sc, cdr(letb), caar(letv), (is_pair(cdr(letv))) ? caadr(letv) : NULL, NULL, true);
@@ -72974,13 +73093,10 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	}
       return(OPT_T);
 
-    case OP_IF:
-    case OP_WHEN:
-    case OP_UNLESS:
+    case OP_IF: case OP_WHEN: case OP_UNLESS:
       if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))
 	return(OPT_OOPS);
-    case OP_OR:
-    case OP_AND:
+    case OP_OR: case OP_AND:
       e = cons(sc, sc->key_if_symbol, e);
       break;
 
@@ -83060,7 +83176,7 @@ static s7_pointer star_set(s7_scheme *sc, s7_pointer slot, s7_pointer val, bool 
     return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, parameter_set_twice_string, slot_symbol(slot), sc->args)));
   if ((check_rest) && (is_rest_slot(slot)))
     return(s7_error(sc, sc->wrong_type_arg_symbol,
-		    set_elist_3(sc, wrap_string(sc, "can't set rest arg ~S to ~S via keyword", 39), slot_symbol(slot), val)));
+		    set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), slot_symbol(slot), val)));
   set_checked_slot(slot);
   slot_set_value(slot, val);
   return(val);
@@ -83098,7 +83214,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	      (is_pair(cdr(lx))) &&
 	      (keyword_symbol(car(lx)) == car(cx)))
 	    return(s7_error(sc, sc->wrong_type_arg_symbol,
-			    set_elist_3(sc, wrap_string(sc, "can't set rest arg ~S to ~S via keyword", 39), car(cx), cadr(lx))));
+			    set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), car(cx), cadr(lx))));
 	  lambda_star_argument_set_value(sc, car(cx), lx, slot, false);
 	  lx = cdr(lx);
 	  cx = cdr(cx);
@@ -83177,7 +83293,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 		  (is_pair(cdr(lx))) &&
 		  (keyword_symbol(car(lx)) == cx))
 		return(s7_error(sc, sc->wrong_type_arg_symbol,
-				set_elist_3(sc, wrap_string(sc, "can't set rest arg ~S to ~S via keyword", 39), cx, cadr(lx))));
+				set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), cx, cadr(lx))));
 	      slot_set_value(slot, lx);
 	    }}
       else
@@ -91413,7 +91529,7 @@ typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS
 	      SL_DEFAULT_HASH_TABLE_LENGTH, SL_INITIAL_STRING_PORT_LENGTH, SL_DEFAULT_RATIONALIZE_ERROR,
 	      SL_DEFAULT_RANDOM_STATE, SL_EQUIVALENT_FLOAT_EPSILON, SL_HASH_TABLE_FLOAT_EPSILON, SL_PRINT_LENGTH,
 	      SL_BIGNUM_PRECISION, SL_MEMORY_USAGE, SL_FLOAT_FORMAT_PRECISION, SL_HISTORY, SL_HISTORY_ENABLED,
-	      SL_HISTORY_SIZE, SL_PROFILE, SL_PROFILE_INFO, SL_AUTOLOADING, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS,
+	      SL_HISTORY_SIZE, SL_PROFILE, SL_PROFILE_INFO, SL_AUTOLOADING, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_MUFFLE_WARNINGS,
 	      SL_MOST_POSITIVE_FIXNUM, SL_MOST_NEGATIVE_FIXNUM, SL_OUTPUT_PORT_DATA_SIZE, SL_DEBUG, SL_VERSION,
 	      SL_GC_TEMPS_SIZE, SL_GC_RESIZE_HEAP_FRACTION, SL_GC_RESIZE_HEAP_BY_4_FRACTION, SL_OPENLETS, SL_EXPANSIONS,
 	      SL_NUM_FIELDS} s7_let_field_t;
@@ -91427,7 +91543,7 @@ static const char *s7_let_field_names[SL_NUM_FIELDS] =
    "default-hash-table-length", "initial-string-port-length", "default-rationalize-error",
    "default-random-state", "equivalent-float-epsilon", "hash-table-float-epsilon", "print-length",
    "bignum-precision", "memory-usage", "float-format-precision", "history", "history-enabled",
-   "history-size", "profile", "profile-info", "autoloading?", "accept-all-keyword-arguments",
+   "history-size", "profile", "profile-info", "autoloading?", "accept-all-keyword-arguments", "muffle-warnings?",
    "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
    "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?"};
 
@@ -91826,6 +91942,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_MEMORY_USAGE:                  return(memory_usage(sc));
     case SL_MOST_NEGATIVE_FIXNUM:          return(sl_int_fixup(sc, leastfix));
     case SL_MOST_POSITIVE_FIXNUM:          return(sl_int_fixup(sc, mostfix));
+    case SL_MUFFLE_WARNINGS:               return(s7_make_boolean(sc, sc->muffle_warnings));
     case SL_OPENLETS:                      return(s7_make_boolean(sc, sc->has_openlets));
     case SL_EXPANSIONS:                    return(s7_make_boolean(sc, sc->is_expanding));
     case SL_OUTPUT_PORT_DATA_SIZE:         return(make_integer(sc, sc->output_port_data_size));
@@ -92136,6 +92253,10 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_MEMORY_USAGE:
     case SL_MOST_NEGATIVE_FIXNUM:
     case SL_MOST_POSITIVE_FIXNUM:  return(sl_unsettable_error(sc, sym));
+
+    case SL_MUFFLE_WARNINGS:
+      if (s7_is_boolean(val)) {sc->muffle_warnings = s7_boolean(sc, val); return(val);}
+      return(simple_wrong_type_argument(sc, sym, val, T_BOOLEAN));
 
     case SL_OPENLETS:
       if (s7_is_boolean(val)) {sc->has_openlets = s7_boolean(sc, val); return(val);}
@@ -94133,6 +94254,7 @@ s7_scheme *s7_init(void)
   sc->has_openlets = true;
   sc->is_expanding = true;
   sc->accept_all_keyword_arguments = false;
+  sc->muffle_warnings = false;
   sc->initial_string_port_length = 128;
   sc->format_depth = -1;
   sc->singletons = (s7_pointer *)calloc(256, sizeof(s7_pointer));
@@ -95000,53 +95122,53 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        527          691    687    477    476
- * tauto       786          648    642    496    496
- * tshoot     1484          883    872    810    810
- * index      1051         1026   1016    983    984
+ * tauto       786          648    642    496    497
+ * tshoot     1484          883    872    810    808
+ * index      1051         1026   1016    983    982
  * tmock      7748         1177   1165   1098   1097
- * tvect      1951         2456   2413   1756   1741
- * s7test     4522         1873   1831   1812   1804
+ * tvect      1951         2456   2413   1756   1740
+ * s7test     4522         1873   1831   1812   1795  [check io times]
  * lt         2127         2123   2110   2123   2119
- * tform      3263         2281   2273   2267   2263
+ * tform      3263         2281   2273   2267   2251
  * tmac       2413         3317   3277   2389   2409
- * tread      2594         2440   2421   2411   2414
+ * tread      2594         2440   2421   2411   2406  2414
  * trclo      4070         2715   2561   2455   2454
- * tmat       2677         3065   3042   2523   2517
- * fbench     2868         2688   2583   2544   2543
- * dup        2927         3805   3788   2639   2551
+ * tmat       2677         3065   3042   2523   2522
+ * fbench     2868         2688   2583   2544   2544
  * tcopy      2623         8035   5546   2557   2551
- * tb         3321         2735   2681   2560   2629
+ * dup        2927         3805   3788   2639   2554
+ * tb         3321         2735   2681   2560   2628
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2881
+ * tsort      3656         3105   3104   2924   2885
  * tset       3230         3253   3104   3090   3084
- * tload                                 3234   3149
- * teq        3594         4068   4045   3576   3567
- * tio        3715         3816   3752   3702   3708
- * tstr       6591         5281   4863   4197   4202  [fx_num_eq_vs -> fb_num_eq_ss?]
+ * tload                                 3234   3144
+ * teq        3594         4068   4045   3576   3570
+ * tio        3715         3816   3752   3702   3701  [primarily s7_flush_output_port?]
+ * tstr       6591         5281   4863   4197   4205
  * tclo       4690         4787   4735   4409   4414
- * tlet       5471         7775   5640   4490   4433
- * tcase      4537         4960   4793   4474   4497
- * tmap       5715         8270   8188   4694   4672
+ * tlet       5471         7775   5640   4490   4431
+ * tcase      4537         4960   4793   4474   4496
+ * tmap       5715         8270   8188   4694   4671
  * tfft      114.8         7820   7729   4798   4792
- * tnum       56.6         6348   6013   5445   5445
- * tgsl       25.2         8485   7802   6389   6397
- * trec       8338         6936          6553   6553
- * tmisc      7588         8960   7699   6972   6876
+ * tnum       56.6         6348   6013   5445   5438
+ * tgsl       25.2         8485   7802   6389   6396
+ * trec       8338         6936          6553   6551
+ * tmisc      7588         8960   7699   6972   6877
  * tlist      7140         7896          7087   7016
- * tgc        10.2         11.9   11.1   8726   8695
- * thash      35.3         11.8   11.7   9838   9809
+ * tgc        10.2         11.9   11.1   8726   8692
+ * thash      35.3         11.8   11.7   9838   9806 [subtract_p_pp?]
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.1  [perhaps fx_num_eq_to?]
+ * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.3
- * tbig      596.1        177.4  175.8  167.7  166.7
+ * tbig      596.1        177.4  175.8  167.7  166.5
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
- * random -> 0? try new form?
  * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), when/unless_a, cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
- *   when_a maybe b_n
- * t505 loop limits: should these give an error that explains fp->int? if !gmp && start|end > 2^53? 13118 and are ints warn? inexact->exact?
+ * s7_warn: can any be removed? s7_error less overhead?
+ *   muffle-warnings should leave gc-stats alone etc -- maybe pointless given compile-time switch?
+ *   io warnings
  */
