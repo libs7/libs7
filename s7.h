@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.15"
-#define S7_DATE "20-Aug-2021"
+#define S7_VERSION "9.16"
+#define S7_DATE "23-Aug-2021"
 #define S7_MAJOR_VERSION 9
-#define S7_MINOR_VERSION 15
+#define S7_MINOR_VERSION 16
 
 #include <stdint.h>           /* for int64_t */
 
@@ -366,7 +366,7 @@ s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);
 s7_pointer s7_open_output_string(s7_scheme *sc);                            /* (open-output-string) */
 const char *s7_get_output_string(s7_scheme *sc, s7_pointer out_port);       /* (get-output-string port) -- current contents of output string */
   /*    don't free the string */
-void s7_flush_output_port(s7_scheme *sc, s7_pointer p);                     /* (flush-output-port port) */
+bool s7_flush_output_port(s7_scheme *sc, s7_pointer p);                     /* (flush-output-port port) */
 
 typedef enum {S7_READ, S7_READ_CHAR, S7_READ_LINE, S7_PEEK_CHAR, S7_IS_CHAR_READY, S7_NUM_READ_CHOICES} s7_read_t;
 s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port));  

@@ -5561,6 +5561,20 @@ Use the standard environment syntax to access these fields:
 <code>(*s7* 'stack-top)</code>.  stuff.scm has the function
 *s7*-&gt;list that returns most of these fields in a list.
 </p>
+<p>The compile-time defaults for some of these fields can be set:
+</p>
+<pre class="indented">
+heap-size:               INITIAL_HEAP_SIZE        (64000)
+stack-size:              INITIAL_STACK_SIZE       (4096)
+gc-temps-size:           GC_TEMPS_SIZE            (256)
+bignum-precision:        DEFAULT_BIGNUM_PRECISION (128)
+history-size:            DEFAULT_HISTORY_SIZE     (8)
+print-length:            DEFAULT_PRINT_LENGTH     (12)
+gc-resize-heap-fraction: GC_RESIZE_HEAP_FRACTION  (0.8)
+output-port-data-size:   OUTPUT_PORT_DATA_SIZE    (2048)
+
+See also WITH_WARNINGS, S7_ALIGNED, and GC_TRIGGER_SIZE.
+</pre>
 
 <p><code>(set! (*s7* 'autoloading) #f)</code> turns off the autoloader.
 </p>
