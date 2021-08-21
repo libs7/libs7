@@ -9417,7 +9417,7 @@ bool s7_is_input_port(s7_scheme *sc, s7_pointer p);
 bool s7_is_output_port(s7_scheme *sc, s7_pointer p);
 void s7_close_input_port(s7_scheme *sc, s7_pointer p);
 void s7_close_output_port(s7_scheme *sc, s7_pointer p);
-void s7_flush_output_port(s7_scheme *sc, s7_pointer p);
+bool s7_flush_output_port(s7_scheme *sc, s7_pointer p); /* false=flush lost data */
 const char *s7_port_filename(s7_scheme *sc, s7_pointer x);
 s7_int s7_port_line_number(s7_scheme *sc, s7_pointer p);
 

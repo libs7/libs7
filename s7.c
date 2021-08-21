@@ -440,8 +440,8 @@ typedef intptr_t opcode_t;
 #define WRITE_REAL_PRECISION 16
 typedef long double long_double;
 
-#define print_s7_int PRId64
-#define print_pointer PRIdPTR
+#define ld64 PRId64
+#define p64 PRIdPTR
 
 #define MAX_FLOAT_FORMAT_PRECISION 128
 
@@ -2998,7 +2998,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 {
   if (id < symbol_id(p))
     {
-      fprintf(stderr, "id mismatch: sym: %s %" print_s7_int ", let: %" print_s7_int "\n", symbol_name(p), symbol_id(p), id);
+      fprintf(stderr, "id mismatch: sym: %s %" ld64 ", let: %" ld64 "\n", symbol_name(p), symbol_id(p), id);
       abort();
     }
   (T_Sym(p))->object.sym.id = id;
@@ -3537,7 +3537,7 @@ static void set_type_1(s7_pointer p, uint64_t f, const char *func, int line)
       {
 	if (((full_type(p) & T_IMMUTABLE) != 0) && ((full_type(p) != (uint64_t)(f))))
 	  {
-	    fprintf(stderr, "%s[%d]: set immutable %p type %d to %" print_s7_int "\n", __func__, __LINE__, p, unchecked_type(p), (int64_t)(f));
+	    fprintf(stderr, "%s[%d]: set immutable %p type %d to %" ld64 "\n", __func__, __LINE__, p, unchecked_type(p), (int64_t)(f));
 	    abort();
 	  }
 	if (((full_type(p) & T_UNHEAP) != 0) && (((f) & T_UNHEAP) == 0))
@@ -3837,7 +3837,7 @@ static char *copy_string_with_length(const char *str, s7_int len)
 {
   char *newstr;
 #if S7_DEBUGGING
-  if ((len <= 0) || (!str)) fprintf(stderr, "%s[%d]: len: %" print_s7_int ", str: %s\n", __func__, __LINE__, len, str);
+  if ((len <= 0) || (!str)) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
 #endif
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
@@ -4164,7 +4164,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_OR_P, OP_OR_P1, OP_OR_AP, OP_OR_2A, OP_OR_3A, OP_OR_N, OP_OR_S_2, OP_OR_S_TYPE_2,
       OP_WHEN_S, OP_WHEN_A, OP_WHEN_P, OP_WHEN_AND_AP, OP_WHEN_AND_2A, OP_WHEN_AND_3A, OP_UNLESS_S, OP_UNLESS_A, OP_UNLESS_P,
 
-      OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A, 
+      OP_IF_A_C_C, OP_IF_A_A, OP_IF_A_A_A, OP_IF_S_A_A, OP_IF_AND2_S_A, OP_IF_NOT_A_A, OP_IF_NOT_A_A_A,
       OP_IF_B_A, OP_IF_B_P, OP_IF_B_R, OP_IF_B_A_P, OP_IF_B_P_A, OP_IF_B_P_P, OP_IF_B_N_N,
       OP_IF_A_A_P, OP_IF_A_P_A, OP_IF_S_P_A, OP_IF_IS_TYPE_S_P_A, OP_IF_IS_TYPE_S_A_A,
       OP_IF_S_P, OP_IF_S_P_P, OP_IF_S_R, OP_IF_S_N, OP_IF_S_N_N,
@@ -4388,7 +4388,7 @@ static const char* op_names[NUM_OPS] =
       "or_p", "or_p1", "or_ap", "or_2a", "or_3a", "or_n", "or_s_2", "or_s_type_2",
       "when_s", "when_a", "when_p", "when_and_ap", "when_and_2a", "when_and_3a", "unless_s", "unless_a", "unless_p",
 
-      "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a", 
+      "if_a_c_c", "if_a_a", "if_a_a_a", "if_s_a_a", "if_and2_s_a", "if_not_a_a", "if_not_a_a_a",
       "if_b_a", "if_b_p", "if_b_r",  "if_b_a_p", "if_b_p_a", "if_b_p_p", "if_b_n_n",
       "if_a_a_p", "if_a_p_a", "if_s_p_a", "if_is_type_s_p_a", "if_is_type_s_a_a",
       "if_s_p", "if_s_p_p", "if_s_r", "if_s_n", "if_s_n_n",
@@ -5118,7 +5118,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 	full_type(obj) = free_type;
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
-	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" print_s7_int " #x%" PRIx64 " (%s)), current: %s[%d], previous: %s[%d], %sgc: %s[%d]%s\n",
+	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], previous: %s[%d], %sgc: %s[%d]%s\n",
 		BOLD_TEXT,
 		obj, line,
 		s7_type_names[obj->current_alloc_type & 0xff], obj->current_alloc_type, obj->current_alloc_type,
@@ -5510,7 +5510,7 @@ static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, in
       s7_pointer slot;
       char *s;
       fprintf(stderr, "%s%s[%d]: %s unbound%s\n", BOLD_TEXT, func, line, symbol_name(sym), UNBOLD_TEXT);
-      fprintf(stderr, "  symbol_id: %" print_s7_int ", let_id: %" print_s7_int ", bits: %s", symbol_id(sym), let_id(sc->curlet), s = describe_type_bits(sc, sym));
+      fprintf(stderr, "  symbol_id: %" ld64 ", let_id: %" ld64 ", bits: %s", symbol_id(sym), let_id(sc->curlet), s = describe_type_bits(sc, sym));
       free(s);
       slot = symbol_to_local_slot(sc, sym, sc->curlet);
       if (is_slot(slot)) fprintf(stderr, ", slot: %s", display(slot));
@@ -6036,7 +6036,7 @@ void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc)
       if (vector_element(sc->protected_objects, loc) != sc->unused)
 	sc->gpofl[++sc->gpofl_loc] = loc;
 #if S7_DEBUGGING
-      else fprintf(stderr, "redundant gc_unprotect_at location %" print_s7_int "\n", loc);
+      else fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
 #endif
       vector_element(sc->protected_objects, loc) = sc->unused;
     }
@@ -7125,10 +7125,10 @@ static int64_t gc(s7_scheme *sc)
       if (show_gc_stats(sc))
 	{
 #if (!MS_WINDOWS)
-	  s7_warn(sc, 256, "gc freed %" print_s7_int "/%" print_s7_int " (free: %" print_pointer "), time: %f\n",
+	  s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n",
 		  sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
 #else
-	  s7_warn(sc, 256, "gc freed %" print_s7_int "/%" print_s7_int "\n", sc->gc_freed, sc->heap_size);
+	  s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 "\n", sc->gc_freed, sc->heap_size);
 #endif
 	}
       if (show_protected_objects_stats(sc))
@@ -7138,7 +7138,7 @@ static int64_t gc(s7_scheme *sc)
 	  for (i = 0, num = 0; i < len; i++)
 	    if (vector_element(sc->protected_objects, i) != sc->unused)
 	      num++;
-	  s7_warn(sc, 256, "gc-protected-objects: %" print_s7_int " in use of %" print_s7_int "\n", num, len);
+	  s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n", num, len);
 	}}
   sc->previous_free_heap_top = sc->free_heap_top;
   return(sc->gc_freed);
@@ -7172,10 +7172,10 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
   if (((2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell))) >= SIZE_MAX)
     {
-      s7_warn(sc, 256, "heap size requested, %ld => %ld bytes, is greater than size_t: %ld\n",
-	      (long int)(sc->heap_size),
-	      (long int)((2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell))),
-	      (long int)SIZE_MAX);
+      s7_warn(sc, 256, "heap size requested, %" ld64 " => %" ld64 " bytes, is greater than size_t: %" ld64 "\n",
+	      sc->heap_size,
+	      (2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell)),
+	      SIZE_MAX);
       sc->heap_size = old_size + 64000;
     }
 
@@ -7184,7 +7184,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
     sc->heap = cp;
   else
     {
-      s7_warn(sc, 256, "heap reallocation failed! tried to get %" print_s7_int " bytes (will retry with a smaller amount)\n", (int64_t)(sc->heap_size * sizeof(s7_cell *)));
+      s7_warn(sc, 256, "heap reallocation failed! tried to get %" ld64 " bytes (will retry with a smaller amount)\n", (int64_t)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
       sc->heap = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
@@ -7214,9 +7214,9 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       char *str;
       str = string_value(object_to_truncated_string(sc, current_code(sc), 80));
       if (size != 0)
-	s7_warn(sc, 512, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ", requested %" print_s7_int ") from %s\n",
+	s7_warn(sc, 512, "heap grows to %" ld64 " (old free/size: %" ld64 "/%" ld64 ", requested %" ld64 ") from %s\n",
 		sc->heap_size, old_free, old_size, size, str);
-      else s7_warn(sc, 512, "heap grows to %" print_s7_int " (old free/size: %" print_s7_int "/%" print_s7_int ") from %s\n",
+      else s7_warn(sc, 512, "heap grows to %" ld64 " (old free/size: %" ld64 "/%" ld64 ") from %s\n",
 		   sc->heap_size, old_free, old_size, str);
     }
   if (sc->heap_size >= sc->max_heap_size)
@@ -7546,7 +7546,7 @@ static void pop_stack_1(s7_scheme *sc, const char *func, int line)
   sc->cur_op = (opcode_t)(sc->stack_end[3]);
   if (sc->cur_op >= NUM_OPS)
     {
-      fprintf(stderr, "%s%s[%d]: pop_stack invalid opcode: %" print_pointer " %s\n", BOLD_TEXT, func, line, sc->cur_op, UNBOLD_TEXT);
+      fprintf(stderr, "%s%s[%d]: pop_stack invalid opcode: %" p64 " %s\n", BOLD_TEXT, func, line, sc->cur_op, UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
   if ((!is_let(sc->stack_end[1])) && (!is_null(sc->stack_end[1])) && (sc->cur_op != OP_ANY_CLOSURE_3P_3)) /* used as third GC protection field */
@@ -7585,7 +7585,7 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
     fprintf(stderr, "%s[%d]: stack changed in push_stack\n", func, line);
   if (op >= NUM_OPS)
     {
-      fprintf(stderr, "%s%s[%d]: push_stack invalid opcode: %" print_pointer " %s\n", BOLD_TEXT, func, line, sc->cur_op, UNBOLD_TEXT);
+      fprintf(stderr, "%s%s[%d]: push_stack invalid opcode: %" p64 " %s\n", BOLD_TEXT, func, line, sc->cur_op, UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
   if (code) sc->stack_end[0] = T_Pos(code);
@@ -8113,7 +8113,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   memcpy((void *)(name + plen + 3), (void *)p, len);
   nlen = len + plen + 2;
   if ((S7_DEBUGGING) && ((s7_int)strlen(name) != nlen))
-    fprintf(stderr, "%s[%d]: %s len: %" print_s7_int " != %" print_s7_int "\n", __func__, __LINE__, name, nlen, (s7_int)strlen(name));
+    fprintf(stderr, "%s[%d]: %s len: %" ld64 " != %" ld64 "\n", __func__, __LINE__, name, nlen, (s7_int)strlen(name));
   hash = raw_string_hash((const uint8_t *)name, nlen);
   location = hash % SYMBOL_TABLE_SIZE;
 
@@ -8496,7 +8496,7 @@ static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_le
 {
   /* we're reusing let here as a let -- it was probably a pair */
 #if S7_DEBUGGING
-  let->debugger_bits = 0; 
+  let->debugger_bits = 0;
   if (!in_heap(let)) fprintf(stderr, "reusing an unheaped let?\n");
 #endif
   set_full_type(let, T_LET | T_SAFE_PROCEDURE);
@@ -13989,15 +13989,15 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
       sc->num_to_str[0] = '\0';
       real(sc->real_wrapper4) = imag_part(obj);
       imag = copy_string(number_to_string_base_10(sc, sc->real_wrapper4, 0, precision, float_choice, &len, choice));
-      
+
       sc->num_to_str[0] = '\0';
       real(sc->real_wrapper3) = real_part(obj);
       number_to_string_base_10(sc, sc->real_wrapper3, 0, precision, float_choice, &len, choice);
-      
+
       sc->num_to_str[len] = '\0';
       len = catstrs(sc->num_to_str, sc->num_to_str_size, ((imag[0] == '+') || (imag[0] == '-')) ? "" : "+", imag, "i", (char *)NULL);
       free(imag);
-      
+
       if (width > len)  /* (format #f "~20g" 1+i) */
 	{
 	  insert_spaces(sc, sc->num_to_str, width, len); /* this checks sc->num_to_str_size */
@@ -14006,7 +14006,7 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
       else (*nlen) = len;
       return(sc->num_to_str);
     }
-  
+
   /* ratio */
   len = catstrs_direct(sc->num_to_str, integer_to_string_no_length(sc, numerator(obj)), "/", pos_int_to_str_direct(sc, denominator(obj)), (const char *)NULL);
   if (width > len)
@@ -18834,7 +18834,7 @@ static inline s7_pointer add_if_overflow_to_real_or_big_integer(s7_scheme *sc, s
     }
 #else
     {
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %ld %ld)\n", x, y);
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %" ld64 " %" ld64 ")\n", x, y);
       return(make_real(sc, (long_double)x + (long_double)y));
     }
 #endif
@@ -18861,7 +18861,7 @@ static s7_pointer integer_ratio_add_if_overflow_to_real_or_rational(s7_scheme *s
     }
 #else
     {
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer + ratio overflow: (+ %ld %ld/%ld)\n", integer(x), numerator(y), denominator(y));
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer + ratio overflow: (+ %" ld64 " %" ld64 "/%" ld64 ")\n", integer(x), numerator(y), denominator(y));
       return(make_real(sc, (long_double)integer(x) + fraction(y)));
     }
 #endif
@@ -18958,7 +18958,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		  }
 #else
 		  {
- 		    if (WITH_WARNINGS) s7_warn(sc, 128, "ratio + ratio overflow: (/ (+ %ld %ld) %ld)\n", n1, n2, d1);
+ 		    if (WITH_WARNINGS) s7_warn(sc, 128, "ratio + ratio overflow: (/ (+ %" ld64 " %" ld64 ") %" ld64 ")\n", n1, n2, d1);
 		    return(make_real(sc, ((long_double)n1 + (long_double)n2) / (long_double)d1));
 		  }
 #endif
@@ -18984,7 +18984,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		}
 #else
 	        {
- 		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio + ratio overflow: (+ %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+ 		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio + ratio overflow: (+ %" ld64 "/%" ld64 " %" ld64 "/%" ld64 ")\n", n1, d1, n2, d2);
 	          return(make_real(sc, ((long_double)n1 / (long_double)d1) + ((long_double)n2 / (long_double)d2)));
 		}
 #endif
@@ -19254,7 +19254,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
-static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z) 
+static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z)
 {
 #if HAVE_OVERFLOW_CHECKS && (!WITH_GMP)
   if ((is_t_integer(x)) && (is_t_integer(y)) && (is_t_integer(z)))
@@ -19263,7 +19263,7 @@ static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointe
       if ((!add_overflow(integer(x), integer(y), &val)) &&
 	  (!add_overflow(val, integer(z), &val)))
 	return(make_integer(sc, val));
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %ld %ld %ld)\n", integer(x), integer(y), integer(z));
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %" ld64 " %" ld64 " %" ld64 ")\n", integer(x), integer(y), integer(z));
       return(make_real(sc, (long_double)integer(x) + (long_double)integer(y) + (long_double)integer(z)));
     }
 #endif
@@ -19315,7 +19315,7 @@ static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args)
       mpz_add(sc->mpz_1, sc->mpz_1, sc->mpz_2);
       return(mpz_to_integer(sc, sc->mpz_1));
 #else
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %ld %ld %ld)\n", integer(p0), integer(p1), integer(p2));
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %" ld64 " %" ld64 " %" ld64 ")\n", integer(p0), integer(p1), integer(p2));
       return(make_real(sc, (long_double)integer(p0) + (long_double)integer(p1) + (long_double)integer(p2)));
 #endif
 #else
@@ -19622,7 +19622,7 @@ static inline s7_pointer subtract_if_overflow_to_real_or_big_integer(s7_scheme *
     }
 #else
     {
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer subtract overflow: (- %ld %ld)\n", x, y);
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer subtract overflow: (- %" ld64 " %" ld64 ")\n", x, y);
       return(make_real(sc, (long_double)x - (long_double)y));
     }
 #endif
@@ -19661,7 +19661,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	      }
 #else
 	      {
-		if (WITH_WARNINGS) s7_warn(sc, 128, "integer - ratio overflow: (- %ld %ld/%ld)\n", integer(x), numerator(y), denominator(y));
+		if (WITH_WARNINGS) s7_warn(sc, 128, "integer - ratio overflow: (- %" ld64 " %" ld64 "/%" ld64 ")\n", integer(x), numerator(y), denominator(y));
 		return(make_real(sc, (long_double)integer(x) - fraction(y)));
 	      }
 #endif
@@ -19723,7 +19723,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	      }
 #else
 	      {
-		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio - integer overflow: (- %ld/%ld %ld)\n", numerator(x), denominator(x), integer(y));
+		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio - integer overflow: (- %" ld64 "/%" ld64 " %" ld64 ")\n", numerator(x), denominator(x), integer(y));
 		return(make_real(sc, fraction(x) - (long_double)integer(y)));
 	      }
 #endif
@@ -19750,7 +19750,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		  }
 #else
 		  {
-		    if (WITH_WARNINGS) s7_warn(sc, 128, "ratio - ratio overflow: (- %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+		    if (WITH_WARNINGS) s7_warn(sc, 128, "ratio - ratio overflow: (- %" ld64 "/%" ld64 " %" ld64 "/%" ld64 ")\n", n1, d1, n2, d2);
 		    return(make_real(sc, ((long_double)n1 - (long_double)n2) / (long_double)d1));
 		  }
 #endif
@@ -19776,7 +19776,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		}
 #else
 	        {
-		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio - ratio overflow: (- %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio - ratio overflow: (- %" ld64 "/%" ld64 " %" ld64 "/%" ld64 ")\n", n1, d1, n2, d2);
 		  return(make_real(sc, ((long_double)n1 / (long_double)d1) - ((long_double)n2 / (long_double)d2)));
 		}
 #endif
@@ -20208,7 +20208,7 @@ static inline s7_pointer multiply_if_overflow_to_real_or_big_integer(s7_scheme *
     }
 #else
     {
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply overflow: (* %ld %ld)\n", x, y);
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply overflow: (* %" ld64 " %" ld64 ")\n", x, y);
       return(make_real(sc, (double)x * (double)y));
     }
 #endif
@@ -20233,7 +20233,7 @@ static s7_pointer integer_ratio_multiply_if_overflow_to_real_or_ratio(s7_scheme 
     }
 #else
     {
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer * ratio overflow: (* %ld %ld/%ld)\n", x, numerator(y), denominator(y));
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer * ratio overflow: (* %" ld64 " %" ld64 "/%" ld64 ")\n", x, numerator(y), denominator(y));
       return(make_real(sc, (double)x * fraction(y)));
     }
 #endif
@@ -20309,7 +20309,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		}
 #else
 	        {
-		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio * ratio overflow: (* %ld/%ld %ld/%ld)\n", n1, d1, n2, d2);
+		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio * ratio overflow: (* %" ld64 "/%" ld64 " %" ld64 "/%" ld64 ")\n", n1, d1, n2, d2);
 		  return(make_real(sc, fraction(x) * fraction(y)));
 		}
 #endif
@@ -20728,7 +20728,7 @@ static s7_pointer g_mul_2_ii(s7_scheme *sc, s7_pointer args)
   s7_int val, x = integer(car(args)), y = integer(cadr(args));
   if (multiply_overflow(x, y, &val))
     {
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply overflow: (* %ld %ld)\n", x, y);
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply overflow: (* %" ld64 " %" ld64 ")\n", x, y);
       return(make_real(sc, (double)x * (double)y));
     }
   return(make_integer(sc, val));
@@ -20744,7 +20744,7 @@ static s7_int multiply_i_ii(s7_int i1, s7_int i2)
   s7_int val;
   if (multiply_overflow(i1, i2, &val))
     {
-      if (WITH_WARNINGS) s7_warn(cur_sc, 64, "integer multiply overflow: (* %ld %ld)\n", i1, i2);
+      if (WITH_WARNINGS) s7_warn(cur_sc, 64, "integer multiply overflow: (* %" ld64 " %" ld64 ")\n", i1, i2);
       return(S7_INT64_MAX); /* this is inconsistent with other unopt cases where an overflow -> double result */
     }
   /* (let () (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((= j 1)) (even? (* (ash 1 43) (ash 1 43)))))) (define (hi) (func)) (hi)) */
@@ -20761,7 +20761,7 @@ static s7_int multiply_i_iii(s7_int i1, s7_int i2, s7_int i3)
   if ((multiply_overflow(i1, i2, &val1)) ||
       (multiply_overflow(val1, i3, &val2)))
     {
-      if (WITH_WARNINGS) s7_warn(cur_sc, 64, "integer multiply overflow: (* %ld %ld %ld)\n", i1, i2, i3);
+      if (WITH_WARNINGS) s7_warn(cur_sc, 64, "integer multiply overflow: (* %" ld64 " %" ld64 " %" ld64 ")\n", i1, i2, i3);
       return(S7_INT64_MAX);
     }
   return(val2);
@@ -20912,7 +20912,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	      }
 #else
               {
-		if (WITH_WARNINGS) s7_warn(sc, 128, "integer / ratio overflow: (/ %ld %ld/%ld)\n", integer(x), numerator(y), denominator(y));
+		if (WITH_WARNINGS) s7_warn(sc, 128, "integer / ratio overflow: (/ %" ld64 " %" ld64 "/%" ld64 ")\n", integer(x), numerator(y), denominator(y));
   	        return(make_real(sc, integer(x) * inverted_fraction(y)));
 	      }
 #endif
@@ -20994,7 +20994,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	      }
 #else
               {
-		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio / integer overflow: (/ %ld/%ld %ld)\n", numerator(x), denominator(x), integer(y));
+		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio / integer overflow: (/ %" ld64 "/%" ld64 " %" ld64 ")\n", numerator(x), denominator(x), integer(y));
 	        return(make_real(sc, (long_double)numerator(x) / ((long_double)denominator(x) * (long_double)integer(y))));
 	      }
 #endif
@@ -21021,7 +21021,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		return(mpq_to_rational(sc, sc->mpq_1));
 #else
 		s7_double r1, r2;
-		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio / ratio overflow: (/ %ld/%ld %ld/%ld)\n", numerator(x), denominator(x), numerator(y), denominator(y));
+		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio / ratio overflow: (/ %" ld64 "/%" ld64 " %" ld64 "/%" ld64 ")\n", numerator(x), denominator(x), numerator(y), denominator(y));
 		r1 = fraction(x);
 		r2 = inverted_fraction(y);
 		return(make_real(sc, r1 * r2));
@@ -21486,7 +21486,7 @@ static s7_pointer g_divide_by_2(s7_scheme *sc, s7_pointer args)
 	      }
 #else
 	      {
-		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio / 2 overflow: (/ %ld/%ld 2)\n", numerator(num), denominator(num));
+		if (WITH_WARNINGS) s7_warn(sc, 128, "ratio / 2 overflow: (/ %" ld64 "/%" ld64 " 2)\n", numerator(num), denominator(num));
 	        return(make_real(sc, ((long_double)numerator(num) * 0.5) / (long_double)denominator(num)));
 	      }
 #endif
@@ -28274,7 +28274,7 @@ static s7_pointer stdin_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
     }
   if (fgets(sc->read_line_buf, sc->read_line_buf_size, stdin))
     return(s7_make_string(sc, sc->read_line_buf)); /* fgets adds the trailing '\0' */
-  return(make_string_with_length(sc, NULL, 0));
+  return(nil_string); /* make_string_with_length(sc, NULL, 0)); */
 }
 
 static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
@@ -28896,7 +28896,7 @@ static s7_pointer read_file(s7_scheme *sc, FILE *fp, const char *name, s7_int ma
 	    {
 	      char tmp[256];
 	      int32_t len;
-	      len = snprintf(tmp, 256, "(%s \"%s\") read %ld bytes of an expected %" print_s7_int "?", caller, name, (long)bytes, size);
+	      len = snprintf(tmp, 256, "(%s \"%s\") read %ld bytes of an expected %" ld64 "?", caller, name, (long)bytes, size);
 	      port_write_string(current_output_port(sc))(sc, tmp, clamp_length(len, 256), current_output_port(sc));
 	    }
 	  size = bytes;
@@ -29249,7 +29249,7 @@ static s7_pointer open_input_string(s7_scheme *sc, const char *input_string, s7_
 #if S7_DEBUGGING
   if (input_string[len] != '\0')
     {
-      fprintf(stderr, "%s[%d]: read_white_space string is not terminated: len: %" print_s7_int ", at end: %c%c, str: %s", __func__, __LINE__, len, input_string[len - 1], input_string[len], input_string);
+      fprintf(stderr, "%s[%d]: read_white_space string is not terminated: len: %" ld64 ", at end: %c%c, str: %s", __func__, __LINE__, len, input_string[len - 1], input_string[len], input_string);
       abort();
     }
 #endif
@@ -30048,7 +30048,7 @@ static block_t *search_load_path(s7_scheme *sc, const char *name)
 	  if (new_dir)
 	    {
 	      if ((WITH_WARNINGS) && (string_length(car(dir_names)) + name_len >= S7_FILENAME_MAX))
-		s7_warn(sc, 256, "load: file + directory name too long: %ld + %ld > %d\n", name_len, string_length(car(dir_names)), S7_FILENAME_MAX);
+		s7_warn(sc, 256, "load: file + directory name too long: %" ld64 " + %" ld64 " > %d\n", name_len, string_length(car(dir_names)), S7_FILENAME_MAX);
 	      filename[0] = '\0';
 	      if (new_dir[strlen(new_dir) - 1] == '/')
 		catstrs(filename, S7_FILENAME_MAX, new_dir, name, (char *)NULL);
@@ -34198,7 +34198,7 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 		  ci->init_port = s7_open_output_string(sc);
 		  ci->init_loc = s7_gc_protect_1(sc, ci->init_port);
 		}
-	      nlen = snprintf(buf, CP_BUFSIZE, "  (set! <%d> (c-pointer %" print_pointer, -ref, (intptr_t)c_pointer(obj));
+	      nlen = snprintf(buf, CP_BUFSIZE, "  (set! <%d> (c-pointer %" p64, -ref, (intptr_t)c_pointer(obj));
 	      port_write_string(ci->init_port)(sc, buf, nlen, ci->init_port);
 
 	      if ((c_pointer_type(obj) != sc->F) ||
@@ -34222,7 +34222,7 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
 	    }}
       else
 	{
-	  nlen = snprintf(buf, CP_BUFSIZE, "(c-pointer %" print_pointer, (intptr_t)c_pointer(obj));
+	  nlen = snprintf(buf, CP_BUFSIZE, "(c-pointer %" p64, (intptr_t)c_pointer(obj));
 	  port_write_string(port)(sc, buf, clamp_length(nlen, CP_BUFSIZE), port);
 	  if ((c_pointer_type(obj) != sc->F) ||
 	      (c_pointer_info(obj) != sc->F))
@@ -36465,7 +36465,7 @@ static void check_sig_entry(s7_scheme *sc, s7_pointer p, s7_int pos, bool circle
       (!s7_is_boolean(car(p))) &&
       (!is_pair(car(p))))
     {
-      s7_warn(sc, 512, "s7_make_%ssignature got an invalid entry at position %" print_s7_int ": (", (circle) ? "circular_" : "", pos);
+      s7_warn(sc, 512, "s7_make_%ssignature got an invalid entry at position %" ld64 ": (", (circle) ? "circular_" : "", pos);
       set_car(p, sc->nil);
     }
 }
@@ -51127,7 +51127,7 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = (int32_t)(sc->op_stack_now - sc->op_stack);
   catch_set_handler(p, error_handler);
-  if (!sc->longjmp_ok) 
+  if (!sc->longjmp_ok)
     {
       declare_jump_info();
       TRACK(sc);
@@ -51998,7 +51998,7 @@ static s7_pointer read_error_1(s7_scheme *sc, const char *errmsg, bool string_er
 	      len = safe_strlen(recent_input) + safe_strlen(errmsg) + port_filename_length(pt) + safe_strlen(sc->current_file) + 64;
 	      p = make_empty_string(sc, len, '\0');
 	      msg = string_value(p);
-	      nlen = snprintf(msg, len, "%s: %s %s[%u], last top-level form at: %s[%" print_s7_int "]",
+	      nlen = snprintf(msg, len, "%s: %s %s[%u], last top-level form at: %s[%" ld64 "]",
 			     errmsg, (recent_input) ? recent_input : "", port_filename(pt), port_line_number(pt),
 			     sc->current_file, sc->current_line);
 	    }
@@ -52009,7 +52009,7 @@ static s7_pointer read_error_1(s7_scheme *sc, const char *errmsg, bool string_er
 	      msg = string_value(p);
 	      if ((sc->current_file) &&
 		  (sc->current_line >= 0))
-		nlen = snprintf(msg, len, "%s: %s, last top-level form at %s[%" print_s7_int "]",
+		nlen = snprintf(msg, len, "%s: %s, last top-level form at %s[%" ld64 "]",
 			       errmsg, (recent_input) ? recent_input : "",
 			       sc->current_file, sc->current_line);
 	      else nlen = snprintf(msg, len, "%s: %s", errmsg, (recent_input) ? recent_input : "");
@@ -52028,10 +52028,10 @@ static s7_pointer read_error_1(s7_scheme *sc, const char *errmsg, bool string_er
       p = make_empty_string(sc, len, '\0');
       msg = string_value(p);
       if (string_error)
-	nlen = snprintf(msg, len, "%s %s[%u],\n;  possible culprit: \"%s...\"\n;  last top-level form at %s[%" print_s7_int "]",
+	nlen = snprintf(msg, len, "%s %s[%u],\n;  possible culprit: \"%s...\"\n;  last top-level form at %s[%" ld64 "]",
 		       errmsg, port_filename(pt), port_line_number(pt),
 		       sc->strbuf, sc->current_file, sc->current_line);
-      else nlen = snprintf(msg, len, "%s %s[%u], last top-level form at %s[%" print_s7_int "]",
+      else nlen = snprintf(msg, len, "%s %s[%u], last top-level form at %s[%" ld64 "]",
 			  errmsg, port_filename(pt), port_line_number(pt),
 			  sc->current_file, sc->current_line);
       string_length(p) = nlen;
@@ -52190,12 +52190,12 @@ static s7_pointer missing_close_paren_error(s7_scheme *sc)
       msg = string_value(p);
       if (syntax_msg)
 	{
-	  nlen = snprintf(msg, len, "missing close paren, %s[%u], last top-level form at %s[%" print_s7_int "]\n%s",
+	  nlen = snprintf(msg, len, "missing close paren, %s[%u], last top-level form at %s[%" ld64 "]\n%s",
 			 port_filename(pt), port_line_number(pt),
 			 sc->current_file, sc->current_line, syntax_msg);
 	  free(syntax_msg);
 	}
-      else nlen = snprintf(msg, len, "missing close paren, %s[%u], last top-level form at %s[%" print_s7_int "]",
+      else nlen = snprintf(msg, len, "missing close paren, %s[%u], last top-level form at %s[%" ld64 "]",
 			  port_filename(pt), port_line_number(pt),
 			  sc->current_file, sc->current_line);
       string_length(p) = nlen;
@@ -52918,7 +52918,7 @@ static s7_pointer g_exit(s7_scheme *sc, s7_pointer args)
 
   s7_quit(sc);
   if (show_gc_stats(sc))
-    s7_warn(sc, 256, "gc calls %" print_s7_int " total time: %f\n", sc->gc_calls, (double)(sc->gc_total_time) / ticks_per_second());
+    s7_warn(sc, 256, "gc calls %" ld64 " total time: %f\n", sc->gc_calls, (double)(sc->gc_total_time) / ticks_per_second());
   return(g_emergency_exit(sc, args));
 }
 
@@ -53821,7 +53821,7 @@ static inline s7_pointer fx_sqr_1(s7_scheme *sc, s7_pointer x)
 	s7_int val;
 	if (multiply_overflow(integer(x), integer(x), &val))
 	  {
-	    if (WITH_WARNINGS) s7_warn(sc, 128, "integer sqr overflow: (* %ld %ld)\n", integer(x), integer(x));
+	    if (WITH_WARNINGS) s7_warn(sc, 128, "integer sqr overflow: (* %" ld64 " %" ld64 ")\n", integer(x), integer(x));
 	    return(make_real(sc, (long_double)integer(x) * (long_double)integer(x)));
 	  }
 	return(make_integer(sc, val));
@@ -54501,7 +54501,7 @@ static s7_pointer fx_add_mul_opssq_s(s7_scheme *sc, s7_pointer arg)
       if ((multiply_overflow(integer(a), integer(b), &val)) ||
 	  (add_overflow(val, integer(c), &val)))
 	{
-	  if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply/add overflow: (+ (* %ld %ld) %ld)\n", integer(a), integer(b), integer(c));
+	  if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply/add overflow: (+ (* %" ld64 " %" ld64 ") %" ld64 ")\n", integer(a), integer(b), integer(c));
 	  return(make_real(sc, ((long_double)integer(a) * (long_double)integer(b)) + (long_double)integer(c)));
 	}
       return(make_integer(sc, val));
@@ -56863,7 +56863,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 		  if (fn_proc(arg) == g_memq_2)
 		    set_opt3_direct(cdr(arg), (s7_pointer)memq_2_p_pp);
 		  else
-		    if ((is_pair(caddr(arg))) && (is_proper_list_3(sc, cadaddr(arg)))) 
+		    if ((is_pair(caddr(arg))) && (is_proper_list_3(sc, cadaddr(arg))))
 		      set_opt3_direct(cdr(arg), memq_3_p_pp);
 		    else
 		      if (fn_proc(arg) == g_memq_4)
@@ -57214,7 +57214,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_u1));
 	  return(false);
 	}
-      if (cadr(p) == var3) 
+      if (cadr(p) == var3)
 	{
 	  if (fx_proc(tree) == fx_num_eq_s0) return(with_fx(tree, fx_num_eq_v0));
 	  if (fx_proc(tree) == fx_num_eq_si) return(with_fx(tree, fx_num_eq_vi));
@@ -57261,7 +57261,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if (fx_proc(tree) == fx_memq_ss)     return(with_fx(tree, fx_memq_tu));
 	    }
 	  if (fx_proc(tree) == fx_multiply_ss) return(with_fx(tree, fx_multiply_ts));
-	  if (fx_proc(tree) == fx_num_eq_ss)   
+	  if (fx_proc(tree) == fx_num_eq_ss)
 	    {
 	      if (is_global(caddr(p))) return(with_fx(tree, fx_num_eq_tg));
 	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_num_eq_to));
@@ -57275,7 +57275,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_leq_ss) return(with_fx(tree, fx_leq_ts));
 	  if (fx_proc(tree) == fx_lt_ss)  return(with_fx(tree, fx_lt_ts));
 	  if (fx_proc(tree) == fx_lt_sg)  return(with_fx(tree, fx_lt_tg));
-	  if (fx_proc(tree) == fx_gt_ss)    
+	  if (fx_proc(tree) == fx_gt_ss)
 	    {
 	      if (is_global(caddr(p))) return(with_fx(tree, fx_gt_tg));
 	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_gt_to));
@@ -57288,7 +57288,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      if ((!more_vars) && (caddr(p) != var3) && (caddr(p) != var1)) return(with_fx(tree, fx_is_eq_to));
 	      return(with_fx(tree, fx_is_eq_ts));
 	    }
-	  if (fx_proc(tree) == fx_vref_ss) 
+	  if (fx_proc(tree) == fx_vref_ss)
 	    {
 	      if (caddr(p) == var2) return(with_fx(tree, fx_vref_tu));
 	      return(with_fx(tree, fx_vref_ts));
@@ -57299,7 +57299,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_c_ss_direct) {return(with_fx(tree, (is_global(cadr(p))) ? fx_c_gt_direct : fx_c_st_direct));}
 	  if (fx_proc(tree) == fx_hash_table_ref_ss) return(with_fx(tree, fx_hash_table_ref_st));
 	  if (fx_proc(tree) == fx_cons_ss) return(with_fx(tree, fx_cons_st));
-	  if (fx_proc(tree) == fx_vref_ss) 
+	  if (fx_proc(tree) == fx_vref_ss)
 	    {
 	      if (is_global(cadr(p))) return(with_fx(tree, fx_vref_gt));
 	      if ((!more_vars) && (cadr(p) != var2) && (cadr(p) != var3)) return(with_fx(tree, fx_vref_ot));
@@ -57307,7 +57307,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }
 	  if ((fx_proc(tree) == fx_gt_ss) && (cadr(p) == var2)) return(with_fx(tree, fx_gt_ut));
 	  if ((fx_proc(tree) == fx_lt_ss) && (cadr(p) == var2)) return(with_fx(tree, fx_lt_ut));
-	  if ((fx_proc(tree) == fx_geq_ss)) 
+	  if ((fx_proc(tree) == fx_geq_ss))
 	    {
 	      if ((!more_vars) && (o_var_ok(cadr(p), var1, var2, var3))) return(with_fx(tree, fx_geq_ot));
 	      return(with_fx(tree, fx_geq_st));
@@ -57371,7 +57371,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
     case HOP_SAFE_C_SSS:
       if ((cadr(p) == var1) && ((caddr(p) == var2) && ((fx_proc(tree) == fx_c_sss) || (fx_proc(tree) == fx_c_sss_direct))))
 	return(with_fx(tree, (cadddr(p) == var3) ? fx_c_tuv : fx_c_tus));
-      if (caddr(p) == var1) 
+      if (caddr(p) == var1)
 	{
 	  if (car(p) == sc->vector_set_symbol)
 	    {
@@ -57442,9 +57442,9 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	      return(with_fx(tree, fx_c_optq_s));
 	    }
 	  if (fx_proc(tree) == fx_c_opsq_s_direct) return(with_fx(tree, fx_c_optq_s_direct));
-	  if (fx_proc(tree) == fx_cons_car_s_s) 
+	  if (fx_proc(tree) == fx_cons_car_s_s)
 	    {
-	      set_opt1_sym(cdr(p), var1); 
+	      set_opt1_sym(cdr(p), var1);
 	      return(with_fx(tree, (caddr(p) == var3) ? fx_cons_car_t_v : fx_cons_car_t_s));
 	    }}
       if (cadadr(p) == var2)
@@ -58217,7 +58217,7 @@ static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 {
   s7_pointer sig;
   s7_i_7pi_t pfunc;
-  
+
   pfunc = s7_i_7pi_function(s_func);
   if (!pfunc)
     return_false(sc, car_x);
@@ -58241,7 +58241,7 @@ static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	      ((!is_byte_vector(slot_value(slot))) ||
 	       (vector_rank(slot_value(slot)) > 1)))
 	    return_false(sc, car_x);
-	  
+
 	  opc->v[3].i_7pi_f = pfunc;
 	  p = opt_integer_symbol(sc, arg2);
 	  if (p)
@@ -58357,7 +58357,7 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   s7_pointer p, sig;
 
   ifunc = s7_i_ii_function(s_func);
-  if (!ifunc) 
+  if (!ifunc)
     {
       ifunc7 = s7_i_7ii_function(s_func);
       if (!ifunc7)
@@ -58371,7 +58371,7 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       if (ifunc)
 	opc->v[3].i_ii_f = ifunc;
       else opc->v[3].i_7ii_f = ifunc7;
-      
+
       if (is_t_integer(arg1))
 	{
 	  opc->v[1].i = integer(arg1);
@@ -58499,7 +58499,7 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 			      if (opc->v[3].i_ii_f == add_i_ii) {opc->v[0].fi = opt_i_ii_fc_add; return(true);}
 			      if (opc->v[3].i_ii_f == multiply_i_ii) {opc->v[0].fi = opt_i_ii_fc_mul; return(true);}
 			      opc->v[0].fi = opt_i_ii_fc;
-			      
+
 			      if ((opc->v[3].i_ii_f == subtract_i_ii) && (opc == sc->opts[sc->pc - 2]) &&
 				  (sc->opts[start]->v[0].fi == opt_i_7i_c) &&
 				  (sc->opts[start]->v[2].i_7i_f == random_i_7i))
@@ -58773,23 +58773,23 @@ static bool i_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
       (is_symbol(cadr(car_x))))
     {
       s7_pointer slot, fname = car(car_x);
-      
+
       if ((is_target_or_its_alias(fname, s_func, sc->int_vector_set_symbol)) ||
 	  (is_target_or_its_alias(fname, s_func, sc->byte_vector_set_symbol)))
 	return(opt_int_vector_set(sc, (fname == sc->int_vector_set_symbol) ? 1 : 0, opc, cadr(car_x), cddr(car_x), NULL, cdddr(car_x)));
-      
+
       slot = opt_types_match(sc, cadr(sig), cadr(car_x));
       if (slot)
 	{
 	  s7_pointer arg2, p;
 	  int32_t start = sc->pc;
 	  opc->v[1].p = slot;
-	  
+
 	  if (((is_target_or_its_alias(fname, s_func, sc->int_vector_ref_symbol)) ||
 	       (is_target_or_its_alias(fname, s_func, sc->byte_vector_ref_symbol))) &&
 	      (vector_rank(slot_value(slot)) != 2))
 	    return_false(sc, car_x);
-	  
+
 	  arg2 = caddr(car_x);
 	  p = opt_integer_symbol(sc, arg2);
 	  if (p)
@@ -59338,13 +59338,13 @@ static bool d_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
       opc->v[1].p = lookup_slot_from(cadr(car_x), sc->curlet);
       if (!is_slot(opc->v[1].p))
 	return_false(sc, car_x);
-      
+
       obj = slot_value(opc->v[1].p);
       if ((is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol)) &&
 	  ((!is_float_vector(obj)) ||
 	   (vector_rank(obj) > 1)))
 	return_false(sc, car_x);
-      
+
       arg2 = caddr(car_x);
       if (!is_pair(arg2))
 	{
@@ -59377,12 +59377,12 @@ static bool d_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
       pc_fallback(sc, start);
       return_false(sc, car_x);
     }
-  
+
   if ((is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol)) &&
       ((!is_float_vector(cadr(car_x))) ||
        (vector_rank(cadr(car_x)) > 1)))          /* (float-vector-ref #r2d((.1 .2) (.3 .4)) 3) */
     return_false(sc, car_x);
-  
+
   if (cell_optimize(sc, cdr(car_x)))
     {
       opt_info *o2 = sc->opts[sc->pc];
@@ -60101,7 +60101,7 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   s7_d_dd_t func;
   s7_d_7dd_t func7 = NULL;
   func = s7_d_dd_function(s_func);
-  if (!func) 
+  if (!func)
     {
       func7 = s7_d_7dd_function(s_func);
       if (!func7) return_false(sc, car_x);
@@ -60109,7 +60109,7 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   if (func)
     opc->v[3].d_dd_f = func;
   else opc->v[3].d_7dd_f = func7;
-  
+
   /* arg1 = real constant */
   if (is_small_real(arg1))
     {
@@ -60144,7 +60144,7 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       pc_fallback(sc, start);
       return_false(sc, car_x);
     }
-  
+
   /* arg1 = float symbol */
   slot = opt_float_symbol(sc, arg1);
   if (slot)
@@ -60191,7 +60191,7 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       pc_fallback(sc, start);
       return_false(sc, car_x);
     }
-  
+
   /* arg1 = float expr or non-float */
   o1 = sc->opts[sc->pc];
   if (float_optimize(sc, cdr(car_x)))
@@ -60939,7 +60939,7 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 		    {
 		      opc->v[0].fd = opt_d_7piid_sssf;
 		      opc->v[9].fd = opc->v[8].o1->v[0].fd;
-		      
+
 		      if ((step_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
 			  (step_end_fits(opc->v[3].p, vector_dimension(vect, 1))))
 			opc->v[0].fd = opt_d_7piid_sssf_unchecked;
@@ -61973,7 +61973,7 @@ static bool b_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   s7_b_ii_t bif;
   s7_b_7ii_t b7if = NULL;
   bif = s7_b_ii_function(s_func);
-  if (!bif) 
+  if (!bif)
     {
       b7if = s7_b_7ii_function(s_func);
       if (!b7if)
@@ -61986,7 +61986,7 @@ static bool b_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       if (is_symbol(arg2))
 	{
 	  opc->v[2].p = lookup_slot_from(arg2, sc->curlet);
-	  
+
 	  opc->v[0].fb = (bif == lt_b_ii) ? opt_b_ii_ss_lt :
 	    ((bif == leq_b_ii) ? opt_b_ii_ss_leq :
 	     ((bif == gt_b_ii) ? opt_b_ii_ss_gt :
@@ -62018,7 +62018,7 @@ static bool b_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       return_false(sc, car_x);
     }
   if (!bif) return_false(sc, car_x);
-  
+
   if (is_symbol(arg2))
     {
       opc->v[10].o1 = sc->opts[sc->pc];
@@ -62566,13 +62566,13 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   if ((is_any_vector(slot_value(slot1))) &&
       (vector_rank(slot_value(slot1)) > 1))
     return_false(sc, car_x);
-  
+
   opc->v[3].p_pi_f = func;
   opc->v[1].p = slot1;
-  
+
   if (is_symbol(cadr(sig)))
     checker = cadr(sig);
-  
+
   if ((s7_p_pi_unchecked_function(s_func)) &&
       (checker))
     {
@@ -62684,10 +62684,10 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	  return_false(sc, car_x);
 	}
       opc->v[1].p = slot;
-      
+
       if ((func == hash_table_ref_p_pp) && (is_hash_table(slot_value(slot))))
 	opc->v[3].p_pp_f = s7_hash_table_ref;
-      
+
       if (is_symbol(caddr(car_x)))
 	{
 	  opc->v[2].p = opt_simple_symbol(sc, caddr(car_x));
@@ -62708,7 +62708,7 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	}
       if (cell_optimize(sc, cddr(car_x)))
 	{
-	  opc->v[0].fp = (func == add_p_pp) ? opt_p_pp_sf_add : ((func == subtract_p_pp) ? opt_p_pp_sf_sub : ((func == set_car_p_pp) ? opt_p_pp_sf_set_car : 
+	  opc->v[0].fp = (func == add_p_pp) ? opt_p_pp_sf_add : ((func == subtract_p_pp) ? opt_p_pp_sf_sub : ((func == set_car_p_pp) ? opt_p_pp_sf_set_car :
                           ((func == set_cdr_p_pp) ? opt_p_pp_sf_set_cdr : ((opc->v[3].p_pp_f == s7_hash_table_ref) ? opt_p_pp_sf_href : opt_p_pp_sf))));
 	  opc->v[4].o1 = sc->opts[pstart];
 	  opc->v[5].fp = sc->opts[pstart]->v[0].fp;
@@ -63330,17 +63330,17 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
     {
       s7_pointer slot, obj;
       opt_info *o1;
-      
+
       slot = lookup_slot_from(arg1, sc->curlet);
       if ((!is_slot(slot)) ||
 	  (has_methods(slot_value(slot))))
 	return_false(sc, car_x);
-      
+
       obj = slot_value(slot);
       if ((is_any_vector(obj)) &&
 	  (vector_rank(obj) > 1))
 	return_false(sc, car_x);
-      
+
       if (is_target_or_its_alias(car(car_x), s_func, sc->hash_table_set_symbol))
 	{
 	  if ((!is_hash_table(obj)) || (is_immutable(obj)))
@@ -63350,12 +63350,12 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	if ((is_target_or_its_alias(car(car_x), s_func, sc->let_set_symbol)) &&
 	    ((!is_let(obj)) || (is_immutable(obj))))
 	  return_false(sc, car_x);
-      
+
       opc->v[1].p = slot;
-      
+
       if ((func == hash_table_set_p_ppp) && (is_hash_table(obj)))
 	opc->v[3].p_ppp_f = s7_hash_table_set;
-      
+
       if (is_symbol(arg2))
 	{
 	  slot = opt_simple_symbol(sc, arg2);
@@ -63647,13 +63647,13 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	case T_LET:        opc->v[3].p_pp_f = s7_let_ref;	             break;
 	case T_STRING:     opc->v[3].p_pi_f = string_ref_p_pi_unchecked; break;
 	case T_C_OBJECT:   return_false(sc, car_x); /* no pi_ref because ref assumes pp */
-	  
+
 	case T_VECTOR:
 	  if (vector_rank(obj) != 1)
 	    return_false(sc, car_x);
 	  opc->v[3].p_pi_f = normal_vector_ref_p_pi_unchecked;
 	  break;
-	  
+
 	case T_BYTE_VECTOR:
 	case T_INT_VECTOR:
 	case T_FLOAT_VECTOR:
@@ -63661,7 +63661,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	    return_false(sc, car_x);
 	  opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
 	  break;
-	  
+
 	default:
 	  return_false(sc, car_x);
 	}
@@ -63748,7 +63748,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 		}}
 	  pc_fallback(sc, start);
 	}
-      
+
       if (len < (NUM_VUNIONS - 4))  /* mimic p_call_any_ok */
 	{
 	  int32_t pctr;
@@ -65527,7 +65527,7 @@ static s7_pointer opt_do_list_simple(opt_info *o)
   o1 = do_any_body(o);
 
   fp = o1->v[0].fp;
-  if (fp == opt_if_bp) 
+  if (fp == opt_if_bp)
     {
       while (is_pair(slot_value(vp)))
 	{
@@ -66748,7 +66748,7 @@ static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
 /* ---------------- bool funcs (an experiment) ---------------- */
 typedef bool (*s7_bfunc)(s7_scheme *sc, s7_pointer expr);
 
-static bool fb_lt_ss(s7_scheme *sc, s7_pointer expr) 
+static bool fb_lt_ss(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer x, y;
   x = lookup(sc, cadr(expr));
@@ -66756,7 +66756,7 @@ static bool fb_lt_ss(s7_scheme *sc, s7_pointer expr)
   return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) < integer(y)) : lt_b_7pp(sc, x, y));
 }
 
-static bool fb_num_eq_ss(s7_scheme *sc, s7_pointer expr) 
+static bool fb_num_eq_ss(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer x, y;
   x = lookup(sc, cadr(expr));
@@ -66807,8 +66807,7 @@ static s7_pointer fx_to_fb(s7_scheme *sc, s7_function fx) /* eventually parallel
   return(NULL);
 }
 
-/* when/unless_b cond? do end-test? */
-/* num_eq_vs|us */
+/* when_b cond? do end-test? num_eq_vs|us */
 
 
 /* ---------------------------------------- for-each ---------------------------------------- */
@@ -67762,7 +67761,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 
       /* look for errors here rather than glomming up the set! and let code. */
     case OP_SET_SAFE:                         /* symbol is sc->code after pop */
-    case OP_SET1: 
+    case OP_SET1:
     case OP_SET_FROM_LET_TEMP:                /* (set! var (values 1 2 3)) */
       eval_error_with_caller2(sc, "~A: can't set ~A to ~S", 22, sc->set_symbol, stack_code(sc->stack, top), set_ulist_1(sc, sc->values_symbol, args));
 
@@ -76409,7 +76408,9 @@ static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_function fx, opcode_t
       set_opt3_any(cdr(form), bfunc);
       pair_set_syntax_op(form, op);
     }
-  /* else fprintf(stderr, "%s: %s\n", op_names[op], display_80(form)); */
+#if 0
+  else fprintf(stderr, "%s %s: %s\n", op_names[op], op_names[optimize_op((op == OP_IF_B_N_N) ? cadadr(form) : cadr(form))], display_80(form));
+#endif
 }
 
 #define choose_if_optc(Opc, One, Reversed, Not) ((One) ? ((Reversed) ? OP_ ## Opc ## _R : ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) :  ((Not) ? OP_ ## Opc ## _N_N : OP_ ## Opc ## _P_P))
@@ -76541,7 +76542,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			  pair_set_syntax_op(form, OP_IF_A_A_A); /* b_a_a never happens? */
 			  set_opt2_pair(form, cddr(code));
 			}
-		      else 
+		      else
 			{
 			  pair_set_syntax_op(form, OP_IF_A_A_P);
 			  fb_annotate(sc, form, fx_proc(code), OP_IF_B_A_P);
@@ -81815,19 +81816,19 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		    {
 		      if (fp == opt_if_bp)
 			{
-			  for (; integer(stepper) < end; integer(stepper)++) 
+			  for (; integer(stepper) < end; integer(stepper)++)
 			    if (o->v[3].fb(o->v[2].o1)) o->v[5].fp(o->v[4].o1);
 			}
 		      else
 			if (fp == opt_if_nbp_fs)
 			  {
-			    for (; integer(stepper) < end; integer(stepper)++) 
+			    for (; integer(stepper) < end; integer(stepper)++)
 			      if (!(o->v[2].b_pi_f(sc, o->v[5].fp(o->v[4].o1), integer(slot_value(o->v[3].p))))) o->v[11].fp(o->v[10].o1);
 			  }
 			else
 			  if (fp == opt_unless_p_1)
 			    {
-			      for (; integer(stepper) < end; integer(stepper)++) 
+			      for (; integer(stepper) < end; integer(stepper)++)
 				if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);
 			    }
 			  else for (; integer(stepper) < end; integer(stepper)++) fp(o);
@@ -81922,7 +81923,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		    func(sc);
 		    step = integer(slot_value(step_slot)) + 1;
 		  }
-	  if ((S7_DEBUGGING) && (stop != integer(slot_value(end_slot)))) fprintf(stderr, "end: %ld %ld\n", stop, integer(slot_value(end_slot)));
+	  if ((S7_DEBUGGING) && (stop != integer(slot_value(end_slot)))) fprintf(stderr, "end: %" ld64 " %" ld64 "\n", stop, integer(slot_value(end_slot)));
 	}
       sc->value = sc->T;
       sc->code = cdadr(scc);
@@ -85997,10 +85998,9 @@ typedef enum {OPT_PTR, OPT_INT, OPT_DBL, OPT_INT_0} opt_pid_t;
 
 static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_pointer code)
 {
-  s7_pointer caller;
+  s7_pointer caller = opt3_pair(code); /* false_p in check_recur */
 #if (!WITH_GMP)
   s7_pointer c_op;
-  caller = opt3_pair(code);
   c_op = car(caller);
   if ((is_symbol(c_op)) &&
       ((is_global(c_op)) ||
@@ -86035,7 +86035,6 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 #endif
   rec_set_test(sc, cdr(code));
   rec_set_res(sc, (a_op) ?  cddr(code) : cdddr(code));
-  caller = opt3_pair(code); /* false_p in check_recur */
   rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
   rec_set_f2(sc, cdr(opt3_pair(caller)));
   sc->rec_slot1 = let_slots(sc->curlet);
@@ -86306,13 +86305,9 @@ static s7_pointer op_recur_if_a_a_opa_l3aq(s7_scheme *sc)
 /* -------- if_a_a_opla_laq and if_a_opla_laq_a -------- */
 static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, bool a_op)
 {
-#if WITH_GMP
-  s7_pointer caller;
-  caller = opt3_pair(sc->code);
-#else
-  s7_pointer caller, c_op;
-  caller = opt3_pair(sc->code);
-
+  s7_pointer caller = opt3_pair(sc->code);
+#if (!WITH_GMP)
+  s7_pointer c_op;
   c_op = car(caller);
   if ((is_symbol(c_op)) &&
       ((is_global(c_op)) ||
@@ -86616,8 +86611,7 @@ static s7_pointer rec_y(s7_scheme *sc, s7_pointer code) {return(slot_value(sc->r
 static s7_pointer rec_z(s7_scheme *sc, s7_pointer code) {return(slot_value(sc->rec_slot3));}
 static s7_pointer rec_sub_z1(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer x;
-  x = slot_value(sc->rec_slot3);
+  s7_pointer x = slot_value(sc->rec_slot3);
   return((is_t_integer(x)) ? make_integer(sc, integer(x) - 1) : minus_c1(sc, x));
 }
 
@@ -87517,8 +87511,7 @@ static void op_cl_fa(s7_scheme *sc)
 
 static void op_map_or_for_each_fa(s7_scheme *sc)
 {
-  s7_pointer f, code = sc->code;
-  f = cddr(code);
+  s7_pointer f = cddr(sc->code), code = sc->code;
   sc->value = fx_call(sc, f);
   if (is_null(sc->value))
     sc->value = (fn_proc_unchecked(code)) ? sc->unspecified : sc->nil;
@@ -87539,7 +87532,7 @@ static void op_cl_na(s7_scheme *sc)
   for (args = cdr(sc->code), p = val; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
   sc->value = fn_proc(sc->code)(sc, val);
-  if (in_heap(val)) 
+  if (in_heap(val))
     {
       /* the fn_proc call might push its own op (e.g. for-each/map) so we have to check for that */
       if (main_stack_op(sc) == OP_GC_PROTECT)
@@ -91322,7 +91315,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  break;
 
 	default:
-	  fprintf(stderr, "unknown operator: %" print_pointer " in %s\n", sc->cur_op, display(current_code(sc)));
+	  fprintf(stderr, "unknown operator: %" p64 " in %s\n", sc->cur_op, display(current_code(sc)));
 	  return(sc->F);
 	}
 
@@ -91402,7 +91395,7 @@ static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
   int len = 0;
   b = mallocate(sc, 128);
   if (bytes < 1000)
-    len = snprintf((char *)block_data(b), 128, "%" print_s7_int, bytes);
+    len = snprintf((char *)block_data(b), 128, "%" ld64, bytes);
   else
     if (bytes < 1000000)
       len = snprintf((char *)block_data(b), 128, "%.1fk", bytes / 1000.0);
@@ -91523,7 +91516,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
     sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
     sc->lambdas->loc + sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"), 
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
                                cons_unchecked(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
   }
   /* strings */
@@ -94988,6 +94981,10 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
- * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), when/unless_a, cond/do tests if result
+ * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
+ *   for and/or: all branches fx->fb -> new op??
+ * g_map 67433 case for two lists? can the function be opt'd (g_subtract -> sc->subtract_2 etc -- via chooser?) 
+ *   also ((lambda...)...)
+ *   op_safe_c_opsq_p [car lg/b -- but this requires a special op -- can it be direct?] 4240
  */

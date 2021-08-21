@@ -1174,7 +1174,7 @@
                       (set! just-selected #t)))
                   (define (char-separator? c)
                     (char-position c " ()`',\"#"))
-                  (define (word-back-x)
+                  (define (word-back-x) ;; some of these are courtesy of Elijah Stone
                     (let loop ((col (max (bols row) (- col 1))))
                       (if (= col (bols row))
 			  col
