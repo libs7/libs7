@@ -652,6 +652,14 @@
 	    lst v))
 (f27 lst nv)
 
+(define (f28)
+  (do ((p lst (cdr p))
+       (i 0 (+ i 1)))
+      ((null? p))
+    (set-car! p i))
+  (map + lst lst))
+(f28)
+
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)

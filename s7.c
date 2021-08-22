@@ -8229,14 +8229,14 @@ static s7_pointer g_symbol_to_string_uncopied(s7_scheme *sc, s7_pointer args)
 static s7_pointer symbol_to_string_p_p(s7_scheme *sc, s7_pointer sym)
 {
   if (!is_symbol(sym))
-    simple_wrong_type_argument(sc, sc->symbol_to_string_symbol, sym, T_SYMBOL);
+    return(method_or_bust_one_arg(sc, sym, sc->symbol_to_string_symbol, set_plist_1(sc, sym), T_SYMBOL));
   return(inline_make_string_with_length(sc, symbol_name(sym), symbol_name_length(sym)));
 }
 
 static s7_pointer symbol_to_string_uncopied_p(s7_scheme *sc, s7_pointer sym)
 {
   if (!is_symbol(sym))
-    simple_wrong_type_argument(sc, sc->symbol_to_string_symbol, sym, T_SYMBOL);
+    return(method_or_bust_one_arg(sc, sym, sc->symbol_to_string_symbol, set_plist_1(sc, sym), T_SYMBOL));
   if (is_gensym(sym))
     return(make_string_with_length(sc, symbol_name(sym), symbol_name_length(sym)));
   return(symbol_name_cell(sym));
@@ -12571,9 +12571,6 @@ static s7_pointer string_to_either_complex(s7_scheme *sc, char *q, char *slash1,
 static bool big_numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
   /* either or both can be big here, but not neither, and types might not match at all */
-  if ((S7_DEBUGGING) && (!s7_is_bignum(a)) && (!s7_is_bignum(b)))
-    fprintf(stderr, "big eqv but neither is big: %s %s, %s %s\n", display(a), s7_type_names[type(a)], display(b), s7_type_names[type(b)]);
-
   switch (type(a))
     {
     case T_INTEGER:
@@ -14218,7 +14215,7 @@ static s7_pointer g_number_to_string(s7_scheme *sc, s7_pointer args)
   char *res;
   s7_pointer x = car(args);
 
-  if (!s7_is_number(x))
+  if (!is_number(x))
     return(method_or_bust_with_type(sc, x, sc->number_to_string_symbol, args, a_number_string, 1));
 
   if (is_pair(cdr(args)))
@@ -14269,7 +14266,7 @@ static s7_pointer number_to_string_p_p(s7_scheme *sc, s7_pointer p)
   s7_int nlen = 0;
   char *res;
   if (!is_number(p))
-    return(wrong_type_argument_with_type(sc, sc->number_to_string_symbol, 1, p, a_number_string));
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->number_to_string_symbol, a_number_string));
   res = number_to_string_base_10(sc, p, 0, sc->float_format_precision, 'g', &nlen, P_WRITE);
   return(inline_make_string_with_length(sc, res, nlen));
 #endif
@@ -15575,7 +15572,7 @@ static s7_pointer string_to_number(s7_scheme *sc, char *str, int32_t radix)
 {
   s7_pointer x;
   x = make_atom(sc, str, radix, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR);
-  return((s7_is_number(x)) ? x : sc->F);  /* only needed because str might start with '#' and not be a number (#t for example) */
+  return((is_number(x)) ? x : sc->F);  /* only needed because str might start with '#' and not be a number (#t for example) */
 }
 
 static s7_pointer string_to_number_p_p(s7_scheme *sc, s7_pointer str1)
@@ -16421,13 +16418,13 @@ static s7_pointer big_log(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p0 = car(args), p1 = NULL, res;
 
-  if (!s7_is_number(p0))
+  if (!is_number(p0))
     return(method_or_bust_with_type(sc, p0, sc->log_symbol, args, a_number_string, 1));
 
   if (is_pair(cdr(args)))
     {
       p1 = cadr(args);
-      if (!s7_is_number(p1))
+      if (!is_number(p1))
 	return(method_or_bust_with_type(sc, p1, sc->log_symbol, args, a_number_string, 2));
     }
 
@@ -16489,7 +16486,7 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
   #define Q_log sc->pcl_n
 
   s7_pointer x = car(args);
-  if (!s7_is_number(x))
+  if (!is_number(x))
     return(method_or_bust_with_type(sc, x, sc->log_symbol, args, a_number_string, 1));
 
 #if WITH_GMP
@@ -16498,7 +16495,7 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
   if (is_pair(cdr(args)))
     {
       s7_pointer y = cadr(args);
-      if (!(s7_is_number(y)))
+      if (!(is_number(y)))
 	return(method_or_bust_with_type(sc, y, sc->log_symbol, args, a_number_string, 2));
 
 #if WITH_GMP
@@ -17755,11 +17752,11 @@ static bool lt_b_pi(s7_scheme *sc, s7_pointer p1, s7_int p2);
 static s7_pointer big_expt(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer x = car(args), y, res;
-  if (!s7_is_number(x))
+  if (!is_number(x))
     return(method_or_bust_with_type(sc, x, sc->expt_symbol, args, a_number_string, 1));
 
   y = cadr(args);
-  if (!s7_is_number(y))
+  if (!is_number(y))
     return(method_or_bust_with_type(sc, y, sc->expt_symbol, args, a_number_string, 2));
 
   if (s7_is_zero(x))
@@ -17966,11 +17963,11 @@ static s7_pointer g_expt(s7_scheme *sc, s7_pointer args)
   /* big_expt sometimes chooses a different value: g_expt (expt -1 1/3) is -1, but big_expt (expt -1 (bignum 1/3)) is (complex 1/2 (/ (sqrt 3) 2)) */
 #endif
 
-  if (!s7_is_number(n))
+  if (!is_number(n))
     return(method_or_bust_with_type(sc, n, sc->expt_symbol, args, a_number_string, 1));
 
   pw = cadr(args);
-  if (!s7_is_number(pw))
+  if (!is_number(pw))
     return(method_or_bust_with_type(sc, pw, sc->expt_symbol, args, a_number_string, 2));
 
   if (s7_is_zero(n))
@@ -22864,7 +22861,7 @@ static bool num_eq_b_7pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 
 static bool is_number_via_method(s7_scheme *sc, s7_pointer p)
 {
-  if (s7_is_number(p))
+  if (is_number(p))
     return(true);
   if (has_active_methods(sc, p))
     {
@@ -24406,7 +24403,7 @@ static bool is_nan_b_7p(s7_scheme *sc, s7_pointer x)
     case T_BIG_COMPLEX: return((mpfr_nan_p(mpc_realref(big_complex(x))) != 0) || (mpfr_nan_p(mpc_imagref(big_complex(x))) != 0));
 #endif
     default:
-      if (s7_is_number(x))
+      if (is_number(x))
 	return(method_or_bust_with_type_one_arg_p(sc, x, sc->is_nan_symbol, a_number_string) != sc->F);
     }
   return(false);
@@ -24438,7 +24435,7 @@ static bool is_infinite_b_7p(s7_scheme *sc, s7_pointer x)
 	     (mpfr_inf_p(mpc_imagref(big_complex(x))) != 0));
 #endif
     default:
-      if (s7_is_number(x))
+      if (is_number(x))
 	return(method_or_bust_with_type_one_arg_p(sc, x, sc->is_infinite_symbol, a_number_string) != sc->F);
     }
   return(false);
@@ -24540,7 +24537,7 @@ static s7_pointer g_is_zero(s7_scheme *sc, s7_pointer args)
 static bool is_zero_b_7p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
-  if (!s7_is_number(p))
+  if (!is_number(p))
     simple_wrong_type_argument_with_type(sc, sc->is_zero_symbol, p, a_number_string);
   return(s7_is_zero(p));
 #else
@@ -24557,8 +24554,8 @@ static bool is_zero_b_7p(s7_scheme *sc, s7_pointer p)
 static s7_pointer is_zero_p_p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
-  if (!s7_is_number(p))
-    simple_wrong_type_argument_with_type(sc, sc->is_zero_symbol, p, a_number_string);
+  if (!is_number(p))
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_zero_symbol, a_number_string));
   return(make_boolean(sc, s7_is_zero(p)));
 #else
   if (is_t_integer(p))
@@ -24566,7 +24563,7 @@ static s7_pointer is_zero_p_p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p))
     return(make_boolean(sc, real(p) == 0.0));
   if (!is_number(p))
-    simple_wrong_type_argument_with_type(sc, sc->is_zero_symbol, p, a_number_string);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_zero_symbol, a_number_string));
   return(sc->F);
 #endif
 }
@@ -24618,7 +24615,7 @@ static s7_pointer is_positive_p_p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
   if (!s7_is_real(p))
-    simple_wrong_type_argument(sc, sc->is_positive_symbol, p, T_REAL);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_positive_symbol, a_number_string));
   return(make_boolean(sc, s7_is_positive(p)));
 #else
   if (is_t_integer(p))
@@ -24626,7 +24623,7 @@ static s7_pointer is_positive_p_p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p))
     return((real(p) > 0.0) ? sc->T : sc->F);
   if (!is_small_real(p))
-    simple_wrong_type_argument(sc, sc->is_positive_symbol, p, T_REAL);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_positive_symbol, a_number_string));
   return((numerator(p) > 0) ? sc->T : sc->F);
 #endif
 }
@@ -24664,7 +24661,7 @@ static bool is_negative_b_7p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
   if (!s7_is_real(p))
-    simple_wrong_type_argument(sc, sc->is_negative_symbol, p, T_REAL);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_negative_symbol, a_number_string));
   return(s7_is_negative(p));
 #else
   if (is_t_integer(p))
@@ -24672,7 +24669,7 @@ static bool is_negative_b_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p))
     return(real(p) < 0.0);
   if (!is_small_real(p))
-    simple_wrong_type_argument(sc, sc->is_negative_symbol, p, T_REAL);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_negative_symbol, a_number_string));
   return(numerator(p) < 0);
 #endif
 }
@@ -25749,7 +25746,7 @@ static bool is_char_alphabetic_b_7p(s7_scheme *sc, s7_pointer c)
 static s7_pointer is_char_alphabetic_p_p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
-    simple_wrong_type_argument(sc, sc->is_char_alphabetic_symbol, c, T_CHARACTER);
+    return(method_or_bust_one_arg(sc, c, sc->is_char_alphabetic_symbol, set_plist_1(sc, c), T_CHARACTER));
   return(make_boolean(sc, is_char_alphabetic(c)));
 }
 
@@ -25801,7 +25798,7 @@ static bool is_char_whitespace_b_7p(s7_scheme *sc, s7_pointer c)
 static s7_pointer is_char_whitespace_p_p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
-    simple_wrong_type_argument(sc, sc->is_char_whitespace_symbol, c, T_CHARACTER);
+    return(method_or_bust_one_arg(sc, c, sc->is_char_whitespace_symbol, set_plist_1(sc, c), T_CHARACTER));
   return(make_boolean(sc, is_char_whitespace(c)));
 }
 
@@ -26024,9 +26021,9 @@ static bool char_eq_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 
 static s7_pointer char_eq_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
-  if (!is_character(p1)) simple_wrong_type_argument(sc, sc->char_eq_symbol, p1, T_CHARACTER);
+  if (!is_character(p1)) return(method_or_bust(sc, p1, sc->char_eq_symbol, set_plist_2(sc, p1, p2), T_CHARACTER, 1));
   if (p1 == p2) return(sc->T);
-  if (!is_character(p2)) simple_wrong_type_argument(sc, sc->char_eq_symbol, p2, T_CHARACTER);
+  if (!is_character(p2)) return(method_or_bust(sc, p2, sc->char_eq_symbol, set_plist_2(sc, p1, p2), T_CHARACTER, 2));
   return(sc->F);
 }
 
@@ -32339,7 +32336,7 @@ static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
   if ((str[0] == '#') || (str[0] == '\'') || (str[0] == ','))
     return(true);
 
-  if (s7_is_number(make_atom(sc, (char *)str, 10, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR)))
+  if (is_number(make_atom(sc, (char *)str, 10, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR)))
     return(true);
 
   len = symbol_name_length(obj);
@@ -35864,7 +35861,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'F': case 'f':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~F: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
 			  format_error(sc, "~~F: numeric argument required", 30, str, args, fdat);
@@ -35875,7 +35872,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'G': case 'g':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~G: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
 			  format_error(sc, "~~G: numeric argument required", 30, str, args, fdat);
@@ -35886,7 +35883,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'E': case 'e':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~E: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
 			  format_error(sc, "~~E: numeric argument required", 30, str, args, fdat);
@@ -35902,7 +35899,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'D': case 'd':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~D: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			/* (let () (require mockery.scm) (format #f "~D" ((*mock-number* 'mock-number) 123)))
 			 *    port here is a string-port, str has the width/precision data if the caller wants it,
@@ -35920,7 +35917,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'O': case 'o':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~O: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
 			  format_error(sc, "~~O: numeric argument required", 30, str, args, fdat);
@@ -35931,7 +35928,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'X': case 'x':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~X: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
 			  format_error(sc, "~~X: numeric argument required", 30, str, args, fdat);
@@ -35942,7 +35939,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'B': case 'b':
 		    if (is_null(fdat->args))
 		      format_error(sc, "~~B: missing argument", 21, str, args, fdat);
-		    if (!(s7_is_number(car(fdat->args))))
+		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
 			  format_error(sc, "~~B: numeric argument required", 30, str, args, fdat);
@@ -37494,7 +37491,7 @@ static s7_pointer car_p_p(s7_scheme *sc, s7_pointer p)
 {
   if (is_pair(p))
     return(car(p));
-  return(simple_wrong_type_argument(sc, sc->car_symbol, p, T_PAIR));
+  return(method_or_bust_one_arg(sc, p, sc->car_symbol, set_plist_1(sc, p), T_PAIR));
 }
 
 static s7_pointer g_list_ref_at_0(s7_scheme *sc, s7_pointer args)
@@ -37519,7 +37516,7 @@ static s7_pointer g_set_car(s7_scheme *sc, s7_pointer args)
 static Inline s7_pointer inline_set_car(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   if (!is_mutable_pair(p1))
-    simple_wrong_type_argument(sc, sc->set_car_symbol, p1, T_PAIR);
+    return(mutable_method_or_bust(sc, p1, sc->set_car_symbol, set_plist_1(sc, p1), T_PAIR, 1));
   set_car(p1, p2);
   return(p2);
 }
@@ -37543,7 +37540,7 @@ static s7_pointer cdr_p_p(s7_scheme *sc, s7_pointer p)
 {
   if (is_pair(p))
     return(cdr(p));
-  return(simple_wrong_type_argument(sc, sc->cdr_symbol, p, T_PAIR));
+  return(method_or_bust_one_arg(sc, p, sc->cdr_symbol, set_plist_1(sc, p), T_PAIR));
 }
 
 
@@ -37562,7 +37559,7 @@ static s7_pointer g_set_cdr(s7_scheme *sc, s7_pointer args)
 static Inline s7_pointer inline_set_cdr(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   if (!is_mutable_pair(p1))
-    simple_wrong_type_argument(sc, sc->set_cdr_symbol, p1, T_PAIR);
+    return(mutable_method_or_bust(sc, p1, sc->set_cdr_symbol, set_plist_1(sc, p1), T_PAIR, 1));
   set_cdr(p1, p2);
   return(p2);
 }
@@ -38457,7 +38454,7 @@ static s7_pointer memv_number(s7_scheme *sc, s7_pointer obj, s7_pointer x)
   s7_pointer y = x;
   while (true)
     {
-      LOOP_4(if ((s7_is_number(car(x))) && (numbers_are_eqv(sc, obj, car(x)))) return(x); x = cdr(x); if (!is_pair(x)) return(sc->F));
+      LOOP_4(if ((is_number(car(x))) && (numbers_are_eqv(sc, obj, car(x)))) return(x); x = cdr(x); if (!is_pair(x)) return(sc->F));
       y = cdr(y);
       if (x == y) return(sc->F);
     }
@@ -38474,7 +38471,7 @@ static s7_pointer memv_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 
   if (is_simple(x)) return(s7_memq(sc, x, y));
-  if (s7_is_number(x)) return(memv_number(sc, x, y));
+  if (is_number(x)) return(memv_number(sc, x, y));
 
   z = y;
   while (true)
@@ -38677,7 +38674,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
   /* the only things that aren't simply == here are c_object, string, number, vector, hash-table, pair, and c_pointer
    *   but all the other cases are unlikely.
    */
-  if (s7_is_number(obj))
+  if (is_number(obj))
     return(memv_number(sc, obj, x));
   return(member(sc, obj, x));
 }
@@ -43389,7 +43386,7 @@ static hash_entry_t *hash_eqv(s7_scheme *sc, s7_pointer table, s7_pointer key)
   hash_entry_t *x;
   s7_int loc, hash_mask = hash_table_mask(table);
   loc = hash_loc(sc, table, key) & hash_mask;
-  if (s7_is_number(key))
+  if (is_number(key))
     {
       for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
 	if (numbers_are_eqv(sc, key, hash_entry_key(x)))
@@ -44215,7 +44212,7 @@ static s7_pointer g_hash_table_ref_2(s7_scheme *sc, s7_pointer args)
 static s7_pointer hash_table_ref_p_pp(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   if (!is_hash_table(table))
-    simple_wrong_type_argument(sc, sc->hash_table_ref_symbol, table, T_HASH_TABLE);
+    return(method_or_bust(sc, table, sc->hash_table_ref_symbol, set_plist_2(sc, table, key), T_HASH_TABLE, 1));
   return(hash_entry_value((*hash_table_checker(table))(sc, table, key)));
 }
 
@@ -46707,7 +46704,7 @@ bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
     return(false);
   if ((a == b) && (!is_number(a)))         /* if a is NaN, a == b doesn't mean (eqv? a b) */
     return(true);                          /* a == b means (let ((x "a")) (let ((y x)) (eqv? x y))) is #t */
-  if (s7_is_number(a))
+  if (is_number(a))
     return(numbers_are_eqv(sc, a, b));
   if (is_unspecified(a))                   /* types are the same so we know b is also unspecified */
     return(true);
@@ -51642,8 +51639,10 @@ static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...) /* len = m
     {
       int bytes;
       va_list ap;
+      block_t *b;
       char *str;
-      str = (char *)malloc(len);
+      b = mallocate(sc, len);
+      str = (char *)block_data(b);
       str[0] = '\0';
       va_start(ap, ctrl);
       bytes = vsnprintf(str, len, ctrl, ap);
@@ -51652,7 +51651,7 @@ static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...) /* len = m
 	sc->error_port = sc->standard_error;
       if ((bytes > 0) && (sc->error_port != sc->F))
 	port_write_string(sc->error_port)(sc, str, bytes, sc->error_port);
-      free(str);
+      liberate(sc, b);
     }
 }
 
@@ -67093,6 +67092,36 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
     {
       s7_function func;
       s7_pointer iters;
+
+      s7_p_p_t fp = s7_p_p_function(f);
+      if ((fp) && (len == 1))
+	{
+	  if (is_pair(cadr(args)))
+	    {
+	      s7_pointer fast, slow;
+	      for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+		{
+		  fp(sc, car(fast));
+		  if (is_pair(cdr(fast)))
+		    {
+		      fast = cdr(fast);
+		      if (fast == slow) break;
+		      fp(sc, car(fast));
+		    }
+		  return(sc->unspecified);
+		}}
+	  else
+	    {
+	      if (is_any_vector(cadr(args)))
+		{
+		  s7_int i, len;
+		  s7_pointer v;
+		  v = cadr(args);
+		  len = vector_length(v);
+		  for (i = 0; i < len; i++) fp(sc, vector_getter(v)(sc, v, i));
+		  return(sc->unspecified);
+		}}}
+
       func = c_function_call(f);    /* presumably this is either display/write, or method call? */
       sc->z = make_iterators(sc, args);
       sc->z = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
@@ -67401,38 +67430,86 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
       if (got_nil) return(sc->nil);
       if (is_safe_procedure(f))
 	{
+	  s7_pointer val, val1, f_args, old_args, iter_list;
 	  s7_function func;
 	  func = c_function_call(f);
-	  if ((is_pair(cadr(args))) &&
-	      (len == 1))
+	  if (is_pair(cadr(args)))
 	    {
-	      s7_pointer f_args, val, fast, slow;
-	      f_args = list_1(sc, sc->F);
-	      val = list_1_unchecked(sc, sc->nil);
-	      push_stack_no_let(sc, OP_GC_PROTECT, f_args, val);
-	      for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+	      if (len == 1)
 		{
-		  s7_pointer z;
-		  set_car(f_args, car(fast));
-		  z = func(sc, f_args);
-		  if (z != sc->no_value)
-		    set_car(val, cons(sc, z, car(val)));
-		  if (is_pair(cdr(fast)))
+		  s7_pointer fast, slow;
+		  s7_p_p_t fp = s7_p_p_function(f);
+		  if (fp)
 		    {
-		      fast = cdr(fast);
-		      if (fast == slow)
-			break;
+		      val = list_1_unchecked(sc, sc->nil);
+		      push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
+		      for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+			{
+			  s7_pointer z;
+			  z = fp(sc, car(fast));
+			  if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+			  if (is_pair(cdr(fast)))
+			    {
+			      fast = cdr(fast);
+			      if (fast == slow) break;
+			      z = fp(sc, car(fast));
+			      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+			    }}
+		      unstack(sc);
+		      return(proper_list_reverse_in_place(sc, car(val)));
+		    }
+
+		  val = list_1_unchecked(sc, sc->nil);
+		  f_args = list_1(sc, sc->nil);
+		  push_stack_no_let(sc, OP_GC_PROTECT, f_args, val);
+		  for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+		    {
+		      s7_pointer z;
 		      set_car(f_args, car(fast));
 		      z = func(sc, f_args);
-		      if (z != sc->no_value)
-			set_car(val, cons(sc, z, car(val)));
-		    }}
-	      unstack(sc);
-	      return(proper_list_reverse_in_place(sc, car(val)));
-	    }
-	  else
-	    {
-	      s7_pointer val, val1, old_args, iter_list;
+		      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+		      if (is_pair(cdr(fast)))
+			{
+			  fast = cdr(fast);
+			  if (fast == slow) break;
+			  set_car(f_args, car(fast));
+			  z = func(sc, f_args);
+			  if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+			}}
+		  unstack(sc);
+		  return(proper_list_reverse_in_place(sc, car(val)));
+		}
+	      if ((len == 2) && (is_pair(caddr(args))))
+		{
+		  s7_pointer fcdr, fast1, slow1, fast2, slow2;
+		  val = list_1_unchecked(sc, sc->nil);
+		  f_args = list_2(sc, sc->nil, sc->nil);
+		  fcdr = cdr(f_args);
+		  push_stack_no_let(sc, OP_GC_PROTECT, f_args, val);
+		  for (fast1 = cadr(args), slow1 = cadr(args), fast2 = caddr(args), slow2 = caddr(args); 
+		       (is_pair(fast1)) && (is_pair(fast2)); 
+		       fast1 = cdr(fast1), slow1 = cdr(slow1), fast2 = cdr(fast2), slow2 = cdr(slow2))
+		    {
+		      s7_pointer z;
+		      set_car(f_args, car(fast1));
+		      set_car(fcdr, car(fast2));
+		      z = func(sc, f_args);
+		      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+		      if ((is_pair(cdr(fast1))) && (is_pair(cdr(fast2))))
+			{
+			  fast1 = cdr(fast1);
+			  if (fast1 == slow1) break;
+			  fast2 = cdr(fast2);
+			  if (fast2 == slow2) break;
+			  set_car(f_args, car(fast1));
+			  set_car(fcdr, car(fast2));
+			  z = func(sc, f_args);
+			  if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+			}}
+		  unstack(sc);
+		  return(proper_list_reverse_in_place(sc, car(val)));
+		}}
+
 	      sc->z = make_iterators(sc, args);
 	      val1 = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
 	      iter_list = sc->z;
@@ -67456,12 +67533,9 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  z = func(sc, cdr(val1)); /* can this contain multiple-values? */
 		  if (z != sc->no_value)
 		    set_car(val, cons(sc, z, car(val)));
-		}}}
+		}}
+
       else /* not safe procedure */
-	/* to mimic map values handling elsewhere:
-	 *   ((lambda args (format *stderr* "~A~%" (map values args))) (values)):   ()
-	 *   ((lambda args (format *stderr* "~A~%" (map values args))) (values #<unspecified>)): #<unspecified> etc
-	 */
 	if ((f == global_value(sc->values_symbol)) &&
 	    (len == 1) &&
 	    (!has_methods(cadr(args)))) /* iterator should be ok here -- object_to_list can handle it */
@@ -94939,42 +95013,42 @@ int main(int argc, char **argv)
  * tref        527          691    687    477    476
  * tauto       786          648    642    496    497
  * tshoot     1484          883    872    810    808
- * index      1051         1026   1016    983    982
+ * index      1051         1026   1016    983    981
  * tmock      7748         1177   1165   1098   1097
  * tvect      1951         2456   2413   1756   1740
- * s7test     4522         1873   1831   1812   1795
+ * s7test     4522         1873   1831   1812   1795  1809
  * lt         2127         2123   2110   2123   2119
  * tform      3263         2281   2273   2267   2253
  * tmac       2413         3317   3277   2389   2409
- * tread      2594         2440   2421   2411   2410
+ * tread      2594         2440   2421   2411   2410  2414
  * trclo      4070         2715   2561   2455   2454
  * tmat       2677         3065   3042   2523   2522
- * dup        2927         3805   3788   2639   2541
+ * dup        2927         3805   3788   2639   2542
  * fbench     2868         2688   2583   2544   2544
  * tcopy      2623         8035   5546   2557   2551
  * tb         3321         2735   2681   2560   2628
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2885
- * tset       3230         3253   3104   3090   3084
+ * tsort      3656         3105   3104   2924   2885  2866 [symbol_to_string_uncopied_p?]
+ * tset       3230         3253   3104   3090   3084  3092
  * tload                                 3234   3144
  * teq        3594         4068   4045   3576   3570
  * tio        3715         3816   3752   3702   3692
- * tstr       6591         5281   4863   4197   4203
+ * tstr       6591         5281   4863   4197   4200
  * tclo       4690         4787   4735   4409   4414
  * tlet       5471         7775   5640   4490   4431
  * tcase      4537         4960   4793   4474   4496
- * tmap       5715         8270   8188   4694   4671
+ * tmap                    8295   8213   4797   4704  4657
  * tfft      114.8         7820   7729   4798   4792
- * tnum       56.6         6348   6013   5445   5442
+ * tnum       56.6         6348   6013   5445   5442  5445
  * tgsl       25.2         8485   7802   6389   6396
  * trec       8338         6936          6553   6551
- * tmisc      7588         8960   7699   6972   6877  6860
+ * tmisc      7588         8960   7699   6972   6877  6860 6646
  * tlist      7140         7896          7087   7016
  * tgc        10.2         11.9   11.1   8726   8693
  * thash      35.3         11.8   11.7   9838   9806
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.1
+ * calls      60.7         36.7   37.5   37.1   37.1  37.3
  * sg                                    56.1   56.1
  * lg        104.9        106.6  105.0  104.5  104.3
  * tbig      596.1        177.4  175.8  167.7  166.4
@@ -94984,7 +95058,12 @@ int main(int argc, char **argv)
  * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
  *   for and/or: all branches fx->fb -> new op??
- * g_map 67433 case for two lists? can the function be opt'd (g_subtract -> sc->subtract_2 etc -- via chooser?) 
- *   also ((lambda...)...)
- *   op_safe_c_opsq_p [car lg/b -- but this requires a special op -- can it be direct?] 4240
+ * g_map 67433 can the function be opt'd (g_subtract ->?) use <func>_p_p|pp -- no arglist needed etc
+ * finish the wrong-type->method changes for p|pp etc
+ * read_file sets port_filename, but if load-path used, this name is ambiguous/incomplete
+ *   search_load_path->b with name, open_file_with_load_path has b, want to memcpy the new name and pass that to read_scheme_file -> read_file
+ *   so if found, pass back copied name in open_file char** arg, pass on to read_scheme file as the filename
+ *   there's also expand_cwd in the load case, which could use the same char** arg
+ *   put all 3 in one function
+ * expand_cwd should use memcpy
  */
