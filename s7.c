@@ -30207,95 +30207,79 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 }
 #endif
 
+static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
+{
+  FILE* fp;
+  if (is_directory(filename))
+    return(NULL);
+  fp = fopen(filename, "r");
 #if WITH_GCC
-static FILE *expand_cwd(s7_scheme *sc, const char *fname)
-{
-  /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
-  if ((fname[0] == '~') &&
-      (fname[1] == '/'))
+  if (!fp) /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
     {
-      char *home;
-      home = getenv("HOME");
-      if (home)
+      if ((filename[0] == '~') && (filename[1] == '/'))
 	{
-	  block_t *b;
-	  char *filename;
-	  s7_int len;
-	  FILE *fp;
-
-	  len = safe_strlen(fname) + safe_strlen(home) + 1;
-	  b = mallocate(sc, len);
-	  filename = (char *)block_data(b);
-	  filename[0] = '\0';
-	  catstrs(filename, len, home, (char *)(fname + 1), (char *)NULL);
-	  fp = fopen(filename, "r");
-	  liberate(sc, b);
-
-	  return(fp);
-	}}
-  return(NULL);
-}
+	  char *home;
+	  home = getenv("HOME");
+	  if (home)
+	    {
+	      block_t *b;
+	      char *fname;
+	      s7_int len, file_len, home_len;
+	      file_len = safe_strlen(filename);
+	      home_len = safe_strlen(home);
+	      len = file_len + home_len;
+	      b = mallocate(sc, len);
+	      fname = (char *)block_data(b);
+	      memcpy((void *)fname, home, home_len);
+	      memcpy((void *)(fname + home_len), (char *)(filename + 1), file_len - 1);
+	      fname[len - 1] = '\0';
+	      fp = fopen(fname, "r");
+	      if (fp) filename = copy_string_with_length(fname, len - 1);
+	      liberate(sc, b);
+	    }}}
 #endif
-
-static FILE *open_file_with_load_path(s7_scheme *sc, const char *fname)
-{
-  block_t *b;
-  FILE *fp;
-  b = search_load_path(sc, fname);
-  if (!b) return(NULL);
-  fp = fopen((const char *)block_data(b), "r");
-  if ((fp) && (hook_has_functions(sc->load_hook)))
-    s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, (const char *)block_data(b))));
-  liberate(sc, b);
-  return(fp);
-}
-
-static s7_pointer read_scheme_file(s7_scheme *sc, FILE *fp, const char *fname)
-{
-  s7_pointer port;
-  port = read_file(sc, fp, fname, -1, "load"); /* -1 = read entire file into string, this is currently not tweakable */
-  port_file_number(port) = remember_file_name(sc, fname);
-  set_loader_port(port);
-  sc->temp6 = port;
-  push_input_port(sc, port);
-  sc->temp6 = sc->nil;
-  return(port);
+  if (!fp)
+    {
+      block_t *b;
+      const char *fname;
+      b = search_load_path(sc, filename);
+      if (!b) return(NULL);
+      fname = (const char *)block_data(b);
+      fp = fopen(fname, "r");
+      if (fp) filename = copy_string(fname);
+      liberate(sc, b);
+    }
+  if (fp)
+    {
+      s7_pointer port;
+      if (hook_has_functions(sc->load_hook))
+	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, filename)));
+      port = read_file(sc, fp, filename, -1, "load"); /* -1 = read entire file into string, this is currently not tweakable */
+      port_file_number(port) = remember_file_name(sc, filename);
+      set_loader_port(port);
+      sc->temp6 = port;
+      push_input_port(sc, port);
+      sc->temp6 = sc->nil;
+      return(port);
+    }
+  return(NULL);
 }
 
 s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_pointer e)
 {
   /* returns either the value of the load or NULL if filename not found */
   s7_pointer port;
-  FILE *fp;
   declare_jump_info();
   TRACK(sc);
   if (e == sc->s7_let) return(NULL);
 
 #if WITH_C_LOADER
-  {
-    s7_pointer p;
-    p = load_shared_object(sc, filename, (is_null(e)) ? sc->rootlet : e);
-    if (p) return(p);
-  }
+  port = load_shared_object(sc, filename, (is_null(e)) ? sc->rootlet : e);
+  if (port) return(port);
 #endif
 
-  if (is_directory(filename))
-    return(NULL);
-  fp = fopen(filename, "r");
-#if WITH_GCC
-  if (!fp) fp = expand_cwd(sc, filename);
-#endif
-  if (fp)
-    {
-      if (hook_has_functions(sc->load_hook))
-	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, filename)));
-    }
-  else
-    {
-      fp = open_file_with_load_path(sc, filename);
-      if (!fp) return(NULL);
-    }
-  port = read_scheme_file(sc, fp, filename);
+  port = load_file_1(sc, filename);
+  if (!port) return(NULL);
 
   set_curlet(sc, (e == sc->rootlet) ? sc->nil : e);
   push_stack(sc, OP_LOAD_RETURN_IF_EOF, port, sc->code);
@@ -30368,7 +30352,6 @@ static s7_pointer g_load(s7_scheme *sc, s7_pointer args)
 defaults to the rootlet.  To load into the current environment instead, pass (curlet)."
   #define Q_load s7_make_signature(sc, 3, sc->values_symbol, sc->is_string_symbol, sc->is_let_symbol)
 
-  FILE *fp = NULL;
   s7_pointer name = car(args);
   const char *fname;
 
@@ -30390,9 +30373,6 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
   if ((!fname) || (!(*fname)))                 /* fopen("", "r") returns a file pointer?? */
     return(s7_error(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "load's first argument, ~S, should be a filename", 47), name)));
 
-  if (is_directory(fname))
-    return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "load argument, ~S, is a directory", 33), name)));
-
 #if WITH_C_LOADER
   {
     s7_pointer p;
@@ -30401,21 +30381,8 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
   }
 #endif
 
-  fp = fopen(fname, "r");
-#if WITH_GCC
-  if (!fp) fp = expand_cwd(sc, fname);
-#endif
-  if (fp)
-    {
-      if (hook_has_functions(sc->load_hook))
-	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, fname)));
-    }
-  else
-    {
-      fp = open_file_with_load_path(sc, fname);
-      if (!fp) return(file_error(sc, "load", "can't open", fname));
-    }
-  read_scheme_file(sc, fp, fname);
+  if (!load_file_1(sc, fname))
+    return(file_error(sc, "load", "can't open", fname));
 
   push_stack_op_let(sc, OP_LOAD_CLOSE_AND_POP_IF_EOF);  /* was pushing args and code, but I don't think they're used later */
   push_stack_op_let(sc, OP_READ_INTERNAL);
@@ -95060,10 +95027,5 @@ int main(int argc, char **argv)
  *   for and/or: all branches fx->fb -> new op??
  * g_map 67433 can the function be opt'd (g_subtract ->?) use <func>_p_p|pp -- no arglist needed etc
  * finish the wrong-type->method changes for p|pp etc
- * read_file sets port_filename, but if load-path used, this name is ambiguous/incomplete
- *   search_load_path->b with name, open_file_with_load_path has b, want to memcpy the new name and pass that to read_scheme_file -> read_file
- *   so if found, pass back copied name in open_file char** arg, pass on to read_scheme file as the filename
- *   there's also expand_cwd in the load case, which could use the same char** arg
- *   put all 3 in one function
- * expand_cwd should use memcpy
+ *   map cxr (and all built-ins) over lists with mock data -- see s7test from yesterday
  */
