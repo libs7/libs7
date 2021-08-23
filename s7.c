@@ -10750,8 +10750,7 @@ bool s7_is_defined(s7_scheme *sc, const char *name)
 
 static bool is_defined_b_7p(s7_scheme *sc, s7_pointer p)
 {
-  if (!is_symbol(p))
-    simple_wrong_type_argument(sc, sc->is_defined_symbol, p, T_SYMBOL);
+  if (!is_symbol(p)) return(method_or_bust(sc, p, sc->is_defined_symbol, set_plist_1(sc, p), T_SYMBOL, 1) != sc->F);
   return(is_slot(lookup_slot_from(p, sc->curlet)));
 }
 
@@ -22929,6 +22928,7 @@ static bool num_eq_b_pi(s7_scheme *sc, s7_pointer x, s7_int y)
 #endif
   if (!is_number(x)) /* complex/ratio */
     simple_wrong_type_argument_with_type(sc, sc->num_eq_symbol, x, a_number_string);
+    /* return(eq_out_x(sc, x, make_integer(sc, y))); */ /* much slower? see thash */
   return(false);
 }
 
@@ -23249,8 +23249,7 @@ static bool lt_b_pi(s7_scheme *sc, s7_pointer p1, s7_int p2)
   if (is_t_big_ratio(p1))
     return(mpq_cmp_si(big_ratio(p1), p2, 1) < 0);
 #endif
-  simple_wrong_type_argument(sc, sc->lt_symbol, p1, T_REAL);
-  return(false);
+  return(lt_out_x(sc, p1, make_integer(sc, p2)));
 }
 
 static s7_pointer g_less_2(s7_scheme *sc, s7_pointer args) {return(lt_p_pp(sc, car(args), cadr(args)));}
@@ -23513,8 +23512,7 @@ static bool leq_b_pi(s7_scheme *sc, s7_pointer p1, s7_int p2)
   if (is_t_big_ratio(p1))
     return(mpq_cmp_si(big_ratio(p1), p2, 1) <= 0);
 #endif
-  simple_wrong_type_argument(sc, sc->leq_symbol, p1, T_REAL);
-  return(false);
+  return(leq_out_x(sc, p1, make_integer(sc, p2)));
 }
 
 static s7_pointer leq_p_pi(s7_scheme *sc, s7_pointer p1, s7_int p2) {return(make_boolean(sc, leq_b_pi(sc, p1, p2)));}
@@ -23805,8 +23803,7 @@ static bool gt_b_pi(s7_scheme *sc, s7_pointer p1, s7_int p2)
   if (is_t_big_ratio(p1))
     return(mpq_cmp_si(big_ratio(p1), p2, 1) > 0);
 #endif
-  simple_wrong_type_argument(sc, sc->gt_symbol, p1, T_REAL);
-  return(false);
+  return(gt_out_x(sc, p1, make_integer(sc, p2)));
 }
 
 static s7_pointer gt_p_pi(s7_scheme *sc, s7_pointer p1, s7_int p2) {return(make_boolean(sc, gt_b_pi(sc, p1, p2)));}
@@ -24110,8 +24107,7 @@ static bool geq_b_pi(s7_scheme *sc, s7_pointer p1, s7_int p2)
   if (is_t_big_ratio(p1))
     return(mpq_cmp_si(big_ratio(p1), p2, 1) >= 0);
 #endif
-  simple_wrong_type_argument(sc, sc->geq_symbol, p1, T_REAL);
-  return(false);
+  return(geq_out_x(sc, p1, make_integer(sc, p2)));
 }
 
 static s7_pointer geq_p_pi(s7_scheme *sc, s7_pointer p1, s7_int p2) {return(make_boolean(sc, geq_b_pi(sc, p1, p2)));}
@@ -24458,8 +24454,7 @@ static bool is_even_b_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_big_integer(p))
     return(mpz_even_p(big_integer(p)));
 #endif
-  simple_wrong_type_argument(sc, sc->is_even_symbol, p, T_INTEGER);
-  return(false);
+  return(method_or_bust_one_arg_p(sc, p, sc->is_even_symbol, T_INTEGER) != sc->F);
 }
 
 static bool is_even_i(s7_int i1) {return((i1 & 1) == 0);}
@@ -24503,8 +24498,7 @@ static bool is_odd_b_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_big_integer(p))
     return(mpz_odd_p(big_integer(p)));
 #endif
-  simple_wrong_type_argument(sc, sc->is_odd_symbol, p, T_INTEGER);
-  return(false);
+  return(method_or_bust_one_arg_p(sc, p, sc->is_odd_symbol, T_INTEGER) != sc->F);
 }
 
 static bool is_odd_i(s7_int i1) {return((i1 & 1) == 1);}
@@ -24538,7 +24532,7 @@ static bool is_zero_b_7p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
   if (!is_number(p))
-    simple_wrong_type_argument_with_type(sc, sc->is_zero_symbol, p, a_number_string);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_zero_symbol, a_number_string) != sc->F);
   return(s7_is_zero(p));
 #else
   if (is_t_integer(p))
@@ -24546,7 +24540,7 @@ static bool is_zero_b_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p))
     return(real(p) == 0.0);
   if (!is_number(p))
-    simple_wrong_type_argument_with_type(sc, sc->is_zero_symbol, p, a_number_string);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_zero_symbol, a_number_string) != sc->F);
   return(false);
 #endif
 }
@@ -24598,7 +24592,7 @@ static bool is_positive_b_7p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
   if (!s7_is_real(p))
-    simple_wrong_type_argument(sc, sc->is_positive_symbol, p, T_REAL);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_positive_symbol, a_number_string) != sc->F);
   return(s7_is_positive(p));
 #else
   if (is_t_integer(p))
@@ -24606,7 +24600,7 @@ static bool is_positive_b_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p))
     return(real(p) > 0.0);
   if (!is_small_real(p))
-    simple_wrong_type_argument(sc, sc->is_positive_symbol, p, T_REAL);
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_positive_symbol, a_number_string) != sc->F);
   return(numerator(p) > 0);
 #endif
 }
@@ -24661,7 +24655,7 @@ static bool is_negative_b_7p(s7_scheme *sc, s7_pointer p)
 {
 #if WITH_GMP
   if (!s7_is_real(p))
-    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_negative_symbol, a_number_string));
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_negative_symbol, a_number_string) != sc->F);
   return(s7_is_negative(p));
 #else
   if (is_t_integer(p))
@@ -24669,7 +24663,7 @@ static bool is_negative_b_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p))
     return(real(p) < 0.0);
   if (!is_small_real(p))
-    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_negative_symbol, a_number_string));
+    return(method_or_bust_with_type_one_arg_p(sc, p, sc->is_negative_symbol, a_number_string) != sc->F);
   return(numerator(p) < 0);
 #endif
 }
@@ -24717,7 +24711,7 @@ static s7_pointer g_is_exact(s7_scheme *sc, s7_pointer args)
 static bool is_exact_b_7p(s7_scheme *sc, s7_pointer p)
 {
   if (!is_number(p))
-    simple_wrong_type_argument_with_type(sc, sc->is_exact_symbol, p, a_number_string);
+    return(method_or_bust_with_type_one_arg(sc, p, sc->is_exact_symbol, set_plist_1(sc, p), a_number_string) != sc->F);
   return(is_rational(p));
 }
 
@@ -24744,7 +24738,7 @@ static s7_pointer g_is_inexact(s7_scheme *sc, s7_pointer args)
 static bool is_inexact_b_7p(s7_scheme *sc, s7_pointer p)
 {
   if (!is_number(p))
-    simple_wrong_type_argument_with_type(sc, sc->is_inexact_symbol, p, a_number_string);
+    return(method_or_bust_with_type_one_arg(sc, p, sc->is_inexact_symbol, set_plist_1(sc, p), a_number_string) != sc->F);
   return(!is_rational(p));
 }
 
@@ -25077,13 +25071,12 @@ static bool logbit_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
     {
       if (is_t_integer(p2))
 	return(logbit_b_7ii(sc, integer(p1), integer(p2)));
-      simple_wrong_type_argument(sc, sc->logbit_symbol, p2, T_INTEGER);
+      return(method_or_bust(sc, p2, sc->logbit_symbol, set_plist_2(sc, p1, p2), T_INTEGER, 2) != sc->F);
     }
 #if WITH_GMP
   return(g_logbit(sc, set_plist_2(sc, p1, p2)));
 #else
-  simple_wrong_type_argument(sc, sc->logbit_symbol, p1, T_INTEGER);
-  return(false);
+  return(method_or_bust(sc, p1, sc->logbit_symbol, set_plist_2(sc, p1, p2), T_INTEGER, 1) != sc->F);
 #endif
 }
 
@@ -25740,6 +25733,7 @@ static bool is_char_alphabetic_b_7p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
     simple_wrong_type_argument(sc, sc->is_char_alphabetic_symbol, c, T_CHARACTER);
+    /* return(method_or_bust_one_arg(sc, c, sc->is_char_alphabetic_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F); */ /* slower? see tmisc */
   return(is_char_alphabetic(c));
 }
 
@@ -25764,7 +25758,7 @@ static s7_pointer g_is_char_numeric(s7_scheme *sc, s7_pointer args)
 static bool is_char_numeric_b_7p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
-    simple_wrong_type_argument(sc, sc->is_char_numeric_symbol, c, T_CHARACTER);
+    return(method_or_bust_one_arg(sc, c, sc->is_char_numeric_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F);
   return(is_char_numeric(c));
 }
 
@@ -25791,8 +25785,7 @@ static bool is_char_whitespace_b_7p(s7_scheme *sc, s7_pointer c)
       if (f != sc->undefined)
 	return(is_true(sc, call_method(sc, c, f, set_plist_1(sc, c))));
     }
-  simple_wrong_type_argument(sc, sc->is_char_whitespace_symbol, c, T_CHARACTER);
-  return(false);
+  return(method_or_bust_one_arg(sc, c, sc->is_char_whitespace_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F);
 }
 
 static s7_pointer is_char_whitespace_p_p(s7_scheme *sc, s7_pointer c)
@@ -25820,7 +25813,7 @@ static s7_pointer g_is_char_upper_case(s7_scheme *sc, s7_pointer args)
 static bool is_char_upper_case_b_7p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
-    simple_wrong_type_argument(sc, sc->is_char_upper_case_symbol, c, T_CHARACTER);
+    return(method_or_bust_one_arg(sc, c, sc->is_char_upper_case_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F);
   return(is_char_uppercase(c));
 }
 
@@ -25838,7 +25831,7 @@ static s7_pointer g_is_char_lower_case(s7_scheme *sc, s7_pointer args)
 static bool is_char_lower_case_b_7p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
-    simple_wrong_type_argument(sc, sc->is_char_lower_case_symbol, c, T_CHARACTER);
+    return(method_or_bust_one_arg(sc, c, sc->is_char_lower_case_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F);
   return(is_char_lowercase(c));
 }
 
@@ -25972,14 +25965,11 @@ static s7_pointer g_chars_are_leq(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_simple_char_eq(s7_scheme *sc, s7_pointer args) {return(make_boolean(sc, car(args) == cadr(args)));} /* chooser checks types */
 
-
-static inline void check_char2_args(s7_scheme *sc, s7_pointer caller, s7_pointer p1, s7_pointer p2)
-{
-  if (!is_character(p1))
-    simple_wrong_type_argument(sc, caller, p1, T_CHARACTER);
-  if (!is_character(p2))
-    simple_wrong_type_argument(sc, caller, p2, T_CHARACTER);
-}
+#define check_char2_args(Sc, Caller, P1, P2) \
+  do { \
+      if (!is_character(P1)) return(method_or_bust(Sc, P1, Caller, set_plist_2(Sc, P1, P2), T_CHARACTER, 1) != sc->F); \
+      if (!is_character(P2)) return(method_or_bust(Sc, P2, Caller, set_plist_2(Sc, P1, P2), T_CHARACTER, 2) != sc->F); \
+     } while (0)
 
 static bool char_lt_b_unchecked(s7_pointer p1, s7_pointer p2) {return(p1 < p2);}
 static bool char_lt_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
@@ -26013,9 +26003,9 @@ static bool char_eq_b_unchecked(s7_pointer p1, s7_pointer p2) {return(p1 == p2);
 
 static bool char_eq_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
-  if (!is_character(p1)) simple_wrong_type_argument(sc, sc->char_eq_symbol, p1, T_CHARACTER);
+  if (!is_character(p1)) return(method_or_bust(sc, p1, sc->char_eq_symbol, set_plist_2(sc, p1, p2), T_CHARACTER, 1) != sc->F);
   if (p1 == p2) return(true);
-  if (!is_character(p2)) simple_wrong_type_argument(sc, sc->char_eq_symbol, p2, T_CHARACTER);
+  if (!is_character(p2)) return(method_or_bust(sc, p2, sc->char_eq_symbol, set_plist_2(sc, p1, p2), T_CHARACTER, 2) != sc->F);
   return(false);
 }
 
@@ -26029,30 +26019,24 @@ static s7_pointer char_eq_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 
 static s7_pointer g_char_equal_2(s7_scheme *sc, s7_pointer args)
 {
-  if (!is_character(car(args)))
-    return(method_or_bust(sc, car(args), sc->char_eq_symbol, args, T_CHARACTER, 1));
+  if (!is_character(car(args))) return(method_or_bust(sc, car(args), sc->char_eq_symbol, args, T_CHARACTER, 1));
   if (car(args) == cadr(args))
     return(sc->T);
-  if (!is_character(cadr(args)))
-    return(method_or_bust(sc, cadr(args), sc->char_eq_symbol, args, T_CHARACTER, 2));
+  if (!is_character(cadr(args))) return(method_or_bust(sc, cadr(args), sc->char_eq_symbol, args, T_CHARACTER, 2));
   return(sc->F);
 }
 
 static s7_pointer g_char_less_2(s7_scheme *sc, s7_pointer args)
 {
-  if (!is_character(car(args)))
-    return(method_or_bust(sc, car(args), sc->char_lt_symbol, args, T_CHARACTER, 1));
-  if (!is_character(cadr(args)))
-    return(method_or_bust(sc, cadr(args), sc->char_lt_symbol, args, T_CHARACTER, 2));
+  if (!is_character(car(args))) return(method_or_bust(sc, car(args), sc->char_lt_symbol, args, T_CHARACTER, 1));
+  if (!is_character(cadr(args))) return(method_or_bust(sc, cadr(args), sc->char_lt_symbol, args, T_CHARACTER, 2));
   return(make_boolean(sc, character(car(args)) < character(cadr(args))));
 }
 
 static s7_pointer g_char_greater_2(s7_scheme *sc, s7_pointer args)
 {
-  if (!is_character(car(args)))
-    return(method_or_bust(sc, car(args), sc->char_gt_symbol, args, T_CHARACTER, 1));
-  if (!is_character(cadr(args)))
-    return(method_or_bust(sc, cadr(args), sc->char_gt_symbol, args, T_CHARACTER, 2));
+  if (!is_character(car(args))) return(method_or_bust(sc, car(args), sc->char_gt_symbol, args, T_CHARACTER, 1));
+  if (!is_character(cadr(args))) return(method_or_bust(sc, cadr(args), sc->char_gt_symbol, args, T_CHARACTER, 2));
   return(make_boolean(sc, character(car(args)) > character(cadr(args))));
 }
 
@@ -26678,7 +26662,7 @@ static s7_pointer g_string_ref(s7_scheme *sc, s7_pointer args)
 static s7_pointer string_ref_p_pi(s7_scheme *sc, s7_pointer p1, s7_int i1)
 {
   if (!is_string(p1))
-    simple_wrong_type_argument(sc, sc->string_ref_symbol, p1, T_STRING);
+    return(method_or_bust(sc, p1, sc->string_ref_symbol, set_plist_2(sc, p1, make_integer(sc, i1)), T_STRING, 1));
   if ((i1 >= 0) && (i1 < string_length(p1)))
     return(chars[((uint8_t *)string_value(p1))[i1]]);
   out_of_range(sc, sc->string_ref_symbol, int_two, wrap_integer1(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
@@ -27259,13 +27243,11 @@ static s7_pointer g_string_greater_2(s7_scheme *sc, s7_pointer args)
   return(make_boolean(sc, scheme_strcmp(car(args), cadr(args)) == 1));
 }
 
-static inline void check_string2_args(s7_scheme *sc, s7_pointer caller, s7_pointer p1, s7_pointer p2)
-{
-  if (!is_string(p1))
-    simple_wrong_type_argument(sc, caller, p1, T_STRING);
-  if (!s7_is_string(p2))
-    simple_wrong_type_argument(sc, caller, p2, T_STRING);
-}
+#define check_string2_args(Sc, Caller, P1, P2) \
+  do { \
+      if (!is_string(p1)) return(method_or_bust(sc, P1, Caller, set_plist_2(Sc, P1, P2), T_STRING, 1) != Sc->F); \
+      if (!is_string(p2)) return(method_or_bust(sc, P2, Caller, set_plist_2(Sc, P1, P2), T_STRING, 2) != Sc->F); \
+     } while (0)
 
 static bool string_lt_b_unchecked(s7_pointer p1, s7_pointer p2) {return(scheme_strcmp(p1, p2) == -1);}
 static bool string_lt_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
@@ -27676,8 +27658,7 @@ static bool is_port_closed_b_7p(s7_scheme *sc, s7_pointer x)
     return(port_is_closed(x));
   if ((x == current_output_port(sc)) && (x == sc->F))
     return(false);
-  simple_wrong_type_argument_with_type(sc, sc->is_port_closed_symbol, x, wrap_string(sc, "a port", 6));
-  return(false);
+  return(method_or_bust_with_type_one_arg(sc, x, sc->is_port_closed_symbol, set_plist_1(sc, x), wrap_string(sc, "a port", 6)) != sc->F);
 }
 
 
@@ -30214,29 +30195,28 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
     return(NULL);
   fp = fopen(filename, "r");
 #if WITH_GCC
-  if (!fp) /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
+  if ((!fp) && /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
+      (filename[0] == '~') && (filename[1] == '/'))
     {
-      if ((filename[0] == '~') && (filename[1] == '/'))
+      char *home;
+      home = getenv("HOME");
+      if (home)
 	{
-	  char *home;
-	  home = getenv("HOME");
-	  if (home)
-	    {
-	      block_t *b;
-	      char *fname;
-	      s7_int len, file_len, home_len;
-	      file_len = safe_strlen(filename);
-	      home_len = safe_strlen(home);
-	      len = file_len + home_len;
-	      b = mallocate(sc, len);
-	      fname = (char *)block_data(b);
-	      memcpy((void *)fname, home, home_len);
-	      memcpy((void *)(fname + home_len), (char *)(filename + 1), file_len - 1);
-	      fname[len - 1] = '\0';
-	      fp = fopen(fname, "r");
-	      if (fp) filename = copy_string_with_length(fname, len - 1);
-	      liberate(sc, b);
-	    }}}
+	  block_t *b;
+	  char *fname;
+	  s7_int len, file_len, home_len;
+	  file_len = safe_strlen(filename);
+	  home_len = safe_strlen(home);
+	  len = file_len + home_len;
+	  b = mallocate(sc, len);
+	  fname = (char *)block_data(b);
+	  memcpy((void *)fname, home, home_len);
+	  memcpy((void *)(fname + home_len), (char *)(filename + 1), file_len - 1);
+	  fname[len - 1] = '\0';
+	  fp = fopen(fname, "r");
+	  if (fp) filename = copy_string_with_length(fname, len - 1);
+	  liberate(sc, b);
+	}}
 #endif
   if (!fp)
     {
@@ -30681,7 +30661,7 @@ bool s7_is_provided(s7_scheme *sc, const char *feature)
 static bool is_provided_b_7p(s7_scheme *sc, s7_pointer sym)
 {
   if (!is_symbol(sym))
-    simple_wrong_type_argument(sc, sc->is_provided_symbol, sym, T_SYMBOL);
+    return(method_or_bust_one_arg_p(sc, sym, sc->is_provided_symbol, T_SYMBOL) != sc->F);
   return(is_memq(sym, s7_symbol_value(sc, sc->features_symbol)));
 }
 
@@ -37474,16 +37454,14 @@ static s7_pointer g_set_car(s7_scheme *sc, s7_pointer args)
   #define Q_set_car s7_make_signature(sc, 3, sc->T, sc->is_pair_symbol, sc->T)
 
   s7_pointer p = car(args);
-  if (!is_mutable_pair(p)) /* this is currently 2.5x slower than is_pair */
-    return(mutable_method_or_bust(sc, p, sc->set_car_symbol, args, T_PAIR, 1));
+  if (!is_mutable_pair(p)) return(mutable_method_or_bust(sc, p, sc->set_car_symbol, args, T_PAIR, 1));
   set_car(p, cadr(args));
   return(car(p));
 }
 
 static Inline s7_pointer inline_set_car(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
-  if (!is_mutable_pair(p1))
-    return(mutable_method_or_bust(sc, p1, sc->set_car_symbol, set_plist_1(sc, p1), T_PAIR, 1));
+  if (!is_mutable_pair(p1)) return(mutable_method_or_bust(sc, p1, sc->set_car_symbol, set_plist_1(sc, p1), T_PAIR, 1));
   set_car(p1, p2);
   return(p2);
 }
@@ -37517,16 +37495,14 @@ static s7_pointer g_set_cdr(s7_scheme *sc, s7_pointer args)
   #define Q_set_cdr s7_make_signature(sc, 3, sc->T, sc->is_pair_symbol, sc->T)
 
   s7_pointer p = car(args);
-  if (!is_mutable_pair(p))
-    return(mutable_method_or_bust(sc, p, sc->set_cdr_symbol, args, T_PAIR, 1));
+  if (!is_mutable_pair(p)) return(mutable_method_or_bust(sc, p, sc->set_cdr_symbol, args, T_PAIR, 1));
   set_cdr(p, cadr(args));
   return(cdr(p));
 }
 
 static Inline s7_pointer inline_set_cdr(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
-  if (!is_mutable_pair(p1))
-    return(mutable_method_or_bust(sc, p1, sc->set_cdr_symbol, set_plist_1(sc, p1), T_PAIR, 1));
+  if (!is_mutable_pair(p1)) return(mutable_method_or_bust(sc, p1, sc->set_cdr_symbol, set_plist_1(sc, p1), T_PAIR, 1));
   set_cdr(p1, p2);
   return(p2);
 }
@@ -37549,7 +37525,7 @@ static s7_pointer g_caar(s7_scheme *sc, s7_pointer args)
 static s7_pointer caar_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(car(p)))) return(caar(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->caar_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->caar_symbol, set_plist_1(sc, p), T_PAIR));
   return(simple_wrong_type_argument_with_type(sc, sc->caar_symbol, p, car_a_list_string));
 }
 
@@ -37568,15 +37544,14 @@ static s7_pointer g_cadr(s7_scheme *sc, s7_pointer args)
 static s7_pointer cadr_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(cdr(p)))) return(cadr(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->cadr_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->cadr_symbol, set_plist_1(sc, p), T_PAIR));
   return(simple_wrong_type_argument_with_type(sc, sc->cadr_symbol, p, cdr_a_list_string));
 }
 
 static s7_pointer g_list_ref_at_1(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer lst = car(args);
-  if (!is_pair(lst))
-    return(method_or_bust(sc, lst, sc->list_ref_symbol, args, T_PAIR, 1));
+  if (!is_pair(lst)) return(method_or_bust(sc, lst, sc->list_ref_symbol, args, T_PAIR, 1));
   if (is_pair(cdr(lst))) return(cadr(lst));
   return(out_of_range(sc, sc->list_ref_symbol, int_two, cadr(args), its_too_large_string));
 }
@@ -37596,7 +37571,7 @@ static s7_pointer g_cdar(s7_scheme *sc, s7_pointer args)
 static s7_pointer cdar_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(car(p)))) return(cdar(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->cdar_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->cdar_symbol, set_plist_1(sc, p), T_PAIR));
   return(simple_wrong_type_argument_with_type(sc, sc->cdar_symbol, p, car_a_list_string));
 }
 
@@ -94980,44 +94955,44 @@ int main(int argc, char **argv)
  * tref        527          691    687    477    476
  * tauto       786          648    642    496    497
  * tshoot     1484          883    872    810    808
- * index      1051         1026   1016    983    981
+ * index      1051         1026   1016    983    979
  * tmock      7748         1177   1165   1098   1097
- * tvect      1951         2456   2413   1756   1740
- * s7test     4522         1873   1831   1812   1795  1809
+ * tvect      1951         2456   2413   1756   1736
+ * s7test     4522         1873   1831   1812   1795
  * lt         2127         2123   2110   2123   2119
  * tform      3263         2281   2273   2267   2253
  * tmac       2413         3317   3277   2389   2409
- * tread      2594         2440   2421   2411   2410  2414
- * trclo      4070         2715   2561   2455   2454
- * tmat       2677         3065   3042   2523   2522
- * dup        2927         3805   3788   2639   2542
+ * tread      2594         2440   2421   2411   2412
+ * trclo      4070         2715   2561   2455   2453
+ * tmat       2677         3065   3042   2523   2507  2516
+ * dup        2927         3805   3788   2639   2529
  * fbench     2868         2688   2583   2544   2544
  * tcopy      2623         8035   5546   2557   2551
- * tb         3321         2735   2681   2560   2628
+ * tb         3321         2735   2681   2560   2627
  * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2885  2866 [symbol_to_string_uncopied_p?]
- * tset       3230         3253   3104   3090   3084  3092
- * tload                                 3234   3144
+ * tsort      3656         3105   3104   2924   2860
+ * tset       3230         3253   3104   3090   3092
+ * tload                                 3234   3142
  * teq        3594         4068   4045   3576   3570
  * tio        3715         3816   3752   3702   3692
- * tstr       6591         5281   4863   4197   4200
+ * tstr       6591         5281   4863   4197   4167
  * tclo       4690         4787   4735   4409   4414
  * tlet       5471         7775   5640   4490   4431
  * tcase      4537         4960   4793   4474   4496
- * tmap                    8295   8213   4797   4704  4657
+ * tmap                    8295   8213   4797   4609
  * tfft      114.8         7820   7729   4798   4792
- * tnum       56.6         6348   6013   5445   5442  5445
+ * tnum       56.6         6348   6013   5445   5437  5442
  * tgsl       25.2         8485   7802   6389   6396
  * trec       8338         6936          6553   6551
- * tmisc      7588         8960   7699   6972   6877  6860 6646
- * tlist      7140         7896          7087   7016
- * tgc        10.2         11.9   11.1   8726   8693
- * thash      35.3         11.8   11.7   9838   9806
+ * tmisc      7588         8960   7699   6972   6646
+ * tlist      7140         7896          7087   6977
+ * tgc        10.2         11.9   11.1   8726   8692
+ * thash      35.3         11.8   11.7   9838   9808
  * tgen       12.3         11.2   11.4   11.5   11.5
  * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.1  37.3
+ * calls      60.7         36.7   37.5   37.1   37.1
  * sg                                    56.1   56.1
- * lg        104.9        106.6  105.0  104.5  104.3
+ * lg        104.9        106.6  105.0  104.5  104.2
  * tbig      596.1        177.4  175.8  167.7  166.4
  * --------------------------------------------------------
  *
@@ -95025,7 +95000,8 @@ int main(int argc, char **argv)
  * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
  *   for and/or: all branches fx->fb -> new op??
- * g_map 67433 can the function be opt'd (g_subtract ->?) use <func>_p_p|pp -- no arglist needed etc
- * finish the wrong-type->method changes for p|pp etc
- *   map cxr (and all built-ins) over lists with mock data -- see s7test from yesterday
+ * g_map 67433 and for-each (apply?)
+ * finish the wrong-type->method changes for p|pp etc: extend to char_eq_b_7pp et al
+ *   t506 less-than-ideal error message
+ *   much repetition now, check others like num_eq/char-alpha
  */
