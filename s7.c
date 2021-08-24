@@ -15740,8 +15740,7 @@ static s7_pointer magnitude_p_p(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_INTEGER:
-      if (integer(x) == S7_INT64_MIN)
-	return(make_integer(sc, S7_INT64_MAX));
+      if (integer(x) == S7_INT64_MIN) return(mostfix); 
       /* (magnitude -9223372036854775808) -> -9223372036854775808
        *   same thing happens in abs, lcm and gcd: (gcd -9223372036854775808) -> -9223372036854775808
        */
@@ -24771,7 +24770,7 @@ static s7_pointer g_integer_length(s7_scheme *sc, s7_pointer args)
     {
       s7_int x;
       x = integer(p);
-      return((x < 0) ? make_integer(sc, integer_length(-(x + 1))) : make_integer(sc, integer_length(x)));
+      return((x < 0) ? small_int(integer_length(-(x + 1))) : small_int(integer_length(x)));
     }
 #if WITH_GMP
   if (is_t_big_integer(p))
@@ -24807,7 +24806,7 @@ sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
       return(list_3(sc,
 		    make_integer(sc, (s7_int)((num.ix & 0xfffffffffffffLL) | 0x10000000000000LL)),
 		    make_integer(sc, (s7_int)(((num.ix & 0x7fffffffffffffffLL) >> 52) - 1023 - 52)),
-		    make_integer(sc, ((num.ix & 0x8000000000000000LL) != 0) ? -1 : 1)));
+		    ((num.ix & 0x8000000000000000LL) != 0) ? minus_one : int_one));
     }
 #if WITH_GMP
   if (is_t_big_real(x))
@@ -24817,7 +24816,7 @@ sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
       exp_n = mpfr_get_z_exp(sc->mpz_1, big_real(x));
       neg = (mpz_cmp_ui(sc->mpz_1, 0) < 0);
       if (neg) mpz_abs(sc->mpz_1, sc->mpz_1);
-      return(list_3(sc, mpz_to_integer(sc, sc->mpz_1), make_integer(sc, exp_n), make_integer(sc, neg ? -1 : 1)));
+      return(list_3(sc, mpz_to_integer(sc, sc->mpz_1), make_integer(sc, exp_n), (neg) ? minus_one : int_one));
       /* not gmp: (integer-decode-float +nan.0): (6755399441055744 972 1), gmp: (integer-decode-float (bignum +nan.0)): (0 -1073741823 1) */
     }
 #endif
@@ -25060,8 +25059,7 @@ static bool logbit_b_7ii(s7_scheme *sc, s7_int i1, s7_int i2)
       out_of_range(sc, sc->logbit_symbol, int_two, wrap_integer1(sc, i1), its_negative_string);
       return(false);
     }
-  if (i2 >= S7_INT_BITS)
-    return(i1 < 0);
+  if (i2 >= S7_INT_BITS) return(i1 < 0);
   return((((int64_t)(1LL << (int64_t)i2)) & (int64_t)i1) != 0);
 }
 
@@ -25597,6 +25595,13 @@ static s7_int char_to_integer_i_7p(s7_scheme *sc, s7_pointer p)
   return(character(p));
 }
 
+static s7_pointer char_to_integer_p_p(s7_scheme *sc, s7_pointer p)
+{
+  if (!is_character(p))
+    return(method_or_bust_one_arg_p(sc, p, sc->char_to_integer_symbol, T_CHARACTER));
+  return(make_integer(sc, character(p)));
+}
+
 static s7_pointer integer_to_char_p_p(s7_scheme *sc, s7_pointer x)
 {
   s7_int ind;
@@ -25758,8 +25763,16 @@ static s7_pointer g_is_char_numeric(s7_scheme *sc, s7_pointer args)
 static bool is_char_numeric_b_7p(s7_scheme *sc, s7_pointer c)
 {
   if (!is_character(c))
-    return(method_or_bust_one_arg(sc, c, sc->is_char_numeric_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F);
+    simple_wrong_type_argument(sc, sc->is_char_numeric_symbol, c, T_CHARACTER);
+  /* return(method_or_bust_one_arg(sc, c, sc->is_char_numeric_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F); */ /* as above */
   return(is_char_numeric(c));
+}
+
+static s7_pointer is_char_numeric_p_p(s7_scheme *sc, s7_pointer c)
+{
+  if (!is_character(c))
+    return(method_or_bust_one_arg(sc, c, sc->is_char_numeric_symbol, set_plist_1(sc, c), T_CHARACTER));
+  return(make_boolean(sc, is_char_numeric(c)));
 }
 
 
@@ -25776,16 +25789,9 @@ static s7_pointer g_is_char_whitespace(s7_scheme *sc, s7_pointer args)
 
 static bool is_char_whitespace_b_7p(s7_scheme *sc, s7_pointer c)
 {
-  if (is_character(c))
-    return(is_char_whitespace(c));
-  if (has_active_methods(sc, c))
-    {
-      s7_pointer f;
-      f = find_method_with_let(sc, c, sc->is_char_whitespace_symbol);
-      if (f != sc->undefined)
-	return(is_true(sc, call_method(sc, c, f, set_plist_1(sc, c))));
-    }
-  return(method_or_bust_one_arg(sc, c, sc->is_char_whitespace_symbol, set_plist_1(sc, c), T_CHARACTER) != sc->F);
+  if (!is_character(c))
+    simple_wrong_type_argument(sc, sc->is_char_whitespace_symbol, c, T_CHARACTER);
+  return(is_char_whitespace(c));
 }
 
 static s7_pointer is_char_whitespace_p_p(s7_scheme *sc, s7_pointer c)
@@ -30360,9 +30366,9 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
     if (p) return(p);
   }
 #endif
-
+  errno = 0;
   if (!load_file_1(sc, fname))
-    return(file_error(sc, "load", "can't open", fname));
+    return(file_error(sc, "load", strerror(errno), fname));
 
   push_stack_op_let(sc, OP_LOAD_CLOSE_AND_POP_IF_EOF);  /* was pushing args and code, but I don't think they're used later */
   push_stack_op_let(sc, OP_READ_INTERNAL);
@@ -37590,7 +37596,7 @@ static s7_pointer g_cddr(s7_scheme *sc, s7_pointer args)
 static s7_pointer cddr_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(cdr(p)))) return(cddr(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->cddr_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->cddr_symbol, set_plist_1(sc, p), T_PAIR));
   return(simple_wrong_type_argument_with_type(sc, sc->cddr_symbol, p, cdr_a_list_string));
 }
 
@@ -37613,7 +37619,7 @@ static s7_pointer g_caaar(s7_scheme *sc, s7_pointer args)
 static s7_pointer caadr_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(cdr(p))) && (is_pair(cadr(p)))) return(caadr(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->caadr_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->caadr_symbol, set_plist_1(sc, p), T_PAIR));
   if (!is_pair(cdr(p))) return(simple_wrong_type_argument_with_type(sc, sc->caadr_symbol, p, cdr_a_list_string));
   return(simple_wrong_type_argument_with_type(sc, sc->caadr_symbol, p, cadr_a_list_string));
 }
@@ -37643,7 +37649,7 @@ static s7_pointer g_cadar(s7_scheme *sc, s7_pointer args)
 static s7_pointer cadar_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(car(p))) && (is_pair(cdar(p)))) return(cadar(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->cadar_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->cadar_symbol, set_plist_1(sc, p), T_PAIR));
   if (!is_pair(car(p))) return(simple_wrong_type_argument_with_type(sc, sc->cadar_symbol, p, car_a_list_string));
   return(simple_wrong_type_argument_with_type(sc, sc->cadar_symbol, p, cdar_a_list_string));
 }
@@ -37678,7 +37684,7 @@ static s7_pointer g_caddr(s7_scheme *sc, s7_pointer args)
 static s7_pointer caddr_p_p(s7_scheme *sc, s7_pointer p)
 {
   if ((is_pair(p)) && (is_pair(cdr(p))) && (is_pair(cddr(p)))) return(caddr(p));
-  if (!is_pair(p)) return(simple_wrong_type_argument(sc, sc->caddr_symbol, p, T_PAIR));
+  if (!is_pair(p)) return(method_or_bust_one_arg(sc, p, sc->caddr_symbol, set_plist_1(sc, p), T_PAIR));
   if (!is_pair(cdr(p))) return(simple_wrong_type_argument_with_type(sc, sc->caddr_symbol, p, cdr_a_list_string));
   return(simple_wrong_type_argument_with_type(sc, sc->caddr_symbol, p, cddr_a_list_string));
 }
@@ -61767,6 +61773,7 @@ static bool b_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 /* -------- b_pi -------- */
 static bool opt_b_pi_fs(opt_info *o) {return(o->v[2].b_pi_f(opt_sc(o), o->v[11].fp(o->v[10].o1), integer(slot_value(o->v[1].p))));}
 static bool opt_b_pi_fs_num_eq(opt_info *o) {return(num_eq_b_pi(opt_sc(o), o->v[11].fp(o->v[10].o1), integer(slot_value(o->v[1].p))));}
+static bool opt_b_pi_fi(opt_info *o) {return(o->v[2].b_pi_f(opt_sc(o), o->v[11].fp(o->v[10].o1), o->v[1].i));}
 
 static bool b_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, s7_pointer arg2)
 {
@@ -61774,12 +61781,20 @@ static bool b_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   bpif = s7_b_pi_function(s_func);
   if (bpif)
     {
-      opc->v[1].p = lookup_slot_from(arg2, sc->curlet); /* slot checked in opt_arg_type */
+      if (is_symbol(arg2))
+	opc->v[1].p = lookup_slot_from(arg2, sc->curlet); /* slot checked in opt_arg_type */
+      else 
+	{
+	  if (integer(arg2) < 0) return_false(sc, car_x);
+	  opc->v[1].i = integer(arg2);
+	}
       opc->v[10].o1 = sc->opts[sc->pc];
       if (cell_optimize(sc, cdr(car_x)))
 	{
 	  opc->v[2].b_pi_f = bpif;
-	  opc->v[0].fb = (bpif == num_eq_b_pi) ? opt_b_pi_fs_num_eq : opt_b_pi_fs;
+	  if (is_symbol(arg2))
+	    opc->v[0].fb = (bpif == num_eq_b_pi) ? opt_b_pi_fs_num_eq : opt_b_pi_fs;
+	  else opc->v[0].fb = opt_b_pi_fi;
 	  opc->v[11].fp = opc->v[10].o1->v[0].fp;
 	  return(true);
 	}}
@@ -66567,8 +66582,8 @@ static bool bool_optimize_nw_1(s7_scheme *sc, s7_pointer expr)
 			    (b_ii_ok(sc, opc, s_func, car_x, arg1, arg2)))
 			  return(true);
 			pc_fallback(sc, cur_index);
-
-			if ((is_symbol(arg2)) &&
+			
+			if ((!is_pair(arg2)) && 
 			    (b_pi_ok(sc, opc, s_func, car_x, arg2)))
 			  return(true);
 			pc_fallback(sc, cur_index);
@@ -67053,16 +67068,25 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 		  return(sc->unspecified);
 		}}
 	  else
-	    {
-	      if (is_any_vector(cadr(args)))
+	    if (is_any_vector(cadr(args)))
+	      {
+		s7_int i, len;
+		s7_pointer v = cadr(args);
+		len = vector_length(v);
+		for (i = 0; i < len; i++) fp(sc, vector_getter(v)(sc, v, i));
+		return(sc->unspecified);
+	      }
+	    else
+	      if (is_string(cadr(args)))
 		{
 		  s7_int i, len;
-		  s7_pointer v;
-		  v = cadr(args);
-		  len = vector_length(v);
-		  for (i = 0; i < len; i++) fp(sc, vector_getter(v)(sc, v, i));
+		  s7_pointer str = cadr(args);
+		  const char *s;
+		  s = string_value(str);
+		  len = string_length(str);
+		  for (i = 0; i < len; i++) fp(sc, chars[(uint8_t)(s[i])]);
 		  return(sc->unspecified);
-		}}}
+		}}
 
       func = c_function_call(f);    /* presumably this is either display/write, or method call? */
       sc->z = make_iterators(sc, args);
@@ -67451,31 +67475,69 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  unstack(sc);
 		  return(proper_list_reverse_in_place(sc, car(val)));
 		}}
-
-	      sc->z = make_iterators(sc, args);
-	      val1 = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
-	      iter_list = sc->z;
-	      old_args = sc->args;
-	      func = c_function_call(f);
-	      push_stack_no_let(sc, OP_GC_PROTECT, val1, val = cons(sc, sc->nil, sc->code)); /* temporary GC protection: need to protect val1, iter_list, val */
-	      sc->z = sc->nil;
-	      while (true)
+	  if ((is_string(cadr(args))) && (len == 1))
+	    {
+	      s7_p_p_t fp = s7_p_p_function(f);
+	      if (fp)
 		{
-		  s7_pointer x, y, z;
-		  for (x = iter_list, y = cdr(val1); is_pair(x); x = cdr(x), y = cdr(y))
+		  s7_int i, len;
+		  s7_pointer z, val, str = cadr(args);
+		  const char *s;
+		  val = list_1_unchecked(sc, sc->nil);
+		  push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
+		  s = string_value(str);
+		  len = string_length(str);
+		  for (i = 0; i < len; i++) 
 		    {
-		      set_car(y, s7_iterate(sc, car(x)));
-		      if (iterator_is_at_end(car(x)))
-			{
-			  unstack(sc);
-			  /* free_cell(sc, car(x)); */ /* 16-Jan-19 iterator in circular list -- see s7test */
-			  sc->args = T_Pos(old_args);
-			  return(proper_list_reverse_in_place(sc, car(val)));
-			}}
-		  z = func(sc, cdr(val1)); /* can this contain multiple-values? */
-		  if (z != sc->no_value)
-		    set_car(val, cons(sc, z, car(val)));
+		      z = fp(sc, chars[(uint8_t)(s[i])]);
+		      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+		    }
+		  unstack(sc);
+		  return(proper_list_reverse_in_place(sc, car(val)));
 		}}
+	  if ((is_any_vector(cadr(args))) && (len == 1))
+	    {
+	      s7_p_p_t fp = s7_p_p_function(f);
+	      if (fp)
+		{
+		  s7_int i, len;
+		  s7_pointer z, val, vec = cadr(args);
+		  val = list_1_unchecked(sc, sc->nil);
+		  push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
+		  len = vector_length(vec);
+		  for (i = 0; i < len; i++) 
+		    {
+		      z = fp(sc, vector_getter(vec)(sc, vec, i));
+		      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
+		    }
+		  unstack(sc);
+		  return(proper_list_reverse_in_place(sc, car(val)));
+		}}
+
+	  sc->z = make_iterators(sc, args);
+	  val1 = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
+	  iter_list = sc->z;
+	  old_args = sc->args;
+	  func = c_function_call(f);
+	  push_stack_no_let(sc, OP_GC_PROTECT, val1, val = cons(sc, sc->nil, sc->code)); /* temporary GC protection: need to protect val1, iter_list, val */
+	  sc->z = sc->nil;
+	  while (true)
+	    {
+	      s7_pointer x, y, z;
+	      for (x = iter_list, y = cdr(val1); is_pair(x); x = cdr(x), y = cdr(y))
+		{
+		  set_car(y, s7_iterate(sc, car(x)));
+		  if (iterator_is_at_end(car(x)))
+		    {
+		      unstack(sc);
+		      /* free_cell(sc, car(x)); */ /* 16-Jan-19 iterator in circular list -- see s7test */
+		      sc->args = T_Pos(old_args);
+		      return(proper_list_reverse_in_place(sc, car(val)));
+		    }}
+	      z = func(sc, cdr(val1)); /* can this contain multiple-values? */
+	      if (z != sc->no_value)
+		set_car(val, cons(sc, z, car(val)));
+	    }}
 
       else /* not safe procedure */
 	if ((f == global_value(sc->values_symbol)) &&
@@ -92754,6 +92816,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_i_7p_function(sc, global_value(sc->char_to_integer_symbol), char_to_integer_i_7p);
   s7_set_i_7p_function(sc, global_value(sc->hash_table_entries_symbol), hash_table_entries_i_7p);
   s7_set_i_7p_function(sc, global_value(sc->tree_leaves_symbol), tree_leaves_i_7p);
+  s7_set_p_p_function(sc, global_value(sc->char_to_integer_symbol), char_to_integer_p_p);
 
   s7_set_b_p_function(sc, global_value(sc->is_boolean_symbol), s7_is_boolean);
   s7_set_b_p_function(sc, global_value(sc->is_byte_vector_symbol), s7_is_byte_vector);
@@ -92844,6 +92907,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->c_pointer_weak2_symbol), c_pointer_weak2_p_p);
   s7_set_p_p_function(sc, global_value(sc->is_char_alphabetic_symbol), is_char_alphabetic_p_p);
   s7_set_p_p_function(sc, global_value(sc->is_char_whitespace_symbol), is_char_whitespace_p_p);
+  s7_set_p_p_function(sc, global_value(sc->is_char_numeric_symbol), is_char_numeric_p_p);
   s7_set_p_p_function(sc, global_value(sc->char_upcase_symbol), char_upcase_p_p);
   s7_set_p_p_function(sc, global_value(sc->read_char_symbol), read_char_p_p);
   s7_set_p_i_function(sc, global_value(sc->make_string_symbol), make_string_p_i);
@@ -94949,59 +95013,59 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------
- *             gmp (7-19)  20.9   21.0   21.6   21.7
+ *             gmp (8-23)  20.9   21.0   21.6   21.7
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
- * tref        527          691    687    477    476
- * tauto       786          648    642    496    497
- * tshoot     1484          883    872    810    808
- * index      1051         1026   1016    983    979
- * tmock      7748         1177   1165   1098   1097
- * tvect      1951         2456   2413   1756   1736
- * s7test     4522         1873   1831   1812   1795
- * lt         2127         2123   2110   2123   2119
- * tform      3263         2281   2273   2267   2253
- * tmac       2413         3317   3277   2389   2409
- * tread      2594         2440   2421   2411   2412
- * trclo      4070         2715   2561   2455   2453
- * tmat       2677         3065   3042   2523   2507  2516
- * dup        2927         3805   3788   2639   2529
- * fbench     2868         2688   2583   2544   2544
- * tcopy      2623         8035   5546   2557   2551
- * tb         3321         2735   2681   2560   2627
- * titer      2727         2865   2842   2679   2679
- * tsort      3656         3105   3104   2924   2860
- * tset       3230         3253   3104   3090   3092
- * tload                                 3234   3142
- * teq        3594         4068   4045   3576   3570
- * tio        3715         3816   3752   3702   3692
- * tstr       6591         5281   4863   4197   4167
- * tclo       4690         4787   4735   4409   4414
- * tlet       5471         7775   5640   4490   4431
- * tcase      4537         4960   4793   4474   4496
- * tmap                    8295   8213   4797   4609
- * tfft      114.8         7820   7729   4798   4792
- * tnum       56.6         6348   6013   5445   5437  5442
+ * tref        552          691    687    477    476
+ * tauto       785          648    642    496    497
+ * tshoot     1471          883    872    810    808
+ * index      1031         1026   1016    983    979
+ * tmock      7756         1177   1165   1098   1097
+ * tvect      1915         2456   2413   1756   1736
+ * s7test     4514         1873   1831   1812   1795
+ * lt         2129         2123   2110   2123   2119
+ * tform      3245         2281   2273   2267   2253
+ * tmac       2429         3317   3277   2389   2409
+ * tread      2591         2440   2421   2411   2412
+ * trclo      4093         2715   2561   2455   2453
+ * tmat       2648         3065   3042   2523   2513
+ * dup        2760         3805   3788   2639   2561
+ * fbench     2852         2688   2583   2544   2544
+ * tcopy      2745         8035   5546   2557   2551
+ * tb         3375         2735   2681   2560   2627
+ * titer      2678         2865   2842   2679   2679
+ * tsort      3590         3105   3104   2924   2860
+ * tset       3100         3253   3104   3090   3092
+ * tload      3849                       3234   3142
+ * teq        3542         4068   4045   3576   3570
+ * tio        3684         3816   3752   3702   3692
+ * tstr       6230         5281   4863   4197   4165
+ * tclo       4636         4787   4735   4409   4414
+ * tlet       5283         7775   5640   4490   4431
+ * tcase      4550         4960   4793   4474   4496
+ * tmap       5984         8869   8774   5209   4878
+ * tfft      115.1         7820   7729   4798   4792
+ * tnum       56.7         6348   6013   5445   5447
  * tgsl       25.2         8485   7802   6389   6396
- * trec       8338         6936          6553   6551
- * tmisc      7588         8960   7699   6972   6646
- * tlist      7140         7896          7087   6977
- * tgc        10.2         11.9   11.1   8726   8692
- * thash      35.3         11.8   11.7   9838   9808
- * tgen       12.3         11.2   11.4   11.5   11.5
- * tall       26.8         15.6   15.6   15.6   15.6
- * calls      60.7         36.7   37.5   37.1   37.1
- * sg                                    56.1   56.1
- * lg        104.9        106.6  105.0  104.5  104.2
- * tbig      596.1        177.4  175.8  167.7  166.4
+ * trec       8338         6936   6922   6553   6551
+ * tmisc      7217         8960   7699   6972   6596
+ * tlist      6834         7896   7546   7087   6976
+ * tgc        10.1         11.9   11.1   8726   8692
+ * thash      35.4         11.8   11.7   9838   9808
+ * tgen       12.1         11.2   11.4   11.5   11.5
+ * tall       24.4         15.6   15.6   15.6   15.6
+ * calls      58.0         36.7   37.5   37.1   37.1
+ * sg         80.0                       56.1   56.1
+ * lg        104.5        106.6  105.0  104.5  104.2
+ * tbig      635.1        177.4  175.8  167.7  166.5
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
  * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
  *   for and/or: all branches fx->fb -> new op??
- * g_map 67433 and for-each (apply?)
- * finish the wrong-type->method changes for p|pp etc: extend to char_eq_b_7pp et al
- *   t506 less-than-ideal error message
- *   much repetition now, check others like num_eq/char-alpha
+ * g_map snd for-each (apply?), 1/2 vect/str/lst lambda cases? (i.e. no iterators)
+ * much repetition now from p_p
+ * simple tc/recur cases?
+ * op_local_lambda
  */

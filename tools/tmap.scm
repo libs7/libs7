@@ -660,7 +660,21 @@
   (map + lst lst))
 (f28)
 
+(define (f29)
+  (let ((str (make-string 100 #\a)))
+    (set! (str 50) #\b)
+    (do ((i 0 (+ i 1)))
+	((= i 30000))
+      (map char->integer str))))
+(f29)
+
+(define (f30)
+  (do ((i 0 (+ i 1)))
+      ((= i 30))
+    (map pair? lst)))
+(f30)
+
+
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)
-

@@ -293,4 +293,8 @@
 (format *stderr* "~NC full s7test ~NC~%" 20 #\- 20 #\-)
 (system "./repl full-s7test.scm")
 
+(define with-block #f)
+(format *stderr* "~NC s7test no blocks~NC~%" 20 #\- 20 #\-)
+(system "./repl s7test.scm")
+
 (exit)
