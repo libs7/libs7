@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.16"
-#define S7_DATE "25-Aug-2021"
+#define S7_VERSION "9.17"
+#define S7_DATE "26-Aug-2021"
 #define S7_MAJOR_VERSION 9
-#define S7_MINOR_VERSION 16
+#define S7_MINOR_VERSION 17
 
 #include <stdint.h>           /* for int64_t */
 
@@ -366,6 +366,7 @@ s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);
 s7_pointer s7_open_output_string(s7_scheme *sc);                            /* (open-output-string) */
 const char *s7_get_output_string(s7_scheme *sc, s7_pointer out_port);       /* (get-output-string port) -- current contents of output string */
   /*    don't free the string */
+s7_pointer s7_output_string(s7_scheme *sc, s7_pointer p);                   /*    same but returns an s7 string */
 bool s7_flush_output_port(s7_scheme *sc, s7_pointer p);                     /* (flush-output-port port) */
 
 typedef enum {S7_READ, S7_READ_CHAR, S7_READ_LINE, S7_PEEK_CHAR, S7_IS_CHAR_READY, S7_NUM_READ_CHOICES} s7_read_t;
@@ -911,6 +912,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  * 
+ * 25-Aug:    s7_output_string (like s7_get_output_string, but returns an s7 string).
  * 19-Jul:    s7_is_random_state, s7_make_normal_vector. s7_array_to_list.
  * 12-Apr:    s7_optimize now returns an s7_pfunc, not an s7_function.
  * 7-Apr:     removed the "args" parameter from s7_float_function. added s7_make_c_object_without_gc.

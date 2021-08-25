@@ -24462,32 +24462,9 @@ static s7_pointer g_is_even(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_even "(even? int) returns #t if the integer int32_t is even"
   #define Q_is_even s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_integer_symbol)
-
-  s7_pointer p = car(args);
-  if (is_t_integer(p))
-    return(make_boolean(sc, ((integer(p) & 1) == 0)));
-#if WITH_GMP
-  if (is_t_big_integer(p))
-    return(make_boolean(sc, mpz_even_p(big_integer(p))));
-#endif
-  return(method_or_bust_one_arg_p(sc, p, sc->is_even_symbol, T_INTEGER));
+  return(make_boolean(sc, is_even_b_7p(sc, car(args))));
 }
 
-
-static s7_pointer g_is_odd(s7_scheme *sc, s7_pointer args)
-{
-  #define H_is_odd "(odd? int) returns #t if the integer int32_t is odd"
-  #define Q_is_odd s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_integer_symbol)
-
-  s7_pointer p = car(args);
-  if (is_t_integer(p))
-    return(make_boolean(sc, ((integer(p) & 1) == 1)));
-#if WITH_GMP
-  if (is_t_big_integer(p))
-    return(make_boolean(sc, mpz_odd_p(big_integer(p))));
-#endif
-  return(method_or_bust_one_arg_p(sc, p, sc->is_odd_symbol, T_INTEGER));
-}
 
 static bool is_odd_b_7p(s7_scheme *sc, s7_pointer p)
 {
@@ -24501,6 +24478,13 @@ static bool is_odd_b_7p(s7_scheme *sc, s7_pointer p)
 }
 
 static bool is_odd_i(s7_int i1) {return((i1 & 1) == 1);}
+
+static s7_pointer g_is_odd(s7_scheme *sc, s7_pointer args)
+{
+  #define H_is_odd "(odd? int) returns #t if the integer int32_t is odd"
+  #define Q_is_odd s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_integer_symbol)
+  return(make_boolean(sc, is_odd_b_7p(sc, car(args))));
+}
 
 
 /* ---------------------------------------- zero? ---------------------------------------- */
@@ -29316,6 +29300,12 @@ const char *s7_get_output_string(s7_scheme *sc, s7_pointer p)
 {
   port_data(p)[port_position(p)] = '\0';
   return((const char *)port_data(p));
+}
+
+s7_pointer s7_output_string(s7_scheme *sc, s7_pointer p)
+{
+  port_data(p)[port_position(p)] = '\0';
+  return(make_string_with_length(sc, (const char *)port_data(p), port_position(p)));
 }
 
 static inline void check_get_output_string_port(s7_scheme *sc, s7_pointer p)
@@ -66822,7 +66812,7 @@ static s7_pointer seq_init(s7_scheme *sc, s7_pointer seq)
 	      if (x == y) break;		\
             }}} while (0)
 
-static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
+static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* one sequence arg */
 {
   s7_pointer body = closure_body(f);
   if (!no_cell_opt(body)) /* if at top level we often get an unoptimized (not safe) function here that can be cell_optimized below */
@@ -67241,7 +67231,7 @@ static Inline bool op_for_each_2(s7_scheme *sc)
 
 /* ---------------------------------------- map ---------------------------------------- */
 
-static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq)
+static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* one sequence arg */
 {
   s7_pointer body = closure_body(f);
   sc->value = f;
@@ -95037,6 +95027,7 @@ int main(int argc, char **argv)
  * tsort      3590         3105   3104   2924   2860
  * tset       3100         3253   3104   3090   3092
  * tload      3849                       3234   3142
+ * trose                   3453   3373   3185   3187
  * teq        3542         4068   4045   3576   3570
  * tio        3684         3816   3752   3702   3692
  * tstr       6230         5281   4863   4197   4165
@@ -95064,8 +95055,10 @@ int main(int argc, char **argv)
  * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
  *   for and/or: all branches fx->fb -> new op??
- * g_map snd for-each (apply?), 1/2 vect/str/lst lambda cases? (i.e. no iterators)
+ * g_map snd for-each (apply?), 1/2 vect/str/lst lambda cases? (i.e. no iterators), closure 2 args cases?
+ *   need op_map_or_for_each_faa|f3a etc calling g_map|for_each_closure_2 
  * much repetition now from p_p
- * simple tc/recur cases?
  * op_local_lambda
+ * t725 gmp/gsl
+ * include roset.scm -> trose
  */

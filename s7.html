@@ -9427,6 +9427,7 @@ s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode
 s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);  
 s7_pointer s7_open_output_string(s7_scheme *sc);
 const char *s7_get_output_string(s7_scheme *sc, s7_pointer out_port);
+s7_pointer s7_output_string(s7_scheme *sc, s7_pointer out_port);
 
 typedef enum {S7_READ, S7_READ_CHAR, S7_READ_LINE, S7_PEEK_CHAR, S7_IS_CHAR_READY, S7_NUM_READ_CHOICES} s7_read_t;
 s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port));  
@@ -9456,6 +9457,8 @@ returns the file associated with a file port.  s7_port_line_number returns posit
 reader in an input file port.  The "use_write" parameter to s7_object_to_string refers
 to the write/display choice in scheme.  The string returned by s7_object_to_c_string
 should be freed by the caller.
+s7_output_string is the same as s7_get_output_string except that it returns an s7 string,
+not a C string.
 </p>
 <p>s7_open_input_function and s7_open_output_function
 call their "function" argument when input or output is requested.  The "read_choice"
