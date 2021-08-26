@@ -117,12 +117,12 @@
 (define (transit-surface)
   (let ((iang-sin 0))
     (if (= paraxial 1)
-	(if (zero? radius-of-curvature)
+	(if (= radius-of-curvature 0.0)
 	    (begin
 	      (set! object-distance (* object-distance (/ to-index from-index)))
 	      (set! axis-slope-angle (* axis-slope-angle (/ from-index to-index))))
 	    (begin
-	      (if (zero? object-distance)
+	      (if (= object-distance 0.0)
 		  (begin
 		    (set! axis-slope-angle 0)
 		    (set! iang-sin (/ ray-height radius-of-curvature)))
@@ -130,15 +130,15 @@
 	      (let ((rang-sin (* (/ from-index to-index) iang-sin))
 		    (old-axis-slope-angle axis-slope-angle))
 		(set! axis-slope-angle (- (+ axis-slope-angle iang-sin) rang-sin))
-		(if (not (zero? object-distance))
+		(if (not (= object-distance 0.0))
 		    (set! ray-height (* object-distance old-axis-slope-angle)))
 		(set! object-distance (/ ray-height axis-slope-angle)))))
-	(if (zero? radius-of-curvature)
+	(if (= radius-of-curvature 0.0)
 	    (let ((rang (- (asin (* (/ from-index to-index) (sin axis-slope-angle))))))
 	      (set! object-distance (/ (* object-distance to-index (cos rang)) (* from-index (cos axis-slope-angle))))
 	      (set! axis-slope-angle (- rang)))
 	    (begin
-	      (if (zero? object-distance)
+	      (if (= object-distance 0.0)
 		  (begin
 		    (set! axis-slope-angle 0)
 		    (set! iang-sin (/ ray-height radius-of-curvature)))
