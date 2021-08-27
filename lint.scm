@@ -14418,15 +14418,14 @@
 				      (set! sig (make-list len #t))
 				      (if (< (length sig) len)
 					  (set! sig (copy sig (make-list len #t)))))
-				  (let ((siglist (cdr sig)))
-				    (for-each
-				     (lambda (arg)
-				       (if (memq arg unused)
-					   (set-car! siglist 'unused-parameter?)
-					   (if (memq arg set)
-					       (set-car! siglist 'unused-set-parameter?)))
-				       (set! siglist (cdr siglist)))
-				     proper-args))
+				  (do ((siglist (cdr sig) (cdr siglist))
+				       (arg proper-args (cdr arg)))
+				      ((null? arg))
+				    (if (memq (car arg) unused)
+					(set-car! siglist 'unused-parameter?)
+					(if (memq (car arg) set)
+					    (set-car! siglist 'unused-set-parameter?))))
+				    
 				  (set! (var-signature fvar) sig))))))
 			(cons fvar env))))))))
 
@@ -23768,4 +23767,4 @@
     #f))
 |#
 
-;;; 54 896368, 53 874874, 52 871075
+;;; 54 896368, 53 874874, 52 871075, 54 889347 
