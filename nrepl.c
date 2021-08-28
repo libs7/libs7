@@ -324,9 +324,10 @@ static int nrepl(s7_scheme *sc)
 	  return(0);
 	}
       fprintf(stderr, "load %s\n", argv[1]);
+      errno = 0;
       if (!s7_load(sc, argv[1]))
 	{
-	  fprintf(stderr, "can't load %s\n", argv[1]);
+	  fprintf(stderr, "%s: %s\n", strerror(errno), argv[1]);
 	  return(2);
 	}
     }

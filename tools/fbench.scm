@@ -71,8 +71,8 @@
 (define max-lspher 0)
 (define max-osc 0)
 (define max-lchrom 0)
-(define radius-of-curvature 0)
-(define object-distance 0)
+(define radius-of-curvature 0.0)
+(define object-distance 0.0)
 (define ray-height 0)
 (define axis-slope-angle 0)
 (define from-index 0)
@@ -124,7 +124,7 @@
 	    (begin
 	      (if (= object-distance 0.0)
 		  (begin
-		    (set! axis-slope-angle 0)
+		    (set! axis-slope-angle 0.0)
 		    (set! iang-sin (/ ray-height radius-of-curvature)))
 		  (set! iang-sin (* (/ (- object-distance radius-of-curvature) radius-of-curvature) axis-slope-angle)))
 	      (let ((rang-sin (* (/ from-index to-index) iang-sin))
@@ -140,7 +140,7 @@
 	    (begin
 	      (if (= object-distance 0.0)
 		  (begin
-		    (set! axis-slope-angle 0)
+		    (set! axis-slope-angle 0.0)
 		    (set! iang-sin (/ ray-height radius-of-curvature)))
 		  (set! iang-sin (* (/ (- object-distance radius-of-curvature) radius-of-curvature) (sin axis-slope-angle))))
 	      (let ((iang (asin iang-sin))
@@ -153,7 +153,7 @@
 
 ;;	Perform ray trace in specific spectral line
 (define (trace-line line ray-h)
-  (set! object-distance 0)
+  (set! object-distance 0.0)
   (set! ray-height ray-h)
   (set! from-index 1)
   (for-each (lambda (surface)
