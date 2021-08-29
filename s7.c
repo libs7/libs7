@@ -2553,9 +2553,9 @@ static void init_types(void)
 #define is_definer_or_binder(p)        has_type1_bit(T_Sym(p), T_DEFINER | T_BINDER)
 /* this marks "binders" like let */
 
-#define T_SEMISAFE                    T_BINDER
-#define is_semisafe(p)               has_type1_bit(T_Fnc(p), T_SEMISAFE)
-#define set_is_semisafe(p)           set_type1_bit(T_Fnc(p), T_SEMISAFE)
+#define T_SEMISAFE                     T_BINDER
+#define is_semisafe(p)                 has_type1_bit(T_Fnc(p), T_SEMISAFE)
+#define set_is_semisafe(p)             set_type1_bit(T_Fnc(p), T_SEMISAFE)
 
 /* #define T_TREE_COLLECTED            T_FULL_BINDER */
 #define T_SHORT_TREE_COLLECTED         T_BINDER
@@ -2644,7 +2644,7 @@ static void init_types(void)
 #define is_safety_checked(p)           has_type1_bit(T_Pair(p), T_SAFETY_CHECKED)
 #define set_safety_checked(p)          set_type1_bit(T_Pair(p), T_SAFETY_CHECKED)
 
-#define T_FULL_HAS_FN                  (1LL << (TYPE_BITS + BIT_ROOM + 36))
+#define T_FULL_HAS_FN                  (1LL << (TYPE_BITS + BIT_ROOM + 37))
 #define T_HAS_FN                       (1 << 13)
 #define set_has_fn(p)                  set_type1_bit(T_Pair(p), T_HAS_FN)
 #define has_fn(p)                      has_type1_bit(T_Pair(p), T_HAS_FN)
@@ -4583,69 +4583,69 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 
   str[0] = '\0';
   catstrs(str, 900,	  /* if debugging, all of these bits are being watched, so we need to access them directly */
-	  /* bit 0 (the first 8 bits are easy...) */
+	  /* bit 8 (the first 8 bits (after the 8 type bits) are easy...) */
 	  ((full_typ & T_MULTIFORM) != 0) ?      ((is_any_closure(obj)) ? (((full_typ & T_ONE_FORM) != 0) ? " closure-one-form-has-fx" : " closure-multiform") : " ?0?") : "",
-	  /* bit 1 */
+	  /* bit 9 */
 	  ((full_typ & T_SYNTACTIC) != 0) ?      (((is_pair(obj)) || (is_syntax(obj)) || (is_normal_symbol(obj))) ? " syntactic" : " ?1?") : "",
-	  /* bit 2 */
+	  /* bit 10 */
 	  ((full_typ & T_SIMPLE_ARG_DEFAULTS) != 0) ? ((is_pair(obj)) ? " simple-args|in-use" :
 						       ((is_any_closure(obj)) ? " closure-one-form" :
 							" ?2?")) : "",
-	  /* bit 3 */
+	  /* bit 11 */
 	  ((full_typ & T_OPTIMIZED) != 0) ?      ((is_c_function(obj)) ? " scope-safe" :
 						  ((is_pair(obj)) ? " optimized" :
 						   " ?3?")) : "",
-	  /* bit 4 */
+	  /* bit 12 */
 	  ((full_typ & T_SAFE_CLOSURE) != 0) ?   (((has_closure_let(obj)) || (is_pair(obj))) ? " safe-closure" : " ?4?") : "",
-	  /* bit 5 */
+	  /* bit 13 */
 	  ((full_typ & T_DONT_EVAL_ARGS) != 0) ? (((is_any_macro(obj)) || (is_syntax(obj))) ? " dont-eval-args" : " ?5?") : "",
-	  /* bit 6 */
+	  /* bit 14 */
 	  ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_either_macro(obj))) ? " expansion" : " ?6?") : "",
-	  /* bit 7 */
+	  /* bit 15 */
 	  ((full_typ & T_MULTIPLE_VALUE) != 0) ? ((is_symbol(obj)) ? " matched" :
 						  ((is_pair(obj)) ? " values|matched" :
 						   " ?7?")) : "",
-	  /* bit 8 */
+	  /* bit 16 */
 	  ((full_typ & T_GLOBAL) != 0) ?         ((is_pair(obj)) ? " unsafe-do" :
 						  (((is_symbol(obj)) || (is_syntax(obj))) ? " global" :
 						   ((is_let(obj)) ? " dox_slot1" :
 						    " ?8?"))) : "",
-	  /* bit 9 */
+	  /* bit 17 */
 	  ((full_typ & T_COLLECTED) != 0) ?      " collected" : "",
-	  /* bit 10 */
+	  /* bit 18 */
 	  ((full_typ & T_LOCATION) != 0) ?       ((is_pair(obj)) ? " line-number" :
 						  ((is_input_port(obj)) ? " loader-port" :
 						   ((is_let(obj)) ? " with-let" :
 						    ((is_any_procedure(obj)) ? " simple-defaults" :
 						     (((is_normal_symbol(obj)) || (is_slot(obj))) ? " has-setter" :
 						      " ?10?"))))) : "",
-	  /* bit 11 */
+	  /* bit 19 */
 	  ((full_typ & T_SHARED) != 0) ?         ((is_sequence(obj)) ? " shared" : " ?11?") : "",
-	  /* bit 12 */
+	  /* bit 20 */
 	  ((full_typ & T_LOCAL) != 0) ?          ((is_normal_symbol(obj)) ? " local" :
 						  ((is_pair(obj)) ? " high-c" :
 						   " ?12?")) : "",
-	  /* bit 13 */
+	  /* bit 21 */
 	  ((full_typ & T_SAFE_PROCEDURE) != 0) ? ((is_applicable(obj)) ? " safe-procedure" : " ?13?") : "",
-	  /* bit 14 */
+	  /* bit 22 */
 	  ((full_typ & T_CHECKED) != 0) ?        (((is_pair(obj)) || (is_slot(obj))) ? " checked" :
 						  ((is_symbol(obj)) ? " all-integer" :
 						   " ?14?")) : "",
-	  /* bit 15 */
+	  /* bit 23 */
 	  ((full_typ & T_UNSAFE) != 0) ?         ((is_symbol(obj)) ? " clean-symbol" :
 						  ((is_slot(obj)) ? " has-stepper" :
 						   ((is_pair(obj)) ? " unsafely-opt|no-float-opt" :
 						    ((is_let(obj)) ? " dox-slot2" :
 						     " ?15?")))) : "",
-	  /* bit 16 */
+	  /* bit 24 */
 	  ((full_typ & T_IMMUTABLE) != 0) ?      " immutable" : "",
-	  /* bit 17 */
+	  /* bit 25 */
 	  ((full_typ & T_SETTER) != 0) ?         ((is_normal_symbol(obj)) ? " setter" :
 						  ((is_pair(obj)) ? " allow-other-keys|no-int-opt" :
 						   ((is_slot(obj)) ? " has-expression" :
 						    ((is_c_function_star(obj)) ? " allow-other-keys" :
 						     " ?17?")))) : "",
-	  /* bit 18 */
+	  /* bit 26 */
 	  ((full_typ & T_MUTABLE) != 0) ?        ((is_number(obj)) ? " mutable" :
 						  ((is_symbol(obj)) ? " has-keyword" :
 						   ((is_let(obj)) ? " let-ref-fallback" :
@@ -4654,7 +4654,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						      ((is_let(obj)) ? " ref-fallback" :
 						       ((is_pair(obj)) ? " no-opt" :
 							" ?18?"))))))) : "",
-	  /* bit 19 */
+	  /* bit 27 */
 	  ((full_typ & T_SAFE_STEPPER) != 0) ?   ((is_let(obj)) ? " set-fallback" :
 						  ((is_slot(obj)) ? " safe-stepper" :
 						   ((is_c_function(obj)) ? " maybe-safe" :
@@ -4664,11 +4664,11 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						       ((is_any_macro(obj)) ? " pair-macro-set" :
 							((is_symbol(obj)) ? " all-float" :
 							 " ?19?")))))))) : "",
-	  /* bit 20, for c_function case see sc->apply */
+	  /* bit 28, for c_function case see sc->apply */
 	  ((full_typ & T_COPY_ARGS) != 0) ?      (((is_pair(obj)) || (is_any_macro(obj)) || (is_syntax(obj)) ||
 						   (is_any_closure(obj)) || (is_c_function(obj))) ? " copy-args" :
 						  " ?20?") : "",
-	  /* bit 21 */
+	  /* bit 29 */
 	  ((full_typ & T_GENSYM) != 0) ?         ((is_let(obj)) ? " funclet" :
 						  ((is_normal_symbol(obj)) ? " gensym" :
 						   ((is_string(obj)) ? " documented-symbol" :
@@ -4678,22 +4678,22 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						       ((is_slot(obj)) ? " has-pending-value" :
 							((is_any_closure(obj)) ? " unknopt" :
 							 " ?21?")))))))) : "",
-	  /* bit 22 */
+	  /* bit 30 */
 	  ((full_typ & T_HAS_METHODS) != 0) ?    (((is_let(obj)) || (is_c_object(obj)) || (is_any_closure(obj)) ||
 						   (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" : " ?22?") : "",
-	  /* bit 23 */
+	  /* bit 31 */
 	  ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" :
 						  ((is_pair(obj)) ? " step-end-ok/set-implicit-ok" :
 						   ((is_slot(obj)) ? " in-rootlet" :
 						    ((is_c_function(obj)) ? " bool-function" :
 						     " ?23?")))) : "",
-	  /* bit 24+16 */
+	  /* bit 24+24 */
 	  ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
 						  ((is_procedure(obj)) ? " has-let-arg" :
 						   ((is_hash_table(obj)) ? " has-value-type" :
 						    ((is_pair(obj)) ? " int-optable" :
 						     " ?24?")))) : "",
-	  /* bit 25+16 */
+	  /* bit 25+24 */
 	  ((full_typ & T_FULL_HAS_LET_FILE) != 0) ? ((is_let(obj)) ? " has-let-file" :
 						     ((is_any_vector(obj)) ? " typed-vector" :
 						      ((is_hash_table(obj)) ? " typed-hash-table" :
@@ -4701,7 +4701,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 							((is_slot(obj)) ? " rest-slot" :
 							 (((is_pair(obj)) || (is_closure_star(obj))) ? " no-defaults" :
 							  " ?25?")))))) : "",
-	  /* bit 26+16 */
+	  /* bit 26+24 */
 	  ((full_typ & T_FULL_DEFINER) != 0) ?   ((is_normal_symbol(obj)) ? " definer" :
 						  ((is_pair(obj)) ? " has-fx" :
 						   ((is_slot(obj)) ? " slot-defaults" :
@@ -4711,47 +4711,48 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						       ((is_c_function(obj)) ? " func-definer" :
 							((is_syntax(obj)) ? " syntax-definer" :
 							 " ?26?")))))))) : "",
-	  /* bit 27+16 */
+	  /* bit 27+24 */
 	  ((full_typ & T_FULL_BINDER) != 0) ?    ((is_pair(obj)) ? " tree-collected" :
 						  ((is_hash_table(obj)) ? " simple-values" :
 						   ((is_normal_symbol(obj)) ? " binder" :
 						    ((is_c_function(obj)) ? " safe-args" :
 						     " ?27?")))) : "",
-	  /* bit 28+16 */
+	  /* bit 28+24 */
 	  ((full_typ & T_VERY_SAFE_CLOSURE) != 0) ? (((is_pair(obj)) || (is_any_closure(obj))) ? " very-safe-closure" :
 						     ((is_let(obj)) ? " baffle-let" :
 						      " ?28?")) : "",
-	  /* bit 29+16 */
+	  /* bit 29+24 */
 	  ((full_typ & T_CYCLIC) != 0) ?         (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
 						   (is_any_closure(obj))) ? " cyclic" : " ?29?") : "",
-	  /* bit 30+16 */
+	  /* bit 30+24 */
 	  ((full_typ & T_CYCLIC_SET) != 0) ?     (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
 						   (is_any_closure(obj))) ? " cyclic-set" : " ?30?") : "",
-	  /* bit 31+16 */
+	  /* bit 31+24 */
 	  ((full_typ & T_KEYWORD) != 0) ?        ((is_symbol(obj)) ? " keyword" : " ?31?") : "",
-	  /* bit 32+16 */
+	  /* bit 32+24 */
 	  ((full_typ & T_FULL_SIMPLE_ELEMENTS) != 0) ? ((is_normal_vector(obj)) ? " simple-elements" :
 							((is_hash_table(obj)) ? " simple-keys" :
 							 ((is_normal_symbol(obj)) ? " safe-setter" :
 							  ((is_pair(obj)) ? " float-optable" :
 							   ((typ >= T_C_MACRO) ? " function-simple-elements" :
 							    " 32?"))))) : "",
-	  /* bit 33+16 */
+	  /* bit 33+24 */
 	  ((full_typ & T_FULL_CASE_KEY) != 0) ?  ((is_symbol(obj)) ? " case-key" :
 						  ((is_pair(obj)) ? " opt1-func-listed" :
 						   " ?33?")) : "",
-	  /* bit 34+16 */
+	  /* bit 34+24 */
 	  ((full_typ & T_FULL_HAS_GX) != 0) ?    ((is_pair(obj)) ? " has-gx" : " ?34?") : "",
-	  /* bit 35+16 */
+	  /* bit 35+24 */
 	  ((full_typ & T_FULL_UNKNOPT) != 0) ?    ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
-	  /* bit 36+16 */
+	  /* bit 36+24 */
 	  ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
+	  /* bit 37+24 */
 	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
-	  ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
-	  /* bit 54 */
+	  /* bit 62 */
 	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
-	  /* bit 55 */
+	  /* bit 63 */
 	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
+	  ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
 
 	  ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "",
 	  NULL);
@@ -29228,7 +29229,8 @@ If the optional 'clear-port' is #t, the current string is flushed."
     {
       block_t *block;
       s7_pointer result;
-      result = block_to_string(sc, port_data_block(p), port_position(p));
+      result = block_to_string(sc, port_data_block(p), port_position(p)); 
+      /* this is slightly faster than make_string_with_length(sc, (char *)(port_data(p)), port_position(p)): we're trading a mallocate for a memcpy */
       port_data_size(p) = sc->initial_string_port_length;
       block = mallocate(sc, port_data_size(p));
       port_data_block(p) = block;
@@ -32475,9 +32477,9 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	      port_write_character(port)(sc, ' ', port);
 	      object_to_port_with_circle_check(sc, vector_element(vect, i), port, P_READABLE, ci);
 	    }
-	  port_write_character(port)(sc, ')', port);
 	  if (is_immutable_vector(vect))
-	    port_write_character(port)(sc, ')', port);
+	    port_write_string(port)(sc, "))", 2, port);
+	  else port_write_character(port)(sc, ')', port);
 
 	  if (vector_rank(vect) > 1)
 	    {
@@ -32580,10 +32582,10 @@ static void int_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, 
 	  make_vector_to_port(sc, vect, port);
 	  p = integer_to_string(sc, int_vector(vect, 0), &plen);
 	  port_write_string(port)(sc, p, plen, port);
-	  port_write_character(port)(sc, ')', port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
-	    port_write_character(port)(sc, ')', port);
+	    port_write_string(port)(sc, "))", 2, port);
+	  else port_write_character(port)(sc, ')', port);
 	  return;
 	}}
   if (vector_rank(vect) == 1)
@@ -32736,10 +32738,10 @@ static void byte_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port,
 	  make_vector_to_port(sc, vect, port);
 	  p = integer_to_string(sc, byte_vector(vect, 0), &plen);
 	  port_write_string(port)(sc, p, plen, port);
-	  port_write_character(port)(sc, ')', port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
-	    port_write_character(port)(sc, ')', port);
+	    port_write_string(port)(sc, "))", 2, port);
+	  else port_write_character(port)(sc, ')', port);
 	  return;
 	}}
 
@@ -32795,9 +32797,9 @@ static void string_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
 	      nlen = catstrs_direct(buf, "(make-string ", pos_int_to_str_direct(sc, string_length(obj)), " ", (const char *)NULL);
 	      port_write_string(port)(sc, buf, nlen, port);
 	      port_write_string(port)(sc, character_name(c), character_name_length(c), port);
-	      port_write_character(port)(sc, ')', port);
 	      if (immutable)
-		port_write_character(port)(sc, ')', port);
+		port_write_string(port)(sc, "))", 2, port);
+	      else port_write_character(port)(sc, ')', port);
 	      return;
 	    }}
       if (use_write == P_DISPLAY)
@@ -32897,9 +32899,9 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
       return;
     }
 
-  port_write_character(port)(sc, '(', port);
   if (is_multiple_value(lst))
-    port_write_string(port)(sc, "values ", 7, port);
+    port_write_string(port)(sc, "(values ", 8, port);
+  else port_write_character(port)(sc, '(', port);
 
   check_stack_size(sc);
   s7_gc_protect_via_stack(sc, lst);
@@ -36979,26 +36981,28 @@ static s7_pointer protected_make_list(s7_scheme *sc, s7_int len, s7_pointer init
   return(sc->temp6);
 }
 
-static s7_pointer g_make_list(s7_scheme *sc, s7_pointer args)
+static s7_pointer make_list_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer init)
 {
-  #define H_make_list "(make-list length (initial-element #f)) returns a list of 'length' elements whose value is 'initial-element'."
-  #define Q_make_list s7_make_signature(sc, 3, sc->is_proper_list_symbol, sc->is_integer_symbol, sc->T)
-
-  s7_pointer n = car(args);
   s7_int len;
-
   if (!s7_is_integer(n))
-    return(method_or_bust(sc, n, sc->make_list_symbol, args, T_INTEGER, 1));
+    return(method_or_bust(sc, n, sc->make_list_symbol, set_plist_2(sc, n, init), T_INTEGER, 1));
 
   len = s7_integer_checked(sc, n);
 #if WITH_GMP
   if ((len == 0) && (!is_zero(sc, n)))
     return(s7_out_of_range_error(sc, "make-list", 1, n, "big integer is too big for s7_int"));
 #endif
+  if (len == 0) return(sc->nil);          /* what about (make-list 0 123)? */
   if ((len < 0) || (len > sc->max_list_length))
     return(out_of_range(sc, sc->make_list_symbol, int_one, n, (len < 0) ? its_negative_string : its_too_large_string));
-  if (len == 0) return(sc->nil);          /* what about (make-list 0 123)? */
-  return(make_list(sc, len, (is_pair(cdr(args))) ? cadr(args) : sc->F));
+  return(make_list(sc, len, init));
+}
+
+static s7_pointer g_make_list(s7_scheme *sc, s7_pointer args)
+{
+  #define H_make_list "(make-list length (initial-element #f)) returns a list of 'length' elements whose value is 'initial-element'."
+  #define Q_make_list s7_make_signature(sc, 3, sc->is_proper_list_symbol, sc->is_integer_symbol, sc->T)
+  return(make_list_p_pp(sc, car(args), (is_pair(cdr(args))) ? cadr(args) : sc->F));
 }
 
 
@@ -47815,9 +47819,8 @@ static void init_equals(void)
 #endif
 }
 
-bool s7_is_equal(s7_scheme *sc, s7_pointer x, s7_pointer y) {return(is_equal_1(sc, x, y, NULL));}
-
-bool s7_is_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y) {return(is_equivalent_1(sc, x, y, NULL));}
+bool s7_is_equal(s7_scheme *sc, s7_pointer x, s7_pointer y) {return((*(equals[type(x)]))(sc, x, y, NULL));}
+bool s7_is_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y) {return((*(equivalents[type(x)]))(sc, x, y, NULL));}
 
 static s7_pointer g_is_equal(s7_scheme *sc, s7_pointer args)
 {
@@ -93023,6 +93026,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->list_symbol), list_p_pp);
   s7_set_p_ppp_function(sc, global_value(sc->list_symbol), list_p_ppp);
   s7_set_p_pp_function(sc, global_value(sc->list_tail_symbol), list_tail_p_pp);
+  s7_set_p_pp_function(sc, global_value(sc->make_list_symbol), make_list_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->assq_symbol), assq_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->assv_symbol), assv_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->memq_symbol), memq_p_pp);
@@ -95148,42 +95152,41 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        552          691    687    477    476
- * tauto       785          648    642    496    497
+ * tauto       785          648    642    496    496
  * tshoot     1471          883    872    810    808
  * index      1031         1026   1016    983    979
  * tmock      7756         1177   1165   1098   1097
  * tvect      1915         2456   2413   1756   1736
- * s7test     4514         1873   1831   1812   1795
+ * s7test     4514         1873   1831   1812   1792
  * lt         2129         2123   2110   2123   2119
  * tform      3245         2281   2273   2267   2261
  * tmac       2429         3317   3277   2389   2409
  * tread      2591         2440   2421   2411   2412
  * trclo      4093         2715   2561   2455   2465
- * tmat       2648         3065   3042   2523   2520
- * fbench     2852         2688   2583   2544   2525  2514
+ * fbench     2852         2688   2583   2544   2514
+ * tmat       2648         3065   3042   2523   2514
  * tcopy      2745         8035   5546   2557   2551
- * dup        2760         3805   3788   2639   2583
+ * dup        2760         3805   3788   2639   2577
  * tb         3375         2735   2681   2560   2628
  * titer      2678         2865   2842   2679   2679
  * tsort      3590         3105   3104   2924   2860
  * tset       3100         3253   3104   3090   3092
  * tload      3849                       3234   3142
- * roset      4364         3453   3373   3185   3137
  * teq        3542         4068   4045   3576   3570
  * tio        3684         3816   3752   3702   3692
- * tstr       6230         5281   4863   4197   4167
+ * tstr       6230         5281   4863   4197   4171
  * tclo       4636         4787   4735   4409   4414
  * tlet       5283         7775   5640   4490   4431
- * tcase      4550         4960   4793   4474   4453
- * tmap       5984         8869   8774   5209   4498
- * tfft      115.1         7820   7729   4798   4792  4787
- * tnum       56.7         6348   6013   5445   5441
+ * tcase      4550         4960   4793   4474   4452
+ * tmap       5984         8869   8774   5209   4501
+ * tfft      115.1         7820   7729   4798   4787
+ * tnum       56.7         6348   6013   5445   5445
  * tgsl       25.2         8485   7802   6389   6396
- * trec       8338         6936   6922   6553   6551
+ * trec       8338         6936   6922   6553   6551  [half fx_num_eq_t0 -> fb_num_eq_s0]
  * tmisc      7217         8960   7699   6972   6596
- * tlist      6834         7896   7546   7087   6976
+ * tlist      6834         7896   7546   7087   6918
  * tgc        10.1         11.9   11.1   8726   8667
- * thash      35.4         11.8   11.7   9838   9808  9789
+ * thash      35.4         11.8   11.7   9838   9796
  * tgen       12.1         11.2   11.4   11.5   11.5
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.2
@@ -95196,7 +95199,7 @@ int main(int argc, char **argv)
  * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
  *   for and/or: all branches fx->fb -> new op??
- * map/for-each: maybe if arg short, don't cell_optimize? use fx?
+ *   fx_tree fb cases?
  * much repetition now from p_p
  * op_local_lambda _fx?
  */
