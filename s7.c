@@ -18378,7 +18378,6 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
     {
     case T_INTEGER:
       return(x);
-
     case T_RATIO:
       {
 	s7_int val = numerator(x) / denominator(x);
@@ -18390,7 +18389,6 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
 	 */
 	return((numerator(x) < 0) ? make_integer(sc, val - 1) : make_integer(sc, val)); /* not "val" because it might be truncated to 0 */
       }
-
     case T_REAL:
       {
 	s7_double z = real(x);
@@ -18412,15 +18410,12 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
 	return(make_integer(sc, (s7_int)floor(z)));
 	/* floor here rounds down, whereas a straight int<=real coercion apparently rounds towards 0 */
       }
-
 #if WITH_GMP
     case T_BIG_INTEGER:
       return(x);
-
     case T_BIG_RATIO:
       mpz_fdiv_q(sc->mpz_1, mpq_numref(big_ratio(x)), mpq_denref(big_ratio(x)));
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
 	return(simple_out_of_range(sc, sc->floor_symbol, x, its_nan_string));
@@ -18428,12 +18423,10 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
 	return(simple_out_of_range(sc, sc->floor_symbol, x, its_infinite_string));
       mpfr_get_z(sc->mpz_1, big_real(x), MPFR_RNDD);
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
       return(s7_wrong_type_arg_error(sc, "floor", 0, x, "a real number"));
-
     default:
       return(method_or_bust_one_arg_p(sc, x, sc->floor_symbol, T_REAL));
     }
@@ -18474,23 +18467,17 @@ static s7_int floor_i_7p(s7_scheme *sc, s7_pointer p)
 
 
 /* -------------------------------- ceiling -------------------------------- */
-static s7_pointer g_ceiling(s7_scheme *sc, s7_pointer args)
+static s7_pointer ceiling_p_p(s7_scheme *sc, s7_pointer x)
 {
-  #define H_ceiling "(ceiling x) returns the integer closest to x toward inf"
-  #define Q_ceiling s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
-
-  s7_pointer x = car(args);
   switch (type(x))
     {
     case T_INTEGER:
       return(x);
-
     case T_RATIO:
       {
 	s7_int val = numerator(x) / denominator(x);
 	return((numerator(x) < 0) ? make_integer(sc, val) : make_integer(sc, val + 1));
       }
-
     case T_REAL:
       {
 	s7_double z = real(x);
@@ -18511,15 +18498,12 @@ static s7_pointer g_ceiling(s7_scheme *sc, s7_pointer args)
 #endif
 	return(make_integer(sc, (s7_int)ceil(real(x))));
       }
-
 #if WITH_GMP
     case T_BIG_INTEGER:
       return(x);
-
     case T_BIG_RATIO:
       mpz_cdiv_q(sc->mpz_1, mpq_numref(big_ratio(x)), mpq_denref(big_ratio(x)));
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
 	return(simple_out_of_range(sc, sc->ceiling_symbol, x, its_nan_string));
@@ -18527,13 +18511,20 @@ static s7_pointer g_ceiling(s7_scheme *sc, s7_pointer args)
 	return(simple_out_of_range(sc, sc->ceiling_symbol, x, its_infinite_string));
       mpfr_get_z(sc->mpz_1, big_real(x), MPFR_RNDU);
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
+      return(s7_wrong_type_arg_error(sc, "ceiling", 0, x, "a real number"));
     default:
-      return(method_or_bust_one_arg(sc, x, sc->ceiling_symbol, args, T_REAL));
+      return(method_or_bust_one_arg_p(sc, x, sc->ceiling_symbol, T_REAL));
     }
+}
+
+static s7_pointer g_ceiling(s7_scheme *sc, s7_pointer args)
+{
+  #define H_ceiling "(ceiling x) returns the integer closest to x toward inf"
+  #define Q_ceiling s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
+  return(ceiling_p_p(sc, car(args)));
 }
 
 static s7_int ceiling_i_i(s7_int i) {return(i);}
@@ -18566,10 +18557,8 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
     {
     case T_INTEGER:
       return(x);
-
     case T_RATIO:
       return(make_integer(sc, (s7_int)(numerator(x) / denominator(x)))); /* C "/" already truncates (but this divide is not accurate over e13) */
-
     case T_REAL:
       {
 	s7_double z = real(x);
@@ -18590,15 +18579,12 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
 #endif
 	return((z > 0.0) ? make_integer(sc, (s7_int)floor(z)) : make_integer(sc, (s7_int)ceil(z)));
       }
-
 #if WITH_GMP
     case T_BIG_INTEGER:
       return(x);
-
     case T_BIG_RATIO:
       mpz_tdiv_q(sc->mpz_1, mpq_numref(big_ratio(x)), mpq_denref(big_ratio(x)));
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
 	return(simple_out_of_range(sc, sc->truncate_symbol, x, its_nan_string));
@@ -18606,10 +18592,10 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
 	return(simple_out_of_range(sc, sc->truncate_symbol, x, its_infinite_string));
       mpfr_get_z(sc->mpz_1, big_real(x), MPFR_RNDZ);
       return(mpz_to_integer(sc, sc->mpz_1));
-
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
+      return(s7_wrong_type_arg_error(sc, "truncate", 0, x, "a real number"));
     default:
       return(method_or_bust_one_arg_p(sc, x, sc->truncate_symbol, T_REAL));
     }
@@ -18649,17 +18635,12 @@ static s7_double r5rs_round(s7_double x)
   return((fmod(fl, 2.0) == 0.0) ? fl : ce);
 }
 
-static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
+static s7_pointer round_p_p(s7_scheme *sc, s7_pointer x)
 {
-  #define H_round "(round x) returns the integer closest to x"
-  #define Q_round s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
-
-  s7_pointer x = car(args);
   switch (type(x))
     {
     case T_INTEGER:
       return(x);
-
     case T_RATIO:
       {
 	s7_int truncated = numerator(x) / denominator(x), remains = numerator(x) % denominator(x);
@@ -18671,7 +18652,6 @@ static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
 	  return((numerator(x) < 0) ? make_integer(sc, truncated - 1) : make_integer(sc, truncated + 1));
 	return(make_integer(sc, truncated));
       }
-
     case T_REAL:
       {
 	s7_double z = real(x);
@@ -18693,11 +18673,9 @@ static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
 #endif
 	return(make_integer(sc, (s7_int)r5rs_round(z)));
       }
-
 #if WITH_GMP
       case T_BIG_INTEGER:
 	return(x);
-
     case T_BIG_RATIO:
       {
 	int32_t rnd;
@@ -18713,7 +18691,6 @@ static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
 	    mpz_add_ui(sc->mpz_1, sc->mpz_1, 1);
 	return(mpz_to_integer(sc, sc->mpz_1));
       }
-
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
 	return(simple_out_of_range(sc, sc->round_symbol, x, its_nan_string));
@@ -18723,13 +18700,20 @@ static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
       mpfr_rint(sc->mpfr_2, sc->mpfr_1, MPFR_RNDN);
       mpfr_get_z(sc->mpz_3, sc->mpfr_2, MPFR_RNDN);
       return(mpz_to_integer(sc, sc->mpz_3));
-
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
+      return(s7_wrong_type_arg_error(sc, "round", 0, x, "a real number"));
     default:
-      return(method_or_bust_one_arg(sc, x, sc->round_symbol, args, T_REAL));
+      return(method_or_bust_one_arg_p(sc, x, sc->round_symbol, T_REAL));
     }
+}
+
+static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
+{
+  #define H_round "(round x) returns the integer closest to x"
+  #define Q_round s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
+  return(round_p_p(sc, car(args)));
 }
 
 static s7_int round_i_i(s7_int i) {return(i);}
@@ -61551,7 +61535,15 @@ static void check_b_types(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 	{
 	  opc->v[0].fb = fb;
 	  opc->v[3].b_pp_f = s7_b_pp_unchecked_function(s_func);
-	}}
+	}
+    }
+#if 0
+  if ((arg2_type == sc->is_integer_symbol) && s7_b_pi_function(s_func))
+    {
+      /* opc->v[0].fb = opt_b_pi */
+      fprintf(stderr, "  pi: %s\n", display(car_x));
+    }
+#endif
 }
 
 static bool b_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, s7_pointer arg1, s7_pointer arg2, bool bpf_case)
@@ -61622,6 +61614,7 @@ static bool b_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	  }
 	pc_fallback(sc, cur_index);
       }
+  /* fprintf(stderr, "%d %s %s\n", __LINE__, display(opt_arg_type(sc, cdr(car_x))), display(opt_arg_type(sc, cddr(car_x)))); */
   o1 = sc->opts[sc->pc];
   if (cell_optimize(sc, cdr(car_x)))
     {
@@ -61645,6 +61638,14 @@ static bool b_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 static bool opt_b_pi_fs(opt_info *o) {return(o->v[2].b_pi_f(opt_sc(o), o->v[11].fp(o->v[10].o1), integer(slot_value(o->v[1].p))));}
 static bool opt_b_pi_fs_num_eq(opt_info *o) {return(num_eq_b_pi(opt_sc(o), o->v[11].fp(o->v[10].o1), integer(slot_value(o->v[1].p))));}
 static bool opt_b_pi_fi(opt_info *o) {return(o->v[2].b_pi_f(opt_sc(o), o->v[11].fp(o->v[10].o1), o->v[1].i));}
+#if 0
+static bool opt_b_pi_ff(opt_info *o)
+{
+  s7_pointer p1;
+  p1 = o->v[9].fp(o->v[8].o1);
+  return(o->v[3].b_pi_f(opt_sc(o), p1, o->v[11].fi(o->v[10].o1)));
+}
+#endif
 
 static bool b_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, s7_pointer arg2)
 {
@@ -61656,14 +61657,14 @@ static bool b_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	opc->v[1].p = lookup_slot_from(arg2, sc->curlet); /* slot checked in opt_arg_type */
       else 
 	{
-	  if (integer(arg2) < 0) return_false(sc, car_x);
+	  /* if (integer(arg2) < 0) return_false(sc, car_x); */ /* why this? */
 	  opc->v[1].i = integer(arg2);
 	}
       opc->v[10].o1 = sc->opts[sc->pc];
       if (cell_optimize(sc, cdr(car_x)))
 	{
 	  opc->v[2].b_pi_f = bpif;
-	  if (is_symbol(arg2))
+	  if (is_symbol(arg2))   /* not pair? arg2 in bool_optimize */
 	    opc->v[0].fb = (bpif == num_eq_b_pi) ? opt_b_pi_fs_num_eq : opt_b_pi_fs;
 	  else opc->v[0].fb = opt_b_pi_fi;
 	  opc->v[11].fp = opc->v[10].o1->v[0].fp;
@@ -66444,7 +66445,6 @@ static bool bool_optimize_nw_1(s7_scheme *sc, s7_pointer expr)
 		    opc = alloc_opo(sc);
 		    sig1 = opt_arg_type(sc, cdr(car_x));
 		    sig2 = opt_arg_type(sc, cddr(car_x));
-
 		    if (sig2 == sc->is_integer_symbol)
 		      {
 			int32_t cur_index = sc->pc;
@@ -67932,6 +67932,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_SET_SAFE:                         /* symbol is sc->code after pop */
     case OP_SET1:
     case OP_SET_FROM_LET_TEMP:                /* (set! var (values 1 2 3)) */
+    case OP_SET_FROM_SETTER:
       eval_error_with_caller2(sc, "~A: can't set ~A to ~S", 22, sc->set_symbol, stack_code(sc->stack, top), set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_SET_PAIR_P_1:
@@ -75354,13 +75355,6 @@ static void op_let_one_new(s7_scheme *sc)
   sc->code = opt2_pair(sc->code);
 }
 
-static void op_let_one_old(s7_scheme *sc)
-{
-  sc->code = cdr(sc->code);
-  push_stack_no_args_direct(sc, OP_LET_ONE_OLD_1);
-  sc->code = opt2_pair(sc->code);
-}
-
 static void op_let_one_p_new(s7_scheme *sc)
 {
   sc->code = cdr(sc->code);
@@ -75368,11 +75362,11 @@ static void op_let_one_p_new(s7_scheme *sc)
   sc->code = T_Pair(opt2_pair(sc->code));
 }
 
-static void op_let_one_p_old(s7_scheme *sc)
+static void op_let_one_old(s7_scheme *sc)
 {
   sc->code = cdr(sc->code);
-  push_stack_no_args_direct(sc, OP_LET_ONE_P_OLD_1);
-  sc->code = T_Pair(opt2_pair(sc->code));
+  push_stack_no_args_direct(sc, OP_LET_ONE_OLD_1);
+  sc->code = opt2_pair(sc->code);
 }
 
 static void op_let_one_old_1(s7_scheme *sc)
@@ -75384,9 +75378,19 @@ static void op_let_one_old_1(s7_scheme *sc)
   sc->code = cdr(sc->code);
 }
 
+static void op_let_one_p_old(s7_scheme *sc)
+{
+  sc->code = cdr(sc->code);
+  push_stack_no_args_direct(sc, OP_LET_ONE_P_OLD_1);
+  sc->code = T_Pair(opt2_pair(sc->code));
+}
+
 static void op_let_one_p_old_1(s7_scheme *sc)
 {
   s7_pointer let;
+  if (is_multiple_value(sc->value))
+    s7_error(sc, sc->syntax_error_symbol, 
+	     set_elist_3(sc, wrap_string(sc, "let binding ~S to ~S: more than one value", 41), slot_symbol(let_slots(opt3_let(sc->code))), multiple_value(sc->value)));
   let = update_let_with_slot(sc, opt3_let(sc->code), sc->value);
   let_set_outlet(let, sc->curlet);
   set_curlet(sc, let);
@@ -88504,6 +88508,21 @@ static bool eval_car_pair(s7_scheme *sc)
 	  ((!is_pair(cdr(carc))) ||                 /* ((quote . #\h) (2 . #\i)) ! */
 	   (is_symbol_and_syntactic(cadr(carc)))))  /* ('or #f) but not ('#_or #f) */
 	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
+#if 0
+      /* if ((lambda ...)), check for ((lambda () ...)) and unwrap it to ...: need an operator here to skip these checks (and need optimization of lambda body etc) */
+      /* this is slower than going to op_lambda via eval_car_pair below, both much slower than code without the idiotic lambda */
+      if (car(carc) == sc->lambda_symbol)
+	{
+	  if ((is_null(cadr(carc))) &&
+	      (is_pair(cddr(carc))) &&
+	      (is_null(cdddr(carc))) && /* else wrap in (let ()...) */
+	      (!((is_pair(caddr(carc))) && (is_syntax(caaddr(carc))) && (is_syntax_definer(caaddr(carc))))))
+	    {
+	      sc->stack_end -= 4; /* avoid debugger complaint */
+	      sc->code = caddr(carc);
+	      return(true);
+	    }}
+#endif
       sc->code = carc;
       if (!no_cell_opt(carc))
 	{
@@ -90880,7 +90899,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SET_SYMBOL_P:     op_set_symbol_p(sc);     goto EVAL;
 	case OP_SET_CONS:         op_set_cons(sc);         continue;
  	case OP_SET_SAFE:	  op_set_safe(sc);  	   continue;
-	case OP_SET_FROM_SETTER:  slot_set_value(sc->code, sc->value); continue;
+	case OP_SET_FROM_SETTER:  slot_set_value(sc->code, sc->value); continue; /* mv caught in splice_in_values */
 	case OP_SET_FROM_LET_TEMP: op_set_from_let_temp(sc); continue;
 
 	case OP_SET2:
@@ -92844,6 +92863,8 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_i_function(sc, global_value(sc->rationalize_symbol), rationalize_p_i);
   s7_set_i_i_function(sc, global_value(sc->rationalize_symbol), rationalize_i_i);
   s7_set_p_p_function(sc, global_value(sc->truncate_symbol), truncate_p_p);
+  s7_set_p_p_function(sc, global_value(sc->round_symbol), round_p_p);
+  s7_set_p_p_function(sc, global_value(sc->floor_symbol), floor_p_p);
   s7_set_p_pp_function(sc, global_value(sc->max_symbol), max_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->min_symbol), min_p_pp);
   s7_set_p_p_function(sc, global_value(sc->sqrt_symbol), sqrt_p_p);
@@ -92878,7 +92899,6 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_i_function(sc, global_value(sc->int_vector_symbol), int_vector_p_i);
   s7_set_i_i_function(sc, global_value(sc->round_symbol), round_i_i);
   s7_set_i_i_function(sc, global_value(sc->floor_symbol), floor_i_i);
-  s7_set_p_p_function(sc, global_value(sc->floor_symbol), floor_p_p);
   s7_set_i_i_function(sc, global_value(sc->ceiling_symbol), ceiling_i_i);
   s7_set_i_i_function(sc, global_value(sc->truncate_symbol), truncate_i_i);
 
@@ -95156,7 +95176,7 @@ int main(int argc, char **argv)
  * tshoot     1471          883    872    810    808
  * index      1031         1026   1016    983    979
  * tmock      7756         1177   1165   1098   1097
- * tvect      1915         2456   2413   1756   1736
+ * tvect      1915         2456   2413   1756   1735
  * s7test     4514         1873   1831   1812   1792
  * lt         2129         2123   2110   2123   2119
  * tform      3245         2281   2273   2267   2261
@@ -95201,5 +95221,9 @@ int main(int argc, char **argv)
  *   for and/or: all branches fx->fb -> new op??
  *   fx_tree fb cases?
  * much repetition now from p_p
- * op_local_lambda _fx?
+ * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b))))
+ *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
+ * timing for top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc, cb
+ * b_pi_ff and check_b_types -> b_pi etc, b_pi i<0 vector-ref?
+ * lint fv|iv|etc as bool
  */
