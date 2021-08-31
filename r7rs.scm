@@ -97,7 +97,7 @@
 (define (close-port p) ((if (input-port? p) close-input-port close-output-port) p))
 (define open-binary-input-file open-input-file)
 (define open-binary-output-file open-output-file)
-(define (call-with-port port proc) (proc port))
+(define (call-with-port port proc) (let ((res (proc port))) (if res (close-port port)) res))
 
 (define bytevector-u8-ref byte-vector-ref)
 (define bytevector-u8-set! byte-vector-set!)

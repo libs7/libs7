@@ -41,6 +41,7 @@
 		     ("tgsl.scm" . "v-gsl")
 		     ("tlist.scm" . "v-list")
 		     ("tload.scm" . "v-load")
+		     ("cookbook.scm" . "v-cook")
 		     ))
 
 (define (last-callg)
@@ -109,6 +110,7 @@
 	 (list "repl" "tlist.scm")
 	 (list "repl" "tgc.scm")
 	 (list "repl" "thash.scm")
+	 (list "repl" "cookbook.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
 	 (list "snd -noinit" "tall.scm")
 	 (list "snd -l" "snd-test.scm")

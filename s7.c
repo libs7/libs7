@@ -37924,7 +37924,6 @@ s7_pointer s7_assoc(s7_scheme *sc, s7_pointer sym, s7_pointer lst)
 static s7_pointer g_is_eq(s7_scheme *sc, s7_pointer args);
 static s7_pointer g_is_eqv(s7_scheme *sc, s7_pointer args);
 static s7_pfunc s7_bool_optimize(s7_scheme *sc, s7_pointer expr);
-static s7_pointer opt_bool_any(s7_scheme *sc);
 
 static s7_pointer g_assoc(s7_scheme *sc, s7_pointer args)
 {
@@ -37937,19 +37936,14 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
     {
       if (!is_pair(x))
 	return(method_or_bust_with_type(sc, x, sc->assoc_symbol, args, an_association_list_string, 2));
-
       if ((is_pair(x)) && (!is_pair(car(x))))
 	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, x, an_association_list_string)); /* we're assuming caar below so it better exist */
     }
-
-  if (is_not_null(cddr(args)))
+  if (is_not_null(cddr(args))) /* check third arg before second (trailing arg error check) */
     {
-      /* check third arg before second (trailing arg error check) */
       eq_func = caddr(args);
-
       if (type(eq_func) < T_CONTINUATION)
 	return(method_or_bust_with_type_one_arg(sc, eq_func, sc->assoc_symbol, args, a_procedure_string));
-
       if (!s7_is_aritable(sc, eq_func, 2))
 	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string));
     }
@@ -37958,55 +37952,62 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
   if (eq_func)
     {
       /* here we know x is a pair, but need to protect against circular lists */
-      if (s7_list_length(sc, x) != 0)
+      /* I wonder if the assoc equality function should get the cons, not just caar? */
+
+      if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
 	{
-	  /* now maybe there's a simple case */
-	  if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
+	  s7_function func;
+	  s7_pointer slow;
+	  func = c_function_call(eq_func);
+	  if (func == g_is_eq) return(s7_assq(sc, car(args), x));
+	  if (func == g_is_eqv) return(assv_p_pp(sc, car(args), x));
+	  set_car(sc->t2_1, car(args));
+	  for (slow = x; is_pair(x); x = cdr(x), slow = cdr(slow))
 	    {
-	      s7_function func;
-	      func = c_function_call(eq_func);
-	      if (func == g_is_eq) return(s7_assq(sc, car(args), x));
-	      if (func == g_is_eqv) return(assv_p_pp(sc, car(args), x));
-	      set_car(sc->t2_1, car(args));
-
-	      for (; is_pair(x); x = cdr(x))
-		{
-		  if (!is_pair(car(x)))
-		    return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string));
-		  set_car(sc->t2_2, caar(x));
-		  if (is_true(sc, func(sc, sc->t2_1)))
-		    return(car(x));
-		  /* I wonder if the assoc equality function should get the cons, not just caar? */
-		}
-	      return(sc->F);
+	      if (!is_pair(car(x))) return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string));
+	      set_car(sc->t2_2, caar(x));
+	      if (is_true(sc, func(sc, sc->t2_1))) return(car(x));
+	      x = cdr(x);
+	      if ((!is_pair(x)) || (x == slow)) return(sc->F);
+	      if (!is_pair(car(x))) return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string));
+	      set_car(sc->t2_2, caar(x));
+	      if (is_true(sc, func(sc, sc->t2_1))) return(car(x));
 	    }
-	  if ((is_closure(eq_func)) &&
-	      (is_pair(closure_args(eq_func))) &&
-	      (is_pair(cdr(closure_args(eq_func))))) /* not dotted arg list */
+	  return(sc->F);
+	}
+      if ((is_closure(eq_func)) &&
+	  (is_pair(closure_args(eq_func))) &&
+	  (is_pair(cdr(closure_args(eq_func))))) /* not dotted arg list */
+	{
+	  s7_pointer body;
+	  body = closure_body(eq_func);
+	  if (is_null(cdr(body)))
 	    {
-	      s7_pointer body;
-	      body = closure_body(eq_func);
-	      if (is_null(cdr(body)))
+	      s7_pfunc func;
+	      sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
+	      func = s7_bool_optimize(sc, body);
+	      if (func)
 		{
-		  s7_pfunc func;
-		  sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
-		  func = s7_bool_optimize(sc, body);
-		  if (func)
+		  s7_pointer slowx = x, b;
+		  opt_info *o = sc->opts[0];
+		  b = next_slot(let_slots(sc->curlet));
+		  while (true)
 		    {
-		      s7_pointer b;
-		      b = next_slot(let_slots(sc->curlet));
-
-		      if (func == opt_bool_any)
-			{
-			  opt_info *o = sc->opts[0];
-			  for (; is_pair(x); x = cdr(x))
-			    {
-			      slot_set_value(b, caar(x));
-			      if (o->v[0].fb(o))
-				return(car(x));
-			    }
-			  return(sc->F);
-			}}}}}
+		      if (!is_pair(car(x))) return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string));
+		      slot_set_value(b, caar(x));
+		      if (o->v[0].fb(o)) return(car(x));
+		      x = cdr(x);
+		      if (!is_pair(x)) return(sc->F);
+		      if (!is_pair(car(x))) return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string));
+		      slot_set_value(b, caar(x));
+		      if (o->v[0].fb(o)) return(car(x));
+		      x = cdr(x);
+		      if (!is_pair(x)) return(sc->F);
+		      slowx = cdr(slowx);
+		      if (x == slowx) return(sc->F);
+		    }
+		  return(sc->F);
+		}}}
 
       /* member_if is similar.  Do not call eval here with op_eval_done to return!  An error will longjmp past the
        *   assoc point, leaving the op_eval_done on the stack, causing s7 to quit.
@@ -38394,22 +38395,15 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 	  if (func == g_less) func = g_less_2;
 	  if (func == g_greater) func = g_greater_2;
 	  set_car(sc->t2_1, car(args));
-
 	  for (slow = x; is_pair(x); x = cdr(x), slow = cdr(slow))
 	    {
 	      set_car(sc->t2_2, car(x));
-	      if (is_true(sc, func(sc, sc->t2_1)))
-		return(x);
-
-	      if (!is_pair(cdr(x)))
-		return(sc->F);
+	      if (is_true(sc, func(sc, sc->t2_1))) return(x);
+	      if (!is_pair(cdr(x))) return(sc->F);
 	      x = cdr(x);
-	      if (x == slow)
-		return(sc->F);
-
+	      if (x == slow) return(sc->F);
 	      set_car(sc->t2_2, car(x));
-	      if (is_true(sc, func(sc, sc->t2_1)))
-		return(x);
+	      if (is_true(sc, func(sc, sc->t2_1))) return(x);
 	    }
 	  return(sc->F);
 	}
@@ -38425,7 +38419,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 	      s7_pfunc func;
 	      sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
 	      func = s7_bool_optimize(sc, body);
-	      if (func == opt_bool_any)
+	      if (func)
 		{
 		  opt_info *o = sc->opts[0];
 		  s7_pointer b;
@@ -42205,7 +42199,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 			{
 			  s7_pfunc sf1;
 			  sf1 = s7_bool_optimize(sc, closure_body(lessp));
-			  if (sf1 == opt_bool_any)
+			  if (sf1)
 			    {
 			      if (sc->opts[0]->v[0].fb == p_to_b)
 				sort_func = opt_bool_sort_p;
@@ -61655,11 +61649,7 @@ static bool b_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
     {
       if (is_symbol(arg2))
 	opc->v[1].p = lookup_slot_from(arg2, sc->curlet); /* slot checked in opt_arg_type */
-      else 
-	{
-	  /* if (integer(arg2) < 0) return_false(sc, car_x); */ /* why this? */
-	  opc->v[1].i = integer(arg2);
-	}
+      else opc->v[1].i = integer(arg2);
       opc->v[10].o1 = sc->opts[sc->pc];
       if (cell_optimize(sc, cdr(car_x)))
 	{
@@ -66728,7 +66718,6 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	  {
 	    set_ulist_1(sc, sc->begin_symbol, body);
 	    func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true); /* was list_1 via cons 8-Apr-21, true=nr */
-	    /* if (func) fprintf(stderr, "%s\n", display_80(body)); */
 	  }
 	else func = NULL;
       if (func)
@@ -67816,13 +67805,9 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
   switch (stack_op(sc->stack, top))
     {
       /* the normal case -- splice values into caller's args */
-    case OP_EVAL_ARGS1:
-    case OP_EVAL_ARGS2:
-    case OP_EVAL_ARGS3:
-    case OP_EVAL_ARGS4:
-      /* code = args yet to eval in order, args = evalled args reversed
-       *
-       * it's not safe to simply reverse args and tack the current stacked args onto its (new) end,
+    case OP_EVAL_ARGS1: case OP_EVAL_ARGS2: case OP_EVAL_ARGS3: case OP_EVAL_ARGS4:
+      /* code = args yet to eval in order, args = evalled args reversed.
+       * it is not safe to simply reverse args and tack the current stacked args onto its (new) end,
        *   setting stacked args to cdr of reversed-args and returning car because the list (args)
        *   can be some variable's value in a macro expansion via ,@ and reversing it in place
        *   (all this to avoid consing), clobbers the variable's value.
@@ -67842,12 +67827,10 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       stack_element(sc->stack, top) = (s7_pointer)OP_ANY_C_NP_MV_1;
       goto FP_MV;
 
-    case OP_ANY_C_NP_1:
-    case OP_ANY_CLOSURE_NP_1:
+    case OP_ANY_C_NP_1: case OP_ANY_CLOSURE_NP_1:
       stack_element(sc->stack, top) = (s7_pointer)(stack_op(sc->stack, top) + 1); /* replace with mv version */
 
-    case OP_ANY_C_NP_MV_1:
-    case OP_ANY_CLOSURE_NP_MV_1:
+    case OP_ANY_C_NP_MV_1: case OP_ANY_CLOSURE_NP_MV_1:
     FP_MV:
       if ((is_immutable(args)) || /* (let () (define (func) (with-output-to-string (lambda () (apply-values (write '(1 2)))))) (func) (func)) */
 	  (needs_copied_args(args)))
@@ -67878,8 +67861,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_PA_MV;
       return(args);
 
-    case OP_C_P_1:
-    case OP_SAFE_C_P_1:
+    case OP_C_P_1: case OP_SAFE_C_P_1:
       stack_element(sc->stack, top) = (s7_pointer)OP_C_P_MV;
       return(args);
 
@@ -67955,10 +67937,13 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 	 */
       }
 
-    case OP_LET_ONE_NEW_1:                /* op_let_one_[p]_old_1 can't happen here, I think */
-    case OP_LET_ONE_P_NEW_1:
+    case OP_LET_ONE_NEW_1: case OP_LET_ONE_P_NEW_1:
       eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->let_symbol,
 			      opt2_sym(stack_code(sc->stack, top)), set_ulist_1(sc, sc->values_symbol, args));
+
+    case OP_LET_ONE_OLD_1: case OP_LET_ONE_P_OLD_1:
+      eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->let_symbol,
+			      slot_symbol(let_slots(opt3_let(stack_code(sc->stack, top)))), set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_LET_STAR1:             /* here caar(sc->code) is bound to sc->value */
       eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->let_star_symbol,
@@ -67972,7 +67957,6 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       eval_error_with_caller2(sc, "~A: can't bind ~A to ~S", 23, sc->letrec_star_symbol,
 			      slot_symbol(stack_args(sc->stack, top)), set_ulist_1(sc, sc->values_symbol, args));
 
-      /* handle 'and' and 'or' specially */
     case OP_AND_P1:
     case OP_AND_SAFE_P_REST: /* from OP_AND_SAFE_P1 or P2 */
       for (x = args; is_not_null(cdr(x)); x = cdr(x))
@@ -67993,8 +67977,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_COND1: case OP_COND1_SIMPLE:
       return(car(args));
 
-    case OP_DYNAMIC_UNWIND:
-    case OP_DYNAMIC_UNWIND_PROFILE:
+    case OP_DYNAMIC_UNWIND: case OP_DYNAMIC_UNWIND_PROFILE:
       {
 	s7_pointer old_value = sc->value;
 	bool mv = is_multiple_value(args);
@@ -75388,9 +75371,6 @@ static void op_let_one_p_old(s7_scheme *sc)
 static void op_let_one_p_old_1(s7_scheme *sc)
 {
   s7_pointer let;
-  if (is_multiple_value(sc->value))
-    s7_error(sc, sc->syntax_error_symbol, 
-	     set_elist_3(sc, wrap_string(sc, "let binding ~S to ~S: more than one value", 41), slot_symbol(let_slots(opt3_let(sc->code))), multiple_value(sc->value)));
   let = update_let_with_slot(sc, opt3_let(sc->code), sc->value);
   let_set_outlet(let, sc->curlet);
   set_curlet(sc, let);
@@ -92864,6 +92844,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_i_i_function(sc, global_value(sc->rationalize_symbol), rationalize_i_i);
   s7_set_p_p_function(sc, global_value(sc->truncate_symbol), truncate_p_p);
   s7_set_p_p_function(sc, global_value(sc->round_symbol), round_p_p);
+  s7_set_p_p_function(sc, global_value(sc->ceiling_symbol), ceiling_p_p);
   s7_set_p_p_function(sc, global_value(sc->floor_symbol), floor_p_p);
   s7_set_p_pp_function(sc, global_value(sc->max_symbol), max_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->min_symbol), min_p_pp);
@@ -93097,8 +93078,8 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pi_function(sc, global_value(sc->leq_symbol), leq_p_pi);
   s7_set_b_pi_function(sc, global_value(sc->leq_symbol), leq_b_pi);
   s7_set_p_pi_function(sc, global_value(sc->gt_symbol), gt_p_pi);
-  s7_set_p_pi_function(sc, global_value(sc->geq_symbol), geq_p_pi);
   s7_set_b_pi_function(sc, global_value(sc->gt_symbol), gt_b_pi);
+  s7_set_p_pi_function(sc, global_value(sc->geq_symbol), geq_p_pi);
   s7_set_b_pi_function(sc, global_value(sc->geq_symbol), geq_b_pi);
   /* no ip pd dp! */
   s7_set_b_pi_function(sc, global_value(sc->num_eq_symbol), num_eq_b_pi);
@@ -95179,37 +95160,38 @@ int main(int argc, char **argv)
  * tvect      1915         2456   2413   1756   1735
  * s7test     4514         1873   1831   1812   1792
  * lt         2129         2123   2110   2123   2119
- * tform      3245         2281   2273   2267   2261
+ * tform      3245         2281   2273   2267   2255
  * tmac       2429         3317   3277   2389   2409
  * tread      2591         2440   2421   2411   2412
  * trclo      4093         2715   2561   2455   2465
  * fbench     2852         2688   2583   2544   2514
- * tmat       2648         3065   3042   2523   2514
- * tcopy      2745         8035   5546   2557   2551
- * dup        2760         3805   3788   2639   2577
+ * tmat       2648         3065   3042   2523   2525
+ * tcopy      2745         8035   5546   2557   2550
+ * dup        2760         3805   3788   2639   2537
  * tb         3375         2735   2681   2560   2628
  * titer      2678         2865   2842   2679   2679
- * tsort      3590         3105   3104   2924   2860
+ * tsort      3590         3105   3104   2924   2856
  * tset       3100         3253   3104   3090   3092
  * tload      3849                       3234   3142
  * teq        3542         4068   4045   3576   3570
  * tio        3684         3816   3752   3702   3692
- * tstr       6230         5281   4863   4197   4171
+ * tstr       6230         5281   4863   4197   4174
  * tclo       4636         4787   4735   4409   4414
  * tlet       5283         7775   5640   4490   4431
  * tcase      4550         4960   4793   4474   4452
  * tmap       5984         8869   8774   5209   4501
  * tfft      115.1         7820   7729   4798   4787
- * tnum       56.7         6348   6013   5445   5445
+ * tnum       56.7         6348   6013   5445   5439
  * tgsl       25.2         8485   7802   6389   6396
- * trec       8338         6936   6922   6553   6551  [half fx_num_eq_t0 -> fb_num_eq_s0]
+ * trec       8338         6936   6922   6553   6553  [half fx_num_eq_t0 -> fb_num_eq_s0]
  * tmisc      7217         8960   7699   6972   6596
  * tlist      6834         7896   7546   7087   6918
  * tgc        10.1         11.9   11.1   8726   8667
  * thash      35.4         11.8   11.7   9838   9796
+ * cb         18.8         12.2   12.2   11.6   11.3
  * tgen       12.1         11.2   11.4   11.5   11.5
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1   37.2
+ * calls      58.0         36.7   37.5   37.1   37.1
  * sg         80.0                       56.1   56.1
  * lg        104.5        106.6  105.0  104.5  104.3
  * tbig      635.1        177.4  175.8  167.7  166.4
@@ -95223,7 +95205,10 @@ int main(int argc, char **argv)
  * much repetition now from p_p
  * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b))))
  *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
- * timing for top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc, cb
- * b_pi_ff and check_b_types -> b_pi etc, b_pi i<0 vector-ref?
- * lint fv|iv|etc as bool
+ * timing for top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
+ * b_pi_ff and check_b_types -> b_pi etc
+ * lint fv|iv|etc as bool: (define (f1 fv) (if (float-vector-ref fv 0) 1 2))
+ *   if (car sig) != #t|values|boolean? and not set_memq -- can only be #t?
+ *   also unnecessary exprs in do end-test
+ *   add cb to lg
  */
