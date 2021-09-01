@@ -1836,7 +1836,7 @@ int main(int argc, char **argv)
     if (p != s7_f(sc))
       {fprintf(stderr, "%d: set slot-value %s is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
-    if (s7_outlet(sc, new_env) != old_env)
+    if ((s7_outlet(sc, new_env) != old_env) && (old_env != s7_nil(sc)))
       {fprintf(stderr, "%d: outer-env %s?\n", __LINE__, s1 = TO_STR(old_env)); free(s1);}
 
     s7_make_slot(sc, new_env, s7_make_symbol(sc, "var2"), TO_S7_INT(-1));
