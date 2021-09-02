@@ -5935,7 +5935,7 @@ static s7_pointer g_is_immutable(s7_scheme *sc, s7_pointer args)
   #define H_is_immutable "(immutable? sequence) returns #t if the sequence is immutable"
   #define Q_is_immutable sc->pl_bt
   s7_pointer p = car(args);
-#if 0 /* removed 31-Aug-21 -- strikes me as confusing, but see is_constant above */
+#if 0 /* strikes me as confusing, constant above refers to local define-constant, the symbol itself is always immutable */
   if (is_symbol(p))
     {
       s7_pointer slot;
@@ -7793,6 +7793,7 @@ static inline void gc_protect_via_stack(s7_scheme *sc, s7_pointer val)
 }
 
 #define gc_protect_2_via_stack(Sc, X, Y) do {push_stack_no_let_no_code(Sc, OP_GC_PROTECT, X); stack_protected2(Sc) = Y;} while (0)
+/* often X and Y are fx_calls, so push X, then set Y */
 
 
 /* -------------------------------- symbols -------------------------------- */
@@ -30160,6 +30161,8 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   declare_jump_info();
   TRACK(sc);
 
+  if (content[bytes] != 0) 
+    s7_error(sc, make_symbol(sc, "bad-data"), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
   port = open_input_string(sc, content, bytes);
   port_loc = gc_protect_1(sc, port);
   set_loader_port(port);
@@ -75281,46 +75284,44 @@ static bool op_named_let(s7_scheme *sc)
 
 static void op_named_let_no_vars(s7_scheme *sc)
 {
-  s7_pointer body = opt1_pair(sc->code); /* cdddr(sc->code) */
+  s7_pointer arg = cadr(sc->code);
+  sc->code = opt1_pair(sc->code); /* cdddr(sc->code) */
   sc->curlet = make_let(sc, sc->curlet);
-  sc->args = make_closure_unchecked(sc, sc->nil, body, T_CLOSURE, 0);  /* sc->args is a temp here */
-  add_slot_checked(sc, sc->curlet, cadr(sc->code), sc->args);
-  sc->code = body;
+  sc->args = make_closure_unchecked(sc, sc->nil, sc->code, T_CLOSURE, 0);  /* sc->args is a temp here */
+  add_slot_checked(sc, sc->curlet, arg, sc->args);
 }
 
 static void op_named_let_a(s7_scheme *sc)
 {
-  s7_pointer body;
-  sc->code = cdr(sc->code);
-  body = cddr(sc->code);
-  sc->args = fx_call(sc, cdr(opt1_pair(sc->code)));       /* cdaadr(sc->code) */
+  s7_pointer args;
+  args = cdr(sc->code);
+  sc->code = cddr(args);
+  sc->args = fx_call(sc, cdr(opt1_pair(args)));       /* cdaadr(args) */
   sc->curlet = make_let_slowly(sc, sc->curlet);
-  sc->w = list_1_unchecked(sc, car(opt1_pair(sc->code))); /* caaadr(sc->code), subsequent calls will need a normal list of pars in closure_args */
-  sc->x = make_closure_unchecked(sc, sc->w, body, T_CLOSURE, 1); /* picks up curlet (this is the funclet?) */
-  add_slot(sc, sc->curlet, car(sc->code), sc->x);      /* the function */
+  sc->w = list_1_unchecked(sc, car(opt1_pair(args))); /* caaadr(args), subsequent calls will need a normal list of pars in closure_args */
+  sc->x = make_closure_unchecked(sc, sc->w, sc->code, T_CLOSURE, 1); /* picks up curlet (this is the funclet?) */
+  add_slot(sc, sc->curlet, car(args), sc->x);      /* the function */
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(sc->w), sc->args); /* why the second let? */
   closure_set_let(sc->x, sc->curlet);
   sc->x = sc->nil;
   sc->w = sc->nil;
-  sc->code = T_Pair(body);
 }
 
 static void op_named_let_aa(s7_scheme *sc)
 {
-  s7_pointer body;
-  sc->code = cdr(sc->code);
-  body = cddr(sc->code);
-  sc->args = fx_call(sc, cdr(opt1_pair(sc->code)));         /* cdaadr(sc->code) == init val of first par */
-  sc->value = fx_call(sc, cdr(opt3_pair(sc->code)));        /* cdadadr = init val of second */
+  s7_pointer args;
+  args = cdr(sc->code);
+  sc->code = cddr(args);
+  sc->args = fx_call(sc, cdr(opt1_pair(args)));         /* cdaadr(args) == init val of first par */
+  sc->value = fx_call(sc, cdr(opt3_pair(args)));        /* cdadadr = init val of second */
   sc->curlet = make_let_slowly(sc, sc->curlet);
-  sc->w = list_2_unchecked(sc, car(opt1_pair(sc->code)), car(opt3_pair(sc->code)));  /* subsequent calls will need a normal list of pars in closure_args */
-  sc->x = make_closure_unchecked(sc, sc->w, body, T_CLOSURE, 2); /* picks up curlet (this is the funclet?) */
-  add_slot(sc, sc->curlet, car(sc->code), sc->x);      /* the function */
+  sc->w = list_2_unchecked(sc, car(opt1_pair(args)), car(opt3_pair(args)));  /* subsequent calls will need a normal list of pars in closure_args */
+  sc->x = make_closure_unchecked(sc, sc->w, sc->code, T_CLOSURE, 2); /* picks up curlet (this is the funclet?) */
+  add_slot(sc, sc->curlet, car(args), sc->x);      /* the function */
   sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(sc->w), sc->args, cadr(sc->w), sc->value);
   closure_set_let(sc->x, sc->curlet);
   sc->x = sc->nil;
   sc->w = sc->nil;
-  sc->code = T_Pair(body);
 }
 
 static bool op_named_let_fx(s7_scheme *sc)
@@ -75398,11 +75399,11 @@ static Inline void op_let_a_new(s7_scheme *sc)
 
 static Inline void op_let_a_old(s7_scheme *sc)
 {
-  s7_pointer let, f = cdr(sc->code);
-  let = update_let_with_slot(sc, opt3_let(f), fx_call(sc, cdr(opt2_pair(f))));
+  s7_pointer let;
+  sc->code = cdr(sc->code);
+  let = update_let_with_slot(sc, opt3_let(sc->code), fx_call(sc, cdr(opt2_pair(sc->code))));
   let_set_outlet(let, sc->curlet);
   set_curlet(sc, let);
-  sc->code = f;
 }
 
 static void op_let_a_a_new(s7_scheme *sc)
@@ -95182,8 +95183,8 @@ int main(int argc, char **argv)
  * trclo      4093         2715   2561   2455   2465
  * fbench     2852         2688   2583   2544   2514
  * tmat       2648         3065   3042   2523   2522
- * tcopy      2745         8035   5546   2557   2550
  * dup        2760         3805   3788   2639   2537
+ * tcopy      2745         8035   5546   2557   2550
  * tb         3375         2735   2681   2560   2628
  * titer      2678         2865   2842   2679   2679
  * tsort      3590         3105   3104   2924   2856
@@ -95204,7 +95205,7 @@ int main(int argc, char **argv)
  * tlist      6834         7896   7546   7087   6918
  * tgc        10.1         11.9   11.1   8726   8667
  * thash      35.4         11.8   11.7   9838   9796
- * cb         18.8         12.2   12.2   11.6   11.4  11.3
+ * cb         18.8         12.2   12.2   11.6   11.3
  * tgen       12.1         11.2   11.4   11.5   11.5
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.1
@@ -95219,14 +95220,11 @@ int main(int argc, char **argv)
  *   for and/or: all branches fx->fb -> new op??
  *   fx_tree fb cases?
  * much repetition now from p_p
- * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b))))
+ * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b)))]
  *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
  * timing for top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
  * b_pi_ff and check_b_types -> b_pi etc
- * lint fv|iv|etc as bool: (define (f1 fv) (if (float-vector-ref fv 0) 1 2))
- *   if (car sig) != #t|values|boolean? and not set_memq -- can only be #t?
- *   also unnecessary exprs in do end-test
- * some opt cases check methods/errors, but others don't
+ * some opt cases check methods/errors, but others don't -- these should have the methods
  * unknown_a|aa flipping -- is it counted?
- * do assoc/member_choosers have any effect?
+ * op_let_star_fx_a does get calls -- maybe check op_let_fx_a|fx
  */

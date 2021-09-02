@@ -80,7 +80,7 @@
 ;(define-macro (reader-cond . clauses) `(values))          ; clobber reader-cond to avoid (incorrect) unbound-variable errors
 
 #|
-;; debugging version -- does not work in repl's listener
+;; debugging version -- does not work in repl's listener (repl has its own top-level let)
 (define-expansion (lint-format str caller . args)
   `(begin
      (format outport "lint.scm line ~A~%" ,(port-line-number))
@@ -2081,9 +2081,14 @@
 	  (let ((type (if (pair? expr)
 			  (return-type (car expr) ())
 			  (->lint-type expr))))
-	    (and (symbol? type)
-		 (not (symbol? expr))
-		 (not (memq type '(boolean? values)))))))
+	    (or (and (symbol? type)
+		     (not (symbol? expr))
+		     (not (memq type '(not boolean? values))))
+		(and (pair? type)
+		     (not (memq #t type))
+		     (not (memq 'boolean? type))
+		     (not (memq 'not type))
+		     (not (memq 'values type)))))))
 
     (define (never-true expr)
       (or (not expr)
