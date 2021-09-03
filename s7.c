@@ -37933,6 +37933,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
   #define Q_assoc s7_make_signature(sc, 4, s7_make_signature(sc, 2, sc->is_pair_symbol, sc->is_boolean_symbol), sc->T, sc->is_list_symbol, sc->is_procedure_symbol)
 
   s7_pointer x = cadr(args), y, obj, eq_func = NULL;
+
   if (!is_null(x))
     {
       if (!is_pair(x))
@@ -37940,18 +37941,10 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       if ((is_pair(x)) && (!is_pair(car(x))))
 	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, x, an_association_list_string)); /* we're assuming caar below so it better exist */
     }
-  if (is_not_null(cddr(args))) /* check third arg before second (trailing arg error check) */
+
+  if (is_pair(cddr(args)))
     {
       eq_func = caddr(args);
-      if (type(eq_func) < T_CONTINUATION)
-	return(method_or_bust_with_type_one_arg(sc, eq_func, sc->assoc_symbol, args, a_procedure_string));
-      if (!s7_is_aritable(sc, eq_func, 2))
-	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string));
-    }
-  if (is_null(x)) return(sc->F);
-
-  if (eq_func)
-    {
       /* here we know x is a pair, but need to protect against circular lists */
       /* I wonder if the assoc equality function should get the cons, not just caar? */
 
@@ -37960,8 +37953,10 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 	  s7_function func;
 	  s7_pointer slow;
 	  func = c_function_call(eq_func);
-	  if (func == g_is_eq) return(s7_assq(sc, car(args), x));
+	  if (func == g_is_eq) return(is_null(x) ? sc->F : s7_assq(sc, car(args), x));
 	  if (func == g_is_eqv) return(assv_p_pp(sc, car(args), x));
+	  if (!s7_is_aritable(sc, eq_func, 2))
+	    return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string));
 	  set_car(sc->t2_1, car(args));
 	  for (slow = x; is_pair(x); x = cdr(x), slow = cdr(slow))
 	    {
@@ -37978,10 +37973,11 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 	}
       if ((is_closure(eq_func)) &&
 	  (is_pair(closure_args(eq_func))) &&
-	  (is_pair(cdr(closure_args(eq_func))))) /* not dotted arg list */
+	  (is_pair(cdr(closure_args(eq_func)))) && /* not dotted arg list */
+	  (is_null(cddr(closure_args(eq_func)))))  /* arity == 2 */
 	{
-	  s7_pointer body;
-	  body = closure_body(eq_func);
+	  s7_pointer body = closure_body(eq_func);
+	  if (is_null(x)) return(sc->F);
 	  if (is_null(cdr(body)))
 	    {
 	      s7_pfunc func;
@@ -38013,6 +38009,11 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       /* member_if is similar.  Do not call eval here with op_eval_done to return!  An error will longjmp past the
        *   assoc point, leaving the op_eval_done on the stack, causing s7 to quit.
        */
+      if (type(eq_func) < T_CONTINUATION)
+	return(method_or_bust_with_type_one_arg(sc, eq_func, sc->assoc_symbol, args, a_procedure_string));
+      if (!s7_is_aritable(sc, eq_func, 2))
+	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string));
+      if (is_null(x)) return(sc->F);
       y = list_1(sc, args);
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
@@ -38028,11 +38029,10 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       return(sc->unspecified);
     }
 
-  x = cadr(args);
+  if (is_null(x)) return(sc->F);
   obj = car(args);
   if (is_simple(obj))
     return(s7_assq(sc, obj, x));
-
   y = x;
   if (is_string(obj))
     {
@@ -38082,7 +38082,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 
 static s7_pointer assoc_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2) {return(g_assoc(sc, set_plist_2(sc, p1, p2)));}
 
-static bool assoc_if(s7_scheme *sc)
+static bool op_assoc_if(s7_scheme *sc)
 {
   s7_pointer orig_args = car(sc->args);
   /* code=func, args=(list (list args)) with f/opt1_fast=list, value=result of comparison
@@ -38384,28 +38384,22 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 
   if (is_not_null(cddr(args)))
     {
-      /* check third arg before second (trailing arg error check) */
-      eq_func = caddr(args);
-
-      if (type(eq_func) < T_CONTINUATION)
-	return(method_or_bust_with_type(sc, eq_func, sc->member_symbol, args, a_procedure_string, 3));
-
-      if (!s7_is_aritable(sc, eq_func, 2))
-	return(wrong_type_argument_with_type(sc, sc->member_symbol, 3, eq_func, an_eq_func_string));
-    }
-
-  if (is_null(x)) return(sc->F);
-  if (eq_func)
-    {
       s7_pointer y, slow;
+      eq_func = caddr(args);
 
       if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
 	{
 	  s7_function func = c_function_call(eq_func);
-	  if (func == g_is_eq) return(s7_memq(sc, car(args), x));
+	  if (func == g_is_eq) return(is_null(x) ? sc->F : s7_memq(sc, car(args), x));
 	  if (func == g_is_eqv) return(g_memv(sc, args));
-	  if (func == g_less) func = g_less_2;
-	  if (func == g_greater) func = g_greater_2;
+	  if (func == g_less) 
+	    func = g_less_2;
+	  else
+	    if (func == g_greater)
+	      func = g_greater_2;
+	  else 
+	    if (!s7_is_aritable(sc, eq_func, 2))
+	      return(wrong_type_argument_with_type(sc, sc->member_symbol, 3, eq_func, an_eq_func_string));
 	  set_car(sc->t2_1, car(args));
 	  for (slow = x; is_pair(x); x = cdr(x), slow = cdr(slow))
 	    {
@@ -38422,9 +38416,11 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 
       if ((is_closure(eq_func)) &&
 	  (is_pair(closure_args(eq_func))) &&
-	  (is_pair(cdr(closure_args(eq_func))))) /* not dotted arg list */
+	  (is_pair(cdr(closure_args(eq_func)))) && /* not dotted arg list */
+	  (is_null(cddr(closure_args(eq_func)))))  /* arity == 2 */
 	{
 	  s7_pointer body = closure_body(eq_func);
+	  if (is_null(x)) return(sc->F);
 	  if ((!no_bool_opt(body)) &&
 	      (is_null(cdr(body))))
 	    {
@@ -38466,6 +38462,11 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 	      set_no_bool_opt(body);
 	    }}
 
+      if (type(eq_func) < T_CONTINUATION)
+	return(method_or_bust_with_type(sc, eq_func, sc->member_symbol, args, a_procedure_string, 3));
+      if (!s7_is_aritable(sc, eq_func, 2))
+	return(wrong_type_argument_with_type(sc, sc->member_symbol, 3, eq_func, an_eq_func_string));
+      if (is_null(x)) return(sc->F);
       y = list_1(sc, args); /* this could probably be handled with a counter cell (cdr here is unused) */
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
@@ -38480,13 +38481,11 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 	}
       return(sc->unspecified);
     }
+  if (is_null(x)) return(sc->F);
   obj = car(args);
   if (is_simple(obj))
     return(s7_memq(sc, obj, x));
-
-  /* the only things that aren't simply == here are c_object, string, number, vector, hash-table, pair, and c_pointer
-   *   but all the other cases are unlikely.
-   */
+  /* the only things that aren't simply == here are c_object, string, number, vector, hash-table, pair, and c_pointer, but all the other cases are unlikely */
   if (is_number(obj))
     return(memv_number(sc, obj, x));
   return(member(sc, obj, x));
@@ -38505,7 +38504,7 @@ static s7_pointer member_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
   return(f);
 }
 
-static bool member_if(s7_scheme *sc)
+static bool op_member_if(s7_scheme *sc)
 {
   s7_pointer orig_args = car(sc->args);
   /* code=func, args = (list (list original args)) with opt1_fast->position in cadr (the list),
@@ -61542,8 +61541,7 @@ static void check_b_types(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 	{
 	  opc->v[0].fb = fb;
 	  opc->v[3].b_pp_f = s7_b_pp_unchecked_function(s_func);
-	}
-    }
+	}}
 #if 0
   if ((arg2_type == sc->is_integer_symbol) && s7_b_pi_function(s_func))
     {
@@ -73545,10 +73543,9 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	    else /* pairs != 0 */
 	      {
 		s7_pointer arg1 = cadr(expr);
-		if ((pairs == 1) &&
-		    (len == 1))
+		if ((pairs == 1) && (len == 1))
 		  {
-		    if ((car(expr) == sc->quote_symbol) &&
+		    if ((car_expr == sc->quote_symbol) &&
 			(direct_memq(sc->quote_symbol, e)))
 		      return(OPT_OOPS);
 
@@ -73559,27 +73556,32 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 			set_unsafe_optimize_op(expr, OP_UNKNOWN_A);
 			return(OPT_F);
 		      }}
-
+#if 0
 		if ((len == 2) &&
 		    (is_fxable(sc, arg1)) &&
 		    (is_fxable(sc, caddr(expr))))
 		  {
 		    set_opt3_arglen(cdr(expr), int_two);
+		    fx_annotate_args(sc, cdr(expr), e);
 		    set_unsafe_optimize_op(expr, OP_UNKNOWN_AA);
 		    return(OPT_F);
 		  }
-
+#endif
 		if (fx_count(sc, expr) == len)
 		  {
+#if S7_DEBUGGING
+		    /* never hit */
 		    if ((len == 1) &&
-			(car(expr) == sc->quote_symbol) &&
+			(car_expr == sc->quote_symbol) &&
 			(direct_memq(sc->quote_symbol, e)))
+		      {
+			fprintf(stderr, "quote case 2\n");
 		      return(OPT_OOPS);
-
-		    set_unsafe_optimize_op(expr, (len == 1) ? OP_UNKNOWN_A : OP_UNKNOWN_NA);
+		      }
+#endif
+		    set_unsafe_optimize_op(expr, (len == 1) ? OP_UNKNOWN_A : ((len == 2) ? OP_UNKNOWN_AA : OP_UNKNOWN_NA));
 		    set_opt3_arglen(cdr(expr), make_permanent_integer(len));
-		    if (len == 1)
-		      fx_annotate_arg(sc, cdr(expr), e);
+		    if (len <= 2) fx_annotate_args(sc, cdr(expr), e);
 		    return(OPT_F);
 		  }
 		set_unsafe_optimize_op(expr, OP_UNKNOWN_NP);
@@ -81220,7 +81222,8 @@ static void op_dox_no_body(s7_scheme *sc)
   test = caadr(sc->code);
   result = cdadr(sc->code);
 
-  if (!in_heap(sc->code))
+  if ((!in_heap(sc->code)) &&
+      (is_let(opt3_any(sc->code)))) /* (*repl* 'keymap) anything -> segfault because opt3_any here is #f. (see line 80517) */
     {
       s7_pointer let;
       let = update_let_with_slot(sc, opt3_any(sc->code), fx_call(sc, cdr(var)));
@@ -89144,6 +89147,7 @@ static bool op_unknown_gg(s7_scheme *sc)
 	      }
 	    else
 	      {
+		set_opt3_arglen(cdr(code), int_two);
 		fx_annotate_args(sc, cdr(code), sc->curlet);
 		if (safe_case)
 		  set_safe_optimize_op(code, hop + ((one_form) ? OP_SAFE_CLOSURE_AA_O : OP_SAFE_CLOSURE_AA));
@@ -89170,6 +89174,7 @@ static bool op_unknown_gg(s7_scheme *sc)
       break;
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR:
+      set_opt3_arglen(cdr(code), int_two);
       fx_annotate_args(sc, cdr(code), sc->curlet);
       return(fixup_unknown_op(code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
 
@@ -89267,6 +89272,7 @@ static bool op_unknown_ns(s7_scheme *sc)
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
 
+/* #define op_unknown_aa(Sc) ({fprintf(stderr, "aa: %s[%d]\n", __func__, __LINE__); op_unknown_aa_1(Sc);}) */
 static bool op_unknown_aa(s7_scheme *sc)
 {
   s7_pointer code, f = sc->last_function;
@@ -89275,8 +89281,15 @@ static bool op_unknown_aa(s7_scheme *sc)
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s %s\n", __func__, display(f));
 
   code = sc->code;
+#if S7_DEBUGGING
+  if (!is_t_integer(opt3_arglen(cdr(code)))) {fprintf(stderr, "not int\n"); abort();}
+  if (!has_fx(cdr(code))) {fprintf(stderr, "not fx cdr\n"); abort();}
+  if (!has_fx(cddr(code))) {fprintf(stderr, "not fx cddr\n"); abort();}
+#endif
+#if 0
   set_opt3_arglen(cdr(code), int_two);
   fx_annotate_args(sc, cdr(code), sc->curlet);
+#endif
 
   switch (type(f))
     {
@@ -90670,10 +90683,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_FOR_EACH_3: if (op_for_each_2(sc)) continue; goto EVAL;
 
 	case OP_MEMBER_IF:
-	case OP_MEMBER_IF1: if (member_if(sc)) continue; goto APPLY;
+	case OP_MEMBER_IF1: if (op_member_if(sc)) continue; goto APPLY;
 
 	case OP_ASSOC_IF:
-	case OP_ASSOC_IF1:  if (assoc_if(sc)) continue;  goto APPLY;
+	case OP_ASSOC_IF1:  if (op_assoc_if(sc)) continue;  goto APPLY;
 
 
 	case OP_SAFE_DOTIMES:
@@ -95173,38 +95186,38 @@ int main(int argc, char **argv)
  * tauto       785          648    642    496    496
  * tshoot     1471          883    872    810    808
  * index      1031         1026   1016    983    979
- * tmock      7756         1177   1165   1098   1097
+ * tmock      7756         1177   1165   1098   1090
  * tvect      1915         2456   2413   1756   1735
  * s7test     4514         1873   1831   1812   1792
  * lt         2129         2123   2110   2123   2119
  * tform      3245         2281   2273   2267   2255
  * tmac       2429         3317   3277   2389   2409
  * tread      2591         2440   2421   2411   2412
- * trclo      4093         2715   2561   2455   2465
+ * trclo      4093         2715   2561   2455   2458
  * fbench     2852         2688   2583   2544   2514
  * tmat       2648         3065   3042   2523   2522
- * dup        2760         3805   3788   2639   2537
  * tcopy      2745         8035   5546   2557   2550
+ * dup        2760         3805   3788   2639   2587
  * tb         3375         2735   2681   2560   2628
  * titer      2678         2865   2842   2679   2679
  * tsort      3590         3105   3104   2924   2856
- * tset       3100         3253   3104   3090   3091
+ * tset       3100         3253   3104   3090   3089
  * tload      3849                       3234   3141
  * teq        3542         4068   4045   3576   3570
  * tio        3684         3816   3752   3702   3692
  * tstr       6230         5281   4863   4197   4174
- * tclo       4636         4787   4735   4409   4414
+ * tclo       4636         4787   4735   4409   4402
  * tlet       5283         7775   5640   4490   4431
- * tcase      4550         4960   4793   4474   4452
+ * tcase      4550         4960   4793   4474   4444
  * tmap       5984         8869   8774   5209   4501
  * tfft      115.1         7820   7729   4798   4787
  * tnum       56.7         6348   6013   5445   5439
  * tgsl       25.2         8485   7802   6389   6396
  * trec       8338         6936   6922   6553   6553  [half fx_num_eq_t0 -> fb_num_eq_s0]
  * tmisc      7217         8960   7699   6972   6596
- * tlist      6834         7896   7546   7087   6918
+ * tlist      6834         7896   7546   7087   6865
  * tgc        10.1         11.9   11.1   8726   8667
- * thash      35.4         11.8   11.7   9838   9796
+ * thash      35.4         11.8   11.7   9838   9775
  * cb         18.8         12.2   12.2   11.6   11.3
  * tgen       12.1         11.2   11.4   11.5   11.5
  * tall       24.4         15.6   15.6   15.6   15.6
@@ -95225,6 +95238,5 @@ int main(int argc, char **argv)
  * timing for top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
  * b_pi_ff and check_b_types -> b_pi etc
  * some opt cases check methods/errors, but others don't -- these should have the methods
- * unknown_a|aa flipping -- is it counted?
  * op_let_star_fx_a does get calls -- maybe check op_let_fx_a|fx
  */
