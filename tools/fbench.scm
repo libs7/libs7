@@ -148,7 +148,7 @@
 		    (old-axis-slope-angle axis-slope-angle))
 		(set! axis-slope-angle (+ axis-slope-angle (- iang (asin rang-sin))))
 		(let ((sagitta (sin (/ (+ old-axis-slope-angle iang) 2.0))))
-		  (set! sagitta (* 2 radius-of-curvature sagitta sagitta))
+		  (set! sagitta (* (* 2 radius-of-curvature) (* sagitta sagitta)))
 		  (set! object-distance (+ (/ (* radius-of-curvature (sin (+ old-axis-slope-angle iang))) (tan axis-slope-angle)) sagitta)))))))))
 
 ;;	Perform ray trace in specific spectral line
