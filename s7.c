@@ -7551,7 +7551,9 @@ static void pop_stack_1(s7_scheme *sc, const char *func, int line)
       fprintf(stderr, "%s%s[%d]: pop_stack invalid opcode: %" p64 " %s\n", BOLD_TEXT, func, line, sc->cur_op, UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
-  if ((!is_let(sc->stack_end[1])) && (!is_null(sc->stack_end[1])) && (sc->cur_op != OP_ANY_CLOSURE_3P_3)) /* used as third GC protection field */
+  if ((sc->cur_op != OP_GC_PROTECT) && 
+      (!is_let(sc->stack_end[1])) && (!is_null(sc->stack_end[1])) && 
+      (sc->cur_op != OP_ANY_CLOSURE_3P_3)) /* used as third GC protection field */
     fprintf(stderr, "%s[%d]: curlet not a let: %s\n", func, line, op_names[sc->cur_op]);
 }
 
@@ -7565,7 +7567,7 @@ static void pop_stack_no_op_1(s7_scheme *sc, const char *func, int line)
       if (sc->stop_at_error) abort();
     }
   sc->code = T_Pos(sc->stack_end[0]);
-  if ((!is_let(sc->stack_end[1])) && (!is_null(sc->stack_end[1])))
+  if ((sc->cur_op != OP_GC_PROTECT) && (!is_let(sc->stack_end[1])) && (!is_null(sc->stack_end[1])))
     fprintf(stderr, "%s[%d]: curlet not a let\n", func, line);
   sc->curlet = T_Pos(sc->stack_end[1]); /* not T_Lid: gc_protect can set this directly (not through push_stack) to anything */
   sc->args = sc->stack_end[2];
@@ -16209,12 +16211,12 @@ static s7_pointer g_complex(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer complex_p_ii(s7_scheme *sc, s7_int x, s7_int y)
 {
-  return((y == 0) ? make_integer(sc, x) : make_complex_not_0i(sc, (s7_double)x, (s7_double)y));
+  return((y == 0.0) ? make_integer(sc, x) : make_complex_not_0i(sc, (s7_double)x, (s7_double)y));
 }
 
 static s7_pointer complex_p_dd(s7_scheme *sc, s7_double x, s7_double y)
 {
-  return((y == 0) ? make_real(sc, x) : make_complex_not_0i(sc, x, y));
+  return((y == 0.0) ? make_real(sc, x) : make_complex_not_0i(sc, x, y));
 }
 
 
@@ -24087,12 +24089,11 @@ s7_double s7_real_part(s7_pointer x)
 
 static s7_pointer real_part_p_p(s7_scheme *sc, s7_pointer p)
 {
+  if (is_t_complex(p)) return(make_real(sc, real_part(p)));
   switch (type(p))
     {
     case T_INTEGER: case T_RATIO: case T_REAL:
       return(p);
-    case T_COMPLEX:
-      return(make_real(sc, real_part(p)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL:
       return(p);
@@ -24133,14 +24134,13 @@ s7_double s7_imag_part(s7_pointer x)
 
 static s7_pointer imag_part_p_p(s7_scheme *sc, s7_pointer p)
 {
- switch (type(p))
+  if (is_t_complex(p)) return(make_real(sc, imag_part(p)));
+  switch (type(p))
     {
     case T_INTEGER: case T_RATIO:
       return(int_zero);
     case T_REAL:
       return(real_zero);
-    case T_COMPLEX:
-      return(make_real(sc, imag_part(p)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO:
       return(int_zero);
@@ -95144,53 +95144,53 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------
- *             gmp (8-23)  20.9   21.0   21.6   21.7
+ *             gmp (8-23)  20.9   21.0   21.7   21.8
  * --------------------------------------------------------
- * tpeak       123          115    114    110    110
- * tari                                          376
- * tref        552          691    687    477    476
- * tauto       785          648    642    496    496
- * tshoot     1471          883    872    810    808
- * index      1031         1026   1016    983    981
- * tmock      7756         1177   1165   1098   1090
- * tvect      1915         2456   2413   1756   1735
- * s7test     4514         1873   1831   1812   1792
- * lt         2129         2123   2110   2123   2120
- * tform      3245         2281   2273   2267   2255
- * tmac       2429         3317   3277   2389   2409
- * tread      2591         2440   2421   2411   2415
- * trclo      4093         2715   2561   2455   2458
- * fbench     2852         2688   2583   2544   2475
- * tmat       2648         3065   3042   2523   2530
- * tcopy      2745         8035   5546   2557   2550
- * dup        2760         3805   3788   2639   2565
- * tb         3375         2735   2681   2560   2627
- * titer      2678         2865   2842   2679   2679
- * tsort      3590         3105   3104   2924   2860
- * tset       3100         3253   3104   3090   3089
- * tload      3849                       3234   3142
- * teq        3542         4068   4045   3576   3570
- * tio        3684         3816   3752   3702   3693
- * tstr       6230         5281   4863   4197   4175
- * tclo       4636         4787   4735   4409   4402
- * tlet       5283         7775   5640   4490   4431
- * tcase      4550         4960   4793   4474   4444
- * tmap       5984         8869   8774   5209   4493
- * tfft      115.1         7820   7729   4798   4787
- * tnum       56.7         6348   6013   5445   5443
- * tgsl       25.2         8485   7802   6389   6397
- * trec       8338         6936   6922   6553   6553  [half fx_num_eq_t0 -> fb_num_eq_s0]
- * tmisc      7217         8960   7699   6972   6597
- * tlist      6834         7896   7546   7087   6865
- * tgc        10.1         11.9   11.1   8726   8668
- * thash      35.4         11.8   11.7   9838   9775
- * cb         18.8         12.2   12.2   11.6   11.1
- * tgen       12.1         11.2   11.4   11.5   11.5
- * tall       24.4         15.6   15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1   37.1
- * sg         80.0                       56.1   56.1
- * lg        104.5        106.6  105.0  104.5  104.4
- * tbig      635.1        177.4  175.8  167.7  166.4 166.1
+ * tpeak       123          115    114    110
+ * tref        552          691    687    476
+ * tauto       785          648    642    496
+ * tshoot     1471          883    872    808
+ * index      1031         1026   1016    981
+ * tmock      7756         1177   1165   1090
+ * tvect      1915         2456   2413   1735
+ * s7test     4514         1873   1831   1792
+ * lt         2129         2123   2110   2120
+ * tform      3245         2281   2273   2255
+ * tmac       2429         3317   3277   2409
+ * tread      2591         2440   2421   2415
+ * trclo      4093         2715   2561   2458
+ * tari                                  2459
+ * fbench     2852         2688   2583   2475
+ * tmat       2648         3065   3042   2530
+ * tcopy      2745         8035   5546   2550
+ * dup        2760         3805   3788   2565
+ * tb         3375         2735   2681   2627
+ * titer      2678         2865   2842   2679
+ * tsort      3590         3105   3104   2860
+ * tset       3100         3253   3104   3089
+ * tload      3849                       3142
+ * teq        3542         4068   4045   3570
+ * tio        3684         3816   3752   3693
+ * tstr       6230         5281   4863   4175
+ * tclo       4636         4787   4735   4402
+ * tlet       5283         7775   5640   4431
+ * tcase      4550         4960   4793   4444
+ * tmap       5984         8869   8774   4493
+ * tfft      115.1         7820   7729   4787
+ * tnum       56.7         6348   6013   5443
+ * tgsl       25.2         8485   7802   6397
+ * trec       8338         6936   6922   6553  [half fx_num_eq_t0 -> fb_num_eq_s0]
+ * tmisc      7217         8960   7699   6597
+ * tlist      6834         7896   7546   6865
+ * tgc        10.1         11.9   11.1   8668
+ * thash      35.4         11.8   11.7   9775
+ * cb         18.8         12.2   12.2   11.1
+ * tgen       12.1         11.2   11.4   11.5
+ * tall       24.4         15.6   15.6   15.6
+ * calls      58.0         36.7   37.5   37.1
+ * sg         80.0                       56.1
+ * lg        104.5        106.6  105.0  104.4
+ * tbig      635.1        177.4  175.8  166.4 166.1
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
@@ -95202,8 +95202,15 @@ int main(int argc, char **argv)
  * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b)))]
  *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
  * timing top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
- *   tari/texit/tsupid
+ *   tari[need log/expt cases, fvals for quorem -- 2M as default? etc]/texit/tsupid
+ *   test/timing 20.0|6
  * b_pi_ff and check_b_types -> b_pi etc
  * some opt cases check methods/errors, but others don't -- these should have the methods
- * new nrepl bug in row 0 (2.3.13 is ok, 2.3.17 is broken)
+ * new nrepl bug in row 0 (2.3.13 is ok, 2.3.17 is broken) [probably some option]
+ * __has_include_ (c++ now?, c23) for mus-config.h, possibly:
+    #if defined __has_include
+    #  if __has_include ("mus-config.h")
+    #    include "mus-config.h"
+    #  endif
+    #endif
  */

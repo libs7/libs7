@@ -76,11 +76,11 @@
 	 (system (format #f "./snd compare-calls.scm -e '(compare-calls \"~A~D\" \"~A~D\")'" outfile (- next 1) outfile next)))))
 
    (list (list "repl" "tpeak.scm")
-	 (list "repl" "tari.scm")
 	 (list "repl" "tref.scm")
 	 (list "repl" "tauto.scm")
 	 (list "repl" "tshoot.scm")
 	 (list "snd -noinit" "make-index.scm")
+	 (list "repl" "tari.scm")
 	 (list "repl" "tmock.scm")
 	 (list "repl" "tvect.scm")
 	 (list "repl" "s7test.scm")

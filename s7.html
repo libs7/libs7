@@ -8982,7 +8982,8 @@ and treats it as if it were the contents of a file of scheme code.  So, unlike s
 multiple statements, and things like double-quote don't need to be quoted.  nrepl.c for example
 embeds the contents of nrepl.scm at compile time, then calls s7_load_c_string at program startup.  It also
 includes notcurses_s7.c.  The end result is a stand-alone program that doesn't need to load either nrepl.scm
-or notcurses_s7.so.
+or notcurses_s7.so.  The "content" argument should be a null-terminated C string. The "bytes" argument 
+is the contents length, not including the trailing null, as in strlen.  There are simple examples in ffitest.c.
 </p>
 
 <blockquote>
