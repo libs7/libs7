@@ -27,6 +27,7 @@
 
 (define (display-debug-info cint) #f) ; replaced later
 (define (remove-watcher var) #f)
+(define (nrepl-lookup symbol) (((*nrepl* 'top-level-let) 'run-let) symbol))
 
 (define (debug.scm-init)
   (set! (debug-repl)
@@ -82,6 +83,7 @@
 	      :ncp-let #f
 	      :display-status #f
 	      :status-text ""
+	      :run-let #f
 
 	      :s7-version (lambda () (*s7* 'version))
 
@@ -349,6 +351,7 @@
 				     (if (and wc (= y (+ watch-row 1)))
 					 (min (- watch-col 1) (+ x ncp-col))
 					 (+ x ncp-col))))
+	  (set! (top-level-let :run-let) (curlet))
 	  (when header
 	    (set! hc-cells (vector (nccell_make) (nccell_make) (nccell_make) (nccell_make) (nccell_make) (nccell_make)))
 	    (let ((newline-pos (char-position #\newline header)))
@@ -1359,14 +1362,14 @@
 				(set! bols (copy bols (make-int-vector ncp-rows)))
 				(set! eols (copy eols (make-int-vector ncp-rows))))
 
-				(do ((i (+ ncp-max-row 1) (- i 1)))
-				    ((= i (+ row 1))
-				     (set! ncp-max-row (+ ncp-max-row 1)))
-				  (let ((contents (ncplane_contents ncp (- i 1) 0 1 (eols (- i 1)))))
-				    (clear-line i)
-				    (nc-display i 0 contents)) ; should this be indented?
-				  (set! (eols i) (eols (- i 1)))
-				  (set! (bols i) (bols (- i 1)))))
+			      (do ((i (+ ncp-max-row 1) (- i 1)))
+				  ((= i (+ row 1))
+				   (set! ncp-max-row (+ ncp-max-row 1)))
+				(let ((contents (ncplane_contents ncp (- i 1) 0 1 (eols (- i 1)))))
+				  (clear-line i)
+				  (nc-display i 0 contents)) ; should this be indented?
+				(set! (eols i) (eols (- i 1)))
+				(set! (bols i) (bols (- i 1)))))
 
 			    (nc-display row col (make-string (- (eols row) col) #\space))
 			    (set! (eols row) col)
@@ -1724,7 +1727,9 @@
 
   (with-let *nrepl*
     (start)
-    (run)
+    (if (string=? (notcurses_version) "2.3.17")
+	(run ">" "version 2.3.17 needs this header!") ; surely this is a bug! 2.3.13 seems to be ok
+	(run))
     (stop)))
 
 ;; selection (both ways):

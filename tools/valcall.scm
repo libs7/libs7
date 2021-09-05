@@ -42,6 +42,7 @@
 		     ("tlist.scm" . "v-list")
 		     ("tload.scm" . "v-load")
 		     ("cookbook.scm" . "v-cook")
+		     ("tari.scm" . "v-ari")
 		     ))
 
 (define (last-callg)
@@ -75,6 +76,7 @@
 	 (system (format #f "./snd compare-calls.scm -e '(compare-calls \"~A~D\" \"~A~D\")'" outfile (- next 1) outfile next)))))
 
    (list (list "repl" "tpeak.scm")
+	 (list "repl" "tari.scm")
 	 (list "repl" "tref.scm")
 	 (list "repl" "tauto.scm")
 	 (list "repl" "tshoot.scm")

@@ -1349,7 +1349,7 @@ struct s7_scheme {
              memq_2, memq_3, memq_4, memq_any, tree_set_memq_syms, simple_inlet, profile_out,
              lint_let_ref, lint_let_set, geq_2, add_i_random, is_defined_in_rootlet;
 
-  s7_pointer multiply_2, invert_1, invert_x, divide_2, divide_by_2,
+  s7_pointer multiply_2, invert_1, invert_x, divide_2, divide_by_2, max_2, min_2, max_3, min_3,
              num_eq_2, num_eq_xi, num_eq_ix, less_xi, less_xf, less_x0, less_2, greater_xi, greater_xf, greater_2,
              leq_xi, leq_2, leq_ixx, geq_xi, geq_xf, random_i, random_f, random_1,
              mul_2_ff, mul_2_ii, mul_2_if, mul_2_fi, mul_2_xi, mul_2_ix, mul_2_fx, mul_2_xf,
@@ -22368,6 +22368,10 @@ static s7_pointer g_max(s7_scheme *sc, s7_pointer args)
   return(x);
 }
 
+static s7_pointer g_max_2(s7_scheme *sc, s7_pointer args) {return(max_p_pp(sc, car(args), cadr(args)));}
+static s7_pointer g_max_3(s7_scheme *sc, s7_pointer args) {return(max_p_pp(sc, max_p_pp(sc, car(args), cadr(args)), caddr(args)));}
+static s7_pointer max_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops) {return((args == 2) ? sc->max_2 : ((args == 3) ? sc->max_3 : f));}
+
 static s7_int max_i_ii(s7_int i1, s7_int i2) {return((i1 > i2) ? i1 : i2);}
 static s7_int max_i_iii(s7_int i1, s7_int i2, s7_int i3) {return((i1 > i2) ? ((i1 > i3) ? i1 : i3) : ((i2 > i3) ? i2 : i3));}
 static s7_double max_d_dd(s7_double x1, s7_double x2) {if (is_NaN(x1)) return(x1); return((x1 > x2) ? x1 : x2);}
@@ -22557,6 +22561,10 @@ static s7_pointer g_min(s7_scheme *sc, s7_pointer args)
     x = min_p_pp(sc, x, car(p));
   return(x);
 }
+
+static s7_pointer g_min_2(s7_scheme *sc, s7_pointer args) {return(min_p_pp(sc, car(args), cadr(args)));}
+static s7_pointer g_min_3(s7_scheme *sc, s7_pointer args) {return(min_p_pp(sc, min_p_pp(sc, car(args), cadr(args)), caddr(args)));}
+static s7_pointer min_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops) {return((args == 2) ? sc->min_2 : ((args == 3) ? sc->min_3 : f));}
 
 static s7_int min_i_ii(s7_int i1, s7_int i2) {return((i1 < i2) ? i1 : i2);}
 static s7_int min_i_iii(s7_int i1, s7_int i2, s7_int i3) {return((i1 < i2) ? ((i1 < i3) ? i1 : i3) : ((i2 < i3) ? i2 : i3));}
@@ -67046,21 +67054,21 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	  else
 	    if (is_any_vector(cadr(args)))
 	      {
-		s7_int i, len;
+		s7_int i, vlen;
 		s7_pointer v = cadr(args);
-		len = vector_length(v);
-		for (i = 0; i < len; i++) fp(sc, vector_getter(v)(sc, v, i));
+		vlen = vector_length(v);
+		for (i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i));
 		return(sc->unspecified);
 	      }
 	    else
 	      if (is_string(cadr(args)))
 		{
-		  s7_int i, len;
+		  s7_int i, slen;
 		  s7_pointer str = cadr(args);
 		  const char *s;
 		  s = string_value(str);
-		  len = string_length(str);
-		  for (i = 0; i < len; i++) fp(sc, chars[(uint8_t)(s[i])]);
+		  slen = string_length(str);
+		  for (i = 0; i < slen; i++) fp(sc, chars[(uint8_t)(s[i])]);
 		  return(sc->unspecified);
 		}}
 
@@ -67484,10 +67492,10 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	    {
 	      if (len == 1)
 		{
-		  s7_pointer fast, slow;
 		  s7_p_p_t fp = s7_p_p_function(f);
 		  if (fp)
 		    {
+		      s7_pointer fast, slow;
 		      val = list_1_unchecked(sc, sc->nil);
 		      push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
 		      for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
@@ -67507,10 +67515,10 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		    }}
 	      if ((len == 2) && (is_pair(caddr(args))))
 		{
-		  s7_pointer fast1, slow1, fast2, slow2;
 		  s7_p_pp_t fp = s7_p_pp_function(f);
 		  if (fp)
 		    {
+		      s7_pointer fast1, slow1, fast2, slow2;
 		      val = list_1_unchecked(sc, sc->nil);
 		      push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
 		      for (fast1 = cadr(args), slow1 = cadr(args), fast2 = caddr(args), slow2 = caddr(args);
@@ -67538,7 +67546,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	      if (fp)
 		{
 		  s7_int i, len;
-		  s7_pointer z, val, str = cadr(args);
+		  s7_pointer val, str = cadr(args);
 		  const char *s;
 		  val = list_1_unchecked(sc, sc->nil);
 		  push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
@@ -67546,6 +67554,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  len = string_length(str);
 		  for (i = 0; i < len; i++)
 		    {
+		      s7_pointer z;
 		      z = fp(sc, chars[(uint8_t)(s[i])]);
 		      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
 		    }
@@ -67558,12 +67567,13 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	      if (fp)
 		{
 		  s7_int i, len;
-		  s7_pointer z, val, vec = cadr(args);
+		  s7_pointer val, vec = cadr(args);
 		  val = list_1_unchecked(sc, sc->nil);
 		  push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
 		  len = vector_length(vec);
 		  for (i = 0; i < len; i++)
 		    {
+		      s7_pointer z;
 		      z = fp(sc, vector_getter(vec)(sc, vec, i));
 		      if (z != sc->no_value) set_car(val, cons(sc, z, car(val)));
 		    }
@@ -67575,7 +67585,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  val1 = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
 	  iter_list = sc->z;
 	  old_args = sc->args;
-	  func = c_function_call(f);
+	  /* func = c_function_call(f); */
 	  push_stack_no_let(sc, OP_GC_PROTECT, val1, val = cons(sc, sc->nil, sc->code)); /* temporary GC protection: need to protect val1, iter_list, val */
 	  sc->z = sc->nil;
 	  while (true)
@@ -68387,6 +68397,16 @@ static void init_choosers(s7_scheme *sc)
   sc->num_eq_2 = make_function_with_class(sc, f, "=", g_num_eq_2, 2, 0, false);
   sc->num_eq_xi = make_function_with_class(sc, f, "=", g_num_eq_xi, 2, 0, false);
   sc->num_eq_ix = make_function_with_class(sc, f, "=", g_num_eq_ix, 2, 0, false);
+
+  /* min */
+  f = set_function_chooser(sc, sc->min_symbol, min_chooser);
+  sc->min_2 = make_function_with_class(sc, f, "min", g_min_2, 2, 0, false);
+  sc->min_3 = make_function_with_class(sc, f, "min", g_min_3, 3, 0, false);
+
+  /* max */
+  f = set_function_chooser(sc, sc->max_symbol, max_chooser);
+  sc->max_2 = make_function_with_class(sc, f, "max", g_max_2, 2, 0, false);
+  sc->max_3 = make_function_with_class(sc, f, "max", g_max_3, 3, 0, false);
 
   /* < */
   f = set_function_chooser(sc, sc->lt_symbol, less_chooser);
@@ -95127,49 +95147,50 @@ int main(int argc, char **argv)
  *             gmp (8-23)  20.9   21.0   21.6   21.7
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
+ * tari                                          376
  * tref        552          691    687    477    476
  * tauto       785          648    642    496    496
  * tshoot     1471          883    872    810    808
- * index      1031         1026   1016    983    980
+ * index      1031         1026   1016    983    981
  * tmock      7756         1177   1165   1098   1090
  * tvect      1915         2456   2413   1756   1735
  * s7test     4514         1873   1831   1812   1792
  * lt         2129         2123   2110   2123   2120
  * tform      3245         2281   2273   2267   2255
  * tmac       2429         3317   3277   2389   2409
- * tread      2591         2440   2421   2411   2412
+ * tread      2591         2440   2421   2411   2415
  * trclo      4093         2715   2561   2455   2458
- * fbench     2852         2688   2583   2544   2514  2475
- * tmat       2648         3065   3042   2523   2522
+ * fbench     2852         2688   2583   2544   2475
+ * tmat       2648         3065   3042   2523   2530
  * tcopy      2745         8035   5546   2557   2550
- * dup        2760         3805   3788   2639   2622  2564
- * tb         3375         2735   2681   2560   2628
+ * dup        2760         3805   3788   2639   2565
+ * tb         3375         2735   2681   2560   2627
  * titer      2678         2865   2842   2679   2679
- * tsort      3590         3105   3104   2924   2856
+ * tsort      3590         3105   3104   2924   2860
  * tset       3100         3253   3104   3090   3089
- * tload      3849                       3234   3141
+ * tload      3849                       3234   3142
  * teq        3542         4068   4045   3576   3570
- * tio        3684         3816   3752   3702   3692
- * tstr       6230         5281   4863   4197   4174
+ * tio        3684         3816   3752   3702   3693
+ * tstr       6230         5281   4863   4197   4175
  * tclo       4636         4787   4735   4409   4402
  * tlet       5283         7775   5640   4490   4431
  * tcase      4550         4960   4793   4474   4444
- * tmap       5984         8869   8774   5209   4496
+ * tmap       5984         8869   8774   5209   4493
  * tfft      115.1         7820   7729   4798   4787
  * tnum       56.7         6348   6013   5445   5443
- * tgsl       25.2         8485   7802   6389   6396
+ * tgsl       25.2         8485   7802   6389   6397
  * trec       8338         6936   6922   6553   6553  [half fx_num_eq_t0 -> fb_num_eq_s0]
- * tmisc      7217         8960   7699   6972   6596
+ * tmisc      7217         8960   7699   6972   6597
  * tlist      6834         7896   7546   7087   6865
- * tgc        10.1         11.9   11.1   8726   8667
+ * tgc        10.1         11.9   11.1   8726   8668
  * thash      35.4         11.8   11.7   9838   9775
- * cb         18.8         12.2   12.2   11.6   11.2  11.1
+ * cb         18.8         12.2   12.2   11.6   11.1
  * tgen       12.1         11.2   11.4   11.5   11.5
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.1
  * sg         80.0                       56.1   56.1
  * lg        104.5        106.6  105.0  104.5  104.4
- * tbig      635.1        177.4  175.8  167.7  166.4
+ * tbig      635.1        177.4  175.8  167.7  166.4 166.1
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
@@ -95180,7 +95201,9 @@ int main(int argc, char **argv)
  * much repetition now from p_p
  * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b)))]
  *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
- * timing for top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
+ * timing top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
+ *   tari/texit/tsupid
  * b_pi_ff and check_b_types -> b_pi etc
  * some opt cases check methods/errors, but others don't -- these should have the methods
+ * new nrepl bug in row 0 (2.3.13 is ok, 2.3.17 is broken)
  */
