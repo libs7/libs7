@@ -3844,6 +3844,13 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCOPTION_SUPPRESS_BANNERS);
   nc_int(NCOPTION_NO_ALTERNATE_SCREEN);
   nc_int(NCOPTION_NO_FONT_CHANGES);
+#if (NC_CURRENT_VERSION > NC_VERSION(2, 3, 6))
+  nc_int(NCOPTION_PRESERVE_CURSOR);
+#endif
+
+#if (NC_CURRENT_VERSION > NC_VERSION(2, 3, 10))
+  nc_int(NCPLANE_OPTION_FIXED);
+#endif
 
 #if (NC_CURRENT_VERSION < NC_VERSION(2, 3, 5))
   nc_int(CELL_BGDEFAULT_MASK);
@@ -3877,13 +3884,15 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCPLANE_OPTION_HORALIGNED);
 
   nc_int(NCSTYLE_MASK);
+#if (NC_CURRENT_VERSION < NC_VERSION(2, 4, 0))
   nc_int(NCSTYLE_STANDOUT);
-  nc_int(NCSTYLE_UNDERLINE);
   nc_int(NCSTYLE_REVERSE);
   nc_int(NCSTYLE_BLINK);
+  nc_int(NCSTYLE_INVIS);
+#endif
+  nc_int(NCSTYLE_UNDERLINE);
   nc_int(NCSTYLE_DIM);
   nc_int(NCSTYLE_BOLD);
-  nc_int(NCSTYLE_INVIS);
   nc_int(NCSTYLE_PROTECT);
   nc_int(NCSTYLE_ITALIC);
   nc_int(NCSTYLE_STRUCK);
@@ -4525,7 +4534,7 @@ void notcurses_s7_init(s7_scheme *sc)
 
 #if 0
 /* gcc -fPIC -c notcurses_s7.c
- * gcc notcurses_s7.o -shared -o notcurses_s7.so -lnotcurses
+ * gcc notcurses_s7.o -shared -o notcurses_s7.so -lnotcurses-core
  * repl
  *   > (load "notcurses_s7.so" (inlet 'init_func 'notcurses_s7_init))
  *   > (notcurses_version)

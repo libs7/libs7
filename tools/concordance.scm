@@ -613,9 +613,102 @@
 
 ;;; --------------------------------
 
+(define apropos
+  (let ((levenshtein
+	 (lambda (s1 s2)
+	   (let ((L1 (length s1))
+		 (L2 (length s2)))
+	     (cond ((zero? L1) L2)
+		   ((zero? L2) L1)
+		   (else (let ((distance (make-vector (list (+ L2 1) (+ L1 1)) 0)))
+			   (do ((i 0 (+ i 1)))
+			       ((> i L1))
+			     (set! (distance 0 i) i))
+			   (do ((i 0 (+ i 1)))
+			       ((> i L2))
+			     (set! (distance i 0) i))
+			   (do ((i 1 (+ i 1)))
+			       ((> i L2))
+			     (do ((j 1 (+ j 1)))
+				 ((> j L1))
+			       (let ((c1 (+ (distance i (- j 1)) 1))
+				     (c2 (+ (distance (- i 1) j) 1))
+				     (c3 (if (char=? (s2 (- i 1)) (s1 (- j 1)))
+					     (distance (- i 1) (- j 1))
+					     (+ (distance (- i 1) (- j 1)) 1))))
+				 (set! (distance i j) (min c1 c2 c3)))))
+			   (distance L2 L1)))))))
+	
+	(make-full-let-iterator             ; walk the entire let chain
+	 (lambda* (lt (stop (rootlet)))
+	   (if (eq? stop lt)
+	       (make-iterator lt)
+	       (letrec ((iterloop
+			 (let ((iter (make-iterator lt))
+			       (+iterator+ #t))
+			   (lambda ()
+			     (let ((result (iter)))
+			       (if (and (eof-object? result)
+					(iterator-at-end? iter)
+					(not (eq? stop (iterator-sequence iter))))
+				   (begin
+				     (set! iter (make-iterator (outlet (iterator-sequence iter))))
+				     (iterloop))
+				   result))))))
+		 (make-iterator iterloop))))))
+    
+    (lambda* (name (e (curlet)))
+      (let ((ap-name (if (string? name) name
+			 (if (symbol? name)
+			     (symbol->string name)
+			     (error 'wrong-type-arg "apropos argument 1 should be a string or a symbol"))))
+	    (ap-env (if (let? e) e
+			(error 'wrong-type-arg "apropos argument 2 should be an environment"))))
+	(let ((strs ())
+	      (min2 (floor (log (length ap-name) 2))))
+	  (for-each
+	   (lambda (binding)
+	     (if (pair? binding)
+		 (let ((symbol-name (symbol->string (car binding))))
+		   (if (string-position ap-name symbol-name)
+		       (set! strs (cons (cons binding 0) strs))
+		       (let ((distance (levenshtein ap-name symbol-name)))
+			 (if (< distance min2)
+			     (set! strs (cons (cons binding distance) strs))))))))
+	   (make-full-let-iterator ap-env))
+	  
+	  (if (not (pair? strs))
+	      'no-match
+	      (let ((data "")
+		    (name-len (length name)))
+		(for-each (lambda (b)
+			    (set! data (string-append data
+						      (if (> (length data) 0) (string #\newline) "")
+						      (if (procedure? (cdar b))
+							  (let ((doc (documentation (cdar b)))) ; returns "" if no doc
+							    (if (positive? (length doc))
+								doc
+								(object->string (caar b))))
+							  (object->string (caar b))))))
+			  (sort! strs (lambda (a b)
+					(or (< (cdr a) (cdr b))
+					    (and (= (cdr a) (cdr b))
+						 (< (abs (- (length (symbol->string (caar a))) name-len))
+						    (abs (- (length (symbol->string (caar b))) name-len))))))))
+		data)))))))
+
+(define (apropos-test)
+  (do ((i 0 (+ i 1)))
+      ((= i 15))
+    (apropos "cadd")
+    (apropos "version")
+    (apropos "cd")))
+
 (concord)
 (simple-tests 100000)
 (searcher)
+(apropos-test)
+
 
 (#_exit)
 

@@ -151,7 +151,7 @@
 					       result))))))
 			     (make-iterator iterloop))))))
 
-		(lambda* (name (e (*nrepl* 'top-level-let)))
+		(lambda* (name (e (sublet (*nrepl* 'top-level-let) *notcurses*)))
 		  (let ((ap-name (if (string? name) name
 				     (if (symbol? name)
 					 (symbol->string name)
@@ -405,6 +405,15 @@
 	      (set! (nccell_channels c1) 0)
 	      (set! (nccell_stylemask c1) 0)
 	      (ncplane_set_base_cell ncp c1)
+
+	      (unless (or header
+			  (not (= NOTCURSES_VERNUM_MAJOR 2))
+			  (< NOTCURSES_VERNUM_MINOR 3)
+			  (<= NOTCURSES_VERNUM_PATCH 13))
+		(set! header-row 1)
+		(set! row 1)
+		(set! header-cols nc-cols))
+
 	      (notcurses_render nc))
 
 	    (let ((last-name ""))
@@ -1727,9 +1736,7 @@
 
   (with-let *nrepl*
     (start)
-    (if (string=? (notcurses_version) "2.3.17")
-	(run ">" "version 2.3.17 needs this header!") ; surely this is a bug! 2.3.13 seems to be ok
-	(run))
+    (run)
     (stop)))
 
 ;; selection (both ways):

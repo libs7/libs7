@@ -6563,8 +6563,8 @@ Here are the diffs for the bench script:
 <p>
 I call the standalone version of s7 "repl", so its path
 is /home/bil/motif-snd/repl.  To build repl, get s7.tar.gz
-from https://ccrma.stanford.edu/software/s7/s7.tar.gz,
-add the empty file mus-config.h to the tarball's contents,
+from https://ccrma.stanford.edu/software/s7/s7.tar.gz;
+if not using gcc or clang, add the empty file mus-config.h to the tarball's contents,
 then (in Linux):
 </p>
 <pre>
@@ -6578,7 +6578,7 @@ mus-config.h normally has
 #define HAVE_COMPLEX_TRIG 1
 </pre>
 <p>
-but s7.c has defaults, so mus-config.h can be empty.
+but s7.c has defaults, so mus-config.h can be empty, or absent.
 Finally, go back to the benchmarks directory and
 </p>
 <pre>
@@ -6773,7 +6773,7 @@ int main(int argc, char **argv)
     }
 }
 
-/* make mus-config.h (it can be empty), then
+/* if not using gcc or clang, make mus-config.h (it can be empty), then
  *
  *   gcc -c s7.c -I.
  *   gcc -o repl repl.c s7.o -lm -I. -ldl
@@ -10864,7 +10864,7 @@ Eventually I'll probably retire repl.scm.
 <p>Unlike repl, nrepl has support for the mouse, traversable, scrollable, and resizable panes, built-in ties to
 lint.scm, debug.scm, and profile.scm, and various other enhancements.
 Since it includes all the libc, notcurses FFI code, and nrepl.scm at compile-time, there
-are no problems running it anywhere.  To build nrepl: touch mus-config.h, then
+are no problems running it anywhere.  To build nrepl:
 </p>
 <pre class="indented">
 gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core

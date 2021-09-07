@@ -64,7 +64,13 @@
  * ---------------- compile time switches ----------------
  */
 
-#include "mus-config.h"
+#if defined __has_include
+#  if __has_include ("mus-config.h")
+#    include "mus-config.h"
+#  endif
+#else
+  #include "mus-config.h"
+#endif
 
 /*
  * Your config file goes here, or just replace that #include line with the defines you need.
@@ -95146,51 +95152,51 @@ int main(int argc, char **argv)
 /* --------------------------------------------------------
  *             gmp (8-23)  20.9   21.0   21.7   21.8
  * --------------------------------------------------------
- * tpeak       123          115    114    110
- * tref        552          691    687    476
- * tauto       785          648    642    496
- * tshoot     1471          883    872    808
- * index      1031         1026   1016    981
- * tmock      7756         1177   1165   1090
- * tvect      1915         2456   2413   1735
- * s7test     4514         1873   1831   1792
- * lt         2129         2123   2110   2120
- * tform      3245         2281   2273   2255
- * tmac       2429         3317   3277   2409
- * tread      2591         2440   2421   2415
- * trclo      4093         2715   2561   2458
- * tari                                  2459
- * fbench     2852         2688   2583   2475
- * tmat       2648         3065   3042   2530
- * tcopy      2745         8035   5546   2550
- * dup        2760         3805   3788   2565
- * tb         3375         2735   2681   2627
- * titer      2678         2865   2842   2679
- * tsort      3590         3105   3104   2860
- * tset       3100         3253   3104   3089
- * tload      3849                       3142
- * teq        3542         4068   4045   3570
- * tio        3684         3816   3752   3693
- * tstr       6230         5281   4863   4175
- * tclo       4636         4787   4735   4402
- * tlet       5283         7775   5640   4431
- * tcase      4550         4960   4793   4444
- * tmap       5984         8869   8774   4493
- * tfft      115.1         7820   7729   4787
- * tnum       56.7         6348   6013   5443
- * tgsl       25.2         8485   7802   6397
- * trec       8338         6936   6922   6553  [half fx_num_eq_t0 -> fb_num_eq_s0]
- * tmisc      7217         8960   7699   6597
- * tlist      6834         7896   7546   6865
- * tgc        10.1         11.9   11.1   8668
- * thash      35.4         11.8   11.7   9775
- * cb         18.8         12.2   12.2   11.1
- * tgen       12.1         11.2   11.4   11.5
- * tall       24.4         15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1
- * sg         80.0                       56.1
- * lg        104.5        106.6  105.0  104.4
- * tbig      635.1        177.4  175.8  166.4 166.1
+ * tpeak       123          115    114    110    110
+ * tref        552          691    687    476    476
+ * tauto       785          648    642    496    496
+ * tshoot     1471          883    872    808    808
+ * index      1031         1026   1016    981    918
+ * tmock      7756         1177   1165   1090   1090
+ * tvect      1915         2456   2413   1735   1734
+ * s7test     4514         1873   1831   1792   1799
+ * lt         2129         2123   2110   2120   2120
+ * tform      3245         2281   2273   2255   2258
+ * tmac       2429         3317   3277   2409   2409
+ * tread      2591         2440   2421   2415   2412
+ * trclo      4093         2715   2561   2458   2458
+ * fbench     2852         2688   2583   2475   2475
+ * tmat       2648         3065   3042   2530   2515
+ * tcopy      2745         8035   5546   2550   2550
+ * dup        2760         3805   3788   2565   2565
+ * tb         3375         2735   2681   2627   2627
+ * titer      2678         2865   2842   2679   2679
+ * tsort      3590         3105   3104   2860   2856
+ * tset       3100         3253   3104   3089   3089
+ * tload      3849                       3142   3142
+ * teq        3542         4068   4045   3570   3570
+ * tio        3684         3816   3752   3693   3694
+ * tclo       4636         4787   4735   4402   4402
+ * tlet       5283         7775   5640   4431   4431
+ * tcase      4550         4960   4793   4444   4444
+ * tmap       5984         8869   8774   4493   4493
+ * tfft      115.1         7820   7729   4787   4787
+ * tnum       56.7         6348   6013   5443   5445
+ * tstr       8059         6880   6342   5776   5776
+ * tgsl       25.2         8485   7802   6397   6397
+ * trec       8338         6936   6922   6553   6553
+ * tmisc      7217         8960   7699   6597   6597
+ * tari       ----         12.3   12.0   6837   6837
+ * tlist      6834         7896   7546   6865   6865
+ * tgc        10.1         11.9   11.1   8668   8668
+ * thash      35.4         11.8   11.7   9775   9775
+ * cb         18.8         12.2   12.2   11.1   11.1
+ * tgen       12.1         11.2   11.4   11.5   11.6
+ * tall       24.4         15.6   15.6   15.6   15.6
+ * calls      58.0         36.7   37.5   37.1   37.3
+ * sg         80.0                       56.1   56.1
+ * lg        104.5        106.6  105.0  104.4  104.4
+ * tbig      635.1        177.4  175.8  166.4  166.3
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
@@ -95201,16 +95207,10 @@ int main(int argc, char **argv)
  * much repetition now from p_p
  * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b)))]
  *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
- * timing top-down, in-place lambda, tangled lets, r7rs (stuff?, write?), dw/call-with-exit, unknowns, p_call etc
- *   tari[need log/expt cases, fvals for quorem -- 2M as default? etc]/texit/tsupid
- *   test/timing 20.0|6
+ * texit
+ *   v*ref_un* from check_unchecked: -> make_integer|real? [log etc do not specialize int yet]
  * b_pi_ff and check_b_types -> b_pi etc
  * some opt cases check methods/errors, but others don't -- these should have the methods
- * new nrepl bug in row 0 (2.3.13 is ok, 2.3.17 is broken) [probably some option]
- * __has_include_ (c++ now?, c23) for mus-config.h, possibly:
-    #if defined __has_include
-    #  if __has_include ("mus-config.h")
-    #    include "mus-config.h"
-    #  endif
-    #endif
+ * new nrepl bug in row 0 (2.3.13 is ok, 2.3.17 is broken)
+ * trec: half fx_num_eq_t0 -> fb_num_eq_s0
  */
