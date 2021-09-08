@@ -43,6 +43,7 @@
 		     ("tload.scm" . "v-load")
 		     ("cookbook.scm" . "v-cook")
 		     ("tari.scm" . "v-ari")
+		     ("texit.scm" . "v-exit")
 		     ))
 
 (define (last-callg)
@@ -82,6 +83,7 @@
 	 (list "snd -noinit" "make-index.scm")
 	 (list "repl" "tmock.scm")
 	 (list "repl" "tvect.scm")
+	 (list "repl" "texit.scm")
 	 (list "repl" "s7test.scm")
 	 (list "repl" "lt.scm")
 	 (list "repl" "tform.scm")

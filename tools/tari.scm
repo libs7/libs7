@@ -1,5 +1,7 @@
 ;;; numeric function simple timing tests
 
+;(set! (*s7* 'heap-size) (* 4 1024000))
+
 (define size 250000)
 (define int-limit 1000000)
 (define float-limit 1000.0)
@@ -263,10 +265,13 @@
       (acos (cvals i))
       (atan (fvals i))
       (atan (cvals i))
+      (float-vector-set! fv 0 (atan (fvals i) (fvals i)))
       (sinh (fvals i))
       (sinh (cvals i))
+      (float-vector-set! fv 0 (sinh (fvals i)))
       (cosh (fvals i))
       (cosh (cvals i))
+      (float-vector-set! fv 0 (cosh (fvals i)))
       (tanh (fvals i))
       (tanh (cvals i))
       (asinh (fvals i))

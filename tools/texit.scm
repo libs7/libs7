@@ -167,12 +167,26 @@
 (g71)
 
 
-(define (g8)
+(define (g80)
+  (do ((i 0 (+ i 1)))
+      ((= i lsize))
+    ((lambda () (+ i 1)))))
+
+(g80)
+
+(define (g81)
   (do ((i 0 (+ i 1)))
       ((= i lsize))
     ((lambda (x) (+ x 1)) i)))
 
-(g8)
+(g81)
+
+(define (g82)
+  (do ((i 0 (+ i 1)))
+      ((= i lsize))
+    ((lambda (x y) (+ x y)) i (+ i 1))))
+
+(g82)
 
 
 (define (g9)
