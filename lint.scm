@@ -13942,7 +13942,17 @@
 		      (when (and (eq? (car f) 'set!)          ; other such funcs like fill! don't seem to happen
 				 (eq? (car prev-f) 'set!))
 			(combine-sets caller prev-f f env)))
-
+#|
+		    (when (and (= f-len prev-len 4)           ; (vector-set! v 0 1) (vector-set! v 0 2) -- this does not happen outside tests
+			       (eq? (car f) (car prev-f))
+			       (equal? (cadr f) (cadr prev-f))
+			       (equal? (caddr f) (caddr prev-f))
+			       (memq (car f) '(vector-set! list-set! hash-table-set! float-vector-set! int-vector-set! string-set! let-set!))
+			       (not (pair? (caddr f)))
+			       (not (side-effect? (cadddr f) env))
+			       (not (side-effect? (cadddr prev-f) env)))
+		      (lint-format "~S could be omitted" caller (truncated-list->string prev-f)))
+|#
 		    (if (< ctr (- len 1))
 			(begin		             ; f is not the last form, so its value is ignored
 			  (check-escape caller fs f (= ctr (- len 2)) env)

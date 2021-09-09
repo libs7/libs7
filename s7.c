@@ -10493,7 +10493,7 @@ static s7_pointer make_closure_unchecked(s7_scheme *sc, s7_pointer args, s7_poin
   return(x);
 }
 
-static Inline s7_pointer inline_make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity)
+static s7_pointer make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity)
 {
   /* this is called (almost?) every time a lambda form is evaluated, or during letrec, etc */
   s7_pointer x;
@@ -10516,11 +10516,6 @@ static Inline s7_pointer inline_make_closure(s7_scheme *sc, s7_pointer args, s7_
     else set_closure_has_one_form(x);
   sc->capture_let_counter++;
   return(x);
-}
-
-static s7_pointer make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity)
-{
-  return(inline_make_closure(sc, args, code, type, arity));
 }
 
 static int32_t closure_length(s7_scheme *sc, s7_pointer e)
@@ -45298,7 +45293,7 @@ static s7_pointer make_baffled_closure(s7_scheme *sc, s7_pointer inp)
 {
   /* for dynamic-wind to protect initial and final functions from call/cc */
   s7_pointer nclo, let;
-  nclo = make_closure(sc, sc->nil, closure_body(inp), type(inp), 0);
+  nclo = make_closure_unchecked(sc, sc->nil, closure_body(inp), type(inp), 0);
   let = make_let_slowly(sc, closure_let(inp)); /* let_outlet(let) = closure_let(inp) */
   set_baffle_let(let);
   set_let_baffle_key(let, sc->baffle_ctr++);
@@ -74357,7 +74352,7 @@ static inline s7_pointer op_lambda_unchecked(s7_scheme *sc, s7_pointer code)
 {
   int32_t arity;
   arity = (int32_t)((intptr_t)opt3_any(cdr(code)));
-  return(inline_make_closure(sc, cadr(code), cddr(code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity));
+  return(make_closure_unchecked(sc, cadr(code), cddr(code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity));
 }
 
 static void check_lambda_star(s7_scheme *sc)
@@ -84508,7 +84503,7 @@ static inline void op_closure_fa(s7_scheme *sc)
   s7_pointer farg, new_clo, aarg, func, func_args, code = sc->code;
   farg = opt2_pair(code);           /* cdadr(code); */
   aarg = fx_call(sc, cddr(code));
-  new_clo = make_closure(sc, car(farg), cdr(farg), T_CLOSURE | ((is_symbol(car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
+  new_clo = make_closure_unchecked(sc, car(farg), cdr(farg), T_CLOSURE | ((is_symbol(car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
   func = opt1_lambda(code);         /* outer func */
   func_args = closure_args(func);
   sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), new_clo, cadr(func_args), aarg);
@@ -87654,7 +87649,7 @@ static void op_cl_fa(s7_scheme *sc)
 {
   s7_pointer code = cdadr(sc->code);
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
-  set_car(sc->t2_1, make_closure(sc, car(code), cdr(code), T_CLOSURE | ((is_symbol(car(code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET));
+  set_car(sc->t2_1, make_closure_unchecked(sc, car(code), cdr(code), T_CLOSURE | ((is_symbol(car(code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET));
   /* arg1 lambda can be any arity, but it must be applicable to one arg (the "a" above) */
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
@@ -87668,7 +87663,7 @@ static void op_map_for_each_fa(s7_scheme *sc)
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = inline_make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 1); /* arity=1 checked in optimizer */
+      f = make_closure_unchecked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 1); /* arity=1 checked in optimizer */
       sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, f, sc->value) : g_map_closure(sc, f, sc->value);
     }
 }
@@ -87683,7 +87678,7 @@ static void op_map_for_each_faa(s7_scheme *sc)
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = inline_make_closure(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 2); /* arity=2 checked in optimizer */
+      f = make_closure_unchecked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 2); /* arity=2 checked in optimizer */
       sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure_2(sc, f, sc->value, sc->args) : g_map_closure_2(sc, f, sc->value, sc->args);
     }
 }
@@ -95140,7 +95135,7 @@ int main(int argc, char **argv)
  * tvect      1915         2456   2413   1735   1724
  * s7test     4514         1873   1831   1792   1794
  * texit                   ----   ----          1886
- * lt         2129         2123   2110   2120   2120
+ * lt         2129         2123   2110   2120   2122  2116
  * tform      3245         2281   2273   2255   2258
  * tmac       2429         3317   3277   2409   2409
  * tread      2591         2440   2421   2415   2414
@@ -95148,7 +95143,7 @@ int main(int argc, char **argv)
  * fbench     2852         2688   2583   2475   2475
  * tmat       2648         3065   3042   2530   2519
  * tcopy      2745         8035   5546   2550   2550
- * dup        2760         3805   3788   2565   2577
+ * dup        2760         3805   3788   2565   2563
  * tb         3375         2735   2681   2627   2627
  * titer      2678         2865   2842   2679   2679
  * tsort      3590         3105   3104   2860   2856
@@ -95159,23 +95154,23 @@ int main(int argc, char **argv)
  * tclo       4636         4787   4735   4402   4402
  * tlet       5283         7775   5640   4431   4431
  * tcase      4550         4960   4793   4444   4444
- * tmap       5984         8869   8774   4493   4493
+ * tmap       5984         8869   8774   4493   4491
  * tfft      115.1         7820   7729   4787   4787
  * tnum       56.7         6348   6013   5443   5441
- * tstr       8059         6880   6342   5776   5776
+ * tstr       8059         6880   6342   5776   5734
  * tgsl       25.2         8485   7802   6397   6397
  * trec       8338         6936   6922   6553   6553
- * tmisc      7217         8960   7699   6597   6594
- * tari       ----         12.8   12.5   6973   6931
+ * tmisc      7217         8960   7699   6597   6592
  * tlist      6834         7896   7546   6865   6865
- * tgc        10.1         11.9   11.1   8668   8667
- * thash      35.4         11.8   11.7   9775   9775
+ * tari       ----         12.8   12.5   6973   6930
+ * tgc        10.1         11.9   11.1   8668   8664
+ * thash      35.4         11.8   11.7   9775   9774
  * cb         18.8         12.2   12.2   11.1   11.1
  * tgen       12.1         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.1
  * sg         80.0         ----   ----   56.1   56.1
- * lg        104.5        106.6  105.0  104.4  104.4
+ * lg        104.5        106.6  105.0  104.4  104.4 104.3
  * tbig      635.1        177.4  175.8  166.4  166.3
  * --------------------------------------------------------
  *
@@ -95187,13 +95182,6 @@ int main(int argc, char **argv)
  *   fx_tree fb cases? trec: half fx_num_eq_t0 -> fb_num_eq_s0
  * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b)))]
  *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
- *   v*ref_un* from check_unchecked: -> make_integer|real?
- *   d_7pi??, d_dp|[pd]|pp and i_ip|[pi=i_7pi]|pp to reduce intermediate number creation, also d_pid=d_7pid and i_7pii for nr cases
- *   tari case for these
  *   b_pi_ff and check_b_types -> b_pi etc
  *   some opt cases check methods/errors, but others don't -- these should have the methods
- *   asin at top -- return ignored, so asin is pointless -- at call point we have args, so p_p_nr, p_pp_nr etc?
- *     then idp_nr_fixup could see if func has no_side_effects set and set call to p_p_nr etc -- will break all timing tests...
- *     maybe an S7_TIMING flag or *s7* field (*s7* 'timing-test?)  lint has no-side-effect-functions list
- *     at least a bit for opt functions that have an _nr replacement
  */
