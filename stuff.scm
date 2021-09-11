@@ -110,7 +110,7 @@
 	      (if (pair? (cddr val))
 		  `(set! (setter ',(car val))
 			 (if (not (,(caddr val) ,(car val))) ; check initial value (already set)
-			     (error 'wrong-type "initial value ~S is not ~S" ,(car val) ,(caddr val))
+			     (error 'wrong-type "typed-let: initial value ~S is not ~S" ,(car val) ,(caddr val))
 			     ,(caddr val)))                  ; assume built-in type here
 		  (values)))
 	    vals)
