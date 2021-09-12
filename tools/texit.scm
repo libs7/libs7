@@ -1,6 +1,5 @@
 (define size 100000)
 
-
 (define (memb x ls)
   (call-with-exit
    (lambda (break)
@@ -166,6 +165,7 @@
 
 (g71)
 
+;(define lsize 3000000)
 
 (define (g80)
   (do ((i 0 (+ i 1)))
@@ -199,4 +199,4 @@
 
 (display (g10 + (lambda (x y) (* x y)))) (newline)
 
-(g9)
+;(g9)

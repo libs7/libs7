@@ -1215,14 +1215,14 @@ struct s7_scheme {
   s7_pointer *setters;
   s7_int setters_size, setters_loc;
   s7_pointer *tree_pointers;
-  int32_t tree_pointers_size, tree_pointers_top, permanent_cells, string_wrapper_pos, num_to_str_size;
+  int32_t tree_pointers_size, tree_pointers_top, permanent_cells, num_to_str_size;
   s7_pointer format_ports;
   uint32_t alloc_pointer_k, alloc_function_k, alloc_symbol_k;
   s7_cell *alloc_pointer_cells;
   c_proc_t *alloc_function_cells;
   uint32_t alloc_big_pointer_k;
   s7_big_cell *alloc_big_pointer_cells;
-  s7_pointer *string_wrappers;
+  s7_pointer string_wrappers;
   uint8_t *alloc_symbol_cells;
   char *num_to_str;
 
@@ -4092,7 +4092,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL,
       OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
-      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA,
+      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA, OP_F, OP_F_A, OP_F_AA,
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
@@ -4319,7 +4319,7 @@ static const char* op_names[NUM_OPS] =
       "apply_ss", "apply_sa", "apply_sl",
       "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
-      "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa",
+      "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa", "f", "f_a", "f_aa",
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
       "implicit_string_ref_a", "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_pair_ref_aa",
@@ -26193,8 +26193,8 @@ s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
 {
   s7_pointer x;
-  x = sc->string_wrappers[sc->string_wrapper_pos];
-  sc->string_wrapper_pos = (sc->string_wrapper_pos + 1) & (NUM_STRING_WRAPPERS - 1); /* i.e. next is pos+1 modulo len */
+  x = car(sc->string_wrappers);
+  sc->string_wrappers = cdr(sc->string_wrappers);
   string_value(x) = (char *)str;
   string_length(x) = len;
   return(x);
@@ -26796,8 +26796,7 @@ static s7_pointer g_substring_uncopied(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer substring_uncopied_p_pii(s7_scheme *sc, s7_pointer str, s7_int start, s7_int end)
 {
-  if (!is_string(str))
-    return(method_or_bust(sc, str, sc->substring_symbol, set_plist_3(sc, str, make_integer(sc, start), make_integer(sc, end)), T_STRING, 1));
+  /* is_string arg1 checked in opt */
   if ((end < start) || (end > string_length(str)))
     return(out_of_range(sc, sc->substring_symbol, int_three, wrap_integer1(sc, end), (end < start) ? its_too_small_string : its_too_large_string));
   if ((start < 0) || (start > end))
@@ -59025,8 +59024,7 @@ static bool d_d_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	{
 	  if ((!is_t_real(cadr(car_x))) &&                          /* (random 1) != (random 1.0) */
 	      ((car(car_x) == sc->random_symbol) ||
-	       (car(car_x) == sc->sin_symbol) ||
-	       (car(car_x) == sc->cos_symbol)))
+	       (car(car_x) == sc->sin_symbol) || (car(car_x) == sc->cos_symbol)))
 	    return_false(sc, car_x);
 	  opc->v[1].x = s7_number_to_real(sc, cadr(car_x));
 	  opc->v[0].fd = (func) ? opt_d_d_c : opt_d_7d_c;
@@ -63360,6 +63358,7 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 			int32_t start1 = sc->pc;
 			if ((opc->v[4].call == g_substring_uncopied) && 
 			    (is_t_integer(slot_value(opc->v[2].p))) &&
+			    (is_string(slot_value(opc->v[1].p))) &&
 			    (int_optimize(sc, cdddr(car_x))))
 			  {
 			    opc->v[0].fp = opt_p_substring_uncopied_ssf;
@@ -64588,26 +64587,22 @@ static bool opt_cell_and(s7_scheme *sc, s7_pointer car_x, int32_t len)
   if (len == 3)
     {
       opc->v[0].fp = ((car(car_x) == sc->or_symbol) ? opt_or_pp : opt_and_pp);
-
       opc->v[10].o1 = sc->opts[sc->pc];
       if (!cell_optimize(sc, cdr(car_x)))
 	return_false(sc, car_x);
       opc->v[11].fp = opc->v[10].o1->v[0].fp;
-
       opc->v[8].o1 = sc->opts[sc->pc];
       if (!cell_optimize(sc, cddr(car_x)))
 	return_false(sc, car_x);
       opc->v[9].fp = opc->v[8].o1->v[0].fp;
       return(true);
     }
-
   if ((len > 1) && (len < (NUM_VUNIONS - 4)))
     {
       s7_pointer p;
       int32_t i;
       opc->v[1].i = (len - 1);
       opc->v[0].fp = ((car(car_x) == sc->or_symbol) ? opt_or_any_p : opt_and_any_p);
-
       for (i = 3, p = cdr(car_x); is_pair(p); i++, p = cdr(p))
 	{
 	  opc->v[i].o1 = sc->opts[sc->pc];
@@ -69245,7 +69240,6 @@ static s7_pointer read_expression_read_error(s7_scheme *sc)
 
       start = pos - 40;
       if (start < 0) start = 0;
-
       p = make_empty_string(sc, 128, '\0');
       msg = string_value(p);
       memcpy((void *)msg, (void *)"at \"...", 7);
@@ -83235,6 +83229,25 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
   sc->code = closure_body(sc->code);
 }
 
+static void op_f(s7_scheme *sc)    /* sc->code: ((lambda () 32)) -> (let () 32) */
+{
+  sc->curlet = make_let(sc, sc->curlet);
+  sc->code = opt3_pair(sc->code); /* cddar */
+}
+
+static void op_f_a(s7_scheme *sc)  /* sc->code: ((lambda (x) (+ x 1)) i) -> (let ((x i)) (+ x 1)) */
+{  
+  sc->curlet = make_let_with_slot(sc, sc->curlet, opt3_sym(cdr(sc->code)), fx_call(sc, cdr(sc->code)));
+  sc->code = opt3_pair(sc->code);
+}
+
+static void op_f_aa(s7_scheme *sc)  /* sc->code: ((lambda (x y) (+ x y)) i j) -> (let ((x i) (y j)) (+ x y)) */
+{  
+  gc_protect_via_stack(sc, fx_call(sc, cdr(sc->code)));
+  sc->curlet = make_let_with_two_slots(sc, sc->curlet, opt3_sym(cdr(sc->code)), stack_protected1(sc), cadadr(car(sc->code)), fx_call(sc, cddr(sc->code)));
+  unstack(sc);
+  sc->code = opt3_pair(sc->code);
+}
 
 /* lambda* */
 static void op_lambda_star(s7_scheme *sc)
@@ -88526,13 +88539,13 @@ static inline void eval_args_pair_car(s7_scheme *sc)
 
 static bool eval_car_pair(s7_scheme *sc)
 {
-  s7_pointer code = sc->code, carc = car(code);
+  s7_pointer code = sc->code, carc;
   /* evaluate the inner list but that list can be circular: carc: #1=(#1# #1#)!
    *   and the cycle can be well-hidden -- #1=((#1 2) . 2) and other such stuff
    */
+  carc = car(code);
   if (sc->stack_end >= sc->stack_resize_trigger)
     check_for_cyclic_code(sc, code);
-  push_stack(sc, OP_EVAL_ARGS, sc->nil, code);
 
   if (is_symbol_and_syntactic(car(carc)))
     /* was checking for is_syntactic (pair or symbol) here but that can be confused by successive optimizer passes: (define (hi) (((lambda () list)) 1 2 3)) etc */
@@ -88541,21 +88554,40 @@ static bool eval_car_pair(s7_scheme *sc)
 	  ((!is_pair(cdr(carc))) ||                 /* ((quote . #\h) (2 . #\i)) ! */
 	   (is_symbol_and_syntactic(cadr(carc)))))  /* ('or #f) but not ('#_or #f) */
 	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
-#if 0
-      /* if ((lambda ...)), check for ((lambda () ...)) and unwrap it to ...: need an operator here to skip these checks (and need optimization of lambda body etc) */
-      /* this is slower than going to op_lambda via eval_car_pair below, both much slower than code without the idiotic lambda */
-      if (car(carc) == sc->lambda_symbol)
+
+      /* ((lambda ...) expr) */
+      if ((car(carc) == sc->lambda_symbol) &&
+	  (is_pair(cddr(carc))) && (s7_is_proper_list(sc, cddr(carc)))) /* not dotted! */
 	{
-	  if ((is_null(cadr(carc))) &&
-	      (is_pair(cddr(carc))) &&
-	      (is_null(cdddr(carc))) && /* else wrap in (let ()...) */
-	      (!((is_pair(caddr(carc))) && (is_syntax(caaddr(carc))) && (is_syntax_definer(caaddr(carc))))))
+	  /* ((lambda () ...)) */
+	  set_opt3_pair(code, cddr(carc));
+	  if ((is_null(cadr(carc))) && (is_null(cdr(code))))
 	    {
-	      sc->stack_end -= 4; /* avoid debugger complaint */
-	      sc->code = caddr(carc);
-	      return(true);
-	    }}
-#endif
+	      set_optimize_op(code, OP_F);
+	      return(false);
+	    }
+	  /* ((lambda (x ...) ...) ...) */
+	  if ((is_pair(cadr(carc))) && (is_normal_symbol(caadr(carc))) && (!is_constant(sc, caadr(carc))) &&
+	      (is_pair(cdr(code))) && (is_fxable(sc, cadr(code))))
+	    {
+	      /* ((lambda (x) ...) expr) */
+	      set_opt3_sym(cdr(code), caadr(carc));
+	      if ((is_null(cdadr(carc))) && (is_null(cddr(code)))) /* one parameter, one argument */
+		{
+		  fx_annotate_args(sc, cdr(code), sc->curlet);
+		  set_optimize_op(code, OP_F_A);
+		  return(false);
+		}
+	      if ((is_pair(cdadr(carc))) && (is_pair(cddr(code))) && (is_fxable(sc, caddr(code))) &&
+		  (is_null(cddadr(carc))) && (is_null(cdddr(code))) && /* two parameters, two arguments */
+		  (is_normal_symbol(cadadr(carc))) && (!is_constant(sc, cadadr(carc))) && (caadr(carc) != cadadr(carc)))
+		{
+		  fx_annotate_args(sc, cdr(code), sc->curlet);
+		  set_optimize_op(code, OP_F_AA);
+		  return(false);
+		}}}
+
+      push_stack(sc, OP_EVAL_ARGS, sc->nil, code);
       sc->code = carc;
       if (!no_cell_opt(carc))
 	{
@@ -88580,6 +88612,8 @@ static bool eval_car_pair(s7_scheme *sc)
       pair_set_syntax_op(sc->code, sc->cur_op);
       return(true);
     }
+
+  push_stack(sc, OP_EVAL_ARGS, sc->nil, code);
   if ((is_pair(cdr(code))) && (is_optimized(carc)))
     {
       if ((fx_function[optimize_op(carc)]) &&
@@ -90169,6 +90203,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_S:    op_s(sc);       goto APPLY;
 	case OP_S_C:  op_s_c(sc);     goto APPLY;
 	case OP_S_S:  if (op_s_s(sc)) continue;  goto APPLY;
+	case OP_F:    op_f(sc);       goto BEGIN;
+	case OP_F_A:  op_f_a(sc);     goto BEGIN;
+	case OP_F_AA: op_f_aa(sc);    goto BEGIN;
 
 	case OP_S_A:  op_x_a(sc, lookup_checked(sc, car(sc->code)));  goto APPLY;
 	case OP_A_A:  op_x_a(sc, fx_call(sc, sc->code));              goto APPLY;
@@ -93370,7 +93407,7 @@ static s7_pointer make_integer_wrapper(s7_scheme *sc)
 
 static void init_wrappers(s7_scheme *sc)
 {
-  int32_t i;
+  s7_pointer cp, qp;
   sc->integer_wrapper1 = make_integer_wrapper(sc);
   sc->integer_wrapper2 = make_integer_wrapper(sc);
   sc->integer_wrapper3 = make_integer_wrapper(sc);
@@ -93379,21 +93416,19 @@ static void init_wrappers(s7_scheme *sc)
   sc->real_wrapper3 = make_real_wrapper(sc);
   sc->real_wrapper4 = make_real_wrapper(sc);
 
-  sc->string_wrappers = (s7_pointer *)malloc(NUM_STRING_WRAPPERS * sizeof(s7_pointer));
-  add_saved_pointer(sc, sc->string_wrappers);
-  sc->string_wrapper_pos = 0;
-  for (i = 0; i < NUM_STRING_WRAPPERS; i++)
+  sc->string_wrappers = permanent_list(sc, NUM_STRING_WRAPPERS);
+  for (cp = sc->string_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
     {
       s7_pointer p;
-      p = (s7_pointer)calloc(1, sizeof(s7_cell));
-      add_saved_pointer(sc, p);
-      sc->string_wrappers[i] = p;
+      p = alloc_pointer(sc);
+      car(cp) = p;
       full_type(p) = T_STRING | T_IMMUTABLE | T_SAFE_PROCEDURE | T_UNHEAP;
       string_block(p) = NULL;
       string_value(p) = NULL;
       string_length(p) = 0;
       string_hash(p) = 0;
     }
+  cdr(qp) = sc->string_wrappers;
 }
 
 static s7_pointer syntax(s7_scheme *sc, const char *name, opcode_t op, s7_pointer min_args, s7_pointer max_args, const char *doc)
@@ -94857,7 +94892,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 940) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 943) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95254,7 +95289,7 @@ int main(int argc, char **argv)
  * tmock      7756         1177   1165   1090   1088
  * tvect      1915         2456   2413   1735   1724
  * s7test     4514         1873   1831   1792   1794
- * texit      1933         ----   ----   1886   1857
+ * texit      1933         ----   ----   1886   1857  1793
  * lt         2129         2123   2110   2120   2116
  * tform      3245         2281   2273   2255   2256
  * tmac       2429         3317   3277   2409   2408
@@ -95277,7 +95312,7 @@ int main(int argc, char **argv)
  * tmap       5984         8869   8774   4493   4488
  * tfft      115.1         7820   7729   4787   4787
  * tnum       56.7         6348   6013   5443   5442
- * tstr       8059         6880   6342   5776   5639
+ * tstr       8059         6880   6342   5776   5639  5545
  * tgsl       25.2         8485   7802   6397   6396
  * trec       8338         6936   6922   6553   6553
  * tmisc      7217         8960   7699   6597   6589
@@ -95285,7 +95320,7 @@ int main(int argc, char **argv)
  * tari       ----         12.8   12.5   6973   6930
  * tgc        10.1         11.9   11.1   8668   8653
  * thash      35.4         11.8   11.7   9775   9774
- * cb         18.8         12.2   12.2   11.1   11.1
+ * cb         18.8         12.2   12.2   11.1   11.1  11.2
  * tgen       12.1         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.1
@@ -95300,8 +95335,7 @@ int main(int argc, char **argv)
  *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
  *   for and/or: all branches fx->fb -> new op??
  *   fx_tree fb cases? trec: half fx_num_eq_t0 -> fb_num_eq_s0
- * op_local_lambda _fx?  [and unwrap the pointless case ((lambda () (f a b)))]
- *   need fx_annotate (but not tree) for lambda body, OP_F|F_A|F_AA?
- *   b_pi_ff and check_b_types -> b_pi etc
- *   some opt cases check methods/errors, but others don't -- these should have the methods
+ * b_pi_ff and check_b_types -> b_pi etc
+ * some opt cases check methods/errors, but others don't -- these should have the methods
+ * lambda1, op_f* fx? for cb we need op_f_p with mv or better precheck
  */
