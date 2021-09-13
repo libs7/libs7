@@ -63288,20 +63288,9 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 }
 
 /* -------- p_call_ppp -------- */
-static s7_pointer opt_p_call_sss(opt_info *o)
-{
-  return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p))));
-}
-
-static s7_pointer opt_p_call_css(opt_info *o)
-{
-  return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), o->v[1].p, slot_value(o->v[2].p), slot_value(o->v[3].p))));
-}
-
-static s7_pointer opt_p_call_ssf(opt_info *o)
-{
-  return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[6].fp(o->v[5].o1))));
-}
+static s7_pointer opt_p_call_sss(opt_info *o) {return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p))));}
+static s7_pointer opt_p_call_css(opt_info *o) {return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), o->v[1].p, slot_value(o->v[2].p), slot_value(o->v[3].p))));}
+static s7_pointer opt_p_call_ssf(opt_info *o) {return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[6].fp(o->v[5].o1))));}
 
 static s7_pointer opt_p_call_ppp(opt_info *o)
 {
@@ -87396,7 +87385,6 @@ static s7_pointer oprec_and_a_or_a_laa_laa(s7_scheme *sc)
   if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->F);
   p = sc->rec_resf(sc, sc->rec_resp);
   if (p != sc->F) return(p);
-
   recur_push(sc, slot_value(sc->rec_slot1));
   recur_push(sc, slot_value(sc->rec_slot2));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
@@ -87513,7 +87501,7 @@ static Inline bool op_s_s(s7_scheme *sc)
     {
       set_car(sc->t1_1, lookup(sc, cadr(code)));
       sc->value = c_function_call(sc->code)(sc, sc->t1_1);
-      return(true); /* goto START; */
+      return(true); /* goto START */
     }
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
@@ -87523,36 +87511,43 @@ static Inline bool op_s_s(s7_scheme *sc)
   return(false); /* goto APPLY; */
 }
 
-static void op_x_a(s7_scheme *sc, s7_pointer f)
+static bool op_x_a(s7_scheme *sc, s7_pointer f)
 {
-  s7_pointer code = sc->code;
-  sc->code = f;
-  if (!is_applicable(sc->code))
-    apply_error(sc, sc->code, cdr(code));
-  if (dont_eval_args(sc->code))
-    sc->args = list_1(sc, cadr(code));
+  if ((is_c_function(f)) &&
+      (c_function_required_args(f) == 1) &&
+      (!needs_copied_args(f)))
+    {
+      set_car(sc->t1_1, fx_call(sc, cdr(sc->code)));
+      sc->value = c_function_call(f)(sc, sc->t1_1);
+      return(true); /* goto START; */
+    }
+  if (!is_applicable(f))
+    apply_error(sc, f, cdr(sc->code));
+  if (dont_eval_args(f))
+    sc->args = list_1(sc, cadr(sc->code));
   else
-    if (!needs_copied_args(sc->code))
-      sc->args = set_plist_1(sc, fx_call(sc, cdr(code)));
+    if (!needs_copied_args(f))
+      sc->args = set_plist_1(sc, fx_call(sc, cdr(sc->code)));
     else
       {
-	sc->args = fx_call(sc, cdr(code));
+	sc->args = fx_call(sc, cdr(sc->code));
 	sc->args = list_1(sc, sc->args);
       }
+  sc->code = f;
+  return(false); /* goto APPLY */
 }
 
 static void op_x_aa(s7_scheme *sc, s7_pointer f)
 {
   s7_pointer code = sc->code;
-  sc->code = f;
-  if (!is_applicable(sc->code))
-    apply_error(sc, sc->code, cdr(code));
-  if (dont_eval_args(sc->code))
+  if (!is_applicable(f))
+    apply_error(sc, f, cdr(code));
+  if (dont_eval_args(f))
     sc->args = list_2(sc, cadr(code), caddr(code));
   else
     {
       sc->args = fx_call(sc, cddr(code));
-      if (!needs_copied_args(sc->code))
+      if (!needs_copied_args(f))
 	sc->args = set_plist_2(sc, fx_call(sc, cdr(code)), sc->args);
       else
 	{
@@ -87560,6 +87555,7 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
 	  sc->value = fx_call(sc, cdr(code));
 	  sc->args = cons(sc, sc->value, sc->args);
 	}}
+  sc->code = f;
 }
 
 static void op_p_s_1(s7_scheme *sc)
@@ -88539,22 +88535,16 @@ static inline void eval_args_pair_car(s7_scheme *sc)
 
 static bool eval_car_pair(s7_scheme *sc)
 {
-  s7_pointer code = sc->code, carc;
+  s7_pointer code = sc->code, carc = car(sc->code);
   /* evaluate the inner list but that list can be circular: carc: #1=(#1# #1#)!
    *   and the cycle can be well-hidden -- #1=((#1 2) . 2) and other such stuff
    */
-  carc = car(code);
   if (sc->stack_end >= sc->stack_resize_trigger)
     check_for_cyclic_code(sc, code);
 
   if (is_symbol_and_syntactic(car(carc)))
     /* was checking for is_syntactic (pair or symbol) here but that can be confused by successive optimizer passes: (define (hi) (((lambda () list)) 1 2 3)) etc */
     {
-      if ((car(carc) == sc->quote_symbol) &&        /* ('and #f) */
-	  ((!is_pair(cdr(carc))) ||                 /* ((quote . #\h) (2 . #\i)) ! */
-	   (is_symbol_and_syntactic(cadr(carc)))))  /* ('or #f) but not ('#_or #f) */
-	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
-
       /* ((lambda ...) expr) */
       if ((car(carc) == sc->lambda_symbol) &&
 	  (is_pair(cddr(carc))) && (s7_is_proper_list(sc, cddr(carc)))) /* not dotted! */
@@ -88586,8 +88576,12 @@ static bool eval_car_pair(s7_scheme *sc)
 		  set_optimize_op(code, OP_F_AA);
 		  return(false);
 		}}}
+      if ((car(carc) == sc->quote_symbol) &&        /* ('and #f) */
+	  ((!is_pair(cdr(carc))) ||                 /* ((quote . #\h) (2 . #\i)) ! */
+	   (is_symbol_and_syntactic(cadr(carc)))))  /* ('or #f) but not ('#_or #f) */
+	apply_error(sc, (is_pair(cdr(carc))) ? cadr(carc) : carc, cdr(code));
 
-      push_stack(sc, OP_EVAL_ARGS, sc->nil, code);
+      push_stack_no_args(sc, OP_EVAL_ARGS, code);
       sc->code = carc;
       if (!no_cell_opt(carc))
 	{
@@ -88613,7 +88607,7 @@ static bool eval_car_pair(s7_scheme *sc)
       return(true);
     }
 
-  push_stack(sc, OP_EVAL_ARGS, sc->nil, code);
+  push_stack_no_args(sc, OP_EVAL_ARGS, code);
   if ((is_pair(cdr(code))) && (is_optimized(carc)))
     {
       if ((fx_function[optimize_op(carc)]) &&
@@ -88637,7 +88631,7 @@ static bool eval_car_pair(s7_scheme *sc)
     }
   else set_optimize_op(code, OP_PAIR_PAIR);
 
-  push_stack(sc, OP_EVAL_ARGS, sc->nil, carc);
+  push_stack_no_args(sc, OP_EVAL_ARGS, carc);
   sc->code = car(carc);
   return(false);
 }
@@ -88668,9 +88662,9 @@ static void op_pair_pair(s7_scheme *sc)
       check_for_cyclic_code(sc, sc->code);
       resize_stack(sc);
     }
-  push_stack(sc, OP_EVAL_ARGS, sc->nil, sc->code); /* eval args goes immediately to cdr(sc->code) */
+  push_stack_no_args(sc, OP_EVAL_ARGS, sc->code); /* eval args goes immediately to cdr(sc->code) */
   /* don't put check_stack_size here! */
-  push_stack(sc, OP_EVAL_ARGS, sc->nil, car(sc->code));
+  push_stack_no_args(sc, OP_EVAL_ARGS, car(sc->code));
   sc->code = caar(sc->code);
 }
 
@@ -88836,11 +88830,9 @@ static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
       int32_t hop = 0;
       bool safe_case;
       if (is_immutable_and_stable(sc, car(code))) hop = 1;
-
       fx_annotate_arg(sc, cdr(code), sc->curlet);
       set_opt3_arglen(cdr(code), int_one);
       safe_case = is_safe_closure(f);
-
       if ((safe_case) && (is_null(cdr(closure_args(f)))))
 	set_optimize_op(code, hop + OP_SAFE_CLOSURE_STAR_A1);
       else
@@ -89619,7 +89611,6 @@ static bool op_unknown_np(s7_scheme *sc)
 	{
 	  int32_t hop = 0;
 	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
-
 	  switch (num_args)
 	    {
 	    case 1:
@@ -90207,8 +90198,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_F_A:  op_f_a(sc);     goto BEGIN;
 	case OP_F_AA: op_f_aa(sc);    goto BEGIN;
 
-	case OP_S_A:  op_x_a(sc, lookup_checked(sc, car(sc->code)));  goto APPLY;
-	case OP_A_A:  op_x_a(sc, fx_call(sc, sc->code));              goto APPLY;
+	case OP_S_A:  if (op_x_a(sc, lookup_checked(sc, car(sc->code)))) continue; goto APPLY;
+	case OP_A_A:  if (op_x_a(sc, fx_call(sc, sc->code))) continue;             goto APPLY;
 	case OP_S_AA: op_x_aa(sc, lookup_checked(sc, car(sc->code))); goto APPLY;
 	case OP_A_AA: op_x_aa(sc, fx_call(sc, sc->code));             goto APPLY;
 	case OP_P_S:  push_stack_no_args(sc, OP_P_S_1, sc->code); sc->code = car(sc->code); goto EVAL;
@@ -95289,38 +95280,38 @@ int main(int argc, char **argv)
  * tmock      7756         1177   1165   1090   1088
  * tvect      1915         2456   2413   1735   1724
  * s7test     4514         1873   1831   1792   1794
- * texit      1933         ----   ----   1886   1857  1793
- * lt         2129         2123   2110   2120   2116
- * tform      3245         2281   2273   2255   2256
- * tmac       2429         3317   3277   2409   2408
- * tread      2591         2440   2421   2415   2414
+ * texit      1933         ----   ----   1886   1793
+ * lt         2129         2123   2110   2120   2117
+ * tform      3245         2281   2273   2255   2255
+ * tmac       2429         3317   3277   2409   2419
+ * tread      2591         2440   2421   2415   2418
  * trclo      4093         2715   2561   2458   2458
  * fbench     2852         2688   2583   2475   2475
- * tmat       2648         3065   3042   2530   2517
- * tcopy      2745         8035   5546   2550   2549
+ * tmat       2648         3065   3042   2530   2519
+ * tcopy      2745         8035   5546   2550   2557
  * dup        2760         3805   3788   2565   2567
  * tb         3375         2735   2681   2627   2626
  * titer      2678         2865   2842   2679   2679
- * tsort      3590         3105   3104   2860   2859
- * tset       3100         3253   3104   3089   3089
- * tload      3849         ----   ----   3142   3142
- * teq        3542         4068   4045   3570   3570
- * tio        3684         3816   3752   3693   3699
- * tclo       4636         4787   4735   4402   4397
+ * tsort      3590         3105   3104   2860   2856
+ * tset       3100         3253   3104   3089   3090
+ * tload      3849         ----   ----   3142   3145
+ * teq        3542         4068   4045   3570   3564
+ * tio        3684         3816   3752   3693   3696
+ * tclo       4636         4787   4735   4402   4400
  * tlet       5283         7775   5640   4431   4426
- * tcase      4550         4960   4793   4444   4441
+ * tcase      4550         4960   4793   4444   4446
  * tmap       5984         8869   8774   4493   4488
  * tfft      115.1         7820   7729   4787   4787
- * tnum       56.7         6348   6013   5443   5442
- * tstr       8059         6880   6342   5776   5639  5545
- * tgsl       25.2         8485   7802   6397   6396
+ * tnum       56.7         6348   6013   5443   5450
+ * tstr       8059         6880   6342   5776   5546
+ * tgsl       25.2         8485   7802   6397   6393
  * trec       8338         6936   6922   6553   6553
- * tmisc      7217         8960   7699   6597   6589
- * tlist      6834         7896   7546   6865   6862
+ * tmisc      7217         8960   7699   6597   6564
+ * tlist      6834         7896   7546   6865   6860
  * tari       ----         12.8   12.5   6973   6930
- * tgc        10.1         11.9   11.1   8668   8653
- * thash      35.4         11.8   11.7   9775   9774
- * cb         18.8         12.2   12.2   11.1   11.1  11.2
+ * tgc        10.1         11.9   11.1   8668   8652
+ * thash      35.4         11.8   11.7   9775   9772
+ * cb         18.8         12.2   12.2   11.1   11.2 [is_fxable/proper_list/is_constant_symbol in eval_car_pair]
  * tgen       12.1         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.1
@@ -95336,6 +95327,7 @@ int main(int argc, char **argv)
  *   for and/or: all branches fx->fb -> new op??
  *   fx_tree fb cases? trec: half fx_num_eq_t0 -> fb_num_eq_s0
  * b_pi_ff and check_b_types -> b_pi etc
- * some opt cases check methods/errors, but others don't -- these should have the methods
- * lambda1, op_f* fx? for cb we need op_f_p with mv or better precheck
+ * op_f_p ?  opt_p_p_f -> opt_p_pi_ss -> f|c|iref, similarly opt_p_p_ff opt_p_call_f|ff
+ *              or opt_p_pi_ss - fvref? 
+ * perhaps cyclic integer_wrapper
  */

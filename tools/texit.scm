@@ -199,4 +199,4 @@
 
 (display (g10 + (lambda (x y) (* x y)))) (newline)
 
-;(g9)
+(g9)
