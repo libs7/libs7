@@ -1,3 +1,5 @@
+/* gcc -o repl repl.c s7.o -Wl,-export-dynamic -lm -I. -ldl */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -108,6 +110,3 @@ int main(int argc, char **argv)
     }
   return(0);
 }
-
-/* gcc -o repl repl.c s7.o -Wl,-export-dynamic -lm -I. -ldl
- */

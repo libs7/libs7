@@ -53,8 +53,8 @@
 	       (set! r (+ r 1)))))))))
 
 ;; (fannkuch 7): (228 . 16), 8: (1616 . 22), 9: (8629 . 30), 10: (73196 . 38), 11: (556355 . 51), 12: (3968050 . 65)
-(display (fannkuch 7)) (newline)
-;(fannkuch 12) ;takes around 5 minutes (297 secs)
+(display (fannkuch 8)) (newline)
+
 
 ;;; --------------------------------------------------------------------------------
 
@@ -80,8 +80,8 @@
 ;;; --------------------------------------------------------------------------------
 
 (define (cat)
-  (let ((inport (open-input-file "/home/bil/test/scheme/bench/src/bib"))
-	(outport (open-output-file "foo"))) 
+  (let ((inport (open-input-file "/home/bil/cl/all-lg-results"))
+	(outport (open-output-file "/dev/null"))) 
     (catch #t
       (lambda ()
 	(do () (#f) 
@@ -97,7 +97,7 @@
 (define (string-cat n)
   (let ((s "abcdef"))
     (do ((i 0 (+ i 1)))
-	((= i 10) 
+	((= i 100) 
 	 (string-length s))
       (set! s "abcdef")
       (do ()
@@ -107,7 +107,7 @@
 		 (substring s (quotient (string-length s) 2))
 		 (substring s 0 (+ 1 (quotient (string-length s) 2)))))))))
 
-(display (string-cat 500000)) (newline) ; 524278
+(display (string-cat 600000)) (newline) ; 524278
 
 ;;; --------------------------------------------------------------------------------
 
@@ -142,7 +142,7 @@
 	(if (not (= (matrix 0 0) 5))
 	    (format #t ";mbrot: ~A~%" n))))))
 
-(mbrot 75)
+(mbrot 100)
 
 ;;; --------------------------------------------------------------------------------
 
@@ -178,7 +178,7 @@
 	  (format *stderr* "long lived tree of depth ~D~30Tcheck: ~D~%" max-depth (item-check long-lived-tree)))))))
 
 ;(binary-tree 21) ; 20 secs
-(binary-tree 6)
+(binary-tree 13)
 
 ;;; stretch      tree of  depth 22	 check: 8388607
 ;;; 2097152	 trees of depth 4	 check: 65011712
@@ -191,7 +191,6 @@
 ;;; 128	         trees of depth 18	 check: 67108736
 ;;; 32	         trees of depth 20	 check: 67108832
 ;;; long lived   tree of  depth 21	 check: 4194303
-
 
 ;;; --------------------------------------------------------------------------------
 
@@ -251,8 +250,7 @@
 	   primes)
 	(if (prime? i)
 	    (set! primes (+ primes 1))))))
-  (display (count-primes 100000)) (newline)) ; 9592
-
+  (display (count-primes 200000)) (newline)) ; 100000: 9592, 200000: 17984
 
 ;;; --------------------------------------------------------------------------------
 ;;;
@@ -307,7 +305,7 @@
       
       (sqrt (/ vBv vV))))
 
-  (display (spectral-norm 125)) ; (spectral-norm 5500) takes about 14.3 secs
+  (display (spectral-norm 250)) ; (spectral-norm 5500) takes about 14.3 secs
   (newline))
 
 ;;; --------------------------------------------------------------------------------
@@ -323,7 +321,7 @@
 
   (define (pal-test)
     (do ((i 0 (+ i 1)))
-	((= i 10000))
+	((= i 30000))
       (palindrome? "abcdefgfedcba")
       (palindrome? "abcdefxfedcba")
       (palindrome? "")
