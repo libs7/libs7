@@ -4021,7 +4021,12 @@ argument types.  #t means any type is possible, and 'values means the function r
 </pre>
 
 <p>which says that the first argument to char-position can be a string or a character,
-and the return type can be either boolean or an integer.
+and the return type can be either boolean or an integer.  If we know a function returns
+multiple values, the return type (first element of the signature) can contain a list 
+describing each such value: <code>(define (f x) (values (floor x) (ceiling x)))</code>
+could be <code>(((integer?) (integer?)) real?)</code>.
+</p>
+<p>
 If the function is defined in scheme, its signature is the value of the '+signature+ variable
 in its closure:
 </p>

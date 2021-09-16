@@ -1179,7 +1179,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer u, v, w, x, y, z;         /* evaluator local vars */
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp_cell_2;
+  s7_pointer temp1, temp2, temp3, temp4, temp6, temp7, temp8, temp9, temp_cell_2;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1, u2_2;
 
   Jmp_Buf goto_start;
@@ -4109,11 +4109,9 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S, OP_IMPLICIT_S7_LET_SET_SA,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_G, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
-      OP_SYM, OP_GLOBAL_SYM, OP_CON, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY,
-      HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
+      OP_SYM, OP_CON, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
 
-      OP_READ_INTERNAL, OP_EVAL,
-      OP_EVAL_ARGS, OP_EVAL_ARGS1, OP_EVAL_ARGS2, OP_EVAL_ARGS3, OP_EVAL_ARGS4, OP_EVAL_ARGS5,
+      OP_READ_INTERNAL, OP_EVAL, OP_EVAL_ARGS, OP_EVAL_ARGS1, OP_EVAL_ARGS2, OP_EVAL_ARGS3, OP_EVAL_ARGS4, OP_EVAL_ARGS5,
       OP_APPLY, OP_EVAL_MACRO, OP_LAMBDA, OP_QUOTE, OP_QUOTE_UNCHECKED, OP_MACROEXPAND, OP_CALL_CC,
       OP_DEFINE, OP_DEFINE1, OP_BEGIN, OP_BEGIN_HOOK, OP_BEGIN_NO_HOOK, OP_BEGIN_UNCHECKED, OP_BEGIN_2_UNCHECKED, OP_BEGIN_NA, OP_BEGIN_AA,
       OP_IF, OP_IF1, OP_WHEN, OP_UNLESS, OP_SET, OP_SET1, OP_SET2,
@@ -4336,11 +4334,9 @@ static const char* op_names[NUM_OPS] =
       "implicit_hash_table_ref_a", "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", "implicit_*s7*_set_sa",
       "unknown_thunk", "unknown_ns", "unknown_na", "unknown_g", "unknown_gg", "unknown_a", "unknown_aa", "unknown_np",
 
-      "symbol", "global-symbol", "constant", "pair_sym", "pair_pair", "pair_any",
-      "h_ssa_direct", "h_hash_table_increment", "clear_opts",
+      "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_ssa_direct", "h_hash_table_increment", "clear_opts",
 
-      "read_internal", "eval",
-      "eval_args", "eval_args1", "eval_args2", "eval_args3", "eval_args4", "eval_args5",
+      "read_internal", "eval", "eval_args", "eval_args1", "eval_args2", "eval_args3", "eval_args4", "eval_args5",
       "apply", "eval_macro", "lambda", "quote", "quote_unchecked", "macroexpand", "call/cc",
       "define", "define1", "begin", "begin_hook", "begin_no_hook", "begin_unchecked", "begin_2_unchecked", "begin_na", "begin_aa",
       "if", "if1", "when", "unless", "set", "set1", "set2",
@@ -6999,7 +6995,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp2);
   gc_mark(sc->temp3);
   gc_mark(sc->temp4);
-  gc_mark(sc->temp5);
   gc_mark(sc->temp6);
   gc_mark(sc->temp7);
   gc_mark(sc->temp8);
@@ -52872,6 +52867,7 @@ static s7_pointer fx_v(s7_scheme *sc, s7_pointer arg) {return(v_lookup(sc, T_Sym
 static s7_pointer fx_T(s7_scheme *sc, s7_pointer arg) {return(T_lookup(sc, T_Sym(arg), arg));}
 static s7_pointer fx_U(s7_scheme *sc, s7_pointer arg) {return(U_lookup(sc, T_Sym(arg), arg));}
 static s7_pointer fx_c_nc(s7_scheme *sc, s7_pointer arg) {return(fc_call(sc, arg));}
+static s7_pointer fx_cons_cc(s7_scheme *sc, s7_pointer arg) {return(cons(sc, cadr(arg), caddr(arg)));}
 
 #define fx_c_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -56109,7 +56105,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
 	      set_opt3_con(arg, make_permanent_integer((fn_proc(arg) == g_abs) ? s7_int_abs(integer(cadr(arg))) : string_length(cadr(arg))));
 	      return(fx_in_place);
 	    }
-	  return((fn_proc(arg) == g_random_i) ? fx_random_i : fx_c_nc);
+	  return((fn_proc(arg) == g_random_i) ? fx_random_i : ((fn_proc(arg) == g_cons) ? fx_cons_cc : fx_c_nc));
 
 	case OP_OR_2A:
 	  if (fx_proc(cddr(arg)) == fx_and_2a) {set_opt3_pair(arg, cdaddr(arg)); return(fx_or_and_2a);}
@@ -67718,6 +67714,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     case T_C_OBJECT:
       /* args if sc->args (plist + c_object) can be clobbered here by s7_is_aritable, so we need to protect it */
       args = copy_proper_list(sc, args);
+      sc->temp8 = args;
       
     default:
       if (!is_applicable(f))
@@ -73679,7 +73676,7 @@ static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
       else
 	/* new 22-Sep-19, but I don't think this saves anything over falling into trailers */
 	if (is_symbol(obj))
-	  set_optimize_op(obj, (is_keyword(obj)) ? OP_CON : ((is_global(obj)) ? OP_GLOBAL_SYM : OP_SYM));
+	  set_optimize_op(obj, (is_keyword(obj)) ? OP_CON : OP_SYM);
 	else set_optimize_op(obj, OP_CON);
     }
   if (!is_list(x))
@@ -88689,7 +88686,7 @@ static void op_pair_pair(s7_scheme *sc)
       check_for_cyclic_code(sc, sc->code);
       resize_stack(sc);
     }
-  push_stack_no_args(sc, OP_EVAL_ARGS, sc->code); /* eval args goes immediately to cdr(sc->code) */
+  push_stack_no_args_direct(sc, OP_EVAL_ARGS); /* eval args goes immediately to cdr(sc->code) */
   /* don't put check_stack_size here! */
   push_stack_no_args(sc, OP_EVAL_ARGS, car(sc->code));
   sc->code = caar(sc->code);
@@ -88732,7 +88729,7 @@ static goto_t trailers(s7_scheme *sc)
   if (is_symbol(code))
     {
       sc->value = lookup_checked(sc, code);
-      set_optimize_op(code, (is_keyword(code)) ? OP_CON : ((is_global(code)) ? OP_GLOBAL_SYM : OP_SYM));
+      set_optimize_op(code, (is_keyword(code)) ? OP_CON : OP_SYM);
     }
   else
     {
@@ -90615,7 +90612,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_UNOPT:       goto UNOPT;
 	case OP_SYM:         sc->value = lookup_checked(sc, sc->code);     continue;
-	case OP_GLOBAL_SYM:  sc->value = lookup_global(sc, sc->code);      continue;
 	case OP_CON:         sc->value = sc->code;                         continue;
 	case OP_PAIR_PAIR:   op_pair_pair(sc);                             goto EVAL;         /* car is pair ((if x car cadr) ...) */
 	case OP_PAIR_ANY:    sc->value = car(sc->code);                    goto EVAL_ARGS_TOP;
@@ -94518,7 +94514,6 @@ s7_scheme *s7_init(void)
   sc->temp2 = sc->nil;
   sc->temp3 = sc->nil;
   sc->temp4 = sc->nil;
-  sc->temp5 = sc->nil;
   sc->temp6 = sc->nil;
   sc->temp7 = sc->nil;
   sc->temp8 = sc->nil;
@@ -94909,7 +94904,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 943) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 942) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95307,17 +95302,16 @@ int main(int argc, char **argv)
  * s7test     4514         1873   1831   1792   1790
  * texit      1933         ----   ----   1886   1792
  * lt         2129         2123   2110   2120   2116
- * tform      3245         2281   2273   2255   2248
+ * tform      3245         2281   2273   2255   2250
  * tmac       2429         3317   3277   2409   2419
  * tread      2591         2440   2421   2415   2415
  * trclo      4093         2715   2561   2458   2458
  * fbench     2852         2688   2583   2475   2475
- * tmat       2648         3065   3042   2530   2522
+ * tmat       2648         3065   3042   2530   2517
  * tcopy      2745         8035   5546   2550   2557
  * dup        2760         3805   3788   2565   2579
  * tb         3375         2735   2681   2627   2626
  * titer      2678         2865   2842   2679   2679
- * tshoot     3607         2951   2900   2775   2811 [overhead! string_length_i_7p g_car etc]
  * tsort      3590         3105   3104   2860   2859
  * tset       3100         3253   3104   3089   3090
  * tload      3849         ----   ----   3142   3145
@@ -95326,8 +95320,9 @@ int main(int argc, char **argv)
  * tclo       4636         4787   4735   4402   4400
  * tlet       5283         7775   5640   4431   4426
  * tcase      4550         4960   4793   4444   4446
- * tmap       5984         8869   8774   4493   4484
+ * tmap       5984         8869   8774   4493   4493
  * tfft      115.1         7820   7729   4787   4787
+ * tshoot     6875         5475   5373   5154   5215
  * tnum       56.7         6348   6013   5443   5436
  * tstr       8059         6880   6342   5776   5525
  * tgsl       25.2         8485   7802   6397   6393
@@ -95341,7 +95336,7 @@ int main(int argc, char **argv)
  * tgen       12.1         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      58.0         36.7   37.5   37.1   37.0
- * sg         80.0         ----   ----   56.1   55.9
+ * sg         80.0         ----   ----   56.1   56.0
  * lg        104.5        106.6  105.0  104.4  104.3
  * tbig      635.1        177.4  175.8  166.4  166.3
  * --------------------------------------------------------
@@ -95353,9 +95348,7 @@ int main(int argc, char **argv)
  *   for and/or: all branches fx->fb -> new op??
  *   fx_tree fb cases? trec: half fx_num_eq_t0 -> fb_num_eq_s0
  * b_pi_ff and check_b_types -> b_pi etc
- * for values, sig could be ((val1-types...) ...): (define (f x) (values (floor x) (ceiling x))): (((integer?) (integer?)) real?)
- *   perhaps a switch to insist on compliance with sigs? a bazillion added checks... [methods, closures, non-s7 C functions?]
- * (display (string-append|append ...)) -> display each arg?  but display returns its argument
+ * perhaps a switch to insist on compliance with sigs? a bazillion added checks... [methods, closures, non-s7 C functions?]
  * (write-string (read-line...)) can wrap the string (tshoot) or just use read_line_buf directly
- * t718 -> s7test
+ * op_let_opssq_e_* and others use "e"=one statement, should use "o"?
  */
