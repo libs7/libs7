@@ -4158,7 +4158,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_LET_NO_VARS, OP_NAMED_LET, OP_NAMED_LET_NO_VARS, OP_NAMED_LET_A, OP_NAMED_LET_AA, OP_NAMED_LET_FX, OP_NAMED_LET_STAR,
       OP_LET_FX_OLD, OP_LET_FX_NEW, OP_LET_2A_OLD, OP_LET_2A_NEW, OP_LET_3A_OLD, OP_LET_3A_NEW,
-      OP_LET_opSSq_OLD, OP_LET_opSSq_NEW, OP_LET_opSSq_E_OLD, OP_LET_opSSq_E_NEW, OP_LET_opaSSq_OLD, OP_LET_opaSSq_NEW, OP_LET_opaSSq_E_OLD, OP_LET_opaSSq_E_NEW,
+      OP_LET_opSSq_OLD, OP_LET_opSSq_NEW, OP_LET_opaSSq_OLD, OP_LET_opaSSq_NEW, 
       OP_LET_ONE_OLD, OP_LET_ONE_NEW, OP_LET_ONE_P_OLD, OP_LET_ONE_P_NEW,
       OP_LET_ONE_OLD_1, OP_LET_ONE_NEW_1, OP_LET_ONE_P_OLD_1, OP_LET_ONE_P_NEW_1,
       OP_LET_A_OLD, OP_LET_A_NEW, OP_LET_A_P_OLD, OP_LET_A_P_NEW,
@@ -4380,7 +4380,7 @@ static const char* op_names[NUM_OPS] =
 
       "let_no_vars", "named_let", "named_let_no_vars", "named_let_a", "named_let_aa", "named_let_fx", "named_let*",
       "let_fx_old", "let_fx_new", "let_2a_old", "let_2a_new", "let_3a_old", "let_3a_new",
-      "let_opssq_old", "let_opssq_new", "let_opssq_e_old", "let_opssq_e_new", "let_opassq_old", "let_opassq_new", "let_opassq_e_old", "let_opassq_e_new",
+      "let_opssq_old", "let_opssq_new", "let_opassq_old", "let_opassq_new",
       "let_one_old", "let_one_new", "let_one_p_old", "let_one_p_new",
       "let_one_old_1", "let_one_new_1", "let_one_p_old_1", "let_one_p_new_1",
       "let_a_old", "let_a_new", "let_a_p_old", "let_a_p_new",
@@ -8230,9 +8230,9 @@ static Inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const cha
   return(x);
 }
 
-static inline s7_pointer make_string_with_length(s7_scheme *sc, const char *str, s7_int len)
+static s7_pointer make_string_with_length(s7_scheme *sc, const char *str, s7_int len)
 {
-  return(inline_make_string_with_length(sc, str, len));
+  return(inline_make_string_with_length(sc, str, len)); /* packaged to avoid inlining everywhere */
 }
 
 static s7_pointer g_symbol_to_string(s7_scheme *sc, s7_pointer args)
@@ -28138,7 +28138,7 @@ static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
 	{
 	  s7_int pos = (s7_int)(snew - sc->read_line_buf);
 	  port_line_number(port)++;
-	  return(make_string_with_length(sc, sc->read_line_buf, (with_eol) ? (pos + 1) : pos));
+	  return(inline_make_string_with_length(sc, sc->read_line_buf, (with_eol) ? (pos + 1) : pos));
 	}
       reads++;
       cur_size = strlen(sc->read_line_buf);
@@ -28168,13 +28168,13 @@ static s7_pointer string_read_line(s7_scheme *sc, s7_pointer port, bool with_eol
       port_line_number(port)++;
       i = cur - port_str;
       port_position(port) = i + 1;
-      return(make_string_with_length(sc, (const char *)start, ((with_eol) ? i + 1 : i) - port_start));
+      return(inline_make_string_with_length(sc, (const char *)start, ((with_eol) ? i + 1 : i) - port_start));
     }
   i = port_data_size(port);
   port_position(port) = i;
   if (i <= port_start)         /* the < part can happen -- if not caught we try to create a string of length - 1 -> segfault */
     return(eof_object);
-  return(inline_make_string_with_length(sc, (const char *)start, i - port_start));
+  return(make_string_with_length(sc, (const char *)start, i - port_start));
 }
 
 
@@ -74911,29 +74911,6 @@ static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
 
       if (is_optimized(cadr(binding)))
 	{
-	  if (is_null(cddr(code)))                   /* one statement body */
-	    {
-	      if (optimize_op(cadr(binding)) == HOP_SAFE_C_SS)
-		{
-		  /* no lt fx here, 4 s7test */
-		  if (fn_proc(cadr(binding)) == g_assq)
-		    {
-		      set_opt2_sym(code, cadadr(binding));
-		      pair_set_syntax_op(form, OP_LET_opaSSq_E_OLD);
-		    }
-		  else pair_set_syntax_op(form, OP_LET_opSSq_E_OLD);
-		  set_opt3_sym(cdr(code), caddadr(binding));
-		  set_opt1_sym(code, car(binding));
-		  return;
-		}
-	      if (is_fxable(sc, cadr(binding)))
-		{
-		  set_opt2_pair(code, binding);
-		  pair_set_syntax_op(form, OP_LET_A_OLD);
-		  fx_annotate_arg(sc, cdr(binding), sc->curlet);
-		  check_let_a_body(sc, form);
-		  return;
-		}}
 	  if (optimize_op(cadr(binding)) == HOP_SAFE_C_SS)
 	    {
 	      if (fn_proc(cadr(binding)) == g_assq)
@@ -75513,7 +75490,7 @@ static inline void op_let_opassq(s7_scheme *sc)
   else sc->value = (is_null(lst)) ? sc->F : g_assq(sc, set_plist_2(sc, in_val, lst));
 }
 
-static void op_let_opssq_old(s7_scheme *sc)
+static /* inline */ void op_let_opssq_old(s7_scheme *sc)
 {
   s7_pointer let;
   op_let_opssq(sc);
@@ -75523,31 +75500,14 @@ static void op_let_opssq_old(s7_scheme *sc)
   sc->code = T_Pair(cdr(sc->code));
 }
 
-static void op_let_opssq_new(s7_scheme *sc)
+static /* inline */ void op_let_opssq_new(s7_scheme *sc)
 {
   op_let_opssq(sc);
   sc->curlet = make_let_with_slot(sc, sc->curlet, opt1_sym(sc->code), sc->value);
   sc->code = T_Pair(cdr(sc->code));
 }
 
-static void op_let_opssq_e_old(s7_scheme *sc)
-{
-  s7_pointer let;
-  op_let_opssq(sc);
-  let = update_let_with_slot(sc, opt3_let(sc->code), sc->value);
-  let_set_outlet(let, sc->curlet);
-  set_curlet(sc, let);
-  sc->code = cadr(sc->code);
-}
-
-static void op_let_opssq_e_new(s7_scheme *sc)
-{
-  op_let_opssq(sc);
-  sc->curlet = make_let_with_slot(sc, sc->curlet, opt1_sym(sc->code), sc->value);
-  sc->code = cadr(sc->code);
-}
-
-static void op_let_opassq_old(s7_scheme *sc)
+static inline void op_let_opassq_old(s7_scheme *sc)
 {
   s7_pointer let;
   op_let_opassq(sc);
@@ -75557,28 +75517,11 @@ static void op_let_opassq_old(s7_scheme *sc)
   sc->code = T_Pair(cdr(sc->code));
 }
 
-static void op_let_opassq_new(s7_scheme *sc)
+static inline void op_let_opassq_new(s7_scheme *sc)
 {
   op_let_opassq(sc);
   sc->curlet = make_let_with_slot(sc, sc->curlet, opt1_sym(sc->code), sc->value);
   sc->code = T_Pair(cdr(sc->code));
-}
-
-static void op_let_opassq_e_old(s7_scheme *sc)
-{
-  s7_pointer let;
-  op_let_opassq(sc);
-  let = update_let_with_slot(sc, opt3_let(sc->code), sc->value);
-  let_set_outlet(let, sc->curlet);
-  set_curlet(sc, let);
-  sc->code = cadr(sc->code);
-}
-
-static void op_let_opassq_e_new(s7_scheme *sc)
-{
-  op_let_opassq(sc);
-  sc->curlet = make_let_with_slot(sc, sc->curlet, opt1_sym(sc->code), sc->value); /* caaar(sc->code) = local variable name */
-  sc->code = cadr(sc->code);
 }
 
 static Inline void op_let_fx_new(s7_scheme *sc)
@@ -91214,12 +91157,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_LET_opSSq_OLD:    op_let_opssq_old(sc);    goto BEGIN;
 	case OP_LET_opSSq_NEW:    op_let_opssq_new(sc);    goto BEGIN;
-	case OP_LET_opSSq_E_OLD:  op_let_opssq_e_old(sc);  goto EVAL;
-	case OP_LET_opSSq_E_NEW:  op_let_opssq_e_new(sc);  goto EVAL;
 	case OP_LET_opaSSq_OLD:   op_let_opassq_old(sc);   goto BEGIN;
 	case OP_LET_opaSSq_NEW:   op_let_opassq_new(sc);   goto BEGIN;
-	case OP_LET_opaSSq_E_OLD: op_let_opassq_e_old(sc); goto EVAL;
-	case OP_LET_opaSSq_E_NEW: op_let_opassq_e_new(sc); goto EVAL;
 
 	case OP_LET_STAR_FX:      op_let_star_fx(sc);     goto BEGIN;
 	case OP_LET_STAR_FX_A:    op_let_star_fx_a(sc);   continue;
@@ -94904,7 +94843,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 942) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 938) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95296,49 +95235,49 @@ int main(int argc, char **argv)
  * tpeak       123          115    114    110    110
  * tref        552          691    687    476    463
  * tauto       785          648    642    496    496
- * index      1031         1026   1016    981    981
+ * index      1031         1026   1016    981    980
  * tmock      7756         1177   1165   1090   1088
  * tvect      1915         2456   2413   1735   1712
  * s7test     4514         1873   1831   1792   1790
  * texit      1933         ----   ----   1886   1792
  * lt         2129         2123   2110   2120   2116
- * tform      3245         2281   2273   2255   2250
+ * tform      3245         2281   2273   2255   2246
  * tmac       2429         3317   3277   2409   2419
- * tread      2591         2440   2421   2415   2415
+ * tread      2591         2440   2421   2415   2413
  * trclo      4093         2715   2561   2458   2458
  * fbench     2852         2688   2583   2475   2475
- * tmat       2648         3065   3042   2530   2517
+ * tmat       2648         3065   3042   2530   2515
  * tcopy      2745         8035   5546   2550   2557
- * dup        2760         3805   3788   2565   2579
+ * dup        2760         3805   3788   2565   2564
  * tb         3375         2735   2681   2627   2626
  * titer      2678         2865   2842   2679   2679
  * tsort      3590         3105   3104   2860   2859
  * tset       3100         3253   3104   3089   3090
  * tload      3849         ----   ----   3142   3145
- * teq        3542         4068   4045   3570   3557
- * tio        3684         3816   3752   3693   3703
- * tclo       4636         4787   4735   4402   4400
+ * teq        3542         4068   4045   3570   3556
+ * tio        3684         3816   3752   3693   3698
+ * tclo       4636         4787   4735   4402   4402
  * tlet       5283         7775   5640   4431   4426
  * tcase      4550         4960   4793   4444   4446
  * tmap       5984         8869   8774   4493   4493
  * tfft      115.1         7820   7729   4787   4787
- * tshoot     6875         5475   5373   5154   5215
- * tnum       56.7         6348   6013   5443   5436
- * tstr       8059         6880   6342   5776   5525
+ * tshoot     6875         5475   5373   5154   5198
+ * tnum       56.7         6348   6013   5443   5444
+ * tstr       8059         6880   6342   5776   5522
  * tgsl       25.2         8485   7802   6397   6393
  * trec       8338         6936   6922   6553   6553
  * tmisc      7217         8960   7699   6597   6564
  * tari       ----         13.1   12.8   7293   6814
  * tlist      6834         7896   7546   6865   6860
- * tgc        10.1         11.9   11.1   8668   8652
+ * tgc        10.1         11.9   11.1   8668   8647
  * thash      35.4         11.8   11.7   9775   9726
  * cb         18.8         12.2   12.2   11.1   10.9
  * tgen       12.1         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1   37.0
+ * calls      58.0         36.7   37.5   37.1   37.1
  * sg         80.0         ----   ----   56.1   56.0
  * lg        104.5        106.6  105.0  104.4  104.3
- * tbig      635.1        177.4  175.8  166.4  166.3
+ * tbig      635.1        177.4  175.8  166.4  166.5
  * --------------------------------------------------------
  *
  * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
@@ -95349,6 +95288,5 @@ int main(int argc, char **argv)
  *   fx_tree fb cases? trec: half fx_num_eq_t0 -> fb_num_eq_s0
  * b_pi_ff and check_b_types -> b_pi etc
  * perhaps a switch to insist on compliance with sigs? a bazillion added checks... [methods, closures, non-s7 C functions?]
- * (write-string (read-line...)) can wrap the string (tshoot) or just use read_line_buf directly
- * op_let_opssq_e_* and others use "e"=one statement, should use "o"?
+ * display+read-line: if string out, use it as read buf?
  */
