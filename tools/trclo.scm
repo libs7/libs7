@@ -418,6 +418,26 @@
   (lcond3 5000 5000)
   (lcond4 5000 5000 5000))
   
+;;; --------------------------------------------------------------------------------
+
+;;; from bug-guile
+(define (fdot . lst)
+  (let lp2 ((i 0) (s 0) (lst lst))
+    (if (and (pair? lst)
+	     (< i 64))
+        (lp2 (+ i 1) 
+	     (if (car lst) 
+                 (logior (ash 1 i) s) 
+                 s) 
+             (cdr lst))
+        s)))
+
+(unless (= (fdot #f #t #t #f #f #t #f) 38) (format *stderr* "fdot: ~S~%" (fdot #f #t #t #f #f #t #f)))
+
+(define (test-fdot)
+  (do ((i 0 (+ i 1)))
+      ((= i 10000))
+    (fdot #f #t #t #f #f #t #f #f)))
 
 ;;; --------------------------------------------------------------------------------
 (define (tests)
@@ -430,6 +450,7 @@
     (when-f)
     (cond-f)
     ))
+(test-fdot)
 
 (tests)
 
