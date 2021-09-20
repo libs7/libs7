@@ -4080,14 +4080,12 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_CALL_WITH_EXIT, HOP_CALL_WITH_EXIT, OP_CALL_WITH_EXIT_O, HOP_CALL_WITH_EXIT_O,
       OP_C_CATCH, HOP_C_CATCH, OP_C_CATCH_ALL, HOP_C_CATCH_ALL, OP_C_CATCH_ALL_O, HOP_C_CATCH_ALL_O, OP_C_CATCH_ALL_A, HOP_C_CATCH_ALL_A,
-      OP_C_S_opSq, HOP_C_S_opSq, OP_C_SS, HOP_C_SS, OP_C_S, HOP_C_S, OP_READ_S, HOP_READ_S, OP_C_P, HOP_C_P, OP_C_AP, HOP_C_AP,
+      OP_C_SS, HOP_C_SS, OP_C_S, HOP_C_S, OP_READ_S, HOP_READ_S, OP_C_P, HOP_C_P, OP_C_AP, HOP_C_AP,
       OP_C_A, HOP_C_A, OP_C_AA, HOP_C_AA, OP_C, HOP_C, OP_C_NA, HOP_C_NA,
 
-      OP_CL_S, HOP_CL_S, OP_CL_SS, HOP_CL_SS, OP_CL_A, HOP_CL_A, OP_CL_AA, HOP_CL_AA, OP_CL_NA, HOP_CL_NA,
-      OP_CL_FA, HOP_CL_FA, OP_CL_SAS, HOP_CL_SAS, OP_CL_S_opSq, HOP_CL_S_opSq,
+      OP_CL_S, HOP_CL_S, OP_CL_SS, HOP_CL_SS, OP_CL_A, HOP_CL_A, OP_CL_AA, HOP_CL_AA, OP_CL_NA, HOP_CL_NA, OP_CL_FA, HOP_CL_FA, OP_CL_SAS, HOP_CL_SAS, 
 
       OP_SAFE_C_PP, HOP_SAFE_C_PP, OP_SAFE_C_FF, HOP_SAFE_C_FF,
-      OP_SAFE_C_opSq_P, HOP_SAFE_C_opSq_P,
       OP_SAFE_C_SP, HOP_SAFE_C_SP, OP_SAFE_C_CP, HOP_SAFE_C_CP,
       OP_SAFE_C_AP, HOP_SAFE_C_AP, OP_SAFE_C_PA, HOP_SAFE_C_PA,
       OP_SAFE_C_PS, HOP_SAFE_C_PS, OP_SAFE_C_PC, HOP_SAFE_C_PC,
@@ -4306,14 +4304,12 @@ static const char* op_names[NUM_OPS] =
 
       "call_with_exit", "h_call_with_exit", "call_with_exit_o", "h_call_with_exit_o",
       "c_catch", "h_c_catch", "c_catch_all", "h_c_catch_all", "c_catch_all_o", "h_c_catch_all_o", "c_catch_all_a", "h_c_catch_all_a",
-      "c_s_opsq", "h_c_s_opsq", "c_ss", "h_c_ss", "c_s", "h_c_s", "read_s", "h_read_s", "c_p", "h_c_p", "c_ap", "h_c_ap",
+      "c_ss", "h_c_ss", "c_s", "h_c_s", "read_s", "h_read_s", "c_p", "h_c_p", "c_ap", "h_c_ap",
       "c_a", "h_c_a", "c_aa", "h_c_aa", "c", "h_c", "c_fx", "h_c_fx",
 
-      "cl_s", "h_cl_s", "cl_ss", "h_cl_ss", "cl_a", "h_cl_a", "cl_aa", "h_cl_aa",
-      "cl_na", "h_cl_na", "cl_fa", "h_cl_fa", "cl_sas", "h_cl_sas", "cl_s_opsq", "h_cl_s_opsq",
+      "cl_s", "h_cl_s", "cl_ss", "h_cl_ss", "cl_a", "h_cl_a", "cl_aa", "h_cl_aa", "cl_na", "h_cl_na", "cl_fa", "h_cl_fa", "cl_sas", "h_cl_sas",
 
       "safe_c_pp", "h_safe_c_pp", "safe_c_ff", "h_safe_c_ff",
-      "safe_c_opsq_p", "h_safe_c_opsq_p",
       "safe_c_sp", "h_safe_c_sp", "safe_c_cp", "h_safe_c_cp",
       "safe_c_ap", "h_safe_c_ap", "safe_c_pa", "h_safe_c_pa",
       "safe_c_ps", "h_safe_c_ps", "safe_c_pc", "h_safe_c_pc",
@@ -62529,6 +62525,19 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	      if (opc->v[1].p)
 		{
 		  opc->v[0].fp = opt_p_pp_cs;
+		  if (is_pair(slot_value(opc->v[1].p)))
+		    {
+		      if (func == assq_p_pp) opc->v[3].p_pp_f = s7_assq;
+		      else
+			if (func == memq_p_pp) opc->v[3].p_pp_f = s7_memq;
+			else
+			  if ((func == member_p_pp) && (is_simple(opc->v[2].p))) opc->v[3].p_pp_f = s7_memq;
+			  else
+			    if (func == assoc_p_pp) 
+			      {
+				if (is_simple(opc->v[2].p)) opc->v[3].p_pp_f = s7_assq;
+				else if (is_pair(car(slot_value(opc->v[1].p)))) opc->v[3].p_pp_f = assoc_1;
+			      }}
 		  return(true);
 		}
 	      pc_fallback(sc, pstart);
@@ -67792,6 +67801,35 @@ static bool op_map_2(s7_scheme *sc)
   return(false);
 }
 
+static s7_pointer revappend(s7_scheme *sc, s7_pointer a, s7_pointer b)
+{
+  /* (map (lambda (x) (if (odd? x) (apply values '(1 2 3)) (values))) (list 1 2 3 4)) is a bad case -- we have to copy the incoming list (in op_map_gather) */
+  s7_pointer p = b, q;
+  if (is_not_null(a))
+    {
+      a = copy_proper_list(sc, a);
+      do /* while (is_not_null(a)) */
+	{
+	  q = cdr(a);
+	  set_cdr(a, p);
+	  p = a;
+	  a = q;
+	}
+      while (is_pair(a));
+    }
+  return(p);
+}
+
+static Inline void op_map_gather(s7_scheme *sc)
+{
+  if (sc->value != sc->no_value)
+    {
+      if (is_multiple_value(sc->value))
+	counter_set_result(sc->args, revappend(sc, multiple_value(sc->value), counter_result(sc->args)));
+      else counter_set_result(sc->args, cons(sc, sc->value, counter_result(sc->args)));
+    }
+}
+
 
 /* -------------------------------- multiple-values -------------------------------- */
 #if S7_DEBUGGING
@@ -71739,16 +71777,6 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		}
 	      choose_c_function(sc, expr, func, 2);
 	      return(OPT_T);
-	    }
-
-	  if ((symbols == 1) &&
-	      (is_normal_symbol(arg1)) &&
-	      (is_safe_c_s(arg2)))
-	    {
-	      set_unsafe_optimize_op(expr, hop + ((is_semisafe(func)) ? OP_CL_S_opSq : OP_C_S_opSq));
-	      set_opt1_sym(cdr(expr), cadr(arg2));
-	      choose_c_function(sc, expr, func, 2);
-	      return(OPT_F);
 	    }}
 
       if ((bad_pairs == 1) && (quotes == 1))
@@ -71875,12 +71903,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		  set_opt2_con(cdr(expr), cadr(arg2));
 		  choose_c_function(sc, expr, func, 2);
 		  return(OPT_T);
-		}
-	      set_unsafe_optimize_op(expr, hop + OP_SAFE_C_opSq_P);
-	      opt_sp_1(sc, c_function_call(func), expr);
-	      choose_c_function(sc, expr, func, 2);
-	      return(OPT_F);
-	    }
+		}}
 	  if (quotes == 0)
 	    {
 	      set_unsafely_optimized(expr);
@@ -77048,7 +77071,7 @@ static void check_define(s7_scheme *sc)
       if (is_syntactic_symbol(func))                                             /* (define and a) */
 	{
 	  if (sc->safety > NO_SAFETY)
-	    s7_warn(sc, 128, "%s: syntactic keywords tend to behave badly if redefined\n", display(func));
+	    s7_warn(sc, 256, "%s: syntactic keywords tend to behave badly if redefined: %s\n", display(func), display_80(sc->code));
 	  set_local(func);
 	}
       if ((is_pair(cadr(code))) &&               /* look for (define sym (lambda ...)) and treat it like (define (sym ...)...) */
@@ -77074,7 +77097,7 @@ static void check_define(s7_scheme *sc)
       if (is_syntactic_symbol(func))                                             /* (define (and a) a) */
 	{
 	  if (sc->safety > NO_SAFETY)
-	    s7_warn(sc, 128, "%s: syntactic keywords tend to behave badly if redefined\n", display(func));
+	    s7_warn(sc, 256, "%s: syntactic keywords tend to behave badly if redefined: %s\n", display(func), display_80(sc->code));
 	  set_local(func);
 	}
       if (starred)
@@ -77357,7 +77380,7 @@ static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op)
   if (is_syntactic_symbol(mac_name))
     {
       if (sc->safety > NO_SAFETY)
-	s7_warn(sc, 128, "%s: syntactic keywords tend to behave badly if redefined\n", display(mac_name));
+	s7_warn(sc, 256, "%s: syntactic keywords tend to behave badly if redefined: %s\n", display(mac_name), display_80(sc->code));
       set_local(mac_name);
     }
   if (is_constant_symbol(sc, mac_name))
@@ -87348,15 +87371,6 @@ static void op_safe_c_ssp_mv_1(s7_scheme *sc)
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
-static s7_pointer op_c_s_opsq(s7_scheme *sc)
-{
-  s7_pointer args = cdr(sc->code), val;
-  val = lookup(sc, car(args));
-  set_car(sc->t1_1, lookup(sc, opt1_sym(args)));
-  sc->args = list_2(sc, val, fn_proc(cadr(args))(sc, sc->t1_1));
-  return(fn_proc(sc->code)(sc, sc->args));
-}
-
 static inline void op_s(s7_scheme *sc)
 {
   sc->code = lookup(sc, car(sc->code));
@@ -87743,7 +87757,7 @@ static void op_safe_c_pp_6_mv(s7_scheme *sc)
   sc->args = pair_append(sc, sc->args, sc->value);
   /*
    * fn_proc(sc->code) here is g_add_2, but we have any number of args from a values call
-   *   the original (unoptimized) function is (hopefully) c_function_base(opt1_cfunc(sc->code))?
+   *   the original (unoptimized) function is c_function_base(opt1_cfunc(sc->code))
    *   (let () (define (hi) (+ (values 1 2) (values 3 4))) (hi)) -> 10
    */
   sc->code = c_function_base(opt1_cfunc(sc->code));
@@ -87773,6 +87787,7 @@ static void op_safe_c_3p_1_mv(s7_scheme *sc) /* here only if sc->value is mv */
 static void op_safe_c_3p_2(s7_scheme *sc)
 {
   gc_protect_via_stack(sc, sc->value);
+  check_stack_size(sc);
   push_stack_direct(sc, OP_SAFE_C_3P_3);
   sc->code = cadddr(sc->code);
 }
@@ -87870,25 +87885,6 @@ static void op_any_c_np_2(s7_scheme *sc)
   sc->args = proper_list_reverse_in_place(sc, sc->args = cons(sc, sc->value, sc->args));
   sc->code = pop_op_stack(sc);
   sc->value = fn_proc(sc->code)(sc, sc->args);
-}
-
-static s7_pointer revappend(s7_scheme *sc, s7_pointer a, s7_pointer b)
-{
-  /* (map (lambda (x) (if (odd? x) (apply values '(1 2 3)) (values))) (list 1 2 3 4)) is a bad case -- we have to copy the incoming list (in op_map_gather) */
-  s7_pointer p = b, q;
-  if (is_not_null(a))
-    {
-      a = copy_proper_list(sc, a);
-      do /* while (is_not_null(a)) */
-	{
-	  q = cdr(a);
-	  set_cdr(a, p);
-	  p = a;
-	  a = q;
-	}
-      while (is_pair(a));
-    }
-  return(p);
 }
 
 static bool op_any_c_np_mv_1(s7_scheme *sc)
@@ -88047,16 +88043,6 @@ static void op_safe_c_pa_mv(s7_scheme *sc)
   sc->args = val;
   unstack(sc);
   sc->code = c_function_base(opt1_cfunc(sc->code));
-}
-
-static void op_safe_c_opsq_p(s7_scheme *sc)
-{
-  s7_pointer args = cadr(sc->code);
-  check_stack_size(sc); /* snd-test 23 */
-  set_car(sc->t1_1, lookup(sc, cadr(args)));
-  sc->args = fn_proc(args)(sc, sc->t1_1);
-  push_stack_direct(sc, (opcode_t)opt1_any(cdr(sc->code)));
-  sc->code = caddr(sc->code);
 }
 
 static void op_c_na(s7_scheme *sc)
@@ -88596,16 +88582,6 @@ static goto_t trailers(s7_scheme *sc)
       set_optimize_op(code, OP_CON);
     }
   return(goto_start);
-}
-
-static Inline void op_map_gather(s7_scheme *sc)
-{
-  if (sc->value != sc->no_value)
-    {
-      if (is_multiple_value(sc->value))
-	counter_set_result(sc->args, revappend(sc, multiple_value(sc->value), counter_result(sc->args)));
-      else counter_set_result(sc->args, cons(sc, sc->value, counter_result(sc->args)));
-    }
 }
 
 
@@ -89216,7 +89192,6 @@ static bool op_unknown_ns(s7_scheme *sc)
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
 
-/* #define op_unknown_aa(Sc) ({fprintf(stderr, "aa: %s[%d]\n", __func__, __LINE__); op_unknown_aa_1(Sc);}) */
 static bool op_unknown_aa(s7_scheme *sc)
 {
   s7_pointer code, f = sc->last_function;
@@ -89950,9 +89925,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_C_opSq_S: if (!c_function_is_ok_cadr(sc, sc->code)) break;
 	case HOP_SAFE_C_opSq_S: sc->value = fx_c_opsq_s(sc, sc->code); continue;
 
-	case OP_SAFE_C_opSq_P: if (!c_function_is_ok_cadr(sc, sc->code)) break;
-	case HOP_SAFE_C_opSq_P: op_safe_c_opsq_p(sc); goto EVAL;
-
 	case OP_SAFE_C_opSq_CS: if (!c_function_is_ok_cadr(sc, sc->code)) break;
 	case HOP_SAFE_C_opSq_CS: sc->value = fx_c_opsq_cs(sc, sc->code); continue;
 
@@ -89978,9 +89950,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_CL_SS: if (!cl_function_is_ok(sc, sc->code)) break;
 	case HOP_CL_SS: op_safe_c_ss(sc); continue; /* safe_c case has the code we want */
-
-	case OP_CL_S_opSq: if (!c_function_is_ok_caddr(sc, sc->code)) break;
-	case HOP_CL_S_opSq: sc->value = fx_c_s_opsq(sc, sc->code); continue;
 
 	case OP_CL_A: if (!cl_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S_A); goto EVAL;}
 	case HOP_CL_A: op_cl_a(sc); continue;
@@ -90029,9 +89998,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_C_AA: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_C_AA: op_c_aa(sc); continue;
-
-	case OP_C_S_opSq: if (!c_function_is_ok_caddr(sc, sc->code)) break;
-	case HOP_C_S_opSq: sc->value = op_c_s_opsq(sc); continue;
 
 	case OP_C_NA: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_C_NA: op_c_na(sc); continue;
@@ -94753,7 +94719,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 938) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 932) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95146,55 +95112,49 @@ int main(int argc, char **argv)
  * tref        552          691    687    476    463
  * tauto       785          648    642    496    495
  * index      1031         1026   1016    981    980
- * tmock      7756         1177   1165   1090   1088
+ * tmock      7756         1177   1165   1090   1088  1063
  * tvect      1915         2456   2413   1735   1712
- * texit      1933         ----   ----   1886   1793
- * s7test     4514         1873   1831   1792   1795
+ * texit      1933         ----   ----   1886   1791
+ * s7test     4514         1873   1831   1792   1795  1786
  * lt         2129         2123   2110   2120   2117
- * tform      3245         2281   2273   2255   2250
- * tmac       2429         3317   3277   2409   2419
+ * tform      3245         2281   2273   2255   2250  2245
+ * tmac       2429         3317   3277   2409   2419  2422
  * tread      2591         2440   2421   2415   2416
  * fbench     2852         2688   2583   2475   2475
  * trclo      4118         2735   2574   2475   2482
- * tmat       2648         3065   3042   2530   2514
+ * tmat       2648         3065   3042   2530   2520  2511
  * tcopy      2745         8035   5546   2550   2557
- * dup        2760         3805   3788   2565   2564
- * tb         3375         2735   2681   2627   2627
+ * dup        2760         3805   3788   2565   2556  2553
+ * tb         3375         2735   2681   2627   2627  2625
  * titer      2678         2865   2842   2679   2677
- * tsort      3590         3105   3104   2860   2859
+ * tsort      3590         3105   3104   2860   2853
  * tset       3100         3253   3104   3089   3090
  * tload      3849         ----   ----   3142   3145
  * teq        3542         4068   4045   3570   3556
  * tio        3684         3816   3752   3693   3697
  * tclo       4636         4787   4735   4402   4402
  * tlet       5283         7775   5640   4431   4427
- * tcase      4550         4960   4793   4444   4446
+ * tcase      4550         4960   4793   4444   4447
  * tmap       5984         8869   8774   4493   4493
  * tfft      115.1         7820   7729   4787   4787
- * tshoot     6875         5475   5373   5154   5198
- * tnum       56.7         6348   6013   5443   5430
- * tstr       8059         6880   6342   5776   5522
+ * tshoot     6946         5525   5447   5220   5198
+ * tnum       56.7         6348   6013   5443   5440
+ * tstr       8059         6880   6342   5776   5542
  * tgsl       25.2         8485   7802   6397   6395
  * trec       8338         6936   6922   6553   6553
  * tmisc      7217         8960   7699   6597   6564
  * tari       ----         13.1   12.8   7293   6814
- * tlist      6834         7896   7546   6865   6860
- * tgc        10.1         11.9   11.1   8668   8647
- * thash      35.4         11.8   11.7   9775   9726
- * cb         18.8         12.2   12.2   11.1   10.9
- * tgen       12.1         11.2   11.4   11.5   11.5
+ * tlist      6834         7896   7546   6865   6860  6844
+ * tgc        10.1         11.9   11.1   8668   8642  8657 [eval]
+ * thash      35.4         11.8   11.7   9775   9725
+ * cb         18.8         12.2   12.2   11.1   10.9  10.6
+ * tgen       12.1         11.2   11.4   11.5   11.5  11.6
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1   37.1
+ * calls      58.0         36.7   37.5   37.1   37.1  37.0
  * sg         80.0         ----   ----   56.1   56.1
- * lg        104.5        106.6  105.0  104.4  104.3
- * tbig      635.1        177.4  175.8  166.4  166.5
+ * lg        104.5        106.6  105.0  104.4  104.4  104.3
+ * tbig      635.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
  *
- * (n)repl.scm should have some autoload function for libm and libgsl (libc also for nrepl): cload.scm has checks at end
- *    nrepl bug(?) in row 0 (2.3.13 is ok, 2.3.17 is broken)
- * fb_annotate: bool_opt cases? and/or with bool ops (lt gt etc), cond/do tests if result
- *   in the vs case, can we see the bfunc and update it? In fx_tree OP_IF_B* call fx_tree directly and catch fixup
- *   for and/or: all branches fx->fb -> new op??
- *   fx_tree fb cases? trec: half fx_num_eq_t0 -> fb_num_eq_s0
- * b_pi_ff and check_b_types -> b_pi etc
+ * maybe quotient/remainder/modulo p_pi?
  */
