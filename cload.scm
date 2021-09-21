@@ -64,16 +64,15 @@
 ;;;    so it works in a sense -- there is a memory leak here
 ;;; 
 ;;;
-;;; (c-define (list '(void* calloc (size_t size_t))
-;;;		    '(void* malloc (size_t))
-;;;		    '(void free (void*))
-;;;		    '(void* realloc(void* size_t))
-;;;		    '(void time (time_t*)) ; ignore returned value
+;;; (c-define (list '(time_t* calloc (size_t size_t))
+;;;		    '(void free (time_t*))
+;;;		    '(void time (time_t*))
 ;;;		    (list (symbol "struct tm*") 'localtime '(time_t*))
 ;;;                 (list 'size_t 'strftime (list 'char* 'size_t 'char* (symbol "struct tm*"))))
 ;;;          "" "time.h")
-;;;   > (let ((p (calloc 1 8)) (str (make-string 32))) (time p) (strftime str 32 "%a %d-%b-%Y %H:%M %Z" (localtime p)) (free p) str)
-;;;   "Sat 11-Aug-2012 08:55 PDT\x00      "
+;;;   > (let ((p (calloc 1 8)) (str (make-string 32))) 
+;;;       (time p) (let ((bytes (strftime str 32 "%a %d-%b-%Y %H:%M %Z" (localtime p)))) (free p) (substring str 0 bytes)))
+;;;   "Sat 11-Aug-2012 08:55 PDT
 ;;;
 ;;;
 ;;; (c-define '((int closedir (DIR*))
@@ -297,7 +296,7 @@
 	(let* ((name (symbol->string type))
 	       (pos (char-position #\- name)))
 	  (if (not pos)
-	      type
+	      name ;type
 	      (begin
 		(string-set! name pos #\space)
 		(set! pos (char-position #\- name (+ pos 1)))
@@ -312,8 +311,12 @@
 		      (len (length name)))
 		 (do ((i 0 (+ i 1)))
 		     ((= i len))
-		   (if (char=? (name i) #\*) (set! (name i) #\_))
-		   (if (char=? (name i) #\-) (set! (name i) #\_)))
+		   (if (char=? (name i) #\*) 
+		       (set! (name i) #\_)
+		       (if (char=? (name i) #\-) 
+			   (set! (name i) #\_)
+			   (if (char=? (name i) #\space) 
+			       (set! (name i) #\_))))) ; "struct tm*" for example
 		 (set! name (symbol name "_symbol"))
 		 (set! type-symbols (cons (cons type name) type-symbols))
 		 name))))
@@ -325,7 +328,6 @@
 	  (let ((num-args (length arg-types))
 		(base-name (string-append (if (> (length prefix) 0) prefix "s7_") "_" func-name)) ; not "g" -- collides with glib
 		(scheme-name (string-append prefix (if (> (length prefix) 0) ":" "") func-name)))
-	  
 	    (if (and (= num-args 1) 
 		     (eq? (car arg-types) 'void))
 		(set! num-args 0))
@@ -344,11 +346,9 @@
 	      (do ((i 0 (+ i 1))
 		   (type arg-types (cdr type)))
 		  ((= i num-args))
-		
 		(let* ((nominal-type ((if (pair? (car type)) caar car) type))  ; double in the example
 		       (true-type    ((if (pair? (car type)) cadar car) type))
-		       (s7-type      (C-type->s7-type true-type)))                    ; real
-
+		       (s7-type      (C-type->s7-type true-type)))             ; real
 		  (format pp "  arg = s7_car(p);~%")
 		  (if (eq? true-type 's7_pointer)
 		      (format pp "    ~A_~D = arg;~%" base-name i)
