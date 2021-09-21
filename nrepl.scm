@@ -614,16 +614,17 @@
 	    ;; we load lint above, at which time it sets its *output-port* to *stderr* (the global built-in port), but
 	    ;;   when called in the repl, we have over-ridden *stderr* to place that output in the notcurses display,
 	    ;;   so we need to redirect lint's output by hand.
-	    (set! lint ; force top-level change
-	      (let ((old-lint lint))
-		(lambda* (file (outp :unset) (report-input :unset))
-		  (if (and (eq? outp :unset)
-			   (eq? report-input :unset))
-		      (nc-multiline-display
-		       (call-with-output-string
-			(lambda (p)
-			  (old-lint file p))))
-		      (old-lint file outp report-input)))))
+	    (when with-lint
+	      (set! lint ; force top-level change
+		    (let ((old-lint lint))
+		      (lambda* (file (outp :unset) (report-input :unset))
+			(if (and (eq? outp :unset)
+				 (eq? report-input :unset))
+			    (nc-multiline-display
+			     (call-with-output-string
+			      (lambda (p)
+				(old-lint file p))))
+			    (old-lint file outp report-input))))))
 
 
 	    ;; -------- top-level-let --------

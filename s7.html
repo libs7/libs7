@@ -6909,9 +6909,7 @@ int main(int argc, char **argv)
 </p>
 
 <pre class="indented">
-in Linux: gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic -Wno-stringop-overflow
-in *BSD:  gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm -Wl,-export-dynamic
-in OSX:   gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
+gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core
 </pre>
 
 

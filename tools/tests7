@@ -122,3 +122,5 @@ gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 valgrind repl s7test.scm
 valgrind repl fulltest.scm
+
+gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core

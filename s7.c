@@ -4038,8 +4038,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_CSA, HOP_SAFE_C_CSA, OP_SAFE_C_SCA, HOP_SAFE_C_SCA, OP_SAFE_C_ASS, HOP_SAFE_C_ASS,
       OP_SAFE_C_CAC, HOP_SAFE_C_CAC, OP_SAFE_C_AGG, HOP_SAFE_C_AGG,
       OP_SAFE_C_opAq, HOP_SAFE_C_opAq, OP_SAFE_C_opAAq, HOP_SAFE_C_opAAq, OP_SAFE_C_opAAAq, HOP_SAFE_C_opAAAq,
-      OP_SAFE_C_S_opAq, HOP_SAFE_C_S_opAq, OP_SAFE_C_opAq_S, HOP_SAFE_C_opAq_S,
-      OP_SAFE_C_S_opAAq, HOP_SAFE_C_S_opAAq, OP_SAFE_C_S_opAAAq, HOP_SAFE_C_S_opAAAq,
+      OP_SAFE_C_S_opAq, HOP_SAFE_C_S_opAq, OP_SAFE_C_opAq_S, HOP_SAFE_C_opAq_S, OP_SAFE_C_S_opAAq, HOP_SAFE_C_S_opAAq, 
       OP_SAFE_C_STAR, HOP_SAFE_C_STAR, OP_SAFE_C_STAR_A, HOP_SAFE_C_STAR_A,
       OP_SAFE_C_STAR_AA, HOP_SAFE_C_STAR_AA, OP_SAFE_C_STAR_NA, HOP_SAFE_C_STAR_NA,
       OP_SAFE_C_P, HOP_SAFE_C_P,
@@ -4097,6 +4096,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
       OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA, OP_F, OP_F_A, OP_F_AA,
+
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
@@ -4262,8 +4262,7 @@ static const char* op_names[NUM_OPS] =
       "safe_c_csa", "h_safe_c_csa", "safe_c_sca", "h_safe_c_sca", "safe_c_ass", "h_safe_c_ass",
       "safe_c_cac", "h_safe_c_cac", "safe_c_agg", "h_safe_c_agg",
       "safe_c_opaq", "h_safe_c_opaq", "safe_c_opaaq", "h_safe_c_opaaq", "safe_c_opaaaq", "h_safe_c_opaaaq",
-      "safe_c_s_opaq", "h_safe_c_s_opaq", "safe_c_opaq_s", "h_safe_c_opaq_s",
-      "safe_c_s_opaaq", "h_safe_c_s_opaaq", "safe_c_s_opaaaq", "h_safe_c_s_opaaaq",
+      "safe_c_s_opaq", "h_safe_c_s_opaq", "safe_c_opaq_s", "h_safe_c_opaq_s", "safe_c_s_opaaq", "h_safe_c_s_opaaq", 
       "safe_c_function*", "h_safe_c_function*", "safe_c_function*_a", "h_safe_c_function*_a",
       "safe_c_function*_aa", "h_safe_c_function*_aa", "safe_c_function*_fx", "h_safe_c_function*_fx",
       "safe_c_p", "h_safe_c_p",
@@ -4320,6 +4319,7 @@ static const char* op_names[NUM_OPS] =
       "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
       "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa", "f", "f_a", "f_aa",
+
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
       "implicit_string_ref_a", "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_pair_ref_aa",
@@ -21595,6 +21595,12 @@ static s7_pointer quotient_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #endif
 }
 
+static s7_pointer quotient_p_pi(s7_scheme *sc, s7_pointer x, s7_int y)
+{
+  if ((is_t_integer(x)) && ((y > 0) || (y < -1))) return(make_integer(sc, integer(x) / y));
+  return(quotient_p_pp(sc, x, wrap_integer(sc, y)));
+}
+
 static s7_pointer g_quotient(s7_scheme *sc, s7_pointer args)
 {
   #define H_quotient "(quotient x1 x2) returns the integer quotient of x1 and x2; (quotient 4 3) = 1"
@@ -21862,6 +21868,12 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #endif
 }
 
+static s7_pointer remainder_p_pi(s7_scheme *sc, s7_pointer x, s7_int y)
+{
+  if ((is_t_integer(x)) && ((y > 1) || (y < -1))) return(make_integer(sc, integer(x) % y));
+  return(remainder_p_pp(sc, x, wrap_integer(sc, y)));
+}
+
 static s7_pointer g_remainder(s7_scheme *sc, s7_pointer args)
 {
   #define H_remainder "(remainder x1 x2) returns the remainder of x1/x2; (remainder 10 3) = 1"
@@ -22094,6 +22106,12 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
       return(method_or_bust_pp(sc, x, sc->modulo_symbol, x, y, T_REAL, 1));
     }
 #endif
+}
+
+static s7_pointer modulo_p_pi(s7_scheme *sc, s7_pointer x, s7_int y)
+{
+  if (is_t_integer(x)) return(make_integer(sc, modulo_i_ii(integer(x), y)));
+  return(modulo_p_pp(sc, x, wrap_integer(sc, y)));
 }
 
 static s7_pointer g_modulo(s7_scheme *sc, s7_pointer args)
@@ -55334,19 +55352,6 @@ static s7_pointer fx_c_s_opaaq(s7_scheme *sc, s7_pointer code)
   return(fn_proc(code)(sc, sc->t2_1));
 }
 
-static s7_pointer fx_c_s_opaaaq(s7_scheme *sc, s7_pointer code)
-{
-  s7_pointer arg = caddr(code);
-  gc_protect_2_via_stack(sc, fx_call(sc, cdr(arg)), fx_call(sc, opt3_pair(arg)));      /* cddr(arg) */
-  set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg))));
-  set_car(sc->t3_1, stack_protected1(sc));
-  set_car(sc->t3_2, stack_protected2(sc));
-  unstack(sc);
-  set_car(sc->t2_2, fn_proc(arg)(sc, sc->t3_1));
-  set_car(sc->t2_1, lookup(sc, cadr(code)));
-  return(fn_proc(code)(sc, sc->t2_1));
-}
-
 static s7_pointer fx_c_4a(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer res = cdr(code);
@@ -69721,20 +69726,15 @@ static int32_t combine_ops(s7_scheme *sc, s7_pointer func, s7_pointer expr, comb
 	{
 	case OP_SAFE_C_S:   return(OP_SAFE_C_S_opSq);
 	case OP_SAFE_C_AA:  return(OP_SAFE_C_S_opAAq);
-	case OP_SAFE_C_AAA: return(OP_SAFE_C_S_opAAAq);
-
 	case OP_SAFE_C_SC:
 	  set_opt2_con(cdr(expr), caddr(arg));
 	  return(OP_SAFE_C_S_opSCq);
-
 	case OP_SAFE_C_CS:	  /* expr is (* a (- 1 b)), e2 is (- 1 b) */
 	  set_opt2_sym(cdr(expr), caddr(arg));
 	  return(OP_SAFE_C_S_opCSq);
-
 	case OP_SAFE_C_SS:	  /* (* a (- b c)) */
 	  set_opt2_sym(cdr(expr), caddr(arg));
 	  return(OP_SAFE_C_S_opSSq);
-
 	case OP_SAFE_C_A:
 	  set_opt3_pair(expr, cdaddr(expr));
 	  return(OP_SAFE_C_S_opAq);
@@ -89574,7 +89574,7 @@ static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t ty
   return(false);
 }
 
-static inline bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
+static /* inline */ bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
 {
   s7_pointer f;
   f = lookup_unexamined(sc, car(code));
@@ -89734,9 +89734,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_SAFE_C_S_opAAq: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_S_opAAq: sc->value = fx_c_s_opaaq(sc, sc->code); continue;
-
-	case OP_SAFE_C_S_opAAAq: if (!c_function_is_ok(sc, sc->code)) break;
-	case HOP_SAFE_C_S_opAAAq: sc->value = fx_c_s_opaaaq(sc, sc->code); continue;
 
 	case OP_SAFE_C_AA: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_AA: sc->value = fx_c_aa(sc, sc->code); continue;
@@ -92561,7 +92558,6 @@ static void init_fx_function(void)
   fx_function[HOP_SAFE_C_opAq_S] = fx_c_opaq_s;
   fx_function[HOP_SAFE_C_S_opAq] = fx_c_s_opaq;
   fx_function[HOP_SAFE_C_S_opAAq] = fx_c_s_opaaq;
-  fx_function[HOP_SAFE_C_S_opAAAq] = fx_c_s_opaaaq;
 
   fx_function[HOP_SSA_DIRECT] = fx_c_ssa_direct;
   fx_function[HOP_HASH_TABLE_INCREMENT] = fx_hash_table_increment;
@@ -92820,8 +92816,11 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_ii_function(sc, global_value(sc->subtract_symbol), subtract_p_ii);
 
   s7_set_p_pp_function(sc, global_value(sc->modulo_symbol), modulo_p_pp);
+  s7_set_p_pi_function(sc, global_value(sc->modulo_symbol), modulo_p_pi);
   s7_set_p_pp_function(sc, global_value(sc->remainder_symbol), remainder_p_pp);
+  s7_set_p_pi_function(sc, global_value(sc->remainder_symbol), remainder_p_pi);
   s7_set_p_pp_function(sc, global_value(sc->quotient_symbol), quotient_p_pp);
+  s7_set_p_pi_function(sc, global_value(sc->quotient_symbol), quotient_p_pi);
   s7_set_p_pp_function(sc, global_value(sc->subtract_symbol), subtract_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->add_symbol), add_p_pp);
   s7_set_p_ppp_function(sc, global_value(sc->add_symbol), add_p_ppp);
@@ -94719,7 +94718,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 932) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 930) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -94949,7 +94948,6 @@ void s7_free(s7_scheme *sc)
 #endif
 
 #if WITH_MAIN && WITH_NOTCURSES
-  #define S7_MAIN 1
   #include "nrepl.c"
   /* gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core */
 #else
@@ -95110,24 +95108,24 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  * tpeak       123          115    114    110    110
  * tref        552          691    687    476    463
- * tauto       785          648    642    496    495
+ * tauto       785          648    642    496    496
  * index      1031         1026   1016    981    980
- * tmock      7756         1177   1165   1090   1088  1063
+ * tmock      7756         1177   1165   1090   1063
  * tvect      1915         2456   2413   1735   1712
  * texit      1933         ----   ----   1886   1791
- * s7test     4514         1873   1831   1792   1795  1786
- * lt         2129         2123   2110   2120   2117
- * tform      3245         2281   2273   2255   2250  2245
- * tmac       2429         3317   3277   2409   2419  2422
- * tread      2591         2440   2421   2415   2416
+ * s7test     4514         1873   1831   1792   1794
+ * lt         2129         2123   2110   2120   2118
+ * tform      3245         2281   2273   2255   2253
+ * tmac       2429         3317   3277   2409   2422
+ * tread      2591         2440   2421   2415   2413
  * fbench     2852         2688   2583   2475   2475
  * trclo      4118         2735   2574   2475   2482
- * tmat       2648         3065   3042   2530   2520  2511
+ * tmat       2648         3065   3042   2530   2522
  * tcopy      2745         8035   5546   2550   2557
- * dup        2760         3805   3788   2565   2556  2553
- * tb         3375         2735   2681   2627   2627  2625
- * titer      2678         2865   2842   2679   2677
- * tsort      3590         3105   3104   2860   2853
+ * dup        2760         3805   3788   2565   2555
+ * tb         3375         2735   2681   2627   2626
+ * titer      2678         2865   2842   2679   2679
+ * tsort      3590         3105   3104   2860   2855
  * tset       3100         3253   3104   3089   3090
  * tload      3849         ----   ----   3142   3145
  * teq        3542         4068   4045   3570   3556
@@ -95137,24 +95135,24 @@ int main(int argc, char **argv)
  * tcase      4550         4960   4793   4444   4447
  * tmap       5984         8869   8774   4493   4493
  * tfft      115.1         7820   7729   4787   4787
- * tshoot     6946         5525   5447   5220   5198
- * tnum       56.7         6348   6013   5443   5440
+ * tshoot     6946         5525   5447   5220   5195
+ * tnum       56.7         6348   6013   5443   5443
  * tstr       8059         6880   6342   5776   5542
  * tgsl       25.2         8485   7802   6397   6395
  * trec       8338         6936   6922   6553   6553
  * tmisc      7217         8960   7699   6597   6564
- * tari       ----         13.1   12.8   7293   6814
- * tlist      6834         7896   7546   6865   6860  6844
- * tgc        10.1         11.9   11.1   8668   8642  8657 [eval]
- * thash      35.4         11.8   11.7   9775   9725
- * cb         18.8         12.2   12.2   11.1   10.9  10.6
- * tgen       12.1         11.2   11.4   11.5   11.5  11.6
+ * tlist      6834         7896   7546   6865   6844
+ * tari       ----         13.0   12.7   7055   6864
+ * tgc        10.1         11.9   11.1   8668   8657
+ * thash      35.4         11.8   11.7   9775   9726
+ * cb         18.8         12.2   12.2   11.1   10.6
+ * tgen       12.1         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1   37.1  37.0
- * sg         80.0         ----   ----   56.1   56.1
- * lg        104.5        106.6  105.0  104.4  104.4  104.3
+ * calls      58.0         36.7   37.5   37.1   37.1
+ * sg         80.0         ----   ----   56.1   56.0
+ * lg        104.5        106.6  105.0  104.4  104.3
  * tbig      635.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
  *
- * maybe quotient/remainder/modulo p_pi?
+ * data-specific files?
  */
