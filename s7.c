@@ -2591,8 +2591,13 @@ static void init_types(void)
 
 #define T_KEYWORD                      (1LL << (TYPE_BITS + BIT_ROOM + 31))
 #define T_SHORT_KEYWORD                (1 << 7)
-#define is_keyword(p)                  has_type1_bit(T_Pos(p), T_SHORT_KEYWORD)
+#define is_keyword(p)                  has_type1_bit(T_Sym(p), T_SHORT_KEYWORD)
+#define is_symbol_and_keyword(p)       ((is_symbol(p)) && (is_keyword(p)))
 /* this bit distinguishes a symbol from a symbol that is also a keyword */
+
+#define T_FX_TREEABLE                  T_SHORT_KEYWORD
+#define is_fx_treeable(p)              has_type1_bit(T_Pair(p), T_FX_TREEABLE)
+#define set_is_fx_treeable(p)          set_type1_bit(T_Pair(p), T_FX_TREEABLE)
 
 #define T_FULL_SIMPLE_ELEMENTS         (1LL << (TYPE_BITS + BIT_ROOM + 32))
 #define T_SIMPLE_ELEMENTS              (1 << 8)
@@ -4732,7 +4737,9 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	  ((full_typ & T_CYCLIC_SET) != 0) ?     (((is_simple_sequence(obj)) || (t_structure_p[type(obj)]) ||
 						   (is_any_closure(obj))) ? " cyclic-set" : " ?30?") : "",
 	  /* bit 31+24 */
-	  ((full_typ & T_KEYWORD) != 0) ?        ((is_symbol(obj)) ? " keyword" : " ?31?") : "",
+	  ((full_typ & T_KEYWORD) != 0) ?        ((is_symbol(obj)) ? " keyword" : 
+						  ((is_pair(obj)) ? " fx-treeable" :
+						   " ?31?")) : "",
 	  /* bit 32+24 */
 	  ((full_typ & T_FULL_SIMPLE_ELEMENTS) != 0) ? ((is_normal_vector(obj)) ? " simple-elements" :
 							((is_hash_table(obj)) ? " simple-keys" :
@@ -4781,7 +4788,7 @@ static bool has_odd_bits(s7_pointer obj)
   uint64_t full_typ = full_type(obj);
   if ((full_typ & UNUSED_BITS) != 0) return(true);
   if (((full_typ & T_MULTIFORM) != 0) && (!is_any_closure(obj))) return(true);
-  if (((full_typ & T_KEYWORD) != 0) && ((!is_symbol(obj)) || (!is_global(obj)) || (is_gensym(obj)))) return(true);
+  if (((full_typ & T_KEYWORD) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_SYNTACTIC) != 0) && (!is_syntax(obj)) && (!is_pair(obj)) && (!is_normal_symbol(obj))) return(true);
   if (((full_typ & T_SIMPLE_ARG_DEFAULTS) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_OPTIMIZED) != 0) && (!is_c_function(obj)) && (!is_pair(obj))) return(true);
@@ -9425,7 +9432,7 @@ static s7_pointer inlet_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_po
     {
       s7_pointer p;
       for (p = cdr(expr); is_pair(p); p = cddr(p))
-	if (!is_keyword(car(p)))
+	if (!is_symbol_and_keyword(car(p)))
 	  {
 	    s7_pointer sym;
 	    if (!is_proper_quote(sc, car(p)))             /* 'abs etc, but tricky: ':abs */
@@ -10839,13 +10846,13 @@ s7_pointer s7_define_constant_with_documentation(s7_scheme *sc, const char *name
 
 
 /* -------------------------------- keyword? -------------------------------- */
-bool s7_is_keyword(s7_pointer obj) {return(is_keyword(obj));}
+bool s7_is_keyword(s7_pointer obj) {return(is_symbol_and_keyword(obj));}
 
 static s7_pointer g_is_keyword(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_keyword "(keyword? obj) returns #t if obj is a keyword, (keyword? :rest) -> #t"
   #define Q_is_keyword sc->pl_bt
-  check_boolean_method(sc, is_keyword, sc->is_keyword_symbol, args);
+  check_boolean_method(sc, is_symbol_and_keyword, sc->is_keyword_symbol, args);
 }
 
 
@@ -10889,7 +10896,7 @@ static s7_pointer g_keyword_to_symbol(s7_scheme *sc, s7_pointer args)
   #define Q_keyword_to_symbol s7_make_signature(sc, 2, sc->is_symbol_symbol, sc->is_keyword_symbol)
 
   s7_pointer sym = car(args);
-  if (!is_keyword(sym))
+  if (!is_symbol_and_keyword(sym))
     return(method_or_bust_with_type_one_arg(sc, sym, sc->keyword_to_symbol_symbol, args, wrap_string(sc, "a keyword", 9)));
   return(keyword_symbol(sym));
 }
@@ -10939,9 +10946,12 @@ void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_ty
   if ((c_pointer(p) != NULL) &&
       (c_pointer_type(p) != expected_type))
     return(s7_error(sc, sc->wrong_type_arg_symbol,
-		    set_elist_5(sc, wrap_string(sc, "~S argument ~D got a pointer of type ~S, but expected ~S", 56),
-				wrap_string(sc, caller, strlen(caller)),
-				make_integer(sc, argnum), c_pointer_type(p), expected_type)));
+		    (argnum == 0) ? 
+		      set_elist_4(sc, wrap_string(sc, "~S argument is a pointer of type ~S, but expected ~S", 52),
+				wrap_string(sc, caller, strlen(caller)), c_pointer_type(p), expected_type) :
+		      set_elist_5(sc, wrap_string(sc, "~S argument ~D got a pointer of type ~S, but expected ~S", 56),
+				  wrap_string(sc, caller, strlen(caller)),
+				  make_integer(sc, argnum), c_pointer_type(p), expected_type)));
   return(c_pointer(p));
 }
 
@@ -46098,7 +46108,7 @@ static s7_pointer b_is_goto_setter(s7_scheme *sc, s7_pointer args)         {retu
 static s7_pointer b_is_number_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, s7_is_complex, args, "a number", 8);}
 static s7_pointer b_is_complex_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, s7_is_complex, args, "a number", 8);}
 static s7_pointer b_is_gensym_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, is_gensym, args, "a gensym", 8);}
-static s7_pointer b_is_keyword_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, is_keyword, args, "a keyword", 9);}
+static s7_pointer b_is_keyword_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, is_symbol_and_keyword, args, "a keyword", 9);}
 static s7_pointer b_is_openlet_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, has_methods, args, "an open let", 11);}
 static s7_pointer b_is_macro_setter(s7_scheme *sc, s7_pointer args)       {b_setter(sc, is_any_macro, args, "a macro", 7);}
 static s7_pointer b_is_integer_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, s7_is_integer, args, "an integer", 10);}
@@ -52316,7 +52326,7 @@ static s7_pointer set_c_function_star_args(s7_scheme *sc)
   /* assume at the start that there are no keywords */
   for (i = 0, arg = sc->args, par = call_args; (i < n_args) && (is_pair(arg)); i++, arg = cdr(arg), par = cdr(par))
     {
-      if (!is_keyword(car(arg)))
+      if (!is_symbol_and_keyword(car(arg)))
 	set_car(par, car(arg));
       else
 	{
@@ -52331,7 +52341,7 @@ static s7_pointer set_c_function_star_args(s7_scheme *sc)
 	    clear_checked(kpar);
 	  df = c_function_arg_names(func);
 	  for (ki = i, karg = arg, kpar = par; (ki < n_args) && (is_pair(karg)); ki++, karg = cdr(karg))
-	    if (!is_keyword(car(karg)))
+	    if (!is_symbol_and_keyword(car(karg)))
 	      {
 		if (is_checked(kpar))
 		  return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, parameter_set_twice_string, car(kpar), sc->args)));
@@ -53451,7 +53461,7 @@ static s7_pointer fx_is_pair_s(s7_scheme *sc, s7_pointer arg)      {return((is_p
 static s7_pointer fx_is_pair_t(s7_scheme *sc, s7_pointer arg)      {return((is_pair(t_lookup(sc, cadr(arg), arg))) ? sc->T : sc->F);}
 static s7_pointer fx_is_pair_u(s7_scheme *sc, s7_pointer arg)      {return((is_pair(u_lookup(sc, cadr(arg), arg))) ? sc->T : sc->F);}
 static s7_pointer fx_is_pair_v(s7_scheme *sc, s7_pointer arg)      {return((is_pair(v_lookup(sc, cadr(arg), arg))) ? sc->T : sc->F);}
-static s7_pointer fx_is_keyword_s(s7_scheme *sc, s7_pointer arg)   {return((is_keyword(lookup(sc, cadr(arg)))) ? sc->T : sc->F);}
+static s7_pointer fx_is_keyword_s(s7_scheme *sc, s7_pointer arg)   {return((is_symbol_and_keyword(lookup(sc, cadr(arg)))) ? sc->T : sc->F);}
 static s7_pointer fx_is_vector_s(s7_scheme *sc, s7_pointer arg)    {return((is_any_vector(lookup(sc, cadr(arg)))) ? sc->T : sc->F);}
 static s7_pointer fx_is_vector_t(s7_scheme *sc, s7_pointer arg)    {return((is_any_vector(t_lookup(sc, cadr(arg), arg))) ? sc->T : sc->F);}
 static s7_pointer fx_is_proper_list_s(s7_scheme *sc, s7_pointer arg) {return((s7_is_proper_list(sc, lookup(sc, cadr(arg)))) ? sc->T : sc->F);}
@@ -55492,7 +55502,7 @@ static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
   for (x = cdr(code); is_pair(x); x = cddr(x))
     {
       s7_pointer symbol = car(x), value;
-      symbol = (is_keyword(symbol)) ? keyword_symbol(symbol) : cadr(symbol);  /* (inlet ':allow-other-keys 3) */
+      symbol = (is_symbol_and_keyword(symbol)) ? keyword_symbol(symbol) : cadr(symbol);  /* (inlet ':allow-other-keys 3) */
       if (is_constant_symbol(sc, symbol))     /* (inlet 'pi 1) */
 	return(wrong_type_argument_with_type(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string));
       value = fx_call(sc, cdr(x));            /* it's necessary to do this first, before add_slot_unchecked */
@@ -64065,7 +64075,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 		      /* here we know the let is a covered mutable let -- ?? not true if s7-optimize called explicitly */
 		      if ((is_pair(cddr(target))) || (has_methods(obj)))
 			return_false(sc, car_x);
-		      if ((is_keyword(cadr(target))) ||
+		      if ((is_symbol_and_keyword(cadr(target))) ||
 			  ((is_quoted_symbol(cadr(target)))))
 			opc->v[3].p_ppp_f = let_set_1;
 		      else opc->v[3].p_ppp_f = let_set_p_ppp_2;
@@ -71421,7 +71431,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
   if ((is_c_function_star(func)) &&
       (fx_count(sc, expr) == 1) &&
       (c_function_all_args(func) >= 1) &&
-      (!is_keyword(arg1)))           /* the only arg should not be a keyword (needs error checks later) */
+      (!is_symbol_and_keyword(arg1)))           /* the only arg should not be a keyword (needs error checks later) */
     {
       if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       set_safe_optimize_op(expr, hop + OP_SAFE_C_STAR_A);
@@ -71442,7 +71452,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
 
   if ((func == sc->s7_let) &&         /* (*s7* ...) */
       (((quotes == 1) && (is_symbol(cadr(arg1)))) ||
-       (is_keyword(arg1))))
+       (is_symbol_and_keyword(arg1))))
     {
       s7_pointer sym;
       sym = (quotes == 1) ? cadr(arg1) : arg1;
@@ -71558,7 +71568,7 @@ static void fixup_closure_star_aa(s7_scheme *sc, s7_pointer f, s7_pointer code, 
   set_opt3_arglen(cdr(code), int_two);
   set_unsafely_optimized(code);
 
-  if ((arity == 1) && (is_keyword(arg1)) && (keyword_symbol(arg1) == par1))
+  if ((arity == 1) && (is_symbol_and_keyword(arg1)) && (keyword_symbol(arg1) == par1))
     set_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_KA : OP_CLOSURE_STAR_KA));
   else
     if ((lambda_has_simple_defaults(f)) && (arity == 2))
@@ -72204,7 +72214,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
   if ((is_c_function_star(func)) &&
       (fx_count(sc, expr) == 2) &&
       (c_function_all_args(func) >= 1) &&
-      (!is_keyword(arg2)))
+      (!is_symbol_and_keyword(arg2)))
     {
       if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       set_optimized(expr);
@@ -74225,6 +74235,19 @@ static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
 	 (is_definer_or_binder(tree)));
 }
 
+static void mark_fx_treeable(s7_scheme *sc, s7_pointer body)
+{
+  if (is_pair(body))
+    {
+      if (is_pair(car(body)))
+	{
+	  set_is_fx_treeable(body);
+	  mark_fx_treeable(sc, car(body));
+	}
+      mark_fx_treeable(sc, cdr(body));
+    }
+}
+
 static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer func, s7_pointer args, s7_pointer body)
 {                                                                 /* func is either sc->unused or a symbol */
   s7_int len;
@@ -74297,10 +74320,11 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	  if (result >= RECUR_BODY)
 	    {
 	      int32_t nvars;
-	      for (nvars = 0, p = args; (is_pair(p)) && (!is_keyword(car(p))); nvars++, p = cdr(p));
+	      for (nvars = 0, p = args; (is_pair(p)) && (!is_symbol_and_keyword(car(p))); nvars++, p = cdr(p));
 	      if ((is_null(p)) &&
 		  (nvars > 0))
 		{
+		  mark_fx_treeable(sc, body);
 		  fx_annotate_args(sc, body, cleared_args); /* almost useless -- we need a recursive traversal here but that collides with check_if et al */
 		  fx_tree(sc, body, /* this usually costs more than it saves! */
 			    (is_pair(car(args))) ? caar(args) : car(args),
@@ -76178,7 +76202,7 @@ static bool op_let_temp_done1(s7_scheme *sc)
       car(sc->args) = cdar(sc->args);
 
       if ((is_pair(settee)) && (car(settee) == sc->s7_let_symbol) &&  /* (let-temporarily (((*s7* (symbol "print-length")) 43))...) */
-	  ((is_keyword(cadr(settee))) ||
+	  ((is_symbol_and_keyword(cadr(settee))) ||
 	   ((is_pair(cadr(settee))) && (caadr(settee) == sc->quote_symbol) && (is_symbol(cadadr(settee))))))
 	{
 	  s7_pointer sym = cadr(settee);
@@ -76512,22 +76536,37 @@ static bool op_or_ap(s7_scheme *sc)
 static void fx_safe_closure_tree(s7_scheme *sc)
 {
   s7_pointer e = sc->curlet;
+  /* fprintf(stderr, "e: %s, is_funclet: %d\n", display(e), is_funclet(e)); */
   if ((is_let(e)) &&              /* e might be sc->nil */
       (is_funclet(e)) &&
       (tis_slot(let_slots(e))))   /* let_slots might be NULL */
     {
       s7_pointer f;
       f = lookup(sc, funclet_function(e));
+      /* fprintf(stderr, "f: %s, safe: %d\n", display(f), is_safe_closure(f)); */
       if (is_safe_closure(f))
 	{
-	  s7_pointer slot1 = let_slots(e), slot2;
+	  s7_pointer slot1 = let_slots(e), slot2, slot3 = NULL;
 	  slot2 = next_slot(slot1);
+	  if (tis_slot(slot2)) slot3 = next_slot(slot2);
 	  fx_tree(sc, closure_body(f),
 		  slot_symbol(slot1),
 		  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
-		  ((tis_slot(slot2)) && (tis_slot(next_slot(slot2)))) ? slot_symbol(next_slot(slot2)) : NULL,
-		  ((tis_slot(slot2)) && (tis_slot(next_slot(slot2)))));
+		  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
+		  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
 	}}
+}
+
+static void fx_curlet_tree(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer slot1 = let_slots(sc->curlet), slot2, slot3 = NULL;
+  slot2 = next_slot(slot1);
+  if (tis_slot(slot2)) slot3 = next_slot(slot2);
+  fx_tree(sc, code,
+	  slot_symbol(slot1),
+	  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
+	  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
+	  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
 }
 
 static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_function fx, opcode_t op)
@@ -76560,6 +76599,8 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
       not_case = true;
       test = cadr(test);
     }
+
+  /* fprintf(stderr, "%s %d %d %p\n", display(form), is_fx_treeable(form), is_fx_treeable(code), code); */
 
   set_opt1_any(form, cadr(code));
   if (!one_branch) set_opt2_any(form, caddr(code));
@@ -76647,6 +76688,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		}
 	      else set_fx_direct(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
 
+	      /* fprintf(stderr, "%s %d\n", op_names[optimize_op(form)], is_fx_treeable(code)); */
 	      if (optimize_op(form) == OP_IF_A_P)
 		{
 		  if (is_fxable(sc, cadr(code)))
@@ -76657,7 +76699,15 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		      fx_safe_closure_tree(sc);
 		      fb_annotate(sc, form, fx_proc(code), OP_IF_B_A);
 		    }
-		  else fb_annotate(sc, form, fx_proc(code), OP_IF_B_P);
+		  else 
+		    {
+#if 0
+		      /* see below -- curlet order can change? maybe check that curlet is permanent? */
+		      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet))))
+			fx_curlet_tree(sc, code);
+#endif
+		      fb_annotate(sc, form, fx_proc(code), OP_IF_B_P);
+		    }
 		}
 	      if (optimize_op(form) == OP_IF_A_R)
 		fb_annotate(sc, form, fx_proc(code), OP_IF_B_R);
@@ -77279,7 +77329,7 @@ static bool op_define_constant(s7_scheme *sc)
   if ((!is_pair(code)) || (!is_pair(cdr(code)))) /* (define-constant) */
     eval_error(sc, "define-constant: not enough arguments: ~S", 41, sc->code);
 
-  if (is_keyword(car(code)))                   /* (define-constant :rest :allow-other-keys) */
+  if (is_symbol_and_keyword(car(code)))                   /* (define-constant :rest :allow-other-keys) */
     {
       if (car(code) == cadr(code))             /* (define-constant pi pi) returns pi */
 	{
@@ -78275,7 +78325,7 @@ static void check_set(s7_scheme *sc)
 			{
 			  s7_pointer obj;
 			  if ((car(inner) == sc->s7_let_symbol) &&
-			      (is_keyword(cadr(inner))))
+			      (is_symbol_and_keyword(cadr(inner))))
 			    {
 			      pair_set_syntax_op(form, OP_IMPLICIT_S7_LET_SET_SA);
 			      fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
@@ -83200,14 +83250,14 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
       if (car(cx) == sc->key_rest_symbol)           /* the rest arg: a default is not allowed here (see check_lambda_star_args) */
 	{
 	  /* next arg is bound to trailing args from this point as a list */
-	  zx = sc->key_rest_symbol;
 	  cx = cdr(cx);
-	  if ((is_keyword(car(lx))) &&
+	  if ((is_symbol_and_keyword(car(lx))) &&
 	      (is_pair(cdr(lx))) &&
 	      (keyword_symbol(car(lx)) == car(cx)))
 	    return(s7_error(sc, sc->wrong_type_arg_symbol,
 			    set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), car(cx), cadr(lx))));
 	  lambda_star_argument_set_value(sc, car(cx), lx, slot, false);
+	  zx = sc->key_rest_symbol;
 	  lx = cdr(lx);
 	  cx = cdr(cx);
 	  slot = next_slot(slot);
@@ -83215,7 +83265,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
       else
 	{
 	  s7_pointer car_lx = car(lx);
-	  if (is_keyword(car_lx))
+	  if (is_symbol_and_keyword(car_lx))
 	    {
 	      if (!is_pair(cdr(lx)))
 		{
@@ -83281,7 +83331,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	{
 	  if (is_symbol(cx))
 	    {
-	      if ((is_keyword(car(lx))) &&
+	      if ((is_symbol_and_keyword(car(lx))) &&
 		  (is_pair(cdr(lx))) &&
 		  (keyword_symbol(car(lx)) == cx))
 		return(s7_error(sc, sc->wrong_type_arg_symbol,
@@ -83295,7 +83345,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	  /* check trailing args for repeated keys or keys with no values or values with no keys */
 	  while (is_pair(lx))
 	    {
-	      if ((!is_keyword(car(lx))) ||     /* ((lambda* (a :allow-other-keys) a) :a 1 :b 2 3) */
+	      if ((!is_symbol_and_keyword(car(lx))) ||     /* ((lambda* (a :allow-other-keys) a) :a 1 :b 2 3) */
 		  (!is_pair(cdr(lx))))          /* ((lambda* (a :allow-other-keys) a) :a 1 :b) */
 		return(s7_error(sc, sc->wrong_type_arg_symbol,
 				set_elist_3(sc, wrap_string(sc, "~A: not a key/value pair: ~S", 28), closure_name(sc, code), lx)));
@@ -83541,7 +83591,7 @@ static Inline s7_pointer op_safe_closure_star_a1(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer val, func = opt1_lambda(code);
   val = fx_call(sc, cdr(code));
-  if ((is_keyword(val)) &&
+  if ((is_symbol_and_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
     s7_error(sc, sc->wrong_type_arg_symbol,
 	     set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, func), val, sc->args));
@@ -83589,7 +83639,7 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
   sc->w = arg1; /* weak GC protection */
   arg2 = fx_call(sc, cddr(code));
 
-  if (is_keyword(arg1))
+  if (is_symbol_and_keyword(arg1))
     {
       if (keyword_symbol(arg1) == slot_symbol(let_slots(closure_let(func))))
 	{
@@ -83610,7 +83660,7 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
 				 closure_name(sc, func), arg1, code));  /* arg1 is already the value */
     }
   else
-    if ((is_keyword(arg2)) &&
+    if ((is_symbol_and_keyword(arg2)) &&
 	(!sc->accept_all_keyword_arguments))
       s7_error(sc, sc->wrong_type_arg_symbol,
 	       set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, func), arg2, code));
@@ -83628,7 +83678,7 @@ static bool op_safe_closure_star_aaa(s7_scheme *sc, s7_pointer code)
   arg2 = fx_call(sc, cddr(code));
   sc->v = arg2;
   arg3 = fx_call(sc, cdddr(code));
-  if ((is_keyword(arg1)) || (is_keyword(arg2)) || (is_keyword(arg3)))
+  if ((is_symbol_and_keyword(arg1)) || (is_symbol_and_keyword(arg2)) || (is_symbol_and_keyword(arg3)))
     {
       bool target;
       s7_pointer arglist;
@@ -83705,7 +83755,7 @@ static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer val, p, func;
   val = fx_call(sc, cdr(code));
-  if ((is_keyword(val)) &&
+  if ((is_symbol_and_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
     s7_error(sc, sc->wrong_type_arg_symbol,
 	     set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, opt1_lambda(code)), val, code));
@@ -87496,7 +87546,7 @@ static void op_safe_c_star_a(s7_scheme *sc)
 {
   s7_pointer p;
   p = fx_call(sc, cdr(sc->code));
-  if (is_keyword(p))
+  if (is_symbol_and_keyword(p))
     s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, value_is_missing_string, car(sc->code), p));
   /* scheme-level define* here also gives "not a parameter name" */
   sc->args = list_1(sc, p);
@@ -95130,7 +95180,7 @@ int main(int argc, char **argv)
  * tload      3849         ----   ----   3142   3145
  * teq        3542         4068   4045   3570   3556
  * tio        3684         3816   3752   3693   3697
- * tclo       4636         4787   4735   4402   4402
+ * tclo       4636         4787   4735   4402   4402  4414
  * tlet       5283         7775   5640   4431   4427
  * tcase      4550         4960   4793   4444   4447
  * tmap       5984         8869   8774   4493   4493
@@ -95155,4 +95205,10 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  *
  * data-specific files?
+ * t516
+ * t718 repl bug -- need context
+ * is pair car is pair in safe_closure(fxtreeable) mark with t_keyword bit, then in other fxtree places (set_if_opt) check keyword bit of tree
+ *   remove fx_safe_closure_tree, use fx_curlet_tree [fb choices will need to expand]
+ *   in snd-test 16: fx_lt_t0 (< start 0) is out of date (start in (inlet 'start -1 'len 123 'file-channel 0) -> 'file-channel 0)
+ *     from extensions.scm insert-channel: safe func but let var order changed? permanent let?
  */
