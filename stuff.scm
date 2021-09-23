@@ -979,37 +979,38 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 				 (cons (car slot) (cadr slot))
 				 (cons slot #f)))
 			   ,slots)                    ; the incoming new slots, #f is the default value
-		      new-slots))))                   ; the inherited slots
+		      new-slots)))                    ; the inherited slots
 
-     (set! new-methods
-	   (append (map (lambda (method)
-			  (if (pair? method)
-			      (cons (car method) (cadr method))
-			      (cons method #f)))
-			,methods)                     ; the incoming new methods
-
-		   ;; add an object->string method for this class (this is already a generic function).
-		   (list (cons 'object->string
-			       (lambda (obj . rest)
-				 (if (and (pair? rest)
-					  (eq? (car rest) :readable))    ; write readably
-				     (format #f "(make-~A~{ :~A ~W~^~})"
-					     ',class-name
-					     (map (lambda (slot)
-						    (values (car slot) (cdr slot)))
-						  obj))
-				     (format #f "#<~A: ~{~A~^ ~}>"
-					     ',class-name
-					     (map (lambda (slot)
-						    (list (car slot) (cdr slot)))
-						  obj))))))
-		   (reverse! new-methods)))                      ; the inherited methods, shadowed automatically
+       (set! new-methods
+	     (remove-duplicates
+	      (append (map (lambda (method)
+			     (if (pair? method)
+				 (cons (car method) (cadr method))
+				 (cons method #f)))
+			   ,methods)                     ; the incoming new methods
+		      
+		      ;; add an object->string method for this class (this is already a generic function).
+		      (list (cons 'object->string
+				  (lambda (obj . rest)
+				    (if (and (pair? rest)
+					     (eq? (car rest) :readable))    ; write readably
+					(format #f "(make-~A~{ :~A ~W~^~})"
+						',class-name
+						(map (lambda (slot)
+						       (values (car slot) (cdr slot)))
+						     obj))
+					(format #f "#<~A: ~{~A~^ ~}>"
+						',class-name
+						(map (lambda (slot)
+						       (list (car slot) (cdr slot)))
+						     obj))))))
+		      (reverse! new-methods)))))                  ; the inherited methods, shadowed automatically
 
      (let ((new-class (openlet
                        (apply sublet                             ; the local slots
 			      (sublet                            ; the global slots
 				  (apply inlet                   ; the methods
-					 (reverse new-methods))
+					 new-methods)
 				'class-name ',class-name         ; class-name slot
 				'inherited ,inherited-classes
 				'inheritors ())                  ; classes that inherit from this class

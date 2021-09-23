@@ -1854,7 +1854,7 @@ int main(int argc, char **argv)
       int gloc;
       gloc = s7_gc_protect(sc, p);
       s1 = TO_STR(p);
-      if (strcmp(s1, "((var1 . #f) (var2 . #t))") != 0)
+      if (strcmp(s1, "((var2 . #t) (var1 . #f))") != 0)
 	{fprintf(stderr, "%d: env->list: %s\n", __LINE__, s1);}
       free(s1);
       s7_gc_unprotect_at(sc, gloc);
