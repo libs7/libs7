@@ -406,10 +406,7 @@
 	      (set! (nccell_stylemask c1) 0)
 	      (ncplane_set_base_cell ncp c1)
 
-	      (unless (or header
-			  (not (= NOTCURSES_VERNUM_MAJOR 2))
-			  (< NOTCURSES_VERNUM_MINOR 3)
-			  (<= NOTCURSES_VERNUM_PATCH 13))
+	      (unless header
 		(set! header-row 1)
 		(set! row 1)
 		(set! header-cols nc-cols))

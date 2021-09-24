@@ -454,7 +454,6 @@
     (denote var-retcons (dilambda (lambda (v) (let-ref (cdr v) 'retcons)) (lambda (v x) (let-set! (cdr v) 'retcons x))))
     (denote var-arglist (dilambda (lambda (v) (let-ref (cdr v) 'arglist)) (lambda (v x) (let-set! (cdr v) 'arglist x))))
     (denote var-definer (dilambda (lambda (v) (let-ref (cdr v) 'definer)) (lambda (v x) (let-set! (cdr v) 'definer x))))
-    (denote var-leaves  (dilambda (lambda (v) (let-ref (cdr v) 'leaves))  (lambda (v x) (let-set! (cdr v) 'leaves x))))
     (denote var-scope   (dilambda (lambda (v) (let-ref (cdr v) 'scope))   (lambda (v x) (let-set! (cdr v) 'scope x))))
     (denote var-setters (dilambda (lambda (v) (let-ref (cdr v) 'setters)) (lambda (v x) (let-set! (cdr v) 'setters x))))
     (denote var-env     (dilambda (lambda (v) (let-ref (cdr v) 'env))     (lambda (v x) (let-set! (cdr v) 'env x))))
@@ -462,7 +461,6 @@
       (let ((val (let-ref (cdr v) 'arit)))
 	(and (not (eq? val #<undefined>))
 	     val)))
-    (denote var-match-list (dilambda (lambda (v) (let-ref (cdr v) 'match-list)) (lambda (v x) (let-set! (cdr v) 'match-list x))))
     (denote (var-initial-value v) (let-ref (cdr v) 'initial-value)) ; not (easily) settable
 
     (denote var-refenv
@@ -504,17 +502,18 @@
 	      (set-car! recent-names (list name definer initial-value))
 	      (set! recent-names (cdr recent-names))))
 |#
-	(cons name (inlet 'env ()
-			  'setters ()
-			  'definer definer
-			  'set 0
-			  'initial-value initial-value
-			  'scope ()
-			  'refenv ()
-			  'ref (length old)
-			  'history (if initial-value
+	(cons name (inlet 'history (if initial-value
 				       (cons initial-value old)
-				       old)))))
+				       old)
+			  'ref (length old)
+			  'scope ()
+			  'initial-value initial-value
+			  'refenv ()
+			  'set 0
+			  'definer definer
+			  'env ()
+			  'setters ()
+			  ))))
 
 
     ;; -------- the usual list functions --------
@@ -658,6 +657,11 @@
 	  (and (pair? sequence)
 	       (or (f (car sequence))
 		   (lint-any? f (cdr sequence)))))))
+
+    (denote (any-side-effect? form env vars)
+      (and (pair? form)
+	   (or (side-effect-with-vars? (car form) env vars)
+	       (any-side-effect? (cdr form) env vars))))
 
     (denote (any-pairs? sequence)
       (and (pair? sequence)
@@ -1250,9 +1254,7 @@
 		(let ((fv (copy v)))
 		  (let-set! (cdr fv) 'side-effect #f)
 		  (set! env (cons fv env)))
-		(lint-any? (lambda (f)
-			     (side-effect-with-vars? f env outvars))
-			   body))))))
+		(any-side-effect? body env outvars))))))
 
     (denote (tree-subst new old tree)
       (cond ((equal? old tree)
@@ -1909,24 +1911,22 @@
 			 (rf (if old (length old) 0))
 			 (ar (form->arity initial-value)))
 		     (cons name
-			   (inlet 'allow-other-keys allow-keys
-				  'setters ()
-				  'env env
-				  'nvalues nv
-				  'leaves #f
-				  'match-list #f
-				  'retcons #f
-				  'arit ar
-				  'arglist arglist
-				  'set 0
-				  'sig ()
-				  'side-effect ()
-				  'scope ()
-				  'refenv ()
-				  'initial-value initial-value
+			   (inlet 'history hist
+				  'ref rf
 				  'ftype ftype
-				  'history hist
-				  'ref rf))))))
+				  'scope ()
+				  'initial-value initial-value
+				  'set 0
+				  'refenv ()
+				  'env env
+				  'sig ()
+				  'arglist arglist
+				  'side-effect ()
+				  'setters ()
+				  'arit ar
+				  'retcons #f
+				  'nvalues nv
+				  'allow-other-keys allow-keys))))))
 	(reduce-function-tree new env)
 	new))
 
@@ -2180,7 +2180,7 @@
 		     (let case-effect? ((f (cddr form)))
 		       (and (pair? f)
 			    (or (not (pair? (car f)))
-				(lint-any? (lambda (ff) (side-effect-with-vars? ff env vars)) (cdar f))
+				(any-side-effect? (cdar f) env vars)
 				(case-effect? (cdr f)))))))
 
 		((cond)
@@ -2190,7 +2190,7 @@
 					(e env))
 		       (and (pair? f)
 			    (or (and (pair? (car f))
-				     (lint-any? (lambda (ff) (side-effect-with-vars? ff e vars)) (car f)))
+				     (any-side-effect? (car f) e vars))
 				(cond-effect? (cdr f) e))))))
 
 		((let let* letrec letrec*)
@@ -2219,9 +2219,7 @@
 				      (not (pair? (cdar f))) ; an error, reported elsewhere: (let ((x)) x)
 				      (side-effect-with-vars? (cadar f) e vars)
 				      (let-effect? (cdr f)))))
-			   (lint-any? (lambda (ff)
-					(side-effect-with-vars? ff e vars))
-				      body)))))
+			   (any-side-effect? body e vars)))))
 
 		((do)
 		 (or (< (length form) 3)
@@ -2235,8 +2233,8 @@
 				(and (pair? (cddar f))
 				     (side-effect-with-vars? (caddar f) e vars))
 				(do-effect? (cdr f) e))))
-		     (lint-any? (lambda (ff) (side-effect-with-vars? ff env vars)) (caddr form))
-		     (lint-any? (lambda (ff) (side-effect-with-vars? ff env vars)) (cdddr form))))
+		     (any-side-effect? (caddr form) env vars)
+		     (any-side-effect? (cdddr form) env vars)))
 
 		;; ((lambda lambda*) (lint-any? (lambda (ff) (side-effect-with-vars? ff env vars)) (cddr form))) ; this is trickier than it looks
 

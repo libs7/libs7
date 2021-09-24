@@ -33241,21 +33241,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
   free_cell(sc, p);  /* free_cell(sc, iterator); */ /* 18-Dec-18 removed */
 }
 
-static void funclet_slots_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
-{
-  int32_t i;
-  s7_pointer slot;
-  for (i = 1, slot = let_slots(obj); tis_slot(slot); i++, slot = next_slot(slot))
-    {
-      port_write_character(port)(sc, ' ', port);
-      object_to_port_with_circle_check(sc, slot, port, use_write, ci);
-      if ((tis_slot(next_slot(slot))) && (i == sc->print_length))
-	{
-	  port_write_string(port)(sc, " ...", 4, port);
-	  break;
-	}}
-}
-
 static void slot_list_to_port(s7_scheme *sc, s7_pointer slot, s7_pointer port, shared_info_t *ci, bool bindings)
 {
   for (; tis_slot(slot); slot = next_slot(slot))
@@ -33487,8 +33472,18 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 		    }}
 	      else /* not readable write */
 		{
+		  int32_t i;
+		  s7_pointer slot;
 		  port_write_string(port)(sc, "(inlet", 6, port);
-		  funclet_slots_to_port(sc, obj, port, use_write, ci);
+		  for (i = 1, slot = let_slots(obj); tis_slot(slot); i++, slot = next_slot(slot))
+		    {
+		      port_write_character(port)(sc, ' ', port);
+		      object_to_port_with_circle_check(sc, slot, port, use_write, ci);
+		      if ((tis_slot(next_slot(slot))) && (i == sc->print_length))
+			{
+			  port_write_string(port)(sc, " ...", 4, port);
+			  break;
+			}}
 		  port_write_character(port)(sc, ')', port);
 		}}}}
 }
@@ -38789,6 +38784,8 @@ static s7_pointer append_in_place(s7_scheme *sc, s7_pointer a, s7_pointer b)
 bool s7_is_vector(s7_pointer p)              {return(is_any_vector(p));}
 bool s7_is_float_vector(s7_pointer p)        {return(is_float_vector(p));}
 bool s7_is_int_vector(s7_pointer p)          {return(is_int_vector(p));}
+bool s7_is_byte_vector(s7_pointer p)         {return(is_byte_vector(p));}
+
 static bool is_byte_vector_b_p(s7_pointer b) {return(is_byte_vector(b));}
 
 s7_int s7_vector_length(s7_pointer vec) {return(vector_length(vec));}
@@ -39091,6 +39088,7 @@ static s7_pointer make_any_vector(s7_scheme *sc, int32_t type, s7_int len, s7_in
 }
 
 s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)    {return(make_any_vector(sc, T_INT_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)   {return(make_any_vector(sc, T_BYTE_VECTOR, len, dims, dim_info));}
 s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)  {return(make_any_vector(sc, T_FLOAT_VECTOR, len, dims, dim_info));}
 s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info) {return(make_any_vector(sc, T_VECTOR, len, dims, dim_info));}
 
@@ -39343,6 +39341,10 @@ s7_pointer *s7_vector_elements(s7_pointer vec) {return(vector_elements(vec));}
 s7_int *s7_int_vector_elements(s7_pointer vec) {return(int_vector_ints(vec));}
 s7_int s7_int_vector_ref(s7_pointer vec, s7_int index) {return(int_vector_ints(vec)[index]);}
 s7_int s7_int_vector_set(s7_pointer vec, s7_int index, s7_int value) {int_vector_ints(vec)[index] = value; return(value);}
+
+uint8_t *s7_byte_vector_elements(s7_pointer vec) {return(byte_vector_bytes(vec));}
+uint8_t s7_byte_vector_ref(s7_pointer vec, s7_int index) {return(byte_vector_bytes(vec)[index]);}
+uint8_t s7_byte_vector_set(s7_pointer vec, s7_int index, uint8_t value) {byte_vector_bytes(vec)[index] = value; return(value);}
 
 s7_double *s7_float_vector_elements(s7_pointer vec) {return(float_vector_floats(vec));}
 s7_double s7_float_vector_ref(s7_pointer vec, s7_int index) {return(float_vector_floats(vec)[index]);}
@@ -48419,9 +48421,6 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       }
 
     case T_LET:
-      /* implicit index can give n-way reality check (ht growth by new entries)
-       * if shadowed entries are they unshadowed by reversal?
-       */
       if (source == sc->s7_let) /* *s7* */
 	{
 	  s7_pointer iter;
@@ -56831,8 +56830,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 {
   s7_pointer p = car(tree);
 #if 0
-  /* if ((s7_tree_memq(sc, var1, car(tree))) || ((var2) && (s7_tree_memq(sc, var2, car(tree)))) || ((var3) && (s7_tree_memq(sc, var3, car(tree))))) */
-  if (fx_proc(tree) == fx_c_s_opssq_direct)
+  if ((s7_tree_memq(sc, var1, car(tree))) || ((var2) && (s7_tree_memq(sc, var2, car(tree)))) || ((var3) && (s7_tree_memq(sc, var3, car(tree)))))
     fprintf(stderr, "fx_tree_in %s %s %s %s: %s\n", op_names[optimize_op(car(tree))],
 	    display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", display_80(car(tree)));
 #endif
@@ -57460,6 +57458,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
 static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2, s7_pointer var3, bool more_vars)
 {
+  /* if (is_pair(tree)) fprintf(stderr, "fx_tree %s %d\n", display(tree), has_fx(tree)); */
   if (!is_pair(tree)) return;
   if ((is_symbol(car(tree))) &&
       (is_definer_or_binder(car(tree))))
@@ -66571,6 +66570,14 @@ static bool fb_lt_ss(s7_scheme *sc, s7_pointer expr)
   return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) < integer(y)) : lt_b_7pp(sc, x, y));
 }
 
+static bool fb_lt_ts(s7_scheme *sc, s7_pointer expr)
+{
+  s7_pointer x, y;
+  x = t_lookup(sc, cadr(expr), expr);
+  y = lookup(sc, opt2_sym(cdr(expr)));
+  return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) < integer(y)) : lt_b_7pp(sc, x, y));
+}
+
 static bool fb_num_eq_ss(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer x, y;
@@ -66629,6 +66636,7 @@ static s7_pointer fx_to_fb(s7_scheme *sc, s7_function fx) /* eventually parallel
 {
   if (fx == fx_num_eq_ss) return((s7_pointer)fb_num_eq_ss);
   if (fx == fx_lt_ss) return((s7_pointer)fb_lt_ss);
+  if (fx == fx_lt_ts) return((s7_pointer)fb_lt_ts);
   if (fx == fx_gt_ss) return((s7_pointer)fb_gt_ss);
   if (fx == fx_leq_ss) return((s7_pointer)fb_leq_ss);
   if (fx == fx_geq_ss) return((s7_pointer)fb_geq_ss);
@@ -75705,9 +75713,6 @@ static bool check_let_star(s7_scheme *sc)
 		}}}
       else  /* multiple variables */
 	{
-#if 0
-	  s7_pointer last_var;
-#endif
 	  if (fxable)
 	    {
 	      pair_set_syntax_op(form, OP_LET_STAR_FX);
@@ -75719,11 +75724,6 @@ static bool check_let_star(s7_scheme *sc)
 		}}
 	  else pair_set_syntax_op(form, OP_LET_STAR2);
 	  set_opt2_con(code, cadaar(code));
-#if 0
-	  for (last_var = caaar(code), vars = cdar(code); is_pair(vars); last_var = caar(vars), vars = cdr(vars))
-	    if (has_fx(cdar(vars)))
-	      fx_tree(sc, cdar(vars), last_var, NULL, NULL, true); /* actually there's isn't a new let unless it's needed */
-#endif
 	}
 
   /* let_star_unchecked... */
@@ -76464,6 +76464,30 @@ static inline s7_pointer check_quote(s7_scheme *sc, s7_pointer code)
 
 
 /* -------------------------------- and -------------------------------- */
+static void fx_curlet_tree(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer slot1 = let_slots(sc->curlet), slot2, slot3 = NULL;
+  slot2 = next_slot(slot1);
+  if (tis_slot(slot2)) slot3 = next_slot(slot2);
+  fx_tree(sc, code,
+	  slot_symbol(slot1),
+	  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
+	  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
+	  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
+}
+
+static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_function fx, opcode_t op)
+{
+  s7_pointer bfunc;
+  bfunc = fx_to_fb(sc, fx);
+  if (bfunc)
+    {
+      set_opt3_any(cdr(form), bfunc);
+      pair_set_syntax_op(form, op);
+    }
+  /* else fprintf(stderr, "%s %s: %s\n", op_names[op], op_names[optimize_op((op == OP_IF_B_N_N) ? cadadr(form) : cadr(form))], display_80(form)); */
+}
+
 static bool check_and(s7_scheme *sc, s7_pointer expr)
 {
   /* this and check_or and check_if might not be called -- optimize_syntax can short-circuit it to return fx* choices */
@@ -76510,6 +76534,7 @@ static bool check_and(s7_scheme *sc, s7_pointer expr)
 	      if ((!has_fx(cddr(code))) && (len == 3))
 		pair_set_syntax_op(expr, OP_AND_SAFE_P3);
 	}}
+  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
   return(false);
 }
 
@@ -76591,6 +76616,8 @@ static bool check_or(s7_scheme *sc, s7_pointer expr)
       (is_proper_list_1(sc, cdr(code)))) /* list_1 of cdr so there are 2 exprs */
     pair_set_syntax_op(expr, (any_nils) ? OP_OR_AP : OP_OR_2A);
   else pair_set_syntax_op(expr, (any_nils) ? OP_OR_P : OP_OR_N);
+
+  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
   return(false);
 }
 
@@ -76606,56 +76633,6 @@ static bool op_or_ap(s7_scheme *sc)
 
 
 /* -------------------------------- if -------------------------------- */
-
-static void fx_safe_closure_tree(s7_scheme *sc)
-{
-  s7_pointer e = sc->curlet;
-  /* fprintf(stderr, "e: %s, is_funclet: %d\n", display(e), is_funclet(e)); */
-  if ((is_let(e)) &&              /* e might be sc->nil */
-      (is_funclet(e)) &&
-      (tis_slot(let_slots(e))))   /* let_slots might be NULL */
-    {
-      s7_pointer f;
-      f = lookup(sc, funclet_function(e));
-      /* fprintf(stderr, "f: %s, safe: %d\n", display(f), is_safe_closure(f)); */
-      if (is_safe_closure(f))
-	{
-	  s7_pointer slot1 = let_slots(e), slot2, slot3 = NULL;
-	  slot2 = next_slot(slot1);
-	  if (tis_slot(slot2)) slot3 = next_slot(slot2);
-	  fx_tree(sc, closure_body(f),
-		  slot_symbol(slot1),
-		  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
-		  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
-		  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
-	}}
-}
-
-static void fx_curlet_tree(s7_scheme *sc, s7_pointer code)
-{
-  s7_pointer slot1 = let_slots(sc->curlet), slot2, slot3 = NULL;
-  slot2 = next_slot(slot1);
-  if (tis_slot(slot2)) slot3 = next_slot(slot2);
-  fx_tree(sc, code,
-	  slot_symbol(slot1),
-	  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
-	  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
-	  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
-}
-
-static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_function fx, opcode_t op)
-{
-  s7_pointer bfunc;
-  bfunc = fx_to_fb(sc, fx);
-  if (bfunc)
-    {
-      set_opt3_any(cdr(form), bfunc);
-      pair_set_syntax_op(form, op);
-    }
-#if 0
-  else fprintf(stderr, "%s %s: %s\n", op_names[op], op_names[optimize_op((op == OP_IF_B_N_N) ? cadadr(form) : cadr(form))], display_80(form));
-#endif
-}
 
 #define choose_if_optc(Opc, One, Reversed, Not) ((One) ? ((Reversed) ? OP_ ## Opc ## _R : ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) :  ((Not) ? OP_ ## Opc ## _N_N : OP_ ## Opc ## _P_P))
 
@@ -76690,6 +76667,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		  if (!reversed) set_opt3_pair(form, cdadr(form));
 		}
 	      else set_fx(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
+	      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
 	      return;
 	    }
 	  if ((is_h_safe_c_s(test)) &&
@@ -76713,7 +76691,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			}
 		      else pair_set_syntax_op(form, OP_IF_IS_TYPE_S_P_A);
 		      fx_annotate_arg(sc, cddr(code), sc->curlet);
-		      fx_safe_closure_tree(sc);
+		      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
 		    }}
 	      else
 		{
@@ -76767,14 +76745,13 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		    {
 		      pair_set_syntax_op(form, OP_IF_A_A);
 		      fx_annotate_arg(sc, cdr(code), sc->curlet);
+		      /* if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code); */
 		      set_opt1_pair(form, cdr(code));
-		      fx_safe_closure_tree(sc);
 		      fb_annotate(sc, form, fx_proc(code), OP_IF_B_A);
 		    }
 		  else 
 		    {
-		      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet))))
-			fx_curlet_tree(sc, code);
+		      /* if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code); */
 		      fb_annotate(sc, form, fx_proc(code), OP_IF_B_P);
 		    }
 		}
@@ -76798,7 +76775,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			  fb_annotate(sc, form, fx_proc(code), OP_IF_B_A_P);
 			}
 		      fx_annotate_args(sc, cdr(code), sc->curlet);
-		      fx_safe_closure_tree(sc);
+		      /* if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code); */
 		    }
 		  else
 		    if (is_fxable(sc, caddr(code)))
@@ -76806,7 +76783,6 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 			pair_set_syntax_op(form, OP_IF_A_P_A);
 			fx_annotate_args(sc, cdr(code), sc->curlet);
 			set_opt2_pair(form, cddr(code));
-			fx_safe_closure_tree(sc);
 			fb_annotate(sc, form, fx_proc(code), OP_IF_B_P_A);
 		      }
 		    else fb_annotate(sc, form, fx_proc(code), OP_IF_B_P_P);
@@ -76816,7 +76792,9 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	      pair_set_syntax_op(form, choose_if_optc(IF_P, one_branch, reversed, not_case));
 	      set_opt2_any(code, (one_branch) ? cadr(code) : cdr(code));
 	      set_opt3_any(code, (not_case) ? cadar(code) : car(code));
-	    }}
+	    }
+	  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
+	}
       else
 	{
 	  pair_set_syntax_op(form, choose_if_optc(IF_P, one_branch, reversed, not_case));
@@ -76858,8 +76836,10 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	  {
 	    pair_set_syntax_op(form, OP_IF_S_P_A);
 	    fx_annotate_arg(sc, cddr(code), sc->curlet);
+	    if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet))))
+	      fx_curlet_tree(sc, code);
 	    set_opt2_pair(form, cddr(code));
-	    fx_safe_closure_tree(sc);
+	    /* fx_safe_closure_tree(sc); */
 	  }}
 }
 
@@ -95224,63 +95204,62 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------
- *             gmp (8-23)  20.9   21.0   21.7   21.8
+ *             gmp (9-23)  20.9   21.0   21.7   21.8
  * --------------------------------------------------------
- * tpeak       123          115    114    110    110
- * tref        552          691    687    476    463
+ * tpeak       124          115    114    110    110
+ * tref        513          691    687    476    463
  * tauto       785          648    642    496    495
- * index      1031         1026   1016    981    981
- * tmock      7756         1177   1165   1090   1063  1053
- * tvect      1915         2456   2413   1735   1712
- * texit      1933         ----   ----   1886   1792
- * s7test     4514         1873   1831   1792   1794
- * lt         2129         2123   2110   2120   2118  2126 [fx_lint_let_ref_s g_lint_let_set]
- * tform      3245         2281   2273   2255   2253  2142
- * tmac       2429         3317   3277   2409   2422
- * tread      2591         2440   2421   2415   2413
- * fbench     2852         2688   2583   2475   2475
- * trclo      4118         2735   2574   2475   2482
- * tmat       2648         3065   3042   2530   2522
- * tcopy      2745         8035   5546   2550   2557  [fb_lt_ss -> lt_b_7pp+fx_lt_ts]
- * dup        2760         3805   3788   2565   2555  2566
- * tb         3375         2735   2681   2627   2626
- * titer      2678         2865   2842   2679   2679  2675 [sublet_1]
- * tsort      3590         3105   3104   2860   2855
- * tset       3100         3253   3104   3089   3090  3106 [fx_c_s_direct]
- * tload      3849         ----   ----   3142   3145
- * teq        3542         4068   4045   3570   3556  3539
- * tio        3684         3816   3752   3693   3697
- * tclo       4636         4787   4735   4402   4402  4414 4420 [lambda_star_set_args]
- * tlet       5283         7775   5640   4431   4427
- * tcase      4550         4960   4793   4444   4447
- * tmap       5984         8869   8774   4493   4490
- * tfft      115.1         7820   7729   4787   4787
- * tshoot     6946         5525   5447   5220   5195  5198 [fx_c_sts+fx_sqr_t -> fx_c_sss_direct+fx_sqr_1]
+ * index      1032         1026   1016    981    981
+ * tmock      7738         1177   1165   1090   1054
+ * tvect      1892         2456   2413   1735   1712
+ * texit      1768         ----   ----   1886   1793
+ * s7test     4506         1873   1831   1792   1794  1803
+ * lt         2121         2123   2110   2120   2116
+ * tform      3235         2281   2273   2255   2247
+ * tmac       2452         3317   3277   2409   2421
+ * tread      2606         2440   2421   2415   2409
+ * fbench     2848         2688   2583   2475   2474
+ * trclo      4107         2735   2574   2475   2482
+ * tmat       2683         3065   3042   2530   2524
+ * tcopy      2610         8035   5546   2550   2556
+ * dup        2783         3805   3788   2565   2566
+ * tb         3383         2735   2681   2627   2626
+ * titer      2693         2865   2842   2679   2675
+ * tsort      3576         3105   3104   2860   2859
+ * tset       3114         3253   3104   3089   3106
+ * tload      3861         ----   ----   3142   3144
+ * teq        3554         4068   4045   3570   3539
+ * tio        3710         3816   3752   3693   3697
+ * tclo       4622         4787   4735   4402   4415
+ * tlet       5278         7775   5640   4431   4427
+ * tcase      4519         4960   4793   4444   4450
+ * tmap       5491         8869   8774   4493   4490
+ * tfft      115.0         7820   7729   4787   4787
+ * tshoot     6923         5525   5447   5220   5198
  * tnum       56.7         6348   6013   5443   5443
- * tstr       8059         6880   6342   5776   5542
- * tgsl       25.2         8485   7802   6397   6395  6401 [fx_s?]
- * trec       8338         6936   6922   6553   6553
- * tmisc      7217         8960   7699   6597   6564
- * tlist      6834         7896   7546   6865   6844
+ * tstr       6187         6880   6342   5776   5542
+ * tgsl       25.2         8485   7802   6397   6402
+ * trec       8320         6936   6922   6553   6548
+ * tmisc      7085         8960   7699   6597   6564
+ * tlist      6837         7896   7546   6865   6833
  * tari       ----         13.0   12.7   7055   6864
- * tgc        10.1         11.9   11.1   8668   8657  8666 [fx_cons_st->ss g_local_inlet]
- * thash      35.4         11.8   11.7   9775   9726  9717
- * cb         18.8         12.2   12.2   11.1   10.6  [no op_recur_cond_a_a_opa_laq]
- * tgen       12.1         11.2   11.4   11.5   11.6
+ * tgc        10.1         11.9   11.1   8668   8666
+ * thash      35.4         11.8   11.7   9775   9716
+ * cb         18.8         12.2   12.2   11.1   10.6
+ * tgen       12.2         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      58.0         36.7   37.5   37.1   37.1
- * sg         80.0         ----   ----   56.1   56.0
- * lg        104.5        106.6  105.0  104.4  104.3  105.1 [fx_lint_let_ref_s g_lint_let_set|ref] -- field order reversed?
- * tbig      635.1        177.4  175.8  166.4  166.4
+ * calls      55.3         36.7   37.5   37.1   37.2
+ * sg         75.8         ----   ----   56.1   56.0
+ * lg        104.7        106.6  105.0  104.4  104.2  104.1
+ * tbig      605.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
  *
  * data-specific files?
+ *   strings: string-wi=?[s7test] levenshtein[concordance] string-trim[dup]
+ *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
  * t516
  * t718 repl bug -- need context
- * fx_treeable
- *   remove fx_safe_closure_tree, use fx_curlet_tree [fb choices will need to expand]
- *   after update warn users of define-class to update
- *   t517 for eventual test cases
- *   check letrec s7_make_slot etc
- * s7_make_byte_vector
+ * fx_treeable: t517|8 for eventual test cases, copy let in order
+ *   need op_lambda fx opts to  get treeable into recur args
+ * opt_lambda fx* -> op_lambda [but we need treeable?]
  */

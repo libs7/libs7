@@ -32,8 +32,9 @@
 					    (data (* i 5))                        ; calls
 					    (/ (data (+ (* i 5) 4)) ticks/sec)))) ; exclusive timing
 		
-		(set! vect (sort! vect (lambda (a b)               ; sort by inclusive time
+		(set! vect (sort! vect (lambda (a b)               ; sort by inclusive time, to sort by calls use caddr
 					 (> (car a) (car b)))))
+					 ;(> (caddr a) (caddr b)))))
 		(let ((name-len 0)                                 ; decide the data column
 		      (name-max 0)
 		      (end (min n entries))
