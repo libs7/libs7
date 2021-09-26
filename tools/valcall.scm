@@ -44,6 +44,7 @@
 		     ("cookbook.scm" . "v-cook")
 		     ("tari.scm" . "v-ari")
 		     ("texit.scm" . "v-exit")
+		     ("tleft.scm" . "v-left")
 		     ))
 
 (define (last-callg)
@@ -81,6 +82,7 @@
 	 (list "repl" "tauto.scm")
 	 (list "snd -noinit" "make-index.scm")
 	 (list "repl" "tmock.scm")
+	 (list "repl" "tleft.scm")
 	 (list "repl" "tvect.scm")
 	 (list "repl" "texit.scm")
 	 (list "repl" "s7test.scm")
