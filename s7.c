@@ -4157,8 +4157,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_LET_NO_VARS, OP_NAMED_LET, OP_NAMED_LET_NO_VARS, OP_NAMED_LET_A, OP_NAMED_LET_AA, OP_NAMED_LET_FX, OP_NAMED_LET_STAR,
       OP_LET_FX_OLD, OP_LET_FX_NEW, OP_LET_2A_OLD, OP_LET_2A_NEW, OP_LET_3A_OLD, OP_LET_3A_NEW,
-      OP_LET_opSSq_OLD, OP_LET_opSSq_NEW, OP_LET_opaSSq_OLD, OP_LET_opaSSq_NEW, 
-      OP_LET_ONE_OLD, OP_LET_ONE_NEW, OP_LET_ONE_P_OLD, OP_LET_ONE_P_NEW,
+      OP_LET_opaSSq_OLD, OP_LET_opaSSq_NEW, OP_LET_ONE_OLD, OP_LET_ONE_NEW, OP_LET_ONE_P_OLD, OP_LET_ONE_P_NEW,
       OP_LET_ONE_OLD_1, OP_LET_ONE_NEW_1, OP_LET_ONE_P_OLD_1, OP_LET_ONE_P_NEW_1,
       OP_LET_A_OLD, OP_LET_A_NEW, OP_LET_A_P_OLD, OP_LET_A_P_NEW,
       OP_LET_A_A_OLD, OP_LET_A_A_NEW, OP_LET_A_FX_OLD, OP_LET_A_FX_NEW, OP_LET_A_OLD_2, OP_LET_A_NEW_2,
@@ -4377,8 +4376,7 @@ static const char* op_names[NUM_OPS] =
 
       "let_no_vars", "named_let", "named_let_no_vars", "named_let_a", "named_let_aa", "named_let_fx", "named_let*",
       "let_fx_old", "let_fx_new", "let_2a_old", "let_2a_new", "let_3a_old", "let_3a_new",
-      "let_opssq_old", "let_opssq_new", "let_opassq_old", "let_opassq_new",
-      "let_one_old", "let_one_new", "let_one_p_old", "let_one_p_new",
+      "let_opassq_old", "let_opassq_new", "let_one_old", "let_one_new", "let_one_p_old", "let_one_p_new",
       "let_one_old_1", "let_one_new_1", "let_one_p_old_1", "let_one_p_new_1",
       "let_a_old", "let_a_new", "let_a_p_old", "let_a_p_new",
       "let_a_a_old", "let_a_a_new", "let_a_fx_old", "let_a_fx_new", "let_a_old_2", "let_a_new_2",
@@ -9305,6 +9303,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	    sp = add_slot_checked_with_id(sc, new_e, sym, val);
 	  else 
 	    {
+	      if (sc->free_heap_top <= sc->free_heap_trigger) try_to_call_gc(sc); /* or maybe add add_slot_at_end_checked? */
 	      sp = add_slot_at_end(sc, let_id(new_e), sp, sym, val);
 	      set_local(sym); /* ? */
 	    }
@@ -53022,26 +53021,26 @@ static s7_pointer fx_add_sf(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, 
 static s7_pointer fx_add_fs(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, lookup(sc, opt2_sym(cdr(arg))), real(cadr(arg))));}
 static s7_pointer fx_add_tf(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, t_lookup(sc, cadr(arg), arg), real(opt2_con(cdr(arg)))));}
 
-static s7_pointer fx_add_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-#if (!WITH_GMP)
-  if (is_t_integer(x))
-    {
-#if HAVE_OVERFLOW_CHECKS
-      s7_int val;
-      if (!add_overflow(integer(x), integer(opt2_con(cdr(arg))), &val))
-	return(make_integer(sc, val));
-      /* else fall into add_p_pp below */
-#else
-      return(make_integer(sc, integer(x) + integer(opt2_con(cdr(arg)))));
-#endif
-      /* return(add_if_overflow_to_real_or_big_integer(sc, integer(x), integer(opt2_con(cdr(arg))))); -- slightly slower than the add_overflow code above */
-    }
-#endif
-  return(add_p_pp(sc, x, opt2_con(cdr(arg)))); /* caddr(arg) */
-}
+#define fx_add_si_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x; \
+    x = Lookup(sc, cadr(arg), arg); \
+    if ((!WITH_GMP) && (is_t_integer(x))) \
+      { \
+        if (HAVE_OVERFLOW_CHECKS) \
+  	  { \
+  	    s7_int val; \
+  	    if (!add_overflow(integer(x), integer(opt2_con(cdr(arg))), &val)) \
+  	      return(make_integer(sc, val)); \
+  	  } \
+        else return(make_integer(sc, integer(x) + integer(opt2_con(cdr(arg))))); \
+      } \
+    return(add_p_pp(sc, x, opt2_con(cdr(arg)))); /* caddr(arg) */ \
+  }
+
+fx_add_si_any(fx_add_si, s_lookup)
+fx_add_si_any(fx_add_ti, t_lookup)
 
 static s7_pointer fx_add_ss(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, s_lookup(sc, cadr(arg), arg), s_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_add_ts(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, t_lookup(sc, cadr(arg), arg), s_lookup(sc, opt2_sym(cdr(arg)), arg)));}
@@ -56962,6 +56961,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
 	  if (fx_proc(tree) == fx_is_eq_sc)    return(with_fx(tree, fx_is_eq_tc));
 	  if (fx_proc(tree) == fx_add_s1)      return(with_fx(tree, fx_add_t1));
+	  if (fx_proc(tree) == fx_add_si)      return(with_fx(tree, fx_add_ti));
 	  if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_t1));
 	  if (fx_proc(tree) == fx_subtract_si) return(with_fx(tree, fx_subtract_ti));
 	  if (fx_proc(tree) == fx_subtract_sf) return(with_fx(tree, fx_subtract_tf));
@@ -70380,11 +70380,11 @@ static bool check_tc_let(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointe
 		  bool z_fxable;
 		  set_optimize_op(body, (vars == 1) ? OP_TC_LET_IF_A_Z_LA : OP_TC_LET_IF_A_Z_LAA);
 		  fx_annotate_arg(sc, cdaadr(body), args);  /* let var binding, caadr: (x (- y 1)) etc */
+		  fx_tree(sc, cdaadr(body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false); /* these are references to laa args, applied to the let var binding */
 		  fx_annotate_arg(sc, cdr(let_body), args); /* test_expr */
 		  fx_annotate_args(sc, cdr(laa), args);
 		  z_fxable = is_fxable(sc, caddr(let_body));
 		  if (z_fxable) fx_annotate_arg(sc, cddr(let_body), args);
-		  fx_tree(sc, cdaadr(body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false); /* these are references to laa args, applied to the let var binding */
 		  fx_tree(sc, cdr(let_body), car(caadr(body)), NULL, NULL, false);
 		  fx_tree_outer(sc, cdr(let_body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false);
 		  if (z_fxable) set_optimized(body);
@@ -74306,6 +74306,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	  if (happy)
 	    lambda_set_simple_defaults(body);
 	}
+      /* fprintf(stderr, "%s %s %d\n", __func__, display(body), result); */
       if (result >= SAFE_BODY) /* not RECUR_BODY here (need new let for cons-r in s7test) */
 	{
 	  set_safe_closure_body(body);
@@ -74327,11 +74328,12 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	  if (result >= RECUR_BODY)
 	    {
 	      int32_t nvars;
+	      mark_fx_treeable(sc, body);
+
 	      for (nvars = 0, p = args; (is_pair(p)) && (!is_symbol_and_keyword(car(p))); nvars++, p = cdr(p));
 	      if ((is_null(p)) &&
 		  (nvars > 0))
 		{
-		  mark_fx_treeable(sc, body);
 #if 1
 		  fx_annotate_args(sc, body, cleared_args); /* almost useless -- we need a recursive traversal here but that collides with check_if et al */
 		  fx_tree(sc, body, /* this usually costs more than it saves! */
@@ -74897,7 +74899,11 @@ static void check_let_a_body(s7_scheme *sc, s7_pointer form)
     }
   else
     if (is_pair(cadr(code)))
-      pair_set_syntax_op(form, OP_LET_A_P_OLD);
+      {
+	pair_set_syntax_op(form, OP_LET_A_P_OLD);
+	if (is_fx_treeable(cdaar(code))) fx_tree(sc, cdr(code), caaar(code), NULL, NULL, false);
+	/* fprintf(stderr, "%s %d %s\n", display(code), is_fx_treeable(cdaar(code)), display(sc->curlet)); */
+      }
 }
 
 static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
@@ -74912,14 +74918,11 @@ static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
 
       if (is_optimized(cadr(binding)))
 	{
-	  if (optimize_op(cadr(binding)) == HOP_SAFE_C_SS)
+	  if ((optimize_op(cadr(binding)) == HOP_SAFE_C_SS) &&
+	      (fn_proc(cadr(binding)) == g_assq))
 	    {
-	      if (fn_proc(cadr(binding)) == g_assq)
-		{
-		  set_opt2_sym(code, cadadr(binding));
-		  pair_set_syntax_op(form, OP_LET_opaSSq_OLD);
-		}
-	      else pair_set_syntax_op(form, OP_LET_opSSq_OLD);
+	      set_opt2_sym(code, cadadr(binding));
+	      pair_set_syntax_op(form, OP_LET_opaSSq_OLD);
 	      set_opt3_sym(cdr(code), caddadr(binding));
 	      set_opt1_sym(code, car(binding));
 	    }
@@ -74943,14 +74946,23 @@ static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
 			fx_annotate_args(sc, cdr(code), set_plist_1(sc, car(binding)));
 			fx_tree(sc, cdr(code), car(binding), NULL, NULL, false);
 			return;
-		      }}}}}
+		      }
+		    /* fprintf(stderr, "%d %s %d\n", __LINE__, display(code), is_fx_treeable(cdr(code))); */
+		    if (is_fx_treeable(cdr(code))) fx_tree(sc, cdr(code), car(binding), NULL, NULL, false);
+		  }}}}
   else
     {
       set_opt2_pair(code, binding);
       pair_set_syntax_op(form, OP_LET_A_OLD);
       fx_annotate_arg(sc, cdr(binding), sc->curlet);
-      if (is_null(cddr(code))) check_let_a_body(sc, form);
-    }
+      if (is_null(cddr(code)))
+	check_let_a_body(sc, form);
+      else
+	{
+	  /* fprintf(stderr, "%d %s %d\n", __LINE__, display(code), is_fx_treeable(cdr(code))); */
+	  fx_annotate_args(sc, cdr(code), set_plist_1(sc, caaar(code))); /* no effect if not syntactic, change op->OP_FX_PROC with backpointer? */
+	  if (is_fx_treeable(cdr(code))) fx_tree(sc, cdr(code), car(binding), NULL, NULL, false);
+	}}
   if ((optimize_op(form) == OP_LET_A_OLD) &&
       (is_pair(cddr(code))) && (is_null(cdddr(code))))
     pair_set_syntax_op(form, OP_LET_A_OLD_2);
@@ -75129,18 +75141,28 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 	  set_opt3_let(code, sc->nil);
 	}}
 
+  /* fx_tree inits */
   if ((is_pair(car(code))) &&
       (is_let(sc->curlet)) && (is_funclet(sc->curlet)) && (tis_slot(let_slots(sc->curlet))))
     {
-      /* apparently works because a safe closure will have old-let -> funclet?? */
       s7_pointer p, s1 = let_slots(sc->curlet), s2 = NULL, s3 = NULL;
-      if (tis_slot(next_slot(s1))) s2 = slot_symbol(next_slot(s1));
-      if ((s2) && (tis_slot(next_slot(next_slot(s1))))) s3 = slot_symbol(next_slot(next_slot(s1)));
+      bool more_vars = false;
+      if (tis_slot(next_slot(s1)))
+	{
+	  s2 = next_slot(s1);
+	  if ((tis_slot(s2)) && (tis_slot(next_slot(s2))))
+	    {
+	      s3 = next_slot(s2);
+	      more_vars = tis_slot(next_slot(s3));
+	      s3 = slot_symbol(s3);
+	    }
+	  s2 = slot_symbol(s2);
+	}
       s1 = slot_symbol(s1);
-      for (p = car(code); is_pair(p); p = cdr(p))
+      for (p = car(code); is_pair(p); p = cdr(p)) /* var list */
 	{
 	  s7_pointer init = cdar(p);
-	  fx_tree(sc, init, s1, s2, s3, s3);
+	  fx_tree(sc, init, s1, s2, s3, more_vars);
 	}}
   return(code);
 }
@@ -75486,17 +75508,6 @@ static void op_let_a_fx_old(s7_scheme *sc)
   sc->value = fx_call(sc, p);
 }
 
-static inline void op_let_opssq(s7_scheme *sc)
-{
-  s7_pointer largs, in_val;
-  sc->code = cdr(sc->code);
-  largs = T_Pair(opt2_pair(sc->code));                      /* cadr(caar(sc->code)); */
-  in_val = lookup(sc, cadr(largs));
-  set_car(sc->t2_2, lookup(sc, opt3_sym(cdr(sc->code))));   /* caddr(largs)); */
-  set_car(sc->t2_1, in_val);
-  sc->value = fn_proc(largs)(sc, sc->t2_1);
-}
-
 static inline void op_let_opassq(s7_scheme *sc)
 {
   s7_pointer in_val, lst;
@@ -75506,23 +75517,6 @@ static inline void op_let_opassq(s7_scheme *sc)
   if (is_pair(lst))
     sc->value = s7_assq(sc, in_val, lst);
   else sc->value = (is_null(lst)) ? sc->F : g_assq(sc, set_plist_2(sc, in_val, lst));
-}
-
-static /* inline */ void op_let_opssq_old(s7_scheme *sc)
-{
-  s7_pointer let;
-  op_let_opssq(sc);
-  let = update_let_with_slot(sc, opt3_let(sc->code), sc->value);
-  let_set_outlet(let, sc->curlet);
-  set_curlet(sc, let);
-  sc->code = T_Pair(cdr(sc->code));
-}
-
-static /* inline */ void op_let_opssq_new(s7_scheme *sc)
-{
-  op_let_opssq(sc);
-  sc->curlet = make_let_with_slot(sc, sc->curlet, opt1_sym(sc->code), sc->value);
-  sc->code = T_Pair(cdr(sc->code));
 }
 
 static inline void op_let_opassq_old(s7_scheme *sc)
@@ -89606,6 +89600,7 @@ static bool op_unknown_np(s7_scheme *sc)
 	    case 4:  set_any_closure_np(sc, f, code, sc->curlet, 4, hop + OP_ANY_CLOSURE_4P);        break;
 	    default: set_any_closure_np(sc, f, code, sc->curlet, num_args, hop + OP_ANY_CLOSURE_NP); break;
 	    }
+	  /* TODO: fx_curlet_tree? */
 	  return(true);
 	}
       break;
@@ -91129,9 +91124,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_LET_ONE_P_OLD_1:   op_let_one_p_old_1(sc); goto EVAL;
 	case OP_LET_ONE_NEW_1:	   sc->curlet = make_let_with_slot(sc, sc->curlet, opt2_sym(sc->code), sc->value); goto BEGIN;
 	case OP_LET_ONE_P_NEW_1:   sc->curlet = make_let_with_slot(sc, sc->curlet, opt2_sym(sc->code), sc->value); sc->code = car(sc->code); goto EVAL;
-
-	case OP_LET_opSSq_OLD:     op_let_opssq_old(sc);    goto BEGIN;
-	case OP_LET_opSSq_NEW:     op_let_opssq_new(sc);    goto BEGIN;
 	case OP_LET_opaSSq_OLD:    op_let_opassq_old(sc);   goto BEGIN;
 	case OP_LET_opaSSq_NEW:    op_let_opassq_new(sc);   goto BEGIN;
 
@@ -94819,7 +94811,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 931) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 929) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95210,49 +95202,49 @@ int main(int argc, char **argv)
  * tpeak       124          115    114    110    110
  * tref        513          691    687    476    463
  * tauto       785          648    642    496    496
- * index      1032         1026   1016    981    980
+ * index      1032         1026   1016    981    978
  * tmock      7738         1177   1165   1090   1054
- * tleft      1725         1708   1689   1433   1392  1353
+ * tleft      1725         1708   1689   1433   1353
  * tvect      1892         2456   2413   1735   1712
  * texit      1768         ----   ----   1886   1796
  * s7test     4506         1873   1831   1792   1794
  * lt         2121         2123   2110   2120   2114
- * tform      3235         2281   2273   2255   2247
+ * tform      3235         2281   2273   2255   2242
  * tread      2606         2440   2421   2415   2411
  * tmac       2452         3317   3277   2409   2421
  * fbench     2848         2688   2583   2475   2474
  * trclo      4107         2735   2574   2475   2458
  * tmat       2683         3065   3042   2530   2518
  * tcopy      2610         8035   5546   2550   2555
- * dup        2783         3805   3788   2565   2552
- * tb         3383         2735   2681   2627   2624
+ * dup        2783         3805   3788   2565   2556
+ * tb         3383         2735   2681   2627   2621
  * titer      2693         2865   2842   2679   2675
- * tsort      3576         3105   3104   2860   2856
+ * tsort      3576         3105   3104   2860   2859
  * tset       3114         3253   3104   3089   3081
  * tload      3861         ----   ----   3142   3147
  * teq        3554         4068   4045   3570   3539
  * tio        3710         3816   3752   3693   3697
  * tclo       4622         4787   4735   4402   4412
- * tlet       5278         7775   5640   4431   4435
+ * tlet       5278         7775   5640   4431   4432
  * tcase      4519         4960   4793   4444   4444
  * tmap       5491         8869   8774   4493   4490
  * tfft      115.0         7820   7729   4787   4787
  * tshoot     6923         5525   5447   5220   5197
- * tnum       56.7         6348   6013   5443   5438
+ * tnum       56.7         6348   6013   5443   5436
  * tstr       6187         6880   6342   5776   5540
- * tgsl       25.2         8485   7802   6397   6402
- * trec       8320         6936   6922   6553   6543
+ * tgsl       25.2         8485   7802   6397   6395
+ * trec       8320         6936   6922   6553   6525
  * tmisc      7085         8960   7699   6597   6565
- * tlist      6837         7896   7546   6865   6829
+ * tlist      6837         7896   7546   6865   6759
  * tari       ----         13.0   12.7   7055   6863
  * tgc        10.1         11.9   11.1   8668   8666
  * thash      35.4         11.8   11.7   9775   9716
- * cb         18.8         12.2   12.2   11.1   10.6
+ * cb         18.8         12.2   12.2   11.1   10.5
  * tgen       12.2         11.2   11.4   11.5   11.6
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.1   37.1
  * sg         75.8         ----   ----   56.1   56.0
- * lg        104.7        106.6  105.0  104.4  104.1
+ * lg        104.7        106.6  105.0  104.4  104.0
  * tbig      605.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
  *
@@ -95261,9 +95253,9 @@ int main(int argc, char **argv)
  *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
  * tleft.scm
  * t718 repl bug -- need context
- * fx_treeable: t517 for eventual test cases, copy let in order [let(rec)(*) do lambda call/exit?]
- *   perhaps remove fx_tree (and annotate?) fro opt_lambda
+ * fx_treeable: tleft for eventual test cases, copy let in order [let(rec)(*) do lambda call/exit?]
+ *   perhaps remove fx_tree (and annotate?) from opt_lambda
  *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
  *   maybe extend to args in op_unknown*
- *   check all tleft, extend fb_annotate
+ *   how to opt bodies as in let -- fx_proc is back one level
  */
