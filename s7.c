@@ -1050,9 +1050,9 @@ typedef struct {
 } gc_list_t;
 
 typedef struct {
-  int32_t size, top, excl_size, excl_top;
-  s7_pointer *funcs;
-  s7_int *data, *excl;
+  s7_int size, top, excl_size, excl_top;
+  s7_pointer *funcs, *let_names, *files;
+  s7_int *timing_data, *excl, *lines;
 } profile_data_t;
 
 
@@ -1186,7 +1186,8 @@ struct s7_scheme {
   opcode_t begin_op;
 
   bool debug_or_profile, profiling_gensyms;
-  s7_int current_line, s7_call_line, safety, debug, profile;
+  s7_int current_line, s7_call_line, safety, debug, profile, profile_position;
+  s7_pointer profile_prefix;
   profile_data_t *profile_data;
   const char *current_file, *s7_call_file, *s7_call_name;
 
@@ -3047,10 +3048,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define symbol_set_tag2(p, Val)        symbol_info(p)->ln.tag = Val
 #define symbol_has_help(p)             (is_documented(symbol_name_cell(p)))
 #define symbol_set_has_help(p)         set_documented(symbol_name_cell(p))
-
-#define symbol_position(p)             symbol_info(p)->dx.pos /* this only needs 32 of the available 64 bits */
-#define symbol_set_position(p, Pos)    symbol_info(p)->dx.pos = Pos
-#define PD_POSITION_UNSET -1
+/* symbol_info->dx is free */
 
 #define symbol_set_local_slot_unchecked(Symbol, Id, Slot) \
   do {(Symbol)->object.sym.local_slot = T_Sln(Slot); symbol_set_id_unchecked(Symbol, Id); symbol_increment_ctr(Symbol);} while (0)
@@ -7049,6 +7047,7 @@ static int64_t gc(s7_scheme *sc)
   mark_vector(sc->protected_objects);
   mark_vector(sc->protected_setters);
   set_mark(sc->protected_setter_symbols);
+  if ((is_symbol(sc->profile_prefix)) && (is_gensym(sc->profile_prefix))) set_mark(sc->profile_prefix);
 
   /* now protect recent allocations using the free_heap cells above the current free_heap_top (if any).
    * cells above sc->free_heap_top might be malloc'd garbage (after heap reallocation), so we keep track of
@@ -7075,7 +7074,7 @@ static int64_t gc(s7_scheme *sc)
     {
       profile_data_t *pd = sc->profile_data;
       for (i = 0; i < pd->top; i++)
-	if (is_gensym(pd->funcs[i]))
+	if ((pd->funcs[i]) && (is_gensym(pd->funcs[i])))
 	  set_mark(pd->funcs[i]);
     }
 
@@ -7881,7 +7880,6 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
   symbol_set_tag2(x, 0);
   symbol_clear_ctr(x); /* alloc_symbol uses malloc */
   symbol_clear_type(x);
-  symbol_set_position(x, PD_POSITION_UNSET);
 
   if ((len > 1) &&                                    /* not 0, otherwise : is a keyword */
       ((name[0] == ':') || (name[len - 1] == ':')))   /* see s7test under keyword? for troubles if both colons are present */
@@ -8159,7 +8157,6 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   symbol_set_tag(x, 0);
   symbol_set_tag2(x, 0);
   symbol_clear_type(x);
-  symbol_set_position(x, PD_POSITION_UNSET);
   gensym_block(x) = b;
 
   /* place new symbol in symbol-table */
@@ -10392,7 +10389,8 @@ static s7_pointer add_profile(s7_scheme *sc, s7_pointer code)
   s7_pointer p;
   if ((is_pair(car(code))) && (caar(code) == sc->profile_in_symbol))
     return(code);
-  p = cons_unchecked(sc, list_2(sc, sc->profile_in_symbol, list_1(sc, sc->curlet_symbol)), code);
+  p = cons_unchecked(sc, list_3(sc, sc->profile_in_symbol, s7_make_integer(sc, sc->profile_position), list_1(sc, sc->curlet_symbol)), code);
+  sc->profile_position++;
   set_unsafe_optimize_op(car(p), OP_PROFILE_IN);
   return(p);
 }
@@ -50684,8 +50682,9 @@ static s7_pointer g_profile_out(s7_scheme *sc, s7_pointer args)
   s7_int pos;
   s7_int *v;
   profile_data_t *pd = sc->profile_data;
-  pos = symbol_position(car(args));
-  v = (s7_int *)(pd->data + pos);
+
+  pos = integer(car(args)) * PD_BLOCK_SIZE;
+  v = (s7_int *)(pd->timing_data + pos);
   v[PD_RECUR]--;
   if (v[PD_RECUR] == 0)
     {
@@ -50702,39 +50701,57 @@ static s7_pointer g_profile_out(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external func -- added to each profiled func by add_profile above */
 {
   #define H_profile_in "(profile-in e) is the profiler's hook into closures"
-  #define Q_profile_in s7_make_signature(sc, 2, sc->T, sc->is_let_symbol)
+  #define Q_profile_in s7_make_signature(sc, 3, sc->T, sc->is_integer_symbol, sc->is_let_symbol)
 
   s7_pointer e;
+  s7_int pos;
   if (sc->profile == 0) return(sc-> F);
 
-  e = find_funclet(sc, car(args));
+  pos = integer(car(args));
+  e = find_funclet(sc, cadr(args));
+
   if ((is_let(e)) &&
       (is_symbol(funclet_function(e))))
     {
       s7_pointer func_name;
-      s7_int pos;
       s7_int *v;
       profile_data_t *pd = sc->profile_data;
       func_name = funclet_function(e);
-      pos = symbol_position(func_name);
-      if (pos == PD_POSITION_UNSET)
+      if (pos >= pd->size)
 	{
-	  if (pd->top == pd->size)
-	    {
-	      s7_int i;
-	      pd->size *= 2;
-	      pd->funcs = (s7_pointer *)Realloc(pd->funcs, pd->size * sizeof(s7_pointer));
-	      pd->data = (s7_int *)Realloc(pd->data, pd->size * PD_BLOCK_SIZE * sizeof(s7_int));
-	      for (i = pd->top * PD_BLOCK_SIZE; i < pd->size * PD_BLOCK_SIZE; i++) pd->data[i] = 0;
-	    }
-	  pos = pd->top * PD_BLOCK_SIZE;
-	  symbol_set_position(func_name, pos);
-	  pd->funcs[pd->top] = func_name;
-	  pd->top++;
-	  if (is_gensym(func_name)) sc->profiling_gensyms = true;
+	  s7_int new_size;
+	  new_size = 2 * pos;
+	  pd->funcs = (s7_pointer *)Realloc(pd->funcs, new_size * sizeof(s7_pointer));
+	  memclr((void *)(pd->funcs + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
+	  pd->timing_data = (s7_int *)Realloc(pd->timing_data, new_size * PD_BLOCK_SIZE * sizeof(s7_int));
+          memclr((void *)(pd->timing_data + (pd->size * PD_BLOCK_SIZE)), (new_size - pd->size) * PD_BLOCK_SIZE * sizeof(s7_int));
+	  pd->let_names = (s7_pointer *)Realloc(pd->let_names, new_size * sizeof(s7_pointer));
+	  memclr((void *)(pd->let_names + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
+	  pd->files = (s7_pointer *)Realloc(pd->files, new_size * sizeof(s7_pointer));
+	  memclr((void *)(pd->files + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
+	  pd->lines = (s7_int *)Realloc(pd->lines, new_size * sizeof(s7_int));
+	  memclr((void *)(pd->lines + pd->size), (new_size - pd->size) * sizeof(s7_int));
+	  pd->size = new_size;
 	}
+      if (pd->funcs[pos] == NULL)
+	{
+	  pd->funcs[pos] = func_name;
+	  if (is_gensym(func_name)) sc->profiling_gensyms = true;
+	  if (pos >= pd->top) pd->top = (pos + 1);
 
-      v = (s7_int *)(sc->profile_data->data + pos);
+	  /* perhaps add_profile needs to reuse ints if file/line exists? */
+	  if (is_symbol(sc->profile_prefix))
+	    {
+	      s7_pointer let_name;
+	      let_name = s7_symbol_local_value(sc, sc->profile_prefix, e);
+	      if (is_symbol(let_name)) pd->let_names[pos] = let_name;
+	    }
+	  if (has_let_file(e))
+	    {
+	      pd->files[pos] = sc->file_names[let_file(e)];
+	      pd->lines[pos] = let_line(e);
+	    }}
+      v = (s7_int *)(sc->profile_data->timing_data + (pos * PD_BLOCK_SIZE));
       v[PD_CALLS]++;
       if (v[PD_RECUR] == 0)
 	{
@@ -50763,24 +50780,34 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	   */
 	  resize_stack(sc);
 	}
-      swap_stack(sc, OP_DYNAMIC_UNWIND_PROFILE, sc->profile_out, func_name);
+      swap_stack(sc, OP_DYNAMIC_UNWIND_PROFILE, sc->profile_out, car(args));
     }
   return(sc->F);
 }
 
 static s7_pointer profile_info_out(s7_scheme *sc)
 {
-  s7_pointer p, vs, vi;
+  s7_pointer p, pp, vs, vi, vn, vf, vl;
+  s7_int i;
   profile_data_t *pd = sc->profile_data;
-  if ((!pd) || (pd->top == 0))
-    return(sc->F);
-
-  p = list_3(sc, sc->F, sc->F, make_integer(sc, ticks_per_second()));
+  if ((!pd) || (pd->top == 0)) return(sc->F);
+  p = make_list(sc, 6, sc->F);
   sc->w = p;
   set_car(p, vs = make_simple_vector(sc, pd->top));
-  memcpy((void *)(vector_elements(vs)), (void *)(pd->funcs), pd->top * sizeof(s7_pointer));
   set_car(cdr(p), vi = make_simple_int_vector(sc, pd->top * PD_BLOCK_SIZE));
-  memcpy((void *)int_vector_ints(vi), (void *)pd->data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
+  set_car(cddr(p), make_integer(sc, ticks_per_second()));
+  pp = cdddr(p);
+  set_car(pp, vn = make_simple_vector(sc, pd->top));
+  set_car(cdr(pp), vf = make_simple_vector(sc, pd->top));
+  set_car(cddr(pp), vl = make_simple_int_vector(sc, pd->top));
+  for (i = 0; i < pd->top; i++)
+    {
+      vector_element(vs, i) = (!pd->funcs[i]) ? sc->F : pd->funcs[i];
+      vector_element(vn, i) = (!pd->let_names[i]) ? sc->F : pd->let_names[i];
+      vector_element(vf, i) = (!pd->files[i]) ? sc->F : pd->files[i];
+    }
+  memcpy((void *)int_vector_ints(vl), (void *)pd->lines, pd->top * sizeof(s7_int));
+  memcpy((void *)int_vector_ints(vi), (void *)pd->timing_data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
   sc->w = sc->nil;
   return(p);
 }
@@ -50791,9 +50818,11 @@ static s7_pointer clear_profile_info(s7_scheme *sc)
     {
       profile_data_t *pd = sc->profile_data;
       int32_t i;
-      for (i = 0; i < pd->top; i++)
-	symbol_set_position(pd->funcs[i], PD_POSITION_UNSET);
-      memclr64(pd->data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int)); /* memclr64 ok because init_size is 16 and we double when resizing */
+      memclr(pd->timing_data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
+      memclr(pd->funcs, pd->top * sizeof(s7_pointer));
+      memclr(pd->let_names, pd->top * sizeof(s7_pointer));
+      memclr(pd->files, pd->top * sizeof(s7_pointer));
+      memclr(pd->lines, pd->top * sizeof(s7_int));
       pd->top = 0;
       for (i = 0; i < pd->excl_top; i++)
 	pd->excl[i] = 0;
@@ -50814,8 +50843,11 @@ static s7_pointer make_profile_info(s7_scheme *sc)
       pd->top = 0;
       pd->excl_top = 0;
       pd->funcs = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
+      pd->let_names = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
+      pd->files = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
+      pd->lines = (s7_int *)Calloc(pd->size, sizeof(s7_int));
       pd->excl = (s7_int *)Calloc(pd->excl_size, sizeof(s7_int));
-      pd->data = (s7_int *)Calloc(pd->size * PD_BLOCK_SIZE, sizeof(s7_int));
+      pd->timing_data = (s7_int *)Calloc(pd->size * PD_BLOCK_SIZE, sizeof(s7_int));
       sc->profile_data = pd;
     }
   return(sc->F);
@@ -56035,7 +56067,7 @@ static bool fx_matches(s7_pointer symbol, s7_pointer target_symbol)
 static s7_pointer fx_in_place(s7_scheme *sc, s7_pointer arg) {return(opt3_con(arg));}
 
 /* #define fx_choose(Sc, Holder, E, Checker) fx_choose_1(Sc, Holder, E, Checker, __func__, __LINE__) */
-static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, safe_sym_t *checker) /* , const char *func, int line) */
+static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_env, safe_sym_t *checker) /* , const char *func, int line) */
 {
   s7_pointer arg = car(holder);
   /* fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(holder), display(e), (is_pair(arg) && (is_optimized(arg))) ? op_names[optimize_op(arg)] : ""); */
@@ -56044,7 +56076,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer e, saf
       if (is_symbol(arg))
 	{
 	  if ((is_keyword(arg)) || ((arg == sc->else_symbol) && (is_global(arg)))) return(fx_c);
-	  return((is_global(arg)) ? fx_g : ((checker(sc, arg, e)) ? fx_s : fx_unsafe_s));
+	  return((is_global(arg)) ? fx_g : ((checker(sc, arg, cur_env)) ? fx_s : fx_unsafe_s));
 	}
       return(fx_c);
     }
@@ -68057,7 +68089,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 	bool mv = is_multiple_value(args);
 	if(mv) clear_multiple_value(args);
 	sc->value = cons(sc, sc->values_symbol, args);
-	dynamic_unwind(sc, stack_code(sc->stack, top), stack_args(sc->stack, top)); /* func (curlet) */
+	dynamic_unwind(sc, stack_code(sc->stack, top), stack_args(sc->stack, top)); /* position (curlet) */
 	sc->value = old_value;
 	if (mv) set_multiple_value(args);
 	sc->stack_end -= 4; /* either op is possible I think */
@@ -80331,6 +80363,7 @@ static s7_pointer check_do(s7_scheme *sc)
   if ((!is_pair(end)) || (!is_fxable(sc, car(end))))
     return(do_end_bad(sc, form));
 
+  /* sc->curlet is the outer environment, local vars are in the symbol_list via check_do_for_obvious_error, and it's only needed for fx_unsafe_s */
   set_fx_direct(end, fx_choose(sc, end, sc->curlet, let_symbol_is_safe_or_listed));
   if ((is_pair(cdr(end))) &&
       (is_fxable(sc, cadr(end))))
@@ -80342,13 +80375,14 @@ static s7_pointer check_do(s7_scheme *sc)
       pair_set_syntax_op(form, OP_DO_NO_VARS);
       return(sc->nil);
     }
-  if (do_tree_has_definers(sc, form))       /* we don't want definers in body, vars, or end test */
+  if (do_tree_has_definers(sc, form))           /* we don't want definers in body, vars, or end test */
     return(fxify_step_exprs(sc, code));
 
-  if ((is_pair(vars)) && (is_null(cdr(vars))))
+  if ((is_pair(vars)) && (is_null(cdr(vars))))  /* if more than one var, can the do let layout change? apparently so -- fix this! */
     fx_tree(sc, end, caar(vars), NULL, NULL, false);
 
-  /* TODO: is_fx_treeable here? */
+  /* TODO: is_fx_treeable here? inits use sc->curlet, end and step-exprs use sc->curlet via fx_tree_outer */
+#if 1
   for (e = sc->curlet; (is_let(e)) && (e != sc->rootlet); e = let_outlet(e))
     if ((is_funclet(e)) || (is_maclet(e)))
       {
@@ -80380,11 +80414,20 @@ static s7_pointer check_do(s7_scheme *sc)
 		      }}}}
 	break;
       }
+#else
+  fprintf(stderr, "%d %s\n", is_fx_treeable(code), display_80(code));
+  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet))))
+    {
+      /* fx_tree_outer(sc, end, curlet-vars...)
+       * for-each stepper, fx_tree(sc, cadr(var), ...), and if step-expr, fx_tree_outer(sc, caddr(var), ...)
+       */
+    }
+#endif
 
   body = cddr(code);
-  if ((is_pair(end)) && (is_pair(car(end))) &&
-      (is_pair(vars)) && (is_null(cdr(vars))) &&
-      (is_pair(body)) && (is_pair(car(body))) &&
+  if ((is_pair(end)) && (is_pair(car(end))) &&   /* end test is a pair */
+      (is_pair(vars)) && (is_null(cdr(vars))) && /* one stepper */
+      (is_pair(body)) && (is_pair(car(body))) && /* body is normal-looking */
       ((is_symbol(caar(body))) || ((is_c_function(caar(body))) && (is_safe_procedure(caar(body))))))
     {
       /* loop has one step variable, and normal-looking end test */
@@ -91375,11 +91418,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_UNWIND_OUTPUT:          op_unwind_output(sc);                          continue;
 	case OP_UNWIND_INPUT:           op_unwind_input(sc);                           continue;
 	case OP_DYNAMIC_UNWIND:         dynamic_unwind(sc, sc->code, sc->args);        continue;
+	case OP_PROFILE_IN:             g_profile_in(sc, set_plist_2(sc, cadr(sc->code), sc->curlet)); continue;
 	case OP_DYNAMIC_UNWIND_PROFILE: g_profile_out(sc, set_plist_1(sc, sc->args));  continue;
-	case OP_PROFILE_IN:	        g_profile_in(sc, set_plist_1(sc, sc->curlet)); continue;
 	case OP_DYNAMIC_WIND:           if (op_dynamic_wind(sc)) goto APPLY;           continue;
 	case OP_DEACTIVATE_GOTO:        call_exit_active(sc->args) = false;            continue; /* deactivate the exiter */
-
 
 	case OP_WITH_LET_S:         if (op_with_let_s(sc)) goto BEGIN; continue;
 	case OP_WITH_LET:           check_with_let(sc);
@@ -91590,8 +91632,8 @@ typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS
 	      SL_DEFAULT_HASH_TABLE_LENGTH, SL_INITIAL_STRING_PORT_LENGTH, SL_DEFAULT_RATIONALIZE_ERROR,
 	      SL_DEFAULT_RANDOM_STATE, SL_EQUIVALENT_FLOAT_EPSILON, SL_HASH_TABLE_FLOAT_EPSILON, SL_PRINT_LENGTH,
 	      SL_BIGNUM_PRECISION, SL_MEMORY_USAGE, SL_FLOAT_FORMAT_PRECISION, SL_HISTORY, SL_HISTORY_ENABLED,
-	      SL_HISTORY_SIZE, SL_PROFILE, SL_PROFILE_INFO, SL_AUTOLOADING, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_MUFFLE_WARNINGS,
-	      SL_MOST_POSITIVE_FIXNUM, SL_MOST_NEGATIVE_FIXNUM, SL_OUTPUT_PORT_DATA_SIZE, SL_DEBUG, SL_VERSION,
+	      SL_HISTORY_SIZE, SL_PROFILE, SL_PROFILE_INFO, SL_PROFILE_PREFIX, SL_AUTOLOADING, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, 
+	      SL_MUFFLE_WARNINGS, SL_MOST_POSITIVE_FIXNUM, SL_MOST_NEGATIVE_FIXNUM, SL_OUTPUT_PORT_DATA_SIZE, SL_DEBUG, SL_VERSION,
 	      SL_GC_TEMPS_SIZE, SL_GC_RESIZE_HEAP_FRACTION, SL_GC_RESIZE_HEAP_BY_4_FRACTION, SL_OPENLETS, SL_EXPANSIONS,
 	      SL_NUM_FIELDS} s7_let_field_t;
 
@@ -91604,8 +91646,8 @@ static const char *s7_let_field_names[SL_NUM_FIELDS] =
    "default-hash-table-length", "initial-string-port-length", "default-rationalize-error",
    "default-random-state", "equivalent-float-epsilon", "hash-table-float-epsilon", "print-length",
    "bignum-precision", "memory-usage", "float-format-precision", "history", "history-enabled",
-   "history-size", "profile", "profile-info", "autoloading?", "accept-all-keyword-arguments", "muffle-warnings?",
-   "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
+   "history-size", "profile", "profile-info", "profile-prefix", "autoloading?", "accept-all-keyword-arguments", 
+   "muffle-warnings?", "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
    "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?"};
 
 
@@ -92040,6 +92082,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_PRINT_LENGTH:                  return(make_integer(sc, sc->print_length));
     case SL_PROFILE:                       return(make_integer(sc, sc->profile));
     case SL_PROFILE_INFO:                  return(profile_info_out(sc));
+    case SL_PROFILE_PREFIX:                return(sc->profile_prefix);
     case SL_ROOTLET_SIZE:                  return(make_integer(sc, sc->rootlet_entries));
     case SL_SAFETY:                        return(make_integer(sc, sc->safety));
     case SL_STACK:                         return(sl_stack_entries(sc, sc->stack, current_stack_top(sc)));
@@ -92378,6 +92421,9 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
 
     case SL_PROFILE_INFO:
       return((val == sc->F) ? clear_profile_info(sc) : simple_s7_let_wrong_type_argument_with_type(sc, sym, val, wrap_string(sc, "#f (to clear the table)", 23)));
+    case SL_PROFILE_PREFIX:
+      if ((is_symbol(val)) || val == sc->F) {sc->profile_prefix = val; return(val);}
+      return(simple_s7_let_wrong_type_argument_with_type(sc, sym, val, wrap_string(sc, "a symbol or #f", 14)));
 
     case SL_ROOTLET_SIZE: return(sl_unsettable_error(sc, sym));
 
@@ -94208,7 +94254,7 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote);
 
-  sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 1, 0, false); /* calls dynamic-unwind */
+  sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 2, 0, false); /* calls dynamic-unwind */
   sc->profile_out = NULL;
 
   /* -------- *features* -------- */
@@ -94585,9 +94631,11 @@ s7_scheme *s7_init(void)
   sc->safety = NO_SAFETY;
   sc->debug = 0;
   sc->profile = 0;
+  sc->profile_position = 0;
   sc->debug_or_profile = false;
   sc->profiling_gensyms = false;
   sc->profile_data = NULL;
+  sc->profile_prefix = sc->F;
   sc->print_length = DEFAULT_PRINT_LENGTH;
   sc->history_size = DEFAULT_HISTORY_SIZE;
   sc->true_history_size = DEFAULT_HISTORY_SIZE;
@@ -95034,8 +95082,11 @@ void s7_free(s7_scheme *sc)
   if (sc->profile_data)
     {
       free(sc->profile_data->funcs);
+      free(sc->profile_data->let_names);
+      free(sc->profile_data->files);
+      free(sc->profile_data->lines);
       free(sc->profile_data->excl);
-      free(sc->profile_data->data);
+      free(sc->profile_data->timing_data);
       free(sc->profile_data);
     }
   if (sc->c_object_types)
@@ -95269,6 +95320,7 @@ int main(int argc, char **argv)
  *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
  * tleft.scm
  * t718 repl bug -- need context
+ *
  * fx_treeable: tleft for eventual test cases, copy let in order [let(rec)(*) do lambda call/exit?]
  *   perhaps remove fx_tree (and annotate?) from opt_lambda
  *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
@@ -95276,17 +95328,8 @@ int main(int argc, char **argv)
  *   fxified case results, cond 73208 -- needs to be in case branch cond_fx_fx function -> case, check_case 74663 gets fx_tree
  *     op_case_??? need case timing tests [all ops] -- add to tcase? tsyn+call/exit+dw etc? or tmisc [t520]
  *     case_a|s|i_i|s|e_[n]a -> fx*
- * add profile support for local funcs: (*s7* 'profile-prefix) checked in profile_in etc
- *   set funclet_function to the let/func name so that it's not created on every call
- *   but does this wreck other uses of *function*?  
- *     find_closure (name in let)
- *     (*function* '...) in g_function
- *     check_do but this looks like it should use is_fx_treeable
- *     is_immutable_and_stable used by op_unknown*
- *   symbol_info has 32 bits available in dx, or we could use a different field (void *data: pos original-func-name?)
- *   or have funclet_function return the unspecialized name, funclet_local_function the let/func name
- *     + bit (symbol): normal *function* or let-specific?
- *     the profile-info returned to user is #(func-names let-prefixes timing-data ticks-per-second)?
- *     (we use let/func internally for positioning, but keep the original let and func names for profile-info)
- *     the position -> let and func names, funclet_function->let/name
+ *   see 80351
+ *   all do loops should add-slot at end
+ *
+ * update repls, t725
  */
