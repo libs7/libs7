@@ -55,10 +55,9 @@
 		      ((= i end))
 		    (let ((entry (vector-ref vect i)))
 		      (when (symbol? (cadr entry))
-			(let ((len (+ (length (symbol->string (cadr entry)))
-				      (if (list-ref entry 4)
-					  (+ 1 (length (symbol->string (list-ref entry 4))))
-					  0))))
+			(let ((len (if (list-ref entry 4)          ; there is a let-name
+				       (+ 1 (length (symbol->string (cadr entry))) (length (symbol->string (list-ref entry 4))))
+				       (length (symbol->string (cadr entry))))))
 			  (set! name-len (+ name-len len))
 			  (set! name-max (max name-max len)))))
 		    (set! call-max (max call-max (caddr (vector-ref vect i)))))

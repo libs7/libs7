@@ -10709,14 +10709,17 @@
 	 (let ((s7-fields (let ((h (make-hash-table)))
 			    (for-each (lambda (f)
 					(hash-table-set! h f #t))
-				      '(print-length safety cpu-time heap-size max-heap-size free-heap-size gc-freed max-string-length max-list-length
-				        max-vector-length max-vector-dimensions default-hash-table-length initial-string-port-length memory-usage
-					gc-protected-objects file-names rootlet-size c-types stack-top stack-size stacktrace-defaults history-enabled
-					max-stack-size stack catches float-format-precision bignum-precision default-rationalize-error debug
-					default-random-state equivalent-float-epsilon hash-table-float-epsilon undefined-identifier-warnings expansions?
-					undefined-constant-warnings gc-stats history-size history autoloading? max-format-length max-port-data-size
-					most-positive-fixnum most-negative-fixnum output-port-data-size accept-all-keyword-arguments profile-info
-					gc-temps-size gc-resize-heap-fraction gc-resize-heap-by-4-fraction gc-total-freed profile openlets version))
+				      '(stack-top stack-size stacktrace-defaults heap-size free-heap-size
+				        gc-freed gc-protected-objects gc-total-freed gc-info file-names rootlet-size c-types safety
+					undefined-identifier-warnings undefined-constant-warnings gc-stats max-heap-size
+					max-port-data-size max-stack-size cpu-time catches stack max-string-length
+					max-format-length max-list-length max-vector-length max-vector-dimensions
+					default-hash-table-length initial-string-port-length default-rationalize-error
+					default-random-state equivalent-float-epsilon hash-table-float-epsilon print-length
+					bignum-precision memory-usage float-format-precision history history-enabled
+					history-size profile profile-info profile-prefix autoloading? accept-all-keyword-arguments 
+					muffle-warnings? most-positive-fixnum most-negative-fixnum output-port-data-size debug version
+					gc-temps-size gc-resize-heap-fraction gc-resize-heap-by-4-fraction openlets expansions?))
 			    h)))
 	   (lambda (caller head form env)
 	     (if (len=2? form)
