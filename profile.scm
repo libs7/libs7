@@ -13,7 +13,7 @@
 
       (lambda* ((n 100))
 	(let ((info (*s7* 'profile-info))) 
-	  ;; a list: '(vector-of-function-names int-vector-of-profile-data ticks-per-second let-names file-names line-numbers)
+	  ;; a list: '(vector-of-function-names int-vector-of-profile-data ticks-per-second let-names file-names line-numbers ambiguous-names)
 	  (if (not info)
 	      (format *profile-port* "no profiling data!~%")
 	      
@@ -34,6 +34,8 @@
 		     ;; strings, #f if none (includes line-numbers)
 
 		     (line-numbers (list-ref info 5))
+		     (ambiguous-names (list-ref info 6)) ; function names that occur more than once
+
 		     (entries (length funcs))
 		     (vect (make-vector entries)))
 		(do ((i 0 (+ i 1)))
@@ -42,8 +44,9 @@
 					    (funcs i)                             ; function name
 					    (data (* i 5))                        ; calls
 					    (/ (data (+ (* i 5) 4)) ticks/sec)    ; exclusive timing
-					    (let-names i) (file-names i) (line-numbers i))))
-		
+					    (let-names i) 
+					    (file-names i) 
+					    (line-numbers i))))
 		(set! vect (sort! vect (lambda (a b)               ; sort by inclusive time, to sort by calls use caddr
 					 (> (car a) (car b)))))
 					 ;(> (caddr a) (caddr b)))))
@@ -89,7 +92,7 @@
 
 		    (let ((entry (vector-ref vect i)))
 		      (when (symbol? (cadr entry))
-			(format *profile-port* "  ~A:~NTcalls ~S, ~NTtime ~,4F ~NT~,4F~%" 
+			(format *profile-port* "  ~A:~NTcalls ~S, ~NTtime ~,4F ~NT~,4F" 
 				(if (list-ref entry 4)
 				    (string-append (symbol->string (list-ref entry 4)) "/" (symbol->string (cadr entry)))
 				    (cadr entry))
@@ -99,6 +102,10 @@
 				(car entry)
 				(+ name-max 5 6 call-max 8 6)
 				(max 0.0 (cadddr entry)))
+			(when (and (memq (cadr entry) ambiguous-names)
+				   (string? (list-ref entry 5)))
+			  (format *profile-port* ", ~A[~D]" (list-ref entry 5) (list-ref entry 6)))
+			(newline *profile-port*)
 			(set! fs (+ fs 1))
 			(set! excl (+ excl (cadddr entry)))))))))))))
 	      

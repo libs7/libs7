@@ -41,7 +41,7 @@
 		     ("tgsl.scm" . "v-gsl")
 		     ("tlist.scm" . "v-list")
 		     ("tload.scm" . "v-load")
-		     ("cookbook.scm" . "v-cook")
+		     ("cb.scm" . "v-cb")
 		     ("tari.scm" . "v-ari")
 		     ("texit.scm" . "v-exit")
 		     ("tleft.scm" . "v-left")
@@ -116,7 +116,7 @@
 	 (reader-cond ((not (provided? 'gmp)) (list "repl" "tari.scm")))
 	 (list "repl" "tgc.scm")
 	 (list "repl" "thash.scm")
-	 (list "repl" "cookbook.scm")
+	 (list "repl" "cb.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
 	 (list "snd -noinit" "tall.scm")
 	 (list "snd -l" "snd-test.scm")
