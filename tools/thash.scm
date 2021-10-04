@@ -1,3 +1,10 @@
+(when (provided? 'pure-s7)
+  (define (vector-fill! vect val . args)
+    (if (vector? vect)
+	(apply fill! vect val args)
+	(error 'wrong-type-arg "vector-fill! argument should be a vector: ~A" str))))
+
+
 (set! (*s7* 'heap-size) (* 12 1024000))
 
 (define (reader)

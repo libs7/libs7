@@ -1863,7 +1863,7 @@ int main(int argc, char **argv)
       int gloc;
       gloc = s7_gc_protect(sc, p);
       s1 = TO_STR(p);
-      if (strcmp(s1, "((var2 . #t) (var1 . #f))") != 0)
+      if ((strcmp(s1, "((var2 . #t) (var1 . #f))") != 0) && (strcmp(s1, "((var1 . #f) (var2 . #t))") != 0))
 	{fprintf(stderr, "%d: env->list: %s\n", __LINE__, s1);}
       free(s1);
       s7_gc_unprotect_at(sc, gloc);
@@ -2575,15 +2575,20 @@ int main(int argc, char **argv)
   }
 
   {
-    s7_pointer p, q;
+    s7_pointer p;
     p = s7_random_state(sc, s7_cons(sc, s7_make_integer(sc, 123456), s7_cons(sc, s7_make_integer(sc, 654321), s7_nil(sc))));
     if (!s7_is_random_state(p))
       fprintf(stderr, "%d: s7_random_state returned %s\n", __LINE__, TO_STR(p));
     if (s7_type_of(sc, p) != s7_make_symbol(sc, "random-state?"))
       fprintf(stderr, "%d: s7_random_state returned %s\n", __LINE__, TO_STR(p));
-    q = s7_random_state_to_list(sc, s7_cons(sc, p, s7_nil(sc)));
-    if (!s7_is_pair(q))
-      fprintf(stderr, "%d: s7_random_state_to_list is %s\n", __LINE__, TO_STR(q));
+#if (!WITH_GMP)
+    {
+      s7_pointer q;
+      q = s7_random_state_to_list(sc, s7_cons(sc, p, s7_nil(sc)));
+      if (!s7_is_pair(q))
+	fprintf(stderr, "%d: s7_random_state_to_list is %s\n", __LINE__, TO_STR(q));
+    }
+#endif
   }
 
   {

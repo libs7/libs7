@@ -1,5 +1,14 @@
 (set! (*s7* 'heap-size) (* 8 1024000))
 
+(when (provided? 'pure-s7)
+  (define (vector-append . args)
+    (if (null? args)
+	#()
+	(if (vector? (car args))
+	    (apply append args)
+	    (error 'wrong-type-arg "vector-append arguments should be vectors: ~A" args)))))
+
+
 (define (cpy1 x y) ; opt_dox
   (do ((i 0 (+ i 1))
        (len (length x)))

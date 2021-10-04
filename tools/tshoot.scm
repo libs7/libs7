@@ -1,6 +1,14 @@
 ;;; various standard benchmarks 
 ;;; --------------------------------------------------------------------------------
 
+(when (provided? 'pure-s7)
+  (define (string-length str)
+    (if (string? str)
+	(length str)
+	(if (openlet? str)
+	    ((let-ref str 'string-length) str)
+	    (error 'wrong-type-arg "string-length argument should be a string: ~A" str)))))
+
 (set! (*s7* 'heap-size) 512000)
 
 (define (fannkuch n)

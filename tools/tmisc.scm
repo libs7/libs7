@@ -384,22 +384,24 @@
 
 ;;; -------- methods --------
 
-(define (m5)
-  (let ((L (openlet (inlet :length (lambda (str) (+ 2 (#_string-length "asdfghjklijk")))))))
-    (do ((i 0 (+ i 1)))
-	((= i 1000000) (length L))
-      (length L))))
+(unless (provided? 'pure-s7)
 
-(unless (eqv? (m5) 14) (format *stderr* "m5: ~S~%" (m5)))
-
-(define (m6)
-  (let ((L (openlet (inlet :length (lambda (str) (+ 2 (#_string-length str)))))))
-    (do ((i 0 (+ i 1)))
-	((= i 1000000) (with-let L (length "asdfghjklijk")))
-      (with-let L
-	(length "asdfghjklijk")))))
-
-(unless (eqv? (m6) 14) (format *stderr* "m6: ~S~%" (m6)))
+  (define (m5)
+    (let ((L (openlet (inlet :length (lambda (str) (+ 2 (#_string-length "asdfghjklijk")))))))
+      (do ((i 0 (+ i 1)))
+	  ((= i 1000000) (length L))
+	(length L))))
+  
+  (unless (eqv? (m5) 14) (format *stderr* "m5: ~S~%" (m5)))
+  
+  (define (m6)
+    (let ((L (openlet (inlet :length (lambda (str) (+ 2 (#_string-length str)))))))
+      (do ((i 0 (+ i 1)))
+	  ((= i 1000000) (with-let L (length "asdfghjklijk")))
+	(with-let L
+	  (length "asdfghjklijk")))))
+  
+  (unless (eqv? (m6) 14) (format *stderr* "m6: ~S~%" (m6))))
 
 (define (m7)
   (let ((L (openlet (inlet :+ (lambda (x y) (#_+ x y 1))))))

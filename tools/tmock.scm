@@ -122,6 +122,14 @@
   (display (cfft mockdata cfft-size)) (newline))
 
 
+(when (provided? 'pure-s7)
+  (define (string-length str)
+    (if (string? str)
+	(length str)
+	(if (openlet? str)
+	    ((let-ref str 'string-length) str)
+	    (error 'wrong-type-arg "string-length argument should be a string: ~A" str)))))
+
 (define (palindrome? str)
   (or (< (string-length str) 2)
       (and (char=? (string-ref str 0)

@@ -1,3 +1,18 @@
+(when (provided? 'pure-s7)
+  (define-macro (cond-expand . clauses)
+    (letrec ((traverse (lambda (tree)
+			 (if (pair? tree)
+			     (cons (traverse (car tree))
+				   (if (null? (cdr tree)) () (traverse (cdr tree))))
+			     (if (memq tree '(and or not else))
+				 tree
+				 (and (symbol? tree) (provided? tree)))))))
+      `(cond ,@(map (lambda (clause)
+		      (cons (traverse (car clause))
+			    (if (null? (cdr clause)) '(#f) (cdr clause))))
+		    clauses)))))
+
+
 (let ((new-env (sublet (curlet) (cons 'init_func 'block_init)))) ; load calls init_func if possible
   (load "s7test-block.so" new-env))
 
