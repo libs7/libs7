@@ -4161,6 +4161,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_CASE_A_E_S, OP_CASE_A_I_S, OP_CASE_A_G_S, OP_CASE_A_E_G, OP_CASE_A_G_G, OP_CASE_A_S_S, OP_CASE_A_S_G,
       OP_CASE_P_E_S, OP_CASE_P_I_S, OP_CASE_P_G_S, OP_CASE_P_E_G, OP_CASE_P_G_G, OP_CASE_P_S_S, OP_CASE_P_S_G,
       OP_CASE_E_S, OP_CASE_I_S, OP_CASE_G_S, OP_CASE_E_G, OP_CASE_G_G, OP_CASE_S_S, OP_CASE_S_G,
+      OP_CASE_A_S_S_A, OP_CASE_A_I_S_A,
 
       OP_IF_UNCHECKED, OP_AND_P, OP_AND_P1, OP_AND_AP, OP_AND_PAIR_P,
       OP_AND_SAFE_P1, OP_AND_SAFE_P2, OP_AND_SAFE_P3, OP_AND_SAFE_P_REST, OP_AND_2A, OP_AND_3A, OP_AND_N, OP_AND_S_2,
@@ -4377,6 +4378,7 @@ static const char* op_names[NUM_OPS] =
       "case_a_e_s", "case_a_i_s", "case_a_g_s", "case_a_e_g", "case_a_g_g", "case_a_s_s", "case_a_s_g",
       "case_p_e_s", "case_p_i_s", "case_p_g_s", "case_p_e_g", "case_p_g_g", "case_p_s_s", "case_p_s_g",
       "case_e_s", "case_i_s", "case_g_s", "case_e_g", "case_g_g", "case_s_s", "case_s_g",
+      "case_a_s_s_a", "case_a_i_s_a",
 
       "if_unchecked", "and_p", "and_p1", "and_ap", "and_pair_p",
       "and_safe_p1", "op_and_safe_p2", "and_safe_p3", "and_safe_p_rest", "and_2a", "and_3a", "and_n", "and_s_2",
@@ -74540,7 +74542,7 @@ static inline bool is_undefined_feed_to(s7_scheme *sc, s7_pointer sym)
 static s7_pointer check_case(s7_scheme *sc)
 {
   /* we're not checking repeated or ridiculous (non-eqv?) keys here because they aren't errors */
-  bool keys_simple = true, has_feed_to = false, keys_single = true, bodies_simple = true, has_else = false;
+  bool keys_simple = true, has_feed_to = false, keys_single = true, bodies_simple = true, has_else = false, use_fx = true;
   int32_t key_type = T_FREE;
   s7_pointer x, carc, code = cdr(sc->code);
 
@@ -74557,8 +74559,7 @@ static s7_pointer check_case(s7_scheme *sc)
   for (x = cdr(code); is_pair(x); x = cdr(x))
     {
       s7_pointer y, car_x;
-      if ((!is_pair(x)) ||                                           /* (case 1 ((2) 1) . 1) */
-	  (!is_pair(car(x))))
+      if (!is_pair(car(x)))
 	eval_error(sc, "case clause ~A messed up", 24, x);
       car_x = car(x);
 
@@ -74567,7 +74568,10 @@ static s7_pointer check_case(s7_scheme *sc)
 
       if ((bodies_simple) &&
 	  ((is_null(cdr(car_x))) || (!is_null(cddr(car_x)))))
-	bodies_simple = false;
+	  bodies_simple = false;
+
+      use_fx = ((use_fx) && (bodies_simple) && (is_fxable(sc, cadr(car_x))));
+      /* fprintf(stderr, "%d %s\n", use_fx, display(cadr(car_x))); */
 
       y = car(car_x);
       if (!is_pair(y))
@@ -74700,16 +74704,18 @@ static s7_pointer check_case(s7_scheme *sc)
 	}
       else pair_set_syntax_op(sc->code, (key_type == T_SYMBOL) ? OP_CASE_P_S_S : OP_CASE_P_E_S);
 
-  /* need to fx_annotate the results, lambda? */
-  /* if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree_in(sc, code); */
-  /* so if selector fxable, and each return also, case_a_na... -- can these choices be moved to bits not ops? */
-  /* X=A, ignore P
-   * Y: ignore this or use to choose case_i_s etc??
-   * Z: are all returns fxable (no =>)
-   *   case_a_na maybe split as case_a_i|e=single_na: ass aes ais cases -> asa[always eval] aea[always eval] aia[eval if found]?
-   *   so we need a separate set: no => + body not simple + return all fxable [split only int?]
-   *   7 case_a -> 14 case_a..._na|a?
-   */
+  if ((use_fx) && (has_else) && ((optimize_op(sc->code) == OP_CASE_A_S_S) || ((!WITH_GMP) && (optimize_op(sc->code) == OP_CASE_A_I_S))))
+    {
+      pair_set_syntax_op(sc->code, (optimize_op(sc->code) == OP_CASE_A_I_S) ? OP_CASE_A_I_S_A : OP_CASE_A_S_S_A);
+      for (x = cdr(code); is_pair(x); x = cdr(x))
+	{
+	  s7_pointer clause;
+	  clause = cdar(x);
+	  set_fx_direct(clause, fx_choose(sc, clause, sc->curlet, let_symbol_is_safe));
+	  if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree_in(sc, clause);
+	  if (is_null(cdr(x))) set_opt3_any(code, clause);
+	}
+    }
   carc = cadr(sc->code);
   if (!is_pair(carc))
     {
@@ -74730,16 +74736,12 @@ static bool op_case_i_s(s7_scheme *sc)
       if (is_t_integer(selector))
 	{
 	  s7_int val = integer(selector);
-	  for (x = cddr(sc->code); is_pair(x); x = cdr(x))
-	    if (is_t_integer(opt2_any(x)))
+	  for (x = cddr(sc->code); is_pair(cdr(x)); x = cdr(x))
+	    if (integer(opt2_any(x)) == val)
 	      {
-		if (integer(opt2_any(x)) == val)
-		  {
-		    sc->code = opt1_clause(x);
-		    return(false);
-		  }}
-	    else break;
-	}
+		sc->code = opt1_clause(x);
+		return(false);
+	      }}
       sc->code = else_clause;
       return(false);
     }
@@ -74754,6 +74756,21 @@ static bool op_case_i_s(s7_scheme *sc)
 	  }}
   sc->value = sc->unspecified;
   return(true);
+}
+
+static s7_pointer fx_case_a_i_s_a(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer selector;
+  selector = fx_call(sc, cdr(code));
+  if (is_t_integer(selector))
+    {
+      s7_pointer x;
+      s7_int val = integer(selector);
+      for (x = cddr(sc->code); is_pair(cdr(x)); x = cdr(x))
+	if (integer(opt2_any(x)) == val)
+	  return(fx_call(sc, cdar(x)));    
+    }
+  return(fx_call(sc, opt3_any(cdr(code))));
 }
 #endif
 
@@ -74933,6 +74950,20 @@ static void op_case_s_s(s7_scheme *sc)
 	    return;
 	  }}
   sc->code = opt3_any(cdr(sc->code));
+}
+
+static inline s7_pointer fx_case_a_s_s_a(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer selector;
+  selector = fx_call(sc, cdr(code));
+  if (is_symbol(selector))
+    {
+      s7_pointer x;
+      for (x = cddr(code); is_pair(x); x = cdr(x))
+	if (opt2_any(x) == selector)
+	  return(fx_call(sc, cdar(x)));
+    }
+  return(fx_call(sc, opt3_any(cdr(code))));
 }
 
 static void op_case_g_s(s7_scheme *sc)
@@ -91245,11 +91276,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  if (has_fx(sc->code))       /* all fx_proc's are set via fx_choose which can return nil, but it is not cleared when type is */
 	    {                         /*   so, if (fx_proc(sc->code)) here and in OR_P is not safe */
 	      sc->value = fx_call(sc, sc->code);
-	      if (is_false(sc, sc->value))
-		continue;
+	      if (is_false(sc, sc->value)) continue;
 	      sc->code = cdr(sc->code);
-	      if (is_null(sc->code))  /* this order of checks appears to be faster than any of the alternatives */
-		continue;
+	      if (is_null(sc->code)) continue;  /* this order of checks appears to be faster than any of the alternatives */
 	      goto AND_P;
 	    }
 	  if (is_not_null(cdr(sc->code)))
@@ -91284,11 +91313,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  if (has_fx(sc->code))
 	    {
 	      sc->value = fx_call(sc, sc->code);
-	      if (is_true(sc, sc->value))
-		continue;
+	      if (is_true(sc, sc->value)) continue;
 	      sc->code = cdr(sc->code);
-	      if (is_null(sc->code))
-		continue;
+	      if (is_null(sc->code)) continue;
 	      goto OR_P;
 	    }
 	  if (is_not_null(cdr(sc->code)))
@@ -91333,8 +91360,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_CASE:                     /* car(sc->code) is the selector */
 	  /* selector A, key type: E=eq (symbol/char), I=integer, G=any, S=single keys and single bodies */
-	  if (check_case(sc)) goto EVAL; 
-	  goto G_G;                       /* selector is a symbol or constant, stupid indentation to shut up the compiler */
+	  if (check_case(sc)) goto EVAL; else goto G_G;  /* selector is a symbol or constant, stupid "else" to shut up the compiler */
 
 	case OP_CASE_A_G_G: sc->value = fx_call(sc, cdr(sc->code));
 	G_G: case OP_CASE_G_G: if (op_case_g_g(sc)) goto TOP_NO_POP; goto FEED_TO;
@@ -91361,18 +91387,18 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CASE_P_E_G: push_stack_no_args_direct(sc, OP_CASE_E_G); sc->code = cadr(sc->code); goto EVAL;
 	case OP_CASE_P_S_G: push_stack_no_args_direct(sc, OP_CASE_S_G); sc->code = cadr(sc->code); goto EVAL;
 
+	case OP_CASE_A_S_S_A: sc->value = fx_case_a_s_s_a(sc, sc->code); continue;
+	case OP_CASE_A_I_S_A: sc->value = fx_case_a_i_s_a(sc, sc->code); continue;
 
 	case OP_ERROR_QUIT:
-	  if (sc->stack_end <= sc->stack_start)
-	    stack_reset(sc);          /* sets stack_end to stack_start, then pushes op_barrier and op_eval_done */
+	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_barrier and op_eval_done */
 	  return(sc->F);
 
 	case OP_ERROR_HOOK_QUIT:
 	  op_error_hook_quit(sc);
 
 	case OP_FLUSH_VALUES:
-	  if (is_multiple_value(sc->value))
-	    sc->value = sc->nil; /* cancel int/float_optimize */
+	  if (is_multiple_value(sc->value)) sc->value = sc->nil; /* cancel int/float_optimize */
 	case OP_EVAL_DONE:
 	  return(sc->F);
 
@@ -92703,6 +92729,8 @@ static void init_fx_function(void)
   fx_function[HOP_SAFE_CLOSURE_A_TO_SC] = fx_safe_closure_a_to_sc;
 
   fx_function[OP_COND_NA_NA] = fx_cond_na_na;
+  fx_function[OP_CASE_A_S_S_A] = fx_case_a_s_s_a;
+  fx_function[OP_CASE_A_I_S_A] = fx_case_a_i_s_a;
   fx_function[OP_IF_A_C_C] = fx_if_a_c_c;
   fx_function[OP_IF_A_A] = fx_if_a_a;
   fx_function[OP_IF_S_A_A] = fx_if_s_a_a;
@@ -94850,7 +94878,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 922) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 924) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95244,24 +95272,24 @@ int main(int argc, char **argv)
  * tpeak       124          115    114    110    110
  * tref        513          691    687    476    463
  * tauto       785          648    642    496    496
- * index      1032         1026   1016    981    976   973
+ * index      1032         1026   1016    981    973
  * tmock      7738         1177   1165   1090   1054
- * tleft      1725         1708   1689   1433   1350  1348 [fx_t]
+ * tleft      1725         1708   1689   1433   1348
  * tvect      1892         2456   2413   1735   1712
  * s7test     4506         1873   1831   1792   1786
  * texit      1768         ----   ----   1886   1801
- * lt         2121         2123   2110   2120   2113
+ * lt         2121         2123   2110   2120   2111
  * tform      3235         2281   2273   2255   2242
- * tread      2606         2440   2421   2415   2411
+ * tread      2606         2440   2421   2415   2411  2418 [op_eval_string]
  * tmac       2452         3317   3277   2409   2420
  * fbench     2848         2688   2583   2475   2458
  * trclo      4107         2735   2574   2475   2458
- * tmat       2683         3065   3042   2530   2527  2516
+ * tmat       2683         3065   3042   2530   2516
  * tcopy      2610         8035   5546   2550   2555
  * dup        2783         3805   3788   2565   2555
  * tb         3383         2735   2681   2627   2616
  * titer      2693         2865   2842   2679   2640
- * tsort      3576         3105   3104   2860   2859
+ * tsort      3576         3105   3104   2860   2856
  * tset       3114         3253   3104   3089   3081
  * tload      3861         ----   ----   3142   3155
  * teq        3554         4068   4045   3570   3539
@@ -95271,8 +95299,8 @@ int main(int argc, char **argv)
  * tcase      4519         4960   4793   4444   4444
  * tmap       5491         8869   8774   4493   4492
  * tfft      115.0         7820   7729   4787   4778
- * tshoot     6923         5525   5447   5220   5207
- * tnum       56.7         6348   6013   5443   5431  5437
+ * tshoot     6923         5525   5447   5220   5203
+ * tnum       56.7         6348   6013   5443   5437
  * tstr       6187         6880   6342   5776   5508
  * tgsl       25.2         8485   7802   6397   6390
  * trec       8320         6936   6922   6553   6512
@@ -95285,7 +95313,7 @@ int main(int argc, char **argv)
  * tgen       12.2         11.2   11.4   11.5   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.1   37.0
- * sg         75.8         ----   ----   56.1   56.0
+ * sg         75.8         ----   ----   56.1   55.9
  * lg        104.7        106.6  105.0  104.4  103.9
  * tbig      605.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
@@ -95299,13 +95327,12 @@ int main(int argc, char **argv)
  * fx_treeable: tleft/t520 for eventual test cases, copy let in order [let(rec)(*) lambda case call/exit?]
  *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
  *   how to opt bodies as in let -- fx_proc is back one level
- *   fxified case results, cond 73242 -- needs to be in case branch, check_case 74692 gets fx_tree
+ *   fxified case results, cond 73242 -- needs to be in case branch
  *     op_case_??? need case timing tests [all ops] -- add to tcase? tsyn+call/exit+dw etc? or tmisc [t520]
- *     case_a|s|i_i|s|e_[n]a -> fx* case_a_na
- *     optimize_expression precedes optimize_lambda, in check_case need fx_annotate/fx_curlet_tree, then -> op_case_a...
+ *     rest of case choices as in fx_case_a...
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
  *
- * opt: case_a_na, call/eixt, test (define (f x) (call-with-exit x))
- *      recur_if_a_z_oplaa_laa|l3a_l3a -> tlist->tleft [see also t526]
+ * opt: call/exit
+ *      recur_if_a_z_oplaa_laa|l3a_l3aq -> tlist->tleft [see also t526]
  */
