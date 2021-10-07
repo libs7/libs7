@@ -939,9 +939,7 @@ typedef struct s7_cell {
 	struct {                   /* (catch #t ...) opts */
 	  uint64_t op_stack_loc, goto_loc;
 	} ctall;
-	struct {
-	  s7_int key;              /* s7_int is sc->baffle_ctr type */
-	} bafl;
+	s7_int key;                /* s7_int is sc->baffle_ctr type */
       } edat;
     } envr;
 
@@ -3132,8 +3130,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define funclet_set_function(p, F)     (S_Let(p, L_FUNC))->object.envr.edat.efnc.function = T_Sym(F)
 #define set_curlet(Sc, P)              Sc->curlet = T_Lid(P)
 
-#define let_baffle_key(p)              (T_Let(p))->object.envr.edat.bafl.key
-#define set_let_baffle_key(p, K)       (T_Let(p))->object.envr.edat.bafl.key = K
+#define let_baffle_key(p)              (T_Let(p))->object.envr.edat.key
+#define set_let_baffle_key(p, K)       (T_Let(p))->object.envr.edat.key = K
 
 #define let_line(p)                    (C_Let(p, L_FUNC))->object.envr.edat.efnc.line
 #define let_set_line(p, L)             (S_Let(p, L_FUNC))->object.envr.edat.efnc.line = L
@@ -4174,7 +4172,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_CASE_A_E_S, OP_CASE_A_I_S, OP_CASE_A_G_S, OP_CASE_A_E_G, OP_CASE_A_G_G, OP_CASE_A_S_G,
       OP_CASE_P_E_S, OP_CASE_P_I_S, OP_CASE_P_G_S, OP_CASE_P_E_G, OP_CASE_P_G_G,
       OP_CASE_E_S, OP_CASE_I_S, OP_CASE_G_S, OP_CASE_E_G, OP_CASE_G_G, 
-      OP_CASE_A_I_S_A, OP_CASE_A_E_S_A, OP_CASE_A_G_S_A,
+      OP_CASE_A_I_S_A, OP_CASE_A_E_S_A, OP_CASE_A_G_S_A, OP_CASE_A_S_G_A,
 
       OP_IF_UNCHECKED, OP_AND_P, OP_AND_P1, OP_AND_AP, OP_AND_PAIR_P,
       OP_AND_SAFE_P1, OP_AND_SAFE_P2, OP_AND_SAFE_P3, OP_AND_SAFE_P_REST, OP_AND_2A, OP_AND_3A, OP_AND_N, OP_AND_S_2,
@@ -4207,7 +4205,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_SAFE_C_P_1, OP_SAFE_C_PP_1, OP_SAFE_C_PP_3_MV, OP_SAFE_C_PP_5, OP_SAFE_C_PP_6_MV,
       OP_SAFE_C_3P_1, OP_SAFE_C_3P_2, OP_SAFE_C_3P_3, OP_SAFE_C_3P_1_MV, OP_SAFE_C_3P_2_MV, OP_SAFE_C_3P_3_MV,
-      OP_SAFE_C_SP_1, OP_SAFE_C_SP_MV, OP_SAFE_CONS_SP_1, OP_SAFE_LIST_SP_1, OP_SAFE_ADD_SP_1, OP_SAFE_MULTIPLY_SP_1,
+      OP_SAFE_C_SP_1, OP_SAFE_C_SP_MV, OP_SAFE_CONS_SP_1, OP_SAFE_ADD_SP_1, OP_SAFE_MULTIPLY_SP_1,
       OP_SAFE_C_PS_1, OP_SAFE_C_PC_1, OP_SAFE_C_PS_MV, OP_SAFE_C_PC_MV,
       OP_EVAL_MACRO_MV, OP_MACROEXPAND_1, OP_APPLY_LAMBDA,
       OP_INCREMENT_SP_1, OP_INCREMENT_SP_MV, OP_ANY_C_NP_1, OP_ANY_C_NP_MV_1, OP_SAFE_C_SSP_1, OP_SAFE_C_SSP_MV_1,
@@ -4391,7 +4389,7 @@ static const char* op_names[NUM_OPS] =
       "case_a_e_s", "case_a_i_s", "case_a_g_s", "case_a_e_g", "case_a_g_g", "case_a_s_g",
       "case_p_e_s", "case_p_i_s", "case_p_g_s", "case_p_e_g", "case_p_g_g", 
       "case_e_s", "case_i_s", "case_g_s", "case_e_g", "case_g_g", 
-      "case_a_i_s_a", "case_a_e_s_a", "case_a_g_s_a",
+      "case_a_i_s_a", "case_a_e_s_a", "case_a_g_s_a", "case_a_s_g_a",
 
       "if_unchecked", "and_p", "and_p1", "and_ap", "and_pair_p",
       "and_safe_p1", "op_and_safe_p2", "and_safe_p3", "and_safe_p_rest", "and_2a", "and_3a", "and_n", "and_s_2",
@@ -4424,7 +4422,7 @@ static const char* op_names[NUM_OPS] =
 
       "safe_c_p_1", "safe_c_pp_1", "safe_c_pp_3_mv", "safe_c_pp_5", "safe_c_pp_6_mv",
       "safe_c_3p_1", "safe_c_3p_2", "safe_c_3p_3", "safe_c_3p_1_mv", "safe_c_3p_2_mv", "safe_c_3p_3_mv",
-      "safe_c_sp_1", "safe_c_sp_mv", "safe_cons_sp_1", "safe_list_sp_1", "safe_add_sp_1", "safe_multiply_sp_1",
+      "safe_c_sp_1", "safe_c_sp_mv", "safe_cons_sp_1", "safe_add_sp_1", "safe_multiply_sp_1",
       "safe_c_ps_1", "safe_c_pc_1", "safe_c_ps_mv", "safe_c_pc_mv",
       "eval_macro_mv", "macroexpand_1", "apply_lambda",
       "increment_sp_1", "increment_sp_mv", "any_c_np_1", "any_c_np_mv_1", "safe_c_ssp_1", "safe_c_ssp_mv_1",
@@ -29911,7 +29909,7 @@ static block_t *search_load_path(s7_scheme *sc, const char *name)
       block_t *b;
       char *filename;
       s7_pointer dir_names;
-      s7_int name_len;
+      s7_int name_len = safe_strlen(name);
 
       /* linux: PATH_MAX: 4096, windows: MAX_PATH: unlimited?, Mac: 1016?, BSD: MAX_PATH_LENGTH: 1024 */
 #if MS_WINDOWS || defined(__linux__)
@@ -29920,9 +29918,7 @@ static block_t *search_load_path(s7_scheme *sc, const char *name)
       #define S7_FILENAME_MAX 1024
 #endif
       b = mallocate(sc, S7_FILENAME_MAX);
-
       filename = (char *)block_data(b);
-      name_len = safe_strlen(name);
 
       for (dir_names = lst; is_pair(dir_names); dir_names = cdr(dir_names))
 	{
@@ -29992,9 +29988,7 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointer let)
 {
   /* if fname ends in .so, try loading it as a C shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
-  s7_int fname_len;
-
-  fname_len = safe_strlen(fname);
+  s7_int fname_len = safe_strlen(fname);
   if ((fname_len > 3) &&
       (local_strcmp((const char *)(fname + (fname_len - 3)), ".so")))
     {
@@ -30227,10 +30221,7 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
 #endif
 }
 
-s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes)
-{
-  return(s7_load_c_string_with_environment(sc, content, bytes, sc->nil));
-}
+s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes) {return(s7_load_c_string_with_environment(sc, content, bytes, sc->nil));}
 
 static s7_pointer g_load(s7_scheme *sc, s7_pointer args)
 {
@@ -30367,9 +30358,8 @@ void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size)
 
 static const char *find_autoload_name(s7_scheme *sc, s7_pointer symbol, bool *already_loaded, bool loading)
 {
-  s7_int l = 0, lib, libs;
+  s7_int l = 0, lib, libs = sc->autoload_names_loc;
   const char *name = symbol_name(symbol);
-  libs = sc->autoload_names_loc;
   for (lib = 0; lib < libs; lib++)
     {
       const char **names;
@@ -30423,7 +30413,6 @@ in the file, or by the function."
   #define Q_autoload s7_make_signature(sc, 3, sc->T, sc->is_symbol_symbol, sc->T)
 
   s7_pointer sym = car(args), value;
-
   if (is_string(sym))
     {
       if (string_length(sym) == 0)                   /* (autoload "" ...) */
@@ -31494,7 +31483,6 @@ static void flip_ref(shared_info_t *ci, s7_pointer p)
 {
   int32_t i;
   s7_pointer *objs = ci->objs;
-
   for (i = 0; i < ci->top; i++)
     if (objs[i] == p)
       {
@@ -37162,6 +37150,15 @@ static s7_pointer list_ref_p_pi(s7_scheme *sc, s7_pointer p1, s7_int i1)
   if (!is_pair(p1))
     simple_wrong_type_argument(sc, sc->list_ref_symbol, p1, T_PAIR);
   return(list_ref_p_pi_unchecked(sc, p1, i1));
+}
+
+static s7_pointer list_ref_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+{
+  if (!is_pair(p1))
+    return(g_list_ref(sc, set_plist_2(sc, p1, p2)));
+  if (!s7_is_integer(p2))
+    simple_wrong_type_argument(sc, sc->list_ref_symbol, p2, T_INTEGER);
+  return(list_ref_p_pi_unchecked(sc, p1, s7_integer_clamped_if_gmp(sc, p2)));
 }
 
 static inline s7_pointer list_set_p_pip_unchecked(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2)
@@ -68017,7 +68014,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_SSP_MV_1;
       return(args);
 
-    case OP_SAFE_C_SP_1: case OP_SAFE_CONS_SP_1: case OP_SAFE_LIST_SP_1: case OP_SAFE_ADD_SP_1: case OP_SAFE_MULTIPLY_SP_1:
+    case OP_SAFE_C_SP_1: case OP_SAFE_CONS_SP_1: case OP_SAFE_ADD_SP_1: case OP_SAFE_MULTIPLY_SP_1:
       stack_element(sc->stack, top) = (s7_pointer)OP_SAFE_C_SP_MV;
       return(args);
 
@@ -71619,10 +71616,8 @@ static void opt_sp_1(s7_scheme *sc, s7_function g, s7_pointer expr)
 {
   set_opt1_any(cdr(expr),
 	       (s7_pointer)((intptr_t)((g == g_cons) ? OP_SAFE_CONS_SP_1 :
-				       (((g == g_list) || (g == g_list_2)) ? OP_SAFE_LIST_SP_1 :
-					(((g == g_multiply) || (g == g_multiply_2)) ? OP_SAFE_MULTIPLY_SP_1 :
-					 (((g == g_add) || (g == g_add_2)) ? OP_SAFE_ADD_SP_1 :
-					  OP_SAFE_C_SP_1))))));
+				       (((g == g_multiply) || (g == g_multiply_2)) ? OP_SAFE_MULTIPLY_SP_1 :
+					(((g == g_add) || (g == g_add_2)) ? OP_SAFE_ADD_SP_1 : OP_SAFE_C_SP_1)))));
 }
 
 static opt_t set_any_c_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_pointer e, int32_t num_args, opcode_t op)
@@ -71636,7 +71631,6 @@ static opt_t set_any_c_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_po
    *   or use op_stack? error clears this? op-any-c-fp: op_any_c_2p|3p|fp? -- mimic clo_3p|4p?
    * all: 3 1 0 any_c_np (* 0.5 (- n 1) y)??
    */
-
   for (p = cdr(expr); is_pair(p); p = cdr(p))
     {
       set_fx(p, fx_choose(sc, p, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe));
@@ -74587,6 +74581,15 @@ static inline bool is_undefined_feed_to(s7_scheme *sc, s7_pointer sym)
 	 ((symbol_ctr(sc->feed_to_symbol) == 0) || (s7_symbol_value(sc, sc->feed_to_symbol) == sc->undefined)));
 }
 
+static bool is_all_fxable(s7_scheme *sc, s7_pointer x)
+{
+  s7_pointer p;
+  for (p = x; is_pair(p); p = cdr(p))
+    if (!is_fxable(sc, car(p)))
+      return(false);
+  return(true);
+}
+
 static s7_pointer check_case(s7_scheme *sc)
 {
   /* we're not checking repeated or ridiculous (non-eqv?) keys here because they aren't errors */
@@ -74602,8 +74605,6 @@ static s7_pointer check_case(s7_scheme *sc)
     eval_error(sc, "case clause is not a list? ~A", 29, sc->code);
   set_opt3_any(code, sc->unspecified);
 
-  /* fprintf(stderr, "check_case: %s %d\n", display(sc->code), is_pair(cdr(code)) && is_fx_treeable(cdr(code))); */
-
   for (x = cdr(code); is_pair(x); x = cdr(x))
     {
       s7_pointer y, car_x;
@@ -74616,11 +74617,9 @@ static s7_pointer check_case(s7_scheme *sc)
 
       if ((bodies_simple) &&
 	  ((is_null(cdr(car_x))) || (!is_null(cddr(car_x)))))
-	  bodies_simple = false;
+	bodies_simple = false;
 
-      use_fx = ((use_fx) && (bodies_simple) && (is_fxable(sc, cadr(car_x))));
-      /* fprintf(stderr, "%d %s\n", use_fx, display(cadr(car_x))); */
-
+      use_fx = ((use_fx) && (is_pair(cdr(car_x))) && (is_all_fxable(sc, cdr(car_x))));
       y = car(car_x);
       if (!is_pair(y))
 	{
@@ -74752,25 +74751,24 @@ static s7_pointer check_case(s7_scheme *sc)
 	}
       else pair_set_syntax_op(sc->code, OP_CASE_P_E_S);
 
-  if ((use_fx) && (has_else))
+  if ((use_fx) && (has_else) && (!has_feed_to))
     {
       opcode_t op;
       op = optimize_op(sc->code);
-      if ((op == OP_CASE_A_E_S) || (op == OP_CASE_A_G_S) || ((!WITH_GMP) && (op == OP_CASE_A_I_S)))
+      if ((op == OP_CASE_A_E_S) || (op == OP_CASE_A_G_S) || (op == OP_CASE_A_S_G) || ((!WITH_GMP) && (op == OP_CASE_A_I_S)))
 	{
-	  pair_set_syntax_op(sc->code, (op == OP_CASE_A_I_S) ? OP_CASE_A_I_S_A : ((op == OP_CASE_A_E_S) ? OP_CASE_A_E_S_A : OP_CASE_A_G_S_A));
+	  pair_set_syntax_op(sc->code, 
+			     (op == OP_CASE_A_I_S) ? OP_CASE_A_I_S_A :
+			       ((op == OP_CASE_A_E_S) ? OP_CASE_A_E_S_A : 
+				 ((op == OP_CASE_A_S_G) ? OP_CASE_A_S_G_A : OP_CASE_A_G_S_A)));
 	  for (x = cdr(code); is_pair(x); x = cdr(x))
 	    {
 	      s7_pointer clause;
 	      clause = cdar(x);
-	      set_fx_direct(clause, fx_choose(sc, clause, sc->curlet, let_symbol_is_safe));
-	      if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree_in(sc, clause);
+	      fx_annotate_args(sc, clause, sc->curlet);
+	      if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, clause);
 	      if (is_null(cdr(x))) set_opt3_any(code, clause);
-	    }}
-      /* s7test: lots of agg|asg, lint: asg, see cases
-       */
-    } /* use_fx but no else happens a lot */
-
+	    }}}
   carc = cadr(sc->code);
   if (!is_pair(carc))
     {
@@ -74883,6 +74881,34 @@ static bool op_case_e_g_1(s7_scheme *sc, s7_pointer selector, bool ok)
   sc->code = car(sc->code);
   sc->cur_op = optimize_op(sc->code);
   return(true);
+}
+
+static inline s7_pointer fx_call_all(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer p;
+  for (p = code; is_pair(cdr(p)); p = cdr(p))
+    fx_call(sc, p);
+  return(fx_call(sc, p));
+}
+
+static s7_pointer fx_case_a_s_g_a(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer selector, x, y;
+  selector = fx_call(sc, cdr(code));
+  if (is_case_key(selector))
+    {
+      for (x = cddr(sc->code); is_pair(x); x = cdr(x))
+	{
+	  y = opt2_any(x);
+	  if (!is_pair(y)) /* i.e. else? */
+	    return(fx_call_all(sc, cdar(x))); /* else clause */
+	  do {
+	    if (car(y) == selector)
+	      return(fx_call_all(sc, cdar(x)));
+	    y = cdr(y);
+	  } while (is_pair(y));
+	}}
+  return(fx_call_all(sc, opt3_any(cdr(code)))); /* selector is not a case-key */
 }
 
 static bool op_case_g_g(s7_scheme *sc)
@@ -90059,7 +90085,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_C_SP_MV: op_safe_c_sp_mv(sc); goto APPLY;
 
 	case OP_SAFE_CONS_SP_1:     sc->value = cons(sc, sc->args, sc->value); continue;
-	case OP_SAFE_LIST_SP_1:     sc->value = list_2(sc, sc->args, sc->value); continue;
 	case OP_SAFE_ADD_SP_1:      op_safe_add_sp_1(sc); continue;
 	case OP_SAFE_MULTIPLY_SP_1: op_safe_multiply_sp_1(sc); continue;
 
@@ -91437,10 +91462,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CASE_P_E_S: push_stack_no_args_direct(sc, OP_CASE_E_S); sc->code = cadr(sc->code); goto EVAL;
 	case OP_CASE_P_G_S: push_stack_no_args_direct(sc, OP_CASE_G_S); sc->code = cadr(sc->code); goto EVAL;
 	case OP_CASE_P_E_G: push_stack_no_args_direct(sc, OP_CASE_E_G); sc->code = cadr(sc->code); goto EVAL;
-
+#if (!WITH_GMP)
 	case OP_CASE_A_I_S_A: sc->value = fx_case_a_i_s_a(sc, sc->code); continue;
+#endif
 	case OP_CASE_A_E_S_A: sc->value = fx_case_a_e_s_a(sc, sc->code); continue;
 	case OP_CASE_A_G_S_A: sc->value = fx_case_a_g_s_a(sc, sc->code); continue;
+	case OP_CASE_A_S_G_A: sc->value = fx_case_a_s_g_a(sc, sc->code); continue;
 
 	case OP_ERROR_QUIT:
 	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_barrier and op_eval_done */
@@ -92781,9 +92808,12 @@ static void init_fx_function(void)
   fx_function[HOP_SAFE_CLOSURE_A_TO_SC] = fx_safe_closure_a_to_sc;
 
   fx_function[OP_COND_NA_NA] = fx_cond_na_na;
+#if (!WITH_GMP)
   fx_function[OP_CASE_A_I_S_A] = fx_case_a_i_s_a;
+#endif
   fx_function[OP_CASE_A_E_S_A] = fx_case_a_e_s_a;
   fx_function[OP_CASE_A_G_S_A] = fx_case_a_g_s_a;
+  fx_function[OP_CASE_A_S_G_A] = fx_case_a_s_g_a;
   fx_function[OP_IF_A_C_C] = fx_if_a_c_c;
   fx_function[OP_IF_A_A] = fx_if_a_a;
   fx_function[OP_IF_S_A_A] = fx_if_s_a_a;
@@ -92919,6 +92949,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_ppp_function(sc, global_value(sc->vector_set_symbol), vector_set_p_ppp);
   s7_set_p_ppp_function(sc, global_value(sc->int_vector_set_symbol), int_vector_set_p_ppp);
 
+  s7_set_p_pp_function(sc, global_value(sc->list_ref_symbol), list_ref_p_pp);
   s7_set_p_pi_function(sc, global_value(sc->list_ref_symbol), list_ref_p_pi);
   s7_set_p_pip_function(sc, global_value(sc->list_set_symbol), list_set_p_pip);
   s7_set_p_pi_unchecked_function(sc, global_value(sc->list_ref_symbol), list_ref_p_pi_unchecked);
@@ -95357,9 +95388,9 @@ int main(int argc, char **argv)
  * tgsl       25.2         8485   7802   6397   6390
  * trec       8320         6936   6922   6553   6512
  * tmisc      7085         8960   7699   6597   6548
- * tlist      6837         7896   7546   6865   6630
- * tleft                   8363   8180   7116   6753
+ * tlist      6837         7896   7546   6865   6622
  * tari       ----         13.0   12.7   7055   6863
+ * tleft      8246         9120   8929   7776   7341
  * tgc        10.1         11.9   11.1   8668   8666
  * thash      35.4         11.8   11.7   9775   9712
  * cb         18.8         12.2   12.2   11.1   10.5
@@ -95374,23 +95405,11 @@ int main(int argc, char **argv)
  * data-specific files?
  *   strings: string-wi=?[s7test] levenshtein[concordance] string-trim[dup]
  *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
- * tleft.scm
+ * tleft.scm [recur]
  * t718 repl bug -- need context
- *
- * fx_treeable: tleft/t520 for eventual test cases, copy let in order [let(rec)(*) lambda case call/exit?]
+ * fx_treeable: tleft/t520 for eventual test cases, copy let in order [let(rec)(*) lambda, rest of case, check call/exit?]
  *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
- *   fxified case results, cond 73242 -- needs to be in case branch
- *     op_case_??? need case timing tests [all ops] -- add to tcase? tsyn+call/exit+dw etc? or tmisc [t520]
- *     rest of case choices as in fx_case_a...
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- *
- * opt: call/exit
- *      recur_if_a_z_oplaa_laa|l3a_l3aq -> tleft [tlist]
- *      case: tleft + implicit/list-ref oddity, a_s_na from a_s_g for lint? [cases]
- *        maybe as wrapper for case_e_g_1--get selector, call, fx and return
- *      body len -> begin_n, maybe _o -> begin1, or begin_aa|na?
- *      are any safe_c_*op*q's mostly fx? -> a + direct?
- *      add tleft ccrma
  */

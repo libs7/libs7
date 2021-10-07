@@ -1,4 +1,9 @@
 (define tc-size 1500000)
+(define rc-size 10000)
+(define case-size 1000000)
+
+
+(set! (*s7* 'heap-size) 512000)
 
 ;;; why no fx_tree? or tentative? sub_t1|s1, fx_lt|geq|leq_si, fb|fx_num_eq_s0, fx_s
 ;;; no other fb's
@@ -113,7 +118,7 @@
 
 (define (f11 x y z)
   (when (> x 0)                     ; fx_gt_ti
-    (f11 (- x 1) (* y 2) (+ z 1)))) ; op_safe_closure_3a fx_multiply_ui+g_mul_xi fx_add_v1
+    (f11 (- x 1) (- y 2) (+ z 1)))) ; op_safe_closure_3a fx_add_v1 [subtract]
 
 (f11 tc-size 2 3) 
 
@@ -125,14 +130,42 @@
 
 
 ;;; --------------------------------------------------------------------------------
-;;; OP_RECUR_IF_A_Z_opLAA_LAAq OP_RECUR_IF_A_Z_opL3A_L3Aq
-;;; see cons-r and list-r in tlist.scm (3A case)
+;OP_RECUR_IF_A_A_opLAA_LAAq -- if_a_oplaa_laaq_a etc
 
+(define (rc1 x y)
+  (if (<= y 0)
+      x
+      (+ (rc1 (+ x 1) (- y 1))
+	 (rc1 (- x 1) (- y 1)))))
+
+(define (trc1)
+  (do ((i 0 (+ i 1)))
+      ((= i rc-size))
+    (rc1 0 6)))
+
+(trc1)
+
+;;; --------------------------------------------------------------------------------
+;OP_RECUR_IF_A_A_opL3A_L3Aq
+
+(define (rc2 x y z)
+  (if (<= z 0)
+      (+ x y)
+      (+ (rc2 (+ x 1) (+ y 1) (- z 1))
+	 (rc2 (- x 1) (- y 1) (- z 1)))))
+
+(define (trc2)
+  (do ((i 0 (+ i 1)))
+      ((= i rc-size))
+    (rc2 0 0 5)))
+
+(trc2)
+
+
+;;; OP_RECUR_IF_A_A_IF_A_A_opL3A_L3Aq, OP_RECUR_OR_A_AND_A_LA(AA)?
 
 
 ;;; --------------------------------------------------------------------------------
-
-(define case-size 1000000)
 
 (define (tcase1)       ; opt_case, numbers_are_eqv
   (do ((i 0 (+ i 1)))
@@ -197,15 +230,7 @@
 (define sym-selector
   (let ((syms '(a b c d e)))
     (lambda (x)
-      (syms (remainder x 5)))))
-
-;;; slower if list-ref used here!
-;;;  48.000    (0.000      48.000)         s7.c:fx_c_s_opscq
-;;;  27.000    (0.000      27.000)         s7.c:g_remainder
-;;;  22.000    (0.000      22.000)         s7.c:g_list_ref
-;;; -8.000     (8.000      0.000)          s7.c:fx_c_ti_direct
-;;; -20.000    (20.000     0.000)          s7.c:remainder_p_pi
-;;; -36.000    (206.834    170.834)        s7.c:eval
+      (syms (remainder x 5))))) ; list-ref is slower
 
 (define (case5 x) ; case p_e_s
   (case (sym-selector x)
@@ -372,5 +397,20 @@
     (case15 i)))
 
 (tcase15)
+
+(define (case16 x) ; case a_s_g_a
+  (case (remainder x 5)
+    ((a) 0)
+    ((b) (display x #f) 1)
+    ((c) (+ 1 2))
+    ((d) 3)
+    (else 4)))
+
+(define (tcase16)
+  (do ((i 0 (+ i 1)))
+      ((= i case-size))
+    (case16 i)))
+
+(tcase16)
 
 (exit)

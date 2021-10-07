@@ -234,7 +234,7 @@
 (define (list-r a b n) 
   (if (= n 0)
       (list a b) 
-      (list (list-r (+ a 1) (+ b 1) (- n 1)) 
+      (cons (list-r (+ a 1) (+ b 1) (- n 1)) 
 	    (list-r (- a 1) (- b 1) (- n 1)))))
 
 (define (list-test tries)
