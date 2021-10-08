@@ -2589,10 +2589,12 @@
 				     " ; or maybe sequence? " ""))
 			(old-arg (case head
 				   ((and if cond when) arg1)
-				   ((or if2)           (list 'not arg1))))
+				   ((or if2)           (list 'not arg1))
+				   (else 'error)))
 			(new-arg (case head
 				   ((and if cond when) (list arg-type arg1))
-				   ((or if2)           (list 'not (list arg-type arg1))))))
+				   ((or if2)           (list 'not (list arg-type arg1)))
+				   (else 'error))))
 		    (format outport "~NCin ~A~A,~%~NCperhaps change ~S to ~S~A~%"
 			    lint-left-margin #\space
 			    (truncated-list->string form)
@@ -2771,10 +2773,12 @@
 			 (not (eq? new-type (car arg1))))
 		(let ((old-arg (case head
 				 ((and if cond when) arg1)
-				 ((or if2)           (list 'not arg1))))
+				 ((or if2)           (list 'not arg1))
+				 (else 'error)))
 		      (new-arg (case head
 				 ((and if cond when) (list new-type (cadr arg1)))
-				 ((or if2)           (list 'not (list new-type (cadr arg1))))))
+				 ((or if2)           (list 'not (list new-type (cadr arg1))))
+				 (else 'error)))
 		      (ln (and (< 0 line-number 100000) line-number))
 		      (comment (if (and (eq? arg-type 'procedure?)
 					(= pos 0)
@@ -4454,7 +4458,8 @@
 								 ((char<= char>=) 'char=?)
 								 ((char-ci<= char-ci>=) 'char-ci=?)
 								 ((string<= string>=) 'string=?)
-								 ((string-ci<= string-ci>=) 'string-ci=?))
+								 ((string-ci<= string-ci>=) 'string-ci=?)
+								 (else 'error))
 							       (cdr arg1))))
 						(and (or (not (code-constant? arg1-1))
 							 (not (code-constant? arg2-2))
@@ -5771,7 +5776,8 @@
 				     ((acosh) 'cosh)
 				     ((atanh) 'tanh)
 				     ((log) 'exp)
-				     ((exp) 'log))))
+				     ((exp) 'log)
+				     (else 'error))))
 			 (cadar args))
 
 			((eqv? (car args) 0)                     ; (sin 0) -> 0
@@ -6883,8 +6889,8 @@
 				      (not (eq? selector-eqf current-eqf)))
 				 (lint-format "~A: perhaps ~A -> ~A" caller (truncated-list->string form) head
 					      (if (memq head '(memq memv member))
-						  (case selector-eqf ((eq?) 'memq) ((eqv?) 'memv) ((equal?) 'member))
-						  (case selector-eqf ((eq?) 'assq) ((eqv?) 'assv) ((equal?) 'assoc)))))
+						  (case selector-eqf ((eq?) 'memq) ((eqv?) 'memv) ((equal?) 'member) (else 'error))
+						  (case selector-eqf ((eq?) 'assq) ((eqv?) 'assv) ((equal?) 'assoc) (else 'error)))))
 
 			     ;; --------------------------------
 			     ;; check for head mismatch with items
@@ -6984,7 +6990,7 @@
 					    (map-items (caddr items)))
 					(cond ((eq? mapf 'car)         ; (memq x (map car y)) -> (assq x y)
 					       (lint-format "perhaps use assoc: ~A" caller
-							    (lists->string form (list (case current-eqf ((eq?) 'assq) ((eqv?) 'assv) ((equal?) 'assoc))
+							    (lists->string form (list (case current-eqf ((eq?) 'assq) ((eqv?) 'assv) ((equal?) 'assoc) (else 'error))
 										      selector map-items))))
 
 					      ((eq? selector #t)
@@ -7468,7 +7474,8 @@
 							       ((<)  (list 'null? arg))
 							       ((<=) `(or (null? ,arg) (null? (cdr ,arg))))
 							       ((>)  `(and (pair? ,arg) (pair? (cdr ,arg))))
-							       ((>=) (list 'pair? arg))))))))))
+							       ((>=) (list 'pair? arg))
+							       (else 'error)))))))))
 		    ((and (len>1? (caddr form))
 			  (eq? (caaddr form) 'length))
 		     (let ((arg (cadr (caddr form))))
@@ -7481,7 +7488,8 @@
 							   ((<)  (list 'pair? arg))
 							   ((<=) (list 'list? arg))
 							   ((>)  `(and (pair? ,arg) (not (proper-list? ,arg))))
-							   ((>=) (list 'null? arg)))))
+							   ((>=) (list 'null? arg))
+							   (else 'error))))
 			     (if (and (eqv? (cadr form) 1)
 				      (not (eq? head '<))) ; (> 1 (length x)) -> (null? x)
 				 (lint-format "perhaps (assuming ~A is a proper list), ~A" caller arg
@@ -7490,7 +7498,8 @@
 							       ((<)  `(and (pair? ,arg) (pair? (cdr ,arg))))
 							       ((<=) (list 'pair? arg))
 							       ((>)  (list 'null? arg))
-							       ((>=) `(or (null? ,arg) (null? (cdr ,arg))))))))))))
+							       ((>=) `(or (null? ,arg) (null? (cdr ,arg))))
+							       (else 'error)))))))))
 		    ((and (eq? head '<)
 			  (eqv? (caddr form) 1)
 			  (len>1? (cadr form))           ; (< (vector-length x) 1) -> (equal? x #())
@@ -8065,7 +8074,8 @@
 						      (list (case (caddr form)
 							      ((0) 'car)
 							      ((1) 'cadr)
-							      ((2) 'caddr))
+							      ((2) 'caddr)
+							      (else 'error))
 							    seq))))
 		      (when (pair? seq)
 			(if (and (memq (car seq) '(vector-ref int-vector-ref float-vector-ref list-ref hash-table-ref let-ref))
@@ -8291,7 +8301,7 @@
 		  (if (and (eq? head 'port-filename)
 			   (memq (cadr form) '(*stdin* *stdout* *stderr*)))
 		      (lint-format "~A: ~S" caller form
-				   (case (cadr form) ((*stdin*) "*stdin*") ((*stdout*) "*stdout*") ((*stderr*) "*stderr*")))))))
+				   (case (cadr form) ((*stdin*) "*stdin*") ((*stdout*) "*stdout*") ((*stderr*) "*stderr*") (else 'error)))))))
 	  (for-each (lambda (c)
 		      (hash-special c sp-read))
 		    '(read port-filename port-line-number read-char read-byte peek-char close-input-port)))
@@ -12381,11 +12391,13 @@
 			      (case func
 				((if) (caddr call))
 				((when) (if (pair? (cdddr call)) (cons 'begin (cddr call)) (caddr call)))
-				((unless) #<unspecified>))
+				((unless) #<unspecified>)
+				(else 'error))
 			      (case func
 				((if) (if (pair? (cdddr call)) (cadddr call)))
 				((when) #<unspecified>)
-				((unless) (if (pair? (cdddr call)) (cons 'begin (cddr call)) (caddr call)))))))))
+				((unless) (if (pair? (cdddr call)) (cons 'begin (cddr call)) (caddr call)))
+				(else 'error)))))))
 
 	;; -------- arg-mismatch
 	(define (arg-mismatch caller vname vtype func call e)
@@ -15569,7 +15581,8 @@
 							   ((list-ref) 'list-set!)
 							   ((string-ref) 'string-set!)
 							   ((hash-table-ref) 'hash-table-set!)
-							   ((let-ref) 'let-set!))
+							   ((let-ref) 'let-set!)
+							   (else 'error))
 							 (append (cdadr form) (cddr form))))))
 
 				    ((and (eq? target 'setter)
@@ -21787,7 +21800,8 @@
 								 ((call-with-input-string)  'open-input-string)
 								 ((call-with-output-string) 'open-output-string)
 								 ((call-with-input-file)    'open-input-file)
-								 ((call-with-output-file)   'open-output-file)))
+								 ((call-with-output-file)   'open-output-file)
+								 (else 'error)))
 							 head)))
 				  (lint-walk-body caller head body (cons cc
 									 (cons (make-lint-var :let form head)
@@ -22914,10 +22928,12 @@
 					    (len2 (length ca2)))
 					(let ((pa1 (case len1
 						     ((2) (list 'cons (cadr ca1) (caddr arg1)))
-						     ((3) (list 'cons (cadr ca1) (list 'cons (caddr ca1) (caddr arg1))))))
+						     ((3) (list 'cons (cadr ca1) (list 'cons (caddr ca1) (caddr arg1))))
+						     (else 'error)))
 					      (pa2 (case len2
 						     ((2) (list 'cons (cadr ca2) (caddr arg2)))
-						     ((3) (list 'cons (cadr ca2) (list 'cons (caddr ca2) (caddr arg2)))))))
+						     ((3) (list 'cons (cadr ca2) (list 'cons (caddr ca2) (caddr arg2))))
+						     (else 'error))))
 					  (if (and (pair? pa1)
 						   (pair? pa2))
 					      (lint-format "perhaps ~A" caller

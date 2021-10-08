@@ -19176,52 +19176,8 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
-static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z)
+static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer p0, s7_pointer p1, s7_pointer p2)
 {
-#if HAVE_OVERFLOW_CHECKS && (!WITH_GMP)
-  if ((is_t_integer(x)) && (is_t_integer(y)) && (is_t_integer(z)))
-    {
-      s7_int val;
-      if ((!add_overflow(integer(x), integer(y), &val)) &&
-	  (!add_overflow(val, integer(z), &val)))
-	return(make_integer(sc, val));
-      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %" ld64 " %" ld64 " %" ld64 ")\n", integer(x), integer(y), integer(z));
-      return(make_real(sc, (long_double)integer(x) + (long_double)integer(y) + (long_double)integer(z)));
-    }
-#endif
-  if ((is_t_real(x)) && (is_t_real(y)) && (is_t_real(z)))
-    return(make_real(sc, real(x) + real(y) + real(z)));
-  return(add_p_pp(sc, add_p_pp(sc, x, y), z));
-}
-
-static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
-{
-  #define H_add "(+ ...) adds its arguments"
-  #define Q_add sc->pcl_n
-
-  s7_pointer x, p;
-  if (is_null(args))
-    return(int_zero);
-  x = car(args);
-  p = cdr(args);
-  if (is_null(p))
-    {
-      if (!is_number(x))
-	return(method_or_bust_with_type_one_arg(sc, x, sc->add_symbol, args, a_number_string));
-      return(x);
-    }
-  if (is_null(cdr(p)))
-    return(add_p_pp(sc, x, car(p)));
-  for (; is_pair(p); p = cdr(p))
-    x = add_p_pp(sc, x, car(p));
-  return(x);
-}
-
-static s7_pointer g_add_2(s7_scheme *sc, s7_pointer args) {return(add_p_pp(sc, car(args), cadr(args)));}
-
-static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args)
-{
-  s7_pointer p0 = car(args), p1 = cadr(args), p2 = caddr(args);
   if ((is_t_integer(p0)) && (is_t_integer(p1)) && (is_t_integer(p2)))
     {
 #if HAVE_OVERFLOW_CHECKS
@@ -19248,9 +19204,32 @@ static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args)
     return(make_real(sc, real(p0) + real(p1) + real(p2)));
   return(add_p_pp(sc, add_p_pp(sc, p0, p1), p2));
 }
-/* trade-off in add_3: time saved by using add_p_pp, but it conses up a new number cell, so subsequent gc can overwhelm the gains, and add add_p_pp overhead
- *   need int wrap as output or reuse-if-known-temp, or perhaps free if not permanent
- */
+
+static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
+{
+  #define H_add "(+ ...) adds its arguments"
+  #define Q_add sc->pcl_n
+
+  s7_pointer x, p;
+  if (is_null(args))
+    return(int_zero);
+  x = car(args);
+  p = cdr(args);
+  if (is_null(p))
+    {
+      if (!is_number(x))
+	return(method_or_bust_with_type_one_arg(sc, x, sc->add_symbol, args, a_number_string));
+      return(x);
+    }
+  if (is_null(cdr(p)))
+    return(add_p_pp(sc, x, car(p)));
+  for (; is_pair(p); p = cdr(p))
+    x = add_p_pp(sc, x, car(p));
+  return(x);
+}
+
+static s7_pointer g_add_2(s7_scheme *sc, s7_pointer args) {return(add_p_pp(sc, car(args), cadr(args)));}
+static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args) {return(add_p_ppp(sc, car(args), cadr(args), caddr(args)));}
 
 static s7_pointer g_add_x1_1(s7_scheme *sc, s7_pointer x, int pos)
 {
@@ -53756,42 +53735,36 @@ static s7_pointer fx_gt_tT(s7_scheme *sc, s7_pointer arg)
   return(((is_t_integer(p1)) && (is_t_integer(p2))) ? make_boolean(sc, integer(p1) > integer(p2)) : gt_p_pp(sc, p1, p2));
 }
 
-static s7_pointer fx_gt_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) > integer(opt2_con(cdr(arg)))));
-  if (is_t_real(x)) return(make_boolean(sc, real(x) > integer(opt2_con(cdr(arg)))));
-  return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+#define fx_gt_si_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x; \
+    x = Lookup(sc, cadr(arg), arg); \
+    if (is_t_integer(x)) return(make_boolean(sc, integer(x) > integer(opt2_con(cdr(arg))))); \
+    if (is_t_real(x)) return(make_boolean(sc, real(x) > integer(opt2_con(cdr(arg))))); \
+    return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */ \
+  }
 
-static s7_pointer fx_gt_ti(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = t_lookup(sc, cadr(arg), arg);
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) > integer(opt2_con(cdr(arg)))));
-  return(g_greater_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+fx_gt_si_any(fx_gt_si, s_lookup)
+fx_gt_si_any(fx_gt_ti, t_lookup)
 
 static s7_pointer fx_leq_ss(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_leq_ts(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_leq_tu(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));}
 
-static s7_pointer fx_leq_si(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = lookup(sc, cadr(arg));
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) <= integer(opt2_con(cdr(arg)))));
-  return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+#define fx_leq_si_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x; \
+    x = Lookup(sc, cadr(arg), arg); \
+    if (is_t_integer(x)) return(make_boolean(sc, integer(x) <= integer(opt2_con(cdr(arg))))); \
+    return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */ \
+  }
 
-static s7_pointer fx_leq_ti(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer x;
-  x = t_lookup(sc, cadr(arg), arg);
-  if (is_t_integer(x)) return(make_boolean(sc, integer(x) <= integer(opt2_con(cdr(arg)))));
-  return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(arg))))); /* caddr(arg) */
-}
+fx_leq_si_any(fx_leq_si, s_lookup)
+fx_leq_si_any(fx_leq_ti, t_lookup)
+fx_leq_si_any(fx_leq_ui, u_lookup)
+fx_leq_si_any(fx_leq_vi, v_lookup)
 
 static s7_pointer fx_lt_ss(s7_scheme *sc, s7_pointer arg) {return(lt_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_lt_sg(s7_scheme *sc, s7_pointer arg) {return(lt_p_pp(sc, lookup(sc, cadr(arg)), lookup_global(sc, opt2_sym(cdr(arg)))));}
@@ -57050,6 +57023,8 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fn_proc(p) == g_geq_xi)     return(with_fx(tree, (integer(caddr(p)) == 0) ? fx_geq_t0 : fx_geq_ti));
 	  if (fn_proc(p) == g_leq_xi)     return(with_fx(tree, fx_leq_ti));
 	  if (fn_proc(p) == g_greater_xi) return(with_fx(tree, fx_gt_ti));
+	  if (fx_proc(tree) == fx_leq_si) return(with_fx(tree, fx_leq_ti));
+	  if (fx_proc(tree) == fx_gt_si)  return(with_fx(tree, fx_gt_ti));
 
 	  if (fx_proc(tree) == fx_c_sc_direct) /* p_pp cases */
 	    {
@@ -57077,8 +57052,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_multiply_sf) return(with_fx(tree, fx_multiply_tf));
 	  if (fx_proc(tree) == fx_lt_si) /* is this ever hit? */
 	    return(with_fx(tree, (integer(caddr(p)) == 2) ? fx_lt_t2 : ((integer(caddr(p)) == 1) ? fx_lt_t1 : fx_lt_ti)));
-	  if (fx_proc(tree) == fx_leq_si)      return(with_fx(tree, fx_leq_ti));
-	  if (fx_proc(tree) == fx_gt_si)       return(with_fx(tree, fx_gt_ti));
 	  if (fx_proc(tree) == fx_num_eq_si)   return(with_fx(tree, fx_num_eq_ti));
 	  if (fx_proc(tree) == fx_num_eq_s0)   return(with_fx(tree, fx_num_eq_t0));
 	  if (fx_proc(tree) == fx_memq_sc)     return(with_fx(tree, fx_memq_tc));
@@ -57093,15 +57066,17 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_u1));
 	  if (fx_proc(tree) == fx_multiply_si) return(with_fx(tree, fx_multiply_ui));
 	  if (fx_proc(tree) == fx_is_eq_sc)    return(with_fx(tree, fx_is_eq_uc));
+	  if (fx_proc(tree) == fx_leq_si)      return(with_fx(tree, fx_leq_ui));
 	  return(false);
 	}
       if (cadr(p) == var3)
 	{
-	  if (fx_proc(tree) == fx_num_eq_s0) return(with_fx(tree, fx_num_eq_v0));
-	  if (fx_proc(tree) == fx_num_eq_si) return(with_fx(tree, fx_num_eq_vi));
-	  if (fx_proc(tree) == fx_add_s1) return(with_fx(tree, fx_add_v1));
+	  if (fx_proc(tree) == fx_num_eq_s0)   return(with_fx(tree, fx_num_eq_v0));
+	  if (fx_proc(tree) == fx_num_eq_si)   return(with_fx(tree, fx_num_eq_vi));
+	  if (fx_proc(tree) == fx_add_s1)      return(with_fx(tree, fx_add_v1));
 	  if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_v1));
-	  if (fx_proc(tree) == fx_c_sc) return(with_fx(tree, fx_c_vc));
+	  if (fx_proc(tree) == fx_leq_si)      return(with_fx(tree, fx_leq_vi));
+	  if (fx_proc(tree) == fx_c_sc)        return(with_fx(tree, fx_c_vc));
 	  return(false);
 	}
       if (!more_vars)
@@ -84696,7 +84671,7 @@ static inline void op_closure_3s(s7_scheme *sc)
   if_pair_set_up_begin(sc);
 }
 
-static void op_closure_4s(s7_scheme *sc)
+static inline void op_closure_4s(s7_scheme *sc)
 {
   s7_pointer args = cdr(sc->code), v1, v2;
   v1 = lookup(sc, car(args));
@@ -95355,13 +95330,13 @@ int main(int argc, char **argv)
  * --------------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    476    463
- * tauto       785          648    642    496    496
+ * tauto       785          648    642    496    497
  * index      1032         1026   1016    981    973
  * tmock      7738         1177   1165   1090   1054
  * tvect      1892         2456   2413   1735   1712
  * s7test     4506         1873   1831   1792   1784
  * texit      1768         ----   ----   1886   1801
- * lt         2121         2123   2110   2120   2112
+ * lt         2121         2123   2110   2120   2110
  * tform      3235         2281   2273   2255   2242
  * tread      2606         2440   2421   2415   2411
  * tmac       2452         3317   3277   2409   2420
@@ -95369,36 +95344,36 @@ int main(int argc, char **argv)
  * trclo      4107         2735   2574   2475   2458
  * tmat       2683         3065   3042   2530   2517
  * tcopy      2610         8035   5546   2550   2556
- * dup        2783         3805   3788   2565   2557
- * tb         3383         2735   2681   2627   2616
+ * dup        2783         3805   3788   2565   2564
+ * tb         3383         2735   2681   2627   2617
  * titer      2693         2865   2842   2679   2640
- * tsort      3576         3105   3104   2860   2856
+ * tsort      3576         3105   3104   2860   2855
  * tset       3114         3253   3104   3089   3081
  * tload      3861         ----   ----   3142   3155
  * teq        3554         4068   4045   3570   3539
  * tio        3710         3816   3752   3693   3680
  * tclo       4622         4787   4735   4402   4408
  * tlet       5278         7775   5640   4431   4435
- * tcase      4519         4960   4793   4444   4444
+ * tcase      4519         4960   4793   4444   4441
  * tmap       5491         8869   8774   4493   4492
  * tfft      115.0         7820   7729   4787   4778
  * tshoot     6923         5525   5447   5220   5203
- * tnum       56.7         6348   6013   5443   5437
+ * tnum       56.7         6348   6013   5443   5436
  * tstr       6187         6880   6342   5776   5508
  * tgsl       25.2         8485   7802   6397   6390
  * trec       8320         6936   6922   6553   6512
  * tmisc      7085         8960   7699   6597   6548
  * tlist      6837         7896   7546   6865   6622
  * tari       ----         13.0   12.7   7055   6863
- * tleft      8246         9120   8929   7776   7341
+ * tleft      8246         9120   8929   7776   7341  7336
  * tgc        10.1         11.9   11.1   8668   8666
- * thash      35.4         11.8   11.7   9775   9712
- * cb         18.8         12.2   12.2   11.1   10.5
+ * thash      35.4         11.8   11.7   9775   9711
+ * cb         18.8         12.2   12.2   11.1   10.5  10.0
  * tgen       12.2         11.2   11.4   11.5   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.1   37.0
  * sg         75.8         ----   ----   56.1   55.9
- * lg        104.7        106.6  105.0  104.4  103.9
+ * lg        104.7        106.6  105.0  104.4  103.7
  * tbig      605.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
  *
@@ -95407,7 +95382,7 @@ int main(int argc, char **argv)
  *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
  * tleft.scm [recur]
  * t718 repl bug -- need context
- * fx_treeable: tleft/t520 for eventual test cases, copy let in order [let(rec)(*) lambda, rest of case, check call/exit?]
+ * fx_treeable: copy let in order [let(rec)(*) lambda, rest of case, check call/exit?]
  *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
