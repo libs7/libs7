@@ -10506,7 +10506,6 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	set_is_definer(mac_name);            /* (list-values 'define ...) aux-13 */
     }
 
-  /* TODO: we want to ignore arguments here, not (define xyzzy (macro...)) */
   if ((!is_either_bacro(mac)) &&
       (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
     clear_all_optimizations(sc, body);
@@ -54772,6 +54771,7 @@ static s7_pointer fx_c_s_opsq(s7_scheme *sc, s7_pointer arg)
   }
 
 fx_c_s_opsq_direct_any(fx_c_s_opsq_direct, s_lookup, s_lookup)
+fx_c_s_opsq_direct_any(fx_c_t_opsq_direct, t_lookup, s_lookup)
 fx_c_s_opsq_direct_any(fx_c_t_opuq_direct, t_lookup, u_lookup)
 fx_c_s_opsq_direct_any(fx_c_u_opvq_direct, u_lookup, v_lookup)
 
@@ -57344,7 +57344,9 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    {
 	      if (fx_proc(tree) == fx_add_s_car_s) return(with_fx(tree, fx_add_t_car_v));
 	      if (fx_proc(tree) == fx_c_s_car_s) return(with_fx(tree, fx_c_t_car_v)); /* ideally eq_p_pp not g_is_eq */
-	    }}
+	    }
+	  if (fx_proc(tree) == fx_c_s_opsq_direct) return(with_fx(tree, fx_c_t_opsq_direct));
+	}
       if (cadr(p) == var2)
 	{
 	  if ((fx_proc(tree) == fx_add_s_car_s) && (cadaddr(p) == var1)) return(with_fx(tree, fx_add_u_car_t));
@@ -72133,7 +72135,6 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      return(OPT_F);
 	    }}
       return(set_any_c_np(sc, func, expr, e, 2, hop + OP_ANY_C_NP)); /* OP_C_PP doesn't exist */
-      /* TODO: gx_annotate */
     }
 
   if (is_closure(func))
@@ -73915,8 +73916,10 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
   if (is_symbol_and_syntactic(expr))
     {
       if (!is_pair(cdr(x))) return(UNSAFE_BODY);
-      /* lambda_unchecked, if_d_p_p define_funchecked */
-      switch (symbol_syntax_op_checked(x))
+      switch (symbol_syntax_op_checked(x)) 
+	/* symbol_syntax_op(expr) here gets tangled in fx_annotation order problems! -- fix this?!?
+	 *   it appears that safe bodies are marked unsafe because the opts are out-of-order?
+	 */
 	{
 	case OP_OR: case OP_AND:
 	case OP_BEGIN:
@@ -73926,7 +73929,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	case OP_MACROEXPAND:
 	  return(UNSAFE_BODY);
 
-	case OP_QUOTE:
+	case OP_QUOTE: case OP_QUOTE_UNCHECKED:
 	  return(((!is_pair(cdr(x))) || (!is_null(cddr(x)))) ? UNSAFE_BODY : VERY_SAFE_BODY);  /* (quote . 1) or (quote 1 2) etc */
 
 	case OP_IF:
@@ -74135,6 +74138,10 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	   *   but in a safe func, that's a constant.  See s7test L 1865 for an example.
 	   */
 	default:
+	  /* fprintf(stderr, "%s %s\n", op_names[symbol_syntax_op_checked(x)], display(x)); */
+	  
+	  /* OP_LAMBDA is major case here */
+
 	  /* try to catch weird cases like:
 	   * (let () (define (hi1 a) (define (hi1 b) (+ b 1)) (hi1 a)) (hi1 1))
 	   * (let () (define (hi1 a) (define (ho1 b) b) (define (hi1 b) (+ b 1)) (hi1 a)) (hi1 1))
@@ -82196,7 +82203,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		      for (; integer(stepper) < end; integer(stepper)++)
 			fi(o);
 		}
-	      else /* what cases are here? */
+	      else /* (((i 0 (+ i 1))) ((= i 1)) (char-alphabetic? (string-ref #u(0 1) 1))) or (logbit? i -1): kinda nutty */
 		for (; integer(stepper) < end; integer(stepper)++)
 		  func(sc);
 	    }
@@ -89725,7 +89732,6 @@ static bool op_unknown_np(s7_scheme *sc)
 	    case 4:  set_any_closure_np(sc, f, code, sc->curlet, 4, hop + OP_ANY_CLOSURE_4P);        break;
 	    default: set_any_closure_np(sc, f, code, sc->curlet, num_args, hop + OP_ANY_CLOSURE_NP); break;
 	    }
-	  /* TODO: fx_curlet_tree? */
 	  return(true);
 	}
       break;
@@ -89794,7 +89800,7 @@ static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t ty
   return(false);
 }
 
-static /* inline */ bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
+static bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
 {
   s7_pointer f;
   f = lookup_unexamined(sc, car(code));
@@ -95336,15 +95342,15 @@ int main(int argc, char **argv)
  * tvect      1892         2456   2413   1735   1712
  * s7test     4506         1873   1831   1792   1784
  * texit      1768         ----   ----   1886   1801
- * lt         2121         2123   2110   2120   2110
+ * lt         2121         2123   2110   2120   2108
  * tform      3235         2281   2273   2255   2242
- * tread      2606         2440   2421   2415   2411
+ * tread      2606         2440   2421   2415   2415
  * tmac       2452         3317   3277   2409   2420
  * fbench     2848         2688   2583   2475   2458
- * trclo      4107         2735   2574   2475   2458
- * tmat       2683         3065   3042   2530   2517
+ * trclo      4107         2735   2574   2475   2459
+ * tmat       2683         3065   3042   2530   2513
  * tcopy      2610         8035   5546   2550   2556
- * dup        2783         3805   3788   2565   2564
+ * dup        2783         3805   3788   2565   2559
  * tb         3383         2735   2681   2627   2617
  * titer      2693         2865   2842   2679   2640
  * tsort      3576         3105   3104   2860   2855
@@ -95357,18 +95363,18 @@ int main(int argc, char **argv)
  * tcase      4519         4960   4793   4444   4441
  * tmap       5491         8869   8774   4493   4492
  * tfft      115.0         7820   7729   4787   4778
- * tshoot     6923         5525   5447   5220   5203
- * tnum       56.7         6348   6013   5443   5436
- * tstr       6187         6880   6342   5776   5508
+ * tshoot     6923         5525   5447   5220   5210
+ * tnum       56.7         6348   6013   5443   5439
+ * tstr       6187         6880   6342   5776   5509
  * tgsl       25.2         8485   7802   6397   6390
- * trec       8320         6936   6922   6553   6512
- * tmisc      7085         8960   7699   6597   6548
+ * trec       8320         6936   6922   6553   6529
+ * tmisc      7085         8960   7699   6597   6553
  * tlist      6837         7896   7546   6865   6622
- * tari       ----         13.0   12.7   7055   6863
- * tleft      8246         9120   8929   7776   7341  7336
+ * tari       ----         13.0   12.7   7055   6860
+ * tleft      8246         9120   8929   7776   7344
  * tgc        10.1         11.9   11.1   8668   8666
  * thash      35.4         11.8   11.7   9775   9711
- * cb         18.8         12.2   12.2   11.1   10.5  10.0
+ * cb         18.8         12.2   12.2   11.1   10.3
  * tgen       12.2         11.2   11.4   11.5   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.1   37.0
@@ -95387,4 +95393,13 @@ int main(int argc, char **argv)
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
+ * lint lint oddities:
+ sp-append (line 9133): perhaps 
+    (list-values 'append (apply-values (cdr new-args))) ->
+    (cons (quote . #<unspecified>) (cdr new-args))
+ eqv-code-constant? (line 14582): memq should be member in (memq x '(#t #f () #<unspecified> #<undefined> #<eof>))
+ lint (line 23057): perhaps (symbol? form) -> #f
+ sp-call/values (line 10321): in (cdr (arity +)),
+     cdr's argument should be a pair, but (arity +) might also be #f
+ also define->let seems dumb
  */
