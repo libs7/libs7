@@ -31,7 +31,7 @@
 
 (define *report-built-in-functions-used-as-variables* #f) ; string and length are the most common cases
 (define *report-forward-functions* #f)                    ; functions used before being defined
-(define *report-sloppy-assoc* #t)                         ; i.e. (cdr (assoc x y)) and the like
+(define *report-sloppy-assoc* #f)                         ; i.e. (cdr (assoc x y)) and the like
 (define *report-bloated-arg* 24)                          ; min arg expr tree size that can trigger a rewrite-as-let suggestion (32 is too high I think)
 (define *report-clobbered-function-return-value* #f)      ; function returns constant sequence, which is then stomped on -- very rare!
 (define *report-boolean-functions-misbehaving* #t)        ; function name ends in #\? but function returns a non-boolean value -- dubious.
@@ -421,13 +421,13 @@
       (let ((outstr (if *report-laconically*
  			(apply format #f str args)
 			(apply format #f
-			   (string-append (if (and line-number (> line-number 0))
+			   (string-append (if (and (integer? line-number) (> line-number 0))
 					      "~NC~A (line ~D): "
 					      "~NC~A: ")
 					  str "~%")
 			   lint-left-margin #\space
 			   (truncated-list->string caller)
-			   (if (and line-number (> line-number 0))
+			   (if (and (integer? line-number) (> line-number 0))
 			       (values line-number args)
 			       args)))))
 	(set! made-suggestion (+ made-suggestion 1))
@@ -2022,8 +2022,7 @@
 	    ((symbol?)           (memq type2 '(gensym? keyword? defined? provided?)))
 	    ((string?)           (memq type2 '(sequence? directory? file-exists?)))
 	    ((not)               (eq? type2 'boolean?))
-	    ((output-port?)      (eq? type2 'not))
-	    ((boolean?)          (eq? type2 'not))
+	    ((output-port? boolean?) (eq? type2 'not))
 	    ((keyword? gensym?)  (memq type2 '(symbol? defined? provided?)))
 	    ((defined?)          (memq type2 '(symbol? provided? keyword?)))
 	    ((list?)             (memq type2 '(null? pair? proper-list? sequence? tree-cyclic?)))
@@ -2037,8 +2036,7 @@
 	    ((iterator?)         (memq type2 '(dilambda? procedure? sequence?))); iterator-at-end?)))
 	    ((let?)              (memq type2 '(defined? sequence? openlet?)))
 	    ((openlet?)          (memq type2 '(let? c-pointer? macro? procedure? sequence? defined? undefined?)))
-	    ((hash-table?)       (eq? type2 'sequence?))
-	    ((byte-vector?)      (eq? type2 'sequence?))
+	    ((hash-table? byte-vector?) (eq? type2 'sequence?))
 	    ((char? char-whitespace? char-numeric? char-alphabetic? char-upper-case? char-lower-case?)
 	     (memq type2 '(char? char-whitespace? char-numeric? char-alphabetic? char-upper-case? char-lower-case?)))
 	    ((tree-cyclic?)      (memq type2 '(list? pair? sequence?)))
@@ -2087,11 +2085,11 @@
 	    (or (and (symbol? type)
 		     (not (symbol? expr))
 		     (not (memq type '(not boolean? values))))
-		(and (pair? type)
-		     (not (memq #t type))
-		     (not (memq 'boolean? type))
-		     (not (memq 'not type))
-		     (not (memq 'values type)))))))
+		(not (or (not (pair? type)) 
+			 (memq #t type) 
+			 (memq 'boolean? type) 
+			 (memq 'not type) 
+			 (memq 'values type)))))))
 
     (define (never-true expr)
       (or (not expr)
@@ -2540,7 +2538,7 @@
       (and (proper-list? form) ;(not (infinite? (length form))) but when would a dotted list work?
 	   (catch #t
 	     (lambda ()
-	       (eval (copy form))); :readable)))
+	       (eval (copy form) (rootlet)))  ; :readable))) -- use rootlet else "form" is defined (in curlet)
 	     (lambda args
 	       :checked-eval-error))))
 
@@ -2601,7 +2599,7 @@
 		    (format outport "~NCin ~A~A,~%~NCperhaps change ~S to ~S~A~%"
 			    lint-left-margin #\space
 			    (truncated-list->string form)
-			    (if (and ln (> ln 0)) (format #f " (line ~D)" ln) "")
+			    (if (and (integer? ln) (> ln 0)) (format #f " (line ~D)" ln) "")
 			    (+ lint-left-margin 4) #\space
 			    old-arg new-arg comment))))))))
 
@@ -2789,7 +2787,7 @@
 		  (format outport "~NCin ~A~A,~%~NCperhaps change ~S to ~S~A~%"
 			  lint-left-margin #\space
 			  (truncated-list->string form)
-			  (if (and ln (> ln 0)) (format #f " (line ~D)" ln) "")
+			  (if (and (integer? ln) (> ln 0)) (format #f " (line ~D)" ln) "")
 			  (+ lint-left-margin 4) #\space
 			  old-arg new-arg comment)))))))
 
@@ -2828,7 +2826,7 @@
 		  (format outport "~NCin ~A~A,~%~NCperhaps change ~A to ~A~%"
 			  lint-left-margin #\space
 			  (truncated-list->string form)
-			  (if (and ln (> ln 0)) (format #f " (line ~D)" ln) "")
+			  (if (and (integer? ln) (> ln 0)) (format #f " (line ~D)" ln) "")
 			  (+ lint-left-margin 4) #\space
 			  (truncated-list->string a2)
 			  (list new-e '...)))))))))
@@ -3169,7 +3167,7 @@
 			     (and (memq type2 '(vector? sequence?))
 				  'contradictory))
 
-			    ((string? let? hash-table? openlet? pair? vector?)
+			    ((string? let? hash-table? openlet? vector?)
 			     (and (eq? type2 'sequence?)
 				  'contradictory))
 
@@ -3801,7 +3799,7 @@
 							(format outport "~NCin ~A~A,~%~NCperhaps change ~S to ~S~%"
 								lint-left-margin #\space
 								(truncated-list->string form)
-								(if (and ln (> ln 0)) (format #f " (line ~D)" ln) "")
+								(if (and (integer? ln) (> ln 0)) (format #f " (line ~D)" ln) "")
 								(+ lint-left-margin 4) #\space
 								(list 'and '... val '... p)
 								nval)
@@ -4572,7 +4570,7 @@
 					      (format outport "~NCin ~A~A, ~A is ~A, but ~A wants ~A"
 						      lint-left-margin #\space
 						      (truncated-list->string form)
-						      (if (and ln (> ln 0)) (format #f " (line ~D)" ln) "")
+						      (if (and (integer? ln) (> ln 0)) (format #f " (line ~D)" ln) "")
 						      (cadr arg1)
 						      (prettify-checker-unq (car arg1))
 						      (car arg2)
@@ -4854,11 +4852,10 @@
 				 ((< x 0)
 				  result)
 			       (set! result
-				     (if (eqv? (vector-ref coeffs x) 0)
-					 (list '* sym result)
-					 (if (eqv? (vector-ref coeffs x) 0.0)
-					     `(inexact (* ,sym ,result))
-					     `(+ ,(vector-ref coeffs x) (* ,sym ,result)))))))
+				      (case (vector-ref coeffs x)
+					((0) (list '* sym result))
+					((0.0) `(inexact (* ,sym ,result)))
+					(else `(+ ,(vector-ref coeffs x) (* ,sym ,result)))))))
 			  (let ((cx (car p)))
 			    (cond ((number? cx)
 				   (vector-set! coeffs 0 (+ (vector-ref coeffs 0) cx)))
@@ -6717,7 +6714,7 @@
 		    (for-each
 		     (lambda (p)
 		       (if (and (pair? p) (eq? (car p) 'values))
-			   (set! len (- (+ len (length p)) 2))))
+			   (set! len (+ len (length p) -2))))
 		     (cdr producer))
 		    (list len len)))
 		 (else (mv-range (car producer) env))))))
@@ -6733,7 +6730,8 @@
 
     (define (unlist-values tree)
       (if (not (and (pair? tree)
-		    (list? (cdr tree))))
+		    (list? (cdr tree))
+		    (not (eq? (car tree) 'quote))))
 	  tree
 	  (case (car tree)
 	    ((list-values)
@@ -6939,7 +6937,7 @@
 								    (pair? (cdr element)))
 							       (lint-format "stray quote? ~A" caller form)) ; (memq x '(a 'b c))
 							   (set! maxf #t))
-							 (let ((type (if (symbol? element)
+							 (let ((type (if (or (symbol? element) (eq? element #<undefined>))
 									 'eq?
 									 (car (->eqf (->simple-type element))))))
 							   (if (or (memq maxf '(#f eq?))
@@ -7847,11 +7845,11 @@
 	;; ---------------- string-copy ----------------
 	(let ()
 	  (define (sp-string-copy caller head form env)
-	    (if (pair? (cdr form))
-		(if (and (pair? (cadr form))   ; (string-copy (string-copy x)) could be (string-copy x)
-			 (memq (caadr form) '(copy string-copy string make-string string-upcase string-downcase
-						   string-append list->string symbol->string number->string)))
-		    (lint-format "~A could be ~A" caller (truncated-list->string form) (cadr form)))))
+	    (if (and (pair? (cdr form))
+		     (pair? (cadr form))   ; (string-copy (string-copy x)) could be (string-copy x)
+		     (memq (caadr form) '(copy string-copy string make-string string-upcase string-downcase
+					  string-append list->string symbol->string number->string)))
+		(lint-format "~A could be ~A" caller (truncated-list->string form) (cadr form))))
 	  (hash-special 'string-copy sp-string-copy))
 
 	;; ---------------- string-down|upcase ----------------
@@ -10312,7 +10310,7 @@
 						      (pair? (cadr consumer))
 						      (let ((len (length (cadr consumer))))
 							(if (negative? len)
-							    (cons (abs len) (cdr (arity +))) ; 536870912 = MAX_ARITY in s7.c
+							    (cons (abs len) 536870912)
 							    (cons len len))))))))
 		  (if (and consumed-values
 			   (or (> (car consumed-values) (car produced-values))
@@ -14761,7 +14759,7 @@
 							    (pair-line-number (var-initial-value v)))))
 					     (lint-format "~A in ~A is already a constant, defined ~A~A" caller sym
 							  (truncated-list->string form)
-							  (if (and line (> line 0)) (format #f "(line ~D): " line) "")
+							  (if (and (integer? line) (> line 0)) (format #f "(line ~D): " line) "")
 							  (truncated-list->string (var-initial-value v)))))))
 
 	    ((memq sym '(else =>)) ; also in r7rs ... and _, but that is for syntax-rules
@@ -15548,7 +15546,7 @@
 							    (pair-line-number (var-initial-value v)))))
 					     (lint-format "can't set! ~A in ~A (it is a constant: ~A~A)" caller settee
 							  (truncated-list->string form)
-							  (if (and line (> line 0)) (format #f "(line ~D): " line) "")
+							  (if (and (integer? line) (> line 0)) (format #f "(line ~D): " line) "")
 							  (truncated-list->string (var-initial-value v))))))
 
 				      ((and (not lint-in-with-let)
@@ -18996,7 +18994,7 @@
 					 (lint-format "~S is constant in the do loop" caller code)
 					 (lint-format "~S in ~S is constant in the do loop" caller new-code code))))))
 			     
-			     (when (and (not (memq (car code) local-vars))
+			     (when (and (not (memq (car code) local-vars)) ; also need (not (dilambda (symbol->value (car code)))) here I think
 					(not (eq? (car code) 'quote))
 					(lint-every? (lambda (v)
 						       (or (code-constant? v)

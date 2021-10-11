@@ -75026,17 +75026,13 @@ static void op_case_g_s(s7_scheme *sc)
   sc->code = opt3_any(cdr(sc->code));
 }
 
-static s7_pointer fx_case_a_g_s_a(s7_scheme *sc, s7_pointer code)
+static s7_pointer fx_case_a_g_s_a(s7_scheme *sc, s7_pointer code) /* split into int/any cases in g_g, via has_integer_keys(sc->code) */
 {
-  s7_pointer selector;
+  s7_pointer x, selector;
   selector = fx_call(sc, cdr(code));
-  if (is_simple(selector))
-    {
-      s7_pointer x;
-      for (x = cddr(code); is_pair(x); x = cdr(x))
-	if (s7_is_eqv(sc, opt2_any(x), selector))
-	  return(fx_call(sc, cdar(x)));
-    }
+  for (x = cddr(code); is_pair(x); x = cdr(x))
+    if (s7_is_eqv(sc, opt2_any(x), selector))
+      return(fx_call(sc, cdar(x)));
   return(fx_call(sc, opt3_any(cdr(code))));
 }
 
@@ -75111,7 +75107,7 @@ static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
 	check_let_a_body(sc, form);
       else
 	{
-	  fx_annotate_args(sc, cdr(code), set_plist_1(sc, caaar(code))); /* no effect if not syntactic, change op->OP_FX_PROC with backpointer? */
+	  fx_annotate_args(sc, cdr(code), set_plist_1(sc, caaar(code))); /* no effect if not syntactic -- how to fix? */
 	  if (is_fx_treeable(cdr(code))) fx_tree(sc, cdr(code), car(binding), NULL, NULL, false);
 	}}
   if ((optimize_op(form) == OP_LET_A_OLD) &&
@@ -87846,6 +87842,10 @@ static Inline void op_safe_c_s(s7_scheme *sc)
   set_car(sc->t1_1, lookup(sc, cadr(sc->code)));
   sc->value = fn_proc(sc->code)(sc, sc->t1_1);
 }
+/* if op_safe_c_t added and set in fx_tree_in, we get a few hits, but nothing significant.
+ *   if that had worked, it would be interesting to set opt1(cdr) to the fx_tree fx_proc, (init to fx_c_s), then call that here.
+ *   opt1(cdr) is not used here, opt3_byte happens a few times
+ */
 
 static Inline void op_safe_c_ss(s7_scheme *sc)
 {
@@ -95379,7 +95379,7 @@ int main(int argc, char **argv)
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.1   37.0
  * sg         75.8         ----   ----   56.1   55.9
- * lg        104.7        106.6  105.0  104.4  103.7
+ * lg        104.7        106.6  105.0  104.4  103.6
  * tbig      605.1        177.4  175.8  166.4  166.4
  * --------------------------------------------------------
  *
@@ -95393,13 +95393,6 @@ int main(int argc, char **argv)
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- * lint lint oddities:
- sp-append (line 9133): perhaps 
-    (list-values 'append (apply-values (cdr new-args))) ->
-    (cons (quote . #<unspecified>) (cdr new-args))
- eqv-code-constant? (line 14582): memq should be member in (memq x '(#t #f () #<unspecified> #<undefined> #<eof>))
- lint (line 23057): perhaps (symbol? form) -> #f
- sp-call/values (line 10321): in (cdr (arity +)),
-     cdr's argument should be a pair, but (arity +) might also be #f
- also define->let seems dumb
+ * what about hop_safe_c_s_direct -> p_p func in opt2, called in eval?
+ * lint: define->let seems dumb
  */
