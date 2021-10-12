@@ -11,15 +11,6 @@
 
 (unless (defined? '*notcurses*)          ; nrepl.c has notcurses_s7.c (thus *notcurses*) built-in
   (load "notcurses_s7.so" (inlet 'init_func 'notcurses_s7_init)))
-(unless (defined? 'nccell_make)        (define nccell_make cell_make))
-(unless (defined? 'nccell_gcluster)    (define nccell_gcluster cell_gcluster))
-(unless (defined? 'nccell_channels)    (define nccell_channels cell_channels))
-(unless (defined? 'nccell_stylemask)   (define nccell_stylemask cell_stylemask))
-(unless (defined? 'nccells_double_box) (define nccells_double_box cells_double_box))
-
-(unless (defined? 'CELL_FGDEFAULT_MASK) (define CELL_FGDEFAULT_MASK NC_FGDEFAULT_MASK))
-(unless (defined? 'CELL_BGDEFAULT_MASK) (define CELL_BGDEFAULT_MASK NC_BGDEFAULT_MASK))
-
 (unless (defined? 'notcurses_getc) (define (notcurses_getc a b c d) (notcurses_get a b d)))
 
 (define (drop-into-repl call e)
@@ -267,7 +258,7 @@
 			       (ash (floor (* g 256)) 8)
 			       (floor (* b 256)))))
 	    (set! (nccell_gcluster c1) (char->integer #\space))
-	    (set! (nccell_channels c1) (logior CELL_FGDEFAULT_MASK CELL_BGDEFAULT_MASK color)))
+	    (set! (nccell_channels c1) (logior NC_FGDEFAULT_MASK NC_BGDEFAULT_MASK color)))
 	  (set! (nccell_stylemask c1) 0)
 	  (ncplane_set_base_cell statp c1)
 	  (notcurses_render nc)
@@ -294,7 +285,7 @@
       (define (red c)
 	(let ((c1 (nccell_make)))
 	  (set! (nccell_gcluster c1) (char->integer c))
-	  (set! (nccell_channels c1)  (logior CELL_FGDEFAULT_MASK #xff000000000000))
+	  (set! (nccell_channels c1)  (logior NC_FGDEFAULT_MASK #xff000000000000))
 	  (set! (nccell_stylemask c1) 0)
 	  c1))
 
@@ -407,7 +398,7 @@
 	      (ncplane_set_base_cell ncp c1)
 
 	      (unless header
-		(set! header-row 1)
+		(set! header-row 1) ; avoid first row -- output is meesed up by notcurses
 		(set! row 1)
 		(set! header-cols nc-cols))
 
@@ -1503,18 +1494,18 @@
 			(lambda (c)
 			  ;; ncinput gives row|col in current view, so we need to map that to the ncplane row|col
 			  ;(display-status (format #f "nc-rows: ~S, ncp-row: ~S, input: ~S" nc-rows ncp-row (ncinput_y ni)))
-			  (set-row (min ncp-max-row (- (ncinput_y ni) ncp-row)))
-			  (set-col (max (min (eols row) (ncinput_x ni)) (bols row)))
-			  (unless mouse-col
-			    (set! mouse-col col)
-			    (set! mouse-row row))))
-
-		  (set! (keymap NCKEY_RELEASE)  ; mouse button release
-			(lambda (c)
-			  (when (and (number? mouse-col)
-				     (not (= col mouse-col)))
-			    (set! selection (ncplane_contents ncp mouse-row (min col mouse-col) 1 (abs (- col mouse-col)))))
-			  (set! mouse-col #f)))
+			  (if (= (ncinput_evtype ni) NCTYPE_RELEASE)
+			      (begin
+				(when (and (number? mouse-col)
+					   (not (= col mouse-col)))
+				  (set! selection (ncplane_contents ncp mouse-row (min col mouse-col) 1 (abs (- col mouse-col)))))
+				(set! mouse-col #f))
+			      (begin
+				(set-row (min ncp-max-row (- (ncinput_y ni) ncp-row)))
+				(set-col (max (min (eols row) (ncinput_x ni)) (bols row)))
+				(unless mouse-col
+				  (set! mouse-col col)
+				  (set! mouse-row row))))))
 
 		  (set! (keymap NCKEY_ENTER) enter)
 

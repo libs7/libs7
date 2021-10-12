@@ -130,7 +130,7 @@
 
 
 ;;; --------------------------------------------------------------------------------
-;OP_RECUR_IF_A_A_opLAA_LAAq -- if_a_oplaa_laaq_a etc
+;OP_RECUR_IF_A_A_opLAA_LAAq OP_RECUR_IF_A_opLAA_LAAq_A 
 
 (define (rc1 x y)
   (if (<= y 0)
@@ -145,8 +145,21 @@
 
 (trc1)
 
+(define (rc1-rev x y)
+  (if (> y 0)
+      (+ (rc1 (+ x 1) (- y 1))
+	 (rc1 (- x 1) (- y 1)))
+      x))
+
+(define (trc1r)
+  (do ((i 0 (+ i 1)))
+      ((= i rc-size))
+    (rc1-rev 0 6)))
+
+(trc1r)
+
 ;;; --------------------------------------------------------------------------------
-;OP_RECUR_IF_A_A_opL3A_L3Aq
+;OP_RECUR_IF_A_A_opL3A_L3Aq OP_RECUR_IF_A_opL3A_L3Aq_A
 
 (define (rc2 x y z)
   (if (<= z 0)
@@ -161,8 +174,36 @@
 
 (trc2)
 
+(define (rc2-rev x y z)
+  (if (> z 0)
+      (+ (rc2 (+ x 1) (+ y 1) (- z 1))
+	 (rc2 (- x 1) (- y 1) (- z 1)))
+      (+ x y)))
 
-;;; OP_RECUR_IF_A_A_IF_A_A_opL3A_L3Aq, OP_RECUR_OR_A_AND_A_LA(AA)?
+(define (trc2r)
+  (do ((i 0 (+ i 1)))
+      ((= i rc-size))
+    (rc2-rev 0 0 5)))
+
+(trc2r)
+
+;;; --------------------------------------------------------------------------------
+;;; OP_RECUR_IF_A_A_IF_A_A_opL3A_L3Aq?, 
+
+;OP_RECUR_OR_A_AND_A_opLA(AA)q?
+
+(define (rc3 lst) ; does this pattern ever happen?
+  (or (null? lst)
+      (and (symbol? (car lst))
+	   (null? (rc3 (cdr lst))))))
+
+(define (trc3)
+  (let ((lst (make-list 100 'a)))
+    (do ((i 0 (+ i 1)))
+	((= i rc-size))
+      (rc3 lst))))
+
+(trc3)
 
 
 ;;; --------------------------------------------------------------------------------

@@ -6021,7 +6021,7 @@
 		    (cons 'random args)
 		    (case (car args)
 		      ((0 1 -1) 0)
-		      ((0 0.0) 0.0)
+		      ((0.0) 0.0)
 		      (else (cons 'random args)))))
 	      (hash-table-set! h 'random numran))
 
@@ -8189,7 +8189,7 @@
 				   (eq? (cadr form) (cadr end))
 				   (memq (car end) '(length vector-length)))
 			      (lint-format "perhaps ~A" caller (lists->string form (list 'subvector (cadr form)))))
-			  (let ((dims (car (cddddr form))))
+			  (let ((dims (list-ref form 4))) ;(car (cddddr form))))
 			    (if (and (quoted-pair? dims)
 				     (integer? start)
 				     (integer? end)
@@ -9637,12 +9637,10 @@
 					  (integer? inner-x))
 				     (+ outer-x inner-x)
 				     (list '+ outer-x inner-x))))
-			  (if (not (or inner-y outer-y))
-			      (lint-format "perhaps ~A" caller
-					   (lists->string form
-							  (list 'substring (cadr str) x)))
-			      (lint-format "perhaps ~A" caller ; (substring (substring str x1 y1) x2 y2)
-					   (lists->string form
+			  (lint-format "perhaps ~A" caller
+				       (lists->string form
+						      (if (not (or inner-y outer-y))
+							  (list 'substring (cadr str) x)
 							  (list 'substring (cadr str) x
 								(if outer-y
 								    (if (and (integer? outer-y)
@@ -18854,6 +18852,12 @@
 						    (catch #t
 						      (lambda ()
 							;(format *stderr* "new-end: ~S, form: ~S~%" new-end form)
+#|
+							;; suggested rewrite:
+							(let ((args (list (eval step-end (inlet))))) ; catch multiple-values, if any
+ 							  (car args)))
+							;; is wrong?
+|#
 							((lambda args            ; lambda here and below to catch multiple values, if any
 							   (car args))           ; no need to check (pair? args) since in this context (values)->#<unspecified>
 							 (eval new-end (inlet))))
@@ -23174,8 +23178,7 @@
 								  (begin
 								    (counter (car tree))
 								    (counter (cdr tree)))
-								  (if (and (symbol? tree)
-									   (memq tree '(<1> <2> <3> <4>)))
+								  (if (memq tree '(<1> <2> <3> <4>))
 								      (set! count (+ count 1)))))
 							    (> (- i count) *fragment-min-size*))))
 					     (vector-set! vals 1 (map (lambda (b) ; line numbers of use points

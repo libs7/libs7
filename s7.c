@@ -88,7 +88,7 @@
  *   #define HAVE_COMPLEX_NUMBERS 1
  *   #define HAVE_COMPLEX_TRIG 0
  *
- *   In Windows, both are 0.
+ *   In Windows and tcc, both are 0.
  *
  *   Some systems (FreeBSD) have complex.h, but some random subset of the trig funcs, so
  *   HAVE_COMPLEX_NUMBERS means we can find
@@ -243,9 +243,13 @@
   #endif
 #else
   #ifndef HAVE_COMPLEX_NUMBERS
-    #define HAVE_COMPLEX_NUMBERS 1
+    #if __TINYC__
+      #define HAVE_COMPLEX_NUMBERS 0
+    #else
+      #define HAVE_COMPLEX_NUMBERS 1
+    #endif
   #endif
-  #if __cplusplus
+  #if __cplusplus || __TINYC__
     #ifndef HAVE_COMPLEX_TRIG
       #define HAVE_COMPLEX_TRIG 0
     #endif
@@ -12711,6 +12715,9 @@ static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
   #else
     #define HAVE_OVERFLOW_CHECKS 0
     #pragma message("no arithmetic overflow checks in this version of s7")
+    #define add_overflow(A, B, C) 0
+    #define multiply_overflow(A, B, C) 0
+    #define subtract_overflow(A, B, C) 0
   #endif
 #endif
 
@@ -67671,7 +67678,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	      s7_p_p_t fp = s7_p_p_function(f);
 	      if (fp)
 		{
-		  s7_int i, len;
+		  s7_int i;
 		  s7_pointer str = cadr(args);
 		  const char *s;
 		  val = list_1_unchecked(sc, sc->nil);
@@ -67692,7 +67699,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	      s7_p_p_t fp = s7_p_p_function(f);
 	      if (fp)
 		{
-		  s7_int i, len;
+		  s7_int i;
 		  s7_pointer vec = cadr(args);
 		  val = list_1_unchecked(sc, sc->nil);
 		  push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
@@ -76516,12 +76523,13 @@ static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value
 
 static bool op_let_temp_fx(s7_scheme *sc) /* all entries are of the form (symbol fx-able-value) */
 {
-  s7_pointer p, var, settee, new_val, slot;
+  s7_pointer p, var, slot;
   s7_pointer *end = sc->stack_end;
   sc->code = cdr(sc->code);
 
   for (p = car(sc->code); is_pair(p); p = cdr(p))
     {
+      s7_pointer settee;
       var = car(p);
       settee = car(var);
       slot = lookup_slot_from(settee, sc->curlet);
@@ -76533,8 +76541,8 @@ static bool op_let_temp_fx(s7_scheme *sc) /* all entries are of the form (symbol
     }
   for (p = car(sc->code); is_pair(p); p = cdr(p), end += 4)
     {
+      s7_pointer new_val;
       var = car(p);
-      settee = car(var);
       new_val = fx_call(sc, cdr(var));
       slot = end[0];
       if (slot_has_setter(slot))
@@ -80677,7 +80685,6 @@ static s7_pointer check_do(s7_scheme *sc)
 	bool more_vars = false;
 	if (tis_slot(let_slots(sc->curlet))) /* outer vars */
 	  {
-	    s7_pointer p;
 	    p = let_slots(sc->curlet);
 	    var1 = slot_symbol(p);
 	    p = next_slot(p);
@@ -93433,6 +93440,9 @@ static void init_features(s7_scheme *sc)
 #if (defined(__GNUC__))
   s7_provide(sc, "gcc");
 #endif
+#if (defined(__TINYC__))
+  s7_provide(sc, "tcc"); /* appears to be 3-4 times slower than gcc (compilation is at least 10 times faster however) */
+#endif
 #ifdef __EMSCRIPTEN__
   s7_provide(sc, "emscripten");
 #endif
@@ -95332,7 +95342,7 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------
- *             gmp (9-23)  20.9   21.0   21.7   21.8
+ *             gmp (9-23)  20.9   21.0   21.7   21.8   21.9
  * --------------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    476    463
@@ -95371,7 +95381,7 @@ int main(int argc, char **argv)
  * tmisc      7085         8960   7699   6597   6553
  * tlist      6837         7896   7546   6865   6622
  * tari       ----         13.0   12.7   7055   6860
- * tleft      8246         9120   8929   7776   7344
+ * tleft      8985         9929   9728   8495   8006
  * tgc        10.1         11.9   11.1   8668   8666
  * thash      35.4         11.8   11.7   9775   9711
  * cb         18.8         12.2   12.2   11.1   10.3
@@ -95393,6 +95403,9 @@ int main(int argc, char **argv)
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- * what about hop_safe_c_s_direct -> p_p func in opt2, called in eval?
  * lint: define->let seems dumb
+    (unless (boolean? rtn) (cond ((eq? rtn 'boolean?) (set! expr arg2)) ((not... ->
+    (cond ((boolean? rtn) #f) ((eq? rtn 'boolean?) (set! expr arg2)) ((not...
+    ;; shouldn't that be #<unspecified> not #f?
+    18858: ((lambda...))->let is apparently wrong??
  */
