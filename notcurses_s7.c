@@ -1,6 +1,6 @@
 /* s7 FFI for the notcurses library
  *
- *   requires notcurses 2.1.6 or later (for notcurses_core)
+ *   requires notcurses 2.4.3 or later
  *   Fedora: notcurses notcurses-devel notcurses-utils
  *   tested in fedora 32/33/34, Ubuntu 20.10/21.04
  */

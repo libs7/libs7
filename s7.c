@@ -8486,6 +8486,16 @@ static inline void add_slot_unchecked(s7_scheme *sc, s7_pointer let, s7_pointer 
   symbol_set_local_slot(symbol, id, slot);
 }
 
+static void add_slot_unchecked_no_local(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value, uint64_t id)
+{
+  s7_pointer slot;
+  new_cell_no_check(sc, slot, T_SLOT);
+  slot_set_symbol_and_value(slot, symbol, value);
+  slot_set_next(slot, let_slots(let));
+  let_set_slots(let, slot);
+  set_local(symbol);
+}
+
 #define add_slot(Sc, Let, Symbol, Value) add_slot_unchecked(Sc, Let, Symbol, Value, let_id(Let))
 
 static inline s7_pointer add_slot_checked(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
@@ -8532,6 +8542,16 @@ static Inline s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer 
   slot_set_symbol_and_value(slot, symbol, value);
   slot_set_next(slot, slot_end(sc));
   symbol_set_local_slot(symbol, id, slot);
+  slot_set_next(last_slot, slot);
+  return(slot);
+}
+
+static s7_pointer add_slot_at_end_no_local(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
+{
+  s7_pointer slot;
+  new_cell_no_check(sc, slot, T_SLOT);
+  slot_set_symbol_and_value(slot, symbol, value);
+  slot_set_next(slot, slot_end(sc));
   slot_set_next(last_slot, slot);
   return(slot);
 }
@@ -52781,8 +52801,8 @@ static void check_t_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
 {
   if (let_slots(e) != lookup_slot_from(var, sc->curlet))
     {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(sc->curlet),
-	      (tis_slot(let_slots(e))) ? display(let_slots(e)) : "no slots");
+      fprintf(stderr, "%s%s %s is out of date (%s in %s -> %s)%s\n", BOLD_TEXT, func, display(expr), display(var), display(sc->curlet),
+	      (tis_slot(let_slots(e))) ? display(let_slots(e)) : "no slots", UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
 }
@@ -52803,8 +52823,8 @@ static void check_u_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
 {
   if (next_slot(let_slots(e)) != lookup_slot_from(var, sc->curlet))
     {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(e),
-	      (tis_slot(next_slot(let_slots(e)))) ? display(next_slot(let_slots(e))) : "no next slot");
+      fprintf(stderr, "%s%s %s is out of date (%s in %s -> %s)%s\n", BOLD_TEXT, func, display(expr), display(var), display(e),
+	      (tis_slot(next_slot(let_slots(e)))) ? display(next_slot(let_slots(e))) : "no next slot", UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
 }
@@ -52825,8 +52845,8 @@ static void check_v_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
 {
   if (next_slot(next_slot(let_slots(e))) != lookup_slot_from(var, sc->curlet))
     {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(e),
-	      (tis_slot(next_slot(next_slot(let_slots(e))))) ? display(next_slot(next_slot(let_slots(e)))) : "no next slot");
+      fprintf(stderr, "%s%s %s is out of date (%s in %s -> %s)%s\n", BOLD_TEXT, func, display(expr), display(var), display(e),
+	      (tis_slot(next_slot(next_slot(let_slots(e))))) ? display(next_slot(next_slot(let_slots(e)))) : "no next slot", UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
 }
@@ -52849,7 +52869,8 @@ static void check_o_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
   slot = lookup_slot_from(var, sc->curlet);
   if (lookup_slot_from(var, e) != slot)
     {
-      fprintf(stderr, "%s %s is out of date (%s in %s -> %s)\n", func, display(expr), display(var), display(e), (tis_slot(slot)) ? display(slot) : "undefined");
+      fprintf(stderr, "%s%s %s is out of date (%s in %s -> %s)%s\n", BOLD_TEXT, func, display(expr), display(var), display(e), 
+	      (tis_slot(slot)) ? display(slot) : "undefined", UNBOLD_TEXT);
       if (sc->stop_at_error) abort();
     }
 }
@@ -55552,7 +55573,9 @@ static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
   gc_protect_via_stack(sc, new_e);
 
   /* as in let, we need to call the var inits before making the new let, but a simpler equivalent is to make the new let
-   *    but don't set its id yet.
+   *    but don't set its id yet, and don't set local_slot until end either because fx_call might refer to same-name symbol in outer let.
+   *    That is, symbol_id=outer_let_id so lookup->local_slot, so we better not set local_slot ahead of time here.
+   *    As far as I can tell, this is the only place we do fx_call at the time of new_slot with new let id unset.
    */
   for (x = cdr(code); is_pair(x); x = cddr(x))
     {
@@ -55563,15 +55586,15 @@ static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
       value = fx_call(sc, cdr(x));            /* it's necessary to do this first, before add_slot_unchecked */
       if (!sp)
 	{
-	  add_slot_unchecked(sc, new_e, symbol, value, symbol_id(symbol));
+	  add_slot_unchecked_no_local(sc, new_e, symbol, value, symbol_id(symbol));
 	  sp = let_slots(new_e);
 	}
-      else sp = add_slot_at_end(sc, symbol_id(symbol), sp, symbol, value);
+      else sp = add_slot_at_end_no_local(sc, symbol_id(symbol), sp, symbol, value);
     }
   id = ++sc->let_number;
   let_set_id(new_e, id);
   for (x = let_slots(new_e); tis_slot(x); x = next_slot(x))
-    symbol_set_id(slot_symbol(x), id);
+    symbol_set_local_slot_unincremented(slot_symbol(x), id, x);  /* was symbol_set_id(slot_symbol(x), id) */
   unstack(sc);
   return(new_e);
 }
@@ -95352,7 +95375,7 @@ int main(int argc, char **argv)
  * tvect      1892         2456   2413   1735   1712
  * s7test     4506         1873   1831   1792   1784
  * texit      1768         ----   ----   1886   1801
- * lt         2121         2123   2110   2120   2108
+ * lt         2121         2123   2110   2120   2108  2105
  * tform      3235         2281   2273   2255   2242
  * tread      2606         2440   2421   2415   2415
  * tmac       2452         3317   3277   2409   2420
@@ -95403,9 +95426,5 @@ int main(int argc, char **argv)
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- * lint: define->let seems dumb
-    (unless (boolean? rtn) (cond ((eq? rtn 'boolean?) (set! expr arg2)) ((not... ->
-    (cond ((boolean? rtn) #f) ((eq? rtn 'boolean?) (set! expr arg2)) ((not...
-    ;; shouldn't that be #<unspecified> not #f?
-    18858: ((lambda...))->let is apparently wrong??
+ * lint: define->let seems dumb -- switch?
  */

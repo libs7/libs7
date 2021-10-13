@@ -4176,8 +4176,7 @@
 				     (lint-format "perhaps ~A" 'or  ; (or (< x y) (and (>= x y) (= x 2))) -> (or (< x y) (= x 2))
 						  ;; this could be much fancier, but it's not hit much (the 'and case below is not hit at all I think)
 						  (lists->string form
-								 (if (null? (cddr arg2))
-								     #t
+								 (or (null? (cddr arg2))
 								     (list 'or arg1
 									   (if (pair? (cdddr arg2))
 									       (cons 'and (cddr arg2))
@@ -4344,12 +4343,11 @@
 							 (simplify-boolean (list 'not (cadr arg2)) () () env))))
 					(lint-format "perhaps ~A" 'and  ; (and (< x y) (or (>= x y) (= x 2))) -> (and (< x y) (= x 2)) ??
 						     (lists->string form
-								    (if (null? (cddr arg2))
-									#f
-									(list 'and arg1
-									      (if (pair? (cdddr arg2))
-										  (cons 'or (cddr arg2))
-										  (caddr arg2)))))))))
+								    (and (not (null? (cddr arg2)))
+									 (list 'and arg1
+									       (if (pair? (cdddr arg2))
+										   (cons 'or (cddr arg2))
+										   (caddr arg2)))))))))
 			    (if (and (pair? arg1)                ; (and (or ... A ...) A) -> A
 				     (eq? (car arg1) 'or)
 				     (member arg2 (cdr arg1))
@@ -16949,7 +16947,7 @@
 								      (cons (list (if (eq? (car form) 'when)
 										      (simplify-boolean (list 'not (cadr form)) () () env)
 										      (cadr form))
-										  #f)
+										  #<unspecified>) ; was #f 12-Oct-21
 									    (cdr body)))))
 			  (when (or (memq (car body) '(when unless))
 				    (and (eq? (car body) 'if)
@@ -18851,16 +18849,7 @@
 						    ;; TODO: here and below, protect against any attempt at IO
 						    (catch #t
 						      (lambda ()
-							;(format *stderr* "new-end: ~S, form: ~S~%" new-end form)
-#|
-							;; suggested rewrite:
-							(let ((args (list (eval step-end (inlet))))) ; catch multiple-values, if any
- 							  (car args)))
-							;; is wrong?
-|#
-							((lambda args            ; lambda here and below to catch multiple values, if any
-							   (car args))           ; no need to check (pair? args) since in this context (values)->#<unspecified>
-							 (eval new-end (inlet))))
+							(car (list (eval new-end (inlet))))) ; catch multiple-values, if any
 						      (lambda args
 							:eval-error)))))
 				     (if (and val (not (eq? val :eval-error)))
@@ -18877,10 +18866,7 @@
 						(val (and (not (tree-set-memq '(read-char read-line read-string read) step-end))
 							  (catch #t
 							    (lambda ()
-							      ;(format *stderr* "step-end: ~S, form: ~S~%" step-end form)
-							      ((lambda args
-								 (car args))
-							       (eval step-end (inlet))))
+							      (car (list (eval step-end (inlet))))) ; catch multiple-values, if any
 							    (lambda args
 							      :eval-error)))))
 					   (if (and val (not (eq? val :eval-error)))

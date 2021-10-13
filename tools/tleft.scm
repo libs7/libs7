@@ -192,7 +192,7 @@
 
 ;OP_RECUR_OR_A_AND_A_opLA(AA)q?
 
-(define (rc3 lst) ; does this pattern ever happen?
+(define (rc3 lst) ; does this pattern ever happen? maybe opA_LAq is more likely
   (or (null? lst)
       (and (symbol? (car lst))
 	   (null? (rc3 (cdr lst))))))
