@@ -3604,7 +3604,7 @@ static void init_int_limits(void)
     s7_int_digits_by_radix[i] = (int32_t)(floor(S7_LOG_INT64_MAX / log((double)i)));
 }
 
-static s7_pointer make_permanent_integer_unchecked(s7_int i)
+static s7_pointer make_permanent_integer(s7_int i)
 {
   s7_pointer p;
   p = (s7_pointer)Calloc(1, sizeof(s7_cell));
@@ -3678,8 +3678,8 @@ static void init_small_ints(void)
   int_two = small_ints[2];
   int_three = small_ints[3];
 
-  mostfix = make_permanent_integer_unchecked(S7_INT64_MAX);
-  leastfix = make_permanent_integer_unchecked(s7_int_min);
+  mostfix = make_permanent_integer(S7_INT64_MAX);
+  leastfix = make_permanent_integer(s7_int_min);
   set_number_name(mostfix, "9223372036854775807", 19);
   set_number_name(leastfix, "-9223372036854775808", 20);
 }
@@ -7099,7 +7099,7 @@ static int64_t gc(s7_scheme *sc)
    *   where the last actually freed cells were after the previous GC call.  We're trying to
    *   GC protect the previous GC_TEMPS_SIZE allocated pointers so that the caller doesn't have
    *   to gc-protect every temporary cell.
-   * There's one remaining possible problem.  s7_remove_from_heap frees cells outside
+   * There's one remaining possible problem.  remove_from_heap frees cells outside
    *   the GC and might push free_heap_top beyond its previous_free_heap_top, then
    *   an immediate explicit gc call might not see those temp cells.
    */
@@ -7467,7 +7467,31 @@ static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
   return(x);
 }
 
-static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
+static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x)
+{
+  /* x known to be a symbol and in the heap */
+  s7_int i;
+  gc_list_t *gp;
+  int64_t loc;
+  loc = heap_location(sc, x);
+  sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
+  free_cell(sc, sc->heap[loc]);
+  unheap(sc, x);
+  gp = sc->gensyms;
+  for (i = 0; i < gp->loc; i++) /* sc->gensyms reaches size 512 during s7test, but this search is called 3 times and costs nothing */
+    if (gp->list[i] == x)
+      {
+	s7_int j;
+	for (j = i + 1; i < gp->loc - 1; i++, j++)
+	  gp->list[i] = gp->list[j];
+	gp->list[i] = NULL;
+	gp->loc--;
+	if (gp->loc == 0) mark_function[T_SYMBOL] = mark_noop;
+	break;
+      }
+}
+
+static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
 {
   /* global functions are very rarely redefined, so we can remove the function body from the heap when it is defined */
   if (!in_heap(x)) return;
@@ -7476,7 +7500,7 @@ static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
       s7_pointer p = x;
       do {
 	petrify(sc, p);
-	s7_remove_from_heap(sc, car(p));
+	remove_from_heap(sc, car(p));
 	p = cdr(p);
       } while (is_pair(p) && (in_heap(p)));
       if (in_heap(p)) petrify(sc, p);
@@ -7497,27 +7521,7 @@ static inline void s7_remove_from_heap(s7_scheme *sc, s7_pointer x)
 
     case T_SYMBOL:
       if (is_gensym(x))
-	{
-	  s7_int i;
-	  gc_list_t *gp;
-	  int64_t loc;
-	  loc = heap_location(sc, x);
-	  sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
-	  free_cell(sc, sc->heap[loc]);
-	  unheap(sc, x);
-
-	  gp = sc->gensyms;
-	  for (i = 0; i < gp->loc; i++) /* sc->gensyms reaches size 512 during s7test, but this search is called 3 times and costs nothing */
-	    if (gp->list[i] == x)
-	      {
-		s7_int j;
-		for (j = i + 1; i < gp->loc - 1; i++, j++)
-		  gp->list[i] = gp->list[j];
-		gp->list[i] = NULL;
-		gp->loc--;
-		if (gp->loc == 0) mark_function[T_SYMBOL] = mark_noop;
-		break;
-	      }}
+	remove_gensym_from_heap(sc, x);
       return;
 
     case T_CLOSURE: case T_CLOSURE_STAR:
@@ -7938,7 +7942,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
       /* the keyword symbol needs to be permanent (not a gensym) else we have to laboriously gc-protect it */
       if ((is_gensym(ksym)) &&
 	  (in_heap(ksym)))
-	s7_remove_from_heap(sc, ksym);
+	remove_gensym_from_heap(sc, ksym);
       slot = make_permanent_slot(sc, x, x);
       set_global_slot(x, slot);
       set_local_slot(x, slot);
@@ -8844,8 +8848,8 @@ static void add_slot_to_rootlet(s7_scheme *sc, s7_pointer slot)
 static void remove_function_from_heap(s7_scheme *sc, s7_pointer value)
 {
   s7_pointer lt;
-  s7_remove_from_heap(sc, closure_args(value));
-  s7_remove_from_heap(sc, closure_body(value));
+  remove_from_heap(sc, closure_args(value));
+  remove_from_heap(sc, closure_body(value));
   /* remove closure if it's local to current func (meaning (define f (let ...) (lambda ...)) removes the enclosing let) */
   lt = closure_let(value); /* closure_let and all its outlets can't be rootlet */
   if ((is_let(lt)) && (!let_removed(lt)) && (lt != sc->shadow_rootlet))
@@ -8898,7 +8902,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	}
       symbol_increment_ctr(symbol);
       if (is_gensym(symbol))
-	s7_remove_from_heap(sc, symbol);
+	remove_gensym_from_heap(sc, symbol);
       return(slot);
     }
   return(add_slot_checked_with_id(sc, let, symbol, value));
@@ -10380,9 +10384,9 @@ static bool pair_symbol_is_safe(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 	 (direct_memq(sym, e)));
 }
 
-static inline s7_pointer collect_variables(s7_scheme *sc, s7_pointer lst, s7_pointer e)
+static /* inline */ s7_pointer collect_variables(s7_scheme *sc, s7_pointer lst, s7_pointer e)
 {
-  /* collect local variable names from let/do (pre-error-check) */
+  /* collect local variable names from let/do (pre-error-check), 20 overhead in tgen -> 14 if cons_unchecked below */
   s7_pointer p;
   sc->w = e;
   for (p = lst; is_pair(p); p = cdr(p))
@@ -13078,16 +13082,6 @@ static s7_pointer make_mutable_integer(s7_scheme *sc, s7_int n)
   return(x);
 }
 
-static s7_pointer make_permanent_integer(s7_int i)
-{
-  if (is_small_int(i)) return(small_int(i));
-  if (i == MAX_ARITY) return(max_arity);
-  if (i == CLOSURE_ARITY_NOT_SET) return(arity_not_set);
-  if (i == -1) return(minus_one);
-  if (i == -2) return(minus_two);  /* a few -3 */
-  return(make_permanent_integer_unchecked(i));
-}
-
 s7_pointer s7_make_real(s7_scheme *sc, s7_double n)
 {
   s7_pointer x;
@@ -13130,7 +13124,11 @@ static s7_complex s7_to_c_complex(s7_pointer p)
 #endif
 }
 
-static s7_pointer c_complex_to_s7(s7_scheme *sc, s7_complex z) {return(make_complex(sc, creal(z), cimag(z)));}
+#if WITH_GCC
+  #define c_complex_to_s7(Sc, Z) ({s7_complex z = Z; make_complex(sc, creal(z), cimag(z));})
+#else
+  static s7_pointer c_complex_to_s7(s7_scheme *sc, s7_complex z) {return(make_complex(sc, creal(z), cimag(z)));}
+#endif
 
 static s7_pointer division_by_zero_error(s7_scheme *sc, s7_pointer caller, s7_pointer arg);
 
@@ -45009,7 +45007,7 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
 	      {
 		names[i] = symbol_to_keyword(sc, car(arg));
 		defaults[i] = cadr(arg);
-		s7_remove_from_heap(sc, cadr(arg));
+		remove_from_heap(sc, cadr(arg));
 		if ((is_pair(defaults[i])) ||
 		    (is_normal_symbol(defaults[i])))
 		  {
@@ -51069,10 +51067,10 @@ static s7_pointer init_owlet(s7_scheme *sc)
   sc->error_type = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-type"), sc->F);  /* the error type or tag ('division-by-zero) */
   sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-data"), sc->F);  /* the message or information passed by the error function */
   sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-code"), sc->F);  /* the code that s7 thinks triggered the error */
-  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer_unchecked(0));  /* the line number of that code */
+  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer(0));  /* the line number of that code */
   add_saved_pointer(sc, p);
   sc->error_file = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-file"), sc->F);  /* the file name of that code */
-  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer_unchecked(0));  /* the file-byte position of that code */
+  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer(0));  /* the file-byte position of that code */
   add_saved_pointer(sc, p);
 #if WITH_HISTORY
   sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
@@ -56118,8 +56116,6 @@ static bool fx_matches(s7_pointer symbol, s7_pointer target_symbol)
 	 (is_unchanged_global(symbol)));
 }
 
-static s7_pointer fx_in_place(s7_scheme *sc, s7_pointer arg) {return(opt3_con(arg));}
-
 /* #define fx_choose(Sc, Holder, E, Checker) fx_choose_1(Sc, Holder, E, Checker, __func__, __LINE__) */
 static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_env, safe_sym_t *checker) /* , const char *func, int line) */
 {
@@ -56143,19 +56139,6 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 #if (!WITH_GMP)
 	  if (fn_proc(arg) == g_add_i_random) return(fx_add_i_random);
 #endif
-	  /* an experiment -- does this ever happen in real code? -- no */
-	  /* integer->char string->number (string) (list) complex sqrt log expt * + - /
-	   */
-	  if (((fn_proc(arg) == g_abs) && (is_t_integer(cadr(arg)))) ||
-#if WITH_PURE_S7
-	      ((fn_proc(arg) == g_length) && (is_string(cadr(arg)))))
-#else
-	      (((fn_proc(arg) == g_string_length) || (fn_proc(arg) == g_length)) && (is_string(cadr(arg)))))
-#endif
-	    {
-	      set_opt3_con(arg, make_permanent_integer((fn_proc(arg) == g_abs) ? s7_int_abs(integer(cadr(arg))) : string_length(cadr(arg))));
-	      return(fx_in_place);
-	    }
 	  return((fn_proc(arg) == g_random_i) ? fx_random_i : ((fn_proc(arg) == g_cons) ? fx_cons_cc : fx_c_nc));
 
 	case OP_OR_2A:
@@ -62193,6 +62176,9 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	    }
 	  return(true);
 	}}
+
+  /* TODO: b_p -> b_to_p ? */
+
   pc_fallback(sc, start);
   if ((is_safe_procedure(s_func)) &&
       (c_function_required_args(s_func) <= 1) &&
@@ -62937,6 +62923,7 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		 ((is_byte_vector(obj)) && (checker == sc->is_byte_vector_symbol))))
 	      opc->v[3].p_pip_f = s7_p_pip_unchecked_function(s_func);
 	  }}
+  /* if (is_t_integer(caddr(car_x))) fprintf(stderr, "%s\n", display(car_x)); */
   if (is_symbol(caddr(car_x)))
     {
       s7_pointer slot2;
@@ -75030,7 +75017,7 @@ static void op_case_e_s(s7_scheme *sc)
   sc->code = opt3_any(cdr(sc->code));
 }
 
-static /* inline */ s7_pointer fx_case_a_e_s_a(s7_scheme *sc, s7_pointer code)
+static s7_pointer fx_case_a_e_s_a(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer selector;
   selector = fx_call(sc, cdr(code));
@@ -76819,6 +76806,22 @@ static bool op_or_ap(s7_scheme *sc)
 
 /* -------------------------------- if -------------------------------- */
 
+#define WITH_OUTLET_TREE 0
+#if WITH_OUTLET_TREE
+static void fx_outlet_curlet_tree(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer slot1 = let_slots(let_outlet(sc->curlet)), slot2, slot3 = NULL;
+  slot2 = next_slot(slot1);
+  if (tis_slot(slot2)) slot3 = next_slot(slot2);
+  fx_tree_outer(sc, code,
+	  slot_symbol(slot1),
+	  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
+	  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
+	  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
+}
+/* TODO: pass let arg to fx_curlet_tree */
+#endif
+
 #define choose_if_optc(Opc, One, Reversed, Not) ((One) ? ((Reversed) ? OP_ ## Opc ## _R : ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) :  ((Not) ? OP_ ## Opc ## _N_N : OP_ ## Opc ## _P_P))
 
 static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool reversed) /* cdr(form) == sc->code */
@@ -76973,7 +76976,12 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	      set_opt2_any(code, (one_branch) ? cadr(code) : cdr(code));
 	      set_opt3_any(code, (not_case) ? cadar(code) : car(code));
 	    }
-	  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
+	  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) 
+	    fx_curlet_tree(sc, code);
+#if WITH_OUTLET_TREE	  
+	  if ((is_fx_treeable(code)) && (is_let(let_outlet(sc->curlet))) && (!is_funclet(let_outlet(sc->curlet))) && (tis_slot(let_slots(let_outlet(sc->curlet)))))
+	    fx_outlet_curlet_tree(sc, code);
+#endif
 	}
       else
 	{
@@ -89602,6 +89610,11 @@ static bool op_unknown_na(s7_scheme *sc)
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, cdr(code));
 
+#if WITH_OUTLET_TREE	  
+	  if ((is_fx_treeable(cdr(code))) && (is_let(let_outlet(sc->curlet))) && (!is_funclet(let_outlet(sc->curlet))) && (tis_slot(let_slots(let_outlet(sc->curlet)))))
+	    fx_outlet_curlet_tree(sc, cdr(code));
+#endif
+
 	  if (is_safe_closure(f))
 	    {
 	      if (num_args != 3)
@@ -93165,6 +93178,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->char_to_integer_symbol), char_to_integer_p_p);
 
   s7_set_b_p_function(sc, global_value(sc->is_boolean_symbol), s7_is_boolean);
+  s7_set_b_p_function(sc, global_value(sc->is_byte_symbol), is_byte);
   s7_set_b_p_function(sc, global_value(sc->is_byte_vector_symbol), is_byte_vector_b_p);
   s7_set_b_p_function(sc, global_value(sc->is_c_object_symbol), s7_is_c_object);
   s7_set_b_p_function(sc, global_value(sc->is_char_symbol), s7_is_character);
@@ -95364,57 +95378,57 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* --------------------------------------------------------
- *             gmp (9-23)  20.9   21.0   21.7   21.8   21.9
- * --------------------------------------------------------
+/* -------------------------------------------------
+ *             gmp (9-23)  20.9   21.0   21.8   21.9
+ * -------------------------------------------------
  * tpeak       124          115    114    110    110
- * tref        513          691    687    476    463
- * tauto       785          648    642    496    497
- * index      1032         1026   1016    981    973
- * tmock      7738         1177   1165   1090   1054
- * tvect      1892         2456   2413   1735   1712
- * s7test     4506         1873   1831   1792   1784
- * texit      1768         ----   ----   1886   1801
- * lt         2121         2123   2110   2120   2108  2105
- * tform      3235         2281   2273   2255   2242
- * tread      2606         2440   2421   2415   2415
- * tmac       2452         3317   3277   2409   2420
- * fbench     2848         2688   2583   2475   2458
- * trclo      4107         2735   2574   2475   2459
- * tmat       2683         3065   3042   2530   2513
- * tcopy      2610         8035   5546   2550   2556
- * dup        2783         3805   3788   2565   2559
- * tb         3383         2735   2681   2627   2617
- * titer      2693         2865   2842   2679   2640
- * tsort      3576         3105   3104   2860   2855
- * tset       3114         3253   3104   3089   3081
- * tload      3861         ----   ----   3142   3155
- * teq        3554         4068   4045   3570   3539
- * tio        3710         3816   3752   3693   3680
- * tclo       4622         4787   4735   4402   4408
- * tlet       5278         7775   5640   4431   4435
- * tcase      4519         4960   4793   4444   4441
- * tmap       5491         8869   8774   4493   4492
- * tfft      115.0         7820   7729   4787   4778
- * tshoot     6923         5525   5447   5220   5210
- * tnum       56.7         6348   6013   5443   5439
- * tstr       6187         6880   6342   5776   5509
- * tgsl       25.2         8485   7802   6397   6390
- * trec       8320         6936   6922   6553   6529
- * tmisc      7085         8960   7699   6597   6553
- * tlist      6837         7896   7546   6865   6622
- * tari       ----         13.0   12.7   7055   6860
- * tleft      8985         9929   9728   8495   8006
- * tgc        10.1         11.9   11.1   8668   8666
- * thash      35.4         11.8   11.7   9775   9711
- * cb         18.8         12.2   12.2   11.1   10.3
- * tgen       12.2         11.2   11.4   11.5   12.0
+ * tref        513          691    687    463    463
+ * tauto       785          648    642    497    497
+ * index      1032         1026   1016    973    973
+ * tmock      7738         1177   1165   1054   1054
+ * tvect      1892         2456   2413   1712   1712
+ * s7test     4506         1873   1831   1784   1782
+ * texit      1768         ----   ----   1801   1801
+ * lt         2121         2123   2110   2108   2105
+ * tform      3235         2281   2273   2242   2247
+ * tread      2606         2440   2421   2415   2418
+ * tmac       2452         3317   3277   2420   2420
+ * fbench     2848         2688   2583   2458   2458
+ * trclo      4107         2735   2574   2459   2459
+ * tmat       2683         3065   3042   2513   2527
+ * tcopy      2610         8035   5546   2556   2556
+ * dup        2783         3805   3788   2559   2553
+ * tb         3383         2735   2681   2617   2618
+ * titer      2693         2865   2842   2640   2641
+ * tsort      3576         3105   3104   2855   2856
+ * tset       3114         3253   3104   3081   3081
+ * tload      3861         ----   ----   3155   3155
+ * teq        3554         4068   4045   3539   3539
+ * tio        3710         3816   3752   3680   3681
+ * tclo       4622         4787   4735   4408   4408
+ * tlet       5278         7775   5640   4435   4435
+ * tcase      4519         4960   4793   4441   4441
+ * tmap       5491         8869   8774   4492   4492
+ * tfft      115.0         7820   7729   4778   4778
+ * tshoot     6923         5525   5447   5210   5203
+ * tnum       56.7         6348   6013   5439   5438  5432
+ * tstr       6187         6880   6342   5509   5510
+ * tgsl       25.2         8485   7802   6390   6390
+ * tmisc      6344         8869   7612   6472   6490
+ * trec       8320         6936   6922   6529   6529
+ * tlist      6837         7896   7546   6622   6622
+ * tari       ----         13.0   12.7   6860   6860  6841
+ * tleft      8985         9929   9728   8006   8006  7985?
+ * tgc        10.1         11.9   11.1   8666   8665
+ * thash      35.4         11.8   11.7   9711   9711
+ * cb         18.8         12.2   12.2   10.3   10.3
+ * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.1   37.0
- * sg         75.8         ----   ----   56.1   55.9
- * lg        104.7        106.6  105.0  104.4  103.6
+ * calls      55.3         36.7   37.5   37.0   37.1
+ * sg         75.8         ----   ----   55.9   56.0
+ * lg        104.7        106.6  105.0  103.6  103.6
  * tbig      605.1        177.4  175.8  166.4  166.4
- * --------------------------------------------------------
+ * -------------------------------------------------
  *
  * data-specific files?
  *   strings: string-wi=?[s7test] levenshtein[concordance] string-trim[dup]
@@ -95426,5 +95440,6 @@ int main(int argc, char **argv)
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- * lint: define->let seems dumb -- switch?
+ *   extend/test with_outlet_tree and if ok, fold into fx_curlet_tree cases
+ * lint: define->let seems dumb -- switch? only if in closure?
  */
