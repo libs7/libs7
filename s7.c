@@ -1064,9 +1064,9 @@ typedef struct {
 
 /* -------------------------------- s7_scheme struct -------------------------------- */
 struct s7_scheme {
-  s7_pointer code;
-  s7_pointer curlet;                  /* layout of first 4 entries should match stack frame layout */
-  s7_pointer args;                    /* arguments of current function */
+  s7_pointer code;    /* layout of first 4 entries should match stack frame layout */
+  s7_pointer curlet;
+  s7_pointer args;
   opcode_t cur_op;
   s7_pointer value;
   s7_pointer cur_code;
@@ -2957,7 +2957,7 @@ static void init_types(void)
 #define caddaddr(p)                    caddr(caddr(p))
 
 #if WITH_GCC
-  /* slightly tricky because cons can be called recursively */
+  /* slightly tricky because cons can be called recursively, macro here is faster than inline function */
   #define cons(Sc, A, B)   ({s7_pointer _X_, _A_, _B_; _A_ = A; _B_ = B; new_cell(Sc, _X_, T_PAIR | T_SAFE_PROCEDURE); set_car(_X_, _A_); set_cdr(_X_, _B_); _X_;})
 #else
   #define cons(Sc, A, B)               s7_cons(Sc, A, B)
@@ -4814,13 +4814,9 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_CHECKED) != 0) && (!is_slot(obj)) && (!is_pair(obj)) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_SHARED) != 0) && (!t_sequence_p[type(obj)]) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
-  if (((full_typ & T_COPY_ARGS) != 0) &&
-      (!is_pair(obj)) && (!is_any_macro(obj)) && (!is_any_closure(obj)) && (!is_c_function(obj)) && (!is_syntax(obj)))
-    return(true);
-  if (((full_typ & T_FULL_SYMCONS) != 0) &&
-      (!is_symbol(obj)) && (!is_procedure(obj)) && (!is_let(obj)) && (!is_hash_table(obj)) && (!is_pair(obj)))
-    return(true);
-  if (((full_typ & T_FULL_BINDER) != 0) &&
+  if (((full_typ & T_COPY_ARGS) != 0) && (!is_pair(obj)) && (!is_any_macro(obj)) && (!is_any_closure(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))) return(true);
+  if (((full_typ & T_FULL_SYMCONS) != 0) && (!is_symbol(obj)) && (!is_procedure(obj)) && (!is_let(obj)) && (!is_hash_table(obj)) && (!is_pair(obj))) return(true);
+  if (((full_typ & T_FULL_BINDER) != 0) && 
       ((!is_pair(obj)) && (!is_hash_table(obj)) && (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))))
     return(true);
   if (((full_typ & T_FULL_DEFINER) != 0) &&
@@ -4850,12 +4846,9 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_FULL_SIMPLE_ELEMENTS) != 0) &&
       ((!is_normal_vector(obj)) && (!is_hash_table(obj)) && (!is_normal_symbol(obj)) && (!is_pair(obj)) && (unchecked_type(obj) < T_C_MACRO)))
     return(true);
-  if (((full_typ & T_CYCLIC) != 0) && (!is_simple_sequence(obj)) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj)))
-    return(true);
-  if (((full_typ & T_CYCLIC_SET) != 0) && (!is_simple_sequence(obj)) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj)))
-    return(true);
+  if (((full_typ & T_CYCLIC) != 0) && (!is_simple_sequence(obj)) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
+  if (((full_typ & T_CYCLIC_SET) != 0) && (!is_simple_sequence(obj)) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_FULL_HAS_FN) != 0) && (!is_pair(obj))) return(true);
-
   if (is_symbol(obj))
     {
       if ((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES)
@@ -7689,10 +7682,14 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 
 #define push_stack_direct(Sc, Op) \
   do { \
-      memcpy((void *)(Sc->stack_end), (void *)Sc, 3 * sizeof(s7_pointer)); \
-      Sc->stack_end[3] = (s7_pointer)(Op); \
+      Sc->cur_op = Op; \
+      memcpy((void *)(Sc->stack_end), (void *)Sc, 4 * sizeof(s7_pointer)); \
+      /* Sc->stack_end[3] = (s7_pointer)(Op); */ \
       Sc->stack_end += 4; \
   } while (0)
+/* is this faster with cur_op because of the cast to s7_pointer, or is callgrind messing up memcpy stats?
+ *   time's output is all over the map.  I think the cur_op form should be slower, but callgrind disagrees.
+ */
 
 #define push_stack_no_code(Sc, Op, Args) \
   do { \
@@ -13124,11 +13121,7 @@ static s7_complex s7_to_c_complex(s7_pointer p)
 #endif
 }
 
-#if WITH_GCC
-  #define c_complex_to_s7(Sc, Z) ({s7_complex z = Z; make_complex(sc, creal(z), cimag(z));})
-#else
-  static s7_pointer c_complex_to_s7(s7_scheme *sc, s7_complex z) {return(make_complex(sc, creal(z), cimag(z)));}
-#endif
+static inline s7_pointer c_complex_to_s7(s7_scheme *sc, s7_complex z) {return(make_complex(sc, creal(z), cimag(z)));}
 
 static s7_pointer division_by_zero_error(s7_scheme *sc, s7_pointer caller, s7_pointer arg);
 
@@ -13150,7 +13143,7 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
       a = -a;
       b = -b;
     }
-  if (a == s7_int_min) /* believe it or not, gcc randomly says a != S7_INT64_MIN here but a == s7_int_min even with explicit types! This has to be a bug */
+  if (a == s7_int_min)
     {
       while (((a & 1) == 0) && ((b & 1) == 0))
 	{
@@ -30911,7 +30904,7 @@ static bool op_with_io_op(s7_scheme *sc)
       sc->code = op_with_io_1(sc);
       return(false);
     }
-  push_stack_no_args(sc, OP_WITH_IO_1, sc->code);
+  push_stack_no_args_direct(sc, OP_WITH_IO_1);
   sc->code = sc->value;
   return(true);
 }
@@ -52952,6 +52945,8 @@ fx_car_any(fx_car_s, s_lookup)
 fx_car_any(fx_car_t, t_lookup)
 fx_car_any(fx_car_u, u_lookup)
 fx_car_any(fx_car_o, o_lookup)
+fx_car_any(fx_car_T, T_lookup)
+fx_car_any(fx_car_U, U_lookup)
 
 
 #define fx_cdr_any(Name, Lookup) \
@@ -52967,6 +52962,8 @@ fx_cdr_any(fx_cdr_t, t_lookup)
 fx_cdr_any(fx_cdr_u, u_lookup)
 fx_cdr_any(fx_cdr_v, v_lookup)
 fx_cdr_any(fx_cdr_o, o_lookup)
+fx_cdr_any(fx_cdr_T, T_lookup)
+fx_cdr_any(fx_cdr_U, U_lookup)
 
 
 #define fx_cadr_any(Name, Lookup) \
@@ -53647,6 +53644,7 @@ static s7_pointer fx_cons_st(s7_scheme *sc, s7_pointer arg) {return(cons(sc, s_l
 static s7_pointer fx_cons_ts(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_cons_tu(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));}
 static s7_pointer fx_cons_tU(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), arg), U_lookup(sc, caddr(arg), arg)));}
+static s7_pointer fx_cons_Ts(s7_scheme *sc, s7_pointer arg) {return(cons(sc, T_lookup(sc, cadr(arg), arg), s_lookup(sc, caddr(arg), arg)));}
 
 #define fx_c_ss_direct_any(Name, Lookup1, Lookup2) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -53905,6 +53903,7 @@ fx_num_eq_ss_any(fx_num_eq_ut, u_lookup, t_lookup)
 fx_num_eq_ss_any(fx_num_eq_us, u_lookup, s_lookup)
 fx_num_eq_ss_any(fx_num_eq_vs, v_lookup, s_lookup)
 fx_num_eq_ss_any(fx_num_eq_uU, u_lookup, U_lookup)
+fx_num_eq_ss_any(fx_num_eq_vU, v_lookup, U_lookup)
 
 
 #define fx_is_eq_ss_any(Name, Lookup1, Lookup2) \
@@ -53944,6 +53943,7 @@ static s7_pointer x_hash_table_ref_ss(s7_scheme *sc, s7_pointer table, s7_pointe
 
 static s7_pointer fx_hash_table_ref_ss(s7_scheme *sc, s7_pointer arg) {return(x_hash_table_ref_ss(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_hash_table_ref_st(s7_scheme *sc, s7_pointer arg) {return(x_hash_table_ref_ss(sc, lookup(sc, cadr(arg)), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
+static s7_pointer fx_hash_table_ref_TV(s7_scheme *sc, s7_pointer arg) {return(x_hash_table_ref_ss(sc, T_lookup(sc, cadr(arg), arg), V_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 
 static s7_pointer fx_hash_table_ref_car(s7_scheme *sc, s7_pointer arg)
 {
@@ -56856,20 +56856,26 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
       if (cadr(p) == var1)
 	{
 	  if ((fx_proc(tree) == fx_c_s) || (fx_proc(tree) == fx_c_o)) return(with_fx(tree, fx_c_T)); /* fx_c_T_direct got no hits */
+	  if ((fx_proc(tree) == fx_car_s) || (fx_proc(tree) == fx_car_o)) return(with_fx(tree, fx_car_T));
+	  if ((fx_proc(tree) == fx_cdr_s) || (fx_proc(tree) == fx_cdr_o)) return(with_fx(tree, fx_cdr_T));
 	  if (fx_proc(tree) == fx_is_null_s)   return(with_fx(tree, fx_is_null_T));
 	  if (fx_proc(tree) == fx_iterate_o)   return(with_fx(tree, fx_iterate_T));
 	  if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_T1));
 	  if (fx_proc(tree) == fx_add_s1)      return(with_fx(tree, fx_add_T1));
 	  if (fx_proc(tree) == fx_c_sca)       return(with_fx(tree, fx_c_Tca));
+	  if (fx_proc(tree) == fx_cons_ss)     return(with_fx(tree, fx_cons_Ts));
 	  if ((fx_proc(tree) == fx_num_eq_si) || (fx_proc(tree) == fx_num_eq_s0) || (fx_proc(tree) == fx_num_eq_oi)) return(with_fx(tree, fx_num_eq_Ti));
 	  if (fx_proc(tree) == fx_multiply_ss) return(with_fx(tree, fx_multiply_Ts));
 	  if ((fx_proc(tree) == fx_c_scs_direct) && (cadddr(p) == var2)) return(with_fx(tree, fx_c_TcU_direct));
+	  if ((fx_proc(tree) == fx_hash_table_ref_ss) && (var3 == caddr(p))) return(with_fx(tree, fx_hash_table_ref_TV));
 	}
       else
 	if (cadr(p) == var2)
 	  {
 	    if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_U1));
 	    if (fx_proc(tree) == fx_add_s1) return(with_fx(tree, fx_add_U1));
+	    if ((fx_proc(tree) == fx_car_s) || (fx_proc(tree) == fx_car_o)) return(with_fx(tree, fx_car_U));
+	    if ((fx_proc(tree) == fx_cdr_s) || (fx_proc(tree) == fx_cdr_o)) return(with_fx(tree, fx_cdr_U));
 	  }
 	else
 	  if (cadr(p) == var3)
@@ -56895,11 +56901,14 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 		      if (fx_proc(tree) == fx_c_ts_direct) return(with_fx(tree, fx_c_tU_direct));
 		      if (fx_proc(tree) == fx_lt_ts)       return(with_fx(tree, fx_lt_tU));
 		      if (fx_proc(tree) == fx_num_eq_us)   return(with_fx(tree, fx_num_eq_uU));
+		      if (fx_proc(tree) == fx_num_eq_vs)   return(with_fx(tree, fx_num_eq_vU));
 		    }
 		  else
 		    if ((fx_proc(tree) == fx_add_sqr_s) && (cadadr(p) == var1)) return(with_fx(tree, fx_add_sqr_T));
 	      }}
 #if 0
+  /* if ((is_pair(p)) && (is_pair(cdr(p))) && (is_pair(cddr(p))) && (car(p) == sc->hash_table_ref_symbol)) abort(); */
+
   if ((s7_tree_memq(sc, var1, p)) || ((var2) && (s7_tree_memq(sc, var2, p))) || ((var3) && (s7_tree_memq(sc, var3, p))))
     fprintf(stderr, "%s[%d] %s %s %s %d %d: %s %s\n", __func__, __LINE__, display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", 
 	    has_fx(tree), more_vars, display(p), op_names[optimize_op(p)]);
@@ -73966,8 +73975,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	    return(min_body(result, form_is_safe(sc, func, cadddr(x), at_end)));
 	  return(result);
 
-	case OP_WHEN:
-	case OP_UNLESS:
+	case OP_WHEN: case OP_UNLESS:
 	  if (!is_pair(cddr(x))) return(UNSAFE_BODY);
 	  if (is_pair(cadr(x)))
 	    {
@@ -74064,10 +74072,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  }
 
 	  /* in the name binders, we first have to check that "func" actually is the same thing as the caller's func */
-	case OP_LET:
-	case OP_LET_STAR:
-	case OP_LETREC:
-	case OP_LETREC_STAR:
+	case OP_LET: case OP_LET_STAR: case OP_LETREC: case OP_LETREC_STAR:
 	  {
 	    bool follow = false;
 	    s7_pointer let_name, sp, vars = cadr(x), body = cddr(x);
@@ -74156,9 +74161,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	   */
 	default:
 	  /* fprintf(stderr, "%s %s\n", op_names[symbol_syntax_op_checked(x)], display(x)); */
-	  
 	  /* OP_LAMBDA is major case here */
-
 	  /* try to catch weird cases like:
 	   * (let () (define (hi1 a) (define (hi1 b) (+ b 1)) (hi1 a)) (hi1 1))
 	   * (let () (define (hi1 a) (define (ho1 b) b) (define (hi1 b) (+ b 1)) (hi1 a)) (hi1 1))
@@ -74423,14 +74426,12 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	      if ((is_null(p)) &&
 		  (nvars > 0))
 		{
-#if 1
 		  fx_annotate_args(sc, body, cleared_args); /* almost useless -- we need a recursive traversal here but that collides with check_if et al */
 		  fx_tree(sc, body, /* this usually costs more than it saves! */
 			    (is_pair(car(args))) ? caar(args) : car(args),
 			    (nvars > 1) ? ((is_pair(cadr(args))) ? caadr(args) : cadr(args)) : NULL,
 			    (nvars > 2) ? ((is_pair(caddr(args))) ? caaddr(args) : caddr(args)) : NULL,
 			    nvars > 3);
-#endif
 		}
 	      if (((unstarred_lambda) || ((is_null(p)) && (nvars == sc->rec_tc_args))) &&
 		  (is_null(cdr(body))))
@@ -74552,14 +74553,34 @@ static void check_lambda_star(s7_scheme *sc)
 /* -------------------------------- case -------------------------------- */
 static void fx_curlet_tree(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer slot1 = let_slots(sc->curlet), slot2, slot3 = NULL;
+  s7_pointer slot1 = let_slots(sc->curlet), slot2, slot3 = NULL, outer_e;
+  bool more_vars;
+
   slot2 = next_slot(slot1);
   if (tis_slot(slot2)) slot3 = next_slot(slot2);
+  more_vars = (tis_slot(slot3)) && (tis_slot(next_slot(slot3)));
+
   fx_tree(sc, code,
 	  slot_symbol(slot1),
 	  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
 	  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
-	  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
+	  more_vars);
+
+  outer_e = let_outlet(sc->curlet);
+  if ((!more_vars) && 
+      (is_let(outer_e)) && 
+      (!is_funclet(outer_e)) && 
+      (tis_slot(let_slots(outer_e))))
+    {
+      slot1 = let_slots(outer_e);
+      slot2 = next_slot(slot1);
+      slot3 = (tis_slot(slot2)) ? next_slot(slot2) : NULL;
+      fx_tree_outer(sc, code,
+		    slot_symbol(slot1),
+		    (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
+		    (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
+		    (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
+    }
 }
 
 static void fx_curlet_tree_in(s7_scheme *sc, s7_pointer code)
@@ -74895,18 +74916,17 @@ static s7_pointer fx_case_a_s_g_a(s7_scheme *sc, s7_pointer code)
   s7_pointer selector, x, y;
   selector = fx_call(sc, cdr(code));
   if (is_case_key(selector))
-    {
-      for (x = cddr(sc->code); is_pair(x); x = cdr(x))
-	{
-	  y = opt2_any(x);
-	  if (!is_pair(y)) /* i.e. else? */
-	    return(fx_call_all(sc, cdar(x))); /* else clause */
-	  do {
-	    if (car(y) == selector)
-	      return(fx_call_all(sc, cdar(x)));
-	    y = cdr(y);
-	  } while (is_pair(y));
-	}}
+    for (x = cddr(sc->code); is_pair(x); x = cdr(x))
+      {
+	y = opt2_any(x);
+	if (!is_pair(y)) /* i.e. else? */
+	  return(fx_call_all(sc, cdar(x))); /* else clause */
+	do {
+	  if (car(y) == selector)
+	    return(fx_call_all(sc, cdar(x)));
+	  y = cdr(y);
+	} while (is_pair(y));
+      }
   return(fx_call_all(sc, opt3_any(cdr(code)))); /* selector is not a case-key */
 }
 
@@ -76806,22 +76826,6 @@ static bool op_or_ap(s7_scheme *sc)
 
 /* -------------------------------- if -------------------------------- */
 
-#define WITH_OUTLET_TREE 0
-#if WITH_OUTLET_TREE
-static void fx_outlet_curlet_tree(s7_scheme *sc, s7_pointer code)
-{
-  s7_pointer slot1 = let_slots(let_outlet(sc->curlet)), slot2, slot3 = NULL;
-  slot2 = next_slot(slot1);
-  if (tis_slot(slot2)) slot3 = next_slot(slot2);
-  fx_tree_outer(sc, code,
-	  slot_symbol(slot1),
-	  (tis_slot(slot2)) ? slot_symbol(slot2) : NULL,
-	  (tis_slot(slot3)) ? slot_symbol(slot3) : NULL,
-	  (tis_slot(slot3)) && (tis_slot(next_slot(slot3))));
-}
-/* TODO: pass let arg to fx_curlet_tree */
-#endif
-
 #define choose_if_optc(Opc, One, Reversed, Not) ((One) ? ((Reversed) ? OP_ ## Opc ## _R : ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) :  ((Not) ? OP_ ## Opc ## _N_N : OP_ ## Opc ## _P_P))
 
 static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool reversed) /* cdr(form) == sc->code */
@@ -76978,10 +76982,6 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	    }
 	  if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) 
 	    fx_curlet_tree(sc, code);
-#if WITH_OUTLET_TREE	  
-	  if ((is_fx_treeable(code)) && (is_let(let_outlet(sc->curlet))) && (!is_funclet(let_outlet(sc->curlet))) && (tis_slot(let_slots(let_outlet(sc->curlet)))))
-	    fx_outlet_curlet_tree(sc, code);
-#endif
 	}
       else
 	{
@@ -84303,14 +84303,20 @@ static void op_safe_closure_3s(s7_scheme *sc)
 {
   s7_pointer args = cddr(sc->code), f = opt1_lambda(sc->code);
   sc->curlet = update_let_with_three_slots(sc, closure_let(f), lookup(sc, cadr(sc->code)), lookup(sc, car(args)), lookup(sc, cadr(args)));
-  sc->code = T_Pair(closure_body(f));
+  args = T_Pair(closure_body(f));
+  if (is_pair(cdr(args)))
+    push_stack_no_args(sc, sc->begin_op, cdr(args));
+  sc->code = car(args);
 }
 
 static void op_safe_closure_ssa(s7_scheme *sc)
 { /* ssa_a is hit once, but is only about 3/4% faster -- there's the fx overhead, etc */
   s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
   sc->curlet = update_let_with_three_slots(sc, closure_let(f), lookup(sc, car(args)), lookup(sc, cadr(args)), fx_call(sc, cddr(args)));
-  sc->code = T_Pair(closure_body(f));
+  args = T_Pair(closure_body(f));
+  if (is_pair(cdr(args)))
+    push_stack_no_args(sc, sc->begin_op, cdr(args));
+  sc->code = car(args);
 }
 
 static void op_safe_closure_saa(s7_scheme *sc)
@@ -84319,14 +84325,20 @@ static void op_safe_closure_saa(s7_scheme *sc)
   arg2 = lookup(sc, cadr(sc->code)); /* I don't see fx_t|u here? */
   sc->code = fx_call(sc, args);
   sc->curlet = update_let_with_three_slots(sc, closure_let(f), arg2, sc->code, fx_call(sc, cdr(args)));
-  sc->code = T_Pair(closure_body(f));
+  args = T_Pair(closure_body(f));
+  if (is_pair(cdr(args)))
+    push_stack_no_args(sc, sc->begin_op, cdr(args));
+  sc->code = car(args);
 }
 
 static void op_safe_closure_agg(s7_scheme *sc)
 {
   s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
   sc->curlet = update_let_with_three_slots(sc, closure_let(f), fx_call(sc, args), fx_call(sc, cdr(args)), fx_call(sc, cddr(args)));
-  sc->code = T_Pair(closure_body(f));
+  args = T_Pair(closure_body(f));
+  if (is_pair(cdr(args)))
+    push_stack_no_args(sc, sc->begin_op, cdr(args));
+  sc->code = car(args);
 }
 
 static void op_closure_p(s7_scheme *sc)
@@ -84467,7 +84479,7 @@ static void op_any_closure_3p(s7_scheme *sc)
 	}}
   else
     {
-      push_stack_no_args(sc, OP_ANY_CLOSURE_3P_1, sc->code);
+      push_stack_no_args_direct(sc, OP_ANY_CLOSURE_3P_1);
       sc->code = car(p);
     }
 }
@@ -84799,7 +84811,7 @@ static void op_safe_closure_ns(s7_scheme *sc)
   sc->code = car(sc->code);
 }
 
-static void op_safe_closure_3a(s7_scheme *sc)
+static inline void op_safe_closure_3a(s7_scheme *sc)
 {
   s7_pointer p = cdr(sc->code), f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p));   /* fx_call can affect sc->value, but not sc->code, I think */
@@ -88290,7 +88302,7 @@ static bool op_safe_c_pa(s7_scheme *sc)
       return(false);
     }
   check_stack_size(sc);
-  push_stack_no_args(sc, OP_SAFE_C_PA_1, sc->code);
+  push_stack_no_args_direct(sc, OP_SAFE_C_PA_1);
   sc->code = car(args);
   return(true);
 }
@@ -89609,12 +89621,6 @@ static bool op_unknown_na(s7_scheme *sc)
 	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, cdr(code));
-
-#if WITH_OUTLET_TREE	  
-	  if ((is_fx_treeable(cdr(code))) && (is_let(let_outlet(sc->curlet))) && (!is_funclet(let_outlet(sc->curlet))) && (tis_slot(let_slots(let_outlet(sc->curlet)))))
-	    fx_outlet_curlet_tree(sc, cdr(code));
-#endif
-
 	  if (is_safe_closure(f))
 	    {
 	      if (num_args != 3)
@@ -89918,7 +89924,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       goto TOP_NO_POP;
 
     BEGIN:
-      if (is_pair(cdr(T_Pair(sc->code))))
+      if (is_pair(cdr(sc->code)))
 	push_stack_no_args(sc, sc->begin_op, cdr(sc->code));
       sc->code = car(sc->code);
       set_current_code(sc, sc->code);
@@ -90312,7 +90318,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_A_A:  if (op_x_a(sc, fx_call(sc, sc->code))) continue;             goto APPLY;
 	case OP_S_AA: op_x_aa(sc, lookup_checked(sc, car(sc->code))); goto APPLY;
 	case OP_A_AA: op_x_aa(sc, fx_call(sc, sc->code));             goto APPLY;
-	case OP_P_S:  push_stack_no_args(sc, OP_P_S_1, sc->code); sc->code = car(sc->code); goto EVAL;
+	case OP_P_S:  push_stack_no_args_direct(sc, OP_P_S_1); sc->code = car(sc->code); goto EVAL;
 	case OP_P_S_1: op_p_s_1(sc);                                  goto APPLY;
 
 	case OP_SAFE_C_STAR: if (!c_function_is_ok(sc, sc->code)) break;
@@ -90480,13 +90486,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_SAFE_CLOSURE_AA_A: sc->value = fx_safe_closure_aa_a(sc, sc->code); continue;
 
 	case OP_SAFE_CLOSURE_SSA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_na(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_SSA: op_safe_closure_ssa(sc); goto BEGIN;
+	case HOP_SAFE_CLOSURE_SSA: op_safe_closure_ssa(sc); goto EVAL;
 
 	case OP_SAFE_CLOSURE_SAA: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_na(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_SAA: op_safe_closure_saa(sc); goto BEGIN;
+	case HOP_SAFE_CLOSURE_SAA: op_safe_closure_saa(sc); goto EVAL;
 
 	case OP_SAFE_CLOSURE_AGG: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_na(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_AGG: op_safe_closure_agg(sc); goto BEGIN;
+	case HOP_SAFE_CLOSURE_AGG: op_safe_closure_agg(sc); goto EVAL;
 
 	case OP_SAFE_CLOSURE_3A: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_M, 3)) {if (op_unknown_na(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_3A: op_safe_closure_3a(sc); goto EVAL;
@@ -90498,7 +90504,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_SAFE_CLOSURE_NA: op_safe_closure_na(sc); goto EVAL;
 
 	case OP_SAFE_CLOSURE_3S:  if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 3)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_3S: op_safe_closure_3s(sc); goto BEGIN;
+	case HOP_SAFE_CLOSURE_3S: op_safe_closure_3s(sc); goto EVAL;
 
 	case OP_SAFE_CLOSURE_3S_A: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_A, 3)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_3S_A: sc->value = op_safe_closure_3s_a(sc, sc->code); continue;
@@ -95383,50 +95389,50 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
- * tauto       785          648    642    497    497
+ * tauto       785          648    642    497    494
  * index      1032         1026   1016    973    973
- * tmock      7738         1177   1165   1054   1054
+ * tmock      7738         1177   1165   1054   1051
  * tvect      1892         2456   2413   1712   1712
- * s7test     4506         1873   1831   1784   1782
- * texit      1768         ----   ----   1801   1801
- * lt         2121         2123   2110   2108   2105
- * tform      3235         2281   2273   2242   2247
- * tread      2606         2440   2421   2415   2418
- * tmac       2452         3317   3277   2420   2420
+ * s7test     4506         1873   1831   1784   1779
+ * texit      1768         ----   ----   1801   1796
+ * lt         2121         2123   2110   2108   2104
+ * tform      3235         2281   2273   2242   2240
+ * tread      2606         2440   2421   2415   2416
+ * tmac       2452         3317   3277   2420   2413
  * fbench     2848         2688   2583   2458   2458
  * trclo      4107         2735   2574   2459   2459
- * tmat       2683         3065   3042   2513   2527
+ * tmat       2683         3065   3042   2513   2521
  * tcopy      2610         8035   5546   2556   2556
- * dup        2783         3805   3788   2559   2553
- * tb         3383         2735   2681   2617   2618
+ * dup        2783         3805   3788   2559   2526
+ * tb         3383         2735   2681   2617   2611
  * titer      2693         2865   2842   2640   2641
- * tsort      3576         3105   3104   2855   2856
- * tset       3114         3253   3104   3081   3081
- * tload      3861         ----   ----   3155   3155
+ * tsort      3576         3105   3104   2855   2859
+ * tset       3114         3253   3104   3081   3045
+ * tload      3861         ----   ----   3155   3153
  * teq        3554         4068   4045   3539   3539
- * tio        3710         3816   3752   3680   3681
- * tclo       4622         4787   4735   4408   4408
- * tlet       5278         7775   5640   4435   4435
- * tcase      4519         4960   4793   4441   4441
- * tmap       5491         8869   8774   4492   4492
+ * tio        3710         3816   3752   3680   3674
+ * tclo       4622         4787   4735   4408   4394
+ * tlet       5278         7775   5640   4435   4428
+ * tcase      4519         4960   4793   4441   4436
+ * tmap       5491         8869   8774   4492   4489
  * tfft      115.0         7820   7729   4778   4778
- * tshoot     6923         5525   5447   5210   5203
- * tnum       56.7         6348   6013   5439   5438  5432
- * tstr       6187         6880   6342   5509   5510
- * tgsl       25.2         8485   7802   6390   6390
- * tmisc      6344         8869   7612   6472   6490
- * trec       8320         6936   6922   6529   6529
- * tlist      6837         7896   7546   6622   6622
- * tari       ----         13.0   12.7   6860   6860  6841
- * tleft      8985         9929   9728   8006   8006  7985?
- * tgc        10.1         11.9   11.1   8666   8665
+ * tshoot     6923         5525   5447   5210   5201
+ * tnum       56.7         6348   6013   5439   5415
+ * tstr       6187         6880   6342   5509   5490
+ * tgsl       25.2         8485   7802   6390   6388
+ * tmisc      6344         8869   7612   6472   6475
+ * trec       8320         6936   6922   6529   6515
+ * tlist      6837         7896   7546   6622   6619
+ * tari       ----         13.0   12.7   6860   6838
+ * tleft      8985         9929   9728   8006   7826
+ * tgc        10.1         11.9   11.1   8666   8644
  * thash      35.4         11.8   11.7   9711   9711
  * cb         18.8         12.2   12.2   10.3   10.3
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.1
+ * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   56.0
- * lg        104.7        106.6  105.0  103.6  103.6
+ * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
  *
@@ -95440,6 +95446,8 @@ int main(int argc, char **argv)
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- *   extend/test with_outlet_tree and if ok, fold into fx_curlet_tree cases
+ *   check outer cases again, curlet_tree could continue up the let chain...
  * lint: define->let seems dumb -- switch? only if in closure?
+ * (car (list (f...))) as nth-value: values-ref? value?  (car (list...)) at least can omit the copy
+ * new_symbol and g_gensym share some code (10-20 lines)
  */
