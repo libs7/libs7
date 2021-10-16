@@ -2528,7 +2528,7 @@ int main(int argc, char **argv)
       fprintf(stderr, "%d: catch my_no_error: %s\n", __LINE__, TO_STR(result));
 
     result = s7_call_with_catch(sc, s7_t(sc), s7_eval_c_string(sc, "(lambda () (+ #f 2))"), err);
-    if ((!s7_is_string(result)) || (strcmp(s7_string(result), "~A argument ~D, ~S, is ~A but should be ~A") != 0))
+    if ((!s7_is_string(result)) || (strcmp(s7_string(result), "~A ~:D argument, ~S, is ~A but should be ~A") != 0))
       fprintf(stderr, "%d: catch (+ #f 2) via my_error_handler: %s\n", __LINE__, TO_STR(result));
     s7_gc_unprotect_at(sc, gc_err);
 

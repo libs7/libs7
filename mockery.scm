@@ -449,7 +449,7 @@
 		  (sublet (*mock-char* 'mock-char-class)
 		    'value c
 		    'mock-type 'mock-char?)))
-		(error 'wrong-type-arg "mock-char arg ~S is not a char" c)))
+		(error 'wrong-type-arg "mock-char argument ~S is not a char" c)))
 	  
 	  (set! mock-char? (lambda (obj)
 			     (and (let? obj)

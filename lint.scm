@@ -9525,22 +9525,22 @@
 				 (case (car a)
 				   ((number->string)
 				    (if (null? (cddr a))                      ; (format #f "~A" (number->string x))
-					(lint-format "~A arg ~A could be ~A" caller head a (cadr a))
+					(lint-format "~A argument ~A could be ~A" caller head a (cadr a))
 					(if (and (pair? (cddr a))
 						 (integer? (caddr a))
 						 (memv (caddr a) '(2 8 10 16)))
 					    (if (= (caddr a) 10)
-						(lint-format "~A arg ~A could be ~A" caller head a (cadr a))
-						(lint-format "~A arg ~A could use the format directive ~~~A and change the argument to ~A" caller head a
+						(lint-format "~A argument ~A could be ~A" caller head a (cadr a))
+						(lint-format "~A argument ~A could use the format directive ~~~A and change the argument to ~A" caller head a
 							     (case (caddr a) ((2) "B") ((8) "O") (else "X"))
 							     (cadr a))))))
 
 				   ((symbol->string object->string string->symbol) ; (format #f "~A" (symbol->string 'x))
-				    (lint-format "~A arg ~A could be ~A" caller head a (cadr a)))
+				    (lint-format "~A argument ~A could be ~A" caller head a (cadr a)))
 
 				   ((make-string)                             ; (format #f "~A" (make-string len c))
 				    (if (pair? (cddr a))
-					(lint-format "~A arg ~A could use the format directive ~~NC and change the argument to ... ~A ~A ..." caller head a
+					(lint-format "~A argument ~A could use the format directive ~~NC and change the argument to ... ~A ~A ..." caller head a
 						     (cadr a) (if (char? (caddr a)) (format #f "~W" (caddr a)) (caddr a)))))
 
 				   ((apply)
@@ -11128,7 +11128,7 @@
 			  (prettify-arg-number (lambda (argn)
 						 (if (or (not (= argn 1))
 							 (pair? (cddr form)))
-						     (format #f "~D " argn)
+						     (format #f "~:D " argn)
 						     ""))))
 		      (if (and (pair? op)
 			       (member checker op any-compatible?))
@@ -11138,7 +11138,7 @@
 				      (var-member :catch env))   ; (round (char-position #\a "asb"))
 			    (let ((other (remove-if (lambda (o) (any-compatible? checker o)) op)))
 			      (when (pair? other)
-				(lint-format "in ~A,~%~NC~A's argument ~Ashould be ~A, but ~A might also be ~A" caller
+				(lint-format "in ~A,~%~NC~A's ~Aargument should be ~A, but ~A might also be ~A" caller
 					     (truncated-list->string form)
 					     (+ lint-left-margin 4) #\space
 					     head
@@ -11147,13 +11147,13 @@
 					     (truncated-list->string arg)
 					     (prettify-checker (car other))))))
 			  (if *report-laconically*
-			      (lint-format "~A's argument ~Ashould be ~A, but ~A is ~A" caller
+			      (lint-format "~A's ~Aargument should be ~A, but ~A is ~A" caller
 				       head
 				       (prettify-arg-number arg-number)
 				       (prettify-checker-unq checker)
 				       (truncated-list->string arg)
 				       (prettify-checker op))
-			      (lint-format "in ~A,~%~NC~A's argument ~Ashould be ~A, but ~A is ~A" caller
+			      (lint-format "in ~A,~%~NC~A's ~Aargument should be ~A, but ~A is ~A" caller
 					   (truncated-list->string form)
 					   (+ lint-left-margin 4) #\space
 					   head
