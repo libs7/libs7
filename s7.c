@@ -8171,7 +8171,6 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   len = plen + 32; /* why 32 -- we need room for the gensym_counter integer, but (length "9223372036854775807") = 19 */
 
   b = mallocate(sc, len + sizeof(block_t) + 2 * sizeof(s7_cell));
-  /* only 16 of block_t size is actually needed here because only the ln.tag (symbol_tag2) field is used in the embedded block_t */
   base = (char *)block_data(b);
   str = (s7_cell *)base;
   stc = (s7_cell *)(base + sizeof(s7_cell));
@@ -16263,15 +16262,19 @@ static s7_pointer g_bignum(s7_scheme *sc, s7_pointer args)
 {
   #define H_bignum "(bignum val (radix 10)) returns a multiprecision version of the string 'val'. If the argument is a number \
 bignum returns that number as a bignum"
-  #define Q_bignum s7_make_signature(sc, 3, sc->is_bignum_symbol, s7_make_signature(sc, 2, sc->is_number_symbol, sc->is_string_symbol), sc->is_integer_symbol)
-
 #if WITH_GMP
+  #define Q_bignum s7_make_signature(sc, 3, sc->is_bignum_symbol, s7_make_signature(sc, 2, sc->is_number_symbol, sc->is_string_symbol), sc->is_integer_symbol)
+#else
+  #define Q_bignum s7_make_signature(sc, 3, s7_make_signature(sc, 2, sc->is_number_symbol, sc->not_symbol), s7_make_signature(sc, 2, sc->is_number_symbol, sc->is_string_symbol), sc->is_integer_symbol)
+#endif
+
   s7_pointer p = car(args);
   if (is_number(p))
     {
       if (!is_null(cdr(args)))
 	s7_error(sc, make_symbol(sc, "bignum-error"),
 		 set_elist_2(sc, wrap_string(sc, "bignum of a number takes only one argument: ~S", 46), args));
+#if WITH_GMP
       switch (type(p))
 	{
 	case T_INTEGER: return(s7_int_to_big_integer(sc, integer(p)));
@@ -16279,11 +16282,16 @@ bignum returns that number as a bignum"
 	case T_REAL:    return(s7_double_to_big_real(sc, real(p)));
 	case T_COMPLEX: return(s7_double_to_big_complex(sc, real_part(p), imag_part(p)));
 	default:        return(p);
-	}}
+	}
+#else
+      return(p);
+#endif
+    }
   p = g_string_to_number_1(sc, args, sc->bignum_symbol);
   if (is_false(sc, p))                                       /* (bignum "1/3.0") */
     s7_error(sc, make_symbol(sc, "bignum-error"),
 	     set_elist_2(sc, wrap_string(sc, "bignum string argument does not represent a number: ~S", 54), car(args)));
+#if WITH_GMP
   switch (type(p))
     {
     case T_INTEGER:   return(s7_int_to_big_integer(sc, integer(p)));
@@ -16297,7 +16305,7 @@ bignum returns that number as a bignum"
       return(p);
     }
 #else
-  return((is_number(car(args))) ? car(args) : g_string_to_number_1(sc, args, sc->bignum_symbol));
+  return(p);
 #endif
 }
 
@@ -29390,7 +29398,7 @@ static s7_pointer input_scheme_function_wrapper(s7_scheme *sc, s7_read_t read_ch
 static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
 {
   #define H_open_input_function "(open-input-function func) opens an input function port"
-  #define Q_open_input_function s7_make_signature(sc, 2, sc->is_input_port_symbol, sc->is_procedure_symbol)
+  #define Q_open_input_function s7_make_signature(sc, 2, sc->is_input_port_symbol, s7_make_signature(sc, 2, sc->is_procedure_symbol, sc->is_macro_symbol))
 
   s7_pointer port, func = car(args);
 
@@ -29445,7 +29453,7 @@ static void output_scheme_function_wrapper(s7_scheme *sc, uint8_t c, s7_pointer 
 static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
 {
   #define H_open_output_function "(open-output-function func) opens an output function port"
-  #define Q_open_output_function s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->is_procedure_symbol)
+  #define Q_open_output_function s7_make_signature(sc, 2, sc->is_output_port_symbol, s7_make_signature(sc, 2, sc->is_procedure_symbol, sc->is_macro_symbol))
 
   s7_pointer port, func = car(args);
 
@@ -29633,6 +29641,7 @@ static s7_pointer g_read_byte(s7_scheme *sc, s7_pointer args)
 
   s7_pointer port;
   int32_t c;
+
   if (is_not_null(args))
     port = car(args);
   else
@@ -29644,7 +29653,6 @@ static s7_pointer g_read_byte(s7_scheme *sc, s7_pointer args)
     return(method_or_bust_with_type_one_arg(sc, port, sc->read_byte_symbol, args, an_input_port_string));
   if (port_is_closed(port))          /* avoid reporting caller here as read-char */
     simple_wrong_type_argument_with_type(sc, sc->read_byte_symbol, port, an_open_port_string);
-
   c = port_read_character(port)(sc, port);
   return((c == EOF) ? eof_object : small_int(c));
 }
@@ -40690,7 +40698,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 	    {
 	      if (!is_symbol(find_closure(sc, typf, closure_let(typf))))
 		return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named function", 16)));
-	      /* the name is needed primarily by the error handler: "vector-set! argument 3, ..., is a ... but should be a <...>" */
+	      /* the name is needed primarily by the error handler: "vector-set! third argument, ..., is a ... but should be a <...>" */
 	    }
 	  else
 	    if (is_c_function(typf))
@@ -42373,7 +42381,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       len = s7_list_length(sc, data);            /* 0 here == infinite */
       if (len <= 0)
 	return(s7_error(sc, sc->wrong_type_arg_symbol,
-			set_elist_2(sc, wrap_string(sc, "sort! argument 1 should be a proper list: ~S", 44), data)));
+			set_elist_2(sc, wrap_string(sc, "sort! first argument should be a proper list: ~S", 48), data)));
       if (len < 2)
 	return(data);
       if (sort_func)
@@ -43898,7 +43906,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		  return(ht);
 		}
 	      return(s7_error(sc, sc->out_of_range_symbol,
-			      set_elist_2(sc, wrap_string(sc, "make-hash-table argument 2, ~S, is not a built-in function it can handle", 72), proc)));
+			      set_elist_3(sc, wrap_string(sc, "~A second argument, ~S, is not a built-in function it can handle", 64), caller, proc)));
 	    }
 	  /* proc not c_function */
 	  else
@@ -43931,7 +43939,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  (is_pair(sig)) &&
 			  (car(sig) != sc->is_boolean_symbol))
 			s7_error(sc, sc->wrong_type_arg_symbol,
-				 set_elist_2(sc, wrap_string(sc, "make-hash-table checker function, ~S, should return a boolean value", 67), checker));
+				 set_elist_3(sc, wrap_string(sc, "~A checker function, ~S, should return a boolean value", 54), caller, checker));
 		      hash_table_checker(ht) = hash_c_function;
 		    }
 		  else hash_table_checker(ht) = hash_closure;
@@ -43943,7 +43951,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  (is_pair(sig)) &&
 			  (car(sig) != sc->is_integer_symbol))
 			s7_error(sc, sc->wrong_type_arg_symbol,
-				 set_elist_2(sc, wrap_string(sc, "make-hash-table mapper function, ~S, should return an integer", 61), mapper));
+				 set_elist_3(sc, wrap_string(sc, "~A mapper function, ~S, should return an integer", 48), caller, mapper));
 		      hash_table_mapper(ht) = c_function_hash_map;
 		    }
 		  else hash_table_mapper(ht) = closure_hash_map;
@@ -44434,19 +44442,15 @@ static inline s7_pointer hash_table_add(s7_scheme *sc, s7_pointer table, s7_poin
   return(value);
 }
 
-static s7_pointer g_hash_table(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_hash_table_1(s7_scheme *sc, s7_pointer args, s7_pointer caller)
 {
-  #define H_hash_table "(hash-table ...) returns a hash-table containing the symbol/value pairs passed as its arguments. \
-That is, (hash-table 'a 1 'b 2) returns a new hash-table with the two key/value pairs preinstalled."
-  #define Q_hash_table s7_make_circular_signature(sc, 1, 2, sc->is_hash_table_symbol, sc->T)
-
   s7_int len;
   s7_pointer ht;
 
   len = proper_list_length(args);
   if (len & 1)
     return(s7_error(sc, sc->wrong_number_of_args_symbol,
-		    set_elist_2(sc, wrap_string(sc, "hash-table got an odd number of arguments: ~S", 45), args)));
+		    set_elist_3(sc, wrap_string(sc, "~A got an odd number of arguments: ~S", 45), caller, args)));
   len /= 2;
   ht = s7_make_hash_table(sc, (len > sc->default_hash_table_length) ? len : sc->default_hash_table_length);
   if (len > 0)
@@ -44457,6 +44461,14 @@ That is, (hash-table 'a 1 'b 2) returns a new hash-table with the two key/value 
 	  hash_table_add(sc, ht, car(x), car(y));
     }
   return(ht);
+}
+
+static s7_pointer g_hash_table(s7_scheme *sc, s7_pointer args)
+{
+  #define H_hash_table "(hash-table ...) returns a hash-table containing the symbol/value pairs passed as its arguments. \
+That is, (hash-table 'a 1 'b 2) returns a new hash-table with the two key/value pairs preinstalled."
+  #define Q_hash_table s7_make_circular_signature(sc, 1, 2, sc->is_hash_table_symbol, sc->T)
+  return(g_hash_table_1(sc, args, sc->hash_table_symbol));
 }
 
 static s7_pointer g_hash_table_2(s7_scheme *sc, s7_pointer args)
@@ -44477,7 +44489,7 @@ That is, (weak-hash-table 'a 1 'b 2) returns a new weak-hash-table with the two 
   #define Q_weak_hash_table Q_hash_table
 
   s7_pointer table;
-  table = g_hash_table(sc, args);
+  table = g_hash_table_1(sc, args, sc->weak_hash_table_symbol);
   set_weak_hash_table(table);
   weak_hash_iters(table) = 0;
   return(table);
@@ -46071,8 +46083,13 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
       return((c_function_required_args(x) <= args) &&
 	     (c_function_all_args(x) >= args));
 
-    case T_C_OPT_ARGS_FUNCTION: /* any/opt req args == 0 */
     case T_C_ANY_ARGS_FUNCTION:
+      if ((x == initial_value(sc->hash_table_symbol)) ||  /* these two need a value for each key */
+	  (x == initial_value(sc->weak_hash_table_symbol)))
+	return((args & 1) == 0);
+      /* fall through */
+
+    case T_C_OPT_ARGS_FUNCTION: /* any/opt req args == 0 */
     case T_C_FUNCTION_STAR:
       return(c_function_all_args(x) >= args);
 
@@ -46106,7 +46123,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	     (vector_length(x) > 0) &&   /* (#() 0) -> error */
 	     (args <= vector_rank(x)));
 
-    case T_LET: case T_HASH_TABLE: case T_PAIR:
+    case T_LET: case T_HASH_TABLE: case T_PAIR: /* for hash-table, this refers to (table 'key) */
       return(args == 1);
 
     case T_ITERATOR:
@@ -46247,7 +46264,7 @@ static s7_pointer b_is_proper_list_setter(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 {
   #define H_setter "(setter obj let) returns the setter associated with obj"
-  #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, sc->not_symbol, sc->is_procedure_symbol), sc->T, sc->is_let_symbol)
+  #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, sc->not_symbol, sc->is_procedure_symbol), sc->T, s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_null_symbol))
 
   s7_pointer p = car(args), e;
   if (is_pair(cdr(args)))
@@ -49016,6 +49033,7 @@ static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
   #define H_reverse_in_place "(reverse! lst) reverses lst in place"
   #define Q_reverse_in_place Q_reverse
 
+  /* (reverse v) is only slighly faster than (reverse! (copy v)) */
   s7_pointer p = car(args);
   switch (type(p))
     {
@@ -67709,12 +67727,12 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     {
     case T_C_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
+    case T_C_OPT_ARGS_FUNCTION:
       if ((c_function_required_args(f) > len) ||
 	  (c_function_all_args(f) < len))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, wrap_integer(sc, len), wrap_integer(sc, len))));
 
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       /* if function is safe c func, do the map locally */
       if (got_nil) return(sc->nil);
@@ -84148,7 +84166,6 @@ static void set_let_file_and_line(s7_scheme *sc, s7_pointer new_let, s7_pointer 
 {
   if (port_file(current_input_port(sc)) != stdin)
     {
-      /* unbound_variable will be called if *function* is encountered, and will return this info as if *function* had some meaning */
       if ((is_pair(closure_args(new_func))) &&
 	  (has_location(closure_args(new_func))))
 	{
@@ -88907,6 +88924,7 @@ static void op_pair_pair(s7_scheme *sc)
 static goto_t trailers(s7_scheme *sc)
 {
   s7_pointer code = sc->code;
+  set_current_code(sc, code);
   if (is_pair(code))
     {
       s7_pointer carc = car(code);
@@ -89353,10 +89371,10 @@ static bool op_unknown_gg(s7_scheme *sc)
     {
     case T_C_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
+    case T_C_OPT_ARGS_FUNCTION: /* e.g. read-byte */
       if ((c_function_required_args(f) > 2) ||
 	  (c_function_all_args(f) < 2))
 	break;
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -89485,10 +89503,10 @@ static bool op_unknown_ns(s7_scheme *sc)
     {
     case T_C_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
+    case T_C_OPT_ARGS_FUNCTION:
       if ((c_function_required_args(f) > num_args) ||
 	  (c_function_all_args(f) < num_args))
 	break;
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -89564,10 +89582,10 @@ static bool op_unknown_aa(s7_scheme *sc)
     {
     case T_C_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
+    case T_C_OPT_ARGS_FUNCTION:
       if ((c_function_required_args(f) > 2) ||
 	  (c_function_all_args(f) < 2))
 	break;
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -89659,10 +89677,10 @@ static bool op_unknown_na(s7_scheme *sc)
     {
     case T_C_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
+    case T_C_OPT_ARGS_FUNCTION:
       if ((c_function_required_args(f) > num_args) ||
 	  (c_function_all_args(f) < num_args))
 	break;
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -89792,10 +89810,10 @@ static bool op_unknown_np(s7_scheme *sc)
     {
     case T_C_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
+    case T_C_OPT_ARGS_FUNCTION:
       if ((c_function_required_args(f) > num_args) ||
 	  (c_function_all_args(f) < num_args))
 	break;
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
       if (num_args == 1)
 	set_any_c_np(sc, f, code, sc->curlet, num_args, (is_safe_procedure(f)) ? OP_SAFE_C_P : OP_C_P);
@@ -94782,7 +94800,7 @@ s7_scheme *s7_init(void)
 
   { /* sc->opts */
     opt_info *os;
-    os = (opt_info *)calloc(OPTS_SIZE, sizeof(opt_info));
+    os = (opt_info *)malloc(OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
     add_saved_pointer(sc, os);
     for (i = 0; i < OPTS_SIZE; i++)
       {
@@ -94988,8 +95006,7 @@ s7_scheme *s7_init(void)
                               (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
 
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
-                          (let ((+signature+ '(procedure?))                                               \n\
-                                (+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
+                          (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
                             (lambda hook-args                                                             \n\
                               (let ((body ()))                                                            \n\
                                 (apply lambda* hook-args                                                  \n\
@@ -95005,15 +95022,19 @@ s7_scheme *s7_init(void)
                                 (+documentation+ \"(hook-functions hook) gets or sets the list of functions associated with the hook\")) \n\
                             (dilambda                                                                     \n\
                               (lambda (hook)                                                              \n\
+                                (when (or (not (procedure? hook)) (continuation? hook) (goto? hook))      \n\
+                                  (error 'wrong-type-arg \"hook-functions hook must be a procedure created by make-hook: ~S\" hook)) \n\
                                 ((funclet hook) 'body))                                                   \n\
                               (lambda (hook lst)                                                          \n\
+                                (when (or (not (procedure? hook)) (continuation? hook) (goto? hook))      \n\
+		                  (error 'wrong-type-arg \"hook-functions hook must be a procedure created by make-hook: ~S\" hook)) \n\
                                 (if (do ((p lst (cdr p)))                                                 \n\
                                         ((not (and (pair? p)                                              \n\
                                                    (procedure? (car p))                                   \n\
                                                    (aritable? (car p) 1)))                                \n\
                                          (null? p)))                                                      \n\
                                     (set! ((funclet hook) 'body) lst)                                     \n\
-                                    (error 'wrong-type-arg \"hook-functions must be a list of functions, each accepting one argument: ~S\" lst))))))");
+                                    (error 'wrong-type-arg \"hook-functions new value must be a list of functions, each accepting one argument: ~S\" lst))))))");
 
   /* -------- *unbound-variable-hook* -------- */
   sc->unbound_variable_hook = s7_eval_c_string(sc, "(make-hook 'variable)");
@@ -95519,15 +95540,19 @@ int main(int argc, char **argv)
  * data-specific files?
  *   strings: string-wi=?[s7test] levenshtein[concordance] string-trim[dup]
  *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
- * tleft.scm [recur]
- * t718 repl bug -- need context
- * fx_treeable: copy let in order [let(rec)(*) lambda, rest of case, check call/exit?]
+ * fx_treeable: copy let in order
  *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
  *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
  *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
  *   check outer cases again, curlet_tree could continue up the let chain
- * lint: define->let seems dumb -- switch? only if in closure?
  * (car (list (f...))) as nth-value: values-ref? value?  (car (list...)) at least can omit the copy
- * new_symbol and g_gensym share some code (10-20 lines)
+ * tauto: func to check errors, sigs, arity [t528]
+ *   how to get "apply" into the error message? (apply map) -> "map: not enough arguments: ()"
+ *   (vector-append #u(2 1) #r(2.0 1.0)) -> "byte-vector-set! third argument, 2.0, is a real but should be an integer"
+ *   (apply map) (call-with-exit map) stop the for-each?
+ *   *function* troubles
+ * tload: load/eval a large file? from memory? maybe many loads?
+ * tleft: call/exit, maybe more case/recur cases, maybe lambda-as-arg?
+ * can symbol-table be growable? Then we could start smaller -- could it be an s7 hash-table?
  */

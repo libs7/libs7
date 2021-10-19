@@ -179,7 +179,7 @@
 		  cutlet varlet gc cond-expand reader-cond
 		  openlet coverlet eval vector list cons values
 		  symbol-table load throw error
-		  make-rectangular hash-table* macro macro* bacro bacro*
+		  make-rectangular macro macro* bacro bacro*
 		  copy fill! hash-table-set! vector-set! let-set! list-values apply-values immutable!
 		  *unbound-variable-hook* *load-hook* *rootlet-redefinition-hook* *missing-close-paren-hook* *read-error-hook*
 		  tree-count ; signature is kinda silly here
@@ -208,7 +208,7 @@
 			(let ((sig (cond ((eq? sym 'append)
 					  (let ((lst (list 'list?)))
 					    (set-cdr! lst lst)))
-					 ((signature f) => copy))))
+					 (else (copy (signature f))))))
 			  (map-values sig)
 			  (autotest f () 0 top (if (pair? sig) (cdr sig) ())))))))))))
 
