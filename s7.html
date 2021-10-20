@@ -4414,7 +4414,9 @@ via the error function, and can be trapped and dealt with via <em class=def id="
 <p>
 catch has 3 arguments: a tag indicating what error to catch (#t = anything),
 the code, a thunk, that the catch is protecting, and the function to call
-if a matching error occurs during the evaluation of the thunk.  The error handler
+if a matching error occurs during the evaluation of the thunk.  
+The tag is matched to the error type with eq?.
+The error handler
 takes a rest argument which will hold whatever the error function chooses to pass it.
 The error function itself takes at least 2 arguments, the error type, a symbol,
 and the error message.  There may also be other arguments describing the error.

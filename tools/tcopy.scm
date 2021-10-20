@@ -380,7 +380,7 @@
       (copy old-block new-fvect)
       
       (copy old-ivect new-ivect)
-      (copy old-fvect new-ivect)
+      ;;; (copy old-fvect new-ivect)
       (copy old-vectori new-ivect)
       (copy old-bvect new-ivect)
       
@@ -439,7 +439,7 @@
 	(copy old-block new-fvect start (+ start nsize))
 	
 	(copy old-ivect new-ivect start (+ start nsize))
-	(copy old-fvect new-ivect start (+ start nsize))
+	;;;(copy old-fvect new-ivect start (+ start nsize))
 	(copy old-vectori new-ivect start (+ start nsize))
 	(copy old-bvect new-ivect start (+ start nsize))
 	
@@ -490,14 +490,12 @@
       (set! vecs (cons (make-vector size i) vecs))
       (set! ivecs (cons (make-int-vector size i) ivecs))
       (set! fvecs (cons (make-float-vector size (* i 1.0)) fvecs))
-      (set! ifvecs (cons ((if (even? i) make-float-vector make-int-vector) size (if (even? i) (* i 1.0) i)) ifvecs))
       (set! allvecs (cons (make-vector size (if (even? i) (* i 1.0) i)) allvecs))
       (set! lsts (cons (make-list size i) lsts)))
     (let ((lst (apply append lsts))
 	  (vec (apply vector-append vecs))
 	  (fvec (apply vector-append fvecs))
 	  (ivec (apply vector-append ivecs))
-	  (ifvec (apply vector-append ifvecs))
 	  (allvec (apply vector-append allvecs))
 	  (str (apply string-append strs))
 	  (bvec (apply vector-append bvecs)))
@@ -509,10 +507,6 @@
       (test (length ivec) (* size size))
       (test (vector? allvec) #t)
       (test (length allvec) (* size size))
-      (test (vector? ifvec) #t)
-      (test (length ifvec) (* size size))
-;      (test (float-vector? ifvec) #t)
-;      (test (int-vector? ifvec) #f)
       (test (pair? lst) #t)
       (test (length lst) (* size size))
       (test (string? str) #t)

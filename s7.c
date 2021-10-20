@@ -874,7 +874,7 @@ typedef struct s7_cell {
     struct {
       c_proc_t *c_proc;              /* C functions, macros */
       s7_function ff;
-      s7_int required_args, optional_args, all_args;
+      s7_int required_args, optional_args, all_args; /* these could be uint32_t */
     } fnc;
 
     struct {                         /* pairs */
@@ -44702,18 +44702,18 @@ static void s7_function_set_class(s7_scheme *sc, s7_pointer f, s7_pointer base_f
 
 static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, s7_int req, s7_int opt, bool rst, const char *doc, s7_pointer x, c_proc_t *ptr)
 {
-  uint32_t ftype = T_C_FUNCTION;
+  uint32_t ftype = T_C_FUNCTION;          /* t_c_no_rest_maybe_req_and_opt */
   if (req == 0)
     {
       if (rst)
-	ftype = T_C_ANY_ARGS_FUNCTION;
+	ftype = T_C_ANY_ARGS_FUNCTION;    /* t_c_rest_no_req_maybe_opt_function */
       else
 	if (opt != 0)
-	  ftype = T_C_OPT_ARGS_FUNCTION;
+	  ftype = T_C_OPT_ARGS_FUNCTION;  /* t_c_opt_no_rest_or_req_function */
     }
   else
     if (rst)
-      ftype = T_C_RST_ARGS_FUNCTION;
+      ftype = T_C_RST_ARGS_FUNCTION;      /* t_c_rest_and_req_maybe_opt_function */
 
   set_full_type(x, ftype);
 
@@ -44864,46 +44864,55 @@ static s7_pointer g_procedure_source(s7_scheme *sc, s7_pointer args)
 
 /* -------------------------------- *current-function* -------------------------------- */
 
+static s7_pointer let_to_function(s7_scheme *sc, s7_pointer e)
+{
+  if ((e == sc->rootlet) || (!is_let(e)))
+    return(sc->F);
+  if (!((is_funclet(e)) || (is_maclet(e))))
+    return(sc->F);
+  if ((has_let_file(e)) &&
+      (let_file(e) <= (s7_int)sc->file_names_top) &&
+      (let_line(e) > 0))
+    return(list_3(sc, funclet_function(e), sc->file_names[let_file(e)], make_integer(sc, let_line(e))));
+  return(funclet_function(e));
+}
+
 static s7_pointer g_function(s7_scheme *sc, s7_pointer args)
 {
   #define H_function "(*function* e) returns the current function in e"
   #define Q_function s7_make_signature(sc, 3, sc->T, sc->is_let_symbol, sc->is_symbol_symbol)
 
-  s7_pointer e, sym, fname, fval;
+  s7_pointer e, sym = NULL, fname, fval;
   if (is_null(args))
     {
       for (e = sc->curlet; is_let(e); e = let_outlet(e))
 	if ((is_funclet(e)) || (is_maclet(e)))
 	  break;
+      return(let_to_function(sc, e));
     }
-  else
+
+  e = car(args);
+  if (!is_let(e))
+    return(simple_wrong_type_argument(sc, sc->_function__symbol, e, T_LET));
+  if (is_pair(cdr(args)))
     {
-      e = car(args);
-      if (!is_let(e))
-	return(simple_wrong_type_argument(sc, sc->_function__symbol, e, T_LET));
-      if (e == sc->rootlet)
-	return(sc->F);
-      if (!((is_funclet(e)) || (is_maclet(e))))
-	e = let_outlet(e);
+      sym = cadr(args);
+      if (!is_symbol(sym))
+	return(simple_wrong_type_argument(sc, sc->_function__symbol, sym, T_SYMBOL));
     }
+
+  if (e == sc->rootlet)
+    return(sc->F);
+  if (!((is_funclet(e)) || (is_maclet(e))))
+    e = let_outlet(e);
+  if (is_null(cdr(args)))
+    return(let_to_function(sc, e));
+
   if ((e == sc->rootlet) || (!is_let(e)))
     return(sc->F);
   if (!((is_funclet(e)) || (is_maclet(e))))
     return(sc->F);
 
-  /* for C-defined things like hooks and dilambda, let_file and let_line are 0 */
-  if ((is_null(args)) || (is_null(cdr(args))))
-    {
-      if ((has_let_file(e)) &&
-	  (let_file(e) <= (s7_int)sc->file_names_top) &&
-	  (let_line(e) > 0))
-	return(list_3(sc, funclet_function(e), sc->file_names[let_file(e)], make_integer(sc, let_line(e))));
-      return(funclet_function(e));
-    }
-
-  sym = cadr(args);
-  if (!is_symbol(sym))
-    return(simple_wrong_type_argument(sc, sc->_function__symbol, sym, T_SYMBOL));
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
   fname = funclet_function(e);
@@ -45868,10 +45877,7 @@ bool s7_is_dilambda(s7_pointer obj)
     case T_CLOSURE: case T_CLOSURE_STAR:
       return(is_any_procedure(closure_setter_or_map_list(obj))); /* type >= T_CLOSURE (excludes goto/continuation) */
 
-    case T_C_FUNCTION:
-    case T_C_ANY_ARGS_FUNCTION:
-    case T_C_OPT_ARGS_FUNCTION:
-    case T_C_RST_ARGS_FUNCTION:
+    case T_C_FUNCTION: case T_C_ANY_ARGS_FUNCTION: case T_C_OPT_ARGS_FUNCTION: case T_C_RST_ARGS_FUNCTION:
     case T_C_FUNCTION_STAR:
       return(is_any_procedure(c_function_setter(obj)));
 
@@ -45983,11 +45989,11 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
 {
   switch (type(x))
     {
-    case T_C_OPT_ARGS_FUNCTION:
     case T_C_RST_ARGS_FUNCTION:
     case T_C_FUNCTION:
       return(cons(sc, make_integer(sc, c_function_required_args(x)), make_integer(sc, c_function_all_args(x))));
 
+    case T_C_OPT_ARGS_FUNCTION:
     case T_C_ANY_ARGS_FUNCTION:
     case T_C_FUNCTION_STAR:
       return(cons(sc, int_zero, make_integer(sc, c_function_all_args(x))));
@@ -46303,11 +46309,8 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 	}
       return(sc->F);
 
-    case T_C_FUNCTION:
-    case T_C_FUNCTION_STAR:
-    case T_C_ANY_ARGS_FUNCTION:
-    case T_C_OPT_ARGS_FUNCTION:
-    case T_C_RST_ARGS_FUNCTION:
+    case T_C_FUNCTION: case T_C_FUNCTION_STAR:
+    case T_C_ANY_ARGS_FUNCTION: case T_C_OPT_ARGS_FUNCTION: case T_C_RST_ARGS_FUNCTION:
       return(c_function_setter(p));
 
     case T_C_MACRO:
@@ -46477,8 +46480,8 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	closure_set_no_setter(p);
       break;
 
-    case T_C_FUNCTION: case T_C_ANY_ARGS_FUNCTION: case T_C_OPT_ARGS_FUNCTION: case T_C_RST_ARGS_FUNCTION:
-    case T_C_FUNCTION_STAR:
+    case T_C_FUNCTION: case T_C_FUNCTION_STAR:
+    case T_C_ANY_ARGS_FUNCTION: case T_C_OPT_ARGS_FUNCTION: case T_C_RST_ARGS_FUNCTION:
       if (p == global_value(sc->setter_symbol))
 	return(immutable_object_error(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), setter)));
       c_function_set_setter(p, setter);
@@ -48453,8 +48456,10 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       break;
 
     case T_INT_VECTOR:
-    case T_FLOAT_VECTOR:
     case T_BYTE_VECTOR:
+      if (is_float_vector(source))
+	return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~S", 17), caller, source, dest)));
+    case T_FLOAT_VECTOR:
       set = vector_setter(dest);
       dest_len = vector_length(dest);
       break;
@@ -48728,13 +48733,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
     case T_FLOAT_VECTOR:
       {
 	s7_double *src = float_vector_floats(source);
-	if (is_int_vector(dest))
-	  {
-	    s7_int *dst = int_vector_ints(dest);
-	    for (i = start, j = 0; i < end; i++, j++)
-	      dst[j] = (s7_int)(src[i]);
-	    return(dest);
-	  }
+	/* int-vector destination can't normally work, fractional parts get rounded away */
 	if ((is_normal_vector(dest)) && (!is_typed_vector(dest)))
 	  {
 	    s7_pointer *dst = vector_elements(dest);
@@ -48862,7 +48861,6 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
   else /* if source == dest here, we're moving data backwards, so this is safe in either case */
     for (i = start, j = 0; i < end; i++, j++)
       set(sc, dest, j, get(sc, source, i));
-
   /* some choices probably should raise an error, but don't:
    *   (copy (make-hash-table) "1") ; nothing to copy (empty hash table), so no error
    */
@@ -49380,7 +49378,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 	{
 	  vector_length(new_vec) = n;
 	  set_car(pargs, x);
-	  s7_copy_1(sc, caller, pargs);  /* not set_plist_2 here! */
+	  s7_copy_1(sc, caller, pargs);             /* not set_plist_2 here! */
 	  vector_length(new_vec) = 0;               /* so GC doesn't march off the end */
 	  i += n;
 	  if (typ == T_VECTOR)
@@ -52335,17 +52333,35 @@ static s7_pointer g_apply(s7_scheme *sc, s7_pointer args)
   if (is_safe_procedure(sc->code))
     {
       s7_pointer p, q;
-
       for (q = args, p = cdr(args); is_not_null(cdr(p)); q = p, p = cdr(p));
       /* the last arg is supposed to be a list, it will be spliced onto the end of the previous arg list (if any) below */
 
       if (!s7_is_proper_list(sc, car(p)))        /* (apply + #f) etc */
 	return(apply_list_error(sc, args));
       set_cdr(q, car(p));
-      /* this would work: if (is_c_function(sc->code)) return(c_function_call(sc->code)(sc, cdr(args)));
-       *   but it omits the arg number check, but if we copy the APPLY table here (returning sc->value)
-       *   the overhead from the now non-inline function calls is greater than the fewer-eval-jumps savings.
-       */
+      if (is_c_function(sc->code)) /* handle in-place to get better error messages */
+	{
+	  s7_int len;
+	  uint8_t typ;
+	  s7_pointer func;
+	  func = sc->code;
+	  typ = type(func);
+	  if (typ == T_C_ANY_ARGS_FUNCTION)
+	    return(c_function_call(func)(sc, cdr(args)));
+	  len = proper_list_length(cdr(args));
+	  if (typ == T_C_RST_ARGS_FUNCTION)
+	    {
+	      if (len < c_function_required_args(func))
+		s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, func, cons(sc, sc->apply_symbol, args)));
+	      return(c_function_call(func)(sc, cdr(args)));
+	    }
+	  if (c_function_all_args(func) < len)
+	    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, func, cons(sc, sc->apply_symbol, args)));
+	  if ((typ == T_C_FUNCTION) &&
+	      (len < c_function_required_args(func)))
+	    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, func, cons(sc, sc->apply_symbol, args)));
+	  return(c_function_call(func)(sc, cdr(args)));
+	}
       push_stack(sc, OP_APPLY, cdr(args), sc->code);
       return(sc->nil);
     }
@@ -67732,7 +67748,6 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  (c_function_all_args(f) < len))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			set_elist_4(sc, wrap_string(sc, "map ~A: ~A argument~P?", 22), f, wrap_integer(sc, len), wrap_integer(sc, len))));
-
     case T_C_ANY_ARGS_FUNCTION:
       /* if function is safe c func, do the map locally */
       if (got_nil) return(sc->nil);
@@ -95490,49 +95505,49 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
- * tauto       785          648    642    497    494
  * index      1032         1026   1016    973    973
- * tmock      7738         1177   1165   1054   1051
+ * tmock      7738         1177   1165   1054   1053
  * tvect      1892         2456   2413   1712   1712
  * s7test     4506         1873   1831   1784   1779
  * texit      1768         ----   ----   1801   1796
  * lt         2121         2123   2110   2108   2104
- * tform      3235         2281   2273   2242   2240
- * tread      2606         2440   2421   2415   2416
- * tmac       2452         3317   3277   2420   2413
- * fbench     2848         2688   2583   2458   2458
+ * tauto      2495         1952   1926          2133  2104
+ * tform      3235         2281   2273   2242   2239
+ * tread      2606         2440   2421   2415   2419
+ * tmac       2452         3317   3277   2420   2418
+ * fbench     2848         2688   2583   2458   2460
  * trclo      4107         2735   2574   2459   2459
- * tmat       2683         3065   3042   2513   2521  2508
- * tcopy      2610         8035   5546   2556   2556
+ * tmat       2683         3065   3042   2513   2521
+ * tcopy      2610         8035   5546   2536   2536
  * dup        2783         3805   3788   2559   2526
  * tb         3383         2735   2681   2617   2611
  * titer      2693         2865   2842   2640   2641
- * tsort      3576         3105   3104   2855   2859
- * tset       3114         3253   3104   3081   3045
- * tload      3861         ----   ----   3155   3153
+ * tsort      3576         3105   3104   2855   2855
+ * tset       3114         3253   3104   3081   3025
+ * tload      3861         ----   ----   3155   3150
  * teq        3554         4068   4045   3539   3539
- * tio        3710         3816   3752   3680   3674
- * tclo       4622         4787   4735   4408   4394
- * tlet       5278         7775   5640   4435   4428
+ * tio        3710         3816   3752   3680   3673
+ * tclo       4622         4787   4735   4408   4392
+ * tlet       5278         7775   5640   4435   4438
  * tcase      4519         4960   4793   4441   4436
  * tmap       5491         8869   8774   4492   4489
  * tfft      115.0         7820   7729   4778   4778
- * tshoot     6923         5525   5447   5210   5201
+ * tshoot     6923         5525   5447   5210   5206
  * tnum       56.7         6348   6013   5439   5415
- * tstr       6187         6880   6342   5509   5490
+ * tstr       6187         6880   6342   5509   5492
  * tgsl       25.2         8485   7802   6390   6388
- * tmisc      6344         8869   7612   6472   6475
- * trec       8320         6936   6922   6529   6515
- * tlist      6837         7896   7546   6622   6619
+ * tmisc      6344         8869   7612   6472   6485  6470
+ * trec       8320         6936   6922   6529   6521
+ * tlist      6837         7896   7546   6622   6623
  * tari       ----         13.0   12.7   6860   6838
  * tleft      8985         9929   9728   8006   7826
  * tgc        10.1         11.9   11.1   8666   8644
- * thash      35.4         11.8   11.7   9711   9711
+ * thash      35.4         11.8   11.7   9711   9718
  * cb         18.8         12.2   12.2   10.3   10.3
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   56.0  56.1
+ * sg         75.8         ----   ----   55.9   56.0
  * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
@@ -95547,12 +95562,9 @@ int main(int argc, char **argv)
  *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
  *   check outer cases again, curlet_tree could continue up the let chain
  * (car (list (f...))) as nth-value: values-ref? value?  (car (list...)) at least can omit the copy
- * tauto: func to check errors, sigs, arity [t528]
- *   how to get "apply" into the error message? (apply map) -> "map: not enough arguments: ()"
- *   (vector-append #u(2 1) #r(2.0 1.0)) -> "byte-vector-set! third argument, 2.0, is a real but should be an integer"
+ * tauto: how to get "apply" into the error message? (apply map) -> "map: not enough arguments: ()"
  *   (apply map) (call-with-exit map) stop the for-each?
- *   *function* troubles
- * tload: load/eval a large file? from memory? maybe many loads?
  * tleft: call/exit, maybe more case/recur cases, maybe lambda-as-arg?
  * can symbol-table be growable? Then we could start smaller -- could it be an s7 hash-table?
+ * catch <list of tags>?
  */
