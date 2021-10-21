@@ -185,7 +185,7 @@
 
 
 (let ((probes (vector #f #t () #\a #<undefined> #<unspecified> #<eof>
-		      1 2/3 1.0 1+i
+		      0 1 2/3 1.0 1+i
 		      (list 0)
 		      'a set!
 		      "11" #(1+i 2+i) #i(312 1234) #r(1.5 2.5) #u(1 2) #2i((1 2) (3 4))

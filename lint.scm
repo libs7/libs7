@@ -969,7 +969,7 @@
 				     sequence? sin sinh square sqrt string->number string->symbol
 				     string-ci<=? string-ci<? string-ci=? string-ci>=? string-ci>? string-downcase string-length
 				     string-position string-ref string-upcase string<=? string<? string=? string>=? string>? string?
-				     substring  subvector? symbol symbol->keyword symbol->string symbol? syntax?
+				     sublet substring  subvector? symbol symbol->keyword symbol->string symbol? syntax?
 				     tan tanh tree-leaves tree-memq truncate
 				     unspecified? undefined?
 				     vector-dimensions vector-dimension vector-length vector-ref vector? vector-rank
@@ -10243,8 +10243,43 @@
 	    (let ((len (length form)))
 	      (if (and (positive? len)
 		       (even? len))
-		  (lint-format "key with no value? ~A" caller (truncated-list->string form)))))
+		  (lint-format "key with no value? ~A" caller (truncated-list->string form))
+		  (when (pair? (cdr form)) ; (hash-table)
+		    (do ((syms ())
+			 (p (cdr form) (cddr p)))
+			((null? p))
+		      (let ((sym (if (pair? (car p)) 
+				     (cadar p)
+				     (and (keyword? (car p)) 
+					  (keyword->symbol (car p))))))
+			(if sym
+			    (if (memq sym syms)
+				(lint-format "repeated key ~S in ~S" caller sym form)
+				(set! syms (cons sym syms))))))))))
 	  (hash-special 'hash-table sp-hash))
+
+	;; ---------------- inlet sublet ----------------
+	(let ()
+	  (define (sp-inlet caller head form env)
+	    (unless (and (eq? head 'sublet)
+			 (or (not (pair? (cdr form)))
+			     (keyword? (cadr form))
+			     (quoted-symbol? (cadr form))))
+	      (when (and (pair? (cdr form)) (pair? (cddr form)))
+		(do ((syms ())
+		     (p (if (eq? head 'inlet) (cdr form) (cddr form)) (cddr p)))
+		    ((null? p))
+		  (let ((sym (if (pair? (car p)) 
+				 (cadar p)
+				 (and (keyword? (car p)) 
+				      (keyword->symbol (car p))))))
+		    (if sym
+			(if (memq sym syms)
+			    (lint-format "repeated key ~S in ~S" caller sym form)
+			    (set! syms (cons sym syms)))))))))
+	  (hash-special 'inlet sp-inlet)
+	  ;(hash-special 'sublet sp-inlet)
+	  )
 
 	;; ---------------- open-input-file open-output-file ----------------
 	(let ()
