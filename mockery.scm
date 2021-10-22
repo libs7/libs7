@@ -797,7 +797,7 @@
 								(#_list-ref (obj 'value) ind))))
 						     (openlet obj) 
 						     val)
-						   (error "let-ref mock-pair index is not an integer: ~S" ind))))
+						   (error 'wrong-type-arg "let-ref mock-pair index is not an integer: ~S" ind))))
 		       'let-set-fallback (lambda (obj ind val) 
 					   (if (eq? ind 'value)
 					       #<undefined>
@@ -807,7 +807,7 @@
 								(#_list-set! (obj 'value) ind val))))
 						     (openlet obj)
 						     val)
-						   (error "let-set! mock-pair index is not an integer: ~S" ind))))
+						   (error 'wrong-type-arg "let-set! mock-pair index is not an integer: ~S" ind))))
 		       
 		       'reverse!         (lambda (obj) 
 					   (if (mock-pair? obj)

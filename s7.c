@@ -142,7 +142,7 @@
   #define SYMBOL_TABLE_SIZE 32749
 #endif
 /* names are hashed into the symbol table (a vector) and collisions are chained as lists. */
-/* 16381: thash +80 [string->symbol] tauto +45[sublet called 4x as often?] tlet +80 [g_symbol] */
+/* 16381: thash +80 [string_to_symbol_p_p] +40 if 24001, tlet +80 [symbol_p_p], +32 24001 */
 
 #ifndef INITIAL_STACK_SIZE
   #define INITIAL_STACK_SIZE 4096  /* was 2048 17-Mar-21 */
@@ -1687,7 +1687,7 @@ static s7_pointer too_many_arguments_string, not_enough_arguments_string, missin
   cdddr_a_list_string, cddr_a_list_string, cdr_a_list_string, immutable_error_string, its_infinite_string, its_nan_string,
   its_negative_string, its_too_large_string, its_too_small_string, parameter_set_twice_string, result_is_too_large_string,
   something_applicable_string, too_many_indices_string, value_is_missing_string, no_setter_string, intermediate_too_large_string,
-  format_string_1, format_string_2, format_string_3, format_string_4;
+  format_string_1, format_string_2, format_string_3, format_string_4, keyword_value_missing_string, a_named_function_string;
 
 static bool t_number_p[NUM_TYPES], t_small_real_p[NUM_TYPES], t_rational_p[NUM_TYPES], t_real_p[NUM_TYPES], t_big_number_p[NUM_TYPES];
 static bool t_simple_p[NUM_TYPES], t_structure_p[NUM_TYPES];
@@ -26372,7 +26372,7 @@ static void init_strings(void)
   cdddr_a_list_string = make_permanent_string("a pair whose cdddr is also a pair");
 
   a_list_string =                 make_permanent_string("a list");
-  an_eq_func_string =             make_permanent_string("a procedure that can take 2 arguments");
+  an_eq_func_string =             make_permanent_string("a procedure that can take two arguments");
   an_association_list_string =    make_permanent_string("an association list");
   a_normal_real_string =          make_permanent_string("a normal real");
   a_rational_string =             make_permanent_string("an integer or a ratio");
@@ -26417,6 +26417,8 @@ static void init_strings(void)
 #if (!HAVE_COMPLEX_NUMBERS)
   no_complex_numbers_string =     make_permanent_string("this version of s7 does not support complex numbers");
 #endif
+  keyword_value_missing_string =  make_permanent_string("~A: keyword argument's value is missing: ~S in ~S");
+  a_named_function_string =       make_permanent_string("a named function");
 
   format_string_1 = make_permanent_string("format: ~S ~{~S~^ ~}: ~A");
   format_string_2 = make_permanent_string("format: ~S: ~A");
@@ -28129,7 +28131,7 @@ static int32_t function_read_char(s7_scheme *sc, s7_pointer port)
 	  clear_multiple_value(res);
 	  s7_error(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port read-char returned: ~S", 42), res));
 	}
-      s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input_function_port read_char returned: ~S", 42), res));
+      s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port read-char returned: ~S", 42), res));
     }
   return((int32_t)character(res));    /* kinda nutty -- we return chars[this] in g_read_char! */
 }
@@ -29631,7 +29633,7 @@ static s7_pointer g_peek_char(s7_scheme *sc, s7_pointer args)
       s7_error(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned: ~S", 42), res));
     }
   if (!is_character(res))
-    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input_function_port peek_char returned: ~S", 42), res));
+    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned: ~S", 42), res));
   return(res);
 }
 
@@ -40700,7 +40702,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 	  if (is_any_closure(typf))
 	    {
 	      if (!is_symbol(find_closure(sc, typf, closure_let(typf))))
-		return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named function", 16)));
+		return(wrong_type_argument_with_type(sc, caller, 3, typf, a_named_function_string));
 	      /* the name is needed primarily by the error handler: "vector-set! third argument, ..., is a ... but should be a <...>" */
 	    }
 	  else
@@ -40727,7 +40729,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 		      {
 			s7_pointer sig;
 			if (!c_function_name(typf))
-			  return(wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named procedure", 17)));
+			  return(wrong_type_argument_with_type(sc, caller, 3, typf, a_named_function_string));
 			if (!c_function_marker(typf))
 			  c_function_set_marker(typf, mark_vector_1);
 			if (!c_function_symbol(typf))
@@ -43785,7 +43787,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  ((valp != sc->T) && (!is_c_function(valp)) && (!is_any_closure(valp))))
 			return(wrong_type_argument_with_type(sc, caller, 3, typers, wrap_string(sc, "(key-type . value-type)", 23)));
 		      if ((keyp != sc->T) && (!s7_is_aritable(sc, keyp, 1)))
-			return(wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a function of 1 argument", 24)));
+			return(wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a function of one argument", 26)));
 		      dproc = cons_unchecked(sc, sc->T, sc->T);
 		      hash_table_set_procedures(ht, dproc);
 		      hash_table_set_key_typer(dproc, keyp);
@@ -43793,7 +43795,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      if (is_c_function(keyp))
 			{
 			  if (!c_function_name(keyp))
-			    return(wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a named procedure", 17)));
+			    return(wrong_type_argument_with_type(sc, caller, 3, keyp, a_named_function_string));
 			  if (c_function_has_simple_elements(keyp))
 			    set_has_simple_keys(ht);
 			  if (!c_function_symbol(keyp))
@@ -43817,13 +43819,13 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      else
 			if ((is_any_closure(keyp)) &&
 			    (!is_symbol(find_closure(sc, keyp, closure_let(keyp)))))
-			  return(wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a named function", 16)));
+			  return(wrong_type_argument_with_type(sc, caller, 3, keyp, a_named_function_string));
 		      if ((valp != sc->T) && (!s7_is_aritable(sc, valp, 1)))
-			return(wrong_type_argument_with_type(sc, caller, 3, valp, wrap_string(sc, "a function of 1 argument", 24)));
+			return(wrong_type_argument_with_type(sc, caller, 3, valp, wrap_string(sc, "a function of one argument", 26)));
 		      if (is_c_function(valp))
 			{
 			  if (!c_function_name(valp))
-			    return(wrong_type_argument_with_type(sc, caller, 3, valp, wrap_string(sc, "a named procedure", 17)));
+			    return(wrong_type_argument_with_type(sc, caller, 3, valp, a_named_function_string));
 			  if (c_function_has_simple_elements(valp))
 			    set_has_simple_values(ht);
 			  if (!c_function_symbol(valp))
@@ -43834,7 +43836,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      else
 			if ((is_any_closure(valp)) &&
 			    (!is_symbol(find_closure(sc, valp, closure_let(valp)))))
-			  return(wrong_type_argument_with_type(sc, caller, 3, valp, wrap_string(sc, "a named function", 16)));
+			  return(wrong_type_argument_with_type(sc, caller, 3, valp, a_named_function_string));
 		      set_typed_hash_table(ht);
 		    }}
 	      else
@@ -43931,9 +43933,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 						caller, mapper, type_name_string(sc, mapper))));
 
 		  if (!(s7_is_aritable(sc, checker, 2)))
-		    return(wrong_type_argument_with_type(sc, caller, 2, checker, wrap_string(sc, "a function of 2 arguments", 25)));
+		    return(wrong_type_argument_with_type(sc, caller, 2, checker, wrap_string(sc, "a function of two arguments", 27)));
 		  if (!(s7_is_aritable(sc, mapper, 1)))
-		    return(wrong_type_argument_with_type(sc, caller, 2, mapper, wrap_string(sc, "a function of 1 argument", 24)));
+		    return(wrong_type_argument_with_type(sc, caller, 2, mapper, wrap_string(sc, "a function of one argument", 26)));
 
 		  if (is_any_c_function(checker))
 		    {
@@ -46466,7 +46468,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
       if (!is_any_procedure(setter))
 	return(s7_wrong_type_arg_error(sc, "set! setter", 2, setter, "a procedure or #f"));
       if (arity_to_int(sc, setter) < 1)          /* we need at least an arg for the set! value */
-	return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take at least 1 argument", 52), setter)));
+	return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take at least one argument", 54), setter)));
     }
 
   switch (type(p))
@@ -48429,6 +48431,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 		    add_slot_checked_with_id(sc, dest, slot_symbol(slot), slot_value(slot));
 	      }
 	    else
+	      /* this copies reversing the order -- if shadowing, this unshadows, tmp has in-order copy code, but it's too much effort */
 	      for (slot = let_slots(source); tis_slot(slot); slot = next_slot(slot))
 		add_slot_checked_with_id(sc, dest, slot_symbol(slot), slot_value(slot));
 	  return(dest);
@@ -51424,7 +51427,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
        */
 
       if (!s7_is_aritable(sc, sc->code, 2))
-	s7_wrong_number_of_args_error(sc, "catch error handler should accept 2 arguments: ~S", sc->code);
+	s7_wrong_number_of_args_error(sc, "catch error handler should accept two arguments: ~S", sc->code);
 
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
       sc->cur_op = OP_APPLY;
@@ -76645,20 +76648,24 @@ static bool op_let_temp_done1(s7_scheme *sc)
   return(true);          /* goto start */
 }
 
+static bool *s7_let_immutable_field = NULL;
+
 static bool op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 'field) fx-able-value) */
 {
-  s7_pointer p;
+  s7_pointer p, code;
   s7_pointer *end = sc->stack_end;
-  sc->code = cdr(sc->code);
-  for (p = car(sc->code); is_pair(p); p = cdr(p))
+  code = cdr(sc->code); /* don't use sc->code here -- it can be changed */
+  for (p = car(code); is_pair(p); p = cdr(p))
     {
       s7_pointer old_value, field = cadadr(caar(p));    /* p: (((*s7* 'expansions?) #f)) -- no keywords here (see check_let_temporarily) */
+      if (s7_let_immutable_field[symbol_s7_let(field)])
+	s7_error(sc, sc->immutable_error_symbol, set_elist_2(sc, wrap_string(sc, "let-temporarily: can't set! (*s7* '~S)", 38), field));
       old_value = g_s7_let_ref_fallback(sc, set_qlist_2(sc, sc->s7_let, field)); /* qlist to avoid stepping on possible plist-in-use */
       push_stack(sc, OP_LET_TEMP_S7_UNWIND, old_value, field);
     }
-  for (p = car(sc->code); is_pair(p); p = cdr(p), end += 4)
+  for (p = car(code); is_pair(p); p = cdr(p), end += 4)
     g_s7_let_set_fallback(sc, set_qlist_3(sc, sc->s7_let, end[0], fx_call(sc, cdar(p))));
-  sc->code = cdr(sc->code);
+  sc->code = cdr(code);
   return(is_pair(sc->code)); /* sc->code can be null if no body */
 }
 
@@ -83628,8 +83635,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	      if (!is_pair(cdr(lx)))
 		{
 		  if (!sc->accept_all_keyword_arguments)
-		    return(s7_error(sc, sc->wrong_type_arg_symbol,
-				    set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, code), lx, args)));
+		    return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, keyword_value_missing_string, closure_name(sc, code), lx, args)));
 		  slot_set_value(slot, car_lx);
 		  set_checked_slot(slot);
 		  lx = cdr(lx);
@@ -83951,8 +83957,7 @@ static Inline s7_pointer op_safe_closure_star_a1(s7_scheme *sc, s7_pointer code)
   val = fx_call(sc, cdr(code));
   if ((is_symbol_and_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
-    s7_error(sc, sc->wrong_type_arg_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, func), val, sc->args));
+    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, keyword_value_missing_string, closure_name(sc, func), val, sc->args));
   sc->curlet = update_let_with_slot(sc, closure_let(func), val);
   sc->code = T_Pair(closure_body(func));
   return(func);
@@ -84020,8 +84025,7 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
   else
     if ((is_symbol_and_keyword(arg2)) &&
 	(!sc->accept_all_keyword_arguments))
-      s7_error(sc, sc->wrong_type_arg_symbol,
-	       set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, func), arg2, code));
+      s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, keyword_value_missing_string, closure_name(sc, func), arg2, code));
   sc->curlet = update_let_with_two_slots(sc, closure_let(func), arg1, arg2);
   sc->code = T_Pair(closure_body(func));
 }
@@ -84115,8 +84119,7 @@ static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
   val = fx_call(sc, cdr(code));
   if ((is_symbol_and_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
-    s7_error(sc, sc->wrong_type_arg_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: keyword argument's value is missing: ~S in ~S", 49), closure_name(sc, opt1_lambda(code)), val, code));
+    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), val, code));
   func = opt1_lambda(code);
   p = car(closure_args(func));
   sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
@@ -88627,7 +88630,7 @@ static void op_read_internal(s7_scheme *sc)
    */
   if (port_is_closed(current_input_port(sc)))
     s7_error(sc, sc->read_error_symbol, /* not read_error here because it paws through the port string which doesn't exist here */
-	     set_elist_1(sc, wrap_string(sc, "read input port is closed!", 26)));
+	     set_elist_1(sc, wrap_string(sc, (is_loader_port(current_input_port(sc))) ? "load input port is closed!" : "read input port is closed!", 26)));
 
   sc->tok = token(sc);
   switch (sc->tok)
@@ -92731,6 +92734,27 @@ s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
   return(sc->undefined);
 }
 
+static void init_s7_let_immutable_field(void)
+{
+  s7_let_immutable_field = (bool *)calloc(SL_NUM_FIELDS, sizeof(bool));
+  s7_let_immutable_field[SL_CATCHES] = true;
+  s7_let_immutable_field[SL_CPU_TIME] = true;
+  s7_let_immutable_field[SL_C_TYPES] = true;
+  s7_let_immutable_field[SL_FILE_NAMES] = true;
+  s7_let_immutable_field[SL_FREE_HEAP_SIZE] = true;
+  s7_let_immutable_field[SL_GC_FREED] = true;
+  s7_let_immutable_field[SL_GC_TOTAL_FREED] = true;
+  s7_let_immutable_field[SL_GC_PROTECTED_OBJECTS] = true;
+  s7_let_immutable_field[SL_MEMORY_USAGE] = true;
+  s7_let_immutable_field[SL_MOST_NEGATIVE_FIXNUM] = true;
+  s7_let_immutable_field[SL_MOST_POSITIVE_FIXNUM] = true;
+  s7_let_immutable_field[SL_ROOTLET_SIZE] = true;
+  s7_let_immutable_field[SL_STACK] = true;
+  s7_let_immutable_field[SL_STACK_SIZE] = true;
+  s7_let_immutable_field[SL_STACK_TOP] = true;
+  s7_let_immutable_field[SL_VERSION] = true;
+}
+
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
@@ -94606,6 +94630,7 @@ s7_scheme *s7_init(void)
       init_strings();
       init_fx_function();
       init_catchers();
+      init_s7_let_immutable_field();
       already_inited = true;
     }
 
@@ -95532,9 +95557,9 @@ int main(int argc, char **argv)
  * index      1032         1026   1016    973    973
  * tmock      7738         1177   1165   1054   1053
  * tvect      1892         2456   2413   1712   1712
- * s7test     4506         1873   1831   1784   1779
+ * s7test     4506         1873   1831   1784   1779  1819 [gc]
  * texit      1768         ----   ----   1801   1796
- * lt         2121         2123   2110   2108   2104
+ * lt         2121         2123   2110   2108   2104  2109
  * tform      3235         2281   2273   2242   2239
  * tauto                   ----   ----   2356   2276
  * tread      2606         2440   2421   2415   2419
@@ -95542,53 +95567,40 @@ int main(int argc, char **argv)
  * fbench     2848         2688   2583   2458   2460
  * trclo      4107         2735   2574   2459   2459
  * tmat       2683         3065   3042   2513   2520
- * dup        2783         3805   3788   2559   2525
+ * dup        2783         3805   3788   2559   2526
  * tcopy      2610         8035   5546   2536   2536
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
  * tset       3114         3253   3104   3081   3025
- * tload      3861         ----   ----   3155   3150
- * teq        3554         4068   4045   3539   3539
- * tio        3710         3816   3752   3680   3675
- * tclo       4622         4787   4735   4408   4392
+ * tload      3861         ----   ----   3155   3151
+ * teq        3554         4068   4045   3539   3542
+ * tio        3710         3816   3752   3680   3674
+ * tclo       4622         4787   4735   4408   4390
  * tlet       5278         7775   5640   4435   4438
- * tcase      4519         4960   4793   4441   4439
+ * tcase      4519         4960   4793   4441   4438
  * tmap       5491         8869   8774   4492   4489
  * tfft      115.0         7820   7729   4778   4778
  * tshoot     6923         5525   5447   5210   5206
- * tnum       56.7         6348   6013   5439   5422
- * tstr       6187         6880   6342   5509   5493
+ * tnum       56.7         6348   6013   5439   5421
+ * tstr       6187         6880   6342   5509   5494
  * tgsl       25.2         8485   7802   6390   6388
  * tmisc      6344         8869   7612   6472   6469
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
  * tari       ----         13.0   12.7   6860   6837
- * tleft      8985         9929   9728   8006   7826  7820
+ * tleft      8985         9929   9728   8006   7824
  * tgc        10.1         11.9   11.1   8666   8644
  * thash      35.4         11.8   11.7   9711   9718
- * cb         18.8         12.2   12.2   10.3   10.3
+ * cb         18.8         12.2   12.2   10.3   10.2
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   56.0
+ * sg         75.8         ----   ----   55.9   56.1
  * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
  *
- * data-specific files?
- *   strings: string-wi=?[s7test] levenshtein[concordance] string-trim[dup]
- *   hashes, lists remove-one|all|if[lint] tree-subst[lint] collect et al[stuff], vectors, lets
- * fx_treeable: copy let in order
- *   opt_func_n_args closure cases if fx_annotate: fx_tree+args
- *   how to opt bodies as in let -- fx_proc is back one level [check* as in case]
- *   lambdas are treeable? (define (f) (display ((lambda (x) (case x ((1) 1) (else 2))) 3)) (newline)) t520
- *     optimize is called, not optimize_lambda -- should they be? maybe use the safe_body code both places?
- *   check outer cases again, curlet_tree could continue up the let chain
- * (car (list (f...))) as nth-value: values-ref? value?  (car (list...)) at least can omit the copy
- * tauto: how to get "apply" into the error message? (apply map) -> "map: not enough arguments: ()"
- * tleft: call/exit, maybe more case/recur cases, maybe lambda-as-arg?
- * can symbol-table be growable? Then we could start smaller -- could it be an s7 hash-table?
- * fx->fb continued?
- * lint: sublet (and inlet?) has the (cons key value) possibility and others
+ * can't (let-temporarily (((*s7* 'gc-info) #t)) ...) ?? gc-info needs to accept its own value: '(0 0 1M) or whatever
+ *   t529 -> s7test without error output
  */
