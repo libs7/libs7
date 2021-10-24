@@ -4100,7 +4100,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
-      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA, OP_F, OP_F_A, OP_F_AA,
+      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA, 
+      OP_F, OP_F_A, OP_F_AA, OP_F_P, OP_F_P_1,
 
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
@@ -4320,7 +4321,8 @@ static const char* op_names[NUM_OPS] =
 
       "apply_ss", "apply_sa", "apply_sl", "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
-      "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa", "f", "f_a", "f_aa",
+      "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa", 
+      "f", "f_a", "f_aa", "f_p", "f_p_1",
 
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
@@ -8483,7 +8485,7 @@ static inline void add_slot_unchecked(s7_scheme *sc, s7_pointer let, s7_pointer 
   symbol_set_local_slot(symbol, id, slot);
 }
 
-static void add_slot_unchecked_no_local(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value, uint64_t id)
+static void add_slot_unchecked_no_local(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
@@ -8543,7 +8545,7 @@ static Inline s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer 
   return(slot);
 }
 
-static s7_pointer add_slot_at_end_no_local(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
+static s7_pointer add_slot_at_end_no_local(s7_scheme *sc, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
@@ -55658,10 +55660,10 @@ static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
       value = fx_call(sc, cdr(x));            /* it's necessary to do this first, before add_slot_unchecked */
       if (!sp)
 	{
-	  add_slot_unchecked_no_local(sc, new_e, symbol, value, symbol_id(symbol));
+	  add_slot_unchecked_no_local(sc, new_e, symbol, value);
 	  sp = let_slots(new_e);
 	}
-      else sp = add_slot_at_end_no_local(sc, symbol_id(symbol), sp, symbol, value);
+      else sp = add_slot_at_end_no_local(sc, sp, symbol, value);
     }
   id = ++sc->let_number;
   let_set_id(new_e, id);
@@ -83466,13 +83468,13 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
   sc->code = closure_body(sc->code);
 }
 
-static void op_f(s7_scheme *sc)    /* sc->code: ((lambda () 32)) -> (let () 32) */
+static void op_f(s7_scheme *sc)     /* sc->code: ((lambda () 32)) -> (let () 32) */
 {
   sc->curlet = make_let(sc, sc->curlet);
   sc->code = opt3_pair(sc->code); /* cddar */
 }
 
-static void op_f_a(s7_scheme *sc)  /* sc->code: ((lambda (x) (+ x 1)) i) -> (let ((x i)) (+ x 1)) */
+static void op_f_a(s7_scheme *sc)   /* sc->code: ((lambda (x) (+ x 1)) i) -> (let ((x i)) (+ x 1)) */
 {  
   sc->curlet = make_let_with_slot(sc, sc->curlet, opt3_sym(cdr(sc->code)), fx_call(sc, cdr(sc->code)));
   sc->code = opt3_pair(sc->code);
@@ -83484,6 +83486,60 @@ static void op_f_aa(s7_scheme *sc)  /* sc->code: ((lambda (x y) (+ x y)) i j) ->
   sc->curlet = make_let_with_two_slots(sc, sc->curlet, opt3_sym(cdr(sc->code)), stack_protected1(sc), cadadr(car(sc->code)), fx_call(sc, cddr(sc->code)));
   unstack(sc);
   sc->code = opt3_pair(sc->code);
+}
+
+/* TODO: rest args: need to see rest arg below either in loop or non-pair case, error checks */
+static void op_f_p(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (values i j)) -> (let ((x i) (y j)) (+ x y)) after splice */
+{
+  s7_pointer e, args = cadar(sc->code);
+  e = make_let_slowly(sc, sc->curlet);
+  if (is_pair(args))
+    {
+      s7_pointer last_slot;
+      add_slot_unchecked_no_local(sc, e, car(args), sc->undefined);
+      last_slot = let_slots(e);
+      for (args = cdr(args); is_pair(args); args = cdr(args))
+	last_slot = add_slot_at_end_no_local(sc, last_slot, car(args), sc->undefined);
+    }
+  check_stack_size(sc);
+  push_stack(sc, OP_GC_PROTECT, let_slots(e), cddr(sc->code));
+  push_stack(sc, OP_F_P_1, e, sc->code);
+  sc->code = cadr(sc->code); 
+  /* fprintf(stderr, "e: %s, sc->code: %s\n", display(e), display(sc->code)); */
+}
+
+static bool op_f_p_1(s7_scheme *sc)
+{
+  /* sc->value = arg value = slot value */
+  s7_pointer slot, arg, e;
+  /* fprintf(stderr, "op_f_p_1: value: %s %d, code: %s\n", display(sc->value), is_multiple_value(sc->value), display(sc->code)); */
+  /* fprintf(stderr, "    pro1: %s, pro2: %s\n", display(stack_protected1(sc)), display(stack_protected2(sc))); */
+  slot = stack_protected1(sc);
+  if (is_multiple_value(sc->value))
+    {
+      s7_pointer p;
+      for (p = sc->value; is_pair(p); p = cdr(p), slot = next_slot(slot))
+	slot_set_value(slot, car(p));
+    }
+  else slot_set_value(slot, sc->value);
+  arg = stack_protected2(sc);
+  if (is_pair(arg))
+    {
+      stack_protected1(sc) = next_slot(slot);
+      stack_protected2(sc) = cdr(arg);
+      push_stack_direct(sc, OP_F_P_1); /* sc->args=e, sc->code from start */
+      sc->code = car(arg);
+      return(true);
+    }
+  e = sc->args;
+  let_set_id(e, ++sc->let_number);
+  set_curlet(sc, e);
+  update_symbol_ids(sc, e);
+  sc->code = cddar(sc->code);
+  /* fprintf(stderr, "at end: %s %s\n", display(sc->code), display(sc->curlet)); */
+  unstack(sc);
+  /* s7_show_stack(sc); */
+  return(false);
 }
 
 /* lambda* */
@@ -88790,7 +88846,11 @@ static bool eval_car_pair(s7_scheme *sc)
 		      fx_annotate_args(sc, cdr(code), sc->curlet);
 		      set_optimize_op(code, OP_F_AA);              /* ((lambda (x y) ...) expr exor) */
 		      return(false);
-		    }}}
+		    }}
+#if 0
+	      set_optimize_op(code, OP_F_P);
+#endif
+	    }
 	  set_no_int_opt(code);
 	}
       /* ((if op1 op2) args...) is another somewhat common case */
@@ -90357,12 +90417,14 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CALL_WITH_OUTPUT_STRING: op_call_with_output_string(sc); goto BEGIN;
 
 
-	case OP_S:    op_s(sc);       goto APPLY;
-	case OP_S_C:  op_s_c(sc);     goto APPLY;
-	case OP_S_S:  if (op_s_s(sc)) continue;  goto APPLY;
-	case OP_F:    op_f(sc);       goto BEGIN;
-	case OP_F_A:  op_f_a(sc);     goto BEGIN;
-	case OP_F_AA: op_f_aa(sc);    goto BEGIN;
+	case OP_S:     op_s(sc);       goto APPLY;
+	case OP_S_C:   op_s_c(sc);     goto APPLY;
+	case OP_S_S:   if (op_s_s(sc)) continue;  goto APPLY;
+	case OP_F:     op_f(sc);       goto BEGIN;
+	case OP_F_A:   op_f_a(sc);     goto BEGIN;
+	case OP_F_AA:  op_f_aa(sc);    goto BEGIN;
+	case OP_F_P:   op_f_p(sc);     goto EVAL;
+	case OP_F_P_1: if (op_f_p_1(sc)) goto EVAL; goto BEGIN;
 
 	case OP_S_A:  if (op_x_a(sc, lookup_checked(sc, car(sc->code)))) continue; goto APPLY;
 	case OP_A_A:  if (op_x_a(sc, fx_call(sc, sc->code))) continue;             goto APPLY;
@@ -95077,7 +95139,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 920) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 922) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95508,7 +95570,7 @@ int main(int argc, char **argv)
  * tleft      8985         9929   9728   8006   7824
  * tgc        10.1         11.9   11.1   8666   8643
  * thash      35.4         11.8   11.7   9711   9720
- * cb         18.8         12.2   12.2   10.3   10.2
+ * cb         18.8         12.2   12.2   10.3   10.2  10.0
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
