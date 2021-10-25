@@ -4101,7 +4101,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
       OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA, 
-      OP_F, OP_F_A, OP_F_AA, OP_F_P, OP_F_P_1,
+      OP_F, OP_F_A, OP_F_AA, OP_F_NP, OP_F_NP_1,
 
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
@@ -12942,7 +12942,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 {
   /* from CL code in Canny, Donald, Ressler, "A Rational Rotation Method for Robust Geometric Algorithms" */
   double x0, x1;
-  s7_int i, i0, i1, p0, q0, p1, q1;
+  s7_int i, p0, q0 = 1, p1, q1 = 1;
   double e0, e1, e0p, e1p;
   int32_t tries = 0;
   /* don't use long_double: the loop below will hang */
@@ -12971,13 +12971,12 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 
   if (error >= 1.0) /* aw good grief! */
     {
-      if (x0 < 0)
-	(*numer) = (x1 < 0) ? (s7_int)floor(x1) : 0;
+      if (x0 < 0.0)
+	(*numer) = (x1 < 0.0) ? (s7_int)floor(x1) : 0;
       else (*numer) = i;
       (*denom) = 1;
       return(true);
     }
-
   if (x1 >= i)
     {
       (*numer) = (i >= 0) ? i : (s7_int)floor(x1);
@@ -12985,17 +12984,12 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
       return(true);
     }
 
-  i0 = (s7_int)floor(x0);
-  i1 = (s7_int)ceil(x1);
-
-  p0 = i0;
-  q0 = 1;
-  p1 = i1;
-  q1 = 1;
-  e0 = i1 - x0;
-  e1 = x0 - i0;
-  e0p = i1 - x1;
-  e1p = x1 - i0;
+  p0 = (s7_int)floor(x0);
+  p1 = (s7_int)ceil(x1);
+  e0 = p1 - x0;
+  e1 = x0 - p0;
+  e0p = p1 - x1;
+  e1p = x1 - p0;
 
   while (true)
     {
@@ -13003,10 +12997,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
       double old_e0, old_e1, old_e0p, val, r, r1;
       val = (double)p0 / (double)q0;
 
-      if (((x0 <= val) && (val <= x1)) ||
-	  (e1 == 0)                    ||
-	  (e1p == 0)                   ||
-	  (tries > 100))
+      if (((x0 <= val) && (val <= x1)) || (e1 == 0.0) || (e1p == 0.0) || (tries > 100))
 	{
 	  if ((q0 == s7_int_min) && (p0 == 1)) /* (rationalize 1.000000004297917e-12) when error is 1e-12 */
 	    {
@@ -39228,7 +39219,7 @@ s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *da
 
 
 /* -------------------------------- vector-fill! -------------------------------- */
-static Vectorized void float_vector_fill(s7_scheme *sc, s7_pointer vec, s7_double x)
+static Vectorized void float_vector_fill(s7_pointer vec, s7_double x)
 {
   s7_int len = vector_length(vec);
   if (len == 0) return;
@@ -39249,7 +39240,7 @@ static Vectorized void float_vector_fill(s7_scheme *sc, s7_pointer vec, s7_doubl
     }
 }
 
-static Vectorized void int_vector_fill(s7_scheme *sc, s7_pointer vec, s7_int k)
+static Vectorized void int_vector_fill(s7_pointer vec, s7_int k)
 {
   s7_int len = vector_length(vec);
   if (len == 0) return;
@@ -39270,7 +39261,7 @@ static Vectorized void int_vector_fill(s7_scheme *sc, s7_pointer vec, s7_int k)
     }
 }
 
-static void byte_vector_fill(s7_scheme *sc, s7_pointer vec, uint8_t byte)
+static void byte_vector_fill(s7_pointer vec, uint8_t byte)
 {
   s7_int len = vector_length(vec);
   if (len == 0) return;
@@ -39282,7 +39273,7 @@ static void byte_vector_fill(s7_scheme *sc, s7_pointer vec, uint8_t byte)
     else memclr((void *)(byte_vector_bytes(vec)), len);
 }
 
-static Vectorized void normal_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
+static Vectorized void normal_vector_fill(s7_pointer vec, s7_pointer obj)
 {
   s7_pointer *orig;
   s7_int len = vector_length(vec), i, left;
@@ -39305,24 +39296,24 @@ void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
     case T_FLOAT_VECTOR:
       if (!is_real(obj))
 	s7_wrong_type_arg_error(sc, "float-vector fill!", 2, obj, "a real");
-      else float_vector_fill(sc, vec, s7_real(obj));
+      else float_vector_fill(vec, s7_real(obj));
       break;
 
     case T_INT_VECTOR:
       if (!s7_is_integer(obj)) /* possibly a bignum */
 	s7_wrong_type_arg_error(sc, "int-vector fill!", 2, obj, "an integer");
-      else int_vector_fill(sc, vec, s7_integer_clamped_if_gmp(sc, obj));
+      else int_vector_fill(vec, s7_integer_clamped_if_gmp(sc, obj));
       break;
 
     case T_BYTE_VECTOR:
       if (!is_byte(obj))
 	s7_wrong_type_arg_error(sc, "byte-vector fill!", 2, obj, "a byte");
-      else byte_vector_fill(sc, vec, (uint8_t)s7_integer_clamped_if_gmp(sc, obj));
+      else byte_vector_fill(vec, (uint8_t)s7_integer_clamped_if_gmp(sc, obj));
       break;
 
     case T_VECTOR:
     default:
-      normal_vector_fill(sc, vec, obj);
+      normal_vector_fill(vec, obj);
     }
 }
 
@@ -40803,7 +40794,7 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
 	  len = multivector_length(sc, p, sc->make_float_vector_symbol);
 	}
       x = make_vector_1(sc, len, NOT_FILLED, T_FLOAT_VECTOR);
-      float_vector_fill(sc, x, s7_real(init));
+      float_vector_fill(x, s7_real(init));
       if (!s7_is_integer(p))
 	return(make_multivector(sc, x, p));
       add_vector(sc, x);
@@ -40866,7 +40857,7 @@ static s7_pointer g_make_int_vector(s7_scheme *sc, s7_pointer args)
 	  len = multivector_length(sc, p, sc->make_int_vector_symbol);
 	}
       x = make_vector_1(sc, len, NOT_FILLED, T_INT_VECTOR);
-      int_vector_fill(sc, x, s7_integer_clamped_if_gmp(sc, init));
+      int_vector_fill(x, s7_integer_clamped_if_gmp(sc, init));
       if (!s7_is_integer(p))
 	return(make_multivector(sc, x, p));
       add_vector(sc, x);
@@ -40902,7 +40893,7 @@ static s7_pointer make_int_vector_p_ii(s7_scheme *sc, s7_int len, s7_int init)
 {
   s7_pointer x;
   x = make_vector_1(sc, len, NOT_FILLED, T_INT_VECTOR);
-  int_vector_fill(sc, x, init);
+  int_vector_fill(x, init);
   add_vector(sc, x);
   return(x);
 }
@@ -42829,7 +42820,7 @@ static hash_map_t char_ci_eq_hash_map[NUM_TYPES];
 static s7_pointer make_dummy_hash_table(s7_scheme *sc)
 {
   s7_pointer table;  /* make the absolute minimal hash-table that can support hash-code */
-  table = (s7_pointer)Calloc(1, sizeof(s7_cell));
+  table = alloc_pointer(sc);
   set_type_bit(table, T_IMMUTABLE | T_HASH_TABLE | T_UNHEAP);
   hash_table_mapper(table) = default_hash_map;
   return(table);
@@ -44145,7 +44136,7 @@ static s7_pointer hash_table_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t ar
 
 
 /* -------------------------------- hash-table-set! -------------------------------- */
-static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, s7_pointer key, hash_entry_t *p)
+static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, hash_entry_t *p)
 {
   hash_entry_t *x;
   s7_int hash_mask, loc;
@@ -44284,7 +44275,7 @@ s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
   hash_entry_t *p, *x;
 
   if (value == sc->F)
-    return(remove_from_hash_table(sc, table, key, (*hash_table_checker(table))(sc, table, key)));
+    return(remove_from_hash_table(sc, table, (*hash_table_checker(table))(sc, table, key)));
 
   if ((is_typed_hash_table(table)) &&
       (sc->safety >= NO_SAFETY))
@@ -61121,7 +61112,7 @@ static s7_double opt_d_multiply_any_f(opt_info *o)
   return(sum);
 }
 
-static bool d_add_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer car_x, int32_t len)
+static bool d_add_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer car_x)
 {
   s7_pointer head = car(car_x);
   int32_t start = sc->pc;
@@ -63611,7 +63602,7 @@ static bool p_call_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 
 static s7_pointer opt_p_fx_any(opt_info *o) {return(o->v[1].call(opt_sc(o), o->v[2].p));}
 
-static bool p_fx_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer x)
+static bool p_fx_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer x)
 {
   s7_function f;
   f = (has_fx(x)) ? fx_proc(x) : fx_choose(sc, x, sc->curlet, let_symbol_is_safe);
@@ -64987,7 +64978,7 @@ static bool case_memv(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #define CASE_CLAUSE_O1 4
 #define CASE_CLAUSE_KEYS 2
 
-static s7_pointer case_value(s7_scheme *sc, opt_info *top, opt_info *o)
+static s7_pointer case_value(opt_info *o)
 {
   opt_info *o1;
   int32_t i, len = o->v[1].i - 1;
@@ -65014,7 +65005,7 @@ static s7_pointer opt_case(opt_info *o)
       o1 = o->v[ctr].o1;
       if ((o1->v[CASE_CLAUSE_KEYS].p == opt_sc(o)->else_symbol) ||
 	  (case_memv(opt_sc(o), selector, o1->v[CASE_CLAUSE_KEYS].p)))
-	return(case_value(opt_sc(o), o, o1));
+	return(case_value(o1));
     }
   return(opt_sc(o)->unspecified);
 }
@@ -66282,7 +66273,7 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 	      break;
 
 	    default:
-	      if (d_add_any_ok(sc, opc, car_x, len))
+	      if (d_add_any_ok(sc, opc, car_x))
 		return(true);
 	      break;
 	    }}
@@ -66555,7 +66546,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	    {
 	      opt_info *opc;
 	      opc = alloc_opo(sc);
-	      if (p_fx_any_ok(sc, opc, s_func, expr))
+	      if (p_fx_any_ok(sc, opc, expr))
 		return(true);
 	    }
 	  if (is_macro(s_func))
@@ -69886,7 +69877,7 @@ static opt_t optimize_closure_dotted_args(s7_scheme *sc, s7_pointer expr, s7_poi
   return(OPT_F);
 }
 
-static int32_t combine_ops(s7_scheme *sc, s7_pointer func, s7_pointer expr, combine_op_t cop, s7_pointer e1, s7_pointer e2) /* sc needed for debugger stuff */
+static int32_t combine_ops(s7_scheme *sc, s7_pointer expr, combine_op_t cop, s7_pointer e1, s7_pointer e2) /* sc needed for debugger stuff */
 {
   int32_t arg_op;
   s7_pointer arg;
@@ -70190,7 +70181,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       if (func_is_safe)
 	{
 	  int32_t op;
-	  op = combine_ops(sc, func, expr, E_C_P, arg1, NULL);
+	  op = combine_ops(sc, expr, E_C_P, arg1, NULL);
 	  set_safe_optimize_op(expr, hop + op);
 	  if ((op == OP_SAFE_C_P) &&
 	      (is_fxable(sc, arg1)))
@@ -71730,7 +71721,7 @@ static opt_t set_any_c_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_po
   return(OPT_F);
 }
 
-static s7_function io_function(s7_scheme *sc, s7_function func)
+static s7_function io_function(s7_function func)
 {
   if (func == g_with_input_from_string) return(with_string_in);
   if (func == g_with_input_from_file) return(with_file_in);
@@ -71889,7 +71880,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      ((is_maybe_safe(func)) && (two_args_ok(sc, expr, e))))
 	    {
 	      int32_t op;
-	      op = combine_ops(sc, func, expr, E_C_PP, arg1, arg2);
+	      op = combine_ops(sc, expr, E_C_PP, arg1, arg2);
 	      set_safe_optimize_op(expr, hop + op);
 	      if (op == OP_SAFE_C_PP)
 		{
@@ -71939,12 +71930,12 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      if (is_pair(arg1))
 		{
 		  orig_op = (is_normal_symbol(arg2)) ? E_C_PS : E_C_PC;
-		  op = combine_ops(sc, func, expr, orig_op, arg1, arg2);
+		  op = combine_ops(sc, expr, orig_op, arg1, arg2);
 		}
 	      else
 		{
 		  orig_op = (is_normal_symbol(arg1)) ? E_C_SP : E_C_CP;
-		  op = combine_ops(sc, func, expr, orig_op, arg1, arg2);
+		  op = combine_ops(sc, expr, orig_op, arg1, arg2);
 		}
 	      if ((((op == OP_SAFE_C_SP) || (op == OP_SAFE_C_CP)) &&
 		   (is_fxable(sc, arg2))) ||
@@ -72189,7 +72180,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		    {
 		      set_unsafe_optimize_op(expr, (is_string(arg1)) ? OP_WITH_IO_C : OP_WITH_IO);
 		      set_opt2_pair(expr, cddr(arg2));
-		      set_opt1_any(expr, (s7_pointer)io_function(sc, c_function_call(func)));
+		      set_opt1_any(expr, (s7_pointer)io_function(c_function_call(func)));
 		      return(OPT_F);
 		    }
 		  if (((c_function_call(func) == g_call_with_input_string) ||
@@ -72204,7 +72195,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		      set_unsafe_optimize_op(expr, (is_string(arg1)) ? OP_WITH_IO_C : OP_WITH_IO);
 		      set_opt2_pair(expr, cddr(arg2));
 		      set_opt3_sym(expr, caadr(arg2));
-		      set_opt1_any(expr, (s7_pointer)io_function(sc, c_function_call(func)));
+		      set_opt1_any(expr, (s7_pointer)io_function(c_function_call(func)));
 		      return(OPT_F);
 		    }
 		  set_unsafe_optimize_op(expr, hop + OP_C_AP);
@@ -80941,7 +80932,7 @@ static bool has_safe_steppers(s7_scheme *sc, s7_pointer let)
   return(true);
 }
 
-static bool copy_if_end_ok(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int i, s7_pointer endp, s7_pointer stepper, opt_info *o)
+static bool copy_if_end_ok(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int i, s7_pointer endp, s7_pointer stepper)
 {
   if ((fn_proc(endp) == g_num_eq_2) && (is_symbol(cadr(endp))) && (is_symbol(caddr(endp))))
     {
@@ -81194,7 +81185,7 @@ static goto_t op_dox(s7_scheme *sc)
 			     ((o->v[5].p_pip_f == vector_set_p_pip_unchecked) && (o->v[6].p_pi_f == normal_vector_ref_p_pi_unchecked)) ||
 			     ((o->v[5].p_pip_f == normal_vector_set_p_pip_direct) && (o->v[6].p_pi_f == normal_vector_ref_p_pi_direct)) ||
 			     ((o->v[5].p_pip_f == list_set_p_pip_unchecked) && (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
-			    (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper, o))))
+			    (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper))))
 			{
 			  if (is_step_end(stepper))
 			    {
@@ -81214,13 +81205,13 @@ static goto_t op_dox(s7_scheme *sc)
 			   (o->v[2].p == o->v[6].p) &&
 			   ((o->v[4].d_7pid_f == float_vector_set_d_7pid) || (o->v[4].d_7pid_f == float_vector_set_d_7pid_direct)) &&
 			   (o->v[3].d_7pi_f == float_vector_ref_d_7pi) &&
-			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), i, endp, stepper, o))) ||
+			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), i, endp, stepper))) ||
 
 			  ((bodyf == opt_int_any_nr) && ((o->v[0].fi == opt_i_7pii_ssf) || (o->v[0].fi == opt_i_7pii_ssf_vset)) &&
 			   (o->v[2].p == o->v[4].o1->v[2].p) &&
 			   (((o->v[3].i_7pii_f == int_vector_set_i_7pii) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi)) ||
 			    ((o->v[3].i_7pii_f == int_vector_set_i_7pii_direct) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi_direct))) &&
-			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper, o)))))
+			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper)))))
 		      /* here the is_step_end business doesn't happen much */
 		      do {
 			bodyf(sc);
@@ -83488,57 +83479,64 @@ static void op_f_aa(s7_scheme *sc)  /* sc->code: ((lambda (x y) (+ x y)) i j) ->
   sc->code = opt3_pair(sc->code);
 }
 
-/* TODO: rest args: need to see rest arg below either in loop or non-pair case, error checks */
-static void op_f_p(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (values i j)) -> (let ((x i) (y j)) (+ x y)) after splice */
+static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (values i j)) -> (let ((x i) (y j)) (+ x y)) after splice */
 {
-  s7_pointer e, args = cadar(sc->code);
+  s7_pointer e, pars = cadar(sc->code);
   e = make_let_slowly(sc, sc->curlet);
-  if (is_pair(args))
+  if (is_pair(pars))
     {
       s7_pointer last_slot;
-      add_slot_unchecked_no_local(sc, e, car(args), sc->undefined);
+      if (is_null(cdr(sc->code))) /* ((lambda (x) 21)) */
+	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
+      add_slot_unchecked_no_local(sc, e, car(pars), sc->undefined);
       last_slot = let_slots(e);
-      for (args = cdr(args); is_pair(args); args = cdr(args))
-	last_slot = add_slot_at_end_no_local(sc, last_slot, car(args), sc->undefined);
+      for (pars = cdr(pars); is_pair(pars); pars = cdr(pars))
+	last_slot = add_slot_at_end_no_local(sc, last_slot, car(pars), sc->undefined);
     }
   check_stack_size(sc);
   push_stack(sc, OP_GC_PROTECT, let_slots(e), cddr(sc->code));
-  push_stack(sc, OP_F_P_1, e, sc->code);
+  push_stack(sc, OP_F_NP_1, e, sc->code);
   sc->code = cadr(sc->code); 
   /* fprintf(stderr, "e: %s, sc->code: %s\n", display(e), display(sc->code)); */
 }
 
-static bool op_f_p_1(s7_scheme *sc)
+static bool op_f_np_1(s7_scheme *sc)
 {
   /* sc->value = arg value = slot value */
   s7_pointer slot, arg, e;
-  /* fprintf(stderr, "op_f_p_1: value: %s %d, code: %s\n", display(sc->value), is_multiple_value(sc->value), display(sc->code)); */
+  /* fprintf(stderr, "op_f_np_1: value: %s %d, code: %s\n", display(sc->value), is_multiple_value(sc->value), display_80(sc->code)); */
   /* fprintf(stderr, "    pro1: %s, pro2: %s\n", display(stack_protected1(sc)), display(stack_protected2(sc))); */
   slot = stack_protected1(sc);
   if (is_multiple_value(sc->value))
     {
-      s7_pointer p;
-      for (p = sc->value; is_pair(p); p = cdr(p), slot = next_slot(slot))
+      s7_pointer p, oslot = slot;
+      for (p = sc->value; (is_pair(p)) && (tis_slot(slot)); p = cdr(p), oslot = slot, slot = next_slot(slot))
 	slot_set_value(slot, car(p));
+      if (is_pair(p))
+	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+      slot = oslot; /* end up with good slot for checks and steps below */
     }
   else slot_set_value(slot, sc->value);
   arg = stack_protected2(sc);
   if (is_pair(arg))
     {
+      if (!tis_slot(next_slot(slot)))
+	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
       stack_protected1(sc) = next_slot(slot);
       stack_protected2(sc) = cdr(arg);
-      push_stack_direct(sc, OP_F_P_1); /* sc->args=e, sc->code from start */
+      push_stack_direct(sc, OP_F_NP_1); /* sc->args=e, sc->code from start */
       sc->code = car(arg);
       return(true);
     }
+  if (tis_slot(next_slot(slot)))
+    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
   e = sc->args;
   let_set_id(e, ++sc->let_number);
   set_curlet(sc, e);
   update_symbol_ids(sc, e);
   sc->code = cddar(sc->code);
-  /* fprintf(stderr, "at end: %s %s\n", display(sc->code), display(sc->curlet)); */
+  /* fprintf(stderr, "at end: %s %s\n", display_80(sc->code), display(sc->curlet)); */
   unstack(sc);
-  /* s7_show_stack(sc); */
   return(false);
 }
 
@@ -88829,28 +88827,28 @@ static bool eval_car_pair(s7_scheme *sc)
 		  set_optimize_op(code, OP_F);    	           /* ((lambda () ...)) */
 		  return(false);
 		}
-	      if ((is_pair(cadr(carc))) && (is_normal_symbol(caadr(carc))) && (!is_constant(sc, caadr(carc))) &&
-		  (is_pair(cdr(code))) && (is_fxable(sc, cadr(code))))
+	      if (is_pair(cadr(carc)))
 		{
-		  set_opt3_sym(cdr(code), caadr(carc));
-		  if ((is_null(cdadr(carc))) && (is_null(cddr(code))))
+		  if ((is_normal_symbol(caadr(carc))) && (!is_constant(sc, caadr(carc))) &&
+		      (is_pair(cdr(code))) && (is_fxable(sc, cadr(code))))
 		    {
-		      fx_annotate_args(sc, cdr(code), sc->curlet); /* ((lambda (x) ...) expr) */
-		      set_optimize_op(code, OP_F_A);
-		      return(false);
-		    }
-		  if ((is_pair(cdadr(carc))) && (is_pair(cddr(code))) && (is_fxable(sc, caddr(code))) &&
-		      (is_null(cddadr(carc))) && (is_null(cdddr(code))) &&
-		      (is_normal_symbol(cadadr(carc))) && (!is_constant(sc, cadadr(carc))) && (caadr(carc) != cadadr(carc)))
-		    {
-		      fx_annotate_args(sc, cdr(code), sc->curlet);
-		      set_optimize_op(code, OP_F_AA);              /* ((lambda (x y) ...) expr exor) */
-		      return(false);
-		    }}
-#if 0
-	      set_optimize_op(code, OP_F_P);
-#endif
-	    }
+		      set_opt3_sym(cdr(code), caadr(carc));
+		      if ((is_null(cdadr(carc))) && (is_null(cddr(code))))
+			{
+			  fx_annotate_args(sc, cdr(code), sc->curlet); /* ((lambda (x) ...) expr) */
+			  set_optimize_op(code, OP_F_A);
+			  return(false);
+			}
+		      if ((is_pair(cdadr(carc))) && (is_pair(cddr(code))) && (is_fxable(sc, caddr(code))) &&
+			  (is_null(cddadr(carc))) && (is_null(cdddr(code))) &&
+			  (is_normal_symbol(cadadr(carc))) && (!is_constant(sc, cadadr(carc))) && (caadr(carc) != cadadr(carc)))
+			{
+			  fx_annotate_args(sc, cdr(code), sc->curlet);
+			  set_optimize_op(code, OP_F_AA);              /* ((lambda (x y) ...) expr exor) */
+			  return(false);
+			}}
+		  set_optimize_op(code, OP_F_NP);
+		}}
 	  set_no_int_opt(code);
 	}
       /* ((if op1 op2) args...) is another somewhat common case */
@@ -89959,7 +89957,7 @@ static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t ty
   return(false);
 }
 
-static bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
+static bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer f;
   f = lookup_unexamined(sc, car(code));
@@ -89973,7 +89971,7 @@ static bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code, int32_t args)
 }
 
 #define closure_is_ok(Sc, Code, Type, Args)        ((symbol_ctr(car(Code)) == 1) || (closure_is_ok_1(Sc, Code, Type, Args)))
-#define closure_np_is_ok(Sc, Code, Args)           ((symbol_ctr(car(Code)) == 1) || (closure_np_is_ok_1(Sc, Code, Args)))
+#define closure_np_is_ok(Sc, Code)                 ((symbol_ctr(car(Code)) == 1) || (closure_np_is_ok_1(Sc, Code)))
 #define closure_is_fine(Sc, Code, Type, Args)      ((symbol_ctr(car(Code)) == 1) || (closure_is_fine_1(Sc, Code, Type, Args)))
 #define closure_star_is_fine(Sc, Code, Type, Args) ((symbol_ctr(car(Code)) == 1) || (closure_star_is_fine_1(Sc, Code, Type, Args)))
 
@@ -90423,8 +90421,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_F:     op_f(sc);       goto BEGIN;
 	case OP_F_A:   op_f_a(sc);     goto BEGIN;
 	case OP_F_AA:  op_f_aa(sc);    goto BEGIN;
-	case OP_F_P:   op_f_p(sc);     goto EVAL;
-	case OP_F_P_1: if (op_f_p_1(sc)) goto EVAL; goto BEGIN;
+	case OP_F_NP:  op_f_np(sc);    goto EVAL;
+	case OP_F_NP_1: if (op_f_np_1(sc)) goto EVAL; goto BEGIN;
 
 	case OP_S_A:  if (op_x_a(sc, lookup_checked(sc, car(sc->code)))) continue; goto APPLY;
 	case OP_A_A:  if (op_x_a(sc, fx_call(sc, sc->code))) continue;             goto APPLY;
@@ -90651,7 +90649,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_ANY_CLOSURE_NA: if (!check_closure_any(sc)) break;
 	case HOP_ANY_CLOSURE_NA: op_any_closure_na(sc); goto BEGIN;
 
-	case OP_ANY_CLOSURE_NP: if (!closure_np_is_ok(sc, sc->code, opt3_arglen(cdr(sc->code)))) {if (op_unknown_np(sc)) goto EVAL; continue;}
+	case OP_ANY_CLOSURE_NP: if (!closure_np_is_ok(sc, sc->code)) {if (op_unknown_np(sc)) goto EVAL; continue;}
 	case HOP_ANY_CLOSURE_NP: op_any_closure_np(sc); goto EVAL;
 	case OP_ANY_CLOSURE_NP_1:
 	  if (!(collect_np_args(sc, OP_ANY_CLOSURE_NP_1, cons(sc, sc->value, sc->args))))
@@ -95539,38 +95537,38 @@ int main(int argc, char **argv)
  * texit      1768         ----   ----   1801   1798
  * lt         2121         2123   2110   2108   2109
  * tform      3235         2281   2273   2242   2239
- * tauto                   ----   ----   2356   2280
+ * tauto                   ----   ----   2356   2282
  * tread      2606         2440   2421   2415   2419
  * tmac       2452         3317   3277   2420   2419
- * fbench     2848         2688   2583   2458   2460
+ * fbench     2848         2688   2583   2458   2461
  * trclo      4107         2735   2574   2459   2459
- * tmat       2683         3065   3042   2513   2516
- * dup        2783         3805   3788   2559   2519
+ * tmat       2683         3065   3042   2513   2527
+ * dup        2783         3805   3788   2559   2520
  * tcopy      2610         8035   5546   2536   2536
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
- * tsort      3576         3105   3104   2855   2855
- * tset       3114         3253   3104   3081   3025
- * tload      3861         ----   ----   3155   3103  3100
+ * tsort      3576         3105   3104   2855   2856
+ * tset       3114         3253   3104   3081   3026
+ * tload      3861         ----   ----   3155   3100
  * teq        3554         4068   4045   3539   3542
  * tio        3710         3816   3752   3680   3672
- * tclo       4622         4787   4735   4408   4390
- * tlet       5278         7775   5640   4435   4439
+ * tclo       4622         4787   4735   4408   4393
  * tcase      4519         4960   4793   4441   4436
+ * tlet       5278         7775   5640   4435   4439
  * tmap       5491         8869   8774   4492   4489
  * tfft      115.0         7820   7729   4778   4778
- * tshoot     6923         5525   5447   5210   5209
- * tnum       56.7         6348   6013   5439   5423
+ * tshoot     6923         5525   5447   5210   5206
+ * tnum       56.7         6348   6013   5439   5422
  * tstr       6187         6880   6342   5509   5493
  * tgsl       25.2         8485   7802   6390   6388
  * tmisc      6344         8869   7612   6472   6474
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
- * tari       ----         13.0   12.7   6860   6838  6828
- * tleft      8985         9929   9728   8006   7824
+ * tari       ----         13.0   12.7   6860   6828
+ * tleft      8985         9929   9728   8006   7822
  * tgc        10.1         11.9   11.1   8666   8643
+ * cb         16.8         11.2   11.0   9897   9686
  * thash      35.4         11.8   11.7   9711   9720
- * cb         18.8         12.2   12.2   10.3   10.2  10.0
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
@@ -95579,5 +95577,7 @@ int main(int argc, char **argv)
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
  *
- * t718 op_closure_s?
+ * set_implicit split out to special cases [from op_set2 where type is known], misc]
+ *   also misc feed_to could split out the cadr=symbol case
+ *   same abs_p_p 60 overhead?!? maybe explicit int case outside abs_p_p
  */
