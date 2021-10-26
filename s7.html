@@ -434,7 +434,7 @@ Clisp and sbcl throw an error.  Everybody agrees that <code>(expt 0 0)</code> is
 that <code>(expt 0.0 0.0)</code> is 1.0.  But <code>(expt 0 0.0)</code> and <code>(expt 0.0 0)</code> return different
 results in Guile (1 and 1.0), both are 0.0 in s7, the first is an error in Clisp, but the second returns 1,
 and so on &mdash; what a mess!  This mess was made a lot worse than it needs to be when the IEEE decreed that
-0.0 equals -0.0, so we can't tell them apart, but that they produce different results in nearly every use!  
+0.0 equals -0.0, so we can't tell them apart, but that they produce different results:  
 </p>
 
 <pre class="indented">

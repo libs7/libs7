@@ -461,7 +461,6 @@ enum {T_FREE = 0,
       NUM_TYPES};
 /* T_UNUSED, T_STACK, T_SLOT, T_DYNAMIC_WIND, T_CATCH, and T_COUNTER are internal */
 
-#if S7_DEBUGGING || SHOW_EVAL_OPS
 static const char *s7_type_names[] =
   {"free", "pair", "nil", "unused", "undefined", "unspecified", "eof_object", "boolean", "character", "syntax", "symbol",
    "integer", "ratio", "real", "complex", "big_integer", "big_ratio", "big_real", "big_complex",
@@ -471,7 +470,6 @@ static const char *s7_type_names[] =
    "closure", "closure*", "macro", "macro*", "bacro", "bacro*", "c_macro",
    "c_function*", "c_function", "c_rst_no_req_function",
    };
-#endif
 
 typedef struct block_t {
   union {
@@ -4213,7 +4211,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_TC_AND_A_OR_A_LA, OP_TC_OR_A_AND_A_LA, OP_TC_AND_A_OR_A_LAA, OP_TC_OR_A_AND_A_LAA, OP_TC_OR_A_A_AND_A_A_LA,
       OP_TC_OR_A_AND_A_A_L3A, OP_TC_AND_A_OR_A_A_LA, OP_TC_OR_A_AND_A_A_LA,
-      OP_TC_WHEN_LAA, OP_TC_LET_WHEN_LAA, OP_TC_LET_UNLESS_LAA,
+      OP_TC_WHEN_LA, OP_TC_WHEN_LAA, OP_TC_WHEN_L3A, OP_TC_LET_WHEN_LAA, OP_TC_LET_UNLESS_LAA,
       OP_TC_COND_A_Z_A_Z_LAA, OP_TC_COND_A_Z_A_LAA_Z, OP_TC_COND_A_Z_A_LAA_LAA, OP_TC_LET_COND,
       OP_TC_IF_A_Z_LA, OP_TC_IF_A_Z_LAA, OP_TC_IF_A_Z_L3A, OP_TC_IF_A_L3A_Z, OP_TC_IF_A_LA_Z, OP_TC_IF_A_LAA_Z,
       OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z, OP_TC_IF_A_Z_IF_A_L3A_L3A,
@@ -4431,7 +4429,7 @@ static const char* op_names[NUM_OPS] =
 
       "tc_and_a_or_a_la", "tc_or_a_and_a_la", "tc_and_a_or_a_laa", "tc_or_a_and_a_laa", "tc_or_a_a_and_a_a_la",
       "tc_or_a_and_a_a_l3a", "tc_and_a_or_a_a_la", "tc_or_a_and_a_a_la",
-      "tc_when_laa", "tc_let_when_laa", "tc_let_unless_laa",
+      "tc_when_la", "tc_when_laa", "tc_when_l3a", "tc_let_when_laa", "tc_let_unless_laa",
       "tc_cond_a_z_a_z_laa", "tc_cond_a_z_a_laa_z", "tc_cond_a_z_a_laa_laa", "tc_let_cond",
       "tc_if_a_z_la", "tc_if_a_z_laa", "tc_if_a_z_l3a", "tc_if_a_l3a_z", "tc_if_a_la_z", "tc_if_a_laa_z",
       "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z", "tc_if_a_z_if_a_l3a_l3a",
@@ -44821,7 +44819,6 @@ static s7_pointer g_procedure_source(s7_scheme *sc, s7_pointer args)
 	clear_safe_closure_body(body);
       return(append_in_place(sc, list_2(sc, procedure_type_to_symbol(sc, type(p)), closure_args(p)), body));
     }
-
   if (!is_procedure(p))
     return(simple_wrong_type_argument_with_type(sc, sc->procedure_source_symbol, p, a_procedure_or_a_macro_string));
   return(sc->nil);
@@ -53233,6 +53230,7 @@ fx_subtract_s1_any(fx_subtract_U1, U_lookup)
 
 fx_subtract_si_any(fx_subtract_si, s_lookup)
 fx_subtract_si_any(fx_subtract_ti, t_lookup)
+fx_subtract_si_any(fx_subtract_ui, u_lookup)
 
 
 #define fx_subtract_sf_any(Name, Lookup) \
@@ -57153,6 +57151,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_num_eq_si)   return(with_fx(tree, fx_num_eq_ui));
 	  if (fx_proc(tree) == fx_add_s1)      return(with_fx(tree, fx_add_u1));
 	  if (fx_proc(tree) == fx_subtract_s1) return(with_fx(tree, fx_subtract_u1));
+	  if (fx_proc(tree) == fx_subtract_si) return(with_fx(tree, fx_subtract_ui));
 	  if (fx_proc(tree) == fx_multiply_si) return(with_fx(tree, fx_multiply_ui));
 	  if (fx_proc(tree) == fx_is_eq_sc)    return(with_fx(tree, fx_is_eq_uc));
 	  if (fx_proc(tree) == fx_leq_si)      return(with_fx(tree, fx_leq_ui));
@@ -70306,20 +70305,30 @@ static bool check_tc_when(s7_scheme *sc, s7_pointer name, s7_pointer args, s7_po
       for (p = cddr(body); is_pair(cdr(p)); p = cdr(p))
 	if (!is_fxable(sc, car(p)))
 	  break;
-      if ((is_proper_list_1(sc, p)) &&
-	  (is_proper_list_3(sc, car(p))) &&
+      if ((is_proper_list_1(sc, p)) &&     /* i.e. p is the last form in the when body */
+	  (is_pair(car(p))) &&
 	  (caar(p) == name))
 	{
 	  s7_pointer laa = car(p);
-	  if ((is_fxable(sc, cadr(laa))) &&
-	      (is_safe_fxable(sc, caddr(laa))))
+	  if ((is_pair(cdr(laa))) && (is_fxable(sc, cadr(laa))))
 	    {
-      	      set_safe_optimize_op(body, OP_TC_WHEN_LAA);
+	      if (is_null(cddr(laa)))
+		set_safe_optimize_op(body, OP_TC_WHEN_LA);
+	      else
+		if (is_fxable(sc, caddr(laa)))
+		  {
+		    if (is_null(cdddr(laa)))
+		      set_safe_optimize_op(body, OP_TC_WHEN_LAA);
+		    else
+		      if ((is_fxable(sc, cadddr(laa))) && (is_null(cddddr(laa))))
+			set_safe_optimize_op(body, OP_TC_WHEN_L3A);
+		      else return(false);
+		  }
 	      fx_annotate_arg(sc, cdr(body), args);
 	      for (p = cddr(body); is_pair(cdr(p)); p = cdr(p))
 		fx_annotate_arg(sc, p, args);
 	      fx_annotate_args(sc, cdr(laa), args);
-	      fx_tree(sc, cdr(body), car(args), cadr(args), NULL, false);
+	      fx_tree(sc, cdr(body), car(args), (is_pair(cdr(args))) ? cadr(args) : NULL, ((is_pair(cdr(args))) && (is_pair(cddr(args)))) ? caddr(args) : NULL, false);
 	      return(true);
 	    }}}
   return(false);
@@ -71008,7 +71017,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
     return(check_tc_case(sc, name, args, body));
 
   /* when */
-  if ((vars == 2) &&
+  if ((vars >= 1) && (vars <= 3) &&
       (car(body) == sc->when_symbol) &&
       (is_fxable(sc, cadr(body))))
     return(check_tc_when(sc, name, args, body));
@@ -83275,9 +83284,11 @@ static void apply_c_function(s7_scheme *sc) 	            /* -------- C-based fun
   s7_int len;
   len = proper_list_length(sc->args);
   if (len < c_function_required_args(sc->code))
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
+    s7_error(sc, sc->wrong_number_of_args_symbol, 
+	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
   if (c_function_all_args(sc->code) < len)
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+    s7_error(sc, sc->wrong_number_of_args_symbol, 
+	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
   sc->value = c_function_call(sc->code)(sc, sc->args);
   /* just by chance, this code is identical to macroexpand_c_macro's code (after macro expansion)! So,
    *   gcc -O2 uses the macroexpand code, but then valgrind shows us calling macros all the time, and
@@ -83295,9 +83306,11 @@ static void apply_c_macro(s7_scheme *sc)  	            /* -------- C-based macro
   s7_int len;
   len = proper_list_length(sc->args);
   if (len < c_macro_required_args(sc->code))
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
+    s7_error(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
   if (c_macro_all_args(sc->code) < len)
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+    s7_error(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
   sc->code = c_macro_call(sc->code)(sc, sc->args);
 }
 
@@ -83317,11 +83330,12 @@ static void apply_syntax(s7_scheme *sc)                    /* -------- syntactic
   else len = 0;
 
   if (len < syntax_min_args(sc->code))
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
-
+    s7_error(sc, sc->wrong_number_of_args_symbol, 
+	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
   if ((syntax_max_args(sc->code) < len) &&
       (syntax_max_args(sc->code) != -1))
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+    s7_error(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
 
   sc->cur_op = syntax_opcode(sc->code);          /* (apply begin '((define x 3) (+ x 2))) */
   /* I had elaborate checks here for embedded circular lists, but now I think that is the caller's problem */
@@ -83423,12 +83437,11 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
 
   id = let_id(e);
   last_slot = slot_end(sc);
-
   for (x = closure_args(sc->code), z = T_Lst(sc->args); is_pair(x); x = cdr(x), z = cdr(z)) /* closure_args can be a symbol, for example */
     {
       if (is_null(z))
-	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
-
+	s7_error(sc, sc->wrong_number_of_args_symbol, 
+		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), closure_args(sc->code), sc->args));
       sym = car(x);
       slot = make_slot(sc, sym, T_Pos(unchecked_car(z)));
 #if S7_DEBUGGING
@@ -83444,7 +83457,8 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
   if (is_null(x))
     {
       if (is_not_null(z))
-	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+	s7_error(sc, sc->wrong_number_of_args_symbol, 
+		 set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda ~S ...)~{~^ ~S~})", 46), closure_args(sc->code), sc->args));
     }
   else
     {
@@ -83487,7 +83501,8 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
     {
       s7_pointer last_slot;
       if (is_null(cdr(sc->code))) /* ((lambda (x) 21)) */
-	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
+	s7_error(sc, sc->wrong_number_of_args_symbol, 
+		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
       add_slot_unchecked_no_local(sc, e, car(pars), sc->undefined);
       last_slot = let_slots(e);
       for (pars = cdr(pars); is_pair(pars); pars = cdr(pars))
@@ -83497,15 +83512,12 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
   push_stack(sc, OP_GC_PROTECT, let_slots(e), cddr(sc->code));
   push_stack(sc, OP_F_NP_1, e, sc->code);
   sc->code = cadr(sc->code); 
-  /* fprintf(stderr, "e: %s, sc->code: %s\n", display(e), display(sc->code)); */
 }
 
 static bool op_f_np_1(s7_scheme *sc)
 {
   /* sc->value = arg value = slot value */
   s7_pointer slot, arg, e;
-  /* fprintf(stderr, "op_f_np_1: value: %s %d, code: %s\n", display(sc->value), is_multiple_value(sc->value), display_80(sc->code)); */
-  /* fprintf(stderr, "    pro1: %s, pro2: %s\n", display(stack_protected1(sc)), display(stack_protected2(sc))); */
   slot = stack_protected1(sc);
   if (is_multiple_value(sc->value))
     {
@@ -83513,7 +83525,8 @@ static bool op_f_np_1(s7_scheme *sc)
       for (p = sc->value; (is_pair(p)) && (tis_slot(slot)); p = cdr(p), oslot = slot, slot = next_slot(slot))
 	slot_set_value(slot, car(p));
       if (is_pair(p))
-	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+	s7_error(sc, sc->wrong_number_of_args_symbol, 
+		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
       slot = oslot; /* end up with good slot for checks and steps below */
     }
   else slot_set_value(slot, sc->value);
@@ -83521,7 +83534,8 @@ static bool op_f_np_1(s7_scheme *sc)
   if (is_pair(arg))
     {
       if (!tis_slot(next_slot(slot)))
-	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+	s7_error(sc, sc->wrong_number_of_args_symbol,
+		 set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda ~S ...)~{~^ ~S~})", 46), cadar(sc->code), cdr(sc->code)));
       stack_protected1(sc) = next_slot(slot);
       stack_protected2(sc) = cdr(arg);
       push_stack_direct(sc, OP_F_NP_1); /* sc->args=e, sc->code from start */
@@ -83529,18 +83543,17 @@ static bool op_f_np_1(s7_scheme *sc)
       return(true);
     }
   if (tis_slot(next_slot(slot)))
-    s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
+    s7_error(sc, sc->wrong_number_of_args_symbol, 
+	     set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
   e = sc->args;
   let_set_id(e, ++sc->let_number);
   set_curlet(sc, e);
   update_symbol_ids(sc, e);
   sc->code = cddar(sc->code);
-  /* fprintf(stderr, "at end: %s %s\n", display_80(sc->code), display(sc->curlet)); */
   unstack(sc);
   return(false);
 }
 
-/* lambda* */
 static void op_lambda_star(s7_scheme *sc)
 {
   check_lambda_star(sc);
@@ -83685,7 +83698,8 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
       else
 	{
 	  if (!allow_other_keys)                       /* ((lambda* (a) a) :a 1 2) */
-	    return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, closure_name(sc, code), args)));
+	    return(s7_error(sc, sc->wrong_number_of_args_symbol, 
+			    set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda* ~S ...)~{~^ ~S~})", 46), closure_args(code), args)));
 	  /* check trailing args for repeated keys or keys with no values or values with no keys */
 	  while (is_pair(lx))
 	    {
@@ -83707,9 +83721,7 @@ static inline bool lambda_star_default(s7_scheme *sc)
   while (true)
     {
       s7_pointer z = sc->args;
-#if S7_DEBUGGING
-      if ((z) && (!is_slot(z))) fprintf(stderr, "%s: z is %s\n", __func__, s7_type_names[unchecked_type(z)]);
-#endif
+      if ((S7_DEBUGGING) && (z) && (!is_slot(z))) fprintf(stderr, "%s: z is %s\n", __func__, s7_type_names[unchecked_type(z)]);
       if (tis_slot(z))
 	{
 	  if ((slot_value(z) == sc->undefined) &&    /* trouble: (lambda* ((e #<undefined>))...) */
@@ -85714,6 +85726,22 @@ static s7_pointer fx_tc_cond_a_laa_z(s7_scheme *sc, s7_pointer arg)
   return(sc->value);
 }
 
+static void op_tc_when_la(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer if_test = cadr(code), body = cddr(code), la_call, la, la_slot = let_slots(sc->curlet);
+  s7_function tf;
+  tf = fx_proc(cdr(code));
+  for (la_call = body; is_pair(cdr(la_call)); la_call = cdr(la_call));
+  la = cdar(la_call);
+  while (tf(sc, if_test) != sc->F)
+    {
+      s7_pointer p;
+      for (p = body; p != la_call; p = cdr(p)) fx_call(sc, p);
+      slot_set_value(la_slot, fx_call(sc, la));
+    }
+  sc->value = sc->unspecified;
+}
+
 static void op_tc_when_laa(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer if_test = cadr(code), body = cddr(code), la_call, la, laa, laa_slot, la_slot = let_slots(sc->curlet);
@@ -85729,6 +85757,30 @@ static void op_tc_when_laa(s7_scheme *sc, s7_pointer code)
       for (p = body; p != la_call; p = cdr(p)) fx_call(sc, p);
       sc->rec_p1 = fx_call(sc, la);
       slot_set_value(laa_slot, fx_call(sc, laa));
+      slot_set_value(la_slot, sc->rec_p1);
+    }
+  sc->value = sc->unspecified;
+}
+
+static void op_tc_when_l3a(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer if_test = cadr(code), body = cddr(code), la_call, la, laa, l3a, l3a_slot, laa_slot, la_slot = let_slots(sc->curlet);
+  s7_function tf;
+  tf = fx_proc(cdr(code));
+  for (la_call = body; is_pair(cdr(la_call)); la_call = cdr(la_call));
+  la = cdar(la_call);
+  laa = cdr(la);
+  l3a = cdr(laa);
+  laa_slot = next_slot(la_slot);
+  l3a_slot = next_slot(laa_slot);
+  while (tf(sc, if_test) != sc->F)
+    {
+      s7_pointer p;
+      for (p = body; p != la_call; p = cdr(p)) fx_call(sc, p);
+      sc->rec_p1 = fx_call(sc, la);
+      sc->rec_p2 = fx_call(sc, laa);
+      slot_set_value(l3a_slot, fx_call(sc, l3a));
+      slot_set_value(laa_slot, sc->rec_p2);
       slot_set_value(la_slot, sc->rec_p1);
     }
   sc->value = sc->unspecified;
@@ -89031,10 +89083,7 @@ static bool op_unknown(s7_scheme *sc)
     unbound_variable_error(sc, car(sc->code));
   /* perhaps set op to OP_CLEAR_OPTS and return(true) above */
 
-#if SHOW_EVAL_OPS
-  fprintf(stderr, "%s %s %s\n", __func__, display(f), s7_type_names[type(f)]);
-#endif
-
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s %s %s\n", __func__, display(f), s7_type_names[type(f)]);
   code = sc->code;
   switch (type(f))
     {
@@ -90683,7 +90732,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_TC_IF_A_Z_LAA:            tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_laa(sc, sc->code, true, TC_IF))         continue; goto EVAL;
 	case OP_TC_COND_A_Z_LAA:          tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_laa(sc, sc->code, true, TC_COND))       continue; goto EVAL;
 	case OP_TC_COND_A_LAA_Z:          tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_laa(sc, sc->code, false, TC_COND))      continue; goto EVAL;
+	case OP_TC_WHEN_LA:               tick_tc(sc, sc->cur_op); op_tc_when_la(sc, sc->code);                             continue;
 	case OP_TC_WHEN_LAA:              tick_tc(sc, sc->cur_op); op_tc_when_laa(sc, sc->code);                            continue;
+	case OP_TC_WHEN_L3A:              tick_tc(sc, sc->cur_op); op_tc_when_l3a(sc, sc->code);                            continue;
 
 	case OP_TC_IF_A_Z_L3A:            tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_l3a(sc, sc->code, true))                continue; goto EVAL;
 	case OP_TC_IF_A_L3A_Z:            tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_l3a(sc, sc->code, false))               continue; goto EVAL;
@@ -90895,9 +90946,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	APPLY:
 	case OP_APPLY:
 	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */
-#if SHOW_EVAL_OPS
-	  safe_print(fprintf(stderr, "  apply %s (%s) to %s\n", display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
-#endif
+	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  apply %s (%s) to %s\n", display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
 	    case T_C_FUNCTION:          apply_c_function(sc);           continue;
@@ -91355,10 +91404,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_PPP:      sc->code = (sc->value != sc->F) ? car(sc->code) : cadr(sc->code); goto EVAL;
 	case OP_IF_PRR:      sc->code = (sc->value == sc->F) ? car(sc->code) : cadr(sc->code); goto EVAL;
 
-	case OP_COND_FEED:   if (op_cond_feed(sc)) goto EVAL; /* else fall through */
-	case OP_COND_FEED_1: if (op_cond_feed_1(sc)) goto EVAL; continue;
-
-
 	case OP_WHEN:        check_when(sc);                   goto EVAL;
 	case OP_WHEN_S:      if (op_when_s(sc)) continue;      goto EVAL;
 	case OP_WHEN_A:      if (op_when_a(sc)) continue;      goto EVAL;
@@ -91375,96 +91420,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_UNLESS_PP:   if (op_unless_pp(sc)) continue;   goto EVAL;
 
 
-	case OP_NAMED_LET_NO_VARS: op_named_let_no_vars(sc);   goto BEGIN;
-	case OP_NAMED_LET:	   if (op_named_let(sc))       goto BEGIN; goto EVAL;
-	case OP_NAMED_LET_A:       op_named_let_a(sc);         goto BEGIN;
-	case OP_NAMED_LET_AA:      op_named_let_aa(sc);        goto BEGIN;
-	case OP_NAMED_LET_FX:      if (op_named_let_fx(sc))    goto BEGIN; goto EVAL;
-
-	case OP_LET: 	           if (op_let(sc))             goto BEGIN; goto EVAL;
-	case OP_LET_UNCHECKED:	   if (op_let_unchecked(sc))   goto BEGIN; goto EVAL;
-	case OP_LET1:	           if (op_let1(sc))            goto BEGIN; goto EVAL;
-	case OP_LET_NO_VARS: 	   op_let_no_vars(sc);	       goto BEGIN;
-
-	case OP_LET_A_A_OLD:       op_let_a_a_old(sc);         continue;
-	case OP_LET_A_A_NEW:       op_let_a_a_new(sc);         continue;
-	case OP_LET_A_FX_OLD:      op_let_a_fx_old(sc);        continue;
-	case OP_LET_A_FX_NEW:      op_let_a_fx_new(sc);        continue;
-	case OP_LET_FX_OLD: 	   op_let_fx_old(sc);	       goto BEGIN;
-	case OP_LET_FX_NEW: 	   op_let_fx_new(sc);	       goto BEGIN;
-	case OP_LET_2A_OLD: 	   op_let_2a_old(sc);	       goto EVAL;
-	case OP_LET_2A_NEW: 	   op_let_2a_new(sc);	       goto EVAL;
-	case OP_LET_3A_OLD: 	   op_let_3a_old(sc);	       goto EVAL;
-	case OP_LET_3A_NEW: 	   op_let_3a_new(sc);	       goto EVAL;
-	case OP_LET_ONE_OLD:	   op_let_one_old(sc);	       goto EVAL;
-	case OP_LET_ONE_NEW:	   op_let_one_new(sc);	       goto EVAL;
-	case OP_LET_ONE_P_OLD: 	   op_let_one_p_old(sc);       goto EVAL;
-	case OP_LET_ONE_P_NEW: 	   op_let_one_p_new(sc);       goto EVAL;
-
-	case OP_LET_A_OLD:         op_let_a_old(sc); sc->code = cdr(sc->code);  goto BEGIN;
-	case OP_LET_A_NEW:         op_let_a_new(sc); sc->code = cdr(sc->code);  goto BEGIN;
-	case OP_LET_A_OLD_2:       op_let_a_old(sc); push_stack_no_args(sc, OP_EVAL, caddr(sc->code)); sc->code = cadr(sc->code); goto EVAL;
-	case OP_LET_A_NEW_2:       op_let_a_new(sc); push_stack_no_args(sc, OP_EVAL, caddr(sc->code)); sc->code = cadr(sc->code); goto EVAL;
-	case OP_LET_A_P_OLD:       op_let_a_old(sc); sc->code = cadr(sc->code); goto EVAL;
-	case OP_LET_A_P_NEW:       op_let_a_new(sc); sc->code = cadr(sc->code); goto EVAL;
-	case OP_LET_ONE_OLD_1:     op_let_one_old_1(sc);   goto BEGIN;
-	case OP_LET_ONE_P_OLD_1:   op_let_one_p_old_1(sc); goto EVAL;
-	case OP_LET_ONE_NEW_1:	   sc->curlet = make_let_with_slot(sc, sc->curlet, opt2_sym(sc->code), sc->value); goto BEGIN;
-	case OP_LET_ONE_P_NEW_1:   sc->curlet = make_let_with_slot(sc, sc->curlet, opt2_sym(sc->code), sc->value); sc->code = car(sc->code); goto EVAL;
-	case OP_LET_opaSSq_OLD:    op_let_opassq_old(sc);   goto BEGIN;
-	case OP_LET_opaSSq_NEW:    op_let_opassq_new(sc);   goto BEGIN;
-
-	case OP_LET_STAR_FX:       op_let_star_fx(sc);     goto BEGIN;
-	case OP_LET_STAR_FX_A:     op_let_star_fx_a(sc);   continue;
-
-	case OP_NAMED_LET_STAR:    op_named_let_star(sc);  goto EVAL;
-	case OP_LET_STAR2:         op_let_star2(sc);       goto EVAL;
-	case OP_LET_STAR:          if (check_let_star(sc)) goto EVAL; goto BEGIN;
-	case OP_LET_STAR1:         if (op_let_star1(sc))   goto EVAL; goto BEGIN;
-	case OP_LET_STAR_SHADOWED: if (op_let_star_shadowed(sc)) goto EVAL; goto BEGIN;
-
-	case OP_LETREC:            check_letrec(sc, true);
-	case OP_LETREC_UNCHECKED:  if (op_letrec_unchecked(sc)) goto EVAL; goto BEGIN;
-	case OP_LETREC1:           if (op_letrec1(sc)) goto EVAL; goto BEGIN;
-
-	case OP_LETREC_STAR:           check_letrec(sc, false);
-	case OP_LETREC_STAR_UNCHECKED: if (op_letrec_star_unchecked(sc)) goto EVAL; goto BEGIN;
-	case OP_LETREC_STAR1:          if (op_letrec_star1(sc)) goto EVAL; goto BEGIN;
-
-
-	case OP_LET_TEMPORARILY: check_let_temporarily(sc);
-	case OP_LET_TEMP_UNCHECKED: op_let_temp_unchecked(sc); goto LET_TEMP_INIT1;
-
-	case OP_LET_TEMP_INIT1:
-	  set_caddr(sc->args, cons(sc, sc->value, caddr(sc->args)));
-	LET_TEMP_INIT1:
-	  if (op_let_temp_init1(sc)) goto EVAL;
-	case OP_LET_TEMP_INIT2:
-	  switch (op_let_temp_init2(sc))
-	    {
-	    case goto_begin: goto BEGIN;
-	    case goto_eval:  goto EVAL;
-	    default: break;
-	    }
-
-	case OP_LET_TEMP_DONE:  push_stack(sc, OP_GC_PROTECT, sc->args, sc->value); /* fall through */
-	case OP_LET_TEMP_DONE1: if (op_let_temp_done1(sc)) continue; goto EVAL;
-
-	case OP_LET_TEMP_S7:     if(op_let_temp_s7(sc))      goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_FX:     if (op_let_temp_fx(sc))     goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_FX_1:   if (op_let_temp_fx_1(sc))   goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_SETTER: if (op_let_temp_setter(sc)) goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_A_A:    sc->value = fx_let_temp_a_a(sc, sc->code); continue;
-
-	case OP_LET_TEMP_UNWIND:        op_let_temp_unwind(sc);        continue;
-	case OP_LET_TEMP_S7_UNWIND:     op_let_temp_s7_unwind(sc);     continue;
-	case OP_LET_TEMP_SETTER_UNWIND: op_let_temp_setter_unwind(sc); continue;
-
+	case OP_COND_FEED:   if (op_cond_feed(sc)) goto EVAL; /* else fall through */
+	case OP_COND_FEED_1: if (op_cond_feed_1(sc)) goto EVAL; continue;
 
 	case OP_COND:           check_cond(sc);
 	case OP_COND_UNCHECKED: if (op_cond_unchecked(sc)) goto EVAL;
 	case OP_COND1:          if (op_cond1(sc)) goto TOP_NO_POP;
-
+	  /* else fall though */
 	FEED_TO:
 	  if (feed_to(sc)) goto APPLY;
 	  goto EVAL;
@@ -91551,6 +91513,92 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_OR_S_TYPE_2: sc->value = fx_or_s_type_2(sc, sc->code); continue;
 	case OP_OR_3A:       sc->value = fx_or_3a(sc, sc->code);       continue;
 	case OP_OR_N:        sc->value = fx_or_n(sc, sc->code);        continue;
+
+
+	case OP_NAMED_LET_NO_VARS: op_named_let_no_vars(sc);   goto BEGIN;
+	case OP_NAMED_LET:	   if (op_named_let(sc))       goto BEGIN; goto EVAL;
+	case OP_NAMED_LET_A:       op_named_let_a(sc);         goto BEGIN;
+	case OP_NAMED_LET_AA:      op_named_let_aa(sc);        goto BEGIN;
+	case OP_NAMED_LET_FX:      if (op_named_let_fx(sc))    goto BEGIN; goto EVAL;
+
+	case OP_LET: 	           if (op_let(sc))             goto BEGIN; goto EVAL;
+	case OP_LET_UNCHECKED:	   if (op_let_unchecked(sc))   goto BEGIN; goto EVAL;
+	case OP_LET1:	           if (op_let1(sc))            goto BEGIN; goto EVAL;
+	case OP_LET_NO_VARS: 	   op_let_no_vars(sc);	       goto BEGIN;
+
+	case OP_LET_A_A_OLD:       op_let_a_a_old(sc);         continue;
+	case OP_LET_A_A_NEW:       op_let_a_a_new(sc);         continue;
+	case OP_LET_A_FX_OLD:      op_let_a_fx_old(sc);        continue;
+	case OP_LET_A_FX_NEW:      op_let_a_fx_new(sc);        continue;
+	case OP_LET_FX_OLD: 	   op_let_fx_old(sc);	       goto BEGIN;
+	case OP_LET_FX_NEW: 	   op_let_fx_new(sc);	       goto BEGIN;
+	case OP_LET_2A_OLD: 	   op_let_2a_old(sc);	       goto EVAL;
+	case OP_LET_2A_NEW: 	   op_let_2a_new(sc);	       goto EVAL;
+	case OP_LET_3A_OLD: 	   op_let_3a_old(sc);	       goto EVAL;
+	case OP_LET_3A_NEW: 	   op_let_3a_new(sc);	       goto EVAL;
+	case OP_LET_ONE_OLD:	   op_let_one_old(sc);	       goto EVAL;
+	case OP_LET_ONE_NEW:	   op_let_one_new(sc);	       goto EVAL;
+	case OP_LET_ONE_P_OLD: 	   op_let_one_p_old(sc);       goto EVAL;
+	case OP_LET_ONE_P_NEW: 	   op_let_one_p_new(sc);       goto EVAL;
+
+	case OP_LET_A_OLD:         op_let_a_old(sc); sc->code = cdr(sc->code);  goto BEGIN;
+	case OP_LET_A_NEW:         op_let_a_new(sc); sc->code = cdr(sc->code);  goto BEGIN;
+	case OP_LET_A_OLD_2:       op_let_a_old(sc); push_stack_no_args(sc, OP_EVAL, caddr(sc->code)); sc->code = cadr(sc->code); goto EVAL;
+	case OP_LET_A_NEW_2:       op_let_a_new(sc); push_stack_no_args(sc, OP_EVAL, caddr(sc->code)); sc->code = cadr(sc->code); goto EVAL;
+	case OP_LET_A_P_OLD:       op_let_a_old(sc); sc->code = cadr(sc->code); goto EVAL;
+	case OP_LET_A_P_NEW:       op_let_a_new(sc); sc->code = cadr(sc->code); goto EVAL;
+	case OP_LET_ONE_OLD_1:     op_let_one_old_1(sc);   goto BEGIN;
+	case OP_LET_ONE_P_OLD_1:   op_let_one_p_old_1(sc); goto EVAL;
+	case OP_LET_ONE_NEW_1:	   sc->curlet = make_let_with_slot(sc, sc->curlet, opt2_sym(sc->code), sc->value); goto BEGIN;
+	case OP_LET_ONE_P_NEW_1:   sc->curlet = make_let_with_slot(sc, sc->curlet, opt2_sym(sc->code), sc->value); sc->code = car(sc->code); goto EVAL;
+	case OP_LET_opaSSq_OLD:    op_let_opassq_old(sc);   goto BEGIN;
+	case OP_LET_opaSSq_NEW:    op_let_opassq_new(sc);   goto BEGIN;
+
+	case OP_LET_STAR_FX:       op_let_star_fx(sc);     goto BEGIN;
+	case OP_LET_STAR_FX_A:     op_let_star_fx_a(sc);   continue;
+
+	case OP_NAMED_LET_STAR:    op_named_let_star(sc);  goto EVAL;
+	case OP_LET_STAR2:         op_let_star2(sc);       goto EVAL;
+	case OP_LET_STAR:          if (check_let_star(sc)) goto EVAL; goto BEGIN;
+	case OP_LET_STAR1:         if (op_let_star1(sc))   goto EVAL; goto BEGIN;
+	case OP_LET_STAR_SHADOWED: if (op_let_star_shadowed(sc)) goto EVAL; goto BEGIN;
+
+	case OP_LETREC:            check_letrec(sc, true);
+	case OP_LETREC_UNCHECKED:  if (op_letrec_unchecked(sc)) goto EVAL; goto BEGIN;
+	case OP_LETREC1:           if (op_letrec1(sc)) goto EVAL; goto BEGIN;
+
+	case OP_LETREC_STAR:           check_letrec(sc, false);
+	case OP_LETREC_STAR_UNCHECKED: if (op_letrec_star_unchecked(sc)) goto EVAL; goto BEGIN;
+	case OP_LETREC_STAR1:          if (op_letrec_star1(sc)) goto EVAL; goto BEGIN;
+
+
+	case OP_LET_TEMPORARILY: check_let_temporarily(sc);
+	case OP_LET_TEMP_UNCHECKED: op_let_temp_unchecked(sc); goto LET_TEMP_INIT1;
+
+	case OP_LET_TEMP_INIT1:
+	  set_caddr(sc->args, cons(sc, sc->value, caddr(sc->args)));
+	LET_TEMP_INIT1:
+	  if (op_let_temp_init1(sc)) goto EVAL;
+	case OP_LET_TEMP_INIT2:
+	  switch (op_let_temp_init2(sc))
+	    {
+	    case goto_begin: goto BEGIN;
+	    case goto_eval:  goto EVAL;
+	    default: break;
+	    }
+
+	case OP_LET_TEMP_DONE:  push_stack(sc, OP_GC_PROTECT, sc->args, sc->value); /* fall through */
+	case OP_LET_TEMP_DONE1: if (op_let_temp_done1(sc)) continue; goto EVAL;
+
+	case OP_LET_TEMP_S7:     if(op_let_temp_s7(sc))      goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_FX:     if (op_let_temp_fx(sc))     goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_FX_1:   if (op_let_temp_fx_1(sc))   goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_SETTER: if (op_let_temp_setter(sc)) goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_A_A:    sc->value = fx_let_temp_a_a(sc, sc->code); continue;
+
+	case OP_LET_TEMP_UNWIND:        op_let_temp_unwind(sc);        continue;
+	case OP_LET_TEMP_S7_UNWIND:     op_let_temp_s7_unwind(sc);     continue;
+	case OP_LET_TEMP_SETTER_UNWIND: op_let_temp_setter_unwind(sc); continue;
 
 
 	case OP_EVAL_MACRO:    op_eval_macro(sc);                  goto EVAL;
@@ -93037,6 +93085,11 @@ static void init_fx_function(void)
   fx_function[OP_TC_OR_A_AND_A_A_L3A] = fx_tc_or_a_and_a_a_l3a;
   fx_function[OP_TC_LET_IF_A_Z_LA] = fx_tc_let_if_a_z_la;
   fx_function[OP_TC_LET_IF_A_Z_LAA] = fx_tc_let_if_a_z_laa;
+#if 0
+  fx_function[OP_TC_WHEN_LA] = fx_tc_when_la;
+  fx_function[OP_TC_WHEN_LAA] = fx_tc_when_laa;
+  fx_function[OP_TC_WHEN_L3A] = fx_tc_when_l3a;
+#endif
   fx_function[OP_TC_LET_WHEN_LAA] = fx_tc_let_when_laa;
   fx_function[OP_TC_LET_UNLESS_LAA] = fx_tc_let_unless_laa;
   fx_function[OP_TC_LET_COND] = fx_tc_let_cond;
@@ -95137,7 +95190,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 922) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 924) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95536,48 +95589,49 @@ int main(int argc, char **argv)
  * s7test     4506         1873   1831   1784   1807
  * texit      1768         ----   ----   1801   1798
  * lt         2121         2123   2110   2108   2109
- * tform      3235         2281   2273   2242   2239
+ * tform      3235         2281   2273   2242   2240
  * tauto                   ----   ----   2356   2282
- * tread      2606         2440   2421   2415   2419
+ * tread      2606         2440   2421   2415   2417
  * tmac       2452         3317   3277   2420   2419
  * fbench     2848         2688   2583   2458   2461
  * trclo      4107         2735   2574   2459   2459
- * tmat       2683         3065   3042   2513   2527
- * dup        2783         3805   3788   2559   2520
+ * tmat       2683         3065   3042   2513   2519
+ * dup        2783         3805   3788   2559   2528
  * tcopy      2610         8035   5546   2536   2536
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2856
  * tset       3114         3253   3104   3081   3026
- * tload      3861         ----   ----   3155   3100
+ * tload      3861         ----   ----   3155   3099
  * teq        3554         4068   4045   3539   3542
- * tio        3710         3816   3752   3680   3672
- * tclo       4622         4787   4735   4408   4393
+ * tio        3710         3816   3752   3680   3673
+ * tclo       4622         4787   4735   4408   4390
  * tcase      4519         4960   4793   4441   4436
- * tlet       5278         7775   5640   4435   4439
+ * tlet       5278         7775   5640   4435   4436
  * tmap       5491         8869   8774   4492   4489
  * tfft      115.0         7820   7729   4778   4778
  * tshoot     6923         5525   5447   5210   5206
- * tnum       56.7         6348   6013   5439   5422
- * tstr       6187         6880   6342   5509   5493
+ * tnum       56.7         6348   6013   5439   5420
+ * tstr       6187         6880   6342   5509   5495
  * tgsl       25.2         8485   7802   6390   6388
  * tmisc      6344         8869   7612   6472   6474
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
  * tari       ----         13.0   12.7   6860   6828
- * tleft      8985         9929   9728   8006   7822
+ * tleft      8985         9929   9728   8006   7688
  * tgc        10.1         11.9   11.1   8666   8643
  * cb         16.8         11.2   11.0   9897   9686
  * thash      35.4         11.8   11.7   9711   9720
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   56.1
+ * sg         75.8         ----   ----   55.9   55.9
  * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
  *
  * set_implicit split out to special cases [from op_set2 where type is known], misc]
  *   also misc feed_to could split out the cadr=symbol case
- *   same abs_p_p 60 overhead?!? maybe explicit int case outside abs_p_p
+ * s7test when_la|l3a for error checks
+ * func name where possible in errors, check these
  */
