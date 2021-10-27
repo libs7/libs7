@@ -13,7 +13,7 @@
 ;;; --------------------------------------------------------------------------------
 ;OP_TC_WHEN_LA and unless cases
 
-(define (f1 x)
+(define (f1 x)     ; now op_tc_when_la
   (when (> x 0)    ; fx_gt_ti
     (f1 (- x 1)))) ; fx_subtract_t1
 
@@ -24,6 +24,21 @@
     (f2 (- x 1)))) ; fx_subtract_t1 
 
 (f2 tc-size)  ; safe_closure_a_o[checked] op_if_a_r
+
+;;; --------------------------------------------------------------------------------
+;OP_TC_WHEN_L3A and unless cases
+
+(define (f11 x y z)                 ; now op_tc_when_l3a
+  (when (> x 0)                     ; fx_gt_ti
+    (f11 (- x 1) (- y 2) (+ z 1)))) ; op_safe_closure_3a fx_add_v1 [subtract]
+
+(f11 tc-size 2 3) 
+
+(define (f12 x y z)
+  (unless (<= x 0)                  ; fx_leq_ti
+    (f12 (- x 1) y z)))             ; op_safe_closure_agg fx_subtract_t1 fx_u fx_v
+
+(f12 tc-size 1 2)
 
 ;;; --------------------------------------------------------------------------------
 ;OP_TC_IF_A_Z_IF_A_Z_L3A and reverse
@@ -49,24 +64,31 @@
 ;;; --------------------------------------------------------------------------------
 ;OP_TC_IF_A_LA_IF_A_Z[_Z] -- already handled:
 
-(define (f5 x) 
+(define (f5 x)        ; op_tc_if_a_la_z
   (if (>= x 0)        ; opt_b_ii_sc_geq_0
       (f5 (- x 1))    ; opt_i_ii_sc_sub
       (if (< x 0)
 	  x
 	  'oops!)))
 
-(f5 tc-size) ; op_tc_if_a_la_z
+(f5 tc-size) 
 
 ;;; --------------------------------------------------------------------------------
-;OP_TC_AND_A_OR_A_L3A
+;OP_TC_AND_A_OR_A_L3A and OP_TC_OR_A_AND_A_L3A
 
-(define (f6 x y z)
+(define (f6 x y z)                   ; now op_tc_and_a_or_a_l3a (also op_tc_or_a_and_a_l3a)
   (and (> x 0)                       ; fx_gt_ti
        (or (= y 0)                   ; fx_num_eq_u0
 	   (f6 (- x 1) (- y 1) 0)))) ; fx_subtract_t|u1
 
-(f6 tc-size (* 2 tc-size) 0) ; op_safe_closure_3a[checked] op_and_ap[fx_gt_ti] op_or_ap[fx_num_eq_u0]
+(f6 tc-size (* 2 tc-size) 0)
+
+(define (f7 x y z)
+  (or (<= x 0)
+       (and (> y 0)
+	    (f7 (- x 1) (- y 1) 0))))
+
+(f7 tc-size (* 2 tc-size) 0)
 
 ;;; --------------------------------------------------------------------------------
 ;OP_TC_IF_A_Z_IF_A_Z_IF_A_Z_LA 
@@ -112,22 +134,6 @@
 	(f10 (- x 1) y z)))) ; op_safe_closure_agg  fx_subtract_s1 + fx_o
 
 (f10 tc-size (/ tc-size 10) (/ tc-size 10))
-
-;;; --------------------------------------------------------------------------------
-;OP_TC_WHEN_L3A and unless cases
-
-(define (f11 x y z)
-  (when (> x 0)                     ; fx_gt_ti
-    (f11 (- x 1) (- y 2) (+ z 1)))) ; op_safe_closure_3a fx_add_v1 [subtract]
-
-(f11 tc-size 2 3) 
-
-(define (f12 x y z)
-  (unless (<= x 0)                  ; fx_leq_ti
-    (f12 (- x 1) y z)))             ; op_safe_closure_agg fx_subtract_t1 fx_u fx_v
-
-(f12 tc-size 1 2)
-
 
 ;;; --------------------------------------------------------------------------------
 ;OP_RECUR_IF_A_A_opLAA_LAAq OP_RECUR_IF_A_opLAA_LAAq_A 
