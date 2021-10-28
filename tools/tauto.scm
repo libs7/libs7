@@ -60,7 +60,7 @@
 	     (lambda (type info)
 	       (if (and (positive? args-now)
 			(memq type '(wrong-type-arg wrong-number-of-args out-of-range syntax-error io-error
-						    division-by-zero format-error missing-method error invalid-escape-function)))
+				     division-by-zero format-error missing-method error invalid-escape-function)))
 		   (quit)))))
        
        (let ((c-args (vector-ref auto-arglists args-now)))
@@ -79,7 +79,7 @@
 		      (apply func c-args))
 		    (lambda (type info)
 		      (if (or (memq type '(wrong-number-of-args out-of-range syntax-error io-error
-								division-by-zero format-error error missing-method invalid-escape-function))
+					   division-by-zero format-error error missing-method invalid-escape-function))
 			      (and (eq? type 'wrong-type-arg)
 				   (pair? (cdr info))
 				   (pair? (cddr info))

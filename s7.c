@@ -1670,7 +1670,7 @@ static block_t *reallocate(s7_scheme *sc, block_t *op, size_t bytes)
 
 typedef enum {P_DISPLAY, P_WRITE, P_READABLE, P_KEY} use_write_t;
 
-static s7_pointer too_many_arguments_string, not_enough_arguments_string, missing_method_string, cant_bind_immutable_string,
+static s7_pointer too_many_arguments_string, not_enough_arguments_string, cant_bind_immutable_string,
   a_boolean_string, a_byte_vector_string, a_format_port_string, a_let_string, a_list_string, a_non_constant_symbol_string,
   a_non_negative_integer_string, a_normal_procedure_string, a_normal_real_string, a_number_string, a_procedure_string, a_procedure_or_a_macro_string,
   a_proper_list_string, a_random_state_object_string, a_rational_string, a_sequence_string, a_symbol_string, a_thunk_string,
@@ -4081,8 +4081,6 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_STAR_NA, HOP_SAFE_CLOSURE_STAR_NA, OP_SAFE_CLOSURE_STAR_NA_0, HOP_SAFE_CLOSURE_STAR_NA_0,
       OP_SAFE_CLOSURE_STAR_NA_1, HOP_SAFE_CLOSURE_STAR_NA_1, OP_SAFE_CLOSURE_STAR_NA_2, HOP_SAFE_CLOSURE_STAR_NA_2,
 
-      OP_CALL_WITH_EXIT, HOP_CALL_WITH_EXIT, OP_CALL_WITH_EXIT_O, HOP_CALL_WITH_EXIT_O,
-      OP_C_CATCH, HOP_C_CATCH, OP_C_CATCH_ALL, HOP_C_CATCH_ALL, OP_C_CATCH_ALL_O, HOP_C_CATCH_ALL_O, OP_C_CATCH_ALL_A, HOP_C_CATCH_ALL_A,
       OP_C_SS, HOP_C_SS, OP_C_S, HOP_C_S, OP_READ_S, HOP_READ_S, OP_C_P, HOP_C_P, OP_C_AP, HOP_C_AP,
       OP_C_A, HOP_C_A, OP_C_AA, HOP_C_AA, OP_C, HOP_C, OP_C_NA, HOP_C_NA,
 
@@ -4110,7 +4108,9 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SYM, OP_CON, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
 
       OP_READ_INTERNAL, OP_EVAL, OP_EVAL_ARGS, OP_EVAL_ARGS1, OP_EVAL_ARGS2, OP_EVAL_ARGS3, OP_EVAL_ARGS4, OP_EVAL_ARGS5,
-      OP_APPLY, OP_EVAL_MACRO, OP_LAMBDA, OP_QUOTE, OP_QUOTE_UNCHECKED, OP_MACROEXPAND, OP_CALL_CC,
+      OP_APPLY, OP_EVAL_MACRO, OP_LAMBDA, OP_QUOTE, OP_QUOTE_UNCHECKED, OP_MACROEXPAND, OP_CALL_CC, OP_CALL_WITH_EXIT, OP_CALL_WITH_EXIT_O,
+      OP_C_CATCH, OP_C_CATCH_ALL, OP_C_CATCH_ALL_O, OP_C_CATCH_ALL_A,
+
       OP_DEFINE, OP_DEFINE1, OP_BEGIN, OP_BEGIN_HOOK, OP_BEGIN_NO_HOOK, OP_BEGIN_UNCHECKED, OP_BEGIN_2_UNCHECKED, OP_BEGIN_NA, OP_BEGIN_AA,
       OP_IF, OP_IF1, OP_WHEN, OP_UNLESS, OP_SET, OP_SET1, OP_SET2,
       OP_LET, OP_LET1, OP_LET_STAR, OP_LET_STAR1, OP_LET_STAR2, OP_LET_STAR_SHADOWED,
@@ -4303,8 +4303,6 @@ static const char* op_names[NUM_OPS] =
       "safe_closure*_fx", "h_safe_closure*_fx", "safe_closure*_fx_0", "h_safe_closure*_fx_0",
       "safe_closure*_fx_1", "h_safe_closure*_fx_1", "safe_closure*_fx_2", "h_safe_closure*_fx_2",
 
-      "call_with_exit", "h_call_with_exit", "call_with_exit_o", "h_call_with_exit_o",
-      "c_catch", "h_c_catch", "c_catch_all", "h_c_catch_all", "c_catch_all_o", "h_c_catch_all_o", "c_catch_all_a", "h_c_catch_all_a",
       "c_ss", "h_c_ss", "c_s", "h_c_s", "read_s", "h_read_s", "c_p", "h_c_p", "c_ap", "h_c_ap",
       "c_a", "h_c_a", "c_aa", "h_c_aa", "c", "h_c", "c_fx", "h_c_fx",
 
@@ -4331,7 +4329,9 @@ static const char* op_names[NUM_OPS] =
       "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_ssa_direct", "h_hash_table_increment", "clear_opts",
 
       "read_internal", "eval", "eval_args", "eval_args1", "eval_args2", "eval_args3", "eval_args4", "eval_args5",
-      "apply", "eval_macro", "lambda", "quote", "quote_unchecked", "macroexpand", "call/cc",
+      "apply", "eval_macro", "lambda", "quote", "quote_unchecked", "macroexpand", "call/cc", "call_with_exit", "call_with_exit_o",
+      "c_catch", "c_catch_all", "c_catch_all_o", "c_catch_all_a",
+
       "define", "define1", "begin", "begin_hook", "begin_no_hook", "begin_unchecked", "begin_2_unchecked", "begin_na", "begin_aa",
       "if", "if1", "when", "unless", "set", "set1", "set2",
       "let", "let1", "let*", "let*1", "let*2", "let*-shadowed",
@@ -5718,7 +5718,9 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
 
 static s7_pointer missing_method_error(s7_scheme *sc, s7_pointer method, s7_pointer obj)
 {
-  return(s7_error(sc, sc->missing_method_symbol, set_elist_3(sc, missing_method_string, method, obj)));
+  return(s7_error(sc, sc->missing_method_symbol, 
+		  set_elist_3(sc, wrap_string(sc, "missing ~S method in ~A", 23), method, 
+			      (is_c_object(obj)) ? c_object_scheme_name(sc, obj) : obj)));
 }
 
 #define check_boolean_method(Sc, Checker, Method, Args)	       \
@@ -26385,7 +26387,7 @@ static void init_strings(void)
   its_nan_string =                make_permanent_string("NaN usually indicates a numerical error");
   its_infinite_string =           make_permanent_string("it is infinite");
   too_many_indices_string =       make_permanent_string("too many indices");
-  value_is_missing_string =       make_permanent_string("~A argument ~S's value is missing"); /* not '~A because it's normally a keyword */
+  value_is_missing_string =       make_permanent_string("~A ~S's value is missing"); /* not '~A because it's normally a keyword */
   parameter_set_twice_string =    make_permanent_string("parameter set twice, ~S in ~S");
   immutable_error_string =        make_permanent_string("can't ~S ~S (it is immutable)");
   no_setter_string =              make_permanent_string("~A (~A) does not have a setter");
@@ -26404,7 +26406,6 @@ static void init_strings(void)
 
   too_many_arguments_string = make_permanent_string("~S: too many arguments: ~A");
   not_enough_arguments_string = make_permanent_string("~S: not enough arguments: ~A");
-  missing_method_string = make_permanent_string("missing ~S method in ~S");
 }
 
 
@@ -30113,8 +30114,6 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 {
   FILE* fp;
-  if (is_directory(filename))
-    return(NULL);
   fp = fopen(filename, "r");
 #if WITH_GCC
   if ((!fp) && /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
@@ -30180,6 +30179,7 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   if (port) return(port);
 #endif
 
+  if (is_directory(filename)) return(NULL);
   port = load_file_1(sc, filename);
   if (!port) return(NULL);
 
@@ -30271,9 +30271,12 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
   else sc->curlet = sc->nil;
 
   fname = string_value(name);
-  if ((!fname) || (!(*fname)))                 /* fopen("", "r") returns a file pointer?? */
+  if ((!fname) || (!(*fname)))   /* fopen("", "r") returns a file pointer?? */
     return(s7_error(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "load's first argument, ~S, should be a filename", 47), name)));
 
+  if (is_directory(fname))
+    return(s7_error(sc, sc->io_error_symbol, 
+		    set_elist_2(sc, wrap_string(sc, "load: ~S is a directory", 23), wrap_string(sc, fname, safe_strlen(fname)))));
 #if WITH_C_LOADER
   {
     s7_pointer p;
@@ -53864,6 +53867,7 @@ static s7_pointer fx_gt_tT(s7_scheme *sc, s7_pointer arg)
 
 fx_gt_si_any(fx_gt_si, s_lookup)
 fx_gt_si_any(fx_gt_ti, t_lookup)
+fx_gt_si_any(fx_gt_ui, u_lookup)
 
 static s7_pointer fx_leq_ss(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_leq_ts(s7_scheme *sc, s7_pointer arg) {return(leq_p_pp(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
@@ -57184,6 +57188,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_multiply_si) return(with_fx(tree, fx_multiply_ui));
 	  if (fx_proc(tree) == fx_is_eq_sc)    return(with_fx(tree, fx_is_eq_uc));
 	  if (fx_proc(tree) == fx_leq_si)      return(with_fx(tree, fx_leq_ui));
+	  if (fx_proc(tree) == fx_gt_si)       return(with_fx(tree, fx_gt_ui));
 	  return(false);
 	}
       if (cadr(p) == var3)
@@ -70264,8 +70269,8 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 		    if (c_function_call(func) == g_call_with_exit)
 		      {
 			if (is_null(cdddr(lambda_expr)))
-			  set_unsafe_optimize_op(expr, hop + OP_CALL_WITH_EXIT_O);
-			else set_unsafe_optimize_op(expr, hop + OP_CALL_WITH_EXIT);
+			  set_unsafe_optimize_op(expr, OP_CALL_WITH_EXIT_O);
+			else set_unsafe_optimize_op(expr, OP_CALL_WITH_EXIT);
 		      }
 		    else
 		      {
@@ -72736,7 +72741,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 		       ((car(error_result) == sc->car_symbol) &&
 			(cadr(error_result) == cadr(error_lambda))))) /* (lambda args (car args) -> error-type */
 		    {
-		      set_optimize_op(expr, hop + OP_C_CATCH_ALL);    /* catch_all* = #t tag, error handling can skip to the simple lambda body */
+		      set_optimize_op(expr, OP_C_CATCH_ALL);    /* catch_all* = #t tag, error handling can skip to the simple lambda body */
 		      set_c_function(expr, func);
 		      set_opt2_con(expr, error_result);
 		      set_opt1_pair(cdr(expr), cddr(body_lambda));
@@ -72744,18 +72749,18 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 			{
 			  if (is_fxable(sc, caddr(body_lambda)))
 			    {
-			      set_optimize_op(expr, hop + OP_C_CATCH_ALL_A);
+			      set_optimize_op(expr, OP_C_CATCH_ALL_A);
 			      set_fx_direct(cddr(body_lambda), fx_choose(sc, cddr(body_lambda), sc->curlet, let_symbol_is_safe));
 			    }
 			  else
 			    {
 			      set_opt1_pair(cdr(expr), caddr(body_lambda));
-			      set_optimize_op(expr, hop + OP_C_CATCH_ALL_O);
+			      set_optimize_op(expr, OP_C_CATCH_ALL_O);
 			      /* fn got no hits */
 			    }}}
 		  else
 		    {
-		      set_optimize_op(expr, hop + OP_C_CATCH); /* mainly c_catch_p, but this is not a common case */
+		      set_optimize_op(expr, OP_C_CATCH); /* mainly c_catch_p, but this is not a common case */
 		      choose_c_function(sc, expr, func, 3);
 		    }
 		  return(OPT_F);
@@ -73903,22 +73908,21 @@ static bool symbol_is_in_arg_list(s7_pointer sym, s7_pointer lst)
   return(sym == x);
 }
 
-static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity)
+static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7_pointer form)
 {
   s7_pointer x;
   int32_t i;
 
   if (!is_list(args))
     {
-      if (is_constant(sc, args))                       /* (lambda :a ...) */
-	eval_error(sc, "lambda parameter '~S is a constant", 34, args); /* not ~A here, (lambda #\null do) for example */
+      if (is_constant(sc, args))                       /* (lambda :a ...) or (define (f :a) ...) */
+	s7_error(sc, sc->syntax_error_symbol,          /* don't use ~A here or below, (lambda #\null do) for example */
+		 set_elist_3(sc, wrap_string(sc, "lambda parameter is a constant: (~S ~S ...)", 43), car(form), cadr(form)));
 
       /* we currently accept (lambda i i . i) (lambda quote i)  (lambda : : . #()) (lambda : 1 . "")
        *   at this level, but when the lambda form is evaluated, it will trigger an error.
        */
-      if (is_symbol(args))
-	set_local(args);
-
+      if (is_symbol(args)) set_local(args);
       if (arity) (*arity) = -1;
       return;
     }
@@ -73929,24 +73933,27 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity)
       if (is_constant(sc, car_x))                      /* (lambda (pi) pi), constant here means not a symbol */
 	{
 	  if (is_pair(car_x))                          /* (lambda ((:hi . "hi") . "hi") 1) */
-	    eval_error(sc, "lambda parameter '~S is a pair (perhaps you want define* or lambda*?)", 69, car_x);
-	  eval_error(sc, "lambda parameter '~S is a constant", 34, car_x);
+	    s7_error(sc, sc->syntax_error_symbol, 
+		     set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a pair (perhaps use lambda*?): (~S ~S ...)", 65), car_x, car(form), cadr(form)));
+	  s7_error(sc, sc->syntax_error_symbol,        /* (lambda (a :b c) 1) */
+		   set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: (~S ~S ...)", 46), car_x, car(form), cadr(form)));
 	}
       if (symbol_is_in_arg_list(car_x, cdr(x)))       /* (lambda (a a) ...) or (lambda (a . a) ...) */
-	eval_error(sc, "lambda parameter '~S is used twice in the parameter list", 56, car_x);
+	s7_error(sc, sc->syntax_error_symbol, 
+		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68), car_x, car(form), cadr(form)));
       set_local(car_x);
     }
   if (is_not_null(x))
     {
       if (is_constant(sc, x))                         /* (lambda (a . 0.0) a) or (lambda (a . :b) a) */
-	eval_error(sc, "lambda :rest parameter '~S is a constant", 40, x);
+	s7_error(sc, sc->syntax_error_symbol,
+		 set_elist_4(sc, wrap_string(sc, "lambda :rest parameter ~S is a constant in (~S ~S ...)", 54), x, car(form), cadr(form)));
       i = -i - 1;
     }
-
   if (arity) (*arity) = i;
 }
 
-static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_pointer body) /* checks closure*, macro*, and bacro* */
+static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_pointer body, s7_pointer form) /* checks closure*, macro*, and bacro* */
 {
   s7_pointer top, v, w;
   int32_t i;
@@ -73954,10 +73961,10 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 
   if (!is_list(args))
     {
-      if (is_constant(sc, args))                                   /* (lambda* :a ...) */
-	eval_error(sc, "lambda* parameter '~S is a constant", 35, args);
-      if (is_symbol(args))
-	set_local(args);
+      if (is_constant(sc, args))                                   /* (lambda* :a ...) or (define* (f . :a) ...) */
+	s7_error(sc, sc->syntax_error_symbol,
+		 set_elist_3(sc, wrap_string(sc, "lambda* parameter is a constant: (~S ~S ...)", 44), car(form), cadr(form)));
+      if (is_symbol(args)) set_local(args);
       return(args);
     }
 
@@ -73970,22 +73977,28 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	{
 	  has_defaults = true;
 	  if (is_constant(sc, car(car_w)))                         /* (lambda* ((:a 1)) ...) */
-	    eval_error(sc, "lambda* parameter '~A is a constant", 35, car(car_w));
-	  if (symbol_is_in_arg_list(caar(w), cdr(w)))              /* (lambda* ((a 1) a) ...) */
-	    eval_error(sc, "lambda* parameter '~A is used twice in the argument list", 56, car(car_w));
+	    s7_error(sc, sc->syntax_error_symbol,
+		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47), car(car_w), car(form), cadr(form)));
 
-	  if (!is_pair(cdr(car_w)))                               /* (lambda* ((a . 0.0)) a) */
+	  if (symbol_is_in_arg_list(caar(w), cdr(w)))              /* (lambda* ((a 1) a) ...) */
+	    s7_error(sc, sc->syntax_error_symbol, 
+		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S occurs twice in the argument list: (~S ~S ...)", 67), car(car_w), car(form), cadr(form)));
+
+	  if (!is_pair(cdr(car_w)))                               
 	    {
 	      if (is_null(cdr(car_w)))                            /* (lambda* ((a)) ...) */
-		eval_error(sc, "lambda* parameter default value missing? '~A", 44, car_w);
-	      eval_error(sc, "lambda* parameter is a dotted pair? '~A",39,  car_w);
+		s7_error(sc, sc->syntax_error_symbol,
+			 set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S default value missing in (~S ~S ...)", 57), car_w, car(form), cadr(form)));
+	      s7_error(sc, sc->syntax_error_symbol,               /* (lambda* ((a . 0.0)) a) */
+		       set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a dotted pair in (~S ~S ...)", 52), car_w, car(form), cadr(form)));
 	    }
 	  if ((is_pair(cadr(car_w))) &&                           /* (lambda* ((a (quote . -1))) ...) */
 	      (s7_list_length(sc, cadr(car_w)) < 0))
-	    eval_error(sc, "lambda* parameter default value is improper? ~A", 47, car_w);
-
+	    s7_error(sc, sc->syntax_error_symbol,
+		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S default value is not a proper list in (~S ~S ...)", 70), car_w, car(form), cadr(form)));
 	  if (is_not_null(cddr(car_w)))                           /* (lambda* ((a 0.0 'hi)) a) */
-	    eval_error(sc, "lambda* parameter has multiple default values? '~A", 50, car_w);
+	    s7_error(sc, sc->syntax_error_symbol,
+		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S has multiple default values in (~S ~S ...)", 63), car_w, car(form), cadr(form)));
 
 	  set_local(car(car_w));
 	}
@@ -73998,17 +74011,20 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 		  if (car_w == sc->key_allow_other_keys_symbol)
 		    {
 		      if (is_not_null(cdr(w)))                    /* (lambda* (:allow-other-keys x) x) */
-			eval_error(sc, ":allow-other-keys should be the last parameter: ~A", 50, args);
-		      if (w == top)
-			eval_error(sc, ":allow-other-keys can't be the only parameter: ~A", 49, args);
+			s7_error(sc, sc->syntax_error_symbol,
+				 set_elist_3(sc, wrap_string(sc, ":allow-other-keys should be the last parameter: (~S ~S ...)", 59), car(form), cadr(form)));
+		      if (w == top)                               /* (lambda* (:allow-other-keys) 1) */
+			s7_error(sc, sc->syntax_error_symbol,
+				 set_elist_3(sc, wrap_string(sc, ":allow-other-keys can't be the only parameter: (~S ~S ...)", 58), car(form), cadr(form)));
 		      set_allow_other_keys(top);
 		      set_cdr(v, sc->nil);
 		    }
-		  else                                            /* (lambda* (pi) ...) */
-		    eval_error(sc, "lambda* parameter '~A is a constant", 35, car_w);
+		  else s7_error(sc, sc->syntax_error_symbol,      /* (lambda* (pi) ...) */
+				set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47), car_w, car(form), cadr(form)));
 		}
 	      if (symbol_is_in_arg_list(car_w, cdr(w)))           /* (lambda* (a a) ...) or (lambda* (a . a) ...) */
-		eval_error(sc, "lambda* parameter '~A is used twice in the argument list", 56, car_w);
+		s7_error(sc, sc->syntax_error_symbol,
+			 set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list: (~S ~S ...)", 69), car_w, car(form), cadr(form)));
 
 	      if (!is_keyword(car_w)) set_local(car_w);
 	    }
@@ -74016,21 +74032,27 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	    {
 	      has_defaults = true;
 	      if (!is_pair(cdr(w)))                               /* (lambda* (:rest) ...) */
-		eval_error(sc, "lambda* :rest parameter missing? ~A", 35, w);
+		s7_error(sc, sc->syntax_error_symbol,
+			 set_elist_3(sc, wrap_string(sc, "lambda* :rest parameter missing in (~S ~S ...)", 46), car(form), cadr(form)));
 	      if (!is_symbol(cadr(w)))                            /* (lambda* (:rest (a 1)) ...) */
 		{
 		  if (!is_pair(cadr(w)))                          /* (lambda* (:rest 1) ...) */
-		    eval_error(sc, "lambda* :rest parameter is not a symbol? ~A", 43, w);
-		  eval_error(sc, "lambda* :rest parameter can't have a default value. ~A", 54, w);
+		    s7_error(sc, sc->syntax_error_symbol,
+			     set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter is not a symbol: ~S in (~S ~S ...)", 58), w, car(form), cadr(form)));
+		  s7_error(sc, sc->syntax_error_symbol,           /* (lambda* (:rest '(1 2)) 1) */
+			   set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter can't have a default value: ~S in (~S ~S ...)", 69), w, car(form), cadr(form)));
 		}
-	      if (is_constant(sc, cadr(w)))                       /* (lambda* (a :rest x)...) where x is locally a constant */
-		return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->lambda_star_symbol, w)));
+	      if (is_constant(sc, cadr(w)))                       /* (lambda* (a :rest x) ...) where x is locally a constant */
+		return(s7_error(sc, sc->wrong_type_arg_symbol, 
+				set_elist_4(sc, wrap_string(sc, "lambda*: ~S is immutable, so it can't be the :rest parameter name: (~S ~S ...)", 78),
+					    cadr(w), car(form), cadr(form))));
 	      set_local(cadr(w));
 	    }}}
   if (is_not_null(w))
     {
       if (is_constant(sc, w))                                     /* (lambda* (a . 0.0) a) or (lambda* (a . :b) a) */
-	eval_error(sc, "lambda* :rest parameter '~A is a constant", 41, w);
+	s7_error(sc, sc->syntax_error_symbol,
+		 set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter ~S is a constant, (~S ~S ...)", 53), w, car(form), cadr(form)));
       if (is_symbol(w))
 	set_local(w);
     }
@@ -74597,7 +74619,7 @@ static int32_t check_lambda(s7_scheme *sc, s7_pointer form, bool opt)
     eval_error(sc, "lambda: no body? ~A", 19, form);
 
   /* in many cases, this is a no-op -- we already checked at define */
-  check_lambda_args(sc, car(code), &arity);
+  check_lambda_args(sc, car(code), &arity, sc->code);
   /* clear_symbol_list(sc); */ /* not used in check_lambda_args and clobbers optimize_expression find_uncomplicated_symbol check */
 
   /* look for (define f (let (...) (lambda ...))) and treat as equivalent to (define (f ...)...)
@@ -74654,7 +74676,7 @@ static void check_lambda_star(s7_scheme *sc)
       (!is_pair(cdr(code))))                                          /* (lambda*) or (lambda* #f) */
     eval_error(sc, "lambda*: no arguments or no body? ~A", 36, sc->code);
 
-  set_car(code, check_lambda_star_args(sc, car(code), NULL));
+  set_car(code, check_lambda_star_args(sc, car(code), NULL, sc->code));
 
   if ((sc->safety > NO_SAFETY) ||
       (main_stack_op(sc) != OP_DEFINE1))
@@ -75979,7 +76001,7 @@ static bool check_let_star(s7_scheme *sc)
 	s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_star_symbol, var_and_val));
 
       if ((named_let) && (symbol_is_in_arg_list(var, cdr(vars)))) /* (let* loop ((a 1) (a 2)) ...) -- added 2-Dec-19 */
-	eval_error(sc, "named let* parameter '~A is used twice in the parameter list", 60, var);
+	eval_error(sc, "named let* parameter ~A is used twice in the parameter list", 59, var);
       /* currently (let* ((a 1) (a (+ a 1))) a) is 2, not an error. */
 
       if (symbol_is_in_list(sc, var)) shadowing = true;
@@ -77503,8 +77525,8 @@ static void check_define(s7_scheme *sc)
 	  if (!is_pair(cddr(cadr(code))))                                        /* (define f (lambda (arg))) */
 	    eval_error_with_caller(sc, "~A: no body: ~A", 15, caller, sc->code);
 	  if (caadr(code) == sc->lambda_star_symbol)
-	    check_lambda_star_args(sc, cadadr(code), cddr(cadr(code)));
-	  else check_lambda_args(sc, cadadr(code), NULL);
+	    check_lambda_star_args(sc, cadadr(code), cddr(cadr(code)), cadr(code));
+	  else check_lambda_args(sc, cadadr(code), NULL, cadr(code));
 	  optimize_lambda(sc, caadr(code) == sc->lambda_symbol, func, cadadr(code), cddr(cadr(code)));
 	}}
   else
@@ -77519,8 +77541,8 @@ static void check_define(s7_scheme *sc)
 	  set_local(func);
 	}
       if (starred)
-	set_cdar(code, check_lambda_star_args(sc, cdar(code), cdr(code)));
-      else check_lambda_args(sc, cdar(code), NULL);
+	set_cdar(code, check_lambda_star_args(sc, cdar(code), cdr(code), sc->code));
+      else check_lambda_args(sc, cdar(code), NULL, sc->code);
       optimize_lambda(sc, !starred, func, cdar(code), cdr(code));
     }
 
@@ -77782,7 +77804,7 @@ static s7_pointer cur_op_to_caller(s7_scheme *sc, opcode_t op)
   return(sc->define_macro_symbol);
 }
 
-static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op)
+static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
 {
   s7_pointer mac_name, args, caller;
   caller = cur_op_to_caller(sc, op);
@@ -77819,13 +77841,13 @@ static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op)
 	if (!is_symbol(car(args)))
 	  return(s7_error(sc, sc->syntax_error_symbol,                /* (define-macro (mac 1) ...) */
 			  set_elist_3(sc, wrap_string(sc, "~A parameter name, ~A, is not a symbol", 38), caller, car(args))));
-      check_lambda_args(sc, cdar(sc->code), NULL);
+      check_lambda_args(sc, cdar(sc->code), NULL, form);
     }
-  else set_cdar(sc->code, check_lambda_star_args(sc, cdar(sc->code), NULL));
+  else set_cdar(sc->code, check_lambda_star_args(sc, cdar(sc->code), NULL, form));
   return(sc->code);
 }
 
-static s7_pointer check_macro(s7_scheme *sc, opcode_t op)
+static s7_pointer check_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
 {
   s7_pointer args, caller;
   caller = cur_op_to_caller(sc, op);
@@ -77847,31 +77869,33 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op)
 	if (!is_symbol(car(args)))
 	  return(s7_error(sc, sc->syntax_error_symbol,                /* (define-macro (mac 1) ...) */
 			  set_elist_3(sc, wrap_string(sc, "~A parameter name, ~A, is not a symbol", 38), caller, car(args))));
-      check_lambda_args(sc, car(sc->code), NULL);
+      check_lambda_args(sc, car(sc->code), NULL, form);
     }
-  else set_car(sc->code, check_lambda_star_args(sc, car(sc->code), NULL));
+  else set_car(sc->code, check_lambda_star_args(sc, car(sc->code), NULL, form));
   return(sc->code);
-}
-
-static void op_define_macro(s7_scheme *sc)
-{
-  sc->code = cdr(sc->code);
-  check_define_macro(sc, sc->cur_op);
-  if ((is_immutable(sc->curlet)) &&
-      (is_let(sc->curlet))) /* not () */
-    eval_error(sc, "define-macro ~S: let is immutable", 33, caar(sc->code)); /* need eval_error_any_with_caller? */
-  sc->value = make_macro(sc, sc->cur_op, true);
 }
 
 static void op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
 {
+  s7_pointer form = sc->code;
   sc->code = cdr(sc->code);
   if ((!is_pair(sc->code)) || (!mac_is_ok(sc->code))) /* (macro)? or (macro . #\a)? */
     {
-      check_macro(sc, sc->cur_op);
+      check_macro(sc, sc->cur_op, form);
       if (is_pair(sc->code)) set_mac_is_ok(sc->code);
     }
   sc->value = make_macro(sc, sc->cur_op, false);
+}
+
+static void op_define_macro(s7_scheme *sc)
+{
+  s7_pointer form = sc->code;
+  sc->code = cdr(sc->code);
+  check_define_macro(sc, sc->cur_op, form);
+  if ((is_immutable(sc->curlet)) &&
+      (is_let(sc->curlet))) /* not () */
+    eval_error(sc, "define-macro ~S: let is immutable", 33, caar(sc->code)); /* need eval_error_any_with_caller? */
+  sc->value = make_macro(sc, sc->cur_op, true);
 }
 
 static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code);
@@ -83478,7 +83502,7 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
     {
       if (is_null(z))
 	s7_error(sc, sc->wrong_number_of_args_symbol, 
-		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), closure_args(sc->code), sc->args));
+		 set_elist_4(sc, wrap_string(sc, "~S: not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 52), closure_name(sc, sc->code), closure_args(sc->code), sc->args));
       sym = car(x);
       slot = make_slot(sc, sym, T_Pos(unchecked_car(z)));
 #if S7_DEBUGGING
@@ -83495,7 +83519,7 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
     {
       if (is_not_null(z))
 	s7_error(sc, sc->wrong_number_of_args_symbol, 
-		 set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda ~S ...)~{~^ ~S~})", 46), closure_args(sc->code), sc->args));
+		 set_elist_4(sc, wrap_string(sc, "~S: too many arguments: ((lambda ~S ...)~{~^ ~S~})", 50), closure_name(sc, sc->code), closure_args(sc->code), sc->args));
     }
   else
     {
@@ -90535,24 +90559,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_APPLY_SA: op_apply_sa(sc); goto APPLY;
 	case OP_APPLY_SL: op_apply_sl(sc); goto APPLY;
 
-	case OP_CALL_WITH_EXIT: if (!c_function_is_ok(sc, sc->code)) break; check_lambda_args(sc, cadadr(sc->code), NULL);
-	case HOP_CALL_WITH_EXIT: op_call_with_exit(sc); goto BEGIN;
-	case OP_CALL_CC: op_call_cc(sc); goto BEGIN;
-
-	case OP_CALL_WITH_EXIT_O: if (!c_function_is_ok(sc, sc->code)) break; check_lambda_args(sc, cadadr(sc->code), NULL);
-	case HOP_CALL_WITH_EXIT_O: op_call_with_exit_o(sc); goto EVAL;
-
-	case OP_C_CATCH: if (!c_function_is_ok(sc, sc->code)) break; check_lambda_args(sc, cadr(cadddr(sc->code)), NULL);
-	case HOP_C_CATCH: op_c_catch(sc); goto BEGIN;
-
-	case OP_C_CATCH_ALL: if (!c_function_is_ok(sc, sc->code)) break;
-	case HOP_C_CATCH_ALL: op_c_catch_all(sc); goto BEGIN;
-
-	case OP_C_CATCH_ALL_O: if (!c_function_is_ok(sc, sc->code)) break;
-	case HOP_C_CATCH_ALL_O: op_c_catch_all(sc); goto EVAL;
-
-	case OP_C_CATCH_ALL_A: if (!c_function_is_ok(sc, sc->code)) break;
-	case HOP_C_CATCH_ALL_A: op_c_catch_all_a(sc); continue;
+	case OP_CALL_WITH_EXIT:   op_call_with_exit(sc);   goto BEGIN;
+	case OP_CALL_CC:          op_call_cc(sc);          goto BEGIN;
+	case OP_CALL_WITH_EXIT_O: op_call_with_exit_o(sc); goto EVAL;
+	case OP_C_CATCH:          op_c_catch(sc);          goto BEGIN;
+	case OP_C_CATCH_ALL:      op_c_catch_all(sc);      goto BEGIN;
+	case OP_C_CATCH_ALL_O:    op_c_catch_all(sc);      goto EVAL;
+	case OP_C_CATCH_ALL_A:    op_c_catch_all_a(sc);    continue;
 
 	case OP_WITH_IO: if (op_with_io_op(sc)) goto EVAL; goto BEGIN;
 	case OP_WITH_IO_1:
@@ -95290,7 +95303,7 @@ s7_scheme *s7_init(void)
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 926) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 920) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
@@ -95684,43 +95697,43 @@ int main(int argc, char **argv)
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
  * index      1032         1026   1016    973    973
- * tmock      7738         1177   1165   1054   1059
+ * tmock      7738         1177   1165   1054   1058
  * tvect      1892         2456   2413   1712   1712
+ * texit      1768         ----   ----   1801   1796
  * s7test     4506         1873   1831   1784   1807
- * texit      1768         ----   ----   1801   1798
  * lt         2121         2123   2110   2108   2109
  * tform      3235         2281   2273   2242   2240
- * tauto                   ----   ----   2356   2282
+ * tmac       2452         3317   3277   2420   2414
  * tread      2606         2440   2421   2415   2417
- * tmac       2452         3317   3277   2420   2419
- * fbench     2848         2688   2583   2458   2461
+ * fbench     2848         2688   2583   2458   2460
  * trclo      4107         2735   2574   2459   2459
- * tmat       2683         3065   3042   2513   2519
- * dup        2783         3805   3788   2559   2528
- * tcopy      2610         8035   5546   2536   2536
+ * tmat       2683         3065   3042   2513   2526
+ * tcopy      2610         8035   5546   2536   2539
+ * dup        2783         3805   3788   2559   2548
+ * tauto                   ----   ----   2356   2561
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
- * tsort      3576         3105   3104   2855   2856
- * tset       3114         3253   3104   3081   3026
- * tload      3861         ----   ----   3155   3099
- * teq        3554         4068   4045   3539   3542
- * tio        3710         3816   3752   3680   3673
- * tclo       4622         4787   4735   4408   4390
- * tcase      4519         4960   4793   4441   4436
- * tlet       5278         7775   5640   4435   4436
- * tmap       5491         8869   8774   4492   4489
+ * tsort      3576         3105   3104   2855   2855
+ * tset       3114         3253   3104   3081   3024
+ * tload      3861         ----   ----   3155   3084
+ * teq        3554         4068   4045   3539   3539
+ * tio        3710         3816   3752   3680   3672
+ * tclo       4622         4787   4735   4408   4388
+ * tcase      4519         4960   4793   4441   4432
+ * tlet       5278         7775   5640   4435   4439
+ * tmap       5491         8869   8774   4492   4488
  * tfft      115.0         7820   7729   4778   4778
- * tshoot     6923         5525   5447   5210   5206
- * tnum       56.7         6348   6013   5439   5420
- * tstr       6187         6880   6342   5509   5495
- * tgsl       25.2         8485   7802   6390   6388
- * tmisc      6344         8869   7612   6472   6474
+ * tshoot     6923         5525   5447   5210   5210
+ * tnum       56.7         6348   6013   5439   5423
+ * tstr       6187         6880   6342   5509   5498
+ * tgsl       25.2         8485   7802   6390   6387
+ * tmisc      6344         8869   7612   6472   6466
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
  * tari       ----         13.0   12.7   6860   6828
- * tleft      9491         10.4   10.2   8354   7788
- * tgc        10.1         11.9   11.1   8666   8643
- * cb         16.8         11.2   11.0   9897   9686
+ * tleft      9491         10.4   10.2   8354   7786
+ * tgc        10.1         11.9   11.1   8666   8637
+ * cb         16.8         11.2   11.0   9897   9685
  * thash      35.4         11.8   11.7   9711   9720
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
@@ -95737,12 +95750,10 @@ int main(int argc, char **argv)
  *  ;for-each #<lambda (x)>: 2 arguments?
  *  ;call-with-input-file: not enough arguments: (call-with-input-file #\A)  ; "no body"??
  *  rest of value is missing cases: 88053 op_safe_c_star_a
- *  ;load: Success "/home/bil/cl"
- *  ;attempt to apply a character #\a to () in (#\a)?
- *  ;lambda* parameter '#f is a constant
+ *  ;expt: division by zero, (0 -212274)
  * need ~S/A with truncation [esp wrong_type_arg], 
  *   print_length in pairs should count entries not outer length, or add an outer truncation?
  *   repl truncates at print-length in input!!  nrepl input is not truncated I think
  * should type-of check for method if c-object? also s7_type_of
- *   missing method error can use c_object_scheme_name, see prepackaged_types
+ *   missing method error maybe use type if c-pointer? or include type in message
  */
