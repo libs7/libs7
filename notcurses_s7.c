@@ -1728,7 +1728,7 @@ static s7_pointer g_set_ncselector_item_option(s7_scheme *sc, s7_pointer args)
   else
     {
       no->option = (char *)malloc(s7_string_length(str));
-      strcpy(no->option, s7_string_checked(sc, str));
+      strcpy((char *)(no->option), s7_string_checked(sc, str));
     }
   return(str);
 }
@@ -1744,7 +1744,7 @@ static s7_pointer g_set_ncselector_item_desc(s7_scheme *sc, s7_pointer args)
   else
     {
       no->desc = (char *)malloc(s7_string_length(str));
-      strcpy(no->desc, s7_string_checked(sc, str));
+      strcpy((char *)(no->desc), s7_string_checked(sc, str));
     }
   return(str);
 }
@@ -1778,7 +1778,7 @@ static s7_pointer g_ncselector_options_footer(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_ncselector_options_items(s7_scheme *sc, s7_pointer args) 
 {
-  return(s7_make_c_pointer_with_type(sc, ((ncselector_options *)s7_c_pointer_with_type(sc, s7_car(args), ncselector_options_symbol, __func__, 1))->items, 
+  return(s7_make_c_pointer_with_type(sc, (void *)(((ncselector_options *)s7_c_pointer_with_type(sc, s7_car(args), ncselector_options_symbol, __func__, 1))->items), 
 				     ncselector_item_symbol, s7_f(sc)));
 }
 
@@ -1834,7 +1834,7 @@ static s7_pointer g_set_ncselector_options_title(s7_scheme *sc, s7_pointer args)
   else
     {
       no->title = (char *)calloc(1, s7_string_length(str) + 1);
-      strcpy(no->title, s7_string_checked(sc, str));
+      strcpy((char *)(no->title), s7_string_checked(sc, str));
     }
   return(str);
 }
@@ -1850,7 +1850,7 @@ static s7_pointer g_set_ncselector_options_secondary(s7_scheme *sc, s7_pointer a
   else
     {
       no->secondary = (char *)calloc(1, s7_string_length(str) + 1);
-      strcpy(no->secondary, s7_string_checked(sc, str));
+      strcpy((char *)(no->secondary), s7_string_checked(sc, str));
     }
   return(s7_cadr(args));
 }
@@ -1866,7 +1866,7 @@ static s7_pointer g_set_ncselector_options_footer(s7_scheme *sc, s7_pointer args
   else
     {
       no->footer = (char *)calloc(1, s7_string_length(str) + 1);
-      strcpy(no->footer, s7_string_checked(sc, str));
+      strcpy((char *)(no->footer), s7_string_checked(sc, str));
     }
   return(s7_cadr(args));
 }
@@ -2003,7 +2003,7 @@ static s7_pointer g_set_ncmselector_item_option(s7_scheme *sc, s7_pointer args)
   else
     {
       no->option = (char *)malloc(s7_string_length(str));
-      strcpy(no->option, s7_string_checked(sc, str));
+      strcpy((char *)(no->option), s7_string_checked(sc, str));
     }
   return(str);
 }
@@ -2019,7 +2019,7 @@ static s7_pointer g_set_ncmselector_item_desc(s7_scheme *sc, s7_pointer args)
   else
     {
       no->desc = (char *)malloc(s7_string_length(str));
-      strcpy(no->desc, s7_string_checked(sc, str));
+      strcpy((char *)(no->desc), s7_string_checked(sc, str));
     }
   return(str);
 }
@@ -2053,7 +2053,7 @@ static s7_pointer g_ncmultiselector_options_footer(s7_scheme *sc, s7_pointer arg
 
 static s7_pointer g_ncmultiselector_options_items(s7_scheme *sc, s7_pointer args) 
 {
-  return(s7_make_c_pointer_with_type(sc, ((ncmultiselector_options *)s7_c_pointer_with_type(sc, s7_car(args), ncmultiselector_options_symbol, __func__, 1))->items, s7_make_symbol(sc, "ncmselector_items*"), s7_f(sc)));
+  return(s7_make_c_pointer_with_type(sc, (void *)(((ncmultiselector_options *)s7_c_pointer_with_type(sc, s7_car(args), ncmultiselector_options_symbol, __func__, 1))->items), s7_make_symbol(sc, "ncmselector_items*"), s7_f(sc)));
 }
 
 static s7_pointer g_ncmultiselector_options_maxdisplay(s7_scheme *sc, s7_pointer args) 
@@ -2103,7 +2103,7 @@ static s7_pointer g_set_ncmultiselector_options_title(s7_scheme *sc, s7_pointer 
   else
     {
       no->title = (char *)calloc(1, s7_string_length(str) + 1);
-      strcpy(no->title, s7_string_checked(sc, str));
+      strcpy((char *)(no->title), s7_string_checked(sc, str));
     }
   return(str);
 }
@@ -2119,7 +2119,7 @@ static s7_pointer g_set_ncmultiselector_options_secondary(s7_scheme *sc, s7_poin
   else
     {
       no->secondary = (char *)calloc(1, s7_string_length(str) + 1);
-      strcpy(no->secondary, s7_string_checked(sc, str));
+      strcpy((char*)(no->secondary), s7_string_checked(sc, str));
     }
   return(s7_cadr(args));
 }
@@ -2135,7 +2135,7 @@ static s7_pointer g_set_ncmultiselector_options_footer(s7_scheme *sc, s7_pointer
   else
     {
       no->footer = (char *)calloc(1, s7_string_length(str) + 1);
-      strcpy(no->footer, s7_string_checked(sc, str));
+      strcpy((char *)no->footer, s7_string_checked(sc, str));
     }
   return(s7_cadr(args));
 }
@@ -3263,15 +3263,6 @@ static s7_pointer g_ncvisual_at_yx(s7_scheme *sc, s7_pointer args)
   return(s7_list(sc, 2, res, s7_make_integer(sc, pix)));
 }
 
-static s7_pointer g_ncvisual_render(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_c_pointer_with_type(sc, ncvisual_render((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
-							 (struct ncvisual *)s7_c_pointer_with_type(sc, s7_cadr(args), ncvisual_symbol, __func__, 2),
-							 (const struct ncvisual_options *)s7_c_pointer_with_type(sc, s7_caddr(args), 
-														 ncvisual_options_symbol, __func__, 3)),
-				     ncplane_symbol, s7_f(sc)));
-}
-
 static s7_pointer g_ncvisual_simple_streamer(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, ncvisual_simple_streamer((struct ncvisual *)s7_c_pointer_with_type(sc, s7_car(args), ncvisual_symbol, __func__, 1),
@@ -4041,7 +4032,6 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncvisual_polyfill_yx, 4, 0, false);
   nc_func(ncvisual_set_yx, 4, 0, false);
   nc_func(ncvisual_at_yx, 3, 0, false);
-  nc_func(ncvisual_render, 3, 0, false);
   nc_func(ncvisual_simple_streamer, 4, 0, false);
   nc_func(ncvisual_decode_loop, 1, 0, false);
 
