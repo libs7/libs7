@@ -4,8 +4,8 @@
 
 (provide 'repl.scm)
 
-(when (= (*s7* 'print-length) 12)
-  (set! (*s7* 'print-length) 32))
+(when (= (*s7* 'print-length) 12)    ; default value
+  (set! (*s7* 'print-length) 60))
 
 (when (file-exists? ".repl")         ; local (scheme) initialization file for repl
   (load ".repl"))
