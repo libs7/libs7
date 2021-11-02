@@ -4887,7 +4887,55 @@ static void complain(const char* complaint, s7_pointer p, const char *func, int 
   if (cur_sc->stop_at_error) abort();
 }
 
-static char* show_debugger_bits(s7_pointer obj);
+static char* show_debugger_bits(s7_pointer p)
+{
+  char *bits_str;
+  int64_t bits = p->debugger_bits;
+  bits_str = (char *)Malloc(512);
+  snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
+	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
+	   ((bits & OPT1_CFUNC) != 0) ? " opt1_cfunc" : "",
+	   ((bits & OPT1_CLAUSE) != 0) ? " opt1_clause" : "",
+	   ((bits & OPT1_LAMBDA) != 0) ? " opt_lambda" : "",
+	   ((bits & OPT1_SYM) != 0) ? " opt1_sym" : "",
+	   ((bits & OPT1_PAIR) != 0) ? " opt1_pair" : "",
+	   ((bits & OPT1_CON) != 0) ? " opt1_con" : "",
+	   ((bits & OPT1_ANY) != 0) ? " opt1_any" : "",
+	   ((bits & OPT1_HASH) != 0) ? " opt1_raw_hash" : "",
+
+	   ((bits & OPT2_SET) != 0) ? " opt2_set" : "",
+	   ((bits & OPT2_KEY) != 0) ? " opt2_any" : "",
+	   ((bits & OPT2_SLOW) != 0) ? " opt2_slow" : "",
+	   ((bits & OPT2_SYM) != 0) ? " opt2_sym" : "",
+	   ((bits & OPT2_PAIR) != 0) ? " opt2_pair" : "",
+	   ((bits & OPT2_CON) != 0) ? " opt2_con" : "",
+	   ((bits & OPT2_FX) != 0) ? " opt2_fx" : "",
+	   ((bits & OPT2_FN) != 0) ? " opt2_fn" : "",
+	   ((bits & OPT2_LAMBDA) != 0) ? " opt2_lambda" : "",
+	   ((bits & OPT2_DIRECT) != 0) ? " opt2_direct" : "",
+	   ((bits & OPT2_NAME) != 0) ? " opt2_raw_name" : "",
+	   ((bits & OPT2_INT) != 0) ? " opt2_int" : "",
+
+	   ((bits & OPT3_SET) != 0) ? " opt3_set" : "",
+	   ((bits & OPT3_ARGLEN) != 0) ? " opt3_arglen" : "",
+	   ((bits & OPT3_SYM) != 0) ? " opt3_sym" : "",
+	   ((bits & OPT3_CON) != 0) ? " opt3_con" : "",
+	   ((bits & OPT3_AND) != 0) ? " opt3_pair " : "",
+	   ((bits & OPT3_ANY) != 0) ? " opt3_any " : "",
+	   ((bits & OPT3_LET) != 0) ? " opt3_let " : "",
+	   ((bits & OPT3_BYTE) != 0) ? " opt3_byte " : "",
+	   ((bits & OPT3_DIRECT) != 0) ? " opt3_direct" : "",
+	   ((bits & OPT3_LOCATION) != 0) ? " opt3_location" : "",
+	   ((bits & OPT3_LEN) != 0) ? " opt3_len" : "",
+	   ((bits & OPT3_INT) != 0) ? " opt3_int" : "",
+
+	   ((bits & L_HIT) != 0) ? " let_set" : "",
+	   ((bits & L_FUNC) != 0) ? " let_func" : "",
+	   ((bits & L_DOX) != 0) ? " let_dox" : "",
+	   ((bits & L_CATCH) != 0) ? " let_catch" : "");
+  return(bits_str);
+}
 
 static s7_pointer check_ref(s7_pointer p, uint8_t expected_type, const char *func, int32_t line, const char *func1, const char *func2)
 {
@@ -5180,56 +5228,6 @@ static const char *opt3_role_name(uint64_t role)
   if (role == OPT3_LEN) return("opt3_len");
   if (role == OPT3_INT) return("opt3_int");
   return((role == OPT3_LOCATION) ? "opt3_location" : "opt3_unknown");
-}
-
-static char* show_debugger_bits(s7_pointer p)
-{
-  char *bits_str;
-  int64_t bits = p->debugger_bits;
-  bits_str = (char *)Malloc(512);
-  snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
-	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
-	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
-	   ((bits & OPT1_CFUNC) != 0) ? " opt1_cfunc" : "",
-	   ((bits & OPT1_CLAUSE) != 0) ? " opt1_clause" : "",
-	   ((bits & OPT1_LAMBDA) != 0) ? " opt_lambda" : "",
-	   ((bits & OPT1_SYM) != 0) ? " opt1_sym" : "",
-	   ((bits & OPT1_PAIR) != 0) ? " opt1_pair" : "",
-	   ((bits & OPT1_CON) != 0) ? " opt1_con" : "",
-	   ((bits & OPT1_ANY) != 0) ? " opt1_any" : "",
-	   ((bits & OPT1_HASH) != 0) ? " opt1_raw_hash" : "",
-
-	   ((bits & OPT2_SET) != 0) ? " opt2_set" : "",
-	   ((bits & OPT2_KEY) != 0) ? " opt2_any" : "",
-	   ((bits & OPT2_SLOW) != 0) ? " opt2_slow" : "",
-	   ((bits & OPT2_SYM) != 0) ? " opt2_sym" : "",
-	   ((bits & OPT2_PAIR) != 0) ? " opt2_pair" : "",
-	   ((bits & OPT2_CON) != 0) ? " opt2_con" : "",
-	   ((bits & OPT2_FX) != 0) ? " opt2_fx" : "",
-	   ((bits & OPT2_FN) != 0) ? " opt2_fn" : "",
-	   ((bits & OPT2_LAMBDA) != 0) ? " opt2_lambda" : "",
-	   ((bits & OPT2_DIRECT) != 0) ? " opt2_direct" : "",
-	   ((bits & OPT2_NAME) != 0) ? " opt2_raw_name" : "",
-	   ((bits & OPT2_INT) != 0) ? " opt2_int" : "",
-
-	   ((bits & OPT3_SET) != 0) ? " opt3_set" : "",
-	   ((bits & OPT3_ARGLEN) != 0) ? " opt3_arglen" : "",
-	   ((bits & OPT3_SYM) != 0) ? " opt3_sym" : "",
-	   ((bits & OPT3_CON) != 0) ? " opt3_con" : "",
-	   ((bits & OPT3_AND) != 0) ? " opt3_pair " : "",
-	   ((bits & OPT3_ANY) != 0) ? " opt3_any " : "",
-	   ((bits & OPT3_LET) != 0) ? " opt3_let " : "",
-	   ((bits & OPT3_BYTE) != 0) ? " opt3_byte " : "",
-	   ((bits & OPT3_DIRECT) != 0) ? " opt3_direct" : "",
-	   ((bits & OPT3_LOCATION) != 0) ? " opt3_location" : "",
-	   ((bits & OPT3_LEN) != 0) ? " opt3_len" : "",
-	   ((bits & OPT3_INT) != 0) ? " opt3_int" : "",
-
-	   ((bits & L_HIT) != 0) ? " let_set" : "",
-	   ((bits & L_FUNC) != 0) ? " let_func" : "",
-	   ((bits & L_DOX) != 0) ? " let_dox" : "",
-	   ((bits & L_CATCH) != 0) ? " let_catch" : "");
-  return(bits_str);
 }
 
 static void show_opt1_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
@@ -7905,7 +7903,7 @@ static uint8_t *alloc_symbol(s7_scheme *sc)
 }
 
 static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value);
-static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len);
+static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
 
 static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len, uint64_t hash, uint32_t location)
 {
@@ -8741,9 +8739,11 @@ static inline s7_pointer checked_slot_set_value(s7_scheme *sc, s7_pointer y, s7_
 static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer e = car(args), val, p;
-  if ((e == sc->rootlet) || (e == sc->s7_let))
-    eval_error(sc, "attempt to fill! ~S?", 20, e);
-  if (e == sc->owlet) /* (owlet) copies sc->owlet, so this probably can't happen */
+  if (e == sc->rootlet) 
+    return(out_of_range(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! rootlet", 19)));
+  if (e == sc->s7_let)
+    return(out_of_range(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! *s7*", 16)));
+  if (e == sc->owlet)                 /* (owlet) copies sc->owlet, so this probably can't happen */
     return(out_of_range(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! owlet", 17)));
   if (is_funclet(e))
     return(out_of_range(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! a funclet", 21)));
@@ -8814,7 +8814,7 @@ static void slot_set_value_with_hook_1(s7_scheme *sc, s7_pointer slot, s7_pointe
   slot_set_value(slot, value);
 }
 
-static void remove_function_from_heap(s7_scheme *sc, s7_pointer value);
+static void remove_function_from_heap(s7_scheme *sc, s7_pointer value); /* calls remove_let_from_heap */
 
 static void remove_let_from_heap(s7_scheme *sc, s7_pointer lt)
 {
@@ -10072,13 +10072,13 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
 
   if (!is_let(let))
     return(s7_wrong_type_arg_error(sc, "set! outlet", 1, let, "a let"));
-  if ((is_immutable(let)) || (let == sc->s7_let))
-    return(s7_wrong_type_arg_error(sc, "set! outlet", 1, let, "a mutable let"));
-
+  if (let == sc->s7_let)
+    return(s7_error(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't set! (outlet *s7*)", 24))));
+  if (is_immutable(let)) 
+    return(immutable_object_error(sc, set_elist_4(sc, wrap_string(sc, "can't (set! (outlet ~S) ~S), ~S is immutable", 44), let, cadr(args), let)));
   new_outer = cadr(args);
   if (!is_let(new_outer))
     return(s7_wrong_type_arg_error(sc, "set! outlet", 2, new_outer, "a let"));
-
   if (let != sc->rootlet)
     {
       /* here it's possible to get cyclic let chains; maybe do this check only if safety>0 */
@@ -13098,7 +13098,11 @@ static s7_complex s7_to_c_complex(s7_pointer p)
 
 static inline s7_pointer c_complex_to_s7(s7_scheme *sc, s7_complex z) {return(make_complex(sc, creal(z), cimag(z)));}
 
-static s7_pointer division_by_zero_error(s7_scheme *sc, s7_pointer caller, s7_pointer args);
+static s7_pointer division_by_zero_error(s7_scheme *sc, s7_pointer caller, s7_pointer args)
+{
+  return(s7_error(sc, sc->division_by_zero_symbol, 
+		  set_elist_4(sc, wrap_string(sc, "~A: division by zero, (~A ~{~S~^ ~})", 36), caller, caller, args)));
+}
 
 static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 {
@@ -17983,16 +17987,16 @@ static s7_pointer expt_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer pw)
 
 	    if (x == -1)
 	      {
-		if (y == S7_INT64_MIN)                          /* (expt -1 most-negative-fixnum) */
+		if (y == S7_INT64_MIN)                        /* (expt -1 most-negative-fixnum) */
 		  return(int_one);
-		if (s7_int_abs(y) & 1)                          /* (expt -1 odd-int) */
+		if (s7_int_abs(y) & 1)                        /* (expt -1 odd-int) */
 		  return(n);
 		return(int_one);                              /* (expt -1 even-int) */
 	      }
 
-	    if (y == S7_INT64_MIN)                              /* (expt x most-negative-fixnum) */
+	    if (y == S7_INT64_MIN)                            /* (expt x most-negative-fixnum) */
 	      return(int_zero);
-	    if (x == S7_INT64_MIN)                              /* (expt most-negative-fixnum y) */
+	    if (x == S7_INT64_MIN)                            /* (expt most-negative-fixnum y) */
 	      return(make_real(sc, pow((double)x, (double)y)));
 
 	    if (int_pow_ok(x, s7_int_abs(y)))
@@ -18013,7 +18017,6 @@ static s7_pointer expt_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer pw)
 		  return(int_zero);                  /* (expt 4/3 most-negative-fixnum) -> 0? */
 		return(real_infinity);               /* (expt 3/4 most-negative-fixnum) -> inf? */
 	      }
-
 	    if ((int_pow_ok(nm, s7_int_abs(y))) &&
 		(int_pow_ok(dn, s7_int_abs(y))))
 	      {
@@ -28891,7 +28894,14 @@ static bool is_directory(const char *filename)
   return(false);
 }
 
-static s7_pointer file_error(s7_scheme *sc, const char *caller, const char *descr, const char *name);
+static s7_pointer file_error(s7_scheme *sc, const char *caller, const char *descr, const char *name)
+{
+  return(s7_error(sc, sc->io_error_symbol,
+		  set_elist_4(sc, wrap_string(sc, "~A: ~A ~S", 9),
+				  s7_make_string_wrapper(sc, caller),
+				  s7_make_string_wrapper(sc, descr),
+				  s7_make_string_wrapper(sc, name))));
+}
 
 static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char *mode, const char *caller)
 {
@@ -29154,10 +29164,7 @@ static inline s7_pointer open_and_protect_input_string(s7_scheme *sc, s7_pointer
   return(p);
 }
 
-s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string)
-{
-  return(open_input_string(sc, input_string, safe_strlen(input_string)));
-}
+s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string) {return(open_input_string(sc, input_string, safe_strlen(input_string)));}
 
 static s7_pointer g_open_input_string(s7_scheme *sc, s7_pointer args)
 {
@@ -50726,21 +50733,6 @@ s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n
 s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args)
 {
   return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_2(sc, s7_make_string_wrapper(sc, caller), args))); /* "caller" includes the format directives */
-}
-
-static s7_pointer division_by_zero_error(s7_scheme *sc, s7_pointer caller, s7_pointer args)
-{
-  return(s7_error(sc, sc->division_by_zero_symbol, 
-		  set_elist_4(sc, wrap_string(sc, "~A: division by zero, (~A ~{~S~^ ~})", 36), caller, caller, args)));
-}
-
-static s7_pointer file_error(s7_scheme *sc, const char *caller, const char *descr, const char *name)
-{
-  return(s7_error(sc, sc->io_error_symbol,
-		  set_elist_4(sc, wrap_string(sc, "~A: ~A ~S", 9),
-				  s7_make_string_wrapper(sc, caller),
-				  s7_make_string_wrapper(sc, descr),
-				  s7_make_string_wrapper(sc, name))));
 }
 
 
@@ -95676,5 +95668,4 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  *
  * print-length pairs = elements?
- *   repl truncates at print-length in input!!  nrepl input is not truncated I think
  */

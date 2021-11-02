@@ -5,7 +5,7 @@
 (provide 'repl.scm)
 
 (when (= (*s7* 'print-length) 12)    ; default value
-  (set! (*s7* 'print-length) 60))
+  (set! (*s7* 'print-length) 32))
 
 (when (file-exists? ".repl")         ; local (scheme) initialization file for repl
   (load ".repl"))
@@ -424,18 +424,19 @@
 		  (if (and (integer? red-par-pos)
 			   (<= start red-par-pos)
 			   (< red-par-pos end))
-		      (string-append
-		       (format #f (if (zero? start)
-				      (values "~A" prompt-string)
-				      (values "~NC" prompt-length #\space)))
-		       (format #f (if (= start red-par-pos)
-				      (values "~A~A"
-					      (bold (red "(")) 
-					      (substring cur-line (+ start 1) end))
-				      (values "~A~A~A"
-					      (substring cur-line start red-par-pos) 
-					      (bold (red "(")) 
-					      (substring cur-line (+ red-par-pos 1) end)))))
+		      (let-temporarily (((*s7* 'print-length) 10000))
+			(string-append
+			 (format #f (if (zero? start)
+					(values "~A" prompt-string)
+					(values "~NC" prompt-length #\space)))
+			 (format #f (if (= start red-par-pos)
+					(values "~A~A"
+						(bold (red "(")) 
+						(substring cur-line (+ start 1) end))
+					(values "~A~A~A"
+						(substring cur-line start red-par-pos) 
+						(bold (red "(")) 
+						(substring cur-line (+ red-par-pos 1) end))))))
 		      (format #f (if (zero? start)
 				     (values "~A~A" prompt-string (substring cur-line 0 end))
 				     (values "~NC~A" prompt-length #\space (substring cur-line start end))))))))
