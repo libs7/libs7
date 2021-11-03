@@ -51025,6 +51025,13 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
 s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler)
 {
   s7_pointer p, result;
+#if 0
+  if (sc->stack_end == sc->stack_start) /* no stack! -- maybe put this in s7_init? */
+    {
+      /* push_stack_direct(sc, OP_BARRIER); */
+      push_stack_direct(sc, OP_EVAL_DONE);
+    }
+#endif
   new_cell(sc, p, T_CATCH);
   catch_tag(p) = tag;
   catch_goto_loc(p) = current_stack_top(sc);
@@ -54953,6 +54960,8 @@ static s7_pointer fx_c_c_opsq_direct(s7_scheme *sc, s7_pointer arg)
 {
   return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, cadr(arg), ((s7_p_p_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt1_sym(cdr(arg))))));
 }
+
+/* perhaps fx_c_c_opt|T|Vq_direct tlet/tmisc */
 
 static s7_pointer fx_c_opsq_opsq(s7_scheme *sc, s7_pointer arg)
 {
@@ -95258,6 +95267,10 @@ s7_scheme *s7_init(void)
   init_unlet(sc);
   init_s7_let(sc);          /* set up *s7* */
   init_signatures(sc);      /* depends on procedure symbols */
+
+  /* push_stack(sc, OP_BARRIER, sc->nil, sc->nil); */
+  push_stack(sc, OP_EVAL_DONE, sc->nil, sc->nil);
+
   return(sc);
 }
 
