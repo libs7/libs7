@@ -53183,7 +53183,6 @@ static s7_pointer fx_add_uv(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, 
 static s7_pointer fx_add_us(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, u_lookup(sc, cadr(arg), arg), s_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_add_vu(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, v_lookup(sc, cadr(arg), arg), u_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 
-
 #define fx_subtract_s1_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
   { \
@@ -53796,7 +53795,9 @@ static s7_pointer fx_geq_us(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, 
 static s7_pointer fx_geq_vs(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, v_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_geq_tT(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, t_lookup(sc, cadr(arg), arg), T_lookup(sc, caddr(arg), arg)));}
 static s7_pointer fx_geq_tu(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));}
+static s7_pointer fx_geq_TU(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, T_lookup(sc, cadr(arg), arg), U_lookup(sc, caddr(arg), arg)));}
 static s7_pointer fx_geq_to(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, t_lookup(sc, cadr(arg), arg), o_lookup(sc, opt2_sym(cdr(arg)), arg)));}
+static s7_pointer fx_geq_vo(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, v_lookup(sc, cadr(arg), arg), o_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_geq_ot(s7_scheme *sc, s7_pointer arg) {return(geq_p_pp(sc, o_lookup(sc, cadr(arg), arg), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 
 static s7_pointer fx_gt_ss(s7_scheme *sc, s7_pointer arg) {return(gt_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
@@ -56925,6 +56926,7 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 	  if (fx_proc(tree) == fx_multiply_ss) return(with_fx(tree, fx_multiply_Ts));
 	  if ((fx_proc(tree) == fx_c_scs_direct) && (cadddr(p) == var2)) return(with_fx(tree, fx_c_TcU_direct));
 	  if ((fx_proc(tree) == fx_hash_table_ref_ss) && (var3 == caddr(p))) return(with_fx(tree, fx_hash_table_ref_TV));
+	  if ((fx_proc(tree) == fx_geq_ss) && (var2 == caddr(p))) return(with_fx(tree, fx_geq_TU));
 	}
       else
 	if (cadr(p) == var2)
@@ -57269,7 +57271,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	{
 	  if (fx_proc(tree) == fx_num_eq_ss) return(with_fx(tree, fx_num_eq_vs));
 	  if ((fx_proc(tree) == fx_add_ss) && (caddr(p) == var2)) return(with_fx(tree, fx_add_vu));
-	  if (fx_proc(tree) == fx_geq_ss) return(with_fx(tree, fx_geq_vs));
+	  if (fx_proc(tree) == fx_geq_ss) return(with_fx(tree, ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) ? fx_geq_vo : fx_geq_vs));
 	}
       break;
 
@@ -65290,7 +65292,6 @@ static s7_pointer opt_do_step_i(opt_info *o)
 
   o1 = do_any_results(o);
   result = o1->v[0].fp(o1);
-
   unstack(sc);
   set_curlet(sc, old_e);
   return(result);
@@ -80589,6 +80590,29 @@ static s7_pointer check_do(s7_scheme *sc)
   if (is_null(vars))
     {
       pair_set_syntax_op(form, OP_DO_NO_VARS);
+      if ((is_pair(car(end))) && /* this code is repeated below */
+	  (has_fx(end)) &&
+	  (!(is_syntax(caar(end)))) &&
+	  (!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
+	{
+	  s7_pointer v1 = NULL, v2 = NULL, v3 = NULL;
+	  bool more_vs = false;
+	  if (tis_slot(let_slots(sc->curlet))) /* outer vars */
+	    {
+	      p = let_slots(sc->curlet);
+	      v1 = slot_symbol(p);
+	      p = next_slot(p);
+	      if (tis_slot(p)) 
+		{
+		  v2 = slot_symbol(p);
+		  p = next_slot(p);
+		  if (tis_slot(p))
+		    {
+		      v3 = slot_symbol(p);
+		      more_vs = tis_slot(next_slot(p));
+		    }}}
+	  if (v1) fx_tree_outer(sc, end, v1, v2, v3, more_vs);
+	}
       return(sc->nil);
     }
   if (do_tree_has_definers(sc, form))           /* we don't want definers in body, vars, or end test */
@@ -80828,7 +80852,7 @@ static s7_pointer check_do(s7_scheme *sc)
 	    s7_pointer var = car(p);
 	    if (is_pair(cdr(var)))
 	      {
-		if (var1) fx_tree_in(sc, cdr(var), var1, var2, var3, more_vars); /* init vals */
+		if (var1) fx_tree_in(sc, cdr(var), var1, var2, var3, more_vars); /* init vals, more_vars refers to outer let, stepper3 == local let more_vars */
 		if (is_pair(cddr(var)))
 		  {
 		    if (stepper0) fx_tree(sc, cddr(var), stepper0, stepper1, stepper2, stepper3);
@@ -95624,45 +95648,45 @@ int main(int argc, char **argv)
  * tmock      7738         1177   1165   1054   1058
  * tvect      1892         2456   2413   1712   1712
  * texit      1768         ----   ----   1801   1796
- * s7test     4506         1873   1831   1784   1830
- * lt         2121         2123   2110   2108   2110
- * tform      3235         2281   2273   2242   2240
+ * s7test     4506         1873   1831   1784   1800
+ * lt         2121         2123   2110   2108   2109
+ * tform      3235         2281   2273   2242   2242
  * tmac       2452         3317   3277   2420   2418
- * tread      2606         2440   2421   2415   2417
+ * tread      2606         2440   2421   2415   2423
  * fbench     2848         2688   2583   2458   2460
  * trclo      4107         2735   2574   2459   2459
  * tmat       2683         3065   3042   2513   2514
  * tcopy      2610         8035   5546   2536   2539
- * dup        2783         3805   3788   2559   2550
+ * dup        2783         3805   3788   2559   2545
  * tauto      2763         ----   ----   2356   2556
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
- * tset       3114         3253   3104   3081   3024
+ * tset       3114         3253   3104   3081   3026
  * tload      3861         ----   ----   3155   3083
  * teq        3554         4068   4045   3539   3542
  * tio        3710         3816   3752   3680   3672
- * tclo       4622         4787   4735   4408   4388
- * tcase      4519         4960   4793   4441   4432
+ * tclo       4622         4787   4735   4408   4387
+ * tcase      4519         4960   4793   4441   4433
  * tlet       5278         7775   5640   4435   4439
  * tmap       5491         8869   8774   4492   4488
- * tfft      115.0         7820   7729   4778   4778
+ * tfft      115.0         7820   7729   4778   4753
  * tshoot     6923         5525   5447   5210   5206
- * tnum       56.7         6348   6013   5439   5424
+ * tnum       56.7         6348   6013   5439   5421
  * tstr       6187         6880   6342   5509   5498
  * tgsl       25.2         8485   7802   6390   6387
  * tmisc      6344         8869   7612   6472   6472
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
- * tari       ----         13.0   12.7   6860   6828
- * tleft      9491         10.4   10.2   8354   7779
+ * tari       ----         13.0   12.7   6860   6830
+ * tleft      9491         10.4   10.2   8354   7777
  * tgc        10.1         11.9   11.1   8666   8642
  * cb         16.8         11.2   11.0   9897   9683
  * thash      35.4         11.8   11.7   9711   9732
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   55.9
+ * calls      55.3         36.7   37.5   37.0   37.1
+ * sg         75.8         ----   ----   55.9   56.1
  * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
