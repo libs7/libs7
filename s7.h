@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "9.18"
-#define S7_DATE "4-Nov-2021"
+#define S7_DATE "5-Nov-2021"
 #define S7_MAJOR_VERSION 9
 #define S7_MINOR_VERSION 18
 
@@ -454,7 +454,8 @@ s7_pointer s7_define_constant(s7_scheme *sc, const char *name, s7_pointer value)
 s7_pointer s7_define_constant_with_documentation(s7_scheme *sc, const char *name, s7_pointer value, const char *help);
 s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value);
   /* These functions add a symbol and its binding to either the top-level environment
-   *    or the 'env' passed as the second argument to s7_define.
+   *    or the 'env' passed as the second argument to s7_define.  Except for s7_define, they return
+   *    the name as a symbol.
    *
    *    s7_define_variable(sc, "*features*", s7_nil(sc));
    *
@@ -464,7 +465,7 @@ s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, 
    *
    * s7_define_variable is simply s7_define with string->symbol and the global environment.
    * s7_define_constant is s7_define but makes its "definee" immutable.
-   * s7_define is equivalent to define in Scheme.
+   * s7_define is equivalent to define in Scheme, except that it does not return the value.
    */
 
 bool s7_is_function(s7_pointer p); 
@@ -525,24 +526,26 @@ s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc, s7_
    *   Its name (for s7_describe_object) is 'name', it requires 'required_args' arguments,
    *   can accept 'optional_args' other arguments, and if 'rest_arg' is true, it accepts
    *   a "rest" argument (a list of all the trailing arguments).  The function's documentation
-   *   is 'doc'.
+   *   is 'doc'.  The s7_make_functions return the new function, but the s7_define_function (and macro)
+   *   procedures return the name as a symbol (a desire for backwards compatibility brought about this split).
    *
    * s7_define_function is the same as s7_make_function, but it also adds 'name' (as a symbol) to the
-   *   global (top-level) environment, with the function as its value.  For example, the Scheme
-   *   function 'car' is essentially:
+   *   global (top-level) environment, with the function as its value (and returns the symbol, not the function).  
+   *   For example, the Scheme function 'car' is essentially:
    *
    *     s7_pointer g_car(s7_scheme *sc, s7_pointer args) {return(s7_car(s7_car(args)));}
    *
    *   then bound to the name "car":
    *
    *     s7_define_function(sc, "car", g_car, 1, 0, false, "(car obj)");
-   *                                          one required arg, no optional arg, no "rest" arg
+   *                                          ^ one required arg, no optional arg, no "rest" arg
    *
    * s7_is_function returns true if its argument is a function defined in this manner.
    * s7_apply_function applies the function (the result of s7_make_function) to the arguments.
    *
    * s7_define_macro defines a Scheme macro; its arguments are not evaluated (unlike a function),
-   *   but its returned value (assumed to be some sort of Scheme expression) is evaluated.
+   *   but the macro's returned value (assumed to be some sort of Scheme expression) is evaluated.
+   *   s7_define_macro returns the name as a symbol.
    *
    * Use the "unsafe" definer if the function might call the evaluator itself in some way (s7_apply_function for example),
    *   or messes with s7's stack.
@@ -583,8 +586,10 @@ s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args);
 s7_pointer s7_call_with_location(s7_scheme *sc, s7_pointer func, s7_pointer args, const char *caller, const char *file, s7_int line);
 s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler);
   
-  /* s7_call takes a Scheme function (e.g. g_car above), and applies it to 'args' (a list of arguments) returning the result.
-   *   s7_integer(s7_call(s7, g_car, s7_cons(s7, s7_make_integer(s7, 123), s7_nil(s7))));
+  /* s7_call takes a Scheme function and applies it to 'args' (a list of arguments) returning the result.
+   *   s7_pointer kar;
+   *   kar = s7_make_function(sc, "car", g_car, 1, 0, false, "(car obj)");
+   *   s7_integer(s7_call(sc, kar, s7_cons(sc, s7_cons(sc, s7_make_integer(sc, 123), s7_nil(sc)), s7_nil(sc))));
    *   returns 123.
    *
    * s7_call_with_location passes some information to the error handler.

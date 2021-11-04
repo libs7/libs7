@@ -283,6 +283,8 @@ static s7_pointer open_plus(s7_scheme *sc, s7_pointer args)
   return(s7_f(sc));
 }
 
+static s7_pointer g_car(s7_scheme *sc, s7_pointer args) {return(s7_car(s7_car(args)));}
+
 
 typedef struct {
   size_t size;
@@ -2149,6 +2151,15 @@ int main(int argc, char **argv)
 				  s7_hook_functions(sc, test_hook)));
     s7_call(sc, test_hook, s7_list(sc, 2, TO_S7_INT(1), TO_S7_INT(2)));
     s7_call_with_location(sc, test_hook, s7_list(sc, 2, TO_S7_INT(1), TO_S7_INT(2)), "ffitest", "ffitest.c", __LINE__);
+  }
+
+  {
+    s7_pointer x, kar; /* from s7.h */
+    kar = s7_make_function(sc, "kar", g_car, 1, 0, false, "(car obj)");
+    x = s7_call(sc, kar, s7_cons(sc, s7_cons(sc, s7_make_integer(sc, 123), s7_nil(sc)), s7_nil(sc)));
+    if ((!s7_is_integer(x)) ||
+	(s7_integer(x) != 123))
+      fprintf(stderr, "s7_call x: %s\n", s7_object_to_c_string(sc, x));
   }
 
   {

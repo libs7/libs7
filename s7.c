@@ -3292,9 +3292,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define port_next(p)                   port_block(p)->nx.next
 #define port_original_input_string(p)  port_port(p)->orig_str
 #define port_output_function(p)        port_port(p)->output_function /* these two are for function ports */
-#define port_output_scheme_function(p) port_port(p)->orig_str
 #define port_input_function(p)         port_port(p)->input_function
-#define port_input_scheme_function(p)  port_port(p)->orig_str
+#define port_scheme_function(p)        port_port(p)->orig_str
 
 #define current_input_port(Sc)         Sc->input_port
 #define set_current_input_port(Sc, P)  Sc->input_port = P
@@ -6850,14 +6849,14 @@ static void mark_iterator(s7_pointer p)
 static void mark_input_port(s7_pointer p)
 {
   set_mark(p);
-  gc_mark(port_input_scheme_function(p)); /* this is also a string port's string */
+  gc_mark(port_scheme_function(p)); /* this is also a string port's string */
 }
 
 static void mark_output_port(s7_pointer p)
 {
   set_mark(p);
   if (is_function_port(p))
-    gc_mark(port_output_scheme_function(p));
+    gc_mark(port_scheme_function(p));
 }
 
 #define clear_type(p) full_type(p) = T_FREE
@@ -7597,6 +7596,7 @@ static void resize_op_stack(s7_scheme *sc)
 #define pop_stack(Sc) pop_stack_1(Sc, __func__, __LINE__)
 static void pop_stack_1(s7_scheme *sc, const char *func, int line)
 {
+  /* fprintf(stderr, "pop_stack %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (sc->stack_end < sc->stack_start)
     {
@@ -7625,6 +7625,7 @@ static void pop_stack_1(s7_scheme *sc, const char *func, int line)
 #define pop_stack_no_op(Sc) pop_stack_no_op_1(Sc, __func__, __LINE__)
 static void pop_stack_no_op_1(s7_scheme *sc, const char *func, int line)
 {
+  /* fprintf(stderr, "pop_stack_no_op %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (sc->stack_end < sc->stack_start)
     {
@@ -7758,6 +7759,7 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 #define unstack(Sc) unstack_1(Sc, __func__, __LINE__)
 static void unstack_1(s7_scheme *sc, const char *func, int line)
 {
+  /* fprintf(stderr, "unstack %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT)
     {
@@ -7770,6 +7772,7 @@ static void unstack_1(s7_scheme *sc, const char *func, int line)
 #define unstack_with(Sc, Op) unstack_2(Sc, Op, __func__, __LINE__)
 static void unstack_2(s7_scheme *sc, opcode_t op, const char *func, int line)
 {
+  /* fprintf(stderr, "unstack_with %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (((opcode_t)sc->stack_end[3]) != op)
     {
@@ -29326,7 +29329,7 @@ static s7_pointer g_closed_input_function_port(s7_scheme *sc, s7_pointer args)
 static void close_input_function(s7_scheme *sc, s7_pointer p)
 {
   port_port(p)->pf = &closed_port_functions;
-  port_input_scheme_function(p) = sc->closed_input_function; /* from s7_make_function so it is GC-protected */
+  port_scheme_function(p) = sc->closed_input_function; /* from s7_make_function so it is GC-protected */
   port_set_closed(p, true);
 }
 
@@ -29357,7 +29360,7 @@ s7_pointer s7_open_input_function(s7_scheme *sc, s7_pointer (*function)(s7_schem
   port_block(x) = b;
   port_port(x) = (port_t *)block_data(b);
   function_port_set_defaults(x);
-  port_input_scheme_function(x) = sc->nil;
+  port_scheme_function(x) = sc->nil;
   port_input_function(x) = function;
   port_port(x)->pf = &input_function_functions;
   add_input_port(sc, x);
@@ -29377,7 +29380,7 @@ static void init_open_input_function_choices(s7_scheme *sc)
 
 static s7_pointer input_scheme_function_wrapper(s7_scheme *sc, s7_read_t read_choice, s7_pointer port)
 {
-  return(s7_apply_function(sc, port_input_scheme_function(port), set_plist_1(sc, sc->open_input_function_choices[(int)read_choice])));
+  return(s7_apply_function(sc, port_scheme_function(port), set_plist_1(sc, sc->open_input_function_choices[(int)read_choice])));
 }
 
 static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
@@ -29393,7 +29396,7 @@ static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
     return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port function, ~A, should take one argument", 58), func)));
 
   port = s7_open_input_function(sc, input_scheme_function_wrapper);
-  port_input_scheme_function(port) = func;
+  port_scheme_function(port) = func;
   return(port);
 }
 
@@ -29407,7 +29410,7 @@ static s7_pointer g_closed_output_function_port(s7_scheme *sc, s7_pointer args)
 static void close_output_function(s7_scheme *sc, s7_pointer p)
 {
   port_port(p)->pf = &closed_port_functions;
-  port_output_scheme_function(p) = sc->closed_output_function;
+  port_scheme_function(p) = sc->closed_output_function;
   port_set_closed(p, true);
 }
 
@@ -29424,7 +29427,7 @@ s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc
   port_port(x) = (port_t *)block_data(b);
   function_port_set_defaults(x);
   port_output_function(x) = function;
-  port_output_scheme_function(x) = sc->nil;
+  port_scheme_function(x) = sc->nil;
   port_port(x)->pf = &output_function_functions;
   add_output_port(sc, x);
   return(x);
@@ -29432,7 +29435,7 @@ s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc
 
 static void output_scheme_function_wrapper(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
-  s7_apply_function(sc, port_output_scheme_function(port), set_plist_1(sc, make_integer(sc, c)));
+  s7_apply_function(sc, port_scheme_function(port), set_plist_1(sc, make_integer(sc, c)));
 }
 
 static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
@@ -29448,7 +29451,7 @@ static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
     return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "output-function-port function, ~A, should take one argument", 59), func)));
 
   port = s7_open_output_function(sc, output_scheme_function_wrapper);
-  port_output_scheme_function(port) = func;
+  port_scheme_function(port) = func;
   mark_function[T_OUTPUT_PORT] = mark_output_port;
   return(port);
 }
@@ -29839,7 +29842,7 @@ s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
 	  eval(sc, OP_READ_INTERNAL);
 	  if (sc->tok == TOKEN_EOF)
 	    sc->value = eof_object;
-	  if ((sc->cur_op == OP_EVAL_DONE) &&
+	  if ((sc->cur_op == OP_EVAL_DONE) && /* pushed above */
 	      (stack_op(sc->stack, current_stack_top(sc) - 1) == OP_BARRIER))
 	    pop_stack(sc);
 	}
@@ -30677,7 +30680,8 @@ s7_pointer s7_eval_c_string_with_environment(s7_scheme *sc, const char *str, s7_
   code = s7_read(sc, port);
   s7_close_input_port(sc, port);
   result = s7_eval(sc, T_Pos(code), e);
-  pop_stack(sc);
+  if (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT)
+    unstack(sc); /* pop_stack(sc); */
   return(result);
 }
 
@@ -45555,10 +45559,22 @@ static s7_pointer g_is_c_object(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- c-object-type -------------------------------- */
+static s7_pointer apply_error(s7_scheme *sc, s7_pointer obj, s7_pointer args)
+{
+  /* the operator type is needed here else the error message is confusing:
+   *    (apply '+ (list 1 2))) -> ;attempt to apply + to (1 2)?
+   */
+  if (is_null(obj))
+    return(s7_error(sc, sc->syntax_error_symbol,
+		    set_elist_3(sc, wrap_string(sc, "attempt to apply nil to ~S in ~S?", 33),
+				args, current_code(sc))));
+  return(s7_error(sc, sc->syntax_error_symbol,
+		  set_elist_5(sc, wrap_string(sc, "attempt to apply ~A ~S to ~S in ~S?", 35),
+			      type_name_string(sc, obj), obj, args, current_code(sc))));
+}
+
 static void fallback_free(void *value) {}
 static void fallback_mark(void *value) {}
-
-static s7_pointer apply_error(s7_scheme *sc, s7_pointer obj, s7_pointer args);
 
 static s7_pointer fallback_ref(s7_scheme *sc, s7_pointer args)   {return(apply_error(sc, car(args), cdr(args)));}
 static s7_pointer fallback_set(s7_scheme *sc, s7_pointer args)   {return(eval_error(sc, "attempt to set ~S?", 18, car(args)));}
@@ -49955,7 +49971,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
 		make_string_with_length(sc, (const char *)port_data(obj), ((port_position(obj)) > 16) ? 16 : port_position(obj)));
     }
   if (is_function_port(obj))
-    s7_varlet(sc, let, sc->function_symbol, (is_input_port(obj)) ? port_input_scheme_function(obj) : port_output_scheme_function(obj));
+    s7_varlet(sc, let, sc->function_symbol, port_scheme_function(obj));
   s7_gc_unprotect_at(sc, gc_loc);
   return(let);
 }
@@ -51025,13 +51041,10 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
 s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler)
 {
   s7_pointer p, result;
-#if 0
-  if (sc->stack_end == sc->stack_start) /* no stack! -- maybe put this in s7_init? */
-    {
-      /* push_stack_direct(sc, OP_BARRIER); */
-      push_stack_direct(sc, OP_EVAL_DONE);
-    }
-#endif
+
+  if (sc->stack_end == sc->stack_start) /* no stack! */
+    push_stack_direct(sc, OP_EVAL_DONE);
+
   new_cell(sc, p, T_CATCH);
   catch_tag(p) = tag;
   catch_goto_loc(p) = current_stack_top(sc);
@@ -51835,20 +51848,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
   return(type);
 }
 
-static s7_pointer apply_error(s7_scheme *sc, s7_pointer obj, s7_pointer args)
-{
-  /* the operator type is needed here else the error message is confusing:
-   *    (apply '+ (list 1 2))) -> ;attempt to apply + to (1 2)?
-   */
-  if (is_null(obj))
-    return(s7_error(sc, sc->syntax_error_symbol,
-		    set_elist_3(sc, wrap_string(sc, "attempt to apply nil to ~S in ~S?", 33),
-				args, current_code(sc))));
-  return(s7_error(sc, sc->syntax_error_symbol,
-		  set_elist_5(sc, wrap_string(sc, "attempt to apply ~A ~S to ~S in ~S?", 35),
-			      type_name_string(sc, obj), obj, args, current_code(sc))));
-}
-
 static s7_pointer read_error_1(s7_scheme *sc, const char *errmsg, bool string_error)
 {
   /* reader errors happen before the evaluator gets involved, so forms such as:
@@ -52588,7 +52587,10 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
 {
   declare_jump_info();
   TRACK(sc);
-
+#if 0
+  fprintf(stderr, "s7_eval\n");
+  s7_show_stack(sc);
+#endif
   if (sc->safety > NO_SAFETY)
     {
       if (!s7_is_valid(sc, code))
@@ -54773,15 +54775,20 @@ static s7_pointer fx_multiply_c_opssq(s7_scheme *sc, s7_pointer arg) /* (* c=flo
   return(multiply_p_pp(sc, cadr(arg), multiply_p_pp(sc, x1, x2)));
 }
 
-static s7_pointer fx_c_s_opscq(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer largs = caddr(arg);
-  set_car(sc->t2_1, lookup(sc, cadr(largs)));
-  set_car(sc->t2_2, opt2_con(cdr(largs)));
-  set_car(sc->t2_2, fn_proc(largs)(sc, sc->t2_1));
-  set_car(sc->t2_1, lookup(sc, cadr(arg)));
-  return(fn_proc(arg)(sc, sc->t2_1));
-}
+#define fx_c_s_opscq_any(Name, Lookup1, Lookup2)		\
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg)		\
+  {								\
+    s7_pointer largs = caddr(arg);				\
+    set_car(sc->t2_1, Lookup2(sc, cadr(largs), arg));		\
+    set_car(sc->t2_2, opt2_con(cdr(largs)));			\
+    set_car(sc->t2_2, fn_proc(largs)(sc, sc->t2_1));		\
+    set_car(sc->t2_1, Lookup1(sc, cadr(arg), arg));		\
+    return(fn_proc(arg)(sc, sc->t2_1));				\
+  }
+
+fx_c_s_opscq_any(fx_c_s_opscq, s_lookup, s_lookup)
+fx_c_s_opscq_any(fx_c_u_optcq, u_lookup, t_lookup)
+/* also fx_c_T_optcq */
 
 static s7_pointer fx_c_s_opscq_direct(s7_scheme *sc, s7_pointer arg)
 {
@@ -57542,11 +57549,14 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_S_opSCq:
+      /* fprintf(stderr, "%s %s %s %s %d\n", display(p), display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", more_vars); */
       if (cadr(p) == var1)
 	{
 	  if (fx_proc(tree) == fx_c_s_opscq_direct) return(with_fx(tree, (cadaddr(p) == var2) ? fx_c_t_opucq_direct : fx_c_t_opscq_direct));
       	  if ((fx_proc(tree) == fx_c_s_opsiq_direct) && (!more_vars) && (o_var_ok(cadaddr(p), var1, var2, var3))) return(with_fx(tree, fx_c_t_opoiq_direct));
 	}
+      else
+	if ((cadr(p) == var2) && (cadaddr(p) == var1) && (fx_proc(tree) == fx_c_s_opscq)) return(with_fx(tree, fx_c_u_optcq));
       break;
 
     case HOP_SAFE_C_opSq_CS:
@@ -95267,10 +95277,6 @@ s7_scheme *s7_init(void)
   init_unlet(sc);
   init_s7_let(sc);          /* set up *s7* */
   init_signatures(sc);      /* depends on procedure symbols */
-
-  /* push_stack(sc, OP_BARRIER, sc->nil, sc->nil); */
-  push_stack(sc, OP_EVAL_DONE, sc->nil, sc->nil);
-
   return(sc);
 }
 
@@ -95694,7 +95700,7 @@ int main(int argc, char **argv)
  * tari       ----         13.0   12.7   6860   6830
  * tleft      9491         10.4   10.2   8354   7777
  * tgc        10.1         11.9   11.1   8666   8642
- * cb         16.8         11.2   11.0   9897   9683
+ * cb         16.8         11.2   11.0   9897   9683  9658
  * thash      35.4         11.8   11.7   9711   9732
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
@@ -95705,4 +95711,6 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  *
  * print-length pairs = elements?
+ * s7_eval_without_catch and same c_string?
+ * testerror -> ffitest
  */
