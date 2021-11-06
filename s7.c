@@ -1379,7 +1379,7 @@ struct s7_scheme {
   s7_pointer safe_lists[NUM_SAFE_LISTS];
   int32_t current_safe_list;
 
-  s7_pointer autoload_table, s7_let, s7_let_symbol;
+  s7_pointer autoload_table, s7_let, s7_let_symbol, let_temp_hook;
   const char ***autoload_names;
   s7_int *autoload_names_sizes;
   bool **autoloaded_already;
@@ -7038,6 +7038,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->stacktrace_defaults);
   gc_mark(sc->autoload_table);
   gc_mark(sc->default_rng);
+  gc_mark(sc->let_temp_hook);
 
   /* permanent lists that might escape and therefore need GC protection */
   mark_pair(sc->temp_cell_2);
@@ -50185,7 +50186,6 @@ static bool stacktrace_error_hook_function(s7_scheme *sc, s7_pointer sym)
       s7_pointer f;
       f = s7_symbol_value(sc, sym);
       return((is_procedure(f)) &&
-	     (is_procedure(sc->error_hook)) &&
 	     (hook_has_functions(sc->error_hook)) &&
 	     (direct_memq(f, s7_hook_functions(sc, sc->error_hook))));
     }
@@ -51457,7 +51457,7 @@ static bool catch_barrier_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_
 
 static bool catch_hook_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  sc->error_hook = stack_code(sc->stack, i);
+  s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, stack_code(sc->stack, i));
   /* apparently there was an error during *error-hook* evaluation, but Rick wants the hook re-established anyway */
   (*reset_hook) = true;
   /* avoid infinite loop -- don't try to (re-)evaluate (buggy) *error-hook*! */
@@ -51472,6 +51472,28 @@ static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
 
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  /* fprintf(stderr, "%s%s[%d]%s: %s %s %d\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(type), display(info), *reset_hook); */
+  /* fprintf(stderr, "%s%s[%d]%s: %d %d\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, *reset_hook, hook_has_functions(sc->error_hook)); */
+
+  /* this is aimed at let-temp error-hook... error -- not yet tested much */
+  if ((!*reset_hook) &&
+      (hook_has_functions(sc->error_hook)))
+    {
+      s7_pointer error_hook_funcs;
+      error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
+      s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
+      s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, error_hook_funcs);
+      sc->code = sc->let_temp_hook;
+      sc->args = list_2(sc, type, info);
+      /* TODO: wrap this in a catch resetting error_hook if error hit */
+      eval(sc, OP_APPLY);
+
+      /* TODO: perhaps this needs to be waiting on the stack, and then return sc->value(?) from eval */
+      s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, error_hook_funcs);
+      s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, sc->nil);
+      let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
+      return(true);  /* long_jmp here if from s7_error */
+    }
   let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
   return(false);
 }
@@ -51604,6 +51626,8 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
   bool reset_error_hook = false;
   s7_pointer cur_code;
 
+  /* fprintf(stderr, "s7_error %s %s\n", display(type), display(info)); */
+
   /* type is a symbol normally, and info is compatible with format: (apply format #f info) --
    *    car(info) is the control string, cdr(info) its args
    *    type/range errors have cadr(info)=caller, caddr(info)=offending arg number
@@ -51699,21 +51723,28 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	    if ((S7_DEBUGGING) && (!sc->longjmp_ok)) fprintf(stderr, "s7_error jump not available?\n");
 	    LongJmp(sc->goto_start, CATCH_JUMP);
 	  }}}
-  /* error not caught */
-  /* (set! *error-hook* (list (lambda (hook) (apply format #t (hook 'args))))) */
+  /* error not caught (but catcher might have been called and returned false) */
 
+#if 0
+  fprintf(stderr, "error-hook: %d %d %s\n", 
+	  !reset_error_hook,
+	  hook_has_functions(sc->error_hook),
+	  display(s7_hook_functions(sc, sc->error_hook)));
+#endif
   if ((!reset_error_hook) &&
-      (is_procedure(sc->error_hook)) &&
       (hook_has_functions(sc->error_hook)))
     {
-      s7_pointer error_hook_func;
+      s7_pointer error_hook_funcs;
       /* (set! (hook-functions *error-hook*) (list (lambda (h) (format *stderr* "got error ~A~%" (h 'args))))) */
-      error_hook_func = sc->error_hook;
-      sc->error_hook = sc->nil;
-      /* if the *error-hook* functions trigger an error, we had better not have *error-hook* still set! */
 
-      push_stack(sc, OP_ERROR_HOOK_QUIT, sc->nil, error_hook_func); /* restore *error-hook* upon successful (or any!) evaluation */
-      sc->code = error_hook_func;
+      error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
+      s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
+      s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, error_hook_funcs);
+      /* if the *error-hook* functions trigger an error, we had better not have hook_functions(*error-hook*) still set! */
+
+      /* here we have no catcher (anywhere!), we're headed back to the top-level(?), so error_hook_quit can call reset_stack? */
+      push_stack(sc, OP_ERROR_HOOK_QUIT, sc->nil, error_hook_funcs); /* restore *error-hook* upon successful (or any!) evaluation */
+      sc->code = sc->let_temp_hook;
       sc->args = list_2(sc, type, info);
       /* if we drop into the longjmp below, the hook functions are not called!
        *   OP_ERROR_HOOK_QUIT performs the longjmp, so it should be safe to go to eval.
@@ -52161,7 +52192,8 @@ static void improper_arglist_error(s7_scheme *sc)
 
 static void op_error_hook_quit(s7_scheme *sc)
 {
-  sc->error_hook = sc->code;  /* restore old value */
+  s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->code);  /* restore old value */
+  s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, sc->nil);
   /* now mimic the end of the normal error handler.  Since this error hook evaluation can happen
    *   in an arbitrary s7_call nesting, we can't just return from the current evaluation --
    *   we have to jump to the original (top-level) call.  Otherwise '#<unspecified> or whatever
@@ -52623,7 +52655,6 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
   return(sc->value);
 }
 
-
 static s7_pointer g_eval(s7_scheme *sc, s7_pointer args)
 {
   #define H_eval "(eval code (let (curlet))) evaluates code in the environment let. 'let' \
@@ -52662,6 +52693,7 @@ pass (rootlet):\n\
   push_stack_direct(sc, OP_EVAL);
   return(sc->nil);
 }
+
 
 s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args)
 {
@@ -69737,7 +69769,8 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 	      old_history_enabled = s7_set_history_enabled(sc, false);
 	      old_hook = sc->unbound_variable_hook;
 	      set_car(sc->z2_1, old_hook);
-	      sc->unbound_variable_hook = sc->error_hook;      /* avoid the infinite loop mentioned above -- error_hook might be () or #f if we're in error-hook now */
+	      /* TODO: clear this hook -- using error_hook will fail */
+	      sc->unbound_variable_hook = sc->error_hook;
 	      result = s7_call(sc, old_hook, set_plist_1(sc, sym)); /* not s7_apply_function */
 	      sc->unbound_variable_hook = old_hook;
 	      s7_set_history_enabled(sc, old_history_enabled);
@@ -76590,6 +76623,7 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
 
 static bool op_let_temp_done1(s7_scheme *sc)
 {
+  /* fprintf(stderr, "%s%s[%d]%s: %s %s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(sc->code), display(sc->args)); */
   while (is_pair(car(sc->args)))
     {
       s7_pointer settee = caar(sc->args), p = cddr(sc->args);
@@ -76624,7 +76658,7 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	    slot_set_value(slot, call_setter(sc, slot, sc->value));
 	  else slot_set_value(slot, sc->value);
 	}}
-  pop_stack(sc);   /* remove the gc_protect */
+  pop_stack(sc); /* not unstack */
   sc->value = sc->code;
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
@@ -76656,11 +76690,15 @@ static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer code, s7_po
 {
   /* called in call/cc, call-with-exit and, catch (unwind to catch) */
   /* check_stack_size(sc); *//* 4-May-21 t101 36/38, but this is an infinite loop if stack resize raises an error (hit if eval is passed a circular list!) */
+#if 0
+  fprintf(stderr, "%s%s[%d]%s: code: %s, args: %s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(code), display(args));
+  fprintf(stderr, "%s%s[%d]%s: sc->code: %s, sc->args: %s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(sc->code), display(sc->args));
+#endif
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->args = T_Pos(args);
   sc->code = code;
   set_curlet(sc, let);
-  eval(sc, OP_LET_TEMP_DONE);
+  eval(sc, OP_LET_TEMP_DONE); /* goes to op_let_temp_done1 */
 }
 
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value)
@@ -91739,7 +91777,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CASE_A_S_G_A: sc->value = fx_case_a_s_g_a(sc, sc->code); continue;
 
 	case OP_ERROR_QUIT:
-	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_barrier and op_eval_done */
+	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_eval_done */
 	  return(sc->F);
 
 	case OP_ERROR_HOOK_QUIT:
@@ -95244,6 +95282,8 @@ s7_scheme *s7_init(void)
   s7_define_constant_with_documentation(sc, "*rootlet-redefinition-hook*", sc->rootlet_redefinition_hook,
 					"*rootlet-redefinition-hook* functions are called when a top-level variable's value is changed, (hook 'name 'value).");
 
+  sc->let_temp_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
+
   { /* *s7* is permanent -- 20-May-21 */
     s7_pointer x, slot1, slot2;
     x = alloc_pointer(sc);
@@ -95681,8 +95721,8 @@ int main(int argc, char **argv)
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
- * tset       3114         3253   3104   3081   3026
- * tload      3861         ----   ----   3155   3083
+ * tset       3114         3253   3104   3081   3026  3042
+ * tload      3861         ----   ----   3155   3083  3090
  * teq        3554         4068   4045   3539   3542
  * tio        3710         3816   3752   3680   3672
  * tclo       4622         4787   4735   4408   4387
@@ -95705,12 +95745,15 @@ int main(int argc, char **argv)
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.1
- * sg         75.8         ----   ----   55.9   56.1
+ * sg         75.8         ----   ----   55.9   56.0
  * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
  * -------------------------------------------------
  *
  * print-length pairs = elements?
  * s7_eval_without_catch and same c_string?
- * testerror -> ffitest
+ * testerror -> ffitest, nested s7_call/catch
+ * error_hook: need unwind on C side, see t534, and let_temp_hook cleared after use
+ *   save body locs for s7_let_set direct?
+ *   unbound-var-hook should not use error-hook
  */
