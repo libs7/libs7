@@ -51470,6 +51470,7 @@ static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
   return(false);
 }
 
+static bool op_let_temp_done1(s7_scheme *sc);
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   /* fprintf(stderr, "%s%s[%d]%s: %s %s %d\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(type), display(info), *reset_hook); */
@@ -51483,15 +51484,15 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
       error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, error_hook_funcs);
-      sc->code = sc->let_temp_hook;
-      sc->args = list_2(sc, type, info);
-      /* TODO: wrap this in a catch resetting error_hook if error hit */
-      eval(sc, OP_APPLY);
 
-      /* TODO: perhaps this needs to be waiting on the stack, and then return sc->value(?) from eval */
+      sc->value = s7_call(sc, sc->let_temp_hook, set_plist_2(sc, type, info));
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, error_hook_funcs);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, sc->nil);
-      let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
+
+      sc->args = stack_args(sc->stack, i);
+      sc->code = stack_code(sc->stack, i);
+      set_curlet(sc, stack_let(sc->stack, i));
+      op_let_temp_done1(sc);
       return(true);  /* long_jmp here if from s7_error */
     }
   let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
@@ -69669,7 +69670,8 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
   /* check *autoload*, autoload_names, then *unbound-variable-hook* */
   if ((sc->autoload_names) ||
       (is_hash_table(sc->autoload_table)) ||
-      (hook_has_functions(sc->unbound_variable_hook)))
+      ((is_procedure(sc->unbound_variable_hook)) &&
+       (hook_has_functions(sc->unbound_variable_hook))))
     {
       s7_pointer result, cur_code, value, code, args, current_let, x, z;
       /* sc->args and sc->code are pushed on the stack by s7_call, then
@@ -69765,12 +69767,10 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 	      /* (let () (set! (hook-functions *unbound-variable-hook*) (list (lambda (v) _asdf_))) _asdf_) */
 	      s7_pointer old_hook;
 	      bool old_history_enabled;
-
 	      old_history_enabled = s7_set_history_enabled(sc, false);
 	      old_hook = sc->unbound_variable_hook;
 	      set_car(sc->z2_1, old_hook);
-	      /* TODO: clear this hook -- using error_hook will fail */
-	      sc->unbound_variable_hook = sc->error_hook;
+	      sc->unbound_variable_hook = sc->nil;
 	      result = s7_call(sc, old_hook, set_plist_1(sc, sym)); /* not s7_apply_function */
 	      sc->unbound_variable_hook = old_hook;
 	      s7_set_history_enabled(sc, old_history_enabled);
@@ -76694,11 +76694,13 @@ static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer code, s7_po
   fprintf(stderr, "%s%s[%d]%s: code: %s, args: %s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(code), display(args));
   fprintf(stderr, "%s%s[%d]%s: sc->code: %s, sc->args: %s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(sc->code), display(sc->args));
 #endif
+  check_stack_size(sc);
   push_stack_direct(sc, OP_EVAL_DONE);
   sc->args = T_Pos(args);
   sc->code = code;
   set_curlet(sc, let);
-  eval(sc, OP_LET_TEMP_DONE); /* goes to op_let_temp_done1 */
+  op_let_temp_done1(sc);  /* an experiment 6-Nov-21 */
+  /* eval(sc, OP_LET_TEMP_DONE); */ /* goes to op_let_temp_done1 */
 }
 
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value)
@@ -95753,7 +95755,5 @@ int main(int argc, char **argv)
  * print-length pairs = elements?
  * s7_eval_without_catch and same c_string?
  * testerror -> ffitest, nested s7_call/catch
- * error_hook: need unwind on C side, see t534, and let_temp_hook cleared after use
- *   save body locs for s7_let_set direct?
- *   unbound-var-hook should not use error-hook
+ * check let-temp+all hooks
  */

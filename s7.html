@@ -4627,8 +4627,7 @@ To list all the local bindings from the error outward:
   (format () "~{~A ~}~%" e))
 </pre>
 
-<p>To see the current s7 stack, <code>(stacktrace)</code>.  You'll probably
-want to use this in conjunction with *error-hook*.
+<p>To see the current s7 stack, <code>(stacktrace)</code>.
 To evaluate the error handler in the environment of the error:
 </p>
 
@@ -4652,7 +4651,7 @@ To evaluate the error handler in the environment of the error:
 
 
 <p>The hook <em class=def id="errorhook">*error-hook*</em> provides a way to specialize error reporting.
-Its arguments are named 'type and 'data.
+Its arguments are named 'type and 'data.  It is called if there are no catches.
 </p>
 
 <pre class="indented">
@@ -8840,8 +8839,6 @@ s7_set_current_error_port(s7, old_port);
 </pre>
 <p>and if errmsg is not NULL, it posts it somewhere.
 (You'll also want to GC-protect the old port while it is idle).
-If you don't want catch or s7's error messages, you can go down
-a level via *error-hook*.
 </p>
 <p>s7_error does not return; its s7_pointer return type is just a convenience.  It unwinds the
 scheme stack, closing files, handling dynamic-winds, looking for a catch that matches its type argument
