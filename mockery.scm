@@ -973,7 +973,7 @@
 	    (immutable!
 	     (openlet 
 	      (sublet (*mock-random-state* 'mock-random-state-class)
-		'value (#_random-state seed carry)
+		'value (if (provided? 'gmp) (#_random-state seed) (#_random-state seed carry))
 		'mock-type 'mock-random-state?))))
 	  
 	  (set! mock-random-state? 

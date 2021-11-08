@@ -3794,8 +3794,7 @@ static s7_pointer wrap_integer(s7_scheme *sc, s7_int x)
 
 static s7_pointer wrap_real(s7_scheme *sc, s7_double x) 
 {
-  s7_pointer p;
-  p = car(sc->real_wrappers);
+  s7_pointer p = car(sc->real_wrappers);
   real(p) = x;
   sc->real_wrappers = cdr(sc->real_wrappers);
   return(p);
@@ -3933,8 +3932,7 @@ static Sentinel size_t catstrs_direct(char *dst, const char *s1, ...) /* NULL-te
 
 static char *pos_int_to_str(s7_scheme *sc, s7_int num, s7_int *len, char endc)
 {
-  char *p, *op;
-  p = (char *)(sc->int_to_str3 + INT_TO_STR_SIZE - 1);
+  char *op, *p = (char *)(sc->int_to_str3 + INT_TO_STR_SIZE - 1);
   op = p;
   *p-- = '\0';
   if (endc != '\0') *p-- = endc;
@@ -3945,8 +3943,7 @@ static char *pos_int_to_str(s7_scheme *sc, s7_int num, s7_int *len, char endc)
 
 static char *pos_int_to_str_direct(s7_scheme *sc, s7_int num)
 {
-  char *p;
-  p = (char *)(sc->int_to_str4 + INT_TO_STR_SIZE - 1);
+  char *p = (char *)(sc->int_to_str4 + INT_TO_STR_SIZE - 1);
   *p-- = '\0';
   do {*p-- = "0123456789"[num % 10]; num /= 10;} while (num);
   return((char *)(p + 1));
@@ -3954,8 +3951,7 @@ static char *pos_int_to_str_direct(s7_scheme *sc, s7_int num)
 
 static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
 {
-  char *p;
-  p = (char *)(sc->int_to_str5 + INT_TO_STR_SIZE - 1);
+  char *p = (char *)(sc->int_to_str5 + INT_TO_STR_SIZE - 1);
   *p-- = '\0';
   do {*p-- = "0123456789"[num % 10]; num /= 10;} while (num);
   return((char *)(p + 1));
@@ -4850,8 +4846,7 @@ static const char *check_name(s7_scheme *sc, int32_t typ)
 {
   if ((typ >= 0) && (typ < NUM_TYPES))
     {
-      s7_pointer p;
-      p = sc->prepackaged_type_names[typ];
+      s7_pointer p = sc->prepackaged_type_names[typ];
       if (is_string(p)) return(string_value(p));
     }
   return("unknown type!");
@@ -5149,10 +5144,9 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
       fprintf(stderr, "[%d]: %p type is %d?\n", line, obj, unchecked_type(obj));
     else
       {
-	s7_int free_type;
+	s7_int free_type = full_type(obj);
 	char *bits;
 	char fline[128];
-	free_type = full_type(obj);
 	full_type(obj) = obj->current_alloc_type;
 	printing_gc_info = true;
 	bits = describe_type_bits(sc, obj); /* this func called in type macro */
@@ -5161,15 +5155,9 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
 	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], previous: %s[%d], %sgc: %s[%d]%s\n",
-		BOLD_TEXT,
-		obj, line,
-		s7_type_names[obj->current_alloc_type & 0xff], obj->current_alloc_type, obj->current_alloc_type,
-		bits,
-		obj->current_alloc_func, obj->current_alloc_line,
-		obj->previous_alloc_func, obj->previous_alloc_line,
-		(obj->explicit_free_line > 0) ? fline : "",
-		obj->gc_func, obj->gc_line,
-		UNBOLD_TEXT);
+		BOLD_TEXT, obj, line, s7_type_names[obj->current_alloc_type & 0xff], obj->current_alloc_type, obj->current_alloc_type,
+		bits, obj->current_alloc_func, obj->current_alloc_line, obj->previous_alloc_func, obj->previous_alloc_line,
+		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	UNBOLD_TEXT);
 	free(bits);
       }
   if (sc->stop_at_error) abort();
@@ -5495,14 +5483,13 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
 {
   /* show current state, current allocated state, and previous allocated state */
   char *current_bits, *allocated_bits, *previous_bits, *str;
-  int64_t save_full_type;
+  int64_t save_full_type = full_type(obj);
   s7_int len, nlen;
   const char *excl_name;
   block_t *b;
 
   excl_name = (is_free(obj)) ? "free cell!" : "unknown object!";
   current_bits = describe_type_bits(sc, obj);
-  save_full_type = full_type(obj);
   full_type(obj) = obj->current_alloc_type;
   allocated_bits = describe_type_bits(sc, obj);
   full_type(obj) = obj->previous_alloc_type;
@@ -49633,8 +49620,7 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
   if (!is_keyword(obj))
     {
       s7_pointer val;
-      s7_int gc_loc;
-      gc_loc = gc_protect_1(sc, let);
+      s7_int gc_loc = gc_protect_1(sc, let);
       if (!sc->current_value_symbol)
 	sc->current_value_symbol = make_symbol(sc, "current-value");
       val = s7_symbol_value(sc, obj);
@@ -50105,12 +50091,10 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
 			   sc->type_symbol, sc->is_string_symbol,
 			   sc->size_symbol, str_length(sc, obj),
 			   sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_string(obj))));
-
     case T_PAIR:
       return(g_local_inlet(sc, 6, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_pair_symbol,
 			   sc->size_symbol, pair_length(sc, obj)));
-
     case T_SYNTAX:
       return(g_local_inlet(sc, 6, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_syntax_symbol,
@@ -68269,9 +68253,9 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       {
 	s7_pointer old_value = sc->value;
 	bool mv = is_multiple_value(args);
-	if(mv) clear_multiple_value(args);
+	if (mv) clear_multiple_value(args);
 	sc->value = cons(sc, sc->values_symbol, args);
-	dynamic_unwind(sc, stack_code(sc->stack, top), stack_args(sc->stack, top)); /* position (curlet) */
+	dynamic_unwind(sc, stack_code(sc->stack, top), stack_args(sc->stack, top)); /* position (curlet), this applies code to sc->value */
 	sc->value = old_value;
 	if (mv) set_multiple_value(args);
 	sc->stack_end -= 4; /* either op is possible I think */
@@ -95755,5 +95739,4 @@ int main(int argc, char **argv)
  * print-length pairs = elements?
  * s7_eval_without_catch and same c_string?
  * testerror -> ffitest, nested s7_call/catch
- * check let-temp+all hooks
  */
