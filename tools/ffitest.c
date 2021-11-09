@@ -692,6 +692,9 @@ static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args)
   return(s7_make_real(sc, s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + g->data[0]));
 }
 
+s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_eval_c_string(sc, "(/ 10 0)"));}
+s7_pointer ter_error_handler(s7_scheme *sc, s7_pointer args) {return s7_f(sc);}
+
 
 int main(int argc, char **argv)
 {
@@ -2557,6 +2560,14 @@ int main(int argc, char **argv)
       {fprintf(stderr, "%d: catch (3): %s\n", __LINE__, s1 = TO_STR(result)); free(s1);}
     s7_gc_unprotect_at(sc, gc_body);
     s7_gc_unprotect_at(sc, gc_err);
+  }
+
+  {
+    s7_pointer make_func, catcher;
+    make_func = s7_make_function(sc, "bad-func-define", ter_bad_func, 0, 0, false, NULL);
+    catcher = s7_make_function(sc, "error-handler", ter_error_handler, 2, 0, false, NULL);
+    s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
+    s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
   }
 
   {

@@ -29136,7 +29136,7 @@ static s7_pointer open_input_string(s7_scheme *sc, const char *input_string, s7_
   port_file(x) = NULL;
   port_needs_free(x) = false;
 #if S7_DEBUGGING
-  if (input_string[len] != '\0')
+  if ((len > 0) && (input_string[len] != '\0'))
     {
       fprintf(stderr, "%s[%d]: read_white_space string is not terminated: len: %" ld64 ", at end: %c%c, str: %s", __func__, __LINE__, len, input_string[len - 1], input_string[len], input_string);
       abort();
@@ -30683,6 +30683,8 @@ static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
   s7_pointer port, str = car(args);
   if (!is_string(str))
     return(method_or_bust(sc, str, sc->eval_string_symbol, args, T_STRING, 1));
+  if (string_length(str) == 0)
+    return(sc->F);  /* (eval-string "") -> #f */
 
   if (is_not_null(cdr(args)))
     {
@@ -31089,9 +31091,8 @@ static s7_pointer hash_table_iterate(s7_scheme *sc, s7_pointer iterator)
   s7_pointer table;
   s7_int loc, len;
   hash_entry_t **elements;
-  hash_entry_t *lst;
+  hash_entry_t *lst = iterator_hash_current(iterator);
 
-  lst = iterator_hash_current(iterator);
   if (lst)
     {
       iterator_hash_current(iterator) = hash_entry_next(lst);
@@ -31551,10 +31552,8 @@ static hash_entry_t *hash_equivalent(s7_scheme *sc, s7_pointer table, s7_pointer
 
 static bool check_collected(s7_pointer top, shared_info_t *ci)
 {
-  s7_pointer *p, *objs_end;
+  s7_pointer *p, *objs_end = (s7_pointer *)(ci->objs + ci->top);
   int32_t i;
-
-  objs_end = (s7_pointer *)(ci->objs + ci->top);
   for (p = ci->objs; p < objs_end; p++)
     if ((*p) == top)
       {
@@ -31773,7 +31772,6 @@ static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top
 	}
       break;
     }
-
   if (!top_cyclic)
     set_shared(top);
   else set_cyclic(top);
@@ -31989,8 +31987,7 @@ static void (*display_functions[256])(s7_scheme *sc, s7_pointer obj, s7_pointer 
 static bool string_needs_slashification(const char *str, s7_int len)
 {
   /* we have to go by len (str len) not *s==0 because s7 strings can have embedded nulls */
-  uint8_t *p, *pend;
-  pend = (uint8_t *)(str + len);
+  uint8_t *p, *pend = (uint8_t *)(str + len);
   for (p = (uint8_t *)str; p < pend; p++)
     if (slashify_table[*p])
       return(true);
@@ -32197,7 +32194,6 @@ static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
 
   if ((str[0] == '#') || (str[0] == '\'') || (str[0] == ','))
     return(true);
-
   if (is_number(make_atom(sc, (char *)str, 10, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR)))
     return(true);
 
@@ -33105,8 +33101,7 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 	}
       else
 	{
-	  s7_int len1;
-	  len1 = plen - 1;
+	  s7_int len1 = plen - 1;
 	  if (is_string_port(port))
 	    {
 	      for (x = lst, i = 0; (is_pair(x)) && (i < len1); i++, x = cdr(x))
@@ -33313,10 +33308,7 @@ static void slot_list_to_port_with_cycle(s7_scheme *sc, s7_pointer obj, s7_point
 {
   for (; tis_slot(slot); slot = next_slot(slot))
     {
-      s7_pointer sym, val;
-      sym = slot_symbol(slot);
-      val = slot_value(slot);
-
+      s7_pointer sym = slot_symbol(slot), val = slot_value(slot);
       if (bindings)
 	{
 	  if (tis_slot(next_slot(slot)))
@@ -33905,9 +33897,8 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	    }}
       else
 	{
-	  s7_pointer seq;
+	  s7_pointer seq = iterator_sequence(obj);
 	  int32_t iter_ref;
-	  seq = iterator_sequence(obj);
 	  if ((ci) &&
 	      (is_cyclic(obj)) &&
 	      ((iter_ref = peek_shared_ref(ci, obj)) != 0))
@@ -34159,7 +34150,7 @@ static void integer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_
     }
   else
     {
-      s7_int nlen;
+      s7_int nlen = 0;
       char *str;
       str = integer_to_string(sc, integer(obj), &nlen);
       set_number_name(obj, str, nlen);
@@ -34173,9 +34164,8 @@ static void number_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
     port_write_string(port)(sc, number_name(obj), number_name_length(obj), port);
   else
     {
-      s7_int nlen;
+      s7_int nlen = 0;
       char *str;
-      nlen = 0;
       str = number_to_string_base_10(sc, obj, 0, sc->float_format_precision, 'g', &nlen, use_write); /* was 14 */
       if ((nlen < NUMBER_NAME_SIZE) &&
 	  (str[0] != 'n') && (str[0] != 'i') &&
@@ -34189,9 +34179,8 @@ static void number_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
 #if WITH_GMP
 static void big_number_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
-  s7_int nlen;
+  s7_int nlen = 0;
   block_t *str;
-  nlen = 0;
   str = big_number_to_string_with_radix(sc, obj, BASE_10, 0, &nlen, use_write);
   port_write_string(port)(sc, (char *)block_data(str), nlen, port);
   liberate(sc, str);
@@ -34302,9 +34291,7 @@ static void dynamic_wind_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port,
 
 static void c_object_name_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port)
 {
-  port_write_string(port)(sc, string_value(c_object_scheme_name(sc, obj)),
-			  string_length(c_object_scheme_name(sc, obj)),
-			  port);
+  port_write_string(port)(sc, string_value(c_object_scheme_name(sc, obj)), string_length(c_object_scheme_name(sc, obj)), port);
 }
 
 static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
@@ -34352,8 +34339,7 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	      c_object_name_to_port(sc, obj, port);
 	      for (i = 0, p = obj_list; is_pair(p); i++, p = cdr(p))
 		{
-		  s7_pointer val;
-		  val = car(p);
+		  s7_pointer val = car(p);
 		  if (has_structure(val))
 		    {
 		      char buf[128];
@@ -34712,13 +34698,11 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
   use_write_t choice;
   s7_pointer obj = car(args), strport, res;
   s7_int out_len, pending_max = S7_INT64_MAX;
-  bool old_openlets;
-  old_openlets = sc->has_openlets;
+  bool old_openlets = sc->has_openlets;
 
   if (is_not_null(cdr(args)))
     {
-      s7_pointer arg;
-      arg = cadr(args);
+      s7_pointer arg = cadr(args);
       if (arg == sc->F) choice = P_DISPLAY;
       else {if (arg == sc->T) choice = P_WRITE;
 	else {if (arg == sc->readable_keyword) choice = P_READABLE;
@@ -51468,8 +51452,13 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
       error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, error_hook_funcs);
-
-      sc->value = s7_call(sc, sc->let_temp_hook, set_plist_2(sc, type, info));
+#if 0 /* see snd-test 24 */
+      sc->value = s7_call(sc, sc->let_temp_hook, list_2(sc, type, info));
+#else
+      sc->code = sc->let_temp_hook;
+      sc->args = list_2(sc, type, info);
+      eval(sc, OP_APPLY);
+#endif
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, error_hook_funcs);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, sc->nil);
 
@@ -76683,8 +76672,8 @@ static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer code, s7_po
   sc->args = T_Pos(args);
   sc->code = code;
   set_curlet(sc, let);
-  op_let_temp_done1(sc);  /* an experiment 6-Nov-21 */
-  /* eval(sc, OP_LET_TEMP_DONE); */ /* goes to op_let_temp_done1 */
+  op_let_temp_done1(sc);             /* an experiment 6-Nov-21 */
+  /* eval(sc, OP_LET_TEMP_DONE); */  /* goes to op_let_temp_done1 */
 }
 
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value)
@@ -95697,7 +95686,7 @@ int main(int argc, char **argv)
  * lt         2121         2123   2110   2108   2109
  * tform      3235         2281   2273   2242   2242
  * tmac       2452         3317   3277   2420   2418
- * tread      2606         2440   2421   2415   2423
+ * tread      2606         2440   2421   2415   2418
  * fbench     2848         2688   2583   2458   2460
  * trclo      4107         2735   2574   2459   2459
  * tmat       2683         3065   3042   2513   2514
@@ -95707,8 +95696,8 @@ int main(int argc, char **argv)
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
- * tset       3114         3253   3104   3081   3026  3042
- * tload      3861         ----   ----   3155   3083  3090
+ * tset       3114         3253   3104   3081   3042
+ * tload      3861         ----   ----   3155   3090
  * teq        3554         4068   4045   3539   3542
  * tio        3710         3816   3752   3680   3672
  * tclo       4622         4787   4735   4408   4387
@@ -95725,8 +95714,8 @@ int main(int argc, char **argv)
  * tlist      6837         7896   7546   6622   6623
  * tari       ----         13.0   12.7   6860   6830
  * tleft      9491         10.4   10.2   8354   7777
- * tgc        10.1         11.9   11.1   8666   8642
- * cb         16.8         11.2   11.0   9897   9683  9658
+ * tgc        10.1         11.9   11.1   8666   8638
+ * cb         16.8         11.2   11.0   9897   9655
  * thash      35.4         11.8   11.7   9711   9732
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
@@ -95738,5 +95727,5 @@ int main(int argc, char **argv)
  *
  * print-length pairs = elements?
  * s7_eval_without_catch and same c_string?
- * testerror -> ffitest, nested s7_call/catch
+ * nested s7_call/catch
  */
