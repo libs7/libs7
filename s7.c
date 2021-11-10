@@ -17156,12 +17156,8 @@ static s7_double atan_d_dd(s7_double x, s7_double y) {return(atan2(x, y));}
 
 
 /* -------------------------------- sinh -------------------------------- */
-static s7_pointer g_sinh(s7_scheme *sc, s7_pointer args)
+static s7_pointer sinh_p_p(s7_scheme *sc, s7_pointer x)
 {
-  #define H_sinh "(sinh z) returns sinh(z)"
-  #define Q_sinh sc->pl_nn
-
-  s7_pointer x = car(args);
   switch (type(x))
     {
     case T_INTEGER:
@@ -17219,8 +17215,15 @@ static s7_pointer g_sinh(s7_scheme *sc, s7_pointer args)
       return(mpc_to_number(sc, sc->mpc_1));
 #endif
     default:
-      return(method_or_bust_with_type_one_arg(sc, x, sc->sinh_symbol, args, a_number_string));
+      return(method_or_bust_with_type_one_arg_p(sc, x, sc->sinh_symbol, a_number_string));
     }
+}
+
+static s7_pointer g_sinh(s7_scheme *sc, s7_pointer args)
+{
+  #define H_sinh "(sinh z) returns sinh(z)"
+  #define Q_sinh sc->pl_nn
+  return(sinh_p_p(sc, car(args)));
 }
 
 #if (!WITH_GMP)
@@ -17229,12 +17232,8 @@ static s7_double sinh_d_d(s7_double x) {return(sinh(x));}
 
 
 /* -------------------------------- cosh -------------------------------- */
-static s7_pointer g_cosh(s7_scheme *sc, s7_pointer args)
+static s7_pointer cosh_p_p(s7_scheme *sc, s7_pointer x)
 {
-  #define H_cosh "(cosh z) returns cosh(z)"
-  #define Q_cosh sc->pl_nn
-
-  s7_pointer x = car(args);
   switch (type(x))
     {
     case T_INTEGER:
@@ -17293,8 +17292,15 @@ static s7_pointer g_cosh(s7_scheme *sc, s7_pointer args)
       return(mpc_to_number(sc, sc->mpc_1));
 #endif
     default:
-      return(method_or_bust_with_type_one_arg(sc, x, sc->cosh_symbol, args, a_number_string));
+      return(method_or_bust_with_type_one_arg_p(sc, x, sc->cosh_symbol, a_number_string));
     }
+}
+
+static s7_pointer g_cosh(s7_scheme *sc, s7_pointer args)
+{
+  #define H_cosh "(cosh z) returns cosh(z)"
+  #define Q_cosh sc->pl_nn
+  return(cosh_p_p(sc, car(args)));
 }
 
 #if (!WITH_GMP)
@@ -30107,6 +30113,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 {
   FILE* fp;
+  char *local_file_name = (char *)filename;
   fp = fopen(filename, "r");
 #if WITH_GCC
   if ((!fp) && /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
@@ -30128,7 +30135,7 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 	  memcpy((void *)(fname + home_len), (char *)(filename + 1), file_len - 1);
 	  fname[len - 1] = '\0';
 	  fp = fopen(fname, "r");
-	  if (fp) filename = copy_string_with_length(fname, len - 1);
+	  if (fp) local_file_name = copy_string_with_length(fname, len - 1);
 	  liberate(sc, b);
 	}}
 #endif
@@ -30140,16 +30147,17 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
       if (!b) return(NULL);
       fname = (const char *)block_data(b);
       fp = fopen(fname, "r");
-      if (fp) filename = copy_string(fname);
+      if (fp) local_file_name = copy_string_with_length(fname, safe_strlen(fname));
       liberate(sc, b);
     }
   if (fp)
     {
       s7_pointer port;
       if (hook_has_functions(sc->load_hook))
-	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, filename)));
-      port = read_file(sc, fp, filename, -1, "load"); /* -1 = read entire file into string, this is currently not tweakable */
-      port_file_number(port) = remember_file_name(sc, filename);
+	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, sc->temp6 = s7_make_string(sc, local_file_name)));
+      port = read_file(sc, fp, local_file_name, -1, "load"); /* -1 = read entire file into string, this is currently not tweakable */
+      port_file_number(port) = remember_file_name(sc, local_file_name);
+      if (filename != local_file_name) free(local_file_name);
       set_loader_port(port);
       sc->temp6 = port;
       push_input_port(sc, port);
@@ -31538,7 +31546,7 @@ static void enlarge_shared_info(shared_info_t *ci)
   ci->objs = (s7_pointer *)Realloc(ci->objs, ci->size * sizeof(s7_pointer));
   ci->refs = (int32_t *)Realloc(ci->refs, ci->size * sizeof(int32_t));
   ci->defined = (bool *)Realloc(ci->defined, ci->size * sizeof(bool));
-  /* this clearing is needed */
+  /* this clearing is needed, memclr is not faster */
   for (i = ci->top; i < ci->size; i++)
     {
       ci->refs[i] = 0;
@@ -45000,7 +45008,6 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
   memcpy((void *)(internal_arglist + 2), (void *)arglist, len);
   internal_arglist[len + 2] = ')';
   internal_arglist[len + 3] = '\0';
-  /* catstrs_direct(internal_arglist, "'(", arglist, ")", (const char *)NULL); */
   local_args = s7_eval_c_string(sc, internal_arglist);
   gc_loc = gc_protect_1(sc, local_args);
   liberate(sc, b);
@@ -45019,12 +45026,9 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
       set_full_type(func, T_C_FUNCTION_STAR | T_UNHEAP); /* unheap from s7_make_function */
       c_function_call_args(func) = NULL;
 
-      names = (s7_pointer *)Malloc(n_args * sizeof(s7_pointer));
-      add_saved_pointer(sc, names);
+      names = (s7_pointer *)permalloc(sc, n_args * sizeof(s7_pointer));
       c_function_arg_names(func) = names;
-
-      defaults = (s7_pointer *)Malloc(n_args * sizeof(s7_pointer));
-      add_saved_pointer(sc, defaults);
+      defaults = (s7_pointer *)permalloc(sc, n_args * sizeof(s7_pointer));
       c_function_arg_defaults(func) = defaults;
       c_func_set_simple_defaults(func);
       /* (define* (f :allow-other-keys) 32) -> :allow-other-keys can't be the only parameter: (:allow-other-keys) */
@@ -45204,6 +45208,7 @@ const char *s7_set_documentation(s7_scheme *sc, s7_pointer sym, const char *new_
     {
       symbol_set_has_help(sym);
       symbol_set_help(sym, copy_string(new_doc));
+      add_saved_pointer(sc, symbol_help(sym));
     }
   return(new_doc);
 }
@@ -45755,10 +45760,9 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
 
   if (!name) return(sc->F);
   len = 16 + safe_strlen(name);
-  internal_set_name = (char *)Malloc(len);
+  internal_set_name = (char *)permalloc(sc, len);
   internal_set_name[0] = '\0';
   catstrs_direct(internal_set_name, "[set-", name, "]", (const char *)NULL);
-  add_saved_pointer(sc, internal_set_name);
   get_func = s7_make_safe_function(sc, name, getter, get_req_args, get_opt_args, false, documentation);
   s7_define(sc, envir, make_symbol(sc, name), get_func);
   set_func = s7_make_function(sc, internal_set_name, setter, set_req_args, set_opt_args, false, documentation);
@@ -57535,7 +57539,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_opSCq:
-      if (cadr(p) == var1)
+      if (cadadr(p) == var1)
 	return(with_fx(tree, fx_c_optcq)); /* there currently isn't any fx_c_opscq_direct */
       break;
 
@@ -58005,8 +58009,7 @@ static s7_pointer opt_simple_symbol(s7_scheme *sc, s7_pointer sym)
 
 static s7_pointer opt_types_match(s7_scheme *sc, s7_pointer check, s7_pointer sym)
 {
-  s7_pointer slot, checker;
-  checker = s7_symbol_value(sc, check);
+  s7_pointer slot, checker = s7_symbol_value(sc, check);
   slot = lookup_slot_from(sym, sc->curlet);
   if (is_slot(slot))
     {
@@ -59053,7 +59056,6 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	  opt_info *opc;
 	  opc = alloc_opo(sc);
 	  opc->v[1].p = s_slot;
-
 	  slot = opt_integer_symbol(sc, cadr(car_x));
 	  if (slot)
 	    {
@@ -63526,6 +63528,7 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 		    if (is_slot(opc->v[1].p))
 		      {
 			int32_t start1 = sc->pc;
+			/* TODO: is opc->v[4] set? */
 			if ((opc->v[4].call == g_substring_uncopied) && 
 			    (is_t_integer(slot_value(opc->v[2].p))) &&
 			    (is_string(slot_value(opc->v[1].p))) &&
@@ -66423,35 +66426,34 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	      break;
 
 	    case 3:
+	      if (is_symbol(cadr(car_x)))
+		{
+		  if ((is_pair(sig)) &&
+		      (is_pair(cdr(sig))) &&
+		      (is_pair(cddr(sig))) &&
+		      (caddr(sig) == sc->is_integer_symbol))
+		    {
+		      if (p_pi_ok(sc, opc, s_func, sig, car_x))
+			return(true);
+		      
+		      if ((car(sig) == sc->is_float_symbol) ||
+			  (car(sig) == sc->is_real_symbol))
+			{
+			  s7_d_7pi_t f;
+			  f = s7_d_7pi_function(s_func);
+			  if (f)
+			    {
+			      sc->pc = pstart - 1;
+			      if (float_optimize(sc, expr))
+				{
+				  opc->v[O_WRAP].fd = opc->v[0].fd;
+				  opc->v[0].fp = d_to_p;
+				  return(true);
+				}}}
+		      pc_fallback(sc, pstart);
+		    }}
 	      {
 		s7_i_ii_t ifunc;
-		if (is_symbol(cadr(car_x)))
-		  {
-		    if ((is_pair(sig)) &&
-			(is_pair(cdr(sig))) &&
-			(is_pair(cddr(sig))) &&
-			(caddr(sig) == sc->is_integer_symbol))
-		      {
-			if (p_pi_ok(sc, opc, s_func, sig, car_x))
-			  return(true);
-
-			if ((car(sig) == sc->is_float_symbol) ||
-			    (car(sig) == sc->is_real_symbol))
-			  {
-			    s7_d_7pi_t f;
-			    f = s7_d_7pi_function(s_func);
-			    if (f)
-			      {
-				sc->pc = pstart - 1;
-				if (float_optimize(sc, expr))
-				  {
-				    opc->v[O_WRAP].fd = opc->v[0].fd;
-				    opc->v[0].fp = d_to_p;
-				    return(true);
-				  }}}}
-		    pc_fallback(sc, pstart);
-		  }
-
 		ifunc = s7_i_ii_function(s_func);
 		sc->pc = pstart - 1;
 		if ((ifunc) &&
@@ -66462,15 +66464,14 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 		    if (opc->v[O_WRAP].fi == opt_i_ii_ss_add)
 		      opc->v[0].fp = opt_p_ii_ss_add;
 		    return(true);
-		  }
-		pc_fallback(sc, pstart);
-
-		if ((p_ii_ok(sc, opc, s_func, car_x, pstart)) ||
-		    (p_dd_ok(sc, opc, s_func, car_x, pstart)) ||
-		    (p_pp_ok(sc, opc, s_func, car_x, pstart)) ||
-		    (p_call_pp_ok(sc, opc, s_func, car_x, pstart)))
-		  return(true);
-	      }
+		  }}
+	      pc_fallback(sc, pstart);
+	      
+	      if ((p_ii_ok(sc, opc, s_func, car_x, pstart)) ||
+		  (p_dd_ok(sc, opc, s_func, car_x, pstart)) ||
+		  (p_pp_ok(sc, opc, s_func, car_x, pstart)) ||
+		  (p_call_pp_ok(sc, opc, s_func, car_x, pstart)))
+		return(true);
 	      break;
 
 	    case 4:
@@ -66505,9 +66506,9 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 			  opc->v[O_WRAP].fi = opc->v[0].fi;
 			  opc->v[0].fp = i_to_p;
 			  return(true);
-			}}
-		  pc_fallback(sc, pstart);
-		}
+			}
+		      pc_fallback(sc, pstart);
+		    }}
 	      if ((p_ppi_ok(sc, opc, s_func, car_x)) ||
 		  (p_ppp_ok(sc, opc, s_func, car_x)) ||
 		  (p_call_ppp_ok(sc, opc, s_func, car_x)))
@@ -93347,6 +93348,8 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->tan_symbol), tan_p_p);
   s7_set_p_p_function(sc, global_value(sc->asin_symbol), asin_p_p);
   s7_set_p_p_function(sc, global_value(sc->acos_symbol), acos_p_p);
+  s7_set_p_p_function(sc, global_value(sc->sinh_symbol), sinh_p_p);
+  s7_set_p_p_function(sc, global_value(sc->cosh_symbol), cosh_p_p);
 
   s7_set_p_d_function(sc, global_value(sc->rationalize_symbol), rationalize_p_d);
   s7_set_p_i_function(sc, global_value(sc->rationalize_symbol), rationalize_p_i);
@@ -95298,6 +95301,12 @@ s7_scheme *s7_init(void)
 
 /* -------------------------------- s7_free -------------------------------- */
 
+static void gc_list_free(gc_list_t *g)
+{
+  free(g->list);
+  free(g);
+}
+
 void s7_free(s7_scheme *sc)
 {
   /* free the memory associated with sc
@@ -95314,17 +95323,14 @@ void s7_free(s7_scheme *sc)
   for (i = 0; i < gp->loc; i++)
     if (block_index(unchecked_vector_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_vector_block(gp->list[i])));
-  free(gp->list);
-  free(gp);
-  free(sc->multivectors->list); /* I assume vector_dimension_info won't need 131072 bytes */
-  free(sc->multivectors);
+  gc_list_free(gp);
+  gc_list_free(sc->multivectors); /* I assume vector_dimension_info won't need 131072 bytes */
 
   gp = sc->strings;
   for (i = 0; i < gp->loc; i++)
     if (block_index(unchecked_string_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_string_block(gp->list[i])));
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->output_ports;
   for (i = 0; i < gp->loc; i++)
@@ -95336,25 +95342,21 @@ void s7_free(s7_scheme *sc)
 	  (!port_is_closed(gp->list[i])))
 	fclose(port_file(gp->list[i]));
     }
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->input_ports;
   for (i = 0; i < gp->loc; i++)
     if ((unchecked_port_data_block(gp->list[i])) &&
 	(block_index(unchecked_port_data_block(gp->list[i])) == TOP_BLOCK_LIST))
       free(block_data(unchecked_port_data_block(gp->list[i])));    /* the file contents, port_block is other stuff */
-  free(gp->list);
-  free(gp);
-  free(sc->input_string_ports->list); /* port_data_block is null, port_block is the const char* data, so I assume it is handled elsewhere */
-  free(sc->input_string_ports);
+  gc_list_free(gp);
+  gc_list_free(sc->input_string_ports); /* port_data_block is null, port_block is the const char* data, so I assume it is handled elsewhere */
 
   gp = sc->hash_tables;
   for (i = 0; i < gp->loc; i++)
     if (block_index(unchecked_hash_table_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_hash_table_block(gp->list[i])));
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->c_objects;
   for (i = 0; i < gp->loc; i++)
@@ -95365,8 +95367,7 @@ void s7_free(s7_scheme *sc)
         (*(c_object_gc_free(sc, s1)))(sc, s1);
       else (*(c_object_free(sc, s1)))(c_object_value(s1));
     }
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
 #if WITH_GMP
   /* free lists */
@@ -95378,28 +95379,23 @@ void s7_free(s7_scheme *sc)
   /* in-use lists */
   gp = sc->big_integers;
   for (i = 0; i < gp->loc; i++) {bigint *p; p = big_integer_bgi(gp->list[i]); mpz_clear(p->n); free(p);}
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->big_ratios;
   for (i = 0; i < gp->loc; i++) {bigrat *p; p = big_ratio_bgr(gp->list[i]); mpq_clear(p->q); free(p);}
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->big_reals;
   for (i = 0; i < gp->loc; i++) {bigflt *p; p = big_real_bgf(gp->list[i]); mpfr_clear(p->x); free(p);}
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->big_complexes;
   for (i = 0; i < gp->loc; i++) {bigcmp *p; p = big_complex_bgc(gp->list[i]); mpc_clear(p->z); free(p);}
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gp = sc->big_random_states;
   for (i = 0; i < gp->loc; i++) gmp_randclear(random_gmp_state(gp->list[i]));
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
   gmp_randclear(random_gmp_state(sc->default_rng));
 
@@ -95417,20 +95413,14 @@ void s7_free(s7_scheme *sc)
   gp = sc->undefineds;
   for (i = 0; i < gp->loc; i++)
     free(undefined_name(gp->list[i]));
-  free(gp->list);
-  free(gp);
+  gc_list_free(gp);
 
-  free(sc->gensyms->list);
-  free(sc->gensyms);
-  free(sc->continuations->list);
-  free(sc->continuations);            /* stack is simple vector (handled above) */
-  free(sc->lambdas->list);
-  free(sc->lambdas);
-  free(sc->weak_refs->list);
-  free(sc->weak_refs);
-  free(sc->weak_hash_iterators->list);
-  free(sc->weak_hash_iterators);
-  free(sc->opt1_funcs);
+  gc_list_free(sc->gensyms);
+  gc_list_free(sc->continuations);  /* stack is simple vector (handled above) */          
+  gc_list_free(sc->lambdas);  
+  gc_list_free(sc->weak_refs);
+  gc_list_free(sc->weak_hash_iterators);
+  gc_list_free(sc->opt1_funcs);
 
   free(port_port(sc->standard_output));
   free(port_port(sc->standard_error));
@@ -95696,8 +95686,8 @@ int main(int argc, char **argv)
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
+ * tload      3861         ----   ----   3155   3090  3040
  * tset       3114         3253   3104   3081   3042
- * tload      3861         ----   ----   3155   3090
  * teq        3554         4068   4045   3539   3542
  * tio        3710         3816   3752   3680   3672
  * tclo       4622         4787   4735   4408   4387
@@ -95712,8 +95702,8 @@ int main(int argc, char **argv)
  * tmisc      6344         8869   7612   6472   6472
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
- * tari       ----         13.0   12.7   6860   6830
- * tleft      9491         10.4   10.2   8354   7777
+ * tari       ----         13.0   12.7   6860   6830  6827
+ * tleft      9491         10.4   10.2   8354   7777  7767
  * tgc        10.1         11.9   11.1   8666   8638
  * cb         16.8         11.2   11.0   9897   9655
  * thash      35.4         11.8   11.7   9711   9732
@@ -95726,6 +95716,7 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  *
  * print-length pairs = elements?
- * s7_eval_without_catch and same c_string?
- * nested s7_call/catch
+ * tleft (zero(remainder)) both g_* (enormous overhead p_pi etc)
+ * (make-list int [...]) chooser checking int>0 and split low int? and p_pp split?
+ * tlist opt_p_ppp_fff -> ppp_ccc? opt_list_nc|make_list_ic
  */

@@ -692,8 +692,11 @@ static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args)
   return(s7_make_real(sc, s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + g->data[0]));
 }
 
-s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_eval_c_string(sc, "(/ 10 0)"));}
-s7_pointer ter_error_handler(s7_scheme *sc, s7_pointer args) {return s7_f(sc);}
+static s7_pointer make_func, catcher1;
+static s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_eval_c_string(sc, "(/ 10 0)"));}
+static s7_pointer ter_error_handler(s7_scheme *sc, s7_pointer args) {return s7_f(sc);}
+static s7_pointer ter1_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_call_with_catch(sc, s7_t(sc), make_func, catcher1));}
+static s7_pointer ter1_error_handler(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, 123));}
 
 
 int main(int argc, char **argv)
@@ -2563,11 +2566,29 @@ int main(int argc, char **argv)
   }
 
   {
-    s7_pointer make_func, catcher;
-    make_func = s7_make_function(sc, "bad-func-define", ter_bad_func, 0, 0, false, NULL);
-    catcher = s7_make_function(sc, "error-handler", ter_error_handler, 2, 0, false, NULL);
-    s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
-    s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
+    s7_pointer make_func2, catcher2;
+    make_func2 = s7_make_function(sc, "bad-func-define", ter_bad_func, 0, 0, false, NULL);
+    catcher2 = s7_make_function(sc, "error-handler", ter_error_handler, 2, 0, false, NULL);
+    s7_call_with_catch(sc, s7_t(sc), make_func2, catcher2);
+    s7_call_with_catch(sc, s7_t(sc), make_func2, catcher2);
+  }
+
+  {
+    s7_pointer catcher, make_func1, val;
+    make_func = s7_make_function(sc, "bad", ter_bad_func, 0, 0, false, NULL);
+    catcher = s7_make_function(sc, "catcher", ter_error_handler, 2, 0, false, NULL);
+    make_func1 = s7_make_function(sc, "bad1", ter1_bad_func, 0, 0, false, NULL);
+    catcher1 = s7_make_function(sc, "catcher1", ter1_error_handler, 2, 0, false, NULL);
+    val = s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
+    if (val != s7_f(sc)) fprintf(stderr, "%d: %s should be #f\n", __LINE__, s7_object_to_c_string(sc, val));
+    val = s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
+    if (val != s7_f(sc)) fprintf(stderr, "%d: %s should be #f\n", __LINE__, s7_object_to_c_string(sc, val));
+    val = s7_call_with_catch(sc, s7_t(sc), make_func1, catcher1);
+    if (s7_integer(val) != 123) fprintf(stderr, "%d: %s should be 123\n", __LINE__, s7_object_to_c_string(sc, val));
+    val = s7_call_with_catch(sc, s7_t(sc), make_func1, catcher1);
+    if (s7_integer(val) != 123) fprintf(stderr, "%d: %s should be 123\n", __LINE__, s7_object_to_c_string(sc, val));
+    val = s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
+    if (val != s7_f(sc)) fprintf(stderr, "%d: %s should be #f\n", __LINE__, s7_object_to_c_string(sc, val));
   }
 
   {
