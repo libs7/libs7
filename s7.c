@@ -996,6 +996,7 @@ typedef struct s7_cell {
       uint64_t goto_loc, op_stack_loc;
       s7_pointer tag;
       s7_pointer handler;
+      Jmp_Buf *cstack;
     } rcatch; /* C++ reserves "catch" I guess */
 
     struct {                        /* dynamic-wind */
@@ -3416,6 +3417,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define catch_tag(p)                   (T_Cat(p))->object.rcatch.tag
 #define catch_goto_loc(p)              (T_Cat(p))->object.rcatch.goto_loc
 #define catch_op_loc(p)                (T_Cat(p))->object.rcatch.op_stack_loc
+#define catch_cstack(p)                (T_Cat(p))->object.rcatch.cstack
 #define catch_handler(p)               T_Pos((T_Cat(p))->object.rcatch.handler)
 #define catch_set_handler(p, val)      (T_Cat(p))->object.rcatch.handler = T_Pos(val)
 
@@ -50967,10 +50969,9 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
 
   s7_pointer p, proc = cadr(args), err = caddr(args);
 
-  /* Guile sets up the catch before looking for arg errors:
-   *   (catch #t log (lambda args "hiho")) -> "hiho"
-   * which is consistent in that (catch #t (lambda () (log))...) should probably be the same as (catch #t log ...)
-   * but what if the error handler arg is messed up?  Seems weird to handle args in reverse order with an intervening let etc.
+  /* Guile sets up the catch before looking for arg errors: (catch #t log (lambda args "hiho")) -> "hiho"
+   *   which is consistent in that (catch #t (lambda () (log))...) should probably be the same as (catch #t log ...)
+   *   but what if the error handler arg is messed up?  Seems weird to handle args in reverse order with an intervening let etc.
    */
   /* if (is_let(err)) check_method(sc, err, sc->catch_symbol, args); */ /* causes exit from s7! */
 
@@ -50979,6 +50980,7 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = (int32_t)(sc->op_stack_now - sc->op_stack);
   catch_set_handler(p, err);
+  catch_cstack(p) = NULL;
 
   if (is_any_macro(err))
     push_stack(sc, OP_CATCH_2, args, p);
@@ -50990,8 +50992,7 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
   if (!is_applicable(err))
     return(wrong_type_argument_with_type(sc, sc->catch_symbol, 3, err, something_applicable_string));
 
-  /* should we check here for (aritable? err 2)?
-   *  (catch #t (lambda () 1) "hiho") -> 1
+  /* should we check here for (aritable? err 2)?  (catch #t (lambda () 1) "hiho") -> 1
    * currently this is checked only if the error handler is called
    */
 
@@ -51013,7 +51014,6 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
 s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler)
 {
   s7_pointer p, result;
-
   if (sc->stack_end == sc->stack_start) /* no stack! */
     push_stack_direct(sc, OP_EVAL_DONE);
 
@@ -51022,23 +51022,28 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = (int32_t)(sc->op_stack_now - sc->op_stack);
   catch_set_handler(p, error_handler);
+  catch_cstack(p) = NULL;
+
   if (!sc->longjmp_ok)
     {
+      Jmp_Buf new_goto_start;
       declare_jump_info();
       TRACK(sc);
       store_jump_info(sc);
       set_jump_info(sc, S7_CALL_SET_JUMP);
+      memcpy((void *)new_goto_start, (void *)(sc->goto_start), sizeof(new_goto_start));
       if (jump_loc != NO_JUMP)
 	{
 	  if (jump_loc != ERROR_JUMP)
 	    eval(sc, sc->cur_op);
-	  if ((jump_loc == CATCH_JUMP) &&                /* we're returning (back to eval) from an error in catch */
+	  if ((jump_loc == CATCH_JUMP) &&    /* we're returning (back to eval) from an error in catch */
 	      (sc->stack_end == sc->stack_start))
 	    push_stack_op(sc, OP_ERROR_QUIT);
 	  result = sc->value;
 	}
       else
 	{
+	  catch_cstack(p) = &new_goto_start;
 	  push_stack(sc, OP_CATCH, error_handler, p);
 	  result = s7_call(sc, body, sc->nil);
 	}
@@ -51069,6 +51074,7 @@ static void op_c_catch(s7_scheme *sc)
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
   catch_set_handler(p, cdadr(args));       /* not yet a closure... */
+  catch_cstack(p) = NULL;
 
   push_stack(sc, OP_CATCH_1, sc->code, p); /* code ignored here, except by GC */
   sc->curlet = make_let(sc, sc->curlet);
@@ -51198,6 +51204,12 @@ It has the additional local variables: error-type, error-data, error-code, error
 
 
 /* -------- catch handlers -------- (don't free the catcher) */
+static void load_catch_cstack(s7_scheme *sc, s7_pointer c)
+{
+  if (catch_cstack(c))
+    memcpy(sc->goto_start, catch_cstack(c), sizeof(sc->goto_start));
+}
+
 static bool catch_all_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   s7_pointer catcher = stack_let(sc->stack, i);
@@ -51227,6 +51239,7 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(x));
       sc->stack_end = (s7_pointer *)(sc->stack_start + loc);
       sc->code = catch_handler(x);
+      load_catch_cstack(sc, x);
 
       if (needs_copied_args(sc->code))
 	sc->args = list_2(sc, type, info);
@@ -51245,7 +51258,7 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   s7_pointer x = stack_code(sc->stack, i);
-  if ((catch_tag(x) == sc->T) ||
+  if ((catch_tag(x) == sc->T) ||  /* the normal case */
       (catch_tag(x) == type) ||
       (type == sc->T))
     {
@@ -51257,6 +51270,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       loc = catch_goto_loc(catcher);
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(catcher));
       sc->stack_end = (s7_pointer *)(sc->stack_start + loc);
+      load_catch_cstack(sc, catcher);
       error_func = catch_handler(catcher);
 
       /* very often the error handler just returns either a constant ('error or #f), or
@@ -51348,13 +51362,11 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 	}
       else sc->code = error_func;
       sc->temp4 = sc->nil;
-
       /* if user (i.e. yers truly!) copies/pastes the preceding lambda () into the
        *   error handler portion of the catch, he gets the inexplicable message:
        *       ;(): too many arguments: (a1 ())
        *   when this apply tries to call the handler.  So, we need a special case error check here!
        */
-
       if (!s7_is_aritable(sc, sc->code, 2))
 	s7_wrong_number_of_args_error(sc, "catch error handler should accept two arguments: ~S", sc->code);
 
@@ -51387,7 +51399,7 @@ static bool catch_dynamic_wind_function(s7_scheme *sc, s7_int i, s7_pointer type
 
 static bool catch_out_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  s7_pointer x = stack_code(sc->stack, i);                /* "code" = port that we opened */
+  s7_pointer x = stack_code(sc->stack, i);     /* "code" = port that we opened */
   s7_close_output_port(sc, x);
   x = stack_args(sc->stack, i);                /* "args" = port that we shadowed, if not #<unused> */
   if (x != sc->unused)
@@ -51445,9 +51457,6 @@ static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
 static bool op_let_temp_done1(s7_scheme *sc);
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  /* fprintf(stderr, "%s%s[%d]%s: %s %s %d\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(type), display(info), *reset_hook); */
-  /* fprintf(stderr, "%s%s[%d]%s: %d %d\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, *reset_hook, hook_has_functions(sc->error_hook)); */
-
   /* this is aimed at let-temp error-hook... error -- not yet tested much */
   if ((!*reset_hook) &&
       (hook_has_functions(sc->error_hook)))
@@ -51456,13 +51465,9 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
       error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, error_hook_funcs);
-#if 0 /* see snd-test 24 */
-      sc->value = s7_call(sc, sc->let_temp_hook, list_2(sc, type, info));
-#else
       sc->code = sc->let_temp_hook;
       sc->args = list_2(sc, type, info);
-      eval(sc, OP_APPLY);
-#endif
+      eval(sc, OP_APPLY); /* not s7_call here -- see snd-test 24 */
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, error_hook_funcs);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, sc->nil);
 
@@ -66647,7 +66652,7 @@ static bool bool_optimize_nw_1(s7_scheme *sc, s7_pointer expr)
 		    if (bpf)
 		      opc->v[3].b_pp_f = bpf;
 		    else opc->v[3].b_7pp_f = bpf7;
-		    return(b_pp_ok(sc, opc, s_func, car_x, arg1, arg2, bpf != NULL));
+		    return(b_pp_ok(sc, opc, s_func, car_x, arg1, arg2, bpf));
 		  }}
 	      break;
 
@@ -95663,18 +95668,18 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -------------------------------------------------
+/* ---------------------------------------------------------
  *             gmp (9-23)  20.9   21.0   21.8   21.9
- * -------------------------------------------------
+ * ---------------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
- * index      1032         1026   1016    973    973
+ * index      1032         1026   1016    973    973   971?
  * tmock      7738         1177   1165   1054   1058
  * tvect      1892         2456   2413   1712   1712
  * texit      1768         ----   ----   1801   1796
- * s7test     4506         1873   1831   1784   1800
+ * s7test     4506         1873   1831   1784   1800  [1837]
  * lt         2121         2123   2110   2108   2109
- * tform      3235         2281   2273   2242   2242
+ * tform      3235         2281   2273   2242   2242  2288 [s7_load? catch memcpy?] fprintf!
  * tmac       2452         3317   3277   2420   2418
  * tread      2606         2440   2421   2415   2418
  * fbench     2848         2688   2583   2458   2460
@@ -95682,11 +95687,11 @@ int main(int argc, char **argv)
  * tmat       2683         3065   3042   2513   2514
  * tcopy      2610         8035   5546   2536   2539
  * dup        2783         3805   3788   2559   2545
- * tauto      2763         ----   ----   2356   2556
+ * tauto      2763         ----   ----   2356   2556  2574 [catch?]
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
- * tload      3861         ----   ----   3155   3090  3040
+ * tload      3861         ----   ----   3155   3090  3040  3063 [strcmp? malloc?]
  * tset       3114         3253   3104   3081   3042
  * teq        3554         4068   4045   3539   3542
  * tio        3710         3816   3752   3680   3672
@@ -95695,25 +95700,25 @@ int main(int argc, char **argv)
  * tlet       5278         7775   5640   4435   4439
  * tmap       5491         8869   8774   4492   4488
  * tfft      115.0         7820   7729   4778   4753
- * tshoot     6923         5525   5447   5210   5206
+ * tshoot     6923         5525   5447   5210   5205
  * tnum       56.7         6348   6013   5439   5421
  * tstr       6187         6880   6342   5509   5498
- * tgsl       25.2         8485   7802   6390   6387
+ * tgsl       25.2         8485   7802   6390   6387  6397 [can't be catch here]
  * tmisc      6344         8869   7612   6472   6472
  * trec       8320         6936   6922   6529   6521
  * tlist      6837         7896   7546   6622   6623
- * tari       ----         13.0   12.7   6860   6830  6827
- * tleft      9491         10.4   10.2   8354   7777  7767
- * tgc        10.1         11.9   11.1   8666   8638
+ * tari       ----         13.0   12.7   6860   6828
+ * tleft      9491         10.4   10.2   8354   7767
+ * tgc        10.1         11.9   11.1   8666   8638  8643 [op_c_catch]
  * cb         16.8         11.2   11.0   9897   9655
  * thash      35.4         11.8   11.7   9711   9732
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.1
+ * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   56.0
  * lg        104.7        106.6  105.0  103.6  103.5
  * tbig      605.1        177.4  175.8  166.4  166.4
- * -------------------------------------------------
+ * ---------------------------------------------------------
  *
  * print-length pairs = elements?
  * tleft (zero(remainder)) both g_* (enormous overhead p_pi etc)
