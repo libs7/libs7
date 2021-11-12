@@ -335,6 +335,7 @@
 
 #ifndef S7_ALIGNED
   #define S7_ALIGNED 0
+  /* memclr, local_strcmp and local_memset */
 #endif
 
 #include <stdio.h>
@@ -1179,7 +1180,7 @@ struct s7_scheme {
   s7_pointer temp1, temp2, temp3, temp4, temp6, temp7, temp8, temp9, temp_cell_2;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1, u2_2;
 
-  Jmp_Buf goto_start;
+  Jmp_Buf *goto_start;
   bool longjmp_ok;
   int32_t setjmp_loc;
 
@@ -10078,7 +10079,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
       s7_pointer lt;
       for (lt = new_outer; (is_let(lt)) && (lt != sc->rootlet); lt = let_outlet(lt))
 	if (let == lt)
-	  s7_error(sc, s7_make_symbol(sc, "cyclic-let"), set_elist_2(sc, wrap_string(sc, "set! (outlet ~A) creates a cyclic let chain", 43), let));
+	  s7_error(sc, make_symbol(sc, "cyclic-let"), set_elist_2(sc, wrap_string(sc, "set! (outlet ~A) creates a cyclic let chain", 43), let));
       let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);  /* outlet rootlet->() so that slot search can use is_let(outlet) I think */
     }
   return(new_outer);
@@ -11784,7 +11785,7 @@ static void call_with_exit(s7_scheme *sc)
       if (sc->longjmp_ok)
 	{
 	  pop_stack(sc);
-	  LongJmp(sc->goto_start, CALL_WITH_EXIT_JUMP);
+	  LongJmp(*(sc->goto_start), CALL_WITH_EXIT_JUMP);
 	}
       for (i = 0; i < quit; i++)
 	push_stack_op_let(sc, OP_EVAL_DONE);
@@ -12483,7 +12484,7 @@ static block_t *big_number_to_string_with_radix(s7_scheme *sc, s7_pointer p, int
 	  spaces = width - len;
 	  ((char *)block_data(tmp))[width] = '\0';
 	  memmove((void *)((char *)block_data(tmp) + spaces), (void *)block_data(str), len);
-	  memset((void *)block_data(tmp), (int)' ', spaces);
+	  local_memset((void *)block_data(tmp), (int)' ', spaces);
 	  (*nlen) = width;
 	  liberate(sc, str);
 	  return(tmp);
@@ -13663,7 +13664,7 @@ static int dtoa_emit_digits(char* digits, int ndigits, char* dest, int K, bool n
   if ((K >= 0) && (exp < (ndigits + 7)))
     {
       memcpy(dest, digits, ndigits);
-      memset(dest + ndigits, '0', K);
+      local_memset(dest + ndigits, '0', K);
       dest[ndigits + K] = '.';
       dest[ndigits + K + 1] = '0';
       return(ndigits + K + 2);
@@ -13680,7 +13681,7 @@ static int dtoa_emit_digits(char* digits, int ndigits, char* dest, int K, bool n
 	  offset = -offset;
 	  dest[0] = '0';
 	  dest[1] = '.';
-	  memset(dest + 2, '0', offset);
+	  local_memset(dest + 2, '0', offset);
 	  memcpy(dest + offset + 2, digits, ndigits);
 	  return(ndigits + 2 + offset);
 	  /* fp > 1.0 */
@@ -13920,7 +13921,7 @@ static void insert_spaces(s7_scheme *sc, char *src, s7_int width, s7_int len)
   spaces = width - len;
   sc->num_to_str[width] = '\0';
   memmove((void *)(sc->num_to_str + spaces), (void *)src, len);
-  memset((void *)(sc->num_to_str), (int)' ', spaces);
+  local_memset((void *)(sc->num_to_str), (int)' ', spaces);
 }
 
 static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int width, s7_int precision, char float_choice, s7_int *nlen, use_write_t choice) /* don't free result */
@@ -14062,7 +14063,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	    size_t start;
 	    start = width - len1;
 	    memmove((void *)(p + start), (void *)p, len1);
-	    memset((void *)p, (int)' ', start);
+	    local_memset((void *)p, (int)' ', start);
 	    p[width] = '\0';
 	    *nlen = width;
 	  }
@@ -14196,7 +14197,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
       spaces = width - len;
       p[width] = '\0';
       memmove((void *)(p + spaces), (void *)p, len);
-      memset((void *)p, (int)' ', spaces);
+      local_memset((void *)p, (int)' ', spaces);
       (*nlen) = width;
     }
   else (*nlen) = len;
@@ -29787,30 +29788,31 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- read -------------------------------- */
-#define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; Jmp_Buf old_goto_start
+#define declare_jump_info() bool old_longjmp; int32_t old_jump_loc, jump_loc; Jmp_Buf *old_goto_start; Jmp_Buf new_goto_start
 
-#define store_jump_info(Sc)						\
-  do {									\
-      old_longjmp = Sc->longjmp_ok;					\
-      old_jump_loc = Sc->setjmp_loc;					\
-      memcpy((void *)old_goto_start, (void *)(Sc->goto_start), sizeof(Jmp_Buf)); \
+#define store_jump_info(Sc)			\
+  do {						\
+      old_longjmp = Sc->longjmp_ok;		\
+      old_jump_loc = Sc->setjmp_loc;		\
+      old_goto_start = Sc->goto_start;		\
   } while (0)
 
-#define restore_jump_info(Sc)						\
-  do {									\
-    Sc->longjmp_ok = old_longjmp;					\
-    Sc->setjmp_loc = old_jump_loc;					\
-    memcpy((void *)(Sc->goto_start), (void *)old_goto_start, sizeof(Jmp_Buf)); \
-    if ((jump_loc == ERROR_JUMP) &&					\
-	(sc->longjmp_ok))						\
-      LongJmp(sc->goto_start, ERROR_JUMP);				\
+#define restore_jump_info(Sc)			\
+  do {						\
+    Sc->longjmp_ok = old_longjmp;		\
+    Sc->setjmp_loc = old_jump_loc;		\
+    Sc->goto_start = old_goto_start;		\
+    if ((jump_loc == ERROR_JUMP) &&		\
+	(Sc->longjmp_ok))			\
+      LongJmp(*(Sc->goto_start), ERROR_JUMP);	\
   } while (0)
 
-#define set_jump_info(Sc, Tag)		\
-  do {					\
-    sc->longjmp_ok = true;		\
-    sc->setjmp_loc = Tag;		\
-    jump_loc = SetJmp(sc->goto_start, 1);	\
+#define set_jump_info(Sc, Tag)			\
+  do {						\
+    Sc->longjmp_ok = true;			\
+    Sc->setjmp_loc = Tag;			\
+    jump_loc = SetJmp(new_goto_start, 1);	\
+    Sc->goto_start = &new_goto_start;		\
   } while (0)
 
 s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
@@ -30268,14 +30270,16 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
       if (!is_let(e))
 	return(wrong_type_argument_with_type(sc, sc->load_symbol, 2, e, a_let_string));
       if (e == sc->s7_let)
-	return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't load ~S into *s7*", 23), name)));
+	return(s7_error(sc, sc->wrong_type_arg_symbol, 
+			set_elist_2(sc, wrap_string(sc, "can't load ~S into *s7*", 23), name)));
       set_curlet(sc, (e == sc->rootlet) ? sc->nil : e);
     }
   else sc->curlet = sc->nil;
 
   fname = string_value(name);
   if ((!fname) || (!(*fname)))   /* fopen("", "r") returns a file pointer?? */
-    return(s7_error(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "load's first argument, ~S, should be a filename", 47), name)));
+    return(s7_error(sc, sc->out_of_range_symbol, 
+		    set_elist_2(sc, wrap_string(sc, "load's first argument, ~S, should be a filename", 47), name)));
 
   if (is_directory(fname))
     return(s7_error(sc, sc->io_error_symbol, 
@@ -50980,7 +50984,7 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = (int32_t)(sc->op_stack_now - sc->op_stack);
   catch_set_handler(p, err);
-  catch_cstack(p) = NULL;
+  catch_cstack(p) = sc->goto_start;
 
   if (is_any_macro(err))
     push_stack(sc, OP_CATCH_2, args, p);
@@ -51022,16 +51026,14 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = (int32_t)(sc->op_stack_now - sc->op_stack);
   catch_set_handler(p, error_handler);
-  catch_cstack(p) = NULL;
+  catch_cstack(p) = sc->goto_start;
 
   if (!sc->longjmp_ok)
     {
-      Jmp_Buf new_goto_start;
       declare_jump_info();
       TRACK(sc);
       store_jump_info(sc);
       set_jump_info(sc, S7_CALL_SET_JUMP);
-      memcpy((void *)new_goto_start, (void *)(sc->goto_start), sizeof(new_goto_start));
       if (jump_loc != NO_JUMP)
 	{
 	  if (jump_loc != ERROR_JUMP)
@@ -51043,6 +51045,7 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
 	}
       else
 	{
+	  /* we've replaced our jump point, fix it in this catch too */
 	  catch_cstack(p) = &new_goto_start;
 	  push_stack(sc, OP_CATCH, error_handler, p);
 	  result = s7_call(sc, body, sc->nil);
@@ -51074,7 +51077,7 @@ static void op_c_catch(s7_scheme *sc)
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
   catch_set_handler(p, cdadr(args));       /* not yet a closure... */
-  catch_cstack(p) = NULL;
+  catch_cstack(p) = sc->goto_start;
 
   push_stack(sc, OP_CATCH_1, sc->code, p); /* code ignored here, except by GC */
   sc->curlet = make_let(sc, sc->curlet);
@@ -51207,7 +51210,7 @@ It has the additional local variables: error-type, error-data, error-code, error
 static void load_catch_cstack(s7_scheme *sc, s7_pointer c)
 {
   if (catch_cstack(c))
-    memcpy(sc->goto_start, catch_cstack(c), sizeof(sc->goto_start));
+    sc->goto_start = catch_cstack(c);
 }
 
 static bool catch_all_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
@@ -51556,7 +51559,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
-	  if (sc->longjmp_ok) LongJmp(sc->goto_start, THROW_JUMP);
+	  if (sc->longjmp_ok) LongJmp(*(sc->goto_start), THROW_JUMP);
 	  return(sc->value);
 	}}
   if (is_let(car(args)))
@@ -51704,7 +51707,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	    (catcher(sc, i, type, info, &reset_error_hook)))
 	  {
 	    if ((S7_DEBUGGING) && (!sc->longjmp_ok)) fprintf(stderr, "s7_error jump not available?\n");
-	    LongJmp(sc->goto_start, CATCH_JUMP);
+	    LongJmp(*(sc->goto_start), CATCH_JUMP);
 	  }}}
   /* error not caught (but catcher might have been called and returned false) */
 
@@ -51858,7 +51861,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
       sc->value = type;
       sc->cur_op = OP_ERROR_QUIT;
     }
-  if (sc->longjmp_ok) LongJmp(sc->goto_start, ERROR_JUMP);
+  if (sc->longjmp_ok) LongJmp(*(sc->goto_start), ERROR_JUMP);
   return(type);
 }
 
@@ -51978,7 +51981,7 @@ and applies it to the rest of the arguments."
     return(s7_error(sc, sc->nil, sc->nil));
   if (!is_string(car(args)))                     /* else a CL-style error? -- use tag = 'no-catch */
     return(s7_error(sc, car(args), cdr(args)));
-  s7_error(sc, sc->no_catch_symbol, args);  /* this can have trailing args (implicit format) */
+  s7_error(sc, sc->no_catch_symbol, args);       /* this can have trailing args (implicit format) */
   return(sc->unspecified);
 }
 
@@ -52187,7 +52190,7 @@ static void op_error_hook_quit(s7_scheme *sc)
   push_stack_op(sc, OP_ERROR_QUIT);                /* added 3-Dec-16: try to make sure we actually exit! */
   sc->cur_op = OP_ERROR_QUIT;
   if (sc->longjmp_ok)
-    LongJmp(sc->goto_start, ERROR_QUIT_JUMP);
+    LongJmp(*(sc->goto_start), ERROR_QUIT_JUMP);
 }
 
 
@@ -54375,6 +54378,15 @@ static s7_pointer fx_is_zero_remainder_o(s7_scheme *sc, s7_pointer arg)
 fx_c_opscq_any(fx_c_opscq, s_lookup)
 fx_c_opscq_any(fx_c_optcq, t_lookup)
 
+static s7_pointer fx_is_zero_remainder_ti(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer larg = cdadr(arg), t;
+  s7_int u;
+  t = t_lookup(sc, car(larg), arg);
+  u = integer(cadr(larg));
+  if (is_t_integer(t)) return(make_boolean(sc, (integer(t) % u) == 0));
+  return(make_boolean(sc, is_zero_b_7p(sc, remainder_p_pi(sc, t, u))));
+}
 
 static s7_pointer fx_not_opscq(s7_scheme *sc, s7_pointer arg)
 {
@@ -57545,7 +57557,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
     case HOP_SAFE_C_opSCq:
       if (cadadr(p) == var1)
-	return(with_fx(tree, fx_c_optcq)); /* there currently isn't any fx_c_opscq_direct */
+	{
+	  if ((fn_proc(p) == g_is_zero) && (fn_proc(cadr(p)) == g_remainder) && 
+	      (is_t_integer(caddadr(p))) && (integer(caddadr(p)) > 1))
+	    return(with_fx(tree, fx_is_zero_remainder_ti));
+	  return(with_fx(tree, fx_c_optcq)); /* there currently isn't any fx_c_opscq_direct */
+	}
       break;
 
     case HOP_SAFE_C_opSSq_C:
@@ -57671,7 +57688,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
 static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer var2, s7_pointer var3, bool more_vars)
 {
-  /* if (is_pair(tree)) fprintf(stderr, "fx_tree %s %d\n", display(tree), has_fx(tree)); */
+  /* if (is_pair(tree)) fprintf(stderr, "fx_tree %s %d %d\n", display(tree), has_fx(tree), is_syntax(car(tree))); */
   if (!is_pair(tree)) return;
   if ((is_symbol(car(tree))) &&
       (is_definer_or_binder(car(tree))))
@@ -63313,6 +63330,7 @@ static s7_pointer opt_p_ppp_sss(opt_info *o) {return(o->v[4].p_ppp_f(opt_sc(o), 
 static s7_pointer opt_p_ppp_sss_mul(opt_info *o) {return(multiply_p_ppp(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p)));}
 static s7_pointer opt_p_ppp_sss_hset(opt_info *o) {return(s7_hash_table_set(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p)));}
 static s7_pointer opt_p_ppp_ssc(opt_info *o) {return(o->v[3].p_ppp_f(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[4].p));}
+static s7_pointer opt_list_3c(opt_info *o) {s7_scheme *sc = opt_sc(o); return(list_3(sc, o->v[10].p, o->v[8].p, o->v[4].p));}
 
 static s7_pointer opt_p_ppp_sff(opt_info *o)
 {
@@ -63469,6 +63487,14 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  opc->v[11].fp = opc->v[10].o1->v[0].fp;
 		  opc->v[9].fp = opc->v[8].o1->v[0].fp;
 		  opc->v[5].fp = opc->v[4].o1->v[0].fp;
+		  if ((opc->v[3].p_ppp_f == list_p_ppp) &&
+		      (opc->v[5].fp == opt_p_c) && (opc->v[9].fp == opt_p_c) && (opc->v[11].fp == opt_p_c))
+		    {
+		      opc->v[0].fp = opt_list_3c;
+		      opc->v[4].p = opc->v[4].o1->v[1].p;
+		      opc->v[8].p = opc->v[8].o1->v[1].p;
+		      opc->v[10].p = opc->v[10].o1->v[1].p;
+		    }
 		  return(true);
 		}}}}
   pc_fallback(sc, start);
@@ -63533,8 +63559,7 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 		    if (is_slot(opc->v[1].p))
 		      {
 			int32_t start1 = sc->pc;
-			/* TODO: is opc->v[4] set? */
-			if ((opc->v[4].call == g_substring_uncopied) && 
+			if ((cf_call(sc, car_x, s_func, 3) == g_substring_uncopied) && /* opc->v[4].call is unsafe -- might not be set */
 			    (is_t_integer(slot_value(opc->v[2].p))) &&
 			    (is_string(slot_value(opc->v[1].p))) &&
 			    (int_optimize(sc, cdddr(car_x))))
@@ -65254,12 +65279,11 @@ static s7_pointer opt_do_any(opt_info *o)
 static s7_pointer opt_do_step_1(opt_info *o)
 {
   /* 1 stepper (multi inits perhaps), 1 body, 1 rtn */
-  opt_info *o1, *ostart, *ostep, *inits, *body;
+  opt_info *o1, *ostart, *ostep = o->v[9].o1, *inits, *body;
   int32_t k;
   s7_pointer vp, old_e, result, stepper = NULL;
   s7_scheme *sc = opt_sc(o);
 
-  ostep = o->v[9].o1;
   old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
   sc->curlet = T_Let(do_curlet(o));
@@ -65290,13 +65314,12 @@ static s7_pointer opt_do_step_1(opt_info *o)
 static s7_pointer opt_do_step_i(opt_info *o)
 {
   /* 1 stepper (multi inits perhaps), 1 body, 1 rtn */
-  opt_info *o1, *ostart, *ostep, *inits, *body;
+  opt_info *o1, *ostart, *ostep = o->v[9].o1, *inits, *body;
   int32_t k;
   s7_pointer vp, old_e, result, stepper = NULL, si;
   s7_scheme *sc = opt_sc(o);
   s7_int end, incr;
 
-  ostep = o->v[9].o1;
   old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
   sc->curlet = T_Let(do_curlet(o));
@@ -65374,7 +65397,7 @@ static s7_pointer opt_do_no_vars(opt_info *o)
 static s7_pointer opt_do_1(opt_info *o)
 {
   /* 1 var, 1 expr, no return */
-  opt_info *o1, *ostart, *ostep, *body; /* o->v[2].p=let */
+  opt_info *o1, *ostart, *ostep = o->v[9].o1, *body; /* o->v[2].p=let */
   s7_pointer vp, old_e;
   s7_scheme *sc = opt_sc(o);
 
@@ -65382,7 +65405,6 @@ static s7_pointer opt_do_1(opt_info *o)
   s7_gc_protect_via_stack(sc, old_e);
   set_curlet(sc, do_curlet(o));
 
-  ostep = o->v[9].o1;
   vp = let_slots(do_curlet(o));
   o1 = do_stepper_init(o);
   slot_set_value(vp, o1->v[0].fp(o1));
@@ -65431,7 +65453,7 @@ static s7_pointer opt_do_1(opt_info *o)
 static s7_pointer opt_do_n(opt_info *o)
 {
   /* 1 var, no return */
-  opt_info *o1, *ostart, *ostep, *body; /* o->v[2].p=let, o->v[3].i=body length */
+  opt_info *o1, *ostart, *ostep = o->v[9].o1, *body; /* o->v[2].p=let, o->v[3].i=body length */
   int32_t len;
   s7_pointer vp, old_e;
   s7_scheme *sc = opt_sc(o);
@@ -65439,7 +65461,6 @@ static s7_pointer opt_do_n(opt_info *o)
   old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
   set_curlet(sc, do_curlet(o));
-  ostep = o->v[9].o1;
   len = do_body_length(o);
 
   vp = let_slots(do_curlet(o));
@@ -65498,9 +65519,7 @@ static s7_pointer opt_dotimes_2(opt_info *o)
 
   if (len == 2)                 /* tmac tmisc */
     {
-      opt_info *e1, *e2;
-      e1 = body->v[0].o1;
-      e2 = body->v[1].o1;
+      opt_info *e1 = body->v[0].o1, *e2 = body->v[1].o1;
       while (integer(vp) < end)
 	{
 	  e1->v[0].fp(e1);
@@ -66433,10 +66452,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	    case 3:
 	      if (is_symbol(cadr(car_x)))
 		{
-		  if ((is_pair(sig)) &&
-		      (is_pair(cdr(sig))) &&
-		      (is_pair(cddr(sig))) &&
-		      (caddr(sig) == sc->is_integer_symbol))
+		  if ((is_pair(sig)) && (is_pair(cdr(sig))) && (is_pair(cddr(sig))) && (caddr(sig) == sc->is_integer_symbol))
 		    {
 		      if (p_pi_ok(sc, opc, s_func, sig, car_x))
 			return(true);
@@ -68605,7 +68621,7 @@ static s7_pointer make_function_with_class(s7_scheme *sc, s7_pointer cls, const 
 }
 
 static s7_pointer make_unsafe_function_with_class(s7_scheme *sc, s7_pointer cls, const char *name, s7_function f,
-					   int32_t required_args, int32_t optional_args, bool rest_arg)
+						  int32_t required_args, int32_t optional_args, bool rest_arg)
 {
   s7_pointer uf;
   uf = s7_make_function(sc, name, f, required_args, optional_args, rest_arg, NULL); /* was s7_make_safe_function! 14-Dec-20 */
@@ -68614,7 +68630,8 @@ static s7_pointer make_unsafe_function_with_class(s7_scheme *sc, s7_pointer cls,
   return(uf);
 }
 
-static s7_pointer set_function_chooser(s7_scheme *sc, s7_pointer sym, s7_pointer (*chooser)(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops))
+static s7_pointer set_function_chooser(s7_scheme *sc, s7_pointer sym, 
+				       s7_pointer (*chooser)(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops))
 {
   s7_pointer f = global_value(sym);
   c_function_chooser(f) = chooser;
@@ -82570,9 +82587,8 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
   s7_int body_len, var_len, k, end;
   #define O_SIZE 32
   opt_info *body[O_SIZE], *vars[O_SIZE];
-
-  memset((void *)body, 0, O_SIZE * sizeof(opt_info *)); /* placate the damned compiler */
-  memset((void *)vars, 0, O_SIZE * sizeof(opt_info *));
+  memclr((void *)body, O_SIZE * sizeof(opt_info *)); /* placate the damned compiler */
+  memclr((void *)vars, O_SIZE * sizeof(opt_info *));
 
   /* do_let with non-float vars doesn't get many fixable hits */
   let_code = caddr(scc);
@@ -92503,8 +92519,7 @@ static s7_pointer s7_let_iterate(s7_scheme *sc, s7_pointer iterator)
   sc->w = osw;
   if (iterator_let_cons(iterator))
     {
-      s7_pointer p;
-      p = iterator_let_cons(iterator);
+      s7_pointer p = iterator_let_cons(iterator);
       set_car(p, symbol);
       set_cdr(p, value);
       return(p);
@@ -95549,7 +95564,7 @@ void s7_repl(s7_scheme *sc)
   /* try to get lib_s7.so from the repl's directory, and set *libc*.
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
-  e = s7_inlet(sc, set_plist_2(sc, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
+  e = s7_inlet(sc, set_plist_2(sc, make_symbol(sc, "init_func"), make_symbol(sc, "libc_s7_init")));
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
@@ -95576,8 +95591,8 @@ void s7_repl(s7_scheme *sc)
   else
     {
 #if S7_DEBUGGING
-      s7_autoload(sc, s7_make_symbol(sc, "compare-calls"), s7_make_string(sc, "compare-calls.scm"));
-      s7_autoload(sc, s7_make_symbol(sc, "get-overheads"), s7_make_string(sc, "compare-calls.scm"));
+      s7_autoload(sc, make_symbol(sc, "compare-calls"), s7_make_string(sc, "compare-calls.scm"));
+      s7_autoload(sc, make_symbol(sc, "get-overheads"), s7_make_string(sc, "compare-calls.scm"));
 #endif
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) s7_load(sc, "repl.scm");
@@ -95673,45 +95688,45 @@ int main(int argc, char **argv)
  * ---------------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
- * index      1032         1026   1016    973    973   971?
+ * index      1032         1026   1016    973    971
  * tmock      7738         1177   1165   1054   1058
  * tvect      1892         2456   2413   1712   1712
- * texit      1768         ----   ----   1801   1796
- * s7test     4506         1873   1831   1784   1800  [1837]
- * lt         2121         2123   2110   2108   2109
- * tform      3235         2281   2273   2242   2242  2288 [s7_load? catch memcpy?] fprintf!
+ * texit      1768         ----   ----   1801   1798
+ * s7test     4506         1873   1831   1784   1800
+ * lt         2121         2123   2110   2108   2110
+ * tform      3235         2281   2273   2242   2245
  * tmac       2452         3317   3277   2420   2418
- * tread      2606         2440   2421   2415   2418
+ * tread      2606         2440   2421   2415   2419
  * fbench     2848         2688   2583   2458   2460
  * trclo      4107         2735   2574   2459   2459
- * tmat       2683         3065   3042   2513   2514
- * tcopy      2610         8035   5546   2536   2539
- * dup        2783         3805   3788   2559   2545
- * tauto      2763         ----   ----   2356   2556  2574 [catch?]
+ * tmat       2683         3065   3042   2513   2505
+ * tcopy      2610         8035   5546   2536   2538
+ * dup        2783         3805   3788   2559   2548
+ * tauto      2763         ----   ----   2356   2566
  * tb         3383         2735   2681   2617   2612
  * titer      2693         2865   2842   2640   2641
  * tsort      3576         3105   3104   2855   2855
- * tload      3861         ----   ----   3155   3090  3040  3063 [strcmp? malloc?]
+ * tload      3861         ----   ----   3155   3031
  * tset       3114         3253   3104   3081   3042
- * teq        3554         4068   4045   3539   3542
- * tio        3710         3816   3752   3680   3672
+ * teq        3554         4068   4045   3539   3539
+ * tio        3710         3816   3752   3680   3674
  * tclo       4622         4787   4735   4408   4387
- * tcase      4519         4960   4793   4441   4433
+ * tcase      4519         4960   4793   4441   4432
  * tlet       5278         7775   5640   4435   4439
  * tmap       5491         8869   8774   4492   4488
  * tfft      115.0         7820   7729   4778   4753
  * tshoot     6923         5525   5447   5210   5205
- * tnum       56.7         6348   6013   5439   5421
- * tstr       6187         6880   6342   5509   5498
- * tgsl       25.2         8485   7802   6390   6387  6397 [can't be catch here]
+ * tnum       56.7         6348   6013   5439   5425
+ * tstr       6187         6880   6342   5509   5498  5471
+ * tgsl       25.2         8485   7802   6390   6373
  * tmisc      6344         8869   7612   6472   6472
  * trec       8320         6936   6922   6529   6521
- * tlist      6837         7896   7546   6622   6623
+ * tlist      6837         7896   7546   6622   6623  6565
  * tari       ----         13.0   12.7   6860   6828
- * tleft      9491         10.4   10.2   8354   7767
- * tgc        10.1         11.9   11.1   8666   8638  8643 [op_c_catch]
+ * tleft      9491         10.4   10.2   8354   7767  7678
+ * tgc        10.1         11.9   11.1   8666   8648
  * cb         16.8         11.2   11.0   9897   9655
- * thash      35.4         11.8   11.7   9711   9732
+ * thash      35.4         11.8   11.7   9711   9734
  * tgen       12.2         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
@@ -95721,7 +95736,4 @@ int main(int argc, char **argv)
  * ---------------------------------------------------------
  *
  * print-length pairs = elements?
- * tleft (zero(remainder)) both g_* (enormous overhead p_pi etc)
- * (make-list int [...]) chooser checking int>0 and split low int? and p_pp split?
- * tlist opt_p_ppp_fff -> ppp_ccc? opt_list_nc|make_list_ic
  */

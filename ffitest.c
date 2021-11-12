@@ -693,7 +693,7 @@ static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_pointer make_func, catcher1;
-static s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_eval_c_string(sc, "(/ 10 0)"));}
+static s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {s7_eval_c_string(sc, "(/ 10 0)"); return(s7_t(sc));}
 static s7_pointer ter_error_handler(s7_scheme *sc, s7_pointer args) {return s7_f(sc);}
 static s7_pointer ter1_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_call_with_catch(sc, s7_t(sc), make_func, catcher1));}
 static s7_pointer ter1_error_handler(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, 123));}
@@ -2571,6 +2571,16 @@ int main(int argc, char **argv)
     catcher2 = s7_make_function(sc, "error-handler", ter_error_handler, 2, 0, false, NULL);
     s7_call_with_catch(sc, s7_t(sc), make_func2, catcher2);
     s7_call_with_catch(sc, s7_t(sc), make_func2, catcher2);
+  }
+
+  {
+    s7_pointer result1, result2;
+    s7_define_function(sc, "bad-func", ter_bad_func, 0, 0, false, NULL);
+    s7_define_function(sc, "error-handler", ter_error_handler, 2, 0, false, NULL);
+    result1 = s7_call_with_catch(sc, s7_t(sc), s7_name_to_value(sc, "bad-func"), s7_name_to_value(sc, "error-handler"));
+    result2 = s7_eval_c_string(sc, "(catch #t bad-func error-handler)");
+    if (result1 != result2) 
+      fprintf(stderr, "%d: %s != %s\n", __LINE__, s7_object_to_c_string(sc, result1), s7_object_to_c_string(sc, result2));
   }
 
   {
