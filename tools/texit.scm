@@ -1,3 +1,5 @@
+(set! (*s7* 'heap-size) (* 3 1024000))
+
 (define size 100000)
 
 (define (memb x ls)
@@ -164,8 +166,6 @@
     (g7)))
 
 (g71)
-
-;(define lsize 3000000)
 
 (define (g80)
   (do ((i 0 (+ i 1)))

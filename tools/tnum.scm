@@ -517,18 +517,18 @@
 	      (set! sum (+ sum del)))))))
 
 (define (gcf a x)			;Q(a,x) evaluated as continued fraction
-  (let ((itmax 100)
-	(eps 3.0e-7)
-	(gln (gammln a))
-	(gold 0.0)			;previous value of g, tested for convergence
-	(a0 1.0)
-	(a1 x)
-	(b0 0.0)
-	(b1 1.0)			;setting up continued fraction
-	(fac 1.0)
-	(ana 0.0) (g 0.0) (anf 0.0))
-    (call-with-exit
-     (lambda (return)
+  (call-with-exit
+   (lambda (return)
+     (let ((itmax 100)
+	   (eps 3.0e-7)
+	   (gln (gammln a))
+	   (gold 0.0)			;previous value of g, tested for convergence
+	   (a0 1.0)
+	   (a1 x)
+	   (b0 0.0)
+	   (b1 1.0)			;setting up continued fraction
+	   (fac 1.0)
+	   (ana 0.0) (g 0.0) (anf 0.0))
        (do ((n 1 (+ n 1)))
 	   ((> n itmax) 
 	    (* g (exp (- (* a (log x)) x gln))))
