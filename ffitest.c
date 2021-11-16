@@ -1412,7 +1412,7 @@ int main(int argc, char **argv)
 
     p = s7_list(sc, 2, s7_make_symbol(sc, "a"), s7_make_symbol(sc, "b"));
     p1 = s7_memq(sc, s7_make_symbol(sc, "b"), p);
-    s1 = TO_STR(p1);
+    s1 = TO_STR(p1); /* s1 is "(b)" here but valgrind complains */
     if (strcmp(s1, "(b)") != 0)
       {fprintf(stderr, "%d: (memq 'b '(a b)) is %s?\n", __LINE__, s1);}
     free(s1);    

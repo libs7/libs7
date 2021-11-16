@@ -1093,9 +1093,9 @@ struct s7_scheme {
 
   gc_obj_t *permanent_objects, *permanent_lets;
   s7_pointer protected_objects, protected_setters, protected_setter_symbols;  /* vectors of gc-protected objects */
-  s7_int *gpofl; /* "gc_protected_objects_free_locations" (so we never have to do a linear search for a place to store something) */
+  s7_int *protected_objects_free_list;    /* to avoid a linear search for a place to store an object in sc->protected_objects */
   s7_int protected_objects_size, protected_setters_size, protected_setters_loc;
-  s7_int gpofl_loc;
+  s7_int protected_objects_free_list_loc;
 
   s7_pointer nil;                     /* empty list */
   s7_pointer T;                       /* #t */
@@ -6073,20 +6073,20 @@ static void resize_gc_protect(s7_scheme *sc)
   vector_elements(sc->protected_objects) = (s7_pointer *)block_data(nb);
   vector_length(sc->protected_objects) = new_size;
   sc->protected_objects_size = new_size;
-  sc->gpofl = (s7_int *)Realloc(sc->gpofl, new_size * sizeof(s7_int));
+  sc->protected_objects_free_list = (s7_int *)Realloc(sc->protected_objects_free_list, new_size * sizeof(s7_int));
   for (i = size; i < new_size; i++)
     {
       vector_element(sc->protected_objects, i) = sc->unused;
-      sc->gpofl[++sc->gpofl_loc] = i;
+      sc->protected_objects_free_list[++sc->protected_objects_free_list_loc] = i;
     }
 }
 
 s7_int s7_gc_protect(s7_scheme *sc, s7_pointer x)
 {
   s7_int loc;
-  if (sc->gpofl_loc < 0)
+  if (sc->protected_objects_free_list_loc < 0)
     resize_gc_protect(sc);
-  loc = sc->gpofl[sc->gpofl_loc--];
+  loc = sc->protected_objects_free_list[sc->protected_objects_free_list_loc--];
   vector_element(sc->protected_objects, loc) = x;
   return(loc);
 }
@@ -6096,7 +6096,7 @@ void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc)
   if (loc < sc->protected_objects_size)
     {
       if (vector_element(sc->protected_objects, loc) != sc->unused)
-	sc->gpofl[++sc->gpofl_loc] = loc;
+	sc->protected_objects_free_list[++sc->protected_objects_free_list_loc] = loc;
 #if S7_DEBUGGING
       else fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
 #endif
@@ -34764,6 +34764,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   strport = open_format_port(sc);
   object_out(sc, T_Pos(obj), strport, P_WRITE);
   len = port_position(strport);
+  if ((S7_DEBUGGING) && (len == 0)) fprintf(stderr, "%s[%d]: len == 0\n", __func__, __LINE__);
   if (len == 0) {close_format_port(sc, strport); return(NULL);} /* probably never happens */
   str = (char *)Malloc(len + 1);
   memcpy((void *)str, (void *)port_data(strport), len);
@@ -38148,7 +38149,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
     {
       if (!is_pair(x))
 	return(method_or_bust_with_type(sc, x, sc->assoc_symbol, args, an_association_list_string, 2));
-      if ((is_pair(x)) && (!is_pair(car(x))))
+      if (!is_pair(car(x)))
 	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, x, an_association_list_string)); /* we're assuming caar below so it better exist */
     }
   if (is_pair(cddr(args)))
@@ -38249,8 +38250,7 @@ static s7_pointer assoc_p_pp(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 {
   if (is_null(x)) return(sc->F);
   if (!is_pair(x)) return(method_or_bust_with_type(sc, x, sc->assoc_symbol, set_plist_2(sc, obj, x), an_association_list_string, 2));
-  if ((is_pair(x)) && (!is_pair(car(x))))
-    return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, x, an_association_list_string));
+  if (!is_pair(car(x))) return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, x, an_association_list_string));
   if (is_simple(obj)) return(s7_assq(sc, obj, x));
   return(assoc_1(sc, obj, x));
 }
@@ -40522,7 +40522,9 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	}
       return(s7_wrong_type_arg_error(sc, "vector-set!", 3, val, make_type_name(sc, typed_vector_typer_name(sc, vec), INDEFINITE_ARTICLE)));
     }
-  vector_setter(vec)(sc, vec, index, val);
+  if (is_normal_vector(vec))
+    vector_element(vec, index) = val;
+  else vector_setter(vec)(sc, vec, index, val);
   return(val);
 }
 
@@ -40536,8 +40538,9 @@ static s7_pointer vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_poi
 
   if (is_typed_vector(v))
     return(typed_vector_setter(sc, v, i, p));
-
-  vector_setter(v)(sc, v, i, p);
+  if (is_normal_vector(v))
+    vector_element(v, i) = p;
+  else vector_setter(v)(sc, v, i, p);
   return(p);
 }
 
@@ -40561,7 +40564,9 @@ static s7_pointer vector_set_p_piip(s7_scheme *sc, s7_pointer v, s7_int i1, s7_i
   if (is_typed_vector(v))
     return(typed_vector_setter(sc, v, i2 + (i1 * vector_offset(v, 0)), p));
 
-  vector_setter(v)(sc, v, i2 + (i1 * vector_offset(v, 0)), p);
+  if (is_normal_vector(v))
+    vector_element(v, i2 + (i1 * vector_offset(v, 0))) = p;
+  else vector_setter(v)(sc, v, i2 + (i1 * vector_offset(v, 0)), p);
   return(p);
 }
 
@@ -40625,8 +40630,9 @@ static s7_pointer g_vector_set_3(s7_scheme *sc, s7_pointer args)
   val = caddr(args);
   if (is_typed_vector(vec))
     return(typed_vector_setter(sc, vec, index, val));
-
-  vector_setter(vec)(sc, vec, index, val);
+  if (is_normal_vector(vec))
+    vector_element(vec, index) = val;
+  else vector_setter(vec)(sc, vec, index, val);
   return(val);
 }
 
@@ -40670,7 +40676,9 @@ static s7_pointer g_vector_set_4(s7_scheme *sc, s7_pointer args)
   val = cadddr(args);
   if (is_typed_vector(v))
     return(typed_vector_setter(sc, v, i2 + (i1 * vector_offset(v, 0)), val));
-  vector_setter(v)(sc, v, i2 + (i1 * vector_offset(v, 0)), val);
+  if (is_normal_vector(v))
+    vector_element(v, i2 + (i1 * vector_offset(v, 0))) = val;
+  else vector_setter(v)(sc, v, i2 + (i1 * vector_offset(v, 0)), val);
   return(val);
 }
 
@@ -92404,7 +92412,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   /* same for permanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
-			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->gpofl_loc),
+			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->protected_objects_free_list_loc),
 				  make_integer(sc, sc->protected_objects_size)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "setters"), make_integer(sc, sc->protected_setters_loc));
 
@@ -95219,15 +95227,15 @@ s7_scheme *s7_init(void)
   sc->protected_setter_symbols = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
 
   sc->protected_objects_size = INITIAL_PROTECTED_OBJECTS_SIZE;
-  sc->gpofl = (s7_int *)malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
-  sc->gpofl_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
+  sc->protected_objects_free_list = (s7_int *)malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
+  sc->protected_objects_free_list_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
   sc->protected_objects = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
   for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++)
     {
       vector_element(sc->protected_objects, i) = sc->unused;
       vector_element(sc->protected_setters, i) = sc->unused;
       vector_element(sc->protected_setter_symbols, i) = sc->unused;
-      sc->gpofl[i] = i;
+      sc->protected_objects_free_list[i] = i;
     }
 
   sc->stack = s7_make_vector(sc, INITIAL_STACK_SIZE); /* this fills it with sc->nil */
@@ -95584,6 +95592,17 @@ void s7_free(s7_scheme *sc)
 
   g_gc(sc, sc->nil); /* probably not needed (my simple tests work fine if the gc call is omitted) */
 
+  gp = sc->c_objects;  /* do this first since they might involve gc_unprotect etc */
+  for (i = 0; i < gp->loc; i++)
+    {
+      s7_pointer s1;
+      s1 = gp->list[i];
+      if (c_object_gc_free(sc, s1))
+        (*(c_object_gc_free(sc, s1)))(sc, s1);
+      else (*(c_object_free(sc, s1)))(c_object_value(s1));
+    }
+  gc_list_free(gp);
+
   gp = sc->vectors;
   for (i = 0; i < gp->loc; i++)
     if (block_index(unchecked_vector_block(gp->list[i])) == TOP_BLOCK_LIST)
@@ -95621,17 +95640,6 @@ void s7_free(s7_scheme *sc)
   for (i = 0; i < gp->loc; i++)
     if (block_index(unchecked_hash_table_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_hash_table_block(gp->list[i])));
-  gc_list_free(gp);
-
-  gp = sc->c_objects;
-  for (i = 0; i < gp->loc; i++)
-    {
-      s7_pointer s1;
-      s1 = gp->list[i];
-      if (c_object_gc_free(sc, s1))
-        (*(c_object_gc_free(sc, s1)))(sc, s1);
-      else (*(c_object_free(sc, s1)))(c_object_value(s1));
-    }
   gc_list_free(gp);
 
 #if WITH_GMP
@@ -95723,7 +95731,7 @@ void s7_free(s7_scheme *sc)
   free(sc->op_stack);
   if (sc->tree_pointers) free(sc->tree_pointers);
   free(sc->num_to_str);
-  free(sc->gpofl);
+  free(sc->protected_objects_free_list);
   if (sc->read_line_buf) free(sc->read_line_buf);
   free(sc->strbuf);
   free(sc->circle_info->objs);
@@ -95929,40 +95937,40 @@ int main(int argc, char **argv)
 #endif
 
 /* ---------------------------------------------------------
- *            gmp (11-12)   20.9   21.0   21.8   21.9
+ *            gmp (11-12)   20.9   21.0   21.8   21.9   22.0
  * ---------------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
  * index      1022         1026   1016    973    971
  * tmock      7744         1177   1165   1054   1058
  * texit      1840         ----   ----   1801   1772
- * tvect      1953         2519   2464   1774   1774
+ * tvect      1953         2519   2464   1774   1772
  * s7test     4517         1873   1831   1784   1800
  * lt         2114         2123   2110   2108   2110
  * tform      3235         2281   2273   2242   2245
  * tmac       2450         3317   3277   2420   2418
  * tread      2614         2440   2421   2415   2419
  * fbench     2833         2688   2583   2458   2460
- * trclo      4085         2735   2574   2459   2459
+ * trclo      4085         2735   2574   2459   2455
  * tmat       2683         3065   3042   2513   2505
  * tcopy      2599         8035   5546   2536   2534
- * dup        2765         3805   3788   2559   2549
+ * dup        2765         3805   3788   2559   2562
  * tauto      2763         ----   ----   2356   2560
  * tb         2743         2735   2681   2617   2611
  * titer      2659         2865   2842   2640   2641
  * tsort      3572         3105   3104   2855   2855
  * tload      3709         ----   ----   3155   3021
  * tset       3052         3253   3104   3081   3042
- * teq        3554         4068   4045   3539   3539
+ * teq        3554         4068   4045   3539   3552
  * tio        3688         3816   3752   3680   3674
  * tclo       4599         4787   4735   4408   4387
- * tcase      4499         4960   4793   4441   4432
+ * tcase      4499         4960   4793   4441   4443
  * tlet       5293         7775   5640   4435   4439
  * tmap       5488         8869   8774   4492   4488
  * tfft      115.1         7820   7729   4778   4753
  * tshoot     6920         5525   5447   5210   5184
- * tnum       56.7         6348   6013   5439   5419
- * tstr       6118         6880   6342   5509   5473
+ * tnum       56.7         6348   6013   5439   5422
+ * tstr       6118         6880   6342   5509   5471
  * tgsl       25.1         8485   7802   6390   6373
  * tmisc      7002         8869   7612   6472   6472
  * trec       8314         6936   6922   6529   6521
@@ -95970,7 +95978,7 @@ int main(int argc, char **argv)
  * tari       ----         13.0   12.7   6860   6827
  * tleft      9021         10.4   10.2   8354   7648
  * tgc        9614         11.9   11.1   8666   8176
- * cb         16.8         11.2   11.0   9897   9655
+ * cb         16.8         11.2   11.0   9897   9650
  * thash      35.4         11.8   11.7   9711   9734
  * tgen       12.6         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
