@@ -804,6 +804,44 @@
 
 (tvcop)
 
+;;; --------------------------------------------------------------------------------
+
+(define (randomize-vector uv)
+  (let* ((len (length uv))
+	 (v (copy uv))
+	 (unset (vector :unset))
+	 (nv (make-vector len unset))
+	 (min-i 0))
+    (do ((i 0 (+ i 1))
+	 (r (random len) (random len)))
+	((= i len))
+      (if (eq? (vector-ref v r) unset)
+	  (do ((k min-i (+ k 1)))
+	      ((or (= k len)
+		   (not (eq? (vector-ref v k) unset)))
+	       (if (= k len)
+		   (format *stderr* "can't find a value for ~S!\n" r)
+		   (begin
+		     (set! min-i (+ k 1))
+		     (vector-set! nv i (vector-ref v k))
+		     (vector-set! v k unset)))))
+	  (begin
+	    (vector-set! nv i (vector-ref v r))
+	    (vector-set! v r unset))))
+    nv))
+
+(define (rtest)
+  (let ((v (make-vector 100000)))
+    (do ((i 0 (+ i 1)))
+	((= i 100000))
+      (vector-set! v i i))
+    (randomize-vector v)))
+
+(rtest)
+
+
+;;; --------------------------------------------------------------------------------
+
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)
