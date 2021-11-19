@@ -23705,7 +23705,6 @@ static bool gt_b_7pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  return(mpfr_cmp_q(big_real(y), big_ratio(x)) < 0);
 	default: return(gt_out_y(sc, x, y));
 	}
-
     case T_BIG_REAL:
       switch (type(y))
 	{
@@ -24752,7 +24751,6 @@ sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
 
   decode_float_t num;
   s7_pointer x = car(args);
-
   if (is_t_real(x))
     {
       if (real(x) == 0.0)
@@ -24998,7 +24996,6 @@ order here follows gmp, and is the opposite of the CL convention.  (logbit? int 
 
   if (index >= S7_INT_BITS)           /* not sure about the >: (logbit? -1 64) ?? */
     return(make_boolean(sc, integer(x) < 0));
-
   /* (zero? (logand most-positive-fixnum (ash 1 63))) -> ash argument 2, 63, is out of range (shift is too large)
    *   so logbit? has a wider range than the logand/ash shuffle above.
    */
@@ -25038,14 +25035,12 @@ static bool logbit_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 static s7_int c_ash(s7_scheme *sc, s7_int arg1, s7_int arg2)
 {
   if (arg1 == 0) return(0);
-
   if (arg2 >= S7_INT_BITS)
     {
       if ((arg1 == -1) && (arg2 == 63))   /* (ash -1 63): most-negative-fixnum */
 	return(S7_INT64_MIN);
       out_of_range(sc, sc->ash_symbol, int_two, wrap_integer(sc, arg2), its_too_large_string);
     }
-
   if (arg2 < -S7_INT_BITS)
     return((arg1 < 0) ? -1 : 0);        /* (ash -31 -100) */
 
@@ -26311,8 +26306,7 @@ s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len
 
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
 {
-  s7_pointer x;
-  x = car(sc->string_wrappers);
+  s7_pointer x = car(sc->string_wrappers);
   sc->string_wrappers = cdr(sc->string_wrappers);
   string_value(x) = (char *)str;
   string_length(x) = len;
@@ -26751,8 +26745,7 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
   /* get length for new string */
   for (x = args; is_not_null(x); x = cdr(x))
     {
-      s7_pointer p;
-      p = car(x);
+      s7_pointer p = car(x);
       if (!is_string(p))
 	{
 	  /* look for string-append and if found, cobble up a plausible intermediate call */
@@ -26929,12 +26922,12 @@ static s7_pointer g_get_output_string(s7_scheme *sc, s7_pointer args);
 static void check_for_substring_temp(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer nps[NUM_STRING_WRAPPERS];
-  s7_pointer p, arg;
+  s7_pointer p;
   int32_t substrs = 0, i;
   /* don't use substring_uncopied for arg if arg is returned: (reverse! (write-string (substring x ...))) */
   for (p = cdr(expr); is_pair(p); p = cdr(p))
     {
-      arg = car(p);
+      s7_pointer arg = car(p);
       if ((is_pair(arg)) &&
 	  (is_symbol(car(arg))) &&
 	  (is_safely_optimized(arg)) &&
@@ -27041,14 +27034,12 @@ static int32_t scheme_strcmp(s7_pointer s1, s7_pointer s2)
   else
     {
       /* this algorithm from stackoverflow(?), with various changes (original did not work for large strings, etc) */
-      size_t last, pos;
+      size_t pos, last = len / sizeof(size_t);
       size_t *ptr1, *ptr2;
 
-      last = len / sizeof(size_t);
       for (ptr1 = (size_t *)str1, ptr2 = (size_t *)str2, i = 0; i < last; i++)
 	if (ptr1[i] != ptr2[i])
 	  break;
-
       for (pos = i * sizeof(size_t); pos < len; pos++)
 	{
 	  if ((uint8_t)str1[pos] < (uint8_t)str2[pos])
@@ -27132,7 +27123,6 @@ static s7_pointer g_strings_are_equal(s7_scheme *sc, s7_pointer args)
 
   if (!is_string(y))
     return(method_or_bust(sc, y, sc->string_eq_symbol, args, T_STRING, 1));
-
   for (x = cdr(args); is_pair(x); x = cdr(x))
     {
       s7_pointer p = car(x);
@@ -27342,7 +27332,6 @@ static s7_pointer g_string_ci_cmp_not(s7_scheme *sc, s7_pointer args, int32_t va
 
   if (!is_string(y))
     return(method_or_bust(sc, y, sym, args, T_STRING, 1));
-
   for (x = cdr(args); is_not_null(x); y = car(x), x = cdr(x))
     {
       if (!is_string(car(x)))
@@ -27545,7 +27534,6 @@ static s7_pointer g_list_to_string(s7_scheme *sc, s7_pointer args)
 
   if (is_null(car(args)))
     return(nil_string);
-
   if (!s7_is_proper_list(sc, car(args)))
     return(method_or_bust_with_type_one_arg(sc, car(args), sc->list_to_string_symbol, args,
 					    wrap_string(sc, "a (proper, non-circular) list of characters", 43)));
@@ -27581,7 +27569,6 @@ static s7_pointer g_string_to_list(s7_scheme *sc, s7_pointer args)
 
   if (!is_string(str))
     return(method_or_bust_one_arg(sc, str, sc->string_to_list_symbol, args, T_STRING));
-
   end = string_length(str);
   if (!is_null(cdr(args)))
     {
@@ -27999,9 +27986,8 @@ static port_functions_t closed_port_functions =
 
 static void close_input_file(s7_scheme *sc, s7_pointer p)
 {
-  if (port_filename(p))
+  if (port_filename(p)) /* for string ports, this is the original input file name */
     {
-      /* for string ports, this is the original input file name */
       liberate(sc, port_filename_block(p));
       port_filename(p) = NULL;
     }
@@ -28020,9 +28006,8 @@ static void close_input_file(s7_scheme *sc, s7_pointer p)
 
 static void close_input_string(s7_scheme *sc, s7_pointer p)
 {
-  if (port_filename(p))
+  if (port_filename(p)) /* for string ports, this is the original input file name */
     {
-      /* for string ports, this is the original input file name */
       liberate(sc, port_filename_block(p));
       port_filename(p) = NULL;
     }
@@ -28037,10 +28022,8 @@ static void close_input_string(s7_scheme *sc, s7_pointer p)
 static void close_simple_input_string(s7_scheme *sc, s7_pointer p)
 {
 #if S7_DEBUGGING
-  if (port_filename(p))
-    fprintf(stderr, "%s: port has a filename\n", __func__);
-  if (port_needs_free(p))
-    fprintf(stderr, "%s: port needs free\n", __func__);
+  if (port_filename(p)) fprintf(stderr, "%s: port has a filename\n", __func__);
+  if (port_needs_free(p)) fprintf(stderr, "%s: port needs free\n", __func__);
 #endif
   port_port(p)->pf = &closed_port_functions;
   port_set_closed(p, true);
@@ -28090,8 +28073,7 @@ static s7_pointer g_flush_output_port(s7_scheme *sc, s7_pointer args)
   #define H_flush_output_port "(flush-output-port port) flushes the file port (that is, it writes any accumulated output to the output file)"
   #define Q_flush_output_port s7_make_signature(sc, 2, sc->T, s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol))
 
-  s7_pointer pt;
-  pt = (is_null(args)) ? current_output_port(sc) : car(args);
+  s7_pointer pt = (is_null(args)) ? current_output_port(sc) : car(args);
   if (!is_output_port(pt))
     {
       if (pt == sc->F) return(pt);
@@ -28468,8 +28450,7 @@ static void file_write_string(s7_scheme *sc, const char *str, s7_int len, s7_poi
 
 static void string_display(s7_scheme *sc, const char *s, s7_pointer port)
 {
-  if (s)
-    string_write_string(sc, s, safe_strlen(s), port);
+  if (s) string_write_string(sc, s, safe_strlen(s), port);
 }
 
 static void file_display(s7_scheme *sc, const char *s, s7_pointer port)
@@ -28529,9 +28510,8 @@ static s7_pointer g_write_string(s7_scheme *sc, s7_pointer args)
   end = string_length(str);
   if (!is_null(cdr(args)))
     {
-      s7_pointer inds;
+      s7_pointer inds = cddr(args);
       port = cadr(args);
-      inds = cddr(args);
       if (!is_null(inds))
 	{
 	  s7_pointer p;
@@ -28588,8 +28568,7 @@ static token_t file_read_semicolon(s7_scheme *sc, s7_pointer pt)
 
 static token_t string_read_semicolon(s7_scheme *sc, s7_pointer pt)
 {
-  const char *orig_str, *str;
-  str = (const char *)(port_data(pt) + port_position(pt));
+  const char *orig_str, *str = (const char *)(port_data(pt) + port_position(pt));
   orig_str = strchr(str, (int)'\n');
   if (!orig_str)
     {
@@ -28672,8 +28651,7 @@ static s7_pointer string_read_name_no_free(s7_scheme *sc, s7_pointer pt)
 {
   /* sc->strbuf[0] has the first char of the string we're reading */
   s7_pointer result;
-  char *str;
-  str = (char *)(port_data(pt) + port_position(pt));
+  char *str = (char *)(port_data(pt) + port_position(pt));
 
   if (char_ok_in_a_name[(uint8_t)*str])
     {
@@ -28722,8 +28700,7 @@ static s7_pointer string_read_sharp(s7_scheme *sc, s7_pointer pt)
   /* sc->strbuf[0] has the first char of the string we're reading.
    *   since a *#readers* function might want to get further input, we can't mess with the input even when it is otherwise safe
    */
-  char *str;
-  str = (char *)(port_data(pt) + port_position(pt));
+  char *str = (char *)(port_data(pt) + port_position(pt));
   if (char_ok_in_a_name[(uint8_t)*str])
     {
       s7_int k;
@@ -28759,9 +28736,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
 {
   /* port_string was allocated (and read from a file) so we can mess with it directly */
   s7_pointer result;
-  char *str;
-
-  str = (char *)(port_data(pt) + port_position(pt));
+  char *str = (char *)(port_data(pt) + port_position(pt));
   if (char_ok_in_a_name[(uint8_t)*str])
     {
       s7_int k;
@@ -28995,7 +28970,6 @@ static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char 
 {
   FILE *fp;
   /* see if we can open this file before allocating a port */
-
   if (is_directory(name))
     return(file_error(sc, caller, "file is a directory:", name));
 
@@ -29048,7 +29022,6 @@ static s7_pointer g_open_input_file(s7_scheme *sc, s7_pointer args)
 
   if (!is_string(name))
     return(method_or_bust(sc, name, sc->open_input_file_symbol, args, T_STRING, 1));
-
   if (!is_pair(cdr(args)))
     return(open_input_file_1(sc, string_value(name), "r", "open-input-file"));
 
@@ -29327,7 +29300,6 @@ static inline void check_get_output_string_port(s7_scheme *sc, s7_pointer p)
 {
   if (port_is_closed(p))
     simple_wrong_type_argument_with_type(sc, sc->get_output_string_symbol, p, wrap_string(sc, "an active (open) string port", 28));
-
   if (port_position(p) > sc->max_string_length)
     s7_error(sc, sc->out_of_range_symbol,
 	     set_elist_2(sc, wrap_string(sc, "port-position ~D is greater than (*s7* 'max-string-length)", 58), wrap_integer(sc, port_position(p))));
@@ -51855,12 +51827,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	  }}}
   /* error not caught (but catcher might have been called and returned false) */
 
-#if 0
-  fprintf(stderr, "error-hook: %d %d %s\n", 
-	  !reset_error_hook,
-	  hook_has_functions(sc->error_hook),
-	  display(s7_hook_functions(sc, sc->error_hook)));
-#endif
   if ((!reset_error_hook) &&
       (hook_has_functions(sc->error_hook)))
     {
@@ -52749,10 +52715,6 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
 {
   declare_jump_info();
   TRACK(sc);
-#if 0
-  fprintf(stderr, "s7_eval\n");
-  s7_show_stack(sc);
-#endif
   if (sc->safety > NO_SAFETY)
     {
       if (!s7_is_valid(sc, code))
@@ -68251,9 +68213,8 @@ static s7_pointer T_Mut_1(s7_pointer p, const char *func, int line)
 
 static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 {
-  int64_t top;
+  int64_t top = current_stack_top(sc) - 1; /* stack_end - stack_start if negative, we're in big trouble */
   s7_pointer x;
-  top = current_stack_top(sc) - 1; /* stack_end - stack_start if negative, we're in big trouble */
   if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: splice %s %s\n", __func__, __LINE__, op_names[stack_op(sc->stack, top)], display_80(args)));
 
   switch (stack_op(sc->stack, top))
@@ -74658,8 +74619,8 @@ static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
 	 (is_definer_or_binder(tree)));
 }
 
-static void mark_fx_treeable(s7_scheme *sc, s7_pointer body)
-{
+static void mark_fx_treeable(s7_scheme *sc, s7_pointer body) 
+{ /* it is possible to encounter a cyclic body here -- should we protect against that if safety>0? */
   if (is_pair(body))
     {
       if (is_pair(car(body)))
@@ -82720,8 +82681,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
     int32_t k;
 
     body_len = s7_list_length(sc, code);
-    sc->pc = 0;
     if (body_len >= 32) return(false);
+    sc->pc = 0;
 
     if (!no_float_opt(code))
       {
@@ -84408,9 +84369,8 @@ static Inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code)
 
 static void op_closure_star_ka(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer val, p, func;
+  s7_pointer val, p, func = opt1_lambda(code);
   val = fx_call(sc, cddr(code));
-  func = opt1_lambda(code);
   p = car(closure_args(func));
   sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
   sc->code = T_Pair(closure_body(func));
@@ -85439,9 +85399,8 @@ static bool check_closure_any(s7_scheme *sc)
 
 static void op_any_closure_na(s7_scheme *sc) /* for (lambda a ...) ? */
 {
-  s7_pointer func, p, old_args = cdr(sc->code); /* args aren't evaluated yet */
+  s7_pointer func = opt1_lambda(sc->code), old_args = cdr(sc->code); /* args aren't evaluated yet */
   s7_int num_args;
-  func = opt1_lambda(sc->code);
   num_args = opt3_arglen(old_args);
 
   if (num_args == 1)
@@ -85456,6 +85415,7 @@ static void op_any_closure_na(s7_scheme *sc) /* for (lambda a ...) ? */
       }
     else
       {
+	s7_pointer p;
 	sc->args = make_list(sc, num_args, sc->F);
 	for (p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	  set_car(p, fx_call(sc, old_args));
@@ -92276,9 +92236,7 @@ static s7_pointer simple_s7_let_wrong_type_argument(s7_scheme *sc, s7_pointer ca
 {
   return(s7_error(sc, sc->wrong_type_arg_symbol, 
 		  set_elist_5(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be ~A", 54), 
-			      caller, arg,
-			      prepackaged_type_name(sc, arg),  
-			      sc->prepackaged_type_names[desired_type])));
+			      caller, arg, prepackaged_type_name(sc, arg), sc->prepackaged_type_names[desired_type])));
 }
 
 static s7_pointer simple_s7_let_wrong_type_argument_with_type(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typ)
@@ -92639,11 +92597,10 @@ static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
   for (i = top - 1; i >= 3; i -= 4)
     {
       s7_pointer func, args, e;
-      opcode_t op;
+      opcode_t op = stack_op(stack, i);
       func = stack_code(stack, i);
       args = stack_args(stack, i);
       e = stack_let(stack, i);
-      op = stack_op(stack, i);
       if ((s7_is_valid(sc, func)) &&
 	  (s7_is_valid(sc, args)) &&
 	  (s7_is_valid(sc, e)) &&
@@ -92746,20 +92703,23 @@ static s7_pointer g_s7_let_ref_fallback(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer s7_let_iterate(s7_scheme *sc, s7_pointer iterator)
 {
-  s7_pointer symbol, value, osw;
+  s7_pointer symbol, value;
   iterator_position(iterator)++;
   if (iterator_position(iterator) >= SL_NUM_FIELDS)
     return(iterator_quit(iterator));
   symbol = make_symbol(sc, s7_let_field_names[iterator_position(iterator)]);
-  osw = sc->w;  /* protect against s7_let_field list making (why?) */
 
   if ((iterator_position(iterator) == SL_STACK) ||
       (iterator_position(iterator) == SL_GC_PROTECTED_OBJECTS) ||
       (iterator_position(iterator) == SL_MEMORY_USAGE))
     value = sc->F;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
-  else value = s7_let_field(sc, symbol);
-
-  sc->w = osw;
+  else 
+    {
+      s7_pointer osw;
+      osw = sc->w;  /* protect against s7_let_field list making (why? and should this use the stack?) */
+      value = s7_let_field(sc, symbol);
+      sc->w = osw;
+    }
   if (iterator_let_cons(iterator))
     {
       s7_pointer p = iterator_let_cons(iterator);
@@ -95936,57 +95896,61 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ---------------------------------------------------------
- *            gmp (11-12)   20.9   21.0   21.8   21.9   22.0
- * ---------------------------------------------------------
+/* ----------------------------------------------------
+ *            gmp (11-12)   20.9   21.0   21.9   22.0
+ * ----------------------------------------------------
  * tpeak       124          115    114    110    110
  * tref        513          691    687    463    463
- * index      1022         1026   1016    973    971
- * tmock      7744         1177   1165   1054   1058
- * texit      1840         ----   ----   1801   1772
- * tvect      1953         2519   2464   1774   1772
- * s7test     4517         1873   1831   1784   1800
- * lt         2114         2123   2110   2108   2110
- * tform      3235         2281   2273   2242   2245
- * tmac       2450         3317   3277   2420   2418
- * tread      2614         2440   2421   2415   2419
- * fbench     2833         2688   2583   2458   2460
- * trclo      4085         2735   2574   2459   2455
- * tmat       2683         3065   3042   2513   2505
- * tcopy      2599         8035   5546   2536   2534
- * dup        2765         3805   3788   2559   2562
- * tauto      2763         ----   ----   2356   2560
- * tb         2743         2735   2681   2617   2611
- * titer      2659         2865   2842   2640   2641
+ * index      1022         1026   1016    971    971
+ * tmock      7744         1177   1165   1058   1058
+ * texit      1840         ----   ----   1772   1772
+ * tvect      1953         2519   2464   1772   1772
+ * s7test     4517         1873   1831   1800   1805
+ * lt         2114         2123   2110   2110   2110
+ * tform      3235         2281   2273   2245   2250
+ * tmac       2450         3317   3277   2418   2418
+ * tread      2614         2440   2421   2419   2419
+ * trclo      4085         2735   2574   2455   2455
+ * fbench     2833         2688   2583   2460   2460
+ * tmat       2683         3065   3042   2505   2525
+ * tcopy      2599         8035   5546   2534   2534
+ * dup        2765         3805   3788   2562   2558
+ * tauto      2763         ----   ----   2560   2560
+ * tb         2743         2735   2681   2611   2611
+ * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2855   2855
- * tload      3709         ----   ----   3155   3021
- * tset       3052         3253   3104   3081   3042
- * teq        3554         4068   4045   3539   3552
- * tio        3688         3816   3752   3680   3674
- * tclo       4599         4787   4735   4408   4387
- * tcase      4499         4960   4793   4441   4443
- * tlet       5293         7775   5640   4435   4439
- * tmap       5488         8869   8774   4492   4488
- * tfft      115.1         7820   7729   4778   4753
- * tshoot     6920         5525   5447   5210   5184
- * tnum       56.7         6348   6013   5439   5422
- * tstr       6118         6880   6342   5509   5471
- * tgsl       25.1         8485   7802   6390   6373
+ * tload      3709         ----   ----   3021   3021
+ * tset       3052         3253   3104   3042   3042
+ * teq        3554         4068   4045   3552   3552
+ * tobj                                         3672
+ * tio        3688         3816   3752   3674   3674
+ * tclo       4599         4787   4735   4387   4388
+ * tlet       5293         7775   5640   4439   4439
+ * tcase      4499         4960   4793   4443   4443
+ * tmap       5488         8869   8774   4488   4489
+ * tfft      115.1         7820   7729   4753   4753
+ * tshoot     6920         5525   5447   5184   5184
+ * tnum       56.7         6348   6013   5422   5420
+ * tstr       6118         6880   6342   5471   5471
+ * tgsl       25.1         8485   7802   6373   6373
  * tmisc      7002         8869   7612   6472   6472
- * trec       8314         6936   6922   6529   6521
- * tlist      6549         7896   7546   6622   6566
- * tari       ----         13.0   12.7   6860   6827
- * tleft      9021         10.4   10.2   8354   7648
- * tgc        9614         11.9   11.1   8666   8176
- * cb         16.8         11.2   11.0   9897   9650
- * thash      35.4         11.8   11.7   9711   9734
+ * trec       8314         6936   6922   6521   6521
+ * tlist      6549         7896   7546   6566   6566
+ * tari       ----         13.0   12.7   6827   6828
+ * tleft      9021         10.4   10.2   7648   7648
+ * tgc        9614         11.9   11.1   8176   8177
+ * cb         16.8         11.2   11.0   9650   9651
+ * thash      35.4         11.8   11.7   9734   9734
  * tgen       12.6         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.0         36.7   37.5   37.0   37.0
- * sg         75.2         ----   ----   55.9   56.0  55.9
- * lg        104.1        106.6  105.0  103.6  103.5
+ * calls      55.0         36.7   37.5   37.0   37.1
+ * sg         75.2         ----   ----   55.9   55.9
+ * lg        104.1        106.6  105.0  103.5  103.6
  * tbig      605.1        177.4  175.8  166.4  166.4
- * ---------------------------------------------------------
+ * ----------------------------------------------------
  *
  * print-length pairs = elements?
+ * fb_annotate additions? [these currently require new "B" ops]
+ * tobj -> ccrma snd/gs7 etc
+ * tleft: cond/case tc/recur. if_a_z_if_a_z_l3a|l3a_a seem straightforward. cond_a_z_l3a is a variant of if_a_z_l3a.
  */
