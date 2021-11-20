@@ -4588,7 +4588,6 @@ void s7_show_stack(s7_scheme *sc)
     fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
 }
 
-
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S7_DEBUGGING in display_any (fallback for display_functions) */
 {
   uint64_t full_typ = full_type(obj);
@@ -16968,11 +16967,9 @@ static s7_pointer asin_p_p(s7_scheme *sc, s7_pointer p)
     case T_BIG_INTEGER:
       mpfr_set_z(sc->mpfr_1, big_integer(p), MPFR_RNDN);
       goto ASIN_BIG_REAL;
-
     case T_BIG_RATIO:
       mpfr_set_q(sc->mpfr_1, big_ratio(p), MPFR_RNDN);
       goto ASIN_BIG_REAL;
-
     case T_BIG_REAL:
       if (mpfr_inf_p(big_real(p)))
 	{
@@ -16991,7 +16988,6 @@ static s7_pointer asin_p_p(s7_scheme *sc, s7_pointer p)
       mpc_set_fr(sc->mpc_1, sc->mpfr_1, MPC_RNDNN);
       mpc_asin(sc->mpc_1, sc->mpc_1, MPC_RNDNN);
       return(mpc_to_number(sc, sc->mpc_1));
-
     case T_BIG_COMPLEX:
       mpc_asin(sc->mpc_1, big_complex(p), MPC_RNDNN);
       return(mpc_to_number(sc, sc->mpc_1));
@@ -26024,7 +26020,6 @@ static s7_pointer char_greater_chooser(s7_scheme *sc, s7_pointer f, int32_t args
 }
 
 
-
 /* -------------------------------- char-ci<? char-ci<=? char-ci>? char-ci>=? char-ci=? -------------------------------- */
 #if (!WITH_PURE_S7)
 static s7_pointer g_char_cmp_ci(s7_scheme *sc, s7_pointer args, int32_t val, s7_pointer sym)
@@ -28244,7 +28239,6 @@ static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
     {
       s7_int cur_size;
       char *buf, *snew;
-
       snew = strchr(sc->read_line_buf, (int)'\n'); /* or maybe just strlen + end-of-string=newline */
       if (snew)
 	{
@@ -28612,9 +28606,7 @@ static int32_t terminated_string_read_white_space(s7_scheme *sc, s7_pointer pt)
 static s7_pointer file_read_name_or_sharp(s7_scheme *sc, s7_pointer pt, bool atom_case)
 {
   int32_t c;
-  s7_int i = 1;
-  /* sc->strbuf[0] has the first char of the string we're reading */
-
+  s7_int i = 1;  /* sc->strbuf[0] has the first char of the string we're reading */
   do {
     c = fgetc(port_file(pt)); /* might return EOF */
     if (c == '\n')
@@ -28638,7 +28630,6 @@ static s7_pointer file_read_name_or_sharp(s7_scheme *sc, s7_pointer pt, bool ato
 	}
       sc->strbuf[i - 1] = '\0';
     }
-
   if (atom_case)
     return(make_atom(sc, sc->strbuf, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR));
   return(make_sharp_constant(sc, sc->strbuf, WITH_OVERFLOW_ERROR, pt, true));
@@ -38950,10 +38941,10 @@ static s7_pointer append_in_place(s7_scheme *sc, s7_pointer a, s7_pointer b)
 
 /* -------------------------------- vectors -------------------------------- */
 
-bool s7_is_vector(s7_pointer p)              {return(is_any_vector(p));}
-bool s7_is_float_vector(s7_pointer p)        {return(is_float_vector(p));}
-bool s7_is_int_vector(s7_pointer p)          {return(is_int_vector(p));}
-bool s7_is_byte_vector(s7_pointer p)         {return(is_byte_vector(p));}
+bool s7_is_vector(s7_pointer p)       {return(is_any_vector(p));}
+bool s7_is_float_vector(s7_pointer p) {return(is_float_vector(p));}
+bool s7_is_int_vector(s7_pointer p)   {return(is_int_vector(p));}
+bool s7_is_byte_vector(s7_pointer p)  {return(is_byte_vector(p));}
 
 static bool is_byte_vector_b_p(s7_pointer b) {return(is_byte_vector(b));}
 
@@ -39108,7 +39099,6 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
     return(out_of_range(sc, sc->make_vector_symbol, int_one, wrap_integer(sc, len), its_too_large_string));
 
   /* this has to follow the error checks! (else garbage in free_heap temps portion confuses GC when "vector" is finalized) */
-
   new_cell(sc, x, typ | T_SAFE_PROCEDURE);
   vector_length(x) = len;
   if (len == 0)
@@ -45710,7 +45700,7 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name)
 	}
       else
 	{
-	  sc->c_object_types_size = tag + 8;
+	  sc->c_object_types_size = tag * 2;
 	  sc->c_object_types = (c_object_t **)Realloc((void *)(sc->c_object_types), sc->c_object_types_size * sizeof(c_object_t *));
 	}}
   c_type = (c_object_t *)Calloc(1, sizeof(c_object_t));
@@ -45735,7 +45725,6 @@ void s7_c_type_set_equal(s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, 
 void s7_c_type_set_gc_free(s7_scheme *sc, s7_int tag, s7_pointer (*gc_free)(s7_scheme *sc, s7_pointer obj))    {sc->c_object_types[tag]->gc_free = gc_free;}
 void s7_c_type_set_gc_mark(s7_scheme *sc, s7_int tag, s7_pointer (*gc_mark)(s7_scheme *sc, s7_pointer obj))    {sc->c_object_types[tag]->gc_mark = gc_mark;}
 void s7_c_type_set_is_equal(s7_scheme *sc, s7_int tag, s7_pointer (*is_equal)(s7_scheme *sc, s7_pointer args)) {sc->c_object_types[tag]->equal = is_equal;}
-void s7_c_type_set_set(s7_scheme *sc, s7_int tag, s7_pointer (*set)(s7_scheme *sc, s7_pointer args))           {sc->c_object_types[tag]->set = set;}
 void s7_c_type_set_length(s7_scheme *sc, s7_int tag, s7_pointer (*length)(s7_scheme *sc, s7_pointer args))     {sc->c_object_types[tag]->length = length;}
 void s7_c_type_set_copy(s7_scheme *sc, s7_int tag, s7_pointer (*copy)(s7_scheme *sc, s7_pointer args))         {sc->c_object_types[tag]->copy = copy;}
 void s7_c_type_set_fill(s7_scheme *sc, s7_int tag, s7_pointer (*fill)(s7_scheme *sc, s7_pointer args))         {sc->c_object_types[tag]->fill = fill;}
@@ -45750,21 +45739,27 @@ void s7_c_type_set_is_equivalent(s7_scheme *sc, s7_int tag, s7_pointer (*is_equi
 
 void s7_c_type_set_ref(s7_scheme *sc, s7_int tag, s7_pointer (*ref)(s7_scheme *sc, s7_pointer args))
 {
-  sc->c_object_types[tag]->ref = ref;
-  if (sc->c_object_types[tag]->ref != fallback_ref)
-    sc->c_object_types[tag]->outer_type = (T_C_OBJECT | T_SAFE_PROCEDURE);
+  sc->c_object_types[tag]->ref = (ref) ? ref : fallback_ref;
+  if (sc->c_object_types[tag]->ref == fallback_ref)
+    sc->c_object_types[tag]->outer_type = T_C_OBJECT;
+  else sc->c_object_types[tag]->outer_type = (T_C_OBJECT | T_SAFE_PROCEDURE);
 }
 
 void s7_c_type_set_getter(s7_scheme *sc, s7_int tag, s7_pointer getter)
 {
-  if ((S7_DEBUGGING) && (!is_c_function(getter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, getter);
-  sc->c_object_types[tag]->getter = getter;
+  if ((S7_DEBUGGING) && (getter) && (!is_c_function(getter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, getter);
+  sc->c_object_types[tag]->getter = (getter) ? getter : sc->F;
+}
+
+void s7_c_type_set_set(s7_scheme *sc, s7_int tag, s7_pointer (*set)(s7_scheme *sc, s7_pointer args))
+{
+  sc->c_object_types[tag]->set = (set) ? set : fallback_set;
 }
 
 void s7_c_type_set_setter(s7_scheme *sc, s7_int tag, s7_pointer setter)
 {
-  if ((S7_DEBUGGING) && (!is_c_function(setter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, setter);
-  sc->c_object_types[tag]->setter = setter;
+  if ((S7_DEBUGGING) && (setter) && (!is_c_function(setter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, setter);
+  sc->c_object_types[tag]->setter = (setter) ? setter : sc->F;
 }
 
 void *s7_c_object_value(s7_pointer obj) {return(c_object_value(obj));}
@@ -47387,9 +47382,15 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
 	      return(false);
 	}
       else
-	for (i = 0; i < len; i++)
-	  if (!floats_are_equivalent(sc, arr1[i], arr2[i]))
-	    return(false);
+	if ((len & 0x3) == 0)
+	  for (i = 0; i < len; )
+	    {
+	      LOOP_4(if (!floats_are_equivalent(sc, arr1[i], arr2[i])) return(false); i++);
+	    }
+	else
+	  for (i = 0; i < len; i++)
+	    if (!floats_are_equivalent(sc, arr1[i], arr2[i]))
+	      return(false);
       return(true);
     }
   if (is_int_vector(x))
@@ -49158,7 +49159,7 @@ static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
 
 #if (defined(__linux__)) && (defined(__GLIBC__)) /* need byteswp.h */
 	/* this code (from StackOverflow) is much faster: */
-	if ((len & 0x1f) == 0)
+	if ((len & 0x1f) == 0) /* 4-bytes at a time, 4 times per loop == 16 */
 	  {
 	    #include <byteswap.h>
 	    uint32_t *dst = (uint32_t *)(bytes + len - 4);
@@ -82681,8 +82682,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
     int32_t k;
 
     body_len = s7_list_length(sc, code);
-    if (body_len >= 32) return(false);
     sc->pc = 0;
+    if (body_len >= 32) return(false);
 
     if (!no_float_opt(code))
       {
@@ -92497,6 +92498,11 @@ static s7_pointer memory_usage(s7_scheme *sc)
   /* c-objects */
   if (sc->c_objects->loc > 0)
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-objects"), make_integer(sc, sc->c_objects->loc));
+  if (sc->num_c_object_types > 0)
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-types"), 
+			       cons(sc, make_integer(sc, sc->num_c_object_types),
+				    make_integer(sc, (sc->c_object_types_size * sizeof(c_object_t *)) + (sc->num_c_object_types * sizeof(c_object_t)))));
+				    /* we're ignoring c_type->scheme_name: s7_make_permanent_string(sc, name) */
 #if WITH_GMP
   add_slot_unchecked_with_id(sc, mu_let,
 			     make_symbol(sc, "bignums"),
@@ -92621,7 +92627,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_AUTOLOADING:                   return(s7_make_boolean(sc, sc->is_autoloading));
     case SL_BIGNUM_PRECISION:              return(make_integer(sc, sc->bignum_precision));
     case SL_CATCHES:                       return(sl_active_catches(sc));
-    case SL_CPU_TIME:                      return(s7_make_real(sc, (double)clock() / (double)CLOCKS_PER_SEC));
+    case SL_CPU_TIME:                      return(s7_make_real(sc, (double)clock() / (double)CLOCKS_PER_SEC)); /* cpu, not wall-clock time */
     case SL_C_TYPES:                       return(sl_c_types(sc));
     case SL_DEBUG:                         return(make_integer(sc, sc->debug));
     case SL_DEFAULT_HASH_TABLE_LENGTH:     return(make_integer(sc, sc->default_hash_table_length));
@@ -95922,8 +95928,8 @@ int main(int argc, char **argv)
  * tload      3709         ----   ----   3021   3021
  * tset       3052         3253   3104   3042   3042
  * teq        3554         4068   4045   3552   3552
- * tobj                                         3672
  * tio        3688         3816   3752   3674   3674
+ * tobj       3923         4016   3970   3881   3834
  * tclo       4599         4787   4735   4387   4388
  * tlet       5293         7775   5640   4439   4439
  * tcase      4499         4960   4793   4443   4443
@@ -95951,6 +95957,5 @@ int main(int argc, char **argv)
  *
  * print-length pairs = elements?
  * fb_annotate additions? [these currently require new "B" ops]
- * tobj -> ccrma snd/gs7 etc
  * tleft: cond/case tc/recur. if_a_z_if_a_z_l3a|l3a_a seem straightforward. cond_a_z_l3a is a variant of if_a_z_l3a.
  */

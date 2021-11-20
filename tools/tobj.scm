@@ -4,6 +4,7 @@
 
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))
 
+
 (define (f1 b)
   (b 0)) ; op_implicit_c_object_ref_a and g_block_ref -> s7_c_object_type|value, op_unknown_a
 
@@ -219,6 +220,14 @@
     (randomize-block v)))
 
 (rtest)
+
+
+(define (fload) ; check s7_make_c_type et al
+  (do ((i 0 (+ i 1)))
+      ((= i 2000))
+    (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))))
+
+(fload)
 
 
 
