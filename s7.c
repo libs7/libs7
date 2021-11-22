@@ -45719,11 +45719,9 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name)
   return(tag);
 }
 
-void s7_c_type_set_free(s7_scheme *sc, s7_int tag, void (*gc_free)(void *value))                               {sc->c_object_types[tag]->free = gc_free;}
-void s7_c_type_set_mark(s7_scheme *sc, s7_int tag, void (*mark)(void *value))                                  {sc->c_object_types[tag]->mark = mark;}
-void s7_c_type_set_equal(s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, void *value2))                 {sc->c_object_types[tag]->eql = equal;}
 void s7_c_type_set_gc_free(s7_scheme *sc, s7_int tag, s7_pointer (*gc_free)(s7_scheme *sc, s7_pointer obj))    {sc->c_object_types[tag]->gc_free = gc_free;}
 void s7_c_type_set_gc_mark(s7_scheme *sc, s7_int tag, s7_pointer (*gc_mark)(s7_scheme *sc, s7_pointer obj))    {sc->c_object_types[tag]->gc_mark = gc_mark;}
+void s7_c_type_set_equal(s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, void *value2))                 {sc->c_object_types[tag]->eql = equal;}
 void s7_c_type_set_is_equal(s7_scheme *sc, s7_int tag, s7_pointer (*is_equal)(s7_scheme *sc, s7_pointer args)) {sc->c_object_types[tag]->equal = is_equal;}
 void s7_c_type_set_length(s7_scheme *sc, s7_int tag, s7_pointer (*length)(s7_scheme *sc, s7_pointer args))     {sc->c_object_types[tag]->length = length;}
 void s7_c_type_set_copy(s7_scheme *sc, s7_int tag, s7_pointer (*copy)(s7_scheme *sc, s7_pointer args))         {sc->c_object_types[tag]->copy = copy;}
@@ -45735,6 +45733,16 @@ void s7_c_type_set_to_string(s7_scheme *sc, s7_int tag, s7_pointer (*to_string)(
 void s7_c_type_set_is_equivalent(s7_scheme *sc, s7_int tag, s7_pointer (*is_equivalent)(s7_scheme *sc, s7_pointer args))
 {
   sc->c_object_types[tag]->equivalent = is_equivalent;
+}
+
+void s7_c_type_set_free(s7_scheme *sc, s7_int tag, void (*gc_free)(void *value))
+{
+  sc->c_object_types[tag]->free = (gc_free) ? gc_free : fallback_free;
+}
+
+void s7_c_type_set_mark(s7_scheme *sc, s7_int tag, void (*mark)(void *value))
+{
+  sc->c_object_types[tag]->mark = (mark) ? mark : fallback_mark;
 }
 
 void s7_c_type_set_ref(s7_scheme *sc, s7_int tag, s7_pointer (*ref)(s7_scheme *sc, s7_pointer args))
