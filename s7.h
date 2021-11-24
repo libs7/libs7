@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "9.18"
-#define S7_DATE "23-Nov-2021"
-#define S7_MAJOR_VERSION 9
-#define S7_MINOR_VERSION 18
+#define S7_VERSION "10.0"
+#define S7_DATE "25-Nov-2021"
+#define S7_MAJOR_VERSION 10
+#define S7_MINOR_VERSION 0
 
 #include <stdint.h>           /* for int64_t */
 
@@ -814,6 +814,18 @@ typedef s7_pointer (*s7_p_d_t)(s7_scheme *sc, s7_double x);
 void s7_set_p_d_function(s7_scheme *sc, s7_pointer f, s7_p_d_t df);
 s7_p_d_t s7_p_d_function(s7_pointer f);
 
+typedef s7_pointer (*s7_p_p_t)(s7_scheme *sc, s7_pointer p);
+void s7_set_p_p_function(s7_scheme *sc, s7_pointer f, s7_p_p_t df);
+s7_p_p_t s7_p_p_function(s7_pointer f);
+
+typedef s7_pointer (*s7_p_pp_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2);
+void s7_set_p_pp_function(s7_scheme *sc, s7_pointer f, s7_p_pp_t df);
+s7_p_pp_t s7_p_pp_function(s7_pointer f);
+
+typedef s7_pointer (*s7_p_ppp_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3);
+void s7_set_p_ppp_function(s7_scheme *sc, s7_pointer f, s7_p_ppp_t df);
+s7_p_ppp_t s7_p_ppp_function(s7_pointer f);
+
 /* Here is an example of using these functions; more extensive examples are in clm2xen.c in sndlib, and in s7.c.
  * (This example comes from a HackerNews discussion):
  * plus.c:
@@ -922,6 +934,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  * 
+ * 24-Nov:    moved s7_p_p_t and friends into s7.h.
  * 23-Sep:    s7_make_byte_vector, s7_is_byte_vector, s7_byte_vector_ref|set|elements.
  * 25-Aug:    s7_output_string (like s7_get_output_string, but returns an s7 string).
  * 19-Jul:    s7_is_random_state, s7_make_normal_vector. s7_array_to_list.

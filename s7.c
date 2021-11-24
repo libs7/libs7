@@ -647,11 +647,8 @@ typedef bool (*s7_b_i_t)(s7_int p1);
 typedef bool (*s7_b_ii_t)(s7_int p1, s7_int p2);
 typedef bool (*s7_b_7ii_t)(s7_scheme *sc, s7_int p1, s7_int p2);
 typedef bool (*s7_b_dd_t)(s7_double p1, s7_double p2);
-typedef s7_pointer (*s7_p_p_t)(s7_scheme *sc, s7_pointer p);
 typedef s7_pointer (*s7_p_t)(s7_scheme *sc);
-typedef s7_pointer (*s7_p_pp_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2);
 typedef s7_pointer (*s7_p_ppi_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_int i1);
-typedef s7_pointer (*s7_p_ppp_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3);
 typedef s7_pointer (*s7_p_pi_t)(s7_scheme *sc, s7_pointer p1, s7_int i1);
 typedef s7_pointer (*s7_p_pii_t)(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_int i2);
 typedef s7_pointer (*s7_p_pip_t)(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2);
@@ -56327,9 +56324,6 @@ static bool is_code_constant(s7_scheme *sc, s7_pointer p) {return((is_pair(p)) ?
 
 static inline s7_pointer check_quote(s7_scheme *sc, s7_pointer code);
 
-static s7_p_p_t s7_p_p_function(s7_pointer f);
-static s7_p_pp_t s7_p_pp_function(s7_pointer f);
-static s7_p_ppp_t s7_p_ppp_function(s7_pointer f);
 static s7_p_dd_t s7_p_dd_function(s7_pointer f);
 static s7_p_pi_t s7_p_pi_function(s7_pointer f);
 static s7_p_ii_t s7_p_ii_function(s7_pointer f);
@@ -56343,8 +56337,7 @@ static s7_p_ii_t s7_p_ii_function(s7_pointer f);
 
 static bool fx_matches(s7_pointer symbol, s7_pointer target_symbol)
 {
-  return((symbol == target_symbol) &&
-	 (is_unchanged_global(symbol)));
+  return((symbol == target_symbol) && (is_unchanged_global(symbol)));
 }
 
 /* #define fx_choose(Sc, Holder, E, Checker) fx_choose_1(Sc, Holder, E, Checker, __func__, __LINE__) */
@@ -58032,17 +58025,17 @@ static s7_b_7ii_t s7_b_7ii_function(s7_pointer f) {return((s7_b_7ii_t)opt_func(f
 static void s7_set_b_dd_function(s7_scheme *sc, s7_pointer f, s7_b_dd_t df) {add_opt_func(sc, f, o_b_dd, (void *)df);}
 static s7_b_dd_t s7_b_dd_function(s7_pointer f) {return((s7_b_dd_t)opt_func(f, o_b_dd));}
 
-static void s7_set_p_p_function(s7_scheme *sc, s7_pointer f, s7_p_p_t df) {add_opt_func(sc, f, o_p_p, (void *)df);}
-static s7_p_p_t s7_p_p_function(s7_pointer f) {return((s7_p_p_t)opt_func(f, o_p_p));}
+void s7_set_p_p_function(s7_scheme *sc, s7_pointer f, s7_p_p_t df) {add_opt_func(sc, f, o_p_p, (void *)df);}
+s7_p_p_t s7_p_p_function(s7_pointer f) {return((s7_p_p_t)opt_func(f, o_p_p));}
 
 static void s7_set_p_function(s7_scheme *sc, s7_pointer f, s7_p_t df) {add_opt_func(sc, f, o_p, (void *)df);}
 static s7_p_t s7_p_function(s7_pointer f) {return((s7_p_t)opt_func(f, o_p));}
 
-static void s7_set_p_pp_function(s7_scheme *sc, s7_pointer f, s7_p_pp_t df) {add_opt_func(sc, f, o_p_pp, (void *)df);}
-static s7_p_pp_t s7_p_pp_function(s7_pointer f) {return((s7_p_pp_t)opt_func(f, o_p_pp));}
+void s7_set_p_pp_function(s7_scheme *sc, s7_pointer f, s7_p_pp_t df) {add_opt_func(sc, f, o_p_pp, (void *)df);}
+s7_p_pp_t s7_p_pp_function(s7_pointer f) {return((s7_p_pp_t)opt_func(f, o_p_pp));}
 
-static void s7_set_p_ppp_function(s7_scheme *sc, s7_pointer f, s7_p_ppp_t df) {add_opt_func(sc, f, o_p_ppp, (void *)df);}
-static s7_p_ppp_t s7_p_ppp_function(s7_pointer f) {return((s7_p_ppp_t)opt_func(f, o_p_ppp));}
+void s7_set_p_ppp_function(s7_scheme *sc, s7_pointer f, s7_p_ppp_t df) {add_opt_func(sc, f, o_p_ppp, (void *)df);}
+s7_p_ppp_t s7_p_ppp_function(s7_pointer f) {return((s7_p_ppp_t)opt_func(f, o_p_ppp));}
 
 static void s7_set_p_pip_function(s7_scheme *sc, s7_pointer f, s7_p_pip_t df) {add_opt_func(sc, f, o_p_pip, (void *)df);}
 static s7_p_pip_t s7_p_pip_function(s7_pointer f) {return((s7_p_pip_t)opt_func(f, o_p_pip));}
@@ -77015,6 +77008,7 @@ static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_pointer fx_expr, opco
       pair_set_syntax_op(form, op);
     }
 #if 0
+  /* fb_annotate additions? [these currently require new "B" ops] */
   else 
     {
       fprintf(stderr, "fx: %s %s\n", ((is_pair(fx_expr)) && (is_pair(car(fx_expr)))) ? op_names[optimize_op(car(fx_expr))] : "", display_80(fx_expr));
@@ -95964,6 +95958,7 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  *
  * print-length pairs = elements?
- * fb_annotate additions? [these currently require new "B" ops]
  * tleft: cond/case tc/recur. if_a_z_if_a_z_l3a|l3a_a seem straightforward. cond_a_z_l3a is a variant of if_a_z_l3a.
+ * p*_t->cload [requires calls], clm2xen? sndlib2xen? perhaps the rest of the opt tie-ins
+ * fx_c_nc -> direct cases? d|i|p_d|i|p etc -- tedious! [read misc lg *io* gsl *gc*]
  */
