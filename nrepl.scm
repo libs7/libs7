@@ -1710,7 +1710,7 @@
 		(set! nc (notcurses_core_init noptions)))
 	      (notcurses_cursor_enable nc 0 2)
 	      (unless (string-position "rxvt" ((libc-let 'getenv) "TERM"))
-		(notcurses_mouse_enable nc)) ; 0 if ok, -1 if failure
+		(notcurses_mice_enable nc NCMICE_ALL_EVENTS)) ; 0 if ok, -1 if failure
 	      (let ((size (ncplane_dim_yx (notcurses_stdplane nc))))
 		(set! nc-cols (cadr size))
 		(set! nc-rows (car size))

@@ -124,11 +124,13 @@ static s7_pointer g_notcurses_options_termtype(s7_scheme *sc, s7_pointer args)
   return(s7_make_string(sc, ((notcurses_options *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_options_symbol, __func__, 1))->termtype));
 }
 
+#if 0
 static s7_pointer g_notcurses_options_renderfp(s7_scheme *sc, s7_pointer args) 
 {
   return(s7_make_c_pointer_with_type(sc, ((notcurses_options *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_options_symbol, __func__, 1))->renderfp, 
 				     s7_make_symbol(sc, "FILE*"), s7_f(sc)));
 }
+#endif
 
 static s7_pointer g_notcurses_options_loglevel(s7_scheme *sc, s7_pointer args) 
 {
@@ -263,14 +265,15 @@ static s7_pointer g_notcurses_inputready_fd(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, notcurses_inputready_fd((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
 }
 
-static s7_pointer g_notcurses_mouse_enable(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_notcurses_mice_enable(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_integer(sc, notcurses_mouse_enable((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
+  return(s7_make_integer(sc, notcurses_mice_enable((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
+                                                   (unsigned)s7_integer(s7_cadr(args)))));
 }
 
-static s7_pointer g_notcurses_mouse_disable(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_notcurses_mice_disable(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_integer(sc, notcurses_mouse_disable((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
+  return(s7_make_integer(sc, notcurses_mice_disable((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
 }
 
 static s7_pointer g_notcurses_cursor_enable(s7_scheme *sc, s7_pointer args)
@@ -420,22 +423,12 @@ static s7_pointer g_notcurses_canutf8(s7_scheme *sc, s7_pointer args)
   return(s7_make_boolean(sc, notcurses_canutf8((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1))));
 }
 
-#if (NC_CURRENT_VERSION >= NC_VERSION(2, 3, 12))
 static s7_pointer g_notcurses_get(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, notcurses_get((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
 					      (const struct timespec *)s7_c_pointer_with_type(sc, s7_cadr(args), timespec_symbol, __func__, 2), 
 					      (ncinput *)s7_c_pointer_with_type(sc, s7_caddr(args), ncinput_symbol, __func__, 3))));
 }
-#else
-static s7_pointer g_notcurses_getc(s7_scheme *sc, s7_pointer args)
-{
-  return(s7_make_integer(sc, notcurses_getc((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1),
-					      (const struct timespec *)s7_c_pointer_with_type(sc, s7_cadr(args), timespec_symbol, __func__, 2), 
-					      (sigset_t *)s7_c_pointer_with_type(sc, s7_caddr(args), sigset_t_symbol, __func__, 3),
-					      (ncinput *)s7_c_pointer_with_type(sc, s7_cadddr(args), ncinput_symbol, __func__, 4))));
-}
-#endif
 
 static s7_pointer g_notcurses_refresh(s7_scheme *sc, s7_pointer args)
 {
@@ -669,11 +662,7 @@ static s7_pointer g_ncstats_free(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_notcurses_stats(s7_scheme *sc, s7_pointer args)
 {
-#if (NC_CURRENT_VERSION >= NC_VERSION(2, 2, 2))
   notcurses_stats((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
-#else
-  notcurses_stats((const struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), 
-#endif
 		  (ncstats *)s7_c_pointer_with_type(sc, s7_cadr(args), ncstats_symbol, __func__, 2));
   return(s7_cadr(args));
 }
@@ -1473,13 +1462,8 @@ static s7_pointer g_ncplane_contents(s7_scheme *sc, s7_pointer args)
   begx = s7_integer_checked(sc, s7_car(arg)); arg = s7_cdr(arg);
   leny = s7_integer_checked(sc, s7_car(arg)); arg = s7_cdr(arg);
   lenx = s7_integer_checked(sc, s7_car(arg)); 
-#if (NC_CURRENT_VERSION <= NC_VERSION(2, 3, 1))
-  return(s7_make_string(sc, ncplane_contents((const struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
-					     begy, begx, leny, lenx)));
-#else
   return(s7_make_string(sc, ncplane_contents((struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), 
 					     begy, begx, leny, lenx)));
-#endif
 }
 
 /* int ncplane_vprintf_yx(struct ncplane* n, int y, int x, const char* format, va_list ap); */
@@ -3492,13 +3476,8 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCOPTION_SUPPRESS_BANNERS);
   nc_int(NCOPTION_NO_ALTERNATE_SCREEN);
   nc_int(NCOPTION_NO_FONT_CHANGES);
-#if (NC_CURRENT_VERSION > NC_VERSION(2, 3, 6))
   nc_int(NCOPTION_PRESERVE_CURSOR);
-#endif
-
-#if (NC_CURRENT_VERSION > NC_VERSION(2, 3, 10))
   nc_int(NCPLANE_OPTION_FIXED);
-#endif
 
   nc_int(NC_BGDEFAULT_MASK);
   nc_int(NC_FGDEFAULT_MASK);
@@ -3650,6 +3629,12 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_int(NCTYPE_REPEAT);
   nc_int(NCTYPE_RELEASE);
 
+  nc_int(NCMICE_NO_EVENTS);
+  nc_int(NCMICE_MOVE_EVENT);
+  nc_int(NCMICE_BUTTON_EVENT);
+  nc_int(NCMICE_DRAG_EVENT);
+  nc_int(NCMICE_ALL_EVENTS);
+
   #define nc_func(Name, Req, Opt, Rst) s7_define(sc, notcurses_let, \
                                           s7_make_symbol(sc, #Name), \
                                           s7_make_function(sc, #Name, g_ ## Name, Req, Opt, Rst, NULL))
@@ -3662,8 +3647,9 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_options_free, 1, 0, false);
 
   nc_func(notcurses_options_termtype, 1, 0, false);
+#if 0
   nc_func(notcurses_options_renderfp, 1, 0, false);
-
+#endif
   #define nc_func2(Name) s7_dilambda_with_environment(sc, notcurses_let, #Name, g_ ## Name, 1, 0, g_set_ ## Name, 2, 0, NULL)
   #define nc_func3(NcName, Name) \
     do {s7_dilambda_with_environment(sc, notcurses_let, #NcName, g_ ## Name, 1, 0, g_set_ ## Name, 2, 0, NULL); \
@@ -3681,8 +3667,10 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_stop, 1, 0, false);
   nc_func(notcurses_render, 1, 0, false);
   nc_func(notcurses_inputready_fd, 1, 0, false);
-  nc_func(notcurses_mouse_enable, 1, 0, false);
-  nc_func(notcurses_mouse_disable, 1, 0, false);
+
+  nc_func(notcurses_mice_enable, 2, 0, false);
+  nc_func(notcurses_mice_disable, 1, 0, false);
+
   nc_func(notcurses_supported_styles, 1, 0, false);
   nc_func(notcurses_palette_size, 1, 0, false);
   nc_func(notcurses_canfade, 1, 0, false);
@@ -3696,11 +3684,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_stdplane_const, 1, 0, false);
   nc_func(notcurses_cursor_enable, 3, 0, false);
   nc_func(notcurses_cursor_disable, 1, 0, false);
-#if (NC_CURRENT_VERSION >= NC_VERSION(2, 3, 12))
   nc_func(notcurses_get, 3, 0, false);
-#else
-  nc_func(notcurses_getc, 4, 0, false);
-#endif
   nc_func(notcurses_refresh, 1, 0, false);
   nc_func(notcurses_at_yx, 5, 0, false);
   nc_func(notcurses_lex_margins, 2, 0, false);

@@ -1762,7 +1762,7 @@ static void init_types(void)
   t_sequence_p[T_BYTE_VECTOR] = true;
   t_sequence_p[T_HASH_TABLE] = true;
   t_sequence_p[T_LET] = true;
-  t_sequence_p[T_C_OBJECT] = true;
+  t_sequence_p[T_C_OBJECT] = true; /* this assumes the object has a length method? */
 
   t_mappable_p[T_PAIR] = true;
   t_mappable_p[T_STRING] = true;
@@ -45720,12 +45720,16 @@ void s7_c_type_set_gc_free(s7_scheme *sc, s7_int tag, s7_pointer (*gc_free)(s7_s
 void s7_c_type_set_gc_mark(s7_scheme *sc, s7_int tag, s7_pointer (*gc_mark)(s7_scheme *sc, s7_pointer obj))    {sc->c_object_types[tag]->gc_mark = gc_mark;}
 void s7_c_type_set_equal(s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, void *value2))                 {sc->c_object_types[tag]->eql = equal;}
 void s7_c_type_set_is_equal(s7_scheme *sc, s7_int tag, s7_pointer (*is_equal)(s7_scheme *sc, s7_pointer args)) {sc->c_object_types[tag]->equal = is_equal;}
-void s7_c_type_set_length(s7_scheme *sc, s7_int tag, s7_pointer (*length)(s7_scheme *sc, s7_pointer args))     {sc->c_object_types[tag]->length = length;}
 void s7_c_type_set_copy(s7_scheme *sc, s7_int tag, s7_pointer (*copy)(s7_scheme *sc, s7_pointer args))         {sc->c_object_types[tag]->copy = copy;}
 void s7_c_type_set_fill(s7_scheme *sc, s7_int tag, s7_pointer (*fill)(s7_scheme *sc, s7_pointer args))         {sc->c_object_types[tag]->fill = fill;}
 void s7_c_type_set_reverse(s7_scheme *sc, s7_int tag, s7_pointer (*reverse)(s7_scheme *sc, s7_pointer args))   {sc->c_object_types[tag]->reverse = reverse;}
 void s7_c_type_set_to_list(s7_scheme *sc, s7_int tag, s7_pointer (*to_list)(s7_scheme *sc, s7_pointer args))   {sc->c_object_types[tag]->to_list = to_list;}
 void s7_c_type_set_to_string(s7_scheme *sc, s7_int tag, s7_pointer (*to_string)(s7_scheme *sc, s7_pointer args)) {sc->c_object_types[tag]->to_string = to_string;}
+
+void s7_c_type_set_length(s7_scheme *sc, s7_int tag, s7_pointer (*length)(s7_scheme *sc, s7_pointer args))
+{
+  sc->c_object_types[tag]->length = (length) ? length : fallback_length; /* is_sequence(c_obj) is #t so we need a length method */
+}
 
 void s7_c_type_set_is_equivalent(s7_scheme *sc, s7_int tag, s7_pointer (*is_equivalent)(s7_scheme *sc, s7_pointer args))
 {
@@ -45811,20 +45815,15 @@ s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e)
 
 static s7_pointer c_object_length(s7_scheme *sc, s7_pointer obj)
 {
-  if (c_object_len(sc, obj))
-    return((*(c_object_len(sc, obj)))(sc, set_clist_1(sc, obj)));
-  return(syntax_error(sc, "attempt to get length of ~S?", 28, obj));
+  return((*(c_object_len(sc, obj)))(sc, set_clist_1(sc, obj)));
 }
 
 static s7_int c_object_length_to_int(s7_scheme *sc, s7_pointer obj)
 {
-  if (c_object_len(sc, obj))
-    {
-      s7_pointer res;
-      res = (*(c_object_len(sc, obj)))(sc, set_clist_1(sc, obj));
-      if (s7_is_integer(res))
-	return(s7_integer_clamped_if_gmp(sc, res));
-    }
+  s7_pointer res;
+  res = (*(c_object_len(sc, obj)))(sc, set_clist_1(sc, obj));
+  if (s7_is_integer(res))
+    return(s7_integer_clamped_if_gmp(sc, res));
   return(-1);
 }
 
@@ -49985,8 +49984,7 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
 		      sc->class_symbol, c_object_type_to_let(sc, obj));
   gc_loc = gc_protect_1(sc, let);
   /* not sure these are useful */
-  if (c_object_len(sc, obj))   /* c_object_length is the object length, not the procedure */
-    s7_varlet(sc, let, sc->c_object_length_symbol, s7_lambda(sc, c_object_len(sc, obj), 1, 0, false));
+  s7_varlet(sc, let, sc->c_object_length_symbol, s7_lambda(sc, c_object_len(sc, obj), 1, 0, false));
   if (c_object_ref(sc, obj))
     s7_varlet(sc, let, sc->c_object_ref_symbol, s7_lambda(sc, c_object_ref(sc, obj), 1, 0, true));
   if (c_object_set(sc, obj))
@@ -52873,6 +52871,7 @@ static void init_typers(s7_scheme *sc)
   sc->type_to_typers[T_FREE] =                sc->F;
   sc->type_to_typers[T_PAIR] =                sc->is_pair_symbol;
   sc->type_to_typers[T_NIL] =                 sc->is_null_symbol;
+  sc->type_to_typers[T_UNUSED] =              sc->F;
   sc->type_to_typers[T_EOF] =                 sc->is_eof_object_symbol;
   sc->type_to_typers[T_UNDEFINED] =           sc->is_undefined_symbol;
   sc->type_to_typers[T_UNSPECIFIED] =         sc->is_unspecified_symbol;
@@ -52918,6 +52917,14 @@ static void init_typers(s7_scheme *sc)
   sc->type_to_typers[T_C_FUNCTION] =          sc->is_procedure_symbol;
   sc->type_to_typers[T_C_FUNCTION_STAR] =     sc->is_procedure_symbol;
   sc->type_to_typers[T_C_RST_NO_REQ_FUNCTION] = sc->is_procedure_symbol;
+#if S7_DEBUGGING
+  {
+    int i;
+    for (i = 0; i < NUM_TYPES; i++)
+      if (!sc->type_to_typers[i])
+	fprintf(stderr, "%s[%d]: no typer for %s (%d)\n", __func__, __LINE__, s7_type_names[i], i);
+  }
+#endif
 }
 
 s7_pointer s7_type_of(s7_scheme *sc, s7_pointer arg) {return(sc->type_to_typers[type(arg)]);}
@@ -95198,7 +95205,7 @@ s7_scheme *s7_init(void)
   sc->protected_objects_free_list = (s7_int *)malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
   sc->protected_objects_free_list_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
   sc->protected_objects = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
-  for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++)
+  for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++) /* using #<unused> as the not-set indicator here lets that value leak out! */
     {
       vector_element(sc->protected_objects, i) = sc->unused;
       vector_element(sc->protected_setters, i) = sc->unused;
@@ -95959,6 +95966,4 @@ int main(int argc, char **argv)
  *
  * print-length pairs = elements?
  * tleft: cond/case tc/recur. if_a_z_if_a_z_l3a|l3a_a seem straightforward. cond_a_z_l3a is a variant of if_a_z_l3a.
- * p*_t->cload [requires calls], clm2xen? sndlib2xen? perhaps the rest of the opt tie-ins
- * fx_c_nc -> direct cases? d|i|p_d|i|p etc -- tedious! [read misc lg *io* gsl *gc*]
  */
