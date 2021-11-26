@@ -124,14 +124,6 @@ static s7_pointer g_notcurses_options_termtype(s7_scheme *sc, s7_pointer args)
   return(s7_make_string(sc, ((notcurses_options *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_options_symbol, __func__, 1))->termtype));
 }
 
-#if 0
-static s7_pointer g_notcurses_options_renderfp(s7_scheme *sc, s7_pointer args) 
-{
-  return(s7_make_c_pointer_with_type(sc, ((notcurses_options *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_options_symbol, __func__, 1))->renderfp, 
-				     s7_make_symbol(sc, "FILE*"), s7_f(sc)));
-}
-#endif
-
 static s7_pointer g_notcurses_options_loglevel(s7_scheme *sc, s7_pointer args) 
 {
   return(s7_make_integer(sc, ((notcurses_options *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_options_symbol, __func__, 1))->loglevel));
@@ -3647,9 +3639,7 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(notcurses_options_free, 1, 0, false);
 
   nc_func(notcurses_options_termtype, 1, 0, false);
-#if 0
-  nc_func(notcurses_options_renderfp, 1, 0, false);
-#endif
+
   #define nc_func2(Name) s7_dilambda_with_environment(sc, notcurses_let, #Name, g_ ## Name, 1, 0, g_set_ ## Name, 2, 0, NULL)
   #define nc_func3(NcName, Name) \
     do {s7_dilambda_with_environment(sc, notcurses_let, #NcName, g_ ## Name, 1, 0, g_set_ ## Name, 2, 0, NULL); \
