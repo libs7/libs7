@@ -3860,9 +3860,7 @@ static inline s7_int safe_strlen(const char *str) /* this is safer than strlen, 
 static char *copy_string_with_length(const char *str, s7_int len)
 {
   char *newstr;
-#if S7_DEBUGGING
-  if ((len <= 0) || (!str)) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
-#endif
+  if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
   if (len != 0)
@@ -9667,11 +9665,7 @@ inline s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 
   if (!is_symbol(symbol))
     {
-#if S7_DEBUGGING
-      if ((let != sc->rootlet) && (has_let_ref_fallback(let)))
-#else
-	if (has_let_ref_fallback(let))
-#endif
+      if (has_let_ref_fallback(let))
 	return(call_let_ref_fallback(sc, let, symbol));
       return(wrong_type_argument_with_type(sc, sc->let_ref_symbol, 2, symbol, a_symbol_string));
     }
@@ -13009,9 +13003,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	    {
 	      (*numer) = p0;
 	      (*denom) = q0;
-#if S7_DEBUGGING
-	      if (q0 == 0) fprintf(stderr, "%f %ld/0\n", ux, p0);
-#endif
+	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %ld/0\n", ux, p0);
 	    }
 	  return(true);
 	}
@@ -45647,6 +45639,7 @@ static void fallback_mark(void *value) {}
 static s7_pointer fallback_ref(s7_scheme *sc, s7_pointer args)   {return(apply_error(sc, car(args), cdr(args)));}
 static s7_pointer fallback_set(s7_scheme *sc, s7_pointer args)   {return(syntax_error(sc, "attempt to set ~S?", 18, car(args)));}
 static s7_pointer fallback_length(s7_scheme *sc, s7_pointer obj) {return(sc->F);}
+
 s7_int s7_c_object_type(s7_pointer obj) {return((is_c_object(obj)) ? c_object_type(obj) : -1);}
 
 static s7_pointer g_c_object_type(s7_scheme *sc, s7_pointer args)
@@ -49969,7 +49962,8 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
 		      sc->class_symbol, c_object_type_to_let(sc, obj));
   gc_loc = gc_protect_1(sc, let);
   /* not sure these are useful */
-  s7_varlet(sc, let, sc->c_object_length_symbol, s7_lambda(sc, c_object_len(sc, obj), 1, 0, false));
+  if (c_object_len(sc, obj) != fallback_length)
+    s7_varlet(sc, let, sc->c_object_length_symbol, s7_lambda(sc, c_object_len(sc, obj), 1, 0, false));
   if (c_object_ref(sc, obj))
     s7_varlet(sc, let, sc->c_object_ref_symbol, s7_lambda(sc, c_object_ref(sc, obj), 1, 0, true));
   if (c_object_set(sc, obj))
@@ -93575,8 +93569,9 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->max_symbol), max_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->min_symbol), min_p_pp);
   s7_set_p_p_function(sc, global_value(sc->sqrt_symbol), sqrt_p_p);
+#if (!WITH_GMP)
   s7_set_p_pp_function(sc, global_value(sc->expt_symbol), expt_p_pp);
-
+#endif
   s7_set_d_7dd_function(sc, global_value(sc->remainder_symbol), remainder_d_7dd);
   s7_set_i_7ii_function(sc, global_value(sc->remainder_symbol), remainder_i_7ii);
   s7_set_i_7ii_function(sc, global_value(sc->quotient_symbol), quotient_i_7ii);
@@ -95406,10 +95401,11 @@ s7_scheme *s7_init(void)
                                 (lambda (clause)                                                          \n\
 	                          (let ((val (eval (car clause))))                                        \n\
                                     (when val                                                             \n\
-                                      (return (cond ((null? (cdr clause)) val)                            \n\
-                                                    ((eq? (cadr clause) '=>) ((eval (caddr clause)) val)) \n\
-                                                    ((null? (cddr clause)) (cadr clause))                 \n\
-                                                    (else (apply values (map quote (cdr clause)))))))))   \n\
+                                      (return                                                             \n\
+                                        (cond ((null? (cdr clause)) val)                                  \n\
+                                              ((eq? (cadr clause) '=>) ((eval (caddr clause)) val))       \n\
+                                              ((null? (cddr clause)) (cadr clause))                       \n\
+                                              (else (apply values (map quote (cdr clause)))))))))         \n\
                                 clauses)                                                                  \n\
                               (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
 
@@ -95424,6 +95420,9 @@ s7_scheme *s7_init(void)
                                              result))                                                     \n\
                                         :readable)                                                        \n\
                                   ())))))");
+  /* hooks need an indication that a name passed as an argument is not a parameter name even when it is defined (in rootlet for example)
+   *   (define h (make-hook 'x)) (set! (hook-functions h) (list (lambda (hk) (set! (hk 'result) (hk 'abs))))) (h 123) -> abs
+   */
 
   s7_eval_c_string(sc, "(define hook-functions                                                            \n\
                           (let ((+signature+ '(#t procedure?))                                            \n\
@@ -95937,4 +95936,5 @@ int main(int argc, char **argv)
  * lg        104.1        106.6  105.0  103.5  103.6
  * tbig      605.1        177.4  175.8  166.4  166.3
  * ----------------------------------------------------
+ *
  */
