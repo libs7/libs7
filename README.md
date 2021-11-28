@@ -15,7 +15,7 @@ s7 is a Scheme interpreter.
 
 [svn site (Snd)](https://sourceforge.net/p/snd/svn1/)
 
-[scheme-for-max](https://github.com/iainctduncan/scheme-for-max) and [scheme-for-pd](https://github.com/iainctduncan/scheme-for-pd) (Iain Duncan)
+[scheme-for-pd or max](https://github.com/iainctduncan/scheme-for-pd or max)
 
 [radium](https://users.notam02.no/~kjetism/radium/) (Kjetil Matheussen)
 
