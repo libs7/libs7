@@ -2168,9 +2168,9 @@ static void init_types(void)
   #define set_local(p)                 full_type(T_Sym(p)) = ((full_type(p) | T_LOCAL) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC))
 #endif
 
-#define T_HIGH_C                       T_LOCAL
-#define has_high_c(p)                  has_type_bit(T_Pair(p), T_HIGH_C)
-#define set_has_high_c(p)              set_type_bit(T_Pair(p), T_HIGH_C)
+#define T_LOW_COUNT                    T_LOCAL
+#define has_low_count(p)               has_type_bit(T_Pair(p), T_LOW_COUNT)
+#define set_has_low_count(p)           set_type_bit(T_Pair(p), T_LOW_COUNT)
 
 #define T_TC                           T_LOCAL
 #define has_tc(p)                      has_type_bit(T_Pair(p), T_TC)
@@ -2206,7 +2206,7 @@ static void init_types(void)
 #define is_loader_port(p)              has_type_bit(T_Prt(p), T_LOADER_PORT)
 #define set_loader_port(p)             set_type_bit(T_Prt(p), T_LOADER_PORT)
 #define clear_loader_port(p)           clear_type_bit(T_Prt(p), T_LOADER_PORT)
-/* to block random load-time reads from screwing up the load process, this bit marks a port used by the loader */
+/* this bit marks a port used by the loader so that random load-time reads do not screw up the load process */
 
 #define T_HAS_SETTER                   T_LOCATION
 #define symbol_has_setter(p)           has_type_bit(T_Sym(p), T_HAS_SETTER)
@@ -10639,8 +10639,7 @@ static int tree_is_cyclic_or_has_pairs(s7_scheme *sc, s7_pointer tree)
   while (true)
     {
       if (tree_is_collected(fast)) return(TREE_CYCLIC);
-      if ((!has_pairs) &&
-	  (is_unquoted_pair(car(fast))))
+      if ((!has_pairs) && (is_unquoted_pair(car(fast))))
 	has_pairs = true;
       fast = cdr(fast);
       if (!is_pair(fast))
@@ -10649,8 +10648,7 @@ static int tree_is_cyclic_or_has_pairs(s7_scheme *sc, s7_pointer tree)
 	  break;
 	}
       if (tree_is_collected(fast)) return(TREE_CYCLIC);
-      if ((!has_pairs) &&
-	  (is_unquoted_pair(car(fast))))
+      if ((!has_pairs) && (is_unquoted_pair(car(fast))))
 	has_pairs = true;
       fast = cdr(fast);
       if (!is_pair(fast))
@@ -12687,7 +12685,6 @@ static bool big_numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 	return(false);
       mpc_set_d_d(sc->mpc_1, real_part(a), imag_part(a), MPC_RNDNN);
       return(mpc_cmp(sc->mpc_1, big_complex(b)) == 0);
-
     case T_BIG_COMPLEX:
       if ((mpfr_nan_p(mpc_realref(big_complex(a)))) || (mpfr_nan_p(mpc_imagref(big_complex(a)))))
 	return(false);
@@ -13215,11 +13212,9 @@ static s7_pointer exact_to_inexact(s7_scheme *sc, s7_pointer x)
 #if WITH_GMP
     case T_BIG_INTEGER:
       return(big_integer_to_big_real(sc, x));
-
     case T_BIG_RATIO:
       return(big_ratio_to_big_real(sc, x));
 #endif
-
     case T_REAL:    case T_BIG_REAL:
     case T_COMPLEX: case T_BIG_COMPLEX:
       return(x); /* apparently (exact->inexact 1+i) is not an error */
@@ -13466,8 +13461,7 @@ static dtoa_np dtoa_find_cachedpow10(int exp, int* k)
   idx = (approx - dtoa_firstpower) / dtoa_steppowers;
   while (true)
     {
-      int current;
-      current = exp + dtoa_powers_ten[idx].exp + 64;
+      int current = exp + dtoa_powers_ten[idx].exp + 64;
       if (current < dtoa_expmin)
 	{
 	  idx++;
@@ -13510,7 +13504,6 @@ static dtoa_np dtoa_build_np(double d)
 {
   uint64_t bits;
   dtoa_np fp;
-
   bits = dtoa_get_dbits(d);
   fp.frac = bits & dtoa_fracmask;
   fp.exp = (bits & dtoa_expmask) >> 52;
@@ -13586,26 +13579,21 @@ static void dtoa_round_digit(char* digits, int ndigits, uint64_t delta, uint64_t
 
 static int dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower, char* digits, int* K)
 {
-  uint64_t part1, part2, wfrac, delta;
+  uint64_t part1, part2, wfrac = upper->frac - fp->frac, delta = upper->frac - lower->frac;
   uint64_t *divp, *unit;
-  int idx, kappa;
+  int idx = 0, kappa = 10;
   dtoa_np one;
 
-  wfrac = upper->frac - fp->frac;
-  delta = upper->frac - lower->frac;
   one.frac = 1ULL << -upper->exp;
   one.exp  = upper->exp;
   part1 = upper->frac >> -one.exp;
   part2 = upper->frac & (one.frac - 1);
-  idx = 0;
-  kappa = 10;
 
   /* 1000000000 */
   for (divp = dtoa_tens + 10; kappa > 0; divp++)
     {
-      uint64_t tmp, div;
+      uint64_t tmp, div = *divp;
       unsigned digit;
-      div = *divp;
       digit = part1 / div;
       if (digit || idx)
 	digits[idx++] = digit + '0';
@@ -64124,7 +64112,7 @@ static bool check_type_uncertainty(s7_scheme *sc, s7_pointer target, s7_pointer 
       (is_pair(cadr(code))))
     {
       s7_int counts;
-      if ((!has_high_c(code)) && /* only set below */
+      if ((!has_low_count(code)) && /* only set below */
 	  (s7_tree_memq(sc, car_x, code)))
 	{
 	  if (is_pair(caar(code)))
@@ -64146,7 +64134,7 @@ static bool check_type_uncertainty(s7_scheme *sc, s7_pointer target, s7_pointer 
       /* can be from lambda: (lambda (n)...): ((n) (set! sum (+ sum n))) etc */
       if (counts <= 2)
 	{
-	  set_has_high_c(code);
+	  set_has_low_count(code);
 	  pc_fallback(sc, start_pc);
 	  if (cell_optimize(sc, cddr(car_x)))
 	    {
@@ -92325,7 +92313,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
     {
       if (i > 0) in_use += ts[i];
       if (ts[i] > 50)
-	sc->w = cons_unchecked(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)), make_integer(sc, ts[i])), sc->w);
+	sc->w = cons_unchecked(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)), 
+					    make_integer(sc, ts[i])), sc->w);
     }
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free"), 
 			     cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
@@ -92583,6 +92572,20 @@ static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
   return(reverse_in_place_unchecked(sc, sc->nil, lst));
 }
 
+static s7_pointer sl_protected_objects(s7_scheme *sc)
+{
+  s7_pointer nv;
+  s7_pointer *vals;
+  s7_int i, len;
+  nv = s7_vector_copy(sc, sc->protected_objects);
+  len = vector_length(nv);
+  vals = vector_elements(nv);
+  for (i = 0; i < len; i++)
+    if (vals[i] == sc->unused) 
+      vals[i] = sc->F;
+  return(nv);
+}
+
 static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
 {
   switch (symbol_s7_let(sym))
@@ -92604,7 +92607,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_GC_FREED:                      return(make_integer(sc, sc->gc_freed));
     case SL_GC_TOTAL_FREED:                return(make_integer(sc, sc->gc_total_freed));
     case SL_GC_INFO:                       return(list_3(sc, make_integer(sc, sc->gc_calls), make_integer(sc, sc->gc_total_time), make_integer(sc, ticks_per_second())));
-    case SL_GC_PROTECTED_OBJECTS:          return(sc->protected_objects);
+    case SL_GC_PROTECTED_OBJECTS:          return(sl_protected_objects(sc));
     case SL_GC_STATS:                      return(make_integer(sc, sc->gc_stats));
     case SL_GC_TEMPS_SIZE:                 return(make_integer(sc, sc->gc_temps_size));
     case SL_GC_RESIZE_HEAP_FRACTION:       return(make_real(sc, sc->gc_resize_heap_fraction));
@@ -93078,31 +93081,31 @@ static void init_s7_let_immutable_field(void)
 
 static const char *decoded_name(s7_scheme *sc, s7_pointer p)
 {
-  if (p == sc->value) return("value");
-  if (p == sc->args) return("args");
-  if (p == sc->code) return("code");
-  if (p == sc->cur_code) return("cur_code");
-  if (p == sc->curlet) return("curlet");
-  if (p == sc->nil) return("()");
-  if (p == sc->T) return("#t");
-  if (p == sc->F) return("#f");
-  if (p == eof_object) return("eof_object");
-  if (p == sc->undefined) return("undefined");
-  if (p == sc->unspecified) return("unspecified");
-  if (p == sc->no_value) return("no_value");
-  if (p == sc->unused) return("#<unused>");
-  if (p == sc->symbol_table) return("symbol_table");
-  if (p == sc->rootlet) return("rootlet");
-  if (p == sc->s7_let) return("*s7*");
-  if (p == sc->unlet) return("unlet");
-  if (p == current_input_port(sc)) return("current-input-port");
-  if (p == current_output_port(sc)) return("current-output-port");
-  if (p == sc->error_port) return("error_port");
-  if (p == sc->owlet) return("owlet");
-  if (p == sc->standard_input) return("*stdin*");
+  if (p == sc->value)           return("value");
+  if (p == sc->args)            return("args");
+  if (p == sc->code)            return("code");
+  if (p == sc->cur_code)        return("cur_code");
+  if (p == sc->curlet)          return("curlet");
+  if (p == sc->nil)             return("()");
+  if (p == sc->T)               return("#t");
+  if (p == sc->F)               return("#f");
+  if (p == eof_object)          return("eof_object");
+  if (p == sc->undefined)       return("undefined");
+  if (p == sc->unspecified)     return("unspecified");
+  if (p == sc->no_value)        return("no_value");
+  if (p == sc->unused)          return("#<unused>");
+  if (p == sc->symbol_table)    return("symbol_table");
+  if (p == sc->rootlet)         return("rootlet");
+  if (p == sc->s7_let)          return("*s7*");
+  if (p == sc->unlet)           return("unlet");
+  if (p == sc->error_port)      return("error_port");
+  if (p == sc->owlet)           return("owlet");
+  if (p == sc->standard_input)  return("*stdin*");
   if (p == sc->standard_output) return("*stdout*");
-  if (p == sc->standard_error) return("*stderr*");
-  if (p == sc->else_symbol) return("else_symbol");
+  if (p == sc->standard_error)  return("*stderr*");
+  if (p == sc->else_symbol)     return("else_symbol");
+  if (p == current_input_port(sc))  return("current-input-port");
+  if (p == current_output_port(sc)) return("current-output-port");
   return((p == sc->stack) ? "stack" : NULL);
 }
 
