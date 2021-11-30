@@ -7822,8 +7822,16 @@
 		       (boolean? (cadr form))
 		       (char? (cadr form))
 		       (and (pair? (cadr form))     ; (copy (copy x)) -> (copy x)
+			    (null? (cddr form))     ;   not (copy (copy x) (list ...))
 			    (memq (caadr form) '(copy string-copy)))) ; or any maker?
 		   (lint-format "~A could be ~A" caller (truncated-list->string form) (cadr form)))
+
+		  ((and (pair? (cadr form))         ; (copy (copy x) ...) -> (copy x ...)
+			(pair? (cddr form))
+			(eq? (caadr form) 'copy)
+			(pair? (cdadr form))
+			(null? (cddadr form)))
+		   (lint-format "~A could be ~A" caller (truncated-list->string form) `(copy ,(cadadr form) ,@(cddr form))))
 
 		  ((equal? (cadr form) '(owlet))    ; (copy (owlet)) -> (owlet)
 		   (lint-format "~A could be (owlet): owlet is copied internally" caller form))
@@ -7847,7 +7855,12 @@
 		     (pair? (cadr form))   ; (string-copy (string-copy x)) could be (string-copy x)
 		     (memq (caadr form) '(copy string-copy string make-string string-upcase string-downcase
 					  string-append list->string symbol->string number->string)))
-		(lint-format "~A could be ~A" caller (truncated-list->string form) (cadr form))))
+		(if (null? (cddr form))
+		    (lint-format "~A could be ~A" caller (truncated-list->string form) (cadr form))
+		    (if (and (pair? (cddr form))
+			     (pair? (cdadr form))
+			     (null? (cddadr form)))
+			(lint-format "~A could be ~A" caller (truncated-list->string form) `(string-copy ,(cadadr form) ,@(cddr form)))))))
 	  (hash-special 'string-copy sp-string-copy))
 
 	;; ---------------- string-down|upcase ----------------

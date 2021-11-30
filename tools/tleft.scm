@@ -253,8 +253,8 @@
 (tcase3)
 
 (define (tcase3-1)
-  (do ((i 0 (+ i 1)))             ; op_simple_do_step -> safe_closure_aa_o, g_add_x1
-      ((= i case-size))                ; g_num_eq_2
+  (do ((i 0 (+ i 1)))                ; op_simple_do_step -> safe_closure_aa_o, g_add_x1
+      ((= i case-size))              ; g_num_eq_2
     (case3 (remainder i 3) '(1 2)))) ; modulo_p_pi via fx_c_ti_direct(80400 check_do), fx_q
 
 (tcase3-1)

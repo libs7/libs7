@@ -311,12 +311,8 @@
 		      (len (length name)))
 		 (do ((i 0 (+ i 1)))
 		     ((= i len))
-		   (if (char=? (name i) #\*) 
-		       (set! (name i) #\_)
-		       (if (char=? (name i) #\-) 
-			   (set! (name i) #\_)
-			   (if (char=? (name i) #\space) 
-			       (set! (name i) #\_))))) ; "struct tm*" for example
+		   (if (memv (name i) '(#\* #\- #\space)) ; "struct tm*" for example
+		       (set! (name i) #\_)))
 		 (set! name (symbol name "_symbol"))
 		 (set! type-symbols (cons (cons type name) type-symbols))
 		 name))))

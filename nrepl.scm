@@ -1182,11 +1182,10 @@
 			  (if (char-separator? (ncplane_contents ncp row col 1 1))
 			      (loop (- col 1))
 			      (let loop ((col col))
-				(if (= col (bols row))
+				(if (or (= col (bols row))
+					(char-separator? (ncplane_contents ncp row (- col 1) 1 1)))
 				    col
-				    (if (char-separator? (ncplane_contents ncp row (- col 1) 1 1))
-					col
-					(loop (- col 1)))))))))
+				    (loop (- col 1))))))))
                   (define (word-forward-x)
                     (let loop ((col (min (eols row) (+ col 1))))
                       (if (= col (eols row))
@@ -1194,11 +1193,10 @@
 			  (if (char-separator? (ncplane_contents ncp row col 1 1))
 			      (loop (+ col 1))
 			      (let loop ((col col))
-				(if (= col (eols row))
+				(if (or (= col (eols row))
+					(char-separator? (ncplane_contents ncp row col 1 1)))
 				    col
-				    (if (char-separator? (ncplane_contents ncp row col 1 1))
-					col
-					(loop (+ col 1)))))))))
+				    (loop (+ col 1))))))))
 		  
                   (set! (keymap (+ meta-key (char->integer #\B)))
 			(set! (keymap (+ meta-key (char->integer #\b)))
