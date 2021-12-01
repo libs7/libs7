@@ -50763,9 +50763,9 @@ static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg)
 static s7_pointer wrong_type_arg_error_prepackaged(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
 {
   s7_pointer p = cdr(sc->wrong_type_arg_info);  /* info list is '(format_string caller arg_n arg type_name descr) */
-  set_car(p, caller);  p = cdr(p);
-  set_car(p, arg_n);   p = cdr(p);
-  set_car(p, arg);     p = cdr(p);
+  set_car(p, caller); p = cdr(p);
+  set_car(p, arg_n);  p = cdr(p);
+  set_car(p, arg);    p = cdr(p);
   set_car(p, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam);
   p = cdr(p);
   set_car(p, descr);
@@ -51640,8 +51640,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
   /* look for a catcher */
   for (i = current_stack_top(sc) - 1; i >= 3; i -= 4)
     {
-      catch_function_t catcher;
-      catcher = catchers[stack_op(sc->stack, i)];
+      catch_function_t catcher = catchers[stack_op(sc->stack, i)];
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
@@ -51696,7 +51695,7 @@ static void fill_error_location(s7_scheme *sc)
 s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 {
   bool reset_error_hook = false;
-  s7_pointer cur_code;
+  s7_pointer cur_code = current_code(sc);
 
   /* fprintf(stderr, "s7_error %s %s\n", display(type), display(info)); */
 
@@ -51721,7 +51720,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
   if (unchecked_type(sc->curlet) != T_LET)
     sc->curlet = sc->nil;          /* in the reader, the sc->curlet stack entry is mostly ignored, so it can be (and usually is) garbage */
   let_set_outlet(sc->owlet, sc->curlet);
-  cur_code = current_code(sc);
   slot_set_value(sc->error_code, cur_code);
 
 #if WITH_HISTORY
@@ -51883,8 +51881,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 		else
 		  if (sc->input_port_stack_loc > 0)
 		    {
-		      s7_pointer p;
-		      p = sc->input_port_stack[sc->input_port_stack_loc - 1];
+		      s7_pointer p = sc->input_port_stack[sc->input_port_stack_loc - 1];
 		      if ((is_input_port(p)) &&
 			  (port_file(p) != stdin) &&
 			  (!port_is_closed(p)))

@@ -434,7 +434,7 @@
 	(args (map (lambda (field)
 		     (values (list 'quote (car field))
 			     (let ((par (memq (car field) (cdr make))))
-			       (if (pair? par) (car par) #f))))
+			       (and (pair? par) (car par)))))
 		   fields)))
     `(begin
        (define (,? ,obj)

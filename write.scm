@@ -48,14 +48,13 @@
 		(if (not (eq? p lst))
 		    (spaces port col))
 		(let ((len (length (object->string obj))))
-		  (if (and (keyword? obj)
-			   (pair? (cdr p)))
-		      (begin
-			(write obj port)
-			(write-char #\space port)
-			(set! added (+ 1 len))
-			(set! p (cdr p))
-			(set! obj (car p)))) ; pair? cdr p above
+		  (when (and (keyword? obj)
+			     (pair? (cdr p)))
+		    (write obj port)
+		    (write-char #\space port)
+		    (set! added (+ 1 len))
+		    (set! p (cdr p))
+		    (set! obj (car p))) ; pair? cdr p above
 		  
 		  (cond ((or (hash-table? obj)
 			     (let? obj))
@@ -302,11 +301,10 @@
 					    (begin
 					      (write-char #\space port)
 					      (write (cadr lst) port)
-					      (if (and (eq? (cadr lst) '=>)
-						       (pair? (cddr lst)))
-						  (begin
-						    (write-char #\space port)
-						    (write (caddr lst) port))))
+					      (when (and (eq? (cadr lst) '=>)
+							 (pair? (cddr lst)))
+						(write-char #\space port)
+						(write (caddr lst) port)))
 					    (begin
 					      (spaces port (+ column 3))
 					      (stacked-list port (cdr lst) (+ column 3)))))
@@ -323,10 +321,9 @@
 			   (display objstr port)
 			   (begin
 			     (format port "(~A" (car obj))
-			     (if (pair? (cdr obj))
-				 (begin
-				   (write-char #\space port)
-				   (stacked-list port (cdr obj) (+ column *pretty-print-spacing*))))
+			     (when (pair? (cdr obj))
+			       (write-char #\space port)
+			       (stacked-list port (cdr obj) (+ column *pretty-print-spacing*)))
 			     (write-char #\) port)))))
 		   (hash-table-set! h 'map w-map)
 		   (hash-table-set! h 'for-each w-map)
@@ -364,10 +361,9 @@
 		   ;; -------- begin etc
 		   (define (w-begin obj port column)
 		     (format port "(~A" (car obj))
-		     (if (pair? (cdr obj))
-			 (begin
-			   (spaces port (+ column *pretty-print-spacing*))
-			   (stacked-list port (cdr obj) (+ column *pretty-print-spacing*))))
+		     (when (pair? (cdr obj))
+		       (spaces port (+ column *pretty-print-spacing*))
+		       (stacked-list port (cdr obj) (+ column *pretty-print-spacing*)))
 		     (write-char #\) port))
 		   (for-each
 		    (lambda (f)
