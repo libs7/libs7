@@ -1,3 +1,5 @@
+(set! (*s7* 'heap-size) 512000)
+
 (unless (provided? 'snd-peak-phases.scm) 
   (load "low-primes.scm")
   (load "peak-phases.scm"))
