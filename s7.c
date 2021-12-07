@@ -1667,7 +1667,7 @@ static block_t *reallocate(s7_scheme *sc, block_t *op, size_t bytes)
 
 /* -------------------------------------------------------------------------------- */
 
-typedef enum {P_DISPLAY, P_WRITE, P_READABLE, P_KEY} use_write_t;
+typedef enum {P_DISPLAY, P_WRITE, P_READABLE, P_KEY, P_CODE} use_write_t;
 
 static s7_pointer too_many_arguments_string, not_enough_arguments_string, cant_bind_immutable_string,
   a_boolean_string, a_byte_vector_string, a_format_port_string, a_let_string, a_list_string, a_non_constant_symbol_string,
@@ -32247,7 +32247,7 @@ static inline void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port
   else
     {
       char c = '\0';
-      if (use_write == P_READABLE)
+      if ((use_write == P_READABLE) || (use_write == P_CODE))
 	{
 	  if (!is_keyword(obj)) c = '\'';
 	}
@@ -33294,8 +33294,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  s7_pointer key_val;
 	  port_write_character(port)(sc, ' ', port);
 	  key_val = hash_table_iterate(sc, iterator);
-	  if ((use_write != P_READABLE) &&
-	      (is_normal_symbol(car(key_val))))
+	  if ((use_write != P_READABLE) && (use_write != P_CODE) && (is_normal_symbol(car(key_val))))
 	    port_write_character(port)(sc, '\'', port);
 	  object_to_port_with_circle_check(sc, car(key_val), port, NOT_P_DISPLAY(use_write), ci);
 	  port_write_character(port)(sc, ' ', port);
@@ -33406,6 +33405,14 @@ static void slot_setters_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port,
       }
 }
 
+static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
+{
+  /* the slot symbol might need (symbol...) in which case we don't want the preceding quote */
+  symbol_to_port(sc, slot_symbol(obj), port, P_READABLE, ci);
+  port_write_character(port)(sc, ' ', port);
+  object_to_port_with_circle_check(sc, slot_value(obj), port, use_write, ci);
+}
+
 static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   /* if outer env points to (say) method list, the object needs to specialize object->string itself */
@@ -33419,7 +33426,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	  /* what needs to be protected here? for one, the function might not return a string! */
 
 	  clear_has_methods(obj);
-	  if (use_write == P_WRITE)
+	  if ((use_write == P_WRITE) || (use_write == P_CODE))
 	    p = call_method(sc, obj, print_func, set_plist_1(sc, obj));
 	  else p = call_method(sc, obj, print_func, set_plist_2(sc, obj, (use_write == P_DISPLAY) ? sc->F : sc->readable_keyword));
 	  set_has_methods(obj);
@@ -33548,7 +33555,8 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 		  for (i = 1, slot = let_slots(obj); tis_slot(slot); i++, slot = next_slot(slot))
 		    {
 		      port_write_character(port)(sc, ' ', port);
-		      object_to_port_with_circle_check(sc, slot, port, use_write, ci);
+		      /* object_to_port_with_circle_check(sc, slot, port, use_write, ci); */
+		      slot_to_port(sc, slot, port, use_write, ci);
 		      if ((tis_slot(next_slot(slot))) && (i == sc->print_length))
 			{
 			  port_write_string(port)(sc, " ...", 4, port);
@@ -34414,14 +34422,6 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	  nlen = snprintf(buf, 128, " %p>", obj);
 	  port_write_string(port)(sc, buf, clamp_length(nlen, 128), port);
 	}}
-}
-
-static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
-{
-  /* the slot symbol might need (symbol...) in which case we don't want the preceding quote */
-  symbol_to_port(sc, slot_symbol(obj), port, P_READABLE, ci);
-  port_write_character(port)(sc, ' ', port);
-  object_to_port_with_circle_check(sc, slot_value(obj), port, use_write, ci);
 }
 
 static void stack_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
@@ -35578,6 +35578,10 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 
 	    case '}':
 	      format_error(sc, "unmatched '}'", 13, str, args, fdat);
+
+	    case '$':
+	      use_write = P_CODE;
+	      goto OBJSTR;
 
 	    case 'W': case 'w':
 	      use_write = P_READABLE;
@@ -44109,7 +44113,7 @@ static s7_pointer g_hash_table_ref(s7_scheme *sc, s7_pointer args)
   if (is_null(cddr(args))) /* implicit args */
     return(nt);
   if (nt == sc->F) /* need the error here, not in implicit_index because table should be in the error message, not nt */
-    return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, table, args)));
+    return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->hash_table_ref_symbol, args)));
   return(implicit_index(sc, nt, cddr(args))); /* 9-Jan-19 */
 }
 
@@ -52400,6 +52404,14 @@ s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
   return(sc->value);
 }
 
+static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
+{
+  if (!is_applicable(in_obj))
+    return(s7_error(sc, sc->syntax_error_symbol, 
+		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
+				cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
+  return(implicit_index(sc, in_obj, cdr(indices)));
+}
 
 static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indices)
 {
@@ -52446,8 +52458,22 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       return((is_pair(cdr(indices))) ? implicit_index(sc, obj, cdr(indices)) : obj);
 
     case T_HASH_TABLE:                   /* ((vector (hash-table '(a . 1) '(b . 2))) 0 'a) -> 1 */
-      obj = s7_hash_table_ref(sc, obj, car(indices));
-      return((is_pair(cdr(indices))) ? implicit_index(sc, obj, cdr(indices)) : obj);
+      {
+	s7_pointer in_obj;
+	in_obj = s7_hash_table_ref(sc, obj, car(indices));
+	if (is_pair(cdr(indices)))
+	  return(implicit_index_checked(sc, obj, in_obj, indices));
+#if 0
+	  {
+	    if (!is_applicable(in_obj))
+	      return(s7_error(sc, sc->syntax_error_symbol, 
+			      set_elist_4(sc, wrap_string(sc, "~S becomes ~S, but ~S can't take arguments", 42),
+					  cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
+	    return(implicit_index(sc, in_obj, cdr(indices)));
+	  }
+#endif
+	return(in_obj);
+      }
 
     case T_C_OBJECT:
       res = (*(c_object_ref(sc, obj)))(sc, set_ulist_1(sc, obj, indices));
@@ -83520,7 +83546,16 @@ static void apply_hash_table(s7_scheme *sc)                /* -------- hash-tabl
     s7_wrong_number_of_args_error(sc, "hash-table ref: no key: (~S)", sc->code);
   sc->value = s7_hash_table_ref(sc, sc->code, car(sc->args));
   if (!is_null(cdr(sc->args)))
-    sc->value = implicit_index(sc, sc->value, cdr(sc->args));
+    sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
+#if 0
+    {
+      if (!is_applicable(sc->value))
+	s7_error(sc, sc->syntax_error_symbol, 
+		 set_elist_4(sc, wrap_string(sc, "~S becomes ~S, but ~S can't take arguments", 42),
+			     cons(sc, sc->code, sc->args), cons(sc, sc->value, cdr(sc->args)), sc->value));
+      sc->value = implicit_index(sc, sc->value, cdr(sc->args));
+    }
+#endif
 }
 
 static void apply_let(s7_scheme *sc)                       /* -------- environment as applicable object -------- */
@@ -95820,4 +95855,19 @@ int main(int argc, char **argv)
  * tbig      605.1        177.4  175.8  166.4  166.4
  * ----------------------------------------------------
  *
+ * (hash 'a :asdf) gets (hash 'a) then tries to call (#f :asdf) via apply giving: error: attempt to apply boolean #f to (:asdf) in 'a?
+ *   (let ((h (hash-table 'b 1))) (h 'a 'asdf)) -> ((hash-table 'b 1) a 'asdf) becomes (#f 'asdf), but #f can't take arguments
+ *   (let ((h (hash-table 'a (hash-table 'b 1)))) (h 'a 'c 'd)) -> error: ((hash-table 'b 1) 'c 'd) becomes (#f 'd), but #f can't take arguments
+ *   (let ((h (hash-table))) (hash-table-ref h 'a 'asdf)) -> error: hash-table-ref: too many arguments: ((hash-table) a asdf)
+ *      why doesn't hash-table-ref accept more args? let-ref also (see below)
+ *
+ *   make implicit_index_error for these and add all to s7test, other uses for ~$? check set! cases
+ *   (let ((L (list 1))) (list-ref L 0 2)) -> error: attempt to apply an integer 1 to (2) in (list-ref L 0 2)?
+ *   (let ((L (list 1))) (L 0 2)) -> error: attempt to apply an integer 1 to (2) in (L 0 2)?
+ *   (let ((V (vector 1 2))) (V 0 1)) -> error: attempt to apply an integer 1 to (1) in (V 0 1)?
+ *   (let ((V (vector 1 2))) (vector-ref V 0 1)) -> error: attempt to apply an integer 1 to (1) in (vector-ref V 0 1)?
+ *   (let ((V (int-vector 1 2))) (V 0 1)) -> error: vector-ref second argument, (0 1), is out of range (too many indices) [float-vector same etc]
+ *   (let ((L (inlet))) (L 'a :asdf)) -> error: attempt to apply an undefined object #<undefined> to (:asdf) in 'a?
+ *   (let ((L (inlet))) (let-ref L 'a :asdf)) -> error: let-ref: too many arguments: (let-ref (inlet) a :asdf)
+ *   (let ((B (block 0 1))) (B 0 2)) -> error: block-ref takes 2 arguments: ((inlet 'body ()) 'body)
  */
