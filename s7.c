@@ -37088,25 +37088,30 @@ static s7_pointer list_ref_1(s7_scheme *sc, s7_pointer lst, s7_pointer ind)
 
 static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indices);
 
+static s7_pointer ref_index_checked(s7_scheme *sc, s7_pointer caller, s7_pointer in_obj, s7_pointer args)
+{
+  if (!is_applicable(in_obj))
+    return(s7_error(sc, sc->syntax_error_symbol, 
+		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
+				cons(sc, caller, args), cons(sc, in_obj, cddr(args)), in_obj)));
+  /* TODO: perhaps first $s -> "(~S ~{~$~^ ~})..." and we can pass the symbol rather than the global value as "caller" */
+  return(implicit_index(sc, in_obj, cddr(args)));
+}
+
 static s7_pointer g_list_ref(s7_scheme *sc, s7_pointer args)
 {
   #define H_list_ref "(list-ref lst i ...) returns the i-th element (0-based) of the list"
   #define Q_list_ref s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_pair_symbol, sc->is_integer_symbol)
   /* (let ((L '((1 2 3) (4 5 6)))) (list-ref L 1 2)) */
 
-  s7_pointer lst = car(args), inds;
+  s7_pointer lst = car(args);
   if (!is_pair(lst))
     return(method_or_bust(sc, lst, sc->list_ref_symbol, args, T_PAIR, 1));
-  inds = cdr(args);
-  while (true)
-    {
-      lst = list_ref_1(sc, lst, car(inds));
-      if (is_null(cdr(inds)))
-	return(lst);
-      inds = cdr(inds);
-      if (!is_pair(lst))
-	return(implicit_index(sc, lst, inds)); /* 9-Jan-19 */
-    }
+
+  lst = list_ref_1(sc, lst, cadr(args));
+  if (is_pair(cddr(args)))
+    return(ref_index_checked(sc, global_value(sc->list_ref_symbol), lst, args));
+  return(lst);
 }
 
 static bool op_implicit_pair_ref_a(s7_scheme *sc)
@@ -40186,6 +40191,15 @@ a vector that points to the same elements as the original-vector but with differ
 
 
 /* -------------------------------- vector-ref -------------------------------- */
+static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
+{
+  if (!is_applicable(in_obj))
+    return(s7_error(sc, sc->syntax_error_symbol, 
+		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
+				cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
+  return(implicit_index(sc, in_obj, cdr(indices)));
+}
+
 static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indices)
 {
   s7_int index = 0;
@@ -40241,7 +40255,10 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 	  if (!is_normal_vector(vect))
 	    return(out_of_range(sc, sc->vector_ref_symbol, int_two, indices, too_many_indices_string));
 	  nv = vector_element(vect, index);
+	  return(implicit_index_checked(sc, vect, nv, indices));
+#if 0
 	  return(implicit_index(sc, nv, cdr(indices)));
+#endif
 	}}
   return((vector_getter(vect))(sc, vect, index));
 }
@@ -44110,11 +44127,10 @@ static s7_pointer g_hash_table_ref(s7_scheme *sc, s7_pointer args)
   if (!is_hash_table(table))
     return(method_or_bust(sc, table, sc->hash_table_ref_symbol, args, T_HASH_TABLE, 1));
   nt = s7_hash_table_ref(sc, table, cadr(args));
-  if (is_null(cddr(args))) /* implicit args */
-    return(nt);
-  if (nt == sc->F) /* need the error here, not in implicit_index because table should be in the error message, not nt */
-    return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->hash_table_ref_symbol, args)));
-  return(implicit_index(sc, nt, cddr(args))); /* 9-Jan-19 */
+
+  if (is_pair(cddr(args)))
+    return(ref_index_checked(sc, global_value(sc->hash_table_ref_symbol), nt, args));
+  return(nt);
 }
 
 static s7_pointer g_hash_table_ref_2(s7_scheme *sc, s7_pointer args)
@@ -52404,18 +52420,9 @@ s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
   return(sc->value);
 }
 
-static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
-{
-  if (!is_applicable(in_obj))
-    return(s7_error(sc, sc->syntax_error_symbol, 
-		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
-				cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
-  return(implicit_index(sc, in_obj, cdr(indices)));
-}
-
 static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indices)
 {
-  s7_pointer res;
+  s7_pointer res, in_obj;
   /* (let ((lst '("12" "34"))) (lst 0 1)) -> #\2
    * (let ((lst (list #(1 2) #(3 4)))) (lst 0 1)) -> 2
    * this can get tricky:
@@ -52454,35 +52461,27 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       return(string_ref_p_pi_unchecked(sc, obj, integer(car(indices))));
 
     case T_PAIR:                         /* (#((1 2) (3 4)) 1 0) -> 3, (#((1 (2 3))) 0 1 0) -> 2 */
-      obj = list_ref_1(sc, obj, car(indices));
-      return((is_pair(cdr(indices))) ? implicit_index(sc, obj, cdr(indices)) : obj);
+      in_obj = list_ref_1(sc, obj, car(indices));
+      if (is_pair(cdr(indices)))
+	return(implicit_index_checked(sc, obj, in_obj, indices));
+      return(in_obj);
 
     case T_HASH_TABLE:                   /* ((vector (hash-table '(a . 1) '(b . 2))) 0 'a) -> 1 */
-      {
-	s7_pointer in_obj;
-	in_obj = s7_hash_table_ref(sc, obj, car(indices));
-	if (is_pair(cdr(indices)))
-	  return(implicit_index_checked(sc, obj, in_obj, indices));
-#if 0
-	  {
-	    if (!is_applicable(in_obj))
-	      return(s7_error(sc, sc->syntax_error_symbol, 
-			      set_elist_4(sc, wrap_string(sc, "~S becomes ~S, but ~S can't take arguments", 42),
-					  cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
-	    return(implicit_index(sc, in_obj, cdr(indices)));
-	  }
-#endif
-	return(in_obj);
-      }
+      in_obj = s7_hash_table_ref(sc, obj, car(indices));
+      if (is_pair(cdr(indices)))
+	return(implicit_index_checked(sc, obj, in_obj, indices));
+      return(in_obj);
+
+    case T_LET:
+      in_obj = s7_let_ref(sc, obj, car(indices));
+      if (is_pair(cdr(indices)))
+	return(implicit_index_checked(sc, obj, in_obj, indices));
+      return(in_obj);
 
     case T_C_OBJECT:
       res = (*(c_object_ref(sc, obj)))(sc, set_ulist_1(sc, obj, indices));
       set_car(sc->u1_1, sc->F);
       return(res);
-
-    case T_LET:
-      obj = s7_let_ref(sc, obj, car(indices));
-      return((is_pair(cdr(indices))) ? implicit_index(sc, obj, cdr(indices)) : obj);
 
     case T_ITERATOR: /* indices is not nil, so this is an error */
       return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices)));
@@ -79109,7 +79108,13 @@ static void op_set_pair_p(s7_scheme *sc)
 
 static s7_pointer no_setter_error(s7_scheme *sc, s7_pointer obj)
 {
+  /* sc->code here is form without set!: ((abs 1) 2) from (set! (abs 1) 2)
+   *   but in implicit case, (let ((L (list 0))) (set! (L 0 0) 2)), code is ((0 0) 2)
+   *   at entry to s7_error: ((0 0 2)??  but we print something from define-hook-function if in the repl
+   *   add indices and new-value args, is unevaluated code always available?
+   */
   int32_t typ = type(obj);
+  /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   if (type(caar(sc->code)) >= T_C_FUNCTION_STAR)
     return(s7_error(sc, sc->no_setter_symbol, 
 		    set_elist_6(sc, wrap_string(sc, "~W (~A) does not have a setter: (set! (~W~{~^ ~S~}) ~S)", 55),
@@ -83536,7 +83541,8 @@ static bool apply_pair(s7_scheme *sc)                       /* -------- list as 
     s7_wrong_number_of_args_error(sc, "list ref: no index: (~S)", sc->code);
   sc->value = list_ref_1(sc, sc->code, car(sc->args));    /* (L 1) */
   if (!is_null(cdr(sc->args)))
-    sc->value = implicit_index(sc, sc->value, cdr(sc->args));     /* (L 1 2) */
+    /* sc->value = implicit_index(sc, sc->value, cdr(sc->args)); */    /* (L 1 2) */
+    sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
   return(true);
 }
 
@@ -83547,15 +83553,6 @@ static void apply_hash_table(s7_scheme *sc)                /* -------- hash-tabl
   sc->value = s7_hash_table_ref(sc, sc->code, car(sc->args));
   if (!is_null(cdr(sc->args)))
     sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
-#if 0
-    {
-      if (!is_applicable(sc->value))
-	s7_error(sc, sc->syntax_error_symbol, 
-		 set_elist_4(sc, wrap_string(sc, "~S becomes ~S, but ~S can't take arguments", 42),
-			     cons(sc, sc->code, sc->args), cons(sc, sc->value, cdr(sc->args)), sc->value));
-      sc->value = implicit_index(sc, sc->value, cdr(sc->args));
-    }
-#endif
 }
 
 static void apply_let(s7_scheme *sc)                       /* -------- environment as applicable object -------- */
@@ -83564,7 +83561,8 @@ static void apply_let(s7_scheme *sc)                       /* -------- environme
     s7_wrong_number_of_args_error(sc, "let ref: no field: (~S)", sc->code);
   sc->value = s7_let_ref(sc, sc->code, car(sc->args));
   if (is_pair(cdr(sc->args)))
-    sc->value = implicit_index(sc, sc->value, cdr(sc->args));
+    /* sc->value = implicit_index(sc, sc->value, cdr(sc->args)); */
+    sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
   /*    (let ((v #(1 2 3))) (let ((e (curlet))) ((e 'v) 1))) -> 2
    * so (let ((v #(1 2 3))) (let ((e (curlet))) (e 'v 1))) -> 2
    */
@@ -88091,9 +88089,11 @@ static bool op_x_a(s7_scheme *sc, s7_pointer f)
   if (dont_eval_args(f))
     sc->args = list_1(sc, cadr(sc->code));
   else
+#if 0
     if (!needs_copied_args(f))
       sc->args = set_plist_1(sc, fx_call(sc, cdr(sc->code)));
     else
+#endif
       {
 	sc->args = fx_call(sc, cdr(sc->code));
 	sc->args = list_1(sc, sc->args);
@@ -88112,9 +88112,11 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
   else
     {
       sc->args = fx_call(sc, cddr(code));
+#if 0
       if (!needs_copied_args(f))
 	sc->args = set_plist_2(sc, fx_call(sc, cdr(code)), sc->args);
       else
+#endif
 	{
 	  sc->args = list_1(sc, sc->args);
 	  sc->value = fx_call(sc, cdr(code));
@@ -95808,7 +95810,7 @@ int main(int argc, char **argv)
  * tpeak       124          115    114    110    108
  * tref        513          691    687    463    463
  * index      1022         1026   1016    971    973
- * tmock      7744         1177   1165   1058   1058
+ * tmock      7744         1177   1165   1058   1061
  * texit      1840         ----   ----   1772   1772
  * tvect      1953         2519   2464   1772   1772
  * s7test     4517         1873   1831   1800   1800
@@ -95827,12 +95829,12 @@ int main(int argc, char **argv)
  * tsort      3572         3105   3104   2855   2855
  * tload      3709         ----   ----   3021   3018
  * tset       3052         3253   3104   3042   3047
- * teq        3554         4068   4045   3552   3549
+ * teq        3554         4068   4045   3552   3536
  * tio        3688         3816   3752   3674   3648
  * tobj       3923         4016   3970   3881   3824
  * tclo       4599         4787   4735   4387   4385
- * tlet       5293         7775   5640   4439   4447
  * tcase      4499         4960   4793   4443   4435
+ * tlet       5293         7775   5640   4439   4447
  * tmap       5488         8869   8774   4488   4489
  * tfft      115.1         7820   7729   4753   4755
  * tshoot     6920         5525   5447   5184   5183
@@ -95855,19 +95857,39 @@ int main(int argc, char **argv)
  * tbig      605.1        177.4  175.8  166.4  166.4
  * ----------------------------------------------------
  *
- * (hash 'a :asdf) gets (hash 'a) then tries to call (#f :asdf) via apply giving: error: attempt to apply boolean #f to (:asdf) in 'a?
- *   (let ((h (hash-table 'b 1))) (h 'a 'asdf)) -> ((hash-table 'b 1) a 'asdf) becomes (#f 'asdf), but #f can't take arguments
- *   (let ((h (hash-table 'a (hash-table 'b 1)))) (h 'a 'c 'd)) -> error: ((hash-table 'b 1) 'c 'd) becomes (#f 'd), but #f can't take arguments
- *   (let ((h (hash-table))) (hash-table-ref h 'a 'asdf)) -> error: hash-table-ref: too many arguments: ((hash-table) a asdf)
- *      why doesn't hash-table-ref accept more args? let-ref also (see below)
- *
- *   make implicit_index_error for these and add all to s7test, other uses for ~$? check set! cases
- *   (let ((L (list 1))) (list-ref L 0 2)) -> error: attempt to apply an integer 1 to (2) in (list-ref L 0 2)?
- *   (let ((L (list 1))) (L 0 2)) -> error: attempt to apply an integer 1 to (2) in (L 0 2)?
- *   (let ((V (vector 1 2))) (V 0 1)) -> error: attempt to apply an integer 1 to (1) in (V 0 1)?
- *   (let ((V (vector 1 2))) (vector-ref V 0 1)) -> error: attempt to apply an integer 1 to (1) in (vector-ref V 0 1)?
- *   (let ((V (int-vector 1 2))) (V 0 1)) -> error: vector-ref second argument, (0 1), is out of range (too many indices) [float-vector same etc]
- *   (let ((L (inlet))) (L 'a :asdf)) -> error: attempt to apply an undefined object #<undefined> to (:asdf) in 'a?
+ * implicit ref errors:
+ *       (let ((h (hash-table 'b 1))) (h 'a 'asdf)) -> ((hash-table 'b 1) a 'asdf) becomes (#f 'asdf), but #f can't take arguments
+ *       (let ((h (hash-table 'a (hash-table 'b 1)))) (h 'a 'c 'd)) -> error: ((hash-table 'b 1) 'c 'd) becomes (#f 'd), but #f can't take arguments
+ *       (let ((h (hash-table))) (hash-table-ref h 'a 'asdf)) -> error: (hash-table-ref (hash-table) 'a 'asdf) becomes (#f 'asdf), but #f can't take arguments
+ *       (let ((L (list 1))) (list-ref L 0 2)) -> error: (list-ref (1) 0 2) becomes (1 2), but 1 can't take arguments
+ *       (let ((L (list 1))) (L 0 2)) -> error: ((1) 0 2) becomes (1 2), but 1 can't take arguments [from apply_pair 83517]
+ *       (let ((L (list (list 0)))) (L 0 0 2)) -> error: ((0) 0 2) becomes (0 2), but 0 can't take arguments [apply_pair -> inplicit_index 52457]
+ *       (let ((V (vector 1 2))) (V 0 1)) -> error: (#(1 2) 0 1) becomes (1 1), but 1 can't take arguments
+ *       (let ((V (vector 1 2))) (vector-ref V 0 1)) -> error: (#(1 2) 0 1) becomes (1 1), but 1 can't take arguments
+ *       (let ((V (vector (vector 0 12)))) (V 0 1 0)) -> error: (#(0 12) 1 0) becomes (12 0), but 12 can't take arguments
+ *       (let ((V (int-vector 1 2))) (V 0 1)) -> error: vector-ref second argument, (0 1), is out of range (too many indices) [float-vector same etc]
+ *       (let ((L (inlet))) (L 'a :asdf)) -> error: ((inlet) 'a :asdf) becomes (#<undefined> :asdf), but #<undefined> can't take arguments
+ *       (let ((L (inlet 'a (inlet 'b 1)))) (L 'a 'b 'c)) -> error: ((inlet 'b 1) 'b 'c) becomes (1 'c), but 1 can't take arguments
  *   (let ((L (inlet))) (let-ref L 'a :asdf)) -> error: let-ref: too many arguments: (let-ref (inlet) a :asdf)
- *   (let ((B (block 0 1))) (B 0 2)) -> error: block-ref takes 2 arguments: ((inlet 'body ()) 'body)
+ *     this is in the let-ref defun statement (2 args, no others)
+ *       (let ((B (block 0 1))) (B 0 2)) -> error: block-ref takes 2 arguments: ((inlet 'body ()) 'body)
+ *   add all to s7test, other uses for ~$?
+ *   see ref_index_checked TODO
+ *
+ * implicit set! errors:
+ *   see no_setter_error 79103: it needs the actual args -- all are messed up below
+ *   (let ((L (inlet 'a (inlet 'b 1)))) (set! (L 'a 'b 'c) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
+ *   (let ((L (inlet))) (set! (L 'a :asdf) 32)) -> error: #<undefined> (an undefined object) does not have a setter: (set! ((inlet 'body ()) 'body)
+ *   (let ((L (list 1))) (set! (L 0 2) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
+ *   (let ((L (list (list 0)))) (set! (L 0 0 2) 32)) -> error: too many arguments for list-set!: (0 2 32)
+ *   (let ((h (hash-table 'b 1))) (set! (h 'a 'asdf) 32)) -> error: #f (boolean) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
+ *   (let ((h (hash-table 'a (hash-table 'b 1)))) (set! (h 'a 'c 'd) 32)) -> error: #f (boolean) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
+ *   (let ((V (vector 1 2))) (set! (V 0 1) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
+ *   (let ((V (vector 1 2))) (set! (vector-ref V 0 1) 32)) -> error: too many arguments for vector-set!: (#(1 2) 0 1 32)
+ *   (let ((V (vector 1 2))) (vector-set! V 0 1 32)) -> error: too many arguments for vector-set!: (#(1 2) 0 1 32)
+ *       (set! (abs 1) 2) -> error: abs (a c-function) does not have a setter: (set! (abs 1) 2)
+ *
+ * /dev/full in s7test -- how is this used?
+ * (call-with-output-file "/dev/full" (lambda (p) (display 123))) -> 123
+ * (call-with-output-file "/dev/full" (lambda (p) (display 123) (flush-output-port p))) -> #<output-file-port:closed>
  */
