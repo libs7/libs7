@@ -37124,13 +37124,27 @@ static bool op_implicit_pair_ref_a(s7_scheme *sc)
   return(true);
 }
 
+static s7_pointer implicit_pair_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
+{
+  if (!is_applicable(in_obj))
+    {
+      s7_pointer safe_indices;
+      safe_indices = copy_proper_list(sc, indices);
+      return(s7_error(sc, sc->syntax_error_symbol, 
+		      set_elist_4(sc, wrap_string(sc, "~S becomes ~S, but ~S can't take arguments", 42),
+				  cons(sc, obj, safe_indices), cons(sc, in_obj, cdr(safe_indices)), in_obj)));
+    }
+  return(implicit_index(sc, in_obj, cdr(indices)));
+}
+
 static bool op_implicit_pair_ref_aa(s7_scheme *sc)
 {
-  s7_pointer s;
+  s7_pointer s, i1;
   s = lookup_checked(sc, car(sc->code));
   if (!is_pair(s)) {sc->last_function = s; return(false);}
   sc->args = fx_call(sc, cddr(sc->code));
-  sc->value = implicit_index(sc, list_ref_1(sc, s, fx_call(sc, cdr(sc->code))), set_plist_1(sc, sc->args));
+  i1 = fx_call(sc, cdr(sc->code));
+  sc->value = implicit_pair_index_checked(sc, s, list_ref_1(sc, s, i1), set_plist_2(sc, i1, sc->args));
   return(true);
 }
 
@@ -40192,14 +40206,6 @@ a vector that points to the same elements as the original-vector but with differ
 
 
 /* -------------------------------- vector-ref -------------------------------- */
-static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
-{
-  if (!is_applicable(in_obj))
-    return(s7_error(sc, sc->syntax_error_symbol, 
-		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
-				cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
-  return(implicit_index(sc, in_obj, cdr(indices)));
-}
 
 static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indices)
 {
@@ -40228,11 +40234,11 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 	{
 	  s7_pointer nv;
 	  if (!is_normal_vector(vect))
-	    return(out_of_range(sc, sc->vector_ref_symbol, int_two, indices, too_many_indices_string));
+	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
+			    set_elist_3(sc, wrap_string(sc, "~S: too many indices: ~S", 24), sc->vector_ref_symbol, copy_proper_list(sc, indices))));
 	  nv = vector_element(vect, index);
 	  return(implicit_index(sc, nv, x));
 	}
-
       /* if not enough indices, return a subvector covering whatever is left */
       if (i < vector_ndims(vect))
 	return(subvector(sc, vect, i, index));
@@ -40254,12 +40260,10 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 	{
 	  s7_pointer nv;
 	  if (!is_normal_vector(vect))
-	    return(out_of_range(sc, sc->vector_ref_symbol, int_two, indices, too_many_indices_string));
+	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
+			    set_elist_3(sc, wrap_string(sc, "~S: too many indices: ~S", 24), sc->vector_ref_symbol, copy_proper_list(sc, indices))));
 	  nv = vector_element(vect, index);
-	  return(implicit_index_checked(sc, vect, nv, indices));
-#if 0
-	  return(implicit_index(sc, nv, cdr(indices)));
-#endif
+	  return(implicit_pair_index_checked(sc, vect, nv, indices));
 	}}
   return((vector_getter(vect))(sc, vect, index));
 }
@@ -52421,6 +52425,15 @@ s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
   return(sc->value);
 }
 
+static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
+{
+  if (!is_applicable(in_obj))
+    return(s7_error(sc, sc->syntax_error_symbol, 
+		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
+				cons(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
+  return(implicit_index(sc, in_obj, cdr(indices)));
+}
+
 static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indices)
 {
   s7_pointer res, in_obj;
@@ -57090,8 +57103,6 @@ static bool fx_tree_out(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_poin
 		    if ((fx_proc(tree) == fx_add_sqr_s) && (cadadr(p) == var1)) return(with_fx(tree, fx_add_sqr_T));
 	      }}
 #if 0
-  /* if ((is_pair(p)) && (is_pair(cdr(p))) && (is_pair(cddr(p))) && (car(p) == sc->hash_table_ref_symbol)) abort(); */
-
   if ((s7_tree_memq(sc, var1, p)) || ((var2) && (s7_tree_memq(sc, var2, p))) || ((var3) && (s7_tree_memq(sc, var3, p))))
     fprintf(stderr, "%s[%d] %s %s %s %d %d: %s %s\n", __func__, __LINE__, display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", 
 	    has_fx(tree), more_vars, display(p), op_names[optimize_op(p)]);
@@ -76578,11 +76589,6 @@ static void check_let_temporarily(s7_scheme *sc)
 	{
 	  if (is_constant_symbol(sc, caarx)) /* (let-temporarily ((pi 3)) ...) */
 	    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_temporarily_symbol, x));
-#if 0
-	  if (is_syntactic_symbol(caarx))    /* (let-temporarily ((if 3)) ...) */
-	    s7_error(sc, sc->wrong_type_arg_symbol,
-		     set_elist_2(sc, wrap_string(sc, "can't set! ~A", 13), caarx));
-#endif
 	}
       else
 	if (!is_pair(caarx))                 /* (let-temporarily ((1 2)) ...) */
@@ -79351,14 +79357,6 @@ static s7_pointer op_set1(s7_scheme *sc)
 		sc->code = func;
 		return(NULL); /* goto APPLY */
 	      }}
-#if 0
-      else
-	if ((is_syntactic_symbol(sc->code)) ||          /* (set! case 3) */
-	    ((global_slot(sc->code) == lx) &&           /* (begin (let ((case 2)) case) (set! case 3)) */
-	     (is_syntax(slot_value(lx))) &&
-	     (sc->code == syntax_symbol(slot_value(lx)))))
-	  syntax_error(sc, "can't set! ~A", 13, sc->code);
-#endif
       slot_set_value(lx, sc->value);
       symbol_increment_ctr(sc->code);                   /* see define setfib example in s7test.scm -- I'm having second thoughts about this... */
       return(sc->value); /* continue */
@@ -79888,7 +79886,7 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
 static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 {
   s7_pointer settee = car(sc->code), key;
-
+  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(cx), display(form)); */
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))
@@ -79906,7 +79904,8 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer f
     {
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = optimize_op(sc->code);
+      sc->cur_op = optimize_op(sc->code); /* TODO: ?? it's a new list -- it must be unopt'd -- it's eventually hash-table-ref */
+      /* fprintf(stderr, "%s[%d]: cur_op: %s %s\n", __func__, __LINE__, op_names[sc->cur_op], display(sc->code)); */
       return(goto_top_no_pop);
     }
 
@@ -80147,6 +80146,7 @@ static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer cx)
 static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ...) */
 {
   s7_pointer caar_code, cx, form = sc->code;
+  /* fprintf(stderr, "%s[%d]: form: %s\n", __func__, __LINE__, display(form)); */
   sc->code = cdr(sc->code);
   caar_code = caar(sc->code);
   if (is_symbol(caar_code))
@@ -80167,8 +80167,7 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
       }
     else cx = caar_code;
 
-  /* code here is the setter and the value without the "set!": ((window-width) 800) */
-  /*    (set! (hi 0) (* 2 3)) -> ((hi 0) (* 2 3)) */
+  /* code here is the setter and the value without the "set!": ((window-width) 800), (set! (hi 0) (* 2 3)) -> ((hi 0) (* 2 3)) */
   /* for gmp case, indices need to be decoded via s7_integer, not just integer */
 
   switch (type(cx))
@@ -80193,6 +80192,8 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
       return(set_implicit_closure(sc, cx));
 
     default:                                         /* (set! (1 2) 3) */
+      /* fprintf(stderr, "%s[%d]: code: %s, cx: %s\n", __func__, __LINE__, display(form), display(cx)); */
+      /* code: (set! (#f 'd) 32), cx: #f from op_set2[80242] */
       no_setter_error(sc, cx);
     }
   return(goto_top_no_pop);
@@ -80200,6 +80201,7 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
 
 static goto_t op_set2(s7_scheme *sc)
 {
+  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->value), display(sc->code)); */
   if (is_pair(sc->value))
     {
       /* (let ((L '((1 2 3)))) (set! ((L 0) 1) 32) L), (let ((L '(((1 2 3))))) (set! ((L 0) 0 1) 32) L)
@@ -80241,6 +80243,17 @@ static goto_t op_set2(s7_scheme *sc)
       sc->code = car(sc->args);
       return(goto_eval);
     }
+  /* fprintf(stderr, "%s[%d]: value: %s, args: %s, code: %s\n", __func__, __LINE__, display(sc->value), display(sc->args), display(sc->code)); */
+  /* (let ((h (hash-table 'a (hash-table 'b 1)))) (set! (h 'a 'c 'd) 32))
+
+     form: (set! (h 'a 'c 'd) 32)
+     value: (hash-table 'b 1), args: ('c 'd), code: (32)
+     form: (set! ((hash-table 'b 1) 'c 'd) 32)
+     value: #f, args: ('d), code: (32)
+     form: (set! (#f 'd) 32)
+     code: (set! (#f 'd) 32), cx: #f
+
+  */
   sc->code = set_ulist_2(sc, sc->set_symbol, set_ulist_1(sc, sc->value, sc->args), sc->code); /* (let ((x 32)) (set! ((curlet) 'x) 3) x) */
   return(set_implicit(sc));
 }
@@ -80255,7 +80268,6 @@ static bool safe_stepper_expr(s7_pointer expr, s7_pointer var)
   s7_pointer p;
   if (cadr(expr) == var) return(false);
   for (p = cdr(expr); is_pair(cdr(p)); p = cdr(p));
-
   if (is_pair(p))
     {
       if ((is_optimized(p)) &&
@@ -95865,17 +95877,8 @@ int main(int argc, char **argv)
  * tbig      605.1        177.4  175.8  166.4  166.4 166.5 [op_x_a + gc]
  * ----------------------------------------------------
  *
- * these work at top level, not in func?
- * not in s7test: (let ((L (list 1))) (L 0 2)) -> error: ((1) 0 2) becomes (1 2), but 1 can't take arguments [from apply_pair 83517]
- *  -> "attempt to apply an integer 1 to (2) in (L 0 2)?"
- * not in s7test: (let ((V (vector 1 2))) (V 0 1)) -> error: (#(1 2) 0 1) becomes (1 1), but 1 can't take arguments
- *  -> "(#(1 2) #1=(() ('apply 'format #f 'info) () () () () () () . #1#) ()) becomes (1 ()), but 1 can't take arguments"
- * not in s7test  (let ((V (int-vector 1 2))) (V 0 1)) -> error: vector-ref second argument, (0 1), is out of range (too many indices) [float-vector same etc]
- *  -> "vector-ref second argument, (#1=(() (apply format #f info) () () () () () () . #1#) ()), is out of range (too many indices)"
- *
  * (let ((L (inlet))) (let-ref L 'a :asdf)) -> error: let-ref: too many arguments: (let-ref (inlet) a :asdf)
  *   this is in the let-ref defun statement (2 args, no others)
- *   other uses for ~$? see above
  *   see ref_index_checked TODO
  *
  * implicit set! errors:
@@ -95888,8 +95891,9 @@ int main(int argc, char **argv)
         set_implicit[80194]: ((1 2) 32)
  *   (let ((L (list (list 0)))) (set! (L 0 0 2) 32)) -> error: too many arguments for list-set!: (0 2 32)
  *   (let ((h (hash-table 'b 1))) (set! (h 'a 'asdf) 32)) -> error: #f (boolean) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
- *   (let ((h (hash-table 'a (hash-table 'b 1)))) (set! (h 'a 'c 'd) 32)) -> error: #f (boolean) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
         set_implicit[80194]: ((#f 'asdf) 32)
+ *   (let ((h (hash-table 'a (hash-table 'b 1)))) (set! (h 'a 'c 'd) 32)) -> error: #f (boolean) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
+ *      set_implicit[80211]: ((#f 'd) 32)
  *   (let ((V (vector 1 2))) (set! (V 0 1) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
         set_implicit[80194]: ((1 1) 32)
  *   (let ((V (vector 1 2))) (set! (vector-ref V 0 1) 32)) -> error: too many arguments for vector-set!: (#(1 2) 0 1 32)
@@ -95898,59 +95902,12 @@ int main(int argc, char **argv)
  *          set_implicit_function[79987]: ((abs 1) 2)
  *
  * no set_pair_p_3 79139 240 259 275, set_implicit 80156, op_set_pws 83415 426
-set_implicit_syntax[80132]: ('a 1)
-set_implicit[80156]: ((_not_a_pws_) 1)
-set_implicit[80194]: ((#\h 0) #\a)
-set_implicit[80194]: ((#f 0) 2)
-set_implicit[80194]: ((1 2) #t)
-set_implicit[80194]: ((4 2) 32)
-set_implicit[80194]: ((go 1) 2)
-set_implicit[80194]: ((go 1) 2)
-set_implicit[80194]: ((x 0) (define x (list 1 2)))
-set_implicit[80194]: ((x 0) 1)
-set_implicit_closure[80094]: ((#<lambda ()>) 3)
-set_implicit_closure[80094]: ((a) "ho")
-set_implicit_closure[80094]: ((fset 1) 2)
-set_implicit_closure[80094]: ((fset3 3) 4)
-set_implicit_closure[80094]: ((hi) 3)
-set_implicit_closure[80094]: ((ship2-y s1) 123.0)
-set_implicit_function[79987]: ((abs 1) 2)
-set_implicit_function[79987]: ((abs 1) 2)
-set_implicit_function[79987]: ((apply s 2) #\a)
-set_implicit_function[79987]: ((apply-values (1)) 3)
-set_implicit_function[79987]: ((call/cc (lambda (a) a)) #f)
-set_implicit_function[79987]: ((cons 1 2) 3)
-set_implicit_function[79987]: ((curlet) 1)
-set_implicit_function[79987]: ((documentation abs) "X the unknown")
-set_implicit_function[79987]: ((hash-table) 1)
-set_implicit_function[79987]: ((list 1 2) 1)
-set_implicit_function[79987]: ((list-tail (list 1 2 3)) '(32))
-set_implicit_function[79987]: ((make-hash-table) 1)
-set_implicit_function[79987]: ((make-vector 1) 1)
-set_implicit_function[79987]: ((owlet) 2)
-set_implicit_function[79987]: ((port-closed? (current-output-port)) "hiho")
-set_implicit_function[79987]: ((port-filename) "hiho")
-set_implicit_function[79987]: ((quasiquote x) 2)
-set_implicit_function[79987]: ((rootlet) 1)
-set_implicit_function[79987]: ((unlet) 1)
-set_implicit_function[79987]: ((values str 0) #\x)
-set_implicit_function[79987]: ((values x) 2)
-set_implicit_function[79987]: ((values) 1)
-set_implicit_function[79987]: ((vector) 1)
-set_implicit_function[79987]: ((vector-dimensions #(1 2)) 1)
-set_implicit_iterator[80120]: ((lti) 32)
-set_implicit_syntax[80132]: ((define x 3) 6)
-set_implicit_syntax[80132]: ((lambda () 1) 4)
-set_implicit_syntax[80132]: ((let ((x 1)) x) 3)
-set_implicit_syntax[80132]: ((let () 'a) 1)
-set_implicit_syntax[80132]: ((with-baffle (display x)) 5)
-
  * for op_set_pws see code and t543.scm -- it is completely broken
  * for 80156 set_implicit, surely that case is unbound_variable? similarly 79139 set_pair_p_3
  *
- * /dev/full in s7test -- all output cases?
+ * /dev/full in s7test -- all output cases? [flush_output_port checks]
  * (call-with-output-file "/dev/full" (lambda (p) (display 123 p))) -> 123
- * (call-with-output-file "/dev/full" (lambda (p) (display 123 p) (flush-output-port p))) -> error: flush-output-port: No space left on device "/dev/full"
+ * write newline write-string|char|byte with-output-to-file
  *
  * op_x_a|a = c -> plist_1? matters mainly in tbig
  *   the baddies here are let/hash/c-object which can call equal etc, maybe a type array for this, is_unsafe_implicit
