@@ -52243,7 +52243,8 @@ static void improper_arglist_error(s7_scheme *sc)
   s7_pointer func;
   func = pop_op_stack(sc);
   if (sc->args == sc->nil)               /* (abs . 1) */
-    s7_error(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "attempt to evaluate (~S . ~S)?", 30), func, sc->code));
+    s7_error(sc, sc->syntax_error_symbol, 
+	     set_elist_3(sc, wrap_string(sc, "attempt to evaluate (~S . ~S)?", 30), func, sc->code));
   else s7_error(sc, sc->syntax_error_symbol,
 		set_elist_4(sc, wrap_string(sc, "attempt to evaluate (~S ~S . ~S)?", 33),
 			    func, sc->args = proper_list_reverse_in_place(sc, sc->args), sc->code));
@@ -79592,7 +79593,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer cx, s7_pointer form)
        */
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = optimize_op(sc->code);
+      sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
       return(goto_top_no_pop);
     }
 
@@ -79856,7 +79857,7 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
        */
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = optimize_op(sc->code);
+      sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
       return(goto_top_no_pop);
     }
 
@@ -79883,10 +79884,10 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
   return(goto_start);
 }
 
-static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer form)
+static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointer form) /* form has the set!, sc->code is cdr(form) */
 {
-  s7_pointer settee = car(sc->code), key;
-  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(cx), display(form)); */
+  s7_pointer settee = car(sc->code), key, keyval = NULL;
+  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(table), display(form)); */
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))
@@ -79897,37 +79898,47 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer f
 	s7_wrong_number_of_args_error(sc, "no key for hash-table-set!: ~S", form);
       set_implicit_set_ok(sc->code);
     }
-  if (is_immutable(cx))
-    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, cx));
+  if (is_immutable(table))
+    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, table));
 
   if (!is_null(cddr(settee)))
     {
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = optimize_op(sc->code); /* TODO: ?? it's a new list -- it must be unopt'd -- it's eventually hash-table-ref */
-      /* fprintf(stderr, "%s[%d]: cur_op: %s %s\n", __func__, __LINE__, op_names[sc->cur_op], display(sc->code)); */
+
+      /* here push hash-table-ref + args, goto eval_args4? (see below) */
+      sc->cur_op = OP_UNOPT;
       return(goto_top_no_pop);
     }
 
   key = cadr(settee);
-  if (!is_pair(key))
+  if (is_pair(key))
+    {
+      if (car(key) == sc->quote_symbol)
+	keyval = cadr(key);
+    }
+  else
+    {
+      if (is_normal_symbol(key))
+	keyval = lookup_checked(sc, key);
+      else keyval = key;
+    }
+  if (keyval)
     {
       s7_pointer val = cadr(sc->code);
-      if (is_symbol(key))
-	key = lookup_checked(sc, key);
       if (!is_pair(val))
 	{
 	  if (is_symbol(val))
 	    val = lookup_checked(sc, val);
-	  sc->value = s7_hash_table_set(sc, cx, key, val);
+	  sc->value = s7_hash_table_set(sc, table, keyval, val);
 	  return(goto_start);
 	}
       push_op_stack(sc, sc->hash_table_set_function);
-      sc->args = list_2(sc, key, cx);
+      sc->args = list_2(sc, keyval, table);
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, table), cdr(sc->code));
   push_op_stack(sc, sc->hash_table_set_function);
   sc->code = cadar(sc->code);
   sc->cur_op = optimize_op(sc->code);
@@ -79936,7 +79947,7 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer cx, s7_pointer f
 
 static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 {
-  s7_pointer settee = car(sc->code), key;
+  s7_pointer settee = car(sc->code), key, keyval = NULL;
   /* code: ((gen 'input) input) from (set! (gen 'input) input) */
 
   if (!implicit_set_ok(sc->code))
@@ -79953,23 +79964,33 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
     {
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = optimize_op(sc->code);
+      sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
       return(goto_top_no_pop);
     }
   key = cadr(settee);
-  if (is_proper_quote(sc, key))
+  if (is_pair(key))
+    {
+      if (car(key) == sc->quote_symbol)
+	keyval = cadr(key);
+    }
+  else
+    {
+      if (is_normal_symbol(key))
+	keyval = lookup_checked(sc, key);
+      else keyval = key;
+    }
+  if (keyval)
     {
       s7_pointer val = cadr(sc->code);
-      key = cadr(key);
       if (!is_pair(val))
 	{
 	  if (is_symbol(val))
 	    val = lookup_checked(sc, val);
-	  sc->value = s7_let_set(sc, cx, key, val);
+	  sc->value = s7_let_set(sc, cx, keyval, val);
 	  return(goto_start);
 	}
       push_op_stack(sc, sc->let_set_function);
-      sc->args = list_2(sc, key, cx);
+      sc->args = list_2(sc, keyval, cx);
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
@@ -80160,6 +80181,7 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
   else
     if (is_pair(caar_code))
       {
+	/* fprintf(stderr, "%s[%d]; %s\n", __func__, __LINE__, display(form)); */
 	push_stack(sc, OP_SET2, cdar(sc->code), T_Pair(cdr(sc->code)));
 	sc->code = caar_code;
 	sc->cur_op = optimize_op(sc->code);
@@ -80201,7 +80223,7 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
 
 static goto_t op_set2(s7_scheme *sc)
 {
-  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->value), display(sc->code)); */
+  /* fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(sc->value), display(sc->code), display(sc->args)); */
   if (is_pair(sc->value))
     {
       /* (let ((L '((1 2 3)))) (set! ((L 0) 1) 32) L), (let ((L '(((1 2 3))))) (set! ((L 0) 0 1) 32) L)
@@ -91468,7 +91490,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_top_no_pop: goto TOP_NO_POP;
 	    case goto_start:      continue;
 	    case goto_apply:      goto APPLY;
-	    default:              goto EVAL_ARGS;
+	    default:              goto EVAL_ARGS; /* goto_eval_args in funcs called by op_set2 */
 	    }
 
 	case OP_SET: check_set(sc);
@@ -95879,7 +95901,7 @@ int main(int argc, char **argv)
  *
  * (let ((L (inlet))) (let-ref L 'a :asdf)) -> error: let-ref: too many arguments: (let-ref (inlet) a :asdf)
  *   this is in the let-ref defun statement (2 args, no others)
- *   see ref_index_checked TODO
+ *   see ref_index_checked TODO [pass symbol not caller for error msg]
  *
  * implicit set! errors:
  *   see no_setter_error 79103: it needs the actual args -- all are messed up below
@@ -95912,4 +95934,5 @@ int main(int argc, char **argv)
  * op_x_a|a = c -> plist_1? matters mainly in tbig
  *   the baddies here are let/hash/c-object which can call equal etc, maybe a type array for this, is_unsafe_implicit
  * optimize implicit hash?
+ * timp.scm implicit timing tests
  */
