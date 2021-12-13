@@ -46,6 +46,7 @@
 		     ("texit.scm" . "v-exit")
 		     ("tleft.scm" . "v-left")
 		     ("tobj.scm" . "v-obj")
+		     ("timp.scm" . "v-imp")
 		     ))
 
 (define (last-callg)
@@ -80,6 +81,7 @@
 
    (list (list "repl" "tpeak.scm")
 	 (list "repl" "tref.scm")
+	 (list "repl" "timp.scm")
 	 (list "snd -noinit" "make-index.scm")
 	 (list "repl" "tmock.scm")
 	 (list "repl" "texit.scm")
