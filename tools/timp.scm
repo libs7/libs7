@@ -2,7 +2,7 @@
 
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))
 
-(define size 20000)
+(define size 50000)
 
 (define (s1 obj val)
   (set! (obj 'a) val))
@@ -91,15 +91,17 @@
 
 (define (stest)
   (let ((table (hash-table 'a 1 'b (hash-table 'a 3)))
-	(env (inlet 'a 1 'b (inlet 'a 4)))
 	(table1 (hash-table 'b "12345"))
 	(table2 (vector (vector 1 2 3)))
 	(table3 (hash-table 'b (block 1 2 3)))
 	(table4 (hash-table 'b (let ((x (vector 1 2 3))) (dilambda (lambda (ind) (x ind)) (lambda (ind val) (set! (x ind) val))))))
 	(table5 (hash-table 'a 1 'b (hash-table 'a 3 'b (hash-table 'a 4))))
 	(table6 (vector (list 0 1) (list 2 3)))
+	(env (inlet 'a 1 'b (inlet 'a 4)))
 	(lst (list 0 1))
-	(lst1 (list dilambda_test))) ; from s7test-block
+	(lst1 (list dilambda_test)) ; from s7test-block
+	(lst2 (list (list 0 1))))
+
     (do ((i 0 (+ i 1)))
 	((= i size))
 
@@ -190,14 +192,22 @@
       (s77 table6 0 1 12)
       (unless (= (table6 0 1) 12) (format *stderr* "oops"))
       (s777 lst1 12)
+
+      (s5 lst2 32)
+      (unless (= (cadar lst2) 32) (format *stderr* "yow"))
+      (s55 lst2 12)
+      (unless (= (cadar lst2) 12) (format *stderr* "yow"))
+      (s555 lst2 '(15))
+      (unless (= (cadar lst2) 15) (format *stderr* "yow"))
+      (s5555 lst2 1 3)
+      (unless (= (cadar lst2) 3) (format *stderr* "yow"))
+
       )))
 
 (stest)
 
 
-;;; c-object[special cases, refs] iterator syntax macro function c_macro c_function (* cases too), else->no_setter_error
-;;; why no implicit string ref if table1?
-;;; for iterator see s7test.scm 26743 (set! (iter) 32)
-;;; for syntax, this is (set! (with-let...) val) (set! (with-let (curlet) 'c) 32) etc
+;;; c-object[special cases, refs] macro function c_macro c_function (* cases too), else->no_setter_error
+;;; why no implicit string ref if table1?  
 ;;; for functions, it's setter
-
+;;; also need error message checks for 3-arg

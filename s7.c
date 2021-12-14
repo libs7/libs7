@@ -12988,7 +12988,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	    {
 	      (*numer) = p0;
 	      (*denom) = q0;
-	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %ld/0\n", ux, p0);
+	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
 	    }
 	  return(true);
 	}
@@ -79472,6 +79472,8 @@ static goto_t op_set_dilambda_p_1(s7_scheme *sc)
 
 
 /* ---------------- implicit ref/set ---------------- */
+static goto_t call_set_implicit(s7_scheme *sc, s7_pointer cx, s7_pointer form);
+
 static Inline bool op_implicit_vector_ref_a(s7_scheme *sc)
 {
   s7_pointer v, x;
@@ -79837,10 +79839,9 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer cx, s7_pointer form)
   return(goto_top_no_pop);
 }
 
-static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)      /* code: ((lst 1) 32) from (let ((lst (list 1 2 3))) (set! (lst 1) 32)) */
+static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer form)      /* code: ((lst 1) 32) from (let ((lst (list 1 2 3))) (set! (lst 1) 32)) */
 {
-  s7_pointer settee = car(sc->code), index, val;
-
+  s7_pointer settee = car(sc->code), index, index_val = NULL, val;
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))
@@ -79851,46 +79852,61 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer cx, s7_pointer form)  
 	s7_wrong_number_of_args_error(sc, "no index for list-set!: ~S", form);
       set_implicit_set_ok(sc->code);
     }
+
+  index = cadr(settee);
+  if (!is_pair(index))
+    {
+      if (is_normal_symbol(index))
+	index_val = lookup_checked(sc, index);
+      else index_val = index;
+    }
+  val = cadr(sc->code);
+
   if (!is_null(cddr(settee)))
     {
       /* split (set! (a b c...) v) into (set! ((a b) c ...) v), eval (a b), return
        *    (let ((L (list (list 1 2)))) (set! (L 0 0) 3) L)
        */
+      if (index_val)
+	{
+	  s7_pointer obj;
+	  obj = list_ref_1(sc, lst, index_val);
+	  if (!is_applicable(obj))
+	    s7_error(sc, sc->no_setter_symbol,
+		     set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~$) is ~S which can't take arguments", 47), form, lst, index_val, obj));
+	  sc->code = set_plist_2(sc, set_ulist_1(sc, obj, cddr(settee)), val);
+	  return(call_set_implicit(sc, obj, form));
+	}
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
-      sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
+      sc->code = set_plist_2(sc, car(settee), cadr(settee));
+      sc->cur_op = OP_UNOPT;
       return(goto_top_no_pop);
     }
-
-  index = cadr(settee);
-  val = cadr(sc->code);
-
-  if ((is_pair(index)) || (is_pair(val)))
+  if (index_val)
     {
-      push_op_stack(sc, sc->list_set_function);
-      sc->code = (is_null(cddr(settee))) ? cdr(sc->code) : pair_append(sc, cddr(settee), cdr(sc->code));
-      push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), sc->code);
-      sc->code = index;
-      sc->cur_op = optimize_op(sc->code);
-      return(goto_top_no_pop);
+      if (!is_pair(val)) /* TODO: or car(val) == quote */
+	{
+	  set_car(sc->t2_1, index_val);
+	  set_car(sc->t2_2, (is_symbol(val)) ? lookup_checked(sc, val) : val);
+	  sc->value = g_list_set_1(sc, lst, sc->t2_1, 2);
+	  return(goto_start);
+	}
+      push_op_stack(sc, sc->list_set_function); /* because cddr(settee) is nil, we're definitely calling list_set */
+      sc->args = list_2(sc, index_val, lst);                     /* plist unsafe here */
+      sc->code = cdr(sc->code);
+      return(goto_eval_args);
     }
-  if (is_symbol(index))
-    index = lookup_checked(sc, index);
-  if (is_symbol(val))
-    val = lookup_checked(sc, val);
-
-  set_car(sc->t2_1, index);
-  set_car(sc->t2_2, val);
-  sc->value = g_list_set_1(sc, cx, sc->t2_1, 2);
-  return(goto_start);
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, lst), cdr(sc->code)); /* plist unsafe here */
+  push_op_stack(sc, sc->list_set_function);
+  sc->code = cadar(sc->code);
+  sc->cur_op = optimize_op(sc->code);
+  return(goto_top_no_pop);
 }
-
-/* static goto_t set_implicit(s7_scheme *sc); */
 
 static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointer form) /* form has the set!, sc->code is cdr(form) */
 {
   s7_pointer settee = car(sc->code), key, keyval = NULL;
-  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(table), display(form)); */
+  /* fprintf(stderr, "%s[%d]: %s form: %s, code: %s\n", __func__, __LINE__, display(table), display(form), display(sc->code)); */
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))
@@ -79919,67 +79935,54 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 
   if (!is_null(cddr(settee)))
     {
-#if 0
       if (keyval)
 	{
 	  s7_pointer obj;
 	  obj = s7_hash_table_ref(sc, table, keyval);
 	  if (obj == sc->F)                           /* (let ((h (hash-table 'b 1))) (set! (h 'a 'asdf) 32)) */
 	    s7_error(sc, sc->syntax_error_symbol,
-		     set_elist_4(sc, wrap_string(sc, "in ~S, ~$ does not exist in ~S\n", 31), form, keyval, table));
+		     set_elist_4(sc, wrap_string(sc, "in ~S, ~$ does not exist in ~S", 30), form, keyval, table));
 	  else
-	    if (!is_applicable(obj))
+	    if (!is_applicable(obj))                  /* (let ((h (hash-table 'b 1))) (set! (h 'b 'asdf) 32)) */
 	      s7_error(sc, sc->no_setter_symbol,
 		       set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~$) is ~S which can't take arguments", 47), form, table, keyval, obj));
-#if 0 /* remember set_implicit above */
-	  /* TODO: (set! (obj . cddr(settee)) cadr(sc->code)) but obj needs to make sense for set 
-	   *    (hash-table 'a (list 1 2)) (set! (v 'a 1) 5) -> code: (set! ((1 2) 1) 5) -> attempt to apply an integer 1 to (2) in (1 2)?
-	   *    we have to set the list in obj -- hash_table_loc above?
-	   *  (*hash_table_checker(table))(sc, table, key) -> hash_entry_t 
-	   * x = (*hash_table_checker(table))(sc, table, key);
-	   * if (x != sc->unentry) hash_entry_set_value(x, T_Pos(value)); [sc->unentry value is #f]
-	   * then?
-	   */
-	  sc->code = list_3(sc, sc->set_symbol, cons(sc, obj, cddr(settee)), cadr(sc->code));
-	  fprintf(stderr, "code: %s\n", display(sc->code));
-	  return(set_implicit(sc)); /* we need to go down here into the set_implicit* cases: 
-				       set_implict_pair(sc, obj, form) with sc->code = (list (cons obj (cddr settee)) (cadr sc->code))
-				    */
-#endif
-	}
-#endif
-/* apply -> implicit? (let ((H (hash-table 'a (hash-table 'b 1)))) (apply H (list 'a 'b))) -> 1 */
 
+	  /* (let ((v (hash-table 'a (list 1 2)))) (set! (v 'a 1) 5)) -> code: (set! ((1 2) 1) 5) -> 5 (v: (hash-table 'a (1 5))) */
+	  /* (let ((v (hash-table 'a (hash-table 'b 1)))) (set! (v 'a 'b 'b) 32) v) -> error: in (set! (v 'a 'b 'b) 32), ((hash-table 'b 1) 'b) is 1 which can't take arguments */
+	  /* sc->code = list_2_unchecked(sc, cons(sc, obj, cddr(settee)), cadr(sc->code)); */
+	  sc->code = set_plist_2(sc, set_ulist_1(sc, obj, cddr(settee)), cadr(sc->code)); 
+	  /* maybe unsafe to use ulist here, definitely unsafe to use plist!  -- how can this work? */
+
+	  return(call_set_implicit(sc, obj, form));
+	}
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
-      sc->code = list_2(sc, car(settee), key);
-      /* here push hash-table-ref + args, goto eval_args4? (see below) */
+      sc->code = set_plist_2(sc, car(settee), key); /* plist maybe unsafe */
       sc->cur_op = OP_UNOPT;
       return(goto_top_no_pop);
     }
-
   if (keyval)
     {
       s7_pointer val = cadr(sc->code);
-      if (!is_pair(val))
+      if (!is_pair(val)) /* TODO: or car(val) == quote */
 	{
 	  if (is_symbol(val))
 	    val = lookup_checked(sc, val);
 	  sc->value = s7_hash_table_set(sc, table, keyval, val);
 	  return(goto_start);
 	}
-      push_op_stack(sc, sc->hash_table_set_function);
-      sc->args = list_2(sc, keyval, table);
+      push_op_stack(sc, sc->hash_table_set_function); /* because cddr(settee) is nil, we're definitely calling hash_table_set */
+      sc->args = list_2(sc, keyval, table);                        /* plist unsafe here */
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, table), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, table), cdr(sc->code)); /* plist unsafe here */
   push_op_stack(sc, sc->hash_table_set_function);
   sc->code = cadar(sc->code);
   sc->cur_op = optimize_op(sc->code);
   return(goto_top_no_pop);
 }
 
-static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
+static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer form)
 {
   s7_pointer settee = car(sc->code), key, keyval = NULL;
   /* code: ((gen 'input) input) from (set! (gen 'input) input) */
@@ -79994,13 +79997,7 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 	s7_wrong_number_of_args_error(sc, "no symbol (variable name) for let-set!: ~S", form);
       set_implicit_set_ok(sc->code);
     }
-  if (!is_null(cddr(settee)))
-    {
-      push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
-      sc->code = list_2(sc, car(settee), cadr(settee));
-      sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
-      return(goto_top_no_pop);
-    }
+
   key = cadr(settee);
   if (is_pair(key))
     {
@@ -80013,6 +80010,26 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 	keyval = lookup_checked(sc, key);
       else keyval = key;
     }
+
+  if (!is_null(cddr(settee)))
+    {
+      if (keyval)
+	{
+	  s7_pointer obj;
+	  obj = s7_let_ref(sc, let, keyval);
+	  if (!is_applicable(obj))                  /* (let ((h (hash-table 'b 1))) (set! (h 'b 'asdf) 32)) */
+	    s7_error(sc, sc->no_setter_symbol,
+		     set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~$) is ~S which can't take arguments", 47), form, let, keyval, obj));
+
+	  /* sc->code = list_2_unchecked(sc, cons(sc, obj, cddr(settee)), cadr(sc->code)); */
+	  sc->code = set_plist_2(sc, set_ulist_1(sc, obj, cddr(settee)), cadr(sc->code)); 
+	  return(call_set_implicit(sc, obj, form));
+	}
+      push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
+      sc->code = list_2(sc, car(settee), cadr(settee));
+      sc->cur_op = OP_UNOPT;
+      return(goto_top_no_pop);
+    }
   if (keyval)
     {
       s7_pointer val = cadr(sc->code);
@@ -80020,15 +80037,15 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer cx, s7_pointer form)
 	{
 	  if (is_symbol(val))
 	    val = lookup_checked(sc, val);
-	  sc->value = s7_let_set(sc, cx, keyval, val);
+	  sc->value = s7_let_set(sc, let, keyval, val);
 	  return(goto_start);
 	}
       push_op_stack(sc, sc->let_set_function);
-      sc->args = list_2(sc, keyval, cx);
+      sc->args = list_2(sc, keyval, let);
       sc->code = cdr(sc->code);
       return(goto_eval_args);
     }
-  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, cx), cdr(sc->code));
+  push_stack(sc, OP_EVAL_ARGS4, list_1(sc, let), cdr(sc->code));
   push_op_stack(sc, sc->let_set_function);
   sc->code = cadar(sc->code);
   sc->cur_op = optimize_op(sc->code);
@@ -80146,6 +80163,38 @@ static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer cx)
   return(goto_top_no_pop);
 }
 
+static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer form)
+{
+  /* these depend on sc->code making sense given obj as the sequence being set */
+  switch (type(obj))
+    {
+    case T_STRING:     return(set_implicit_string(sc, obj, form));
+    case T_PAIR:       return(set_implicit_pair(sc, obj, form));
+    case T_HASH_TABLE: return(set_implicit_hash_table(sc, obj, form));
+    case T_LET:        return(set_implicit_let(sc, obj, form));
+    case T_C_OBJECT:   return(set_implicit_c_object(sc, obj, form));
+    case T_ITERATOR:   return(set_implicit_iterator(sc, obj));    /* not sure this makes sense */
+    case T_SYNTAX:     return(set_implicit_syntax(sc, obj));
+
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+      return(set_implicit_vector(sc, obj, form));
+
+    case T_C_MACRO: case T_C_FUNCTION_STAR:
+    case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION: 
+      return(set_implicit_function(sc, obj));
+
+    case T_MACRO: case T_MACRO_STAR: case T_BACRO: case T_BACRO_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
+      return(set_implicit_closure(sc, obj));
+
+    default:                                         /* (set! (1 2) 3) */
+      /* fprintf(stderr, "%s[%d]: code: %s, obj: %s\n", __func__, __LINE__, display(form), display(obj)); */
+      /* code: (set! (#f 'd) 32), obj: #f from op_set2[80242] */
+      no_setter_error(sc, obj);
+    }
+  return(goto_top_no_pop);
+}
+
 static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ...) */
 {
   s7_pointer caar_code, cx, form = sc->code;
@@ -80170,37 +80219,20 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
 	return(goto_top_no_pop);
       }
     else cx = caar_code;
-
   /* code here is the setter and the value without the "set!": ((window-width) 800), (set! (hi 0) (* 2 3)) -> ((hi 0) (* 2 3)) */
   /* for gmp case, indices need to be decoded via s7_integer, not just integer */
 
-  switch (type(cx))
-    {
-    case T_STRING:     return(set_implicit_string(sc, cx, form));
-    case T_PAIR:       return(set_implicit_pair(sc, cx, form));
-    case T_HASH_TABLE: return(set_implicit_hash_table(sc, cx, form));
-    case T_LET:        return(set_implicit_let(sc, cx, form));
-    case T_C_OBJECT:   return(set_implicit_c_object(sc, cx, form));
-    case T_ITERATOR:   return(set_implicit_iterator(sc, cx));    /* not sure this makes sense */
-    case T_SYNTAX:     return(set_implicit_syntax(sc, cx));
+#if 0
+  /* (let ((L (list 1))) (set! (L 0 2) 32)) */
+  /* (let ((V (vector 1 2))) (set! (V 0 1) 32)) */
+  /* TODO: if !applicable(cx) -> error */
+  fprintf(stderr, "form: %s, cx: %s, code: %s\n", display(form), display(cx), display(sc->code));
+  if (!is_applicable(cx))
+    s7_error(sc, sc->no_setter_symbol,
+	     set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~$) is ~S which can't take arguments", 47), form, cx, keyval, obj));
+#endif
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
-      return(set_implicit_vector(sc, cx, form));
-
-    case T_C_MACRO: case T_C_FUNCTION_STAR:
-    case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION: 
-      return(set_implicit_function(sc, cx));
-
-    case T_MACRO: case T_MACRO_STAR: case T_BACRO: case T_BACRO_STAR:
-    case T_CLOSURE: case T_CLOSURE_STAR:
-      return(set_implicit_closure(sc, cx));
-
-    default:                                         /* (set! (1 2) 3) */
-      /* fprintf(stderr, "%s[%d]: code: %s, cx: %s\n", __func__, __LINE__, display(form), display(cx)); */
-      /* code: (set! (#f 'd) 32), cx: #f from op_set2[80242] */
-      no_setter_error(sc, cx);
-    }
-  return(goto_top_no_pop);
+  return(call_set_implicit(sc, cx, form));
 }
 
 static goto_t op_set2(s7_scheme *sc)
@@ -80256,6 +80288,9 @@ static goto_t op_set2(s7_scheme *sc)
      value: #f, args: ('d), code: (32)
      form: (set! (#f 'd) 32)
      code: (set! (#f 'd) 32), cx: #f
+
+     (let ((V (vector 1 2))) (set! (V 0 1) 32))
+     value: 1, args: (1) code: ((1 1) 32)
 
   */
   sc->code = set_ulist_2(sc, sc->set_symbol, set_ulist_1(sc, sc->value, sc->args), sc->code); /* (let ((x 32)) (set! ((curlet) 'x) 3) x) */
@@ -83441,8 +83476,11 @@ static void op_set_pws(s7_scheme *sc)
       set_car(sc->t1_1, value);
       sc->value = c_function_call(c_function_setter(obj))(sc, sc->t1_1);
     }
-  else no_setter_error(sc, obj); 
-  /* here sc->code can be (set! (mus-clipping) 123), but no_setter_error looks for caar(sc->code) */
+  else 
+    {
+      if (!is_pair(car(sc->code))) sc->code = cdr(sc->code);
+      no_setter_error(sc, obj); 
+    }
 }
 
 
@@ -95833,40 +95871,40 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak       124          115    114    110    108
  * tref        513          691    687    463    463
- * timp        974         1059   1033    968    959 [placeholder]
  * index      1022         1026   1016    971    973
- * tmock      7744         1177   1165   1058   1061
+ * tmock      7744         1177   1165   1058   1058
  * texit      1840         ----   ----   1772   1772
  * tvect      1953         2519   2464   1772   1772
  * s7test     4517         1873   1831   1800   1800
- * lt         2114         2123   2110   2110   2110
+ * lt         2114         2123   2110   2110   2111
+ * timp                                         2181
  * tform      3235         2281   2273   2245   2237
  * tmac       2450         3317   3277   2418   2418
- * tread      2614         2440   2421   2419   2419
+ * tread      2614         2440   2421   2419   2416
  * trclo      4085         2735   2574   2455   2454
  * fbench     2833         2688   2583   2460   2460
  * tmat       2683         3065   3042   2505   2521
- * tcopy      2599         8035   5546   2534   2534
- * dup        2765         3805   3788   2562   2539  2574
+ * tcopy      2599         8035   5546   2534   2538
+ * dup        2765         3805   3788   2562   2552
  * tauto      2763         ----   ----   2560   2563
  * tb         2743         2735   2681   2611   2611
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2855   2855
- * tload      3709         ----   ----   3021   3018
- * tset       3052         3253   3104   3042   3047  3036
+ * tload      3709         ----   ----   3021   3045
+ * tset       3052         3253   3104   3042   3036
  * teq        3554         4068   4045   3552   3536
- * tio        3688         3816   3752   3674   3648  3676 [flush_output_port]
+ * tio        3688         3816   3752   3674   3676
  * tobj       3923         4016   3970   3881   3824
  * tclo       4599         4787   4735   4387   4385
- * tcase      4499         4960   4793   4443   4435  4431
+ * tcase      4499         4960   4793   4443   4431
  * tlet       5293         7775   5640   4439   4447
  * tmap       5488         8869   8774   4488   4489
- * tfft      115.1         7820   7729   4753   4755  4749
+ * tfft      115.1         7820   7729   4753   4749
  * tshoot     6920         5525   5447   5184   5183
- * tnum       56.7         6348   6013   5422   5423
+ * tnum       56.7         6348   6013   5422   5421
  * tstr       6118         6880   6342   5471   5471
+ * tmisc      7002         8869   7612   6472   6347
  * tgsl       25.1         8485   7802   6373   6373
- * tmisc      7002         8869   7612   6472   6472  6449 [set_implicit]
  * trec       8314         6936   6922   6521   6521
  * tlist      6549         7896   7546   6566   6552
  * tari       ----         13.0   12.7   6827   6828
@@ -95878,8 +95916,8 @@ int main(int argc, char **argv)
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.0         36.7   37.5   37.0   37.1
  * sg         75.2         ----   ----   55.9   55.9
- * lg        104.1        106.6  105.0  103.5  103.5  103.6 [g_member]
- * tbig      605.1        177.4  175.8  166.4  166.4  166.5 [op_x_a + gc]
+ * lg        104.1        106.6  105.0  103.5  103.6
+ * tbig      605.1        177.4  175.8  166.4  166.5
  * ----------------------------------------------------
  *
  * (let ((L (inlet))) (let-ref L 'a :asdf)) -> error: let-ref: too many arguments: (let-ref (inlet) a :asdf)
@@ -95887,32 +95925,14 @@ int main(int argc, char **argv)
  *   see ref_index_checked TODO [pass symbol not caller for error msg]
  *
  * implicit set! errors:
- *   see no_setter_error 79103: it needs the actual args -- all are messed up below
- *   (let ((L (inlet 'a (inlet 'b 1)))) (set! (L 'a 'b 'c) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst) 
-        set_implicit[80194]: ((1 'c) 32)
- *   (let ((L (inlet))) (set! (L 'a :asdf) 32)) -> error: #<undefined> (an undefined object) does not have a setter: (set! ((inlet 'body ()) 'body)
-        set_implicit[80194]: ((#<undefined> :asdf) 32)
- *   (let ((L (list 1))) (set! (L 0 2) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
-        set_implicit[80194]: ((1 2) 32)
- *   (let ((L (list (list 0)))) (set! (L 0 0 2) 32)) -> error: too many arguments for list-set!: (0 2 32)
- *   (let ((h (hash-table 'a (hash-table 'b 1)))) (set! (h 'a 'c 'd) 32)) -> error: #f (boolean) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
- *      set_implicit[80211]: ((#f 'd) 32)
  *   (let ((V (vector 1 2))) (set! (V 0 1) 32)) -> error: 1 (an integer) does not have a setter: (set! ((inlet 'body ()) 'body) lst)
-        set_implicit[80194]: ((1 1) 32)
  *   (let ((V (vector 1 2))) (set! (vector-ref V 0 1) 32)) -> error: too many arguments for vector-set!: (#(1 2) 0 1 32)
  *   (let ((V (vector 1 2))) (vector-set! V 0 1 32)) -> error: too many arguments for vector-set!: (#(1 2) 0 1 32)
- *       (set! (abs 1) 2) -> error: abs (a c-function) does not have a setter: (set! (abs 1) 2)
- *          set_implicit_function[79987]: ((abs 1) 2)
- * ok:
- *   (let ((h (hash-table 'b 1))) (set! (h 'a 'asdf) 32)) -> error: in (set! (h 'a 'asdf) 32), 'a does not exist in (hash-table 'b 1)
- *   (let ((h (hash-table 'b 1))) (set! (h 'b 'asdf) 32)) -> error: in (set! (h 'b 'asdf) 32), ((hash-table 'b 1) 'b) is 1 which can't take arguments
- * bug: error: attempt to apply an integer 1 to (2) in (1 2)? from (let ((v (hash-table 'a (1 2)))) (set! (v 'a 1) 5)) -- function!
  *
  * no set_pair_p_3 79139 240 259 275, set_implicit 80156, op_set_pws 83415 426
- * for op_set_pws see code and t543.scm -- it is completely broken
  * for 80156 set_implicit, surely that case is unbound_variable? similarly 79139 set_pair_p_3
+ * add t543 op_set_pws case to s7test
  *
  * op_x_a|a = c -> plist_1? matters mainly in tbig
- *   the baddies here are let/hash/c-object which can call equal etc, maybe a type array for this, is_unsafe_implicit
- * optimize implicit hash?
+ *   the baddies here are let/hash/c-object/pair?/vector? which can call equal etc, maybe a type array for this, is_unsafe_implicit
  */
