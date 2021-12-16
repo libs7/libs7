@@ -33557,7 +33557,6 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 		  for (i = 1, slot = let_slots(obj); tis_slot(slot); i++, slot = next_slot(slot))
 		    {
 		      port_write_character(port)(sc, ' ', port);
-		      /* object_to_port_with_circle_check(sc, slot, port, use_write, ci); */
 		      slot_to_port(sc, slot, port, use_write, ci);
 		      if ((tis_slot(next_slot(slot))) && (i == sc->print_length))
 			{
@@ -37096,7 +37095,7 @@ static s7_pointer ref_index_checked(s7_scheme *sc, s7_pointer caller, s7_pointer
     return(s7_error(sc, sc->syntax_error_symbol, 
 		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
 				cons(sc, caller, args), cons(sc, in_obj, cddr(args)), in_obj)));
-  /* TODO: perhaps first $s -> "(~S ~{~$~^ ~})..." and we can pass the symbol rather than the global value as "caller" */
+  /* perhaps first $s -> "(~S ~{~$~^ ~})..." and we can pass the symbol rather than the global value as "caller" */
   return(implicit_index(sc, in_obj, cddr(args)));
 }
 
@@ -79128,7 +79127,6 @@ static s7_pointer no_setter_error(s7_scheme *sc, s7_pointer obj)
    *   add indices and new-value args, is unevaluated code always available?
    */
   int32_t typ = type(obj);
-  /* fprintf(stderr, "%s[%d]: %s\n", func, line, display(sc->code)); */
   if (type(caar(sc->code)) >= T_C_FUNCTION_STAR)
     return(s7_error(sc, sc->no_setter_symbol, 
 		    set_elist_6(sc, wrap_string(sc, "~W (~A) does not have a setter: (set! (~W~{~^ ~S~}) ~S)", 55),
@@ -79238,9 +79236,6 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
 
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
     case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
-      /* 79239 ((getter tree) (cdr lst))
-       */
-      /* fprintf(stderr, "%d %s\n", __LINE__, display(sc->code)); */
       if (!is_any_procedure(c_function_setter(obj)))
 	no_setter_error(sc, obj);
       if (is_c_function(c_function_setter(obj)))
@@ -79260,12 +79255,6 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      /* fprintf(stderr, "%d %s\n", __LINE__, display(sc->code)); */
-      /* 79259 ((hook-functions *read-error-hook*) read-hooks)
-	 79259 ((var-refenv data) env)
-	 79259 ((v i) (car arg))
-
-      */
       if (!is_any_procedure(closure_setter(obj)))
 	no_setter_error(sc, obj);
       if (is_c_function(closure_setter(obj)))
@@ -79283,8 +79272,7 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
       break;
 
     default:
-      /* fprintf(stderr, "%d %s\n", __LINE__, display(sc->code)); */
-      no_setter_error(sc, obj);
+      no_setter_error(sc, obj); /* possibly a continuation/goto? */
     }
   return(false);
 }
@@ -79572,7 +79560,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
   /* vect is the vector, sc->code is expr without the set!, form is the full expr,  args have not been evaluated! */
   s7_pointer settee = car(sc->code), index;
   s7_int argnum;
-
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))     /* (set! (v 0)) */
@@ -79596,6 +79583,12 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
        *   sc->code here: ((v 0 'a) 32)
        * so if we could catch easy cases (i.e. int index and rank==1 vect), do the vector_ref, check applicable and go on:
        */
+      /* TODO: symbol cadr(settee) -> int[or treat as op_implicit_vector_ref_3 see 4 case below] else goto op_set2 */
+#if 0
+      /* this is incorrect -- set optimize_op as 4 case below, but don't call set_implicit recursively 
+       *   can obj be used below?  (we need this error check)
+       *  the bug is that we set optimize_op on form but pass in the old one!
+       */
       if ((is_t_integer(cadr(settee))) && (vector_rank(vect) == 1))
 	{
 	  s7_pointer obj;
@@ -79606,9 +79599,10 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 	  if (!is_applicable(obj))
 	    s7_error(sc, sc->no_setter_symbol,
 		     set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~S) is ~S which can't take arguments", 47), form, vect, cadr(settee), obj));
-          sc->code = set_plist_2(sc, set_ulist_1(sc, obj, cddr(settee)), cadr(sc->code)); 
+          sc->code = list_2(sc, cons(sc, obj, cddr(settee)), cadr(sc->code));
           return(call_set_implicit(sc, obj, form));
 	}
+#endif
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
       sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
@@ -79714,7 +79708,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 static goto_t set_implicit_c_object(s7_scheme *sc, s7_pointer c_obj, s7_pointer form)
 {
   s7_pointer settee, index;
-  /* fprintf(stderr, "%s[%d]: %s\n", __func__,__LINE__, display(form)); */
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))
@@ -79842,6 +79835,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer form
 	    }
 	  syntax_error_any(sc, sc->wrong_type_arg_symbol, "value must be a character: ~S", 29, form);
 	}
+      /* PERHAPS: op_implicit_string_set_a as in vector? */
       push_op_stack(sc, sc->string_set_function);
       sc->args = list_2(sc, index, str);
       sc->code = cdr(sc->code);
@@ -79921,7 +79915,6 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer form) 
 static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointer form) /* form has the set!, sc->code is cdr(form) */
 {
   s7_pointer settee = car(sc->code), key, keyval = NULL;
-  /* fprintf(stderr, "%s[%d]: %s form: %s, code: %s\n", __func__, __LINE__, display(table), display(form), display(sc->code)); */
   if (!implicit_set_ok(sc->code))
     {
       if (!is_pair(cdr(sc->code)))
@@ -80068,7 +80061,6 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer form)
 
 static goto_t set_implicit_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((lst (list 1 2))) (set! (list-ref lst 0) 2) lst) */
 {
-  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(fnc), display(sc->code)); */
   if (!is_t_procedure(c_function_setter(fnc)))
     {
       if (!is_any_macro(c_function_setter(fnc)))
@@ -80140,25 +80132,26 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer fnc)
 static goto_t set_implicit_iterator(s7_scheme *sc, s7_pointer iter)
 {
   s7_pointer setter = iterator_sequence(iter);
+
   if ((is_any_closure(setter)) || (is_any_macro(setter)))
     setter = closure_setter(iterator_sequence(iter));
-  else setter = sc->F;
+  else no_setter_error(sc, iter);
+
+  if (!is_null(cdar(sc->code))) /* (set! (iter ...) val) but iter is a thunk */
+    s7_error(sc, sc->wrong_number_of_args_symbol, 
+	     set_elist_3(sc, wrap_string(sc, "~S (an iterator): too many arguments: ~S", 40), iter, sc->code));
+
   if (is_procedure(setter))
     {
       push_op_stack(sc, setter);
       push_stack(sc, OP_EVAL_ARGS1, sc->nil, sc->nil);
       sc->code = cadr(sc->code);    /* the (as yet unevaluated) value, incoming code was ((obj) val) */
+      sc->cur_op = optimize_op(sc->code);
+      return(goto_top_no_pop);
     }
-  else
-    {
-      if (!is_any_macro(setter))
-	no_setter_error(sc, iter);
-      sc->args = cdr(sc->code);
-      sc->code = setter;
-      return(goto_apply);
-    }
-  sc->cur_op = optimize_op(sc->code);
-  return(goto_top_no_pop);
+  sc->args = sc->nil;
+  sc->code = setter;
+  return(goto_apply);
 }
 
 static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer wlet)
@@ -80180,7 +80173,6 @@ static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer wlet)
 static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer form)
 {
   /* these depend on sc->code making sense given obj as the sequence being set */
-  /* fprintf(stderr, "%d form: %s\n", __LINE__, display(form)); */
   switch (type(obj))
     {
     case T_STRING:     return(set_implicit_string(sc, obj, form));
@@ -80220,7 +80212,6 @@ static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer form)
 static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ...) */
 {
   s7_pointer caar_code, obj, form = sc->code;
-  /* fprintf(stderr, "%s[%d]: form: %s\n", __func__, __LINE__, display(form)); */
   sc->code = cdr(sc->code);
   caar_code = caar(sc->code);
   if (is_symbol(caar_code))
@@ -80235,7 +80226,6 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
       obj = caar_code;
     else
       {
-	/* fprintf(stderr, "%s[%d]; %s\n", __func__, __LINE__, display(form)); */
 	push_stack(sc, OP_SET2, cdar(sc->code), T_Pair(cdr(sc->code)));
 	sc->code = caar_code;
 	sc->cur_op = optimize_op(sc->code);
@@ -80248,7 +80238,6 @@ static goto_t set_implicit(s7_scheme *sc) /* sc->code incoming is (set! (...) ..
 
 static goto_t op_set2(s7_scheme *sc)
 {
-  /* fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(sc->value), display(sc->code), display(sc->args)); */
   if (is_pair(sc->value))
     {
       /* (let ((L '((1 2 3)))) (set! ((L 0) 1) 32) L), (let ((L '(((1 2 3))))) (set! ((L 0) 0 1) 32) L)
@@ -95917,6 +95906,16 @@ int main(int argc, char **argv)
  * tbig      605.1        177.4  175.8  166.4  166.5
  * ----------------------------------------------------
  *
- * see ref_index_checked TODO [pass symbol not caller for error msg]
- * no set_pair_p_3 79139[unbound? -- can this be goto/call/cc?] 240 259 275, set_implicit 80156, op_set_pws 83415 426
+ * the other implicit sets could optimize to *_a op like vector_set, check for symbol->int
+ * bad:
+ *   (set! (with-let (curlet) 3) 2) -> error: can't set 3 in ((inlet 'body ()) 'body)
+ *   (set! (with-let (curlet) :asdf) (+ 1 1)) -> error: let-set!: asdf is not defined in (inlet 'exit #<lambda ()>)
+ *   (set! (with-let (curlet) (symbol->keyword 'asdf)) (+ 1 1)) -> error: symbol->keyword (a c-function) does not have a setter: (set! #1=(() () () () () () () () . #1#) ())
+ *   (set! (with-let) 1) -> error: set! (with-let)? 1
+ *   (let ((e (inlet :v (vector 1 2)))) (set! (with-let e (let ((z 0)) (v z))) 'a) (e 'v)) -> error: let (syntactic) does not have a setter: (set! (hook-functions *missing-close-paren-hook*)
+ *
+ * for set iter see t545 (bugs and bad error messages)
+ * is this intentional: (append "asdf" #u(90 91)) -> error: append second argument, #u(90 91), is a byte-vector but should be a string
+ * implicit vector set error is bad -- see s7test and 79588 here
+ * new notcurses needs many updates
  */
