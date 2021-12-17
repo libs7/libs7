@@ -79132,8 +79132,11 @@ static s7_pointer no_setter_error(s7_scheme *sc, s7_pointer obj)
 		    set_elist_6(sc, wrap_string(sc, "~W (~A) does not have a setter: (set! (~W~{~^ ~S~}) ~S)", 55),
 				caar(sc->code), sc->prepackaged_type_names[typ], caar(sc->code), cdar(sc->code), cadr(sc->code))));
   return(s7_error(sc, sc->no_setter_symbol, 
-		  set_elist_4(sc, wrap_string(sc, "~A (~A) does not have a setter: (set! ~{~S~^ ~})", 48),
-			      caar(sc->code), sc->prepackaged_type_names[typ], sc->code)));
+		  set_elist_5(sc, wrap_string(sc, "~A (~A) does not have a setter: (set! ~S ~S)", 44),
+			      caar(sc->code), sc->prepackaged_type_names[typ], 
+			      (is_pair(car(sc->code))) ? copy_proper_list(sc, car(sc->code)) : car(sc->code), 
+			      (is_pair(cadr(sc->code))) ? copy_proper_list(sc, cadr(sc->code)) : cadr(sc->code))));
+  /* copy is necessary due to the way quoted lists|symbols are handled in op_set_with_let_1|2 and copy_tree */
 }
 
 static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer value)
@@ -79364,9 +79367,10 @@ static bool op_set_with_let_1(s7_scheme *sc)
    *   'b above can be a pair = generalized set in the 'e environment.
    */
   if (!is_pair(sc->args))                /* (set! (with-let) ...) */
-    syntax_error(sc, "set! (with-let)? ~A", 19, current_code(sc));
+    syntax_error(sc, "with-let needs a let and a symbol: (set! (with-let) ~$)", 55, sc->value);
   if (!is_pair(cdr(sc->args)))           /* (set! (with-let e) ...) */
-    syntax_error(sc, "set! (with-let ...) has no symbol to set? ~A", 44, current_code(sc));
+    s7_error(sc, sc->syntax_error_symbol,
+	     set_elist_3(sc, wrap_string(sc, "with-let in (set! (with-let ~S) ~$) has no symbol to set?", 57), car(sc->args), sc->value));
   e = car(sc->args);
   b = cadr(sc->args);
   x = sc->value;
@@ -79583,26 +79587,24 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
        *   sc->code here: ((v 0 'a) 32)
        * so if we could catch easy cases (i.e. int index and rank==1 vect), do the vector_ref, check applicable and go on:
        */
-      /* TODO: symbol cadr(settee) -> int[or treat as op_implicit_vector_ref_3 see 4 case below] else goto op_set2 */
-#if 0
-      /* this is incorrect -- set optimize_op as 4 case below, but don't call set_implicit recursively 
-       *   can obj be used below?  (we need this error check)
-       *  the bug is that we set optimize_op on form but pass in the old one!
-       */
-      if ((is_t_integer(cadr(settee))) && (vector_rank(vect) == 1))
+      /* TODO: treat as op_implicit_vector_ref_3 see 4 case below, the other implicit sets could optimize to *_a op like vector_set */
+      if (vector_rank(vect) == 1)
 	{
-	  s7_pointer obj;
-	  s7_int index = integer(cadr(settee));
-	  if ((index < 0) || (index >= vector_length(vect)))
-	    out_of_range(sc, sc->vector_ref_symbol, int_two, cadr(settee), (index < 0) ? its_negative_string : its_too_large_string);
-	  obj = vector_element(vect, index);
-	  if (!is_applicable(obj))
-	    s7_error(sc, sc->no_setter_symbol,
-		     set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~S) is ~S which can't take arguments", 47), form, vect, cadr(settee), obj));
-          sc->code = list_2(sc, cons(sc, obj, cddr(settee)), cadr(sc->code));
-          return(call_set_implicit(sc, obj, form));
-	}
-#endif
+	  s7_pointer ind = cadr(settee);
+	  if (is_symbol(ind)) ind = lookup(sc, ind);
+	  if (is_t_integer(ind))
+	    {
+	      s7_pointer obj;
+	      s7_int index = integer(ind);
+	      if ((index < 0) || (index >= vector_length(vect)))
+		out_of_range(sc, sc->vector_ref_symbol, int_two, cadr(settee), (index < 0) ? its_negative_string : its_too_large_string);
+	      obj = vector_element(vect, index);
+	      if (!is_applicable(obj))
+		s7_error(sc, sc->no_setter_symbol,
+			 set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~S) is ~S which can't take arguments", 47), form, vect, cadr(settee), obj));
+	      sc->code = set_plist_2(sc, set_ulist_1(sc, obj, cddr(settee)), cadr(sc->code));
+	      return(call_set_implicit(sc, obj, form));
+	    }}
       push_stack(sc, OP_SET2, cddr(settee), cdr(sc->code));
       sc->code = list_2(sc, car(settee), cadr(settee));
       sc->cur_op = OP_UNOPT; /* optimize_op(sc->code); */
@@ -79611,7 +79613,8 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 
   if ((argnum > 1) || (vector_rank(vect) > 1))
     {
-      if ((argnum == 2) &&
+      if ((argnum == 2) && 
+	  (cdr(form) == sc->code) &&           /* form == cdr(sc->code) only on the outer call, thereafter form is the old form for better error messages */
 	  (is_fxable(sc, cadr(settee))) &&
 	  (is_fxable(sc, caddr(settee))) &&
 	  (is_fxable(sc, cadr(sc->code))))     /* (set! (v fx fx) fx) */
@@ -79661,7 +79664,8 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 
   /* one index, rank == 1 */
   index = cadr(settee);
-  if ((is_fxable(sc, index)) &&
+  if ((cdr(form) == sc->code) &&
+      (is_fxable(sc, index)) &&
       (is_fxable(sc, cadr(sc->code))))
     {
       fx_annotate_arg(sc, cdr(settee), sc->curlet);
@@ -80149,7 +80153,7 @@ static goto_t set_implicit_iterator(s7_scheme *sc, s7_pointer iter)
       sc->cur_op = optimize_op(sc->code);
       return(goto_top_no_pop);
     }
-  sc->args = sc->nil;
+  sc->args = cdr(sc->code);
   sc->code = setter;
   return(goto_apply);
 }
@@ -91524,8 +91528,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_apply:      goto APPLY;
 	      default:              goto EVAL_ARGS;
 	      }
-	  /* (set! 3 2) */
-	  s7_error(sc, sc->out_of_range_symbol, set_elist_3(sc, wrap_string(sc, "can't set ~A in ~S", 18), cadr(sc->code), sc->code));
+	  s7_error(sc, sc->no_setter_symbol, 
+		   set_elist_3(sc, wrap_string(sc, "can't set ~A in ~S", 18), cadr(sc->code),
+			       list_3(sc, sc->set_symbol,
+				      (is_pair(cadr(sc->code))) ? copy_proper_list(sc, cadr(sc->code)) : cadr(sc->code),
+				      (is_pair(caddr(sc->code))) ? copy_proper_list(sc, caddr(sc->code)) : caddr(sc->code))));
 
 
 	case OP_IF:           op_if(sc);           goto EVAL;
@@ -95864,14 +95871,14 @@ int main(int argc, char **argv)
  * s7test     4517         1873   1831   1800   1800
  * lt         2114         2123   2110   2110   2111
  * tform      3235         2281   2273   2245   2237
- * timp       2742         2971   2891   2718   2306  2260
+ * timp       2742         2971   2891   2718   2250
  * tmac       2450         3317   3277   2418   2418
  * tread      2614         2440   2421   2419   2416
  * trclo      4085         2735   2574   2455   2454
  * fbench     2833         2688   2583   2460   2460
  * tmat       2683         3065   3042   2505   2521
  * tcopy      2599         8035   5546   2534   2538
- * dup        2765         3805   3788   2562   2552  2538
+ * dup        2765         3805   3788   2562   2535
  * tauto      2763         ----   ----   2560   2563
  * tb         2743         2735   2681   2611   2611
  * titer      2659         2865   2842   2641   2641
@@ -95880,7 +95887,7 @@ int main(int argc, char **argv)
  * tset       3052         3253   3104   3042   3036
  * teq        3554         4068   4045   3552   3536
  * tio        3688         3816   3752   3674   3676
- * tobj       3923         4016   3970   3881   3824
+ * tobj       3923         4016   3970   3881   3828
  * tclo       4599         4787   4735   4387   4385
  * tcase      4499         4960   4793   4443   4431
  * tlet       5293         7775   5640   4439   4447
@@ -95889,7 +95896,7 @@ int main(int argc, char **argv)
  * tshoot     6920         5525   5447   5184   5183
  * tnum       56.7         6348   6013   5422   5421
  * tstr       6118         6880   6342   5471   5471
- * tmisc      7002         8869   7612   6472   6347  6315
+ * tmisc      7002         8869   7612   6472   6318
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6549         7896   7546   6566   6552
@@ -95905,17 +95912,4 @@ int main(int argc, char **argv)
  * lg        104.1        106.6  105.0  103.5  103.6
  * tbig      605.1        177.4  175.8  166.4  166.5
  * ----------------------------------------------------
- *
- * the other implicit sets could optimize to *_a op like vector_set, check for symbol->int
- * bad:
- *   (set! (with-let (curlet) 3) 2) -> error: can't set 3 in ((inlet 'body ()) 'body)
- *   (set! (with-let (curlet) :asdf) (+ 1 1)) -> error: let-set!: asdf is not defined in (inlet 'exit #<lambda ()>)
- *   (set! (with-let (curlet) (symbol->keyword 'asdf)) (+ 1 1)) -> error: symbol->keyword (a c-function) does not have a setter: (set! #1=(() () () () () () () () . #1#) ())
- *   (set! (with-let) 1) -> error: set! (with-let)? 1
- *   (let ((e (inlet :v (vector 1 2)))) (set! (with-let e (let ((z 0)) (v z))) 'a) (e 'v)) -> error: let (syntactic) does not have a setter: (set! (hook-functions *missing-close-paren-hook*)
- *
- * for set iter see t545 (bugs and bad error messages)
- * is this intentional: (append "asdf" #u(90 91)) -> error: append second argument, #u(90 91), is a byte-vector but should be a string
- * implicit vector set error is bad -- see s7test and 79588 here
- * new notcurses needs many updates
  */

@@ -258,7 +258,7 @@
 			       (ash (floor (* g 256)) 8)
 			       (floor (* b 256)))))
 	    (set! (nccell_gcluster c1) (char->integer #\space))
-	    (set! (nccell_channels c1) (logior NC_FGDEFAULT_MASK NC_BGDEFAULT_MASK color)))
+	    (set! (nccell_channels c1) (logior (ash NC_BGDEFAULT_MASK 32) NC_BGDEFAULT_MASK color)))
 	  (set! (nccell_stylemask c1) 0)
 	  (ncplane_set_base_cell statp c1)
 	  (notcurses_render nc)
@@ -285,7 +285,7 @@
       (define (red c)
 	(let ((c1 (nccell_make)))
 	  (set! (nccell_gcluster c1) (char->integer c))
-	  (set! (nccell_channels c1)  (logior NC_FGDEFAULT_MASK #xff000000000000))
+	  (set! (nccell_channels c1)  (logior (ash NC_BGDEFAULT_MASK 32) #xff000000000000))
 	  (set! (nccell_stylemask c1) 0)
 	  c1))
 
