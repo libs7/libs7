@@ -1,5 +1,7 @@
 ;;; implicit ref/set -- tmisc.scm and tread.scm also have some
 
+(set! (*s7* 'heap-size) 1024000)
+
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))
 
 (define size 50000)
