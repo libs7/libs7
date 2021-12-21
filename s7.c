@@ -2955,7 +2955,7 @@ static void init_types(void)
 #define list_2_unchecked(Sc, A, B)     cons_unchecked(Sc, A, cons_unchecked(Sc, B, Sc->nil))
 #define list_3(Sc, A, B, C)            cons_unchecked(Sc, A, cons_unchecked(Sc, B, cons(Sc, C, Sc->nil)))
 #define list_4(Sc, A, B, C, D)         cons_unchecked(Sc, A, cons_unchecked(Sc, B, cons_unchecked(Sc, C, cons(Sc, D, Sc->nil))))
-#define with_list_t1(A)                (set_car(sc->t1_1, A), sc->t1_1) /* this form is slightly slower than explicit code, especially t3 below */
+#define with_list_t1(A)                (set_car(sc->t1_1, A), sc->t1_1) /* this is slower than explicit code, esp t3, procedures are same as this */
 #define with_list_t2(A, B)             (set_car(sc->t2_1, A), set_car(sc->t2_2, B), sc->t2_1)
 #define with_list_t3(A, B, C)          (set_car(sc->t3_1, A), set_car(sc->t3_2, B), set_car(sc->t3_3, C), sc->t3_1)
 
@@ -4109,7 +4109,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
-      OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S, OP_IMPLICIT_S7_LET_SET_SA,
+      OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_HASH_TABLE_REF_AA, 
+      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S, OP_IMPLICIT_S7_LET_SET_SA,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_G, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
       OP_SYM, OP_CON, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
@@ -4330,7 +4331,8 @@ static const char* op_names[NUM_OPS] =
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
       "implicit_string_ref_a", "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_pair_ref_aa",
-      "implicit_hash_table_ref_a", "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", "implicit_*s7*_set_sa",
+      "implicit_hash_table_ref_a", "implicit_hash_table_ref_aa", 
+      "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", "implicit_*s7*_set_sa",
       "unknown_thunk", "unknown_ns", "unknown_na", "unknown_g", "unknown_gg", "unknown_a", "unknown_aa", "unknown_np",
 
       "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_ssa_direct", "h_hash_table_increment", "clear_opts",
@@ -37137,7 +37139,7 @@ static s7_pointer implicit_pair_index_checked(s7_scheme *sc, s7_pointer obj, s7_
       s7_pointer safe_indices;
       safe_indices = copy_proper_list(sc, indices);
       return(s7_error(sc, sc->syntax_error_symbol, 
-		      set_elist_4(sc, wrap_string(sc, "~S becomes ~S, but ~S can't take arguments", 42),
+		      set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
 				  cons(sc, obj, safe_indices), cons(sc, in_obj, cdr(safe_indices)), in_obj)));
     }
   return(implicit_index(sc, in_obj, cdr(indices)));
@@ -44157,6 +44159,18 @@ static bool op_implicit_hash_table_ref_a(s7_scheme *sc)
   return(true);
 }
 
+static bool op_implicit_hash_table_ref_aa(s7_scheme *sc)
+{
+  s7_pointer table, in_obj, out_key;
+  table = lookup_checked(sc, car(sc->code));
+  if (!is_hash_table(table)) {sc->last_function = table; return(false);}
+  in_obj = s7_hash_table_ref(sc, table, out_key = fx_call(sc, cdr(sc->code)));
+  if (is_hash_table(in_obj))
+    sc->value = s7_hash_table_ref(sc, in_obj, fx_call(sc, cddr(sc->code)));
+  else sc->value = implicit_pair_index_checked(sc, table, in_obj, set_plist_2(sc, out_key, fx_call(sc, cddr(sc->code))));
+  return(true);
+}
+
 static s7_pointer hash_table_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
   if (args == 2)
@@ -45766,9 +45780,20 @@ static s7_pointer make_c_object_with_let(s7_scheme *sc, s7_int type, void *value
   return(x);
 }
 
-s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let) {return(make_c_object_with_let(sc, type, value, let, true));}
-s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value) {return(make_c_object_with_let(sc, type, value, sc->nil, true));}
-s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value) {return(make_c_object_with_let(sc, type, value, sc->nil, false));}
+s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let) 
+{
+  return(make_c_object_with_let(sc, type, value, let, true));
+}
+
+s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value) 
+{
+  return(make_c_object_with_let(sc, type, value, sc->nil, true));
+}
+
+s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value) 
+{
+  return(make_c_object_with_let(sc, type, value, sc->nil, false));
+}
 
 s7_pointer s7_c_object_let(s7_pointer obj) {return(c_object_let(obj));}
 
@@ -52504,7 +52529,6 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 	      (c_function_all_args(obj) >= len))
 	    return(c_function_call(obj)(sc, indices));
 	}
-      /* closure? */
       push_stack_direct(sc, OP_EVAL_DONE);
       sc->code = obj;
       sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
@@ -79173,11 +79197,7 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
       if (!is_any_procedure(c_function_setter(obj)))
 	no_setter_error(sc, obj);
       if (is_c_function(c_function_setter(obj)))
-	{
-	  set_car(sc->t2_1, arg);
-	  set_car(sc->t2_2, value);
-	  sc->value = c_function_call(c_function_setter(obj))(sc, sc->t2_1);
-	}
+	sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t2(arg, value));
       else
 	{
 	  sc->code = c_function_setter(obj);
@@ -79192,11 +79212,7 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
       if (!is_any_procedure(closure_setter(obj)))
 	no_setter_error(sc, obj);
       if (is_c_function(closure_setter(obj)))
-	{
-	  set_car(sc->t2_1, arg);
-	  set_car(sc->t2_2, value);
-	  sc->value = c_function_call(closure_setter(obj))(sc, sc->t2_1);
-	}
+	sc->value = c_function_call(closure_setter(obj))(sc, with_list_t2(arg, value));
       else
 	{
 	  sc->code = closure_setter(obj);
@@ -89704,6 +89720,10 @@ static bool op_unknown_gg(s7_scheme *sc)
       fx_annotate_args(sc, cdr(code), sc->curlet);
       return(fixup_unknown_op(code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
 
+    case T_HASH_TABLE: 
+      fx_annotate_args(sc, cdr(code), sc->curlet);
+      return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
+
     case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
     case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
 
@@ -89861,6 +89881,9 @@ static bool op_unknown_aa(s7_scheme *sc)
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR:
       return(fixup_unknown_op(code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
+
+    case T_HASH_TABLE: 
+      return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
 
     case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
     case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
@@ -91005,6 +91028,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_VECTOR_REF_AA:    if (!op_implicit_vector_ref_aa(sc))    {if (op_unknown_aa(sc)) goto EVAL;} continue;
 	case OP_IMPLICIT_STRING_REF_A:     if (!op_implicit_string_ref_a(sc))     {if (op_unknown_a(sc)) goto EVAL;}  continue;
 	case OP_IMPLICIT_HASH_TABLE_REF_A: if (!op_implicit_hash_table_ref_a(sc)) {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_HASH_TABLE_REF_AA: if (!op_implicit_hash_table_ref_aa(sc)) {if (op_unknown_a(sc)) goto EVAL;}  continue;
 	case OP_IMPLICIT_CONTINUATION_A:   if (!op_implicit_continuation_a(sc))   {if (op_unknown_a(sc)) goto EVAL;}  continue;
 	case OP_IMPLICIT_ITERATE:          if (!op_implicit_iterate(sc))          {if (op_unknown(sc)) goto EVAL;}    continue;
 	case OP_IMPLICIT_LET_REF_C:        if (!op_implicit_let_ref_c(sc))        {if ((has_fx(cdr(sc->code))) && (op_unknown_a(sc))) goto EVAL;} continue;
@@ -92413,9 +92437,9 @@ static s7_pointer sl_int_fixup(s7_scheme *sc, s7_pointer val)
 static s7_pointer sl_history(s7_scheme *sc)
 {
 #if WITH_HISTORY
-    return(cull_history(sc, (sc->cur_code == sc->history_sink) ? sc->old_cur_code : sc->cur_code));
+  return(cull_history(sc, (sc->cur_code == sc->history_sink) ? sc->old_cur_code : sc->cur_code));
 #else
-    return(sc->cur_code);
+  return(sc->cur_code);
 #endif
 }
 
@@ -95391,7 +95415,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) 
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 915) 
+  if (NUM_OPS != 916) 
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95767,59 +95791,58 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ----------------------------------------------------
- *            gmp (11-12)   20.9   21.0   21.9   22.0
- * ----------------------------------------------------
- * tpeak       124          115    114    110    108
- * tref        513          691    687    463    463
- * index      1022         1026   1016    971    973
- * tmock      7744         1177   1165   1058   1056
- * texit      1840         ----   ----   1772   1774
- * tvect      1953         2519   2464   1772   1772
- * s7test     4517         1873   1831   1800   1800
- * lt         2114         2123   2110   2110   2112
- * timp       2742         2971   2891   2718   2207
- * tform      3235         2281   2273   2245   2255
- * tmac       2450         3317   3277   2418   2418
- * tread      2614         2440   2421   2419   2416
- * trclo      4085         2735   2574   2455   2454
- * fbench     2833         2688   2583   2460   2460
- * tmat       2683         3065   3042   2505   2524
- * tcopy      2599         8035   5546   2534   2538
- * dup        2765         3805   3788   2562   2530
- * tauto      2763         ----   ----   2560   2562
- * tb         2743         2735   2681   2611   2611
- * titer      2659         2865   2842   2641   2641
- * tsort      3572         3105   3104   2855   2855
- * tload      3709         ----   ----   3021   3045
- * tset       3052         3253   3104   3042   3047
- * teq        3554         4068   4045   3552   3536
- * tio        3688         3816   3752   3674   3683
- * tobj       3923         4016   3970   3881   3828
- * tclo       4599         4787   4735   4387   4392
- * tcase      4499         4960   4793   4443   4437
- * tlet       5293         7775   5640   4439   4447
- * tmap       5488         8869   8774   4488   4489
- * tfft      115.1         7820   7729   4753   4755
- * tshoot     6920         5525   5447   5184   5183
- * tnum       56.7         6348   6013   5422   5424
- * tstr       6118         6880   6342   5471   5476
- * tmisc      7002         8869   7612   6472   6318
- * tgsl       25.1         8485   7802   6373   6373
- * trec       8314         6936   6922   6521   6521
- * tlist      6549         7896   7546   6566   6552
- * tari       ----         13.0   12.7   6827   6828
- * tleft      9021         10.4   10.2   7648   7646
- * tgc        9614         11.9   11.1   8176   8175
- * cb         16.8         11.2   11.0   9650   9656
- * thash      35.4         11.8   11.7   9734   9734
- * tgen       12.6         11.2   11.4   12.0   12.0
- * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.0         36.7   37.5   37.0   37.0
- * sg         75.2         ----   ----   55.9   55.9
- * lg        104.1        106.6  105.0  103.5  103.6
- * tbig      605.1        177.4  175.8  166.4  166.4
- * ----------------------------------------------------
+/* ---------------------------------------------
+ *            gmp (12-20)   20.9   21.0   22.0
+ * ---------------------------------------------
+ * tpeak       122          115    114    108
+ * tref        513          691    687    463
+ * index      1024         1026   1016    973
+ * tmock      7741         1177   1165   1056
+ * texit      1827         ----   ----   1774
+ * tvect      1953         2519   2464   1772
+ * s7test     4537         1873   1831   1800
+ * lt         2117         2123   2110   2112
+ * timp       2232         2971   2891   2207  2174
+ * tform      3241         2281   2273   2255
+ * tmac       2450         3317   3277   2418
+ * tread      2614         2440   2421   2416
+ * trclo      4079         2735   2574   2454
+ * fbench     2833         2688   2583   2460
+ * tmat       2694         3065   3042   2524
+ * tcopy      2600         8035   5546   2538
+ * dup        2756         3805   3788   2530
+ * tauto      2763         ----   ----   2562
+ * tb         3366?        2735   2681   2611
+ * titer      2659         2865   2842   2641
+ * tsort      3572         3105   3104   2855
+ * tload      3740         ----   ----   3045
+ * tset       3058         3253   3104   3047
+ * teq        3541         4068   4045   3536
+ * tio        3698         3816   3752   3683
+ * tobj       4533         4016   3970   3828
+ * tclo       4604         4787   4735   4392
+ * tcase      4501         4960   4793   4437
+ * tlet       5305         7775   5640   4447
+ * tmap       5488         8869   8774   4489
+ * tfft      115.1         7820   7729   4755
+ * tshoot     6896         5525   5447   5183
+ * tnum       56.7         6348   6013   5424
+ * tstr       6123         6880   6342   5476
+ * tmisc      6847         8869   7612   6318
+ * tgsl       25.1         8485   7802   6373
+ * trec       8314         6936   6922   6521
+ * tlist      6551         7896   7546   6552
+ * tari       ----         13.0   12.7   6828
+ * tleft      9004         10.4   10.2   7646
+ * tgc        9614         11.9   11.1   8175
+ * cb         16.8         11.2   11.0   9656
+ * thash      35.4         11.8   11.7   9734
+ * tgen       12.6         11.2   11.4   12.0
+ * tall       24.4         15.6   15.6   15.6
+ * calls      55.3         36.7   37.5   37.0
+ * sg         75.8         ----   ----   55.9
+ * lg        104.2        106.6  105.0  103.6
+ * tbig      604.3        177.4  175.8  166.4
+ * ---------------------------------------------
  *
- * with_list_t1 could be set_t1 and a procedure (like set_plist_1 -> with_plist_1?), similarly t2/t3
  */
