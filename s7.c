@@ -60808,7 +60808,8 @@ static bool d_7piid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_point
 /* -------- d_7piii -------- */
 static s7_double opt_d_7piii_ssss(opt_info *o)
 {
-  return(float_vector_ref_d_7piii(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p)), integer(slot_value(o->v[5].p))));
+  return(float_vector_ref_d_7piii(opt_sc(o), slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), 
+				  integer(slot_value(o->v[3].p)), integer(slot_value(o->v[5].p))));
 }
 
 static s7_double opt_d_7piii_ssss_unchecked(opt_info *o)
@@ -63571,9 +63572,20 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 }
 
 /* -------- p_call_ppp -------- */
-static s7_pointer opt_p_call_sss(opt_info *o) {return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p))));}
-static s7_pointer opt_p_call_css(opt_info *o) {return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), o->v[1].p, slot_value(o->v[2].p), slot_value(o->v[3].p))));}
-static s7_pointer opt_p_call_ssf(opt_info *o) {return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[6].fp(o->v[5].o1))));}
+static s7_pointer opt_p_call_sss(opt_info *o) 
+{
+  return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p))));
+}
+
+static s7_pointer opt_p_call_css(opt_info *o) 
+{
+  return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), o->v[1].p, slot_value(o->v[2].p), slot_value(o->v[3].p))));
+}
+
+static s7_pointer opt_p_call_ssf(opt_info *o) 
+{
+  return(o->v[4].call(opt_sc(o), set_plist_3(opt_sc(o), slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[6].fp(o->v[5].o1))));
+}
 
 static s7_pointer opt_p_call_ppp(opt_info *o)
 {
@@ -72592,7 +72604,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
   return((is_optimized(expr)) ? OPT_T : OPT_F);
 }
 
-static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t pairs, int32_t symbols, int32_t quotes, s7_pointer e)
+static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer func, 
+					     int32_t hop, int32_t pairs, int32_t symbols, int32_t quotes, s7_pointer e)
 {
   s7_pointer arg1 = cadr(expr), arg2 = caddr(expr), arg3 = cadddr(expr);
   if (pairs == 0)
@@ -82425,7 +82438,9 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 			(o->v[3].d_7pi_f == float_vector_ref_d_7pi) && (o->v[2].p == o->v[6].p))
 		      copy_to_same_type(sc, slot_value(o->v[1].p), slot_value(o->v[5].p), integer(stepper), end, integer(stepper));
 		    else
-		      if ((o->v[0].fd == opt_d_7pid_ssc) && (o->v[4].d_7pid_f == float_vector_set_d_7pid_direct) && (stepper == slot_value(o->v[2].p)))
+		      if ((o->v[0].fd == opt_d_7pid_ssc) && 
+			  (o->v[4].d_7pid_f == float_vector_set_d_7pid_direct) && 
+			  (stepper == slot_value(o->v[2].p)))
 			s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), make_real(sc, o->v[3].x), stepper, make_integer(sc, end)));
 		      else
 			for (; integer(stepper) < end; integer(stepper)++)
@@ -82437,7 +82452,9 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  fp = o->v[0].fp;
 		  if ((fp == opt_p_pip_ssc) &&
 		      (stepper == slot_value(o->v[2].p)) &&        /* i.e. index by do counter */
-		      ((o->v[3].p_pip_f == string_set_p_pip_direct) || (o->v[3].p_pip_f == normal_vector_set_p_pip_direct) || (o->v[3].p_pip_f == list_set_p_pip_unchecked)))
+		      ((o->v[3].p_pip_f == string_set_p_pip_direct) || 
+		       (o->v[3].p_pip_f == normal_vector_set_p_pip_direct) || 
+		       (o->v[3].p_pip_f == list_set_p_pip_unchecked)))
 		    s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), o->v[4].p, stepper, make_integer(sc, end)));
 		  else
 		    {
@@ -82550,7 +82567,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		    func(sc);
 		    step = integer(slot_value(step_slot)) + 1;
 		  }
-	  if ((S7_DEBUGGING) && (stop != integer(slot_value(end_slot)))) fprintf(stderr, "end: %" ld64 " %" ld64 "\n", stop, integer(slot_value(end_slot)));
+	  if ((S7_DEBUGGING) && (stop != integer(slot_value(end_slot)))) 
+	    fprintf(stderr, "end: %" ld64 " %" ld64 "\n", stop, integer(slot_value(end_slot)));
 	}
       sc->value = sc->T;
       sc->code = cdadr(scc);
@@ -83582,7 +83600,8 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
     {
       if (is_null(z))
 	s7_error(sc, sc->wrong_number_of_args_symbol, 
-		 set_elist_4(sc, wrap_string(sc, "~S: not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 52), closure_name(sc, sc->code), closure_args(sc->code), sc->args));
+		 set_elist_4(sc, wrap_string(sc, "~S: not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 52), 
+			     closure_name(sc, sc->code), closure_args(sc->code), sc->args));
       sym = car(x);
       slot = make_slot(sc, sym, T_Pos(unchecked_car(z)));
 #if S7_DEBUGGING
@@ -83599,7 +83618,8 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
     {
       if (is_not_null(z))
 	s7_error(sc, sc->wrong_number_of_args_symbol, 
-		 set_elist_4(sc, wrap_string(sc, "~S: too many arguments: ((lambda ~S ...)~{~^ ~S~})", 50), closure_name(sc, sc->code), closure_args(sc->code), sc->args));
+		 set_elist_4(sc, wrap_string(sc, "~S: too many arguments: ((lambda ~S ...)~{~^ ~S~})", 50), 
+			     closure_name(sc, sc->code), closure_args(sc->code), sc->args));
     }
   else
     {
@@ -88154,7 +88174,8 @@ static void op_safe_c_star_a(s7_scheme *sc)
   s7_pointer p;
   p = fx_call(sc, cdr(sc->code));
   if (is_symbol_and_keyword(p))               /* (blocks3 (car (list :asdf))) */
-    s7_error(sc, sc->syntax_error_symbol, set_elist_4(sc, wrap_string(sc, "~A: keyword ~S, but no value: ~S", 32), car(sc->code), p, sc->code)); 
+    s7_error(sc, sc->syntax_error_symbol, 
+	     set_elist_4(sc, wrap_string(sc, "~A: keyword ~S, but no value: ~S", 32), car(sc->code), p, sc->code)); 
   /* scheme-level define* here also gives "not a parameter name" */
   sc->args = list_1(sc, p);
   sc->code = opt1_cfunc(sc->code);
@@ -88680,18 +88701,18 @@ static void op_safe_c_pa_1(s7_scheme *sc)
 static void op_safe_c_pa_mv(s7_scheme *sc)
 {
   s7_pointer p, val;
-  val = copy_proper_list(sc, sc->value); /* this is necessary since the fx_proc below can clobber sc->value */
+  val = copy_proper_list(sc, sc->value);      /* this is necessary since the fx_proc below can clobber sc->value */
   gc_protect_via_stack(sc, val);
   for (p = val; is_pair(cdr(p)); p = cdr(p)); /* must be more than 1 member of list or it's not mv */
   sc->args = fx_call(sc, cddr(sc->code));
-  cdr(p) = set_plist_1(sc, sc->args); /* do we need to copy sc->args if it is immutable (i.e. plist)? */
+  cdr(p) = set_plist_1(sc, sc->args);         /* do we need to copy sc->args if it is immutable (i.e. plist)? */
   sc->args = val;
   unstack(sc);
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
-static void op_c_na(s7_scheme *sc)
-{ /* (set-cdr! lst ()) */
+static void op_c_na(s7_scheme *sc)  /* (set-cdr! lst ()) */
+{ 
   s7_pointer args, p, new_args;
   new_args = make_list(sc, opt3_arglen(cdr(sc->code)), sc->nil);
   sc->args = new_args;
@@ -88764,7 +88785,7 @@ static Inline void op_apply_ss(s7_scheme *sc)
   if (needs_copied_args(sc->code))
     sc->args = copy_proper_list_with_arglist_error(sc, sc->args);
   else
-    if (!s7_is_proper_list(sc, sc->args))     /* (apply + #f) etc */
+    if (!s7_is_proper_list(sc, sc->args))     /* (apply + false) etc */
       apply_list_error(sc, sc->args);
 }
 
@@ -89879,12 +89900,11 @@ static bool op_unknown_aa(s7_scheme *sc)
       else set_optimize_op(code, OP_S_AA);
       return(true);
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR:
-      return(fixup_unknown_op(code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: 
+      return(fixup_unknown_op(code, f, OP_IMPLICIT_VECTOR_REF_AA));
 
-    case T_HASH_TABLE: 
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
-
+    case T_PAIR:       return(fixup_unknown_op(code, f, OP_IMPLICIT_PAIR_REF_AA));
+    case T_HASH_TABLE: return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
     case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
     case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
 
@@ -90256,6 +90276,7 @@ static bool closure_star_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type
 #define OK_SAFE_CLOSURE_M        (T_CLOSURE      | T_SAFE_CLOSURE | T_MULTIFORM)
 #define OK_SAFE_CLOSURE_A        (T_CLOSURE      | T_SAFE_CLOSURE | T_ONE_FORM_FX_ARG)
 /* since T_HAS_METHODS is on if there might be methods, this can protect us from that case */
+
 
 /* ---------------- eval ---------------- */
 static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
@@ -91024,24 +91045,24 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_UNKNOWN_NP: sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_np(sc)) goto EVAL; continue;
 
 
-	case OP_IMPLICIT_VECTOR_REF_A:     if (!op_implicit_vector_ref_a(sc))     {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_VECTOR_REF_AA:    if (!op_implicit_vector_ref_aa(sc))    {if (op_unknown_aa(sc)) goto EVAL;} continue;
-	case OP_IMPLICIT_STRING_REF_A:     if (!op_implicit_string_ref_a(sc))     {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_HASH_TABLE_REF_A: if (!op_implicit_hash_table_ref_a(sc)) {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_VECTOR_REF_A:      if (!op_implicit_vector_ref_a(sc))      {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_VECTOR_REF_AA:     if (!op_implicit_vector_ref_aa(sc))     {if (op_unknown_aa(sc)) goto EVAL;} continue;
+	case OP_IMPLICIT_STRING_REF_A:      if (!op_implicit_string_ref_a(sc))      {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_HASH_TABLE_REF_A:  if (!op_implicit_hash_table_ref_a(sc))  {if (op_unknown_a(sc)) goto EVAL;}  continue;
 	case OP_IMPLICIT_HASH_TABLE_REF_AA: if (!op_implicit_hash_table_ref_aa(sc)) {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_CONTINUATION_A:   if (!op_implicit_continuation_a(sc))   {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_ITERATE:          if (!op_implicit_iterate(sc))          {if (op_unknown(sc)) goto EVAL;}    continue;
-	case OP_IMPLICIT_LET_REF_C:        if (!op_implicit_let_ref_c(sc))        {if ((has_fx(cdr(sc->code))) && (op_unknown_a(sc))) goto EVAL;} continue;
-	case OP_IMPLICIT_LET_REF_A:        if (!op_implicit_let_ref_a(sc))        {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_PAIR_REF_A:       if (!op_implicit_pair_ref_a(sc))       {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_PAIR_REF_AA:      if (!op_implicit_pair_ref_aa(sc))      {if (op_unknown_aa(sc)) goto EVAL;} continue;
-	case OP_IMPLICIT_C_OBJECT_REF_A:   if (!op_implicit_c_object_ref_a(sc))   {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_GOTO:             if (!op_implicit_goto(sc))             {if (op_unknown(sc)) goto EVAL;}    continue;
-	case OP_IMPLICIT_GOTO_A:           if (!op_implicit_goto_a(sc))           {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_VECTOR_SET_3:     if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
-	case OP_IMPLICIT_VECTOR_SET_4:     if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
-	case OP_IMPLICIT_S7_LET_REF_S:	   sc->value = s7_let_field(sc, opt3_sym(sc->code)); continue;
-	case OP_IMPLICIT_S7_LET_SET_SA:	   sc->value = s7_let_field_set(sc, opt3_sym(cdr(sc->code)), fx_call(sc, cddr(sc->code))); continue;
+	case OP_IMPLICIT_CONTINUATION_A:    if (!op_implicit_continuation_a(sc))    {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_ITERATE:           if (!op_implicit_iterate(sc))           {if (op_unknown(sc)) goto EVAL;}    continue;
+	case OP_IMPLICIT_LET_REF_C:         if (!op_implicit_let_ref_c(sc))         {if ((has_fx(cdr(sc->code))) && (op_unknown_a(sc))) goto EVAL;} continue;
+	case OP_IMPLICIT_LET_REF_A:         if (!op_implicit_let_ref_a(sc))         {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_PAIR_REF_A:        if (!op_implicit_pair_ref_a(sc))        {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_PAIR_REF_AA:       if (!op_implicit_pair_ref_aa(sc))       {if (op_unknown_aa(sc)) goto EVAL;} continue;
+	case OP_IMPLICIT_C_OBJECT_REF_A:    if (!op_implicit_c_object_ref_a(sc))    {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_GOTO:              if (!op_implicit_goto(sc))              {if (op_unknown(sc)) goto EVAL;}    continue;
+	case OP_IMPLICIT_GOTO_A:            if (!op_implicit_goto_a(sc))            {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
+	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
+	case OP_IMPLICIT_S7_LET_REF_S:	    sc->value = s7_let_field(sc, opt3_sym(sc->code)); continue;
+	case OP_IMPLICIT_S7_LET_SET_SA:	    sc->value = s7_let_field_set(sc, opt3_sym(cdr(sc->code)), fx_call(sc, cddr(sc->code))); continue;
 
 
 	case OP_UNOPT:       goto UNOPT;
@@ -91051,11 +91072,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_PAIR_ANY:    sc->value = car(sc->code);                    goto EVAL_ARGS_TOP;
 	case OP_PAIR_SYM:    sc->value = lookup_global(sc, car(sc->code)); goto EVAL_ARGS_TOP;
 
-	case OP_EVAL_ARGS5: op_eval_args5(sc); goto APPLY;
+	case OP_EVAL_ARGS1: sc->args = cons(sc, sc->value, sc->args); goto EVAL_ARGS;
 	case OP_EVAL_ARGS2: op_eval_args2(sc); goto APPLY; /* sc->value is the last arg, [so if is_null(cdr(sc->code) and current is pair, push args2] */
 	case OP_EVAL_ARGS3: op_eval_args3(sc); goto APPLY; /* sc->value is the next-to-last arg, and the last arg is not a list (so values can't mess us up!) */
 	case OP_EVAL_ARGS4: sc->args = cons(sc, sc->value, sc->args); goto EVAL_ARGS_PAIR;
-	case OP_EVAL_ARGS1: sc->args = cons(sc, sc->value, sc->args); goto EVAL_ARGS;
+	case OP_EVAL_ARGS5: op_eval_args5(sc); goto APPLY;
 
 	EVAL_ARGS_TOP:
 	case OP_EVAL_ARGS:
