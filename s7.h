@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.0"
-#define S7_DATE "22-Dec-2021"
+#define S7_DATE "23-Dec-2021"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 0
 
@@ -934,6 +934,7 @@ typedef s7_double s7_Double;
  * 
  *        s7 changes
  * 
+ * --------
  * 24-Nov:    moved s7_p_p_t and friends into s7.h.
  * 23-Sep:    s7_make_byte_vector, s7_is_byte_vector, s7_byte_vector_ref|set|elements.
  * 25-Aug:    s7_output_string (like s7_get_output_string, but returns an s7 string).
