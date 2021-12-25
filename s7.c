@@ -4580,6 +4580,8 @@ void s7_show_stack(s7_scheme *sc)
     fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
 }
 
+#define UNUSED_BITS 0xfc00000000c0 /* high 6 bits of optimizer code + high 2 bits of type */
+
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S7_DEBUGGING in display_any (fallback for display_functions) */
 {
   uint64_t full_typ = full_type(obj);
@@ -4765,6 +4767,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	  /* bit 63 */
 	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
 
+	  ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
 	  ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "",
 	  NULL);
 
@@ -4781,6 +4784,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 static bool has_odd_bits(s7_pointer obj)
 {
   uint64_t full_typ = full_type(obj);
+  if ((full_typ & UNUSED_BITS) != 0) return(true);
   if (((full_typ & T_MULTIFORM) != 0) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_KEYWORD) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_SYNTACTIC) != 0) && (!is_syntax(obj)) && (!is_pair(obj)) && (!is_normal_symbol(obj))) return(true);
@@ -35119,8 +35123,7 @@ static s7_int format_read_integer(s7_int *cur_i, s7_int str_len, const char *str
   s7_int i, lval = 0;
   for (i = *cur_i; i < str_len - 1; i++)
     {
-      int32_t dig;
-      dig = digits[(uint8_t)str[i]];
+      int32_t dig = digits[(uint8_t)str[i]];
       if (dig < 10)
 	{
 #if HAVE_OVERFLOW_CHECKS
@@ -38089,9 +38092,8 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 
       if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
 	{
-	  s7_function func;
 	  s7_pointer slow;
-	  func = c_function_call(eq_func);
+	  s7_function func = c_function_call(eq_func);
 	  if (func == g_is_eq) return(is_null(x) ? sc->F : s7_assq(sc, car(args), x));
 	  if (func == g_is_eqv) return(assv_p_pp(sc, car(args), x));
 	  if (!s7_is_aritable(sc, eq_func, 2))
@@ -38358,7 +38360,6 @@ static bool numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
   if ((is_big_number(a)) || (is_big_number(b)))
     return(big_numbers_are_eqv(sc, a, b));
 #endif
-
   if (type(a) != type(b)) return(false);    /* (eqv? 1 1.0) -> #f! */
 
   /* switch is apparently as expensive as 3-4 if's! so this only loses if every call involves complex numbers? */
@@ -38476,15 +38477,14 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
    *
    * here as in assoc, sort, and make-hash-table we accept macros, but I can't think of a good reason to do so.
    */
-  s7_pointer x = cadr(args), obj, eq_func = NULL;
+  s7_pointer x = cadr(args), obj;
 
   if ((!is_pair(x)) && (!is_null(x)))
     return(method_or_bust_with_type(sc, x, sc->member_symbol, args, a_list_string, 2));
 
   if (is_not_null(cddr(args)))
     {
-      s7_pointer y, slow;
-      eq_func = caddr(args);
+      s7_pointer y, slow, eq_func = caddr(args);
 
       if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
 	{
@@ -63096,7 +63096,6 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		 ((is_byte_vector(obj)) && (checker == sc->is_byte_vector_symbol))))
 	      opc->v[3].p_pip_f = s7_p_pip_unchecked_function(s_func);
 	  }}
-  /* if (is_t_integer(caddr(car_x))) fprintf(stderr, "%s\n", display(car_x)); */
   if (is_symbol(caddr(car_x)))
     {
       s7_pointer slot2;
@@ -95858,7 +95857,6 @@ int main(int argc, char **argv)
  * calls      55.3         36.7   37.5   37.0
  * sg         75.8         ----   ----   55.9
  * lg        104.2        106.6  105.0  103.6
- * tbig      604.3        177.4  175.8  166.4 162.6
+ * tbig      604.3        177.4  175.8  166.4 156.8
  * ---------------------------------------------
- *
  */
