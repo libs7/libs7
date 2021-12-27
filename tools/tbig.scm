@@ -1837,8 +1837,20 @@
 (port-test)
 
 
+;(define-expansion (new-value val)
+;  `(make-vector (make-list (+ 1 (random 4)) (+ 1 (random 4))) ,val))
+
+(define lists (make-vector 16))
+(do ((i 0 (+ i 1))
+     (j 1)
+     (k 1))
+    ((= i 16))
+  (set! (lists i) (make-list k j))
+  (set! j (+ j 1))
+  (when (= j 5) (set! j 1) (set! k (+ k 1))))
+
 (define-expansion (new-value val)
-  `(make-vector (make-list (+ 1 (random 4)) (+ 1 (random 4))) ,val))
+  `(make-vector (vector-ref lists (random 16)) ,val))
 
 (define-expansion (old-value ref)
   `((subvector ,ref 0 1) 0))

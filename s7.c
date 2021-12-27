@@ -29744,10 +29744,8 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
   if (!s7_is_integer(k))
     return(method_or_bust(sc, k, sc->read_string_symbol, args, T_INTEGER, 1));
   nchars = s7_integer_clamped_if_gmp(sc, k);
-  if (nchars < 0)
-    return(wrong_type_argument_with_type(sc, sc->read_string_symbol, 1, k, a_non_negative_integer_string));
-  if (nchars > sc->max_string_length)
-    return(out_of_range(sc, sc->read_string_symbol, int_one, k, its_too_large_string));
+  if ((nchars < 0) || (nchars > sc->max_string_length))
+    return(out_of_range(sc, sc->read_string_symbol, int_one, k, (nchars < 0) ? its_negative_string : its_too_large_string));
 
   if (!is_null(cdr(args)))
     port = cadr(args);
@@ -39058,10 +39056,8 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 {
   s7_pointer x;
 
-  if (len < 0)
-    return(wrong_type_argument_with_type(sc, sc->make_vector_symbol, 1, wrap_integer(sc, len), a_non_negative_integer_string));
-  if (len > sc->max_vector_length)
-    return(out_of_range(sc, sc->make_vector_symbol, int_one, wrap_integer(sc, len), its_too_large_string));
+  if ((len < 0) || (len > sc->max_vector_length))
+    return(out_of_range(sc, sc->make_vector_symbol, int_one, wrap_integer(sc, len), (len < 0) ? its_negative_string : its_too_large_string));
 
   /* this has to follow the error checks! (else garbage in free_heap temps portion confuses GC when "vector" is finalized) */
   new_cell(sc, x, typ | T_SAFE_PROCEDURE);
@@ -39600,8 +39596,7 @@ static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_i
 	{
 	  s7_int ind;
 	  ind = va_arg(ap, s7_int);
-	  if ((ind < 0) ||
-	      (ind >= dimensions[i]))
+	  if ((ind < 0) || (ind >= dimensions[i]))
 	    {
 	      va_end(ap);
 	      out_of_range(sc, sc->vector_ref_symbol, wrap_integer(sc, i), wrap_integer(sc, ind), (ind < 0) ? its_negative_string : its_too_large_string);
@@ -40128,8 +40123,7 @@ a vector that points to the same elements as the original-vector but with differ
       if (!s7_is_integer(start))
 	return(method_or_bust(sc, start, sc->subvector_symbol, args, T_INTEGER, 2));
       offset = s7_integer_clamped_if_gmp(sc, start);
-      if ((offset < 0) ||
-	  (offset > orig_len))  /* we need this if, for example, offset == 9223372036854775807 */
+      if ((offset < 0) || (offset > orig_len))  /* we need this if, for example, offset == 9223372036854775807 */
 	return(out_of_range(sc, sc->subvector_symbol, int_two, start, (offset < 0) ? its_negative_string : its_too_large_string));
       new_len -= offset;
 
@@ -40141,8 +40135,7 @@ a vector that points to the same elements as the original-vector but with differ
 	  if (!s7_is_integer(end))
 	    return(method_or_bust(sc, end, sc->subvector_symbol, args, T_INTEGER, 3));
 	  new_end = s7_integer_clamped_if_gmp(sc, end);
-	  if ((new_end < 0) ||
-	      (new_end > orig_len))
+	  if ((new_end < 0) || (new_end > orig_len))
 	    return(out_of_range(sc, sc->subvector_symbol, int_three, end, (new_end < 0) ? its_negative_string : its_too_large_string));
 	  if (offset > new_end)
 	    return(out_of_range(sc, sc->subvector_symbol, int_two, start, wrap_string(sc, "start point > end point", 23)));
@@ -40218,8 +40211,7 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 	  if (!s7_is_integer(p))
 	    return(method_or_bust(sc, p, sc->vector_ref_symbol, set_ulist_1(sc, vect, indices), T_INTEGER, i + 2));
           n = s7_integer_clamped_if_gmp(sc, p);
-	  if ((n < 0) ||
-	      (n >= vector_dimension(vect, i)))
+	  if ((n < 0) || (n >= vector_dimension(vect, i)))
 	    return(out_of_range(sc, sc->vector_ref_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? its_negative_string : its_too_large_string));
 
 	  index += n * vector_offset(vect, i);
@@ -40246,8 +40238,7 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 	return(method_or_bust(sc, p, sc->vector_ref_symbol, set_ulist_1(sc, vect, indices), T_INTEGER, 2));
       index = s7_integer_clamped_if_gmp(sc, p);
 
-      if ((index < 0) ||
-	  (index >= vector_length(vect)))
+      if ((index < 0) || (index >= vector_length(vect)))
 	return(out_of_range(sc, sc->vector_ref_symbol, int_two, p, (index < 0) ? its_negative_string : its_too_large_string));
 
       if (is_not_null(cdr(indices)))                /* (let ((L #(#(1 2 3) #(4 5 6)))) (vector-ref L 1 2)) */
@@ -40401,8 +40392,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	  if (!s7_is_integer(p))
 	    return(method_or_bust(sc, p, sc->vector_set_symbol, args, T_INTEGER, i + 2));
           n = s7_integer_clamped_if_gmp(sc, p);
-	  if ((n < 0) ||
-	      (n >= vector_dimension(vec, i)))
+	  if ((n < 0) || (n >= vector_dimension(vec, i)))
 	    return(out_of_range(sc, sc->vector_set_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? its_negative_string : its_too_large_string));
 
 	  index += n * vector_offset(vec, i);
@@ -40427,8 +40417,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
       if (!s7_is_integer(p))
 	return(method_or_bust(sc, p, sc->vector_set_symbol, args, T_INTEGER, 2));
       index = s7_integer_clamped_if_gmp(sc, p);
-      if ((index < 0) ||
-	  (index >= vector_length(vec)))
+      if ((index < 0) || (index >= vector_length(vec)))
 	return(out_of_range(sc, sc->vector_set_symbol, int_two, p, (index < 0) ? its_negative_string : its_too_large_string));
 
       if (is_not_null(cdddr(args)))
@@ -40461,8 +40450,7 @@ static s7_pointer vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_poi
 {
   if ((!is_any_vector(v)) ||
       (vector_rank(v) > 1) ||
-      (i < 0) ||
-      (i >= vector_length(v)))
+      (i < 0) || (i >= vector_length(v)))
     return(g_vector_set(sc, set_plist_3(sc, v, make_integer(sc, i), p)));
 
   if (is_typed_vector(v))
@@ -40552,8 +40540,7 @@ static s7_pointer g_vector_set_3(s7_scheme *sc, s7_pointer args)
   if (!s7_is_integer(ind))
     return(g_vector_set(sc, args));
   index = s7_integer_clamped_if_gmp(sc, ind);
-  if ((index < 0) ||
-      (index >= vector_length(vec)))
+  if ((index < 0) || (index >= vector_length(vec)))
     return(out_of_range(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? its_negative_string : its_too_large_string));
 
   val = caddr(args);
@@ -40576,8 +40563,7 @@ static s7_pointer vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_pointer ind
   if (!s7_is_integer(ind))
     return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
   index = s7_integer_clamped_if_gmp(sc, ind);
-  if ((index < 0) ||
-      (index >= vector_length(vec)))
+  if ((index < 0) || (index >= vector_length(vec)))
     return(out_of_range(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? its_negative_string : its_too_large_string));
 
   if (is_typed_vector(vec))
@@ -40795,8 +40781,7 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
   s7_pointer x, p = car(args);
   block_t *arr;
 
-  if ((is_pair(cdr(args))) ||
-      (!s7_is_integer(p)))      /* (make-float-vector (bignum "3")) */
+  if ((is_pair(cdr(args))) || (!s7_is_integer(p)))
     {
       s7_pointer init;
       if (is_pair(cdr(args)))
@@ -40829,10 +40814,8 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
     }
 
   len = s7_integer_clamped_if_gmp(sc, p);
-  if (len < 0)
-    return(wrong_type_argument_with_type(sc, sc->make_float_vector_symbol, 1, p, a_non_negative_integer_string));
-  if (len > sc->max_vector_length)
-    return(out_of_range(sc, sc->make_float_vector_symbol, int_one, p, its_too_large_string));
+  if ((len < 0) || (len > sc->max_vector_length))
+    return(out_of_range(sc, sc->make_float_vector_symbol, int_one, p, (len < 0) ? its_negative_string : its_too_large_string));
 
   arr = mallocate_vector(sc, len * sizeof(s7_double));
   new_cell(sc, x, T_FLOAT_VECTOR | T_SAFE_PROCEDURE);
@@ -40851,6 +40834,19 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
 
   add_vector(sc, x);
   return(x);
+}
+
+static s7_pointer make_float_vector_p_pp(s7_scheme *sc, s7_pointer len, s7_pointer fill)
+{
+  if ((is_t_integer(len)) && (is_t_real(fill)) &&
+      (integer(len)>= 0) && (integer(len) < sc->max_vector_length))
+    {
+      s7_pointer fv;
+      fv = make_simple_float_vector(sc, integer(len));
+      float_vector_fill(fv, real(fill));
+      return(fv);
+    }
+  return(g_make_float_vector(sc, set_plist_2(sc, len, fill)));
 }
 
 
@@ -40892,10 +40888,8 @@ static s7_pointer g_make_int_vector(s7_scheme *sc, s7_pointer args)
     }
 
   len = s7_integer_clamped_if_gmp(sc, p);
-  if (len < 0)
-    return(wrong_type_argument_with_type(sc, sc->make_int_vector_symbol, 1, p, a_non_negative_integer_string));
-  if (len > sc->max_vector_length)
-    return(out_of_range(sc, sc->make_int_vector_symbol, int_one, p, its_too_large_string));
+  if ((len < 0) || (len > sc->max_vector_length))
+    return(out_of_range(sc, sc->make_int_vector_symbol, int_one, p, (len < 0) ? its_negative_string : its_too_large_string));
 
   arr = mallocate_vector(sc, len * sizeof(s7_int));
   new_cell(sc, x, T_INT_VECTOR | T_SAFE_PROCEDURE);
@@ -41294,8 +41288,7 @@ static s7_pointer univect_ref(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	  if (!s7_is_integer(index))
 	    return(method_or_bust(sc, index, caller, args, T_INTEGER, i + 2));
 	  n = s7_integer_clamped_if_gmp(sc, index);
-	  if ((n < 0) ||
-	      (n >= vector_dimension(v, i)))
+	  if ((n < 0) || (n >= vector_dimension(v, i)))
 	    return(out_of_range(sc, caller, wrap_integer(sc, i + 2), index, (n < 0) ? its_negative_string : its_too_large_string));
 	  ind += n * vector_offset(v, i);
 	}
@@ -41333,8 +41326,7 @@ static s7_pointer univect_set(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	  if (!s7_is_integer(index))
 	    return(method_or_bust(sc, index, caller, args, T_INTEGER, i + 2));
 	  n = s7_integer_clamped_if_gmp(sc, index);
-	  if ((n < 0) ||
-	      (n >= vector_dimension(vec, i)))
+	  if ((n < 0) || (n >= vector_dimension(vec, i)))
 	    return(out_of_range(sc, caller, wrap_integer(sc, i + 2), index, (n < 0) ? its_negative_string : its_too_large_string));
 	  ind += n * vector_offset(vec, i);
 	}
@@ -41351,8 +41343,7 @@ static s7_pointer univect_set(s7_scheme *sc, s7_pointer args, s7_pointer caller,
       if (!s7_is_integer(index))
 	return(method_or_bust(sc, index, caller, args, T_INTEGER, 2));
       ind = s7_integer_clamped_if_gmp(sc, index);
-      if ((ind < 0) ||
-	  (ind >= vector_length(vec)))
+      if ((ind < 0) || (ind >= vector_length(vec)))
 	return(out_of_range(sc, caller, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string));
       if (is_not_null(cddr(p)))
 	return(s7_error(sc, sc->wrong_number_of_args_symbol,
@@ -65180,15 +65171,14 @@ static bool opt_cell_case(s7_scheme *sc, s7_pointer car_x)
 
 static s7_pointer opt_let_temporarily(opt_info *o)
 {
-  opt_info *o1;
+  opt_info *o1 = o->v[4].o1;
   int32_t i, len;
   s7_pointer result;
   s7_scheme *sc = o->sc;
 
   if (is_immutable_slot(o->v[1].p))
     immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, slot_symbol(o->v[1].p)));
-
-  o1 = o->v[4].o1;
+  
   o->v[3].p = slot_value(o->v[1].p);         /* save and protect old value */
   gc_protect_via_stack(sc, o->v[3].p);
   slot_set_value(o->v[1].p, o1->v[0].fp(o1)); /* set new value */
@@ -65733,6 +65723,7 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 	      while (integer(vp) < end)
 		{
 		  float_vector_set_d_7pid_direct(sc, fv, integer(slot_value(ind)), fd(o2));
+		  /* weird! els[integer(slot_value(ind))] = fd(o2) is much slower according to callgrind? */
 		  integer(vp)++;
 		}}
 	  else
@@ -77085,7 +77076,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		}
 	      else set_fx(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
 	      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
-	      /* TODO: fb_annotate? */
+	      /* fb_annotate? */
 	      return;
 	    }
 	  if ((is_h_safe_c_s(test)) &&
@@ -77110,7 +77101,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		      else pair_set_syntax_op(form, OP_IF_IS_TYPE_S_P_A);
 		      fx_annotate_arg(sc, cddr(code), sc->curlet);
 		      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
-		      /* TODO: fb_annotate? */
+		      /* fb_annotate? */
 		    }}
 	      else
 		{
@@ -79625,8 +79616,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
       if (!s7_is_integer(index))
 	syntax_error_any(sc, sc->wrong_type_arg_symbol, "vector-set!: index must be an integer: ~S", 41, sc->code);
       ind = s7_integer_clamped_if_gmp(sc, index);
-      if ((ind < 0) ||
-	  (ind >= vector_length(vect)))
+      if ((ind < 0) || (ind >= vector_length(vect)))
 	out_of_range(sc, sc->vector_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
       val = cadr(sc->code);
       if (!is_pair(val))
@@ -79760,8 +79750,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer form
       if (!s7_is_integer(index))
 	syntax_error_any(sc, sc->wrong_type_arg_symbol, "index must be an integer: ~S", 28, form);
       ind = s7_integer_clamped_if_gmp(sc, index);
-      if ((ind < 0) ||
-	  (ind >= string_length(str)))
+      if ((ind < 0) || (ind >= string_length(str)))
 	out_of_range(sc, sc->string_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
       if (is_immutable(str))
 	immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, str));
@@ -79914,11 +79903,17 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
   if (keyval)
     {
       s7_pointer val = cadr(sc->code);
-      if (!is_pair(val)) /* TODO: or car(val) == quote */
+      if (is_pair(val))
 	{
-	  if (is_symbol(val))
-	    val = lookup_checked(sc, val);
-	  sc->value = s7_hash_table_set(sc, table, keyval, val);
+	  if (car(val) == sc->quote_symbol)
+	    {
+	      sc->value = s7_hash_table_set(sc, table, keyval, cadr(val));
+	      return(goto_start);
+	    }
+	}
+      else
+	{
+	  sc->value = s7_hash_table_set(sc, table, keyval, (is_normal_symbol(val)) ? lookup_checked(sc, val) : val);
 	  return(goto_start);
 	}
       push_op_stack(sc, sc->hash_table_set_function); /* because cddr(settee) is nil, we're definitely calling hash_table_set */
@@ -81333,8 +81328,7 @@ static goto_t op_dox(s7_scheme *sc)
 		  opt_info *o = sc->opts[0];
 		  if (bodyf == opt_cell_any_nr)
 		    {
-		      s7_pointer (*fp)(opt_info *o);
-		      fp = o->v[0].fp;
+		      s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
 
 		      /* a laborious experiment... */
 		      if (!((fp == opt_p_pip_sso) && (o->v[2].p == o->v[4].p) &&
@@ -82071,8 +82065,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	  fp = o->v[0].fp;
 	  if ((fp == opt_p_ppp_sss) || (fp == opt_p_ppp_sss_mul) || (fp == opt_p_ppp_sss_hset))
 	    {
-	      s7_p_ppp_t fpt;
-	      fpt = o->v[4].p_ppp_f;
+	      s7_p_ppp_t fpt = o->v[4].p_ppp_f;
 	      for (i = start; i < stop; i++)
 		{
 		  slot_set_value(ctr_slot, make_integer(sc, i));
@@ -82124,8 +82117,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	  opt_info *o = sc->opts[0];
 	  if (!opt_do_copy(sc, o, stop, start + 1))
 	    {
-	      s7_pointer (*fp)(opt_info *o);
-	      fp = o->v[0].fp;
+	      s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
 	      for (i = start; i >= stop; i--)
 		{
 		  slot_set_value(ctr_slot, make_integer(sc, i));
@@ -82431,8 +82423,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		}
 	      else
 		{
-		  s7_pointer (*fp)(opt_info *o);
-		  fp = o->v[0].fp;
+		  s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
 		  if ((fp == opt_p_pip_ssc) &&
 		      (stepper == slot_value(o->v[2].p)) &&        /* i.e. index by do counter */
 		      ((o->v[3].p_pip_f == string_set_p_pip_direct) ||
@@ -82833,8 +82824,7 @@ static goto_t op_safe_dotimes(s7_scheme *sc)
   init_val = fx_call(sc, cdaar(sc->code));
   if (s7_is_integer(init_val))
     {
-      s7_pointer end_expr, end_val, code = sc->code;
-      end_expr = caadr(code);
+      s7_pointer end_expr = caadr(sc->code), end_val, code = sc->code;
       end_val = caddr(end_expr);
       if (is_symbol(end_val))
 	end_val = lookup_checked(sc, end_val);
@@ -93781,6 +93771,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->is_equal_symbol), is_equal_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->is_equivalent_symbol), is_equivalent_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->char_eq_symbol), char_eq_p_pp);
+  s7_set_p_pp_function(sc, global_value(sc->make_float_vector_symbol), make_float_vector_p_pp);
 
   s7_set_b_7pp_function(sc, global_value(sc->char_lt_symbol), char_lt_b_7pp);
   s7_set_b_7pp_function(sc, global_value(sc->char_leq_symbol), char_leq_b_7pp);
@@ -95815,41 +95806,41 @@ int main(int argc, char **argv)
  * tmock      7741         1177   1165   1056
  * texit      1827         ----   ----   1774
  * tvect      1953         2519   2464   1772
- * s7test     4537         1873   1831   1816
- * lt         2117         2123   2110   2112
+ * s7test     4537         1873   1831   1828
+ * lt         2117         2123   2110   2113
  * timp       2232         2971   2891   2174
- * tform      3241         2281   2273   2251
+ * tform      3241         2281   2273   2247
  * tmac       2450         3317   3277   2418
- * tread      2614         2440   2421   2418
+ * tread      2614         2440   2421   2415
  * trclo      4079         2735   2574   2454
  * fbench     2833         2688   2583   2460
  * tmat       2694         3065   3042   2524
  * tcopy      2600         8035   5546   2539
  * dup        2756         3805   3788   2494
  * tauto      2763         ----   ----   2562
- * tb         3366?        2735   2681   2611
+ * tb         3366?        2735   2681   2612
  * titer      2659         2865   2842   2641
- * tsort      3572         3105   3104   2855
- * tload      3740         ----   ----   3045
- * tset       3058         3253   3104   3047
+ * tsort      3572         3105   3104   2856
+ * tload      3740         ----   ----   3046
+ * tset       3058         3253   3104   3048
  * teq        3541         4068   4045   3536
- * tio        3698         3816   3752   3682
+ * tio        3698         3816   3752   3683
  * tobj       4533         4016   3970   3828
  * tclo       4604         4787   4735   4392
  * tcase      4501         4960   4793   4437
- * tlet       5305         7775   5640   4447
+ * tlet       5305         7775   5640   4450
  * tmap       5488         8869   8774   4489
  * tfft      115.1         7820   7729   4755
  * tshoot     6896         5525   5447   5183
- * tnum       56.7         6348   6013   5424  5435
+ * tnum       56.7         6348   6013   5430
  * tstr       6123         6880   6342   5476
- * tmisc      6847         8869   7612   6318
+ * tmisc      6847         8869   7612   6319
  * tgsl       25.1         8485   7802   6373
  * trec       8314         6936   6922   6521
  * tlist      6551         7896   7546   6558
- * tari       ----         13.0   12.7   6828
+ * tari       ----         13.0   12.7   6827
  * tleft      9004         10.4   10.2   7651
- * tgc        9614         11.9   11.1   8175
+ * tgc        9614         11.9   11.1   8177
  * cb         16.8         11.2   11.0   9656
  * thash      35.4         11.8   11.7   9734
  * tgen       12.6         11.2   11.4   12.0
@@ -95857,6 +95848,6 @@ int main(int argc, char **argv)
  * calls      55.3         36.7   37.5   37.0
  * sg         75.8         ----   ----   55.9
  * lg        104.2        106.6  105.0  103.6
- * tbig      604.3        177.4  175.8  166.4 156.8
+ * tbig      604.3        177.4  175.8  156.5
  * ---------------------------------------------
  */
