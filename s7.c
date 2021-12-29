@@ -16598,7 +16598,7 @@ static s7_pointer sin_p_p(s7_scheme *sc, s7_pointer x)
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	}
 #endif
-      return(make_real(sc, sin((s7_double)(integer(x)))));
+      return(make_real(sc, sin((s7_double)(integer(x))))); /* bogus for very large integers, but so is the equivalent real (see SIN_LIMIT) */
 
     case T_RATIO:
       return(make_real(sc, sin((s7_double)(fraction(x)))));
@@ -19282,7 +19282,7 @@ static s7_pointer g_add_x1(s7_scheme *sc, s7_pointer args) {return(g_add_x1_1(sc
 static s7_pointer g_add_x1(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer x = car(args);
-  if (is_t_integer(x)) return(make_integer(sc, integer(x) + 1));
+  if (is_t_integer(x)) return(add_if_overflow_to_real_or_big_integer(sc, integer(x), 1)); /* return(make_integer(sc, integer(x) + 1)); */
   if (is_t_real(x)) return(make_real(sc, real(x) + 1.0));
   if (is_t_complex(x)) return(make_complex_not_0i(sc, real_part(x) + 1.0, imag_part(x)));
   return(add_p_pp(sc, x, int_one));
@@ -20020,7 +20020,8 @@ static s7_pointer g_subtract_x1(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
   return(subtract_p_pp(sc, p, int_one));
 #endif
-  return((is_t_integer(p)) ? make_integer(sc, integer(p) - 1) : minus_c1(sc, p));
+  /* return((is_t_integer(p)) ? make_integer(sc, integer(p) - 1) : minus_c1(sc, p)); */
+  return((is_t_integer(p)) ? subtract_if_overflow_to_real_or_big_integer(sc, integer(p), 1) : minus_c1(sc, p));
 }
 
 static s7_pointer g_subtract_2f(s7_scheme *sc, s7_pointer args) /* (- x f) */
@@ -30556,7 +30557,8 @@ The symbols refer to the argument to \"provide\".  (require lint.scm)"
 	    if (is_closure(f))   /* f should be a function of one argument, the current (calling) environment */
 	      s7_call(sc, f, set_ulist_1(sc, sc->curlet, sc->nil));
 	}}
-  unstack(sc);
+  if (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT) /* op_error_quit if load failed in scheme in Snd */
+    unstack(sc);
   return(sc->T);
 }
 
@@ -79909,8 +79911,7 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 	    {
 	      sc->value = s7_hash_table_set(sc, table, keyval, cadr(val));
 	      return(goto_start);
-	    }
-	}
+	    }}
       else
 	{
 	  sc->value = s7_hash_table_set(sc, table, keyval, (is_normal_symbol(val)) ? lookup_checked(sc, val) : val);
@@ -82720,14 +82721,11 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 	      (first->v[3].d_dd_f == add_d_dd) &&
 	      (slot_symbol(step_slot) == slot_symbol(o->v[2].p)))
 	    {
-	      opt_info *o1, *o2, *o3;
+	      opt_info *o1 = o->v[12].o1, *o2 = o->v[13].o1, *o3 = o->v[14].o1;
 	      s7_d_v_t vf1, vf2, vf3, vf4;
 	      s7_d_vd_t vf5, vf6;
 	      s7_d_vid_t vf7;
 	      void *obj1, *obj2, *obj3, *obj4, *obj5, *obj6, *obj7;
-	      o1 = o->v[12].o1;
-	      o2 = o->v[13].o1;
-	      o3 = o->v[14].o1;
 	      vf1 = first->v[4].d_v_f;
 	      vf2 = first->v[5].d_v_f;
 	      vf3 = o1->v[2].d_v_f;
@@ -83652,8 +83650,7 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
 static bool op_f_np_1(s7_scheme *sc)
 {
   /* sc->value = arg value = slot value */
-  s7_pointer slot, arg, e;
-  slot = stack_protected1(sc);
+  s7_pointer arg, e, slot = stack_protected1(sc);
   if (is_multiple_value(sc->value))
     {
       s7_pointer p, oslot = slot;
@@ -84165,7 +84162,14 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
   sc->code = T_Pair(closure_body(func));
 }
 
-#define call_lambda_star(Sc, Code, Arglist) do {Sc->code = opt1_lambda(Code); target = apply_safe_closure_star_1(Sc); clear_list_in_use(Arglist);} while (0)
+static inline bool call_lambda_star(s7_scheme *sc, s7_pointer code, s7_pointer arglist) 
+{
+  bool target;
+  sc->code = opt1_lambda(code); 
+  target = apply_safe_closure_star_1(sc); 
+  clear_list_in_use(arglist);
+  return(target);
+}
 
 static bool op_safe_closure_star_aaa(s7_scheme *sc, s7_pointer code)
 {
@@ -84177,15 +84181,13 @@ static bool op_safe_closure_star_aaa(s7_scheme *sc, s7_pointer code)
   arg3 = fx_call(sc, cdddr(code));
   if ((is_symbol_and_keyword(arg1)) || (is_symbol_and_keyword(arg2)) || (is_symbol_and_keyword(arg3)))
     {
-      bool target;
       s7_pointer arglist;
       sc->args = make_safe_list(sc, 3);
       arglist = sc->args;
-      set_car(sc->args, arg1);
-      set_car(cdr(sc->args), arg2);
-      set_car(cddr(sc->args), arg3);
-      call_lambda_star(sc, code, arglist);       /* this clears list_in_use, sets target */
-      return(target);
+      set_car(arglist, arg1);
+      set_car(cdr(arglist), arg2);
+      set_car(cddr(arglist), arg3);
+      return(call_lambda_star(sc, code, arglist));       /* this clears list_in_use */
     }
   sc->curlet = update_let_with_three_slots(sc, closure_let(func), arg1, arg2, arg3);
   p = T_Pair(closure_body(func));
@@ -84204,38 +84206,32 @@ static bool op_safe_closure_star_na_0(s7_scheme *sc, s7_pointer code)
 
 static bool op_safe_closure_star_na_1(s7_scheme *sc, s7_pointer code)
 {
-  bool target;
   s7_pointer arglist;
   sc->args = safe_list_1(sc);
   arglist = sc->args;
-  set_car(sc->args, fx_call(sc, cdr(code)));
-  call_lambda_star(sc, code, arglist);       /* this clears list_in_use, sets target */
-  return(target);
+  set_car(arglist, fx_call(sc, cdr(code)));
+  return(call_lambda_star(sc, code, arglist));  /* clears list_in_use */
 }
 
 static bool op_safe_closure_star_na_2(s7_scheme *sc, s7_pointer code)
 {
-  bool target;
   s7_pointer arglist, p;
   sc->args = safe_list_2(sc);
   arglist = sc->args;
-  set_car(sc->args, fx_call(sc, cdr(code)));
+  set_car(arglist, fx_call(sc, cdr(code)));
   p = cddr(code);
-  set_car(cdr(sc->args), fx_call(sc, p));
-  call_lambda_star(sc, code, arglist);       /* this clears list_in_use, sets target */
-  return(target);
+  set_car(cdr(arglist), fx_call(sc, p));
+  return(call_lambda_star(sc, code, arglist));  /* clears list_in_use */
 }
 
 static Inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer old_args, p, arglist;
-  bool target;
   sc->args = safe_list_if_possible(sc, opt3_arglen(cdr(code)));
   arglist = sc->args;
-  for (p = sc->args, old_args = cdr(code); is_pair(p); p = cdr(p), old_args = cdr(old_args))
+  for (p = arglist, old_args = cdr(code); is_pair(p); p = cdr(p), old_args = cdr(old_args))
     set_car(p, fx_call(sc, old_args));
-  call_lambda_star(sc, code, arglist);       /* this clears list_in_use, sets target */
-  return(target);
+  return(call_lambda_star(sc, code, arglist));   /* clears list_in_use */
 }
 
 static void op_closure_star_ka(s7_scheme *sc, s7_pointer code)
@@ -84410,7 +84406,7 @@ static void op_define_with_setter(s7_scheme *sc)
 		if (slot_symbol(slot) == code)
 		  {
 		    if (is_immutable(slot))
-		      syntax_error(sc, "define ~S, but it is immutable", 30, code);
+		      syntax_error(sc, "define ~S, but it is immutable", 30, code); /* TODO: these 3 cases should give the location of the immutable definition or setting */
 		    slot_set_value(slot, new_func);
 		    symbol_set_local_slot(code, sc->let_number, slot);
 		    set_local(code);
@@ -85797,14 +85793,11 @@ static bool op_tc_if_a_z_laa(s7_scheme *sc, s7_pointer code, bool z_first, tc_ch
 		  if (int_optimize(sc, laa))
 		    {
 		      s7_pointer val1, val2;
-		      s7_int (*fi1)(opt_info *o);
-		      s7_int (*fi2)(opt_info *o);
-		      bool (*fb)(opt_info *o);
+		      s7_int (*fi1)(opt_info *o) = o1->v[0].fi;
+		      s7_int (*fi2)(opt_info *o) = o2->v[0].fi;
+		      bool (*fb)(opt_info *o) = o->v[0].fb;
 		      slot_set_value(la_slot, val1 = make_mutable_integer(sc, integer(slot_value(la_slot))));
 		      slot_set_value(laa_slot, val2 = make_mutable_integer(sc, integer(slot_value(laa_slot))));
-		      fb = o->v[0].fb;
-		      fi1 = o1->v[0].fi;
-		      fi2 = o2->v[0].fi;
 		      if ((z_first) &&
 			  ((fb == opt_b_ii_sc_lt) || (fb == opt_b_ii_sc_lt_0)) &&
 			  (fi1 == opt_i_ii_sc_sub))
@@ -85838,14 +85831,11 @@ static bool op_tc_if_a_z_laa(s7_scheme *sc, s7_pointer code, bool z_first, tc_ch
 		  if (float_optimize(sc, laa))
 		    {
 		      s7_pointer val1, val2;
-		      s7_double (*fd1)(opt_info *o);
-		      s7_double (*fd2)(opt_info *o);
-		      bool (*fb)(opt_info *o);
+		      s7_double (*fd1)(opt_info *o) = o1->v[0].fd;
+		      s7_double (*fd2)(opt_info *o) = o2->v[0].fd;
+		      bool (*fb)(opt_info *o) = o->v[0].fb;
 		      slot_set_value(la_slot, val1 = s7_make_mutable_real(sc, real(slot_value(la_slot))));
 		      slot_set_value(laa_slot, val2 = s7_make_mutable_real(sc, real(slot_value(laa_slot))));
-		      fb = o->v[0].fb;
-		      fd1 = o1->v[0].fd;
-		      fd2 = o2->v[0].fd;
 		      if ((z_first) &&
 			  (fb == opt_b_dd_sc_lt) &&
 			  (fd1 == opt_d_dd_sc_sub))
@@ -95803,20 +95793,20 @@ int main(int argc, char **argv)
  * tpeak       122          115    114    108
  * tref        513          691    687    463
  * index      1024         1026   1016    973
- * tmock      7741         1177   1165   1056
- * texit      1827         ----   ----   1774
+ * tmock      7741         1177   1165   1057
  * tvect      1953         2519   2464   1772
- * s7test     4537         1873   1831   1828
+ * texit      1827         ----   ----   1778
+ * s7test     4537         1873   1831   1818
  * lt         2117         2123   2110   2113
- * timp       2232         2971   2891   2174
+ * timp       2232         2971   2891   2176
  * tform      3241         2281   2273   2247
  * tmac       2450         3317   3277   2418
- * tread      2614         2440   2421   2415
+ * tread      2614         2440   2421   2419
  * trclo      4079         2735   2574   2454
  * fbench     2833         2688   2583   2460
  * tmat       2694         3065   3042   2524
  * tcopy      2600         8035   5546   2539
- * dup        2756         3805   3788   2494
+ * dup        2756         3805   3788   2492
  * tauto      2763         ----   ----   2562
  * tb         3366?        2735   2681   2612
  * titer      2659         2865   2842   2641
@@ -95826,22 +95816,22 @@ int main(int argc, char **argv)
  * teq        3541         4068   4045   3536
  * tio        3698         3816   3752   3683
  * tobj       4533         4016   3970   3828
- * tclo       4604         4787   4735   4392
- * tcase      4501         4960   4793   4437
+ * tclo       4604         4787   4735   4390
+ * tcase      4501         4960   4793   4439
  * tlet       5305         7775   5640   4450
  * tmap       5488         8869   8774   4489
  * tfft      115.1         7820   7729   4755
  * tshoot     6896         5525   5447   5183
- * tnum       56.7         6348   6013   5430
- * tstr       6123         6880   6342   5476
- * tmisc      6847         8869   7612   6319
+ * tnum       56.7         6348   6013   5433
+ * tstr       6123         6880   6342   5488
+ * tmisc      6847         8869   7612   6325
  * tgsl       25.1         8485   7802   6373
  * trec       8314         6936   6922   6521
  * tlist      6551         7896   7546   6558
  * tari       ----         13.0   12.7   6827
- * tleft      9004         10.4   10.2   7651
+ * tleft      9004         10.4   10.2   7657
  * tgc        9614         11.9   11.1   8177
- * cb         16.8         11.2   11.0   9656
+ * cb         16.8         11.2   11.0   9658
  * thash      35.4         11.8   11.7   9734
  * tgen       12.6         11.2   11.4   12.0
  * tall       24.4         15.6   15.6   15.6
