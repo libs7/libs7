@@ -362,9 +362,15 @@
 #define SetJmp(A, B)  setjmp(A)
 #define LongJmp(A, B) longjmp(A, B)
 #else
-#define Jmp_Buf       sigjmp_buf
-#define SetJmp(A, B)  sigsetjmp(A, B)
-#define LongJmp(A, B) siglongjmp(A, B)
+#if SHOW_EVAL_OPS
+  #define Jmp_Buf       sigjmp_buf
+  #define SetJmp(A, B)  ({fprintf(stderr, "%s%s[%d]: set_jmp%s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT); sigsetjmp(A, B);})
+  #define LongJmp(A, B) ({fprintf(stderr, "%s%s[%d]: longjmp%s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT); siglongjmp(A, B);})
+#else
+  #define Jmp_Buf       sigjmp_buf
+  #define SetJmp(A, B)  sigsetjmp(A, B)
+  #define LongJmp(A, B) siglongjmp(A, B)
+#endif
   /* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
    *   unfortunately sigsetjmp is noticeably slower than setjmp, especially when s7_optimize_1 is called a lot.
    *   In one case, the sigsetjmp version runs in 24 seconds, but the setjmp version takes 10 seconds, and
@@ -5235,11 +5241,11 @@ static void show_opt1_bits(s7_pointer p, const char *func, int32_t line, uint64_
 {
   char *bits;
   bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %lx",
+  fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %" ld64,
 	  BOLD_TEXT, func, line, UNBOLD_TEXT,
 	  p, p->object.cons.opt1,
 	  opt1_role_name(role),
-	  p->debugger_bits, bits, role);
+	  p->debugger_bits, bits, (s7_int)role);
   free(bits);
 }
 
@@ -5290,11 +5296,11 @@ static void show_opt2_bits(s7_pointer p, const char *func, int32_t line, uint64_
 {
   char *bits;
   bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: opt2: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %lx %s",
+  fprintf(stderr, "%s%s[%d]%s: opt2: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %" ld64 " %s",
 	  BOLD_TEXT, func, line, UNBOLD_TEXT,
 	  p, p->object.cons.o2.opt2,
 	  opt2_role_name(role),
-	  p->debugger_bits, bits, role,
+	  p->debugger_bits, bits, (s7_int)role,
 	  opt2_role_name(role));
   free(bits);
 }
@@ -6000,7 +6006,7 @@ s7_pointer s7_immutable(s7_pointer p)
 
 static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 {
-  #define H_immutable "(immutable! sequence) declares that the sequence's entries can't be changed. The sequence is returned."
+  #define H_immutable "(immutable! x) declares that the x can't be changed. x is returned."
   #define Q_immutable s7_make_signature(sc, 2, sc->T, sc->T)
   s7_pointer p = car(args);
   if (is_symbol(p))
@@ -6012,7 +6018,7 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 	  set_immutable(slot);
 	  return(p);  /* symbol is not set immutable ? */
 	}}
-  set_immutable(p);
+  set_immutable(p);   /* could set_immutable save the current file/line? Then the immutable error checks for define-constant and this setting */
   return(p);
 }
 
@@ -7640,6 +7646,7 @@ static void pop_stack_no_op_1(s7_scheme *sc, const char *func, int line)
 
 static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer code, s7_pointer *end, const char *func, int line)
 {
+  if ((SHOW_EVAL_OPS) && (op == OP_EVAL_DONE)) fprintf(stderr, "%s[%d]: push eval_done\n", func, line);
   if (sc->stack_end >= sc->stack_start + sc->stack_size)
     {
       fprintf(stderr, "%s%s[%d]: stack overflow%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
@@ -46597,12 +46604,9 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
   if (is_c_function(func))
     return(call_c_function_setter(sc, func, slot_symbol(slot), new_value));
 
-  push_stack_direct(sc, OP_EVAL_DONE);
   sc->args = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
-  sc->code = func;
-  eval(sc, OP_APPLY);
-  return(sc->value);
+  return(s7_call(sc, func, sc->args));
 }
 
 static s7_pointer bind_symbol_with_setter(s7_scheme *sc, opcode_t op, s7_pointer symbol, s7_pointer new_value)
@@ -51055,6 +51059,7 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
    */
   /* if (is_let(err)) check_method(sc, err, sc->catch_symbol, args); */ /* causes exit from s7! */
 
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
   new_cell(sc, p, T_CATCH);
   catch_tag(p) = car(args);
   catch_goto_loc(p) = current_stack_top(sc);
@@ -51097,6 +51102,7 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
   if (sc->stack_end == sc->stack_start) /* no stack! */
     push_stack_direct(sc, OP_EVAL_DONE);
 
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
   new_cell(sc, p, T_CATCH);
   catch_tag(p) = tag;
   catch_goto_loc(p) = current_stack_top(sc);
@@ -51148,6 +51154,7 @@ static void op_c_catch(s7_scheme *sc)
     tag = (is_symbol(f)) ? lookup_checked(sc, f) : f;
   else tag = cadr(f);                  /* (catch 'sym ...) */
 
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
   new_cell(sc, p, T_CATCH);            /* the catch object sitting on the stack */
   catch_tag(p) = tag;
   catch_goto_loc(p) = current_stack_top(sc);
@@ -51162,6 +51169,7 @@ static void op_c_catch(s7_scheme *sc)
 
 static void op_c_catch_all(s7_scheme *sc)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
   sc->curlet = make_let(sc, sc->curlet);
   catch_all_set_goto_loc(sc->curlet, current_stack_top(sc));
   catch_all_set_op_loc(sc->curlet, sc->op_stack_now - sc->op_stack);
@@ -51171,6 +51179,7 @@ static void op_c_catch_all(s7_scheme *sc)
 
 static Inline void op_c_catch_all_a(s7_scheme *sc)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
   sc->curlet = make_let(sc, sc->curlet);
   catch_all_set_goto_loc(sc->curlet, current_stack_top(sc));
   catch_all_set_op_loc(sc->curlet, sc->op_stack_now - sc->op_stack);
@@ -51399,6 +51408,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		    y = type;
 	  if (y)
 	    {
+	      if (SHOW_EVAL_OPS) {fprintf(stderr, "about to pop_stack: \n"); s7_show_stack(sc);}
 	      if (loc > 4)
 		pop_stack(sc);
 	      /* we're at OP_CATCH, normally we want to pop that away, but (handwaving...) if we're coming
@@ -51772,6 +51782,7 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	if ((catcher) &&
 	    (catcher(sc, i, type, info, &reset_error_hook)))
 	  {
+	    if (SHOW_EVAL_OPS) {fprintf(stderr, "after catch: \n"); s7_show_stack(sc);}
 	    if ((S7_DEBUGGING) && (!sc->longjmp_ok)) fprintf(stderr, "s7_error jump not available?\n");
 	    LongJmp(*(sc->goto_start), CATCH_JUMP);
 	  }}}
@@ -81430,9 +81441,8 @@ static goto_t op_dox(s7_scheme *sc)
 	      opt_info *o = sc->opts[0];
 	      fp = o->v[0].fp;
 	      do {
-		s7_pointer slot1;
+		s7_pointer slot1 = slots;
 		fp(o);
-		slot1 = slots;
 		do {
 		  if (slot_has_expression(slot1))
 		    slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
@@ -81442,9 +81452,8 @@ static goto_t op_dox(s7_scheme *sc)
 	    }
 	  else
 	    do {
-	      s7_pointer slot1;
+	      s7_pointer slot1 = slots;
 	      bodyf(sc);
-	      slot1 = slots;
 	      do {
 		if (slot_has_expression(slot1))
 		  slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
@@ -81488,9 +81497,8 @@ static goto_t op_dox(s7_scheme *sc)
 	{
 	  s7_function f = fx_proc_unchecked(code);
 	  do {
-	    s7_pointer slot1;
+	    s7_pointer slot1 = slots;
 	    f(sc, body);
-	    slot1 = slots;
 	    do {
 	      if (slot_has_expression(slot1))
 		slot_set_value(slot1, fx_call(sc, slot_expression(slot1)));
@@ -82392,8 +82400,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	      opt_info *o = sc->opts[0];
 	      if (func == opt_float_any_nr)
 		{
-		  s7_double (*fd)(opt_info *o);
-		  fd = o->v[0].fd;
+		  s7_double (*fd)(opt_info *o) = o->v[0].fd;
 		  if ((fd == opt_d_id_sf) && /* by far the most common case in clm: (outa i ...) etc */
 		      (is_slot(o->v[1].p)) &&
 		      (stepper == slot_value(o->v[1].p)))
@@ -84162,7 +84169,7 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
   sc->code = T_Pair(closure_body(func));
 }
 
-static inline bool call_lambda_star(s7_scheme *sc, s7_pointer code, s7_pointer arglist) 
+static bool call_lambda_star(s7_scheme *sc, s7_pointer code, s7_pointer arglist) 
 {
   bool target;
   sc->code = opt1_lambda(code); 
@@ -90289,6 +90296,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
        *    so the switch statement is unnecessary -- maybe a table eval_functions[cur_op] eventually
        */
 
+      if (SHOW_EVAL_OPS) s7_show_stack(sc);
       switch (sc->cur_op)
 	{
 	  /* safe c_functions */
@@ -95812,7 +95820,7 @@ int main(int argc, char **argv)
  * titer      2659         2865   2842   2641
  * tsort      3572         3105   3104   2856
  * tload      3740         ----   ----   3046
- * tset       3058         3253   3104   3048
+ * tset       3058         3253   3104   3048 [3119]
  * teq        3541         4068   4045   3536
  * tio        3698         3816   3752   3683
  * tobj       4533         4016   3970   3828
@@ -95840,4 +95848,9 @@ int main(int argc, char **argv)
  * lg        104.2        106.6  105.0  103.6
  * tbig      604.3        177.4  175.8  156.5
  * ---------------------------------------------
+ * 
+ * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
+ * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string, 
+ *   tmac continued, eval/eval-string?, c-function*?, nested let-ref?, hooks
+ * s7_call not op_eval_done+op_apply?
  */
