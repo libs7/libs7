@@ -30234,7 +30234,6 @@ s7_pointer s7_load(s7_scheme *sc, const char *filename) {return(s7_load_with_env
 
 s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content, s7_int bytes, s7_pointer e)
 {
-#if (!MS_WINDOWS)
   s7_pointer port;
   s7_int port_loc;
   declare_jump_info();
@@ -30266,9 +30265,6 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
   return(sc->value);
-#else
-  return(sc->F);
-#endif
 }
 
 s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes) {return(s7_load_c_string_with_environment(sc, content, bytes, sc->nil));}
@@ -43375,24 +43371,15 @@ static s7_int hash_map_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
 
 static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  s7_pointer old_e, args, body, f = hash_table_procedures_mapper(table);
+  s7_pointer f = hash_table_procedures_mapper(table);
   if (f == sc->unused)
     s7_error(sc, make_symbol(sc, "hash-map-recursion"),
 	     set_elist_1(sc, wrap_string(sc, "hash-table map function called recursively", 42)));
   gc_protect_via_stack(sc, f);
   hash_table_set_procedures_mapper(table, sc->unused);
-  old_e = sc->curlet;
-  args = closure_args(f);
-  body = closure_body(f);
-  sc->curlet = make_let_with_slot(sc, closure_let(f), (is_symbol(car(args))) ? car(args) : caar(args), key);
-  push_stack_direct(sc, OP_EVAL_DONE);
-  if (is_pair(cdr(body)))
-    push_stack_no_args(sc, sc->begin_op, cdr(body));
-  sc->code = car(body);
-  eval(sc, OP_EVAL);
+  sc->value = s7_call(sc, f, set_plist_1(sc, key));
   unstack(sc);
   hash_table_set_procedures_mapper(table, f);
-  set_curlet(sc, old_e);
   if (!s7_is_integer(sc->value))
     s7_error(sc, sc->wrong_type_arg_symbol,
 	     set_elist_2(sc, wrap_string(sc, "hash-table map function should return an integer: ~S", 52), sc->value));
@@ -43619,35 +43606,17 @@ static s7_int hash_map_pair(s7_scheme *sc, s7_pointer table, s7_pointer key)
   return(loc);
 }
 
-
 static hash_entry_t *hash_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   hash_entry_t *x;
   s7_int hash, loc, hash_mask = hash_table_mask(table);
-  s7_pointer args, body, old_e = sc->curlet, f = hash_table_procedures_checker(table);
+  s7_pointer f = hash_table_procedures_checker(table);
   hash = hash_loc(sc, table, key);
   loc = hash & hash_mask;
-  args = closure_args(f);    /* in lambda* case, car/cadr(args) can be lists */
-  body = closure_body(f);
-  sc->curlet = make_let_with_two_slots(sc, closure_let(f),
-				       (is_symbol(car(args))) ? car(args) : caar(args), key,
-				       (is_symbol(cadr(args))) ? cadr(args) : caadr(args), sc->F);
-
   for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     if (hash_entry_raw_hash(x) == hash)
-      {
-	slot_set_value(next_slot(let_slots(sc->curlet)), hash_entry_key(x));
-	push_stack_direct(sc, OP_EVAL_DONE);
-	if (is_pair(cdr(body)))
-	  push_stack_no_args(sc, sc->begin_op, cdr(body));
-	sc->code = car(body);
-	eval(sc, OP_EVAL);
-	if (is_true(sc, sc->value))
-	  {
-	    set_curlet(sc, old_e);
-	    return(x);
-	  }}
-  set_curlet(sc, old_e);
+      if (is_true(sc, s7_call(sc, f, set_plist_2(sc, key, hash_entry_key(x)))))
+	return(x);
   return(sc->unentry);
 }
 
@@ -52497,18 +52466,17 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
     case T_ITERATOR: /* indices is not nil, so this is an error */
       return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices)));
 
-    case T_CLOSURE: /* and others similarly? */
+    case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
       check_stack_size(sc);
       sc->curlet = make_let(sc, closure_let(obj));
-      push_stack_direct(sc, OP_EVAL_DONE);
-      sc->code = obj;
       sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
-      eval(sc, OP_APPLY_LAMBDA);
+      sc->value = s7_call(sc, obj, sc->args);
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
 
     default:                              /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi" */
+      /* fprintf(stderr, "%s %s\n", display(obj), display(indices)); */
       if (!is_applicable(obj))            /* (apply (list cons cons) (list 1 2)) needs the argnum check mentioned below */
 	return(apply_error(sc, obj, indices));
       if ((is_c_function(obj)) && (is_safe_procedure(obj)))
@@ -95795,9 +95763,9 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ---------------------------------------------
- *            gmp (12-20)   20.9   21.0   22.0
- * ---------------------------------------------
+/* -----------------------------------------------------
+ *            gmp (12-20)   20.9   21.0   22.0   22.1
+ * -----------------------------------------------------
  * tpeak       122          115    114    108
  * tref        513          691    687    463
  * index      1024         1026   1016    973
@@ -95806,7 +95774,7 @@ int main(int argc, char **argv)
  * texit      1827         ----   ----   1778
  * s7test     4537         1873   1831   1818
  * lt         2117         2123   2110   2113
- * timp       2232         2971   2891   2176
+ * timp       2232         2971   2891   2176 [2211]
  * tform      3241         2281   2273   2247
  * tmac       2450         3317   3277   2418
  * tread      2614         2440   2421   2419
@@ -95847,10 +95815,11 @@ int main(int argc, char **argv)
  * sg         75.8         ----   ----   55.9
  * lg        104.2        106.6  105.0  103.6
  * tbig      604.3        177.4  175.8  156.5
- * ---------------------------------------------
+ * -----------------------------------------------------
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string, 
  *   tmac continued, eval/eval-string?, c-function*?, nested let-ref?, hooks
  * s7_call not op_eval_done+op_apply?
+ *   s7test hit all appy+eval_done cases with catch+error
  */
