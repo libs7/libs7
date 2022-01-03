@@ -52389,6 +52389,8 @@ s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
   return(sc->value);
 }
 
+static inline s7_pointer apply_c_function(s7_scheme *sc, s7_pointer func, s7_pointer args);
+
 static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
 {
   if (!is_applicable(in_obj))
@@ -52475,27 +52477,16 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
 
-    default:                              /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi" */
-      /* fprintf(stderr, "%s %s\n", display(obj), display(indices)); */
+    default: /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi"?, also here with (apply (inlet) '(define y 32)) */
       if (!is_applicable(obj))            /* (apply (list cons cons) (list 1 2)) needs the argnum check mentioned below */
 	return(apply_error(sc, obj, indices));
-      if ((is_c_function(obj)) && (is_safe_procedure(obj)))
-	{
-	  s7_int len;
-	  len = proper_list_length(indices);
-	  if ((c_function_required_args(obj) <= len) &&
-	      (c_function_all_args(obj) >= len))
-	    return(c_function_call(obj)(sc, indices));
-	}
-      push_stack_direct(sc, OP_EVAL_DONE);
-      sc->code = obj;
+      if (is_c_function(obj))
+	return(apply_c_function(sc, obj, indices));
       sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
-      eval(sc, OP_APPLY);
-      /* here sc->values can be multiple-values: (list (list-ref (list (lambda (a) (values a (+ a 1)))) 0 1)) -> '((values 1 2)), but should be '(1 2) */
+      sc->value = s7_call(sc, obj, sc->args);
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
-      /* return(s7_apply_function(sc, obj, indices)); -- needs argnum check */ /* was g_apply 23-Jan-19 which assumes we're not in map */
     }
 }
 
@@ -68199,8 +68190,10 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
        *   can be some variable's value in a macro expansion via ,@ and reversing it in place
        *   (all this to avoid consing), clobbers the variable's value.
        */
+      /* fprintf(stderr, "%s[%d]:  splice %s into %s\n", __func__, __LINE__, display_80(args), display_80(stack_args(sc->stack, top))); */
       for (x = args; is_not_null(cdr(x)); x = cdr(x))
 	stack_args(sc->stack, top) = cons(sc, car(x), T_Mut(stack_args(sc->stack, top)));
+      /* fprintf(stderr, "%s[%d]:  spliced to %s, returning %s\n", __func__, __LINE__, display_80(stack_args(sc->stack, top)), display(car(x))); */
       return(car(x));
 
       /* in the next set, the main evaluator branches blithely assume no multiple-values,
@@ -68414,6 +68407,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 			set_elist_1(sc, wrap_string(sc, "function-port should not return multiple-values", 47))));
       stack_element(sc->stack, top) = (s7_pointer)OP_SPLICE_VALUES; /* tricky -- continue from eval_done with the current splice */
       stack_args(sc->stack, top) = args;
+      /* fprintf(stderr, "%s[%d]: args: %s\n", __func__, __LINE__, display(args)); */
       push_stack_op(sc, OP_EVAL_DONE);
       return(args);
 
@@ -83382,17 +83376,17 @@ static void op_set_pws(s7_scheme *sc)
 
 /* -------------------------------- apply functions -------------------------------- */
 
-static void apply_c_function(s7_scheme *sc) 	            /* -------- C-based function -------- */
+static s7_pointer apply_c_function(s7_scheme *sc, s7_pointer func, s7_pointer args) /* -------- C-based function -------- */
 {
   s7_int len;
-  len = proper_list_length(sc->args);
-  if (len < c_function_required_args(sc->code))
+  len = proper_list_length(args);
+  if (len < c_function_required_args(func))
     s7_error(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
-  if (c_function_all_args(sc->code) < len)
+	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), func, func, args));
+  if (c_function_all_args(func) < len)
     s7_error(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
-  sc->value = c_function_call(sc->code)(sc, sc->args);
+	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), func, func, args));
+  return(c_function_call(func)(sc, args));
   /* just by chance, this code is identical to macroexpand_c_macro's code (after macro expansion)! So,
    *   gcc -O2 uses the macroexpand code, but then valgrind shows us calling macros all the time, and
    *   gdb with break apply_c_function breaks at macroexpand -- confusing!
@@ -88761,6 +88755,7 @@ static void op_apply_sl(s7_scheme *sc)
 static void op_eval_args2(s7_scheme *sc)
 {
   sc->code = pop_op_stack(sc);
+  /* fprintf(stderr, "%s[%d]: sc->value: %s, sc->args: %s, sc->code: %s\n", __func__, __LINE__, display(sc->value), display(sc->args), display(sc->code)); */
   sc->args = (is_null(sc->args)) ? list_1(sc, sc->value) : proper_list_reverse_in_place(sc, cons(sc, sc->value, sc->args));
 }
 
@@ -91099,10 +91094,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	APPLY:
 	case OP_APPLY:
 	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */
-	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  apply %s (%s) to %s\n", display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
+	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_%sapply%s %s (%s) to %s\n", 
+						__func__, __LINE__, BOLD_TEXT, UNBOLD_TEXT, display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
-	    case T_C_FUNCTION:          apply_c_function(sc);           continue;
+	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue;
 	    case T_C_RST_NO_REQ_FUNCTION: apply_c_rst_no_req_function(sc); continue;
 	    case T_C_FUNCTION_STAR:     apply_c_function_star(sc);      continue;
 	    case T_CONTINUATION:        call_with_current_continuation(sc); continue;
@@ -91823,7 +91819,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  return(sc->F);
 
 	case OP_SPLICE_VALUES:         /* if splice_in_values hits eval_done, it needs to continue the splice after returning, so we get here */
-	  splice_in_values(sc, sc->args);
+	  /* fprintf(stderr, "%s[%d]: sc->args: %s\n", __func__, __LINE__, display(sc->args)); */
+	  sc->value = splice_in_values(sc, sc->args);
+	  /* fprintf(stderr, "%s[%d]: sc->args: %s, sc->value: %s\n", __func__, __LINE__, display(sc->args), display(sc->value)); */
 	  continue;
 
 	case OP_GC_PROTECT: case OP_BARRIER: case OP_NO_VALUES:
@@ -95766,55 +95764,55 @@ int main(int argc, char **argv)
 /* -----------------------------------------------------
  *            gmp (12-20)   20.9   21.0   22.0   22.1
  * -----------------------------------------------------
- * tpeak       122          115    114    108
- * tref        513          691    687    463
- * index      1024         1026   1016    973
- * tmock      7741         1177   1165   1057
- * tvect      1953         2519   2464   1772
- * texit      1827         ----   ----   1778
- * s7test     4537         1873   1831   1818
- * lt         2117         2123   2110   2113
- * timp       2232         2971   2891   2176 [2211]
- * tform      3241         2281   2273   2247
- * tmac       2450         3317   3277   2418
- * tread      2614         2440   2421   2419
- * trclo      4079         2735   2574   2454
- * fbench     2833         2688   2583   2460
- * tmat       2694         3065   3042   2524
- * tcopy      2600         8035   5546   2539
- * dup        2756         3805   3788   2492
- * tauto      2763         ----   ----   2562
- * tb         3366?        2735   2681   2612
- * titer      2659         2865   2842   2641
- * tsort      3572         3105   3104   2856
- * tload      3740         ----   ----   3046
- * tset       3058         3253   3104   3048 [3119]
- * teq        3541         4068   4045   3536
- * tio        3698         3816   3752   3683
- * tobj       4533         4016   3970   3828
- * tclo       4604         4787   4735   4390
- * tcase      4501         4960   4793   4439
- * tlet       5305         7775   5640   4450
- * tmap       5488         8869   8774   4489
- * tfft      115.1         7820   7729   4755
- * tshoot     6896         5525   5447   5183
- * tnum       56.7         6348   6013   5433
- * tstr       6123         6880   6342   5488
- * tmisc      6847         8869   7612   6325
- * tgsl       25.1         8485   7802   6373
- * trec       8314         6936   6922   6521
- * tlist      6551         7896   7546   6558
- * tari       ----         13.0   12.7   6827
- * tleft      9004         10.4   10.2   7657
- * tgc        9614         11.9   11.1   8177
- * cb         16.8         11.2   11.0   9658
- * thash      35.4         11.8   11.7   9734
- * tgen       12.6         11.2   11.4   12.0
- * tall       24.4         15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0
- * sg         75.8         ----   ----   55.9
- * lg        104.2        106.6  105.0  103.6
- * tbig      604.3        177.4  175.8  156.5
+ * tpeak       122          115    114    108    108
+ * tref        513          691    687    463    463
+ * index      1024         1026   1016    973    973
+ * tmock      7741         1177   1165   1057   1054
+ * tvect      1953         2519   2464   1772   1772
+ * texit      1827         ----   ----   1778   1778
+ * s7test     4537         1873   1831   1818   1836
+ * lt         2117         2123   2110   2113   2112
+ * timp       2232         2971   2891   2176   2200
+ * tform      3241         2281   2273   2247   2255
+ * tmac       2450         3317   3277   2418   2419
+ * tread      2614         2440   2421   2419   2418
+ * trclo      4079         2735   2574   2454   2454
+ * fbench     2833         2688   2583   2460   2460
+ * tmat       2694         3065   3042   2524   2528
+ * tcopy      2600         8035   5546   2539   2538
+ * dup        2756         3805   3788   2492   2471
+ * tauto      2763         ----   ----   2562   2556
+ * tb         3366?        2735   2681   2612   2612
+ * titer      2659         2865   2842   2641   2641
+ * tsort      3572         3105   3104   2856   2855
+ * tload      3740         ----   ----   3046   3040
+ * tset       3058         3253   3104   3048   3119
+ * teq        3541         4068   4045   3536   3538
+ * tio        3698         3816   3752   3683   3683
+ * tobj       4533         4016   3970   3828   3828
+ * tclo       4604         4787   4735   4390   4390
+ * tcase      4501         4960   4793   4439   4435
+ * tlet       5305         7775   5640   4450   4450
+ * tmap       5488         8869   8774   4489   4489
+ * tfft      115.1         7820   7729   4755   4756
+ * tshoot     6896         5525   5447   5183   5184
+ * tnum       56.7         6348   6013   5433   5432
+ * tstr       6123         6880   6342   5488   5488
+ * tmisc      6847         8869   7612   6325   6363
+ * tgsl       25.1         8485   7802   6373   6373
+ * trec       8314         6936   6922   6521   6521
+ * tlist      6551         7896   7546   6558   6557
+ * tari       ----         13.0   12.7   6827   6828
+ * tleft      9004         10.4   10.2   7657   7656
+ * tgc        9614         11.9   11.1   8177   8176
+ * cb         16.8         11.2   11.0   9658   9658
+ * thash      35.4         11.8   11.7   9734   9735
+ * tgen       12.6         11.2   11.4   12.0   12.0
+ * tall       24.4         15.6   15.6   15.6   15.6
+ * calls      55.3         36.7   37.5   37.0   37.0
+ * sg         75.8         ----   ----   55.9   56.0
+ * lg        104.2        106.6  105.0  103.6  103.6
+ * tbig      604.3        177.4  175.8  156.5  156.5
  * -----------------------------------------------------
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
@@ -95822,4 +95820,8 @@ int main(int argc, char **argv)
  *   tmac continued, eval/eval-string?, c-function*?, nested let-ref?, hooks
  * s7_call not op_eval_done+op_apply?
  *   s7test hit all appy+eval_done cases with catch+error
+ *   s7_call (and s7_apply_function need argnum checks
+ *   can s7_call sigset be put off til after c_function_call?  does it need argnum checks? (catchable)
+ * ((inlet) 'define) -> define -- how to set outlet to not see globals? let-local-ref|set!?
+ *   (apply (inlet) '(define y 32)) -> ((inlet) 'define 'y 32) -> (apply define '(y 32)) -> 32!
  */
