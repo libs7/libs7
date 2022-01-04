@@ -6,9 +6,8 @@
  * Bill Schottstaedt, bil@ccrma.stanford.edu
  *
  * Mike Scholz provided the FreeBSD support (complex trig funcs, etc)
- * Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci provided the MS Visual C++ support
+ * Rick Taube, Andrew Burnson, Donny Ward, Greg Santucci, and Christos Vagias provided the MS Visual C++ support
  * Kjetil Matheussen provided the mingw support
- * chai xiaoxiang provided the msys2 support
  *
  * Documentation is in s7.h and s7.html.
  * s7test.scm is a regression test.
@@ -52477,11 +52476,15 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
 
+    case T_C_FUNCTION:
+      return(apply_c_function(sc, obj, indices));
+
+    case T_C_RST_NO_REQ_FUNCTION:
+      return(c_function_call(obj)(sc, indices));
+
     default: /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi"?, also here with (apply (inlet) '(define y 32)) */
       if (!is_applicable(obj))            /* (apply (list cons cons) (list 1 2)) needs the argnum check mentioned below */
 	return(apply_error(sc, obj, indices));
-      if (is_c_function(obj))
-	return(apply_c_function(sc, obj, indices));
       sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
       sc->value = s7_call(sc, obj, sc->args);
       if (is_multiple_value(sc->value))
@@ -52729,41 +52732,41 @@ pass (rootlet):\n\
 
 s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args)
 {
-  declare_jump_info();
-  TRACK(sc);
-  set_current_code(sc, history_cons(sc, func, args));
-  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s: %s %s\n", __func__, display(func), display_80(args)));
-
   if (is_c_function(func))
-    return(c_function_call(func)(sc, args));         /* no check for wrong-number-of-args -- is that reasonable? */
-
-  sc->temp4 = T_App(func);                           /* this is feeble GC protection */
-  sc->temp2 = T_Lst(args);
-
-  store_jump_info(sc);
-  set_jump_info(sc, S7_CALL_SET_JUMP);
-  if (jump_loc != NO_JUMP)
-    {
-      if (jump_loc != ERROR_JUMP)
-	eval(sc, sc->cur_op);
-
-      if ((jump_loc == CATCH_JUMP) &&                /* we're returning (back to eval) from an error in catch */
-	  (sc->stack_end == sc->stack_start))
-	push_stack_op(sc, OP_ERROR_QUIT);
-    }
-  else
-    {
-      if (sc->safety > NO_SAFETY)
-	check_list_validity(sc, "s7_call", args);
-      push_stack_direct(sc, OP_EVAL_DONE); /* this saves the current evaluation and will eventually finish this (possibly) nested call */
-      sc->code = func;
-      sc->args = (needs_copied_args(func)) ? copy_proper_list(sc, args) : args;
-      /* besides a closure, "func" can also be an object (T_C_OBJECT) -- in Snd, a generator for example  */
-      eval(sc, OP_APPLY);
-    }
-  restore_jump_info(sc);
-  /* don't clear temp4 or temp2 here -- lots of (Snd) code calls s7_call repeatedly and assumes the "func" arg is protected between calls */
-  return(sc->value);
+    return(c_function_call(func)(sc, args));         /* no check for wrong-number-of-args -- is that reasonable? maybe use apply_c_function(sc, func, args) */
+  {
+    declare_jump_info();
+    TRACK(sc);
+    set_current_code(sc, history_cons(sc, func, args));
+    if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s: %s %s\n", __func__, display(func), display_80(args)));
+    
+    sc->temp4 = T_App(func);                           /* this is feeble GC protection */
+    sc->temp2 = T_Lst(args);
+    
+    store_jump_info(sc);
+    set_jump_info(sc, S7_CALL_SET_JUMP);
+    if (jump_loc != NO_JUMP)
+      {
+	if (jump_loc != ERROR_JUMP)
+	  eval(sc, sc->cur_op);
+	
+	if ((jump_loc == CATCH_JUMP) &&                /* we're returning (back to eval) from an error in catch */
+	    (sc->stack_end == sc->stack_start))
+	  push_stack_op(sc, OP_ERROR_QUIT);
+      }
+    else
+      {
+	if (sc->safety > NO_SAFETY)
+	  check_list_validity(sc, "s7_call", args);
+	push_stack_direct(sc, OP_EVAL_DONE); /* this saves the current evaluation and will eventually finish this (possibly) nested call */
+	sc->code = func;
+	sc->args = (needs_copied_args(func)) ? copy_proper_list(sc, args) : args;
+	eval(sc, OP_APPLY);
+      }
+    restore_jump_info(sc);
+    /* don't clear temp4 or temp2 here -- lots of (Snd) code calls s7_call repeatedly and assumes the "func" arg is protected between calls */
+    return(sc->value);
+  }
 }
 
 s7_pointer s7_call_with_location(s7_scheme *sc, s7_pointer func, s7_pointer args, const char *caller, const char *file, s7_int line)
@@ -68190,10 +68193,8 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
        *   can be some variable's value in a macro expansion via ,@ and reversing it in place
        *   (all this to avoid consing), clobbers the variable's value.
        */
-      /* fprintf(stderr, "%s[%d]:  splice %s into %s\n", __func__, __LINE__, display_80(args), display_80(stack_args(sc->stack, top))); */
       for (x = args; is_not_null(cdr(x)); x = cdr(x))
 	stack_args(sc->stack, top) = cons(sc, car(x), T_Mut(stack_args(sc->stack, top)));
-      /* fprintf(stderr, "%s[%d]:  spliced to %s, returning %s\n", __func__, __LINE__, display_80(stack_args(sc->stack, top)), display(car(x))); */
       return(car(x));
 
       /* in the next set, the main evaluator branches blithely assume no multiple-values,
@@ -68407,7 +68408,6 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 			set_elist_1(sc, wrap_string(sc, "function-port should not return multiple-values", 47))));
       stack_element(sc->stack, top) = (s7_pointer)OP_SPLICE_VALUES; /* tricky -- continue from eval_done with the current splice */
       stack_args(sc->stack, top) = args;
-      /* fprintf(stderr, "%s[%d]: args: %s\n", __func__, __LINE__, display(args)); */
       push_stack_op(sc, OP_EVAL_DONE);
       return(args);
 
@@ -83376,7 +83376,7 @@ static void op_set_pws(s7_scheme *sc)
 
 /* -------------------------------- apply functions -------------------------------- */
 
-static s7_pointer apply_c_function(s7_scheme *sc, s7_pointer func, s7_pointer args) /* -------- C-based function -------- */
+static inline s7_pointer apply_c_function(s7_scheme *sc, s7_pointer func, s7_pointer args) /* -------- C-based function -------- */
 {
   s7_int len;
   len = proper_list_length(args);
@@ -88755,7 +88755,6 @@ static void op_apply_sl(s7_scheme *sc)
 static void op_eval_args2(s7_scheme *sc)
 {
   sc->code = pop_op_stack(sc);
-  /* fprintf(stderr, "%s[%d]: sc->value: %s, sc->args: %s, sc->code: %s\n", __func__, __LINE__, display(sc->value), display(sc->args), display(sc->code)); */
   sc->args = (is_null(sc->args)) ? list_1(sc, sc->value) : proper_list_reverse_in_place(sc, cons(sc, sc->value, sc->args));
 }
 
@@ -91108,9 +91107,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case T_HASH_TABLE:	        apply_hash_table(sc);           continue;
 	    case T_ITERATOR:	        apply_iterator(sc);	        continue;
 	    case T_LET:	                apply_let(sc);	                continue;
-	    case T_INT_VECTOR:
-	    case T_BYTE_VECTOR:
-	    case T_FLOAT_VECTOR:
+	    case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR:
 	    case T_VECTOR: 	        apply_vector(sc);	        continue;
 	    case T_SYNTAX:	        apply_syntax(sc); 	        goto TOP_NO_POP;
 	    case T_PAIR:	        if (apply_pair(sc)) continue;   goto APPLY;
@@ -91819,7 +91816,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  return(sc->F);
 
 	case OP_SPLICE_VALUES:         /* if splice_in_values hits eval_done, it needs to continue the splice after returning, so we get here */
-	  /* fprintf(stderr, "%s[%d]: sc->args: %s\n", __func__, __LINE__, display(sc->args)); */
 	  sc->value = splice_in_values(sc, sc->args);
 	  /* fprintf(stderr, "%s[%d]: sc->args: %s, sc->value: %s\n", __func__, __LINE__, display(sc->args), display(sc->value)); */
 	  continue;
@@ -93827,7 +93823,7 @@ static void init_features(s7_scheme *sc)
   s7_provide(sc, "android");
 #endif
 #ifdef __MSYS__
-  s7_provide(sc, "msys2");
+  s7_provide(sc, "msys2");  /* from chai xiaoxiang */
 #endif
 #ifdef __MINGW32__          /* this is also defined in mingw64 */
   s7_provide(sc, "mingw");
@@ -95818,10 +95814,4 @@ int main(int argc, char **argv)
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string, 
  *   tmac continued, eval/eval-string?, c-function*?, nested let-ref?, hooks
- * s7_call not op_eval_done+op_apply?
- *   s7test hit all appy+eval_done cases with catch+error
- *   s7_call (and s7_apply_function need argnum checks
- *   can s7_call sigset be put off til after c_function_call?  does it need argnum checks? (catchable)
- * ((inlet) 'define) -> define -- how to set outlet to not see globals? let-local-ref|set!?
- *   (apply (inlet) '(define y 32)) -> ((inlet) 'define 'y 32) -> (apply define '(y 32)) -> 32!
  */
