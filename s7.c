@@ -11503,12 +11503,8 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 		      {
 			dynamic_wind_state(x) = DWIND_FINISH;
 			if (dynamic_wind_out(x) != sc->F)
-			  {
-			    push_stack_direct(sc, OP_EVAL_DONE);
-			    sc->args = sc->nil;
-			    sc->code = dynamic_wind_out(x);
-			    eval(sc, OP_APPLY);
-			  }}}
+			  sc->value = s7_call(sc, dynamic_wind_out(x), sc->nil);
+		      }}
 		else let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
 	      }}
 	  break;
@@ -11559,12 +11555,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  s7_pointer x;
 	  x = stack_code(continuation_stack(c), i);
 	  if (dynamic_wind_in(x) != sc->F)
-	    {
-	      push_stack_direct(sc, OP_EVAL_DONE);
-	      sc->args = sc->nil;
-	      sc->code = dynamic_wind_in(x);
-	      eval(sc, OP_APPLY);
-	    }
+	    sc->value = s7_call(sc, dynamic_wind_in(x), sc->nil);
 	  dynamic_wind_state(x) = DWIND_BODY;
 	}
       else
@@ -11716,10 +11707,7 @@ static void call_with_exit(s7_scheme *sc)
 		  s7_pointer arg;
 		  /* protect the sc->args value across this call if it is sc->plist_1 -- I can't find a broken case */
 		  arg = (sc->args == sc->plist_1) ? car(sc->plist_1) : sc->unused;  /* might also need GC protection here */
-		  push_stack_direct(sc, OP_EVAL_DONE);
-		  sc->args = sc->nil;
-		  sc->code = dynamic_wind_out(lx);
-		  eval(sc, OP_APPLY);
+		  sc->value = s7_call(sc, dynamic_wind_out(lx), sc->nil);
 		  if (arg != sc->unused) set_plist_1(sc, arg);
 		}}}
 	break;
@@ -45522,8 +45510,8 @@ s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_p
 {
   /* this is essentially s7_call with a dynamic-wind wrapper around "body" */
   s7_pointer p;
-  declare_jump_info();
 
+  declare_jump_info();
   store_jump_info(sc);
   set_jump_info(sc, DYNAMIC_WIND_SET_JUMP);
   if (jump_loc != NO_JUMP)
@@ -45533,9 +45521,8 @@ s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_p
     }
   else
     {
-      push_stack_direct(sc, OP_EVAL_DONE);
+      push_stack_direct(sc, OP_EVAL_DONE); /* this is ok because we have called setjmp etc */
       sc->args = sc->nil;
-
       new_cell(sc, p, T_DYNAMIC_WIND);
       dynamic_wind_in(p) = T_Pos(init);
       dynamic_wind_body(p) = T_Pos(body);
@@ -51439,12 +51426,8 @@ static bool catch_dynamic_wind_function(s7_scheme *sc, s7_int i, s7_pointer type
     {
       dynamic_wind_state(x) = DWIND_FINISH;    /* make sure an uncaught error in the exit thunk doesn't cause us to loop */
       if (dynamic_wind_out(x) != sc->F)
-	{
-	  push_stack_direct(sc, OP_EVAL_DONE);
-	  sc->code = dynamic_wind_out(x);
-	  sc->args = sc->nil;
-	  eval(sc, OP_APPLY);                  /* I guess this means no call/cc out of the exit thunk in an error-catching context */
-	}}
+	sc->value = s7_call(sc, dynamic_wind_out(x), sc->nil);
+    }
   return(false);
 }
 
@@ -52665,7 +52648,6 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
       if (!s7_is_valid(sc, e))
 	s7_warn(sc, 256, "bad environment argument to %s: %p\n", __func__, e);
     }
-
   store_jump_info(sc);
   set_jump_info(sc, EVAL_SET_JUMP);
   if (jump_loc != NO_JUMP)
@@ -67947,7 +67929,6 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  val1 = cons_unchecked(sc, sc->z, make_list(sc, len, sc->nil));
 	  iter_list = sc->z;
 	  old_args = sc->args;
-	  /* func = c_function_call(f); */
 	  push_stack_no_let(sc, OP_GC_PROTECT, val1, val = cons(sc, sc->nil, sc->code)); /* temporary GC protection: need to protect val1, iter_list, val */
 	  sc->z = sc->nil;
 	  while (true)
@@ -67963,7 +67944,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		      sc->args = T_Pos(old_args);
 		      return(proper_list_reverse_in_place(sc, car(val)));
 		    }}
-	      z = func(sc, cdr(val1)); /* can this contain multiple-values? */
+	      z = func(sc, cdr(val1)); /* multiple-values? values is unsafe, but s7_values used externally and claims to be safe? */ /* func = c_function_call(f) */
 	      if (z != sc->no_value)
 		set_car(val, cons(sc, z, car(val)));
 	    }}
@@ -68548,17 +68529,12 @@ static s7_pointer g_apply_values(s7_scheme *sc, s7_pointer args)
 
 /* (apply values ...) replaces (unquote_splicing ...)
  *   (define-macro (hi a) `(+ 1 ,a) == (list '+ 1 a)
- *   (define-macro (hi a) ``(+ 1 ,,a) == (list list '+ 1 (list quote a)))
  *   (define-macro (hi a) `(+ 1 ,@a) == (list '+ 1 (apply values a))
- *   (define-macro (hi a) ``(+ 1 ,,@a) == (list list '+ 1 (apply values a))
  *
  * this is not the same as CL's quasiquote; for example:
- *   [1]> (let ((a 1) (b 2)) `(,a ,@b)) -> '(1 . 2)
- *   in s7 this is an error.
- *
+ *   [1]> (let ((a 1) (b 2)) `(,a ,@b)) -> '(1 . 2) but in s7 this is an error.
  * also in CL the target of ,@ can apparently be a circular list
  * one surprising twist: write/display return their first argument directly, so (apply-values (write `(+ x 1))) is the same as (apply-values `(+ x 1))
- *   If this is in a function body, and the function is called twice, it is self-modifying code and behaves in unexpected ways.
  */
 
 
@@ -68672,9 +68648,8 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
 	    }
 	  else set_car(bq, g_quasiquote_1(sc, car(orig), false));
       }
-    else
+    else /* `(1 2 . 3) */
       {
-	/* `(1 2 . 3) */
 	len--;
 	for (orig = form, bq = cdr(sc->w), i = 0; i < len; i++, orig = cdr(orig), bq = cdr(bq))
 	  set_car(bq, g_quasiquote_1(sc, car(orig), false));
@@ -69276,7 +69251,6 @@ static token_t read_comma(s7_scheme *sc, s7_pointer pt)
 
   if ((c = inchar(pt)) == '@')
     return(TOKEN_AT_MARK);
-
   if (c == EOF)
     {
       sc->strbuf[0] = ',';  /* was '@' which doesn't make any sense */
@@ -69403,8 +69377,7 @@ static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
   if (is_string_port(pt))
     {
       /* try the most common case first */
-      char *s, *start, *end;
-      start = (char *)(port_data(pt) + port_position(pt));
+      char *s, *end, *start = (char *)(port_data(pt) + port_position(pt));
       if (*start == '"')
 	{
 	  port_position(pt)++;
@@ -95766,18 +95739,18 @@ int main(int argc, char **argv)
  * tmock      7741         1177   1165   1057   1054
  * tvect      1953         2519   2464   1772   1772
  * texit      1827         ----   ----   1778   1778
- * s7test     4537         1873   1831   1818   1836
+ * s7test     4537         1873   1831   1818   1815
  * lt         2117         2123   2110   2113   2112
- * timp       2232         2971   2891   2176   2200
- * tform      3241         2281   2273   2247   2255
+ * timp       2232         2971   2891   2176   2201
+ * tform      3241         2281   2273   2247   2247
  * tmac       2450         3317   3277   2418   2419
- * tread      2614         2440   2421   2419   2418
+ * tread      2614         2440   2421   2419   2415
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
- * tmat       2694         3065   3042   2524   2528
+ * tmat       2694         3065   3042   2524   2525
  * tcopy      2600         8035   5546   2539   2538
  * dup        2756         3805   3788   2492   2471
- * tauto      2763         ----   ----   2562   2556
+ * tauto      2763         ----   ----   2562   2559
  * tb         3366?        2735   2681   2612   2612
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
@@ -95812,6 +95785,6 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
- * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string, 
- *   tmac continued, eval/eval-string?, c-function*?, nested let-ref?, hooks
+ * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string (t549), 
+ *   tmac continued, eval/eval-string?, nested let-ref?
  */
