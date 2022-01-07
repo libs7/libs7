@@ -2680,22 +2680,23 @@ static void init_types(void)
 
 
 /* pair line/file/position */
-#define PAIR_LINE_BITS       24
-#define PAIR_FILE_BITS       12
-#define PAIR_POSITION_BITS   28
-#define PAIR_LINE_OFFSET     0
-#define PAIR_FILE_OFFSET     PAIR_LINE_BITS
-#define PAIR_POSITION_OFFSET (PAIR_LINE_BITS + PAIR_FILE_BITS)
-#define PAIR_LINE_MASK       ((1 << PAIR_LINE_BITS) - 1)
-#define PAIR_FILE_MASK       ((1 << PAIR_FILE_BITS) - 1)
-#define PAIR_POSITION_MASK   ((1 << PAIR_POSITION_BITS) - 1)
+#define PAIR_LINE_BITS                 24
+#define PAIR_FILE_BITS                 12
+#define PAIR_POSITION_BITS             28
+#define PAIR_LINE_OFFSET               0
+#define PAIR_FILE_OFFSET               PAIR_LINE_BITS
+#define PAIR_POSITION_OFFSET           (PAIR_LINE_BITS + PAIR_FILE_BITS)
+#define PAIR_LINE_MASK                 ((1 << PAIR_LINE_BITS) - 1)
+#define PAIR_FILE_MASK                 ((1 << PAIR_FILE_BITS) - 1)
+#define PAIR_POSITION_MASK             ((1 << PAIR_POSITION_BITS) - 1)
 
-#define port_location(Pt) (((port_line_number(Pt) & PAIR_LINE_MASK) << PAIR_LINE_OFFSET) | \
-                           ((port_file_number(Pt) & PAIR_FILE_MASK) << PAIR_FILE_OFFSET) | \
-                           ((port_position(Pt) & PAIR_POSITION_MASK) << PAIR_POSITION_OFFSET))
-#define location_to_line(Loc)     ((Loc >> PAIR_LINE_OFFSET) & PAIR_LINE_MASK)
-#define location_to_file(Loc)     ((Loc >> PAIR_FILE_OFFSET) & PAIR_FILE_MASK)
-#define location_to_position(Loc) ((Loc >> PAIR_POSITION_OFFSET) & PAIR_POSITION_MASK)
+#define port_location(Pt)              (((port_line_number(Pt) & PAIR_LINE_MASK) << PAIR_LINE_OFFSET) | \
+                                        ((port_file_number(Pt) & PAIR_FILE_MASK) << PAIR_FILE_OFFSET) | \
+                                        ((port_position(Pt) & PAIR_POSITION_MASK) << PAIR_POSITION_OFFSET))
+
+#define location_to_line(Loc)          ((Loc >> PAIR_LINE_OFFSET) & PAIR_LINE_MASK)
+#define location_to_file(Loc)          ((Loc >> PAIR_FILE_OFFSET) & PAIR_FILE_MASK)
+#define location_to_position(Loc)      ((Loc >> PAIR_POSITION_OFFSET) & PAIR_POSITION_MASK)
 
 #define pair_line_number(p)            location_to_line(pair_location(p))
 #define pair_file_number(p)            location_to_file(pair_location(p))
@@ -4125,7 +4126,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IF, OP_IF1, OP_WHEN, OP_UNLESS, OP_SET, OP_SET1, OP_SET2,
       OP_LET, OP_LET1, OP_LET_STAR, OP_LET_STAR1, OP_LET_STAR2, OP_LET_STAR_SHADOWED,
       OP_LETREC, OP_LETREC1, OP_LETREC_STAR, OP_LETREC_STAR1,
-      OP_LET_TEMPORARILY, OP_LET_TEMP_UNCHECKED, OP_LET_TEMP_INIT1, OP_LET_TEMP_INIT2, OP_LET_TEMP_DONE,
+      OP_LET_TEMPORARILY, OP_LET_TEMP_UNCHECKED, OP_LET_TEMP_INIT1, OP_LET_TEMP_INIT2, OP_LET_TEMP_DONE, OP_LET_TEMP_DONE1,
       OP_LET_TEMP_S7, OP_LET_TEMP_FX, OP_LET_TEMP_FX_1, OP_LET_TEMP_SETTER, OP_LET_TEMP_UNWIND, OP_LET_TEMP_S7_UNWIND, OP_LET_TEMP_SETTER_UNWIND,
       OP_LET_TEMP_A_A,
       OP_COND, OP_COND1, OP_FEED_TO_1, OP_COND_SIMPLE, OP_COND1_SIMPLE, OP_COND_SIMPLE_O, OP_COND1_SIMPLE_O,
@@ -4347,7 +4348,7 @@ static const char* op_names[NUM_OPS] =
       "if", "if1", "when", "unless", "set", "set1", "set2",
       "let", "let1", "let*", "let*1", "let*2", "let*-shadowed",
       "letrec", "letrec1", "letrec*", "letrec*1",
-      "let_temporarily", "let_temp_unchecked", "let_temp_init1", "let_temp_init2", "let_temp_done",
+      "let_temporarily", "let_temp_unchecked", "let_temp_init1", "let_temp_init2", "let_temp_done", "let_temp_done1",
       "let_temp_s7", "let_temp_fx", "let_temp_fx_1", "let_temp_setter", "let_temp_unwind", "let_temp_s7_unwind", "let_temp_setter_unwind",
       "let_temp_a_a",
       "cond", "cond1", "feed_to_1", "cond_simple", "cond1_simple", "cond_simple_o", "cond1_simple_o",
@@ -6924,8 +6925,7 @@ static void mark_op_stack(s7_scheme *sc)
 
 static void mark_input_port_stack(s7_scheme *sc)
 {
-  s7_pointer *p, *tp;
-  tp = (s7_pointer *)(sc->input_port_stack + sc->input_port_stack_loc);
+  s7_pointer *p, *tp = (s7_pointer *)(sc->input_port_stack + sc->input_port_stack_loc);
   for (p = sc->input_port_stack; p < tp; p++)
     gc_mark(*p);
 }
@@ -7371,8 +7371,7 @@ static void check_free_heap_size_1(s7_scheme *sc, s7_int size, const char *func,
 static void check_free_heap_size(s7_scheme *sc, s7_int size)
 #endif
 {
-  s7_int free_cells;
-  free_cells = sc->free_heap_top - sc->free_heap;
+  s7_int free_cells = sc->free_heap_top - sc->free_heap;
   if (free_cells < size)
     {
 #if S7_DEBUGGING
@@ -7805,12 +7804,9 @@ static void stack_reset(s7_scheme *sc)
 
 static void resize_stack(s7_scheme *sc)
 {
-  uint64_t loc;
-  uint32_t new_size;
+  uint64_t loc = current_stack_top(sc);
+  uint32_t new_size = sc->stack_size * 2;
   block_t *ob, *nb;
-
-  loc = current_stack_top(sc);
-  new_size = sc->stack_size * 2;
 
   /* how can we trap infinite recursion?  Is a warning in order here? I think I'll add 'max-stack-size */
   if (new_size > sc->max_stack_size)
@@ -8160,8 +8156,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   /* get symbol name */
   if (is_not_null(args))
     {
-      s7_pointer gname;
-      gname = car(args);
+      s7_pointer gname = car(args);
       if (!is_string(gname))
 	return(method_or_bust_one_arg(sc, gname, sc->gensym_symbol, args, T_STRING));
       prefix = string_value(gname);
@@ -8695,8 +8690,7 @@ static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
   let_set_slots(let, slot);
   for (var = cdr(vars); is_pair(var); var = cdr(var))
     {
-      s7_pointer last_slot;
-      last_slot = slot;
+      s7_pointer last_slot = slot;
       slot = make_permanent_slot(sc, caar(var), sc->F);
       add_permanent_let_or_slot(sc, slot);
       symbol_set_local_slot(caar(var), sc->let_number, slot);
@@ -9283,7 +9277,6 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 
       if (!is_symbol(sym))
 	return(wrong_type_argument_with_type(sc, sc->cutlet_symbol, position_of(syms, args), sym, a_symbol_string));
-
       if (is_keyword(sym))
 	sym = keyword_symbol(sym);
 
@@ -11453,7 +11446,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   return(x);
 }
 
-static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer code, s7_pointer let);
+static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let);
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value);
 static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e);
 static s7_pointer eval(s7_scheme *sc, opcode_t first_op);
@@ -11482,14 +11475,14 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
       switch (op)
 	{
 	case OP_DYNAMIC_WIND:
-	case OP_LET_TEMP_DONE:
+	case OP_LET_TEMP_DONE: /* case OP_LET_TEMP_DONE1: */
 	  {
 	    s7_pointer x;
 	    int64_t j, s_base = 0;
 	    x = stack_code(sc->stack, i);
 	    for (j = 3; j < top2; j += 4)
 	      if (((stack_op(continuation_stack(c), j) == OP_DYNAMIC_WIND) ||
-		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE)) &&
+		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE) /* || (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE1) */ ) &&
 		  (x == stack_code(continuation_stack(c), j)))
 		{
 		  s_base = i;
@@ -11505,7 +11498,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 			if (dynamic_wind_out(x) != sc->F)
 			  sc->value = s7_call(sc, dynamic_wind_out(x), sc->nil);
 		      }}
-		else let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
+		else let_temp_done(sc, stack_args(sc->stack, i), stack_let(sc->stack, i));
 	      }}
 	  break;
 
@@ -11730,10 +11723,14 @@ static void call_with_exit(s7_scheme *sc)
 	call_exit_active(stack_args(sc->stack, i)) = false;
 	break;
 
-      case OP_LET_TEMP_DONE:
-	let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
+      case OP_LET_TEMP_DONE:  /* case OP_LET_TEMP_DONE1: */
+	{
+	  s7_pointer old_args = sc->args;
+	  let_temp_done(sc, stack_args(sc->stack, i), stack_let(sc->stack, i));
+	  sc->args = old_args;
+	}
 	break;
-
+	  
       case OP_LET_TEMP_UNWIND:
 	let_temp_unwind(sc, stack_code(sc->stack, i), stack_args(sc->stack, i));
 	break;
@@ -51363,7 +51360,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		    y = type;
 	  if (y)
 	    {
-	      if (SHOW_EVAL_OPS) {fprintf(stderr, "about to pop_stack: \n"); s7_show_stack(sc);}
+	      if ((SHOW_EVAL_OPS) && (loc > 4)) {fprintf(stderr, "about to pop_stack: \n"); s7_show_stack(sc);}
 	      if (loc > 4)
 		pop_stack(sc);
 	      /* we're at OP_CATCH, normally we want to pop that away, but (handwaving...) if we're coming
@@ -51489,6 +51486,7 @@ static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
 }
 
 static bool op_let_temp_done1(s7_scheme *sc);
+
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   /* this is aimed at let-temp error-hook... error -- not yet tested much */
@@ -51511,7 +51509,7 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
       op_let_temp_done1(sc);
       return(true);  /* long_jmp here if from s7_error */
     }
-  let_temp_done(sc, stack_args(sc->stack, i), stack_code(sc->stack, i), stack_let(sc->stack, i));
+  let_temp_done(sc, stack_args(sc->stack, i), stack_let(sc->stack, i));
   return(false);
 }
 
@@ -76592,7 +76590,7 @@ static bool op_let_temp_init1(s7_scheme *sc)
 typedef enum {goto_start, goto_begin, fall_through, goto_do_end_clauses, goto_safe_do_end_clauses,
 	      goto_eval, goto_apply_lambda, goto_do_end, goto_top_no_pop, goto_apply,
 	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list,
-	      goto_read_tok, goto_feed_to} goto_t;
+	      goto_read_tok, goto_feed_to, goto_set_unchecked} goto_t;
 
 static goto_t op_let_temp_init2(s7_scheme *sc)
 {
@@ -76613,9 +76611,8 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
 	      return(goto_eval);
 	    }
 	  sc->code = set_plist_3(sc, sc->set_symbol, settee, new_value);
-	  push_stack_direct(sc, OP_EVAL_DONE);
-	  eval(sc, OP_SET_UNCHECKED);
-	  continue;
+	  push_stack_direct(sc, OP_LET_TEMP_INIT2);
+	  return(goto_set_unchecked);
 	}
       slot = lookup_slot_from(settee, sc->curlet);
       if (!is_slot(slot)) unbound_variable_error(sc, settee);
@@ -76661,17 +76658,16 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	  s7_pointer slot;
 	  if (!is_symbol(settee))
 	    {
+	      push_stack_direct(sc, OP_LET_TEMP_DONE1); /* save args and (pending) body value==sc->code */
 	      if ((is_pair(sc->value)) || (is_symbol(sc->value)))
 		sc->code = set_plist_3(sc, sc->set_symbol, settee, set_plist_2(sc, sc->quote_symbol, sc->value));
 	      else sc->code = set_plist_3(sc, sc->set_symbol, settee, sc->value);
-	      push_stack_direct(sc, OP_EVAL_DONE);
-	      eval(sc, OP_SET_UNCHECKED);
-	      continue;
+	      return(false); /* goto set_unchecked */
 	    }
 	  slot = lookup_slot_from(settee, sc->curlet);
 	  if (is_immutable_slot(slot))
 	    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
-	  if (slot_has_setter(slot)) /* maybe setter changed in let-temp body? else setter has already checked the init value */
+	  if (slot_has_setter(slot))             /* maybe setter changed in let-temp body? else setter has already checked the init value */
 	    slot_set_value(slot, call_setter(sc, slot, sc->value));
 	  else slot_set_value(slot, sc->value);
 	}}
@@ -76703,14 +76699,13 @@ static bool op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 
   return(is_pair(sc->code)); /* sc->code can be null if no body */
 }
 
-static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer code, s7_pointer let)
+static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let)
 {
   /* called in call/cc, call-with-exit and, catch (unwind to catch) */
   /* check_stack_size(sc); *//* 4-May-21 t101 36/38, but this is an infinite loop if stack resize raises an error (hit if eval is passed a circular list!) */
   check_stack_size(sc);
-  push_stack_direct(sc, OP_EVAL_DONE);
+  push_stack_direct(sc, OP_GC_PROTECT);
   sc->args = T_Pos(args);
-  sc->code = code;
   set_curlet(sc, let);
   op_let_temp_done1(sc);  /* an experiment 6-Nov-21, was eval(sc, OP_LET_TEMP_DONE) */
 }
@@ -90230,8 +90225,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
        *    sc->value = fx_function[sc->cur_op](sc, sc->code); continue;
        *    so the switch statement is unnecessary -- maybe a table eval_functions[cur_op] eventually
        */
-
-      if (SHOW_EVAL_OPS) s7_show_stack(sc);
       switch (sc->cur_op)
 	{
 	  /* safe c_functions */
@@ -91374,6 +91367,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_SET: check_set(sc);
 	case OP_SET_UNCHECKED:
+	SET_UNCHECKED:
 	  if (is_pair(cadr(sc->code)))             /* has setter */
 	    switch (set_implicit(sc))
 	      {
@@ -91703,13 +91697,17 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    {
 	    case goto_begin: goto BEGIN;
 	    case goto_eval:  goto EVAL;
+	    case goto_set_unchecked: goto SET_UNCHECKED;
 	    default: break;
 	    }
 
 	case OP_LET_TEMP_DONE:
-	  push_stack(sc, OP_GC_PROTECT, sc->args, sc->value);
+	  sc->code = sc->value;
+	  push_stack(sc, OP_GC_PROTECT, sc->args, sc->value);  /* save let-temp body val as sc->code */
+	case OP_LET_TEMP_DONE1:
 	  if (op_let_temp_done1(sc)) continue;
-	  goto EVAL;
+	  goto SET_UNCHECKED;
+
 
 	case OP_LET_TEMP_S7:     if(op_let_temp_s7(sc))      goto BEGIN; sc->value = sc->nil; continue;
 	case OP_LET_TEMP_FX:     if (op_let_temp_fx(sc))     goto BEGIN; sc->value = sc->nil; continue;
@@ -95354,7 +95352,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 916)
+  if (NUM_OPS != 917)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95750,7 +95748,7 @@ int main(int argc, char **argv)
  * tmat       2694         3065   3042   2524   2525
  * tcopy      2600         8035   5546   2539   2538
  * dup        2756         3805   3788   2492   2471
- * tauto      2763         ----   ----   2562   2559
+ * tauto      2763         ----   ----   2562   2554
  * tb         3366?        2735   2681   2612   2612
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
@@ -95758,16 +95756,16 @@ int main(int argc, char **argv)
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3538
  * tio        3698         3816   3752   3683   3683
- * tobj       4533         4016   3970   3828   3828
+ * tobj       4533         4016   3970   3828   3825
  * tclo       4604         4787   4735   4390   4390
  * tcase      4501         4960   4793   4439   4435
  * tlet       5305         7775   5640   4450   4450
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5184
- * tnum       56.7         6348   6013   5433   5432
+ * tnum       56.7         6348   6013   5433   5428
  * tstr       6123         6880   6342   5488   5488
- * tmisc      6847         8869   7612   6325   6363
+ * tmisc      6847         8869   7612   6325   6361
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6557
