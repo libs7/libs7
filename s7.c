@@ -51495,21 +51495,30 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
     {
       s7_pointer error_hook_funcs;
       error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
+
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, error_hook_funcs);
       sc->code = sc->let_temp_hook;
       sc->args = list_2(sc, type, info);
-      eval(sc, OP_APPLY); /* not s7_call here -- see snd-test 24 */
+
+      push_stack_direct(sc, OP_EVAL_DONE);
+      sc->curlet = make_let(sc, closure_let(sc->code));
+      eval(sc, OP_APPLY_LAMBDA);
+
       s7_let_set(sc, closure_let(sc->error_hook), sc->body_symbol, error_hook_funcs);
       s7_let_set(sc, closure_let(sc->let_temp_hook), sc->body_symbol, sc->nil);
 
       sc->args = stack_args(sc->stack, i);
       sc->code = stack_code(sc->stack, i);
       set_curlet(sc, stack_let(sc->stack, i));
-      op_let_temp_done1(sc);
-      return(true);  /* long_jmp here if from s7_error */
-    }
-  let_temp_done(sc, stack_args(sc->stack, i), stack_let(sc->stack, i));
+
+      push_stack_direct(sc, OP_GC_PROTECT);
+      if (!op_let_temp_done1(sc)) 
+	{
+	  push_stack_direct(sc, OP_EVAL_DONE);
+	  eval(sc, OP_SET_UNCHECKED);
+	}}
+  else let_temp_done(sc, stack_args(sc->stack, i), stack_let(sc->stack, i));
   return(false);
 }
 
@@ -51755,7 +51764,8 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
       /* if we drop into the longjmp below, the hook functions are not called!
        *   OP_ERROR_HOOK_QUIT performs the longjmp, so it should be safe to go to eval.
        */
-      eval(sc, OP_APPLY);
+      sc->curlet = make_let(sc, closure_let(sc->code));
+      eval(sc, OP_APPLY_LAMBDA);
     }
   else
     {
@@ -79205,8 +79215,7 @@ static void op_set_safe(s7_scheme *sc)
 static s7_pointer op_set1(s7_scheme *sc)
 {
   s7_pointer lx;
-  /* if unbound variable hook here, we need the binding, not the current value */
-  lx = lookup_slot_from(sc->code, sc->curlet);
+  lx = lookup_slot_from(sc->code, sc->curlet);    /* if unbound variable hook here, we need the binding, not the current value */
   if (is_slot(lx))
     {
       if (is_immutable(lx))
@@ -95785,4 +95794,7 @@ int main(int argc, char **argv)
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string (t549), 
  *   tmac continued, eval/eval-string?, nested let-ref?
+ * needs testing: error-hook (catch in hook -- t549), sort!? s7test 1500 -> t101? (and others like it)
+ *   error-hook+missing-close-paren?
+ * t718 maxint
  */
