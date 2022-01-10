@@ -128,7 +128,24 @@
 
 (test-chars)
 
-;(do ((i 0 (+ i 1))) ((= i 1000)) (test-chars))
+(define (f)
+  (do ((i 0 (+ i 1)))
+      ((= i 100000))
+    (format #f "~{.~{~A~}+~{~A~}~}" '((1 2) (3 4 5) (6 7 8) (9)))
+    (format #f "~{.~{+~{-~W~}~}~}" '(((1 2) (3 4 5))))
+    (format #f "~{.~{+~{-~A~}~}~}" '(((1 2) (3 4 5)) ((6) (7 8 9))))
+    (format #f "~9,9F" 3.14)
+    (format #f "~19,'xf" 3.14)
+    (format #f "~{~{~~~{~D~| ~}~| ~}~}" '(((1 2) (3 4))))
+    (format #f "~10,'\\T~&~20Tasdf~&")
+    (reader-cond
+     ((string=? (substring (*s7* 'version)  3 4) "9")
+      (format #f "~D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi))
+     (#t 
+      (format #f "~:D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi)))
+    ))
+(f)
+
 
 (when (> (*s7* 'profile) 0)
   (show-profile 200))

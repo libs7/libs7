@@ -2118,7 +2118,7 @@ static void init_types(void)
 #define clear_safe_closure_body(p)     clear_type0_bit(T_Pair(p), T_SAFE_CLOSURE)
 
 /* optimizer flag for a closure body that is completely simple (every expression is safe)
- *   set_safe_closure happens only in define_funchcecked, clear only in procedure_source, bits only here
+ *   set_safe_closure happens in define_funchcecked letrec_setup_closures etc, clear only in procedure_source, bits only here
  *   this has to be separate from T_SAFE_PROCEDURE, and should be in the second byte (closure_is_ok_1 checks typesflag).
  * define -> optimize_lambda sets safe -> define_funchecked -> make_funclet for the let
  *   similarly, named let -> optimize_lambda, then let creates the let if safe
@@ -76359,7 +76359,6 @@ static void letrec_setup_closures(s7_scheme *sc)
 	      set_very_safe_closure(func);
 	  }
 	make_funclet(sc, func, slot_symbol(slot), closure_let(func));
-	/*  else closure_set_let(new_func, sc->curlet); -- maybe funclet not needed here? */
       }
 }
 
@@ -78679,13 +78678,13 @@ static void check_set(s7_scheme *sc)
     {
       if (is_null(code))                                             /* (set!) */
 	syntax_error(sc, "set!: not enough arguments: ~A", 30, form);
-      syntax_error(sc, "set!: stray dot? ~A",19,  form);               /* (set! . 1) */
+      syntax_error(sc, "set!: stray dot? ~A",19,  form);             /* (set! . 1) */
     }
   if (!is_pair(cdr(code)))
     {
       if (is_null(cdr(code)))                                        /* (set! var) */
 	syntax_error(sc, "set!: not enough arguments: ~A", 30, form);
-      syntax_error(sc, "set!: stray dot? ~A", 19, form);               /* (set! var . 1) */
+      syntax_error(sc, "set!: stray dot? ~A", 19, form);             /* (set! var . 1) */
     }
   if (is_not_null(cddr(code)))                                       /* (set! var 1 2) */
     syntax_error(sc, "~A: too many arguments to set!", 30, form);
@@ -81895,7 +81894,6 @@ static bool op_do_step(s7_scheme *sc)
 {
   /* increment all vars, return to endtest
    *   these are also updated in parallel at the end, so we gather all the incremented values first
-   *
    * here we know car(sc->args) is not null, args is the list of steppable vars,
    *   any unstepped vars in the do var section are not in this list, so
    *   (do ((i 0 (+ i 1)) (j 2)) ...) arrives here with sc->args: '(slot<((+ i 1)=expr, 0=pending_value>))
@@ -82147,10 +82145,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 
 static bool op_simple_do(s7_scheme *sc)
 {
-  /* body might not be safe in this case, but the step and end exprs are easy
-   * simple_do: set up local let, check end (c_c?), goto op_simple_do_1
-   *   if latter gets s7_optimize, run locally, else goto simple_do_step.
-   */
+  /* body might not be safe in this case, but the step and end exprs are easy */
   s7_pointer end, body, code = cdr(sc->code);
   sc->curlet = make_let_slowly(sc, sc->curlet);
   sc->value = fx_call(sc, cdaar(code));
@@ -87544,7 +87539,7 @@ static s7_pointer fx_recur_cond_a_a_a_a_opla_laq(s7_scheme *sc, s7_pointer arg)
 /* -------- cond_a_a_a_a_oplaa_laaq -------- */
 static void opinit_cond_a_a_a_a_oplaa_laaq(s7_scheme *sc, bool cond_case)
 {
-  s7_pointer caller = opt3_pair(sc->code);              /* cadr(cadddr(sc->code)) = (cfunc laa laa) */
+  s7_pointer caller = opt3_pair(sc->code);             /* cadr(cadddr(sc->code)) = (cfunc laa laa) */
   if (cond_case)
     {
       rec_set_test(sc, cadr(sc->code));
@@ -89856,7 +89851,7 @@ static bool op_unknown_na(s7_scheme *sc)
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(f), display(sc->code));
 
   num_args = (is_pair(cdr(code))) ? opt3_arglen(cdr(code)) : 0;
-  if (num_args == 0) return(fixup_unknown_op(code, f, OP_S));       /* via op_closure*-fx where original had 0 args, safe case -> op_safe_closure*_0 */
+  if (num_args == 0) return(fixup_unknown_op(code, f, OP_S));  /* via op_closure*-fx where original had 0 args, safe case -> op_safe_closure*_0 */
 
   switch (type(f))
     {
@@ -91069,7 +91064,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_APPLY:
 	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */
 	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_%sapply%s %s (%s) to %s\n", 
-						__func__, __LINE__, BOLD_TEXT, UNBOLD_TEXT, display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
+						__func__, __LINE__, BOLD_TEXT, UNBOLD_TEXT, 
+						display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
 	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue;
@@ -95749,14 +95745,13 @@ int main(int argc, char **argv)
  * s7test     4537         1873   1831   1818   1815
  * lt         2117         2123   2110   2113   2112
  * timp       2232         2971   2891   2176   2201
- * tform      3241         2281   2273   2247   2247
  * tmac       2450         3317   3277   2418   2419
  * tread      2614         2440   2421   2419   2415
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
  * tmat       2694         3065   3042   2524   2525
  * tcopy      2600         8035   5546   2539   2538
- * dup        2756         3805   3788   2492   2471
+ * dup        2756         3805   3788   2492   2471  2482
  * tauto      2763         ----   ----   2562   2554
  * tb         3366?        2735   2681   2612   2612
  * titer      2659         2865   2842   2641   2641
@@ -95766,12 +95761,14 @@ int main(int argc, char **argv)
  * teq        3541         4068   4045   3536   3538
  * tio        3698         3816   3752   3683   3683
  * tobj       4533         4016   3970   3828   3825
+ * tlamb      4454         4912   4786   4298   4298
  * tclo       4604         4787   4735   4390   4390
  * tcase      4501         4960   4793   4439   4435
  * tlet       5305         7775   5640   4450   4450
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5184
+ * tform      8338         5357   5348   5307   5307
  * tnum       56.7         6348   6013   5433   5428
  * tstr       6123         6880   6342   5488   5488
  * tmisc      6847         8869   7612   6325   6361
@@ -95786,15 +95783,11 @@ int main(int argc, char **argv)
  * tgen       12.6         11.2   11.4   12.0   12.0
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   56.0
+ * sg         75.8         ----   ----   55.9   55.9
  * lg        104.2        106.6  105.0  103.6  103.6
  * tbig      604.3        177.4  175.8  156.5  156.5
  * -----------------------------------------------------
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
- * timing: continuations/call-with-exit (texit continued), lambda as arg, define in func, complex format control string (t549), 
- *   tmac continued, eval/eval-string?, nested let-ref?
- * needs testing: error-hook (catch in hook -- t549), sort!? s7test 1500 -> t101? (and others like it)
- *   error-hook+missing-close-paren?
- * t718 maxint
+ * can let optimize_lambda like letrec (t550)?
  */
