@@ -44,7 +44,7 @@
 
 (f3-test)
 
-;;; f1 could be faster, treat (lambda...) as a one-time evaluation (but where to save == lamlet?)
+;;; f1 could be faster, treat (lambda...) as a one-time evaluation (but where to save == lamlet? it's a do-loop: save locally)
 
 
 ;;; -------- [82] --------
@@ -56,7 +56,7 @@
 (define (f4-test)
   (do ((i 0 (+ i 1)))            ; opt_dotimes opt_p_fx_any
       ((= i size))
-    (f4 123)))                   ; fx_safe_closure_a_a
+    (f4 123)))                   ; fx_safe_closure_a_a -> safe_closure_add1_c [y=c etc] -> add1_c or inner body using s->val
 
 (f4-test)
 
@@ -121,7 +121,7 @@
 
 ;;; -------- [375] --------
 (define (f9 x)
-  (let ((f9_1 (lambda (y) (+ y 1)))) ; faster then define (f2)??  make_closure_unchecked
+  (let ((f9_1 (lambda (y) (+ y 1)))) ; faster than define (f2)??  make_closure_unchecked
     (f9_1 x)))
 
 ;(display (f9 123)) (newline)

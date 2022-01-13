@@ -71,7 +71,7 @@
 
       (object->string (bases (random 6)) :readable))))
 
-(require stuff.scm)
+(catch #t (lambda () (require stuff.scm)) (lambda (type info) (apply format *stderr* info)))
 (load "write.scm")
 (define (pp-checked obj)
   (let-temporarily ((((funclet pretty-print) '*pretty-print-cycles*) #t)) (pp obj)))
@@ -821,8 +821,10 @@
 		    "3441313796169221281/1720656898084610641" "1855077841/1311738121" "4478554083/3166815962" "20057446674355970889/10028723337177985444"
 		    "(cosh 128)" "(cosh (bignum 128.0))" "(bignum -1/2)" "123456789.123456789" "(bignum 1234)" "(bignum 1234.1234)" "(bignum 1+i)"
 		    "(bignum +inf.0)" "(bignum +nan.0)" "(bignum -inf.0)" "(bignum 0+i)" "(bignum 0.0)" "(bignum 0-i)"
-#|
+		    "(expt 2 -32)" "1/2+1/3i"
+
 		    ;(reader-cond ((provided? 'gmp)
+#|
 				  "(if (> (random 1.0) 0.5) -123 (bignum -123))"
 				  "(if (> (random 1.0) 0.5) 1/3 (bignum 1/3))"
 				  "(if (> (random 1.0) 0.5) -2.0 (bignum -2.0))"
@@ -840,7 +842,7 @@
 				  "(if (> (random 1.0) 0.5) 1.5 (bignum 1.5))"
 				  "(if (> (random 1.0) 0.5) 5/2 (bignum 5/2))"
 				  "(if (> (random 1.0) 0.5) 3/2 (bignum 3/2))"
-				  
+
 				  "18446744073709551614"
 				  "18446744073709551614/3"
 				  "18446744073709551615.0"
@@ -859,14 +861,14 @@
 				  "-4611686018427387905"
 				  "4611686018427387904"
 				  ;))
-|#
+|#				  
 
 		    "=>" 
 		    "\"ho\"" ":ho" "'ho" "(list 1)" "(list 1 2)" "(cons 1 2)" "'()" "(list (list 1 2))" "(list (list 1))" "(list ())" "=>" 
 		    "#f" "#t" "()" "#()" "\"\"" "'#()" ; ":write" -- not this because sr2 calls write and this can be an arg to sublet redefining write
 		    ":readable" ":rest" ":allow-other-keys" ":a" ":frequency" ":scaler" ; for blocks5 s7test.scm
 		    "1/0+i" "0+0/0i" "0+1/0i" "1+0/0i" "0/0+0/0i" "0/0+i" "+nan.0-3i" "+inf.0-nan.0i"
-		    "cons" "\"ra\"" "''2"
+		    "cons" "\"ra\"" "''2" "'a" "_!asdf!_"
 		    "#\\a" "#\\A" "\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-"
 		    "(make-hook)" "(make-hook '__x__)"
 		    "1+i" "0+i" "(ash 1 43)"  "(fib 8)" "(fibr 8)" "(fibf 8.0)"
@@ -917,6 +919,7 @@
 		    "(= i 2)" "(zero? i)" "((null? i) i)"
 		    "(#t ())" 
 		    "`(+ ,a ,@b)" "`(+ ,a ,b)" "`(+ ,a ,b ,@c)" "`(+ ,a b ,@c ',d)"
+		    ;"(+ (*s7* 'most-positive-fixnum) 1)"
 		    "_definee_"
 		    "(hash-table 'a 1.5)" "(hash-table)" "(hash-table 'a (hash-table 'b 1))"
 		    "(weak-hash-table 1.0 'a 2.0 'b 3.0 'c)"
@@ -1074,13 +1077,13 @@
 		    "(cons-r 0 0 6)"
 		    "(list-r 0 0 6)"
 
-		    "(*s7* 'catches)"
+		    ;"(*s7* 'catches)"
 		    ;"(*s7* 'cpu-time)" ; variable
 		    "(*s7* 'c-types)"
 		    ;"(copy (*s7* 'file-names))" ; one is *stdin* which can hang if read* gets it as the port
 		    ;"(*s7* 'gc-freed)" "(*s7* 'gc-total-freed)" "(*s7* 'free-heap-size)" ; variable
 		    ;"(*s7* 'gc-protected-objects)"  ; access + element set => not protected! perhaps copy it?
-		    "(copy (*s7* 'gc-protected-objects))"
+		    "(*s7* 'gc-protected-objects)"
 		    ;"(*s7* 'memory-usage)"          ; variable
 		    "(*s7* 'most-negative-fixnum)"
 		    "(*s7* 'most-positive-fixnum)"
@@ -1103,69 +1106,112 @@
 		    "(subvector #i2d((1 2) (3 4)))" "(subvector #i2d((1 2) (3 4)) 0 4 '(4))" "(subvector #i2d((1 2) (3 4)) 1 3 '(2 1))"
 
 		    "my-let" "my-with-baffle" "fvset" "htset"
+		    "(catch #t (lambda () (+ 1 #(2))) (lambda (type info) 0))"
 		    #f #f #f
 		    ))
 
       (codes (vector 
-	      (list "(do ((x 0.0 (+ x 0.1)) (i 0 (+ i 1))) ((>= x .1) " "(let ((x 0.1) (i 1)) (begin ")
-	      (list "(do ((x 0) (i 0 (+ i 1))) ((= i 1) x) (set! x " "(let ((x 0) (i 0)) (set! x ")
-	      ;; (list "((lambda x " "((lambda* ((x ())) ")
-	      ;;(list "((lambda* ((x 1)) " "(let* ((_aaa_ 1) (x _aaa_)) (begin ")
-	      (list "(cond (else " "(case x (else ")
-	      (list "(case false ((#f) " "(case false ((1) #t) (else ")
-	      (list "(call-with-exit (lambda (_x_) " "(call/cc (lambda (_x_) ")
-	      (list "(if (not x) (begin " "(if x #<unspecified> (begin ")
-	      (list "(cond ((not false) " "(unless false (begin ")
-	      (list "(let () (let-temporarily ((x 1)) " "(let () (let ((x 1)) ")
-	      (list "(begin (_let1_ " "(begin (_let2_ ")
-	      (list "(begin (_dw_ " "((lambda () ")
-	      (list "(begin (append " "(apply append (list ")
-	      (list "(begin (with-let (inlet 'i 0) " "(with-let (inlet) (let ((i 0)) ")
-	      (list "(list (_cw_ " "(list (values ")
-	      (list "(do () ((not false) " "(begin (when (not false) ")
-	      ;;(list "((define-macro (_m_) " "((define-bacro (_m_) ") ; circular source if signature in body
-	      (list "(for-each display (list " "(for-each (lambda (x) (display x)) (list ")
-	      (list "(begin (_ct1_ " "(begin (_ct2_ ")
-	      (list "(with-output-to-string (lambda () " "(begin (_dw_out_ ")
-	      (list "(begin (_rf1_ " "(begin (_rf2_ ")
-	      (list "(begin (_rf1_ " "(begin (_rf3_ ")
-	      (list "(let () (_do1_ " "(let () (_do2_ ")
-	      (list "(let () (let-temporarily ((x 1234)) (call-with-exit (lambda (goto) (goto 1))) "
-		    "(let () (let-temporarily ((x 1234)) (call/cc (lambda (goto) (goto 1))) ")
-	      (list "(let ((x 1)) (immutable! 'x) (begin " "((lambda* ((x 1)) (immutable! 'x) ")
-	      (list "(do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((= j 1)) "
-		    "(do ((i 0 (+ i 1))) ((= i 1)) (let ((j 0)) ")
-	      (list "(or (_cop1_ " "(and (_cop2_ ")
-	      (list "(let () (_do4_ " "(let () (_do5_ ")
-	      (list "(begin (_ft1_ " "(begin (_ft2_ ")
-	      (list "(begin (_rd3_ " "(begin (_rd4_ ")
-	      (list "(begin (_rd5_ " "(begin (_rd6_ ")
-	      (list "(begin (_rd7_ " "(begin (_rd8_ ")
-	      (list "(format #f \"~S\" (list " "(object->string (list ")
-	      (list "(begin (_wr1_ " "(begin (_wr2_ ")
-	      (list "(begin (_wr3_ " "(begin (_wr4_ ")
-	      (list "(begin (vector " "(apply vector (list ")
-	      (list "(begin (string " "(apply string (list ")
-	      (list "(begin (float-vector " "(apply float-vector (list ")
-	      (list "(begin (values " "(apply values (list ")
-	      (list "(vector (values " "(apply vector (list ")
-	      (list "(vector 1 (values " "(apply vector (list 1 ")
-	      (list "(begin (do ((i 0 (+ i 1))) ((= i 1)) " "(let ((__x__ 1)) (do ((i 0 (+ i __x__))) ((= i __x__)) ")
+	      (list (lambda (s) (string-append "(do ((x 0.0 (+ x 0.1)) (i 0 (+ i 1))) ((>= x .1) " s "))"))
+		    (lambda (s) (string-append "(let ((x 0.1) (i 1)) " s ")")))
+	      (list (lambda (s) (string-append "(do ((x 0) (i 0 (+ i 1))) ((= i 1) x) (set! x " s "))"))
+		    (lambda (s) (string-append "(let ((x 0) (i 0)) (set! x " s "))")))
+	      (list (lambda (s) (string-append "(cond (else " s "))")) 
+                    (lambda (s) (string-append "(case x (else " s "))")))
+	      (list (lambda (s) (string-append "(case false ((#f) " s "))")) 
+                    (lambda (s) (string-append "(case false ((1) #t) (else " s "))")))
+	      (list (lambda (s) (string-append "(call-with-exit (lambda (_x_) " s "))")) 
+                    (lambda (s) (string-append "(call/cc (lambda (_x_) " s "))")))
+	      (list (lambda (s) (string-append "(if (not x) (begin " s "))")) 
+                    (lambda (s) (string-append "(if x #<unspecified> (begin " s "))")))
+	      (list (lambda (s) (string-append "(cond ((not false) " s "))")) 
+                    (lambda (s) (string-append "(unless false " s ")")))
+	      (list (lambda (s) (string-append "(let () (let-temporarily ((x 1)) " s "))")) 
+                    (lambda (s) (string-append "(let ((x 1)) " s ")")))
+	      (list (lambda (s) (string-append "(_let1_ " s ")")) 
+                    (lambda (s) (string-append "(_let2_ " s ")")))
+	      (list (lambda (s) (string-append "(_dw_ " s ")")) 
+                    (lambda (s) (string-append "((lambda () " s "))")))
+	      (list (lambda (s) (string-append "(append " s ")")) 
+                    (lambda (s) (string-append "(apply append (list " s "))")))
+	      (list (lambda (s) (string-append "(with-let (inlet 'i 0) " s ")")) 
+                    (lambda (s) (string-append "(with-let (inlet) (let ((i 0)) " s "))")))
+	      (list (lambda (s) (string-append "(list (_cw_ " s "))")) 
+                    (lambda (s) (string-append "(list (values " s "))")))
+	      (list (lambda (s) (string-append "(do () ((not false) " s "))")) 
+                    (lambda (s) (string-append "(when (not false) " s ")")))
+	      (list (lambda (s) (string-append "(for-each display (list " s "))")) 
+                    (lambda (s) (string-append "(for-each (lambda (x) (display x)) (list " s "))")))
+	      (list (lambda (s) (string-append "(_ct1_ " s ")")) 
+                    (lambda (s) (string-append "(_ct2_ " s ")")))
+	      (list (lambda (s) (string-append "(with-output-to-string (lambda () " s "))")) 
+                    (lambda (s) (string-append "(_dw_out_ " s ")")))
+	      (list (lambda (s) (string-append "(_rf1_ " s ")")) 
+                    (lambda (s) (string-append "(_rf2_ " s ")")))
+	      (list (lambda (s) (string-append "(_rf1_ " s ")")) 
+                    (lambda (s) (string-append "(_rf3_ " s ")")))
+	      (list (lambda (s) (string-append "(_do1_ " s ")")) 
+                    (lambda (s) (string-append "(_do2_ " s ")")))
+	      (list (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call-with-exit (lambda (goto) (goto 1))) " s "))")) 
+                    (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call/cc (lambda (goto) (goto 1))) " s "))")))
+	      (list (lambda (s) (string-append "(let ((x 1)) (immutable! 'x) (begin " s "))")) 
+                    (lambda (s) (string-append "((lambda* ((x 1)) (immutable! 'x) " s "))")))
+	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((= j 1)) " s "))")) 
+                    (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1)) (let ((j 0)) " s "))")))
+	      (list (lambda (s) (string-append "(or (_cop1_ " s "))")) 
+                    (lambda (s) (string-append "(and (_cop2_ " s "))")))
+	      (list (lambda (s) (string-append "(_do4_ " s ")")) 
+                    (lambda (s) (string-append "(_do5_ " s ")")))
+	      (list (lambda (s) (string-append "(_ft1_ " s ")")) 
+                    (lambda (s) (string-append "(_ft2_ " s ")")))
+	      (list (lambda (s) (string-append "(_rd3_ " s ")")) 
+                    (lambda (s) (string-append "(_rd4_ " s ")")))
+	      (list (lambda (s) (string-append "(_rd5_ " s ")")) 
+                    (lambda (s) (string-append "(_rd6_ " s ")")))
+	      (list (lambda (s) (string-append "(_rd7_ " s ")")) 
+                    (lambda (s) (string-append "(_rd8_ " s ")")))
+	      (list (lambda (s) (string-append "(format #f \"~S\" (list " s "))"))
+		    (lambda (s) (string-append "(object->string (list " s "))")))
+	      (list (lambda (s) (string-append "(_wr1_ " s ")")) 
+                    (lambda (s) (string-append "(_wr2_ " s ")")))
+	      (list (lambda (s) (string-append "(_wr3_ " s ")")) 
+                    (lambda (s) (string-append "(_wr4_ " s ")")))
+	      (list (lambda (s) (string-append "(vector " s ")")) 
+                    (lambda (s) (string-append "(apply vector (list " s "))")))
+	      (list (lambda (s) (string-append "(string " s ")")) 
+                    (lambda (s) (string-append "(apply string (list " s "))")))
+	      (list (lambda (s) (string-append "(float-vector " s ")")) 
+                    (lambda (s) (string-append "(apply float-vector (list " s "))")))
+	      (list (lambda (s) (string-append "(values " s ")")) 
+                    (lambda (s) (string-append "(apply values (list " s "))")))
+	      (list (lambda (s) (string-append "(vector (values " s "))")) 
+                    (lambda (s) (string-append "(apply vector (list " s "))")))
+	      (list (lambda (s) (string-append "(vector 1 (values " s "))")) 
+                    (lambda (s) (string-append "(apply vector (list 1 " s "))")))
+	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1)) " s ")")) 
+                    (lambda (s) (string-append "(let ((__x__ 1)) (do ((i 0 (+ i __x__))) ((= i __x__)) " s "))")))
+	      (list (lambda (s) (string-append "(cond ((eqv? x 0) " s "))")) 
+                    (lambda (s) (string-append "(when (eqv? x 0) " s ")")))
+              (list (lambda (s) (string-append "((lambda (a) (sort! a >)) " s ")")) 
+                    (lambda (s) (string-append "((lambda (a) (sort! a (lambda (x y) (not (<= x y))))) " s ")")))
+	      (list (lambda (s) (string-append "(_iter_ " s ")")) 
+                    (lambda (s) (string-append "(_map_ " s ")")))
+	      (list (lambda (s) (string-append "(_cat1_ " s ")")) 
+                    (lambda (s) (string-append "(_cat2_ " s ")")))
+	      (list (lambda (s) (string-append "(let ((+ -)) " s ")")) 
+                    (lambda (s) (string-append "(let () (define + -) " s ")")))
+	      (list (lambda (s) (string-append "(let ((+ -)) (let ((cons list)) " s "))")) 
+                    (lambda (s) (string-append "(let ((cons list)) (let ((+ -)) " s "))")))
+	      (list (lambda (s) (string-append "(let () (with-baffle " s "))")) 
+                    (lambda (s) (string-append "(let ((mwb with-baffle)) (mwb " s "))")))
+	      (list (lambda (s) (string-append "(let _L_ ((x 1)) (if (> x 0) (_L_ (- x 1)) " s "))")) 
+                    (lambda (s) (string-append "(let* _L_ ((x 1)) (if (> x 0) (_L_ (- x 1)) " s "))")))
+	      (list (lambda (s) (string-append "(catch #t (lambda () (+ 1 #\\a)) (lambda (+t+ +i+) " s "))")) 
+                    (lambda (s) (string-append "(catch #t (lambda () " s ") (lambda (type info) 'error))")))
+	      (list (lambda (s) (string-append "(let-temporarily ((x " s ")) x)"))
+		    (lambda (s) (string-append "(let ((x " s ")) x)")))
+	      (list (lambda (s) (string-append "(case 1 ((2 3 1) " s ") (else 'oops))"))
+		    (lambda (s) (string-append "(cond ((= 1 1) " s ") (else 'oops))")))
 
-	      (list "(cond ((eqv? x 0) " "(begin (when (eqv? x 0) ")
-	      ;(list "(_fe1_ " "(_fe2_ ")
-	      ;(list "(_fe3_ " "(_fe4_ ")
-	      ;(list "(begin (_tr1_ " "(begin (_tr2_ ")
-	      ;(list "(begin (_mem1_ " "(begin (_mem2_ ")
-	      ;(list "(list (_cw_ " "(list (_cc_ ")
-
-              (list "(begin ((lambda (a) (sort! a >)) " "(begin ((lambda (a) (sort! a (lambda (x y) (not (<= x y))))) ")
-	      (list "(begin (_iter_ " "(begin (_map_ ")
-	      (list "(begin (_cat1_ " "(begin (_cat2_ ")
-	      (list "(begin (let ((+ -)) " "(begin (let () (define + -) ")
-	      (list "(let ((+ -)) (let ((cons list)) " "(let ((cons list)) (let ((+ -)) ")
-	      (list "(let () (with-baffle " "(let ((mwb with-baffle)) (mwb ")
-	      (list "(let _L_ ((x 1)) (if (> x 0) (_L_ (- x 1)) " "(let* _L_ ((x 1)) (if (> x 0) (_L_ (- x 1)) ")
 	      ))
       
       (chars (vector #\( #\( #\) #\space))) ; #\' #\/ #\# #\, #\` #\@ #\. #\:))  ; #\\ #\> #\space))
@@ -1184,15 +1230,15 @@
 	    (cycler (+ 3 (random 3))))))
 
     (define (rf-symbol->string sym)
-      (if (or (> (random 100) 5)
-	      (syntax? sym)
-	      (syntax? (symbol->value sym)))
-	  (symbol->string sym)
-	  (if (< (random 10) 3) 
-	      (string-append "(let () " (symbol->string sym) ")")
-	      (if (< (random 10) 3)
-		  (string-append "((vector " (symbol->string sym) ") 0)")
-		  (string-append "#_" (symbol->string sym))))))
+      (cond ((or (> (random 100) 5)
+		 (syntax? sym)
+		 (syntax? (symbol->value sym)))
+             (symbol->string sym))
+            ((< (random 10) 3)
+             (string-append "(let () " (symbol->string sym) ")"))
+            ((< (random 10) 3)
+             (string-append "((vector " (symbol->string sym) ") 0)"))
+            (else (string-append "#_" (symbol->string sym)))))
 
     (define (fix-op op)
       (case op
@@ -1485,10 +1531,10 @@
 	(lambda arg 'error))
 
       (set! last-error-type #f)
-      (let* ((outer (codes (random codes-len)))
-	     (str1 (string-append "(let ((x #f) (i 0)) " (car outer) str ")))"))
+      (let* ((outer-funcs (codes (random codes-len)))
+	     (str1 (string-append "(let ((x #f) (i 0)) " ((car outer-funcs) str) ")"))
 	     (str2 (string-append "(let () (define (func) " str1 ") (func))"))
-	     (str3 (string-append "(let ((x #f) (i 0)) " (cadr outer) str ")))"))
+	     (str3 (string-append "(let ((x #f) (i 0)) " ((cadr outer-funcs) str) ")"))
 	     (str4 (string-append "(let () (define (func) " str3 ") (func))")))
 	(let ((val1 (begin (set! curstr str1) (eval-it str1)))
 	      (val2 (begin (set! curstr str2) (eval-it str2)))

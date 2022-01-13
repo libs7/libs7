@@ -139,7 +139,7 @@
     (format #f "~{~{~~~{~D~| ~}~| ~}~}" '(((1 2) (3 4))))
     (format #f "~10,'\\T~&~20Tasdf~&")
     (reader-cond
-     ((string=? (substring (*s7* 'version)  3 4) "9")
+     ((<= (*s7* 'major-version) 9)
       (format #f "~D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi))
      (#t 
       (format #f "~:D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi)))

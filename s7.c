@@ -32702,7 +32702,7 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
 {
   s7_int i, len, plen;
   bool too_long;
-  #define FV_BUFSIZE 256
+  #define FV_BUFSIZE 512 /* some floats can take around 312 bytes */
   char buf[FV_BUFSIZE];
   s7_double *els = float_vector_floats(vect);
 
@@ -43662,7 +43662,6 @@ s7_pointer s7_make_hash_table(s7_scheme *sc, s7_int size)
 	  }
 	size++;
       }
-
   els = (block_t *)callocate(sc, size * sizeof(hash_entry_t *));
   new_cell(sc, table, T_HASH_TABLE | T_SAFE_PROCEDURE);
   hash_table_mask(table) = size - 1;
@@ -43756,8 +43755,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  proc = cadr(args);
 			  if (is_c_function(proc))
 			    {
-			      s7_pointer eq_sig;
-			      eq_sig = c_function_signature(proc);
+			      s7_pointer eq_sig = c_function_signature(proc);
 			      if ((eq_sig) &&
 				  (is_pair(eq_sig)) &&
 				  (is_pair(cdr(eq_sig))) &&
@@ -49964,7 +49962,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
 	      int bytes;
 	      strftime(c1, 64, "%a %d-%b-%Y %H:%M", localtime(&sb.st_atime));
 	      strftime(c2, 64, "%a %d-%b-%Y %H:%M", localtime(&sb.st_mtime));
-	      bytes = snprintf(str, 512, "mode: #o%d, links: %ld, owner uid: %d gid: %d, size: %ld bytes, last file access: %s, last file modification: %s",
+	      bytes = snprintf(str, 512, "mode: #o%u, links: %ld, owner uid: %d gid: %d, size: %ld bytes, last file access: %s, last file modification: %s",
 			       sb.st_mode,
 			       (long)sb.st_nlink,
 			       (int)sb.st_uid, (int)sb.st_gid,
@@ -51342,6 +51340,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		y = cadr(error_body);
 	      else
 		if ((car(error_body) == sc->car_symbol) &&
+		    (is_pair(cdr(error_body))) &&            /* catch: (lambda (type info) (car)) */
 		    (cadr(error_body) == error_args))
 		  y = type;
 	    }
@@ -72814,6 +72813,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 		      ((!is_pair(error_result)) ||
 		       (car(error_result) == sc->quote_symbol) ||     /* (lambda args 'a) */
 		       ((car(error_result) == sc->car_symbol) &&
+			(is_pair(cdr(error_result))) &&               /* (lambda (type info) (car)) */
 			(cadr(error_result) == cadr(error_lambda))))) /* (lambda args (car args) -> error-type */
 		    {
 		      set_optimize_op(expr, OP_C_CATCH_ALL);    /* catch_all* = #t tag, error handling can skip to the simple lambda body */
@@ -92015,8 +92015,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS, SL_HEAP_SIZE, SL_FREE_HEAP_SIZE,
 	      SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_ROOTLET_SIZE, SL_C_TYPES, SL_SAFETY,
 	      SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_UNDEFINED_CONSTANT_WARNINGS, SL_GC_STATS, SL_MAX_HEAP_SIZE,
-	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_CPU_TIME, SL_CATCHES, SL_STACK, SL_MAX_STRING_LENGTH,
-	      SL_MAX_FORMAT_LENGTH, SL_MAX_LIST_LENGTH, SL_MAX_VECTOR_LENGTH, SL_MAX_VECTOR_DIMENSIONS,
+	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_CPU_TIME, SL_CATCHES, SL_STACK, SL_MAJOR_VERSION, SL_MINOR_VERSION,
+	      SL_MAX_STRING_LENGTH, SL_MAX_FORMAT_LENGTH, SL_MAX_LIST_LENGTH, SL_MAX_VECTOR_LENGTH, SL_MAX_VECTOR_DIMENSIONS,
 	      SL_DEFAULT_HASH_TABLE_LENGTH, SL_INITIAL_STRING_PORT_LENGTH, SL_DEFAULT_RATIONALIZE_ERROR,
 	      SL_DEFAULT_RANDOM_STATE, SL_EQUIVALENT_FLOAT_EPSILON, SL_HASH_TABLE_FLOAT_EPSILON, SL_PRINT_LENGTH,
 	      SL_BIGNUM_PRECISION, SL_MEMORY_USAGE, SL_FLOAT_FORMAT_PRECISION, SL_HISTORY, SL_HISTORY_ENABLED,
@@ -92029,8 +92029,8 @@ static const char *s7_let_field_names[SL_NUM_FIELDS] =
   {"no-field", "stack-top", "stack-size", "stacktrace-defaults", "heap-size", "free-heap-size",
    "gc-freed", "gc-protected-objects", "gc-total-freed", "gc-info", "file-names", "rootlet-size", "c-types", "safety",
    "undefined-identifier-warnings", "undefined-constant-warnings", "gc-stats", "max-heap-size",
-   "max-port-data-size", "max-stack-size", "cpu-time", "catches", "stack", "max-string-length",
-   "max-format-length", "max-list-length", "max-vector-length", "max-vector-dimensions",
+   "max-port-data-size", "max-stack-size", "cpu-time", "catches", "stack", "major-version", "minor-version",
+   "max-string-length", "max-format-length", "max-list-length", "max-vector-length", "max-vector-dimensions",
    "default-hash-table-length", "initial-string-port-length", "default-rationalize-error",
    "default-random-state", "equivalent-float-epsilon", "hash-table-float-epsilon", "print-length",
    "bignum-precision", "memory-usage", "float-format-precision", "history", "history-enabled",
@@ -92473,6 +92473,8 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_HISTORY_ENABLED:               return(s7_make_boolean(sc, s7_history_enabled(sc)));
     case SL_HISTORY_SIZE:                  return(make_integer(sc, sc->history_size));
     case SL_INITIAL_STRING_PORT_LENGTH:    return(make_integer(sc, sc->initial_string_port_length));
+    case SL_MAJOR_VERSION:                 return(make_integer(sc, S7_MAJOR_VERSION));
+    case SL_MINOR_VERSION:                 return(make_integer(sc, S7_MINOR_VERSION));
     case SL_MAX_FORMAT_LENGTH:             return(make_integer(sc, sc->max_format_length));
     case SL_MAX_HEAP_SIZE:                 return(make_integer(sc, sc->max_heap_size));
     case SL_MAX_LIST_LENGTH:               return(make_integer(sc, sc->max_list_length));
@@ -92925,6 +92927,8 @@ static void init_s7_let_immutable_field(void)
   s7_let_immutable_field[SL_STACK_SIZE] = true;
   s7_let_immutable_field[SL_STACK_TOP] = true;
   s7_let_immutable_field[SL_VERSION] = true;
+  s7_let_immutable_field[SL_MAJOR_VERSION] = true;
+  s7_let_immutable_field[SL_MINOR_VERSION] = true;
 }
 
 
@@ -95790,4 +95794,5 @@ int main(int argc, char **argv)
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * can let optimize_lambda like letrec (t550)?
+ * dw timing
  */

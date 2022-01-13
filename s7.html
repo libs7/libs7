@@ -5499,6 +5499,10 @@ correct.  To clear out the current data, call clear-profile.
 state: 
 </p>
 <pre class="indented">
+version                       a string describing the current s7: e.g. "s7 10.0, 13-Jan-2022"
+major-version                 an integer (10 in the example above)
+minor-version                 an integer (0 in the example above)
+
 print-length                  number of elements to print of a non-string sequence
 max-string-length             maximum size arg to make-string and read-string
 max-format-length             maximum size arg to ~N or the width and precision fields for floats in format
@@ -5560,7 +5564,7 @@ gc-temps-size                 number of cells just allocated that are protected 
 gc-resize-heap-fraction       when to resize the heap (0.8); these two are aimed at GC experiments
 gc-resize-heap-by-4-fraction  when to get panicky about resizing the heap
 gc-protected-objects          vector of the objects permanently protected from the GC
-memory-usage                  a description of current memory allocations (sent to current-output-port)
+memory-usage                  a let (environment) describing current s7 memory allocations
 </pre>
 
 <p>
