@@ -2061,7 +2061,7 @@ static void init_types(void)
 #define clear_type_bit(p, b)           full_type(p) &= (~(b))
 #define has_type_bit(p, b)             ((full_type(p) & (b)) != 0)
 
-#define set_type0_bit(p, b)            typesflag(p) |= (b)
+#define set_type0_bit(p, b)            typesflag(p) |= (b)      /* I don't think these type0's matter -- *_type_bit is the same speed */
 #define clear_type0_bit(p, b)          typesflag(p) &= (~(b))
 #define has_type0_bit(p, b)            ((typesflag(p) & (b)) != 0)
 
@@ -2078,14 +2078,14 @@ static void init_types(void)
 /* this marks symbols that represent syntax objects, it should be in the second byte */
 
 #define T_SIMPLE_ARG_DEFAULTS          (1 << (TYPE_BITS + 2))
-#define lambda_has_simple_defaults(p)  has_type_bit(T_Pair(closure_body(p)), T_SIMPLE_ARG_DEFAULTS)
-#define lambda_set_simple_defaults(p)  set_type_bit(T_Pair(p), T_SIMPLE_ARG_DEFAULTS)
+#define lambda_has_simple_defaults(p)  has_type0_bit(T_Pair(closure_body(p)), T_SIMPLE_ARG_DEFAULTS)
+#define lambda_set_simple_defaults(p)  set_type0_bit(T_Pair(p), T_SIMPLE_ARG_DEFAULTS)
 /* are all lambda* default values simple? This is set on closure_body, so it doesn't mess up closure_is_ok_1 */
 
 #define T_LIST_IN_USE                  T_SIMPLE_ARG_DEFAULTS
 #define list_is_in_use(p)              has_type0_bit(T_Pair(p), T_LIST_IN_USE)
-#define set_list_in_use(p)             set_type_bit(T_Pair(p), T_LIST_IN_USE)
-#define clear_list_in_use(p)           do {clear_type_bit(T_Pair(p), T_LIST_IN_USE); sc->current_safe_list = 0;} while (0)
+#define set_list_in_use(p)             set_type0_bit(T_Pair(p), T_LIST_IN_USE)
+#define clear_list_in_use(p)           do {clear_type0_bit(T_Pair(p), T_LIST_IN_USE); sc->current_safe_list = 0;} while (0)
 /* since the safe lists are not in the heap, if the list_in_use bit is off, the list won't ne GC-protected even if
  *   it is gc_marked explicitly.  This happens, for example, in copy_proper_list where we try to protect the original list
  *   by sc->u = lst; then in the GC, gc_mark(sc->u); but the safe_list probably is already marked, so its contents are not protected.
@@ -2093,22 +2093,22 @@ static void init_types(void)
 /* if (!is_immutable(p)) free_vlist(sc, p) seems plausible here, but it got no hits in s7test and other cases */
 
 #define T_ONE_FORM                     T_SIMPLE_ARG_DEFAULTS
-#define set_closure_has_one_form(p)    set_type_bit(T_Clo(p), T_ONE_FORM)
+#define set_closure_has_one_form(p)    set_type0_bit(T_Clo(p), T_ONE_FORM)
 #define T_MULTIFORM                    (1 << (TYPE_BITS + 0))
-#define set_closure_has_multiform(p)   set_type_bit(T_Clo(p), T_MULTIFORM)
+#define set_closure_has_multiform(p)   set_type0_bit(T_Clo(p), T_MULTIFORM)
 #define T_ONE_FORM_FX_ARG              (T_ONE_FORM | T_MULTIFORM)
-#define set_closure_one_form_fx_arg(p) set_type_bit(T_Clo(p), T_ONE_FORM_FX_ARG)
+#define set_closure_one_form_fx_arg(p) set_type0_bit(T_Clo(p), T_ONE_FORM_FX_ARG)
 /* can't use T_HAS_FX here because closure_is_ok wants to examine typesflag */
 
 #define T_OPTIMIZED                    (1 << (TYPE_BITS + 3))
 #define set_optimized(p)               set_type0_bit(T_Pair(p), T_OPTIMIZED)
 #define clear_optimized(p)             clear_type0_bit(T_Pair(p), T_OPTIMIZED | T_SYNTACTIC | T_HAS_FX | T_HAS_FN)
-#define is_optimized(p)                (typesflag(T_Pos(p)) == (uint16_t)(T_PAIR | T_OPTIMIZED)) /* OPTIMIZED_PAIR */
+#define is_optimized(p)                (typesflag(T_Pos(p)) == (uint16_t)(T_PAIR | T_OPTIMIZED))
 /* optimizer flag for an expression that has optimization info, it should be in the second byte */
 
 #define T_SCOPE_SAFE                   T_OPTIMIZED
-#define is_scope_safe(p)               has_type_bit(T_Fnc(p), T_SCOPE_SAFE)
-#define set_scope_safe(p)              set_type_bit(T_Fnc(p), T_SCOPE_SAFE)
+#define is_scope_safe(p)               has_type0_bit(T_Fnc(p), T_SCOPE_SAFE)
+#define set_scope_safe(p)              set_type0_bit(T_Fnc(p), T_SCOPE_SAFE)
 
 #define T_SAFE_CLOSURE                 (1 << (TYPE_BITS + 4))
 #define is_safe_closure(p)             has_type0_bit(T_Clo(p), T_SAFE_CLOSURE)
@@ -4056,7 +4056,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_STAR_AA, HOP_SAFE_C_STAR_AA, OP_SAFE_C_STAR_NA, HOP_SAFE_C_STAR_NA,
       OP_SAFE_C_P, HOP_SAFE_C_P,
 
-      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A,
+      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A, 
 
       OP_CLOSURE_S, HOP_CLOSURE_S, OP_CLOSURE_S_O, HOP_CLOSURE_S_O,
       OP_CLOSURE_A, HOP_CLOSURE_A, OP_CLOSURE_A_O, HOP_CLOSURE_A_O, OP_CLOSURE_P, HOP_CLOSURE_P,
@@ -4279,7 +4279,7 @@ static const char* op_names[NUM_OPS] =
       "safe_c_function*_aa", "h_safe_c_function*_aa", "safe_c_function*_fx", "h_safe_c_function*_fx",
       "safe_c_p", "h_safe_c_p",
 
-      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a",
+      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a", 
 
       "closure_s", "h_closure_s", "closure_s_o", "h_closure_s_o",
       "closure_a", "h_closure_a", "closure_a_o", "h_closure_a_o", "closure_p", "h_closure_p",
@@ -45542,6 +45542,68 @@ s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_p
  return(sc->value);
 }
 
+static void op_unwind_output(s7_scheme *sc)
+{
+  bool is_file = is_file_port(sc->code);
+
+  if ((is_output_port(sc->code)) &&
+      (!port_is_closed(sc->code)))
+    s7_close_output_port(sc, sc->code); /* may call fflush */
+
+  if (((is_output_port(sc->args)) &&
+       (!port_is_closed(sc->args))) ||
+      (sc->args == sc->F))
+    set_current_output_port(sc, sc->args);
+
+  if ((is_file) &&
+      (is_multiple_value(sc->value)))
+    sc->value = splice_in_values(sc, multiple_value(sc->value));
+}
+
+static void op_unwind_input(s7_scheme *sc)
+{
+  /* sc->code is an input port */
+  if (!port_is_closed(sc->code))
+    s7_close_input_port(sc, sc->code);
+
+  if ((is_input_port(sc->args)) &&
+      (!port_is_closed(sc->args)))
+    set_current_input_port(sc, sc->args);
+
+  if (is_multiple_value(sc->value))
+    sc->value = splice_in_values(sc, multiple_value(sc->value));
+}
+
+static bool op_dynamic_wind(s7_scheme *sc)
+{
+  if (dynamic_wind_state(sc->code) == DWIND_INIT)
+    {
+      dynamic_wind_state(sc->code) = DWIND_BODY;
+      push_stack(sc, OP_DYNAMIC_WIND, sc->nil, sc->code);
+      sc->code = dynamic_wind_body(sc->code);
+      sc->args = sc->nil;
+      return(true); /* goto apply */
+    }
+  if (dynamic_wind_state(sc->code) == DWIND_BODY)
+    {
+      dynamic_wind_state(sc->code) = DWIND_FINISH;
+      if (dynamic_wind_out(sc->code) != sc->F)
+	{
+	  push_stack(sc, OP_DYNAMIC_WIND, sc->value, sc->code);
+	  sc->code = dynamic_wind_out(sc->code);
+	  sc->args = sc->nil;
+	  return(true);
+	}
+      if (is_multiple_value(sc->value))
+	sc->value = splice_in_values(sc, multiple_value(sc->value));
+      return(false); /* goto start */
+    }
+  if (is_multiple_value(sc->args))       /* (+ 1 (dynamic-wind (lambda () #f) (lambda () (values 2 3 4)) (lambda () #f)) 5) */
+    sc->value = splice_in_values(sc, multiple_value(sc->args));
+  else sc->value = sc->args;             /* value saved above */
+  return(false);
+}
+
 
 /* -------------------------------- c-object? -------------------------------- */
 bool s7_is_c_object(s7_pointer p) {return(is_c_object(p));}
@@ -79347,6 +79409,99 @@ static goto_t op_set_dilambda_p_1(s7_scheme *sc)
   return((set_pair_p_3(sc, func, arg, sc->value)) ? goto_apply : goto_start);
 }
 
+static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) */
+{
+  s7_pointer val, y;
+
+  y = lookup_slot_from(cadr(sc->code), sc->curlet);
+  if (!is_slot(y))
+    s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
+  val = slot_value(y);
+  if (is_t_integer(val))
+    sc->value = make_integer(sc, integer(val) + 1);
+  else
+    switch (type(val))
+      {
+      case T_RATIO:
+	new_cell(sc, sc->value, T_RATIO);
+	numerator(sc->value) = numerator(val) + denominator(val);
+	denominator(sc->value) = denominator(val);
+	break;
+      case T_REAL:
+	sc->value = make_real(sc, real(val) + 1.0);
+	break;
+      case T_COMPLEX:
+	new_cell(sc, sc->value, T_COMPLEX);
+	set_real_part(sc->value, real_part(val) + 1.0);
+	set_imag_part(sc->value, imag_part(val));
+	break;
+      default:
+	sc->value = add_p_pp(sc, val, int_one);
+	break;
+      }
+  slot_set_value(y, sc->value);
+}
+
+static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
+{
+  s7_pointer val, y;
+
+  y = lookup_slot_from(cadr(sc->code), sc->curlet);
+  if (!is_slot(y))
+    s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
+  val = slot_value(y);
+  if (is_t_integer(val))
+    sc->value = make_integer(sc, integer(val) - 1); /* increment (set!) returns the new value in sc->value */
+  else
+    switch (type(val))
+      {
+      case T_RATIO:
+	new_cell(sc, sc->value, T_RATIO);
+	numerator(sc->value) = numerator(val) - denominator(val);
+	denominator(sc->value) = denominator(val);
+	break;
+      case T_REAL:
+	sc->value = make_real(sc, real(val) - 1.0);
+	break;
+      case T_COMPLEX:
+	new_cell(sc, sc->value, T_COMPLEX);
+	set_real_part(sc->value, real_part(val) - 1.0);
+	set_imag_part(sc->value, imag_part(val));
+	break;
+      default:
+	sc->value = g_subtract(sc, set_plist_2(sc, val, int_one));
+	break;
+      }
+  slot_set_value(y, sc->value);
+}
+
+static void op_set_pws(s7_scheme *sc)
+{
+  /* this is (set! (getter) val) where getter is a global c_function (a built-in pws) and val is not a pair: (set! (mus-clipping) #f) */
+  s7_pointer obj, code = cdr(sc->code);
+  obj = caar(code);
+  if (is_symbol(obj))
+    {
+      obj = lookup_slot_from(obj, sc->curlet);
+      if (is_slot(obj))
+	obj = slot_value(obj);
+      else no_setter_error(sc, obj); /* unhittable -- we only get here if obj is a globally known c_function */
+    }
+  if ((is_c_function(obj)) &&
+      (is_procedure(c_function_setter(obj))))
+    {
+      s7_pointer value = cadr(code);
+      if (is_symbol(value))
+	value = lookup_checked(sc, value);
+      sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t1(value));
+    }
+  else
+    {
+      if (!is_pair(car(sc->code))) sc->code = cdr(sc->code);
+      no_setter_error(sc, obj);
+    }
+}
+
 
 /* ---------------- implicit ref/set ---------------- */
 static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer form);
@@ -83146,205 +83301,6 @@ static goto_t op_do_end1(s7_scheme *sc)
   return(goto_begin);
 }
 
-/* -------------------------------------------------------------------------------- */
-
-static void op_unwind_output(s7_scheme *sc)
-{
-  bool is_file = is_file_port(sc->code);
-
-  if ((is_output_port(sc->code)) &&
-      (!port_is_closed(sc->code)))
-    s7_close_output_port(sc, sc->code); /* may call fflush */
-
-  if (((is_output_port(sc->args)) &&
-       (!port_is_closed(sc->args))) ||
-      (sc->args == sc->F))
-    set_current_output_port(sc, sc->args);
-
-  if ((is_file) &&
-      (is_multiple_value(sc->value)))
-    sc->value = splice_in_values(sc, multiple_value(sc->value));
-}
-
-static void op_unwind_input(s7_scheme *sc)
-{
-  /* sc->code is an input port */
-  if (!port_is_closed(sc->code))
-    s7_close_input_port(sc, sc->code);
-
-  if ((is_input_port(sc->args)) &&
-      (!port_is_closed(sc->args)))
-    set_current_input_port(sc, sc->args);
-
-  if (is_multiple_value(sc->value))
-    sc->value = splice_in_values(sc, multiple_value(sc->value));
-}
-
-static bool op_dynamic_wind(s7_scheme *sc)
-{
-  if (dynamic_wind_state(sc->code) == DWIND_INIT)
-    {
-      dynamic_wind_state(sc->code) = DWIND_BODY;
-      push_stack(sc, OP_DYNAMIC_WIND, sc->nil, sc->code);
-      sc->code = dynamic_wind_body(sc->code);
-      sc->args = sc->nil;
-      return(true); /* goto apply */
-    }
-  if (dynamic_wind_state(sc->code) == DWIND_BODY)
-    {
-      dynamic_wind_state(sc->code) = DWIND_FINISH;
-      if (dynamic_wind_out(sc->code) != sc->F)
-	{
-	  push_stack(sc, OP_DYNAMIC_WIND, sc->value, sc->code);
-	  sc->code = dynamic_wind_out(sc->code);
-	  sc->args = sc->nil;
-	  return(true);
-	}
-      if (is_multiple_value(sc->value))
-	sc->value = splice_in_values(sc, multiple_value(sc->value));
-      return(false); /* goto start */
-    }
-  if (is_multiple_value(sc->args))       /* (+ 1 (dynamic-wind (lambda () #f) (lambda () (values 2 3 4)) (lambda () #f)) 5) */
-    sc->value = splice_in_values(sc, multiple_value(sc->args));
-  else sc->value = sc->args;             /* value saved above */
-  return(false);
-}
-
-static void op_read_s(s7_scheme *sc)
-{
-  s7_pointer port;
-  port = lookup(sc, cadr(sc->code));
-  if (!is_input_port(port)) /* was also not stdin */
-    {
-      sc->value = g_read(sc, set_plist_1(sc, port));
-      return;
-    }
-  if (port_is_closed(port))  /* I guess the port_is_closed check is needed because we're going down a level below */
-    simple_wrong_type_argument_with_type(sc, sc->read_symbol, port, an_open_port_string);
-
-  if (is_function_port(port))
-    {
-      sc->value = (*(port_input_function(port)))(sc, S7_READ, port);
-      if (is_multiple_value(sc->value))
-	{
-	  clear_multiple_value(sc->value);
-	  s7_error(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port read returned: ~S", 37), sc->value));
-	}}
-  else
-    if ((is_string_port(port)) &&
-	(port_data_size(port) <= port_position(port)))
-      sc->value = eof_object;
-    else
-      {
-	push_input_port(sc, port);
-	push_stack_op(sc, OP_READ_DONE); /* this stops the internal read process so we only get one form */
-	sc->tok = token(sc);
-	switch (sc->tok)
-	  {
-	  case TOKEN_EOF:	  return;
-	  case TOKEN_RIGHT_PAREN: read_error(sc, "unexpected close paren");
-	  case TOKEN_COMMA:	  read_error(sc, "unexpected comma");
-	  default:
-	    sc->value = read_expression(sc);
-	    sc->current_line = port_line_number(current_input_port(sc));  /* this info is used to track down missing close parens */
-	    sc->current_file = port_filename(current_input_port(sc));
-	  }}
-  /* equally read-done and read-list here */
-}
-
-static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) */
-{
-  s7_pointer val, y;
-
-  y = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if (!is_slot(y))
-    s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
-  val = slot_value(y);
-  if (is_t_integer(val))
-    sc->value = make_integer(sc, integer(val) + 1);
-  else
-    switch (type(val))
-      {
-      case T_RATIO:
-	new_cell(sc, sc->value, T_RATIO);
-	numerator(sc->value) = numerator(val) + denominator(val);
-	denominator(sc->value) = denominator(val);
-	break;
-      case T_REAL:
-	sc->value = make_real(sc, real(val) + 1.0);
-	break;
-      case T_COMPLEX:
-	new_cell(sc, sc->value, T_COMPLEX);
-	set_real_part(sc->value, real_part(val) + 1.0);
-	set_imag_part(sc->value, imag_part(val));
-	break;
-      default:
-	sc->value = add_p_pp(sc, val, int_one);
-	break;
-      }
-  slot_set_value(y, sc->value);
-}
-
-static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
-{
-  s7_pointer val, y;
-
-  y = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if (!is_slot(y))
-    s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
-  val = slot_value(y);
-  if (is_t_integer(val))
-    sc->value = make_integer(sc, integer(val) - 1); /* increment (set!) returns the new value in sc->value */
-  else
-    switch (type(val))
-      {
-      case T_RATIO:
-	new_cell(sc, sc->value, T_RATIO);
-	numerator(sc->value) = numerator(val) - denominator(val);
-	denominator(sc->value) = denominator(val);
-	break;
-      case T_REAL:
-	sc->value = make_real(sc, real(val) - 1.0);
-	break;
-      case T_COMPLEX:
-	new_cell(sc, sc->value, T_COMPLEX);
-	set_real_part(sc->value, real_part(val) - 1.0);
-	set_imag_part(sc->value, imag_part(val));
-	break;
-      default:
-	sc->value = g_subtract(sc, set_plist_2(sc, val, int_one));
-	break;
-      }
-  slot_set_value(y, sc->value);
-}
-
-static void op_set_pws(s7_scheme *sc)
-{
-  /* this is (set! (getter) val) where getter is a global c_function (a built-in pws) and val is not a pair: (set! (mus-clipping) #f) */
-  s7_pointer obj, code = cdr(sc->code);
-  obj = caar(code);
-  if (is_symbol(obj))
-    {
-      obj = lookup_slot_from(obj, sc->curlet);
-      if (is_slot(obj))
-	obj = slot_value(obj);
-      else no_setter_error(sc, obj); /* unhittable -- we only get here if obj is a globally known c_function */
-    }
-  if ((is_c_function(obj)) &&
-      (is_procedure(c_function_setter(obj))))
-    {
-      s7_pointer value = cadr(code);
-      if (is_symbol(value))
-	value = lookup_checked(sc, value);
-      sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t1(value));
-    }
-  else
-    {
-      if (!is_pair(car(sc->code))) sc->code = cdr(sc->code);
-      no_setter_error(sc, obj);
-    }
-}
-
 
 /* -------------------------------- apply functions -------------------------------- */
 
@@ -83815,16 +83771,13 @@ static inline bool lambda_star_default(s7_scheme *sc)
 		  slot_set_value(z, lookup_checked(sc, val));
 		  if (slot_value(z) == sc->undefined)
 		    {
-		      /* the current environment here contains the function parameters which
-		       *   defaulted to #<undefined> (or maybe #<unused>?) earlier in apply_*_closure_star_1,
-		       *   so (define (f f) (define* (f (f f)) f) (f)) (f 0) looks for the
-		       *   default f, finds itself currently undefined, and raises an error!
-		       *   So, before claiming it is unbound, we need to check outlet as well.
-		       *   But in the case above, the inner define* shadows the caller's
-		       *   parameter before checking the default arg values, so the default f
-		       *   refers to the define* -- I'm not sure this is a bug.  It means
-		       *   that (define* (f (a f)) a) returns f: (equal? f (f)) -> #t, so
-		       *   any outer f needs an extra let and endless outlets:
+		      /* the current environment here contains the function parameters which defaulted to #<undefined> 
+		       *   (or maybe #<unused>?) earlier in apply_*_closure_star_1, so (define (f f) (define* (f (f f)) f) (f)) (f 0) 
+		       *   looks for the default f, finds itself currently undefined, and raises an error! So, before 
+		       *   claiming it is unbound, we need to check outlet as well. But in the case above, the inner 
+		       *   define* shadows the caller's parameter before checking the default arg values, so the default f
+		       *   refers to the define* -- I'm not sure this is a bug.  It means that (define* (f (a f)) a) 
+		       *   returns f: (equal? f (f)) -> #t, so any outer f needs an extra let and endless outlets:
 		       *   (let ((f 3)) (let () (define* (f (a ((outlet (outlet (outlet (curlet)))) 'f))) a) (f))) -> 3
 		       *   We want the shadowing once the define* is done, so the current mess is simplest.
 		       */
@@ -84249,7 +84202,8 @@ static bool op_define1(s7_scheme *sc)
    */
   if (is_multiple_value(sc->value))                 /* (define x (values 1 2)) */
     s7_error(sc, sc->syntax_error_symbol,
-	     set_elist_5(sc, wrap_string(sc, "~A: more than one value: (~A ~A ~S)", 35), define1_caller(sc), define1_caller(sc), sc->code, sc->value));
+	     set_elist_5(sc, wrap_string(sc, "~A: more than one value: (~A ~A ~S)", 35), 
+			 define1_caller(sc), define1_caller(sc), sc->code, sc->value));
   if (is_constant_symbol(sc, sc->code))             /* (define pi 3) or (define (pi a) a) */
     {
       s7_pointer x;
@@ -88811,6 +88765,44 @@ static void op_read_done(s7_scheme *sc)
   sc->current_file = NULL; /* this is for error handling */
 }
 
+static void op_read_s(s7_scheme *sc)
+{
+  s7_pointer port;
+  port = lookup(sc, cadr(sc->code));
+  if (!is_input_port(port)) /* was also not stdin */
+    {
+      sc->value = g_read(sc, set_plist_1(sc, port));
+      return;
+    }
+  if (port_is_closed(port))  /* I guess the port_is_closed check is needed because we're going down a level below */
+    simple_wrong_type_argument_with_type(sc, sc->read_symbol, port, an_open_port_string);
+
+  if (is_function_port(port))
+    {
+      sc->value = (*(port_input_function(port)))(sc, S7_READ, port);
+      if (is_multiple_value(sc->value))
+	{
+	  clear_multiple_value(sc->value);
+	  s7_error(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port read returned: ~S", 37), sc->value));
+	}}
+  else /* we used to check for string port at end here, but that is rarely true so checking takes up more time than it saves */
+    {
+      push_input_port(sc, port);
+      push_stack_op(sc, OP_READ_DONE); /* this stops the internal read process so we only get one form */
+      sc->tok = token(sc);
+      switch (sc->tok)
+	{
+	case TOKEN_EOF:	  return;
+	case TOKEN_RIGHT_PAREN: read_error(sc, "unexpected close paren");
+	case TOKEN_COMMA:	  read_error(sc, "unexpected comma");
+	default:
+	  sc->value = read_expression(sc);
+	  sc->current_line = port_line_number(current_input_port(sc));  /* this info is used to track down missing close parens */
+	  sc->current_file = port_filename(current_input_port(sc));
+	}}
+  /* equally read-done and read-list here -- what is this referring to? */
+}
+
 static bool op_read_quasiquote(s7_scheme *sc)
 {
   /* this was pushed when the backquote was seen, then eventually we popped back to it */
@@ -90950,30 +90942,30 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_CLOSURE_STAR_NA: if (op_closure_star_na(sc, sc->code)) goto EVAL; goto BEGIN;
 
 
-	case OP_UNKNOWN:    sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown(sc)) goto EVAL;    continue;
+	case OP_UNKNOWN:    sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown(sc))    goto EVAL; continue;
 	case OP_UNKNOWN_NS: sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_ns(sc)) goto EVAL; continue;
-	case OP_UNKNOWN_G:  sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_g(sc)) goto EVAL;  continue;
+	case OP_UNKNOWN_G:  sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_g(sc))  goto EVAL; continue;
 	case OP_UNKNOWN_GG: sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_gg(sc)) goto EVAL; continue;
-	case OP_UNKNOWN_A:  sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_a(sc)) goto EVAL;  continue;
+	case OP_UNKNOWN_A:  sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_a(sc))  goto EVAL; continue;
 	case OP_UNKNOWN_AA: sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_aa(sc)) goto EVAL; continue;
 	case OP_UNKNOWN_NA: sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_na(sc)) goto EVAL; continue;
 	case OP_UNKNOWN_NP: sc->last_function = lookup_checked(sc, car(sc->code)); if (op_unknown_np(sc)) goto EVAL; continue;
 
 
-	case OP_IMPLICIT_VECTOR_REF_A:      if (!op_implicit_vector_ref_a(sc))      {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_VECTOR_REF_A:      if (!op_implicit_vector_ref_a(sc))      {if (op_unknown_a(sc))  goto EVAL;} continue;
 	case OP_IMPLICIT_VECTOR_REF_AA:     if (!op_implicit_vector_ref_aa(sc))     {if (op_unknown_aa(sc)) goto EVAL;} continue;
-	case OP_IMPLICIT_STRING_REF_A:      if (!op_implicit_string_ref_a(sc))      {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_HASH_TABLE_REF_A:  if (!op_implicit_hash_table_ref_a(sc))  {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_HASH_TABLE_REF_AA: if (!op_implicit_hash_table_ref_aa(sc)) {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_CONTINUATION_A:    if (!op_implicit_continuation_a(sc))    {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_ITERATE:           if (!op_implicit_iterate(sc))           {if (op_unknown(sc)) goto EVAL;}    continue;
+	case OP_IMPLICIT_STRING_REF_A:      if (!op_implicit_string_ref_a(sc))      {if (op_unknown_a(sc))  goto EVAL;} continue;
+	case OP_IMPLICIT_HASH_TABLE_REF_A:  if (!op_implicit_hash_table_ref_a(sc))  {if (op_unknown_a(sc))  goto EVAL;} continue;
+	case OP_IMPLICIT_HASH_TABLE_REF_AA: if (!op_implicit_hash_table_ref_aa(sc)) {if (op_unknown_a(sc))  goto EVAL;} continue;
+	case OP_IMPLICIT_CONTINUATION_A:    if (!op_implicit_continuation_a(sc))    {if (op_unknown_a(sc))  goto EVAL;} continue;
+	case OP_IMPLICIT_ITERATE:           if (!op_implicit_iterate(sc))           {if (op_unknown(sc))    goto EVAL;} continue;
 	case OP_IMPLICIT_LET_REF_C:         if (!op_implicit_let_ref_c(sc))         {if ((has_fx(cdr(sc->code))) && (op_unknown_a(sc))) goto EVAL;} continue;
-	case OP_IMPLICIT_LET_REF_A:         if (!op_implicit_let_ref_a(sc))         {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_PAIR_REF_A:        if (!op_implicit_pair_ref_a(sc))        {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_LET_REF_A:         if (!op_implicit_let_ref_a(sc))         {if (op_unknown_a(sc))  goto EVAL;} continue;
+	case OP_IMPLICIT_PAIR_REF_A:        if (!op_implicit_pair_ref_a(sc))        {if (op_unknown_a(sc))  goto EVAL;} continue;
 	case OP_IMPLICIT_PAIR_REF_AA:       if (!op_implicit_pair_ref_aa(sc))       {if (op_unknown_aa(sc)) goto EVAL;} continue;
-	case OP_IMPLICIT_C_OBJECT_REF_A:    if (!op_implicit_c_object_ref_a(sc))    {if (op_unknown_a(sc)) goto EVAL;}  continue;
-	case OP_IMPLICIT_GOTO:              if (!op_implicit_goto(sc))              {if (op_unknown(sc)) goto EVAL;}    continue;
-	case OP_IMPLICIT_GOTO_A:            if (!op_implicit_goto_a(sc))            {if (op_unknown_a(sc)) goto EVAL;}  continue;
+	case OP_IMPLICIT_C_OBJECT_REF_A:    if (!op_implicit_c_object_ref_a(sc))    {if (op_unknown_a(sc))  goto EVAL;} continue;
+	case OP_IMPLICIT_GOTO:              if (!op_implicit_goto(sc))              {if (op_unknown(sc))    goto EVAL;} continue;
+	case OP_IMPLICIT_GOTO_A:            if (!op_implicit_goto_a(sc))            {if (op_unknown_a(sc))  goto EVAL;} continue;
 	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_S7_LET_REF_S:	    sc->value = s7_let_field(sc, opt3_sym(sc->code)); continue;
@@ -92009,7 +92001,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 /* -------------------------------- *s7* let -------------------------------- */
-/* maybe features field in *s7*, others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* #-readers? */
+/* maybe *features* field in *s7*, others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* */
 
 /* if this changes, remember to change lint.scm */
 typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS, SL_HEAP_SIZE, SL_FREE_HEAP_SIZE,
@@ -95749,37 +95741,37 @@ int main(int argc, char **argv)
  * s7test     4537         1873   1831   1818   1815
  * lt         2117         2123   2110   2113   2112
  * timp       2232         2971   2891   2176   2201
- * tmac       2450         3317   3277   2418   2419
- * tread      2614         2440   2421   2419   2415
+ * tmac       2450         3317   3277   2418   2418
+ * tread      2614         2440   2421   2419   2418
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
- * tmat       2694         3065   3042   2524   2525
+ * tmat       2694         3065   3042   2524   2523
  * tcopy      2600         8035   5546   2539   2538
- * dup        2756         3805   3788   2492   2471  2482
- * tauto      2763         ----   ----   2562   2554
+ * dup        2756         3805   3788   2492   2482
+ * tauto      2763         ----   ----   2562   2557
  * tb         3366?        2735   2681   2612   2612
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
- * tload      3740         ----   ----   3046   3040
+ * tload      3740         ----   ----   3046   3046
  * tset       3058         3253   3104   3048   3119
- * teq        3541         4068   4045   3536   3538
- * tio        3698         3816   3752   3683   3683
+ * teq        3541         4068   4045   3536   3541
+ * tio        3698         3816   3752   3683   3681
  * tobj       4533         4016   3970   3828   3825
- * tlamb      4454         4912   4786   4298   4298
- * tclo       4604         4787   4735   4390   4390
+ * tlamb      4454         4912   4786   4298   4294
+ * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4435
  * tlet       5305         7775   5640   4450   4450
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5184
- * tform      8338         5357   5348   5307   5307
+ * tform      8338         5357   5348   5307   5311
  * tnum       56.7         6348   6013   5433   5428
  * tstr       6123         6880   6342   5488   5488
  * tmisc      6847         8869   7612   6325   6361
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6557
- * tari       ----         13.0   12.7   6827   6828
+ * tari       ----         13.0   12.7   6827   6826
  * tleft      9004         10.4   10.2   7657   7656
  * tgc        9614         11.9   11.1   8177   8176
  * cb         16.8         11.2   11.0   9658   9658
@@ -95789,7 +95781,7 @@ int main(int argc, char **argv)
  * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   55.9
  * lg        104.2        106.6  105.0  103.6  103.6
- * tbig      604.3        177.4  175.8  156.5  156.5
+ * tbig      604.3        177.4  175.8  156.5  156.5  156.2
  * -----------------------------------------------------
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
