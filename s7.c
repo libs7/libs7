@@ -1353,7 +1353,7 @@ struct s7_scheme {
              fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, iv_ref_2, iv_ref_3, iv_set_3, bv_ref_2, bv_ref_3, bv_set_3, vector_2, vector_3,
              list_0, list_1, list_2, list_3, list_4, list_set_i, hash_table_ref_2, hash_table_2, list_ref_at_0, list_ref_at_1, list_ref_at_2,
              format_f, format_no_column, format_just_control_string, format_as_objstr, values_uncopied,
-             memq_2, memq_3, memq_4, memq_any, tree_set_memq_syms, simple_inlet, profile_out,
+             memq_2, memq_3, memq_4, memq_any, tree_set_memq_syms, simple_inlet, profile_out, simple_list_values,
              lint_let_ref, lint_let_set, geq_2, add_i_random, is_defined_in_rootlet;
 
   s7_pointer multiply_2, invert_1, invert_x, divide_2, divide_by_2, max_2, min_2, max_3, min_3,
@@ -9388,7 +9388,7 @@ s7_pointer s7_sublet(s7_scheme *sc, s7_pointer e, s7_pointer bindings) {return(s
 
 static s7_pointer g_sublet(s7_scheme *sc, s7_pointer args)
 {
-  #define H_sublet "(sublet let ...) adds its arguments (each a let or a cons: '(symbol . value)) to let, and returns the new let."
+  #define H_sublet "(sublet let ...) makes a new let within the environment 'let', initializing it with the bindings"
   #define Q_sublet Q_varlet
 
   s7_pointer e = car(args);
@@ -34711,7 +34711,7 @@ s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer obj, bool use_write) /*
 
 static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
 {
-  #define H_object_to_string "(object->string obj (write #t) (max-len most-positive-fixnum)) returns a string representation of obj."
+  #define H_object_to_string "(object->string obj (write #t) (max-len (*s7* 'most-positive-fixnum))) returns a string representation of obj."
   #define Q_object_to_string s7_make_signature(sc, 4, \
                                sc->is_string_symbol, sc->T, \
                                s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_keyword_symbol), sc->is_integer_symbol)
@@ -68509,6 +68509,26 @@ static s7_pointer values_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
 
 
 /* -------------------------------- list-values -------------------------------- */
+
+static s7_pointer splice_out_values(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer p, tp, np;
+#if S7_DEBUGGING
+  if (is_null(args)) {fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(args)); return(sc->nil);}
+#endif
+  while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
+  tp = list_1(sc, car(args));
+  sc->y = tp;
+  for (p = cdr(args), np = tp; is_pair(p); p = cdr(p))
+    if (car(p) != sc->no_value)
+      {
+	set_cdr(np, list_1(sc, car(p)));
+	np = cdr(np);
+      }
+  sc->y = sc->nil;
+  return(tp);
+}
+
 static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 {
   #define H_list_values "(list-values ...) returns its arguments in a list (internal to quasiquote)"
@@ -68532,10 +68552,15 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
     {
       if (!checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
 	{
+#if 0
 	  s7_pointer p;
 	  for (p = args; is_pair(p); p = cdr(p))
 	    if (is_immutable(p))
 	      return(copy_proper_list(sc, args));
+#else
+	  if (is_immutable(args))
+	    return(copy_proper_list(sc, args));
+#endif
 	  return(args);
 	}
       sc->u = args;
@@ -68559,21 +68584,28 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
    *   everything down intolerably, so if the checked bit is on in a macro expansion, that means we're re-expanding this macro,
    *   and therefore have to copy the tree.  But isn't that only the case if the macro expands into closures?
    */
-  {
-    s7_pointer p, tp, np;
-    if (is_null(args)) return(sc->nil);
-    while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
-    tp = list_1(sc, car(args));
-    sc->y = tp;
-    for (p = cdr(args), np = tp; is_pair(p); p = cdr(p))
-      if (car(p) != sc->no_value)
-	{
-	  set_cdr(np, list_1(sc, car(p)));
-	  np = cdr(np);
-	}
-    sc->y = sc->nil;
-    return(tp);
-  }
+  return(splice_out_values(sc, args));
+}
+
+static s7_pointer g_simple_list_values(s7_scheme *sc, s7_pointer args)
+{
+  /* if just (code-)constant/symbol, symbol->pair won't be checked (not optimized/re-expanded code), but might be no-values */
+  s7_pointer p;
+  for (p = args; is_pair(p); p = cdr(p))
+    if (car(p) == sc->no_value)
+      return(splice_out_values(sc, args));
+  if (is_immutable(args)) 
+    return(copy_proper_list(sc, args));
+  return(args);
+}
+
+static s7_pointer list_values_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
+{
+  s7_pointer p;
+  for (p = cdr(expr); is_pair(p); p = cdr(p))
+    if ((is_pair(car(p))) && (caar(p) != sc->quote_symbol)) 
+      return(f);
+  return(sc->simple_list_values);
 }
 
 
@@ -69071,6 +69103,10 @@ static void init_choosers(s7_scheme *sc)
   /* values */
   f = set_function_chooser(sc, sc->values_symbol, values_chooser);
   sc->values_uncopied = make_unsafe_function_with_class(sc, f, "values", splice_in_values, 0, 0, true);
+
+  /* list-values */
+  f = set_function_chooser(sc, sc->list_values_symbol, list_values_chooser);
+  sc->simple_list_values = make_function_with_class(sc, f, "list-values", g_simple_list_values, 0, 0, true);
 }
 
 
@@ -95737,11 +95773,11 @@ int main(int argc, char **argv)
  * index      1024         1026   1016    973    973
  * tmock      7741         1177   1165   1057   1054
  * tvect      1953         2519   2464   1772   1772
- * texit      1827         ----   ----   1778   1778
- * s7test     4537         1873   1831   1818   1815
+ * texit      1827         ----   ----   1778   1778  1760 [copy_tree?]
+ * s7test     4537         1873   1831   1818   1815  1805
  * lt         2117         2123   2110   2113   2112
  * timp       2232         2971   2891   2176   2201
- * tmac       2450         3317   3277   2418   2418
+ * tmac       2450         3317   3277   2418   2418  2406
  * tread      2614         2440   2421   2419   2418
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
@@ -95757,9 +95793,9 @@ int main(int argc, char **argv)
  * teq        3541         4068   4045   3536   3541
  * tio        3698         3816   3752   3683   3681
  * tobj       4533         4016   3970   3828   3825
- * tlamb      4454         4912   4786   4298   4294
+ * tlamb      4454         4912   4786   4298   4294  4255
  * tclo       4604         4787   4735   4390   4398
- * tcase      4501         4960   4793   4439   4435
+ * tcase      4501         4960   4793   4439   4435  4432
  * tlet       5305         7775   5640   4450   4450
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
@@ -95776,15 +95812,16 @@ int main(int argc, char **argv)
  * tgc        9614         11.9   11.1   8177   8176
  * cb         16.8         11.2   11.0   9658   9658
  * thash      35.4         11.8   11.7   9734   9735
- * tgen       12.6         11.2   11.4   12.0   12.0
+ * tgen       12.6         11.2   11.4   12.0   12.0  11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   55.9
  * lg        104.2        106.6  105.0  103.6  103.6
- * tbig      604.3        177.4  175.8  156.5  156.5  156.2
+ * tbig      604.3        177.4  175.8  156.5  156.5
  * -----------------------------------------------------
  * 
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * can let optimize_lambda like letrec (t550)?
  * dw timing
+ * recursive macro in t725/s7test
  */

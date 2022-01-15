@@ -111,8 +111,7 @@
 </div>
 
 
-<p>s7 is a Scheme implementation intended as an extension language
-for other applications, primarily Snd, Radium, Common Music, and Max/MSP through Scheme For Max (or Pd).
+<p>s7 is a Scheme implementation intended as an extension language for other applications.
 It exists as just two files, s7.c and
 s7.h, that want only to disappear into someone else's source tree.  There are no libraries,
 no run-time init files, and no configuration scripts.
@@ -122,17 +121,14 @@ A tarball is available: <a href="https://ccrma.stanford.edu/software/s7/s7.tar.g
 There is an svn repository at sourceforge (the Snd project): <a href="https://sourceforge.net/p/snd/svn1/">Snd</a>,
 and a git repository (just s7): git@cm-gitlab.stanford.edu:bil/s7.git <a href="https://cm-gitlab.stanford.edu/bil/s7.git">s7.git</a>.
 Please ignore all other "s7" github sites.  Christos Vagias created a web-assembly site with
-a repl: https://github.com/actonDev/s7-playground/.  
+a repl: https://github.com/actonDev/s7-playground/.
 </p>
 
 <p>
-s7 is the default extension language of Snd and sndlib (<a href="http://ccrma.stanford.edu/software/snd/index.html">snd</a>),
-Rick Taube's Common Music (commonmusic at sourceforge), and Kjetil Matheussen's Radium music editor.  
+s7 is an extension language of Snd and sndlib (<a href="http://ccrma.stanford.edu/software/snd/index.html">snd</a>),
+Rick Taube's Common Music (commonmusic at sourceforge), Kjetil Matheussen's Radium music editor, and Iain Duncan's Scheme for Max (or Pd).
 There are X, Motif, and openGL bindings
 in libxm in the Snd tarball, or at ftp://ccrma-ftp.stanford.edu/pub/Lisp/libxm.tar.gz.
-If you're running s7 in a context
-that has getenv, file-exists?, and system, you can use s7-slib-init.scm
-to gain easy access to slib.  This init file is named "s7.init" in the slib distribution.
 </p>
 
 <p>Although it is a descendant of tinyScheme, s7 is closest as a Scheme dialect to Guile 1.8.
@@ -239,7 +235,7 @@ indented and on a sort of brownish background.
 <p>All numeric types, integers, ratios, reals, and complex numbers are supported.
 The basic integer and real
 types are defined in s7.h, defaulting to int64_t and double.  
-A ratio consists of two integers, a complex number two reals.
+A ratio consists of two integers, a complex number consists of two reals.
 pi is predefined.
 s7 can be built with multiprecision support 
 for all types,  using the gmp, mpfr, and mpc libraries (set WITH_GMP to 1 in s7.c).  
@@ -582,7 +578,7 @@ have any number after, for example, #b:
 <em class="gray">15.625+1i</em>
 </pre>
 
-<p>(But s7 uses #i for int-vector and does not implement #e).
+<p>s7 uses #i for int-vector and does not implement #e.
 Speaking of #b and friends, what should <code>(string-&gt;number "#xffff" 2)</code> return?
 </p>
 </div>
@@ -599,27 +595,27 @@ Speaking of #b and friends, what should <code>(string-&gt;number "#xffff" 2)</co
  <em class=def id="lambdastar">lambda*</em>
 are extensions of define and lambda that make it easier
 to deal with optional, keyword, and rest arguments.  
-The syntax is very simple: every argument to define* has a default value
+The syntax is very simple: every parameter to define* has a default value
 and is automatically available as a keyword argument.  The default value
 is either #f if unspecified, or given in a list whose first member is
-the argument name.
-The last argument
+the parameter name.
+The last parameter
 can be preceded by :rest or a dot to indicate that all other trailing arguments
-should be packaged as a list under that argument's name.  A trailing or rest
-argument's default value is () and can't be specified in the declaration.
-The rest argument is not available as a keyword argument.
+should be packaged as a list under that parameter's name.  A trailing or rest
+parameter's default value is () and can't be specified in the declaration.
+The rest parameter is not available as a keyword argument.
 </p>
 
 <pre class="indented">
 (<em class=red>define*</em> (hi a (b 32) (c "hi")) (list a b c))
 </pre>
 
-<p>Here the argument "a" defaults to #f, "b" to 32, etc.
+<p>Here the parameter "a" defaults to #f, "b" to 32, etc.
 When the function is called, 
-the argument names are set from the values passed the function,
-then any unset arguments are bound to their default values, evaluated in left-to-right order.
+the parameter names are set from the values passed the function,
+then any unset parameters are bound to their default values, evaluated in left-to-right order.
 As the current argument list is scanned,  any name that occurs as a keyword, :arg for example where the parameter name is arg,
-sets that argument's new value.  Otherwise, as values occur, they
+sets that parameter's new value.  Otherwise, as values occur, they
 are plugged into the actual argument list based on their position, counting a keyword/value pair as one argument.
 This is called an optional-key list in CLM.  So, taking the function
 above as an example:
@@ -885,7 +881,7 @@ another amusing lambda* case:
 <em class=def id="definemacro">define-macro</em>, 
 <em class=def id="definemacrostar">define-macro*</em>, 
 <em class=def id="definebacro">define-bacro</em>, 
-<em class=def id="definebacrostar">define-nacro*</em>, 
+<em class=def id="definebacrostar">define-bacro*</em>, 
 <em class=def id="macroexpand">macroexpand</em>,
 <em class=def id="gensym">gensym</em>, 
 <em class=def id="gensym?">gensym?</em>, and 
@@ -2006,7 +2002,7 @@ or even <code>(&gt; 1 0+i)</code>.
 (<em class=def id="reverseb">reverse!</em> sequence) and (reverse sequence)
 (<em class=def id="fillb">fill!</em> sequence value (start 0) end)
 (<em class=def id="s7copy">copy</em> obj) and (copy source destination (start 0) end)
-(<em class=def id="objecttostring">object-&gt;string</em> obj)
+(<em class=def>object-&gt;string</em> obj)
 (object-&gt;let obj)
 (length obj)
 (append . sequences)
@@ -2112,8 +2108,8 @@ instead of eof-object?.
 </p>
 
 <p>The argument to make-iterator can also be a function or macro.  
-There should be a variable named '+iterator+ with a non-#f
-value in the closure's environment:
+In this case, to be acceptable to iterate, the closure's environment must have a
+variable named '+iterator+ with a non-#f value:
 </p>
 <pre class="indented">
 (define (make-circular-iterator obj)
@@ -2125,7 +2121,7 @@ value in the closure's environment:
            ((#&lt;eof&gt;) ((set! iter (make-iterator obj))))
            (else)))))))
 </pre>
-<p>The 'iterator? variable is similar to the '+documentation+ variable used by documentation.
+<p>The +iterator+ variable is similar to the '+documentation+ variable used by documentation.
 It gives make-iterator some hope of catching inadvertent bogus function arguments that would
 otherwise cause an infinite loop. 
 </p>
@@ -2595,7 +2591,7 @@ Implicit indexing gives multilevel hashes:
 
 <p>hash-code is like Common Lisp's sxhash.  It returns an integer that can be associated with
 an s7 object when implementing your own hash-tables.  s7test.scm has an example using vectors.
-The eqfunc argument is currently ignored (hash-code assumes equal? is in use).
+In this case the eqfunc argument is ignored (hash-code assumes equal? is in use).
 </p>
 
 
@@ -2763,7 +2759,7 @@ Environments are first class (and applicable) objects in s7.
 (<em class=def id="funclet">funclet</em> proc)          the environment at the time when proc was defined
 (<em class=def id="isfunclet">funclet?</em> env)          #t if env is a funclet
 (owlet)                 the environment at the point of the last error
-(<em class=def id="unlet">unlet</em>)                 a let with any built-in functions that do not have their original value
+(<em class=def id="unlet">unlet</em>)                 a let with built-in functions with their original value
 
 (<em class=def id="letref">let-ref</em> env sym)       get value of sym in env, same as (env sym)
 (<em class=def id="letset">let-set!</em> env sym val)  set value of sym in env to val, same as (set! (env sym) val)
@@ -2866,7 +2862,7 @@ Or better,
 <p>It is faster to use <code>(biglet 'a-function)</code> than <code>(with-let biglet a-function)</code>.
 </p>
 
-<p><b>let-temporarily</b> (now built-into s7) is somewhat similar to fluid-let in other Schemes.
+<p><b>let-temporarily</b> is somewhat similar to fluid-let in other Schemes.
 Its syntax looks like
 let, but it first saves the current value, then sets the
 variable to the new value (via set!), calls the body, and finally restores the
@@ -2903,12 +2899,18 @@ puts it back to its original value.
 </p>
 
 <p>
-<b>sublet</b> adds bindings (symbols with associated values) to an environment.
-It does not change the environment passed to it, but
-just prepends the new bindings, shadowing any old ones,
-as if you had called "let".
+<b>sublet</b> makes a new let with the bindings passed to it, then sets the new environment's outlet to the 'env' argument.
+This is similar to a let form inside another let.
+</p>
+<pre class="indented">
+&gt; (sublet (curlet) 'b 2)
+<em class="gray">(inlet 'b 2)</em>
+&gt; (let ((a 1)) (with-let (sublet (curlet) 'b 2) (+ a b)))
+<em class="gray">3</em>
+</pre>
+<p>
 To add the bindings directly to the environment,
-use <b>varlet</b>.  Both of these functions accept nil as the
+use <b>varlet</b>.  Both of these functions accept () as the
 'env' argument as shorthand for <code>(rootlet)</code>.
 Both also accept other environments as well as individual bindings,
 adding all the argument's bindings to the new environment.
@@ -3168,9 +3170,9 @@ and openlet? -&gt; methods?.
 
 <div class="indented">
 <p>let-ref and let-set! are problematic as methods.  It is very easy to get into an infinite
-loop, especially with let-ref since any reference to the let within the method body probably
+loop, especially with let-ref, since any reference to the let within the method body probably
 calls let-ref, which calls the let-ref method.  We used to recommend coverlet here, but
-even that is not enough, so not let-ref and let-set! are immutable; they can't be used
+even that is not enough, so now let-ref and let-set! are immutable; they can't be used
 as methods.
 Use let-ref-fallback and let-set-fallback instead, if possible.
 </p>
@@ -3357,7 +3359,7 @@ In s7, multiple values are spliced directly into the caller's argument list.
 
 <div class="indented">
 
-<p>multiple-values are useful in a several situations.  For example,
+<p>multiple-values are useful in several situations.  For example,
 <code>(if test (+ a b c) (+ a b d e))</code> can be written
 <code>(+ a b (if test c (values d e)))</code>. 
 There are a few special uses of multiple-values.
@@ -3627,7 +3629,12 @@ from a simple procedure.
 
 <div class="header" id="format1"><h4>format, object-&gt;string</h4></div>
 
-<p>object-&gt;string returns the string representation of its argument.  Its optional second argument
+<pre class="indented">
+(<em class=def id="objecttostring">object-&gt;string</em> obj (write #t) (max-len (*s7* 'most-positive-fixnum)))
+(<em class=def id="format">format</em> output-choice control-string . arguments)
+</pre>
+
+<p>object-&gt;string returns the string representation of its first argument.  Its optional second argument
 can be #f or :display (use display), #t or :write (the default, use write), or :readable.  In the latter case, object-&gt;string
 tries to produce a string that can be evaluated via eval-string to return an object equal to the
 original.  The optional third argument sets the maximum desired string length; if object-&gt;string
@@ -3641,8 +3648,7 @@ notices it has exceeded this limit, it returns the partial string.
 <em class="gray">"\"hiho\""</em>
 </pre>
 
-<br>
-<p>s7's <em class=def id="format">format</em> function is very close to that in srfi-48.
+<p>s7's format function is very close to CL's and that in srfi-48.
 </p>
 
 <pre class="indented">
@@ -3731,7 +3737,7 @@ floats in the "~X" case.  So in s7,
 <p>That is, the output choice matches the argument.  A case that came up in the Guile mailing lists is:
 <code>(format #f "~F" 1/3)</code>.  s7 currently returns "1/3", but Clisp returns "0.33333334".
 </p>
-<br>
+
 <p>The curly bracket directive applies to anything you can map over, not just lists:
 </p>
 
@@ -3743,7 +3749,6 @@ floats in the "~X" case.  So in s7,
 &gt; (with-input-from-string (format #f "(~{~C~^ ~})" (format #f "~B" 1367)) read) ; integer-&gt;list
 <em class="gray">(1 0 1 0 1 0 1 0 1 1 1)</em>
 </pre>
-<br>
 
 <p>Since any sequence can be passed to ~{~}, we need a way to truncate output and represent
 the rest of the sequence with "...", but ~^ only stops at the end of the sequence.  ~|

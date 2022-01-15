@@ -1,5 +1,6 @@
-(define size 1000000)
+(set! (*s7* 'heap-size) 1024000)
 
+(define size 1000000)
 
 ;;; -------- [416] --------
 (define (f1 x) (x 123))           ; op_closure_a for (x 123)
