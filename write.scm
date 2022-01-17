@@ -396,7 +396,8 @@
 		      (hash-table-set! h f w-lambda))
 		    '(lambda lambda* define* define-macro define-macro* define-bacro define-bacro* with-let
 			     call-with-input-string call-with-input-file call-with-output-file
-			     with-input-from-file with-input-from-string with-output-to-file))
+			     with-input-from-file with-input-from-string with-output-to-file
+			     let-temporarily))
 		   
 		   ;; -------- defmacro defmacro*
 		   (define (w-defmacro obj port column)

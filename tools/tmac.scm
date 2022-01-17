@@ -106,6 +106,64 @@
 
 (trace-test)
 
+
+;;; recursive macros
+
+(let ()
+  (define-macro (m1 a b)
+    `(if (> ,a 0)
+	 (m1 (- ,a 1) (+ ,b 1))
+	 (+ ,a ,b)))
+
+  (define (test-m1)
+    (do ((i 0 (+ i 1)))
+	((= i 10000))
+      (m1 3 0)))
+  
+  (test-m1))
+
+
+(let ((m2 (macro (a b)
+	    `(if (> ,a 0)
+		 (m2 (- ,a 1) (+ ,b 1)) ; m2 ok so named macro let is not needed
+		 (+ ,a ,b)))))
+
+  (define (test-m2)
+    (do ((i 0 (+ i 1)))
+	((= i 10000))
+      (m2 3 0)))
+  
+  (test-m2))
+
+
+#|
+;; undefined m3
+(let ((m3 (lambda (a b)
+	    (if (> a 0)
+		 (m3 (- a 1) (+ b 1)) ; m3 undefined so we need letrec/named let etc
+		 (+ a b)))))
+
+  ;(display (m3 3 0)) (newline)
+  #f)
+|#
+
+
+(let ()
+  (define-macro (tak x y z)           ; [1992], expansion is same (1980) even if declared globally, functional tak is [7]
+    `(if (not (< ,y ,x))
+	 ,z
+	 (tak (tak (- ,x 1) ,y ,z)
+              (tak (- ,y 1) ,z ,x)
+              (tak (- ,z 1) ,x ,y))))
+  
+  (define (test-tak)
+    (do ((i 0 (+ i 1)))
+	((= i 200))
+      (tak 6 4 2)))
+  
+  (test-tak))
+
+
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)

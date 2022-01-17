@@ -38921,6 +38921,16 @@ static const char *typed_vector_typer_name(s7_scheme *sc, s7_pointer p)
 }
 
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article);
+static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
+
+static s7_pointer typed_vector_setter_error(s7_scheme *sc, s7_pointer vec, s7_pointer val)
+{
+  const char *descr;
+  descr = typed_vector_typer_name(sc, vec);
+  return(s7_error(sc, sc->wrong_type_arg_symbol,
+		  set_elist_4(sc, wrap_string(sc, "vector-set! third argument ~$, is ~A, but the vector's element type checker, ~A, rejects it", 91),
+			      val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr)))));
+}
 
 static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
@@ -38930,7 +38940,7 @@ static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_i
       vector_element(vec, loc) = val;
       return(val);
     }
-  return(s7_wrong_type_arg_error(sc, "vector-set!", 3, val, make_type_name(sc, typed_vector_typer_name(sc, vec), INDEFINITE_ARTICLE)));
+  return(typed_vector_setter_error(sc, vec, val));
 }
 
 static s7_pointer default_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(vector_element(vec, loc));}
@@ -40420,15 +40430,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
       val = caddr(args);
     }
   if (is_typed_vector(vec))
-    {
-      if ((sc->safety < NO_SAFETY) || /* or == NO_SAFETY?? */
-	  (typed_vector_typer_call(sc, vec, set_plist_1(sc, val)) != sc->F))
-	{
-	  vector_element(vec, index) = val;
-	  return(val);
-	}
-      return(s7_wrong_type_arg_error(sc, "vector-set!", 3, val, make_type_name(sc, typed_vector_typer_name(sc, vec), INDEFINITE_ARTICLE)));
-    }
+    return(typed_vector_setter(sc, vec, index, val));
   if (is_normal_vector(vec))
     vector_element(vec, index) = val;
   else vector_setter(vec)(sc, vec, index, val);
@@ -43692,7 +43694,6 @@ static bool compatible_types(s7_scheme *sc, s7_pointer eq_type, s7_pointer value
 
 static s7_pointer g_is_equal(s7_scheme *sc, s7_pointer args);
 static s7_pointer g_is_equivalent(s7_scheme *sc, s7_pointer args);
-static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
 
 static s7_pointer g_make_hash_table_1(s7_scheme *sc, s7_pointer args, s7_pointer caller)
 {
@@ -44231,13 +44232,17 @@ static void check_hash_types(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
 	    type_ok = c_function_call(kf)(sc, set_plist_1(sc, key));
 	  else type_ok = s7_apply_function(sc, kf, set_plist_1(sc, key));
 	  if (type_ok == sc->F)
-	    s7_wrong_type_arg_error(sc, "hash-table-set! key", 2, key,
-				    make_type_name(sc, hash_table_typer_name(sc, hash_table_key_typer(table)), INDEFINITE_ARTICLE));
-	}}
+	    {
+	      const char *descr;
+	      descr = hash_table_typer_name(sc, hash_table_value_typer(table));
+	      s7_error(sc, sc->wrong_type_arg_symbol,
+		       set_elist_4(sc, wrap_string(sc, "hash-table-set! second argument ~$, is ~A, but the hash-table's key type checker, ~A, rejects it", 96),
+				   key, type_name_string(sc, key), wrap_string(sc, descr, safe_strlen(descr))));
+	    }}}
   if (has_hash_value_type(table))
     {
       if ((uint8_t)symbol_type(c_function_symbol(hash_table_value_typer(table))) != type(value))
-	s7_wrong_type_arg_error(sc, "hash-table-set! value", 3, value,
+	s7_wrong_type_arg_error(sc, "hash-table-set! ", 3, value,
 				make_type_name(sc, hash_table_typer_name(sc, hash_table_value_typer(table)), INDEFINITE_ARTICLE));
     }
   else
@@ -44250,9 +44255,13 @@ static void check_hash_types(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
 	    type_ok = c_function_call(vf)(sc, set_plist_1(sc, value));
 	  else type_ok = s7_apply_function(sc, vf, set_plist_1(sc, value));
 	  if (type_ok == sc->F)
-	    s7_wrong_type_arg_error(sc, "hash-table-set! value", 3, value,
-				    make_type_name(sc, hash_table_typer_name(sc, hash_table_value_typer(table)), INDEFINITE_ARTICLE));
-	}}
+	    {
+	      const char *descr;
+	      descr = hash_table_typer_name(sc, hash_table_value_typer(table));
+	      s7_error(sc, sc->wrong_type_arg_symbol,
+		       set_elist_4(sc, wrap_string(sc, "hash-table-set! third argument ~$, is ~A, but the hash-table's value type checker, ~A, rejects it", 97),
+				   value, type_name_string(sc, value), wrap_string(sc, descr, safe_strlen(descr))));
+	    }}}
 }
 
 s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value)
@@ -46554,7 +46563,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
       break;
 
     default:  /* (set! (setter 4) ...) or p==continuation etc */
-      return(s7_wrong_type_arg_error(sc, "set! setter", 1, p, "a normal procedure or a macro"));
+      return(s7_wrong_type_arg_error(sc, "set! setter", 1, p, "a symbol, a procedure, or a macro"));
     }
   return(setter);
 }
@@ -79178,14 +79187,10 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
 	    syntax_error_any(sc, sc->out_of_range_symbol, "vector-set!: index must be less than vector length: ~S", 54, sc->code);
 	  if (is_immutable(obj))
 	    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, obj));
+
 	  if (is_typed_vector(obj))
-	    {
-	      if ((sc->safety < NO_SAFETY) || /* or == NO_SAFETY?? */
-		  (typed_vector_typer_call(sc, obj, set_plist_1(sc, value)) != sc->F))
-		vector_element(obj, index) = value;
-	      else return(s7_wrong_type_arg_error(sc, "vector-set!", 3, value, make_type_name(sc, typed_vector_typer_name(sc, obj), INDEFINITE_ARTICLE)));
-	    }
-	  else vector_setter(obj)(sc, obj, index, value);
+	    return(typed_vector_setter(sc, obj, index, value));
+	  vector_setter(obj)(sc, obj, index, value);
 	  sc->value = T_Pos(value);
 	}
 #endif
@@ -95777,7 +95782,6 @@ int main(int argc, char **argv)
  * s7test     4537         1873   1831   1818   1815  1805
  * lt         2117         2123   2110   2113   2112
  * timp       2232         2971   2891   2176   2201
- * tmac       2450         3317   3277   2418   2418  2406
  * tread      2614         2440   2421   2419   2418
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
@@ -95788,6 +95792,7 @@ int main(int argc, char **argv)
  * tb         3366?        2735   2681   2612   2612
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
+ * tmac       3074         3950   3873   3033   2998
  * tload      3740         ----   ----   3046   3046
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3541
@@ -95823,5 +95828,10 @@ int main(int argc, char **argv)
  * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * can let optimize_lambda like letrec (t550)?
  * dw timing
- * recursive macro in t725/s7test
+ * :readable in pretty-print?
+ * repl missing close paren starts the repeat?
+(pp '(let-temporarily (((*s7* 'print-length) 100)) 
+                       (when asdf 
+                         (set! asdf 3)
+ * nrepl works here
  */
