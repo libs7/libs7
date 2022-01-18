@@ -138,7 +138,7 @@
 (define-macro (features) '*features*) ; needs to be the local *features*
 
 
-(define (with-exception-handler handler thunk) (catch #t thunk handler))
+(define (with-exception-handler handler thunk) (catch #t thunk (lambda args (apply handler args))))
 (define raise error)
 (define raise-continuable error)
 
@@ -278,6 +278,7 @@
 
 ;; libraries
 (apply define (symbol (object->string '(scheme base))) (inlet) ()) ; ignore (scheme base)
+(apply define (symbol (object->string '(scheme r5rs))) (inlet) ()) ; ignore (scheme r5rs)
 (apply define (symbol (object->string '(scheme read))) (inlet) ()) ; and so on... what a pile of baloney
 (apply define (symbol (object->string '(scheme write))) (inlet) ()) 
 (apply define (symbol (object->string '(scheme time))) (inlet) ()) 
@@ -290,11 +291,10 @@
 (define-macro (define-library libname . body) ; |(lib name)| -> environment
   `(define ,(symbol (object->string libname))
      (with-let (sublet (unlet) 
-			 (cons 'import (symbol->value 'import))
+			 (cons 'import import)
 			 (cons '*export* ())
-			 (cons 'export (symbol->value 
-					(define-macro (,(gensym) . names) 
-					  `(set! *export* (append ',names *export*))))))
+			 (cons 'export (define-macro (,(gensym) . names) 
+					 `(set! *export* (append ',names *export*)))))
        ,@body
        (apply inlet
 	      (map (lambda (entry)
