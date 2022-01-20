@@ -8877,7 +8877,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
       s7_pointer slot;
       if (is_immutable(sc->rootlet))
 	return(immutable_object_error(sc, set_elist_2(sc, wrap_string(sc, "can't define '~S; rootlet is immutable", 38), symbol)));
-      if ((sc->safety == NO_SAFETY) &&
+      if ((sc->safety <= NO_SAFETY) &&
 	  (has_closure_let(value)))
 	remove_function_from_heap(sc, value);
 
@@ -42572,7 +42572,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 
   n = len - 1;
   k = (n / 2) + 1;
-  lx = s7_make_vector(sc, (sc->safety == NO_SAFETY) ? 4 : 6);
+  lx = s7_make_vector(sc, (sc->safety <= NO_SAFETY) ? 4 : 6);
   sc->v = lx;
   vector_element(lx, 0) = make_mutable_integer(sc, n);
   vector_element(lx, 1) = make_mutable_integer(sc, k);
@@ -95778,7 +95778,7 @@ int main(int argc, char **argv)
  * index      1024         1026   1016    973    973
  * tmock      7741         1177   1165   1057   1054
  * texit      1827         ----   ----   1778   1760
- * tvect      1953         2519   2464   1772   1772
+ * tvect      1953         2519   2464   1772   1772  1767
  * s7test     4537         1873   1831   1818   1801
  * lt         2117         2123   2110   2113   2112
  * timp       2232         2971   2891   2176   2201
@@ -95801,7 +95801,7 @@ int main(int argc, char **argv)
  * tlamb      4454         4912   4786   4298   4255
  * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4431
- * tlet       5305         7775   5640   4450   4450
+ * tlet       5305         7775   5640   4450   4450  4438
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5184
@@ -95830,4 +95830,5 @@ int main(int argc, char **argv)
  * dw timing
  * :readable in pretty-print?
  * inline cache of last-hit searched-for vars?
+ * r7rs tests (t553)
  */

@@ -7,8 +7,7 @@
 (define (vector-map p . args) (apply vector (apply map p args)))
 (define (string-map p . args) (apply string (apply map p args)))
 (define vector-for-each for-each) 
-(define string-for-each for-each) 
-
+(define string-for-each for-each)
 
 (define* (vector->string v (start 0) end) 
   (let ((stop (or end (length v)))) 
@@ -25,17 +24,23 @@
 (define r7rs-string-fill! fill!)
 
 (define* (vector-copy! dest at src (start 0) end) ; end is exclusive
-  (let ((len (or end (length src))))
-    (if (or (not (eq? dest src))
-	    (<= at start))
-	(do ((i at (+ i 1))
-	     (k start (+ k 1)))
-	    ((= k len) dest)
-	  (set! (dest i) (src k)))
-	(do ((i (- (+ at len) start 1) (- i 1))
-	     (k (- len 1) (- k 1)))
-	    ((< k start) dest)
-	  (set! (dest i) (src k))))))
+  (if (not at)
+      (copy dest)
+      (if (not src)
+	  (copy (subvector dest at))
+	  (if (integer? src) ; good lord, who dreamed up this nonsense?
+	      (copy (subvector dest at src))
+	      (let ((len (or end (length src))))
+		(if (or (not (eq? dest src))
+			(<= at start))
+		    (do ((i at (+ i 1))
+			 (k start (+ k 1)))
+			((= k len) dest)
+		      (set! (dest i) (src k)))
+		    (do ((i (- (+ at len) start 1) (- i 1))
+			 (k (- len 1) (- k 1)))
+			((< k start) dest)
+		      (set! (dest i) (src k)))))))))
 
 (define (r7rs-make-hash-table . args)
   (if (null? args)
@@ -50,9 +55,8 @@
 (define bytevector-ref byte-vector-ref)
 (define bytevector-set! byte-vector-set!)
 (define bytevector-copy! vector-copy!)
-(define string-copy! vector-copy!) ; this could use s7's string-copy+substring (much faster) and vector-copy! above could use copy+subvector
 (define (bytevector->list bv) (copy bv (make-list (length bv))))
-
+(define string-copy! vector-copy!)
 
 (define (boolean=? . args)
   (or (null? args)
@@ -105,7 +109,14 @@
 (define bytevector-length length)
 (define bytevector-copy vector-copy!)
 (define bytevector-append append)
-(define write-bytevector write)
+
+(define* (write-bytevector bv port start end)
+  (if (not port)
+      (write bv)
+      (if (not start)
+	  (write bv port)
+	  (write (subvector bv start (or end (length bv)))))))
+
 (define* (read-bytevector! bv port (start 0) end)
   (let ((lim (or end (length bv)))
 	(pt (or port (current-input-port))))
@@ -115,22 +126,25 @@
 	     (eof-object? c))
 	 bv)
       (set! (bv i) c))))
+
 (define* (read-bytevector k port)
   (read-bytevector! (make-byte-vector k) port))
 (define (get-output-bytevector port) (string->byte-vector (get-output-string port)))
-(define open-input-bytevector open-input-string)
+(define (open-input-bytevector bv) (open-input-string (copy bv (make-string (length bv)))))
 (define open-output-bytevector open-output-string)
 (define read-u8 read-byte)
 (define write-u8 write-byte) 
 (define u8-ready? char-ready?) 
 (define peek-u8 peek-char)
+
 (define* (utf8->string v (start 0) end) 
   (if (string? v)
-      v
+      (substring v start (or end (length v)))
       (substring (byte-vector->string v) start (or end (length v)))))
+
 (define* (string->utf8 s (start 0) end) 
   (if (byte-vector? s)
-      s
+      (copy (subvector s start (or end (length s))))
       (string->byte-vector (utf8->string s start end))))
 (define write-simple write)
 
@@ -138,9 +152,18 @@
 (define-macro (features) '*features*) ; needs to be the local *features*
 
 
-(define (with-exception-handler handler thunk) (catch #t thunk (lambda args (apply handler args))))
+(define (with-exception-handler handler thunk) 
+  (catch #t thunk 
+	 (lambda args
+	   (if (aritable? handler (length args))
+	       (apply handler args)
+	       (handler (cadr args))))))
+
 (define raise error)
-(define raise-continuable error)
+(define raise-continuable error) ; this should return the handler value? So with-exception-handler is supposed to add it to a local env??
+(define (error-object? obj) #f)
+(define (error-object-message . args) #f)
+(define (error-object-irritants . args) #f)
 
 (define-macro (guard results . body)
   `(let ((,(car results) (catch #t (lambda () ,@body) (lambda args (car args)))))
@@ -171,7 +194,8 @@
 (define (file-error? obj) (eq? (car obj) 'io-error))
 (define (error-message obj) (apply format #f (cadr obj)))
 (define error-irritants cdadr)
-
+(define write-shared write)
+(define write-simple write)
 
 (define interaction-environment curlet)
 ;; for null-environment see stuff.scm
@@ -306,59 +330,77 @@
 		   (curlet))))))
 
 (define-macro (import . libs)
-  `(varlet (curlet)
-     ,@(map (lambda (lib)
-	      (case (car lib)
-		((only) 
-		 `((lambda (e names)
-		     (apply inlet
-			    (map (lambda (name)
-				   (cons name (e name)))
-				 names)))
-		   (symbol->value (symbol (object->string (cadr ',lib))))
-		   (cddr ',lib)))
-  
-		((except)
-		 `((lambda (e names)
-		     (apply inlet
-			    (map (lambda (entry)
-				   (if (member (car entry) names)
-				       (values)
-				       entry))
-				 e)))
-		   (symbol->value (symbol (object->string (cadr ',lib))))
-		   (cddr ',lib)))
-  
-		((prefix)
-		 `((lambda (e prefx)
-		     (apply inlet
-			    (map (lambda (entry)
-				   (cons (string->symbol 
-					  (string-append (symbol->string prefx) 
-							 (symbol->string (car entry)))) 
-					 (cdr entry)))
-				 e)))
-		   (symbol->value (symbol (object->string (cadr ',lib))))
-		   (caddr ',lib)))
-  
-		((rename)
-		 `((lambda (e names)
-		     (apply inlet
-			    (map (lambda (entry)
-				   (let ((info (assoc (car entry) names)))
-				     (if info
-					 (cons (cadr info) (cdr entry))
-					 entry))) ; I assume the un-renamed ones are included
-				 e)))
-		   (symbol->value (symbol (object->string (cadr ',lib))))
-		   (cddr ',lib)))
-
-		(else
-		 `(let ((sym (symbol (object->string ',lib))))
-		    (if (not (defined? sym))
-			(format () "~A not loaded~%" sym)
-			(symbol->value sym))))))
-	    libs)))
+  `(begin
+     (let loop ((libs ',libs)) ; load library files, unless already loaded or pointless
+       (when (pair? libs)
+	 (unless (eq? (caar libs) 'scheme)
+           (let ((lib-filename (let loop ((lib (if (memq (caar libs) '(only except prefix rename))
+						   (cadar libs)
+						   (car libs)))
+					  (name ""))
+				 (set! name (string-append name (symbol->string (car lib))))
+				 (if (null? (cdr lib))
+				     (string-append name ".scm")
+				     (begin
+				       (set! name (string-append name "-"))
+				       (loop (cdr lib) name))))))
+	     (unless (member lib-filename (*s7* 'filenames))
+	       (load (lib-filename)))))
+         (loop (cdr libs))))
+     
+     (varlet (curlet)
+       ,@(map (lambda (lib)
+		(case (car lib)
+		  ((only) 
+		   `((lambda (e names)
+		       (apply inlet
+			      (map (lambda (name)
+				     (cons name (e name)))
+				   names)))
+		     (symbol->value (symbol (object->string (cadr ',lib))))
+		     (cddr ',lib)))
+		  
+		  ((except)
+		   `((lambda (e names)
+		       (apply inlet
+			      (map (lambda (entry)
+				     (if (member (car entry) names)
+					 (values)
+					 entry))
+				   e)))
+		     (symbol->value (symbol (object->string (cadr ',lib))))
+		     (cddr ',lib)))
+		  
+		  ((prefix)
+		   `((lambda (e prefx)
+		       (apply inlet
+			      (map (lambda (entry)
+				     (cons (string->symbol 
+					    (string-append (symbol->string prefx) 
+							   (symbol->string (car entry)))) 
+					   (cdr entry)))
+				   e)))
+		     (symbol->value (symbol (object->string (cadr ',lib))))
+		     (caddr ',lib)))
+		  
+		  ((rename)
+		   `((lambda (e names)
+		       (apply inlet
+			      (map (lambda (entry)
+				     (let ((info (assoc (car entry) names)))
+				       (if info
+					   (cons (cadr info) (cdr entry))
+					   entry))) ; I assume the un-renamed ones are included
+				   e)))
+		     (symbol->value (symbol (object->string (cadr ',lib))))
+		     (cddr ',lib)))
+		  
+		  (else
+		   `(let ((sym (symbol (object->string ',lib))))
+		      (if (not (defined? sym))
+			  (format () "~A not loaded~%" sym)
+			  (symbol->value sym))))))
+	      libs))))
 
 
 ;; delay and force: ugh
@@ -404,6 +446,10 @@
 (define (os-version) (string-append (list-ref ((*libc* 'uname)) 3) " " (list-ref ((*libc* 'uname)) 4))) ; or perhaps use /etc/os-release
 (define (implementation-name) (copy "s7"))
 (define (implementation-version) (substring (*s7* 'version) 3 7))
+
+(unless (defined? 'null-environment)
+  (define (null-environment . args) (rootlet)))
+(define (environment . args) (rootlet))
 
 ;; command-line is problematic: s7 has no access to the caller's "main" function, and
 ;;   outside Windows, there's no reasonable way to get these arguments.
