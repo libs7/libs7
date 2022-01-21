@@ -10590,7 +10590,14 @@ static int32_t closure_length(s7_scheme *sc, s7_pointer e)
   return(-1);
 }
 
-static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b);
+static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b) /* (used only in copy_tree_with_type) */
+{
+  s7_pointer x;
+  new_cell_no_check(sc, x, full_type(p) & (TYPE_MASK | T_IMMUTABLE | T_SAFE_PROCEDURE));
+  set_car(x, a);
+  set_cdr(x, b);
+  return(x);
+}
 
 static s7_pointer copy_tree_with_type(s7_scheme *sc, s7_pointer tree)
 {
@@ -35145,11 +35152,9 @@ static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_
 	/* in the "int" cases, precision depends on the arg type */
 	switch (type(car(fdat->args)))
 	  {
-	  case T_INTEGER:
-	  case T_RATIO:
+	  case T_INTEGER: case T_RATIO:
 	    precision = 0;
 	    break;
-
 	  default:
 	    precision = 6;
 	    break;
@@ -35959,13 +35964,13 @@ is #t, the string is also sent to the current-output-port."
                      s7_make_signature(sc, 3, sc->is_output_port_symbol, sc->is_boolean_symbol, sc->is_null_symbol), sc->T)
 
   s7_pointer pt = car(args), str;
-  sc->format_column = 0;
   if (is_null(pt))
     {
       pt = current_output_port(sc);          /* () -> (current-output-port) */
       if (pt == sc->F)                       /*   otherwise () -> #f so we get a returned string, which is confusing */
 	return(pt);                          /*   but this means some error checks are skipped? */
     }
+  sc->format_column = 0;
   if (!((s7_is_boolean(pt)) ||               /* #f or #t */
 	((is_output_port(pt)) &&             /* (current-output-port) or call-with-open-file arg, etc */
 	 (!port_is_closed(pt)))))
@@ -36300,16 +36305,6 @@ static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b)
   /* apparently slightly faster as a function? */
   s7_pointer x;
   new_cell_no_check(sc, x, T_PAIR | T_SAFE_PROCEDURE);
-  set_car(x, a);
-  set_cdr(x, b);
-  return(x);
-}
-
-static s7_pointer cons_unchecked_with_type(s7_scheme *sc, s7_pointer p, s7_pointer a, s7_pointer b)
-{
-  /* apparently slightly faster as a function? (used only in copy_tree_with_type) */
-  s7_pointer x;
-  new_cell_no_check(sc, x, full_type(p) & (TYPE_MASK | T_IMMUTABLE | T_SAFE_PROCEDURE));
   set_car(x, a);
   set_cdr(x, b);
   return(x);
@@ -80340,7 +80335,7 @@ static goto_t op_set2(s7_scheme *sc)
 
       if (is_multiple_value(sc->value)) /* this has to be at least 2 args, sc->args and sc->code make 2 more, so... */
 	syntax_error(sc, "set!: too many arguments: ~S", 28,
-		   set_ulist_1(sc, sc->set_symbol, pair_append(sc, multiple_value(sc->value), pair_append(sc, sc->args, sc->code))));
+		     set_ulist_1(sc, sc->set_symbol, pair_append(sc, multiple_value(sc->value), pair_append(sc, sc->args, sc->code))));
 
       if (sc->args == sc->nil)
 	syntax_error(sc, "list set!: not enough arguments: ~S", 35, sc->code);
@@ -89114,7 +89109,7 @@ static bool eval_car_pair(s7_scheme *sc)
 	  set_optimize_op(code, OP_P_S);
 	  set_opt3_sym(code, cadr(code));
 	}
-      /* OP_P_ALL_A runs into opt2 fx overwrites in a case like ((values set!) x 32) */
+      /* possible op OP_P_ALL_A runs into opt2 fx overwrites in a case like ((values set!) x 32) */
       else set_optimize_op(code, OP_PAIR_PAIR);
     }
   else set_optimize_op(code, OP_PAIR_PAIR);
@@ -95756,7 +95751,7 @@ int main(int argc, char **argv)
   return(0);
 }
 
-/* in Linux:  gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic
+/* in Linux:  gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic ; also need libc.scm cload.scm repl.scm to get a decent repl
  * in *BSD:   gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm -Wl,-export-dynamic
  * in OSX:    gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
  *   (clang also needs LDFLAGS="-Wl,-export-dynamic" in Linux and "-fPIC")
@@ -95825,10 +95820,8 @@ int main(int argc, char **argv)
  * tbig      604.3        177.4  175.8  156.5  156.5
  * -----------------------------------------------------
  * 
- * gmp/pure-s7 etc in t725 (tests7 cases? also valgrind)
  * can let optimize_lambda like letrec (t550)?
  * dw timing
  * :readable in pretty-print?
  * inline cache of last-hit searched-for vars?
- * r7rs tests (t553)
  */

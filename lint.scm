@@ -22741,8 +22741,30 @@
 	  (cond ((eq? (car head) 'list)
 		 (lint-format "perhaps use vector here: ~A" caller (truncated-list->string form)))
 
+		((and (eq? (car head) 'if)
+		      (len=3? head))                     ; ((if y +) 3 4)
+		 (lint-format "~S better not be #f here: ~A" caller (cadr head) (truncated-list->string form)))
+
+		;; how far to go here?
+		;; ((if y abs -))
+		;; ((if y abs exp) 1.0 2.0)
+		;; ((if y string=? string>?) 1 2)
+		;; ((if y abs +) 1.0 2.0)
+		;; ((if y 32 #<eof>) 1.0 2.0)
+		;; ((not y) 1.0)
+		;; (((if y + -) 2 3) 4)
+		;; ((throw 'oops)))
+		;; ((1 2) 3))
+		;; we can ignore any sequence accessor (car vector-ref etc), any unknown, unevalled context, bindings??, symbol->value
+		;;        let-temporarily bindings -- but how to tell we're in let-temporarily-walker?
+		;; is there an unambiguous funcall context?
+		;; if restricted to syntactic car, would there be false hits? of non-list as cadr?
+
 		((not (and (pair? (cdr head))
-			   (memq (car head) '(lambda lambda*)))))
+			   (memq (car head) '(lambda lambda*))))
+
+		 ;(format *stderr* "========> ~S~%" (truncated-list->string form))
+		 )
 
 		((and (identity? head)
 		      (pair? (cdr form))) ; identity needs an argument
