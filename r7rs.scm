@@ -345,7 +345,7 @@
 				     (begin
 				       (set! name (string-append name "-"))
 				       (loop (cdr lib) name))))))
-	     (unless (member lib-filename (*s7* 'filenames))
+	     (unless (member lib-filename (*s7* 'file-names))
 	       (load (lib-filename)))))
          (loop (cdr libs))))
      

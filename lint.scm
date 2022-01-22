@@ -16935,14 +16935,22 @@
 		      (head (car form)))
 
 		  ;; when->unless and vice versa
-		  (if (and (pair? test)
-			   (eq? (car test) 'not))  ; (when (not a) (set! x y)) -> (unless a (set! x y))
-		      (lint-format "perhaps ~A"
-				   caller
-				   (truncated-lists->string form
-							    (cons (if (eq? head 'when) 'unless 'when)
-								  (cons (cadr test)
-									(cddr form))))))
+		  (when (pair? test)
+		    (cond ((eq? (car test) 'not)           ; (when (not a) (set! x y)) -> (unless a (set! x y))
+			   (lint-format "perhaps ~A"
+					caller
+					(truncated-lists->string form
+								 (cons (if (eq? head 'when) 'unless 'when)
+								       (cons (cadr test)
+									     (cddr form))))))
+			  ((and (eq? head 'unless)
+				(hash-table-ref notables (car test))) ; (unless (< y 3) ...) -> (when (>= y 3) ...)
+			   (lint-format "perhaps ~A"
+					caller
+					(truncated-lists->string form
+								 (cons 'when
+								       (cons (cons (hash-table-ref notables (car test)) (cdr test))
+									     (cddr form))))))))
 		  (if (never-false test)
 		      (lint-format "~A test is never false: ~A" caller head (truncated-list->string form))
 		      (if (never-true test)       ; (unless #f...)
@@ -22741,31 +22749,51 @@
 	  (cond ((eq? (car head) 'list)
 		 (lint-format "perhaps use vector here: ~A" caller (truncated-list->string form)))
 
-		((and (eq? (car head) 'if)
-		      (len=3? head))                     ; ((if y +) 3 4)
-		 (lint-format "~S better not be #f here: ~A" caller (cadr head) (truncated-list->string form)))
+		((eq? (car head) 'if)
+		 (let ((if-len (length head)))
+		   (if (= if-len 3)                     ; ((if y +) 3 4)
+		       (lint-format "~S better not be #f here: ~A" caller (cadr head) (truncated-list->string form))
+		       
+		       (if (= if-len 4)                 ; ((if y + -) 2 3), if-len might be anything
+			   (let ((true (caddr head))
+				 (false (cadddr head))
+				 (num-args (length (cdr form))))
+			     
+			     (if (and (symbol? true)
+				      (symbol? false))
+				 (when (and (defined? true)
+					    (defined? false))
+				   (let ((op1 (symbol->value true))
+					 (op2 (symbol->value false)))
 
-		;; how far to go here?
-		;; ((if y abs -))
-		;; ((if y abs exp) 1.0 2.0)
-		;; ((if y string=? string>?) 1 2)
-		;; ((if y abs +) 1.0 2.0)
-		;; ((if y 32 #<eof>) 1.0 2.0)
-		;; ((not y) 1.0)
-		;; (((if y + -) 2 3) 4)
-		;; ((throw 'oops)))
-		;; ((1 2) 3))
-		;; we can ignore any sequence accessor (car vector-ref etc), any unknown, unevalled context, bindings??, symbol->value
-		;;        let-temporarily bindings -- but how to tell we're in let-temporarily-walker?
-		;; is there an unambiguous funcall context?
-		;; if restricted to syntactic car, would there be false hits? of non-list as cadr?
+				     (unless (aritable? op1 num-args)
+				       (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+						    caller true head num-args num-args (truncated-list->string form)))
+				     (unless (aritable? op2 num-args)
+				       (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+						    caller false head num-args num-args (truncated-list->string form)))
+				     
+				     (let ((sig1 (signature op1))
+					   (sig2 (signature op2))
+					   (data (var-member head env)))
+				       (when (pair? sig1)
+					 (check-args caller form data form (cdr sig1) env num-args))
+				       (when (pair? sig2)
+					 (check-args caller form data form (cdr sig2) env num-args)))))
 
+				 (unless (or (pair? true) (pair? false))
+
+				   (unless (aritable? true num-args)
+				     (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+						  caller true head num-args num-args (truncated-list->string form)))
+				   (unless (aritable? false num-args)
+				     (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+						  caller false head num-args num-args (truncated-list->string form))))))))))
+		
 		((not (and (pair? (cdr head))
-			   (memq (car head) '(lambda lambda*))))
-
-		 ;(format *stderr* "========> ~S~%" (truncated-list->string form))
-		 )
-
+			   (memq (car head) '(lambda lambda*)))))
+		;; just ((lambda|lambda* ...)...) from here down
+		
 		((and (identity? head)
 		      (pair? (cdr form))) ; identity needs an argument
 		 ;; ((lambda (x) x) 32) -> 32

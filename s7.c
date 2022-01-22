@@ -28666,9 +28666,13 @@ static s7_pointer string_read_sharp(s7_scheme *sc, s7_pointer pt)
       str++;
       while (char_ok_in_a_name[(uint8_t)(*str)]) {str++;}
       k = str - orig_str;
+#if 0
       if (*str != 0)
 	port_position(pt) += (k - 1);
       else port_position(pt) += k;
+#else
+      port_position(pt) += (k - 1);
+#endif
       if ((k + 1) >= sc->strbuf_size)
 	resize_strbuf(sc, k + 1);
       memcpy((void *)(sc->strbuf), (void *)orig_str, k);
@@ -95824,4 +95828,5 @@ int main(int argc, char **argv)
  * dw timing
  * :readable in pretty-print?
  * inline cache of last-hit searched-for vars?
+ * t557 port-position -> s7test?, check others
  */
