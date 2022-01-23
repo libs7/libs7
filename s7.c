@@ -27618,9 +27618,8 @@ static s7_pointer g_set_port_position(s7_scheme *sc, s7_pointer args)
   position = s7_integer_clamped_if_gmp(sc, pos);
   if (position < 0)
     return(out_of_range(sc, sc->port_position_symbol, int_two, pos, its_negative_string));
-
   if (is_string_port(port))
-    port_position(port) = position;
+    port_position(port) = (position > port_data_size(port)) ? port_data_size(port) : position;
 #if (!MS_WINDOWS)
   else
     if (is_file_port(port))
@@ -28666,13 +28665,7 @@ static s7_pointer string_read_sharp(s7_scheme *sc, s7_pointer pt)
       str++;
       while (char_ok_in_a_name[(uint8_t)(*str)]) {str++;}
       k = str - orig_str;
-#if 0
-      if (*str != 0)
-	port_position(pt) += (k - 1);
-      else port_position(pt) += k;
-#else
       port_position(pt) += (k - 1);
-#endif
       if ((k + 1) >= sc->strbuf_size)
 	resize_strbuf(sc, k + 1);
       memcpy((void *)(sc->strbuf), (void *)orig_str, k);
@@ -28707,13 +28700,9 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
       str++;
       while (char_ok_in_a_name[(uint8_t)(*str)]) {str++;}
       k = str - orig_str;
-      if (*str != 0)
-	port_position(pt) += (k - 1);
-      else port_position(pt) = port_data_size(pt);
-
+      port_position(pt) += (k - 1);
       if (!number_table[(uint8_t)(*orig_str)])
 	return(make_symbol_with_length(sc, orig_str, k));
-
       endc = (*str);
       (*str) = '\0';
       result = make_atom(sc, orig_str, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR);
@@ -68560,15 +68549,10 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
     {
       if (!checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
 	{
-#if 0
 	  s7_pointer p;
-	  for (p = args; is_pair(p); p = cdr(p))
+	  for (p = args; is_pair(p); p = cdr(p)) /* embedded list can be immutable, so we need to copy (sigh) */
 	    if (is_immutable(p))
 	      return(copy_proper_list(sc, args));
-#else
-	  if (is_immutable(args))
-	    return(copy_proper_list(sc, args));
-#endif
 	  return(args);
 	}
       sc->u = args;
@@ -95774,23 +95758,23 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  * tpeak       122          115    114    108    108
  * tref        513          691    687    463    463
- * index      1024         1026   1016    973    973
+ * index      1024         1026   1016    973    973   969
  * tmock      7741         1177   1165   1057   1054
  * texit      1827         ----   ----   1778   1760
- * tvect      1953         2519   2464   1772   1772  1767
+ * tvect      1953         2519   2464   1772   1767
  * s7test     4537         1873   1831   1818   1801
- * lt         2117         2123   2110   2113   2112
+ * lt         2117         2123   2110   2113   2112  2115
  * timp       2232         2971   2891   2176   2201
  * tread      2614         2440   2421   2419   2416
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
- * tmat       2694         3065   3042   2524   2533
+ * tmat       2694         3065   3042   2524   2528
  * tcopy      2600         8035   5546   2539   2538
  * dup        2756         3805   3788   2492   2470
  * tauto      2763         ----   ----   2562   2554
- * tb         3366?        2735   2681   2612   2612
+ * tb         3366?        2735   2681   2612   2612  2610
  * titer      2659         2865   2842   2641   2641
- * tsort      3572         3105   3104   2856   2859
+ * tsort      3572         3105   3104   2856   2859  2855
  * tmac       3074         3950   3873   3033   2978
  * tload      3740         ----   ----   3046   3046
  * tset       3058         3253   3104   3048   3115
@@ -95800,7 +95784,7 @@ int main(int argc, char **argv)
  * tlamb      4454         4912   4786   4298   4255
  * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4431
- * tlet       5305         7775   5640   4450   4450  4438
+ * tlet       5305         7775   5640   4450   4438
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5184
@@ -95815,18 +95799,17 @@ int main(int argc, char **argv)
  * tleft      9004         10.4   10.2   7657   7656
  * tgc        9614         11.9   11.1   8177   8176
  * cb         16.8         11.2   11.0   9658   9658
- * thash      35.4         11.8   11.7   9734   9735
+ * thash      35.4         11.8   11.7   9734   9735  9732
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   55.9
  * lg        104.2        106.6  105.0  103.6  103.6
- * tbig      604.3        177.4  175.8  156.5  156.5
+ * tbig      604.3        177.4  175.8  156.5  156.5 156.1
  * -----------------------------------------------------
  * 
  * can let optimize_lambda like letrec (t550)?
  * dw timing
  * :readable in pretty-print?
  * inline cache of last-hit searched-for vars?
- * t557 port-position -> s7test?, check others
  */
