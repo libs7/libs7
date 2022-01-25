@@ -3866,7 +3866,7 @@ static char *copy_string_with_length(const char *str, s7_int len)
   if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
-  if (len != 0)
+  /* if (len != 0) */ /* we check this above -- 24-Jan-22 */
     memcpy((void *)newstr, (void *)str, len);
   newstr[len] = '\0';
   return(newstr);
@@ -4056,7 +4056,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_STAR_AA, HOP_SAFE_C_STAR_AA, OP_SAFE_C_STAR_NA, HOP_SAFE_C_STAR_NA,
       OP_SAFE_C_P, HOP_SAFE_C_P,
 
-      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A, 
+      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A,
 
       OP_CLOSURE_S, HOP_CLOSURE_S, OP_CLOSURE_S_O, HOP_CLOSURE_S_O,
       OP_CLOSURE_A, HOP_CLOSURE_A, OP_CLOSURE_A_O, HOP_CLOSURE_A_O, OP_CLOSURE_P, HOP_CLOSURE_P,
@@ -4279,7 +4279,7 @@ static const char* op_names[NUM_OPS] =
       "safe_c_function*_aa", "h_safe_c_function*_aa", "safe_c_function*_fx", "h_safe_c_function*_fx",
       "safe_c_p", "h_safe_c_p",
 
-      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a", 
+      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a",
 
       "closure_s", "h_closure_s", "closure_s_o", "h_closure_s_o",
       "closure_a", "h_closure_a", "closure_a_o", "h_closure_a_o", "closure_p", "h_closure_p",
@@ -8177,7 +8177,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   name = (char *)(base + sizeof(block_t) + 2 * sizeof(s7_cell));
 
   name[0] = '{';
-  if (plen > 0) memcpy((void *)(name + 1), prefix, plen);
+  /* if (plen > 0) */ memcpy((void *)(name + 1), prefix, plen);
   name[plen + 1] = '}';
   name[plen + 2] = '-'; /* {gensym}-nnn */
 
@@ -8261,7 +8261,7 @@ static Inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const cha
   new_cell(sc, x, T_STRING | T_SAFE_PROCEDURE);
   string_block(x) = mallocate(sc, len + 1);
   string_value(x) = (char *)block_data(string_block(x));
-  if (len > 0)
+  /* if (len > 0) */
     memcpy((void *)string_value(x), (void *)str, len);
   string_value(x)[len] = 0;
   string_length(x) = len;
@@ -11737,7 +11737,7 @@ static void call_with_exit(s7_scheme *sc)
 	  sc->args = old_args;
 	}
 	break;
-	  
+
       case OP_LET_TEMP_UNWIND:
 	let_temp_unwind(sc, stack_code(sc->stack, i), stack_args(sc->stack, i));
 	break;
@@ -14403,6 +14403,7 @@ static s7_pointer check_sharp_readers(s7_scheme *sc, const char *name)
    * This search happens after #|, #t, and #f (and #nD for multivectors?). #! has a fallback.  Added #_ later)
    */
 
+  if ((S7_DEBUGGING) && ((!name) || (!*name))) fprintf(stderr, "%s[%d]: name is %s\n", __func__, __LINE__, name);
   need_loader_port = is_loader_port(current_input_port(sc));
   if (need_loader_port)
     clear_loader_port(current_input_port(sc));
@@ -14450,8 +14451,7 @@ static s7_pointer make_undefined(s7_scheme *sc, const char* name)
   len = safe_strlen(name);
   newstr = (char *)Malloc(len + 2);
   newstr[0] = '#';
-  if (len > 0)
-    memcpy((void *)(newstr + 1), (void *)name, len);
+  memcpy((void *)(newstr + 1), (void *)name, len);
   newstr[len + 1] = '\0';
   if (sc->undefined_constant_warnings) s7_warn(sc, len + 32, "%s is undefined\n", newstr);
   undefined_set_name_length(p, len + 1);
@@ -14560,6 +14560,8 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 static s7_pointer make_sharp_constant(s7_scheme *sc, char *name, bool with_error, s7_pointer pt, bool error_if_bad_number)
 {
   /* name is the stuff after the '#', return sc->nil if not a recognized #... entity */
+  if ((!name) || (!*name)) /* (string->number "#") for example */
+    return(make_undefined(sc, name));
 
   /* stupid r7rs special cases */
   if ((name[0] == 't') &&
@@ -28039,7 +28041,8 @@ static s7_pointer g_flush_output_port(s7_scheme *sc, s7_pointer args)
       if (pt == sc->F) return(pt);
       return(method_or_bust_with_type_one_arg_p(sc, pt, sc->flush_output_port_symbol, an_output_port_string));
     }
-  s7_flush_output_port(sc, pt);
+  if (!s7_flush_output_port(sc, pt))
+    return(s7_error(sc, sc->io_error_symbol, set_elist_2(sc, wrap_string(sc, "flush-output-port ~S failed", 27), pt)));
   return(pt);
 }
 
@@ -28914,7 +28917,6 @@ static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char 
   /* see if we can open this file before allocating a port */
   if (is_directory(name))
     return(file_error(sc, caller, "file is a directory:", name));
-
   errno = 0;
   fp = fopen(name, mode);
   if (fp)
@@ -28924,8 +28926,9 @@ static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char 
   if (errno == EINVAL)
     return(file_error(sc, caller, "invalid mode", mode));
 #if WITH_GCC
-  if ((name[0] == '~') &&  /* catch one special case, "~/..." */
-      (name[1] == '/'))
+  if ((!name) || (!*name))
+    return(file_error(sc, caller, strerror(errno), name));
+  if ((name[0] == '~') && (name[1] == '/'))    /* catch one special case, "~/..." */
     {
       char *home;
       home = getenv("HOME");
@@ -29985,6 +29988,7 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
   s7_int len;
   char *rtn;
   block_t *block;
+  if ((S7_DEBUGGING) && ((!filename) || (!*filename))) fprintf(stderr, "%s[%d]: filename is %s\n", __func__, __LINE__, filename);
   if (filename[0] == '/')
     {
       len = safe_strlen(filename);
@@ -30123,6 +30127,7 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 {
   FILE* fp;
   char *local_file_name = (char *)filename;
+
   fp = fopen(filename, "r");
 #if WITH_GCC
   if ((!fp) && /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
@@ -34668,7 +34673,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   object_out(sc, T_Pos(obj), strport, P_WRITE);
   len = port_position(strport);
   if ((S7_DEBUGGING) && (len == 0)) fprintf(stderr, "%s[%d]: len == 0\n", __func__, __LINE__);
-  if (len == 0) {close_format_port(sc, strport); return(NULL);} /* probably never happens */
+  /* if (len == 0) {close_format_port(sc, strport); return(NULL);} */ /* probably never happens */
   str = (char *)Malloc(len + 1);
   memcpy((void *)str, (void *)port_data(strport), len);
   str[len] = '\0';
@@ -45446,6 +45451,7 @@ each a function of no arguments, guaranteeing that finish is called even if body
                            s7_make_signature(sc, 2, sc->is_procedure_symbol, sc->not_symbol), \
                            sc->is_procedure_symbol, \
                            s7_make_signature(sc, 2, sc->is_procedure_symbol, sc->not_symbol))
+
   if (!is_dwind_thunk(sc, car(args)))
     return(method_or_bust_with_type(sc, car(args), sc->dynamic_wind_symbol, args, wrap_string(sc, "a thunk or #f", 13), 1));
   if (!is_thunk(sc, cadr(args)))
@@ -45472,14 +45478,18 @@ static bool is_lambda(s7_scheme *sc, s7_pointer sym)
   /* symbol_id=0 means it has never been rebound (T_GLOBAL might not be set for initial stuff) */
 }
 
-static bool is_ok_thunk(s7_scheme *sc, s7_pointer arg)
+static int32_t is_ok_thunk(s7_scheme *sc, s7_pointer arg) /* used only in dynamic_wind_chooser */
 {
-  return((is_pair(arg)) &&
-	 (is_lambda(sc, car(arg))) &&
-	 (is_pair(cdr(arg))) &&
-	 (is_null(cadr(arg))) &&
-	 (is_pair(cddr(arg))) &&
-	 (s7_is_proper_list(sc, cddr(arg))));
+  /* 0 = not ok, 1 = ok but not simple, 2 = ok body is just #f, 3 = #f */
+  if (arg == sc->F) return(3);
+  if ((is_pair(arg)) &&
+      (is_lambda(sc, car(arg))) &&
+      (is_pair(cdr(arg))) &&
+      (is_null(cadr(arg))) && /* (lambda () ...) */
+      (is_pair(cddr(arg))) &&
+      (s7_is_proper_list(sc, cddr(arg))))
+    return(((is_null(cdddr(arg))) && (caddr(arg) == sc->F)) ? 2 : 1); /* 2: (lambda () #f) */
+  return(0);
 }
 
 static s7_pointer dynamic_wind_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
@@ -45487,13 +45497,12 @@ static s7_pointer dynamic_wind_chooser(s7_scheme *sc, s7_pointer f, int32_t args
   if ((args == 3) &&
       (is_ok_thunk(sc, caddr(expr))))
     {
-      if ((cadr(expr) == sc->F) && (cadddr(expr) == sc->F))
-	return(sc->dynamic_wind_body);
-      if ((is_ok_thunk(sc, cadr(expr))) && (cadddr(expr) == sc->F))
-	return(sc->dynamic_wind_init);
-      if (((is_ok_thunk(sc, cadr(expr))) || (cadr(expr) == sc->F)) &&
-	  ((is_ok_thunk(sc, cadddr(expr))) || (cadddr(expr) == sc->F)))
-	return(sc->dynamic_wind_unchecked);
+      int32_t init, end;
+      init = is_ok_thunk(sc, cadr(expr));
+      end = is_ok_thunk(sc, cadddr(expr));
+      if ((init > 1) && (end > 1)) return(sc->dynamic_wind_body);
+      if ((init > 0) && (end > 1)) return(sc->dynamic_wind_init);
+      if ((init > 0) && (end > 0)) return(sc->dynamic_wind_unchecked);
     }
   return(f);
 }
@@ -51571,7 +51580,7 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
       set_curlet(sc, stack_let(sc->stack, i));
 
       push_stack_direct(sc, OP_GC_PROTECT);
-      if (!op_let_temp_done1(sc)) 
+      if (!op_let_temp_done1(sc))
 	{
 	  push_stack_direct(sc, OP_EVAL_DONE);
 	  eval(sc, OP_SET_UNCHECKED);
@@ -52787,17 +52796,17 @@ s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args)
     TRACK(sc);
     set_current_code(sc, history_cons(sc, func, args));
     if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s: %s %s\n", __func__, display(func), display_80(args)));
-    
+
     sc->temp4 = T_App(func);                           /* this is feeble GC protection */
     sc->temp2 = T_Lst(args);
-    
+
     store_jump_info(sc);
     set_jump_info(sc, S7_CALL_SET_JUMP);
     if (jump_loc != NO_JUMP)
       {
 	if (jump_loc != ERROR_JUMP)
 	  eval(sc, sc->cur_op);
-	
+
 	if ((jump_loc == CATCH_JUMP) &&                /* we're returning (back to eval) from an error in catch */
 	    (sc->stack_end == sc->stack_start))
 	  push_stack_op(sc, OP_ERROR_QUIT);
@@ -65201,7 +65210,7 @@ static s7_pointer opt_let_temporarily(opt_info *o)
 
   if (is_immutable_slot(o->v[1].p))
     immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, slot_symbol(o->v[1].p)));
-  
+
   o->v[3].p = slot_value(o->v[1].p);         /* save and protect old value */
   gc_protect_via_stack(sc, o->v[3].p);
   slot_set_value(o->v[1].p, o1->v[0].fp(o1)); /* set new value */
@@ -68586,7 +68595,7 @@ static s7_pointer g_simple_list_values(s7_scheme *sc, s7_pointer args)
   for (p = args; is_pair(p); p = cdr(p))
     if (car(p) == sc->no_value)
       return(splice_out_values(sc, args));
-  if (is_immutable(args)) 
+  if (is_immutable(args))
     return(copy_proper_list(sc, args));
   return(args);
 }
@@ -68595,7 +68604,7 @@ static s7_pointer list_values_chooser(s7_scheme *sc, s7_pointer f, int32_t args,
 {
   s7_pointer p;
   for (p = cdr(expr); is_pair(p); p = cdr(p))
-    if ((is_pair(car(p))) && (caar(p) != sc->quote_symbol)) 
+    if ((is_pair(car(p))) && (caar(p) != sc->quote_symbol))
       return(f);
   return(sc->simple_list_values);
 }
@@ -69432,14 +69441,14 @@ static int32_t read_x_char(s7_scheme *sc, int32_t i, s7_pointer pt)
 	  backchar((char)c, pt);
 	  return(i);
 	}
-      if (c == EOF)
-	{
-	  read_error(sc, "#<eof> in midst of hex-char");
-	  return(i);
-	}
       if (c == ';')
 	{
 	  sc->strbuf[i++] = (unsigned char)d1;
+	  return(i);
+	}
+      if (c == EOF)
+	{
+	  read_error(sc, "#<eof> in midst of hex-char");
 	  return(i);
 	}
       d2 = digits[c];
@@ -72562,7 +72571,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      add_symbol_to_list(sc, car(p));
 
 	  /* check_lambda calls optimize_lambda if define in progress, else just optimize on the body */
-	  clear_safe_closure_body(cddr(arg1)); /* otherwise we need to fixup the local let for the optimizer -- what is this about? */
+	  clear_safe_closure_body(cddr(arg1)); /* otherwise we need to fixup the local let for the optimizer -- see s7test intersection case 91492 */
 	  set_opt1_lambda_add(expr, func);
 	  return(OPT_F);
 	}
@@ -83795,12 +83804,12 @@ static inline bool lambda_star_default(s7_scheme *sc)
 		  slot_set_value(z, lookup_checked(sc, val));
 		  if (slot_value(z) == sc->undefined)
 		    {
-		      /* the current environment here contains the function parameters which defaulted to #<undefined> 
-		       *   (or maybe #<unused>?) earlier in apply_*_closure_star_1, so (define (f f) (define* (f (f f)) f) (f)) (f 0) 
-		       *   looks for the default f, finds itself currently undefined, and raises an error! So, before 
-		       *   claiming it is unbound, we need to check outlet as well. But in the case above, the inner 
+		      /* the current environment here contains the function parameters which defaulted to #<undefined>
+		       *   (or maybe #<unused>?) earlier in apply_*_closure_star_1, so (define (f f) (define* (f (f f)) f) (f)) (f 0)
+		       *   looks for the default f, finds itself currently undefined, and raises an error! So, before
+		       *   claiming it is unbound, we need to check outlet as well. But in the case above, the inner
 		       *   define* shadows the caller's parameter before checking the default arg values, so the default f
-		       *   refers to the define* -- I'm not sure this is a bug.  It means that (define* (f (a f)) a) 
+		       *   refers to the define* -- I'm not sure this is a bug.  It means that (define* (f (a f)) a)
 		       *   returns f: (equal? f (f)) -> #t, so any outer f needs an extra let and endless outlets:
 		       *   (let ((f 3)) (let () (define* (f (a ((outlet (outlet (outlet (curlet)))) 'f))) a) (f))) -> 3
 		       *   We want the shadowing once the define* is done, so the current mess is simplest.
@@ -84080,11 +84089,11 @@ static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
   sc->code = T_Pair(closure_body(func));
 }
 
-static bool call_lambda_star(s7_scheme *sc, s7_pointer code, s7_pointer arglist) 
+static bool call_lambda_star(s7_scheme *sc, s7_pointer code, s7_pointer arglist)
 {
   bool target;
-  sc->code = opt1_lambda(code); 
-  target = apply_safe_closure_star_1(sc); 
+  sc->code = opt1_lambda(code);
+  target = apply_safe_closure_star_1(sc);
   clear_list_in_use(arglist);
   return(target);
 }
@@ -84226,7 +84235,7 @@ static bool op_define1(s7_scheme *sc)
    */
   if (is_multiple_value(sc->value))                 /* (define x (values 1 2)) */
     s7_error(sc, sc->syntax_error_symbol,
-	     set_elist_5(sc, wrap_string(sc, "~A: more than one value: (~A ~A ~S)", 35), 
+	     set_elist_5(sc, wrap_string(sc, "~A: more than one value: (~A ~A ~S)", 35),
 			 define1_caller(sc), define1_caller(sc), sc->code, sc->value));
   if (is_constant_symbol(sc, sc->code))             /* (define pi 3) or (define (pi a) a) */
     {
@@ -91079,8 +91088,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	APPLY:
 	case OP_APPLY:
 	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */
-	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_%sapply%s %s (%s) to %s\n", 
-						__func__, __LINE__, BOLD_TEXT, UNBOLD_TEXT, 
+	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_%sapply%s %s (%s) to %s\n",
+						__func__, __LINE__, BOLD_TEXT, UNBOLD_TEXT,
 						display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
@@ -91757,7 +91766,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_LAMBDA:                sc->value = op_lambda(sc, sc->code);           continue;
 	case OP_LAMBDA_UNCHECKED:      sc->value = op_lambda_unchecked(sc, sc->code); continue;
-
 	case OP_LAMBDA_STAR:           op_lambda_star(sc);           continue;
 	case OP_LAMBDA_STAR_UNCHECKED: op_lambda_star_unchecked(sc); continue;
 
@@ -95807,9 +95815,12 @@ int main(int argc, char **argv)
  * lg        104.2        106.6  105.0  103.6  103.6
  * tbig      604.3        177.4  175.8  156.5  156.4
  * -----------------------------------------------------
- * 
+ *
  * can let optimize_lambda like letrec (t550)?
- * dw timing
+ * dw timing, tdyn.scm
  * :readable in pretty-print?
  * inline cache of last-hit searched-for vars?
+ * fx_lambda fx_lambda_unchecked via optimize_syntax perhaps: see tmp -- why no in use?
+ * (*s7* 'filenames) through sl_filenames?
+ * s7test s7_call is not unwinding call/cc+error+dw+setter(?) 51488 [in s7test stop if len(name)==0 make_undefined_constant]
  */
