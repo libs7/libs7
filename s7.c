@@ -50385,16 +50385,14 @@ static block_t *stacktrace_add_func(s7_scheme *sc, s7_pointer f, s7_pointer code
     {
       newlen = symbol_name_length(f) + errlen + 10;
       newp = mallocate(sc, newlen);
-      newstr = (char *)block_data(newp);
-      /* newstr[0] = '\0'; */
+      newstr = (char *)block_data(newp);      /* newstr[0] = '\0'; */
       errlen = catstrs_direct(newstr, symbol_name(f), ": ", errstr, (const char *)NULL);
     }
   else
     {
       newlen = errlen + 8;
       newp = mallocate(sc, newlen);
-      newstr = (char *)block_data(newp);
-      /* newstr[0] = '\0'; */
+      newstr = (char *)block_data(newp);      /* newstr[0] = '\0'; */
       if ((errlen > 2) && (errstr[2] == '('))
         errlen = catstrs_direct(newstr, "  ", errstr, (const char *)NULL);
       else
@@ -50404,8 +50402,7 @@ static block_t *stacktrace_add_func(s7_scheme *sc, s7_pointer f, s7_pointer code
 	}}
   newlen = code_max + 8 + ((notes) ? strlen(notes) : 0);
   b = mallocate(sc, newlen);
-  str = (char *)block_data(b);
-  /* str[0] = '\0'; */
+  str = (char *)block_data(b);                /* str[0] = '\0'; */
 
   if (errlen >= code_max)
     {
@@ -72565,7 +72562,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	  set_unsafe_optimize_op(expr, hop + OP_CLOSURE_FA);
 	  check_lambda(sc, arg1, false);
 
-	  clear_symbol_list(sc);
+	  clear_symbol_list(sc); /* clobbered in check_lambda so restore it? */
 	  for (p = e; is_pair(p); p = cdr(p))
 	    if (is_normal_symbol(car(p)))
 	      add_symbol_to_list(sc, car(p));
@@ -79584,8 +79581,7 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc)
 	  (ix < vector_dimension(v, 0)) &&
 	  (iy < vector_dimension(v, 1)))
 	{
-	  s7_int index;
-	  index = (ix * vector_offset(v, 0)) + iy;
+	  s7_int index = (ix * vector_offset(v, 0)) + iy;
 	  sc->value = vector_getter(v)(sc, v, index); /* check for normal vector saves in some cases, costs in others */
 	  return(true);
 	}}
@@ -79668,10 +79664,10 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 	  if (is_t_integer(ind))
 	    {
 	      s7_pointer obj;
-	      s7_int index = integer(ind);
-	      if ((index < 0) || (index >= vector_length(vect)))
-		out_of_range(sc, sc->vector_ref_symbol, int_two, cadr(settee), (index < 0) ? its_negative_string : its_too_large_string);
-	      obj = vector_element(vect, index);
+	      s7_int index1 = integer(ind);
+	      if ((index1 < 0) || (index1 >= vector_length(vect)))
+		out_of_range(sc, sc->vector_ref_symbol, int_two, cadr(settee), (index1 < 0) ? its_negative_string : its_too_large_string);
+	      obj = vector_element(vect, index1);
 	      if (!is_applicable(obj))
 		s7_error(sc, sc->no_setter_symbol,
 			 set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~S) is ~S which can't take arguments", 47), form, vect, cadr(settee), obj));
@@ -83899,14 +83895,13 @@ static bool apply_safe_closure_star_1(s7_scheme *sc)                   /* ------
 
 static bool apply_unsafe_closure_star_1(s7_scheme *sc)
 {
-  s7_pointer z, val, top = sc->nil;
+  s7_pointer z, top = sc->nil;
   for (z = closure_args(sc->code); is_pair(z); z = cdr(z))
     {
       s7_pointer car_z = car(z);
       if (is_pair(car_z))           /* arg has a default value */
 	{
-	  s7_pointer slot;
-	  val = cadr(car_z);
+	  s7_pointer slot, val = cadr(car_z);
 	  if ((!is_pair(val)) &&
 	      (!is_symbol(val)))
 	    slot = add_slot_checked(sc, sc->curlet, car(car_z), val);
@@ -92037,7 +92032,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 /* if this changes, remember to change lint.scm */
 typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS, SL_HEAP_SIZE, SL_FREE_HEAP_SIZE,
-	      SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_ROOTLET_SIZE, SL_C_TYPES, SL_SAFETY,
+	      SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_FILENAMES, SL_ROOTLET_SIZE, SL_C_TYPES, SL_SAFETY,
 	      SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_UNDEFINED_CONSTANT_WARNINGS, SL_GC_STATS, SL_MAX_HEAP_SIZE,
 	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_CPU_TIME, SL_CATCHES, SL_STACK, SL_MAJOR_VERSION, SL_MINOR_VERSION,
 	      SL_MAX_STRING_LENGTH, SL_MAX_FORMAT_LENGTH, SL_MAX_LIST_LENGTH, SL_MAX_VECTOR_LENGTH, SL_MAX_VECTOR_DIMENSIONS,
@@ -92051,7 +92046,7 @@ typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS
 
 static const char *s7_let_field_names[SL_NUM_FIELDS] =
   {"no-field", "stack-top", "stack-size", "stacktrace-defaults", "heap-size", "free-heap-size",
-   "gc-freed", "gc-protected-objects", "gc-total-freed", "gc-info", "file-names", "rootlet-size", "c-types", "safety",
+   "gc-freed", "gc-protected-objects", "gc-total-freed", "gc-info", "file-names", "filenames", "rootlet-size", "c-types", "safety",
    "undefined-identifier-warnings", "undefined-constant-warnings", "gc-stats", "max-heap-size",
    "max-port-data-size", "max-stack-size", "cpu-time", "catches", "stack", "major-version", "minor-version",
    "max-string-length", "max-format-length", "max-list-length", "max-vector-length", "max-vector-dimensions",
@@ -92480,7 +92475,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_DEFAULT_RATIONALIZE_ERROR:     return(make_real(sc, sc->default_rationalize_error));
     case SL_EQUIVALENT_FLOAT_EPSILON:      return(s7_make_real(sc, sc->equivalent_float_epsilon));
     case SL_EXPANSIONS:                    return(s7_make_boolean(sc, sc->is_expanding));
-    case SL_FILE_NAMES:                    return(sl_file_names(sc));
+    case SL_FILE_NAMES: case SL_FILENAMES: return(sl_file_names(sc));
     case SL_FLOAT_FORMAT_PRECISION:        return(make_integer(sc, sc->float_format_precision));
     case SL_FREE_HEAP_SIZE:                return(make_integer(sc, sc->free_heap_top - sc->free_heap));
     case SL_GC_FREED:                      return(make_integer(sc, sc->gc_freed));
@@ -92737,7 +92732,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       sc->equivalent_float_epsilon = s7_real(sl_real_geq_0(sc, sym, val));
       return(val);
 
-    case SL_FILE_NAMES: return(sl_unsettable_error(sc, sym));
+    case SL_FILE_NAMES: case SL_FILENAMES: return(sl_unsettable_error(sc, sym));
 
     case SL_FLOAT_FORMAT_PRECISION: /* float-format-precision should not be huge => hangs in snprintf -- what's a reasonable limit here? */
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
@@ -92939,6 +92934,7 @@ static void init_s7_let_immutable_field(void)
   s7_let_immutable_field[SL_CPU_TIME] = true;
   s7_let_immutable_field[SL_C_TYPES] = true;
   s7_let_immutable_field[SL_FILE_NAMES] = true;
+  s7_let_immutable_field[SL_FILENAMES] = true;
   s7_let_immutable_field[SL_FREE_HEAP_SIZE] = true;
   s7_let_immutable_field[SL_GC_FREED] = true;
   s7_let_immutable_field[SL_GC_TOTAL_FREED] = true;
@@ -95820,7 +95816,8 @@ int main(int argc, char **argv)
  * dw timing, tdyn.scm
  * :readable in pretty-print?
  * inline cache of last-hit searched-for vars?
- * fx_lambda fx_lambda_unchecked via optimize_syntax perhaps: see tmp -- why no in use?
- * (*s7* 'filenames) through sl_filenames?
+ * fx_lambda fx_lambda_unchecked via optimize_syntax perhaps: see tmp -- why not in use?
  * s7test s7_call is not unwinding call/cc+error+dw+setter(?) 51488 [in s7test stop if len(name)==0 make_undefined_constant]
+ * cutlet troubles: t560
+ * r7rs.scm: fix import file names to use /
  */

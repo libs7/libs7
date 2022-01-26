@@ -302,7 +302,7 @@
 		vars))))
 
 
-;; libraries
+;; libraries?
 (apply define (symbol (object->string '(scheme base))) (inlet) ()) ; ignore (scheme base)
 (apply define (symbol (object->string '(scheme r5rs))) (inlet) ()) ; ignore (scheme r5rs)
 (apply define (symbol (object->string '(scheme read))) (inlet) ()) ; and so on... what a pile of baloney
@@ -313,6 +313,12 @@
 (apply define (symbol (object->string '(scheme inexact))) (inlet) ()) 
 (apply define (symbol (object->string '(scheme char))) (inlet) ()) 
 (apply define (symbol (object->string '(scheme complex))) (inlet) ()) 
+(apply define (symbol (object->string '(scheme eval))) (inlet) ()) 
+(apply define (symbol (object->string '(scheme process-context))) (inlet) ()) 
+(apply define (symbol (object->string '(scheme case-lambda))) (inlet) ()) 
+(apply define (symbol (object->string '(scheme lazy))) (inlet) ()) 
+(apply define (symbol (object->string '(scheme load))) (inlet) ()) 
+(apply define (symbol (object->string '(scheme repl))) (inlet) ()) 
 
 (define-macro (define-library libname . body) ; |(lib name)| -> environment
   `(define ,(symbol (object->string libname))

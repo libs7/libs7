@@ -2921,7 +2921,7 @@ inlet can also be used to copy an environment without accidentally invoking
 that environment's copy method.
 </p>
 
-<p>Here's an example: we want to define two functions that share a
+<p>Here's an example of varlet: we want to define two functions that share a
 local variable:
 </p>
 
@@ -2991,7 +2991,6 @@ changed built-ins:
 <em class="gray">1</em>
 </pre>
 
-<blockquote>
 <p>
 with-let and unlet are constants, so you can
 use them in any context without worrying about whether they've been redefined.
@@ -3003,6 +3002,14 @@ that unlet accesses is not accessible from scheme code, so there's no way
 that those values can be clobbered).
 </p>
 
+<p><b>cutlet</b> removes bindings from an environment.  If the environment is
+part of the outlet chain of a function, you'll probably get a segfault.
+Don't, for example, <code>(cutlet (outlet (funclet func) 'x))</code>
+where func refers to x in its body.  Similarly, don't mess up the
+outlet chain of a function (via (set! (outlet...))), and still 
+expect that function to do something reasonable. (I may remove cutlet someday).
+</p>
+<br>
 
 <div class="indented">
 
@@ -5546,7 +5553,7 @@ expansions?                   #t, whether expansions are handled at read-time
 muffle-warnings?              #f, if #t s7_warn does not output anything
 
 cpu-time                      run time so far (proportional to cpu cycles consumed, not wall-clock seconds)
-file-names                    currently loaded files (a list)
+file-names or filenames       currently loaded files (a list)
 catches                       a list of the currently active catch tags
 c-types                       a list of c-object type names (from s7_make_c_type, etc)
 

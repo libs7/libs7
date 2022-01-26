@@ -10759,7 +10759,7 @@
 			    (for-each (lambda (f)
 					(hash-table-set! h f #t))
 				      '(stack-top stack-size stacktrace-defaults heap-size free-heap-size major-version minor-version
-				        gc-freed gc-protected-objects gc-total-freed gc-info file-names rootlet-size c-types safety
+				        gc-freed gc-protected-objects gc-total-freed gc-info file-names filenames rootlet-size c-types safety
 					undefined-identifier-warnings undefined-constant-warnings gc-stats max-heap-size
 					max-port-data-size max-stack-size cpu-time catches stack max-string-length
 					max-format-length max-list-length max-vector-length max-vector-dimensions
