@@ -337,25 +337,27 @@
 			 entry))
 		   (curlet))))))
 
+(unless (defined? 'r7rs-import-library-filename)
+  (define (r7rs-import-library-filename libs)    ; this turns (A B) into "A/B.scm", then loads it if needed
+    (when (pair? libs)
+      (unless (eq? (caar libs) 'scheme)
+        (let ((lib-filename (let loop ((lib (if (memq (caar libs) '(only except prefix rename))
+						(cadar libs)
+						(car libs)))
+				       (name ""))
+			      (set! name (string-append name (symbol->string (car lib))))
+			      (if (null? (cdr lib))
+				  (string-append name ".scm")
+				  (begin
+				    (set! name (string-append name "/")) ; this follows Guile, Chibi, and Racket
+				    (loop (cdr lib) name))))))
+	  (unless (member lib-filename (*s7* 'file-names))
+	    (load lib-filename))))
+      (r7rs-import-library-filename (cdr libs)))))
+  
 (define-macro (import . libs)
   `(begin
-     (let loop ((libs ',libs)) ; load library files, unless already loaded or pointless
-       (when (pair? libs)
-	 (unless (eq? (caar libs) 'scheme)
-           (let ((lib-filename (let loop ((lib (if (memq (caar libs) '(only except prefix rename))
-						   (cadar libs)
-						   (car libs)))
-					  (name ""))
-				 (set! name (string-append name (symbol->string (car lib))))
-				 (if (null? (cdr lib))
-				     (string-append name ".scm")
-				     (begin
-				       (set! name (string-append name "-"))
-				       (loop (cdr lib) name))))))
-	     (unless (member lib-filename (*s7* 'file-names))
-	       (load (lib-filename)))))
-         (loop (cdr libs))))
-     
+     (r7rs-import-library-filename ',libs)
      (varlet (curlet)
        ,@(map (lambda (lib)
 		(case (car lib)
@@ -402,7 +404,7 @@
 				   e)))
 		     (symbol->value (symbol (object->string (cadr ',lib))))
 		     (cddr ',lib)))
-		  
+
 		  (else
 		   `(let ((sym (symbol (object->string ',lib))))
 		      (if (not (defined? sym))

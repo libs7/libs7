@@ -425,7 +425,12 @@ static s7_pointer g_notcurses_get(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_notcurses_refresh(s7_scheme *sc, s7_pointer args)
 {
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  unsigned int x = 0, y = 0;
+  int z;
+#else
   int x = 0, y = 0, z;
+#endif
   z = notcurses_refresh((struct notcurses *)s7_c_pointer_with_type(sc, s7_car(args), notcurses_symbol, __func__, 1), &x, &y); /* by reference? */
   return(s7_list(sc, 3, s7_make_integer(sc, z), s7_make_integer(sc, x), s7_make_integer(sc, y)));
 }
@@ -922,7 +927,11 @@ static s7_pointer g_ncplane_set_channels(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_ncplane_dim_yx(s7_scheme *sc, s7_pointer args)
 {
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  unsigned int x = 0, y = 0;
+#else
   int x = 0, y = 0;
+#endif
   ncplane_dim_yx((const struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), &y, &x);
   return(s7_list(sc, 2, s7_make_integer(sc, y), s7_make_integer(sc, x)));
 }
@@ -1219,7 +1228,11 @@ static s7_pointer g_ncplane_yx(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_ncplane_cursor_yx(s7_scheme *sc, s7_pointer args)
 {
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  unsigned int x = 0, y = 0;
+#else
   int x = 0, y = 0;
+#endif
   ncplane_cursor_yx((const struct ncplane *)s7_c_pointer_with_type(sc, s7_car(args), ncplane_symbol, __func__, 1), &y, &x);
   return(s7_list(sc, 2, s7_make_integer(sc, y), s7_make_integer(sc, x)));
 }
@@ -4071,25 +4084,6 @@ void notcurses_s7_init(s7_scheme *sc)
  *   > (load "notcurses_s7.so" (inlet 'init_func 'notcurses_s7_init))
  *   > (notcurses_version)
  * repl make-nrepl-bits.scm
- */
-
-/* TODO: ncmenu_item(s) various callbacks ncpalette-chans? notcurses_canbraille
- *  list of lists of menu items -> (permanent) c array, arg type checks
- *  API void ncplane_set_resizecb(struct ncplane* n, int(*resizecb)(struct ncplane*)); -- these need wrappers
- *  API int (*ncplane_resizecb(const struct ncplane* n))(struct ncplane*);
- * 2.1.0
- *  ncpile_top|bottom, ncplane_resize_maximize, ncplane_descendent_p?
- *  NCPLOT_OPTION_PRINTSAMPLE
- * 2.1.1
- *  ncprogbar
- * 2.1.2
- *  notcurses_linesigs_enable|disable
- * 2.1.4
- *  HIRES additions
- *  API int ncplane_at_cursor_cell(struct ncplane* n, nccell* c);
- *  API int ncplane_at_yx_cell(struct ncplane* n, int y, int x, nccell* c);
- *  API ncblitter_e ncvisual_media_defblitter(const struct notcurses* nc, ncscale_e scale);
- *  API bool notcurses_cansextant(const struct notcurses* nc);
  */
 #endif
 

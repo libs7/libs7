@@ -8114,11 +8114,9 @@ s7_pointer s7_gensym(s7_scheme *sc, const char *prefix)
   block_t *b;
   char *name;
   uint32_t location;
-  s7_int len;
+  s7_int len = safe_strlen(prefix) + 32;
   uint64_t hash;
   s7_pointer x;
-
-  len = safe_strlen(prefix) + 32;
   b = mallocate(sc, len);
   name = (char *)block_data(b);
   /* there's no point in heroic efforts here to avoid name collisions -- the user can screw up no matter what we do */
@@ -12476,14 +12474,12 @@ static block_t *big_number_to_string_with_radix(s7_scheme *sc, s7_pointer p, int
     }
   if (width > 0)
     {
-      s7_int len;
-      len = safe_strlen((char *)block_data(str));
+      s7_int len = safe_strlen((char *)block_data(str));
       if (width > len)
 	{
-	  int32_t spaces;
+	  int32_t spaces = width - len;
 	  block_t *tmp;
-	  tmp = (block_t *)mallocate(sc, width + 1);
-	  spaces = width - len;
+	  tmp = (block_t *)mallocate(sc, width + 1);	  
 	  ((char *)block_data(tmp))[width] = '\0';
 	  memmove((void *)((char *)block_data(tmp) + spaces), (void *)block_data(str), len);
 	  local_memset((void *)block_data(tmp), (int)' ', spaces);
@@ -13900,7 +13896,7 @@ static inline char *floatify(char *str, s7_int *nlen)
   return(str);
 }
 
-static void insert_spaces(s7_scheme *sc, char *src, s7_int width, s7_int len)
+static void insert_spaces(s7_scheme *sc, const char *src, s7_int width, s7_int len)
 {
   s7_int spaces;
   if (width >= sc->num_to_str_size)
@@ -14446,9 +14442,8 @@ static s7_pointer make_undefined(s7_scheme *sc, const char* name)
 {
   s7_pointer p;
   char *newstr;
-  s7_int len;
-  new_cell(sc, p, T_UNDEFINED | T_IMMUTABLE);
-  len = safe_strlen(name);
+  s7_int len = safe_strlen(name);
+  new_cell(sc, p, T_UNDEFINED | T_IMMUTABLE);  
   newstr = (char *)Malloc(len + 2);
   newstr[0] = '#';
   memcpy((void *)(newstr + 1), (void *)name, len);
@@ -14498,7 +14493,7 @@ static void resize_strbuf(s7_scheme *sc, s7_int needed_size)
 
 static s7_pointer *chars;
 
-static s7_pointer unknown_sharp_constant(s7_scheme *sc, char *name, s7_pointer pt)
+static s7_pointer unknown_sharp_constant(s7_scheme *sc, const char *name, s7_pointer pt)
 {
   if (hook_has_functions(sc->read_error_hook))  /* check *read-error-hook* */
     {
@@ -14513,8 +14508,7 @@ static s7_pointer unknown_sharp_constant(s7_scheme *sc, char *name, s7_pointer p
     }
   if (pt) /* #<"..."> which gets here as name="#<" */
     {
-      s7_int len;
-      len = safe_strlen(name);
+      s7_int len = safe_strlen(name);
       if ((name[len - 1] != '>') &&
 	  (is_input_port(pt)) &&
 	  (pt != sc->standard_input))
@@ -14557,7 +14551,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 #define SYMBOL_OK true
 #define NO_SYMBOLS false
 
-static s7_pointer make_sharp_constant(s7_scheme *sc, char *name, bool with_error, s7_pointer pt, bool error_if_bad_number)
+static s7_pointer make_sharp_constant(s7_scheme *sc, const char *name, bool with_error, s7_pointer pt, bool error_if_bad_number)
 {
   /* name is the stuff after the '#', return sc->nil if not a recognized #... entity */
   if ((!name) || (!*name)) /* (string->number "#") for example */
@@ -15081,13 +15075,12 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
 }
 
 #if (!WITH_GMP)
-static s7_pointer make_undefined_bignum(s7_scheme *sc, char *name)
+static s7_pointer make_undefined_bignum(s7_scheme *sc, const char *name)
 {
   block_t *b;
   char *buf;
-  s7_int len;
+  s7_int len = safe_strlen(name) + 16;
   s7_pointer res;
-  len = safe_strlen(name) + 16;
   b = mallocate(sc, len);
   buf = (char *)block_data(b);
   snprintf(buf, len, "<bignum: %s>", name);
@@ -15099,8 +15092,7 @@ static s7_pointer make_undefined_bignum(s7_scheme *sc, char *name)
 
 static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int32_t radix, bool want_symbol)
 {
-  s7_int len;
-  len = safe_strlen(p);
+  s7_int len = safe_strlen(p);
   if (p[len - 1] == 'i')        /* +nan.0[+/-]...i */
     {
       if (len == 6)            /* +nan.0+i */
@@ -15120,8 +15112,7 @@ static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int
 
 static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radix, bool want_symbol)
 {
-  s7_int len;
-  len = safe_strlen(q);
+  s7_int len = safe_strlen(q);
   if ((len > 7) && (len < 1024)) /* make compiler happy */
     {
       char *ip;
@@ -15366,10 +15357,8 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	char e1 = 0, e2 = 0;
 #endif
 	s7_pointer result;
-	s7_int len;
+	s7_int len = safe_strlen(q);
 	char ql1, pl1;
-
-	len = safe_strlen(q);
 
 	if (q[len - 1] != 'i')
 	  return((want_symbol) ? make_symbol(sc, q) : sc->F);
@@ -26295,8 +26284,7 @@ s7_pointer s7_make_string(s7_scheme *sc, const char *str) {return((str) ? make_s
 static char *make_permanent_c_string(s7_scheme *sc, const char *str)
 {
   char *x;
-  s7_int len;
-  len = safe_strlen(str);
+  s7_int len = safe_strlen(str);
   x = (char *)permalloc(sc, len + 1);
   memcpy((void *)x, (void *)str, len);
   x[len] = 0;
@@ -26332,11 +26320,10 @@ static s7_pointer g_is_string(s7_scheme *sc, s7_pointer args)
 static s7_pointer make_permanent_string(const char *str)
 {
   s7_pointer x;
-  s7_int len;
+  s7_int len = safe_strlen(str);
   x = (s7_pointer)calloc(1, sizeof(s7_cell));
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CON);
-  len = safe_strlen(str);
   string_length(x) = len;
   string_block(x) = NULL;
   string_value(x) = (char *)str;
@@ -28936,8 +28923,7 @@ static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char 
 	{
 	  block_t *b;
 	  char *filename;
-	  s7_int len;
-	  len = safe_strlen(name) + safe_strlen(home) + 1;
+	  s7_int len = safe_strlen(name) + safe_strlen(home) + 1;
 	  b = mallocate(sc, len);
 	  filename = (char *)block_data(b);
 	  filename[0] = '\0';
@@ -30139,9 +30125,7 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 	{
 	  block_t *b;
 	  char *fname;
-	  s7_int len, file_len, home_len;
-	  file_len = safe_strlen(filename);
-	  home_len = safe_strlen(home);
+	  s7_int len, file_len = safe_strlen(filename), home_len = safe_strlen(home);
 	  len = file_len + home_len;
 	  b = mallocate(sc, len);
 	  fname = (char *)block_data(b);
@@ -36212,8 +36196,7 @@ system captures the output as a string and returns it."
       fd = popen(string_value(name), "r");
       while (fgets(buf, BUF_SIZE, fd))
 	{
-	  s7_int buf_len;
-	  buf_len = safe_strlen(buf);
+	  s7_int buf_len = safe_strlen(buf);
 	  if (cur_len + buf_len >= full_len)
 	    {
 	      full_len += BUF_SIZE * 2;
@@ -44993,12 +44976,10 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
 {
   s7_pointer func, local_args;
   char *internal_arglist;
-  s7_int len, n_args;
+  s7_int n_args, len = safe_strlen(arglist);
   s7_int gc_loc;
   s7_pointer *names, *defaults;
   block_t *b;
-
-  len = safe_strlen(arglist);
   b = mallocate(sc, len + 4);
   internal_arglist = (char *)block_data(b);
   internal_arglist[0] = '\'';
@@ -50294,12 +50275,11 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 		{
 		  char *objstr, *str;
 		  s7_pointer objp;
-		  const char *spaces;
+		  const char *spaces = "                                                                                ";
 		  s7_int new_note_len, notes_max, spaces_len = 80;
 		  bool new_notes_line = false, old_short_print = sc->short_print;
 		  s7_int old_len = sc->print_length, objlen;
 
-		  spaces = "                                                                                ";
 		  if (notes_start_col < 0) notes_start_col = 50;
 		  if (notes_start_col > total_cols) notes_start_col = 0;
 		  notes_max = total_cols - notes_start_col;
@@ -50373,13 +50353,11 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
   return(notes);
 }
 
-static block_t *stacktrace_add_func(s7_scheme *sc, s7_pointer f, s7_pointer code, char *errstr, char *notes, s7_int code_max, bool as_comment)
+static block_t *stacktrace_add_func(s7_scheme *sc, s7_pointer f, s7_pointer code, const char *errstr, char *notes, s7_int code_max, bool as_comment)
 {
-  s7_int newlen, errlen;
+  s7_int newlen, errlen = strlen(errstr);
   char *newstr, *str;
   block_t *newp, *b;
-
-  errlen = strlen(errstr);
   if ((is_symbol(f)) &&
       (f != car(code)))
     {
@@ -50634,8 +50612,7 @@ static s7_pointer history_cons(s7_scheme *sc, s7_pointer code, s7_pointer args)
 
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article)
 {
-  s7_int i, slen, len;
-  slen = safe_strlen(name);
+  s7_int i, len, slen = safe_strlen(name);
   len = slen + 8;
   if (len > sc->typnam_len)
     {
@@ -95652,15 +95629,11 @@ void s7_repl(s7_scheme *sc)
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
     }
-  else
-    {
-      val = s7_load(sc, "repl.scm");
-      if (val) repl_loaded = true;
-    }
+
   s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
   s7_gc_unprotect_at(sc, gc_loc);
 
-  if (!val) /* s7_load was unable to find/load libc_s7.so or repl.scm */
+  if (!val) /* s7_load was unable to find/load libc_s7.so */
     dumb_repl(sc);
   else
     {
@@ -95815,9 +95788,6 @@ int main(int argc, char **argv)
  * can let optimize_lambda like letrec (t550)?
  * dw timing, tdyn.scm
  * :readable in pretty-print?
- * inline cache of last-hit searched-for vars?
  * fx_lambda fx_lambda_unchecked via optimize_syntax perhaps: see tmp -- why not in use?
- * s7test s7_call is not unwinding call/cc+error+dw+setter(?) 51488 [in s7test stop if len(name)==0 make_undefined_constant]
- * cutlet troubles: t560
- * r7rs.scm: fix import file names to use /
+ * s7test s7_call is not unwinding call/cc+dw+catch: see t562, special error case is at fault!
  */
