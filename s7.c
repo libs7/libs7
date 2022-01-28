@@ -939,9 +939,6 @@ typedef struct s7_cell {
 	struct {
 	  s7_pointer dox1, dox2;   /* do loop variables */
 	} dox;
-	struct {                   /* (catch #t ...) opts */
-	  uint64_t op_stack_loc, goto_loc;
-	} ctall;
 	s7_int key;                /* sc->baffle_ctr type */
       } edat;
     } envr;
@@ -2810,8 +2807,7 @@ static void init_types(void)
 #define L_HIT                          (1LL << 40) /* "L_SET" is taken */
 #define L_FUNC                         (1LL << 41)
 #define L_DOX                          (1LL << 42)
-#define L_CATCH                        (1LL << 43)
-#define L_MASK                         (L_FUNC | L_DOX | L_CATCH)
+#define L_MASK                         (L_FUNC | L_DOX)
 #endif
 
 #define opt1_fast(P)                   T_Lst(opt1(P,                OPT1_FAST))
@@ -3424,11 +3420,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define catch_cstack(p)                (T_Cat(p))->object.rcatch.cstack
 #define catch_handler(p)               T_Pos((T_Cat(p))->object.rcatch.handler)
 #define catch_set_handler(p, val)      (T_Cat(p))->object.rcatch.handler = T_Pos(val)
-
-#define catch_all_goto_loc(p)          (C_Let(p, L_CATCH))->object.envr.edat.ctall.goto_loc
-#define catch_all_set_goto_loc(p, L)   (S_Let(p, L_CATCH))->object.envr.edat.ctall.goto_loc = L
-#define catch_all_op_loc(p)            (C_Let(p, L_CATCH))->object.envr.edat.ctall.op_stack_loc
-#define catch_all_set_op_loc(p, L)     (S_Let(p, L_CATCH))->object.envr.edat.ctall.op_stack_loc = L
 
 #define dynamic_wind_state(p)          (T_Dyn(p))->object.winder.state
 #define dynamic_wind_in(p)             (T_Dyn(p))->object.winder.in
@@ -4906,7 +4897,7 @@ static char* show_debugger_bits(s7_pointer p)
   char *bits_str;
   int64_t bits = p->debugger_bits;
   bits_str = (char *)Malloc(512);
-  snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+  snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
 	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
 	   ((bits & OPT1_CFUNC) != 0) ? " opt1_cfunc" : "",
@@ -4946,8 +4937,7 @@ static char* show_debugger_bits(s7_pointer p)
 
 	   ((bits & L_HIT) != 0) ? " let_set" : "",
 	   ((bits & L_FUNC) != 0) ? " let_func" : "",
-	   ((bits & L_DOX) != 0) ? " let_dox" : "",
-	   ((bits & L_CATCH) != 0) ? " let_catch" : "");
+	   ((bits & L_DOX) != 0) ? " let_dox" : "");
   return(bits_str);
 }
 
@@ -7596,7 +7586,6 @@ static void resize_op_stack(s7_scheme *sc)
 #define pop_stack(Sc) pop_stack_1(Sc, __func__, __LINE__)
 static void pop_stack_1(s7_scheme *sc, const char *func, int line)
 {
-  /* fprintf(stderr, "pop_stack %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (sc->stack_end < sc->stack_start)
     {
@@ -7625,7 +7614,6 @@ static void pop_stack_1(s7_scheme *sc, const char *func, int line)
 #define pop_stack_no_op(Sc) pop_stack_no_op_1(Sc, __func__, __LINE__)
 static void pop_stack_no_op_1(s7_scheme *sc, const char *func, int line)
 {
-  /* fprintf(stderr, "pop_stack_no_op %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (sc->stack_end < sc->stack_start)
     {
@@ -7760,7 +7748,6 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 #define unstack(Sc) unstack_1(Sc, __func__, __LINE__)
 static void unstack_1(s7_scheme *sc, const char *func, int line)
 {
-  /* fprintf(stderr, "unstack %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT)
     {
@@ -7773,7 +7760,6 @@ static void unstack_1(s7_scheme *sc, const char *func, int line)
 #define unstack_with(Sc, Op) unstack_2(Sc, Op, __func__, __LINE__)
 static void unstack_2(s7_scheme *sc, opcode_t op, const char *func, int line)
 {
-  /* fprintf(stderr, "unstack_with %s[%d]\n", func, line); */
   sc->stack_end -= 4;
   if (((opcode_t)sc->stack_end[3]) != op)
     {
@@ -7973,7 +7959,6 @@ static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name
 
   hash = raw_string_hash((const uint8_t *)name, len);
   location = hash % SYMBOL_TABLE_SIZE;
-
   if (len <= 8)
     {
       for (x = vector_element(sc->symbol_table, location); is_pair(x); x = cdr(x))
@@ -10163,7 +10148,6 @@ static s7_pointer symbol_to_local_slot(s7_scheme *sc, s7_pointer symbol, s7_poin
 {
   if (!is_let(e))
     return(global_slot(symbol));
-
   if (symbol_id(symbol) != 0)
     {
       s7_pointer y;
@@ -11551,7 +11535,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
       if (op == OP_DYNAMIC_WIND)
 	{
 	  s7_pointer x;
-	  x = stack_code(continuation_stack(c), i);
+	  x = T_Dyn(stack_code(continuation_stack(c), i));
 	  if (dynamic_wind_in(x) != sc->F)
 	    sc->value = s7_call(sc, dynamic_wind_in(x), sc->nil);
 	  dynamic_wind_state(x) = DWIND_BODY;
@@ -11696,7 +11680,7 @@ static void call_with_exit(s7_scheme *sc)
       {
       case OP_DYNAMIC_WIND:
 	{
-	  s7_pointer lx = stack_code(sc->stack, i);
+	  s7_pointer lx = T_Dyn(stack_code(sc->stack, i));
 	  if (dynamic_wind_state(lx) == DWIND_BODY)
 	    {
 	      dynamic_wind_state(lx) = DWIND_FINISH;
@@ -11748,7 +11732,7 @@ static void call_with_exit(s7_scheme *sc)
       case OP_GET_OUTPUT_STRING:
       case OP_UNWIND_OUTPUT:
 	{
-	  s7_pointer x = stack_code(sc->stack, i);         /* "code" = port that we opened */
+	  s7_pointer x = T_Prt(stack_code(sc->stack, i));  /* "code" = port that we opened */
 	  s7_close_output_port(sc, x);
 	  x = stack_args(sc->stack, i);                    /* "args" = port that we shadowed, if not #<unused> */
 	  if (x != sc->unused)
@@ -18464,8 +18448,7 @@ static s7_int floor_i_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_real(p)) return(floor_i_7d(sc, real(p)));
   if (is_t_ratio(p)) /* for consistency with floor_p_p, don't use floor(fraction(p)) */
     {
-      s7_int val;
-      val = numerator(p) / denominator(p);
+      s7_int val = numerator(p) / denominator(p);
       return((numerator(p) < 0) ? val - 1 : val);
     }
   return(s7_integer(method_or_bust_p(sc, p, sc->floor_symbol, T_REAL)));
@@ -20338,11 +20321,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  return(make_complex(sc, real_part(x) * real(y), imag_part(x) * real(y)));
 	case T_COMPLEX:
 	  {
-	    s7_double r1, r2, i1, i2;
-	    r1 = real_part(x);
-	    r2 = real_part(y);
-	    i1 = imag_part(x);
-	    i2 = imag_part(y);
+	    s7_double r1 = real_part(x), r2 = real_part(y), i1 = imag_part(x), i2 = imag_part(y);
 	    return(make_complex(sc, r1 * r2 - i1 * i2, r1 * i2 + r2 * i1));
 	  }
 #if WITH_GMP
@@ -21103,8 +21082,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 
 	case T_COMPLEX:
 	  {
-	    s7_double r1, r2, i1, i2, den;
-	    r1 = real_part(x);
+	    s7_double r1 = real_part(x), r2, i1, i2, den;
 	    if (is_NaN(r1)) return(real_NaN);
 	    i1 = imag_part(x);
 	    if (is_NaN(i1)) return(real_NaN);
@@ -51142,18 +51120,16 @@ static void op_c_catch(s7_scheme *sc)
   s7_pointer p, f = cadr(sc->code), args = cddr(sc->code), tag;
 
   /* defer making the error lambda */
-  if (!is_pair(f))                     /* (catch #t ...) or (catch sym ...) */
+  if (!is_pair(f))                         /* (catch #t ...) or (catch sym ...) */
     tag = (is_symbol(f)) ? lookup_checked(sc, f) : f;
-  else tag = cadr(f);                  /* (catch 'sym ...) */
+  else tag = cadr(f);                      /* (catch 'sym ...) */
 
-  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
-  new_cell(sc, p, T_CATCH);            /* the catch object sitting on the stack */
+  new_cell(sc, p, T_CATCH);                /* the catch object sitting on the stack */
   catch_tag(p) = tag;
   catch_goto_loc(p) = current_stack_top(sc);
   catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
-  catch_set_handler(p, cdadr(args));   /* not yet a closure... */
+  catch_set_handler(p, cdadr(args));       /* not yet a closure... */
   catch_cstack(p) = sc->goto_start;
-
   push_stack(sc, OP_CATCH_1, sc->code, p); /* code ignored here, except by GC */
   sc->curlet = make_let(sc, sc->curlet);
   sc->code = T_Pair(cddar(args));
@@ -51161,21 +51137,27 @@ static void op_c_catch(s7_scheme *sc)
 
 static void op_c_catch_all(s7_scheme *sc)
 {
-  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
-  sc->curlet = make_let(sc, sc->curlet);
-  catch_all_set_goto_loc(sc->curlet, current_stack_top(sc));
-  catch_all_set_op_loc(sc->curlet, sc->op_stack_now - sc->op_stack);
-  push_stack_no_args_direct(sc, OP_CATCH_ALL);       /* used to GC protect sc->args here and below, 14-Jul-21 */
+  s7_pointer p;
+  new_cell(sc, p, T_CATCH);
+  catch_tag(p) = sc->T;
+  catch_goto_loc(p) = current_stack_top(sc);
+  catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
+  catch_set_handler(p, sc->nil);
+  catch_cstack(p) = sc->goto_start;
+  push_stack(sc, OP_CATCH_ALL, opt2_con(sc->code), p);         /* push_stack: op args code */
   sc->code = T_Pair(opt1_pair(cdr(sc->code)));       /* the body of the first lambda (or car of it if catch_all_o) */
 }
 
 static Inline void op_c_catch_all_a(s7_scheme *sc)
 {
-  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]\n", __func__, __LINE__);
-  sc->curlet = make_let(sc, sc->curlet);
-  catch_all_set_goto_loc(sc->curlet, current_stack_top(sc));
-  catch_all_set_op_loc(sc->curlet, sc->op_stack_now - sc->op_stack);
-  push_stack_no_args_direct(sc, OP_CATCH_ALL);
+  s7_pointer p;
+  new_cell(sc, p, T_CATCH);                          /* the catch object sitting on the stack */
+  catch_tag(p) = sc->T;
+  catch_goto_loc(p) = current_stack_top(sc);
+  catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
+  catch_set_handler(p, sc->nil);
+  catch_cstack(p) = sc->goto_start;
+  push_stack(sc, OP_CATCH_ALL, opt2_con(sc->code), p);
   sc->value = fx_call(sc, opt1_pair(cdr(sc->code)));
 }
 
@@ -51290,10 +51272,11 @@ static void load_catch_cstack(s7_scheme *sc, s7_pointer c)
 
 static bool catch_all_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  s7_pointer catcher = stack_let(sc->stack, i);
-  sc->value = opt2_con(stack_code(sc->stack, i)); /* error result, optimize_func_three_args */
-  sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_all_op_loc(catcher));
-  sc->stack_end = (s7_pointer *)(sc->stack_start + catch_all_goto_loc(catcher));
+  s7_pointer catcher = T_Cat(stack_code(sc->stack, i));
+  sc->value = stack_args(sc->stack, i);      /* error result, optimize_func_three_args -> op_c_catch_all etc */
+  sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(catcher));
+  sc->stack_end = (s7_pointer *)(sc->stack_start + catch_goto_loc(catcher));
+  load_catch_cstack(sc, catcher);
   pop_stack(sc);
   if (is_pair(sc->value))
     sc->value = (car(sc->value) == sc->quote_symbol) ? cadr(sc->value) : type;
@@ -51308,17 +51291,15 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
   /* this is the macro-error-handler case from g_catch
    *    (let () (define-macro (m . args) (apply (car args) (cadr args))) (catch #t (lambda () (error abs -1)) m))
    */
-  s7_pointer x = stack_code(sc->stack, i);
+  s7_pointer x = T_Cat(stack_code(sc->stack, i));
   if ((catch_tag(x) == sc->T) ||
       (catch_tag(x) == type) ||
       (type == sc->T))
     {
-      int64_t loc = catch_goto_loc(x);
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(x));
-      sc->stack_end = (s7_pointer *)(sc->stack_start + loc);
+      sc->stack_end = (s7_pointer *)(sc->stack_start + catch_goto_loc(x));
       sc->code = catch_handler(x);
       load_catch_cstack(sc, x);
-
       if (needs_copied_args(sc->code))
 	sc->args = list_2(sc, type, info);
       else           /* very unlikely: need c_macro as error catcher: (catch #t (lambda () (error 'oops)) require) */
@@ -51331,7 +51312,7 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 
 static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  s7_pointer x = stack_code(sc->stack, i);
+  s7_pointer x = T_Cat(stack_code(sc->stack, i));
   if ((catch_tag(x) == sc->T) ||  /* the normal case */
       (catch_tag(x) == type) ||
       (type == sc->T))
@@ -51459,7 +51440,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 
 static bool catch_dynamic_wind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  s7_pointer x = stack_code(sc->stack, i);
+  s7_pointer x = T_Dyn(stack_code(sc->stack, i));
   if (dynamic_wind_state(x) == DWIND_BODY)
     {
       dynamic_wind_state(x) = DWIND_FINISH;    /* make sure an uncaught error in the exit thunk doesn't cause us to loop */
@@ -51471,9 +51452,9 @@ static bool catch_dynamic_wind_function(s7_scheme *sc, s7_int i, s7_pointer type
 
 static bool catch_out_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  s7_pointer x = stack_code(sc->stack, i);     /* "code" = port that we opened */
+  s7_pointer x = T_Prt(stack_code(sc->stack, i));     /* "code" = port that we opened */
   s7_close_output_port(sc, x);
-  x = stack_args(sc->stack, i);                /* "args" = port that we shadowed, if not #<unused> */
+  x = stack_args(sc->stack, i);                       /* "args" = port that we shadowed, if not #<unused> */
   if (x != sc->unused)
     set_current_output_port(sc, x);
   return(false);
@@ -51689,8 +51670,6 @@ s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info)
 {
   bool reset_error_hook = false;
   s7_pointer cur_code = current_code(sc);
-
-  /* fprintf(stderr, "s7_error %s %s\n", display(type), display(info)); */
 
   /* type is a symbol normally, and info is compatible with format: (apply format #f info) --
    *    car(info) is the control string, cdr(info) its args
@@ -56268,7 +56247,6 @@ static bool fx_matches(s7_pointer symbol, s7_pointer target_symbol)
 static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_env, safe_sym_t *checker) /* , const char *func, int line) */
 {
   s7_pointer arg = car(holder);
-  /* fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(holder), display(e), (is_pair(arg) && (is_optimized(arg))) ? op_names[optimize_op(arg)] : ""); */
   if (!is_pair(arg))
     {
       if (is_symbol(arg))
@@ -57631,7 +57609,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_S_opSCq:
-      /* fprintf(stderr, "%s %s %s %s %d\n", display(p), display(var1), (var2) ? display(var2) : "", (var3) ? display(var3) : "", more_vars); */
       if (cadr(p) == var1)
 	{
 	  if (fx_proc(tree) == fx_c_s_opscq_direct) return(with_fx(tree, (cadaddr(p) == var2) ? fx_c_t_opucq_direct : fx_c_t_opscq_direct));
@@ -72889,9 +72866,9 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 			(is_pair(cdr(error_result))) &&               /* (lambda (type info) (car)) */
 			(cadr(error_result) == cadr(error_lambda))))) /* (lambda args (car args) -> error-type */
 		    {
-		      set_optimize_op(expr, OP_C_CATCH_ALL);    /* catch_all* = #t tag, error handling can skip to the simple lambda body */
+		      set_optimize_op(expr, OP_C_CATCH_ALL);          /* catch_all* = #t tag, error handling can skip to the simple lambda body */
 		      set_c_function(expr, func);
-		      set_opt2_con(expr, error_result);
+		      set_opt2_con(expr, error_result);               /* for op_c_catch_all|_a -> stack */
 		      set_opt1_pair(cdr(expr), cddr(body_lambda));
 		      if (is_null(cdddr(body_lambda)))
 			{
@@ -76719,7 +76696,6 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
 
 static bool op_let_temp_done1(s7_scheme *sc)
 {
-  /* fprintf(stderr, "%s%s[%d]%s: %s %s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT, display(sc->code), display(sc->args)); */
   while (is_pair(car(sc->args)))
     {
       s7_pointer settee = caar(sc->args), p = cddr(sc->args);
@@ -92392,7 +92368,7 @@ static s7_pointer sl_active_catches(s7_scheme *sc)
 	lst = cons(sc, sc->T, lst);
 	break;
       case OP_CATCH_2: case OP_CATCH_1: case OP_CATCH:
-	x = stack_code(sc->stack, i);
+	x = T_Cat(stack_code(sc->stack, i));
 	lst = cons(sc, catch_tag(x), lst);
 	break;
       }
@@ -95739,21 +95715,21 @@ int main(int argc, char **argv)
  * tmock      7741         1177   1165   1057   1057
  * texit      1827         ----   ----   1778   1760
  * tvect      1953         2519   2464   1772   1767
- * s7test     4537         1873   1831   1818   1823
+ * s7test     4537         1873   1831   1818   1810
  * lt         2117         2123   2110   2113   2115
  * timp       2232         2971   2891   2176   2201
- * tread      2614         2440   2421   2419   2417
+ * tread      2614         2440   2421   2419   2415
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
  * tmat       2694         3065   3042   2524   2519
- * tcopy      2600         8035   5546   2539   2538
- * dup        2756         3805   3788   2492   2473
- * tauto      2763         ----   ----   2562   2554
- * tb         3366?        2735   2681   2612   2610
+ * tcopy      2600         8035   5546   2539   2534
+ * dup        2756         3805   3788   2492   2472
+ * tauto      2763         ----   ----   2562   2550
+ * tb         3366?        2735   2681   2612   2609
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
  * tmac       3074         3950   3873   3033   2996
- * tload      3740         ----   ----   3046   3046
+ * tload      3740         ----   ----   3046   3041
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3541
  * tio        3698         3816   3752   3683   3681
@@ -95761,12 +95737,12 @@ int main(int argc, char **argv)
  * tlamb      4454         4912   4786   4298   4255
  * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4431
- * tlet       5305         7775   5640   4450   4438
+ * tlet       5305         7775   5640   4450   4436
  * tmap       5488         8869   8774   4489   4489
  * tfft      115.1         7820   7729   4755   4756
- * tshoot     6896         5525   5447   5183   5184
- * tform      8338         5357   5348   5307   5304
- * tnum       56.7         6348   6013   5433   5428
+ * tshoot     6896         5525   5447   5183   5181
+ * tform      8338         5357   5348   5307   5317
+ * tnum       56.7         6348   6013   5433   5432
  * tstr       6123         6880   6342   5488   5488
  * tmisc      6847         8869   7612   6325   6361
  * tgsl       25.1         8485   7802   6373   6373
@@ -95774,9 +95750,9 @@ int main(int argc, char **argv)
  * tlist      6551         7896   7546   6558   6557
  * tari       ----         13.0   12.7   6827   6826
  * tleft      9004         10.4   10.2   7657   7656
- * tgc        9614         11.9   11.1   8177   8176
- * cb         16.8         11.2   11.0   9658   9658
- * thash      35.4         11.8   11.7   9734   9733
+ * tgc        9614         11.9   11.1   8177   8173
+ * cb         16.8         11.2   11.0   9658   9661
+ * thash      35.4         11.8   11.7   9734   9729
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
@@ -95789,5 +95765,4 @@ int main(int argc, char **argv)
  * dw timing, tdyn.scm
  * :readable in pretty-print?
  * fx_lambda fx_lambda_unchecked via optimize_syntax perhaps: see tmp -- why not in use?
- * s7test s7_call is not unwinding call/cc+dw+catch: see t562, special error case is at fault!
  */
