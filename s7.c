@@ -8418,16 +8418,6 @@ static inline s7_pointer make_let_slowly(s7_scheme *sc, s7_pointer old_let)
   return(x);
 }
 
-static inline s7_pointer make_simple_let(s7_scheme *sc) /* called only in op_let_fx */
-{
-  s7_pointer let;
-  new_cell(sc, let, T_LET | T_SAFE_PROCEDURE);
-  let_set_id(let, sc->let_number + 1);
-  let_set_slots(let, slot_end(sc));
-  let_set_outlet(let, sc->curlet);
-  return(let);
-}
-
 static Inline s7_pointer make_let_with_slot(s7_scheme *sc, s7_pointer old_let, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer new_let, slot;
@@ -51144,21 +51134,14 @@ static void op_c_catch_all(s7_scheme *sc)
   catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
   catch_set_handler(p, sc->nil);
   catch_cstack(p) = sc->goto_start;
-  push_stack(sc, OP_CATCH_ALL, opt2_con(sc->code), p);         /* push_stack: op args code */
-  sc->code = T_Pair(opt1_pair(cdr(sc->code)));       /* the body of the first lambda (or car of it if catch_all_o) */
+  push_stack(sc, OP_CATCH_ALL, opt2_con(sc->code), p);    /* push_stack: op args code */
+  sc->code = T_Pair(opt1_pair(cdr(sc->code)));            /* the body of the first lambda (or car of it if catch_all_o) */
 }
 
-static Inline void op_c_catch_all_a(s7_scheme *sc)
+static void op_c_catch_all_a(s7_scheme *sc)
 {
-  s7_pointer p;
-  new_cell(sc, p, T_CATCH);                          /* the catch object sitting on the stack */
-  catch_tag(p) = sc->T;
-  catch_goto_loc(p) = current_stack_top(sc);
-  catch_op_loc(p) = sc->op_stack_now - sc->op_stack;
-  catch_set_handler(p, sc->nil);
-  catch_cstack(p) = sc->goto_start;
-  push_stack(sc, OP_CATCH_ALL, opt2_con(sc->code), p);
-  sc->value = fx_call(sc, opt1_pair(cdr(sc->code)));
+  op_c_catch_all(sc);
+  sc->value = fx_call(sc, sc->code);
 }
 
 
@@ -58877,8 +58860,7 @@ static s7_int opt_i_add_any_f(opt_info *o)
   int32_t i;
   for (i = 0; i < o->v[1].i; i++)
     {
-      opt_info *o1;
-      o1 = o->v[i + 2].o1;
+      opt_info *o1 = o->v[i + 2].o1;
       sum += o1->v[0].fi(o1);
     }
   return(sum);
@@ -58938,8 +58920,7 @@ static s7_int opt_i_multiply_any_f(opt_info *o)
   int32_t i;
   for (i = 0; i < o->v[1].i; i++)
     {
-      opt_info *o1;
-      o1 = o->v[i + 2].o1;
+      opt_info *o1 = o->v[i + 2].o1;
       sum *= o1->v[0].fi(o1);
     }
   return(sum);
@@ -61004,11 +60985,8 @@ static s7_double opt_d_vid_ssf(opt_info *o) {return(o->v[4].d_vid_f(o->v[5].obj,
 static inline s7_double opt_fmv(opt_info *o)
 {
   /* d_vid_ssf -> d_dd_ff_o1 -> d_vd_o1 -> d_dd_ff_o3, this is a placeholder */
-  opt_info *o1, *o2, *o3;
+  opt_info *o1 = o->v[12].o1, *o2 = o->v[13].o1, *o3 = o->v[14].o1;
   s7_double amp_env, index_env, vib;
-  o1 = o->v[12].o1;           /* o2 below */
-  o2 = o->v[13].o1;           /* o3 below */
-  o3 = o->v[14].o1;           /* o1 below */
   amp_env = o1->v[2].d_v_f(o1->v[1].obj);
   vib = real(slot_value(o2->v[2].p));
   index_env = o3->v[5].d_v_f(o3->v[1].obj);
@@ -61162,8 +61140,7 @@ static s7_double opt_d_add_any_f(opt_info *o)
   int32_t i;
   for (i = 0; i < o->v[1].i; i++)
     {
-      opt_info *o1;
-      o1 = o->v[i + 2].o1;
+      opt_info *o1 = o->v[i + 2].o1;
       sum += o1->v[0].fd(o1);
     }
   return(sum);
@@ -61175,8 +61152,7 @@ static s7_double opt_d_multiply_any_f(opt_info *o)
   int32_t i;
   for (i = 0; i < o->v[1].i; i++)
     {
-      opt_info *o1;
-      o1 = o->v[i + 2].o1;
+      opt_info *o1 = o->v[i + 2].o1;
       sum *= o1->v[0].fd(o1);
     }
   return(sum);
@@ -62080,8 +62056,7 @@ static bool opt_and_any_b(opt_info *o)
   int32_t i;
   for (i = 0; i < o->v[1].i; i++)
     {
-      opt_info *o1;
-      o1 = o->v[i + 3].o1;
+      opt_info *o1 = o->v[i + 3].o1;
       if (!o1->v[0].fb(o1))
 	return(false);
     }
@@ -62095,8 +62070,7 @@ static bool opt_or_any_b(opt_info *o)
   int32_t i;
   for (i = 0; i < o->v[1].i; i++)
     {
-      opt_info *o1;
-      o1 = o->v[i + 3].o1;
+      opt_info *o1 = o->v[i + 3].o1;
       if (o1->v[0].fb(o1))
 	return(true);
     }
@@ -65415,8 +65389,7 @@ static s7_pointer opt_do_no_vars(opt_info *o)
 	  int32_t i;
 	  for (i = 0; i < len; i++)
 	    {
-	      opt_info *o1;
-	      o1 = body->v[i].o1;
+	      opt_info *o1 = body->v[i].o1;
 	      o1->v[0].fp(o1);
 	    }}}
   unstack(sc);
@@ -75942,7 +75915,11 @@ static inline void op_let_opassq_new(s7_scheme *sc)
 static Inline void op_let_fx_new(s7_scheme *sc)
 {
   s7_pointer p, let, sp = NULL;
-  let = make_simple_let(sc);
+
+  new_cell(sc, let, T_LET | T_SAFE_PROCEDURE);
+  let_set_id(let, sc->let_number + 1);
+  let_set_slots(let, slot_end(sc));
+  let_set_outlet(let, sc->curlet);
   sc->args = let;
   for (p = cadr(sc->code); is_pair(p); p = cdr(p))
     {
@@ -81681,10 +81658,10 @@ static goto_t op_dox(s7_scheme *sc)
   return(goto_begin);
 }
 
-static bool op_dox_step(s7_scheme *sc)
+static inline bool op_dox_step_1(s7_scheme *sc)
 {
   s7_pointer slot = let_slots(sc->curlet);
-  do {
+  do {                                      /* every dox case has vars (else op_do_no_vars) */
     if (slot_has_expression(slot))
       slot_set_value(slot, fx_call(sc, slot_expression(slot)));
     slot = next_slot(slot);
@@ -81695,25 +81672,20 @@ static bool op_dox_step(s7_scheme *sc)
       sc->code = cdadr(sc->code);
       return(true);
     }
+  return(false);
+}
+
+static bool op_dox_step(s7_scheme *sc)
+{
+  if (op_dox_step_1(sc)) return(true);
   push_stack_no_args_direct(sc, OP_DOX_STEP);
   sc->code = T_Pair(cddr(sc->code));
   return(false);
 }
 
-static bool op_dox_step_o(s7_scheme *sc) /* every dox case has vars (else op_do_no_vars) */
+static bool op_dox_step_o(s7_scheme *sc)
 {
-  s7_pointer slot = let_slots(sc->curlet);
-  do {
-    if (slot_has_expression(slot))
-      slot_set_value(slot, fx_call(sc, slot_expression(slot)));
-    slot = next_slot(slot);
-    } while (tis_slot(slot));
-  sc->value = fx_call(sc, cadr(sc->code));
-  if (is_true(sc, sc->value))
-    {
-      sc->code = cdadr(sc->code);
-      return(true);
-    }
+  if (op_dox_step_1(sc)) return(true);
   push_stack_no_args_direct(sc, OP_DOX_STEP_O);
   sc->code = caddr(sc->code);
   return(false);
@@ -95721,9 +95693,9 @@ int main(int argc, char **argv)
  * tread      2614         2440   2421   2419   2415
  * trclo      4079         2735   2574   2454   2454
  * fbench     2833         2688   2583   2460   2460
- * tmat       2694         3065   3042   2524   2519
+ * tmat       2694         3065   3042   2524   2519  2527
  * tcopy      2600         8035   5546   2539   2534
- * dup        2756         3805   3788   2492   2472
+ * dup        2756         3805   3788   2492   2466
  * tauto      2763         ----   ----   2562   2550
  * tb         3366?        2735   2681   2612   2609
  * titer      2659         2865   2842   2641   2641
@@ -95762,7 +95734,5 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * can let optimize_lambda like letrec (t550)?
- * dw timing, tdyn.scm
  * :readable in pretty-print?
- * fx_lambda fx_lambda_unchecked via optimize_syntax perhaps: see tmp -- why not in use?
  */
