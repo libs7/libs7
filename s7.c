@@ -1251,7 +1251,7 @@ struct s7_scheme {
              ash_symbol, asin_symbol, asinh_symbol, assoc_symbol, assq_symbol, assv_symbol, atan_symbol, atanh_symbol, autoload_symbol, autoloader_symbol,
              bacro_symbol, bacro_star_symbol, bignum_symbol, byte_vector_symbol, byte_vector_ref_symbol, byte_vector_set_symbol, byte_vector_to_string_symbol,
              c_pointer_symbol, c_pointer_info_symbol, c_pointer_to_list_symbol, c_pointer_type_symbol, c_pointer_weak1_symbol, c_pointer_weak2_symbol,
-             c_pointer_with_type, caaaar_symbol, caaadr_symbol, caaar_symbol, caadar_symbol, caaddr_symbol, caadr_symbol,
+             caaaar_symbol, caaadr_symbol, caaar_symbol, caadar_symbol, caaddr_symbol, caadr_symbol,
              caar_symbol, cadaar_symbol, cadadr_symbol, cadar_symbol, caddar_symbol, cadddr_symbol, caddr_symbol, cadr_symbol,
              call_cc_symbol, call_with_current_continuation_symbol, call_with_exit_symbol, call_with_input_file_symbol,
              call_with_input_string_symbol, call_with_output_file_symbol, call_with_output_string_symbol, car_symbol,
@@ -5562,8 +5562,7 @@ static s7_pointer set_elist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2)
 
 static s7_pointer set_elist_3(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_pointer x3)
 {
-  s7_pointer p;
-  p = sc->elist_3;
+  s7_pointer p = sc->elist_3;
   set_car(p, x1); p = cdr(p);
   set_car(p, x2); p = cdr(p);
   set_car(p, x3);
@@ -5572,8 +5571,7 @@ static s7_pointer set_elist_3(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
 
 static s7_pointer set_elist_4(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_pointer x3, s7_pointer x4)
 {
-  s7_pointer p;
-  p = sc->elist_4;
+  s7_pointer p = sc->elist_4;
   set_car(p, x1); p = cdr(p);
   set_car(p, x2); p = cdr(p);
   set_car(p, x3); p = cdr(p);
@@ -5583,8 +5581,7 @@ static s7_pointer set_elist_4(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
 
 static s7_pointer set_elist_5(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_pointer x3, s7_pointer x4, s7_pointer x5)
 {
-  s7_pointer p;
-  p = sc->elist_5;
+  s7_pointer p = sc->elist_5;
   set_car(p, x1); p = cdr(p);
   set_car(p, x2); p = cdr(p);
   set_car(p, x3); p = cdr(p);
@@ -5610,8 +5607,7 @@ static s7_pointer set_elist_7(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
 
 static s7_pointer set_wlist_3(s7_pointer lst, s7_pointer x1, s7_pointer x2, s7_pointer x3)
 {
-  s7_pointer p;
-  p = lst;
+  s7_pointer p = lst;
   set_car(p, x1); p = cdr(p);
   set_car(p, x2); p = cdr(p);
   set_car(p, x3);
@@ -5620,8 +5616,7 @@ static s7_pointer set_wlist_3(s7_pointer lst, s7_pointer x1, s7_pointer x2, s7_p
 
 static s7_pointer set_wlist_4(s7_pointer lst, s7_pointer x1, s7_pointer x2, s7_pointer x3, s7_pointer x4)
 {
-  s7_pointer p;
-  p = lst;
+  s7_pointer p = lst;
   set_car(p, x1); p = cdr(p);
   set_car(p, x2); p = cdr(p);
   set_car(p, x3); p = cdr(p);
@@ -11438,27 +11433,23 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
    *   into the body.  Similarly for let-temporarily.  If a call/cc jumps out of a dynamic-wind
    *   body-func, we're supposed to call the finish-func.  The continuation is called at
    *   current_stack_top(sc); the continuation form is at continuation_stack_top(c).
-   */
-  int64_t i, top1, top2;
-  opcode_t op;
-  /* check sc->stack for dynamic-winds we're jumping out of
+   *
+   * check sc->stack for dynamic-winds we're jumping out of
    *    we need to check from the current stack top down to where the continuation stack matches the current stack??
    *    this was (i > 0), but that goes too far back; perhaps s7 should save the position of the call/cc invocation.
    *    also the two stacks can be different sizes (either can be larger)
    */
-  top1 = current_stack_top(sc);
-  top2 = continuation_stack_top(c);
+  int64_t i, top1 = current_stack_top(sc), top2 = continuation_stack_top(c);
   for (i = top1 - 1; (i > 0) && ((i >= top2) || (stack_code(sc->stack, i) != stack_code(continuation_stack(c), i))); i -= 4)
     {
-      op = stack_op(sc->stack, i);
+      opcode_t op = stack_op(sc->stack, i);
       switch (op)
 	{
 	case OP_DYNAMIC_WIND:
 	case OP_LET_TEMP_DONE: /* case OP_LET_TEMP_DONE1: */
 	  {
-	    s7_pointer x;
+	    s7_pointer x = stack_code(sc->stack, i);
 	    int64_t j, s_base = 0;
-	    x = stack_code(sc->stack, i);
 	    for (j = 3; j < top2; j += 4)
 	      if (((stack_op(continuation_stack(c), j) == OP_DYNAMIC_WIND) ||
 		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE) /* || (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE1) */ ) &&
@@ -11521,11 +11512,10 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
   /* check continuation-stack for dynamic-winds we're jumping into */
   for (i = current_stack_top(sc) - 1; i < top2; i += 4)
     {
-      op = stack_op(continuation_stack(c), i);
+      opcode_t op = stack_op(continuation_stack(c), i);
       if (op == OP_DYNAMIC_WIND)
 	{
-	  s7_pointer x;
-	  x = T_Dyn(stack_code(continuation_stack(c), i));
+	  s7_pointer x = T_Dyn(stack_code(continuation_stack(c), i));
 	  if (dynamic_wind_in(x) != sc->F)
 	    sc->value = s7_call(sc, dynamic_wind_in(x), sc->nil);
 	  dynamic_wind_state(x) = DWIND_BODY;
@@ -11583,7 +11573,6 @@ static void call_with_current_continuation(s7_scheme *sc)
       {
 	int32_t i, top = continuation_op_loc(c);
 	s7_pointer *src, *dst;
-
 	sc->op_stack_now = (s7_pointer *)(sc->op_stack + top);
 	sc->op_stack_size = continuation_op_size(c);
 	sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
@@ -11676,9 +11665,8 @@ static void call_with_exit(s7_scheme *sc)
 	      dynamic_wind_state(lx) = DWIND_FINISH;
 	      if (dynamic_wind_out(lx) != sc->F)
 		{
-		  s7_pointer arg;
+		  s7_pointer arg = (sc->args == sc->plist_1) ? car(sc->plist_1) : sc->unused;  /* might also need GC protection here */
 		  /* protect the sc->args value across this call if it is sc->plist_1 -- I can't find a broken case */
-		  arg = (sc->args == sc->plist_1) ? car(sc->plist_1) : sc->unused;  /* might also need GC protection here */
 		  sc->value = s7_call(sc, dynamic_wind_out(lx), sc->nil);
 		  if (arg != sc->unused) set_plist_1(sc, arg);
 		}}}
@@ -12370,7 +12358,6 @@ static block_t *mpfr_to_string(s7_scheme *sc, mpfr_t val, int32_t radix)
 
   if (mpfr_zero_p(val))
     return(string_to_block(sc, "0.0", 3));
-
   if (mpfr_nan_p(val))
     return(string_to_block(sc, "+nan.0", 6));
   if (mpfr_inf_p(val))
@@ -15028,7 +15015,6 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
 	       * 0.000000012222222222222222222222222222222222222e10 122.22222222222222
 	       * 0.000000012222222222222222222222222222222222222e17 1222222222.222222
 	       */
-
 	      int_part = 0;
 	      for (i = 0; i < exponent; i++)
 		int_part = digits[(int32_t)(*str++)] + (int_part * radix);
@@ -38291,7 +38277,7 @@ static bool numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
   if ((is_big_number(a)) || (is_big_number(b)))
     return(big_numbers_are_eqv(sc, a, b));
 #endif
-  if (type(a) != type(b)) return(false);    /* (eqv? 1 1.0) -> #f! */
+  /* if (type(a) != type(b)) return(false); */   /* (eqv? 1 1.0) -> #f! but assume that we've checked types already */
 
   /* switch is apparently as expensive as 3-4 if's! so this only loses if every call involves complex numbers? */
   if (is_t_integer(a)) return(integer(a) == integer(b));
@@ -38305,9 +38291,10 @@ static bool numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 static s7_pointer memv_number(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 {
   s7_pointer y = x;
+  uint8_t obj_type = type(obj);
   while (true)
     {
-      LOOP_4(if ((is_number(car(x))) && (numbers_are_eqv(sc, obj, car(x)))) return(x); x = cdr(x); if (!is_pair(x)) return(sc->F));
+      LOOP_4(if ((type(car(x)) == obj_type) && (numbers_are_eqv(sc, obj, car(x)))) return(x); x = cdr(x); if (!is_pair(x)) return(sc->F));
       y = cdr(y);
       if (x == y) return(sc->F);
     }
@@ -43238,8 +43225,10 @@ static hash_entry_t *hash_eqv(s7_scheme *sc, s7_pointer table, s7_pointer key)
   loc = hash_loc(sc, table, key) & hash_mask;
   if (is_number(key))
     {
+      uint8_t key_type = type(key);
       for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
-	if (numbers_are_eqv(sc, key, hash_entry_key(x)))
+	if ((key_type == type(hash_entry_key(x))) && 
+	    (numbers_are_eqv(sc, key, hash_entry_key(x))))
 	  return(x);
     }
   else
@@ -44785,7 +44774,7 @@ static s7_pointer g_function(s7_scheme *sc, s7_pointer args)
   #define Q_function s7_make_signature(sc, 3, sc->T, sc->is_let_symbol, sc->is_symbol_symbol)
 
   s7_pointer e, sym = NULL, fname, fval;
-  if (is_null(args))
+  if (is_null(args))                /* (*function*) is akin to __func__ in C */
     {
       for (e = sc->curlet; is_let(e); e = let_outlet(e))
 	if ((is_funclet(e)) || (is_maclet(e)))
@@ -44854,7 +44843,7 @@ static s7_pointer g_funclet(s7_scheme *sc, s7_pointer args)
     return(simple_wrong_type_argument_with_type(sc, sc->funclet_symbol, p, a_procedure_or_a_macro_string));
   e = find_let(sc, p);
   if ((is_null(e)) &&
-      (!is_c_object(p))) /* why this complication? */
+      (!is_c_object(p))) /* rootlet is not the c_object let */
     return(sc->rootlet);
   return(e);
 }
@@ -76314,8 +76303,7 @@ static void op_let_star2(s7_scheme *sc)
 /* -------------------------------- letrec, letrec* -------------------------------- */
 static void check_letrec(s7_scheme *sc, bool letrec)
 {
-  s7_pointer x, caller, code = cdr(sc->code);
-  caller = (letrec) ? sc->letrec_symbol : sc->letrec_star_symbol;
+  s7_pointer x, code = cdr(sc->code), caller = (letrec) ? sc->letrec_symbol : sc->letrec_star_symbol;
 
   if ((!is_pair(code)) ||                     /* (letrec . 1) */
       (!is_list(car(code))))                  /* (letrec 1 ...) */
@@ -77060,8 +77048,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	  if ((is_h_safe_c_s(test)) &&
 	      (is_symbol(car(test))))
 	    {
-	      uint8_t typ;
-	      typ = symbol_type(car(test));
+	      uint8_t typ = symbol_type(car(test));
 	      if (typ > 0)
 		{
 		  pair_set_syntax_op(form, choose_if_optc(IF_IS_TYPE_S, one_branch, reversed, not_case));
@@ -77991,8 +77978,7 @@ static void transfer_macro_info(s7_scheme *sc, s7_pointer mac)
 static goto_t op_expansion(s7_scheme *sc)
 {
   int64_t loc = current_stack_top(sc) - 1;
-  s7_pointer caller;
-  caller = (is_pair(stack_args(sc->stack, loc))) ? car(stack_args(sc->stack, loc)) : sc->F; /* this can be garbage */
+  s7_pointer caller = (is_pair(stack_args(sc->stack, loc))) ? car(stack_args(sc->stack, loc)) : sc->F; /* this can be garbage */
   if ((loc >= 3) &&
       (stack_op(sc->stack, loc) != OP_READ_QUOTE) &&        /* '(expansion ...) */
       (stack_op(sc->stack, loc) != OP_READ_VECTOR) &&       /* #(expansion ...) */
@@ -78049,25 +78035,20 @@ static goto_t macroexpand(s7_scheme *sc)
     case T_MACRO:
       sc->curlet = make_let(sc, closure_let(sc->code));
       return(goto_apply_lambda);
-
     case T_BACRO:
       sc->curlet = make_let(sc, sc->curlet);
       return(goto_apply_lambda);
-
     case T_MACRO_STAR:
       sc->curlet = make_let(sc, closure_let(sc->code));
       apply_macro_star_1(sc);
       return(goto_begin);
-
     case T_BACRO_STAR:
       sc->curlet = make_let(sc, sc->curlet);
       apply_macro_star_1(sc);
       return(goto_begin);
-
     case T_C_MACRO:
       macroexpand_c_macro(sc);
       return(goto_start);
-
     default:
       syntax_error(sc, "macroexpand argument is not a macro call: ~A", 44, sc->args);
     }
@@ -78242,7 +78223,7 @@ static void activate_with_let(s7_scheme *sc, s7_pointer e)
   if (!is_let(e))                    /* (with-let . "hi") */
     syntax_error_any(sc, sc->wrong_type_arg_symbol, "with-let takes an environment argument: ~A", 42, e);
   if (e == sc->rootlet)
-    sc->curlet = sc->nil;                             /* (with-let (rootlet) ...) */
+    sc->curlet = sc->nil;            /* (with-let (rootlet) ...) */
   else
     {
       set_with_let_let(e);
@@ -81405,8 +81386,7 @@ static goto_t op_dox(s7_scheme *sc)
 			{
 			  if (is_step_end(stepper))
 			    {
-			      s7_int lim;
-			      lim = do_loop_end(slot_value(stepper));
+			      s7_int lim = do_loop_end(slot_value(stepper));
 			      do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < lim);
 			      sc->value = sc->T;
 			    }
@@ -82415,8 +82395,7 @@ static Inline bool op_dotimes_step_o(s7_scheme *sc)
 
 static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool safe_step)
 {
-  s7_int end;
-  end = do_loop_end(slot_value(sc->args)); /* s7_optimize below can step on this value! */
+  s7_int end = do_loop_end(slot_value(sc->args)); /* s7_optimize below can step on this value! */
 
   if (safe_step)
     set_safe_stepper(sc->args);
@@ -82605,8 +82584,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
     opt_info *body[32];
     int32_t k;
 
-    body_len = s7_list_length(sc, code);
     sc->pc = 0;
+    body_len = s7_list_length(sc, code);
     if (body_len >= 32) return(false);
 
     if (!no_float_opt(code))
@@ -82774,7 +82753,7 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 	      opt_info *o1 = o->v[12].o1, *o2 = o->v[13].o1, *o3 = o->v[14].o1;
 	      s7_d_v_t vf1, vf2, vf3, vf4;
 	      s7_d_vd_t vf5, vf6;
-	      s7_d_vid_t vf7;
+	      s7_d_vid_t vf7 = o->v[4].d_vid_f;
 	      void *obj1, *obj2, *obj3, *obj4, *obj5, *obj6, *obj7;
 	      vf1 = first->v[4].d_v_f;
 	      vf2 = first->v[5].d_v_f;
@@ -82782,7 +82761,6 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 	      vf4 = o3->v[5].d_v_f;
 	      vf5 = o2->v[3].d_vd_f;
 	      vf6 = o3->v[6].d_vd_f;
-	      vf7 = o->v[4].d_vid_f;
 	      obj1 = first->v[1].obj;
 	      obj2 = first->v[2].obj;
 	      obj3 = o1->v[1].obj;
@@ -82790,7 +82768,6 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
 	      obj5 = o->v[5].obj;
 	      obj6 = o2->v[5].obj;
 	      obj7 = o3->v[2].obj;
-
 	      for (k = numerator(stepper) + 1; k < end; k++)
 		{
 		  s7_double amp_env, vib;
@@ -88745,15 +88722,14 @@ static void op_read_s(s7_scheme *sc)
       sc->tok = token(sc);
       switch (sc->tok)
 	{
-	case TOKEN_EOF:	  return;
+	case TOKEN_EOF:	        return;
 	case TOKEN_RIGHT_PAREN: read_error(sc, "unexpected close paren");
-	case TOKEN_COMMA:	  read_error(sc, "unexpected comma");
+	case TOKEN_COMMA:	read_error(sc, "unexpected comma");
 	default:
 	  sc->value = read_expression(sc);
 	  sc->current_line = port_line_number(current_input_port(sc));  /* this info is used to track down missing close parens */
 	  sc->current_file = port_filename(current_input_port(sc));
 	}}
-  /* equally read-done and read-list here -- what is this referring to? */
 }
 
 static bool op_read_quasiquote(s7_scheme *sc)
@@ -90170,8 +90146,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
        *    then the switch below is not needed, and we free up 16 type bits.  C does not guarantee tail calls (I think)
        *    so we'd have each function return the next, and eval would be (while (true) f = f(sc) but would the function
        *    call overhead be less expensive than the switch? (We get most functions inlined in the current code).
-       * with some fake fx_calls for the P cases, many of these could be
-       *    sc->value = fx_function[sc->cur_op](sc, sc->code); continue;
+       * with some fake fx_calls for the P cases, many of these could be sc->value = fx_function[sc->cur_op](sc, sc->code); continue;
        *    so the switch statement is unnecessary -- maybe a table eval_functions[cur_op] eventually
        */
       switch (sc->cur_op)
@@ -95691,7 +95666,7 @@ int main(int argc, char **argv)
  * lt         2117         2123   2110   2113   2115
  * timp       2232         2971   2891   2176   2201
  * tread      2614         2440   2421   2419   2415
- * trclo      4079         2735   2574   2454   2454
+ * trclo      4079         2735   2574   2454   2454  2451
  * fbench     2833         2688   2583   2460   2460
  * tmat       2694         3065   3042   2524   2519  2527
  * tcopy      2600         8035   5546   2539   2534
@@ -95721,7 +95696,7 @@ int main(int argc, char **argv)
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6557
  * tari       ----         13.0   12.7   6827   6826
- * tleft      9004         10.4   10.2   7657   7656
+ * tleft      9004         10.4   10.2   7657   7656  7648
  * tgc        9614         11.9   11.1   8177   8173
  * cb         16.8         11.2   11.0   9658   9661
  * thash      35.4         11.8   11.7   9734   9729
@@ -95734,5 +95709,4 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * can let optimize_lambda like letrec (t550)?
- * :readable in pretty-print?
  */

@@ -721,4 +721,6 @@
   (newline)
   (pretty-print v))
 
+;;; :readable in pretty-print? couldn't this be (pretty-print (with-input-from-string (object->string obj :readable) read))?
+
 |#
