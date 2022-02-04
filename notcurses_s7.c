@@ -534,18 +534,37 @@ static s7_pointer g_ncinput_x(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_ncinput_alt(s7_scheme *sc, s7_pointer args) 
 {
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  return(s7_make_boolean(sc, ncinput_alt_p((const ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))));
+#else
   return(s7_make_boolean(sc, ((ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))->alt));
+#endif
 }
 
 static s7_pointer g_ncinput_shift(s7_scheme *sc, s7_pointer args) 
 {
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  return(s7_make_boolean(sc, ncinput_shift_p((const ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))));
+#else
   return(s7_make_boolean(sc, ((ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))->shift));
+#endif
 }
 
 static s7_pointer g_ncinput_ctrl(s7_scheme *sc, s7_pointer args) 
 {
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  return(s7_make_boolean(sc, ncinput_ctrl_p((const ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))));
+#else
   return(s7_make_boolean(sc, ((ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))->ctrl));
+#endif
 }
+
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+static s7_pointer g_ncinput_meta(s7_scheme *sc, s7_pointer args) 
+{
+  return(s7_make_boolean(sc, ncinput_meta_p((const ncinput *)s7_c_pointer_with_type(sc, s7_car(args), ncinput_symbol, __func__, 1))));
+}
+#endif
 
 static s7_pointer g_ncinput_evtype(s7_scheme *sc, s7_pointer args) 
 {
@@ -3717,6 +3736,9 @@ void notcurses_s7_init(s7_scheme *sc)
   nc_func(ncinput_alt, 1, 0, false);
   nc_func(ncinput_shift, 1, 0, false);
   nc_func(ncinput_ctrl, 1, 0, false);
+#if (NC_CURRENT_VERSION >= NC_VERSION(3, 0, 4))
+  nc_func(ncinput_meta, 1, 0, false);
+#endif
   nc_func(ncinput_evtype, 1, 0, false);
   nc_func(ncinput_make, 0, 0, false);
   nc_func(ncinput_free, 1, 0, false);
