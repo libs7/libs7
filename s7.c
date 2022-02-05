@@ -1175,9 +1175,11 @@ struct s7_scheme {
   char *read_line_buf;
   s7_int read_line_buf_size;
 
-  s7_pointer w, x, y, z;         /* evaluator local vars */
+  s7_pointer w, x, z;
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9;
-  s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, z2_1, z2_2, t4_1, u1_1, u2_1, u2_2;
+  s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1, u2_1, u2_2;
+  s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
+  s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1; /* dlist|clist and ulist can't overlap */
 
   Jmp_Buf *goto_start;
   bool longjmp_ok;
@@ -1195,7 +1197,6 @@ struct s7_scheme {
   shared_info_t *circle_info;
   format_data_t **fdats;
   int32_t num_fdats, last_error_line;
-  s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7, plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1;
   gc_list_t *strings, *vectors, *input_ports, *output_ports, *input_string_ports, *continuations, *c_objects, *hash_tables;
   gc_list_t *gensyms, *undefineds, *lambdas, *multivectors, *weak_refs, *weak_hash_iterators, *opt1_funcs;
 #if (WITH_GMP)
@@ -6994,7 +6995,6 @@ static int64_t gc(s7_scheme *sc)
   mark_stack_1(sc->stack, current_stack_top(sc));
   gc_mark(sc->w);
   gc_mark(sc->x);
-  gc_mark(sc->y);
   gc_mark(sc->z);
   gc_mark(sc->value);
 
@@ -7026,7 +7026,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->plist_2)); gc_mark(cadr(sc->plist_2));
   for (p = sc->plist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
   gc_mark(car(sc->qlist_2)); gc_mark(cadr(sc->qlist_2));
-  gc_mark(car(sc->qlist_3)); gc_mark(cadr(sc->qlist_3)); gc_mark(caddr(sc->qlist_3));
+  gc_mark(car(sc->qlist_3));
   gc_mark(car(sc->u1_1));
   gc_mark(car(sc->u2_1));
 
@@ -7055,13 +7055,13 @@ static int64_t gc(s7_scheme *sc)
   for (i = 0; i < sc->setters_loc; i++)
     gc_mark(cdr(sc->setters[i]));
 
-  for (i = 0; i < sc->num_fdats; i++)
-    if (sc->fdats[i])                       /* TODO: if in use */
+  for (i = 0; i <= sc->format_depth; i++) /* sc->num_fdats is size of array */
+    if (sc->fdats[i])
       gc_mark(sc->fdats[i]->curly_arg);
 
   if (sc->rec_stack)
     {
-      just_mark(sc->rec_stack);             /* TODO: if in use */
+      just_mark(sc->rec_stack);
       for (i = 0; i < sc->rec_loc; i++)
 	gc_mark(sc->rec_els[i]);
     }
@@ -7171,8 +7171,7 @@ static int64_t gc(s7_scheme *sc)
 	}
       if (show_protected_objects_stats(sc))
 	{
-	  s7_int len, num;
-	  len = vector_length(sc->protected_objects); /* allocated at startup */
+	  s7_int num, len = vector_length(sc->protected_objects); /* allocated at startup */
 	  for (i = 0, num = 0; i < len; i++)
 	    if (vector_element(sc->protected_objects, i) != sc->unused)
 	      num++;
@@ -7187,13 +7186,12 @@ static int64_t gc(s7_scheme *sc)
 
 static void resize_heap_to(s7_scheme *sc, int64_t size)
 {
-  int64_t old_size = sc->heap_size, old_free, k;
+  int64_t k, old_size = sc->heap_size, old_free = sc->free_heap_top - sc->free_heap;
   s7_cell *cells;
   s7_pointer p;
   s7_cell **cp;
   heap_block_t *hp;
 
-  old_free = sc->free_heap_top - sc->free_heap;
   if (size == 0)
     {
       /* (sc->heap_size < 2048000) */  /* 8192000 here improves various gc benchmarks only slightly */
@@ -7314,7 +7312,7 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   set_plist_2(sc, sc->nil, sc->nil);
   set_plist_3(sc, sc->nil, sc->nil, sc->nil);
   set_qlist_2(sc, sc->nil, sc->nil);
-  set_qlist_3(sc, sc->nil, sc->nil, sc->nil);
+  set_car(sc->qlist_3, sc->nil);
   set_elist_1(sc, sc->nil);
   set_elist_2(sc, sc->nil, sc->nil);
   set_elist_3(sc, sc->nil, sc->nil, sc->nil);
@@ -7322,7 +7320,7 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   set_car(sc->elist_5, sc->nil);
   set_car(sc->elist_6, sc->nil);
   set_car(sc->elist_7, sc->nil);
-  /* TODO: clist dlist ulist? temp*? */
+  set_car(sc->dlist_1, sc->nil);
 
   if (is_not_null(args))
     {
@@ -7534,8 +7532,7 @@ static void push_op_stack(s7_scheme *sc, s7_pointer op)
 
 static s7_pointer pop_op_stack(s7_scheme *sc)
 {
-  s7_pointer op;
-  op = (*(--(sc->op_stack_now)));
+  s7_pointer op = (*(--(sc->op_stack_now)));
   if (sc->op_stack_now < sc->op_stack)
     {
       fprintf(stderr, "%sop_stack underflow%s\n", BOLD_TEXT, UNBOLD_TEXT);
@@ -7560,8 +7557,7 @@ static void initialize_op_stack(s7_scheme *sc)
 
 static void resize_op_stack(s7_scheme *sc)
 {
-  int32_t i, loc, new_size;
-  loc = (int32_t)(sc->op_stack_now - sc->op_stack);
+  int32_t i, new_size, loc = (int32_t)(sc->op_stack_now - sc->op_stack);
   new_size = sc->op_stack_size * 2;
   sc->op_stack = (s7_pointer *)Realloc((void *)(sc->op_stack), new_size * sizeof(s7_pointer));
   for (i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->nil;
@@ -11387,7 +11383,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   stack = make_simple_vector(sc, loc);
   set_full_type(stack, T_STACK);
   temp_stack_top(stack) = loc;
-  sc->temp8 = stack;
+  sc->temp7 = stack;
   copy_stack(sc, stack, sc->stack, loc);
 
   new_cell(sc, x, T_CONTINUATION);
@@ -11402,7 +11398,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   continuation_op_size(x) = sc->op_stack_size;
   continuation_key(x) = find_any_baffle(sc);
   continuation_name(x) = sc->F;
-  sc->temp8 = sc->nil;
+  sc->temp7 = sc->nil;
 
   add_continuation(sc, x);
   return(x);
@@ -31130,13 +31126,9 @@ static s7_pointer c_object_iterate(s7_scheme *sc, s7_pointer obj)
     return(iterator_quit(obj));
   p = iterator_sequence(obj);
   cur = iterator_current(obj);
-  set_car(sc->z2_1, sc->x);
-  set_car(sc->z2_2, sc->z); /* is this necessary? (save/restore sc->x/y across c_object iteration) */
   set_car(cur, p);
   set_car(cdr(cur), make_integer(sc, iterator_position(obj)));
-  result = (*(c_object_ref(sc, p)))(sc, cur);
-  sc->x = car(sc->z2_1);
-  sc->z = car(sc->z2_2);
+  result = (*(c_object_ref(sc, p)))(sc, cur); /* used to save/restore sc->x|z here */
   iterator_position(obj)++;
   if (result == ITERATOR_END)
     {
@@ -36835,7 +36827,7 @@ static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
   if (!is_pair(lst)) return(sc->nil);
   sc->temp5 = lst;
   tp = list_1(sc, car(lst));
-  sc->y = tp;
+  sc->temp8 = tp;
   for (p = cdr(lst), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
     {
       set_cdr(np, list_1_unchecked(sc, car(p)));
@@ -36844,7 +36836,7 @@ static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
       p = cdr(p);
       if (is_pair(p)) {np = cdr(np); set_cdr(np, list_1(sc, car(p)));} else break;
     }
-  sc->y = sc->nil;
+  sc->temp8 = sc->nil;
   sc->temp5 = sc->nil;
   return(tp);
 }
@@ -36857,10 +36849,10 @@ static s7_pointer copy_proper_list_with_arglist_error(s7_scheme *sc, s7_pointer 
     s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "stray dot?: ~S", 14), lst));
   sc->temp5 = lst;
   tp = list_1(sc, car(lst));
-  sc->y = tp;
+  sc->temp8 = tp;
   for (p = cdr(lst), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
     set_cdr(np, list_1(sc, car(p)));
-  sc->y = sc->nil;
+  sc->temp8 = sc->nil;
   sc->temp5 = sc->nil;
   if (!is_null(p))
     s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), lst));
@@ -38741,7 +38733,7 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 		if (len < 0)
 		  set_cdr(np, p);
 	    }
-	  sc->y = sc->nil;
+	  sc->temp8 = sc->nil;
 	  unstack(sc);
 	  return(tp);
 	}
@@ -38755,14 +38747,14 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 	    {
 	      if (!s7_is_proper_list(sc, p))
 		{
-		  sc->y = sc->nil;
+		  sc->temp8 = sc->nil;
 		  return(wrong_type_argument_with_type(sc, sc->append_symbol, position_of(y, args), p, a_proper_list_string));
 		}
 	      if (is_null(tp))
 		{
 		  tp = list_1(sc, car(p));
 		  np = tp;
-		  sc->y = tp; /* GC protect? */
+		  sc->temp8 = tp; /* GC protect? */
 		  pp = cdr(p);
 		}
 	      else pp = p;
@@ -38780,7 +38772,7 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 		    {
 		      tp = s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, p, make_list(sc, len, sc->F)));
 		      np = tp;
-		      sc->y = tp;
+		      sc->temp8 = tp;
 		    }
 		  else set_cdr(np, s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, p, make_list(sc, len, sc->F))));
 		  for (; is_pair(cdr(np)); np = cdr(np));
@@ -49459,7 +49451,7 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       if ((!is_pair(b)) && (!is_null(b)))
 	return(g_list_append(sc, list_2(sc, a, b)));
       q = list_1(sc, car(a));
-      sc->y = q;
+      sc->temp8 = q;
       for (op = a, p = cdr(a), np = q; (is_pair(p)) && (p != op); p = cdr(p), np = cdr(np), op = cdr(op))
 	{
 	  set_cdr(np, list_1_unchecked(sc, car(p))); p = cdr(p); np = cdr(np);
@@ -49469,7 +49461,7 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       if (!is_null(p))
 	return(wrong_type_argument_with_type(sc, sc->append_symbol, 1, a, a_proper_list_string));
       set_cdr(np, b);
-      sc->y = sc->nil;
+      sc->temp8 = sc->nil;
       return(q);
     }
   if (is_null(a)) return(b);
@@ -49505,7 +49497,7 @@ static s7_pointer hash_table_to_list(s7_scheme *sc, s7_pointer obj)
   s7_pointer x, iterator;
   if (hash_table_entries(obj) <= 0) return(sc->nil);
   iterator = s7_make_iterator(sc, obj);
-  sc->temp8 = iterator;
+  gc_protect_via_stack(sc, iterator);
   sc->w = sc->nil;
   while (true)
     {
@@ -49515,7 +49507,7 @@ static s7_pointer hash_table_to_list(s7_scheme *sc, s7_pointer obj)
     }
   x = sc->w;
   sc->w = sc->nil;
-  sc->temp8 = sc->nil;	  /* free_cell(sc, iterator); */ /* 16-Nov-18 but then 18-Dec-18 got free cell that was iterator */
+  unstack(sc);
   return(x);
 }
 
@@ -49530,7 +49522,7 @@ static s7_pointer iterator_to_list(s7_scheme *sc, s7_pointer obj)
       if ((val == ITERATOR_END) &&
 	  (iterator_is_at_end(obj)))
 	{
-	  sc->temp8 = sc->nil;
+	  if (is_pair(result)) unstack(sc);
 	  return(result);
 	}
       if (sc->safety > NO_SAFETY)
@@ -49556,7 +49548,7 @@ static s7_pointer iterator_to_list(s7_scheme *sc, s7_pointer obj)
 		  result = list_1(sc, val);
 		  p = result;
 		}
-	      sc->temp8 = result;
+	      gc_protect_via_stack(sc, result);
 	    }
 	  else
 	    if (is_multiple_value(val))
@@ -49592,26 +49584,21 @@ static s7_pointer c_obj_to_list(s7_scheme *sc, s7_pointer obj) /* "c_object_to_l
     return(sc->nil);
 
   result = make_list(sc, len, sc->nil);
-  sc->temp8 = result;
+  sc->temp7 = result;
   z = list_2_unchecked(sc, obj, zc = make_mutable_integer(sc, 0));
   gc_z = gc_protect_1(sc, z);
-  set_car(sc->z2_1, sc->x);
-  set_car(sc->z2_2, sc->z);
-  for (i = 0, x = result; i < len; i++, x = cdr(x))
+  for (i = 0, x = result; i < len; i++, x = cdr(x))  /* used to save/restore sc->x|z here */
     {
       integer(zc) = i;
       set_car(x, (*(c_object_ref(sc, obj)))(sc, z));
     }
-  sc->x = car(sc->z2_1);
-  sc->z = car(sc->z2_2);
   s7_gc_unprotect_at(sc, gc_z);
-  sc->temp8 = sc->nil;
+  sc->temp7 = sc->nil;
   return(result);
 }
 
-static s7_pointer object_to_list(s7_scheme *sc, s7_pointer obj)
-{
-  /* used only in format_to_port_1 and (map values ...) */
+static s7_pointer object_to_list(s7_scheme *sc, s7_pointer obj) /* used only in format_to_port_1 and (map values ...) */
+{  
   switch (type(obj))
     {
     case T_STRING:      return(string_to_list(sc, string_value(obj), string_length(obj)));
@@ -67997,7 +67984,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     case T_C_OBJECT:
       /* args if sc->args (plist + c_object) can be clobbered here by s7_is_aritable, so we need to protect it */
       args = copy_proper_list(sc, args);
-      sc->temp8 = args;
+      gc_protect_via_stack(sc, args);
 
     default:
       if (!is_applicable(f))
@@ -68455,14 +68442,14 @@ static s7_pointer splice_out_values(s7_scheme *sc, s7_pointer args)
 #endif
   while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
   tp = list_1(sc, car(args));
-  sc->y = tp;
+  sc->temp8 = tp;
   for (p = cdr(args), np = tp; is_pair(p); p = cdr(p))
     if (car(p) != sc->no_value)
       {
 	set_cdr(np, list_1(sc, car(p)));
 	np = cdr(np);
       }
-  sc->y = sc->nil;
+  sc->temp8 = sc->nil;
   return(tp);
 }
 
@@ -69853,11 +69840,12 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 	      s7_pointer old_hook = sc->unbound_variable_hook;
 	      bool old_history_enabled;
 	      old_history_enabled = s7_set_history_enabled(sc, false);
-	      set_car(sc->z2_1, old_hook);
+	      gc_protect_via_stack(sc, old_hook);
 	      sc->unbound_variable_hook = sc->nil;
 	      result = s7_call(sc, old_hook, set_plist_1(sc, sym)); /* not s7_apply_function */
 	      sc->unbound_variable_hook = old_hook;
 	      s7_set_history_enabled(sc, old_history_enabled);
+	      unstack(sc);
 	    }}
 
       sc->value = T_Pos(value);
@@ -75619,7 +75607,7 @@ static bool op_let1(s7_scheme *sc)
   x = proper_list_reverse_in_place(sc, sc->args);
   sc->code = car(x); /* restore the original form */
   y = cdr(x);        /* use sc->args as the new let */
-  sc->y = y;
+  sc->temp8 = y;
   set_curlet(sc, reuse_as_let(sc, x, sc->curlet));
 
   if (is_symbol(car(sc->code)))
@@ -75651,7 +75639,7 @@ static bool op_let1(s7_scheme *sc)
       slot_set_next(sp, slot_end(sc));
     }
   sc->code = T_Pair(cdr(sc->code));
-  sc->y = sc->nil;
+  sc->temp8 = sc->nil;
   return(true);
 }
 
@@ -79578,7 +79566,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
       /* this block needs to be first to handle (eg):
        *   (let ((v (vector (inlet 'a 0)))) (set! (v 0 'a) 32) v): #((inlet 'a 32))
        *   sc->code here: ((v 0 'a) 32)
-       * so if we could catch easy cases (i.e. int index and rank==1 vect), do the vector_ref, check applicable and go on:
        */
       /* TODO: treat as op_implicit_vector_ref_3 see 4 case below, the other implicit sets could optimize to *_a op like vector_set */
       if (vector_rank(vect) == 1)
@@ -94825,8 +94812,6 @@ s7_scheme *s7_init(void)
   sc->t1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->t2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->t2_1 = permanent_cons(sc, sc->nil, sc->t2_2, T_PAIR | T_IMMUTABLE);
-  sc->z2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->z2_1 = permanent_cons(sc, sc->nil, sc->z2_2, T_PAIR | T_IMMUTABLE);
   sc->t3_3 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
   sc->t3_2 = permanent_cons(sc, sc->nil, sc->t3_3, T_PAIR | T_IMMUTABLE);
   sc->t3_1 = permanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
@@ -94872,7 +94857,6 @@ s7_scheme *s7_init(void)
   sc->value = sc->nil;
   sc->w = sc->nil;
   sc->x = sc->nil;
-  sc->y = sc->nil;
   sc->z = sc->nil;
   sc->temp1 = sc->nil;
   sc->temp2 = sc->nil;
@@ -95052,7 +95036,7 @@ s7_scheme *s7_init(void)
   sc->plist_2_2 = cdr(sc->plist_2);
   sc->plist_3 = permanent_list(sc, 3);
   sc->qlist_2 = permanent_list(sc, 2);
-  sc->qlist_3 = permanent_list(sc, 3);
+  sc->qlist_3 = permanent_cons(sc, sc->F, sc->qlist_2, T_PAIR | T_IMMUTABLE);
   sc->clist_1 = permanent_list(sc, 1);
   sc->clist_2 = permanent_list(sc, 2);
   sc->dlist_1 = permanent_list(sc, 1);
@@ -95713,6 +95697,6 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * opt: with-let (tmisc), goto?
- * elist_* overlapped? temp8->temp7?
+ * elist_1|2|3|4 overlapped? t*_*? (etc)
  * autogrow for nrepl?
  */
