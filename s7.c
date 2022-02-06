@@ -6991,13 +6991,21 @@ static int64_t gc(s7_scheme *sc)
   if (sc->args) gc_mark(sc->args);
   gc_mark(sc->curlet);   /* not mark_let because op_any_closure_3p uses sc->curlet as a temp!! */
   mark_current_code(sc); /* probably redundant if with_history */
+  gc_mark(sc->value);
 
   mark_stack_1(sc->stack, current_stack_top(sc));
+  set_mark(current_input_port(sc));
+  mark_input_port_stack(sc);
+  set_mark(current_output_port(sc));
+  set_mark(sc->error_port);
+  gc_mark(sc->stacktrace_defaults);
+  gc_mark(sc->autoload_table);
+  gc_mark(sc->default_rng);
+  gc_mark(sc->let_temp_hook);
+
   gc_mark(sc->w);
   gc_mark(sc->x);
   gc_mark(sc->z);
-  gc_mark(sc->value);
-
   gc_mark(sc->temp1);
   gc_mark(sc->temp2);
   gc_mark(sc->temp3);
@@ -7008,16 +7016,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
 
-  set_mark(current_input_port(sc));
-  mark_input_port_stack(sc);
-  set_mark(current_output_port(sc));
-  set_mark(sc->error_port);
-  gc_mark(sc->stacktrace_defaults);
-  gc_mark(sc->autoload_table);
-  gc_mark(sc->default_rng);
-  gc_mark(sc->let_temp_hook);
-
-  /* permanent lists that might escape and therefore need GC protection */
   gc_mark(car(sc->t1_1));
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
   gc_mark(car(sc->t3_1)); gc_mark(car(sc->t3_2)); gc_mark(car(sc->t3_3)); 
@@ -7028,19 +7026,21 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->qlist_2)); gc_mark(cadr(sc->qlist_2));
   gc_mark(car(sc->qlist_3));
   gc_mark(car(sc->u1_1));
-  gc_mark(car(sc->u2_1));
+  gc_mark(car(sc->u2_1)); gc_mark(car(sc->u2_2));
 
   gc_mark(sc->rec_p1);
   gc_mark(sc->rec_p2);
 
+  /* these probably don't need to be marked */
   for (p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
   for (p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
   for (p = sc->out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
   for (p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+
   gc_mark(car(sc->elist_1));
   gc_mark(car(sc->elist_2));
   gc_mark(cadr(sc->elist_2));
-  for (p = sc->elist_3; is_pair(p); p = cdr(p)) gc_mark(car(p)); /* TODO: overlapped? */
+  for (p = sc->elist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
   gc_mark(car(sc->elist_4));
   gc_mark(car(sc->elist_5));
   gc_mark(car(sc->elist_6));
@@ -11430,13 +11430,13 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
       switch (op)
 	{
 	case OP_DYNAMIC_WIND:
-	case OP_LET_TEMP_DONE: /* case OP_LET_TEMP_DONE1: */
+	case OP_LET_TEMP_DONE:
 	  {
 	    s7_pointer x = stack_code(sc->stack, i);
 	    int64_t j, s_base = 0;
 	    for (j = 3; j < top2; j += 4)
 	      if (((stack_op(continuation_stack(c), j) == OP_DYNAMIC_WIND) ||
-		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE) /* || (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE1) */ ) &&
+		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE)) &&
 		  (x == stack_code(continuation_stack(c), j)))
 		{
 		  s_base = i;
@@ -11674,7 +11674,7 @@ static void call_with_exit(s7_scheme *sc)
 	call_exit_active(stack_args(sc->stack, i)) = false;
 	break;
 
-      case OP_LET_TEMP_DONE:  /* case OP_LET_TEMP_DONE1: */
+      case OP_LET_TEMP_DONE:
 	{
 	  s7_pointer old_args = sc->args;
 	  let_temp_done(sc, stack_args(sc->stack, i), stack_let(sc->stack, i));
@@ -11764,27 +11764,20 @@ static s7_pointer g_call_with_exit(s7_scheme *sc, s7_pointer args)   /* (call-wi
   s7_pointer p = car(args), x;
   if (is_any_closure(p))
     {
-      x = make_goto(sc, ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p))))) ? car(closure_args(p)) : sc->F);
+      x = make_goto(sc, ((is_pair(closure_args(p))) && (is_symbol(car(closure_args(p))))) ? car(closure_args(p)) : sc->F);
       push_stack(sc, OP_DEACTIVATE_GOTO, x, p); /* this means call-with-exit is not tail-recursive */
       push_stack(sc, OP_APPLY, cons_unchecked(sc, x, sc->nil), p);
       return(sc->nil);
     }
-
-  if (!is_t_procedure(p))                  /* this includes continuations */
+  /* maybe just return an error here -- these gotos as args are stupid; also an error above if closure not aritable 1 */
+  if (!is_t_procedure(p))
     return(method_or_bust_with_type_one_arg_p(sc, p, sc->call_with_exit_symbol, a_procedure_string));
-
-  x = make_goto(sc, ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p))))) ? car(closure_args(p)) : sc->F);
-  if ((is_any_c_function(p)) && (s7_is_aritable(sc, p, 1)))
-    {
-      call_exit_active(x) = false;
-      return((is_c_function(p)) ? c_function_call(p)(sc, set_plist_1(sc, x)) : s7_apply_function_star(sc, p, set_plist_1(sc, x)));
-    }
-  push_stack(sc, OP_DEACTIVATE_GOTO, x, p); /* this means call-with-exit is not tail-recursive */
-  push_stack(sc, OP_APPLY, cons_unchecked(sc, x, sc->nil), p);
-  return(sc->nil);
-  /* this is why call-with-exit is declared an unsafe_defun: a safe function returns its value, but an unsafe one
-   *   can await a further evaluation (the call-with-exit body).  The sc->nil returned value is ignored.
-   */
+  if (!s7_is_aritable(sc, p, 1))
+    return(s7_error(sc, sc->wrong_type_arg_symbol,
+		    set_elist_2(sc, wrap_string(sc, "call-with-exit argument should be a function of one argument: ~S", 64), p)));
+  x = make_goto(sc, sc->F);
+  call_exit_active(x) = false;
+  return((is_c_function(p)) ? c_function_call(p)(sc, set_plist_1(sc, x)) : s7_apply_function_star(sc, p, set_plist_1(sc, x)));
 }
 
 static inline void op_call_with_exit(s7_scheme *sc)
@@ -16099,15 +16092,12 @@ static s7_pointer g_complex(s7_scheme *sc, s7_pointer args)
 	case T_INTEGER: case T_RATIO: case T_REAL:
 	  mpfr_set_d(mpc_realref(big_complex(p)), s7_real(p0), MPFR_RNDN);
 	  break;
-
 	case T_BIG_REAL:
 	  mpfr_set(mpc_realref(big_complex(p)), big_real(p0), MPFR_RNDN);
 	  break;
-
 	case T_BIG_RATIO:
 	  mpfr_set_q(mpc_realref(big_complex(p)), big_ratio(p0), MPFR_RNDN);
 	  break;
-
 	case T_BIG_INTEGER:
 	  mpfr_set_z(mpc_realref(big_complex(p)), big_integer(p0), MPFR_RNDN);
 	  break;
@@ -47913,7 +47903,7 @@ static s7_pointer is_equivalent_p_pp(s7_scheme *sc, s7_pointer a, s7_pointer b) 
 
 
 /* ---------------------------------------- length, copy, fill ---------------------------------------- */
-static s7_pointer s7_length(s7_scheme *sc, s7_pointer lst); /* TODO: why isn't this in s7.h? */
+static s7_pointer s7_length(s7_scheme *sc, s7_pointer lst); /* why isn't this in s7.h? */
 
 static s7_pointer (*length_functions[256])(s7_scheme *sc, s7_pointer obj);
 static s7_pointer any_length(s7_scheme *sc, s7_pointer obj) {return(sc->F);}
@@ -66930,7 +66920,7 @@ static s7_pointer fx_to_fb(s7_scheme *sc, s7_function fx) /* eventually parallel
 static void fb_annotate(s7_scheme *sc, s7_pointer form, s7_pointer fx_expr, opcode_t op)
 {
   s7_pointer bfunc;
-  if ((is_fx_treeable(cdr(form))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, cdr(form)); /* TODO: and not already treed? just the one expr? */
+  if ((is_fx_treeable(cdr(form))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, cdr(form)); /* and not already treed? just the one expr? */
   bfunc = fx_to_fb(sc, fx_proc(fx_expr));
   if (bfunc)
     {
@@ -79567,7 +79557,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
        *   (let ((v (vector (inlet 'a 0)))) (set! (v 0 'a) 32) v): #((inlet 'a 32))
        *   sc->code here: ((v 0 'a) 32)
        */
-      /* TODO: treat as op_implicit_vector_ref_3 see 4 case below, the other implicit sets could optimize to *_a op like vector_set */
       if (vector_rank(vect) == 1)
 	{
 	  s7_pointer ind = cadr(settee);
@@ -85781,6 +85770,7 @@ static void op_tc_when_laa(s7_scheme *sc, s7_pointer code)
       slot_set_value(laa_slot, fx_call(sc, laa));
       slot_set_value(la_slot, sc->rec_p1);
     }
+  sc->rec_p1 = sc->F;
   sc->value = sc->unspecified;
 }
 
@@ -85804,6 +85794,7 @@ static void op_tc_when_l3a(s7_scheme *sc, s7_pointer code)
       slot_set_value(laa_slot, sc->rec_p2);
       slot_set_value(la_slot, sc->rec_p1);
     }
+  sc->rec_p1 = sc->F;
   sc->value = sc->unspecified;
 }
 
@@ -86346,6 +86337,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
       slot_set_value(la_slot, sc->rec_p1);
       set_curlet(sc, outer_let);
     }
+  sc->rec_p1 = sc->F;
   unstack(sc);
   if (!op_tc_z(sc, endp))  /* might refer to inner_let slots */
     return(false);
