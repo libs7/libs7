@@ -9866,10 +9866,10 @@ static s7_pointer let_set_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_
 
 static s7_pointer reverse_slots(s7_scheme *sc, s7_pointer list)
 {
-  s7_pointer p = list, result = slot_end(sc), q;
+  s7_pointer p = list, result = slot_end(sc);
   while (tis_slot(p))
     {
-      q = next_slot(p);
+      s7_pointer q = next_slot(p);
       slot_set_next(p, result);
       result = p;
       p = q;
@@ -21241,7 +21241,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	{
 	case T_INTEGER:
 	  if (integer(y) == 0)
-	    return(division_by_zero_error_2(sc, sc->divide_symbol, (sc, x, y)));
+	    return(division_by_zero_error_2(sc, sc->divide_symbol, x, y));
 	  mpc_set_si(sc->mpc_1, integer(y), MPC_RNDNN);
 	  mpc_div(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
@@ -38242,6 +38242,7 @@ static bool numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 #if WITH_GMP
   if ((is_big_number(a)) || (is_big_number(b)))
     return(big_numbers_are_eqv(sc, a, b));
+  if (type(a) != type(b)) return(false);
 #endif
   /* if (type(a) != type(b)) return(false); */   /* (eqv? 1 1.0) -> #f! but assume that we've checked types already */
 
@@ -38257,10 +38258,16 @@ static bool numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 static s7_pointer memv_number(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 {
   s7_pointer y = x;
+#if (!WITH_GMP)
   uint8_t obj_type = type(obj);
+#endif
   while (true)
     {
+#if WITH_GMP
+      LOOP_4(if ((is_number(car(x))) && (numbers_are_eqv(sc, obj, car(x)))) return(x); x = cdr(x); if (!is_pair(x)) return(sc->F));
+#else
       LOOP_4(if ((type(car(x)) == obj_type) && (numbers_are_eqv(sc, obj, car(x)))) return(x); x = cdr(x); if (!is_pair(x)) return(sc->F));
+#endif
       y = cdr(y);
       if (x == y) return(sc->F);
     }
@@ -38607,7 +38614,7 @@ s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...) /* arglist should b
 
   sc->w = make_list(sc, num_values, sc->nil);
   va_start(ap, num_values);
-  for (q= sc->w, i = 0; i < num_values; i++, q = cdr(q))
+  for (q = sc->w, i = 0; i < num_values; i++, q = cdr(q))
     {
       p = va_arg(ap, s7_pointer);
       if (!p)
@@ -43191,11 +43198,17 @@ static hash_entry_t *hash_eqv(s7_scheme *sc, s7_pointer table, s7_pointer key)
   loc = hash_loc(sc, table, key) & hash_mask;
   if (is_number(key))
     {
+#if WITH_GMP
+      for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
+	if (numbers_are_eqv(sc, key, hash_entry_key(x)))
+	  return(x);
+#else
       uint8_t key_type = type(key);
       for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
 	if ((key_type == type(hash_entry_key(x))) && 
 	    (numbers_are_eqv(sc, key, hash_entry_key(x))))
 	  return(x);
+#endif
     }
   else
     for (x = hash_table_element(table, loc); x; x = hash_entry_next(x))
@@ -50195,8 +50208,7 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 		{
 		  char *objstr, *str;
 		  s7_pointer objp;
-		  const char *spaces = "                                                                                ";
-		  s7_int new_note_len, notes_max, spaces_len = 80;
+		  s7_int new_note_len, notes_max;
 		  bool new_notes_line = false, old_short_print = sc->short_print;
 		  s7_int old_len = sc->print_length, objlen;
 
@@ -50235,6 +50247,8 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 		      }
 		  if (new_notes_line)
 		    {
+		      const char *spaces = "                                                                                ";
+		      s7_int spaces_len = 80;
 		      new_note_len += (4 + notes_start_col + ((notes) ? strlen(notes) : 0));
 		      str = (char *)Malloc(new_note_len);   /* str[0] = '\0'; */
 		      catstrs_direct(str,
@@ -67227,13 +67241,13 @@ static void map_or_for_each_closure_vector_2(s7_scheme *sc, s7_pfunc func, s7_po
   if (len > vector_length(seq2)) len = vector_length(seq2);
   for (i = 0; i < len; i++)
     {
-      s7_pointer val;
       slot_set_value(slot1, vector_getter(seq1)(sc, seq1, i));
       slot_set_value(slot2, vector_getter(seq2)(sc, seq2, i));
       if (for_each_case)
 	func(sc);
       else
 	{
+	  s7_pointer val;
 	  val = func(sc);
 	  if (val != sc->no_value) sc->temp6 = cons(sc, val, sc->temp6);
 	}}
@@ -67246,13 +67260,13 @@ static void map_or_for_each_closure_string_2(s7_scheme *sc, s7_pfunc func, s7_po
   if (len > string_length(seq2)) len = string_length(seq2);
   for (i = 0; i < len; i++)
     {
-      s7_pointer val;
       slot_set_value(slot1, chars[(uint8_t)(s1[i])]);
       slot_set_value(slot2, chars[(uint8_t)(s2[i])]);
       if (for_each_case)
 	func(sc);
       else
 	{
+	  s7_pointer val;
 	  val = func(sc);
 	  if (val != sc->no_value) sc->temp6 = cons(sc, val, sc->temp6);
 	}}
@@ -68101,18 +68115,16 @@ static bool op_map_2(s7_scheme *sc)
 static s7_pointer revappend(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
   /* (map (lambda (x) (if (odd? x) (apply values '(1 2 3)) (values))) (list 1 2 3 4)) is a bad case -- we have to copy the incoming list (in op_map_gather) */
-  s7_pointer p = b, q;
+  s7_pointer p = b;
   if (is_not_null(a))
     {
       a = copy_proper_list(sc, a);
-      do /* while (is_not_null(a)) */
-	{
-	  q = cdr(a);
-	  set_cdr(a, p);
-	  p = a;
-	  a = q;
-	}
-      while (is_pair(a));
+      do {
+	s7_pointer q = cdr(a);
+	set_cdr(a, p);
+	p = a;
+	a = q;
+      } while (is_pair(a));
     }
   return(p);
 }
@@ -80922,7 +80934,7 @@ static s7_pointer check_do(s7_scheme *sc)
 	      }
 	    else
 	      {
-		s7_pointer endp, var1;
+		s7_pointer endp = car(end), var1 = car(var);
 		if ((car(step_expr) != sc->quote_symbol) &&     /* opt1_cfunc(==opt1) might not be set in this case (sigh) */
 		    (is_safe_c_op(optimize_op(step_expr))) &&
 		    ((preserves_type(sc, c_function_class(opt1_cfunc(step_expr)))) || /* add etc */
@@ -80934,8 +80946,6 @@ static s7_pointer check_do(s7_scheme *sc)
 		      (caadr(var) == car(step_expr)))))	       /* i.e. accept char-position as init/step, but not iterate */
 		  set_safe_stepper_expr(cddr(var));
 
-		endp = car(end);
-		var1 = car(var);
 		if ((is_proper_list_3(sc, endp)) && (is_proper_list_3(sc, step_expr)) &&
 		    ((car(endp) == sc->num_eq_symbol) || (car(endp) == sc->geq_symbol)) &&
 		    (is_symbol(cadr(endp))) &&
@@ -95643,15 +95653,15 @@ int main(int argc, char **argv)
  * texit      1827         ----   ----   1778   1760
  * tvect      1953         2519   2464   1772   1767
  * s7test     4537         1873   1831   1818   1804
- * lt         2117         2123   2110   2113   2115
+ * lt         2117         2123   2110   2113   2113
  * timp       2232         2971   2891   2176   2201
  * tread      2614         2440   2421   2419   2417
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
- * dup        2756         3805   3788   2492   2481
+ * dup        2756         3805   3788   2492   2486
  * tmat       2694         3065   3042   2524   2522
  * tcopy      2600         8035   5546   2539   2534
- * tauto      2763         ----   ----   2562   2550
+ * tauto      2763         ----   ----   2562   2552
  * tb         3366?        2735   2681   2612   2609
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
@@ -95660,16 +95670,16 @@ int main(int argc, char **argv)
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3541
  * tio        3698         3816   3752   3683   3680
- * tobj       4533         4016   3970   3828   3825
- * tlamb      4454         4912   4786   4298   4255
+ * tobj       4533         4016   3970   3828   3821
+ * tlamb      4454         4912   4786   4298   4258
  * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4431
  * tlet       5305         7775   5640   4450   4436
  * tmap       5488         8869   8774   4489   4509
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5186
- * tform      8338         5357   5348   5307   5314
- * tnum       56.7         6348   6013   5433   5428
+ * tform      8338         5357   5348   5307   5308
+ * tnum       56.7         6348   6013   5433   5434
  * tstr       6123         6880   6342   5488   5488
  * tmisc      6847         8869   7612   6435   6353
  * tgsl       25.1         8485   7802   6373   6373
@@ -95679,16 +95689,15 @@ int main(int argc, char **argv)
  * tleft      9004         10.4   10.2   7657   7650
  * tgc        9614         11.9   11.1   8177   8173
  * cb         16.8         11.2   11.0   9658   9660
- * thash      35.4         11.8   11.7   9734   9746
+ * thash      35.4         11.8   11.7   9734   9737
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0
+ * calls      55.3         36.7   37.5   37.0   37.1
  * sg         75.8         ----   ----   55.9   55.9
  * lg        104.2        106.6  105.0  103.6  103.6
  * tbig      604.3        177.4  175.8  156.5  156.4
  * -----------------------------------------------------
  *
  * opt: with-let (tmisc), goto?
- * elist_1|2|3|4 overlapped? t*_*? (etc)
  * autogrow for nrepl?
  */
