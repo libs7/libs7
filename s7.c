@@ -30566,7 +30566,7 @@ static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
  	return(wrong_type_argument_with_type(sc, sc->eval_string_symbol, 2, e, a_let_string));
       set_curlet(sc, (e == sc->rootlet) ? sc->nil : e);
     }
-  sc->temp3 = sc->args;
+  sc->temp3 = sc->args; /* see t101-aux-17.scm */
   push_stack(sc, OP_EVAL_STRING, args, sc->code);
   port = open_and_protect_input_string(sc, str);
   push_input_port(sc, port);
@@ -39153,19 +39153,19 @@ void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
     case T_FLOAT_VECTOR:
       if (!is_real(obj))
 	s7_wrong_type_arg_error(sc, "float-vector fill!", 2, obj, "a real");
-      else float_vector_fill(vec, s7_real(obj));
+      float_vector_fill(vec, s7_real(obj));
       break;
 
     case T_INT_VECTOR:
       if (!s7_is_integer(obj)) /* possibly a bignum */
 	s7_wrong_type_arg_error(sc, "int-vector fill!", 2, obj, "an integer");
-      else int_vector_fill(vec, s7_integer_clamped_if_gmp(sc, obj));
+      int_vector_fill(vec, s7_integer_clamped_if_gmp(sc, obj));
       break;
 
     case T_BYTE_VECTOR:
       if (!is_byte(obj))
 	s7_wrong_type_arg_error(sc, "byte-vector fill!", 2, obj, "a byte");
-      else byte_vector_fill(vec, (uint8_t)s7_integer_clamped_if_gmp(sc, obj));
+      byte_vector_fill(vec, (uint8_t)s7_integer_clamped_if_gmp(sc, obj));
       break;
 
     case T_VECTOR:
@@ -42463,15 +42463,14 @@ static s7_pointer vector_into_string(s7_pointer vect, s7_pointer dest)
 {
   s7_pointer *elements = vector_elements(vect);
   s7_int i, len = vector_length(vect);
-  uint8_t *str;
   if (is_byte_vector(dest))
     {
-      str = (uint8_t *)byte_vector_bytes(dest);
+      uint8_t *str = (uint8_t *)byte_vector_bytes(dest);
       for (i = 0; i < len; i++)	str[i] = (uint8_t)integer(elements[i]);
     }
   else
     {
-      str = (uint8_t *)string_value(dest);
+      uint8_t *str = (uint8_t *)string_value(dest);
       for (i = 0; i < len; i++)	str[i] = character(elements[i]);
     }
   return(dest);
@@ -42846,10 +42845,9 @@ static hash_entry_t *hash_number_equivalent(s7_scheme *sc, s7_pointer table, s7_
   return(sc->unentry);
 #else
   s7_int iprobe, loc;
-  s7_double bin_dist, fprobe, keyval;
+  s7_double bin_dist, fprobe, keyval = (is_real(key)) ? s7_real(key) : real_part(key);
   hash_entry_t *i1;
-
-  keyval = (is_real(key)) ? s7_real(key) : real_part(key);
+  
   fprobe = fabs(keyval);
   iprobe = (s7_int)floor(fprobe);
   loc = iprobe & hash_table_mask(table);
@@ -43949,7 +43947,7 @@ static bool op_implicit_hash_table_ref_aa(s7_scheme *sc)
   in_obj = s7_hash_table_ref(sc, table, out_key = fx_call(sc, cdr(sc->code)));
   if (is_hash_table(in_obj))
     sc->value = s7_hash_table_ref(sc, in_obj, fx_call(sc, cddr(sc->code)));
-  else sc->value = implicit_pair_index_checked(sc, table, in_obj, set_plist_2(sc, out_key, fx_call(sc, cddr(sc->code))));
+  else sc->value = implicit_pair_index_checked(sc, table, in_obj, set_plist_2(sc, out_key, fx_call(sc, cddr(sc->code)))); /* -> implicit_index */
   return(true);
 }
 
@@ -55291,10 +55289,10 @@ fx_c_sa_direct_any(fx_c_sa_direct, s_lookup)
 fx_c_sa_direct_any(fx_c_ua_direct, u_lookup)
 
 static s7_pointer fx_cons_ca(s7_scheme *sc, s7_pointer arg) {return(cons(sc, opt3_con(arg), fx_call(sc, cddr(arg))));}
-static s7_pointer fx_cons_ac(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), opt3_con(arg)));}
+static s7_pointer fx_cons_ac(s7_scheme *sc, s7_pointer arg) {return(cons(sc, sc->temp3 = fx_call(sc, cdr(arg)), opt3_con(arg)));}
 static s7_pointer fx_cons_sa(s7_scheme *sc, s7_pointer arg) {return(cons(sc, lookup(sc, opt3_sym(arg)), fx_call(sc, cddr(arg))));}
-static s7_pointer fx_cons_as(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), lookup(sc, opt3_sym(arg))));}
-static s7_pointer fx_cons_aa(s7_scheme *sc, s7_pointer arg) {return(cons(sc, fx_call(sc, cdr(arg)), fx_call(sc, opt3_pair(arg))));}
+static s7_pointer fx_cons_as(s7_scheme *sc, s7_pointer arg) {return(cons(sc, sc->temp3 = fx_call(sc, cdr(arg)), lookup(sc, opt3_sym(arg))));}
+static s7_pointer fx_cons_aa(s7_scheme *sc, s7_pointer arg) {return(cons(sc, sc->temp3 = fx_call(sc, cdr(arg)), fx_call(sc, opt3_pair(arg))));}
 
 #define fx_c_as_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -55625,7 +55623,7 @@ static s7_pointer fx_c_na(s7_scheme *sc, s7_pointer arg)
   return(p);
 }
 
-static s7_pointer fx_vector_all_a(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_vector_na(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer v, args;
   s7_pointer *els;
@@ -55636,7 +55634,7 @@ static s7_pointer fx_vector_all_a(s7_scheme *sc, s7_pointer arg)
   els = vector_elements(v);
   for (i = 0, args = cdr(arg); i < len; args = cdr(args), i++)
     els[i] = fx_call(sc, args);
-  sc->value = v;
+  sc->value = v; /* full-s7test 12262 list_p_p case */
   unstack(sc);
   return(v);
 }
@@ -56169,7 +56167,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	  return(fx_and_2a);
 
 	case HOP_SAFE_C_S:
-	  if (is_unchanged_global(car(arg)))
+	  if (is_unchanged_global(car(arg))) /* mus-copy would work here but in tgen (for example) it's loading generators.scm with local mus-copy methods */
 	    {
 	      uint8_t typ;
 	      if (car(arg) == sc->cdr_symbol)            return(fx_cdr_s);
@@ -56752,7 +56750,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	  return((fx_proc(cdadr(arg)) == fx_s) ? fx_c_opsaq : fx_c_opaaq);
 
 	case HOP_SAFE_C_NA:
-	  return((fn_proc(arg) == g_vector) ? fx_vector_all_a : fx_c_na);
+	  return((fn_proc(arg) == g_vector) ? fx_vector_na : fx_c_na);
 
 	case HOP_SAFE_C_ALL_CA:
 	  return((fn_proc(arg) == g_simple_inlet) ? fx_inlet_ca : fx_c_all_ca);
@@ -77790,10 +77788,10 @@ static void op_define_macro(s7_scheme *sc)
 static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code);
 static void apply_macro_star_1(s7_scheme *sc);
 
-static inline bool op_macro_d(s7_scheme *sc)
+static inline bool op_macro_d(s7_scheme *sc, uint8_t typ)
 {
   sc->value = lookup(sc, car(sc->code));
-  if (!is_macro(sc->value))   /* for-each (etc) called a macro before, now it's something else -- a very rare case */
+  if (type(sc->value) != typ)                 /* for-each (etc) called a macro before, now it's something else -- a very rare case */
     return(unknown_any(sc, sc->value, sc->code));
   sc->args = cdr(sc->code);                   /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
   sc->code = sc->value;                       /* the macro */
@@ -77805,14 +77803,7 @@ static inline bool op_macro_d(s7_scheme *sc)
 
 static bool op_macro_star_d(s7_scheme *sc)
 {
-  sc->value = lookup(sc, car(sc->code));
-  if (!is_macro_star(sc->value))
-    return(unknown_any(sc, sc->value, sc->code));
-  sc->args = cdr(sc->code); /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
-  sc->code = sc->value;
-  check_stack_size(sc);
-  push_stack_op_let(sc, OP_EVAL_MACRO);
-  sc->curlet = make_let(sc, closure_let(sc->code));
+  if (op_macro_d(sc, T_MACRO_STAR)) return(true);
   apply_macro_star_1(sc);
   return(false);
 }
@@ -87862,7 +87853,7 @@ static void op_safe_c_pc(s7_scheme *sc)
 
 static void op_safe_c_pc_mv(s7_scheme *sc)
 {
-  sc->args = pair_append(sc, sc->value, list_1(sc, sc->args)); /* not plist! sc->value is not resuable */
+  sc->args = pair_append(sc, sc->value, list_1(sc, sc->args)); /* not plist! sc->value is not reusable */
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
@@ -89279,7 +89270,6 @@ static bool op_unknown_gg(s7_scheme *sc)
   if ((s1) &&
       (!is_slot(lookup_slot_from(cadr(code), sc->curlet))))
     return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
-
   if ((s2) &&
       (!is_slot(lookup_slot_from(caddr(code), sc->curlet))))
     return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
@@ -90812,8 +90802,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    default:	                apply_error(sc, sc->code, sc->args);
 	    }
 
-	case OP_MACRO_STAR_D: if (op_macro_star_d(sc)) goto EVAL_ARGS_TOP; goto BEGIN;
-	case OP_MACRO_D:      if (op_macro_d(sc)) goto EVAL_ARGS_TOP;
+	case OP_MACRO_STAR_D: if (op_macro_star_d(sc))     goto EVAL_ARGS_TOP; goto BEGIN;
+	case OP_MACRO_D:      if (op_macro_d(sc, T_MACRO)) goto EVAL_ARGS_TOP;
 
 	APPLY_LAMBDA:
 	case OP_APPLY_LAMBDA:
@@ -91057,7 +91047,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    {
 	    case goto_begin: goto BEGIN;
 	    case goto_apply: goto APPLY;
-	    default:         continue;
+	    case goto_start: continue;
+	    default:         
+	      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: to start %s %s\n", __func__, __LINE__, display(sc->code), op_names[optimize_op(sc->code)]);
+	      continue;
 	    }
 
 	case OP_INCREMENT_BY_1:   op_increment_by_1(sc);   continue;
@@ -91082,7 +91075,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_start:      continue;
 	    case goto_apply:      goto APPLY;
 	    case goto_unopt:      goto UNOPT;
-	    default:              goto EVAL_ARGS; /* goto_eval_args in funcs called by op_set2 */
+	    default:              goto EVAL_ARGS; /* goto_eval_args in funcs called by op_set2, unopt */
 	    }
 
 	case OP_SET: check_set(sc);
@@ -91095,7 +91088,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_start:      continue;
 	      case goto_apply:      goto APPLY;
 	      case goto_unopt:      goto UNOPT;
-	      default:              goto EVAL_ARGS;
+	      default:              goto EVAL_ARGS; /* very common, op_unopt at this point */
 	      }
 	case OP_SET_NORMAL: if (op_set_normal(sc)) goto EVAL;
 	case OP_SET1:       if (op_set1(sc)) continue; goto APPLY;
@@ -91111,7 +91104,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_start:      continue;
 	      case goto_apply:      goto APPLY;
 	      case goto_unopt:      goto UNOPT;
-	      default:              goto EVAL_ARGS;
+	      default:              goto EVAL_ARGS; /* unopt */
 	      }
 	  s7_error(sc, sc->no_setter_symbol,
 		   set_elist_3(sc, wrap_string(sc, "can't set ~A in ~S", 18), cadr(sc->code),
@@ -91718,9 +91711,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case goto_top_no_pop:    goto TOP_NO_POP;
 	case goto_eval_args_top: goto EVAL_ARGS_TOP;
 	case goto_eval:          goto EVAL;
-	default: break;
+	case goto_start:         continue; /* sc->value has been set, this is OP_SYM|CON on the next pass */
+	default:                 break;    /* this never happens */
 	}}
-  return(sc->F);
+  return(sc->F);                           /* this also never happens (make the compiler happy) */
 }
 
 
@@ -94397,7 +94391,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->exit_symbol =                  defun("exit",		exit,			0, 1, false);
 
 #if WITH_GCC
-  s7_define_function(sc, "abort", g_abort, 0, 0, true, "drop into gdb I hope");
+  s7_define_function(sc, "abort", g_abort, 0, 0, false, "drop into gdb I hope");
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
@@ -95448,15 +95442,15 @@ int main(int argc, char **argv)
  * tvect      1953         2519   2464   1772   1767
  * s7test     4537         1873   1831   1818   1801
  * lt         2117         2123   2110   2113   2113
- * timp       2232         2971   2891   2176   2201
- * tread      2614         2440   2421   2419   2413
+ * timp       2232         2971   2891   2176   2206
+ * tread      2614         2440   2421   2419   2415
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
  * dup        2756         3805   3788   2492   2454
  * tmat       2694         3065   3042   2524   2522
  * tcopy      2600         8035   5546   2539   2534
  * tauto      2763         ----   ----   2562   2549
- * tb         3366?        2735   2681   2612   2611
+ * tb         3366?        2735   2681   2612   2610
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
  * tmac       3074         3950   3873   3033   2996
@@ -95466,16 +95460,16 @@ int main(int argc, char **argv)
  * tio        3698         3816   3752   3683   3680
  * tobj       4533         4016   3970   3828   3821
  * tlamb      4454         4912   4786   4298   4258
- * tclo       4604         4787   4735   4390   4398
+ * tclo       4604         4787   4735   4390   4395
  * tcase      4501         4960   4793   4439   4430
  * tlet       5305         7775   5640   4450   4436
  * tmap       5488         8869   8774   4489   4509
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5186
  * tform      8338         5357   5348   5307   5308
- * tnum       56.7         6348   6013   5433   5434
+ * tnum       56.7         6348   6013   5433   5432
  * tstr       6123         6880   6342   5488   5488
- * tmisc      6847         8869   7612   6435   6353
+ * tmisc      6847         8869   7612   6435   6318
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6557
@@ -95487,8 +95481,10 @@ int main(int argc, char **argv)
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   55.9
+ * sg         75.8         ----   ----   55.9   55.8
  * lg        104.2        106.6  105.0  103.6  103.6
  * tbig      604.3        177.4  175.8  156.5  156.4
  * -----------------------------------------------------
+ *
+ * set_unknown* like unknown*?
  */
