@@ -588,7 +588,7 @@ typedef struct {
   const char *name;
   int32_t name_length;
   uint32_t id;
-  char *doc;
+  const char *doc;
   block_t *block;
   opt_funcs_t *opt_data; /* vunion-functions (see below) */
   s7_pointer generic_ff, setter, signature, pars;
@@ -7248,7 +7248,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
   if (show_heap_stats(sc))
     {
-      char *str;
+      const char *str;
       str = string_value(object_to_truncated_string(sc, current_code(sc), 80));
       if (size != 0)
 	s7_warn(sc, 512, "heap grows to %" ld64 " (old free/size: %" ld64 "/%" ld64 ", requested %" ld64 ") from %s\n",
@@ -26359,14 +26359,15 @@ static s7_pointer g_string_downcase(s7_scheme *sc, s7_pointer args)
 
   s7_pointer p = car(args), newstr;
   s7_int i, len;
-  uint8_t *nstr, *ostr;
+  uint8_t *nstr;
+  const uint8_t *ostr;
 
   if (!is_string(p))
     return(method_or_bust_p(sc, p, sc->string_downcase_symbol, T_STRING));
   len = string_length(p);
   newstr = make_empty_string(sc, len, 0);
 
-  ostr = (uint8_t *)string_value(p);
+  ostr = (const uint8_t *)string_value(p);
   nstr = (uint8_t *)string_value(newstr);
   if (len >= 128)
     {
@@ -26387,14 +26388,15 @@ static s7_pointer g_string_upcase(s7_scheme *sc, s7_pointer args)
 
   s7_pointer p = car(args), newstr;
   s7_int i, len;
-  uint8_t *nstr, *ostr;
+  uint8_t *nstr;
+  const uint8_t *ostr;
 
   if (!is_string(p))
     return(method_or_bust_p(sc, p, sc->string_upcase_symbol, T_STRING));
   len = string_length(p);
   newstr = make_empty_string(sc, len, 0);
 
-  ostr = (uint8_t *)string_value(p);
+  ostr = (const uint8_t *)string_value(p);
   nstr = (uint8_t *)string_value(newstr);
   if (len >= 128)
     {
@@ -27084,7 +27086,7 @@ static int32_t scheme_strcasecmp(s7_pointer s1, s7_pointer s2)
   /* same as scheme_strcmp -- watch out for unwanted sign! and lack of trailing null (length sets string end).
    */
   s7_int i, len, len1 = string_length(s1), len2 = string_length(s2);
-  uint8_t *str1 = (uint8_t *)string_value(s1), *str2 = (uint8_t *)string_value(s2);
+  const uint8_t *str1 = (const uint8_t *)string_value(s1), *str2 = (const uint8_t *)string_value(s2);
 
   len = (len1 > len2) ? len2 : len1;
   for (i = 0; i < len; i++)
@@ -27103,11 +27105,11 @@ static bool scheme_strequal_ci(s7_pointer s1, s7_pointer s2)
 {
   /* same as scheme_strcmp -- watch out for unwanted sign! */
   s7_int i, len = string_length(s1), len2 = string_length(s2);
-  uint8_t *str1, *str2;
+  const uint8_t *str1, *str2;
 
   if (len != len2) return(false);
-  str1 = (uint8_t *)string_value(s1);
-  str2 = (uint8_t *)string_value(s2);
+  str1 = (const uint8_t *)string_value(s1);
+  str2 = (const uint8_t *)string_value(s2);
   for (i = 0; i < len; i++)
     if (uppers[(int32_t)str1[i]] != uppers[(int32_t)str2[i]])
       return(false);
@@ -28100,22 +28102,22 @@ static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
 static s7_pointer string_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
 {
   s7_int i, port_start = port_position(port);
-  uint8_t *cur, *start, *port_str = port_data(port);
+  const char *cur, *start, *port_str = (const char *)port_data(port);
 
-  start = (uint8_t *)(port_str + port_start);
-  cur = (uint8_t *)strchr((const char *)start, (int)'\n'); /* this can run off the end making valgrind unhappy, but I think it's innocuous */
+  start = port_str + port_start;
+  cur = (const char *)strchr(start, (int)'\n'); /* this can run off the end making valgrind unhappy, but I think it's innocuous */
   if (cur)
     {
       port_line_number(port)++;
       i = cur - port_str;
       port_position(port) = i + 1;
-      return(inline_make_string_with_length(sc, (const char *)start, ((with_eol) ? i + 1 : i) - port_start));
+      return(inline_make_string_with_length(sc, start, ((with_eol) ? i + 1 : i) - port_start));
     }
   i = port_data_size(port);
   port_position(port) = i;
   if (i <= port_start)         /* the < part can happen -- if not caught we try to create a string of length - 1 -> segfault */
     return(eof_object);
-  return(make_string_with_length(sc, (const char *)start, i - port_start));
+  return(make_string_with_length(sc, start, i - port_start));
 }
 
 
@@ -31863,11 +31865,11 @@ static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_
 static void (*display_functions[256])(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci);
 #define object_to_port(Sc, Obj, Port, Use_Write, Ci) (*display_functions[unchecked_type(Obj)])(Sc, Obj, Port, Use_Write, Ci)
 
-static bool string_needs_slashification(const char *str, s7_int len)
+static bool string_needs_slashification(const uint8_t *str, s7_int len)
 {
   /* we have to go by len (str len) not *s==0 because s7 strings can have embedded nulls */
-  uint8_t *p, *pend = (uint8_t *)(str + len);
-  for (p = (uint8_t *)str; p < pend; p++)
+  const uint8_t *p, *pend = (const uint8_t *)(str + len);
+  for (p = str; p < pend; p++)
     if (slashify_table[*p])
       return(true);
   return(false);
@@ -32715,7 +32717,7 @@ static void string_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
       if (use_write == P_DISPLAY)
 	port_write_string(port)(sc, string_value(obj), string_length(obj), port);
       else
-	if (!string_needs_slashification(string_value(obj), string_length(obj)))
+	if (!string_needs_slashification((const uint8_t *)string_value(obj), string_length(obj)))
 	  {
 	    port_write_character(port)(sc, '"', port);
 	    port_write_string(port)(sc, string_value(obj), string_length(obj), port);
@@ -33817,15 +33819,15 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 
 	  if (is_string(seq))
 	    {
-	      char *iter_str = (char *)(string_value(seq) + iterator_position(obj));
 	      s7_int len;
 	      len = string_length(seq) - iterator_position(obj);
 	      if (len == 0)
 		port_write_string(port)(sc, "(make-iterator \"\")", 18, port);
 	      else
 		{
+		  const char *iter_str = (const char *)(string_value(seq) + iterator_position(obj));
 		  port_write_string(port)(sc, "(make-iterator \"", 16, port);
-		  if (!string_needs_slashification(iter_str, len))
+		  if (!string_needs_slashification((const uint8_t *)iter_str, len))
 		    port_write_string(port)(sc, iter_str, len, port);
 		  else slashify_string_to_port(sc, port, iter_str, len, NOT_IN_QUOTES);
 		  port_write_string(port)(sc, "\")", 2, port);
@@ -41076,11 +41078,12 @@ static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect
 
   if (is_byte_vector(old_vect))
     {
-      uint8_t *src, *dst;
+      const uint8_t *src;
+      uint8_t *dst;
       if (vector_rank(old_vect) > 1)
 	new_vect = g_make_vector_1(sc, set_plist_2(sc, g_vector_dimensions(sc, set_plist_1(sc, old_vect)), int_zero), sc->make_byte_vector_symbol);
       else new_vect = make_simple_byte_vector(sc, len);
-      src = (uint8_t *)byte_vector_bytes(old_vect);
+      src = (const uint8_t *)byte_vector_bytes(old_vect);
       dst = (uint8_t *)byte_vector_bytes(new_vect);
       for (i = len; i > 0; i--) *dst++ = *src++;
       return(new_vect);
@@ -41823,8 +41826,8 @@ static int32_t int_greater(const void *f1, const void *f2) {return(-int_less(f1,
 
 static int32_t byte_less(const void *f1, const void *f2)
 {
-  if ((*((uint8_t *)f1)) < (*((uint8_t *)f2))) return(-1);
-  return(((*((uint8_t *)f1)) > (*((uint8_t *)f2))) ? 1 : 0);
+  if ((*((const uint8_t *)f1)) < (*((const uint8_t *)f2))) return(-1);
+  return(((*((const uint8_t *)f1)) > (*((const uint8_t *)f2))) ? 1 : 0);
 }
 
 static int32_t byte_greater(const void *f1, const void *f2) {return(-byte_less(f1, f2));}
@@ -47077,7 +47080,7 @@ static bool iv_meq(s7_int *ex, s7_int *ey, s7_int len)
 static bool byte_vector_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y)
 {
   s7_int i, len = vector_length(x);
-  uint8_t *xp = byte_vector_bytes(x), *yp = byte_vector_bytes(y);
+  const uint8_t *xp = byte_vector_bytes(x), *yp = byte_vector_bytes(y);
   for (i = 0; i < len; i++)
     if (xp[i] != yp[i])
       return(false);
@@ -47087,8 +47090,8 @@ static bool byte_vector_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y)
 static bool biv_meq(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
   s7_int i, len = vector_length(x);
-  uint8_t *xp = byte_vector_bytes(x);
-  s7_int *yp = int_vector_ints(y);
+  const uint8_t *xp = byte_vector_bytes(x);
+  const s7_int *yp = int_vector_ints(y);
   if ((S7_DEBUGGING) && (len != vector_length(y))) {fprintf(stderr, "%s[%d]: base vects not equal\n", __func__, __LINE__); return(false);}
   for (i = 0; i < len; i++)
     if ((s7_int)(xp[i]) != yp[i])
@@ -48837,9 +48840,10 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 
     case T_BYTE_VECTOR:
       {
-	uint8_t *dest, *end, *source = byte_vector_bytes(p);
+	uint8_t *dest;
+	const uint8_t *source = byte_vector_bytes(p), *end;
 	s7_int len = byte_vector_length(p);
-	end = (uint8_t *)(source + len);
+	end = (const uint8_t *)(source + len);
 	np = make_simple_byte_vector(sc, len);
 	dest = (uint8_t *)(byte_vector_bytes(np) + len);
 	while (source < end) *(--dest) = *source++;
@@ -67046,7 +67050,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	    }
 	  if (is_byte_vector(seq))
 	    {
-	      uint8_t *vals = byte_vector_bytes(seq);
+	      const uint8_t *vals = (const uint8_t *)byte_vector_bytes(seq);
 	      s7_int i, len = vector_length(seq);
 	      if (func == opt_int_any_nr)
 		{
@@ -68194,8 +68198,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 
     case OP_LET1:                         /* (let ((var (values 1 2 3))) ...) */
       {
-	s7_pointer p, let_code, vars, sym;
-	p = stack_args(sc->stack, top);
+	s7_pointer let_code, vars, sym, p = stack_args(sc->stack, top);
 	for (let_code = p; is_pair(cdr(let_code)); let_code = cdr(let_code));
 	for (vars = caar(let_code); is_pair(cdr(p)); p = cdr(p), vars = cdr(vars));
 	sym = caar(vars);
@@ -88299,11 +88302,9 @@ static bool op_safe_c_pa(s7_scheme *sc)
   s7_pointer args = cdr(sc->code);
   if ((has_gx(args)) && (symbol_ctr(caar(args)) == 1))
     {
-      s7_pointer val;
-      val = fx_proc_unchecked(args)(sc, car(args));
-      gc_protect_via_stack(sc, val);
+      gc_protect_via_stack(sc, fx_proc_unchecked(args)(sc, car(args)));
       set_car(sc->t2_2, fx_call(sc, cdr(args)));
-      set_car(sc->t2_1, val);
+      set_car(sc->t2_1, stack_protected1(sc));
       unstack(sc);
       sc->value = fn_proc(sc->code)(sc, sc->t2_1);
       return(false);
@@ -88316,11 +88317,9 @@ static bool op_safe_c_pa(s7_scheme *sc)
 
 static void op_safe_c_pa_1(s7_scheme *sc)
 {
-  s7_pointer val = sc->value;
-  gc_protect_via_stack(sc, val); /* not a temp */
+  sc->args = sc->value; /* fx* might change sc->value?? */
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
-  set_car(sc->t2_1, val);
-  unstack(sc);
+  set_car(sc->t2_1, sc->args);
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
 
@@ -88573,10 +88572,9 @@ static bool pop_read_list(s7_scheme *sc)
   /* push-stack OP_READ_LIST is always no_code and op is always OP_READ_LIST (and not used), sc->curlet is apparently not needed here */
   unstack_with(sc, OP_READ_LIST);
   sc->args = sc->stack_end[2];
-  if (!is_null(sc->args))
-    return(false);
-  sc->args = cons(sc, sc->value, sc->args);
-  pair_set_current_input_location(sc, sc->args);
+  if (!is_null(sc->args)) return(false); /* fall into read_list where sc->args is placed at end of on-going list, sc->value */
+  sc->args = list_1(sc, sc->value);
+  pair_set_current_input_location(sc, sc->args); /* uses port_location */
   return(true);
 }
 
@@ -90092,13 +90090,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_SAFE_C_opSq: sc->value = fx_c_opsq(sc, sc->code); continue;
 
 	case OP_SAFE_C_op_opSqq: if (!c_function_is_ok_cadr_cadadr(sc, sc->code)) break;
-	case HOP_SAFE_C_op_opSqq: sc->value = fx_c_op_opsqq(sc, sc->code); continue;
+	case HOP_SAFE_C_op_opSqq: sc->value = fx_c_op_opsqq(sc, sc->code); continue;     /* lg cb (splits to not) */
 
 	case OP_SAFE_C_op_S_opSqq: if (!c_function_is_ok_cadr_caddadr(sc, sc->code)) break;
-	case HOP_SAFE_C_op_S_opSqq: sc->value = fx_c_op_s_opsqq(sc, sc->code); continue;
+	case HOP_SAFE_C_op_S_opSqq: sc->value = fx_c_op_s_opsqq(sc, sc->code); continue; /* tlet sg (splits to not) */
 
 	case OP_SAFE_C_op_opSq_Sq: if (!c_function_is_ok_cadr_cadadr(sc, sc->code)) break;
-	case HOP_SAFE_C_op_opSq_Sq: sc->value = fx_c_op_opsq_sq(sc, sc->code); continue;
+	case HOP_SAFE_C_op_opSq_Sq: sc->value = fx_c_op_opsq_sq(sc, sc->code); continue; /* lg cb (splits to not etc) */
 
 	case OP_SAFE_C_PS:    if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_PS:   op_safe_c_ps(sc); goto EVAL;
@@ -90957,7 +90955,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_begin:   goto BEGIN;
 	    case goto_feed_to: goto FEED_TO;
 	    case goto_do_end:  goto DO_END;
-	    default: break;
+	    default:
+	      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
+	    case fall_through:
+	      break;
 	    }
 
 	case OP_DO_STEP:  if (op_do_step(sc))  goto DO_END; goto EVAL;
@@ -91422,7 +91423,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_begin: goto BEGIN;
 	    case goto_eval:  goto EVAL;
 	    case goto_set_unchecked: goto SET_UNCHECKED;
-	    default: break;
+	    default:
+	      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
+	    case fall_through:
+	      break;
 	    }
 
 	case OP_LET_TEMP_DONE:
@@ -91721,7 +91725,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case goto_eval_args_top: goto EVAL_ARGS_TOP;
 	case goto_eval:          goto EVAL;
 	case goto_start:         continue; /* sc->value has been set, this is OP_SYM|CON on the next pass */
-	default:                 break;    /* this never happens */
+	default:
+	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
+	  break;
 	}}
   return(sc->F);                           /* this also never happens (make the compiler happy) */
 }
@@ -95497,4 +95503,5 @@ int main(int argc, char **argv)
  * -----------------------------------------------------
  *
  * set_unknown* like unknown*?
+ * use more "const"? -- nearly every parameter could include this, and timings are the same
  */
