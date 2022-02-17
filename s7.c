@@ -32949,8 +32949,7 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
     }
   else /* not :readable */
     {
-      s7_int plen;
-      plen = (len > sc->print_length) ? sc->print_length : len;
+      s7_int plen = (len > sc->print_length) ? sc->print_length : len;
       if (plen <= 0)
 	{
 	  port_write_string(port)(sc, "(...))", 6, port); /* open paren above about 150 lines, "list" here is wrong if it's a cons */
@@ -33682,7 +33681,7 @@ static void write_closure_readably_1(s7_scheme *sc, s7_pointer obj, s7_pointer a
 
 static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer port, shared_info_t *ci)
 {
-  s7_pointer body = closure_body(obj), arglist, pe, local_slots, setter = NULL;
+  s7_pointer body = closure_body(obj), arglist = closure_args(obj), pe, local_slots, setter = NULL;
   s7_int gc_loc;
 
   if (sc->safety > NO_SAFETY)
@@ -33698,7 +33697,6 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
        *   long-term we need to include closure_body(obj) in the top object_out make_shared_info
        */
     }
-  arglist = closure_args(obj);
   if (is_symbol(arglist)) arglist = set_dlist_1(sc, arglist);
   pe = closure_let(obj);
 
@@ -33819,8 +33817,7 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 
 	  if (is_string(seq))
 	    {
-	      s7_int len;
-	      len = string_length(seq) - iterator_position(obj);
+	      s7_int len = string_length(seq) - iterator_position(obj);
 	      if (len == 0)
 		port_write_string(port)(sc, "(make-iterator \"\")", 18, port);
 	      else
@@ -34495,10 +34492,8 @@ static s7_pointer new_format_port(s7_scheme *sc)
 
 static inline s7_pointer open_format_port(s7_scheme *sc)
 {
-  s7_pointer x;
-  if (!sc->format_ports)
-    return(new_format_port(sc));
-  x = sc->format_ports;
+  s7_pointer x = sc->format_ports;
+  if (!x) return(new_format_port(sc));
   sc->format_ports = (s7_pointer)(port_next(x));
   port_position(x) = 0;
   port_data(x)[0] = '\0';
@@ -87746,12 +87741,8 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
       sc->args = fx_call(sc, cddr(code));
       if (!needs_copied_args(f)) /* && (is_c_function(f))) -- set_was plist_2 which could collide with c_object_equal */
 	sc->args = set_plist_2(sc, fx_call(sc, cdr(code)), sc->args);
-      else
-	{
-	  sc->args = list_1(sc, sc->args);
-	  sc->value = fx_call(sc, cdr(code));
-	  sc->args = cons(sc, sc->value, sc->args);
-	}}
+      else sc->args = list_2(sc, sc->value = fx_call(sc, cdr(code)), sc->args);
+    }
   sc->code = f;
 }
 
@@ -95464,7 +95455,7 @@ int main(int argc, char **argv)
  * fbench     2833         2688   2583   2460   2460
  * dup        2756         3805   3788   2492   2462
  * tmat       2694         3065   3042   2524   2522  2535
- * tcopy      2600         8035   5546   2539   2534
+ * tcopy      2600         8035   5546   2539   2534  2532
  * tauto      2763         ----   ----   2562   2549
  * tb         3366?        2735   2681   2612   2610
  * titer      2659         2865   2842   2641   2641
@@ -95474,7 +95465,7 @@ int main(int argc, char **argv)
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3541
  * tio        3698         3816   3752   3683   3680
- * tobj       4533         4016   3970   3828   3821
+ * tobj       4533         4016   3970   3828   3821  3749
  * tlamb      4454         4912   4786   4298   4258
  * tclo       4604         4787   4735   4390   4395
  * tcase      4501         4960   4793   4439   4430
