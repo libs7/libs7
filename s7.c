@@ -48464,8 +48464,15 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 		  dst[j] = character(car(p));
 		}}
 	  else
-	    for (i = start, j = 0; i < end; i++, j++, p = cdr(p))
-	      set(sc, dest, j, car(p));
+	    if ((is_normal_vector(dest)) && (set != typed_vector_setter))
+	      {
+		s7_pointer *els = vector_elements(dest);
+		for (i = start, j = 0; i < end; i++, j++, p = cdr(p))
+		  els[j] = car(p);
+	      }
+	    else
+	      for (i = start, j = 0; i < end; i++, j++, p = cdr(p))
+		set(sc, dest, j, car(p));
 	return(dest);
       }
 
@@ -80648,9 +80655,7 @@ static s7_pointer check_do(s7_scheme *sc)
 	      (car(v) == cadr(end)))
 	    {
 	      /* end var is (op var const|symbol) using same var as step so at least we can use SIMPLE_DO */
-	      bool has_set = false, one_line;
-	      one_line = ((is_null(cdr(body))) && (is_pair(car(body))));
-
+	      bool has_set = false, one_line = ((is_null(cdr(body))) && (is_pair(car(body))));
 	      if ((car(end) == sc->num_eq_symbol) && (is_symbol(cadr(end))) && (is_t_integer(caddr(end))))
 		{
 		  set_c_function(end, sc->num_eq_2);
@@ -81204,7 +81209,6 @@ static goto_t op_dox(s7_scheme *sc)
 		  if (bodyf == opt_cell_any_nr)
 		    {
 		      s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
-
 		      /* a laborious experiment... */
 		      if (!((fp == opt_p_pip_sso) && (o->v[2].p == o->v[4].p) &&
 			    (((o->v[5].p_pip_f == string_set_p_pip_unchecked) && (o->v[6].p_pi_f == string_ref_p_pi_unchecked)) ||
@@ -81257,9 +81261,8 @@ static goto_t op_dox(s7_scheme *sc)
 	  if ((steppers == 2) &&
 	      (!tis_slot(next_slot(next_slot(slots)))))
 	    {
-	      s7_pointer s1 = slots, s2, p1, p2;
+	      s7_pointer s1 = slots, s2 = next_slot(slots), p1, p2;
 	      s7_function f1, f2;
-	      s2 = next_slot(s1);
 	      f1 = fx_proc(slot_expression(s1));
 	      f2 = fx_proc(slot_expression(s2));
 	      p1 = car(slot_expression(s1));
@@ -81554,9 +81557,10 @@ static void op_dox_no_body(s7_scheme *sc)
       s7_pointer step = caddr(var);
       if (testf == fx_or_and_2a)
 	{
-	  s7_pointer f1_arg = cadr(test), p = opt3_pair(test) /* cdadr(p) */, f2_arg = car(p), f3_arg = cadr(p);
-	  s7_function f1, f2, f3;
-	  f1 = fx_proc(cdr(test));
+	  s7_pointer f1_arg = cadr(test), f2_arg, f3_arg, p = opt3_pair(test); /* cdadr(p) */
+	  s7_function f2, f3, f1 = fx_proc(cdr(test));
+	  f2_arg = car(p);
+	  f3_arg = cadr(p);
 	  f2 = fx_proc(p);
 	  f3 = fx_proc(cdr(p));
 	  if (((stepf == fx_add_t1) || (stepf == fx_add_u1)) && (is_t_integer(slot_value(slot))))
@@ -82027,8 +82031,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
   if (func == opt_cell_any_nr)
     {
       opt_info *o = sc->opts[0];
-      s7_pointer (*fp)(opt_info *o);
-      fp = o->v[0].fp;
+      s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
       if ((stepf == g_add_x1) && (is_t_integer(slot_value(ctr_slot))) &&
 	  (endf == g_greater_2) && (is_t_integer(slot_value(end_slot))))
 	{
@@ -82081,7 +82084,7 @@ static bool op_simple_do(s7_scheme *sc)
   if (is_true(sc, sc->value))
     {
       sc->code = cdadr(code);
-      return(true); /* goto DO_END_CLAUSES */
+      return(true);                       /* goto DO_END_CLAUSES */
     }
   body = cddr(code);
   if ((is_null(cdr(body))) &&             /* one expr in body */
@@ -82105,7 +82108,7 @@ static bool op_simple_do_step(s7_scheme *sc)
       set_car(sc->t2_1, slot_value(ctr));
       set_car(sc->t2_2, caddr(step));
     }
-  else
+  else /* is_symbol(caddr(step)) I think: (+ 1 x) vs (+ x 1) */
     {
       set_car(sc->t2_2, slot_value(ctr));
       set_car(sc->t2_1, cadr(step));
@@ -88953,9 +88956,7 @@ static bool op_unknown(s7_scheme *sc)
     case T_CLOSURE_STAR:
       if (!has_methods(f))
 	{
-	  int32_t hop = 0;
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
-
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  if (is_null(closure_args(f)))
 	    {
 	      s7_pointer body = closure_body(f);
@@ -89004,9 +89005,8 @@ static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
   if ((!has_methods(f)) &&
       (closure_star_arity_to_int(sc, f) != 0))
     {
-      int32_t hop = 0;
+      int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
       bool safe_case = is_safe_closure(f);
-      if (is_immutable_and_stable(sc, car(code))) hop = 1;
       fx_annotate_arg(sc, cdr(code), sc->curlet);
       set_opt3_arglen(cdr(code), 1);
       if ((safe_case) && (is_null(cdr(closure_args(f)))))
@@ -89076,10 +89076,8 @@ static bool op_unknown_g(s7_scheme *sc)
 	  (closure_arity_to_int(sc, f) == 1))
 	{
 	  s7_pointer body = closure_body(f);
-	  int32_t hop = 0;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  set_opt2_sym(code, cadr(code));
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
-
 	  /* code here might be (f x) where f is passed elsewhere as a function parameter,
 	   *   first time through we look it up, find a safe-closure and optimize as (say) safe_closure_s_a,
 	   *   next time it is something else, etc.  Rather than keep optimizing it locally, we need to
@@ -89218,10 +89216,9 @@ static bool op_unknown_a(s7_scheme *sc)
 	{
 	  s7_pointer body = closure_body(f);
 	  bool one_form, safe_case = is_safe_closure(f);
-	  int32_t hop = 0;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 
 	  one_form = is_null(cdr(body));
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
 	  fxify_closure_a(sc, f, one_form, safe_case, hop, code, sc->curlet);
 	  set_opt1_lambda(code, f);
 	  return(true);
@@ -89319,10 +89316,9 @@ static bool op_unknown_gg(s7_scheme *sc)
 	{
 	  s7_pointer body = closure_body(f);
 	  bool one_form, safe_case = is_safe_closure(f);
-	  int32_t hop = 0;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 
 	  one_form = is_null(cdr(body));
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
 	  if ((s1) && (s2))
 	    {
 	      set_opt2_sym(code, caddr(code));
@@ -89440,8 +89436,7 @@ static bool op_unknown_ns(s7_scheme *sc)
       if ((!has_methods(f)) &&
 	  (closure_arity_to_int(sc, f) == num_args))
 	{
-	  int32_t hop = 0;
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if (num_args == 3)
 	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : OP_CLOSURE_3S)));
@@ -89456,8 +89451,7 @@ static bool op_unknown_ns(s7_scheme *sc)
       if ((!has_methods(f)) &&
 	  ((closure_star_arity_to_int(sc, f) < 0) || ((closure_star_arity_to_int(sc, f) * 2) >= num_args)))
 	{
-	  int32_t hop = 0;
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if ((is_safe_closure(f)) && (num_args == 3) && (closure_star_arity_to_int(sc, f) == 3))
 	    return(fixup_unknown_op(code, f, OP_SAFE_CLOSURE_STAR_3A));
@@ -89504,9 +89498,7 @@ static bool op_unknown_aa(s7_scheme *sc)
 	{
 	  s7_pointer body = closure_body(f);
 	  bool one_form, safe_case = is_safe_closure(f);
-	  int32_t hop = 0;
-
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  one_form = is_null(cdr(body));
 	  if (!one_form)
 	    set_safe_optimize_op(code, hop + ((safe_case) ? OP_SAFE_CLOSURE_AA : OP_CLOSURE_AA));
@@ -89614,8 +89606,7 @@ static bool op_unknown_na(s7_scheme *sc)
       if ((!has_methods(f)) &&
 	  (closure_arity_to_int(sc, f) == num_args))
 	{
-	  int32_t hop = 0;
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, cdr(code));
 	  if (is_safe_closure(f))
@@ -89654,8 +89645,7 @@ static bool op_unknown_na(s7_scheme *sc)
       if ((!has_methods(f)) &&
 	  ((closure_star_arity_to_int(sc, f) < 0) || ((closure_star_arity_to_int(sc, f) * 2) >= num_args)))
 	{
-	  int32_t hop = 0;
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  if (num_args > 0)
 	    {
 	      set_opt3_arglen(cdr(code), num_args);
@@ -89723,8 +89713,7 @@ static bool op_unknown_np(s7_scheme *sc)
       if ((!has_methods(f)) &&
 	  (closure_arity_to_int(sc, f) == num_args))
 	{
-	  int32_t hop = 0;
-	  if (is_immutable_and_stable(sc, car(code))) hop = 1;
+	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  switch (num_args)
 	    {
 	    case 1:
@@ -91729,8 +91718,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 /* if this changes, remember to change lint.scm */
 typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS, SL_HEAP_SIZE, SL_FREE_HEAP_SIZE,
-	      SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_FILENAMES, SL_ROOTLET_SIZE, SL_C_TYPES, SL_SAFETY,
-	      SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_UNDEFINED_CONSTANT_WARNINGS, SL_GC_STATS, SL_MAX_HEAP_SIZE,
+              SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_FILENAMES, SL_ROOTLET_SIZE, SL_C_TYPES, 
+              SL_SAFETY, SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_UNDEFINED_CONSTANT_WARNINGS, SL_GC_STATS, SL_MAX_HEAP_SIZE,
 	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_CPU_TIME, SL_CATCHES, SL_STACK, SL_MAJOR_VERSION, SL_MINOR_VERSION,
 	      SL_MAX_STRING_LENGTH, SL_MAX_FORMAT_LENGTH, SL_MAX_LIST_LENGTH, SL_MAX_VECTOR_LENGTH, SL_MAX_VECTOR_DIMENSIONS,
 	      SL_DEFAULT_HASH_TABLE_LENGTH, SL_INITIAL_STRING_PORT_LENGTH, SL_DEFAULT_RATIONALIZE_ERROR,
@@ -91743,8 +91732,8 @@ typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS
 
 static const char *s7_let_field_names[SL_NUM_FIELDS] =
   {"no-field", "stack-top", "stack-size", "stacktrace-defaults", "heap-size", "free-heap-size",
-   "gc-freed", "gc-protected-objects", "gc-total-freed", "gc-info", "file-names", "filenames", "rootlet-size", "c-types", "safety",
-   "undefined-identifier-warnings", "undefined-constant-warnings", "gc-stats", "max-heap-size",
+   "gc-freed", "gc-protected-objects", "gc-total-freed", "gc-info", "file-names", "filenames", "rootlet-size", "c-types", 
+   "safety", "undefined-identifier-warnings", "undefined-constant-warnings", "gc-stats", "max-heap-size",
    "max-port-data-size", "max-stack-size", "cpu-time", "catches", "stack", "major-version", "minor-version",
    "max-string-length", "max-format-length", "max-list-length", "max-vector-length", "max-vector-dimensions",
    "default-hash-table-length", "initial-string-port-length", "default-rationalize-error",
@@ -95454,8 +95443,8 @@ int main(int argc, char **argv)
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
  * dup        2756         3805   3788   2492   2462
- * tmat       2694         3065   3042   2524   2522  2535
- * tcopy      2600         8035   5546   2539   2534  2532
+ * tcopy      2600         8035   5546   2539   2507
+ * tmat       2694         3065   3042   2524   2531
  * tauto      2763         ----   ----   2562   2549
  * tb         3366?        2735   2681   2612   2610
  * titer      2659         2865   2842   2641   2641
@@ -95465,7 +95454,7 @@ int main(int argc, char **argv)
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3541
  * tio        3698         3816   3752   3683   3680
- * tobj       4533         4016   3970   3828   3821  3749
+ * tobj       4533         4016   3970   3828   3705
  * tlamb      4454         4912   4786   4298   4258
  * tclo       4604         4787   4735   4390   4395
  * tcase      4501         4960   4793   4439   4430
@@ -95474,25 +95463,26 @@ int main(int argc, char **argv)
  * tfft      115.1         7820   7729   4755   4756
  * tshoot     6896         5525   5447   5183   5186
  * tform      8338         5357   5348   5307   5308
- * tnum       56.7         6348   6013   5433   5429
+ * tnum       56.7         6348   6013   5433   5435
  * tstr       6123         6880   6342   5488   5488
- * tmisc      6847         8869   7612   6435   6312
+ * tmisc      6847         8869   7612   6435   6316
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6557
  * tari       ----         13.0   12.7   6827   6824
  * tleft      9004         10.4   10.2   7657   7650
- * tgc        9614         11.9   11.1   8177   8170
+ * tgc        9614         11.9   11.1   8177   8167
  * cb         16.8         11.2   11.0   9658   9660
  * thash      35.4         11.8   11.7   9734   9737
- * tgen       12.6         11.2   11.4   12.0   12.0
+ * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   55.8
  * lg        104.2        106.6  105.0  103.6  103.6
- * tbig      604.3        177.4  175.8  156.5  156.4 154.0
+ * tbig      604.3        177.4  175.8  156.5  153.7
  * -----------------------------------------------------
  *
  * set_unknown* like unknown*?
  * use more "const"? -- nearly every parameter could include this, and timings are the same
+ * in copy, src/dest lens have been checked, so getter/setter could be unchecked versions
  */
