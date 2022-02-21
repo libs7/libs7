@@ -243,22 +243,21 @@
 
 ;;; ----------------
 (define-macro (fully-macroexpand form)
-  (define (expand form)
-    (cond ((not (pair? form)) 
-	   form)
-          ((and (symbol? (car form))
-                (macro? (symbol->value (car form))))
-           (expand (apply macroexpand (list form))))
-          ((and (eq? (car form) 'set!)
-                (pair? (cdr form))
-                (pair? (cadr form))
-                (macro? (symbol->value (caadr form))))
-           (expand (apply macroexpand (list (cons (setter (symbol->value (caadr form))) 
-						  (append (cdadr form) (copy (cddr form))))))))
-          (else 
-	   (cons (expand (car form)) 
-		 (expand (cdr form))))))
-  (list 'quote (expand form)))
+  (list 'quote
+        (let expand ((form form))
+          (cond ((not (pair? form)) form)
+                ((and (symbol? (car form))
+                      (macro? (symbol->value (car form))))
+                 (expand (apply macroexpand (list form))))
+                ((and (eq? (car form) 'set!)
+                      (pair? (cdr form))
+                      (pair? (cadr form))
+                      (macro? (symbol->value (caadr form))))
+                 (expand
+                  (apply macroexpand
+                         (list (cons (setter (symbol->value (caadr form)))
+                               (append (cdadr form) (copy (cddr form))))))))
+                (else (cons (expand (car form)) (expand (cdr form))))))))
 
 (define-macro (define-with-macros name&args . body)
   `(apply define ',name&args (list (fully-macroexpand `(begin ,,@body)))))

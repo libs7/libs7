@@ -58481,12 +58481,11 @@ static s7_int opt_i_iii_fff(opt_info *o)
 
 static bool i_iii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
-  int32_t start;
+  int32_t start = sc->pc;
   s7_i_iii_t ifunc;
   ifunc = s7_i_iii_function(s_func);
   if (!ifunc)
     return_false(sc, car_x);
-  start = sc->pc;
   opc->v[10].o1 = sc->opts[start];
   if (int_optimize(sc, cdr(car_x)))
     {
@@ -67350,7 +67349,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	      s7_int i, vlen;
 	      s7_pointer v = cadr(args);
 	      vlen = vector_length(v);
-	      for (i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i));
+	      for (i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
 	      return(sc->unspecified);
 	    }
 	  if (is_string(cadr(args)))
@@ -78664,13 +78663,12 @@ static void check_set(s7_scheme *sc)
 				    if ((is_proper_list_1(sc, body)) &&
 					((has_fx(body)) || (is_fxable(sc, car(body)))))
 				      {
-					s7_pointer setter_args;
+					s7_pointer setter_args = closure_args(setter);
 					if (!has_fx(body))
 					  {
 					    fx_annotate_arg(sc, body, sc->curlet);
 					    set_closure_one_form_fx_arg(setter);
 					  }
-					setter_args = closure_args(setter);
 					if ((is_pair(setter_args)) && (is_pair(cdr(setter_args))) && (is_null(cddr(setter_args))))
 					  fx_tree(sc, body, car(setter_args), cadr(setter_args), NULL, false);
 
@@ -79119,7 +79117,7 @@ static s7_pointer op_set1(s7_scheme *sc)
 
 static bool op_set_with_let_1(s7_scheme *sc)
 {
-  s7_pointer e, b, x;
+  s7_pointer e, b, x = sc->value;
   /* from the T_SYNTAX branch of op_set_pair: (set! (with-let e b) x) as in let-temporarily
    *   here sc->value is the new value for the settee = x, args has the (as yet unevaluated) let and settee-expression.
    *   'b above can be a pair = generalized set in the 'e environment.
@@ -79131,7 +79129,6 @@ static bool op_set_with_let_1(s7_scheme *sc)
 	     set_elist_3(sc, wrap_string(sc, "with-let in (set! (with-let ~S) ~$) has no symbol to set?", 57), car(sc->args), sc->value));
   e = car(sc->args);
   b = cadr(sc->args);
-  x = sc->value;
   if (is_symbol(e))
     {
       if (is_symbol(b))
@@ -82031,7 +82028,8 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
   if (func == opt_cell_any_nr)
     {
       opt_info *o = sc->opts[0];
-      s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
+      s7_pointer (*fp)(opt_info *o);
+      fp = o->v[0].fp;
       if ((stepf == g_add_x1) && (is_t_integer(slot_value(ctr_slot))) &&
 	  (endf == g_greater_2) && (is_t_integer(slot_value(end_slot))))
 	{
@@ -82281,9 +82279,13 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 			  (stepper == slot_value(o->v[2].p)))
 			s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), make_real(sc, o->v[3].x), stepper, make_integer(sc, end)));
 		      else
-			for (; integer(stepper) < end; integer(stepper)++)
-			  fd(o);
-		}
+			{
+			  s7_int end4 = end - 4;
+			  while (integer(stepper) < end4)
+			    LOOP_4(fd(o); integer(stepper)++);
+			  for (; integer(stepper) < end; integer(stepper)++)
+			    fd(o);
+			}}
 	      else
 		{
 		  s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
@@ -82945,7 +82947,6 @@ static bool op_do_init_1(s7_scheme *sc)
 	}
       sc->code = cdr(sc->code);
     }
-
   /* all the initial values are now in the args list */
   sc->args = proper_list_reverse_in_place(sc, sc->args);
   sc->code = car(sc->args);                       /* saved at the start */
@@ -83219,20 +83220,17 @@ static void apply_iterator(s7_scheme *sc)                  /* -------- iterator 
 
 static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal function (lambda), or macro -------- */
 {             /* load up the current args into the ((args) (lambda)) layout [via the current environment] */
-  s7_pointer x, z, e = sc->curlet, sym, slot, last_slot = slot_end(sc);
+  s7_pointer x, z, e = sc->curlet, slot, last_slot = slot_end(sc);
   uint64_t id = let_id(sc->curlet);
 
   for (x = closure_args(sc->code), z = T_Lst(sc->args); is_pair(x); x = cdr(x), z = cdr(z)) /* closure_args can be a symbol, for example */
     {
+      s7_pointer sym = car(x);
       if (is_null(z))
 	s7_error(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_4(sc, wrap_string(sc, "~S: not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 52),
 			     closure_name(sc, sc->code), closure_args(sc->code), sc->args));
-      sym = car(x);
       slot = make_slot(sc, sym, T_Pos(unchecked_car(z)));
-#if S7_DEBUGGING
-      slot->debugger_bits = 0;
-#endif
       symbol_set_local_slot(sym, id, slot);
       if (tis_slot(last_slot))
 	slot_set_next(last_slot, slot);
@@ -83249,9 +83247,8 @@ static Inline void apply_lambda(s7_scheme *sc)             /* -------- normal fu
     }
   else
     {
-      sym = x;
-      slot = make_slot(sc, sym, z);
-      symbol_set_local_slot(sym, id, slot);
+      slot = make_slot(sc, x, z);
+      symbol_set_local_slot(x, id, slot);
       if (tis_slot(last_slot))
 	slot_set_next(last_slot, slot);
       else let_set_slots(e, slot);
@@ -83268,6 +83265,7 @@ static void op_f(s7_scheme *sc)     /* sc->code: ((lambda () 32)) -> (let () 32)
 
 static void op_f_a(s7_scheme *sc)   /* sc->code: ((lambda (x) (+ x 1)) i) -> (let ((x i)) (+ x 1)) */
 {
+  /* if caddar(sc->code) is fxable [(+ x 1) above], this could call fx and return to the top */
   sc->curlet = make_let_with_slot(sc, sc->curlet, opt3_sym(cdr(sc->code)), fx_call(sc, cdr(sc->code)));
   sc->code = opt3_pair(sc->code);
 }
@@ -83297,15 +83295,14 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
     }
   /* check_stack_size(sc); */
   if ((sc->stack_end + 4) >= sc->stack_resize_trigger) resize_stack(sc);
-  push_stack(sc, OP_GC_PROTECT, let_slots(e), cddr(sc->code));
+  push_stack(sc, OP_GC_PROTECT, let_slots(e), cddr(sc->code)); /* not for gc-protection, but as implicit loop vars */
   push_stack(sc, OP_F_NP_1, e, sc->code);
   sc->code = cadr(sc->code);
 }
 
 static bool op_f_np_1(s7_scheme *sc)
 {
-  /* sc->value = arg value = slot value */
-  s7_pointer arg, e, slot = stack_protected1(sc);
+  s7_pointer e, slot = stack_protected1(sc), arg = stack_protected2(sc);
   if (is_multiple_value(sc->value))
     {
       s7_pointer p, oslot = slot;
@@ -83317,7 +83314,6 @@ static bool op_f_np_1(s7_scheme *sc)
       slot = oslot; /* end up with good slot for checks and steps below */
     }
   else slot_set_value(slot, sc->value);
-  arg = stack_protected2(sc);
   if (is_pair(arg))
     {
       if (!tis_slot(next_slot(slot)))
@@ -95482,7 +95478,5 @@ int main(int argc, char **argv)
  * tbig      604.3        177.4  175.8  156.5  153.7
  * -----------------------------------------------------
  *
- * set_unknown* like unknown*?
- * use more "const"? -- nearly every parameter could include this, and timings are the same
- * in copy, src/dest lens have been checked, so getter/setter could be unchecked versions
+ * tests for stuff fully-macroexpand
  */
