@@ -6880,7 +6880,6 @@
 			   (selector-eqf (car (eqf selector env)))
 			   (one-item (and (memq head '(memq memv member)) (list-one? items))))
 		       ;; one-item assoc doesn't simplify cleanly
-
 		       (if one-item
 			   (let* ((target (one-item items))
 				  (iter-eqf (eqf target env)))
@@ -6900,7 +6899,9 @@
 									  (fnc (car lst) (cdr lst)))
 								     (duplicate-constants? (cdr lst) fnc))))))
 			     (if (and (symbol? selector-eqf)   ; (memq 1.0 x): perhaps memq -> memv
-				      (not (eq? selector-eqf current-eqf)))
+				      (not (eq? selector-eqf current-eqf))
+				      (or (not (eq? 'eq? current-eqf))
+					  (not (memq 'char=? (eqf selector env))))) ; eq? used with chars is ok in s7: (assq (string-ref name 0) bad-var-names)
 				 (lint-format "~A: perhaps ~A -> ~A" caller (truncated-list->string form) head
 					      (if (memq head '(memq memv member))
 						  (case selector-eqf ((eq?) 'memq) ((eqv?) 'memv) ((equal?) 'member) (else 'error))
@@ -15944,6 +15945,15 @@
 						  ;;          (if (not x) (set! y z) (set! y x)) -> (set! y (or x z))
 						  (tree-subst-eq (simplify-boolean (cons 'or (reverse (cadr diff))) () () env)
 								 subst-loc true))
+						 
+						 ((and (eq? true-op 'begin)
+						       (eq? (caar diff) (caadr diff)) ; so I think we're changing set! target, not value
+						       (pair? true) (pair? (cdr true)) (pair? (cadr true))
+						       (eq? (caadr true) 'set!))
+						  ;; tricky: (if x (begin (set! y x) (set! j x) k) (begin (set! m x) (set! j x) k)) -> 
+						  ;;            (begin (set! (if x y m) x) (set! j x) k)
+						  ;;  without this check
+						  #f)
 
 						 ((or (memq true-op '(set! begin and or))
 						      (let list-memq ((a subst-loc) (lst true))
@@ -15959,6 +15969,7 @@
 						      (not (and (pair? test)
 								(or (side-effect? test env)
 								    (memq (car test) '(list-values apply-values append unquote))))))
+
 						  (tree-subst-eq (cons 'if (cons test (cadr diff))) subst-loc true))
 
 						 (else #f))))
@@ -16662,47 +16673,48 @@
 			  ;; (if x (display y) (begin (set! z y) (display y))) -> (begin (if (not x) (set! z y)) (display y))
 			  (let ((not-expr (and (pair? expr)
 					       (eq? (car expr) 'not))))
-			    ;; (format *stderr* "~%new-true: ~S, new-false: ~S~%" new-true new-false)
+			    ;; these are of the form (if expr1 (begin expr2... val) val) or its many variants
+			    ;;   see s7test.scm (lint-test "(if x (begin (display x) y) y)"...) and following
+			    ;;   that form goes to          (begin (if x (display x)) y)
 			    (lint-format "perhaps ~A" caller
-					 (lists->string form
-							(let ((body (if (null? new-true)
-									(cons (if (null? (cddr new-false)) ; (if|when|unless... )
-										  'if
-										  (if not-expr
-										      'when 'unless))
-									      (cons
-									       (if (null? (cddr new-false)) ; remove 'not if present else add unless unless
-										   (if not-expr
-										       (cadr expr)
-										       (list 'not expr))
-										   (if not-expr
-										       (cadr expr)
-										       expr))
-
-									       (if (and (pair? (cddr new-false))
-											(eq? (car new-false) 'begin))
-										   (cdr new-false)
-										   (cons new-false ()))))
-
-									(if (null? new-false)
-									    (cons (if (null? (cddr new-true)) ; (if|when|unless... )
-										      'if
-										      (if not-expr
-											  'unless 'when))
-										  (cons
-										   (if (null? (cddr new-true)) 
-										       expr
-										       (if not-expr
-											   (cadr expr)
-											   expr))
-										   (if (and (pair? (cddr new-true))
-											    (eq? (car new-true) 'begin))
-										       (cdr new-true)
-										       (cons new-true ()))))
-									    (list 'if expr new-true new-false)))))
-							  `(begin ,@start
-								  ,body
-								  ,@end)))))))))))))
+			      (lists->string form
+				(let ((body (if (null? new-true)
+						(cons (if (null? (cddr new-false)) ; (if|when|unless... )
+							  'if
+							  (if not-expr
+							      'when 'unless))
+						      (cons
+						       (if (null? (cddr new-false)) ; remove 'not if present else add unless unless
+							   (if not-expr
+							       (cadr expr)
+							       (list 'not expr))
+							   (if not-expr
+							       (cadr expr)
+							       expr))
+						       (if (and (pair? (cddr new-false))
+								(eq? (car new-false) 'begin))
+							   (cdr new-false)
+							   (cons new-false ()))))
+						
+						(if (null? new-false)
+						    (cons (if (null? (cddr new-true)) ; (if|when|unless... )
+							      'if
+							      (if not-expr
+								  'unless 'when))
+							  (cons
+							   (if (null? (cddr new-true)) 
+							       expr
+							       (if not-expr
+								   (cadr expr)
+								   expr))
+							   (if (and (pair? (cddr new-true))
+								    (eq? (car new-true) 'begin))
+							       (cdr new-true)
+							       (cons new-true ()))))
+						    (list 'if expr new-true new-false)))))
+				  `(begin ,@start
+					  ,body
+					  ,@end)))))))))))))
 
 	  ;; -------- if+let->when --------
 	  (define (if+let->when caller form expr true false)

@@ -14,7 +14,6 @@
 	(le2 0)
         (ip 0)
         (nv2 0)
-        (nm1 0)
         (ur 0.0)
         (ui 0.0)
         (wr 0.0)
@@ -23,8 +22,6 @@
         (ti 0.0))
     ;; initialize
     (set! nv2 (quotient n 2))
-    (set! nm1 (- n 1))
-    
     (do ()
 	((>= i n))
       (set! m (+ m 1))
@@ -150,8 +147,8 @@
          (w (cadr dims))
 	 (ih (/ (* 2.0 pi) h))
 	 (iw (/ (* 2.0 pi) w))
-         (rl (make-float-vector dims 0.0))
-         (im (make-float-vector dims 0.0))
+         (rl (make-float-vector dims))
+         (im (make-float-vector dims))
 	 (out (make-float-vector dims))
 	 (xw 0)
 	 (yh 0))
@@ -192,7 +189,7 @@
       (format *stderr* "dft2 out: ~S~%" (caddr vs)))))
 
 (define (test-dft2)
-  (let ((mat (make-float-vector '(16 16) 0.0)))
+  (let ((mat (make-float-vector '(16 16))))
     (set! (mat 0 8) 1.0)
     (dft2 mat)
     (fill! mat 0.0)
@@ -427,10 +424,10 @@
 
 
 (define (test-dft3ex)
-  (let ((mat (make-float-vector '(9 9 9) 0.0)))
+  (let ((mat (make-float-vector '(9 9 9))))
     (float-vector-set! mat 0 0 0 1.0)
     (dft3ex mat))
-  (let ((mat (make-float-vector '(9 9 9) 0.0)))
+  (let ((mat (make-float-vector '(9 9 9))))
     (float-vector-set! mat 0 0 0 1.0)
     (dft3ex-1 mat)))
 

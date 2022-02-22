@@ -27,7 +27,7 @@
 
 
 (define (fibc n)
-  (cond ((< n 1) n)
+  (cond ((< n 1) n) ; dumb buts hits oprec_cond_a_a_a_a_opla_laq
 	((< n 2) n)
 	(else (+ (fibc (- n 1))
 		 (fibc (- n 2))))))

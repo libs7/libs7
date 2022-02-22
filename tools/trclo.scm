@@ -36,11 +36,11 @@
 	     (loop (cdr x))))))
 
 (define (and-f)
-  (if (and-1 big-list) (format #t "and-1 returned #t\n"))
-  ;(if (and*-1 big-list) (format #t "and*-1 returned #t\n"))
-  (if (not (and-2 big-list)) (format #t "and-2 returned #f\n"))
-  (if (and-3 big-list) (format #t "and-3 returned #t\n"))
-  (if (not (and-4 big-list)) (format #t "and-4 returned #f\n")))
+  (if (and-1 big-list) (format () "and-1 returned #t\n"))
+  ;(if (and*-1 big-list) (format () "and*-1 returned #t\n"))
+  (if (not (and-2 big-list)) (format () "and-2 returned #f\n"))
+  (if (and-3 big-list) (format () "and-3 returned #t\n"))
+  (if (not (and-4 big-list)) (format () "and-4 returned #f\n")))
 
 
 ;;; --------
@@ -73,11 +73,11 @@
 	   (pand-4 (cdr x) (- count 1)))))
 
 (define (pand-f)
-  (if (pand-1 big-list) (format #t "pand-1 returned #t\n"))
-  (if (dpand-1 big-list) (format #t "dpand-1 returned #t\n"))
-  (if (not (pand-2 big-list)) (format #t "pand-2 returned #f\n"))
-  (if (pand-3 big-list 10000) (format #t "pand-3 returned #t\n"))
-  (if (not (pand-4 big-list 10000)) (format #t "pand-4 returned #f\n")))
+  (if (pand-1 big-list) (format () "pand-1 returned #t\n"))
+  (if (dpand-1 big-list) (format () "dpand-1 returned #t\n"))
+  (if (not (pand-2 big-list)) (format () "pand-2 returned #f\n"))
+  (if (pand-3 big-list 10000) (format () "pand-3 returned #t\n"))
+  (if (not (pand-4 big-list 10000)) (format () "pand-4 returned #f\n")))
 
 
 ;;; --------------------------------------------------------------------------------
@@ -147,40 +147,40 @@
 (define (sum-f)
   (let ((n (sum-1 10000)))
     (if (not (= n 50005000))
-	(format #t ";sum1: ~A~%" n)))
+	(format () ";sum1: ~A~%" n)))
 #|
   (let ((n (sum*-1 10000)))
     (if (not (= n 50005000))
-	(format #t ";sum*-1: ~A~%" n)))
+	(format () ";sum*-1: ~A~%" n)))
 |#
   (let ((result (sum-2 10000.0)))
     (if (not (equal? result 50005000.0))
-	(format #t ";sum-2: ~A~%" result)))
+	(format () ";sum-2: ~A~%" result)))
 #|
   (let ((result (esum-2 10000)))
     (if (or (not (float? result))
 	    (not (equal? result 50005000.0)))
-	(format #t ";esum-2: ~A~%" result)))
+	(format () ";esum-2: ~A~%" result)))
 |#
   (let ((n (sum-3 10000)))
     (if (not (= n 50005000))
-	(format #t ";sum-3: ~A~%" n)))
+	(format () ";sum-3: ~A~%" n)))
 
   (let ((result (sum-4 10000.0)))
     (if (not (equal? result 50005000.0))
-	(format #t ";sum-4: ~A~%" result)))
+	(format () ";sum-4: ~A~%" result)))
 
   (let ((result (sum-5 10000)))
     (if (not (= result 50005000))
-	(format #t ";sum-5: ~A~%" n)))
+	(format () ";sum-5: ~A~%" n)))
 
   (let ((result (sum-6 big-str)))
     (if result
-	(format #t ";sum-6: ~A~%" result)))
+	(format () ";sum-6: ~A~%" result)))
 
   (let ((result (llet-1 10000 10001)))
     (if (not (= result -1))
-	(format #t ";llet-1: ~A~%" result))))
+	(format () ";llet-1: ~A~%" result))))
 
 ;;; --------
 
@@ -263,56 +263,56 @@
 (define (psum-f)
   (let ((n (psum-1 10000 0)))
     (if (not (= n 50005000))
-	(format #t ";psum-1: ~A~%" n)))
+	(format () ";psum-1: ~A~%" n)))
 #|
   (let ((n (dpsum-1 10000 0)))
     (if (not (= n 50005000))
-	(format #t ";dpsum-1: ~A~%" n)))
+	(format () ";dpsum-1: ~A~%" n)))
 |#
   (let ((n (npsum-1 10000 0)))
     (if (not (= n 50005000))
-	(format #t ";npsum-1: ~A~%" n)))
+	(format () ";npsum-1: ~A~%" n)))
 
   (let ((result (psum-2 10000.0 0.0)))
     (if (not (equal? result 50005000.0))
-	(format #t ";psum-2: ~A~%" result)))
+	(format () ";psum-2: ~A~%" result)))
 
   (let ((result (dpsum-2 10000.0 0.0)))
     (if (not (equal? result 50005000.0))
-	(format #t ";dpsum-2: ~A~%" result)))
+	(format () ";dpsum-2: ~A~%" result)))
 
   (let ((n (psum-3 10000 0)))
     (if (not (= n 50005000))
-	(format #t ";psum-3: ~A~%" n)))
+	(format () ";psum-3: ~A~%" n)))
 
   (let ((result (psum-4 10000.0 0.0)))
     (if (not (equal? result 50005000.0))
-	(format #t ";psum-4: ~A~%" result)))
+	(format () ";psum-4: ~A~%" result)))
 
   (let ((result (psum-5 10000 0)))
     (if (not (= result 50005000))
-	(format #t ";psum-5: ~A~%" result)))
+	(format () ";psum-5: ~A~%" result)))
 
   (let ((result (psum-6 9999)))
     (if result
-	(format #t ";psum-6: ~A~%" result)))
+	(format () ";psum-6: ~A~%" result)))
 
   (let-temporarily (((big-list 9999) 2))
     (let ((result (psum-7 big-list)))
       (if (not (= result 2))
-	  (format #t ";psum-7: ~A~%" result)))
+	  (format () ";psum-7: ~A~%" result)))
 
     (let ((result (psum-8 big-list)))
       (if (not (= result 2))
-	  (format #t ";psum-8: ~A~%" result)))
+	  (format () ";psum-8: ~A~%" result)))
 
     (let ((result (psum-9 big-list)))
       (if (not (= result 2))
-	  (format #t ";psum-9: ~A~%" result))))
+	  (format () ";psum-9: ~A~%" result))))
 
   (let ((result (plet-1 10000 10001)))
     (if (not (= result -1))
-	(format #t ";plet-1: ~A~%" result))))
+	(format () ";plet-1: ~A~%" result))))
 
 ;;; --------
 

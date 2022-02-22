@@ -73,11 +73,11 @@
 	      (do ((i 0 (+ i 1)))
 		  ((or (>= i len)
 		       (not (char-whitespace? (string-ref this i))))
-		   (when (and (< i len) ; i.e. not char-whitespace above
-			      (char=? (string-ref this i) #\})
-			      (> (length last1) 0)
-			      (char=? (string-ref last1 last-i) #\}))
-		     (format #f "~D ~S~%" line last1))
+		   ;(when (and (< i len) ; i.e. not char-whitespace above
+		   ;      (char=? (string-ref this i) #\})
+		   ;      (> (length last1) 0)
+		   ;      (char=? (string-ref last1 last-i) #\}))
+	           ;  (format #f "~D ~S~%" line last1))
 		   (set! last-i i)
 		   (set! last1 this))))))))))
 

@@ -71,9 +71,9 @@
       (call-with-exit
        (lambda (return)
 	 (let ((n (car (vector-dimensions matrix))))
-	   (let ((cols (make-int-vector n 0))
-		 (rows (make-int-vector n 0))
-		 (pivots (make-int-vector n 0)))
+	   (let ((cols (make-int-vector n))
+		 (rows (make-int-vector n))
+		 (pivots (make-int-vector n)))
 	     (do ((i 0 (+ i 1))
 		  (col 0 0)
 		  (row 0 0))
