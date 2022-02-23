@@ -17157,13 +17157,14 @@
 	      (let ((first-clause (cadr form))
 		    (else-clause (list-ref form len)))
 		(when (and (len=1? (cdr first-clause))
-			   (pair? (cadr first-clause)))
+			   (pair? (cadr first-clause))
+			   (not (eq? (caadr first-clause) 'list))) ; (list (cond ...values...)) is worse then (cond ...list...)
 		  (let ((first-result (cadr first-clause))
 			(first-func (caadr first-clause)))
 		    (if (and (memq (car else-clause) '(#t else))
 			     (pair? (cdr else-clause))
 			     (pair? (cadr else-clause))
-			     (or (equal? (caadr first-clause) (caadr else-clause)) ; there's some hope we'll match
+			     (or (equal? first-func (caadr else-clause)) ; there's some hope we'll match
 				 (escape? (cadr else-clause) env)))
 			(let ((else-error (escape? (cadr else-clause) env)))
 			  (when (and (pair? (cdr first-result))
@@ -17744,27 +17745,27 @@
 								(cdr form)))
 						   ,result)))))))
 
-	  ;; -------- cond-partial-test-repeat --------
-	  (define (cond-partial-test-repeat caller form)
-	    (let ((arg1 (cadr form))
-		  (arg2 (caddr form)))
-	      (when (and (len=2? arg1)
-			 (len>1? (car arg1))
-			 (len=2? arg2)
-			 (eq? (caar arg1) 'and)
-			 (member (car arg2) (cdar arg1))
-			 (len=2? (cdar arg1)))
-		;; (cond ((and A B) c) (B d) (else e)) -> (cond (B (if A c d)) (else e))
-		(lint-format "perhaps ~A" caller
-			     (lists->string form
-					    (cons 'cond
-						  (cons (list (car arg2)
-							      (list 'if
-								    ((if (equal? (car arg2) (cadar arg1)) caddar cadar) arg1)
-								    (cadr arg1)
-								    (cadr arg2)))
-							(cdddr form))))))))
-
+ 	  ;; -------- cond-partial-test-repeat --------
+ 	  (define (cond-partial-test-repeat caller form)
+ 	    (let ((arg1 (cadr form))
+ 		  (arg2 (caddr form)))
+ 	      (when (and (len=2? arg1)
+ 			 (len>1? (car arg1))
+ 			 (len=2? arg2)
+ 			 (eq? (caar arg1) 'and)
+ 			 (member (car arg2) (cdar arg1))
+ 			 (len=2? (cdar arg1)))
+ 		;; (cond ((and A B) c) (B d) (else e)) -> (cond (B (if A c d)) (else e))
+ 		(lint-format "perhaps ~A" caller
+ 			     (lists->string form
+ 					    (cons 'cond
+ 						  (cons (list (car arg2)
+ 							      (list 'if
+ 								    ((if (equal? (car arg2) (cadar arg1)) caddar cadar) arg1)
+ 								    (cadr arg1)
+ 								    (cadr arg2)))
+ 							(cdddr form))))))))
+ 
 	  ;; -------- cond-combine-into-else --------
 	  (define (cond-combine-into-else caller form last-clause len)
 	    (if (and (len=1? last-clause)   ; (cond ... ((or ...)) (else ...)) -> (cond ... (else (or ... ...)))
@@ -18199,7 +18200,7 @@
 		    (when (> len 3)
 		      (cond-repeated-else caller form len env))
 
-		    (cond-partial-test-repeat caller form)
+ 		    (cond-partial-test-repeat caller form)
 		    (cond-combine-into-else caller form last-clause len))))
 
 	      (combine-conds caller form has-else len env))

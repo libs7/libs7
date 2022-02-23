@@ -149,7 +149,7 @@
       (let ((matrix (make-vector (list n n))))
 	(mb matrix -1.0 -0.5 0.005 n)
 	(if (not (= (matrix 0 0) 5))
-	    (format #t ";mbrot: ~A~%" n))))))
+	    (format () ";mbrot: ~A~%" n))))))
 
 (mbrot 140)
 
@@ -454,11 +454,11 @@
 
 (define (main n)
   (offset_momentum NBODIES bodies)
-  (format #t "~,9F~%" (energy NBODIES bodies))
+  (format () "~,9F~%" (energy NBODIES bodies))
   (do ((i 0 (+ i 1)))
       ((= i n))
     (advance NBODIES bodies 0.01))
-  (format #t "~,9F~%" (energy NBODIES bodies)))
+  (format () "~,9F~%" (energy NBODIES bodies)))
 
 (main 6000)
 

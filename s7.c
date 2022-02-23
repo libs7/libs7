@@ -50329,10 +50329,8 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 	  (!tree_is_cyclic(sc, err_code)))
 	{
 	  char *notes = NULL;
-	  s7_pointer current_let, f, errstr;
-
+	  s7_pointer current_let = let_outlet(sc->owlet), f, errstr;
 	  errstr = s7_object_to_string(sc, err_code, false);
-	  current_let = let_outlet(sc->owlet);
 	  f = stacktrace_find_caller(sc, current_let); /* this is a symbol */
 	  if ((is_let(current_let)) &&
 	      (current_let != sc->rootlet))
@@ -50340,8 +50338,7 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 	  strp = stacktrace_add_func(sc, f, err_code, string_value(errstr), notes, code_cols, as_comment);
 	  str = (char *)block_data(strp);
 	}
-      /* now if OP_ERROR_HOOK_QUIT is in the stack, jump past it! */
-      loc = stacktrace_find_error_hook_quit(sc);
+      loc = stacktrace_find_error_hook_quit(sc); /* if OP_ERROR_HOOK_QUIT is in the stack, jump past it! */
       if (loc > 0) top = (loc + 1) / 4;
     }
   for (loc = top - 1; loc > 0; loc--)
@@ -63939,6 +63936,7 @@ static bool is_some_number(s7_scheme *sc, s7_pointer tp)
 	 (tp == sc->is_real_symbol) ||
 	 (tp == sc->is_complex_symbol) ||
 	 (tp == sc->is_number_symbol) ||
+	 (tp == sc->is_byte_symbol) ||
 	 (tp == sc->is_rational_symbol));
 }
 
@@ -65872,13 +65870,11 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       stop_slot = (is_symbol(caddr(stop))) ? opt_integer_symbol(sc, caddr(stop)) : sc->nil;
       if (stop_slot)
 	{
-	  s7_int lim;
+	  s7_int lim = (is_slot(stop_slot)) ? integer(slot_value(stop_slot)) : integer(caddr(stop));
 	  bool set_stop = false;
 	  s7_pointer slot;
-
-	  lim = (is_slot(stop_slot)) ? integer(slot_value(stop_slot)) : integer(caddr(stop));
+	  
 	  if (car(stop) == sc->gt_symbol) lim++;
-
 	  for (p = cadr(car_x), slot = let_slots(let); is_pair(p); p = cdr(p), slot = next_slot(slot))
 	    {
 	      /* this could be put off until it is needed (ref/set), but this code is not called much
@@ -65974,7 +65970,6 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   do_curlet(opc) = let;
   do_body_length(opc) = len - 3;
   do_result_length(opc) = rtn_len;
-
   opc->v[9].o1 = sc->opts[step_pc];
   set_curlet(sc, old_e);
 
@@ -66095,11 +66090,10 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  opc->v[4].i = body_index;
 	  if (body_len == 1) /* opt_do_1 */
 	    {
-	      opt_info *o1;
+	      opt_info *o1 = sc->opts[body_index];
 	      opc->v[0].fp = opt_do_very_simple;
 	      if (is_t_integer(caddr(end)))
 		opc->v[3].i = integer(caddr(end));
-	      o1 = sc->opts[body_index];
 	      if (o1->v[0].fp == d_to_p_nr) /* snd-test: (do ((k 0 (+ k 1))) ((= k N)) (float-vector-set! rl k (read-sample rd))) */
 		{
 		  opc->v[0].fp = opt_do_prepackaged;
@@ -95468,7 +95462,7 @@ int main(int argc, char **argv)
  * tari       ----         13.0   12.7   6827   6824
  * tleft      9004         10.4   10.2   7657   7650
  * tgc        9614         11.9   11.1   8177   8167
- * cb         16.8         11.2   11.0   9658   9660  9596
+ * cb         16.8         11.2   11.0   9658   9660  9576
  * thash      35.4         11.8   11.7   9734   9737
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
@@ -95477,6 +95471,4 @@ int main(int argc, char **argv)
  * lg        104.2        106.6  105.0  103.6  103.6
  * tbig      604.3        177.4  175.8  156.5  153.7
  * -----------------------------------------------------
- *
- * tests for stuff fully-macroexpand
  */

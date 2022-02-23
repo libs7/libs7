@@ -160,7 +160,7 @@
 		   (local-regerror (*libc* 'regerror))
 		   (local-regexec (*libc* 'regexec))
 		   (local-regfree (*libc* 'regfree)))
-	       (lambda (reg e)
+	       (lambda (reg)
 		 (lambda (x)
 		   (and (string? x)
 			(let ((res (local-regcomp rg (substring reg 1 (- (length reg) 1)) 0)))
@@ -195,7 +195,7 @@
 				      ((char=? (func 0) #\")                      ; labelled regex, #<label:"regexp">
 				       (lambda (x)
 					 (set! (labels label) x)
-					 (handle-regex func e)))
+					 (handle-regex func)))
 				      
 				      (else                                       ; #<label:func>
 				       (let ((func-val (symbol->value (string->symbol func) e)))
@@ -209,7 +209,7 @@
 			     
 			     ;; if no colon either #<label> or #<func> or #<"regexp"> -- label means match its saved expr, func = call func
 			     ((char=? (str 0) #\")
-			      (handle-regex str e))
+			      (handle-regex str))
 			     
 			     (else                                                ; #<label> or #<func>
 			      (let ((saved (labels str)))

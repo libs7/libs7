@@ -104,7 +104,7 @@
       (do ((b teq-vars (cdr b)))
 	  ((null? b))
 	(if (equivalent? vj (car b))
-	    (if (not (eq? a b))
+	    (if (not (eq? a b)) ; (and ...) would look nicer, but this way is much faster
 		(format *stderr* "oops!: ~A ~A~%" a b))))))))
 
 (equivalent-tests 20000)
