@@ -17158,7 +17158,7 @@
 		    (else-clause (list-ref form len)))
 		(when (and (len=1? (cdr first-clause))
 			   (pair? (cadr first-clause))
-			   (not (eq? (caadr first-clause) 'list))) ; (list (cond ...values...)) is worse then (cond ...list...)
+			   (not (eq? (caadr first-clause) 'list))) ; (list (cond ...values...)) is worse than (cond ...list...)
 		  (let ((first-result (cadr first-clause))
 			(first-func (caadr first-clause)))
 		    (if (and (memq (car else-clause) '(#t else))

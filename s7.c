@@ -10495,6 +10495,20 @@ static s7_pointer make_closure_unchecked(s7_scheme *sc, s7_pointer args, s7_poin
   return(x);
 }
 
+static inline s7_pointer make_closure_gc_checked(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity)
+{
+  s7_pointer x;
+  new_cell(sc, x, (type | closure_bits(code)));
+  closure_set_args(x, args);
+  closure_set_let(x, sc->curlet);
+  closure_set_setter(x, sc->F);
+  closure_set_arity(x, arity);
+  closure_set_body(x, code);
+  if (is_pair(cdr(code))) set_closure_has_multiform(x); else set_closure_has_one_form(x);
+  sc->capture_let_counter++;
+  return(x);
+}
+
 static s7_pointer make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity)
 {
   /* this is called (almost?) every time a lambda form is evaluated, or during letrec, etc */
@@ -45212,7 +45226,7 @@ static s7_pointer make_baffled_closure(s7_scheme *sc, s7_pointer inp)
 {
   /* for dynamic-wind to protect initial and final functions from call/cc */
   s7_pointer nclo, let;
-  nclo = make_closure_unchecked(sc, sc->nil, closure_body(inp), type(inp), 0);
+  nclo = make_closure_unchecked(sc, sc->nil, closure_body(inp), type(inp), 0); /* always preceded by new dw cell */
   let = make_let_slowly(sc, closure_let(inp)); /* let_outlet(let) = closure_let(inp) */
   set_baffle_let(let);
   set_let_baffle_key(let, sc->baffle_ctr++);
@@ -74622,7 +74636,7 @@ static s7_pointer op_lambda(s7_scheme *sc, s7_pointer code)
 static inline s7_pointer op_lambda_unchecked(s7_scheme *sc, s7_pointer code)
 {
   int32_t arity = (int32_t)((intptr_t)opt3_any(cdr(code)));
-  return(make_closure_unchecked(sc, cadr(code), cddr(code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity));
+  return(make_closure_gc_checked(sc, cadr(code), cddr(code), T_CLOSURE | ((arity < 0) ? T_COPY_ARGS : 0), arity));
 }
 
 static void check_lambda_star(s7_scheme *sc)
@@ -83582,7 +83596,6 @@ static bool apply_safe_closure_star_1(s7_scheme *sc)                   /* ------
 {
   s7_pointer z;
   /* slots are in "reverse order" -- in the same order as the args, despite let printout (which reverses the order!) */
-
   set_curlet(sc, closure_let(sc->code));
   if (has_no_defaults(sc->code))
     {
@@ -83876,12 +83889,11 @@ static void op_closure_star_ka(s7_scheme *sc, s7_pointer code)
 
 static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer val, p, func;
+  s7_pointer val, p, func = opt1_lambda(code);
   val = fx_call(sc, cdr(code));
   if ((is_symbol_and_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
     s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), val, code));
-  func = opt1_lambda(code);
   p = car(closure_args(func));
   sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
   if (closure_star_arity_to_int(sc, func) > 1)
@@ -84687,10 +84699,12 @@ static inline void op_closure_fa(s7_scheme *sc)
   s7_pointer farg, new_clo, aarg, func, func_args, code = sc->code;
   farg = opt2_pair(code);           /* cdadr(code); */
   aarg = fx_call(sc, cddr(code));
-  new_clo = make_closure_unchecked(sc, car(farg), cdr(farg), T_CLOSURE | ((is_symbol(car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
   func = opt1_lambda(code);         /* outer func */
   func_args = closure_args(func);
-  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), new_clo, cadr(func_args), aarg);
+  sc->value = make_let_with_two_slots(sc, closure_let(func), car(func_args), sc->F, cadr(func_args), aarg);
+  new_clo = make_closure_unchecked(sc, car(farg), cdr(farg), T_CLOSURE | ((is_symbol(car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
+  slot_set_value(let_slots(sc->value), new_clo); /* this order allows us to use make_closure_unchecked */
+  sc->curlet = sc->value;
   sc->code = car(closure_body(func));
 }
 
@@ -87920,7 +87934,7 @@ static void op_cl_fa(s7_scheme *sc)
 {
   s7_pointer code = cdadr(sc->code);
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
-  set_car(sc->t2_1, make_closure_unchecked(sc, car(code), cdr(code), T_CLOSURE | ((is_symbol(car(code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET));
+  set_car(sc->t2_1, make_closure_gc_checked(sc, car(code), cdr(code), T_CLOSURE | ((is_symbol(car(code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET));
   /* arg1 lambda can be any arity, but it must be applicable to one arg (the "a" above) */
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
@@ -87934,7 +87948,7 @@ static void op_map_for_each_fa(s7_scheme *sc)
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = make_closure_unchecked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 1); /* arity=1 checked in optimizer */
+      f = make_closure_gc_checked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 1); /* arity=1 checked in optimizer */
       sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, f, sc->value) : g_map_closure(sc, f, sc->value);
     }
 }
@@ -87949,7 +87963,7 @@ static void op_map_for_each_faa(s7_scheme *sc)
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = make_closure_unchecked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 2); /* arity=2 checked in optimizer */
+      f = make_closure_gc_checked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 2); /* arity=2 checked in optimizer */
       sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure_2(sc, f, sc->value, sc->args) : g_map_closure_2(sc, f, sc->value, sc->args);
     }
 }
@@ -91920,7 +91934,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
     sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
     sc->lambdas->loc + sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
-                               cons_unchecked(sc, make_integer(sc, loc), cons(sc, make_integer(sc, len), make_integer(sc, len * sizeof(s7_pointer)))));
+                               cons_unchecked(sc, make_integer(sc, loc), /* active */
+                                 cons(sc, make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer))))); /* total list space allocated */
   }
   /* strings */
   gp = sc->strings;
@@ -95423,8 +95438,8 @@ int main(int argc, char **argv)
  * tpeak       122          115    114    108    107
  * tref        513          691    687    463    463
  * index      1024         1026   1016    973    968
- * tmock      7741         1177   1165   1057   1057
- * texit      1827         ----   ----   1778   1760
+ * tmock      7741         1177   1165   1057   1060
+ * texit      1827         ----   ----   1778   1757
  * tvect      1953         2519   2464   1772   1708
  * s7test     4537         1873   1831   1818   1801
  * lt         2117         2123   2110   2113   2113
@@ -95435,40 +95450,42 @@ int main(int argc, char **argv)
  * dup        2756         3805   3788   2492   2457
  * tcopy      2600         8035   5546   2539   2507
  * tmat       2694         3065   3042   2524   2514
- * tauto      2763         ----   ----   2562   2549
+ * tauto      2763         ----   ----   2562   2546
  * tb         3366?        2735   2681   2612   2610
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
- * tmac       3074         3950   3873   3033   2996
+ * tmac       3074         3950   3873   3033   2994
  * tload      3740         ----   ----   3046   3041
  * tset       3058         3253   3104   3048   3119
  * teq        3541         4068   4045   3536   3541
  * tio        3698         3816   3752   3683   3680
- * tobj       4533         4016   3970   3828   3705
- * tlamb      4454         4912   4786   4298   4258
+ * tobj       4533         4016   3970   3828   3704
+ * tlamb      4454         4912   4786   4298   4248
  * tclo       4604         4787   4735   4390   4395
- * tcase      4501         4960   4793   4439   4430
- * tlet       5305         7775   5640   4450   4433
- * tmap       5488         8869   8774   4489   4509
+ * tcase      4501         4960   4793   4439   4425
+ * tlet       5305         7775   5640   4450   4431
+ * tmap       5488         8869   8774   4489   4508
  * tfft      115.1         7820   7729   4755   4756
- * tshoot     6896         5525   5447   5183   5186
+ * tshoot     6896         5525   5447   5183   5189
  * tform      8338         5357   5348   5307   5308
- * tnum       56.7         6348   6013   5433   5407
- * tstr       6123         6880   6342   5488   5471
- * tmisc      6847         8869   7612   6435   6316
+ * tnum       56.7         6348   6013   5433   5404
+ * tstr       6123         6880   6342   5488   5487
+ * tmisc      6847         8869   7612   6435   6314
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6557
  * tari       ----         13.0   12.7   6827   6824
- * tleft      9004         10.4   10.2   7657   7650
- * tgc        9614         11.9   11.1   8177   8167
- * cb         16.8         11.2   11.0   9658   9660  9576
+ * tleft      9004         10.4   10.2   7657   7648
+ * tgc        9614         11.9   11.1   8177   8156
+ * cb         16.8         11.2   11.0   9658   9576
  * thash      35.4         11.8   11.7   9734   9737
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0
+ * calls      55.3         36.7   37.5   37.0   36.9
  * sg         75.8         ----   ----   55.9   55.8
  * lg        104.2        106.6  105.0  103.6  103.6
  * tbig      604.3        177.4  175.8  156.5  153.7
  * -----------------------------------------------------
+ *
+ * we need a way to release excessive mallocate bins (or combine upwards?)
  */
