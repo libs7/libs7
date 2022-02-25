@@ -62123,6 +62123,8 @@ static s7_pointer opt_p_p_f1(opt_info *o) {return(o->v[2].p_p_f(o->sc, o->v[3].p
 static s7_pointer opt_p_7d_c_random(opt_info *o) {return(make_real(o->sc, random_d_7d(o->sc, o->v[1].x)));}
 static s7_pointer opt_p_p_f_exp(opt_info *o)  {return(exp_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
 
+/* opt_p_p_iterate|string_to_number for tbig */
+
 static bool p_p_f_combinable(s7_scheme *sc, opt_info *opc)
 {
   if ((sc->pc > 1) &&
@@ -62594,13 +62596,17 @@ static s7_pointer opt_p_pp_fs(opt_info *o) {return(o->v[3].p_pp_f(o->sc, o->v[5]
 static s7_pointer opt_p_pp_fc(opt_info *o) {return(o->v[3].p_pp_f(o->sc, o->v[5].fp(o->v[4].o1), o->v[2].p));}
 static s7_pointer opt_p_pp_cc(opt_info *o) {return(o->v[3].p_pp_f(o->sc, o->v[1].p, o->v[2].p));}
 static s7_pointer opt_set_car_pp_ss(opt_info *o) {return(inline_set_car(o->sc, slot_value(o->v[1].p), slot_value(o->v[2].p)));}
+static s7_pointer opt_p_pp_ss_href(opt_info *o) {return(s7_hash_table_ref(o->sc, slot_value(o->v[1].p), slot_value(o->v[2].p)));}
 static s7_pointer opt_p_pp_sf_add(opt_info *o) {return(add_p_pp(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_sub(opt_info *o) {return(subtract_p_pp(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
+static s7_pointer opt_p_pp_sf_mul(opt_info *o) {return(multiply_p_pp(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_set_car(opt_info *o) {return(inline_set_car(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_set_cdr(opt_info *o) {return(inline_set_cdr(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_sf_href(opt_info *o) {return(s7_hash_table_ref(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1)));}
 static s7_pointer opt_p_pp_fs_vref(opt_info *o) {return(vector_ref_p_pp(o->sc, o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
 static s7_pointer opt_p_pp_fs_cons(opt_info *o) {return(cons(o->sc, o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
+static s7_pointer opt_p_pp_fs_add(opt_info *o) {return(add_p_pp(o->sc, o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
+static s7_pointer opt_p_pp_fs_sub(opt_info *o) {return(subtract_p_pp(o->sc, o->v[5].fp(o->v[4].o1), slot_value(o->v[1].p)));}
 
 static s7_pointer opt_p_pp_ff(opt_info *o)
 {
@@ -62609,6 +62615,8 @@ static s7_pointer opt_p_pp_ff(opt_info *o)
   o->sc->temp2 = p1; /* feeble GC protection */
   return(o->v[3].p_pp_f(o->sc, p1, o->v[9].fp(o->v[8].o1)));
 }
+
+/* add|subtract_mul_mul for tbig */
 
 static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, int32_t pstart)
 {
@@ -62643,7 +62651,7 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	  opc->v[2].p = opt_simple_symbol(sc, caddr(car_x));
 	  if (opc->v[2].p)
 	    {
-	      opc->v[0].fp = (func == set_car_p_pp) ? opt_set_car_pp_ss : opt_p_pp_ss;
+	      opc->v[0].fp = (func == set_car_p_pp) ? opt_set_car_pp_ss : ((opc->v[3].p_pp_f == s7_hash_table_ref) ? opt_p_pp_ss_href : opt_p_pp_ss);
 	      return(true);
 	    }
 	  pc_fallback(sc, pstart);
@@ -62658,8 +62666,9 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	}
       if (cell_optimize(sc, cddr(car_x)))
 	{
-	  opc->v[0].fp = (func == add_p_pp) ? opt_p_pp_sf_add : ((func == subtract_p_pp) ? opt_p_pp_sf_sub : ((func == set_car_p_pp) ? opt_p_pp_sf_set_car :
-                          ((func == set_cdr_p_pp) ? opt_p_pp_sf_set_cdr : ((opc->v[3].p_pp_f == s7_hash_table_ref) ? opt_p_pp_sf_href : opt_p_pp_sf))));
+	  opc->v[0].fp = (func == add_p_pp) ? opt_p_pp_sf_add : ((func == subtract_p_pp) ? opt_p_pp_sf_sub : ((func == multiply_p_pp) ? opt_p_pp_sf_mul : 
+                           ((func == set_car_p_pp) ? opt_p_pp_sf_set_car : ((func == set_cdr_p_pp) ? opt_p_pp_sf_set_cdr : 
+                            ((opc->v[3].p_pp_f == s7_hash_table_ref) ? opt_p_pp_sf_href : opt_p_pp_sf)))));
 	  opc->v[4].o1 = sc->opts[pstart];
 	  opc->v[5].fp = sc->opts[pstart]->v[0].fp;
 	  return(true);
@@ -62711,7 +62720,8 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	      opc->v[1].p = opt_simple_symbol(sc, caddr(car_x));
 	      if (opc->v[1].p)
 		{
-		  opc->v[0].fp = (func == vector_ref_p_pp) ? opt_p_pp_fs_vref : ((func == cons_p_pp) ? opt_p_pp_fs_cons : opt_p_pp_fs);
+		  opc->v[0].fp = (func == add_p_pp) ? opt_p_pp_fs_add : ((func == subtract_p_pp) ? opt_p_pp_fs_sub : 
+                                   ((func == vector_ref_p_pp) ? opt_p_pp_fs_vref : ((func == cons_p_pp) ? opt_p_pp_fs_cons : opt_p_pp_fs)));
 		  opc->v[4].o1 = o1;
 		  opc->v[5].fp = o1->v[0].fp;
 		  return(true);
@@ -63787,6 +63797,8 @@ static s7_pointer opt_set_p_p_f(opt_info *o)
   slot_set_value(o->v[1].p, x);
   return(x);
 }
+
+/* opt_p_pp_ff tbig */
 
 static s7_pointer opt_set_p_i_s(opt_info *o)
 {
@@ -64947,21 +64959,6 @@ static bool opt_cell_if(s7_scheme *sc, s7_pointer car_x, int32_t len)
 }
 
 /* -------- cell_case -------- */
-static bool case_memv(s7_scheme *sc, s7_pointer x, s7_pointer y)
-{
-  s7_pointer z;
-  if (is_simple(x))
-    {
-      for (z = y; is_pair(z); z = cdr(z))
-	if (x == car(z))
-	  return(true);
-      return(false);
-    }
-  for (z = y; is_pair(z); z = cdr(z))
-    if (s7_is_eqv(sc, x, car(z))) return(true);
-  return(false);
-}
-
 #define CASE_O1 3
 #define CASE_SEL 2
 #define CASE_CLAUSE_O1 4
@@ -64984,17 +64981,31 @@ static s7_pointer opt_case(opt_info *o)
 {
   opt_info *o1 = o->v[CASE_SEL].o1;
   int32_t ctr, lim = o->v[1].i;
-  s7_pointer selector;
+  s7_pointer selector, z;
   s7_scheme *sc = o->sc;
 
   selector = o1->v[0].fp(o1);
-  for (ctr = CASE_O1; ctr < lim; ctr++)
+  if (is_simple(selector))
     {
-      o1 = o->v[ctr].o1;
-      if ((o1->v[CASE_CLAUSE_KEYS].p == sc->else_symbol) ||
-	  (case_memv(sc, selector, o1->v[CASE_CLAUSE_KEYS].p)))
-	return(case_value(o1));
-    }
+      for (ctr = CASE_O1; ctr < lim; ctr++)
+	{
+	  o1 = o->v[ctr].o1;
+	  for (z = o1->v[CASE_CLAUSE_KEYS].p; is_pair(z); z = cdr(z))
+	    if (selector == car(z))
+	      return(case_value(o1));
+	  if (z == sc->else_symbol)
+	    return(case_value(o1));
+	}}
+  else
+    for (ctr = CASE_O1; ctr < lim; ctr++)
+      {
+	o1 = o->v[ctr].o1;
+	for (z = o1->v[CASE_CLAUSE_KEYS].p; is_pair(z); z = cdr(z))
+	  if (s7_is_eqv(sc, selector, car(z)))
+	    return(case_value(o1));
+	if (z == sc->else_symbol)
+	  return(case_value(o1));
+      }
   return(sc->unspecified);
 }
 
@@ -95484,7 +95495,7 @@ int main(int argc, char **argv)
  * calls      55.3         36.7   37.5   37.0   36.9
  * sg         75.8         ----   ----   55.9   55.8
  * lg        104.2        106.6  105.0  103.6  103.6
- * tbig      604.3        177.4  175.8  156.5  153.7
+ * tbig      604.3        177.4  175.8  156.5  153.7  153.4
  * -----------------------------------------------------
  *
  * we need a way to release excessive mallocate bins (or combine upwards?)

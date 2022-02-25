@@ -315,7 +315,7 @@
 (define (any-selector x)
   (if (zero? (remainder x 3)) #\a))
 
-(define (case7 x) ; casae p_g_s
+(define (case7 x) ; case p_g_s
   (case (any-selector x)
     ((1/2) 0)
     ((#\a) 1)
@@ -330,7 +330,7 @@
 
 (tcase7)
 
-(define (case8 x) ; casae a_g_s_a
+(define (case8 x) ; case a_g_s_a
   (case (even? x)
     ((1/2) 0)
     ((#\a) 1)
@@ -345,7 +345,7 @@
 
 (tcase8)
 
-(define (case9 x) ; casae a_e_g
+(define (case9 x) ; case a_e_g
   (case (even? x)
     ((#t) (display x #f) (not x))
     ((#f) (write x #f) (integer? x))
@@ -358,7 +358,7 @@
 
 (tcase9)
 
-(define (case10 x) ; casae a_g_g
+(define (case10 x) ; case a_g_g
   (case (even? x)
     ((#t) (display x #f) (not x))
     ((1/2) (write x #f) (integer? x))
@@ -387,7 +387,7 @@
 
 (tcase11)
 
-(define (case12 x) ; casae p_g_g
+(define (case12 x) ; case p_g_g
   (case (any-selector x)
     ((#t) (display x #f) (not x))
     ((1/2) (write x #f) (integer? x))
