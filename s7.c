@@ -1466,6 +1466,7 @@ static const int32_t intlen_bits[256] =
    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
 
+
 static void memclr(void *s, size_t n)
 {
   uint8_t *s2;
@@ -1477,7 +1478,7 @@ static void memclr(void *s, size_t n)
     {
       int64_t *s1 = (int64_t *)s;
       size_t n8 = n >> 3;
-      do {*s1++ = 0;} while (--n8 > 0);
+      do {*s1++ = 0;} while (--n8 > 0); /* LOOP_4 here is slower */
       n &= 7;
       s2 = (uint8_t *)s1;
     }
@@ -42249,14 +42250,12 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  s7_pointer *els = s7_vector_elements(data);
 	  typ = type(els[0]);
 	  if ((typ == T_INTEGER) || (typ == T_REAL) || (typ == T_STRING) || (typ == T_CHARACTER))
-	    {
-	      s7_int i;
-	      for (i = 1; i < len; i++)
-		if (type(els[i]) != typ)
-		  {
-		    typ = T_FREE;
-		    break;
-		  }}
+	    for (s7_int i = 1; i < len; i++)
+	      if (type(els[i]) != typ)
+		{
+		  typ = T_FREE;
+		  break;
+		}
 	  if ((sc->sort_f == lt_b_7pp) || (sc->sort_f == gt_b_7pp))
 	    {
 	      if (typ == T_INTEGER)
@@ -61795,8 +61794,7 @@ static bool opt_and_bb(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? o->v[11].
 
 static bool opt_and_any_b(opt_info *o)
 {
-  s7_int i;
-  for (i = 0; i < o->v[1].i; i++)
+  for (s7_int i = 0; i < o->v[1].i; i++)
     {
       opt_info *o1 = o->v[i + 3].o1;
       if (!o1->v[0].fb(o1))
@@ -65001,7 +64999,7 @@ static s7_pointer opt_do_any(opt_info *o)
       if (ostart->v[0].fb(ostart))
 	break;
       /* body */
-      if (len == 6)
+      if (len == 6) /* here and in opt_do_n we need a better way to unroll these loops */
 	{fp[0](os[0]); fp[1](os[1]); fp[2](os[2]); fp[3](os[3]); fp[4](os[4]); fp[5](os[5]);}
       else
 	if (len == 7)
@@ -65233,10 +65231,9 @@ static s7_pointer opt_do_n(opt_info *o)
 	}}
   else
     {
-      int32_t i;
       opt_info *os[NUM_VUNIONS];
       opo_fp fp[NUM_VUNIONS];
-      for (i = 0; i < len; i++)
+      for (int32_t i = 0; i < len; i++)
 	{
 	  os[i] = body->v[i].o1;
 	  fp[i] = os[i]->v[0].fp;
@@ -66962,8 +66959,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 
 static void map_or_for_each_closure_pair_2(s7_scheme *sc, s7_pfunc func, s7_pointer seq1, s7_pointer seq2, s7_pointer slot1, s7_pointer slot2, bool for_each_case)
 {
-  s7_pointer fast1, slow1, fast2, slow2;
-  for (fast1 = seq1, slow1 = seq1, fast2 = seq2, slow2 = seq2; (is_pair(fast1)) && (is_pair(fast2));
+  for (s7_pointer fast1 = seq1, slow1 = seq1, fast2 = seq2, slow2 = seq2; (is_pair(fast1)) && (is_pair(fast2));
        fast1 = cdr(fast1), slow1 = cdr(slow1), fast2 = cdr(fast2), slow2 = cdr(slow2))
     {
       s7_pointer val;
@@ -67166,8 +67162,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	{
 	  if (is_pair(cadr(args)))
 	    {
-	      s7_pointer fast, slow;
-	      for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+	      for (s7_pointer fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
 		{
 		  fp(sc, car(fast));
 		  if (is_pair(cdr(fast)))
@@ -67180,20 +67175,20 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	    }
 	  if (is_any_vector(cadr(args)))
 	    {
-	      s7_int i, vlen;
+	      s7_int vlen;
 	      s7_pointer v = cadr(args);
 	      vlen = vector_length(v);
-	      for (i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
+	      for (s7_int i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
 	      return(sc->unspecified);
 	    }
 	  if (is_string(cadr(args)))
 	    {
-	      s7_int i, slen;
+	      s7_int slen;
 	      s7_pointer str = cadr(args);
 	      const char *s;
 	      s = string_value(str);
 	      slen = string_length(str);
-	      for (i = 0; i < slen; i++) fp(sc, chars[(uint8_t)(s[i])]);
+	      for (s7_int i = 0; i < slen; i++) fp(sc, chars[(uint8_t)(s[i])]);
 	      return(sc->unspecified);
 	    }}
       func = c_function_call(f);    /* presumably this is either display/write, or method call? */
@@ -67376,8 +67371,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	  push_stack_no_let(sc, OP_GC_PROTECT, f, seq);
 	  if (is_pair(seq))
 	    {
-	      s7_pointer fast, slow;
-	      for (fast = seq, slow = seq; is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+	      for (s7_pointer fast = seq, slow = seq; is_pair(fast); fast = cdr(fast), slow = cdr(slow))
 		{
 		  slot_set_value(slot, car(fast));
 		  z = func(sc);
@@ -67396,8 +67390,8 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	  if (is_float_vector(seq))
 	    {
 	      s7_double *vals = float_vector_floats(seq);
-	      s7_int i, len = vector_length(seq);
-	      for (i = 0; i < len; i++)
+	      s7_int len = vector_length(seq);
+	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, make_real(sc, vals[i]));
 		  z = func(sc);
@@ -67409,8 +67403,8 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	  if (is_int_vector(seq))
 	    {
 	      s7_int *vals = int_vector_ints(seq);
-	      s7_int i, len = vector_length(seq);
-	      for (i = 0; i < len; i++)
+	      s7_int len = vector_length(seq);
+	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, make_integer(sc, vals[i]));
 		  z = func(sc);
@@ -67422,8 +67416,8 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	  if (is_normal_vector(seq))
 	    {
 	      s7_pointer *vals = vector_elements(seq);
-	      s7_int i, len = vector_length(seq);
-	      for (i = 0; i < len; i++)
+	      s7_int len = vector_length(seq);
+	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, vals[i]);
 		  z = func(sc);
@@ -67434,9 +67428,9 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	    }
 	  if (is_string(seq))
 	    {
-	      s7_int i, len = string_length(seq);
+	      s7_int len = string_length(seq);
 	      const char *str = string_value(seq);
-	      for (i = 0; i < len; i++)
+	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, chars[(uint8_t)(str[i])]);
 		  z = func(sc);
@@ -67590,10 +67584,9 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  s7_p_p_t fp = s7_p_p_function(f);
 		  if (fp)
 		    {
-		      s7_pointer fast, slow;
 		      val = list_1_unchecked(sc, sc->nil);
 		      push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
-		      for (fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
+		      for (s7_pointer fast = cadr(args), slow = cadr(args); is_pair(fast); fast = cdr(fast), slow = cdr(slow))
 			{
 			  s7_pointer z;
 			  z = fp(sc, car(fast));
@@ -67613,10 +67606,9 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  s7_p_pp_t fp = s7_p_pp_function(f);
 		  if (fp)
 		    {
-		      s7_pointer fast1, slow1, fast2, slow2;
 		      val = list_1_unchecked(sc, sc->nil);
 		      push_stack_no_let_no_code(sc, OP_GC_PROTECT, val);
-		      for (fast1 = cadr(args), slow1 = cadr(args), fast2 = caddr(args), slow2 = caddr(args);
+		      for (s7_pointer fast1 = cadr(args), slow1 = cadr(args), fast2 = caddr(args), slow2 = caddr(args);
 			   (is_pair(fast1)) && (is_pair(fast2));
 			   fast1 = cdr(fast1), slow1 = cdr(slow1), fast2 = cdr(fast2), slow2 = cdr(slow2))
 			{
@@ -67682,8 +67674,8 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  sc->z = sc->nil;
 	  while (true)
 	    {
-	      s7_pointer x, y, z;
-	      for (x = iter_list, y = cdr(val1); is_pair(x); x = cdr(x), y = cdr(y))
+	      s7_pointer z;
+	      for (s7_pointer x = iter_list, y = cdr(val1); is_pair(x); x = cdr(x), y = cdr(y))
 		{
 		  set_car(y, s7_iterate(sc, car(x)));
 		  if (iterator_is_at_end(car(x)))
@@ -68922,19 +68914,15 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       */
     case '!':
       {
-	char last_char;
-	s7_pointer reader;
-
+	char last_char = ' ';
 	/* make it possible to override #! handling */
-	for (reader = slot_value(sc->sharp_readers); is_pair(reader); reader = cdr(reader))
+	for (s7_pointer reader = slot_value(sc->sharp_readers); is_pair(reader); reader = cdr(reader))
 	  if (s7_character(caar(reader)) == '!')
 	    {
 	      sc->strbuf[0] = (unsigned char)c;
 	      return(TOKEN_SHARP_CONST); /* next stage notices any errors */
 	    }
-
 	/* not #! as block comment (for Guile I guess) */
-	last_char = ' ';
 	while ((c = inchar(pt)) != EOF)
 	  {
 	    if ((c == '#') &&
@@ -69652,8 +69640,7 @@ static void fx_annotate_arg(s7_scheme *sc, s7_pointer arg, s7_pointer e)
 
 static void fx_annotate_args(s7_scheme *sc, s7_pointer args, s7_pointer e)
 {
-  s7_pointer p;
-  for (p = args; is_pair(p); p = cdr(p))
+  for (s7_pointer p = args; is_pair(p); p = cdr(p))
 #if S7_DEBUGGING
     fx_annotate_arg(sc, p, e); /* checks has_fx */
 #else
@@ -72754,7 +72741,6 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	  (is_constant_symbol(sc, car(expr))))
 	hop = 1;
     }
-
   if ((is_c_function(func)) && (c_function_is_aritable(func, args)))
     {
       if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
@@ -82719,7 +82705,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
 
 static bool op_do_init_1(s7_scheme *sc)
 {
-  s7_pointer x, y, z;
+  s7_pointer y, z;
   while (true)  /* at start, first value is the loop (for GC protection?), returning sc->value is the next value */
     {
       s7_pointer init;
@@ -82755,7 +82741,7 @@ static bool op_do_init_1(s7_scheme *sc)
   /* run through sc->code and sc->args adding '( caar(car(code)) . car(args) ) to sc->curlet, also reuse sc->args as the new let slots */
   sc->value = sc->nil;
   y = sc->args;
-  for (x = car(sc->code); is_not_null(y); x = cdr(x))
+  for (s7_pointer x = car(sc->code); is_not_null(y); x = cdr(x))
     {
       s7_pointer sym = caar(x), args = cdr(y);
       reuse_as_slot(sc, y, sym, unchecked_car(y));
@@ -92440,12 +92426,11 @@ static const char *decoded_name(s7_scheme *sc, s7_pointer p)
 static bool is_decodable(s7_scheme *sc, s7_pointer p)
 {
   int32_t i;
-  s7_pointer x;
   s7_pointer *tp = sc->heap, *heap_top = (s7_pointer *)(sc->heap + sc->heap_size);
 
   /* check symbol-table */
   for (i = 0; i < SYMBOL_TABLE_SIZE; i++)
-    for (x = vector_element(sc->symbol_table, i); is_not_null(x); x = cdr(x))
+    for (s7_pointer x = vector_element(sc->symbol_table, i); is_not_null(x); x = cdr(x))
       {
 	s7_pointer sym = car(x);
 	if ((sym == p) ||
@@ -94970,12 +94955,9 @@ void s7_free(s7_scheme *sc)
   if (sc->autoload_names_sizes) free(sc->autoload_names_sizes);
   if (sc->autoloaded_already) free(sc->autoloaded_already);
 
-  {
-    block_t *top;
-    for (top = sc->block_lists[TOP_BLOCK_LIST]; top; top = block_next(top))
-      if (block_data(top))
-	free(block_data(top));
-  }
+  for (block_t *top = sc->block_lists[TOP_BLOCK_LIST]; top; top = block_next(top))
+    if (block_data(top))
+      free(block_data(top));
 
   for (i = 0; i < sc->saved_pointers_loc; i++)
     free(sc->saved_pointers[i]);
@@ -94983,10 +94965,10 @@ void s7_free(s7_scheme *sc)
 
   {
     gc_obj_t *g, *gnxt;
-    heap_block_t *hp, *hpnxt;
+    heap_block_t *hpnxt;
     for (g = sc->permanent_lets; g; g = gnxt)    {gnxt = g->nxt; free(g);}
     for (g = sc->permanent_objects; g; g = gnxt) {gnxt = g->nxt; free(g);}
-    for (hp = sc->heap_blocks; hp; hp = hpnxt) {hpnxt = hp->next; free(hp);}
+    for (heap_block_t *hp = sc->heap_blocks; hp; hp = hpnxt) {hpnxt = hp->next; free(hp);}
   }
 
   free(sc->heap);
@@ -95209,7 +95191,7 @@ int main(int argc, char **argv)
  * texit      1827         ----   ----   1778   1757
  * tvect      1953         2519   2464   1772   1708
  * s7test     4537         1873   1831   1818   1801
- * lt         2117         2123   2110   2113   2113
+ * lt         2117         2123   2110   2113   2113  2147
  * timp       2232         2971   2891   2176   2206
  * tread      2614         2440   2421   2419   2415
  * trclo      4079         2735   2574   2454   2451
@@ -95250,7 +95232,7 @@ int main(int argc, char **argv)
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   36.9
  * sg         75.8         ----   ----   55.9   55.8
- * lg        104.2        106.6  105.0  103.6  103.6
+ * lg        104.2        106.6  105.0  103.6  103.6 105.4 (lint)
  * tbig      604.3        177.4  175.8  156.5  153.4 152.5
  * -----------------------------------------------------
  *

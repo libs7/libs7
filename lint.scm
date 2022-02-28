@@ -11906,7 +11906,7 @@
       (case func
 	((set-car! set-cdr! vector-set! list-set! string-set!)
 	 (eq? arg1 vname))
-	((set!)
+	((set! implicit-set)
 	 (and (pair? arg1)
 	      (eq? (car arg1) vname)))
 	(else #f)))
@@ -12804,8 +12804,7 @@
 		       (unused-var caller head local-var otype)
 		       (let ((vtype #f))
 			 (move-var-inward caller local-var)
-
-			 (when (and (not (memq (var-definer local-var) '(parameter named-let named-let*)))
+			 (when (and (not (memq (var-definer local-var) '(named-let named-let*)))
 				    (pair? (var-history local-var))
 				    (or (zero? (var-set local-var))
 					(set! vtype (all-types-agree local-var))))
@@ -12827,14 +12826,22 @@
 				   (let ((func (car call))
 					 (vname (var-name local-var))
 					 (call-arg1 (and (pair? (cdr call)) (cadr call))))
-
+				     
 				     ;; check for assignments into constants
 				     (if (and lit?
+					      (sequence? (var-initial-value local-var)) ; not #f = no default
 					      (indirect-set? vname func call-arg1))
-					 (lint-format "~A's value, ~S, is a literal constant, so this set! is trouble: ~A" caller
-						      vname (var-initial-value local-var) (truncated-list->string call)))
+					 (lint-format "~A's ~Avalue, ~S, is a literal constant, so this set! is trouble: ~A" caller
+						      vname 
+						      (if (eq? (var-definer local-var) 'parameter) "default " "")
+						      (var-initial-value local-var) 
+						      (truncated-list->string 
+						       (if (eq? (car call) 'implicit-set)
+							   (cons 'set! (cdr call))
+							   call))))
 
-				     (when (symbol? vtype)
+				     (when (and (symbol? vtype)
+						(not (eq? (var-definer local-var) 'parameter)))
 				       (pointless-if caller vname vtype func call)
 
 				       ;; check for incorrect types in function calls
@@ -14154,7 +14161,7 @@
 	    ;; call-with-exit: walker on last on body, and scan for return func, walker on arg(s...)->values?
 	    )))
 
-    (define (check-sequence-constant function-name last)
+    (define (check-sequence-constant function-name last) ; if last is a sequence constant, complain
       (return-walker last
 		     (lambda (in-seq)
 		       (when (or (not (pair? in-seq))
@@ -14474,7 +14481,9 @@
 							   (eq? definer 'define*-public))) ; who knows?
 						  (lint-format "the default argument value is #f in ~A, so ~A can be ~A" function-name
 							       definer arg (car arg)))
-					      (make-lint-var (car arg) #f 'parameter)))))
+					      (make-lint-var (car arg)
+							     (and star-definer (len=2? arg) (cadr arg)) ; default value -> initial-value
+							     'parameter)))))
 				  (proper-list args))))))
 
 		  (let* ((cur-env (cons (make-lint-var :let form definer)
