@@ -52244,16 +52244,15 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 
 static inline void fill_star_defaults(s7_scheme *sc, s7_pointer func, int32_t start_arg, int32_t n_args, s7_pointer par)
 {
-  int32_t i;
   s7_pointer *df;
   df = c_function_arg_defaults(func);
   if (c_func_has_simple_defaults(func))
     {
-      for (i = start_arg; i < n_args; i++, par = cdr(par))
+      for (int32_t i = start_arg; i < n_args; i++, par = cdr(par))
 	set_car(par, df[i]);
     }
   else
-    for (i = start_arg; i < n_args; i++, par = cdr(par))
+    for (int32_t i = start_arg; i < n_args; i++, par = cdr(par))
       {
 	s7_pointer defval = df[i];
 	if (is_symbol(defval))
@@ -55605,12 +55604,11 @@ static s7_pointer fx_len3_t(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_and_3a(s7_scheme *sc, s7_pointer arg)
 {
-  s7_pointer p = cdr(arg), val;
-  val = fx_call(sc, p);
-  if (val == sc->F) return(val);
+  s7_pointer p = cdr(arg);
+  if (fx_call(sc, p) == sc->F) return(sc->F);
   p = cdr(p);
-  val = fx_call(sc, p);
-  return((val == sc->F) ? val : fx_call(sc, cdr(p)));
+  if (fx_call(sc, p) == sc->F) return(sc->F);
+  return(fx_call(sc, cdr(p)));
 }
 
 static s7_pointer fx_and_n(s7_scheme *sc, s7_pointer arg)
@@ -55685,8 +55683,8 @@ static s7_pointer fx_or_3a(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_or_n(s7_scheme *sc, s7_pointer arg)
 {
-  s7_pointer p, x = sc->F;
-  for (p = cdr(arg); (is_pair(p)) && (x == sc->F); p = cdr(p))
+  s7_pointer x = sc->F;
+  for (s7_pointer p = cdr(arg); (is_pair(p)) && (x == sc->F); p = cdr(p))
     x = fx_call(sc, p);
   return(x);
 }
@@ -69058,50 +69056,53 @@ static int32_t read_x_char(s7_scheme *sc, int32_t i, s7_pointer pt)
   /* possible "\xn...;" char (write creates these things, so we have to read them)
    *   but we could have crazy input like "\x -- with no trailing double quote
    */
-  while (true)
+  int32_t c_ctr;
+  for (c_ctr = 0; ; c_ctr++)
     {
       int32_t d1, d2, c;
       c = inchar(pt);
-      if (c == '"')
+      if (c == '"')                  /* "\x" -> error, "\x44" or "\x44;" -> #\D */
 	{
-	  backchar(c, pt);
+	  if (c_ctr == 0)            /* "\x" */
+ 	    read_error(sc, "unknown backslash usage -- perhaps you meant two backslashes?");
+	  backchar(c, pt);           /* "\x44" I think -- not sure about this -- Guile is happy but I think it contradicts r7rs.pdf */
 	  return(i);
 	}
-      if (c == ';') return(i);
-      if (c == EOF)
+      if (c == ';') 
+	{
+	  if (c_ctr == 0)            /* "\x;" */
+ 	    read_error(sc, "unknown backslash usage -- perhaps you meant two backslashes?");
+	  return(i);                 /* "\x44;" */
+	}
+      if (c == EOF)                  /* "\x<eof> */
 	{
 	  read_error(sc, "#<eof> in midst of hex-char");
 	  return(i);
 	}
       d1 = digits[c];
-      if (d1 >= 16)
-	{
-	  sc->strbuf[i++] = (unsigned char)c; /* just go on -- maybe a special char is not intended */
-	  return(i);
-	}
+      if (d1 >= 16)                  /* "\x4H" */
+	read_error(sc, "unknown backslash usage -- perhaps you meant two backslashes?");
+
       c = inchar(pt);
-      if (c == '"')
+      if (c == '"')                  /* "\x4" */
 	{
 	  sc->strbuf[i++] = (unsigned char)d1;
 	  backchar((char)c, pt);
 	  return(i);
 	}
-      if (c == ';')
+      if (c == ';')                  /* "\x4;" */
 	{
 	  sc->strbuf[i++] = (unsigned char)d1;
 	  return(i);
 	}
-      if (c == EOF)
+      if (c == EOF)                  /* "\x4<eof */
 	{
 	  read_error(sc, "#<eof> in midst of hex-char");
 	  return(i);
 	}
       d2 = digits[c];
       if (d2 >= 16)
-	{
-	  sc->strbuf[i++] = (unsigned char)c; /* just go on -- maybe a special char is not intended */
-	  return(i);
-	}
+	read_error(sc, "unknown backslash usage -- perhaps you meant two backslashes?");
       sc->strbuf[i++] = (unsigned char)(16 * d1 + d2);
     }
   return(i);
@@ -95173,49 +95174,50 @@ int main(int argc, char **argv)
  * s7test     4537         1873   1831   1818   1796
  * lt         2153         2187   2172   2150   2146
  * timp       2232         2971   2891   2176   2207
- * tread      2614         2440   2421   2419   2415
+ * tread      2614         2440   2421   2419   2412
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
- * dup        2756         3805   3788   2492   2457  2362
+ * dup        2756         3805   3788   2492   2362
  * tcopy      2600         8035   5546   2539   2507
- * tmat       2694         3065   3042   2524   2514
+ * tmat       2694         3065   3042   2524   2521
  * tauto      2763         ----   ----   2562   2546
- * tb         3366?        2735   2681   2612   2610
+ * tb         3366?        2735   2681   2612   2611
  * titer      2659         2865   2842   2641   2641
  * tsort      3572         3105   3104   2856   2855
- * tmac       3074         3950   3873   3033   2994
- * tload      3740         ----   ----   3046   3041
+ * tmac       3074         3950   3873   3033   2998
+ * tload      3740         ----   ----   3046   3042
  * tset       3058         3253   3104   3048   3119
- * teq        3541         4068   4045   3536   3541
+ * teq        3541         4068   4045   3536   3531
  * tio        3698         3816   3752   3683   3680
  * tobj       4533         4016   3970   3828   3704
  * tlamb      4454         4912   4786   4298   4248
- * tclo       4604         4787   4735   4390   4395
- * tcase      4501         4960   4793   4439   4425
+ * tclo       4604         4787   4735   4390   4398
+ * tcase      4501         4960   4793   4439   4426
  * tlet       5305         7775   5640   4450   4431
  * tmap       5488         8869   8774   4489   4508
- * tfft      115.1         7820   7729   4755   4754  4651
- * tshoot     6896         5525   5447   5183   5189
- * tform      8338         5357   5348   5307   5308
- * tnum       56.7         6348   6013   5433   5404  5413
- * tstr       6123         6880   6342   5488   5487
- * tmisc      6847         8869   7612   6435   6314
+ * tfft      115.1         7820   7729   4755   4652
+ * tshoot     6896         5525   5447   5183   5193
+ * tform      8338         5357   5348   5307   5300
+ * tnum       56.7         6348   6013   5433   5409
+ * tstr       6123         6880   6342   5488   5488
+ * tmisc      6847         8869   7612   6435   6316
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
- * tlist      6551         7896   7546   6558   6557  6531
+ * tlist      6551         7896   7546   6558   6532
  * tari       ----         13.0   12.7   6827   6824
  * tleft      9004         10.4   10.2   7657   7648
  * tgc        9614         11.9   11.1   8177   8156
  * cb         16.8         11.2   11.0   9658   9576
- * thash      35.4         11.8   11.7   9734   9737  9730
+ * thash      35.4         11.8   11.7   9734   9730
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   36.9
  * sg         75.8         ----   ----   55.9   55.8
  * lg        105.9         ----   ----  105.2  105.4
- * tbig      604.3        177.4  175.8  156.5  153.4 152.4
+ * tbig      604.3        177.4  175.8  156.5  152.4
  * -----------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
+ *   need no_alloc bit for c|fx_funcs
  */
