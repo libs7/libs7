@@ -43963,6 +43963,46 @@ static void check_hash_types(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
 	    }}}
 }
 
+static void check_hash_table_checker(s7_scheme *sc, s7_pointer table, s7_pointer key)
+{
+  /* check type -- raise error if incompatible with eq func set by make-hash-table */
+  if (hash_table_checker(table) == hash_number_num_eq)
+    {
+      if (!is_number(key))
+	s7_error(sc, sc->wrong_type_arg_symbol,
+		 set_elist_3(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is =", 69),
+			     key, type_name_string(sc, key)));
+    }
+  else
+    if (hash_table_checker(table) == hash_eq)
+      {
+	if (is_number(key)) /* (((type(key) >= T_INTEGER) && (type(key) < T_C_MACRO)) || (type(key) == T_PAIR)), but we might want eq? */
+	  s7_error(sc, sc->wrong_type_arg_symbol,
+		   set_elist_3(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is eq?", 71),
+			       key, type_name_string(sc, key)));
+      }
+    else
+#if WITH_PURE_S7
+      if (((hash_table_checker(table) == hash_string) && (!is_string(key))) ||
+	  ((hash_table_checker(table) == hash_char) && (!is_character(key))))
+	s7_error(sc, sc->wrong_type_arg_symbol,
+		 set_elist_4(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is ~A", 70),
+			     key, type_name_string(sc, key),
+			     (hash_table_checker(table) == hash_string) ? sc->string_eq_symbol : sc->char_eq_symbol));
+#else
+      if ((((hash_table_checker(table) == hash_string) || (hash_table_checker(table) == hash_ci_string)) &&
+	   (!is_string(key))) ||
+	  (((hash_table_checker(table) == hash_char) || (hash_table_checker(table) == hash_ci_char)) &&
+	   (!is_character(key))))
+	s7_error(sc, sc->wrong_type_arg_symbol,
+		 set_elist_4(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is ~A", 70),
+			     key, type_name_string(sc, key),
+			     (hash_table_checker(table) == hash_string) ? sc->string_eq_symbol :
+			     ((hash_table_checker(table) == hash_ci_string) ? sc->string_ci_eq_symbol :
+			      ((hash_table_checker(table) == hash_char) ? sc->char_eq_symbol : sc->char_ci_eq_symbol))));
+#endif
+}
+
 s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value)
 {
   s7_int hash_mask, loc;
@@ -43984,46 +44024,12 @@ s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
   /* hash_entry_raw_hash(x) can save the hash_loc from the lookup operations, but at some added complexity in
    *   all the preceding code.  This saves about 5% compute time best case in this function.
    */
-
   if (!hash_chosen(table))
     hash_table_set_checker(table, type(key)); /* raw_hash value (hash_loc(sc, table, key)) does not change via hash_table_set_checker etc */
   else
-    /* check type -- raise error if incompatible with eq func set by make-hash-table */
-    if (hash_table_checker(table) == hash_number_num_eq)
-      {
-	if (!is_number(key))
-	  return(s7_error(sc, sc->wrong_type_arg_symbol,
-			  set_elist_3(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is =", 69),
-				      key, type_name_string(sc, key))));
-      }
-    else
-      if (hash_table_checker(table) == hash_eq)
-	{
-	  if (is_number(key)) /* (((type(key) >= T_INTEGER) && (type(key) < T_C_MACRO)) || (type(key) == T_PAIR)), but we might want eq? */
-	    return(s7_error(sc, sc->wrong_type_arg_symbol,
-			    set_elist_3(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is eq?", 71),
-					key, type_name_string(sc, key))));
-	}
-      else
-#if WITH_PURE_S7
-	if (((hash_table_checker(table) == hash_string) && (!is_string(key))) ||
-	    ((hash_table_checker(table) == hash_char) && (!is_character(key))))
-	  return(s7_error(sc, sc->wrong_type_arg_symbol,
-			  set_elist_4(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is ~A", 70),
-				      key, type_name_string(sc, key),
-				      (hash_table_checker(table) == hash_string) ? sc->string_eq_symbol : sc->char_eq_symbol)));
-#else
-        if ((((hash_table_checker(table) == hash_string) || (hash_table_checker(table) == hash_ci_string)) &&
-	     (!is_string(key))) ||
-	    (((hash_table_checker(table) == hash_char) || (hash_table_checker(table) == hash_ci_char)) &&
-	     (!is_character(key))))
-	  return(s7_error(sc, sc->wrong_type_arg_symbol,
-			  set_elist_4(sc, wrap_string(sc, "hash-table-set! key ~S, is ~A, but the hash-table's key function is ~A", 70),
-				      key, type_name_string(sc, key),
-				      (hash_table_checker(table) == hash_string) ? sc->string_eq_symbol :
-				      ((hash_table_checker(table) == hash_ci_string) ? sc->string_ci_eq_symbol :
-				       ((hash_table_checker(table) == hash_char) ? sc->char_eq_symbol : sc->char_ci_eq_symbol)))));
-#endif
+    if (sc->safety > NO_SAFETY)
+      check_hash_table_checker(sc, table, key);
+
   p = mallocate_block(sc);
   hash_entry_key(p) = key;
   hash_entry_set_value(p, T_Pos(value));
@@ -53458,6 +53464,7 @@ static s7_pointer fx_c_si_direct(s7_scheme *sc, s7_pointer arg) {return(((s7_p_p
 static s7_pointer fx_c_ti_direct(s7_scheme *sc, s7_pointer arg) {return(((s7_p_pi_t)opt3_direct(cdr(arg)))(sc, t_lookup(sc, cadr(arg), arg), integer(opt2_con(cdr(arg)))));}
 static s7_pointer fx_c_tc_direct(s7_scheme *sc, s7_pointer arg) {return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, t_lookup(sc, cadr(arg), arg), opt2_con(cdr(arg))));}
 static s7_pointer fx_vector_ref_tc(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p_pi(sc, t_lookup(sc, cadr(arg), arg), integer(opt2_con(cdr(arg)))));}
+  /* tc happens a lot, but others almost never */
 
 static s7_pointer fx_memq_sc(s7_scheme *sc, s7_pointer arg)   {return(memq_p_pp(sc, lookup(sc, cadr(arg)), opt2_con(cdr(arg))));}
 static s7_pointer fx_memq_sc_3(s7_scheme *sc, s7_pointer arg) {return(memq_3_p_pp(sc, lookup(sc, cadr(arg)), opt2_con(cdr(arg))));}
@@ -69080,8 +69087,9 @@ static int32_t read_x_char(s7_scheme *sc, int32_t i, s7_pointer pt)
 	  return(i);
 	}
       d1 = digits[c];
-      if (d1 >= 16)                  /* "\x4H" */
+      if (d1 >= 16)                  /* "\x4H", also "\x44H" which Guile thinks is ok -- it apparently reads 2 digits and quits? */
 	read_error(sc, "unknown backslash usage -- perhaps you meant two backslashes?");
+      /* perhaps if c_ctr==0 error else backchar + return(i??) */
 
       c = inchar(pt);
       if (c == '"')                  /* "\x4" */
@@ -70243,7 +70251,6 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
   s7_pointer p = cdr(body), clause1 = car(p);
   if ((is_proper_list_2(sc, clause1)) && (is_fxable(sc, car(clause1)))) /* cond_a... */
     {
-      s7_pointer clause2;
       p = cdr(p);
       if ((is_pair(p)) && (is_null(cdr(p))) && ((caar(p) == sc->else_symbol) || (caar(p) == sc->T)))
 	{
@@ -70293,6 +70300,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 	}
       if (is_proper_list_2(sc, p))
 	{
+	  s7_pointer clause2;
 	  clause2 = car(p);
 	  if ((is_proper_list_2(sc, clause2)) &&
 	      (is_fxable(sc, car(clause2))))
@@ -71373,7 +71381,6 @@ static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer
       set_unsafely_optimized(expr);
       return(OPT_F);
     }
-
   if (fx_count(sc, expr) == 1)
     {
       set_unsafely_optimized(expr);
@@ -95166,27 +95173,27 @@ int main(int argc, char **argv)
  *            gmp (12-20)   20.9   21.0   22.0   22.2
  * -----------------------------------------------------
  * tpeak       122          115    114    108    107
- * tref        513          691    687    463    463
+ * tref        513          691    687    463    459
  * index      1024         1026   1016    973    968
  * tmock      7741         1177   1165   1057   1060
  * texit      1827         ----   ----   1778   1757
  * tvect      1953         2519   2464   1772   1713
  * s7test     4537         1873   1831   1818   1796
  * lt         2153         2187   2172   2150   2146
- * timp       2232         2971   2891   2176   2207
+ * timp       2232         2971   2891   2176   2206
  * tread      2614         2440   2421   2419   2412
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
  * dup        2756         3805   3788   2492   2362
- * tcopy      2600         8035   5546   2539   2507
- * tmat       2694         3065   3042   2524   2521
+ * tcopy      2600         8035   5546   2539   2499
+ * tmat       2694         3065   3042   2524   2516
  * tauto      2763         ----   ----   2562   2546
  * tb         3366?        2735   2681   2612   2611
- * titer      2659         2865   2842   2641   2641
+ * titer      2659         2865   2842   2641   2638
  * tsort      3572         3105   3104   2856   2855
  * tmac       3074         3950   3873   3033   2998
  * tload      3740         ----   ----   3046   3042
- * tset       3058         3253   3104   3048   3119
+ * tset       3058         3253   3104   3048   3121
  * teq        3541         4068   4045   3536   3531
  * tio        3698         3816   3752   3683   3680
  * tobj       4533         4016   3970   3828   3704
@@ -95207,8 +95214,8 @@ int main(int argc, char **argv)
  * tari       ----         13.0   12.7   6827   6824
  * tleft      9004         10.4   10.2   7657   7648
  * tgc        9614         11.9   11.1   8177   8156
- * cb         16.8         11.2   11.0   9658   9576
- * thash      35.4         11.8   11.7   9734   9730
+ * cb         16.8         11.2   11.0   9658   9581
+ * thash      35.4         11.8   11.7   9734   9601
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   36.9
@@ -95220,4 +95227,6 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
  *   need no_alloc bit for c|fx_funcs
+ * read_x_char is too restrictive now, remake v-lg34
+ * t718
  */
