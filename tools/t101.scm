@@ -51,7 +51,7 @@
   "`(ok? ',tst (lambda () (let ((__x__ #f)) (define (__f__) (do ((__i__ 0 (+ __i__ 1))) ((= __i__ 1) __x__) (set! __x__ ,tst))) (__f__))) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!v! (vector #f))) (do ((!i! 0 (+ !i! 1))) ((= !i! 1) (!v! 0)) (vector-set! !v! 0 ,tst)))) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!v! #f)) (do ((!i! 0 (+ !i! 1))) ((= !i! 1) !v!) (set! !v! ,tst)))) (!f!)) ,expected)"
-  "`(ok? ',tst (lambda () (define (!f!) (let ((!x! (map (lambda (!a!) ,tst) '(0)))) (car !x!))) (!f!)) ,expected)"
+  "`(ok? ',tst (lambda () (define (!f!) (let ((!x! (map (lambda (!a!) ,tst) '(0)))) (if (pair? !x!) (car !x!) :no-value))) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (call-with-exit (lambda (!a!) (!a! ,tst)))) ,expected)"
   "`(ok? ',tst (lambda () (call/cc (lambda (!a!) (!a! ,tst)))) ,expected)"
   "`(ok? ',tst (lambda () (values ,tst)) ,expected)"
@@ -74,7 +74,8 @@
   "`(ok? ',tst (lambda () (let ((!x 0)) (let-temporarily ((!x #f)) ,tst))) ,expected)"
   "`(ok? ',tst (lambda () (let () (define h! (make-hook '!x)) (set! (hook-functions h!) (list (lambda (!h) (set! (!h 'result) ,tst)))) (h!))) ,expected)"
   "`(ok? ',tst (lambda () (let-temporarily (((*s7* 'autoloading?) #f)) (with-let (sublet (curlet)) ,tst))) ,expected)"
-  "`(ok? ',tst (lambda () (let-temporarily (((*s7* 'safety) 1)) ,tst)) ,expected)"
+  "`(ok? ',tst (lambda () (let-temporarily (((*s7* 'safety) 1)) ,tst)) (let-temporarily (((*s7* 'safety) 1)) ,expected))"
+  ;; "`(ok? ',tst (lambda () (let* _L_ ((_Lx_ 1)) (if (> _Lx_ 0) (_L_ (- _Lx_ 1)) ,tst))) ,expected)"
 
   ;; this confuses get-zero-count, but otherwise is ok: `(ok? ',tst (lambda () (gc) ,tst) ,expected)
   ;; these are ok: "`(ok? ',tst (lambda () (define-macro (!m x) `(values ,x)) (!m ,tst)) ,expected)"
@@ -268,6 +269,9 @@
 
 (format *stderr* "~NC tmisc ~NC~%" 20 #\- 20 #\-)
 (system "./repl tmisc.scm")
+
+(format *stderr* "~NC tleft ~NC~%" 20 #\- 20 #\-)
+(system "./repl tleft.scm")
 
 (format *stderr* "~NC tcase ~NC~%" 20 #\- 20 #\-)
 (system "./repl tcase.scm")
