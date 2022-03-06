@@ -20483,7 +20483,7 @@ static s7_pointer g_mul_2_if(s7_scheme *sc, s7_pointer args) {return(make_real(s
 static s7_pointer g_mul_2_fi(s7_scheme *sc, s7_pointer args) {return(make_real(sc, real(car(args)) * integer(cadr(args))));}
 static s7_pointer g_mul_2_xi(s7_scheme *sc, s7_pointer args) {return(g_mul_xi(sc, car(args), integer(cadr(args)), 1));}
 static s7_pointer g_mul_2_ix(s7_scheme *sc, s7_pointer args) {return(g_mul_xi(sc, cadr(args), integer(car(args)), 2));}
-static s7_pointer g_mul_2_xf(s7_scheme *sc, s7_pointer args) {return(g_mul_xf(sc, car(args), real(cadr(args)), 1));}
+static s7_pointer g_mul_2_xf(s7_scheme *sc, s7_pointer args) {return(g_mul_xf(sc, car(args), real(cadr(args)), 1));} /* split out t_real is slower */
 static s7_pointer g_mul_2_fx(s7_scheme *sc, s7_pointer args) {return(g_mul_xf(sc, cadr(args), real(car(args)), 2));}
 static s7_pointer g_mul_2_ff(s7_scheme *sc, s7_pointer args) {return(make_real(sc, real(car(args)) * real(cadr(args))));}
 
@@ -22749,7 +22749,7 @@ static inline s7_pointer num_eq_xx(s7_scheme *sc, s7_pointer x, s7_pointer y)
   if (is_t_integer(x))
     return(make_boolean(sc, integer(x) == integer(y)));
   if (is_t_real(x))
-    return((is_NaN(real(x))) ? sc->F : make_boolean(sc, real(x) == integer(y)));
+    return(make_boolean(sc, real(x) == integer(y)));
   if (!is_number(x))
     return(make_boolean(sc, eq_out_x(sc, x, y)));
 #if WITH_GMP
@@ -46405,8 +46405,7 @@ static bool floats_are_equivalent_1(s7_scheme *sc, s7_double x, s7_double y, s7_
   if (x == y) return(true);
   diff = fabs(x - y);
   if (diff <= eps) return(true);
-  return(((is_NaN(x)) || (is_NaN(y))) &&
-	 ((is_NaN(x)) && (is_NaN(y))));
+  return((is_NaN(x)) && (is_NaN(y)));
 }
 
 static bool floats_are_equivalent(s7_scheme *sc, s7_double x, s7_double y)
@@ -47267,8 +47266,7 @@ static bool real_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t 
 static bool complex_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
   if (is_t_complex(y))
-    return((real_part(x) == real_part(y)) &&
-	   (imag_part(x) == imag_part(y)));
+    return((real_part(x) == real_part(y)) && (imag_part(x) == imag_part(y)));
 #if WITH_GMP
   if (is_t_big_complex(y))
     {
@@ -59694,6 +59692,16 @@ static bool finish_dd_fso(opt_info *opc, opt_info *o1, opt_info *o2)
   return(true);
 }
 
+static s7_double opt_d_7dd_ff_div_add(opt_info *o)
+{
+  s7_double x1, x2;
+  opt_info *o2 = o->v[10].o1;
+  x1 = o->v[9].fd(o->v[8].o1);
+  x2 = o2->v[5].fd(o2->v[4].o1);
+  x2 += float_vector_ref_d_7pi(o2->sc, slot_value(o2->v[6].p), o2->v[9].fi(o2->v[8].o1));
+  return(divide_d_7dd(o->sc, x1, x2));
+}
+
 static bool d_dd_ff_combinable(s7_scheme *sc, opt_info *opc, int32_t start)
 {
   opt_info *o1 = opc->v[8].o1, *o2 = opc->v[10].o1;
@@ -60028,7 +60036,13 @@ static bool d_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 		  opc->v[11].fd = o2->v[0].fd;
 		  return(true);
 		}}
-	  else opc->v[0].fd = opt_d_7dd_ff;
+	  else 
+	    {
+	      opc->v[0].fd = opt_d_7dd_ff;
+	      if ((opc->v[11].fd == opt_d_dd_ff_add_fv_ref) &&
+		  (opc->v[3].d_7dd_f == divide_d_7dd))
+		opc->v[0].fd = opt_d_7dd_ff_div_add;
+	    }
 	  return(true);
 	}}
   pc_fallback(sc, start);
@@ -65974,7 +65988,7 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
     case OP_IF:     return(opt_cell_if(sc, car_x, len));
     case OP_DO:     return(opt_cell_do(sc, car_x, len));
     case OP_LET_TEMPORARILY: return(opt_cell_let_temporarily(sc, car_x, len));
-    default: /* lambda let/let* with-let define etc */
+    default: /* lambda let/let* with-let define etc, also map/for-each with c_function?? */
       break;
     }
   return_false(sc, car_x);
@@ -69588,7 +69602,6 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 	      s7_set_history_enabled(sc, old_history_enabled);
 	      unstack(sc);
 	    }}
-
       sc->value = T_Pos(value);
       sc->args = T_Pos(args);
       sc->code = code;
@@ -69692,7 +69705,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	}
       return(OPT_F);
     }
-
   if (is_c_function(func))
     {
       if (c_function_min_args(func) != 0)
@@ -69709,7 +69721,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
       choose_c_function(sc, expr, func, 0);
       return(OPT_F);
     }
-
   if (is_c_function_star(func))
     {
       set_safe_optimize_op(expr, hop + OP_SAFE_C_STAR);
@@ -73710,7 +73721,6 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
       if (arity) (*arity) = -1;
       return;
     }
-
   for (i = 0, x = args; is_pair(x); i++, x = cdr(x))
     {
       s7_pointer car_x = car(x);
@@ -74329,37 +74339,36 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
       if (optimize(sc, body, 1, cleared_args = collect_parameters(sc, args, lst)) == OPT_OOPS)
 	clear_all_optimizations(sc, body);
       else
-	{
-	  if (result >= RECUR_BODY)
-	    {
-	      int32_t nvars;
-	      mark_fx_treeable(sc, body);
-
-	      for (nvars = 0, p = args; (is_pair(p)) && (!is_symbol_and_keyword(car(p))); nvars++, p = cdr(p));
-	      if ((is_null(p)) &&
-		  (nvars > 0))
-		{
-		  fx_annotate_args(sc, body, cleared_args); /* almost useless -- we need a recursive traversal here but that collides with check_if et al */
-		  fx_tree(sc, body, /* this usually costs more than it saves! */
-			    (is_pair(car(args))) ? caar(args) : car(args),
-			    (nvars > 1) ? ((is_pair(cadr(args))) ? caadr(args) : cadr(args)) : NULL,
-			    (nvars > 2) ? ((is_pair(caddr(args))) ? caaddr(args) : caddr(args)) : NULL,
-			    nvars > 3);
-		}
-	      if (((unstarred_lambda) || ((is_null(p)) && (nvars == sc->rec_tc_args))) &&
-		  (is_null(cdr(body))))
-		{ /* (if <a> #t|#f...) happens only rarely */
-		  if (sc->got_tc)
-		    {
-		      if (check_tc(sc, func, nvars, args, car(body)))
-			set_safe_closure_body(body);	      /* (very_)safe_closure set above if > RECUR_BODY */
-		      /* if not check_tc, car(body) is either not a tc op or it is not optimized so that is_fxable will return false */
-		    }
-		  if ((sc->got_rec) &&
-		      (!is_tc_op(optimize_op(car(body)))) &&
-		      (check_recur(sc, func, nvars, args, car(body))))
-		    set_safe_closure_body(body);
-		}}}
+	if (result >= RECUR_BODY)
+	  {
+	    int32_t nvars;
+	    mark_fx_treeable(sc, body);
+	    
+	    for (nvars = 0, p = args; (is_pair(p)) && (!is_symbol_and_keyword(car(p))); nvars++, p = cdr(p));
+	    if ((is_null(p)) &&
+		(nvars > 0))
+	      {
+		fx_annotate_args(sc, body, cleared_args); /* almost useless -- we need a recursive traversal here but that collides with check_if et al */
+		fx_tree(sc, body, /* this usually costs more than it saves! */
+			(is_pair(car(args))) ? caar(args) : car(args),
+			(nvars > 1) ? ((is_pair(cadr(args))) ? caadr(args) : cadr(args)) : NULL,
+			(nvars > 2) ? ((is_pair(caddr(args))) ? caaddr(args) : caddr(args)) : NULL,
+			nvars > 3);
+	      }
+	    if (((unstarred_lambda) || ((is_null(p)) && (nvars == sc->rec_tc_args))) &&
+		(is_null(cdr(body))))
+	      { /* (if <a> #t|#f...) happens only rarely */
+		if (sc->got_tc)
+		  {
+		    if (check_tc(sc, func, nvars, args, car(body)))
+		      set_safe_closure_body(body);	      /* (very_)safe_closure set above if > RECUR_BODY */
+		    /* if not check_tc, car(body) is either not a tc op or it is not optimized so that is_fxable will return false */
+		  }
+		if ((sc->got_rec) &&
+		    (!is_tc_op(optimize_op(car(body)))) &&
+		    (check_recur(sc, func, nvars, args, car(body))))
+		  set_safe_closure_body(body);
+	      }}
       if (is_symbol(func))
 	{
 	  sc->temp1 = sc->nil;
@@ -75230,8 +75239,7 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
 {
   s7_pointer body = cddr(sc->code), x;
   s7_int n = opt2_int(sc->code);
-  sc->w = sc->nil;
-  for (x = cadr(sc->code); is_pair(x); x = cdr(x))
+  for (x = cadr(sc->code), sc->w = sc->nil; is_pair(x); x = cdr(x))
     {
       sc->w = cons(sc, caar(x), sc->w);
       x = cdr(x);
@@ -95190,20 +95198,20 @@ int main(int argc, char **argv)
  *            gmp (12-20)   20.9   21.0   22.0   22.2
  * -----------------------------------------------------
  * tpeak       122          115    114    108    107
- * tref        513          691    687    463    459
+ * tref        513          691    687    463    458
  * index      1024         1026   1016    973    968
  * tmock      7741         1177   1165   1057   1060
  * texit      1827         ----   ----   1778   1757
  * tvect      1953         2519   2464   1772   1713
- * s7test     4537         1873   1831   1818   1796
- * lt         2153         2187   2172   2150   2146
+ * s7test     4537         1873   1831   1818   1813
+ * lt         2153         2187   2172   2150   2148
  * timp       2232         2971   2891   2176   2206
  * tread      2614         2440   2421   2419   2412
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
- * dup        2756         3805   3788   2492   2362
- * tcopy      2600         8035   5546   2539   2507
- * tmat       2694         3065   3042   2524   2516
+ * dup        2756         3805   3788   2492   2368
+ * tcopy      2600         8035   5546   2539   2501
+ * tmat       2694         3065   3042   2524   2523
  * tauto      2763         ----   ----   2562   2546
  * tb         3366?        2735   2681   2612   2611
  * titer      2659         2865   2842   2641   2638
@@ -95213,14 +95221,14 @@ int main(int argc, char **argv)
  * tset       3058         3253   3104   3048   3121
  * teq        3541         4068   4045   3536   3531
  * tio        3698         3816   3752   3683   3680
- * tobj       4533         4016   3970   3828   3704
+ * tobj       4533         4016   3970   3828   3701
  * tlamb      4454         4912   4786   4298   4248
  * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4426
  * tlet       5305         7775   5640   4450   4431
  * tmap       5488         8869   8774   4489   4508
  * tfft      115.1         7820   7729   4755   4652
- * tshoot     6896         5525   5447   5183   5193
+ * tshoot     6896         5525   5447   5183   5153
  * tform      8338         5357   5348   5307   5300
  * tnum       56.7         6348   6013   5433   5409
  * tstr       6123         6880   6342   5488   5488
@@ -95232,13 +95240,13 @@ int main(int argc, char **argv)
  * tleft      9004         10.4   10.2   7657   7648
  * tgc        9614         11.9   11.1   8177   8156
  * cb         16.8         11.2   11.0   9658   9581
- * thash      35.4         11.8   11.7   9734   9601
+ * thash      35.4         11.8   11.7   9734   9590
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   36.9
  * sg         75.8         ----   ----   55.9   55.8
  * lg        105.9         ----   ----  105.2  105.4
- * tbig      604.3        177.4  175.8  156.5  152.4
+ * tbig      604.3        177.4  175.8  156.5  152.5
  * -----------------------------------------------------
  *
  * we need a way to release excessive mallocate bins

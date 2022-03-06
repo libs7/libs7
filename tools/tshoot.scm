@@ -274,9 +274,9 @@
       (do ((j 0 (+ j 1)))
           ((= j n))
 	(float-vector-set! av i (+ (float-vector-ref av i) 
-				   (* (/ 1.0 (+ i (float-vector-ref weights (+ i j))))
-				      (float-vector-ref v j)))))))
-  
+				   (/ (float-vector-ref v j)
+				      (+ i (float-vector-ref weights (+ i j)))))))))
+
   (define (mulAtV n v atv)
     (fill! atv 0.0)
     (do ((i 0 (+ i 1)))
@@ -284,9 +284,9 @@
       (do ((j 0 (+ j 1)))
           ((= j n))
 	(float-vector-set! atv i (+ (float-vector-ref atv i) 
-				    (* (/ 1.0 (+ j (float-vector-ref weights (+ i j))))
-				       (float-vector-ref v j)))))))
-  
+				    (/ (float-vector-ref v j)
+				       (+ j (float-vector-ref weights (+ i j)))))))))
+
   (define (mulAtAv n v atav)
     (let ((u (make-float-vector n 0.0)))
       (mulAv n v u)
@@ -314,7 +314,7 @@
       
       (sqrt (/ vBv vV))))
 
-  (display (spectral-norm 300)) ; (spectral-norm 5500) takes about 14.3 secs
+  (display (spectral-norm 300)) ; (spectral-norm 4000) takes about 6.8 seconds, 5500: 12.8, 8000: 29.5
   (newline))
 
 ;;; --------------------------------------------------------------------------------

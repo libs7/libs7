@@ -4640,7 +4640,17 @@
 				(return (car diff)))
 			    (return (simplify-boolean (cons 'and diff) () () env))))
 			;; now there are redundancies below (see subsumes?) but they assumed the tests were side-by-side
-
+#|
+			;; (and (or x y) x y) -> (and x y) which doesn't happen to anyone but me
+			(when (= (length form) 4) ; len here does not always reflect form length?
+			  (let ((arg1 (cadr form))
+				(arg2 (caddr form))
+				(arg3 (cadddr form)))
+			    (when (and (pair? arg1) (eq? (car arg1) 'or) (len=3? arg1)
+				       (equal? (cadr arg1) arg2)
+				       (equal? (caddr arg1) arg3))
+			      (return (list 'and arg2 arg3)))))
+|#			    
 			(reduce-and return form len false env)))))))))
 
 	(define (bsimp x env) ; quick check for common easy cases
