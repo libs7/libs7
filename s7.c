@@ -3290,10 +3290,10 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define port_set_closed(p, Val)        port_port(p)->is_closed = Val /* this can't be a type bit because sweep checks it after the type has been cleared */
 #define port_needs_free(p)             port_port(p)->needs_free
 #define port_next(p)                   port_block(p)->nx.next
-#define port_original_input_string(p)  port_port(p)->orig_str
 #define port_output_function(p)        port_port(p)->output_function /* these two are for function ports */
 #define port_input_function(p)         port_port(p)->input_function
-#define port_scheme_function(p)        port_port(p)->orig_str
+#define port_string_or_function(p)     port_port(p)->orig_str
+#define port_set_string_or_function(p, S) port_port(p)->orig_str = S
 
 #define current_input_port(Sc)         Sc->input_port
 #define set_current_input_port(Sc, P)  Sc->input_port = P
@@ -4084,7 +4084,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_C_SS, HOP_C_SS, OP_C_S, HOP_C_S, OP_READ_S, HOP_READ_S, OP_C_P, HOP_C_P, OP_C_AP, HOP_C_AP,
       OP_C_A, HOP_C_A, OP_C_AA, HOP_C_AA, OP_C, HOP_C, OP_C_NA, HOP_C_NA,
 
-      OP_CL_S, HOP_CL_S, OP_CL_SS, HOP_CL_SS, OP_CL_A, HOP_CL_A, OP_CL_AA, HOP_CL_AA, OP_CL_NA, HOP_CL_NA, OP_CL_FA, HOP_CL_FA, OP_CL_SAS, HOP_CL_SAS,
+      OP_CL_S, HOP_CL_S, OP_CL_SS, HOP_CL_SS, OP_CL_A, HOP_CL_A, OP_CL_AA, HOP_CL_AA,
+      OP_CL_NA, HOP_CL_NA, OP_CL_FA, HOP_CL_FA, OP_CL_SAS, HOP_CL_SAS,
 
       OP_SAFE_C_PP, HOP_SAFE_C_PP, OP_SAFE_C_FF, HOP_SAFE_C_FF,
       OP_SAFE_C_SP, HOP_SAFE_C_SP, OP_SAFE_C_CP, HOP_SAFE_C_CP,
@@ -4306,7 +4307,8 @@ static const char* op_names[NUM_OPS] =
       "c_ss", "h_c_ss", "c_s", "h_c_s", "read_s", "h_read_s", "c_p", "h_c_p", "c_ap", "h_c_ap",
       "c_a", "h_c_a", "c_aa", "h_c_aa", "c", "h_c", "c_na", "h_c_na",
 
-      "cl_s", "h_cl_s", "cl_ss", "h_cl_ss", "cl_a", "h_cl_a", "cl_aa", "h_cl_aa", "cl_na", "h_cl_na", "cl_fa", "h_cl_fa", "cl_sas", "h_cl_sas",
+      "cl_s", "h_cl_s", "cl_ss", "h_cl_ss", "cl_a", "h_cl_a", "cl_aa", "h_cl_aa",
+      "cl_na", "h_cl_na", "cl_fa", "h_cl_fa", "cl_sas", "h_cl_sas",
 
       "safe_c_pp", "h_safe_c_pp", "safe_c_ff", "h_safe_c_ff",
       "safe_c_sp", "h_safe_c_sp", "safe_c_cp", "h_safe_c_cp",
@@ -6815,14 +6817,14 @@ static void mark_iterator(s7_pointer p)
 static void mark_input_port(s7_pointer p)
 {
   set_mark(p);
-  gc_mark(port_scheme_function(p)); /* this is also a string port's string */
+  gc_mark(port_string_or_function(p)); /* this is also a string port's string */
 }
 
 static void mark_output_port(s7_pointer p)
 {
   set_mark(p);
   if (is_function_port(p))
-    gc_mark(port_scheme_function(p));
+    gc_mark(port_string_or_function(p));
 }
 
 #define clear_type(p) full_type(p) = T_FREE
@@ -28568,7 +28570,7 @@ static s7_pointer read_file(s7_scheme *sc, FILE *fp, const char *name, s7_int ma
   port_block(port) = b;
   port_port(port) = (port_t *)block_data(b);
   port_set_closed(port, false);
-  port_original_input_string(port) = sc->nil;
+  port_set_string_or_function(port, sc->nil);
   /* if we're constantly opening files, and each open saves the file name in permanent memory, we gradually core-up */
   port_filename_length(port) = safe_strlen(name);
   port_set_filename(sc, port, name, port_filename_length(port));
@@ -28830,7 +28832,7 @@ static void init_standard_ports(s7_scheme *sc)
   port_port(x) = (port_t *)calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_set_closed(x, false);
-  port_original_input_string(x) = sc->nil;
+  port_set_string_or_function(x, sc->nil);
   port_filename_length(x) = 7;
   port_set_filename(sc, x, "*stdin*", 7);
   port_file_number(x) = remember_file_name(sc, port_filename(x));
@@ -28932,7 +28934,7 @@ static s7_pointer open_input_string(s7_scheme *sc, const char *input_string, s7_
   port_port(x) = (port_t *)block_data(b);
   port_type(x) = STRING_PORT;
   port_set_closed(x, false);
-  port_original_input_string(x) = sc->nil;
+  port_set_string_or_function(x, sc->nil);
   port_data(x) = (uint8_t *)input_string;
   port_data_block(x) = NULL;
   port_data_size(x) = len;
@@ -28961,7 +28963,7 @@ static inline s7_pointer open_and_protect_input_string(s7_scheme *sc, s7_pointer
 {
   s7_pointer p;
   p = open_input_string(sc, string_value(str), string_length(str));
-  port_original_input_string(p) = str;
+  port_set_string_or_function(p, str);
   return(p);
 }
 
@@ -29126,7 +29128,7 @@ static s7_pointer g_closed_input_function_port(s7_scheme *sc, s7_pointer args)
 static void close_input_function(s7_scheme *sc, s7_pointer p)
 {
   port_port(p)->pf = &closed_port_functions;
-  port_scheme_function(p) = sc->closed_input_function; /* from s7_make_function so it is GC-protected */
+  port_set_string_or_function(p, sc->closed_input_function); /* from s7_make_function so it is GC-protected */
   port_set_closed(p, true);
 }
 
@@ -29157,7 +29159,7 @@ s7_pointer s7_open_input_function(s7_scheme *sc, s7_pointer (*function)(s7_schem
   port_block(x) = b;
   port_port(x) = (port_t *)block_data(b);
   function_port_set_defaults(x);
-  port_scheme_function(x) = sc->nil;
+  port_set_string_or_function(x, sc->nil);
   port_input_function(x) = function;
   port_port(x)->pf = &input_function_functions;
   add_input_port(sc, x);
@@ -29177,7 +29179,7 @@ static void init_open_input_function_choices(s7_scheme *sc)
 
 static s7_pointer input_scheme_function_wrapper(s7_scheme *sc, s7_read_t read_choice, s7_pointer port)
 {
-  return(s7_apply_function(sc, port_scheme_function(port), set_plist_1(sc, sc->open_input_function_choices[(int)read_choice])));
+  return(s7_apply_function(sc, port_string_or_function(port), set_plist_1(sc, sc->open_input_function_choices[(int)read_choice])));
 }
 
 static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
@@ -29194,7 +29196,7 @@ static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
 		    set_elist_2(sc, wrap_string(sc, "input-function-port function, ~A, should take one argument", 58), func)));
 
   port = s7_open_input_function(sc, input_scheme_function_wrapper);
-  port_scheme_function(port) = func;
+  port_set_string_or_function(port, func);
   return(port);
 }
 
@@ -29208,7 +29210,7 @@ static s7_pointer g_closed_output_function_port(s7_scheme *sc, s7_pointer args)
 static void close_output_function(s7_scheme *sc, s7_pointer p)
 {
   port_port(p)->pf = &closed_port_functions;
-  port_scheme_function(p) = sc->closed_output_function;
+  port_set_string_or_function(p, sc->closed_output_function);
   port_set_closed(p, true);
 }
 
@@ -29225,7 +29227,7 @@ s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc
   port_port(x) = (port_t *)block_data(b);
   function_port_set_defaults(x);
   port_output_function(x) = function;
-  port_scheme_function(x) = sc->nil;
+  port_set_string_or_function(x, sc->nil);
   port_port(x)->pf = &output_function_functions;
   add_output_port(sc, x);
   return(x);
@@ -29233,7 +29235,7 @@ s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc
 
 static void output_scheme_function_wrapper(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
-  s7_apply_function(sc, port_scheme_function(port), set_plist_1(sc, make_integer(sc, c)));
+  s7_apply_function(sc, port_string_or_function(port), set_plist_1(sc, make_integer(sc, c)));
 }
 
 static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
@@ -29250,7 +29252,7 @@ static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
 		    set_elist_2(sc, wrap_string(sc, "output-function-port function, ~A, should take one argument", 59), func)));
 
   port = s7_open_output_function(sc, output_scheme_function_wrapper);
-  port_scheme_function(port) = func;
+  port_set_string_or_function(port, func);
   mark_function[T_OUTPUT_PORT] = mark_output_port;
   return(port);
 }
@@ -30536,7 +30538,7 @@ static s7_pointer op_eval_string(s7_scheme *sc)
 static s7_pointer call_with_input(s7_scheme *sc, s7_pointer port, s7_pointer args)
 {
   s7_pointer p = cadr(args);
-  port_original_input_string(port) = car(args);
+  port_set_string_or_function(port, car(args));
   push_stack(sc, OP_UNWIND_INPUT, sc->unused, port); /* #<unused> here is a marker (needed) */
   push_stack(sc, OP_APPLY, list_1(sc, port), p);
   return(sc->F);
@@ -30590,7 +30592,7 @@ static s7_pointer with_input(s7_scheme *sc, s7_pointer port, s7_pointer args)
 {
   s7_pointer p, old_input_port = current_input_port(sc);
   set_current_input_port(sc, port);
-  port_original_input_string(port) = car(args);
+  port_set_string_or_function(port, car(args));
   push_stack(sc, OP_UNWIND_INPUT, old_input_port, port);
   p = cadr(args);
   push_stack(sc, OP_APPLY, sc->nil, p);
@@ -30605,28 +30607,26 @@ static s7_pointer g_with_input_from_string(s7_scheme *sc, s7_pointer args)
   s7_pointer str = car(args);
   if (!is_string(str))
     return(method_or_bust(sc, str, sc->with_input_from_string_symbol, args, T_STRING, 1));
-
   if (cadr(args) == global_value(sc->read_symbol))
     {
       if (string_length(str) == 0)
 	return(eof_object);
       push_input_port(sc, current_input_port(sc));
       set_current_input_port(sc, open_and_protect_input_string(sc, str));
-      port_original_input_string(current_input_port(sc)) = str;
+      port_set_string_or_function(current_input_port(sc), str);
       push_stack(sc, OP_UNWIND_INPUT, sc->unused, current_input_port(sc));
       push_stack_op_let(sc, OP_READ_DONE);
       push_stack_op_let(sc, OP_READ_INTERNAL);
       return(current_input_port(sc));
     }
-
   if (!is_thunk(sc, cadr(args)))
     return(method_or_bust_with_type(sc, cadr(args), sc->with_input_from_string_symbol, args, a_thunk_string, 2));
-
   /* since the arguments are evaluated before we get here, we can get some confusing situations:
    *   (with-input-from-string "#x2.1" (read))
    *     (read) -> whatever it can get from the current input port!
    *     ";with-input-from-string argument 2, #<eof>, is untyped but should be a thunk"
    *   (with-input-from-string "" (read-line)) -> hangs awaiting stdin input
+   * also this can't be split into wifs and wifs_read because we need the runtime value of 'read
    */
   return(with_input(sc, open_and_protect_input_string(sc, str), args));
 }
@@ -49766,7 +49766,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
 		make_string_with_length(sc, (const char *)port_data(obj), ((port_position(obj)) > 16) ? 16 : port_position(obj)));
     }
   if (is_function_port(obj))
-    s7_varlet(sc, let, sc->function_symbol, port_scheme_function(obj));
+    s7_varlet(sc, let, sc->function_symbol, port_string_or_function(obj));
   s7_gc_unprotect_at(sc, gc_loc);
   return(let);
 }
@@ -52472,7 +52472,7 @@ pass (rootlet):\n\
     }
   else
     if (is_optimized(sc->code))
-      clear_all_optimizations(sc, sc->code);
+      clear_all_optimizations(sc, sc->code); /* clears "unsafe" ops, not all ops */
 
   set_current_code(sc, sc->code);
   if (current_stack_top(sc) < 12)
@@ -88173,10 +88173,7 @@ static inline void op_c_s(s7_scheme *sc)
 
 static Inline void op_apply_ss(s7_scheme *sc)
 {
-  /* these used to check sc->code (i.e. "apply") if not h_optimized, but that still assumed we'd apply cadr to cddr.
-   *   should we check that apply has not been set!?
-   */
-  sc->args = lookup(sc, opt2_sym(sc->code));  /* is this right if code=macro? */
+  sc->args = lookup(sc, opt2_sym(sc->code));
   sc->code = lookup(sc, cadr(sc->code));      /* global search here was slower (e.g. tauto) */
   if (needs_copied_args(sc->code))
     sc->args = copy_proper_list_with_arglist_error(sc, sc->args);
@@ -95252,4 +95249,5 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
  *   need no_alloc bit for c|fx_funcs
+ * lint: (* (/ 1.0 expr) expr) where at least one of the exprs is float
  */
