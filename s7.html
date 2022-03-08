@@ -3268,6 +3268,19 @@ add information to the namespace created by <code>(object-&gt;let mark)</code>.
 <em class="gray">123.0</em>
 </pre>
 
+<p>Normally, every let's outlet chain goes back to the rootlet.  If we want to
+create a let that breaks that chain, we can use let-ref-fallback:
+</p>
+
+<pre>
+(define lt (<em class=red>openlet</em> (inlet 'a 1
+                           'let-ref-fallback (lambda (e sym) 
+			                       ;; any other symbol is undefined
+					       #&lt;undefined&gt;))))
+&gt; (lt 'abs)
+<em class="gray">#&lt;undefined&gt;</em>
+</pre>
+
 </div>
 
 
