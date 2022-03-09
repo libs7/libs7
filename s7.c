@@ -4451,7 +4451,7 @@ static const char* op_names[NUM_OPS] =
 
 #define is_safe_c_op(op)  ((op >= OP_SAFE_C_NC) && (op < OP_THUNK))
 #define is_unknown_op(op) ((op >= OP_UNKNOWN) && (op <= OP_UNKNOWN_NP))
-#define is_h_safe_c_d(P)  (optimize_op(P) == HOP_SAFE_C_NC)
+#define is_h_safe_c_nc(P) (optimize_op(P) == HOP_SAFE_C_NC)
 #define is_safe_c_s(P)    ((optimize_op(P) == OP_SAFE_C_S) || (optimize_op(P) == HOP_SAFE_C_S))
 #define is_h_safe_c_s(P)  (optimize_op(P) == HOP_SAFE_C_S)
 #define FIRST_UNHOPPABLE_OP OP_APPLY_SS
@@ -6205,13 +6205,12 @@ static void process_output_port(s7_scheme *sc, s7_pointer s1)
   liberate(sc, port_block(s1));
   if (port_needs_free(s1))
     {
+      port_needs_free(s1) = false;
       if (port_data_block(s1))
 	{
 	  liberate(sc, port_data_block(s1));
 	  port_data_block(s1) = NULL;
-	}
-      port_needs_free(s1) = false;
-    }
+	}}
 }
 
 static void process_continuation(s7_scheme *sc, s7_pointer s1)
@@ -19297,7 +19296,7 @@ static s7_pointer add_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
 	  s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
 	  if (arg2 == int_one)                          /* (+ ... 1) */
 	    return(sc->add_x1);
-	  if ((is_t_integer(arg1)) && ((is_pair(arg2)) && (is_optimized(arg2)) && (is_h_safe_c_d(arg2)) && (fn_proc(arg2) == g_random_i)))
+	  if ((is_t_integer(arg1)) && ((is_pair(arg2)) && (is_optimized(arg2)) && (is_h_safe_c_nc(arg2)) && (fn_proc(arg2) == g_random_i)))
 	    {
 	      set_opt3_int(cdr(expr), integer(cadr(arg2)));
 	      set_safe_optimize_op(expr, HOP_SAFE_C_NC); /* op if r op? */
@@ -34719,7 +34718,6 @@ calls thunk, then returns the collected output"
   s7_pointer old_output_port, p = car(args);
   if (!is_thunk(sc, p))
     return(method_or_bust_with_type(sc, p, sc->with_output_to_string_symbol, args, a_thunk_string, 1));
-
   if ((is_continuation(p)) || (is_goto(p)))
     return(wrong_type_argument_with_type(sc, sc->with_output_to_string_symbol, 1, p, a_normal_procedure_string));
 
@@ -35136,9 +35134,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  (port_position(port) < port_data_size(port)))
 		{
 		  port_data(port)[port_position(port)++] = '\n';
-		  /* which is actually a bad idea, but as a desperate stopgap, I simply padded
-		   *  the string port string with 8 chars that are not in the length.
-		   */
 		  sc->format_column = 0;
 		}
 	      else format_append_newline(sc, port);
@@ -35236,10 +35231,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		if (curly_len == 1)
 		  format_error(sc, "~{~}' doesn't consume any arguments!", 36, str, args, fdat);
 
-		/* what about cons's here?  I can't see any way in CL either to specify the car or cdr of a cons within the format string
-		 *   (cons 1 2) is applicable: ((cons 1 2) 0) -> 1
-		 *   also there can be applicable objects that won't work in the map context (arg not integer etc)
-		 */
+		/* what about cons's here?  I can't see any way to specify the car or cdr of a cons within the format string */
 		if (is_not_null(car(fdat->args)))               /* (format #f "~{~A ~}" ()) -> "" */
 		  {
 		    s7_pointer curly_arg;
@@ -35425,8 +35417,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		switch (str[i])
 		  {
 		    /* -------- pad to column --------
-		     *   are columns numbered from 1 or 0?  there seems to be disagreement about this directive
-		     *   does "space over to" mean including?
+		     *   are columns numbered from 1 or 0?  there seems to be disagreement about this directive, does "space over to" mean including? 
 		     */
 		  case 'T': case 't':
 		    if (width == -1) width = 0;
@@ -36158,7 +36149,10 @@ s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q)
 
 /* -------------------------------------------------------------------------------- */
 
-/* these are used in clm2xen et al under names like Xen_wrap_5_args -- they should go away! */
+/* these are used in clm2xen et al under names like Xen_wrap_5_args -- they should go away!
+ *   we could move these to xen.c, s7.h entries to xen.h, but that means using s7_car|cdr below rather than simple car|cdr
+ */
+
 s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1)) /* not currently used */
 {
   return(f1(car(args)));
@@ -76686,6 +76680,52 @@ static bool op_or_ap(s7_scheme *sc)
 
 /* -------------------------------- if -------------------------------- */
 
+static void fb_if_annotate(s7_scheme *sc, s7_pointer code, s7_pointer form)
+{
+  if (optimize_op(form) == OP_IF_A_P)
+    {
+      if (is_fxable(sc, cadr(code)))
+	{
+	  pair_set_syntax_op(form, OP_IF_A_A);
+	  fx_annotate_arg(sc, cdr(code), sc->curlet);
+	  set_opt1_pair(form, cdr(code));
+	  fb_annotate(sc, form, code, OP_IF_B_A);
+	}
+      else fb_annotate(sc, form, code, OP_IF_B_P);
+    }
+  if (optimize_op(form) == OP_IF_A_R)
+    fb_annotate(sc, form, code, OP_IF_B_R);
+  if (optimize_op(form) == OP_IF_A_N_N)
+    fb_annotate(sc, form, cdar(code), OP_IF_B_N_N);
+  if (optimize_op(form) == OP_IF_A_P_P)
+    {
+      if (is_fxable(sc, cadr(code)))
+	{
+	  set_opt1_pair(form, cdr(code));
+	  if (is_fxable(sc, caddr(code)))
+	    {
+	      pair_set_syntax_op(form, OP_IF_A_A_A); /* b_a_a never happens? */
+	      set_opt2_pair(form, cddr(code));
+	    }
+	  else
+	    {
+	      pair_set_syntax_op(form, OP_IF_A_A_P);
+	      fb_annotate(sc, form, code, OP_IF_B_A_P);
+	    }
+	  fx_annotate_args(sc, cdr(code), sc->curlet);
+	}
+      else
+	if (is_fxable(sc, caddr(code)))
+	  {
+	    pair_set_syntax_op(form, OP_IF_A_P_A);
+	    fx_annotate_args(sc, cdr(code), sc->curlet);
+	    set_opt2_pair(form, cddr(code));
+	    fb_annotate(sc, form, code, OP_IF_B_P_A);
+	  }
+	else fb_annotate(sc, form, code, OP_IF_B_P_P);
+    }
+}
+
 #define choose_if_optc(Opc, One, Reversed, Not) \
           ((One) ? ((Reversed) ? OP_ ## Opc ## _R : \
             ((Not) ? OP_ ## Opc ## _N : OP_ ## Opc ## _P)) : \
@@ -76713,7 +76753,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
     {
       if (is_optimized(test))
 	{
-	  if (is_h_safe_c_d(test)) /* replace these with fx_and* */
+	  if (is_h_safe_c_nc(test)) /* replace these with fx_and* */
 	    {
 	      pair_set_syntax_op(form, choose_if_optc(IF_A, one_branch, reversed, not_case));
 	      if (not_case)
@@ -76723,7 +76763,7 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		}
 	      else set_fx(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
 	      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
-	      /* fb_annotate? */
+	      fb_if_annotate(sc, code, form);
 	      return;
 	    }
 	  if ((is_h_safe_c_s(test)) &&
@@ -76747,7 +76787,6 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		      else pair_set_syntax_op(form, OP_IF_IS_TYPE_S_P_A);
 		      fx_annotate_arg(sc, cddr(code), sc->curlet);
 		      if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
-		      /* fb_annotate? */
 		    }}
 	      else
 		{
@@ -76760,17 +76799,11 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 	    }
 	  if (is_fxable(sc, test))
 	    {
-	      if (optimize_op(test) == OP_OR_2A)
+	      if ((optimize_op(test) == OP_OR_2A) || (optimize_op(test) == OP_AND_2A))
 		{
-		  pair_set_syntax_op(form, choose_if_optc(IF_OR2, one_branch, reversed, not_case));
-		  clear_has_fx(code);
-		  set_opt2_pair(code, cdr(test));
-		  set_opt3_pair(code, cddr(test));
-		  return;
-		}
-	      if (optimize_op(test) == OP_AND_2A)
-		{
-		  pair_set_syntax_op(form, choose_if_optc(IF_AND2, one_branch, reversed, not_case));
+		  if (optimize_op(test) == OP_OR_2A)
+		    pair_set_syntax_op(form, choose_if_optc(IF_OR2, one_branch, reversed, not_case));
+		  else pair_set_syntax_op(form, choose_if_optc(IF_AND2, one_branch, reversed, not_case));
 		  clear_has_fx(code);
 		  set_opt2_pair(code, cdr(test));
 		  set_opt3_pair(code, cddr(test));
@@ -76793,49 +76826,8 @@ static void set_if_opts(s7_scheme *sc, s7_pointer form, bool one_branch, bool re
 		  if (!reversed) set_opt3_pair(form, cdadr(form));
 		}
 	      else set_fx_direct(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
-
-	      if (optimize_op(form) == OP_IF_A_P)
-		{
-		  if (is_fxable(sc, cadr(code)))
-		    {
-		      pair_set_syntax_op(form, OP_IF_A_A);
-		      fx_annotate_arg(sc, cdr(code), sc->curlet);
-		      set_opt1_pair(form, cdr(code));
-		      fb_annotate(sc, form, code, OP_IF_B_A);
-		    }
-		  else fb_annotate(sc, form, code, OP_IF_B_P);
-		}
-	      if (optimize_op(form) == OP_IF_A_R)
-		fb_annotate(sc, form, code, OP_IF_B_R);
-	      if (optimize_op(form) == OP_IF_A_N_N)
-		fb_annotate(sc, form, cdar(code), OP_IF_B_N_N);
-	      if (optimize_op(form) == OP_IF_A_P_P)
-		{
-		  if (is_fxable(sc, cadr(code)))
-		    {
-		      set_opt1_pair(form, cdr(code));
-		      if (is_fxable(sc, caddr(code)))
-			{
-			  pair_set_syntax_op(form, OP_IF_A_A_A); /* b_a_a never happens? */
-			  set_opt2_pair(form, cddr(code));
-			}
-		      else
-			{
-			  pair_set_syntax_op(form, OP_IF_A_A_P);
-			  fb_annotate(sc, form, code, OP_IF_B_A_P);
-			}
-		      fx_annotate_args(sc, cdr(code), sc->curlet);
-		    }
-		  else
-		    if (is_fxable(sc, caddr(code)))
-		      {
-			pair_set_syntax_op(form, OP_IF_A_P_A);
-			fx_annotate_args(sc, cdr(code), sc->curlet);
-			set_opt2_pair(form, cddr(code));
-			fb_annotate(sc, form, code, OP_IF_B_P_A);
-		      }
-		    else fb_annotate(sc, form, code, OP_IF_B_P_P);
-		}}
+	      fb_if_annotate(sc, code, form);
+	    }
 	  else
 	    {
 	      pair_set_syntax_op(form, choose_if_optc(IF_P, one_branch, reversed, not_case));
@@ -80138,7 +80130,7 @@ static s7_pointer simple_stepper(s7_scheme *sc, s7_pointer v)
       s7_pointer step_expr = caddr(v);
       if ((is_optimized(step_expr)) &&
 	  (((optimize_op(step_expr) == HOP_SAFE_C_SC) && (car(v) == cadr(step_expr))) ||
-	   ((is_h_safe_c_d(step_expr)) && /* replace with is_fxable? */
+	   ((is_h_safe_c_nc(step_expr)) &&       /* replace with is_fxable? */
 	    (is_pair(cdr(step_expr))) &&         /* ((v 0 (+))) */
 	    (car(v) == cadr(step_expr)) &&
 	    ((opt1_cfunc(step_expr) == sc->add_x1) || (opt1_cfunc(step_expr) == sc->subtract_x1))) ||
@@ -83624,12 +83616,11 @@ static bool op_safe_closure_star_na_1(s7_scheme *sc, s7_pointer code)
 
 static bool op_safe_closure_star_na_2(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer arglist, p;
+  s7_pointer arglist;
   sc->args = safe_list_2(sc);
   arglist = sc->args;
   set_car(arglist, fx_call(sc, cdr(code)));
-  p = cddr(code);
-  set_car(cdr(arglist), fx_call(sc, p));
+  set_car(cdr(arglist), fx_call(sc, cddr(code)));
   return(call_lambda_star(sc, code, arglist));  /* clears list_in_use */
 }
 
@@ -95152,17 +95143,17 @@ int main(int argc, char **argv)
  * tref        513          691    687    463    458
  * index      1024         1026   1016    973    968
  * tmock      7741         1177   1165   1057   1060
- * texit      1827         ----   ----   1778   1757
  * tvect      1953         2519   2464   1772   1713
+ * texit      1827         ----   ----   1778   1757
  * s7test     4537         1873   1831   1818   1813
  * lt         2153         2187   2172   2150   2148
  * timp       2232         2971   2891   2176   2206
- * tread      2614         2440   2421   2419   2412
+ * tread      2614         2440   2421   2419   2414
  * trclo      4079         2735   2574   2454   2451
  * fbench     2833         2688   2583   2460   2460
- * dup        2756         3805   3788   2492   2368  2373
+ * dup        2756         3805   3788   2492   2373
  * tcopy      2600         8035   5546   2539   2501
- * tmat       2694         3065   3042   2524   2523  2519
+ * tmat       2694         3065   3042   2524   2520
  * tauto      2763         ----   ----   2562   2546
  * tb         3366?        2735   2681   2612   2611
  * titer      2659         2865   2842   2641   2638
@@ -95173,28 +95164,28 @@ int main(int argc, char **argv)
  * teq        3541         4068   4045   3536   3531
  * tio        3698         3816   3752   3683   3680
  * tobj       4533         4016   3970   3828   3701
- * tlamb      4454         4912   4786   4298   4248
+ * tlamb      4454         4912   4786   4298   4255
  * tclo       4604         4787   4735   4390   4398
  * tcase      4501         4960   4793   4439   4426
- * tlet       5305         7775   5640   4450   4431
- * tmap       5488         8869   8774   4489   4508  4501
+ * tlet       5305         7775   5640   4450   4434
+ * tmap       5488         8869   8774   4489   4500
  * tfft      115.1         7820   7729   4755   4652
  * tshoot     6896         5525   5447   5183   5153
  * tform      8338         5357   5348   5307   5300
- * tnum       56.7         6348   6013   5433   5409
+ * tnum       56.7         6348   6013   5433   5406
  * tstr       6123         6880   6342   5488   5488
- * tmisc      6847         8869   7612   6435   6322
+ * tmisc      6847         8869   7612   6435   6331
  * tgsl       25.1         8485   7802   6373   6373
  * trec       8314         6936   6922   6521   6521
  * tlist      6551         7896   7546   6558   6532
- * tari       ----         13.0   12.7   6827   6824  6819
- * tleft      9004         10.4   10.2   7657   7648
+ * tari       ----         13.0   12.7   6827   6819
+ * tleft      9004         10.4   10.2   7657   7664
  * tgc        9614         11.9   11.1   8177   8156
- * cb         16.8         11.2   11.0   9658   9581
+ * cb         16.8         11.2   11.0   9658   9585
  * thash      35.4         11.8   11.7   9734   9590
  * tgen       12.6         11.2   11.4   12.0   11.9
  * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   36.9
+ * calls      55.3         36.7   37.5   37.0   37.0
  * sg         75.8         ----   ----   55.9   55.8
  * lg        105.9         ----   ----  105.2  105.4
  * tbig      604.3        177.4  175.8  156.5  152.5
@@ -95204,5 +95195,6 @@ int main(int argc, char **argv)
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
  *   need no_alloc bit for c|fx_funcs
  * lint: (* (/ 1.0 expr) expr) where at least one of the exprs is float
- *   t572 for inexact->exact stupidities
+ * need an non-openlet blocking outlet
+ * more direct sharing (like int|float|byte-vector)? ratio/complex/string -- new vector types?
  */

@@ -4833,7 +4833,7 @@
       (let ()
 
 	(define (integer-result? op)
-	  (memq op '(logior lognot logxor logand numerator denominator floor round truncate ceiling ash)))
+	  (memq op '(logior lognot logxor logand numerator denominator floor round truncate ceiling ash int-vector-ref)))
 
 	(define (remove-inexactions val)
 	  (when (and (or (assq 'exact->inexact val)
@@ -6180,9 +6180,10 @@
 	      (define (rational-result? op)
 		(memq op '(rationalize inexact->exact exact)))
 
-	      (define (numexact args form env)
+	      (define (numexact args form env)  ; inexact->exact
 		(cond ((not (len=1? args))
 		       form)
+
 		      ((or (rational? (car args))
 			   (and (pair? (car args))
 				(or (rational-result? (caar args))
@@ -6191,19 +6192,25 @@
 					 (pair? (cdar args))
 					 (rational? (cadar args)))))) ; perhaps (exact (random 10.0)) -> (random 10)??
 		       (car args))
+
 		      ((number? (car args))
 		       (catch #t (lambda () (inexact->exact (car args))) (lambda any (cons (car form) args))))
+
 		      (else (cons (car form) args))))
 	      (hash-table-set! h 'inexact->exact numexact)
 	      (hash-table-set! h 'exact numexact))
 
 	    (let ()
-	      (define (numinexact args form env)
+	      (define (numinexact args form env) ; exact->inexact
 		(cond ((not (len=1? args))
 		       form)
 
-		      ((memv (car args) '(0 0.0))
-		       0.0)
+		      ((number? (car args))
+		       (catch #t (lambda () (exact->inexact (car args))) (lambda any (cons (car form) args))))
+
+		      ((and (pair? (car args))  ; this should be expanded
+			    (eq? (caar args) 'float-vector-ref))
+		       (car args))
 
 		      ((not (and (pair? (car args))
 				 (not (eq? (caar args) 'random))
