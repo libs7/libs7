@@ -802,30 +802,30 @@ typedef struct s7_cell {
     } number;
 
     struct {
-      s7_int unused1, unused2;     /* always int64_t so this is 16 bytes */
+      s7_int unused1, unused2;    /* always int64_t so this is 16 bytes */
       uint8_t name[24];
     } number_name;
 
-    struct {                       /* ports */
+    struct {                      /* ports */
       port_t *port;
       uint8_t *data;
       s7_int size, point;
       block_t *block;
     } prt;
 
-    struct{                        /* characters */
+    struct{                       /* characters */
       uint8_t c, up_c;
       int32_t length;
       bool alpha_c, digit_c, space_c, upper_c, lower_c;
       char c_name[12];
     } chr;
 
-    struct {                       /* c-pointers */
+    struct {                      /* c-pointers */
       void *c_pointer;
       s7_pointer c_type, info, weak1, weak2;
     } cptr;
 
-    struct {                       /* vectors */
+    struct {                      /* vectors */
       s7_int length;
       union {
 	s7_pointer *objects;
@@ -4068,8 +4068,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_NS, HOP_SAFE_CLOSURE_NS,
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
 
-      OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P,
-      OP_ANY_CLOSURE_NA, HOP_ANY_CLOSURE_NA, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
+      OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
+      OP_ANY_CLOSURE_SYM, HOP_ANY_CLOSURE_SYM,
 
       OP_CLOSURE_STAR_A, HOP_CLOSURE_STAR_A, OP_CLOSURE_STAR_NA, HOP_CLOSURE_STAR_NA,
       OP_SAFE_CLOSURE_STAR_A, HOP_SAFE_CLOSURE_STAR_A, OP_SAFE_CLOSURE_STAR_AA, HOP_SAFE_CLOSURE_STAR_AA,
@@ -4291,8 +4291,8 @@ static const char* op_names[NUM_OPS] =
       "safe_closure_3s", "h_safe_closure_3s", "safe_closure_ns", "h_safe_closure_ns",
       "safe_closure_3s_a", "h_safe_closure_3s_a",
 
-      "any_closure_3p", "h_any_closure_3p", "any_closure_4p", "h_any_closure_4p",
-      "any_closure_na", "h_any_closure_na", "any_closure_np", "h_any_closure_np",
+      "any_closure_3p", "h_any_closure_3p", "any_closure_4p", "h_any_closure_4p", "any_closure_np", "h_any_closure_np",
+      "any_closure_sym", "h_any_closure_sym", 
 
       "closure*_a", "h_closure*_a", "closure*_na", "h_closure*_na",
       "safe_closure*_a", "h_safe_closure*_a", "safe_closure*_aa", "h_safe_closure*_aa",
@@ -67960,7 +67960,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_SAFE_CLOSURE_P_1:  case OP_CLOSURE_P_1: case OP_SAFE_CLOSURE_P_A_1:
     case OP_SAFE_CLOSURE_AP_1: case OP_CLOSURE_AP_1:
     case OP_SAFE_CLOSURE_PP_1: case OP_CLOSURE_PP_1:
-    case OP_SAFE_CLOSURE_PA_1: case OP_CLOSURE_PA_1:      /* arity is 2, we have 2 args, this has to be an error (see optimize_closure_dotted_args) */
+    case OP_SAFE_CLOSURE_PA_1: case OP_CLOSURE_PA_1:      /* arity is 2, we have 2 args, this has to be an error (see optimize_closure_symbol_par) */
     case OP_ANY_CLOSURE_3P_1: case OP_ANY_CLOSURE_3P_2: case OP_ANY_CLOSURE_3P_3:
     case OP_ANY_CLOSURE_4P_1: case OP_ANY_CLOSURE_4P_2: case OP_ANY_CLOSURE_4P_3: case OP_ANY_CLOSURE_4P_4:
       return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, stack_code(sc->stack, top), sc->value)));
@@ -69711,14 +69711,14 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
   return(OPT_F);
 }
 
-static opt_t optimize_closure_dotted_args(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
+static opt_t optimize_closure_symbol_par(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
 {
   if ((S7_DEBUGGING) && (!is_symbol(closure_args(func)))) fprintf(stderr, "%s[%d]: %s but %s\n", __func__, __LINE__, display_80(expr), display(func));
   if (fx_count(sc, expr) != args) /* fx_count starts at cdr, args here is the number of exprs in cdr(expr) -- so this means "are all args fxable" */
     return(OPT_F);
   fx_annotate_args(sc, cdr(expr), e);
   set_opt3_arglen(cdr(expr), args);
-  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_NA);
+  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
   set_opt1_lambda_add(expr, func);
   return(OPT_F);
 }
@@ -71351,9 +71351,8 @@ static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer
   arit = closure_arity_to_int(sc, func);
   if (arit != 1)
     {
-      if ((arit == -1) &&
-	  (is_symbol(closure_args(func))))
-	return(optimize_closure_dotted_args(sc, expr, func, hop, 1, e));
+      if (is_symbol(closure_args(func))) /* (arit == -1) is ambiguous: (define (f . a)...) and (define (f a . b)...) both are -1 here */
+	return(optimize_closure_symbol_par(sc, expr, func, hop, 1, e));
       return(OPT_F);
     }
   safe_case = is_safe_closure(func);
@@ -72093,9 +72092,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       arit = closure_arity_to_int(sc, func);
       if (arit != 2)
 	{
-	  if ((arit == -1) &&
-	      (is_symbol(closure_args(func))))
-	    return(optimize_closure_dotted_args(sc, expr, func, hop, 2, e));
+	  if ((is_symbol(closure_args(func))))
+	    return(optimize_closure_symbol_par(sc, expr, func, hop, 2, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -72611,9 +72609,8 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       arit = closure_arity_to_int(sc, func);
       if (arit != 3)
 	{
-	  if ((arit == -1) &&
-	      (is_symbol(closure_args(func))))
-	    return(optimize_closure_dotted_args(sc, expr, func, hop, 3, e));
+	  if ((is_symbol(closure_args(func))))
+	    return(optimize_closure_symbol_par(sc, expr, func, hop, 3, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -72812,9 +72809,8 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
       arit = closure_arity_to_int(sc, func);
       if (arit != args)
 	{
-	  if ((arit == -1) &&
-	      (is_symbol(closure_args(func))))
-	    return(optimize_closure_dotted_args(sc, expr, func, hop, args, e));
+	  if ((is_symbol(closure_args(func))))
+	    return(optimize_closure_symbol_par(sc, expr, func, hop, args, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -84641,7 +84637,7 @@ static bool check_closure_any(s7_scheme *sc)
   return(true);
 }
 
-static void op_any_closure_na(s7_scheme *sc) /* for (lambda a ...) ? */
+static void op_any_closure_sym(s7_scheme *sc) /* for (lambda a ...) */
 {
   s7_pointer func = opt1_lambda(sc->code), old_args = cdr(sc->code); /* args aren't evaluated yet */
   s7_int num_args;
@@ -89164,7 +89160,6 @@ static bool op_unknown_ns(s7_scheme *sc)
 	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_4S)));
 	  return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_NS)));
 	}
-      /* if (is_symbol(closure_args(f))) closure_any in some form? this never happens */
       break;
 
     case T_CLOSURE_STAR:
@@ -89355,8 +89350,8 @@ static bool op_unknown_na(s7_scheme *sc)
 	}
       if (is_symbol(closure_args(f)))
 	{
-	  optimize_closure_dotted_args(sc, code, f, 0, num_args, sc->curlet);
-	  if (optimize_op(code) == OP_ANY_CLOSURE_NA) return(true);
+	  optimize_closure_symbol_par(sc, code, f, 0, num_args, sc->curlet);
+	  if (optimize_op(code) == OP_ANY_CLOSURE_SYM) return(true);
 	}
       break;
 
@@ -90223,9 +90218,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CLOSURE_NA: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, opt3_arglen(cdr(sc->code)))) {if (op_unknown_na(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_NA: op_closure_na(sc); goto EVAL;
 
-	case OP_ANY_CLOSURE_NA: if (!check_closure_any(sc)) break;
-	case HOP_ANY_CLOSURE_NA: op_any_closure_na(sc); goto BEGIN;
-
 	case OP_ANY_CLOSURE_NP: if (!closure_np_is_ok(sc, sc->code)) {if (op_unknown_np(sc)) goto EVAL; continue;}
 	case HOP_ANY_CLOSURE_NP: op_any_closure_np(sc); goto EVAL;
 	case OP_ANY_CLOSURE_NP_1:
@@ -90240,6 +90232,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  if (!(collect_np_args(sc, OP_ANY_CLOSURE_NP_MV, (is_multiple_value(sc->value)) ? revappend(sc, sc->value, sc->args) : cons(sc, sc->value, sc->args))))
 	    op_any_closure_np_end(sc);
 	  goto EVAL;
+
+	case OP_ANY_CLOSURE_SYM: if (!check_closure_any(sc)) break; /* (lambda args ...) */
+	case HOP_ANY_CLOSURE_SYM: op_any_closure_sym(sc); goto BEGIN;
 
 
 	case OP_TC_AND_A_OR_A_LA:         tick_tc(sc, sc->cur_op); op_tc_and_a_or_a_la(sc, sc->code);                       continue;
@@ -95193,8 +95188,9 @@ int main(int argc, char **argv)
  *
  * we need a way to release excessive mallocate bins
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
- *   need no_alloc bit for c|fx_funcs
+ *   need no_alloc bit for c|fx_funcs (or parallel ops)
  * lint: (* (/ 1.0 expr) expr) where at least one of the exprs is float
- * need an non-openlet blocking outlet
+ * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let?
  * more direct sharing (like int|float|byte-vector)? ratio/complex/string -- new vector types?
+ * opt check: (lambda symbol ...) and friends
  */

@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.1"
-#define S7_DATE "10-Mar-2022"
+#define S7_DATE "11-Mar-2022"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 1
 
@@ -859,7 +859,6 @@ void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value);
 
 /* -------------------------------------------------------------------------------- */
 
-  /* these will be deprecated and removed eventually */
 #if (!DISABLE_DEPRECATED)
 s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1));
 s7_pointer s7_apply_2(s7_scheme *sc, s7_pointer args, s7_pointer (*f2)(s7_pointer a1, s7_pointer a2));
