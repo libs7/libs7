@@ -8303,9 +8303,8 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
 
   b = mallocate(sc, len + 1);
   name = (char *)block_data(b);
-  /* can't use catstrs_direct here because it stops at embedded null */
-  cur_len = 0;
-  for (p = args; is_pair(p); p = cdr(p))
+  /* can't use catstrs_direct here because it stops at embedded null */  
+  for (cur_len = 0, p = args; is_pair(p); p = cdr(p))
     {
       s7_pointer str = car(p);
       if (string_length(str) > 0)
@@ -67960,7 +67959,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_SAFE_CLOSURE_P_1:  case OP_CLOSURE_P_1: case OP_SAFE_CLOSURE_P_A_1:
     case OP_SAFE_CLOSURE_AP_1: case OP_CLOSURE_AP_1:
     case OP_SAFE_CLOSURE_PP_1: case OP_CLOSURE_PP_1:
-    case OP_SAFE_CLOSURE_PA_1: case OP_CLOSURE_PA_1:      /* arity is 2, we have 2 args, this has to be an error (see optimize_closure_symbol_par) */
+    case OP_SAFE_CLOSURE_PA_1: case OP_CLOSURE_PA_1:      /* arity is 2, we have 2 args, this has to be an error (see optimize_closure_sym) */
     case OP_ANY_CLOSURE_3P_1: case OP_ANY_CLOSURE_3P_2: case OP_ANY_CLOSURE_3P_3:
     case OP_ANY_CLOSURE_4P_1: case OP_ANY_CLOSURE_4P_2: case OP_ANY_CLOSURE_4P_3: case OP_ANY_CLOSURE_4P_4:
       return(s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, stack_code(sc->stack, top), sc->value)));
@@ -69711,7 +69710,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
   return(OPT_F);
 }
 
-static opt_t optimize_closure_symbol_par(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
+static opt_t optimize_closure_sym(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
 {
   if ((S7_DEBUGGING) && (!is_symbol(closure_args(func)))) fprintf(stderr, "%s[%d]: %s but %s\n", __func__, __LINE__, display_80(expr), display(func));
   if (fx_count(sc, expr) != args) /* fx_count starts at cdr, args here is the number of exprs in cdr(expr) -- so this means "are all args fxable" */
@@ -71352,7 +71351,7 @@ static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer
   if (arit != 1)
     {
       if (is_symbol(closure_args(func))) /* (arit == -1) is ambiguous: (define (f . a)...) and (define (f a . b)...) both are -1 here */
-	return(optimize_closure_symbol_par(sc, expr, func, hop, 1, e));
+	return(optimize_closure_sym(sc, expr, func, hop, 1, e));
       return(OPT_F);
     }
   safe_case = is_safe_closure(func);
@@ -72093,7 +72092,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       if (arit != 2)
 	{
 	  if ((is_symbol(closure_args(func))))
-	    return(optimize_closure_symbol_par(sc, expr, func, hop, 2, e));
+	    return(optimize_closure_sym(sc, expr, func, hop, 2, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -72610,7 +72609,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       if (arit != 3)
 	{
 	  if ((is_symbol(closure_args(func))))
-	    return(optimize_closure_symbol_par(sc, expr, func, hop, 3, e));
+	    return(optimize_closure_sym(sc, expr, func, hop, 3, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -72810,7 +72809,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
       if (arit != args)
 	{
 	  if ((is_symbol(closure_args(func))))
-	    return(optimize_closure_symbol_par(sc, expr, func, hop, args, e));
+	    return(optimize_closure_sym(sc, expr, func, hop, args, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -73688,9 +73687,8 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
   if (!is_list(args))
     {
       if (is_constant(sc, args))                       /* (lambda :a ...) or (define (f :a) ...) */
-	s7_error(sc, sc->syntax_error_symbol,          /* don't use ~A here or below, (lambda #\null do) for example */
+	s7_error(sc, sc->syntax_error_symbol,
 		 set_elist_3(sc, wrap_string(sc, "lambda parameter is a constant: (~S ~S ...)", 43), car(form), cadr(form)));
-
       /* we currently accept (lambda i i . i) (lambda quote i)  (lambda : : . #()) (lambda : 1 . "")
        *   at this level, but when the lambda form is evaluated, it will trigger an error.
        */
@@ -73704,10 +73702,17 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
       if (is_constant(sc, car_x))                      /* (lambda (pi) pi), constant here means not a symbol */
 	{
 	  if (is_pair(car_x))                          /* (lambda ((:hi . "hi") . "hi") 1) */
-	    s7_error(sc, sc->syntax_error_symbol,
+	    s7_error(sc, sc->syntax_error_symbol,      /* don't use ~A here or below, (lambda #\null do) for example */
 		     set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a pair (perhaps use lambda*?): (~S ~S ...)", 65), car_x, car(form), cadr(form)));
+
+	  if ((car_x == sc->rest_keyword) &&
+	      ((car(form) == sc->define_symbol) || (car(form) == sc->lambda_symbol)))
+	    s7_error(sc, sc->syntax_error_symbol,
+		     set_elist_5(sc, wrap_string(sc, "lambda parameter is ~S? (~S ~S ...), perhaps use ~S", 51), 
+				 car_x, car(form), cadr(form), 
+				 (car(form) == sc->define_symbol) ? sc->define_star_symbol : sc->lambda_star_symbol));
 	  s7_error(sc, sc->syntax_error_symbol,        /* (lambda (a :b c) 1) */
-		   set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: (~S ~S ...)", 46), car_x, car(form), cadr(form)));
+			set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: (~S ~S ...)", 46), car_x, car(form), cadr(form)));
 	}
       if (symbol_is_in_arg_list(car_x, cdr(x)))       /* (lambda (a a) ...) or (lambda (a . a) ...) */
 	s7_error(sc, sc->syntax_error_symbol,
@@ -79943,7 +79948,6 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			  (!is_pair(cddr(expr))))
 			return(false);
 		      cp = var_list;
-
 		      for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
 			{
 			  s7_pointer var;
@@ -80671,52 +80675,51 @@ static bool has_safe_steppers(s7_scheme *sc, s7_pointer let)
 	      else clear_safe_stepper(slot);
 	    }
 	  else
-	    {
-	      if (is_safe_stepper_expr(step_expr))
-		{
-		  if (is_t_integer(val))
+	    if (is_safe_stepper_expr(step_expr))
+	      {
+		if (is_t_integer(val))
+		  {
+		    if (is_int_optable(step_expr))
+		      set_safe_stepper(slot);
+		    else
+		      if (no_int_opt(step_expr))
+			clear_safe_stepper(slot);
+		      else
+			{
+			  sc->pc = 0;
+			  if (int_optimize(sc, step_expr))
+			    {
+			      set_safe_stepper(slot);
+			      set_is_int_optable(step_expr);
+			    }
+			  else
+			    {
+			      clear_safe_stepper(slot);
+			      set_no_int_opt(step_expr);
+			    }}}
+		else
+		  if (is_small_real(val))
 		    {
-		      if (is_int_optable(step_expr))
+		      if (is_float_optable(step_expr))
 			set_safe_stepper(slot);
 		      else
-			if (no_int_opt(step_expr))
+			if (no_float_opt(step_expr))
 			  clear_safe_stepper(slot);
 			else
 			  {
 			    sc->pc = 0;
-			    if (int_optimize(sc, step_expr))
+			    if (float_optimize(sc, step_expr))
 			      {
 				set_safe_stepper(slot);
-				set_is_int_optable(step_expr);
+				set_is_float_optable(step_expr);
 			      }
 			    else
 			      {
 				clear_safe_stepper(slot);
-				set_no_int_opt(step_expr);
+				set_no_float_opt(step_expr);
 			      }}}
-		  else
-		    if (is_small_real(val))
-		      {
-			if (is_float_optable(step_expr))
-			  set_safe_stepper(slot);
-			else
-			  if (no_float_opt(step_expr))
-			    clear_safe_stepper(slot);
-			  else
-			    {
-			      sc->pc = 0;
-			      if (float_optimize(sc, step_expr))
-				{
-				  set_safe_stepper(slot);
-				  set_is_float_optable(step_expr);
-				}
-			      else
-				{
-				  clear_safe_stepper(slot);
-				  set_no_float_opt(step_expr);
-				}}}
-		    else set_safe_stepper(slot);  /* ?? shouldn't this check types ?? */
-		}}}
+		  else set_safe_stepper(slot);  /* ?? shouldn't this check types ?? */
+	      }}
       else
 	{
 	  if (is_t_real(val))
@@ -80795,35 +80798,33 @@ static goto_t op_dox_no_body_1(s7_scheme *sc, s7_pointer slots, s7_pointer end, 
 	  do {slot_set_value(stepper, cdr(slot_value(stepper)));} while (endf(sc, endp) == sc->F);
 	  sc->value = sc->T;
 	}
-      else
-	{
-	  /* (- n 1) tpeak dup */
-	  if (((f == fx_add_t1) || (f == fx_add_u1)) && (is_t_integer(slot_value(stepper))))
-	    {
-	      s7_pointer p;
-	      p = make_mutable_integer(sc, integer(slot_value(stepper)));
-	      slot_set_value(stepper, p);
-	      if (!no_bool_opt(end))
-		{
-		  sc->pc = 0;
-		  if (bool_optimize(sc, end))  /* in dup.scm this costs more than the fb(o) below saves (search is short) */
-		    {                          /*    but tc is much slower (and bool|int_optimize dominates) */
-		      opt_info *o = sc->opts[0];
-		      bool (*fb)(opt_info *o);
-		      fb = o->v[0].fb;
-		      do {integer(p)++;} while (!fb(o)); /* do {integer(p)++;} while ((sc->value = optf(sc, endp)) == sc->F); */
-		      clear_mutable_integer(p);
-		      sc->value = sc->T;
-		      sc->code = cdr(end);
-		      return(goto_do_end_clauses);
-		    }
-		  set_no_bool_opt(end);
-		}
-	      do {integer(p)++;} while ((sc->value = endf(sc, endp)) == sc->F);
-	      clear_mutable_integer(p);
-	    }
-	  else do {slot_set_value(stepper, f(sc, a));} while ((sc->value = endf(sc, endp)) == sc->F);
-	}
+      else /* (- n 1) tpeak dup */
+	if (((f == fx_add_t1) || (f == fx_add_u1)) && (is_t_integer(slot_value(stepper))))
+	  {
+	    s7_pointer p;
+	    p = make_mutable_integer(sc, integer(slot_value(stepper)));
+	    slot_set_value(stepper, p);
+	    if (!no_bool_opt(end))
+	      {
+		sc->pc = 0;
+		if (bool_optimize(sc, end))  /* in dup.scm this costs more than the fb(o) below saves (search is short) */
+		  {                          /*    but tc is much slower (and bool|int_optimize dominates) */
+		    opt_info *o = sc->opts[0];
+		    bool (*fb)(opt_info *o);
+		    fb = o->v[0].fb;
+		    do {integer(p)++;} while (!fb(o)); /* do {integer(p)++;} while ((sc->value = optf(sc, endp)) == sc->F); */
+		    clear_mutable_integer(p);
+		    sc->value = sc->T;
+		    sc->code = cdr(end);
+		    return(goto_do_end_clauses);
+		  }
+		set_no_bool_opt(end);
+	      }
+	    do {integer(p)++;} while ((sc->value = endf(sc, endp)) == sc->F);
+	    clear_mutable_integer(p);
+	  }
+	else do {slot_set_value(stepper, f(sc, a));} while ((sc->value = endf(sc, endp)) == sc->F);
+
       sc->code = cdr(end);
       return(goto_do_end_clauses);
     }
@@ -82064,46 +82065,44 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		       (o->v[3].p_pip_f == list_set_p_pip_unchecked)))
 		    s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), o->v[4].p, stepper, make_integer(sc, end)));
 		  else
-		    {
-		      if (fp == opt_if_bp)
+		    if (fp == opt_if_bp)
+		      {
+			for (; integer(stepper) < end; integer(stepper)++)
+			  if (o->v[3].fb(o->v[2].o1)) o->v[5].fp(o->v[4].o1);
+		      }
+		    else
+		      if (fp == opt_if_nbp_fs)
 			{
 			  for (; integer(stepper) < end; integer(stepper)++)
-			    if (o->v[3].fb(o->v[2].o1)) o->v[5].fp(o->v[4].o1);
+			    if (!(o->v[2].b_pi_f(sc, o->v[5].fp(o->v[4].o1), integer(slot_value(o->v[3].p))))) o->v[11].fp(o->v[10].o1);
 			}
 		      else
-			if (fp == opt_if_nbp_fs)
+			if (fp == opt_unless_p_1)
 			  {
 			    for (; integer(stepper) < end; integer(stepper)++)
-			      if (!(o->v[2].b_pi_f(sc, o->v[5].fp(o->v[4].o1), integer(slot_value(o->v[3].p))))) o->v[11].fp(o->v[10].o1);
+			      if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);
 			  }
-			else
-			  if (fp == opt_unless_p_1)
-			    {
-			      for (; integer(stepper) < end; integer(stepper)++)
-				if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);
-			    }
-			  else for (; integer(stepper) < end; integer(stepper)++) fp(o);
-		    }}}
+			else for (; integer(stepper) < end; integer(stepper)++) fp(o);
+		}}
 	  else
-	    {
-	      if (func == opt_int_any_nr)
-		{
-		  s7_int (*fi)(opt_info *o);
-		  opt_info *o = sc->opts[0];
-		  fi = o->v[0].fi;
-		  if ((fi == opt_i_7pii_ssc) && (stepper == slot_value(o->v[2].p)) && (o->v[3].i_7pii_f == int_vector_set_i_7pii_direct))
-		    s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), make_integer(sc, o->v[4].i), stepper, make_integer(sc, end)));
+	    if (func == opt_int_any_nr)
+	      {
+		s7_int (*fi)(opt_info *o);
+		opt_info *o = sc->opts[0];
+		fi = o->v[0].fi;
+		if ((fi == opt_i_7pii_ssc) && (stepper == slot_value(o->v[2].p)) && (o->v[3].i_7pii_f == int_vector_set_i_7pii_direct))
+		  s7_fill(sc, set_elist_4(sc, slot_value(o->v[1].p), make_integer(sc, o->v[4].i), stepper, make_integer(sc, end)));
+		else
+		  if ((o->v[3].i_7pii_f == int_vector_set_i_7pii_direct) && (o->v[5].fi == opt_7pi_ss_ivref) && (o->v[2].p == o->v[4].o1->v[2].p))
+		    copy_to_same_type(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), integer(stepper), end, integer(stepper));
 		  else
-		    if ((o->v[3].i_7pii_f == int_vector_set_i_7pii_direct) && (o->v[5].fi == opt_7pi_ss_ivref) && (o->v[2].p == o->v[4].o1->v[2].p))
-		      copy_to_same_type(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), integer(stepper), end, integer(stepper));
-		    else
-		      for (; integer(stepper) < end; integer(stepper)++)
-			fi(o);
-		}
-	      else /* (((i 0 (+ i 1))) ((= i 1)) (char-alphabetic? (string-ref #u(0 1) 1))) or (logbit? i -1): kinda nutty */
-		for (; integer(stepper) < end; integer(stepper)++)
-		  func(sc);
-	    }
+		    for (; integer(stepper) < end; integer(stepper)++)
+		      fi(o);
+	      }
+	    else /* (((i 0 (+ i 1))) ((= i 1)) (char-alphabetic? (string-ref #u(0 1) 1))) or (logbit? i -1): kinda nutty */
+	      for (; integer(stepper) < end; integer(stepper)++)
+		func(sc);
+
 	  clear_mutable_integer(stepper);
 	}
       else /* not safe_step */
@@ -89350,7 +89349,7 @@ static bool op_unknown_na(s7_scheme *sc)
 	}
       if (is_symbol(closure_args(f)))
 	{
-	  optimize_closure_symbol_par(sc, code, f, 0, num_args, sc->curlet);
+	  optimize_closure_sym(sc, code, f, 0, num_args, sc->curlet);
 	  if (optimize_op(code) == OP_ANY_CLOSURE_SYM) return(true);
 	}
       break;
@@ -95189,8 +95188,8 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
  *   need no_alloc bit for c|fx_funcs (or parallel ops)
- * lint: (* (/ 1.0 expr) expr) where at least one of the exprs is float
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let?
  * more direct sharing (like int|float|byte-vector)? ratio/complex/string -- new vector types?
- * opt check: (lambda symbol ...) and friends
+ * opt check: (lambda symbol ...) and friends, t572
+ * is error-port actually useful? t573
  */
