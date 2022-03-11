@@ -72091,7 +72091,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       arit = closure_arity_to_int(sc, func);
       if (arit != 2)
 	{
-	  if ((is_symbol(closure_args(func))))
+	  if (is_symbol(closure_args(func)))
 	    return(optimize_closure_sym(sc, expr, func, hop, 2, e));
 	  return(OPT_F);
 	}
@@ -72608,7 +72608,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       arit = closure_arity_to_int(sc, func);
       if (arit != 3)
 	{
-	  if ((is_symbol(closure_args(func))))
+	  if (is_symbol(closure_args(func)))
 	    return(optimize_closure_sym(sc, expr, func, hop, 3, e));
 	  return(OPT_F);
 	}
@@ -72808,7 +72808,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
       arit = closure_arity_to_int(sc, func);
       if (arit != args)
 	{
-	  if ((is_symbol(closure_args(func))))
+	  if (is_symbol(closure_args(func)))
 	    return(optimize_closure_sym(sc, expr, func, hop, args, e));
 	  return(OPT_F);
 	}
@@ -95189,7 +95189,6 @@ int main(int argc, char **argv)
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
  *   need no_alloc bit for c|fx_funcs (or parallel ops)
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let?
- * more direct sharing (like int|float|byte-vector)? ratio/complex/string -- new vector types?
  * opt check: (lambda symbol ...) and friends, t572
  * is error-port actually useful? t573
  */
