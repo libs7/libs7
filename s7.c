@@ -4043,7 +4043,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_STAR_AA, HOP_SAFE_C_STAR_AA, OP_SAFE_C_STAR_NA, HOP_SAFE_C_STAR_NA,
       OP_SAFE_C_P, HOP_SAFE_C_P,
 
-      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A,
+      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A, OP_SAFE_THUNK_ANY, HOP_SAFE_THUNK_ANY,
 
       OP_CLOSURE_S, HOP_CLOSURE_S, OP_CLOSURE_S_O, HOP_CLOSURE_S_O,
       OP_CLOSURE_A, HOP_CLOSURE_A, OP_CLOSURE_A_O, HOP_CLOSURE_A_O, OP_CLOSURE_P, HOP_CLOSURE_P,
@@ -4266,7 +4266,7 @@ static const char* op_names[NUM_OPS] =
       "safe_c*", "h_safe_c*", "safe_c*_a", "h_safe_c*_a", "safe_c*_aa", "h_safe_c*_aa", "safe_c*_na", "h_safe_c*_na",
       "safe_c_p", "h_safe_c_p",
 
-      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a",
+      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a", "safe_thunk_any", "h_safe_thunk_any",
 
       "closure_s", "h_closure_s", "closure_s_o", "h_closure_s_o",
       "closure_a", "h_closure_a", "closure_a_o", "h_closure_a_o", "closure_p", "h_closure_p",
@@ -4651,12 +4651,11 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	  /* bit 26 */
 	  ((full_typ & T_MUTABLE) != 0) ?        ((is_number(obj)) ? " mutable" :
 						  ((is_symbol(obj)) ? " has-keyword" :
-						   ((is_let(obj)) ? " let-ref-fallback" :
+						   ((is_let(obj)) ? " ref-fallback" :
 						    ((is_iterator(obj)) ? " mark-sequence" :
 						     ((is_slot(obj)) ? " step-end" :
-						      ((is_let(obj)) ? " ref-fallback" :
-						       ((is_pair(obj)) ? " no-opt" :
-							" ?18?"))))))) : "",
+						      ((is_pair(obj)) ? " no-opt" :
+						       " ?18?")))))) : "",
 	  /* bit 27 */
 	  ((full_typ & T_SAFE_STEPPER) != 0) ?   ((is_let(obj)) ? " set-fallback" :
 						  ((is_slot(obj)) ? " safe-stepper" :
@@ -10268,7 +10267,7 @@ static bool pair_symbol_is_safe(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 	 (direct_memq(sym, e)));
 }
 
-static /* inline */ s7_pointer collect_variables(s7_scheme *sc, s7_pointer lst, s7_pointer e)
+static s7_pointer collect_variables(s7_scheme *sc, s7_pointer lst, s7_pointer e)
 {
   /* collect local variable names from let/do (pre-error-check), 20 overhead in tgen -> 14 if cons_unchecked below */
   sc->w = e;
@@ -13751,7 +13750,7 @@ static char *integer_to_string_no_length(s7_scheme *sc, s7_int num) /* do not fr
   return(++p);
 }
 
-static inline char *floatify(char *str, s7_int *nlen)
+static char *floatify(char *str, s7_int *nlen)
 {
   if ((!strchr(str, '.')) && (!strchr(str, 'e'))) /* faster than (strcspn(str, ".e") >= (size_t)(*nlen)) */
     {
@@ -55701,13 +55700,6 @@ static s7_pointer fx_safe_thunk_a(s7_scheme *sc, s7_pointer code)
   return(result);
 }
 
-static s7_pointer op_safe_thunk_a(s7_scheme *sc, s7_pointer code)
-{
-  s7_pointer f = opt1_lambda(code);
-  set_curlet(sc, closure_let(f));
-  return(fx_call(sc, closure_body(f)));
-}
-
 static s7_pointer fx_safe_closure_s_a(s7_scheme *sc, s7_pointer code) /* also called from h_safe_closure_s_a in eval */
 {
   s7_pointer result;
@@ -69649,11 +69641,14 @@ static void fx_annotate_args(s7_scheme *sc, s7_pointer args, s7_pointer e)
 
 static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, s7_pointer e)
 {
+  /* fprintf(stderr, "%s %s\n", __func__, display(expr)); */
   if ((hop != 1) && (is_constant_symbol(sc, car(expr)))) hop = 1;
 
   if ((is_closure(func)) || (is_closure_star(func)))
     {
       bool safe_case = is_safe_closure(func);
+      /* fprintf(stderr, "safe: %s %d\n", display(func), safe_case); */
+
       if (is_immutable(func)) hop = 1;
       if (is_null(closure_args(func)))               /* no rest arg funny business */
 	{
@@ -69661,6 +69656,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	  set_optimized(expr);
 	  if ((is_null(cdr(body))) && (safe_case) && (is_fxable(sc, car(body)))) /* fx stuff is not set yet */
 	    {
+	      /* TODO: and (!has_fx)?? */
 	      fx_annotate_arg(sc, body, e);
 	      set_optimize_op(expr, hop + OP_SAFE_THUNK_A);
 	      set_closure_one_form_fx_arg(func);
@@ -69670,14 +69666,27 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	  /* thunks with fully fxable bodies are rare apparently, and the time spent here overwhelms run time gains */
 	  set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_THUNK : OP_THUNK));
 	  set_opt1_lambda_add(expr, func);
-	  return(OPT_F);
+	  return((safe_case) ? OPT_T : OPT_F);
 	}
+
       if (is_symbol(closure_args(func))) /* (define* (f1 . a) ...) called (f1) -- called a closure (not closure*) in define_unchecked */
 	{
 	  set_opt1_lambda_add(expr, func);
+	  if (safe_case)
+	    {
+	      s7_pointer body = closure_body(func);
+	      if (!has_fx(body))
+		{
+		  fx_annotate_args(sc, body, e);
+		  fx_tree(sc, body, closure_args(func), NULL, NULL, false);
+		}
+	      set_safe_optimize_op(expr, hop + OP_SAFE_THUNK_ANY);
+	      return(OPT_T);
+	    }
 	  set_unsafe_optimize_op(expr, hop + OP_THUNK_ANY); /* "thunk" because here it is called with no args, I guess */
 	  return(OPT_F);
 	}
+
       if (is_closure_star(func))
 	{
 	  set_opt1_lambda_add(expr, func);
@@ -69715,10 +69724,22 @@ static opt_t optimize_closure_sym(s7_scheme *sc, s7_pointer expr, s7_pointer fun
   if ((S7_DEBUGGING) && (!is_symbol(closure_args(func)))) fprintf(stderr, "%s[%d]: %s but %s\n", __func__, __LINE__, display_80(expr), display(func));
   if (fx_count(sc, expr) != args) /* fx_count starts at cdr, args here is the number of exprs in cdr(expr) -- so this means "are all args fxable" */
     return(OPT_F);
-  fx_annotate_args(sc, cdr(expr), e);
+
   set_opt3_arglen(cdr(expr), args);
-  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
   set_opt1_lambda_add(expr, func);
+  fx_annotate_args(sc, cdr(expr), e);
+  if (is_safe_closure(func)) 
+    {
+      s7_pointer body = closure_body(func);
+      if (!has_fx(body)) /* does this have any effect? */
+	{
+	  fx_annotate_args(sc, body, e);
+	  fx_tree(sc, body, closure_args(func), NULL, NULL, false);
+	}
+      set_safe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
+      return(OPT_T);
+    }
+  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
   return(OPT_F);
 }
 
@@ -78496,17 +78517,10 @@ static void check_set(s7_scheme *sc)
 		}
 	      else
 		{
-		  /* if cadr(cadr) == car, or cdr(cadr) not null and cadr(cadr) == car, and cddr(cadr) == null,
-		   *   it's (set! <var> (<op> <var> val)) or (<op> val <var>) or (<op> <var>)
-		   *   in the set code, we get the slot as usual, then in case 1 above,
-		   *   car(sc->t2_1) = slot_value(slot), car(sc->t2_2) = increment, call <op>, set slot_value(slot)
-		   *
-		   * (define (hi) (let ((x 1)) (set! x (+ x 1))))
-		   *   but the value might be values:
-		   *   (let () (define (hi) (let ((x 0)) (set! x (values 1 2)) x)) (catch #t hi (lambda a a)) (hi))
-		   *   which is caught in splice_in_values
-		   */
 		  pair_set_syntax_op(form, OP_SET_SYMBOL_P);
+
+		  /* TODO? h_safe_sc (set! x (+ x 1)), sp: (set! x (+ x (f ...))) */
+
 		  if (is_optimized(value))
 		    {
 		      if (optimize_op(value) == HOP_SAFE_C_NC)
@@ -83876,6 +83890,21 @@ static void op_thunk(s7_scheme *sc)
   if_pair_set_up_begin_unchecked(sc);
 }
 
+static void op_safe_thunk(s7_scheme *sc) /* no let needed */
+{
+  s7_pointer p = opt1_lambda(sc->code);
+  sc->curlet = closure_let(p);
+  sc->code = T_Pair(closure_body(p));
+  if_pair_set_up_begin_unchecked(sc);
+}
+
+static s7_pointer op_safe_thunk_a(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer f = opt1_lambda(code);
+  set_curlet(sc, closure_let(f));
+  return(fx_call(sc, closure_body(f)));
+}
+
 static void op_thunk_any(s7_scheme *sc)
 {
   s7_pointer p = opt1_lambda(sc->code);
@@ -83883,10 +83912,11 @@ static void op_thunk_any(s7_scheme *sc)
   sc->code = closure_body(p);
 }
 
-static void op_safe_thunk(s7_scheme *sc) /* no let needed */
+static void op_safe_thunk_any(s7_scheme *sc)
 {
   s7_pointer p = opt1_lambda(sc->code);
   sc->curlet = closure_let(p);
+  slot_set_value(let_slots(sc->curlet), sc->nil);
   sc->code = T_Pair(closure_body(p));
   if_pair_set_up_begin_unchecked(sc);
 }
@@ -84615,7 +84645,7 @@ static void op_closure_na(s7_scheme *sc)
   if_pair_set_up_begin(sc);
 }
 
-static bool check_closure_any(s7_scheme *sc)
+static bool check_closure_sym(s7_scheme *sc)
 {
   /* can't use closure_is_fine -- (lambda args 1) and (lambda (name . args) 1) are both arity -1 for the internal arity checkers! */
   if ((symbol_ctr(car(sc->code)) != 1) ||
@@ -89513,7 +89543,7 @@ static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code)
  * closure_np_is_ok accepts safe/unsafe etc
  */
 
-static inline bool closure_is_ok_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
+static /* inline */ bool closure_is_ok_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
 {
   s7_pointer f;
   if ((S7_DEBUGGING) && (symbol_ctr(car(code)) == 1))
@@ -89529,7 +89559,7 @@ static inline bool closure_is_ok_1(s7_scheme *sc, s7_pointer code, uint16_t type
   return(false);
 }
 
-static inline bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
+static /* inline */ bool closure_is_fine_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
 {
   s7_pointer f;
   f = lookup_unexamined(sc, car(code));
@@ -89561,7 +89591,7 @@ static bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code)
 #define closure_is_fine(Sc, Code, Type, Args)      ((symbol_ctr(car(Code)) == 1) || (closure_is_fine_1(Sc, Code, Type, Args)))
 #define closure_star_is_fine(Sc, Code, Type, Args) ((symbol_ctr(car(Code)) == 1) || (closure_star_is_fine_1(Sc, Code, Type, Args)))
 
-static inline bool closure_is_eq(s7_scheme *sc)
+static /* inline */ bool closure_is_eq(s7_scheme *sc)
 {
   sc->last_function = lookup_unexamined(sc, car(sc->code));
   return(sc->last_function == opt1_lambda_unchecked(sc->code));
@@ -90024,6 +90054,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_THUNK_ANY: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 1)) break; /* symbol as arglist */
 	case HOP_THUNK_ANY: op_thunk_any(sc); goto BEGIN;
 
+	case OP_SAFE_THUNK_ANY: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 1)) break; /* symbol as arglist */
+	case HOP_SAFE_THUNK_ANY: op_safe_thunk_any(sc); goto EVAL;
+
 	case OP_SAFE_THUNK_A: if (!closure_is_ok(sc, sc->code, OK_SAFE_CLOSURE_A, 0)) {if (op_unknown(sc)) goto EVAL; continue;}
 	case HOP_SAFE_THUNK_A: sc->value = op_safe_thunk_a(sc, sc->code); continue;
 
@@ -90232,7 +90265,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    op_any_closure_np_end(sc);
 	  goto EVAL;
 
-	case OP_ANY_CLOSURE_SYM: if (!check_closure_any(sc)) break; /* (lambda args ...) */
+	case OP_ANY_CLOSURE_SYM: if (!check_closure_sym(sc)) break; /* (lambda args ...) */
 	case HOP_ANY_CLOSURE_SYM: op_any_closure_sym(sc); goto BEGIN;
 
 
@@ -94761,7 +94794,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 916)
+  if (NUM_OPS != 918)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95130,65 +95163,70 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -----------------------------------------------------
- *            gmp (12-20)   20.9   21.0   22.0   22.2
- * -----------------------------------------------------
- * tpeak       122          115    114    108    107
- * tref        513          691    687    463    458
- * index      1024         1026   1016    973    968
- * tmock      7741         1177   1165   1057   1060
- * tvect      1953         2519   2464   1772   1713
- * texit      1827         ----   ----   1778   1757
- * s7test     4537         1873   1831   1818   1813
- * lt         2153         2187   2172   2150   2148
- * timp       2232         2971   2891   2176   2206
- * tread      2614         2440   2421   2419   2414
- * trclo      4079         2735   2574   2454   2451
- * fbench     2833         2688   2583   2460   2460
- * dup        2756         3805   3788   2492   2373
- * tcopy      2600         8035   5546   2539   2501
- * tmat       2694         3065   3042   2524   2520
- * tauto      2763         ----   ----   2562   2546
- * tb         3366?        2735   2681   2612   2611
- * titer      2659         2865   2842   2641   2638
- * tsort      3572         3105   3104   2856   2855
- * tmac       3074         3950   3873   3033   2998
- * tload      3740         ----   ----   3046   3042
- * tset       3058         3253   3104   3048   3121
- * teq        3541         4068   4045   3536   3531
- * tio        3698         3816   3752   3683   3680
- * tobj       4533         4016   3970   3828   3701
- * tlamb      4454         4912   4786   4298   4255
- * tclo       4604         4787   4735   4390   4398
- * tcase      4501         4960   4793   4439   4426
- * tlet       5305         7775   5640   4450   4434
- * tmap       5488         8869   8774   4489   4500
- * tfft      115.1         7820   7729   4755   4652
- * tshoot     6896         5525   5447   5183   5153
- * tform      8338         5357   5348   5307   5300
- * tnum       56.7         6348   6013   5433   5406
- * tstr       6123         6880   6342   5488   5488
- * tmisc      6847         8869   7612   6435   6331
- * tgsl       25.1         8485   7802   6373   6373
- * trec       8314         6936   6922   6521   6521
- * tlist      6551         7896   7546   6558   6532
- * tari       ----         13.0   12.7   6827   6819
- * tleft      9004         10.4   10.2   7657   7664
- * tgc        9614         11.9   11.1   8177   8156
- * cb         16.8         11.2   11.0   9658   9585
- * thash      35.4         11.8   11.7   9734   9590
- * tgen       12.6         11.2   11.4   12.0   11.9
- * tall       24.4         15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0
- * sg         75.8         ----   ----   55.9   55.8
- * lg        105.9         ----   ----  105.2  105.4
- * tbig      604.3        177.4  175.8  156.5  152.5
- * -----------------------------------------------------
+/* -------------------------------------------------------------
+ *            gmp (12-20)   20.9   21.0   22.0   22.2   22.3
+ * -------------------------------------------------------------
+ * tpeak       122          115    114    108    107    107
+ * tref        513          691    687    463    458    458
+ * index      1024         1026   1016    973    968    965
+ * tmock      7741         1177   1165   1057   1060   1051
+ * tvect      1953         2519   2464   1772   1713   1713
+ * texit      1827         ----   ----   1778   1757   1757
+ * s7test     4537         1873   1831   1818   1813   1809
+ * lt         2153         2187   2172   2150   2148   2143
+ * timp       2232         2971   2891   2176   2206   2206
+ * dup        2756         3805   3788   2492   2373   2377
+ * tread      2614         2440   2421   2419   2414   2379
+ * trclo      4079         2735   2574   2454   2451   2451
+ * fbench     2833         2688   2583   2460   2460   2451
+ * tcopy      2600         8035   5546   2539   2501   2501
+ * tmat       2694         3065   3042   2524   2520   2518
+ * tauto      2763         ----   ----   2562   2546   2552
+ * tb         3366?        2735   2681   2612   2611   2621
+ * titer      2659         2865   2842   2641   2638   2631
+ * tsort      3572         3105   3104   2856   2855   2855
+ * tmac       3074         3950   3873   3033   2998   2911
+ * tload      3740         ----   ----   3046   3042   3025
+ * tset       3058         3253   3104   3048   3121   3111
+ * teq        3541         4068   4045   3536   3531   3531
+ * tio        3698         3816   3752   3683   3680   3661
+ * tobj       4533         4016   3970   3828   3701   3695
+ * tlamb      4454         4912   4786   4298   4255   4277
+ * tclo       4604         4787   4735   4390   4398   4318
+ * tcase      4501         4960   4793   4439   4426   4402
+ * tlet       5305         7775   5640   4450   4434   4430
+ * tmap       5488         8869   8774   4489   4500   4495
+ * tfft      115.1         7820   7729   4755   4652   4651
+ * tshoot     6896         5525   5447   5183   5153   5143
+ * tform      8338         5357   5348   5307   5300   5307
+ * tnum       56.7         6348   6013   5433   5406   5390
+ * tstr       6123         6880   6342   5488   5488   5480
+ * tmisc      6847         8869   7612   6435   6331   6340
+ * tgsl       25.1         8485   7802   6373   6373   6373
+ * trec       8314         6936   6922   6521   6521   6523
+ * tlist      6551         7896   7546   6558   6532   6499
+ * tari       ----         13.0   12.7   6827   6819   6817
+ * tleft      9004         10.4   10.2   7657   7664   7638
+ * tgc        9614         11.9   11.1   8177   8156   8134
+ * thash      35.4         11.8   11.7   9734   9590   9586
+ * cb         16.8         11.2   11.0   9658   9585   9635
+ * tgen       12.6         11.2   11.4   12.0   11.9   11.9
+ * tall       24.4         15.6   15.6   15.6   15.6   15.6
+ * calls      55.3         36.7   37.5   37.0   37.0   37.0
+ * sg         75.8         ----   ----   55.9   55.8   55.8
+ * lg        105.9         ----   ----  105.2  105.4  105.0
+ * tbig      604.3        177.4  175.8  156.5  152.5  152.3
+ * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
  *   need no_alloc bit for c|fx_funcs (or parallel ops)
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let?
- * opt check: (lambda symbol ...) and friends, t572
+ *   s7_let_ref[9571] -- only blocks rootlet now, but is that a problem?
+ *   might set bit for return #<undefined>
+ * opt check: (lambda symbol ...) and friends, t572: 0-args done, need 1,2,3
  * is error-port actually useful? t573
+ * is safe_thunk_any worth 2 ops
+ * truncate enormous list in error message
+ * can cb checks be avoided?
  */
