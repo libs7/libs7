@@ -973,28 +973,6 @@ int main(int argc, char **argv)
   if (s7_real_part(p) != 1.0)
     {fprintf(stderr, "%d: (real-part %s) is not 1.0?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
-#if 0
-  if (s7_integer(s7_apply_1(sc, int_list(sc, 1), ap_1)) != 1) fprintf(stderr, "apply_1 != 1\n");
-  if (s7_integer(s7_apply_2(sc, int_list(sc, 2), ap_2)) != 3) fprintf(stderr, "apply_2 != 3\n");
-  if (s7_integer(s7_apply_3(sc, int_list(sc, 3), ap_3)) != 6) fprintf(stderr, "apply_3 != 6\n");
-  if (s7_integer(s7_apply_4(sc, int_list(sc, 4), ap_4)) != 10) fprintf(stderr, "apply_4 != 10\n");
-  if (s7_integer(s7_apply_5(sc, int_list(sc, 5), ap_5)) != 15) fprintf(stderr, "apply_5 != 15\n");
-  if (s7_integer(s7_apply_6(sc, int_list(sc, 6), ap_6)) != 21) fprintf(stderr, "apply_6 != 21\n");
-  if (s7_integer(s7_apply_7(sc, int_list(sc, 7), ap_7)) != 28) fprintf(stderr, "apply_7 != 28\n");
-  if (s7_integer(s7_apply_8(sc, int_list(sc, 8), ap_8)) != 36) fprintf(stderr, "apply_8 != 36\n");
-  if (s7_integer(s7_apply_9(sc, int_list(sc, 9), ap_9)) != 45) fprintf(stderr, "apply_9 != 45\n");
-
-  if (s7_integer(s7_apply_n_1(sc, int_list(sc, 1), ap_1)) != 1) fprintf(stderr, "apply_1 != 1\n");
-  if (s7_integer(s7_apply_n_2(sc, int_list(sc, 2), ap_2)) != 3) fprintf(stderr, "apply_2 != 3\n");
-  if (s7_integer(s7_apply_n_3(sc, int_list(sc, 3), ap_3)) != 6) fprintf(stderr, "apply_3 != 6\n");
-  if (s7_integer(s7_apply_n_4(sc, int_list(sc, 4), ap_4)) != 10) fprintf(stderr, "apply_4 != 10\n");
-  if (s7_integer(s7_apply_n_5(sc, int_list(sc, 5), ap_5)) != 15) fprintf(stderr, "apply_5 != 15\n");
-  if (s7_integer(s7_apply_n_6(sc, int_list(sc, 6), ap_6)) != 21) fprintf(stderr, "apply_6 != 21\n");
-  if (s7_integer(s7_apply_n_7(sc, int_list(sc, 7), ap_7)) != 28) fprintf(stderr, "apply_7 != 28\n");
-  if (s7_integer(s7_apply_n_8(sc, int_list(sc, 8), ap_8)) != 36) fprintf(stderr, "apply_8 != 36\n");
-  if (s7_integer(s7_apply_n_9(sc, int_list(sc, 9), ap_9)) != 45) fprintf(stderr, "apply_9 != 45\n");
-#endif
-
   if (s7_imag_part(p) != 1.0)
     {fprintf(stderr, "%d: (imag-part %s) is not 1.0?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 

@@ -4069,7 +4069,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
 
       OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
-      OP_ANY_CLOSURE_SYM, HOP_ANY_CLOSURE_SYM,
+      OP_ANY_CLOSURE_SYM, HOP_ANY_CLOSURE_SYM, OP_ANY_CLOSURE_A_SYM, HOP_ANY_CLOSURE_A_SYM,
 
       OP_CLOSURE_STAR_A, HOP_CLOSURE_STAR_A, OP_CLOSURE_STAR_NA, HOP_CLOSURE_STAR_NA,
       OP_SAFE_CLOSURE_STAR_A, HOP_SAFE_CLOSURE_STAR_A, OP_SAFE_CLOSURE_STAR_AA, HOP_SAFE_CLOSURE_STAR_AA,
@@ -4292,7 +4292,7 @@ static const char* op_names[NUM_OPS] =
       "safe_closure_3s_a", "h_safe_closure_3s_a",
 
       "any_closure_3p", "h_any_closure_3p", "any_closure_4p", "h_any_closure_4p", "any_closure_np", "h_any_closure_np",
-      "any_closure_sym", "h_any_closure_sym", 
+      "any_closure_sym", "h_any_closure_sym", "any_closure_a_sym", "h_any_closure_a_sym", 
 
       "closure*_a", "h_closure*_a", "closure*_na", "h_closure*_na",
       "safe_closure*_a", "h_safe_closure*_a", "safe_closure*_aa", "h_safe_closure*_aa",
@@ -32669,7 +32669,7 @@ static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int t
 }
 
 static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_write_t use_write, shared_info_t *ci)
-{ /* someday, print-length pair = elements? */
+{ /* TODO: print-length pair = elements? */
   s7_pointer x;
   s7_int i, len, true_len;
 
@@ -36147,10 +36147,9 @@ s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q)
 
 /* -------------------------------------------------------------------------------- */
 
-/* these are used in clm2xen et al under names like Xen_wrap_5_args -- they should go away!
- *   we could move these to xen.c, s7.h entries to xen.h, but that means using s7_car|cdr below rather than simple car|cdr
- */
+/* these are used in clm2xen et al under names like Xen_wrap_5_args -- they should go away! */
 
+#if (!DISABLE_DEPRECATED)
 s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1)) /* not currently used */
 {
   return(f1(car(args)));
@@ -36293,7 +36292,7 @@ s7_pointer s7_apply_n_9(s7_scheme *sc, s7_pointer args,
   apply_n_args(9);
   return(f9(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]));
 }
-
+#endif
 
 /* ---------------- tree-leaves ---------------- */
 static inline s7_int tree_len_1(s7_scheme *sc, s7_pointer p)
@@ -56489,11 +56488,11 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      set_opt3_direct(arg, (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_p_function(global_value(caadr(arg)))));
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_p_function(global_value(caaddr(arg)))));
-	      if ((caadr(arg) == caaddr(arg)) && (caadr(arg) == sc->cdr_symbol))
+	      if ((caadr(arg) == caaddr(arg)) && ((caadr(arg) == sc->cdr_symbol) || (caadr(arg) == sc->car_symbol)))
 		{
 		  set_opt1_sym(cdr(arg), cadadr(arg));
-		  set_opt2_sym(cdr(arg), cadaddr(arg));
-		  return(fx_cdr_s_cdr_s);
+		  set_opt2_sym(cdr(arg), cadaddr(arg)); /* usable because we know func is cdr */
+		  return((caadr(arg) == sc->cdr_symbol) ? fx_cdr_s_cdr_s : fx_car_s_car_s);
 		}
 	      set_opt1_sym(cdr(arg), cadaddr(arg)); /* opt2 is taken by second func */
 	      return(fx_c_opsq_opsq_direct);
@@ -57216,7 +57215,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_opSq_opSq:
-      if (fx_proc(tree) == fx_c_opsq_opsq_direct)
+      if ((fx_proc(tree) == fx_c_opsq_opsq_direct) || (fx_proc(tree) == fx_car_s_car_s))
 	{
 	  if ((cadadr(p) == var1) && (cadadr(p) == cadaddr(p)))
 	    {
@@ -69719,30 +69718,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
   return(OPT_F);
 }
 
-static opt_t optimize_closure_sym(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
-{
-  if ((S7_DEBUGGING) && (!is_symbol(closure_args(func)))) fprintf(stderr, "%s[%d]: %s but %s\n", __func__, __LINE__, display_80(expr), display(func));
-  if (fx_count(sc, expr) != args) /* fx_count starts at cdr, args here is the number of exprs in cdr(expr) -- so this means "are all args fxable" */
-    return(OPT_F);
-
-  set_opt3_arglen(cdr(expr), args);
-  set_opt1_lambda_add(expr, func);
-  fx_annotate_args(sc, cdr(expr), e);
-  if (is_safe_closure(func)) 
-    {
-      s7_pointer body = closure_body(func);
-      if (!has_fx(body)) /* does this have any effect? */
-	{
-	  fx_annotate_args(sc, body, e);
-	  fx_tree(sc, body, closure_args(func), NULL, NULL, false);
-	}
-      set_safe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
-      return(OPT_T);
-    }
-  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
-  return(OPT_F);
-}
-
 static int32_t combine_ops(s7_scheme *sc, s7_pointer expr, combine_op_t cop, s7_pointer e1, s7_pointer e2) /* sc needed for debugger stuff */
 {
   int32_t arg_op;
@@ -71362,6 +71337,49 @@ static bool fxify_closure_a(s7_scheme *sc, s7_pointer func, bool one_form, bool 
   return(false);
 }
 
+static opt_t optimize_closure_sym(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
+{
+  if (fx_count(sc, expr) != args) /* fx_count starts at cdr, args here is the number of exprs in cdr(expr) -- so this means "are all args fxable" */
+    return(OPT_F);
+  set_opt3_arglen(cdr(expr), args);
+  set_opt1_lambda_add(expr, func);
+  fx_annotate_args(sc, cdr(expr), e);
+  if (is_safe_closure(func)) 
+    {
+      s7_pointer body = closure_body(func);
+      if (!has_fx(body)) /* does this have any effect? */
+	{
+	  fx_annotate_args(sc, body, e);
+	  fx_tree(sc, body, closure_args(func), NULL, NULL, false);
+	}
+      set_safe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
+      return(OPT_T);
+    }
+  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_SYM);
+  return(OPT_F);
+}
+
+static opt_t optimize_closure_a_sym(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, int32_t args, s7_pointer e)
+{
+  if (fx_count(sc, expr) != args) return(OPT_F);
+  set_opt3_arglen(cdr(expr), args);
+  set_opt1_lambda_add(expr, func);
+  fx_annotate_args(sc, cdr(expr), e);
+  if (is_safe_closure(func)) 
+    {
+      s7_pointer body = closure_body(func);
+      if (!has_fx(body)) /* does this have any effect? */
+	{
+	  fx_annotate_args(sc, body, e);
+	  fx_tree(sc, body, car(closure_args(func)), cdr(closure_args(func)), NULL, false);
+	}
+      set_safe_optimize_op(expr, hop + OP_ANY_CLOSURE_A_SYM);
+      return(OPT_T);
+    }
+  set_unsafe_optimize_op(expr, hop + OP_ANY_CLOSURE_A_SYM);
+  return(OPT_F);
+}
+
 static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer func,
 				      int32_t hop, int32_t pairs, int32_t symbols, int32_t quotes, int32_t bad_pairs, s7_pointer e)
 {
@@ -71373,6 +71391,8 @@ static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer
     {
       if (is_symbol(closure_args(func))) /* (arit == -1) is ambiguous: (define (f . a)...) and (define (f a . b)...) both are -1 here */
 	return(optimize_closure_sym(sc, expr, func, hop, 1, e));
+      if ((arit == -1) && (is_symbol(cdr(closure_args(func)))))
+	return(optimize_closure_a_sym(sc, expr, func, hop, 1, e));
       return(OPT_F);
     }
   safe_case = is_safe_closure(func);
@@ -72114,6 +72134,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	{
 	  if (is_symbol(closure_args(func)))
 	    return(optimize_closure_sym(sc, expr, func, hop, 2, e));
+	  if ((arit == -1) && (is_symbol(cdr(closure_args(func))))) /* (define (f a . b) ...) */
+	    return(optimize_closure_a_sym(sc, expr, func, hop, 2, e));
 	  return(OPT_F);
 	}
       if (is_immutable(func)) hop = 1;
@@ -84673,24 +84695,88 @@ static void op_any_closure_sym(s7_scheme *sc) /* for (lambda a ...) */
   num_args = opt3_arglen(old_args);
 
   if (num_args == 1)
-    sc->args = ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args));
+    sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func),
+				    ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? 
+				     set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args)));
   else
     if (num_args == 2)
       {
 	gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
 	sc->args = fx_call(sc, cdr(old_args));
-	sc->args = ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? set_plist_2(sc, stack_protected1(sc), sc->args) : list_2(sc, stack_protected1(sc), sc->args);
+	sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func),
+					((is_safe_closure(func)) && (!sc->debug_or_profile)) ? 
+					 set_plist_2(sc, stack_protected1(sc), sc->args) : list_2(sc, stack_protected1(sc), sc->args));
 	unstack(sc);
       }
     else
-      {
-	sc->args = make_list(sc, num_args, sc->F);
-	for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
-	  set_car(p, fx_call(sc, old_args));
-      }
-  sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func), sc->args);
+      if (num_args == 0)
+	sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func), sc->nil);
+      else
+	{
+	  sc->args = make_list(sc, num_args, sc->F);
+	  for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
+	    set_car(p, fx_call(sc, old_args));
+	  sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func), sc->args);
+	}
   sc->code = T_Pair(closure_body(func));
 }
+
+static bool check_closure_a_sym(s7_scheme *sc)
+{
+  if ((symbol_ctr(car(sc->code)) != 1) ||
+      (unchecked_local_value(car(sc->code)) != opt1_lambda_unchecked(sc->code)))
+    {
+      s7_pointer f;
+      f = lookup_unexamined(sc, car(sc->code));
+      if ((f != opt1_lambda_unchecked(sc->code)) &&
+	  ((!f) ||
+	   ((typesflag(f) & (TYPE_MASK | T_SAFE_CLOSURE)) != T_CLOSURE) ||
+	   (!is_symbol(cdr(closure_args(f))))))
+	{
+	  sc->last_function = f;
+	  return(false);
+	}
+      set_opt1_lambda(sc->code, f);
+    }
+  return(true);
+}
+
+static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
+{
+  s7_pointer func = opt1_lambda(sc->code), old_args = cdr(sc->code), func_args;
+  s7_int num_args;
+  num_args = opt3_arglen(old_args);
+  func_args = closure_args(func);
+
+  if (num_args == 1)
+    sc->curlet = make_let_with_two_slots(sc, closure_let(func), 
+					 car(func_args), sc->value = fx_call(sc, old_args), 
+					 cdr(func_args), sc->nil);
+  else
+    {
+      gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
+      if (num_args == 2)
+	{
+	  sc->args = fx_call(sc, cdr(old_args));
+	  sc->curlet = make_let_with_two_slots(sc, closure_let(func), 
+					       car(func_args), stack_protected1(sc), 
+					       cdr(func_args), ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? 
+					                        set_plist_1(sc, sc->args) : list_1(sc, sc->args));
+	}
+      else
+	{
+	  sc->args = make_list(sc, num_args - 1, sc->F);
+	  old_args = cdr(old_args);
+	  for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
+	    set_car(p, fx_call(sc, old_args));
+	  sc->curlet = make_let_with_two_slots(sc, closure_let(func),
+					       car(func_args), stack_protected1(sc), 
+					       cdr(func_args), sc->args);
+	}}
+  sc->code = T_Pair(closure_body(func));
+}
+
+
 
 /* -------- */
 #if S7_DEBUGGING
@@ -90267,6 +90353,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_ANY_CLOSURE_SYM: if (!check_closure_sym(sc)) break; /* (lambda args ...) */
 	case HOP_ANY_CLOSURE_SYM: op_any_closure_sym(sc); goto BEGIN;
+	case OP_ANY_CLOSURE_A_SYM: if (!check_closure_a_sym(sc)) break; /* (lambda (a . args) ...) */
+	case HOP_ANY_CLOSURE_A_SYM: op_any_closure_a_sym(sc); goto BEGIN;
 
 
 	case OP_TC_AND_A_OR_A_LA:         tick_tc(sc, sc->cur_op); op_tc_and_a_or_a_la(sc, sc->code);                       continue;
@@ -94794,7 +94882,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 918)
+  if (NUM_OPS != 920)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95191,7 +95279,6 @@ int main(int argc, char **argv)
  * teq        3541         4068   4045   3536   3531   3531
  * tio        3698         3816   3752   3683   3680   3661
  * tobj       4533         4016   3970   3828   3701   3695
- * tlamb      4454         4912   4786   4298   4255   4277
  * tclo       4604         4787   4735   4390   4398   4318
  * tcase      4501         4960   4793   4439   4426   4402
  * tlet       5305         7775   5640   4450   4434   4430
@@ -95201,6 +95288,7 @@ int main(int argc, char **argv)
  * tform      8338         5357   5348   5307   5300   5307
  * tnum       56.7         6348   6013   5433   5406   5390
  * tstr       6123         6880   6342   5488   5488   5480
+ * tlamb      5902         6423   6273   5720   ----   5582
  * tmisc      6847         8869   7612   6435   6331   6340
  * tgsl       25.1         8485   7802   6373   6373   6373
  * trec       8314         6936   6922   6521   6521   6523
@@ -95224,9 +95312,7 @@ int main(int argc, char **argv)
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let?
  *   s7_let_ref[9571] -- only blocks rootlet now, but is that a problem?
  *   might set bit for return #<undefined>
- * opt check: (lambda symbol ...) and friends, t572: 0-args done, need 1,2,3
  * is error-port actually useful? t573
- * is safe_thunk_any worth 2 ops
- * truncate enormous list in error message
- * can cb checks be avoided?
+ * is safe_thunk_any worth 2 ops, combine code in optimize_closure_*sym
+ * truncate enormous list in error message: print-length or ~NA|S|W?
  */

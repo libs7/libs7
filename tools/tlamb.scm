@@ -68,7 +68,7 @@
 ;(display (f5 123)) (newline)
 
 (define (f5-test)
-  (do ((i 0 (+ i 1)))            ; op_safe_dotimes_step_o -> op_f_a [op_safe_sc] -- this could be optimized [op_f_fx_a?]
+  (do ((i 0 (+ i 1)))            ; op_safe_dotimes_step_o -> op_f_a [op_safe_sc] -- this could be optimized [op_f_fx_a?], caddar(sc->code) is fxable
       ((= i size))
     (f5 123)))                   ; op_closure_a_o
 
@@ -256,6 +256,42 @@
 (f17-test)
 
 
+;;; -------- [313] --------
+(define (f18 . args)           ; [346] -> 318 (safe_thunk) but tmisc up 10 6341 if op_safe_thunk_any -> 313 (fx_is_null_t)
+  (if (null? args) 1 0))       ; fx_is_null_t if safe_thunk_any
+
+(define (dof18)
+  (do ((sum 0)                 ; op_dox_step_o
+       (i 0 (+ i 1)))          ; fx_add_t1
+      ((= i size) sum)         ; fx_num_eq_ti
+    (set! sum (+ sum (f18))))) ; op_safe_c_sp + op_safe_thunk_any
+
+(unless (= (dof18) size) (format *stderr* "dof18: ~S~%" (dof18)))
 	    
+
+;;; -------- [449] --------
+(define (f19 . args)     ; [449] => 310 if (define (g arg)...)
+  (+ (car args) 1))      ; eval:fx_c_opsq_c_any -> car add_x1 (eval)
+
+(define (dof19)
+  (do ((sum 0)           ; op_dox_step_o
+       (i 0 (+ i 1)))    ; fx_add_t1 -> g_add_x1
+      ((= i size) sum)   ; fx_num_eq_ti
+    (set! sum (+ sum (f19 i))))) ; op_any_closure_sym via set_symbol_p+safe_set
+
+(unless (= (dof19) (/ (* size (+ size 1)) 2)) (format *stderr* "dof19: ~S~%" (dof19)))
+
+
+;;; -------- [520] --------
+(define (f20 a . b)
+  (+ a (car b)))         ; fx_c_s_opsq -> g_add_2 + g_car
+
+(define (dof20)          ;[618 -> 609 -> 520] op_any_closure_a_sym
+  (do ((sum 0)           ; op_dox_step_o
+       (i 0 (+ i 1)))    ; fx_add_t1
+      ((= i size) sum)   ; fx_num_eq_ti
+    (set! sum (+ sum (f20 i 1)))))
+
+(unless (= (dof20) (/ (* size (+ size 1)) 2)) (format *stderr* "dof20: ~S~%" (dof20)))
 
 (exit)
