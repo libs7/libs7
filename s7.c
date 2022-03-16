@@ -4792,7 +4792,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_FULL_CASE_KEY) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_FULL_UNKNOPT) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj))) return(true);
-  if (((full_typ & T_FULL_HAS_GX) != 0) && (!is_pair(obj)) && (!is_any_closure(obj))) return(true);
+  if (((full_typ & T_FULL_HAS_GX) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_CHECKED) != 0) && (!is_slot(obj)) && (!is_pair(obj)) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_SHARED) != 0) && (!t_sequence_p[type(obj)]) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
@@ -56491,7 +56491,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      if ((caadr(arg) == caaddr(arg)) && ((caadr(arg) == sc->cdr_symbol) || (caadr(arg) == sc->car_symbol)))
 		{
 		  set_opt1_sym(cdr(arg), cadadr(arg));
-		  set_opt2_sym(cdr(arg), cadaddr(arg)); /* usable because we know func is cdr */
+		  set_opt2_sym(cdr(arg), cadaddr(arg)); /* usable because we know func is cdr|car */
 		  return((caadr(arg) == sc->cdr_symbol) ? fx_cdr_s_cdr_s : fx_car_s_car_s);
 		}
 	      set_opt1_sym(cdr(arg), cadaddr(arg)); /* opt2 is taken by second func */
@@ -57215,20 +57215,19 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_opSq_opSq:
-      if ((fx_proc(tree) == fx_c_opsq_opsq_direct) || (fx_proc(tree) == fx_car_s_car_s))
+      if ((fx_proc(tree) == fx_c_opsq_opsq_direct) && (cadadr(p) == var1) && (cadadr(p) == cadaddr(p)))
 	{
-	  if ((cadadr(p) == var1) && (cadadr(p) == cadaddr(p)))
-	    {
-	      set_opt1_sym(cdr(p), cadadr(p));
-	      return(with_fx(tree, fx_c_optq_optq_direct));   /* opuq got few hits */
-	    }
-	  if ((caadr(p) == caaddr(p)) && (caadr(p) == sc->car_symbol))
-	    {
-	      set_opt1_sym(cdr(p), cadadr(p));
-	      set_opt2_sym(cdr(p), cadaddr(p));
-	      return(with_fx(tree, ((cadadr(p) == var1) && (cadaddr(p) == var2)) ?
-			     ((opt3_direct(p) == (s7_pointer)is_eq_p_pp) ? fx_is_eq_car_car_tu : fx_car_t_car_u) : fx_car_s_car_s));
-	    }}
+	  set_opt1_sym(cdr(p), cadadr(p));
+	  return(with_fx(tree, fx_c_optq_optq_direct));   /* opuq got few hits */
+	}
+      if (((fx_proc(tree) == fx_c_opsq_opsq_direct) || (fx_proc(tree) == fx_car_s_car_s)) &&
+	  ((caadr(p) == sc->car_symbol) && (caadr(p) == caaddr(p))))
+	{
+	  set_opt1_sym(cdr(p), cadadr(p));
+	  set_opt2_sym(cdr(p), cadaddr(p));
+	  return(with_fx(tree, ((cadadr(p) == var1) && (cadaddr(p) == var2)) ?
+			 ((opt3_direct(p) == (s7_pointer)is_eq_p_pp) ? fx_is_eq_car_car_tu : fx_car_t_car_u) : fx_car_s_car_s));
+	}
       break;
 
     case HOP_SAFE_C_opSq_C:
@@ -62386,10 +62385,18 @@ static s7_pointer opt_p_pp_fs_sub(opt_info *o) {return(subtract_p_pp(o->sc, o->v
 
 static s7_pointer opt_p_pp_ff(opt_info *o)
 {
-  s7_pointer p1;
-  p1 = o->v[11].fp(o->v[10].o1);
-  o->sc->temp2 = p1; /* feeble GC protection */
-  return(o->v[3].p_pp_f(o->sc, p1, o->v[9].fp(o->v[8].o1)));
+  s7_scheme *sc = o->sc;
+  s7_pointer result;
+#if 0
+  gc_protect_2_via_stack(sc, o->v[11].fp(o->v[10].o1), o->v[9].fp(o->v[8].o1));
+  result = o->v[3].p_pp_f(sc, stack_protected1(sc), stack_protected2(sc));
+#else
+  /* faster, but maybe less safe? */
+  gc_protect_via_stack(sc, o->v[11].fp(o->v[10].o1));
+  result = o->v[3].p_pp_f(sc, stack_protected1(sc), o->v[9].fp(o->v[8].o1));
+#endif
+  unstack(sc);
+  return(result);
 }
 
 static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, int32_t pstart)
@@ -84667,7 +84674,7 @@ static void op_closure_na(s7_scheme *sc)
   if_pair_set_up_begin(sc);
 }
 
-static bool check_closure_sym(s7_scheme *sc)
+static bool check_closure_sym(s7_scheme *sc, int32_t args)
 {
   /* can't use closure_is_fine -- (lambda args 1) and (lambda (name . args) 1) are both arity -1 for the internal arity checkers! */
   if ((symbol_ctr(car(sc->code)) != 1) ||
@@ -84678,7 +84685,8 @@ static bool check_closure_sym(s7_scheme *sc)
       if ((f != opt1_lambda_unchecked(sc->code)) &&
 	  ((!f) ||
 	   ((typesflag(f) & (TYPE_MASK | T_SAFE_CLOSURE)) != T_CLOSURE) ||
-	   (!is_symbol(closure_args(f)))))
+	   (((args == 1) && (!is_symbol(closure_args(f)))) || 
+	    ((args == 2) && ((!is_pair(closure_args(f))) || (!is_symbol(cdr(closure_args(f)))))))))
 	{
 	  sc->last_function = f;
 	  return(false);
@@ -84719,26 +84727,6 @@ static void op_any_closure_sym(s7_scheme *sc) /* for (lambda a ...) */
 	  sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func), sc->args);
 	}
   sc->code = T_Pair(closure_body(func));
-}
-
-static bool check_closure_a_sym(s7_scheme *sc)
-{
-  if ((symbol_ctr(car(sc->code)) != 1) ||
-      (unchecked_local_value(car(sc->code)) != opt1_lambda_unchecked(sc->code)))
-    {
-      s7_pointer f;
-      f = lookup_unexamined(sc, car(sc->code));
-      if ((f != opt1_lambda_unchecked(sc->code)) &&
-	  ((!f) ||
-	   ((typesflag(f) & (TYPE_MASK | T_SAFE_CLOSURE)) != T_CLOSURE) ||
-	   (!is_symbol(cdr(closure_args(f))))))
-	{
-	  sc->last_function = f;
-	  return(false);
-	}
-      set_opt1_lambda(sc->code, f);
-    }
-  return(true);
 }
 
 static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
@@ -90351,9 +90339,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    op_any_closure_np_end(sc);
 	  goto EVAL;
 
-	case OP_ANY_CLOSURE_SYM: if (!check_closure_sym(sc)) break; /* (lambda args ...) */
+	case OP_ANY_CLOSURE_SYM: if (!check_closure_sym(sc, 1)) break; /* (lambda args ...) */
 	case HOP_ANY_CLOSURE_SYM: op_any_closure_sym(sc); goto BEGIN;
-	case OP_ANY_CLOSURE_A_SYM: if (!check_closure_a_sym(sc)) break; /* (lambda (a . args) ...) */
+	case OP_ANY_CLOSURE_A_SYM: if (!check_closure_sym(sc, 2)) break; /* (lambda (a . args) ...) */
 	case HOP_ANY_CLOSURE_A_SYM: op_any_closure_a_sym(sc); goto BEGIN;
 
 
@@ -95259,60 +95247,57 @@ int main(int argc, char **argv)
  * index      1024         1026   1016    973    968    965
  * tmock      7741         1177   1165   1057   1060   1051
  * tvect      1953         2519   2464   1772   1713   1713
- * texit      1827         ----   ----   1778   1757   1757
- * s7test     4537         1873   1831   1818   1813   1809
+ * texit      1827         ----   ----   1778   1757   1756
+ * s7test     4537         1873   1831   1818   1813   1798
  * lt         2153         2187   2172   2150   2148   2143
- * timp       2232         2971   2891   2176   2206   2206
- * dup        2756         3805   3788   2492   2373   2377
- * tread      2614         2440   2421   2419   2414   2379
+ * timp       2232         2971   2891   2176   2206   2204
+ * tread      2614         2440   2421   2419   2414   2372
+ * dup        2756         3805   3788   2492   2373   2380
  * trclo      4079         2735   2574   2454   2451   2451
  * fbench     2833         2688   2583   2460   2460   2451
  * tcopy      2600         8035   5546   2539   2501   2501
- * tmat       2694         3065   3042   2524   2520   2518
+ * tmat       2694         3065   3042   2524   2520   2513
  * tauto      2763         ----   ----   2562   2546   2552
- * tb         3366?        2735   2681   2612   2611   2621
+ * tb         3366?        2735   2681   2612   2611   2612
  * titer      2659         2865   2842   2641   2638   2631
  * tsort      3572         3105   3104   2856   2855   2855
- * tmac       3074         3950   3873   3033   2998   2911
- * tload      3740         ----   ----   3046   3042   3025
- * tset       3058         3253   3104   3048   3121   3111
+ * tmac       3074         3950   3873   3033   2998   2908
+ * tload      3740         ----   ----   3046   3042   3020
+ * tset       3058         3253   3104   3048   3121   3106
  * teq        3541         4068   4045   3536   3531   3531
  * tio        3698         3816   3752   3683   3680   3661
  * tobj       4533         4016   3970   3828   3701   3695
- * tclo       4604         4787   4735   4390   4398   4318
+ * tclo       4604         4787   4735   4390   4398   4323
  * tcase      4501         4960   4793   4439   4426   4402
- * tlet       5305         7775   5640   4450   4434   4430
+ * tlet       5305         7775   5640   4450   4434   4422
  * tmap       5488         8869   8774   4489   4500   4495
- * tfft      115.1         7820   7729   4755   4652   4651
+ * tfft      115.1         7820   7729   4755   4652   4649
  * tshoot     6896         5525   5447   5183   5153   5143
- * tform      8338         5357   5348   5307   5300   5307
- * tnum       56.7         6348   6013   5433   5406   5390
+ * tform      8338         5357   5348   5307   5300   5305
+ * tnum       56.7         6348   6013   5433   5406   5402
  * tstr       6123         6880   6342   5488   5488   5480
  * tlamb      5902         6423   6273   5720   ----   5582
- * tmisc      6847         8869   7612   6435   6331   6340
- * tgsl       25.1         8485   7802   6373   6373   6373
+ * tmisc      6847         8869   7612   6435   6331   6335
+ * tgsl       25.1         8485   7802   6373   6373   6371
+ * tlist      6551         7896   7546   6558   6532   6507
  * trec       8314         6936   6922   6521   6521   6523
- * tlist      6551         7896   7546   6558   6532   6499
- * tari       ----         13.0   12.7   6827   6819   6817
- * tleft      9004         10.4   10.2   7657   7664   7638
+ * tari       ----         13.0   12.7   6827   6819   6834
+ * tleft      9004         10.4   10.2   7657   7664   7646
  * tgc        9614         11.9   11.1   8177   8156   8134
- * thash      35.4         11.8   11.7   9734   9590   9586
+ * thash      35.4         11.8   11.7   9734   9590   9581
  * cb         16.8         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
  * tall       24.4         15.6   15.6   15.6   15.6   15.6
  * calls      55.3         36.7   37.5   37.0   37.0   37.0
  * sg         75.8         ----   ----   55.9   55.8   55.8
- * lg        105.9         ----   ----  105.2  105.4  105.0
- * tbig      604.3        177.4  175.8  156.5  152.5  152.3
+ * lg        105.9         ----   ----  105.2  105.4  104.9
+ * tbig      604.3        177.4  175.8  156.5  152.5  152.4
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
- * in fx_vector_na, if all a are non-allocators, no fill/stack-protect is needed (same elsewhere for protect)
- *   need no_alloc bit for c|fx_funcs (or parallel ops)
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let?
  *   s7_let_ref[9571] -- only blocks rootlet now, but is that a problem?
  *   might set bit for return #<undefined>
- * is error-port actually useful? t573
- * is safe_thunk_any worth 2 ops, combine code in optimize_closure_*sym
  * truncate enormous list in error message: print-length or ~NA|S|W?
+ * tbig: opt_p_pp_ff split: add|subtract(sf_mul, sf_mul)
  */
