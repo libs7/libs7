@@ -475,67 +475,6 @@ static bool symbol_func_1(const char *symbol_name, void *data)
 
 static s7_scheme *cur_sc;
 
-#if 0
-static s7_pointer ap_1(s7_pointer a1) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1)));
-}
-
-static s7_pointer ap_2(s7_pointer a1, s7_pointer a2) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2)));
-}
-
-static s7_pointer ap_3(s7_pointer a1, s7_pointer a2, s7_pointer a3) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3)));
-}
-
-static s7_pointer ap_4(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3) + s7_integer(a4)));
-}
-
-static s7_pointer ap_5(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3) + s7_integer(a4) + s7_integer(a5)));
-}
-
-static s7_pointer ap_6(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5, s7_pointer a6) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3) + s7_integer(a4) + s7_integer(a5) + s7_integer(a6)));
-}
-
-static s7_pointer ap_7(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5, s7_pointer a6, s7_pointer a7) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3) + s7_integer(a4) + s7_integer(a5) + s7_integer(a6) + s7_integer(a7)));
-}
-
-static s7_pointer ap_8(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3) + s7_integer(a4) + s7_integer(a5) + s7_integer(a6) + s7_integer(a7) + s7_integer(a8)));
-}
-
-static s7_pointer ap_9(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8, s7_pointer a9) 
-{
-  return(s7_make_integer(cur_sc, s7_integer(a1) + s7_integer(a2) + s7_integer(a3) + s7_integer(a4) + s7_integer(a5) + s7_integer(a6) + s7_integer(a7) + s7_integer(a8) + s7_integer(a9)));
-}
-
-static s7_pointer int_list(s7_scheme *sc, s7_int len)
-{
-  s7_int i, gc_loc;
-  s7_pointer result;
-  s7_eval_c_string(sc, "(set! (*s7* 'safety) 1)");
-  result = s7_list(sc, 1, s7_nil(sc));
-  s7_eval_c_string(sc, "(set! (*s7* 'safety) 0)");
-  gc_loc = s7_gc_protect(sc, result);
-  for (i = 1; i <= len; i++)
-    s7_set_car(result, s7_cons(sc, s7_make_integer(sc, i), s7_car(result)));
-  s7_gc_unprotect_at(sc, gc_loc);
-  return(s7_reverse(sc, s7_car(result)));
-}
-#endif
-
 static const char *pretty_print(s7_scheme *sc, s7_pointer obj) /* (pretty-print obj) */
 {
   return(s7_string(

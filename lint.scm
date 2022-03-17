@@ -38,6 +38,7 @@
 (define *report-quasiquote-rewrites* #t)                  ; simple quasiquote stuff rewritten as a normal list expression
 (define *report-||-rewrites* #t)                          ; | has no special meaning in s7, |...| does not represent the symbol ...
 (define *report-constant-expressions-in-do* #t)           ; a first stab at this
+(define *report-recursion->iteration* #t)                 ; named-let -> do and the like
 
 ;;; these turn out to be less useful than I expected
 (define *report-repeated-code-fragments* 200)             ; #t, #f, or an int = min reported fragment size * uses * uses, #t=130.
@@ -1907,7 +1908,7 @@
 		(lint-format "~A ~A ~A shadows built-in ~A" caller head vtype v v)))))
 
     (define (make-fvar name ftype arglist initial-value env)
-      (unless (keyword? name)
+      (when (and *report-recursion->iteration* (not (keyword? name)))
 	(recursion->iteration name ftype arglist initial-value env))
       (improper-arglist->define* name ftype arglist initial-value)
 
@@ -15361,7 +15362,7 @@
 					    (not (memq (var-name (car e)) '(:lambda :dilambda)))) ; (define x (lambda ...))
 					(cons (make-lint-var sym (car val) head) env)
 					(begin
-					  (if (eq? (var-name (car e)) :lambda)
+					  (if (and *report-recursion->iteration* (eq? (var-name (car e)) :lambda))
 					      (recursion->iteration sym
 								    (var-ftype (car e))
 								    (var-arglist (car e))
@@ -20200,7 +20201,7 @@
 							v
 							(values)))
 						  last-refs)))
-				 ;; should this omit cases where most of the let is in the one or two lines?
+				 ;; should this omit cases where most of the let is in one or two lines?
 				 (when (pair? locals)
 				   (set! locals (sort! locals (lambda (a b)
 								(or (< (a 1) (b 1))
