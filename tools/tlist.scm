@@ -1,5 +1,7 @@
 ;;; list timing tests
 
+(set! (*s7* 'heap-size) 512000)
+
 (define count 150000)
 
 (define (cxr tries)

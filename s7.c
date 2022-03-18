@@ -5986,7 +5986,7 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
       if (is_slot(slot))
 	{
 	  set_immutable(slot);
-	  return(p);  /* symbol is not set immutable ? */
+	  return(p);   /* symbol is not set immutable ? */
 	}}
   set_immutable(p);   /* could set_immutable save the current file/line? Then the immutable error checks for define-constant and this setting */
   return(p);
@@ -36147,8 +36147,6 @@ s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q)
 
 /* -------------------------------------------------------------------------------- */
 
-/* these are used in clm2xen et al under names like Xen_wrap_5_args */
-
 void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t len)
 {
   int32_t i; 
@@ -36158,6 +36156,8 @@ void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t
 }
 
 #if (!DISABLE_DEPRECATED)
+/* these are used in clm2xen et al under names like Xen_wrap_5_args */
+
 s7_pointer s7_apply_n_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1))
 {
   if (is_pair(args)) return(f1(car(args)));
@@ -36172,21 +36172,9 @@ s7_pointer s7_apply_n_2(s7_scheme *sc, s7_pointer args, s7_pointer (*f2)(s7_poin
 
 s7_pointer s7_apply_n_3(s7_scheme *sc, s7_pointer args, s7_pointer (*f3)(s7_pointer a1, s7_pointer a2, s7_pointer a3))
 {
-#if 0
   s7_pointer a[3];
   s7_list_to_array(sc, args, a, 3);
   return(f3(a[0], a[1], a[2]));
-#else
-  s7_pointer a1, a2;
-  if (!is_pair(args))
-    return(f3(sc->undefined, sc->undefined, sc->undefined));
-  a1 = car(args);
-  args = cdr(args);
-  if (!is_pair(args))
-    return(f3(a1, sc->undefined, sc->undefined));
-  a2 = car(args);
-  return((is_pair(cdr(args))) ? f3(a1, a2, cadr(args)) : f3(a1, a2, sc->undefined));
-#endif
 }
 
 s7_pointer s7_apply_n_4(s7_scheme *sc, s7_pointer args, s7_pointer (*f4)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4))
@@ -69904,8 +69892,7 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
       (symbol_is_in_list(sc, symbol_to_keyword(sc, symbol))))
     return(sc->nil);
 
-  id = symbol_id(symbol);
-  for (x = sc->curlet; id < let_id(x); x = let_outlet(x));
+  for (x = sc->curlet, id = symbol_id(symbol); id < let_id(x); x = let_outlet(x));
   for (; is_let(x); x = let_outlet(x))
     {
       if (let_id(x) == id)
@@ -69920,10 +69907,15 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
 static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 {
   return((is_pair(arg2)) &&
-	 (is_lambda(sc, car(arg2))) &&
-	 (is_pair(cdr(arg2))) &&
-	 (is_pair(cddr(arg2))) &&
-	 (s7_is_proper_list(sc, cddr(arg2))));
+	 (is_lambda(sc, car(arg2))) && /* must start (lambda ...) */
+	 (is_pair(cdr(arg2))) &&       /* must have arg(s) */
+	 (is_pair(cddr(arg2))) &&      /* must have body */
+	 (s7_is_proper_list(sc, cdddr(arg2))));
+}
+
+static bool hop_if_constant(s7_scheme *sc, s7_pointer sym)
+{ 
+  return(((!sc->in_with_let) && (symbol_id(sym) == 0)) ? 1 : 0); /* for with-let, see s7test atanh (77261) */
 }
 
 static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer func,
@@ -69931,8 +69923,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 {
   s7_pointer arg1 = cadr(expr);
   bool func_is_safe = is_safe_procedure(func);
-  if ((hop == 0) && ((is_immutable(car(expr))) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
-  /* hooboy! this used to check is_immutable(func) but that is never the case */
+  if (hop == 0) hop = hop_if_constant(sc, car(expr));
   if (pairs == 0)
     {
       if (func_is_safe)                  /* safe c function */
@@ -70480,7 +70471,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
     {
       /* this is a mess */
       bool func_is_safe = is_safe_procedure(func);
-      if ((hop == 0) && ((is_immutable(car(expr))) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
+      if (hop == 0) hop = hop_if_constant(sc, car(expr));
 
       if (pairs == 0)
 	{
@@ -71317,7 +71308,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 
   if (is_c_function(func) && (c_function_is_aritable(func, 3)))
     {
-      if ((hop == 0) && ((is_immutable(car(expr))) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
+      if (hop == 0) hop = hop_if_constant(sc, car(expr));
       if ((is_safe_procedure(func)) ||
 	  ((is_maybe_safe(func)) && (unsafe_is_safe(sc, arg3, e))))
 	{
@@ -71557,8 +71548,7 @@ static bool symbols_are_safe(s7_scheme *sc, s7_pointer args, s7_pointer e)
 {
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
     {
-      s7_pointer arg;
-      arg = car(p);
+      s7_pointer arg = car(p);
       if ((is_normal_symbol(arg)) &&
 	  (!arg_findable(sc, arg, e)))
 	return(false);
@@ -71581,7 +71571,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
     }
   if ((is_c_function(func)) && (c_function_is_aritable(func, args)))
     {
-      if ((hop == 0) && ((is_immutable(car(expr))) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
+      if (hop == 0) hop = hop_if_constant(sc, car(expr));
       if (is_safe_procedure(func))
 	{
 	  if (pairs == 0)
@@ -95168,7 +95158,7 @@ int main(int argc, char **argv)
  *
  * for nrepl: gcc s7.c -o repl -DWITH_MAIN -DWITH_NOTCURSES -I. -O2 -g -lnotcurses-core -ldl -lm -Wl,-export-dynamic
  *
- * (s7.c compile time 2-Jul-21 52 secs)
+ * (s7.c compile time 17-Mar-22 50 secs)
  * musl works, but there is some problem in libgsl.scm with gsl/gsl_blas.h I think
  */
 #endif
@@ -95212,9 +95202,9 @@ int main(int argc, char **argv)
  * tnum       56.7         6348   6013   5433   5406   5402
  * tstr       6123         6880   6342   5488   5488   5480
  * tlamb      5902         6423   6273   5720   ----   5597
+ * tgsl       25.1         8485   7802   6373   6373   6324
  * tmisc      6847         8869   7612   6435   6331   6335
- * tgsl       25.1         8485   7802   6373   6373   6371  6400 [c_function_is_ok]
- * tlist      6551         7896   7546   6558   6532   6507
+ * tlist      6551         7896   7546   6558   6532   6507  6489
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
  * tleft      9004         10.4   10.2   7657   7664   7638
@@ -95223,8 +95213,8 @@ int main(int argc, char **argv)
  * cb         16.8         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
  * tall       24.4         15.6   15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0   37.0  37.3 [s7_apply_n_3 both, 37.1 old style]
- * sg         75.8         ----   ----   55.9   55.8   55.8  56.0
+ * calls      55.3         36.7   37.5   37.0   37.0   37.3
+ * sg         75.8         ----   ----   55.9   55.8   56.0
  * lg        105.9         ----   ----  105.2  105.4  104.9
  * tbig      604.3        177.4  175.8  156.5  152.5  152.4
  * -------------------------------------------------------------
@@ -95232,6 +95222,4 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * truncate enormous list in error message: print-length or ~NA|S|W?
- * tbig: opt_p_pp_ff split: add|subtract(sf_mul, sf_mul)
- * s7_apply_n_3 old style in xen.c?
  */
