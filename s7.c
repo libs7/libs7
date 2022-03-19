@@ -1031,7 +1031,7 @@ typedef struct {
   bool has_hits;
   int32_t *refs;
   s7_pointer cycle_port, init_port;
-  s7_int cycle_loc, init_loc;
+  s7_int cycle_loc, init_loc, ctr;
   bool *defined;
 } shared_info_t;
 
@@ -31588,6 +31588,7 @@ static inline shared_info_t *new_shared_info(s7_scheme *sc)
     }
   ci->ref = 0;
   ci->has_hits = false;
+  ci->ctr = 0;
   return(ci);
 }
 
@@ -32669,7 +32670,7 @@ static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int t
 }
 
 static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_write_t use_write, shared_info_t *ci)
-{ /* TODO: print-length pair = elements? perhaps keep current count in ci? */
+{ 
   s7_pointer x;
   s7_int i, len, true_len;
 
@@ -32858,6 +32859,13 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 	{
 	  for (x = lst, i = 0; (is_pair(x)) && (i < plen) && ((i == 0) || (peek_shared_ref(ci, x) == 0)); i++, x = cdr(x))
 	    {
+	      ci->ctr++;
+	      if (ci->ctr > sc->print_length)
+		{
+		  port_write_string(port)(sc, " ...)", 5, port);
+		  unstack(sc);
+		  return;
+		}
 	      object_to_port_with_circle_check(sc, car(x), port, NOT_P_DISPLAY(use_write), ci);
 	      if (i < (len - 1))
 		port_write_character(port)(sc, ' ', port);
@@ -63508,8 +63516,6 @@ static s7_pointer opt_set_p_p_f(opt_info *o)
   return(x);
 }
 
-/* opt_p_pp_ff tbig */
-
 static s7_pointer opt_set_p_i_s(opt_info *o)
 {
   s7_pointer val = slot_value(o->v[2].p);
@@ -65525,7 +65531,6 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   {
     s7_pointer slot;
     init_pc = sc->pc;
-
     for (k = 0, p = cadr(car_x), slot = let_slots(let); (is_pair(p)) && (k < SIZE_O); k++, p = cdr(p), slot = next_slot(slot))
       {
 	s7_pointer var = car(p);
@@ -87387,10 +87392,7 @@ static void op_safe_c_p(s7_scheme *sc)
   sc->code = T_Pair(cadr(sc->code));
 }
 
-static void op_safe_c_p_1(s7_scheme *sc)
-{
-  sc->value = fn_proc(sc->code)(sc, with_list_t1(sc->value));
-}
+static void op_safe_c_p_1(s7_scheme *sc) {sc->value = fn_proc(sc->code)(sc, with_list_t1(sc->value));}
 
 static void op_safe_c_ssp(s7_scheme *sc)
 {
@@ -87665,10 +87667,7 @@ static void op_safe_c_sc(s7_scheme *sc)
   sc->value = fn_proc(sc->code)(sc, with_list_t2(lookup(sc, cadr(sc->code)), opt2_con(cdr(sc->code))));
 }
 
-static void op_cl_a(s7_scheme *sc)
-{
-  sc->value = fn_proc(sc->code)(sc, with_list_t1(fx_call(sc, cdr(sc->code))));
-}
+static void op_cl_a(s7_scheme *sc) {sc->value = fn_proc(sc->code)(sc, with_list_t1(fx_call(sc, cdr(sc->code))));}
 
 static void op_cl_aa(s7_scheme *sc)
 {
@@ -87791,17 +87790,10 @@ static void op_safe_c_pp_5(s7_scheme *sc)
 
 static void op_safe_c_pp_6_mv(s7_scheme *sc) /* both args mv */
 {
-  /* sc->args = pair_append(sc, sc->args, sc->value); */
-
-  /* is this safe?? */
   s7_pointer p;
-  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->args), display(sc->value)); */
-  if ((S7_DEBUGGING) && (is_immutable(sc->args))) fprintf(stderr, "%d: multiple-value is immutable: %s\n", __LINE__, display(sc->args));
-  if ((S7_DEBUGGING) && (is_null(cdr(sc->args)))) fprintf(stderr, "%d: multiple-value has only 1 value: %s\n", __LINE__, display(sc->args));
-  for (p = cdr(sc->args); is_pair(cdr(p)); p = cdr(p));
+  for (p = cdr(sc->args); is_pair(cdr(p)); p = cdr(p)); /* we used to copy here: sc->args = pair_append(sc, sc->args, sc->value); */
   set_cdr(p, sc->value);
- /*
-   * fn_proc(sc->code) here is g_add_2, but we have any number of args from a values call
+  /* fn_proc(sc->code) here is g_add_2, but we have any number of args from a values call
    *   the original (unoptimized) function is c_function_base(opt1_cfunc(sc->code))
    *   (let () (define (hi) (+ (values 1 2) (values 3 4))) (hi)) -> 10
    */
@@ -89661,9 +89653,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
        *    macroized so it will work if such gotos aren't available.  I think I'll stick with a switch statement.
        * Another seductive idea is to put the function in the tree, not an index to it (the optimize_op business above),
        *    then the switch below is not needed, and we free up 16 type bits.  C does not guarantee tail calls (I think)
-       *    so we'd have each function return the next, and eval would be (while (true) f = f(sc) but would the function
+       *    so we'd have each function return the next, and eval would be [while (true) f = f(sc)] but would the function
        *    call overhead be less expensive than the switch? (We get most functions inlined in the current code).
-       * with some fake fx_calls for the P cases, many of these could be sc->value = fx_function[sc->cur_op](sc, sc->code); continue;
+       * with some fake fx_calls for the P cases, many of these could be [sc->value = fx_function[sc->cur_op](sc, sc->code); continue;]
        *    so the switch statement is unnecessary -- maybe a table eval_functions[cur_op] eventually
        */
       switch (sc->cur_op)
@@ -91518,18 +91510,34 @@ static s7_pointer simple_s7_let_out_of_range(s7_scheme *sc, s7_pointer caller, s
 
 static s7_int s7_let_length(void) {return(SL_NUM_FIELDS - 1);}
 
-static s7_pointer s7_let_add_field(s7_scheme *sc, const char *name, s7_let_field_t field)
-{
-  s7_pointer sym;
-  sym = make_symbol(sc, name);
-  symbol_set_s7_let(sym, field);
-  return(sym);
-}
+static s7_pointer make_s7_let(s7_scheme *sc)
+{ 
+  s7_pointer x, slot1, slot2;
 
-static void init_s7_let(s7_scheme *sc)
-{
+  x = alloc_pointer(sc);        /* *s7* is permanent -- 20-May-21 */
+  set_full_type(x, T_LET | T_SAFE_PROCEDURE | T_UNHEAP | T_HAS_METHODS | T_HAS_LET_REF_FALLBACK | T_HAS_LET_SET_FALLBACK);
+  let_set_id(x, ++sc->let_number);
+  let_set_outlet(x, sc->nil);
+  slot1 = make_permanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
+  symbol_set_local_slot(sc->let_set_fallback_symbol, sc->let_number, slot1);
+  slot_set_next(slot1, slot_end(sc));
+  slot2 = make_permanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
+  symbol_set_local_slot(sc->let_ref_fallback_symbol, sc->let_number, slot2);
+  slot_set_next(slot2, slot1);
+  let_set_slots(x, slot2);
+
+  set_immutable(slot1);         /* make the *s7* let-ref|set! fallbacks immutable */
+  set_immutable(slot2);
+  set_immutable(x);
+  sc->s7_let_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x));
+
   for (int32_t i = SL_STACK_TOP; i < SL_NUM_FIELDS; i++)
-    s7_let_add_field(sc, s7_let_field_names[i], (s7_let_field_t)i);
+    {
+      s7_pointer sym;
+      sym = make_symbol(sc, s7_let_field_names[i]);
+      symbol_set_s7_let(sym, (s7_let_field_t)i);
+    }
+  return(x);
 }
 
 /* handling all *s7* fields via fallbacks lets us use direct field accesses in the rest of s7, and avoids
@@ -94766,26 +94774,7 @@ s7_scheme *s7_init(void)
 					"*rootlet-redefinition-hook* functions are called when a top-level variable's value is changed, (hook 'name 'value).");
 
   sc->let_temp_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
-
-  { /* *s7* is permanent -- 20-May-21 */
-    s7_pointer x, slot1, slot2;
-    x = alloc_pointer(sc);
-    set_full_type(x, T_LET | T_SAFE_PROCEDURE | T_UNHEAP | T_HAS_METHODS | T_HAS_LET_REF_FALLBACK | T_HAS_LET_SET_FALLBACK);
-    let_set_id(x, ++sc->let_number);
-    let_set_outlet(x, sc->nil);
-    slot1 = make_permanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
-    symbol_set_local_slot(sc->let_set_fallback_symbol, sc->let_number, slot1);
-    slot_set_next(slot1, slot_end(sc));
-    slot2 = make_permanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
-    symbol_set_local_slot(sc->let_ref_fallback_symbol, sc->let_number, slot2);
-    slot_set_next(slot2, slot1);
-    let_set_slots(x, slot2);
-    sc->s7_let = x;
-  }
-  sc->s7_let_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, sc->s7_let));
-  set_immutable(let_slots(sc->s7_let)); /* make the *s7* let-ref|set! fallbacks immutable */
-  set_immutable(next_slot(let_slots(sc->s7_let)));
-  set_immutable(sc->s7_let);
+  sc->s7_let = make_s7_let(sc);
   s7_set_history_enabled(sc, true);
 
 #if S7_DEBUGGING
@@ -94801,7 +94790,6 @@ s7_scheme *s7_init(void)
 #endif
 
   init_unlet(sc);
-  init_s7_let(sc);          /* set up *s7* */
   init_signatures(sc);      /* depends on procedure symbols */
   return(sc);
 }
@@ -95181,7 +95169,7 @@ int main(int argc, char **argv)
  * trclo      4079         2735   2574   2454   2451   2451
  * fbench     2833         2688   2583   2460   2460   2451
  * tcopy      2600         8035   5546   2539   2501   2501
- * tmat       2694         3065   3042   2524   2520   2513
+ * tmat       2694         3065   3042   2524   2520   2510
  * tauto      2763         ----   ----   2562   2546   2552
  * tb         3366?        2735   2681   2612   2611   2611
  * titer      2659         2865   2842   2641   2638   2631
@@ -95189,7 +95177,7 @@ int main(int argc, char **argv)
  * tmac       3074         3950   3873   3033   2998   2908
  * tload      3740         ----   ----   3046   3042   3020
  * tset       3058         3253   3104   3048   3121   3106
- * teq        3541         4068   4045   3536   3531   3531
+ * teq        3541         4068   4045   3536   3531   3469
  * tio        3698         3816   3752   3683   3680   3661
  * tobj       4533         4016   3970   3828   3701   3695
  * tclo       4604         4787   4735   4390   4398   4329
@@ -95204,7 +95192,7 @@ int main(int argc, char **argv)
  * tlamb      5902         6423   6273   5720   ----   5597
  * tgsl       25.1         8485   7802   6373   6373   6324
  * tmisc      6847         8869   7612   6435   6331   6335
- * tlist      6551         7896   7546   6558   6532   6507  6489
+ * tlist      6551         7896   7546   6558   6532   6490
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
  * tleft      9004         10.4   10.2   7657   7664   7638
@@ -95213,13 +95201,13 @@ int main(int argc, char **argv)
  * cb         16.8         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
  * tall       24.4         15.6   15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0   37.3
- * sg         75.8         ----   ----   55.9   55.8   56.0
- * lg        105.9         ----   ----  105.2  105.4  104.9
+ * calls      55.3         36.7   37.5   37.0   37.0   37.1
+ * sg         75.8         ----   ----   55.9   55.8   55.9
+ * lg        105.9         ----   ----  105.2  105.4  105.0
  * tbig      604.3        177.4  175.8  156.5  152.5  152.4
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
- * truncate enormous list in error message: print-length or ~NA|S|W?
+ * t718
  */
