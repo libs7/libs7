@@ -357,19 +357,13 @@
 #endif
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
-#define Jmp_Buf       jmp_buf
-#define SetJmp(A, B)  setjmp(A)
-#define LongJmp(A, B) longjmp(A, B)
-#else
-#if SHOW_EVAL_OPS
-  #define Jmp_Buf       sigjmp_buf
-  #define SetJmp(A, B)  ({fprintf(stderr, "%s%s[%d]: set_jmp%s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT); sigsetjmp(A, B);})
-  #define LongJmp(A, B) ({fprintf(stderr, "%s%s[%d]: longjmp%s\n", BOLD_TEXT, __func__, __LINE__, UNBOLD_TEXT); siglongjmp(A, B);})
+  #define Jmp_Buf       jmp_buf
+  #define SetJmp(A, B)  setjmp(A)
+  #define LongJmp(A, B) longjmp(A, B)
 #else
   #define Jmp_Buf       sigjmp_buf
   #define SetJmp(A, B)  sigsetjmp(A, B)
   #define LongJmp(A, B) siglongjmp(A, B)
-#endif
   /* we need sigsetjmp, not setjmp for nrepl's interrupt (something to do with signal masks??)
    *   unfortunately sigsetjmp is noticeably slower than setjmp, especially when s7_optimize_1 is called a lot.
    *   In one case, the sigsetjmp version runs in 24 seconds, but the setjmp version takes 10 seconds, and
@@ -9385,7 +9379,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   return(x);
 }
 
-static s7_pointer g_local_inlet(s7_scheme *sc, s7_int num_args, ...)
+static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
 {
   va_list ap;
   s7_pointer new_e, sp = NULL;
@@ -9401,8 +9395,7 @@ static s7_pointer g_local_inlet(s7_scheme *sc, s7_int num_args, ...)
       s7_pointer symbol, value;
       symbol = va_arg(ap, s7_pointer);
       value = va_arg(ap, s7_pointer);
-      if (is_keyword(symbol))                 /* (inlet ':allow-other-keys 3) */
-	symbol = keyword_symbol(symbol);
+      if ((S7_DEBUGGING) && (is_keyword(symbol))) fprintf(stderr, "internal_inlet key: %s??\n", display(symbol));
       if (!sp)
 	{
 	  add_slot_unchecked(sc, new_e, symbol, value, id);
@@ -31158,12 +31151,13 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
       iterator_length(iter) = c_object_length_to_int(sc, e);
       p = find_make_iterator_method(sc, e, iter);
       if (p) {free_cell(sc, iter); return(p);}
-      iterator_current(iter) = list_2(sc, e, int_zero);
+      iterator_current(iter) = list_2_unchecked(sc, e, int_zero); /* if not unchecked, gc protect iter */
       set_mark_seq(iter);
       iterator_next(iter) = c_object_iterate;
       break;
 
     default:
+      free_cell(sc, iter);  /* 19-Mar-22 */
       return(simple_wrong_type_argument_with_type(sc, sc->make_iterator_symbol, e, a_sequence_string));
     }
   return(iter);
@@ -45448,7 +45442,7 @@ static s7_pointer copy_c_object(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer c_object_type_to_let(s7_scheme *sc, s7_pointer cobj)
 {
-  return(g_local_inlet(sc, 4,
+  return(internal_inlet(sc, 4,
 		       sc->name_symbol, c_object_scheme_name(sc, cobj),
 		       sc->setter_symbol, (c_object_set(sc, cobj) != fallback_set) ? sc->c_object_set_function : sc->F));
   /* should we make new wrappers every time this is called? or save the let somewhere and reuse it? */
@@ -49338,7 +49332,7 @@ static s7_pointer object_to_list(s7_scheme *sc, s7_pointer obj) /* used only in 
 static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
 {
   s7_pointer let;
-  let = g_local_inlet(sc, 4, sc->value_symbol, obj,
+  let = internal_inlet(sc, 4, sc->value_symbol, obj,
 		      sc->type_symbol, (is_keyword(obj)) ? sc->is_keyword_symbol :
 		                         ((is_gensym(obj)) ? sc->is_gensym_symbol : sc->is_symbol_symbol));
   if (!is_keyword(obj))
@@ -49366,14 +49360,14 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
 static s7_pointer random_state_to_let(s7_scheme *sc, s7_pointer obj)
 {
 #if WITH_GMP
-  return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_random_state_symbol));
+  return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_random_state_symbol));
 #else
   if (!sc->seed_symbol)
     {
       sc->seed_symbol = make_symbol(sc, "seed");
       sc->carry_symbol = make_symbol(sc, "carry");
     }
-  return(g_local_inlet(sc, 8, sc->value_symbol, obj,
+  return(internal_inlet(sc, 8, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_random_state_symbol,
 		       sc->seed_symbol, make_integer(sc, random_seed(obj)),
 		       sc->carry_symbol, make_integer(sc, random_carry(obj))));
@@ -49387,7 +49381,7 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
 
   if (!sc->dimensions_symbol) sc->dimensions_symbol = make_symbol(sc, "dimensions");
   if (!sc->original_vector_symbol) sc->original_vector_symbol = make_symbol(sc, "original-vector");
-  let = g_local_inlet(sc, 10, sc->value_symbol, obj,
+  let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		      sc->type_symbol, (is_subvector(obj)) ? cons(sc, sc->is_subvector_symbol, s7_type_of(sc, subvector_vector(obj))) : s7_type_of(sc, obj),
 		      sc->size_symbol, s7_length(sc, obj),
 		      sc->dimensions_symbol, g_vector_dimensions(sc, set_plist_1(sc, obj)),
@@ -49422,7 +49416,7 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
       sc->locked_symbol = make_symbol(sc, "locked");
       sc->weak_symbol = make_symbol(sc, "weak");
     }
-  let = g_local_inlet(sc, 12, sc->value_symbol, obj,
+  let = internal_inlet(sc, 12, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_hash_table_symbol,
 		      sc->size_symbol, s7_length(sc, obj),
 		      sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
@@ -49483,7 +49477,7 @@ static s7_pointer iterator_to_let(s7_scheme *sc, s7_pointer obj)
       sc->sequence_symbol = make_symbol(sc, "sequence");
     }
   seq = iterator_sequence(obj);
-  let = g_local_inlet(sc, 8, sc->value_symbol, obj,
+  let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_iterator_symbol,
 		      sc->at_end_symbol, s7_make_boolean(sc, iterator_is_at_end(obj)),
 		      sc->sequence_symbol, iterator_sequence(obj));
@@ -49520,7 +49514,7 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
       sc->open_symbol = make_symbol(sc, "open");
       sc->alias_symbol = make_symbol(sc, "alias");
     }
-  let = g_local_inlet(sc, 12, sc->value_symbol, obj,
+  let = internal_inlet(sc, 12, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_let_symbol,
 		      sc->size_symbol, s7_length(sc, obj),
 		      sc->open_symbol, s7_make_boolean(sc, has_methods(obj)),
@@ -49589,7 +49583,7 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
       sc->c_object_to_string_symbol = make_symbol(sc, "c-object->string");
     }
   clet = c_object_let(obj);
-  let = g_local_inlet(sc, 10, sc->value_symbol, obj,
+  let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_c_object_symbol,
 		      sc->c_object_type_symbol, make_integer(sc, c_object_type(obj)),
 		      sc->c_object_let_symbol, clet,
@@ -49636,7 +49630,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
       sc->closed_symbol = make_symbol(sc, "closed");
       sc->file_info_symbol = make_symbol(sc, "file-info");
     }
-  let = g_local_inlet(sc, 10, sc->value_symbol, obj,
+  let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		      /* obj as 'value means it will say "(closed)" when subsequently the let is displayed */
 		      sc->type_symbol, (is_input_port(obj)) ? sc->is_input_port_symbol : sc->is_output_port_symbol,
 		      sc->port_type_symbol, (is_string_port(obj)) ? sc->string_symbol : ((is_file_port(obj)) ? sc->file_symbol : sc->function_symbol),
@@ -49694,7 +49688,7 @@ static s7_pointer closure_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->source_symbol)
     sc->source_symbol = make_symbol(sc, "source");
-  let = g_local_inlet(sc, 8, sc->value_symbol, obj,
+  let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		      sc->type_symbol, (is_t_procedure(obj)) ? sc->is_procedure_symbol : sc->is_macro_symbol,
 		      sc->arity_symbol, s7_arity(sc, obj),
 		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
@@ -49739,7 +49733,7 @@ static s7_pointer c_pointer_to_let(s7_scheme *sc, s7_pointer obj)
       sc->info_symbol = make_symbol(sc, "info");
     }
   if (!sc->pointer_symbol) sc->pointer_symbol = make_symbol(sc, "pointer");
-  return(g_local_inlet(sc, 10, sc->value_symbol, obj,
+  return(internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_c_pointer_symbol,
 		       sc->pointer_symbol, make_integer(sc, (s7_int)((intptr_t)c_pointer(obj))),
 		       sc->c_type_symbol, c_pointer_type(obj),
@@ -49751,7 +49745,7 @@ static s7_pointer c_function_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let, sig;
   const char* doc;
   s7_int gc_loc;
-  let = g_local_inlet(sc, 8, sc->value_symbol, obj,
+  let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		      sc->type_symbol, (is_t_procedure(obj)) ? sc->is_procedure_symbol : sc->is_macro_symbol,
 		      sc->arity_symbol, s7_arity(sc, obj),
 		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
@@ -49779,10 +49773,10 @@ static s7_pointer goto_to_let(s7_scheme *sc, s7_pointer obj)
       sc->goto_symbol = make_symbol(sc, "goto?");
     }
   if (is_symbol(call_exit_name(obj)))
-    return(g_local_inlet(sc, 8, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
+    return(internal_inlet(sc, 8, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
 			 sc->active_symbol, s7_make_boolean(sc, call_exit_active(obj)),
 			 sc->name_symbol, call_exit_name(obj)));
-  return(g_local_inlet(sc, 6, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
+  return(internal_inlet(sc, 6, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
 		       sc->active_symbol, s7_make_boolean(sc, call_exit_active(obj))));
 }
 
@@ -49790,12 +49784,12 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
 {
   switch (type(obj))
     {
-    case T_NIL:          return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_null_symbol));
-    case T_UNSPECIFIED:  return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_unspecified_symbol));
-    case T_UNDEFINED:    return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_undefined_symbol));
-    case T_EOF:          return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_eof_object_symbol));
-    case T_BOOLEAN:      return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_boolean_symbol));
-    case T_CHARACTER:    return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_char_symbol));
+    case T_NIL:          return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_null_symbol));
+    case T_UNSPECIFIED:  return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_unspecified_symbol));
+    case T_UNDEFINED:    return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_undefined_symbol));
+    case T_EOF:          return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_eof_object_symbol));
+    case T_BOOLEAN:      return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_boolean_symbol));
+    case T_CHARACTER:    return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_char_symbol));
     case T_SYMBOL:       return(symbol_to_let(sc, obj));
     case T_RANDOM_STATE: return(random_state_to_let(sc, obj));
     case T_GOTO:         return(goto_to_let(sc, obj));
@@ -49805,22 +49799,22 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
     case T_LET:          return(let_to_let(sc, obj));
     case T_C_OBJECT:     return(c_object_to_let(sc, obj));
 
-    case T_INTEGER: case T_BIG_INTEGER: return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_integer_symbol));
-    case T_RATIO:   case T_BIG_RATIO:   return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_rational_symbol));
-    case T_REAL:    case T_BIG_REAL:    return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_real_symbol));
-    case T_COMPLEX: case T_BIG_COMPLEX: return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_complex_symbol));
+    case T_INTEGER: case T_BIG_INTEGER: return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_integer_symbol));
+    case T_RATIO:   case T_BIG_RATIO:   return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_rational_symbol));
+    case T_REAL:    case T_BIG_REAL:    return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_real_symbol));
+    case T_COMPLEX: case T_BIG_COMPLEX: return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_complex_symbol));
 
     case T_STRING:
-      return(g_local_inlet(sc, 8, sc->value_symbol, obj,
+      return(internal_inlet(sc, 8, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_string_symbol,
 			   sc->size_symbol, str_length(sc, obj),
 			   sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_string(obj))));
     case T_PAIR:
-      return(g_local_inlet(sc, 6, sc->value_symbol, obj,
+      return(internal_inlet(sc, 6, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_pair_symbol,
 			   sc->size_symbol, pair_length(sc, obj)));
     case T_SYNTAX:
-      return(g_local_inlet(sc, 6, sc->value_symbol, obj,
+      return(internal_inlet(sc, 6, sc->value_symbol, obj,
 			   sc->type_symbol, sc->is_syntax_symbol,
 			   sc->documentation_symbol, s7_make_string(sc, syntax_documentation(obj))));
 
@@ -49829,8 +49823,8 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
 
     case T_CONTINUATION:  /* perhaps include the continuation-key */
       if (is_symbol(continuation_name(obj)))
-	return(g_local_inlet(sc, 6, sc->value_symbol, obj, sc->type_symbol, sc->is_continuation_symbol, sc->name_symbol, continuation_name(obj)));
-      return(g_local_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_continuation_symbol));
+	return(internal_inlet(sc, 6, sc->value_symbol, obj, sc->type_symbol, sc->is_continuation_symbol, sc->name_symbol, continuation_name(obj)));
+      return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_continuation_symbol));
 
     case T_INPUT_PORT: case T_OUTPUT_PORT:
       return(port_to_let(sc, obj));
@@ -53826,6 +53820,11 @@ static s7_pointer fx_c_sss_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_ppp_t)opt3_direct(cdr(arg)))(sc, lookup(sc, cadr(arg)), lookup(sc, opt1_sym(cdr(arg))), lookup(sc, opt2_sym(cdr(arg)))));
 }
 
+static s7_pointer fx_c_tuv_direct(s7_scheme *sc, s7_pointer arg)
+{
+  return(((s7_p_ppp_t)opt3_direct(cdr(arg)))(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, opt1_sym(cdr(arg)), arg), v_lookup(sc, opt2_sym(cdr(arg)), arg)));
+}
+
 static s7_pointer fx_vset_sts(s7_scheme *sc, s7_pointer arg)
 {
   return(vector_set_p_ppp(sc, lookup(sc, cadr(arg)), t_lookup(sc, opt1_sym(cdr(arg)), arg), lookup(sc, opt2_sym(cdr(arg)))));
@@ -57023,7 +57022,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
     case HOP_SAFE_C_SSS:
       if ((cadr(p) == var1) && ((caddr(p) == var2) && ((fx_proc(tree) == fx_c_sss) || (fx_proc(tree) == fx_c_sss_direct))))
-	return(with_fx(tree, (cadddr(p) == var3) ? fx_c_tuv : fx_c_tus));
+	return(with_fx(tree, (cadddr(p) == var3) ? ((fx_proc(tree) == fx_c_sss_direct) ? fx_c_tuv_direct : fx_c_tuv) : fx_c_tus));
       if (caddr(p) == var1)
 	{
 	  if (car(p) == sc->vector_set_symbol)
@@ -83599,6 +83598,7 @@ static Inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code)
   arglist = sc->args;
   for (s7_pointer p = arglist, old_args = cdr(code); is_pair(p); p = cdr(p), old_args = cdr(old_args))
     set_car(p, fx_call(sc, old_args));
+  if ((S7_DEBUGGING) && (sc->args != arglist)) fprintf(stderr, "%s[%d]: lost gc\n", __func__, __LINE__);
   return(call_lambda_star(sc, code, arglist));   /* clears list_in_use */
 }
 
@@ -83617,7 +83617,8 @@ static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
   val = fx_call(sc, cdr(code));
   if ((is_symbol_and_keyword(val)) &&
       (!sc->accept_all_keyword_arguments))
-    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), val, code));
+    s7_error(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), val, code));
   p = car(closure_args(func));
   sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
   if (closure_star_arity_to_int(sc, func) > 1)
@@ -90497,9 +90498,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	APPLY:
 	case OP_APPLY:
 	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */
-	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_%sapply%s %s (%s) to %s\n",
-						__func__, __LINE__, BOLD_TEXT, UNBOLD_TEXT,
-						display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
+	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_apply %s (%s) to %s\n",
+						__func__, __LINE__, display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
 	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue;
@@ -90980,8 +90980,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_COND:           check_cond(sc);
 	case OP_COND_UNCHECKED: if (op_cond_unchecked(sc)) goto EVAL;
-	case OP_COND1:          if (op_cond1(sc)) goto TOP_NO_POP;
-	  /* else fall though */
+	case OP_COND1:          if (op_cond1(sc)) goto TOP_NO_POP; /* else fall through */
 	FEED_TO:
 	  if (feed_to(sc)) goto APPLY;
 	  goto EVAL;
@@ -91232,7 +91231,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_SPLICE_VALUES:         /* if splice_in_values hits eval_done, it needs to continue the splice after returning, so we get here */
 	  sc->value = splice_in_values(sc, sc->args);
-	  /* fprintf(stderr, "%s[%d]: sc->args: %s, sc->value: %s\n", __func__, __LINE__, display(sc->args), display(sc->value)); */
 	  continue;
 
 	case OP_GC_PROTECT: case OP_BARRIER: case OP_NO_VALUES:
@@ -95195,8 +95193,8 @@ int main(int argc, char **argv)
  * tlist      6551         7896   7546   6558   6532   6490
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
- * tleft      9004         10.4   10.2   7657   7664   7638
- * tgc        9614         11.9   11.1   8177   8156   8134
+ * tleft      9004         10.4   10.2   7657   7664   7638  7612
+ * tgc        9614         11.9   11.1   8177   8156   8134  8129
  * thash      35.4         11.8   11.7   9734   9590   9581
  * cb         16.8         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
@@ -95209,5 +95207,4 @@ int main(int argc, char **argv)
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
- * t718
  */

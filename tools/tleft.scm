@@ -128,7 +128,7 @@
 ;OP_TC_LET_IF_A_Z_L3A
 
 (define (f10 x y z)
-  (let ((a (+ x y z)))       ; fx_c_tuv -> g_add_3?[why not direct? no tuv_direct]  let_a_p_old
+  (let ((a (+ x y z)))       ; fx_c_tuv_direct  let_a_p_old
     (if (= a 0)              ; fx_num_eq_t0  if_a_a_p
 	x                    ; fx_o?
 	(f10 (- x 1) y z)))) ; op_safe_closure_agg  fx_subtract_s1 + fx_o
