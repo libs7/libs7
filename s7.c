@@ -25944,8 +25944,7 @@ static s7_pointer char_position_p_ppi(s7_scheme *sc, s7_pointer p1, s7_pointer p
   s7_int len;
   char c;
 
-  if (!is_string(p2))
-    wrong_type_argument(sc, sc->char_position_symbol, 2, p2, T_STRING);
+  /* if (!is_string(p2)) wrong_type_argument(sc, sc->char_position_symbol, 2, p2, T_STRING); */ /* checked now below */
   if (start < 0)
     wrong_type_argument_with_type(sc, sc->char_position_symbol, 3, make_integer(sc, start), a_non_negative_integer_string);
 
@@ -61831,6 +61830,7 @@ static s7_pointer opt_p_7d_c_random(opt_info *o) {return(make_real(o->sc, random
 static s7_pointer opt_p_p_s_iterate(opt_info *o) {return(iterate_p_p(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_f_iterate(opt_info *o) {return(iterate_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f_string_to_number(opt_info *o) {return(string_to_number_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
+static s7_pointer opt_p_p_s_iterate_unchecked(opt_info *o) {s7_pointer iter = slot_value(o->v[1].p); return(iterator_next(iter)(o->sc, iter));}
 
 static bool p_p_f_combinable(s7_scheme *sc, opt_info *opc)
 {
@@ -61910,7 +61910,8 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	  opc->v[1].p = opt_simple_symbol(sc, cadr(car_x));
 	  if (!opc->v[1].p)
 	    return_false(sc, car_x);
-	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : ((ppf == cdr_p_p) ? opt_p_p_s_cdr : ((ppf == iterate_p_p) ? opt_p_p_s_iterate : opt_p_p_s));
+	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : ((ppf == cdr_p_p) ? opt_p_p_s_cdr : 
+			   ((ppf == iterate_p_p) ? ((is_iterator(slot_value(opc->v[1].p))) ? opt_p_p_s_iterate_unchecked : opt_p_p_s_iterate) : opt_p_p_s));
 	  return(true);
 	}
       if (!is_pair(cadr(car_x)))
@@ -62965,7 +62966,7 @@ static bool p_ppi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	{
 	  opc->v[2].p = cadr(car_x);
 	  opc->v[1].p = slot;
-	  opc->v[0].fp = (ifunc == char_position_p_ppi) ? opt_p_ppi_psf_cpos : opt_p_ppi_psf;
+	  opc->v[0].fp = ((ifunc == char_position_p_ppi) && (is_string(slot_value(slot)))) ? opt_p_ppi_psf_cpos : opt_p_ppi_psf;
 	  opc->v[4].o1 = sc->opts[start];
 	  opc->v[5].fi = sc->opts[start]->v[0].fi;
 	  return(true);
@@ -95170,20 +95171,20 @@ int main(int argc, char **argv)
  * tmat       2694         3065   3042   2524   2520   2510
  * tauto      2763         ----   ----   2562   2546   2552
  * tb         3366?        2735   2681   2612   2611   2611
- * titer      2659         2865   2842   2641   2638   2631
+ * titer      2659         2865   2842   2641   2638   2631  2615
  * tsort      3572         3105   3104   2856   2855   2856
- * tmac       3074         3950   3873   3033   2998   2908
+ * tmac       3074         3950   3873   3033   2998   2908  2890
  * tload      3740         ----   ----   3046   3042   3020
  * tset       3058         3253   3104   3048   3121   3106
  * teq        3541         4068   4045   3536   3531   3469
  * tio        3698         3816   3752   3683   3680   3661
- * tobj       4533         4016   3970   3828   3701   3695
+ * tobj       4533         4016   3970   3828   3701   3695  3690
  * tclo       4604         4787   4735   4390   4398   4329
  * tcase      4501         4960   4793   4439   4426   4402
  * tlet       5305         7775   5640   4450   4434   4422
  * tmap       5488         8869   8774   4489   4500   4495
  * tfft      115.1         7820   7729   4755   4652   4649
- * tshoot     6896         5525   5447   5183   5153   5143
+ * tshoot     6896         5525   5447   5183   5153   5143  5139
  * tform      8338         5357   5348   5307   5300   5305
  * tnum       56.7         6348   6013   5433   5406   5402
  * tstr       6123         6880   6342   5488   5488   5480
