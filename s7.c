@@ -1192,7 +1192,7 @@ struct s7_scheme {
   format_data_t **fdats;
   int32_t num_fdats, last_error_line, safety;
   gc_list_t *strings, *vectors, *input_ports, *output_ports, *input_string_ports, *continuations, *c_objects, *hash_tables;
-  gc_list_t *gensyms, *undefineds, *lambdas, *multivectors, *weak_refs, *weak_hash_iterators, *opt1_funcs;
+  gc_list_t *gensyms, *undefineds, *multivectors, *weak_refs, *weak_hash_iterators, *opt1_funcs;
 #if (WITH_GMP)
   gc_list_t *big_integers, *big_ratios, *big_reals, *big_complexes, *big_random_states;
   mpz_t mpz_1, mpz_2, mpz_3, mpz_4;
@@ -1358,8 +1358,7 @@ struct s7_scheme {
   /* object->let symbols */
   s7_pointer active_symbol, goto_symbol, data_symbol, weak_symbol, dimensions_symbol, info_symbol, c_type_symbol, source_symbol, c_object_ref_symbol,
              at_end_symbol, sequence_symbol, position_symbol, entries_symbol, locked_symbol, function_symbol, open_symbol, alias_symbol, port_type_symbol,
-             file_symbol, file_info_symbol, line_symbol, c_object_let_symbol, class_symbol, c_object_length_symbol, c_object_set_symbol, current_value_symbol,
-             c_object_copy_symbol, c_object_fill_symbol, c_object_reverse_symbol, c_object_to_list_symbol, c_object_to_string_symbol, closed_symbol,
+             file_symbol, file_info_symbol, line_symbol, c_object_let_symbol, class_symbol, current_value_symbol, closed_symbol,
              mutable_symbol, size_symbol, original_vector_symbol, pointer_symbol;
 
 #if WITH_SYSTEM_EXTRAS
@@ -1857,6 +1856,13 @@ static void init_types(void)
   t_freeze_p[T_CONTINUATION] = true;
   t_freeze_p[T_INPUT_PORT] = true;
   t_freeze_p[T_OUTPUT_PORT] = true;
+#if WITH_GMP
+  t_freeze_p[T_BIG_INTEGER] = true;
+  t_freeze_p[T_BIG_RATIO] = true;
+  t_freeze_p[T_BIG_REAL] = true;
+  t_freeze_p[T_BIG_COMPLEX] = true;
+  t_freeze_p[T_RANDOM_STATE] = true;
+#endif
 #endif
 }
 
@@ -6306,9 +6312,6 @@ static void sweep(s7_scheme *sc)
   gp = sc->c_objects;
   process_gc_list((c_object_gc_free(sc, s1)) ? (void)(*(c_object_gc_free(sc, s1)))(sc, s1) : (void)(*(c_object_free(sc, s1)))(c_object_value(s1)))
 
-  gp = sc->lambdas;
-  process_gc_list(liberate(sc, c_function_block(s1)))
-
   gp = sc->vectors;
   process_gc_list(liberate(sc, vector_block(s1)))
 
@@ -6436,7 +6439,6 @@ static void add_gensym(s7_scheme *sc, s7_pointer p)
 #define add_undefined(sc, p)         add_to_gc_list(sc->undefineds, p)
 #define add_vector(sc, p)            add_to_gc_list(sc->vectors, p)
 #define add_multivector(sc, p)       add_to_gc_list(sc->multivectors, p)
-#define add_lambda(sc, p)            add_to_gc_list(sc->lambdas, p)
 #define add_weak_ref(sc, p)          add_to_gc_list(sc->weak_refs, p)
 #define add_weak_hash_iterator(sc, p) add_to_gc_list(sc->weak_hash_iterators, p)
 #define add_opt1_func(sc, p) do {if (!opt1_func_listed(p)) add_to_gc_list(sc->opt1_funcs, p); set_opt1_func_listed(p);} while (0)
@@ -6462,7 +6464,6 @@ static void init_gc_caches(s7_scheme *sc)
   sc->output_ports = make_gc_list();
   sc->continuations = make_gc_list();
   sc->c_objects = make_gc_list();
-  sc->lambdas = make_gc_list();
   sc->weak_refs = make_gc_list();
   sc->weak_hash_iterators = make_gc_list();
   sc->opt1_funcs = make_gc_list();
@@ -7398,8 +7399,20 @@ static void free_cell(s7_scheme *sc, s7_pointer p)
 #if S7_DEBUGGING
   /* anything that needs gc_list attention should not be freed here */
   uint8_t typ = unchecked_type(p);
+  gc_list_t *gp = sc->opt1_funcs;
+
   if ((t_freeze_p[typ]) || ((typ == T_SYMBOL) && (is_gensym(p))))
     fprintf(stderr, "free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
+  if ((t_any_closure_p[typ]) && (gp->loc > 0))
+    for (s7_int i = 0; i < gp->loc; i++)
+      if (gp->list[i] == p)
+	fprintf(stderr, "opt1_funcs free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
+  gp = sc->weak_refs;
+  if (gp->loc > 0)
+    for (s7_int i = 0; i < gp->loc; i++)
+      if (gp->list[i] == p)
+	fprintf(stderr, "weak refs free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
+
   p->debugger_bits = 0;
   p->explicit_free_line = line;
 #endif
@@ -36185,8 +36198,7 @@ s7_pointer s7_apply_n_4(s7_scheme *sc, s7_pointer args, s7_pointer (*f4)(s7_poin
   return(f4(a[0], a[1], a[2], a[3]));
 }
 
-s7_pointer s7_apply_n_5(s7_scheme *sc, s7_pointer args,
-			s7_pointer (*f5)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5))
+s7_pointer s7_apply_n_5(s7_scheme *sc, s7_pointer args, s7_pointer (*f5)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5))
 {
   s7_pointer a[5];
   s7_list_to_array(sc, args, a, 5);
@@ -44301,19 +44313,6 @@ static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, 
   return(x);
 }
 
-static s7_pointer s7_lambda(s7_scheme *sc, s7_function f, s7_int required_args, s7_int optional_args, bool rest_arg)
-{
-  /* same as s7_make_function but the new function is not global and permanent; it can be GC'd */
-  s7_pointer fnc;
-  block_t *block;
-  new_cell(sc, fnc, T_PAIR);  /* just a place-holder, make_function will set its type and return it */
-  block = mallocate(sc, sizeof(c_proc_t));
-  fnc = make_function(sc, "#<c-function>", f, required_args, optional_args, rest_arg, NULL, fnc, (c_proc_t *)block_data(block));
-  c_function_block(fnc) = block;
-  add_lambda(sc, fnc);
-  return(fnc);
-}
-
 static c_proc_t *alloc_permanent_function(s7_scheme *sc)
 {
   #define ALLOC_FUNCTION_SIZE 256
@@ -49567,19 +49566,10 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
 static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
 {
   s7_pointer let, clet;
-  s7_int gc_loc;
   if (!sc->class_symbol)
     {
       sc->class_symbol = make_symbol(sc, "class");
-      sc->c_object_length_symbol = make_symbol(sc, "c-object-length");
-      sc->c_object_ref_symbol = make_symbol(sc, "c-object-ref");
       sc->c_object_let_symbol = make_symbol(sc, "c-object-let");
-      sc->c_object_set_symbol = make_symbol(sc, "c-object-set!");
-      sc->c_object_copy_symbol = make_symbol(sc, "c-object-copy");
-      sc->c_object_fill_symbol = make_symbol(sc, "c-object-fill!");
-      sc->c_object_reverse_symbol = make_symbol(sc, "c-object-reverse");
-      sc->c_object_to_list_symbol = make_symbol(sc, "c-object->list");
-      sc->c_object_to_string_symbol = make_symbol(sc, "c-object->string");
     }
   clet = c_object_let(obj);
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
@@ -49587,34 +49577,17 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
 		      sc->c_object_type_symbol, make_integer(sc, c_object_type(obj)),
 		      sc->c_object_let_symbol, clet,
 		      sc->class_symbol, c_object_type_to_let(sc, obj));
-  gc_loc = gc_protect_1(sc, let);
-  /* not sure these are useful */
-  if (c_object_len(sc, obj) != fallback_length)
-    s7_varlet(sc, let, sc->c_object_length_symbol, s7_lambda(sc, c_object_len(sc, obj), 1, 0, false));
-  if (c_object_ref(sc, obj))
-    s7_varlet(sc, let, sc->c_object_ref_symbol, s7_lambda(sc, c_object_ref(sc, obj), 1, 0, true));
-  if (c_object_set(sc, obj))
-    s7_varlet(sc, let, sc->c_object_set_symbol, s7_lambda(sc, c_object_set(sc, obj), 2, 0, true));
-  if (c_object_copy(sc, obj))
-    s7_varlet(sc, let, sc->c_object_copy_symbol, s7_lambda(sc, c_object_copy(sc, obj), 1, 0, true));
-  if (c_object_fill(sc, obj))
-    s7_varlet(sc, let, sc->c_object_fill_symbol, s7_lambda(sc, c_object_fill(sc, obj), 1, 0, true));
-  if (c_object_reverse(sc, obj))
-    s7_varlet(sc, let, sc->c_object_reverse_symbol, s7_lambda(sc, c_object_reverse(sc, obj), 1, 0, true));
-  if (c_object_to_list(sc, obj))
-    s7_varlet(sc, let, sc->c_object_to_list_symbol, s7_lambda(sc, c_object_to_list(sc, obj), 1, 0, true));
-  if (c_object_to_string(sc, obj))
-    s7_varlet(sc, let, sc->c_object_to_string_symbol, s7_lambda(sc, c_object_to_string(sc, obj), 1, 1, false));
-
   if ((is_let(clet)) &&
       ((has_active_methods(sc, clet)) || (has_active_methods(sc, obj))))
     {
       s7_pointer func;
+      s7_int gc_loc;
+      gc_loc = gc_protect_1(sc, let);
       func = find_method(sc, clet, sc->object_to_let_symbol);
       if (func != sc->undefined)
 	s7_apply_function(sc, func, set_plist_2(sc, obj, let));
+      s7_gc_unprotect_at(sc, gc_loc);
     }
-  s7_gc_unprotect_at(sc, gc_loc);
   return(let);
 }
 
@@ -91674,12 +91647,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
   /* check the gc lists (finalizations) */
   len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
     sc->continuations->size + sc->c_objects->size + sc->hash_tables->size + sc->gensyms->size + sc->undefineds->size +
-    sc->lambdas->size + sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->opt1_funcs->size;
+    sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->opt1_funcs->size;
   {
     int32_t loc;
     loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
-    sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
-    sc->lambdas->loc + sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
+            sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
+            sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
                                cons_unchecked(sc, make_integer(sc, loc), /* active */
                                  cons(sc, make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer))))); /* total list space allocated */
@@ -94912,7 +94885,6 @@ void s7_free(s7_scheme *sc)
 
   gc_list_free(sc->gensyms);
   gc_list_free(sc->continuations);  /* stack is simple vector (handled above) */
-  gc_list_free(sc->lambdas);
   gc_list_free(sc->weak_refs);
   gc_list_free(sc->weak_hash_iterators);
   gc_list_free(sc->opt1_funcs);

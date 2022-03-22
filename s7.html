@@ -9991,6 +9991,8 @@ typedef s7_double (*s7_d_t)(void);
 void s7_set_d_function(s7_scheme *sc, s7_pointer f, s7_d_t df);
 s7_d_t s7_d_function(s7_pointer f);
 etc...
+
+s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr);
 </pre>
 
 <p>
@@ -10046,6 +10048,62 @@ Don't use something dumb like call/cc.  Avoid append.  Use iteration, not recurs
 Perhaps take the hot spot and do it in C.  callgrind might also be helpful, but it 
 can be hard to map from callgrind output to the original scheme code.
 </p>
+<p>s7_optimize is the third-level optimizer.  It is a bit hard to explain,
+but basically you pass it some scheme code, and it returns either NULL or a function that can be called
+to evaluate that code.  There are several examples in snd-sig.c.
+Here's an example where we want to call <code>(list 1 2 3)</code> a bazillion times:
+</p>
+<pre class="indented">
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include "s7.h"
+int main(int argc, char **argv)
+{
+  s7_scheme *s;
+  s7_pfunc f;
+  s7_pointer body;
+  int i;
+  s = s7_init();
+  body = s7_list_nl(s, 4, s7_make_symbol(s, "list"),	\
+	       s7_make_integer(s, 1),		\
+	       s7_make_integer(s, 2),		\
+	       s7_make_integer(s, 3),		\
+	       NULL);
+  f = <em class="red">s7_optimize</em>(s, s7_list(s, 1, body));
+  if (!f) fprintf(stderr, "oops\n");
+  else
+    for (i = 0; i < 2000000; i++)
+      f(s);
+}
+</pre>
+<p>
+s7_optimize can also be used to take advantage of the direct
+C function calls mentioned above:
+</p>
+<pre class="indented">
+static s7_pointer g_d_func(s7_scheme *sc, s7_pointer args) 
+{
+  /* a normal C-defined s7 function that simply returns (scheme) 1.0 */
+  return(s7_make_real(sc, 1.0));
+}
+static s7_double opt_d_func(void) 
+{
+  /* a version of g_d_func that returns (C) 1.0 */
+  return(1.0);
+}
+
+/* now make it possible to call opt_d_func in place of g_d_func */
+s7_float_function func;
+s7_pointer symbol;
+
+symbol = s7_define_safe_function(sc, "d-func", g_d_func, 0, 0, false, "opt func");
+s7_set_d_function(sc, s7_name_to_value(sc, "d-func"), opt_d_func);
+
+/* and try it (this saves creating an s7 real, accessing its value, and GC-ing it eventually) */
+func = s7_float_optimize(sc, s7_list(sc, 1, s7_list(sc, 1, symbol)));
+fprintf(stderr, "%f\n", func(sc));
+</pre>
 
 
 <div class="shortheader" id="candsoon">And so on...</div>
@@ -10077,7 +10135,6 @@ s7_pointer s7_values(s7_scheme *sc, s7_pointer args);
 s7_pointer s7_copy(s7_scheme *sc, s7_pointer args);
 s7_pointer s7_fill(s7_scheme *sc, s7_pointer args);
 s7_pointer s7_type_of(s7_scheme *sc, s7_pointer arg);
-s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr);
 bool s7_is_syntax(s7_pointer p);
 bool s7_is_valid(s7_scheme *sc, s7_pointer arg);
 
@@ -10103,33 +10160,6 @@ is syntax?.
 <p>s7_is_valid is a debugging aid; it tries to tell if an arbitrary value is pointing to
 an s7 object.  Set the compile-time switch TRAP_SEGFAULT to 1 before using this function!
 </p>
-<p>s7_optimize is the third-level optimizer.  It is a bit hard to explain,
-but basically you pass it some scheme code, and it returns either NULL or a function that can be called
-to evaluate that code.  There are several examples in snd-sig.c.
-</p>
-<pre class="indented">
-static s7_pointer g_d_func(s7_scheme *sc, s7_pointer args) 
-{
-  /* a normal C-defined s7 function that simply returns (scheme) 1.0 */
-  return(s7_make_real(sc, 1.0));
-}
-static s7_double opt_d_func(void) 
-{
-  /* a version of g_d_func that returns (C) 1.0 */
-  return(1.0);
-}
-
-/* now make it possible to call opt_d_func in place of g_d_func */
-s7_float_function func;
-s7_pointer symbol;
-
-symbol = s7_define_safe_function(sc, "d-func", g_d_func, 0, 0, false, "opt func");
-s7_set_d_function(sc, s7_name_to_value(sc, "d-func"), opt_d_func);
-
-/* and try it (this saves creating an s7 real, accessing its value, and GC-ing it eventually) */
-func = s7_float_optimize(sc, s7_list(sc, 1, s7_list(sc, 1, symbol)));
-fprintf(stderr, "%f\n", func(sc));
-</pre>
 <p>
 Finally, the begin_hook
 functions are explained <a href="#beginhook">above</a>.
