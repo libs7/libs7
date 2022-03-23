@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "10.2"
-#define S7_DATE "22-Mar-2022"
+#define S7_VERSION "10.3"
+#define S7_DATE "24-Mar-2022"
 #define S7_MAJOR_VERSION 10
-#define S7_MINOR_VERSION 2
+#define S7_MINOR_VERSION 3
 
 #include <stdint.h>           /* for int64_t */
 
@@ -103,6 +103,7 @@ void s7_set_begin_hook(s7_scheme *sc, void (*hook)(s7_scheme *sc, bool *val));
    */
 
 s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e);    /* (eval code e) -- e is the optional environment */
+s7_pointer s7_eval_with_location(s7_scheme *sc, s7_pointer code, s7_pointer e, const char *caller, const char *file, s7_int line);
 void s7_provide(s7_scheme *sc, const char *feature);                 /* add feature (as a symbol) to the *features* list */
 bool s7_is_provided(s7_scheme *sc, const char *feature);             /* (provided? feature) */
 void s7_repl(s7_scheme *sc);
@@ -924,6 +925,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
+ * 22-Mar:    s7_eval_with_location.
  * 16-Mar:    s7_list_to_array for the s7_apply_* changes.
  * 8-Mar-22:  moved s7_apply_* to xen.h if DISABLE_DEPRECATED.
  * --------

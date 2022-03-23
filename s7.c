@@ -4895,7 +4895,7 @@ static char* show_debugger_bits(s7_pointer p)
 	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
 	   ((bits & OPT1_CFUNC) != 0) ? " opt1_cfunc" : "",
 	   ((bits & OPT1_CLAUSE) != 0) ? " opt1_clause" : "",
-	   ((bits & OPT1_LAMBDA) != 0) ? " opt_lambda" : "",
+	   ((bits & OPT1_LAMBDA) != 0) ? " opt1_lambda" : "",
 	   ((bits & OPT1_SYM) != 0) ? " opt1_sym" : "",
 	   ((bits & OPT1_PAIR) != 0) ? " opt1_pair" : "",
 	   ((bits & OPT1_CON) != 0) ? " opt1_con" : "",
@@ -5181,7 +5181,7 @@ static const char *opt1_role_name(uint64_t role)
 {
   if (role == OPT1_FAST) return("opt1_fast");
   if (role == OPT1_CFUNC) return("opt1_cfunc");
-  if (role == OPT1_LAMBDA) return("opt_lambda");
+  if (role == OPT1_LAMBDA) return("opt1_lambda");
   if (role == OPT1_CLAUSE) return("opt1_clause");
   if (role == OPT1_SYM) return("opt1_sym");
   if (role == OPT1_PAIR) return("opt1_pair");
@@ -25957,7 +25957,8 @@ static s7_pointer char_position_p_ppi(s7_scheme *sc, s7_pointer p1, s7_pointer p
   s7_int len;
   char c;
 
-  /* if (!is_string(p2)) wrong_type_argument(sc, sc->char_position_symbol, 2, p2, T_STRING); */ /* checked now below */
+  if (!is_string(p2)) 
+    wrong_type_argument(sc, sc->char_position_symbol, 2, p2, T_STRING);
   if (start < 0)
     wrong_type_argument_with_type(sc, sc->char_position_symbol, 3, make_integer(sc, start), a_non_negative_integer_string);
 
@@ -52324,6 +52325,25 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
   return(sc->value);
 }
 
+s7_pointer s7_eval_with_location(s7_scheme *sc, s7_pointer code, s7_pointer e, const char *caller, const char *file, s7_int line)
+{
+  s7_pointer result;
+  if (caller)
+    {
+      sc->s7_call_name = caller;
+      sc->s7_call_file = file;
+      sc->s7_call_line = line;
+    }
+  result = s7_eval(sc, code, e);
+  if (caller)
+    {
+      sc->s7_call_name = NULL;
+      sc->s7_call_file = NULL;
+      sc->s7_call_line = -1;
+    }
+  return(result);
+}
+
 static s7_pointer g_eval(s7_scheme *sc, s7_pointer args)
 {
   #define H_eval "(eval code (let (curlet))) evaluates code in the environment let. 'let' \
@@ -62939,7 +62959,7 @@ static bool p_ppi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	{
 	  opc->v[2].p = cadr(car_x);
 	  opc->v[1].p = slot;
-	  opc->v[0].fp = ((ifunc == char_position_p_ppi) && (is_string(slot_value(slot)))) ? opt_p_ppi_psf_cpos : opt_p_ppi_psf;
+	  opc->v[0].fp = (ifunc == char_position_p_ppi) ? opt_p_ppi_psf_cpos : opt_p_ppi_psf;
 	  opc->v[4].o1 = sc->opts[start];
 	  opc->v[5].fi = sc->opts[start]->v[0].fi;
 	  return(true);
@@ -70183,7 +70203,7 @@ static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer
 	    {
 	      if (is_fxable(sc, car(body)))
 		return(fxify_closure_s(sc, func, expr, e, hop));
-	      set_optimize_op(expr, hop + OP_SAFE_CLOSURE_S_O);
+	      set_optimize_op(expr, hop + OP_SAFE_CLOSURE_S_O); /* tleft 7638 is _O here, 7692 if not (and claims 80 in the begin setup) */
 	    }
 	  else set_optimize_op(expr, hop + OP_CLOSURE_S_O);
 	}
@@ -78506,6 +78526,7 @@ static void check_set(s7_scheme *sc)
 					set_opt2_pair(code, cddr(value));
 				      }}}}}
 		  if ((is_h_optimized(value)) &&
+		      (is_safe_c_op(optimize_op(value))) &&    /* else might not be opt_cfunc? (opt1_lambda probably) */
 		      (!is_unsafe(value)) &&                   /* is_unsafe(value) can happen! */
 		      (is_not_null(cdr(value))))               /* (set! x (y)) */
 		    {
@@ -78937,10 +78958,9 @@ static goto_t op_set_dilambda_p_1(s7_scheme *sc)
   return((set_pair_p_3(sc, func, arg, sc->value)) ? goto_apply : goto_start);
 }
 
-static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) */
+static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) -- why is this always inlined? saves 22 in concordance */
 {
   s7_pointer val, y;
-
   y = lookup_slot_from(cadr(sc->code), sc->curlet);
   if (!is_slot(y))
     s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
@@ -78973,7 +78993,6 @@ static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) *
 static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
 {
   s7_pointer val, y;
-
   y = lookup_slot_from(cadr(sc->code), sc->curlet);
   if (!is_slot(y))
     s7_error(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
@@ -83876,7 +83895,7 @@ static void op_safe_closure_s(s7_scheme *sc)
   s7_pointer p = opt1_lambda(sc->code);
   sc->curlet = update_let_with_slot(sc, closure_let(p), lookup(sc, opt2_sym(sc->code)));
   sc->code = T_Pair(closure_body(p));
-  if_pair_set_up_begin_unchecked(sc);
+  if_pair_set_up_begin_unchecked(sc); 
 }
 
 static void op_safe_closure_s_o(s7_scheme *sc)
@@ -89494,14 +89513,20 @@ static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code)
 #define c_function_is_ok_cadr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))))
 #define c_function_is_ok_caddr(Sc, P) ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, caddr(P))))
 
-#define c_function_is_ok_cadr_caddr(Sc, P) \
-  ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, caddr(P))))
+static bool c_function_is_ok_cadr_caddr(s7_scheme *sc, s7_pointer p)
+{
+  return((c_function_is_ok(sc, p)) && (h_c_function_is_ok(sc, cadr(p))) && (h_c_function_is_ok(sc, caddr(p))));
+}
 
-#define c_function_is_ok_cadr_cadadr(Sc, P) \
-  ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, opt3_pair(P))))  /* cadadr(P) */
+static bool c_function_is_ok_cadr_cadadr(s7_scheme *sc, s7_pointer p)
+{
+  return((c_function_is_ok(sc, p)) && (h_c_function_is_ok(sc, cadr(p))) && (h_c_function_is_ok(sc, opt3_pair(p))));  /* cadadr(P) */
+}
 
-#define c_function_is_ok_cadr_caddadr(Sc, P) \
-  ((c_function_is_ok(Sc, P)) && (h_c_function_is_ok(Sc, cadr(P))) && (h_c_function_is_ok(Sc, opt3_pair(P)))) /* caddadr(P) */
+static bool c_function_is_ok_cadr_caddadr(s7_scheme *sc, s7_pointer p)
+{
+  return((c_function_is_ok(sc, p)) && (h_c_function_is_ok(sc, cadr(p))) && (h_c_function_is_ok(sc, opt3_pair(p)))); /* caddadr(p) */
+}
 
 /* closure_is_ok_1 checks the type and the body length indications
  * closure_is_fine_1 just checks the type (safe or unsafe closure)
@@ -95126,58 +95151,59 @@ int main(int argc, char **argv)
 /* -------------------------------------------------------------
  *            gmp (12-20)   20.9   21.0   22.0   22.2   22.3
  * -------------------------------------------------------------
- * tpeak       122          115    114    108    107    107
- * tref        513          691    687    463    458    458
- * index      1024         1026   1016    973    968    965
- * tmock      7741         1177   1165   1057   1060   1051
+ * tpeak       121          115    114    108    107    107
+ * tref        508          691    687    463    458    458
+ * index      1167         1026   1016    973    968    965
+ * tmock      7737         1177   1165   1057   1060   1051
  * tvect      1953         2519   2464   1772   1713   1713
- * texit      1827         ----   ----   1778   1757   1756
- * s7test     4537         1873   1831   1818   1813   1796
+ * texit      1806         ----   ----   1778   1757   1756
+ * s7test     4533         1873   1831   1818   1813   1796
  * lt         2153         2187   2172   2150   2148   2143
  * timp       2232         2971   2891   2176   2206   2203
- * tread      2614         2440   2421   2419   2414   2370
- * dup        2756         3805   3788   2492   2373   2380
- * trclo      4079         2735   2574   2454   2451   2451
- * fbench     2833         2688   2583   2460   2460   2451
- * tcopy      2600         8035   5546   2539   2501   2501
- * tmat       2694         3065   3042   2524   2520   2510
- * tauto      2763         ----   ----   2562   2546   2552
- * tb         3366?        2735   2681   2612   2611   2611
- * titer      2659         2865   2842   2641   2638   2631  2615
+ * tread      2567         2440   2421   2419   2414   2370
+ * dup        2579         3805   3788   2492   2373   2380
+ * trclo      4073         2735   2574   2454   2451   2443
+ * fbench     2827         2688   2583   2460   2460   2451
+ * tcopy      2557         8035   5546   2539   2501   2501
+ * tmat       2684         3065   3042   2524   2520   2510
+ * tauto      2750         ----   ----   2562   2546   2552
+ * tb         3364         2735   2681   2612   2611   2610
+ * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
- * tmac       3074         3950   3873   3033   2998   2908  2890
- * tload      3740         ----   ----   3046   3042   3020
- * tset       3058         3253   3104   3048   3121   3106
- * teq        3541         4068   4045   3536   3531   3469
- * tio        3698         3816   3752   3683   3680   3661
- * tobj       4533         4016   3970   3828   3701   3695  3690
- * tclo       4604         4787   4735   4390   4398   4329
- * tcase      4501         4960   4793   4439   4426   4402
- * tlet       5305         7775   5640   4450   4434   4422
- * tmap       5488         8869   8774   4489   4500   4495
- * tfft      115.1         7820   7729   4755   4652   4649
- * tshoot     6896         5525   5447   5183   5153   5143  5139
- * tform      8338         5357   5348   5307   5300   5305
- * tnum       56.7         6348   6013   5433   5406   5402
+ * tmac       2949         3950   3873   3033   2998   2890
+ * tload      3718         ----   ----   3046   3042   3020
+ * tset       3107         3253   3104   3048   3121   3108
+ * teq        3472         4068   4045   3536   3531   3469
+ * tio        3679         3816   3752   3683   3680   3661
+ * tobj       3730         4016   3970   3828   3701   3663
+ * tclo       4538         4787   4735   4390   4398   4326
+ * tcase      4475         4960   4793   4439   4426   4402
+ * tlet       5277         7775   5640   4450   4434   4422
+ * tmap       5495         8869   8774   4489   4500   4495
+ * tfft      114.9         7820   7729   4755   4652   4649
+ * tshoot     6903         5525   5447   5183   5153   5137
+ * tform      8335         5357   5348   5307   5300   5305
+ * tnum       56.6         6348   6013   5433   5406   5397
  * tstr       6123         6880   6342   5488   5488   5480
- * tlamb      5902         6423   6273   5720   ----   5597
- * tgsl       25.1         8485   7802   6373   6373   6324
- * tmisc      6847         8869   7612   6435   6331   6335
- * tlist      6551         7896   7546   6558   6532   6490
+ * tlamb      5799         6423   6273   5720   ----   5597
+ * tgsl       25.2         8485   7802   6373   6373   6324
+ * tmisc      6892         8869   7612   6435   6331   6335
+ * tlist      6505         7896   7546   6558   6532   6490
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
- * tleft      9004         10.4   10.2   7657   7664   7638  7612
- * tgc        9614         11.9   11.1   8177   8156   8134  8129
- * thash      35.4         11.8   11.7   9734   9590   9581
- * cb         16.8         11.2   11.0   9658   9585   9635
+ * tleft      9004         10.4   10.2   7657   7664   7613
+ * tgc        9532         11.9   11.1   8177   8156   8089
+ * thash      35.2         11.8   11.7   9734   9590   9581
+ * cb         16.9         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
- * tall       24.4         15.6   15.6   15.6   15.6   15.6
- * calls      55.3         36.7   37.5   37.0   37.0   37.1
- * sg         75.8         ----   ----   55.9   55.8   55.9
- * lg        105.9         ----   ----  105.2  105.4  105.0
- * tbig      604.3        177.4  175.8  156.5  152.5  152.4
+ * tall       24.5         15.6   15.6   15.6   15.6   15.6
+ * calls      55.8         36.7   37.5   37.0   37.0   37.1
+ * sg         76.1         ----   ----   55.9   55.8   55.9
+ * lg        105.6         ----   ----  105.2  105.4  105.0
+ * tbig      600.4        177.4  175.8  156.5  152.5  152.4
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
+ * ffitest s7_eval_with_location and s7_list_to_array
  */

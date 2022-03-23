@@ -9072,6 +9072,7 @@ s7_autoload_set_names(sc, snd_names, 5924);
 
 <pre class="indented">
 s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e);
+s7_pointer s7_eval_with_location(s7_scheme *sc, s7_pointer code, s7_pointer e, const char *caller, const char *file, s7_int line);
 s7_pointer s7_eval_c_string(s7_scheme *sc, const char *str);
 s7_pointer s7_eval_c_string_with_environment(s7_scheme *sc, const char *str, s7_pointer e);
 
@@ -10063,18 +10064,21 @@ int main(int argc, char **argv)
   s7_scheme *s;
   s7_pfunc f;
   s7_pointer body;
+  s7_int gc_loc;
   int i;
   s = s7_init();
-  body = s7_list_nl(s, 4, s7_make_symbol(s, "list"),	\
-	       s7_make_integer(s, 1),		\
-	       s7_make_integer(s, 2),		\
-	       s7_make_integer(s, 3),		\
-	       NULL);
+  body = s7_list_nl(s, 4, s7_make_symbol(s, "list"),
+	                  s7_make_integer(s, 1),
+	                  s7_make_integer(s, 2),
+	                  s7_make_integer(s, 3),
+	                  NULL);
+  gc_loc = s7_gc_protect(s, body);
   f = <em class="red">s7_optimize</em>(s, s7_list(s, 1, body));
   if (!f) fprintf(stderr, "oops\n");
   else
-    for (i = 0; i < 2000000; i++)
-      f(s);
+    for (i = 0; i &lt; 2000000; i++)
+      <em class="red">f</em>(s);
+  s7_gc_unprotect_at(s, gc_loc);
 }
 </pre>
 <p>
