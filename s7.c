@@ -4065,7 +4065,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_AA, HOP_SAFE_CLOSURE_AA, OP_SAFE_CLOSURE_AA_O, HOP_SAFE_CLOSURE_AA_O, OP_SAFE_CLOSURE_AA_A, HOP_SAFE_CLOSURE_AA_A,
       OP_SAFE_CLOSURE_SAA, HOP_SAFE_CLOSURE_SAA, OP_SAFE_CLOSURE_SSA, HOP_SAFE_CLOSURE_SSA,
       OP_SAFE_CLOSURE_AGG, HOP_SAFE_CLOSURE_AGG, OP_SAFE_CLOSURE_3A, HOP_SAFE_CLOSURE_3A, OP_SAFE_CLOSURE_NA, HOP_SAFE_CLOSURE_NA,
-      OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_NS, HOP_SAFE_CLOSURE_NS,
+      OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_NS, HOP_SAFE_CLOSURE_NS, /* safe_closure_4s gained very little */
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
 
       OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
@@ -5714,6 +5714,7 @@ static s7_pointer missing_method_error(s7_scheme *sc, s7_pointer method, s7_poin
 			      (is_c_object(obj)) ? c_object_scheme_name(sc, obj) : obj)));
 }
 
+/* this is a macro mainly to simplify the Checker handling */
 #define check_boolean_method(Sc, Checker, Method, Args)	       \
   {							       \
     s7_pointer p = car(Args);				       \
@@ -29814,10 +29815,12 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 
 static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointer let)
 {
-  /* if fname ends in .so, try loading it as a C shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
+  /* if fname ends in .so|.dylib, try loading it as a C shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
   s7_int fname_len = safe_strlen(fname);
-  if ((fname_len > 3) &&
-      (local_strcmp((const char *)(fname + (fname_len - 3)), ".so")))
+  if (((fname_len > 3) &&
+       (local_strcmp((const char *)(fname + (fname_len - 3)), ".so"))) ||   /* linux */
+      ((fname_len > 6) &&
+       (local_strcmp((const char *)(fname + (fname_len - 3)), ".dylib"))))  /* mac */
     {
       void *library;
       char *pwd_name = NULL;
@@ -45164,12 +45167,10 @@ static void op_unwind_output(s7_scheme *sc)
   if ((is_output_port(sc->code)) &&
       (!port_is_closed(sc->code)))
     s7_close_output_port(sc, sc->code); /* may call fflush */
-
   if (((is_output_port(sc->args)) &&
        (!port_is_closed(sc->args))) ||
       (sc->args == sc->F))
     set_current_output_port(sc, sc->args);
-
   if ((is_file) &&
       (is_multiple_value(sc->value)))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
@@ -45180,11 +45181,9 @@ static void op_unwind_input(s7_scheme *sc)
   /* sc->code is an input port */
   if (!port_is_closed(sc->code))
     s7_close_input_port(sc, sc->code);
-
   if ((is_input_port(sc->args)) &&
       (!port_is_closed(sc->args)))
     set_current_input_port(sc, sc->args);
-
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
 }
@@ -45553,10 +45552,8 @@ bool s7_is_dilambda(s7_pointer obj)
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       return(is_any_procedure(closure_setter_or_map_list(obj))); /* type >= T_CLOSURE (excludes goto/continuation) */
-
     case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION_STAR:
       return(is_any_procedure(c_function_setter(obj)));
-
     case T_C_MACRO:
       return(is_any_procedure(c_macro_setter(obj)));
     }
@@ -46178,8 +46175,7 @@ s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
 	for (s7_int index = 0; index < sc->protected_setters_loc; index++)
 	  if (vector_element(sc->protected_setter_symbols, index) == p)
 	    {
-	      s7_pointer old_func;
-	      old_func = vector_element(sc->protected_setters, index);
+	      s7_pointer old_func = vector_element(sc->protected_setters, index);
 	      if ((is_any_procedure(old_func)) && /* i.e. not #f! */
 		  (is_immutable(old_func)))
 		return(setter);
@@ -46221,10 +46217,8 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
   s7_pointer func = slot_setter(slot);
   if (!is_any_procedure(func))
     return(new_value);
-
   if (is_c_function(func))
     return(call_c_function_setter(sc, func, slot_symbol(slot), new_value));
-
   sc->args = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
   return(s7_call(sc, func, sc->args));
@@ -47989,7 +47983,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 
   if ((is_immutable(dest)) &&
       (dest != sc->readable_keyword) &&
-      (dest != sc->nil))                                                      /* error_hook copies with cadr(args) :readable, so it's currently NULL */
+      (dest != sc->nil))                 /* error_hook copies with cadr(args) :readable, so it's currently NULL */
     return(s7_wrong_type_arg_error(sc, symbol_name(caller), 2, dest, "a mutable object")); /*    so this segfaults if not checking for :readable */
 
   have_indices = (is_pair(cddr(args)));
@@ -48001,7 +47995,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
     case T_PAIR:
       if (dest == sc->readable_keyword)  /* a kludge, but I can't think of anything less stupid */
 	{
-	  if (have_indices)                 /* it seems to me that the start/end args here don't make any sense so... */
+	  if (have_indices)              /* it seems to me that the start/end args here don't make any sense so... */
 	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
 			    set_elist_3(sc, wrap_string(sc, "~S: start/end indices make no sense with :readable: ~S", 54), caller, args)));
 	  return(copy_body(sc, source));
@@ -48142,8 +48136,10 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       break;
 
     case T_LET:
-      if ((dest == sc->rootlet) || (dest == sc->s7_let))
-	return(wrong_type_argument_with_type(sc, caller, 2, dest, wrap_string(sc, "a sequence other than the rootlet or *s7*", 41)));
+      if (dest == sc->rootlet)
+	return(wrong_type_argument_with_type(sc, caller, 2, dest, wrap_string(sc, "a sequence other rootlet", 24)));
+      if (dest == sc->s7_let)
+	return(wrong_type_argument_with_type(sc, caller, 2, dest, wrap_string(sc, "a sequence other than *s7*", 26)));
       set = let_setter;
       dest_len = source_len;          /* grows via set, so dest_len isn't relevant */
       set_cadr(sc->elist_3, caller);  /* for possible error handling in let_setter */
@@ -78341,7 +78337,6 @@ static void check_set(s7_scheme *sc)
     {
       /* here we have (set! (...) ...) */
       s7_pointer inner = car(code), value = cadr(code);
-
       pair_set_syntax_op(form, OP_SET_UNCHECKED); /* if not pair car, op_set_normal below */
       if (is_symbol(car(inner)))
 	{
@@ -78460,100 +78455,96 @@ static void check_set(s7_scheme *sc)
 		  set_opt2_sym(code, value);
 		}}
 	  else
-	    {
-	      if ((!is_pair(value)) ||
-		  ((car(value) == sc->quote_symbol) && (is_pair(cdr(value))))) /* (quote . 1) ? */
-		{
-		  pair_set_syntax_op(form, OP_SET_SYMBOL_C);
-		  set_opt2_con(code, (is_pair(value)) ? cadr(value) : value);
-		}
-	      else
-		{
-		  pair_set_syntax_op(form, OP_SET_SYMBOL_P);
-
-		  /* TODO? h_safe_sc (set! x (+ x 1)), sp: (set! x (+ x (f ...))) */
-
-		  if (is_optimized(value))
-		    {
-		      if (optimize_op(value) == HOP_SAFE_C_NC)
+	    if ((!is_pair(value)) ||
+		((car(value) == sc->quote_symbol) && (is_pair(cdr(value))))) /* (quote . 1) ? */
+	      {
+		pair_set_syntax_op(form, OP_SET_SYMBOL_C);
+		set_opt2_con(code, (is_pair(value)) ? cadr(value) : value);
+	      }
+	    else
+	      {
+		pair_set_syntax_op(form, OP_SET_SYMBOL_P);
+		/* TODO? h_safe_sc (set! x (+ x 1)), sp: (set! x (+ x (f ...))) */
+		if (is_optimized(value))
+		  {
+		    if (optimize_op(value) == HOP_SAFE_C_NC)
+		      {
+			pair_set_syntax_op(form, OP_SET_SYMBOL_A);
+			fx_annotate_arg(sc, cdr(code), sc->curlet);
+		      }
+		    else
+		      if (optimize_op(value) == HOP_SAFE_C_SS)
 			{
-			  pair_set_syntax_op(form, OP_SET_SYMBOL_A);
-			  fx_annotate_arg(sc, cdr(code), sc->curlet);
-			}
-		      else
-			{
-			  if (optimize_op(value) == HOP_SAFE_C_SS)
+			  if (settee == cadr(value))
 			    {
-			      if (settee == cadr(value))
-				{
-				  pair_set_syntax_op(form, OP_INCREMENT_SA);
-				  fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
-				  set_opt2_pair(code, cddr(value));
-				}
-			      else
-				{
-				  pair_set_syntax_op(form, OP_SET_SYMBOL_A);
-				  fx_annotate_arg(sc, cdr(code), sc->curlet);
-				}}
-			  else
-			    {
-			      if (is_fxable(sc, value)) /* value = cadr(code) */
-				{
-				  pair_set_syntax_op(form, OP_SET_SYMBOL_A);
-				  fx_annotate_arg(sc, cdr(code), sc->curlet);
-				}
-			      if ((is_safe_c_op(optimize_op(value))) &&
-				  (is_pair(cdr(value))) &&
-				  (settee == cadr(value)) &&
-				  (!is_null(cddr(value))))
-				{
-				  if (is_null(cdddr(value)))
-				    {
-				      if (is_fxable(sc, caddr(value)))
-					{
-					  pair_set_syntax_op(form, OP_INCREMENT_SA);
-					  fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
-					  set_opt2_pair(code, cddr(value));
-					}}
-				  else
-				    if ((is_null(cddddr(value))) &&
-					(is_fxable(sc, caddr(value))) &&
-					(is_fxable(sc, cadddr(value))))
-				      {
-					pair_set_syntax_op(form, OP_INCREMENT_SAA);
-					fx_annotate_args(sc, cddr(value), sc->curlet);
-					/* fx_annotate_arg(sc, cdddr(value), sc->curlet); */
-					set_opt2_pair(code, cddr(value));
-				      }}}}}
-		  if ((is_h_optimized(value)) &&
-		      (is_safe_c_op(optimize_op(value))) &&    /* else might not be opt_cfunc? (opt1_lambda probably) */
-		      (!is_unsafe(value)) &&                   /* is_unsafe(value) can happen! */
-		      (is_not_null(cdr(value))))               /* (set! x (y)) */
-		    {
-		      if (is_not_null(cddr(value)))
-			{
-			  if ((caddr(value) == int_one) &&
-			      (cadr(value) == settee))
-			    {
-			      if (opt1_cfunc(value) == sc->add_x1)
-				pair_set_syntax_op(form, OP_INCREMENT_BY_1);
-			      else
-				if (opt1_cfunc(value) == sc->subtract_x1)
-				  pair_set_syntax_op(form, OP_DECREMENT_BY_1);
+			      pair_set_syntax_op(form, OP_INCREMENT_SA);
+			      fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
+			      set_opt2_pair(code, cddr(value));
 			    }
 			  else
-			    if ((cadr(value) == int_one) &&
-				(caddr(value) == settee) &&
-				(opt1_cfunc(value) == sc->add_1x))
+			    {
+			      pair_set_syntax_op(form, OP_SET_SYMBOL_A);
+			      fx_annotate_arg(sc, cdr(code), sc->curlet);
+			    }}
+		      else
+			{
+			  if (is_fxable(sc, value)) /* value = cadr(code) */
+			    {
+			      pair_set_syntax_op(form, OP_SET_SYMBOL_A);
+			      fx_annotate_arg(sc, cdr(code), sc->curlet);
+			    }
+			  if ((is_safe_c_op(optimize_op(value))) &&
+			      (is_pair(cdr(value))) &&
+			      (settee == cadr(value)) &&
+			      (!is_null(cddr(value))))
+			    {
+			      if (is_null(cdddr(value)))
+				{
+				  if (is_fxable(sc, caddr(value)))
+				    {
+				      pair_set_syntax_op(form, OP_INCREMENT_SA);
+				      fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
+				      set_opt2_pair(code, cddr(value));
+				    }}
+			      else
+				if ((is_null(cddddr(value))) &&
+				    (is_fxable(sc, caddr(value))) &&
+				    (is_fxable(sc, cadddr(value))))
+				  {
+				    pair_set_syntax_op(form, OP_INCREMENT_SAA);
+				    fx_annotate_args(sc, cddr(value), sc->curlet);
+				    /* fx_annotate_arg(sc, cdddr(value), sc->curlet); */
+				    set_opt2_pair(code, cddr(value));
+				  }}}}
+		if ((is_h_optimized(value)) &&
+		    (is_safe_c_op(optimize_op(value))) &&    /* else might not be opt1_cfunc? (opt1_lambda probably) */
+		    (!is_unsafe(value)) &&                   /* is_unsafe(value) can happen! */
+		    (is_not_null(cdr(value))))               /* (set! x (y)) */
+		  {
+		    if (is_not_null(cddr(value)))
+		      {
+			if ((caddr(value) == int_one) &&
+			    (cadr(value) == settee))
+			  {
+			    if (opt1_cfunc(value) == sc->add_x1)
 			      pair_set_syntax_op(form, OP_INCREMENT_BY_1);
 			    else
-			      if ((settee == caddr(value)) &&
-				  (is_safe_symbol(cadr(value))) &&
-				  (caadr(code) == sc->cons_symbol))
-				{
-				  pair_set_syntax_op(form, OP_SET_CONS);
-				  set_opt2_sym(code, cadr(value));
-				}}}}}}}
+			      if (opt1_cfunc(value) == sc->subtract_x1)
+				pair_set_syntax_op(form, OP_DECREMENT_BY_1);
+			  }
+			else
+			  if ((cadr(value) == int_one) &&
+			      (caddr(value) == settee) &&
+			      (opt1_cfunc(value) == sc->add_1x))
+			    pair_set_syntax_op(form, OP_INCREMENT_BY_1);
+			  else
+			    if ((settee == caddr(value)) &&
+				(is_safe_symbol(cadr(value))) &&
+				(caadr(code) == sc->cons_symbol))
+			      {
+				pair_set_syntax_op(form, OP_SET_CONS);
+				set_opt2_sym(code, cadr(value));
+			      }}}}}}
 }
 
 static void op_set_symbol_c(s7_scheme *sc)
@@ -95205,5 +95196,4 @@ int main(int argc, char **argv)
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
- * ffitest s7_eval_with_location and s7_list_to_array
  */

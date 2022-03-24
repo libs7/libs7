@@ -1351,6 +1351,12 @@ int main(int argc, char **argv)
                s7_nil(sc));
     if (s7_integer(p) != 3)
        {fprintf(stderr, "%d: (eval '(+ 1 2)) is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    p = s7_eval_with_location(sc, s7_cons(sc, s7_make_symbol(sc, "+"), 
+					  s7_cons(sc, s7_make_integer(sc, 1),
+						  s7_cons(sc, s7_make_integer(sc, 2), s7_nil(sc)))), 
+			      s7_nil(sc), "ffitest", __FILE__, __LINE__);
+    if (s7_integer(p) != 3)
+       {fprintf(stderr, "%d: (eval '(+ 1 2)) is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
     p = s7_eval(sc, s7_cons(sc, s7_make_symbol(sc, "+"), /* s7.html example */
                s7_cons(sc, s7_make_integer(sc, 1),
                   s7_cons(sc, s7_make_integer(sc, 3), s7_nil(sc)))), 
@@ -2564,6 +2570,14 @@ int main(int argc, char **argv)
 	fprintf(stderr, "%d: s7_random_state_to_list is %s\n", __LINE__, TO_STR(q));
     }
 #endif
+  }
+
+  {
+    s7_pointer lst;
+    s7_pointer arr[3];
+    lst = s7_list(sc, 3, s7_make_integer(sc, 1), s7_make_integer(sc, 2), s7_make_integer(sc, 3));
+    s7_list_to_array(sc, lst, arr, 3);
+    if (s7_integer(arr[1]) != 2) fprintf(stderr, "arr[1]: %s\n", TO_STR(arr[1]));
   }
 
   {

@@ -19096,6 +19096,7 @@
 				 (walker (cdr code)))))))
 		   (let walker ((code (cdddr form)))  ; look for exprs (or portions thereof) that don't change
 		     (unless (or (not (pair? code))
+				 (and (null? (cdr code)) (symbol? (car code))) ; symbol in arg list etc, (do vars end (func eqv?))
 				 (memq (car code) binders)
 				 (memq (car code) '(quote case))
 				 (hash-table-ref makers (car code)))
