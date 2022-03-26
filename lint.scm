@@ -19135,7 +19135,8 @@
 				     (if (equal? new-code code)
 					 (lint-format "~S is constant in the do loop" caller code)
 					 (lint-format "~S in ~S is constant in the do loop" caller new-code code))))))
-			     
+#|			     
+			     ;; this messes up all the time
 			     (when (and (not (memq (car code) local-vars)) ; also need (not (dilambda (symbol->value (car code)))) here I think
 					(not (eq? (car code) 'quote))
 					(lint-every? (lambda (v)
@@ -19143,7 +19144,9 @@
 							   (and (symbol? v)
 								(not (memq v local-vars)))))
 						     (cdr code)))
-			       (lint-format "~S could be moved out of the do loop" caller code))))
+			       (lint-format "~S could be moved out of the do loop" caller code))
+|#
+			     ))
 		       (walker (car code))
 		       (walker (cdr code))))))))
 	    

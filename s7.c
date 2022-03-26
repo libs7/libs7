@@ -1169,7 +1169,7 @@ struct s7_scheme {
   char *read_line_buf;
   s7_int read_line_buf_size;
 
-  s7_pointer w, x, z;
+  s7_pointer w, x, y, z;
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1, u2_1, u2_2;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
@@ -6983,6 +6983,7 @@ static int64_t gc(s7_scheme *sc)
 
   gc_mark(sc->w);
   gc_mark(sc->x);
+  gc_mark(sc->y);
   gc_mark(sc->z);
   gc_mark(sc->temp1);
   gc_mark(sc->temp2);
@@ -7606,7 +7607,12 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
   if ((SHOW_EVAL_OPS) && (op == OP_EVAL_DONE)) fprintf(stderr, "%s[%d]: push eval_done\n", func, line);
   if (sc->stack_end >= sc->stack_start + sc->stack_size)
     {
-      fprintf(stderr, "%s%s[%d]: stack overflow%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
+      fprintf(stderr, "%s%s[%d]: stack overflow, %" ld64 " > %u, trigger: %" ld64 " %s\n", 
+	      BOLD_TEXT, func, line, 
+	      (s7_int)((intptr_t)(sc->stack_end - sc->stack_start)), sc->stack_size, 
+	      (s7_int)((intptr_t)(sc->stack_resize_trigger - sc->stack_start)), 
+	      UNBOLD_TEXT);
+      if (S7_DEBUGGING) s7_show_stack(sc);
       if (sc->stop_at_error) abort();
     }
   if (sc->stack_end >= sc->stack_resize_trigger)
@@ -10636,8 +10642,12 @@ static inline s7_int tree_len(s7_scheme *sc, s7_pointer p);
 static s7_pointer copy_body(s7_scheme *sc, s7_pointer p)
 {
   sc->w = p;
-  if (tree_is_cyclic(sc, p))
-    s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "copy: tree is cyclic: ~S", 24), p));
+  if (!is_safety_checked(p))
+    {
+      if (tree_is_cyclic(sc, p))
+	s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "copy: tree is cyclic: ~S", 24), p));
+      else set_safety_checked(p);
+    }
   check_free_heap_size(sc, tree_len(sc, p) * 2);
   return((sc->safety > NO_SAFETY) ? copy_tree_with_type(sc, p) : copy_tree(sc, p));
 }
@@ -11096,10 +11106,11 @@ static s7_pointer copy_any_list(s7_scheme *sc, s7_pointer a)
 {
   s7_pointer slow, fast, p;
 #if S7_DEBUGGING
-  #define wrap_return(W) do {fast = W; W = sc->nil; return(check_wrap_return(fast));} while (0)
+  #define wrap_return(W) do {fast = W; W = sc->nil; sc->y = sc->nil; return(check_wrap_return(fast));} while (0)
 #else
-  #define wrap_return(W) do {fast = W; W = sc->nil; return(fast);} while (0)
+  #define wrap_return(W) do {fast = W; W = sc->nil; sc->y = sc->nil; return(fast);} while (0)
 #endif
+  sc->y = a;
   sc->w = list_1(sc, car(a));
   p = sc->w;
 
@@ -25011,15 +25022,9 @@ You can later apply random-state to this list to continue a random number sequen
     return(method_or_bust_with_type(sc, car(args), sc->random_state_to_list_symbol, args, a_random_state_object_string, 1));
   return(sc->nil);
 #else
-  s7_pointer r;
-  if (is_null(args))
-    r = sc->default_rng;
-  else
-    {
-      r = car(args);
-      if (!is_random_state(r))
-	return(method_or_bust_with_type(sc, r, sc->random_state_to_list_symbol, args, a_random_state_object_string, 1));
-    }
+  s7_pointer r = (is_null(args)) ? sc->default_rng : car(args);
+  if (!is_random_state(r))
+    return(method_or_bust_with_type(sc, r, sc->random_state_to_list_symbol, args, a_random_state_object_string, 1));
   return(list_2(sc, make_integer(sc, random_seed(r)), make_integer(sc, random_carry(r))));
 #endif
 }
@@ -26634,7 +26639,6 @@ end: (substring \"01234\" 1 2) -> \"1\""
 
   if (!is_string(str))
     return(method_or_bust(sc, str, sc->substring_symbol, args, T_STRING, 1));
-
   end = string_length(str);
   if (!is_null(cdr(args)))
     {
@@ -26656,7 +26660,6 @@ static s7_pointer g_substring_uncopied(s7_scheme *sc, s7_pointer args)
 
   if (!is_string(str))
     return(method_or_bust(sc, str, sc->substring_symbol, args, T_STRING, 1));
-
   end = string_length(str);
   if (!is_null(cdr(args)))
     {
@@ -26780,14 +26783,13 @@ static int32_t scheme_strcmp(s7_pointer s1, s7_pointer s2)
 
   len = (len1 > len2) ? len2 : len1;
   if (len < sizeof(size_t))
-    {
-      for (i = 0; i < len; i++)
-	{
-	  if ((uint8_t)(str1[i]) < (uint8_t )(str2[i]))
-	    return(-1);
-	  if ((uint8_t)(str1[i]) > (uint8_t)(str2[i]))
-	    return(1);
-	}}
+    for (i = 0; i < len; i++)
+      {
+	if ((uint8_t)(str1[i]) < (uint8_t )(str2[i]))
+	  return(-1);
+	if ((uint8_t)(str1[i]) > (uint8_t)(str2[i]))
+	  return(1);
+      }
   else
     {
       /* this algorithm from stackoverflow(?), with various changes (original did not work for large strings, etc) */
@@ -66457,7 +66459,8 @@ static void fx_curlet_tree(s7_scheme *sc, s7_pointer code)
   if ((!more_vars) &&
       (is_let(outer_e)) &&
       (!is_funclet(outer_e)) &&
-      (tis_slot(let_slots(outer_e))))
+      (tis_slot(let_slots(outer_e))) &&
+      (slot_symbol(let_slots(outer_e)) != slot_symbol(slot1)))
     {
       slot1 = let_slots(outer_e);
       slot2 = next_slot(slot1);
@@ -84652,19 +84655,14 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
   func_args = closure_args(func);
 
   if (num_args == 1)
-    sc->curlet = make_let_with_two_slots(sc, closure_let(func), 
-					 car(func_args), sc->value = fx_call(sc, old_args), 
-					 cdr(func_args), sc->nil);
+    sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), sc->value = fx_call(sc, old_args), cdr(func_args), sc->nil);
   else
     {
       gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
       if (num_args == 2)
 	{
 	  sc->args = fx_call(sc, cdr(old_args));
-	  sc->curlet = make_let_with_two_slots(sc, closure_let(func), 
-					       car(func_args), stack_protected1(sc), 
-					       cdr(func_args), ((is_safe_closure(func)) && (!sc->debug_or_profile)) ? 
-					                        set_plist_1(sc, sc->args) : list_1(sc, sc->args));
+	  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), stack_protected1(sc), cdr(func_args), list_1(sc, sc->args));
 	}
       else
 	{
@@ -84672,9 +84670,7 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
 	  old_args = cdr(old_args);
 	  for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	    set_car(p, fx_call(sc, old_args));
-	  sc->curlet = make_let_with_two_slots(sc, closure_let(func),
-					       car(func_args), stack_protected1(sc), 
-					       cdr(func_args), sc->args);
+	  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), stack_protected1(sc), cdr(func_args), sc->args);
 	}}
   sc->code = T_Pair(closure_body(func));
 }
@@ -90440,8 +90436,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  if (is_pair(sc->code))  /* evaluate current arg -- must check for pair here, not sc->nil (improper list as args) */
 	    {
 	      if ((sc->safety > NO_SAFETY) &&
-		  (tree_is_cyclic(sc, sc->code)))
-		syntax_error(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
+		  (!is_safety_checked(sc->code)))
+		{
+		  if (tree_is_cyclic(sc, sc->code))
+		    syntax_error(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
+		  else set_safety_checked(sc->code);
+		}
 
 	    EVAL_ARGS_PAIR:
 	      if (is_pair(car(sc->code)))
@@ -94379,6 +94379,7 @@ s7_scheme *s7_init(void)
   sc->value = sc->nil;
   sc->w = sc->nil;
   sc->x = sc->nil;
+  sc->y = sc->nil;
   sc->z = sc->nil;
   sc->temp1 = sc->nil;
   sc->temp2 = sc->nil;
@@ -95176,14 +95177,14 @@ int main(int argc, char **argv)
  * tform      8335         5357   5348   5307   5300   5305
  * tnum       56.6         6348   6013   5433   5406   5397
  * tstr       6123         6880   6342   5488   5488   5480
- * tlamb      5799         6423   6273   5720   ----   5597
+ * tlamb      5799         6423   6273   5720   ----   5606
  * tgsl       25.2         8485   7802   6373   6373   6324
  * tmisc      6892         8869   7612   6435   6331   6335
  * tlist      6505         7896   7546   6558   6532   6490
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
  * tleft      9004         10.4   10.2   7657   7664   7613
- * tgc        9532         11.9   11.1   8177   8156   8089
+ * tgc        9532         11.9   11.1   8177   8156   8089  8078
  * thash      35.2         11.8   11.7   9734   9590   9581
  * cb         16.9         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
@@ -95196,4 +95197,5 @@ int main(int argc, char **argv)
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
+ * t725 to see error messages, t718
  */
