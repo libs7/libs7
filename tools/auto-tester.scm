@@ -167,6 +167,17 @@
 (define* (_svals5s_ x y z) (* x y z))
 (define* (_svals6s_ w x y z) (* w x y z))
 
+(define (fop1 x y z)
+  (+ (floor (* x y)) z)) ; op_opssqq_s
+(define (fop2 x y z)
+  (+ (* x y) (abs z)))   ; opssq_opsq
+(define (fop3 x y z)
+  (+ (abs x) (* y z)))   ; opsq_opssq
+(define (_h1_ x) (vector-ref x 0))
+(define (_h2_ x) (vector-ref x 1))
+(define (_ff_ x y) (+ (_h1_ x) (_h2_ y)))
+(define (tff) (_ff_ (vector 1 2) (vector 3 4))) ; c_ff
+
 (define (sym1 . a) (copy a))
 (define (sym2 a . b) (cons a (copy b)))
 (define (sym3 a b . c) (list a b (copy c)))
@@ -552,6 +563,8 @@
 (define-constant imfv2 (immutable! #r2d((1 2 3) (4 5 6))))
 (define-constant imfv3 (immutable! #r3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imi (immutable! (inlet 'a 3 'b 2)))
+(define-constant ilt (inlet 'a 1 'let-ref-fallback (lambda (e sym) #<undefined>)))
+
 (define-constant imh (immutable! (hash-table 'a 1 'b 2)))
 (define-constant imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
 (define-constant imb (immutable! (block 0.0 1.0 2.0)))
@@ -729,7 +742,7 @@
 			  ;'immutable!
 			  'checked-procedure-source
 			  ;'owlet ;too many uninteresting diffs
-			  'gc  ; slower?
+			  ;'gc  ; slower? and can be trouble if called within an expression
 			  ;'reader-cond ;-- cond test clause can involve unbound vars: (null? i) for example
 			  ;'funclet ; '*function* ; tons of output
 			  ;'random 
@@ -814,10 +827,17 @@
                           '_vals3_ '_vals4_ '_vals5_ '_vals6_ '_vals3s_ '_vals4s_ '_vals5s_ '_vals6s_ 
                           '_svals3_ '_svals4_ '_svals5_ '_svals6_ '_svals3s_ '_svals4s_ '_svals5s_ '_svals6s_ 
 			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6
+			  'fop1 'fop2 'fop3 'tff
 			  'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
 			  ;'linter
 			  'ifa 'ifb ; place-holders
+
+			  'ims 'imbv 'imv 'imiv 'imfv 'imi 'imp 'imh 'ilt
+			  'imv2 'imv3 'imfv2 'imfv3 'imiv2 'imiv3 'imbv2 'imbv3
+			  'vvv 'vvvi 'vvvf 'typed-hash 'typed-vector 'typed-let 'constant-let
+			  'a1 'a2 'a3 'a4 'a5 'a6
+
 			  ))
 	 
       (args (vector "-123" "1234" "-3/4" "-1" "1/2" "1+i" "1-i" "0+i" "0-i" "(expt 2 32)" "4294967297" "1001" "10001"
@@ -1182,10 +1202,10 @@
               (list (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (begin " s " (> a b))))"))
                     (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (let-temporarily ((x (list " s "))) (> a b))))")))
 
-	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1000)) " s ")"))
-                    (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 1000)) " s "))")))
-	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1000)) (apply values " s " ()))"))
-                    (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 1000)) (apply values " s " ())))")))
+	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 100)) " s ")"))
+                    (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) " s "))")))
+	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 100)) (apply values " s " ()))"))
+                    (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) (apply values " s " ())))")))
 	      
 	      ))
       
@@ -1485,15 +1505,15 @@
 
       (if (> (random 1.0) 0.5)
 	  (begin
-	    (set! int-var (random (expt 2 30)))
-	    (set! float-var (random 1.0e18))
-	    (set! ratio-var (/ (random (expt 2 30)) (+ 1 (random (expt 2 30)))))
-	    (set! complex-var (complex (random 1.0e18) (random 1.0e18))))
+	    (set! int-var (random (ash 1 30)))
+	    (set! float-var (random 1.0e10))
+	    (set! ratio-var (/ (random (ash 1 30)) (+ 1 (random (ash 1 30)))))
+	    (set! complex-var (complex (random 1.0e10) (random 1.0e10))))
 	  (begin
-	    (set! int-var (random (expt 2 30)))
-	    (set! float-var (random -1.0e18))
-	    (set! ratio-var (/ (random (- (expt 2 30))) (+ 1 (random (expt 2 30)))))
-	    (set! complex-var (complex (random -1.0e18) (random -1.0e18)))))
+	    (set! int-var (random (ash 1 30)))
+	    (set! float-var (random -1.0e10))
+	    (set! ratio-var (/ (random (- (ash 1 30))) (+ 1 (random (ash 1 30)))))
+	    (set! complex-var (complex (random -1.0e10) (random -1.0e10)))))
 
       (catch #t 
 	(lambda () 
@@ -1507,9 +1527,9 @@
       (set! last-error-type #f)
       (let* ((outer-funcs (codes (random codes-len)))
 	     (str1 (string-append "(let ((x #f) (i 0)) " ((car outer-funcs) str) ")"))
-	     (str2 (string-append "(let () (define (func) " str1 ") (func))"))
+	     (str2 (string-append "(let () (define (func) " str1 ") (func) (func))"))
 	     (str3 (string-append "(let ((x #f) (i 0)) " ((cadr outer-funcs) str) ")"))
-	     (str4 (string-append "(let () (define (func) " str3 ") (func))")))
+	     (str4 (string-append "(let () (define (func) " str3 ") (func) (func))")))
 	(let ((val1 (begin (set! curstr str1) (eval-it str1)))
 	      (val2 (begin (set! curstr str2) (eval-it str2)))
 	      (val3 (begin (set! curstr str3) (eval-it str3)))

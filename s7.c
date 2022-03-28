@@ -2082,11 +2082,10 @@ static void init_types(void)
 #define list_is_in_use(p)              has_type0_bit(T_Pair(p), T_LIST_IN_USE)
 #define set_list_in_use(p)             set_type0_bit(T_Pair(p), T_LIST_IN_USE)
 #define clear_list_in_use(p)           do {clear_type0_bit(T_Pair(p), T_LIST_IN_USE); sc->current_safe_list = 0;} while (0)
-/* since the safe lists are not in the heap, if the list_in_use bit is off, the list won't ne GC-protected even if
+/* since the safe lists are not in the heap, if the list_in_use bit is off, the list won't be GC-protected even if
  *   it is gc_marked explicitly.  This happens, for example, in copy_proper_list where we try to protect the original list
- *   by sc->temp5 = lst; then in the GC, gc_mark(sc->u); but the safe_list probably is already marked, so its contents are not protected.
+ *   by sc->temp5 = lst; then in the GC, gc_mark(sc->temp5); but the safe_list probably is already marked, so its contents are not protected.
  */
-/* if (!is_immutable(p)) free_vlist(sc, p) seems plausible here, but it got no hits in s7test and other cases */
 
 #define T_ONE_FORM                     T_SIMPLE_ARG_DEFAULTS
 #define set_closure_has_one_form(p)    set_type0_bit(T_Clo(p), T_ONE_FORM)
@@ -4104,7 +4103,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S, OP_IMPLICIT_S7_LET_SET_SA,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_G, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
-      OP_SYM, OP_CON, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
+      OP_SYMBOL, OP_CONSTANT, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
 
       OP_READ_INTERNAL, OP_EVAL, OP_EVAL_ARGS, OP_EVAL_ARGS1, OP_EVAL_ARGS2, OP_EVAL_ARGS3, OP_EVAL_ARGS4, OP_EVAL_ARGS5,
       OP_APPLY, OP_EVAL_MACRO, OP_LAMBDA, OP_QUOTE, OP_QUOTE_UNCHECKED, OP_MACROEXPAND, OP_CALL_CC, OP_CALL_WITH_EXIT, OP_CALL_WITH_EXIT_O,
@@ -4572,6 +4571,7 @@ void s7_show_stack(s7_scheme *sc)
 }
 
 #define UNUSED_BITS 0xfc00000000c0 /* high 6 bits of optimizer code + high 2 bits of type */
+/* #define OPTIMIZER_BITS 0xff0000000000 */
 
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S7_DEBUGGING in display_any (fallback for display_functions) */
 {
@@ -4758,12 +4758,15 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
 
 	  ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
+	  /* (((full_typ & OPTIMIZER_BITS) != 0) && (is_simple_sequence(obj)) && (!is_pair(obj))) ? " optimizer-bits set" : "", */ /* op_constant etc */
 	  ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "",
 	  NULL);
 
   buf = (char *)Malloc(1024);
-  snprintf(buf, 1024, "type: %s? (%d), opt_op: %d, flags: #x%" PRIx64 "%s",
-	   type_name(sc, obj, NO_ARTICLE), typ, optimize_op(obj), full_typ, str);
+  snprintf(buf, 1024, "type: %s? (%d), opt_op: %d %s, flags: #x%" PRIx64 "%s",
+	   type_name(sc, obj, NO_ARTICLE), typ, 
+	   optimize_op(obj), ((optimize_op(obj) >= OP_UNOPT) && (optimize_op(obj) < NUM_OPS)) ? op_names[optimize_op(obj)] : "",
+	   full_typ, str);
   return(buf);
 }
 
@@ -4775,6 +4778,7 @@ static bool has_odd_bits(s7_pointer obj)
 {
   uint64_t full_typ = full_type(obj);
   if ((full_typ & UNUSED_BITS) != 0) return(true);
+  /* if (((full_typ & OPTIMIZER_BITS) != 0) && (!is_pair(obj)) && (is_simple_sequence(obj))) return(true); */
   if (((full_typ & T_MULTIFORM) != 0) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_KEYWORD) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_SYNTACTIC) != 0) && (!is_syntax(obj)) && (!is_pair(obj)) && (!is_normal_symbol(obj))) return(true);
@@ -7569,7 +7573,7 @@ static void pop_stack_1(s7_scheme *sc, const char *func, int32_t line)
    *   and are carried around as GC protection in other cases.
    */
   sc->code = T_Pos(sc->stack_end[0]);
-  sc->curlet = T_Pos(sc->stack_end[1]);  /* not T_Lid, see op_any_closure_3p_end et al (stack used to pass args, not curlet) */
+  sc->curlet = sc->stack_end[1];  /* not T_Lid|Pos, see op_any_closure_3p_end et al (stack used to pass args, not curlet) */
   sc->args = sc->stack_end[2];
   sc->cur_op = (opcode_t)(sc->stack_end[3]);
   if (sc->cur_op >= NUM_OPS)
@@ -7595,7 +7599,7 @@ static void pop_stack_no_op_1(s7_scheme *sc, const char *func, int32_t line)
   sc->code = T_Pos(sc->stack_end[0]);
   if ((sc->cur_op != OP_GC_PROTECT) && (!is_let(sc->stack_end[1])) && (!is_null(sc->stack_end[1])))
     fprintf(stderr, "%s[%d]: curlet not a let\n", func, line);
-  sc->curlet = T_Pos(sc->stack_end[1]); /* not T_Lid: gc_protect can set this directly (not through push_stack) to anything */
+  sc->curlet = sc->stack_end[1]; /* not T_Lid|Pos: gc_protect can set this directly (not through push_stack) to anything */
   sc->args = sc->stack_end[2];
 }
 
@@ -7905,7 +7909,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
     {
       s7_pointer slot, ksym;
       set_type_bit(x, T_IMMUTABLE | T_KEYWORD | T_GLOBAL);
-      set_optimize_op(str, OP_CON);
+      set_optimize_op(str, OP_CONSTANT);
       ksym = make_symbol_with_length(sc, (name[0] == ':') ? (char *)(name + 1) : name, len - 1);
       keyword_set_symbol(x, ksym);
       set_has_keyword(ksym);
@@ -25386,7 +25390,7 @@ static void init_chars(void)
       uint8_t c = (uint8_t)i;
 
       set_type_bit(cp, T_IMMUTABLE | T_CHARACTER | T_UNHEAP);
-      set_optimize_op(cp, OP_CON);
+      set_optimize_op(cp, OP_CONSTANT);
       character(cp) = c;
       upper_character(cp) = (uint8_t)toupper(i);
       is_char_alphabetic(cp) = (bool)isalpha(i);
@@ -26122,7 +26126,7 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
   if (!str) return(nil_string);
   x = alloc_pointer(sc);
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
-  set_optimize_op(x, OP_CON);
+  set_optimize_op(x, OP_CONSTANT);
   len = safe_strlen(str);
   string_length(x) = len;
   string_block(x) = NULL;
@@ -26146,7 +26150,7 @@ static s7_pointer make_permanent_string(const char *str)
   s7_int len = safe_strlen(str);
   x = (s7_pointer)calloc(1, sizeof(s7_cell));
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
-  set_optimize_op(x, OP_CON);
+  set_optimize_op(x, OP_CONSTANT);
   string_length(x) = len;
   string_block(x) = NULL;
   string_value(x) = (char *)str;
@@ -26158,7 +26162,7 @@ static void init_strings(void)
 {
   nil_string = make_permanent_string("");
   nil_string->tf.flag = T_STRING | T_UNHEAP;
-  set_optimize_op(nil_string, OP_CON);
+  set_optimize_op(nil_string, OP_CONSTANT);
 
   car_a_list_string = make_permanent_string("a pair whose car is also a pair");
   cdr_a_list_string = make_permanent_string("a pair whose cdr is also a pair");
@@ -72492,8 +72496,8 @@ static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
 	    }}
       else /* new 22-Sep-19, but I don't think this saves anything over falling into trailers */
 	if (is_symbol(obj))
-	  set_optimize_op(obj, (is_keyword(obj)) ? OP_CON : OP_SYM);
-	else set_optimize_op(obj, OP_CON);
+	  set_optimize_op(obj, (is_keyword(obj)) ? OP_CONSTANT : OP_SYMBOL);
+	else set_optimize_op(obj, OP_CONSTANT);
     }
   if (!is_list(x))
     syntax_error(sc, "stray dot in function body: ~S", 30, code);
@@ -83130,7 +83134,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	      (keyword_symbol(car(arg_vals)) == car(pars)))
 	    return(s7_error(sc, sc->wrong_type_arg_symbol,
 			    set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), car(pars), cadr(arg_vals))));
-	  lambda_star_argument_set_value(sc, car(pars), arg_vals, slot, false);
+	  lambda_star_argument_set_value(sc, car(pars), (in_heap(arg_vals)) ? arg_vals : copy_proper_list(sc, arg_vals), slot, false); /* sym5 :rest bug */
 	  rest_key = sc->rest_keyword;
 	  arg_vals = cdr(arg_vals);
 	  pars = cdr(pars);
@@ -83209,7 +83213,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 		  (keyword_symbol(car(arg_vals)) == pars))
 		return(s7_error(sc, sc->wrong_type_arg_symbol,
 				set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), pars, cadr(arg_vals))));
-	      slot_set_value(slot, arg_vals);
+	      slot_set_value(slot, (in_heap(arg_vals)) ? arg_vals : copy_proper_list(sc, arg_vals)); /* sym5 :rest bug */
 	    }}
       else
 	{
@@ -84671,7 +84675,9 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
 	  for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	    set_car(p, fx_call(sc, old_args));
 	  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), stack_protected1(sc), cdr(func_args), sc->args);
-	}}
+	}
+      unstack(sc);
+    }
   sc->code = T_Pair(closure_body(func));
 }
 
@@ -88617,12 +88623,12 @@ static goto_t trailers(s7_scheme *sc)
   if (is_symbol(code))
     {
       sc->value = lookup_checked(sc, code);
-      set_optimize_op(code, (is_keyword(code)) ? OP_CON : OP_SYM);
+      set_optimize_op(code, (is_keyword(code)) ? OP_CONSTANT : OP_SYMBOL);
     }
   else
     {
       sc->value = T_Pos(code);
-      set_optimize_op(code, OP_CON);
+      set_optimize_op(code, OP_CONSTANT);
     }
   return(goto_start);
 }
@@ -90402,8 +90408,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 	case OP_UNOPT:       goto UNOPT;
-	case OP_SYM:         sc->value = lookup_checked(sc, sc->code);     continue;
-	case OP_CON:         sc->value = sc->code;                         continue;
+	case OP_SYMBOL:      sc->value = lookup_checked(sc, sc->code);     continue;
+	case OP_CONSTANT:    sc->value = sc->code;                         continue;
 	case OP_PAIR_PAIR:   op_pair_pair(sc);                             goto EVAL;         /* car is pair ((if x car cadr) ...) */
 	case OP_PAIR_ANY:    sc->value = car(sc->code);                    goto EVAL_ARGS_TOP;
 	case OP_PAIR_SYM:    sc->value = lookup_global(sc, car(sc->code)); goto EVAL_ARGS_TOP;
@@ -91429,7 +91435,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case goto_top_no_pop:    goto TOP_NO_POP;
 	case goto_eval_args_top: goto EVAL_ARGS_TOP;
 	case goto_eval:          goto EVAL;
-	case goto_start:         continue; /* sc->value has been set, this is OP_SYM|CON on the next pass */
+	case goto_start:         continue; /* sc->value has been set, this is OP_SYMBOL|CONSTANT on the next pass */
 	default:
 	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
 	  break;
@@ -93372,7 +93378,7 @@ static s7_pointer make_unique(s7_scheme *sc, const char* name, uint64_t typ)
   s7_pointer p;
   p = alloc_pointer(sc);
   set_full_type(p, typ | T_IMMUTABLE | T_UNHEAP);
-  set_optimize_op(p, OP_CON);
+  set_optimize_op(p, OP_CONSTANT);
   if (typ == T_UNDEFINED) /* sc->undefined here to avoid the undefined_constant_warning */
     {
       undefined_set_name_length(p, safe_strlen(name));
@@ -95156,7 +95162,7 @@ int main(int argc, char **argv)
  * dup        2579         3805   3788   2492   2373   2380
  * trclo      4073         2735   2574   2454   2451   2443
  * fbench     2827         2688   2583   2460   2460   2451
- * tcopy      2557         8035   5546   2539   2501   2501
+ * tcopy      2557         8035   5546   2539   2501   2501  2497
  * tmat       2684         3065   3042   2524   2520   2510
  * tauto      2750         ----   ----   2562   2546   2552
  * tb         3364         2735   2681   2612   2611   2610
@@ -95168,12 +95174,12 @@ int main(int argc, char **argv)
  * teq        3472         4068   4045   3536   3531   3469
  * tio        3679         3816   3752   3683   3680   3661
  * tobj       3730         4016   3970   3828   3701   3663
- * tclo       4538         4787   4735   4390   4398   4326
+ * tclo       4538         4787   4735   4390   4398   4326  4341 [lambda_star_set_args]
  * tcase      4475         4960   4793   4439   4426   4402
  * tlet       5277         7775   5640   4450   4434   4422
- * tmap       5495         8869   8774   4489   4500   4495
+ * tmap       5495         8869   8774   4489   4500   4498
  * tfft      114.9         7820   7729   4755   4652   4649
- * tshoot     6903         5525   5447   5183   5153   5137
+ * tshoot     6903         5525   5447   5183   5153   5137  5143 [char_position_p_ppi]
  * tform      8335         5357   5348   5307   5300   5305
  * tnum       56.6         6348   6013   5433   5406   5397
  * tstr       6123         6880   6342   5488   5488   5480
@@ -95184,7 +95190,7 @@ int main(int argc, char **argv)
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
  * tleft      9004         10.4   10.2   7657   7664   7613
- * tgc        9532         11.9   11.1   8177   8156   8089  8078
+ * tgc        9532         11.9   11.1   8177   8156   8078
  * thash      35.2         11.8   11.7   9734   9590   9581
  * cb         16.9         11.2   11.0   9658   9585   9635
  * tgen       12.6         11.2   11.4   12.0   11.9   11.9
@@ -95197,5 +95203,20 @@ int main(int argc, char **argv)
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
- * t725 to see error messages, t718
+ * t725 to see error messages
+ * gmp fft support?
+ * error if pending gc_mark of safe_list not in use and already marked (before any gc_marks)
+ *   so special cases like sc->y are useless if not-in-use safe-list is anywhere in sc->y
+ *   maybe if marked+safe-list+not-in-use then there's a problem (in debugging-mark-pair) -- or any !in_heap entry?
+ *     safe-list bit + check for consistency with in-use bit = check in mark, use T_VERY_SAFE_CLOSURE for safe_list mark?
+ *   is sc->y still needed?
+ *   t725 macro+rest args, :allow-other-keys, defaults define* etc
+ *   check that implicits are being tested -- they are not, any_c_np_mv add|multiply_sp_1 cl_sas
+ *      s_c|s safe_closure_s closure_fa safe_|closure_ss closure_sc closure_aa|saa|3s|na any_closure_mp(mv) most op_tc*
+ *      most op_recur* safe_|closure*_ka most implict*  apply let|iterator|hash-table sort* assoc some do* set_dilambda* set_with_let* if_b*
+ *      a few if* when|unless_s|a many and|or* named-let-no-vars|aa|na case* etc with-baffle
+ * for multithread s7: (with-s7 ((var database)...) . body)
+ *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
+ *   how to join? *s7-threads*? (current-s7), need to handle output
+ *   libpthread.scm
  */
