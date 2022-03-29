@@ -2622,6 +2622,11 @@ static void init_types(void)
 #define T_HAS_GX                       (1 << 10)
 #define has_gx(p)                      has_type1_bit(T_Pair(p), T_HAS_GX)
 #define set_has_gx(p)                  set_type1_bit(T_Pair(p), T_HAS_GX)
+#if S7_DEBUGGING
+  #define T_SAFE_LIST                  T_FULL_HAS_GX
+  #define is_safe_list(p)              has_type1_bit(T_Pair(p), T_SAFE_LIST)
+  #define set_is_safe_list(p)          set_type1_bit(T_Pair(p), T_SAFE_LIST)
+#endif
 
 #define T_FULL_UNKNOPT                 (1LL << (TYPE_BITS + BIT_ROOM + 35))
 #define T_UNKNOPT                      (1 << 11)
@@ -4316,7 +4321,7 @@ static const char* op_names[NUM_OPS] =
       "apply_ss", "apply_sa", "apply_sl", "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
       "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa",
-      "f", "f_a", "f_aa", "f_p", "f_p_1",
+      "f", "f_a", "f_aa", "f_np", "f_np_1",
 
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
@@ -4571,7 +4576,6 @@ void s7_show_stack(s7_scheme *sc)
 }
 
 #define UNUSED_BITS 0xfc00000000c0 /* high 6 bits of optimizer code + high 2 bits of type */
-/* #define OPTIMIZER_BITS 0xff0000000000 */
 
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S7_DEBUGGING in display_any (fallback for display_functions) */
 {
@@ -4758,7 +4762,6 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
 
 	  ((full_typ & UNUSED_BITS) != 0) ?      " unused bits set?" : "",
-	  /* (((full_typ & OPTIMIZER_BITS) != 0) && (is_simple_sequence(obj)) && (!is_pair(obj))) ? " optimizer-bits set" : "", */ /* op_constant etc */
 	  ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "",
 	  NULL);
 
@@ -4778,7 +4781,6 @@ static bool has_odd_bits(s7_pointer obj)
 {
   uint64_t full_typ = full_type(obj);
   if ((full_typ & UNUSED_BITS) != 0) return(true);
-  /* if (((full_typ & OPTIMIZER_BITS) != 0) && (!is_pair(obj)) && (is_simple_sequence(obj))) return(true); */
   if (((full_typ & T_MULTIFORM) != 0) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_KEYWORD) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_SYNTACTIC) != 0) && (!is_syntax(obj)) && (!is_pair(obj)) && (!is_normal_symbol(obj))) return(true);
@@ -6634,6 +6636,9 @@ static void mark_c_proc_star(s7_pointer p)
 
 static void mark_pair(s7_pointer p)
 {
+#if S7_DEBUGGING
+  if ((is_safe_list(p)) && (!list_is_in_use(p))) fprintf(stderr, "%s[%d]: safe list not in use but marked\n", __func__, __LINE__);
+#endif
   do {
     set_mark(p);
     gc_mark(car(p)); /* expanding this to avoid recursion is slower */
@@ -36594,23 +36599,6 @@ static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
   return(tp);
 }
 
-static s7_pointer copy_proper_list_with_arglist_error(s7_scheme *sc, s7_pointer lst)
-{
-  s7_pointer p, tp, np;
-  if (is_null(lst)) return(sc->nil);
-  if (!is_pair(lst))
-    s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "stray dot?: ~S", 14), lst));
-  sc->temp5 = lst;
-  tp = list_1(sc, car(lst));
-  sc->temp8 = tp;
-  for (p = cdr(lst), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
-    set_cdr(np, list_1(sc, car(p)));
-  sc->temp8 = sc->nil;
-  sc->temp5 = sc->nil;
-  if (!is_null(p))
-    s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), lst));
-  return(tp);
-}
 
 /* -------------------------------- proper-list? -------------------------------- */
 bool s7_is_proper_list(s7_scheme *sc, s7_pointer lst)
@@ -38424,7 +38412,12 @@ static s7_pointer make_safe_list(s7_scheme *sc, s7_int num_args)
     {
       sc->current_safe_list = num_args;
       if (!is_pair(sc->safe_lists[num_args]))
-	sc->safe_lists[num_args] = permanent_list(sc, num_args);
+	{
+	  sc->safe_lists[num_args] = permanent_list(sc, num_args);
+#if S7_DEBUGGING
+	  set_is_safe_list(sc->safe_lists[num_args]);
+#endif
+	}
       if (!list_is_in_use(sc->safe_lists[num_args]))
 	{
 	  set_list_in_use(sc->safe_lists[num_args]);
@@ -83022,6 +83015,12 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
       last_slot = let_slots(e);
       for (pars = cdr(pars); is_pair(pars); pars = cdr(pars))
 	last_slot = add_slot_at_end_no_local(sc, last_slot, car(pars), sc->undefined);
+      /* last par might be rest par (dotted) */
+      if (!is_null(pars))
+	{
+	  last_slot = add_slot_at_end_no_local(sc, last_slot, pars, sc->undefined);
+	  set_is_rest_slot(last_slot);
+	}
     }
   /* check_stack_size(sc); */
   if ((sc->stack_end + 4) >= sc->stack_resize_trigger) resize_stack(sc);
@@ -83037,27 +83036,44 @@ static bool op_f_np_1(s7_scheme *sc)
     {
       s7_pointer p, oslot = slot;
       for (p = sc->value; (is_pair(p)) && (tis_slot(slot)); p = cdr(p), oslot = slot, slot = next_slot(slot))
-	slot_set_value(slot, car(p));
+	if (is_rest_slot(slot))
+	  {
+	    slot_set_value(slot, copy_proper_list(sc, p));
+	    p = sc->nil;
+	    break;
+	  }
+	else slot_set_value(slot, car(p));
       if (is_pair(p))
 	s7_error(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
       slot = oslot; /* end up with good slot for checks and steps below */
     }
-  else slot_set_value(slot, sc->value);
+  else 
+    if (is_rest_slot(slot))
+      {
+	if (slot_value(slot) == sc->undefined)
+	  slot_set_value(slot, list_1(sc, sc->value));
+	else slot_set_value(slot, pair_append(sc, slot_value(slot), list_1(sc, sc->value)));
+      }
+    else slot_set_value(slot, sc->value);
   if (is_pair(arg))
     {
-      if (!tis_slot(next_slot(slot)))
+      if ((!tis_slot(next_slot(slot))) && (!is_rest_slot(slot)))
 	s7_error(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda ~S ...)~{~^ ~S~})", 46), cadar(sc->code), cdr(sc->code)));
-      stack_protected1(sc) = next_slot(slot);
+      stack_protected1(sc) = (is_rest_slot(slot)) ? slot : next_slot(slot);
       stack_protected2(sc) = cdr(arg);
       push_stack_direct(sc, OP_F_NP_1); /* sc->args=e, sc->code from start */
       sc->code = car(arg);
       return(true);
     }
   if (tis_slot(next_slot(slot)))
-    s7_error(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
+    {
+      if (is_rest_slot(next_slot(slot)))
+	slot_set_value(next_slot(slot), sc->nil);
+      else s7_error(sc, sc->wrong_number_of_args_symbol,
+		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
+    }
   e = sc->args;
   let_set_id(e, ++sc->let_number);
   set_curlet(sc, e);
@@ -88124,24 +88140,22 @@ static inline void op_c_s(s7_scheme *sc)
 static Inline void op_apply_ss(s7_scheme *sc)
 {
   sc->args = lookup(sc, opt2_sym(sc->code));
+  if (!s7_is_proper_list(sc, sc->args))
+    s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "apply: improper list of arguments: ~S", 37), sc->args));
   sc->code = lookup(sc, cadr(sc->code));      /* global search here was slower (e.g. tauto) */
   if (needs_copied_args(sc->code))
-    sc->args = copy_proper_list_with_arglist_error(sc, sc->args);
-  else
-    if (!s7_is_proper_list(sc, sc->args))     /* (apply + false) etc */
-      apply_list_error(sc, sc->args);
+    sc->args = copy_proper_list(sc, sc->args);
 }
 
 static void op_apply_sa(s7_scheme *sc)
 {
   s7_pointer p = cdr(sc->code);
   sc->args = fx_call(sc, cdr(p));
+  if (!s7_is_proper_list(sc, sc->args))
+    s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "apply: improper list of arguments: ~S", 37), sc->args));
   sc->code = lookup_global(sc, car(p));
   if (needs_copied_args(sc->code))
-    sc->args = copy_proper_list_with_arglist_error(sc, sc->args);
-  else
-    if (!s7_is_proper_list(sc, sc->args))     /* (apply + #f) etc */
-      apply_list_error(sc, sc->args);
+    sc->args = copy_proper_list(sc, sc->args);
 }
 
 static void op_apply_sl(s7_scheme *sc)
@@ -94350,7 +94364,12 @@ s7_scheme *s7_init(void)
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
-    sc->safe_lists[i] = permanent_list(sc, i);
+    {
+      sc->safe_lists[i] = permanent_list(sc, i);
+#if S7_DEBUGGING
+      set_is_safe_list(sc->safe_lists[i]);
+#endif
+    }
   for (i = NUM_SAFE_PRELISTS; i < NUM_SAFE_LISTS; i++)
     sc->safe_lists[i] = sc->nil;
   sc->current_safe_list = 0;
@@ -95205,18 +95224,12 @@ int main(int argc, char **argv)
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
  * gmp fft support?
- * error if pending gc_mark of safe_list not in use and already marked (before any gc_marks)
- *   so special cases like sc->y are useless if not-in-use safe-list is anywhere in sc->y
- *   maybe if marked+safe-list+not-in-use then there's a problem (in debugging-mark-pair) -- or any !in_heap entry?
- *     safe-list bit + check for consistency with in-use bit = check in mark, use T_VERY_SAFE_CLOSURE for safe_list mark?
- *   is sc->y still needed?
- *   t725 macro+rest args, :allow-other-keys, defaults define* etc
- *   check that implicits are being tested -- they are not, any_c_np_mv add|multiply_sp_1 cl_sas
- *      s_c|s safe_closure_s closure_fa safe_|closure_ss closure_sc closure_aa|saa|3s|na any_closure_mp(mv) most op_tc*
+ * t725 check that implicits are being tested -- they are not
+ *      any_c_np_mv add|multiply_sp_1 cl_sas s_c|s closure_fa closure_aa|saa|3s|na any_closure_mp(mv) most op_tc*
  *      most op_recur* safe_|closure*_ka most implict*  apply let|iterator|hash-table sort* assoc some do* set_dilambda* set_with_let* if_b*
- *      a few if* when|unless_s|a many and|or* named-let-no-vars|aa|na case* etc with-baffle
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
+ * t718
  */
