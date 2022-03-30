@@ -67868,7 +67868,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 
     case OP_C_AP_1:
       stack_element(sc->stack, top) = (s7_pointer)OP_C_AP_MV;
-      sc->value = args;
+      /* sc->value = args; */ /* removed 29-Mar-22 -- seems redundant */
       return(args);
 
     case OP_SAFE_CLOSURE_P_1:  case OP_CLOSURE_P_1: case OP_SAFE_CLOSURE_P_A_1:
@@ -83038,7 +83038,9 @@ static bool op_f_np_1(s7_scheme *sc)
       for (p = sc->value; (is_pair(p)) && (tis_slot(slot)); p = cdr(p), oslot = slot, slot = next_slot(slot))
 	if (is_rest_slot(slot))
 	  {
-	    slot_set_value(slot, copy_proper_list(sc, p));
+	    if (slot_value(slot) == sc->undefined)
+	      slot_set_value(slot, copy_proper_list(sc, p));
+	    else slot_set_value(slot, pair_append(sc, slot_value(slot), copy_proper_list(sc, p)));
 	    p = sc->nil;
 	    break;
 	  }
@@ -83046,7 +83048,7 @@ static bool op_f_np_1(s7_scheme *sc)
       if (is_pair(p))
 	s7_error(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
-      slot = oslot; /* end up with good slot for checks and steps below */
+      if (!tis_slot(slot)) slot = oslot; /* end up with good slot for checks and steps below */
     }
   else 
     if (is_rest_slot(slot))
@@ -83070,7 +83072,10 @@ static bool op_f_np_1(s7_scheme *sc)
   if (tis_slot(next_slot(slot)))
     {
       if (is_rest_slot(next_slot(slot)))
-	slot_set_value(next_slot(slot), sc->nil);
+	{
+	  if (slot_value(next_slot(slot)) == sc->undefined)
+	    slot_set_value(next_slot(slot), sc->nil);
+	}
       else s7_error(sc, sc->wrong_number_of_args_symbol,
 		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
     }
@@ -87970,13 +87975,11 @@ static void op_any_closure_np_end(s7_scheme *sc)
       id = ++sc->let_number;
       set_curlet(sc, closure_let(f));
       let_set_id(sc->curlet, id);
-      for (x = let_slots(sc->curlet), z = sc->args; tis_slot(x); x = next_slot(x))
+      for (x = let_slots(sc->curlet), z = sc->args; tis_slot(x); x = next_slot(x), z = cdr(z))
 	{
-	  s7_pointer nz = cdr(z);
 	  slot_set_value(x, car(z));
 	  symbol_set_local_slot(slot_symbol(x), id, x);
-	  free_cell(sc, z);
-	  z = nz;
+	  /* don't free sc->args -- it might be needed in the error below */
 	}
       if (tis_slot(x))
 	s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
@@ -87991,16 +87994,8 @@ static void op_any_closure_np_end(s7_scheme *sc)
       slot_set_next(last_slot, slot_end(sc));
       let_set_slots(e, last_slot);
       symbol_set_local_slot(car(p), id, last_slot);
-
-      z = cdr(sc->args);
-      free_cell(sc, sc->args);
-      for (p = cdr(p); is_pair(p); p = cdr(p))
-	{
-	  s7_pointer nz = cdr(z);
-	  last_slot = add_slot_at_end(sc, id, last_slot, car(p), car(z)); /* sets last_slot */
-	  free_cell(sc, z);
-	  z = nz;
-	}
+      for (p = cdr(p), z = cdr(sc->args); is_pair(p); p = cdr(p), z = cdr(z))
+	last_slot = add_slot_at_end(sc, id, last_slot, car(p), car(z)); /* sets last_slot, don't free sc->args -- used below */
       set_curlet(sc, e);
       sc->z = sc->nil;
       if (is_pair(p))
@@ -90258,7 +90253,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  sc->args = cons(sc, sc->value, sc->args);
 	  op_any_closure_np_end(sc);
 	  goto EVAL;
-	case OP_ANY_CLOSURE_NP_MV: /* this is probably an error */
+	case OP_ANY_CLOSURE_NP_MV: /* this is an error -- a values call confusing the optimizer's arg count */
 	  if (!(collect_np_args(sc, OP_ANY_CLOSURE_NP_MV, (is_multiple_value(sc->value)) ? revappend(sc, sc->value, sc->args) : cons(sc, sc->value, sc->args))))
 	    op_any_closure_np_end(sc);
 	  goto EVAL;
@@ -95171,30 +95166,30 @@ int main(int argc, char **argv)
  * tpeak       121          115    114    108    107    107
  * tref        508          691    687    463    458    458
  * index      1167         1026   1016    973    968    965
- * tmock      7737         1177   1165   1057   1060   1051
+ * tmock      7737         1177   1165   1057   1060   1055
  * tvect      1953         2519   2464   1772   1713   1713
  * texit      1806         ----   ----   1778   1757   1756
  * s7test     4533         1873   1831   1818   1813   1796
- * lt         2153         2187   2172   2150   2148   2143
- * timp       2232         2971   2891   2176   2206   2203
- * tread      2567         2440   2421   2419   2414   2370
- * dup        2579         3805   3788   2492   2373   2380
+ * lt         2153         2187   2172   2150   2148   2147
+ * timp       2232         2971   2891   2176   2206   2204
+ * tread      2567         2440   2421   2419   2414   2372
+ * dup        2579         3805   3788   2492   2373   2378
  * trclo      4073         2735   2574   2454   2451   2443
- * fbench     2827         2688   2583   2460   2460   2451
- * tcopy      2557         8035   5546   2539   2501   2501  2497
- * tmat       2684         3065   3042   2524   2520   2510
- * tauto      2750         ----   ----   2562   2546   2552
- * tb         3364         2735   2681   2612   2611   2610
+ * fbench     2827         2688   2583   2460   2460   2453
+ * tcopy      2557         8035   5546   2539   2501   2497
+ * tmat       2684         3065   3042   2524   2520   2507
+ * tauto      2750         ----   ----   2562   2546   2555
+ * tb         3364         2735   2681   2612   2611   2615
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
- * tmac       2949         3950   3873   3033   2998   2890
+ * tmac       2949         3950   3873   3033   2998   2892
  * tload      3718         ----   ----   3046   3042   3020
  * tset       3107         3253   3104   3048   3121   3108
- * teq        3472         4068   4045   3536   3531   3469
- * tio        3679         3816   3752   3683   3680   3661
+ * teq        3472         4068   4045   3536   3531   3468
+ * tio        3679         3816   3752   3683   3680   3662
  * tobj       3730         4016   3970   3828   3701   3663
- * tclo       4538         4787   4735   4390   4398   4326  4341 [lambda_star_set_args]
- * tcase      4475         4960   4793   4439   4426   4402
+ * tclo       4538         4787   4735   4390   4398   4339
+ * tcase      4475         4960   4793   4439   4426   4411
  * tlet       5277         7775   5640   4450   4434   4422
  * tmap       5495         8869   8774   4489   4500   4498
  * tfft      114.9         7820   7729   4755   4652   4649
@@ -95225,8 +95220,8 @@ int main(int argc, char **argv)
  * t725 to see error messages
  * gmp fft support?
  * t725 check that implicits are being tested -- they are not
- *      any_c_np_mv add|multiply_sp_1 cl_sas s_c|s closure_fa closure_aa|saa|3s|na any_closure_mp(mv) most op_tc*
- *      most op_recur* safe_|closure*_ka most implict*  apply let|iterator|hash-table sort* assoc some do* set_dilambda* set_with_let* if_b*
+ *      add|multiply_sp_1 cl_sas s_c|s closure_fa closure_aa|saa|3s|na safe_|closure*_ka most implict*
+ *      apply let|iterator|hash-table sort* assoc some do* set_dilambda* set_with_let* if_b*
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
