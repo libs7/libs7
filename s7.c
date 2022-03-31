@@ -37787,6 +37787,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       if (!s7_is_aritable(sc, eq_func, 2))
 	return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string));
       if (is_null(x)) return(sc->F);
+      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) clear_all_optimizations(sc, closure_body(eq_func));
       y = list_1(sc, copy_proper_list(sc, args));
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
@@ -38203,6 +38204,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
       if (!s7_is_aritable(sc, eq_func, 2))
 	return(wrong_type_argument_with_type(sc, sc->member_symbol, 3, eq_func, an_eq_func_string));
       if (is_null(x)) return(sc->F);
+      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) clear_all_optimizations(sc, closure_body(eq_func));
       y = list_1(sc, copy_proper_list(sc, args)); /* this could probably be handled with a counter cell (cdr here is unused) */
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
@@ -41874,6 +41876,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
     return(wrong_type_argument_with_type(sc, sc->sort_symbol, 2, lessp, a_normal_procedure_string));
   if (!s7_is_aritable(sc, lessp, 2))
     return(wrong_type_argument_with_type(sc, sc->sort_symbol, 2, lessp, an_eq_func_string));
+  if ((is_any_macro(lessp)) && (!is_c_macro(lessp))) clear_all_optimizations(sc, closure_body(lessp));
 
   sort_func = NULL;
   sc->sort_f = NULL;
@@ -77491,6 +77494,10 @@ static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op, s7_pointer form
   if (!is_pair(cdr(sc->code)))                                        /* (define-macro (...)) */
     syntax_error_with_caller(sc, "~A ~A, but no body?", 19, caller, mac_name);
 
+  if (s7_list_length(sc, cdr(sc->code)) < 0)                          /* (define-macro (hi) 1 . 2) */
+    s7_error(sc, sc->syntax_error_symbol,
+	     set_elist_3(sc, wrap_string(sc, "~A: macro body messed up, ~A", 28), caller, sc->code));
+
   args = cdar(sc->code);
   if ((!is_list(args)) &&
       (!is_symbol(args)))
@@ -77505,7 +77512,7 @@ static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op, s7_pointer form
 			  set_elist_3(sc, wrap_string(sc, "~A parameter name, ~A, is not a symbol", 38), caller, car(args))));
       check_lambda_args(sc, cdar(sc->code), NULL, form);
     }
-  else set_cdar(sc->code, check_lambda_star_args(sc, cdar(sc->code), NULL, form));
+  else set_cdar(sc->code, check_lambda_star_args(sc, args, NULL, form));
   return(sc->code);
 }
 
@@ -77514,26 +77521,31 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
   s7_pointer args, caller;
   caller = cur_op_to_caller(sc, op);
 
-  if (!is_pair(sc->code))                                             /* (define-macro . 1) */
-    syntax_error_with_caller(sc, "~A name missing (stray dot?): ~A", 32, caller, sc->code);
-  if (!is_pair(cdr(sc->code)))                                        /* (define-macro (...)) */
-    syntax_error_with_caller(sc, "(~A ~A) has no body?", 20, caller, car(sc->code));
+  if (!is_pair(sc->code)) /* sc->code = cdr(form) */                  /* (macro) or (macro . 1) */
+    syntax_error_with_caller(sc, "~S: ~S has no parameters or body?", 33, caller, form);
+  if (!is_pair(cdr(sc->code)))                                        /* (macro (a)) */
+    syntax_error_with_caller(sc, "~S: ~S has no body?", 19, caller, form);
 
   args = car(sc->code);
   if ((!is_list(args)) &&
       (!is_symbol(args)))
-    return(s7_error(sc, sc->syntax_error_symbol,                      /* (define-macro (mac . 1) ...) */
-		    set_elist_2(sc, wrap_string(sc, "macro argument list is ~S?", 26), args)));
+    return(s7_error(sc, sc->syntax_error_symbol,                      /* (macro #(0) ...) */
+		    set_elist_2(sc, wrap_string(sc, "macro parameter list is ~S?", 27), args)));
 
   if ((op == OP_MACRO) || (op == OP_BACRO))
     {
       for (; is_pair(args); args = cdr(args))
 	if (!is_symbol(car(args)))
-	  return(s7_error(sc, sc->syntax_error_symbol,                /* (define-macro (mac 1) ...) */
+	  return(s7_error(sc, sc->syntax_error_symbol,                /* (macro (1) ...) */
 			  set_elist_3(sc, wrap_string(sc, "~A parameter name, ~A, is not a symbol", 38), caller, car(args))));
       check_lambda_args(sc, car(sc->code), NULL, form);
     }
-  else set_car(sc->code, check_lambda_star_args(sc, car(sc->code), NULL, form));
+  else set_car(sc->code, check_lambda_star_args(sc, args, NULL, form));
+
+  if (s7_list_length(sc, cdr(sc->code)) < 0)                          /* (macro () 1 . 2) */
+    s7_error(sc, sc->syntax_error_symbol,
+	     set_elist_3(sc, wrap_string(sc, "~A: macro body messed up, ~A", 28), caller, form));
+
   return(sc->code);
 }
 
@@ -77544,7 +77556,7 @@ static void op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
   if ((!is_pair(sc->code)) || (!mac_is_ok(sc->code))) /* (macro)? or (macro . #\a)? */
     {
       check_macro(sc, sc->cur_op, form);
-      if (is_pair(sc->code)) set_mac_is_ok(sc->code);
+      set_mac_is_ok(sc->code);
     }
   sc->value = make_macro(sc, sc->cur_op, false);
 }
@@ -83048,7 +83060,7 @@ static bool op_f_np_1(s7_scheme *sc)
       if (is_pair(p))
 	s7_error(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
-      if (!tis_slot(slot)) slot = oslot; /* end up with good slot for checks and steps below */
+      slot = oslot; /* snd-test 22 grani */
     }
   else 
     if (is_rest_slot(slot))
@@ -87695,7 +87707,7 @@ static void op_cl_fa(s7_scheme *sc)
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
 
-static void op_map_for_each_fa(s7_scheme *sc)
+static inline void op_map_for_each_fa(s7_scheme *sc)
 {
   s7_pointer f = cddr(sc->code), code = sc->code;
   sc->value = fx_call(sc, f);
@@ -88581,8 +88593,13 @@ static inline bool eval_args_last_arg(s7_scheme *sc)
   return(false);
 }
 
-static void op_pair_pair(s7_scheme *sc)
+static bool op_pair_pair(s7_scheme *sc)
 {
+  if (!is_pair(car(sc->code)))
+    {
+      clear_optimize_op(sc->code);
+      return(false);
+    }
   if (sc->stack_end >= (sc->stack_resize_trigger - 8))
     {
       check_for_cyclic_code(sc, sc->code);
@@ -88592,6 +88609,7 @@ static void op_pair_pair(s7_scheme *sc)
   /* don't put check_stack_size here! */
   push_stack_no_args(sc, OP_EVAL_ARGS, car(sc->code));
   sc->code = caar(sc->code);
+  return(true);
 }
 
 static goto_t trailers(s7_scheme *sc)
@@ -90419,7 +90437,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_UNOPT:       goto UNOPT;
 	case OP_SYMBOL:      sc->value = lookup_checked(sc, sc->code);     continue;
 	case OP_CONSTANT:    sc->value = sc->code;                         continue;
-	case OP_PAIR_PAIR:   op_pair_pair(sc);                             goto EVAL;         /* car is pair ((if x car cadr) ...) */
+	case OP_PAIR_PAIR:   if (op_pair_pair(sc)) goto EVAL;              continue;         /* car is pair ((if x car cadr) ...) */
 	case OP_PAIR_ANY:    sc->value = car(sc->code);                    goto EVAL_ARGS_TOP;
 	case OP_PAIR_SYM:    sc->value = lookup_global(sc, car(sc->code)); goto EVAL_ARGS_TOP;
 
@@ -95193,38 +95211,38 @@ int main(int argc, char **argv)
  * tlet       5277         7775   5640   4450   4434   4422
  * tmap       5495         8869   8774   4489   4500   4498
  * tfft      114.9         7820   7729   4755   4652   4649
- * tshoot     6903         5525   5447   5183   5153   5137  5143 [char_position_p_ppi]
- * tform      8335         5357   5348   5307   5300   5305
+ * tshoot     6903         5525   5447   5183   5153   5143
+ * tform      8335         5357   5348   5307   5300   5317
  * tnum       56.6         6348   6013   5433   5406   5397
  * tstr       6123         6880   6342   5488   5488   5480
- * tlamb      5799         6423   6273   5720   ----   5606
+ * tlamb      5799         6423   6273   5720   ----   5593
  * tgsl       25.2         8485   7802   6373   6373   6324
  * tmisc      6892         8869   7612   6435   6331   6335
  * tlist      6505         7896   7546   6558   6532   6490
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
- * tleft      9004         10.4   10.2   7657   7664   7613
- * tgc        9532         11.9   11.1   8177   8156   8078
+ * tleft      9004         10.4   10.2   7657   7664   7612
+ * tgc        9532         11.9   11.1   8177   8156   8080
  * thash      35.2         11.8   11.7   9734   9590   9581
- * cb         16.9         11.2   11.0   9658   9585   9635
- * tgen       12.6         11.2   11.4   12.0   11.9   11.9
+ * cb         16.9         11.2   11.0   9658   9585   9659
+ * tgen       12.6         11.2   11.4   12.0   11.9   12.0
  * tall       24.5         15.6   15.6   15.6   15.6   15.6
- * calls      55.8         36.7   37.5   37.0   37.0   37.1
- * sg         76.1         ----   ----   55.9   55.8   55.9
- * lg        105.6         ----   ----  105.2  105.4  105.0
- * tbig      600.4        177.4  175.8  156.5  152.5  152.4
+ * calls      55.8         36.7   37.5   37.0   37.0   37.2
+ * sg         76.1         ----   ----   55.9   55.8   56.0
+ * lg        105.6         ----   ----  105.2  105.4  105.1
+ * tbig      600.4        177.4  175.8  156.5  152.5  152.5
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * gmp fft support?
  * t725 check that implicits are being tested -- they are not
- *      add|multiply_sp_1 cl_sas s_c|s closure_fa closure_aa|saa|3s|na safe_|closure*_ka most implict*
- *      apply let|iterator|hash-table sort* assoc some do* set_dilambda* set_with_let* if_b*
+ *      add|multiply_sp_1 cl_sas s_c|s closure_fa closure_aa|saa|3s closure*_ka [most implict*]
+ *      apply let|iterator|hash-table sort* assoc do* set_dilambda* set_with_let* if_b*
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
- * t718
+ * op_pair_pair t718 (mac opt?) -- clear_all_opts then set some flag for that
+ *   or if not pair_pair clear -- but where to go from there? top_no_pop
  */
