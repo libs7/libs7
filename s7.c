@@ -3354,8 +3354,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_macro_call(f)                (T_CMac(f))->object.fnc.ff
 #define c_macro_name(f)                c_macro_data(f)->name
 #define c_macro_name_length(f)         c_macro_data(f)->name_length
-#define c_macro_required_args(f)       (T_CMac(f))->object.fnc.required_args
-#define c_macro_all_args(f)            (T_CMac(f))->object.fnc.all_args
+#define c_macro_min_args(f)       (T_CMac(f))->object.fnc.required_args
+#define c_macro_max_args(f)            (T_CMac(f))->object.fnc.all_args
 #define c_macro_setter(f)              T_Prc(c_macro_data(f)->setter)
 #define c_macro_set_setter(f, Val)     c_macro_data(f)->setter = T_Prc(Val)
 
@@ -10426,6 +10426,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	set_is_definer(mac_name);            /* (list-values 'define ...) aux-13 */
     }
 
+  /* PERHAPS: if rest/dotted arg list, don't optimize */
   if ((!is_either_bacro(mac)) &&
       (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
     clear_all_optimizations(sc, body);
@@ -44994,7 +44995,7 @@ static bool is_dwind_thunk(s7_scheme *sc, s7_pointer x)
     case T_C_FUNCTION_STAR:
       return(c_function_max_args(x) >= 0);
     case T_C_MACRO:
-      return((c_macro_required_args(x) <= 0) && (c_macro_all_args(x) >= 0));
+      return((c_macro_min_args(x) <= 0) && (c_macro_max_args(x) >= 0));
     case T_GOTO: case T_CONTINUATION: case T_C_RST_NO_REQ_FUNCTION:
       return(true);
     }
@@ -45677,7 +45678,7 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
       return(closure_star_arity_to_cons(sc, x, closure_args(x)));
 
     case T_C_MACRO:
-      return(cons(sc, make_integer(sc, c_macro_required_args(x)), make_integer(sc, c_macro_all_args(x))));
+      return(cons(sc, make_integer(sc, c_macro_min_args(x)), make_integer(sc, c_macro_max_args(x))));
 
     case T_GOTO: case T_CONTINUATION:
       return(cons(sc, int_zero, max_arity));
@@ -45772,8 +45773,8 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
       return(closure_star_is_aritable(sc, x, closure_args(x), args));
 
     case T_C_MACRO:
-      return((c_macro_required_args(x) <= args) &&
-	     (c_macro_all_args(x) >= args));
+      return((c_macro_min_args(x) <= args) &&
+	     (c_macro_max_args(x) >= args));
 
     case T_GOTO: case T_CONTINUATION:
       return(true);
@@ -45843,7 +45844,7 @@ static int32_t arity_to_int(s7_scheme *sc, s7_pointer x)
       args = closure_star_arity_to_int(sc, x);
       return((args < 0) ? MAX_ARITY : args);
 
-    case T_C_MACRO:  return(c_macro_all_args(x));
+    case T_C_MACRO:  return(c_macro_max_args(x));
     case T_C_OBJECT: return(MAX_ARITY);
       /* do vectors et al make sense here? */
     }
@@ -77580,7 +77581,10 @@ static inline bool op_macro_d(s7_scheme *sc, uint8_t typ)
   sc->value = lookup(sc, car(sc->code));
   if (type(sc->value) != typ)                 /* for-each (etc) called a macro before, now it's something else -- a very rare case */
     return(unknown_any(sc, sc->value, sc->code));
-  sc->args = cdr(sc->code);                   /* sc->args = copy_proper_list(sc, cdr(sc->code)); */
+
+  sc->args = cdr(sc->code); /* sc->args = copy_proper_list(sc, cdr(sc->code)); */ 
+  /* TODO: this is wrong if arglist dotted etc -- need to set arity at opt time */
+  
   sc->code = sc->value;                       /* the macro */
   check_stack_size(sc);                       /* (define-macro (f) (f)) (f) */
   push_stack_op_let(sc, OP_EVAL_MACRO);
@@ -77657,9 +77661,9 @@ static void macroexpand_c_macro(s7_scheme *sc) /* callgrind shows this when it's
 {
   s7_int len;
   len = proper_list_length(sc->args);
-  if (len < c_macro_required_args(sc->code))
+  if (len < c_macro_min_args(sc->code))
     s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
-  if (c_macro_all_args(sc->code) < len)
+  if (c_macro_max_args(sc->code) < len)
     s7_error(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
   sc->value = c_macro_call(sc->code)(sc, sc->args);
 }
@@ -78871,13 +78875,18 @@ static bool op_set_with_let_1(s7_scheme *sc)
   if (!is_pair(cdr(sc->args)))           /* (set! (with-let e) ...) */
     s7_error(sc, sc->syntax_error_symbol,
 	     set_elist_3(sc, wrap_string(sc, "with-let in (set! (with-let ~S) ~$) has no symbol to set?", 57), car(sc->args), sc->value));
+
   e = car(sc->args);
   b = cadr(sc->args);
+  if (is_multiple_value(x))              /* (set! (with-let lt) (values 1 2)) */
+    s7_error(sc, sc->syntax_error_symbol, 
+	     set_elist_4(sc, wrap_string(sc, "can't (set! (with-let ~S ~S) (values ~{~S~^ ~})): too many values", 65), e, b, x));
+
   if (is_symbol(e))
     {
       if (is_symbol(b))
 	{
-	  e = lookup_checked(sc, e); /* the let */
+	  e = lookup_checked(sc, e);     /* the let */
 	  if (!is_let(e))
 	    wrong_type_argument_with_type(sc, sc->let_set_symbol, 1, e, a_let_string);
 	  sc->value = let_set_1(sc, e, b, x);
@@ -82831,10 +82840,10 @@ static void apply_c_macro(s7_scheme *sc)  	            /* -------- C-based macro
 {
   s7_int len;
   len = proper_list_length(sc->args);
-  if (len < c_macro_required_args(sc->code))
+  if (len < c_macro_min_args(sc->code))
     s7_error(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
-  if (c_macro_all_args(sc->code) < len)
+  if (c_macro_max_args(sc->code) < len)
     s7_error(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
   sc->code = c_macro_call(sc->code)(sc, sc->args);
@@ -83032,8 +83041,7 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
 	{
 	  last_slot = add_slot_at_end_no_local(sc, last_slot, pars, sc->undefined);
 	  set_is_rest_slot(last_slot);
-	}
-    }
+	}}
   /* check_stack_size(sc); */
   if ((sc->stack_end + 4) >= sc->stack_resize_trigger) resize_stack(sc);
   push_stack(sc, OP_GC_PROTECT, let_slots(e), cddr(sc->code)); /* not for gc-protection, but as implicit loop vars */
@@ -88204,8 +88212,9 @@ static bool eval_args_no_eval_args(s7_scheme *sc)
 	{
 	  if (is_macro(sc->value))
 	    set_optimize_op(sc->code, OP_MACRO_D);
-	  if (is_macro_star(sc->value))
-	    set_optimize_op(sc->code, OP_MACRO_STAR_D);
+	  else
+	    if (is_macro_star(sc->value))
+	      set_optimize_op(sc->code, OP_MACRO_STAR_D);
 	}
       sc->code = sc->value;
       return(true);
@@ -88609,6 +88618,17 @@ static bool op_pair_pair(s7_scheme *sc)
   /* don't put check_stack_size here! */
   push_stack_no_args(sc, OP_EVAL_ARGS, car(sc->code));
   sc->code = caar(sc->code);
+  return(true);
+}
+
+static bool op_pair_sym(s7_scheme *sc)
+{
+  if (!is_symbol(car(sc->code)))
+    {
+      clear_optimize_op(sc->code);
+      return(false);
+    }
+  sc->value = lookup_global(sc, car(sc->code)); 
   return(true);
 }
 
@@ -90439,7 +90459,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CONSTANT:    sc->value = sc->code;                         continue;
 	case OP_PAIR_PAIR:   if (op_pair_pair(sc)) goto EVAL;              continue;         /* car is pair ((if x car cadr) ...) */
 	case OP_PAIR_ANY:    sc->value = car(sc->code);                    goto EVAL_ARGS_TOP;
-	case OP_PAIR_SYM:    sc->value = lookup_global(sc, car(sc->code)); goto EVAL_ARGS_TOP;
+	case OP_PAIR_SYM:    if (op_pair_sym(sc)) goto EVAL_ARGS_TOP;      continue;
 
 	case OP_EVAL_ARGS1: sc->args = cons(sc, sc->value, sc->args); goto EVAL_ARGS;
 	case OP_EVAL_ARGS2: op_eval_args2(sc); goto APPLY; /* sc->value is the last arg, [so if is_null(cdr(sc->code) and current is pair, push args2] */
@@ -95184,20 +95204,20 @@ int main(int argc, char **argv)
  * tpeak       121          115    114    108    107    107
  * tref        508          691    687    463    458    458
  * index      1167         1026   1016    973    968    965
- * tmock      7737         1177   1165   1057   1060   1055
+ * tmock      7737         1177   1165   1057   1060   1051
  * tvect      1953         2519   2464   1772   1713   1713
  * texit      1806         ----   ----   1778   1757   1756
  * s7test     4533         1873   1831   1818   1813   1796
- * lt         2153         2187   2172   2150   2148   2147
+ * lt         2153         2187   2172   2150   2148   2144
  * timp       2232         2971   2891   2176   2206   2204
- * tread      2567         2440   2421   2419   2414   2372
+ * tread      2567         2440   2421   2419   2414   2374
  * dup        2579         3805   3788   2492   2373   2378
  * trclo      4073         2735   2574   2454   2451   2443
- * fbench     2827         2688   2583   2460   2460   2453
+ * fbench     2827         2688   2583   2460   2460   2451
  * tcopy      2557         8035   5546   2539   2501   2497
- * tmat       2684         3065   3042   2524   2520   2507
- * tauto      2750         ----   ----   2562   2546   2555
- * tb         3364         2735   2681   2612   2611   2615
+ * tmat       2684         3065   3042   2524   2520   2523
+ * tauto      2750         ----   ----   2562   2546   2553
+ * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
  * tmac       2949         3950   3873   3033   2998   2892
@@ -95206,13 +95226,13 @@ int main(int argc, char **argv)
  * teq        3472         4068   4045   3536   3531   3468
  * tio        3679         3816   3752   3683   3680   3662
  * tobj       3730         4016   3970   3828   3701   3663
- * tclo       4538         4787   4735   4390   4398   4339
- * tcase      4475         4960   4793   4439   4426   4411
+ * tclo       4538         4787   4735   4390   4398   4342
+ * tcase      4475         4960   4793   4439   4426   4407
  * tlet       5277         7775   5640   4450   4434   4422
  * tmap       5495         8869   8774   4489   4500   4498
  * tfft      114.9         7820   7729   4755   4652   4649
  * tshoot     6903         5525   5447   5183   5153   5143
- * tform      8335         5357   5348   5307   5300   5317
+ * tform      8335         5357   5348   5307   5300   5313
  * tnum       56.6         6348   6013   5433   5406   5397
  * tstr       6123         6880   6342   5488   5488   5480
  * tlamb      5799         6423   6273   5720   ----   5593
@@ -95224,25 +95244,23 @@ int main(int argc, char **argv)
  * tleft      9004         10.4   10.2   7657   7664   7612
  * tgc        9532         11.9   11.1   8177   8156   8080
  * thash      35.2         11.8   11.7   9734   9590   9581
- * cb         16.9         11.2   11.0   9658   9585   9659
+ * cb         16.9         11.2   11.0   9658   9585   9655
  * tgen       12.6         11.2   11.4   12.0   11.9   12.0
  * tall       24.5         15.6   15.6   15.6   15.6   15.6
  * calls      55.8         36.7   37.5   37.0   37.0   37.2
  * sg         76.1         ----   ----   55.9   55.8   56.0
- * lg        105.6         ----   ----  105.2  105.4  105.1
+ * lg        105.6         ----   ----  105.2  105.4  105.0
  * tbig      600.4        177.4  175.8  156.5  152.5  152.5
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * t725 check that implicits are being tested -- they are not
- *      add|multiply_sp_1 cl_sas s_c|s closure_fa closure_aa|saa|3s closure*_ka [most implict*]
- *      apply let|iterator|hash-table sort* assoc do* set_dilambda* set_with_let* if_b*
+ * t725 (set!-)implicits cl_sas s_c|s apply let|iterator|hash-table sort* assoc do* set_dilambda* if_b*
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
- * op_pair_pair t718 (mac opt?) -- clear_all_opts then set some flag for that
- *   or if not pair_pair clear -- but where to go from there? top_no_pop
+ * 77579 macro problems are probably all uncopied arglist in op_macro_d -- need to split or set arity at optimization time if OP_MACRO(*)_D
+ *   sc->args = copy_proper_list(sc, cdr(sc->code));
  */
