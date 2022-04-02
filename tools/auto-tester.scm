@@ -123,6 +123,7 @@
 (set! (setter kar) (lambda (sym e) (error 'oops "kar not settable: ~A" ostr)))
 (define-constant _1234_ 1234)
 (define-constant _dilambda_ (dilambda (lambda (x) (+ x 1)) (lambda (x y) (+ x y))))
+(define-constant _dl_ (let ((x #f)) (dilambda (lambda () x) (lambda (y) (set! x y)))))
 (define __var2__ 3)
 (set! (setter '__var2__) (let ((+signature+ '(boolean? #t))) (lambda (s v) (if (integer? v) v 3))))
 (define _definee_ #f)
@@ -177,6 +178,62 @@
 (define (_h2_ x) (vector-ref x 1))
 (define (_ff_ x y) (+ (_h1_ x) (_h2_ y)))
 (define (tff) (_ff_ (vector 1 2) (vector 3 4))) ; c_ff
+(define (fop4 x y)       ; apply_ss
+  (apply x y))
+(define (fop5 x y)       ; apply_sl
+  (apply x (list y)))
+(define (fop6 x y)       ; apply_sa
+  (apply x (cons y ())))
+(define (fop7 x) (display x) (+ x 1))
+(define (tf7 y) (fop7 y))
+(define (fop8 x y) (display x) (+ x y))
+(define (tf8 y) (fop8 y y))
+(define (fop9 x y)
+  (display x)
+  (values x y))
+(define (tf9 y)
+  (let ((x 1))
+    (fop9 x y)))
+(define (tf10 x)
+  (fop9 x 1))
+(define fop13 ; op_closure_na
+  (let ((L1 (list 1 2 3))
+	(V1 (vector 1 2 3))
+	(S1 "123")
+	(H1 (hash-table 1 1 2 2 3 3))
+	(E1 (inlet :a 1 :b 2)))
+    (lambda (i s L V S H E)
+      (vector (L (+ i 1)) (V (+ i 1)) (S (+ i 1)) (H (+ i 1)) (E (string->symbol s))))))
+(define (tf13 x)
+  (fop13 x "a" L1 V1 S1 H1 E1) (vector 2 2 #\2 1 1))
+(define* (fop14 par) ; safe_closure*_ka
+  (+ par 1))
+(define (tf14 x)
+  (fop14 :par x))
+(define (fop15 f a) ; op_closure_fa
+  (f a))
+(define (tf15 y)
+  (fop15 (lambda (x) (+ x 1)) y))
+(define* (fop16 par)  ; closure_star_ka
+  (fop16-1 par))
+(define (tf16 x)
+  (fop16 :par x))
+(define (fop16-1 x) x)
+(define (fop17 a b c) ; closure_3s
+  (fop17-1 (+ a 1) b c))
+(define (tf17 x)
+  (fop17 x x x))
+(define (tf18 x)      ; closure_saa
+  (fop17 x (+ x 1) (* x 2)))
+(define (fop17-1 a b c)
+  (+ a b c))
+(define (fop19 a b)   ; closure_aa
+  (display a #f)
+  (fop19-1 a (+ b 1)))
+(define (tf19 x)
+  (fop19 (* x 2) (+ x 1)))
+(define (fop19-1 x y)
+  (+ x y))
 
 (define (sym1 . a) (copy a))
 (define (sym2 a . b) (cons a (copy b)))
@@ -184,6 +241,13 @@
 (define* (sym4 :rest a) (copy a))
 (define* (sym5 a :rest b) (cons a (copy b)))
 (define* (sym6 a b :rest c) (list a b (copy c)))
+
+(define-macro (msym1 . a) `(copy ,a))
+(define-macro (msym2 a . b) `(cons ,a (copy ,b))) ; these are confusing!
+(define-macro (msym3 a b . c) `(list ,a ,b (copy ,c)))
+(define-macro* (msym4 :rest a) `(copy ,a))
+(define-macro* (msym5 a :rest b) `(cons ,a (copy ,b)))
+(define-macro* (msym6 a b :rest c) `(list ,a ,b (copy ,c)))
 
 (define (s7-print-length) (*s7* 'print-length))
 (define (s7-max-string-length) (*s7* 'max-string-length))
@@ -211,10 +275,12 @@
 
 (define-macro (_mac_ x) `(+ ,x 1))
 (define-macro* (_mac*_ (x 1)) `(+ ,x 1))
+(define-macro* (_mac1*_ (x 1) :allow-other-keys) `(+ ,x 1))
 (define-bacro (_bac_ x) `(+ ,x 1))
 (define-bacro* (_bac*_ (x 1)) `(+ ,x 1))
 (define (_fnc_ x) (+ x 1))
 (define* (_fnc*_ (x 1)) (+ x 1))
+(define* (_fnc1*_ (x 1) :allow-other-keys) (+ x 1))
 (define (_fnc1_ x) (apply + (list x 1)))
 (define (_fnc2_ x) (- x 1))
 (define (_fnc3_ x) (* x 2.0))
@@ -333,12 +399,13 @@
 (define-expansion (_ct2_ . args)
   `(catch 'oops (lambda () (call-with-exit (lambda (goto) (goto ,@args)))) (lambda args 'error)))
 
+#|
 (define-expansion (_mem1_ . args)
   `(member 1 (list 3 2) (lambda (a b) ,@args)))
 
 (define-expansion (_mem2_ . args)
   `(assoc 1 (list (list 3 2) (list 2)) (lambda (a b) ,@args)))
-
+|#
 
 (define-expansion (_ft1_ . args)
   `(let ((_f_ (lambda () ,@args))) (_f_) (_f_)))
@@ -760,7 +827,7 @@
 			  'tree-memq 'tree-set-memq 'tree-count 'tree-leaves
 			  'tree-cyclic?
                           'require
-			  'else '_mac_ '_mac*_ '_bac_ '_bac*_ 
+			  'else '_mac_ '_mac*_ '_bac_ '_bac*_ '_mac1*_ '_fnc1*_
 			  '_fnc_ '_fnc*_ '_fnc1_ '_fnc2_ '_fnc3_ '_fnc4_ '_fnc5_ ;'_fnc6_
 			  '=>
 			  
@@ -826,8 +893,8 @@
 			  'kar '_dilambda_ '_vals_ '_vals1_ '_vals2_ 
                           '_vals3_ '_vals4_ '_vals5_ '_vals6_ '_vals3s_ '_vals4s_ '_vals5s_ '_vals6s_ 
                           '_svals3_ '_svals4_ '_svals5_ '_svals6_ '_svals3s_ '_svals4s_ '_svals5s_ '_svals6s_ 
-			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6
-			  'fop1 'fop2 'fop3 'tff
+			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6 'msym1 'msym2 'msym3 'msym4 'msym5 'msym6
+			  'fop1 'fop2 'fop3 'tff 'fop4 'fop5 'fop6 'tf7 'tf8 'tf9 'tf10 'tf13 'tf14 'tf15 'tf16 'tf17 'tf18 'tf19
 			  'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
 			  ;'linter
@@ -866,9 +933,10 @@
 		    "(dilambda (lambda () 1) (lambda (a) a))" "quasiquote" "macroexpand" "(lambda* ((a 1) (b 2)) (+ a b))" 
 		    "(dilambda (lambda args args) (lambda args args))" "(dilambda (lambda* (a b) a) (lambda* (a b c) c))"
 		    "((lambda (a) (+ a 1)) 2)" "((lambda* ((a 1)) (+ a 1)) 1)" "(lambda (a) (values a (+ a 1)))" "((lambda (a) (values a (+ a 1))) 2)"
-		    "(lambda (a . b) (cons a b))" "(lambda* (a . b) (cons a b))" "(lambda (a b . c) (reverse! c))"
+		    "(lambda a (copy a))" "(lambda (a . b) (cons a b))" "(lambda* (a . b) (cons a b))" "(lambda (a b . c) (list a b c))"
 		    "(define-macro (_m1_ a) `(+ ,a 1))" "(define-bacro (_b1_ a) `(* ,a 2))"
 		    "(macro (a) `(+ ,a 1))" "(bacro (a) `(* ,a 2))" "(macro* (a (b 1)) `(+ ,a ,b))" "(bacro* (a (b 2)) `(* ,a ,b))"
+		    "(macro a `(copy ,a))" "(macro (a . b) `(cons ,a ,b))" "(macro* (a . b) `(cons ,a ,b))" "(macro (a b . c) `(list a b ,c))"
 		    "(string #\\c #\\null #\\b)" "#2d((100 200) (3 4))" "#r(0 1)" "#i2d((101 201) (3 4))" "#r2d((.1 .2) (.3 .4))" "#i1d(15 25)"
 		    "(values 1 2)" "(values)" "(values #\\c 3 1.2)" "(values \"ho\")" "(values 1 2 3 4 5 6 7 8 9 10)" "(values (define b1 3))"
 		    "(apply values (make-list 128 1/2))"
@@ -1038,8 +1106,8 @@
 		    "(make-vector 3 #<eof> eof-object?)" "(make-vector (make-list 256 1))"
 		    "(make-vector 3 '(1) pair?)"
 		    "(make-vector 3 :rest keyword?)"
-		    "(make-vector '(2 3) boolean?)"
-		    "(make-vector '(2 3) symbol?)"
+		    "(make-vector '(2 3) #f boolean?)"
+		    "(make-vector '(2 3) 'a symbol?)"
 		    "(make-hash-table 8 #f (cons symbol? integer?))"
 		    "(let ((i 32)) (set! (setter 'i) integer?) (curlet))"
 
@@ -1139,6 +1207,12 @@
                     (lambda (s) (string-append "(_do2_ " s ")")))
 	      (list (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call-with-exit (lambda (goto) (goto 1))) " s "))")) 
                     (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call/cc (lambda (goto) (goto 1))) " s "))")))
+	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let lt a) " s "))"))
+		    (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (lt 'a) " s "))")))
+	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let (curlet) a) " s "))"))
+		    (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (lt 'a) " s "))")))
+	      (list (lambda (s) (string-append "(set! (_dl_) " s ")"))
+		    (lambda (s) (string-append "(let ((v (vector 0))) (set! (v 0) " s "))")))
 	      (list (lambda (s) (string-append "(let ((x 1)) (immutable! 'x) (begin " s "))")) 
                     (lambda (s) (string-append "((lambda* ((x 1)) (immutable! 'x) " s "))")))
 	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((= j 1)) " s "))")) 
@@ -1576,4 +1650,3 @@
 ;;; (let () ((lambda () str))) (let () (define _f_ (lambda () str)) (_f_))
 ;;; (let _f_ ((x #f) (i 0)) str)
 ;;; (do ((x #f) (i 0) (_k_ str)) ((= i 0) _k_))
-

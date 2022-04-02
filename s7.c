@@ -43860,7 +43860,7 @@ static void check_hash_types(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
 	  if (type_ok == sc->F)
 	    {
 	      const char *descr;
-	      descr = hash_table_typer_name(sc, hash_table_value_typer(table));
+	      descr = hash_table_typer_name(sc, hash_table_key_typer(table));
 	      s7_error(sc, sc->wrong_type_arg_symbol,
 		       set_elist_4(sc, wrap_string(sc, "hash-table-set! second argument ~$, is ~A, but the hash-table's key type checker, ~A, rejects it", 96),
 				   key, type_name_string(sc, key), wrap_string(sc, descr, safe_strlen(descr))));
@@ -77576,14 +77576,23 @@ static void op_define_macro(s7_scheme *sc)
 static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code);
 static void apply_macro_star_1(s7_scheme *sc);
 
+static opcode_t fixup_macro_d(s7_scheme *sc, opcode_t op, s7_pointer mac)
+{
+  if (closure_arity_unknown(mac))
+    closure_set_arity(mac, s7_list_length(sc, closure_args(mac)));
+  return(op);
+}
+
 static inline bool op_macro_d(s7_scheme *sc, uint8_t typ)
 {
   sc->value = lookup(sc, car(sc->code));
   if (type(sc->value) != typ)                 /* for-each (etc) called a macro before, now it's something else -- a very rare case */
     return(unknown_any(sc, sc->value, sc->code));
 
-  sc->args = cdr(sc->code); /* sc->args = copy_proper_list(sc, cdr(sc->code)); */ 
-  /* TODO: this is wrong if arglist dotted etc -- need to set arity at opt time */
+  /* it's probably safer to always copy the list here, but that costs 4-5% in tmac, whereas this costs 3% -- maybe not worth the code? */
+  if (closure_arity(sc->value) <= 0)
+    sc->args = copy_proper_list(sc, cdr(sc->code));
+  else sc->args = cdr(sc->code); 
   
   sc->code = sc->value;                       /* the macro */
   check_stack_size(sc);                       /* (define-macro (f) (f)) (f) */
@@ -79046,8 +79055,7 @@ static void op_set_pws(s7_scheme *sc)
 	obj = slot_value(obj);
       else no_setter_error(sc, obj); /* unhittable -- we only get here if obj is a globally known c_function */
     }
-  if ((is_c_function(obj)) &&
-      (is_procedure(c_function_setter(obj))))
+  if ((is_c_function(obj)) && (is_procedure(c_function_setter(obj))))
     {
       s7_pointer value = cadr(code);
       if (is_symbol(value))
@@ -83636,23 +83644,23 @@ static Inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code)
 
 static void op_closure_star_ka(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer val, p, func = opt1_lambda(code);
-  val = fx_call(sc, cddr(code));
+  s7_pointer p, func = opt1_lambda(code);
+  sc->value = fx_call(sc, cddr(code));
   p = car(closure_args(func));
-  sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
+  sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value);
   sc->code = T_Pair(closure_body(func));
 }
 
 static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer val, p, func = opt1_lambda(code);
-  val = fx_call(sc, cdr(code));
-  if ((is_symbol_and_keyword(val)) &&
+  s7_pointer p, func = opt1_lambda(code);
+  sc->value = fx_call(sc, cdr(code));
+  if ((is_symbol_and_keyword(sc->value)) &&
       (!sc->accept_all_keyword_arguments))
     s7_error(sc, sc->wrong_type_arg_symbol, 
-	     set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), val, code));
+	     set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), sc->value, code));
   p = car(closure_args(func));
-  sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, val);
+  sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value);
   if (closure_star_arity_to_int(sc, func) > 1)
     {
       s7_pointer last_slot = let_slots(sc->curlet);
@@ -88211,10 +88219,10 @@ static bool eval_args_no_eval_args(s7_scheme *sc)
       if (is_symbol(car(sc->code))) /* not ((f p) args...) where (f p) has returned a macro, op_macro_d assumes car is a symbol */
 	{
 	  if (is_macro(sc->value))
-	    set_optimize_op(sc->code, OP_MACRO_D);
+	    set_optimize_op(sc->code, fixup_macro_d(sc, OP_MACRO_D, sc->value));
 	  else
 	    if (is_macro_star(sc->value))
-	      set_optimize_op(sc->code, OP_MACRO_STAR_D);
+	      set_optimize_op(sc->code, fixup_macro_d(sc, OP_MACRO_STAR_D, sc->value));
 	}
       sc->code = sc->value;
       return(true);
@@ -88759,8 +88767,8 @@ static bool op_unknown(s7_scheme *sc)
 
     case T_GOTO:       return(fixup_unknown_op(code, f, OP_IMPLICIT_GOTO));
     case T_ITERATOR:   return(fixup_unknown_op(code, f, OP_IMPLICIT_ITERATE));
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       if ((is_symbol(car(code))) &&
@@ -88943,8 +88951,8 @@ static bool op_unknown_g(s7_scheme *sc)
       fx_annotate_arg(sc, cdr(code), sc->curlet);
       return(fixup_unknown_op(code, f, OP_IMPLICIT_CONTINUATION_A));
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       break;
@@ -89008,8 +89016,8 @@ static bool op_unknown_a(s7_scheme *sc)
     case T_HASH_TABLE:   return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_A));
     case T_GOTO:         return(fixup_unknown_op(code, f, OP_IMPLICIT_GOTO_A));
     case T_CONTINUATION: return(fixup_unknown_op(code, f, OP_IMPLICIT_CONTINUATION_A));
-    case T_MACRO:        return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR:   return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:        return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR:   return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     case T_LET:
       {
@@ -89152,8 +89160,8 @@ static bool op_unknown_gg(s7_scheme *sc)
       fx_annotate_args(sc, cdr(code), sc->curlet);
       return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       break;
@@ -89228,8 +89236,8 @@ static bool op_unknown_ns(s7_scheme *sc)
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
       /* vector/pair */
     default:
@@ -89303,8 +89311,8 @@ static bool op_unknown_aa(s7_scheme *sc)
 
     case T_PAIR:       return(fixup_unknown_op(code, f, OP_IMPLICIT_PAIR_REF_AA));
     case T_HASH_TABLE: return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       break;
@@ -89433,8 +89441,8 @@ static bool op_unknown_na(s7_scheme *sc)
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
       /* implicit vector doesn't happen */
 
     default:
@@ -89527,8 +89535,8 @@ static bool op_unknown_np(s7_scheme *sc)
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, OP_MACRO_D));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, OP_MACRO_STAR_D));
+    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
     }
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
@@ -95220,7 +95228,7 @@ int main(int argc, char **argv)
  * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
- * tmac       2949         3950   3873   3033   2998   2892
+ * tmac       2949         3950   3873   3033   2998   2892  2986 [3034 if always copied]
  * tload      3718         ----   ----   3046   3042   3020
  * tset       3107         3253   3104   3048   3121   3108
  * teq        3472         4068   4045   3536   3531   3468
@@ -95256,11 +95264,10 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * t725 (set!-)implicits cl_sas s_c|s apply let|iterator|hash-table sort* assoc do* set_dilambda* if_b*
+ * t725 (set!-)implicits s_c let|iterator|hash-table sort* do* set_dilambda* if_b*
+ *   safe_c_ff safe_closure_sc|3s|3s_a safe_closure*aa any_closure_np
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
- * 77579 macro problems are probably all uncopied arglist in op_macro_d -- need to split or set arity at optimization time if OP_MACRO(*)_D
- *   sc->args = copy_proper_list(sc, cdr(sc->code));
  */
