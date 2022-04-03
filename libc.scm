@@ -1,7 +1,6 @@
 ;;; libc.scm
 ;;;
 ;;; tie the C library into the *libc* environment
-
 (provide 'libc.scm)
 
 ;; if loading from a different directory, pass that info to C
@@ -1758,6 +1757,8 @@
                     int res, flags;
                     regex_t *regexp;
                     const char *str;
+                    if (!s7_is_string(s7_cadr(args))) return(s7_wrong_type_arg_error(sc, \"regcomp\", 2, s7_cadr(args), \"string\"));
+                    if (!s7_is_integer(s7_caddr(args))) return(s7_wrong_type_arg_error(sc, \"regcomp\", 3, s7_caddr(args), \"integer\"));
                     regexp = (regex_t *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"regex_t*\"), __func__, 1);
                     str = (const char *)s7_string(s7_cadr(args));
                     flags = s7_integer(s7_caddr(args));
@@ -1774,6 +1775,9 @@
                     s7_pointer subs;
                     s7_int *els;
 
+                    if (!s7_is_string(s7_cadr(args))) return(s7_wrong_type_arg_error(sc, \"regexec\", 2, s7_cadr(args), \"string\"));
+                    if (!s7_is_integer(s7_caddr(args))) return(s7_wrong_type_arg_error(sc, \"regexec\", 3, s7_caddr(args), \"integer\"));
+                    if (!s7_is_integer(s7_cadddr(args))) return(s7_wrong_type_arg_error(sc, \"regexec\", 4, s7_cadddr(args), \"integer\"));
                     regexp = (regex_t *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"regex_t*\"), __func__, 1);
                     str = (const char *)s7_string(s7_cadr(args));
                     nmatches = s7_integer(s7_caddr(args));

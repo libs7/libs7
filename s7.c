@@ -55106,6 +55106,7 @@ static s7_pointer fx_subtract_aa(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x1, x2;
   x1 = fx_call(sc, cdr(arg));
+  sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
   if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) - real(x2)));
   return(subtract_p_pp(sc, x1, x2));
@@ -55115,6 +55116,7 @@ static s7_pointer fx_add_aa(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x1, x2;
   x1 = fx_call(sc, cdr(arg));
+  sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
   if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) + real(x2)));
   return(add_p_pp(sc, x1, x2));
@@ -55124,6 +55126,7 @@ static s7_pointer fx_multiply_aa(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x1, x2;
   x1 = fx_call(sc, cdr(arg));
+  sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
   if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) * real(x2)));
   return(multiply_p_pp(sc, x1, x2));
@@ -62310,14 +62313,8 @@ static s7_pointer opt_p_pp_ff(opt_info *o)
 {
   s7_scheme *sc = o->sc;
   s7_pointer result;
-#if 0
-  gc_protect_2_via_stack(sc, o->v[11].fp(o->v[10].o1), o->v[9].fp(o->v[8].o1));
+  gc_protect_2_via_stack(sc, o->v[11].fp(o->v[10].o1), o->v[9].fp(o->v[8].o1)); /* we do need to protect both */
   result = o->v[3].p_pp_f(sc, stack_protected1(sc), stack_protected2(sc));
-#else
-  /* faster, but maybe less safe? */
-  gc_protect_via_stack(sc, o->v[11].fp(o->v[10].o1));
-  result = o->v[3].p_pp_f(sc, stack_protected1(sc), o->v[9].fp(o->v[8].o1));
-#endif
   unstack(sc);
   return(result);
 }
@@ -70110,7 +70107,6 @@ static bool fxify_closure_a(s7_scheme *sc, s7_pointer func, bool one_form, bool 
 	  {
 	    fx_annotate_arg(sc, body, e);
 	    set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_A_A);
-
 	    if ((is_pair(car(body))) &&
 		(optimize_op(car(body)) == HOP_SAFE_C_SC) &&
 		(car(closure_args(func)) == cadar(body)))
@@ -70118,6 +70114,7 @@ static bool fxify_closure_a(s7_scheme *sc, s7_pointer func, bool one_form, bool 
 		s7_pointer body_arg2 = caddar(body);
 		set_opt3_con(cdr(expr), (is_pair(body_arg2)) ? cadr(body_arg2) : body_arg2);
 		set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_A_TO_SC);
+		/* why is this setting expr whereas _s case above sets cdr(expr)? */
 		if ((caar(body) == sc->vector_ref_symbol) && (is_global(sc->vector_ref_symbol)))
 		  set_fx_direct(expr, fx_safe_closure_a_to_vref);
 		else set_fx_direct(expr, fx_safe_closure_a_to_sc);
@@ -83446,10 +83443,38 @@ static void apply_macro_star_1(s7_scheme *sc)
   sc->code = T_Pair(closure_body(sc->code));
 }
 
+static void clear_absolutely_all_optimizations(s7_pointer p)
+{
+  if ((is_pair(p)) && (!is_matched_pair(p)))
+    {
+      clear_has_fx(p);
+      clear_optimized(p);
+      clear_optimize_op(p);
+      set_match_pair(p);
+      clear_absolutely_all_optimizations(cdr(p));
+      clear_absolutely_all_optimizations(car(p));
+    }
+}
+
+static void clear_matches(s7_pointer p)
+{
+  if ((is_pair(p)) && (is_matched_pair(p)))
+    {
+      clear_match_pair(p);
+      clear_matches(car(p));
+      clear_matches(cdr(p));
+    }
+}
+
 static void apply_macro(s7_scheme *sc)
 {
   /* this is not from the reader, so treat expansions here as normal macros */
   check_stack_size(sc);
+  if (closure_arity_to_int(sc, sc->code) < 0)
+    {
+      clear_absolutely_all_optimizations(sc->args); /* desperation... */
+      clear_matches(sc->args);
+    }
   push_stack_op_let(sc, OP_EVAL_MACRO);
   sc->curlet = make_let(sc, closure_let(sc->code)); /* closure_let -> sc->curlet, sc->code is the macro */
   transfer_macro_info(sc, sc->code);
@@ -95228,7 +95253,7 @@ int main(int argc, char **argv)
  * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
- * tmac       2949         3950   3873   3033   2998   2892  2986 [3034 if always copied]
+ * tmac       2949         3950   3873   3033   2998   2892  2986 [3034 if always copied], 2991 with clear
  * tload      3718         ----   ----   3046   3042   3020
  * tset       3107         3253   3104   3048   3121   3108
  * teq        3472         4068   4045   3536   3531   3468
