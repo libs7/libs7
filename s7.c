@@ -3006,7 +3006,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 {
   if (id < symbol_id(p))
     {
-      fprintf(stderr, "id mismatch: sym: %s %" ld64 ", let: %" ld64 "\n", symbol_name(p), symbol_id(p), id);
+      fprintf(stderr, "%s[%d]: id mismatch: sym: %s %" ld64 ", let: %" ld64 "\n", __func__, __LINE__, symbol_name(p), symbol_id(p), id);
       abort();
     }
   (T_Sym(p))->object.sym.id = id;
@@ -3074,9 +3074,9 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_simply_set_pending_value(p, Val) (T_Slt(p))->object.slt.pending_value = T_Nmv(Val)
 #if S7_DEBUGGING
 static s7_pointer slot_pending_value(s7_pointer p) \
-  {if (slot_has_pending_value(p)) return(p->object.slt.pending_value); fprintf(stderr, "slot: no pending value\n"); abort();}
+  {if (slot_has_pending_value(p)) return(p->object.slt.pending_value); fprintf(stderr, "%s[%d]: slot: no pending value\n", __func__, __LINE__); abort();}
 static s7_pointer slot_expression(s7_pointer p)    \
-  {if (slot_has_expression(p)) return(p->object.slt.expr); fprintf(stderr, "slot: no expression\n"); abort();}
+  {if (slot_has_expression(p)) return(p->object.slt.expr); fprintf(stderr, "%s[%d]: slot: no expression\n", __func__, __LINE__); abort();}
 #else
 #define slot_pending_value(p)          (T_Slt(p))->object.slt.pending_value
 #define slot_expression(p)             (T_Slt(p))->object.slt.expr
@@ -3113,7 +3113,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define let_outlet(p)                  T_Lid((T_Let(p))->object.envr.nxt)
 #define let_set_outlet(p, ol)          (T_Let(p))->object.envr.nxt = T_Lid(ol)
 #if S7_DEBUGGING
-  #define let_set_slots(p, Slot)       do {if ((!in_heap(p)) && (Slot) && (in_heap(Slot))) fprintf(stderr, "let+slot mismatch\n"); \
+  #define let_set_slots(p, Slot)       do {if ((!in_heap(p)) && (Slot) && (in_heap(Slot))) fprintf(stderr, "%s[%d]: let+slot mismatch\n", __func__, __LINE__); \
                                            T_Let(p)->object.envr.slots = T_Sln(Slot);} while (0)
   #define C_Let(p, role)               check_let_ref(p, role, __func__, __LINE__)
   #define S_Let(p, role)               check_let_set(p, role, __func__, __LINE__)
@@ -3754,7 +3754,7 @@ static void try_to_call_gc(s7_scheme *sc);
 #define new_cell_no_check(Sc, Obj, Type)		    \
   do {							    \
     Obj = (*(--(Sc->free_heap_top)));			    \
-    if (Sc->free_heap_top < Sc->free_heap) {fprintf(stderr, "free heap exhausted\n"); abort();}\
+    if (Sc->free_heap_top < Sc->free_heap) {fprintf(stderr, "%s[%d]: free heap exhausted\n", __func__, __LINE__); abort();}\
     Obj->debugger_bits = 0; Obj->gc_func = NULL;	    \
     set_full_type(Obj, Type);				    \
     } while (0)
@@ -4098,7 +4098,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, OP_MACRO_D, OP_MACRO_STAR_D,
       OP_WITH_IO, OP_WITH_IO_1, OP_WITH_OUTPUT_TO_STRING, OP_WITH_IO_C, OP_CALL_WITH_OUTPUT_STRING,
-      OP_S, OP_S_S, OP_S_C, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA,
+      OP_S, OP_S_G, OP_S_A, OP_S_AA, OP_A_A, OP_A_AA, OP_P_S, OP_P_S_1, OP_MAP_FOR_EACH_FA, OP_MAP_FOR_EACH_FAA,
       OP_F, OP_F_A, OP_F_AA, OP_F_NP, OP_F_NP_1,
 
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
@@ -4320,7 +4320,7 @@ static const char* op_names[NUM_OPS] =
 
       "apply_ss", "apply_sa", "apply_sl", "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
-      "s", "s_s", "s_c", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa",
+      "s", "s_g", "s_a", "s_aa", "a_a", "a_aa", "p_s", "p_s_1", "map_for_each_fa", "map_for_each_faa",
       "f", "f_a", "f_aa", "f_np", "f_np_1",
 
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
@@ -5258,7 +5258,6 @@ static void base_opt1(s7_pointer p, uint64_t role)
 
 static s7_pointer set_opt1_1(s7_pointer p, s7_pointer x, uint64_t role)
 {
-  /* if ((opt1_role_matches(p, OPT1_LAMBDA)) && (role != OPT1_LAMBDA)) fprintf(stderr, "reset opt1_lambda to %s\n", opt1_role_name(role)); */
   p->object.cons.opt1 = x;
   base_opt1(p, role);
   return(x);
@@ -11690,7 +11689,6 @@ static void call_with_exit(s7_scheme *sc)
 
   /* the return value should have an implicit values call, just as in call/cc */
   sc->value = (is_null(sc->args)) ? sc->nil : ((is_null(cdr(sc->args))) ? car(sc->args) : splice_in_values(sc, sc->args));
-
   if (quit > 0)
     {
       if (sc->longjmp_ok)
@@ -68286,7 +68284,7 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
       }
     s7_gc_protect_via_stack(sc, sc->w);
 
-    check_free_heap_size(sc, len);
+    check_free_heap_size(sc, len + 1);
     sc->w = sc->nil;
     for (i = 0; i <= len; i++)
       sc->w = cons_unchecked(sc, sc->nil, sc->w);
@@ -70341,7 +70339,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
 	}}
 
   /* unknown_* for other cases is set later(? -- we're getting eval-args...) */
-  /* op_safe_c_p for (< (values 1 2 3)) op_s_s for (op arg) op_s_c for (op 'x) or (op 1) also op_s_a
+  /* op_safe_c_p for (< (values 1 2 3)) op_s_s for (op arg)
    *   but is it better to wait for unknown* ?  These are not hit often at this point (except in s7test).
    *   do they end up in op_s_a or whatever after unknown*?
    */
@@ -83209,12 +83207,10 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 		       * this has become much trickier than I anticipated...
 		       */
 		      if (allow_other_keys)
-			{
-			  /* in CL: (defun hi (&key (a 1) &allow-other-keys) a) (hi :b :a :a 3) -> 3
-			   * in s7: (define* (hi (a 1) :allow-other-keys) a)    (hi :b :a :a 3) -> 3
-			   */
-			  arg_vals = cddr(arg_vals);
-			}
+			/* in CL: (defun hi (&key (a 1) &allow-other-keys) a) (hi :b :a :a 3) -> 3
+			 * in s7: (define* (hi (a 1) :allow-other-keys) a)    (hi :b :a :a 3) -> 3
+			 */
+			arg_vals = cddr(arg_vals);
 		      else
 			{
 			  if (!sc->accept_all_keyword_arguments)
@@ -87476,7 +87472,7 @@ static void op_safe_c_ssp_mv(s7_scheme *sc)
   sc->code = c_function_base(opt1_cfunc(sc->code));
 }
 
-static inline void op_s(s7_scheme *sc)
+static void op_s(s7_scheme *sc)
 {
   sc->code = lookup(sc, car(sc->code));
   if (!is_applicable(sc->code))
@@ -87484,17 +87480,7 @@ static inline void op_s(s7_scheme *sc)
   sc->args = sc->nil; /* op_s -> apply, so we'll apply sc->code to sc->args */
 }
 
-static s7_pointer op_s_c(s7_scheme *sc)
-{
-  s7_pointer code = sc->code;
-  sc->code = lookup_checked(sc, car(code));
-  if (!is_applicable(sc->code))
-    apply_error(sc, sc->code, cdr(code));
-  sc->args = (needs_copied_args(sc->code)) ? list_1(sc, cadr(code)) : set_plist_1(sc, cadr(code));
-  return(NULL);
-}
-
-static Inline bool op_s_s(s7_scheme *sc)
+static bool op_s_g(s7_scheme *sc)
 {
   s7_pointer code = sc->code;
   sc->code = lookup_checked(sc, car(code));
@@ -87502,15 +87488,20 @@ static Inline bool op_s_s(s7_scheme *sc)
       (c_function_min_args(sc->code) == 1) &&
       (!needs_copied_args(sc->code)))
     {
-      sc->value = c_function_call(sc->code)(sc, with_list_t1(lookup(sc, cadr(code))));
+      sc->value = c_function_call(sc->code)(sc, with_list_t1((is_symbol(cadr(code))) ? lookup_checked(sc, cadr(code)) : cadr(code)));
       return(true); /* continue */
     }
   if (!is_applicable(sc->code))
     apply_error(sc, sc->code, cdr(code));
   if (dont_eval_args(sc->code))
-    sc->args = cdr(code); /* list_1(sc, cadr(code)); */ /* ?? */
-  else sc->args = (needs_copied_args(sc->code)) ? list_1(sc, lookup(sc, cadr(code))) : set_plist_1(sc, lookup(sc, cadr(code)));
-  return(false); /* goto APPLY; */
+    sc->args = cdr(code);
+  else 
+    {
+      s7_pointer val;
+      val = (is_symbol(cadr(code))) ? lookup_checked(sc, cadr(code)) : cadr(code);
+      sc->args = (needs_copied_args(sc->code)) ? list_1(sc, val) : set_plist_1(sc, val);
+    }
+  return(false);
 }
 
 static bool op_x_a(s7_scheme *sc, s7_pointer f)
@@ -88765,7 +88756,6 @@ static bool op_unknown(s7_scheme *sc)
 	      s7_pointer body = closure_body(f);
 	      bool safe_case = is_safe_closure(f);
 	      set_opt1_lambda(code, f);
-
 	      if (is_null(cdr(body)))
 		{
 		  if ((safe_case) && (is_fxable(sc, car(body))))
@@ -88841,10 +88831,10 @@ static bool op_unknown_g(s7_scheme *sc)
   if ((sym_case) &&
       (!is_any_macro(f)) &&   /* if f is a macro, its argument can be unbound legitimately */
       (!is_slot(lookup_slot_from(cadr(code), sc->curlet))))
-    return(unknown_unknown(sc, sc->code, (is_normal_symbol(cadr(sc->code))) ? OP_CLEAR_OPTS : OP_S_C)); /* not OP_S_S here! */
+    return(unknown_unknown(sc, sc->code, (is_normal_symbol(cadr(sc->code))) ? OP_CLEAR_OPTS : OP_S_G));
 
   if ((is_unknopt(code)) && (!is_closure(f)))
-    return(fixup_unknown_op(code, f, (sym_case) ? OP_S_S : OP_S_C));
+    return(fixup_unknown_op(code, f, OP_S_G));
 
   switch (type(f))
     {
@@ -88884,7 +88874,7 @@ static bool op_unknown_g(s7_scheme *sc)
 	  /* code here might be (f x) where f is passed elsewhere as a function parameter,
 	   *   first time through we look it up, find a safe-closure and optimize as (say) safe_closure_s_a,
 	   *   next time it is something else, etc.  Rather than keep optimizing it locally, we need to
-	   *   back out: safe_closure_s_* -> safe_closure_s -> closure_s -> op_s_s.  Ideally we'd know
+	   *   back out: safe_closure_s_* -> safe_closure_s -> closure_s -> op_s_g.  Ideally we'd know
 	   *   this was a parameter or whatever.  The tricky case is local letrec(f) calling f which initially
 	   *   thinks it is not safe, then later is set safe correctly, now outer func is called again,
 	   *   this time f is safe, and we're ok from then on.
@@ -88893,14 +88883,14 @@ static bool op_unknown_g(s7_scheme *sc)
 	    {
 	      switch (op_no_hop(code))
 		{
-		case OP_CLOSURE_S:              set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S :  OP_S_S); break;
+		case OP_CLOSURE_S:              set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S :  OP_S_G); break;
 		case OP_CLOSURE_S_O:
 		case OP_SAFE_CLOSURE_S:         set_optimize_op(code, OP_CLOSURE_S); break;
 		case OP_SAFE_CLOSURE_S_O:
 		case OP_SAFE_CLOSURE_S_A:
 		case OP_SAFE_CLOSURE_S_TO_S:
 		case OP_SAFE_CLOSURE_S_TO_SC:   set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S : OP_CLOSURE_S); break;
-		default:                        set_optimize_op(code, OP_S_S); break;
+		default:                        set_optimize_op(code, OP_S_G); break;
 		}
 	      set_opt1_lambda(code, f);
 	      return(true);
@@ -88985,7 +88975,7 @@ static bool op_unknown_g(s7_scheme *sc)
   if ((is_symbol(car(code))) &&
       (!is_slot(lookup_slot_from(car(code), sc->curlet))))
     unbound_variable_error(sc, car(code));
-  return(fixup_unknown_op(code, f, (sym_case) ? OP_S_S : OP_S_C));
+  return(fixup_unknown_op(code, f, OP_S_G));
 }
 
 static bool op_unknown_a(s7_scheme *sc)
@@ -90028,10 +90018,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_C: if (!c_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S); goto EVAL;}
 	case HOP_C: sc->value = fn_proc(sc->code)(sc, sc->nil); continue;
 
-	case OP_C_S: if (!c_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S_S); goto EVAL;}
+	case OP_C_S: if (!c_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S_G); goto EVAL;}
 	case HOP_C_S: op_c_s(sc); continue;
 
-	case OP_READ_S: if (!c_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S_S); goto EVAL;}
+	case OP_READ_S: if (!c_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S_G); goto EVAL;}
 	case HOP_READ_S: op_read_s(sc); continue;
 
 	case OP_C_A: if (!c_function_is_ok(sc, sc->code)) {set_optimize_op(sc->code, OP_S_A); goto EVAL;}
@@ -90080,15 +90070,14 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CALL_WITH_OUTPUT_STRING: op_call_with_output_string(sc); goto BEGIN;
 
 
-	case OP_S:     op_s(sc);       goto APPLY;
-	case OP_S_C:   op_s_c(sc);     goto APPLY;
-	case OP_S_S:   if (op_s_s(sc)) continue;  goto APPLY;
-	case OP_F:     op_f(sc);       goto BEGIN;
-	case OP_F_A:   op_f_a(sc);     goto BEGIN;
-	case OP_F_AA:  op_f_aa(sc);    goto BEGIN;
-	case OP_F_NP:  op_f_np(sc);    goto EVAL;
+	case OP_F:    op_f(sc);    goto BEGIN;
+	case OP_F_A:  op_f_a(sc);  goto BEGIN;
+	case OP_F_AA: op_f_aa(sc); goto BEGIN;
+	case OP_F_NP: op_f_np(sc); goto EVAL;
 	case OP_F_NP_1: if (op_f_np_1(sc)) goto EVAL; goto BEGIN;
 
+	case OP_S:    op_s(sc); goto APPLY;
+	case OP_S_G:  if (op_s_g(sc)) continue; goto APPLY;
 	case OP_S_A:  if (op_x_a(sc, lookup_checked(sc, car(sc->code)))) continue; goto APPLY;
 	case OP_A_A:  if (op_x_a(sc, fx_call(sc, sc->code))) continue;             goto APPLY;
 	case OP_S_AA: op_x_aa(sc, lookup_checked(sc, car(sc->code)));              goto APPLY;
@@ -94864,7 +94853,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 920)
+  if (NUM_OPS != 919)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95236,10 +95225,10 @@ int main(int argc, char **argv)
  * -------------------------------------------------------------
  * tpeak       121          115    114    108    107    107
  * tref        508          691    687    463    458    458
- * index      1167         1026   1016    973    968    965
+ * index      1167         1026   1016    973    968    965   969 [clear]
  * tmock      7737         1177   1165   1057   1060   1051
  * tvect      1953         2519   2464   1772   1713   1713
- * texit      1806         ----   ----   1778   1757   1756
+ * texit      1806         ----   ----   1778   1757   1756  1761 [s_g]
  * s7test     4533         1873   1831   1818   1813   1796
  * lt         2153         2187   2172   2150   2148   2144
  * timp       2232         2971   2891   2176   2206   2204
@@ -95249,18 +95238,18 @@ int main(int argc, char **argv)
  * fbench     2827         2688   2583   2460   2460   2451
  * tcopy      2557         8035   5546   2539   2501   2497
  * tmat       2684         3065   3042   2524   2520   2523
- * tauto      2750         ----   ----   2562   2546   2553
+ * tauto      2750         ----   ----   2562   2546   2553  2586 [s_g] 2569 [c_func]
  * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
- * tmac       2949         3950   3873   3033   2998   2892  2986 [3034 if always copied], 2991 with clear
+ * tmac       2949         3950   3873   3033   2998   2990
  * tload      3718         ----   ----   3046   3042   3020
- * tset       3107         3253   3104   3048   3121   3108
+ * tset       3107         3253   3104   3048   3121   3108  3142
  * teq        3472         4068   4045   3536   3531   3468
- * tio        3679         3816   3752   3683   3680   3662
+ * tio        3679         3816   3752   3683   3680   3662  3646
  * tobj       3730         4016   3970   3828   3701   3663
  * tclo       4538         4787   4735   4390   4398   4342
- * tcase      4475         4960   4793   4439   4426   4407
+ * tcase      4475         4960   4793   4439   4426   4407  4436 [s_g]
  * tlet       5277         7775   5640   4450   4434   4422
  * tmap       5495         8869   8774   4489   4500   4498
  * tfft      114.9         7820   7729   4755   4652   4649
@@ -95268,29 +95257,28 @@ int main(int argc, char **argv)
  * tform      8335         5357   5348   5307   5300   5313
  * tnum       56.6         6348   6013   5433   5406   5397
  * tstr       6123         6880   6342   5488   5488   5480
- * tlamb      5799         6423   6273   5720   ----   5593
+ * tlamb      5799         6423   6273   5720   ----   5593  5630 [macro_d]
  * tgsl       25.2         8485   7802   6373   6373   6324
  * tmisc      6892         8869   7612   6435   6331   6335
- * tlist      6505         7896   7546   6558   6532   6490
+ * tlist      6505         7896   7546   6558   6532   6490  6497
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6834
  * tleft      9004         10.4   10.2   7657   7664   7612
- * tgc        9532         11.9   11.1   8177   8156   8080
+ * tgc        9532         11.9   11.1   8177   8156   8080  8063
  * thash      35.2         11.8   11.7   9734   9590   9581
- * cb         16.9         11.2   11.0   9658   9585   9655
+ * cb         16.9         11.2   11.0   9658   9585   9655  9661 [s_g] 9658 [c_func]
  * tgen       12.6         11.2   11.4   12.0   11.9   12.0
  * tall       24.5         15.6   15.6   15.6   15.6   15.6
  * calls      55.8         36.7   37.5   37.0   37.0   37.2
  * sg         76.1         ----   ----   55.9   55.8   56.0
- * lg        105.6         ----   ----  105.2  105.4  105.0
- * tbig      600.4        177.4  175.8  156.5  152.5  152.5
+ * lg        105.6         ----   ----  105.2  105.4  105.0 104.9
+ * tbig      600.4        177.4  175.8  156.5  152.5  152.5 152.4
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * t725 (set!-)implicits s_c let|iterator|hash-table sort* do* set_dilambda* if_b*
- *   safe_c_ff safe_closure_sc|3s|3s_a safe_closure*aa any_closure_np
+ * t725 (set!-)implicits let|iterator|hash-table do* set_dilambda* if_b* safe_c_ff safe_closure_sc safe_closure*aa
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
