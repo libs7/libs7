@@ -33557,12 +33557,17 @@ static s7_pointer closure_name(s7_scheme *sc, s7_pointer closure)
 static s7_pointer pair_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
   s7_pointer p = cdr(a), tp, np;
-  if (is_null(p)) return(cons(sc, car(a), b));
-  tp = list_1(sc, car(a));
-  gc_protect_via_stack(sc, tp);
-  for (np = tp; is_pair(p); p = cdr(p), np = cdr(np))
-    set_cdr(np, list_1(sc, car(p)));
-  set_cdr(np, b);
+  gc_protect_via_stack(sc, b);
+  if (is_null(p)) 
+    tp = cons(sc, car(a), b);
+  else
+    {
+      tp = list_1(sc, car(a));
+      stack_protected2(sc) = tp;
+      for (np = tp; is_pair(p); p = cdr(p), np = cdr(np))
+	set_cdr(np, list_1(sc, car(p)));
+      set_cdr(np, b);
+    }
   unstack(sc);
   return(tp);
 }
@@ -70562,8 +70567,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		      (is_global(caadr(expr))) && (is_global(caaddr(expr))))
 		    {
 		      /* ideally this would be OP not HOP, but safe_closure_s_to_sc is too picky */
-		      /* set_opt3_pair(expr, caddr(expr)); */
-		      /* set_opt3_arglen(cdr(expr), 2); */
+		      /* set_opt3_pair(expr, caddr(expr)); */ /* set_opt3_arglen(cdr(expr), 2); */
 		      set_safe_optimize_op(expr, HOP_SAFE_C_FF);
 		    }
 
@@ -78383,10 +78387,7 @@ static void check_set(s7_scheme *sc)
 		      else pair_set_syntax_op(form, OP_SET_PAIR_P);  /* splice_in_values protects us here from values */
 
 		      if (!is_fxable(sc, value))
-			{
-			  if (is_symbol(car(inner)))
-			    set_dilambda_opt(sc, form, OP_SET_DILAMBDA_P, inner);
-			}
+			set_dilambda_opt(sc, form, OP_SET_DILAMBDA_P, inner);
 		      else
 			{
 			  s7_pointer obj;
@@ -78435,14 +78436,14 @@ static void check_set(s7_scheme *sc)
 					  fx_tree(sc, body, car(setter_args), cadr(setter_args), NULL, false);
 
 					pair_set_syntax_op(form, OP_SET_DILAMBDA_SA_A);
-					if ((!(is_let(closure_let(setter)))) || /* ?? not sure this can happen */
-					    (!(is_funclet(closure_let(setter)))))
+
+					if ((S7_DEBUGGING) && (!(is_let(closure_let(setter))))) fprintf(stderr, "setter no closure let: %s\n", display(form));
+					if (!(is_funclet(closure_let(setter))))
 					  make_funclet(sc, setter, car(inner), closure_let(setter));
 				      }}}}}
-		  else /* is_pair(cadr(inner)) */
+		  else /* (is_pair(cadr(inner))) && (is_symbol(car(inner))) */
 		    if ((caadr(inner) == sc->quote_symbol) &&
 			(is_global(sc->quote_symbol)) && /* (call/cc (lambda* 'x) ... (set! (setter 'y) ...)...) should return y */
-			(is_symbol(car(inner))) &&
 			((is_normal_symbol(value)) ||
 			 (is_fxable(sc, value))))
 		      {
@@ -95278,9 +95279,10 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * t725 (set!-)implicits let|iterator|hash-table do* set_dilambda* if_b* safe_c_ff safe_closure_sc safe_closure*aa
+ * t725 (set!-)implicits (see 576) do* set_dilambda*(576) if_b*
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
+ * dilambda simple case (no args get, one arg set), currently call_|set_implicit -> set_implicit_closure (t576)
  */
