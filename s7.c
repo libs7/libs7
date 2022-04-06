@@ -4146,9 +4146,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_LAMBDA_UNCHECKED, OP_LET_UNCHECKED, OP_CATCH_1, OP_CATCH_2, OP_CATCH_ALL,
 
       OP_SET_UNCHECKED, OP_SET_SYMBOL_C, OP_SET_SYMBOL_S, OP_SET_SYMBOL_P, OP_SET_SYMBOL_A,
-      OP_SET_NORMAL, OP_SET_PAIR, OP_SET_DILAMBDA, OP_SET_DILAMBDA_P, OP_SET_DILAMBDA_P_1, OP_SET_DILAMBDA_SA_A,
-      OP_SET_PAIR_A, OP_SET_PAIR_P, OP_SET_PAIR_ZA,
-      OP_SET_PAIR_P_1, OP_SET_FROM_SETTER, OP_SET_FROM_LET_TEMP, OP_SET_PWS, OP_SET_LET_A, OP_SET_SAFE,
+      OP_SET_NORMAL, OP_SET_PAIR1_G, OP_SET_DILAMBDA, OP_SET_DILAMBDA_P, OP_SET_DILAMBDA_P_1, OP_SET_PAIR_P, 
+      OP_SET_PAIR_P_1, OP_SET_FROM_SETTER, OP_SET_FROM_LET_TEMP, OP_SET_opSq_A, OP_SET_opSAq_A, OP_SET_LET_A, OP_SET_SAFE,
       OP_INCREMENT_BY_1, OP_DECREMENT_BY_1, OP_INCREMENT_SA, OP_INCREMENT_SAA, OP_SET_CONS,
 
       OP_LETREC_UNCHECKED, OP_LETREC_STAR_UNCHECKED, OP_COND_UNCHECKED,
@@ -4366,9 +4365,8 @@ static const char* op_names[NUM_OPS] =
       "member_if", "assoc_if", "member_if1", "assoc_if1",
       "lambda_unchecked", "let_unchecked", "catch_1", "catch_2", "catch_all",
       "set_unchecked", "set_symbol_c", "set_symbol_s", "set_symbol_p", "set_symbol_a",
-      "set_normal", "set_pair", "set_dilambda", "set_dilambda_p", "set_dilambda_p_1", "set_dilambda_sa_a",
-      "set_pair_a", "set_pair_p", "set_pair_za",
-      "set_pair_p_1", "set_from_setter", "set_from_let_temp", "set_pws", "set_let_a", "set_safe",
+      "set_normal", "set_pair1_g", "set_dilambda", "set_dilambda_p", "set_dilambda_p_1", "set_pair_p", 
+      "set_pair_p_1", "set_from_setter", "set_from_let_temp", "set_opsq_a", "set_opsaq_a", "set_let_a", "set_safe",
       "increment_1", "decrement_1", "increment_sa", "increment_saa", "set_cons",
       "letrec_unchecked", "letrec*_unchecked", "cond_unchecked",
       "lambda*_unchecked", "do_unchecked", "define_unchecked", "define*_unchecked", "define_funchecked", "define_constant_unchecked",
@@ -41870,10 +41868,10 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       return(sc->nil);
     }
 
+  if (!is_sequence(data)) /* precede immutable because #f (for example) is immutable: "can't sort #f because it is immutable" is a joke */
+    return(wrong_type_argument_with_type(sc, sc->sort_symbol, 1, data, a_sequence_string));
   if (is_immutable(data))
     return(immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->sort_symbol, data)));
-  if (!is_sequence(data))
-    return(wrong_type_argument_with_type(sc, sc->sort_symbol, 1, data, a_sequence_string));
 
   lessp = cadr(args);
   if (type(lessp) <= T_GOTO)
@@ -45522,30 +45520,6 @@ s7_pointer s7_typed_dilambda(s7_scheme *sc,
   if (get_sig) c_function_signature(get_func) = get_sig;
   if (set_sig) c_function_signature(set_func) = set_sig;
   return(get_func);
-}
-
-static void op_set_dilambda_p(s7_scheme *sc)
-{
-  push_stack_no_args(sc, OP_SET_DILAMBDA_P_1, cdr(sc->code));
-  sc->code = caddr(sc->code);
-}
-
-static void op_set_dilambda(s7_scheme *sc) /* ([set!] (dilambda-setter g) s) */
-{
-  sc->code = cdr(sc->code);
-  sc->value = cadr(sc->code);
-  if (is_symbol(sc->value))
-    sc->value = lookup_checked(sc, sc->value);
-}
-
-static void op_set_dilambda_sa_a(s7_scheme *sc)
-{
-  s7_pointer code = cdr(sc->code), obj, func, setter;
-  func = lookup(sc, caar(code));
-  obj = lookup(sc, cadar(code));
-  setter = closure_setter(func);
-  sc->curlet = update_let_with_two_slots(sc, closure_let(setter), obj, fx_call(sc, cdr(code)));
-  sc->value = fx_call(sc, closure_body(setter));
 }
 
 
@@ -78364,83 +78338,39 @@ static void check_set(s7_scheme *sc)
       pair_set_syntax_op(form, OP_SET_UNCHECKED); /* if not pair car, op_set_normal below */
       if (is_symbol(car(inner)))
 	{
-	  if ((is_null(cdr(inner))) &&
-	      (!is_pair(value)) &&
-	      (is_global(car(inner))) &&
-	      (is_c_function(global_value(car(inner)))) &&
-	      (c_function_min_args(global_value(car(inner))) == 0))
-	    pair_set_syntax_op(form, OP_SET_PWS);
-	  else
+	  if (is_null(cdr(inner)))                                  /* (set! (symbol) ...) */
 	    {
-	      if ((is_pair(cdr(inner))) &&
-		  (!is_pair(cddr(inner)))) /* we check cddr(code) above */  /* this leaves (set! (vect i j) 1) unhandled so we go to OP_SET_UNCHECKED */
+	      if (is_fxable(sc, value))
 		{
+		  pair_set_syntax_op(form, OP_SET_opSq_A);          /* (set! (symbol) fxable) */
+		  fx_annotate_arg(sc, cdr(code), sc->curlet);       /* cdr(code) = value */
+		}} /* perhaps OP_SET_opSq_P|_1|_MV */
+	  else
+	    if (is_null(cddr(inner))) /* we check cddr(code) above */  /* this leaves (set! (vect i j) 1) unhandled so we go to OP_SET_UNCHECKED */
+	      {
+		s7_pointer index = cadr(inner);
+		if ((is_fxable(sc, index)) && (is_fxable(sc, value)))
+		  {
+		    pair_set_syntax_op(form, OP_SET_opSAq_A);       /* (set! (symbol fxable) fxable) */
+		    fx_annotate_arg(sc, cdar(code), sc->curlet);    /* cdr(inner) -> index */
+		    fx_annotate_arg(sc, cdr(code), sc->curlet);     /* cdr(code) -> value */
+		    
+		    /* check tmp dilambda_sa_a for fx_tree etc */
+		  } /* perhaps OP_SET_opSAq_P|_1|_MV */
+		else
 		  if (!is_pair(cadr(inner)))
 		    {
 		      /* (set! (f s) ...) */
 		      if (!is_pair(value))
 			{
-			  pair_set_syntax_op(form, OP_SET_PAIR);
+			  pair_set_syntax_op(form, OP_SET_PAIR1_G);
 			  if (is_symbol(car(inner)))
 			    set_dilambda_opt(sc, form, OP_SET_DILAMBDA, inner);
 			}
 		      else pair_set_syntax_op(form, OP_SET_PAIR_P);  /* splice_in_values protects us here from values */
-
-		      if (!is_fxable(sc, value))
-			set_dilambda_opt(sc, form, OP_SET_DILAMBDA_P, inner);
-		      else
-			{
-			  s7_pointer obj;
-			  if ((car(inner) == sc->s7_let_symbol) &&
-			      (is_symbol_and_keyword(cadr(inner))))
-			    {
-			      pair_set_syntax_op(form, OP_IMPLICIT_S7_LET_SET_SA);
-			      fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
-			      set_opt3_sym(cdr(form), keyword_symbol(cadr(inner)));
-			      return;
-			    }
-
-			  obj = lookup_checked(sc, car(inner)); /* might be (set! (undefined-var ...)...) */
-			  if (((is_c_function(obj)) && (car(inner) != make_symbol(sc, c_function_name(obj)))) ||
-			      ((is_closure(obj)) && (car(inner) != closure_name(sc, obj))) ||
-			      ((!is_c_function(obj)) && (!is_closure(obj))))
-			    return;
-
-			  fx_annotate_arg(sc, cdr(code), sc->curlet);
-			  pair_set_syntax_op(form, OP_SET_PAIR_ZA);
-			  if ((is_c_function(obj)) &&
-			      (is_c_function(c_function_setter(obj))))
-			    pair_set_syntax_op(form, OP_SET_PAIR_A);
-			  else
-			    if (is_symbol(cadr(inner)))
-			      {
-				if (!has_fx(cdr(code)))
-				  fx_annotate_arg(sc, cdr(code), sc->curlet);
-
-				if ((is_closure(obj)) &&
-				    (is_closure(closure_setter(obj))) &&
-				    (is_safe_closure(closure_setter(obj))))
-				  {
-				    s7_pointer setter = closure_setter(obj), body;
-				    body = closure_body(setter);
-				    if ((is_proper_list_1(sc, body)) &&
-					((has_fx(body)) || (is_fxable(sc, car(body)))))
-				      {
-					s7_pointer setter_args = closure_args(setter);
-					if (!has_fx(body))
-					  {
-					    fx_annotate_arg(sc, body, sc->curlet);
-					    set_closure_one_form_fx_arg(setter);
-					  }
-					if ((is_pair(setter_args)) && (is_pair(cdr(setter_args))) && (is_null(cddr(setter_args))))
-					  fx_tree(sc, body, car(setter_args), cadr(setter_args), NULL, false);
-
-					pair_set_syntax_op(form, OP_SET_DILAMBDA_SA_A);
-
-					if ((S7_DEBUGGING) && (!(is_let(closure_let(setter))))) fprintf(stderr, "setter no closure let: %s\n", display(form));
-					if (!(is_funclet(closure_let(setter))))
-					  make_funclet(sc, setter, car(inner), closure_let(setter));
-				      }}}}}
+		      
+		      set_dilambda_opt(sc, form, OP_SET_DILAMBDA_P, inner);
+		    }
 		  else /* (is_pair(cadr(inner))) && (is_symbol(car(inner))) */
 		    if ((caadr(inner) == sc->quote_symbol) &&
 			(is_global(sc->quote_symbol)) && /* (call/cc (lambda* 'x) ... (set! (setter 'y) ...)...) should return y */
@@ -78457,7 +78387,8 @@ static void check_set(s7_scheme *sc)
 			  }
 			pair_set_syntax_op(form, OP_SET_LET_A);
 			set_fx(cdr(code), fx_choose(sc, cdr(code), sc->curlet, let_symbol_is_safe));
-		      }}}}
+		      }}}
+      /* PAIR_A DILAMBDA_SA_A */
       return;
     }
   pair_set_syntax_op(form, OP_SET_NORMAL);
@@ -78629,19 +78560,6 @@ static void op_increment_sa(s7_scheme *sc)
   slot_set_value(slot, sc->value = fn_proc(cadr(sc->code))(sc, sc->t2_1));
 }
 
-static inline void op_set_pair_a(s7_scheme *sc)
-{
-  s7_pointer obj, setter, code = cdr(sc->code);
-  obj = lookup_checked(sc, caar(code));
-  setter = c_function_setter(obj);
-  obj = fx_call(sc, cdr(code));
-  set_car(sc->t2_1, cadar(code));              /* might be a constant: (set! (mus-sound-srate "oboe.snd") 12345) */
-  if (is_symbol(car(sc->t2_1)))
-    set_car(sc->t2_1, lookup_checked(sc, cadar(code)));
-  set_car(sc->t2_2, obj);
-  sc->value = c_function_call(setter)(sc, sc->t2_1);
-}
-
 static void op_set_pair_p(s7_scheme *sc)
 {
   /* ([set!] (car a) (cadr a)) */
@@ -78669,6 +78587,8 @@ static s7_pointer no_setter_error(s7_scheme *sc, s7_pointer obj)
    *   add indices and new-value args, is unevaluated code always available?
    */
   int32_t typ = type(obj);
+  if (!is_pair(car(sc->code))) sc->code = cdr(sc->code);
+
   if (type(caar(sc->code)) >= T_C_FUNCTION_STAR)
     return(s7_error(sc, sc->no_setter_symbol,
 		    set_elist_6(sc, wrap_string(sc, "~W (~A) does not have a setter: (set! (~W~{~^ ~S~}) ~S)", 55),
@@ -78765,7 +78685,7 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
 	{
 	  sc->code = c_function_setter(obj);
 	  sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
-	  return(true); /* goto APPLY; */
+	  return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
 	}
       break;
 
@@ -78790,6 +78710,37 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
   return(false);
 }
 
+static bool op_set_opsq_a(s7_scheme *sc)        /* (set! (symbol) fxable) */
+{
+  s7_pointer obj, value, code = cdr(sc->code);
+  obj = lookup_checked(sc, caar(code));
+  value = fx_call(sc, cdr(code));
+  if ((is_c_function(obj)) && (is_c_function(c_function_setter(obj))))
+    {
+      sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t1(value));
+      return(false);
+    }
+  if (is_any_closure(obj))
+    sc->code = closure_setter(obj);
+  else sc->code = g_setter(sc, set_plist_1(sc, obj));
+  sc->args = list_1(sc, value);
+  return(true);
+}
+
+static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable) */
+{
+  s7_pointer obj, index, value, code = cdr(sc->code);
+  bool result;
+  obj = lookup_checked(sc, caar(code));
+  value = fx_call(sc, cdr(code));
+  gc_protect_via_stack(sc, value);
+  index = fx_call(sc, cdar(code));
+  stack_protected2(sc) = index;
+  result = set_pair_p_3(sc, obj, index, value);
+  unstack(sc);
+  return(result);
+}
+
 static Inline bool op_set_pair_p_1(s7_scheme *sc)
 {
   /* car(sc->code) is a pair, caar(code) is the object with a setter, it has one (safe) argument, and one safe value to set
@@ -78805,7 +78756,7 @@ static Inline bool op_set_pair_p_1(s7_scheme *sc)
   return(set_pair_p_3(sc, lookup_checked(sc, caar(sc->code)), arg, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
 }
 
-static bool op_set_pair(s7_scheme *sc)
+static bool op_set_pair1_g(s7_scheme *sc)
 {
   /* ([set!] (setter g) s) or ([set!] (str 0) #\a) */
   s7_pointer obj, arg, value;
@@ -78824,6 +78775,47 @@ static bool op_set_pair(s7_scheme *sc)
   obj = caar(sc->code);
   if (is_symbol(obj)) obj = lookup(sc, obj);
   return(set_pair_p_3(sc, obj, arg, value));
+}
+
+static void op_set_dilambda(s7_scheme *sc) /* ([set!] (dilambda-setter g) s) */ /* TODO: never called in s7test! */
+{
+  sc->code = cdr(sc->code);
+  sc->value = cadr(sc->code);
+  if (is_symbol(sc->value))
+    sc->value = lookup_checked(sc, sc->value);
+  /* falls through in eval to op_set_dilambda_p_1 */
+}
+
+static void op_set_dilambda_p(s7_scheme *sc) /* TODO: never called in s7test! */
+{
+  /* sc->code is full form: (set! (planet-y b) ...) */
+  push_stack_no_args(sc, OP_SET_DILAMBDA_P_1, cdr(sc->code));
+  sc->code = caddr(sc->code);
+}
+
+static goto_t op_set_dilambda_p_1(s7_scheme *sc) /* TODO: never called in s7test! planet-y et al in tshoot, ind-indexed in make-index */
+{
+  /* sc->code: form without the set! ((planet-y b) ...), (set! (func arg) ...) */
+  s7_pointer func, arg = cadar(sc->code);
+
+  if (is_symbol(arg))
+    arg = lookup_checked(sc, arg);
+  else
+    if (is_pair(arg))
+      arg = cadr(arg); /* can only be (quote ...) in this case */
+
+  func = lookup(sc, caar(sc->code));
+  if ((is_closure(func)) &&
+      (is_safe_closure(closure_setter(func))))
+    {
+      s7_pointer setter = closure_setter(func);
+      if (is_pair(closure_args(setter))) /* what is this? */
+	{
+	  sc->curlet = update_let_with_two_slots(sc, closure_let(setter), arg, sc->value);
+	  sc->code = T_Pair(closure_body(setter));
+	  return(goto_begin);
+	}}
+  return((set_pair_p_3(sc, func, arg, sc->value)) ? goto_apply : goto_start);
 }
 
 static void op_set_safe(s7_scheme *sc)
@@ -78952,29 +78944,6 @@ static void op_set_symbol_p(s7_scheme *sc)
   sc->code = caddr(sc->code);
 }
 
-static goto_t op_set_dilambda_p_1(s7_scheme *sc)
-{
-  s7_pointer func, arg = cadar(sc->code);
-  if (is_symbol(arg))
-    arg = lookup_checked(sc, arg);
-  else
-    if (is_pair(arg))
-      arg = cadr(arg); /* can only be (quote ...) in this case */
-
-  func = lookup(sc, caar(sc->code));
-  if ((is_closure(func)) &&
-      (is_safe_closure(closure_setter(func))))
-    {
-      s7_pointer setter = closure_setter(func);
-      if (is_pair(closure_args(setter)))
-	{
-	  sc->curlet = update_let_with_two_slots(sc, closure_let(setter), arg, sc->value);
-	  sc->code = T_Pair(closure_body(setter));
-	  return(goto_begin);
-	}}
-  return((set_pair_p_3(sc, func, arg, sc->value)) ? goto_apply : goto_start);
-}
-
 static Inline void op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) -- why is this always inlined? saves 22 in concordance */
 {
   s7_pointer val, y;
@@ -79037,32 +79006,6 @@ static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
 	break;
       }
   slot_set_value(y, sc->value);
-}
-
-static void op_set_pws(s7_scheme *sc)
-{
-  /* this is (set! (getter) val) where getter is a global c_function (a built-in pws) and val is not a pair: (set! (mus-clipping) #f) */
-  s7_pointer obj, code = cdr(sc->code);
-  obj = caar(code);
-  if (is_symbol(obj))
-    {
-      obj = lookup_slot_from(obj, sc->curlet);
-      if (is_slot(obj))
-	obj = slot_value(obj);
-      else no_setter_error(sc, obj); /* unhittable -- we only get here if obj is a globally known c_function */
-    }
-  if ((is_c_function(obj)) && (is_procedure(c_function_setter(obj))))
-    {
-      s7_pointer value = cadr(code);
-      if (is_symbol(value))
-	value = lookup_checked(sc, value);
-      sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t1(value));
-    }
-  else
-    {
-      if (!is_pair(car(sc->code))) sc->code = cdr(sc->code);
-      no_setter_error(sc, obj);
-    }
 }
 
 
@@ -90821,18 +90764,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    goto APPLY;
 	  continue;
 
-	case OP_SET_PAIR_ZA:      /* unknown setter pair, but value is easy */
-	  sc->code = cdr(sc->code);
-	  sc->value = fx_call(sc, cdr(sc->code));
+	case OP_SET_opSq_A:        if (op_set_opsq_a(sc))    goto APPLY; continue;
+	case OP_SET_opSAq_A:	   if (op_set_opsaq_a(sc))   goto APPLY; continue;
 
-	case OP_SET_PAIR_P_1:      if (op_set_pair_p_1(sc)) goto APPLY; continue;
-	case OP_SET_PAIR:	   if (op_set_pair(sc))     goto APPLY; continue;
-
+	  /* rest are under construction... */
+	case OP_SET_PAIR_P_1:      if (op_set_pair_p_1(sc))  goto APPLY; continue;
+	case OP_SET_PAIR1_G:	   if (op_set_pair1_g(sc))   goto APPLY; continue;
 	case OP_SET_PAIR_P:        op_set_pair_p(sc);        goto EVAL;
-	case OP_SET_PAIR_A:        op_set_pair_a(sc);        continue;
-
-	case OP_SET_PWS:           op_set_pws(sc);           continue;
-	case OP_SET_DILAMBDA_SA_A: op_set_dilambda_sa_a(sc); continue;
 	case OP_SET_DILAMBDA_P:    op_set_dilambda_p(sc);    goto EVAL;
 	case OP_SET_DILAMBDA:      op_set_dilambda(sc);      /* fall through */
 	case OP_SET_DILAMBDA_P_1:
@@ -94854,7 +94792,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 919)
+  if (NUM_OPS != 917)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95226,63 +95164,62 @@ int main(int argc, char **argv)
  * -------------------------------------------------------------
  * tpeak       121          115    114    108    107    107
  * tref        508          691    687    463    458    458
- * index      1167         1026   1016    973    968    965   969 [clear]
+ * index      1167         1026   1016    973    968    970
  * tmock      7737         1177   1165   1057   1060   1051
  * tvect      1953         2519   2464   1772   1713   1713
- * texit      1806         ----   ----   1778   1757   1756  1761 [s_g]
+ * texit      1806         ----   ----   1778   1757   1764
  * s7test     4533         1873   1831   1818   1813   1796
- * lt         2153         2187   2172   2150   2148   2144
- * timp       2232         2971   2891   2176   2206   2204
- * tread      2567         2440   2421   2419   2414   2374
+ * lt         2153         2187   2172   2150   2148   2144  2154 [op_set_dilambda_sa_a]
+ * timp       2232         2971   2891   2176   2206   2198
+ * tread      2567         2440   2421   2419   2414   2379
  * dup        2579         3805   3788   2492   2373   2378
  * trclo      4073         2735   2574   2454   2451   2443
  * fbench     2827         2688   2583   2460   2460   2451
  * tcopy      2557         8035   5546   2539   2501   2497
- * tmat       2684         3065   3042   2524   2520   2523
- * tauto      2750         ----   ----   2562   2546   2553  2586 [s_g] 2569 [c_func]
+ * tmat       2684         3065   3042   2524   2520   2520
+ * tauto      2750         ----   ----   2562   2546   2569
  * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
  * tmac       2949         3950   3873   3033   2998   2990
  * tload      3718         ----   ----   3046   3042   3020
- * tset       3107         3253   3104   3048   3121   3108  3142
+ * tset       3107         3253   3104   3048   3121   3145
  * teq        3472         4068   4045   3536   3531   3468
- * tio        3679         3816   3752   3683   3680   3662  3646
- * tobj       3730         4016   3970   3828   3701   3663
+ * tio        3679         3816   3752   3683   3680   3646
+ * tobj       3730         4016   3970   3828   3701   3666
  * tclo       4538         4787   4735   4390   4398   4342
- * tcase      4475         4960   4793   4439   4426   4407  4436 [s_g]
+ * tcase      4475         4960   4793   4439   4426   4442
  * tlet       5277         7775   5640   4450   4434   4422
  * tmap       5495         8869   8774   4489   4500   4498
- * tfft      114.9         7820   7729   4755   4652   4649
- * tshoot     6903         5525   5447   5183   5153   5143
- * tform      8335         5357   5348   5307   5300   5313
+ * tfft      114.9         7820   7729   4755   4652   4646
+ * tshoot     6903         5525   5447   5183   5153   5145
+ * tform      8335         5357   5348   5307   5300   5320
  * tnum       56.6         6348   6013   5433   5406   5397
- * tstr       6123         6880   6342   5488   5488   5480
- * tlamb      5799         6423   6273   5720   ----   5593  5630 [macro_d]
+ * tstr       6123         6880   6342   5488   5488   5476
+ * tlamb      5799         6423   6273   5720   ----   5630
  * tgsl       25.2         8485   7802   6373   6373   6324
- * tmisc      6892         8869   7612   6435   6331   6335
- * tlist      6505         7896   7546   6558   6532   6490  6497
+ * tmisc      6892         8869   7612   6435   6331   6318
+ * tlist      6505         7896   7546   6558   6532   6497
  * trec       8314         6936   6922   6521   6521   6523
- * tari       ----         13.0   12.7   6827   6819   6834
- * tleft      9004         10.4   10.2   7657   7664   7612
- * tgc        9532         11.9   11.1   8177   8156   8080  8063
- * thash      35.2         11.8   11.7   9734   9590   9581
- * cb         16.9         11.2   11.0   9658   9585   9655  9661 [s_g] 9658 [c_func]
+ * tari       ----         13.0   12.7   6827   6819   6836
+ * tleft      9004         10.4   10.2   7657   7664   7615
+ * tgc        9532         11.9   11.1   8177   8156   8063
+ * thash      35.2         11.8   11.7   9734   9590   9584
+ * cb         16.9         11.2   11.0   9658   9585   9678 [opsaq_a]
  * tgen       12.6         11.2   11.4   12.0   11.9   12.0
  * tall       24.5         15.6   15.6   15.6   15.6   15.6
  * calls      55.8         36.7   37.5   37.0   37.0   37.2
  * sg         76.1         ----   ----   55.9   55.8   56.0
- * lg        105.6         ----   ----  105.2  105.4  105.0 104.9
- * tbig      600.4        177.4  175.8  156.5  152.5  152.5 152.4
+ * lg        105.6         ----   ----  105.2  105.4  105.0 104.9  105.7 [op_set_dilambda_sa_a]
+ * tbig      600.4        177.4  175.8  156.5  152.5  152.5
  * -------------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * t725 (set!-)implicits (see 576) do* set_dilambda*(576) if_b*
+ * t725 (set!-)implicits set_dilambda*(576)
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
- * dilambda simple case (no args get, one arg set), currently call_|set_implicit -> set_implicit_closure (t576)
  */
