@@ -4105,7 +4105,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
       OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_HASH_TABLE_REF_AA,
-      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S, OP_IMPLICIT_S7_LET_SET_SA,
+      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_G, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
       OP_SYMBOL, OP_CONSTANT, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
@@ -4146,8 +4146,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_LAMBDA_UNCHECKED, OP_LET_UNCHECKED, OP_CATCH_1, OP_CATCH_2, OP_CATCH_ALL,
 
       OP_SET_UNCHECKED, OP_SET_SYMBOL_C, OP_SET_SYMBOL_S, OP_SET_SYMBOL_P, OP_SET_SYMBOL_A,
-      OP_SET_NORMAL, OP_SET_PAIR1_G, OP_SET_DILAMBDA, OP_SET_DILAMBDA_P, OP_SET_DILAMBDA_P_1, OP_SET_PAIR_P, 
-      OP_SET_PAIR_P_1, OP_SET_FROM_SETTER, OP_SET_FROM_LET_TEMP, OP_SET_opSq_A, OP_SET_opSAq_A, OP_SET_LET_A, OP_SET_SAFE,
+      OP_SET_NORMAL, OP_SET_opSq_A, OP_SET_opSAq_A, OP_SET_opSAq_P, OP_SET_opSAq_P_1, 
+      OP_SET_FROM_SETTER, OP_SET_FROM_LET_TEMP, OP_SET_SAFE,
       OP_INCREMENT_BY_1, OP_DECREMENT_BY_1, OP_INCREMENT_SA, OP_INCREMENT_SAA, OP_SET_CONS,
 
       OP_LETREC_UNCHECKED, OP_LETREC_STAR_UNCHECKED, OP_COND_UNCHECKED,
@@ -4326,7 +4326,7 @@ static const char* op_names[NUM_OPS] =
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
       "implicit_string_ref_a", "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_pair_ref_aa",
       "implicit_hash_table_ref_a", "implicit_hash_table_ref_aa",
-      "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", "implicit_*s7*_set_sa",
+      "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", 
       "unknown_thunk", "unknown_ns", "unknown_na", "unknown_g", "unknown_gg", "unknown_a", "unknown_aa", "unknown_np",
 
       "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_ssa_direct", "h_hash_table_increment", "clear_opts",
@@ -4365,8 +4365,8 @@ static const char* op_names[NUM_OPS] =
       "member_if", "assoc_if", "member_if1", "assoc_if1",
       "lambda_unchecked", "let_unchecked", "catch_1", "catch_2", "catch_all",
       "set_unchecked", "set_symbol_c", "set_symbol_s", "set_symbol_p", "set_symbol_a",
-      "set_normal", "set_pair1_g", "set_dilambda", "set_dilambda_p", "set_dilambda_p_1", "set_pair_p", 
-      "set_pair_p_1", "set_from_setter", "set_from_let_temp", "set_opsq_a", "set_opsaq_a", "set_let_a", "set_safe",
+      "set_normal", "set_opsq_a", "set_opsaq_a", "set_opsaq_p", "set_opsaq_p_1", 
+      "set_from_setter", "set_from_let_temp", "set_safe",
       "increment_1", "decrement_1", "increment_sa", "increment_saa", "set_cons",
       "letrec_unchecked", "letrec*_unchecked", "cond_unchecked",
       "lambda*_unchecked", "do_unchecked", "define_unchecked", "define*_unchecked", "define_funchecked", "define_constant_unchecked",
@@ -4765,9 +4765,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 
   buf = (char *)Malloc(1024);
   snprintf(buf, 1024, "type: %s? (%d), opt_op: %d %s, flags: #x%" PRIx64 "%s",
-	   type_name(sc, obj, NO_ARTICLE), typ, 
-	   optimize_op(obj), ((optimize_op(obj) >= OP_UNOPT) && (optimize_op(obj) < NUM_OPS)) ? op_names[optimize_op(obj)] : "",
-	   full_typ, str);
+	   type_name(sc, obj, NO_ARTICLE), typ, optimize_op(obj), (optimize_op(obj) < NUM_OPS) ? op_names[optimize_op(obj)] : "", full_typ, str);
   return(buf);
 }
 
@@ -33554,12 +33552,13 @@ static s7_pointer closure_name(s7_scheme *sc, s7_pointer closure)
 
 static s7_pointer pair_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
-  s7_pointer p = cdr(a), tp, np;
+  s7_pointer p = cdr(a), tp;
   gc_protect_via_stack(sc, b);
   if (is_null(p)) 
     tp = cons(sc, car(a), b);
   else
     {
+      s7_pointer np;
       tp = list_1(sc, car(a));
       stack_protected2(sc) = tp;
       for (np = tp; is_pair(p); p = cdr(p), np = cdr(np))
@@ -55797,7 +55796,6 @@ static inline s7_pointer fx_cond_na_na(s7_scheme *sc, s7_pointer code)  /* all t
 static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym);
 
 static s7_pointer fx_implicit_s7_let_ref_s(s7_scheme *sc, s7_pointer arg) {return(s7_let_field(sc, opt3_sym(arg)));}
-static s7_pointer fx_implicit_s7_let_set_sa(s7_scheme *sc, s7_pointer arg) {return(s7_let_field_set(sc, opt3_sym(cdr(arg)), fx_call(sc, cddr(arg))));}
 
 static s7_function *fx_function = NULL;
 
@@ -64969,7 +64967,7 @@ static s7_pointer opt_do_step_i(opt_info *o)
   end = integer(slot_value(ostart->v[2].p));
   incr = ostep->v[2].i;
   si = make_mutable_integer(sc, integer(slot_value(ostart->v[1].p)));
-  slot_set_value(stepper, si);
+  if (stepper) slot_set_value(stepper, si);
 
   while (integer(si) != end)
     {
@@ -67895,7 +67893,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_SET_FROM_SETTER:
       syntax_error_with_caller2(sc, "~A: can't set ~A to ~S", 22, sc->set_symbol, stack_code(sc->stack, top), set_ulist_1(sc, sc->values_symbol, args));
 
-    case OP_SET_PAIR_P_1:
+    case OP_SET_opSAq_P_1:
       syntax_error(sc, "too many values to set! ~S", 26, set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_LET1:                         /* (let ((var (values 1 2 3))) ...) */
@@ -78278,22 +78276,6 @@ static bool feed_to(s7_scheme *sc)
 
 
 /* -------------------------------- set! -------------------------------- */
-static void set_dilambda_opt(s7_scheme *sc, s7_pointer form, opcode_t opt, s7_pointer expr)
-{
-  s7_pointer func;
-  func = lookup_checked(sc, car(expr));
-  if ((is_closure(func)) &&
-      (is_closure(closure_setter(func))) &&
-      (is_safe_closure(closure_setter(func))))
-    {
-      s7_pointer setter = closure_setter(func);
-      pair_set_syntax_op(form, opt);
-      if ((!(is_let(closure_let(setter)))) ||
-	  (!(is_funclet(closure_let(setter)))))
-	make_funclet(sc, setter, car(expr), closure_let(setter));
-    }
-}
-
 static void check_set(s7_scheme *sc)
 {
   s7_pointer form = sc->code, code = cdr(sc->code);
@@ -78344,51 +78326,21 @@ static void check_set(s7_scheme *sc)
 		{
 		  pair_set_syntax_op(form, OP_SET_opSq_A);          /* (set! (symbol) fxable) */
 		  fx_annotate_arg(sc, cdr(code), sc->curlet);       /* cdr(code) = value */
-		}} /* perhaps OP_SET_opSq_P|_1|_MV */
+		}} 
 	  else
 	    if (is_null(cddr(inner))) /* we check cddr(code) above */  /* this leaves (set! (vect i j) 1) unhandled so we go to OP_SET_UNCHECKED */
 	      {
 		s7_pointer index = cadr(inner);
-		if ((is_fxable(sc, index)) && (is_fxable(sc, value)))
+		if (is_fxable(sc, index)) 
 		  {
-		    pair_set_syntax_op(form, OP_SET_opSAq_A);       /* (set! (symbol fxable) fxable) */
 		    fx_annotate_arg(sc, cdar(code), sc->curlet);    /* cdr(inner) -> index */
-		    fx_annotate_arg(sc, cdr(code), sc->curlet);     /* cdr(code) -> value */
-		    
-		    /* check tmp dilambda_sa_a for fx_tree etc */
-		  } /* perhaps OP_SET_opSAq_P|_1|_MV */
-		else
-		  if (!is_pair(cadr(inner)))
-		    {
-		      /* (set! (f s) ...) */
-		      if (!is_pair(value))
-			{
-			  pair_set_syntax_op(form, OP_SET_PAIR1_G);
-			  if (is_symbol(car(inner)))
-			    set_dilambda_opt(sc, form, OP_SET_DILAMBDA, inner);
-			}
-		      else pair_set_syntax_op(form, OP_SET_PAIR_P);  /* splice_in_values protects us here from values */
-		      
-		      set_dilambda_opt(sc, form, OP_SET_DILAMBDA_P, inner);
-		    }
-		  else /* (is_pair(cadr(inner))) && (is_symbol(car(inner))) */
-		    if ((caadr(inner) == sc->quote_symbol) &&
-			(is_global(sc->quote_symbol)) && /* (call/cc (lambda* 'x) ... (set! (setter 'y) ...)...) should return y */
-			((is_normal_symbol(value)) ||
-			 (is_fxable(sc, value))))
+		    if (is_fxable(sc, value))
 		      {
-			if ((car(inner) == sc->s7_let_symbol) &&
-			    (is_symbol(cadadr(inner))))
-			  {
-			    pair_set_syntax_op(form, OP_IMPLICIT_S7_LET_SET_SA);
-			    fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
-			    set_opt3_sym(cdr(form), cadadr(inner));
-			    return;
-			  }
-			pair_set_syntax_op(form, OP_SET_LET_A);
-			set_fx(cdr(code), fx_choose(sc, cdr(code), sc->curlet, let_symbol_is_safe));
-		      }}}
-      /* PAIR_A DILAMBDA_SA_A */
+			pair_set_syntax_op(form, OP_SET_opSAq_A);       /* (set! (symbol fxable) fxable) */
+			fx_annotate_arg(sc, cdr(code), sc->curlet);     /* cdr(code) -> value */
+		      }
+		    else pair_set_syntax_op(form, OP_SET_opSAq_P);  /* (set! (symbol fxable) any) */
+		  }}}
       return;
     }
   pair_set_syntax_op(form, OP_SET_NORMAL);
@@ -78560,20 +78512,6 @@ static void op_increment_sa(s7_scheme *sc)
   slot_set_value(slot, sc->value = fn_proc(cadr(sc->code))(sc, sc->t2_1));
 }
 
-static void op_set_pair_p(s7_scheme *sc)
-{
-  /* ([set!] (car a) (cadr a)) */
-  /* here the pair can't generate multiple values, or if it does, it's an error (caught below)
-   *  splice_in_values will notice the OP_SET_PAIR_P_1 and complain.
-   * (let () (define (hi) (let ((str "123")) (set! (str 0) (values #\a)) str)) (hi) (hi)) is "a23"
-   * (let () (define (hi) (let ((str "123")) (set! (str 0) (values #\a #\b)) str)) (hi) (hi)) is an error from the first call (caught elsewhere)
-   * (let () (define (hi) (let ((str "123")) (set! (str 0) (values #\a #\b)) str)) (catch #t hi (lambda a a)) (hi)) is an error from the second call
-   * (let ((v (make-vector '(2 3) 0))) (set! (v (values 0 1)) 23) v) -> #2D((0 23 0) (0 0 0))
-   */
-  push_stack_no_args(sc, OP_SET_PAIR_P_1, cdr(sc->code));
-  sc->code = caddr(sc->code);
-}
-
 #if S7_DEBUGGING
 #define no_setter_error(Sc, Obj) no_setter_error_1(Sc, Obj, __func__, __LINE__)
 static s7_pointer no_setter_error_1(s7_scheme *sc, s7_pointer obj, const char *func, int32_t line)
@@ -78609,10 +78547,18 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
       sc->value = (*(c_object_set(sc, obj)))(sc, with_list_t3(obj, arg, value));
       break;
 
-      /* some of these are wasteful -- we know the object type! (list hash-table) */
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_FLOAT_VECTOR:
+      sc->value = g_fv_set_3(sc, with_list_t3(obj, arg, value));
+      break;
+    case T_INT_VECTOR:
+      sc->value = g_iv_set_3(sc, with_list_t3(obj, arg, value));
+      break;
+    case T_BYTE_VECTOR:
+      sc->value = g_bv_set_3(sc, with_list_t3(obj, arg, value));
+      break;
+    case T_VECTOR:
 #if WITH_GMP
-      sc->value = g_vector_set(sc, with_list_t3(obj, arg, value));
+      sc->value = g_vector_set_3(sc, with_list_t3(obj, arg, value));
 #else
       if (vector_rank(obj) > 1)
 	sc->value = g_vector_set(sc, with_list_t3(obj, arg, value));
@@ -78628,10 +78574,9 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
 	    syntax_error_any(sc, sc->out_of_range_symbol, "vector-set!: index must be less than vector length: ~S", 54, sc->code);
 	  if (is_immutable(obj))
 	    immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, obj));
-
 	  if (is_typed_vector(obj))
 	    return(typed_vector_setter(sc, obj, index, value));
-	  vector_setter(obj)(sc, obj, index, value);
+	  vector_element(obj, index) = value;
 	  sc->value = T_Pos(value);
 	}
 #endif
@@ -78741,81 +78686,23 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
   return(result);
 }
 
-static Inline bool op_set_pair_p_1(s7_scheme *sc)
+static void op_set_opsaq_p(s7_scheme *sc)
 {
-  /* car(sc->code) is a pair, caar(code) is the object with a setter, it has one (safe) argument, and one safe value to set
-   *   (set! (str i) #\a) in a function (both inner things need to be symbols (or the second can be a quoted symbol) to get here)
-   *   the inner list is a proper list, with no embedded list at car.
+  /* ([set!] (car a) (cadr a)) */
+  /* here the pair can't generate multiple values, or if it does, it's an error (caught below)
+   *  splice_in_values will notice the OP_SET_opSAq_P_1 and complain.
+   * (let () (define (hi) (let ((str "123")) (set! (str 0) (values #\a)) str)) (hi) (hi)) is "a23"
+   * (let ((v (make-vector '(2 3) 0))) (set! (v (values 0 1)) 23) v) -> #2D((0 23 0) (0 0 0))
    */
-  s7_pointer value = sc->value, arg = cadar(sc->code);
-  if (is_symbol(arg))
-    arg = lookup_checked(sc, arg);
-  else
-    if (is_pair(arg))
-      arg = cadr(arg); /* can only be (quote ...) in this case */
-  return(set_pair_p_3(sc, lookup_checked(sc, caar(sc->code)), arg, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
-}
-
-static bool op_set_pair1_g(s7_scheme *sc)
-{
-  /* ([set!] (setter g) s) or ([set!] (str 0) #\a) */
-  s7_pointer obj, arg, value;
-  sc->code = cdr(sc->code);
-  value = cadr(sc->code);
-  if (is_symbol(value))
-    value = lookup_checked(sc, value);
-
-  arg = cadar(sc->code);
-  if (is_symbol(arg))
-    arg = lookup_checked(sc, arg);
-  else
-    if (is_pair(arg))
-      arg = cadr(arg); /* can only be (quote ...) in this case */
-
-  obj = caar(sc->code);
-  if (is_symbol(obj)) obj = lookup(sc, obj);
-  return(set_pair_p_3(sc, obj, arg, value));
-}
-
-static void op_set_dilambda(s7_scheme *sc) /* ([set!] (dilambda-setter g) s) */ /* TODO: never called in s7test! */
-{
-  sc->code = cdr(sc->code);
-  sc->value = cadr(sc->code);
-  if (is_symbol(sc->value))
-    sc->value = lookup_checked(sc, sc->value);
-  /* falls through in eval to op_set_dilambda_p_1 */
-}
-
-static void op_set_dilambda_p(s7_scheme *sc) /* TODO: never called in s7test! */
-{
-  /* sc->code is full form: (set! (planet-y b) ...) */
-  push_stack_no_args(sc, OP_SET_DILAMBDA_P_1, cdr(sc->code));
+  push_stack_no_args(sc, OP_SET_opSAq_P_1, cdr(sc->code));
   sc->code = caddr(sc->code);
 }
 
-static goto_t op_set_dilambda_p_1(s7_scheme *sc) /* TODO: never called in s7test! planet-y et al in tshoot, ind-indexed in make-index */
+static inline bool op_set_opsaq_p_1(s7_scheme *sc)
 {
-  /* sc->code: form without the set! ((planet-y b) ...), (set! (func arg) ...) */
-  s7_pointer func, arg = cadar(sc->code);
-
-  if (is_symbol(arg))
-    arg = lookup_checked(sc, arg);
-  else
-    if (is_pair(arg))
-      arg = cadr(arg); /* can only be (quote ...) in this case */
-
-  func = lookup(sc, caar(sc->code));
-  if ((is_closure(func)) &&
-      (is_safe_closure(closure_setter(func))))
-    {
-      s7_pointer setter = closure_setter(func);
-      if (is_pair(closure_args(setter))) /* what is this? */
-	{
-	  sc->curlet = update_let_with_two_slots(sc, closure_let(setter), arg, sc->value);
-	  sc->code = T_Pair(closure_body(setter));
-	  return(goto_begin);
-	}}
-  return((set_pair_p_3(sc, func, arg, sc->value)) ? goto_apply : goto_start);
+  s7_pointer value = sc->value, index;
+  index = fx_call(sc, cdar(sc->code));
+  return(set_pair_p_3(sc, lookup_checked(sc, caar(sc->code)), index, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
 }
 
 static void op_set_safe(s7_scheme *sc)
@@ -79106,7 +78993,7 @@ static bool op_implicit_vector_set_4(s7_scheme *sc)
 
 static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer form)
 {
-  /* vect is the vector, sc->code is expr without the set!, form is the full expr,  args have not been evaluated! */
+  /* vect is the vector, sc->code is expr without the set!, form is the full expr, args have not been evaluated! */
   s7_pointer settee = car(sc->code), index;
   s7_int argnum;
   if (!implicit_set_ok(sc->code))
@@ -90417,7 +90304,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_S7_LET_REF_S:	    sc->value = s7_let_field(sc, opt3_sym(sc->code)); continue;
-	case OP_IMPLICIT_S7_LET_SET_SA:	    sc->value = s7_let_field_set(sc, opt3_sym(cdr(sc->code)), fx_call(sc, cddr(sc->code))); continue;
 
 
 	case OP_UNOPT:       goto UNOPT;
@@ -90758,31 +90644,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DEFINE1: if (op_define1(sc)) goto APPLY;
 	case OP_DEFINE_WITH_SETTER: op_define_with_setter(sc); continue;
 
-	case OP_SET_LET_A:       /* (set! (hook 'result) 123) or (set! (H 'c) 32) */
-	  sc->code = cdr(sc->code);
-	  if (set_pair_p_3(sc, lookup(sc, caar(sc->code)), cadr(cadar(sc->code)), fx_call(sc, cdr(sc->code))))
-	    goto APPLY;
-	  continue;
-
 	case OP_SET_opSq_A:        if (op_set_opsq_a(sc))    goto APPLY; continue;
 	case OP_SET_opSAq_A:	   if (op_set_opsaq_a(sc))   goto APPLY; continue;
-
-	  /* rest are under construction... */
-	case OP_SET_PAIR_P_1:      if (op_set_pair_p_1(sc))  goto APPLY; continue;
-	case OP_SET_PAIR1_G:	   if (op_set_pair1_g(sc))   goto APPLY; continue;
-	case OP_SET_PAIR_P:        op_set_pair_p(sc);        goto EVAL;
-	case OP_SET_DILAMBDA_P:    op_set_dilambda_p(sc);    goto EVAL;
-	case OP_SET_DILAMBDA:      op_set_dilambda(sc);      /* fall through */
-	case OP_SET_DILAMBDA_P_1:
-	  switch (op_set_dilambda_p_1(sc))
-	    {
-	    case goto_begin: goto BEGIN;
-	    case goto_apply: goto APPLY;
-	    case goto_start: continue;
-	    default:
-	      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: to start %s %s\n", __func__, __LINE__, display(sc->code), op_names[optimize_op(sc->code)]);
-	      continue;
-	    }
+	case OP_SET_opSAq_P:       op_set_opsaq_p(sc);       goto EVAL;
+	case OP_SET_opSAq_P_1:     if (op_set_opsaq_p_1(sc)) goto APPLY; continue;
 
 	case OP_INCREMENT_BY_1:   op_increment_by_1(sc);   continue;
 	case OP_DECREMENT_BY_1:   op_decrement_by_1(sc);   continue;
@@ -92648,7 +92513,6 @@ static void init_fx_function(void)
   fx_function[OP_BEGIN_AA] = fx_begin_aa;
   fx_function[OP_LET_TEMP_A_A] = fx_let_temp_a_a;
   fx_function[OP_IMPLICIT_S7_LET_REF_S] = fx_implicit_s7_let_ref_s;
-  fx_function[OP_IMPLICIT_S7_LET_SET_SA] = fx_implicit_s7_let_set_sa;
 
   /* these are ok even if a "z" branch is taken -- in that case the body does not have the is_optimized bit, so is_fxable returns false */
   fx_function[OP_TC_AND_A_OR_A_LA] = fx_tc_and_a_or_a_la;
@@ -94792,7 +94656,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 917)
+  if (NUM_OPS != 911)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95165,18 +95029,18 @@ int main(int argc, char **argv)
  * tpeak       121          115    114    108    107    107
  * tref        508          691    687    463    458    458
  * index      1167         1026   1016    973    968    970
- * tmock      7737         1177   1165   1057   1060   1051
+ * tmock      7737         1177   1165   1057   1060   1052
  * tvect      1953         2519   2464   1772   1713   1713
  * texit      1806         ----   ----   1778   1757   1764
- * s7test     4533         1873   1831   1818   1813   1796
- * lt         2153         2187   2172   2150   2148   2144  2154 [op_set_dilambda_sa_a]
- * timp       2232         2971   2891   2176   2206   2198
- * tread      2567         2440   2421   2419   2414   2379
- * dup        2579         3805   3788   2492   2373   2378
+ * s7test     4533         1873   1831   1818   1813   1790
+ * lt         2153         2187   2172   2150   2148   2156
+ * timp       2232         2971   2891   2176   2206   2199
+ * tread      2567         2440   2421   2419   2414   2376
+ * dup        2579         3805   3788   2492   2373   2376
  * trclo      4073         2735   2574   2454   2451   2443
- * fbench     2827         2688   2583   2460   2460   2451
+ * fbench     2827         2688   2583   2460   2460   2453
  * tcopy      2557         8035   5546   2539   2501   2497
- * tmat       2684         3065   3042   2524   2520   2520
+ * tmat       2684         3065   3042   2524   2520   2514  2522 [iv_set_3??]
  * tauto      2750         ----   ----   2562   2546   2569
  * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
@@ -95187,25 +95051,25 @@ int main(int argc, char **argv)
  * teq        3472         4068   4045   3536   3531   3468
  * tio        3679         3816   3752   3683   3680   3646
  * tobj       3730         4016   3970   3828   3701   3666
- * tclo       4538         4787   4735   4390   4398   4342
- * tcase      4475         4960   4793   4439   4426   4442
- * tlet       5277         7775   5640   4450   4434   4422
+ * tclo       4538         4787   4735   4390   4398   4341
+ * tcase      4475         4960   4793   4439   4426   4444
+ * tlet       5277         7775   5640   4450   4434   4423
  * tmap       5495         8869   8774   4489   4500   4498
- * tfft      114.9         7820   7729   4755   4652   4646
- * tshoot     6903         5525   5447   5183   5153   5145
- * tform      8335         5357   5348   5307   5300   5320
- * tnum       56.6         6348   6013   5433   5406   5397
- * tstr       6123         6880   6342   5488   5488   5476
+ * tfft      114.9         7820   7729   4755   4652   4624
+ * tshoot     6903         5525   5447   5183   5153   5198
+ * tform      8335         5357   5348   5307   5300   5307
+ * tnum       56.6         6348   6013   5433   5406   5391
+ * tstr       6123         6880   6342   5488   5488   5474
  * tlamb      5799         6423   6273   5720   ----   5630
  * tgsl       25.2         8485   7802   6373   6373   6324
- * tmisc      6892         8869   7612   6435   6331   6318
- * tlist      6505         7896   7546   6558   6532   6497
+ * tmisc      6892         8869   7612   6435   6331   6322
+ * tlist      6505         7896   7546   6558   6532   6494
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6836
  * tleft      9004         10.4   10.2   7657   7664   7615
- * tgc        9532         11.9   11.1   8177   8156   8063
+ * tgc        9532         11.9   11.1   8177   8156   8068
  * thash      35.2         11.8   11.7   9734   9590   9584
- * cb         16.9         11.2   11.0   9658   9585   9678 [opsaq_a]
+ * cb         16.9         11.2   11.0   9658   9585   9678
  * tgen       12.6         11.2   11.4   12.0   11.9   12.0
  * tall       24.5         15.6   15.6   15.6   15.6   15.6
  * calls      55.8         36.7   37.5   37.0   37.0   37.2
@@ -95217,9 +95081,12 @@ int main(int argc, char **argv)
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * t725 to see error messages
- * t725 (set!-)implicits set_dilambda*(576)
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
+ * for op_set_opsaaq_* we need set_pair_p4 with support for e.g. implicit hash-table-set! with args already evaluated
+ *   this is also the case for vectors etc (set! (v 0 'a) 32) where (v 0) is a let or whatever -- does this work?
+ *     yes: (define v (vector (inlet 'a 1))) (set! (v 0 'a) 33) v->#((inlet 'a 33))
+ *   but set_implicit_* assumes args are not evaluated, so it's a ton of repetitive code (see tmp)
  */
