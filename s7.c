@@ -2960,6 +2960,7 @@ static void init_types(void)
 #define with_list_t1(A)                (set_car(sc->t1_1, A), sc->t1_1) /* this is slower than explicit code, esp t3, procedures are same as this */
 #define with_list_t2(A, B)             (set_car(sc->t2_1, A), set_car(sc->t2_2, B), sc->t2_1)
 #define with_list_t3(A, B, C)          (set_car(sc->t3_1, A), set_car(sc->t3_2, B), set_car(sc->t3_3, C), sc->t3_1)
+#define with_list_t4(A, B, C, D)       (set_car(sc->t4_1, A), set_car(sc->t3_1, B), set_car(sc->t3_2, C), set_car(sc->t3_3, D), sc->t4_1)
 
 #define is_string(p)                   (type(p) == T_STRING)
 #define is_mutable_string(p)           ((full_type(T_Pos(p)) & (TYPE_MASK | T_IMMUTABLE)) == T_STRING)
@@ -4145,8 +4146,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_MEMBER_IF, OP_ASSOC_IF, OP_MEMBER_IF1, OP_ASSOC_IF1,
       OP_LAMBDA_UNCHECKED, OP_LET_UNCHECKED, OP_CATCH_1, OP_CATCH_2, OP_CATCH_ALL,
 
-      OP_SET_UNCHECKED, OP_SET_SYMBOL_C, OP_SET_SYMBOL_S, OP_SET_SYMBOL_P, OP_SET_SYMBOL_A,
-      OP_SET_NORMAL, OP_SET_opSq_A, OP_SET_opSAq_A, OP_SET_opSAq_P, OP_SET_opSAq_P_1, 
+      OP_SET_UNCHECKED, OP_SET_S_C, OP_SET_S_S, OP_SET_S_P, OP_SET_S_A,
+      OP_SET_NORMAL, OP_SET_opSq_A, OP_SET_opSAq_A, OP_SET_opSAq_P, OP_SET_opSAq_P_1, OP_SET_opSAAq_A, OP_SET_opSAAq_P, OP_SET_opSAAq_P_1, 
       OP_SET_FROM_SETTER, OP_SET_FROM_LET_TEMP, OP_SET_SAFE,
       OP_INCREMENT_BY_1, OP_DECREMENT_BY_1, OP_INCREMENT_SA, OP_INCREMENT_SAA, OP_SET_CONS,
 
@@ -4364,8 +4365,8 @@ static const char* op_names[NUM_OPS] =
       "eval_string",
       "member_if", "assoc_if", "member_if1", "assoc_if1",
       "lambda_unchecked", "let_unchecked", "catch_1", "catch_2", "catch_all",
-      "set_unchecked", "set_symbol_c", "set_symbol_s", "set_symbol_p", "set_symbol_a",
-      "set_normal", "set_opsq_a", "set_opsaq_a", "set_opsaq_p", "set_opsaq_p_1", 
+      "set_unchecked", "set_s_c", "set_s_s", "set_s_p", "set_a",
+      "set_normal", "set_opsq_a", "set_opsaq_a", "set_opsaq_p", "set_opsaq_p_1", "set_opsaaq_a", "set_opsaaq_p", "set_opsaaq_p_1", 
       "set_from_setter", "set_from_let_temp", "set_safe",
       "increment_1", "decrement_1", "increment_sa", "increment_saa", "set_cons",
       "letrec_unchecked", "letrec*_unchecked", "cond_unchecked",
@@ -45910,20 +45911,8 @@ static s7_pointer b_is_proper_list_setter(s7_scheme *sc, s7_pointer args)
 	    car(args), cadr(args), sc->prepackaged_type_names[type(cadr(args))], wrap_string(sc, "a proper list", 13))));
 }
 
-static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
+static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 {
-  #define H_setter "(setter obj let) returns the setter associated with obj"
-  #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, \
-                     sc->not_symbol, sc->is_procedure_symbol), sc->T, s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_null_symbol))
-  s7_pointer p = car(args), e;
-  if (is_pair(cdr(args)))
-    {
-      e = cadr(args);
-      if (!((is_let(e)) || (e == sc->rootlet) || (e == sc->nil)))
-	return(wrong_type_argument(sc, sc->setter_symbol, 2, e, T_LET));
-    }
-  else e = sc->curlet;
-
   switch (type(p))
     {
     case T_MACRO:   case T_MACRO_STAR:
@@ -45962,12 +45951,12 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
       return(sc->F);
 
     case T_C_OBJECT:
-      check_method(sc, p, sc->setter_symbol, args);
+      check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return((c_object_set(sc, p) == fallback_set) ? sc->F : sc->c_object_set_function); /* for example ((setter obj) obj 0 1.0) if s7test block */
       /* this could wrap the setter as an s7_function giving p's class-name etc */
 
     case T_LET:
-      check_method(sc, p, sc->setter_symbol, args);
+      check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return(global_value(sc->let_set_symbol));
 
     case T_ITERATOR:                           /* (set! (iter) val) doesn't fit the other setters */
@@ -45984,7 +45973,7 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 
     case T_SYMBOL:                             /* (setter symbol let) */
       {
-	s7_pointer sym = car(args), slot, setter;
+	s7_pointer sym = p, slot, setter;
 	if (is_keyword(sym))
 	  return(sc->F);
 
@@ -45993,6 +45982,8 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 	else
 	  {
 	    s7_pointer old_e = sc->curlet;
+	    if (!is_let(e))
+	      return(s7_wrong_type_arg_error(sc, "setter", 2, e, "a let"));
 	    set_curlet(sc, e);
 	    slot = lookup_slot_from(sym, sc->curlet);
 	    set_curlet(sc, old_e);
@@ -46002,10 +45993,26 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
        	if (is_bool_function(setter)) return(c_function_setter(setter));
 	return(setter);
       }}
-  return(s7_wrong_type_arg_error(sc, "setter", 0, p, "something that might have a setter"));
+  return(s7_wrong_type_arg_error(sc, "setter", 1, p, "something that might have a setter"));
 }
 
-s7_pointer s7_setter(s7_scheme *sc, s7_pointer obj) {return(g_setter(sc, set_plist_1(sc, obj)));}
+static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
+{
+  #define H_setter "(setter obj let) returns the setter associated with obj"
+  #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, \
+                     sc->not_symbol, sc->is_procedure_symbol), sc->T, s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_null_symbol))
+  s7_pointer e;
+  if (is_pair(cdr(args)))
+    {
+      e = cadr(args);
+      if (!((is_let(e)) || (e == sc->rootlet) || (e == sc->nil)))
+	return(wrong_type_argument(sc, sc->setter_symbol, 2, e, T_LET));
+    }
+  else e = sc->curlet;
+  return(setter_p_pp(sc, car(args), e));
+}
+
+s7_pointer s7_setter(s7_scheme *sc, s7_pointer obj) {return(setter_p_pp(sc, obj, sc->curlet));}
 
 
 /* -------------------------------- set-setter -------------------------------- */
@@ -46206,7 +46213,7 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
 static s7_pointer bind_symbol_with_setter(s7_scheme *sc, opcode_t op, s7_pointer symbol, s7_pointer new_value)
 {
   s7_pointer func;
-  func = g_setter(sc, set_plist_2(sc, symbol, sc->curlet));
+  func = setter_p_pp(sc, symbol, sc->curlet);
   if (!is_any_procedure(func))
     return(new_value);
 
@@ -49317,7 +49324,7 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
 	sc->current_value_symbol = make_symbol(sc, "current-value");
       val = s7_symbol_value(sc, obj);
       s7_varlet(sc, let, sc->current_value_symbol, val);
-      s7_varlet(sc, let, sc->setter_symbol, g_setter(sc, set_plist_1(sc, obj)));
+      s7_varlet(sc, let, sc->setter_symbol, setter_p_pp(sc, obj, sc->curlet));
       s7_varlet(sc, let, sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_symbol(obj)));
       if (!is_undefined(val))
 	{
@@ -67893,7 +67900,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_SET_FROM_SETTER:
       syntax_error_with_caller2(sc, "~A: can't set ~A to ~S", 22, sc->set_symbol, stack_code(sc->stack, top), set_ulist_1(sc, sc->values_symbol, args));
 
-    case OP_SET_opSAq_P_1:
+    case OP_SET_opSAq_P_1: case OP_SET_opSAAq_P_1:
       syntax_error(sc, "too many values to set! ~S", 26, set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_LET1:                         /* (let ((var (values 1 2 3))) ...) */
@@ -78340,7 +78347,21 @@ static void check_set(s7_scheme *sc)
 			fx_annotate_arg(sc, cdr(code), sc->curlet);     /* cdr(code) -> value */
 		      }
 		    else pair_set_syntax_op(form, OP_SET_opSAq_P);  /* (set! (symbol fxable) any) */
-		  }}}
+		  }}
+	    else
+	      if (is_null(cdddr(inner)))
+		{
+		  s7_pointer index1 = cadr(inner), index2 = caddr(inner);
+		  if ((is_fxable(sc, index1)) && (is_fxable(sc, index2)))
+		    {
+		      fx_annotate_args(sc, cdar(code), sc->curlet);    /* cdr(inner) -> index1 and 2 */
+		      if (is_fxable(sc, value))
+			{
+			  pair_set_syntax_op(form, OP_SET_opSAAq_A);   /* (set! (symbol fxable fxable) fxable) */
+			  fx_annotate_arg(sc, cdr(code), sc->curlet);  /* cdr(code) -> value */
+			}
+		      else pair_set_syntax_op(form, OP_SET_opSAAq_P);  /* (set! (symbol fxable fxable) any) */
+		    }}}
       return;
     }
   pair_set_syntax_op(form, OP_SET_NORMAL);
@@ -78355,25 +78376,25 @@ static void check_set(s7_scheme *sc)
 	    {
 	      if (is_slot(lookup_slot_from(value, sc->curlet)))
 		{
-		  pair_set_syntax_op(form, OP_SET_SYMBOL_S);
+		  pair_set_syntax_op(form, OP_SET_S_S);
 		  set_opt2_sym(code, value);
 		}}
 	  else
 	    if ((!is_pair(value)) ||
 		((car(value) == sc->quote_symbol) && (is_pair(cdr(value))))) /* (quote . 1) ? */
 	      {
-		pair_set_syntax_op(form, OP_SET_SYMBOL_C);
+		pair_set_syntax_op(form, OP_SET_S_C);
 		set_opt2_con(code, (is_pair(value)) ? cadr(value) : value);
 	      }
 	    else
 	      {
-		pair_set_syntax_op(form, OP_SET_SYMBOL_P);
+		pair_set_syntax_op(form, OP_SET_S_P);
 		/* TODO? h_safe_sc (set! x (+ x 1)), sp: (set! x (+ x (f ...))) */
 		if (is_optimized(value))
 		  {
 		    if (optimize_op(value) == HOP_SAFE_C_NC)
 		      {
-			pair_set_syntax_op(form, OP_SET_SYMBOL_A);
+			pair_set_syntax_op(form, OP_SET_S_A);
 			fx_annotate_arg(sc, cdr(code), sc->curlet);
 		      }
 		    else
@@ -78387,14 +78408,14 @@ static void check_set(s7_scheme *sc)
 			    }
 			  else
 			    {
-			      pair_set_syntax_op(form, OP_SET_SYMBOL_A);
+			      pair_set_syntax_op(form, OP_SET_S_A);
 			      fx_annotate_arg(sc, cdr(code), sc->curlet);
 			    }}
 		      else
 			{
 			  if (is_fxable(sc, value)) /* value = cadr(code) */
 			    {
-			      pair_set_syntax_op(form, OP_SET_SYMBOL_A);
+			      pair_set_syntax_op(form, OP_SET_S_A);
 			      fx_annotate_arg(sc, cdr(code), sc->curlet);
 			    }
 			  if ((is_safe_c_op(optimize_op(value))) &&
@@ -78451,21 +78472,21 @@ static void check_set(s7_scheme *sc)
 			      }}}}}}
 }
 
-static void op_set_symbol_c(s7_scheme *sc)
+static void op_set_s_c(s7_scheme *sc)
 {
   s7_pointer slot;
   slot = lookup_slot_from(cadr(sc->code), sc->curlet);
   slot_set_value(slot, sc->value = opt2_con(cdr(sc->code)));
 }
 
-static void op_set_symbol_s(s7_scheme *sc)
+static void op_set_s_s(s7_scheme *sc)
 {
   s7_pointer slot;
   slot = lookup_slot_from(cadr(sc->code), sc->curlet);
   slot_set_value(slot, sc->value = lookup(sc, opt2_sym(cdr(sc->code))));
 }
 
-static void op_set_symbol_a(s7_scheme *sc)
+static void op_set_s_a(s7_scheme *sc)
 {
   s7_pointer slot;
   slot = lookup_slot_from(cadr(sc->code), sc->curlet);
@@ -78539,7 +78560,7 @@ static s7_pointer no_setter_error(s7_scheme *sc, s7_pointer obj)
   /* copy is necessary due to the way quoted lists|symbols are handled in op_set_with_let_1|2 and copy_tree */
 }
 
-static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer value)
+static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer value)
 {
   switch (type(obj))
     {
@@ -78655,54 +78676,203 @@ static bool set_pair_p_3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_point
   return(false);
 }
 
+
 static bool op_set_opsq_a(s7_scheme *sc)        /* (set! (symbol) fxable) */
 {
-  s7_pointer obj, value, code = cdr(sc->code);
+  s7_pointer obj, setf, value, code = cdr(sc->code);
   obj = lookup_checked(sc, caar(code));
-  value = fx_call(sc, cdr(code));
-  if ((is_c_function(obj)) && (is_c_function(c_function_setter(obj))))
+  setf = setter_p_pp(sc, obj, sc->curlet);
+  if (is_any_macro(setf))
     {
-      sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t1(value));
+      sc->code = setf;
+      sc->args = cdr(code);
+      return(true);
+    }
+  value = fx_call(sc, cdr(code));
+  if (is_c_function(setf))
+    {
+      sc->value = c_function_call(setf)(sc, with_list_t1(value));
       return(false);
     }
-  if (is_any_closure(obj))
-    sc->code = closure_setter(obj);
-  else sc->code = g_setter(sc, set_plist_1(sc, obj));
+  sc->code = setf;
   sc->args = list_1(sc, value);
   return(true);
 }
 
 static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable) */
 {
-  s7_pointer obj, index, value, code = cdr(sc->code);
+  s7_pointer obj, setf, index, value, code = cdr(sc->code);
   bool result;
   obj = lookup_checked(sc, caar(code));
+  setf = setter_p_pp(sc, obj, sc->curlet);
+  if (is_any_macro(setf))
+    {
+      sc->code = setf;
+      sc->args = pair_append(sc, cdar(code), cdr(code));
+      return(true);
+    }
   value = fx_call(sc, cdr(code));
   gc_protect_via_stack(sc, value);
   index = fx_call(sc, cdar(code));
   stack_protected2(sc) = index;
-  result = set_pair_p_3(sc, obj, index, value);
+  result = set_pair3(sc, obj, index, value);
   unstack(sc);
   return(result);
 }
 
-static void op_set_opsaq_p(s7_scheme *sc)
+static inline bool op_set_opsaq_p(s7_scheme *sc)
 {
+  s7_pointer obj, setf, code = cdr(sc->code);
   /* ([set!] (car a) (cadr a)) */
   /* here the pair can't generate multiple values, or if it does, it's an error (caught below)
    *  splice_in_values will notice the OP_SET_opSAq_P_1 and complain.
    * (let () (define (hi) (let ((str "123")) (set! (str 0) (values #\a)) str)) (hi) (hi)) is "a23"
    * (let ((v (make-vector '(2 3) 0))) (set! (v (values 0 1)) 23) v) -> #2D((0 23 0) (0 0 0))
    */
-  push_stack_no_args(sc, OP_SET_opSAq_P_1, cdr(sc->code));
-  sc->code = caddr(sc->code);
+  obj = lookup_checked(sc, caar(code));
+  setf = setter_p_pp(sc, obj, sc->curlet);
+  if (is_any_macro(setf))
+    {
+      sc->code = setf;
+      sc->args = pair_append(sc, cdar(code), cdr(code));
+      return(true);
+    }
+  push_stack(sc, OP_SET_opSAq_P_1, obj, code);
+  sc->code = cadr(code);
+  return(false);
 }
 
 static inline bool op_set_opsaq_p_1(s7_scheme *sc)
 {
   s7_pointer value = sc->value, index;
   index = fx_call(sc, cdar(sc->code));
-  return(set_pair_p_3(sc, lookup_checked(sc, caar(sc->code)), index, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
+  return(set_pair3(sc, sc->args, index, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
+}
+
+static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_pointer index2, s7_pointer value)
+{
+  switch (type(obj))
+    {
+    case T_C_OBJECT:
+      sc->value = (*(c_object_ref(sc, obj)))(sc, with_list_t2(obj, index1));
+      return(set_pair3(sc, sc->value, index2, value));
+      break;
+      
+    case T_FLOAT_VECTOR: 
+      sc->value = g_float_vector_set(sc, with_list_t4(obj, index1, index2, value)); /* would set_plist_4 be faster? */
+      break;
+    case T_INT_VECTOR: 
+      sc->value = g_int_vector_set(sc, with_list_t4(obj, index1, index2, value));
+      break;
+    case T_BYTE_VECTOR:
+      sc->value = g_byte_vector_set(sc, with_list_t4(obj, index1, index2, value));
+      break;
+    case T_VECTOR:
+      if (vector_rank(obj) == 2)
+	sc->value = g_vector_set_4(sc, with_list_t4(obj, index1, index2, value));
+      else
+	{
+	  sc->value = g_vector_ref(sc, with_list_t2(obj, index1));
+	  return(set_pair3(sc, sc->value, index2, value));
+	}
+      break;
+
+    case T_PAIR:
+      sc->value = g_list_ref(sc, with_list_t2(obj, index1));
+      return(set_pair3(sc, sc->value, index2, value));
+      break;
+
+    case T_HASH_TABLE:
+      sc->value = s7_hash_table_ref(sc, obj, index1);
+      return(set_pair3(sc, sc->value, index2, value));
+      break;
+
+    case T_LET:
+      sc->value = s7_let_ref(sc, obj, index1);
+      return(set_pair3(sc, sc->value, index2, value));
+      break;
+
+    case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
+    case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
+      if (!is_any_procedure(c_function_setter(obj)))
+	no_setter_error(sc, obj);
+      if (is_c_function(c_function_setter(obj)))
+	sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t3(index1, index2, value));
+      else
+	{
+	  sc->code = c_function_setter(obj);
+	  sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
+	  return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
+	}
+      break;
+
+    case T_MACRO:   case T_MACRO_STAR:
+    case T_BACRO:   case T_BACRO_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
+      if (!is_any_procedure(closure_setter(obj)))
+	no_setter_error(sc, obj);
+      if (is_c_function(closure_setter(obj)))
+	sc->value = c_function_call(closure_setter(obj))(sc, with_list_t3(index1, index2, value));
+      else
+	{
+	  sc->code = closure_setter(obj);
+	  sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
+	  return(true); /* goto APPLY; */
+	}
+      break;
+
+    default:
+      no_setter_error(sc, obj); /* possibly a continuation/goto or string */
+    }
+  return(false); /* goto start */
+}
+
+static bool op_set_opsaaq_a(s7_scheme *sc)        /* (set! (symbol fxable fxable) fxable) */
+{
+  s7_pointer obj, setf, index1, value, code = cdr(sc->code);
+  bool result;
+  obj = lookup_checked(sc, caar(code));
+  setf = setter_p_pp(sc, obj, sc->curlet);
+  if (is_any_macro(setf))
+    {
+      sc->code = setf;
+      sc->args = pair_append(sc, cdar(code), cdr(code));
+      return(true);
+    }
+  value = fx_call(sc, cdr(code));
+  gc_protect_via_stack(sc, value);
+  index1 = fx_call(sc, cdar(code));
+  stack_protected2(sc) = index1;
+  result = set_pair4(sc, obj, index1, fx_call(sc, cddar(code)), value);
+  unstack(sc);
+  return(result);
+}
+
+static bool op_set_opsaaq_p(s7_scheme *sc)
+{
+  s7_pointer obj, setf, code = cdr(sc->code);
+  obj = lookup_checked(sc, caar(code));
+  setf = setter_p_pp(sc, obj, sc->curlet);
+  if (is_any_macro(setf))
+    {
+      sc->code = setf;
+      sc->args = pair_append(sc, cdar(code), cdr(code));
+      return(true);
+    }
+  push_stack(sc, OP_SET_opSAAq_P_1, obj, code);
+  sc->code = cadr(code);
+  return(false);
+}
+
+static bool op_set_opsaaq_p_1(s7_scheme *sc)
+{
+  s7_pointer value = sc->value, index1;
+  bool result;
+  index1 = fx_call(sc, cdar(sc->code));
+  gc_protect_via_stack(sc, index1);
+  result = set_pair4(sc, sc->args, index1, fx_call(sc, cddar(sc->code)), value);
+  unstack(sc);
+  return(result);
 }
 
 static void op_set_safe(s7_scheme *sc)
@@ -78824,7 +78994,7 @@ static bool op_set_normal(s7_scheme *sc)
   return(false);
 }
 
-static void op_set_symbol_p(s7_scheme *sc)
+static void op_set_s_p(s7_scheme *sc)
 {
   check_stack_size(sc);
   push_stack_no_args(sc, OP_SET_SAFE, cadr(sc->code));
@@ -78958,7 +79128,7 @@ static inline bool op_implicit_vector_set_3(s7_scheme *sc)
   v = lookup(sc, caar(code));
   if (!is_any_vector(v))
     {
-      /* this could be improved -- set_pair_p_3 perhaps: pair_p_3 set opt3? but this calls g_vector_set_3 */
+      /* this could be improved -- set_pair3 perhaps: pair3 set opt3? but this calls g_vector_set_3 */
       pair_set_syntax_op(sc->code, OP_SET_UNCHECKED);
       return(true);
     }
@@ -79506,7 +79676,7 @@ static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer fnc)
   s7_pointer setter = closure_setter(fnc);
   if ((setter == sc->F) &&
       (!closure_no_setter(fnc)))
-    setter = g_setter(sc, set_plist_1(sc, fnc));
+    setter = setter_p_pp(sc, fnc, sc->curlet);
   if (is_t_procedure(setter))
     {
       /* (set! (o g) ...), here fnc = o, sc->code = ((o g) ...) */
@@ -90644,22 +90814,26 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DEFINE1: if (op_define1(sc)) goto APPLY;
 	case OP_DEFINE_WITH_SETTER: op_define_with_setter(sc); continue;
 
-	case OP_SET_opSq_A:        if (op_set_opsq_a(sc))    goto APPLY; continue;
-	case OP_SET_opSAq_A:	   if (op_set_opsaq_a(sc))   goto APPLY; continue;
-	case OP_SET_opSAq_P:       op_set_opsaq_p(sc);       goto EVAL;
-	case OP_SET_opSAq_P_1:     if (op_set_opsaq_p_1(sc)) goto APPLY; continue;
+	case OP_SET_opSq_A:     if (op_set_opsq_a(sc))     goto APPLY; continue;
+	case OP_SET_opSAq_A:	if (op_set_opsaq_a(sc))    goto APPLY; continue;
+	case OP_SET_opSAq_P:    if (op_set_opsaq_p(sc))    goto APPLY; goto EVAL;
+	case OP_SET_opSAq_P_1:  if (op_set_opsaq_p_1(sc))  goto APPLY; continue;
+	case OP_SET_opSAAq_A:	if (op_set_opsaaq_a(sc))   goto APPLY; continue;
+	case OP_SET_opSAAq_P:   if (op_set_opsaaq_p(sc))   goto APPLY; goto EVAL;
+	case OP_SET_opSAAq_P_1: if (op_set_opsaaq_p_1(sc)) goto APPLY; continue;
 
-	case OP_INCREMENT_BY_1:   op_increment_by_1(sc);   continue;
-	case OP_DECREMENT_BY_1:   op_decrement_by_1(sc);   continue;
-	case OP_INCREMENT_SA:     op_increment_sa(sc);     continue;
-	case OP_INCREMENT_SAA:    op_increment_saa(sc);    continue;
+	case OP_INCREMENT_BY_1: op_increment_by_1(sc); continue;
+	case OP_DECREMENT_BY_1: op_decrement_by_1(sc); continue;
+	case OP_INCREMENT_SA:   op_increment_sa(sc);   continue;
+	case OP_INCREMENT_SAA:  op_increment_saa(sc);  continue;
 
-	case OP_SET_SYMBOL_C:     op_set_symbol_c(sc);     continue;
-	case OP_SET_SYMBOL_S:     op_set_symbol_s(sc);     continue;
-	case OP_SET_SYMBOL_A:     op_set_symbol_a(sc);     continue;
-	case OP_SET_SYMBOL_P:     op_set_symbol_p(sc);     goto EVAL;
-	case OP_SET_CONS:         op_set_cons(sc);         continue;
- 	case OP_SET_SAFE:	  op_set_safe(sc);  	   continue;
+	case OP_SET_S_C:        op_set_s_c(sc);        continue;
+	case OP_SET_S_S:        op_set_s_s(sc);        continue;
+	case OP_SET_S_A:        op_set_s_a(sc);        continue;
+	case OP_SET_S_P:        op_set_s_p(sc);        goto EVAL;
+	case OP_SET_CONS:       op_set_cons(sc);       continue;
+ 	case OP_SET_SAFE:	op_set_safe(sc);       continue;
+
 	case OP_SET_FROM_SETTER:  slot_set_value(sc->code, sc->value); continue; /* mv caught in splice_in_values */
 	case OP_SET_FROM_LET_TEMP: op_set_from_let_temp(sc); continue;
 
@@ -93026,6 +93200,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->is_equivalent_symbol), is_equivalent_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->char_eq_symbol), char_eq_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->make_float_vector_symbol), make_float_vector_p_pp);
+  s7_set_p_pp_function(sc, global_value(sc->setter_symbol), setter_p_pp);
 
   s7_set_b_7pp_function(sc, global_value(sc->char_lt_symbol), char_lt_b_7pp);
   s7_set_b_7pp_function(sc, global_value(sc->char_leq_symbol), char_leq_b_7pp);
@@ -94656,7 +94831,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 911)
+  if (NUM_OPS != 914)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95029,52 +95204,52 @@ int main(int argc, char **argv)
  * tpeak       121          115    114    108    107    107
  * tref        508          691    687    463    458    458
  * index      1167         1026   1016    973    968    970
- * tmock      7737         1177   1165   1057   1060   1052
+ * tmock      7737         1177   1165   1057   1060   1052  1054 [op_set_opsaq_p]
  * tvect      1953         2519   2464   1772   1713   1713
  * texit      1806         ----   ----   1778   1757   1764
  * s7test     4533         1873   1831   1818   1813   1790
  * lt         2153         2187   2172   2150   2148   2156
- * timp       2232         2971   2891   2176   2206   2199
- * tread      2567         2440   2421   2419   2414   2376
- * dup        2579         3805   3788   2492   2373   2376
+ * timp       2232         2971   2891   2176   2206   2199  2061 [op_set_opsaaq_a] 2054
+ * tread      2567         2440   2421   2419   2414   2376  2385 [g_setter]
+ * dup        2579         3805   3788   2492   2373   2376  2380
  * trclo      4073         2735   2574   2454   2451   2443
  * fbench     2827         2688   2583   2460   2460   2453
  * tcopy      2557         8035   5546   2539   2501   2497
- * tmat       2684         3065   3042   2524   2520   2514  2522 [iv_set_3??]
+ * tmat       2684         3065   3042   2524   2520   2514  2517
  * tauto      2750         ----   ----   2562   2546   2569
  * tb         3364         2735   2681   2612   2611   2611
  * titer      2633         2865   2842   2641   2638   2615
  * tsort      3572         3105   3104   2856   2855   2856
  * tmac       2949         3950   3873   3033   2998   2990
  * tload      3718         ----   ----   3046   3042   3020
- * tset       3107         3253   3104   3048   3121   3145
+ * tset       3107         3253   3104   3048   3121   3145  3131
  * teq        3472         4068   4045   3536   3531   3468
  * tio        3679         3816   3752   3683   3680   3646
- * tobj       3730         4016   3970   3828   3701   3666
+ * tobj       3730         4016   3970   3828   3701   3666  3678 [g_setter]
  * tclo       4538         4787   4735   4390   4398   4341
  * tcase      4475         4960   4793   4439   4426   4444
  * tlet       5277         7775   5640   4450   4434   4423
  * tmap       5495         8869   8774   4489   4500   4498
- * tfft      114.9         7820   7729   4755   4652   4624
- * tshoot     6903         5525   5447   5183   5153   5198
+ * tfft      114.9         7820   7729   4755   4652   4624  4721! [op_set_opsaq_p g_setter] 4680 if inlined
+ * tshoot     6903         5525   5447   5183   5153   5198  5207 [op_set_opsaq_p]
  * tform      8335         5357   5348   5307   5300   5307
- * tnum       56.6         6348   6013   5433   5406   5391
+ * tnum       56.6         6348   6013   5433   5406   5391  5451! [op_set_opsaq_p] 5427 if inlined
  * tstr       6123         6880   6342   5488   5488   5474
  * tlamb      5799         6423   6273   5720   ----   5630
  * tgsl       25.2         8485   7802   6373   6373   6324
- * tmisc      6892         8869   7612   6435   6331   6322
+ * tmisc      6892         8869   7612   6435   6331   6322  6341 [op_set_opsaaq_a]
  * tlist      6505         7896   7546   6558   6532   6494
  * trec       8314         6936   6922   6521   6521   6523
  * tari       ----         13.0   12.7   6827   6819   6836
  * tleft      9004         10.4   10.2   7657   7664   7615
- * tgc        9532         11.9   11.1   8177   8156   8068
+ * tgc        9532         11.9   11.1   8177   8156   8068  8063
  * thash      35.2         11.8   11.7   9734   9590   9584
- * cb         16.9         11.2   11.0   9658   9585   9678
+ * cb         16.9         11.2   11.0   9658   9585   9678  9693
  * tgen       12.6         11.2   11.4   12.0   11.9   12.0
  * tall       24.5         15.6   15.6   15.6   15.6   15.6
  * calls      55.8         36.7   37.5   37.0   37.0   37.2
  * sg         76.1         ----   ----   55.9   55.8   56.0
- * lg        105.6         ----   ----  105.2  105.4  105.0 104.9  105.7 [op_set_dilambda_sa_a]
+ * lg        105.6         ----   ----  105.2  105.4  105.7
  * tbig      600.4        177.4  175.8  156.5  152.5  152.5
  * -------------------------------------------------------------
  *
@@ -95085,8 +95260,5 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm
- * for op_set_opsaaq_* we need set_pair_p4 with support for e.g. implicit hash-table-set! with args already evaluated
- *   this is also the case for vectors etc (set! (v 0 'a) 32) where (v 0) is a let or whatever -- does this work?
- *     yes: (define v (vector (inlet 'a 1))) (set! (v 0 'a) 33) v->#((inlet 'a 33))
- *   but set_implicit_* assumes args are not evaluated, so it's a ton of repetitive code (see tmp)
+ * 577|8 -> s7test + 5 arg cases, check (set! <key>...)
  */

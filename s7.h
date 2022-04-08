@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.3"
-#define S7_DATE "8-Apr-2022"
+#define S7_DATE "11-Apr-2022"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 3
 
