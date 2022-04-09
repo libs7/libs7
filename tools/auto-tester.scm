@@ -210,7 +210,7 @@
   (+ par 1))
 (define (tf14 x)
   (fop14 :par x))
-(define (fop15 f a) ; op_closure_fa
+(define (fop15 f a)   ; closure_fa
   (f a))
 (define (tf15 y)
   (fop15 (lambda (x) (+ x 1)) y))
@@ -234,6 +234,59 @@
   (fop19 (* x 2) (+ x 1)))
 (define (fop19-1 x y)
   (+ x y))
+(define (fop20 a b)   ; cl_sas
+  (map list (car a) b))
+(define (tf20 x)
+  (fop20 (list (list 1 2 3)) x))
+(define (fop21 a b c d) ; closure_4s
+  (fop21-1 (+ a 1) b c d))
+(define (tf21 x)
+  (fop21 x x x x))
+(define (fop21-1 a b c d)
+  (+ a b c d))
+(define (fop22 a b)   ; apply_sl
+  (apply + (list a b)))
+(define (tf22 x)
+  (fop22 x x))
+(define (fop23 a)     ; apply_ss
+  (apply + a))
+(define (tf23 x)
+  (fop23 x))
+(define (fop24 a b c d e)
+  (+ a b c d e))
+(define (tf24 x)
+  (fop24 (fop24-1 x) (fop24-1 (+ x 1)) x x x)) ; any_closure_np
+(define (fop24-1 x)
+  (* x 2))
+(define (tf25 x)
+  (fop24 (fop24-1 x) (fop24-1 (+ x 1)) x x (values x x))) ; any_closure_np_mv
+(define (tf26 x)
+  (fop24 (fop24-1 x) x (values x x x)))
+(define (tf27 x)
+  (fop24 (values x x x) (fop24-1 x) (fop24-1 x)))
+(define (fop29 x)
+  (sort! x (lambda (a b) (unless (and a b) (error "oops")) (< a b))))
+(define (fop30 a b c)
+  (+ a b c))
+(define (tf30 x)
+  (let ((y (* x 2))
+	(z (+ x 1)))
+    (fop30 x y z))) ; safe_closure_3s_a
+(define (fop31 a b c)
+  (+ a b)
+  (max a b c))
+(define (tf31 x)
+  (let ((y (* x 2))
+	(z (+ x 1)))
+    (fop31 x y z))) ; safe_closure_3s
+(define (fop32-0 x) (vector-ref x 0))
+(define (fop32-1 x) (vector-ref x 1))
+(define (fop32 x) (+ (fop32-0 x) (fop32-1 x)))
+(define (tf32 x) (fop32 x)) ; fx_c_ff = op_safe_c_ff
+(define (fop33 x y) (abs y) (+ x 1))
+(define (tf33 x) (fop33 x 0))  ; op_safe_closure_sc
+(define* (fop34 x y) (abs y) (+ x y))
+(define (tf34 x) (fop34 (+ x 1) (* x 2))) ; op_safe_closure_star_aa
 
 (define (sym1 . a) (copy a))
 (define (sym2 a . b) (cons a (copy b)))
@@ -241,6 +294,7 @@
 (define* (sym4 :rest a) (copy a))
 (define* (sym5 a :rest b) (cons a (copy b)))
 (define* (sym6 a b :rest c) (list a b (copy c)))
+(define* (sym7 a :rest b :rest c) (list a b c))
 
 (define-macro (msym1 . a) `(copy ,a))
 (define-macro (msym2 a . b) `(cons ,a (copy ,b))) ; these are confusing!
@@ -248,6 +302,7 @@
 (define-macro* (msym4 :rest a) `(copy ,a))
 (define-macro* (msym5 a :rest b) `(cons ,a (copy ,b)))
 (define-macro* (msym6 a b :rest c) `(list ,a ,b (copy ,c)))
+(define-macro* (msym7 a :rest b :rest c) `(list ,a ,@b ,@c))
 
 (define (s7-print-length) (*s7* 'print-length))
 (define (s7-max-string-length) (*s7* 'max-string-length))
@@ -398,14 +453,6 @@
 
 (define-expansion (_ct2_ . args)
   `(catch 'oops (lambda () (call-with-exit (lambda (goto) (goto ,@args)))) (lambda args 'error)))
-
-#|
-(define-expansion (_mem1_ . args)
-  `(member 1 (list 3 2) (lambda (a b) ,@args)))
-
-(define-expansion (_mem2_ . args)
-  `(assoc 1 (list (list 3 2) (list 2)) (lambda (a b) ,@args)))
-|#
 
 (define-expansion (_ft1_ . args)
   `(let ((_f_ (lambda () ,@args))) (_f_) (_f_)))
@@ -893,8 +940,10 @@
 			  'kar '_dilambda_ '_vals_ '_vals1_ '_vals2_ 
                           '_vals3_ '_vals4_ '_vals5_ '_vals6_ '_vals3s_ '_vals4s_ '_vals5s_ '_vals6s_ 
                           '_svals3_ '_svals4_ '_svals5_ '_svals6_ '_svals3s_ '_svals4s_ '_svals5s_ '_svals6s_ 
-			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6 'msym1 'msym2 'msym3 'msym4 'msym5 'msym6
-			  'fop1 'fop2 'fop3 'tff 'fop4 'fop5 'fop6 'tf7 'tf8 'tf9 'tf10 'tf13 'tf14 'tf15 'tf16 'tf17 'tf18 'tf19
+			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6 'sym7 'msym1 'msym2 'msym3 'msym4 'msym5 'msym6 'msym7
+			  'fop1 'fop2 'fop3 'tff 'fop4 'fop5 'fop6 'tf7 'tf8 'tf9 'tf10 'tf13 'tf14 
+			  'tf15 'tf16 'tf17 'tf18 'tf19 'tf20 'tf21 'tf22 'tf23 'tf24 'tf25 'tf26 'tf27 'fop29 
+			  'tf30 'tf31 'tf32 'tf33 'tf34
 			  'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
 			  ;'linter
