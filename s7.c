@@ -583,7 +583,6 @@ typedef struct {
   int32_t name_length;
   uint32_t id;
   const char *doc;
-  block_t *block;
   opt_funcs_t *opt_data; /* vunion-functions (see below) */
   s7_pointer generic_ff, setter, signature, pars;
   s7_pointer (*chooser)(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops);
@@ -3331,7 +3330,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_signature(f)        c_function_data(f)->signature
 #define c_function_setter(f)           T_Prc(c_function_data(f)->setter)
 #define c_function_set_setter(f, Val)  c_function_data(f)->setter = T_Prc(Val)
-#define c_function_block(f)            (f)->object.fnc.c_proc->block /* no type checking here */
 #define c_function_class(f)            c_function_data(f)->id
 #define c_function_chooser(f)          c_function_data(f)->chooser
 #define c_function_base(f)             T_Fnc(c_function_data(f)->generic_ff)
@@ -36177,75 +36175,6 @@ void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t
   for (; i < len; i++) array[i] = sc->undefined;
 }
 
-#if (!DISABLE_DEPRECATED)
-/* these are used in clm2xen et al under names like Xen_wrap_5_args */
-
-s7_pointer s7_apply_n_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1))
-{
-  if (is_pair(args)) return(f1(car(args)));
-  return(f1(sc->undefined));
-}
-
-s7_pointer s7_apply_n_2(s7_scheme *sc, s7_pointer args, s7_pointer (*f2)(s7_pointer a1, s7_pointer a2))
-{
-  if (is_pair(args)) return((is_pair(cdr(args))) ? f2(car(args), cadr(args)) : f2(car(args), sc->undefined));
-  return(f2(sc->undefined, sc->undefined));
-}
-
-s7_pointer s7_apply_n_3(s7_scheme *sc, s7_pointer args, s7_pointer (*f3)(s7_pointer a1, s7_pointer a2, s7_pointer a3))
-{
-  s7_pointer a[3];
-  s7_list_to_array(sc, args, a, 3);
-  return(f3(a[0], a[1], a[2]));
-}
-
-s7_pointer s7_apply_n_4(s7_scheme *sc, s7_pointer args, s7_pointer (*f4)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4))
-{
-  s7_pointer a[4];
-  s7_list_to_array(sc, args, a, 4);
-  return(f4(a[0], a[1], a[2], a[3]));
-}
-
-s7_pointer s7_apply_n_5(s7_scheme *sc, s7_pointer args, s7_pointer (*f5)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5))
-{
-  s7_pointer a[5];
-  s7_list_to_array(sc, args, a, 5);
-  return(f5(a[0], a[1], a[2], a[3], a[4]));
-}
-
-s7_pointer s7_apply_n_6(s7_scheme *sc, s7_pointer args,
-			s7_pointer (*f6)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5, s7_pointer a6))
-{
-  s7_pointer a[6];
-  s7_list_to_array(sc, args, a, 6);
-  return(f6(a[0], a[1], a[2], a[3], a[4], a[5]));
-}
-
-s7_pointer s7_apply_n_7(s7_scheme *sc, s7_pointer args, s7_pointer (*f7)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4,
-				       s7_pointer a5, s7_pointer a6, s7_pointer a7))
-{
-  s7_pointer a[7];
-  s7_list_to_array(sc, args, a, 7);
-  return(f7(a[0], a[1], a[2], a[3], a[4], a[5], a[6]));
-}
-
-s7_pointer s7_apply_n_8(s7_scheme *sc, s7_pointer args, s7_pointer (*f8)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4,
-				       s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8))
-{
-  s7_pointer a[8];
-  s7_list_to_array(sc, args, a, 8);
-  return(f8(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]));
-}
-
-s7_pointer s7_apply_n_9(s7_scheme *sc, s7_pointer args, s7_pointer (*f9)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4,
-				       s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8, s7_pointer a9))
-{
-  s7_pointer a[9];
-  s7_list_to_array(sc, args, a, 9);
-  return(f9(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]));
-}
-#endif
-
 
 /* ---------------- tree-leaves ---------------- */
 static inline s7_int tree_len_1(s7_scheme *sc, s7_pointer p)
@@ -41147,11 +41076,11 @@ static bool find_matching_ref(s7_scheme *sc, s7_pointer getter, s7_pointer expr)
 	  if (is_pair(car(p)))
 	    {
 	      s7_pointer ref = car(p);
-	      if (((car(ref) == getter) &&
+	      if (((car(ref) == getter) &&             /* (getter v ind) */
 		   (is_proper_list_2(sc, cdr(ref))) &&
 		   (cadr(ref) == v) &&
 		   (caddr(ref) == ind)) ||
-		  ((car(ref) == v) &&
+		  ((car(ref) == v) &&                  /* (v ind) */
 		   (is_proper_list_1(sc, cdr(ref))) &&
 		   (cadr(ref) == ind)))
 		return(true);
@@ -44104,9 +44033,8 @@ static void check_old_hash(s7_scheme *sc, s7_pointer old_hash, s7_pointer new_ha
 
 static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer new_hash, s7_int start, s7_int end)
 {
-  s7_int i, old_len, new_mask, count = 0;
+  s7_int old_len, new_mask, count = 0;
   hash_entry_t **old_lists, **new_lists;
-  hash_entry_t *x, *p;
 
   if ((is_typed_hash_table(new_hash)) &&
       (sc->safety >= NO_SAFETY) &&
@@ -44127,10 +44055,11 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
 	{
-	  for (i = 0; i < old_len; i++)
-	    for (x = old_lists[i]; x; x = hash_entry_next(x))
+	  for (s7_int i = 0; i < old_len; i++)
+	    for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
 	      {
 		s7_int loc;
+		hash_entry_t *p;
 		loc = hash_entry_raw_hash(x) & new_mask;
 		p = make_hash_entry(sc, hash_entry_key(x), hash_entry_value(x), hash_entry_raw_hash(x));
 		hash_entry_next(p) = new_lists[loc];
@@ -44139,8 +44068,8 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 	  hash_table_entries(new_hash) = hash_table_entries(old_hash);
 	  return(new_hash);
 	}
-      for (i = 0; i < old_len; i++)
-	for (x = old_lists[i]; x; x = hash_entry_next(x))
+      for (s7_int i = 0; i < old_len; i++)
+	for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
 	  {
 	    if (count >= end)
 	      {
@@ -44150,6 +44079,7 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 	    if (count >= start)
 	      {
 		s7_int loc;
+		hash_entry_t *p;
 		loc = hash_entry_raw_hash(x) & new_mask;
 		p = make_hash_entry(sc, hash_entry_key(x), hash_entry_value(x), hash_entry_raw_hash(x));
 		hash_entry_next(p) = new_lists[loc];
@@ -44162,8 +44092,8 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
     }
 
   /* this can't be optimized much because we have to look for key matches (we're copying old_hash into the existing, non-empty new_hash) */
-  for (i = 0; i < old_len; i++)
-    for (x = old_lists[i]; x; x = hash_entry_next(x))
+  for (s7_int i = 0; i < old_len; i++)
+    for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
       {
 	if (count >= end)
 	  return(new_hash);
@@ -44176,6 +44106,7 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 	    else
 	      {
 		s7_int loc;
+		hash_entry_t *p;
 		loc = hash_entry_raw_hash(x) & new_mask;
 		p = make_hash_entry(sc, hash_entry_key(x), hash_entry_value(x), hash_entry_raw_hash(x));
 		hash_entry_next(p) = new_lists[loc];
@@ -44204,12 +44135,12 @@ static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
       if (val == sc->F)                      /* hash-table-ref returns #f if it can't find a key, so val == #f here means empty the table */
 	{
 	  hash_entry_t **hp = entries, **hn;
-	  hash_entry_t *p;
 	  hn = (hash_entry_t **)(hp + len);
 	  for (; hp < hn; hp++)
 	    {
 	      if (*hp)
 		{
+		  hash_entry_t *p;
 		  p = *hp;
 		  while (hash_entry_next(p)) p = hash_entry_next(p);
 		  hash_entry_next(p) = sc->block_lists[BLOCK_LIST];
@@ -44218,6 +44149,7 @@ static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
 	      hp++;
 	      if (*hp)
 		{
+		  hash_entry_t *p;
 		  p = *hp;
 		  while (hash_entry_next(p)) p = hash_entry_next(p);
 		  hash_entry_next(p) = sc->block_lists[BLOCK_LIST];
@@ -45028,12 +44960,11 @@ static s7_pointer g_dynamic_wind_unchecked(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_dynamic_wind_init(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer p, inp;
+  s7_pointer p, inp = closure_or_f(sc, car(args));
   new_cell(sc, p, T_DYNAMIC_WIND);                          /* don't mark car/cdr, don't copy */
-  dynamic_wind_in(p) = closure_or_f(sc, car(args));
+  dynamic_wind_in(p) = inp;
   dynamic_wind_body(p) = cadr(args);
   dynamic_wind_out(p) = sc->F;
-  inp = dynamic_wind_in(p);
   if ((is_any_closure(inp)) && (!is_safe_closure(inp)))    /* wrap this use of inp in a with-baffle */
     dynamic_wind_in(p) = make_baffled_closure(sc, inp);
   push_stack(sc, OP_DYNAMIC_WIND, sc->nil, p);             /* args will be the saved result, code = s7_dynwind_t obj */
@@ -60990,12 +60921,14 @@ static bool opt_b_d_f(opt_info *o)  {return(o->v[2].b_d_f(o->v[11].fd(o->v[10].o
 static bool opt_b_p_s(opt_info *o)  {return(o->v[2].b_p_f(slot_value(o->v[1].p)));}
 static bool opt_b_p_f(opt_info *o)  {return(o->v[2].b_p_f(o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_7p_s(opt_info *o) {return(o->v[2].b_7p_f(o->sc, slot_value(o->v[1].p)));}
+static bool opt_b_7p_s_not(opt_info *o) {return(slot_value(o->v[1].p) == o->sc->F);}
 static bool opt_b_7p_f(opt_info *o) {return(o->v[2].b_7p_f(o->sc, o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_d_s_is_positive(opt_info *o) {return(real(slot_value(o->v[1].p)) > 0.0);}
 static bool opt_b_p_s_is_integer(opt_info *o) {return(s7_is_integer(slot_value(o->v[1].p)));}
 static bool opt_b_p_s_is_pair(opt_info *o) {return(is_pair(slot_value(o->v[1].p)));}
 static bool opt_b_p_f_is_string(opt_info *o) {return(s7_is_string(o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_7p_s_iter_at_end(opt_info *o) {return(iterator_is_at_end(slot_value(o->v[1].p)));}
+static bool opt_b_7p_f_not(opt_info *o) {return((o->v[4].fp(o->v[3].o1)) == o->sc->F);}
 
 static bool opt_zero_mod(opt_info *o)
 {
@@ -61081,13 +61014,14 @@ static bool b_idp_ok(s7_scheme *sc, s7_pointer s_func, s7_pointer car_x, s7_poin
 	  if (!p) return_false(sc, car_x);
 	  opc->v[1].p = p;
  	  opc->v[0].fb = (bpf) ? ((bpf == s7_is_integer) ? opt_b_p_s_is_integer : ((bpf == s7_is_pair) ? opt_b_p_s_is_pair : opt_b_p_s)) :
-	                         (((bpf7 == iterator_is_at_end_b_7p) && (is_iterator(slot_value(p)))) ? opt_b_7p_s_iter_at_end : opt_b_7p_s);
+	                         (((bpf7 == iterator_is_at_end_b_7p) && (is_iterator(slot_value(p)))) ? opt_b_7p_s_iter_at_end : 
+				  ((bpf7 == not_b_7p) ? opt_b_7p_s_not : opt_b_7p_s));
 	  return(true);
 	}
       opc->v[3].o1 = sc->opts[sc->pc];
       if (cell_optimize(sc, cdr(car_x)))
 	{
-	  opc->v[0].fb = (bpf) ? ((bpf == s7_is_string) ? opt_b_p_f_is_string : opt_b_p_f) : opt_b_7p_f;
+	  opc->v[0].fb = (bpf) ? ((bpf == s7_is_string) ? opt_b_p_f_is_string : opt_b_p_f) : (bpf7 == not_b_7p) ? opt_b_7p_f_not : opt_b_7p_f;
 	  opc->v[4].fp = opc->v[3].o1->v[0].fp;
 	  return(true);
 	}}
@@ -61459,6 +61393,7 @@ static bool opt_b_dd_sf(opt_info *o) {return(o->v[3].b_dd_f(real(slot_value(o->v
 static bool opt_b_dd_fs(opt_info *o) {return(o->v[3].b_dd_f(o->v[11].fd(o->v[10].o1), real(slot_value(o->v[1].p))));}
 static bool opt_b_dd_fs_gt(opt_info *o) {return(o->v[11].fd(o->v[10].o1) > real(slot_value(o->v[1].p)));}
 static bool opt_b_dd_fc(opt_info *o) {return(o->v[3].b_dd_f(o->v[11].fd(o->v[10].o1), o->v[1].x));}
+static bool opt_b_dd_fc_gt(opt_info *o) {return(o->v[11].fd(o->v[10].o1) > o->v[1].x);}
 
 static bool opt_b_dd_ff(opt_info *o)
 {
@@ -61512,7 +61447,7 @@ static bool b_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       if (is_small_real(arg2))
 	{
 	  opc->v[1].x = s7_number_to_real(sc, arg2);
-	  opc->v[0].fb = opt_b_dd_fc;
+	  opc->v[0].fb = (bif == gt_b_dd) ? opt_b_dd_fc_gt : opt_b_dd_fc;
 	  return(true);
 	}
       opc->v[8].o1 = sc->opts[sc->pc];
@@ -95185,7 +95120,7 @@ int main(int argc, char **argv)
 /* ------------------------------------------------------
  *            gmp (22-3-22) 20.9   21.0   22.0   22.3
  * ------------------------------------------------------
- * tpeak       121          115    114    108    107
+ * tpeak       121          115    114    108    105
  * tref        508          691    687    463    458
  * index      1167         1026   1016    973    970
  * tmock      7737         1177   1165   1057   1054
@@ -95201,7 +95136,7 @@ int main(int argc, char **argv)
  * tcopy      2557         8035   5546   2539   2497
  * tmat       2684         3065   3042   2524   2518
  * tauto      2750         ----   ----   2562   2566
- * tb         3364         2735   2681   2612   2609
+ * tb         3364         2735   2681   2612   2609  2606
  * titer      2633         2865   2842   2641   2615
  * tsort      3572         3105   3104   2856   2856
  * tmac       2949         3950   3873   3033   2990
@@ -95215,10 +95150,10 @@ int main(int argc, char **argv)
  * tcase      4475         4960   4793   4439   4446
  * tmap       5495         8869   8774   4489   4498
  * tfft      114.9         7820   7729   4755   4683
- * tshoot     6903         5525   5447   5183   5208
+ * tshoot     6903         5525   5447   5183   5208  5201
  * tform      8335         5357   5348   5307   5307
  * tnum       56.6         6348   6013   5433   5420
- * tstr       6123         6880   6342   5488   5477
+ * tstr       6123         6880   6342   5488   5477  5460
  * tlamb      5799         6423   6273   5720   5630
  * tgsl       25.2         8485   7802   6373   6324
  * tmisc      6892         8869   7612   6435   6341
@@ -95239,10 +95174,8 @@ int main(int argc, char **argv)
  *
  * we need a way to release excessive mallocate bins
  * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
- * t725 to see error messages
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm -> main
- * perhaps more closure->a?
  */

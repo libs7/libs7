@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "10.3"
-#define S7_DATE "11-Apr-2022"
+#define S7_VERSION "10.4"
+#define S7_DATE "12-Apr-2022"
 #define S7_MAJOR_VERSION 10
-#define S7_MINOR_VERSION 3
+#define S7_MINOR_VERSION 4
 
 #include <stdint.h>           /* for int64_t */
 
@@ -862,33 +862,6 @@ void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value);
 /* -------------------------------------------------------------------------------- */
 
 #if (!DISABLE_DEPRECATED)
-s7_pointer s7_apply_n_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1));
-s7_pointer s7_apply_n_2(s7_scheme *sc, s7_pointer args, s7_pointer (*f2)(s7_pointer a1, s7_pointer a2));
-s7_pointer s7_apply_n_3(s7_scheme *sc, s7_pointer args, s7_pointer (*f3)(s7_pointer a1, s7_pointer a2, s7_pointer a3));
-s7_pointer s7_apply_n_4(s7_scheme *sc, s7_pointer args, s7_pointer (*f4)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4));
-s7_pointer s7_apply_n_5(s7_scheme *sc, s7_pointer args, s7_pointer (*f5)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, s7_pointer a5));
-s7_pointer s7_apply_n_6(s7_scheme *sc, s7_pointer args, 
-		      s7_pointer (*f6)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4,
-				       s7_pointer a5, s7_pointer a6));
-s7_pointer s7_apply_n_7(s7_scheme *sc, s7_pointer args, 
-		      s7_pointer (*f7)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, 
-				       s7_pointer a5, s7_pointer a6, s7_pointer a7));
-s7_pointer s7_apply_n_8(s7_scheme *sc, s7_pointer args, 
-		      s7_pointer (*f8)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, 
-				       s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8));
-s7_pointer s7_apply_n_9(s7_scheme *sc, s7_pointer args, 
-		      s7_pointer (*f9)(s7_pointer a1, s7_pointer a2, s7_pointer a3, s7_pointer a4, 
-				       s7_pointer a5, s7_pointer a6, s7_pointer a7, s7_pointer a8, s7_pointer a9));
-#define s7_apply_1 s7_apply_n_1
-#define s7_apply_2 s7_apply_n_2
-#define s7_apply_3 s7_apply_n_3
-#define s7_apply_4 s7_apply_n_4
-#define s7_apply_5 s7_apply_n_5
-#define s7_apply_6 s7_apply_n_6
-#define s7_apply_7 s7_apply_n_7
-#define s7_apply_8 s7_apply_n_8
-#define s7_apply_9 s7_apply_n_9
-
 typedef s7_int s7_Int;
 typedef s7_double s7_Double;
 
@@ -925,6 +898,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
+ * 11-Apr:    removed s7_apply_*.
  * 22-Mar:    s7_eval_with_location.
  * 16-Mar:    s7_list_to_array for the s7_apply_* changes.
  * 8-Mar-22:  moved s7_apply_* to xen.h if DISABLE_DEPRECATED.
