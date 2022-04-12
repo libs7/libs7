@@ -37733,8 +37733,11 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 
 static s7_pointer assoc_p_pp(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 {
-  if (is_null(x)) return(sc->F);
-  if (!is_pair(x)) return(method_or_bust_with_type(sc, x, sc->assoc_symbol, set_plist_2(sc, obj, x), an_association_list_string, 2));
+  if (!is_pair(x)) 
+    {
+      if (is_null(x)) return(sc->F);
+      return(method_or_bust_with_type(sc, x, sc->assoc_symbol, set_plist_2(sc, obj, x), an_association_list_string, 2));
+    }
   if (!is_pair(car(x))) return(wrong_type_argument_with_type(sc, sc->assoc_symbol, 2, x, an_association_list_string));
   if (is_simple(obj)) return(s7_assq(sc, obj, x));
   return(assoc_1(sc, obj, x));
@@ -42115,7 +42118,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  if ((typ == T_CHARACTER) &&
 	      ((sc->sort_f == char_lt_b_7pp) || (sc->sort_f == char_gt_b_7pp)))
 	    {
-	      qsort((void *)els, len, sizeof(s7_pointer), ((sc->sort_f = char_lt_b_7pp) ? chr_less_2 : chr_greater_2));
+	      qsort((void *)els, len, sizeof(s7_pointer), ((sc->sort_f == char_lt_b_7pp) ? chr_less_2 : chr_greater_2));
 	      return(data);
 	    }
 	  local_qsort_r((void *)s7_vector_elements(data), len, sizeof(s7_pointer), sort_func, (void *)sc);
@@ -60003,6 +60006,13 @@ static s7_double opt_d_7pid_sff(opt_info *o)
   return(o->v[4].d_7pid_f(o->sc, slot_value(o->v[1].p), pos, o->v[9].fd(o->v[8].o1)));
 }
 
+static s7_double opt_d_7pid_sff_fvset(opt_info *o)
+{
+  s7_int pos;
+  pos = o->v[11].fi(o->v[10].o1);
+  return(float_vector_set_d_7pid(o->sc, slot_value(o->v[1].p), pos, o->v[9].fd(o->v[8].o1)));
+}
+
 static s7_double opt_d_7pid_sso(opt_info *o)
 {
   return(o->v[4].d_7pid_f(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), o->v[5].d_v_f(o->v[3].obj)));
@@ -60140,7 +60150,7 @@ static bool d_7pid_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 	    {
 	      opc->v[8].o1 = sc->opts[sc->pc];
 	      if (float_optimize(sc, cdddr(car_x)))
-		{
+		{	
 		  opc->v[0].fd = opt_d_7pid_sff;
 		  opc->v[11].fi = opc->v[10].o1->v[0].fi;
 		  opc->v[9].fd = opc->v[8].o1->v[0].fd;
@@ -60418,7 +60428,7 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 	      opc->v[8].o1 = sc->opts[sc->pc];
 	      if (float_optimize(sc, valp))
 		{
-		  opc->v[0].fd = opt_d_7pid_sff;
+		  opc->v[0].fd = (opc->v[4].d_7pid_f == float_vector_set_d_7pid) ? opt_d_7pid_sff_fvset : opt_d_7pid_sff;
 		  opc->v[11].fi = opc->v[10].o1->v[0].fi;
 		  opc->v[9].fd = opc->v[8].o1->v[0].fd;
 		  return(true);
@@ -60929,6 +60939,7 @@ static bool opt_b_p_s_is_pair(opt_info *o) {return(is_pair(slot_value(o->v[1].p)
 static bool opt_b_p_f_is_string(opt_info *o) {return(s7_is_string(o->v[4].fp(o->v[3].o1)));}
 static bool opt_b_7p_s_iter_at_end(opt_info *o) {return(iterator_is_at_end(slot_value(o->v[1].p)));}
 static bool opt_b_7p_f_not(opt_info *o) {return((o->v[4].fp(o->v[3].o1)) == o->sc->F);}
+/* ari: add zero/pos/neg, but needs arg type check */
 
 static bool opt_zero_mod(opt_info *o)
 {
@@ -61227,7 +61238,7 @@ static bool b_pp_ff_combinable(s7_scheme *sc, opt_info *opc, bool bpf_case)
 	  opc->v[2].p = o2->v[1].p;
 	  opc->v[5].p_p_f = o2->v[2].p_p_f;
 	  opc->v[0].fb = (bpf_case) ? ((opc->v[3].b_pp_f == s7_is_eq) ? opt_b_pp_ffo_is_eq : opt_b_pp_ffo) :
-	                              (((opc->v[4].p_p_f == cadr_p_p) && (opc->v[5].p_p_f = cadr_p_p)) ? opt_b_cadr_cadr : opt_b_7pp_ffo);
+	                              (((opc->v[4].p_p_f == cadr_p_p) && (opc->v[5].p_p_f == cadr_p_p)) ? opt_b_cadr_cadr : opt_b_7pp_ffo);
 	  sc->pc -= 2;
 	  return(true);
 	}}
@@ -61704,6 +61715,9 @@ static bool p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car
 }
 
 /* -------- p_p -------- */
+static s7_pointer opt_p_pi_ss_vref_direct(opt_info *o);
+static s7_pointer opt_p_pi_ss_fvref_direct(opt_info *o);
+
 static s7_pointer opt_p_p_c(opt_info *o)     {return(o->v[2].p_p_f(o->sc, o->v[1].p));}
 static s7_pointer opt_p_i_c(opt_info *o)     {return(make_integer(o->sc, o->v[2].i_i_f(o->v[1].i)));}
 static s7_pointer opt_p_7i_c(opt_info *o)    {return(make_integer(o->sc, o->v[2].i_7i_f(o->sc, o->v[1].i)));}
@@ -61720,6 +61734,8 @@ static s7_pointer opt_p_p_s_iterate(opt_info *o) {return(iterate_p_p(o->sc, slot
 static s7_pointer opt_p_p_f_iterate(opt_info *o) {return(iterate_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f_string_to_number(opt_info *o) {return(string_to_number_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_s_iterate_unchecked(opt_info *o) {s7_pointer iter = slot_value(o->v[1].p); return(iterator_next(iter)(o->sc, iter));}
+static s7_pointer opt_p_p_fvref(opt_info *o) {return(o->v[2].p_p_f(o->sc, opt_p_pi_ss_fvref_direct(o->v[3].o1)));} /* unwrap to fvref is not faster */
+static s7_pointer opt_p_p_vref(opt_info *o) {return(o->v[2].p_p_f(o->sc, opt_p_pi_ss_vref_direct(o->v[3].o1)));}
 
 static bool p_p_f_combinable(s7_scheme *sc, opt_info *opc)
 {
@@ -61814,6 +61830,7 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	{
 	  if (!p_p_f_combinable(sc, opc))
 	    {
+	      s7_pointer (*fp)(opt_info *o);
 	      opc->v[0].fp = (ppf == exp_p_p) ? opt_p_p_f_exp : ((ppf == iterate_p_p) ? opt_p_p_f_iterate :
 			       ((ppf == string_to_number_p_p) ? opt_p_p_f_string_to_number : opt_p_p_f));
 	      if (caadr(car_x) == sc->string_ref_symbol)
@@ -61825,7 +61842,10 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 		      opc->v[2].p_p_f = is_char_whitespace_p_p_unchecked;
 		}
 	      opc->v[3].o1 = o1;
-	      opc->v[4].fp = o1->v[0].fp;
+	      fp = o1->v[0].fp;
+	      opc->v[4].fp = fp;
+	      if (fp == opt_p_pi_ss_fvref_direct) opc->v[0].fp = opt_p_p_fvref;
+	      else if (fp == opt_p_pi_ss_vref_direct) opc->v[0].fp = opt_p_p_vref;
 	    }
 	  return(true);
 	}}
@@ -63969,7 +63989,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 			    {
 			      opc->v[4].p = cadadr(target);
 			      opc->v[2].p = val_slot;
-			      opc->v[0].fp = (opc->v[3].p_ppp_f = let_set_1) ? opt_p_ppp_scs_eset : opt_p_ppp_scs;
+			      opc->v[0].fp = (opc->v[3].p_ppp_f == let_set_1) ? opt_p_ppp_scs_eset : opt_p_ppp_scs;
 			      return(true);
 			    }}
 		      o1 = sc->opts[sc->pc];
@@ -64363,6 +64383,7 @@ static bool opt_cell_and(s7_scheme *sc, s7_pointer car_x, int32_t len)
 
 /* -------- cell_if -------- */
 static s7_pointer opt_if_bp(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : o->sc->unspecified);}
+static s7_pointer opt_if_b7p(opt_info *o) {return((opt_b_7p_f(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : o->sc->unspecified);} /* expanded not faster */
 static s7_pointer opt_if_nbp(opt_info *o) {return((o->v[5].fb(o->v[4].o1)) ? o->sc->unspecified : o->v[11].fp(o->v[10].o1));}
 
 static s7_pointer opt_if_bp_pb(opt_info *o) /* p_to_b at outer, p_to_b expanded and moved to o[3] */
@@ -64416,6 +64437,7 @@ static s7_pointer opt_if_nbp_7sf(opt_info *o)   /* b_7pp_sf */
 }
 
 static s7_pointer opt_if_bpp(opt_info *o) {return((o->v[5].fb(o->v[4].o1)) ? o->v[9].fp(o->v[8].o1) : o->v[11].fp(o->v[10].o1));}
+static s7_pointer opt_if_bpp_bit(opt_info *o) {return((opt_b_7ii_sc_bit(o->v[4].o1)) ? o->v[9].fp(o->v[8].o1) : o->v[11].fp(o->v[10].o1));}
 
 static bool opt_cell_if(s7_scheme *sc, s7_pointer car_x, int32_t len)
 {
@@ -64524,7 +64546,7 @@ static bool opt_cell_if(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		    opc->v[0].fp = opt_if_bp_ii_fc;
 		    return(true);
 		  }
-		opc->v[0].fp = opt_if_bp;
+		opc->v[0].fp = (bop->v[0].fb == opt_b_7p_f) ? opt_if_b7p : opt_if_bp;
 		opc->v[3].fb = bop->v[0].fb;
 		return(true);
 	      }}
@@ -64538,7 +64560,7 @@ static bool opt_cell_if(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  if (cell_optimize(sc, cddr(car_x)))
 	    {
 	      opt_info *o3 = sc->opts[sc->pc];
-	      opc->v[0].fp = opt_if_bpp;
+	      opc->v[0].fp = (bop->v[0].fb == opt_b_7ii_sc_bit) ? opt_if_bpp_bit : opt_if_bpp;
 	      if (cell_optimize(sc, cdddr(car_x)))
 		{
 		  opc->v[4].o1 = bop;
@@ -95124,50 +95146,50 @@ int main(int argc, char **argv)
  * tref        508          691    687    463    458
  * index      1167         1026   1016    973    970
  * tmock      7737         1177   1165   1057   1054
- * tvect      1953         2519   2464   1772   1713
- * texit      1806         ----   ----   1778   1764
+ * tvect      1953         2519   2464   1772   1708
+ * texit      1806         ----   ----   1778   1767
  * s7test     4533         1873   1831   1818   1790
  * timp       2232         2971   2891   2176   2051
- * lt         2153         2187   2172   2150   2157
+ * lt         2153         2187   2172   2150   2156
+ * dup        2579         3805   3788   2492   2325
  * tread      2567         2440   2421   2419   2381
- * dup        2579         3805   3788   2492   2377
  * trclo      4073         2735   2574   2454   2443
  * fbench     2827         2688   2583   2460   2453
  * tcopy      2557         8035   5546   2539   2497
  * tmat       2684         3065   3042   2524   2518
  * tauto      2750         ----   ----   2562   2566
- * tb         3364         2735   2681   2612   2609  2606
+ * tb         3364         2735   2681   2612   2606
  * titer      2633         2865   2842   2641   2615
  * tsort      3572         3105   3104   2856   2856
- * tmac       2949         3950   3873   3033   2990
+ * tmac       2949         3950   3873   3033   2992
  * tload      3718         ----   ----   3046   3020
  * tset       3107         3253   3104   3048   3130
  * teq        3472         4068   4045   3536   3468
- * tio        3679         3816   3752   3683   3662
+ * tio        3679         3816   3752   3683   3646
  * tobj       3730         4016   3970   3828   3678
- * tclo       4538         4787   4735   4390   4341
+ * tclo       4538         4787   4735   4390   4343
  * tlet       5277         7775   5640   4450   4423
- * tcase      4475         4960   4793   4439   4446
- * tmap       5495         8869   8774   4489   4498
+ * tcase      4475         4960   4793   4439   4439
+ * tmap       5495         8869   8774   4489   4490
  * tfft      114.9         7820   7729   4755   4683
- * tshoot     6903         5525   5447   5183   5208  5201
+ * tshoot     6903         5525   5447   5183   5174
  * tform      8335         5357   5348   5307   5307
- * tnum       56.6         6348   6013   5433   5420
- * tstr       6123         6880   6342   5488   5477  5460
+ * tnum       56.6         6348   6013   5433   5425
+ * tstr       6123         6880   6342   5488   5461
  * tlamb      5799         6423   6273   5720   5630
  * tgsl       25.2         8485   7802   6373   6324
  * tmisc      6892         8869   7612   6435   6341
- * tlist      6505         7896   7546   6558   6494
+ * tlist      6505         7896   7546   6558   6498
  * trec       8314         6936   6922   6521   6523
- * tari       ----         13.0   12.7   6827   6836
+ * tari       ----         13.0   12.7   6827   6717
  * tleft      9004         10.4   10.2   7657   7615
  * tgc        9532         11.9   11.1   8177   8063
  * thash      35.2         11.8   11.7   9734   9584
- * cb         16.9         11.2   11.0   9658   9690
+ * cb         16.9         11.2   11.0   9658   9686
  * tgen       12.6         11.2   11.4   12.0   12.0
  * tall       24.5         15.6   15.6   15.6   15.6
- * calls      55.8         36.7   37.5   37.0   37.2
- * sg         76.1         ----   ----   55.9   56.0
+ * calls      55.8         36.7   37.5   37.0   37.6
+ * sg         76.1         ----   ----   55.9   56.6
  * lg        105.6         ----   ----  105.2  105.8
  * tbig      600.4        177.4  175.8  156.5  152.4
  * ------------------------------------------------------
