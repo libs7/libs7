@@ -6942,7 +6942,11 @@ static bool has_odd_bits(s7_pointer obj);
 #endif
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj);
 static s7_pointer make_symbol(s7_scheme *sc, const char *name);
-static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
+#if WITH_GCC
+static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
+#else
+static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...)
+#endif
 
 #if S7_DEBUGGING
 #define call_gc(Sc) gc(Sc, __func__, __LINE__)
@@ -7138,25 +7142,28 @@ static int64_t gc(s7_scheme *sc)
   sc->gc_end = my_clock();
   sc->gc_total_time += (sc->gc_end - sc->gc_start);
 
-  if (sc->gc_stats != 0)
+  if (show_gc_stats(sc))
     {
-      if (show_gc_stats(sc))
-	{
 #if (!MS_WINDOWS)
-	  s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n",
-		  sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
+#if S7_DEBUGGING
+      s7_warn(sc, 512, "%s[%d]: gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n", func, line,
+	      sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
 #else
-	  s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 "\n", sc->gc_freed, sc->heap_size);
+      s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n",
+	      sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
 #endif
-	}
-      if (show_protected_objects_stats(sc))
-	{
-	  s7_int num, len = vector_length(sc->protected_objects); /* allocated at startup */
-	  for (i = 0, num = 0; i < len; i++)
-	    if (vector_element(sc->protected_objects, i) != sc->unused)
-	      num++;
-	  s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n", num, len);
-	}}
+#else
+      s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 "\n", sc->gc_freed, sc->heap_size);
+#endif
+    }
+  if (show_protected_objects_stats(sc))
+    {
+      s7_int num, len = vector_length(sc->protected_objects); /* allocated at startup */
+      for (i = 0, num = 0; i < len; i++)
+	if (vector_element(sc->protected_objects, i) != sc->unused)
+	  num++;
+      s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n", num, len);
+    }
   sc->previous_free_heap_top = sc->free_heap_top;
   return(sc->gc_freed);
 }
@@ -19231,6 +19238,8 @@ static s7_pointer g_add_2_fx(s7_scheme *sc, s7_pointer args) {return(g_add_xf(sc
 #endif
 
 static s7_pointer add_p_dd(s7_scheme *sc, s7_double x1, s7_double x2) {return(make_real(sc, x1 + x2));}
+static s7_pointer add_p_ii(s7_scheme *sc, s7_int x1, s7_int x2) {return(make_integer(sc, x1 + x2));}
+
 /* add_p_ii and add_d_id unhittable apparently -- this (d_id) is due to the order of d_dd_ok and d_id_ok in float_optimize,
  *   but d_dd is much more often hit, and the int arg (if constant) is turned into a float in d_dd
  */
@@ -51154,7 +51163,11 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 		  set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info)));
 }
 
+#if WITH_GCC
+static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...)
+#else
 static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...) /* len = max size of output string (for vsnprintf) */
+#endif
 {
   if ((sc->error_port != sc->F) && (!sc->muffle_warnings))
     {
@@ -64385,6 +64398,7 @@ static bool opt_cell_and(s7_scheme *sc, s7_pointer car_x, int32_t len)
 static s7_pointer opt_if_bp(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : o->sc->unspecified);}
 static s7_pointer opt_if_b7p(opt_info *o) {return((opt_b_7p_f(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : o->sc->unspecified);} /* expanded not faster */
 static s7_pointer opt_if_nbp(opt_info *o) {return((o->v[5].fb(o->v[4].o1)) ? o->sc->unspecified : o->v[11].fp(o->v[10].o1));}
+static s7_pointer opt_if_bp_and(opt_info *o) {return((opt_and_bb(o->v[2].o1)) ? o->v[5].fp(o->v[4].o1) : o->sc->unspecified);}
 
 static s7_pointer opt_if_bp_pb(opt_info *o) /* p_to_b at outer, p_to_b expanded and moved to o[3] */
 {
@@ -64546,7 +64560,7 @@ static bool opt_cell_if(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		    opc->v[0].fp = opt_if_bp_ii_fc;
 		    return(true);
 		  }
-		opc->v[0].fp = (bop->v[0].fb == opt_b_7p_f) ? opt_if_b7p : opt_if_bp;
+		opc->v[0].fp = (bop->v[0].fb == opt_b_7p_f) ? opt_if_b7p : ((bop->v[0].fb == opt_and_bb) ? opt_if_bp_and : opt_if_bp);
 		opc->v[3].fb = bop->v[0].fb;
 		return(true);
 	      }}
@@ -89548,11 +89562,10 @@ static bool c_function_is_ok_cadr_caddadr(s7_scheme *sc, s7_pointer p)
 static /* inline */ bool closure_is_ok_1(s7_scheme *sc, s7_pointer code, uint16_t type, int32_t args)
 {
   s7_pointer f;
-  if ((S7_DEBUGGING) && (symbol_ctr(car(code)) == 1))
-    fprintf(stderr, "%s ctr is 1, %p != %p\n", display(car(code)), unchecked_local_value(car(code)), opt1_lambda_unchecked(code));
+  /* if (symbol_ctr(car(code)) == 1) return(true); */ /* this just slows us down */
   f = lookup_unexamined(sc, car(code));
   if ((f == opt1_lambda_unchecked(code)) ||
-      ((f) &&
+      ((f) && /* this fixup check does save time (e.g. cb) */
        (typesflag(f) == type) &&
        ((closure_arity(f) == args) || (closure_arity_to_int(sc, f) == args)) && /* 3 type bits to replace this but not hit enough to warrant them */
        (set_opt1_lambda(code, f))))
@@ -92859,6 +92872,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_i_ii_function(sc, global_value(sc->modulo_symbol), modulo_i_ii);
   s7_set_p_dd_function(sc, global_value(sc->multiply_symbol), mul_p_dd);
   s7_set_p_dd_function(sc, global_value(sc->add_symbol), add_p_dd);
+  s7_set_p_ii_function(sc, global_value(sc->add_symbol), add_p_ii);
   s7_set_p_dd_function(sc, global_value(sc->subtract_symbol), subtract_p_dd);
   s7_set_p_ii_function(sc, global_value(sc->subtract_symbol), subtract_p_ii);
 
@@ -95160,7 +95174,7 @@ int main(int argc, char **argv)
  * tauto      2750         ----   ----   2562   2566
  * tb         3364         2735   2681   2612   2606
  * titer      2633         2865   2842   2641   2615
- * tsort      3572         3105   3104   2856   2856
+ * tsort      3572         3105   3104   2856   2856  2840
  * tmac       2949         3950   3873   3033   2992
  * tload      3718         ----   ----   3046   3020
  * tset       3107         3253   3104   3048   3130
@@ -95200,4 +95214,5 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm -> main
+ * could the built-ins be global? (faster thread startup)
  */
