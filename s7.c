@@ -3622,13 +3622,13 @@ static void init_small_ints(void)
   const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
   s7_cell *cells;
   small_ints = (s7_pointer *)malloc(NUM_SMALL_INTS * sizeof(s7_pointer));
-  cells = (s7_cell *)calloc((NUM_SMALL_INTS), sizeof(s7_cell));
+  cells = (s7_cell *)malloc(NUM_SMALL_INTS * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
   for (int32_t i = 0; i < NUM_SMALL_INTS; i++)
     {
       s7_pointer p;
       small_ints[i] = &cells[i];
       p = small_ints[i];
-      set_type_bit(p, T_IMMUTABLE | T_INTEGER | T_UNHEAP);
+      full_type(p) = T_IMMUTABLE | T_INTEGER | T_UNHEAP;
       integer(p) = i;
     }
   for (int32_t i = 0; i < 10; i++)
@@ -3746,16 +3746,16 @@ static void try_to_call_gc(s7_scheme *sc);
   do {									\
     if (Sc->free_heap_top <= Sc->free_heap_trigger) try_to_call_gc(Sc); \
     Obj = (*(--(Sc->free_heap_top)));					\
-    Obj->debugger_bits = 0; Obj->gc_func = NULL;			\
+    Obj->debugger_bits = 0; Obj->gc_func = NULL; Obj->gc_line = 0;	\
     set_full_type(Obj, Type);						\
   } while (0)
 
-#define new_cell_no_check(Sc, Obj, Type)		    \
-  do {							    \
-    Obj = (*(--(Sc->free_heap_top)));			    \
+#define new_cell_no_check(Sc, Obj, Type)				\
+  do {									\
+    Obj = (*(--(Sc->free_heap_top)));					\
     if (Sc->free_heap_top < Sc->free_heap) {fprintf(stderr, "%s[%d]: free heap exhausted\n", __func__, __LINE__); abort();}\
-    Obj->debugger_bits = 0; Obj->gc_func = NULL;	    \
-    set_full_type(Obj, Type);				    \
+    Obj->debugger_bits = 0; Obj->gc_func = NULL; Obj->gc_line = 0;	\
+    set_full_type(Obj, Type);						\
     } while (0)
 #endif
 
@@ -5156,10 +5156,12 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 	full_type(obj) = free_type;
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
-	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], previous: %s[%d], %sgc: %s[%d]%s\n",
+	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], previous: %s[%d], %sgc: %s[%d]%s",
 		BOLD_TEXT, obj, line, s7_type_names[obj->current_alloc_type & 0xff], obj->current_alloc_type, obj->current_alloc_type,
 		bits, obj->current_alloc_func, obj->current_alloc_line, obj->previous_alloc_func, obj->previous_alloc_line,
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	UNBOLD_TEXT);
+	if (S7_DEBUGGING) fprintf(stderr, ", last gc line: %d", sc->last_gc_line);
+	fprintf(stderr, "\n");
 	free(bits);
       }
   if (sc->stop_at_error) abort();
@@ -7442,15 +7444,23 @@ static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
   return(x);
 }
 
-static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x)
+#if S7_DEBUGGING
+#define remove_gensym_from_heap(Sc, Gensym) remove_gensym_from_heap_1(Sc, Gensym, __func__, __LINE__)
+static void remove_gensym_from_heap_1(s7_scheme *sc, s7_pointer x, const char *func, int line)
+#else
+static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x) /* x known to be a symbol and in the heap */
+#endif
 {
-  /* x known to be a symbol and in the heap */
   gc_list_t *gp;
   int64_t loc;
   loc = heap_location(sc, x);
   sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
   free_cell(sc, sc->heap[loc]);
-  unheap(sc, x);
+#if S7_DEBUGGING
+  x->gc_func = func;
+  x->gc_line = line;
+#endif
+  unheap(sc, x); /* set UNHEAP bit in type(x) */
   gp = sc->gensyms;
   for (s7_int i = 0; i < gp->loc; i++) /* sc->gensyms reaches size 512 during s7test, but this search is called 3 times and costs nothing */
     if (gp->list[i] == x)
@@ -8121,7 +8131,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
       if (!is_string(gname))
 	return(method_or_bust_one_arg(sc, gname, sc->gensym_symbol, args, T_STRING));
       prefix = string_value(gname);
-      plen = safe_strlen(prefix);
+      plen = safe_strlen(prefix); /* string_length?? are we stopping at #\null deliberately? */
     }
   else
     {
@@ -8138,7 +8148,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   name = (char *)(base + sizeof(block_t) + 2 * sizeof(s7_cell));
 
   name[0] = '{';
-  /* if (plen > 0) */ memcpy((void *)(name + 1), prefix, plen);
+  memcpy((void *)(name + 1), prefix, plen); /* memcpy is ok with plen==0, I think */
   name[plen + 1] = '}';
   name[plen + 2] = '-'; /* {gensym}-nnn */
 
@@ -8839,13 +8849,13 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
       slot = make_permanent_slot(sc, symbol, value);
       add_slot_to_rootlet(sc, slot);
       set_global_slot(symbol, slot);
-      if (symbol_id(symbol) == 0)    /* never defined locally? */
+      if (symbol_id(symbol) == 0)         /* never defined locally? */
 	{
 	  if ((!is_gensym(symbol)) &&
 	      (initial_slot(symbol) == sc->undefined) &&
-	      (!in_heap(value)) &&     /* else initial_slot value can be GC'd if symbol set! (initial != global, initial unprotected) */
-	      ((!sc->unlet) ||            /* init_unlet creates sc->unlet, after that initial_slot is for c_functions?? */
-	       (is_c_function(value))))
+	      (!in_heap(value)) &&        /* else initial_slot value can be GC'd if symbol set! (initial != global, initial unprotected) */
+	      ((!sc->unlet) ||            /* init_unlet creates sc->unlet (includes syntax), after that initial_slot is for c_functions?? */
+	       (is_c_function(value))))   /* || (is_syntax(value)) -- we need 'else as a special case? */
 	    set_initial_slot(symbol, make_permanent_slot(sc, symbol, value));
 	  set_local_slot(symbol, slot);
 	  set_global(symbol);
@@ -11341,7 +11351,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
 
   sc->continuation_counter++;
   make_room_for_cc_stack(sc);
-  if (sc->continuation_counter > 2000) call_gc(sc); /* gc time up, but run time down -- try big cache */
+  if (sc->continuation_counter > 2000) call_gc(sc); /* call_gc zeros cc counter, gc time up, but run time down -- try big cache */
 
   loc = current_stack_top(sc);
   stack = make_simple_vector(sc, loc);
@@ -30849,7 +30859,7 @@ static s7_pointer iterator_copy(s7_scheme *sc, s7_pointer p)
   /* fields are obj cur [loc|lcur] [len|slow|hcur] next, but untangling them in debugging case is a pain */
   s7_pointer iter;
   new_cell(sc, iter, T_ITERATOR | T_SAFE_PROCEDURE);
-  memcpy((void *)iter, (void *)p, sizeof(s7_cell));
+  memcpy((void *)iter, (void *)p, sizeof(s7_cell)); /* picks up ITER_OK I hope */
   return(iter);
 }
 
@@ -51938,9 +51948,7 @@ static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_point
   if (!is_applicable(in_obj))
     return(s7_error(sc, sc->syntax_error_symbol,
 		    set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
-				cons(sc, obj, copy_proper_list(sc, indices)),
-				cons(sc, in_obj, copy_proper_list(sc, cdr(indices))),
-				in_obj)));
+				set_ulist_1(sc, obj, indices), cons(sc, in_obj, cdr(indices)), in_obj)));
   return(implicit_index(sc, in_obj, cdr(indices)));
 }
 
@@ -57843,7 +57851,13 @@ static s7_int opt_i_ii_ff(opt_info *o)     {return(o->v[3].i_ii_f(o->v[11].fi(o-
 static s7_int opt_i_7ii_ff_quo(opt_info *o){return(quotient_i_7ii(o->sc,o->v[11].fi(o->v[10].o1), o->v[9].fi(o->v[8].o1)));}
 static s7_int opt_i_ii_fc(opt_info *o)     {return(o->v[3].i_ii_f(o->v[11].fi(o->v[10].o1), o->v[2].i));}
 static s7_int opt_i_ii_fc_add(opt_info *o) {return(o->v[11].fi(o->v[10].o1) + o->v[2].i);}
-static s7_int opt_i_ii_fc_mul(opt_info *o) {return(o->v[11].fi(o->v[10].o1) * o->v[2].i);}
+static s7_int opt_i_ii_fc_mul(opt_info *o) {return(o->v[11].fi(o->v[10].o1) * o->v[2].i);} 
+/* returning s7_int so overflow->real is no doable here, so
+ *   (define (func) (do ((x 0) (i 0 (+ i 1))) ((= i 1) x) (set! x (* (lognot 4294967297) 4294967297)))) (func) (func)
+ *   will return -12884901890 rather than -18446744086594454000.0, 4294967297 > sqrt(fixmost)
+ *   This affects all the opt arithmetical functions.  Unfortunately the gmp version also gets -12884901890!
+ *   We need to make sure none of these are available in the gmp version.
+ */
 static s7_int opt_i_7ii_fc(opt_info *o)    {return(o->v[3].i_7ii_f(o->sc, o->v[11].fi(o->v[10].o1), o->v[2].i));}
 static s7_int opt_i_ii_fco(opt_info *o)    {return(o->v[3].i_ii_f(o->v[4].i_7pi_f(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))), o->v[5].i));}
 static s7_int opt_i_ii_fco_ivref_add(opt_info *o){return(int_vector_ref_i_7pi_direct(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))) + o->v[5].i);}  /* tref */
@@ -57898,6 +57912,7 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   s7_i_ii_t ifunc;
   s7_i_7ii_t ifunc7 = NULL;
   s7_pointer p, sig;
+  /* TODO: if (WITH_GMP) return(false); */
 
   ifunc = s7_i_ii_function(s_func);
   if (!ifunc)
@@ -61608,7 +61623,7 @@ static bool b_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 }
 
 /* -------- b_or|and -------- */
-static bool opt_and_bb(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? o->v[11].fb(o->v[10].o1) : false);}
+static bool opt_and_bb(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) && (o->v[11].fb(o->v[10].o1)));}
 
 static bool opt_and_any_b(opt_info *o)
 {
@@ -61621,7 +61636,7 @@ static bool opt_and_any_b(opt_info *o)
   return(true);
 }
 
-static bool opt_or_bb(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) ? true : o->v[11].fb(o->v[10].o1));}
+static bool opt_or_bb(opt_info *o) {return((o->v[3].fb(o->v[2].o1)) || o->v[11].fb(o->v[10].o1));}
 
 static bool opt_or_any_b(opt_info *o)
 {
@@ -65821,6 +65836,7 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer car_x = car(expr), head, s_func, s_slot = NULL;
   s7_int len;
+  if (WITH_GMP) return(false);
   if (!is_pair(car_x)) /* wrap constants/symbols */
     return(opt_float_not_pair(sc, car_x));
 
@@ -65912,6 +65928,7 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer car_x = car(expr), head, s_func, s_slot = NULL;
   s7_int len;
+  if (WITH_GMP) return(false);
   if (!is_pair(car_x)) /* wrap constants/symbols */
     return(opt_int_not_pair(sc, car_x));
 
@@ -65986,6 +66003,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer car_x = car(expr), head, s_func, s_slot = NULL;
   s7_int len;
+  if (WITH_GMP) return(false);
   if (!is_pair(car_x)) /* wrap constants/symbols */
     return(opt_cell_not_pair(sc, car_x));
 
@@ -66277,6 +66295,7 @@ static bool bool_optimize(s7_scheme *sc, s7_pointer expr)
 {
   int32_t start = sc->pc;
   opt_info *wrapper;
+  if (WITH_GMP) return(false);
   if (bool_optimize_nw(sc, expr))
     return(true);
   pc_fallback(sc, start);
@@ -66311,6 +66330,7 @@ s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr)
 
 static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nr)
 {
+  if (WITH_GMP) return(NULL);
   if ((!is_pair(expr)) || (no_cell_opt(expr)) || (sc->debug != 0))
     return(NULL);
   sc->pc = 0;
@@ -75403,8 +75423,7 @@ static void op_let_a_a_new(s7_scheme *sc)
   binding = opt2_pair(sc->code);
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding)));
   sc->value = fx_call(sc, cdr(sc->code));
-  free_cell(sc, let_slots(sc->curlet));
-  free_cell(sc, sc->curlet);
+  free_cell(sc, sc->curlet); /* don't free let_slots here unless checked first (can be null after fx_call above?) */
   /* upon return, we continue, so sc->curlet should be ok */
 }
 
@@ -75427,8 +75446,7 @@ static void op_let_a_na_new(s7_scheme *sc)
   for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p))
     fx_call(sc, p);
   sc->value = fx_call(sc, p);
-  free_cell(sc, let_slots(sc->curlet));
-  free_cell(sc, sc->curlet);
+  free_cell(sc, sc->curlet); /* see above */
 }
 
 /* this and others like it could easily be fx funcs, but check_let is called too late, so it's never seen as fxable */
@@ -93596,6 +93614,15 @@ then returns each var to its original value."
 
 static void init_rootlet(s7_scheme *sc)
 {
+  /* most of init_rootlet (the built-in  functions for example), could be shared by all s7 instances.
+   *   currently, each s7_init call allocates room for them, then s7_free frees it -- kinda wasteful.
+   *   allocate separately filling unlet then set symbols in init_rootlet by running through unlet and calling s7_define for each?
+   *   need pre-unlet separate from thread-local unlet (dynamic loads).
+   *   but currently the init_unlet run through the symbol table is wasting lots of time.
+   *   unlet has only c_functions/syntax but should we support #_gsl* etc?
+   *   split init_unlet, add load to defun macros
+   */
+
   s7_pointer sym;
   init_syntax(sc);
 
@@ -94429,15 +94456,23 @@ s7_scheme *s7_init(void)
   sc->previous_free_heap_top = sc->free_heap_top;
   {
     s7_cell *cells;
-    cells = (s7_cell *)calloc(INITIAL_HEAP_SIZE, sizeof(s7_cell)); /* calloc to make sure type=0 at start? (for gc/valgrind) */
+    cells = (s7_cell *)malloc(INITIAL_HEAP_SIZE * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
     add_saved_pointer(sc, (void *)cells);
     for (i = 0; i < INITIAL_HEAP_SIZE; i++)       /* LOOP_4 here is slower! */
       {
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
+#if S7_DEBUGGING
+	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
+#endif
+	clear_type(sc->heap[i]);
 	i++;
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
+#if S7_DEBUGGING
+	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
+#endif
+	clear_type(sc->heap[i]);
      }
     sc->heap_blocks = (heap_block_t *)malloc(sizeof(heap_block_t));
     sc->heap_blocks->start = (intptr_t)cells;
@@ -94487,8 +94522,8 @@ s7_scheme *s7_init(void)
   initialize_op_stack(sc);
 
   /* keep the symbol table out of the heap */
-  sc->symbol_table = (s7_pointer)calloc(1, sizeof(s7_cell));
-  set_full_type(sc->symbol_table, T_VECTOR | T_UNHEAP);
+  sc->symbol_table = (s7_pointer)malloc(sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+  full_type(sc->symbol_table) = T_VECTOR | T_UNHEAP;
   vector_length(sc->symbol_table) = SYMBOL_TABLE_SIZE;
   vector_elements(sc->symbol_table) = (s7_pointer *)malloc(SYMBOL_TABLE_SIZE * sizeof(s7_pointer));
   vector_getter(sc->symbol_table) = default_vector_getter;
@@ -94815,7 +94850,7 @@ void s7_free(s7_scheme *sc)
   s7_int i;
   gc_list_t *gp;
 
-  g_gc(sc, sc->nil); /* probably not needed (my simple tests work fine if the gc call is omitted) */
+  /* g_gc(sc, sc->nil); */ /* probably not needed (my simple tests work fine if the gc call is omitted) */ /* removed 14-Apr-22 */
 
   gp = sc->c_objects;  /* do this first since they might involve gc_unprotect etc */
   for (i = 0; i < gp->loc; i++)
@@ -95156,56 +95191,56 @@ int main(int argc, char **argv)
 /* ------------------------------------------------------
  *            gmp (22-3-22) 20.9   21.0   22.0   22.3
  * ------------------------------------------------------
- * tpeak       121          115    114    108    105
- * tref        508          691    687    463    458
- * index      1167         1026   1016    973    970
+ * tpeak       121 [151]    115    114    108    105
+ * tref        508[4413]    691    687    463    458
+ * index      1167[1021]   1026   1016    973    970
  * tmock      7737         1177   1165   1057   1054
- * tvect      1953         2519   2464   1772   1708
- * texit      1806         ----   ----   1778   1767
+ * tvect      1953[9235]   2519   2464   1772   1708
+ * texit      1806[1824]   ----   ----   1778   1767
  * s7test     4533         1873   1831   1818   1790
- * timp       2232         2971   2891   2176   2051
+ * timp       2232[2108]   2971   2891   2176   2051
  * lt         2153         2187   2172   2150   2156
  * dup        2579         3805   3788   2492   2325
  * tread      2567         2440   2421   2419   2381
  * trclo      4073         2735   2574   2454   2443
  * fbench     2827         2688   2583   2460   2453
- * tcopy      2557         8035   5546   2539   2497
- * tmat       2684         3065   3042   2524   2518
+ * titer      2633[3177]   2865   2842   2641   2615  2490
+ * tcopy      2557[10.7]   8035   5546   2539   2497
+ * tmat       2684[8204]   3065   3042   2524   2518
  * tauto      2750         ----   ----   2562   2566
- * tb         3364         2735   2681   2612   2606
- * titer      2633         2865   2842   2641   2615
+ * tb         3364[3653]   2735   2681   2612   2606
  * tsort      3572         3105   3104   2856   2856  2840
- * tmac       2949         3950   3873   3033   2992
+ * tmac       2949[5000]   3950   3873   3033   2992
  * tload      3718         ----   ----   3046   3020
  * tset       3107         3253   3104   3048   3130
- * teq        3472         4068   4045   3536   3468
+ * teq        3472[6019]   4068   4045   3536   3468
  * tio        3679         3816   3752   3683   3646
- * tobj       3730         4016   3970   3828   3678
+ * tobj       3730[6199]   4016   3970   3828   3678
  * tclo       4538         4787   4735   4390   4343
- * tlet       5277         7775   5640   4450   4423
+ * tlet       5277[5623]   7775   5640   4450   4423
  * tcase      4475         4960   4793   4439   4439
- * tmap       5495         8869   8774   4489   4490
- * tfft      114.9         7820   7729   4755   4683
- * tshoot     6903         5525   5447   5183   5174
+ * tmap       5495[8683]   8869   8774   4489   4490
+ * tfft      114.9[122.2]  7820   7729   4755   4683
+ * tshoot     6903[8780]   5525   5447   5183   5174
  * tform      8335         5357   5348   5307   5307
- * tnum       56.6         6348   6013   5433   5425
- * tstr       6123         6880   6342   5488   5461
- * tlamb      5799         6423   6273   5720   5630
- * tgsl       25.2         8485   7802   6373   6324
- * tmisc      6892         8869   7612   6435   6341
- * tlist      6505         7896   7546   6558   6498
+ * tnum       56.6[56.8]   6348   6013   5433   5425
+ * tstr       6123[7127]   6880   6342   5488   5461
+ * tlamb      5799[6780]   6423   6273   5720   5630
+ * tgsl       25.2[25.5]   8485   7802   6373   6324
+ * tmisc      6892[8835]   8869   7612   6435   6341
+ * tlist      6505[7898]   7896   7546   6558   6498
  * trec       8314         6936   6922   6521   6523
  * tari       ----         13.0   12.7   6827   6717
  * tleft      9004         10.4   10.2   7657   7615
  * tgc        9532         11.9   11.1   8177   8063
- * thash      35.2         11.8   11.7   9734   9584
+ * thash      35.2[40.0]   11.8   11.7   9734   9584
  * cb         16.9         11.2   11.0   9658   9686
- * tgen       12.6         11.2   11.4   12.0   12.0
- * tall       24.5         15.6   15.6   15.6   15.6
- * calls      55.8         36.7   37.5   37.0   37.6
- * sg         76.1         ----   ----   55.9   56.6
- * lg        105.6         ----   ----  105.2  105.8
- * tbig      600.4        177.4  175.8  156.5  152.4
+ * tgen       12.6[12.0]   11.2   11.4   12.0   12.0
+ * tall       24.5[33.5]   15.6   15.6   15.6   15.6
+ * calls      55.8[72.8]   36.7   37.5   37.0   37.6
+ * sg         76.1[93.4]   ----   ----   55.9   56.6
+ * lg        105.6[104.6]  ----   ----  105.2  105.8
+ * tbig      600.4[813.4] 177.4  175.8  156.5  152.4
  * ------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
@@ -95214,5 +95249,7 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm -> main
- * could the built-ins be global? (faster thread startup)
+ * with-baffle is safe, so can fx_call it leaving an empty let in curlet and thus messing up subsequent t_lookup et al?
+ * t718
+ * t725 gensyms
  */

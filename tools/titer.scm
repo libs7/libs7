@@ -8,7 +8,7 @@
       (load "s7test-block.so" new-env)))
   
   (define-constant (find-if-a iter)
-    (case (type-of (iterate iter))
+    (case (type-of (iterate iter)) ; op_tc_case
       ((string?) #t)
       ((eof-object?) #f)
       (else (find-if-a iter))))
@@ -23,7 +23,7 @@
   
   (define-constant (find-if-c iter)
     (do ((obj (iterate iter) (iterate iter)))
-	((memq (type-of obj) '(eof-object? string?))
+	((or (string? obj) (eof-object? obj))
 	 (string? obj))))
   
   (define-constant (find-if-d iter)
