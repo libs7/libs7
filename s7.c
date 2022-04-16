@@ -1406,18 +1406,6 @@ struct s7_scheme {
 static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
 
 
-/* -------------------------------- mallocate -------------------------------- */
-
-static void add_saved_pointer(s7_scheme *sc, void *p)
-{
-  if (sc->saved_pointers_loc == sc->saved_pointers_size)
-    {
-      sc->saved_pointers_size *= 2;
-      sc->saved_pointers = (void **)realloc(sc->saved_pointers, sc->saved_pointers_size * sizeof(void *));
-    }
-  sc->saved_pointers[sc->saved_pointers_loc++] = p;
-}
-
 #if POINTER_32
 static void *Malloc(size_t bytes)
 {
@@ -1447,6 +1435,19 @@ static void *Realloc(void *ptr, size_t size)
 #define Calloc calloc
 #define Realloc realloc
 #endif
+
+
+/* -------------------------------- mallocate -------------------------------- */
+
+static void add_saved_pointer(s7_scheme *sc, void *p)
+{
+  if (sc->saved_pointers_loc == sc->saved_pointers_size)
+    {
+      sc->saved_pointers_size *= 2;
+      sc->saved_pointers = (void **)Realloc(sc->saved_pointers, sc->saved_pointers_size * sizeof(void *));
+    }
+  sc->saved_pointers[sc->saved_pointers_loc++] = p;
+}
 
 static const int32_t intlen_bits[256] =
   {0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
@@ -3621,8 +3622,8 @@ static void init_small_ints(void)
 {
   const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
   s7_cell *cells;
-  small_ints = (s7_pointer *)malloc(NUM_SMALL_INTS * sizeof(s7_pointer));
-  cells = (s7_cell *)malloc(NUM_SMALL_INTS * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+  small_ints = (s7_pointer *)Malloc(NUM_SMALL_INTS * sizeof(s7_pointer));
+  cells = (s7_cell *)Malloc(NUM_SMALL_INTS * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
   for (int32_t i = 0; i < NUM_SMALL_INTS; i++)
     {
       s7_pointer p;
@@ -3636,7 +3637,7 @@ static void init_small_ints(void)
 
   /* setup a few other numbers while we're here */
   #define EXTRA_NUMBERS 11
-  cells = (s7_cell *)calloc(EXTRA_NUMBERS, sizeof(s7_cell));
+  cells = (s7_cell *)Calloc(EXTRA_NUMBERS, sizeof(s7_cell));
 
   #define init_integer(Ptr, Num, Name, Name_Len) \
     do {set_full_type(Ptr, T_INTEGER | T_IMMUTABLE | T_UNHEAP); set_integer(Ptr, Num); set_number_name(Ptr, Name, Name_Len);} while (0)
@@ -6406,7 +6407,7 @@ static inline void add_to_gc_list(gc_list_t *gp, s7_pointer p)
   if (gp->loc == gp->size)
     {
       gp->size *= 2;
-      gp->list = (s7_pointer *)realloc(gp->list, gp->size * sizeof(s7_pointer));
+      gp->list = (s7_pointer *)Realloc(gp->list, gp->size * sizeof(s7_pointer));
     }
   gp->list[gp->loc++] = p;
 }
@@ -6415,10 +6416,10 @@ static gc_list_t *make_gc_list(void)
 {
   gc_list_t *gp;
   #define INIT_GC_CACHE_SIZE 4
-  gp = (gc_list_t *)malloc(sizeof(gc_list_t));
+  gp = (gc_list_t *)Malloc(sizeof(gc_list_t));
   gp->size = INIT_GC_CACHE_SIZE;
   gp->loc = 0;
-  gp->list = (s7_pointer *)malloc(gp->size * sizeof(s7_pointer));
+  gp->list = (s7_pointer *)Malloc(gp->size * sizeof(s7_pointer));
   return(gp);
 }
 
@@ -6479,7 +6480,7 @@ static void init_gc_caches(s7_scheme *sc)
   /* slightly unrelated... */
   sc->setters_size = 4;
   sc->setters_loc = 0;
-  sc->setters = (s7_pointer *)malloc(sc->setters_size * sizeof(s7_pointer));
+  sc->setters = (s7_pointer *)Malloc(sc->setters_size * sizeof(s7_pointer));
 }
 
 static s7_pointer permanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type);
@@ -7204,7 +7205,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       sc->heap_size = old_size + 64000;
     }
 
-  cp = (s7_cell **)realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
+  cp = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
   if (cp)
     sc->heap = cp;
   else
@@ -7218,7 +7219,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->free_heap_top = sc->free_heap + old_free; /* incremented below, added old_free 21-Aug-12?!? */
 
-  cells = (s7_cell *)Calloc(sc->heap_size - old_size, sizeof(s7_cell));
+  cells = (s7_cell *)Calloc(sc->heap_size - old_size, sizeof(s7_cell)); /* Malloc + clear_type below is much slower?! */
   add_saved_pointer(sc, (void *)cells);
   for (p = cells, k = old_size; k < sc->heap_size;)
     {
@@ -7554,7 +7555,7 @@ static s7_pointer pop_op_stack(s7_scheme *sc)
 
 static void initialize_op_stack(s7_scheme *sc)
 {
-  sc->op_stack = (s7_pointer *)malloc(OP_STACK_INITIAL_SIZE * sizeof(s7_pointer));
+  sc->op_stack = (s7_pointer *)Malloc(OP_STACK_INITIAL_SIZE * sizeof(s7_pointer));
   sc->op_stack_size = OP_STACK_INITIAL_SIZE;
   sc->op_stack_now = sc->op_stack;
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
@@ -8131,7 +8132,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
       if (!is_string(gname))
 	return(method_or_bust_one_arg(sc, gname, sc->gensym_symbol, args, T_STRING));
       prefix = string_value(gname);
-      plen = safe_strlen(prefix); /* string_length?? are we stopping at #\null deliberately? */
+      plen = string_length(gname); /* was safe_strlen(prefix): were we stopping at #\null deliberately? */
     }
   else
     {
@@ -8155,13 +8156,10 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   p = pos_int_to_str(sc, sc->gensym_counter++, &len, '\0');
   memcpy((void *)(name + plen + 3), (void *)p, len);
   nlen = len + plen + 2;
-  if ((S7_DEBUGGING) && ((s7_int)strlen(name) != nlen))
-    fprintf(stderr, "%s[%d]: %s len: %" ld64 " != %" ld64 "\n", __func__, __LINE__, name, nlen, (s7_int)strlen(name));
   hash = raw_string_hash((const uint8_t *)name, nlen);
   location = hash % SYMBOL_TABLE_SIZE;
 
-  if ((WITH_WARNINGS) &&
-      (!is_null(symbol_table_find_by_name(sc, name, hash, location, nlen))))
+  if ((WITH_WARNINGS) && (!is_null(symbol_table_find_by_name(sc, name, hash, location, nlen))))
     s7_warn(sc, nlen + 32, "%s is already in use!", name);
 
   /* make-string for symbol name */
@@ -11883,7 +11881,7 @@ static bigint *alloc_bigint(s7_scheme *sc)
     }
   else
     {
-      p = (bigint *)malloc(sizeof(bigint));
+      p = (bigint *)Malloc(sizeof(bigint));
       /* not permalloc here: gmp must be playing tricky games with realloc or something.  permalloc can lead
        *   to mpz_set_si overwriting adjacent memory (valgrind does not catch this), clobbering at least the
        *   bigint nxt field.  Someday I need to look at the source.
@@ -11903,7 +11901,7 @@ static bigrat *alloc_bigrat(s7_scheme *sc)
     }
   else
     {
-      p = (bigrat *)malloc(sizeof(bigrat));
+      p = (bigrat *)Malloc(sizeof(bigrat));
       mpq_init(p->q);
     }
   return(p);
@@ -11920,7 +11918,7 @@ static bigflt *alloc_bigflt(s7_scheme *sc)
     }
   else
     {
-      p = (bigflt *)malloc(sizeof(bigflt));
+      p = (bigflt *)Malloc(sizeof(bigflt));
       mpfr_init2(p->x, sc->bignum_precision);
     }
   return(p);
@@ -11937,7 +11935,7 @@ static bigcmp *alloc_bigcmp(s7_scheme *sc)
     }
   else
     {
-      p = (bigcmp *)malloc(sizeof(bigcmp));
+      p = (bigcmp *)Malloc(sizeof(bigcmp));
       mpc_init(p->z);
     }
   return(p);
@@ -13279,10 +13277,10 @@ static double **pepow = NULL; /* [17][MAX_POW * 2]; */
 static void init_pows(void)
 {
   int32_t i;
-  pepow = (double **)malloc(17 * sizeof(double *));
+  pepow = (double **)Malloc(17 * sizeof(double *));
   pepow[0] = NULL;
   pepow[1] = NULL;
-  for (i = 2; i < 17; i++) pepow[i] = (double *)malloc((MAX_POW * 2) * sizeof(double));
+  for (i = 2; i < 17; i++) pepow[i] = (double *)Malloc((MAX_POW * 2) * sizeof(double));
   for (i = 2; i < 17; i++)        /* radix between 2 and 16 */
     for (int32_t j = -MAX_POW; j < MAX_POW; j++) /* saved exponent between 0 and +/- MAX_POW */
       pepow[i][j + MAX_POW] = pow((double)i, (double)j);
@@ -14220,14 +14218,14 @@ static void init_ctables(void)
 {
   int32_t i;
 
-  exponent_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
-  slashify_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
-  symbol_slashify_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
-  char_ok_in_a_name = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
-  white_space = (bool *)calloc(CTABLE_SIZE + 1, sizeof(bool));
+  exponent_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  slashify_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  symbol_slashify_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  char_ok_in_a_name = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  white_space = (bool *)Calloc(CTABLE_SIZE + 1, sizeof(bool));
   white_space++;      /* leave white_space[-1] false for white_space[EOF] */
-  number_table = (bool *)calloc(CTABLE_SIZE, sizeof(bool));
-  digits = (int32_t *)calloc(CTABLE_SIZE, sizeof(int32_t));
+  number_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  digits = (int32_t *)Calloc(CTABLE_SIZE, sizeof(int32_t));
 
   for (i = 0; i < CTABLE_SIZE; i++)
     {
@@ -15654,7 +15652,7 @@ static s7_pointer g_magnitude(s7_scheme *sc, s7_pointer args)
 static rat_locals_t *init_rat_locals_t(s7_scheme *sc)
 {
   rat_locals_t *r;
-  r = (rat_locals_t *)malloc(sizeof(rat_locals_t));
+  r = (rat_locals_t *)Malloc(sizeof(rat_locals_t));
   sc->ratloc = r;
   mpz_inits(r->i, r->i0, r->i1, r->n, r->p0, r->q0, r->r, r->r1, r->p1, r->q1, r->old_p1, r->old_q1, NULL);
   mpq_init(r->q);
@@ -25385,8 +25383,8 @@ static void init_chars(void)
 {
   s7_cell *cells;
 
-  chars = (s7_pointer *)malloc((NUM_CHARS + 1) * sizeof(s7_pointer)); /* chars is declared far above */
-  cells = (s7_cell *)calloc(NUM_CHARS + 1, sizeof(s7_cell));
+  chars = (s7_pointer *)Malloc((NUM_CHARS + 1) * sizeof(s7_pointer)); /* chars is declared far above */
+  cells = (s7_cell *)Calloc(NUM_CHARS + 1, sizeof(s7_cell));
 
   chars[0] = &cells[0];
   eof_object = chars[0];
@@ -26160,7 +26158,7 @@ static s7_pointer make_permanent_string(const char *str)
 {
   s7_pointer x;
   s7_int len = safe_strlen(str);
-  x = (s7_pointer)calloc(1, sizeof(s7_cell));
+  x = (s7_pointer)Calloc(1, sizeof(s7_cell));
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CONSTANT);
   string_length(x) = len;
@@ -28811,7 +28809,7 @@ static void init_standard_ports(s7_scheme *sc)
   /* standard output */
   x = alloc_pointer(sc);
   set_full_type(x, T_OUTPUT_PORT | T_IMMUTABLE | T_UNHEAP);
-  port_port(x) = (port_t *)calloc(1, sizeof(port_t));
+  port_port(x) = (port_t *)Calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_data(x) = NULL;
   port_data_block(x) = NULL;
@@ -28828,7 +28826,7 @@ static void init_standard_ports(s7_scheme *sc)
   /* standard error */
   x = alloc_pointer(sc);
   set_full_type(x, T_OUTPUT_PORT | T_IMMUTABLE | T_UNHEAP);
-  port_port(x) = (port_t *)calloc(1, sizeof(port_t));
+  port_port(x) = (port_t *)Calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_data(x) = NULL;
   port_data_block(x) = NULL;
@@ -28845,7 +28843,7 @@ static void init_standard_ports(s7_scheme *sc)
   /* standard input */
   x = alloc_pointer(sc);
   set_full_type(x, T_INPUT_PORT | T_IMMUTABLE | T_UNHEAP);
-  port_port(x) = (port_t *)calloc(1, sizeof(port_t));
+  port_port(x) = (port_t *)Calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_set_closed(x, false);
   port_set_string_or_function(x, sc->nil);
@@ -31592,12 +31590,12 @@ static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top
 static shared_info_t *init_circle_info(s7_scheme *sc)
 {
   shared_info_t *ci;
-  ci = (shared_info_t *)calloc(1, sizeof(shared_info_t));
+  ci = (shared_info_t *)Calloc(1, sizeof(shared_info_t));
   ci->size = INITIAL_SHARED_INFO_SIZE;
   ci->size2 = ci->size - 2;
-  ci->objs = (s7_pointer *)malloc(ci->size * sizeof(s7_pointer));
-  ci->refs = (int32_t *)calloc(ci->size, sizeof(int32_t));   /* finder expects 0 = unseen previously */
-  ci->defined = (bool *)calloc(ci->size, sizeof(bool));
+  ci->objs = (s7_pointer *)Malloc(ci->size * sizeof(s7_pointer));
+  ci->refs = (int32_t *)Calloc(ci->size, sizeof(int32_t));   /* finder expects 0 = unseen previously */
+  ci->defined = (bool *)Calloc(ci->size, sizeof(bool));
   ci->cycle_port = sc->F;
   ci->init_port = sc->F;
   return(ci);
@@ -44270,7 +44268,7 @@ static c_proc_t *alloc_permanent_function(s7_scheme *sc)
   #define ALLOC_FUNCTION_SIZE 256
   if (sc->alloc_function_k == ALLOC_FUNCTION_SIZE)
     {
-      sc->alloc_function_cells = (c_proc_t *)malloc(ALLOC_FUNCTION_SIZE * sizeof(c_proc_t));
+      sc->alloc_function_cells = (c_proc_t *)Malloc(ALLOC_FUNCTION_SIZE * sizeof(c_proc_t));
       add_saved_pointer(sc, sc->alloc_function_cells);
       sc->alloc_function_k = 0;
     }
@@ -57285,7 +57283,7 @@ static opt_funcs_t *alloc_permanent_opt_func(s7_scheme *sc)
 {
   if (sc->alloc_opt_func_k == ALLOC_FUNCTION_SIZE)
     {
-      sc->alloc_opt_func_cells = (opt_funcs_t *)malloc(ALLOC_FUNCTION_SIZE * sizeof(opt_funcs_t));
+      sc->alloc_opt_func_cells = (opt_funcs_t *)Malloc(ALLOC_FUNCTION_SIZE * sizeof(opt_funcs_t));
       add_saved_pointer(sc, sc->alloc_opt_func_cells);
       sc->alloc_opt_func_k = 0;
     }
@@ -57912,7 +57910,6 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   s7_i_ii_t ifunc;
   s7_i_7ii_t ifunc7 = NULL;
   s7_pointer p, sig;
-  /* TODO: if (WITH_GMP) return(false); */
 
   ifunc = s7_i_ii_function(s_func);
   if (!ifunc)
@@ -60293,11 +60290,9 @@ static s7_double opt_d_7piid_sfff(opt_info *o)
 
 static s7_double opt_d_7piid_sssf_unchecked(opt_info *o) /* this could be subsumed by the call above if we were using o->v[5] or o->v[0].fd */
 {
-  s7_int i1, i2;
+  s7_int i1 = integer(slot_value(o->v[2].p)), i2 = integer(slot_value(o->v[3].p));
   s7_pointer vect = slot_value(o->v[1].p);
   s7_double val;
-  i1 = integer(slot_value(o->v[2].p));
-  i2 = integer(slot_value(o->v[3].p));
   val = o->v[9].fd(o->v[8].o1);
   float_vector(vect, (i1 * (vector_offset(vect, 0)) + i2)) = val;
   return(val);
@@ -64769,7 +64764,6 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
 	  if (!cell_optimize(sc, p))
 	    return_false(sc, car_x);
 	}
-
       opc->v[2].i = len - 2;
       opc->v[0].fp = opt_let_temporarily;
       return(true);
@@ -69003,7 +68997,6 @@ static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
 	  port_position(pt)++;
 	  return(nil_string);
 	}
-
       end = (char *)(port_data(pt) + port_data_size(pt));
       s = strpbrk(start, "\"\n\\");
       if ((!s) || (s >= end))                     /* can this read a huge string constant from a file? */
@@ -69020,7 +69013,6 @@ static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
 	  port_position(pt) += (len + 1);
 	  return(make_string_with_length(sc, start, len));
 	}
-
       for (; s < end; s++)
 	{
 	  if (*s == '"')                         /* switch here no faster */
@@ -69053,7 +69045,6 @@ static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
       /* splitting this check out and duplicating the loop was slower?!? */
       int32_t c;
       c = port_read_character(pt)(sc, pt);
-
       switch (c)
 	{
 	case '\n':
@@ -69155,7 +69146,6 @@ static s7_pointer read_expression_read_error(s7_scheme *sc)
       s7_int start, pos = port_position(pt);
       s7_pointer p;
       char *msg;
-
       start = pos - 40;
       if (start < 0) start = 0;
       p = make_empty_string(sc, 128, '\0');
@@ -69523,7 +69513,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	  set_optimized(expr);
 	  if ((is_null(cdr(body))) && (safe_case) && (is_fxable(sc, car(body)))) /* fx stuff is not set yet */
 	    {
-	      /* TODO: and (!has_fx)?? */
 	      fx_annotate_arg(sc, body, e);
 	      set_optimize_op(expr, hop + OP_SAFE_THUNK_A);
 	      set_closure_one_form_fx_arg(func);
@@ -84741,7 +84730,7 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
 
 static void init_tc_rec(s7_scheme *sc)
 {
-  sc->tc_rec_calls = (int *)calloc(TC_REC_SIZE, sizeof(int));
+  sc->tc_rec_calls = (int *)Calloc(TC_REC_SIZE, sizeof(int));
   add_saved_pointer(sc, sc->tc_rec_calls);
 }
 
@@ -92374,7 +92363,7 @@ s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
 
 static void init_s7_let_immutable_field(void)
 {
-  s7_let_immutable_field = (bool *)calloc(SL_NUM_FIELDS, sizeof(bool));
+  s7_let_immutable_field = (bool *)Calloc(SL_NUM_FIELDS, sizeof(bool));
   s7_let_immutable_field[SL_CATCHES] = true;
   s7_let_immutable_field[SL_CPU_TIME] = true;
   s7_let_immutable_field[SL_C_TYPES] = true;
@@ -92550,7 +92539,7 @@ char *s7_decode_bt(s7_scheme *sc)
 
 static void init_fx_function(void)
 {
-  fx_function = (s7_function *)calloc(NUM_OPS, sizeof(s7_function));
+  fx_function = (s7_function *)Calloc(NUM_OPS, sizeof(s7_function));
 
   fx_function[HOP_SAFE_C_NC] = fx_c_nc;
   fx_function[HOP_SAFE_C_S] = fx_c_s;
@@ -94298,12 +94287,12 @@ s7_scheme *s7_init(void)
 #if (!MS_WINDOWS)
   pthread_mutex_unlock(&init_lock);
 #endif
-  sc = (s7_scheme *)calloc(1, sizeof(s7_scheme)); /* not malloc! */
+  sc = (s7_scheme *)Calloc(1, sizeof(s7_scheme)); /* not malloc! */
   cur_sc = sc;                                    /* for gdb/debugging */
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
   sc->gc_stats = 0;
 
-  sc->saved_pointers = (void **)malloc(INITIAL_SAVED_POINTERS_SIZE * sizeof(void *));
+  sc->saved_pointers = (void **)Malloc(INITIAL_SAVED_POINTERS_SIZE * sizeof(void *));
   sc->saved_pointers_loc = 0;
   sc->saved_pointers_size = INITIAL_SAVED_POINTERS_SIZE;
 
@@ -94332,7 +94321,7 @@ s7_scheme *s7_init(void)
   sc->max_list_length = 1073741824;
   sc->max_vector_dimensions = 512;
   sc->strbuf_size = INITIAL_STRBUF_SIZE;
-  sc->strbuf = (char *)calloc(sc->strbuf_size, 1);
+  sc->strbuf = (char *)Calloc(sc->strbuf_size, 1);
   sc->print_width = sc->max_string_length;
   sc->short_print = false;
   sc->in_with_let = false;
@@ -94343,7 +94332,7 @@ s7_scheme *s7_init(void)
   sc->muffle_warnings = false;
   sc->initial_string_port_length = 128;
   sc->format_depth = -1;
-  sc->singletons = (s7_pointer *)calloc(256, sizeof(s7_pointer));
+  sc->singletons = (s7_pointer *)Calloc(256, sizeof(s7_pointer));
   add_saved_pointer(sc, sc->singletons);
   sc->read_line_buf = NULL;
   sc->read_line_buf_size = 0;
@@ -94390,7 +94379,7 @@ s7_scheme *s7_init(void)
   sc->current_safe_list = 0;
 
   sc->input_port_stack_size = INPUT_PORT_STACK_INITIAL_SIZE;
-  sc->input_port_stack = (s7_pointer *)malloc(sc->input_port_stack_size * sizeof(s7_pointer));
+  sc->input_port_stack = (s7_pointer *)Malloc(sc->input_port_stack_size * sizeof(s7_pointer));
   sc->input_port_stack_loc = 0;
 
   sc->code = sc->nil;
@@ -94449,14 +94438,14 @@ s7_scheme *s7_init(void)
   sc->heap_size = INITIAL_HEAP_SIZE;
   if ((sc->heap_size % 32) != 0)
     sc->heap_size = 32 * (int64_t)ceil((double)(sc->heap_size) / 32.0);
-  sc->heap = (s7_pointer *)malloc(sc->heap_size * sizeof(s7_pointer));
-  sc->free_heap = (s7_cell **)malloc(sc->heap_size * sizeof(s7_cell *));
+  sc->heap = (s7_pointer *)Malloc(sc->heap_size * sizeof(s7_pointer));
+  sc->free_heap = (s7_cell **)Malloc(sc->heap_size * sizeof(s7_cell *));
   sc->free_heap_top = (s7_cell **)(sc->free_heap + INITIAL_HEAP_SIZE);
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->previous_free_heap_top = sc->free_heap_top;
   {
     s7_cell *cells;
-    cells = (s7_cell *)malloc(INITIAL_HEAP_SIZE * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+    cells = (s7_cell *)Malloc(INITIAL_HEAP_SIZE * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
     add_saved_pointer(sc, (void *)cells);
     for (i = 0; i < INITIAL_HEAP_SIZE; i++)       /* LOOP_4 here is slower! */
       {
@@ -94474,7 +94463,7 @@ s7_scheme *s7_init(void)
 #endif
 	clear_type(sc->heap[i]);
      }
-    sc->heap_blocks = (heap_block_t *)malloc(sizeof(heap_block_t));
+    sc->heap_blocks = (heap_block_t *)Malloc(sizeof(heap_block_t));
     sc->heap_blocks->start = (intptr_t)cells;
     sc->heap_blocks->end = (intptr_t)cells + (sc->heap_size * sizeof(s7_cell));
     sc->heap_blocks->offset = 0;
@@ -94500,7 +94489,7 @@ s7_scheme *s7_init(void)
   sc->protected_setter_symbols = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
 
   sc->protected_objects_size = INITIAL_PROTECTED_OBJECTS_SIZE;
-  sc->protected_objects_free_list = (s7_int *)malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
+  sc->protected_objects_free_list = (s7_int *)Malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
   sc->protected_objects_free_list_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
   sc->protected_objects = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
   for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++) /* using #<unused> as the not-set indicator here lets that value leak out! */
@@ -94522,17 +94511,17 @@ s7_scheme *s7_init(void)
   initialize_op_stack(sc);
 
   /* keep the symbol table out of the heap */
-  sc->symbol_table = (s7_pointer)malloc(sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+  sc->symbol_table = (s7_pointer)Malloc(sizeof(s7_cell)); /* was calloc 14-Apr-22 */
   full_type(sc->symbol_table) = T_VECTOR | T_UNHEAP;
   vector_length(sc->symbol_table) = SYMBOL_TABLE_SIZE;
-  vector_elements(sc->symbol_table) = (s7_pointer *)malloc(SYMBOL_TABLE_SIZE * sizeof(s7_pointer));
+  vector_elements(sc->symbol_table) = (s7_pointer *)Malloc(SYMBOL_TABLE_SIZE * sizeof(s7_pointer));
   vector_getter(sc->symbol_table) = default_vector_getter;
   vector_setter(sc->symbol_table) = default_vector_setter;
   normal_vector_fill(sc->symbol_table, sc->nil);
 
   { /* sc->opts */
     opt_info *os;
-    os = (opt_info *)malloc(OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
+    os = (opt_info *)Malloc(OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
     add_saved_pointer(sc, os);
     for (i = 0; i < OPTS_SIZE; i++)
       {
@@ -94600,7 +94589,7 @@ s7_scheme *s7_init(void)
   sc->mutable_symbol = make_symbol(sc, "mutable?");
   sc->file__symbol = make_symbol(sc, "FILE*");
   sc->circle_info = init_circle_info(sc);
-  sc->fdats = (format_data_t **)calloc(8, sizeof(format_data_t *));
+  sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
   sc->plist_1 = permanent_list(sc, 1);
   sc->plist_2 = permanent_list(sc, 2);
@@ -94621,7 +94610,7 @@ s7_scheme *s7_init(void)
   sc->undefined_identifier_warnings = false;
   sc->undefined_constant_warnings = false;
   sc->wrap_only = make_wrap_only(sc);
-  sc->unentry = (hash_entry_t *)malloc(sizeof(hash_entry_t));
+  sc->unentry = (hash_entry_t *)Malloc(sizeof(hash_entry_t));
   hash_entry_set_value(sc->unentry, sc->F);
   sc->begin_op = OP_BEGIN_NO_HOOK;
   /* we used to laboriously set various other fields to null, but the calloc takes care of that */
@@ -95198,47 +95187,47 @@ int main(int argc, char **argv)
  * tvect      1953[9235]   2519   2464   1772   1708
  * texit      1806[1824]   ----   ----   1778   1767
  * s7test     4533         1873   1831   1818   1790
- * timp       2232[2108]   2971   2891   2176   2051
+ * timp       2232[2108]   2971   2891   2176   2054
  * lt         2153         2187   2172   2150   2156
- * dup        2579         3805   3788   2492   2325
- * tread      2567         2440   2421   2419   2381
+ * dup        2579         3805   3788   2492   2328
+ * tload      3718         ----   ----   3046   2352
+ * tread      2567         2440   2421   2419   2383
  * trclo      4073         2735   2574   2454   2443
  * fbench     2827         2688   2583   2460   2453
- * titer      2633[3177]   2865   2842   2641   2615  2490
+ * titer      2633[3177]   2865   2842   2641   2490
  * tcopy      2557[10.7]   8035   5546   2539   2497
- * tmat       2684[8204]   3065   3042   2524   2518
+ * tmat       2684[8204]   3065   3042   2524   2516
  * tauto      2750         ----   ----   2562   2566
  * tb         3364[3653]   2735   2681   2612   2606
- * tsort      3572         3105   3104   2856   2856  2840
+ * tsort      3572         3105   3104   2856   2841
  * tmac       2949[5000]   3950   3873   3033   2992
- * tload      3718         ----   ----   3046   3020
- * tset       3107         3253   3104   3048   3130
+ * tset       3107         3253   3104   3048   3133
  * teq        3472[6019]   4068   4045   3536   3468
  * tio        3679         3816   3752   3683   3646
  * tobj       3730[6199]   4016   3970   3828   3678
  * tclo       4538         4787   4735   4390   4343
  * tlet       5277[5623]   7775   5640   4450   4423
- * tcase      4475         4960   4793   4439   4439
+ * tcase      4475         4960   4793   4439   4462
  * tmap       5495[8683]   8869   8774   4489   4490
  * tfft      114.9[122.2]  7820   7729   4755   4683
  * tshoot     6903[8780]   5525   5447   5183   5174
- * tform      8335         5357   5348   5307   5307
- * tnum       56.6[56.8]   6348   6013   5433   5425
- * tstr       6123[7127]   6880   6342   5488   5461
+ * tform      8335         5357   5348   5307   5312
+ * tnum       56.6[56.8]   6348   6013   5433   5426
+ * tstr       6123[7127]   6880   6342   5488   5462
  * tlamb      5799[6780]   6423   6273   5720   5630
- * tgsl       25.2[25.5]   8485   7802   6373   6324
- * tmisc      6892[8835]   8869   7612   6435   6341
- * tlist      6505[7898]   7896   7546   6558   6498
+ * tgsl       25.2[25.5]   8485   7802   6373   6333
+ * tmisc      6892[8835]   8869   7612   6435   6342
+ * tlist      6505[7898]   7896   7546   6558   6507
  * trec       8314         6936   6922   6521   6523
  * tari       ----         13.0   12.7   6827   6717
- * tleft      9004         10.4   10.2   7657   7615
- * tgc        9532         11.9   11.1   8177   8063
- * thash      35.2[40.0]   11.8   11.7   9734   9584
+ * tleft      9004         10.4   10.2   7657   7616
+ * tgc        9532         11.9   11.1   8177   8064
+ * thash      35.2[40.0]   11.8   11.7   9734   9583
  * cb         16.9         11.2   11.0   9658   9686
  * tgen       12.6[12.0]   11.2   11.4   12.0   12.0
  * tall       24.5[33.5]   15.6   15.6   15.6   15.6
  * calls      55.8[72.8]   36.7   37.5   37.0   37.6
- * sg         76.1[93.4]   ----   ----   55.9   56.6
+ * sg         76.1[93.4]   ----   ----   55.9   56.5
  * lg        105.6[104.6]  ----   ----  105.2  105.8
  * tbig      600.4[813.4] 177.4  175.8  156.5  152.4
  * ------------------------------------------------------
@@ -95249,7 +95238,9 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm -> main
+ *   threads.c -> tools + tests
  * with-baffle is safe, so can fx_call it leaving an empty let in curlet and thus messing up subsequent t_lookup et al?
  * t718
  * t725 gensyms
+ * unlet opts
  */

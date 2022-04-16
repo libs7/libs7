@@ -1825,12 +1825,15 @@
                     int errcode;
                     regex_t *regexp;
                     char *err;
+                    s7_pointer result;
                     errcode = s7_integer(s7_car(args));
                     regexp = (regex_t *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, \"regex_t*\"), __func__, 1);
                     len = regerror (errcode, regexp, NULL, 0);
                     err = (char *)malloc(len);
                     regerror(errcode, regexp, err, len);
-                    return(s7_make_string_with_length(sc, err, len - 1));
+                    result = s7_make_string_with_length(sc, err, len - 1);
+                    free(err);
+                    return(result);
                   }
                  ")
 	   (C-function ("regex.make" g_regex_make "" 0))
