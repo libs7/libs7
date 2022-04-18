@@ -6948,7 +6948,7 @@ static s7_pointer make_symbol(s7_scheme *sc, const char *name);
 #if WITH_GCC
 static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #else
-static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...)
+static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #endif
 
 #if S7_DEBUGGING
@@ -12620,9 +12620,10 @@ static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
   #else
     #define HAVE_OVERFLOW_CHECKS 0
     #pragma message("no arithmetic overflow checks in this version of s7")
-    #define add_overflow(A, B, C) 0
-    #define multiply_overflow(A, B, C) 0
-    #define subtract_overflow(A, B, C) 0
+    /* these are untested */
+    static bool add_overflow(s7_int A, s7_int B, s7_int *C) {*C = A + B; return(false);}        /* #define add_overflow(A, B, C) 0 */
+    static bool subtract_overflow(s7_int A, s7_int B, s7_int *C) {*C = A - B; return(false);}   /* #define subtract_overflow(A, B, C) 0 */
+    static bool multiply_overflow(s7_int A, s7_int B, s7_int *C) {*C = A * B; return(false);}   /* #define multiply_overflow(A, B, C) 0 */
   #endif
 #endif
 
@@ -28430,30 +28431,25 @@ static s7_pointer string_read_name_no_free(s7_scheme *sc, s7_pointer pt)
 {
   /* sc->strbuf[0] has the first char of the string we're reading */
   s7_pointer result;
-  char *str = (char *)(port_data(pt) + port_position(pt));
+  uint8_t *str = (uint8_t *)(port_data(pt) + port_position(pt));
 
-  if (char_ok_in_a_name[(uint8_t)*str])
+  if (char_ok_in_a_name[*str])
     {
       s7_int k;
-      char *orig_str = (char *)(str - 1);
+      uint8_t *orig_str = str - 1;
       str++;
-      while (char_ok_in_a_name[(uint8_t)(*str)]) {str++;}
+      while (char_ok_in_a_name[*str]) str++;
       k = str - orig_str;
       if (*str != 0)
 	port_position(pt) += (k - 1);
       else port_position(pt) = port_data_size(pt);
       /* this is equivalent to:
        *    str = strpbrk(str, "(); \"\t\r\n");
-       *    if (!str)
-       *      {
-       *        k = strlen(orig_str);
-       *        str = (char *)(orig_str + k);
-       *      }
-       *    else k = str - orig_str;
+       *    if (!str) {k = strlen(orig_str); str = (char *)(orig_str + k);} else k = str - orig_str;
        * but slightly faster.
        */
-      if (!number_table[(uint8_t)(*orig_str)])
-	return(make_symbol_with_length(sc, orig_str, k));
+      if (!number_table[*orig_str])
+	return(make_symbol_with_length(sc, (const char *)orig_str, k));
 
       /* eval_c_string string is a constant so we can't set and unset the token's end char */
       if ((k + 1) >= sc->strbuf_size)
@@ -28463,7 +28459,6 @@ static s7_pointer string_read_name_no_free(s7_scheme *sc, s7_pointer pt)
       sc->strbuf[k] = '\0';
       return(make_atom(sc, sc->strbuf, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR));
     }
-
   result = sc->singletons[(uint8_t)(sc->strbuf[0])];
   if (!result)
     {
@@ -28513,22 +28508,22 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
 {
   /* port_string was allocated (and read from a file) so we can mess with it directly */
   s7_pointer result;
-  char *str = (char *)(port_data(pt) + port_position(pt));
-  if (char_ok_in_a_name[(uint8_t)*str])
+  uint8_t *str = (uint8_t *)(port_data(pt) + port_position(pt));
+  if (char_ok_in_a_name[*str])
     {
       s7_int k;
-      char endc;
-      char *orig_str = (char *)(str - 1);
+      uint8_t endc;
+      uint8_t *orig_str = str - 1;
       str++;
-      while (char_ok_in_a_name[(uint8_t)(*str)]) {str++;}
+      while (char_ok_in_a_name[*str]) str++;
       k = str - orig_str;
       port_position(pt) += (k - 1);
-      if (!number_table[(uint8_t)(*orig_str)])
-	return(make_symbol_with_length(sc, orig_str, k));
-      endc = (*str);
-      (*str) = '\0';
-      result = make_atom(sc, orig_str, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR);
-      (*str) = endc;
+      if (!number_table[*orig_str])
+	return(make_symbol_with_length(sc, (const char *)orig_str, k));
+      endc = *str;
+      *str = 0;
+      result = make_atom(sc, (char *)orig_str, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR);
+      *str = endc;
       return(result);
     }
   result = sc->singletons[(uint8_t)(sc->strbuf[0])];
@@ -28541,7 +28536,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
   return(result);
 }
 
-static inline void port_set_filename(s7_scheme *sc, s7_pointer p, const char *name, size_t len)
+static void port_set_filename(s7_scheme *sc, s7_pointer p, const char *name, size_t len)
 {
   block_t *b;
   b = mallocate(sc, len + 1);
@@ -57961,7 +57956,7 @@ static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	    {
 	      if (opc->v[3].i_ii_f == add_i_ii)
 		{
-		  opc->v[1].i = integer(arg1) + integer(arg2);
+		  opc->v[1].i = integer(arg1) + integer(arg2); /* no overflow check for sc_add case above */
 		  opc->v[0].fi = opt_i_c;
 		}
 	      else 
@@ -70096,6 +70091,7 @@ static opt_t fxify_closure_s(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7
 {
   s7_pointer body = closure_body(func);
   fx_annotate_arg(sc, body, e);
+  /* we can't currently fx_annotate_arg(sc, cdr(expr), e) here because that opt2 field is in use elsewhere (opt2_sym, not sure where it's set) */
   set_safe_optimize_op(expr, hop + OP_SAFE_CLOSURE_S_A);
   if ((is_pair(car(body))) && (is_pair(cdar(body))) && (car(closure_args(func)) == cadar(body)))
     {
@@ -70224,14 +70220,13 @@ static opt_t optimize_closure_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer
     {
       set_opt2_sym(expr, arg1);
       set_opt1_lambda_add(expr, func);
-
       if (one_form)
 	{
 	  if (safe_case)
 	    {
 	      if (is_fxable(sc, car(body)))
 		return(fxify_closure_s(sc, func, expr, e, hop));
-	      set_optimize_op(expr, hop + OP_SAFE_CLOSURE_S_O); /* tleft 7638 is _O here, 7692 if not (and claims 80 in the begin setup) */
+	      set_optimize_op(expr, hop + OP_SAFE_CLOSURE_S_O); /* tleft 7638 if _O here, 7692 if not (and claims 80 in the begin setup) */
 	    }
 	  else set_optimize_op(expr, hop + OP_CLOSURE_S_O);
 	}
@@ -87782,7 +87777,8 @@ static Inline void op_safe_c_s(s7_scheme *sc)
 }
 /* if op_safe_c_t added and set in fx_tree_in, we get a few hits, but nothing significant.
  *   if that had worked, it would be interesting to set opt1(cdr) to the fx_tree fx_proc, (init to fx_c_s), then call that here.
- *   opt1(cdr) is not used here, opt3_byte happens a few times
+ *   opt1(cdr) is not used here, opt3_byte happens a few times, but opt2_direct clobbers opt2_fx sometimes
+ *   (also need fx_annotate cdr(expr) in optimize_c_function_one_arg)
  */
 
 static Inline void op_safe_c_ss(s7_scheme *sc)
