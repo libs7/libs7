@@ -48932,7 +48932,7 @@ static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
   return(-1);
 }
 
-static bool is_empty(s7_scheme *sc, s7_pointer obj)
+static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is some C++ struct?? */
 {
   switch (type(obj))
     {
@@ -49063,7 +49063,7 @@ static s7_pointer hash_table_append(s7_scheme *sc, s7_pointer args)
   new_hash = s7_make_hash_table(sc, sc->default_hash_table_length);
   push_stack_no_let(sc, OP_GC_PROTECT, args, new_hash);
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
-    if (!is_empty(sc, car(p)))
+    if (!sequence_is_empty(sc, car(p)))
       s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_hash));
   set_plist_2(sc, sc->nil, sc->nil);
   unstack(sc);
@@ -49077,7 +49077,7 @@ static s7_pointer let_append(s7_scheme *sc, s7_pointer args)
   s7_gc_protect_via_stack(sc, args);
   new_let = make_let_slowly(sc, sc->nil);
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
-    if (!is_empty(sc, car(p)))
+    if (!sequence_is_empty(sc, car(p)))
       s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_let));
   set_plist_2(sc, sc->nil, sc->nil);
   unstack(sc);
