@@ -1459,7 +1459,6 @@ static const int32_t intlen_bits[256] =
    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8};
 
-
 static void memclr(void *s, size_t n)
 {
   uint8_t *s2;
@@ -28983,7 +28982,10 @@ static inline s7_pointer open_and_protect_input_string(s7_scheme *sc, s7_pointer
   return(p);
 }
 
-s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string) {return(open_input_string(sc, input_string, safe_strlen(input_string)));}
+s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string) 
+{
+  return(open_input_string(sc, input_string, safe_strlen(input_string)));
+}
 
 static s7_pointer g_open_input_string(s7_scheme *sc, s7_pointer args)
 {
@@ -29060,7 +29062,8 @@ static inline void check_get_output_string_port(s7_scheme *sc, s7_pointer p)
     simple_wrong_type_argument_with_type(sc, sc->get_output_string_symbol, p, wrap_string(sc, "an active (open) string port", 28));
   if (port_position(p) > sc->max_string_length)
     s7_error(sc, sc->out_of_range_symbol,
-	     set_elist_2(sc, wrap_string(sc, "port-position ~D is greater than (*s7* 'max-string-length)", 58), wrap_integer(sc, port_position(p))));
+	     set_elist_2(sc, wrap_string(sc, "port-position ~D is greater than (*s7* 'max-string-length)", 58), 
+			     wrap_integer(sc, port_position(p))));
 }
 
 static s7_pointer g_get_output_string(s7_scheme *sc, s7_pointer args)
@@ -29922,7 +29925,8 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 		    if (pname) liberate(sc, pname);
 		    return(p);
 		  }
-		s7_warn(sc, 512, "loaded %s, but can't find init_func %s, dlerror: %s, let: %s\n", fname, init_name, dlerror(), display(let));
+		s7_warn(sc, 512, "loaded %s, but can't find init_func %s, dlerror: %s, let: %s\n", 
+			fname, init_name, dlerror(), display(let));
 		dlclose(library);
 	      }
 	    if (S7_DEBUGGING) fprintf(stderr, "init_func trouble in %s, %s\n", fname, display(init));
@@ -30064,7 +30068,10 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   return(sc->value);
 }
 
-s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes) {return(s7_load_c_string_with_environment(sc, content, bytes, sc->nil));}
+s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes) 
+{
+  return(s7_load_c_string_with_environment(sc, content, bytes, sc->nil));
+}
 
 static s7_pointer g_load(s7_scheme *sc, s7_pointer args)
 {
@@ -30335,7 +30342,8 @@ The symbols refer to the argument to \"provide\".  (require lint.scm)"
 	if ((is_proper_quote(sc, car(p))) &&
 	    (is_symbol(cadar(p))))
 	  sym = cadar(p);
-	else return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "require: ~S is not a symbol", 27), car(p))));
+	else return(s7_error(sc, sc->wrong_type_arg_symbol, 
+			     set_elist_2(sc, wrap_string(sc, "require: ~S is not a symbol", 27), car(p))));
 
       if ((!is_memq(sym, s7_symbol_value(sc, sc->features_symbol))) &&
 	  (sc->is_autoloading))
@@ -30343,7 +30351,8 @@ The symbols refer to the argument to \"provide\".  (require lint.scm)"
 	  s7_pointer f;
 	  f = g_autoloader(sc, set_plist_1(sc, sym));
 	  if (is_false(sc, f))
-	    return(s7_error(sc, sc->autoload_error_symbol, set_elist_2(sc, wrap_string(sc, "require: no autoload info for ~S", 32), sym)));
+	    return(s7_error(sc, sc->autoload_error_symbol, 
+			    set_elist_2(sc, wrap_string(sc, "require: no autoload info for ~S", 32), sym)));
 	  if (hook_has_functions(sc->autoload_hook))
 	    s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, f));
 	  if (is_string(f))
@@ -32844,10 +32853,12 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 		{
 		  if (lref < 0) lref = -lref;
 		  if (i == 0)
-		    plen = catstrs_direct(buf, (lst_local) ? "    " : "  ", "(set-cdr! ", lst_name, " <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
+		    plen = catstrs_direct(buf, (lst_local) ? "    " : "  ", 
+					  "(set-cdr! ", lst_name, " <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
 		  else
 		    if (i == 1)
-		      plen = catstrs_direct(buf, (lst_local) ? "    " : "  ", "(set-cdr! (cdr ", lst_name, ") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
+		      plen = catstrs_direct(buf, (lst_local) ? "    " : "  ", 
+					    "(set-cdr! (cdr ", lst_name, ") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
 		    else plen = catstrs_direct(buf, (lst_local) ? "    " : "  ",
 					       "(set-cdr! (list-tail ", lst_name, " ", pos_int_to_str_direct_1(sc, i),
 					       ") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
@@ -48028,7 +48039,8 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
     case T_INT_VECTOR:
     case T_BYTE_VECTOR:
       if (is_float_vector(source))
-	return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~S", 17), caller, source, dest)));
+	return(s7_error(sc, sc->wrong_type_arg_symbol, 
+			set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~A", 17), caller, source, sc->prepackaged_type_names[type(dest)])));
     case T_FLOAT_VECTOR:
       set = vector_setter(dest);
       dest_len = vector_length(dest);
@@ -48266,7 +48278,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  {
 	    s7_double *dst = float_vector_floats(dest);
 	    for (i = start, j = 0; i < end; i++, j++)
-	      dst[j] = real_to_double(sc, vals[i], "copy");
+	      dst[j] = real_to_double(sc, vals[i], symbol_name(caller));
 	    return(dest);
 	  }
 	if (is_int_vector(dest))
@@ -48905,9 +48917,7 @@ static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
 	return((len == 0) ? -1 : len);
       }
     case T_NIL:         return(0);
-    case T_BYTE_VECTOR:
-    case T_INT_VECTOR:
-    case T_FLOAT_VECTOR:
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
     case T_VECTOR:      return(vector_length(lst));
     case T_STRING:      return(string_length(lst));
     case T_HASH_TABLE:  return(hash_table_entries(lst));
@@ -48920,6 +48930,22 @@ static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
 	  return(s7_integer_clamped_if_gmp(sc, x));
       }}
   return(-1);
+}
+
+static bool is_empty(s7_scheme *sc, s7_pointer obj)
+{
+  switch (type(obj))
+    {
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: 
+    case T_VECTOR:     return(vector_length(obj) == 0);
+    case T_NIL:        return(true);
+    case T_PAIR:       return(false);
+    case T_STRING:     return(string_length(obj) == 0);
+    case T_HASH_TABLE: return(hash_table_entries(obj) == 0);
+    case T_LET:        return(!tis_slot(let_slots(obj)));
+    case T_C_OBJECT:   return(s7_is_eqv(sc, c_object_length(sc, obj), int_zero));
+    default:           return(false);
+    }
 }
 
 static s7_int total_sequence_length(s7_scheme *sc, s7_pointer args, s7_pointer caller, uint8_t typ)
@@ -49037,7 +49063,8 @@ static s7_pointer hash_table_append(s7_scheme *sc, s7_pointer args)
   new_hash = s7_make_hash_table(sc, sc->default_hash_table_length);
   push_stack_no_let(sc, OP_GC_PROTECT, args, new_hash);
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
-    s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_hash));
+    if (!is_empty(sc, car(p)))
+      s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_hash));
   set_plist_2(sc, sc->nil, sc->nil);
   unstack(sc);
   return(new_hash);
@@ -49050,7 +49077,8 @@ static s7_pointer let_append(s7_scheme *sc, s7_pointer args)
   s7_gc_protect_via_stack(sc, args);
   new_let = make_let_slowly(sc, sc->nil);
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
-    s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_let));
+    if (!is_empty(sc, car(p)))
+      s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_let));
   set_plist_2(sc, sc->nil, sc->nil);
   unstack(sc);
   return(new_let);
@@ -52027,7 +52055,6 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 
     case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
       check_stack_size(sc);
-      sc->curlet = make_let(sc, closure_let(obj));
       sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
       sc->value = s7_call(sc, obj, sc->args);
       if (is_multiple_value(sc->value))
@@ -81522,7 +81549,7 @@ static bool op_do_no_vars_no_opt_1(s7_scheme *sc)
   return(false);
 }
 
-static void op_do_no_body_na_vars(s7_scheme *sc)
+static void op_do_no_body_na_vars(s7_scheme *sc) /* vars fxable, end-test not */
 {
   s7_pointer let, stepper = NULL;
   s7_int steppers = 0;
@@ -81557,7 +81584,6 @@ static bool op_do_no_body_na_vars_step(s7_scheme *sc)
   for (s7_pointer slot = let_slots(sc->curlet); tis_slot(slot); slot = next_slot(slot))
     if (slot_has_expression(slot))
       slot_set_value(slot, fx_call(sc, slot_expression(slot)));
-
   push_stack_no_args_direct(sc, OP_DO_NO_BODY_NA_VARS_STEP);
   sc->code = caadr(sc->code);
   return(false);
@@ -95292,9 +95318,9 @@ int main(int argc, char **argv)
  * s7test     4533         1873   1831   1818   1790
  * timp       2232[2108]   2971   2891   2176   2054
  * lt         2153         2187   2172   2150   2156
- * dup        2579         3805   3788   2492   2328
+ * dup        2579         3805   3788   2492   2327
  * tload      3718         ----   ----   3046   2352
- * tread      2567         2440   2421   2419   2383
+ * tread      2567         2440   2421   2419   2385
  * trclo      4073         2735   2574   2454   2443
  * fbench     2827         2688   2583   2460   2453
  * titer      2633[3177]   2865   2842   2641   2490
@@ -95302,37 +95328,37 @@ int main(int argc, char **argv)
  * tmat       2684[8204]   3065   3042   2524   2516
  * tauto      2750         ----   ----   2562   2566
  * tb         3364[3653]   2735   2681   2612   2606
- * tsort      3572         3105   3104   2856   2841  2826
+ * tsort      3572         3105   3104   2856   2826
  * tmac       2949[5000]   3950   3873   3033   2992
  * tset       3107         3253   3104   3048   3133
  * teq        3472[6019]   4068   4045   3536   3468
  * tio        3679         3816   3752   3683   3646
- * tobj       3730[6199]   4016   3970   3828   3678
+ * tobj       3730[6199]   4016   3970   3828   3678  3633
  * tclo       4538         4787   4735   4390   4343
  * tlet       5277[5623]   7775   5640   4450   4423
  * tcase      4475         4960   4793   4439   4462
  * tmap       5495[8683]   8869   8774   4489   4490
  * tfft      114.9[122.2]  7820   7729   4755   4683
  * tshoot     6903[8780]   5525   5447   5183   5174
- * tform      8335         5357   5348   5307   5312
- * tnum       56.6[56.8]   6348   6013   5433   5426
+ * tform      8335         5357   5348   5307   5310
+ * tnum       56.6[56.8]   6348   6013   5433   5425
  * tstr       6123[7127]   6880   6342   5488   5462
- * tlamb      5799[6780]   6423   6273   5720   5630  5618
+ * tlamb      5799[6780]   6423   6273   5720   5618
  * tgsl       25.2[25.5]   8485   7802   6373   6333
- * tmisc      6892[8835]   8869   7612   6435   6342  6324
- * tlist      6505[7898]   7896   7546   6558   6507  6486
+ * tmisc      6892[8835]   8869   7612   6435   6324
+ * tlist      6505[7898]   7896   7546   6558   6486
  * trec       8314         6936   6922   6521   6523
  * tari       ----         13.0   12.7   6827   6717
- * tleft      9004         10.4   10.2   7657   7616  7561
+ * tleft      9004         10.4   10.2   7657   7561
  * tgc        9532         11.9   11.1   8177   8064
  * thash      35.2[40.0]   11.8   11.7   9734   9583
- * cb         16.9         11.2   11.0   9658   9686
+ * cb         16.9         11.2   11.0   9658   9677
  * tgen       12.6[12.0]   11.2   11.4   12.0   12.0
  * tall       24.5[33.5]   15.6   15.6   15.6   15.6
  * calls      55.8[72.8]   36.7   37.5   37.0   37.6
  * sg         76.1[93.4]   ----   ----   55.9   56.5
  * lg        105.6[104.6]  ----   ----  105.2  105.8
- * tbig      600.4[813.4] 177.4  175.8  156.5  152.4 151.1
+ * tbig      600.4[813.4] 177.4  175.8  156.5  151.1
  * ------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
@@ -95343,4 +95369,5 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
+ * t582: append troubles
  */

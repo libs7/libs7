@@ -296,11 +296,11 @@
 (define* (sym6 a b :rest c) (list a b (copy c)))
 (define* (sym7 a :rest b :rest c) (list a b c))
 
-(define-macro (msym1 . a) `(copy ,a))
+(define-macro (msym1 . a) `(list (list ,@a)))
 (define-macro (msym2 a . b) `(cons ,a (copy ,b))) ; these are confusing!
 (define-macro (msym3 a b . c) `(list ,a ,b (copy ,c)))
 (define-macro* (msym4 :rest a) `(copy ,a))
-(define-macro* (msym5 a :rest b) `(cons ,a (copy ,b)))
+(define-macro* (msym5 a :rest b) `(cons ,a (list (list ,@b))))
 (define-macro* (msym6 a b :rest c) `(list ,a ,b (copy ,c)))
 (define-macro* (msym7 a :rest b :rest c) `(list ,a ,@b ,@c))
 
@@ -638,7 +638,7 @@
      (set! ((car x)) 0)))
 
 (define-macro (trace f)
-  (let ((old-f (gensym)))
+  (let ((old-f (gensym "trace")))
     `(define ,f 
        (let ((,old-f ,f))
 	 (apply lambda 'args 
@@ -827,7 +827,7 @@
 			  'write 'display 
 			  ;'outlet 
 			  'directory->list 
-			  ;'set!
+			  'set!
 			  'set-car! 
 			  'call-with-output-file 'with-output-to-file 
 			  ;'read-char 'read-byte 'read-line 'read-string 'read ; stdin=>hangs
@@ -853,7 +853,7 @@
 			  ;'varlet ;-- error exits, chaos in rootlet
 			  ;'eval ; -- can't use if signature (circular program) or (make-list (max-list-len))
 			  'checked-eval
-			  ;'immutable!
+			  ;'immutable! ;-- lots of complaints about 'a constant in inlet
 			  'checked-procedure-source
 			  ;'owlet ;too many uninteresting diffs
 			  ;'gc  ; slower? and can be trouble if called within an expression
@@ -868,7 +868,7 @@
 			  ;'let-set! ;-- rootlet troubles?
 			  ;'coverlet ;-- blocks block's equivalent?
                           'help ;-- snd goes crazy
-			  ;'macroexpand ;-- uninteresting objstr stuff
+			  'macroexpand ;-- uninteresting objstr stuff
 			  'signature ; -- circular lists cause infinite loops with (e.g.) for-each??
 			  'eval-string 
 			  'tree-memq 'tree-set-memq 'tree-count 'tree-leaves
@@ -1118,7 +1118,7 @@
 		      "(mock-random-state 1234)"))
 		    "'value"
 
-		    "(subvector 0 3 (vector 0 1 2 3 4))" "(substring \"0123\" 2)"
+		    "(subvector 0 3 (vector 0 1 2 3 4))" "(substring \"0123\" 2)" "(vector (lambda (a . b) a))"
 		    "(let-temporarily ((x 1234)) (+ x 1))"
 		    "(error 'oops \"an error!\")"
 		    "(define b2 32)"
@@ -1147,7 +1147,7 @@
 		    "(make-list 512)"
 		    "(make-vector '(2 3) 1)"             "(make-vector '(12 14) #<undefined>)"
 		    "(make-byte-vector '(2 3) 1)"        "(make-byte-vector '(4 32) 255)"
-		    "(make-string 256 #\\1)"             "(make-string 1024 #\\null)"
+		    "(make-string 256 #\\1)"             "(make-string 64 #\\a)"
 		    "(make-int-vector '(2 3) 1)"         "(make-int-vector '(2 128) -1)"
 		    "(make-float-vector '(2 3) 1)"       "(make-float-vector '(128 3) pi)"
 		    "(make-vector 3 'a symbol?)"         "(make-vector '(2 3 4 3 2 3 4) 1)"
@@ -1329,7 +1329,6 @@
                     (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) " s "))")))
 	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 100)) (apply values " s " ()))"))
                     (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) (apply values " s " ())))")))
-	      
 	      ))
       
       (chars (vector #\( #\( #\) #\space))) ; #\' #\/ #\# #\, #\` #\@ #\. #\:))  ; #\\ #\> #\space))
