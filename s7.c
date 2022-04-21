@@ -1409,24 +1409,21 @@ static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also use
 #if POINTER_32
 static void *Malloc(size_t bytes)
 {
-  void *p;
-  p = malloc(bytes);
+  void *p = malloc(bytes);
   if (!p) s7_error(cur_sc, cur_sc->out_of_memory_symbol, cur_sc->nil);
   return(p);
 }
 
 static void *Calloc(size_t nmemb, size_t size)
 {
-  void *p;
-  p = calloc(nmemb, size);
+  void *p = calloc(nmemb, size);
   if (!p) s7_error(cur_sc, cur_sc->out_of_memory_symbol, cur_sc->nil);
   return(p);
 }
 
 static void *Realloc(void *ptr, size_t size)
 {
-  void *p;
-  p = realloc(ptr, size);
+  void *p = realloc(ptr, size);
   if (!p) s7_error(cur_sc, cur_sc->out_of_memory_symbol, cur_sc->nil);
   return(p);
 }
@@ -1629,8 +1626,7 @@ static Inline block_t *mallocate(s7_scheme *sc, size_t bytes)
 
 static block_t *callocate(s7_scheme *sc, size_t bytes)
 {
-  block_t *p;
-  p = mallocate(sc, bytes);
+  block_t *p = mallocate(sc, bytes);
   if ((block_data(p)) && (block_index(p) != BLOCK_LIST))
     {
       if ((bytes & (~0x3f)) > 0)
@@ -1643,8 +1639,7 @@ static block_t *callocate(s7_scheme *sc, size_t bytes)
 
 static block_t *reallocate(s7_scheme *sc, block_t *op, size_t bytes)
 {
-  block_t *np;
-  np = mallocate(sc, bytes);
+  block_t *np = mallocate(sc, bytes);
   if (block_data(op))  /* presumably block_data(np) is not null */
     memcpy((uint8_t *)(block_data(np)), (uint8_t *)(block_data(op)), block_size(op));
   liberate(sc, op);
@@ -3582,7 +3577,6 @@ static void init_int_limits(void)
   /* actually not safe = (log (- (expt 2 63) 1)) and (log (- (expt 2 31) 1)) (using 63 and 31 bits) */
   #define S7_LOG_INT64_MAX 43.668274
 #endif
-
   s7_int_min = S7_INT64_MIN; /* see comment in s7_make_ratio -- we're trying to hack around a gcc bug (9.2.1 Ubuntu) */
   s7_int_digits_by_radix[0] = 0;
   s7_int_digits_by_radix[1] = 0;
@@ -3592,9 +3586,8 @@ static void init_int_limits(void)
 
 static s7_pointer make_permanent_integer(s7_int i)
 {
-  s7_pointer p;
-  p = (s7_pointer)Calloc(1, sizeof(s7_cell));
-  set_type_bit(p, T_IMMUTABLE | T_INTEGER | T_UNHEAP);
+  s7_pointer p = (s7_pointer)Calloc(1, sizeof(s7_cell)); /* Calloc to clear name */
+  full_type(p) = T_IMMUTABLE | T_INTEGER | T_UNHEAP;
   integer(p) = i;
   return(p);
 }
@@ -4872,8 +4865,7 @@ static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int3
 
 static char *safe_object_to_string(s7_pointer p)
 {
-  char *buf;
-  buf = (char *)Malloc(128);
+  char *buf = (char *)Malloc(128);
   snprintf(buf, 128, "type: %d", unchecked_type(p));
   return(buf);
 }
@@ -4886,9 +4878,8 @@ static void complain(const char* complaint, s7_pointer p, const char *func, int3
 
 static char* show_debugger_bits(s7_pointer p)
 {
-  char *bits_str;
+  char *bits_str = (char *)Malloc(512);
   int64_t bits = p->debugger_bits;
-  bits_str = (char *)Malloc(512);
   snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
 	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
@@ -6413,9 +6404,8 @@ static inline void add_to_gc_list(gc_list_t *gp, s7_pointer p)
 
 static gc_list_t *make_gc_list(void)
 {
-  gc_list_t *gp;
+  gc_list_t *gp = (gc_list_t *)Malloc(sizeof(gc_list_t));
   #define INIT_GC_CACHE_SIZE 4
-  gp = (gc_list_t *)Malloc(sizeof(gc_list_t));
   gp->size = INIT_GC_CACHE_SIZE;
   gp->loc = 0;
   gp->list = (s7_pointer *)Malloc(gp->size * sizeof(s7_pointer));
@@ -7383,8 +7373,7 @@ static s7_big_cell *alloc_big_pointer(s7_scheme *sc, int64_t loc)
 
 static void add_permanent_object(s7_scheme *sc, s7_pointer obj) /* called by remove_from_heap */
 {
-  gc_obj_t *g;
-  g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
+  gc_obj_t *g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
   g->p = obj;
   g->nxt = sc->permanent_objects;
   sc->permanent_objects = g;
@@ -7392,8 +7381,7 @@ static void add_permanent_object(s7_scheme *sc, s7_pointer obj) /* called by rem
 
 static void add_permanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
 {
-  gc_obj_t *g;
-  g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
+  gc_obj_t *g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
   g->p = obj;
   g->nxt = sc->permanent_lets;
   sc->permanent_lets = g;
@@ -8911,12 +8899,11 @@ static void init_unlet(s7_scheme *sc)
 {
   int32_t k = 0;
   s7_pointer *inits, *els;
-  block_t *block;
+  block_t *block = mallocate(sc, UNLET_ENTRIES * sizeof(s7_pointer));
 
   sc->unlet = (s7_pointer)Calloc(1, sizeof(s7_cell));
   set_full_type(sc->unlet, T_VECTOR | T_UNHEAP);
   vector_length(sc->unlet) = UNLET_ENTRIES;
-  block = mallocate(sc, UNLET_ENTRIES * sizeof(s7_pointer));
   vector_block(sc->unlet) = block;
   vector_elements(sc->unlet) = (s7_pointer *)block_data(block);
   vector_set_dimension_info(sc->unlet, NULL);
@@ -11198,8 +11185,7 @@ static s7_pointer copy_counter(s7_scheme *sc, s7_pointer obj)
 
 static void copy_stack_list_set_immutable(s7_scheme *sc, s7_pointer pold, s7_pointer pnew)
 {
-  s7_pointer p1, p2, slow = pold;
-  for (p1 = pold, p2 = pnew; is_pair(p2); p1 = cdr(p1), p2 = cdr(p2))
+  for (s7_pointer p1 = pold, p2 = pnew, slow = pold; is_pair(p2); p1 = cdr(p1), p2 = cdr(p2))
     {
       if (is_immutable(p1)) set_immutable(p2);
       if (is_pair(cdr(p1)))
@@ -11793,9 +11779,8 @@ static bool op_implicit_goto_a(s7_scheme *sc)
 
 static block_t *string_to_block(s7_scheme *sc, const char *p, s7_int len)
 {
-  block_t *b;
+  block_t *b = mallocate(sc, len + 1);
   char *bp;
-  b = mallocate(sc, len + 1);
   bp = (char *)block_data(b);
   memcpy((void *)bp, (void *)p, len);
   bp[len] = '\0';
@@ -12387,8 +12372,7 @@ static block_t *big_number_to_string_with_radix(s7_scheme *sc, s7_pointer p, int
       if (width > len)
 	{
 	  int32_t spaces = width - len;
-	  block_t *tmp;
-	  tmp = (block_t *)mallocate(sc, width + 1);
+	  block_t *tmp = (block_t *)mallocate(sc, width + 1);
 	  ((char *)block_data(tmp))[width] = '\0';
 	  memmove((void *)((char *)block_data(tmp) + spaces), (void *)block_data(str), len);
 	  local_memset((void *)block_data(tmp), (int)' ', spaces);
@@ -15658,8 +15642,7 @@ static s7_pointer g_magnitude(s7_scheme *sc, s7_pointer args)
 
 static rat_locals_t *init_rat_locals_t(s7_scheme *sc)
 {
-  rat_locals_t *r;
-  r = (rat_locals_t *)Malloc(sizeof(rat_locals_t));
+  rat_locals_t *r = (rat_locals_t *)Malloc(sizeof(rat_locals_t));
   sc->ratloc = r;
   mpz_inits(r->i, r->i0, r->i1, r->n, r->p0, r->q0, r->r, r->r1, r->p1, r->q1, r->old_p1, r->old_q1, NULL);
   mpq_init(r->q);
@@ -25388,11 +25371,9 @@ static void init_uppers(void)
 
 static void init_chars(void)
 {
-  s7_cell *cells;
+  s7_cell *cells = (s7_cell *)Calloc(NUM_CHARS + 1, sizeof(s7_cell));
 
   chars = (s7_pointer *)Malloc((NUM_CHARS + 1) * sizeof(s7_pointer)); /* chars is declared far above */
-  cells = (s7_cell *)Calloc(NUM_CHARS + 1, sizeof(s7_cell));
-
   chars[0] = &cells[0];
   eof_object = chars[0];
   set_full_type(eof_object, T_EOF | T_IMMUTABLE | T_UNHEAP);
@@ -26163,9 +26144,8 @@ static s7_pointer g_is_string(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer make_permanent_string(const char *str)
 {
-  s7_pointer x;
+  s7_pointer x = (s7_pointer)Calloc(1, sizeof(s7_cell));
   s7_int len = safe_strlen(str);
-  x = (s7_pointer)Calloc(1, sizeof(s7_cell));
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CONSTANT);
   string_length(x) = len;
@@ -28537,8 +28517,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
 
 static void port_set_filename(s7_scheme *sc, s7_pointer p, const char *name, size_t len)
 {
-  block_t *b;
-  b = mallocate(sc, len + 1);
+  block_t *b = mallocate(sc, len + 1);
   port_filename_block(p) = b;
   port_filename(p) = (char *)block_data(b);
   memcpy((void *)block_data(b), (void *)name, len);
@@ -28605,10 +28584,8 @@ static s7_pointer read_file(s7_scheme *sc, FILE *fp, const char *name, s7_int ma
       ((max_size < 0) || (size < max_size))) /* load uses max_size = -1 */
     {
       size_t bytes;
-      block_t *block;
+      block_t *block = mallocate(sc, size + 2);
       uint8_t *content;
-
-      block = mallocate(sc, size + 2);
       content = (uint8_t *)(block_data(block));
       bytes = fread(content, sizeof(uint8_t), size, fp);
       if (bytes != (size_t)size)
@@ -29013,7 +28990,7 @@ static const port_functions_t output_string_functions =
 s7_pointer s7_open_output_string(s7_scheme *sc)
 {
   s7_pointer x;
-  block_t *block, *b;
+  block_t *b, *block = mallocate(sc, sc->initial_string_port_length);
   new_cell(sc, x, T_OUTPUT_PORT);
   b = mallocate_port(sc);
   port_block(x) = b;
@@ -29021,7 +28998,6 @@ s7_pointer s7_open_output_string(s7_scheme *sc)
   port_type(x) = STRING_PORT;
   port_set_closed(x, false);
   port_data_size(x) = sc->initial_string_port_length;
-  block = mallocate(sc, sc->initial_string_port_length);
   port_data_block(x) = block;
   port_data(x) = (uint8_t *)(block_data(block));
   port_data(x)[0] = '\0';        /* in case s7_get_output_string before any output */
@@ -31601,8 +31577,7 @@ static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top
 
 static shared_info_t *init_circle_info(s7_scheme *sc)
 {
-  shared_info_t *ci;
-  ci = (shared_info_t *)Calloc(1, sizeof(shared_info_t));
+  shared_info_t *ci = (shared_info_t *)Calloc(1, sizeof(shared_info_t));
   ci->size = INITIAL_SHARED_INFO_SIZE;
   ci->size2 = ci->size - 2;
   ci->objs = (s7_pointer *)Malloc(ci->size * sizeof(s7_pointer));
@@ -34470,8 +34445,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
 
 static inline void restore_format_port(s7_scheme *sc, s7_pointer strport)
 {
-  block_t *block;
-  block = mallocate(sc, FORMAT_PORT_LENGTH);
+  block_t *block = mallocate(sc, FORMAT_PORT_LENGTH);
   port_data(strport) = (uint8_t *)(block_data(block));
   port_data_block(strport) = block;
   port_data(strport)[0] = '\0';
@@ -34883,9 +34857,8 @@ static void format_append_chars(s7_scheme *sc, format_data_t *fdat, char pad, s7
     }
   else
     {
-      block_t *b;
-      char *str;
-      b = mallocate(sc, chars + 1);
+      block_t *b = mallocate(sc, chars + 1);
+      char *str;      
       str = (char *)block_data(b);
       local_memset((void *)str, pad, chars);
       str[chars] = '\0';
@@ -35664,10 +35637,9 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	}
       if (port_position(port) < port_data_size(port))
 	{
-	  block_t *block;
+	  block_t *block = mallocate(sc, FORMAT_PORT_LENGTH);
 	  result = block_to_string(sc, port_data_block(port), port_position(port));
 	  port_data_size(port) = FORMAT_PORT_LENGTH;
-	  block = mallocate(sc, FORMAT_PORT_LENGTH);
 	  port_data_block(port) = block;
 	  port_data(port) = (uint8_t *)(block_data(block));
 	  port_data(port)[0] = '\0';
@@ -38652,9 +38624,8 @@ static inline s7_pointer make_simple_int_vector(s7_scheme *sc, s7_int len) /* le
 static s7_pointer make_simple_byte_vector(s7_scheme *sc, s7_int len)
 {
   s7_pointer x;
-  block_t *b;
-  new_cell(sc, x, T_BYTE_VECTOR | T_SAFE_PROCEDURE);
-  b = mallocate(sc, len);
+  block_t *b = mallocate(sc, len);
+  new_cell(sc, x, T_BYTE_VECTOR | T_SAFE_PROCEDURE);  
   vector_block(x) = b;
   byte_vector_bytes(x) = (uint8_t *)block_data(b);
   vector_length(x) = len;
@@ -45326,8 +45297,7 @@ void *s7_c_object_value(s7_pointer obj) {return(c_object_value(obj));}
 
 void *s7_c_object_value_checked(s7_pointer obj, s7_int type)
 {
-  if ((is_c_object(obj)) &&
-      (c_object_type(obj) == type))
+  if ((is_c_object(obj)) && (c_object_type(obj) == type))
     return(c_object_value(obj));
   return(NULL);
 }
@@ -45932,7 +45902,6 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 	s7_pointer sym = p, slot, setter;
 	if (is_keyword(sym))
 	  return(sc->F);
-
 	if ((e == sc->rootlet) || (e == sc->nil))
 	  slot = global_slot(sym);
 	else
@@ -45978,10 +45947,8 @@ static void protect_setter(s7_scheme *sc, s7_pointer sym, s7_pointer acc)
   if (sc->protected_setters_size == sc->protected_setters_loc)
     {
       s7_int new_size, size = sc->protected_setters_size;
-      block_t *ob, *nb;
+      block_t *nb, *ob = vector_block(sc->protected_setters);
       new_size = 2 * size;
-
-      ob = vector_block(sc->protected_setters);
       nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
       block_info(nb) = NULL;
       vector_block(sc->protected_setters) = nb;
@@ -46157,10 +46124,10 @@ static s7_pointer call_c_function_setter(s7_scheme *sc, s7_pointer func, s7_poin
 static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_value) /* see also op_set1 */
 {
   s7_pointer func = slot_setter(slot);
-  if (!is_any_procedure(func))
-    return(new_value);
   if (is_c_function(func))
     return(call_c_function_setter(sc, func, slot_symbol(slot), new_value));
+  if (!is_any_procedure(func))
+    return(new_value);
   sc->args = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
   return(s7_call(sc, func, sc->args));
@@ -46170,12 +46137,10 @@ static s7_pointer bind_symbol_with_setter(s7_scheme *sc, opcode_t op, s7_pointer
 {
   s7_pointer func;
   func = setter_p_pp(sc, symbol, sc->curlet);
-  if (!is_any_procedure(func))
-    return(new_value);
-
   if (is_c_function(func))
     return(call_c_function_setter(sc, func, symbol, new_value));
-
+  if (!is_any_procedure(func))
+    return(new_value);
   sc->args = (has_let_arg(func)) ? list_3(sc, symbol, new_value, sc->curlet) : list_2(sc, symbol, new_value);
   push_stack_direct(sc, op);
   sc->code = func;
@@ -46481,7 +46446,7 @@ static bool c_objects_are_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, 
 static bool hash_table_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci, bool equivalent)
 {
   hash_entry_t **lists;
-  s7_int i, len;
+  s7_int len;
   shared_info_t *nci = ci;
   hash_check_t hf;
   bool (*eqf)(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci);
@@ -46516,7 +46481,7 @@ static bool hash_table_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
   hf = hash_table_checker(y);
   if ((hf != hash_equal) && (hf != hash_equivalent))
     {
-      for (i = 0; i < len; i++)
+      for (s7_int i = 0; i < len; i++)
 	for (hash_entry_t *p = lists[i]; p; p = hash_entry_next(p))
 	  {
 	    hash_entry_t *y_val;
@@ -46536,7 +46501,7 @@ static bool hash_table_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
   /* we need to protect the current shared_info data (nci) here so the current hash_table_checker won't work --
    *   outside equal?/eqivalent? they can safely assume that they can start a new shared_info process.
    */
-  for (i = 0; i < len; i++)
+  for (s7_int i = 0; i < len; i++)
     for (hash_entry_t *p = lists[i]; p; p = hash_entry_next(p))
       {
 	hash_entry_t *xe;
@@ -46789,18 +46754,18 @@ static bool biv_meq(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci
 
 static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
-  s7_int i, len;
+  s7_int len;
   shared_info_t *nci = ci;
 
   if (!is_any_vector(y)) return(false);
-  base_vector_equal(sc, x, y);
+  base_vector_equal(sc, x, y); /* sets len */
   if (type(x) != type(y))
     {
       if ((is_int_vector(x)) && (is_byte_vector(y)))
 	return(biv_meq(sc, y, x, NULL));
       if ((is_byte_vector(x)) && (is_int_vector(y)))
 	return(biv_meq(sc, x, y, NULL));
-      for (i = 0; i < len; i++)
+      for (s7_int i = 0; i < len; i++)
 	if (!is_equal_1(sc, vector_getter(x)(sc, x, i), vector_getter(y)(sc, y, i), NULL)) /* this could be greatly optimized */
 	  return(false);
       return(true);
@@ -46813,7 +46778,7 @@ static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_
 	}
       else nci = new_shared_info(sc);
     }
-  for (i = 0; i < len; i++)
+  for (s7_int i = 0; i < len; i++)
     if (!(is_equal_1(sc, vector_element(x, i), vector_element(y, i), nci)))
       return(false);
   return(true);
@@ -47678,7 +47643,7 @@ static s7_pointer let_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_pointer
 static s7_pointer hash_table_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_pointer val)
 {
   /* loc is irrelevant here, e is the hash-table, val has to be of the form (cons key value)
-   * if key is already in e, its value is changed, otherwise a new slot is added to e
+   * if key is already in e, its value is changed, otherwise a new slot is added to e, cadr(elist_3) is caller
    */
   if (is_pair(val))
     return(s7_hash_table_set(sc, e, car(val), cdr(val)));
@@ -48932,22 +48897,6 @@ static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
   return(-1);
 }
 
-static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is some C++ struct?? */
-{
-  switch (type(obj))
-    {
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: 
-    case T_VECTOR:     return(vector_length(obj) == 0);
-    case T_NIL:        return(true);
-    case T_PAIR:       return(false);
-    case T_STRING:     return(string_length(obj) == 0);
-    case T_HASH_TABLE: return(hash_table_entries(obj) == 0);
-    case T_LET:        return(!tis_slot(let_slots(obj)));
-    case T_C_OBJECT:   return(s7_is_eqv(sc, c_object_length(sc, obj), int_zero));
-    default:           return(false);
-    }
-}
-
 static s7_int total_sequence_length(s7_scheme *sc, s7_pointer args, s7_pointer caller, uint8_t typ)
 {
   s7_pointer p;
@@ -49057,11 +49006,28 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
   return(new_vec);
 }
 
+static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is some C++ struct?? */
+{
+  switch (type(obj))
+    {
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: 
+    case T_VECTOR:     return(vector_length(obj) == 0);
+    case T_NIL:        return(true);
+    case T_PAIR:       return(false);
+    case T_STRING:     return(string_length(obj) == 0);
+    case T_HASH_TABLE: return(hash_table_entries(obj) == 0);
+    case T_LET:        return(!tis_slot(let_slots(obj)));
+    case T_C_OBJECT:   return(s7_is_eqv(sc, c_object_length(sc, obj), int_zero));
+    default:           return(false);
+    }
+}
+
 static s7_pointer hash_table_append(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer new_hash;
+  s7_gc_protect_via_stack(sc, args);
   new_hash = s7_make_hash_table(sc, sc->default_hash_table_length);
-  push_stack_no_let(sc, OP_GC_PROTECT, args, new_hash);
+  stack_protected2(sc) = new_hash;
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
     if (!sequence_is_empty(sc, car(p)))
       s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_hash));
@@ -49076,6 +49042,7 @@ static s7_pointer let_append(s7_scheme *sc, s7_pointer args)
   check_method(sc, e, sc->append_symbol, args);
   s7_gc_protect_via_stack(sc, args);
   new_let = make_let_slowly(sc, sc->nil);
+  stack_protected2(sc) = new_let;
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
     if (!sequence_is_empty(sc, car(p)))
       s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_let));
@@ -49089,21 +49056,22 @@ static s7_pointer g_append(s7_scheme *sc, s7_pointer args)
   #define H_append "(append ...) returns its argument sequences appended into one sequence"
   #define Q_append s7_make_circular_signature(sc, 0, 1, sc->T)
 
-  if (is_null(args)) return(sc->nil);  /* (append) -> () */
+  if (is_null(args)) return(sc->nil);         /* (append) -> () */
   if (is_null(cdr(args))) return(car(args));  /* (append <anything>) -> <anything> */
   sc->value = args;
-  args = copy_proper_list(sc, args);  /* copied since other args might invoke methods */
+  args = copy_proper_list(sc, args);          /* copied since other args might invoke methods */
   sc->value = args;
   switch (type(car(args)))
     {
-    case T_NIL: case T_PAIR: return(g_list_append(sc, args));
-    case T_STRING:           return(g_string_append_1(sc, args, sc->append_symbol));
-    case T_HASH_TABLE:       return(hash_table_append(sc, args));
-    case T_LET:              return(let_append(sc, args));
+    case T_NIL:        return(g_list_append(sc, cdr(args)));
+    case T_PAIR:       return(g_list_append(sc, args));
+    case T_STRING:     return(g_string_append_1(sc, args, sc->append_symbol));
+      /* should this work in the generic append: (append "12" #\3) -- currently an error, (append (list 1 2) 3) -> '(1 2 . 3) */
+    case T_HASH_TABLE: return(hash_table_append(sc, args));
+    case T_LET:        return(let_append(sc, args));
     case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
       return(vector_append(sc, args, type(car(args)), sc->append_symbol));
-    default:
-      check_method(sc, car(args), sc->append_symbol, args);
+    default: check_method(sc, car(args), sc->append_symbol, args);
     }
   return(wrong_type_argument_with_type(sc, sc->append_symbol, 1, car(args), a_sequence_string)); /* (append 1 0) */
 }
@@ -50573,8 +50541,7 @@ static s7_pointer make_profile_info(s7_scheme *sc)
 {
   if (!sc->profile_data)
     {
-      profile_data_t *pd;
-      pd = (profile_data_t *)Malloc(sizeof(profile_data_t));
+      profile_data_t *pd = (profile_data_t *)Malloc(sizeof(profile_data_t));
       pd->size = PD_INITIAL_SIZE;
       pd->excl_size = PD_INITIAL_SIZE;
       pd->top = 0;
@@ -51214,9 +51181,8 @@ static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...) /* len = m
     {
       int32_t bytes;
       va_list ap;
-      block_t *b;
-      char *str;
-      b = mallocate(sc, len);
+      block_t *b = mallocate(sc, len);
+      char *str;      
       str = (char *)block_data(b);
       str[0] = '\0';
       va_start(ap, ctrl);
@@ -91685,9 +91651,8 @@ static s7_pointer make_s7_let(s7_scheme *sc)  /* *s7* is permanent -- 20-May-21 
 
 static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
 {
-  block_t *b;
-  int32_t len = 0;
-  b = mallocate(sc, 128);
+  block_t *b = mallocate(sc, 128);
+  int32_t len = 0;  
   if (bytes < 1000)
     len = snprintf((char *)block_data(b), 128, "%" ld64, bytes);
   else
@@ -94649,8 +94614,7 @@ s7_scheme *s7_init(void)
   normal_vector_fill(sc->symbol_table, sc->nil);
 
   { /* sc->opts */
-    opt_info *os;
-    os = (opt_info *)Malloc(OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
+    opt_info *os = (opt_info *)Malloc(OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
     add_saved_pointer(sc, os);
     for (i = 0; i < OPTS_SIZE; i++)
       {
@@ -95316,7 +95280,7 @@ int main(int argc, char **argv)
  * tvect      1953[9235]   2519   2464   1772   1708
  * texit      1806[1824]   ----   ----   1778   1767
  * s7test     4533         1873   1831   1818   1790
- * timp       2232[2108]   2971   2891   2176   2054
+ * timp       2232[2108]   2971   2891   2176   2051
  * lt         2153         2187   2172   2150   2156
  * dup        2579         3805   3788   2492   2327
  * tload      3718         ----   ----   3046   2352
@@ -95324,8 +95288,8 @@ int main(int argc, char **argv)
  * trclo      4073         2735   2574   2454   2443
  * fbench     2827         2688   2583   2460   2453
  * titer      2633[3177]   2865   2842   2641   2490
- * tcopy      2557[10.7]   8035   5546   2539   2497
- * tmat       2684[8204]   3065   3042   2524   2516
+ * tcopy      2557[10.7]   8035   5546   2539   2495
+ * tmat       2684[8204]   3065   3042   2524   2515
  * tauto      2750         ----   ----   2562   2566
  * tb         3364[3653]   2735   2681   2612   2606
  * tsort      3572         3105   3104   2856   2826
@@ -95333,7 +95297,7 @@ int main(int argc, char **argv)
  * tset       3107         3253   3104   3048   3133
  * teq        3472[6019]   4068   4045   3536   3468
  * tio        3679         3816   3752   3683   3646
- * tobj       3730[6199]   4016   3970   3828   3678  3633
+ * tobj       3730[6199]   4016   3970   3828   3633
  * tclo       4538         4787   4735   4390   4343
  * tlet       5277[5623]   7775   5640   4450   4423
  * tcase      4475         4960   4793   4439   4462
@@ -95350,13 +95314,13 @@ int main(int argc, char **argv)
  * trec       8314         6936   6922   6521   6523
  * tari       ----         13.0   12.7   6827   6717
  * tleft      9004         10.4   10.2   7657   7561
- * tgc        9532         11.9   11.1   8177   8064
+ * tgc        9532         11.9   11.1   8177   8062
  * thash      35.2[40.0]   11.8   11.7   9734   9583
  * cb         16.9         11.2   11.0   9658   9677
  * tgen       12.6[12.0]   11.2   11.4   12.0   12.0
  * tall       24.5[33.5]   15.6   15.6   15.6   15.6
  * calls      55.8[72.8]   36.7   37.5   37.0   37.6
- * sg         76.1[93.4]   ----   ----   55.9   56.5
+ * sg         76.1[93.4]   ----   ----   55.9   56.3
  * lg        105.6[104.6]  ----   ----  105.2  105.8
  * tbig      600.4[813.4] 177.4  175.8  156.5  151.1
  * ------------------------------------------------------
@@ -95369,5 +95333,4 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
- * t582: append troubles
  */
