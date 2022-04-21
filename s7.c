@@ -4009,7 +4009,7 @@ static s7_pointer simple_out_of_range_error_prepackaged(s7_scheme *sc, s7_pointe
 /* ---------------- evaluator ops ---------------- */
 
 /* C=constant, S=symbol, A=fx-callable, Q=quote, N=any number of next >= 1, FX=list of A's, P=parlous?, O=one form, M=multiform */
-enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_protect used below as boundary marker */
+enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_protect used below as lower boundary marker */
 
       OP_SAFE_C_NC, HOP_SAFE_C_NC, OP_SAFE_C_S, HOP_SAFE_C_S,
       OP_SAFE_C_SS, HOP_SAFE_C_SS, OP_SAFE_C_SC, HOP_SAFE_C_SC, OP_SAFE_C_CS, HOP_SAFE_C_CS, OP_SAFE_C_CQ, HOP_SAFE_C_CQ,
@@ -4037,7 +4037,10 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_S_opAq, HOP_SAFE_C_S_opAq, OP_SAFE_C_opAq_S, HOP_SAFE_C_opAq_S, OP_SAFE_C_S_opAAq, HOP_SAFE_C_S_opAAq,
       OP_SAFE_C_STAR, HOP_SAFE_C_STAR, OP_SAFE_C_STAR_A, HOP_SAFE_C_STAR_A,
       OP_SAFE_C_STAR_AA, HOP_SAFE_C_STAR_AA, OP_SAFE_C_STAR_NA, HOP_SAFE_C_STAR_NA,
-      OP_SAFE_C_P, HOP_SAFE_C_P,
+
+      OP_SAFE_C_P, HOP_SAFE_C_P, OP_SAFE_C_PP, HOP_SAFE_C_PP, OP_SAFE_C_FF, HOP_SAFE_C_FF, OP_SAFE_C_SP, HOP_SAFE_C_SP, 
+      OP_SAFE_C_CP, HOP_SAFE_C_CP, OP_SAFE_C_AP, HOP_SAFE_C_AP, OP_SAFE_C_PA, HOP_SAFE_C_PA, OP_SAFE_C_PS, HOP_SAFE_C_PS, 
+      OP_SAFE_C_PC, HOP_SAFE_C_PC, OP_SAFE_C_SSP, HOP_SAFE_C_SSP, OP_ANY_C_NP, HOP_ANY_C_NP, OP_SAFE_C_3P, HOP_SAFE_C_3P,
 
       OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A, OP_SAFE_THUNK_ANY, HOP_SAFE_THUNK_ANY,
 
@@ -4063,6 +4066,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_AGG, HOP_SAFE_CLOSURE_AGG, OP_SAFE_CLOSURE_3A, HOP_SAFE_CLOSURE_3A, OP_SAFE_CLOSURE_NA, HOP_SAFE_CLOSURE_NA,
       OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_NS, HOP_SAFE_CLOSURE_NS, /* safe_closure_4s gained very little */
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
+      /* ssa|saa|ns|na|3s|agg|3a|sc|ap|pa|pp_a ? thunk_o? op_closure_ss|sc|3s|4s|na|3*_o?  */
 
       OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
       OP_ANY_CLOSURE_SYM, HOP_ANY_CLOSURE_SYM, OP_ANY_CLOSURE_A_SYM, HOP_ANY_CLOSURE_A_SYM,
@@ -4079,13 +4083,6 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       OP_CL_S, HOP_CL_S, OP_CL_SS, HOP_CL_SS, OP_CL_A, HOP_CL_A, OP_CL_AA, HOP_CL_AA,
       OP_CL_NA, HOP_CL_NA, OP_CL_FA, HOP_CL_FA, OP_CL_SAS, HOP_CL_SAS,
-
-      OP_SAFE_C_PP, HOP_SAFE_C_PP, OP_SAFE_C_FF, HOP_SAFE_C_FF,
-      OP_SAFE_C_SP, HOP_SAFE_C_SP, OP_SAFE_C_CP, HOP_SAFE_C_CP,
-      OP_SAFE_C_AP, HOP_SAFE_C_AP, OP_SAFE_C_PA, HOP_SAFE_C_PA,
-      OP_SAFE_C_PS, HOP_SAFE_C_PS, OP_SAFE_C_PC, HOP_SAFE_C_PC,
-      OP_SAFE_C_SSP, HOP_SAFE_C_SSP, OP_ANY_C_NP, HOP_ANY_C_NP,
-      OP_SAFE_C_3P, HOP_SAFE_C_3P,
       /* end of h_opts */
 
       OP_APPLY_SS, OP_APPLY_SA, OP_APPLY_SL, OP_MACRO_D, OP_MACRO_STAR_D,
@@ -4258,7 +4255,10 @@ static const char* op_names[NUM_OPS] =
       "safe_c_opaq", "h_safe_c_opaq", "safe_c_opaaq", "h_safe_c_opaaq", "safe_c_opaaaq", "h_safe_c_opaaaq",
       "safe_c_s_opaq", "h_safe_c_s_opaq", "safe_c_opaq_s", "h_safe_c_opaq_s", "safe_c_s_opaaq", "h_safe_c_s_opaaq",
       "safe_c*", "h_safe_c*", "safe_c*_a", "h_safe_c*_a", "safe_c*_aa", "h_safe_c*_aa", "safe_c*_na", "h_safe_c*_na",
-      "safe_c_p", "h_safe_c_p",
+
+      "safe_c_p", "h_safe_c_p", "safe_c_pp", "h_safe_c_pp", "safe_c_ff", "h_safe_c_ff", "safe_c_sp", "h_safe_c_sp", 
+      "safe_c_cp", "h_safe_c_cp", "safe_c_ap", "h_safe_c_ap", "safe_c_pa", "h_safe_c_pa", "safe_c_ps", "h_safe_c_ps", 
+      "safe_c_pc", "h_safe_c_pc", "safe_c_ssp", "h_safe_c_ssp", "any_c_np", "h_any_c_np", "safe_c_3p", "h_safe_c_3p",
 
       "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a", "safe_thunk_any", "h_safe_thunk_any",
 
@@ -4300,13 +4300,6 @@ static const char* op_names[NUM_OPS] =
 
       "cl_s", "h_cl_s", "cl_ss", "h_cl_ss", "cl_a", "h_cl_a", "cl_aa", "h_cl_aa",
       "cl_na", "h_cl_na", "cl_fa", "h_cl_fa", "cl_sas", "h_cl_sas",
-
-      "safe_c_pp", "h_safe_c_pp", "safe_c_ff", "h_safe_c_ff",
-      "safe_c_sp", "h_safe_c_sp", "safe_c_cp", "h_safe_c_cp",
-      "safe_c_ap", "h_safe_c_ap", "safe_c_pa", "h_safe_c_pa",
-      "safe_c_ps", "h_safe_c_ps", "safe_c_pc", "h_safe_c_pc",
-      "safe_c_ssp", "h_safe_c_ssp", "any_c_np", "h_any_c_np",
-      "safe_c_3p", "h_safe_c_3p",
 
       "apply_ss", "apply_sa", "apply_sl", "macro_d", "macro*_d",
       "with_input_from_string", "with_input_from_string_1", "with_output_to_string", "with_input_from_string_c", "call_with_output_string",
@@ -58164,6 +58157,7 @@ static s7_int opt_i_7pii_ssf(opt_info *o) {return(o->v[3].i_7pii_f(o->sc, slot_v
 static s7_int opt_i_7pii_ssf_vset(opt_info *o) {return(int_vector_set_i_7pii_direct(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), o->v[5].fi(o->v[4].o1)));}
 static s7_int opt_i_7pii_ssc(opt_info *o) {return(o->v[3].i_7pii_f(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), o->v[4].i));}
 static s7_int opt_i_7pii_sss(opt_info *o) {return(o->v[4].i_7pii_f(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p)), integer(slot_value(o->v[3].p))));}
+static s7_int opt_i_7pii_sif(opt_info *o) {return(o->v[3].i_7pii_f(o->sc, slot_value(o->v[1].p), o->v[12].i, o->v[9].fi(o->v[8].o1)));}
 
 static s7_int opt_i_pii_sss_ivref_unchecked(opt_info *o)
 {
@@ -58178,7 +58172,6 @@ static s7_int opt_i_7pii_sff(opt_info *o)
   i2 = o->v[9].fi(o->v[8].o1);
   return(o->v[3].i_7pii_f(o->sc, slot_value(o->v[1].p), i1, i2));
 }
-
 
 /* -------- i_7piii -------- */
 static s7_int opt_i_7piii_sssf(opt_info *o)
@@ -58317,9 +58310,14 @@ static bool opt_int_vector_set(s7_scheme *sc, int32_t otype, opt_info *opc, s7_p
 		  opc->v[8].o1 = sc->opts[sc->pc];
 		  if (int_optimize(sc, valp))
 		    {
-		      opc->v[0].fi = opt_i_7pii_sff;
 		      opc->v[11].fi = opc->v[10].o1->v[0].fi;
 		      opc->v[9].fi = opc->v[8].o1->v[0].fi;
+		      if (opc->v[11].fi == opt_i_c) /* (int-vector-set! v 0 (floor (sqrt i))) */
+			{
+			  opc->v[0].fi = opt_i_7pii_sif;
+			  opc->v[12].i = opc->v[10].o1->v[1].i;
+			}
+		      else opc->v[0].fi = opt_i_7pii_sff;
 		      return(true);
 		    }}
 	      return_false(sc, NULL);
@@ -67816,7 +67814,9 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 {
   int64_t top = current_stack_top(sc) - 1; /* stack_end - stack_start if negative, we're in big trouble */
   s7_pointer x;
-  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: splice %s %s\n", __func__, __LINE__, op_names[stack_op(sc->stack, top)], display_80(args)));
+  if (SHOW_EVAL_OPS) 
+    safe_print(fprintf(stderr, "%s[%d]: splice %s %s\n", __func__, __LINE__, 
+		       (top > 0) ? op_names[stack_op(sc->stack, top)] : "no stack!", display_80(args)));
 
   switch (stack_op(sc->stack, top))
     {
@@ -68091,6 +68091,8 @@ static s7_pointer values_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
   if (args > 1) return(sc->values_uncopied); /* splice_in_values */
   return(f);
 }
+
+bool s7_is_multiple_value(s7_pointer obj) {return(is_multiple_value(obj));}
 
 
 /* -------------------------------- list-values -------------------------------- */
@@ -95312,7 +95314,7 @@ int main(int argc, char **argv)
  * tmisc      6892[8835]   8869   7612   6435   6324
  * tlist      6505[7898]   7896   7546   6558   6486
  * trec       8314         6936   6922   6521   6523
- * tari       ----         13.0   12.7   6827   6717
+ * tari       ----         13.0   12.7   6827   6717  6696
  * tleft      9004         10.4   10.2   7657   7561
  * tgc        9532         11.9   11.1   8177   8062
  * thash      35.2[40.0]   11.8   11.7   9734   9583

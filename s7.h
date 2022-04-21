@@ -626,7 +626,7 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
 					const char *documentation);
 
 s7_pointer s7_values(s7_scheme *sc, s7_pointer args);          /* (values ...) */
-
+bool s7_is_multiple_value(s7_pointer obj);                     /*    is obj the results of (values ...) */
 
 s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e);      /* (make-iterator e) */
 bool s7_is_iterator(s7_pointer obj);                           /* (iterator? obj) */
@@ -898,6 +898,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
+ * 21-Apr:    s7_is_multiple_value.
  * 11-Apr:    removed s7_apply_*.
  * 22-Mar:    s7_eval_with_location.
  * 16-Mar:    s7_list_to_array for the s7_apply_* changes.

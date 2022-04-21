@@ -10136,6 +10136,7 @@ bool s7_set_history_enabled(s7_scheme *sc, bool enabled);
 s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_pointer finish);
 s7_pointer s7_make_continuation(s7_scheme *sc);
 s7_pointer s7_values(s7_scheme *sc, s7_pointer args);
+bool s7_is_multiple_value(s7_pointer obj);
 s7_pointer s7_copy(s7_scheme *sc, s7_pointer args);
 s7_pointer s7_fill(s7_scheme *sc, s7_pointer args);
 s7_pointer s7_type_of(s7_scheme *sc, s7_pointer arg);
@@ -10161,6 +10162,12 @@ is an <a href="#signal">example</a> above.
 s7_values is values, s7_copy is copy, s7_fill is fill!, s7_type_of is type-of, s7_is_syntax
 is syntax?. 
 </p>
+<p>s7_is_multiple_value returns true if its argument (a list) is the result of
+calling values or s7_values.  (values) returns a special object that is eq? to 
+#&lt;unspecified&gt; but not C == to it (that is, there are two things in s7 that
+represent the unspecified object, one being the result of calling values with no
+arguments).  (values obj) returns obj, which is not considered a multiple-value.
+</p>
 <p>s7_is_valid is a debugging aid; it tries to tell if an arbitrary value is pointing to
 an s7 object.  Set the compile-time switch TRAP_SEGFAULT to 1 before using this function!
 </p>
@@ -10169,6 +10176,23 @@ Finally, the begin_hook
 functions are explained <a href="#beginhook">above</a>.
 </p>
 
+<p>An example of s7_values:
+</p>
+<pre class="indented">
+static s7_pointer vals(s7_scheme *s, s7_pointer args)
+{
+  return(s7_values(s, args));
+}
+
+int main(int argc, char **argv) 
+{
+  s7_scheme *s = s7_init();
+  s7_define_function(s, "vals", vals, 0, 0, true, NULL);
+  s7_pointer e = s7_eval_c_string(s, "(+ (vals 1 2 3))");
+  s7_display(s, e, s7_current_output_port(s));
+  s7_newline(s, s7_current_output_port(s));
+}
+</pre>
 
 <br><br>
 

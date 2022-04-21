@@ -1676,7 +1676,16 @@ int main(int argc, char **argv)
   p = s7_eval_c_string(sc, "(let () (+ (mac-plus-mv 2 3)))");
   if (s7_integer(p) != 5)
     {fprintf(stderr, "%d: %s is not 5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
+  p = s7_values(sc, s7_list(sc, 2, s7_make_integer(sc, 1), s7_make_integer(sc, 2)));
+  if (!s7_is_multiple_value(p))
+    {fprintf(stderr, "%d: %s is not a multiple-values object?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  p = s7_values(sc, s7_nil(sc));
+  if ((!s7_is_unspecified(sc, p)) || (p == s7_unspecified(sc)))
+    {fprintf(stderr, "%d: %s is not a no-values object?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  p = s7_values(sc, s7_list(sc, 1, s7_f(sc)));
+  if (s7_is_multiple_value(p))
+    {fprintf(stderr, "%d: %s is a multiple-values object?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   s7_define_semisafe_typed_function(sc, "open-plus", open_plus, 1, 0, true, plus_help, s7_make_circular_signature(sc, 1, 2, s7_make_symbol(sc, "number?"), s7_t(sc)));
   p = s7_sublet(sc, s7_nil(sc), s7_cons(sc, s7_cons(sc, s7_make_symbol(sc, "plus"), s7_name_to_value(sc, "plus")), s7_nil(sc)));
