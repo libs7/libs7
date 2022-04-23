@@ -4485,8 +4485,7 @@ bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
 	    result = true;
 	  else
 	    {
-	      int64_t loc;
-	      loc = heap_location(sc, arg);
+	      int64_t loc = heap_location(sc, arg);
 	      if ((loc >= 0) && (loc < sc->heap_size))
 		result = (sc->heap[loc] == arg);
 	    }}
@@ -7177,16 +7176,16 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       while (sc->heap_size < size) sc->heap_size *= 2;
     else return;
   /* do not call new_cell here! */
-
+#if POINTER_32
   if (((2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell))) >= SIZE_MAX)
-    {
-      s7_warn(sc, 256, "heap size requested, %" ld64 " => %" ld64 " bytes, is greater than size_t: %" ld64 "\n",
+    { /* can this happen in 64-bit land?  SIZE_MAX is unsigned int in 32-bit, unsigned long in 64 bit = UINTPTR_MAX = 18446744073709551615UL */
+      s7_warn(sc, 256, "heap size requested, %" ld64 " => %" ld64 " bytes, is greater than size_t: %u\n",
 	      sc->heap_size,
 	      (2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell)),
 	      SIZE_MAX);
       sc->heap_size = old_size + 64000;
     }
-
+#endif
   cp = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
   if (cp)
     sc->heap = cp;
@@ -7416,8 +7415,7 @@ static void free_cell(s7_scheme *sc, s7_pointer p)
 static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
 {
   s7_pointer p;
-  int64_t loc;
-  loc = heap_location(sc, x);
+  int64_t loc = heap_location(sc, x);
   p = (s7_pointer)alloc_big_pointer(sc, loc);
   sc->heap[loc] = p;
   free_cell(sc, p);
@@ -7433,8 +7431,7 @@ static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x) /* x known to b
 #endif
 {
   gc_list_t *gp;
-  int64_t loc;
-  loc = heap_location(sc, x);
+  int64_t loc = heap_location(sc, x);
   sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
   free_cell(sc, sc->heap[loc]);
 #if S7_DEBUGGING
@@ -51584,10 +51581,7 @@ static char *truncate_string(char *form, s7_int len, use_write_t use_write)
 	    return(form);
 	  }
       i = len - 5;
-      if (i > 0)
-	{
-	  form[i] = '.'; form[i + 1] = '.'; form[i + 2] = '.'; form[i + 3] = '"'; form[i + 4] = '\0';
-	}
+      if (i > 0) {form[i] = '.'; form[i + 1] = '.'; form[i + 2] = '.'; form[i + 3] = '"'; form[i + 4] = '\0';}
       else
 	if (len >= 2)
 	  {
@@ -51603,10 +51597,7 @@ static char *truncate_string(char *form, s7_int len, use_write_t use_write)
 	    return(form);
 	  }
       i = len - 4;
-      if (i >= 0)
-	{
-	  form[i] = '.'; form[i + 1] = '.'; form[i + 2] = '.'; form[i + 3] = '\0';
-	}
+      if (i >= 0) {form[i] = '.'; form[i + 1] = '.'; form[i + 2] = '.'; form[i + 3] = '\0';}
       else form[len] = '\0';
     }
   return(form);
@@ -51727,9 +51718,8 @@ static s7_pointer missing_close_paren_error(s7_scheme *sc)
       (port_data(pt)) &&
       (port_position(pt) > 0))
     {
-      s7_pointer p;
+      s7_pointer p = make_empty_string(sc, 128, '\0');
       s7_int start, pos = port_position(pt);
-      p = make_empty_string(sc, 128, '\0');
       msg = string_value(p);
       memcpy((void *)msg, (void *)"missing close paren: ", 21);
       start = pos - 40;
@@ -51746,8 +51736,7 @@ static void improper_arglist_error(s7_scheme *sc)
   /* sc->code is the last (dotted) arg, sc->args is the arglist reversed not including sc->code
    *   the original was `(func ,@(reverse args) . ,code) essentially where func is sc->value or pop_op_stack(sc)
    */
-  s7_pointer func;
-  func = pop_op_stack(sc);
+  s7_pointer func = pop_op_stack(sc);
   if (sc->args == sc->nil)               /* (abs . 1) */
     s7_error(sc, sc->syntax_error_symbol,
 	     set_elist_3(sc, wrap_string(sc, "attempt to evaluate (~S . ~S)?", 30), func, sc->code));
@@ -51951,10 +51940,8 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
   s7_pointer res, in_obj;
   /* (let ((lst '("12" "34"))) (lst 0 1)) -> #\2
    * (let ((lst (list #(1 2) #(3 4)))) (lst 0 1)) -> 2
-   * this can get tricky:
-   *   ((list (lambda (a) (+ a 1)) (lambda (b) (* b 2))) 1 2) -> 4
-   * but what if func takes rest/optional args, etc?
-   *   ((list (lambda args (car args))) 0 "hi" 0)
+   * this can get tricky: ((list (lambda (a) (+ a 1)) (lambda (b) (* b 2))) 1 2) -> 4
+   * but what if func takes rest/optional args, etc: ((list (lambda args (car args))) 0 "hi" 0)
    *   should this return #\h or "hi"?? currently it is "hi" which is consistent with ((lambda args (car args)) "hi" 0)
    * but ((lambda (arg) arg) "hi" 0) is currently an error (too many arguments)
    * maybe it should be (((lambda (arg) arg) "hi") 0) -> #\h
@@ -52042,10 +52029,8 @@ static inline void fill_star_defaults(s7_scheme *sc, s7_pointer func, int32_t st
   s7_pointer *df;
   df = c_function_arg_defaults(func);
   if (c_func_has_simple_defaults(func))
-    {
-      for (int32_t i = start_arg; i < n_args; i++, par = cdr(par))
-	set_car(par, df[i]);
-    }
+    for (int32_t i = start_arg; i < n_args; i++, par = cdr(par))
+      set_car(par, df[i]);
   else
     for (int32_t i = start_arg; i < n_args; i++, par = cdr(par))
       {
@@ -52073,84 +52058,83 @@ static s7_pointer set_c_function_star_args(s7_scheme *sc)
 
   /* assume at the start that there are no keywords */
   for (i = 0, arg = sc->args, par = call_args; (i < n_args) && (is_pair(arg)); i++, arg = cdr(arg), par = cdr(par))
-    {
-      if (!is_symbol_and_keyword(car(arg)))
-	set_car(par, car(arg));
-      else
-	{
-	  s7_pointer kpar, karg;
-	  int32_t ki;
-	  /* oops -- there are keywords, change scanners (much duplicated code...)
-	   *   setting checked on the call_args here rather than parsing the parameters to use add_symbol_to_list
-	   */
-	  for (kpar = call_args; kpar != par; kpar = cdr(kpar))
-	    set_checked(kpar);
-	  for (; is_pair(kpar); kpar = cdr(kpar))
-	    clear_checked(kpar);
-	  df = c_function_arg_names(func);
-	  for (ki = i, karg = arg, kpar = par; (ki < n_args) && (is_pair(karg)); ki++, karg = cdr(karg))
-	    if (!is_symbol_and_keyword(car(karg)))
-	      {
-		if (is_checked(kpar))
-		  return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, parameter_set_twice_string, car(kpar), sc->args)));
-		set_checked(kpar);
-		set_car(kpar, car(karg));
-		kpar = cdr(kpar);
-	      }
-	    else
-	      {
-		s7_pointer p;
-		for (j = 0, p = call_args; j < n_args; j++, p = cdr(p))
-		  if (df[j] == car(karg))
-		    break;
-		if (j == n_args)
-		  {
-		    if (!c_function_allows_other_keys(func))
-		      return(s7_error(sc, sc->wrong_type_arg_symbol, 
-				      set_elist_2(sc, wrap_string(sc, "~A: not a parameter name?", 25), car(karg))));
-		    karg = cdr(karg);
-		    if (is_null(karg)) /* (f :x) where f arglist includes :allow-other-keys */
-		      return(s7_error(sc, sc->syntax_error_symbol, 
-				      set_elist_4(sc, wrap_string(sc, "~A: key ~S, but no value: ~S", 28), func, car(arg), sc->args)));
-		    ki--;
-		  }
-		else
-		  {
-		    if (is_checked(p))
-		      return(s7_error(sc, sc->wrong_type_arg_symbol, 
-				      set_elist_3(sc, parameter_set_twice_string, car(p), sc->args)));
-		    if (!is_pair(cdr(karg)))
-		      return(s7_error(sc, sc->syntax_error_symbol, 
-				      set_elist_4(sc, wrap_string(sc, "~A: key ~S, but no value: ~S", 28), func, car(karg), sc->args)));
-		    set_checked(p);
-		    karg = cdr(karg);
-		    set_car(p, car(karg));
-		    kpar = cdr(kpar);
-		  }}
-	  if ((!is_null(karg)) && (!c_function_allows_other_keys(func)))
-	    return(s7_error(sc, sc->wrong_number_of_args_symbol,
-			    set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), func, func, sc->args)));
-	  if (ki < n_args)
+    if (!is_symbol_and_keyword(car(arg)))
+      set_car(par, car(arg));
+    else
+      {
+	s7_pointer kpar, karg;
+	int32_t ki;
+	/* oops -- there are keywords, change scanners (much duplicated code...)
+	 *   setting checked on the call_args here rather than parsing the parameters to use add_symbol_to_list
+	 */
+	for (kpar = call_args; kpar != par; kpar = cdr(kpar))
+	  set_checked(kpar);
+	for (; is_pair(kpar); kpar = cdr(kpar))
+	  clear_checked(kpar);
+	df = c_function_arg_names(func);
+	for (ki = i, karg = arg, kpar = par; (ki < n_args) && (is_pair(karg)); ki++, karg = cdr(karg))
+	  if (!is_symbol_and_keyword(car(karg)))
 	    {
-	      df = c_function_arg_defaults(func);
-	      if (c_func_has_simple_defaults(func))
+	      if (is_checked(kpar))
+		return(s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, parameter_set_twice_string, car(kpar), sc->args)));
+	      set_checked(kpar);
+	      set_car(kpar, car(karg));
+	      kpar = cdr(kpar);
+	    }
+	  else
+	    {
+	      s7_pointer p;
+	      for (j = 0, p = call_args; j < n_args; j++, p = cdr(p))
+		if (df[j] == car(karg))
+		  break;
+	      if (j == n_args)
 		{
-		  for (ki = i, kpar = par; ki < n_args; ki++, kpar = cdr(kpar))
-		    if (!is_checked(kpar))
-		      set_car(kpar, df[ki]);
+		  if (!c_function_allows_other_keys(func))
+		    return(s7_error(sc, sc->wrong_type_arg_symbol, 
+				    set_elist_2(sc, wrap_string(sc, "~A: not a parameter name?", 25), car(karg))));
+		  karg = cdr(karg);
+		  if (is_null(karg)) /* (f :x) where f arglist includes :allow-other-keys */
+		    return(s7_error(sc, sc->syntax_error_symbol, 
+				    set_elist_4(sc, wrap_string(sc, "~A: key ~S, but no value: ~S", 28), func, car(arg), sc->args)));
+		  ki--;
 		}
 	      else
+		{
+		  if (is_checked(p))
+		    return(s7_error(sc, sc->wrong_type_arg_symbol, 
+				    set_elist_3(sc, parameter_set_twice_string, car(p), sc->args)));
+		  if (!is_pair(cdr(karg)))
+		    return(s7_error(sc, sc->syntax_error_symbol, 
+				    set_elist_4(sc, wrap_string(sc, "~A: key ~S, but no value: ~S", 28), func, car(karg), sc->args)));
+		  set_checked(p);
+		  karg = cdr(karg);
+		  set_car(p, car(karg));
+		  kpar = cdr(kpar);
+		}}
+	if ((!is_null(karg)) && (!c_function_allows_other_keys(func)))
+	  return(s7_error(sc, sc->wrong_number_of_args_symbol,
+			  set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), func, func, sc->args)));
+	if (ki < n_args)
+	  {
+	    df = c_function_arg_defaults(func);
+	    if (c_func_has_simple_defaults(func))
+	      {
 		for (ki = i, kpar = par; ki < n_args; ki++, kpar = cdr(kpar))
 		  if (!is_checked(kpar))
-		    {
-		      s7_pointer defval = df[ki];
-		      if (is_symbol(defval))
-			set_car(kpar, lookup_checked(sc, defval));
-		      else set_car(kpar, (is_pair(defval)) ? s7_eval(sc, defval, sc->nil) : defval);
-		    }}
-	  if (!is_safe_procedure(func)) unstack(sc);
-	  return(call_args);
-	}}
+		    set_car(kpar, df[ki]);
+	      }
+	    else
+	      for (ki = i, kpar = par; ki < n_args; ki++, kpar = cdr(kpar))
+		if (!is_checked(kpar))
+		  {
+		    s7_pointer defval = df[ki];
+		    if (is_symbol(defval))
+		      set_car(kpar, lookup_checked(sc, defval));
+		    else set_car(kpar, (is_pair(defval)) ? s7_eval(sc, defval, sc->nil) : defval);
+		  }}
+	if (!is_safe_procedure(func)) unstack(sc);
+	return(call_args);
+      }
   if (!is_null(arg))
     return(s7_error(sc, sc->wrong_number_of_args_symbol,
 		    set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), func, func, sc->args)));
@@ -60650,8 +60634,7 @@ static s7_double opt_d_vdd_ff(opt_info *o)
 
 static bool d_vdd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
-  s7_d_vdd_t flt;
-  flt = s7_d_vdd_function(s_func);
+  s7_d_vdd_t flt = s7_d_vdd_function(s_func);
   if (flt)
     {
       s7_pointer sig = c_function_signature(s_func);
@@ -60695,8 +60678,7 @@ static s7_double opt_d_dddd_ffff(opt_info *o)
 
 static bool d_dddd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
-  s7_d_dddd_t f;
-  f = s7_d_dddd_function(s_func);
+  s7_d_dddd_t f = s7_d_dddd_function(s_func);
   if (!f)
     return_false(sc, car_x);
   opc->v[10].o1 = sc->opts[sc->pc];
@@ -61003,8 +60985,7 @@ static bool b_idp_ok(s7_scheme *sc, s7_pointer s_func, s7_pointer car_x, s7_poin
 
   if (arg_type == sc->is_integer_symbol)
     {
-      s7_b_i_t bif;
-      bif = s7_b_i_function(s_func);
+      s7_b_i_t bif = s7_b_i_function(s_func);
       if (bif)
 	{
 	  opc->v[2].b_i_f = bif;
@@ -61035,8 +61016,7 @@ static bool b_idp_ok(s7_scheme *sc, s7_pointer s_func, s7_pointer car_x, s7_poin
   else
     if (arg_type == sc->is_float_symbol)
       {
-	s7_b_d_t bdf;
-	bdf = s7_b_d_function(s_func);
+	s7_b_d_t bdf = s7_b_d_function(s_func);
 	if (bdf)
 	  {
 	    opc->v[2].b_d_f = bdf;
@@ -81748,11 +81728,11 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	    else
 	      if ((fp == opt_p_pip_sss_vset) && (start >= 0) && (stop <= vector_length(slot_value(o->v[1].p))))
 		{
-		  s7_pointer v = slot_value(o->v[1].p);
+		  s7_pointer *vels = vector_elements(slot_value(o->v[1].p)); /* better in callgrind, possibly slightly slower in time */
 		  for (i = start; i < stop; i++)
 		    {
 		      slot_set_value(ctr_slot, make_integer(sc, i));
-		      vector_element(v, integer(slot_value(o->v[2].p))) = slot_value(o->v[3].p);
+		      vels[integer(slot_value(o->v[2].p))] = slot_value(o->v[3].p);
 		    }}
 	      else
 		for (i = start; i < stop; i++)
@@ -95165,8 +95145,7 @@ void s7_repl(s7_scheme *sc)
   if (val)
     {
       s7_pointer libs;
-      uint64_t hash;
-      hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
+      uint64_t hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
       s7_define(sc, sc->nil, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
@@ -95273,58 +95252,58 @@ int main(int argc, char **argv)
 #endif
 
 /* ------------------------------------------------------
- *            gmp (22-3-22) 20.9   21.0   22.0   22.3
+ *            20.9   21.0   22.0   22.3
  * ------------------------------------------------------
- * tpeak       121 [151]    115    114    108    105
- * tref        508[4413]    691    687    463    458
- * index      1167[1021]   1026   1016    973    970
- * tmock      7737         1177   1165   1057   1054
- * tvect      1953[9235]   2519   2464   1772   1708
- * texit      1806[1824]   ----   ----   1778   1767
- * s7test     4533         1873   1831   1818   1790
- * timp       2232[2108]   2971   2891   2176   2051
- * lt         2153         2187   2172   2150   2156
- * dup        2579         3805   3788   2492   2327
- * tload      3718         ----   ----   3046   2352
- * tread      2567         2440   2421   2419   2385
- * trclo      4073         2735   2574   2454   2443
- * fbench     2827         2688   2583   2460   2453
- * titer      2633[3177]   2865   2842   2641   2490
- * tcopy      2557[10.7]   8035   5546   2539   2495
- * tmat       2684[8204]   3065   3042   2524   2515
- * tauto      2750         ----   ----   2562   2566
- * tb         3364[3653]   2735   2681   2612   2606
- * tsort      3572         3105   3104   2856   2826
- * tmac       2949[5000]   3950   3873   3033   2992
- * tset       3107         3253   3104   3048   3133
- * teq        3472[6019]   4068   4045   3536   3468
- * tio        3679         3816   3752   3683   3646
- * tobj       3730[6199]   4016   3970   3828   3633
- * tclo       4538         4787   4735   4390   4343
- * tlet       5277[5623]   7775   5640   4450   4423
- * tcase      4475         4960   4793   4439   4462
- * tmap       5495[8683]   8869   8774   4489   4490
- * tfft      114.9[122.2]  7820   7729   4755   4683
- * tshoot     6903[8780]   5525   5447   5183   5174
- * tform      8335         5357   5348   5307   5310
- * tnum       56.6[56.8]   6348   6013   5433   5425
- * tstr       6123[7127]   6880   6342   5488   5462
- * tlamb      5799[6780]   6423   6273   5720   5618
- * tgsl       25.2[25.5]   8485   7802   6373   6333
- * tmisc      6892[8835]   8869   7612   6435   6324
- * tlist      6505[7898]   7896   7546   6558   6486
- * trec       8314         6936   6922   6521   6523
- * tari       ----         13.0   12.7   6827   6717  6696
- * tleft      9004         10.4   10.2   7657   7561
- * tgc        9532         11.9   11.1   8177   8062
- * thash      35.2[40.0]   11.8   11.7   9734   9583
- * cb         16.9         11.2   11.0   9658   9677
- * tgen       12.6[12.0]   11.2   11.4   12.0   12.0
- * tall       24.5[33.5]   15.6   15.6   15.6   15.6
- * calls      55.8[72.8]   36.7   37.5   37.0   37.6
- * sg         76.1[93.4]   ----   ----   55.9   56.3
- * lg        105.6[104.6]  ----   ----  105.2  105.8
- * tbig      600.4[813.4] 177.4  175.8  156.5  151.1
+ * tpeak      115    114    108    105
+ * tref       691    687    463    458
+ * index     1026   1016    973    970
+ * tmock     1177   1165   1057   1054
+ * tvect     2519   2464   1772   1708
+ * texit     ----   ----   1778   1767
+ * s7test    1873   1831   1818   1790
+ * timp      2971   2891   2176   2051
+ * lt        2187   2172   2150   2156
+ * dup       3805   3788   2492   2327
+ * tload     ----   ----   3046   2352
+ * tread     2440   2421   2419   2385
+ * trclo     2735   2574   2454   2443
+ * fbench    2688   2583   2460   2453
+ * titer     2865   2842   2641   2490
+ * tcopy     8035   5546   2539   2495
+ * tmat      3065   3042   2524   2515
+ * tauto     ----   ----   2562   2566
+ * tb        2735   2681   2612   2606
+ * tsort     3105   3104   2856   2826
+ * tmac      3950   3873   3033   2992
+ * tset      3253   3104   3048   3133
+ * teq       4068   4045   3536   3468
+ * tio       3816   3752   3683   3646
+ * tobj      4016   3970   3828   3633
+ * tclo      4787   4735   4390   4343
+ * tlet      7775   5640   4450   4423
+ * tcase     4960   4793   4439   4462
+ * tmap      8869   8774   4489   4490
+ * tfft      7820   7729   4755   4683
+ * tshoot    5525   5447   5183   5174
+ * tform     5357   5348   5307   5310
+ * tnum      6348   6013   5433   5425
+ * tstr      6880   6342   5488   5462
+ * tlamb     6423   6273   5720   5618
+ * tgsl      8485   7802   6373   6333
+ * tmisc     8869   7612   6435   6324
+ * tlist     7896   7546   6558   6486
+ * trec      6936   6922   6521   6523
+ * tari      13.0   12.7   6827   6717  6696
+ * tleft     10.4   10.2   7657   7561
+ * tgc       11.9   11.1   8177   8062
+ * thash     11.8   11.7   9734   9583
+ * cb        11.2   11.0   9658   9677
+ * tgen      11.2   11.4   12.0   12.0
+ * tall      15.6   15.6   15.6   15.6
+ * calls     36.7   37.5   37.0   37.6
+ * sg        ----   ----   55.9   56.3
+ * lg        ----   ----  105.2  105.8
+ * tbig     177.4  175.8  156.5  151.1
  * ------------------------------------------------------
  *
  * we need a way to release excessive mallocate bins
@@ -95335,4 +95314,5 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
+ * check that step_end/do_loop_end are set when used 62114 [and mutable, not small ints, etc]
  */

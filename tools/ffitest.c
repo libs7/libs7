@@ -18,6 +18,10 @@
 
 #include "s7.h"
 
+#ifndef WITH_GMP
+  #define WITH_GMP 0
+#endif
+
 #define ld64 PRId64
 
 #define TO_STR(x) s7_object_to_c_string(sc, x)
@@ -2596,93 +2600,93 @@ int main(int argc, char **argv)
     symbol = s7_define_safe_function(sc, "d-func", g_d_func, 0, 0, false, "d opt func");
     s7_set_d_function(sc, s7_name_to_value(sc, "d-func"), opt_d_func);
     func = s7_float_optimize(sc, s7_list(sc, 1, s7_list(sc, 1, symbol))); /* ((d-func)) -- the extra list layer is an historical artifact */
-    if (!func) fprintf(stderr, "%d: d-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!func)) fprintf(stderr, "%d: d-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-d-func", g_d_d_func, 1, 0, false, "d-d opt func");
     s7_set_d_d_function(sc, s7_name_to_value(sc, "d-d-func"), opt_d_d_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((d-d-func 2.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-d-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-d-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-dd-func", g_d_dd_func, 2, 0, false, "d-dd opt func");
     s7_set_d_dd_function(sc, s7_name_to_value(sc, "d-dd-func"), opt_d_dd_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0)))); /* ((d-dd-func 2.0 3.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-dd-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-dd-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-ddd-func", g_d_ddd_func, 3, 0, false, "d-ddd opt func");
     s7_set_d_ddd_function(sc, s7_name_to_value(sc, "d-ddd-func"), opt_d_ddd_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 4, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0), s7_make_real(sc, 4.0)))); /* ((d-ddd-func 2.0 3.0 4.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-ddd-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-ddd-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-dddd-func", g_d_dddd_func, 4, 0, false, "d-dddd opt func");
     s7_set_d_dddd_function(sc, s7_name_to_value(sc, "d-dddd-func"), opt_d_dddd_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, 
        s7_list(sc, 5, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0), s7_make_real(sc, 4.0), s7_make_real(sc, 5.0)))); /* ((d-dddd-func 2.0 3.0 4.0 5.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-dddd-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-dddd-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "i-i-func", g_i_i_func, 1, 0, false, "i-i opt func");
     s7_set_i_i_function(sc, s7_name_to_value(sc, "i-i-func"), opt_i_i_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_integer(sc, 2)))); /* ((i-i-func 2)) */
-    if (!sfunc) fprintf(stderr, "%d: i-i-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: i-i-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "i-ii-func", g_i_ii_func, 2, 0, false, "i-ii opt func");
     s7_set_i_ii_function(sc, s7_name_to_value(sc, "i-ii-func"), opt_i_ii_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_integer(sc, 2), s7_make_integer(sc, 3)))); /* ((i-ii-func 2 3)) */
-    if (!sfunc) fprintf(stderr, "%d: i-ii-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: i-ii-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-id-func", g_d_id_func, 2, 0, false, "d-id opt func");
     s7_set_d_id_function(sc, s7_name_to_value(sc, "d-id-func"), opt_d_id_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_integer(sc, 2), s7_make_real(sc, 3.0)))); /* ((d-id-func 2 3.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-id-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-id-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-ip-func", g_d_ip_func, 2, 0, false, "d-ip opt func");
     s7_set_d_ip_function(sc, s7_name_to_value(sc, "d-ip-func"), opt_d_ip_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_integer(sc, 2), s7_make_real(sc, 3.0)))); /* ((d-ip-func 2 3.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-ip-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-ip-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "i-7d-func", g_i_7d_func, 1, 0, false, "i-7d opt func");
     s7_set_i_7d_function(sc, s7_name_to_value(sc, "i-7d-func"), opt_i_7d_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((i-7d-func 2.0)) */
-    if (!sfunc) fprintf(stderr, "%d: i-7d-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: i-7d-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "i-7p-func", g_i_7p_func, 1, 0, false, "i-7p opt func");
     s7_set_i_7p_function(sc, s7_name_to_value(sc, "i-7p-func"), opt_i_7p_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_integer(sc, 2)))); /* ((i-7p-func 2)) */
-    if (!sfunc) fprintf(stderr, "%d: i-7p-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: i-7p-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-p-func", g_d_p_func, 1, 0, false, "d-p opt func");
     s7_set_d_p_function(sc, s7_name_to_value(sc, "d-p-func"), opt_d_p_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((d-p-func 2.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-p-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-p-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-pd-func", g_d_pd_func, 2, 0, false, "d-pd opt func");
     s7_set_d_pd_function(sc, s7_name_to_value(sc, "d-pd-func"), opt_d_pd_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0)))); /* ((d-pd-func 2.0 3.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-pd-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-pd-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-7pi-func", g_d_7pi_func, 2, 0, false, "d-7pi opt func");
     s7_set_d_7pi_function(sc, s7_name_to_value(sc, "d-7pi-func"), opt_d_7pi_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 3, symbol, s7_make_real(sc, 2.0), s7_make_integer(sc, 3)))); /* ((d-7pi-func 2.0 3)) */
-    if (!sfunc) fprintf(stderr, "%d: d-7pi-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-7pi-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-7pid-func", g_d_7pid_func, 3, 0, false, "d-7pid opt func");
     s7_set_d_7pid_function(sc, s7_name_to_value(sc, "d-7pid-func"), opt_d_7pid_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 4, symbol, s7_make_real(sc, 2.0), s7_make_integer(sc, 3), s7_make_real(sc, 4.0)))); /* ((d-7pid-func 2.0 3 4.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-7pid-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-7pid-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "b-p-func", g_b_p_func, 1, 0, false, "b-p opt func");
     s7_set_b_p_function(sc, s7_name_to_value(sc, "b-p-func"), opt_b_p_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((b-p-func 2.0)) */
-    if (!sfunc) fprintf(stderr, "%d: b-p-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: b-p-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "p-d-func", g_p_d_func, 1, 0, false, "p-d opt func");
     s7_set_p_d_function(sc, s7_name_to_value(sc, "p-d-func"), opt_p_d_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_make_real(sc, 2.0)))); /* ((p-d-func 2.0)) */
-    if (!sfunc) fprintf(stderr, "%d: p-d-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: p-d-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-v-func", g_d_v_func, 1, 0, false, "d-v opt func");
     s7_set_d_v_function(sc, s7_name_to_value(sc, "d-v-func"), opt_d_v_func);
     sfunc = s7_optimize(sc, s7_list(sc, 1, s7_list(sc, 2, symbol, s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2))))); /* ((d-v-func (block 2))) */
-    if (!sfunc) fprintf(stderr, "%d: d-v-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-v-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-vd-func", g_d_vd_func, 2, 0, false, "d-vd opt func");
     s7_set_d_vd_function(sc, s7_name_to_value(sc, "d-vd-func"), opt_d_vd_func);
@@ -2690,7 +2694,7 @@ int main(int argc, char **argv)
                               s7_list(sc, 3, symbol, 
                                              s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
 				             s7_make_real(sc, 0.0)))); /* ((d-vd-func (block 2) 0.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-vd-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-vd-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-vid-func", g_d_vid_func, 3, 0, false, "d-vid opt func");
     s7_set_d_vid_function(sc, s7_name_to_value(sc, "d-vid-func"), opt_d_vid_func);
@@ -2699,7 +2703,7 @@ int main(int argc, char **argv)
                                              s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
 				             s7_make_integer(sc, 0),
 				             s7_make_real(sc, 0.0)))); /* ((d-vid-func (block 2) 0 0.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-vid-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-vid-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-vdd-func", g_d_vdd_func, 3, 0, false, "d-vdd opt func");
     s7_set_d_vdd_function(sc, s7_name_to_value(sc, "d-vdd-func"), opt_d_vdd_func);
@@ -2708,7 +2712,7 @@ int main(int argc, char **argv)
                                              s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
 				             s7_make_real(sc, 0.0),
 				             s7_make_real(sc, 0.0)))); /* ((d-vdd-func (block 2) 0.0 0.0)) */
-    if (!sfunc) fprintf(stderr, "%d: d-vdd-func not optimized\n", __LINE__);
+    if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-vdd-func not optimized\n", __LINE__);
   }
 
   {
