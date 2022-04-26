@@ -1923,7 +1923,7 @@ static void init_types(void)
   #define T_Let(P) check_ref(P, T_LET,               __func__, __LINE__, NULL, NULL)
   #define T_Lid(P) check_ref16(P,                    __func__, __LINE__)                /* let/nil */
   #define T_Lst(P) check_ref2(P, T_PAIR, T_NIL,      __func__, __LINE__, "gc", NULL)
-  #define T_Mac(P) check_ref17(P,                    __func__, __LINE__)                /* and non-C macro */
+  #define T_Mac(P) check_ref17(P,                    __func__, __LINE__)                /* a non-C macro */
   #define T_Met(P) check_ref9(P,                     __func__, __LINE__)                /* anything that might contain a method */
   #define T_Nmv(P) check_ref15(P,                    __func__, __LINE__)                /* not multiple-value, not free */
   #define T_Num(P) check_ref7(P,                     __func__, __LINE__)                /* any number (not bignums) */
@@ -1932,7 +1932,7 @@ static void init_types(void)
   #define T_Pair(P) check_ref(P, T_PAIR,             __func__, __LINE__, NULL, NULL)
   #define T_Pcs(P) check_ref2(P, T_PAIR, T_CLOSURE_STAR, __func__, __LINE__, NULL, NULL)
   #define T_Pos(P) check_nref(P,                     __func__, __LINE__)                /* not free */
-  #define T_Prc(P) check_ref14(P,                    __func__, __LINE__)                /* any procedure or #f (setters) */
+  #define T_Prc(P) check_ref14(P,                    __func__, __LINE__)                /* any procedure (3-arg setters) or #f */
   #define T_Prt(P) check_ref3(P,                     __func__, __LINE__)                /* input|output_port */
   #define T_Ptr(P) check_ref(P, T_C_POINTER,         __func__, __LINE__, NULL, NULL)
   #define T_Ran(P) check_ref(P, T_RANDOM_STATE,      __func__, __LINE__, NULL, NULL)
@@ -4097,7 +4097,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_LET_REF_S,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_G, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
-      OP_SYMBOL, OP_CONSTANT, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_SSA_DIRECT, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
+      OP_SYMBOL, OP_CONSTANT, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
 
       OP_READ_INTERNAL, OP_EVAL, OP_EVAL_ARGS, OP_EVAL_ARGS1, OP_EVAL_ARGS2, OP_EVAL_ARGS3, OP_EVAL_ARGS4, OP_EVAL_ARGS5,
       OP_APPLY, OP_EVAL_MACRO, OP_LAMBDA, OP_QUOTE, OP_QUOTE_UNCHECKED, OP_MACROEXPAND, OP_CALL_CC, OP_CALL_WITH_EXIT, OP_CALL_WITH_EXIT_O,
@@ -4313,7 +4313,7 @@ static const char* op_names[NUM_OPS] =
       "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s",
       "unknown_thunk", "unknown_ns", "unknown_na", "unknown_g", "unknown_gg", "unknown_a", "unknown_aa", "unknown_np",
 
-      "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_ssa_direct", "h_hash_table_increment", "clear_opts",
+      "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_hash_table_increment", "clear_opts",
 
       "read_internal", "eval", "eval_args", "eval_args1", "eval_args2", "eval_args3", "eval_args4", "eval_args5",
       "apply", "eval_macro", "lambda", "quote", "quote_unchecked", "macroexpand", "call/cc", "call_with_exit", "call_with_exit_o",
@@ -4675,7 +4675,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						     " ?23?")))) : "",
 	  /* bit 24+24 */
 	  ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
-						  ((is_procedure(obj)) ? " has-let-arg" :
+						  ((is_any_procedure(obj)) ? " has-let-arg" :
 						   ((is_hash_table(obj)) ? " has-value-type" :
 						    ((is_pair(obj)) ? " int-optable" :
 						     " ?24?")))) : "",
@@ -4784,7 +4784,7 @@ static bool has_odd_bits(s7_pointer obj)
       (!is_any_macro(obj)) && (!is_any_closure(obj)) && (!is_c_function(obj)) && (!is_syntax(obj)))
     return(true);
   if (((full_typ & T_FULL_SYMCONS) != 0) &&
-      (!is_symbol(obj)) && (!is_procedure(obj)) && (!is_let(obj)) && (!is_hash_table(obj)) && (!is_pair(obj)))
+      (!is_symbol(obj)) && (!is_any_procedure(obj)) && (!is_hash_table(obj)) && (!is_pair(obj)))
     return(true);
   if (((full_typ & T_FULL_BINDER) != 0) &&
       ((!is_pair(obj)) && (!is_hash_table(obj)) && (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))))
@@ -5070,7 +5070,7 @@ static s7_pointer check_ref13(s7_pointer p, const char *func, int32_t line)
 static s7_pointer check_ref14(s7_pointer p, const char *func, int32_t line)
 {
   if ((!is_any_procedure(p)) && (!s7_is_boolean(p)))
-    complain("%s%s[%d]: procedure setter is %s (%s)%s?\n", p, func, line, unchecked_type(p));
+    complain("%s%s[%d]: setter (with let arg) is %s (%s)%s?\n", p, func, line, unchecked_type(p));
   return(p);
 }
 
@@ -43876,8 +43876,8 @@ static s7_pointer hash_table_set_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer 
 
 static s7_pointer hash_table_set_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool ops)
 {
- if ((args == 3) && (optimize_op(expr) == HOP_SSA_DIRECT)) /* a tedious experiment... */ /* this could be HOP_FX_C_SSA if no SSA_DIRECT */
-   {
+  if ((args == 3) && (optimize_op(expr) == HOP_SAFE_C_SSA))
+    {
      s7_pointer val = cadddr(expr);
      if ((is_pair(val)) && (car(val) == sc->add_symbol) && (is_proper_list_3(sc, val)) &&
 	 ((cadr(val) == int_one) || (caddr(val) == int_one)))
@@ -43889,7 +43889,7 @@ static s7_pointer hash_table_set_chooser(s7_scheme *sc, s7_pointer f, int32_t ar
 	     s7_pointer or1 = cadr(add1);
 	     if ((is_pair(or1)) && (car(or1) == sc->hash_table_ref_symbol) && (is_proper_list_3(sc, or1)) &&
 		 (cadr(or1) == cadr(expr)) && (caddr(or1) == caddr(expr)))
-	       /* (hash-table-set! counts p (+ (or (hash-table-ref counts p) 0) 1)) -- ssa_direct and hop_safe_c_ss */
+	       /* (hash-table-set! counts p (+ (or (hash-table-ref counts p) 0) 1)) */
 	       set_optimize_op(expr, HOP_HASH_TABLE_INCREMENT);
 	   }}}
  return(f);
@@ -53610,6 +53610,7 @@ static s7_pointer fx_hash_table_ref_car(s7_scheme *sc, s7_pointer arg)
   return((is_hash_table(table)) ? hash_entry_value((*hash_table_checker(table))(sc, table, car(lst))) : g_hash_table_ref(sc, set_plist_2(sc, table, car(lst))));
 }
 
+
 static inline s7_pointer fx_hash_table_increment_1(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer arg)
 {
   hash_entry_t *val;
@@ -53631,6 +53632,7 @@ static s7_pointer fx_hash_table_increment(s7_scheme *sc, s7_pointer arg)
 {
   return(fx_hash_table_increment_1(sc, lookup(sc, cadr(arg)), lookup(sc, caddr(arg)), arg));
 }
+
 
 static s7_pointer fx_lint_let_ref_s(s7_scheme *sc, s7_pointer arg)
 {
@@ -54788,20 +54790,20 @@ static s7_pointer fx_c_saa(s7_scheme *sc, s7_pointer arg)
   return(fn_proc(arg)(sc, sc->t3_1));
 }
 
-static s7_pointer fx_c_ssa(s7_scheme *sc, s7_pointer arg)
-{
-  set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg))));
-  set_car(sc->t3_1, lookup(sc, cadr(arg)));
-  set_car(sc->t3_2, lookup(sc, car(opt3_pair(arg))));
-  return(fn_proc(arg)(sc, sc->t3_1));
-}
+#define fx_c_ssa_any(Name, Lookup1, Lookup2) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+  set_car(sc->t3_3, fx_call(sc, cdr(opt3_pair(arg)))); \
+  set_car(sc->t3_1, Lookup1(sc, cadr(arg), arg));\
+  set_car(sc->t3_2, Lookup2(sc, car(opt3_pair(arg)), arg)); \
+  return(fn_proc(arg)(sc, sc->t3_1));\
+  }
+
+fx_c_ssa_any(fx_c_ssa, s_lookup, s_lookup)
+fx_c_ssa_any(fx_c_tsa, t_lookup, s_lookup)
+fx_c_ssa_any(fx_c_sta, s_lookup, t_lookup)
 
 static s7_pointer fx_c_ssa_direct(s7_scheme *sc, s7_pointer arg)
-{
-  return(((s7_p_ppp_t)opt2_direct(cdr(arg)))(sc, lookup(sc, cadr(arg)), lookup(sc, car(opt3_pair(arg))), fx_call(sc, cdr(opt3_pair(arg)))));
-}
-
-static Inline s7_pointer op_ssa_direct(s7_scheme *sc, s7_pointer arg)
 {
   return(((s7_p_ppp_t)opt2_direct(cdr(arg)))(sc, lookup(sc, cadr(arg)), lookup(sc, car(opt3_pair(arg))), fx_call(sc, cdr(opt3_pair(arg)))));
 }
@@ -56888,6 +56890,11 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }
 	  return(with_fx(tree, fx_c_sts));
 	}
+      break;
+
+    case HOP_SAFE_C_SSA:
+      if (cadr(p) == var1) return(with_fx(tree, fx_c_tsa)); /* tua is hit but not called much */
+      if (caddr(p) == var1) return(with_fx(tree, fx_c_sta));
       break;
 
     case HOP_SAFE_C_opSq:
@@ -62874,7 +62881,7 @@ static bool p_ppi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 
 /* -------- p_ppp -------- */
 static s7_pointer opt_p_ppp_ssf(opt_info *o) {return(o->v[3].p_ppp_f(o->sc, slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[5].fp(o->v[4].o1)));}
-static s7_pointer opt_p_ppp_hash_table_increment(opt_info *o) {return(fx_hash_table_increment_1(o->sc, slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[5].p));}
+static s7_pointer opt_p_ppp_hash_table_increment(opt_info *o) {return(fx_hash_table_increment_1(o->sc, slot_value(o->v[1].p), slot_value(o->v[2].p), o->v[5].p));} 
 static s7_pointer opt_p_ppp_sfs(opt_info *o) {return(o->v[3].p_ppp_f(o->sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1), slot_value(o->v[2].p)));}
 static s7_pointer opt_p_ppp_scs(opt_info *o) {return(o->v[3].p_ppp_f(o->sc, slot_value(o->v[1].p), o->v[4].p, slot_value(o->v[2].p)));}
 static s7_pointer opt_p_ppp_scs_eset(opt_info *o) {return(let_set_1(o->sc, slot_value(o->v[1].p), o->v[4].p, slot_value(o->v[2].p)));}
@@ -71112,13 +71119,8 @@ static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_
 			{
 			  if (is_normal_symbol(arg2))
 			    {
-			      if ((hop == 1) && (s7_p_ppp_function(func)))
-				{
-				  set_optimize_op(expr, HOP_SSA_DIRECT);
-				  clear_has_fx(cdr(expr));
-				  set_opt2_direct(cdr(expr), (s7_pointer)(s7_p_ppp_function(func)));
-				}
-			      else set_optimize_op(expr, hop + OP_SAFE_C_SSA);
+			      set_optimize_op(expr, hop + OP_SAFE_C_SSA);
+			      clear_has_fx(cdr(expr)); /* TODO: why is this needed? should it be somewhere else? */
 			    }
 			  else set_optimize_op(expr, hop + OP_SAFE_C_SAS);
 			}
@@ -89734,8 +89736,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_SAFE_C_SSA: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_SSA: sc->value = fx_c_ssa(sc, sc->code); continue;
-	case HOP_SSA_DIRECT: sc->value = op_ssa_direct(sc, sc->code); continue;
-	case HOP_HASH_TABLE_INCREMENT: sc->value = fx_hash_table_increment(sc, sc->code); continue; /* a placeholder, almost never called */
+        case HOP_HASH_TABLE_INCREMENT: sc->value = fx_hash_table_increment(sc, sc->code); continue; /* a placeholder, almost never called */
 
 	case OP_SAFE_C_SAS: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_SAFE_C_SAS: sc->value = fx_c_sas(sc, sc->code); continue;
@@ -92568,7 +92569,6 @@ static void init_fx_function(void)
   fx_function[HOP_SAFE_C_S_opAq] = fx_c_s_opaq;
   fx_function[HOP_SAFE_C_S_opAAq] = fx_c_s_opaaq;
 
-  fx_function[HOP_SSA_DIRECT] = fx_c_ssa_direct;
   fx_function[HOP_HASH_TABLE_INCREMENT] = fx_hash_table_increment;
 
   fx_function[HOP_SAFE_THUNK_A] = fx_safe_thunk_a;
@@ -94766,7 +94766,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 916)
+  if (NUM_OPS != 915)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95136,7 +95136,7 @@ int main(int argc, char **argv)
  * ------------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    458
- * index     1026   1016    973    970    971
+ * index     1026   1016    973    970    970
  * tmock     1177   1165   1057   1054   1055
  * tvect     2519   2464   1772   1708   1708
  * texit     ----   ----   1778   1767   1767
@@ -95149,7 +95149,7 @@ int main(int argc, char **argv)
  * trclo     2735   2574   2454   2443   2443
  * fbench    2688   2583   2460   2453   2453
  * titer     2865   2842   2641   2490   2491
- * tcopy     8035   5546   2539   2495   2495
+ * tcopy     8035   5546   2539   2495   2502
  * tmat      3065   3042   2524   2515   2523
  * tauto     ----   ----   2562   2566   2564
  * tb        2735   2681   2612   2606   2606
@@ -95158,33 +95158,32 @@ int main(int argc, char **argv)
  * tset      3253   3104   3048   3133   3134
  * teq       4068   4045   3536   3468   3467
  * tio       3816   3752   3683   3646   3467
- * tobj      4016   3970   3828   3633   3633
- * tclo      4787   4735   4390   4343   4343
+ * tobj      4016   3970   3828   3633   3637
+ * tclo      4787   4735   4390   4343   4341
  * tlet      7775   5640   4450   4423   4423
  * tcase     4960   4793   4439   4462   4446
  * tmap      8869   8774   4489   4490   4490
  * tfft      7820   7729   4755   4683   4683
- * tshoot    5525   5447   5183   5174   5174
+ * tshoot    5525   5447   5183   5174   5171
  * tform     5357   5348   5307   5310   5300
- * tnum      6348   6013   5433   5425   5429
- * tstr      6880   6342   5488   5462   5463
+ * tnum      6348   6013   5433   5425   5427
+ * tstr      6880   6342   5488   5462   5466
  * tlamb     6423   6273   5720   5618   5618
- * tgsl      8485   7802   6373   6333   6332
- * tmisc     8869   7612   6435   6324   6324
+ * tgsl      8485   7802   6373   6333   6334
+ * tmisc     8869   7612   6435   6324   6328
  * tlist     7896   7546   6558   6486   6486
  * trec      6936   6922   6521   6523   6523
  * tari      13.0   12.7   6827   6717   6696
  * tleft     10.4   10.2   7657   7561   7561
- * tgc       11.9   11.1   8177   8062   8063
+ * tgc       11.9   11.1   8177   8062   8068
  * thash     11.8   11.7   9734   9583   9584
- * cb        11.2   11.0   9658   9677   9674
+ * cb        11.2   11.0   9658   9677   9673
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.7
- * sg        ----   ----   55.9   56.3   56.5
+ * sg        ----   ----   55.9   56.3   56.4
  * lg        ----   ----  105.2  105.8  105.8
- * tbig     177.4  175.8  156.5  151.1  151.1
+ * tbig     177.4  175.8  156.5  151.1  151.3
  * ------------------------------------------------------
  *
- * fx_c_ssa tU opt cb, see ssa
  */
