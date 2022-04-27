@@ -4122,7 +4122,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_DEFINE_CONSTANT, OP_DEFINE_CONSTANT1,
       OP_DO, OP_DO_END, OP_DO_END1, OP_DO_STEP, OP_DO_STEP2, OP_DO_INIT,
       OP_DEFINE_STAR, OP_LAMBDA_STAR, OP_LAMBDA_STAR_DEFAULT, OP_ERROR_QUIT, OP_UNWIND_INPUT, OP_UNWIND_OUTPUT, OP_ERROR_HOOK_QUIT,
-      OP_WITH_LET, OP_WITH_LET1, OP_WITH_LET_UNCHECKED, OP_WITH_LET_S, OP_WITH_UNLET_S,
+      OP_WITH_LET, OP_WITH_LET1, OP_WITH_LET_UNCHECKED, OP_WITH_LET_S,
       OP_WITH_BAFFLE, OP_WITH_BAFFLE_UNCHECKED, OP_EXPANSION,
       OP_FOR_EACH, OP_FOR_EACH_1, OP_FOR_EACH_2, OP_FOR_EACH_3,
       OP_MAP, OP_MAP_1, OP_MAP_2, OP_MAP_GATHER, OP_MAP_GATHER_1, OP_MAP_GATHER_2, OP_MAP_GATHER_3,
@@ -4337,7 +4337,7 @@ static const char* op_names[NUM_OPS] =
       "define_constant", "define_constant1",
       "do", "do_end", "do_end1", "do_step", "do_step2", "do_init",
       "define*", "lambda*", "lambda*_default", "error_quit", "unwind_input", "unwind_output", "error_hook_quit",
-      "with_let", "with_let1", "with_let_unchecked", "with_let_s", "with_unlet_s",
+      "with_let", "with_let1", "with_let_unchecked", "with_let_s",
       "with_baffle", "with_baffle_unchecked", "expansion",
       "for_each", "for_each_1", "for_each_2", "for_each_3",
       "map", "map_1", "map_2", "map_gather", "map_gather_1", "map_gather_2", "map_gather_3",
@@ -45125,6 +45125,8 @@ static s7_pointer apply_error(s7_scheme *sc, s7_pointer obj, s7_pointer args)
 {
   /* the operator type is needed here else the error message is confusing:
    *    (apply '+ (list 1 2))) -> ;attempt to apply + to (1 2)?
+   * but using current_code(sc) to get the context is not optimal:
+   *    (1 (bignum 4))) -> ;attempt to apply an integer 1 to (4) in (bignum 4)?
    */
   if (is_null(obj))
     return(s7_error(sc, sc->syntax_error_symbol,
@@ -77727,13 +77729,9 @@ static void check_with_let(s7_scheme *sc)
   if (!s7_is_proper_list(sc, cdr(form)))         /* (with-let e . 3) */
     syntax_error(sc, "stray dot in with-let body: ~S", 30, sc->code);
 
-  if ((is_pair(car(form))) &&
-      (caar(form) == sc->unlet_symbol) &&        /* a constant, (with-let (unlet) ...) */
-      (is_null(cdar(form))) &&
-      (is_symbol(cadr(form))) &&
-      (is_null(cddr(form))))                     /* (with-let (unlet) symbol) */
-    pair_set_syntax_op(sc->code, OP_WITH_UNLET_S);
-  else pair_set_syntax_op(sc->code, (is_symbol(car(form))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
+  pair_set_syntax_op(sc->code, ((is_normal_symbol(car(form))) &&
+				(is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
+				(is_null(cddr(form)))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
 }
 
 static bool op_with_let_unchecked(s7_scheme *sc)
@@ -77752,38 +77750,14 @@ static bool op_with_let_unchecked(s7_scheme *sc)
   return(true);
 }
 
-static inline bool op_with_let_s(s7_scheme *sc)
+static inline s7_pointer op_with_let_s(s7_scheme *sc)
 {
   s7_pointer e;
   sc->code = cdr(sc->code);
   e = lookup_checked(sc, car(sc->code));
   if ((!is_let(e)) && (e != sc->rootlet))
     syntax_error_any(sc, sc->wrong_type_arg_symbol, "with-let takes an environment argument: ~A", 42, e);
-  if ((is_null(cddr(sc->code))) &&
-      (is_symbol(cadr(sc->code))))
-    {
-      sc->value = s7_let_ref(sc, e, cadr(sc->code)); /* (with-let e s) -> (let-ref e s) */
-      return(false);
-    }
-  if (e == sc->rootlet)
-    sc->curlet = sc->nil;
-  else
-    {
-      set_with_let_let(e);
-      let_set_id(e, ++sc->let_number);
-      set_curlet(sc, e);
-      update_symbol_ids(sc, e);
-    }
-  sc->code = T_Pair(cdr(sc->code));
-  return(true);
-}
-
-static s7_pointer op_with_unlet_s(s7_scheme *sc) /* never happens */
-{
-  s7_pointer sym = caddr(sc->code);
-  if (is_slot(initial_slot(sym)))
-    return(initial_value(sym));
-  return(lookup(sc, sym));
+  return(s7_let_ref(sc, e, cadr(sc->code))); /* (with-let e s) -> (let-ref e s) */
 }
 
 static void activate_with_let(s7_scheme *sc, s7_pointer e)
@@ -91217,11 +91191,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DYNAMIC_WIND:           if (op_dynamic_wind(sc)) goto APPLY;           continue;
 	case OP_DEACTIVATE_GOTO:        call_exit_active(sc->args) = false;            continue; /* deactivate the exiter */
 
-	case OP_WITH_LET_S:         if (op_with_let_s(sc)) goto BEGIN; continue;
+	case OP_WITH_LET_S:         sc->value = op_with_let_s(sc); continue;
 	case OP_WITH_LET:           check_with_let(sc);
 	case OP_WITH_LET_UNCHECKED: if (op_with_let_unchecked(sc)) goto EVAL;
 	case OP_WITH_LET1:          if (sc->value != sc->curlet) activate_with_let(sc, sc->value); goto BEGIN;
-	case OP_WITH_UNLET_S:       sc->value = op_with_unlet_s(sc); continue;
 
 	case OP_WITH_BAFFLE:           check_with_baffle(sc);
 	case OP_WITH_BAFFLE_UNCHECKED: if (op_with_baffle_unchecked(sc)) continue; goto BEGIN;
@@ -94766,7 +94739,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 915)
+  if (NUM_OPS != 914)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95186,4 +95159,6 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  151.1  151.3
  * ------------------------------------------------------
  *
+ * t718 and t584 (s7test/bugs append-list)
+ * undef let fallback for sandbox?
  */
