@@ -71,7 +71,7 @@
 
       (object->string (bases (random 6)) :readable))))
 
-(catch #t (lambda () (require stuff.scm)) (lambda (type info) (apply format *stderr* info)))
+(load "stuff.scm")
 (load "write.scm")
 (define (pp-checked obj)
   (let-temporarily ((((funclet pretty-print) '*pretty-print-cycles*) #t)) (pp obj)))
@@ -381,14 +381,14 @@
   (let ((e (car args)))
     (when (and (let? e)
 	       (not (eq? e (rootlet)))
-	       (not (defined? 'error-type e)))
+	       (not (defined? 'error-type e #t)))
       (apply varlet e (cdr args)))))
 
 (define (local-let-set! . args)
   (let ((e (car args)))
     (when (and (let? e)
 	       (not (eq? e (rootlet)))
-	       (not (defined? 'error-type e)))
+	       (not (defined? 'error-type e #t)))
       (apply let-set! e (cdr args)))))
 
 (define (checked-hash-table . args)
@@ -820,7 +820,8 @@
 			  'gensym
 			  'case*
 			  ;'do
-			  ;'if 'begin 'cond 'case 'or 'and 'with-let 'with-baffle 'when 'unless 'let-temporarily
+			  ;'if 'begin 'cond 'case 'or 'and 'when 'unless
+			  'with-baffle 'let-temporarily 'with-let
 			  'byte-vector-set! 'my-make-byte-vector 
 			  'write-char 'call/cc 'write-byte 'write-string 
 			  'file-mtime
@@ -865,7 +866,7 @@
 			  ;'cond-expand 
 			  ;'random-state->list 
                           ;'pair-line-number 'pair-filename ; -- too many uninteresting diffs
-			  ;'let-set! ;-- rootlet troubles?
+			  'let-set! ;-- rootlet troubles?
 			  ;'coverlet ;-- blocks block's equivalent?
                           'help ;-- snd goes crazy
 			  'macroexpand ;-- uninteresting objstr stuff
@@ -923,16 +924,14 @@
 			  'fvref 'ivref 'bvref 'vref 'fvset 'ivset 'bvset 'vset 'adder
 
 			  'undefined-function
-			  ;'subsequence 
+			  'subsequence 
 			  'empty? 'indexable?
 			  ;'adjoin 'cdr-assoc
 			  ;'progv ;'value->symbol -- correctly different values sometimes, progv localizes
-			  ;'string-case 'concatenate
-			  ;'2^n? 'lognor 'ldb 'clamp 
-			  ; reverse! etc 
-
+			  'string-case 'concatenate
+			  '2^n? 'lognor 'ldb 'clamp 
 			  ;'log-n-of ; uninteresting complaints
-			  ;;'sandbox -- slow
+			  ;'sandbox ;-- slow and talkative
 			  'circular-list? ;;'hash-table->alist -- hash map order problem
 			  'weak-hash-table 'byte? 'the 'lognand 'logeqv 
 			  'local-random 'local-read-string 'local-varlet 'local-let-set!
@@ -947,7 +946,7 @@
 			  'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref 
 			  ;'linter
-			  'ifa 'ifb ; place-holders
+			  'ifa 'ifb
 
 			  'ims 'imbv 'imv 'imiv 'imfv 'imi 'imp 'imh 'ilt
 			  'imv2 'imv3 'imfv2 'imfv3 'imiv2 'imiv3 'imbv2 'imbv3
@@ -1004,7 +1003,6 @@
 		    "((if (> 3 2) or and) #t #f)"
 		    "float-var" "int-var" "ratio-var" "complex-var"
 
-                    ;; experiments -- trying to hit every eval branch
                     "(apply + (make-list 2 3))" "(let ((a 1) (b 2) (c 3)) (+ a b c))" "(let ((x '(\"asdf\"))) (apply format #f x))"
                     "(cons (cons + -) *)" "(list (list quasiquote +) -1)" "(let ((s '(1 2))) (list (car s) (cdr s)))"
                     "(let ((i 3)) (list i (expt 2 i)))" "(more-values)" "(- (+ x x) (* x x))"
@@ -1050,7 +1048,6 @@
 		    "#<>" "#<label:>" "#<...>"
 		    "#_and" "'#_or" "#_abs" "#_+" 
 		    "#o123" "#b101" "#\\newline" "#\\alarm" "#\\delete" "#_cons" "#x123.123" "#\\x65"
-		    ;"(provide 'pizza)" "(require pizza)"
 		    
 		    "(call-with-exit (lambda (goto) goto))"
 		    "(with-baffle (call/cc (lambda (cc) (cc 1))))"
@@ -1457,6 +1454,19 @@
 	     (or (eq? v1-type (type-of v3)) (and (number? v1) (number? v3) (= v1 v3)))
 	     (or (eq? v1-type (type-of v4)) (and (number? v1) (number? v4) (= v1 v4))))))
 
+    (define (show-variables str)
+      (if (string-position "int-var" str) (format *stderr* "int-var: ~W~%" int-var))
+      (if (string-position "float-var" str) (format *stderr* "float-var: ~W~%" float-var))
+      (if (string-position "ratio-var" str) (format *stderr* "ratio-var: ~W~%" ratio-var))
+      (if (string-position "complex-var" str) (format *stderr* "complex-var: ~W~%" complex-var))
+      (if (string-position "imi" str) (format *stderr* "imi: ~W~%" imi))
+
+      (if (string-position "a1" str) (format *stderr* "a1: ~W~%" a1))
+      (if (string-position "a2" str) (format *stderr* "a2: ~W~%" a2))
+      (if (string-position "a3" str) (format *stderr* "a3: ~W~%" a3))
+      (if (string-position "a4" str) (format *stderr* "a4: ~W~%" a4)))
+
+
     (define (same-type? val1 val2 val3 val4 str str1 str2 str3 str4)
       (cond ((not (type-eqv? val1 val2 val3 val4))
 	     (unless (or (memq error-type '(out-of-range wrong-type-arg baffled!)) ; _rd3_ vs _rd4_ for example where one uses dynamic-wind which has built-in baffles
@@ -1485,6 +1495,7 @@
 		   (when (string-position "_definee_" str) (format *stderr* "_definee_: ~W~%" old-definee))
 		   (when (string-position "bigrat" str) (format *stderr* "bigrat: ~W" bigrat))
 		   (when (string-position "-inf.0" str) (format *stderr* "-inf.0: ~W" -inf.0))
+		   (show-variables str)
 		   (format *stderr* "~%~%~S~%~S~%~S~%~S~%    ~A~%    ~A~%    ~A~%    ~A~%" 
 			   str1 str2 str3 str4 
 			   (tp val1) (tp val2) (tp val3) (tp val4))
@@ -1506,6 +1517,7 @@
 			      (eq? val1 val3)
 			      (eq? val1 val4))
 		   (when (string-position "_definee_" str) (format *stderr* "_definee_: ~W~%" old-definee))
+		   (show-variables str)
 		   (format *stderr* "~%~%~S~%~S~%~S~%~S~%~S~%   ~A ~A ~A ~A~%" 
 			   str str1 str2 str3 str4 
 			   (tp val1) (tp val2) (tp val3) (tp val4))
@@ -1537,25 +1549,27 @@
 			   (and (iterator? _definee_) 
 				(string-position "_definee_" str)))
 		 (when (string-position "_definee_" str) (format *stderr* "_definee_: ~W~%" old-definee))
+		 (show-variables str)
 		 (format *stderr* "~%~%~S~%~S~%~S~%~S~%~S~%    ~A~%    ~A~%    ~A~%    ~A~%~%" 
 			 str str1 str2 str3 str4 
 			 (tp val1) (tp val2) (tp val3) (tp val4)))))
 	    
 	    ((number? val1)
-	     (if (or (and (nan? val1)
-			  (not (and (nan? val2) (nan? val3) (nan? val4))))
-		     (and (infinite? val1)
-			  (not (and (infinite? val2) (infinite? val3) (infinite? val4))))
-		     (and (finite? val1)
-			  (not (and (finite? val2) (finite? val3) (finite? val4))))
-		     (and (not (= val1 val2))
-			  (not (zero? val1))
-			  (finite? val1) (real? val1) (real? val2) (real? val3) (real? val4) 
-			  (or (and (negative? val1) (or (positive? val2) (positive? val3) (positive? val4)))
-			      (and (positive? val1) (or (negative? val2) (negative? val3) (negative? val4))))))
-		 (format *stderr* "~%~%~S~%~S~%~S~%~S~%~S~%    ~A~%    ~A~%    ~A~%    ~A~%~%" 
-			 str str1 str2 str3 str4 
-			 (tp val1) (tp val2) (tp val3) (tp val4))))
+	     (when (or (and (nan? val1)
+			    (not (and (nan? val2) (nan? val3) (nan? val4))))
+		       (and (infinite? val1)
+			    (not (and (infinite? val2) (infinite? val3) (infinite? val4))))
+		       (and (finite? val1)
+			    (not (and (finite? val2) (finite? val3) (finite? val4))))
+		       (and (not (= val1 val2))
+			    (not (zero? val1))
+			    (finite? val1) (real? val1) (real? val2) (real? val3) (real? val4) 
+			    (or (and (negative? val1) (or (positive? val2) (positive? val3) (positive? val4)))
+				(and (positive? val1) (or (negative? val2) (negative? val3) (negative? val4))))))
+	       (show-variables str)
+	       (format *stderr* "~%~%~S~%~S~%~S~%~S~%~S~%    ~A~%    ~A~%    ~A~%    ~A~%~%" 
+		       str str1 str2 str3 str4 
+		       (tp val1) (tp val2) (tp val3) (tp val4))))
 	    
 	    ((or (boolean? val1)
 		 (syntax? val1)
@@ -1569,6 +1583,7 @@
 			 (and (iterator? _definee_) 
 			      (string-position "_definee_" str)))
 	       (when (string-position "_definee_" str) (format *stderr* "_definee_: ~W~%" old-definee))
+	       (show-variables str)
 	       (format *stderr* "~%~%~S~%~S~%~S~%~S~%~S~%   ~A ~A ~A ~A~%" 
 		       str str1 str2 str3 str4 
 		       (tp val1) (tp val2) (tp val3) (tp val4))))
@@ -1578,6 +1593,7 @@
 	     (unless (and (equal? val1 val2)
 			  (equal? val1 val3)
 			  (equal? val1 val4))
+	       (show-variables str)
 	       (format *stderr* "~%~%~S~%~S~%~S~%~S~%~S~%   ~A ~A ~A ~A~%" 
 		       str str1 str2 str3 str4 
 		       (tp val1) (tp val2) (tp val3) (tp val4))))
@@ -1611,11 +1627,7 @@
 	    ;; "unexpected" close paren from: (eval-string (reverse (object->string ()))) -> (eval-string ")(")
 	    (if (and (pair? info) (string? (car info)))
 		(format *stderr* "read-error from ~S: ~S~%" str (apply format #f info))
-		(format *stderr* "read-error bad info\n"))
-	    (if (string-position "a1" str) (format *stderr* "a1: ~W~%" a1))
-	    (if (string-position "a2" str) (format *stderr* "a2: ~W~%" a2))
-	    (if (string-position "a3" str) (format *stderr* "a3: ~W~%" a3))
-	    (if (string-position "a4" str) (format *stderr* "a4: ~W~%" a4)))
+		(format *stderr* "read-error bad info\n")))
           'error)))
 
     (define (try-both str)

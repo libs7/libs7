@@ -1349,13 +1349,6 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 
 ;;; ----------------
 
-(define-macro (catch* clauses . error)
-  (let builder ((lst clauses))
-    (if (null? lst)
-	(apply values error)
-	`(catch #t (lambda () ,(car lst)) (lambda args ,(builder (cdr lst)))))))
-
-
 (define* (subsequence obj (start 0) end)
   (let ((new-len (let ((len (length obj)))
 		   (- (min len (or end len)) start))))
@@ -1371,9 +1364,11 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
                (substring obj start)))
 
           ((not (pair? obj))
-           (catch* (((obj 'subsequence) obj start end)
-		    (subsequence (obj 'value) start end))
-		   #f))
+           (if (defined? 'value obj #t)
+	       (subsequence (obj 'value) start end)
+	       (if (defined? 'subsequence obj #t)
+		   ((obj 'subsequence) obj start end)
+		   #f)))
 
           ((not end)
 	   (list-tail obj start))

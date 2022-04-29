@@ -481,7 +481,7 @@
 		    
 		    ((let? obj)
 		     (if (and (openlet? obj)
-			      (defined? 'pretty-print obj))
+			      (defined? 'pretty-print obj #t))  ; #t = locally defined
 			 ((obj 'pretty-print) obj port column)
 			 (begin
 			   (display "(inlet" port)
