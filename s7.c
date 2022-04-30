@@ -7335,7 +7335,7 @@ static s7_cell *alloc_pointer(s7_scheme *sc)
   if (sc->alloc_pointer_k == ALLOC_POINTER_SIZE)     /* if either no current block or the block is used up, make a new block */
     {
       sc->permanent_cells += ALLOC_POINTER_SIZE;
-      sc->alloc_pointer_cells = (s7_cell *)Calloc(ALLOC_POINTER_SIZE, sizeof(s7_cell));
+      sc->alloc_pointer_cells = (s7_cell *)Calloc(ALLOC_POINTER_SIZE, sizeof(s7_cell)); /* not Malloc here or below (maybe set full type to 0 if Malloc) */
       add_saved_pointer(sc, sc->alloc_pointer_cells);
       sc->alloc_pointer_k = 0;
     }
@@ -9598,7 +9598,7 @@ inline s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
       if (slot_symbol(y) == symbol)
 	return(slot_value(y));
 
-  if (has_methods(let)) /* this is not a redundant check -- if has_methods, don't check global slot -- why not?? */
+  if (has_methods(let))
     {
       /* If a let is a mock-hash-table (for example), implicit
        *   indexing of the hash-table collides with the same thing for the let (field names
@@ -9608,12 +9608,9 @@ inline s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
       if (has_let_ref_fallback(let))
 	return(call_let_ref_fallback(sc, let, symbol));
     }
- /* else */
-    {
-      y = global_slot(symbol);  /* (let () ((curlet) 'pi)) */
-      if (is_slot(y))
-	return(slot_value(y));
-    }
+  y = global_slot(symbol);  /* (let () ((curlet) 'pi)) */
+  if (is_slot(y))
+    return(slot_value(y));
   return(sc->undefined);
 }
 
@@ -19239,8 +19236,7 @@ static s7_pointer argument_type(s7_scheme *sc, s7_pointer arg1)
 	  (is_safe_c_op(optimize_op(arg1))) &&
 	  (is_c_function(opt1_cfunc(arg1))))
 	{
-	  s7_pointer sig;
-	  sig = c_function_signature(opt1_cfunc(arg1));
+	  s7_pointer sig = c_function_signature(opt1_cfunc(arg1));
 	  if ((sig) &&
 	      (is_pair(sig)) &&
 	      (is_symbol(car(sig))))
@@ -26473,8 +26469,50 @@ static s7_pointer string_set_p_pip_direct(s7_scheme *sc, s7_pointer p1, s7_int i
 
 
 /* -------------------------------- string-append -------------------------------- */
-static s7_int sequence_length(s7_scheme *sc, s7_pointer lst);
-static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj);
+static s7_pointer c_object_length(s7_scheme *sc, s7_pointer obj);
+
+static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is some C++ struct?? */
+{
+  switch (type(obj))
+    {
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
+    case T_VECTOR:     return(vector_length(obj) == 0);
+    case T_NIL:        return(true);
+    case T_PAIR:       return(false);
+    case T_STRING:     return(string_length(obj) == 0);
+    case T_HASH_TABLE: return(hash_table_entries(obj) == 0);
+    case T_LET:        return(!tis_slot(let_slots(obj)));
+    case T_C_OBJECT:   return(s7_is_eqv(sc, c_object_length(sc, obj), int_zero));
+    default:           return(false);
+    }
+}
+
+static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
+{
+  switch (type(lst))
+    {
+    case T_PAIR:
+      {
+	s7_int len;
+	len = s7_list_length(sc, lst);
+	return((len == 0) ? -1 : len);
+      }
+    case T_NIL:         return(0);
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
+    case T_VECTOR:      return(vector_length(lst));
+    case T_STRING:      return(string_length(lst));
+    case T_HASH_TABLE:  return(hash_table_entries(lst));
+    case T_LET:         return(let_length(sc, lst));
+    case T_C_OBJECT:
+      {
+	s7_pointer x;
+	x = c_object_length(sc, lst);
+	if (s7_is_integer(x))
+	  return(s7_integer_clamped_if_gmp(sc, x));
+      }}
+  return(-1);
+}
+
 static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args);
 
 static void string_append_2(s7_scheme *sc, s7_pointer newstr, s7_pointer args, s7_pointer stop_arg, s7_pointer caller)
@@ -26548,7 +26586,7 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
 		  unstack(sc);
 		  return(s7_apply_function(sc, func, set_ulist_1(sc, newstr, x)));
 		}}
-	  if (caller == sc->string_append_symbol)
+	  if ((caller == sc->string_append_symbol) || (caller == sc->symbol_symbol))
 	    {
 	      unstack(sc);
 	      return(wrong_type_argument(sc, caller, position_of(x, args), p, T_STRING));
@@ -34979,8 +35017,7 @@ static const s7_int ordinal_length[11] = {6, 5, 6, 5, 6, 5, 5, 7, 6, 5, 5};
 
 static void format_ordinal_number(s7_scheme *sc, format_data_t *fdat, s7_pointer port)
 {
-  s7_int num;
-  num = s7_integer_clamped_if_gmp(sc, car(fdat->args));
+  s7_int num = s7_integer_clamped_if_gmp(sc, car(fdat->args));
   if (num < 11)
     format_append_string(sc, fdat, ordinal[num], ordinal_length[num], port);
   else
@@ -42445,8 +42482,7 @@ static s7_int hash_map_syntax(s7_scheme *sc, s7_pointer table, s7_pointer key)  
 
 static hash_entry_t *hash_equal_syntax(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  s7_int loc;
-  loc = hash_loc(sc, table, key) & hash_table_mask(table);
+  s7_int loc = hash_loc(sc, table, key) & hash_table_mask(table);
   for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     if ((is_syntax(hash_entry_key(x))) &&
 	(syntax_symbol(hash_entry_key(x)) == syntax_symbol(key))) /* the opcodes might differ, but the symbols should not */
@@ -42988,8 +43024,7 @@ static s7_int hash_map_let(s7_scheme *sc, s7_pointer table, s7_pointer key)
 
 static hash_entry_t *hash_equal_eq(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  s7_int loc;
-  loc = hash_loc(sc, table, key) & hash_table_mask(table);
+  s7_int loc = hash_loc(sc, table, key) & hash_table_mask(table);
   for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     if (hash_entry_key(x) == key)
       return(x);
@@ -48882,32 +48917,6 @@ s7_pointer s7_fill(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- append -------------------------------- */
-static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
-{
-  switch (type(lst))
-    {
-    case T_PAIR:
-      {
-	s7_int len;
-	len = s7_list_length(sc, lst);
-	return((len == 0) ? -1 : len);
-      }
-    case T_NIL:         return(0);
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
-    case T_VECTOR:      return(vector_length(lst));
-    case T_STRING:      return(string_length(lst));
-    case T_HASH_TABLE:  return(hash_table_entries(lst));
-    case T_LET:         return(let_length(sc, lst));
-    case T_C_OBJECT:
-      {
-	s7_pointer x;
-	x = c_object_length(sc, lst);
-	if (s7_is_integer(x))
-	  return(s7_integer_clamped_if_gmp(sc, x));
-      }}
-  return(-1);
-}
-
 static s7_int total_sequence_length(s7_scheme *sc, s7_pointer args, s7_pointer caller, uint8_t typ)
 {
   s7_pointer p;
@@ -49015,22 +49024,6 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 
   unstack(sc);
   return(new_vec);
-}
-
-static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is some C++ struct?? */
-{
-  switch (type(obj))
-    {
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
-    case T_VECTOR:     return(vector_length(obj) == 0);
-    case T_NIL:        return(true);
-    case T_PAIR:       return(false);
-    case T_STRING:     return(string_length(obj) == 0);
-    case T_HASH_TABLE: return(hash_table_entries(obj) == 0);
-    case T_LET:        return(!tis_slot(let_slots(obj)));
-    case T_C_OBJECT:   return(s7_is_eqv(sc, c_object_length(sc, obj), int_zero));
-    default:           return(false);
-    }
 }
 
 static s7_pointer hash_table_append(s7_scheme *sc, s7_pointer args)
@@ -60898,8 +60891,7 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
       (len == 2))
     {
       s7_d_7pi_t func;
-      s7_pointer getf;
-      getf = c_object_getf(sc, obj);
+      s7_pointer getf = c_object_getf(sc, obj);
       if (is_c_function(getf)) /* default is #f */
 	{
 	  func = s7_d_7pi_function(getf);
@@ -66460,8 +66452,7 @@ static bool fb_lt_ss(s7_scheme *sc, s7_pointer expr)
 
 static bool fb_lt_ts(s7_scheme *sc, s7_pointer expr)
 {
-  s7_pointer x, y;
-  x = t_lookup(sc, cadr(expr), expr);
+  s7_pointer y, x = t_lookup(sc, cadr(expr), expr);
   y = lookup(sc, opt2_sym(cdr(expr)));
   return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) < integer(y)) : lt_b_7pp(sc, x, y));
 }
@@ -66490,9 +66481,7 @@ static bool fb_num_eq_s0f(s7_scheme *sc, s7_pointer expr)
 
 static bool fb_gt_tu(s7_scheme *sc, s7_pointer expr)
 {
-  s7_pointer x, y;
-  x = t_lookup(sc, cadr(expr), expr);
-  y = u_lookup(sc, opt2_sym(cdr(expr)), expr);
+  s7_pointer x = t_lookup(sc, cadr(expr), expr), y = u_lookup(sc, opt2_sym(cdr(expr)), expr);
   return(((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) > integer(y)) : gt_b_7pp(sc, x, y));
 }
 
@@ -66522,16 +66511,14 @@ static bool fb_leq_ss(s7_scheme *sc, s7_pointer expr)
 
 static bool fb_leq_ti(s7_scheme *sc, s7_pointer expr)
 {
-  s7_pointer x;
-  x = t_lookup(sc, cadr(expr), expr);
+  s7_pointer x = t_lookup(sc, cadr(expr), expr);
   if (is_t_integer(x)) return(integer(x) <= integer(opt2_con(cdr(expr))));
   return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(expr)))));
 }
 
 static bool fb_leq_ui(s7_scheme *sc, s7_pointer expr)
 {
-  s7_pointer x;
-  x = u_lookup(sc, cadr(expr), expr);
+  s7_pointer x = u_lookup(sc, cadr(expr), expr);
   if (is_t_integer(x)) return(integer(x) <= integer(opt2_con(cdr(expr))));
   return(g_leq_xi(sc, set_plist_2(sc, x, opt2_con(cdr(expr)))));
 }
@@ -67570,8 +67557,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     case T_CLOSURE:
     case T_CLOSURE_STAR:
       {
-	int32_t fargs;
-	fargs = (is_closure(f)) ? closure_arity_to_int(sc, f) : closure_star_arity_to_int(sc, f);
+	int32_t fargs = (is_closure(f)) ? closure_arity_to_int(sc, f) : closure_star_arity_to_int(sc, f);
 	if ((len == 1) &&
 	    (fargs == 1) &&
 	    (!is_constant_symbol(sc, (is_pair(car(closure_args(f)))) ? caar(closure_args(f)) : car(closure_args(f)))))
@@ -71396,8 +71382,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
   /* not c func */
   if (is_closure(func))
     {
-      int32_t arit;
-      arit = closure_arity_to_int(sc, func);
+      int32_t arit = closure_arity_to_int(sc, func);
       if (arit != 3)
 	{
 	  if (is_symbol(closure_args(func)))
@@ -71595,8 +71580,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
   func_is_closure = is_closure(func);
   if (func_is_closure)
     {
-      int32_t arit;
-      arit = closure_arity_to_int(sc, func);
+      int32_t arit = closure_arity_to_int(sc, func);
       if (arit != args)
 	{
 	  if (is_symbol(closure_args(func)))
@@ -95184,57 +95168,53 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    458
  * index     1026   1016    973    970    970
- * tmock     1177   1165   1057   1054   1055  1053
+ * tmock     1177   1165   1057   1054   1055
  * tvect     2519   2464   1772   1708   1708
- * texit     ----   ----   1778   1767   1767  1763
+ * texit     ----   ----   1778   1767   1763
  * s7test    1873   1831   1818   1790   1808
  * timp      2971   2891   2176   2051   2051
- * lt        2187   2172   2150   2156   2156  2155
+ * lt        2187   2172   2150   2156   2156
+ * tauto     ----   ----   2562   2566   2208
  * dup       3805   3788   2492   2327   2335
  * tload     ----   ----   3046   2352   2353
  * tread     2440   2421   2419   2385   2382
  * trclo     2735   2574   2454   2443   2443
- * fbench    2688   2583   2460   2453   2453  2450
- * titer     2865   2842   2641   2490   2491  2483
+ * fbench    2688   2583   2460   2453   2450
+ * titer     2865   2842   2641   2490   2483
  * tcopy     8035   5546   2539   2495   2502
- * tmat      3065   3042   2524   2515   2523  2517
- * tauto     ----   ----   2562   2566   2564  2566
- * tb        2735   2681   2612   2606   2606  2604
- * tsort     3105   3104   2856   2826   2827
- * tmac      3950   3873   3033   2992   2992  2988
- * tset      3253   3104   3048   3133   3134  3130
+ * tmat      3065   3042   2524   2515   2515
+ * tb        2735   2681   2612   2606   2604
+ * tsort     3105   3104   2856   2826   2826
+ * tmac      3950   3873   3033   2992   2988
+ * tset      3253   3104   3048   3133   3131
  * teq       4068   4045   3536   3468   3467
- * tio       3816   3752   3683   3646   3467  3464
+ * tio       3816   3752   3683   3646   3644
  * tobj      4016   3970   3828   3633   3637
- * tclo      4787   4735   4390   4343   4341  4332
- * tlet      7775   5640   4450   4423   4423  4420
- * tcase     4960   4793   4439   4462   4446  4441
- * tmap      8869   8774   4489   4490   4490  4488
- * tfft      7820   7729   4755   4683   4683  4681
- * tshoot    5525   5447   5183   5174   5171
- * tform     5357   5348   5307   5310   5300  5319?
- * tnum      6348   6013   5433   5425   5427  5424
- * tstr      6880   6342   5488   5462   5466  5463
- * tlamb     6423   6273   5720   5618   5618  5606
- * tgsl      8485   7802   6373   6333   6334  5631
- * tmisc     8869   7612   6435   6324   6328  6335 [activate_with_let]
- * tlist     7896   7546   6558   6486   6486  6481
+ * tclo      4787   4735   4390   4343   4332
+ * tlet      7775   5640   4450   4423   4423
+ * tcase     4960   4793   4439   4462   4442
+ * tmap      8869   8774   4489   4490   4488
+ * tfft      7820   7729   4755   4683   4681
+ * tshoot    5525   5447   5183   5174   5170
+ * tform     5357   5348   5307   5310   5313
+ * tnum      6348   6013   5433   5425   5421
+ * tstr      6880   6342   5488   5462   5464
+ * tlamb     6423   6273   5720   5618   5606
+ * tgsl      8485   7802   6373   6333   6331
+ * tmisc     8869   7612   6435   6324   6342
+ * tlist     7896   7546   6558   6486   6481
  * trec      6936   6922   6521   6523   6523
  * tari      13.0   12.7   6827   6717   6696
- * tleft     10.4   10.2   7657   7561   7561  7554
- * tgc       11.9   11.1   8177   8062   8068  8042
+ * tleft     10.4   10.2   7657   7561   7554
+ * tgc       11.9   11.1   8177   8062   8042
  * thash     11.8   11.7   9734   9583   9582
- * cb        11.2   11.0   9658   9677   9673  9664
+ * cb        11.2   11.0   9658   9677   9667
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.7  37.8 [activate_with_let]
- * sg        ----   ----   55.9   56.3   56.4  56.5 [same and s7_error]
+ * calls     36.7   37.5   37.0   37.6   37.7
+ * sg        ----   ----   55.9   56.3   56.5
  * lg        ----   ----  105.2  105.8  105.8
  * tbig     177.4  175.8  156.5  151.1  151.3
  * ------------------------------------------------------
  *
- * t584 (s7test/bugs append-list) -- "copy" as caller in block cases and #r??, see also t582, and string_append_1 bad error message
- *   full test segfault, tauto (symbol "" ()) ok
- * undef let fallback for sandbox?
- * fx other ops? h_safe_c*[change macro so we return value not set sc->value]  if_b_a
  */
