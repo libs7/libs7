@@ -76,7 +76,7 @@ repl s7test.scm
 echo ' '
 echo '-------- initial sizes --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DINITIAL_HEAP_SIZE=32768 -DINITIAL_STACK_SIZE=512 -DINITIAL_PROTECTED_OBJECTS_SIZE=4 -DGC_TEMPS_SIZE=512 -DSYMBOL_TABLE_SIZE=10009 -DNUM_SMALL_INTS=512 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DINITIAL_HEAP_SIZE=32768 -DINITIAL_STACK_SIZE=512 -DINITIAL_PROTECTED_OBJECTS_SIZE=4 -DGC_TEMPS_SIZE=512 -DSYMBOL_TABLE_SIZE=10009 -DNUM_SMALL_INTS=256 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
