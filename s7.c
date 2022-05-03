@@ -58573,13 +58573,15 @@ static bool i_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    return_false(sc, car_x);
 	  settee = lookup_slot_from(cadr(car_x), sc->curlet);
 	  if ((is_slot(settee)) &&
+	      (is_t_integer(slot_value(settee))) &&
 	      (!is_immutable(settee)) &&
-	      ((!slot_has_setter(settee)) || (slot_setter(settee) != initial_value(sc->is_integer_symbol))))
+	      ((!slot_has_setter(settee)) ||
+	       (slot_setter(settee) == initial_value(sc->is_integer_symbol)))) 
+	    /* opt set! won't change type, and it is an integer now (and we might not hit opt_cell_set) */
 	    {
 	      opt_info *o1 = sc->opts[sc->pc];
 	      opc->v[1].p = settee;
-	      if ((is_t_integer(slot_value(settee))) &&
-		  (int_optimize(sc, cddr(car_x))))
+	      if (int_optimize(sc, cddr(car_x)))
 		{
 		  if (set_i_i_f_combinable(sc, opc))
 		    return(true);
@@ -60762,14 +60764,14 @@ static bool d_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    return_false(sc, car_x);
 	  settee = lookup_slot_from(cadr(car_x), sc->curlet);
 	  if ((is_slot(settee)) &&
+	      (is_t_real(slot_value(settee))) &&
 	      (!is_immutable(settee)) &&
-	      ((!slot_has_setter(settee)) || (slot_setter(settee) != initial_value(sc->is_float_symbol))))
-	    /* ttl.scm experiment: if setter is float? (sin float) is a float so we can float_optimize this */
+	      ((!slot_has_setter(settee)) || 
+	       (slot_setter(settee) == initial_value(sc->is_float_symbol))))
 	    {
 	      opt_info *o1 = sc->opts[sc->pc];
 	      opc->v[1].p = settee;
 	      if ((!is_t_integer(caddr(car_x))) &&
-		  (is_t_real(slot_value(settee))) &&
 		  (float_optimize(sc, cddr(car_x))))
 		{
 		  opc->v[0].fd = (is_mutable_number(slot_value(opc->v[1].p))) ? opt_set_d_d_fm : opt_set_d_d_f;
@@ -95153,10 +95155,10 @@ int main(int argc, char **argv)
  * index     1026   1016    973    970    970
  * tmock     1177   1165   1057   1054   1055
  * tvect     2519   2464   1772   1708   1708
- * texit     ----   ----   1778   1767   1763
- * s7test    1873   1831   1818   1790   1808
+ * texit     ----   ----   1778   1767   1762
+ * s7test    1873   1831   1818   1790   1791
  * timp      2971   2891   2176   2051   2051
- * lt        2187   2172   2150   2156   2156
+ * lt        2187   2172   2150   2156   2155
  * tauto     ----   ----   2562   2566   2208
  * dup       3805   3788   2492   2327   2335
  * tload     ----   ----   3046   2352   2353
@@ -95175,29 +95177,30 @@ int main(int argc, char **argv)
  * tobj      4016   3970   3828   3633   3637
  * tclo      4787   4735   4390   4343   4332
  * tlet      7775   5640   4450   4423   4423
- * tcase     4960   4793   4439   4462   4442
+ * tcase     4960   4793   4439   4462   4441
  * tmap      8869   8774   4489   4490   4488
  * tfft      7820   7729   4755   4683   4681
- * tshoot    5525   5447   5183   5174   5170
+ * tshoot    5525   5447   5183   5174   5169
  * tform     5357   5348   5307   5310   5313
  * tnum      6348   6013   5433   5425   5421
  * tstr      6880   6342   5488   5462   5464
- * tlamb     6423   6273   5720   5618   5606
+ * tlamb     6423   6273   5720   5618   5605
  * tgsl      8485   7802   6373   6333   6331
- * tmisc     8869   7612   6435   6324   6342
+ * tmisc     8869   7612   6435   6324   6339
  * tlist     7896   7546   6558   6486   6481
  * trec      6936   6922   6521   6523   6523
  * tari      13.0   12.7   6827   6717   6696
  * tleft     10.4   10.2   7657   7561   7554
- * tgc       11.9   11.1   8177   8062   8042
+ * tgc       11.9   11.1   8177   8062   8038
  * thash     11.8   11.7   9734   9583   9582
  * cb        11.2   11.0   9658   9677   9667
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.7
+ * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.3   56.5
  * lg        ----   ----  105.2  105.8  105.8
  * tbig     177.4  175.8  156.5  151.1  151.3
  * ------------------------------------------------------
  *
+ * check lint (format #f "~A" (symbol->string ...)) or vice versa [and object|number->string I suppose] see t585.scm
  */
