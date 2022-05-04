@@ -2616,11 +2616,6 @@ static void init_types(void)
 #define T_HAS_GX                       (1 << 10)
 #define has_gx(p)                      has_type1_bit(T_Pair(p), T_HAS_GX)
 #define set_has_gx(p)                  set_type1_bit(T_Pair(p), T_HAS_GX)
-#if S7_DEBUGGING
-  #define T_SAFE_LIST                  T_FULL_HAS_GX
-  #define is_safe_list(p)              has_type1_bit(T_Pair(p), T_SAFE_LIST)
-  #define set_is_safe_list(p)          set_type1_bit(T_Pair(p), T_SAFE_LIST)
-#endif
 
 #define T_FULL_UNKNOPT                 (1LL << (TYPE_BITS + BIT_ROOM + 35))
 #define T_UNKNOPT                      (1 << 11)
@@ -3851,8 +3846,7 @@ static char *copy_string_with_length(const char *str, s7_int len)
   if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
-  /* if (len != 0) */ /* we check this above -- 24-Jan-22 */
-    memcpy((void *)newstr, (void *)str, len);
+  memcpy((void *)newstr, (void *)str, len); /* we check len != 0 above -- 24-Jan-22 */
   newstr[len] = '\0';
   return(newstr);
 }
@@ -6103,11 +6097,8 @@ static void process_iterator(s7_scheme *sc, s7_pointer s1)
       clear_weak_hash_iterator(s1);
       h = iterator_sequence(s1);
       if (unchecked_type(h) == T_HASH_TABLE)
-	{
-	  if ((S7_DEBUGGING) && (weak_hash_iters(h) == 0))
-	    fprintf(stderr, "in gc weak has iters wrapping under!\n");
-	  weak_hash_iters(h)--;
-	}}
+	weak_hash_iters(h)--;
+    }
 }
 
 static void process_multivector(s7_scheme *sc, s7_pointer s1)
@@ -6612,9 +6603,6 @@ static void mark_c_proc_star(s7_pointer p)
 
 static void mark_pair(s7_pointer p)
 {
-#if S7_DEBUGGING
-  if ((is_safe_list(p)) && (!list_is_in_use(p))) fprintf(stderr, "%s[%d]: safe list not in use but marked\n", __func__, __LINE__);
-#endif
   do {
     set_mark(p);
     gc_mark(car(p)); /* expanding this to avoid recursion is slower */
@@ -8047,16 +8035,12 @@ static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym)
   if (car(x) == sym)
     vector_element(sc->symbol_table, location) = cdr(x);
   else
-    {
-      s7_pointer y;
-      for (y = x, x = cdr(x); is_pair(x); y = x, x = cdr(x))
-	if (car(x) == sym)
-	  {
-	    set_cdr(y, cdr(x));
-	    return;
-	  }
-      if (S7_DEBUGGING) fprintf(stderr, "could not remove %s?\n", string_value(name));
-    }
+    for (s7_pointer y = x, z = cdr(x); is_pair(z); y = z, z = cdr(z))
+      if (car(z) == sym)
+	{
+	  set_cdr(y, cdr(z));
+	  return;
+	}
 }
 
 s7_pointer s7_gensym(s7_scheme *sc, const char *prefix)
@@ -8206,8 +8190,7 @@ static Inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const cha
   new_cell(sc, x, T_STRING | T_SAFE_PROCEDURE);
   string_block(x) = mallocate(sc, len + 1);
   string_value(x) = (char *)block_data(string_block(x));
-  /* if (len > 0) */
-    memcpy((void *)string_value(x), (void *)str, len);
+  memcpy((void *)string_value(x), (void *)str, len);
   string_value(x)[len] = 0;
   string_length(x) = len;
   string_hash(x) = 0;
@@ -10397,7 +10380,6 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
       mac_slot = symbol_to_local_slot(sc, mac_name, sc->curlet); /* returns global_slot(symbol) if sc->curlet == nil */
       if (is_slot(mac_slot))
 	{
-	  if ((S7_DEBUGGING) && (sc->curlet == sc->rootlet)) fprintf(stderr, "%s[%d]: curlet==rootlet!\n", __func__, __LINE__);
 	  if ((sc->curlet == sc->nil) && (!in_rootlet(mac_slot)))
 	    add_slot_to_rootlet(sc, mac_slot);
 	  slot_set_value_with_hook(mac_slot, mac);
@@ -29912,7 +29894,6 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 	      pname = full_filename(sc, fname);
 	      pwd_name = (char *)block_data(pname);
 	    }}
-      /* else pname is NULL, so use fname -- can this happen? */
       if ((S7_DEBUGGING) && (!pname)) fprintf(stderr, "pname is null\n");
       library = dlopen((pname) ? pwd_name : fname, RTLD_NOW);
       if (!library)
@@ -34874,10 +34855,8 @@ static void format_append_char(s7_scheme *sc, char c, s7_pointer port)
   /* if c is #\null, is this the right thing to do?
    * We used to return "1 2 3 4" because ~C was first turned into a string (empty in this case)
    *   (format #f "1 2~C3 4" #\null) -> "1 2"
-   * Clisp does this:
-   *   (format nil "1 2~C3 4" (int-char 0)) -> "1 23 4"
+   * Clisp: (format nil "1 2~C3 4" (int-char 0)) -> "1 23 4"
    * whereas sbcl says int-char is undefined, and Guile returns "1 2\x003 4"
-   * if -O3 compiler flag, we hit a segfault here during s7test
    */
 }
 
@@ -35910,8 +35889,6 @@ static s7_pointer format_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
   return(f);
 }
 
-
-/* -------------------------------- system extras -------------------------------- */
 
 #if WITH_SYSTEM_EXTRAS
 #include <fcntl.h>
@@ -37874,8 +37851,7 @@ s7_pointer s7_memq(s7_scheme *sc, s7_pointer obj, s7_pointer x)
 static s7_pointer memq_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 {
   return((is_pair(y)) ? s7_memq(sc, x, y) :
-	 ((is_null(y)) ? sc->F :
-	  method_or_bust_with_type_pp(sc, y, sc->memq_symbol, x, y, a_list_string, 2)));
+	 ((is_null(y)) ? sc->F : method_or_bust_with_type_pp(sc, y, sc->memq_symbol, x, y, a_list_string, 2)));
 }
 
 static s7_pointer g_memq(s7_scheme *sc, s7_pointer args)
@@ -38397,12 +38373,7 @@ static s7_pointer make_safe_list(s7_scheme *sc, s7_int num_args)
     {
       sc->current_safe_list = num_args;
       if (!is_pair(sc->safe_lists[num_args]))
-	{
-	  sc->safe_lists[num_args] = permanent_list(sc, num_args);
-#if S7_DEBUGGING
-	  set_is_safe_list(sc->safe_lists[num_args]);
-#endif
-	}
+	sc->safe_lists[num_args] = permanent_list(sc, num_args);
       if (!list_is_in_use(sc->safe_lists[num_args]))
 	{
 	  set_list_in_use(sc->safe_lists[num_args]);
@@ -65250,11 +65221,10 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 	    (o1->v[1].p != let_dox_slot1(do_curlet(o))))
 	  {
 	    s7_pointer ival;
-	    opt_info *o2;
+	    opt_info *o2 = o1->v[5].o1;                  /* set_p_i_f: x = make_integer(o->sc, o->v[6].fi(o->v[5].o1)); */
 	    s7_int (*fi)(opt_info *o);
 	    ival = make_mutable_integer(sc, integer(slot_value(o1->v[1].p)));
 	    slot_set_value(o1->v[1].p, ival);
-	    o2 = o1->v[5].o1;                  /* set_p_i_f: x = make_integer(o->sc, o->v[6].fi(o->v[5].o1)); */
 	    fi = o2->v[0].fi;
 	    while (integer(vp) < end)
 	      {
@@ -65267,12 +65237,10 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 	  if ((f == opt_d_7pid_ssf_nr) &&           /* tref.scm */
 	      (o1->v[4].d_7pid_f == float_vector_set_d_7pid_direct))
 	    {
-	      s7_pointer fv, ind;
-	      opt_info *o2;
+	      s7_pointer fv, ind = o1->v[2].p;
+	      opt_info *o2 = do_any_body(o1);
 	      s7_double (*fd)(opt_info *o);
-	      o2 = do_any_body(o1);
 	      fv = slot_value(o1->v[1].p);
-	      ind = o1->v[2].p;
 	      fd = o2->v[0].fd;
 	      while (integer(vp) < end)
 		{
@@ -65317,13 +65285,10 @@ static s7_pointer opt_do_prepackaged(opt_info *o)
 
 static s7_pointer opt_do_dpnr(opt_info *o)
 {
-  opt_info *o1;
-  s7_pointer vp;
-  s7_int end;
+  opt_info *o1 = do_any_body(o);
+  s7_pointer vp = do_prepack_stepper(o);
+  s7_int end = do_prepack_end(o);
   s7_double (*f)(opt_info *o);
-  end = do_prepack_end(o);
-  vp = do_prepack_stepper(o);
-  o1 = do_any_body(o);
   f = o1->v[O_WRAP].fd;
   while (integer(vp) < end) {f(o1); integer(vp)++;}
   return(NULL);
@@ -65331,13 +65296,10 @@ static s7_pointer opt_do_dpnr(opt_info *o)
 
 static s7_pointer opt_do_ipnr(opt_info *o)
 {
-  opt_info *o1;
-  s7_pointer vp;
-  s7_int end;
+  opt_info *o1 = do_any_body(o);
+  s7_pointer vp = do_prepack_stepper(o);
+  s7_int end = do_prepack_end(o);
   s7_int (*f)(opt_info *o);
-  end = do_prepack_end(o);
-  vp = do_prepack_stepper(o);
-  o1 = do_any_body(o);
   f = o1->v[O_WRAP].fi;
   while (integer(vp) < end) {f(o1); integer(vp)++;}
   return(NULL);
@@ -65526,8 +65488,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	s7_pointer var = car(p);
 	if (is_pair(cddr(var)))
 	  {
-	    s7_pointer init_type;
-	    init_type = opt_arg_type(sc, cdr(var));
+	    s7_pointer init_type = opt_arg_type(sc, cdr(var));
 	    if (((init_type == sc->is_integer_symbol) ||
 		 (init_type == sc->is_float_symbol)) &&
 		(opt_arg_type(sc, cddr(var)) != init_type))
@@ -68030,9 +67991,7 @@ bool s7_is_multiple_value(s7_pointer obj) {return(is_multiple_value(obj));}
 static s7_pointer splice_out_values(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer tp;
-#if S7_DEBUGGING
-  if (is_null(args)) {fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(args)); return(sc->nil);}
-#endif
+  if ((S7_DEBUGGING) && (is_null(args))) {fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(args)); return(sc->nil);}
   while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
   tp = list_1(sc, car(args));
   sc->temp8 = tp;
@@ -82090,10 +82049,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		    slot_set_value(step_slot, make_integer(sc, step));
 		    func(sc);
 		    step = integer(slot_value(step_slot)) + 1;
-		  }
-	  if ((S7_DEBUGGING) && (stop != integer(slot_value(end_slot))))
-	    fprintf(stderr, "end: %" ld64 " %" ld64 "\n", stop, integer(slot_value(end_slot)));
-	}
+		  }}
       sc->value = sc->T;
       sc->code = cdadr(scc);
       return(true);
@@ -94341,12 +94297,7 @@ s7_scheme *s7_init(void)
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
-    {
-      sc->safe_lists[i] = permanent_list(sc, i);
-#if S7_DEBUGGING
-      set_is_safe_list(sc->safe_lists[i]);
-#endif
-    }
+    sc->safe_lists[i] = permanent_list(sc, i);
   for (i = NUM_SAFE_PRELISTS; i < NUM_SAFE_LISTS; i++)
     sc->safe_lists[i] = sc->nil;
   sc->current_safe_list = 0;
@@ -95202,5 +95153,5 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  151.1  151.3
  * ------------------------------------------------------
  *
- * check lint (format #f "~A" (symbol->string ...)) or vice versa [and object|number->string I suppose] see t585.scm
+ * t586 -> tset?
  */
