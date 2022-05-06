@@ -154,6 +154,11 @@
 	      values vector vector-append vector->list vector-dimensions vector-dimension vector-rank vector-length vector-ref vector?
 	      when with-baffle with-let with-input-from-file with-input-from-string with-output-to-string
 	      zero?
+
+	      c-pointer-weak2 c-pointer-type bignum port-position byte-vector->string c-pointer-info c-pointer->list subvector-vector c-pointer-weak1
+	      funclet? bignum? weak-hash-table? goto? file-mtime open-output-function port-file byte? hash-code 
+	      string-copy getenv directory->list dilambda copy ; these 3 lines added 5-May-22
+
 	      list-values apply-values unquote))
 	   ;; do not include file-exists? or directory? (also not peek-char because these are checked via eval)
 	   ht))
@@ -203,9 +208,22 @@
 			         exit dilambda make-hook hook-functions stacktrace tree-leaves tree-memq object->let
 				 getenv directory? file-exists? type-of immutable! immutable? byte-vector-set! syntax?
 				 list-values apply-values unquote set-current-output-port unspecified? undefined? byte-vector-ref
-				 set-current-input-port set-current-error-port directory->list system subvector-position subvector-offset
+				 set-current-input-port set-current-error-port directory->list system subvector-position
 				 tree-count tree-set-memq tree-cyclic?))
 			      ht))
+
+	(side-effect-functions '(provide list-set! fill! reverse! sort! vector-fill! vector-set! float-vector-set! int-vector-set! byte-vector-set! 
+				 string->byte-vector string-set! hash-table-set! call/cc call-with-current-continuation load autoload eval eval-string 
+				 apply set-current-error-port display set-current-input-port set-current-output-port write close-input-port 
+				 close-output-port flush-output-port open-input-file open-output-file open-input-string open-output-string 
+				 get-output-string newline read-char peek-char write-char write-string read-byte write-byte read-line read-string 
+				 read call-with-output-string call-with-output-file string-fill! with-output-to-file system format set-car! set-cdr! 
+				 immutable! varlet cutlet coverlet openlet random let-set! iterate))
+	(input-side-effect-functions '(set-current-input-port close-input-port open-input-file open-input-string 
+				       read-char peek-char read-byte read-line read-string read))
+	(output-side-effect-functions '(set-current-output-port close-output-port flush-output-port open-output-file open-output-string 
+					get-output-string call-with-output-string call-with-output-file with-output-to-file 
+					newline write-char write-string display write write-byte format))
 
 	(makers (let ((h (make-hash-table)))
 		  (for-each

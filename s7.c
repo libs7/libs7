@@ -2199,8 +2199,6 @@ static void init_types(void)
 /* this bit marks a port used by the loader so that random load-time reads do not screw up the load process */
 
 #define T_HAS_SETTER                   T_LOCATION
-#define symbol_has_setter(p)           has_type_bit(T_Sym(p), T_HAS_SETTER)
-#define symbol_set_has_setter(p)       set_type_bit(T_Sym(p), T_HAS_SETTER)
 #define slot_has_setter(p)             has_type_bit(T_Slt(p), T_HAS_SETTER)
 #define slot_set_has_setter(p)         set_type_bit(T_Slt(p), T_HAS_SETTER)
 /* marks a slot that has a setter or symbol that might have a setter */
@@ -4112,7 +4110,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_READ_LIST, OP_READ_NEXT, OP_READ_DOT, OP_READ_QUOTE,
       OP_READ_QUASIQUOTE, OP_READ_UNQUOTE, OP_READ_APPLY_VALUES,
       OP_READ_VECTOR, OP_READ_BYTE_VECTOR, OP_READ_INT_VECTOR, OP_READ_FLOAT_VECTOR, OP_READ_DONE,
-      OP_LOAD_RETURN_IF_EOF, OP_LOAD_CLOSE_AND_POP_IF_EOF, OP_EVAL_DONE, OP_SPLICE_VALUES, OP_NO_VALUES, OP_FLUSH_VALUES,
+      OP_LOAD_RETURN_IF_EOF, OP_LOAD_CLOSE_AND_POP_IF_EOF, OP_EVAL_DONE, OP_SPLICE_VALUES, OP_NO_VALUES,
       OP_CATCH, OP_DYNAMIC_WIND, OP_DYNAMIC_UNWIND, OP_DYNAMIC_UNWIND_PROFILE, OP_PROFILE_IN,
       OP_DEFINE_CONSTANT, OP_DEFINE_CONSTANT1,
       OP_DO, OP_DO_END, OP_DO_END1, OP_DO_STEP, OP_DO_STEP2, OP_DO_INIT,
@@ -4327,7 +4325,7 @@ static const char* op_names[NUM_OPS] =
       "case", "read_list", "read_next", "read_dot", "read_quote",
       "read_quasiquote", "read_unquote", "read_apply_values",
       "read_vector", "read_byte_vector", "read_int_vector", "read_float_vector", "read_done",
-      "load_return_if_eof", "load_close_and_pop_if_eof", "eval_done", "splice_values", "no_values", "flush_values",
+      "load_return_if_eof", "load_close_and_pop_if_eof", "eval_done", "splice_values", "no_values",
       "catch", "dynamic_wind", "dynamic_unwind", "dynamic_unwind_profile", "profile_in",
       "define_constant", "define_constant1",
       "do", "do_end", "do_end1", "do_step", "do_step2", "do_init",
@@ -8891,7 +8889,6 @@ static void init_unlet(s7_scheme *sc)
 	    s7_pointer val = initial_value(sym);
 	    if ((is_c_function(val)) || (is_syntax(val)))  /* we assume the initial_slot value needs no GC protection */
 	      inits[k++] = initial_slot(sym);
-
 	    /* non-c_functions that are not set! (and therefore initial_slot GC) protected by default:
 	     *    make-hook hook-functions
 	     * if these initial_slot values are added to unlet, they need explicit GC protection.
@@ -44684,7 +44681,7 @@ static s7_pointer s7_macroexpand(s7_scheme *sc, s7_pointer mac, s7_pointer args)
 {
   if (!s7_is_proper_list(sc, args))
     s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), args));
-  push_stack_direct(sc, OP_FLUSH_VALUES);
+  push_stack_direct(sc, OP_EVAL_DONE);
   sc->code = mac;
   sc->args = args;
   sc->curlet = make_let(sc, closure_let(sc->code));
@@ -46029,10 +46026,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	s7_set_setter(sc, sym, func); /* special GC protection for global vars */
       else slot_set_setter(slot, func); /* func might be #f */
       if (func != sc->F)
-	{
-	  slot_set_has_setter(slot);
-	  symbol_set_has_setter(sym);
-	}
+	slot_set_has_setter(slot);
       return(func);
     }
 
@@ -46102,7 +46096,6 @@ s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
       if (setter != sc->F)
 	{
 	  slot_set_has_setter(global_slot(p));
-	  symbol_set_has_setter(p);
 	  protect_setter(sc, p, setter);
 	  slot_set_setter(global_slot(p), setter);
 	  if (s7_is_aritable(sc, setter, 3))
@@ -63645,12 +63638,14 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
   if (is_symbol(target))
     {
       s7_pointer settee;
-      if ((is_constant_symbol(sc, target)) ||
-	  (symbol_has_setter(target)))
+      if ((is_constant_symbol(sc, target)) || 
+	  ((is_slot(global_slot(target))) && (slot_has_setter(global_slot(target)))))
 	return_false(sc, car_x);
       settee = lookup_slot_from(target, sc->curlet);
+      if ((is_slot(settee)) && (slot_has_setter(settee))) return_false(sc, car_x);
 
       if ((is_slot(settee)) &&
+	  /* (!slot_has_setter(settee)) && */
 	  (!is_immutable(settee)) &&
 	  (!is_syntax(slot_value(settee))))
 	{
@@ -65414,8 +65409,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	{
 	  s7_pointer sym = car(var);
 
-	  if ((is_constant_symbol(sc, sym)) ||
-	      (symbol_has_setter(sym)))
+	  if (is_constant_symbol(sc, sym))
 	    return_false(sc, car_x);
 	  if (symbol_is_in_list(sc, sym))
 	    syntax_error(sc, "duplicate identifier in do: ~A", 30, var);
@@ -65880,10 +65874,15 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 	}}
   else
     {
-      /* this is not good -- we're evaluating the macro body!  Need something much smarter or ensure body simplicity and safety (no side-effects etc) */
       if ((is_macro(s_func)) &&
 	  (!no_cell_opt(expr)))
-	return(float_optimize(sc, set_plist_1(sc, s7_macroexpand(sc, s_func, cdar(expr))))); /* is this use of plist safe? */
+	{
+	  s7_pointer body = closure_body(s_func);
+	  if ((is_null(cdr(body))) &&
+	      (is_pair(car(body))) &&
+	      ((caar(body) == sc->list_symbol) || (caar(body) == sc->list_values_symbol)))
+	    return(float_optimize(sc, set_plist_1(sc, s7_macroexpand(sc, s_func, cdar(expr)))));
+	}
       if (!s_slot) return_false(sc, car_x);
       return(d_implicit_ok(sc, s_slot, car_x, len));
     }
@@ -65958,7 +65957,13 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
     {
       if ((is_macro(s_func)) &&
 	  (!no_cell_opt(expr)))
-	return(int_optimize(sc, set_plist_1(sc, s7_macroexpand(sc, s_func, cdar(expr)))));
+	{
+	  s7_pointer body = closure_body(s_func);
+	  if ((is_null(cdr(body))) &&
+	      (is_pair(car(body))) &&
+	      ((caar(body) == sc->list_symbol) || (caar(body) == sc->list_values_symbol)))
+	    return(int_optimize(sc, set_plist_1(sc, s7_macroexpand(sc, s_func, cdar(expr)))));
+	}
       if (!s_slot) return_false(sc, car_x);
       return(i_implicit_ok(sc, s_slot, car_x, len));
     }
@@ -67901,7 +67906,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       return(splice_in_values(sc, args));
 
     case OP_BEGIN_HOOK: case OP_BEGIN_NO_HOOK: case OP_BEGIN_2_UNCHECKED:
-    case OP_SIMPLE_DO_STEP: case OP_DOX_STEP_O: case OP_DOX_STEP: case OP_FLUSH_VALUES:
+    case OP_SIMPLE_DO_STEP: case OP_DOX_STEP_O: case OP_DOX_STEP:
       /* here we have a values call with nothing to splice into.  So flush it...
        *   otherwise the multiple-values bit gets set in some innocent list and never unset:
        *     (let ((x '((1 2)))) (eval `(apply apply values x)) x) -> ((values 1 2))
@@ -74176,6 +74181,8 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	}
       else lst = sc->nil;
 
+      /* if (result >= RECUR_BODY) ... */
+
       if (optimize(sc, body, 1, cleared_args = collect_parameters(sc, args, lst)) == OPT_OOPS)
 	clear_all_optimizations(sc, body);
       else
@@ -74209,6 +74216,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		    (check_recur(sc, func, nvars, args, car(body))))
 		  set_safe_closure_body(body);
 	      }}
+
       if (is_symbol(func))
 	{
 	  sc->temp1 = sc->nil;
@@ -76176,7 +76184,6 @@ static goto_t op_let_temp_init2(s7_scheme *sc)
       if (!is_slot(slot)) unbound_variable_error(sc, settee);
       if (is_immutable_slot(slot)) immutable_object_error(sc, set_elist_3(sc, immutable_error_string, sc->let_temporarily_symbol, settee));
       if (is_symbol(new_value))	new_value = lookup_checked(sc, new_value);
-      /* if ((symbol_has_setter(settee)) && (!slot_has_setter(slot))) settee is local with no setter, but its global binding does have a setter */
       slot_set_value(slot, (slot_has_setter(slot)) ? call_setter(sc, slot, new_value) : new_value);
     }
   car(sc->args) = cadr(sc->args);
@@ -77137,7 +77144,6 @@ static void check_define(s7_scheme *sc)
   if (sc->cur_op == OP_DEFINE)
     {
       if ((is_pair(car(code))) &&
-	  (!symbol_has_setter(func)) &&
 	  (!is_possibly_constant(func)))
 	pair_set_syntax_op(sc->code, OP_DEFINE_FUNCHECKED);
       else pair_set_syntax_op(sc->code, OP_DEFINE_UNCHECKED);
@@ -78284,12 +78290,16 @@ static void check_set(s7_scheme *sc)
     {
       s7_pointer settee = car(code), value = cadr(code);
 
-      if ((!symbol_has_setter(settee)) &&
+	s7_pointer slot;
+	slot = lookup_slot_from(settee, sc->curlet);
+      if (((!is_slot(slot)) || (!slot_has_setter(slot))) &&
 	  (!is_syntactic_symbol(settee)))
 	{
 	  if (is_normal_symbol(value))
 	    {
-	      if (is_slot(lookup_slot_from(value, sc->curlet)))
+	      s7_pointer slot1;
+	      slot1 = lookup_slot_from(value, sc->curlet);
+	      if ((is_slot(slot1)) && (!slot_has_setter(slot1)))
 		{
 		  pair_set_syntax_op(form, OP_SET_S_S);
 		  set_opt2_sym(code, value);
@@ -83631,13 +83641,13 @@ static bool op_define1(s7_scheme *sc)
    *   we want to ignore the rebinding (not raise an error) if it is the existing value.
    *   This happens when we reload a file that calls define-constant.
    */
+  s7_pointer x;
   if (is_multiple_value(sc->value))                 /* (define x (values 1 2)) */
     s7_error(sc, sc->syntax_error_symbol,
 	     set_elist_5(sc, wrap_string(sc, "~A: more than one value: (~A ~A ~S)", 35),
 			 define1_caller(sc), define1_caller(sc), sc->code, sc->value));
   if (is_constant_symbol(sc, sc->code))             /* (define pi 3) or (define (pi a) a) */
     {
-      s7_pointer x;
       x = (is_slot(global_slot(sc->code))) ? global_slot(sc->code) : lookup_slot_from(sc->code, sc->curlet);
       /* local_slot can be free even if sc->code is immutable (local constant now defunct) */
 
@@ -83646,17 +83656,14 @@ static bool op_define1(s7_scheme *sc)
 	    (s7_is_equivalent(sc, sc->value, slot_value(x)))))    /* if value is unchanged, just ignore this (re)definition */
 	syntax_error_with_caller(sc, "~A: ~S is immutable", 19, define1_caller(sc), sc->code); /*   can't use s7_is_equal because value might be NaN, etc */
     }
-  if (symbol_has_setter(sc->code))
+  x = lookup_slot_from(sc->code, sc->curlet);
+  if ((is_slot(x)) && (slot_has_setter(x)))
     {
-      s7_pointer x;
-      x = lookup_slot_from(sc->code, sc->curlet);
-      if ((is_slot(x)) && (slot_has_setter(x)))
-	{
-	  sc->value = bind_symbol_with_setter(sc, OP_DEFINE_WITH_SETTER, sc->code, sc->value);
-	  if (sc->value == sc->no_value)
-	    return(true); /* goto apply */
-	  /* if all goes well, OP_DEFINE_WITH_SETTER will jump to DEFINE2 */
-	}}
+      sc->value = bind_symbol_with_setter(sc, OP_DEFINE_WITH_SETTER, sc->code, sc->value);
+      if (sc->value == sc->no_value)
+	return(true); /* goto apply */
+      /* if all goes well, OP_DEFINE_WITH_SETTER will jump to DEFINE2 */
+    }
   return(false); /* fall through */
 }
 
@@ -91166,8 +91173,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_ERROR_HOOK_QUIT:
 	  op_error_hook_quit(sc);
 
-	case OP_FLUSH_VALUES:
-	  if (is_multiple_value(sc->value)) sc->value = sc->nil; /* cancel int/float_optimize */
 	case OP_EVAL_DONE:
 	  return(sc->F);
 
@@ -94733,7 +94738,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 914)
+  if (NUM_OPS != 913)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95106,43 +95111,43 @@ int main(int argc, char **argv)
  * index     1026   1016    973    970    970
  * tmock     1177   1165   1057   1054   1055
  * tvect     2519   2464   1772   1708   1708
- * texit     ----   ----   1778   1767   1762
+ * texit     ----   ----   1778   1767   1764
  * s7test    1873   1831   1818   1790   1791
  * timp      2971   2891   2176   2051   2051
  * lt        2187   2172   2150   2156   2155
  * tauto     ----   ----   2562   2566   2208
- * dup       3805   3788   2492   2327   2335
+ * dup       3805   3788   2492   2327   2346
  * tload     ----   ----   3046   2352   2353
  * tread     2440   2421   2419   2385   2382
- * trclo     2735   2574   2454   2443   2443
+ * trclo     2735   2574   2454   2443   2443  2462 [op_tc_if_a_z_if_a_z_la op_tc_if_a_z_laa] -> 2443
  * fbench    2688   2583   2460   2453   2450
  * titer     2865   2842   2641   2490   2483
- * tcopy     8035   5546   2539   2495   2502
- * tmat      3065   3042   2524   2515   2515
+ * tcopy     8035   5546   2539   2495   2501
+ * tmat      3065   3042   2524   2515   2510
  * tb        2735   2681   2612   2606   2604
  * tsort     3105   3104   2856   2826   2826
- * tmac      3950   3873   3033   2992   2988
+ * tmac      3950   3873   3033   2992   2988  4843 [what if entire mac body is quasiquoted?] -> 3556
  * tset      3253   3104   3048   3133   3131
  * teq       4068   4045   3536   3468   3467
- * tio       3816   3752   3683   3646   3644
  * tobj      4016   3970   3828   3633   3637
+ * tio       3816   3752   3683   3646   3644
  * tclo      4787   4735   4390   4343   4332
  * tlet      7775   5640   4450   4423   4423
  * tcase     4960   4793   4439   4462   4441
- * tmap      8869   8774   4489   4490   4488
- * tfft      7820   7729   4755   4683   4681
+ * tmap      8869   8774   4489   4490   4486
+ * tfft      7820   7729   4755   4683   4678
  * tshoot    5525   5447   5183   5174   5169
  * tform     5357   5348   5307   5310   5313
- * tnum      6348   6013   5433   5425   5421
- * tstr      6880   6342   5488   5462   5464
- * tlamb     6423   6273   5720   5618   5605
+ * tnum      6348   6013   5433   5425   5418
+ * tstr      6880   6342   5488   5462   5464  5521 [op_tc_if_a_z_if_a_z_la] -> 5463
+ * tlamb     6423   6273   5720   5618   5605  6523[macro] -> 5604
  * tgsl      8485   7802   6373   6333   6331
- * tmisc     8869   7612   6435   6324   6339
+ * tmisc     8869   7612   6435   6324   6342
  * tlist     7896   7546   6558   6486   6481
  * trec      6936   6922   6521   6523   6523
  * tari      13.0   12.7   6827   6717   6696
- * tleft     10.4   10.2   7657   7561   7554
- * tgc       11.9   11.1   8177   8062   8038
+ * tleft     10.4   10.2   7657   7561   7556
+ * tgc       11.9   11.1   8177   8062   8043
  * thash     11.8   11.7   9734   9583   9582
  * cb        11.2   11.0   9658   9677   9667
  * tgen      11.2   11.4   12.0   12.0   12.0
@@ -95154,4 +95159,8 @@ int main(int argc, char **argv)
  * ------------------------------------------------------
  *
  * t586 -> tset?
+ * t725 valg again, check with_history valg
+ * t718: somewhere hop=1 incorrectly during optimize in optimize_lambda
+ *   if unsafe body, don't call fx_tree (don't set fx_treeable) -- start at fx_outer
+ * lint let->let* see t587
  */

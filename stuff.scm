@@ -108,10 +108,15 @@
 	       vals)
      ,@(map (lambda (val)
 	      (if (pair? (cddr val))
-		  `(set! (setter ',(car val))
-			 (if (not (,(caddr val) ,(car val))) ; check initial value (already set)
-			     (error 'wrong-type "typed-let: initial value ~S is not ~S" ,(car val) ,(caddr val))
-			     ,(caddr val)))                  ; assume built-in type here
+		  (let ((init-args (if (pair? (caddr val)) ; setter: (lambda (s v [e]) ...)
+				       (if (eqv? (length (cadr (caddr val))) 3)
+					   (list (list 'quote (car val)) (car val) (list 'curlet))
+					   (list (list 'quote (car val)) (car val)))
+				       (list (car val))))) ; setter: integer? etc
+		    `(begin
+		       (unless (,(caddr val) ,@init-args) ; check initial value (already set)
+			 (error 'wrong-type "typed-let: '~S initial value ~S is not ~S" ',(car val) ,(car val) ,(caddr val)))
+		       (set! (setter ',(car val)) ,(caddr val))))
 		  (values)))
 	    vals)
      ,@body))
