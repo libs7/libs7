@@ -35954,15 +35954,17 @@ static s7_pointer g_delete_file(s7_scheme *sc, s7_pointer args)
 }
 
 /* -------------------------------- getenv -------------------------------- */
-static s7_pointer g_getenv(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_getenv(s7_scheme *sc, s7_pointer args) /* r7rs says #f if no such variable. this used to return "" in that case, 6-May-22 */
 {
-  #define H_getenv "(getenv var) returns the value of an environment variable."
-  #define Q_getenv sc->pcl_s
+  #define H_getenv "(getenv var) returns the value of an environment variable, or #f if none is found"
+  #define Q_getenv s7_make_signature(sc, 2, s7_make_signature(sc, 2, sc->is_string_symbol, sc->not_symbol), sc->is_string_symbol)
 
+  char *result;
   s7_pointer name = car(args);
   if (!is_string(name))
     return(method_or_bust_one_arg(sc, name, sc->getenv_symbol, args, T_STRING));
-  return(s7_make_string(sc, getenv(string_value(name))));
+  result = getenv(string_value(name));
+  return((result) ? s7_make_string(sc, result) : sc->F);
 }
 
 /* -------------------------------- system -------------------------------- */
@@ -63645,7 +63647,6 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
       if ((is_slot(settee)) && (slot_has_setter(settee))) return_false(sc, car_x);
 
       if ((is_slot(settee)) &&
-	  /* (!slot_has_setter(settee)) && */
 	  (!is_immutable(settee)) &&
 	  (!is_syntax(slot_value(settee))))
 	{
@@ -66337,9 +66338,12 @@ s7_pfunc s7_optimize_nr(s7_scheme *sc, s7_pointer expr) {return(s7_optimize_1(sc
 static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
 {
   s7_pfunc f;
-  s7_pointer code = car(args);
+  s7_pointer code = car(args), result = sc->undefined;
+  gc_protect_via_stack(sc, code);
   f = s7_optimize(sc, code);
-  return((f) ? f(sc) : sc->undefined);
+  if (f) result = f(sc);
+  unstack(sc);
+  return(result);
 }
 
 static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
@@ -78288,10 +78292,8 @@ static void check_set(s7_scheme *sc)
   pair_set_syntax_op(form, OP_SET_NORMAL);
   if (is_symbol(car(code)))
     {
-      s7_pointer settee = car(code), value = cadr(code);
-
-	s7_pointer slot;
-	slot = lookup_slot_from(settee, sc->curlet);
+      s7_pointer settee = car(code), value = cadr(code), slot;
+      slot = lookup_slot_from(settee, sc->curlet);
       if (((!is_slot(slot)) || (!slot_has_setter(slot))) &&
 	  (!is_syntactic_symbol(settee)))
 	{
@@ -80263,29 +80265,31 @@ static s7_pointer check_do(s7_scheme *sc)
   if (is_null(vars))
     {
       pair_set_syntax_op(form, OP_DO_NO_VARS);
-      if ((is_pair(car(end))) && /* this code is repeated below */
-	  (has_fx(end)) &&
-	  (!(is_syntax(caar(end)))) &&
-	  (!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
+      if (is_fx_treeable(end))
 	{
-	  s7_pointer v1 = NULL, v2 = NULL, v3 = NULL;
-	  bool more_vs = false;
-	  if (tis_slot(let_slots(sc->curlet))) /* outer vars */
+	  if ((is_pair(car(end))) && /* this code is repeated below */
+	      (has_fx(end)) &&
+	      (!(is_syntax(caar(end)))) &&
+	      (!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
 	    {
-	      p = let_slots(sc->curlet);
-	      v1 = slot_symbol(p);
-	      p = next_slot(p);
-	      if (tis_slot(p))
+	      s7_pointer v1 = NULL, v2 = NULL, v3 = NULL;
+	      bool more_vs = false;
+	      if (tis_slot(let_slots(sc->curlet))) /* outer vars */
 		{
-		  v2 = slot_symbol(p);
+		  p = let_slots(sc->curlet);
+		  v1 = slot_symbol(p);
 		  p = next_slot(p);
 		  if (tis_slot(p))
 		    {
-		      v3 = slot_symbol(p);
-		      more_vs = tis_slot(next_slot(p));
-		    }}}
-	  if (v1) fx_tree_outer(sc, end, v1, v2, v3, more_vs);
-	}
+		      v2 = slot_symbol(p);
+		      p = next_slot(p);
+		      if (tis_slot(p))
+			{
+			  v3 = slot_symbol(p);
+			  more_vs = tis_slot(next_slot(p));
+			}}}
+	      if (v1) fx_tree_outer(sc, end, v1, v2, v3, more_vs);
+	    }}
       return(sc->nil);
     }
   if (do_tree_has_definers(sc, form))           /* we don't want definers in body, vars, or end test */
@@ -95109,58 +95113,52 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    458
  * index     1026   1016    973    970    970
- * tmock     1177   1165   1057   1054   1055
+ * tmock     1177   1165   1057   1054   1056
  * tvect     2519   2464   1772   1708   1708
  * texit     ----   ----   1778   1767   1764
  * s7test    1873   1831   1818   1790   1791
  * timp      2971   2891   2176   2051   2051
- * lt        2187   2172   2150   2156   2155
- * tauto     ----   ----   2562   2566   2208
- * dup       3805   3788   2492   2327   2346
+ * lt        2187   2172   2150   2156   2165
+ * tauto     ----   ----   2562   2566   2212
+ * dup       3805   3788   2492   2327   2349
  * tload     ----   ----   3046   2352   2353
  * tread     2440   2421   2419   2385   2382
- * trclo     2735   2574   2454   2443   2443  2462 [op_tc_if_a_z_if_a_z_la op_tc_if_a_z_laa] -> 2443
- * fbench    2688   2583   2460   2453   2450
+ * trclo     2735   2574   2454   2443   2443
+ * fbench    2688   2583   2460   2453   2451
  * titer     2865   2842   2641   2490   2483
  * tcopy     8035   5546   2539   2495   2501
- * tmat      3065   3042   2524   2515   2510
+ * tmat      3065   3042   2524   2515   2512
  * tb        2735   2681   2612   2606   2604
  * tsort     3105   3104   2856   2826   2826
- * tmac      3950   3873   3033   2992   2988  4843 [what if entire mac body is quasiquoted?] -> 3556
- * tset      3253   3104   3048   3133   3131
  * teq       4068   4045   3536   3468   3467
+ * tmac      3950   3873   3033   2992   3556
  * tobj      4016   3970   3828   3633   3637
  * tio       3816   3752   3683   3646   3644
  * tclo      4787   4735   4390   4343   4332
  * tlet      7775   5640   4450   4423   4423
  * tcase     4960   4793   4439   4462   4441
- * tmap      8869   8774   4489   4490   4486
- * tfft      7820   7729   4755   4683   4678
- * tshoot    5525   5447   5183   5174   5169
- * tform     5357   5348   5307   5310   5313
- * tnum      6348   6013   5433   5425   5418
- * tstr      6880   6342   5488   5462   5464  5521 [op_tc_if_a_z_if_a_z_la] -> 5463
- * tlamb     6423   6273   5720   5618   5605  6523[macro] -> 5604
+ * tmap      8869   8774   4489   4490   4487
+ * tfft      7820   7729   4755   4683   4679
+ * tshoot    5525   5447   5183   5174   5172
+ * tform     5357   5348   5307   5310   5308
+ * tnum      6348   6013   5433   5425   5423
+ * tstr      6880   6342   5488   5462   5464
+ * tlamb     6423   6273   5720   5618   5604
+ * tset                                  6313
  * tgsl      8485   7802   6373   6333   6331
  * tmisc     8869   7612   6435   6324   6342
- * tlist     7896   7546   6558   6486   6481
+ * tlist     7896   7546   6558   6486   6482
  * trec      6936   6922   6521   6523   6523
- * tari      13.0   12.7   6827   6717   6696
+ * tari      13.0   12.7   6827   6717   6695
  * tleft     10.4   10.2   7657   7561   7556
- * tgc       11.9   11.1   8177   8062   8043
- * thash     11.8   11.7   9734   9583   9582
- * cb        11.2   11.0   9658   9677   9667
+ * tgc       11.9   11.1   8177   8062   8042
+ * thash     11.8   11.7   9734   9583   9584
+ * cb        11.2   11.0   9658   9677   9677
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.3   56.5
- * lg        ----   ----  105.2  105.8  105.8
+ * lg        ----   ----  105.2  105.8  105.9
  * tbig     177.4  175.8  156.5  151.1  151.3
  * ------------------------------------------------------
- *
- * t586 -> tset?
- * t725 valg again, check with_history valg
- * t718: somewhere hop=1 incorrectly during optimize in optimize_lambda
- *   if unsafe body, don't call fx_tree (don't set fx_treeable) -- start at fx_outer
- * lint let->let* see t587
  */

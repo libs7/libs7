@@ -156,8 +156,8 @@
 	      zero?
 
 	      c-pointer-weak2 c-pointer-type bignum port-position byte-vector->string c-pointer-info c-pointer->list subvector-vector c-pointer-weak1
-	      funclet? bignum? weak-hash-table? goto? file-mtime open-output-function port-file byte? hash-code 
-	      string-copy getenv directory->list dilambda copy ; these 3 lines added 5-May-22
+	      funclet? bignum? weak-hash-table? goto? port-file byte? hash-code 
+	      dilambda ; these 3 lines added 5-May-22, not getenv directory->list or file-mtime because bools are evaluated if constant args!
 
 	      list-values apply-values unquote))
 	   ;; do not include file-exists? or directory? (also not peek-char because these are checked via eval)
@@ -218,12 +218,8 @@
 				 close-output-port flush-output-port open-input-file open-output-file open-input-string open-output-string 
 				 get-output-string newline read-char peek-char write-char write-string read-byte write-byte read-line read-string 
 				 read call-with-output-string call-with-output-file string-fill! with-output-to-file system format set-car! set-cdr! 
-				 immutable! varlet cutlet coverlet openlet random let-set! iterate))
-	(input-side-effect-functions '(set-current-input-port close-input-port open-input-file open-input-string 
-				       read-char peek-char read-byte read-line read-string read))
-	(output-side-effect-functions '(set-current-output-port close-output-port flush-output-port open-output-file open-output-string 
-					get-output-string call-with-output-string call-with-output-file with-output-to-file 
-					newline write-char write-string display write write-byte format))
+				 immutable! varlet cutlet coverlet openlet random let-set! iterate
+				 emergency-exit exit error throw))
 
 	(makers (let ((h (make-hash-table)))
 		  (for-each
@@ -11595,12 +11591,15 @@
       (let ((changers (let ((h (make-hash-table)))
 			(for-each (lambda (s)
 				    (hash-table-set! h s #t))
+				  (cons 'set! side-effect-functions))
+			h)))
+#|
 				  '(set!
-				    read read-byte read-char read-line read-string
+				    read read-byte read-char read-line read-string peek-char
 				    write write-byte write-char write-string format display newline
 				    reverse! set-cdr! sort! string-fill! vector-fill! fill!
 				    emergency-exit exit error throw))
-			h)))
+|#
 	(lambda (caller form vals env)
 	  (define (report-trouble)  ;  (let ((x (read-byte)) (y (read-byte))) (- x y))
 	    (lint-format "order of evaluation of ~A's ~A is unspecified, so ~A is trouble" caller
@@ -20843,90 +20842,138 @@
 							     ,new-form))))))))))
 
 	  ;; -------- let-walker --------
-	  (define (let-walker caller form env)
-	    (if (or (< (length form) 3)             ; (let ((a 1) (set! a 2)))
-		    (not (or (symbol? (cadr form))
-			     (list? (cadr form)))))
-		(lint-format "let is messed up: ~A" caller (truncated-list->string form))
+	  
+	  (define let-walker
+	    (let ((input-side-effect-functions '(;set-current-input-port close-input-port open-input-file open-input-string 
+						 read-char peek-char read-byte read-line read-string read))
+		  (output-side-effect-functions '(;set-current-output-port close-output-port flush-output-port open-output-file open-output-string 
+						  ;get-output-string call-with-output-string call-with-output-file with-output-to-file 
+						  newline write-char write-string display write write-byte format)))
 
-		(let ((named-let (and (symbol? (cadr form)) (cadr form))))
-		  (if (keyword? named-let)          ; (let :x ((i y)) (x i))
-		      (lint-format "bad let name: ~A" caller named-let))
-
-		  (if named-let
-		      (if *report-shadowed-variables*
-			  (report-shadower caller 'let 'named-let-function-name named-let named-let env))
-		      (remove-null-let caller form env))
-
-		  (let ((vars (declare-named-let form env))
-			(varlist ((if named-let caddr cadr) form))
-			(body ((if named-let cdddr cddr) form)))
-
-		    (if (not (and (proper-list? varlist)
-				  (just-pairs? varlist)))
-			(lint-format "let is messed up: ~A" caller (truncated-list->string form))
-			(begin
-			  (if (and (null? varlist)
-				   (len=1? body)
-				   (not (side-effect? (car body) env))) ; (let xx () z)
-			      (lint-format "perhaps ~A" caller (lists->string form (car body))))
-
-			  (set! vars (walk-let-vars caller form varlist vars env))
-
-			  (when (and (pair? body)
-				     (pair? vars)
-				     (func-definer? (car body)))
-			    (let-local-funcs->closure caller form body (map var-name vars)))
-			  ;; here we could check '+signature+ and others, but it is tricky to tell that
-			  ;;   var-initial-value is messed up
-
-			  (let ((suggest made-suggestion))
-			    (unless named-let
-			      (when (and (pair? varlist)
-					 (pair? body)
-					 (len>1? (car body)))
-				(let->cond caller form env)
-				(when (null? (cdr body))
-				  (if (and ;(= suggest made-suggestion)
-				       (null? (cdr varlist))
-				       (pair? (cdar varlist)))
-				      (let->case-else caller form (caar varlist) (cadar varlist) body))
-				  (move-let-into-if caller form env)
+	      ;; need port extractors for each of these
+	      (define (extract-port init)
+		(if (pair? (cdr init))
+		    (cadr init)
+		    ()))
+	      
+	      (lambda (caller form env)
+		(if (or (< (length form) 3)             ; (let ((a 1) (set! a 2)))
+			(not (or (symbol? (cadr form))
+				 (list? (cadr form)))))
+		    (lint-format "let is messed up: ~A" caller (truncated-list->string form))
+		    
+		    (let ((named-let (and (symbol? (cadr form)) (cadr form))))
+		      (if (keyword? named-let)          ; (let :x ((i y)) (x i))
+			  (lint-format "bad let name: ~A" caller named-let))
+		      
+		      (if named-let
+			  (if *report-shadowed-variables*
+			      (report-shadower caller 'let 'named-let-function-name named-let named-let env))
+			  (remove-null-let caller form env))
+		      
+		      (let ((vars (declare-named-let form env))
+			    (varlist ((if named-let caddr cadr) form))
+			    (body ((if named-let cdddr cddr) form)))
+			
+			(if (not (and (proper-list? varlist)
+				      (just-pairs? varlist)))
+			    (lint-format "let is messed up: ~A" caller (truncated-list->string form))
+			    (begin
+			      (if (and (null? varlist)
+				       (len=1? body)
+				       (not (side-effect? (car body) env))) ; (let xx () z)
+				  (lint-format "perhaps ~A" caller (lists->string form (car body))))
+			      
+			      (set! vars (walk-let-vars caller form varlist vars env))
+			      
+			      (when (and (pair? body)
+					 (pair? vars)
+					 (func-definer? (car body)))
+				(let-local-funcs->closure caller form body (map var-name vars)))
+			      ;; here we could check '+signature+ and others, but it is tricky to tell that
+			      ;;   var-initial-value is messed up
+			      
+			      (let ((suggest made-suggestion))
+				(unless named-let
+				  (when (and (pair? varlist)
+					     (pair? body)
+					     (len>1? (car body)))
+				    (let->cond caller form env)
+				    (when (null? (cdr body))
+				      (if (and ;(= suggest made-suggestion)
+					   (null? (cdr varlist))
+					   (pair? (cdar varlist)))
+					  (let->case-else caller form (caar varlist) (cadar varlist) body))
+				      (move-let-into-if caller form env)
+				      (when (= suggest made-suggestion)
+					(embed-let caller form env))))
 				  (when (= suggest made-suggestion)
-				    (embed-let caller form env))))
-			      (when (= suggest made-suggestion)
-				(useless-let caller form env)))
+				    (useless-let caller form env)))
 
-			    (let ((es (walk-letx-body caller form body vars env)))
-			      (set! vars (car es))
-			      (set! env (cdr es)))
+				;; let ((x <init1>) (y <init2)) -> varlist: '((x <init1>) (y <init2>))
+				;;   if init1 and init2 have side-effect contention, suggest let*
+				;;   (let ((x (read-char)) (y (peek-char)) ...) -> (let* ...)
+				;; see also check-unordered-exprs above (sigh) -- I missed it when I wrote this code
+				(when (and (pair? varlist)
+					   (pair? (cdr varlist)))
+				  (let ((hits (map (lambda (var)
+						     (if (and (pair? (cdr var))
+							      (pair? (cadr var)))
+							 (if (memq (caadr var) input-side-effect-functions)
+							     (list :input var)
+							     (if (memq (caadr var) output-side-effect-functions)
+								 (list :output var)
+								 (values)))
+							 (values)))
+						   varlist)))
+				    (when (and (pair? hits)
+					       (pair? (cdr hits)))
+				      (let loop1 ((cur-var (car hits)) (rest (cdr hits)))
+					(let* ((cur-init (cadadr cur-var))
+					       (cur-port (extract-port cur-init)) ; can be #f
+					       (got-hit #f))
+					  (let loop2 ((rst-var rest))
+					    (when (pair? rst-var)
+					      (if (and (eq? (car cur-var) (caar rst-var))
+						       cur-port ; not #f
+						       (equal? cur-port (extract-port (cadr (cadar rst-var)))))
+						  (begin
+						    (lint-format "in ~S, let should be let*" caller (truncated-list->string form))
+						    (set! got-hit #t))
+						  (loop2 (cdr rst-var)))))
+					  (unless (or got-hit (null? rest))
+					    (loop1 (car rest) (cdr rest))))))))
 
-			    (when (pair? vars)
-			      (unless (or named-let
-					  (not *report-combinable-lets*))
-				(evert-function-locals form vars env))
-			      (when (and (pair? (cadr form))
-					 (pair? (caadr form)))
-				(split-let caller form body vars env)))
-
-			    (let-var->body caller form body varlist)
-
-			    (when (pair? body)
-			      (when (len>2? (car body))
-				(let-body->value caller form vars env))
-			      (when (and (pair? varlist)
-					 (not named-let))
-				(let->for-each caller form varlist body)
-				(let-ends-in-set caller form)
-				(when (and (pair? (car body))
-					   (eq? (caar body) 'do))
-				  (normal-let->do caller form env))
-				(tighten-let caller form vars env)
-				(if (= suggest made-suggestion)
-				    (combine-set+one-use caller body varlist env)))))
-
-			  (combine-lets caller form varlist env))))))
-	    env)
+				(let ((es (walk-letx-body caller form body vars env)))
+				  (set! vars (car es))
+				  (set! env (cdr es)))
+				
+				(when (pair? vars)
+				  (unless (or named-let
+					      (not *report-combinable-lets*))
+				    (evert-function-locals form vars env))
+				  (when (and (pair? (cadr form))
+					     (pair? (caadr form)))
+				    (split-let caller form body vars env)))
+				
+				(let-var->body caller form body varlist)
+				
+				(when (pair? body)
+				  (when (len>2? (car body))
+				    (let-body->value caller form vars env))
+				  (when (and (pair? varlist)
+					     (not named-let))
+				    (let->for-each caller form varlist body)
+				    (let-ends-in-set caller form)
+				    (when (and (pair? (car body))
+					       (eq? (caar body) 'do))
+				      (normal-let->do caller form env))
+				    (tighten-let caller form vars env)
+				    (if (= suggest made-suggestion)
+					(combine-set+one-use caller body varlist env)))))
+			      
+			      (combine-lets caller form varlist env))))))
+		env)))
 	  (hash-walker 'let let-walker)
 
 
