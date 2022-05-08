@@ -20937,6 +20937,7 @@
 					      (if (and (eq? (car cur-var) (caar rst-var))
 						       cur-port ; not #f
 						       (equal? cur-port (extract-port (cadr (cadar rst-var)))))
+						  ;; or equal? one to () and the other to current-input|output-port
 						  (begin
 						    (lint-format "in ~S, let should be let*" caller (truncated-list->string form))
 						    (set! got-hit #t))
