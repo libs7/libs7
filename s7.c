@@ -4166,7 +4166,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IF_ANDP_P, OP_IF_ANDP_P_P, OP_IF_ANDP_R, OP_IF_ANDP_N, OP_IF_ANDP_N_N,
       OP_IF_ORP_P, OP_IF_ORP_P_P, OP_IF_ORP_R, OP_IF_ORP_N, OP_IF_ORP_N_N,
       OP_IF_OR2_P, OP_IF_OR2_P_P, OP_IF_OR2_R, OP_IF_OR2_N, OP_IF_OR2_N_N,
-      OP_IF_PP, OP_IF_PPP, OP_IF_PR, OP_IF_PRR, OP_WHEN_PP, OP_UNLESS_PP,
+      OP_IF_PP, OP_IF_PPP, OP_IF_PN, OP_IF_PR, OP_IF_PRR, OP_WHEN_PP, OP_UNLESS_PP,
 
       OP_COND_NA_NA, OP_COND_NA_NP, OP_COND_NA_NP_1, OP_COND_NA_2E, OP_COND_NA_3E, OP_COND_NA_NP_O,
       OP_COND_FEED, OP_COND_FEED_1,
@@ -4379,7 +4379,7 @@ static const char* op_names[NUM_OPS] =
       "if_andp_p", "if_andp_p_p", "if_andp_r", "if_andp_n", "if_andp_n_n",
       "if_orp_p", "if_orp_p_p", "if_orp_r", "if_orp_n", "if_orp_n_n",
       "if_or2_p", "if_or2_p_p", "if_or2_r", "if_or2_n", "if_or2_n_n",
-      "if_pp", "if_ppp", "if_pr", "if_prr", "when_pp", "unless_pp",
+      "if_pp", "if_ppp", "if_pn", "if_pr", "if_prr", "when_pp", "unless_pp",
 
       "cond_na_na", "cond_na_np", "cond_na_np_1", "cond_na_2e", "cond_na_3e", "cond_na_np_o",
       "cond_feed", "cond_feed_1",
@@ -34646,7 +34646,6 @@ static s7_pointer g_write(s7_scheme *sc, s7_pointer args)
 {
   #define H_write "(write obj (port (current-output-port))) writes (object->string obj) to the output port"
   #define Q_write s7_make_signature(sc, 3, sc->T, sc->T, s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol))
-
   check_method(sc, car(args), sc->write_symbol, args);
   return(write_p_pp(sc, car(args), (is_pair(cdr(args))) ? cadr(args) : current_output_port(sc)));
 }
@@ -65788,21 +65787,16 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 	}}
   else
     {
-      if ((is_macro(s_func)) &&
-	  (!no_cell_opt(expr)))
+      if ((is_macro(s_func)) && (!no_cell_opt(expr)))
 	{
 	  s7_pointer body = closure_body(s_func);
-	  if ((is_null(cdr(body))) &&
-	      (is_pair(car(body))) &&
+	  if ((is_null(cdr(body))) && (is_pair(car(body))) &&
 	      ((caar(body) == sc->list_symbol) || (caar(body) == sc->list_values_symbol)))
 	    {
 	      s7_pointer result;
 	      result = s7_macroexpand(sc, s_func, cdar(expr));
 	      if (result == sc->F) return_false(sc, car_x);
 	      return(float_optimize(sc, set_plist_1(sc, result)));
-	      /* ideally s7_boolean(s7_call_with_catch(#t, (lambda () s7_make_boolean(float_optimize(plist(macroexpand)))), (lambda (t i) #f)))
-	       *    maybe s7_macroexpand but push op_c_catch_all before calling eval
-	       */
 	    }}
       if (!s_slot) return_false(sc, car_x);
       return(d_implicit_ok(sc, s_slot, car_x, len));
@@ -65876,12 +65870,10 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 	}}
   else
     {
-      if ((is_macro(s_func)) &&
-	  (!no_cell_opt(expr)))
+      if ((is_macro(s_func)) && (!no_cell_opt(expr)))
 	{
 	  s7_pointer body = closure_body(s_func);
-	  if ((is_null(cdr(body))) &&
-	      (is_pair(car(body))) &&
+	  if ((is_null(cdr(body))) && (is_pair(car(body))) &&
 	      ((caar(body) == sc->list_symbol) || (caar(body) == sc->list_values_symbol)))
 	    {
 	      s7_pointer result;
@@ -67809,6 +67801,9 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     case OP_CASE_G_G: case OP_CASE_G_S: case OP_CASE_E_G: case OP_CASE_E_S: case OP_CASE_I_S:
     case OP_COND1: case OP_COND1_SIMPLE:
       return(car(args));
+
+    case OP_IF_PN: /* (if|when (not (values...)) ...) as opposed to (if|unless (values...)...) which follows CL and drops trailing values */
+      syntax_error(sc, "too many arguments to not: ~S", 29, set_ulist_1(sc, sc->values_symbol, args));      
 
     case OP_DYNAMIC_UNWIND: case OP_DYNAMIC_UNWIND_PROFILE:
       {
@@ -88025,7 +88020,7 @@ static void op_eval_args5(s7_scheme *sc)      /* sc->value is the last arg, sc->
 
 static bool eval_args_no_eval_args(s7_scheme *sc)
 {
-  if ((is_any_macro(sc->value)) /* || (is_syntax(sc->value)) */)
+  if (is_any_macro(sc->value))
     {
       if (!s7_is_proper_list(sc, cdr(sc->code)))
 	s7_error(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "improper list of arguments: ~S", 30), sc->code));
@@ -88046,7 +88041,10 @@ static bool eval_args_no_eval_args(s7_scheme *sc)
   else
     {
       sc->cur_op = syntax_opcode(sc->value);
-      pair_set_syntax_op(sc->code, sc->cur_op);
+      if ((is_symbol(car(sc->code))) &&  /* don't opt pair to syntax op if sc->value is actually an arg not the op! ((write and)) should not be op_and */
+	  ((car(sc->code) == syntax_symbol(sc->value)) || (lookup_global(sc, car(sc->code)) == sc->value)))
+	pair_set_syntax_op(sc->code, sc->cur_op);
+      /* weird that sc->cur_op setting above seems ok, but OP_PAIR_PAIR hangs?? */
     }
   return(false);
 }
@@ -90773,7 +90771,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	    #define if_p_push(op) do {push_stack_no_args(sc, op, opt2_any(cdr(sc->code)));  sc->code = opt3_any(cdr(sc->code));} while (0)
 	case OP_IF_P_P:      if_p_push(OP_IF_PP); goto EVAL;
-	case OP_IF_P_N:      if_p_push(OP_IF_PR); goto EVAL;
+	case OP_IF_P_N:      if_p_push(OP_IF_PN); goto EVAL;
 	case OP_IF_P_P_P:    if_p_push(OP_IF_PPP); goto EVAL;
 	case OP_IF_P_R:      if_p_push(OP_IF_PR); goto EVAL;
 	case OP_IF_P_N_N:    if_p_push(OP_IF_PRR); goto EVAL;
@@ -90792,6 +90790,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IF_ORP_N_N:  if_bp_push(OP_IF_PRR); goto OR_P;
 
 	case OP_IF_PP:       if (sc->value != sc->F) goto EVAL; sc->value = sc->unspecified; continue;
+	case OP_IF_PN:
 	case OP_IF_PR:       if (sc->value == sc->F) goto EVAL; sc->value = sc->unspecified; continue;
 	case OP_IF_PPP:      sc->code = (sc->value != sc->F) ? car(sc->code) : cadr(sc->code); goto EVAL;
 	case OP_IF_PRR:      sc->code = (sc->value == sc->F) ? car(sc->code) : cadr(sc->code); goto EVAL;
@@ -94615,7 +94614,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 913)
+  if (NUM_OPS != 914)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -94985,54 +94984,54 @@ int main(int argc, char **argv)
  * ------------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    458
- * index     1026   1016    973    970    968
- * tmock     1177   1165   1057   1054   1056
+ * index     1026   1016    973    970    968   965
+ * tmock     1177   1165   1057   1054   1056  1047
  * tvect     2519   2464   1772   1708   1708
- * texit     ----   ----   1778   1767   1764
- * s7test    1873   1831   1818   1790   1791  1815
- * timp      2971   2891   2176   2051   2051
- * lt        2187   2172   2150   2156   2165
- * tauto     ----   ----   2562   2566   2212
- * dup       3805   3788   2492   2327   2341
+ * texit     ----   ----   1778   1767   1764  1750
+ * s7test    1873   1831   1818   1790   1791  1795
+ * timp      2971   2891   2176   2051   2051  2039
+ * lt        2187   2172   2150   2156   2165  2153
+ * tauto     ----   ----   2562   2566   2212  2199
+ * dup       3805   3788   2492   2327   2341  2325
  * tload     ----   ----   3046   2352   2353
- * tread     2440   2421   2419   2385   2382
+ * tread     2440   2421   2419   2385   2382  2380
  * trclo     2735   2574   2454   2443   2443
- * fbench    2688   2583   2460   2453   2451
- * titer     2865   2842   2641   2490   2483
- * tcopy     8035   5546   2539   2495   2501
- * tmat      3065   3042   2524   2515   2520
- * tb        2735   2681   2612   2606   2604
+ * fbench    2688   2583   2460   2453   2451  2433
+ * titer     2865   2842   2641   2490   2483  2475
+ * tcopy     8035   5546   2539   2495   2501  2499
+ * tmat      3065   3042   2524   2515   2520  2514
+ * tb        2735   2681   2612   2606   2604  2590
  * tsort     3105   3104   2856   2826   2826
  * teq       4068   4045   3536   3468   3467
- * tmac      3950   3873   3033   2992   3556
- * tobj      4016   3970   3828   3633   3637
- * tio       3816   3752   3683   3646   3644
- * tclo      4787   4735   4390   4343   4332
- * tlet      7775   5640   4450   4423   4423
- * tcase     4960   4793   4439   4462   4441
- * tmap      8869   8774   4489   4490   4487
- * tfft      7820   7729   4755   4683   4679
- * tshoot    5525   5447   5183   5174   5172
- * tform     5357   5348   5307   5310   5308
- * tnum      6348   6013   5433   5425   5418
- * tstr      6880   6342   5488   5462   5464
- * tlamb     6423   6273   5720   5618   5604
- * tset      ----   ----   ----   6313   6220
- * tgsl      8485   7802   6373   6333   6331
- * tmisc     8869   7612   6435   6324   6342
- * tlist     7896   7546   6558   6486   6482
- * trec      6936   6922   6521   6523   6523
- * tari      13.0   12.7   6827   6717   6695
- * tleft     10.4   10.2   7657   7561   7556
- * tgc       11.9   11.1   8177   8062   8042
- * thash     11.8   11.7   9734   9583   9584
- * cb        11.2   11.0   9658   9677   9683
+ * tmac      3950   3873   3033   2992   3556  3538
+ * tobj      4016   3970   3828   3633   3637  3632
+ * tio       3816   3752   3683   3646   3644  3623
+ * tclo      4787   4735   4390   4343   4332  4296
+ * tlet      7775   5640   4450   4423   4423  4407
+ * tcase     4960   4793   4439   4462   4441  4419
+ * tmap      8869   8774   4489   4490   4487  4484
+ * tfft      7820   7729   4755   4683   4679  4668
+ * tshoot    5525   5447   5183   5174   5172  5165
+ * tform     5357   5348   5307   5310   5308  5305
+ * tnum      6348   6013   5433   5425   5418  5392
+ * tstr      6880   6342   5488   5462   5464  5432
+ * tlamb     6423   6273   5720   5618   5604  5547
+ * tset      ----   ----   ----   6313   6220  6179
+ * tgsl      8485   7802   6373   6333   6331  6328
+ * tmisc     8869   7612   6435   6324   6342  6307
+ * tlist     7896   7546   6558   6486   6482  6453
+ * trec      6936   6922   6521   6523   6523  6518
+ * tari      13.0   12.7   6827   6717   6695  6691
+ * tleft     10.4   10.2   7657   7561   7556  7474
+ * tgc       11.9   11.1   8177   8062   8042  7998
+ * thash     11.8   11.7   9734   9583   9584  9572
+ * cb        11.2   11.0   9658   9677   9683  9617
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6 [g_is_defined??]
  * sg        ----   ----   55.9   56.3   56.5
- * lg        ----   ----  105.2  105.8  105.9
- * tbig     177.4  175.8  156.5  151.1  151.3
+ * lg        ----   ----  105.2  105.8  105.9 105.3
+ * tbig     177.4  175.8  156.5  151.1  151.3 151.1
  * ------------------------------------------------------
- *
+ * t718 sym7
  */
