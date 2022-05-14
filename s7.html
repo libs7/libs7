@@ -6832,7 +6832,7 @@ int main(int argc, char **argv)
  * osx:
  *   gcc -o repl repl.c s7.o -lm -I.
  * openbsd:
- *   gcc -o repl repl.c s7.o -I. -ftrampolines -Wl,-export-dynamic -lm
+ *   clang -o repl repl.c s7.o -I. -fPIC -Wl,-export-dynamic -lm
  */
 </pre>
 </div>
@@ -8476,7 +8476,7 @@ int main(int argc, char **argv)
  *   gcc ex3a.o -shared -o ex3a.so
  *   gcc -c s7.c -I. -fPIC -shared
  *   gcc -o ex3 ex3.c s7.o -lm -ldl -I. -Wl,-export-dynamic
- *   # omit -ldl in freeBSD, openBSD might want -ftrampolines
+ *   # omit -ldl in freeBSD
  *
  * in Mac OSX:
  *   gcc -c ex3a.c

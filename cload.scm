@@ -101,7 +101,7 @@
 (if (not (defined? '*cload-directory*))
     (define *cload-directory* ""))
 
-(define *cload-c-compiler* (if (provided? 'gcc) "gcc" (if (provided? 'clang) "clang" "cc")))
+(define *cload-c-compiler* (if (and (provided? 'gcc) (not (provided? 'openbsd))) "gcc" (if (provided? 'clang) "clang" "cc")))
 
 
 (define-macro (defvar name value) 
@@ -668,7 +668,7 @@
 			       o-file-name so-file-name *cload-ldflags* ldflags)))
 	      
 	      ((provided? 'openbsd)
-	       (system (format #f "~A -fPIC -ftrampolines -c ~A -o ~A ~A ~A" 
+	       (system (format #f "~A -fPIC -c ~A -o ~A ~A ~A" 
 			       *cload-c-compiler* c-file-name o-file-name *cload-cflags* cflags))
 	       (system (format #f "~A ~A -shared -o ~A ~A ~A" 
 			       *cload-c-compiler* o-file-name so-file-name *cload-ldflags* ldflags)))
