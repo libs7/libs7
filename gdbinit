@@ -64,14 +64,14 @@ end
 define s7bt
 set logging overwrite on
 set logging redirect on
-set logging on
+set logging enabled on
 if $argc == 1
   bt $arg0
 end
 if $argc == 0
   bt
 end
-set logging off
+set logging enabled off
 # now gdb.txt has the backtrace
 print s7_decode_bt(cur_sc)
 end
@@ -82,14 +82,14 @@ end
 define s7btfull
 set logging overwrite on
 set logging redirect on
-set logging on
+set logging enabled on
 if $argc == 1
   bt full $arg0
 end
 if $argc == 0
   bt full
 end
-set logging off
+set logging enabled off
 print s7_decode_bt(cur_sc)
 end
 document s7btfull

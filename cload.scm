@@ -101,8 +101,11 @@
 (if (not (defined? '*cload-directory*))
     (define *cload-directory* ""))
 
-(define *cload-c-compiler* (if (and (provided? 'gcc) (not (provided? 'openbsd))) "gcc" (if (provided? 'clang) "clang" "cc")))
-
+(define *cload-c-compiler* (if (and (provided? 'gcc) 
+				    (not (provided? 'openbsd))) "gcc"
+			       (if (provided? 'clang) "clang"
+				   (if (provided? 'tcc) "tcc")
+				   "cc")))
 
 (define-macro (defvar name value) 
   `(if (not (defined? ',name)) 

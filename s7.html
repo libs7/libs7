@@ -6603,7 +6603,8 @@ if not using gcc or clang, add the empty file mus-config.h to the tarball's cont
 then (in Linux):
 </p>
 <pre>
-gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic -Wno-stringop-overflow
+gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic
+;; tcc -o s7 s7.c -I. -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER
 </pre>
 <p>For timing tests, I add "-fomit-frame-pointer -funroll-loops -march=native".
 mus-config.h normally has 
