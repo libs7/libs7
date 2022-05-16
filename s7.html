@@ -7129,8 +7129,7 @@ int main(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  s7 = s7_init();
+  s7_scheme *s7 = s7_init();
 
   s7_define_variable(s7, "an-integer", s7_make_integer(s7, 1));
   s7_eval_c_string(s7, "(define (add1 a) (+ a 1))");
@@ -7401,13 +7400,11 @@ static int dax_type_tag = 0;
 
 static s7_pointer dax_to_string(s7_scheme *sc, s7_pointer args)
 {
-  char *data_str, *str;
   s7_pointer result;
-  int data_str_len;
   dax *o = (dax *)s7_c_object_value(s7_car(args));
-  data_str = s7_object_to_c_string(sc, o-&gt;data);
-  data_str_len = strlen(data_str);
-  str = (char *)calloc(data_str_len + 32, sizeof(char));
+  char *data_str = s7_object_to_c_string(sc, o-&gt;data);
+  int data_str_len = strlen(data_str);
+  char *str = (char *)calloc(data_str_len + 32, sizeof(char));
   snprintf(str, data_str_len + 32, "&lt;dax %.3f %s&gt;", o-&gt;x, data_str);
   free(data_str);
   result = s7_make_string(sc, str);
@@ -7423,16 +7420,14 @@ static s7_pointer free_dax(s7_scheme *sc, s7_pointer obj)
 
 static s7_pointer mark_dax(s7_scheme *sc, s7_pointer obj)
 {
-  dax *o;
-  o = (dax *)s7_c_object_value(obj);
+  dax *o = (dax *)s7_c_object_value(obj);
   s7_mark(o-&gt;data);
   return(NULL);
 }
 
 static s7_pointer make_dax(s7_scheme *sc, s7_pointer args)
 {
-  dax *o;
-  o = (dax *)malloc(sizeof(dax));
+  dax *o = (dax *)malloc(sizeof(dax));
   o-&gt;x = s7_real(s7_car(args));
   if (s7_cdr(args) != s7_nil(sc))
     o-&gt;data = s7_cadr(args);
@@ -7449,40 +7444,35 @@ static s7_pointer is_dax(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer dax_x(s7_scheme *sc, s7_pointer args)
 {
-  dax *o;
-  o = (dax *)<em class=red>s7_c_object_value</em>(s7_car(args));
+  dax *o = (dax *)<em class=red>s7_c_object_value</em>(s7_car(args));
   return(s7_make_real(sc, o-&gt;x));
 }
 
 static s7_pointer set_dax_x(s7_scheme *sc, s7_pointer args)
 {
-  dax *o;
-  o = (dax *)s7_c_object_value(s7_car(args));
+  dax *o = (dax *)s7_c_object_value(s7_car(args));
   o-&gt;x = s7_real(s7_cadr(args));
   return(s7_cadr(args));
 }
 
 static s7_pointer dax_data(s7_scheme *sc, s7_pointer args)
 {
-  dax *o;
-  o = (dax *)s7_c_object_value(s7_car(args));
+  dax *o = (dax *)s7_c_object_value(s7_car(args));
   return(o-&gt;data);
 }
 
 static s7_pointer set_dax_data(s7_scheme *sc, s7_pointer args)
 {
-  dax *o;
-  o = (dax *)s7_c_object_value(s7_car(args));
+  dax *o = (dax *)s7_c_object_value(s7_car(args));
   o-&gt;data = s7_cadr(args);
   return(o-&gt;data);
 }
 
 static s7_pointer dax_is_equal(s7_scheme *sc, s7_pointer args) 
 {
-  s7_pointer p1, p2;
   dax *d1, *d2;
-  p1 = s7_car(args);
-  p2 = s7_cadr(args);
+  s7_pointer p1 = s7_car(args);
+  s7_pointer p2 = s7_cadr(args);
   if (p1 == p2) 
     return(s7_t(sc));
   if ((!s7_is_c_object(p2)) ||
@@ -7730,8 +7720,7 @@ static s7_pointer our_abs(s7_scheme *sc, s7_pointer args)
   x = s7_car(args);
   if (!s7_is_number(x))
     {
-      s7_pointer method;
-      method = <em class=red>s7_method</em>(sc, x, s7_make_symbol(sc, "abs"));
+      s7_pointer method = <em class=red>s7_method</em>(sc, x, s7_make_symbol(sc, "abs"));
       if (method == s7_undefined(sc))                       /* no method found, so raise an error */
 	s7_wrong_type_arg_error(sc, "abs", 1, x, "a real"); 
       return(s7_apply_function(sc, method, args));          /*   else apply the method to the args */
@@ -8038,8 +8027,7 @@ static s7_pointer scheme_set_notification(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  s7 = s7_init();  
+  s7_scheme *s7 = s7_init();  
 
   s7_define_function(s7, "notify-C", scheme_set_notification, 2, 0, false, "called if notified-var is set!");
   s7_define_variable(s7, "notified-var", s7_make_integer(s7, 0));
@@ -8100,10 +8088,8 @@ static s7_pointer func1(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
+  s7_scheme *s7 = s7_init();  
   s7_pointer new_env;
-
-  s7 = s7_init();  
 
   /* "func1" and "var1" will be placed in an anonymous environment,
    *   accessible from Scheme via the global variable "lib-exports"
@@ -8409,8 +8395,7 @@ static void *library = NULL;
 static s7_pointer try(s7_scheme *sc, s7_pointer args)
 {
   /* try tries to call an arbitrary function in the shared library */
-  void *func;
-  func = <em class=red>dlsym</em>(library, s7_string(s7_car(args)));
+  void *func = <em class=red>dlsym</em>(library, s7_string(s7_car(args)));
   if (func)
     {
       /* we'll assume double f(double) */
@@ -8430,8 +8415,7 @@ static s7_pointer cload(s7_scheme *sc, s7_pointer args)
   if (library)
     {
       /* call our init func to define add-1 in s7 */
-      void *init_func;
-      init_func = <em class=red>dlsym</em>(library, s7_string(s7_cadr(args)));
+      void *init_func = <em class=red>dlsym</em>(library, s7_string(s7_cadr(args)));
       if (init_func)
 	{
 	  typedef void *(*dl_func)(s7_scheme *sc);
@@ -8448,9 +8432,7 @@ int main(int argc, char **argv)
 {
   char buffer[512];
   char response[1024];
-  s7_scheme *s7;
-
-  s7 = s7_init();  
+  s7_scheme *s7 = s7_init();  
 
   s7_define_function(s7, "cload", cload, 2, 0, false, CLOAD_HELP);
   s7_define_function(s7, "try", try, 2, 0, false, 
