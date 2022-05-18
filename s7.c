@@ -280,8 +280,7 @@
 #define SHOW_EVAL_OPS 0
 
 #ifndef _GNU_SOURCE
-  #define _GNU_SOURCE
-/* for qsort_r, grumble... */
+  #define _GNU_SOURCE  /* for qsort_r, grumble... */
 #endif
 
 #ifndef _MSC_VER
@@ -9346,9 +9345,8 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
   va_start(ap, num_args);
   for (s7_int i = 0; i < num_args; i += 2)
     {
-      s7_pointer symbol, value;
-      symbol = va_arg(ap, s7_pointer);
-      value = va_arg(ap, s7_pointer);
+      s7_pointer symbol = va_arg(ap, s7_pointer);
+      s7_pointer value = va_arg(ap, s7_pointer);
       if ((S7_DEBUGGING) && (is_keyword(symbol))) fprintf(stderr, "internal_inlet key: %s??\n", display(symbol));
       if (!sp)
 	{
@@ -78404,15 +78402,13 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc)
   gc_protect_via_stack(sc, x);
   y = fx_call(sc, cdr(code));
   stack_protected2(sc) = y;
-  if ((s7_is_integer(x)) &&
-      (s7_is_integer(y)) &&
+  if ((s7_is_integer(x)) && (s7_is_integer(y)) &&
       (vector_rank(v) == 2))
     {
-      s7_int ix = s7_integer_clamped_if_gmp(sc, x), iy = s7_integer_clamped_if_gmp(sc, y);
-      if ((ix >= 0) &&
-	  (iy >= 0) &&
-	  (ix < vector_dimension(v, 0)) &&
-	  (iy < vector_dimension(v, 1)))
+      s7_int ix = s7_integer_clamped_if_gmp(sc, x);
+      s7_int iy = s7_integer_clamped_if_gmp(sc, y);
+      if ((ix >= 0) && (iy >= 0) &&
+	  (ix < vector_dimension(v, 0)) && (iy < vector_dimension(v, 1)))
 	{
 	  s7_int index = (ix * vector_offset(v, 0)) + iy;
 	  sc->value = vector_getter(v)(sc, v, index); /* check for normal vector saves in some cases, costs in others */
@@ -79202,7 +79198,8 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
       if (is_pair(expr))
 	{
 	  s7_pointer x = car(expr);
-	  if ((is_symbol(x)) || ((is_c_function(x)) && (is_safe_procedure(x))))
+	  if ((is_symbol(x)) || 
+	      ((is_c_function(x)) && (is_safe_procedure(x))))
 	    {
 	      if (is_symbol_and_syntactic(x))
 		{
@@ -81055,7 +81052,8 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
       if ((stepf == g_add_x1) && (is_t_integer(slot_value(ctr_slot))) &&
 	  (endf == g_greater_2) && (is_t_integer(slot_value(end_slot))))
 	{
-	  s7_int i, start = integer(slot_value(ctr_slot)), stop = integer(slot_value(end_slot));
+	  s7_int i, start = integer(slot_value(ctr_slot));
+	  s7_int stop = integer(slot_value(end_slot));
 	  if (fp == opt_cond_1b)
 	    {
 	      s7_pointer (*test_fp)(opt_info *o) = o->v[4].o1->v[O_WRAP].fp;
@@ -85002,17 +85000,19 @@ static s7_pointer fx_tc_if_a_z_if_a_l3a_l3a(s7_scheme *sc, s7_pointer arg)
 
 static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer body = caddr(code), if_test, if_true, if_false, la, la_slot, let_slot, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer body = caddr(code), la_slot, let_slot, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer if_test = cdr(body);
+  s7_pointer if_true = cddr(body);
+  s7_pointer if_false = cadddr(body);
+  s7_pointer la = cdr(if_false);
+
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   inner_let = sc->curlet;
   s7_gc_protect_via_stack(sc, inner_let);
   let_slot = let_slots(sc->curlet);
   let_var = cdr(let_var);
-  if_test = cdr(body);
-  if_true = cddr(body);
-  if_false = cadddr(body);
-  la = cdr(if_false);
   la_slot = let_slots(outer_let);
+
   while (fx_call(sc, if_test) == sc->F)
     {
       slot_set_value(la_slot, fx_call(sc, la));
@@ -85037,19 +85037,19 @@ static s7_pointer fx_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer arg)
 
 static bool op_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer body = caddr(code), if_test, if_true, if_false, la, la_slot, let_slot, laa, laa_slot, 
-    let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer body = caddr(code), la_slot, let_slot, laa_slot, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer if_test = cdr(body);
+  s7_pointer if_true = cddr(body);
+  s7_pointer if_false = cadddr(body);
+  s7_pointer la = cdr(if_false);
+  s7_pointer laa = cddr(if_false);
+
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   inner_let = sc->curlet;
   s7_gc_protect_via_stack(sc, inner_let);
   let_slot = let_slots(sc->curlet);
   let_var = cdr(let_var);
-  if_test = cdr(body);
-  if_true = cddr(body);
-  if_false = cadddr(body);
-  la = cdr(if_false);
   la_slot = let_slots(outer_let);
-  laa = cddr(if_false);
   laa_slot = next_slot(la_slot);
 #if (!WITH_GMP)
   if (!no_bool_opt(code))
@@ -85120,14 +85120,16 @@ static s7_pointer fx_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer arg)
 
 static void op_tc_let_when_laa(s7_scheme *sc, bool when, s7_pointer code)
 {
-  s7_pointer p, body = caddr(code), if_test, if_true, la, let_slot, laa, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer p, body = caddr(code), la, let_slot, laa, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer if_test = cdr(body);
+  s7_pointer if_true = cddr(body);
+
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   inner_let = sc->curlet;
   s7_gc_protect_via_stack(sc, inner_let);
   let_slot = let_slots(sc->curlet);
   let_var = cdr(let_var);
-  if_test = cdr(body);
-  if_true = cddr(body);
+
   for (p = if_true; is_pair(cdr(p)); p = cdr(p));
   la = cdar(p);
   laa = cddar(p);
@@ -85222,6 +85224,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
   s7_pointer laa = cdr(la);
   s7_pointer laa_slot = next_slot(la_slot);
   s7_pointer inner_let = make_let(sc, sc->curlet);
+
   s7_gc_protect_via_stack(sc, inner_let);
   slot = make_slot(sc, caar(let_vars), sc->F);
   slot_set_next(slot, slot_end(sc));
@@ -85229,6 +85232,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
   symbol_set_local_slot_unincremented(caar(let_vars), let_id(inner_let), slot);
   for (var = cdr(let_vars); is_pair(var); var = cdr(var))
     slot = add_slot_at_end(sc, let_id(inner_let), slot, caar(var), sc->F);
+
   while (true)
     {
       if (fx_call(sc, if1_test) != sc->F) {endp = if1_true; break;}
@@ -85255,10 +85259,12 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 
 static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer outer_let = sc->curlet, inner_let, let_var = caadr(code), let_slot, cond_body, slots, result;
+  s7_pointer outer_let = sc->curlet, inner_let, let_var = caadr(code), let_slot, slots, result;
   s7_function letf;
   bool read_case;
+  s7_pointer cond_body = cdaddr(code);
   /* code here == body in check_tc */
+
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   inner_let = sc->curlet;
   s7_gc_protect_via_stack(sc, inner_let);
@@ -85266,13 +85272,13 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
   let_var = cdr(let_var);
   letf = fx_proc(let_var);
   let_var = car(let_var);
+
   if ((letf == fx_c_s_direct) &&                       /* an experiment */
       (symbol_id(cadr(let_var)) != let_id(outer_let))) /* i.e. not an argument to the recursive function, and not set! (safe closure body) */
     {
       letf = (s7_p_p_t)opt2_direct(cdr(let_var));
       let_var = lookup(sc, cadr(let_var));
     }
-  cond_body = cdaddr(code);
   slots = let_slots(outer_let);
   /* in the named let no-var case slots may contain the let name (it's the funclet) */
 
@@ -85632,9 +85638,8 @@ static s7_pointer oprec_if_a_opla_aq_a(s7_scheme *sc)
 
 static void wrap_recur_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op)
 {
-  opt_pid_t choice;
+  opt_pid_t choice = opinit_if_a_a_opa_laq(sc, a_op, la_op, sc->code);
   tick_tc(sc, sc->cur_op);
-  choice = opinit_if_a_a_opa_laq(sc, a_op, la_op, sc->code);
   if (choice == OPT_INT)
     sc->value = make_integer(sc, (a_op) ? oprec_i_if_a_a_opa_laq(sc) : oprec_i_if_a_opa_laq_a(sc));
   else
@@ -86005,9 +86010,8 @@ static s7_pointer oprec_if_a_opla_laq_a(s7_scheme *sc)
 
 static void wrap_recur_if_a_a_opla_laq(s7_scheme *sc, bool a_op)
 {
-  opt_pid_t choice;
+  opt_pid_t choice = opinit_if_a_a_opla_laq(sc, a_op);
   tick_tc(sc, sc->cur_op);
-  choice = opinit_if_a_a_opla_laq(sc, a_op);
   if ((choice == OPT_INT) || (choice == OPT_INT_0))
     {
       if (choice == OPT_INT_0)
@@ -86621,9 +86625,8 @@ static s7_pointer oprec_cond_a_a_a_laa_lopa_laaq(s7_scheme *sc)
 
 static void wrap_recur_cond_a_a_a_laa_lopa_laaq(s7_scheme *sc)
 {
-  opt_pid_t choice;
+  opt_pid_t choice = opinit_cond_a_a_a_laa_lopa_laaq(sc);
   tick_tc(sc, sc->cur_op);
-  choice = opinit_cond_a_a_a_laa_lopa_laaq(sc);
   if (choice != OPT_PTR)
     sc->value = make_integer(sc, (choice == OPT_INT) ? oprec_i_cond_a_a_a_laa_lopa_laaq(sc) : oprec_i_cond_a_a_a_laa_lopa_laaq_0(sc));
   else
@@ -88259,10 +88262,10 @@ static bool op_unknown_a(s7_scheme *sc)
 	  (closure_arity_to_int(sc, f) == 1))
 	{
 	  s7_pointer body = closure_body(f);
-	  bool one_form, safe_case = is_safe_closure(f);
+	  bool safe_case = is_safe_closure(f);
 	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
+	  bool one_form = is_null(cdr(body));
 
-	  one_form = is_null(cdr(body));
 	  fxify_closure_a(sc, f, one_form, safe_case, hop, code, sc->curlet);
 	  set_opt1_lambda(code, f);
 	  return(true);
@@ -88359,10 +88362,10 @@ static bool op_unknown_gg(s7_scheme *sc)
       if (closure_arity_to_int(sc, f) == 2)
 	{
 	  s7_pointer body = closure_body(f);
-	  bool one_form, safe_case = is_safe_closure(f);
+	  bool safe_case = is_safe_closure(f);
 	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
+	  bool one_form = is_null(cdr(body));
 
-	  one_form = is_null(cdr(body));
 	  if ((s1) && (s2))
 	    {
 	      set_opt2_sym(code, caddr(code));
@@ -94464,25 +94467,27 @@ int main(int argc, char **argv)
  * tnum      6348   6013   5433   5425   5395  5387
  * tstr      6880   6342   5488   5462   5452  5400
  * tlamb     6423   6273   5720   5618   5547
- * tset      ----   ----   ----   6313   6179  6197 [fx_eq_weak1_type_s = 50]
+ * tset      ----   ----   ----   6313   6179  6197
  * tmisc     8869   7612   6435   6324   6307  6269
  * tgsl      8485   7802   6373   6333   6328  6304
  * tlist     7896   7546   6558   6486   6453  6197
- * trec      6936   6922   6521   6523   6518  6538 [fx_add_u_car_t old-style]
+ * trec      6936   6922   6521   6523   6518  6538
  * tari      13.0   12.7   6827   6717   6691  6634
  * tleft     10.4   10.2   7657   7561   7474 
- * tgc       11.9   11.1   8177   8062   7997  8024?
- * thash     11.8   11.7   9734   9583   9548  9479 [fx_hash_table_increment_1 new-style]
+ * tgc       11.9   11.1   8177   8062   7997  8024
+ * thash     11.8   11.7   9734   9583   9548  9479
  * cb        11.2   11.0   9658   9677   9601  9546
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6  37.5
- * sg        ----   ----   55.9   56.3   56.5  56.7 [safe_strlen??]
+ * sg        ----   ----   55.9   56.3   56.5  56.7
  * lg        ----   ----  105.2  105.8  105.3 104.9
  * tbig     177.4  175.8  156.5  151.1  151.1 150.6
  * ------------------------------------------------------
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3?
- * tset
+ * tset opts
+ * t718: optimize_syntax overeagerness
+ * *_nr?
  */

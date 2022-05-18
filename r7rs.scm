@@ -487,6 +487,7 @@
 ;; records
 (define-macro (define-record-type type make ? . fields)
   (let ((obj (gensym))
+	(typ (gensym))
 	(args (map (lambda (field)
 		     (values (list 'quote (car field))
 			     (let ((par (memq (car field) (cdr make))))
@@ -495,10 +496,10 @@
     `(begin
        (define (,? ,obj)
 	 (and (let? ,obj)
-	      (eq? (let-ref ,obj 'type) ',type)))
+	      (eq? (let-ref ,obj ',typ) ',type)))
        
        (define ,make 
-         (inlet 'type ',type ,@args))
+         (inlet ',typ ',type ,@args))
 
        ,@(map
 	  (lambda (field)
