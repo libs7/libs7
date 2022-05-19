@@ -335,7 +335,7 @@
   #define noreturn _Noreturn
 #else
   #define noreturn __attribute__((noreturn))
-  /* this is ok in gcc/g++/clang and tcc */
+  /* this is ok in gcc/g++/clang and tcc; pure attribute is rarely applicable here, and does not seem to be helpful (maybe safe_strlen) */
 #endif
 
 #ifndef S7_ALIGNED
@@ -64223,31 +64223,27 @@ typedef s7_pointer (*opt_info_fp)(opt_info *o);
 static s7_pointer opt_do_any(opt_info *o)
 {
   /* o->v[2].p=let, o->v[1].i=body end index, o->v[3].i=body length, o->v[4].i=return length, o->v[7].i=inits */
-  opt_info *o1, *ostart, *body, *inits, *steps, *results;
-  int32_t i, k, len;
+  opt_info *o1;
+  opt_info *ostart = do_any_test(o);
+  opt_info *body = do_any_body(o);
+  opt_info *inits = do_any_inits(o);
+  opt_info *steps = do_any_steps(o);
+  opt_info *results = do_any_results(o);
+  int32_t i, k, len = do_body_length(o);   /* len=6 tlist, 6|7 tbig, 0 tvect */
   s7_pointer vp, result;
   s7_scheme *sc = o->sc;
   opt_info *os[NUM_VUNIONS];
   opt_info_fp fp[NUM_VUNIONS];
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   sc->curlet = T_Let(do_curlet(o));
-
   /* init */
-  inits = do_any_inits(o);
   for (k = 0, vp = let_slots(sc->curlet); tis_slot(vp); k++, vp = next_slot(vp))
     {
       o1 = inits->v[k].o1;
       slot_set_value(vp, o1->v[0].fp(o1));
     }
-
-  ostart = do_any_test(o);
-  body = do_any_body(o);
-  results = do_any_results(o);
-  steps = do_any_steps(o);
   let_set_has_pending_value(sc->curlet);
-  len = do_body_length(o);   /* len=6 tlist, 6|7 tbig, 0 tvect */
   for (i = 0; i < len; i++)
     {
       os[i] = body->v[i].o1;
@@ -64276,7 +64272,6 @@ static s7_pointer opt_do_any(opt_info *o)
 	if (has_stepper(vp))
 	  slot_set_value(vp, slot_pending_value(vp));
     }
-
   /* result */
   result = sc->T;
   for (i = 0; i < do_result_length(o); i++)
@@ -64293,25 +64288,23 @@ static s7_pointer opt_do_any(opt_info *o)
 static s7_pointer opt_do_step_1(opt_info *o)
 {
   /* 1 stepper (multi inits perhaps), 1 body, 1 rtn */
-  opt_info *o1, *ostart, *ostep = o->v[9].o1, *inits, *body;
+  opt_info *o1;
+  opt_info *ostart = do_any_test(o);
+  opt_info *ostep = o->v[9].o1;
+  opt_info *inits = do_any_inits(o);
+  opt_info *body = do_any_body(o);
   int32_t k;
   s7_pointer vp, result, stepper = NULL;
   s7_scheme *sc = o->sc;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   sc->curlet = T_Let(do_curlet(o));
-
-  inits = do_any_inits(o);
   for (k = 0, vp = let_slots(sc->curlet); tis_slot(vp); k++, vp = next_slot(vp))
     {
       o1 = inits->v[k].o1;
       slot_set_value(vp, o1->v[0].fp(o1));
       if (has_stepper(vp)) stepper = vp;
     }
-  ostart = do_any_test(o);
-  body = do_any_body(o);
-
   while (!(ostart->v[0].fb(ostart)))
     {
       body->v[0].fp(body);
@@ -64319,7 +64312,6 @@ static s7_pointer opt_do_step_1(opt_info *o)
     }
   o1 = do_any_results(o);
   result = o1->v[0].fp(o1);
-
   unstack(sc);
   set_curlet(sc, old_e);
   return(result);
@@ -64328,38 +64320,34 @@ static s7_pointer opt_do_step_1(opt_info *o)
 static s7_pointer opt_do_step_i(opt_info *o)
 {
   /* 1 stepper (multi inits perhaps), 1 body, 1 rtn */
-  opt_info *o1, *ostart, *ostep = o->v[9].o1, *inits, *body;
+  opt_info *o1;
+  opt_info *ostart = do_any_test(o);
+  opt_info *ostep = o->v[9].o1;
+  opt_info *inits = do_any_inits(o);
+  opt_info *body = do_any_body(o);
   int32_t k;
   s7_pointer vp, result, stepper = NULL, si;
   s7_scheme *sc = o->sc;
   s7_int end, incr;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-  
   sc->curlet = T_Let(do_curlet(o));
-
-  inits = do_any_inits(o);
   for (k = 0, vp = let_slots(sc->curlet); tis_slot(vp); k++, vp = next_slot(vp))
     {
       o1 = inits->v[k].o1;
       slot_set_value(vp, o1->v[0].fp(o1));
       if (has_stepper(vp)) stepper = vp;
     }
-  ostart = do_any_test(o);
-  body = do_any_body(o);
-
   end = integer(slot_value(ostart->v[2].p));
   incr = ostep->v[2].i;
   si = make_mutable_integer(sc, integer(slot_value(ostart->v[1].p)));
   if (stepper) slot_set_value(stepper, si);
-
   while (integer(si) != end)
     {
       body->v[0].fp(body);
       integer(si) += incr;
     }
   clear_mutable_integer(si);
-
   o1 = do_any_results(o);
   result = o1->v[0].fp(o1);
   unstack(sc);
@@ -64373,18 +64361,13 @@ static s7_pointer opt_do_step_i(opt_info *o)
 static s7_pointer opt_do_no_vars(opt_info *o)
 {
   /* no vars, no return, o->v[2].p=let, o->v[1].i=body end index, o->v[3].i=body length, o->v[4].i=return length=0, o->v[6]=end test */
-  opt_info *ostart;
-  int32_t len;
+  opt_info *ostart = do_no_vars_test(o);
+  int32_t len = do_body_length(o);
   s7_scheme *sc = o->sc;
-  bool (*fb)(opt_info *o);
+  bool (*fb)(opt_info *o) = ostart->v[0].fb;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-  
   set_curlet(sc, do_curlet(o));
-  len = do_body_length(o);
-  ostart = do_no_vars_test(o);
-  fb = ostart->v[0].fb;
-
   if (len == 0)       /* titer */
     while (!(fb(ostart)));
   else
@@ -64406,20 +64389,16 @@ static s7_pointer opt_do_no_vars(opt_info *o)
 static s7_pointer opt_do_1(opt_info *o)
 {
   /* 1 var, 1 expr, no return */
-  opt_info *o1, *ostart, *ostep = o->v[9].o1, *body; /* o->v[2].p=let */
-  s7_pointer vp;
+  opt_info *o1 = do_stepper_init(o);
+  opt_info *ostart = do_any_test(o);
+  opt_info *ostep = o->v[9].o1;
+  opt_info *body = do_any_body(o);
+  s7_pointer vp = let_slots(do_curlet(o));
   s7_scheme *sc = o->sc;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-  
   set_curlet(sc, do_curlet(o));
-
-  vp = let_slots(do_curlet(o));
-  o1 = do_stepper_init(o);
   slot_set_value(vp, o1->v[0].fp(o1));
-  ostart = do_any_test(o);
-  body = do_any_body(o);
-
   if ((o->v[8].i == 1) &&
       (is_t_integer(slot_value(vp))))
     {
@@ -64461,22 +64440,17 @@ static s7_pointer opt_do_1(opt_info *o)
 static s7_pointer opt_do_n(opt_info *o)
 {
   /* 1 var, no return */
-  opt_info *o1, *ostart, *ostep = o->v[9].o1, *body; /* o->v[2].p=let, o->v[3].i=body length */
-  int32_t len;
-  s7_pointer vp;
+  opt_info *o1 = do_stepper_init(o);
+  opt_info *ostart = do_any_test(o);
+  opt_info *ostep = o->v[9].o1;
+  opt_info *body = do_n_body(o);
+  int32_t len = do_body_length(o);
+  s7_pointer vp = let_slots(do_curlet(o));
   s7_scheme *sc = o->sc;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   set_curlet(sc, do_curlet(o));
-  len = do_body_length(o);
-
-  vp = let_slots(do_curlet(o));
-  o1 = do_stepper_init(o);
   slot_set_value(vp, o1->v[0].fp(o1));
-  ostart = do_any_test(o);
-  body = do_n_body(o);
-
   if (len == 2) /* tmac tshoot */
     {
       opt_info *e1 = body->v[0].o1, *e2 = body->v[1].o1;
@@ -64515,23 +64489,16 @@ static s7_pointer opt_do_n(opt_info *o)
 static s7_pointer opt_do_times(opt_info *o)
 {
   /* 1 var, no return */
-  opt_info *o1, *body; /* o->v[2].p=let, o->v[3].i=body length, o->v[4].i=return length=0, o->v[6].i=end index, v6.i=end, v7=init */
-  int32_t len;
-  s7_int end;
-  s7_pointer vp;
+  opt_info *o1 = do_stepper_init(o);
+  opt_info *body = do_n_body(o);
+  int32_t len = do_body_length(o);
+  s7_int end = (is_slot(let_dox_slot2_unchecked(do_curlet(o)))) ? integer(slot_value(let_dox_slot2(do_curlet(o)))) : o->v[6].i;
+  s7_pointer vp = let_dox1_value(do_curlet(o));
   s7_scheme *sc = o->sc;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   set_curlet(sc, do_curlet(o));
-  len = do_body_length(o);
-
-  vp = let_dox1_value(do_curlet(o));
-  end = (is_slot(let_dox_slot2_unchecked(do_curlet(o)))) ? integer(slot_value(let_dox_slot2(do_curlet(o)))) : o->v[6].i;
-  o1 = do_stepper_init(o);
   integer(vp) = integer(o1->v[0].fp(o1));
-  body = do_n_body(o);
-
   if (len == 2)                 /* tmac tmisc */
     {
       opt_info *e1 = body->v[0].o1, *e2 = body->v[1].o1;
@@ -64558,21 +64525,15 @@ static s7_pointer opt_do_times(opt_info *o)
 
 static s7_pointer opt_do_list_simple(opt_info *o)
 {
-  /* 1 var, 1 expr, no return, step by cdr, end=null? */
-  opt_info *o1; /* o->v[2].p=let */
-  s7_pointer vp;
+  opt_info *o1 = do_stepper_init(o);
+  s7_pointer vp = let_slots(do_curlet(o));
   s7_scheme *sc = o->sc;
   s7_pointer (*fp)(opt_info *o);
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   set_curlet(sc, do_curlet(o));
-
-  vp = let_slots(do_curlet(o));
-  o1 = do_stepper_init(o);
   slot_set_value(vp, o1->v[0].fp(o1));
   o1 = do_any_body(o);
-
   fp = o1->v[0].fp;
   if (fp == opt_if_bp)
     while (is_pair(slot_value(vp)))
@@ -64595,21 +64556,15 @@ static s7_pointer opt_do_list_simple(opt_info *o)
 static s7_pointer opt_do_very_simple(opt_info *o)
 {
   /* like simple but step can be direct, v[2].p is a let, v[3].i=end? */
-  opt_info *o1;
-  s7_int end;
-  s7_pointer vp;
+  opt_info *o1 = do_stepper_init(o);
+  s7_int end = (is_slot(let_dox_slot2_unchecked(do_curlet(o)))) ? integer(slot_value(let_dox_slot2(do_curlet(o)))) : o->v[3].i;
+  s7_pointer vp = let_dox1_value(do_curlet(o));
   s7_pointer (*f)(opt_info *o);
   s7_scheme *sc = o->sc;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   set_curlet(sc, do_curlet(o));
-
-  vp = let_dox1_value(do_curlet(o));
-  end = (is_slot(let_dox_slot2_unchecked(do_curlet(o)))) ? integer(slot_value(let_dox_slot2(do_curlet(o)))) : o->v[3].i;
-  o1 = do_stepper_init(o);
   integer(vp) = integer(o1->v[0].fp(o1));
-
   o1 = do_any_body(o);
   f = o1->v[0].fp;
   if (f == opt_p_pip_ssf)                            /* tref.scm */
@@ -64693,18 +64648,13 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 
 static s7_pointer opt_do_prepackaged(opt_info *o)
 {
-  opt_info *o1;
-  s7_int end;
-  s7_pointer vp;
+  opt_info *o1 = do_stepper_init(o);
+  s7_int end = (is_slot(let_dox_slot2_unchecked(do_curlet(o)))) ? integer(slot_value(let_dox_slot2(do_curlet(o)))) : o->v[3].i;
+  s7_pointer vp = let_dox1_value(do_curlet(o));
   s7_scheme *sc = o->sc;
   s7_pointer old_e = sc->curlet;
   s7_gc_protect_via_stack(sc, old_e);
-
   set_curlet(sc, do_curlet(o));
-
-  vp = let_dox1_value(do_curlet(o));
-  end = (is_slot(let_dox_slot2_unchecked(do_curlet(o)))) ? integer(slot_value(let_dox_slot2(do_curlet(o)))) : o->v[3].i;
-  o1 = do_stepper_init(o);
   integer(vp) = integer(o1->v[0].fp(o1));
 
   do_prepack_stepper(o) = vp;
@@ -65497,9 +65447,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	case 4:
 	  if (is_symbol(cadr(car_x)))
 	    {
-	      if ((is_pair(sig)) &&
-		  (is_pair(cdr(sig))) &&
-		  (is_pair(cddr(sig))) &&
+	      if ((is_pair(sig)) && (is_pair(cdr(sig))) && (is_pair(cddr(sig))) &&
 		  (caddr(sig) == sc->is_integer_symbol))
 		{
 		  if (p_pii_ok(sc, opc, s_func, car_x))
@@ -80160,14 +80108,14 @@ static goto_t op_dox(s7_scheme *sc)
   sc->temp1 = let;
   for (s7_pointer vars = car(sc->code); is_pair(vars); vars = cdr(vars))
     {
-      s7_pointer expr = cdar(vars), stp, slot;
+      s7_pointer expr = cdar(vars), slot;
       s7_pointer val = fx_call(sc, expr);
+      s7_pointer stp = cdr(expr); /* cddar(vars) */
 #if WITH_GMP
       if (!got_bignum) got_bignum = is_big_number(val);
 #endif
       new_cell_no_check(sc, slot, T_SLOT);
       slot_set_symbol_and_value(slot, caar(vars), val);
-      stp = cdr(expr); /* cddar(vars) */
       if (is_pair(stp))
 	{
 	  steppers++;
@@ -80368,14 +80316,13 @@ static goto_t op_dox(s7_scheme *sc)
 	  ((has_fx(cddr(body))) || (is_fxable(sc, caddr(body)))) &&
 	  (is_null(cdddr(body))))
 	{
-	  s7_pointer val = cddr(body), slot, stepa;
+	  s7_pointer val = cddr(body), stepa;
 	  s7_function stepf, valf;
-
+	  s7_pointer slot = lookup_slot_from(cadr(body), sc->curlet);
 	  if (!has_fx(val))
 	    set_fx(val, fx_choose(sc, val, sc->curlet, let_symbol_is_safe));
 	  valf = fx_proc(val);
 	  val = car(val);
-	  slot = lookup_slot_from(cadr(body), sc->curlet);
 	  if (slot == sc->undefined)
 	    unbound_variable_error(sc, cadr(body));
 	  stepf = fx_proc(slot_expression(stepper));
@@ -81278,8 +81225,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
       if (safe_step)
 	{
 	  s7_int end = do_loop_end(slot_value(sc->args));
-	  s7_pointer stepper;
-	  slot_set_value(sc->args, stepper = make_mutable_integer(sc, integer(slot_value(sc->args))));
+	  s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
+	  slot_set_value(sc->args, stepper);
 	  if ((func == opt_float_any_nr) ||
 	      (func == opt_cell_any_nr))
 	    {
@@ -81465,8 +81412,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	    s7_int end = do_loop_end(slot_value(sc->args));
 	    if (safe_step)
 	      {
-		s7_pointer stepper;
-		slot_set_value(sc->args, stepper = make_mutable_integer(sc, integer(slot_value(sc->args))));
+		s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
+		slot_set_value(sc->args, stepper);
 		for (; integer(stepper) < end; integer(stepper)++)
 		  for (int32_t i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
 		clear_mutable_integer(stepper);
@@ -84558,9 +84505,9 @@ static bool op_tc_if_a_z_laa(s7_scheme *sc, s7_pointer code, bool z_first, tc_ch
 		      s7_double (*fd2)(opt_info *o) = o2->v[0].fd;
 		      bool (*fb)(opt_info *o) = o->v[0].fb;
 		      s7_pointer val1 = s7_make_mutable_real(sc, real(slot_value(la_slot)));
-		      s7_pointer val2;
+		      s7_pointer val2 = s7_make_mutable_real(sc, real(slot_value(laa_slot)));
 		      slot_set_value(la_slot, val1);
-		      slot_set_value(laa_slot, val2 = s7_make_mutable_real(sc, real(slot_value(laa_slot))));
+		      slot_set_value(laa_slot, val2);
 		      if ((z_first) &&
 			  (fb == opt_b_dd_sc_lt) &&
 			  (fd1 == opt_d_dd_sc_sub))
@@ -85071,11 +85018,13 @@ static bool op_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 		      set_curlet(sc, outer_let);
 		      if (int_optimize(sc, let_var))
 			{
-			  s7_pointer val1, val2, val3;
+			  s7_pointer val1 = make_mutable_integer(sc, integer(slot_value(la_slot)));
+			  s7_pointer val2 = make_mutable_integer(sc, integer(slot_value(laa_slot)));
+			  s7_pointer val3 = make_mutable_integer(sc, integer(slot_value(let_slot)));
 			  set_curlet(sc, inner_let);
-			  slot_set_value(la_slot, val1 = make_mutable_integer(sc, integer(slot_value(la_slot))));
-			  slot_set_value(laa_slot, val2 = make_mutable_integer(sc, integer(slot_value(laa_slot))));
-			  slot_set_value(let_slot, val3 = make_mutable_integer(sc, integer(slot_value(let_slot))));
+			  slot_set_value(la_slot, val1);
+			  slot_set_value(laa_slot, val2);
+			  slot_set_value(let_slot, val3);
 			  while (!(o->v[0].fb(o)))
 			    {
 			      s7_int i1 = o1->v[0].fi(o1);
@@ -94436,58 +94385,57 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    461
  * index     1026   1016    973    970    967
- * tmock     1177   1165   1057   1054   1047  1037
- * tvect     2519   2464   1772   1708   1708  1689
- * texit     ----   ----   1778   1767   1750
- * s7test    1873   1831   1818   1790   1795  1782
+ * tmock     1177   1165   1057   1054   1037
+ * tvect     2519   2464   1772   1708   1689
+ * texit     ----   ----   1778   1767   1754
+ * s7test    1873   1831   1818   1790   1782
  * timp      2971   2891   2176   2051   2042
- * lt        2187   2172   2150   2156   2153  2146
- * tauto     ----   ----   2562   2566   2203  2207
- * dup       3805   3788   2492   2327   2323  2248
+ * lt        2187   2172   2150   2156   2146
+ * tauto     ----   ----   2562   2566   2206
+ * dup       3805   3788   2492   2327   2247
  * tload     ----   ----   3046   2352   2351
  * tread     2440   2421   2419   2385   2375
- * trclo     2735   2574   2454   2443   2442  2423
- * fbench    2688   2583   2460   2453   2433  2411
+ * trclo     2735   2574   2454   2443   2423
+ * fbench    2688   2583   2460   2453   2411
  * titer     2865   2842   2641   2490   2482
- * tcopy     8035   5546   2539   2495   2499  2504
- * tmat      3065   3042   2524   2515   2517  2507
- * tb        2735   2681   2612   2606   2590  2577
- * tsort     3105   3104   2856   2826   2824
- * teq       4068   4045   3536   3468   3467  3437
- * tmac      3950   3873   3033   2992   3538  3544
- * tio       3816   3752   3683   3646   3623  3604
- * tobj      4016   3970   3828   3633   3632  3624
- * tclo      4787   4735   4390   4343   4296  4329!
+ * tcopy     8035   5546   2539   2495   2504
+ * tmat      3065   3042   2524   2515   2517
+ * tb        2735   2681   2612   2606   2577
+ * tsort     3105   3104   2856   2826   2821
+ * teq       4068   4045   3536   3468   3437
+ * tmac      3950   3873   3033   2992   3545
+ * tio       3816   3752   3683   3646   3604
+ * tobj      4016   3970   3828   3633   3624
+ * tclo      4787   4735   4390   4343   4329
  * tlet      7775   5640   4450   4423   4407
  * tcase     4960   4793   4439   4462   4416
- * tmap      8869   8774   4489   4490   4484  4470
- * tfft      7820   7729   4755   4683   4669  4596
- * tshoot    5525   5447   5183   5174   5165  5101
- * tform     5357   5348   5307   5310   5303  5280
- * tnum      6348   6013   5433   5425   5395  5387
- * tstr      6880   6342   5488   5462   5452  5400
+ * tmap      8869   8774   4489   4490   4470
+ * tfft      7820   7729   4755   4683   4596
+ * tshoot    5525   5447   5183   5174   5101
+ * tform     5357   5348   5307   5310   5287
+ * tnum      6348   6013   5433   5425   5387
+ * tstr      6880   6342   5488   5462   5400
  * tlamb     6423   6273   5720   5618   5547
- * tset      ----   ----   ----   6313   6179  6197
- * tmisc     8869   7612   6435   6324   6307  6269
- * tgsl      8485   7802   6373   6333   6328  6304
- * tlist     7896   7546   6558   6486   6453  6197
- * trec      6936   6922   6521   6523   6518  6538
- * tari      13.0   12.7   6827   6717   6691  6634
+ * tset      ----   ----   ----   6313   6197
+ * tlist     7896   7546   6558   6486   6197
+ * tmisc     8869   7612   6435   6324   6269
+ * tgsl      8485   7802   6373   6333   6304
+ * trec      6936   6922   6521   6523   6538
+ * tari      13.0   12.7   6827   6717   6634
  * tleft     10.4   10.2   7657   7561   7474 
- * tgc       11.9   11.1   8177   8062   7997  8024
- * thash     11.8   11.7   9734   9583   9548  9479
- * cb        11.2   11.0   9658   9677   9601  9546
+ * tgc       11.9   11.1   8177   8062   8024
+ * thash     11.8   11.7   9734   9583   9479
+ * cb        11.2   11.0   9658   9677   9546
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.6  37.5
- * sg        ----   ----   55.9   56.3   56.5  56.7
- * lg        ----   ----  105.2  105.8  105.3 104.9
- * tbig     177.4  175.8  156.5  151.1  151.1 150.6
+ * calls     36.7   37.5   37.0   37.6   37.6
+ * sg        ----   ----   55.9   56.3   56.5
+ * lg        ----   ----  105.2  105.8  104.9
+ * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3?
  * tset opts
- * t718: optimize_syntax overeagerness
- * *_nr?
+ * t718: optimize_syntax overeagerness, immutable list display
  */
