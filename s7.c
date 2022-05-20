@@ -3068,9 +3068,9 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_simply_set_pending_value(p, Val) (T_Slt(p))->object.slt.pending_value = T_Nmv(Val)
 #if S7_DEBUGGING
 static s7_pointer slot_pending_value(s7_pointer p) \
-  {if (slot_has_pending_value(p)) return(p->object.slt.pending_value); fprintf(stderr, "%s[%d]: slot: no pending value\n", __func__, __LINE__); abort();}
+  {if (slot_has_pending_value(p)) return(p->object.slt.pending_value); fprintf(stderr, "%s[%d]: slot: no pending value\n", __func__, __LINE__); abort(); return(NULL);}
 static s7_pointer slot_expression(s7_pointer p)    \
-  {if (slot_has_expression(p)) return(p->object.slt.expr); fprintf(stderr, "%s[%d]: slot: no expression\n", __func__, __LINE__); abort();}
+  {if (slot_has_expression(p)) return(p->object.slt.expr); fprintf(stderr, "%s[%d]: slot: no expression\n", __func__, __LINE__); abort(); return(NULL);}
 #else
 #define slot_pending_value(p)          (T_Slt(p))->object.slt.pending_value
 #define slot_expression(p)             (T_Slt(p))->object.slt.expr
@@ -82258,10 +82258,12 @@ static void op_f_np(s7_scheme *sc)   /* sc->code: ((lambda (x y) (+ x y)) (value
       s7_pointer last_slot;
       if (is_null(cdr(sc->code))) /* ((lambda (x) 21)) */
 	s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
+		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), 
+				cadar(sc->code), cdr(sc->code)));
       if (is_constant(sc, car(pars)))
 	s7_error_nr(sc, sc->syntax_error_symbol,        /* (lambda (a) 1) where 'a is immutable (locally perhaps) */
-		    set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: ((lambda ~S ...)~{~^ ~S~})", 61), car(pars), cadar(sc->code), cdr(sc->code)));
+		    set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: ((lambda ~S ...)~{~^ ~S~})", 61), 
+				car(pars), cadar(sc->code), cdr(sc->code)));
 	
       add_slot_unchecked_no_local(sc, e, car(pars), sc->undefined);
       last_slot = let_slots(e);
@@ -82298,7 +82300,8 @@ static bool op_f_np_1(s7_scheme *sc)
 	else slot_set_value(slot, car(p));
       if (is_pair(p))
 	s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
+		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), 
+				cadar(sc->code), cdr(sc->code)));
       slot = oslot; /* snd-test 22 grani */
     }
   else /* not mv */
@@ -82313,7 +82316,8 @@ static bool op_f_np_1(s7_scheme *sc)
     {
       if ((!tis_slot(next_slot(slot))) && (!is_rest_slot(slot)))
 	s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-		    set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda ~S ...)~{~^ ~S~})", 46), cadar(sc->code), cdr(sc->code)));
+		    set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda ~S ...)~{~^ ~S~})", 46), 
+				cadar(sc->code), cdr(sc->code)));
       stack_protected1(sc) = (is_rest_slot(slot)) ? slot : next_slot(slot);
       stack_protected2(sc) = cdr(arg);
       push_stack_direct(sc, OP_F_NP_1); /* sc->args=e, sc->code from start */
@@ -82328,7 +82332,8 @@ static bool op_f_np_1(s7_scheme *sc)
 	    slot_set_value(next_slot(slot), sc->nil);
 	}
       else s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-		       set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), cadar(sc->code), cdr(sc->code)));
+		       set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48), 
+				   cadar(sc->code), cdr(sc->code)));
     }
   e = sc->args;
   let_set_id(e, ++sc->let_number);
@@ -82405,7 +82410,8 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	      (is_pair(cdr(arg_vals))) &&
 	      (keyword_symbol(car(arg_vals)) == car(pars)))
 	    s7_error_nr(sc, sc->wrong_type_arg_symbol,
-			set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44), car(pars), cadr(arg_vals)));
+			set_elist_3(sc, wrap_string(sc, "can't set rest argument ~S to ~S via keyword", 44),
+				    car(pars), cadr(arg_vals)));
 	  lambda_star_argument_set_value(sc, car(pars), (in_heap(arg_vals)) ? arg_vals : copy_proper_list(sc, arg_vals), slot, false); /* sym5 :rest bug */
 	  rest_key = sc->rest_keyword;
 	  arg_vals = cdr(arg_vals);
@@ -82491,12 +82497,14 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	{
 	  if (!allow_other_keys)                                 /* ((lambda* (a) a) :a 1 2) */
 	    s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-			set_elist_3(sc, wrap_string(sc, "too many arguments: ((lambda* ~S ...)~{~^ ~S~})", 46), closure_args(code), args));
+			set_elist_4(sc, wrap_string(sc, "too many arguments: (~S ~S ...)~{~^ ~S~})", 41), 
+				    (is_closure_star(code)) ? sc->lambda_star_symbol : ((is_bacro_star(sc->code)) ? sc->bacro_star_symbol : sc->macro_star_symbol),
+				    closure_args(code), args));
 	  /* check trailing args for repeated keys or keys with no values or values with no keys */
 	  while (is_pair(arg_vals))
 	    {
 	      if ((!is_symbol_and_keyword(car(arg_vals))) ||     /* ((lambda* (a :allow-other-keys) a) :a 1 :b 2 3) */
-		  (!is_pair(cdr(arg_vals))))          /* ((lambda* (a :allow-other-keys) a) :a 1 :b) */
+		  (!is_pair(cdr(arg_vals))))                     /* ((lambda* (a :allow-other-keys) a) :a 1 :b) */
 		s7_error_nr(sc, sc->wrong_type_arg_symbol,
 			    set_elist_3(sc, wrap_string(sc, "~A: not a key/value pair: ~S", 28), closure_name(sc, code), arg_vals));
 	      slot = symbol_to_local_slot(sc, keyword_symbol(car(arg_vals)), sc->curlet);
@@ -82888,9 +82896,9 @@ static Inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code)
 
 static void op_closure_star_ka(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer p, func = opt1_lambda(code);
+  s7_pointer func = opt1_lambda(code);
+  s7_pointer p = car(closure_args(func));
   sc->value = fx_call(sc, cddr(code));
-  p = car(closure_args(func));
   sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value);
   sc->code = T_Pair(closure_body(func));
 }
@@ -83856,11 +83864,11 @@ static void op_closure_4a(s7_scheme *sc) /* sass */
 
 static void op_closure_na(s7_scheme *sc)
 {
-  s7_pointer exprs = cdr(sc->code), pars, func = opt1_lambda(sc->code), slot, last_slot;
+  s7_pointer exprs = cdr(sc->code), func = opt1_lambda(sc->code), slot, last_slot;
   s7_int id;
+  s7_pointer pars = closure_args(func);
   s7_pointer e = make_let(sc, closure_let(func));
   sc->z = e;
-  pars = closure_args(func);
   sc->value = fx_call(sc, exprs);
   new_cell_no_check(sc, last_slot, T_SLOT);
   slot_set_symbol_and_value(last_slot, car(pars), sc->value);
@@ -86080,12 +86088,12 @@ static s7_pointer rec_sub_z1(s7_scheme *sc, s7_pointer code)
 
 static void opinit_if_a_a_lopl3a_l3a_l3aq(s7_scheme *sc)
 {
-  s7_pointer la1, la2, la3, caller = opt3_pair(sc->code);
+  s7_pointer caller = opt3_pair(sc->code);
+  s7_pointer la1 = cadr(caller);
+  s7_pointer la2 = caddr(caller);
+  s7_pointer la3 = opt3_pair(caller);
   rec_set_test(sc, cdr(sc->code));
   rec_set_res(sc, cddr(sc->code));
-  la1 = cadr(caller);
-  la2 = caddr(caller);
-  la3 = opt3_pair(caller);
   rec_set_f1(sc, cdr(la1));
   rec_set_f2(sc, cddr(la1));
   if (sc->rec_f2f == fx_u) sc->rec_f2f = rec_y;
@@ -86155,11 +86163,11 @@ static s7_pointer op_recur_if_a_a_lopl3a_l3a_l3aq(s7_scheme *sc)
 /* -------- if_a_a_and_a_laa_laa -------- */
 static void opinit_if_a_a_and_a_laa_laa(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer la1, la2, caller = opt3_pair(code);
+  s7_pointer caller = opt3_pair(code);
+  s7_pointer la1 = caddr(caller);
+  s7_pointer la2 = cadddr(caller);
   rec_set_test(sc, cdr(code));
   rec_set_res(sc, cddr(code));
-  la1 = caddr(caller);
-  la2 = cadddr(caller);
   rec_set_f1(sc, cdr(caller));
   rec_set_f2(sc, cdr(la1));
   rec_set_f3(sc, cddr(la1));
@@ -94395,8 +94403,8 @@ int main(int argc, char **argv)
  * dup       3805   3788   2492   2327   2247
  * tload     ----   ----   3046   2352   2351
  * tread     2440   2421   2419   2385   2375
- * trclo     2735   2574   2454   2443   2423
  * fbench    2688   2583   2460   2453   2411
+ * trclo     2735   2574   2454   2443   2423
  * titer     2865   2842   2641   2490   2482
  * tcopy     8035   5546   2539   2495   2504
  * tmat      3065   3042   2524   2515   2517
@@ -94434,8 +94442,19 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
- * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
- *   tcc s7test 3191 unbound v3?
  * tset opts
  * t718: optimize_syntax overeagerness, immutable list display
+ * pulseaudio sample format?
+ *
+ * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
+ *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
+ *   tcc -o s7 s7.c -I. -g3 -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER -DS7_DEBUGGING
+ * we need a way to release excessive mallocate bins
+ * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
+ * for multithread s7: (with-s7 ((var database)...) . body)
+ *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
+ *   how to join? *s7-threads*? (current-s7), need to handle output
+ *   libpthread.scm -> main [but should it include the pool/start_routine?]
+ *   threads.c -> tools + tests
+ *   unlet opts
  */

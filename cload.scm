@@ -101,14 +101,14 @@
 (if (not (defined? '*cload-directory*))
     (define *cload-directory* ""))
 
-(define *cload-c-compiler* (if (provided? 'tcc) 
-			       "tcc"
+(define *cload-c-compiler* ;(if (provided? 'tcc)  ; how to get tcc to write a .so file?
+			       ;"tcc"
 			       (if (and (provided? 'gcc) 
 					(not (provided? 'openbsd))) 
 				   "gcc"
 				   (if (provided? 'clang) 
 				       "clang"
-				       "cc"))))
+				       "cc")));)
 
 (define-macro (defvar name value) 
   `(if (not (defined? ',name)) 
