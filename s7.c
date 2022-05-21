@@ -45567,6 +45567,9 @@ static s7_pointer b_is_proper_list_setter(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 {
+  if (!((is_let(e)) || (e == sc->rootlet) || (e == sc->nil)))
+    wrong_type_argument(sc, sc->setter_symbol, 2, e, T_LET); /* need to check this in case let arg is bogus */
+
   switch (type(p))
     {
     case T_MACRO:   case T_MACRO_STAR:
@@ -45634,8 +45637,6 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 	else
 	  {
 	    s7_pointer old_e = sc->curlet;
-	    if (!is_let(e))
-	      return(s7_wrong_type_arg_error(sc, "setter", 2, e, "a let"));
 	    set_curlet(sc, e);
 	    slot = lookup_slot_from(sym, sc->curlet);
 	    set_curlet(sc, old_e);
@@ -45653,15 +45654,7 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
   #define H_setter "(setter obj let) returns the setter associated with obj"
   #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, \
                      sc->not_symbol, sc->is_procedure_symbol), sc->T, s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_null_symbol))
-  s7_pointer e;
-  if (is_pair(cdr(args)))
-    {
-      e = cadr(args);
-      if (!((is_let(e)) || (e == sc->rootlet) || (e == sc->nil)))
-	wrong_type_argument(sc, sc->setter_symbol, 2, e, T_LET);
-    }
-  else e = sc->curlet;
-  return(setter_p_pp(sc, car(args), e));
+  return(setter_p_pp(sc, car(args), (is_pair(cdr(args))) ? cadr(args) : sc->curlet));
 }
 
 s7_pointer s7_setter(s7_scheme *sc, s7_pointer obj) {return(setter_p_pp(sc, obj, sc->curlet));}
@@ -58086,7 +58079,9 @@ static bool i_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	      (is_t_integer(slot_value(settee))) &&
 	      (!is_immutable(settee)) &&
 	      ((!slot_has_setter(settee)) ||
-	       (slot_setter(settee) == initial_value(sc->is_integer_symbol)))) 
+	       ((is_c_function(slot_setter(settee))) &&
+		((slot_setter(settee) == initial_value(sc->is_integer_symbol)) ||
+		 (c_function_call(slot_setter(settee)) == b_is_integer_setter)))))
 	    /* opt set! won't change type, and it is an integer now (and we might not hit opt_cell_set) */
 	    {
 	      opt_info *o1 = sc->opts[sc->pc];
@@ -60233,8 +60228,10 @@ static bool d_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  if ((is_slot(settee)) &&
 	      (is_t_real(slot_value(settee))) &&
 	      (!is_immutable(settee)) &&
-	      ((!slot_has_setter(settee)) || 
-	       (slot_setter(settee) == initial_value(sc->is_float_symbol))))
+	      ((!slot_has_setter(settee)) ||
+	       ((is_c_function(slot_setter(settee))) &&
+		((slot_setter(settee) == initial_value(sc->is_float_symbol)) ||
+		 (c_function_call(slot_setter(settee)) == b_is_float_setter)))))
 	    {
 	      opt_info *o1 = sc->opts[sc->pc];
 	      opc->v[1].p = settee;
@@ -60547,7 +60544,12 @@ static s7_pointer opt_arg_type(s7_scheme *sc, s7_pointer argp)
 			  pc_fallback(sc, start);
 			}
 		      return(car(sig)); /* we want the function's return type in this context */
-		    }}}
+		    }
+		  return(sc->T);
+		}
+	      if (car(arg) == sc->quote_symbol)
+		return(s7_type_of(sc, cadr(arg)));
+	    }
 	  slot = lookup_slot_from(car(arg), sc->curlet);
 	  if ((is_slot(slot)) &&
 	      (is_sequence(slot_value(slot))))
@@ -62890,6 +62892,14 @@ static s7_pointer opt_set_p_p_f(opt_info *o)
   return(x);
 }
 
+static s7_pointer opt_set_p_p_f_with_setter(opt_info *o)
+{
+  s7_pointer x = o->v[4].fp(o->v[3].o1);
+  call_c_function_setter(o->sc, slot_setter(o->v[1].p), slot_symbol(o->v[1].p), x);
+  slot_set_value(o->v[1].p, x); /* symbol_increment?? */
+  return(x);
+}
+
 static s7_pointer opt_set_p_i_s(opt_info *o)
 {
   s7_pointer val = slot_value(o->v[2].p);
@@ -63101,18 +63111,31 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
       if ((is_constant_symbol(sc, target)) || 
 	  ((is_slot(global_slot(target))) && (slot_has_setter(global_slot(target)))))
 	return_false(sc, car_x);
-      settee = lookup_slot_from(target, sc->curlet);
-      if ((is_slot(settee)) && (slot_has_setter(settee))) return_false(sc, car_x);
 
+      settee = lookup_slot_from(target, sc->curlet);
       if ((is_slot(settee)) &&
 	  (!is_immutable(settee)) &&
 	  (!is_syntax(slot_value(settee))))
 	{
-	  s7_pointer atype, stype;
  	  int32_t start_pc = sc->pc;
-
+	  s7_pointer stype = s7_type_of(sc, slot_value(settee));
+	  s7_pointer atype;
 	  opc->v[1].p = settee;
-	  stype = s7_type_of(sc, slot_value(settee));
+	  if (slot_has_setter(settee))
+	    {
+	      if ((is_c_function(slot_setter(settee))) &&
+		  (is_bool_function(slot_setter(settee))) &&
+		  (stype == opt_arg_type(sc, cddr(car_x))) &&
+		  (cell_optimize(sc, cddr(car_x))))
+		{
+		  opc->v[1].p = settee;
+		  opc->v[0].fp = opt_set_p_p_f_with_setter;
+		  opc->v[3].o1 = sc->opts[start_pc];
+		  opc->v[4].fp = sc->opts[start_pc]->v[0].fp;
+		  return(true);
+		}
+	      return_false(sc, car_x);
+	    }
 
 	  if (stype == sc->is_integer_symbol)
 	    {
@@ -63169,6 +63192,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 		    }
 		  return(check_type_uncertainty(sc, target, car_x, opc, start_pc));
 		}}
+
 	  atype = opt_arg_type(sc, cddr(car_x));
 	  if ((is_some_number(sc, atype)) &&
 	      (!is_some_number(sc, stype)))
@@ -94424,7 +94448,7 @@ int main(int argc, char **argv)
  * tnum      6348   6013   5433   5425   5387
  * tstr      6880   6342   5488   5462   5400
  * tlamb     6423   6273   5720   5618   5547
- * tset      ----   ----   ----   6313   6197
+ * tset      ----   ----   ----   6682   6170
  * tlist     7896   7546   6558   6486   6197
  * tmisc     8869   7612   6435   6324   6269
  * tgsl      8485   7802   6373   6333   6304
@@ -94442,15 +94466,13 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
- * tset opts
+ * tset op for eval
  * t718: optimize_syntax overeagerness, immutable list display
- * pulseaudio sample format?
+ * pulseaudio playback?
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
  *   tcc -o s7 s7.c -I. -g3 -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER -DS7_DEBUGGING
- * we need a way to release excessive mallocate bins
- * need an non-openlet blocking outlet: maybe let-ref-fallback not as method but flag on let
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output

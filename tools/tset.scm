@@ -7,7 +7,27 @@
 	((= i size) x)
       (set! x (+ x 1)))))
 
-(f1)
+(unless (= (f1) size) (format *stderr* "f1: ~S~%" (f1)))
+
+
+(define (f1a)
+  (let ((x 0.0))
+    (set! (setter 'x) float?)
+    (do ((i 0 (+ i 1)))
+	((= i size) x)
+      (set! x (+ x 1.0)))))
+
+(unless (= (f1a) size) (format *stderr* "f1a: ~S~%" (f1a)))
+
+
+(define (f1b)
+  (let ((x 'a))
+    (set! (setter 'x) symbol?)
+    (do ((i 0 (+ i 1)))
+	((= i size) x)
+      (set! x 'b)))) ;(string->symbol "b") -- ok ;(if (symbol? x) 'b 'a))))) -- needs support in opt_arg_type
+
+(f1b)
 
 
 (define (f2)
@@ -19,7 +39,7 @@
 	  ((= i 10))
 	(set! x (+ x (/ i))))))) ;if (/ i) and size (or > 100) -> 14.392725722864782 -- ratio overflows bignum
 
-(f2)
+(unless (= (f2) 17822500/63) (format *stderr* "f2: ~S~%" (f2)))
 
 
 (define (f3)
@@ -76,6 +96,7 @@
     (f6 i)))
 
 (f6-test)
+
 
 ;;; --------------------------------------------------------------------------------
 
