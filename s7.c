@@ -32485,15 +32485,29 @@ static void string_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
     port_write_character(port)(sc, ')', port);
 }
 
-static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int true_len, s7_int len, s7_pointer port, shared_info_t *ci)
+static s7_int list_length_with_immutable_check(s7_scheme *sc, s7_pointer a, bool *immutable)
+{
+  s7_pointer slow = a, fast = a;
+  for (s7_int i = 0; ; i += 2)
+    {
+      if (!is_pair(fast)) return((is_null(fast)) ? i : -i);
+      if (is_immutable(fast)) *immutable = true;
+      fast = cdr(fast);
+      if (!is_pair(fast)) return((is_null(fast)) ? (i + 1) : (-i - 1));
+      if (is_immutable(fast)) *immutable = true;
+      fast = cdr(fast);
+      slow = cdr(slow);
+      if (fast == slow) return(0);
+    }
+  return(0);
+}
+
+static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int true_len, s7_int len, s7_pointer port, shared_info_t *ci, bool immutable)
 {
   /* the easier cases: no circles or shared refs to patch up */
   s7_pointer x;
 
-  if (is_immutable(lst))
-    port_write_string(port)(sc, "immutable! (", 12, port);
-
-  if (true_len > 0)
+  if ((true_len > 0) && (!immutable))
     {
       port_write_string(port)(sc, "list", 4, port);
       for (x = lst; is_pair(x); x = cdr(x))
@@ -32505,27 +32519,45 @@ static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int t
     }
   else
     {
-      port_write_string(port)(sc, "cons ", 5, port);
+      s7_int immutable_ctr = 0;
+      if (is_immutable(lst))
+	{
+	  port_write_string(port)(sc, "immutable! (cons ", 17, port);
+	  immutable_ctr++;
+	}
+      else port_write_string(port)(sc, "cons ", 5, port);
       object_to_port_with_circle_check(sc, car(lst), port, P_READABLE, ci);
+
       for (x = cdr(lst); is_pair(x); x = cdr(x))
 	{
-	  port_write_string(port)(sc, " (cons ", 7, port);
+	  if (is_immutable(x))
+	    {
+	      port_write_string(port)(sc, " (immutable! (cons ", 19, port);
+	      immutable_ctr++;
+	    }
+	  else port_write_string(port)(sc, " (cons ", 7, port);
 	  object_to_port_with_circle_check(sc, car(x), port, P_READABLE, ci);
 	}
-      port_write_character(port)(sc, ' ', port);
-      object_to_port_with_circle_check(sc, x, port, P_READABLE, ci);
-      for (s7_int i = 1; i < len; i++)
+      if (is_null(x))
+	port_write_string(port)(sc, " ()", 3, port);
+      else
+	{
+	  port_write_character(port)(sc, ' ', port);
+	  object_to_port_with_circle_check(sc, x, port, P_READABLE, ci);
+	}
+      for (s7_int i = (true_len <= 0) ? 1 : 0; i < len; i++)
+	port_write_character(port)(sc, ')', port);
+      for (s7_int i = 0; i < immutable_ctr; i++)
 	port_write_character(port)(sc, ')', port);
     }
-  if (is_immutable(lst))
-    port_write_character(port)(sc, ')', port);
 }
 
 static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   s7_pointer x;
   s7_int i, len;
-  s7_int true_len = s7_list_length(sc, lst);
+  bool immutable = false;
+  s7_int true_len = list_length_with_immutable_check(sc, lst, &immutable);
   if (true_len < 0)                    /* a dotted list -- handle cars, then final cdr */
     len = (-true_len + 1);
   else len = (true_len == 0) ? circular_list_entries(lst) : true_len; /* circular list (nil is handled by unique_to_port) */
@@ -32570,7 +32602,8 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
     {
       if (!is_cyclic(lst))
 	{
-	  simple_list_readable_display(sc, lst, true_len, len, port, ci);
+	  /* here (and in the cyclic case) we need to handle immutable pairs -- this requires using cons rather than list etc */
+	  simple_list_readable_display(sc, lst, true_len, len, port, ci, immutable);
 	  unstack(sc);
 	  return;
 	}
@@ -32604,7 +32637,7 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 		    }
 		  else
 		    {
-		      simple_list_readable_display(sc, lst, true_len, len, port, ci);
+		      simple_list_readable_display(sc, lst, true_len, len, port, ci, immutable);
 		      unstack(sc);
 		      return;
 		    }}}
@@ -32693,7 +32726,7 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 	  if (lst_local)
 	    port_write_string(local_port)(sc, "    <L>)", 8, local_port);
 	}
-      else simple_list_readable_display(sc, lst, true_len, len, port, ci);
+      else simple_list_readable_display(sc, lst, true_len, len, port, ci, immutable);
     }
   else /* not :readable */
     {
@@ -36273,25 +36306,17 @@ static s7_int proper_list_length_with_end(s7_pointer a, s7_pointer *c)
   return(i);
 }
 
-s7_int s7_list_length(s7_scheme *sc, s7_pointer a)
+s7_int s7_list_length(s7_scheme *sc, s7_pointer a) /* returns -len if list is dotted, 0 if it's (directly) circular */
 {
-  /* returns -len if list is dotted, 0 if it's (directly) circular */
   s7_pointer slow = a, fast = a;
-
   for (s7_int i = 0; ; i += 2)
     {
-      if (!is_pair(fast))
-	return((is_null(fast)) ? i : -i);
-
+      if (!is_pair(fast)) return((is_null(fast)) ? i : -i);
       fast = cdr(fast);
-      if (!is_pair(fast))
-	return((is_null(fast)) ? (i + 1) : (-i - 1));
-      /* if unrolled further, it's a lot slower? */
-
+      if (!is_pair(fast)) return((is_null(fast)) ? (i + 1) : (-i - 1)); /* if unrolled further, it's a lot slower? */
       fast = cdr(fast);
       slow = cdr(slow);
-      if (fast == slow)
-	return(0);
+      if (fast == slow)	return(0);
     }
   return(0);
 }
@@ -44355,12 +44380,11 @@ s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_functi
 
 static void define_function_star_1(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc, bool safe, s7_pointer signature)
 {
-  s7_pointer func, sym;
+  s7_pointer func;
   if (safe)
     func = s7_make_safe_function_star(sc, name, fnc, arglist, doc);
   else func = s7_make_function_star(sc, name, fnc, arglist, doc);
-  sym = make_symbol(sc, name);
-  s7_define(sc, sc->nil, sym, func);
+  s7_define(sc, sc->nil, make_symbol(sc, name), func);
   if (signature) c_function_signature(func) = signature;
 }
 
@@ -47589,12 +47613,13 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 
   dest = T_Pos(cadr(args));
   if ((dest == sc->readable_keyword) && (!is_pair(source)))
-    s7_error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "copy argument 2, :readable, only works if the source is a pair", 62)));
+    s7_error_nr(sc, sc->out_of_range_symbol, 
+		set_elist_1(sc, wrap_string(sc, "copy argument 2, :readable, only works if the source is a pair", 62)));
 
   if ((is_immutable(dest)) &&
       (dest != sc->readable_keyword) &&
       (dest != sc->nil))                 /* error_hook copies with cadr(args) :readable, so it's currently NULL */
-    return(s7_wrong_type_arg_error(sc, symbol_name(caller), 2, dest, "a mutable object")); /*    so this segfaults if not checking for :readable */
+    return(s7_wrong_type_arg_error(sc, symbol_name(caller), 2, dest, "a mutable object")); /* so this segfaults if not checking for :readable */
 
   have_indices = (is_pair(cddr(args)));
   if ((source == dest) && (!have_indices))
@@ -49035,14 +49060,13 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
 
 static s7_pointer iterator_to_let(s7_scheme *sc, s7_pointer obj)
 {
-  s7_pointer let, seq;
+  s7_pointer let, seq = iterator_sequence(obj);
   s7_int gc_loc;
   if (!sc->at_end_symbol)
     {
       sc->at_end_symbol = make_symbol(sc, "at-end");
       sc->sequence_symbol = make_symbol(sc, "sequence");
     }
-  seq = iterator_sequence(obj);
   let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_iterator_symbol,
 		      sc->at_end_symbol, s7_make_boolean(sc, iterator_is_at_end(obj)),
@@ -49129,13 +49153,12 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
 
 static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
 {
-  s7_pointer let, clet;
+  s7_pointer let, clet = c_object_let(obj);
   if (!sc->class_symbol)
     {
       sc->class_symbol = make_symbol(sc, "class");
       sc->c_object_let_symbol = make_symbol(sc, "c-object-let");
     }
-  clet = c_object_let(obj);
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_c_object_symbol,
 		      sc->c_object_type_symbol, make_integer(sc, c_object_type(obj)),
@@ -81023,20 +81046,20 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
       if ((stepf == g_add_x1) && (is_t_integer(slot_value(ctr_slot))) &&
 	  (endf == g_greater_2) && (is_t_integer(slot_value(end_slot))))
 	{
-	  s7_int i, start = integer(slot_value(ctr_slot));
+	  s7_int start = integer(slot_value(ctr_slot));
 	  s7_int stop = integer(slot_value(end_slot));
 	  if (fp == opt_cond_1b)
 	    {
 	      s7_pointer (*test_fp)(opt_info *o) = o->v[4].o1->v[O_WRAP].fp;
 	      opt_info *test_o1 = o->v[4].o1;
 	      opt_info *o2 = o->v[6].o1;
-	      for (i = start; i <= stop; i++)
+	      for (s7_int i = start; i <= stop; i++)
 		{
 		  slot_set_value(ctr_slot, make_integer(sc, i));
 		  if (test_fp(test_o1) != sc->F) cond_value(o2);
 		}}
 	  else
-	    for (i = start; i <= stop; i++)
+	    for (s7_int i = start; i <= stop; i++)
 	      {
 		slot_set_value(ctr_slot, make_integer(sc, i));
 		fp(o);
@@ -81068,16 +81091,17 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 static bool op_simple_do(s7_scheme *sc)
 {
   /* body might not be safe in this case, but the step and end exprs are easy */
-  s7_pointer end, body, code = cdr(sc->code);
+  s7_pointer code = cdr(sc->code);
+  s7_pointer end = opt1_any(code); /* caddr(caadr(code)) */
+  s7_pointer body = cddr(code);
+
   sc->curlet = make_let_slowly(sc, sc->curlet);
   sc->value = fx_call(sc, cdaar(code));
   let_set_dox_slot1(sc->curlet, add_slot_checked(sc, sc->curlet, caaar(code), sc->value));
 
-  end = opt1_any(code); /* caddr(caadr(code)) */
   if (is_symbol(end))
     let_set_dox_slot2(sc->curlet, lookup_slot_from(end, sc->curlet));
   else let_set_dox_slot2(sc->curlet, make_slot(sc, caaar(code), end));
-
   set_car(sc->t2_1, let_dox1_value(sc->curlet));
   set_car(sc->t2_2, let_dox2_value(sc->curlet));
   sc->value = fn_proc(caadr(code))(sc, sc->t2_1);
@@ -81086,7 +81110,7 @@ static bool op_simple_do(s7_scheme *sc)
       sc->code = cdadr(code);
       return(true);                       /* goto DO_END_CLAUSES */
     }
-  body = cddr(code);
+  
   if ((is_null(cdr(body))) &&             /* one expr in body */
       (is_pair(car(body))) &&             /*   and it is a pair */
       (is_symbol(cadr(opt2_pair(code)))) && /* caddr(caar(code)), caar=(i 0 (+ i 1)), caddr=(+ i 1), so this checks that stepf is reasonable? */
@@ -89798,7 +89822,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	   */
 	APPLY:
 	case OP_APPLY:
-	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */
+	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */ /* this erases info -- intended for apply_error */
 	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_apply %s (%s) to %s\n",
 						__func__, __LINE__, display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
@@ -94420,21 +94444,21 @@ int main(int argc, char **argv)
  * tmock     1177   1165   1057   1054   1037
  * tvect     2519   2464   1772   1708   1689
  * texit     ----   ----   1778   1767   1754
- * s7test    1873   1831   1818   1790   1782
- * timp      2971   2891   2176   2051   2042
+ * s7test    1873   1831   1818   1790   1779
+ * timp      2971   2891   2176   2051   2048
  * lt        2187   2172   2150   2156   2146
  * tauto     ----   ----   2562   2566   2206
- * dup       3805   3788   2492   2327   2247
+ * dup       3805   3788   2492   2327   2247  2273
  * tload     ----   ----   3046   2352   2351
  * tread     2440   2421   2419   2385   2375
  * fbench    2688   2583   2460   2453   2411
  * trclo     2735   2574   2454   2443   2423
  * titer     2865   2842   2641   2490   2482
  * tcopy     8035   5546   2539   2495   2504
- * tmat      3065   3042   2524   2515   2517
+ * tmat      3065   3042   2524   2515   2509
  * tb        2735   2681   2612   2606   2577
  * tsort     3105   3104   2856   2826   2821
- * teq       4068   4045   3536   3468   3437
+ * teq       4068   4045   3536   3468   3448
  * tmac      3950   3873   3033   2992   3545
  * tio       3816   3752   3683   3646   3604
  * tobj      4016   3970   3828   3633   3624
@@ -94442,33 +94466,34 @@ int main(int argc, char **argv)
  * tlet      7775   5640   4450   4423   4407
  * tcase     4960   4793   4439   4462   4416
  * tmap      8869   8774   4489   4490   4470
- * tfft      7820   7729   4755   4683   4596
- * tshoot    5525   5447   5183   5174   5101
- * tform     5357   5348   5307   5310   5287
- * tnum      6348   6013   5433   5425   5387
- * tstr      6880   6342   5488   5462   5400
- * tlamb     6423   6273   5720   5618   5547
+ * tfft      7820   7729   4755   4683   4602
+ * tshoot    5525   5447   5183   5174   5100
+ * tform     5357   5348   5307   5310   5291
+ * tnum      6348   6013   5433   5425   5391
+ * tstr      6880   6342   5488   5462   5402
+ * tlamb     6423   6273   5720   5618   5548
  * tset      ----   ----   ----   6682   6170
- * tlist     7896   7546   6558   6486   6197
- * tmisc     8869   7612   6435   6324   6269
+ * tlist     7896   7546   6558   6486   6198
+ * tmisc     8869   7612   6435   6324   6272
  * tgsl      8485   7802   6373   6333   6304
  * trec      6936   6922   6521   6523   6538
- * tari      13.0   12.7   6827   6717   6634
- * tleft     10.4   10.2   7657   7561   7474 
+ * tari      13.0   12.7   6827   6717   6633
+ * tleft     10.4   10.2   7657   7561   7475
  * tgc       11.9   11.1   8177   8062   8024
- * thash     11.8   11.7   9734   9583   9479
+ * thash     11.8   11.7   9734   9583   9492
  * cb        11.2   11.0   9658   9677   9546
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.3   56.5
- * lg        ----   ----  105.2  105.8  104.9
+ * sg        ----   ----   55.9   56.3   56.6
+ * lg        ----   ----  105.2  105.8  105.0
  * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
- * tset op for eval
- * t718: optimize_syntax overeagerness, immutable list display
- * pulseaudio playback?
+ * tset op for eval, p_p_f_/setter->s7test
+ * t718: optimize_syntax overeagerness
+ *       immutable field of inlet/hash-table, vector|hash+typer, etc :readable display
+ * pulseaudio playback? pulse_audio_sample_types audio.c smsg
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
@@ -94479,4 +94504,6 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
+ * setter for specific sequence element, cleaner way to set setter for inlet field
+ * unknown_g where g=c for closure cases?
  */
