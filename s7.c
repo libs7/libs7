@@ -1295,7 +1295,7 @@ struct s7_scheme {
              open_output_file_symbol, open_output_function_symbol, open_output_string_symbol, openlet_symbol, outlet_symbol, owlet_symbol,
              pair_filename_symbol, pair_line_number_symbol, peek_char_symbol, pi_symbol, port_filename_symbol, port_line_number_symbol,
              port_file_symbol, port_position_symbol, procedure_source_symbol, provide_symbol,
-             quotient_symbol,
+             qq_append_symbol, quotient_symbol,
              random_state_symbol, random_state_to_list_symbol, random_symbol, rationalize_symbol, read_byte_symbol,
              read_char_symbol, read_line_symbol, read_string_symbol, read_symbol, real_part_symbol, remainder_symbol,
              require_symbol, reverse_symbol, reverseb_symbol, rootlet_symbol, round_symbol,
@@ -67630,8 +67630,7 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
 	for (orig = form, bq = cdr(sc->w), i = 0; i < len; i++, orig = cdr(orig), bq = cdr(bq))
 	  set_car(bq, g_quasiquote_1(sc, car(orig), false));
 	set_car(bq, g_quasiquote_1(sc, car(orig), false));
-
-	sc->w = list_3(sc, sc->append_symbol, sc->w, g_quasiquote_1(sc, cdr(orig), false));
+	sc->w = list_3(sc, sc->qq_append_symbol, sc->w, g_quasiquote_1(sc, cdr(orig), false));
 	/* quasiquote might quote a symbol in cdr(orig), so it's not completely pointless */
       }
     bq = sc->w;
@@ -67649,6 +67648,24 @@ static s7_pointer g_quasiquote(s7_scheme *sc, s7_pointer args)
    *   which is an infinite loop.  Guile says syntax error (because it thinks "quote" can't be a parameter name, I think).
    */
   return(g_quasiquote_1(sc, car(args), true));
+}
+
+static s7_pointer g_qq_append(s7_scheme *sc, s7_pointer args)
+{
+  #define H_qq_append "CL list* (I think) for quasiquote's internal use"
+  #define Q_qq_append s7_make_circular_signature(sc, 0, 1, sc->T)
+  s7_pointer a = car(args), b = cadr(args);
+  s7_pointer p, tp, np;
+  if (is_null(a)) return(b);
+  p = cdr(a);
+  if (is_null(p)) return(cons(sc, car(a), b));
+  tp = list_1(sc, car(a));
+  s7_gc_protect_via_stack(sc, tp);
+  for (np = tp; is_pair(p); p = cdr(p), np = cdr(np))
+    set_cdr(np, list_1(sc, car(p)));
+  set_cdr(np, b);
+  unstack(sc);
+  return(tp);
 }
 
 
@@ -74061,6 +74078,7 @@ static s7_pointer fx_case_a_s_g_a(s7_scheme *sc, s7_pointer code)
 
 #define if_pair_set_up_begin(Sc) if (is_pair(cdr(Sc->code))) {check_stack_size(Sc); push_stack_no_args(Sc, Sc->begin_op, cdr(Sc->code));} Sc->code = car(Sc->code);
 #define if_pair_set_up_begin_unchecked(Sc) if (is_pair(cdr(Sc->code))) push_stack_no_args(Sc, Sc->begin_op, cdr(Sc->code)); Sc->code = car(Sc->code);
+/* using the one_form bit here was slower */
 
 static bool op_case_g_g(s7_scheme *sc)
 {
@@ -83719,7 +83737,8 @@ static inline void op_closure_4s(s7_scheme *sc)
 
 static void op_safe_closure_aa(s7_scheme *sc)
 {
-  s7_pointer p = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer p = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p)); /* fx_call can affect sc->value, but not sc->code, I think */
   sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), sc->code);
   p = T_Pair(closure_body(f));
@@ -83730,7 +83749,8 @@ static void op_safe_closure_aa(s7_scheme *sc)
 
 static inline void op_safe_closure_aa_o(s7_scheme *sc)
 {
-  s7_pointer p = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer p = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p));
   sc->curlet = update_let_with_two_slots(sc, closure_let(f), fx_call(sc, p), sc->code);
   sc->code = car(closure_body(f));
@@ -83738,7 +83758,8 @@ static inline void op_safe_closure_aa_o(s7_scheme *sc)
 
 static void op_closure_aa(s7_scheme *sc)
 {
-  s7_pointer p = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer p = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p));
   sc->value = fx_call(sc, p);
   sc->curlet = make_let_with_two_slots(sc, closure_let(f), car(closure_args(f)), sc->value, cadr(closure_args(f)), sc->code);
@@ -83750,7 +83771,8 @@ static void op_closure_aa(s7_scheme *sc)
 
 static Inline void op_closure_aa_o(s7_scheme *sc)
 {
-  s7_pointer p = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer p = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p));
   sc->value = fx_call(sc, p);
   sc->curlet = make_let_with_two_slots(sc, closure_let(f), car(closure_args(f)), sc->value, cadr(closure_args(f)), sc->code);
@@ -83791,7 +83813,8 @@ static void op_safe_closure_ns(s7_scheme *sc)
 
 static inline void op_safe_closure_3a(s7_scheme *sc)
 {
-  s7_pointer p = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer p = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->code = fx_call(sc, cdr(p));   /* fx_call can affect sc->value, but not sc->code, I think */
   sc->args = fx_call(sc, cddr(p));  /* is sc->args safe here? */
   sc->curlet = update_let_with_three_slots(sc, closure_let(f), fx_call(sc, p), sc->code, sc->args);
@@ -83847,7 +83870,8 @@ static Inline void op_closure_ns(s7_scheme *sc)
 
 static void op_closure_ass(s7_scheme *sc)
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   make_let_with_three_slots(sc, f, fx_call(sc, args), lookup(sc, cadr(args)), lookup(sc, caddr(args)));
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
@@ -83855,7 +83879,8 @@ static void op_closure_ass(s7_scheme *sc)
 
 static void op_closure_aas(s7_scheme *sc)
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->z = fx_call(sc, args);
   make_let_with_three_slots(sc, f, sc->z, fx_call(sc, cdr(args)), lookup(sc, caddr(args)));
   sc->code = T_Pair(closure_body(f));
@@ -83864,7 +83889,8 @@ static void op_closure_aas(s7_scheme *sc)
 
 static void op_closure_saa(s7_scheme *sc)
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->z = fx_call(sc, cdr(args));
   make_let_with_three_slots(sc, f, lookup(sc, car(args)), sc->z, fx_call(sc, cddr(args)));
   sc->code = T_Pair(closure_body(f));
@@ -83873,7 +83899,8 @@ static void op_closure_saa(s7_scheme *sc)
 
 static void op_closure_asa(s7_scheme *sc)
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   sc->z = fx_call(sc, args);
   make_let_with_three_slots(sc, f, sc->z, lookup(sc, cadr(args)), fx_call(sc, cddr(args)));
   sc->code = T_Pair(closure_body(f));
@@ -83882,7 +83909,8 @@ static void op_closure_asa(s7_scheme *sc)
 
 static void op_closure_sas(s7_scheme *sc)
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   make_let_with_three_slots(sc, f, lookup(sc, car(args)), fx_call(sc, cdr(args)), lookup(sc, caddr(args)));
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
@@ -83890,7 +83918,8 @@ static void op_closure_sas(s7_scheme *sc)
 
 static inline void op_closure_3a(s7_scheme *sc) /* if inlined, tlist -60 */
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   gc_protect_2_via_stack(sc, fx_call(sc, args), fx_call(sc, cdr(args)));
   make_let_with_three_slots(sc, f, stack_protected1(sc), stack_protected2(sc), fx_call(sc, cddr(args)));
   unstack(sc);
@@ -83900,7 +83929,8 @@ static inline void op_closure_3a(s7_scheme *sc) /* if inlined, tlist -60 */
 
 static void op_closure_4a(s7_scheme *sc) /* sass */
 {
-  s7_pointer args = cdr(sc->code), f = opt1_lambda(sc->code);
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
   gc_protect_2_via_stack(sc, fx_call(sc, args), fx_call(sc, cddr(args)));
   args = cdr(args);
   stack_protected3(sc) = fx_call(sc, args);  /* [-3]=second */
@@ -83912,7 +83942,8 @@ static void op_closure_4a(s7_scheme *sc) /* sass */
 
 static void op_closure_na(s7_scheme *sc)
 {
-  s7_pointer exprs = cdr(sc->code), func = opt1_lambda(sc->code), slot, last_slot;
+  s7_pointer exprs = cdr(sc->code);
+  s7_pointer func = opt1_lambda(sc->code), slot, last_slot;
   s7_int id;
   s7_pointer pars = closure_args(func);
   s7_pointer e = make_let(sc, closure_let(func));
@@ -93311,6 +93342,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->reverseb_symbol =              defun("reverse!",		reverse_in_place,	1, 0, false);
   sc->sort_symbol =                  unsafe_defun("sort!",      sort, 	                2, 0, false); /* not semisafe! */
   sc->append_symbol =                defun("append",		append,			0, 0, true);
+  sc->qq_append_symbol =             defun("[list*]",           qq_append,		0, 0, true);
 
 #if (!WITH_PURE_S7)
   sc->vector_append_symbol =         defun("vector-append",	vector_append,		0, 0, true);
@@ -94492,8 +94524,13 @@ int main(int argc, char **argv)
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       immutable field of inlet/hash-table, vector|hash+typer, etc :readable display
- * pulseaudio playback? pulse_audio_sample_types audio.c smsg
+ *       immutable field of inlet, vector, hash + typer, etc :readable display
+ *       typer to set hash key value immutable
+ * openlet -> closed in method search?
+ * unknown_g where g=c for closure cases?
+ * libutf8proc: does utf8proc_map (et al) need free?
+ * *_o (is _o then cases where *| doesn't need to check pair(cdr)
+ *   clos3s/4s lg, check _m(implicit) where if_pair
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
@@ -94504,6 +94541,4 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
- * setter for specific sequence element, cleaner way to set setter for inlet field
- * unknown_g where g=c for closure cases?
  */

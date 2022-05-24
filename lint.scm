@@ -9214,7 +9214,9 @@
 		    (if (and (= made-suggestion suggestion)
 			     (not (equal? (cdr form) new-args)))
 			(lint-format "perhaps ~A" caller (lists->string form (cons 'append new-args)))))))))
-	  (hash-special 'append sp-append))
+	  (hash-special 'append sp-append)
+	  ;(hash-special '[list*] sp-append) ; [list*] in the new code?
+	  )
 
 	;; ---------------- apply ----------------
 	(let ()
