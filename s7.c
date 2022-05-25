@@ -2975,7 +2975,7 @@ static void init_types(void)
 #define character_name_length(p)       (T_Chr(p))->object.chr.length
 
 #define optimize_op(P)                 (T_Pos(P))->tf.opts.opt_choice
-#define set_optimize_op(P, Op)         (T_Pos(P))->tf.opts.opt_choice = Op
+#define set_optimize_op(P, Op)         (T_Pos(P))->tf.opts.opt_choice = (Op)
 #define OP_HOP_MASK                    0xfffe
 #define optimize_op_match(P, Q)        ((is_optimized(P)) && ((optimize_op(P) & OP_HOP_MASK) == (Q)))
 #define op_no_hop(P)                   (optimize_op(P) & OP_HOP_MASK)
@@ -4044,7 +4044,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_CLOSURE_A, HOP_CLOSURE_A, OP_CLOSURE_A_O, HOP_CLOSURE_A_O, OP_CLOSURE_P, HOP_CLOSURE_P,
       OP_CLOSURE_AP, HOP_CLOSURE_AP, OP_CLOSURE_PA, HOP_CLOSURE_PA, OP_CLOSURE_PP, HOP_CLOSURE_PP,
       OP_CLOSURE_FA, HOP_CLOSURE_FA, OP_CLOSURE_SS, HOP_CLOSURE_SS, OP_CLOSURE_SS_O, HOP_CLOSURE_SS_O,
-      OP_CLOSURE_SC, HOP_CLOSURE_SC, OP_CLOSURE_SC_O, HOP_CLOSURE_SC_O, OP_CLOSURE_3S, HOP_CLOSURE_3S, OP_CLOSURE_4S, HOP_CLOSURE_4S,
+      OP_CLOSURE_SC, HOP_CLOSURE_SC, OP_CLOSURE_SC_O, HOP_CLOSURE_SC_O, 
+      OP_CLOSURE_3S, HOP_CLOSURE_3S, OP_CLOSURE_3S_O, HOP_CLOSURE_3S_O, OP_CLOSURE_4S, HOP_CLOSURE_4S,
       OP_CLOSURE_AA, HOP_CLOSURE_AA, OP_CLOSURE_AA_O, HOP_CLOSURE_AA_O, OP_CLOSURE_3A, HOP_CLOSURE_3A, OP_CLOSURE_4A, HOP_CLOSURE_4A,
       OP_CLOSURE_NA, HOP_CLOSURE_NA, OP_CLOSURE_ASS, HOP_CLOSURE_ASS, OP_CLOSURE_SAS, HOP_CLOSURE_SAS ,OP_CLOSURE_AAS, HOP_CLOSURE_AAS,
       OP_CLOSURE_SAA, HOP_CLOSURE_SAA, OP_CLOSURE_ASA, HOP_CLOSURE_ASA, OP_CLOSURE_NS, HOP_CLOSURE_NS,
@@ -4262,7 +4263,8 @@ static const char* op_names[NUM_OPS] =
       "closure_a", "h_closure_a", "closure_a_o", "h_closure_a_o", "closure_p", "h_closure_p",
       "closure_ap", "h_closure_ap", "closure_pa", "h_closure_pa", "closure_pp", "h_closure_pp",
       "closure_fa", "h_closure_fa", "closure_ss", "h_closure_ss", "closure_ss_o", "h_closure_ss_o",
-      "closure_sc", "h_closure_sc", "closure_sc_o", "h_closure_sc_o", "closure_3s", "h_closure_3s", "closure_4s", "h_closure_4s",
+      "closure_sc", "h_closure_sc", "closure_sc_o", "h_closure_sc_o", 
+      "closure_3s", "h_closure_3s", "closure_3s_o", "h_closure_3s_o", "closure_4s", "h_closure_4s",
       "closure_aa", "h_closure_aa", "closure_aa_o", "h_closure_aa_o", "closure_3a", "h_closure_3a", "closure_4a", "h_closure_4a",
       "closure_na", "h_closure_na", "closure_ass", "h_closure_ass", "closure_sas", "h_closure_sas ","closure_aas", "h_closure_aas",
       "closure_saa", "h_closure_saa", "closure_asa", "h_closure_asa", "closure_ns", "h_closure_ns",
@@ -5322,7 +5324,10 @@ static void set_opt2_1(s7_scheme *sc, s7_pointer p, s7_pointer x, uint64_t role,
 	    op_names[optimize_op(car(p))],
 	    ((is_h_optimized(car(p))) && (is_safe_c_op(optimize_op(car(p))))) ? UNBOLD_TEXT : "");
   if ((role != OPT2_FX) && (role != OPT2_DIRECT) && (has_fx(p))) /* sometimes opt2_direct just specializes fx */
-    fprintf(stderr, "%s[%d]: overwrite has_fx: %s %s\n", func, line, opt2_role_name(role), display_80(p));
+    {
+      fprintf(stderr, "%s[%d]: overwrite has_fx: %s %s\n", func, line, opt2_role_name(role), display_80(p));
+      if (sc->stop_at_error) abort();
+    }
   p->object.cons.o2.opt2 = x;
   base_opt2(p, role);
 }
@@ -33109,7 +33114,9 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 			}
 		      if (has_methods(obj))
 			port_write_string(port)(sc, "(openlet ", 9, port);
-		      /* not immutable here because we'll need to set the let fields below, then declare it immutable */
+		      /* not immutable here because we'll need to set the let fields below, then declare it immutable 
+		       *   TODO: this sounds wrong and we don't set anything immutable below
+		       */
 		      if (let_has_setter(obj))
 			{
 			  port_write_string(port)(sc, "(let (", 6, port);
@@ -33137,6 +33144,10 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 		      /* this ignores outlet -- but is that a problem? */
 		      /* (object->string (let ((i 0)) (set! (setter 'i) integer?) (curlet)) :readable) -> "(let ((i 0)) (set! (setter 'i) #_integer?) (curlet))" */
 		      if (let_has_setter(obj))
+			/* TODO: or variable is immutable 
+			 *   need let_has_immutable_slot(sc, let)
+			 *   then below immutable_slots_to_port or whatever
+			 */
 			{
 			  port_write_string(port)(sc, "(let (", 6, port);
 			  slot_list_to_port(sc, let_slots(obj), port, ci, true);
@@ -67652,7 +67663,7 @@ static s7_pointer g_quasiquote(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_qq_append(s7_scheme *sc, s7_pointer args)
 {
-  #define H_qq_append "CL list* (I think) for quasiquote's internal use"
+  #define H_qq_append "[list*]: CL list* (I think) for quasiquote's internal use"
   #define Q_qq_append s7_make_circular_signature(sc, 0, 1, sc->T)
   s7_pointer a = car(args), b = cadr(args);
   s7_pointer p, tp, np;
@@ -70759,12 +70770,13 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
       if (symbols == 3)
 	{
 	  s7_pointer body = closure_body(func);
+	  bool one_form = is_null(cdr(body));
 	  set_opt1_lambda_add(expr, func);
 	  set_opt3_arglen(cdr(expr), 3);
 
 	  if (is_safe_closure(func))
 	    {
-	      if ((is_null(cdr(body))) &&
+	      if ((one_form) &&
 		  (is_fxable(sc, car(body))))
 		{
 		  set_opt2_sym(expr, arg2);
@@ -70777,7 +70789,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	      else set_optimize_op(expr, hop + OP_SAFE_CLOSURE_3S);
 	      return(OPT_T);
 	    }
-	  set_unsafe_optimize_op(expr, hop + OP_CLOSURE_3S);
+	  set_unsafe_optimize_op(expr, hop + ((one_form) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S));
 	  return(OPT_F);
 	}
 
@@ -83242,6 +83254,7 @@ static void op_closure_s(s7_scheme *sc)
   check_stack_size(sc);
   sc->curlet = make_let_with_slot(sc, closure_let(p), car(closure_args(p)), lookup(sc, opt2_sym(sc->code)));
   sc->code = T_Pair(closure_body(p));
+  /* if (!is_pair(cdr(sc->code))) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   if_pair_set_up_begin_unchecked(sc);
 }
 
@@ -83257,6 +83270,7 @@ static void op_safe_closure_s(s7_scheme *sc)
   s7_pointer p = opt1_lambda(sc->code);
   sc->curlet = update_let_with_slot(sc, closure_let(p), lookup(sc, opt2_sym(sc->code)));
   sc->code = T_Pair(closure_body(p));
+  /* if (!is_pair(cdr(sc->code))) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   if_pair_set_up_begin_unchecked(sc);
 }
 
@@ -83712,15 +83726,25 @@ static void op_closure_sc_o(s7_scheme *sc)
   sc->code = car(closure_body(f));
 }
 
-static inline void op_closure_3s(s7_scheme *sc)
+static void op_closure_3s(s7_scheme *sc)
 {
   s7_pointer args = cdr(sc->code);
   s7_pointer v1 = lookup(sc, car(args));
+  s7_pointer f = opt1_lambda(sc->code);
   args = cdr(args);
-  sc->code = opt1_lambda(sc->code);
-  make_let_with_three_slots(sc, sc->code, v1, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
-  sc->code = T_Pair(closure_body(sc->code));
+  make_let_with_three_slots(sc, f, v1, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
+  sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
+}
+
+static inline void op_closure_3s_o(s7_scheme *sc)
+{
+  s7_pointer args = cdr(sc->code);
+  s7_pointer v1 = lookup(sc, car(args));
+  s7_pointer f = opt1_lambda(sc->code);
+  args = cdr(args);
+  make_let_with_three_slots(sc, f, v1, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
+  sc->code = car(closure_body(f));
 }
 
 static inline void op_closure_4s(s7_scheme *sc)
@@ -83728,10 +83752,10 @@ static inline void op_closure_4s(s7_scheme *sc)
   s7_pointer args = cdr(sc->code);
   s7_pointer v1 = lookup(sc, car(args));
   s7_pointer v2 = lookup(sc, cadr(args));
+  s7_pointer f = opt1_lambda(sc->code);
   args = cddr(args);
-  sc->code = opt1_lambda(sc->code);
-  make_let_with_four_slots(sc, sc->code, v1, v2, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
-  sc->code = T_Pair(closure_body(sc->code));
+  make_let_with_four_slots(sc, f, v1, v2, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
+  sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
 }
 
@@ -88155,12 +88179,15 @@ static bool op_unknown_g(s7_scheme *sc)
       break;
 
     case T_CLOSURE:
-      if ((!has_methods(f)) &&
+      if ((sym_case) &&  /* keyword happens rarely, other constants never */
+	  (!has_methods(f)) &&
 	  (closure_arity_to_int(sc, f) == 1))
 	{
 	  s7_pointer body = closure_body(f);
+	  bool one_form = is_null(cdr(body));
 	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  set_opt2_sym(code, cadr(code));
+
 	  /* code here might be (f x) where f is passed elsewhere as a function parameter,
 	   *   first time through we look it up, find a safe-closure and optimize as (say) safe_closure_s_a,
 	   *   next time it is something else, etc.  Rather than keep optimizing it locally, we need to
@@ -88173,14 +88200,21 @@ static bool op_unknown_g(s7_scheme *sc)
 	    {
 	      switch (op_no_hop(code))
 		{
-		case OP_CLOSURE_S:              set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S :  OP_S_G); break;
+		case OP_CLOSURE_S:
+		  set_optimize_op(code, (is_safe_closure(f)) ? ((one_form) ? OP_SAFE_CLOSURE_S_O : OP_SAFE_CLOSURE_S) :  OP_S_G); break;
 		case OP_CLOSURE_S_O:
-		case OP_SAFE_CLOSURE_S:         set_optimize_op(code, OP_CLOSURE_S); break;
+		case OP_SAFE_CLOSURE_S:
+		  set_optimize_op(code, ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S)); break;
 		case OP_SAFE_CLOSURE_S_O:
 		case OP_SAFE_CLOSURE_S_A:
 		case OP_SAFE_CLOSURE_S_TO_S:
-		case OP_SAFE_CLOSURE_S_TO_SC:   set_optimize_op(code, (is_safe_closure(f)) ? OP_SAFE_CLOSURE_S : OP_CLOSURE_S); break;
-		default:                        set_optimize_op(code, OP_S_G); break;
+		case OP_SAFE_CLOSURE_S_TO_SC:
+		  set_optimize_op(code, (is_safe_closure(f)) ? 
+				  ((one_form) ? OP_SAFE_CLOSURE_S_O : OP_SAFE_CLOSURE_S) : 
+				  ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
+		  break;
+		default:
+		  set_optimize_op(code, OP_S_G); break;
 		}
 	      set_opt1_lambda(code, f);
 	      return(true);
@@ -88198,7 +88232,7 @@ static bool op_unknown_g(s7_scheme *sc)
 		}
 	      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S);
 	    }
-	  else set_optimize_op(code, hop + ((is_null(cdr(body))) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
+	  else set_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
 	  set_is_unknopt(code);
 	  set_opt1_lambda(code, f);
 	  return(true);
@@ -88522,7 +88556,7 @@ static bool op_unknown_ns(s7_scheme *sc)
 	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if (num_args == 3)
-	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : OP_CLOSURE_3S)));
+	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : ((is_null(cdr(closure_body(f)))) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S))));
 	  if (num_args == 4)
 	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_4S)));
 	  return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_NS)));
@@ -88986,17 +89020,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       goto TOP_NO_POP;
 
     BEGIN:
-#if 1
       if (is_pair(cdr(sc->code)))
 	{
 	  set_current_code(sc, sc->code);
 	  push_stack_no_args(sc, sc->begin_op, cdr(sc->code));
 	}
       sc->code = car(sc->code);
-#else
-      if_pair_set_up_begin_unchecked(sc);
-      set_current_code(sc, sc->code);
-#endif
 
     EVAL:
       sc->cur_op = optimize_op(sc->code); /* sc->code can be anything, optimize_op examines a type field (opt_choice) */
@@ -89512,7 +89541,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_SAFE_CLOSURE_SS_A: sc->value = op_safe_closure_ss_a(sc, sc->code); continue;
 
 	case OP_CLOSURE_3S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 3)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
-	case HOP_CLOSURE_3S: op_closure_3s(sc); goto EVAL;
+	case HOP_CLOSURE_3S: op_closure_3s(sc); goto EVAL; /* "fine" here means changing func (as arg) does not constantly call op_unknown_ns */
+
+	case OP_CLOSURE_3S_O: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 3)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
+	case HOP_CLOSURE_3S_O: op_closure_3s_o(sc); goto EVAL;
 
 	case OP_CLOSURE_4S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 4)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_4S: op_closure_4s(sc); goto EVAL;
@@ -93342,7 +93374,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->reverseb_symbol =              defun("reverse!",		reverse_in_place,	1, 0, false);
   sc->sort_symbol =                  unsafe_defun("sort!",      sort, 	                2, 0, false); /* not semisafe! */
   sc->append_symbol =                defun("append",		append,			0, 0, true);
-  sc->qq_append_symbol =             defun("[list*]",           qq_append,		0, 0, true);
+  sc->qq_append_symbol =             defun("[list*]",           qq_append,		2, 0, false);
 
 #if (!WITH_PURE_S7)
   sc->vector_append_symbol =         defun("vector-append",	vector_append,		0, 0, true);
@@ -94106,7 +94138,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 914)
+  if (NUM_OPS != 916)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -94480,7 +94512,7 @@ int main(int argc, char **argv)
  * timp      2971   2891   2176   2051   2048
  * lt        2187   2172   2150   2156   2146
  * tauto     ----   ----   2562   2566   2206
- * dup       3805   3788   2492   2327   2247  2273
+ * dup       3805   3788   2492   2327   2277
  * tload     ----   ----   3046   2352   2351
  * tread     2440   2421   2419   2385   2375
  * fbench    2688   2583   2460   2453   2411
@@ -94503,7 +94535,7 @@ int main(int argc, char **argv)
  * tform     5357   5348   5307   5310   5291
  * tnum      6348   6013   5433   5425   5391
  * tstr      6880   6342   5488   5462   5402
- * tlamb     6423   6273   5720   5618   5548
+ * tlamb     6423   6273   5720   5618   5548  5542
  * tset      ----   ----   ----   6682   6170
  * tlist     7896   7546   6558   6486   6198
  * tmisc     8869   7612   6435   6324   6272
@@ -94517,20 +94549,20 @@ int main(int argc, char **argv)
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.3   56.6
- * lg        ----   ----  105.2  105.8  105.0
+ * sg        ----   ----   55.9   56.3   56.6  56.5
+ * lg        ----   ----  105.2  105.8  105.0 104.976/992 -> 104.778
  * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       immutable field of inlet, vector, hash + typer, etc :readable display
+ *       immutable field of inlet, vector, hash + typer, etc :readable display, but requires func also if local?
  *       typer to set hash key value immutable
  * openlet -> closed in method search?
- * unknown_g where g=c for closure cases?
- * libutf8proc: does utf8proc_map (et al) need free?
- * *_o (is _o then cases where *| doesn't need to check pair(cdr)
- *   clos3s/4s lg, check _m(implicit) where if_pair
+ * unknown_g closure where g=keyword -- "g" = normal_symbol? :key->"a"
+ * libutf8proc: does utf8proc_map (et al) need free? encode_char|map->s7test for known cases
+ * more closure_is_fine cases!  and op_closure_4s_o etc
+ *   remove all closure_m cases?
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
