@@ -4038,14 +4038,15 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_C_CP, HOP_SAFE_C_CP, OP_SAFE_C_AP, HOP_SAFE_C_AP, OP_SAFE_C_PA, HOP_SAFE_C_PA, OP_SAFE_C_PS, HOP_SAFE_C_PS,
       OP_SAFE_C_PC, HOP_SAFE_C_PC, OP_SAFE_C_SSP, HOP_SAFE_C_SSP, OP_ANY_C_NP, HOP_ANY_C_NP, OP_SAFE_C_3P, HOP_SAFE_C_3P,
 
-      OP_THUNK, HOP_THUNK, OP_THUNK_ANY, HOP_THUNK_ANY, OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A, OP_SAFE_THUNK_ANY, HOP_SAFE_THUNK_ANY,
+      OP_THUNK, HOP_THUNK, OP_THUNK_O, HOP_THUNK_O, OP_THUNK_ANY, HOP_THUNK_ANY, 
+      OP_SAFE_THUNK, HOP_SAFE_THUNK, OP_SAFE_THUNK_A, HOP_SAFE_THUNK_A, OP_SAFE_THUNK_ANY, HOP_SAFE_THUNK_ANY,
 
       OP_CLOSURE_S, HOP_CLOSURE_S, OP_CLOSURE_S_O, HOP_CLOSURE_S_O,
       OP_CLOSURE_A, HOP_CLOSURE_A, OP_CLOSURE_A_O, HOP_CLOSURE_A_O, OP_CLOSURE_P, HOP_CLOSURE_P,
       OP_CLOSURE_AP, HOP_CLOSURE_AP, OP_CLOSURE_PA, HOP_CLOSURE_PA, OP_CLOSURE_PP, HOP_CLOSURE_PP,
       OP_CLOSURE_FA, HOP_CLOSURE_FA, OP_CLOSURE_SS, HOP_CLOSURE_SS, OP_CLOSURE_SS_O, HOP_CLOSURE_SS_O,
       OP_CLOSURE_SC, HOP_CLOSURE_SC, OP_CLOSURE_SC_O, HOP_CLOSURE_SC_O, 
-      OP_CLOSURE_3S, HOP_CLOSURE_3S, OP_CLOSURE_3S_O, HOP_CLOSURE_3S_O, OP_CLOSURE_4S, HOP_CLOSURE_4S,
+      OP_CLOSURE_3S, HOP_CLOSURE_3S, OP_CLOSURE_3S_O, HOP_CLOSURE_3S_O, OP_CLOSURE_4S, HOP_CLOSURE_4S, OP_CLOSURE_4S_O, HOP_CLOSURE_4S_O,
       OP_CLOSURE_AA, HOP_CLOSURE_AA, OP_CLOSURE_AA_O, HOP_CLOSURE_AA_O, OP_CLOSURE_3A, HOP_CLOSURE_3A, OP_CLOSURE_4A, HOP_CLOSURE_4A,
       OP_CLOSURE_NA, HOP_CLOSURE_NA, OP_CLOSURE_ASS, HOP_CLOSURE_ASS, OP_CLOSURE_SAS, HOP_CLOSURE_SAS ,OP_CLOSURE_AAS, HOP_CLOSURE_AAS,
       OP_CLOSURE_SAA, HOP_CLOSURE_SAA, OP_CLOSURE_ASA, HOP_CLOSURE_ASA, OP_CLOSURE_NS, HOP_CLOSURE_NS,
@@ -4063,7 +4064,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_AGG, HOP_SAFE_CLOSURE_AGG, OP_SAFE_CLOSURE_3A, HOP_SAFE_CLOSURE_3A, OP_SAFE_CLOSURE_NA, HOP_SAFE_CLOSURE_NA,
       OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_NS, HOP_SAFE_CLOSURE_NS, /* safe_closure_4s gained very little */
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
-      /* ssa|saa|ns|na|3s|agg|3a|sc|ap|pa|pp_a ? thunk_o? op_closure_ss|sc|3s|4s|na|3*_o?  */
+      /* ssa|saa|ns|na|3s|agg|3a|sc|ap|pa|pp_a ? thunk_o? op_closure_ns?  */
 
       OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
       OP_ANY_CLOSURE_SYM, HOP_ANY_CLOSURE_SYM, OP_ANY_CLOSURE_A_SYM, HOP_ANY_CLOSURE_A_SYM,
@@ -4257,14 +4258,15 @@ static const char* op_names[NUM_OPS] =
       "safe_c_cp", "h_safe_c_cp", "safe_c_ap", "h_safe_c_ap", "safe_c_pa", "h_safe_c_pa", "safe_c_ps", "h_safe_c_ps",
       "safe_c_pc", "h_safe_c_pc", "safe_c_ssp", "h_safe_c_ssp", "any_c_np", "h_any_c_np", "safe_c_3p", "h_safe_c_3p",
 
-      "thunk", "h_thunk", "thunk_any", "h_thunk_any", "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a", "safe_thunk_any", "h_safe_thunk_any",
+      "thunk", "h_thunk", "thunk_o", "h_thunk_o", "thunk_any", "h_thunk_any", 
+      "safe_thunk", "h_safe_thunk", "safe_thunk_a", "h_safe_thunk_a", "safe_thunk_any", "h_safe_thunk_any",
 
       "closure_s", "h_closure_s", "closure_s_o", "h_closure_s_o",
       "closure_a", "h_closure_a", "closure_a_o", "h_closure_a_o", "closure_p", "h_closure_p",
       "closure_ap", "h_closure_ap", "closure_pa", "h_closure_pa", "closure_pp", "h_closure_pp",
       "closure_fa", "h_closure_fa", "closure_ss", "h_closure_ss", "closure_ss_o", "h_closure_ss_o",
       "closure_sc", "h_closure_sc", "closure_sc_o", "h_closure_sc_o", 
-      "closure_3s", "h_closure_3s", "closure_3s_o", "h_closure_3s_o", "closure_4s", "h_closure_4s",
+      "closure_3s", "h_closure_3s", "closure_3s_o", "h_closure_3s_o", "closure_4s", "h_closure_4s", "closure_4s_o", "h_closure_4s_o",
       "closure_aa", "h_closure_aa", "closure_aa_o", "h_closure_aa_o", "closure_3a", "h_closure_3a", "closure_4a", "h_closure_4a",
       "closure_na", "h_closure_na", "closure_ass", "h_closure_ass", "closure_sas", "h_closure_sas ","closure_aas", "h_closure_aas",
       "closure_saa", "h_closure_saa", "closure_asa", "h_closure_asa", "closure_ns", "h_closure_ns",
@@ -31860,7 +31862,7 @@ static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
 
 static inline void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
-  /* I think this is the only place we print a symbol's name */
+  /* I think this is the only place we print a symbol's name; ci is needed to be a display_function, it is not used */
   if ((!is_clean_symbol(obj)) &&
       (symbol_needs_slashification(sc, obj)))
     {
@@ -31962,7 +31964,7 @@ static void make_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port)
 {
   s7_int vlen;
   int32_t plen;
-  char buf[128];
+  char buf[256];
   const char* vtyp = "";
 
   if (is_float_vector(vect))
@@ -31974,6 +31976,7 @@ static void make_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port)
       if (is_byte_vector(vect))
 	vtyp = "byte-";
   vlen = vector_length(vect);
+
   if (vector_rank(vect) == 1)
     {
       plen = catstrs_direct(buf, "(make-", vtyp, "vector ", integer_to_string_no_length(sc, vlen), " ", (const char *)NULL);
@@ -32007,6 +32010,8 @@ static void write_vector_dimensions(s7_scheme *sc, s7_pointer vect, s7_pointer p
   plen = catstrs_direct(buf, integer_to_string_no_length(sc, vector_dimension(vect, dim)), "))", (const char *)NULL);
   port_write_string(port)(sc, buf, plen, port);
 }
+
+static void port_write_vector_typer(s7_scheme *sc, s7_pointer vect, s7_pointer port);
 
 static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
@@ -32054,6 +32059,11 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	{
 	  make_vector_to_port(sc, vect, port);
 	  object_to_port(sc, p0, port, use_write, NULL);
+	  if (is_typed_vector(vect)) 
+	    {
+	      port_write_character(port)(sc, ' ', port);
+	      port_write_vector_typer(sc, vect, port);
+	    }
 	  port_write_character(port)(sc, ')', port);
 	  return;
 	}}
@@ -32954,37 +32964,46 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
   free_cell(sc, p);  /* free_cell(sc, iterator); */ /* 18-Dec-18 removed */
 }
 
-static void slot_list_to_port(s7_scheme *sc, s7_pointer slot, s7_pointer port, shared_info_t *ci, bool bindings)
+static void slot_list_to_port(s7_scheme *sc, s7_pointer slot, s7_pointer port, shared_info_t *ci, bool bindings) /* bindings=let/inlet choice */
 {
+  bool first_time = true;
   for (; tis_slot(slot); slot = next_slot(slot))
     {
       if (bindings)
 	{
-	  if (tis_slot(next_slot(slot)))
-	    port_write_string(port)(sc, " (", 2, port);
-	  else port_write_character(port)(sc, '(', port);
+	  if (first_time) 
+	    {
+	      port_write_character(port)(sc, '(', port);
+	      first_time = false;
+	    }
+	  else port_write_string(port)(sc, " (", 2, port);
 	}
-      else port_write_character(port)(sc, ' ', port);
-      symbol_to_port(sc, slot_symbol(slot), port, (bindings) ? P_DISPLAY : P_KEY, ci);  /* (object->string (inlet (symbol "(\")") 1) :readable) */
+      else port_write_character(port)(sc, ' ', port);	
+      symbol_to_port(sc, slot_symbol(slot), port, (bindings) ? P_DISPLAY : P_KEY, NULL);  /* (object->string (inlet (symbol "(\")") 1) :readable) */
       port_write_character(port)(sc, ' ', port);
       object_to_port_with_circle_check(sc, slot_value(slot), port, P_READABLE, ci);
-      if (bindings) port_write_character(port)(sc, ')', port);
+      if (bindings) 
+	port_write_character(port)(sc, ')', port);
     }
 }
 
 static void slot_list_to_port_with_cycle(s7_scheme *sc, s7_pointer obj, s7_pointer slot, s7_pointer port, shared_info_t *ci, bool bindings)
 {
+  bool first_time = true;
   for (; tis_slot(slot); slot = next_slot(slot))
     {
       s7_pointer sym = slot_symbol(slot), val = slot_value(slot);
       if (bindings)
 	{
-	  if (tis_slot(next_slot(slot)))
-	    port_write_string(port)(sc, " (", 2, port);
-	  else port_write_character(port)(sc, '(', port);
+	  if (first_time) 
+	    {
+	      port_write_character(port)(sc, '(', port);
+	      first_time = false;
+	    }
+	  else port_write_string(port)(sc, " (", 2, port);
 	}
       else port_write_character(port)(sc, ' ', port);
-      symbol_to_port(sc, sym, port, (bindings) ? P_DISPLAY : P_KEY, ci);
+      symbol_to_port(sc, sym, port, (bindings) ? P_DISPLAY : P_KEY, NULL);
       if (has_structure(val))
 	{
 	  char buf[128];
@@ -32992,7 +33011,7 @@ static void slot_list_to_port_with_cycle(s7_scheme *sc, s7_pointer obj, s7_point
 	  int32_t len = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, -peek_shared_ref(ci, obj)), "> ", (const char *)NULL);
 	  port_write_string(port)(sc, " #f", 3, port);
 	  port_write_string(ci->cycle_port)(sc, buf, len, ci->cycle_port);
-	  symbol_to_port(sc, sym, ci->cycle_port, P_KEY, ci);
+	  symbol_to_port(sc, sym, ci->cycle_port, P_KEY, NULL);
 
 	  symref = peek_shared_ref(ci, val);
 	  if (symref != 0)
@@ -33024,20 +33043,35 @@ static void slot_list_to_port_with_cycle(s7_scheme *sc, s7_pointer obj, s7_point
 static bool let_has_setter(s7_pointer obj)
 {
   for (s7_pointer slot = let_slots(obj); tis_slot(slot); slot = next_slot(slot))
-    if (slot_has_setter(slot))
+    if ((slot_has_setter(slot)) || (is_immutable(slot)))
       return(true);
   return(false);
 }
 
-static void slot_setters_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, shared_info_t *ci)
+static bool slot_setters_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, shared_info_t *ci)
 {
+  bool spaced_out = false;
   for (s7_pointer slot = let_slots(obj); tis_slot(slot); slot = next_slot(slot))
     if (slot_has_setter(slot))
       {
+	if (spaced_out) port_write_character(port)(sc, ' ', port); else spaced_out = true;
 	port_write_string(port)(sc, "(set! (setter '", 15, port);
-	symbol_to_port(sc, slot_symbol(slot), port, P_DISPLAY, ci);
+	symbol_to_port(sc, slot_symbol(slot), port, P_DISPLAY, NULL);
 	port_write_string(port)(sc, ") ", 2, port);
 	object_to_port_with_circle_check(sc, slot_setter(slot), port, P_READABLE, ci);
+	port_write_character(port)(sc, ')', port);
+      }
+  return(spaced_out);
+}
+
+static void immutable_slots_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, bool spaced_out)
+{
+  for (s7_pointer slot = let_slots(obj); tis_slot(slot); slot = next_slot(slot))
+    if (is_immutable(slot))
+      {
+	if (spaced_out) port_write_character(port)(sc, ' ', port); else spaced_out = true;
+	port_write_string(port)(sc, "(immutable! '", 13, port);
+	symbol_to_port(sc, slot_symbol(slot), port, P_DISPLAY, NULL);
 	port_write_character(port)(sc, ')', port);
       }
 }
@@ -33045,7 +33079,7 @@ static void slot_setters_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port,
 static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   /* the slot symbol might need (symbol...) in which case we don't want the preceding quote */
-  symbol_to_port(sc, slot_symbol(obj), port, P_READABLE, ci);
+  symbol_to_port(sc, slot_symbol(obj), port, P_READABLE, NULL);
   port_write_character(port)(sc, ' ', port);
   object_to_port_with_circle_check(sc, slot_value(obj), port, use_write, ci);
 }
@@ -33114,15 +33148,13 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 			}
 		      if (has_methods(obj))
 			port_write_string(port)(sc, "(openlet ", 9, port);
-		      /* not immutable here because we'll need to set the let fields below, then declare it immutable 
-		       *   TODO: this sounds wrong and we don't set anything immutable below
-		       */
-		      if (let_has_setter(obj))
+		      /* not immutable here because we'll need to set the let fields below, then declare it immutable */
+		      if (let_has_setter(obj))           /* both explicit setters and immutable slots */
 			{
 			  port_write_string(port)(sc, "(let (", 6, port);
 			  slot_list_to_port_with_cycle(sc, obj, let_slots(obj), port, ci, true);
 			  port_write_string(port)(sc, ") ", 2, port);
-			  slot_setters_to_port(sc, obj, port, ci);
+			  immutable_slots_to_port(sc, obj, port, slot_setters_to_port(sc, obj, port, ci));
 			  port_write_string(port)(sc, " (curlet))", 10, port);
 			}
 		      else
@@ -33144,15 +33176,11 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 		      /* this ignores outlet -- but is that a problem? */
 		      /* (object->string (let ((i 0)) (set! (setter 'i) integer?) (curlet)) :readable) -> "(let ((i 0)) (set! (setter 'i) #_integer?) (curlet))" */
 		      if (let_has_setter(obj))
-			/* TODO: or variable is immutable 
-			 *   need let_has_immutable_slot(sc, let)
-			 *   then below immutable_slots_to_port or whatever
-			 */
 			{
 			  port_write_string(port)(sc, "(let (", 6, port);
 			  slot_list_to_port(sc, let_slots(obj), port, ci, true);
 			  port_write_string(port)(sc, ") ", 2, port);
-			  slot_setters_to_port(sc, obj, port, ci);
+			  immutable_slots_to_port(sc, obj, port, slot_setters_to_port(sc, obj, port, ci));
 			  /* perhaps set outlet here?? */
 			  port_write_string(port)(sc, " (curlet))", 10, port);
 			}
@@ -33173,7 +33201,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 				{
 				  s7_pointer name = s7_let_ref(sc, obj, sc->class_name_symbol);
 				  if (is_symbol(name))
-				    symbol_to_port(sc, name, port, P_DISPLAY, ci);
+				    symbol_to_port(sc, name, port, P_DISPLAY, NULL);
 				  else let_to_port(sc, let_outlet(obj), port, use_write, ci);
 				}}
 			  else port_write_string(port)(sc, "(inlet", 6, port);
@@ -33920,7 +33948,7 @@ static void continuation_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port,
   if (is_symbol(continuation_name(obj)))
     {
       port_write_string(port)(sc, "#<continuation ", 15, port);
-      symbol_to_port(sc, continuation_name(obj), port, P_DISPLAY, ci);
+      symbol_to_port(sc, continuation_name(obj), port, P_DISPLAY, NULL);
       port_write_character(port)(sc, '>', port);
     }
   else port_write_string(port)(sc, "#<continuation>", 15, port);
@@ -33931,7 +33959,7 @@ static void goto_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wri
   if (is_symbol(call_exit_name(obj)))
     {
       port_write_string(port)(sc, "#<goto ", 7, port);
-      symbol_to_port(sc, call_exit_name(obj), port, P_DISPLAY, ci);
+      symbol_to_port(sc, call_exit_name(obj), port, P_DISPLAY, NULL);
       port_write_character(port)(sc, '>', port);
     }
   else port_write_string(port)(sc, "#<goto>", 7, port);
@@ -38352,6 +38380,13 @@ static const char *typed_vector_typer_name(s7_scheme *sc, s7_pointer p)
 
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article);
 static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
+
+static void port_write_vector_typer(s7_scheme *sc, s7_pointer vect, s7_pointer port)
+{
+  const char *setter;
+  setter = make_type_name(sc, typed_vector_typer_name(sc, vect), NO_ARTICLE);
+  port_write_string(port)(sc, setter, safe_strlen(setter), port);
+}
 
 static noreturn void typed_vector_setter_error(s7_scheme *sc, s7_pointer vec, s7_pointer val)
 {
@@ -68905,14 +68940,14 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
   if ((is_closure(func)) || (is_closure_star(func)))
     {
       bool safe_case = is_safe_closure(func);
-      /* fprintf(stderr, "safe: %s %d\n", display(func), safe_case); */
+      s7_pointer body = closure_body(func);
+      bool one_form = is_null(cdr(body));
 
       if (is_immutable(func)) hop = 1;
       if (is_null(closure_args(func)))               /* no rest arg funny business */
 	{
-	  s7_pointer body = closure_body(func);
 	  set_optimized(expr);
-	  if ((is_null(cdr(body))) && (safe_case) && (is_fxable(sc, car(body)))) /* fx stuff is not set yet */
+	  if ((one_form) && (safe_case) && (is_fxable(sc, car(body)))) /* fx stuff is not set yet */
 	    {
 	      fx_annotate_arg(sc, body, e);
 	      set_optimize_op(expr, hop + OP_SAFE_THUNK_A);
@@ -68921,7 +68956,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	      return(OPT_T);
 	    }
 	  /* thunks with fully fxable bodies are rare apparently, and the time spent here overwhelms run time gains */
-	  set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_THUNK : OP_THUNK));
+	  set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_THUNK : ((one_form) ? OP_THUNK_O : OP_THUNK)));
 	  set_opt1_lambda_add(expr, func);
 	  return((safe_case) ? OPT_T : OPT_F);
 	}
@@ -68931,7 +68966,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	  set_opt1_lambda_add(expr, func);
 	  if (safe_case)
 	    {
-	      s7_pointer body = closure_body(func);
 	      if (!has_fx(body))
 		{
 		  fx_annotate_args(sc, body, e);
@@ -70980,7 +71014,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	    {
 	      if (safe_case)
 		set_optimize_op(expr, hop + OP_SAFE_CLOSURE_NS);
-	      else set_optimize_op(expr, hop + ((args == 4) ? OP_CLOSURE_4S : OP_CLOSURE_NS));
+	      else set_optimize_op(expr, hop + ((args == 4) ? ((is_null(cdr(closure_body(func)))) ? OP_CLOSURE_4S_O : OP_CLOSURE_4S) : OP_CLOSURE_NS));
 	    }
 	  return(OPT_F);
 	}
@@ -71702,7 +71736,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 		if (len == 1)
 		  {
 		    if (car_expr != sc->quote_symbol) /* !! quote can be redefined locally, unsetting the T_SYNTACTIC flag -- can this happen elsewhere? */
-		      set_unsafe_optimize_op(expr, (symbols == 1) ? OP_UNKNOWN_G : OP_UNKNOWN_A);
+		      set_unsafe_optimize_op(expr, (is_normal_symbol(cadr(expr))) ? OP_UNKNOWN_G : OP_UNKNOWN_A);
 		    fx_annotate_arg(sc, cdr(expr), e); /* g->a later if closure */
 		    return(OPT_F);
 		  }
@@ -83217,6 +83251,13 @@ static void op_thunk(s7_scheme *sc)
   if_pair_set_up_begin_unchecked(sc);
 }
 
+static void op_thunk_o(s7_scheme *sc)
+{
+  s7_pointer p = opt1_lambda(sc->code);
+  sc->curlet = make_let(sc, closure_let(p));
+  sc->code = car(closure_body(p));
+}
+
 static void op_safe_thunk(s7_scheme *sc) /* no let needed */
 {
   s7_pointer p = opt1_lambda(sc->code);
@@ -83254,7 +83295,6 @@ static void op_closure_s(s7_scheme *sc)
   check_stack_size(sc);
   sc->curlet = make_let_with_slot(sc, closure_let(p), car(closure_args(p)), lookup(sc, opt2_sym(sc->code)));
   sc->code = T_Pair(closure_body(p));
-  /* if (!is_pair(cdr(sc->code))) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   if_pair_set_up_begin_unchecked(sc);
 }
 
@@ -83270,7 +83310,6 @@ static void op_safe_closure_s(s7_scheme *sc)
   s7_pointer p = opt1_lambda(sc->code);
   sc->curlet = update_let_with_slot(sc, closure_let(p), lookup(sc, opt2_sym(sc->code)));
   sc->code = T_Pair(closure_body(p));
-  /* if (!is_pair(cdr(sc->code))) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   if_pair_set_up_begin_unchecked(sc);
 }
 
@@ -83747,7 +83786,7 @@ static inline void op_closure_3s_o(s7_scheme *sc)
   sc->code = car(closure_body(f));
 }
 
-static inline void op_closure_4s(s7_scheme *sc)
+static void op_closure_4s(s7_scheme *sc)
 {
   s7_pointer args = cdr(sc->code);
   s7_pointer v1 = lookup(sc, car(args));
@@ -83757,6 +83796,17 @@ static inline void op_closure_4s(s7_scheme *sc)
   make_let_with_four_slots(sc, f, v1, v2, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
+}
+
+static inline void op_closure_4s_o(s7_scheme *sc)
+{
+  s7_pointer args = cdr(sc->code);
+  s7_pointer v1 = lookup(sc, car(args));
+  s7_pointer v2 = lookup(sc, cadr(args));
+  s7_pointer f = opt1_lambda(sc->code);
+  args = cddr(args);
+  make_let_with_four_slots(sc, f, v1, v2, lookup(sc, car(args)), lookup(sc, cadr(args))); /* sets sc->curlet */
+  sc->code = car(closure_body(f));
 }
 
 static void op_safe_closure_aa(s7_scheme *sc)
@@ -88068,9 +88118,10 @@ static bool op_unknown(s7_scheme *sc)
 	  if (is_null(closure_args(f)))
 	    {
 	      s7_pointer body = closure_body(f);
+	      bool one_form = is_null(cdr(body));
 	      bool safe_case = is_safe_closure(f);
 	      set_opt1_lambda(code, f);
-	      if (is_null(cdr(body)))
+	      if (one_form)
 		{
 		  if ((safe_case) && (is_fxable(sc, car(body))))
 		    {
@@ -88083,7 +88134,7 @@ static bool op_unknown(s7_scheme *sc)
 		    }
 		  clear_has_fx(code);
 		}
-	      set_safe_optimize_op(code, hop + ((safe_case) ? OP_SAFE_THUNK : OP_THUNK));
+	      set_safe_optimize_op(code, hop + ((safe_case) ? OP_SAFE_THUNK : ((one_form) ? OP_THUNK_O : OP_THUNK)));
 	      return(true);
 	    }
 	  if (is_closure_star(f))
@@ -88142,6 +88193,7 @@ static bool op_unknown_g(s7_scheme *sc)
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s %s\n", __func__, display(f));
 
   sym_case = is_normal_symbol(cadr(code));
+  if ((S7_DEBUGGING) && (!sym_case)) fprintf(stderr, "%s[%d]: not a symbol: %s\n", __func__, __LINE__, display(code));
   if ((sym_case) &&
       (!is_any_macro(f)) &&   /* if f is a macro, its argument can be unbound legitimately */
       (!is_slot(lookup_slot_from(cadr(code), sc->curlet))))
@@ -88554,11 +88606,12 @@ static bool op_unknown_ns(s7_scheme *sc)
 	  (closure_arity_to_int(sc, f) == num_args))
 	{
 	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
+	  bool one_form = is_null(cdr(closure_body(f)));
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if (num_args == 3)
-	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : ((is_null(cdr(closure_body(f)))) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S))));
+	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : ((one_form) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S))));
 	  if (num_args == 4)
-	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_4S)));
+	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : ((one_form) ? OP_CLOSURE_4S_O : OP_CLOSURE_4S))));
 	  return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_NS)));
 	}
       break;
@@ -88884,7 +88937,7 @@ static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code)
 {
   sc->last_function = f;
   if (is_null(cdr(code))) return(op_unknown(sc));
-  if ((is_null(cddr(code))) && (!is_pair(cadr(code)))) return(op_unknown_g(sc));
+  if ((is_null(cddr(code))) && (is_normal_symbol(cadr(code)))) return(op_unknown_g(sc));
   set_opt3_arglen(cdr(code), proper_list_length(cdr(code)));
   return(op_unknown_np(sc));
 }
@@ -89422,6 +89475,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_THUNK: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 0)) {if (op_unknown(sc)) goto EVAL; continue;}
 	case HOP_THUNK: op_thunk(sc); goto EVAL;
 
+	case OP_THUNK_O: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 0)) {if (op_unknown(sc)) goto EVAL; continue;}
+	case HOP_THUNK_O: op_thunk_o(sc); goto EVAL;
+
 	case OP_SAFE_THUNK: if (!closure_is_fine(sc, sc->code, FINE_SAFE_CLOSURE, 0)) {if (op_unknown(sc)) goto EVAL; continue;}
 	case HOP_SAFE_THUNK: op_safe_thunk(sc); goto EVAL;
 
@@ -89548,6 +89604,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_CLOSURE_4S: if (!closure_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE, 4)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_4S: op_closure_4s(sc); goto EVAL;
+
+	case OP_CLOSURE_4S_O: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_P, 4)) {if (op_unknown_ns(sc)) goto EVAL; continue;}
+	case HOP_CLOSURE_4S_O: op_closure_4s_o(sc); goto EVAL;
 
 	case OP_CLOSURE_SC: if (!closure_is_ok(sc, sc->code, OK_UNSAFE_CLOSURE_M, 2)) {if (op_unknown_gg(sc)) goto EVAL; continue;}
 	case HOP_CLOSURE_SC: op_closure_sc(sc); goto EVAL;
@@ -94138,7 +94197,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 916)
+  if (NUM_OPS != 920)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -94505,64 +94564,65 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    461
  * index     1026   1016    973    970    967
- * tmock     1177   1165   1057   1054   1037
+ * tmock     1177   1165   1057   1054   1036
  * tvect     2519   2464   1772   1708   1689
- * texit     ----   ----   1778   1767   1754
+ * texit     ----   ----   1778   1767   1754  1749
  * s7test    1873   1831   1818   1790   1779
- * timp      2971   2891   2176   2051   2048
- * lt        2187   2172   2150   2156   2146
+ * timp      2971   2891   2176   2051   2048  2043
+ * lt        2187   2172   2150   2156   2146  2143
  * tauto     ----   ----   2562   2566   2206
- * dup       3805   3788   2492   2327   2277
- * tload     ----   ----   3046   2352   2351
+ * dup       3805   3788   2492   2327   2277  2279
+ * tload     ----   ----   3046   2352   2350
  * tread     2440   2421   2419   2385   2375
- * fbench    2688   2583   2460   2453   2411
+ * fbench    2688   2583   2460   2453   2411  2403
  * trclo     2735   2574   2454   2443   2423
- * titer     2865   2842   2641   2490   2482
- * tcopy     8035   5546   2539   2495   2504
+ * titer     2865   2842   2641   2490   2482  2475
+ * tcopy     8035   5546   2539   2495   2503
  * tmat      3065   3042   2524   2515   2509
- * tb        2735   2681   2612   2606   2577
- * tsort     3105   3104   2856   2826   2821
- * teq       4068   4045   3536   3468   3448
- * tmac      3950   3873   3033   2992   3545
- * tio       3816   3752   3683   3646   3604
+ * tb        2735   2681   2612   2606   2577  2574
+ * tsort     3105   3104   2856   2826   2824
+ * teq       4068   4045   3536   3468   3450
+ * tmac      3950   3873   3033   2992   3545  3541
+ * tio       3816   3752   3683   3646   3604  3587
  * tobj      4016   3970   3828   3633   3624
- * tclo      4787   4735   4390   4343   4329
- * tlet      7775   5640   4450   4423   4407
- * tcase     4960   4793   4439   4462   4416
+ * tclo      4787   4735   4390   4343   4329  4309
+ * tlet      7775   5640   4450   4423   4407  4393
+ * tcase     4960   4793   4439   4462   4416  4408
  * tmap      8869   8774   4489   4490   4470
  * tfft      7820   7729   4755   4683   4602
  * tshoot    5525   5447   5183   5174   5100
- * tform     5357   5348   5307   5310   5291
- * tnum      6348   6013   5433   5425   5391
- * tstr      6880   6342   5488   5462   5402
- * tlamb     6423   6273   5720   5618   5548  5542
- * tset      ----   ----   ----   6682   6170
- * tlist     7896   7546   6558   6486   6198
- * tmisc     8869   7612   6435   6324   6272
- * tgsl      8485   7802   6373   6333   6304
+ * tform     5357   5348   5307   5310   5291  5279
+ * tnum      6348   6013   5433   5425   5391  5373
+ * tstr      6880   6342   5488   5462   5400
+ * tlamb     6423   6273   5720   5618   5548  5542 5530
+ * tset      ----   ----   ----   6682   6170  6163
+ * tlist     7896   7546   6558   6486   6198  6195
+ * tmisc     8869   7612   6435   6324   6272  6253 6239
+ * tgsl      8485   7802   6373   6333   6304  6301
  * trec      6936   6922   6521   6523   6538
  * tari      13.0   12.7   6827   6717   6633
- * tleft     10.4   10.2   7657   7561   7475
- * tgc       11.9   11.1   8177   8062   8024
- * thash     11.8   11.7   9734   9583   9492
- * cb        11.2   11.0   9658   9677   9546
+ * tleft     10.4   10.2   7657   7561   7475  7472
+ * tgc       11.9   11.1   8177   8062   8024  8002
+ * thash     11.8   11.7   9734   9583   9492  9489
+ * cb        11.2   11.0   9658   9677   9546  9537
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.3   56.6  56.5
- * lg        ----   ----  105.2  105.8  105.0 104.976/992 -> 104.778
+ * lg        ----   ----  105.2  105.8  105.0 104.8
  * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       immutable field of inlet, vector, hash + typer, etc :readable display, but requires func also if local?
+ *       vector|hash + typer :readable display
  *       typer to set hash key value immutable
  * openlet -> closed in method search?
- * unknown_g closure where g=keyword -- "g" = normal_symbol? :key->"a"
+ * unknown_g closure where g=keyword -- "g" = normal_symbol? :key->"a" [unknown_g should be unknown_s]
+ *   or expand it to include constants 71724 88925 [op_closure_a etc -- but all implicits are also _a so use op_unknown_a or specialize for _s]
  * libutf8proc: does utf8proc_map (et al) need free? encode_char|map->s7test for known cases
- * more closure_is_fine cases!  and op_closure_4s_o etc
- *   remove all closure_m cases?
+ * more closure_is_fine cases!  and op_closure_*_o etc, remove all closure_m cases?
+ * t718
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
