@@ -1,6 +1,6 @@
 ;;; utf8proc.scm
 ;;;
-;;; tie the utf8proc library into the *utf8proc* environment
+;;; tie the utf8proc library into the *libutf8proc* environment
 
 (require cload.scm)
 (provide 'libutf8proc.scm)
@@ -71,7 +71,7 @@
 	   (bool utf8proc_codepoint_valid ((utf8proc_int32_t int)))
 	   (bool utf8proc_grapheme_break ((utf8proc_int32_t int) (utf8proc_int32_t int)))
 
-	   (char* utf8proc_NFD (char*))
+	   (char* utf8proc_NFD (char*)) /* these return newly allocated memory -- should probably free it here */
 	   (char* utf8proc_NFC (char*))
 	   (char* utf8proc_NFKD (char*))
 	   (char* utf8proc_NFKC (char*))
@@ -160,14 +160,16 @@
 
 	   (in-C "static s7_pointer g_utf8proc_map(s7_scheme *sc, s7_pointer args)
                   {
-                    s7_pointer opt, str;
+                    s7_pointer opt, str, p;
                     ssize_t res;
                     utf8proc_uint8_t *dst;
                     str = s7_car(args);
                     opt = s7_cadr(args);
                     res = utf8proc_map((utf8proc_uint8_t *)s7_string(str), s7_string_length(str), &dst, (utf8proc_option_t)s7_integer(opt));
                     if (res < 0) return(s7_make_integer(sc, res));
-                    return(s7_make_string_with_length(sc, dst, res));
+                    p = s7_make_string_with_length(sc, dst, res);
+                    free(dst);
+                    return(p);
                   }")
 	   (C-function ("utf8proc_map" g_utf8proc_map "" 2))
 
