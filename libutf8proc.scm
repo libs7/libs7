@@ -71,7 +71,7 @@
 	   (bool utf8proc_codepoint_valid ((utf8proc_int32_t int)))
 	   (bool utf8proc_grapheme_break ((utf8proc_int32_t int) (utf8proc_int32_t int)))
 
-	   (char* utf8proc_NFD (char*)) /* these return newly allocated memory -- should probably free it here */
+	   (char* utf8proc_NFD (char*)) ; these return newly allocated memory -- should probably free it here
 	   (char* utf8proc_NFC (char*))
 	   (char* utf8proc_NFKD (char*))
 	   (char* utf8proc_NFKC (char*))
