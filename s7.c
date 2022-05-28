@@ -60604,7 +60604,8 @@ static s7_pointer opt_arg_type(s7_scheme *sc, s7_pointer argp)
 		    }
 		  return(sc->T);
 		}
-	      if (car(arg) == sc->quote_symbol)
+	      if ((car(arg) == sc->quote_symbol) &&
+		  (is_pair(cdr(arg))))
 		return(s7_type_of(sc, cadr(arg)));
 	    }
 	  slot = lookup_slot_from(car(arg), sc->curlet);
@@ -67653,7 +67654,7 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
 		}
 	      set_car(bq, g_quasiquote_1(sc, car(orig), false));
 	      set_cdr(bq, sc->nil);
-	      sc->w = list_3(sc, sc->qq_append_symbol, sc->w, caddr(orig));
+	      sc->w = list_3(sc, sc->qq_append_symbol, sc->w, caddr(orig)); /* `(f . ,(string-append "h" "i")) */
 	      break;
 	    }
 	  else set_car(bq, g_quasiquote_1(sc, car(orig), false));
@@ -94545,61 +94546,59 @@ int main(int argc, char **argv)
  * ------------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    461
- * index     1026   1016    973    970    967
+ * index     1026   1016    973    970    968
  * tmock     1177   1165   1057   1054   1036
  * tvect     2519   2464   1772   1708   1689
- * texit     ----   ----   1778   1767   1754  1749
+ * texit     ----   ----   1778   1767   1749
  * s7test    1873   1831   1818   1790   1779
- * timp      2971   2891   2176   2051   2048  2043
- * lt        2187   2172   2150   2156   2146  2143
- * tauto     ----   ----   2562   2566   2206
- * dup       3805   3788   2492   2327   2277  2279
- * tload     ----   ----   3046   2352   2350
- * tread     2440   2421   2419   2385   2375
- * fbench    2688   2583   2460   2453   2411  2403
+ * timp      2971   2891   2176   2051   2043
+ * lt        2187   2172   2150   2156   2143
+ * tauto     ----   ----   2562   2566   2207
+ * dup       3805   3788   2492   2327   2273
+ * tload     ----   ----   3046   2352   2352
+ * tread     2440   2421   2419   2385   2376
+ * fbench    2688   2583   2460   2453   2403
  * trclo     2735   2574   2454   2443   2423
- * titer     2865   2842   2641   2490   2482  2475
+ * titer     2865   2842   2641   2490   2475
  * tcopy     8035   5546   2539   2495   2503
- * tmat      3065   3042   2524   2515   2509
- * tb        2735   2681   2612   2606   2577  2574
- * tsort     3105   3104   2856   2826   2824
+ * tmat      3065   3042   2524   2515   2511
+ * tb        2735   2681   2612   2606   2574
+ * tsort     3105   3104   2856   2826   2820
  * teq       4068   4045   3536   3468   3450
- * tmac      3950   3873   3033   2992   3545  3541
- * tio       3816   3752   3683   3646   3604  3587 [3589 safe_thunk_o]
+ * tmac      3950   3873   3033   2992   3541
+ * tio       3816   3752   3683   3646   3588
  * tobj      4016   3970   3828   3633   3624
- * tclo      4787   4735   4390   4343   4329  4309
- * tlet      7775   5640   4450   4423   4407  4393
- * tcase     4960   4793   4439   4462   4416  4408
- * tmap      8869   8774   4489   4490   4470
- * tfft      7820   7729   4755   4683   4602
- * tshoot    5525   5447   5183   5174   5100
- * tform     5357   5348   5307   5310   5291  5279
- * tnum      6348   6013   5433   5425   5391  5373
+ * tclo      4787   4735   4390   4343   4309
+ * tlet      7775   5640   4450   4423   4393
+ * tcase     4960   4793   4439   4462   4407
+ * tmap      8869   8774   4489   4490   4468
+ * tfft      7820   7729   4755   4683   4599
+ * tshoot    5525   5447   5183   5174   5099
+ * tform     5357   5348   5307   5310   5281
+ * tnum      6348   6013   5433   5425   5378
  * tstr      6880   6342   5488   5462   5400
- * tlamb     6423   6273   5720   5618   5548  5542 5530
- * tset      ----   ----   ----   6682   6170  6163
- * tlist     7896   7546   6558   6486   6198  6195
- * tmisc     8869   7612   6435   6324   6272  6253 6239 [6241 safe_thunk_o][6239 if clo_m+no cdr check -- .6 faster out of 4.2]
- * tgsl      8485   7802   6373   6333   6304  6301
+ * tlamb     6423   6273   5720   5618   5530
+ * tset      ----   ----   ----   6682   6163
+ * tlist     7896   7546   6558   6486   6195
+ * tmisc     8869   7612   6435   6324   6239
+ * tgsl      8485   7802   6373   6333   6301
  * trec      6936   6922   6521   6523   6538
  * tari      13.0   12.7   6827   6717   6633
- * tleft     10.4   10.2   7657   7561   7475  7472
- * tgc       11.9   11.1   8177   8062   8024  8002
- * thash     11.8   11.7   9734   9583   9492  9489
- * cb        11.2   11.0   9658   9677   9546  9537
+ * tleft     10.4   10.2   7657   7561   7472
+ * tgc       11.9   11.1   8177   8062   8002
+ * thash     11.8   11.7   9734   9583   9489
+ * cb        11.2   11.0   9658   9677   9539
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.3   56.6  56.5
- * lg        ----   ----  105.2  105.8  105.0 104.8
+ * sg        ----   ----   55.9   56.3   56.5
+ * lg        ----   ----  105.2  105.8  104.6
  * tbig     177.4  175.8  156.5  151.1  150.6
  * ------------------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       vector|hash + typer :readable display
- *       typer to set hash key value immutable
- * t718
+ *       vector|hash + typer :readable display -- see tmp for vector, check multidim vector + typer
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
@@ -94610,4 +94609,5 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
+ * typer to set hash key value immutable
  */

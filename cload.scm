@@ -728,14 +728,16 @@
 	  
 	  (lambda (func)
 	    ;; functions
-	    (if (>= (length func) 3)
-		(apply add-one-function func)
-		(case (car func)
-		  ((in-C)       (format pp "~A~%" (cadr func)))
-		  ((C-init)     (set! inits (cons (cadr func) inits)))
-		  ((C-macro)    (apply add-one-macro (cadr func)))
-		  ((C-function) (collides? (caadr func)) (set! functions (cons (check-doc (cadr func)) functions)))
-		  (else         (apply add-one-constant func)))))))
+	    (if (pair? func)
+		(if (>= (length func) 3)
+		    (apply add-one-function func)
+		    (case (car func)
+		      ((in-C)       (format pp "~A~%" (cadr func)))
+		      ((C-init)     (set! inits (cons (cadr func) inits)))
+		      ((C-macro)    (apply add-one-macro (cadr func)))
+		      ((C-function) (collides? (caadr func)) (set! functions (cons (check-doc (cadr func)) functions)))
+		      (else         (apply add-one-constant func))))
+		(error 'wrong-type-arg "~S (func arg to handle-declaration in cload.scm) should be a pair" func)))))
       
       
       ;; c-define-1 (called in c-define macro above)
