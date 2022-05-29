@@ -61372,11 +61372,10 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
   pc_fallback(sc, start);
   if ((is_safe_procedure(s_func)) && (c_function_is_aritable(s_func, 1)))
     {
-      s7_pointer slot;
       opc->v[2].call = cf_call(sc, car_x, s_func, 1);
       if (is_symbol(cadr(car_x)))
 	{
-	  slot = opt_simple_symbol(sc, cadr(car_x));
+	  s7_pointer slot = opt_simple_symbol(sc, cadr(car_x));
 	  if (slot)
 	    {
 	      opc->v[1].p = slot;
@@ -63344,9 +63343,8 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 			  s7_d_7pid_t func = s7_d_7pid_function(c_object_setf(sc, obj));
 			  if (func)
 			    {
-			      s7_pointer slot;
+			      s7_pointer slot = opt_integer_symbol(sc, cadr(target));
 			      opc->v[4].d_7pid_f = func;
-			      slot = opt_integer_symbol(sc, cadr(target));
 			      opc->v[10].o1 = sc->opts[sc->pc];
 			      if (slot)
 				{
@@ -63754,8 +63752,8 @@ static s7_pointer opt_cond(opt_info *top)
   s7_int len = top->v[2].i;
   for (s7_int clause = 0; clause < len; clause++)
     {
-      opt_info *o2, *o1 = top->v[clause + COND_O1].o1;
-      o2 = o1->v[4].o1;
+      opt_info *o1 = top->v[clause + COND_O1].o1;
+      opt_info *o2 = o1->v[4].o1;
       if (o2->v[0].fb(o2))
 	{
 	  s7_pointer res = cond_value(o1);
@@ -63769,9 +63767,8 @@ static s7_pointer opt_cond_1b(opt_info *o) {return((o->v[4].o1->v[O_WRAP].fp(o->
 
 static s7_pointer opt_cond_2(opt_info *o)  /* 2 branches, results 1 expr, else */
 {
-  s7_pointer res;
   opt_info *o1 = (o->v[5].fb(o->v[4].o1)) ? o->v[6].o1 : o->v[7].o1;
-  res = o1->v[0].fp(o1);
+  s7_pointer res = o1->v[0].fp(o1);
   return(res);
 }
 
@@ -85418,10 +85415,9 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 	  result = cdar(p);
 	  if (has_tc(result))
 	    {
-	      s7_pointer slot, arg;
-	      for (slot = slots, arg = cdar(result); is_pair(arg); slot = next_slot(slot), arg = cdr(arg))
+	      for (s7_pointer slot = slots, arg = cdar(result); is_pair(arg); slot = next_slot(slot), arg = cdr(arg))
 		slot_simply_set_pending_value(slot, fx_call(sc, arg));
-	      for (slot = slots; tis_slot(slot); slot = next_slot(slot)) /* using two swapping lets instead is slightly slower */
+	      for (s7_pointer slot = slots; tis_slot(slot); slot = next_slot(slot)) /* using two swapping lets instead is slightly slower */
 		slot_set_value(slot, slot_pending_value(slot));
 
 	      if (read_case)
@@ -94542,7 +94538,7 @@ int main(int argc, char **argv)
 #endif
 
 /* ------------------------------------------------------
- *            20.9   21.0   22.0   22.3   22.4
+ *            20.9   21.0   22.0   22.3   22.4   22.5
  * ------------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    458    461
@@ -94610,4 +94606,5 @@ int main(int argc, char **argv)
  *   threads.c -> tools + tests
  *   unlet opts
  * typer to set hash key value immutable
+ * (set! (setter vector) ...) or hash-table
  */

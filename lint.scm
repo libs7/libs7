@@ -81,7 +81,7 @@
 ;(define-macro (reader-cond . clauses) `(values))          ; clobber reader-cond to avoid (incorrect) unbound-variable errors
 
 
-(unless (defined? 'need-lint-line-numbers) 
+(unless (defined? 'need-lint-line-numbers)
   (define need-lint-line-numbers #t))
 
 (when (and (provided? 'debugging) need-lint-line-numbers)
@@ -156,7 +156,7 @@
 	      zero?
 
 	      c-pointer-weak2 c-pointer-type bignum port-position byte-vector->string c-pointer-info c-pointer->list subvector-vector c-pointer-weak1
-	      funclet? bignum? weak-hash-table? goto? port-file byte? hash-code 
+	      funclet? bignum? weak-hash-table? goto? port-file byte? hash-code
 	      dilambda ; these 3 lines added 5-May-22, not getenv directory->list or file-mtime because bools are evaluated if constant args!
 
 	      list-values apply-values unquote))
@@ -212,12 +212,12 @@
 				 tree-count tree-set-memq tree-cyclic?))
 			      ht))
 
-	(side-effect-functions '(provide list-set! fill! reverse! sort! vector-fill! vector-set! float-vector-set! int-vector-set! byte-vector-set! 
-				 string->byte-vector string-set! hash-table-set! call/cc call-with-current-continuation load autoload eval eval-string 
-				 apply set-current-error-port display set-current-input-port set-current-output-port write close-input-port 
-				 close-output-port flush-output-port open-input-file open-output-file open-input-string open-output-string 
-				 get-output-string newline read-char peek-char write-char write-string read-byte write-byte read-line read-string 
-				 read call-with-output-string call-with-output-file string-fill! with-output-to-file system format set-car! set-cdr! 
+	(side-effect-functions '(provide list-set! fill! reverse! sort! vector-fill! vector-set! float-vector-set! int-vector-set! byte-vector-set!
+				 string->byte-vector string-set! hash-table-set! call/cc call-with-current-continuation load autoload eval eval-string
+				 apply set-current-error-port display set-current-input-port set-current-output-port write close-input-port
+				 close-output-port flush-output-port open-input-file open-output-file open-input-string open-output-string
+				 get-output-string newline read-char peek-char write-char write-string read-byte write-byte read-line read-string
+				 read call-with-output-string call-with-output-file string-fill! with-output-to-file system format set-car! set-cdr!
 				 immutable! varlet cutlet coverlet openlet random let-set! iterate
 				 emergency-exit exit error throw))
 
@@ -2117,10 +2117,10 @@
 	    (or (and (symbol? type)
 		     (not (symbol? expr))
 		     (not (memq type '(not boolean? values))))
-		(not (or (not (pair? type)) 
-			 (memq #t type) 
-			 (memq 'boolean? type) 
-			 (memq 'not type) 
+		(not (or (not (pair? type))
+			 (memq #t type)
+			 (memq 'boolean? type)
+			 (memq 'not type)
 			 (memq 'values type)))))))
 
     (define (never-true expr)
@@ -4665,7 +4665,7 @@
 				       (equal? (cadr arg1) arg2)
 				       (equal? (caddr arg1) arg3))
 			      (return (list 'and arg2 arg3)))))
-|#			    
+|#
 			(reduce-and return form len false env)))))))))
 
 	(define (bsimp x env) ; quick check for common easy cases
@@ -7815,7 +7815,7 @@
 				       (if (and (eq? (car arg) 'modulo)
 						(not (eq? head 'zero?))
 						(not (zero? (caddr arg))))
-					   (lint-format "perhaps ~A" caller 
+					   (lint-format "perhaps ~A" caller
 							(lists->string form (case head
 									      ((positive?) (positive? (caddr arg)))
 									      ((negative?) (negative? (caddr arg)))
@@ -10320,9 +10320,9 @@
 		    (do ((syms ())
 			 (p (cdr form) (cddr p)))
 			((null? p))
-		      (let ((sym (if (pair? (car p)) 
+		      (let ((sym (if (pair? (car p))
 				     (cadar p)
-				     (and (keyword? (car p)) 
+				     (and (keyword? (car p))
 					  (keyword->symbol (car p))))))
 			(if sym
 			    (if (memq sym syms)
@@ -10341,9 +10341,9 @@
 		(do ((syms ())
 		     (p (if (eq? head 'inlet) (cdr form) (cddr form)) (cddr p)))
 		    ((null? p))
-		  (let ((sym (if (pair? (car p)) 
+		  (let ((sym (if (pair? (car p))
 				 (cadar p)
-				 (and (keyword? (car p)) 
+				 (and (keyword? (car p))
 				      (keyword->symbol (car p))))))
 		    (if sym
 			(if (memq sym syms)
@@ -10825,7 +10825,7 @@
 					default-hash-table-length initial-string-port-length default-rationalize-error
 					default-random-state equivalent-float-epsilon hash-table-float-epsilon print-length
 					bignum-precision memory-usage float-format-precision history history-enabled
-					history-size profile profile-info profile-prefix autoloading? accept-all-keyword-arguments 
+					history-size profile profile-info profile-prefix autoloading? accept-all-keyword-arguments
 					muffle-warnings? most-positive-fixnum most-negative-fixnum output-port-data-size debug version
 					gc-temps-size gc-resize-heap-fraction gc-resize-heap-by-4-fraction openlets expansions?))
 			    h)))
@@ -12865,16 +12865,16 @@
 				   (let ((func (car call))
 					 (vname (var-name local-var))
 					 (call-arg1 (and (pair? (cdr call)) (cadr call))))
-				     
+
 				     ;; check for assignments into constants
 				     (if (and lit?
 					      (sequence? (var-initial-value local-var)) ; not #f = no default
 					      (indirect-set? vname func call-arg1))
 					 (lint-format "~A's ~Avalue, ~S, is a literal constant, so this set! is trouble: ~A" caller
-						      vname 
+						      vname
 						      (if (eq? (var-definer local-var) 'parameter) "default " "")
-						      (var-initial-value local-var) 
-						      (truncated-list->string 
+						      (var-initial-value local-var)
+						      (truncated-list->string
 						       (if (eq? (car call) 'implicit-set)
 							   (cons 'set! (cdr call))
 							   call))))
@@ -14563,7 +14563,7 @@
 					(set-car! siglist 'unused-parameter?)
 					(if (memq (car arg) set)
 					    (set-car! siglist 'unused-set-parameter?))))
-				    
+
 				  (set! (var-signature fvar) sig))))))
 			(cons fvar env))))))))
 
@@ -15737,7 +15737,7 @@
 
 		   (if (or (equal? (cadr form) setval) ; not settee here!          ;  (set! a a)
 			   (and (symbol? (cadr form))
-				(equal? (caddr form) (list 'copy (cadr form)))))   ;  (set! a (copy a))   
+				(equal? (caddr form) (list 'copy (cadr form)))))   ;  (set! a (copy a))
 		       (lint-format "pointless set! ~A" caller (truncated-list->string form)))
 
 		   (when (and (pair? setval)
@@ -15993,12 +15993,12 @@
 						  ;;          (if (not x) (set! y z) (set! y x)) -> (set! y (or x z))
 						  (tree-subst-eq (simplify-boolean (cons 'or (reverse (cadr diff))) () () env)
 								 subst-loc true))
-						 
+
 						 ((and (eq? true-op 'begin)
 						       (eq? (caar diff) (caadr diff)) ; so I think we're changing set! target, not value
 						       (pair? true) (pair? (cdr true)) (pair? (cadr true))
 						       (eq? (caadr true) 'set!))
-						  ;; tricky: (if x (begin (set! y x) (set! j x) k) (begin (set! m x) (set! j x) k)) -> 
+						  ;; tricky: (if x (begin (set! y x) (set! j x) k) (begin (set! m x) (set! j x) k)) ->
 						  ;;            (begin (set! (if x y m) x) (set! j x) k)
 						  ;;  without this check
 						  #f)
@@ -16743,14 +16743,14 @@
 								(eq? (car new-false) 'begin))
 							   (cdr new-false)
 							   (cons new-false ()))))
-						
+
 						(if (null? new-false)
 						    (cons (if (null? (cddr new-true)) ; (if|when|unless... )
 							      'if
 							      (if not-expr
 								  'unless 'when))
 							  (cons
-							   (if (null? (cddr new-true)) 
+							   (if (null? (cddr new-true))
 							       expr
 							       (if not-expr
 								   (cadr expr)
@@ -17813,7 +17813,7 @@
  								    (cadr arg1)
  								    (cadr arg2)))
  							(cdddr form))))))))
- 
+
 	  ;; -------- cond-combine-into-else --------
 	  (define (cond-combine-into-else caller form last-clause len)
 	    (if (and (len=1? last-clause)   ; (cond ... ((or ...)) (else ...)) -> (cond ... (else (or ... ...)))
@@ -19126,7 +19126,7 @@
 			     (when (> (length code) 3) ; counting '* etc
 			       (let ((cs 0))
 				 (for-each (lambda (p)
-					     (if (or (code-constant? p) 
+					     (if (or (code-constant? p)
 						     (and (symbol? p)
 							  (not (memq p local-vars)))
 						     (and (pair? p)
@@ -19156,7 +19156,7 @@
 				     (if (equal? new-code code)
 					 (lint-format "~S is constant in the do loop" caller code)
 					 (lint-format "~S in ~S is constant in the do loop" caller new-code code))))))
-#|			     
+#|
 			     ;; this messes up all the time
 			     (when (and (not (memq (car code) local-vars)) ; also need (not (dilambda (symbol->value (car code)))) here I think
 					(not (eq? (car code) 'quote))
@@ -19170,7 +19170,7 @@
 			     ))
 		       (walker (car code))
 		       (walker (cdr code))))))))
-	    
+
 	    ;; before report-usage, check for unused variables, and don't complain about them if
 	    ;;   they are referenced in an earlier step expr.
 	    (do ((v vars (cdr v)))
@@ -20844,12 +20844,12 @@
 							     ,new-form))))))))))
 
 	  ;; -------- let-walker --------
-	  
+
 	  (define let-walker
-	    (let ((input-side-effect-functions '(;set-current-input-port close-input-port open-input-file open-input-string 
+	    (let ((input-side-effect-functions '(;set-current-input-port close-input-port open-input-file open-input-string
 						 read-char peek-char read-byte read-line read-string read))
-		  (output-side-effect-functions '(;set-current-output-port close-output-port flush-output-port open-output-file open-output-string 
-						  ;get-output-string call-with-output-string call-with-output-file with-output-to-file 
+		  (output-side-effect-functions '(;set-current-output-port close-output-port flush-output-port open-output-file open-output-string
+						  ;get-output-string call-with-output-string call-with-output-file with-output-to-file
 						  newline write-char write-string display write write-byte format)))
 
 	      ;; need port extractors for each of these
@@ -20857,26 +20857,26 @@
 		(if (pair? (cdr init))
 		    (cadr init)
 		    ()))
-	      
+
 	      (lambda (caller form env)
 		(if (or (< (length form) 3)             ; (let ((a 1) (set! a 2)))
 			(not (or (symbol? (cadr form))
 				 (list? (cadr form)))))
 		    (lint-format "let is messed up: ~A" caller (truncated-list->string form))
-		    
+
 		    (let ((named-let (and (symbol? (cadr form)) (cadr form))))
 		      (if (keyword? named-let)          ; (let :x ((i y)) (x i))
 			  (lint-format "bad let name: ~A" caller named-let))
-		      
+
 		      (if named-let
 			  (if *report-shadowed-variables*
 			      (report-shadower caller 'let 'named-let-function-name named-let named-let env))
 			  (remove-null-let caller form env))
-		      
+
 		      (let ((vars (declare-named-let form env))
 			    (varlist ((if named-let caddr cadr) form))
 			    (body ((if named-let cdddr cddr) form)))
-			
+
 			(if (not (and (proper-list? varlist)
 				      (just-pairs? varlist)))
 			    (lint-format "let is messed up: ~A" caller (truncated-list->string form))
@@ -20885,16 +20885,16 @@
 				       (len=1? body)
 				       (not (side-effect? (car body) env))) ; (let xx () z)
 				  (lint-format "perhaps ~A" caller (lists->string form (car body))))
-			      
+
 			      (set! vars (walk-let-vars caller form varlist vars env))
-			      
+
 			      (when (and (pair? body)
 					 (pair? vars)
 					 (func-definer? (car body)))
 				(let-local-funcs->closure caller form body (map var-name vars)))
 			      ;; here we could check '+signature+ and others, but it is tricky to tell that
 			      ;;   var-initial-value is messed up
-			      
+
 			      (let ((suggest made-suggestion))
 				(unless named-let
 				  (when (and (pair? varlist)
@@ -20950,7 +20950,7 @@
 				(let ((es (walk-letx-body caller form body vars env)))
 				  (set! vars (car es))
 				  (set! env (cdr es)))
-				
+
 				(when (pair? vars)
 				  (unless (or named-let
 					      (not *report-combinable-lets*))
@@ -20958,9 +20958,9 @@
 				  (when (and (pair? (cadr form))
 					     (pair? (caadr form)))
 				    (split-let caller form body vars env)))
-				
+
 				(let-var->body caller form body varlist)
-				
+
 				(when (pair? body)
 				  (when (len>2? (car body))
 				    (let-body->value caller form vars env))
@@ -20974,7 +20974,7 @@
 				    (tighten-let caller form vars env)
 				    (if (= suggest made-suggestion)
 					(combine-set+one-use caller body varlist env)))))
-			      
+
 			      (combine-lets caller form varlist env))))))
 		env)))
 	  (hash-walker 'let let-walker)
@@ -22922,12 +22922,12 @@
 		 (let ((if-len (length head)))
 		   (if (= if-len 3)                     ; ((if y +) 3 4)
 		       (lint-format "~S better not be #f here: ~A" caller (cadr head) (truncated-list->string form))
-		       
+
 		       (if (= if-len 4)                 ; ((if y + -) 2 3), if-len might be anything
 			   (let ((true (caddr head))
 				 (false (cadddr head))
 				 (num-args (length (cdr form))))
-			     
+
 			     (if (and (symbol? true)
 				      (symbol? false))
 				 (when (and (defined? true)
@@ -22936,12 +22936,12 @@
 					 (op2 (symbol->value false)))
 
 				     (unless (aritable? op1 num-args)
-				       (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+				       (lint-format "~S in ~S can't be called with ~D argument~P: ~A"
 						    caller true head num-args num-args (truncated-list->string form)))
 				     (unless (aritable? op2 num-args)
-				       (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+				       (lint-format "~S in ~S can't be called with ~D argument~P: ~A"
 						    caller false head num-args num-args (truncated-list->string form)))
-				     
+
 				     (let ((sig1 (signature op1))
 					   (sig2 (signature op2))
 					   (data (var-member head env)))
@@ -22953,16 +22953,16 @@
 				 (unless (or (pair? true) (pair? false))
 
 				   (unless (aritable? true num-args)
-				     (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+				     (lint-format "~S in ~S can't be called with ~D argument~P: ~A"
 						  caller true head num-args num-args (truncated-list->string form)))
 				   (unless (aritable? false num-args)
-				     (lint-format "~S in ~S can't be called with ~D argument~P: ~A" 
+				     (lint-format "~S in ~S can't be called with ~D argument~P: ~A"
 						  caller false head num-args num-args (truncated-list->string form))))))))))
-		
+
 		((not (and (pair? (cdr head))
 			   (memq (car head) '(lambda lambda*)))))
 		;; just ((lambda|lambda* ...)...) from here down
-		
+
 		((and (identity? head)
 		      (pair? (cdr form))) ; identity needs an argument
 		 ;; ((lambda (x) x) 32) -> 32
@@ -24042,4 +24042,4 @@
     #f))
 |#
 
-;;; 54 896368, 53 874874, 52 871075, 54 889347 
+;;; 54 896368, 53 874874, 52 871075, 54 889347

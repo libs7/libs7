@@ -1,5 +1,5 @@
 ;;; dup.scm
-;;; (dups size file alloc-lines): 
+;;; (dups size file alloc-lines):
 ;;;    find all matches of "size" successive lines in "file" ignoring empty lines and leading/trailing whitespace
 ;;;    "alloc-lines" is any number bigger than the number of lines in "file"
 ;;;    (dups 16 "s7.c" 91000) finds all 16-line matches in s7.c which (we wish) has less than 91000 lines in all
@@ -21,11 +21,11 @@
 	    (size-1 0)
 	    (reported-already (make-vector alloc-lines #f)))
 	(set! unique (make-vector alloc-lines #f))
-	
+
 	(call-with-input-file file
 	  (lambda (p)
 	    ;; get lines, original and trimmed
-	    (let ((total-lines 
+	    (let ((total-lines
 		   (do ((i 0 (+ i 1))
 			(j 0)
 			(line (read-line p) (read-line p)))
@@ -54,10 +54,10 @@
 			     (vector-set! lines j line)
 			     (int-vector-set! lens j (length line))
 			     (set! j (+ j 1)))))))))
-	      
+
 	      (set! size (min size total-lines))
 	      (set! size-1 (- size 1))
-	      ;; (format *stderr* "lines: ~S~%" total-lines)         ; 84201 2-jul-19, 89690 29-Aug-20
+	      ;; (format *stderr* "lines: ~S~%" total-lines)         ; 84201 2-jul-19, 89690 29-Aug-20, 85715 28-May-22
 
 	      ;; mark unmatchable strings
 	      (let ((sortv (make-vector total-lines)))
@@ -113,7 +113,7 @@
 				      (if first
 					  (let ((first-line (int-vector-ref linenums i)))
 					    (vector-set! reported-already i #t)
-					    (format *stderr* "~NC~%~{~A~%~}~%  lines ~D ~D" 8 #\- ; lineseq 
+					    (format *stderr* "~NC~%~{~A~%~}~%  lines ~D ~D" 8 #\- ; lineseq
 						    (subvector original-lines first-line (int-vector-ref linenums (+ i size)))
 						    first-line
 						    (int-vector-ref linenums k))
@@ -127,7 +127,7 @@
   )
 
 (dup 16 "s7.c" 110000)
-;(dup 12 "s7.c" 110000)
+;(dup 2 "s7.c" 110000)
 ;(dup 12 "ffitest.c" 10000)
 ;(dup 8 "ffitest.c" 10000)
 ;(dup 1 "s7test.scm" 110000)
