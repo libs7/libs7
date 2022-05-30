@@ -1673,7 +1673,7 @@ static s7_pointer too_many_arguments_string, not_enough_arguments_string, cant_b
   cdddr_a_list_string, cddr_a_list_string, cdr_a_list_string, immutable_error_string, its_infinite_string, its_nan_string,
   its_negative_string, its_too_large_string, its_too_small_string, parameter_set_twice_string, result_is_too_large_string,
   something_applicable_string, too_many_indices_string, intermediate_too_large_string,
-  format_string_1, format_string_2, format_string_3, format_string_4, keyword_value_missing_string, a_named_function_string;
+  format_string_1, format_string_2, format_string_3, format_string_4, keyword_value_missing_string;
 
 static bool t_number_p[NUM_TYPES], t_small_real_p[NUM_TYPES], t_rational_p[NUM_TYPES], t_real_p[NUM_TYPES], t_big_number_p[NUM_TYPES];
 static bool t_simple_p[NUM_TYPES], t_structure_p[NUM_TYPES];
@@ -26053,7 +26053,6 @@ static void init_strings(void)
   no_complex_numbers_string =     make_permanent_string("this version of s7 does not support complex numbers");
 #endif
   keyword_value_missing_string =  make_permanent_string("~A: keyword argument's value is missing: ~S in ~S");
-  a_named_function_string =       make_permanent_string("a named function");
 
   format_string_1 = make_permanent_string("format: ~S ~{~S~^ ~}: ~A");
   format_string_2 = make_permanent_string("format: ~S: ~A");
@@ -40082,7 +40081,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 	  if (is_any_closure(typf))
 	    {
 	      if (!is_symbol(find_closure(sc, typf, closure_let(typf))))
-		wrong_type_argument_with_type(sc, caller, 3, typf, a_named_function_string);
+		wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named function", 16));
 	      /* the name is needed primarily by the error handler: "vector-set! third argument, ..., is a ... but should be a <...>" */
 	    }
 	  else
@@ -40109,7 +40108,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 		      {
 			s7_pointer sig;
 			if (!c_function_name(typf))
-			  wrong_type_argument_with_type(sc, caller, 3, typf, a_named_function_string);
+			  wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named function", 16));
 			if (!c_function_marker(typf))
 			  c_function_set_marker(typf, mark_vector_1);
 			if (!c_function_symbol(typf))
@@ -43114,8 +43113,12 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      if (((keyp != sc->T) && (!is_c_function(keyp)) && (!is_any_closure(keyp))) ||
 			  ((valp != sc->T) && (!is_c_function(valp)) && (!is_any_closure(valp))))
 			wrong_type_argument_with_type(sc, caller, 3, typers, wrap_string(sc, "(key-type . value-type)", 23));
-		      if ((keyp != sc->T) && (!s7_is_aritable(sc, keyp, 1)))
-			wrong_type_argument_with_type(sc, caller, 3, keyp, wrap_string(sc, "a function of one argument", 26));
+
+		      if ((keyp != sc->T) && 
+			  (!s7_is_aritable(sc, keyp, 1)))
+			s7_error(sc, sc->wrong_type_arg_symbol, 
+				 set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
+					     caller, typers));
 		      dproc = cons_unchecked(sc, sc->T, sc->T);
 		      hash_table_set_procedures(ht, dproc);
 		      hash_table_set_key_typer(dproc, keyp);
@@ -43123,7 +43126,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      if (is_c_function(keyp))
 			{
 			  if (!c_function_name(keyp))
-			    wrong_type_argument_with_type(sc, caller, 3, keyp, a_named_function_string);
+			    s7_error(sc, sc->wrong_type_arg_symbol, 
+				     set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the first function is anonymous", 92),
+						 caller, typers));
 			  if (c_function_has_simple_elements(keyp))
 			    set_has_simple_keys(ht);
 			  if (!c_function_symbol(keyp))
@@ -43141,18 +43146,27 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 				  (is_pair(eq_sig)) &&
 				  (is_pair(cdr(eq_sig))) &&
 				  (!compatible_types(sc, cadr(eq_sig), c_function_symbol(keyp))))
-				wrong_type_argument_with_type(sc, caller, 2, proc, wrap_string(sc, "a function that matches the key type function", 45));
+			    s7_error(sc, sc->wrong_type_arg_symbol, 
+				     set_elist_3(sc, wrap_string(sc, "~A: in the third argument, the key type function is not compatible with the equality function: ~S", 97),
+						 caller, typers));
 			    }}
 		      else
 			if ((is_any_closure(keyp)) &&
 			    (!is_symbol(find_closure(sc, keyp, closure_let(keyp)))))
-			  wrong_type_argument_with_type(sc, caller, 3, keyp, a_named_function_string);
-		      if ((valp != sc->T) && (!s7_is_aritable(sc, valp, 1)))
-			wrong_type_argument_with_type(sc, caller, 3, valp, wrap_string(sc, "a function of one argument", 26));
+			  s7_error(sc, sc->wrong_type_arg_symbol, 
+				   set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the first function is anonymous", 92),
+					       caller, typers));
+		      if ((valp != sc->T) && 
+			  (!s7_is_aritable(sc, valp, 1)))
+			s7_error(sc, sc->wrong_type_arg_symbol, 
+				 set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
+					     caller, typers));
 		      if (is_c_function(valp))
 			{
 			  if (!c_function_name(valp))
-			    wrong_type_argument_with_type(sc, caller, 3, valp, a_named_function_string);
+			    s7_error(sc, sc->wrong_type_arg_symbol, 
+				     set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
+						 caller, typers));
 			  if (c_function_has_simple_elements(valp))
 			    set_has_simple_values(ht);
 			  if (!c_function_symbol(valp))
@@ -43163,12 +43177,14 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      else
 			if ((is_any_closure(valp)) &&
 			    (!is_symbol(find_closure(sc, valp, closure_let(valp)))))
-			  wrong_type_argument_with_type(sc, caller, 3, valp, a_named_function_string);
+			  s7_error(sc, sc->wrong_type_arg_symbol, 
+				   set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
+					       caller, typers));
 		      set_typed_hash_table(ht);
 		    }}
 	      else
 		if (typers != sc->F)
-		  wrong_type_argument_with_type(sc, caller, 3, typers, wrap_string(sc, "(key-type . value-type)", 23));
+		  wrong_type_argument_with_type(sc, caller, 3, typers, wrap_string(sc, "either #f or (cons key-type-check value-type-check)", 51));
 	    }
 
 	  /* check eq_func */
@@ -65795,7 +65811,7 @@ static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
   gc_protect_via_stack(sc, code);
   f = s7_optimize(sc, code);
   if (f) result = f(sc);
-  unstack(sc);
+  if (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT) unstack(sc); /* was unstack(sc) */
   return(result);
 }
 
@@ -71369,9 +71385,8 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
       set_safe_optimize_op(expr, OP_COND_NA_NA);
       for (p = cdr(expr); is_pair(p); p = cdr(p))
 	{
-	  s7_pointer q;
 	  set_fx_direct(car(p), fx_choose(sc, car(p), e, pair_symbol_is_safe));
-	  for (q = cdar(p); is_pair(q); q = cdr(q))
+	  for (s7_pointer q = cdar(p); is_pair(q); q = cdr(q))
 	    set_fx_direct(q, fx_choose(sc, q, e, pair_symbol_is_safe));
 	}
       return(OPT_T);
@@ -72199,8 +72214,8 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  if (is_pair(cadr(x)))
 	    {
 	      bool follow = false;
-	      s7_pointer vars = cadr(x), sp;
-	      sp = vars;
+	      s7_pointer vars = cadr(x);
+	      s7_pointer sp = vars;
 	      for (; is_pair(vars); vars = cdr(vars))
 		{
 		  s7_pointer do_var = car(vars);
@@ -73136,9 +73151,9 @@ static bool check_tc_let(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointe
     {
       if (car(let_body) == sc->cond_symbol) /* vars=#loop pars, args=names thereof (arglist) */
 	{
-	  s7_pointer p, var_name;
+	  s7_pointer var_name;
 	  bool all_fxable = true;
-	  for (p = cdr(let_body); is_pair(p); p = cdr(p))
+	  for (s7_pointer p = cdr(let_body); is_pair(p); p = cdr(p))
 	    {
 	      s7_pointer clause = car(p);
 	      if ((is_proper_list_2(sc, clause)) &&
@@ -73154,9 +73169,8 @@ static bool check_tc_let(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointe
 		  if ((is_pair(result)) &&
 		      (car(result) == name))    /* result is recursive call */
 		    {
-		      s7_pointer arg;
-		      s7_int i;
-		      for (i = 0, arg = cdr(result); is_pair(arg); i++, arg = cdr(arg))
+		      s7_int i = 0;
+		      for (s7_pointer arg = cdr(result); is_pair(arg); i++, arg = cdr(arg))
 			if (!is_fxable(sc, car(arg)))
 			  return(false);
 		      if (i != vars)
@@ -73171,7 +73185,7 @@ static bool check_tc_let(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointe
 	  if (vars > 0)
 	    fx_tree(sc, cdaadr(body), car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, vars > 3);
 	  var_name = caaadr(body);
-	  for (p = cdr(let_body); is_pair(p); p = cdr(p))
+	  for (s7_pointer p = cdr(let_body); is_pair(p); p = cdr(p))
 	    {
 	      s7_pointer clause = car(p);
 	      s7_pointer result = cadr(clause);
@@ -73739,18 +73753,16 @@ static inline s7_pointer op_lambda_unchecked(s7_scheme *sc, s7_pointer code)
 
 static void check_lambda_star(s7_scheme *sc)
 {
-  s7_pointer code;
+  s7_pointer code = cdr(sc->code);
   if ((sc->safety > NO_SAFETY) &&
       (tree_is_cyclic(sc, sc->code)))
     s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "lambda*: body is cyclic: ~S", 27), sc->code));
-
-  code = cdr(sc->code);
+  
   if ((!is_pair(code)) ||
       (!is_pair(cdr(code))))                                          /* (lambda*) or (lambda* #f) */
     syntax_error(sc, "lambda*: no arguments or no body? ~A", 36, sc->code);
 
   set_car(code, check_lambda_star_args(sc, car(code), NULL, sc->code));
-
   if ((sc->safety > NO_SAFETY) ||
       (main_stack_op(sc) != OP_DEFINE1))
     {
@@ -74340,9 +74352,8 @@ static s7_pointer check_named_let(s7_scheme *sc, int32_t vars)
       sc->args = T_Pair(safe_list_if_possible(sc, vars));
       for (s7_pointer ex = cadr(code), exp = sc->args; is_pair(ex); ex = cdr(ex), exp = cdr(exp))
 	{
-	  s7_function fx;
 	  s7_pointer val = cdar(ex);
-	  fx = fx_choose(sc, val, sc->curlet, let_symbol_is_safe);
+	  s7_function fx = fx_choose(sc, val, sc->curlet, let_symbol_is_safe);
 	  if (fx) set_fx_direct(val, fx); else fx_ok = false;
 	  car(exp) = caar(ex);
 	}
@@ -74666,9 +74677,9 @@ static bool op_let(s7_scheme *sc)
 
 static bool op_let_unchecked(s7_scheme *sc)     /* not named, but has vars */
 {
-  s7_pointer x, code = cadr(sc->code);
+  s7_pointer code = cadr(sc->code);
+  s7_pointer x = cdar(code);
   sc->args = list_1(sc, cdr(sc->code));
-  x = cdar(code);
   if (has_fx(x))
     sc->value = fx_call(sc, x);
   else
@@ -74911,12 +74922,13 @@ static Inline void op_let_na_new(s7_scheme *sc)
 
 static void op_let_na_old(s7_scheme *sc)
 {
-  s7_pointer p, slot, let = opt3_let(cdr(sc->code));
+  s7_pointer let = opt3_let(cdr(sc->code));
+  s7_pointer slot = let_slots(let);
   uint64_t id = ++sc->let_number;
   sc->args = let;
   let_set_id(let, id);
   let_set_outlet(let, sc->curlet);
-  for (p = cadr(sc->code), slot = let_slots(let); is_pair(p); p = cdr(p), slot = next_slot(slot))
+  for (s7_pointer p = cadr(sc->code); is_pair(p); p = cdr(p), slot = next_slot(slot))
     {
       /* GC protected because it's a permanent let? or perhaps use sc->args? */
       slot_set_value(slot, fx_call(sc, cdar(p)));
@@ -75785,11 +75797,10 @@ static s7_pointer fx_let_temp_a_a(s7_scheme *sc, s7_pointer code) /* one entry, 
 
 static bool op_let_temp_setter(s7_scheme *sc)
 {
-  s7_pointer var, slot, sym, e;
+  s7_pointer var, slot, sym, e = sc->curlet;
   sc->code = cdr(sc->code);
   var = caaar(sc->code);
   sym = fx_call(sc, cdr(var));
-  e = sc->curlet;
   set_curlet(sc, fx_call(sc, cddr(var)));
   slot = lookup_slot_from(sym, sc->curlet);
   set_curlet(sc, e);
@@ -77723,8 +77734,8 @@ static void check_set(s7_scheme *sc)
   pair_set_syntax_op(form, OP_SET_NORMAL);
   if (is_symbol(car(code)))
     {
-      s7_pointer settee = car(code), value = cadr(code), slot;
-      slot = lookup_slot_from(settee, sc->curlet);
+      s7_pointer settee = car(code), value = cadr(code);
+      s7_pointer slot = lookup_slot_from(settee, sc->curlet);
       if (((!is_slot(slot)) || (!slot_has_setter(slot))) &&
 	  (!is_syntactic_symbol(settee)))
 	{
@@ -79804,12 +79815,12 @@ static s7_pointer check_do(s7_scheme *sc)
 
     for (p = vars; is_pair(p); p = cdr(p))
       {
-	s7_pointer var = car(p), val;
+	s7_pointer var = car(p);
+	s7_pointer val = cddr(var);
 	stepper3 = stepper2;
 	stepper2 = stepper1;
 	stepper1 = stepper0;
 	stepper0 = car(var);
-	val = cddr(var);
 	if (is_pair(val))
 	  {
 	    var = car(var);
@@ -79885,14 +79896,11 @@ static s7_pointer check_do(s7_scheme *sc)
 	(is_pair(cdar(vars))) &&
 	(is_pair(cddar(vars))))
       {
-	s7_pointer var, step;
+	s7_pointer var = caar(vars);
+	s7_pointer step = cddar(vars);
 	set_opt3_any(code, (in_heap(code)) ? sc->F : make_permanent_let(sc, vars));
-
 	if (!got_pending)
 	  pair_set_syntax_op(form, OP_DOX_NO_BODY);
-
-	var = caar(vars);
-	step = cddar(vars);
 	if (is_safe_stepper_expr(step))
 	  {
 	    step = car(step);
@@ -80187,15 +80195,14 @@ static goto_t op_dox(s7_scheme *sc)
    *    since all these exprs are local, we don't need to jump until the body
    */
   int64_t id, steppers = 0;
-  s7_pointer let, code, end, endp, stepper = NULL, form = sc->code, slots;
+  s7_pointer code, end, endp, stepper = NULL, form = sc->code, slots;
   s7_function endf;
 #if WITH_GMP
   bool got_bignum = false;
 #endif
-
-  sc->code = cdr(sc->code);
-  let = make_let(sc, sc->curlet);   /* new let is not tied into the symbol lookup process yet */
+  s7_pointer let = make_let(sc, sc->curlet);   /* new let is not tied into the symbol lookup process yet */
   sc->temp1 = let;
+  sc->code = cdr(sc->code);
   for (s7_pointer vars = car(sc->code); is_pair(vars); vars = cdr(vars))
     {
       s7_pointer expr = cdar(vars), slot;
@@ -80648,12 +80655,11 @@ static void op_dox_no_body(s7_scheme *sc)
 
 static void op_dox_pending_no_body(s7_scheme *sc)
 {
-  s7_pointer let, test, slots;
+  s7_pointer test, slots;
   bool all_steps = true;
-
-  sc->code = cdr(sc->code);
-  let = make_let(sc, sc->curlet);
+  s7_pointer let = make_let(sc, sc->curlet);
   sc->temp1 = let;
+  sc->code = cdr(sc->code);
   for (s7_pointer vars = car(sc->code); is_pair(vars); vars = cdr(vars))
     {
       add_slot(sc, let, caar(vars), fx_call(sc, cdar(vars)));
@@ -80780,11 +80786,11 @@ static bool op_do_no_vars_no_opt_1(s7_scheme *sc)
 
 static void op_do_no_body_na_vars(s7_scheme *sc) /* vars fxable, end-test not */
 {
-  s7_pointer let, stepper = NULL;
+  s7_pointer stepper = NULL;
   s7_int steppers = 0;
-  sc->code = cdr(sc->code);
-  let = make_let(sc, sc->curlet);
+  s7_pointer let = make_let(sc, sc->curlet);
   sc->temp1 = let;
+  sc->code = cdr(sc->code);
   for (s7_pointer vars = car(sc->code); is_pair(vars); vars = cdr(vars))
     {
       add_slot(sc, let, caar(vars), fx_call(sc, cdar(vars)));
@@ -81921,13 +81927,13 @@ static goto_t op_safe_do(s7_scheme *sc)
 
 static goto_t op_dotimes_p(s7_scheme *sc)
 {
-  s7_pointer end, code = cdr(sc->code), end_val, slot, old_e;
+  s7_pointer code = cdr(sc->code), end_val, slot, old_e;
+  s7_pointer end = opt1_any(code); /* caddr(opt2_pair(code)) */
   /* (do ... (set! args ...)) -- one line, syntactic */
 
   s7_pointer init_val = fx_call(sc, cdaar(code));
   sc->value = init_val;
   set_opt2_pair(code, caadr(code));
-  end = opt1_any(code); /* caddr(opt2_pair(code)) */
   if (is_symbol(end))
     {
       slot = lookup_slot_from(end, sc->curlet);
@@ -83221,14 +83227,18 @@ static void check_for_cyclic_code(s7_scheme *sc, s7_pointer code)
 static void op_thunk(s7_scheme *sc)
 {
   s7_pointer p = opt1_lambda(sc->code);
-  check_stack_size(sc); /* full-test (toward end, grows to 524288!) */
+  /* check_stack_size(sc); */ /* full-test (toward end, grows to 524288!) */
   /* this recursion check is consistent with the other unsafe closure calls, but we're probably in big trouble:
    *   (letrec ((a (lambda () (cons 1 (b)))) (b (lambda () (a)))) (b))
    */
   sc->curlet = make_let(sc, closure_let(p));
   sc->code = T_Pair(closure_body(p));
+#if 0
   push_stack_no_args(sc, sc->begin_op, T_Pair(cdr(sc->code)));
   sc->code = car(sc->code);
+#else
+  if_pair_set_up_begin(sc);
+#endif
 }
 
 static void op_thunk_o(s7_scheme *sc)
@@ -85088,18 +85098,19 @@ static s7_pointer fx_tc_if_a_z_if_a_l3a_l3a(s7_scheme *sc, s7_pointer arg)
 
 static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer body = caddr(code), la_slot, let_slot, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer body = caddr(code);
+  s7_pointer outer_let = sc->curlet;
+  s7_pointer la_slot = let_slots(outer_let);
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
   s7_pointer if_false = cadddr(body);
   s7_pointer la = cdr(if_false);
-
-  sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
-  inner_let = sc->curlet;
+  s7_pointer let_var = caadr(code);
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer let_slot = let_slots(inner_let);
+  sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
-  let_slot = let_slots(sc->curlet);
   let_var = cdr(let_var);
-  la_slot = let_slots(outer_let);
 
   while (fx_call(sc, if_test) == sc->F)
     {
@@ -85125,20 +85136,21 @@ static s7_pointer fx_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer arg)
 
 static bool op_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer body = caddr(code), la_slot, let_slot, laa_slot, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer body = caddr(code);
+  s7_pointer outer_let = sc->curlet;
+  s7_pointer la_slot = let_slots(outer_let);
+  s7_pointer laa_slot = next_slot(la_slot);
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
   s7_pointer if_false = cadddr(body);
   s7_pointer la = cdr(if_false);
   s7_pointer laa = cddr(if_false);
-
-  sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
-  inner_let = sc->curlet;
+  s7_pointer let_var = caadr(code);
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer let_slot = let_slots(inner_let);
+  sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
-  let_slot = let_slots(sc->curlet);
   let_var = cdr(let_var);
-  la_slot = let_slots(outer_let);
-  laa_slot = next_slot(la_slot);
 #if (!WITH_GMP)
   if (!no_bool_opt(code))
     {
@@ -85210,14 +85222,13 @@ static s7_pointer fx_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer arg)
 
 static void op_tc_let_when_laa(s7_scheme *sc, bool when, s7_pointer code)
 {
-  s7_pointer p, body = caddr(code), la, let_slot, laa, let_var = caadr(code), outer_let = sc->curlet, inner_let;
+  s7_pointer p, body = caddr(code), la, laa, let_var = caadr(code), outer_let = sc->curlet;
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
-
-  sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
-  inner_let = sc->curlet;
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer let_slot = let_slots(inner_let);
+  sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
-  let_slot = let_slots(sc->curlet);
   let_var = cdr(let_var);
 
   for (p = if_true; is_pair(cdr(p)); p = cdr(p));
@@ -85349,27 +85360,24 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 
 static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer outer_let = sc->curlet, inner_let, let_var = caadr(code), let_slot, slots, result;
-  s7_function letf;
   bool read_case;
-  s7_pointer cond_body = cdaddr(code);
-  /* code here == body in check_tc */
-
-  sc->curlet = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
-  inner_let = sc->curlet;
+  s7_pointer result;
+  s7_pointer outer_let = sc->curlet;
+  s7_pointer slots = let_slots(outer_let);
+  s7_pointer cond_body = cdaddr(code);  /* code here == body in check_tc */
+  s7_pointer let_var = caadr(code);
+  s7_function letf = fx_proc(cdr(let_var));
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer let_slot = let_slots(inner_let);
+  sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
-  let_slot = let_slots(sc->curlet);
-  let_var = cdr(let_var);
-  letf = fx_proc(let_var);
-  let_var = car(let_var);
-
+  let_var = cadr(let_var);
   if ((letf == fx_c_s_direct) &&                       /* an experiment */
       (symbol_id(cadr(let_var)) != let_id(outer_let))) /* i.e. not an argument to the recursive function, and not set! (safe closure body) */
     {
       letf = (s7_p_p_t)opt2_direct(cdr(let_var));
       let_var = lookup(sc, cadr(let_var));
     }
-  slots = let_slots(outer_let);
   /* in the named let no-var case slots may contain the let name (it's the funclet) */
 
   if (opt3_arglen(cdr(code)) == 0) /* (loop) etc -- no args */
@@ -87334,12 +87342,11 @@ static bool op_any_c_np_mv(s7_scheme *sc)
 
 static void op_any_closure_np(s7_scheme *sc)
 {
-  s7_pointer p;
+  s7_pointer p = cdr(sc->code);
   check_stack_size(sc);
   if (sc->op_stack_now >= sc->op_stack_end)
     resize_op_stack(sc);
   push_op_stack(sc, sc->code);
-  p = cdr(sc->code);
   if (has_fx(p))
     {
       sc->args = fx_call(sc, p);
@@ -94537,60 +94544,60 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ------------------------------------------------------
- *            20.9   21.0   22.0   22.3   22.4   22.5
- * ------------------------------------------------------
- * tpeak      115    114    108    105    105
- * tref       691    687    463    458    461
- * index     1026   1016    973    970    968
- * tmock     1177   1165   1057   1054   1036
- * tvect     2519   2464   1772   1708   1689
- * texit     ----   ----   1778   1767   1749
- * s7test    1873   1831   1818   1790   1779
- * timp      2971   2891   2176   2051   2043
- * lt        2187   2172   2150   2156   2143
- * tauto     ----   ----   2562   2566   2207
- * dup       3805   3788   2492   2327   2273
- * tload     ----   ----   3046   2352   2352
- * tread     2440   2421   2419   2385   2376
- * fbench    2688   2583   2460   2453   2403
- * trclo     2735   2574   2454   2443   2423
- * titer     2865   2842   2641   2490   2475
- * tcopy     8035   5546   2539   2495   2503
- * tmat      3065   3042   2524   2515   2511
- * tb        2735   2681   2612   2606   2574
- * tsort     3105   3104   2856   2826   2820
- * teq       4068   4045   3536   3468   3450
- * tmac      3950   3873   3033   2992   3541
- * tio       3816   3752   3683   3646   3588
- * tobj      4016   3970   3828   3633   3624
- * tclo      4787   4735   4390   4343   4309
- * tlet      7775   5640   4450   4423   4393
- * tcase     4960   4793   4439   4462   4407
- * tmap      8869   8774   4489   4490   4468
- * tfft      7820   7729   4755   4683   4599
- * tshoot    5525   5447   5183   5174   5099
- * tform     5357   5348   5307   5310   5281
- * tnum      6348   6013   5433   5425   5378
- * tstr      6880   6342   5488   5462   5400
- * tlamb     6423   6273   5720   5618   5530
- * tset      ----   ----   ----   6682   6163
- * tlist     7896   7546   6558   6486   6195
- * tmisc     8869   7612   6435   6324   6239
- * tgsl      8485   7802   6373   6333   6301
- * trec      6936   6922   6521   6523   6538
- * tari      13.0   12.7   6827   6717   6633
- * tleft     10.4   10.2   7657   7561   7472
- * tgc       11.9   11.1   8177   8062   8002
- * thash     11.8   11.7   9734   9583   9489
- * cb        11.2   11.0   9658   9677   9539
- * tgen      11.2   11.4   12.0   12.0   12.0
- * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.3   56.5
- * lg        ----   ----  105.2  105.8  104.6
- * tbig     177.4  175.8  156.5  151.1  150.6
- * ------------------------------------------------------
+/* -----------------------------------------------
+ *            20.9   21.0   22.0   22.4   22.5
+ * -----------------------------------------------
+ * tpeak      115    114    108    105   
+ * tref       691    687    463    461   
+ * index     1026   1016    973    968   
+ * tmock     1177   1165   1057   1036   
+ * tvect     2519   2464   1772   1689   
+ * texit     ----   ----   1778   1749   
+ * s7test    1873   1831   1818   1779   
+ * timp      2971   2891   2176   2043   
+ * lt        2187   2172   2150   2143   
+ * tauto     ----   ----   2562   2207   
+ * dup       3805   3788   2492   2273   
+ * tload     ----   ----   3046   2352   
+ * tread     2440   2421   2419   2376   
+ * fbench    2688   2583   2460   2403   
+ * trclo     2735   2574   2454   2423   
+ * titer     2865   2842   2641   2475   
+ * tcopy     8035   5546   2539   2503   
+ * tmat      3065   3042   2524   2511   
+ * tb        2735   2681   2612   2574   
+ * tsort     3105   3104   2856   2820   
+ * teq       4068   4045   3536   3450   
+ * tmac      3950   3873   3033   3541   
+ * tio       3816   3752   3683   3588   
+ * tobj      4016   3970   3828   3624   
+ * tclo      4787   4735   4390   4309   
+ * tlet      7775   5640   4450   4393   
+ * tcase     4960   4793   4439   4407   
+ * tmap      8869   8774   4489   4468   
+ * tfft      7820   7729   4755   4599   
+ * tshoot    5525   5447   5183   5099   
+ * tform     5357   5348   5307   5281   
+ * tnum      6348   6013   5433   5378   
+ * tstr      6880   6342   5488   5400   
+ * tlamb     6423   6273   5720   5530   
+ * tset      ----   ----   ----   6163   
+ * tlist     7896   7546   6558   6195   
+ * tmisc     8869   7612   6435   6239   
+ * tgsl      8485   7802   6373   6301   
+ * trec      6936   6922   6521   6538   
+ * tari      13.0   12.7   6827   6633   
+ * tleft     10.4   10.2   7657   7472   
+ * tgc       11.9   11.1   8177   8002   
+ * thash     11.8   11.7   9734   9489   
+ * cb        11.2   11.0   9658   9539   
+ * tgen      11.2   11.4   12.0   12.0   
+ * tall      15.6   15.6   15.6   15.6   
+ * calls     36.7   37.5   37.0   37.6   
+ * sg        ----   ----   55.9   56.5   
+ * lg        ----   ----  105.2  104.6   
+ * tbig     177.4  175.8  156.5  150.6   
+ * -----------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
@@ -94599,12 +94606,24 @@ int main(int argc, char **argv)
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
  *   tcc -o s7 s7.c -I. -g3 -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER -DS7_DEBUGGING
+ *
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
- * typer to set hash key value immutable
- * (set! (setter vector) ...) or hash-table
+ *
+ * (set! (setter vector) ...) or hash-table, but then we want the getter anyway: 
+ *   dilambdas: vector-element-typer hash-table-key-typer hash-table-value-typer
+ *      ideally vector: (new-value [index...]), hash key: (new-key), hash value: (new-value [key])?
+ *          or hash-table-typer (key value) that checks both key and value [(value [key]...)?]
+ *      (hash value #f removes the key before typer sees it I presume)
+ *      typer to set hash key value immutable could use this
+ *   for vector see make_vector_1 for error checks, typed_vector_set_typer(vec, typf)
+ *      has_simple_elements bit, (new has to match current elements)
+ *   hash_table much more complicated (error checking and fixups, but again reset has to be compatible with current contents)
+ *      hash_table_set_key_typer(dproc, keyp);
+ *      hash_table_set_value_typer(dproc, valp);
+ *   let-typer (var value)?
  */
