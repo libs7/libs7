@@ -1588,7 +1588,7 @@ static inline char *permalloc(s7_scheme *sc, size_t len)
   return(result);
 }
 
-static Inline block_t *mallocate(s7_scheme *sc, size_t bytes)
+static Inline block_t *inline_mallocate(s7_scheme *sc, size_t bytes)
 {
   block_t *p;
   if (bytes > 0)
@@ -1630,6 +1630,8 @@ static Inline block_t *mallocate(s7_scheme *sc, size_t bytes)
   block_set_size(p, bytes);
   return(p);
 }
+
+static block_t *mallocate(s7_scheme *sc, size_t bytes) {return(inline_mallocate(sc, bytes));}
 
 static block_t *callocate(s7_scheme *sc, size_t bytes)
 {
@@ -8168,7 +8170,7 @@ static Inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const cha
 {
   s7_pointer x;
   new_cell(sc, x, T_STRING | T_SAFE_PROCEDURE);
-  string_block(x) = mallocate(sc, len + 1);
+  string_block(x) = inline_mallocate(sc, len + 1);
   string_value(x) = (char *)block_data(string_block(x));
   memcpy((void *)string_value(x), (void *)str, len);
   string_value(x)[len] = 0;
@@ -10760,7 +10762,7 @@ s7_pointer s7_make_keyword(s7_scheme *sc, const char *key)
 {
   s7_pointer sym;
   size_t slen = (size_t)safe_strlen(key);
-  block_t *b = mallocate(sc, slen + 2);
+  block_t *b = inline_mallocate(sc, slen + 2);
   char *name = (char *)block_data(b);
   name[0] = ':';
   memcpy((void *)(name + 1), (void *)key, slen);
@@ -11685,7 +11687,7 @@ static bool op_implicit_goto_a(s7_scheme *sc)
 
 static block_t *string_to_block(s7_scheme *sc, const char *p, s7_int len)
 {
-  block_t *b = mallocate(sc, len + 1);
+  block_t *b = inline_mallocate(sc, len + 1);
   char *bp = (char *)block_data(b);
   memcpy((void *)bp, (void *)p, len);
   bp[len] = '\0';
@@ -13809,7 +13811,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
     case T_INTEGER:
       {
 	size_t len1;
-	b = mallocate(sc, (128 + width));
+	b = inline_mallocate(sc, (128 + width));
 	p = (char *)block_data(b);
 	len1 = integer_to_string_any_base(p, integer(obj), radix);
 	if ((size_t)width > len1)
@@ -13828,7 +13830,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
       {
 	size_t len1, len2;
 	str_len = 256 + width;
-	b = mallocate(sc, str_len);
+	b = inline_mallocate(sc, str_len);
 	p = (char *)block_data(b);
 	len1 = integer_to_string_any_base(p, numerator(obj), radix);
 	p[len1] = '/';
@@ -13866,7 +13868,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	    len = 0;
 	    b = number_to_string_with_radix(sc, wrap_real(sc, x / pow((double)radix, (double)ep)), /* divide it down to one digit, then the fractional part */
 					    radix, width, precision, float_choice, &len);
-	    b1 = mallocate(sc, len + 8);
+	    b1 = inline_mallocate(sc, len + 8);
 	    p = (char *)block_data(b1);
 	    p[0] = '\0';
 	    (*nlen) = catstrs(p, len + 8, (sign) ? "-" : "", (char *)block_data(b), (radix == 16) ? "@" : "e", integer_to_string_no_length(sc, ep), (char *)NULL);
@@ -13892,7 +13894,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	if (i == 0)
 	  d[i++] = '0';
 	d[i] = '\0';
-	b = mallocate(sc, 256);
+	b = inline_mallocate(sc, 256);
         p = (char *)block_data(b);
 	/* much faster than catstrs because we know the string lengths */
 	{
@@ -13918,7 +13920,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	block_t *n = number_to_string_with_radix(sc, wrap_real(sc, real_part(obj)), radix, 0, precision, float_choice, &real_len); /* include floatify */
 	block_t *d = number_to_string_with_radix(sc, wrap_real(sc, imag_part(obj)), radix, 0, precision, float_choice, &imag_len);
 	char *dp = (char *)block_data(d);
-	b = mallocate(sc, 512);
+	b = inline_mallocate(sc, 512);
 	p = (char *)block_data(b);
 	pt = p;
 	memcpy(pt, (void *)block_data(n), real_len);
@@ -25908,7 +25910,7 @@ static Inline s7_pointer inline_make_empty_string(s7_scheme *sc, s7_int len, cha
   block_t *b;
   if (len == 0) return(nil_string);
   new_cell(sc, x, T_STRING);
-  b = mallocate(sc, len + 1);
+  b = inline_mallocate(sc, len + 1);
   string_block(x) = b;
   string_value(x) = (char *)block_data(b);
   if (fill != '\0')
@@ -28417,7 +28419,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
 
 static void port_set_filename(s7_scheme *sc, s7_pointer p, const char *name, size_t len)
 {
-  block_t *b = mallocate(sc, len + 1);
+  block_t *b = inline_mallocate(sc, len + 1);
   port_filename_block(p) = b;
   port_filename(p) = (char *)block_data(b);
   memcpy((void *)block_data(b), (void *)name, len);
@@ -28880,7 +28882,7 @@ s7_pointer s7_open_output_string(s7_scheme *sc)
 {
   s7_pointer x;
   block_t *b = mallocate_port(sc);
-  block_t *block = mallocate(sc, sc->initial_string_port_length);
+  block_t *block = inline_mallocate(sc, sc->initial_string_port_length);
   new_cell(sc, x, T_OUTPUT_PORT);
   port_block(x) = b;
   port_port(x) = (port_t *)block_data(b);
@@ -28962,7 +28964,7 @@ If the optional 'clear-port' is #t, the current string is flushed."
       s7_pointer result = block_to_string(sc, port_data_block(p), port_position(p));
       /* this is slightly faster than make_string_with_length(sc, (char *)(port_data(p)), port_position(p)): we're trading a mallocate for a memcpy */
       port_data_size(p) = sc->initial_string_port_length;
-      block = mallocate(sc, port_data_size(p));
+      block = inline_mallocate(sc, port_data_size(p));
       port_data_block(p) = block;
       port_data(p) = (uint8_t *)(block_data(block));
       port_position(p) = 0;
@@ -30558,6 +30560,15 @@ static s7_pointer call_file_out(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer op_lambda(s7_scheme *sc, s7_pointer code);
 
+static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
+{
+  if (!is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
+    return(make_symbol(sc, c_function_name(f)));
+  if (!c_function_symbol(f))
+    c_function_symbol(f) = make_symbol(sc, c_function_name(f));
+  return(c_function_symbol(f));
+}
+
 static void op_with_io_1_method(s7_scheme *sc)
 {
   s7_pointer lt = sc->value;
@@ -30565,7 +30576,7 @@ static void op_with_io_1_method(s7_scheme *sc)
     {
       s7_pointer method = car(sc->code);
       if (is_c_function(method))            /* #_call-with-input-string et al */
-	method = make_symbol(sc, c_function_name(method));
+	method = c_function_name_to_symbol(sc, method);
       push_stack(sc, OP_GC_PROTECT, lt, sc->code);
       sc->code = caddr(sc->code);
       sc->value = op_lambda(sc, sc->code);  /* don't unstack */
@@ -32062,6 +32073,9 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	      return;
 	    }
 
+	  if (is_typed_vector(vect))
+	    port_write_string(port)(sc, "(let ((<v> ", 11, port);
+
 	  if (vector_rank(vect) > 1)
 	    port_write_string(port)(sc, "(subvector ", 11, port);
 
@@ -32126,9 +32140,19 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	      plen = catstrs_direct(buf, " 0 ", pos_int_to_str_direct(sc, len), (const char *)NULL);
 	      port_write_string(port)(sc, buf, plen, port);
 	      write_vector_dimensions(sc, vect, port);
+	    }
+	  if (is_typed_vector(vect))
+	    {
+	      port_write_string(port)(sc, ")) (set! (vector-typer <v>) ", 28, port);
+	      port_write_vector_typer(sc, vect, port);
+	      port_write_string(port)(sc, ") <v>)", 6, port);
 	    }}
       else
 	{
+	  if (is_typed_vector(vect))
+	    port_write_string(port)(sc, "(let ((<v> ", 11, port);
+	  /* (let ((v (make-vector 3 'a symbol?))) (object->string v :readable)): "(let ((<v> (vector 'a 'a 'a))) (set! (vector-typer <v>) symbol?) <v>)" */
+
 	  if (vector_rank(vect) > 1)
 	    port_write_string(port)(sc, "(subvector ", 11, port);
 
@@ -32141,15 +32165,22 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	      port_write_character(port)(sc, ' ', port);
 	      object_to_port_with_circle_check(sc, vector_element(vect, i), port, P_READABLE, ci);
 	    }
+
 	  if (is_immutable_vector(vect))
 	    port_write_string(port)(sc, "))", 2, port);
 	  else port_write_character(port)(sc, ')', port);
 
-	  if (vector_rank(vect) > 1)
+	  if (vector_rank(vect) > 1)          /* subvector above */
 	    {
 	      plen = catstrs_direct(buf, " 0 ", pos_int_to_str_direct(sc, len), (const char *)NULL);
 	      port_write_string(port)(sc, buf, plen, port);
 	      write_vector_dimensions(sc, vect, port);
+	    }
+	  if (is_typed_vector(vect))
+	    {
+	      port_write_string(port)(sc, ")) (set! (vector-typer <v>) ", 28, port);
+	      port_write_vector_typer(sc, vect, port);
+	      port_write_string(port)(sc, ") <v>)", 6, port);
 	    }}}
   else /* not readable write */
     {
@@ -33892,7 +33923,7 @@ static void macro_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wr
 
 static void c_function_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
-  s7_pointer sym = make_symbol(sc, c_function_name(obj));
+  s7_pointer sym = c_function_name_to_symbol(sc, obj);
   if ((!is_global(sym)) &&
       (is_slot(initial_slot(sym))) &&
       ((use_write == P_READABLE) || (lookup(sc, sym) != initial_value(sym))))
@@ -34294,7 +34325,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
 
 static inline void restore_format_port(s7_scheme *sc, s7_pointer strport)
 {
-  block_t *block = mallocate(sc, FORMAT_PORT_LENGTH);
+  block_t *block = inline_mallocate(sc, FORMAT_PORT_LENGTH);
   port_data(strport) = (uint8_t *)(block_data(block));
   port_data_block(strport) = block;
   port_data(strport)[0] = '\0';
@@ -35476,7 +35507,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	}
       if (port_position(port) < port_data_size(port))
 	{
-	  block_t *block = mallocate(sc, FORMAT_PORT_LENGTH);
+	  block_t *block = inline_mallocate(sc, FORMAT_PORT_LENGTH);
 	  result = block_to_string(sc, port_data_block(port), port_position(port));
 	  port_data_size(port) = FORMAT_PORT_LENGTH;
 	  port_data_block(port) = block;
@@ -38410,7 +38441,7 @@ static Inline block_t *mallocate_vector(s7_scheme *sc, s7_int len)
 {
   block_t *b;
   if (len > 0)
-    return(mallocate(sc, len));
+    return(inline_mallocate(sc, len));
   b = mallocate_block(sc);
   block_data(b) = NULL;
   block_info(b) = NULL;
@@ -39449,7 +39480,7 @@ static inline vdims_t *list_to_dims(s7_scheme *sc, s7_pointer x)
   s7_pointer y;
   s7_int *ds, *os;
   s7_int len = proper_list_length(x);
-  vdims_t *v = (vdims_t *)mallocate(sc, len * 2 * sizeof(s7_int));
+  vdims_t *v = (vdims_t *)inline_mallocate(sc, len * 2 * sizeof(s7_int));
   vdims_rank(v) = len;
   vdims_offsets(v) = (s7_int *)(vdims_dims(v) + len);
   vector_elements_should_be_freed(v) = false;
@@ -39991,6 +40022,21 @@ static s7_int multivector_length(s7_scheme *sc, s7_pointer x, s7_pointer caller)
   return(len);
 }
 
+static void check_vector_typer_c_function(s7_scheme *sc, s7_pointer caller, s7_pointer typf)
+{
+  s7_pointer sig = c_function_signature(typf);
+  if ((sig != sc->pl_bt) &&
+      (is_pair(sig)) &&
+      ((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
+    wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19));
+  if (!c_function_name(typf))
+    wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named function", 16));
+  if (!c_function_marker(typf))
+    c_function_set_marker(typf, mark_vector_1);
+  if (!c_function_symbol(typf))
+    c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
+}
+
 static inline s7_pointer make_multivector(s7_scheme *sc, s7_pointer vec, s7_pointer x)
 {
   vdims_t *v = list_to_dims(sc, x);
@@ -40066,21 +40112,8 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 			if (!is_byte(fill)) wrong_type_argument_with_type(sc, caller, 2, fill, an_unsigned_byte_string);
 			result_type = T_BYTE_VECTOR;
 		      }
-		    else
-		      {
-			s7_pointer sig;
-			if (!c_function_name(typf))
-			  wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a named function", 16));
-			if (!c_function_marker(typf))
-			  c_function_set_marker(typf, mark_vector_1);
-			if (!c_function_symbol(typf))
-			  c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
-			sig = c_function_signature(typf);
-			if ((sig != sc->pl_bt) &&
-			    (is_pair(sig)) &&
-			    ((car(sig) != sc->is_boolean_symbol) || (cadr(sig) != sc->T) || (!is_null(cddr(sig)))))
-			  wrong_type_argument_with_type(sc, caller, 3, typf, wrap_string(sc, "a boolean procedure", 19));
-		      }}}}
+		    else check_vector_typer_c_function(sc, caller, typf);
+	      }}}
   /* before making the new vector, if fill is specified and the vector is typed, we have to check for a type error.
    *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the gc.
    */
@@ -40394,19 +40427,8 @@ static s7_pointer g_vector_dimensions(s7_scheme *sc, s7_pointer args)
 /* this is part of the vector_set process -- called before set! checks types etc, but does not actually set the element or raise an error
  *    a real problem: currently #f -> error (or at least don't set), so how to set an element to #f? could be like unentry, a unique value as signal
  *    a logistical problem: indices
- *    use setter in readable vector print, doc, s7test
- *
- * (define (typer x) (symbol? x))
- * (define v (make-vector 9 'a typer))
- * (equal? typer (vector-typer v))
- * (vector-typer (make-int-vector 3)) -> integer?
- * (vector-typer (make-vector 9 1 integer?)) -> integer?
- *
- * (define v (make-vector 3 1)) -> #(1 1 1)
- * (vector-typer v) -> #f
- * (set! (vector-typer v) integer?) -> integer?
- * (vector-typer v) -> integer?
- * (set! (v 0) pi) -> error: vector-set! third argument 3.141592653589793, is a real, but the vector's element type checker, integer?, rejects it
+ *    use setter in readable vector print
+ *    check arity of typer? or accept any number of indices?
  */
 
 static s7_pointer g_vector_typer(s7_scheme *sc, s7_pointer args)
@@ -40428,9 +40450,25 @@ static s7_pointer g_set_vector_typer(s7_scheme *sc, s7_pointer args)
   s7_pointer v = car(args), typer = cadr(args);
   if (!is_any_vector(v))
     return(s7_wrong_type_arg_error(sc, "set! vector-typer", 1, v, "a vector"));
-  /* TODO: check typer type (procedure + at least 1 arg), see split case in g_make_vector_1 40083 
-       also if int/float/byte-vector don't set new type (ignore redundant)
-  */
+  if (!is_normal_vector(v))
+    {
+      if (((is_int_vector(v)) && (typer != global_value(sc->is_integer_symbol))) ||
+	  ((is_float_vector(v)) && (typer != global_value(sc->is_float_symbol))) ||
+	  ((is_byte_vector(v)) && (typer != global_value(sc->is_byte_symbol))))
+	s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, wrap_string(sc, "vector_typer can't set ~S typer to ~S", 37), v, typer));
+      return(typer);
+    }
+  if (is_c_function(typer))
+    check_vector_typer_c_function(sc, sc->vector_typer_symbol, typer);
+  else
+    if (typer != sc->T)
+      {
+	if (!is_any_closure(typer))
+	  wrong_type_argument_with_type(sc, sc->vector_typer_symbol, 3, typer, wrap_string(sc, "a built-in procedure, a closure or #t", 37));
+	if (!is_symbol(find_closure(sc, typer, closure_let(typer))))
+	  wrong_type_argument_with_type(sc, sc->vector_typer_symbol, 3, typer, wrap_string(sc, "a named function", 16));
+	/* the name is needed primarily by the error handler: "vector-set! third argument, ..., is a ... but should be a <...>" */
+      }
   set_typed_vector(v);
   typed_vector_set_typer(v, typer);
   if ((is_c_function(typer)) &&
@@ -44361,7 +44399,7 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
   char *internal_arglist;
   s7_int n_args, len = safe_strlen(arglist);
   s7_int gc_loc;
-  block_t *b = mallocate(sc, len + 4);
+  block_t *b = inline_mallocate(sc, len + 4);
 
   internal_arglist = (char *)block_data(b);
   internal_arglist[0] = '\'';
@@ -55453,7 +55491,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	       *    (define kar car) (load "mockery.scm") (let ((p (mock-pair '(1 2 3)))) (call-with-exit (lambda (x) (x (kar p)))))
 	       *  "kar" fails but not "car" because symbol_id(kar) == 0!  symbol_id(car) > 0 because mockery provides a method for it.
 	       */
-	      if (symbol_id(make_symbol(sc, c_function_name(global_value(car(arg))))) == 0) /* yow! */
+	      if (symbol_id(c_function_name_to_symbol(sc, global_value(car(arg)))) == 0)
 		{
 		  s7_p_p_t f = s7_p_p_function(global_value(car(arg)));
 		  if (f)
@@ -80236,7 +80274,7 @@ static goto_t op_dox(s7_scheme *sc)
       if ((!bodyf) &&
 	  (is_fxable(sc, body)) &&     /* happens very rarely, #_* as car etc */
 	  (is_c_function(car(body))))
-	bodyf = s7_optimize_nr(sc, set_dlist_1(sc, set_ulist_1(sc, make_symbol(sc, c_function_name(car(body))), cdr(body))));
+	bodyf = s7_optimize_nr(sc, set_dlist_1(sc, set_ulist_1(sc, c_function_name_to_symbol(sc, car(body)), cdr(body))));
 
       if (bodyf)
 	{
@@ -90387,7 +90425,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      if (is_null(sc->code)) continue;  /* this order of checks appears to be faster than any of the alternatives */
 	      goto AND_P;
 	    }
-	  if (is_not_null(cdr(sc->code)))
+	  if (is_pair(cdr(sc->code)))  /* apparently exactly as fast as is_not_null */
 	    push_stack_no_args(sc, OP_AND_P1, cdr(sc->code));
 	  sc->code = car(sc->code);
 	  goto EVAL;
@@ -90423,7 +90461,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      if (is_null(sc->code)) continue;
 	      goto OR_P;
 	    }
-	  if (is_not_null(cdr(sc->code)))
+	  if (is_pair(cdr(sc->code)))
 	    push_stack_no_args(sc, OP_OR_P1, cdr(sc->code));
 	  sc->code = car(sc->code);
 	  goto EVAL;
@@ -94529,7 +94567,7 @@ int main(int argc, char **argv)
  * fbench    2688   2583   2460   2403   2403
  * trclo     2735   2574   2454   2423   2421
  * titer     2865   2842   2641   2475   2475
- * tcopy     8035   5546   2539   2503   2494 [gc]
+ * tcopy     8035   5546   2539   2503   2494
  * tmat      3065   3042   2524   2511   2515
  * tb        2735   2681   2612   2574   2574
  * tsort     3105   3104   2856   2820   2820
@@ -94539,7 +94577,7 @@ int main(int argc, char **argv)
  * tobj      4016   3970   3828   3624   3624
  * tclo      4787   4735   4390   4309   4309
  * tlet      7775   5640   4450   4393   4393
- * tcase     4960   4793   4439   4407   4413 [malloc]
+ * tcase     4960   4793   4439   4407   4413
  * tmap      8869   8774   4489   4468   4467
  * tfft      7820   7729   4755   4599   4600
  * tshoot    5525   5447   5183   5099   5086
@@ -94549,25 +94587,26 @@ int main(int argc, char **argv)
  * tlamb     6423   6273   5720   5530   5530
  * tset      ----   ----   ----   6163   6163
  * tlist     7896   7546   6558   6195   6195
- * tmisc     8869   7612   6435   6239   6241 [op_thunk]
+ * tmisc     8869   7612   6435   6239   6241
  * tgsl      8485   7802   6373   6301   6301
- * trec      6936   6922   6521   6538   6358
+ * trec      6936   6922   6521   6538   6538
  * tari      13.0   12.7   6827   6633   6634
  * tleft     10.4   10.2   7657   7472   7472
- * tgc       11.9   11.1   8177   8002   7996 [gc]
- * thash     11.8   11.7   9734   9489   9469 [hash_equivalent, gc]
+ * tgc       11.9   11.1   8177   8002   7996
+ * thash     11.8   11.7   9734   9489   9469
  * cb        11.2   11.0   9658   9539   9537
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.7
- * sg        ----   ----   55.9   56.5   56.7
+ * calls     36.7   37.5   37.0   37.6   37.6
+ * sg        ----   ----   55.9   56.5   56.5
  * lg        ----   ----  105.2  104.6  104.6
- * tbig     177.4  175.8  156.5  150.6  150.5 [open_input_string] 
+ * tbig     177.4  175.8  156.5  150.6  150.5
  * -----------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
  *       vector|hash + typer :readable display -- see tmp for vector, check multidim vector + typer
+ * perhaps inline_mallocate g_gensym (tbig)
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
@@ -94580,19 +94619,12 @@ int main(int argc, char **argv)
  *   threads.c -> tools + tests
  *   unlet opts
  *
- * (set! (setter vector) ...) or hash-table, but then we want the getter anyway: 
- *   dilambdas: vector-element-typer hash-table-key-typer hash-table-value-typer
+ * (set! (hash-table-key/value-typer hash-table) ...)
+ *   dilambdas: hash-table-key-typer hash-table-value-typer
  *      ideally vector: (new-value [index...]), hash key: (new-key), hash value: (new-value [key])?
  *          or hash-table-typer (key value) that checks both key and value [(value [key]...)?]
  *      (hash value #f removes the key before typer sees it I presume)
  *      typer to set hash key value immutable could use this
- *   for vector see make_vector_1 for error checks, typed_vector_set_typer(vec, typf)
- *      has_simple_elements bit
- *   hash_table much more complicated (error checking and fixups, but again reset has to be compatible with current contents)
- *      hash_table_set_key_typer(dproc, keyp);
- *      hash_table_set_value_typer(dproc, valp);
  *   let-typer (var value)?
  *   accept anonymous funcs here?
- *   equal? and equivalent? should not check typers/setters
- *   when set! no check is run on current elements
  */

@@ -2133,7 +2133,7 @@ otherwise cause an infinite loop.
 <p>
 s7 supports
 vectors with any number of dimensions.  It is here, in particular, that generalized
-set! shines.  make-vector's second argument can be a list of dimensions, rather than
+set! shines.  make-vector's first argument can be a list of dimensions, rather than
 an integer as in the one dimensional case:
 </p>
 
@@ -2182,6 +2182,7 @@ s7_ints, s7_doubles, or unsigned bytes.
 (<em class=def id="vectordimensions">vector-dimensions</em> vect)
 (<em class=def id="vectordimension">vector-dimension</em> vect n)
 (<em class=def id="vectorrank">vector-rank</em> obj)
+(<em class=def id="vectortyper">vector-typer</em> obj)
 
 (<em class=def>float-vector?</em> obj)
 (<em class=def>float-vector</em> . args)
@@ -2219,7 +2220,9 @@ If the type function is omitted (or set to #t),
 no type checking is performed.
 If the type function is a closure (rather than a C-defined or built-in function),
 its name must be accessible; it can't be an anonymous lambda (the signature and
-error handlers need this name).
+error handlers need this name).  <a href="#vectortyper">vector-typer</a> returns or sets this type function;
+when set via vector-typer, there is no automatic check that the vector's current contents
+match that type function.
 </p>
 
 <pre class="indented">

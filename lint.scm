@@ -151,7 +151,7 @@
 	      symbol symbol->dynamic-value symbol->keyword symbol->string symbol->value symbol? syntax?
 	      tan tanh tree-leaves tree-memq tree-set-memq tree-count tree-cyclic? truncate type-of
 	      unless unspecified? undefined?
-	      values vector vector-append vector->list vector-dimensions vector-dimension vector-rank vector-length vector-ref vector?
+	      values vector vector-append vector->list vector-dimensions vector-dimension vector-rank vector-length vector-ref vector-typer vector?
 	      when with-baffle with-let with-input-from-file with-input-from-string with-output-to-string
 	      zero?
 
@@ -198,7 +198,7 @@
 			         cdadar cddaar cdaddr cddddr cddadr cdddar assoc member list list-ref list-set! list-tail
 			         make-list length copy fill! reverse reverse! sort! append assq assv memq memv vector-append
 			         list->vector vector-fill! vector-length vector->list vector-ref vector-set! vector-dimensions vector-dimension
-			         make-vector subvector vector float-vector make-float-vector float-vector-set! vector-rank
+			         make-vector subvector vector float-vector make-float-vector float-vector-set! vector-rank vector-typer
 			         float-vector-ref int-vector make-int-vector int-vector-set! int-vector-ref string->byte-vector
 			         byte-vector make-byte-vector hash-table  make-hash-table hash-table-ref
 			         hash-table-set! hash-table-entries cyclic-sequences call/cc call-with-current-continuation
@@ -1004,7 +1004,7 @@
 				     sublet substring  subvector? symbol symbol->keyword symbol->string symbol? syntax?
 				     tan tanh tree-leaves tree-memq truncate
 				     unspecified? undefined?
-				     vector-dimensions vector-dimension vector-length vector-ref vector? vector-rank
+				     vector-dimensions vector-dimension vector-length vector-ref vector?
 				     zero?))
 				  ht)))
 	(lambda (val env)
