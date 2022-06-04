@@ -124,3 +124,9 @@ valgrind repl s7test.scm
 valgrind repl fulltest.scm
 
 gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core
+
+echo ' '
+echo '-------- tcc --------'
+echo ' '
+tcc -o repl s7.c -I. -g3 -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER -DS7_DEBUGGING
+repl s7test.scm

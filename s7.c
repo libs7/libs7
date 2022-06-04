@@ -57,7 +57,7 @@
  *
  * naming conventions: s7_* usually are C accessible (s7.h), g_* are scheme accessible,
  *   H_* are documentation strings, Q_* are procedure signatures, scheme "?" corresponds to C "is_", scheme "->" to C "_to_",
- *   *_1 are ancillary functions, big_* refer to gmp, *_nr means no return, inline_* means always inline.
+ *   *_1 are ancillary functions, big_* refer to gmp, *_nr means no return, inline_* means always-inline.
  *
  * ---------------- compile time switches ----------------
  */
@@ -1264,7 +1264,8 @@ struct s7_scheme {
              features_symbol, file__symbol, fill_symbol, float_vector_ref_symbol, float_vector_set_symbol, float_vector_symbol, floor_symbol,
              flush_output_port_symbol, for_each_symbol, format_symbol, funclet_symbol, _function__symbol,
              gc_symbol, gcd_symbol, gensym_symbol, geq_symbol, get_output_string_symbol, gt_symbol,
-             hash_table_entries_symbol, hash_table_ref_symbol, hash_table_set_symbol, hash_table_symbol, help_symbol,
+             hash_table_entries_symbol, hash_table_key_typer_symbol, hash_table_ref_symbol, hash_table_set_symbol, hash_table_symbol, 
+             hash_table_value_typer_symbol, help_symbol,
              imag_part_symbol, immutable_symbol, inexact_to_exact_symbol, inlet_symbol, int_vector_ref_symbol, int_vector_set_symbol, int_vector_symbol,
              integer_decode_float_symbol, integer_to_char_symbol,
              is_aritable_symbol, is_bignum_symbol, is_boolean_symbol, is_byte_symbol, is_byte_vector_symbol,
@@ -1633,7 +1634,7 @@ static block_t *mallocate(s7_scheme *sc, size_t bytes) {return(inline_mallocate(
 
 static block_t *callocate(s7_scheme *sc, size_t bytes)
 {
-  block_t *p = mallocate(sc, bytes);
+  block_t *p = inline_mallocate(sc, bytes);
   if ((block_data(p)) && (block_index(p) != BLOCK_LIST))
     {
       if ((bytes & (~0x3f)) > 0)
@@ -1646,7 +1647,7 @@ static block_t *callocate(s7_scheme *sc, size_t bytes)
 
 static block_t *reallocate(s7_scheme *sc, block_t *op, size_t bytes)
 {
-  block_t *np = mallocate(sc, bytes);
+  block_t *np = inline_mallocate(sc, bytes);
   if (block_data(op))  /* presumably block_data(np) is not null */
     memcpy((uint8_t *)(block_data(np)), (uint8_t *)(block_data(op)), block_size(op));
   liberate(sc, op);
@@ -38479,7 +38480,7 @@ static inline s7_pointer make_simple_int_vector(s7_scheme *sc, s7_int len) /* le
 static s7_pointer make_simple_byte_vector(s7_scheme *sc, s7_int len)
 {
   s7_pointer x;
-  block_t *b = mallocate(sc, len);
+  block_t *b = inline_mallocate(sc, len);
   new_cell(sc, x, T_BYTE_VECTOR | T_SAFE_PROCEDURE);
   vector_block(x) = b;
   byte_vector_bytes(x) = (uint8_t *)block_data(b);
@@ -40407,20 +40408,16 @@ static s7_pointer g_vector_dimensions(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- vector-typer -------------------------------- */
-/* this is part of the vector_set process -- called before set! checks types etc, but does not actually set the element or raise an error
- *    a real problem: currently #f -> error (or at least don't set), so how to set an element to #f? could be like unentry, a unique value as signal
- *    a logistical problem: indices
- *    use setter in readable vector print
- *    check arity of typer? or accept any number of indices?
- */
 
 static s7_pointer g_vector_typer(s7_scheme *sc, s7_pointer args)
 {
   #define H_vector_typer "(vector-typer vect) returns the vector's element type checking function"
   #define Q_vector_typer s7_make_signature(sc, 2, s7_make_signature(sc, 2, sc->not_symbol, sc->is_procedure_symbol), sc->is_vector_symbol)
+
   s7_pointer v = car(args);
   if (!is_any_vector(v))
     return(method_or_bust_one_arg(sc, v, sc->vector_typer_symbol, args, T_VECTOR));
+
   if (is_typed_vector(v)) return(typed_vector_typer(v));
   if (is_float_vector(v)) return(global_value(sc->is_float_symbol));
   if (is_int_vector(v)) return(global_value(sc->is_integer_symbol));
@@ -42235,6 +42232,48 @@ static s7_int hash_table_entries_i_7p(s7_scheme *sc, s7_pointer p)
     return(integer(method_or_bust_p(sc, p, sc->hash_table_entries_symbol, T_HASH_TABLE)));
   return(hash_table_entries(p));
 }
+
+
+/* -------------------------------- hash-table-key|value-typer -------------------------------- */
+
+static s7_pointer g_hash_table_key_typer(s7_scheme *sc, s7_pointer args)
+{
+  #define H_hash_table_key_typer "(hash_table-key-typer hash) returns the hash_table's key type checking function"
+  #define Q_hash_table_key_typer s7_make_signature(sc, 2, s7_make_signature(sc, 2, sc->not_symbol, sc->is_procedure_symbol), sc->is_hash_table_symbol)
+
+  s7_pointer h = car(args);
+  if (!is_hash_table(h)) return(method_or_bust_one_arg(sc, h, sc->hash_table_key_typer_symbol, args, T_HASH_TABLE));
+  if (is_typed_hash_table(h)) return(hash_table_key_typer(h));
+  return(sc->F);
+}
+
+static s7_pointer g_hash_table_value_typer(s7_scheme *sc, s7_pointer args)
+{
+  #define H_hash_table_value_typer "(hash_table-value-typer hash) returns the hash_table's value type checking function"
+  #define Q_hash_table_value_typer s7_make_signature(sc, 2, s7_make_signature(sc, 2, sc->not_symbol, sc->is_procedure_symbol), sc->is_hash_table_symbol)
+
+  s7_pointer h = car(args);
+  if (!is_hash_table(h)) return(method_or_bust_one_arg(sc, h, sc->hash_table_value_typer_symbol, args, T_HASH_TABLE));
+  if (is_typed_hash_table(h)) return(hash_table_value_typer(h));
+  return(sc->F);
+}
+
+
+/* TODO: setters, s7test from t718 etc, lint lists
+ *
+ * (set! (hash-table-key/value-typer hash-table) ...)
+ *     if both typers, immutable would be: shared last-key, then return val==original
+ *     accept anonymous funcs here and in vector?
+ */
+#if 0
+<1> (hash-table-key-typer (hash-table))
+#f
+<2> (hash-table-key-typer (make-hash-table 8 eq? (cons symbol? integer?)))
+symbol?
+<3> (hash-table-value-typer (make-hash-table 8 eq? (cons symbol? integer?)))
+integer?
+;test methods too
+#endif
 
 
 /* ---------------- hash map and equality tables ---------------- */
@@ -46004,7 +46043,7 @@ static s7_pointer g_is_eq(s7_scheme *sc, s7_pointer args)
   /* (eq? (apply apply apply values '(())) #<unspecified>) should return #t */
 }
 
-bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
+bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b) /* possibly inline tleft tio */
 {
 #if WITH_GMP
   if ((is_big_number(a)) || (is_big_number(b)))
@@ -46205,6 +46244,8 @@ static Inline bool inline_equal_ref(s7_scheme *sc, s7_pointer x, s7_pointer y, s
   return(false);
 }
 
+static bool equal_ref(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci) {return(inline_equal_ref(sc, x, y, ci));}
+
 static bool c_objects_are_equal(s7_scheme *sc, s7_pointer a, s7_pointer b, shared_info_t *ci)
 {
   s7_pointer (*to_list)(s7_scheme *sc, s7_pointer args);
@@ -46228,7 +46269,7 @@ static bool c_objects_are_equal(s7_scheme *sc, s7_pointer a, s7_pointer b, share
     return(false);
   if (ci)
     {
-      if (inline_equal_ref(sc, a, b, ci)) return(true); /* and nci == ci above */
+      if (equal_ref(sc, a, b, ci)) return(true); /* and nci == ci above */
     }
   else nci = new_shared_info(sc);
 
@@ -46272,7 +46313,7 @@ static bool hash_table_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
 	check_equivalent_method(sc, y, x);
       return(false);
     }
-  if ((ci) && (inline_equal_ref(sc, x, y, ci))) return(true);
+  if ((ci) && (equal_ref(sc, x, y, ci))) return(true);
 
   if (hash_table_entries(x) != hash_table_entries(y))
     return(false);
@@ -46363,7 +46404,7 @@ static bool let_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t
   if ((!is_let(y)) || (x == sc->rootlet) || (y == sc->rootlet))
     return(false);
 
-  if ((ci) && (inline_equal_ref(sc, x, y, ci))) return(true);
+  if ((ci) && (equal_ref(sc, x, y, ci))) return(true);
 
   clear_symbol_list(sc);
   for (x_len = 0, ex = x; is_let(T_Lid(ex)); ex = let_outlet(ex))
@@ -46583,7 +46624,7 @@ static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_
     {
       if (ci)
 	{
-	  if (inline_equal_ref(sc, x, y, ci)) return(true);
+	  if (equal_ref(sc, x, y, ci)) return(true);
 	}
       else nci = new_shared_info(sc);
     }
@@ -46686,7 +46727,7 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
     {
       if (ci)
 	{
-	  if (inline_equal_ref(sc, x, y, ci)) return(true);
+	  if (equal_ref(sc, x, y, ci)) return(true);
 	}
       else nci = new_shared_info(sc);
     }
@@ -67081,7 +67122,7 @@ static bool op_map_1(s7_scheme *sc)
   return(false);
 }
 
-static bool op_map_2(s7_scheme *sc)
+static bool op_map_2(s7_scheme *sc) /* possibly inline lg */
 {
   s7_pointer x, c = sc->args, code = sc->code;
   s7_pointer p = counter_list(c);
@@ -76950,7 +76991,7 @@ static opcode_t fixup_macro_d(s7_scheme *sc, opcode_t op, s7_pointer mac)
   return(op);
 }
 
-static inline bool op_macro_d(s7_scheme *sc, uint8_t typ)
+static inline bool op_macro_d(s7_scheme *sc, uint8_t typ) /* possibly inline tmac */
 {
   sc->value = lookup(sc, car(sc->code));
   if (type(sc->value) != typ)                 /* for-each (etc) called a macro before, now it's something else -- a very rare case */
@@ -78437,7 +78478,7 @@ static Inline bool inline_op_implicit_vector_ref_a(s7_scheme *sc) /* called once
   return(true);
 }
 
-static bool op_implicit_vector_ref_aa(s7_scheme *sc)
+static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* possibly inline (tstr) */
 {
   s7_pointer x, y, code;
   s7_pointer v = lookup_checked(sc, car(sc->code));
@@ -82691,7 +82732,7 @@ static inline bool set_star_args(s7_scheme *sc, s7_pointer top)
 }
 
 static bool apply_safe_closure_star_1(s7_scheme *sc)                   /* -------- define* (lambda*) -------- */
-{
+{ /* possibly inline tauto */
   /* slots are in "reverse order" -- in the same order as the args, despite let printout (which reverses the order!) */
   set_curlet(sc, closure_let(sc->code));
   if (has_no_defaults(sc->code))
@@ -82853,7 +82894,7 @@ static bool apply_closure_star(s7_scheme *sc)
   return(apply_unsafe_closure_star_1(sc));
 }
 
-static Inline s7_pointer inline_op_safe_closure_star_a1(s7_scheme *sc, s7_pointer code) /* called in eval and below, tlamb */
+static inline s7_pointer op_safe_closure_star_a1(s7_scheme *sc, s7_pointer code) /* called in eval and below, tlamb */
 {
   s7_pointer func = opt1_lambda(code);
   s7_pointer val = fx_call(sc, cdr(code));
@@ -82867,7 +82908,7 @@ static Inline s7_pointer inline_op_safe_closure_star_a1(s7_scheme *sc, s7_pointe
 
 static void op_safe_closure_star_a(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer func = inline_op_safe_closure_star_a1(sc, code);
+  s7_pointer func = op_safe_closure_star_a1(sc, code);
   s7_pointer p = cdr(closure_args(func));
   if (is_pair(p))
     for (s7_pointer x = next_slot(let_slots(closure_let(func))); is_pair(p); p = cdr(p), x = next_slot(x))
@@ -82889,7 +82930,7 @@ static void op_safe_closure_star_ka(s7_scheme *sc, s7_pointer code) /* two args,
   sc->code = T_Pair(closure_body(func));
 }
 
-static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code)
+static void op_safe_closure_star_aa(s7_scheme *sc, s7_pointer code) /* possibly inline tauto */
 {
   /* here closure_arity == 2 and we have 2 args and those args' defaults are simple (no eval or lookup needed) */
   s7_pointer arg2, func = opt1_lambda(code);
@@ -82981,7 +83022,7 @@ static bool op_safe_closure_star_na_2(s7_scheme *sc, s7_pointer code)
   return(call_lambda_star(sc, code, arglist));  /* clears list_in_use */
 }
 
-static Inline bool inline_op_safe_closure_star_na(s7_scheme *sc, s7_pointer code) /* called once in eval, clo */
+static inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code) /* called once in eval, clo */
 {
   s7_pointer arglist = safe_list_if_possible(sc, opt3_arglen(cdr(code)));
   sc->args = arglist;
@@ -83344,7 +83385,7 @@ static void op_safe_closure_3s(s7_scheme *sc)
   if_pair_set_up_begin_unchecked(sc);
 }
 
-static void op_safe_closure_ssa(s7_scheme *sc)
+static void op_safe_closure_ssa(s7_scheme *sc) /* possible inline b */
 { /* ssa_a is hit once, but is only about 3/4% faster -- there's the fx overhead, etc */
   s7_pointer args = cdr(sc->code);
   s7_pointer f = opt1_lambda(sc->code);
@@ -83364,7 +83405,7 @@ static void op_safe_closure_saa(s7_scheme *sc)
   if_pair_set_up_begin_unchecked(sc);
 }
 
-static void op_safe_closure_agg(s7_scheme *sc)
+static void op_safe_closure_agg(s7_scheme *sc) /* posisbly inline tleft */
 {
   s7_pointer args = cdr(sc->code);
   s7_pointer f = opt1_lambda(sc->code);
@@ -83738,7 +83779,7 @@ static void op_closure_sc(s7_scheme *sc)
   sc->code = car(sc->code);
 }
 
-static void op_closure_sc_o(s7_scheme *sc)
+static void op_closure_sc_o(s7_scheme *sc) /* possibly inline timp */
 {
   s7_pointer f = opt1_lambda(sc->code);
   check_stack_size(sc);
@@ -83923,7 +83964,7 @@ static Inline void inline_op_closure_ns(s7_scheme *sc) /* called once in eval, l
   if_pair_set_up_begin(sc);
 }
 
-static void op_closure_ass(s7_scheme *sc)
+static void op_closure_ass(s7_scheme *sc) /* possibly inline b */
 {
   s7_pointer args = cdr(sc->code);
   s7_pointer f = opt1_lambda(sc->code);
@@ -83932,7 +83973,7 @@ static void op_closure_ass(s7_scheme *sc)
   if_pair_set_up_begin(sc);
 }
 
-static void op_closure_aas(s7_scheme *sc)
+static void op_closure_aas(s7_scheme *sc) /* possibly inline b */
 {
   s7_pointer args = cdr(sc->code);
   s7_pointer f = opt1_lambda(sc->code);
@@ -84058,16 +84099,16 @@ static void op_any_closure_sym(s7_scheme *sc) /* for (lambda a ...) */
 
   if (num_args == 1)
     sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func),
-				    ((is_safe_closure(func)) && (!sc->debug_or_profile)) ?
-				     set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args)));
+					   ((is_safe_closure(func)) && (!sc->debug_or_profile)) ?
+					   set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args)));
   else
     if (num_args == 2)
       {
 	gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
 	sc->args = fx_call(sc, cdr(old_args));
 	sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func),
-					((is_safe_closure(func)) && (!sc->debug_or_profile)) ?
-					 set_plist_2(sc, stack_protected1(sc), sc->args) : list_2(sc, stack_protected1(sc), sc->args));
+					       ((is_safe_closure(func)) && (!sc->debug_or_profile)) ?
+					       set_plist_2(sc, stack_protected1(sc), sc->args) : list_2(sc, stack_protected1(sc), sc->args));
 	unstack(sc);
       }
     else
@@ -86371,7 +86412,7 @@ static void opinit_cond_a_a_a_a_opla_laq(s7_scheme *sc, s7_pointer code, bool co
   sc->rec_fn = fn_proc(caller);
 }
 
-static s7_pointer oprec_cond_a_a_a_a_opla_laq(s7_scheme *sc)
+static inline s7_pointer oprec_cond_a_a_a_a_opla_laq(s7_scheme *sc)
 {
   if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F) return(sc->rec_f2f(sc, sc->rec_f2p));
@@ -89765,7 +89806,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_SAFE_CLOSURE_STAR_A: op_safe_closure_star_a(sc, sc->code); goto BEGIN;
 
 	case OP_SAFE_CLOSURE_STAR_A1: if (!closure_star_is_fine(sc, sc->code, FINE_SAFE_CLOSURE_STAR, 1)) {if (op_unknown_a(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_STAR_A1: inline_op_safe_closure_star_a1(sc, sc->code); goto BEGIN;
+	case HOP_SAFE_CLOSURE_STAR_A1: op_safe_closure_star_a1(sc, sc->code); goto BEGIN;
 
 	case OP_SAFE_CLOSURE_STAR_KA: if (!closure_star_is_fine(sc, sc->code, FINE_SAFE_CLOSURE_STAR, 1)) {if (op_unknown_a(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_STAR_KA: op_safe_closure_star_ka(sc, sc->code); goto BEGIN;
@@ -89782,7 +89823,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_CLOSURE_STAR_NA:
 	  if (!closure_star_is_fine(sc, sc->code, FINE_SAFE_CLOSURE_STAR, (is_pair(cdr(sc->code))) ? opt3_arglen(cdr(sc->code)) : 0))
 	    {if (op_unknown_na(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_STAR_NA: if (inline_op_safe_closure_star_na(sc, sc->code)) goto EVAL; goto BEGIN;
+	case HOP_SAFE_CLOSURE_STAR_NA: if (op_safe_closure_star_na(sc, sc->code)) goto EVAL; goto BEGIN;
 
 	case OP_SAFE_CLOSURE_STAR_NA_0: if (!closure_star_is_fine(sc, sc->code, FINE_SAFE_CLOSURE_STAR, 0)) {if (op_unknown(sc)) goto EVAL; continue;}
 	case HOP_SAFE_CLOSURE_STAR_NA_0: if (op_safe_closure_star_na_0(sc, sc->code)) goto EVAL; goto BEGIN;
@@ -93465,6 +93506,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->hash_table_entries_symbol =    defun("hash-table-entries", hash_table_entries,	1, 0, false);
   sc->hash_code_symbol =             defun("hash-code",         hash_code,              1, 1, false);
   sc->dummy_equal_hash_table = make_dummy_hash_table(sc);
+  sc->hash_table_key_typer_symbol =  defun("hash-table-key-typer", hash_table_key_typer, 1, 0, false);
+  sc->hash_table_value_typer_symbol = defun("hash-table-value-typer", hash_table_value_typer, 1, 0, false);
 
   sc->cyclic_sequences_symbol =      defun("cyclic-sequences",  cyclic_sequences,	1, 0, false);
   sc->call_cc_symbol =               semisafe_defun("call/cc",	call_cc,		1, 0, false);
@@ -94543,60 +94586,61 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    461    461
- * index     1026   1016    973    968    968
- * tmock     1177   1165   1057   1036   1036
+ * index     1026   1016    973    968    969
+ * tmock     1177   1165   1057   1036   1037
  * tvect     2519   2464   1772   1689   1689
- * texit     ----   ----   1778   1749   1749
+ * texit     ----   ----   1778   1749   1755
  * s7test    1873   1831   1818   1779   1785
- * timp      2971   2891   2176   2043   2043
- * lt        2187   2172   2150   2143   2143
- * tauto     ----   ----   2562   2207   2205  2154 [c_function_name_to_port]
- * dup       3805   3788   2492   2273   2303  2315
- * tload     ----   ----   3046   2352   2350
- * tread     2440   2421   2419   2376   2375
- * fbench    2688   2583   2460   2403   2403
+ * timp      2971   2891   2176   2043   2049
+ * lt        2187   2172   2150   2143   2146
+ * tauto     ----   ----   2562   2207   2157
+ * dup       3805   3788   2492   2273   2316
+ * tload     ----   ----   3046   2352   2351
+ * tread     2440   2421   2419   2376   2377
+ * fbench    2688   2583   2460   2403   2411
  * trclo     2735   2574   2454   2423   2421
- * titer     2865   2842   2641   2475   2475
- * tcopy     8035   5546   2539   2503   2494
- * tmat      3065   3042   2524   2511   2512
- * tb        2735   2681   2612   2574   2574
+ * titer     2865   2842   2641   2475   2483
+ * tcopy     8035   5546   2539   2503   2495
+ * tmat      3065   3042   2524   2511   2513
+ * tb        2735   2681   2612   2574   2577
  * tsort     3105   3104   2856   2820   2820
  * teq       4068   4045   3536   3450   3447
- * tmac      3950   3873   3033   3541   3541
- * tio       3816   3752   3683   3588   3584
- * tobj      4016   3970   3828   3624   3624
- * tclo      4787   4735   4390   4309   4309
- * tlet      7775   5640   4450   4393   4393
- * tcase     4960   4793   4439   4407   4413
- * tmap      8869   8774   4489   4468   4467
- * tfft      7820   7729   4755   4599   4600
- * tshoot    5525   5447   5183   5099   5086
- * tform     5357   5348   5307   5281   5284
- * tnum      6348   6013   5433   5378   5379
- * tstr      6880   6342   5488   5400   5406
- * tlamb     6423   6273   5720   5530   5530
- * tset      ----   ----   ----   6163   6163
- * tlist     7896   7546   6558   6195   6195
- * tmisc     8869   7612   6435   6239   6241
- * tgsl      8485   7802   6373   6301   6301
- * trec      6936   6922   6521   6538   6538
- * tari      13.0   12.7   6827   6633   6634
- * tleft     10.4   10.2   7657   7472   7472
- * tgc       11.9   11.1   8177   8002   7996
- * thash     11.8   11.7   9734   9489   9469
- * cb        11.2   11.0   9658   9539   9537
+ * tmac      3950   3873   3033   3541   3546
+ * tio       3816   3752   3683   3588   3598
+ * tobj      4016   3970   3828   3624   3625  3618
+ * tclo      4787   4735   4390   4309   4330
+ * tlet      7775   5640   4450   4393   4399
+ * tcase     4960   4793   4439   4407   4420  4424
+ * tmap      8869   8774   4489   4468   4470
+ * tfft      7820   7729   4755   4599   4603
+ * tshoot    5525   5447   5183   5099   5088
+ * tform     5357   5348   5307   5281   5290
+ * tnum      6348   6013   5433   5378   5388  5392
+ * tstr      6880   6342   5488   5400   5415
+ * tlamb     6423   6273   5720   5530   5545
+ * tset      ----   ----   ----   6163   6170
+ * tlist     7896   7546   6558   6195   6198
+ * tmisc     8869   7612   6435   6239   6255
+ * tgsl      8485   7802   6373   6301   6304
+ * trec      6936   6922   6521   6538   6538  6512
+ * tari      13.0   12.7   6827   6633   6635
+ * tleft     10.4   10.2   7657   7472   7475  7480
+ * tgc       11.9   11.1   8177   8002   8018  8024 [mallocate gensym]
+ * thash     11.8   11.7   9734   9489   9474
+ * cb        11.2   11.0   9658   9539   9545
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.5   56.5
- * lg        ----   ----  105.2  104.6  104.6
- * tbig     177.4  175.8  156.5  150.6  150.5
+ * lg        ----   ----  105.2  104.6  104.8  [mallocate g_symbol]
+ * tbig     177.4  175.8  156.5  150.6  150.5  [mallocate g_gensym]
  * -----------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       vector|hash + typer :readable display -- see tmp for vector, check multidim vector + typer
- * check other inline_* cases for splits set, add others?: 262 currently: see inlines
+ *       hash + typer :readable display
+ * check other inline_* cases for splits set, add others?: 257 currently: see inlines
+ * clean up the mishmash of error functions
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
@@ -94608,13 +94652,4 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
  *   unlet opts
- *
- * (set! (hash-table-key/value-typer hash-table) ...)
- *   dilambdas: hash-table-key-typer hash-table-value-typer
- *      ideally vector: (new-value [index...]), hash key: (new-key), hash value: (new-value [key])?
- *          or hash-table-typer (key value) that checks both key and value [(value [key]...)?]
- *      (hash value #f removes the key before typer sees it I presume)
- *      typer to set hash key value immutable could use this
- *   let-typer (var value)?
- *   accept anonymous funcs here?
  */

@@ -2560,6 +2560,8 @@ To insist that all objects are of the same type, use an explicit getter:
 <li>(<em class=def id="hashtableref">hash-table-ref</em> ht key)
 <li>(<em class=def id="hashtableset">hash-table-set!</em> ht key value)
 <li>(<em class=def id="hashtableentries">hash-table-entries</em> ht)
+<li>(<em class=def id="hashtablekeytyper">hash-table-key-typer</em> obj)
+<li>(<em class=def id="hashtablevaluetyper">hash-table-value-typer</em> obj)
 <li>(<em class=def id="hashcode">hash-code</em> obj eqfunc)
 </ul>
 
@@ -2728,7 +2730,11 @@ much like the third argument to make-vector.
 It is a cons of the type functions,
 <code>(cons symbol? integer?)</code> for example. This says that all the keys must
 be symbols and all the values integers.
+<a href="#hashtablekeytyper">hash-table-key-typer</a> and
+<a href="#hashtablevaluetyper">hash-table-value-typer</a>
+return or set these functions.
 </p>
+
 <pre class="indented">
 &gt; (define (10|12? val) (memv val '(10 12)))
 <em class="gray">10|12?</em>
