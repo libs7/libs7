@@ -129,7 +129,7 @@
 	      eof-object? eq? equal? eqv? even? exact->inexact exact? exp expt
 	      float? float-vector float-vector-ref float-vector? floor for-each funclet
 	      gcd gensym gensym?
-	      hash-table  hash-table-entries hash-table-ref hash-table? help hook-functions
+	      hash-table  hash-table-entries hash-table-ref hash-table-key-typer hash-table-value-typer hash-table? help hook-functions
 	      if imag-part immutable? inexact->exact inexact? infinite? inlet input-port?
 	      int-vector int-vector-ref int-vector? iterator-at-end? iterator-sequence integer->char
 	      integer-decode-float integer-length integer? iterator?
@@ -200,7 +200,7 @@
 			         list->vector vector-fill! vector-length vector->list vector-ref vector-set! vector-dimensions vector-dimension
 			         make-vector subvector vector float-vector make-float-vector float-vector-set! vector-rank vector-typer
 			         float-vector-ref int-vector make-int-vector int-vector-set! int-vector-ref string->byte-vector
-			         byte-vector make-byte-vector hash-table  make-hash-table hash-table-ref
+			         byte-vector make-byte-vector hash-table  make-hash-table hash-table-ref hash-table-key-typer hash-table-value-typer
 			         hash-table-set! hash-table-entries cyclic-sequences call/cc call-with-current-continuation
 			         call-with-exit load autoload eval eval-string apply for-each map dynamic-wind values
 			         catch throw error documentation signature help procedure-source funclet
