@@ -847,7 +847,7 @@ typedef struct s7_cell {
 
     struct {                        /* hash-tables */
       s7_int mask;
-      hash_entry_t **elements;
+      hash_entry_t **elements;      /* a pointer into block below: takes up a field in object.hasher but is faster (50 in thash) */
       hash_check_t hash_func;
       hash_map_t *loc;
       block_t *block;
@@ -1361,7 +1361,7 @@ struct s7_scheme {
 
   /* object->let symbols */
   s7_pointer active_symbol, goto_symbol, data_symbol, weak_symbol, dimensions_symbol, info_symbol, c_type_symbol, source_symbol, c_object_ref_symbol,
-             at_end_symbol, sequence_symbol, position_symbol, entries_symbol, locked_symbol, function_symbol, open_symbol, alias_symbol, port_type_symbol,
+             at_end_symbol, sequence_symbol, position_symbol, entries_symbol, function_symbol, open_symbol, alias_symbol, port_type_symbol,
              file_symbol, file_info_symbol, line_symbol, c_object_let_symbol, class_symbol, current_value_symbol, closed_symbol,
              mutable_symbol, size_symbol, original_vector_symbol, pointer_symbol;
 
@@ -3226,7 +3226,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define hash_table_entries(p)          hash_table_block(p)->nx.nx_int
 #define hash_table_checker(p)          (T_Hsh(p))->object.hasher.hash_func
 #define hash_table_mapper(p)           (T_Hsh(p))->object.hasher.loc
-#define hash_table_checker_locked(p)   (hash_table_mapper(p) != default_hash_map)
 #define hash_table_procedures(p)       T_Lst(hash_table_block(p)->ex.ex_ptr)
 #define hash_table_set_procedures(p, Lst)  hash_table_block(p)->ex.ex_ptr = T_Lst(Lst)
 #define hash_table_procedures_checker(p)   car(hash_table_procedures(p))
@@ -31328,7 +31327,7 @@ static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top
 	  hash_entry_t **entries = hash_table_elements(top);
 	  bool keys_safe = ((hash_table_checker(top) != hash_equal) &&
 			    (hash_table_checker(top) != hash_equivalent) &&
-			    (!hash_table_checker_locked(top)));
+			    (hash_table_mapper(top) == default_hash_map)); /* if this then we don't need to know if keys are cyclic?? */
 	  for (s7_int i = 0; i < len; i++)
 	    for (hash_entry_t *p = entries[i]; p; p = hash_entry_next(p))
 	      {
@@ -32817,6 +32816,16 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
   unstack(sc);
 }
 
+static s7_pointer find_closure(s7_scheme *sc, s7_pointer closure, s7_pointer current_let);
+static const char *hash_table_checker_name(s7_scheme *sc, s7_pointer ht);
+
+static const char *hash_table_typer_name(s7_scheme *sc, s7_pointer typer)
+{
+  if (is_c_function(typer)) return(c_function_name(typer));
+  if (s7_is_boolean(typer)) return("#t");
+  return(symbol_name(find_closure(sc, typer, closure_let(typer))));
+}
+
 static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   s7_int gc_iter, len = hash_table_entries(hash);
@@ -32830,9 +32839,44 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
    */
   if (len == 0)
     {
-      if (is_weak_hash_table(hash))
-	port_write_string(port)(sc, "(weak-hash-table)", 17, port);
-      else port_write_string(port)(sc, "(hash-table)", 12, port);
+      if (use_write == P_READABLE)
+	{
+	  const char *typer = hash_table_checker_name(sc, hash);
+	  if ((typer[0] == '#') && 
+	      (!is_typed_hash_table(hash)))
+	    {
+	      if (is_weak_hash_table(hash))
+		port_write_string(port)(sc, "(weak-hash-table)", 17, port);
+	      else port_write_string(port)(sc, "(hash-table)", 12, port);
+	    }
+	  else
+	    {
+	      s7_int nlen = 0;
+	      char *str = integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
+	      if (is_weak_hash_table(hash))
+		port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
+	      else port_write_string(port)(sc, "(make-hash-table ", 17, port);
+	      port_write_string(port)(sc, str, nlen, port);
+	      port_write_character(port)(sc, ' ', port);
+	      port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	      if (is_typed_hash_table(hash))
+		{
+		  port_write_string(port)(sc, " (cons ", 7, port);
+		  typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
+		  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+		  port_write_character(port)(sc, ' ', port);
+		  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
+		  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+		  port_write_string(port)(sc, "))", 2, port);
+		}
+	      else port_write_character(port)(sc, ')', port);
+	    }}
+      else
+	{
+	  if (is_weak_hash_table(hash))
+	    port_write_string(port)(sc, "(weak-hash-table)", 17, port);
+	  else port_write_string(port)(sc, "(hash-table)", 12, port);
+	}
       return;
     }
   if (use_write != P_READABLE)
@@ -32869,10 +32913,13 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
   iterator_current(iterator) = p;
   set_mark_seq(iterator);
 
-  if ((use_write == P_READABLE) &&
-      (is_immutable(hash)))
-    port_write_string(port)(sc, "(immutable! ", 12, port);
-
+  if (use_write == P_READABLE)
+    {
+      if (is_typed_hash_table(hash))
+	port_write_string(port)(sc, "(let ((<h> ", 11, port);
+      if (is_immutable(hash))
+	port_write_string(port)(sc, "(immutable! ", 12, port);
+    }
   if ((use_write == P_READABLE) &&
       (ci) &&
       (is_cyclic(hash)) &&
@@ -32945,9 +32992,20 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	port_write_string(port)(sc, " ...)", 5, port);
       else port_write_character(port)(sc, ')', port);
     }
-  if ((use_write == P_READABLE) &&
-      (is_immutable(hash)))
-    port_write_character(port)(sc, ')', port);
+  if (use_write == P_READABLE)
+    {
+      if (is_immutable(hash))
+	port_write_character(port)(sc, ')', port);
+      if (is_typed_hash_table(hash))
+	{
+	  const char *typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
+	  port_write_string(port)(sc, ")) (set! (hash-table-key-typer <h>) ", 36, port);
+	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	  port_write_string(port)(sc, ") (set! (hash-table-value-typer <h>) ", 37, port);
+	  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
+	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	  port_write_string(port)(sc, ") <h>)", 6, port);
+	}}
 
   s7_gc_unprotect_at(sc, gc_iter);
   iterator_current(iterator) = sc->nil;
@@ -38369,6 +38427,8 @@ static const char *typed_vector_typer_name(s7_scheme *sc, s7_pointer p)
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article);
 static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
 
+static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
+
 static void port_write_vector_typer(s7_scheme *sc, s7_pointer vect, s7_pointer port)
 {
   const char *setter = make_type_name(sc, typed_vector_typer_name(sc, vect), NO_ARTICLE);
@@ -38425,10 +38485,10 @@ static s7_pointer byte_vector_setter(s7_scheme *sc, s7_pointer str, s7_int loc, 
   wrong_type_arg_error_nr(sc, "byte-vector-set!", 3, val, "a byte");
 }
 
-static inline block_t *mallocate_vector(s7_scheme *sc, s7_int len) /* Inline not needed? maybe move the len>0 outward */
+static inline block_t *mallocate_vector(s7_scheme *sc, s7_int len)
 {
   block_t *b;
-  if (len > 0) return(inline_mallocate(sc, len));
+  if (len > 0) return(inline_mallocate(sc, len));  /* maybe move the len>0 outward */
   b = mallocate_block(sc);
   block_data(b) = NULL;
   block_info(b) = NULL;
@@ -43279,8 +43339,8 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 					     caller, typers));
 		      dproc = cons_unchecked(sc, sc->T, sc->T);
 		      hash_table_set_procedures(ht, dproc);
-		      hash_table_set_key_typer(dproc, keyp);
-		      hash_table_set_value_typer(dproc, valp);
+		      hash_table_set_key_typer(dproc, keyp);    /* opt1_any(dproc), car/cdr are for the map/equality funcs */
+		      hash_table_set_value_typer(dproc, valp);  /* opt2_any(dproc) */
 		      if (is_c_function(keyp))
 			{
 			  if (!c_function_name(keyp))
@@ -43496,6 +43556,22 @@ static s7_pointer g_make_weak_hash_table(s7_scheme *sc, s7_pointer args)
   return(table);
 }
 
+static const char *hash_table_checker_name(s7_scheme *sc, s7_pointer ht)
+{
+  if (hash_table_checker(ht) == hash_equal) return("equal?");
+  if (hash_table_checker(ht) == hash_equivalent) return("equivalent?");
+  if (hash_table_checker(ht) == hash_eq) return("eq?");
+  if (hash_table_checker(ht) == hash_eqv) return("eqv?");
+  if (hash_table_checker(ht) == hash_string) return("string=?");
+#if (!WITH_PURE_S7)
+  if (hash_table_checker(ht) == hash_ci_string) return("string-ci=?");
+  if (hash_table_checker(ht) == hash_ci_char) return("char-ci=?");
+#endif
+  if (hash_table_checker(ht) == hash_char) return("char=?");
+  if (hash_table_checker(ht) == hash_number_num_eq) return("=");
+  return("#f");
+}
+
 
 /* -------------------------------- weak-hash-table? -------------------------------- */
 static s7_pointer g_is_weak_hash_table(s7_scheme *sc, s7_pointer args)
@@ -43695,7 +43771,7 @@ static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, hash_e
 	  }}
   hash_table_entries(table)--;
   if ((hash_table_entries(table) == 0) &&
-      (!hash_table_checker_locked(table)))
+      (hash_table_mapper(table) == default_hash_map))
     {
       hash_table_checker(table) = hash_empty;
       hash_clear_chosen(table);
@@ -43728,7 +43804,7 @@ static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table)
 		  hash_table_entries(table)--;
 		  if (hash_table_entries(table) == 0)
 		    {
-		      if (!hash_table_checker_locked(table))
+		      if (hash_table_mapper(table) == default_hash_map)
 			{
 			  hash_table_checker(table) = hash_empty;
 			  hash_clear_chosen(table);
@@ -43757,11 +43833,6 @@ static s7_pointer hash_table_typer_symbol(s7_scheme *sc, s7_pointer typer)
   if (typer == sc->T)
     return(sc->T);
   return((is_c_function(typer)) ? c_function_symbol(typer) : find_closure(sc, typer, closure_let(typer)));
-}
-
-static const char *hash_table_typer_name(s7_scheme *sc, s7_pointer typer)
-{
-  return((is_c_function(typer)) ? c_function_name(typer) : symbol_name(find_closure(sc, typer, closure_let(typer))));
 }
 
 static void check_hash_types(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value)
@@ -44147,7 +44218,7 @@ static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
 	  if (len >= 8)
 	    memclr64(entries, len * sizeof(hash_entry_t *));
 	  else memclr(entries, len * sizeof(hash_entry_t *));
-	  if (!hash_table_checker_locked(table))
+	  if (hash_table_mapper(table) == default_hash_map)
 	    {
 	      hash_table_checker(table) = hash_empty;
 	      hash_clear_chosen(table);
@@ -46135,7 +46206,7 @@ static s7_pointer g_is_eq(s7_scheme *sc, s7_pointer args)
   /* (eq? (apply apply apply values '(())) #<unspecified>) should return #t */
 }
 
-bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b) /* possibly inline tleft tio */
+bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
 #if WITH_GMP
   if ((is_big_number(a)) || (is_big_number(b)))
@@ -46411,7 +46482,7 @@ static bool hash_table_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
     return(false);
   if (hash_table_entries(x) == 0)
     return(true);
-  if ((!equivalent) && ((hash_table_checker_locked(x)) || (hash_table_checker_locked(y))))
+  if ((!equivalent) && ((hash_table_mapper(x) != default_hash_map) || (hash_table_mapper(y) != default_hash_map)))
     {
       if (hash_table_checker(x) != hash_table_checker(y))
 	return(false);
@@ -47772,7 +47843,7 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
       {
 	s7_pointer p = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
 	if ((hash_table_checker(source) != hash_table_checker(dest)) &&
-	    (!hash_table_checker_locked(dest)))
+	    (hash_table_mapper(dest) == default_hash_map))
 	  {
 	    if (hash_table_checker(dest) == hash_empty)
 	      hash_table_checker(dest) = hash_table_checker(source);
@@ -49218,14 +49289,12 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
   if (!sc->entries_symbol)
     {
       sc->entries_symbol = make_symbol(sc, "entries");
-      sc->locked_symbol = make_symbol(sc, "locked");
       sc->weak_symbol = make_symbol(sc, "weak");
     }
-  let = internal_inlet(sc, 12, sc->value_symbol, obj,
+  let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		      sc->type_symbol, sc->is_hash_table_symbol,
 		      sc->size_symbol, s7_length(sc, obj),
 		      sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
-		      sc->locked_symbol, s7_make_boolean(sc, hash_table_checker_locked(obj)),
 		      sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (is_weak_hash_table(obj))
@@ -82825,8 +82894,8 @@ static inline bool set_star_args(s7_scheme *sc, s7_pointer top)
   return(false);
 }
 
-static bool apply_safe_closure_star_1(s7_scheme *sc)                   /* -------- define* (lambda*) -------- */
-{ /* possibly inline tauto */
+static inline bool apply_safe_closure_star_1(s7_scheme *sc)  /* -------- define* (lambda*) -------- */
+{
   /* slots are in "reverse order" -- in the same order as the args, despite let printout (which reverses the order!) */
   set_curlet(sc, closure_let(sc->code));
   if (has_no_defaults(sc->code))
@@ -83873,7 +83942,7 @@ static void op_closure_sc(s7_scheme *sc)
   sc->code = car(sc->code);
 }
 
-static void op_closure_sc_o(s7_scheme *sc) /* possibly inline timp */
+static inline void op_closure_sc_o(s7_scheme *sc)
 {
   s7_pointer f = opt1_lambda(sc->code);
   check_stack_size(sc);
@@ -92971,9 +93040,9 @@ static void init_setters(s7_scheme *sc)
   c_function_set_setter(global_value(sc->vector_typer_symbol),
 			s7_make_function(sc, "#<set-vector-typer>", g_set_vector_typer, 2, 0, false, "vector-typer setter"));
   c_function_set_setter(global_value(sc->hash_table_key_typer_symbol),
-			s7_make_function(sc, "#<set-hash_table-key-typer>", g_set_hash_table_key_typer, 2, 0, false, "hash_table-key-typer setter"));
+			s7_make_function(sc, "#<set-hash-table-key-typer>", g_set_hash_table_key_typer, 2, 0, false, "hash-table-key-typer setter"));
   c_function_set_setter(global_value(sc->hash_table_value_typer_symbol),
-			s7_make_function(sc, "#<set-hash_table-value-typer>", g_set_hash_table_value_typer, 2, 0, false, "hash_table-value-typer setter"));
+			s7_make_function(sc, "#<set-hash-table-value-typer>", g_set_hash_table_value_typer, 2, 0, false, "hash-table-value-typer setter"));
 }
 
 static void init_syntax(s7_scheme *sc)
@@ -94684,31 +94753,31 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    461    461
- * index     1026   1016    973    968    969
+ * index     1026   1016    973    968    967
  * tmock     1177   1165   1057   1036   1037
  * tvect     2519   2464   1772   1689   1689
  * texit     ----   ----   1778   1749   1755
  * s7test    1873   1831   1818   1779   1785
- * timp      2971   2891   2176   2043   2049
+ * timp      2971   2891   2176   2043   2019
  * lt        2187   2172   2150   2143   2146
  * tauto     ----   ----   2562   2207   2157
- * dup       3805   3788   2492   2273   2319
+ * dup       3805   3788   2492   2273   2331
  * tload     ----   ----   3046   2352   2351
  * tread     2440   2421   2419   2376   2379
  * fbench    2688   2583   2460   2403   2411
  * trclo     2735   2574   2454   2423   2421
  * titer     2865   2842   2641   2475   2483
  * tcopy     8035   5546   2539   2503   2478
- * tmat      3065   3042   2524   2511   2528
+ * tmat      3065   3042   2524   2511   2522
  * tb        2735   2681   2612   2574   2577
  * tsort     3105   3104   2856   2820   2820
  * teq       4068   4045   3536   3450   3433
- * tmac      3950   3873   3033   3541   3546
+ * tmac      3950   3873   3033   3541   3553
  * tio       3816   3752   3683   3588   3600
- * tobj      4016   3970   3828   3624   3618
- * tclo      4787   4735   4390   4309   4330
- * tlet      7775   5640   4450   4393   4399
- * tcase     4960   4793   4439   4407   4435
+ * tobj      4016   3970   3828   3624   3614
+ * tclo      4787   4735   4390   4309   4221
+ * tlet      7775   5640   4450   4393   4419 [op_c_any_np and elsewhere]
+ * tcase     4960   4793   4439   4407   4438
  * tmap      8869   8774   4489   4468   4470
  * tfft      7820   7729   4755   4599   4603
  * tshoot    5525   5447   5183   5099   5091
@@ -94716,30 +94785,29 @@ int main(int argc, char **argv)
  * tnum      6348   6013   5433   5378   5403
  * tstr      6880   6342   5488   5400   5433
  * tlamb     6423   6273   5720   5530   5542
- * tset      ----   ----   ----   6163   6170
+ * tset      ----   ----   ----   6163   6177
  * tlist     7896   7546   6558   6195   6197
- * tmisc     8869   7612   6435   6239   6255
+ * tmisc     8869   7612   6435   6239   6252
  * tgsl      8485   7802   6373   6301   6300
  * trec      6936   6922   6521   6538   6512
  * tari      13.0   12.7   6827   6633   6635
- * tleft     10.4   10.2   7657   7472   7475
- * tgc       11.9   11.1   8177   8002   8039
+ * tleft     10.4   10.2   7657   7472   7478
+ * tgc       11.9   11.1   8177   8002   8036
  * thash     11.8   11.7   9734   9489   9474
- * cb        11.2   11.0   9658   9539   9550
+ * cb        11.2   11.0   9658   9539   9560
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.5   56.7
- * lg        ----   ----  105.2  104.6  104.8
- * tbig     177.4  175.8  156.5  150.6  150.6
+ * sg        ----   ----   55.9   56.5   56.8
+ * lg        ----   ----  105.2  104.6  104.9 [op_c_any_np 148]
+ * tbig     177.4  175.8  156.5  150.6  150.7 [same 296]
  * -----------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       hash + typer :readable display + method tests
- *       if both typers, immutable would be: shared last-key, then return val==original
+ *       hash + typer method tests, t590->s7test
+ *       if both typers, immutable would be: shared last-key, then return val==original?
  *       accept anonymous funcs here and in vector?
- *       object->let typers?
  *
  * check other inline_* cases for splits set, add others?: 257 currently: see inlines
  * clean up the mishmash of error functions
