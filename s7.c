@@ -8350,6 +8350,11 @@ static Inline s7_pointer inline_make_let_with_slot(s7_scheme *sc, s7_pointer old
   return(new_let);
 }
 
+static s7_pointer make_let_with_slot(s7_scheme *sc, s7_pointer old_let, s7_pointer symbol, s7_pointer value)
+{
+  return(inline_make_let_with_slot(sc, old_let, symbol, value));
+}
+
 static Inline s7_pointer inline_make_let_with_two_slots(s7_scheme *sc, s7_pointer old_let,
 							s7_pointer symbol1, s7_pointer value1, s7_pointer symbol2, s7_pointer value2)
 {
@@ -8372,6 +8377,11 @@ static Inline s7_pointer inline_make_let_with_two_slots(s7_scheme *sc, s7_pointe
   slot_set_next(slot2, slot_end(sc));
   slot_set_next(slot1, slot2);
   return(new_let);
+}
+
+static s7_pointer make_let_with_two_slots(s7_scheme *sc, s7_pointer old_let, s7_pointer symbol1, s7_pointer value1, s7_pointer symbol2, s7_pointer value2)
+{
+  return(inline_make_let_with_two_slots(sc, old_let, symbol1, value1, symbol2, value2));
 }
 
 /* in all these functions, symbol_set_local_slot should follow slot_set_value so that we can evaluate the slot's value in its old state */
@@ -30539,7 +30549,7 @@ static s7_pointer call_file_out(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer port = s7_open_output_file(sc, string_value(sc->value), "w");
   push_stack(sc, OP_UNWIND_OUTPUT, sc->unused, port);
-  sc->curlet = inline_make_let_with_slot(sc, sc->curlet, opt3_sym(sc->code), port);
+  sc->curlet = make_let_with_slot(sc, sc->curlet, opt3_sym(sc->code), port);  /* perhaps NOT INLINE */
   return(opt2_pair(sc->code));
 }
 
@@ -37611,7 +37621,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 	  if (is_null(cdr(body)))
 	    {
 	      s7_pfunc func;
-	      sc->curlet = inline_make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
+	      sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
 	      func = s7_bool_optimize(sc, body);
 	      if (func)
 		{
@@ -38025,7 +38035,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 	      (is_null(cdr(body))))
 	    {
 	      s7_pfunc func;
-	      sc->curlet = inline_make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
+	      sc->curlet = make_let_with_two_slots(sc, sc->curlet, car(closure_args(eq_func)), car(args), cadr(closure_args(eq_func)), sc->F);
 	      func = s7_bool_optimize(sc, body);
 	      if (func)
 		{
@@ -38485,15 +38495,16 @@ static s7_pointer byte_vector_setter(s7_scheme *sc, s7_pointer str, s7_int loc, 
   wrong_type_arg_error_nr(sc, "byte-vector-set!", 3, val, "a byte");
 }
 
-static inline block_t *mallocate_vector(s7_scheme *sc, s7_int len)
+static block_t *mallocate_empty_vector(s7_scheme *sc)
 {
   block_t *b;
-  if (len > 0) return(inline_mallocate(sc, len));  /* maybe move the len>0 outward */
   b = mallocate_block(sc);
   block_data(b) = NULL;
   block_info(b) = NULL;
   return(b);
 }
+
+#define mallocate_vector(Sc, Len) ((Len) > 0) ? inline_mallocate(Sc, Len) : mallocate_empty_vector(Sc)
 
 static inline s7_pointer make_simple_vector(s7_scheme *sc, s7_int len) /* len >= 0 and < max */
 {
@@ -38581,14 +38592,14 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
   vector_length(x) = len;
   if (len == 0)
     {
-      vector_block(x) = mallocate_vector(sc, 0);
+      vector_block(x) = mallocate_empty_vector(sc);
       vector_elements(x) = NULL;
       if (typ == T_VECTOR) set_has_simple_elements(x);
     }
   else
     if (typ == T_VECTOR)
       {
-	block_t *b = mallocate_vector(sc, len * sizeof(s7_pointer));
+	block_t *b = inline_mallocate(sc, len * sizeof(s7_pointer));
 	vector_block(x) = b;
 	vector_elements(x) = (s7_pointer *)block_data(b);
 	vector_getter(x) = default_vector_getter;
@@ -38599,7 +38610,7 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
     else
       if (typ == T_FLOAT_VECTOR)
 	{
-	  block_t *b = mallocate_vector(sc, len * sizeof(s7_double));
+	  block_t *b = inline_mallocate(sc, len * sizeof(s7_double));
 	  vector_block(x) = b;
 	  float_vector_floats(x) = (s7_double *)block_data(b);
 	  if (filled)
@@ -38614,7 +38625,7 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
       else
 	if (typ == T_INT_VECTOR)
 	  {
-	    block_t *b = mallocate_vector(sc, len * sizeof(s7_int));
+	    block_t *b = inline_mallocate(sc, len * sizeof(s7_int));
 	    vector_block(x) = b;
 	    int_vector_ints(x) = (s7_int *)block_data(b);
 	    if (filled)
@@ -38725,7 +38736,7 @@ s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *da
 {
   /* this wraps up a C-allocated/freed double array as an s7 vector */
   s7_pointer x;
-  block_t *b = mallocate_vector(sc, 0);
+  block_t *b = mallocate_empty_vector(sc);
   new_cell(sc, x, T_FLOAT_VECTOR | T_SAFE_PROCEDURE);
   vector_block(x) = b;
   float_vector_floats(x) = data;
@@ -39483,7 +39494,7 @@ static s7_pointer subvector(s7_scheme *sc, s7_pointer vect, s7_int skip_dims, s7
   s7_pointer x;
   new_cell(sc, x, (full_type(vect) & (~T_COLLECTED)) | T_SUBVECTOR | T_SAFE_PROCEDURE);
   vector_length(x) = 0;
-  vector_block(x) = mallocate_vector(sc, 0);
+  vector_block(x) = mallocate_empty_vector(sc);
   vector_elements(x) = NULL;
   vector_getter(x) = vector_getter(vect);
   vector_setter(x) = vector_setter(vect);
@@ -39619,7 +39630,7 @@ a vector that points to the same elements as the original-vector but with differ
   else mark_function[type(orig)] = mark_int_or_float_vector_possibly_shared; /* I think this works for byte-vectors also */
 
   new_cell(sc, x, (full_type(orig) & (~T_COLLECTED)) | T_SUBVECTOR | T_SAFE_PROCEDURE);
-  vector_block(x) = mallocate_vector(sc, 0);
+  vector_block(x) = mallocate_empty_vector(sc);
   vector_set_dimension_info(x, v);
   if (!v) subvector_set_vector(x, orig);
   vector_length(x) = new_len;                 /* might be less than original length */
@@ -41870,7 +41881,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	      if ((!sort_func) &&
 		  (is_safe_closure(lessp))) /* no embedded sort! or call/cc, etc */
 		{
-		  sc->curlet = inline_make_let_with_two_slots(sc, closure_let(lessp), car(largs), sc->F, cadr(largs), sc->F);
+		  sc->curlet = make_let_with_two_slots(sc, closure_let(lessp), car(largs), sc->F, cadr(largs), sc->F);
 		  sc->sort_body = car(closure_body(lessp));
 		  sc->sort_begin = cdr(closure_body(lessp));
 		  sort_func = (is_null(sc->sort_begin)) ? closure_sort : closure_sort_begin;
@@ -50558,7 +50569,7 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
        */
       sc->code = closure_body(proc);
       if (is_symbol(closure_args(proc)))
-	sc->curlet = inline_make_let_with_slot(sc, closure_let(proc), closure_args(proc), sc->nil);
+	sc->curlet = make_let_with_slot(sc, closure_let(proc), closure_args(proc), sc->nil); /* NOT INLINE */
       else sc->curlet = inline_make_let(sc, closure_let(proc));
       push_stack_no_args_direct(sc, sc->begin_op);
     }
@@ -66520,9 +66531,9 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
       s7_pointer olde = sc->curlet, pars = closure_args(f), slot1, slot2;
       s7_pointer val1 = seq_init(sc, seq1);
       s7_pointer val2 = seq_init(sc, seq2);
-      sc->curlet = inline_make_let_with_two_slots(sc, closure_let(f),
-						  (is_pair(car(pars))) ? caar(pars) : car(pars), val1,
-						  (is_pair(cadr(pars))) ? cadar(pars) : cadr(pars), val2);
+      sc->curlet = make_let_with_two_slots(sc, closure_let(f),
+					   (is_pair(car(pars))) ? caar(pars) : car(pars), val1,
+					   (is_pair(cadr(pars))) ? cadar(pars) : cadr(pars), val2);
       slot1 = let_slots(sc->curlet);
       slot2 = next_slot(slot1);
 
@@ -66956,9 +66967,9 @@ static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, 
       s7_pointer old_e = sc->curlet, pars = closure_args(f), slot1, slot2;
       s7_pointer val1 = seq_init(sc, seq1);
       s7_pointer val2 = seq_init(sc, seq2);
-      sc->curlet = inline_make_let_with_two_slots(sc, closure_let(f),
-						  (is_pair(car(pars))) ? caar(pars) : car(pars), val1,
-						  (is_pair(cadr(pars))) ? cadar(pars) : cadr(pars), val2);
+      sc->curlet = make_let_with_two_slots(sc, closure_let(f),
+					   (is_pair(car(pars))) ? caar(pars) : car(pars), val1,
+					   (is_pair(cadr(pars))) ? cadar(pars) : cadr(pars), val2);
       slot1 = let_slots(sc->curlet);
       slot2 = next_slot(slot1);
 
@@ -75051,7 +75062,7 @@ static void op_let_a_na_new(s7_scheme *sc)
   s7_pointer binding, p;
   sc->code = cdr(sc->code);
   binding = opt2_pair(sc->code);
-  sc->curlet = inline_make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding)));
+  sc->curlet = make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))); /* perhaps NOT INLINE */
   for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p))
     fx_call(sc, p);
   sc->value = fx_call(sc, p);
@@ -80799,7 +80810,7 @@ static void op_dox_no_body(s7_scheme *sc)
       let_set_outlet(let, sc->curlet);
       set_curlet(sc, let);
     }
-  else sc->curlet = inline_make_let_with_slot(sc, sc->curlet, car(var), fx_call(sc, cdr(var)));
+  else sc->curlet = make_let_with_slot(sc, sc->curlet, car(var), fx_call(sc, cdr(var))); /* NOT INLINE */
 
   slot = let_slots(sc->curlet);
   if ((is_t_integer(slot_value(slot))) &&
@@ -81457,7 +81468,7 @@ static bool op_safe_dotimes_step_o(s7_scheme *sc)
   return(false);
 }
 
-static inline bool op_dotimes_step_o(s7_scheme *sc) /* called once in eval, mat(10), num(7) */
+static /* inline */ bool op_dotimes_step_o(s7_scheme *sc) /* called once in eval, mat(10+6), num(7+1) */
 {
   s7_pointer ctr = let_dox_slot1(sc->curlet);
   s7_pointer end = let_dox2_value(sc->curlet);
@@ -82538,14 +82549,14 @@ static void op_f(s7_scheme *sc)     /* sc->code: ((lambda () 32)) -> (let () 32)
 static void op_f_a(s7_scheme *sc)   /* sc->code: ((lambda (x) (+ x 1)) i) -> (let ((x i)) (+ x 1)) */
 {
   /* if caddar(sc->code) is fxable [(+ x 1) above], this could call fx and return to the top */
-  sc->curlet = inline_make_let_with_slot(sc, sc->curlet, opt3_sym(cdr(sc->code)), fx_call(sc, cdr(sc->code)));
+  sc->curlet = inline_make_let_with_slot(sc, sc->curlet, opt3_sym(cdr(sc->code)), fx_call(sc, cdr(sc->code))); /* perhaps NOT INLINE */
   sc->code = opt3_pair(sc->code);
 }
 
 static void op_f_aa(s7_scheme *sc)  /* sc->code: ((lambda (x y) (+ x y)) i j) -> (let ((x i) (y j)) (+ x y)) */
 {
   gc_protect_via_stack(sc, fx_call(sc, cdr(sc->code)));
-  sc->curlet = inline_make_let_with_two_slots(sc, sc->curlet, opt3_sym(cdr(sc->code)), stack_protected1(sc), cadadr(car(sc->code)), fx_call(sc, cddr(sc->code)));
+  sc->curlet = make_let_with_two_slots(sc, sc->curlet, opt3_sym(cdr(sc->code)), stack_protected1(sc), cadadr(car(sc->code)), fx_call(sc, cddr(sc->code)));
   unstack(sc);
   sc->code = opt3_pair(sc->code);
 }
@@ -83200,7 +83211,7 @@ static void op_closure_star_ka(s7_scheme *sc, s7_pointer code)
   s7_pointer func = opt1_lambda(code);
   s7_pointer p = car(closure_args(func));
   sc->value = fx_call(sc, cddr(code));
-  sc->curlet = inline_make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value);
+  sc->curlet = inline_make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value); /* perhaps NOT INLINE */
   sc->code = T_Pair(closure_body(func));
 }
 
@@ -83213,7 +83224,7 @@ static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
     s7_error_nr(sc, sc->wrong_type_arg_symbol,
 		set_elist_4(sc, keyword_value_missing_string, closure_name(sc, opt1_lambda(code)), sc->value, code));
   p = car(closure_args(func));
-  sc->curlet = inline_make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value);
+  sc->curlet = make_let_with_slot(sc, closure_let(func), (is_pair(p)) ? car(p) : p, sc->value); /* NOT INLINE */
   if (closure_star_arity_to_int(sc, func) > 1)
     {
       s7_pointer last_slot = let_slots(sc->curlet);
@@ -83461,7 +83472,7 @@ static s7_pointer op_safe_thunk_a(s7_scheme *sc, s7_pointer code)
 static void op_thunk_any(s7_scheme *sc)
 {
   s7_pointer p = opt1_lambda(sc->code);
-  sc->curlet = inline_make_let_with_slot(sc, closure_let(p), closure_args(p), sc->nil);
+  sc->curlet = make_let_with_slot(sc, closure_let(p), closure_args(p), sc->nil); /* NOT INLINE */
   sc->code = closure_body(p);
 }
 
@@ -83936,7 +83947,7 @@ static void op_closure_sc(s7_scheme *sc)
 {
   s7_pointer f = opt1_lambda(sc->code);
   check_stack_size(sc);
-  sc->curlet = inline_make_let_with_two_slots(sc, closure_let(f), car(closure_args(f)), lookup(sc, cadr(sc->code)), cadr(closure_args(f)), opt2_con(sc->code));
+  sc->curlet = make_let_with_two_slots(sc, closure_let(f), car(closure_args(f)), lookup(sc, cadr(sc->code)), cadr(closure_args(f)), opt2_con(sc->code));
   sc->code = T_Pair(closure_body(f));
   push_stack_no_args(sc, sc->begin_op, T_Pair(cdr(sc->code)));
   sc->code = car(sc->code);
@@ -84261,7 +84272,7 @@ static void op_any_closure_sym(s7_scheme *sc) /* for (lambda a ...) */
   s7_int num_args = opt3_arglen(old_args);
 
   if (num_args == 1)
-    sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func),
+    sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func), /* perhaps NOT INLINE */
 					   ((is_safe_closure(func)) && (!sc->debug_or_profile)) ?
 					   set_plist_1(sc, fx_call(sc, old_args)) : list_1(sc, sc->value = fx_call(sc, old_args)));
   else
@@ -84269,20 +84280,20 @@ static void op_any_closure_sym(s7_scheme *sc) /* for (lambda a ...) */
       {
 	gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
 	sc->args = fx_call(sc, cdr(old_args));
-	sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func),
+	sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func), /* perhaps NOT INLINE */
 					       ((is_safe_closure(func)) && (!sc->debug_or_profile)) ?
 					       set_plist_2(sc, stack_protected1(sc), sc->args) : list_2(sc, stack_protected1(sc), sc->args));
 	unstack(sc);
       }
     else
       if (num_args == 0)
-	sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func), sc->nil);
+	sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func), sc->nil); /* NOT INLINE */
       else
 	{
 	  sc->args = make_list(sc, num_args, sc->F);
 	  for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	    set_car(p, fx_call(sc, old_args));
-	  sc->curlet = inline_make_let_with_slot(sc, closure_let(func), closure_args(func), sc->args);
+	  sc->curlet = make_let_with_slot(sc, closure_let(func), closure_args(func), sc->args); /* perhaps NOT INLINE */
 	}
   sc->code = T_Pair(closure_body(func));
 }
@@ -84294,7 +84305,7 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
   s7_pointer func_args = closure_args(func);
 
   if (num_args == 1)
-    sc->curlet = inline_make_let_with_two_slots(sc, closure_let(func), car(func_args), sc->value = fx_call(sc, old_args), cdr(func_args), sc->nil);
+    sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), sc->value = fx_call(sc, old_args), cdr(func_args), sc->nil);
   else
     {
       gc_protect_via_stack(sc, fx_call(sc, old_args)); /* not sc->value as GC protection! -- fx_call below can clobber it */
@@ -84309,13 +84320,12 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
 	  old_args = cdr(old_args);
 	  for (s7_pointer p = sc->args; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	    set_car(p, fx_call(sc, old_args));
-	  sc->curlet = inline_make_let_with_two_slots(sc, closure_let(func), car(func_args), stack_protected1(sc), cdr(func_args), sc->args);
+	  sc->curlet = make_let_with_two_slots(sc, closure_let(func), car(func_args), stack_protected1(sc), cdr(func_args), sc->args);
 	}
       unstack(sc);
     }
   sc->code = T_Pair(closure_body(func));
 }
-
 
 
 /* -------- */
@@ -85301,7 +85311,7 @@ static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
   s7_pointer if_false = cadddr(body);
   s7_pointer la = cdr(if_false);
   s7_pointer let_var = caadr(code);
-  s7_pointer inner_let = inline_make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var))); /* NOT INLINE */
   s7_pointer let_slot = let_slots(inner_let);
   sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
@@ -85341,7 +85351,7 @@ static bool op_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
   s7_pointer la = cdr(if_false);
   s7_pointer laa = cddr(if_false);
   s7_pointer let_var = caadr(code);
-  s7_pointer inner_let = inline_make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var))); /* NOT INLINE */
   s7_pointer let_slot = let_slots(inner_let);
   sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
@@ -85420,7 +85430,7 @@ static void op_tc_let_when_laa(s7_scheme *sc, bool when, s7_pointer code)
   s7_pointer p, body = caddr(code), la, laa, let_var = caadr(code), outer_let = sc->curlet;
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
-  s7_pointer inner_let = inline_make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var))); /* NOT INLINE */
   s7_pointer let_slot = let_slots(inner_let);
   sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
@@ -85562,7 +85572,7 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
   s7_pointer cond_body = cdaddr(code);  /* code here == body in check_tc */
   s7_pointer let_var = caadr(code);
   s7_function letf = fx_proc(cdr(let_var));
-  s7_pointer inner_let = inline_make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var))); /* NOT INLINE */
   s7_pointer let_slot = let_slots(inner_let);
   sc->curlet = inner_let;
   s7_gc_protect_via_stack(sc, inner_let);
@@ -87272,7 +87282,7 @@ static void op_safe_c_sc(s7_scheme *sc)
 
 static void op_cl_a(s7_scheme *sc) {sc->value = fn_proc(sc->code)(sc, with_list_t1(fx_call(sc, cdr(sc->code))));}
 
-static void op_cl_aa(s7_scheme *sc)
+static inline void op_cl_aa(s7_scheme *sc) /* possibly inline lg */
 {
   gc_protect_via_stack(sc, fx_call(sc, cdr(sc->code)));
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
@@ -87481,7 +87491,7 @@ static Inline bool inline_collect_np_args(s7_scheme *sc, opcode_t op, s7_pointer
   return(false);
 }
 
-static bool op_any_c_np(s7_scheme *sc) /* code: (func . args) where at least one arg is not fxable */
+static bool op_any_c_np(s7_scheme *sc) /* code: (func . args) where at least one arg is not fxable */ /* possibly inline */
 {
   sc->args = sc->nil;
   for (s7_pointer p = cdr(sc->code); is_pair(p); p = cdr(p))
@@ -94756,60 +94766,58 @@ int main(int argc, char **argv)
  * index     1026   1016    973    968    967
  * tmock     1177   1165   1057   1036   1037
  * tvect     2519   2464   1772   1689   1689
- * texit     ----   ----   1778   1749   1755
- * s7test    1873   1831   1818   1779   1785
+ * texit     ----   ----   1778   1749   1756
+ * s7test    1873   1831   1818   1779   1782
  * timp      2971   2891   2176   2043   2019
- * lt        2187   2172   2150   2143   2146
- * tauto     ----   ----   2562   2207   2157
- * dup       3805   3788   2492   2273   2331
- * tload     ----   ----   3046   2352   2351
- * tread     2440   2421   2419   2376   2379
+ * lt        2187   2172   2150   2143   2147
+ * tauto     ----   ----   2562   2207   2160
+ * dup       3805   3788   2492   2273   2333
+ * tload     ----   ----   3046   2352   2353
+ * tread     2440   2421   2419   2376   2377
  * fbench    2688   2583   2460   2403   2411
- * trclo     2735   2574   2454   2423   2421
+ * trclo     2735   2574   2454   2423   2423
  * titer     2865   2842   2641   2475   2483
- * tcopy     8035   5546   2539   2503   2478
- * tmat      3065   3042   2524   2511   2522
+ * tcopy     8035   5546   2539   2503   2475
+ * tmat      3065   3042   2524   2511   2523
  * tb        2735   2681   2612   2574   2577
  * tsort     3105   3104   2856   2820   2820
  * teq       4068   4045   3536   3450   3433
  * tmac      3950   3873   3033   3541   3553
  * tio       3816   3752   3683   3588   3600
  * tobj      4016   3970   3828   3624   3614
- * tclo      4787   4735   4390   4309   4221
- * tlet      7775   5640   4450   4393   4419 [op_c_any_np and elsewhere]
- * tcase     4960   4793   4439   4407   4438
- * tmap      8869   8774   4489   4468   4470
+ * tclo      4787   4735   4390   4309   4221  4254 [make_let_with_slot 40: op_closure_star_ka 11 and no others]--inlined
+ * tlet      7775   5640   4450   4393   4419
+ * tcase     4960   4793   4439   4407   4436
+ * tmap      8869   8774   4489   4468   4469
  * tfft      7820   7729   4755   4599   4603
- * tshoot    5525   5447   5183   5099   5091
- * tform     5357   5348   5307   5281   5278
- * tnum      6348   6013   5433   5378   5403
- * tstr      6880   6342   5488   5400   5433
+ * tshoot    5525   5447   5183   5099   5095
+ * tform     5357   5348   5307   5281   5275
+ * tnum      6348   6013   5433   5378   5402
+ * tstr      6880   6342   5488   5400   5434
  * tlamb     6423   6273   5720   5530   5542
- * tset      ----   ----   ----   6163   6177
- * tlist     7896   7546   6558   6195   6197
- * tmisc     8869   7612   6435   6239   6252
- * tgsl      8485   7802   6373   6301   6300
+ * tset      ----   ----   ----   6163   6176
+ * tlist     7896   7546   6558   6195   6200
+ * tmisc     8869   7612   6435   6239   6251
+ * tgsl      8485   7802   6373   6301   6305
  * trec      6936   6922   6521   6538   6512
  * tari      13.0   12.7   6827   6633   6635
- * tleft     10.4   10.2   7657   7472   7478
- * tgc       11.9   11.1   8177   8002   8036
+ * tleft     10.4   10.2   7657   7472   7475
+ * tgc       11.9   11.1   8177   8002   8020
  * thash     11.8   11.7   9734   9489   9474
  * cb        11.2   11.0   9658   9539   9560
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.5   56.8
- * lg        ----   ----  105.2  104.6  104.9 [op_c_any_np 148]
- * tbig     177.4  175.8  156.5  150.6  150.7 [same 296]
+ * sg        ----   ----   55.9   56.5   56.6
+ * lg        ----   ----  105.2  104.6  104.9  [check this]
+ * tbig     177.4  175.8  156.5  150.6  150.5
  * -----------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       hash + typer method tests, t590->s7test
- *       if both typers, immutable would be: shared last-key, then return val==original?
+ *       hash + typer method tests
  *       accept anonymous funcs here and in vector?
- *
- * check other inline_* cases for splits set, add others?: 257 currently: see inlines
+ * check other inline_* cases for splits set, add others?: 224 currently: see inlines [op_any_c_np op_cl_aa?? big lg tlet]
  * clean up the mishmash of error functions
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
