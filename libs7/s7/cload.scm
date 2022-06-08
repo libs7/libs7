@@ -1,4 +1,4 @@
-(display "loading cload.scm")
+(display "loading cload.scm\n")
 (provide 'cload.scm)
 
 ;;; --------------------------------------------------------------------------------

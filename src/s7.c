@@ -94861,7 +94861,7 @@ static void dumb_repl(s7_scheme *sc)
 
 void s7_repl(s7_scheme *sc)
 {
-    printf("s7_repl xxxxxxxxxxxxxxxx\n");
+    printf("oibl: s7_repl\n");
 #if (!WITH_C_LOADER)
   dumb_repl(sc);
 #else
@@ -94878,16 +94878,17 @@ void s7_repl(s7_scheme *sc)
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
-  printf("loading libc_s7.so\n");
+  /* printf("loading %s/%s\n", TOSTRING(OBAZL_RUNFILES_DIR), "/libc_s7.o"); */
+  printf("loading libc_s7.o\n");
+  printf("cwd: %s\n", getcwd(NULL, 0));
 
   val = s7_load_with_environment(sc,
-                                 /* "src/libc_s7.so", */
-                                 TOSTRING(OBAZL_RUNFILES_DIR)
-                                 "/libc_s7.so", //OBAZL
+                                 "libc_s7.so",
+                                 /* TOSTRING(OBAZL_RUNFILES_DIR) */
+                                 /* "/libc_s7.so", //OBAZL */
                                  e);
   if (val)
     {
-        printf("rrrrrrrrrrrrrrrr\n");
       s7_pointer libs;
       uint64_t hash;
       hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
@@ -94897,6 +94898,7 @@ void s7_repl(s7_scheme *sc)
     }
   else 
     {
+        printf("oibl: load libc_s7.so failed\n");
       val = s7_load(sc, "repl.scm");
       if (val) repl_loaded = true;
     }
@@ -94921,7 +94923,7 @@ void s7_repl(s7_scheme *sc)
                   /* TOSTRING(OBAZL_RUNFILES_DIR) */
                   /* "/repl.scm"); /\* OBAZL *\/ */
       }
-      s7_eval_c_string(sc, "((*repl* 'run))");
+      /* s7_eval_c_string(sc, "((*repl* 'run))"); */
     }
 #endif
 #endif

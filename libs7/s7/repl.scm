@@ -1,4 +1,4 @@
-(format #t "LOADING repl.scm")
+(format #t "repl.scm loading ...\n")
 ;;; a repl
 ;;;
 ;;; (load "repl.scm") ((*repl* 'run))
