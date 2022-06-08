@@ -1,3 +1,7 @@
+/* for OBAZL_RUNFILES_DIR: */
+#define VAL(str) #str
+#define TOSTRING(str) VAL(str)
+
 /* s7, a Scheme interpreter
  *
  *   derived from TinyScheme 1.39, but not a single byte of that code remains
@@ -94857,6 +94861,7 @@ static void dumb_repl(s7_scheme *sc)
 
 void s7_repl(s7_scheme *sc)
 {
+    printf("s7_repl xxxxxxxxxxxxxxxx\n");
 #if (!WITH_C_LOADER)
   dumb_repl(sc);
 #else
@@ -94873,9 +94878,16 @@ void s7_repl(s7_scheme *sc)
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
-  val = s7_load_with_environment(sc, "libc_s7.so", e);
+  printf("loading libc_s7.so\n");
+
+  val = s7_load_with_environment(sc,
+                                 /* "src/libc_s7.so", */
+                                 TOSTRING(OBAZL_RUNFILES_DIR)
+                                 "/libc_s7.so", //OBAZL
+                                 e);
   if (val)
     {
+        printf("rrrrrrrrrrrrrrrr\n");
       s7_pointer libs;
       uint64_t hash;
       hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
@@ -94900,7 +94912,15 @@ void s7_repl(s7_scheme *sc)
       s7_autoload(sc, s7_make_symbol(sc, "get-overheads"), s7_make_string(sc, "compare-calls.scm"));
 #endif
       s7_provide(sc, "libc.scm");
-      if (!repl_loaded) s7_load(sc, "repl.scm");
+
+      /* OBAZL: loading repl.scm doesn't work in emacs */
+      printf("repl_loaded? %d\n", repl_loaded); /* OBAZL */
+      if (!repl_loaded) {
+          printf("Loading repl.scm\n"); /* OBAZL */
+          s7_load(sc, "s7/repl.scm");
+                  /* TOSTRING(OBAZL_RUNFILES_DIR) */
+                  /* "/repl.scm"); /\* OBAZL *\/ */
+      }
       s7_eval_c_string(sc, "((*repl* 'run))");
     }
 #endif

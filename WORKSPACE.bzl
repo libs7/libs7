@@ -27,20 +27,20 @@ def cc_fetch_repos():
 
     maybe(
         http_archive,
-        name = "rules_foreign_cc",
-        sha256 = "33a5690733c5cc2ede39cb62ebf89e751f2448e27f20c8b2fbbc7d136b166804",
-        strip_prefix = "rules_foreign_cc-0.5.1",
-        url = "https://github.com/bazelbuild/rules_foreign_cc/archive/0.5.1.tar.gz",
-    )
+            name = "rules_foreign_cc",
+            sha256 = "6041f1374ff32ba711564374ad8e007aef77f71561a7ce784123b9b4b88614fc",
+            strip_prefix = "rules_foreign_cc-0.8.0",
+            url = "https://github.com/bazelbuild/rules_foreign_cc/archive/0.8.0.tar.gz",
+        )
 
-    maybe(
-        git_repository,
-        name = "sealark",
-        remote = "https://github.com/obazl/sealark",
-        # commit = "b1c40e1de81913a3c40e5948f78719c28152486d",
-        # shallow_since = "1605101351 -0800"
-        branch = "main"
-    )
+    # maybe(
+    #     git_repository,
+    #     name = "sealark",
+    #     remote = "https://github.com/obazl/sealark",
+    #     # commit = "b1c40e1de81913a3c40e5948f78719c28152486d",
+    #     # shallow_since = "1605101351 -0800"
+    #     branch = "main"
+    # )
 
     # http://www.throwtheswitch.org/unity
     # maybe(
@@ -68,4 +68,25 @@ def cc_fetch_repos():
 #         # type = "zip",
 #         # sha256 = "60b64c656520f986ec7bd2a6dc61e800848c97872f8f5132c5f753d9c205c358",
 # )
+
+#### s7 nrepl (notcurses repl)
+
+    maybe(
+        http_archive,
+        name = "notcurses",
+        url  = "https://github.com/dankamongmen/notcurses/archive/refs/tags/v3.0.8.tar.gz",
+        sha256 = "56c33ffe2a2bc4d0b6e3ac14bdf620cf41e3293789135f76825057d0166974fd",
+        strip_prefix = "notcurses-3.0.8",
+        build_file = "//external/notcurses:BUILD.bazel",
+    )
+    # deps: libdeflate-dev libncurses-dev libunistring-dev
+
+    maybe(
+        http_archive,
+        name = "libdeflate",
+        url  = "https://github.com/ebiggers/libdeflate/archive/refs/tags/v1.11.tar.gz",
+        sha256 = "c72f691293f41c6aee66d44ca2dcd24092161b312a1c4c3d591d5d25f26b1faf",
+        strip_prefix = "libdeflate-1.11",
+        build_file = "//external/libdeflate:BUILD.bazel",
+)
 

@@ -1,10 +1,13 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
+exports_files(["s7.h"])
+
 ###########
 cc_library(
     name  = "s7",
-    linkstatic = 0,
-    srcs  = ["s7.c", "mus-config.h"],
+    alwayslink = True,
+    # linkstatic = True,
+    srcs  = ["s7.c", "mus-config.h"], ## "libc_s7.c"],
     hdrs  = ["s7.h"],
     copts = select({
         "//bzl/host:macos": ["-std=c11", "-Wextra"],
@@ -17,6 +20,12 @@ cc_library(
         "-Isrc",
         "-Ivendored/linenoise",
     ],
+    defines = [
+        # "OBAZL_RUNFILES_DIR=external/libs7/src",
+        "OBAZL_RUNFILES_DIR=/Users/gar/bin",
+        "WITH_C_LOADER",
+        "WITH_SYSTEM_EXTRAS"
+    ],
     linkopts = select({
         "//bzl/host:macos": [],
         "//bzl/host:linux": ["-ldl", "-Wl,-export-dynamic"],
@@ -24,7 +33,16 @@ cc_library(
     }) + [
         "-lm"
     ],
+    data = [
+        # both loaded at runtime by s7_repl()
+        ":c_s7",
+        "//libs7:srcs",
+        "//libs7/s7:srcs",
+        # "repl.scm",
+        # "alist.scm"
+    ],
     deps = [
+        ":c_s7"
     ],
     visibility = ["//visibility:public"]
 )
@@ -46,7 +64,48 @@ cc_binary(
         "-Isrc",
         "-Ivendored/linenoise",
     ],
-    defines = ["WITH_MAIN"],
+    defines = [
+        "WITH_MAIN",
+        # "WITH_C_LOADER",
+        "WITH_SYSTEM_EXTRAS"
+    ],
+    linkopts = select({
+        "//bzl/host:macos": [],
+        "//bzl/host:linux": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }) + [
+        "-lm"
+    ],
+    data = [":c_s7",
+            "//libs7:srcs",
+            "//libs7/s7:srcs"],
+    deps = [":c_s7"],
+    visibility = ["//visibility:public"]
+)
+
+###########
+cc_binary(
+# cc_library(
+    name  = "c_s7",  # create libc_s7
+    linkshared = True,
+    # alwayslink = True,
+    srcs  = ["libc_s7.c", "s7.h"],
+    copts = select({
+        # strdup is non-standard, not supported on linux in strict c11 mode
+        "//bzl/host:macos": ["-std=c11"],
+        "//bzl/host:linux": ["-std=gnu11"],
+        "//conditions:default": ["-std=c11"],
+    }) + [
+        "-Wextra",
+        "-Wno-unused-parameter",
+        # "-Ivendored/linenoise",
+        "-O2", "-g",
+        "-Isrc",
+        "-Ivendored/linenoise",
+    ],
+    defines = [
+        "WITH_SYSTEM_EXTRAS"
+    ],
     linkopts = select({
         "//bzl/host:macos": [],
         "//bzl/host:linux": ["-ldl", "-Wl,-export-dynamic"],
@@ -56,3 +115,4 @@ cc_binary(
     ],
     visibility = ["//visibility:public"]
 )
+
