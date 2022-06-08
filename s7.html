@@ -2748,6 +2748,37 @@ return or set these functions.
 <em class="red">error</em><em class="gray">: hash-table-set! value argument 3, 32, is an integer but should be a 10|12?</em>
 </pre>
 
+<div class="indented">
+<pre>
+(define H (hash-table 'v1 1 'v2 2 'v3 3))
+(let ((last-key #f))
+  (define (valtyp val)
+    (or (not last-key)
+        (eq? last-key 'v1)
+	(and (eq? last-key 'v2)
+             (integer? val)
+	     (<= 0 val 32))))
+  (define (keytyp key)
+    (set! last-key key)
+    #t)
+  (set! (<em class=red>hash-table-key-typer</em> H) keytyp)
+  (set! (<em class=red>hash-table-value-typer</em> H) valtyp))
+  
+;; now (H 'v1) can be set to anything
+;;     (H 'v2) must be an integer between 0 and 32
+;;     (H 'v3) is immutable
+  
+&gt; (hash-table-set! H 'v1 11)
+11
+&gt;(hash-table-set! H 'v2 12)
+12
+&gt; (hash-table-set! H 'v3 13)
+<em class=red>error</em>: hash-table-set! third argument 13, is an integer, but the hash-table's value type checker, valtyp, rejects it
+&gt; (hash-table-set! H 'v2 112)
+<em class=red>error</em>: hash-table-set! third argument 112, is an integer, but the hash-table's value type checker, valtyp, rejects it
+</pre>
+</div>
+
 </blockquote>
 
 
