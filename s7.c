@@ -26682,7 +26682,7 @@ static s7_pointer g_string_copy(s7_scheme *sc, s7_pointer args)
   {
     char *s1 = string_value(dest) + start;
     char *s0 = string_value(source);
-    if (((s0 == s1) && (end > start)) ||
+    if (/* ((s0 == s1) && (end > start)) || */ /* this can happen but isn't it a no-op? */
 	((s0 < s1) && ((s0 + end - start) > s1)) ||
 	((s0 > s1) && ((s1 + end - start) > s0)))
       {
@@ -83578,14 +83578,15 @@ static void op_safe_closure_p_1(s7_scheme *sc)
 static void op_safe_closure_p_a(s7_scheme *sc)
 {
   check_stack_size(sc);
-  push_stack_no_args(sc, OP_SAFE_CLOSURE_P_A_1, opt1_lambda(sc->code));
+  push_stack_no_args_direct(sc, OP_SAFE_CLOSURE_P_A_1);
   sc->code = cadr(sc->code);
 }
 
 static void op_safe_closure_p_a_1(s7_scheme *sc)
 {
-  sc->curlet = update_let_with_slot(sc, closure_let(sc->code), sc->value);
-  sc->value = fx_call(sc, closure_body(sc->code));
+  s7_pointer f = opt1_lambda(sc->code);  
+  sc->curlet = update_let_with_slot(sc, closure_let(f), sc->value);
+  sc->value = fx_call(sc, closure_body(f));
 }
 
 static Inline void inline_op_closure_a(s7_scheme *sc) /* called twice in eval */
