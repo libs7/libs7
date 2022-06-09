@@ -94882,8 +94882,8 @@ void s7_repl(s7_scheme *sc)
   printf("loading libc_s7.o\n");
   printf("cwd: %s\n", getcwd(NULL, 0));
 
-  val = s7_load_with_environment(sc,
-                                 "libc_s7.so",
+  val = s7_load_with_environment(sc, "libc_s7.so",
+                                 /* "libs7/src/libc_s7.so", */
                                  /* TOSTRING(OBAZL_RUNFILES_DIR) */
                                  /* "/libc_s7.so", //OBAZL */
                                  e);

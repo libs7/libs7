@@ -22,7 +22,7 @@ cc_library(
     ],
     defines = [
         # "OBAZL_RUNFILES_DIR=external/libs7/src",
-        "OBAZL_RUNFILES_DIR=/Users/gar/bin",
+        # "OBAZL_RUNFILES_DIR=/Users/gar/.local/share/libs7",
         "WITH_C_LOADER",
         "WITH_SYSTEM_EXTRAS"
     ],
