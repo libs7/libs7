@@ -3,7 +3,7 @@
 
 ;; see   ~/scheme/srfi-152
 
-(load "srfi.scm")
+;; (load "srfi.scm")
 
 
 ;; derived from srfi-152
