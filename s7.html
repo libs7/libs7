@@ -2757,7 +2757,7 @@ return or set these functions.
         (eq? last-key 'v1)
 	(and (eq? last-key 'v2)
              (integer? val)
-	     (<= 0 val 32))))
+	     (&lt;= 0 val 32))))
   (define (keytyp key)
     (set! last-key key)
     #t)
@@ -2766,7 +2766,7 @@ return or set these functions.
   
 ;; now (H 'v1) can be set to anything
 ;;     (H 'v2) must be an integer between 0 and 32
-;;     (H 'v3) is immutable
+;;     (H 'v3) is immutable (but setting it to #f will remove it from H)
   
 &gt; (hash-table-set! H 'v1 11)
 11

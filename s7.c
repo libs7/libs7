@@ -1939,7 +1939,7 @@ static void init_types(void)
   #define T_Pair(P) check_ref(P, T_PAIR,             __func__, __LINE__, NULL, NULL)
   #define T_Pcs(P) check_ref2(P, T_PAIR, T_CLOSURE_STAR, __func__, __LINE__, NULL, NULL)
   #define T_Pos(P) check_nref(P,                     __func__, __LINE__)                /* not free */
-  #define T_Prc(P) check_ref14(P,                    __func__, __LINE__)                /* any procedure (3-arg setters) or #f */
+  #define T_Prc(P) check_ref14(P,                    __func__, __LINE__)                /* any procedure (3-arg setters) or #f|#t */
   #define T_Prt(P) check_ref3(P,                     __func__, __LINE__)                /* input|output_port */
   #define T_Ptr(P) check_ref(P, T_C_POINTER,         __func__, __LINE__, NULL, NULL)
   #define T_Ran(P) check_ref(P, T_RANDOM_STATE,      __func__, __LINE__, NULL, NULL)
@@ -3232,8 +3232,10 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define hash_table_procedures_mapper(p)    cdr(hash_table_procedures(p))
 #define hash_table_set_procedures_mapper(p, f) set_cdr(hash_table_procedures(p), f)
 #define hash_table_key_typer(p)            T_Prc(opt1_any(hash_table_procedures(p)))
+#define hash_table_key_typer_unchecked(p)  hash_table_block(p)->ex.ex_ptr->object.cons.opt1
 #define hash_table_set_key_typer(p, Fnc)   set_opt1_any(p, T_Prc(Fnc)) /* p = the cons, dproc */
 #define hash_table_value_typer(p)          T_Prc(opt2_any(hash_table_procedures(p)))
+#define hash_table_value_typer_unchecked(p) hash_table_block(p)->ex.ex_ptr->object.cons.o2.opt2
 #define hash_table_set_value_typer(p, Fnc) set_opt2_any(p, T_Prc(Fnc)) /* p = the cons, dproc */
 #define weak_hash_iters(p)                 hash_table_block(p)->ln.tag
 
@@ -6487,7 +6489,7 @@ static void mark_symbol_vector(s7_pointer p, s7_int len)
     {
       s7_pointer *e = vector_elements(p);
       for (s7_int i = 0; i < len; i++)
-	if (is_gensym(e[i]))
+	if ((is_symbol(e[i])) && (is_gensym(e[i]))) /* need is_symbol: make-vector + set! vector-typer symbol? where init is not a symbol */
 	  set_mark(e[i]);
     }
 }
@@ -6740,6 +6742,11 @@ static void mark_hash_table(s7_pointer p)
 {
   set_mark(p);
   gc_mark(hash_table_procedures(p));
+  if (is_pair(hash_table_procedures(p)))
+    {
+      gc_mark(hash_table_key_typer_unchecked(p));  /* unchecked to avoid s7-debugger's reference to sc */
+      gc_mark(hash_table_value_typer_unchecked(p));
+    }
   if (hash_table_entries(p) > 0)
     {
       s7_int len = hash_table_mask(p) + 1;
@@ -26671,6 +26678,21 @@ static s7_pointer g_string_copy(s7_scheme *sc, s7_pointer args)
   if (end > string_length(dest)) end = string_length(dest);
   if (end <= start) return(dest);
   if ((end - start) > string_length(source)) end = start + string_length(source);
+#if S7_DEBUGGING
+  {
+    char *s1 = string_value(dest) + start;
+    char *s0 = string_value(source);
+    if (((s0 == s1) && (end > start)) ||
+	((s0 < s1) && ((s0 + end - start) > s1)) ||
+	((s0 > s1) && ((s1 + end - start) > s0)))
+      {
+	fprintf(stderr, "%p %p %" ld64 "\n", s0, s1, end-start);
+	fprintf(stderr, "%s\n", display(sc->code));
+	fprintf(stderr, "%s\n", s7_object_to_c_string(sc, s7_name_to_value(sc, "estr")));
+	abort();
+      }
+  }
+#endif
   memcpy((void *)(string_value(dest) + start), (void *)(string_value(source)), end - start);
   return(dest);
 }
@@ -42387,6 +42409,8 @@ static s7_pointer check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_po
   if (is_null(dproc))
     {
       dproc = cons_unchecked(sc, sc->T, sc->T);
+      hash_table_set_key_typer(dproc, sc->T);
+      hash_table_set_value_typer(dproc, sc->T);
       hash_table_set_procedures(h, dproc);
     }
   set_typed_hash_table(h);
@@ -43154,19 +43178,23 @@ static s7_int hash_map_c_function(s7_scheme *sc, s7_pointer table, s7_pointer ke
 
 static hash_entry_t *hash_c_function(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  s7_int hash_mask = hash_table_mask(table);
-  s7_function f = c_function_call(hash_table_procedures_checker(table));
-  s7_int hash = hash_loc(sc, table, key);
-  s7_int loc = hash & hash_mask;
-  set_car(sc->t2_1, key);
-  for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
-    if (hash_entry_raw_hash(x) == hash)
-      {
-	set_car(sc->t2_2, hash_entry_key(x));
-	if (is_true(sc, f(sc, sc->t2_1)))
-	  return(x);
-      }
-  return(sc->unentry);
+  if (is_pair(hash_table_procedures(table)))
+    {
+      s7_int hash_mask = hash_table_mask(table);
+      s7_function f = c_function_call(hash_table_procedures_checker(table));
+      s7_int hash = hash_loc(sc, table, key);
+      s7_int loc = hash & hash_mask;
+      set_car(sc->t2_1, key);
+      for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
+	if (hash_entry_raw_hash(x) == hash)
+	  {
+	    set_car(sc->t2_2, hash_entry_key(x));
+	    if (is_true(sc, f(sc, sc->t2_1)))
+	      return(x);
+	  }
+      return(sc->unentry);
+    }
+  return(hash_equal(sc, table, key));
 }
 
 static int32_t len_upto_8(s7_pointer p)
@@ -43206,15 +43234,19 @@ static s7_int hash_map_pair(s7_scheme *sc, s7_pointer table, s7_pointer key)
 
 static hash_entry_t *hash_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  s7_int hash_mask = hash_table_mask(table);
-  s7_pointer f = hash_table_procedures_checker(table);
-  s7_int hash = hash_loc(sc, table, key);
-  s7_int loc = hash & hash_mask;
-  for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
-    if (hash_entry_raw_hash(x) == hash)
-      if (is_true(sc, s7_call(sc, f, set_plist_2(sc, key, hash_entry_key(x)))))
-	return(x);
-  return(sc->unentry);
+  if (is_pair(hash_table_procedures(table)))
+    {
+      s7_int hash_mask = hash_table_mask(table);
+      s7_pointer f = hash_table_procedures_checker(table);
+      s7_int hash = hash_loc(sc, table, key);
+      s7_int loc = hash & hash_mask;
+      for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
+	if (hash_entry_raw_hash(x) == hash)
+	  if (is_true(sc, s7_call(sc, f, set_plist_2(sc, key, hash_entry_key(x)))))
+	    return(x);
+      return(sc->unentry);
+    }
+  return(hash_equal(sc, table, key));
 }
 
 static hash_entry_t *hash_equal(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -43539,7 +43571,12 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		  else hash_table_mapper(ht) = closure_hash_map;
 
 		  if (is_null(dproc))
-		    hash_table_set_procedures(ht, proc); /* only place this is newly set (as opposed to preserved in copy) */
+		    {
+		      dproc = cons(sc, car(proc), cdr(proc));
+		      hash_table_set_procedures(ht, dproc); /* only place this is newly set (as opposed to preserved in copy) */
+		      hash_table_set_key_typer(dproc, sc->T);
+		      hash_table_set_value_typer(dproc, sc->T);
+		    }
 		  else
 		    {
 		      set_car(dproc, car(proc));
@@ -88274,11 +88311,11 @@ static goto_t trailers(s7_scheme *sc)
 
 
 /* ---------------- unknown ops ---------------- */
-static bool fixup_unknown_op(s7_pointer code, s7_pointer func, opcode_t op)
+static bool fixup_unknown_op(s7_scheme *sc, s7_pointer code, s7_pointer func, opcode_t op) /* TODO: split when closure case known */
 {
   set_optimize_op(code, op);
   if (is_any_closure(func))
-    set_opt1_lambda(code, func);   /* perhaps set_opt1_lambda_add here and throughout op_unknown* */
+    set_opt1_lambda_add(code, func);   /* perhaps set_opt1_lambda_add here and throughout op_unknown* */
   return(true);
 }
 
@@ -88322,7 +88359,7 @@ static bool op_unknown(s7_scheme *sc)
 	      s7_pointer body = closure_body(f);
 	      bool one_form = is_null(cdr(body));
 	      bool safe_case = is_safe_closure(f);
-	      set_opt1_lambda(code, f);
+	      set_opt1_lambda_add(code, f);
 	      if (one_form)
 		{
 		  if ((safe_case) && (is_fxable(sc, car(body))))
@@ -88342,22 +88379,22 @@ static bool op_unknown(s7_scheme *sc)
 	  if (is_closure_star(f))
 	    {
 	      set_safe_optimize_op(code, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_STAR_NA_0 : OP_CLOSURE_STAR_NA));
-	      set_opt1_lambda(code, f);
+	      set_opt1_lambda_add(code, f);
 	      return(true);
 	    }}
       break;
 
-    case T_GOTO:       return(fixup_unknown_op(code, f, OP_IMPLICIT_GOTO));
-    case T_ITERATOR:   return(fixup_unknown_op(code, f, OP_IMPLICIT_ITERATE));
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_GOTO:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO));
+    case T_ITERATOR:   return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_ITERATE));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       if ((is_symbol(car(code))) &&
 	  (!is_slot(lookup_slot_from(car(code), sc->curlet))))
 	unbound_variable_error_nr(sc, car(code));
     }
-  return(fixup_unknown_op(code, f, OP_S));
+  return(fixup_unknown_op(sc, code, f, OP_S));
 }
 
 static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
@@ -88375,12 +88412,12 @@ static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
 	if (lambda_has_simple_defaults(f))
 	  {
 	    if (arglist_has_rest(sc, closure_args(f)))
-	      fixup_unknown_op(code, f, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_NA_1 : OP_CLOSURE_STAR_NA));
-	    else fixup_unknown_op(code, f, hop + ((safe_case) ?
+	      fixup_unknown_op(sc, code, f, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_NA_1 : OP_CLOSURE_STAR_NA));
+	    else fixup_unknown_op(sc, code, f, hop + ((safe_case) ?
 						  ((is_null(cdr(closure_args(f)))) ? OP_SAFE_CLOSURE_STAR_A1 : OP_SAFE_CLOSURE_STAR_A) : OP_CLOSURE_STAR_A));
 	    return(true);
 	  }
-      fixup_unknown_op(code, f, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_NA_1 : OP_CLOSURE_STAR_NA));
+      fixup_unknown_op(sc, code, f, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_NA_1 : OP_CLOSURE_STAR_NA));
       return(true);
     }
   return(false);
@@ -88402,7 +88439,7 @@ static bool op_unknown_s(s7_scheme *sc)
     return(unknown_unknown(sc, sc->code, (is_normal_symbol(cadr(sc->code))) ? OP_CLEAR_OPTS : OP_S_G));
 
   if ((is_unknopt(code)) && (!is_closure(f)))
-    return(fixup_unknown_op(code, f, OP_S_G));
+    return(fixup_unknown_op(sc, code, f, OP_S_G));
 
   switch (type(f))
     {
@@ -88470,7 +88507,7 @@ static bool op_unknown_s(s7_scheme *sc)
 		default:
 		  set_optimize_op(code, OP_S_G); break;
 		}
-	      set_opt1_lambda(code, f);
+	      set_opt1_lambda_add(code, f);
 	      return(true);
 	    }
 	  if (is_safe_closure(f))
@@ -88488,7 +88525,7 @@ static bool op_unknown_s(s7_scheme *sc)
 	    }
 	  else set_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
 	  set_is_unknopt(code);
-	  set_opt1_lambda(code, f);
+	  set_opt1_lambda_add(code, f);
 	  return(true);
 	}
       break;
@@ -88500,30 +88537,30 @@ static bool op_unknown_s(s7_scheme *sc)
     case T_GOTO:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
       set_opt3_arglen(cdr(code), 1);
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_GOTO_A));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO_A));
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
       if ((sym_case) ||                    /* (v i) */
 	  (is_t_integer(cadr(code))))      /* (v 4/3) */
 	{
 	  fx_annotate_arg(sc, cdr(code), sc->curlet);
-	  return(fixup_unknown_op(code, f, OP_IMPLICIT_VECTOR_REF_A));
+	  return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A));
 	}
       break;
 
     case T_STRING:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_STRING_REF_A));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_STRING_REF_A));
 
     case T_PAIR:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_PAIR_REF_A));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_PAIR_REF_A));
 
     case T_C_OBJECT:
       if (s7_is_aritable(sc, f, 1))
 	{
 	  fx_annotate_arg(sc, cdr(code), sc->curlet);
-	  return(fixup_unknown_op(code, f, OP_IMPLICIT_C_OBJECT_REF_A));
+	  return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_C_OBJECT_REF_A));
 	}
       break;
 
@@ -88531,21 +88568,21 @@ static bool op_unknown_s(s7_scheme *sc)
       if (sym_case)
 	{
 	  fx_annotate_arg(sc, cdr(code), sc->curlet);
-	  return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_A));
+	  return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_A));
 	}
       set_opt3_con(code, cadr(code));
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_C));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_C));
 
     case T_HASH_TABLE:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_A));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_HASH_TABLE_REF_A));
 
     case T_CONTINUATION:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_CONTINUATION_A));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_CONTINUATION_A));
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       break;
@@ -88553,7 +88590,7 @@ static bool op_unknown_s(s7_scheme *sc)
   if ((is_symbol(car(code))) &&
       (!is_slot(lookup_slot_from(car(code), sc->curlet))))
     unbound_variable_error_nr(sc, car(code));
-  return(fixup_unknown_op(code, f, OP_S_G));
+  return(fixup_unknown_op(sc, code, f, OP_S_G));
 }
 
 static bool op_unknown_a(s7_scheme *sc)
@@ -88591,7 +88628,7 @@ static bool op_unknown_a(s7_scheme *sc)
 	  bool one_form = is_null(cdr(body));
 
 	  fxify_closure_a(sc, f, one_form, safe_case, hop, code, sc->curlet);
-	  set_opt1_lambda(code, f);
+	  set_opt1_lambda_add(code, f);
 	  return(true);
 	}
       break;
@@ -88601,16 +88638,16 @@ static bool op_unknown_a(s7_scheme *sc)
       break;
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_VECTOR_REF_A));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A));
 
-    case T_STRING:       return(fixup_unknown_op(code, f, OP_IMPLICIT_STRING_REF_A));
-    case T_PAIR:         return(fixup_unknown_op(code, f, OP_IMPLICIT_PAIR_REF_A));
-    case T_C_OBJECT:     return(fixup_unknown_op(code, f, OP_IMPLICIT_C_OBJECT_REF_A));
-    case T_HASH_TABLE:   return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_A));
-    case T_GOTO:         return(fixup_unknown_op(code, f, OP_IMPLICIT_GOTO_A));
-    case T_CONTINUATION: return(fixup_unknown_op(code, f, OP_IMPLICIT_CONTINUATION_A));
-    case T_MACRO:        return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR:   return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_STRING:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_STRING_REF_A));
+    case T_PAIR:         return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_PAIR_REF_A));
+    case T_C_OBJECT:     return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_C_OBJECT_REF_A));
+    case T_HASH_TABLE:   return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_HASH_TABLE_REF_A));
+    case T_GOTO:         return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO_A));
+    case T_CONTINUATION: return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_CONTINUATION_A));
+    case T_MACRO:        return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR:   return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     case T_LET:
       {
@@ -88618,10 +88655,10 @@ static bool op_unknown_a(s7_scheme *sc)
 	if ((is_pair(arg1)) && (car(arg1) == sc->quote_symbol))
 	  {
 	    set_opt3_con(code, cadadr(code));
-	    return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_C));
+	    return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_C));
 	  }
 	set_opt3_any(code, cadr(code));
-	return(fixup_unknown_op(code, f, OP_IMPLICIT_LET_REF_A));
+	return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_A));
       }
 
     default:
@@ -88630,7 +88667,7 @@ static bool op_unknown_a(s7_scheme *sc)
   if ((is_symbol(car(code))) &&
       (!is_slot(lookup_slot_from(car(code), sc->curlet))))
     unbound_variable_error_nr(sc, car(code));
-  return(fixup_unknown_op(code, f, OP_S_A)); /* closure with methods etc */
+  return(fixup_unknown_op(sc, code, f, OP_S_A)); /* closure with methods etc */
 }
 
 static bool op_unknown_gg(s7_scheme *sc)
@@ -88724,7 +88761,7 @@ static bool op_unknown_gg(s7_scheme *sc)
 		  set_safe_optimize_op(code, hop + ((one_form) ? OP_SAFE_CLOSURE_AA_O : OP_SAFE_CLOSURE_AA));
 		else set_safe_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_AA_O : OP_CLOSURE_AA));
 	      }
-	  set_opt1_lambda(code, f);
+	  set_opt1_lambda_add(code, f);
 	  return(true);
 	}
       break;
@@ -88737,7 +88774,7 @@ static bool op_unknown_gg(s7_scheme *sc)
 	  if (!has_methods(f))
 	    {
 	      fixup_closure_star_aa(sc, f, code, (is_immutable_and_stable(sc, car(code))) ? 1 : 0);
-	      set_opt1_lambda(code, f);
+	      set_opt1_lambda_add(code, f);
 	    }
 	  else set_optimize_op(code, OP_S_AA);
 	  return(true);
@@ -88747,14 +88784,14 @@ static bool op_unknown_gg(s7_scheme *sc)
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR:
       set_opt3_arglen(cdr(code), 2);
       fx_annotate_args(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
+      return(fixup_unknown_op(sc, code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
 
     case T_HASH_TABLE:
       fx_annotate_args(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       break;
@@ -88764,7 +88801,7 @@ static bool op_unknown_gg(s7_scheme *sc)
     unbound_variable_error_nr(sc, car(code));
 
   fx_annotate_args(sc, cdr(code), sc->curlet);
-  return(fixup_unknown_op(code, f, OP_S_AA));
+  return(fixup_unknown_op(sc, code, f, OP_S_AA));
 }
 
 static bool op_unknown_ns(s7_scheme *sc)
@@ -88811,10 +88848,10 @@ static bool op_unknown_ns(s7_scheme *sc)
 	  bool one_form = is_null(cdr(closure_body(f)));
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if (num_args == 3)
-	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : ((one_form) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S))));
+	    return(fixup_unknown_op(sc, code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_3S : ((one_form) ? OP_CLOSURE_3S_O : OP_CLOSURE_3S))));
 	  if (num_args == 4)
-	    return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : ((one_form) ? OP_CLOSURE_4S_O : OP_CLOSURE_4S))));
-	  return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_NS)));
+	    return(fixup_unknown_op(sc, code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : ((one_form) ? OP_CLOSURE_4S_O : OP_CLOSURE_4S))));
+	  return(fixup_unknown_op(sc, code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_NS : OP_CLOSURE_NS)));
 	}
       break;
 
@@ -88825,13 +88862,13 @@ static bool op_unknown_ns(s7_scheme *sc)
 	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
 	  fx_annotate_args(sc, cdr(code), sc->curlet);
 	  if ((is_safe_closure(f)) && (num_args == 3) && (closure_star_arity_to_int(sc, f) == 3))
-	    return(fixup_unknown_op(code, f, OP_SAFE_CLOSURE_STAR_3A));
-	  return(fixup_unknown_op(code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_STAR_NA : OP_CLOSURE_STAR_NA)));
+	    return(fixup_unknown_op(sc, code, f, OP_SAFE_CLOSURE_STAR_3A));
+	  return(fixup_unknown_op(sc, code, f, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_STAR_NA : OP_CLOSURE_STAR_NA)));
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
       /* vector/pair */
     default:
@@ -88886,7 +88923,7 @@ static bool op_unknown_aa(s7_scheme *sc)
 		  set_closure_one_form_fx_arg(f);
 		}
 	  if ((is_fx_treeable(cdr(code))) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, cdr(code));
-	  set_opt1_lambda(code, f);
+	  set_opt1_lambda_add(code, f);
 	  return(true);
 	}
       break;
@@ -88895,18 +88932,18 @@ static bool op_unknown_aa(s7_scheme *sc)
       if (!has_methods(f))
 	{
 	  fixup_closure_star_aa(sc, f, code, (is_immutable_and_stable(sc, car(code))) ? 1 : 0);
-	  set_opt1_lambda(code, f);
+	  set_opt1_lambda_add(code, f);
 	}
       else set_optimize_op(code, OP_S_AA);
       return(true);
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
-      return(fixup_unknown_op(code, f, OP_IMPLICIT_VECTOR_REF_AA));
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_AA));
 
-    case T_PAIR:       return(fixup_unknown_op(code, f, OP_IMPLICIT_PAIR_REF_AA));
-    case T_HASH_TABLE: return(fixup_unknown_op(code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_PAIR:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_PAIR_REF_AA));
+    case T_HASH_TABLE: return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default:
       break;
@@ -88914,7 +88951,7 @@ static bool op_unknown_aa(s7_scheme *sc)
   if ((is_symbol(car(code))) &&
       (!is_slot(lookup_slot_from(car(code), sc->curlet))))
     unbound_variable_error_nr(sc, car(code));
-  return(fixup_unknown_op(code, f, OP_S_AA));
+  return(fixup_unknown_op(sc, code, f, OP_S_AA));
 }
 
 static bool is_normal_happy_symbol(s7_scheme *sc, s7_pointer sym)
@@ -88935,7 +88972,7 @@ static bool op_unknown_na(s7_scheme *sc)
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(f), display(sc->code));
 
   num_args = (is_pair(cdr(code))) ? opt3_arglen(cdr(code)) : 0;
-  if (num_args == 0) return(fixup_unknown_op(code, f, OP_S));  /* via op_closure*-fx where original had 0 args, safe case -> op_safe_closure*_0 */
+  if (num_args == 0) return(fixup_unknown_op(sc, code, f, OP_S));  /* via op_closure*-fx where original had 0 args, safe case -> op_safe_closure*_0 */
 
   switch (type(f))
     {
@@ -89001,7 +89038,7 @@ static bool op_unknown_na(s7_scheme *sc)
 		  if (is_normal_happy_symbol(sc, caddr(code)))
 		    set_safe_optimize_op(code, hop + OP_CLOSURE_ASA);
 		  else set_safe_optimize_op(code, hop + ((is_normal_happy_symbol(sc, cadddr(code))) ? OP_CLOSURE_AAS : OP_CLOSURE_3A));
-	  set_opt1_lambda(code, f);
+	  set_opt1_lambda_add(code, f);
 	  return(true);
 	}
       if (is_symbol(closure_args(f)))
@@ -89025,18 +89062,18 @@ static bool op_unknown_na(s7_scheme *sc)
 	  if (is_safe_closure(f))
 	    switch (num_args)
 	      {
-	      case 0: return(fixup_unknown_op(code, f, hop + OP_SAFE_CLOSURE_STAR_NA_0));
-	      case 1: return(fixup_unknown_op(code, f, hop + OP_SAFE_CLOSURE_STAR_NA_1));
-	      case 2: return(fixup_unknown_op(code, f, hop + OP_SAFE_CLOSURE_STAR_NA_2));
-	      case 3: if (closure_star_arity_to_int(sc, f) == 3) return(fixup_unknown_op(code, f, OP_SAFE_CLOSURE_STAR_3A));
-	      default: return(fixup_unknown_op(code, f, hop + OP_SAFE_CLOSURE_STAR_NA));
+	      case 0: return(fixup_unknown_op(sc, code, f, hop + OP_SAFE_CLOSURE_STAR_NA_0));
+	      case 1: return(fixup_unknown_op(sc, code, f, hop + OP_SAFE_CLOSURE_STAR_NA_1));
+	      case 2: return(fixup_unknown_op(sc, code, f, hop + OP_SAFE_CLOSURE_STAR_NA_2));
+	      case 3: if (closure_star_arity_to_int(sc, f) == 3) return(fixup_unknown_op(sc, code, f, OP_SAFE_CLOSURE_STAR_3A));
+	      default: return(fixup_unknown_op(sc, code, f, hop + OP_SAFE_CLOSURE_STAR_NA));
 	      }
-	  return(fixup_unknown_op(code, f, hop + OP_CLOSURE_STAR_NA));
+	  return(fixup_unknown_op(sc, code, f, hop + OP_CLOSURE_STAR_NA));
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
       /* implicit vector doesn't happen */
 
     default:
@@ -89098,7 +89135,7 @@ static bool op_unknown_np(s7_scheme *sc)
 		  else set_optimize_op(code, hop + OP_SAFE_CLOSURE_P);
 		}
 	      else set_optimize_op(code, hop + OP_CLOSURE_P);
-	      set_opt1_lambda(code, f);
+	      set_opt1_lambda_add(code, f); /* added 8-Jun-22 */
 	      set_opt3_arglen(cdr(code), 1);
 	      set_unsafely_optimized(code);
 	      break;
@@ -89116,7 +89153,7 @@ static bool op_unknown_np(s7_scheme *sc)
 		    set_optimize_op(code, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_PA : OP_CLOSURE_PA));
 		  }
 		else set_optimize_op(code, hop + ((is_safe_closure(f)) ? OP_SAFE_CLOSURE_PP : OP_CLOSURE_PP));
-	      set_opt1_lambda(code, f);
+	      set_opt1_lambda_add(code, f);  /* added 8-Jun-22 */
 	      set_opt3_arglen(cdr(code), 2); /* for later op_unknown_np */
 	      set_unsafely_optimized(code);
 	      break;
@@ -89129,8 +89166,8 @@ static bool op_unknown_np(s7_scheme *sc)
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
     }
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
@@ -94826,9 +94863,9 @@ int main(int argc, char **argv)
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       hash|vector + typer method tests
- *       accept anonymous funcs here and in vector?
- * clean up the mishmash of error functions
+ *       hash :readable does not include eqf/mapf unless it's a built-in choice
+ *       accept anonymous typer?
+ * check callgrind with opt1_lambda_add
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
