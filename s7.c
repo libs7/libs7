@@ -2747,7 +2747,7 @@ static void init_types(void)
 #define opt1_role_matches(p, Role)     (((T_Pair(p))->debugger_bits & OPT1_MASK) == Role)
 #define set_opt1_role(p, Role)         (T_Pair(p))->debugger_bits = (Role | ((p)->debugger_bits & ~OPT1_MASK))
 #define opt1(p, Role)                  opt1_1(sc, T_Pair(p), Role, __func__, __LINE__)
-#define set_opt1(p, x, Role)           set_opt1_1(T_Pair(p), x, Role)
+#define set_opt1(p, x, Role)           set_opt1_1(T_Pair(p), x, Role, __func__, __LINE__)
 
 #define OPT2_KEY                       (1 << 13)  /* case key */
 #define OPT2_SLOW                      (1 << 14)  /* slow list in member/assoc circular list check */
@@ -5239,8 +5239,16 @@ static void base_opt1(s7_pointer p, uint64_t role)
   set_opt1_is_set(p);
 }
 
-static s7_pointer set_opt1_1(s7_pointer p, s7_pointer x, uint64_t role)
+static s7_pointer set_opt1_1(s7_pointer p, s7_pointer x, uint64_t role, const char *func, int32_t line)
 {
+  if (((p->debugger_bits & OPT1_MASK) != role) &&
+      ((p->debugger_bits & OPT1_MASK) == OPT1_LAMBDA) &&
+      (role != OPT1_CFUNC))
+    fprintf(stderr, "%s[%d]: opt1_lambda -> %s, op: %s, x: %s,\n    %s\n", 
+	    func, line, opt1_role_name(role), 
+	    (is_optimized(x)) ? op_names[optimize_op(x)] : "unopt",
+	    s7_object_to_c_string(cur_sc, x),
+	    s7_object_to_c_string(cur_sc, p));
   p->object.cons.opt1 = x;
   base_opt1(p, role);
   return(x);
@@ -26678,22 +26686,8 @@ static s7_pointer g_string_copy(s7_scheme *sc, s7_pointer args)
   if (end > string_length(dest)) end = string_length(dest);
   if (end <= start) return(dest);
   if ((end - start) > string_length(source)) end = start + string_length(source);
-#if S7_DEBUGGING
-  {
-    char *s1 = string_value(dest) + start;
-    char *s0 = string_value(source);
-    if (/* ((s0 == s1) && (end > start)) || */ /* this can happen but isn't it a no-op? */
-	((s0 < s1) && ((s0 + end - start) > s1)) ||
-	((s0 > s1) && ((s1 + end - start) > s0)))
-      {
-	fprintf(stderr, "%p %p %" ld64 "\n", s0, s1, end-start);
-	fprintf(stderr, "%s\n", display(sc->code));
-	fprintf(stderr, "%s\n", s7_object_to_c_string(sc, s7_name_to_value(sc, "estr")));
-	abort();
-      }
-  }
-#endif
-  memcpy((void *)(string_value(dest) + start), (void *)(string_value(source)), end - start);
+  memmove((void *)(string_value(dest) + start), (void *)(string_value(source)), end - start);
+  /* although I haven't tracked down a case, libasan+auto-tester reported source<dest with overlap, so use memmove */
   return(dest);
 }
 
@@ -94364,6 +94358,7 @@ s7_scheme *s7_init(void)
                                 clauses)                                                                  \n\
                               (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
 
+#if 0
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
                             (lambda hook-args                                                             \n\
@@ -94377,9 +94372,23 @@ s7_scheme *s7_init(void)
                                   ())))))");
   /* hooks need an indication that a name passed as an argument is not a parameter name even when it is defined (in rootlet for example)
    *   (define h (make-hook 'x)) (set! (hook-functions h) (list (lambda (hk) (set! (hk 'result) (hk 'abs))))) (h 123) -> abs
-   *   apparently local-let-ref currently is (cond ((assq name (let->list lt)) -> cdr) (else #<undefined>))!
-   *   but this won't work with a hook because we need access to the parameters as well as 'result.
    */
+#else
+  /* this is probably slightly slower than using copy; it returns #<undefined> for anything that would otherwise be found in rootlet,
+   *   but ideally we wouldn't have to create a new let, load up the fallback etc -- maybe add a flag on the let (blocked?)
+   *   or notice let-ref-fallback in lets (as opposed to sublet), then it could be in the let with result.
+   *   the same sublet+fallback code could be used above
+   */
+  s7_eval_c_string(sc, "(define make-hook                                                                 \n\
+                          (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
+                            (lambda hook-args                                                             \n\
+                              (let ((body ()))                                                            \n\
+                                (apply lambda* hook-args                                                  \n\
+                                  `((let ((result #<unspecified>))                                        \n\
+                                      (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>))))) \n\
+                                        (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
+                                        result))))))))");
+#endif
 
   s7_eval_c_string(sc, "(define hook-functions                                                            \n\
                           (let ((+signature+ '(#t procedure?))                                            \n\
@@ -94866,7 +94875,7 @@ int main(int argc, char **argv)
  * t718: optimize_syntax overeagerness
  *       hash :readable does not include eqf/mapf unless it's a built-in choice
  *       accept anonymous typer?
- * check callgrind with opt1_lambda_add
+ * need thook.scm
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??

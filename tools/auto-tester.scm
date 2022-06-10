@@ -133,6 +133,50 @@
 (define* (my-make-byte-vector size (init 0)) (make-byte-vector size init))
 (define* (my-make-string size (init #\a)) (make-string size init))
 
+(define-constant Hk (make-hook 'x))
+(set! (hook-functions Hk) (list (lambda (h) 
+				  (set! (h 'result) (+ (h 'x) 1)))))
+
+(define-constant V_1 (let ((v (make-vector 8))) (set! (vector-typer v) symbol?) v))
+
+(define-constant H_1
+  (let ((H (hash-table 'v1 1 'v2 2 'v3 3))
+	(last-key #f))
+    (define (valtyp val)
+      (or (not last-key)
+	  (eq? last-key 'v1)
+	  (and (eq? last-key 'v2)
+	       (<= 0 val 32))))
+    (define (keytyp key)
+      (set! last-key key)
+      #t)
+    (set! (hash-table-key-typer H) keytyp)
+    (set! (hash-table-value-typer H) valtyp)
+    H))
+
+(define-constant H_2 (make-hash-table 8 eq? (cons symbol? integer?)))
+(define-constant H_3 (make-hash-table 8 (cons equal? hash-code)))
+(define-constant H_4 (make-hash-table 8
+				      (let ((eqf (lambda (a b) (equal? a b)))
+					    (mapf (lambda (a) (hash-code a))))
+					(cons eqf mapf))))
+(define-constant H_5 (let ((H (make-hash-table 8
+					       (let ((eqf (lambda (a b) (equal? a b)))
+						     (mapf (lambda (a) (hash-code a))))
+						 (cons eqf mapf))))
+			   (last-key #f))
+		       (define (valtyp val)
+			 (or (not last-key)
+			     (eq? last-key 'v1)
+			     (and (eq? last-key 'v2)
+				  (<= 0 val 32))))
+		       (define (keytyp key)
+			 (set! last-key key)
+			 #t)
+		       (set! (hash-table-key-typer H) keytyp)
+		       (set! (hash-table-value-typer H) valtyp)
+		       H))
+
 (define fvref float-vector-ref)
 (define ivref int-vector-ref)
 (define bvref byte-vector-ref)
@@ -723,7 +767,7 @@
 
 (define typed-hash (make-hash-table 8 eq? (cons symbol? integer?)))
 (define typed-vector (make-vector 8 'a symbol?))
-(define typed-let (immutable! (let ((a 1)) (set! (setter 'a) integer?) (curlet))))
+(define typed-let1 (immutable! (let ((a 1)) (set! (setter 'a) integer?) (curlet))))
 (define constant-let (immutable! (let () (define-constant a 1) (curlet))))
 
 (define-constant fvset float-vector-set!)
@@ -780,7 +824,7 @@
 			  'char>=? 
 			  'string-length 'list->string 'inexact? 
 			  'with-input-from-file 'type-of
-			  'vector-fill! 
+			  'vector-fill! 'vector-typer 'hash-table-key-typer 'hash-table-value-typer
 			  'peek-char 
 			  'make-hash-table 'make-weak-hash-table 'weak-hash-table? 'hash-code
 			  'macro? 
@@ -820,7 +864,8 @@
 			  'gensym
 			  'case*
 			  ;'do
-			  ;'if 'begin 'cond 'case 'or 'and 'when 'unless
+			  ;'cond 'case
+			  'or 'and 'when 'unless 'if 'begin
 			  'with-baffle 'let-temporarily 'with-let
 			  'byte-vector-set! 'my-make-byte-vector 
 			  'write-char 'call/cc 'write-byte 'write-string 
@@ -828,7 +873,7 @@
 			  'write 'display 
 			  ;'outlet 
 			  'directory->list 
-			  'set!
+			  ;'set!
 			  'set-car! 
 			  'call-with-output-file 'with-output-to-file 
 			  ;'read-char 'read-byte 'read-line 'read-string 'read ; stdin=>hangs
@@ -919,7 +964,7 @@
 			  'block-reverse! 'subblock 'block-append 'block-let
 			  'simple-block? 'make-simple-block ;'make-c-tag ; -- uninteresting diffs
 			  'make-cycle 
-			  'make-c-tag1
+			  ;'make-c-tag1 ; from s7test.scm, as above
 
 			  'fvref 'ivref 'bvref 'vref 'fvset 'ivset 'bvset 'vset 'adder
 
@@ -977,7 +1022,7 @@
 		    "0" "1" "4" "1.0" "-1.0" "1.0+123.0i" "3/4" "(make-vector 3)" "(make-string 3 #\\space)" "(make-vector '(2 3))"
 		    "'((111 2222) (3 4))" "'((1 (2)) (((3) 4)))" "(byte-vector 255)" "(make-byte-vector '(2 3) 0)"
 		    "#(123 223)" "(vector 1 '(3))" "(let ((x 3)) (lambda (y) (+ x y)))" "abs" "(lambda sym-args sym-args)" "#u(0 1)"
-		    "'((1) (vector 1))" "(abs x)" "(symbol? x)" "(cons x x)" 
+		    "'((1) (vector 1))" "(abs x)" "(symbol? x)" "(cons x x)" "(cons i i)" "(vector i x)" "(vector x i)" 
 		    "(dilambda (lambda () 1) (lambda (a) a))" "quasiquote" "macroexpand" "(lambda* ((a 1) (b 2)) (+ a b))" 
 		    "(dilambda (lambda args args) (lambda args args))" "(dilambda (lambda* (a b) a) (lambda* (a b c) c))"
 		    "((lambda (a) (+ a 1)) 2)" "((lambda* ((a 1)) (+ a 1)) 1)" "(lambda (a) (values a (+ a 1)))" "((lambda (a) (values a (+ a 1))) 2)"
@@ -1067,7 +1112,7 @@
 		    ;"(else ())" "(else (f x) B)"
 		    "(else)"
 		    "else" "x" "(+ x 1)" "(+ 1/2 x)" "(abs x)" "(+ x 1 2+i)" "(* 2 x 3.0 4)" "((x 1234))" "((x 1234) (y 1/2))" "'x" "(x 1)"
-		    "_undef_" "(begin |undef1|)" "(setter 'x)"
+		    "_undef_" "(begin |undef1|)" "(setter 'x)" "(setter 'i)"
 
 		    "+signature+" "+documentation+" "+setter+" "+iterator+"
 		    "(let ((+documentation+ \"help\")) (lambda (x) x))"
@@ -1082,7 +1127,7 @@
 
 		    "ims" "imbv" "imv" "imiv" "imfv" "imi" "imp" "imh"
 		    "imv2" "imv3" "imfv2" "imfv3" "imiv2" "imiv3" "imbv2" "imbv3"
-		    "vvv" "vvvi" "vvvf" "typed-hash" "typed-vector" "typed-let" "constant-let"
+		    "vvv" "vvvi" "vvvf" "typed-hash" "typed-vector" "typed-let1" "constant-let"
 		    "a1" "a2" "a3" "a4" "a5" "a6"
 		    "x1" "x2" "x3" "x4" "x5" "x6" "x7" "x8" "x9"
 
@@ -1090,8 +1135,8 @@
 		    "(make-hash-table 8 equivalent? (cons symbol? #t))"
 		    "(let ((a 1)) (set! (setter 'a) integer?) (curlet))"
 
-		    "bigi0" "bigi1" "bigi2" "bigrat" "bigflt" "bigcmp" "bigf2"
-		    "(ims 1)" "(imbv 1)" "(imv 1)" "(imb 1)" "(imh 'a)"
+		    "bigi0" "bigi1" "bigi2" "bigrat" "bigflt" "bigcmp" "bigf2" "Hk"
+		    "(ims 1)" "(imbv 1)" "(imv 1)" "(imb 1)" "(imh 'a)" "V_1" "H_1" "H_2" "H_3" "H_4" "H_5"
 
 		    "(make-iterator (block 1 2 3))"
 		    "(vector-dimensions (block))" 
@@ -1319,8 +1364,8 @@
 		    (lambda (s) (string-append "(cond ((= 1 1) " s ") (else 'oops))")))
 	      (list (lambda (s) (string-append "(catch #t (lambda () (let-temporarily ((x (list " s "))) x)) (lambda (type info) 'error))"))
 		    (lambda (s) (string-append "(catch #t (lambda () (let ((x (list " s "))) x)) (lambda (type info) 'error))")))
-              (list (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (begin " s " (> a b))))"))
-                    (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (let-temporarily ((x (list " s "))) (> a b))))")))
+;              (list (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (begin " s " (> a b))))"))
+;                    (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (let-temporarily ((x (list " s "))) (> a b))))")))
 
 	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 100)) " s ")"))
                     (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) " s "))")))
@@ -1692,17 +1737,7 @@
 	  (lambda ()
 	    (try-both (make-expr (+ 1 (random both-ran))))) ; min 1 here not 0, was 6
 	  (lambda (type info)
-	    (let ((str (format #f "~%~%outer: ~S ~S from ~S~%" type 
-			       (catch #t
-				 (lambda ()
-				   (if (and (pair? info) (string? (car info)))
-				       (apply format #f info)
-				       (list 'outer-format-error t i info)))
-				 (lambda (t i)
-				   (list 'outer-format-error t i info)))
-			       estr)))
-	      (display str *stderr*)
-	      (if (string-position "c-tag1" str) (abort)))))
+	    (format *stderr* "~%~%outer: ~S ~S from ~S~%" type info estr)))
 	))
 
     (test-it)))
