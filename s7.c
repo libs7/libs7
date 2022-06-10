@@ -94358,7 +94358,7 @@ s7_scheme *s7_init(void)
                                 clauses)                                                                  \n\
                               (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
 
-#if 0
+#if 1
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
                             (lambda hook-args                                                             \n\
