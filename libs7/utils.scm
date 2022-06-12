@@ -66,6 +66,21 @@
          (last-dot (string-index-right basename (lambda (c) (eq? c #\.)))))
     (string-take basename last-dot)))
 
+(define principal-name
+  (let ((+documentation+ "Returns path segment with extension removed. Usually for filenames, but works for directory names too, if they contain a dot.")
+        (+signature+ "(principal-name path)"))
+    (lambda (path)
+      (bname path))))
+
+(define filename-extension
+  (let ((+documentation+ "Returns extension of filename (path), including dot.")
+        (+signature+ "(filename-extension path)"))
+    (lambda (path)
+      (let* ((fname (basename path))
+             (len (string-length fname))
+             (last-dot (string-index-right fname (lambda (c) (eq? c #\.)))))
+        (string-take-right fname (- len last-dot))))))
+
 ;; s7test.scm
 (define (identity x) x)
 (define eq eq?)
@@ -220,7 +235,9 @@
 
 (define (basename path)
   (let ((last-slash (string-index-right path (lambda (c) (eq? c #\/)))))
-    (string-drop path (+ last-slash 1))))
+    (if last-slash
+        (string-drop path (+ last-slash 1))
+        path)))
 
 (define (fs-glob->list pattern)
   ;;(with-let (sublet *libc* :pattern pattern)
