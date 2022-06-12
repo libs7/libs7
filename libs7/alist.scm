@@ -182,42 +182,60 @@
 ;; FIXME: add optional eql? arg; default is equal?
 ;; ENHANCEMENT: proc that only adds to end, returns #<unspecified> for
 ;; other missing keys.
-(define (alist-update-in! als ks fn)
-  ;; (format #t "alist-update-in! keys: ~A\n" ks)
-  ;; (format #t "alist-update-in! ~A\n  keys: ~A\n" als ks)
-  (let ((the-alist als)
-        (eql? equal?))
-    (let recur ((als als)
-                (ks ks))
-      (if (null? als)
-          (if (null? ks)
-              (begin
-                ;; (format #t "XXXX empty als, empty ks\n")
-                (fn '()))
-              (begin
-                ;; (format #t "YYYY empty als, ks: ~A\n" ks)
-                (list (list (cons (car ks) ;; (fn '())) ;; add new elt
-                                  (recur '() (cdr ks)))))))
-          (if (null? ks)
-              ;; matched last k
-              (fn als)
-              (if-let ((apair (assoc (car ks) als)))
-                      (if (null? (cdr ks))
+(define alist-update-in!
+  (let ((+documentation+ "Updates alist at keypath, using fn, which must be a function of one arg. The old value will be passed to fn, which must return a new val.")
+        (+signature+ "(alist-update-in! alist keypath fn)"))
+    (lambda (als ks fn)
+      ;; (format #t "alist-update-in! keys: ~A\n" ks)
+      ;; (format #t "alist-update-in! ~A\n  keys: ~A\n" als ks)
+      (let ((the-alist als)
+            (eql? equal?))
+        (let recur ((als als)
+                    (ks ks))
+          ;; (format #t "RECURRING ks: ~A\n" ks)
+          ;; (format #t "RECURRING als: ~A\n" als)
+          (if (null? als)
+              (if (null? ks)
+                  (begin
+                    ;; (format #t "XXXX empty als, empty ks\n")
+                    (fn '()))
+                  (begin
+                    ;; (format #t "YYYY empty als, ks: ~A\n" ks)
+                    (list (list (cons (car ks) ;; (fn '())) ;; add new elt
+                                      (recur '() (cdr ks)))))))
+              ;; als not null
+              (if (null? ks)
+                  (begin
+                    ;; (format #t "matched all keys, applying fn to ~A\n" als)
+                    (fn als))
+                  ;; ks and als not null
+                  (if-let ((sub-alist (assoc (car ks) als)))
                           (begin
-                            ;; (format #t "last k: ~A -> ~A\n" (car ks) apair)
-                            (set! (cdr apair) (fn apair))
-                            ;; (format #t " updated: ~A\n" apair)
-                            als)
-                          ;; intermediate match
-                          (recur (cadr apair) (cdr ks)))
-                      (begin
-                        ;; (format #t "adding ~A\n" ks)
-                        (let ((newtree ;;(list
-                               (cons (car ks)
-                                     (recur '() (cdr ks)))))
-                          ;; (format #t "newtree: ~A\n" newtree)
-                          (append! als (list newtree))))))))
-    the-alist))
+                            ;; (format #t "intermediate match on k ~A\n"
+                            ;;         (car ks))
+                            ;; (format #t "isub-list before ~A\n" sub-alist)
+                            (let ((recur-result
+                                  (recur (cdr sub-alist) (cdr ks))))
+                              ;; (format #t "recur-result ~A\n" recur-result)
+                              ;; replaces sub-alist within als
+                              (set-cdr! sub-alist
+                                        recur-result)
+                              ;; (format #t "isub-list after ~A\n" sub-alist)
+                              ;; (format #t "als after ~A\n" als)
+                            als))
+                          ;; no match
+                          (begin
+                            ;; (format #t "no key match - adding ~A\n" ks)
+                            ;; (format #t "old als: ~A\n" als)
+                            (let ((newtree ;;(list
+                                   (append! als
+                                           (list
+                                            (cons (car ks)
+                                                 (list (recur '() (cdr ks))))))))
+                              ;; (format #t "newtree: ~A\n" newtree)
+                              ;; (format #t "new als: ~A\n" als)
+                              newtree))))))
+        the-alist))))
 
 ;;;;;;;;;;;;;;;; tests ;;;;;;;;;;;;;;;;
 ;; (define al '((:a 1) (:b 2) (:c 3) ("a" "hi") ("b" "bye")))
