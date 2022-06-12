@@ -41,8 +41,11 @@
 ;; rassoc: searches for pair with matching value
 
 ;; srfi-1: alist-cons
-(define (acons key datum alist)
-  (cons (list key datum) alist))
+(define acons
+  (let ((+documentation+ "(acons key datum alist)")
+        (+signature+ '(acons key datum alist)))
+    (lambda (key datum alist)
+      (cons (list key datum) alist))))
 
 ;; assoc+
 ;; like assoc, but returns list of all matches instead of the first

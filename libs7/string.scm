@@ -127,26 +127,35 @@
   (if (and (zero? start) (= end (string-length s))) s
       (substring s start end)))
 
-(define (string-take s n)
-  (check-arg string? s string-take)
-  (check-arg (lambda (val) (and (integer? n) (exact? n)
-				(<= 0 n (string-length s))))
-	     n string-take)
-  (%substring s 0 n))
+(define string-take
+  (let ((+documentation+ "Returns first n characters of s")
+        (+signature+ "(string-take str n)"))
+    (lambda (s n)
+      (check-arg string? s string-take)
+      (check-arg (lambda (val) (and (integer? n) (exact? n)
+				    (<= 0 n (string-length s))))
+	         n string-take)
+      (%substring s 0 n))))
 
-(define (string-take-right s n)
-  (check-arg string? s string-take-right)
-  (let ((len (string-length s)))
-    (check-arg (lambda (val) (and (integer? n) (exact? n) (<= 0 n len)))
-	       n string-take-right)
-    (%substring s (- len n) len)))
+(define string-take-right
+  (let ((+documentation+ "Returns last n characters of str")
+        (+signature+ "(string-take-right str n)"))
+    (lambda (s n)
+      (check-arg string? s string-take-right)
+      (let ((len (string-length s)))
+        (check-arg (lambda (val) (and (integer? n) (exact? n) (<= 0 n len)))
+	           n string-take-right)
+        (%substring s (- len n) len)))))
 
-(define (string-drop s n)
-  (check-arg string? s string-drop)
-  (let ((len (string-length s)))
-    (check-arg (lambda (val) (and (integer? n) (exact? n) (<= 0 n len)))
-	       n string-drop)
-  (%substring s n len)))
+(define string-drop
+  (let ((+documentation+ "Drop first n characters of str")
+        (+signature+ "(string-drop str n)"))
+    (lambda (s n)
+      (check-arg string? s string-drop)
+      (let ((len (string-length s)))
+        (check-arg (lambda (val) (and (integer? n) (exact? n) (<= 0 n len)))
+	           n string-drop)
+        (%substring s n len)))))
 
 (define (string-drop-right s n)
   (check-arg string? s string-drop-right)
@@ -199,7 +208,8 @@
 ;; 	    len1))))
 
 (define string-prefix?
-  (let ((+documentation+ "(string-prefix? pfx s2)"))
+  (let ((+documentation+ "(string-prefix? pfx s2)")
+        (+signature+ "(string-prefix? pfx s2)"))
     (lambda (s1 s2)
       (let* ((len1 (length s1))
              (len2 (length s2))
@@ -209,13 +219,16 @@
 				       s2 0 len2)
 	        len1))))))
 
-(define (string-suffix? s1 s2)
-  (let* ((len1 (length s1))
-        (len2 (length s2))
-        (delta (- len2 len1)))
-    (and (<= len1 len2)
-         (eq? delta
-              (string-position s1 s2 delta)))))
+(define string-suffix?
+  (let ((+documentation+ "(string-suffix? sfx s2)")
+        (+signature+ "(string-suffix? sfx s2)"))
+    (lambda (s1 s2)
+      (let* ((len1 (length s1))
+             (len2 (length s2))
+             (delta (- len2 len1)))
+        (and (<= len1 len2)
+             (eq? delta
+                  (string-position s1 s2 delta)))))))
 
 ;; srfi 13
 (define (%string-prefix-length-ci s1 start1 end1 s2 start2 end2)

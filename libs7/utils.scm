@@ -1,4 +1,4 @@
-(display "loading libs7/utils.scm") (newline)
+;; (display "loading libs7/utils.scm") (newline)
 
 (define (remove-ifx func lst)
   (map (lambda (x) (if (func x) (values) x)) lst))

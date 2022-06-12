@@ -1,4 +1,4 @@
-(format #t "repl.scm loading ...\n")
+;; (format #t "repl.scm loading ...\n")
 ;;; a repl
 ;;;
 ;;; (load "repl.scm") ((*repl* 'run))
@@ -1599,6 +1599,6 @@ to post a help string (kinda tedious, but the helper list is aimed more at posti
 ;; unicode someday: I think all we need is unicode_string_length and index into unicode string (set/ref)
 ;; scroll past top line?
 
-(format #t "loaded repl.scm\n")
+;; (format #t "loaded repl.scm\n")
 
 *repl*
