@@ -94861,7 +94861,7 @@ static void dumb_repl(s7_scheme *sc)
 
 void s7_repl(s7_scheme *sc)
 {
-    printf("oibl: s7_repl\n");
+    printf("mibl: s7_repl\n");
 #if (!WITH_C_LOADER)
   dumb_repl(sc);
 #else
@@ -94898,7 +94898,7 @@ void s7_repl(s7_scheme *sc)
     }
   else 
     {
-        printf("oibl: load libc_s7.so failed\n");
+        printf("mibl: load libc_s7.so failed\n");
       val = s7_load(sc, "repl.scm");
       if (val) repl_loaded = true;
     }
