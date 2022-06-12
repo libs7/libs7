@@ -9789,49 +9789,46 @@ static s7_pointer reverse_slots(s7_scheme *sc, s7_pointer list)
 
 static s7_pointer let_copy(s7_scheme *sc, s7_pointer let)
 {
-  if (is_let(let))
+  s7_pointer new_e;
+
+  if ((S7_DEBUGGING) && (!is_let(let))) fprintf(stderr, "%s let is not a let %s\n", __func__, display(let));
+  if (let == sc->rootlet)   /* (copy (rootlet)) or (copy (funclet abs)) etc */
+    return(sc->rootlet);
+  
+  /* we can't make copy handle lets-as-objects specially because the make-object function in define-class uses copy to make a new object!
+   *   So if it is present, we get it here, and then there's almost surely trouble.
+   */
+  new_e = make_let(sc, let_outlet(let));
+  set_all_methods(new_e, let);
+  sc->temp3 = new_e;
+  if (tis_slot(let_slots(let)))
     {
-      s7_pointer new_e;
-
-      if (let == sc->rootlet)   /* (copy (rootlet)) or (copy (funclet abs)) etc */
-	return(sc->rootlet);
-
-      /* we can't make copy handle lets-as-objects specially because the make-object function in define-class uses copy to make a new object!
-       *   So if it is present, we get it here, and then there's almost surely trouble.
-       */
-      new_e = make_let(sc, let_outlet(let));
-      set_all_methods(new_e, let);
-      sc->temp3 = new_e;
-      if (tis_slot(let_slots(let)))
+      s7_int id = let_id(new_e);
+      s7_pointer y = NULL;
+      for (s7_pointer x = let_slots(let); tis_slot(x); x = next_slot(x))
 	{
-	  s7_int id = let_id(new_e);
-	  s7_pointer y = NULL;
-	  for (s7_pointer x = let_slots(let); tis_slot(x); x = next_slot(x))
+	  s7_pointer z;
+	  new_cell(sc, z, T_SLOT);
+	  slot_set_symbol_and_value(z, slot_symbol(x), slot_value(x));
+	  if (symbol_id(slot_symbol(z)) != id) /* keep shadowing intact */
+	    symbol_set_local_slot(slot_symbol(x), id, z);
+	  if (slot_has_setter(x))
 	    {
-	      s7_pointer z;
-	      new_cell(sc, z, T_SLOT);
-	      slot_set_symbol_and_value(z, slot_symbol(x), slot_value(x));
-	      if (symbol_id(slot_symbol(z)) != id) /* keep shadowing intact */
-		symbol_set_local_slot(slot_symbol(x), id, z);
-	      if (slot_has_setter(x))
-		{
-		  slot_set_setter(z, slot_setter(x));
-		  slot_set_has_setter(z);
-		}
-	      if (y)
-		slot_set_next(y, z);
-	      else let_set_slots(new_e, z);
-	      slot_set_next(z, slot_end(sc));              /* in case GC runs during this loop */
-	      y = z;
-	    }}
-      /* We can't do a (normal) loop here then reverse the slots later because the symbol's local_slot has to
-       *    match the unshadowed slot, not the last in the list:
-       *    (let ((e1 (inlet 'a 1 'a 2))) (let ((e2 (copy e1))) (list (equal? e1 e2) (equal? (e1 'a) (e2 'a)))))
-       */
-      sc->temp3 = sc->nil;
-      return(new_e);
-    }
-  return(sc->nil);
+	      slot_set_setter(z, slot_setter(x));
+	      slot_set_has_setter(z);
+	    }
+	  if (y)
+	    slot_set_next(y, z);
+	  else let_set_slots(new_e, z);
+	  slot_set_next(z, slot_end(sc));              /* in case GC runs during this loop */
+	  y = z;
+	}}
+  /* We can't do a (normal) loop here then reverse the slots later because the symbol's local_slot has to
+   *    match the unshadowed slot, not the last in the list:
+   *    (let ((e1 (inlet 'a 1 'a 2))) (let ((e2 (copy e1))) (list (equal? e1 e2) (equal? (e1 'a) (e2 'a)))))
+   */
+  sc->temp3 = sc->nil;
+  return(new_e);
 }
 
 
@@ -13342,14 +13339,12 @@ static void dtoa_get_normalized_boundaries(dtoa_np* fp, dtoa_np* lower, dtoa_np*
 static dtoa_np dtoa_multiply(dtoa_np* a, dtoa_np* b)
 {
   dtoa_np fp;
-  uint64_t ah_bl, al_bh, al_bl, ah_bh, tmp;
   const uint64_t lomask = 0x00000000FFFFFFFF;
-
-  ah_bl = (a->frac >> 32)    * (b->frac & lomask);
-  al_bh = (a->frac & lomask) * (b->frac >> 32);
-  al_bl = (a->frac & lomask) * (b->frac & lomask);
-  ah_bh = (a->frac >> 32)    * (b->frac >> 32);
-  tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32);
+  uint64_t ah_bl = (a->frac >> 32)    * (b->frac & lomask);
+  uint64_t al_bh = (a->frac & lomask) * (b->frac >> 32);
+  uint64_t al_bl = (a->frac & lomask) * (b->frac & lomask);
+  uint64_t ah_bh = (a->frac >> 32)    * (b->frac >> 32);
+  uint64_t tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32);
   /* round up */
   tmp += 1U << 31;
   fp.frac = ah_bh + (ah_bl >> 32) + (al_bh >> 32) + (tmp >> 32);
@@ -13421,8 +13416,8 @@ static int32_t dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower,
 static int32_t dtoa_grisu2(double d, char* digits, int* K)
 {
   int32_t k;
-  dtoa_np cp, w, lower, upper;
-  w = dtoa_build_np(d);
+  dtoa_np cp, lower, upper;
+  dtoa_np w = dtoa_build_np(d);
   dtoa_get_normalized_boundaries(&w, &lower, &upper);
   dtoa_normalize(&w);
   cp = dtoa_find_cachedpow10(upper.exp, &k);
@@ -13437,9 +13432,9 @@ static int32_t dtoa_grisu2(double d, char* digits, int* K)
 
 static int32_t dtoa_emit_digits(char* digits, int32_t ndigits, char* dest, int32_t K, bool neg)
 {
-  int32_t exp, idx, cent;
+  int32_t idx, cent;
   char sign;
-  exp = dtoa_absv(K + ndigits - 1);
+  int32_t exp = dtoa_absv(K + ndigits - 1);
 
   /* write plain integer */
   if ((K >= 0) && (exp < (ndigits + 7)))
@@ -33571,8 +33566,9 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
 {
   s7_pointer body = closure_body(obj);
   s7_pointer arglist = closure_args(obj);
-  s7_pointer pe, local_slots, setter = NULL;
+  s7_pointer pe, local_slots, setter = NULL, obj_slot = NULL;
   s7_int gc_loc;
+  bool sent_let = false, sent_letrec = false;
 
   if (sc->safety > NO_SAFETY)
     {
@@ -33607,7 +33603,9 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
   local_slots = T_Lst(gc_protected_at(sc, gc_loc)); /* possibly a list of slots */
   if (!is_null(local_slots))
     {
-      port_write_string(port)(sc, "(let (", 6, port);
+      /* fprintf(stderr, "locals: %s\n", display(local_slots)); */
+      /* if (let|letrec ((f (lambda () f))) (object->string f :readable)), local_slots: ('f f) */
+      /* but we can't handle it below because that leads to an infinite loop */
       for (s7_pointer x = local_slots; is_pair(x); x = cdr(x))
 	{
 	  s7_pointer slot = car(x);
@@ -33615,6 +33613,11 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
 	      ((!has_structure(slot_value(slot))) ||    /* see s7test example, vector has closure that refers to vector */
 	       (slot_symbol(slot) == sc->local_signature_symbol)))
 	    {
+	      if (!sent_let)
+		{
+		  port_write_string(port)(sc, "(let (", 6, port);
+		  sent_let = true;
+		}
 	      port_write_character(port)(sc, '(', port);
 	      port_write_string(port)(sc, symbol_name(slot_symbol(slot)), symbol_name_length(slot_symbol(slot)), port);
 	      port_write_character(port)(sc, ' ', port);
@@ -33624,9 +33627,27 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
 		port_write_character(port)(sc, ')', port);
 	      else port_write_string(port)(sc, ") ", 2, port);
 	    }}
-      port_write_string(port)(sc, ") ", 2, port);
+      if (sent_let) port_write_string(port)(sc, ") ", 2, port);
     }
 
+  /* now we need to know if obj is in the closure_let via letrec, and if so, send out letrec+obj name+def below, then close it with obj-name?? 
+   *  the two cases are: (let ((f (lambda () f)))...) which is ok now, and (letrec ((f (lambda () f)))...) which needs the letrec
+   */
+  if (!is_null(local_slots))
+    for (s7_pointer x = local_slots; is_pair(x); x = cdr(x))
+      {
+	s7_pointer slot = car(x);
+	if ((is_any_closure(slot_value(slot))) &&
+	    (slot_value(slot) == obj))
+	  {
+	    port_write_string(port)(sc, "(letrec ((", 10, port); /* (letrec ((f (lambda () f))) f) */
+	    sent_letrec = true;
+	    port_write_string(port)(sc, symbol_name(slot_symbol(slot)), symbol_name_length(slot_symbol(slot)), port);
+	    port_write_character(port)(sc, ' ', port);
+	    obj_slot = slot;
+	    break;
+	  }}
+    
   if (setter)
     port_write_string(port)(sc, "(dilambda ", 10, port);
 
@@ -33640,8 +33661,16 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
       else object_to_port_with_circle_check(sc, setter, port, P_READABLE, ci);
       port_write_character(port)(sc, ')', port);
     }
-  if (!is_null(local_slots))
+  if (sent_letrec)
+    {
+      port_write_string(port)(sc, ")) ", 3, port);
+      port_write_string(port)(sc, symbol_name(slot_symbol(obj_slot)), symbol_name_length(slot_symbol(obj_slot)), port);
+      port_write_character(port)(sc, ')', port);
+    }
+  
+  if (sent_let)
     port_write_character(port)(sc, ')', port);
+
   s7_gc_unprotect_at(sc, gc_loc);
 }
 
@@ -34739,7 +34768,7 @@ static s7_pointer g_with_output_to_file(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- format -------------------------------- */
-static s7_pointer format_error_1(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer args, format_data_t *fdat)
+static noreturn void format_error_1_nr(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer args, format_data_t *fdat)
 {
   s7_pointer x = NULL;
   s7_pointer ctrl_str = (fdat->orig_str) ? fdat->orig_str : s7_make_string_wrapper(sc, str);
@@ -34759,11 +34788,9 @@ static s7_pointer format_error_1(s7_scheme *sc, s7_pointer msg, const char *str,
       fdat->port = NULL;
     }
   s7_error_nr(sc, sc->format_error_symbol, x);
-  return(sc->format_error_symbol);
 }
 
-#define format_error(Sc, Msg, Len, Str, Args, Fdat) return(format_error_1(Sc, wrap_string(Sc, Msg, Len), Str, Args, Fdat))
-#define just_format_error(Sc, Msg, Len, Str, Args, Fdat) format_error_1(Sc, wrap_string(Sc, Msg, Len), Str, Args, Fdat)
+#define format_error_nr(Sc, Msg, Len, Str, Args, Fdat) format_error_1_nr(Sc, wrap_string(Sc, Msg, Len), Str, Args, Fdat)
 
 static void format_append_char(s7_scheme *sc, char c, s7_pointer port)
 {
@@ -34982,16 +35009,16 @@ static s7_int format_n_arg(s7_scheme *sc, const char *str, format_data_t *fdat, 
   s7_int n;
 
   if (is_null(fdat->args))          /* (format #f "~nT") */
-    just_format_error(sc, "~~N: missing argument", 21, str, args, fdat);
+    format_error_nr(sc, "~~N: missing argument", 21, str, args, fdat);
   if (!s7_is_integer(car(fdat->args)))
-    just_format_error(sc, "~~N: integer argument required", 30, str, args, fdat);
+    format_error_nr(sc, "~~N: integer argument required", 30, str, args, fdat);
   n = s7_integer_clamped_if_gmp(sc, car(fdat->args));
 
   if (n < 0)
-    just_format_error(sc, "~~N value is negative?", 22, str, args, fdat);
+    format_error_nr(sc, "~~N value is negative?", 22, str, args, fdat);
   else
     if (n > sc->max_format_length)
-      just_format_error(sc, "~~N value is too big", 20, str, args, fdat);
+      format_error_nr(sc, "~~N value is too big", 20, str, args, fdat);
 
   fdat->args = cdr(fdat->args);    /* I don't think fdat->ctr should be incremented here -- it's for *vector-print-length* etc */
   return(n);
@@ -35003,16 +35030,16 @@ static s7_int format_numeric_arg(s7_scheme *sc, const char *str, s7_int str_len,
   s7_int width = format_read_integer(i, str_len, str);
   if (width < 0)
     {
-      if (str[old_i - 1] != ',') /* need branches here, not if-expr because just_format_error creates the permanent string */
-	just_format_error(sc, "width is negative?", 18, str, fdat->args, fdat);
-      else just_format_error(sc, "precision is negative?", 22, str, fdat->args, fdat);
+      if (str[old_i - 1] != ',') /* need branches here, not if-expr because format_error creates the permanent string */
+	format_error_nr(sc, "width is negative?", 18, str, fdat->args, fdat);
+      else format_error_nr(sc, "precision is negative?", 22, str, fdat->args, fdat);
     }
   else
     if (width > sc->max_format_length)
       {
 	if (str[old_i - 1] != ',')
-	  just_format_error(sc, "width is too big", 16, str, fdat->args, fdat);
-	else just_format_error(sc, "precision is too big", 20, str, fdat->args, fdat);
+	  format_error_nr(sc, "width is too big", 16, str, fdat->args, fdat);
+	else format_error_nr(sc, "precision is too big", 20, str, fdat->args, fdat);
       }
   return(width);
 }
@@ -35139,7 +35166,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	    case '*':                           /* -------- ignore arg -------- */
 	      i++;
 	      if (is_null(fdat->args))          /* (format #f "~*~A") */
-		format_error(sc, "can't skip argument!", 20, str, args, fdat);
+		format_error_nr(sc, "can't skip argument!", 20, str, args, fdat);
 	      fdat->args = cdr(fdat->args);
 	      break;
 
@@ -35164,11 +35191,11 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	    case '@':                           /* -------- plural, 'y' or 'ies' -------- */
 	      i += 2;
 	      if ((str[i] != 'P') && (str[i] != 'p'))
-		format_error(sc, "unknown '@' directive", 21, str, args, fdat);
+		format_error_nr(sc, "unknown '@' directive", 21, str, args, fdat);
 	      if (!is_pair(fdat->args))
-		format_error(sc, "'@' directive argument missing", 30, str, args, fdat);
+		format_error_nr(sc, "'@' directive argument missing", 30, str, args, fdat);
 	      if (!is_real(car(fdat->args)))        /* CL accepts non numbers here */
-		format_error(sc, "'@P' directive argument is not a real number", 44, str, args, fdat);
+		format_error_nr(sc, "'@P' directive argument is not a real number", 44, str, args, fdat);
 
 	      if (!is_one_or_big_one(sc, car(fdat->args)))
 		format_append_string(sc, fdat, "ies", 3, port);
@@ -35179,9 +35206,9 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 
 	    case 'P': case 'p':                 /* -------- plural in 's' -------- */
 	      if (!is_pair(fdat->args))
-		format_error(sc, "'P' directive argument missing", 30, str, args, fdat);
+		format_error_nr(sc, "'P' directive argument missing", 30, str, args, fdat);
 	      if (!is_real(car(fdat->args)))
-		format_error(sc, "'P' directive argument is not a real number", 43, str, args, fdat);
+		format_error_nr(sc, "'P' directive argument is not a real number", 43, str, args, fdat);
 	      if (!is_one_or_big_one(sc, car(fdat->args)))
 		format_append_char(sc, 's', port);
 	      i++;
@@ -35193,18 +35220,18 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		s7_int curly_len;
 
 		if (is_null(fdat->args))
-		  format_error(sc, "missing argument", 16, str, args, fdat);
+		  format_error_nr(sc, "missing argument", 16, str, args, fdat);
 
 		if ((is_pair(car(fdat->args))) &&               /* any sequence is possible here */
 		    (s7_list_length(sc, car(fdat->args)) < 0))  /* (format #f "~{~a~e~}" (cons 1 2)) */
-		  format_error(sc, "~{ argument is a dotted list", 28, str, args, fdat);
+		  format_error_nr(sc, "~{ argument is a dotted list", 28, str, args, fdat);
 
 		curly_len = format_nesting(str, '{', '}', i, str_len - 1);
 
 		if (curly_len == -1)
-		  format_error(sc, "'{' directive, but no matching '}'", 34, str, args, fdat);
+		  format_error_nr(sc, "'{' directive, but no matching '}'", 34, str, args, fdat);
 		if (curly_len == 1)
-		  format_error(sc, "~{~}' doesn't consume any arguments!", 36, str, args, fdat);
+		  format_error_nr(sc, "~{~}' doesn't consume any arguments!", 36, str, args, fdat);
 
 		/* what about cons's here?  I can't see any way to specify the car or cdr of a cons within the format string */
 		if (is_not_null(car(fdat->args)))               /* (format #f "~{~A ~}" ()) -> "" */
@@ -35245,7 +35272,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			      {
 				if (cdr(curly_arg) == curly_arg) break;
 				fdat->curly_arg = sc->nil;
-				format_error(sc, "'{...}' doesn't consume any arguments!", 38, str, args, fdat);
+				format_error_nr(sc, "'{...}' doesn't consume any arguments!", 38, str, args, fdat);
 			      }
 			    curly_arg = new_arg;
 			    if ((!is_pair(curly_arg)) || (curly_arg == cycle_arg))
@@ -35263,7 +35290,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			  }}
 		    else
 		      if (!is_null(curly_arg))
-			format_error(sc, "'{' directive argument should be a list or something we can turn into a list", 76, str, args, fdat);
+			format_error_nr(sc, "'{' directive argument should be a list or something we can turn into a list", 76, str, args, fdat);
 		  }
 		i += (curly_len + 2); /* jump past the ending '}' too */
 		fdat->args = cdr(fdat->args);
@@ -35272,7 +35299,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	      break;
 
 	    case '}':
-	      format_error(sc, "unmatched '}'", 13, str, args, fdat);
+	      format_error_nr(sc, "unmatched '}'", 13, str, args, fdat);
 
 	    case '$':
 	      use_write = P_CODE;
@@ -35292,7 +35319,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	      {
 		s7_pointer obj, strport;
 		if (is_null(fdat->args))
-		  format_error(sc, "missing argument", 16, str, args, fdat);
+		  format_error_nr(sc, "missing argument", 16, str, args, fdat);
 		i++;
 		obj = car(fdat->args);
 		if ((use_write == P_READABLE) ||
@@ -35331,13 +35358,13 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	    case ':':
 	      i += 2;
 	      if ((str[i] != 'D') && (str[i] != 'd'))
-		format_error(sc, "unknown ':' directive", 21, str, args, fdat);
+		format_error_nr(sc, "unknown ':' directive", 21, str, args, fdat);
 	      if (!is_pair(fdat->args))
-		format_error(sc, "':D' directive argument missing", 31, str, args, fdat);
+		format_error_nr(sc, "':D' directive argument missing", 31, str, args, fdat);
 	      if (!s7_is_integer(car(fdat->args)))
-		format_error(sc, "':D' directive argument is not an integer", 41, str, args, fdat);
+		format_error_nr(sc, "':D' directive argument is not an integer", 41, str, args, fdat);
 	      if (s7_integer_clamped_if_gmp(sc, car(fdat->args)) < 0)
-		format_error(sc, "':D' directive argument can't be negative", 41, str, args, fdat);
+		format_error_nr(sc, "':D' directive argument can't be negative", 41, str, args, fdat);
 	      format_ordinal_number(sc, fdat, port);
 	      break;
 
@@ -35385,7 +35412,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			    pad = str[i + 1];
 			    i += 2;
 			    if (i >= str_len)            /* (format #f "~,'") */
-			      format_error(sc, "incomplete numeric argument", 27, str, args, fdat);
+			      format_error_nr(sc, "incomplete numeric argument", 27, str, args, fdat);
 			  }}  /* is (let ((str "~12,'xD")) (set! (str 5) #\null) (format #f str 1)) an error? */
 
 		switch (str[i])
@@ -35418,13 +35445,13 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      s7_pointer obj;
 
 		      if (is_null(fdat->args))
-			format_error(sc, "~~C: missing argument", 21, str, args, fdat);
+			format_error_nr(sc, "~~C: missing argument", 21, str, args, fdat);
 		      /* the "~~" here and below protects against "~C" being treated as a directive */
 		      obj = car(fdat->args);
 		      if (!is_character(obj))
 			{
 			  if (!format_method(sc, (char *)(str + i), fdat, port)) /* i stepped forward above */
-			    format_error(sc, "'C' directive requires a character argument", 43, str, args, fdat);
+			    format_error_nr(sc, "'C' directive requires a character argument", 43, str, args, fdat);
 			}
 		      else
 			{
@@ -35443,33 +35470,33 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		    /* -------- numbers -------- */
 		  case 'F': case 'f':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~F: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~F: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~F: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~F: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'f', pad, port);
 		    break;
 
 		  case 'G': case 'g':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~G: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~G: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~G: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~G: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'g', pad, port);
 		    break;
 
 		  case 'E': case 'e':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~E: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~E: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~E: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~E: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'e', pad, port);
 		    break;
@@ -35481,7 +35508,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		     */
 		  case 'D': case 'd':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~D: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~D: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			/* (let () (require mockery.scm) (format #f "~D" ((*mock-number* 'mock-number) 123)))
@@ -35492,53 +35519,53 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			 *    return a (scheme) string.
 			 */
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~D: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~D: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'd', pad, port);
 		    break;
 
 		  case 'O': case 'o':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~O: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~O: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~O: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~O: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 8, width, precision, 'o', pad, port);
 		    break;
 
 		  case 'X': case 'x':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~X: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~X: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~X: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~X: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 16, width, precision, 'x', pad, port);
 		    break;
 
 		  case 'B': case 'b':
 		    if (is_null(fdat->args))
-		      format_error(sc, "~~B: missing argument", 21, str, args, fdat);
+		      format_error_nr(sc, "~~B: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
 			if (!format_method(sc, (char *)(str + i), fdat, port))
-			  format_error(sc, "~~B: numeric argument required", 30, str, args, fdat);
+			  format_error_nr(sc, "~~B: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 2, width, precision, 'b', pad, port);
 		    break;
 
 		  default:
 		    if (width > 0)
-		      format_error(sc, "unused numeric argument", 23, str, args, fdat);
-		    format_error(sc, "unimplemented format directive", 30, str, args, fdat);
+		      format_error_nr(sc, "unused numeric argument", 23, str, args, fdat);
+		    format_error_nr(sc, "unimplemented format directive", 30, str, args, fdat);
 		  }}
 	      break;
 
 	    default:
-	      format_error(sc, "unimplemented format directive", 30, str, args, fdat);
+	      format_error_nr(sc, "unimplemented format directive", 30, str, args, fdat);
 	    }}
       else /* str[i] is not #\~ */
 	{
@@ -35563,12 +35590,12 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
     (*next_arg) = fdat->args;
   else
     if (is_not_null(fdat->args))
-      format_error(sc, "too many arguments", 18, str, args, fdat);
+      format_error_nr(sc, "too many arguments", 18, str, args, fdat);
 
   if (i < str_len)
     {
       if (str[i] == '~')
-	format_error(sc, "control string ends in tilde", 28, str, args, fdat);
+	format_error_nr(sc, "control string ends in tilde", 28, str, args, fdat);
       format_append_char(sc, str[i], port);
     }
   sc->format_depth--;
@@ -40530,7 +40557,7 @@ static s7_pointer g_set_vector_typer(s7_scheme *sc, s7_pointer args)
       if (((is_int_vector(v)) && (typer != global_value(sc->is_integer_symbol))) ||
 	  ((is_float_vector(v)) && (typer != global_value(sc->is_float_symbol))) ||
 	  ((is_byte_vector(v)) && (typer != global_value(sc->is_byte_symbol))))
-	s7_error(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, wrap_string(sc, "vector-typer can't set ~S typer to ~S", 37), v, typer));
+	s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, wrap_string(sc, "vector-typer can't set ~S typer to ~S", 37), v, typer));
       return(typer);
     }
   if (s7_is_boolean(typer))
@@ -40603,12 +40630,11 @@ static s7_pointer proper_list_reverse_in_place(s7_scheme *sc, s7_pointer list)
   return(reverse_in_place_unchecked(sc, sc->nil, list));
 }
 
-static s7_pointer multivector_error(s7_scheme *sc, const char *message, s7_pointer data)
+static noreturn void multivector_error_nr(s7_scheme *sc, const char *message, s7_pointer data)
 {
   s7_error_nr(sc, sc->read_error_symbol,
 	      set_elist_3(sc, wrap_string(sc, "reading constant vector, ~A: ~A", 31),
 			  s7_make_string_wrapper(sc, message), data));
-  return(sc->read_error_symbol);
 }
 
 static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
@@ -40649,7 +40675,7 @@ static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 	  (!is_pair(x)))
 	{
 	  free(sizes);
-	  return(multivector_error(sc, "we need a list that fully specifies the vector's elements", data));
+	  multivector_error_nr(sc, "we need a list that fully specifies the vector's elements", data);
 	}}
 
   vec = g_make_vector(sc, set_plist_1(sc, sc->w = proper_list_reverse_in_place(sc, sc->w)));
@@ -40662,7 +40688,7 @@ static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
   free(sizes);
   s7_gc_unprotect_at(sc, vec_loc);
   if (err < 0)
-    return(multivector_error(sc, (err == MULTIVECTOR_TOO_MANY_ELEMENTS) ? "found too many elements" : "not enough elements found", data));
+    multivector_error_nr(sc, (err == MULTIVECTOR_TOO_MANY_ELEMENTS) ? "found too many elements" : "not enough elements found", data);
   return(vec);
 }
 
@@ -42383,7 +42409,7 @@ static s7_pointer check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_po
 	wrong_type_argument_with_type_nr(sc, caller, 2, typer, wrap_string(sc, "a named function", 16));
     }
   if (!s7_is_aritable(sc, typer, 1))
-    s7_error(sc, sc->wrong_type_arg_symbol,
+    s7_error_nr(sc, sc->wrong_type_arg_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~A: the second argument, ~S, (the type checker) should accept one argument", 74), caller, typer));
   if (is_c_function(typer))
     {
@@ -43376,9 +43402,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 
 		      if ((keyp != sc->T) &&
 			  (!s7_is_aritable(sc, keyp, 1)))
-			s7_error(sc, sc->wrong_type_arg_symbol,
-				 set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
-					     caller, typers));
+			s7_error_nr(sc, sc->wrong_type_arg_symbol,
+				    set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
+						caller, typers));
 		      dproc = cons_unchecked(sc, sc->T, sc->T);
 		      hash_table_set_procedures(ht, dproc);
 		      hash_table_set_key_typer(dproc, keyp);    /* opt1_any(dproc), car/cdr are for the map/equality funcs */
@@ -43386,9 +43412,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      if (is_c_function(keyp))
 			{
 			  if (!c_function_name(keyp))
-			    s7_error(sc, sc->wrong_type_arg_symbol,
-				     set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the first function is anonymous", 92),
-						 caller, typers));
+			    s7_error_nr(sc, sc->wrong_type_arg_symbol,
+					set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the first function is anonymous", 92),
+						    caller, typers));
 			  if (c_function_has_simple_elements(keyp))
 			    set_has_simple_keys(ht);
 			  if (!c_function_symbol(keyp))
@@ -43406,27 +43432,27 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 				  (is_pair(eq_sig)) &&
 				  (is_pair(cdr(eq_sig))) &&
 				  (!compatible_types(sc, cadr(eq_sig), c_function_symbol(keyp))))
-			    s7_error(sc, sc->wrong_type_arg_symbol,
-				     set_elist_3(sc, wrap_string(sc, "~A: in the third argument, the key type function is not compatible with the equality function: ~S", 97),
-						 caller, typers));
+			    s7_error_nr(sc, sc->wrong_type_arg_symbol,
+					set_elist_3(sc, wrap_string(sc, "~A: in the third argument, the key type function is not compatible with the equality function: ~S", 97),
+						    caller, typers));
 			    }}
 		      else
 			if ((is_any_closure(keyp)) &&
 			    (!is_symbol(find_closure(sc, keyp, closure_let(keyp)))))
-			  s7_error(sc, sc->wrong_type_arg_symbol,
-				   set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the first function is anonymous", 92),
-					       caller, typers));
+			  s7_error_nr(sc, sc->wrong_type_arg_symbol,
+				      set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the first function is anonymous", 92),
+						  caller, typers));
 		      if ((valp != sc->T) &&
 			  (!s7_is_aritable(sc, valp, 1)))
-			s7_error(sc, sc->wrong_type_arg_symbol,
-				 set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
-					     caller, typers));
+			s7_error_nr(sc, sc->wrong_type_arg_symbol,
+				    set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
+						caller, typers));
 		      if (is_c_function(valp))
 			{
 			  if (!c_function_name(valp))
-			    s7_error(sc, sc->wrong_type_arg_symbol,
-				     set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
-						 caller, typers));
+			    s7_error_nr(sc, sc->wrong_type_arg_symbol,
+					set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
+						    caller, typers));
 			  if (c_function_has_simple_elements(valp))
 			    set_has_simple_values(ht);
 			  if (!c_function_symbol(valp))
@@ -43437,9 +43463,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		      else
 			if ((is_any_closure(valp)) &&
 			    (!is_symbol(find_closure(sc, valp, closure_let(valp)))))
-			  s7_error(sc, sc->wrong_type_arg_symbol,
-				   set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
-					       caller, typers));
+			  s7_error_nr(sc, sc->wrong_type_arg_symbol,
+				      set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
+						  caller, typers));
 		      set_typed_hash_table(ht);
 		    }}
 	      else
@@ -50648,8 +50674,7 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
 	  catch_cstack(p) = &new_goto_start;
 	  push_stack(sc, OP_CATCH, error_handler, p);
 	  result = s7_call(sc, body, sc->nil);
-	  if (((opcode_t)sc->stack_end[-1]) == OP_CATCH)
-	    unstack_with(sc, OP_CATCH);
+	  if (((opcode_t)sc->stack_end[-1]) == OP_CATCH) sc->stack_end -= 4;
 	}
       restore_jump_info(sc);
     }
@@ -50657,8 +50682,7 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
     {
       push_stack(sc, OP_CATCH, error_handler, p);
       result = s7_call(sc, body, sc->nil);
-      if (((opcode_t)sc->stack_end[-1]) == OP_CATCH)
-	    unstack_with(sc, OP_CATCH);	
+      if (((opcode_t)sc->stack_end[-1]) == OP_CATCH) sc->stack_end -= 4;
     }
   return(result);
 }
@@ -80816,20 +80840,16 @@ static inline bool op_dox_step_1(s7_scheme *sc)
   return(false);
 }
 
-static bool op_dox_step(s7_scheme *sc)
+static void op_dox_step(s7_scheme *sc)
 {
-  if (op_dox_step_1(sc)) return(true);
   push_stack_no_args_direct(sc, OP_DOX_STEP);
   sc->code = T_Pair(cddr(sc->code));
-  return(false);
 }
 
-static bool op_dox_step_o(s7_scheme *sc)
+static void op_dox_step_o(s7_scheme *sc)
 {
-  if (op_dox_step_1(sc)) return(true);
   push_stack_no_args_direct(sc, OP_DOX_STEP_O);
   sc->code = caddr(sc->code);
-  return(false);
 }
 
 static void op_dox_no_body(s7_scheme *sc)
@@ -81414,7 +81434,6 @@ static bool op_simple_do(s7_scheme *sc)
       sc->code = cdadr(code);
       return(true);                       /* goto DO_END_CLAUSES */
     }
-
   if ((is_null(cdr(body))) &&             /* one expr in body */
       (is_pair(car(body))) &&             /*   and it is a pair */
       (is_symbol(cadr(opt2_pair(code)))) && /* caddr(caar(code)), caar=(i 0 (+ i 1)), caddr=(+ i 1), so this checks that stepf is reasonable? */
@@ -90314,8 +90333,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SIMPLE_DO_STEP:      if (op_simple_do_step(sc))      goto DO_END_CLAUSES; goto BEGIN;
 	case OP_DOTIMES_STEP_O:      if (op_dotimes_step_o(sc))      goto DO_END_CLAUSES; goto EVAL;
 	case OP_DOX_INIT:            if (op_dox_init(sc))            goto DO_END_CLAUSES; goto BEGIN;
-	case OP_DOX_STEP:            if (op_dox_step(sc))            goto DO_END_CLAUSES; goto BEGIN;
-	case OP_DOX_STEP_O:          if (op_dox_step_o(sc))          goto DO_END_CLAUSES; goto EVAL;
+	case OP_DOX_STEP:            if (op_dox_step_1(sc))          goto DO_END_CLAUSES; op_dox_step(sc);   goto BEGIN;
+	case OP_DOX_STEP_O:          if (op_dox_step_1(sc))          goto DO_END_CLAUSES; op_dox_step_o(sc); goto EVAL;
 	case OP_DOX_NO_BODY:         op_dox_no_body(sc);             continue;
 	case OP_DOX_PENDING_NO_BODY: op_dox_pending_no_body(sc);     goto DO_END_CLAUSES;
 
@@ -94358,7 +94377,7 @@ s7_scheme *s7_init(void)
                                 clauses)                                                                  \n\
                               (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
 
-#if 1
+#if 0
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
                             (lambda hook-args                                                             \n\
@@ -94374,10 +94393,10 @@ s7_scheme *s7_init(void)
    *   (define h (make-hook 'x)) (set! (hook-functions h) (list (lambda (hk) (set! (hk 'result) (hk 'abs))))) (h 123) -> abs
    */
 #else
-  /* this is probably slightly slower than using copy; it returns #<undefined> for anything that would otherwise be found in rootlet,
-   *   but ideally we wouldn't have to create a new let, load up the fallback etc -- maybe add a flag on the let (blocked?)
-   *   or notice let-ref-fallback in lets (as opposed to sublet), then it could be in the let with result.
-   *   the same sublet+fallback code could be used above
+  /* this is much faster than using copy, and surely copy isn't needed here; this version returns #<undefined> for anything that 
+   *  would otherwise be found in rootlet, but ideally we wouldn't have to create a new let, load up the fallback etc -- 
+   *  maybe add a flag on the let (blocked?) or notice let-ref-fallback in lets (as opposed to sublet), then it could be in the let with result.
+   *  the same sublet+fallback code could be used in the old version above
    */
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
@@ -94388,6 +94407,7 @@ s7_scheme *s7_init(void)
                                       (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>))))) \n\
                                         (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
                                         result))))))))");
+  /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)) */
 #endif
 
   s7_eval_c_string(sc, "(define hook-functions                                                            \n\
@@ -94821,61 +94841,70 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    461    461
- * index     1026   1016    973    968    967
+ * index     1026   1016    973    968    967   958
  * tmock     1177   1165   1057   1036   1037
  * tvect     2519   2464   1772   1689   1689
- * texit     ----   ----   1778   1749   1756
+ * texit     ----   ----   1778   1749   1756  1744
  * s7test    1873   1831   1818   1779   1782
  * timp      2971   2891   2176   2043   2019
  * lt        2187   2172   2150   2143   2148
- * tauto     ----   ----   2562   2207   2161
- * dup       3805   3788   2492   2273   2337
+ * tauto     ----   ----   2562   2207   2161  2172 [sublet_1]
+ * dup       3805   3788   2492   2273   2337  2305
  * tload     ----   ----   3046   2352   2353
  * tread     2440   2421   2419   2376   2378
  * fbench    2688   2583   2460   2403   2411
  * trclo     2735   2574   2454   2423   2423
- * tcopy     8035   5546   2539   2503   2475
+ * tcopy     8035   5546   2539   2503   2475  2495 [s7_copy_1/hash_table_copy]
  * titer     2865   2842   2641   2475   2483
- * tmat      3065   3042   2524   2511   2528
- * tb        2735   2681   2612   2574   2577
+ * tmat      3065   3042   2524   2511   2528  2524
+ * tb        2735   2681   2612   2574   2577  2607 [gc mark_vector|pair??]
  * tsort     3105   3104   2856   2820   2820
  * teq       4068   4045   3536   3450   3433
- * tmac      3950   3873   3033   3541   3554
+ * tmac      3950   3873   3033   3541   3554  3549
  * tio       3816   3752   3683   3588   3600
- * tobj      4016   3970   3828   3624   3614
+ * tobj      4016   3970   3828   3624   3614  3611
  * tclo      4787   4735   4390   4309   4221
  * tlet      7775   5640   4450   4393   4404
- * tcase     4960   4793   4439   4407   4435
+ * tcase     4960   4793   4439   4407   4435  4420
  * tmap      8869   8774   4489   4468   4469
- * tfft      7820   7729   4755   4599   4603
- * tshoot    5525   5447   5183   5099   5094
- * tform     5357   5348   5307   5281   5275
- * tnum      6348   6013   5433   5378   5404
- * tstr      6880   6342   5488   5400   5434
- * tlamb     6423   6273   5720   5530   5545
- * tset      ----   ----   ----   6163   6171
+ * tfft      7820   7729   4755   4599   4603  4581
+ * tshoot    5525   5447   5183   5099   5094  5089
+ * tform     5357   5348   5307   5281   5275  5288 [pair_to_port]
+ * tnum      6348   6013   5433   5378   5404  5390
+ * tstr      6880   6342   5488   5400   5434  5386
+ * tlamb     6423   6273   5720   5530   5545  5496
+ * tset      ----   ----   ----   6163   6171  6133
  * tlist     7896   7546   6558   6195   6198
- * tmisc     8869   7612   6435   6239   6252
- * tgsl      8485   7802   6373   6301   6305
+ * tmisc     8869   7612   6435   6239   6252  6239
+ * tgsl      8485   7802   6373   6301   6305  6302
  * trec      6936   6922   6521   6538   6512
  * tari      13.0   12.7   6827   6633   6635
- * tleft     10.4   10.2   7657   7472   7480
+ * tleft     10.4   10.2   7657   7472   7480  7477
  * tgc       11.9   11.1   8177   8002   8020
- * thash     11.8   11.7   9734   9489   9474
- * cb        11.2   11.0   9658   9539   9556
+ * thash     11.8   11.7   9734   9489   9474  9462
+ * cb        11.2   11.0   9658   9539   9556  9543
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.7
  * sg        ----   ----   55.9   56.5   56.6
- * lg        ----   ----  105.2  104.6  104.9
- * tbig     177.4  175.8  156.5  150.6  150.5
+ * lg        ----   ----  105.2  104.6  104.9 105.0 [op_any_c_np > op_dox_step_o]
+ * tbig     177.4  175.8  156.5  150.6  150.5 105.4
  * -----------------------------------------------
  *
  * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
- *       hash :readable does not include eqf/mapf unless it's a built-in choice
+ *       hash :readable does not include eqf/mapf unless it's a built-in choice, more closure cases here?
  *       accept anonymous typer?
- * need thook.scm
+ * need thook.scm [t592]
+ * add hook? make-hook but how to check?
+ *   (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
+ *      but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
+ *   hook -> apply_unsafe_closure*
+ * try op_any_c_np inline, maybe base_vector_equal Inline and for_each_any_list
+ * one cases: remove_from_heap(sg index) tree_is_cyclic(list) make_empty_string(io hash big, already Inline)
+ *   cyclic_sequences_p_pp(gc eq case), opt_integer_symbol(mat), case_e_g_1 (move ok), op_cond_feed_1(lg)
+ *   op_do_no_body_na_vars_step(lg cb). op_do_end1(split, num lg misc sg), maybe inline_op_any_c_np_1
+ *   maybe op_any_c_np* should be split sideways?
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??

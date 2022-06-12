@@ -441,11 +441,7 @@
 (define (current-jiffy) (round (* (jiffies-per-second) (*s7* 'cpu-time))))
 (define (current-second) (floor (*s7* 'cpu-time)))
 
-(define (get-environment-variable x)
-  (let ((val ((*libc* 'getenv) x)))
-    (and (string? val)
-	 (> (length val) 0)
-	 val)))
+(define get-environment-variable getenv)
 (define get-environment-variables (*libc* 'getenvs))
 (define (r7rs-file-exists? arg) (= ((*libc* 'access) arg (*libc* 'F_OK)) 0))
 (define r7rs-delete-file (*libc* 'unlink))
