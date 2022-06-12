@@ -1,7 +1,12 @@
-(display "loading libs7/alist.scm") (newline)
+;; (display "loading libs7/alist.scm") (newline)
 
 (load "srfi.scm")
 (load "utils.scm")
+
+(define (assoc-val k alist)
+  (if-let ((a (assoc k alist)))
+          (cdr a)
+          #f))
 
 ;; s7test.scm
 (define eq eq?)
