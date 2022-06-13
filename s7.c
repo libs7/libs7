@@ -6973,7 +6973,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->stacktrace_defaults);
   gc_mark(sc->autoload_table);
   gc_mark(sc->default_rng);
-  gc_mark(sc->let_temp_hook);
+  if (sc->let_temp_hook) gc_mark(sc->let_temp_hook);
 
   gc_mark(sc->w);
   gc_mark(sc->x);
@@ -66329,22 +66329,6 @@ static s7_pointer seq_init(s7_scheme *sc, s7_pointer seq)
 
 #define MUTLIM 32 /* was 1000 */
 
-#define for_each_any_list(Code)		        \
-  do {						\
-      s7_pointer x, y;				\
-      for (x = seq, y = x; is_pair(x); )        \
-        {					\
-          slot_set_value(slot, car(x));		\
-          Code;					\
-          x = cdr(x);				\
-          if (is_pair(x))			\
-            {					\
-              slot_set_value(slot, car(x));	\
-              Code;				\
-              y = cdr(y);	x = cdr(x);	\
-	      if (x == y) break;		\
-            }}} while (0)
-
 static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* one sequence arg */
 {
   s7_pointer body = closure_body(f);
@@ -66370,12 +66354,19 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	{
 	  if (is_pair(seq))
 	    {
-	      if (func == opt_cell_any_nr) /* this block saves less than 0.5% */
+	      for (s7_pointer x = seq, y = x; is_pair(x); )
 		{
-		  opt_info *o = sc->opts[0];
-		  for_each_any_list(o->v[0].fp(o));
-		}
-	      else for_each_any_list(func(sc));
+		  slot_set_value(slot, car(x));
+		  func(sc);
+		  x = cdr(x);
+		  if (is_pair(x))
+		    {
+		      slot_set_value(slot, car(x));
+		      func(sc);
+		      x = cdr(x);
+		      y = cdr(y);
+		      if (x == y) break;
+		    }}
 	      return(sc->unspecified);
 	    }
 	  if (is_float_vector(seq))
@@ -74299,7 +74290,7 @@ static bool op_case_i_s(s7_scheme *sc)
   return(true);
 }
 
-static s7_pointer fx_case_a_i_s_a(s7_scheme *sc, s7_pointer code)
+static inline s7_pointer fx_case_a_i_s_a(s7_scheme *sc, s7_pointer code) /* inline saves about 30 in tleft */
 {
   s7_pointer selector = fx_call(sc, cdr(code));
   if (is_t_integer(selector))
@@ -74523,7 +74514,7 @@ static void op_case_g_s(s7_scheme *sc)
   sc->code = opt3_any(cdr(sc->code));
 }
 
-static s7_pointer fx_case_a_g_s_a(s7_scheme *sc, s7_pointer code) /* split into int/any cases in g_g, via has_integer_keys(sc->code) */
+static inline s7_pointer fx_case_a_g_s_a(s7_scheme *sc, s7_pointer code) /* split into int/any cases in g_g, via has_integer_keys(sc->code) */
 {
   s7_pointer selector = fx_call(sc, cdr(code));
   for (s7_pointer x = cddr(code); is_pair(x); x = cdr(x))
@@ -77884,21 +77875,15 @@ static bool op_cond_feed(s7_scheme *sc)
   return(false);
 }
 
-static bool op_cond_feed_1(s7_scheme *sc)
+static void op_cond_feed_1(s7_scheme *sc)
 {
-  if (is_true(sc, sc->value))
+  if (is_multiple_value(sc->value))
+    sc->code = cons(sc, opt2_lambda(sc->code), multiple_value(sc->value));
+  else
     {
-      if (is_multiple_value(sc->value))
-	sc->code = cons(sc, opt2_lambda(sc->code), multiple_value(sc->value));
-      else
-	{
-	  sc->curlet = inline_make_let_with_slot(sc, sc->curlet, caadr(opt2_lambda(sc->code)), sc->value);
-	  sc->code = caddr(opt2_lambda(sc->code));
-	}
-      return(true);
+      sc->curlet = inline_make_let_with_slot(sc, sc->curlet, caadr(opt2_lambda(sc->code)), sc->value);
+      sc->code = caddr(opt2_lambda(sc->code));
     }
-  sc->value = sc->unspecified; /* it's cond -- perhaps push as sc->args above; this was nil until 21-Feb-17! */
-  return(false);
 }
 
 static bool feed_to(s7_scheme *sc)
@@ -82363,46 +82348,47 @@ static bool op_do_end(s7_scheme *sc)
   return(false);
 }
 
-static goto_t op_do_end1(s7_scheme *sc)
+static goto_t op_do_end_false(s7_scheme *sc)
 {
-  if (is_true(sc, sc->value))             /* sc->value is the result of end-test evaluation */
-    {
-      /* we're done -- deal with result exprs, if there isn't an end test, there also isn't a result (they're in the same list)
-       * multiple-value end-test result is ok
-       */
-      sc->code = T_Lst(cddr(sc->args));   /* result expr (a list -- implicit begin) */
-      free_cell(sc, sc->args);
-      sc->args = sc->nil;
-      if (is_null(sc->code))
-	{
-	  if (is_multiple_value(sc->value))  /* (define (f) (+ 1 (do ((i 2 (+ i 1))) ((values i (+ i 1)))))) -> 6 */
-	    sc->value = splice_in_values(sc, multiple_value(sc->value));
-	  /* similarly, if the result is a multiple value: (define (f) (+ 1 (do ((i 2 (+ i 1))) ((= i 3) (values i (+ i 1)))))) -> 8 */
-	  return(goto_start);
-	}
-      /* might be => here as in cond and case */
-      if (is_null(cdr(sc->code)))
-	{
-	  if (has_fx(sc->code))
-	    {
-	      sc->value = fx_call(sc, sc->code);
-	      return(goto_start);
-	    }
-	  sc->code = car(sc->code);
-	  return(goto_eval);
-	}
-      if (is_undefined_feed_to(sc, car(sc->code)))
-	return(goto_feed_to);
-      push_stack_no_args(sc, sc->begin_op, cdr(sc->code));
-      sc->code = car(sc->code);
-      return(goto_eval);
-    }
   if (!is_pair(sc->code))
     return((is_null(car(sc->args))) ? /* no steppers */ goto_do_end : fall_through);
   if (is_null(car(sc->args)))
     push_stack_direct(sc, OP_DO_END);
   else push_stack_direct(sc, OP_DO_STEP);
   return(goto_begin);
+}
+
+static goto_t op_do_end_true(s7_scheme *sc)
+{
+  /* we're done -- deal with result exprs, if there isn't an end test, there also isn't a result (they're in the same list)
+   * multiple-value end-test result is ok
+   */
+  sc->code = T_Lst(cddr(sc->args));   /* result expr (a list -- implicit begin) */
+  free_cell(sc, sc->args);
+  sc->args = sc->nil;
+  if (is_null(sc->code))
+    {
+      if (is_multiple_value(sc->value))  /* (define (f) (+ 1 (do ((i 2 (+ i 1))) ((values i (+ i 1)))))) -> 6 */
+	sc->value = splice_in_values(sc, multiple_value(sc->value));
+      /* similarly, if the result is a multiple value: (define (f) (+ 1 (do ((i 2 (+ i 1))) ((= i 3) (values i (+ i 1)))))) -> 8 */
+      return(goto_start);
+    }
+  /* might be => here as in cond and case */
+  if (is_null(cdr(sc->code)))
+    {
+      if (has_fx(sc->code))
+	{
+	  sc->value = fx_call(sc, sc->code);
+	  return(goto_start);
+	}
+      sc->code = car(sc->code);
+      return(goto_eval);
+    }
+  if (is_undefined_feed_to(sc, car(sc->code)))
+    return(goto_feed_to);
+  push_stack_no_args(sc, sc->begin_op, cdr(sc->code));
+  sc->code = car(sc->code);
+  return(goto_eval);
 }
 
 
@@ -87553,7 +87539,7 @@ static Inline bool inline_collect_np_args(s7_scheme *sc, opcode_t op, s7_pointer
 
 static bool collect_np_args(s7_scheme *sc, opcode_t op, s7_pointer args) {return(inline_collect_np_args(sc, op, args));}
 
-static bool op_any_c_np(s7_scheme *sc) /* code: (func . args) where at least one arg is not fxable */ /* possibly inline */
+static /* inline */ bool op_any_c_np(s7_scheme *sc) /* code: (func . args) where at least one arg is not fxable */ /* possibly inline */
 {
   sc->args = sc->nil;
   for (s7_pointer p = cdr(sc->code); is_pair(p); p = cdr(p))
@@ -90365,17 +90351,19 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  if (op_do_end(sc)) goto EVAL;
 
 	case OP_DO_END1:
-	  switch (op_do_end1(sc))
+	  if (is_true(sc, sc->value))
 	    {
-	    case goto_start:   continue;
-	    case goto_eval:    goto EVAL;
-	    case goto_begin:   goto BEGIN;
-	    case goto_feed_to: goto FEED_TO;
-	    case goto_do_end:  goto DO_END;
-	    default:
-	      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
-	    case fall_through:
-	      break;
+	      goto_t next = op_do_end_true(sc);
+	      if (next == goto_start) continue;
+	      if (next == goto_eval) goto EVAL;
+	      goto FEED_TO;
+	    }
+	  else
+	    {
+	      goto_t next = op_do_end_false(sc);
+	      if (next == goto_begin) goto BEGIN;
+	      if (next == goto_do_end) goto DO_END;
+	      /* fall through */
 	    }
 
 	case OP_DO_STEP:  if (op_do_step(sc))  goto DO_END; goto EVAL;
@@ -90383,14 +90371,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	DO_END_CLAUSES:
 	  if (do_end_clauses(sc)) continue;
-
 	DO_END_CODE:
-	  switch (do_end_code(sc))
-	    {
-	    case goto_feed_to: goto FEED_TO;
-	    case goto_eval:    goto EVAL;
-	    default:           continue;
-	    }
+	  {
+	    goto_t next = do_end_code(sc);
+	    if (next == goto_eval) goto EVAL;
+	    if (next == goto_start) continue;
+	    goto FEED_TO;
+	  }
 
 
 	case OP_BEGIN_UNCHECKED:
@@ -90655,7 +90642,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 	case OP_COND_FEED:   if (op_cond_feed(sc)) goto EVAL; /* else fall through */
-	case OP_COND_FEED_1: if (op_cond_feed_1(sc)) goto EVAL; continue;
+	case OP_COND_FEED_1: if (is_true(sc, sc->value)) {op_cond_feed_1(sc); goto EVAL;} sc->value = sc->unspecified; continue;
 
 	case OP_COND:           check_cond(sc);
 	case OP_COND_UNCHECKED: if (op_cond_unchecked(sc)) goto EVAL;
@@ -94332,6 +94319,11 @@ s7_scheme *s7_init(void)
   init_tc_rec(sc);
 #endif
 
+  init_unlet(sc);
+  init_signatures(sc);      /* depends on procedure symbols */
+  sc->s7_let = make_s7_let(sc);
+  s7_set_history_enabled(sc, true);
+
 #if (!WITH_PURE_S7)
   s7_define_variable(sc, "make-rectangular", global_value(sc->complex_symbol));
   s7_eval_c_string(sc, "(define make-polar                                                                \n\
@@ -94377,27 +94369,6 @@ s7_scheme *s7_init(void)
                                 clauses)                                                                  \n\
                               (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
 
-#if 0
-  s7_eval_c_string(sc, "(define make-hook                                                                 \n\
-                          (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
-                            (lambda hook-args                                                             \n\
-                              (let ((body ()))                                                            \n\
-                                (apply lambda* hook-args                                                  \n\
-                                  (copy '(let ((result #<unspecified>))                                   \n\
-                                           (let ((hook (curlet)))                                         \n\
-                                             (for-each (lambda (hook-function) (hook-function hook)) body)\n\
-                                             result))                                                     \n\
-                                        :readable)                                                        \n\
-                                  ())))))");
-  /* hooks need an indication that a name passed as an argument is not a parameter name even when it is defined (in rootlet for example)
-   *   (define h (make-hook 'x)) (set! (hook-functions h) (list (lambda (hk) (set! (hk 'result) (hk 'abs))))) (h 123) -> abs
-   */
-#else
-  /* this is much faster than using copy, and surely copy isn't needed here; this version returns #<undefined> for anything that 
-   *  would otherwise be found in rootlet, but ideally we wouldn't have to create a new let, load up the fallback etc -- 
-   *  maybe add a flag on the let (blocked?) or notice let-ref-fallback in lets (as opposed to sublet), then it could be in the let with result.
-   *  the same sublet+fallback code could be used in the old version above
-   */
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list.\")) \n\
                             (lambda hook-args                                                             \n\
@@ -94407,8 +94378,7 @@ s7_scheme *s7_init(void)
                                       (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>))))) \n\
                                         (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
                                         result))))))))");
-  /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)) */
-#endif
+  /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)), see stuff.scm for commentary */
 
   s7_eval_c_string(sc, "(define hook-functions                                                            \n\
                           (let ((+signature+ '(#t procedure?))                                            \n\
@@ -94465,8 +94435,6 @@ s7_scheme *s7_init(void)
 					"*rootlet-redefinition-hook* functions are called when a top-level variable's value is changed, (hook 'name 'value).");
 
   sc->let_temp_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
-  sc->s7_let = make_s7_let(sc);
-  s7_set_history_enabled(sc, true);
 
 #if S7_DEBUGGING
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL);
@@ -94480,8 +94448,6 @@ s7_scheme *s7_init(void)
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
 
-  init_unlet(sc);
-  init_signatures(sc);      /* depends on procedure symbols */
   return(sc);
 }
 
@@ -94841,70 +94807,64 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    461    461
- * index     1026   1016    973    968    967   958
- * tmock     1177   1165   1057   1036   1037
+ * index     1026   1016    973    968    959
+ * tmock     1177   1165   1057   1036   1036
  * tvect     2519   2464   1772   1689   1689
- * texit     ----   ----   1778   1749   1756  1744
+ * texit     ----   ----   1778   1749   1745
  * s7test    1873   1831   1818   1779   1782
  * timp      2971   2891   2176   2043   2019
- * lt        2187   2172   2150   2143   2148
- * tauto     ----   ----   2562   2207   2161  2172 [sublet_1]
- * dup       3805   3788   2492   2273   2337  2305
- * tload     ----   ----   3046   2352   2353
- * tread     2440   2421   2419   2376   2378
+ * lt        2187   2172   2150   2143   2147
+ * tauto     ----   ----   2562   2207   2174
+ * dup       3805   3788   2492   2273   2306
+ * tload     ----   ----   3046   2352   2357
+ * tread     2440   2421   2419   2376   2372
  * fbench    2688   2583   2460   2403   2411
  * trclo     2735   2574   2454   2423   2423
- * tcopy     8035   5546   2539   2503   2475  2495 [s7_copy_1/hash_table_copy]
  * titer     2865   2842   2641   2475   2483
- * tmat      3065   3042   2524   2511   2528  2524
- * tb        2735   2681   2612   2574   2577  2607 [gc mark_vector|pair??]
+ * tcopy     8035   5546   2539   2503   2495
+ * tmat      3065   3042   2524   2511   2519
+ * tb        2735   2681   2612   2574   2603
  * tsort     3105   3104   2856   2820   2820
- * teq       4068   4045   3536   3450   3433
- * tmac      3950   3873   3033   3541   3554  3549
+ * teq       4068   4045   3536   3450   3433  3445 [hash_table_equal_1|iterate]
+ * tmac      3950   3873   3033   3541   3554  3559 [op_any_c_np_mv]
  * tio       3816   3752   3683   3588   3600
- * tobj      4016   3970   3828   3624   3614  3611
- * tclo      4787   4735   4390   4309   4221
- * tlet      7775   5640   4450   4393   4404
- * tcase     4960   4793   4439   4407   4435  4420
- * tmap      8869   8774   4489   4468   4469
- * tfft      7820   7729   4755   4599   4603  4581
- * tshoot    5525   5447   5183   5099   5094  5089
- * tform     5357   5348   5307   5281   5275  5288 [pair_to_port]
- * tnum      6348   6013   5433   5378   5404  5390
- * tstr      6880   6342   5488   5400   5434  5386
- * tlamb     6423   6273   5720   5530   5545  5496
- * tset      ----   ----   ----   6163   6171  6133
- * tlist     7896   7546   6558   6195   6198
- * tmisc     8869   7612   6435   6239   6252  6239
- * tgsl      8485   7802   6373   6301   6305  6302
+ * tobj      4016   3970   3828   3624   3612
+ * tclo      4787   4735   4390   4309   4218
+ * tlet      7775   5640   4450   4393   4406
+ * tcase     4960   4793   4439   4407   4424
+ * tmap      8869   8774   4489   4468   4476
+ * tfft      7820   7729   4755   4599   4580
+ * tshoot    5525   5447   5183   5099   5089
+ * tform     5357   5348   5307   5281   5283
+ * tnum      6348   6013   5433   5378   5357
+ * tstr      6880   6342   5488   5400   5385
+ * tlamb     6423   6273   5720   5530   5500
+ * tset      ----   ----   ----   6163   6136  6140 [eval]
+ * tlist     7896   7546   6558   6195   6204
+ * tmisc     8869   7612   6435   6239   6244
+ * tgsl      8485   7802   6373   6301   6303
  * trec      6936   6922   6521   6538   6512
  * tari      13.0   12.7   6827   6633   6635
- * tleft     10.4   10.2   7657   7472   7480  7477
- * tgc       11.9   11.1   8177   8002   8020
- * thash     11.8   11.7   9734   9489   9474  9462
- * cb        11.2   11.0   9658   9539   9556  9543
+ * tleft     10.4   10.2   7657   7472   7480  7426 [2 inlined fx_case*]
+ * tgc       11.9   11.1   8177   8002   8016
+ * thash     11.8   11.7   9734   9489   9461
+ * cb        11.2   11.0   9658   9539   9543
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.7
+ * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.5   56.6
- * lg        ----   ----  105.2  104.6  104.9 105.0 [op_any_c_np > op_dox_step_o]
- * tbig     177.4  175.8  156.5  150.6  150.5 105.4
+ * lg        ----   ----  105.2  104.6  104.9
+ * tbig     177.4  175.8  156.5  150.6  150.4
  * -----------------------------------------------
  *
- * tset op for eval, p_p_f_/setter->s7test
  * t718: optimize_syntax overeagerness
  *       hash :readable does not include eqf/mapf unless it's a built-in choice, more closure cases here?
  *       accept anonymous typer?
  * need thook.scm [t592]
- * add hook? make-hook but how to check?
- *   (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
- *      but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
- *   hook -> apply_unsafe_closure*
- * try op_any_c_np inline, maybe base_vector_equal Inline and for_each_any_list
- * one cases: remove_from_heap(sg index) tree_is_cyclic(list) make_empty_string(io hash big, already Inline)
- *   cyclic_sequences_p_pp(gc eq case), opt_integer_symbol(mat), case_e_g_1 (move ok), op_cond_feed_1(lg)
- *   op_do_no_body_na_vars_step(lg cb). op_do_end1(split, num lg misc sg), maybe inline_op_any_c_np_1
- *   maybe op_any_c_np* should be split sideways?
+ *    hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
+ *
+ * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
+ *    but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
  *
  * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
  *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??

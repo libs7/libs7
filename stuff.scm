@@ -1544,6 +1544,42 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 
 
 ;;; --------------------------------------------------------------------------------
+;;;
+#|
+;;; other make-hook possibilities.  Here is the original:
+
+(define make-hook
+  (let ((+documentation+ "(make-hook . pars) returns a new hook (a function) that passes the parameters to its function list."))
+    (lambda hook-args
+      (let ((body ()))
+        (apply lambda* hook-args
+               (copy '(let ((result #<unspecified>))
+                        (let ((hook (curlet)))
+                          (for-each (lambda (hook-function) (hook-function hook)) body)
+                          result))
+                     :readable)
+	       ())))))
+
+;;; but hooks need an indication that a name passed as an argument is not a parameter name even when it is defined (in rootlet for example)
+;;;   (define h (make-hook 'x)) (set! (hook-functions h) (list (lambda (hk) (set! (hk 'result) (hk 'abs))))) (h 123) -> abs
+;;; but the current s7.c version is much faster than using copy, and surely copy isn't needed here; the current version returns #<undefined> for anything that 
+;;;  would otherwise be found in rootlet, but ideally we wouldn't have to create a new let, load up the fallback etc -- 
+;;;  maybe add a flag on the let (blocked?) or notice let-ref-fallback in lets (as opposed to sublet), then it could be in the let with result.
+
+;;; here is a macro make-hook:
+
+(define-macro (make-hook . hook-args)
+  `(let ((body ()))
+     (lambda* ,(map (lambda (p) (if (pair? p) (cadr p) (if (keyword? p) p (error 'wrong-type-arg "make-hook arg ~S?" p)))) hook-args)
+       (let ((result #<unspecified>))
+         (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>)))))
+           (for-each (lambda (hook-function) (hook-function hook)) body)
+           result)))))
+
+;;; but this is much slower than the current apply lambda* version
+|#
+
+;;; --------------------------------------------------------------------------------
 
 (define null-environment
   (let ((e #f))
@@ -1704,3 +1740,4 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 				 (apply format #f (cadr args)))
 			       (lambda args
 				 (copy "?")))))))))))))
+
