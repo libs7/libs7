@@ -1,0 +1,23 @@
+# libs7
+
+A Scheme interpreter derived from link:https://ccrma.stanford.edu/software/snd/snd/s7.html[s7].  For more information see link:https://iainctduncan.github.io/scheme-for-max-docs/s7.html[Why S7 Scheme?].
+
+This library uses a stripped-down and modified copy of the s7 sources;
+it includes only what is needed to build OBazl tools like
+link:https://github.com/obazl/mibl[mibl],
+link:https://github.com/obazl/tools_obazl[tools_obazl],
+
+
+This is a component of the link:https://obazl.github.io/docs_obazl/[OBazl Toolsuite].
+
+Build targets:
+
+* `bazel build @libs7//src:s7` - produces `libs7.lo`, `libc_s7.so`
+* `bazel build @libs7//src:c_s7` - produces `libc_s7.so`
+* `bazel run @libs7//src:repl` - launches a primitive repl (currently broken)
+
+
+'''
+link:https://cm-gitlab.stanford.edu/bil/s7.git[s7 git repository]  If you get a certificate complaint try `git config --global http.sslVerify false`.
+
+
