@@ -4,8 +4,8 @@ A Scheme interpreter derived from link:https://ccrma.stanford.edu/software/snd/s
 
 This library uses a stripped-down and modified copy of the s7 sources;
 it includes only what is needed to build OBazl tools like
-link:https://github.com/obazl/mibl[mibl],
-link:https://github.com/obazl/tools_obazl[tools_obazl],
+link:https://github.com/obazl/mibl[mibl] and
+link:https://github.com/obazl/tools_obazl[tools_obazl].
 
 
 This is a component of the link:https://obazl.github.io/docs_obazl/[OBazl Toolsuite].
