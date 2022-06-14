@@ -3761,6 +3761,8 @@ static void try_to_call_gc(s7_scheme *sc);
 #if WITH_GCC
 #define make_integer(Sc, N) \
   ({ s7_int _N_; _N_ = (N); (is_small_int(_N_) ? small_int(_N_) : ({ s7_pointer _I_; new_cell(Sc, _I_, T_INTEGER); integer(_I_) = _N_; _I_;}) ); })
+#define make_integer_unchecked(Sc, N) \
+  ({ s7_int _N_; _N_ = (N); (is_small_int(_N_) ? small_int(_N_) : ({ s7_pointer _I_; new_cell_no_check(Sc, _I_, T_INTEGER); integer(_I_) = _N_; _I_;}) ); })
 
 #define make_real(Sc, X) ({ s7_pointer _R_; s7_double _N_ = (X); new_cell(Sc, _R_, T_REAL); set_real(_R_, _N_); _R_;})
 #define make_real_unchecked(Sc, X) ({ s7_pointer _R_; s7_double _N_ = (X); new_cell_no_check(Sc, _R_, T_REAL); set_real(_R_, _N_); _R_;})
@@ -3776,6 +3778,7 @@ static void try_to_call_gc(s7_scheme *sc);
 #else
 
 #define make_integer(Sc, N)           s7_make_integer(Sc, N)
+#define make_integer_unchecked(Sc, N) s7_make_integer(Sc, N)
 #define make_real(Sc, X)              s7_make_real(Sc, X)
 #define make_real_unchecked(Sc, X)    s7_make_real(Sc, X)
 #define make_complex(Sc, R, I)        s7_make_complex(Sc, R, I)
@@ -39195,8 +39198,9 @@ s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array)
   s7_pointer result;
   if (num_values == 0) return(sc->nil);
   sc->temp6 = sc->nil;
+  check_free_heap_size(sc, num_values);
   for (s7_int i = num_values - 1; i >= 0; i--)
-    sc->temp6 = cons(sc, array[i], sc->temp6);
+    sc->temp6 = cons_unchecked(sc, array[i], sc->temp6);
   result = sc->temp6;
   if (sc->safety > NO_SAFETY)
     check_list_validity(sc, "s7_array_to_list", result);
@@ -42058,9 +42062,10 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	add_vector(sc, vec);
 	s7_gc_protect_via_stack(sc, vec);
 	elements = s7_vector_elements(vec);
+	check_free_heap_size(sc, len);
 	if (is_float_vector(data))
-	  for (i = 0; i < len; i++) elements[i] = make_real(sc, float_vector(data, i));
-	else for (i = 0; i < len; i++) elements[i] = make_integer(sc, int_vector(data, i));
+	  for (i = 0; i < len; i++) elements[i] = make_real_unchecked(sc, float_vector(data, i));
+	else for (i = 0; i < len; i++) elements[i] = make_integer_unchecked(sc, int_vector(data, i));
 	if (sort_func)
 	  {
 	    sc->temp6 = vec;
@@ -42074,7 +42079,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  }
 	unstack(sc);
 	set_car(args, vec);
-	push_stack(sc, OP_SORT_VECTOR_END, cons_unchecked(sc, data, lessp), sc->code); /* save and gc protect the original homogeneous vector and func */
+	push_stack(sc, OP_SORT_VECTOR_END, cons(sc, data, lessp), sc->code); /* save and gc protect the original homogeneous vector and func */
       }
       break;
 
@@ -48233,8 +48238,9 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  if (is_pair(dest))
 	    {
 	      s7_pointer p;
+	      check_free_heap_size(sc, end - start);
 	      for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p), slot = next_slot(slot))
-		set_car(p, cons(sc, slot_symbol(slot), slot_value(slot)));
+		set_car(p, cons_unchecked(sc, slot_symbol(slot), slot_value(slot)));
 	    }
 	  else
 	    if (is_let(dest))
@@ -48254,10 +48260,18 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	    else
 	      if (is_hash_table(dest))
 		for (i = start; i < end; i++, slot = next_slot(slot))
-		  s7_hash_table_set(sc, dest, slot_symbol(slot), slot_value(slot));
+		  s7_hash_table_set(sc, dest, slot_symbol(slot), slot_value(slot)); /* if value=#f, dest will not contain symbol */
 	      else
-		for (i = start, j = 0; i < end; i++, j++, slot = next_slot(slot))
-		  set(sc, dest, j, cons(sc, slot_symbol(slot), slot_value(slot)));
+		if ((is_normal_vector(dest)) && (set != typed_vector_setter))
+		  {
+		    s7_pointer *els = vector_elements(dest);
+		    check_free_heap_size(sc, end - start);
+		    for (i = start, j = 0; i < end; i++, j++, slot = next_slot(slot))
+		      els[j] = cons_unchecked(sc, slot_symbol(slot), slot_value(slot));
+		  }
+		else
+		  for (i = start, j = 0; i < end; i++, j++, slot = next_slot(slot))
+		    set(sc, dest, j, cons(sc, slot_symbol(slot), slot_value(slot)));
 	}
       return(dest);
 
@@ -48276,10 +48290,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	if (is_pair(dest))
 	  {
 	    s7_pointer p;
+	    check_free_heap_size(sc, end - start);
 	    for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p))
 	      {
 		while (!x) x = elements[++loc];
-		set_car(p, cons(sc, hash_entry_key(x), hash_entry_value(x)));
+		set_car(p, cons_unchecked(sc, hash_entry_key(x), hash_entry_value(x)));
 		x = hash_entry_next(x);
 	      }}
 	else
@@ -48297,16 +48312,18 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 				set_elist_4(sc, wrap_string(sc, "~A into ~A: ~A is a constant", 28), caller, dest, symbol));
 		  if ((symbol != sc->let_ref_fallback_symbol) &&
 		      (symbol != sc->let_set_fallback_symbol))
-		    add_slot_checked_with_id(sc, dest, symbol, hash_entry_value(x));
+		    add_slot_checked_with_id(sc, dest, symbol, hash_entry_value(x)); /* ...unchecked... if size ok */
 		  x = hash_entry_next(x);
 		}}
 	  else
-	    for (i = start, j = 0; i < end; i++, j++)
-	      {
-		while (!x) x = elements[++loc];
-		set(sc, dest, j, cons(sc, hash_entry_key(x), hash_entry_value(x)));
-		x = hash_entry_next(x);
-	      }
+	    {
+	      check_free_heap_size(sc, end - start);
+	      for (i = start, j = 0; i < end; i++, j++)
+		{
+		  while (!x) x = elements[++loc];
+		  set(sc, dest, j, cons_unchecked(sc, hash_entry_key(x), hash_entry_value(x)));
+		  x = hash_entry_next(x);
+		}}
         return(dest);
       }
 
@@ -48366,12 +48383,9 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	if ((is_normal_vector(dest)) && (!is_typed_vector(dest)))
 	  {
 	    s7_pointer *dst = vector_elements(dest);
+	    check_free_heap_size(sc, end - start);
 	    for (i = start, j = 0; i < end; i++, j++)
-	      {
-		dst[j++] = make_real(sc, src[i++]);
-		if (i == end) break;
-		dst[j] = make_real_unchecked(sc, src[i]);
-	      }
+	      dst[j] = make_real_unchecked(sc, src[i]);
 	    return(dest);
 	  }}
       break;
@@ -48392,8 +48406,9 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	   */
 	  {
 	    s7_pointer *dst = vector_elements(dest);
+	    check_free_heap_size(sc, end - start);
 	    for (i = start, j = 0; i < end; i++, j++)
-	      dst[j] = make_integer(sc, src[i]);
+	      dst[j] = make_integer_unchecked(sc, src[i]);
 	    return(dest);
 	  }
 	if (is_string(dest))
@@ -48422,8 +48437,9 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       if ((is_normal_vector(dest)) && (!is_typed_vector(dest)))
 	{
 	  s7_pointer *dst = vector_elements(dest);
+	  check_free_heap_size(sc, end - start);
 	  for (i = start, j = 0; i < end; i++, j++)
-	    dst[j] = make_integer(sc, (s7_int)(byte_vector(source, i)));
+	    dst[j] = make_integer_unchecked(sc, (s7_int)(byte_vector(source, i)));
 	  return(dest);
 	}
       if (is_int_vector(dest))
@@ -48473,15 +48489,17 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       if (is_float_vector(source))
 	{
 	  s7_double *els = float_vector_floats(source);
+	  check_free_heap_size(sc, end - start);
 	  for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p))
-	    set_car(p, make_real(sc, els[i]));
+	    set_car(p, make_real_unchecked(sc, els[i]));
 	}
       else
 	if (is_int_vector(source))
 	  {
 	    s7_int *els = int_vector_ints(source);
+	    check_free_heap_size(sc, end - start);
 	    for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p))
-	      set_car(p, make_integer(sc, els[i]));
+	      set_car(p, make_integer_unchecked(sc, els[i]));
 	  }
 	else
 	  for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p))
@@ -61113,7 +61131,6 @@ static bool b_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   int32_t cur_index = sc->pc;
   opt_info *o1;
   /* v[3] is set when we get here */
-
   if ((is_symbol(arg1)) &&
       (is_symbol(arg2)))
     {
@@ -90261,9 +90278,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_ASSOC_IF1:  if (op_assoc_if(sc)) continue;  goto APPLY;
 
 
-	case OP_SAFE_DOTIMES:
+	case OP_SAFE_DOTIMES: /* gen form */
 	SAFE_DOTIMES:         /* check_do */
-	  switch (op_safe_dotimes(sc))
+	  switch (op_safe_dotimes(sc)) /* gen form */
 	    {
 	    case goto_safe_do_end_clauses: if (is_null(sc->code)) continue; goto DO_END_CODE;
 	    case goto_do_end_clauses: goto DO_END_CLAUSES;
@@ -90274,13 +90291,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_SAFE_DO:
 	SAFE_DO:             /* from check_do */
-	  switch (op_safe_do(sc))
+	  switch (op_safe_do(sc)) /* mat */
 	    {
 	    case goto_safe_do_end_clauses:
-	      if (is_null(sc->code)) /* multiple values (as test result) can't happen here -- all safe do loops involve counters by 1 to some integer end */
-		continue;
+	      if (is_null(sc->code)) continue; /* multiple values (as test result) can't happen -- safe do loops involve counters by 1 to some integer end */
 	      goto DO_END_CODE;
-
 	    case goto_do_unchecked: goto DO_UNCHECKED;
 	    default: goto BEGIN;
 	    }
@@ -90296,7 +90311,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_DOX:
 	DOX:                 /* from check_do */
-	  switch (op_dox(sc))
+	  switch (op_dox(sc)) /* lg fft exit */
 	    {
 	    case goto_do_end_clauses: goto DO_END_CLAUSES;
 	    case goto_start:          continue;
@@ -90460,7 +90475,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SET_FROM_LET_TEMP: op_set_from_let_temp(sc); continue;
 
 	case OP_SET2:
-	  switch (op_set2(sc))
+	  switch (op_set2(sc)) /* imp */
 	    {
 	    case goto_eval:       goto EVAL;
 	    case goto_top_no_pop: goto TOP_NO_POP;
@@ -90490,7 +90505,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	SET_WITH_LET:
 	  activate_with_let(sc, sc->value);  /* this activates sc->value, so the set! will happen in that environment */
 	  if (is_pair(cadr(sc->code)))
-	    switch (set_implicit(sc))
+	    switch (set_implicit(sc))  /* imp misc */
 	      {
 	      case goto_top_no_pop: goto TOP_NO_POP;
 	      case goto_start:      continue;
@@ -90798,12 +90813,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	LET_TEMP_INIT1:
 	  if (op_let_temp_init1(sc)) goto EVAL;
 	case OP_LET_TEMP_INIT2:
-	  switch (op_let_temp_init2(sc))
+	  switch (op_let_temp_init2(sc)) /* let misc obj */
 	    {
 	    case goto_begin:         goto BEGIN;
 	    case goto_eval:          goto EVAL;
 	    case goto_set_unchecked: goto SET_UNCHECKED;
-	    case fall_through:       break;
+	    case fall_through:
 	    default:                 break;
 	    }
 
@@ -94807,45 +94822,45 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    461    461
- * index     1026   1016    973    968    959
+ * index     1026   1016    973    968    958
  * tmock     1177   1165   1057   1036   1036
  * tvect     2519   2464   1772   1689   1689
- * texit     ----   ----   1778   1749   1745
+ * texit     ----   ----   1778   1749   1744
  * s7test    1873   1831   1818   1779   1782
- * timp      2971   2891   2176   2043   2019
- * lt        2187   2172   2150   2143   2147
- * tauto     ----   ----   2562   2207   2174
- * dup       3805   3788   2492   2273   2306
- * tload     ----   ----   3046   2352   2357
+ * timp      2971   2891   2176   2043   2018
+ * lt        2187   2172   2150   2143   2146
+ * tauto     ----   ----   2562   2207   2173
+ * dup       3805   3788   2492   2273   2305
+ * tload     ----   ----   3046   2352   2356
  * tread     2440   2421   2419   2376   2372
  * fbench    2688   2583   2460   2403   2411
  * trclo     2735   2574   2454   2423   2423
+ * tcopy     8035   5546   2539   2503   2428
  * titer     2865   2842   2641   2475   2483
- * tcopy     8035   5546   2539   2503   2495
  * tmat      3065   3042   2524   2511   2519
  * tb        2735   2681   2612   2574   2603
- * tsort     3105   3104   2856   2820   2820
- * teq       4068   4045   3536   3450   3433  3445 [hash_table_equal_1|iterate]
- * tmac      3950   3873   3033   3541   3554  3559 [op_any_c_np_mv]
+ * tsort     3105   3104   2856   2820   2819
+ * teq       4068   4045   3536   3450   3445
+ * tmac      3950   3873   3033   3541   3548
  * tio       3816   3752   3683   3588   3600
  * tobj      4016   3970   3828   3624   3612
  * tclo      4787   4735   4390   4309   4218
  * tlet      7775   5640   4450   4393   4406
- * tcase     4960   4793   4439   4407   4424
- * tmap      8869   8774   4489   4468   4476
+ * tcase     4960   4793   4439   4407   4421
+ * tmap      8869   8774   4489   4468   4474
  * tfft      7820   7729   4755   4599   4580
- * tshoot    5525   5447   5183   5099   5089
- * tform     5357   5348   5307   5281   5283
+ * tshoot    5525   5447   5183   5099   5088
+ * tform     5357   5348   5307   5281   5278
  * tnum      6348   6013   5433   5378   5357
  * tstr      6880   6342   5488   5400   5385
- * tlamb     6423   6273   5720   5530   5500
- * tset      ----   ----   ----   6163   6136  6140 [eval]
+ * tlamb     6423   6273   5720   5530   5495
+ * tset      ----   ----   ----   6163   6133
  * tlist     7896   7546   6558   6195   6204
- * tmisc     8869   7612   6435   6239   6244
- * tgsl      8485   7802   6373   6301   6303
+ * tmisc     8869   7612   6435   6239   6233
+ * tgsl      8485   7802   6373   6301   6302
  * trec      6936   6922   6521   6538   6512
  * tari      13.0   12.7   6827   6633   6635
- * tleft     10.4   10.2   7657   7472   7480  7426 [2 inlined fx_case*]
+ * tleft     10.4   10.2   7657   7472   7426
  * tgc       11.9   11.1   8177   8002   8016
  * thash     11.8   11.7   9734   9489   9461
  * cb        11.2   11.0   9658   9539   9543
@@ -94862,6 +94877,9 @@ int main(int argc, char **argv)
  *       accept anonymous typer?
  * need thook.scm [t592]
  *    hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
+ * unlet opts
+ * list_set_p_pii (tlist) and num_eq_b|p_pi?? or wrap int|dbl rather than i|d_to_p if (say) an index
+ *   p_to_i|d?
  *
  * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
  *    but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
@@ -94875,5 +94893,4 @@ int main(int argc, char **argv)
  *   how to join? *s7-threads*? (current-s7), need to handle output
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
- *   unlet opts
  */
