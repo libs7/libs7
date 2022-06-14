@@ -59,12 +59,10 @@
 
 ;; basename with extension removed
 (define (bname path)
-  (let* ((last-slash (string-index-right path (lambda (c) (eq? c #\/))))
-         (basename (if last-slash
-                       (string-drop path (+ last-slash 1))
-                       path))
-         (last-dot (string-index-right basename (lambda (c) (eq? c #\.)))))
-    (string-take basename last-dot)))
+  (let* ((bn (basename path))
+         (last-dot (string-index-right bn (lambda (c) (eq? c #\.))))
+         )
+    (string-take bn last-dot)))
 
 (define principal-name
   (let ((+documentation+ "Returns path segment with extension removed. Usually for filenames, but works for directory names too, if they contain a dot.")
@@ -233,8 +231,11 @@
         (string-take path last-slash)
         path)))
 
-(define (basename path)
-  (let ((last-slash (string-index-right path (lambda (c) (eq? c #\/)))))
+(define (basename _path)
+  (let* ((path (if (string? _path) _path
+                   (if (symbol? _path) (symbol->string _path)
+                       (error 'wrong-arg-type "Arg to basename must be string or symbol: ~A" _path))))
+         (last-slash (string-index-right path (lambda (c) (eq? c #\/)))))
     (if last-slash
         (string-drop path (+ last-slash 1))
         path)))
