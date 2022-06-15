@@ -128,7 +128,8 @@
       (substring s start end)))
 
 (define string-take
-  (let ((+documentation+ "Returns first n characters of s")
+  (let ((+documentation+
+         "(string-take str n) returns first n characters of s")
         (+signature+ "(string-take str n)"))
     (lambda (s n)
       (check-arg string? s string-take)
@@ -148,7 +149,7 @@
         (%substring s (- len n) len)))))
 
 (define string-drop
-  (let ((+documentation+ "Drop first n characters of str")
+  (let ((+documentation+ "(string-drop str n) drop first n characters of str")
         (+signature+ "(string-drop str n)"))
     (lambda (s n)
       (check-arg string? s string-drop)
@@ -335,18 +336,38 @@
 ;; the segment of characters in string1 from start1 to end1 is
 ;; replaced by the segment of characters in string2 from start2 to
 ;; end2
-(define (string-replace s1 s2 start1 end1 . maybe-start+end)
-  ;; (check-substring-spec string-replace s1 start1 end1)
-  ;;(let-string-start+end (start2 end2) string-replace s2 maybe-start+end
-    (let* ((slen1 (string-length s1))
-	   (sublen2 (string-length s2)) ;; (- end2 start2))
-	   (alen (+ (- slen1 (- end1 start1)) sublen2))
-	   (ans (make-string alen)))
-      (%string-copy! ans 0 s1 0 start1)
-      (%string-copy! ans start1 s2 0 sublen2) ;; start2 end2)
-      (%string-copy! ans (+ start1 sublen2) s1 end1 slen1)
-      ans))
-;;)
+(define string-replace
+  (let ((+documentation+ "SRFI-152. The segment of characters in string1 from start1 to end1 is replaced by the segment of characters in string2 from start2 to end2.")
+        (+signature+ "(string-replace s1 s2 start end1 . maybe-start+end"))
+    (lambda (s1 s2 start1 end1 . maybe-start+end)
+      ;; (check-substring-spec string-replace s1 start1 end1)
+      ;;(let-string-start+end (start2 end2) string-replace s2 maybe-start+end
+      (let* ((slen1 (string-length s1))
+	     (sublen2 (string-length s2)) ;; (- end2 start2))
+	     (alen (+ (- slen1 (- end1 start1)) sublen2))
+	     (ans (make-string alen)))
+        (%string-copy! ans 0 s1 0 start1)
+        (%string-copy! ans start1 s2 0 sublen2) ;; start2 end2)
+        (%string-copy! ans (+ start1 sublen2) s1 end1 slen1)
+        ans))))
+
+(define string-replace-all
+  (let ((+documentation+ "Replaces all occurrences of substring a by substring b")
+        (+signature+ "(string-replace-all s a b"))
+    (lambda (s a b)
+      (let ((alen (string-length a))
+            (posn (string-position a s)))
+        ;; (format #t "posn: ~A,  ~A: ~A\n" a s posn)
+        (while posn
+               ;; (format #t "posn: ~A\n" posn)
+               ;; (format #t "s: ~A\n" s)
+	       (set! s (string-replace s b posn (+ posn alen)))
+               (if-let ((pos (string-position a s)))
+                       (set! posn pos)
+                       (set! posn #f)))
+        s))))
+
+;; (string-replace-all "a/../b/../c" ".." "x")
 
 (define (string-tr s char-from char-to)
   (let ((segs (string-split s char-from)))
