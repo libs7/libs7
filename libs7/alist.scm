@@ -205,19 +205,21 @@
                   (let ((_ (format #t " empty als, ks: ~A\n" ks))
                         (recres (recur als (cdr ks))))
                     (format #t " base recres for ~A: ~A\n" (car ks) recres)
-                    ;; (list (list (cons (car ks) ;; (fn '())) ;; add new elt
-                    ;;                   recres)))
-                    (cons (car ks) recres)))
+                    (if (alist? recres)
+                        (cons (car ks) recres)
+                        (cons (car ks) (list recres)))))
               ;; als not null
               (if (null? ks)
                   (begin
-                    ;; (format #t "matched all keys, applying fn to ~A\n" als)
-                    (fn als))
+                    (format #t "matched all keys, applying fn to ~A\n" als)
+                    (let ((base (fn als)))
+                      (format #t "fn result: ~A\n" base)
+                      base))
                   ;; ks and als not null
                   (begin
-                    ;; (format #t "xxxxxxxxxxxxxxxx\n")
-                    ;; (format #t "intermediate match on k ~A\n"
-                    ;;         (assoc (car ks) als))
+                    (format #t "(alist? als) ~A\n" (alist? als))
+                    (format #t "intermediate match on k? ~A\n"
+                            (assoc (car ks) als))
                     (if-let ((sub-alist (assoc (car ks) als)))
                           (begin
                             (format #t "intermediate match on k ~A\n"
@@ -234,7 +236,7 @@
 
                           ;; no match, both ks and als not null
                           (begin
-                            ;; (format #t "yyyyyyyyyyyyyyyy ~A\n" (car ks))
+                            (format #t "yyyyyyyyyyyyyyyy ~A\n" (car ks))
                             ;; (format #t "nomatch for key ~A - adding ~A\n"
                             ;;         (car ks) ks)
                             ;; (format #t "old als: ~A\n" als)
