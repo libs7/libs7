@@ -11,13 +11,16 @@ static s7_pointer FILE__symbol;
 /*
   Remove leading ./ and any ../ for path that does not exist on fs
   Returns char* that must be freed by client.
+
+  Web search finds manpage for Linux canonicalize_filename, but it's
+  not on macos.
  */
 /* FIXME: optimize. this does waaay too much copying. */
 /* FIXME: throw an error if too many '..' */
 /* e.g. a/b/../../../../../c */
-char *normalize_path(char *path)
+char *canonical_path(char *path)
 {
-    /* printf("normalize_path: %s\n", path); */
+    /* printf("canonical_path: %s\n", path); */
 
     char *buf = calloc(strlen(path), sizeof(char*));
     memset(buf, '\0', strlen(path));
@@ -50,10 +53,10 @@ char *normalize_path(char *path)
     int slashcount = 0;    /* consecutive '/' or "/./" */
 
     while (*src_cursor != '\0') {
-        printf("\nbuf: %s\n", buf);
-        printf("dst_cursor: %s\n", dst_cursor);
-        printf("src_cursor: %s\n", src_cursor);
-        printf("prev_slash: %s\n", prev_slash);
+        /* printf("\nbuf: %s\n", buf); */
+        /* printf("dst_cursor: %s\n", dst_cursor); */
+        /* printf("src_cursor: %s\n", src_cursor); */
+        /* printf("prev_slash: %s\n", prev_slash); */
         if (*src_cursor == '/') {
             /* printf("slash at %s; ct: %d, dotcount: %d\n", */
             /*        src_cursor, slashcount, dotcount); */
@@ -74,12 +77,12 @@ char *normalize_path(char *path)
             slashcount++;
             buflen = strlen(buf) - 1;
             if (*(buf + buflen) == '/') {
-                printf("searching buf backwards starting at: %s\n",
-                       buf + buflen-1);
+                /* printf("searching buf backwards starting at: %s\n", */
+                /*        buf + buflen-1); */
                 for (i=buflen-1; i>0; i--) {
-                    printf("check: %s\n", buf + i);
+                    /* printf("check: %s\n", buf + i); */
                     if (*(buf + i) == '/') {
-                        printf("bingo: %s\n", (char*)buf + i);
+                        /* printf("bingo: %s\n", (char*)buf + i); */
                         prev_slash = buf + i;
                         break;
                     }
@@ -216,7 +219,7 @@ char *normalize_path(char *path)
 }
 
 /* one arg: a path string */
-static s7_pointer g_normalize_path(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_canonical_path(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p, arg;
   char* _path;
@@ -225,7 +228,7 @@ static s7_pointer g_normalize_path(s7_scheme *sc, s7_pointer args)
   if (s7_is_string(arg))
     _path = (char*)s7_string(arg);
   else return(s7_wrong_type_arg_error(sc, __func__, 0, arg, "string"));
-  return(s7_make_string(sc, (char*)normalize_path(_path)));
+  return(s7_make_string(sc, (char*)canonical_path(_path)));
 }
 
 
@@ -392,10 +395,10 @@ void init_fs_api(s7_scheme *sc)
     pl_ssix = s7_make_signature(sc, 4, s, s, i, x);
 
     s7_define(sc, cur_env,
-              s7_make_symbol(sc, "normalize-path"),
-              s7_make_typed_function(sc, "normalize-path", g_normalize_path,
+              s7_make_symbol(sc, "canonical-path"),
+              s7_make_typed_function(sc, "canonical-path", g_canonical_path,
                                      1, 0, false,
-                                     "char* normalize_path(char* path)",
+                                     "char* canonical_path(char* path)",
                                      pl_ss));
 
     s7_define(sc, cur_env,
