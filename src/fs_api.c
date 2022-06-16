@@ -50,10 +50,10 @@ char *normalize_path(char *path)
     int slashcount = 0;    /* consecutive '/' or "/./" */
 
     while (*src_cursor != '\0') {
-        /* printf("\nbuf: %s\n", buf); */
-        /* printf("dst_cursor: %s\n", dst_cursor); */
-        /* printf("src_cursor: %s\n", src_cursor); */
-        /* printf("prev_slash: %s\n", prev_slash); */
+        printf("\nbuf: %s\n", buf);
+        printf("dst_cursor: %s\n", dst_cursor);
+        printf("src_cursor: %s\n", src_cursor);
+        printf("prev_slash: %s\n", prev_slash);
         if (*src_cursor == '/') {
             /* printf("slash at %s; ct: %d, dotcount: %d\n", */
             /*        src_cursor, slashcount, dotcount); */
@@ -74,13 +74,14 @@ char *normalize_path(char *path)
             slashcount++;
             buflen = strlen(buf) - 1;
             if (*(buf + buflen) == '/') {
-                /* printf("searching buf backwards starting at: %s\n", */
-                /*        buf + buflen-1); */
+                printf("searching buf backwards starting at: %s\n",
+                       buf + buflen-1);
                 for (i=buflen-1; i>0; i--) {
-                    /* printf("check: %s\n", buf + i); */
+                    printf("check: %s\n", buf + i);
                     if (*(buf + i) == '/') {
-                        /* printf("bingo: %s\n", (char*)buf + i); */
+                        printf("bingo: %s\n", (char*)buf + i);
                         prev_slash = buf + i;
+                        break;
                     }
                 }
                 if (prev_slash == NULL)
