@@ -10,10 +10,14 @@ static s7_pointer FILE__symbol;
 
 /*
   Remove leading ./ and any ../ for path that does not exist on fs
+  Returns char* that must be freed by client.
  */
+/* FIXME: optimize. this does waaay too much copying. */
+/* FIXME: throw an error if too many '..' */
+/* e.g. a/b/../../../../../c */
 char *normalize_path(char *path)
 {
-    printf("normalize_path: %s\n", path);
+    /* printf("normalize_path: %s\n", path); */
 
     char *buf = calloc(strlen(path), sizeof(char*));
     memset(buf, '\0', strlen(path));
@@ -23,6 +27,10 @@ char *normalize_path(char *path)
     char *src_anchor = path;
     char *dst_anchor = path;
     char *start  = path;
+
+    char *prev_slash = NULL;
+    char *prevprev_slash = NULL;
+    bool backup = false;
 
     /* if (path[0] == '.') { */
     /*     if (path[1] == '/') { */
@@ -35,57 +43,97 @@ char *normalize_path(char *path)
 
     int len  = strlen(src_cursor);
     int mvlen  = 0;
-    int i;
+    int i, buflen;
 
     bool editing = false;
     int dotcount   = 0;    /* consecutive '.' */
     int slashcount = 0;    /* consecutive '/' or "/./" */
 
     while (*src_cursor != '\0') {
-        printf("buf: %s\n", buf);
-        printf("dst_cursor: %s\n", dst_cursor);
-        printf("src_cursor: %s\n", src_cursor);
+        /* printf("\nbuf: %s\n", buf); */
+        /* printf("dst_cursor: %s\n", dst_cursor); */
+        /* printf("src_cursor: %s\n", src_cursor); */
+        /* printf("prev_slash: %s\n", prev_slash); */
         if (*src_cursor == '/') {
+            /* printf("slash at %s; ct: %d, dotcount: %d\n", */
+            /*        src_cursor, slashcount, dotcount); */
+            /* printf("prevprev_slash: %s\n", prevprev_slash); */
             if (slashcount == 0) {
                 if (dotcount > 0) {
                     /* we're in ./ prefix  */
-                    printf("xxxxxxxxxxxxxxxx\n");
                     slashcount++;
                     src_cursor++;
                     continue;
                 } else {
+                    /* we're in a filename somewhere */
                     src_anchor = src_cursor;
                     dst_anchor = dst_cursor;
                     *dst_cursor++ = *src_cursor;
                 }
             }
             slashcount++;
-            dotcount = 0;
+            buflen = strlen(buf) - 1;
+            if (*(buf + buflen) == '/') {
+                /* printf("searching buf backwards starting at: %s\n", */
+                /*        buf + buflen-1); */
+                for (i=buflen-1; i>0; i--) {
+                    /* printf("check: %s\n", buf + i); */
+                    if (*(buf + i) == '/') {
+                        /* printf("bingo: %s\n", (char*)buf + i); */
+                        prev_slash = buf + i;
+                    }
+                }
+                if (prev_slash == NULL)
+                    prev_slash = buf;
+                /* prev_slash = strrchr(buf, '/'); */
+                /* prev_slash--; */
+                /* prev_slash = strrchr(prev_slash, '/'); */
+            } else {
+                prev_slash = strrchr(buf, '/');
+            }
+            /* } */
             if (slashcount == 1) {
                 src_cursor++; // continue
             }
-            else if (dotcount == 2) { /* must be at end of "/../" */
-                // copy from src_cursor+1 to src_anchor, reset src_cursor and counters
-                src_cursor++;
+            else if (dotcount == 2) {
+                /* printf("slashct: %d, dotcount 2\n", slashcount); */
+                if (slashcount == 2) {
+                    /* at end of "/../" */
+                    // back up one level
+                    /* printf("BACKING UP\n"); */
+                    /* printf("buf: %s\n", buf); */
+                    /* printf("prev_slash: %s\n", prev_slash); */
+                    dst_cursor = prev_slash + 1;
+                    dst_cursor++;
+                    *dst_cursor = '\0';
+                    dst_cursor--;
+                    src_cursor++;
+                } else {
+                    /* end of "/././" */
+                    src_cursor++;
+                }
             }
             else {              /* consecutive '/' and '.' */
-                printf("at %s, dotcount: %d, slashcount: %d\n",
-                       src_cursor, dotcount, slashcount);
+                /* printf("at %s, dotcount: %d, slashcount: %d\n", */
+                /*        src_cursor, dotcount, slashcount); */
                 src_cursor++;
             }
         }
         else if (*src_cursor == '.') {
-            printf("DOT at %s, slashcount: %d\n",
-                   src_cursor, slashcount);
+            /* printf("DOT at %s, slashcount: %d\n", */
+            /*        src_cursor, slashcount); */
             if (slashcount == 0) { /* "foo.ml" */
-                /* careful: "./a/b" */
+                /* careful: "./a/b", "../a/b" */
                 if (src_cursor == start) {
                     src_cursor++;
+                    if (*src_cursor == '.')
+                        src_cursor++;
                     slashcount++; /* fake */
                     dotcount++;
                 } else {
                     dotcount=0;       /* e.g. a/.hidden */
                     *dst_cursor++ = *src_cursor++;
+                    *dst_cursor = '\0';
                 }
             }
             else if (slashcount > 0) { /* we've seen at least one '/' */
@@ -99,54 +147,63 @@ char *normalize_path(char *path)
         else {                  /* not '.' nor '/' */
             if (slashcount > 1) { /* we've seen consecutive '/', '.' */
                 if (dotcount == 1) {
-                    printf("Char at %s, sc: %d, dc: 1\n",
-                           src_cursor, slashcount);
-                    /* the h in  "a/././.hidden" */
-                    /* cp from src_cursor-1 to src_anchor, reset counters */
-                    --src_cursor;
-                    *dst_cursor++ = *src_cursor++;
-                    src_cursor++;
-                } else {
-                    /* dotcount must be 0, & we've seen at least 2 '/' */
-                    /* e.g. the c in "a/./c" */
+                    /* printf("Char at %s, sc: %d, dc: 1\n", */
+                    /*        src_cursor, slashcount); */
+                    if (*(src_cursor - 1) == '/') {
+                        /* printf("the b in a/./b, a/././b, etc.\n"); */
+                        *dst_cursor++ = *src_cursor++;
+                        *dst_cursor = '\0';
+                        slashcount = dotcount = 0;
+                    } else {
+                        /* printf("the h in  a/././.hidden\n"); */
+                        --src_cursor;
+                        *dst_cursor++ = *src_cursor++;
+                        src_cursor++;
+                        *dst_cursor = '\0';
+                        slashcount = dotcount = 0;
+                    }
+                } else { /* slashct > 1 */
+                    /* dotcount may be any */
+                    /* e.g. the c in "a/./c", "a///c", etc. */
                     /* cp from src_cursor-1 to src_anchor, reset counters */
                     src_anchor = src_cursor;
                     dst_anchor = dst_cursor;
-                    printf("shifting at src_cursor %s, src_anchor %s, buf %s\n",
-                           src_cursor, src_anchor, buf);
-                    printf("dotcount: %d, slashcount: %d\n",
-                           dotcount, slashcount);
+                    /* printf("shifting at src_cursor %s, src_anchor %s, buf %s\n", */
+                    /*        src_cursor, src_anchor, buf); */
+                    /* printf("dotcount: %d, slashcount: %d\n", */
+                    /*        dotcount, slashcount); */
                     mvlen = strlen(src_cursor);
-                    printf("mvlen: %d\n", mvlen);
-                    printf("src_anchor: %s\n", src_anchor);
-                    printf("dst_anchor: %s\n", dst_anchor);
+                    /* printf("mvlen: %d\n", mvlen); */
+                    /* printf("src_anchor: %s\n", src_anchor); */
+                    /* printf("dst_anchor: %s\n", dst_anchor); */
                     while ( *src_cursor != '\0') {
-                        printf("buf: %s, src_cursor: %s\n",
-                               buf, src_cursor);
+                        /* printf("buf: %s, src_cursor: %s\n", */
+                        /*        buf, src_cursor); */
                         *dst_cursor++ = *src_cursor++;
 
                         /* printf("src_anchor: %s\n", src_anchor); */
                     }
                     *dst_cursor = '\0';
-                    printf("buf: %s\n", buf);
-                    /* exit(EXIT_SUCCESS); */
+                    /* printf("buf: %s\n", buf); */
                     src_cursor = src_anchor;
                     dst_cursor = dst_anchor;
                     slashcount = dotcount = 0;
                 }
             }
             else if (slashcount == 1) {
-                printf("CHAR at %s, sc: %d, dc: %d\n",
-                       src_cursor, slashcount, dotcount);
+                /* printf("CHAR at %s, sc: %d, dc: %d\n", */
+                /*        src_cursor, slashcount, dotcount); */
                 if (dotcount > 0) {
                     /* b of a/.b */
                     --src_cursor;
                     *dst_cursor++ = *src_cursor++;
                     *dst_cursor++ = *src_cursor++;
+                    *dst_cursor = '\0';
                      slashcount = dotcount = 0;
                 } else {
                     /* b of a/b */
                     *dst_cursor++ = *src_cursor++;
+                    *dst_cursor = '\0';
                     slashcount = dotcount = 0;
                 }
             } else {
@@ -156,6 +213,20 @@ char *normalize_path(char *path)
     }
     return buf;
 }
+
+/* one arg: a path string */
+static s7_pointer g_normalize_path(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer p, arg;
+  char* _path;
+  p = args;
+  arg = s7_car(p);
+  if (s7_is_string(arg))
+    _path = (char*)s7_string(arg);
+  else return(s7_wrong_type_arg_error(sc, __func__, 0, arg, "string"));
+  return(s7_make_string(sc, (char*)normalize_path(_path)));
+}
+
 
 /* -------- chdir -------- */
 static s7_pointer s7__chdir(s7_scheme *sc, s7_pointer args)
@@ -305,7 +376,7 @@ static s7_pointer g_realpath(s7_scheme *sc, s7_pointer args)
 /* getcwd, chdir, fnmatch */
 void init_fs_api(s7_scheme *sc)
 {
-    s7_pointer cur_env, pl_issi, pl_ssi, pl_ssix, pl_is;
+    s7_pointer cur_env, pl_issi, pl_ss, pl_ssi, pl_ssix, pl_is;
     s7_int gc_loc;
 
     s7_pointer s,i,x;
@@ -314,9 +385,17 @@ void init_fs_api(s7_scheme *sc)
     x = s7_make_symbol(sc, "c-pointer?");
 
     pl_is = s7_make_signature(sc, 2, i, s);
+    pl_ss = s7_make_signature(sc, 2, s, s);
     pl_issi = s7_make_signature(sc, 4, i, s, s, i);
     pl_ssi = s7_make_signature(sc, 3, s, s, i);
     pl_ssix = s7_make_signature(sc, 4, s, s, i, x);
+
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "normalize-path"),
+              s7_make_typed_function(sc, "normalize-path", g_normalize_path,
+                                     1, 0, false,
+                                     "char* normalize_path(char* path)",
+                                     pl_ss));
 
     s7_define(sc, cur_env,
               s7_make_symbol(sc, "getcwd"),

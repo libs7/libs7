@@ -7,7 +7,10 @@ cc_library(
     name  = "s7",
     alwayslink = True,
     # linkstatic = True,
-    srcs  = ["s7.c", "mus-config.h"], ## "libc_s7.c"],
+    srcs  = [
+        "s7.c", "mus-config.h",
+        "glob.c", "fs_api.c",
+    ], ## "libc_s7.c"],
     hdrs  = ["s7.h"],
     copts = select({
         "//bzl/host:macos": ["-std=c11", "-Wextra"],

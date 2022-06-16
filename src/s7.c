@@ -1,7 +1,3 @@
-/* for OBAZL_RUNFILES_DIR: */
-#define VAL(str) #str
-#define TOSTRING(str) VAL(str)
-
 /* s7, a Scheme interpreter
  *
  *   derived from TinyScheme 1.39, but not a single byte of that code remains
@@ -94613,6 +94609,12 @@ s7_scheme *s7_init(void)
   init_unlet(sc);
   init_s7_let(sc);          /* set up *s7* */
   init_signatures(sc);      /* depends on procedure symbols */
+
+  void init_glob(s7_scheme *sc); /* obazl */
+  init_glob(sc);                /* obazl */
+
+  void init_fs_api(s7_scheme *sc); /* obazl */
+  init_fs_api(sc);                /* obazl */
   return(sc);
 }
 
@@ -94876,7 +94878,8 @@ void s7_repl(s7_scheme *sc)
    */
   e = s7_inlet(sc, list_2(sc, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
   gc_loc = s7_gc_protect(sc, e);
-  old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
+  // i couldn't figure out how to get at the libc_s7 stuff in curlet, so:
+  //  old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
   /* printf("loading %s/%s\n", TOSTRING(OBAZL_RUNFILES_DIR), "/libc_s7.o"); */
   printf("loading libc_s7.o\n");
@@ -94902,7 +94905,7 @@ void s7_repl(s7_scheme *sc)
       val = s7_load(sc, "repl.scm");
       if (val) repl_loaded = true;
     }
-  s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
+  /* s7_set_curlet(sc, old_e);       /\* restore incoming (curlet) *\/ */
   s7_gc_unprotect_at(sc, gc_loc);
 
   if (!val) /* s7_load was unable to find/load libc_s7.so or repl.scm */

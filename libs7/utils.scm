@@ -247,4 +247,3 @@
     (let ((res (glob.gl_pathv g)))
       (globfree g)
       res)))
-;;)
