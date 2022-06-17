@@ -247,3 +247,6 @@
     (let ((res (glob.gl_pathv g)))
       (globfree g)
       res)))
+
+(define (pwd)
+  (getcwd (make-string 1024) 1024))

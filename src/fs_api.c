@@ -401,6 +401,7 @@ void init_fs_api(s7_scheme *sc)
                                      "char* canonical_path(char* path)",
                                      pl_ss));
 
+    /* (getcwd (make-string 32) 32) */
     s7_define(sc, cur_env,
               s7_make_symbol(sc, "getcwd"),
               s7_make_typed_function(sc, "getcwd", s7__getcwd, 2, 0, false, "char* getcwd(char* size_t)", pl_ssi));
