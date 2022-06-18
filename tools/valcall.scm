@@ -48,6 +48,7 @@
 		     ("tobj.scm" . "v-obj")
 		     ("timp.scm" . "v-imp")
 		     ("tlamb.scm" . "v-lamb")
+		     ("thook.scm" . "v-hook")
 		     ))
 
 (define (last-callg)
@@ -88,6 +89,7 @@
 	 (list "repl" "texit.scm")
 	 (list "repl" "s7test.scm")
 	 (list "repl" "timp.scm")
+	 (list "repl" "thook.scm")
 	 (list "repl" "lt.scm")
 	 (list "repl" "tauto.scm")
 	 (list "repl" "dup.scm")

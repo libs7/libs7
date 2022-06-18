@@ -118,7 +118,7 @@
  * this code doesn't compile anymore in gcc 4.3 -- c11 might be needed
  */
 
-#if (defined(__GNUC__) || defined(__clang__)) /* s7 uses PRId64 so (for example) g++ 4.4 is too old */
+#if (defined(__GNUC__) || defined(__clang__) || defined(__TINYC__)) /* s7 uses PRId64 so (for example) g++ 4.4 is too old */
   #define WITH_GCC 1
 #else
   #define WITH_GCC 0
@@ -202,7 +202,7 @@
 #endif
 
 #ifndef WITH_C_LOADER
-  #if WITH_GCC && (!__MINGW32__) && (!__CYGWIN__)
+  #if (WITH_GCC || __TINYC__) && (!__MINGW32__) && (!__CYGWIN__)
     #define WITH_C_LOADER 1
   /* (load file.so [e]) looks for (e 'init_func) and if found, calls it as the shared object init function.
    * If WITH_SYSTEM_EXTRAS is 0, the caller needs to supply system and delete-file so that cload.scm works.
@@ -1442,7 +1442,6 @@ static void *Realloc(void *ptr, size_t size)
 
 
 /* -------------------------------- mallocate -------------------------------- */
-
 static void add_saved_pointer(s7_scheme *sc, void *p)
 {
   if (sc->saved_pointers_loc == sc->saved_pointers_size)
@@ -3230,7 +3229,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define hash_table_checker(p)          (T_Hsh(p))->object.hasher.hash_func
 #define hash_table_mapper(p)           (T_Hsh(p))->object.hasher.loc
 #define hash_table_procedures(p)       T_Lst(hash_table_block(p)->ex.ex_ptr)
-#define hash_table_set_procedures(p, Lst)  hash_table_block(p)->ex.ex_ptr = T_Lst(Lst)
+#define hash_table_set_procedures(p, Lst)  hash_table_block(p)->ex.ex_ptr = T_Lst(Lst)  /* both the checker/mapper: car/cdr, and the two typers (opt/opt2) */
 #define hash_table_procedures_checker(p)   car(hash_table_procedures(p))
 #define hash_table_procedures_mapper(p)    cdr(hash_table_procedures(p))
 #define hash_table_set_procedures_mapper(p, f) set_cdr(hash_table_procedures(p), f)
@@ -33140,9 +33139,37 @@ static void immutable_slots_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer po
       }
 }
 
+#if CYCLE_DEBUGGING
+static char *base1 = NULL, *min_char1 = NULL;
+#endif
+
 static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   /* the slot symbol might need (symbol...) in which case we don't want the preceding quote */
+#if CYCLE_DEBUGGING
+  char x;
+  if (!base1) base1 = &x; 
+  else 
+    if (&x > base1) base1 = &x; 
+    else 
+      if ((!min_char1) || (&x < min_char1))
+	{
+	  min_char1 = &x;
+	  if ((base1 - min_char1) > 100000)
+	    {
+	      fprintf(stderr, "slot infinite recursion?\n");
+	      if (port_data(port))
+		{
+		  fprintf(stderr, "   port contents (%ld bytes): \n", port_position(port));
+		  if (port_position(port) > 10000)
+		    port_data(port)[10000] = '\0';
+		  else port_data(port)[port_position(port)] = '\0';
+		  fprintf(stderr, "%s\n", port_data(port));
+		}
+	      abort();
+	    }}
+#endif
+
   symbol_to_port(sc, slot_symbol(obj), port, P_READABLE, NULL);
   port_write_character(port)(sc, ' ', port);
   object_to_port_with_circle_check(sc, slot_value(obj), port, use_write, ci);
@@ -39657,7 +39684,7 @@ a vector that points to the same elements as the original-vector but with differ
 	      if (new_len != new_end - offset)
 		s7_error_nr(sc, sc->wrong_type_arg_symbol,
 			    set_elist_4(sc, wrap_string(sc, "subvector dimensional length, ~S, does not match the start and end positions: ~S to ~S~%", 88),
-					s7_make_integer(sc, new_len), start, end));
+					wrap_integer(sc, new_len), start, end));
 	      vdims_original(v) = orig;
 	    }}}
 
@@ -39791,7 +39818,7 @@ static s7_pointer vector_ref_p_pii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_in
       (i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) ||
       (i2 >= vector_dimension(v, 1)))
-    return(g_vector_ref(sc, set_plist_3(sc, v, make_integer(sc, i1), make_integer(sc, i2))));
+    return(g_vector_ref(sc, set_plist_3(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2))));
   return(vector_getter(v)(sc, v, i2 + (i1 * vector_offset(v, 0))));
 }
 
@@ -39800,7 +39827,7 @@ static s7_pointer vector_ref_p_pii_direct(s7_scheme *sc, s7_pointer v, s7_int i1
   if ((i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) ||
       (i2 >= vector_dimension(v, 1)))
-    return(g_vector_ref(sc, set_plist_3(sc, v, make_integer(sc, i1), make_integer(sc, i2))));
+    return(g_vector_ref(sc, set_plist_3(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2))));
   return(vector_element(v, i2 + (i1 * vector_offset(v, 0))));
 }
 
@@ -39961,7 +39988,7 @@ static s7_pointer vector_set_p_piip(s7_scheme *sc, s7_pointer v, s7_int i1, s7_i
       (i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) ||
       (i2 >= vector_dimension(v, 1)))
-    return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer(sc, i2), p))); /* someday these should use plist_4 */
+    return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2), p))); /* someday these should use plist_4 */
 
   if (is_typed_vector(v))
     return(typed_vector_setter(sc, v, i2 + (i1 * vector_offset(v, 0)), p));
@@ -39978,7 +40005,7 @@ static s7_pointer vector_set_p_piip_direct(s7_scheme *sc, s7_pointer v, s7_int i
   if ((i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) ||
       (i2 >= vector_dimension(v, 1)))
-    return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer(sc, i2), p)));
+    return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2), p)));
   vector_element(v, i2 + (i1 * vector_offset(v, 0))) = p;
   return(p);
 }
@@ -39996,7 +40023,7 @@ static s7_pointer typed_vector_set_p_piip_direct(s7_scheme *sc, s7_pointer v, s7
   if ((i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) ||
       (i2 >= vector_dimension(v, 1)))
-    return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer(sc, i2), p)));
+    return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2), p)));
   return(typed_vector_setter(sc, v, i2 + (i1 * vector_offset(v, 0)), p));
 }
 
@@ -42126,7 +42153,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
   if (sc->safety > NO_SAFETY)
     {
       vector_element(lx, 4) = make_mutable_integer(sc, 0);
-      vector_element(lx, 5) = make_integer(sc, n * n);
+      vector_element(lx, 5) = make_integer_unchecked(sc, n * n);
     }
   push_stack(sc, OP_SORT, args, lx);
   sc->temp6 = sc->nil;
@@ -44175,7 +44202,10 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 
   if (hash_table_entries(new_hash) == 0)
     {
+      /* not sure about this -- should copy change the destination checker/mapper/typers? */
+      hash_table_set_procedures(new_hash, hash_table_procedures(old_hash));
       hash_table_checker(new_hash) = hash_table_checker(old_hash);
+      hash_table_mapper(new_hash) = hash_table_mapper(old_hash);
       if (hash_chosen(old_hash)) hash_set_chosen(new_hash);
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
@@ -44240,11 +44270,10 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 
 static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer val, table = car(args);
+  s7_pointer table = car(args), val = cadr(args);
   if (is_immutable(table))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->fill_symbol, table));
 
-  val = cadr(args);
   if (hash_table_entries(table) > 0)
     {
       hash_entry_t **entries = hash_table_elements(table);
@@ -45595,7 +45624,7 @@ static s7_pointer closure_arity_to_cons(s7_scheme *sc, s7_pointer x, s7_pointer 
   len = closure_arity(x);
   if (len < 0)                               /* dotted list => rest arg, (length '(a b . c)) is -2 */
     return(cons(sc, make_integer(sc, -len), max_arity));
-  return(cons(sc, make_integer(sc, len), make_integer(sc, len)));
+  return(cons(sc, make_integer(sc, len), make_integer_unchecked(sc, len)));
 }
 
 static void closure_star_arity_1(s7_scheme *sc, s7_pointer x, s7_pointer args)
@@ -45658,7 +45687,7 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_C_FUNCTION:
-      return(cons(sc, make_integer(sc, c_function_min_args(x)), make_integer(sc, c_function_max_args(x))));
+      return(cons(sc, make_integer(sc, c_function_min_args(x)), make_integer_unchecked(sc, c_function_max_args(x))));
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION_STAR:
       return(cons(sc, int_zero, make_integer(sc, c_function_max_args(x))));
     case T_MACRO: case T_BACRO: case T_CLOSURE:
@@ -45666,7 +45695,7 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
     case T_MACRO_STAR: case T_BACRO_STAR: case T_CLOSURE_STAR:
       return(closure_star_arity_to_cons(sc, x, closure_args(x)));
     case T_C_MACRO:
-      return(cons(sc, make_integer(sc, c_macro_min_args(x)), make_integer(sc, c_macro_max_args(x))));
+      return(cons(sc, make_integer(sc, c_macro_min_args(x)), make_integer_unchecked(sc, c_macro_max_args(x))));
     case T_GOTO: case T_CONTINUATION:
       return(cons(sc, int_zero, max_arity));
     case T_STRING:
@@ -47886,7 +47915,7 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
 	    (hash_table_mapper(dest) == default_hash_map))
 	  {
 	    if (hash_table_checker(dest) == hash_empty)
-	      hash_table_checker(dest) = hash_table_checker(source);
+	      hash_table_checker(dest) = hash_table_checker(source); /* copy hash_table_procedures also? what about the mapper? see hash_table_copy */
 	    else
 	      {
 		hash_table_checker(dest) = hash_equal;
@@ -49036,6 +49065,7 @@ static s7_pointer hash_table_append(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer new_hash;
   s7_gc_protect_via_stack(sc, args);
+  check_stack_size(sc);
   new_hash = s7_make_hash_table(sc, sc->default_hash_table_length);
   stack_protected2(sc) = new_hash;
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
@@ -66675,7 +66705,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
   if ((!arity_ok) &&
       (!s7_is_aritable(sc, f, len)))
     s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-		set_elist_4(sc, wrap_string(sc, "for-each ~A: ~A argument~P?", 27), f, make_integer(sc, len), make_integer(sc, len)));
+		set_elist_4(sc, wrap_string(sc, "for-each ~A: ~A argument~P?", 27), f, wrap_integer(sc, len), wrap_integer(sc, len)));
 
   if (for_each_arg_is_null(sc, cdr(args))) return(sc->unspecified);
 
@@ -79335,7 +79365,8 @@ static s7_pointer check_do(s7_scheme *sc)
 	      (car(v) == cadr(end)))
 	    {
 	      /* end var is (op var const|symbol) using same var as step so at least we can use SIMPLE_DO */
-	      bool has_set = false, one_line = ((is_null(cdr(body))) && (is_pair(car(body))));
+	      bool has_set = false;
+	      bool one_line = ((is_null(cdr(body))) && (is_pair(car(body))));
 	      if ((car(end) == sc->num_eq_symbol) && (is_symbol(cadr(end))) && (is_t_integer(caddr(end))))
 		{
 		  set_c_function(end, sc->num_eq_2);
@@ -80590,7 +80621,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 		s7_p_ppp_t fpt = o->v[3].p_ppp_f;
 		for (i = start; i < stop; i++)
 		  {
-		    slot_set_value(ctr_slot, make_integer(sc, i));
+		    slot_set_value(ctr_slot, make_integer(sc, i)); /* TODO unchecked if ctr not used in fpt (here and elsewhere) */
 		    fpt(sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1), slot_value(o->v[2].p));
 		  }}
 	    else
@@ -94809,6 +94840,7 @@ int main(int argc, char **argv)
  * texit     ----   ----   1778   1749   1744
  * s7test    1873   1831   1818   1779   1782
  * timp      2971   2891   2176   2043   1926
+ * thook     ----   ----   2590   2369   2113
  * lt        2187   2172   2150   2143   2146
  * tauto     ----   ----   2562   2207   2171
  * dup       3805   3788   2492   2273   2288
@@ -94856,23 +94888,14 @@ int main(int argc, char **argv)
  * t718: optimize_syntax overeagerness
  *       hash :readable does not include eqf/mapf unless it's a built-in choice, more closure cases here?
  *       accept anonymous typer?
- * need thook.scm [t592]
- *    hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
+ *       named-let as the typer
+ * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
+ *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
  * s7test 30773 -- (let(letrec)) where we should have (letrec(let))
  * opt_c/e: body as begin+jump to end sc->value? (like cond etc)
+ * more make_integer|real_unchecked possibilities, check wrap string, make->wrap cases?, check mutable if index
  *
  * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
  *    but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
- *
- * better tcc instructions (load libc_s7.so problem, add to WITH_C_LOADER list etc) check openbsd cload clang
- *   tcc s7test 3191 unbound v3? -- this is lookup_unexamined, worse is no complex, no *.so creation??
- *   tcc -o s7 s7.c -I. -g3 -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER -DS7_DEBUGGING
- *
- * for multithread s7: (with-s7 ((var database)...) . body)
- *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a)
- *   how to join? *s7-threads*? (current-s7), need to handle output
- *   libpthread.scm -> main [but should it include the pool/start_routine?]
- *   threads.c -> tools + tests
- *
- * lint: (letrec ((b (lambda () (+ a c))) (a 1) (c 2)) (b)) -> 3 or at least (let ((b (lambda () 3))) (b))
+ *    is this akin to op_implicit_vector_set_3|4? [only from set_implicit_vector]
  */
