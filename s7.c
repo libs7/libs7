@@ -202,7 +202,7 @@
 #endif
 
 #ifndef WITH_C_LOADER
-  #if (WITH_GCC || __TINYC__) && (!__MINGW32__) && (!__CYGWIN__)
+  #if WITH_GCC && (!__MINGW32__) && (!__CYGWIN__)
     #define WITH_C_LOADER 1
   /* (load file.so [e]) looks for (e 'init_func) and if found, calls it as the shared object init function.
    * If WITH_SYSTEM_EXTRAS is 0, the caller needs to supply system and delete-file so that cload.scm works.
@@ -1173,7 +1173,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer w, x, y, z;
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1, u2_1, u2_2;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1; /* dlist|clist and ulist can't overlap */
@@ -6990,6 +6990,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp7);
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
+  gc_mark(sc->temp10);
 
   gc_mark(car(sc->t1_1));
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
@@ -8505,7 +8506,7 @@ static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_le
   /* we're reusing let here as a let -- it was probably a pair */
 #if S7_DEBUGGING
   let->debugger_bits = 0;
-  if (!in_heap(let)) fprintf(stderr, "reusing an unheaped let?\n");
+  if (!in_heap(let)) {fprintf(stderr, "reusing an unheaped %s as a let?\n", s7_type_names[type(let)]); abort();}
 #endif
   set_full_type(let, T_LET | T_SAFE_PROCEDURE);
   let_set_slots(let, slot_end(sc));
@@ -10285,7 +10286,7 @@ static s7_pointer add_profile(s7_scheme *sc, s7_pointer code)
   s7_pointer p;
   if ((is_pair(car(code))) && (caar(code) == sc->profile_in_symbol))
     return(code);
-  p = cons_unchecked(sc, list_3(sc, sc->profile_in_symbol, s7_make_integer(sc, sc->profile_position), list_1(sc, sc->curlet_symbol)), code);
+  p = cons_unchecked(sc, list_3(sc, sc->profile_in_symbol, make_integer_unchecked(sc, sc->profile_position), list_1(sc, sc->curlet_symbol)), code);
   sc->profile_position++;
   set_unsafe_optimize_op(car(p), OP_PROFILE_IN);
   return(p);
@@ -10853,7 +10854,7 @@ void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_ty
 {
   if (!is_c_pointer(p))
     wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, strlen(caller)),
-					    make_integer(sc, argnum), p, sc->unused, sc->prepackaged_type_names[T_C_POINTER]);
+					    wrap_integer(sc, argnum), p, sc->unused, sc->prepackaged_type_names[T_C_POINTER]);
   if ((c_pointer(p) != NULL) &&
       (c_pointer_type(p) != expected_type))
     s7_error_nr(sc, sc->wrong_type_arg_symbol,
@@ -10862,7 +10863,7 @@ void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_ty
 			    wrap_string(sc, caller, strlen(caller)), c_pointer_type(p), expected_type) :
 		set_elist_5(sc, wrap_string(sc, "~S ~:D argument got a pointer of type ~S, but expected ~S", 56),
 			    wrap_string(sc, caller, strlen(caller)),
-			    make_integer(sc, argnum), c_pointer_type(p), expected_type));
+			    wrap_integer(sc, argnum), c_pointer_type(p), expected_type));
   return(c_pointer(p));
 }
 
@@ -15647,7 +15648,7 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	if (err >= pa) return(int_zero);
 	b = (s7_int)err;
 	pa -= b;
-	return((a < 0) ? make_integer(sc, -pa) : make_integer(sc, pa));
+	return(make_integer(sc, (a < 0) ? -pa : pa));
       }
 
     case T_RATIO:
@@ -18009,7 +18010,7 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
 	 *   (let () (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (display (floor 3441313796169221281/1720656898084610641)) (newline))) (func)): 1
 	 *   (let () (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (display (/ (floor 3441313796169221281/1720656898084610641))) (newline))) (func)): 1/2
 	 */
-	return((numerator(x) < 0) ? make_integer(sc, val - 1) : make_integer(sc, val)); /* not "val" because it might be truncated to 0 */
+	return(make_integer(sc, (numerator(x) < 0) ? (val - 1) : val)); /* not "val" because it might be truncated to 0 */
       }
     case T_REAL:
       {
@@ -18097,7 +18098,7 @@ static s7_pointer ceiling_p_p(s7_scheme *sc, s7_pointer x)
     case T_RATIO:
       {
 	s7_int val = numerator(x) / denominator(x);
-	return((numerator(x) < 0) ? make_integer(sc, val) : make_integer(sc, val + 1));
+	return(make_integer(sc, (numerator(x) < 0) ? val : (val + 1)));
       }
     case T_REAL:
       {
@@ -18198,7 +18199,7 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
 	  simple_out_of_range_nr(sc, sc->truncate_symbol, x, its_too_large_string);
 #endif
-	return((z > 0.0) ? make_integer(sc, (s7_int)floor(z)) : make_integer(sc, (s7_int)ceil(z)));
+	return(make_integer(sc, (z > 0.0) ? (s7_int)floor(z) : (s7_int)ceil(z)));
       }
 #if WITH_GMP
     case T_BIG_INTEGER:
@@ -18269,7 +18270,7 @@ static s7_pointer round_p_p(s7_scheme *sc, s7_pointer x)
 	if ((frac > 0.5) ||
 	    ((frac == 0.5) &&
 	     (truncated % 2 != 0)))
-	  return((numerator(x) < 0) ? make_integer(sc, truncated - 1) : make_integer(sc, truncated + 1));
+	  return(make_integer(sc, (numerator(x) < 0) ? (truncated - 1) : (truncated + 1)));
 	return(make_integer(sc, truncated));
       }
     case T_REAL:
@@ -21118,7 +21119,7 @@ static s7_pointer s7_truncate(s7_scheme *sc, s7_pointer caller, s7_double xf)   
 {
   if (fabs(xf) > QUOTIENT_FLOAT_LIMIT)
     simple_out_of_range_nr(sc, caller, wrap_real(sc, xf), its_too_large_string);
-  return((xf > 0.0) ? make_integer(sc, (s7_int)floor(xf)) : make_integer(sc, (s7_int)ceil(xf)));
+  return(make_integer(sc, (xf > 0.0) ? (s7_int)floor(xf) : (s7_int)ceil(xf)));
 }
 
 static s7_int c_quo_dbl(s7_scheme *sc, s7_double x, s7_double y)
@@ -24368,7 +24369,7 @@ sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
 	return(list_3(sc, int_zero, int_zero, int_one));
       num.fx = (double)real(x);
       return(list_3(sc,
-		    make_integer(sc, (s7_int)((num.ix & 0xfffffffffffffLL) | 0x10000000000000LL)),
+		    make_integer_unchecked(sc, (s7_int)((num.ix & 0xfffffffffffffLL) | 0x10000000000000LL)),
 		    make_integer(sc, (s7_int)(((num.ix & 0x7fffffffffffffffLL) >> 52) - 1023 - 52)),
 		    ((num.ix & 0x8000000000000000LL) != 0) ? minus_one : int_one));
     }
@@ -24843,7 +24844,7 @@ You can later apply random-state to this list to continue a random number sequen
   s7_pointer r = (is_null(args)) ? sc->default_rng : car(args);
   if (!is_random_state(r))
     return(method_or_bust_with_type(sc, r, sc->random_state_to_list_symbol, args, a_random_state_object_string, 1));
-  return(list_2(sc, make_integer(sc, random_seed(r)), make_integer(sc, random_carry(r))));
+  return(list_2(sc, make_integer(sc, random_seed(r)), make_integer_unchecked(sc, random_carry(r))));
 #endif
 }
 
@@ -25766,7 +25767,7 @@ static s7_pointer char_position_p_ppi(s7_scheme *sc, s7_pointer p1, s7_pointer p
   if (!is_string(p2))
     wrong_type_argument_nr(sc, sc->char_position_symbol, 2, p2, T_STRING);
   if (start < 0)
-    wrong_type_argument_with_type_nr(sc, sc->char_position_symbol, 3, make_integer(sc, start), a_non_negative_integer_string);
+    wrong_type_argument_with_type_nr(sc, sc->char_position_symbol, 3, wrap_integer(sc, start), a_non_negative_integer_string);
 
   c = character(p1);
   len = string_length(p2);
@@ -32398,7 +32399,7 @@ static void byte_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port,
       if (i == vlen)
 	{
 	  make_vector_to_port(sc, vect, port);
-	  p = integer_to_string(sc, byte_vector(vect, 0), &plen);
+	  p = integer_to_string(sc, byte_vector(vect, 0), &plen); /* only 0..10 start out with names: init_small_ints */
 	  port_write_string(port)(sc, p, plen, port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
@@ -38527,7 +38528,7 @@ static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_i
 static s7_pointer default_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(vector_element(vec, loc));}
 static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)     {return(make_integer(sc, int_vector(vec, loc)));}
 static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)   {return(make_real(sc, float_vector(vec, loc)));}
-static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)     {return(make_integer(sc, (uint8_t)(byte_vector(bv, loc))));}
+static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)     {return(small_int(byte_vector(bv, loc)));}
 
 static s7_pointer int_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
@@ -39196,6 +39197,7 @@ s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect)
   check_free_heap_size(sc, len);
   sc->temp6 = sc->nil;
   gc_protect_via_stack(sc, vect);
+  /* check loop */
   for (s7_int i = len - 1; i >= 0; i--)
     sc->temp6 = cons_unchecked(sc, vector_getter(vect)(sc, vect, i), sc->temp6); /* vector_getter can cause alloction/GC (int_vector_getter -> make_integer) */
   unstack(sc);
@@ -41385,7 +41387,7 @@ static s7_pointer g_bv_ref_2(s7_scheme *sc, s7_pointer args)
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(v)))
     out_of_range_nr(sc, sc->byte_vector_ref_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
-  return(make_integer(sc, byte_vector(v, ind)));
+  return(small_int(byte_vector(v, ind)));
 }
 
 static s7_pointer g_bv_ref_3(s7_scheme *sc, s7_pointer args)
@@ -41409,7 +41411,7 @@ static s7_pointer g_bv_ref_3(s7_scheme *sc, s7_pointer args)
   if ((ind2 < 0) || (ind2 >= vector_dimension(iv, 1)))
     out_of_range_nr(sc, sc->byte_vector_ref_symbol, int_three, index, (ind2 < 0) ? its_negative_string : its_too_large_string);
   ind1 = ind1 * vector_offset(iv, 0) + ind2;
-  return(make_integer(sc, byte_vector(iv, ind1)));
+  return(small_int(byte_vector(iv, ind1)));
 }
 
 static s7_pointer byte_vector_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer unused_expr, bool unused_ops)
@@ -41963,7 +41965,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	{
 	  s7_int i = 0;
 	  s7_pointer vec = g_vector(sc, data);
-	  s7_gc_protect_via_stack(sc, vec);
+	  gc_protect_2_via_stack(sc, vec, data);
 	  elements = s7_vector_elements(vec);
 	  sc->temp6 = vec;
 	  local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
@@ -42013,7 +42015,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 		return(data);
 	      }}
 	vec = make_simple_vector(sc, len);
-	s7_gc_protect_via_stack(sc, vec);
+	gc_protect_2_via_stack(sc, vec, data);
 	elements = s7_vector_elements(vec);
 	if (is_byte_vector(data))
 	  for (i = 0; i < len; i++) elements[i] = small_int(chrs[i]);
@@ -42065,13 +42067,14 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	 *   get/set macro in eval is SORT_DATA(k) then s7_vector_to_list if pair at start (sort_*_end)
 	 */
 	vec = make_vector_1(sc, len, FILLED, T_VECTOR);
+	gc_protect_2_via_stack(sc, vec, data);
 	/* we need this vector prefilled because make_real|integer below can cause a GC at any time during that loop,
 	 *   and the GC mark process expects the vector to have an s7_pointer at every element.
 	 */
 	add_vector(sc, vec);
-	s7_gc_protect_via_stack(sc, vec);
 	elements = s7_vector_elements(vec);
 	check_free_heap_size(sc, len);
+	/* check loop (data!) */
 	if (is_float_vector(data))
 	  for (i = 0; i < len; i++) elements[i] = make_real_unchecked(sc, float_vector(data, i));
 	else for (i = 0; i < len; i++) elements[i] = make_integer_unchecked(sc, int_vector(data, i));
@@ -42086,9 +42089,11 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    unstack(sc);
 	    return(data);
 	  }
-	unstack(sc);
 	set_car(args, vec);
-	push_stack(sc, OP_SORT_VECTOR_END, cons(sc, data, lessp), sc->code); /* save and gc protect the original homogeneous vector and func */
+	sc->temp6 = cons(sc, data, lessp);
+	unstack(sc);
+	push_stack(sc, OP_SORT_VECTOR_END, sc->temp6, sc->code); /* save and gc protect the original homogeneous vector and func */
+	sc->temp6 = sc->nil;
       }
       break;
 
@@ -46216,14 +46221,16 @@ static s7_pointer call_c_function_setter(s7_scheme *sc, s7_pointer func, s7_poin
 
 static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_value) /* see also op_set1 */
 {
-  s7_pointer func = slot_setter(slot);
+  s7_pointer func = slot_setter(slot), result;
   if (is_c_function(func))
     return(call_c_function_setter(sc, func, slot_symbol(slot), new_value));
   if (!is_any_procedure(func))
     return(new_value);
-  sc->args = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
+  sc->temp10 = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
-  return(s7_call(sc, func, sc->args));
+  result = s7_call(sc, func, sc->temp10);
+  sc->temp10 = sc->nil;
+  return(result);
 }
 
 static s7_pointer bind_symbol_with_setter(s7_scheme *sc, opcode_t op, s7_pointer symbol, s7_pointer new_value)
@@ -47933,14 +47940,14 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
 static noreturn void copy_element_error_nr(s7_scheme *sc, s7_pointer caller, s7_int num, s7_pointer element, int32_t desired_type)
 {
   set_elist_6(sc, wrap_string(sc, "~A ~:D element, ~S, is ~A but should be ~A", 42),
-	      caller, make_integer(sc, num), element, type_name_string(sc, element), sc->prepackaged_type_names[desired_type]);
+	      caller, wrap_integer(sc, num), element, type_name_string(sc, element), sc->prepackaged_type_names[desired_type]);
   s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->elist_6);
 }
 
 static noreturn void copy_element_error_with_type_nr(s7_scheme *sc, s7_pointer caller, s7_int num, s7_pointer element, s7_pointer desired_type)
 {
   set_elist_6(sc, wrap_string(sc, "~A ~:D element, ~S, is ~A but should be ~A", 42),
-	      caller, make_integer(sc, num), element, type_name_string(sc, element), desired_type);
+	      caller, wrap_integer(sc, num), element, type_name_string(sc, element), desired_type);
   s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->elist_6);
 }
 
@@ -48398,6 +48405,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  {
 	    s7_pointer *dst = vector_elements(dest);
 	    check_free_heap_size(sc, end - start);
+	    /* check loop (src) */
 	    for (i = start, j = 0; i < end; i++, j++)
 	      dst[j] = make_integer_unchecked(sc, src[i]);
 	    return(dest);
@@ -48430,7 +48438,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  s7_pointer *dst = vector_elements(dest);
 	  check_free_heap_size(sc, end - start);
 	  for (i = start, j = 0; i < end; i++, j++)
-	    dst[j] = make_integer_unchecked(sc, (s7_int)(byte_vector(source, i)));
+	    dst[j] = small_int(byte_vector(source, i));
 	  return(dest);
 	}
       if (is_int_vector(dest))
@@ -48489,6 +48497,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  {
 	    s7_int *els = int_vector_ints(source);
 	    check_free_heap_size(sc, end - start);
+	    /* check loop */
 	    for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p))
 	      set_car(p, make_integer_unchecked(sc, els[i]));
 	  }
@@ -50494,7 +50503,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	  #define PROFILE_MAX_STACK_SIZE 10000000  /* around 5G counting lets/arglists/slots, maybe an *s7* field for this? */
 	  if (sc->stack_size > PROFILE_MAX_STACK_SIZE)
 	    s7_error_nr(sc, make_symbol(sc, "stack-too-big"),
-			set_elist_2(sc, wrap_string(sc, "profiling stack size has grown past ~D", 38), make_integer(sc, PROFILE_MAX_STACK_SIZE)));
+			set_elist_2(sc, wrap_string(sc, "profiling stack size has grown past ~D", 38), wrap_integer(sc, PROFILE_MAX_STACK_SIZE)));
 	  /* rather than raise an error, we could unwind the stack here, popping off all unwind entries, but this is
 	   *   a very rare problem, and the results will be confusing anyway.
 	   */
@@ -52008,8 +52017,9 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 
     case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
       check_stack_size(sc);
-      sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
-      sc->value = s7_call(sc, obj, sc->args);
+      sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
+      sc->value = s7_call(sc, obj, sc->temp10);
+      sc->temp10 = sc->nil;
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
@@ -52023,8 +52033,9 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
     default: /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi"?, also here with (apply (inlet) '(define y 32)) */
       if (!is_applicable(obj))            /* (apply (list cons cons) (list 1 2)) needs the argnum check mentioned below */
 	apply_error_nr(sc, obj, indices);
-      sc->args = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
-      sc->value = s7_call(sc, obj, sc->args);
+      sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; /* do not use sc->args here! */
+      sc->value = s7_call(sc, obj, sc->temp10);
+      sc->temp10 = sc->nil;
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
@@ -66404,6 +66415,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 			else for (i = 0; i < len; i++) {real(sv) = vals[i]; fp(o);}
 		      }
 		    else for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}
+	      /* check loop */
 	      else for (i = 0; i < len; i++) {slot_set_value(slot, make_real(sc, vals[i])); func(sc);}
 	      return(sc->unspecified);
 	    }
@@ -66425,6 +66437,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      s7_int (*fi)(opt_info *o) = o->v[0].fi;
 		      for (i = 0; i < len; i++)	{integer(sv) = vals[i]; fi(o);}}
 		  else for (i = 0; i < len; i++) {integer(sv) = vals[i]; func(sc);}}
+	      /* check loop */
 	      else for (i = 0; i < len; i++) {slot_set_value(slot, make_integer(sc, vals[i])); func(sc);}
 	      return(sc->unspecified);
 	    }
@@ -66947,6 +66960,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	      s7_int len = vector_length(seq);
 	      for (s7_int i = 0; i < len; i++)
 		{
+		  /* check loop */
 		  slot_set_value(slot, make_real(sc, vals[i]));
 		  z = func(sc);
 		  if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
@@ -66958,6 +66972,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 	    {
 	      s7_int *vals = int_vector_ints(seq);
 	      s7_int len = vector_length(seq);
+	      /* check loop */
 	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, make_integer(sc, vals[i]));
@@ -79918,12 +79933,16 @@ static goto_t op_dox(s7_scheme *sc)
 			  if (is_step_end(stepper))
 			    {
 			      s7_int lim = do_loop_end(slot_value(stepper));
-			      do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < lim);
+			      /* check loop -- we have safe-stepper above? */
+			      if ((i >= 0) && (lim < NUM_SMALL_INTS))
+				do {fp(o); slot_set_value(stepper, small_int(++i));} while (i < lim);
+			      else do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < lim);
 			      sc->value = sc->T;
 			    }
 			  else
 			    do {
 			      fp(o);
+			      /* check loop */
 			      slot_set_value(stepper, make_integer(sc, ++i));
 			    } while ((sc->value = endf(sc, endp)) == sc->F);
 			}}
@@ -79942,6 +79961,7 @@ static goto_t op_dox(s7_scheme *sc)
 		      /* here the is_step_end business doesn't happen much */
 		      do {
 			bodyf(sc);
+			/* check loop */
 			slot_set_value(stepper, make_integer(sc, ++i));
 		      } while ((sc->value = endf(sc, endp)) == sc->F);
 		  sc->code = cdr(end);
@@ -80612,6 +80632,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	      s7_p_ppp_t fpt = o->v[4].p_ppp_f;
 	      for (i = start; i < stop; i++)
 		{
+		  /* check loop */
 		  slot_set_value(ctr_slot, make_integer(sc, i));
 		  fpt(sc, slot_value(o->v[1].p), slot_value(o->v[2].p), slot_value(o->v[3].p));
 		}}
@@ -80621,12 +80642,14 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 		s7_p_ppp_t fpt = o->v[3].p_ppp_f;
 		for (i = start; i < stop; i++)
 		  {
-		    slot_set_value(ctr_slot, make_integer(sc, i)); /* TODO unchecked if ctr not used in fpt (here and elsewhere) */
+		    /* check loop */
+		    slot_set_value(ctr_slot, make_integer(sc, i)); /* TODO unchecked if ctr not used in fpt (here and elsewhere) if i not set in body */
 		    fpt(sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1), slot_value(o->v[2].p));
 		  }}
 	    else
 	      if ((fp == opt_p_pip_sss_vset) && (start >= 0) && (stop <= vector_length(slot_value(o->v[1].p))))
 		{
+		  /* check loop */
 		  s7_pointer *vels = vector_elements(slot_value(o->v[1].p)); /* better in callgrind, possibly slightly slower in time */
 		  for (i = start; i < stop; i++)
 		    {
@@ -80636,10 +80659,12 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	      else
 		for (i = start; i < stop; i++)
 		  {
+		    /* check loop */
 		    slot_set_value(ctr_slot, make_integer(sc, i));
 		    fp(o);
 		  }}
       else
+	/* check loop */
 	/* splitting out opt_float_any_nr here saves almost nothing */
 	for (i = start; i < stop; i++)
 	  {
@@ -80664,12 +80689,14 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	      s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
 	      for (i = start; i >= stop; i--)
 		{
+		  /* check loop */
 		  slot_set_value(ctr_slot, make_integer(sc, i));
 		  fp(o);
 		}}}
       else
 	for (i = start; i >= stop; i--)
 	  {
+	    /* check loop */
 	    slot_set_value(ctr_slot, make_integer(sc, i));
 	    func(sc);
 	  }
@@ -80689,12 +80716,14 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	  s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
 	  for (i = start; i < stop; i += incr)
 	    {
+	      /* check loop */
 	      slot_set_value(ctr_slot, make_integer(sc, i));
 	      fp(o);
 	    }}
       else
 	for (i = start; i < stop; i += incr)
 	  {
+	    /* check loop */
 	    slot_set_value(ctr_slot, make_integer(sc, i));
 	    func(sc);
 	  }
@@ -80718,12 +80747,14 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	      opt_info *o2 = o->v[6].o1;
 	      for (s7_int i = start; i <= stop; i++)
 		{
+		  /* check loop */
 		  slot_set_value(ctr_slot, make_integer(sc, i));
 		  if (test_fp(test_o1) != sc->F) cond_value(o2);
 		}}
 	  else
 	    for (s7_int i = start; i <= stop; i++)
 	      {
+		/* check loop */
 		slot_set_value(ctr_slot, make_integer(sc, i));
 		fp(o);
 	      }}
@@ -81061,6 +81092,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  else
 		    while (step < stop)
 		      {
+			/* check loop */
 			slot_set_value(step_slot, make_integer(sc, step));
 			fp(o);
 			step = integer(slot_value(step_slot)) + 1;
@@ -81080,6 +81112,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		  s7_int (*fi)(opt_info *o) = o->v[0].fi;
 		  while (step < stop)
 		    {
+		      /* check loop */
 		      slot_set_value(step_slot, make_integer(sc, step));
 		      fi(o);
 		      step = integer(slot_value(step_slot)) + 1;
@@ -81087,6 +81120,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	      else
 		while (step < stop)
 		  {
+		    /* check loop */
 		    slot_set_value(step_slot, make_integer(sc, step));
 		    func(sc);
 		    step = integer(slot_value(step_slot)) + 1;
@@ -81135,6 +81169,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 		s7_int stop = integer(slot_value(end_slot));
 		for (s7_int step = integer(slot_value(step_slot)); step < stop; step = integer(slot_value(step_slot)) + 1)
 		  {
+		    /* check loop */
 		    slot_set_value(step_slot, make_integer(sc, step));
 		    for (int32_t i = 0; i < body_len; i++) body[i]->v[0].fd(body[i]);
 		  }}
@@ -81176,6 +81211,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	    s7_int stop = integer(slot_value(end_slot));
 	    for (s7_int step = integer(slot_value(step_slot)); step < stop; step = integer(slot_value(step_slot)) + 1)
 	      {
+		/* check loop */
 		slot_set_value(step_slot, make_integer(sc, step));
 		for (int32_t i = 0; i < body_len; i++) body[i]->v[0].fp(body[i]);
 	      }}
@@ -94085,6 +94121,7 @@ s7_scheme *s7_init(void)
   sc->temp7 = sc->nil;
   sc->temp8 = sc->nil;
   sc->temp9 = sc->nil;
+  sc->temp10 = sc->nil;
   sc->rec_p1 = sc->F;
   sc->rec_p2 = sc->F;
 
@@ -94836,7 +94873,7 @@ int main(int argc, char **argv)
  * tref       691    687    463    461    461
  * index     1026   1016    973    968    958
  * tmock     1177   1165   1057   1036   1033
- * tvect     2519   2464   1772   1689   1689
+ * tvect     2519   2464   1772   1689   1689  1683
  * texit     ----   ----   1778   1749   1744
  * s7test    1873   1831   1818   1779   1782
  * timp      2971   2891   2176   2043   1926
@@ -94851,7 +94888,7 @@ int main(int argc, char **argv)
  * tcopy     8035   5546   2539   2503   2428
  * titer     2865   2842   2641   2475   2483
  * tmat      3065   3042   2524   2511   2517
- * tb        2735   2681   2612   2574   2603
+ * tb        2735   2681   2612   2574   2602
  * tsort     3105   3104   2856   2820   2819
  * teq       4068   4045   3536   3450   3445
  * tmac      3950   3873   3033   3541   3553
@@ -94859,18 +94896,18 @@ int main(int argc, char **argv)
  * tobj      4016   3970   3828   3624   3600
  * tclo      4787   4735   4390   4309   4221
  * tlet      7775   5640   4450   4393   4406
+ * tfft      7820   7729   4755   4599   4420
  * tcase     4960   4793   4439   4407   4421
  * tmap      8869   8774   4489   4468   4474
- * tfft      7820   7729   4755   4599   4420
- * tshoot    5525   5447   5183   5099   5088
+ * tshoot    5525   5447   5183   5099   5088  5084 [char_position_p_ppi]
  * tform     5357   5348   5307   5281   5278
- * tnum      6348   6013   5433   5378   5323
+ * tnum      6348   6013   5433   5378   5323  5313 [eval]
  * tstr      6880   6342   5488   5400   5387
  * tlamb     6423   6273   5720   5530   5500
  * tset      ----   ----   ----   6163   6139
  * tlist     7896   7546   6558   6195   6204
  * tmisc     8869   7612   6435   6239   6221
- * tgsl      8485   7802   6373   6301   6303
+ * tgsl      8485   7802   6373   6301   6303  6315 [s7_c_pointer_with_type]
  * trec      6936   6922   6521   6538   6512
  * tari      13.0   12.7   6827   6633   6611
  * tleft     10.4   10.2   7657   7472   7433
@@ -94880,7 +94917,7 @@ int main(int argc, char **argv)
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.5   56.6
+ * sg        ----   ----   55.9   56.5   56.5
  * lg        ----   ----  105.2  104.6  104.9
  * tbig     177.4  175.8  156.5  150.6  150.4
  * -----------------------------------------------
@@ -94888,13 +94925,15 @@ int main(int argc, char **argv)
  * t718: optimize_syntax overeagerness
  *       hash :readable does not include eqf/mapf unless it's a built-in choice, more closure cases here?
  *       accept anonymous typer?
- *       named-let as the typer
+ *       typed-hash-table bugs
  * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
  *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
  * s7test 30773 -- (let(letrec)) where we should have (letrec(let))
  * opt_c/e: body as begin+jump to end sc->value? (like cond etc)
- * more make_integer|real_unchecked possibilities, check wrap string, make->wrap cases?, check mutable if index
- *
+ * make_integer: num_small_ints: start>=0, stop<NUM_SMALL_INTS
+ *   need a stepper_set flag -- I think safe_stepper includes values as well as targets
+ * check_free_heap_size can be problematic (increase gc calls)
+ *   maybe check_free_heap_size should have the same resize code as gc
  * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
  *    but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
  *    is this akin to op_implicit_vector_set_3|4? [only from set_implicit_vector]
