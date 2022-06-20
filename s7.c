@@ -2470,6 +2470,7 @@ static void init_types(void)
 #define T_HASH_VALUE_TYPE              T_SYMCONS
 #define has_hash_value_type(p)         has_type1_bit(T_Hsh(p), T_HASH_VALUE_TYPE)
 #define set_has_hash_value_type(p)     set_type1_bit(T_Hsh(p), T_HASH_VALUE_TYPE)
+#define clear_has_hash_value_type(p)   clear_type1_bit(T_Hsh(p), T_HASH_VALUE_TYPE)
 
 #define T_INT_OPTABLE                  T_SYMCONS
 #define is_int_optable(p)              has_type1_bit(T_Pair(p), T_INT_OPTABLE)
@@ -2538,6 +2539,7 @@ static void init_types(void)
 #define T_HASH_KEY_TYPE                T_DEFINER
 #define has_hash_key_type(p)           has_type1_bit(T_Hsh(p), T_HASH_KEY_TYPE)
 #define set_has_hash_key_type(p)       set_type1_bit(T_Hsh(p), T_HASH_KEY_TYPE)
+#define clear_has_hash_key_type(p)     clear_type1_bit(T_Hsh(p), T_HASH_KEY_TYPE)
 
 #define T_FULL_BINDER                  (1LL << (TYPE_BITS + BIT_ROOM + 27))
 #define T_BINDER                       (1 << 3)
@@ -7608,11 +7610,15 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 	      (s7_int)((intptr_t)(sc->stack_end - sc->stack_start)), sc->stack_size,
 	      (s7_int)((intptr_t)(sc->stack_resize_trigger - sc->stack_start)),
 	      UNBOLD_TEXT);
-      if (S7_DEBUGGING) s7_show_stack(sc);
+      s7_show_stack(sc); 
+      abort();
       if (sc->stop_at_error) abort();
     }
   if (sc->stack_end >= sc->stack_resize_trigger)
-    fprintf(stderr, "%s%s[%d]: stack resize skipped%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
+    {
+      fprintf(stderr, "%s%s[%d]: stack resize skipped%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
+      abort();
+    }
   if (sc->stack_end != end)
     fprintf(stderr, "%s[%d]: stack changed in push_stack\n", func, line);
   if (op >= NUM_OPS)
@@ -38995,6 +39001,73 @@ static s7_pointer g_vector_fill(s7_scheme *sc, s7_pointer args)
   #define Q_vector_fill s7_make_circular_signature(sc, 3, 4, sc->T, sc->is_vector_symbol, sc->T, sc->is_integer_symbol)
   return(g_vector_fill_1(sc, sc->vector_fill_symbol, args));
 }
+
+/* -------------------------------- vector-append -------------------------------- */
+static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_pointer caller);
+static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_pointer source, s7_pointer args);
+
+static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
+{
+  /* returns a one-dimensional vector.  To handle multidimensional vectors, we'd need to
+   *   ensure all the dimensional data matches (rank, size of each dimension except the last etc),
+   *   which is too much trouble.
+   */
+  #define H_vector_append "(vector-append . vectors) returns a new (1-dimensional) vector containing the elements of its vector arguments."
+  #define Q_vector_append sc->pcl_v
+
+  s7_pointer p = args;
+  if (is_null(args))
+    return(make_simple_vector(sc, 0));
+
+  if ((is_null(cdr(args))) &&
+      (is_any_vector(car(args))))
+    return(copy_source_no_dest(sc, sc->vector_append_symbol, car(args), args));
+
+  for (int32_t i = 0; is_pair(p); p = cdr(p), i++)
+    {
+      s7_pointer x = car(p);
+      if (!is_any_vector(x))
+	{
+	  if (has_active_methods(sc, x))
+	    {
+	      s7_pointer func = find_method_with_let(sc, x, sc->vector_append_symbol);
+	      if (func != sc->undefined)
+		{
+		  int32_t k;
+		  s7_pointer v, y;
+		  if (i == 0)
+		    return(s7_apply_function(sc, func, args));
+		  /* we have to copy the arglist here */
+		  sc->temp9 = make_list(sc, i, sc->F);
+		  for (k = 0, y = args, v = sc->temp9; k < i; k++, y = cdr(y), v = cdr(v))
+		    set_car(v, car(y));
+		  v = g_vector_append(sc, sc->temp9);
+		  y = s7_apply_function(sc, func, set_ulist_1(sc, v, p));
+		  sc->temp9 = sc->nil;
+		  return(y);
+		}}
+	  wrong_type_argument_nr(sc, sc->vector_append_symbol, i + 1, x, T_VECTOR);
+	}}
+  return(vector_append(sc, args, type(car(args)), sc->vector_append_symbol));
+}
+
+static s7_pointer vector_append_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+{
+  s7_pointer val;
+  sc->temp7 = list_2(sc, p1, p2);
+  val = g_vector_append(sc, sc->temp7);
+  sc->temp7 = sc->nil;
+  return(val);
+}
+
+static s7_pointer vector_append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3)
+{
+  s7_pointer val;
+  sc->temp7 = list_3(sc, p1, p2, p3);
+  val = g_vector_append(sc, sc->temp7);
+  sc->temp7 = sc->nil;
+  return(val);
+}
 #endif
 
 
@@ -39067,75 +39140,6 @@ s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size)
   return(1);
 }
 
-
-#if (!WITH_PURE_S7)
-/* -------------------------------- vector-append -------------------------------- */
-static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_pointer caller);
-static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_pointer source, s7_pointer args);
-
-static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
-{
-  /* returns a one-dimensional vector.  To handle multidimensional vectors, we'd need to
-   *   ensure all the dimensional data matches (rank, size of each dimension except the last etc),
-   *   which is too much trouble.
-   */
-  #define H_vector_append "(vector-append . vectors) returns a new (1-dimensional) vector containing the elements of its vector arguments."
-  #define Q_vector_append sc->pcl_v
-
-  s7_pointer p = args;
-  if (is_null(args))
-    return(make_simple_vector(sc, 0));
-
-  if ((is_null(cdr(args))) &&
-      (is_any_vector(car(args))))
-    return(copy_source_no_dest(sc, sc->vector_append_symbol, car(args), args));
-
-  for (int32_t i = 0; is_pair(p); p = cdr(p), i++)
-    {
-      s7_pointer x = car(p);
-      if (!is_any_vector(x))
-	{
-	  if (has_active_methods(sc, x))
-	    {
-	      s7_pointer func = find_method_with_let(sc, x, sc->vector_append_symbol);
-	      if (func != sc->undefined)
-		{
-		  int32_t k;
-		  s7_pointer v, y;
-		  if (i == 0)
-		    return(s7_apply_function(sc, func, args));
-		  /* we have to copy the arglist here */
-		  sc->temp9 = make_list(sc, i, sc->F);
-		  for (k = 0, y = args, v = sc->temp9; k < i; k++, y = cdr(y), v = cdr(v))
-		    set_car(v, car(y));
-		  v = g_vector_append(sc, sc->temp9);
-		  y = s7_apply_function(sc, func, set_ulist_1(sc, v, p));
-		  sc->temp9 = sc->nil;
-		  return(y);
-		}}
-	  wrong_type_argument_nr(sc, sc->vector_append_symbol, i + 1, x, T_VECTOR);
-	}}
-  return(vector_append(sc, args, type(car(args)), sc->vector_append_symbol));
-}
-
-static s7_pointer vector_append_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
-{
-  s7_pointer val;
-  sc->temp7 = list_2(sc, p1, p2);
-  val = g_vector_append(sc, sc->temp7);
-  sc->temp7 = sc->nil;
-  return(val);
-}
-
-static s7_pointer vector_append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3)
-{
-  s7_pointer val;
-  sc->temp7 = list_3(sc, p1, p2, p3);
-  val = g_vector_append(sc, sc->temp7);
-  sc->temp7 = sc->nil;
-  return(val);
-}
-#endif
 
 static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_int indices, va_list ap)
 {
@@ -43045,6 +43049,7 @@ static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
   if (f == sc->unused)
     s7_error_nr(sc, make_symbol(sc, "hash-map-recursion"),
 		set_elist_1(sc, wrap_string(sc, "hash-table map function called recursively", 42)));
+  /* check_stack_size(sc); -- perhaps clear typers as well here or save/restore hash-table-procedures */
   gc_protect_via_stack(sc, f);
   hash_table_set_procedures_mapper(table, sc->unused);
   sc->value = s7_call(sc, f, set_plist_1(sc, key));
@@ -44211,6 +44216,8 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
       hash_table_set_procedures(new_hash, hash_table_procedures(old_hash));
       hash_table_checker(new_hash) = hash_table_checker(old_hash);
       hash_table_mapper(new_hash) = hash_table_mapper(old_hash);
+      if (has_hash_key_type(old_hash)) set_has_hash_key_type(new_hash); else clear_has_hash_key_type(new_hash);  /* c_function is something like symbol? */
+      if (has_hash_value_type(old_hash)) set_has_hash_value_type(new_hash); else clear_has_hash_value_type(new_hash);
       if (hash_chosen(old_hash)) hash_set_chosen(new_hash);
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
@@ -44589,6 +44596,8 @@ static s7_pointer g_funclet(s7_scheme *sc, s7_pointer args)
   return(e);
 }
 
+
+/* -------------------------------- s7_define_function and friends -------------------------------- */
 s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc,
 			      s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
@@ -49300,6 +49309,8 @@ static s7_pointer object_to_list(s7_scheme *sc, s7_pointer obj) /* used only in 
   return(obj);
 }
 
+
+/* ---------------- object->let ---------------- */
 static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
 {
   s7_pointer let = internal_inlet(sc, 4, sc->value_symbol, obj,
@@ -94926,12 +94937,17 @@ int main(int argc, char **argv)
  *       hash :readable does not include eqf/mapf unless it's a built-in choice, more closure cases here?
  *       accept anonymous typer?
  *       typed-hash-table bugs
+ *       slot/hash-table display cycles
+ *       stack overflow: need resize stack if typers? (all involve H_4 and probably s7_call) 43050
+ *       define-constant x y, then define x y is not an error -- should we raise one? [second define-constant ok if value is not changed]
+ *          or maybe a warning "define is define-constant here..."
  * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
  *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
  * s7test 30773 -- (let(letrec)) where we should have (letrec(let))
  * opt_c/e: body as begin+jump to end sc->value? (like cond etc)
  * make_integer: num_small_ints: start>=0, stop<NUM_SMALL_INTS
  *   need a stepper_set flag -- I think safe_stepper includes values as well as targets
+ *   check loop: display the code for these cases
  * check_free_heap_size can be problematic (increase gc calls)
  *   maybe check_free_heap_size should have the same resize code as gc
  * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
