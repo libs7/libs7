@@ -2034,6 +2034,8 @@ static void init_types(void)
 #define is_t_big_real(p)               (type(p) == T_BIG_REAL)
 #define is_t_big_complex(p)            (type(p) == T_BIG_COMPLEX)
 
+#define is_boolean(p)                  (type(p) == T_BOOLEAN)
+
 #define is_free(p)                     (type(p) == T_FREE)
 #define is_free_and_clear(p)           (full_type(p) == T_FREE)
 #define is_simple(P)                   t_simple_p[type(P)]  /* eq? */
@@ -2321,6 +2323,10 @@ static void init_types(void)
 #define has_keyword(p)                 has_type_bit(T_Sym(p), T_HAS_KEYWORD)
 #define set_has_keyword(p)             set_type_bit(T_Sym(p), T_HAS_KEYWORD)
 
+#define T_LOCKED_HASH                  T_MUTABLE
+#define is_locked_hash(p)              has_type_bit(T_Hsh(p), T_LOCKED_HASH)
+#define set_locked_hash(p)             set_type_bit(T_Hsh(p), T_LOCKED_HASH)
+
 #define T_MARK_SEQ                     T_MUTABLE
 #define is_mark_seq(p)                 has_type_bit(T_Itr(p), T_MARK_SEQ)
 #define set_mark_seq(p)                set_type_bit(T_Itr(p), T_MARK_SEQ)
@@ -2490,8 +2496,8 @@ static void init_types(void)
 
 #define T_TYPED_HASH_TABLE             T_HAS_LET_FILE
 #define is_typed_hash_table(p)         has_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
-#define set_typed_hash_table(p)        set_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
-#define clear_typed_hash_table(p)      clear_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
+#define set_is_typed_hash_table(p)     set_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
+#define clear_is_typed_hash_table(p)   clear_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
 
 #define T_BOOL_SETTER                  T_HAS_LET_FILE
 #define c_function_has_bool_setter(p)  has_type1_bit(T_Fnc(p), T_BOOL_SETTER)
@@ -2560,6 +2566,7 @@ static void init_types(void)
 #define T_SIMPLE_VALUES                T_BINDER
 #define has_simple_values(p)           has_type1_bit(T_Hsh(p), T_SIMPLE_VALUES)
 #define set_has_simple_values(p)       set_type1_bit(T_Hsh(p), T_SIMPLE_VALUES)
+#define clear_has_simple_values(p)     clear_type1_bit(T_Hsh(p), T_SIMPLE_VALUES)
 
 #define T_VERY_SAFE_CLOSURE            (1LL << (TYPE_BITS + BIT_ROOM + 28))
 #define T_SHORT_VERY_SAFE_CLOSURE      (1 << 4)
@@ -3234,13 +3241,14 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define hash_table_set_procedures(p, Lst)  hash_table_block(p)->ex.ex_ptr = T_Lst(Lst)  /* both the checker/mapper: car/cdr, and the two typers (opt/opt2) */
 #define hash_table_procedures_checker(p)   car(hash_table_procedures(p))
 #define hash_table_procedures_mapper(p)    cdr(hash_table_procedures(p))
+#define hash_table_set_procedures_checker(p, f) set_car(hash_table_procedures(p), f)
 #define hash_table_set_procedures_mapper(p, f) set_cdr(hash_table_procedures(p), f)
 #define hash_table_key_typer(p)            T_Prc(opt1_any(hash_table_procedures(p)))
 #define hash_table_key_typer_unchecked(p)  hash_table_block(p)->ex.ex_ptr->object.cons.opt1
-#define hash_table_set_key_typer(p, Fnc)   set_opt1_any(p, T_Prc(Fnc)) /* p = the cons, dproc */
+#define hash_table_set_key_typer(p, Fnc)   set_opt1_any(hash_table_procedures(T_Hsh(p)), T_Prc(Fnc))
 #define hash_table_value_typer(p)          T_Prc(opt2_any(hash_table_procedures(p)))
 #define hash_table_value_typer_unchecked(p) hash_table_block(p)->ex.ex_ptr->object.cons.o2.opt2
-#define hash_table_set_value_typer(p, Fnc) set_opt2_any(p, T_Prc(Fnc)) /* p = the cons, dproc */
+#define hash_table_set_value_typer(p, Fnc) set_opt2_any(hash_table_procedures(T_Hsh(p)), T_Prc(Fnc))
 #define weak_hash_iters(p)                 hash_table_block(p)->ln.tag
 
 #if S7_DEBUGGING
@@ -4653,7 +4661,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						    ((is_iterator(obj)) ? " mark-sequence" :
 						     ((is_slot(obj)) ? " step-end" :
 						      ((is_pair(obj)) ? " no-opt" :
-						       " ?18?")))))) : "",
+						       ((is_hash_table(obj)) ? " locked-hash" :
+							" ?18?"))))))) : "",
 	  /* bit 27 */
 	  ((full_typ & T_SAFE_STEPPER) != 0) ?   ((is_let(obj)) ? " set-fallback" :
 						  ((is_slot(obj)) ? " safe-stepper" :
@@ -4822,7 +4831,7 @@ static bool has_odd_bits(s7_pointer obj)
       (!is_pair(obj)) && (!is_input_port(obj)) && (!is_let(obj)) && (!is_any_procedure(obj)) && (!is_slot(obj)))
     return(true);
   if (((full_typ & T_MUTABLE) != 0) &&
-      (!is_number(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_iterator(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj)))
+      (!is_number(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_iterator(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj)) && (!is_hash_table(obj)))
     return(true);
   if (((full_typ & T_GENSYM) != 0) && (!is_slot(obj)) && (!is_any_closure(obj)) &&
       (!is_let(obj)) && (!is_symbol(obj)) && (!is_string(obj)) && (!is_hash_table(obj)) && (!is_pair(obj)) && (!is_any_vector(obj)))
@@ -5083,7 +5092,7 @@ static s7_pointer check_ref13(s7_pointer p, const char *func, int32_t line)
 
 static s7_pointer check_ref14(s7_pointer p, const char *func, int32_t line)
 {
-  if ((!is_any_procedure(p)) && (!s7_is_boolean(p)))
+  if ((!is_any_procedure(p)) && (!is_boolean(p)))
     complain("%s%s[%d]: setter (with let arg) is %s (%s)%s?\n", p, func, line, unchecked_type(p));
   return(p);
 }
@@ -5924,7 +5933,7 @@ static s7_pointer g_is_boolean(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_boolean "(boolean? obj) returns #t if obj is #f or #t: (boolean? ()) -> #f"
   #define Q_is_boolean sc->pl_bt
-  check_boolean_method(sc, s7_is_boolean, sc->is_boolean_symbol, args);
+  check_boolean_method(sc, is_boolean, sc->is_boolean_symbol, args);
 }
 
 
@@ -7301,7 +7310,7 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
 
   if (is_not_null(args))
     {
-      if (!s7_is_boolean(car(args)))
+      if (!is_boolean(car(args)))
 	return(method_or_bust_one_arg(sc, car(args), sc->gc_symbol, args, T_BOOLEAN));
       sc->gc_off = (car(args) == sc->F);
       if (sc->gc_off)
@@ -7332,7 +7341,7 @@ static void check_free_heap_size(s7_scheme *sc, s7_int size)
 #else
       gc(sc);
 #endif
-      while ((sc->free_heap_top - sc->free_heap) < size)
+      while ((sc->free_heap_top - sc->free_heap) < (s7_int)(size * 1.5))
 	resize_heap(sc);
     }
 }
@@ -7771,20 +7780,11 @@ static void resize_stack(s7_scheme *sc)
 {
   uint64_t loc = current_stack_top(sc);
   uint32_t new_size = sc->stack_size * 2;
-  block_t *ob, *nb;
-
-  /* how can we trap infinite recursion?  Is a warning in order here? I think I'll add 'max-stack-size */
-  if (new_size > sc->max_stack_size)
-    s7_error_nr(sc, make_symbol(sc, "stack-too-big"),
-		set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
-
-  ob = stack_block(sc->stack);
-  nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
+  block_t *ob = stack_block(sc->stack);
+  block_t *nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
   block_info(nb) = NULL;
   stack_block(sc->stack) = nb;
   stack_elements(sc->stack) = (s7_pointer *)block_data(nb);
-  if (!stack_elements(sc->stack))
-    s7_error_nr(sc, make_symbol(sc, "stack-too-big"), set_elist_1(sc, wrap_string(sc, "no room to expand stack?", 24)));
   {
     s7_pointer *orig = stack_elements(sc->stack);
     s7_int i = sc->stack_size;
@@ -7798,11 +7798,13 @@ static void resize_stack(s7_scheme *sc)
   sc->stack_size = new_size;
   sc->stack_start = stack_elements(sc->stack);
   sc->stack_end = (s7_pointer *)(sc->stack_start + loc);
-  /* sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + sc->stack_size / 2); */
   sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + (new_size - STACK_RESIZE_TRIGGER));
-
   if (show_stack_stats(sc))
     s7_warn(sc, 128, "stack grows to %u\n", new_size);
+  if (new_size > sc->max_stack_size)
+    s7_error_nr(sc, make_symbol(sc, "stack-too-big"),
+		set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
+  /* error needs to follow realloc, else error -> catchers in s7_error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
 }
 
 #define check_stack_size(Sc) do {if (Sc->stack_end >= Sc->stack_resize_trigger) resize_stack(Sc);} while (0)
@@ -10641,7 +10643,7 @@ Only the let is searched if ignore-globals is not #f."
       if (is_pair(cddr(args)))
 	{
 	  b = caddr(args);
-	  if (!s7_is_boolean(b))
+	  if (!is_boolean(b))
 	    return(method_or_bust_with_type(sc, b, sc->is_defined_symbol, args, a_boolean_string, 3));
 	}
       else b = sc->F;
@@ -26564,8 +26566,8 @@ static s7_pointer substring_uncopied_p_pii(s7_scheme *sc, s7_pointer str, s7_int
   /* is_string arg1 checked in opt */
   if ((end < start) || (end > string_length(str)))
     out_of_range_nr(sc, sc->substring_symbol, int_three, wrap_integer(sc, end), (end < start) ? its_too_small_string : its_too_large_string);
-  if ((start < 0) || (start > end))
-    out_of_range_nr(sc, sc->substring_symbol, int_two, wrap_integer(sc, start), (start < 0) ? its_negative_string : its_too_large_string);
+  if (start < 0)
+    out_of_range_nr(sc, sc->substring_symbol, int_two, wrap_integer(sc, start), its_negative_string);
   return(wrap_string(sc, (char *)(string_value(str) + start), end - start));
 }
 
@@ -28927,7 +28929,7 @@ If the optional 'clear-port' is #t, the current string is flushed."
   if (is_pair(cdr(args)))
     {
       p = cadr(args);
-      if (!s7_is_boolean(p))
+      if (!is_boolean(p))
 	wrong_type_argument_nr(sc, sc->get_output_string_symbol, 2, p, T_BOOLEAN);
       clear_port = (p == sc->T);
     }
@@ -31586,6 +31588,8 @@ static s7_pointer g_cyclic_sequences(s7_scheme *sc, s7_pointer args)
   return(cyclic_sequences_p_p(sc, car(args)));
 }
 
+
+/* -------------------------------- object->port (display format etc) -------------------------------- */
 static int32_t circular_list_entries(s7_pointer lst)
 {
   int32_t i = 1;
@@ -32815,9 +32819,12 @@ static const char *hash_table_checker_name(s7_scheme *sc, s7_pointer ht);
 
 static const char *hash_table_typer_name(s7_scheme *sc, s7_pointer typer)
 {
+  s7_pointer sym;
   if (is_c_function(typer)) return(c_function_name(typer));
-  if (s7_is_boolean(typer)) return("#t");
-  return(symbol_name(find_closure(sc, typer, closure_let(typer))));
+  if (is_boolean(typer)) return("#t");
+  sym = find_closure(sc, typer, closure_let(typer));
+  if (is_null(sym)) return(NULL);
+  return(symbol_name(sym));
 }
 
 #if CYCLE_DEBUGGING
@@ -32840,7 +32847,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
       if ((!min_char) || (&x < min_char))
 	{
 	  min_char = &x;
-	  if ((base - min_char) > 100000)
+	  if ((base - min_char) > 1000000)
 	    {
 	      fprintf(stderr, "infinite recursion?\n");
 	      if (port_data(port))
@@ -32851,6 +32858,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 		  else port_data(port)[port_position(port)] = '\0';
 		  fprintf(stderr, "%s\n", port_data(port));
 		}
+	      s7_show_stack(sc);
 	      abort();
 	    }}
 #endif
@@ -32864,12 +32872,37 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
       if (use_write == P_READABLE)
 	{
 	  const char *typer = hash_table_checker_name(sc, hash);
-	  if ((typer[0] == '#') &&
+#if 0
+	  fprintf(stderr, "%s: checker: %s, len: %" ld64 " typed: %d, chosen: %d, procs: %s\n",
+		  __func__, typer, hash_table_mask(hash) + 1, is_typed_hash_table(hash), hash_chosen(hash), display(hash_table_procedures(hash)));
+#endif
+	  if ((typer[0] == '#') && /* #f */
 	      (!is_typed_hash_table(hash)))
 	    {
-	      if (is_weak_hash_table(hash))
-		port_write_string(port)(sc, "(weak-hash-table)", 17, port);
-	      else port_write_string(port)(sc, "(hash-table)", 12, port);
+	      if (is_pair(hash_table_procedures(hash))) /* TODO: this is ridiculous... */
+		{
+		  s7_int nlen = 0;
+		  const char *str = (const char *)integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
+		  const char *checker = hash_table_typer_name(sc, hash_table_procedures_checker(hash));
+		  const char *mapper = hash_table_typer_name(sc, hash_table_procedures_mapper(hash));
+		  if (is_weak_hash_table(hash))
+		    port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
+		  else port_write_string(port)(sc, "(make-hash-table ", 17, port);
+		  port_write_string(port)(sc, str, nlen, port);
+		  if ((checker) && (mapper))
+		    {
+		      port_write_string(port)(sc, " (cons ", 7, port);
+		      port_write_string(port)(sc, checker, safe_strlen(checker), port);
+		      port_write_character(port)(sc, ' ', port);
+		      port_write_string(port)(sc, mapper, safe_strlen(mapper), port);
+		      port_write_string(port)(sc, "))", 2, port);
+		    }
+		  else port_write_character(port)(sc, ')', port);
+		}
+	      else
+		if (is_weak_hash_table(hash))
+		  port_write_string(port)(sc, "(weak-hash-table)", 17, port);
+		else port_write_string(port)(sc, "(hash-table)", 12, port);
 	    }
 	  else
 	    {
@@ -33162,7 +33195,7 @@ static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wri
       if ((!min_char1) || (&x < min_char1))
 	{
 	  min_char1 = &x;
-	  if ((base1 - min_char1) > 100000)
+	  if ((base1 - min_char1) > 1000000)
 	    {
 	      fprintf(stderr, "slot infinite recursion?\n");
 	      if (port_data(port))
@@ -33173,6 +33206,7 @@ static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wri
 		  else port_data(port)[port_position(port)] = '\0';
 		  fprintf(stderr, "%s\n", port_data(port));
 		}
+	      s7_show_stack(sc);
 	      abort();
 	    }}
 #endif
@@ -35716,7 +35750,7 @@ is #t, the string is also sent to the current-output-port."
 	return(pt);                          /*   but this means some error checks are skipped? */
     }
   sc->format_column = 0;
-  if (!((s7_is_boolean(pt)) ||               /* #f or #t */
+  if (!((is_boolean(pt)) ||               /* #f or #t */
 	((is_output_port(pt)) &&             /* (current-output-port) or call-with-open-file arg, etc */
 	 (!port_is_closed(pt)))))
     return(method_or_bust_with_type(sc, pt, sc->format_symbol, args, an_output_port_string, 1));
@@ -35792,7 +35826,7 @@ static s7_pointer g_format_no_column(s7_scheme *sc, s7_pointer args)
       if (pt == sc->F)
 	return(sc->F);
     }
-  if (!((s7_is_boolean(pt)) ||
+  if (!((is_boolean(pt)) ||
 	((is_output_port(pt)) &&             /* (current-output-port) or call-with-open-file arg, etc */
 	 (!port_is_closed(pt)))))
     return(method_or_bust_with_type(sc, pt, sc->format_symbol, args, a_format_port_string, 1));
@@ -36078,7 +36112,7 @@ s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...)
   for (s7_pointer p = res; is_pair(p); p = cdr(p), i++)
     {
       set_car(p, va_arg(ap, s7_pointer));
-      if ((!is_normal_symbol(car(p))) && (!s7_is_boolean(car(p))) && (!is_pair(car(p))))
+      if ((!is_normal_symbol(car(p))) && (!is_boolean(car(p))) && (!is_pair(car(p))))
 	s7_warn(sc, 512, "s7_make_signature got an invalid entry at position %" ld64, i);
     }
   va_end(ap);
@@ -36097,7 +36131,7 @@ s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int 
   for (p = res, i = 0; is_pair(p); p = cdr(p), i++)
     {
       set_car(p, va_arg(ap, s7_pointer));
-      if ((!is_normal_symbol(car(p))) && (!s7_is_boolean(car(p))) && (!is_pair(car(p))))
+      if ((!is_normal_symbol(car(p))) && (!is_boolean(car(p))) && (!is_pair(car(p))))
 	s7_warn(sc, 512, "s7_make_circular_signature got an invalid entry at position %" ld64, i);
       if (i == cycle_point) back = p;
       if (i == (len - 1)) end = p;
@@ -40598,7 +40632,7 @@ static s7_pointer g_set_vector_typer(s7_scheme *sc, s7_pointer args)
 	s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, wrap_string(sc, "vector-typer can't set ~S typer to ~S", 37), v, typer));
       return(typer);
     }
-  if (s7_is_boolean(typer))
+  if (is_boolean(typer))
     {
       if (is_typed_vector(v))
 	{
@@ -42428,9 +42462,28 @@ static s7_pointer g_hash_table_value_typer(s7_scheme *sc, s7_pointer args)
   return(sc->F);
 }
 
-static s7_pointer check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_pointer h, s7_pointer typer)
+static s7_pointer make_hash_table_procedures(s7_scheme *sc)
 {
-  s7_pointer dproc;
+  s7_pointer x = cons(sc, sc->T, sc->T); /* checker, mapped */
+  set_opt1_any(x, sc->T);                /* key */
+  set_opt2_any(x, sc->T);                /* value */
+  return(x);
+}
+
+static s7_pointer copy_hash_table_procedures(s7_scheme *sc, s7_pointer table)
+{
+  if (is_pair(hash_table_procedures(table)))
+    {
+      s7_pointer x = cons(sc, hash_table_procedures_checker(table), hash_table_procedures_mapper(table));
+      set_opt1_any(x, hash_table_key_typer(table));
+      set_opt2_any(x, hash_table_value_typer(table));
+      return(x);
+    }
+  return(sc->nil);
+}
+
+static void check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_pointer h, s7_pointer typer)
+{
   if (is_c_function(typer))
     {
       s7_pointer sig = c_function_signature(typer);
@@ -42465,16 +42518,9 @@ static s7_pointer check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_po
 	      if (symbol_type(c_function_symbol(typer)) != T_FREE)
 		set_has_hash_key_type(h);
 	    }}}
-  dproc = hash_table_procedures(h);
-  if (is_null(dproc))
-    {
-      dproc = cons_unchecked(sc, sc->T, sc->T);
-      hash_table_set_key_typer(dproc, sc->T);
-      hash_table_set_value_typer(dproc, sc->T);
-      hash_table_set_procedures(h, dproc);
-    }
-  set_typed_hash_table(h);
-  return(dproc);
+  if (is_null(hash_table_procedures(h)))
+    hash_table_set_procedures(h, make_hash_table_procedures(sc));
+  set_is_typed_hash_table(h);
 }
 
 static s7_pointer g_set_hash_table_key_typer(s7_scheme *sc, s7_pointer args)
@@ -42483,22 +42529,23 @@ static s7_pointer g_set_hash_table_key_typer(s7_scheme *sc, s7_pointer args)
   if (!is_hash_table(h))
     wrong_type_arg_error_nr(sc, "set! hash_table-key-typer", 1, h, "a hash-table");
 
-  if (s7_is_boolean(typer)) /* remove current typer, if any */
+  if (is_boolean(typer)) /* remove current typer, if any */
     {
       if (is_typed_hash_table(h))
 	{
-	  hash_table_set_key_typer(hash_table_procedures(h), sc->T);
+	  hash_table_set_key_typer(h, sc->T);
 	  if (hash_table_value_typer(h) == sc->T)
 	    {
-	      clear_typed_hash_table(h);
+	      /* clear_is_typed_hash_table(h); */
 	      clear_has_simple_keys(h);
-	      hash_table_set_procedures(h, sc->nil);
+	      /* clear_has_hash_key_type?? looks redundant */
 	    }}}
   else
     {
-      s7_pointer dproc = check_hash_table_typer(sc, sc->hash_table_key_typer_symbol, h, typer);
-      hash_table_set_key_typer(dproc, typer);
+      check_hash_table_typer(sc, sc->hash_table_key_typer_symbol, h, typer);
+      hash_table_set_key_typer(h, typer);
     }
+  set_locked_hash(h);
   return(typer);
 }
 
@@ -42508,22 +42555,22 @@ static s7_pointer g_set_hash_table_value_typer(s7_scheme *sc, s7_pointer args)
   if (!is_hash_table(h))
     wrong_type_arg_error_nr(sc, "set! hash_table-value-typer", 1, h, "a hash-table");
 
-  if (s7_is_boolean(typer)) /* remove current typer, if any */
+  if (is_boolean(typer)) /* remove current typer, if any */
     {
       if (is_typed_hash_table(h))
 	{
-	  hash_table_set_value_typer(hash_table_procedures(h), sc->T);
+	  hash_table_set_value_typer(h, sc->T);
 	  if (hash_table_key_typer(h) == sc->T)
 	    {
-	      clear_typed_hash_table(h);
-	      clear_has_simple_keys(h);
-	      hash_table_set_procedures(h, sc->nil);
+	      /* clear_is_typed_hash_table(h); */
+	      clear_has_simple_values(h);
 	    }}}
   else
     {
-      s7_pointer dproc = check_hash_table_typer(sc, sc->hash_table_value_typer_symbol, h, typer);
-      hash_table_set_value_typer(dproc, typer);
+      check_hash_table_typer(sc, sc->hash_table_value_typer_symbol, h, typer);
+      hash_table_set_value_typer(h, typer);
     }
+  set_locked_hash(h);
   return(typer);
 }
 
@@ -43423,12 +43470,13 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 
       if (is_not_null(cdr(args)))
 	{
-	  s7_pointer proc, dproc = sc->nil;
+	  s7_pointer proc;
 	  s7_pointer ht = s7_make_hash_table(sc, size);
 	  /* check for typers */
 	  if (is_pair(cddr(args)))
 	    {
 	      s7_pointer typers = caddr(args);
+	      set_locked_hash(ht);
 	      if (is_pair(typers))
 		{
 		  s7_pointer keyp = car(typers), valp = cdr(typers);
@@ -43443,10 +43491,9 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			s7_error_nr(sc, sc->wrong_type_arg_symbol,
 				    set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) both functions should take one argument", 100),
 						caller, typers));
-		      dproc = cons_unchecked(sc, sc->T, sc->T);
-		      hash_table_set_procedures(ht, dproc);
-		      hash_table_set_key_typer(dproc, keyp);    /* opt1_any(dproc), car/cdr are for the map/equality funcs */
-		      hash_table_set_value_typer(dproc, valp);  /* opt2_any(dproc) */
+		      hash_table_set_procedures(ht, make_hash_table_procedures(sc));
+		      hash_table_set_key_typer(ht, keyp);
+		      hash_table_set_value_typer(ht, valp);
 		      if (is_c_function(keyp))
 			{
 			  if (!c_function_name(keyp))
@@ -43504,7 +43551,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  s7_error_nr(sc, sc->wrong_type_arg_symbol,
 				      set_elist_3(sc, wrap_string(sc, "~A: in the third argument, ~S, (the key/value type checkers) the second function is anonymous", 93),
 						  caller, typers));
-		      set_typed_hash_table(ht);
+		      set_is_typed_hash_table(ht);
 		    }}
 	      else
 		if (typers != sc->F)
@@ -43628,18 +43675,10 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		    }
 		  else hash_table_mapper(ht) = closure_hash_map;
 
-		  if (is_null(dproc))
-		    {
-		      dproc = cons(sc, car(proc), cdr(proc));
-		      hash_table_set_procedures(ht, dproc); /* only place this is newly set (as opposed to preserved in copy) */
-		      hash_table_set_key_typer(dproc, sc->T);
-		      hash_table_set_value_typer(dproc, sc->T);
-		    }
-		  else
-		    {
-		      set_car(dproc, car(proc));
-		      set_cdr(dproc, cdr(proc));
-		    }
+		  if (is_null(hash_table_procedures(ht)))
+		    hash_table_set_procedures(ht, make_hash_table_procedures(sc));
+		  hash_table_set_procedures_checker(ht, car(proc)); /* proc = cadr(args) */
+		  hash_table_set_procedures_mapper(ht, cdr(proc));
 		  return(ht);
 		}
 	      if (proc != sc->F) wrong_type_argument_with_type_nr(sc, caller, 2, proc, wrap_string(sc, "a cons of two functions", 23));
@@ -43926,7 +43965,7 @@ static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table)
 	    }}}
 }
 
-static void hash_table_set_checker(s7_pointer table, uint8_t typ)
+static void hash_table_set_default_checker(s7_pointer table, uint8_t typ)
 {
   if (hash_table_checker(table) != default_hash_checks[typ])
     {
@@ -44056,7 +44095,7 @@ s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
    *   all the preceding code.  This saves about 5% compute time best case in this function.
    */
   if (!hash_chosen(table))
-    hash_table_set_checker(table, type(key)); /* raw_hash value (hash_loc(sc, table, key)) does not change via hash_table_set_checker etc */
+    hash_table_set_default_checker(table, type(key)); /* raw_hash value (hash_loc(sc, table, key)) does not change via hash_table_set_default_checker etc */
   else
     if (sc->safety > NO_SAFETY)
       check_hash_table_checker(sc, table, key);
@@ -44122,7 +44161,7 @@ static inline s7_pointer hash_table_add(s7_scheme *sc, s7_pointer table, s7_poin
   hash_entry_t *p;
 
   if (!hash_chosen(table))
-    hash_table_set_checker(table, type(key)); /* raw_hash value (hash_loc(sc, table, key)) does not change via hash_table_set_checker etc */
+    hash_table_set_default_checker(table, type(key)); /* raw_hash value (hash_loc(sc, table, key)) does not change via hash_table_set_default_checker etc */
 
   hash_mask = hash_table_mask(table);
   hash = hash_loc(sc, table, key);
@@ -44216,11 +44255,13 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
   s7_int old_len, new_mask, count = 0;
   hash_entry_t **old_lists, **new_lists;
 
-  if ((is_typed_hash_table(new_hash)) &&
-      (sc->safety >= NO_SAFETY) &&
+  if (is_typed_hash_table(new_hash))
+#if 0
+      /* (sc->safety >= NO_SAFETY) && */
       ((!is_typed_hash_table(old_hash)) ||
        (hash_table_key_typer(old_hash) != hash_table_key_typer(new_hash)) ||
        (hash_table_value_typer(old_hash) != hash_table_value_typer(new_hash))))
+#endif
     check_old_hash(sc, old_hash, new_hash, start, end);
 
   old_len = hash_table_mask(old_hash) + 1;
@@ -44230,14 +44271,17 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 
   if (hash_table_entries(new_hash) == 0)
     {
-      /* not sure about this -- should copy change the destination checker/mapper/typers? */
-      hash_table_set_procedures(new_hash, hash_table_procedures(old_hash));
-      if (is_typed_hash_table(old_hash)) set_typed_hash_table(new_hash); else clear_typed_hash_table(new_hash);
-      hash_table_checker(new_hash) = hash_table_checker(old_hash);
-      hash_table_mapper(new_hash) = hash_table_mapper(old_hash);
-      if (has_hash_key_type(old_hash)) set_has_hash_key_type(new_hash); else clear_has_hash_key_type(new_hash);  /* c_function is something like symbol? */
-      if (has_hash_value_type(old_hash)) set_has_hash_value_type(new_hash); else clear_has_hash_value_type(new_hash);
-      if (hash_chosen(old_hash)) hash_set_chosen(new_hash);
+      if (!is_locked_hash(new_hash))
+	{
+	  /* not sure about this -- should copy change the destination checker/mapper/typers? */
+	  hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, old_hash));
+	  if (is_typed_hash_table(old_hash)) set_is_typed_hash_table(new_hash); else clear_is_typed_hash_table(new_hash);
+	  hash_table_checker(new_hash) = hash_table_checker(old_hash);
+	  hash_table_mapper(new_hash) = hash_table_mapper(old_hash);
+	  if (has_hash_key_type(old_hash)) set_has_hash_key_type(new_hash); else clear_has_hash_key_type(new_hash);  /* c_function is something like symbol? */
+	  if (has_hash_value_type(old_hash)) set_has_hash_value_type(new_hash); else clear_has_hash_value_type(new_hash);
+	  if (hash_chosen(old_hash)) hash_set_chosen(new_hash); /* TODO: else clear? */
+	}
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
 	{
@@ -44292,7 +44336,7 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 		new_lists[loc] = p;
 		hash_table_entries(new_hash)++;
 		if (!hash_chosen(new_hash))
-		  hash_table_set_checker(new_hash, type(hash_entry_key(x)));
+		  hash_table_set_default_checker(new_hash, type(hash_entry_key(x)));
 	      }}
 	count++;
       }
@@ -47793,17 +47837,15 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
 	s7_pointer new_hash = s7_make_hash_table(sc, hash_table_mask(source) + 1);
 	s7_int gc_loc = gc_protect_1(sc, new_hash);
 	hash_table_checker(new_hash) = hash_table_checker(source);
-	if (hash_chosen(source)) hash_set_chosen(new_hash);
+	if (hash_chosen(source)) hash_set_chosen(new_hash); /* TODO: else clear? */
 	hash_table_mapper(new_hash) = hash_table_mapper(source);
-	hash_table_set_procedures(new_hash, hash_table_procedures(source));
+	hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, source));
 	hash_table_copy(sc, source, new_hash, 0, hash_table_entries(source));
 	if (is_typed_hash_table(source))
 	  {
-	    set_typed_hash_table(new_hash);
-	    if (has_simple_keys(source))
-	      set_has_simple_keys(new_hash);
-	    if (has_simple_values(source))
-	      set_has_simple_values(new_hash);
+	    set_is_typed_hash_table(new_hash);
+	    if (has_simple_keys(source)) set_has_simple_keys(new_hash); else clear_has_simple_keys(new_hash);
+	    if (has_simple_values(source)) set_has_simple_values(new_hash); else clear_has_simple_values(new_hash);
 	  }
 	s7_gc_unprotect_at(sc, gc_loc);
 	return(new_hash);
@@ -49402,23 +49444,8 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
   return(let);
 }
 
-static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
+static void hash_table_checker_to_let(s7_scheme *sc, s7_pointer let, s7_pointer obj)
 {
-  s7_pointer let;
-  s7_int gc_loc;
-  if (!sc->entries_symbol)
-    {
-      sc->entries_symbol = make_symbol(sc, "entries");
-      sc->weak_symbol = make_symbol(sc, "weak");
-    }
-  let = internal_inlet(sc, 10, sc->value_symbol, obj,
-		       sc->type_symbol, sc->is_hash_table_symbol,
-		       sc->size_symbol, s7_length(sc, obj),
-		       sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
-		       sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
-  gc_loc = gc_protect_1(sc, let);
-  if (is_weak_hash_table(obj))
-    s7_varlet(sc, let, sc->weak_symbol, sc->T);
   if ((hash_table_checker(obj) == hash_eq) ||
       (hash_table_checker(obj) == hash_c_function) ||
       (hash_table_checker(obj) == hash_closure) ||
@@ -49455,8 +49482,41 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
 		  if (hash_table_checker(obj) == hash_ci_string)
 		    s7_varlet(sc, let, sc->function_symbol, sc->string_ci_eq_symbol);
 #endif
+}
+
+static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
+{
+  s7_pointer let;
+  s7_int gc_loc;
+  if (!sc->entries_symbol)
+    {
+      sc->entries_symbol = make_symbol(sc, "entries");
+      sc->weak_symbol = make_symbol(sc, "weak");
+    }
+  let = internal_inlet(sc, 10, sc->value_symbol, obj,
+		       sc->type_symbol, sc->is_hash_table_symbol,
+		       sc->size_symbol, s7_length(sc, obj),
+		       sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
+		       sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+  gc_loc = gc_protect_1(sc, let);
+  if (is_weak_hash_table(obj))
+    s7_varlet(sc, let, sc->weak_symbol, sc->T);
+
   if (is_typed_hash_table(obj))
-    s7_varlet(sc, let, sc->signature_symbol, g_signature(sc, set_plist_1(sc, obj)));
+    {
+      s7_pointer checker = hash_table_procedures_checker(obj);
+      if (checker == sc->T)  /* perhaps typed because typers were set, but not checker/mapper */
+	hash_table_checker_to_let(sc, let, obj);
+      else s7_varlet(sc, let, sc->function_symbol, list_2(sc, checker, hash_table_procedures_mapper(obj)));
+      s7_varlet(sc, let, sc->signature_symbol,
+	            (is_typed_hash_table(obj)) ? 
+		      list_3(sc,
+			     hash_table_typer_symbol(sc, hash_table_value_typer(obj)),
+			     sc->is_hash_table_symbol,
+			     hash_table_typer_symbol(sc, hash_table_key_typer(obj))) :
+ 	              sc->hash_table_signature);
+    }
+  else hash_table_checker_to_let(sc, let, obj);
   s7_gc_unprotect_at(sc, gc_loc);
   return(let);
 }
@@ -50129,7 +50189,7 @@ line to be preceded by a semicolon."
 		  args = cdr(args);
 		  if (!is_null(args))
 		    {
-		      if (!s7_is_boolean(car(args)))
+		      if (!is_boolean(car(args)))
 			wrong_type_argument_nr(sc, sc->stacktrace_symbol, 5, car(args), T_BOOLEAN);
 		      as_comment = s7_boolean(sc, car(args));
 		    }}}}}
@@ -60812,7 +60872,7 @@ static bool opt_bool_not_pair(s7_scheme *sc, s7_pointer car_x)
     return_false(sc, car_x); /* i.e. use cell_optimize */
   p = opt_simple_symbol(sc, car_x);
   if ((p) &&
-      (s7_is_boolean(slot_value(p))))
+      (is_boolean(slot_value(p))))
     {
       opt_info *opc = alloc_opt_info(sc);
       opc->v[1].p = p;
@@ -62669,10 +62729,8 @@ static bool p_piip_to_sx(s7_scheme *sc, opt_info *opc, s7_pointer indexp1, s7_po
 
 static bool p_piip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
-  /* this currently assumes s_func == vector-set! because there aren't any other p_piip functions(!) */
   s7_p_piip_t func = s7_p_piip_function(s_func);
-  if ((func) &&
-      (is_symbol(cadr(car_x))))
+  if ((func) && (s_func == slot_value(global_slot(sc->vector_set_symbol))) && (is_symbol(cadr(car_x))))
     {
       s7_pointer obj;
       s7_pointer slot1 = lookup_slot_from(cadr(car_x), sc->curlet);
@@ -62998,7 +63056,8 @@ static s7_pointer opt_p_call_ppp(opt_info *o)
 static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
 {
   int32_t start = sc->pc;
-  if ((is_safe_procedure(s_func)) && (c_function_is_aritable(s_func, 3)))
+  if ((is_safe_procedure(s_func)) && (c_function_is_aritable(s_func, 3)) &&
+      (s_func != slot_value(global_slot(sc->hash_table_ref_symbol))) && (s_func != slot_value(global_slot(sc->list_ref_symbol))))
     {
       s7_pointer slot, arg = cadr(car_x);
       opt_info *o1 = sc->opts[sc->pc];
@@ -63009,10 +63068,20 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 	    {
 	      slot = opt_simple_symbol(sc, arg);
 	      if (slot)
-		opc->v[1].p = slot;
+		{
+		  opc->v[1].p = slot;
+		  if ((s_func == slot_value(global_slot(sc->vector_ref_symbol))) &&
+		      (is_normal_vector(slot_value(slot))) && (vector_rank(slot_value(slot)) != 2))
+		    return_false(sc, car_x);
+		}
 	      else return_false(sc, car_x); /* no need for pc_fallback here, I think */
 	    }
-	  else opc->v[1].p = arg;
+	  else 
+	    {
+	      opc->v[1].p = arg;
+	      if (s_func == slot_value(global_slot(sc->vector_ref_symbol)))
+		return_false(sc, car_x);
+	    }
 	  arg = caddr(car_x);
 	  if (is_symbol(arg))
 	    {
@@ -63054,6 +63123,8 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 			    opc->v[6].fp = o1->v[0].fp;
 			    return(true);
 			  }}}}}
+      if (s_func == slot_value(global_slot(sc->vector_ref_symbol)))
+	return_false(sc, car_x);
       if (cell_optimize(sc, cdr(car_x)))
 	{
 	  opt_info *o2 = sc->opts[sc->pc];
@@ -63280,18 +63351,26 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	       *   so at least forgo the vec type/rank + immutable checks, the *_set cases are from p_call_any_ok called in cell_optimize,
 	       *   but this is called very rarely mainly because hi-rank implicit refs are rare, and check_type_uncertainty is unhappy
 	       *   if there are multiple sets of a var.
+	       * hash-tables, lets, lists, and vectors with extra (implicit) args can't be handled because we have no way to tell
+	       *   what the implicit call will do, and in the opt_* context, everything must be "safe" (i.e. no defines or
+	       *   hidden multiple-values, etc).
 	       */
 	      opc->v[0].fp = opt_p_call_any;
 	      switch (type(obj))     /* string can't happen here (no multidimensional strings) */
 		{
-		case T_PAIR:         opc->v[2].call = g_list_ref;           break;
-		case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref;     break;
-		  /* case T_LET:     opc->v[2].call = g_let_ref;            break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
+		  /* case T_PAIR:         opc->v[2].call = g_list_ref;       break; */
+		  /* case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref; break; */
+		  /* case T_LET:     opc->v[2].call = g_let_ref;             break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
 		case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
 		case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
 		case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
-		case T_VECTOR:       opc->v[2].call = g_vector_ref;         break;
-		default:             return_false(sc, car_x);
+		  /* TODO: these should match rank/indices */
+		case T_VECTOR:
+		  if (vector_rank(obj) != (len - 1)) return_false(sc, car_x);
+		  opc->v[2].call = g_vector_ref;
+		  break;
+		default:             
+		  return_false(sc, car_x);
 		}
 	      return(true);
 	    }}}
@@ -65954,6 +66033,14 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	  if (p_piip_ok(sc, opc, s_func, car_x))
 	    return(true);
 	  pc_fallback(sc, pstart);
+	  if (s_func == slot_value(global_slot(sc->vector_ref_symbol)))
+	    {
+	      s7_pointer obj;
+	      if (!is_symbol(cadr(car_x))) return_false(sc, car_x);
+	      obj = lookup_from(sc, cadr(car_x), sc->curlet);
+	      if ((!obj) || (!is_any_vector(obj)) || (vector_rank(obj) != 3))
+		return_false(sc, car_x);
+	    }
 	  if (p_call_any_ok(sc, opc, s_func, car_x, len))
 	    return(true);
 	  break;
@@ -70087,7 +70174,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       return(OPT_T);
     }
 
-  if (((is_any_vector(func)) || (is_pair(func))) &&
+  if ((((is_any_vector(func)) && (vector_rank(func) == 2)) || (is_pair(func))) &&
       (is_fxable(sc, arg1)) && (is_fxable(sc, arg2)))
     {
       set_unsafe_optimize_op(expr, ((is_pair(func)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
@@ -77305,13 +77392,13 @@ static void check_set(s7_scheme *sc)
     {
       if (is_null(code))                                             /* (set!) */
 	syntax_error_nr(sc, "set!: not enough arguments: ~A", 30, form);
-      syntax_error_nr(sc, "set!: stray dot? ~A",19,  form);             /* (set! . 1) */
+      syntax_error_nr(sc, "set!: stray dot? ~A",19,  form);          /* (set! . 1) */
     }
   if (!is_pair(cdr(code)))
     {
       if (is_null(cdr(code)))                                        /* (set! var) */
 	syntax_error_nr(sc, "set!: not enough arguments: ~A", 30, form);
-      syntax_error_nr(sc, "set!: stray dot? ~A", 19, form);             /* (set! var . 1) */
+      syntax_error_nr(sc, "set!: stray dot? ~A", 19, form);          /* (set! var . 1) */
     }
   if (is_not_null(cddr(code)))                                       /* (set! var 1 2) */
     syntax_error_nr(sc, "~A: too many arguments to set!", 30, form);
@@ -78097,7 +78184,7 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* if Inline 70 in concorda
 {
   s7_pointer x, y, code;
   s7_pointer v = lookup_checked(sc, car(sc->code));
-  if (!is_any_vector(v))
+  if ((!is_any_vector(v)) || (vector_rank(v) != 2))
     {
       sc->last_function = v;
       return(false);
@@ -80669,10 +80756,10 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 	      if ((fp == opt_p_pip_sss_vset) && (start >= 0) && (stop <= vector_length(slot_value(o->v[1].p))))
 		{
 		  s7_pointer *vels = vector_elements(slot_value(o->v[1].p)); /* better in callgrind, possibly slightly slower in time */
-		  /* check_free_heap_size(sc, stop - start); */
+		  check_free_heap_size(sc, stop - start);
 		  for (i = start; i < stop; i++)
 		    {
-		      slot_set_value(ctr_slot, make_integer(sc, i));
+		      slot_set_value(ctr_slot, make_integer_unchecked(sc, i));
 		      vels[integer(slot_value(o->v[2].p))] = slot_value(o->v[3].p);
 		    }}
 	      else
@@ -82720,7 +82807,8 @@ static bool op_define1(s7_scheme *sc)
    *   (define (hi mac) (mac 1)) assuming mac here is a function passed as an arg, etc...
    * the immutable constant check needs to wait until we have the actual new value because
    *   we want to ignore the rebinding (not raise an error) if it is the existing value.
-   *   This happens when we reload a file that calls define-constant.
+   *   This happens when we reload a file that calls define-constant.  But we want a 
+   *   warning if we got define (as opposed to the original define-constant).
    */
   s7_pointer x;
   if (is_multiple_value(sc->value))                 /* (define x (values 1 2)) */
@@ -82736,8 +82824,12 @@ static bool op_define1(s7_scheme *sc)
 	    (type(sc->value) == unchecked_type(slot_value(x))) &&
 	    (s7_is_equivalent(sc, sc->value, slot_value(x)))))    /* if value is unchanged, just ignore this (re)definition */
 	syntax_error_with_caller_nr(sc, "~A: ~S is immutable", 19, define1_caller(sc), sc->code); /*   can't use s7_is_equal because value might be NaN, etc */
+
+      if ((sc->safety > 0) &&          /* (define-constant x 3) (define x 3)... */
+	  (sc->cur_op == OP_DEFINE))
+	s7_warn(sc, 256, "(define %s %s), but %s is a constant\n", display(sc->code), display(sc->value), display(sc->code));
     }
-  x = lookup_slot_from(sc->code, sc->curlet);
+  else x = lookup_slot_from(sc->code, sc->curlet);
   if ((is_slot(x)) && (slot_has_setter(x)))
     {
       sc->value = bind_symbol_with_setter(sc, OP_DEFINE_WITH_SETTER, sc->code, sc->value);
@@ -84614,7 +84706,7 @@ static bool op_tc_if_a_z_if_a_z_laa(s7_scheme *sc, bool cond, s7_pointer code)
   if (slot1)
     {
       if ((slot1 == laa_slot) && (fx_proc(f_test) == fx_is_null_t) && (fx_proc(la) == fx_cdr_t) && (fx_proc(laa) == fx_cdr_u) &&
-	  (s7_is_boolean(car(if_true))) && (s7_is_boolean(car(f_true))))
+	  (is_boolean(car(if_true))) && (is_boolean(car(f_true))))
 	{
 	  s7_pointer la_val = slot_value(la_slot), laa_val = slot_value(laa_slot);
 	  while (true)
@@ -87126,12 +87218,6 @@ static void op_c_na(s7_scheme *sc)  /* (set-cdr! lst ()) */
   sc->value = fn_proc(sc->code)(sc, new_args);
 }
 
-static void op_c_p_mv(s7_scheme *sc) /* op_c_p_1 -> mv case: (define (hi) (format (values #f "~A ~D" 1 2))) */
-{
-  sc->code = c_function_base(opt1_cfunc(sc->code)); /* see comment above */
-  sc->args = copy_proper_list(sc, sc->value);
-}
-
 static void op_c_a(s7_scheme *sc)
 {
   sc->value = fx_call(sc, cdr(sc->code)); /* gc protect result before list_1 */
@@ -87143,6 +87229,12 @@ static void op_c_p(s7_scheme *sc)
 {
   push_stack_no_args_direct(sc, OP_C_P_1);
   sc->code = T_Pair(cadr(sc->code));
+}
+
+static void op_c_p_mv(s7_scheme *sc) /* op_c_p_1 -> mv case: (define (hi) (format (values #f "~A ~D" 1 2))) */
+{
+  sc->code = c_function_base(opt1_cfunc(sc->code)); /* see comment above */
+  sc->args = copy_proper_list(sc, sc->value);
 }
 
 static inline void op_c_ss(s7_scheme *sc)
@@ -88859,6 +88951,8 @@ static bool op_unknown_gg(s7_scheme *sc)
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR:
       set_opt3_arglen(cdr(code), 2);
       fx_annotate_args(sc, cdr(code), sc->curlet);
+      if ((!is_pair(f)) && (vector_rank(f) != 2))
+	return(fixup_unknown_op(sc, code, f, OP_S_AA));
       return(fixup_unknown_op(sc, code, f, (is_pair(f)) ? OP_IMPLICIT_PAIR_REF_AA : OP_IMPLICIT_VECTOR_REF_AA));
 
     case T_HASH_TABLE:
@@ -88882,12 +88976,11 @@ static bool op_unknown_gg(s7_scheme *sc)
 static bool op_unknown_ns(s7_scheme *sc)
 {
   s7_pointer code = sc->code, f = sc->last_function;
-  int32_t num_args;
+  int32_t num_args = opt3_arglen(cdr(code));
 
   if (!f) unbound_variable_error_nr(sc, car(sc->code));
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s %s\n", __func__, display(f));
-
-  num_args = opt3_arglen(cdr(code));
+  
   for (s7_pointer arg = cdr(code); is_pair(arg); arg = cdr(arg))
     if (!is_slot(lookup_slot_from(car(arg), sc->curlet)))
       unbound_variable_error_nr(sc, car(arg));
@@ -89013,6 +89106,8 @@ static bool op_unknown_aa(s7_scheme *sc)
       return(true);
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+      if (vector_rank(f) != 2)
+	return(fixup_unknown_op(sc, code, f, OP_S_AA));
       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_AA));
 
     case T_PAIR:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_PAIR_REF_AA));
@@ -89041,12 +89136,10 @@ static bool is_normal_happy_symbol(s7_scheme *sc, s7_pointer sym)
 static bool op_unknown_na(s7_scheme *sc)
 {
   s7_pointer code = sc->code, f = sc->last_function;
-  int32_t num_args;
+  int32_t num_args = (is_pair(cdr(code))) ? opt3_arglen(cdr(code)) : 0;
 
   if (!f) unbound_variable_error_nr(sc, car(sc->code));
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(f), display(sc->code));
-
-  num_args = (is_pair(cdr(code))) ? opt3_arglen(cdr(code)) : 0;
   if (num_args == 0) return(fixup_unknown_op(sc, code, f, OP_S));  /* via op_closure*-fx where original had 0 args, safe case -> op_safe_closure*_0 */
 
   switch (type(f))
@@ -89161,11 +89254,10 @@ static bool op_unknown_na(s7_scheme *sc)
 static bool op_unknown_np(s7_scheme *sc)
 {
   s7_pointer code = sc->code, f = sc->last_function;
-  int32_t num_args;
+  int32_t num_args = (is_pair(cdr(code))) ? opt3_arglen(cdr(code)) : 0;
 
   if (!f) unbound_variable_error_nr(sc, car(sc->code));
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s %s %s\n", __func__, __LINE__, display(f), type_name(sc, f, NO_ARTICLE), display(sc->code));
-  num_args = (is_pair(cdr(code))) ? opt3_arglen(cdr(code)) : 0;
 
   switch (type(f))
     {
@@ -89717,7 +89809,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_C_P: if (!c_function_is_ok(sc, sc->code)) break;
 	case HOP_C_P: op_c_p(sc); goto EVAL;
-
 	case OP_C_P_1: sc->value = fn_proc(sc->code)(sc, list_1(sc, sc->value)); continue;
 	case OP_C_P_MV: op_c_p_mv(sc); goto APPLY;
 
@@ -91817,11 +91908,11 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
   switch (symbol_s7_let(sym))
     {
     case SL_ACCEPT_ALL_KEYWORD_ARGUMENTS:
-      if (s7_is_boolean(val)) {sc->accept_all_keyword_arguments = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->accept_all_keyword_arguments = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_AUTOLOADING:
-      if (s7_is_boolean(val)) {sc->is_autoloading = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->is_autoloading = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_BIGNUM_PRECISION:
@@ -91875,7 +91966,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       return(val);
 
     case SL_EXPANSIONS:
-      if (s7_is_boolean(val)) {sc->is_expanding = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->is_expanding = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_FILE_NAMES: case SL_FILENAMES: sl_unsettable_error_nr(sc, sym);
@@ -91895,7 +91986,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_GC_RESIZE_HEAP_BY_4_FRACTION: sc->gc_resize_heap_by_4_fraction = s7_real(sl_real_geq_0(sc, sym, val)); return(val);
 
     case SL_GC_STATS:
-      if (s7_is_boolean(val))
+      if (is_boolean(val))
 	{
 	  sc->gc_stats = ((val == sc->T) ? GC_STATS : 0);
 	  return(val);
@@ -91940,7 +92031,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       return(val);
 
     case SL_HISTORY_ENABLED:       /* (set! (*s7* 'history-enabled) #f|#t) */
-      if (s7_is_boolean(val))
+      if (is_boolean(val))
 	return(s7_make_boolean(sc, s7_set_history_enabled(sc, s7_boolean(sc, val))));
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
@@ -91975,11 +92066,11 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_MOST_POSITIVE_FIXNUM:  sl_unsettable_error_nr(sc, sym);
 
     case SL_MUFFLE_WARNINGS:
-      if (s7_is_boolean(val)) {sc->muffle_warnings = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->muffle_warnings = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_OPENLETS:
-      if (s7_is_boolean(val)) {sc->has_openlets = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->has_openlets = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_OUTPUT_PORT_DATA_SIZE: sc->output_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
@@ -92032,7 +92123,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
 	sl_stacktrace_wrong_type_argument_nr(sc, sym, 3, caddr(val), wrap_string(sc, "an integer (line length)", 24), val);
       if (!is_t_integer(cadddr(val)))
 	sl_stacktrace_wrong_type_argument_nr(sc, sym, 4, cadddr(val), wrap_string(sc, "an integer (comment position)", 29), val);
-      if (!s7_is_boolean(s7_list_ref(sc, val, 4)))
+      if (!is_boolean(s7_list_ref(sc, val, 4)))
 	sl_stacktrace_wrong_type_argument_nr(sc, sym, 5, s7_list_ref(sc, val, 4), wrap_string(sc, "a boolean (treat-data-as-comment)", 33), val);
       sc->stacktrace_defaults = copy_proper_list(sc, val);
       return(val);
@@ -92042,11 +92133,11 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_STACK_TOP:  sl_unsettable_error_nr(sc, sym);
 
     case SL_UNDEFINED_CONSTANT_WARNINGS:
-      if (s7_is_boolean(val)) {sc->undefined_constant_warnings = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->undefined_constant_warnings = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_UNDEFINED_IDENTIFIER_WARNINGS:
-      if (s7_is_boolean(val)) {sc->undefined_identifier_warnings = s7_boolean(sc, val); return(val);}
+      if (is_boolean(val)) {sc->undefined_identifier_warnings = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
 
     case SL_VERSION:  sl_unsettable_error_nr(sc, sym);
@@ -94766,10 +94857,9 @@ void s7_repl(s7_scheme *sc)
   s7_pointer val = s7_load_with_environment(sc, "libc_s7.so", e);
   if (val)
     {
-      s7_pointer libs;
+      s7_pointer libs = global_slot(sc->libraries_symbol);
       uint64_t hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
       s7_define(sc, sc->nil, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
-      libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
     }
 
@@ -94873,77 +94963,70 @@ int main(int argc, char **argv)
 #endif
 
 /* -----------------------------------------------
- *            20.9   21.0   22.0   22.4   22.5   new gcc/valgrind
+ *            20.9   21.0   22.0   22.4   22.5
  * -----------------------------------------------
  * tpeak      115    114    108    105    105
- * tref       691    687    463    461    461     459
- * index     1026   1016    973    968    958     964
- * tmock     1177   1165   1057   1036   1033    1054 [lookup_from]
- * tvect     2519   2464   1772   1689   1689    1667
- * texit     ----   ----   1778   1749   1744    1736
- * s7test    1873   1831   1818   1779   1782    1809 [same copy_proper_list]
- * timp      2971   2891   2176   2043   1926    1943 [make_let_with_three_slots]
- * thook     ----   ----   2590   2369   2113    2143 [lookup_from]
- * lt        2187   2172   2150   2143   2146    2173 [same make_let_with_three_slots]
- * tauto     ----   ----   2562   2207   2171    2196 [same]
- * dup       3805   3788   2492   2273   2288    2324 [lookup_slot_from]
- * tload     ----   ----   3046   2352   2357    2386 [s7_init!]
- * tread     2440   2421   2419   2376   2370    2404 [trailers]
- * fbench    2688   2583   2460   2403   2411    2404
- * trclo     2735   2574   2454   2423   2424    2435 [op_tc*]
- * tcopy     8035   5546   2539   2503   2428    2380
- * titer     2865   2842   2641   2475   2483    2508 [lookup_from]
- * tmat      3065   3042   2524   2511   2517    2513
- * tb        2735   2681   2612   2574   2602    2596
- * tsort     3105   3104   2856   2820   2819    2805
- * teq       4068   4045   3536   3450   3445    3452
- * tmac      3950   3873   3033   3541   3553    3664 [trailers]
- * tio       3816   3752   3683   3588   3600    3619
- * tobj      4016   3970   3828   3624   3600    3561
- * tclo      4787   4735   4390   4309   4221    4380 [apply_safe_closure_star_1]
- * tlet      7775   5640   4450   4393   4406    4415 [eval]
- * tfft      7820   7729   4755   4599   4420    4449 [lookup_from]
- * tcase     4960   4793   4439   4407   4421    4434 [same]
- * tmap      8869   8774   4489   4468   4474    4470
- * tshoot    5525   5447   5183   5099   5088    5081
- * tform     5357   5348   5307   5281   5278    5295
- * tnum      6348   6013   5433   5378   5323    5354 [lookup_from]
- * tstr      6880   6342   5488   5400   5387    5347
- * tlamb     6423   6273   5720   5530   5500    5547 [eval]
- * tset      ----   ----   ----   6163   6139    6208 [eval]
- * tlist     7896   7546   6558   6195   6204    6313 [make_let_with_three_slots]
- * tmisc     8869   7612   6435   6239   6221    6268 [lookup_from]
- * tgsl      8485   7802   6373   6301   6303    6310
- * trec      6936   6922   6521   6538   6512    6547 [op_tc...]
- * tari      13.0   12.7   6827   6633   6611    6488
- * tleft     10.4   10.2   7657   7472   7433    7474 [eval]
- * tgc       11.9   11.1   8177   8002   8016    7960 [eval]
- * thash     11.8   11.7   9734   9489   9461
- * cb        11.2   11.0   9658   9539   9545    9560
+ * tref       691    687    463    461    459
+ * index     1026   1016    973    968    963
+ * tmock     1177   1165   1057   1036   1054
+ * tvect     2519   2464   1772   1689   1667
+ * texit     ----   ----   1778   1749   1736
+ * s7test    1873   1831   1818   1779   1809
+ * timp      2971   2891   2176   2043   1943  1948 [->op_x_aa]
+ * thook     ----   ----   2590   2369   2142
+ * lt        2187   2172   2150   2143   2174
+ * tauto     ----   ----   2562   2207   2196
+ * dup       3805   3788   2492   2273   2304
+ * tcopy     8035   5546   2539   2503   2374
+ * tload     ----   ----   3046   2352   2386
+ * fbench    2688   2583   2460   2403   2404
+ * tread     2440   2421   2419   2376   2404
+ * trclo     2735   2574   2454   2423   2435
+ * titer     2865   2842   2641   2475   2509
+ * tmat      3065   3042   2524   2511   2518  2521
+ * tb        2735   2681   2612   2574   2596
+ * tsort     3105   3104   2856   2820   2805
+ * teq       4068   4045   3536   3450   3453
+ * tobj      4016   3970   3828   3624   3561
+ * tio       3816   3752   3683   3588   3619
+ * tmac      3950   3873   3033   3541   3664
+ * tclo      4787   4735   4390   4309   4377
+ * tlet      7775   5640   4450   4393   4415
+ * tcase     4960   4793   4439   4407   4434
+ * tfft      7820   7729   4755   4599   4450
+ * tmap      8869   8774   4489   4468   4471
+ * tshoot    5525   5447   5183   5099   5082
+ * tform     5357   5348   5307   5281   5298
+ * tstr      6880   6342   5488   5400   5347  5364
+ * tnum      6348   6013   5433   5378   5357
+ * tlamb     6423   6273   5720   5530   5544
+ * tset      ----   ----   ----   6163   6208
+ * tmisc     8869   7612   6435   6239   6250
+ * tlist     7896   7546   6558   6195   6308
+ * tgsl      8485   7802   6373   6301   6310
+ * tari      13.0   12.7   6827   6633   6488
+ * trec      6936   6922   6521   6538   6547
+ * tleft     10.4   10.2   7657   7472   7475
+ * tgc       11.9   11.1   8177   8002   7957
+ * thash     11.8   11.7   9734   9489   9460
+ * cb        11.2   11.0   9658   9539   9560
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.6    
- * sg        ----   ----   55.9   56.5   56.5    57.3 [lookup_from]
- * lg        ----   ----  105.2  104.6  104.9   106.1 [same make_let_with_three_slots]
- * tbig     177.4  175.8  156.5  150.6  150.4   149.6
+ * calls     36.7   37.5   37.0   37.6   37.5   
+ * sg        ----   ----   55.9   56.5   56.9
+ * lg        ----   ----  105.2  104.6  106.1
+ * tbig     177.4  175.8  156.5  150.6  149.6
  * -----------------------------------------------
  *
  * t718: optimize_syntax overeagerness
- *       hash :readable does not include eqf/mapf unless it's a built-in choice, more closure cases here?
+ *       hash :readable for len>0 with typers/checkers
  *       accept anonymous typer?
- *       typed-hash-table bugs
- *       slot/hash-table display cycles
- *       stack overflow: need resize stack if typers? (all involve H_4 and probably s7_call) 43050
- *       define-constant x y, then define x y is not an error -- should we raise one? [second define-constant ok if value is not changed]
- *          or maybe a warning "define is define-constant here..."
- *       inlines for new gcc??
+ *       typed-hash-table bugs, thash key-typer consistency checks (eqv?+string-* etc -- t595)
+ * t595 implicit seq+clo+mv bugs (splice fails in some cases)
  * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
  *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
- * s7test 30773 -- (let(letrec)) where we should have (letrec(let))
  * opt_c/e: body as begin+jump to end sc->value? (like cond etc)
- * check_free_heap_size can be problematic (increase gc calls)
- *   maybe check_free_heap_size should have the same resize code as gc 80675
  * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
- *    but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
- *    is this akin to op_implicit_vector_set_3|4? [only from set_implicit_vector]
+ *   but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
+ *   is this akin to op_implicit_vector_set_3|4? [only from set_implicit_vector]
  */
