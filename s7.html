@@ -2528,8 +2528,9 @@ as:
 
 <p>Add optional and rest arguments, and you can't tell who is supposed to
 take which arguments.  
-Currently, you can mix types with implicit indices,
-but a function grabs all remaining indices.
+Currently, you can mix types with implicit indices, but if you implicitly
+call an element of a sequence that is a function
+that is not known to be "safe" (unproblematic) you'll get an error.
 To insist that all objects are of the same type, use an explicit getter:
 </p>
 

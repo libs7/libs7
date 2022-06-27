@@ -8873,9 +8873,9 @@ static s7_pointer default_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int lo
 static void init_unlet(s7_scheme *sc)
 {
   int32_t k = 0;
-  s7_pointer *inits, *els;
+  s7_pointer *inits;
+  s7_pointer *els = vector_elements(sc->symbol_table);
   block_t *block = mallocate(sc, UNLET_ENTRIES * sizeof(s7_pointer));
-
   sc->unlet = (s7_pointer)Calloc(1, sizeof(s7_cell));
   set_full_type(sc->unlet, T_VECTOR | T_UNHEAP);
   vector_length(sc->unlet) = UNLET_ENTRIES;
@@ -8884,9 +8884,8 @@ static void init_unlet(s7_scheme *sc)
   vector_set_dimension_info(sc->unlet, NULL);
   vector_getter(sc->unlet) = default_vector_getter;
   vector_setter(sc->unlet) = default_vector_setter;
-  inits = vector_elements(sc->unlet);
+  inits = vector_elements(sc->unlet);  
   s7_vector_fill(sc, sc->unlet, sc->nil);
-  els = vector_elements(sc->symbol_table);
 
   inits[k++] = initial_slot(sc->else_symbol);
   for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++)
@@ -8898,9 +8897,8 @@ static void init_unlet(s7_scheme *sc)
 	    s7_pointer val = initial_value(sym);
 	    if ((is_c_function(val)) || (is_syntax(val)))  /* we assume the initial_slot value needs no GC protection */
 	      inits[k++] = initial_slot(sym);
-	    /* non-c_functions that are not set! (and therefore initial_slot GC) protected by default:
-	     *    make-hook hook-functions
-	     * if these initial_slot values are added to unlet, they need explicit GC protection.
+	    /* non-c_functions that are not set! (and therefore initial_slot GC) protected by default: make-hook hook-functions
+	     *   if these initial_slot values are added to unlet, they need explicit GC protection.
 	     */
 	    if ((S7_DEBUGGING) && (k >= UNLET_ENTRIES)) fprintf(stderr, "unlet overflow\n");
 	  }}
@@ -8912,20 +8910,14 @@ static s7_pointer g_unlet(s7_scheme *sc, s7_pointer unused_args)
   #define H_unlet "(unlet) returns a let that establishes the original bindings of all the predefined functions"
   #define Q_unlet s7_make_signature(sc, 1, sc->is_let_symbol)
 
-  /* slightly confusing:
-   *    ((unlet) 'abs) -> #<undefined>
-   *    (defined? 'abs (unlet)) -> #t
-   * this is because unlet sets up a local environment of unshadowed symbols, and s7_let_ref only looks at the local env chain
-   *   (that is, if env is not the global env, then the global env is not searched).
-   */
   s7_pointer *inits = vector_elements(sc->unlet);
-  s7_pointer x;
+  s7_pointer res;
 
   sc->w = make_let(sc, sc->curlet);
   for (int32_t i = 0; (i < UNLET_ENTRIES) && (is_slot(inits[i])); i++)
     {
       s7_pointer sym = slot_symbol(inits[i]);
-      x = slot_value(inits[i]);
+      s7_pointer x = slot_value(inits[i]);
       if ((x != global_value(sym)) ||  /* it has been changed globally */
 	  ((!is_global(sym)) &&        /* it might be shadowed locally */
 	   (s7_symbol_local_value(sc, sym, sc->curlet) != global_value(sym))))
@@ -8934,9 +8926,9 @@ static s7_pointer g_unlet(s7_scheme *sc, s7_pointer unused_args)
   /* if (set! + -) then + needs to be overridden, but the local bit isn't set, so we have to check the actual values in the non-local case.
    *   (define (f x) (with-let (unlet) (+ x 1)))
    */
-  x = sc->w;
+  res = sc->w;
   sc->w = sc->nil;
-  return(x);
+  return(res);
 }
 
 
@@ -8990,8 +8982,7 @@ static s7_pointer g_coverlet(s7_scheme *sc, s7_pointer args)
   if ((e == sc->rootlet) || (e == sc->s7_let))
     s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't coverlet ~S", 17), e));
 
-  if ((is_let(e)) ||
-      (has_closure_let(e)) ||
+  if ((is_let(e)) || (has_closure_let(e)) ||
       ((is_c_object(e)) && (c_object_let(e) != sc->nil)) ||
       ((is_c_pointer(e)) && (is_let(c_pointer_info(e)))))
     {
@@ -29850,12 +29841,11 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   else
     if (jump_loc != ERROR_JUMP)
       eval(sc, sc->cur_op);
-
   pop_input_port(sc);
   if (is_input_port(port))
     s7_close_input_port(sc, port);
-
   restore_jump_info(sc);
+
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
   return(sc->value);
@@ -29887,12 +29877,11 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   else
     if (jump_loc != ERROR_JUMP)
       eval(sc, sc->cur_op);
-
   pop_input_port(sc);
   if (is_input_port(port))
     s7_close_input_port(sc, port);
-
   restore_jump_info(sc);
+
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
   return(sc->value);
@@ -32827,10 +32816,6 @@ static const char *hash_table_typer_name(s7_scheme *sc, s7_pointer typer)
   return(symbol_name(sym));
 }
 
-#if CYCLE_DEBUGGING
-static char *base = NULL, *min_char = NULL;
-#endif
-
 static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   s7_int gc_iter, len = hash_table_entries(hash);
@@ -32838,33 +32823,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
   s7_pointer iterator, p;
   int32_t href;
 
-#if CYCLE_DEBUGGING
-  char x;
-  if (!base) base = &x; 
-  else 
-    if (&x > base) base = &x; 
-    else 
-      if ((!min_char) || (&x < min_char))
-	{
-	  min_char = &x;
-	  if ((base - min_char) > 1000000)
-	    {
-	      fprintf(stderr, "infinite recursion?\n");
-	      if (port_data(port))
-		{
-		  fprintf(stderr, "   port contents (%ld bytes): \n", port_position(port));
-		  if (port_position(port) > 10000)
-		    port_data(port)[10000] = '\0';
-		  else port_data(port)[port_position(port)] = '\0';
-		  fprintf(stderr, "%s\n", port_data(port));
-		}
-	      s7_show_stack(sc);
-	      abort();
-	    }}
-#endif
-
-  /* if hash is a member of ci, just print its number
-   *   (let ((ht (hash-table '(a . 1)))) (hash-table-set! ht 'b ht))
+  /* if hash is a member of ci, just print its number: (let ((ht (hash-table '(a . 1)))) (hash-table-set! ht 'b ht))
    * there's no way to make a truly :readable version of a weak hash-table (or a normal hash-table that uses eq? with pairs, for example)
    */
   if (len == 0)
@@ -32872,10 +32831,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
       if (use_write == P_READABLE)
 	{
 	  const char *typer = hash_table_checker_name(sc, hash);
-#if 0
-	  fprintf(stderr, "%s: checker: %s, len: %" ld64 " typed: %d, chosen: %d, procs: %s\n",
-		  __func__, typer, hash_table_mask(hash) + 1, is_typed_hash_table(hash), hash_chosen(hash), display(hash_table_procedures(hash)));
-#endif
 	  if ((typer[0] == '#') && /* #f */
 	      (!is_typed_hash_table(hash)))
 	    {
@@ -33179,38 +33134,9 @@ static void immutable_slots_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer po
       }
 }
 
-#if CYCLE_DEBUGGING
-static char *base1 = NULL, *min_char1 = NULL;
-#endif
-
 static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   /* the slot symbol might need (symbol...) in which case we don't want the preceding quote */
-#if CYCLE_DEBUGGING
-  char x;
-  if (!base1) base1 = &x; 
-  else 
-    if (&x > base1) base1 = &x; 
-    else 
-      if ((!min_char1) || (&x < min_char1))
-	{
-	  min_char1 = &x;
-	  if ((base1 - min_char1) > 1000000)
-	    {
-	      fprintf(stderr, "slot infinite recursion?\n");
-	      if (port_data(port))
-		{
-		  fprintf(stderr, "   port contents (%ld bytes): \n", port_position(port));
-		  if (port_position(port) > 10000)
-		    port_data(port)[10000] = '\0';
-		  else port_data(port)[port_position(port)] = '\0';
-		  fprintf(stderr, "%s\n", port_data(port));
-		}
-	      s7_show_stack(sc);
-	      abort();
-	    }}
-#endif
-
   symbol_to_port(sc, slot_symbol(obj), port, P_READABLE, NULL);
   port_write_character(port)(sc, ' ', port);
   object_to_port_with_circle_check(sc, slot_value(obj), port, use_write, ci);
@@ -36664,7 +36590,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 
 static s7_pointer ref_index_checked(s7_scheme *sc, s7_pointer caller, s7_pointer in_obj, s7_pointer args)
 {
-  if (!is_applicable(in_obj))
+  if (!is_applicable(in_obj)) /* let implicit_index shuffle syntax and closures */
     s7_error_nr(sc, sc->syntax_error_symbol,
 		set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
 			    cons(sc, caller, args), cons(sc, in_obj, cddr(args)), in_obj));
@@ -44256,12 +44182,6 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
   hash_entry_t **old_lists, **new_lists;
 
   if (is_typed_hash_table(new_hash))
-#if 0
-      /* (sc->safety >= NO_SAFETY) && */
-      ((!is_typed_hash_table(old_hash)) ||
-       (hash_table_key_typer(old_hash) != hash_table_key_typer(new_hash)) ||
-       (hash_table_value_typer(old_hash) != hash_table_value_typer(new_hash))))
-#endif
     check_old_hash(sc, old_hash, new_hash, start, end);
 
   old_len = hash_table_mask(old_hash) + 1;
@@ -44280,7 +44200,7 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 	  hash_table_mapper(new_hash) = hash_table_mapper(old_hash);
 	  if (has_hash_key_type(old_hash)) set_has_hash_key_type(new_hash); else clear_has_hash_key_type(new_hash);  /* c_function is something like symbol? */
 	  if (has_hash_value_type(old_hash)) set_has_hash_value_type(new_hash); else clear_has_hash_value_type(new_hash);
-	  if (hash_chosen(old_hash)) hash_set_chosen(new_hash); /* TODO: else clear? */
+	  if (hash_chosen(old_hash)) hash_set_chosen(new_hash); else hash_clear_chosen(new_hash);
 	}
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
@@ -47837,7 +47757,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
 	s7_pointer new_hash = s7_make_hash_table(sc, hash_table_mask(source) + 1);
 	s7_int gc_loc = gc_protect_1(sc, new_hash);
 	hash_table_checker(new_hash) = hash_table_checker(source);
-	if (hash_chosen(source)) hash_set_chosen(new_hash); /* TODO: else clear? */
+	if (hash_chosen(source)) hash_set_chosen(new_hash); else hash_clear_chosen(new_hash);
 	hash_table_mapper(new_hash) = hash_table_mapper(source);
 	hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, source));
 	hash_table_copy(sc, source, new_hash, 0, hash_table_entries(source));
@@ -51286,8 +51206,9 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 	}}
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
-  return(s7_error(sc, make_symbol(sc, "uncaught-throw"),
-		  set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info)));
+  s7_error_nr(sc, make_symbol(sc, "uncaught-throw"),
+	      set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info));
+  return(sc->F);
 }
 
 #if WITH_GCC
@@ -52104,6 +52025,8 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       s7_error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices));
 
     case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
+      if (!is_safe_closure(obj))
+	s7_error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "can't call a (possibly unsafe) function implicitly: ~S ~S", 57), obj, indices));
       check_stack_size(sc);
       sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
       sc->value = s7_call(sc, obj, sc->temp10);
@@ -52113,6 +52036,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       return(sc->value);
 
     case T_C_FUNCTION:
+      /* TODO: if not safe, error? also syntax etc?? */
       return(apply_c_function(sc, obj, indices));
 
     case T_C_RST_NO_REQ_FUNCTION:
@@ -80749,7 +80673,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 		s7_p_ppp_t fpt = o->v[3].p_ppp_f;
 		for (i = start; i < stop; i++)
 		  {
-		    slot_set_value(ctr_slot, make_integer(sc, i)); /* TODO unchecked if ctr not used in fpt (here and elsewhere) if i not set in body */
+		    slot_set_value(ctr_slot, make_integer(sc, i));
 		    fpt(sc, slot_value(o->v[1].p), o->v[5].fp(o->v[4].o1), slot_value(o->v[2].p));
 		  }}
 	    else
@@ -82040,8 +81964,7 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 		    set_elist_5(sc, wrap_string(sc, "~S: not enough arguments: ((~S ~S ...)~{~^ ~S~})", 48),
 				closure_name(sc, sc->code),
 				(is_closure(sc->code)) ? sc->lambda_symbol : ((is_bacro(sc->code)) ? sc->bacro_symbol : sc->macro_symbol),
-				closure_args(sc->code),
-				sc->args));
+				closure_args(sc->code),	sc->args));
       slot = make_slot(sc, sym, T_Pos(unchecked_car(z)));
       symbol_set_local_slot(sym, id, slot);
       if (tis_slot(last_slot))
@@ -82057,8 +81980,7 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 		    set_elist_5(sc, wrap_string(sc, "~S: too many arguments: ((~S ~S ...)~{~^ ~S~})", 46),
 				closure_name(sc, sc->code),
 				(is_closure(sc->code)) ? sc->lambda_symbol : ((is_bacro(sc->code)) ? sc->bacro_symbol : sc->macro_symbol),
-				closure_args(sc->code),
-				sc->args));
+				closure_args(sc->code),	sc->args));
     }
   else
     {
@@ -91325,26 +91247,23 @@ static s7_int s7_let_length(void) {return(SL_NUM_FIELDS - 1);}
 
 static s7_pointer make_s7_let(s7_scheme *sc)  /* *s7* is permanent -- 20-May-21 */
 {
-  s7_pointer slot1, slot2, x = alloc_pointer(sc);
+  s7_pointer slot1 = make_permanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
+  s7_pointer slot2 = make_permanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
+  s7_pointer x = alloc_pointer(sc);
   set_full_type(x, T_LET | T_SAFE_PROCEDURE | T_UNHEAP | T_HAS_METHODS | T_HAS_LET_REF_FALLBACK | T_HAS_LET_SET_FALLBACK);
   let_set_id(x, ++sc->let_number);
   let_set_outlet(x, sc->nil);
-  slot1 = make_permanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
   symbol_set_local_slot(sc->let_set_fallback_symbol, sc->let_number, slot1);
   slot_set_next(slot1, slot_end(sc));
-  slot2 = make_permanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
   symbol_set_local_slot(sc->let_ref_fallback_symbol, sc->let_number, slot2);
   slot_set_next(slot2, slot1);
   let_set_slots(x, slot2);
-
   set_immutable(slot1);         /* make the *s7* let-ref|set! fallbacks immutable */
   set_immutable(slot2);
   set_immutable(x);
   sc->s7_let_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x));
-
   for (int32_t i = SL_STACK_TOP; i < SL_NUM_FIELDS; i++)
     symbol_set_s7_let(make_symbol(sc, s7_let_field_names[i]), (s7_let_field_t)i);
-
   return(x);
 }
 
@@ -95020,9 +94939,7 @@ int main(int argc, char **argv)
  *
  * t718: optimize_syntax overeagerness
  *       hash :readable for len>0 with typers/checkers
- *       accept anonymous typer?
- *       typed-hash-table bugs, thash key-typer consistency checks (eqv?+string-* etc -- t595)
- * t595 implicit seq+clo+mv bugs (splice fails in some cases)
+ *       thash key-typer consistency checks (eqv?+string-* etc -- t595)
  * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
  *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
  * opt_c/e: body as begin+jump to end sc->value? (like cond etc)
