@@ -3996,34 +3996,7 @@ static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
 static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
 static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
-static s7_pointer find_method_with_let(s7_scheme *sc, s7_pointer let, s7_pointer symbol);
 static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article);
-
-static noreturn void out_of_range_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
-static noreturn void wrong_type_arg_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
-
-static noreturn void simple_wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typnam, s7_pointer descr);
-static noreturn void wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr);
-static noreturn void out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer descr);
-static noreturn void simple_out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr);
-
-/* putting off the type description until s7_error via the sc->unused marker below makes it possible
- *    for gcc to speed up the functions that call these as tail-calls.  1-2% overall speedup!
- */
-#define simple_wrong_type_argument_nr(Sc, Caller, Arg, Desired_Type) \
-  simple_wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
-
-#define wrong_type_argument_nr(Sc, Caller, Num, Arg, Desired_Type)	\
-  wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), make_integer(Sc, Num), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
-
-#define simple_wrong_type_argument_with_type_nr(Sc, Caller, Arg, Type) \
-  simple_wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Sc->unused, Type)
-
-#define wrong_type_argument_with_type_nr(Sc, Caller, Num, Arg, Type)	\
-  wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), make_integer(Sc, Num), Arg, Sc->unused, Type)
-
-#define simple_out_of_range_nr(Sc, Caller, Arg, Description)   simple_out_of_range_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Description)
-#define out_of_range_nr(Sc, Caller, Arg_Num, Arg, Description) out_of_range_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg_Num, Arg, Description)
 
 
 /* ---------------- evaluator ops ---------------- */
@@ -5687,6 +5660,293 @@ static s7_pointer set_ulist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
   return(sc->u2_1);
 }
 
+
+/* ---------------- error handlers ---------------- */
+/* putting off the type description until s7_error via the sc->unused marker below makes it possible
+ *    for gcc to speed up the functions that call these as tail-calls (is this comment obsolete?).
+ */
+#define simple_wrong_type_argument_nr(Sc, Caller, Arg, Desired_Type) \
+  simple_wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
+
+#define wrong_type_argument_nr(Sc, Caller, Num, Arg, Desired_Type)	\
+  wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), make_integer(Sc, Num), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
+
+#define simple_wrong_type_argument_with_type_nr(Sc, Caller, Arg, Type) \
+  simple_wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Sc->unused, Type)
+
+#define wrong_type_argument_with_type_nr(Sc, Caller, Num, Arg, Type)	\
+  wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), make_integer(Sc, Num), Arg, Sc->unused, Type)
+
+#define simple_out_of_range_nr(Sc, Caller, Arg, Description)   simple_out_of_range_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Description)
+#define out_of_range_nr(Sc, Caller, Arg_Num, Arg, Description) out_of_range_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg_Num, Arg, Description)
+
+#define syntax_error_any_nr(Sc, ErrType, ErrMsg, Len, Obj) \
+  s7_error_nr(Sc, ErrType, set_elist_2(Sc, wrap_string(Sc, ErrMsg, Len), Obj))
+
+#define syntax_error_nr(Sc, ErrMsg, Len, Obj) \
+  syntax_error_any_nr(Sc, Sc->syntax_error_symbol, ErrMsg, Len, Obj)
+
+#define syntax_error_with_caller_nr(Sc, ErrMsg, Len, Caller, Obj) \
+  s7_error_nr(Sc, Sc->syntax_error_symbol, set_elist_3(Sc, wrap_string(Sc, ErrMsg, Len), Caller, Obj))
+
+#define syntax_error_with_caller2_nr(Sc, ErrMsg, Len, Caller, Name, Obj) \
+  s7_error_nr(Sc, Sc->syntax_error_symbol, set_elist_4(Sc, wrap_string(Sc, ErrMsg, Len), Caller, Name, Obj))
+
+static const char *make_type_name(s7_scheme *sc, const char *name, article_t article)
+{
+  s7_int i, slen = safe_strlen(name);
+  s7_int len = slen + 8;
+  if (len > sc->typnam_len)
+    {
+      if (sc->typnam) free(sc->typnam);
+      sc->typnam = (char *)Malloc(len);
+      sc->typnam_len = len;
+    }
+  if (article == INDEFINITE_ARTICLE)
+    {
+      i = 1;
+      sc->typnam[0] = 'a';
+      if ((name[0] == 'a') || (name[0] == 'e') || (name[0] == 'i') || (name[0] == 'o') || (name[0] == 'u'))
+	sc->typnam[i++] = 'n';
+      sc->typnam[i++] = ' ';
+    }
+  else i = 0;
+  memcpy((void *)(sc->typnam + i), (void *)name, slen);
+  sc->typnam[i + slen] = '\0';
+  return(sc->typnam);
+}
+
+static const char *type_name_from_type(int32_t typ, article_t article)
+{
+  switch (typ)
+    {
+    case T_FREE:            return((article == NO_ARTICLE) ? "free-cell"         : "a free cell");
+    case T_NIL:             return("nil");
+    case T_UNUSED:          return((article == NO_ARTICLE) ? "#<unused>"         : "the unused object");
+    case T_EOF:             return((article == NO_ARTICLE) ? "#<eof>"            : "the end-of-file object");
+    case T_UNSPECIFIED:     return((article == NO_ARTICLE) ? "#<unspecified>"    : "the unspecified object");
+    case T_UNDEFINED:       return((article == NO_ARTICLE) ? "undefined"         : "an undefined object");
+    case T_BOOLEAN:         return("boolean");
+    case T_STRING:          return((article == NO_ARTICLE) ? "string"            : "a string");
+    case T_BYTE_VECTOR:     return((article == NO_ARTICLE) ? "byte-vector"       : "a byte-vector");
+    case T_SYMBOL:          return((article == NO_ARTICLE) ? "symbol"            : "a symbol");
+    case T_SYNTAX:          return((article == NO_ARTICLE) ? "syntax"            : "syntactic");
+    case T_PAIR:            return((article == NO_ARTICLE) ? "pair"              : "a pair");
+    case T_GOTO:            return((article == NO_ARTICLE) ? "goto"              : "a goto (from call-with-exit)");
+    case T_CONTINUATION:    return((article == NO_ARTICLE) ? "continuation"      : "a continuation");
+    case T_C_RST_NO_REQ_FUNCTION:
+    case T_C_FUNCTION:      return((article == NO_ARTICLE) ? "c-function"        : "a c-function");
+    case T_C_FUNCTION_STAR: return((article == NO_ARTICLE) ? "c-function*"       : "a c-function*");
+    case T_CLOSURE:         return((article == NO_ARTICLE) ? "function"          : "a function");
+    case T_CLOSURE_STAR:    return((article == NO_ARTICLE) ? "function*"         : "a function*");
+    case T_C_MACRO:         return((article == NO_ARTICLE) ? "c-macro"           : "a c-macro");
+    case T_C_POINTER:       return((article == NO_ARTICLE) ? "c-pointer"         : "a c-pointer");
+    case T_CHARACTER:       return((article == NO_ARTICLE) ? "character"         : "a character");
+    case T_VECTOR:          return((article == NO_ARTICLE) ? "vector"            : "a vector");
+    case T_INT_VECTOR:      return((article == NO_ARTICLE) ? "int-vector"        : "an int-vector");
+    case T_FLOAT_VECTOR:    return((article == NO_ARTICLE) ? "float-vector"      : "a float-vector");
+    case T_MACRO_STAR:      return((article == NO_ARTICLE) ? "macro*"            : "a macro*");
+    case T_MACRO:           return((article == NO_ARTICLE) ? "macro"             : "a macro");
+    case T_BACRO_STAR:      return((article == NO_ARTICLE) ? "bacro*"            : "a bacro*");
+    case T_BACRO:           return((article == NO_ARTICLE) ? "bacro"             : "a bacro");
+    case T_CATCH:           return((article == NO_ARTICLE) ? "catch"             : "a catch");
+    case T_STACK:           return((article == NO_ARTICLE) ? "stack"             : "a stack");
+    case T_DYNAMIC_WIND:    return((article == NO_ARTICLE) ? "dynamic-wind"      : "a dynamic-wind");
+    case T_HASH_TABLE:      return((article == NO_ARTICLE) ? "hash-table"        : "a hash-table");
+    case T_ITERATOR:        return((article == NO_ARTICLE) ? "iterator"          : "an iterator");
+    case T_LET:             return((article == NO_ARTICLE) ? "let"               : "a let");
+    case T_COUNTER:         return((article == NO_ARTICLE) ? "internal-counter"  : "an internal counter");
+    case T_RANDOM_STATE:    return((article == NO_ARTICLE) ? "random-state"      : "a random-state");
+    case T_SLOT:            return((article == NO_ARTICLE) ? "slot"              : "a slot (variable binding)");
+    case T_INTEGER:         return((article == NO_ARTICLE) ? "integer"           : "an integer");
+    case T_RATIO:           return((article == NO_ARTICLE) ? "ratio"             : "a ratio");
+    case T_REAL:            return((article == NO_ARTICLE) ? "real"              : "a real");
+    case T_COMPLEX:         return((article == NO_ARTICLE) ? "complex-number"    : "a complex number");
+    case T_BIG_INTEGER:     return((article == NO_ARTICLE) ? "big-integer"       : "a big integer");
+    case T_BIG_RATIO:       return((article == NO_ARTICLE) ? "big-ratio"         : "a big ratio");
+    case T_BIG_REAL:        return((article == NO_ARTICLE) ? "big-real"          : "a big real");
+    case T_BIG_COMPLEX:     return((article == NO_ARTICLE) ? "big-complex-number": "a big complex number");
+    case T_INPUT_PORT:      return((article == NO_ARTICLE) ? "input-port"        : "an input port");
+    case T_OUTPUT_PORT:     return((article == NO_ARTICLE) ? "output-port"       : "an output port");
+    case T_C_OBJECT:        return((article == NO_ARTICLE) ? "c-object"          : "a c_object");
+    }
+  return(NULL);
+}
+
+static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
+{
+  if (is_let(obj)) return(obj);
+  switch (type(obj))
+    {
+    case T_MACRO:   case T_MACRO_STAR:
+    case T_BACRO:   case T_BACRO_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
+      return(closure_let(obj));
+
+    case T_C_OBJECT:
+      return(c_object_let(obj));
+
+    case T_C_POINTER:
+      if ((is_let(c_pointer_info(obj))) &&
+	  (c_pointer_info(obj) != sc->rootlet))
+	return(c_pointer_info(obj));
+    }
+  return(sc->nil);
+}
+
+static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
+{
+  s7_pointer slot;
+  if (symbol_id(symbol) == 0) /* this means the symbol has never been used locally, so how can it be a method? */
+    return(sc->undefined);
+  slot = lookup_slot_from(symbol, let);
+  if (slot != global_slot(symbol))
+    return(slot_value(slot));
+  return(sc->undefined);
+}
+
+static s7_pointer find_method_with_let(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
+{
+  return(find_method(sc, find_let(sc, let), symbol));
+}
+
+static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article)
+{
+  switch (unchecked_type(arg))
+    {
+    case T_C_OBJECT:    return(make_type_name(sc, string_value(c_object_scheme_name(sc, arg)), article));
+    case T_INPUT_PORT:  return(make_type_name(sc, (is_file_port(arg)) ? "input file port" : ((is_string_port(arg)) ? "input string port" : "input port"), article));
+    case T_OUTPUT_PORT: return(make_type_name(sc, (is_file_port(arg)) ? "output file port" : ((is_string_port(arg)) ? "output string port" : "output port"), article));
+    case T_LET:
+      if (has_active_methods(sc, arg))
+	{
+	  s7_pointer class_name = find_method(sc, arg, sc->class_name_symbol);
+	  if (is_symbol(class_name))
+	    return(make_type_name(sc, symbol_name(class_name), article));
+	}
+    default:
+      {
+	const char *str = type_name_from_type(unchecked_type(arg), article);
+	if (str) return(str);
+      }}
+  return("messed up object");
+}
+
+static s7_pointer prepackaged_type_name(s7_scheme *sc, s7_pointer x)
+{
+  s7_pointer p;
+  uint8_t typ;
+  if (has_active_methods(sc, x))
+    {
+      p = find_method_with_let(sc, x, sc->class_name_symbol);
+      if (is_symbol(p))
+	return(symbol_name_cell(p));
+    }
+  typ = type(x);
+  switch (typ)
+    {
+    case T_C_OBJECT:    return(c_object_scheme_name(sc, x));
+    case T_INPUT_PORT:  return((is_file_port(x)) ? an_input_file_port_string : ((is_string_port(x)) ? an_input_string_port_string : an_input_port_string));
+    case T_OUTPUT_PORT: return((is_file_port(x)) ? an_output_file_port_string : ((is_string_port(x)) ? an_output_string_port_string : an_output_port_string));
+    default:
+      p = sc->prepackaged_type_names[type(x)];
+      if (is_string(p)) return(p);
+    }
+  return(wrap_string(sc, "unknown type!", 13));
+}
+
+static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg)
+{
+  if (type(arg) < NUM_TYPES)
+    {
+      s7_pointer p = sc->prepackaged_type_names[type(arg)]; /* these use INDEFINITE_ARTICLE */
+      if (is_string(p)) return(p);
+    }
+  return(s7_make_string_wrapper(sc, type_name(sc, arg, INDEFINITE_ARTICLE)));
+}
+
+static noreturn void wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
+{
+  s7_pointer p = cdr(sc->wrong_type_arg_info);  /* info list is '(format_string caller arg_n arg type_name descr) */
+  set_car(p, caller); p = cdr(p);
+  set_car(p, arg_n);  p = cdr(p);
+  set_car(p, arg);    p = cdr(p);
+  set_car(p, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam);
+  p = cdr(p);
+  set_car(p, descr);
+  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->wrong_type_arg_info);
+}
+
+static noreturn void simple_wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
+{
+  set_wlist_4(cdr(sc->simple_wrong_type_arg_info), caller, arg, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam, descr);
+  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
+}
+
+static noreturn void wrong_type_arg_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
+{
+  if (arg_n > 0)
+    wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n),
+					    arg, type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
+  simple_wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), arg,
+						 type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
+}
+
+s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
+{
+  wrong_type_arg_error_nr(sc, caller, arg_n, arg, descr);
+  return(sc->wrong_type_arg_symbol);
+}
+
+static noreturn void out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer descr)
+{
+  set_wlist_4(cdr(sc->out_of_range_info), caller, arg_n, arg, descr);
+  s7_error_nr(sc, sc->out_of_range_symbol, sc->out_of_range_info);
+}
+
+static noreturn void simple_out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
+{
+  set_wlist_3(cdr(sc->simple_out_of_range_info), caller, arg, descr);
+  s7_error_nr(sc, sc->out_of_range_symbol, sc->simple_out_of_range_info);
+}
+
+static noreturn void out_of_range_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
+{
+  if (arg_n > 0)
+    out_of_range_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n), arg,
+					  wrap_string(sc, descr, safe_strlen(descr)));
+  simple_out_of_range_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)),
+					   arg, wrap_string(sc, descr, safe_strlen(descr)));
+}
+
+s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
+{
+  out_of_range_error_nr(sc, caller, arg_n, arg, descr);
+  return(sc->out_of_range_symbol);
+}
+
+static noreturn void wrong_number_of_args_error_nr(s7_scheme *sc, const char *caller, s7_pointer args)
+{
+  s7_error_nr(sc, sc->wrong_number_of_args_symbol,
+	      set_elist_2(sc, s7_make_string_wrapper(sc, caller), args)); /* "caller" includes the format directives */
+}
+
+s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args)
+{
+  s7_error_nr(sc, sc->wrong_number_of_args_symbol,
+	      set_elist_2(sc, s7_make_string_wrapper(sc, caller), args)); /* "caller" includes the format directives */
+  return(sc->wrong_number_of_args_symbol);
+}
+
+static noreturn void missing_method_error_nr(s7_scheme *sc, s7_pointer method, s7_pointer obj)
+{
+  s7_error_nr(sc, sc->missing_method_symbol,
+	      set_elist_3(sc, wrap_string(sc, "missing ~S method in ~A", 23), method,
+			  (is_c_object(obj)) ? c_object_scheme_name(sc, obj) : obj));
+}
+
+static noreturn void immutable_object_error_nr(s7_scheme *sc, s7_pointer info) {s7_error_nr(sc, sc->immutable_error_symbol, info);}
+
 static int32_t position_of(s7_pointer p, s7_pointer args)
 {
   int32_t i;
@@ -5694,6 +5954,8 @@ static int32_t position_of(s7_pointer p, s7_pointer args)
   return(i);
 }
 
+
+/* -------- method handlers -------- */
 s7_pointer s7_method(s7_scheme *sc, s7_pointer obj, s7_pointer method)
 {
   if (has_active_methods(sc, obj))
@@ -5715,13 +5977,6 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
   s7_pointer func = find_method_with_let(sc, obj, method);
   if (func == sc->undefined) return(sc->F);
   return(s7_apply_function(sc, func, set_plist_1(sc, obj)));
-}
-
-static noreturn void missing_method_error_nr(s7_scheme *sc, s7_pointer method, s7_pointer obj)
-{
-  s7_error_nr(sc, sc->missing_method_symbol,
-	      set_elist_3(sc, wrap_string(sc, "missing ~S method in ~A", 23), method,
-			  (is_c_object(obj)) ? c_object_scheme_name(sc, obj) : obj));
 }
 
 /* this is a macro mainly to simplify the Checker handling */
@@ -5769,8 +6024,6 @@ static s7_pointer method_or_bust_ppp(s7_scheme *sc, s7_pointer obj, s7_pointer m
     wrong_type_argument_nr(sc, method, num, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_plist_3(sc, x1, x2, x3)));
 }
-
-static noreturn void immutable_object_error_nr(s7_scheme *sc, s7_pointer info) {s7_error_nr(sc, sc->immutable_error_symbol, info);}
 
 static s7_pointer mutable_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, uint8_t typ, int32_t num)
 {
@@ -5844,18 +6097,6 @@ static s7_pointer method_or_bust_with_type_one_arg_p(s7_scheme *sc, s7_pointer o
     simple_wrong_type_argument_with_type_nr(sc, method, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_plist_1(sc, obj)));
 }
-
-#define syntax_error_any_nr(Sc, ErrType, ErrMsg, Len, Obj) \
-  s7_error_nr(Sc, ErrType, set_elist_2(Sc, wrap_string(Sc, ErrMsg, Len), Obj))
-
-#define syntax_error_nr(Sc, ErrMsg, Len, Obj) \
-  syntax_error_any_nr(Sc, Sc->syntax_error_symbol, ErrMsg, Len, Obj)
-
-#define syntax_error_with_caller_nr(Sc, ErrMsg, Len, Caller, Obj) \
-  s7_error_nr(Sc, Sc->syntax_error_symbol, set_elist_3(Sc, wrap_string(Sc, ErrMsg, Len), Caller, Obj))
-
-#define syntax_error_with_caller2_nr(Sc, ErrMsg, Len, Caller, Name, Obj) \
-  s7_error_nr(Sc, Sc->syntax_error_symbol, set_elist_4(Sc, wrap_string(Sc, ErrMsg, Len), Caller, Name, Obj))
 
 
 /* -------------------------------- constants -------------------------------- */
@@ -8620,27 +8861,6 @@ static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
   return(let);
 }
 
-static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
-{
-  if (is_let(obj)) return(obj);
-  switch (type(obj))
-    {
-    case T_MACRO:   case T_MACRO_STAR:
-    case T_BACRO:   case T_BACRO_STAR:
-    case T_CLOSURE: case T_CLOSURE_STAR:
-      return(closure_let(obj));
-
-    case T_C_OBJECT:
-      return(c_object_let(obj));
-
-    case T_C_POINTER:
-      if ((is_let(c_pointer_info(obj))) &&
-	  (c_pointer_info(obj) != sc->rootlet))
-	return(c_pointer_info(obj));
-    }
-  return(sc->nil);
-}
-
 static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer old_value);
 
 static inline s7_pointer checked_slot_set_value(s7_scheme *sc, s7_pointer y, s7_pointer value)
@@ -8671,22 +8891,6 @@ static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
   for (s7_pointer p = let_slots(e); tis_slot(p); p = next_slot(p))
     checked_slot_set_value(sc, p, val);
   return(val);
-}
-
-static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
-{
-  s7_pointer slot;
-  if (symbol_id(symbol) == 0) /* this means the symbol has never been used locally, so how can it be a method? */
-    return(sc->undefined);
-  slot = lookup_slot_from(symbol, let);
-  if (slot != global_slot(symbol))
-    return(slot_value(slot));
-  return(sc->undefined);
-}
-
-static s7_pointer find_method_with_let(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
-{
-  return(find_method(sc, find_let(sc, let), symbol));
 }
 
 static s7_int s7_let_length(void);
@@ -36740,7 +36944,7 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
   else
     {
       if (!s7_is_pair(car(p)))
-	return(s7_wrong_number_of_args_error(sc, "too many arguments for list-set!: ~S", args));
+	wrong_number_of_args_error_nr(sc, "too many arguments for list-set!: ~S", args);
       return(g_list_set_1(sc, car(p), cdr(args), arg_num + 1));
     }
   return(cadr(args));
@@ -37597,6 +37801,14 @@ static s7_pointer assoc_1(s7_scheme *sc, s7_pointer obj, s7_pointer x)
   return(sc->F); /* not reached */
 }
 
+static bool closure_has_two_normal_args(s7_scheme *sc, s7_pointer eq_func) /* sc for is_null */
+{
+  return((is_closure(eq_func)) &&
+	 (is_pair(closure_args(eq_func))) &&
+	 (is_pair(cdr(closure_args(eq_func)))) && /* not dotted arg list */
+	 (is_null(cddr(closure_args(eq_func)))));  /* arity == 2 */
+}
+
 static s7_pointer g_assoc(s7_scheme *sc, s7_pointer args)
 {
   #define H_assoc "(assoc obj alist (func #f)) returns the key-value pair associated (via equal?) with the key obj in the association list alist.\
@@ -37641,10 +37853,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 	    }
 	  return(sc->F);
 	}
-      if ((is_closure(eq_func)) &&
-	  (is_pair(closure_args(eq_func))) &&
-	  (is_pair(cdr(closure_args(eq_func)))) && /* not dotted arg list */
-	  (is_null(cddr(closure_args(eq_func)))))  /* arity == 2 */
+      if (closure_has_two_normal_args(sc, eq_func))
 	{
 	  s7_pointer body = closure_body(eq_func);
 	  if (is_null(x)) return(sc->F);
@@ -38054,10 +38263,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
 	  return(sc->F);
 	}
 
-      if ((is_closure(eq_func)) &&
-	  (is_pair(closure_args(eq_func))) &&
-	  (is_pair(cdr(closure_args(eq_func)))) && /* not dotted arg list */
-	  (is_null(cddr(closure_args(eq_func)))))  /* arity == 2 */
+      if (closure_has_two_normal_args(sc, eq_func))
 	{
 	  s7_pointer body = closure_body(eq_func);
 	  if (is_null(x)) return(sc->F);
@@ -38268,14 +38474,13 @@ s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...) /* arglist should b
       if (!p)
 	{
 	  va_end(ap);
-	  return(s7_wrong_number_of_args_error(sc, "not enough arguments for s7_list_nl: ~S", sc->w)); /* ideally we'd sublist this and append extra below */
+	  wrong_number_of_args_error_nr(sc, "not enough arguments for s7_list_nl: ~S", sc->w); /* ideally we'd sublist this and append extra below */
 	}
       set_car(q, p);
     }
   p = va_arg(ap, s7_pointer);
   va_end(ap);
-  if (p)
-    return(s7_wrong_number_of_args_error(sc, "too many arguments for s7_list_nl: ~S", sc->w));
+  if (p) wrong_number_of_args_error_nr(sc, "too many arguments for s7_list_nl: ~S", sc->w);
 
   if (sc->safety > NO_SAFETY)
     check_list_validity(sc, "s7_list_nl", sc->w);
@@ -39107,7 +39312,7 @@ static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_i
   if (rank != indices)
     {
       va_end(ap);
-      s7_wrong_number_of_args_error(sc, "s7_vector_ref_n: wrong number of indices: ~A", wrap_integer(sc, indices));
+      wrong_number_of_args_error_nr(sc, "s7_vector_ref_n: wrong number of indices: ~A", wrap_integer(sc, indices));
     }
   if (rank == 1)
     index = va_arg(ap, s7_int);
@@ -39904,9 +40109,9 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	  index += n * vector_offset(vec, i);
 	}
       if (is_not_null(cdr(x)))
-	return(s7_wrong_number_of_args_error(sc, "too many arguments for vector-set!: ~S", args));
+	wrong_number_of_args_error_nr(sc, "too many arguments for vector-set!: ~S", args);
       if (i != vector_ndims(vec))
-	return(s7_wrong_number_of_args_error(sc, "not enough arguments for vector-set!: ~S", args));
+	wrong_number_of_args_error_nr(sc, "not enough arguments for vector-set!: ~S", args);
 
       /* since vector-ref can return a subvector (if not passed enough args), it might be interesting to
        *   also set a complete subvector via set!, but would that introduce ambiguity?  Only copy the vector
@@ -39930,7 +40135,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	{
 	  s7_pointer v = vector_getter(vec)(sc, vec, index);
 	  if (!is_any_vector(v))
-	    return(s7_wrong_number_of_args_error(sc, "too many arguments for vector-set!: ~S", args));
+	    wrong_number_of_args_error_nr(sc, "too many arguments for vector-set!: ~S", args);
 	  return(g_vector_set(sc, set_ulist_1(sc, v, cddr(args))));
 	}
       val = caddr(args);
@@ -48503,7 +48708,6 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 }
 
 s7_pointer s7_copy(s7_scheme *sc, s7_pointer args) {return(s7_copy_1(sc, sc->copy_symbol, args));}
-
 #define g_copy s7_copy
 
 
@@ -48910,33 +49114,23 @@ s7_pointer s7_fill(s7_scheme *sc, s7_pointer args)
   s7_pointer p = car(args);
   switch (type(p))
     {
-    case T_STRING:
-      return(g_string_fill_1(sc, sc->fill_symbol, args)); /* redundant type check here and below */
-
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR:
-      return(g_vector_fill_1(sc, sc->fill_symbol, args));
-
-    case T_PAIR:
-      return(pair_fill(sc, args));
-
+    case T_STRING:     return(g_string_fill_1(sc, sc->fill_symbol, args)); /* redundant type check here and below */
+    case T_PAIR:       return(pair_fill(sc, args));
+    case T_HASH_TABLE: return(hash_table_fill(sc, args));
     case T_NIL:
       if (!is_null(cddr(args)))  /* (fill! () 1 21 #\a)? */
 	syntax_error_nr(sc, "fill! () ... includes indices: ~S?", 34, cddr(args));
       return(cadr(args));        /* this parallels the empty vector case */
-
-    case T_HASH_TABLE:
-      return(hash_table_fill(sc, args));
-
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR:
+      return(g_vector_fill_1(sc, sc->fill_symbol, args));
     case T_LET:
       check_method(sc, p, sc->fill_symbol, args);
       return(let_fill(sc, args));
-
     case T_C_OBJECT:
       check_method(sc, p, sc->fill_symbol, args);
       if (!c_object_fill(sc, p)) /* default is NULL (s7_make_c_type) */
 	syntax_error_nr(sc, "attempt to fill ~S?", 19, p);
       return((*(c_object_fill(sc, p)))(sc, args));
-
     default:
       check_method(sc, p, sc->fill_symbol, args);
     }
@@ -48945,9 +49139,6 @@ s7_pointer s7_fill(s7_scheme *sc, s7_pointer args)
 }
 
 #define g_fill s7_fill
-/* perhaps (fill iterator obj) could fill the underlying sequence (if any) -- not let/closure
- *   similarly for length, reverse etc
- */
 
 
 /* -------------------------------- append -------------------------------- */
@@ -50177,218 +50368,6 @@ static s7_pointer history_cons(s7_scheme *sc, s7_pointer code, s7_pointer args)
 #endif
 
 
-/* -------- error handlers -------- */
-
-static const char *make_type_name(s7_scheme *sc, const char *name, article_t article)
-{
-  s7_int i, slen = safe_strlen(name);
-  s7_int len = slen + 8;
-  if (len > sc->typnam_len)
-    {
-      if (sc->typnam) free(sc->typnam);
-      sc->typnam = (char *)Malloc(len);
-      sc->typnam_len = len;
-    }
-  if (article == INDEFINITE_ARTICLE)
-    {
-      i = 1;
-      sc->typnam[0] = 'a';
-      if ((name[0] == 'a') || (name[0] == 'e') || (name[0] == 'i') || (name[0] == 'o') || (name[0] == 'u'))
-	sc->typnam[i++] = 'n';
-      sc->typnam[i++] = ' ';
-    }
-  else i = 0;
-  memcpy((void *)(sc->typnam + i), (void *)name, slen);
-  sc->typnam[i + slen] = '\0';
-  return(sc->typnam);
-}
-
-static const char *type_name_from_type(int32_t typ, article_t article)
-{
-  switch (typ)
-    {
-    case T_FREE:            return((article == NO_ARTICLE) ? "free-cell"         : "a free cell");
-    case T_NIL:             return("nil");
-    case T_UNUSED:          return((article == NO_ARTICLE) ? "#<unused>"         : "the unused object");
-    case T_EOF:             return((article == NO_ARTICLE) ? "#<eof>"            : "the end-of-file object");
-    case T_UNSPECIFIED:     return((article == NO_ARTICLE) ? "#<unspecified>"    : "the unspecified object");
-    case T_UNDEFINED:       return((article == NO_ARTICLE) ? "undefined"         : "an undefined object");
-    case T_BOOLEAN:         return("boolean");
-    case T_STRING:          return((article == NO_ARTICLE) ? "string"            : "a string");
-    case T_BYTE_VECTOR:     return((article == NO_ARTICLE) ? "byte-vector"       : "a byte-vector");
-    case T_SYMBOL:          return((article == NO_ARTICLE) ? "symbol"            : "a symbol");
-    case T_SYNTAX:          return((article == NO_ARTICLE) ? "syntax"            : "syntactic");
-    case T_PAIR:            return((article == NO_ARTICLE) ? "pair"              : "a pair");
-    case T_GOTO:            return((article == NO_ARTICLE) ? "goto"              : "a goto (from call-with-exit)");
-    case T_CONTINUATION:    return((article == NO_ARTICLE) ? "continuation"      : "a continuation");
-    case T_C_RST_NO_REQ_FUNCTION:
-    case T_C_FUNCTION:      return((article == NO_ARTICLE) ? "c-function"        : "a c-function");
-    case T_C_FUNCTION_STAR: return((article == NO_ARTICLE) ? "c-function*"       : "a c-function*");
-    case T_CLOSURE:         return((article == NO_ARTICLE) ? "function"          : "a function");
-    case T_CLOSURE_STAR:    return((article == NO_ARTICLE) ? "function*"         : "a function*");
-    case T_C_MACRO:         return((article == NO_ARTICLE) ? "c-macro"           : "a c-macro");
-    case T_C_POINTER:       return((article == NO_ARTICLE) ? "c-pointer"         : "a c-pointer");
-    case T_CHARACTER:       return((article == NO_ARTICLE) ? "character"         : "a character");
-    case T_VECTOR:          return((article == NO_ARTICLE) ? "vector"            : "a vector");
-    case T_INT_VECTOR:      return((article == NO_ARTICLE) ? "int-vector"        : "an int-vector");
-    case T_FLOAT_VECTOR:    return((article == NO_ARTICLE) ? "float-vector"      : "a float-vector");
-    case T_MACRO_STAR:      return((article == NO_ARTICLE) ? "macro*"            : "a macro*");
-    case T_MACRO:           return((article == NO_ARTICLE) ? "macro"             : "a macro");
-    case T_BACRO_STAR:      return((article == NO_ARTICLE) ? "bacro*"            : "a bacro*");
-    case T_BACRO:           return((article == NO_ARTICLE) ? "bacro"             : "a bacro");
-    case T_CATCH:           return((article == NO_ARTICLE) ? "catch"             : "a catch");
-    case T_STACK:           return((article == NO_ARTICLE) ? "stack"             : "a stack");
-    case T_DYNAMIC_WIND:    return((article == NO_ARTICLE) ? "dynamic-wind"      : "a dynamic-wind");
-    case T_HASH_TABLE:      return((article == NO_ARTICLE) ? "hash-table"        : "a hash-table");
-    case T_ITERATOR:        return((article == NO_ARTICLE) ? "iterator"          : "an iterator");
-    case T_LET:             return((article == NO_ARTICLE) ? "let"               : "a let");
-    case T_COUNTER:         return((article == NO_ARTICLE) ? "internal-counter"  : "an internal counter");
-    case T_RANDOM_STATE:    return((article == NO_ARTICLE) ? "random-state"      : "a random-state");
-    case T_SLOT:            return((article == NO_ARTICLE) ? "slot"              : "a slot (variable binding)");
-    case T_INTEGER:         return((article == NO_ARTICLE) ? "integer"           : "an integer");
-    case T_RATIO:           return((article == NO_ARTICLE) ? "ratio"             : "a ratio");
-    case T_REAL:            return((article == NO_ARTICLE) ? "real"              : "a real");
-    case T_COMPLEX:         return((article == NO_ARTICLE) ? "complex-number"    : "a complex number");
-    case T_BIG_INTEGER:     return((article == NO_ARTICLE) ? "big-integer"       : "a big integer");
-    case T_BIG_RATIO:       return((article == NO_ARTICLE) ? "big-ratio"         : "a big ratio");
-    case T_BIG_REAL:        return((article == NO_ARTICLE) ? "big-real"          : "a big real");
-    case T_BIG_COMPLEX:     return((article == NO_ARTICLE) ? "big-complex-number": "a big complex number");
-    case T_INPUT_PORT:      return((article == NO_ARTICLE) ? "input-port"        : "an input port");
-    case T_OUTPUT_PORT:     return((article == NO_ARTICLE) ? "output-port"       : "an output port");
-    case T_C_OBJECT:        return((article == NO_ARTICLE) ? "c-object"          : "a c_object");
-    }
-  return(NULL);
-}
-
-static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article)
-{
-  switch (unchecked_type(arg))
-    {
-    case T_C_OBJECT:    return(make_type_name(sc, string_value(c_object_scheme_name(sc, arg)), article));
-    case T_INPUT_PORT:  return(make_type_name(sc, (is_file_port(arg)) ? "input file port" : ((is_string_port(arg)) ? "input string port" : "input port"), article));
-    case T_OUTPUT_PORT: return(make_type_name(sc, (is_file_port(arg)) ? "output file port" : ((is_string_port(arg)) ? "output string port" : "output port"), article));
-    case T_LET:
-      if (has_active_methods(sc, arg))
-	{
-	  s7_pointer class_name = find_method(sc, arg, sc->class_name_symbol);
-	  if (is_symbol(class_name))
-	    return(make_type_name(sc, symbol_name(class_name), article));
-	}
-    default:
-      {
-	const char *str = type_name_from_type(unchecked_type(arg), article);
-	if (str) return(str);
-      }}
-  return("messed up object");
-}
-
-static s7_pointer prepackaged_type_name(s7_scheme *sc, s7_pointer x)
-{
-  s7_pointer p;
-  uint8_t typ;
-  if (has_active_methods(sc, x))
-    {
-      p = find_method_with_let(sc, x, sc->class_name_symbol);
-      if (is_symbol(p))
-	return(symbol_name_cell(p));
-    }
-  typ = type(x);
-  switch (typ)
-    {
-    case T_C_OBJECT:    return(c_object_scheme_name(sc, x));
-    case T_INPUT_PORT:  return((is_file_port(x)) ? an_input_file_port_string : ((is_string_port(x)) ? an_input_string_port_string : an_input_port_string));
-    case T_OUTPUT_PORT: return((is_file_port(x)) ? an_output_file_port_string : ((is_string_port(x)) ? an_output_string_port_string : an_output_port_string));
-    default:
-      p = sc->prepackaged_type_names[type(x)];
-      if (is_string(p)) return(p);
-    }
-  return(wrap_string(sc, "unknown type!", 13));
-}
-
-static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg)
-{
-  if (type(arg) < NUM_TYPES)
-    {
-      s7_pointer p = sc->prepackaged_type_names[type(arg)]; /* these use INDEFINITE_ARTICLE */
-      if (is_string(p)) return(p);
-    }
-  return(s7_make_string_wrapper(sc, type_name(sc, arg, INDEFINITE_ARTICLE)));
-}
-
-static noreturn void wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
-{
-  s7_pointer p = cdr(sc->wrong_type_arg_info);  /* info list is '(format_string caller arg_n arg type_name descr) */
-  set_car(p, caller); p = cdr(p);
-  set_car(p, arg_n);  p = cdr(p);
-  set_car(p, arg);    p = cdr(p);
-  set_car(p, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam);
-  p = cdr(p);
-  set_car(p, descr);
-  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->wrong_type_arg_info);
-}
-
-static noreturn void simple_wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
-{
-  set_wlist_4(cdr(sc->simple_wrong_type_arg_info), caller, arg, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam, descr);
-  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
-}
-
-static noreturn void wrong_type_arg_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
-{
-  if (arg_n > 0)
-    wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n),
-					    arg, type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
-  simple_wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), arg,
-						 type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
-}
-
-s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
-{
-  wrong_type_arg_error_nr(sc, caller, arg_n, arg, descr);
-  return(sc->wrong_type_arg_symbol);
-}
-
-static noreturn void out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer descr)
-{
-  set_wlist_4(cdr(sc->out_of_range_info), caller, arg_n, arg, descr);
-  s7_error_nr(sc, sc->out_of_range_symbol, sc->out_of_range_info);
-}
-
-static noreturn void simple_out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
-{
-  set_wlist_3(cdr(sc->simple_out_of_range_info), caller, arg, descr);
-  s7_error_nr(sc, sc->out_of_range_symbol, sc->simple_out_of_range_info);
-}
-
-static noreturn void out_of_range_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
-{
-  if (arg_n > 0)
-    out_of_range_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n), arg,
-					  wrap_string(sc, descr, safe_strlen(descr)));
-  simple_out_of_range_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)),
-					   arg, wrap_string(sc, descr, safe_strlen(descr)));
-}
-
-s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
-{
-  out_of_range_error_nr(sc, caller, arg_n, arg, descr);
-  return(sc->out_of_range_symbol);
-}
-
-static noreturn void wrong_number_of_args_error_nr(s7_scheme *sc, const char *caller, s7_pointer args)
-{
-  s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-	      set_elist_2(sc, s7_make_string_wrapper(sc, caller), args)); /* "caller" includes the format directives */
-}
-
-s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args)
-{
-  s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-	      set_elist_2(sc, s7_make_string_wrapper(sc, caller), args)); /* "caller" includes the format directives */
-  return(sc->wrong_number_of_args_symbol);
-}
-
-
 /* -------------------------------- profile -------------------------------- */
 static void swap_stack(s7_scheme *sc, opcode_t new_op, s7_pointer new_code, s7_pointer new_args)
 {
@@ -51211,6 +51190,8 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
   return(sc->F);
 }
 
+
+/* -------------------------------- warn -------------------------------- */
 #if WITH_GCC
 static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...)
 #else
@@ -51235,6 +51216,8 @@ static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...) /* len = m
     }
 }
 
+
+/* -------------------------------- error -------------------------------- */
 static void fill_error_location(s7_scheme *sc)
 {
   if (((is_input_port(current_input_port(sc))) && (is_loader_port(current_input_port(sc)))) ||
@@ -51790,7 +51773,7 @@ static void op_error_hook_quit(s7_scheme *sc)
 }
 
 
-/* -------------------------------- leftovers -------------------------------- */
+/* -------------------------------- begin_hook -------------------------------- */
 void (*s7_begin_hook(s7_scheme *sc))(s7_scheme *sc, bool *val) {return(sc->begin_hook);}
 
 void s7_set_begin_hook(s7_scheme *sc, void (*hook)(s7_scheme *sc, bool *val))
@@ -94889,20 +94872,20 @@ int main(int argc, char **argv)
  * index     1026   1016    973    968    963
  * tmock     1177   1165   1057   1036   1054
  * tvect     2519   2464   1772   1689   1667
+ * timp      2637   2575   1930   1800   1708
  * texit     ----   ----   1778   1749   1736
  * s7test    1873   1831   1818   1779   1809
- * timp      2971   2891   2176   2043   1943  1948 [->op_x_aa]
  * thook     ----   ----   2590   2369   2142
- * lt        2187   2172   2150   2143   2174
+ * lt        2187   2172   2150   2143   2173
  * tauto     ----   ----   2562   2207   2196
- * dup       3805   3788   2492   2273   2304
+ * dup       3805   3788   2492   2273   2278
  * tcopy     8035   5546   2539   2503   2374
  * tload     ----   ----   3046   2352   2386
  * fbench    2688   2583   2460   2403   2404
  * tread     2440   2421   2419   2376   2404
  * trclo     2735   2574   2454   2423   2435
  * titer     2865   2842   2641   2475   2509
- * tmat      3065   3042   2524   2511   2518  2521
+ * tmat      3065   3042   2524   2511   2517
  * tb        2735   2681   2612   2574   2596
  * tsort     3105   3104   2856   2820   2805
  * teq       4068   4045   3536   3450   3453
@@ -94911,13 +94894,13 @@ int main(int argc, char **argv)
  * tmac      3950   3873   3033   3541   3664
  * tclo      4787   4735   4390   4309   4377
  * tlet      7775   5640   4450   4393   4415
- * tcase     4960   4793   4439   4407   4434
+ * tcase     4960   4793   4439   4407   4433
  * tfft      7820   7729   4755   4599   4450
- * tmap      8869   8774   4489   4468   4471
- * tshoot    5525   5447   5183   5099   5082
- * tform     5357   5348   5307   5281   5298
- * tstr      6880   6342   5488   5400   5347  5364
- * tnum      6348   6013   5433   5378   5357
+ * tmap      8869   8774   4489   4468   4473
+ * tshoot    5525   5447   5183   5099   5083
+ * tform     5357   5348   5307   5281   5300
+ * tstr      6880   6342   5488   5400   5363
+ * tnum      6348   6013   5433   5378   5364
  * tlamb     6423   6273   5720   5530   5544
  * tset      ----   ----   ----   6163   6208
  * tmisc     8869   7612   6435   6239   6250
@@ -94925,9 +94908,9 @@ int main(int argc, char **argv)
  * tgsl      8485   7802   6373   6301   6310
  * tari      13.0   12.7   6827   6633   6488
  * trec      6936   6922   6521   6538   6547
- * tleft     10.4   10.2   7657   7472   7475
+ * tleft     10.4   10.2   7657   7472   7472
  * tgc       11.9   11.1   8177   8002   7957
- * thash     11.8   11.7   9734   9489   9460
+ * thash     11.8   11.7   9734   9489   9463
  * cb        11.2   11.0   9658   9539   9560
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
@@ -94938,12 +94921,5 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  *
  * t718: optimize_syntax overeagerness
- *       hash :readable for len>0 with typers/checkers
- *       thash key-typer consistency checks (eqv?+string-* etc -- t595)
- * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
- *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
- * opt_c/e: body as begin+jump to end sc->value? (like cond etc)
- * (call_)set_implicit/setter_p_pp -> op_set_implicit_*? [obj misc imp -> c_obj let hash vect]
- *   but this comes from op_set_opsaq_a: op_set_let_opsq_a? [also opsaq_p opsaaq_a|p] -> 8 new set ops? [also obj, misc op_set_opsaaq_a, imp: both]
- *   is this akin to op_implicit_vector_set_3|4? [only from set_implicit_vector]
+ * hash :readable for len>0 with typers/checkers
  */

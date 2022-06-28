@@ -108,7 +108,7 @@
 	(table1 (hash-table 'b "12345"))
 	(table2 (vector (vector 1 2 3)))
 	(table3 (hash-table 'b (block 1 2 3)))
-	(table4 (hash-table 'b (let ((x (vector 1 2 3))) (dilambda (lambda (ind) (x ind)) (lambda (ind val) (set! (x ind) val))))))
+	;; (table4 (hash-table 'b (let ((x (vector 1 2 3))) (dilambda (lambda (ind) (x ind)) (lambda (ind val) (set! (x ind) val))))))
 	(table5 (hash-table 'a 1 'b (hash-table 'a 3 'b (hash-table 'a 4))))
 	(table6 (vector (list 0 1) (list 2 3)))
 	(env (inlet 'a 1 'b (inlet 'a 4)))
@@ -175,8 +175,8 @@
       (unless (= (table3 'b 1) 23.0) (format *stderr* "[18]"))
       (s4444 table3 1 23.0)
       (unless (= (table3 'b 1) 23.0) (format *stderr* "[19]"))
-
-      (s4 table4 23.0) ; set_implicit_closure
+#|
+      (s4 table4 23.0) ; set_implicit_closure -- now an error
       (unless (= (table4 'b 1) 23.0) (format *stderr* "[20]"))
       (s44 table4 23.0)
       (unless (= (table4 'b 1) 23.0) (format *stderr* "[21]"))
@@ -184,7 +184,7 @@
       (unless (= (table4 'b 1) 23.0) (format *stderr* "[22]"))
       (s4444 table4 1 23.0)
       (unless (= (table4 'b 1) 23.0) (format *stderr* "[23]"))
-
+|#
       (s5 table2 #\a) ; set_implicit_vector
       (unless (char=? (table2 0 1) #\a) (format *stderr* "[24]"))
       (s55 table2 #\a)
