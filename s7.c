@@ -2323,10 +2323,6 @@ static void init_types(void)
 #define has_keyword(p)                 has_type_bit(T_Sym(p), T_HAS_KEYWORD)
 #define set_has_keyword(p)             set_type_bit(T_Sym(p), T_HAS_KEYWORD)
 
-#define T_LOCKED_HASH                  T_MUTABLE
-#define is_locked_hash(p)              has_type_bit(T_Hsh(p), T_LOCKED_HASH)
-#define set_locked_hash(p)             set_type_bit(T_Hsh(p), T_LOCKED_HASH)
-
 #define T_MARK_SEQ                     T_MUTABLE
 #define is_mark_seq(p)                 has_type_bit(T_Itr(p), T_MARK_SEQ)
 #define set_mark_seq(p)                set_type_bit(T_Itr(p), T_MARK_SEQ)
@@ -2476,7 +2472,6 @@ static void init_types(void)
 #define T_HASH_VALUE_TYPE              T_SYMCONS
 #define has_hash_value_type(p)         has_type1_bit(T_Hsh(p), T_HASH_VALUE_TYPE)
 #define set_has_hash_value_type(p)     set_type1_bit(T_Hsh(p), T_HASH_VALUE_TYPE)
-#define clear_has_hash_value_type(p)   clear_type1_bit(T_Hsh(p), T_HASH_VALUE_TYPE)
 
 #define T_INT_OPTABLE                  T_SYMCONS
 #define is_int_optable(p)              has_type1_bit(T_Pair(p), T_INT_OPTABLE)
@@ -2497,7 +2492,6 @@ static void init_types(void)
 #define T_TYPED_HASH_TABLE             T_HAS_LET_FILE
 #define is_typed_hash_table(p)         has_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
 #define set_is_typed_hash_table(p)     set_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
-#define clear_is_typed_hash_table(p)   clear_type1_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
 
 #define T_BOOL_SETTER                  T_HAS_LET_FILE
 #define c_function_has_bool_setter(p)  has_type1_bit(T_Fnc(p), T_BOOL_SETTER)
@@ -2545,7 +2539,6 @@ static void init_types(void)
 #define T_HASH_KEY_TYPE                T_DEFINER
 #define has_hash_key_type(p)           has_type1_bit(T_Hsh(p), T_HASH_KEY_TYPE)
 #define set_has_hash_key_type(p)       set_type1_bit(T_Hsh(p), T_HASH_KEY_TYPE)
-#define clear_has_hash_key_type(p)     clear_type1_bit(T_Hsh(p), T_HASH_KEY_TYPE)
 
 #define T_FULL_BINDER                  (1LL << (TYPE_BITS + BIT_ROOM + 27))
 #define T_BINDER                       (1 << 3)
@@ -4634,8 +4627,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						    ((is_iterator(obj)) ? " mark-sequence" :
 						     ((is_slot(obj)) ? " step-end" :
 						      ((is_pair(obj)) ? " no-opt" :
-						       ((is_hash_table(obj)) ? " locked-hash" :
-							" ?18?"))))))) : "",
+						       " ?18?")))))) : "",
 	  /* bit 27 */
 	  ((full_typ & T_SAFE_STEPPER) != 0) ?   ((is_let(obj)) ? " set-fallback" :
 						  ((is_slot(obj)) ? " safe-stepper" :
@@ -4804,7 +4796,7 @@ static bool has_odd_bits(s7_pointer obj)
       (!is_pair(obj)) && (!is_input_port(obj)) && (!is_let(obj)) && (!is_any_procedure(obj)) && (!is_slot(obj)))
     return(true);
   if (((full_typ & T_MUTABLE) != 0) &&
-      (!is_number(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_iterator(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj)) && (!is_hash_table(obj)))
+      (!is_number(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_iterator(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj)))
     return(true);
   if (((full_typ & T_GENSYM) != 0) && (!is_slot(obj)) && (!is_any_closure(obj)) &&
       (!is_let(obj)) && (!is_symbol(obj)) && (!is_string(obj)) && (!is_hash_table(obj)) && (!is_pair(obj)) && (!is_any_vector(obj)))
@@ -5662,36 +5654,6 @@ static s7_pointer set_ulist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2, s7_po
 
 
 /* ---------------- error handlers ---------------- */
-/* putting off the type description until s7_error via the sc->unused marker below makes it possible
- *    for gcc to speed up the functions that call these as tail-calls (is this comment obsolete?).
- */
-#define simple_wrong_type_argument_nr(Sc, Caller, Arg, Desired_Type) \
-  simple_wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
-
-#define wrong_type_argument_nr(Sc, Caller, Num, Arg, Desired_Type)	\
-  wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), make_integer(Sc, Num), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
-
-#define simple_wrong_type_argument_with_type_nr(Sc, Caller, Arg, Type) \
-  simple_wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Sc->unused, Type)
-
-#define wrong_type_argument_with_type_nr(Sc, Caller, Num, Arg, Type)	\
-  wrong_type_arg_error_prepackaged_nr(Sc, symbol_name_cell(Caller), make_integer(Sc, Num), Arg, Sc->unused, Type)
-
-#define simple_out_of_range_nr(Sc, Caller, Arg, Description)   simple_out_of_range_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg, Description)
-#define out_of_range_nr(Sc, Caller, Arg_Num, Arg, Description) out_of_range_error_prepackaged_nr(Sc, symbol_name_cell(Caller), Arg_Num, Arg, Description)
-
-#define syntax_error_any_nr(Sc, ErrType, ErrMsg, Len, Obj) \
-  s7_error_nr(Sc, ErrType, set_elist_2(Sc, wrap_string(Sc, ErrMsg, Len), Obj))
-
-#define syntax_error_nr(Sc, ErrMsg, Len, Obj) \
-  syntax_error_any_nr(Sc, Sc->syntax_error_symbol, ErrMsg, Len, Obj)
-
-#define syntax_error_with_caller_nr(Sc, ErrMsg, Len, Caller, Obj) \
-  s7_error_nr(Sc, Sc->syntax_error_symbol, set_elist_3(Sc, wrap_string(Sc, ErrMsg, Len), Caller, Obj))
-
-#define syntax_error_with_caller2_nr(Sc, ErrMsg, Len, Caller, Name, Obj) \
-  s7_error_nr(Sc, Sc->syntax_error_symbol, set_elist_4(Sc, wrap_string(Sc, ErrMsg, Len), Caller, Name, Obj))
-
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article)
 {
   s7_int i, slen = safe_strlen(name);
@@ -5865,6 +5827,19 @@ static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg)
   return(s7_make_string_wrapper(sc, type_name(sc, arg, INDEFINITE_ARTICLE)));
 }
 
+static noreturn void simple_wrong_type_argument_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, int32_t descr)
+{
+  set_wlist_4(cdr(sc->simple_wrong_type_arg_info), caller, arg, prepackaged_type_name(sc, arg), sc->prepackaged_type_names[descr]);
+  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
+}
+
+static noreturn void simple_wrong_type_argument_with_type_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typ)
+{
+  set_wlist_4(cdr(sc->simple_wrong_type_arg_info), caller, arg, prepackaged_type_name(sc, arg), typ);
+  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
+}
+
+
 static noreturn void wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
 {
   s7_pointer p = cdr(sc->wrong_type_arg_info);  /* info list is '(format_string caller arg_n arg type_name descr) */
@@ -5876,20 +5851,26 @@ static noreturn void wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_point
   set_car(p, descr);
   s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->wrong_type_arg_info);
 }
+/* TODO: get rid of these "prepackaged" names */
 
-static noreturn void simple_wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
-{
-  set_wlist_4(cdr(sc->simple_wrong_type_arg_info), caller, arg, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam, descr);
-  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
-}
+#define wrong_type_argument_nr(Sc, Caller, Num, Arg, Desired_Type)	\
+  wrong_type_arg_error_prepackaged_nr(Sc, Caller, make_integer(Sc, Num), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
+/* 120 */
+#define wrong_type_argument_with_type_nr(Sc, Caller, Num, Arg, Type)	\
+  wrong_type_arg_error_prepackaged_nr(Sc, Caller, make_integer(Sc, Num), Arg, Sc->unused, Type)
+/* 270 */
 
+/* 60 */
 static noreturn void wrong_type_arg_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
 {
-  if (arg_n > 0)
+  if (arg_n > 0) /* other than just below this is always known in advance so locally it can be split 
+		  *   or just use simple... if 0
+		  */
     wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n),
 					    arg, type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
-  simple_wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), arg,
-						 type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
+  set_wlist_4(cdr(sc->simple_wrong_type_arg_info), wrap_string(sc, caller, safe_strlen(caller)), arg, 
+	      type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
+  s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
 }
 
 s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
@@ -5898,25 +5879,30 @@ s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg
   return(sc->wrong_type_arg_symbol);
 }
 
-static noreturn void out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer descr)
-{
-  set_wlist_4(cdr(sc->out_of_range_info), caller, arg_n, arg, descr);
-  s7_error_nr(sc, sc->out_of_range_symbol, sc->out_of_range_info);
-}
 
-static noreturn void simple_out_of_range_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
+static noreturn void simple_out_of_range_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
 {
   set_wlist_3(cdr(sc->simple_out_of_range_info), caller, arg, descr);
   s7_error_nr(sc, sc->out_of_range_symbol, sc->simple_out_of_range_info);
 }
 
+static noreturn void out_of_range_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer descr)
+{
+  set_wlist_4(cdr(sc->out_of_range_info), caller, arg_n, arg, descr);
+  s7_error_nr(sc, sc->out_of_range_symbol, sc->out_of_range_info);
+}
+
 static noreturn void out_of_range_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
 {
-  if (arg_n > 0)
-    out_of_range_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n), arg,
-					  wrap_string(sc, descr, safe_strlen(descr)));
-  simple_out_of_range_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)),
-					   arg, wrap_string(sc, descr, safe_strlen(descr)));
+  if (arg_n > 0) /* TODO: is this known in advance? yes but few calls */
+    {
+      set_wlist_4(cdr(sc->out_of_range_info), wrap_string(sc, caller, safe_strlen(caller)), 
+		  wrap_integer(sc, arg_n), arg, wrap_string(sc, descr, safe_strlen(descr)));
+      s7_error_nr(sc, sc->out_of_range_symbol, sc->out_of_range_info);
+    }
+  set_wlist_3(cdr(sc->simple_out_of_range_info), wrap_string(sc, caller, safe_strlen(caller)),
+	      arg, wrap_string(sc, descr, safe_strlen(descr)));
+  s7_error_nr(sc, sc->out_of_range_symbol, sc->simple_out_of_range_info);
 }
 
 s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
@@ -5936,6 +5922,21 @@ s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_p
   s7_error_nr(sc, sc->wrong_number_of_args_symbol,
 	      set_elist_2(sc, s7_make_string_wrapper(sc, caller), args)); /* "caller" includes the format directives */
   return(sc->wrong_number_of_args_symbol);
+}
+
+static noreturn void syntax_error_nr(s7_scheme *sc, const char *errmsg, s7_int len, s7_pointer obj)
+{
+  s7_error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, errmsg, len), obj));
+}
+
+static noreturn void syntax_error_with_caller_nr(s7_scheme *sc, const char *errmsg, s7_int len, s7_pointer caller, s7_pointer obj)
+{
+  s7_error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, errmsg, len), caller, obj));
+}
+
+static noreturn void syntax_error_with_caller2_nr(s7_scheme *sc, const char *errmsg, s7_int len, s7_pointer caller, s7_pointer name, s7_pointer obj)
+{
+  s7_error_nr(sc, sc->syntax_error_symbol, set_elist_4(sc, wrap_string(sc, errmsg, len), caller, name, obj));
 }
 
 static noreturn void missing_method_error_nr(s7_scheme *sc, s7_pointer method, s7_pointer obj)
@@ -11056,8 +11057,7 @@ void *s7_c_pointer(s7_pointer p) {return(c_pointer(p));}
 void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_type, const char *caller, s7_int argnum)
 {
   if (!is_c_pointer(p))
-    wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, strlen(caller)),
-					    wrap_integer(sc, argnum), p, sc->unused, sc->prepackaged_type_names[T_C_POINTER]);
+    wrong_type_argument_nr(sc, wrap_string(sc, caller, strlen(caller)), argnum, p, T_C_POINTER);
   if ((c_pointer(p) != NULL) &&
       (c_pointer_type(p) != expected_type))
     s7_error_nr(sc, sc->wrong_type_arg_symbol,
@@ -30762,8 +30762,7 @@ static void op_with_io_1_method(s7_scheme *sc)
   else
     if (is_symbol(car(sc->code)))           /* might be e.g. #_call-with-input-string so use c_function_name */
       wrong_type_argument_nr(sc, car(sc->code), 1, lt, T_STRING);
-    else wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, c_function_name(car(sc->code)), strlen(c_function_name(car(sc->code)))),
-					  int_one, lt, sc->unused, sc->prepackaged_type_names[T_STRING]);
+    else wrong_type_argument_nr(sc, wrap_string(sc, c_function_name(car(sc->code)), strlen(c_function_name(car(sc->code)))), 1, lt, T_STRING);
 }
 
 static bool op_with_io_op(s7_scheme *sc)
@@ -37959,7 +37958,7 @@ static bool op_assoc_if(s7_scheme *sc)
   else push_stack_direct(sc, OP_ASSOC_IF1);
 
   if (!is_pair(car(opt1_fast(orig_args))))     /* (assoc 1 '((2 . 2) 3) =) -- we access caaadr below */
-    syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "assoc: second argument is not an alist: ~S", 42, orig_args);
+    s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "assoc: second argument is not an alist: ~S", 42), orig_args));
   /* not sure about this -- we could simply skip the entry both here and in g_assoc
    *   (assoc 1 '((2 . 2) 3)) -> #f
    *   (assoc 1 '((2 . 2) 3) =) -> error currently
@@ -42422,7 +42421,7 @@ static s7_pointer op_heapsort(s7_scheme *sc)
     {
       SORT_CALLS++;
       if (SORT_CALLS > SORT_STOP)
-	syntax_error_any_nr(sc, sc->out_of_range_symbol, "sort! is caught in an infinite loop, comparison: ~S", 51, SORT_LESSP);
+	s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "sort! is caught in an infinite loop, comparison: ~S", 51), SORT_LESSP));
     }
   j = 2 * k;
   SORT_J = j;
@@ -42676,7 +42675,6 @@ static s7_pointer g_set_hash_table_key_typer(s7_scheme *sc, s7_pointer args)
       check_hash_table_typer(sc, sc->hash_table_key_typer_symbol, h, typer);
       hash_table_set_key_typer(h, typer);
     }
-  set_locked_hash(h);
   return(typer);
 }
 
@@ -42701,7 +42699,6 @@ static s7_pointer g_set_hash_table_value_typer(s7_scheme *sc, s7_pointer args)
       check_hash_table_typer(sc, sc->hash_table_value_typer_symbol, h, typer);
       hash_table_set_value_typer(h, typer);
     }
-  set_locked_hash(h);
   return(typer);
 }
 
@@ -43607,7 +43604,6 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 	  if (is_pair(cddr(args)))
 	    {
 	      s7_pointer typers = caddr(args);
-	      set_locked_hash(ht);
 	      if (is_pair(typers))
 		{
 		  s7_pointer keyp = car(typers), valp = cdr(typers);
@@ -44396,17 +44392,6 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 
   if (hash_table_entries(new_hash) == 0)
     {
-      if (!is_locked_hash(new_hash))
-	{
-	  /* not sure about this -- should copy change the destination checker/mapper/typers? */
-	  hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, old_hash));
-	  if (is_typed_hash_table(old_hash)) set_is_typed_hash_table(new_hash); else clear_is_typed_hash_table(new_hash);
-	  hash_table_checker(new_hash) = hash_table_checker(old_hash);
-	  hash_table_mapper(new_hash) = hash_table_mapper(old_hash);
-	  if (has_hash_key_type(old_hash)) set_has_hash_key_type(new_hash); else clear_has_hash_key_type(new_hash);  /* c_function is something like symbol? */
-	  if (has_hash_value_type(old_hash)) set_has_hash_value_type(new_hash); else clear_has_hash_value_type(new_hash);
-	  if (hash_chosen(old_hash)) hash_set_chosen(new_hash); else hash_clear_chosen(new_hash);
-	}
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
 	{
@@ -47962,15 +47947,17 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
 	s7_pointer new_hash = s7_make_hash_table(sc, hash_table_mask(source) + 1);
 	s7_int gc_loc = gc_protect_1(sc, new_hash);
 	hash_table_checker(new_hash) = hash_table_checker(source);
-	if (hash_chosen(source)) hash_set_chosen(new_hash); else hash_clear_chosen(new_hash);
+	if (hash_chosen(source)) hash_set_chosen(new_hash);
 	hash_table_mapper(new_hash) = hash_table_mapper(source);
 	hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, source));
 	hash_table_copy(sc, source, new_hash, 0, hash_table_entries(source));
 	if (is_typed_hash_table(source))
 	  {
 	    set_is_typed_hash_table(new_hash);
-	    if (has_simple_keys(source)) set_has_simple_keys(new_hash); else clear_has_simple_keys(new_hash);
-	    if (has_simple_values(source)) set_has_simple_values(new_hash); else clear_has_simple_values(new_hash);
+	    if (has_hash_key_type(source)) set_has_hash_key_type(new_hash);
+	    if (has_hash_value_type(source)) set_has_hash_value_type(new_hash);
+	    if (has_simple_keys(source)) set_has_simple_keys(new_hash);
+	    if (has_simple_values(source)) set_has_simple_values(new_hash);
 	  }
 	s7_gc_unprotect_at(sc, gc_loc);
 	return(new_hash);
@@ -48113,6 +48100,7 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
     case T_HASH_TABLE:
       {
 	s7_pointer p = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
+	/* TODO: what if is_typed and hash_table_procedures? */
 	if ((hash_table_checker(source) != hash_table_checker(dest)) &&
 	    (hash_table_mapper(dest) == default_hash_map))
 	  {
@@ -76848,7 +76836,7 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
     {
       e = find_let(sc, e);
       if (!is_let(e))
-	syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "with-let takes an environment argument: ~A", 42, car(code));
+	s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), car(code)));
     }
   return(s7_let_ref(sc, e, cadr(code))); /* (with-let e s) -> (let-ref e s) */
 }
@@ -76859,7 +76847,7 @@ static void activate_with_let(s7_scheme *sc, s7_pointer e)
     {
       s7_pointer new_e = find_let(sc, e);
       if (!is_let(new_e))
-	syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "with-let takes an environment argument: ~A", 42, e);
+	s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), e));
       e = new_e;
     }
   if (e == sc->rootlet)
@@ -77597,12 +77585,12 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 	{
 	  s7_int index;
 	  if (!is_t_integer(arg))
-	    syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "vector-set!: index must be an integer: ~S", 41, sc->code);
+	    s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be an integer: ~S", 41), sc->code));
 	  index = integer(arg);
 	  if (index < 0)
-	    syntax_error_any_nr(sc, sc->out_of_range_symbol, "vector-set!: index must not be negative: ~S", 43, sc->code);
+	    s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must not be negative: ~S", 43), sc->code));
 	  if (index >= vector_length(obj))
-	    syntax_error_any_nr(sc, sc->out_of_range_symbol, "vector-set!: index must be less than vector length: ~S", 54, sc->code);
+	    s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be less than vector length: ~S", 54), sc->code));
 	  if (is_immutable(obj))
 	    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, obj));
 	  if (is_typed_vector(obj))
@@ -77620,17 +77608,17 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
       {
 	s7_int index;
 	if (!is_t_integer(arg))
-	  syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "index must be an integer: ~S", 28, sc->code);
+	  s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "index must be an integer: ~S", 28), sc->code));
 	index = integer(arg);
 	if (index < 0)
-	  syntax_error_any_nr(sc, sc->out_of_range_symbol, "index must not be negative: ~S", 30, sc->code);
+	  s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "index must not be negative: ~S", 30), sc->code));
 	if (index >= string_length(obj))
-	  syntax_error_any_nr(sc, sc->out_of_range_symbol, "index must be less than sequence length: ~S", 43, sc->code);
+	  s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "index must be less than sequence length: ~S", 43), sc->code));
 	if (is_immutable(obj))
 	  immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, obj));
 
 	if (!is_character(value))
-	  syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "(string-)set!: value must be a character: ~S", 44, sc->code);
+	  s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "(string-)set!: value must be a character: ~S", 44), sc->code));
 	string_value(obj)[index] = (char)s7_character(value);
 	sc->value = value;
       }
@@ -78238,7 +78226,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 		  if (is_symbol(index))
 		    index = lookup_checked(sc, index);
 		  if (!s7_is_integer(index))
-		    syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "vector-set!: index must be an integer: ~S", 41, form);
+		    s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be an integer: ~S", 41), form));
 		  car(pa) = index;
 		}
 	      car(pa) = cadr(sc->code);
@@ -78276,7 +78264,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
       if (is_symbol(index))
 	index = lookup_checked(sc, index);
       if (!s7_is_integer(index))
-	syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "vector-set!: index must be an integer: ~S", 41, sc->code);
+	s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be an integer: ~S", 41), sc->code));
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= vector_length(vect)))
 	out_of_range_nr(sc, sc->vector_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
@@ -78409,7 +78397,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer form
       if (is_symbol(index))
 	index = lookup_checked(sc, index);
       if (!s7_is_integer(index))
-	syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "index must be an integer: ~S", 28, form);
+	s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "index must be an integer: ~S", 28), form));
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= string_length(str)))
 	out_of_range_nr(sc, sc->string_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
@@ -78427,7 +78415,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer form
 	      sc->value = val;
 	      return(goto_start);
 	    }
-	  syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "value must be a character: ~S", 29, form);
+	  s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "value must be a character: ~S", 29), form));
 	}
       /* PERHAPS: op_implicit_string_set_a as in vector? */
       push_op_stack(sc, sc->string_set_function);
@@ -81700,7 +81688,7 @@ static bool op_do_init_1(s7_scheme *sc)
 static bool op_do_init(s7_scheme *sc)
 {
   if (is_multiple_value(sc->value))               /* (do ((i (values 1 2)))...) */
-    syntax_error_any_nr(sc, sc->wrong_type_arg_symbol, "do: variable initial value can't be ~S", 38, set_ulist_1(sc, sc->values_symbol, sc->value));
+    s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "do: variable initial value can't be ~S", 38), set_ulist_1(sc, sc->values_symbol, sc->value)));
   return(!op_do_init_1(sc));
 }
 
@@ -94922,4 +94910,8 @@ int main(int argc, char **argv)
  *
  * t718: optimize_syntax overeagerness
  * hash :readable for len>0 with typers/checkers
+ *   (let ((H (hash-table))) (set! (H 'a) H) (object->string H :readable)): "(let ((<1> (hash-table))) (set! (<1> 'a) <1>) <1>)"
+ *   need explicit tests of hash copy with and w/o typers/dests etc
+ * get rid of all the error macros -- they only add confusion (and check/cleanup fwd decls)
+ *   and make sure all the error funcs are tested in s7test
  */
