@@ -3984,14 +3984,6 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
   #define lookup_checked(Sc, Sym) lookup(Sc, Sym)
 #endif
 
-static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e);
-static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int len);
-static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
-static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
-static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
-static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article);
-
-
 /* ---------------- evaluator ops ---------------- */
 /* C=constant, S=symbol, A=fx-callable, Q=quote, N=any number of next >= 1, FX=list of A's, P=parlous?, O=one form, M=multiform */
 enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_protect used below as lower boundary marker */
@@ -4437,6 +4429,12 @@ static bool is_h_optimized(s7_pointer p)
 	 (optimize_op(p) < FIRST_UNHOPPABLE_OP) &&  /* was OP_S? */
 	 (optimize_op(p) > OP_GC_PROTECT));
 }
+
+static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e);
+static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int len);
+static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
+static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
+static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article);
 
 
 /* -------------------------------- internal debugging apparatus -------------------------------- */
@@ -5794,6 +5792,8 @@ static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article)
   return("messed up object");
 }
 
+static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
+
 static s7_pointer prepackaged_type_name(s7_scheme *sc, s7_pointer x)
 {
   s7_pointer p;
@@ -5839,34 +5839,34 @@ static noreturn void simple_wrong_type_argument_with_type_nr(s7_scheme *sc, s7_p
   s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->simple_wrong_type_arg_info);
 }
 
-
-static noreturn void wrong_type_arg_error_prepackaged_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
+static noreturn void wrong_type_arg_1_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg_n, s7_pointer arg, s7_pointer typnam, s7_pointer descr)
 {
   s7_pointer p = cdr(sc->wrong_type_arg_info);  /* info list is '(format_string caller arg_n arg type_name descr) */
   set_car(p, caller); p = cdr(p);
   set_car(p, arg_n);  p = cdr(p);
   set_car(p, arg);    p = cdr(p);
-  set_car(p, (typnam == sc->unused) ? prepackaged_type_name(sc, arg) : typnam);
+  set_car(p, typnam);
   p = cdr(p);
   set_car(p, descr);
   s7_error_nr(sc, sc->wrong_type_arg_symbol, sc->wrong_type_arg_info);
 }
-/* TODO: get rid of these "prepackaged" names */
 
-#define wrong_type_argument_nr(Sc, Caller, Num, Arg, Desired_Type)	\
-  wrong_type_arg_error_prepackaged_nr(Sc, Caller, make_integer(Sc, Num), Arg, Sc->unused, Sc->prepackaged_type_names[Desired_Type])
-/* 120 */
-#define wrong_type_argument_with_type_nr(Sc, Caller, Num, Arg, Type)	\
-  wrong_type_arg_error_prepackaged_nr(Sc, Caller, make_integer(Sc, Num), Arg, Sc->unused, Type)
-/* 270 */
+static Inline noreturn void wrong_type_argument_nr(s7_scheme *sc, s7_pointer caller, s7_int arg_num, s7_pointer arg, int32_t desired_type)
+{
+  wrong_type_arg_1_nr(sc, caller, make_integer(sc, arg_num), arg, prepackaged_type_name(sc, arg), sc->prepackaged_type_names[desired_type]);
+}
 
-/* 60 */
+static Inline noreturn void wrong_type_argument_with_type_nr(s7_scheme *sc, s7_pointer caller, s7_int arg_num, s7_pointer arg, s7_pointer typ)
+{
+  wrong_type_arg_1_nr(sc, caller, make_integer(sc, arg_num), arg, prepackaged_type_name(sc, arg), typ);
+}
+
 static noreturn void wrong_type_arg_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
 {
   if (arg_n > 0) /* other than just below this is always known in advance so locally it can be split 
 		  *   or just use simple... if 0
 		  */
-    wrong_type_arg_error_prepackaged_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n),
+    wrong_type_arg_1_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n),
 					    arg, type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
   set_wlist_4(cdr(sc->simple_wrong_type_arg_info), wrap_string(sc, caller, safe_strlen(caller)), arg, 
 	      type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
@@ -5878,7 +5878,6 @@ s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg
   wrong_type_arg_error_nr(sc, caller, arg_n, arg, descr);
   return(sc->wrong_type_arg_symbol);
 }
-
 
 static noreturn void simple_out_of_range_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
 {
@@ -18252,7 +18251,7 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
-      wrong_type_arg_error_nr(sc, "floor", 0, x, "a real number");
+      simple_wrong_type_argument_nr(sc, sc->floor_symbol, x, T_REAL);
     default:
       return(method_or_bust_p(sc, x, sc->floor_symbol, T_REAL));
     }
@@ -18339,7 +18338,7 @@ static s7_pointer ceiling_p_p(s7_scheme *sc, s7_pointer x)
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
-      wrong_type_arg_error_nr(sc, "ceiling", 0, x, "a real number");
+      simple_wrong_type_argument_nr(sc, sc->ceiling_symbol, x, T_REAL);
     default:
       return(method_or_bust_p(sc, x, sc->ceiling_symbol, T_REAL));
     }
@@ -18420,7 +18419,7 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
-      wrong_type_arg_error_nr(sc, "truncate", 0, x, "a real number");
+      simple_wrong_type_argument_nr(sc, sc->truncate_symbol, x, T_REAL);
     default:
       return(method_or_bust_p(sc, x, sc->truncate_symbol, T_REAL));
     }
@@ -18527,7 +18526,7 @@ static s7_pointer round_p_p(s7_scheme *sc, s7_pointer x)
     case T_BIG_COMPLEX:
 #endif
     case T_COMPLEX:
-      wrong_type_arg_error_nr(sc, "round", 0, x, "a real number");
+      simple_wrong_type_argument_nr(sc, sc->round_symbol, x, T_REAL);
     default:
       return(method_or_bust_p(sc, x, sc->round_symbol, T_REAL));
     }
@@ -33031,6 +33030,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
    */
   if (len == 0)
     {
+      /* TODO: immutable */
       if (use_write == P_READABLE)
 	{
 	  const char *typer = hash_table_checker_name(sc, hash);
@@ -33218,6 +33218,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
 	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
 	  port_write_string(port)(sc, ") <h>)", 6, port);
+	  /* TODO: the new hash set up here as <h1> (in the let) via make-hash as in len=0, then (copy <h> <h1>) and return <h1> (all this if hash-table-procedures etc) */
 	}}
 
   s7_gc_unprotect_at(sc, gc_iter);
@@ -94858,10 +94859,10 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    461    459
  * index     1026   1016    973    968    963
- * tmock     1177   1165   1057   1036   1054
- * tvect     2519   2464   1772   1689   1667
+ * tmock     1177   1165   1057   1036   1053
+ * tvect     2519   2464   1772   1689   1669
  * timp      2637   2575   1930   1800   1708
- * texit     ----   ----   1778   1749   1736
+ * texit     ----   ----   1778   1749   1738
  * s7test    1873   1831   1818   1779   1809
  * thook     ----   ----   2590   2369   2142
  * lt        2187   2172   2150   2143   2173
@@ -94878,22 +94879,22 @@ int main(int argc, char **argv)
  * tsort     3105   3104   2856   2820   2805
  * teq       4068   4045   3536   3450   3453
  * tobj      4016   3970   3828   3624   3561
- * tio       3816   3752   3683   3588   3619
+ * tio       3816   3752   3683   3588   3612
  * tmac      3950   3873   3033   3541   3664
  * tclo      4787   4735   4390   4309   4377
  * tlet      7775   5640   4450   4393   4415
- * tcase     4960   4793   4439   4407   4433
+ * tcase     4960   4793   4439   4407   4429
  * tfft      7820   7729   4755   4599   4450
  * tmap      8869   8774   4489   4468   4473
  * tshoot    5525   5447   5183   5099   5083
  * tform     5357   5348   5307   5281   5300
- * tstr      6880   6342   5488   5400   5363
+ * tstr      6880   6342   5488   5400   5356
  * tnum      6348   6013   5433   5378   5364
  * tlamb     6423   6273   5720   5530   5544
  * tset      ----   ----   ----   6163   6208
  * tmisc     8869   7612   6435   6239   6250
  * tlist     7896   7546   6558   6195   6308
- * tgsl      8485   7802   6373   6301   6310
+ * tgsl      8485   7802   6373   6301   6307
  * tari      13.0   12.7   6827   6633   6488
  * trec      6936   6922   6521   6538   6547
  * tleft     10.4   10.2   7657   7472   7472
@@ -94912,6 +94913,4 @@ int main(int argc, char **argv)
  * hash :readable for len>0 with typers/checkers
  *   (let ((H (hash-table))) (set! (H 'a) H) (object->string H :readable)): "(let ((<1> (hash-table))) (set! (<1> 'a) <1>) <1>)"
  *   need explicit tests of hash copy with and w/o typers/dests etc
- * get rid of all the error macros -- they only add confusion (and check/cleanup fwd decls)
- *   and make sure all the error funcs are tested in s7test
  */
