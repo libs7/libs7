@@ -2640,7 +2640,7 @@ of the table sizes, or the order in which the key/value pairs were added.
 </div>
 
 <div class="indented">
-<p>The second argument to make-hash-table (eq-func) is slightly complicated.  If it is omitted,
+<p>The second argument to make-hash-table (eq-func) is slightly complicated.  If it is omitted (or #f),
 s7 chooses the hashing equality and mapping functions based on the keys in the hash-table.
 There are times when you know
 in advance what equality function you want.  If it's one of the built-in s7 equality

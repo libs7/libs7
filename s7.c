@@ -33018,72 +33018,113 @@ static const char *hash_table_typer_name(s7_scheme *sc, s7_pointer typer)
   return(symbol_name(sym));
 }
 
+static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, bool closed, shared_info_t *ci)
+{
+  /* this can't be a cyclic <n> ref because it is empty */
+  const char *typer = hash_table_checker_name(sc, hash);
+
+  if ((closed) && (is_immutable(hash)))
+    port_write_string(port)(sc, "(immutable! ", 12, port);
+  
+  if (typer[0] == '#') /* #f */
+    {
+      if (is_pair(hash_table_procedures(hash)))
+	{
+	  s7_int nlen = 0;
+	  const char *str = (const char *)integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
+	  const char *checker = hash_table_typer_name(sc, hash_table_procedures_checker(hash));
+	  const char *mapper = hash_table_typer_name(sc, hash_table_procedures_mapper(hash));
+	  if (is_weak_hash_table(hash))
+	    port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
+	  else port_write_string(port)(sc, "(make-hash-table ", 17, port);
+	  port_write_string(port)(sc, str, nlen, port);
+	  if ((checker) && (mapper))
+	    {
+	      if ((is_boolean(hash_table_procedures_checker(hash))) && (is_boolean(hash_table_procedures_mapper(hash))))
+		port_write_string(port)(sc, " #f", 3, port); /* no checker/mapper set? */
+	      else
+		{
+		  port_write_string(port)(sc, " (cons ", 7, port);
+		  port_write_string(port)(sc, checker, safe_strlen(checker), port);
+		  port_write_character(port)(sc, ' ', port);
+		  port_write_string(port)(sc, mapper, safe_strlen(mapper), port);
+		  port_write_character(port)(sc, ')', port);
+		}}
+	  else 
+	    {
+	      if ((is_any_closure(hash_table_procedures_checker(hash))) ||
+		  (is_any_closure(hash_table_procedures_mapper(hash))))
+		{
+		  port_write_string(port)(sc, " (cons ", 7, port);
+		  if (is_any_closure(hash_table_procedures_checker(hash)))
+		    object_to_port_with_circle_check(sc, hash_table_procedures_checker(hash), port, P_READABLE, ci);
+		  else port_write_string(port)(sc, checker, safe_strlen(checker), port);
+		  port_write_character(port)(sc, ' ', port);
+		  if (is_any_closure(hash_table_procedures_mapper(hash)))
+		    object_to_port_with_circle_check(sc, hash_table_procedures_mapper(hash), port, P_READABLE, ci);
+		  else port_write_string(port)(sc, mapper, safe_strlen(mapper), port);
+		  port_write_character(port)(sc, ')', port);
+		}
+	      else port_write_string(port)(sc, " #f", 3, port); /* no checker/mapper set? */
+	    }
+	  if (((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash)))) &&
+	      ((!is_boolean(hash_table_key_typer(hash))) || (!is_boolean(hash_table_value_typer(hash)))))
+	    {
+	      port_write_string(port)(sc, " (cons ", 7, port);
+	      typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
+	      port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	      port_write_character(port)(sc, ' ', port);
+	      typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
+	      port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	      port_write_character(port)(sc, ')', port);
+	    }
+	  port_write_character(port)(sc, ')', port);
+	}
+      else
+	if (is_weak_hash_table(hash))
+	  port_write_string(port)(sc, "(weak-hash-table)", 17, port);
+	else port_write_string(port)(sc, "(hash-table)", 12, port);
+    }
+  else
+    {
+      s7_int nlen = 0;
+      char *str = integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
+      if (is_weak_hash_table(hash))
+	port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
+      else port_write_string(port)(sc, "(make-hash-table ", 17, port);
+      port_write_string(port)(sc, str, nlen, port);
+      port_write_character(port)(sc, ' ', port);
+      port_write_string(port)(sc, typer, safe_strlen(typer), port);
+      if (((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash)))) &&
+	  ((!is_boolean(hash_table_key_typer(hash))) || (!is_boolean(hash_table_value_typer(hash)))))
+	{
+	  port_write_string(port)(sc, " (cons ", 7, port);
+	  typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
+	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	  port_write_character(port)(sc, ' ', port);
+	  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
+	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	  port_write_string(port)(sc, "))", 2, port);
+	}
+      else port_write_character(port)(sc, ')', port);
+    }
+  if (is_immutable(hash))
+    port_write_character(port)(sc, ')', port);
+}
+
 static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   s7_int gc_iter, len = hash_table_entries(hash);
-  bool too_long = false;
+  bool too_long = false, hash_cyclic = false, copied = false, immut = false, letd = false;
   s7_pointer iterator, p;
   int32_t href;
+  
+  /* fprintf(stderr, "%s: %d %s\n", __func__, is_typed_hash_table(hash), display(hash_table_procedures(hash))); */
 
-  /* if hash is a member of ci, just print its number: (let ((ht (hash-table '(a . 1)))) (hash-table-set! ht 'b ht))
-   * there's no way to make a truly :readable version of a weak hash-table (or a normal hash-table that uses eq? with pairs, for example)
-   */
   if (len == 0)
     {
-      /* TODO: immutable */
       if (use_write == P_READABLE)
-	{
-	  const char *typer = hash_table_checker_name(sc, hash);
-	  if ((typer[0] == '#') && /* #f */
-	      (!is_typed_hash_table(hash)))
-	    {
-	      if (is_pair(hash_table_procedures(hash))) /* TODO: this is ridiculous... */
-		{
-		  s7_int nlen = 0;
-		  const char *str = (const char *)integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
-		  const char *checker = hash_table_typer_name(sc, hash_table_procedures_checker(hash));
-		  const char *mapper = hash_table_typer_name(sc, hash_table_procedures_mapper(hash));
-		  if (is_weak_hash_table(hash))
-		    port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
-		  else port_write_string(port)(sc, "(make-hash-table ", 17, port);
-		  port_write_string(port)(sc, str, nlen, port);
-		  if ((checker) && (mapper))
-		    {
-		      port_write_string(port)(sc, " (cons ", 7, port);
-		      port_write_string(port)(sc, checker, safe_strlen(checker), port);
-		      port_write_character(port)(sc, ' ', port);
-		      port_write_string(port)(sc, mapper, safe_strlen(mapper), port);
-		      port_write_string(port)(sc, "))", 2, port);
-		    }
-		  else port_write_character(port)(sc, ')', port);
-		}
-	      else
-		if (is_weak_hash_table(hash))
-		  port_write_string(port)(sc, "(weak-hash-table)", 17, port);
-		else port_write_string(port)(sc, "(hash-table)", 12, port);
-	    }
-	  else
-	    {
-	      s7_int nlen = 0;
-	      char *str = integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
-	      if (is_weak_hash_table(hash))
-		port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
-	      else port_write_string(port)(sc, "(make-hash-table ", 17, port);
-	      port_write_string(port)(sc, str, nlen, port);
-	      port_write_character(port)(sc, ' ', port);
-	      port_write_string(port)(sc, typer, safe_strlen(typer), port);
-	      if (is_typed_hash_table(hash))
-		{
-		  port_write_string(port)(sc, " (cons ", 7, port);
-		  typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
-		  port_write_string(port)(sc, typer, safe_strlen(typer), port);
-		  port_write_character(port)(sc, ' ', port);
-		  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
-		  port_write_string(port)(sc, typer, safe_strlen(typer), port);
-		  port_write_string(port)(sc, "))", 2, port);
-		}
-	      else port_write_character(port)(sc, ')', port);
-	    }}
+	hash_table_procedures_to_port(sc, hash, port, true, ci);
       else
 	{
 	  if (is_weak_hash_table(hash))
@@ -33092,6 +33133,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	}
       return;
     }
+
   if (use_write != P_READABLE)
     {
       s7_int plen = sc->print_length;
@@ -33105,6 +33147,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  too_long = true;
 	  len = plen;
 	}}
+
   if ((use_write == P_READABLE) &&
       (ci))
     {
@@ -33125,72 +33168,85 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
   p = cons_unchecked(sc, sc->F, sc->F);
   iterator_current(iterator) = p;
   set_mark_seq(iterator);
+  hash_cyclic = ((ci) && (is_cyclic(hash)) && ((href = peek_shared_ref(ci, hash)) != 0));
 
   if (use_write == P_READABLE)
     {
-      if (is_typed_hash_table(hash))
-	port_write_string(port)(sc, "(let ((<h> ", 11, port);
-      if (is_immutable(hash))
-	port_write_string(port)(sc, "(immutable! ", 12, port);
-    }
+     /*  fprintf(stderr, "hash: %d %d %s\n", is_typed_hash_table(hash), hash_chosen(hash), display(hash_table_procedures(hash))); */
+
+      if ((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash))) || (hash_chosen(hash)))
+	{
+	  port_write_string(port)(sc, "(let ((<h> ", 11, port);
+	  letd = true;
+	}
+      else
+	if ((is_immutable(hash)) && (!hash_cyclic))
+	  {
+	    port_write_string(port)(sc, "(immutable! ", 12, port);
+	    immut = true;
+	  }}
+
   if ((use_write == P_READABLE) &&
-      (ci) &&
-      (is_cyclic(hash)) &&
-      ((href = peek_shared_ref(ci, hash)) != 0))
+      (hash_cyclic))
     {
       if (href < 0) href = -href;
+      if ((!is_typed_hash_table(hash)) && (!is_pair(hash_table_procedures(hash))) && (!hash_chosen(hash)))
+	{
+	  if (is_weak_hash_table(hash))
+	    port_write_string(port)(sc, "(weak-hash-table", 16, port);
+	  else port_write_string(port)(sc, "(hash-table", 11, port); /* top level let */
+	}
+      else
+	{
+	  hash_table_procedures_to_port(sc, hash, port, true, ci);
+	  port_write_character(port)(sc, ')', port);
+	}
 
-      if (is_weak_hash_table(hash))
-	port_write_string(port)(sc, "(weak-hash-table", 16, port);
-      else port_write_string(port)(sc, "(hash-table", 11, port); /* top level let */
+      /* output here is deferred via ci->cycle_port until later in cyclic_out */
       for (s7_int i = 0; i < len; i++)
 	{
 	  s7_pointer key_val = hash_table_iterate(sc, iterator);
 	  s7_pointer key = car(key_val);
 	  s7_pointer val = cdr(key_val);
-	  if ((has_structure(val)) ||
-	      (has_structure(key)))
+	  char buf[128];
+	  int32_t eref = peek_shared_ref(ci, val);
+	  int32_t kref = peek_shared_ref(ci, key);
+	  int32_t plen = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, href), "> ", (const char *)NULL);
+	  port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
+	  if (kref != 0)
 	    {
-	      char buf[128];
-	      int32_t eref = peek_shared_ref(ci, val);
-	      int32_t kref = peek_shared_ref(ci, key);
-	      int32_t plen = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, href), "> ", (const char *)NULL);
+	      if (kref < 0) kref = -kref;
+	      plen = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, kref), ">", (const char *)NULL);
 	      port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
-
-	      if (kref != 0)
-		{
-		  if (kref < 0) kref = -kref;
-		  plen = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, kref), ">", (const char *)NULL);
-		  port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
-		}
-	      else object_to_port(sc, key, ci->cycle_port, P_READABLE, ci);
-
-	      if (eref != 0)
-		{
-		  if (eref < 0) eref = -eref;
-		  plen = catstrs_direct(buf, ") <", pos_int_to_str_direct(sc, eref), ">) ", (const char *)NULL);
-		  port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
-		}
-	      else
-		{
-		  port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
-		  object_to_port_with_circle_check(sc, val, ci->cycle_port, P_READABLE, ci);
-		  port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
-		}}
+	    }
+	  else object_to_port(sc, key, ci->cycle_port, P_READABLE, ci);
+	  if (eref != 0)
+	    {
+	      if (eref < 0) eref = -eref;
+	      plen = catstrs_direct(buf, ") <", pos_int_to_str_direct(sc, eref), ">) ", (const char *)NULL);
+	      port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
+	    }
 	  else
 	    {
-	      port_write_character(port)(sc, ' ', port);
-	      object_to_port_with_circle_check(sc, key, port, P_READABLE, ci);
-	      port_write_character(port)(sc, ' ', port);
-	      object_to_port_with_circle_check(sc, val, port, P_READABLE, ci);
-	    }}
-      port_write_character(port)(sc, ')', port);
-    }
+	      port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
+	      object_to_port_with_circle_check(sc, val, ci->cycle_port, P_READABLE, ci);
+	      port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
+	    }}}
   else
     {
-      if (is_weak_hash_table(hash))
-	port_write_string(port)(sc, "(weak-hash-table", 16, port);
-      else port_write_string(port)(sc, "(hash-table", 11, port);
+      if (((!is_typed_hash_table(hash)) && (!is_pair(hash_table_procedures(hash))) && (!hash_chosen(hash))) || (use_write != P_READABLE))
+	{
+	  if (is_weak_hash_table(hash))
+	    port_write_string(port)(sc, "(weak-hash-table", 16, port);
+	  else port_write_string(port)(sc, "(hash-table", 11, port);
+	}
+      else
+	{
+	  hash_table_procedures_to_port(sc, hash, port, true, ci);
+	  port_write_character(port)(sc, ')', port);
+	  port_write_string(port)(sc, ") (copy (hash-table", 19, port);
+	  copied = true;
+	}
       for (s7_int i = 0; i < len; i++)
 	{
 	  s7_pointer key_val = hash_table_iterate(sc, iterator);
@@ -33201,25 +33257,37 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  port_write_character(port)(sc, ' ', port);
 	  object_to_port_with_circle_check(sc, cdr(key_val), port, NOT_P_DISPLAY(use_write), ci);
 	}
-      if (too_long)
-	port_write_string(port)(sc, " ...)", 5, port);
-      else port_write_character(port)(sc, ')', port);
-    }
+
+      if (use_write != P_READABLE)
+	{
+	  if (too_long)
+	    port_write_string(port)(sc, " ...)", 5, port);
+	  else port_write_character(port)(sc, ')', port);
+	}}
+
   if (use_write == P_READABLE)
     {
-      if (is_immutable(hash))
-	port_write_character(port)(sc, ')', port);
-      if (is_typed_hash_table(hash))
+      if (copied)
 	{
-	  const char *typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
-	  port_write_string(port)(sc, ")) (set! (hash-table-key-typer <h>) ", 36, port);
-	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
-	  port_write_string(port)(sc, ") (set! (hash-table-value-typer <h>) ", 37, port);
-	  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
-	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
+	  if (!letd)
+	    {
+	      char buf[128];
+	      int32_t plen = catstrs_direct(buf, ") <", pos_int_to_str_direct(sc, href), ">", (const char *)NULL);
+	      port_write_string(port)(sc, buf, plen, port);
+	    }
+	  else port_write_string(port)(sc, ") <h>))", 7, port);
+	}
+      else 
+	if (letd)
 	  port_write_string(port)(sc, ") <h>)", 6, port);
-	  /* TODO: the new hash set up here as <h1> (in the let) via make-hash as in len=0, then (copy <h> <h1>) and return <h1> (all this if hash-table-procedures etc) */
-	}}
+	else port_write_character(port)(sc, ')', port);
+
+      if ((is_immutable(hash)) && (!hash_cyclic) && (!is_typed_hash_table(hash)))
+	port_write_character(port)(sc, ')', port);
+
+      if ((!immut) && (is_immutable(hash)) && (!hash_cyclic))
+	port_write_string(port)(sc, ") (immutable! <h>))", 19, port);
+    }
 
   s7_gc_unprotect_at(sc, gc_iter);
   iterator_current(iterator) = sc->nil;
@@ -34508,7 +34576,7 @@ static s7_pointer cyclic_out(s7_scheme *sc, s7_pointer obj, s7_pointer port, sha
   s7_gc_unprotect_at(sc, ci->cycle_loc);
   ci->cycle_port = sc->F;
 
-  if ((is_immutable(obj)) && (!is_let(obj)))
+  if ((is_immutable(obj)) && (!is_let(obj))) /* TODO: check this -- maybe from let_to_port premature? */
     port_write_string(port)(sc, "  (immutable! ", 14, port);
   else port_write_string(port)(sc, "  ", 2, port);
 
@@ -94911,6 +94979,12 @@ int main(int argc, char **argv)
  *
  * t718: optimize_syntax overeagerness
  * hash :readable for len>0 with typers/checkers
- *   (let ((H (hash-table))) (set! (H 'a) H) (object->string H :readable)): "(let ((<1> (hash-table))) (set! (<1> 'a) <1>) <1>)"
  *   need explicit tests of hash copy with and w/o typers/dests etc
+ *   check immutable let readable if vars
+ *   hash|vector->let additions
+ *   add debug checks typed/dproc
+ *   cycle debugging again (ci can be null)
+ *   lint warn if (string? integer?) as typer (same checker)
+ *   t101-data -> s7test
+ * gs problem with cmn eps files
  */
