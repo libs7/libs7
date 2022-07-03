@@ -10838,15 +10838,6 @@
 			    (not (hash-table-ref s7-fields (cadr arg))))
 		       (lint-format "unknown *s7* field: ~A" caller arg)))))))
 
-	;; ---------------- make-hash-table ----------------
-	(hash-special 'make-hash-table
-	 (lambda (caller head form env)
-	   (if (= (length form) 3)
-	       (let ((func (caddr form)))
-		 (if (and (symbol? func)  ;  (make-hash-table eq? symbol-hash)
-			  (not (memq func '(eq? eqv? equal? equivalent? char=? char-ci=? string=? string-ci=? =))))
-		     (lint-format "make-hash-table function, ~A, is not a hash function" caller func))))))
-
 	;; ---------------- cond-expand ----------------
 	(let ()
 	  (define (sp-cond-expand caller head form env)

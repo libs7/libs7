@@ -31845,40 +31845,39 @@ static void slashify_string_to_port(s7_scheme *sc, s7_pointer port, const char *
    */
   if (quoted) port_write_character(port)(sc, '"', port);
   for (pcur = (uint8_t *)p; pcur < pend; pcur++)
-    {
-      if (slashify_table[*pcur])
-	{
-	  if (pstart) pstart++; else pstart = (uint8_t *)p;
-	  if (pstart != pcur)
+    if (slashify_table[*pcur])
+      {
+	if (pstart) pstart++; else pstart = (uint8_t *)p;
+	if (pstart != pcur)
+	  {
+	    port_write_string(port)(sc, (char *)pstart, pcur - pstart, port);
+	    pstart = pcur;
+	  }
+	port_write_character(port)(sc, '\\', port);
+	switch (*pcur)
+	  {
+	  case '"':   port_write_character(port)(sc, '"', port);   break;
+	  case '\\':  port_write_character(port)(sc, '\\', port);  break;
+	  case '\'':  port_write_character(port)(sc, '\'', port);  break;
+	  case '\t':  port_write_character(port)(sc, 't', port);   break;
+	  case '\r':  port_write_character(port)(sc, 'r', port);   break;
+	  case '\b':  port_write_character(port)(sc, 'b', port);   break;
+	  case '\f':  port_write_character(port)(sc, 'f', port);   break;
+	  case '\?':  port_write_character(port)(sc, '?', port);   break;
+	  case 'x':   port_write_character(port)(sc, 'x', port);   break;
+	  default:
 	    {
-	      port_write_string(port)(sc, (char *)pstart, pcur - pstart, port);
-	      pstart = pcur;
+	      char buf[5];
+	      s7_int n = (s7_int)(*pcur);
+	      buf[0] = 'x';
+	      buf[1] = (n < 16) ? '0' : dignum[(n / 16) % 16];
+	      buf[2] = dignum[n % 16];
+	      buf[3] = ';';
+	      buf[4] = '\0';
+	      port_write_string(port)(sc, buf, 4, port);
 	    }
-	  port_write_character(port)(sc, '\\', port);
-	  switch (*pcur)
-	    {
-	    case '"':   port_write_character(port)(sc, '"', port);   break;
-	    case '\\':  port_write_character(port)(sc, '\\', port);  break;
-	    case '\'':  port_write_character(port)(sc, '\'', port);  break;
-	    case '\t':  port_write_character(port)(sc, 't', port);   break;
-	    case '\r':  port_write_character(port)(sc, 'r', port);   break;
-	    case '\b':  port_write_character(port)(sc, 'b', port);   break;
-	    case '\f':  port_write_character(port)(sc, 'f', port);   break;
-	    case '\?':  port_write_character(port)(sc, '?', port);   break;
-	    case 'x':   port_write_character(port)(sc, 'x', port);   break;
-	    default:
-	      {
-		char buf[5];
-		s7_int n = (s7_int)(*pcur);
-		buf[0] = 'x';
-		buf[1] = (n < 16) ? '0' : dignum[(n / 16) % 16];
-		buf[2] = dignum[n % 16];
-		buf[3] = ';';
-		buf[4] = '\0';
-		port_write_string(port)(sc, buf, 4, port);
-	      }
-	      break;
-	    }}}
+	    break;
+	  }}
   if (!pstart)
     port_write_string(port)(sc, (char *)p, len, port);
   else
@@ -32080,34 +32079,33 @@ static int32_t multivector_to_port_1(s7_scheme *sc, s7_pointer vec, s7_pointer p
       (*last) = false;
     }
   for (int32_t i = 0; i < vector_dimension(vec, dimension); i++)
-    {
-      if (dimension == (dimensions - 1))
-	{
-	  if (flat_ref < out_len)
-	    {
-	      object_to_port_with_circle_check(sc, vector_getter(vec)(sc, vec, flat_ref), port, NOT_P_DISPLAY(use_write), ci);
-
-	      if (use_write == P_READABLE)
-		port_write_string(port)(sc, ") ", 2, port);
-	      flat_ref++;
-	    }
-	  else
-	    {
-	      port_write_string(port)(sc, "...)", 4, port);
-	      return(flat_ref);
-	    }
-	  if ((use_write != P_READABLE) &&
-	      (i < (vector_dimension(vec, dimension) - 1)))
-	    port_write_character(port)(sc, ' ', port);
-	}
-      else
+    if (dimension == (dimensions - 1))
+      {
 	if (flat_ref < out_len)
-	  flat_ref = multivector_to_port_1(sc, vec, port, out_len, flat_ref, dimension + 1, dimensions, last, NOT_P_DISPLAY(use_write), ci);
+	  {
+	    object_to_port_with_circle_check(sc, vector_getter(vec)(sc, vec, flat_ref), port, NOT_P_DISPLAY(use_write), ci);
+	    
+	    if (use_write == P_READABLE)
+	      port_write_string(port)(sc, ") ", 2, port);
+	    flat_ref++;
+	  }
 	else
 	  {
 	    port_write_string(port)(sc, "...)", 4, port);
 	    return(flat_ref);
-	  }}
+	  }
+	if ((use_write != P_READABLE) &&
+	    (i < (vector_dimension(vec, dimension) - 1)))
+	  port_write_character(port)(sc, ' ', port);
+      }
+    else
+      if (flat_ref < out_len)
+	flat_ref = multivector_to_port_1(sc, vec, port, out_len, flat_ref, dimension + 1, dimensions, last, NOT_P_DISPLAY(use_write), ci);
+      else
+	{
+	  port_write_string(port)(sc, "...)", 4, port);
+	  return(flat_ref);
+	}
   if (use_write != P_READABLE)
     port_write_character(port)(sc, ')', port);
   (*last) = true;
@@ -32257,59 +32255,58 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 
 	  port_write_string(port)(sc, "(vector", 7, port); /* top level let */
 	  for (i = 0; i < len; i++)
-	    {
-	      if (has_structure(els[i]))
-		{
-		  int32_t eref = peek_shared_ref(ci, els[i]);
-		  port_write_string(port)(sc, " #f", 3, port);
-		  if (eref != 0)
-		    {
-		      if (eref < 0) eref = -eref;
-		      if (vector_rank(vect) > 1)
-			{
-			  s7_int dimension = vector_rank(vect) - 1;
-			  int32_t str_len = (dimension < 8) ? 128 : ((dimension + 1) * 16);
-			  block_t *b = callocate(sc, str_len);
-			  char *indices = (char *)block_data(b);
-			  multivector_indices_to_string(sc, i, vect, indices, str_len, dimension); /* calls pos_int_to_str_direct, writes to indices */
-			  plen = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, vref), ">",
-						indices, ") <", pos_int_to_str_direct_1(sc, eref), ">) ", (const char *)NULL);
-			  port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
-			  liberate(sc, b);
-			}
-		      else
-			{
-			  size_t len1 = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, vref), "> ", integer_to_string(sc, i, &plen), ") <",
-						pos_int_to_str_direct_1(sc, eref), ">) ", (const char *)NULL);
-			  port_write_string(ci->cycle_port)(sc, buf, len1, ci->cycle_port);
-			}}
-		  else
-		    {
-		      if (vector_rank(vect) > 1)
-			{
-			  s7_int dimension = vector_rank(vect) - 1;
-			  int32_t str_len = (dimension < 8) ? 128 : ((dimension + 1) * 16);
-			  block_t *b = callocate(sc, str_len);
-			  char *indices = (char *)block_data(b);
-			  buf[0] = '\0';
-			  multivector_indices_to_string(sc, i, vect, indices, str_len, dimension); /* writes to indices */
-			  plen = catstrs(buf, 2048, "  (set! (<", pos_int_to_str_direct(sc, vref), ">", indices, ") ", (char *)NULL);
-			  port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
-			  liberate(sc, b);
-			}
-		      else
-			{
-			  size_t len1 = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, vref), "> ", integer_to_string_no_length(sc, i), ") ", (const char *)NULL);
-			  port_write_string(ci->cycle_port)(sc, buf, len1, ci->cycle_port);
-			}
-		      object_to_port_with_circle_check(sc, els[i], ci->cycle_port, P_READABLE, ci);
-		      port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
-		    }}
-	      else
-		{
-		  port_write_character(port)(sc, ' ', port);
-		  object_to_port_with_circle_check(sc, els[i], port, P_READABLE, ci);
-		}}
+	    if (has_structure(els[i]))
+	      {
+		int32_t eref = peek_shared_ref(ci, els[i]);
+		port_write_string(port)(sc, " #f", 3, port);
+		if (eref != 0)
+		  {
+		    if (eref < 0) eref = -eref;
+		    if (vector_rank(vect) > 1)
+		      {
+			s7_int dimension = vector_rank(vect) - 1;
+			int32_t str_len = (dimension < 8) ? 128 : ((dimension + 1) * 16);
+			block_t *b = callocate(sc, str_len);
+			char *indices = (char *)block_data(b);
+			multivector_indices_to_string(sc, i, vect, indices, str_len, dimension); /* calls pos_int_to_str_direct, writes to indices */
+			plen = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, vref), ">",
+					      indices, ") <", pos_int_to_str_direct_1(sc, eref), ">) ", (const char *)NULL);
+			port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
+			liberate(sc, b);
+		      }
+		    else
+		      {
+			size_t len1 = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, vref), "> ", integer_to_string(sc, i, &plen), ") <",
+						     pos_int_to_str_direct_1(sc, eref), ">) ", (const char *)NULL);
+			port_write_string(ci->cycle_port)(sc, buf, len1, ci->cycle_port);
+		      }}
+		else
+		  {
+		    if (vector_rank(vect) > 1)
+		      {
+			s7_int dimension = vector_rank(vect) - 1;
+			int32_t str_len = (dimension < 8) ? 128 : ((dimension + 1) * 16);
+			block_t *b = callocate(sc, str_len);
+			char *indices = (char *)block_data(b);
+			buf[0] = '\0';
+			multivector_indices_to_string(sc, i, vect, indices, str_len, dimension); /* writes to indices */
+			plen = catstrs(buf, 2048, "  (set! (<", pos_int_to_str_direct(sc, vref), ">", indices, ") ", (char *)NULL);
+			port_write_string(ci->cycle_port)(sc, buf, plen, ci->cycle_port);
+			liberate(sc, b);
+		      }
+		    else
+		      {
+			size_t len1 = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, vref), "> ", integer_to_string_no_length(sc, i), ") ", (const char *)NULL);
+			port_write_string(ci->cycle_port)(sc, buf, len1, ci->cycle_port);
+		      }
+		    object_to_port_with_circle_check(sc, els[i], ci->cycle_port, P_READABLE, ci);
+		    port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
+		  }}
+	    else
+	      {
+		port_write_character(port)(sc, ' ', port);
+		object_to_port_with_circle_check(sc, els[i], port, P_READABLE, ci);
+	      }
 	  port_write_character(port)(sc, ')', port);
 	  if (vector_rank(vect) > 1)
 	    {
@@ -33018,11 +33015,25 @@ static const char *hash_table_typer_name(s7_scheme *sc, s7_pointer typer)
   return(symbol_name(sym));
 }
 
+static void hash_typers_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port)
+{
+  if (((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash)))) &&
+      ((!is_boolean(hash_table_key_typer(hash))) || (!is_boolean(hash_table_value_typer(hash)))))
+    {
+      const char *typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
+      port_write_string(port)(sc, " (cons ", 7, port);
+      port_write_string(port)(sc, typer, safe_strlen(typer), port);
+      port_write_character(port)(sc, ' ', port);
+      typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
+      port_write_string(port)(sc, typer, safe_strlen(typer), port);
+      port_write_string(port)(sc, "))", 2, port);
+    }
+  else port_write_character(port)(sc, ')', port);
+}
+
 static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, bool closed, shared_info_t *ci)
 {
-  /* this can't be a cyclic <n> ref because it is empty */
   const char *typer = hash_table_checker_name(sc, hash);
-
   if ((closed) && (is_immutable(hash)))
     port_write_string(port)(sc, "(immutable! ", 12, port);
   
@@ -33051,34 +33062,21 @@ static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_poi
 		  port_write_character(port)(sc, ')', port);
 		}}
 	  else 
-	    {
-	      if ((is_any_closure(hash_table_procedures_checker(hash))) ||
-		  (is_any_closure(hash_table_procedures_mapper(hash))))
-		{
-		  port_write_string(port)(sc, " (cons ", 7, port);
-		  if (is_any_closure(hash_table_procedures_checker(hash)))
-		    object_to_port_with_circle_check(sc, hash_table_procedures_checker(hash), port, P_READABLE, ci);
-		  else port_write_string(port)(sc, checker, safe_strlen(checker), port);
-		  port_write_character(port)(sc, ' ', port);
-		  if (is_any_closure(hash_table_procedures_mapper(hash)))
-		    object_to_port_with_circle_check(sc, hash_table_procedures_mapper(hash), port, P_READABLE, ci);
-		  else port_write_string(port)(sc, mapper, safe_strlen(mapper), port);
-		  port_write_character(port)(sc, ')', port);
-		}
-	      else port_write_string(port)(sc, " #f", 3, port); /* no checker/mapper set? */
-	    }
-	  if (((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash)))) &&
-	      ((!is_boolean(hash_table_key_typer(hash))) || (!is_boolean(hash_table_value_typer(hash)))))
-	    {
-	      port_write_string(port)(sc, " (cons ", 7, port);
-	      typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
-	      port_write_string(port)(sc, typer, safe_strlen(typer), port);
-	      port_write_character(port)(sc, ' ', port);
-	      typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
-	      port_write_string(port)(sc, typer, safe_strlen(typer), port);
-	      port_write_character(port)(sc, ')', port);
-	    }
-	  port_write_character(port)(sc, ')', port);
+	    if ((is_any_closure(hash_table_procedures_checker(hash))) ||
+		(is_any_closure(hash_table_procedures_mapper(hash))))
+	      {
+		port_write_string(port)(sc, " (cons ", 7, port);
+		if (is_any_closure(hash_table_procedures_checker(hash)))
+		  object_to_port_with_circle_check(sc, hash_table_procedures_checker(hash), port, P_READABLE, ci);
+		else port_write_string(port)(sc, checker, safe_strlen(checker), port);
+		port_write_character(port)(sc, ' ', port);
+		if (is_any_closure(hash_table_procedures_mapper(hash)))
+		  object_to_port_with_circle_check(sc, hash_table_procedures_mapper(hash), port, P_READABLE, ci);
+		else port_write_string(port)(sc, mapper, safe_strlen(mapper), port);
+		port_write_character(port)(sc, ')', port);
+	      }
+	    else port_write_string(port)(sc, " #f", 3, port); /* no checker/mapper set? */
+	  hash_typers_to_port(sc, hash, port);
 	}
       else
 	if (is_weak_hash_table(hash))
@@ -33095,31 +33093,46 @@ static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_poi
       port_write_string(port)(sc, str, nlen, port);
       port_write_character(port)(sc, ' ', port);
       port_write_string(port)(sc, typer, safe_strlen(typer), port);
-      if (((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash)))) &&
-	  ((!is_boolean(hash_table_key_typer(hash))) || (!is_boolean(hash_table_value_typer(hash)))))
-	{
-	  port_write_string(port)(sc, " (cons ", 7, port);
-	  typer = hash_table_typer_name(sc, hash_table_key_typer(hash));
-	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
-	  port_write_character(port)(sc, ' ', port);
-	  typer = hash_table_typer_name(sc, hash_table_value_typer(hash));
-	  port_write_string(port)(sc, typer, safe_strlen(typer), port);
-	  port_write_string(port)(sc, "))", 2, port);
-	}
-      else port_write_character(port)(sc, ')', port);
+      hash_typers_to_port(sc, hash, port);
     }
   if (is_immutable(hash))
     port_write_character(port)(sc, ')', port);
 }
+
+#if CYCLE_DEBUGGING
+static char *base = NULL, *min_char = NULL;
+#endif
 
 static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   s7_int gc_iter, len = hash_table_entries(hash);
   bool too_long = false, hash_cyclic = false, copied = false, immut = false, letd = false;
   s7_pointer iterator, p;
-  int32_t href;
+  int32_t href = -1;
   
-  /* fprintf(stderr, "%s: %d %s\n", __func__, is_typed_hash_table(hash), display(hash_table_procedures(hash))); */
+#if CYCLE_DEBUGGING
+  char x;
+  if (!base) base = &x; 
+  else 
+    if (&x > base) base = &x; 
+    else 
+      if ((!min_char) || (&x < min_char))
+	{
+	  min_char = &x;
+	  if ((base - min_char) > 100000)
+	    {
+	      fprintf(stderr, "infinite recursion?\n");
+	      if (port_data(port))
+		{
+		  fprintf(stderr, "   port contents (%ld bytes): \n", port_position(port));
+		  if (port_position(port) > 10000)
+		    port_data(port)[10000] = '\0';
+		  else port_data(port)[port_position(port)] = '\0';
+		  fprintf(stderr, "%s\n", port_data(port));
+		}
+	      abort();
+	    }}
+#endif
 
   if (len == 0)
     {
@@ -33172,8 +33185,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 
   if (use_write == P_READABLE)
     {
-     /*  fprintf(stderr, "hash: %d %d %s\n", is_typed_hash_table(hash), hash_chosen(hash), display(hash_table_procedures(hash))); */
-
       if ((is_typed_hash_table(hash)) || (is_pair(hash_table_procedures(hash))) || (hash_chosen(hash)))
 	{
 	  port_write_string(port)(sc, "(let ((<h> ", 11, port);
@@ -33257,7 +33268,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  port_write_character(port)(sc, ' ', port);
 	  object_to_port_with_circle_check(sc, cdr(key_val), port, NOT_P_DISPLAY(use_write), ci);
 	}
-
       if (use_write != P_READABLE)
 	{
 	  if (too_long)
@@ -33312,8 +33322,7 @@ static void slot_list_to_port(s7_scheme *sc, s7_pointer slot, s7_pointer port, s
       symbol_to_port(sc, slot_symbol(slot), port, (bindings) ? P_DISPLAY : P_KEY, NULL);  /* (object->string (inlet (symbol "(\")") 1) :readable) */
       port_write_character(port)(sc, ' ', port);
       object_to_port_with_circle_check(sc, slot_value(slot), port, P_READABLE, ci);
-      if (bindings)
-	port_write_character(port)(sc, ')', port);
+      if (bindings) port_write_character(port)(sc, ')', port);
     }
 }
 
@@ -33859,7 +33868,6 @@ static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer por
   local_slots = T_Lst(gc_protected_at(sc, gc_loc)); /* possibly a list of slots */
   if (!is_null(local_slots))
     {
-      /* fprintf(stderr, "locals: %s\n", display(local_slots)); */
       /* if (let|letrec ((f (lambda () f))) (object->string f :readable)), local_slots: ('f f) */
       /* but we can't handle it below because that leads to an infinite loop */
       for (s7_pointer x = local_slots; is_pair(x); x = cdr(x))
@@ -68653,7 +68661,6 @@ static void fx_annotate_args(s7_scheme *sc, s7_pointer args, s7_pointer e)
 
 static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, s7_pointer e)
 {
-  /* fprintf(stderr, "%s %s\n", __func__, display(expr)); */
   if ((hop != 1) && (is_constant_symbol(sc, car(expr)))) hop = 1;
 
   if ((is_closure(func)) || (is_closure_star(func)))
@@ -69451,7 +69458,6 @@ static void opt_sp_1(s7_scheme *sc, s7_function g, s7_pointer expr)
 
 static opt_t set_any_c_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_pointer e, int32_t num_args, opcode_t op)
 {
-  /* fprintf(stderr, "%d %d %d %s %s\n", num_args, is_safe_procedure(func), is_semisafe(func), op_names[op], display_80(expr)); */
   /* we get safe/semisafe funcs here of 2 args and up! very few more than 5 */
   /* would safe_c_pp work for cl? or should unknown_* deal with op_cl_*? why aren't unknown* used in op_safe_c and op_c?
    *   2 | 3 args store on stack rather than consing? then use sc->t2|3 to pass to fn_proc (unless unsafe)
@@ -71951,7 +71957,6 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	   *   but in a safe func, that's a constant.  See s7test L 1865 for an example.
 	   */
 	default:
-	  /* fprintf(stderr, "%s %s\n", op_names[symbol_syntax_op_checked(x)], display(x)); */
 	  /* OP_LAMBDA is major case here */
 	  /* try to catch weird cases like:
 	   * (let () (define (hi1 a) (define (hi1 b) (+ b 1)) (hi1 a)) (hi1 1))
@@ -94978,13 +94983,5 @@ int main(int argc, char **argv)
  * -----------------------------------------------
  *
  * t718: optimize_syntax overeagerness
- * hash :readable for len>0 with typers/checkers
- *   need explicit tests of hash copy with and w/o typers/dests etc
- *   check immutable let readable if vars
- *   hash|vector->let additions
- *   add debug checks typed/dproc
- *   cycle debugging again (ci can be null)
- *   lint warn if (string? integer?) as typer (same checker)
- *   t101-data -> s7test
  * gs problem with cmn eps files
  */
