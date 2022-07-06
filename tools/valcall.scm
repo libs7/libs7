@@ -1,3 +1,5 @@
+;;; reset names: back-to-v-10
+
 (define file-names '(("make-index.scm" . "v-index")
 		     ("tmac.scm" . "v-mac")
 		     ("tpeak.scm" . "v-peak")
@@ -115,8 +117,8 @@
 	 (list "repl" "concordance.scm")
 	 (list "repl" "tnum.scm")
 	 (list "repl" "tlamb.scm")
-	 (list "repl" "tset.scm")
 	 (list "repl" "tmisc.scm")
+	 (list "repl" "tset.scm")
 	 (list "repl" "tlist.scm")
 	 (list "repl" "tgsl.scm")
 	 (reader-cond ((not (provided? 'gmp)) (list "repl" "tari.scm")))
