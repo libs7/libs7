@@ -1,3 +1,4 @@
+;; (display "loading libs7/srfi.scm") (newline)
 
 ;; srfi 1
 ;;(define (remove pred l) (filter (lambda (x) (not (pred x))) l))
@@ -171,3 +172,4 @@
 		(pred head)	; Last PRED app is tail call.
 		(and (pred head) (lp (car tail) (cdr tail))))))))
 
+;; (display "loaded libs7/srfi.scm") (newline)

@@ -47,50 +47,58 @@
     (lambda (key datum alist)
       (cons (list key datum) alist))))
 
-;; assoc+
+;; assoc*
 ;; like assoc, but returns list of all matches instead of the first
 ;; returns '() on no match (assoc returns #f)
-(define (assoc+ stanza-key alist)
-  (cond ((null? alist) '())
-        ((equal? stanza-key (caar alist))
-         (cons (car alist) (assoc+ stanza-key (cdr alist))))
-        (else (assoc+ stanza-key (cdr alist)))))
+(define assoc*
+  (let ((+documentation+ "(assoc* key alist) like assoc, but returns list of all matches instead of the first.")
+        (+signature+ '(assoc-in keypath alist)))
+    (lambda (stanza-key alist)
+      (cond ((null? alist) '())
+            ((equal? stanza-key (caar alist))
+             (cons (car alist) (assoc* stanza-key (cdr alist))))
+            (else (assoc* stanza-key (cdr alist)))))))
 
 ;; assoc-in
 ;; returns first assoc pairs for keypath in a nested alist struct
-(define (assoc-in key-path alist)
-  ;; (display (format #f "assoc-in ~A ~A" key-path alist)) (newline)
-  (if (null? key-path)
-      #f ;; alist
-      (if (list? alist)
-          (if (null? alist)
-              #f
-              (if-let ((in-alist (assoc (car key-path) alist)))
-                      (if (null? (cdr key-path))
-                          in-alist
-                          (assoc-in (cdr key-path) (cdr in-alist)))
-                      #f))
-          #f)))
+(define assoc-in
+  (let ((+documentation+ "(assoc-in keypath alist) keypath: list of keys; alist: tree of alists. Returns the first assoc found by successively applying 'assoc'.")
+        (+signature+ '(assoc-in keypath alist)))
+    (lambda (key-path alist)
+      (if (null? key-path)
+          #f ;; alist
+          (if (list? alist)
+              (if (null? alist)
+                  #f
+                  (if-let ((in-alist (assoc (car key-path) alist)))
+                          (if (null? (cdr key-path))
+                              in-alist
+                              (assoc-in (cdr key-path) (cdr in-alist)))
+                          #f))
+              #f)))))
 
-;; assoc-in+
+;; assoc-in*
 ;; returns all assoc pairs for last key in keypath in a nested alist struct
 ;; for all preceding keys, uses first match
 ;; i.e. use this when the path is unique up to the last key
-;; use assoc-in++ when each alist on the path may have dup keys
-(define (assoc-in+ key-path alist)
-  ;; (display (format #f "assoc-in+ ~A ~A" key-path alist)) (newline)
-  (if (null? key-path)
-      alist
-      (if (list? alist)
-          (if (null? alist)
-              #f
-              (if-let ((in-alist (assoc (car key-path) alist)))
-                      (if (null? (cdr key-path))
-                          ;; last key: get all matches
-                          (assoc+ (car key-path) alist)
-                          (assoc-in+ (cdr key-path) (cadr in-alist)))
-                      #f))
-          #f)))
+;; use assoc-in*+ when each alist on the path may have dup keys
+(define assoc-in*
+  (let ((+documentation+ "(assoc-in* keypath alist) keypath: list of keys; alist: tree of alists. Returns all assocs for last key in keypath. For all preceding keys in keypath uses first match.")
+        (+signature+ '(assoc-in* keypath alist)))
+    (lambda (key-path alist)
+      (if (null? key-path)
+          alist
+          (if (list? alist)
+              (if (null? alist)
+                  #f
+                  (if-let ((in-alist (assoc (car key-path) alist)))
+                          (begin
+                            (if (null? (cdr key-path))
+                                ;; last key: get all matches
+                                (assoc* (car key-path) alist)
+                                (assoc-in* (cdr key-path) (cdr in-alist))))
+                          #f))
+              #f)))))
 
 ;; srfi-1: (alist-delete k ls)
 ;; ref impl modified for s7
@@ -195,38 +203,38 @@
             (eql? equal?))
         (let recur ((als als)
                     (ks ks))
-          (format #t "RECURRING ks: ~A\n" ks)
-          (format #t "RECURRING als: ~A\n" als)
+          ;; (format #t "RECURRING ks: ~A\n" ks)
+          ;; (format #t "RECURRING als: ~A\n" als)
           (if (null? als)
               (if (null? ks)
                   (begin
                     ;; (format #t "als and ks null; invoking update fn\n")
                     (fn '()))
-                  (let ((_ (format #t " empty als, ks: ~A\n" ks))
+                  (let (;; (_ (format #t " empty als, ks: ~A\n" ks))
                         (recres (recur als (cdr ks))))
-                    (format #t " base recres for ~A: ~A\n" (car ks) recres)
+                    ;; (format #t " base recres for ~A: ~A\n" (car ks) recres)
                     (if (alist? recres)
                         (cons (car ks) recres)
                         (cons (car ks) (list recres)))))
               ;; als not null
               (if (null? ks)
                   (begin
-                    (format #t "matched all keys, applying fn to ~A\n" als)
+                    ;; (format #t "matched all keys, applying fn to ~A\n" als)
                     (let ((base (fn als)))
-                      (format #t "fn result: ~A\n" base)
+                      ;; (format #t "fn result: ~A\n" base)
                       base))
                   ;; ks and als not null
                   (begin
-                    (format #t "(alist? als) ~A\n" (alist? als))
-                    (format #t "intermediate match on k? ~A\n"
-                            (assoc (car ks) als))
+                    ;; (format #t "(alist? als) ~A\n" (alist? als))
+                    ;; (format #t "intermediate match on k? ~A\n"
+                    ;;         (assoc (car ks) als))
                     (if-let ((sub-alist (assoc (car ks) als)))
                           (begin
-                            (format #t "intermediate match on k ~A\n"
-                                    (car ks))
+                            ;; (format #t "intermediate match on k ~A\n"
+                            ;;         (car ks))
                             ;; (format #t "isub-list before ~A\n" sub-alist)
                             (let ((recres (recur (cdr sub-alist) (cdr ks))))
-                              (format #t "imatch recres ~A\n" recres)
+                              ;; (format #t "imatch recres ~A\n" recres)
                               ;; replaces sub-alist within als
                               (set-cdr! sub-alist
                                         recres)
@@ -239,14 +247,15 @@
                             ;; (format #t "nomatch for key ~A - adding ~A\n"
                             ;;         (car ks) ks)
                             ;; (format #t "old als: ~A\n" als)
-                            (let* ((_ (format
-                                    #t "nomatch for key ~A - adding ~A\n"
-                                    (car ks) ks))
-                                  (_ (format #t "old als: ~A\n" als))
+                            (let* (;;(_ (format
+                                    ;; #t "nomatch for key ~A - adding ~A\n"
+                                    ;; (car ks) ks))
+                                  ;; (_ (format #t "old als: ~A\n" als))
                                   (recres (recur '() (cdr ks)))
-                                  (_ (format
-                                      #t "i-nomatch recres for ~A: ~A\n"
-                                      (car ks) recres)))
+                                  ;; (_ (format
+                                  ;;     #t "i-nomatch recres for ~A: ~A\n"
+                                  ;;     (car ks) recres))
+                                  )
                               ;; recres could be: (:ml d.ml) for new file
                               ;; or (D (:ml d.ml)) for module
                             (let ((newtree
@@ -257,8 +266,8 @@
                                                    (if (alist? recres)
                                                        (car recres)
                                                        recres))))))
-                              (format #t "newtree: ~A\n" newtree)
-                              (format #t "new als: ~A\n" als)
+                              ;; (format #t "newtree: ~A\n" newtree)
+                              ;; (format #t "new als: ~A\n" als)
                               newtree))))))))
         the-alist))))
 
@@ -280,3 +289,4 @@
 ;;   (display x) (newline)
 ;;   ;(display y) (newline)
 ;;   y)
+;; (display "loaded libs7/alist.scm") (newline)

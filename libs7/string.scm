@@ -1,3 +1,5 @@
+;; (display "loading libs7/string.scm") (newline)
+
 ;; https://srfi.schemers.org/srfi-152/srfi-152.html
 ;; String library (reduced)
 
@@ -373,3 +375,4 @@
   (let ((segs (string-split s char-from)))
     (string-join segs (string char-to))))
 
+;; (display "loaded libs7/string.scm") (newline)

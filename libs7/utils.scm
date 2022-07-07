@@ -1,5 +1,14 @@
 ;; (display "loading libs7/utils.scm") (newline)
 
+(define (subset? l1 l2)
+  (or (null? l1)
+      (and (member  (car l1) l2)
+           (subset? (cdr l1) l2))))
+
+(define (set-equal? l1 l2)
+  (and (subset? l1 l2)
+       (subset? l2 l1)))
+
 (define (remove-ifx func lst)
   (map (lambda (x) (if (func x) (values) x)) lst))
 
@@ -77,7 +86,9 @@
       (let* ((fname (basename path))
              (len (string-length fname))
              (last-dot (string-index-right fname (lambda (c) (eq? c #\.)))))
-        (string-take-right fname (- len last-dot))))))
+        (if last-dot
+            (string-take-right fname (- len last-dot))
+            #f)))))
 
 ;; s7test.scm
 (define (identity x) x)
@@ -250,3 +261,5 @@
 
 (define (pwd)
   (getcwd (make-string 1024) 1024))
+
+;; (display "loaded libs7/utils.scm") (newline)
