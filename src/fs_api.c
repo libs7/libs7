@@ -32,8 +32,8 @@ char *canonical_path(char *path)
     char *start  = path;
 
     char *prev_slash = NULL;
-    char *prevprev_slash = NULL;
-    bool backup = false;
+    /* char *prevprev_slash = NULL; */
+    /* bool backup = false; */
 
     /* if (path[0] == '.') { */
     /*     if (path[1] == '/') { */
@@ -44,11 +44,11 @@ char *canonical_path(char *path)
 
     start = src_anchor;
 
-    int len  = strlen(src_cursor);
-    int mvlen  = 0;
+    /* int len  = strlen(src_cursor); */
+    /* int mvlen  = 0; */
     int i, buflen;
 
-    bool editing = false;
+    /* bool editing = false; */
     int dotcount   = 0;    /* consecutive '.' */
     int slashcount = 0;    /* consecutive '/' or "/./" */
 
@@ -176,7 +176,7 @@ char *canonical_path(char *path)
                     /*        src_cursor, src_anchor, buf); */
                     /* printf("dotcount: %d, slashcount: %d\n", */
                     /*        dotcount, slashcount); */
-                    mvlen = strlen(src_cursor);
+                    /* mvlen = strlen(src_cursor); */
                     /* printf("mvlen: %d\n", mvlen); */
                     /* printf("src_anchor: %s\n", src_anchor); */
                     /* printf("dst_anchor: %s\n", dst_anchor); */
@@ -231,7 +231,6 @@ static s7_pointer g_canonical_path(s7_scheme *sc, s7_pointer args)
   return(s7_make_string(sc, (char*)canonical_path(_path)));
 }
 
-
 /* -------- chdir -------- */
 static s7_pointer s7__chdir(s7_scheme *sc, s7_pointer args)
 {
@@ -244,7 +243,6 @@ static s7_pointer s7__chdir(s7_scheme *sc, s7_pointer args)
   else return(s7_wrong_type_arg_error(sc, __func__, 0, arg, "string"));
   return(s7_make_integer(sc, (s7_int)chdir(s7__chdir_0)));
 }
-
 
 /* -------- getcwd -------- */
 static s7_pointer s7__getcwd(s7_scheme *sc, s7_pointer args)
@@ -289,7 +287,6 @@ static s7_pointer s7__fnmatch(s7_scheme *sc, s7_pointer args)
   else return(s7_wrong_type_arg_error(sc, __func__, 3, arg, "integer"));
   return(s7_make_integer(sc, (s7_int)fnmatch(s7__fnmatch_0, s7__fnmatch_1, s7__fnmatch_2)));
 }
-
 
 /* -------- link -------- */
 static s7_pointer s7__link(s7_scheme *sc, s7_pointer args)
@@ -358,7 +355,6 @@ static s7_pointer s7__rename(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, (s7_int)rename(s7__rename_0, s7__rename_1)));
 }
 
-
 /* -------- tmpfile -------- */
 static s7_pointer s7__tmpfile(s7_scheme *sc, s7_pointer args)
 {
@@ -380,19 +376,24 @@ static s7_pointer g_realpath(s7_scheme *sc, s7_pointer args)
 /* getcwd, chdir, fnmatch */
 void init_fs_api(s7_scheme *sc)
 {
-    s7_pointer cur_env, pl_issi, pl_ss, pl_ssi, pl_ssix, pl_is;
-    s7_int gc_loc;
+    s7_pointer cur_env, pl_issi, pl_ss, pl_iss, pl_ssi, pl_sss, pl_is, pl_xt; //  pl_ssix,
+    /* s7_int gc_loc; */
 
-    s7_pointer s,i,x;
+    s7_pointer s,i, t, x;
+    t = s7_t(sc);
     s = s7_make_symbol(sc, "string?");
     i = s7_make_symbol(sc, "integer?");
     x = s7_make_symbol(sc, "c-pointer?");
 
     pl_is = s7_make_signature(sc, 2, i, s);
     pl_ss = s7_make_signature(sc, 2, s, s);
+    pl_iss = s7_make_signature(sc, 3, i, s, s);
     pl_issi = s7_make_signature(sc, 4, i, s, s, i);
     pl_ssi = s7_make_signature(sc, 3, s, s, i);
-    pl_ssix = s7_make_signature(sc, 4, s, s, i, x);
+    pl_sss = s7_make_signature(sc, 3, s, s, s);
+    pl_xt = s7_make_signature(sc, 2, x, t);
+
+    /* pl_ssix = s7_make_signature(sc, 4, s, s, i, x); */
 
     cur_env = s7_curlet(sc);
 
@@ -403,26 +404,66 @@ void init_fs_api(s7_scheme *sc)
                                      "char* canonical_path(char* path)",
                                      pl_ss));
 
-    /* (getcwd (make-string 32) 32) */
     s7_define(sc, cur_env,
               s7_make_symbol(sc, "getcwd"),
               s7_make_typed_function(sc, "getcwd", s7__getcwd, 2, 0, false, "char* getcwd(char* size_t)", pl_ssi));
 
     s7_define(sc, cur_env,
               s7_make_symbol(sc, "chdir"),
-              s7_make_typed_function(sc, "chdir", s7__chdir, 1, 0, false, "int chdir(char*)", pl_is));
+              s7_make_typed_function(sc, "chdir", s7__chdir,
+                                     1, 0, false,
+                                     "int chdir(char*)",
+                                     pl_is));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "realpath"),
             s7_make_typed_function(sc, "realpath", g_realpath,
                                    2, 0, false,
                                    "(realpath file-name resolved-name) - second arg is ignored, returns resolved name.",
-                                   NULL));
-
+                                   pl_sss));
 
     s7_define(sc, cur_env,
               s7_make_symbol(sc, "fnmatch"),
-              s7_make_typed_function(sc, "fnmatch", s7__fnmatch, 3, 0, false, "int fnmatch(char* char* int)", pl_issi));
+              s7_make_typed_function(sc, "fnmatch", s7__fnmatch,
+                                     3, 0, false,
+                                     "int fnmatch(char* char* int)",
+                                     pl_issi));
+
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "link"),
+              s7_make_typed_function(sc, "link", s7__link,
+                                     2, 0, false,
+                                     "int link(const char*, const char*)",
+                                     pl_iss));
+
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "unlink"),
+              s7_make_typed_function(sc, "unlink", s7__unlink,
+                                     1, 0, false,
+                                     "int unlink(const char*)",
+                                     pl_is));
+
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "rename"),
+              s7_make_typed_function(sc, "rename", s7__rename,
+                                     2, 0, false,
+                                     "int rename(const char*, const char*)",
+                                     pl_iss));
+
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "rmdir"),
+              s7_make_typed_function(sc, "rmdir", s7__rmdir,
+                                     1, 0, false,
+                                     "int rmdir(const char*)",
+                                     pl_is));
+
+  s7_define(sc, cur_env,
+            s7_make_symbol(sc, "tmpfile"),
+            s7_make_typed_function(sc, "tmpfile", s7__tmpfile,
+                                   0, 0, false,
+                                   "FILE* tmpfile(void)",
+                                   pl_xt));
+
 
 #ifdef FNM_NOMATCH
     s7_define(sc, cur_env, s7_make_symbol(sc, "FNM_NOMATCH"), s7_make_integer(sc, (s7_int)FNM_NOMATCH));

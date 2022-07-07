@@ -35,7 +35,7 @@ static s7_pointer g_glob(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_glob_gl_pathv(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p;
-  int i;
+  size_t i;
   glob_t *g;
   g = (glob_t *)s7_c_pointer(s7_car(args));
   p = s7_nil(sc);

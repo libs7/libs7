@@ -24,7 +24,10 @@ cc_library(
         "-Isrc",
         "-Ivendored/linenoise",
     ],
-    defines = [
+    defines = select({
+        "//bzl/host:linux": ["_XOPEN_SOURCE=500"], # strdup
+        "//conditions:default":   []
+    }) + [
         # "OBAZL_RUNFILES_DIR=external/libs7/src",
         # "OBAZL_RUNFILES_DIR=/Users/gar/.local/share/libs7",
         "WITH_C_LOADER",

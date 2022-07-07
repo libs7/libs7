@@ -64,7 +64,7 @@ static s7_pointer g_wordexp_make(s7_scheme *sc, s7_pointer args)
 void init_shell_api(s7_scheme *sc)
 {
     s7_pointer cur_env, pl_isxi, pl_tx;
-    s7_int gc_loc;
+    /* s7_int gc_loc; */
 
     s7_pointer t, s,i,x;
     t = s7_t(sc);
