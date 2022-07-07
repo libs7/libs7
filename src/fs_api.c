@@ -394,6 +394,8 @@ void init_fs_api(s7_scheme *sc)
     pl_ssi = s7_make_signature(sc, 3, s, s, i);
     pl_ssix = s7_make_signature(sc, 4, s, s, i, x);
 
+    cur_env = s7_curlet(sc);
+
     s7_define(sc, cur_env,
               s7_make_symbol(sc, "canonical-path"),
               s7_make_typed_function(sc, "canonical-path", g_canonical_path,

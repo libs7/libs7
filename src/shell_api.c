@@ -1,4 +1,13 @@
+#include <fnmatch.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include <wordexp.h>
+
+#include "s7.h"
+
+static s7_pointer wordexp_t__symbol;
 
 /* -------- wordexp -------- */
 static s7_pointer s7__wordexp(s7_scheme *sc, s7_pointer args)
@@ -52,42 +61,55 @@ static s7_pointer g_wordexp_make(s7_scheme *sc, s7_pointer args)
                              return(p);
                            }
 
-void init_wordexp(void)
+void init_shell_api(s7_scheme *sc)
 {
+    s7_pointer cur_env, pl_isxi, pl_tx;
+    s7_int gc_loc;
 
-  wordexp_t__symbol = s7_make_symbol(sc, "wordexp_t*");
+    s7_pointer t, s,i,x;
+    t = s7_t(sc);
+    s = s7_make_symbol(sc, "string?");
+    i = s7_make_symbol(sc, "integer?");
+    x = s7_make_symbol(sc, "c-pointer?");
 
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_SYNTAX"), s7_make_integer(sc, (s7_int)WRDE_SYNTAX));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_CMDSUB"), s7_make_integer(sc, (s7_int)WRDE_CMDSUB));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_BADVAL"), s7_make_integer(sc, (s7_int)WRDE_BADVAL));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_BADCHAR"), s7_make_integer(sc, (s7_int)WRDE_BADCHAR));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_NOSPACE"), s7_make_integer(sc, (s7_int)WRDE_NOSPACE));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_UNDEF"), s7_make_integer(sc, (s7_int)WRDE_UNDEF));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_SHOWERR"), s7_make_integer(sc, (s7_int)WRDE_SHOWERR));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_REUSE"), s7_make_integer(sc, (s7_int)WRDE_REUSE));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_NOCMD"), s7_make_integer(sc, (s7_int)WRDE_NOCMD));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_APPEND"), s7_make_integer(sc, (s7_int)WRDE_APPEND));
-  s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_DOOFFS"), s7_make_integer(sc, (s7_int)WRDE_DOOFFS));
+    pl_tx = s7_make_signature(sc, 2, t, x);
+    pl_isxi = s7_make_signature(sc, 4, i, s, x, i);
+
+    cur_env = s7_curlet(sc);
+
+    wordexp_t__symbol = s7_make_symbol(sc, "wordexp_t*");
+
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_SYNTAX"), s7_make_integer(sc, (s7_int)WRDE_SYNTAX));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_CMDSUB"), s7_make_integer(sc, (s7_int)WRDE_CMDSUB));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_BADVAL"), s7_make_integer(sc, (s7_int)WRDE_BADVAL));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_BADCHAR"), s7_make_integer(sc, (s7_int)WRDE_BADCHAR));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_NOSPACE"), s7_make_integer(sc, (s7_int)WRDE_NOSPACE));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_UNDEF"), s7_make_integer(sc, (s7_int)WRDE_UNDEF));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_SHOWERR"), s7_make_integer(sc, (s7_int)WRDE_SHOWERR));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_REUSE"), s7_make_integer(sc, (s7_int)WRDE_REUSE));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_NOCMD"), s7_make_integer(sc, (s7_int)WRDE_NOCMD));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_APPEND"), s7_make_integer(sc, (s7_int)WRDE_APPEND));
+    s7_define(sc, cur_env, s7_make_symbol(sc, "WRDE_DOOFFS"), s7_make_integer(sc, (s7_int)WRDE_DOOFFS));
 
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "wordexp.we_wordv"),
-            s7_make_typed_function(sc, "wordexp.we_wordv", g_wordexp_we_wordv, 1, 0, false, "wordexp.we_wordv", NULL));
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "wordexp.we_wordv"),
+              s7_make_typed_function(sc, "wordexp.we_wordv", g_wordexp_we_wordv, 1, 0, false, "wordexp.we_wordv", NULL));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "wordexp.we_wordc"),
-            s7_make_typed_function(sc, "wordexp.we_wordc", g_wordexp_we_wordc, 1, 0, false, "wordexp.we_wordc", NULL));
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "wordexp.we_wordc"),
+              s7_make_typed_function(sc, "wordexp.we_wordc", g_wordexp_we_wordc, 1, 0, false, "wordexp.we_wordc", NULL));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "wordexp.make"),
-            s7_make_typed_function(sc, "wordexp.make", g_wordexp_make, 0, 0, false, "wordexp.make", NULL));
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "wordexp.make"),
+              s7_make_typed_function(sc, "wordexp.make", g_wordexp_make, 0, 0, false, "wordexp.make", NULL));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "wordfree"),
-            s7_make_typed_function(sc, "wordfree", s7__wordfree, 1, 0, false, "void wordfree(wordexp_t*)", pl_tx));
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "wordfree"),
+              s7_make_typed_function(sc, "wordfree", s7__wordfree, 1, 0, false, "void wordfree(wordexp_t*)", pl_tx));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "wordexp"),
-            s7_make_typed_function(sc, "wordexp", s7__wordexp, 3, 0, false, "int wordexp(char* wordexp_t* int)", pl_isxi));
+    s7_define(sc, cur_env,
+              s7_make_symbol(sc, "wordexp"),
+              s7_make_typed_function(sc, "wordexp", s7__wordexp, 3, 0, false, "int wordexp(char* wordexp_t* int)", pl_isxi));
 
 }

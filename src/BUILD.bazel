@@ -10,7 +10,8 @@ cc_library(
     srcs  = [
         "s7.c", "mus-config.h",
         "glob.c", "fs_api.c",
-    ], ## "libc_s7.c"],
+        "shell_api.c"
+    ],
     hdrs  = ["s7.h"],
     copts = select({
         "//bzl/host:macos": ["-std=c11", "-Wextra"],
@@ -39,10 +40,8 @@ cc_library(
     data = [
         # both loaded at runtime by s7_repl()
         ":c_s7",
-        "//libs7:srcs",
-        "//libs7/s7:srcs",
-        # "repl.scm",
-        # "alist.scm"
+        "//libs7:srcs",      ## scheme sources
+        "//libs7/s7:srcs",   ## scheme sources
     ],
     deps = [
         ":c_s7"

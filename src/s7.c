@@ -94615,6 +94615,10 @@ s7_scheme *s7_init(void)
 
   void init_fs_api(s7_scheme *sc); /* obazl */
   init_fs_api(sc);                /* obazl */
+
+  void init_shell_api(s7_scheme *sc); /* obazl */
+  init_shell_api(sc);                /* obazl */
+
   return(sc);
 }
 
