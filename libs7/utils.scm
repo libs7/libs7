@@ -17,6 +17,9 @@
       (car list)
       (last (cdr list))))
 
+(define (but-last list)
+  (reverse (cdr (reverse list))))
+
 (load "s7/stuff.scm")
 
 (set! *#readers*

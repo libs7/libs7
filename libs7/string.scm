@@ -7,6 +7,22 @@
 
 ;; (load "srfi.scm")
 
+(define CCRED (format #f "~C[0;31m" #\escape))
+(define CCGRN (format #f "~C[0;32m" #\escape))
+(define CCYEL (format #f "~C[0;33m" #\escape))
+(define CCBLU (format #f "~C[0;34m" #\escape))
+(define CCMAG (format #f "~C[0;35m" #\escape))
+(define CCCYN (format #f "~C[0;36m" #\escape))
+(define CCWHT (format #f "~C[0;37m" #\escape))
+(define CCRESET (format #f "~C[0m" #\escape))
+
+(define (red text) (format #f "~C[31m~A~C[0m" #\escape text #\escape))
+(define (green text) (format #f "~C[32m~A~C[0m" #\escape text #\escape))
+(define (yellow text) (format #f "~C[33m~A~C[0m" #\escape text #\escape))
+(define (blue text) (format #f "~C[34m~A~C[0m" #\escape text #\escape))
+(define (magenta text) (format #f "~C[35m~A~C[0m" #\escape text #\escape))
+(define (cyan text) (format #f "~C[36m~A~C[0m" #\escape text #\escape))
+(define (white text) (format #f "~C[37m~A~C[0m" #\escape text #\escape))
 
 ;; derived from srfi-152
 (define (%string-copy! to tstart from fstart fend)
