@@ -1027,9 +1027,6 @@ typedef struct {
   s7_pointer cycle_port, init_port;
   s7_int cycle_loc, init_loc, ctr;
   bool *defined;
-#if S7_DEBUGGING
-  s7_int stamp;
-#endif
 } shared_info_t;
 
 typedef struct {
@@ -7531,6 +7528,8 @@ static void try_to_call_gc(s7_scheme *sc)
     resize_heap(sc);
   else
     {
+      if ((sc->gc_resize_heap_fraction > 0.5) && (sc->heap_size >= 4194304))
+	  sc->gc_resize_heap_fraction = 0.5;
 #if (!S7_DEBUGGING)
       int64_t freed_heap = gc(sc);
       if (freed_heap < (sc->heap_size * sc->gc_resize_heap_fraction))
@@ -31654,9 +31653,6 @@ static shared_info_t *init_circle_info(s7_scheme *sc)
   ci->defined = (bool *)Calloc(ci->size, sizeof(bool));
   ci->cycle_port = sc->F;
   ci->init_port = sc->F;
-#if S7_DEBUGGING
-  ci->stamp = 0;
-#endif
   return(ci);
 }
 
@@ -31674,9 +31670,6 @@ static inline shared_info_t *new_shared_info(s7_scheme *sc)
   ci->ref = 0;
   ci->has_hits = false;
   ci->ctr = 0;
-#if S7_DEBUGGING
-  ci->stamp++;
-#endif
   return(ci);
 }
 
@@ -34685,17 +34678,11 @@ static void object_out_1(s7_scheme *sc, s7_pointer obj, s7_pointer strport, use_
       shared_info_t *ci = make_shared_info(sc, T_Any(obj), choice != P_READABLE);
       if (ci)
 	{
-#if S7_DEBUGGING
-	  s7_int ref_stamp = ci->stamp;
-#endif
 	  sc->object_out_locked = true;
 	  if (choice == P_READABLE)
 	    cyclic_out(sc, obj, strport, ci);
 	  else object_to_port_with_circle_check(sc, obj, strport, choice, ci);
 	  sc->object_out_locked = false;
-#if S7_DEBUGGING
-	  if (ci->stamp != ref_stamp) fprintf(stderr, "stamp: %" ld64 " but ref %" ld64 "\n", ci->stamp, ref_stamp);
-#endif
 	}
       else object_to_port(sc, obj, strport, choice, NULL);
     }
@@ -91542,9 +91529,16 @@ static s7_pointer memory_usage(s7_scheme *sc)
                   sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
                   sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
-                               cons_unchecked(sc, make_integer(sc, loc), /* active */
-                                 cons(sc, make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer))))); /* total list space allocated */
+                               s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
+				       s7_list(sc, 14, make_integer(sc, sc->strings->size), make_integer(sc, sc->vectors->size),
+					       make_integer(sc, sc->input_ports->size), make_integer(sc, sc->output_ports->size),
+					       make_integer(sc, sc->input_string_ports->size), make_integer(sc, sc->continuations->size),
+					       make_integer(sc, sc->c_objects->size), make_integer(sc, sc->hash_tables->size),
+					       make_integer(sc, sc->gensyms->size), make_integer(sc, sc->undefineds->size),
+					       make_integer(sc, sc->multivectors->size), make_integer(sc, sc->weak_refs->size),
+					       make_integer(sc, sc->weak_hash_iterators->size), make_integer(sc, sc->opt1_funcs->size))));
   }
+
   /* strings */
   gp = sc->strings;
   for (len = 0, i = 0; i < (int32_t)(gp->loc); i++)
@@ -95023,54 +95017,54 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    459    467
  * index     1026   1016    973    963    965
- * tmock     1177   1165   1057   1053   1060
- * tvect     2519   2464   1772   1669   1675
- * timp      2637   2575   1930   1708   1720
+ * tmock     1177   1165   1057   1053   1061
+ * tvect     2519   2464   1772   1669   1676
+ * timp      2637   2575   1930   1708   1721
  * texit     ----   ----   1778   1738   1738
  * s7test    1873   1831   1818   1809   1815
- * thook     ----   ----   2590   2142   2168
- * lt        2187   2172   2150   2173   2180
- * tauto     ----   ----   2562   2196   2196
- * dup       3805   3788   2492   2278   2322
- * tcopy     8035   5546   2539   2374   2374
- * tload     ----   ----   3046   2386   2382
- * fbench    2688   2583   2460   2404   2405
+ * thook     ----   ----   2590   2142   2166
+ * lt        2187   2172   2150   2173   2182
+ * tauto     ----   ----   2562   2196   2199
+ * dup       3805   3788   2492   2278   2317
+ * tcopy     8035   5546   2539   2374   2375
+ * tload     ----   ----   3046   2386   2386
+ * fbench    2688   2583   2460   2404   2425
  * tread     2440   2421   2419   2404   2423
- * trclo     2735   2574   2454   2435   2443
+ * trclo     2735   2574   2454   2435   2447
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2517   2512
+ * tmat      3065   3042   2524   2517   2524
  * tb        2735   2681   2612   2596   2601
- * tsort     3105   3104   2856   2805   2809
- * teq       4068   4045   3536   3453   3469
- * tobj      4016   3970   3828   3561   3560
+ * tsort     3105   3104   2856   2805   2805
+ * teq       4068   4045   3536   3453   3476
+ * tobj      4016   3970   3828   3561   3561
  * tio       3816   3752   3683   3612   3611
- * tmac      3950   3873   3033   3664   3664
- * tclo      4787   4735   4390   4377   4375
- * tlet      7775   5640   4450   4415   4435
- * tcase     4960   4793   4439   4429   4436
- * tfft      7820   7729   4755   4450   4450
- * tmap      8869   8774   4489   4473   4473
- * tshoot    5525   5447   5183   5083   5096
- * tform     5357   5348   5307   5300   5304
- * tstr      6880   6342   5488   5356   5345
- * tnum      6348   6013   5433   5364   5360
- * tlamb     6423   6273   5720   5544   5549
- * tmisc     8869   7612   6435   6250   6275
- * tset      ----   ----   ----   6208   6307
+ * tmac      3950   3873   3033   3664   3671
+ * tclo      4787   4735   4390   4377   4382
+ * tlet      7775   5640   4450   4415   4445
+ * tcase     4960   4793   4439   4429   4441
+ * tfft      7820   7729   4755   4450   4456
+ * tmap      8869   8774   4489   4473   4482
+ * tshoot    5525   5447   5183   5083   5101
+ * tform     5357   5348   5307   5300   5298
+ * tstr      6880   6342   5488   5356   5346
+ * tnum      6348   6013   5433   5364   5370
+ * tlamb     6423   6273   5720   5544   5553
+ * tmisc     8869   7612   6435   6250   6173
+ * tset      ----   ----   ----   6208   6308
  * tgsl      8485   7802   6373   6307   6307
  * tlist     7896   7546   6558   6308   6413
- * tari      13.0   12.7   6827   6488   6490
- * trec      6936   6922   6521   6547   6547
- * tleft     10.4   10.2   7657   7472   7525
- * tgc       11.9   11.1   8177   7957   7965
- * thash     11.8   11.7   9734   9463   9468
- * cb        11.2   11.0   9658   9560   9576
+ * tari      13.0   12.7   6827   6488   6487
+ * trec      6936   6922   6521   6547   6558
+ * tleft     10.4   10.2   7657   7472   7494
+ * tgc       11.9   11.1   8177   7957   7966
+ * thash     11.8   11.7   9734   9463   9474
+ * cb        11.2   11.0   9658   9560   9596
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.7
+ * calls     36.7   37.5   37.0   37.5   37.6
  * sg        ----   ----   55.9   56.9   57.0
- * lg        ----   ----  105.2  106.1  106.6
- * tbig     177.4  175.8  156.5  149.6  149.9
+ * lg        ----   ----  105.2  106.1  106.7
+ * tbig     177.4  175.8  156.5  149.6  150.0
  * --------------------------------------------
  *
  * t718: optimize_syntax overeagerness

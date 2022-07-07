@@ -9424,6 +9424,7 @@
 			  (let ((c (string-ref str i)))
 			    (when (and (= curlys 0)
 				       (not (memv c '(#\~ #\T #\t #\& #\% #\^ #\| #\newline #\}))) ; ~* consumes an arg
+				       (not (and (char=? c #\:) (< i (- len 1)) (memv (string-ref str (+ i 1)) '(#\D #\d))))
 				       (not (call-with-exit
 					     (lambda (return)
 					       (do ((k i (+ k 1)))
@@ -16746,7 +16747,7 @@
 						       (if (and (pair? (cddr new-false))
 								(eq? (car new-false) 'begin))
 							   (cdr new-false)
-							   (cons new-false ()))))
+							   (list new-false))))
 
 						(if (null? new-false)
 						    (cons (if (null? (cddr new-true)) ; (if|when|unless... )
@@ -16762,7 +16763,7 @@
 							   (if (and (pair? (cddr new-true))
 								    (eq? (car new-true) 'begin))
 							       (cdr new-true)
-							       (cons new-true ()))))
+							       (list new-true))))
 						    (list 'if expr new-true new-false)))))
 				  `(begin ,@start
 					  ,body
@@ -18985,7 +18986,7 @@
 						 (lists->string end+result
 								(list end '=> (car result)))))))))
 
-		    (if (and (symbol? end) (memq end '(= > < >= <= null? not)))
+		    (if (memq end '(= > < >= <= null? not))
 			;; (do ((i 0 (+ i 1))) (= i 10) (display i))
 			(lint-format "perhaps missing parens: ~A" caller end+result))
 
