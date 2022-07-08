@@ -111,7 +111,28 @@
             )
           alist))
 
-(define dissoc alist-delete) ;; clojure
+(define dissoc
+  (let ((+documentation+ "Remove keys from alist.")
+        (+signature+ "(dissoc ks alist)"))
+    (lambda (ks als)
+      (alist-delete ks als))))
+
+(define* (alist-delete! ks alist (= equal?))
+  (format #t "alist-delete! ~A ~A\n" ks alist)
+  (let ((als (filter (lambda (assoc-elt)
+                       (not (member (car assoc-elt) ks))
+                       ;; (not (= k (car elt)))
+                       )
+                     alist)))
+    (format #t "filtered: ~A\n" als)
+    (set! alist als)
+    (format #t "updated: ~A\n" alist)))
+
+(define dissoc!
+  (let ((+documentation+ "Destructively remove keys from alist.")
+        (+signature+ "(dissoc! ks alist)"))
+    (lambda (ks als)
+      (filter! (lambda (y) (not (member (car y) ks))) als))))
 
 ;; (define (alist-delete! key alist . maybe-=)
 ;;   (let ((= (:optional maybe-= equal?)))

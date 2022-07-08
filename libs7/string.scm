@@ -198,11 +198,16 @@
 
 (define (string-index-right str criterion) ;; . maybe-start+end)
   ;; (let-string-start+end (start end) string-index-right str maybe-start+end
-  (let ((start 0) (end (length str)))
-	   (let lp ((i (- end 1)))
-	     (and (>= i start)
-		  (if (criterion (string-ref str i)) i
-		      (lp (- i 1)))))))
+  (let* ((str (if (symbol? str) (symbol->string str) str))
+         (start 0)
+         (end (length str)))
+    (let lp ((i (- end 1)))
+      (if (< i 0)
+          #f
+          (and (>= i start)
+	       (if (criterion (string-ref str i))
+                   i
+	           (lp (- i 1))))))))
 
 ;; srfi 152
 (define (%string-prefix-length s1 start1 end1 s2 start2 end2)
