@@ -97,8 +97,8 @@
 
 (set! (*s7* 'safety) 1) ; protect copy (in define-expansion evaluation) from circular lists
 
-(set! (*s7* 'max-stack-size) 32768)
-(set! (*s7* 'max-heap-size) (ash 1 22)) ; 8M
+(set! (*s7* 'max-stack-size) (* 4 32768))
+(set! (*s7* 'max-heap-size) (ash 1 23)) ; 16M = 1.4Gbytes?
 (set! (*s7* 'max-port-data-size) (ash 1 28))
 ;(set! (*s7* 'gc-stats) #t)
 (set! (*s7* 'print-length) 4096)
@@ -138,6 +138,7 @@
 				  (set! (h 'result) (+ (h 'x) 1)))))
 
 (define-constant V_1 (let ((v (make-vector 8))) (set! (vector-typer v) symbol?) v))
+(define-constant V_2 (let ((v (make-vector 1))) (set! (v 0) v) v))
 
 (define-constant H_1
   (let ((H (hash-table 'v1 1 'v2 2 'v3 3))
@@ -176,12 +177,15 @@
 		       (set! (hash-table-key-typer H) keytyp)
 		       (set! (hash-table-value-typer H) valtyp)
 		       H))
+(define-constant H_6 (let ((h (make-hash-table 8 eq? (cons symbol? hash-table?))))
+		       (hash-table-set! h 'a h)
+		       h))
+(define-constant L_6 (immutable! (let ((L (inlet 'a #f))) (let-set! L 'a L) L)))
 
 (define fvref float-vector-ref)
 (define ivref int-vector-ref)
 (define bvref byte-vector-ref)
 (define vref vector-ref)
-(define fvset float-vector-set!)
 (define ivset int-vector-set!)
 (define bvset byte-vector-set!)
 (define vset vector-set!)
@@ -338,7 +342,7 @@
 (define* (sym4 :rest a) (copy a))
 (define* (sym5 a :rest b) (cons a (copy b)))
 (define* (sym6 a b :rest c) (list a b (copy c)))
-(define* (sym7 a :rest b :rest c) (list a b c))
+;(define* (sym7 a :rest b :rest c) (list a b c))
 
 (define-macro (msym1 . a) `(list (list ,@a)))
 (define-macro (msym2 a . b) `(cons ,a (copy ,b))) ; these are confusing!
@@ -346,7 +350,7 @@
 (define-macro* (msym4 :rest a) `(copy ,a))
 (define-macro* (msym5 a :rest b) `(cons ,a (list (list ,@b))))
 (define-macro* (msym6 a b :rest c) `(list ,a ,b (copy ,c)))
-(define-macro* (msym7 a :rest b :rest c) `(list ,a ,@b ,@c))
+;(define-macro* (msym7 a :rest b :rest c) `(list ,a ,@b ,@c))
 
 (define (s7-print-length) (*s7* 'print-length))
 (define (s7-max-string-length) (*s7* 'max-string-length))
@@ -721,9 +725,9 @@
 (define-constant imfv2 (immutable! #r2d((1 2 3) (4 5 6))))
 (define-constant imfv3 (immutable! #r3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imi (immutable! (inlet 'a 3 'b 2)))
-(define-constant ilt (inlet 'a 1 'let-ref-fallback (lambda (e sym) #<undefined>)))
+(define-constant ilt (immutable! (inlet 'a 1 'let-ref-fallback (lambda (e sym) #<undefined>))))
 
-(define-constant imh (immutable! (hash-table 'a 1 'b 2)))
+(define-constant imh (immutable! (let ((H (make-hash-table 8 #f (cons symbol? integer?)))) (set! (H 'a) 1) (set! (H 'b) 2) H)))
 (define-constant imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
 (define-constant imb (immutable! (block 0.0 1.0 2.0)))
 (when with-mock-data
@@ -743,7 +747,7 @@
 (define-constant vvvi (let ((v (make-vector '(2 2)))) (set! (v 0 0) "asd") (set! (v 0 1) #r(4 5 6)) (set! (v 1 0) '(1 2 3)) (set! (v 1 1) 32) (immutable! v)))
 (define-constant vvvf (immutable! (vector abs log sin)))
 
-(define-constant a1 (immutable! (hash-table +nan.0 1)))
+(define-constant a1 (immutable! (let ((H (make-hash-table 8 #f (cons real? integer?)))) (set! (H +nan.0) 1) H)))
 (define-constant a2 (immutable! (inlet :a (hash-table 'b 1))))
 (define-constant a3 (openlet (immutable! (inlet :a 1))))
 (define-constant a4 (subvector #i2d((1 2) (3 4))))
@@ -984,7 +988,7 @@
 			  'kar '_dilambda_ '_vals_ '_vals1_ '_vals2_ 
                           '_vals3_ '_vals4_ '_vals5_ '_vals6_ '_vals3s_ '_vals4s_ '_vals5s_ '_vals6s_ 
                           '_svals3_ '_svals4_ '_svals5_ '_svals6_ '_svals3s_ '_svals4s_ '_svals5s_ '_svals6s_ 
-			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6 'sym7 'msym1 'msym2 'msym3 'msym4 'msym5 'msym6 'msym7
+			  'sym1 'sym2 'sym3 'sym4 'sym5 'sym6 'msym1 'msym2 'msym3 'msym4 'msym5 'msym6 
 			  'fop1 'fop2 'fop3 'tff 'fop4 'fop5 'fop6 'tf7 'tf8 'tf9 'tf10 'tf13 'tf14 
 			  'tf15 'tf16 'tf17 'tf18 'tf19 'tf20 'tf21 'tf22 'tf23 'tf24 'tf25 'tf26 'tf27 'fop29 
 			  'tf30 'tf31 'tf32 'tf33 'tf34
@@ -1007,13 +1011,13 @@
 		    "(bignum +inf.0)" "(bignum +nan.0)" "(bignum -inf.0)" "(bignum 0+i)" "(bignum 0.0)" "(bignum 0-i)"
 		    "(expt 2 -32)" "1/2+1/3i"
 		    "=>" 
-		    "\"ho\"" ":ho" "'ho" "(list 1)" "(list 1 2)" "(cons 1 2)" "'()" "(list (list 1 2))" "(list (list 1))" "(list ())"
-		    "#f" "#t" "()" "#()" "\"\"" "'#()" ; ":write" -- not this because sr2 calls write and this can be an arg to sublet redefining write
+		    "\"ho\"" ":ho" "'ho" "(list 1)" "(list 1 2)" "(cons 1 2)" "()" "(list (list 1 2))" "(list (list 1))" "(list ())"
+		    "#f" "#t" "()" "#()" "\"\"" "#()" ; ":write" -- not this because sr2 calls write and this can be an arg to sublet redefining write
 		    ":readable" ":rest" ":allow-other-keys" ":a" ":frequency" ":scaler" ; for blocks5 s7test.scm
 		    "1/0+i" "0+0/0i" "0+1/0i" "1+0/0i" "0/0+0/0i" "0/0+i" "+nan.0-3i" "+inf.0-nan.0i"
 		    "cons" "\"ra\"" "''2" "'a" "_!asdf!_"
 
-		    "#\\a" "#\\A" "\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-" "#\\x" ;"#\\"
+		    ;"#\\a" "#\\A" "\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-" "#\\x" ;"#\\"
 		    "(make-hook)" "(make-hook '__x__)"
 		    "1+i" "0+i" "(ash 1 43)"  "(fib 8)" "(fibr 8)" "(fibf 8.0)"
 		    "(integer->char 255)" "(string (integer->char 255))" "(string #\\null)" "(byte-vector 0)"
@@ -1136,7 +1140,7 @@
 		    "(let ((a 1)) (set! (setter 'a) integer?) (curlet))"
 
 		    "bigi0" "bigi1" "bigi2" "bigrat" "bigflt" "bigcmp" "bigf2" "Hk"
-		    "(ims 1)" "(imbv 1)" "(imv 1)" "(imb 1)" "(imh 'a)" "V_1" "H_1" "H_2" "H_3" "H_4" "H_5"
+		    "(ims 1)" "(imbv 1)" "(imv 1)" "(imb 1)" "(imh 'a)" "V_1" "V_2" "H_1" "H_2" "H_3" "H_4" "H_5" "H_6" "L_6"
 
 		    "(make-iterator (block 1 2 3))"
 		    "(vector-dimensions (block))" 
@@ -1659,11 +1663,14 @@
 		     (not (eq? error-type last-error-type)))
 	    (format *stderr* "~S ~S~%" last-error-type error-type)
 	    (set! last-error-type error-type))
-	  (if (and (eq? type 'stack-too-big)
-		   (not (string-position "lambda" str)))
-	      (format *stderr* "stack overflow from ~S~%" str))
+	  (when (eq? type 'stack-too-big)
+					;     (not (string-position "lambda" str)))
+	    (format *stderr* "stack overflow from ~S~%" str)
+	    (abort))
 	  (when (eq? type 'heap-too-big)
-	    (format *stderr* "heap overflow from ~S~%" str))
+	    (format *stderr* "heap overflow from ~S~%" str)
+	    (display (*s7* 'memory-usage) *stderr*) (newline *stderr*)
+	    (abort))
 	  (unless (or (not (eq? type 'read-error))
 		      (string-position "junk" (car info))
 		      (string-position "clobbered" (car info))
@@ -1716,8 +1723,12 @@
 	  ;(gc) (gc)
 	  (set! (*s7* 'print-length) 4096)
 	  (same-type? val1 val2 val3 val4 str str1 str2 str3 str4)
-	  (unless (hash-table? a1)
-	    (format *stderr* "a1: ~S, str: ~S~%" a1 str))
+	  (if (string-position "H_1" str) (fill! H_1 #f))
+	  (if (string-position "H_2" str) (fill! H_2 #f))
+	  (if (string-position "H_3" str) (fill! H_3 #f))
+	  (if (string-position "H_4" str) (fill! H_4 #f))
+	  (if (string-position "H_5" str) (fill! H_5 #f))
+	  (when (string-position "H_6" str) (fill! H_6 #f) (hash-table-set! H_6 'a H_6))
 	  )))
 
     (define dots (vector "." "-" "+" "-"))

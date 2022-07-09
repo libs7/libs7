@@ -5964,13 +5964,6 @@ static noreturn void missing_method_error_nr(s7_scheme *sc, s7_pointer method, s
 
 static noreturn void immutable_object_error_nr(s7_scheme *sc, s7_pointer info) {s7_error_nr(sc, sc->immutable_error_symbol, info);}
 
-static int32_t position_of(s7_pointer p, s7_pointer args)
-{
-  int32_t i;
-  for (i = 1; p != args; i++, args = cdr(args));
-  return(i);
-}
-
 
 /* -------- method handlers -------- */
 s7_pointer s7_method(s7_scheme *sc, s7_pointer obj, s7_pointer method)
@@ -7014,9 +7007,6 @@ static void mark_dynamic_wind(s7_pointer p)
   gc_mark(dynamic_wind_body(p));
 }
 
-/* if is_typed_hash_table then if c_function_marker(key|value_typer) is just_mark_vector, we can ignore that field,
- *    if it's mark_simple_vector, we just set_mark (key|value), else we gc_mark (none of this is implemented yet)
- */
 static void mark_hash_table(s7_pointer p)
 {
   set_mark(p);
@@ -9308,6 +9298,13 @@ s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointe
   return(value);
 }
 
+static int32_t position_of(s7_pointer p, s7_pointer args)
+{
+  int32_t i;
+  for (i = 1; p != args; i++, args = cdr(args));
+  return(i);
+}
+
 static s7_pointer g_varlet(s7_scheme *sc, s7_pointer args)   /* varlet = with-let + define */
 {
   #define H_varlet "(varlet let ...) adds its arguments (a let, a cons: symbol . value, or two arguments, the symbol and its value) \
@@ -10221,7 +10218,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
 }
 
 /* -------------------------------- symbol lookup -------------------------------- */
-static inline s7_pointer lookup_from(s7_scheme *sc, const s7_pointer symbol, s7_pointer e)
+static Inline s7_pointer inline_lookup_from(s7_scheme *sc, const s7_pointer symbol, s7_pointer e)
 {
   if (let_id(e) == symbol_id(symbol))
     return(local_value(symbol));
@@ -10245,6 +10242,17 @@ static inline s7_pointer lookup_from(s7_scheme *sc, const s7_pointer symbol, s7_
 #endif
 }
 
+#if WITH_GCC && S7_DEBUGGING
+static s7_pointer lookup_1(s7_scheme *sc, const s7_pointer symbol)
+#else
+static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol) /* lookup_checked includes the unbound_variable call */
+#endif
+{
+  return(inline_lookup_from(sc, symbol, sc->curlet));
+}
+
+/* #define inline_lookup(Sc, Symbol) inline_lookup_from(Sc, Symbol, Sc->curlet) */
+
 static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e)
 {
   if (let_id(e) == symbol_id(symbol))
@@ -10260,15 +10268,6 @@ static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e)
       if (slot_symbol(y) == symbol)
 	return(y);
   return(global_slot(symbol));
-}
-
-#if WITH_GCC && S7_DEBUGGING
-static s7_pointer lookup_1(s7_scheme *sc, const s7_pointer symbol)
-#else
-static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol) /* lookup_checked includes the unbound_variable call */
-#endif
-{
-  return(lookup_from(sc, symbol, sc->curlet));
 }
 
 s7_pointer s7_slot(s7_scheme *sc, s7_pointer symbol) {return(lookup_slot_from(symbol, sc->curlet));}
@@ -33164,40 +33163,12 @@ static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_poi
     port_write_character(port)(sc, ')', port);
 }
 
-#if CYCLE_DEBUGGING
-static char *base = NULL, *min_char = NULL;
-#endif
-
 static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   s7_int gc_iter, len = hash_table_entries(hash);
   bool too_long = false, hash_cyclic = false, copied = false, immut = false, letd = false;
   s7_pointer iterator, p;
   int32_t href = -1;
-
-#if CYCLE_DEBUGGING
-  char x;
-  if (!base) base = &x;
-  else
-    if (&x > base) base = &x;
-    else
-      if ((!min_char) || (&x < min_char))
-	{
-	  min_char = &x;
-	  if ((base - min_char) > 100000)
-	    {
-	      fprintf(stderr, "infinite recursion? %d\n", peek_shared_ref(ci, hash));
-	      if (port_data(port))
-		{
-		  fprintf(stderr, "   port contents (%ld bytes): \n", port_position(port));
-		  if (port_position(port) > 10000)
-		    port_data(port)[10000] = '\0';
-		  else port_data(port)[port_position(port)] = '\0';
-		  fprintf(stderr, "%s\n", port_data(port));
-		}
-	      abort();
-	    }}
-#endif
 
   if (len == 0)
     {
@@ -33488,35 +33459,8 @@ static void slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wri
   object_to_port_with_circle_check(sc, slot_value(obj), port, use_write, ci);
 }
 
-#if CYCLE_DEBUGGING
-static char *base1 = NULL, *min_char1 = NULL;
-#endif
-
 static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
-#if CYCLE_DEBUGGING
-  char x;
-  if (!base1) base1 = &x;
-  else
-    if (&x > base1) base1 = &x;
-    else
-      if ((!min_char1) || (&x < min_char1))
-	{
-	  min_char1 = &x;
-	  if ((base1 - min_char1) > 100000)
-	    {
-	      fprintf(stderr, "infinite recursion? %d\n", peek_shared_ref(ci, obj));
-	      if (port_data(port))
-		{
-		  fprintf(stderr, "   port contents (%ld bytes): \n", port_position(port));
-		  if (port_position(port) > 10000)
-		    port_data(port)[10000] = '\0';
-		  else port_data(port)[port_position(port)] = '\0';
-		  fprintf(stderr, "%s\n", port_data(port));
-		}
-	      abort();
-	    }}
-#endif
   /* if outer env points to (say) method list, the object needs to specialize object->string itself */
   if (has_active_methods(sc, obj))
     {
@@ -52762,7 +52706,7 @@ static void check_o_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
 static s7_pointer o_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func, s7_pointer expr)
 {
   check_o_1(sc, let_outlet(sc->curlet), func, expr, symbol);
-  return(lookup_from(sc, symbol, let_outlet(sc->curlet)));
+  return(inline_lookup_from(sc, symbol, let_outlet(sc->curlet)));
 }
 
 #define t_lookup(Sc, Symbol, Expr) t_lookup_1(Sc, Symbol, __func__, Expr)
@@ -52779,7 +52723,7 @@ static s7_pointer o_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
 #define T_lookup(Sc, Symbol, Expr) slot_value(let_slots(let_outlet(sc->curlet)))
 #define U_lookup(Sc, Symbol, Expr) slot_value(next_slot(let_slots(let_outlet(sc->curlet))))
 #define V_lookup(Sc, Symbol, Expr) slot_value(next_slot(next_slot(let_slots(let_outlet(sc->curlet)))))
-#define o_lookup(Sc, Symbol, Expr) lookup_from(Sc, Symbol, let_outlet(Sc->curlet))
+#define o_lookup(Sc, Symbol, Expr) inline_lookup_from(Sc, Symbol, let_outlet(Sc->curlet))
 #endif
 
 #define s_lookup(Sc, Sym, Expr) lookup(Sc, Sym)
@@ -66131,7 +66075,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	    {
 	      s7_pointer obj;
 	      if (!is_symbol(cadr(car_x))) return_false(sc, car_x);
-	      obj = lookup_from(sc, cadr(car_x), sc->curlet);
+	      obj = lookup_unexamined(sc, cadr(car_x)); /* was lookup_from (to avoid the unbound variable check) */
 	      if ((!obj) || (!is_any_vector(obj)) || (vector_rank(obj) != 3))
 		return_false(sc, car_x);
 	    }
@@ -66227,15 +66171,15 @@ static bool bool_optimize_nw_1(s7_scheme *sc, s7_pointer expr)
 		opt_info *opc = alloc_opt_info(sc);
 		s7_pointer sig1 = opt_arg_type(sc, cdr(car_x));
 		s7_pointer sig2 = opt_arg_type(sc, cddr(car_x));
+		/* fprintf(stderr, "%s %s %s\n", display(car_x), display(sig1), display(sig2)); */
 		if (sig2 == sc->is_integer_symbol)
 		  {
 		    int32_t cur_index = sc->pc;
-
 		    if ((sig1 == sc->is_integer_symbol) &&
 			(b_ii_ok(sc, opc, s_func, car_x, arg1, arg2)))
 		      return(true);
-		    pc_fallback(sc, cur_index);
 
+		    pc_fallback(sc, cur_index);
 		    if ((!is_pair(arg2)) &&
 			(b_pi_ok(sc, opc, s_func, car_x, arg2)))
 		      return(true);
@@ -95064,57 +95008,57 @@ int main(int argc, char **argv)
  * ------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    459    467
- * index     1026   1016    973    963    965
- * tmock     1177   1165   1057   1053   1061
+ * index     1026   1016    973    963    964
+ * tmock     1177   1165   1057   1053   1059
  * tvect     2519   2464   1772   1669   1676
- * timp      2637   2575   1930   1708   1721
- * texit     ----   ----   1778   1738   1738
+ * timp      2637   2575   1930   1708   1718
+ * texit     ----   ----   1778   1738   1735
  * s7test    1873   1831   1818   1809   1815
- * thook     ----   ----   2590   2142   2166  2110
- * lt        2187   2172   2150   2173   2182
- * tauto     ----   ----   2562   2196   2199
- * dup       3805   3788   2492   2278   2317
+ * thook     ----   ----   2590   2142   2103
+ * lt        2187   2172   2150   2173   2180
+ * tauto     ----   ----   2562   2196   2195
+ * dup       3805   3788   2492   2278   2269
  * tcopy     8035   5546   2539   2374   2375
  * tload     ----   ----   3046   2386   2386
- * fbench    2688   2583   2460   2404   2425
- * tread     2440   2421   2419   2404   2423
+ * fbench    2688   2583   2460   2404   2408
+ * tread     2440   2421   2419   2404   2419
  * trclo     2735   2574   2454   2435   2447
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2517   2524
+ * tmat      3065   3042   2524   2517   2515
  * tb        2735   2681   2612   2596   2601
  * tsort     3105   3104   2856   2805   2805
- * teq       4068   4045   3536   3453   3476
- * tobj      4016   3970   3828   3561   3561
- * tio       3816   3752   3683   3612   3611
- * tmac      3950   3873   3033   3664   3671
- * tclo      4787   4735   4390   4377   4382
- * tlet      7775   5640   4450   4415   4445
- * tcase     4960   4793   4439   4429   4441
- * tfft      7820   7729   4755   4450   4456
+ * teq       4068   4045   3536   3453   3477
+ * tobj      4016   3970   3828   3561   3557
+ * tio       3816   3752   3683   3612   3610
+ * tmac      3950   3873   3033   3664   3667
+ * tclo      4787   4735   4390   4377   4377
+ * tlet      7775   5640   4450   4415   4435
+ * tcase     4960   4793   4439   4429   4439
+ * tfft      7820   7729   4755   4450   4455
  * tmap      8869   8774   4489   4473   4482
  * tshoot    5525   5447   5183   5083   5101
- * tform     5357   5348   5307   5300   5298
- * tstr      6880   6342   5488   5356   5346
- * tnum      6348   6013   5433   5364   5370
- * tlamb     6423   6273   5720   5544   5553
- * tmisc     8869   7612   6435   6250   6173
- * tset      ----   ----   ----   6208   6308
- * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6308   6413
- * tari      13.0   12.7   6827   6488   6487
+ * tform     5357   5348   5307   5300   5297
+ * tstr      6880   6342   5488   5356   5327
+ * tnum      6348   6013   5433   5364   5345
+ * tlamb     6423   6273   5720   5544   5547
+ * tmisc     8869   7612   6435   6250   6167
+ * tset      ----   ----   ----   6208   6294
+ * tgsl      8485   7802   6373   6307   6305
+ * tlist     7896   7546   6558   6308   6410  6384
+ * tari      13.0   12.7   6827   6488   6484
  * trec      6936   6922   6521   6547   6558
- * tleft     10.4   10.2   7657   7472   7494
+ * tleft     10.4   10.2   7657   7472   7513
  * tgc       11.9   11.1   8177   7957   7966
- * thash     11.8   11.7   9734   9463   9474
- * cb        11.2   11.0   9658   9560   9596
- * tgen      11.2   11.4   12.0   12.0   12.0
+ * thash     11.8   11.7   9734   9463   9466
+ * cb        11.2   11.0   9658   9560   9591
+ * tgen      11.2   11.4   12.0   12.0   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
- * sg        ----   ----   55.9   56.9   57.0
- * lg        ----   ----  105.2  106.1  106.7
- * tbig     177.4  175.8  156.5  149.6  150.0
+ * sg        ----   ----   55.9   56.9   56.9
+ * lg        ----   ----  105.2  106.1  106.5
+ * tbig     177.4  175.8  156.5  149.6  149.9
  * --------------------------------------------
  *
- * t718: optimize_syntax overeagerness
- *   stack/heap overflows
+ * b_pi_ok if arg2 known int expr, cell_opt arg1, then int_opt arg2?
+ *   do other *i* cases handle this as "f"?
  */
