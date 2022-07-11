@@ -9,6 +9,68 @@
 ;;; hold me liable for its use. Please send bug reports to shivers@ai.mit.edu.
 ;;;     -Olin
 
+;; srfi 8 https://srfi.schemers.org/srfi-8/srfi-8.html
+;; (define-syntax receive
+;;   (syntax-rules ()
+;;     ((receive formals expression body ...)
+;;      (call-with-values (lambda () expression)
+;;                        (lambda formals body ...)))))
+
+(define-macro (receive formals expression . body)
+  `(call-with-values (lambda () ,expression)
+     (lambda ,formals ,body)))
+
+;; srfi 1
+;;; LISTS is a (not very long) non-empty list of lists.
+;;; Return two lists: the cars & the cdrs of the lists.
+;;; However, if any of the lists is empty, just abort and return [() ()].
+
+(define (car+cdr pair) (values (car pair) (cdr pair)))
+
+(define (%cars+cdrs lists)
+  (call/cc ;; -with-current-continuation
+    (lambda (abort)
+      (let recur ((lists lists))
+        (if (pair? lists)
+	    (let-values (((list other-lists) (car+cdr lists)))
+	      (if (null-list? list) (abort '() '()) ; LIST is empty -- bail out
+		  (let-values (((a d) (car+cdr list)))
+		    (let-values (((cars cdrs) (recur other-lists)))
+		      (values (cons a cars) (cons d cdrs))))))
+	    (values '() '()))))))
+
+;;; Like %CARS+CDRS, but we pass in a final elt tacked onto the end of the
+;;; cars list. What a hack.
+(define (%cars+cdrs+ lists cars-final)
+  (call/cc ;; -with-current-continuation
+    (lambda (abort)
+      (let recur ((lists lists))
+        (if (pair? lists)
+            (let ((list (car lists)) (other-lists (cdr lists)))
+	    ;; (receive (list other-lists) (car+cdr lists)
+	      (if (null-list? list) (abort '() '()) ; LIST is empty -- bail out
+		  (let-values (((a d)  (car+cdr list)))
+                    (format #t "dddddddddddddddd ~A, ~A\n" a d)
+                         (receive (a d) (car+cdr list)
+		           (receive (cars cdrs) (recur other-lists)
+		      (values (cons a cars) (cons d cdrs)))))))
+	    (values (list cars-final) '()))))))
+
+(define fold
+  (let ((+documentation+ "(fold kons knil lis1 . lists)")
+        (+signature+ '(fold kons knil lis1 . lists)))
+    (lambda (kons knil lis1 . lists)
+      (check-arg procedure? kons fold)
+      (if (pair? lists)
+          (let lp ((lists (cons lis1 lists)) (ans knil))	; N-ary case
+	    ;; (receive (cars+ans cdrs) (%cars+cdrs+ lists ans)
+            (let-values (((cars+ans cdrs) (%cars+cdrs+ lists ans)))
+              (begin ;; (format #t "uuuuuuuuuuuuuuuu\n")
+	             (if (null? cars+ans) ans ; Done.
+	                 (lp cdrs (apply kons cars+ans))))))
+          (let lp ((lis lis1) (ans knil))			; Fast path
+	    (if (null-list? lis) ans
+	        (lp (cdr lis) (kons (car lis) ans))))))))
 
 ;; srfi 1
 ;;(define (remove pred l) (filter (lambda (x) (not (pred x))) l))

@@ -24,6 +24,12 @@
 (define (cyan text) (format #f "~C[36m~A~C[0m" #\escape text #\escape))
 (define (white text) (format #f "~C[37m~A~C[0m" #\escape text #\escape))
 
+(define (stringify x)
+  (if (symbol? x) (symbol->string x)
+      (if (string? x) x
+          (if (number? x)
+              (number->string x)))))
+
 ;; derived from srfi-152
 (define (%string-copy! to tstart from fstart fend)
   (if (> fstart tstart)
