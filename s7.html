@@ -9420,7 +9420,7 @@ See free_dax in the <a href="#pwstype">dax</a> example.
 </p>
 <p>s7_c_type_set_mark sets the function that is called by the GC during its marking phase.  Any s7_pointer
 value local to your C struct should be marked explicitly at this time, or the GC will free it.  Use s7_mark
-for this (see mark_dax).
+for this (see mark_dax).  Don't allocate any s7 objects in the mark function (otherwise you'll get a recursive call of the GC).
 </p>
 <p>s7_c_type_set_equal and s7_c_type_set_equivalent set the function called when s7 sees a c-object of the
 current type as an argument to equal? or equivalent?.  When called, these functions can assume that the

@@ -61319,7 +61319,7 @@ static bool opt_b_pi_ff(opt_info *o) {s7_pointer p1 = o->v[11].fp(o->v[10].o1); 
 
 static bool b_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, s7_pointer arg2)
 {
-  s7_b_pi_t bpif = s7_b_pi_function(s_func);
+  s7_b_pi_t bpif = s7_b_pi_function(s_func); /* perhaps add vector-ref/equal? */
   if (bpif)
     {
       opc->v[10].o1 = sc->opts[sc->pc];
@@ -64732,6 +64732,11 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
 #define do_curlet(o)        o->v[2].p
 #define do_body_length(o)   o->v[3].i
 #define do_result_length(o) o->v[4].i
+#define do_any_inits(o)     o->v[7].o1
+#define do_any_body(o)      o->v[10].o1
+#define do_any_results(o)   o->v[11].o1
+#define do_any_test(o)      o->v[12].o1
+#define do_any_steps(o)     o->v[13].o1
 
 static void let_set_has_pending_value(s7_pointer lt)
 {
@@ -64744,12 +64749,6 @@ static void let_clear_has_pending_value(s7_pointer lt)
   for (s7_pointer vp = let_slots(lt); tis_slot(vp); vp = next_slot(vp))
     slot_clear_has_pending_value(vp);
 }
-
-#define do_any_inits(o)   o->v[7].o1
-#define do_any_body(o)    o->v[10].o1
-#define do_any_results(o) o->v[11].o1
-#define do_any_test(o)    o->v[12].o1
-#define do_any_steps(o)   o->v[13].o1
 
 typedef s7_pointer (*opt_info_fp)(opt_info *o);
 
@@ -65700,7 +65699,15 @@ static bool p_syntax(s7_scheme *sc, s7_pointer car_x, int32_t len)
     case OP_IF:     return(opt_cell_if(sc, car_x, len));
     case OP_DO:     return(opt_cell_do(sc, car_x, len));
     case OP_LET_TEMPORARILY: return(opt_cell_let_temporarily(sc, car_x, len));
-    default: /* lambda let/let* with-let define etc, also map/for-each with c_function?? */
+    default:
+      /* for lambda et al we'd return the new closure, but if unsafe?
+       *     let(*) -> make the let -> body (let=99% of cases), could we use do (i.e. do+no steppers+no end!) or let-temp?
+       *     with-let -> establish car(args)=let, then body
+       *     macroexpand -> return the expansion
+       *     define et al -> define + return value
+       * map and for-each are not syntax, also call-with*(=exit)
+       * also let-temp for vars>1
+       */
       break;
     }
   return_false(sc, car_x);
@@ -66635,7 +66642,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	  set_no_cell_opt(body);
 	  set_curlet(sc, old_e);
 	}}
-  if ((!is_closure_star(f)) &&
+  if ((!is_closure_star(f)) && /* for simplicity in op_for_each_2 (otherwise we need to check for default arg) */
       (is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -73321,7 +73328,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 
 static void mark_fx_treeable(s7_scheme *sc, s7_pointer body)
 { /* it is possible to encounter a cyclic body here -- should we protect against that if safety>0? */
-  if (is_pair(body))
+  if (is_pair(body)) /* slightly faster than the other way of writing this */
     {
       if (is_pair(car(body)))
 	{
@@ -95033,4 +95040,6 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  149.6  149.9
  * --------------------------------------------
  *
+ * let/let* from opt_cell_do + opt_do_any et al [t599]
+ *   opt tc named-let, reset vars and goto body (similar for call/exit)
  */
