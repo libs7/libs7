@@ -64727,6 +64727,52 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
   return_false(sc, car_x);
 }
 
+/* -------- cell_let -------- */
+#define WITH_OPT_LET 0
+#if WITH_OPT_LET
+
+/* is this worth the effort? need tc named let to gain anything */
+
+#define let_curlet(o)        o->v[1].p
+#define let_body_length(o)   o->v[2].i
+#define let_vars(o)          o->v[3].o1
+#define let_body(o)          o->v[4].o1
+
+static s7_pointer opt_let(opt_info *o)
+{
+  opt_info *o1, *expr;
+  opt_info *body = let_body(o);
+  opt_info *vars = let_vars(o); /* unneeded? */
+  s7_scheme *sc = o->sc;
+  int32_t k;
+  s7_pointer vp, result, new_e;
+
+  s7_pointer old_e = sc->curlet;
+  s7_gc_protect_via_stack(sc, old_e);
+  new_e = let_curlet(o);                 /* or copy_let if not saved? */
+  for (k = 0, vp = let_slots(new_let); tis_slot(vp); k++, vp = next_slot(vp))
+    {
+      o1 = vars->v[k].o1;
+      slot_set_value(vp, o1->v[0].fp(o1));
+    }
+  sc->curlet = new_e;
+  activate_let(sc->curlet);
+
+  for (k = 0; k < let_body_length(o) - 1; k++)
+    {
+      expr = body->v[k].o1;
+      expr->v[0].fp(expr);
+    }
+  expr = body->v[k].o1;
+  result = expr->v[0].fp(expr);
+
+  unstack(sc);
+  set_curlet(sc, old_e);
+  return(result);
+}
+#endif
+
+
 /* -------- cell_do -------- */
 
 #define do_curlet(o)        o->v[2].p
@@ -64754,7 +64800,6 @@ typedef s7_pointer (*opt_info_fp)(opt_info *o);
 
 static s7_pointer opt_do_any(opt_info *o)
 {
-  /* o->v[2].p=let, o->v[1].i=body end index, o->v[3].i=body length, o->v[4].i=return length, o->v[7].i=inits */
   opt_info *o1;
   opt_info *ostart = do_any_test(o);
   opt_info *body = do_any_body(o);
@@ -64892,7 +64937,7 @@ static s7_pointer opt_do_step_i(opt_info *o)
 
 static s7_pointer opt_do_no_vars(opt_info *o)
 {
-  /* no vars, no return, o->v[2].p=let, o->v[1].i=body end index, o->v[3].i=body length, o->v[4].i=return length=0, o->v[6]=end test */
+  /* no vars, no return, o->v[2].p=let, o->v[3].i=body length, o->v[4].i=return length=0, o->v[6]=end test */
   opt_info *ostart = do_no_vars_test(o);
   int32_t len = do_body_length(o);
   s7_scheme *sc = o->sc;
@@ -77511,6 +77556,7 @@ static void check_set(s7_scheme *sc)
 	      {
 		pair_set_syntax_op(form, OP_SET_S_P);
 		/* TODO? h_safe_sc (set! x (+ x 1)), sp: (set! x (+ x (f ...))) */
+
 		if (is_optimized(value))
 		  {
 		    if (optimize_op(value) == HOP_SAFE_C_NC)
@@ -77596,19 +77642,36 @@ static void check_set(s7_scheme *sc)
 static void op_set_s_c(s7_scheme *sc)
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  slot_set_value(slot, sc->value = opt2_con(cdr(sc->code)));
+  if ((slot == sc->undefined) &&
+      (has_methods(sc->curlet)) &&
+      (has_let_set_fallback(sc->curlet)))
+    sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), opt2_con(cdr(sc->code)));
+  else slot_set_value(slot, sc->value = opt2_con(cdr(sc->code)));
 }
 
 static void op_set_s_s(s7_scheme *sc)
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  slot_set_value(slot, sc->value = lookup(sc, opt2_sym(cdr(sc->code))));
+  if ((slot == sc->undefined) &&
+      (has_methods(sc->curlet)) &&
+      (has_let_set_fallback(sc->curlet)))
+    sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), lookup(sc, opt2_sym(cdr(sc->code))));
+  else slot_set_value(slot, sc->value = lookup(sc, opt2_sym(cdr(sc->code))));
 }
 
 static void op_set_s_a(s7_scheme *sc)
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
+#if 0
+  /* not sure this can happen */
+  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->code), display(sc->curlet)); */
+  if ((slot == sc->undefined) &&
+      (has_methods(sc->curlet)) &&
+      (has_let_set_fallback(sc->curlet)))
+    sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), fx_call(sc, cddr(sc->code)));
+  else 
+#endif
+    slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
 }
 
 static void op_set_s_p(s7_scheme *sc)
@@ -77717,8 +77780,8 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 	  if (is_immutable(obj))
 	    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, obj));
 	  if (is_typed_vector(obj))
-	    return(typed_vector_setter(sc, obj, index, value));
-	  vector_element(obj, index) = value;
+	    value = typed_vector_setter(sc, obj, index, value);
+	  else vector_element(obj, index) = value;
 	  sc->value = T_Pos(value);
 	}
 #endif
@@ -77741,7 +77804,7 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 	  immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, obj));
 
 	if (!is_character(value))
-	  s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "(string-)set!: value must be a character: ~S", 44), sc->code));
+	  s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "string-set!: value must be a character: ~S", 42), sc->code));
 	string_value(obj)[index] = (char)s7_character(value);
 	sc->value = value;
       }
@@ -77997,10 +78060,14 @@ static void op_set_safe(s7_scheme *sc)
   s7_pointer slot = lookup_slot_from(sc->code, sc->curlet);
   if (is_slot(slot))
     slot_set_value(slot, sc->value);
-  else unbound_variable_error_nr(sc, sc->code);
+  else 
+    if ((has_methods(sc->curlet)) &&
+	(has_let_set_fallback(sc->curlet)))
+      sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
+    else unbound_variable_error_nr(sc, sc->code);
 }
 
-static s7_pointer op_set1(s7_scheme *sc)
+static bool op_set1(s7_scheme *sc)
 {
   s7_pointer lx = lookup_slot_from(sc->code, sc->curlet);    /* if unbound variable hook here, we need the binding, not the current value */
   if (is_slot(lx))
@@ -78021,15 +78088,17 @@ static s7_pointer op_set1(s7_scheme *sc)
 		  sc->args = list_3(sc, sc->code, sc->value, sc->curlet);
 		else sc->args = list_2(sc, sc->code, sc->value);   /* these lists are reused as the closure_let slots in apply_lambda via apply_closure */
 		sc->code = func;
-		return(NULL); /* goto APPLY */
+		return(false); /* goto APPLY */
 	      }}
       slot_set_value(lx, sc->value);
       symbol_increment_ctr(sc->code);                   /* see define setfib example in s7test.scm -- I'm having second thoughts about this... */
-      return(sc->value); /* continue */
+      return(true); /* continue */
     }
-  if (!has_let_set_fallback(sc->curlet))                 /* (with-let (mock-hash-table 'b 2) (set! b 3)) */
+  if ((!has_let_set_fallback(sc->curlet)) ||            /* (with-let (mock-hash-table 'b 2) (set! b 3)) */
+      (!has_methods(sc->curlet)))
     s7_error_nr(sc, sc->unbound_variable_symbol, set_elist_4(sc, wrap_string(sc, "~S is unbound in (set! ~S ~S)", 29), sc->code, sc->code, sc->value));
-  return(call_let_set_fallback(sc, sc->curlet, sc->code, sc->value));
+  sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
+  return(true);
 }
 
 static bool op_set_with_let_1(s7_scheme *sc)
@@ -78373,7 +78442,8 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer for
 
   /* one index, rank == 1 */
   index = cadr(settee);
-  if ((cdr(form) == sc->code) &&
+  if ((is_symbol(car(sc->code))) && /* not (set! (#(a 0 (3)) 1) 0) -- implicit_vector_set_3 assumes symbol vect ref */
+      (cdr(form) == sc->code) &&
       (is_fxable(sc, index)) &&
       (is_fxable(sc, cadr(sc->code))))
     {
@@ -95040,6 +95110,7 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  149.6  149.9
  * --------------------------------------------
  *
- * let/let* from opt_cell_do + opt_do_any et al [t599]
- *   opt tc named-let, reset vars and goto body (similar for call/exit)
+ * cutlet let-ref|set-fallback clears flag? see t600, blocked in cutlet 9390
+ *   only sublet_1 sets these flags (i.e. not let(*)/add_slot varlet) -- see t600
+ * t600 has initial bug case
  */

@@ -48,7 +48,9 @@
   "`(ok? ',tst (catch #t (lambda () (lambda* ((!a! ,tst)) !a!)) (lambda any (lambda () 'error))) ,expected)"
   "`(ok? ',tst (lambda () (do ((!a! ,tst)) (#t !a!))) ,expected)"
   "`(ok? ',tst (lambda () (do ((__i__ 0 (+ __i__ 1))) ((= __i__ 1) ,expected) ,tst)) ,expected)"
+  "`(ok? ',tst (lambda () (do ((__i__ 0 (+ __i__ 1))) ((= __i__ 2) ,expected) (let-temporarily (((*s7* 'safety) 1)) ,tst))) ,expected)"
   "`(ok? ',tst (lambda () (let ((__x__ #f)) (define (__f__) (do ((__i__ 0 (+ __i__ 1))) ((= __i__ 1) __x__) (set! __x__ ,tst))) (__f__))) ,expected)"
+  ;;  "`(ok? ',tst (lambda () (let ((__x__ #f)) (define (__f__) (do ((__i__ 0 (+ __i__ 1))) ((= __i__ 2) __x__) (set! __x__ ,tst))) (__f__))) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!v! (vector #f))) (do ((!i! 0 (+ !i! 1))) ((= !i! 1) (!v! 0)) (vector-set! !v! 0 ,tst)))) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!v! #f)) (do ((!i! 0 (+ !i! 1))) ((= !i! 1) !v!) (set! !v! ,tst)))) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!x! (map (lambda (!a!) ,tst) '(0)))) (if (pair? !x!) (car !x!) :no-value))) (!f!)) ,expected)"
@@ -272,6 +274,12 @@
 
 (format *stderr* "~NC tleft ~NC~%" 20 #\- 20 #\-)
 (system "./repl tleft.scm")
+
+(format *stderr* "~NC tlamb ~NC~%" 20 #\- 20 #\-)
+(system "./repl tlamb.scm")
+
+(format *stderr* "~NC thook ~NC~%" 20 #\- 20 #\-)
+(system "./repl thook.scm")
 
 (format *stderr* "~NC tcase ~NC~%" 20 #\- 20 #\-)
 (system "./repl tcase.scm")
