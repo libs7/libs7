@@ -9786,7 +9786,7 @@ inline s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
     return((is_slot(global_slot(symbol))) ? global_value(symbol) : sc->undefined);
 
   if (let_id(let) == symbol_id(symbol))
-    return(local_value(symbol)); /* this obviously has to follow the rootlet check */
+    return(local_value(symbol)); /* this has to follow the rootlet check(?) */
 
   for (s7_pointer x = let; is_let(x); x = let_outlet(x))
     for (s7_pointer y = let_slots(x); tis_slot(y); y = next_slot(y))
@@ -27036,6 +27036,13 @@ static s7_pointer g_string_equal_2c(s7_scheme *sc, s7_pointer args)
   if (!is_string(car(args)))
     return(method_or_bust(sc, car(args), sc->string_eq_symbol, args, T_STRING, 1));
   return(make_boolean(sc, scheme_strings_are_equal(car(args), cadr(args))));
+}
+
+static s7_pointer string_eq_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+{
+  if (!is_string(p1))
+    return(method_or_bust(sc, p1, sc->string_eq_symbol, set_plist_2(sc, p1, p2), T_STRING, 1));
+  return(make_boolean(sc, scheme_strings_are_equal(p1, p2)));
 }
 
 static s7_pointer g_string_less_2(s7_scheme *sc, s7_pointer args)
@@ -53966,6 +53973,13 @@ static s7_pointer fx_eq_weak1_type_s(s7_scheme *sc, s7_pointer arg)
 fx_not_opsq_any(fx_not_opsq, s_lookup)
 fx_not_opsq_any(fx_not_optq, t_lookup)
 
+static s7_pointer fx_not_car_t(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer p = t_lookup(sc, opt1_sym(cdr(arg)), arg); /* cadadr */
+  s7_pointer res = (is_pair(p)) ? car(p) : g_car(sc, set_plist_1(sc, p));
+  return((res == sc->F) ? sc->T : sc->F);
+}
+
 
 #define fx_c_opssq_any(Name, Lookup1, Lookup2) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
@@ -56978,8 +56992,11 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_c_car_s) return(with_fx(tree, fx_c_car_t));
 	  if (fx_proc(tree) == fx_c_cdr_s) return(with_fx(tree, fx_c_cdr_t));
 	  if (fx_proc(tree) == fx_is_type_opsq) return(with_fx(tree, fx_is_type_optq));
-	  if (fx_proc(tree) == fx_not_opsq) return(with_fx(tree, fx_not_optq));
-	}
+	  if (fx_proc(tree) == fx_not_opsq)
+	    {
+	      set_opt1_sym(cdr(p), cadadr(p));
+	      return(with_fx(tree, (caadr(p) == sc->car_symbol) ? fx_not_car_t : fx_not_optq));
+	    }}
       if (cadadr(p) == var2)
 	{
 	  if (fx_proc(tree) == fx_c_car_s) return(with_fx(tree, fx_c_car_u));
@@ -64727,52 +64744,6 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
   return_false(sc, car_x);
 }
 
-/* -------- cell_let -------- */
-#define WITH_OPT_LET 0
-#if WITH_OPT_LET
-
-/* is this worth the effort? need tc named let to gain anything */
-
-#define let_curlet(o)        o->v[1].p
-#define let_body_length(o)   o->v[2].i
-#define let_vars(o)          o->v[3].o1
-#define let_body(o)          o->v[4].o1
-
-static s7_pointer opt_let(opt_info *o)
-{
-  opt_info *o1, *expr;
-  opt_info *body = let_body(o);
-  opt_info *vars = let_vars(o); /* unneeded? */
-  s7_scheme *sc = o->sc;
-  int32_t k;
-  s7_pointer vp, result, new_e;
-
-  s7_pointer old_e = sc->curlet;
-  s7_gc_protect_via_stack(sc, old_e);
-  new_e = let_curlet(o);                 /* or copy_let if not saved? */
-  for (k = 0, vp = let_slots(new_let); tis_slot(vp); k++, vp = next_slot(vp))
-    {
-      o1 = vars->v[k].o1;
-      slot_set_value(vp, o1->v[0].fp(o1));
-    }
-  sc->curlet = new_e;
-  activate_let(sc->curlet);
-
-  for (k = 0; k < let_body_length(o) - 1; k++)
-    {
-      expr = body->v[k].o1;
-      expr->v[0].fp(expr);
-    }
-  expr = body->v[k].o1;
-  result = expr->v[0].fp(expr);
-
-  unstack(sc);
-  set_curlet(sc, old_e);
-  return(result);
-}
-#endif
-
-
 /* -------- cell_do -------- */
 
 #define do_curlet(o)        o->v[2].p
@@ -68089,7 +68060,6 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
       /* things that evaluate to themselves don't need to be quoted */
       return(form);
     }
-
   if (car(form) == sc->unquote_symbol)
     {
       if (!is_pair(cdr(form)))             /* (unquote) or (unquote . 1) */
@@ -73479,7 +73449,6 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		    (check_recur(sc, func, nvars, args, car(body))))
 		  set_safe_closure_body(body);
 	      }}
-
       if (is_symbol(func))
 	{
 	  sc->temp1 = sc->nil;
@@ -73622,7 +73591,6 @@ static s7_pointer check_case(s7_scheme *sc)
 	s7_error_nr(sc, sc->syntax_error_symbol,
 		    set_elist_3(sc, wrap_string(sc, "case clause result ~S is messed up in ~A", 40),
 				car_x, object_to_truncated_string(sc, form, 80)));
-
       if ((bodies_simple) &&
 	  ((is_null(cdr(car_x))) || (!is_null(cddr(car_x)))))
 	bodies_simple = false;
@@ -74230,7 +74198,6 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 	s7_error_nr(sc, sc->syntax_error_symbol,
 		    set_elist_3(sc, wrap_string(sc, "let variable declaration, ~A, has more than one value in ~A", 59),
 				x, object_to_truncated_string(sc, form, 80)));
-
       y = car(carx);
       if (!(is_symbol(y)))
 	s7_error_nr(sc, sc->syntax_error_symbol,
@@ -93060,6 +93027,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->make_float_vector_symbol), make_float_vector_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->setter_symbol), setter_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->complex_symbol), complex_p_pp);
+  /* s7_set_p_pp_function(sc, global_value(sc->string_eq_symbol), string_eq_p_pp); */
 
   s7_set_b_7pp_function(sc, global_value(sc->char_lt_symbol), char_lt_b_7pp);
   s7_set_b_7pp_function(sc, global_value(sc->char_leq_symbol), char_leq_b_7pp);
@@ -95060,48 +95028,48 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    459    467
  * index     1026   1016    973    963    964
- * tmock     1177   1165   1057   1053   1059
+ * tmock     1177   1165   1057   1053   1060
  * tvect     2519   2464   1772   1669   1676
- * timp      2637   2575   1930   1708   1718
+ * timp      2637   2575   1930   1708   1720
  * texit     ----   ----   1778   1738   1735
  * s7test    1873   1831   1818   1809   1815
  * thook     ----   ----   2590   2142   2103
  * lt        2187   2172   2150   2173   2180
- * tauto     ----   ----   2562   2196   2195
- * dup       3805   3788   2492   2278   2269
+ * tauto     ----   ----   2562   2196   2194
+ * dup       3805   3788   2492   2278   2274
  * tcopy     8035   5546   2539   2374   2375
  * tload     ----   ----   3046   2386   2386
- * fbench    2688   2583   2460   2404   2408
+ * fbench    2688   2583   2460   2404   2413
  * tread     2440   2421   2419   2404   2419
  * trclo     2735   2574   2454   2435   2447
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2517   2515
- * tb        2735   2681   2612   2596   2601
+ * tmat      3065   3042   2524   2517   2504
+ * tb        2735   2681   2612   2596   2600
  * tsort     3105   3104   2856   2805   2805
  * teq       4068   4045   3536   3453   3477
- * tobj      4016   3970   3828   3561   3557
- * tio       3816   3752   3683   3612   3610
- * tmac      3950   3873   3033   3664   3667
- * tclo      4787   4735   4390   4377   4377
- * tlet      7775   5640   4450   4415   4435
- * tcase     4960   4793   4439   4429   4439
+ * tobj      4016   3970   3828   3561   3556
+ * tio       3816   3752   3683   3612   3610  3602
+ * tmac      3950   3873   3033   3664   3664
+ * tclo      4787   4735   4390   4377   4376
+ * tlet      7775   5640   4450   4415   4429
+ * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4450   4455
- * tmap      8869   8774   4489   4473   4482
- * tshoot    5525   5447   5183   5083   5101
+ * tmap      8869   8774   4489   4473   4478
+ * tshoot    5525   5447   5183   5083   5100  5068
  * tform     5357   5348   5307   5300   5297
- * tstr      6880   6342   5488   5356   5327
- * tnum      6348   6013   5433   5364   5345
- * tlamb     6423   6273   5720   5544   5547
- * tmisc     8869   7612   6435   6250   6167
- * tset      ----   ----   ----   6208   6294
- * tgsl      8485   7802   6373   6307   6305
- * tlist     7896   7546   6558   6308   6410  6384 6355
- * tari      13.0   12.7   6827   6488   6484
- * trec      6936   6922   6521   6547   6558
- * tleft     10.4   10.2   7657   7472   7513
+ * tstr      6880   6342   5488   5356   5331
+ * tnum      6348   6013   5433   5364   5360
+ * tlamb     6423   6273   5720   5544   5543
+ * tmisc     8869   7612   6435   6250   6153
+ * tset      ----   ----   ----   6208   6303
+ * tgsl      8485   7802   6373   6307   6306
+ * tlist     7896   7546   6558   6308   6360
+ * tari      13.0   12.7   6827   6488   6486
+ * trec      6936   6922   6521   6547   6559
+ * tleft     10.4   10.2   7657   7472   7517
  * tgc       11.9   11.1   8177   7957   7966
- * thash     11.8   11.7   9734   9463   9466
- * cb        11.2   11.0   9658   9560   9591
+ * thash     11.8   11.7   9734   9463   9469
+ * cb        11.2   11.0   9658   9560   9586
  * tgen      11.2   11.4   12.0   12.0   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
@@ -95110,7 +95078,7 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  149.6  149.9
  * --------------------------------------------
  *
- * cutlet let-ref|set-fallback clears flag? see t600, blocked in cutlet 9390
- *   only sublet_1 sets these flags (i.e. not let(*)/add_slot varlet) -- see t600
- * t600 has initial bug case
+ * utf8proc_s7.c could add c-object utf8-string with mock-string methods
+ * rather than #u|i|r perhaps #byte|int|float-vector, then #hash-table #let? #oscil??
+ * t718, cb14 string_less etc 22084
  */
