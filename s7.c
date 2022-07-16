@@ -27042,6 +27042,8 @@ static s7_pointer string_eq_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   if (!is_string(p1))
     return(method_or_bust(sc, p1, sc->string_eq_symbol, set_plist_2(sc, p1, p2), T_STRING, 1));
+  if (!is_string(p2))
+    return(method_or_bust(sc, p2, sc->string_eq_symbol, set_plist_2(sc, p1, p2), T_STRING, 2));
   return(make_boolean(sc, scheme_strings_are_equal(p1, p2)));
 }
 
@@ -27054,6 +27056,15 @@ static s7_pointer g_string_less_2(s7_scheme *sc, s7_pointer args)
   return(make_boolean(sc, scheme_strcmp(car(args), cadr(args)) == -1));
 }
 
+static s7_pointer string_lt_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+{
+  if (!is_string(p1))
+    return(method_or_bust(sc, p1, sc->string_lt_symbol, set_plist_2(sc, p1, p2), T_STRING, 1));
+  if (!is_string(p2))
+    return(method_or_bust(sc, p2, sc->string_lt_symbol, set_plist_2(sc, p1, p2), T_STRING, 2));
+  return(make_boolean(sc, scheme_strcmp(p1, p2) == -1));
+}
+
 static s7_pointer g_string_greater_2(s7_scheme *sc, s7_pointer args)
 {
   if (!is_string(car(args)))
@@ -27061,6 +27072,15 @@ static s7_pointer g_string_greater_2(s7_scheme *sc, s7_pointer args)
   if (!is_string(cadr(args)))
     return(method_or_bust(sc, cadr(args), sc->string_gt_symbol, args, T_STRING, 2));
   return(make_boolean(sc, scheme_strcmp(car(args), cadr(args)) == 1));
+}
+
+static s7_pointer string_gt_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
+{
+  if (!is_string(p1))
+    return(method_or_bust(sc, p1, sc->string_gt_symbol, set_plist_2(sc, p1, p2), T_STRING, 1));
+  if (!is_string(p2))
+    return(method_or_bust(sc, p2, sc->string_gt_symbol, set_plist_2(sc, p1, p2), T_STRING, 2));
+  return(make_boolean(sc, scheme_strcmp(p1, p2) == 1));
 }
 
 #define check_string2_args(Sc, Caller, P1, P2) \
@@ -27103,7 +27123,6 @@ static bool string_eq_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
   check_string2_args(sc, sc->string_eq_symbol, p1, p2);
   return(scheme_strings_are_equal(p1, p2));
 }
-
 
 static s7_pointer string_equal_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr, bool unused_ops)
 {
@@ -54495,6 +54514,12 @@ static s7_pointer fx_c_s_opsiq_direct(s7_scheme *sc, s7_pointer arg)
 	   ((s7_p_pi_t)opt3_direct(cdr(arg)))(sc, lookup(sc, opt3_sym(arg)), integer(opt1_con(cdr(arg))))));
 }
 
+static s7_pointer fx_c_u_optiq_direct(s7_scheme *sc, s7_pointer arg)
+{
+  return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, u_lookup(sc, cadr(arg), arg),
+	   ((s7_p_pi_t)opt3_direct(cdr(arg)))(sc, t_lookup(sc, opt3_sym(arg), arg), integer(opt1_con(cdr(arg))))));
+}
+
 static s7_pointer fx_c_t_opoiq_direct(s7_scheme *sc, s7_pointer arg)
 {
   return(((s7_p_pp_t)opt2_direct(cdr(arg)))(sc, t_lookup(sc, cadr(arg), arg),
@@ -57177,7 +57202,11 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       	  if ((fx_proc(tree) == fx_c_s_opsiq_direct) && (!more_vars) && (o_var_ok(cadaddr(p), var1, var2, var3))) return(with_fx(tree, fx_c_t_opoiq_direct));
 	}
       else
-	if ((cadr(p) == var2) && (cadaddr(p) == var1) && (fx_proc(tree) == fx_c_s_opscq)) return(with_fx(tree, fx_c_u_optcq));
+	if ((cadr(p) == var2) && (cadaddr(p) == var1))
+	  {
+	    if (fx_proc(tree) == fx_c_s_opsiq_direct) return(with_fx(tree, fx_c_u_optiq_direct));
+	    if (fx_proc(tree) == fx_c_s_opscq) return(with_fx(tree, fx_c_u_optcq));
+	  }
       break;
 
     case HOP_SAFE_C_opSq_CS:
@@ -70229,55 +70258,57 @@ static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_
       if (symbols == 0)
 	set_optimize_op(expr, hop + OP_SAFE_C_NC);
       else
-	if (symbols == 3)
-	  {
-	    set_optimize_op(expr, hop + OP_SAFE_C_SSS);
-	    set_opt1_sym(cdr(expr), arg2);
-	    set_opt2_sym(cdr(expr), arg3);
-	  }
-	else
-	  if (symbols == 2)
-	    if (!is_normal_symbol(arg1))
-	      {
-		set_optimize_op(expr, hop + OP_SAFE_C_CSS);
-		set_opt1_sym(cdr(expr), arg2);
-		set_opt2_sym(cdr(expr), arg3);
-	      }
-	    else
-	      if (!is_normal_symbol(arg3))
+	{
+	  clear_has_fx(cdr(expr));
+	  if (symbols == 3)
+	    {
+	      set_optimize_op(expr, hop + OP_SAFE_C_SSS);
+	      set_opt1_sym(cdr(expr), arg2);
+	      set_opt2_sym(cdr(expr), arg3);
+	    }
+	  else
+	    if (symbols == 2)
+	      if (!is_normal_symbol(arg1))
 		{
-		  set_opt2_con(cdr(expr), arg3);
+		  set_optimize_op(expr, hop + OP_SAFE_C_CSS);
 		  set_opt1_sym(cdr(expr), arg2);
-		  set_optimize_op(expr, hop + OP_SAFE_C_SSC);
+		  set_opt2_sym(cdr(expr), arg3);
 		}
 	      else
+		if (!is_normal_symbol(arg3))
+		  {
+		    set_opt2_con(cdr(expr), arg3);
+		    set_opt1_sym(cdr(expr), arg2);
+		    set_optimize_op(expr, hop + OP_SAFE_C_SSC);
+		  }
+		else
+		  {
+		    set_opt1_con(cdr(expr), arg2);
+		    set_opt2_sym(cdr(expr), arg3);
+		    set_optimize_op(expr, hop + OP_SAFE_C_SCS);
+		  }
+	    else
+	      if (is_normal_symbol(arg1))
 		{
 		  set_opt1_con(cdr(expr), arg2);
-		  set_opt2_sym(cdr(expr), arg3);
-		  set_optimize_op(expr, hop + OP_SAFE_C_SCS);
-		}
-	  else
-	    if (is_normal_symbol(arg1))
-	      {
-		set_opt1_con(cdr(expr), arg2);
-		set_opt2_con(cdr(expr), arg3);
-		set_optimize_op(expr, hop + OP_SAFE_C_SCC);
-	      }
-	    else
-	      if (is_normal_symbol(arg2))
-		{
-		  set_opt1_sym(cdr(expr), arg2);
 		  set_opt2_con(cdr(expr), arg3);
-		  set_opt3_con(cdr(expr), arg1);
-		  set_optimize_op(expr, hop + OP_SAFE_C_CSC);
+		  set_optimize_op(expr, hop + OP_SAFE_C_SCC);
 		}
 	      else
-		{
-		  set_opt1_sym(cdr(expr), arg3);
-		  set_opt2_con(cdr(expr), arg2);
-		  set_opt3_con(cdr(expr), arg1);
-		  set_optimize_op(expr, hop + OP_SAFE_C_CCS);
-		}
+		if (is_normal_symbol(arg2))
+		  {
+		    set_opt1_sym(cdr(expr), arg2);
+		    set_opt2_con(cdr(expr), arg3);
+		    set_opt3_con(cdr(expr), arg1);
+		    set_optimize_op(expr, hop + OP_SAFE_C_CSC);
+		  }
+		else
+		  {
+		    set_opt1_sym(cdr(expr), arg3);
+		    set_opt2_con(cdr(expr), arg2);
+		    set_opt3_con(cdr(expr), arg1);
+		    set_optimize_op(expr, hop + OP_SAFE_C_CCS);
+		  }}
       choose_c_function(sc, expr, func, 3);
       return(OPT_T);
     }
@@ -93027,7 +93058,9 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->make_float_vector_symbol), make_float_vector_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->setter_symbol), setter_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->complex_symbol), complex_p_pp);
-  /* s7_set_p_pp_function(sc, global_value(sc->string_eq_symbol), string_eq_p_pp); */
+  s7_set_p_pp_function(sc, global_value(sc->string_eq_symbol), string_eq_p_pp);
+  s7_set_p_pp_function(sc, global_value(sc->string_lt_symbol), string_lt_p_pp);
+  s7_set_p_pp_function(sc, global_value(sc->string_gt_symbol), string_gt_p_pp);
 
   s7_set_b_7pp_function(sc, global_value(sc->char_lt_symbol), char_lt_b_7pp);
   s7_set_b_7pp_function(sc, global_value(sc->char_leq_symbol), char_leq_b_7pp);
@@ -95048,7 +95081,7 @@ int main(int argc, char **argv)
  * tsort     3105   3104   2856   2805   2805
  * teq       4068   4045   3536   3453   3477
  * tobj      4016   3970   3828   3561   3556
- * tio       3816   3752   3683   3612   3610  3602
+ * tio       3816   3752   3683   3612   3610  3604
  * tmac      3950   3873   3033   3664   3664
  * tclo      4787   4735   4390   4377   4376
  * tlet      7775   5640   4450   4415   4429
@@ -95069,7 +95102,7 @@ int main(int argc, char **argv)
  * tleft     10.4   10.2   7657   7472   7517
  * tgc       11.9   11.1   8177   7957   7966
  * thash     11.8   11.7   9734   9463   9469
- * cb        11.2   11.0   9658   9560   9586
+ * cb        11.2   11.0   9658   9560   9586  9563
  * tgen      11.2   11.4   12.0   12.0   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
@@ -95080,5 +95113,4 @@ int main(int argc, char **argv)
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * rather than #u|i|r perhaps #byte|int|float-vector, then #hash-table #let? #oscil??
- * t718, cb14 string_less etc 22084
  */
