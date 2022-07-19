@@ -1119,7 +1119,7 @@ struct s7_scheme {
   s7_pointer unbound_variable_hook;   /* *unbound-variable-hook* hook object */
   s7_pointer missing_close_paren_hook, rootlet_redefinition_hook;
   s7_pointer error_hook, read_error_hook; /* *error-hook* hook object, and *read-error-hook* */
-  bool gc_off;                        /* gc_off: if true, the GC won't run */
+  bool gc_off, gc_in_progress;        /* gc_off: if true, the GC won't run */
   uint32_t gc_stats, gensym_counter, f_class, add_class, multiply_class, subtract_class, num_eq_class;
   int32_t format_column, error_argnum;
   uint64_t capture_let_counter;
@@ -1652,6 +1652,7 @@ static block_t *reallocate(s7_scheme *sc, block_t *op, size_t bytes)
 
 /* we can't export mallocate et al without also exporting block_t or accessors for it
  *   that is, the block_t* pointer returned can't be used as if it were the void* pointer returned by malloc
+ * ideally we'd have a way to release excessive mallocate bins, but they are permalloc'd individually
  */
 
 
@@ -7197,6 +7198,9 @@ static int64_t gc(s7_scheme *sc)
   s7_int i;
   s7_pointer p;
 
+  if (sc->gc_in_progress)
+    s7_error_nr(sc, sc->error_symbol, set_elist_1(sc, wrap_string(sc, "GC called recursively", 21)));
+  sc->gc_in_progress = true;
   sc->gc_start = my_clock();
   sc->gc_calls++;
 #if S7_DEBUGGING
@@ -7399,6 +7403,7 @@ static int64_t gc(s7_scheme *sc)
       s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n", num, len);
     }
   sc->previous_free_heap_top = sc->free_heap_top;
+  sc->gc_in_progress = false;
   return(sc->gc_freed);
 }
 
@@ -10684,7 +10689,7 @@ static s7_pointer copy_tree_with_type(s7_scheme *sc, s7_pointer tree)
 				  (is_unquoted_pair(cdr(tree))) ? COPY_TREE_WITH_TYPE(cdr(tree)) : cdr(tree)));
 }
 
-static s7_pointer copy_tree(s7_scheme *sc, s7_pointer tree)
+static inline s7_pointer copy_tree(s7_scheme *sc, s7_pointer tree)
 {
 #if WITH_GCC
   #define COPY_TREE(P) ({s7_pointer _p; _p = P; \
@@ -11923,7 +11928,7 @@ static block_t *string_to_block(s7_scheme *sc, const char *p, s7_int len)
   return(b);
 }
 
-static s7_pointer block_to_string(s7_scheme *sc, block_t *block, s7_int len)
+static Inline s7_pointer inline_block_to_string(s7_scheme *sc, block_t *block, s7_int len)
 {
   s7_pointer x;
   new_cell(sc, x, T_STRING | T_SAFE_PROCEDURE);
@@ -11935,6 +11940,8 @@ static s7_pointer block_to_string(s7_scheme *sc, block_t *block, s7_int len)
   add_string(sc, x);
   return(x);
 }
+
+static s7_pointer block_to_string(s7_scheme *sc, block_t *block, s7_int len) {return(inline_block_to_string(sc, block, len));}
 
 static inline s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den)
 {
@@ -12559,9 +12566,8 @@ static s7_pointer string_to_either_integer(s7_scheme *sc, const char *str, int32
 static s7_pointer string_to_either_ratio(s7_scheme *sc, const char *nstr, const char *dstr, int32_t radix)
 {
   bool overflow = false;
-  /* gmp segfaults if passed a bignum/0 so this needs to check first that
-   *   the denominator is not 0 before letting gmp screw up.  Also, if the
-   *   first character is '+', gmp returns 0!
+  /* gmp segfaults if passed a bignum/0 so this needs to check first that the denominator is not 0 before letting gmp screw up.  
+   *   Also, if the first character is '+', gmp returns 0!
    */
   s7_int d = string_to_integer(dstr, radix, &overflow);
   if (!overflow)
@@ -13012,11 +13018,9 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
       old_e0p = e0p;
       e0p = e1;
       old_e1 = e1;
-
       p0 = old_p1 + r * p0;
       q0 = old_q1 + r * q0;
-      e1 = old_e0p - r * e1p;
-      /* if the error is set too low, we can get e1 = 0 here: (rationalize (/ pi) 1e-17) */
+      e1 = old_e0p - r * e1p;  /* if the error is set too low, we can get e1 = 0 here: (rationalize (/ pi) 1e-17) */
       e1p = old_e0 - r * old_e1;
     }
   return(false);
@@ -35887,7 +35891,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
       if (port_position(port) < port_data_size(port))
 	{
 	  block_t *block = inline_mallocate(sc, FORMAT_PORT_LENGTH);
-	  result = block_to_string(sc, port_data_block(port), port_position(port));
+	  result = inline_block_to_string(sc, port_data_block(port), port_position(port));
 	  port_data_size(port) = FORMAT_PORT_LENGTH;
 	  port_data_block(port) = block;
 	  port_data(port) = (uint8_t *)(block_data(block));
@@ -52017,6 +52021,13 @@ static s7_pointer g_apply(s7_scheme *sc, s7_pointer args)
     apply_list_error_nr(sc, args);
 
   sc->code = func;
+  /* (define imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
+   * (define (fop4 x y) (apply x y))
+   * (display (object->string (apply (lambda (a . b) (cons a b)) imp) :readable)) -> (list 0 1 2)
+   * (display (object->string (fop4 (lambda (a . b) (cons a b)) imp) :readable)) -> (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())
+   * g_apply sees the first one and thinks the lambda arg is unsafe, apply_ss sees the second and thinks it is safe (hence the list is not copied),
+   * so calling sort on the first is fine, but on the second gets an immutable object error.
+   */
   sc->args = (needs_copied_args(sc->code)) ? copy_proper_list(sc, sc->args) : sc->args;
   push_stack_direct(sc, OP_APPLY);
   return(sc->nil);
@@ -54216,8 +54227,16 @@ static s7_pointer fx_add_sub_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer p1 = lookup(sc, car(largs));
   s7_pointer p2 = lookup(sc, opt2_sym(largs));
   s7_pointer p3 = lookup(sc, caddr(arg));
-  if ((is_t_real(p1)) && (is_t_real(p2)) && (is_t_real(p3)))
-    return(make_real(sc, real(p3) + real(p1) - real(p2)));
+  if ((is_t_real(p1)) && (is_t_real(p2)) && (is_t_real(p3))) return(make_real(sc, real(p3) + real(p1) - real(p2)));
+  return(add_p_pp(sc, subtract_p_pp(sc, p1, p2), p3));
+}
+
+static s7_pointer fx_add_sub_tu_s(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer p1 = t_lookup(sc, car(cdadr(arg)), arg);
+  s7_pointer p2 = u_lookup(sc, cadr(cdadr(arg)), arg);
+  s7_pointer p3 = lookup(sc, caddr(arg));
+  if ((is_t_real(p1)) && (is_t_real(p2)) && (is_t_real(p3))) return(make_real(sc, real(p3) + real(p1) - real(p2)));
   return(add_p_pp(sc, subtract_p_pp(sc, p1, p2), p3));
 }
 
@@ -54227,8 +54246,16 @@ static s7_pointer fx_gt_add_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer x1 = lookup(sc, car(largs));
   s7_pointer x2 = lookup(sc, opt2_sym(largs));
   s7_pointer x3 = lookup(sc, caddr(arg));
-  if ((is_t_real(x1)) && (is_t_real(x2)) && (is_t_real(x3)))
-    return(make_boolean(sc, (real(x1) + real(x2)) > real(x3)));
+  if ((is_t_real(x1)) && (is_t_real(x2)) && (is_t_real(x3))) return(make_boolean(sc, (real(x1) + real(x2)) > real(x3)));
+  return(gt_p_pp(sc, add_p_pp(sc, x1, x2), x3));
+}
+
+static s7_pointer fx_gt_add_tu_s(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x1 = t_lookup(sc, car(cdadr(arg)), arg);
+  s7_pointer x2 = u_lookup(sc, cadr(cdadr(arg)), arg);
+  s7_pointer x3 = lookup(sc, caddr(arg));
+  if ((is_t_real(x1)) && (is_t_real(x2)) && (is_t_real(x3))) return(make_boolean(sc, (real(x1) + real(x2)) > real(x3)));
   return(gt_p_pp(sc, add_p_pp(sc, x1, x2), x3));
 }
 
@@ -57244,6 +57271,10 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }
 	  if ((cadadr(p) == var1) && (caddadr(p) == var2) && (caddr(p) == var3)) return(with_fx(tree, fx_vref_vref_tu_v));
 	}
+      if ((fx_proc(tree) == fx_gt_add_s) && (cadadr(p) == var1) && (caddadr(p) == var2))
+	return(with_fx(tree, fx_gt_add_tu_s));
+      if ((fx_proc(tree) == fx_add_sub_s) && (cadadr(p) == var1) && (caddadr(p) == var2))
+	return(with_fx(tree, fx_add_sub_tu_s));
       break;
 
     case HOP_SAFE_C_S_opSSq:
@@ -57821,7 +57852,6 @@ static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
   s7_i_7pi_t pfunc = s7_i_7pi_function(s_func);
   if (!pfunc)
     return_false(sc, car_x);
-
   sig = c_function_signature(s_func);
   if (is_pair(sig))
     {
@@ -57894,7 +57924,7 @@ static s7_int opt_i_7ii_ff_quo(opt_info *o){return(quotient_i_7ii(o->sc,o->v[11]
 static s7_int opt_i_ii_fc(opt_info *o)     {return(o->v[3].i_ii_f(o->v[11].fi(o->v[10].o1), o->v[2].i));}
 static s7_int opt_i_ii_fc_add(opt_info *o) {return(o->v[11].fi(o->v[10].o1) + o->v[2].i);}
 static s7_int opt_i_ii_fc_mul(opt_info *o) {return(o->v[11].fi(o->v[10].o1) * o->v[2].i);}
-/* returning s7_int so overflow->real is no doable here, so
+/* returning s7_int so overflow->real is not doable here, so
  *   (define (func) (do ((x 0) (i 0 (+ i 1))) ((= i 1) x) (set! x (* (lognot 4294967297) 4294967297)))) (func) (func)
  *   will return -12884901890 rather than -18446744086594454000.0, 4294967297 > sqrt(fixmost)
  *   This affects all the opt arithmetical functions.  Unfortunately the gmp version also gets -12884901890!
@@ -94187,6 +94217,7 @@ s7_scheme *s7_init(void)
   sc = (s7_scheme *)Calloc(1, sizeof(s7_scheme)); /* not malloc! */
   cur_sc = sc;                                    /* for gdb/debugging */
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
+  sc->gc_in_progress = false;
   sc->gc_stats = 0;
 
   sc->saved_pointers = (void **)Malloc(INITIAL_SAVED_POINTERS_SIZE * sizeof(void *));
@@ -95061,56 +95092,64 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    459    467
  * index     1026   1016    973    963    964
- * tmock     1177   1165   1057   1053   1060
+ * tmock     1177   1165   1057   1053   1061
  * tvect     2519   2464   1772   1669   1676
- * timp      2637   2575   1930   1708   1720
- * texit     ----   ----   1778   1738   1735
+ * timp      2637   2575   1930   1708   1717
+ * texit     ----   ----   1778   1738   1736
  * s7test    1873   1831   1818   1809   1815
  * thook     ----   ----   2590   2142   2103
  * lt        2187   2172   2150   2173   2180
- * tauto     ----   ----   2562   2196   2194
+ * tauto     ----   ----   2562   2196   2192
  * dup       3805   3788   2492   2278   2274
  * tcopy     8035   5546   2539   2374   2375
- * tload     ----   ----   3046   2386   2386
- * fbench    2688   2583   2460   2404   2413
+ * tload     ----   ----   3046   2386   2388
+ * fbench    2688   2583   2460   2404   2412
  * tread     2440   2421   2419   2404   2419
  * trclo     2735   2574   2454   2435   2447
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2517   2504
- * tb        2735   2681   2612   2596   2600
- * tsort     3105   3104   2856   2805   2805
- * teq       4068   4045   3536   3453   3477
+ * tmat      3065   3042   2524   2517   2508
+ * tb        2735   2681   2612   2596   2601
+ * tsort     3105   3104   2856   2805   2803
+ * teq       4068   4045   3536   3453   3470
  * tobj      4016   3970   3828   3561   3556
- * tio       3816   3752   3683   3612   3610  3604
- * tmac      3950   3873   3033   3664   3664
+ * tio       3816   3752   3683   3612   3604
+ * tmac      3950   3873   3033   3664   3674
  * tclo      4787   4735   4390   4377   4376
- * tlet      7775   5640   4450   4415   4429
- * tcase     4960   4793   4439   4429   4434
+ * tlet      7775   5640   4450   4415   4431
+ * tcase     4960   4793   4439   4429   4435
  * tfft      7820   7729   4755   4450   4455
  * tmap      8869   8774   4489   4473   4478
- * tshoot    5525   5447   5183   5083   5100  5068
- * tform     5357   5348   5307   5300   5297
- * tstr      6880   6342   5488   5356   5331
- * tnum      6348   6013   5433   5364   5360
- * tlamb     6423   6273   5720   5544   5543
+ * tshoot    5525   5447   5183   5083   5068
+ * tstr      6880   6342   5488   5356   5114
+ * tform     5357   5348   5307   5300   5292
+ * tnum      6348   6013   5433   5364   5363
+ * tlamb     6423   6273   5720   5544   5549
  * tmisc     8869   7612   6435   6250   6153
  * tset      ----   ----   ----   6208   6303
- * tgsl      8485   7802   6373   6307   6306
- * tlist     7896   7546   6558   6308   6360
+ * tgsl      8485   7802   6373   6307   6307
+ * tlist     7896   7546   6558   6308   6356
  * tari      13.0   12.7   6827   6488   6486
  * trec      6936   6922   6521   6547   6559
- * tleft     10.4   10.2   7657   7472   7517
- * tgc       11.9   11.1   8177   7957   7966
+ * tleft     10.4   10.2   7657   7472   7516
+ * tgc       11.9   11.1   8177   7957   7964
  * thash     11.8   11.7   9734   9463   9469
- * cb        11.2   11.0   9658   9560   9586  9563
- * tgen      11.2   11.4   12.0   12.0   12.1
+ * cb        11.2   11.0   9658   9560   9563
+ * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
  * sg        ----   ----   55.9   56.9   56.9
- * lg        ----   ----  105.2  106.1  106.5
+ * lg        ----   ----  105.2  106.1  106.6
  * tbig     177.4  175.8  156.5  149.6  149.9
  * --------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * rather than #u|i|r perhaps #byte|int|float-vector, then #hash-table #let? #oscil??
+ * cutlet let-ref|set-fallback clears flag? see t600, blocked in cutlet 9390
+ *   only sublet_1 sets these flags (i.e. not let(*)/add_slot varlet) -- see t600
+ * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
+ *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
+ * for multithread s7: (with-s7 ((var database)...) . body)
+ *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
+ *   libpthread.scm -> main [but should it include the pool/start_routine?]
+ *   threads.c -> tools + tests
  */
