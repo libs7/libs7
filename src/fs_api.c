@@ -398,7 +398,7 @@ void init_fs_api(s7_scheme *sc)
     cur_env = s7_curlet(sc);
 
     s7_define(sc, cur_env,
-              s7_make_symbol(sc, "canonical-path"),
+              s7_make_symbol(sc, "->canonical-path"),
               s7_make_typed_function(sc, "canonical-path", g_canonical_path,
                                      1, 0, false,
                                      "char* canonical_path(char* path)",
@@ -426,7 +426,7 @@ void init_fs_api(s7_scheme *sc)
               s7_make_symbol(sc, "fnmatch"),
               s7_make_typed_function(sc, "fnmatch", s7__fnmatch,
                                      3, 0, false,
-                                     "int fnmatch(char* char* int)",
+                                     "(fnmatch pattern file flags)",
                                      pl_issi));
 
     s7_define(sc, cur_env,
