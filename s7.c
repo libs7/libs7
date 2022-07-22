@@ -5868,9 +5868,7 @@ static Inline noreturn void wrong_type_argument_with_type_nr(s7_scheme *sc, s7_p
 
 static noreturn void wrong_type_arg_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
 {
-  if (arg_n > 0) /* other than just below this is always known in advance so locally it can be split
-		  *   or just use simple... if 0
-		  */
+  if (arg_n > 0)
     wrong_type_arg_1_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), wrap_integer(sc, arg_n),
 					    arg, type_name_string(sc, arg), wrap_string(sc, descr, safe_strlen(descr)));
   set_wlist_4(cdr(sc->simple_wrong_type_arg_info), wrap_string(sc, caller, safe_strlen(caller)), arg,
@@ -5898,7 +5896,7 @@ static noreturn void out_of_range_nr(s7_scheme *sc, s7_pointer caller, s7_pointe
 
 static noreturn void out_of_range_error_nr(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr)
 {
-  if (arg_n > 0) /* TODO: is this known in advance? yes but few calls */
+  if (arg_n > 0)
     {
       set_wlist_4(cdr(sc->out_of_range_info), wrap_string(sc, caller, safe_strlen(caller)),
 		  wrap_integer(sc, arg_n), arg, wrap_string(sc, descr, safe_strlen(descr)));
@@ -7512,15 +7510,9 @@ static void try_to_call_gc(s7_scheme *sc)
     {
       if ((sc->gc_resize_heap_fraction > 0.5) && (sc->heap_size >= 4194304))
 	  sc->gc_resize_heap_fraction = 0.5;
-#if (!S7_DEBUGGING)
-      int64_t freed_heap = gc(sc);
-      if (freed_heap < (sc->heap_size * sc->gc_resize_heap_fraction))
+      call_gc(sc);
+      if ((int64_t)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction)) /* changed 21-Jul-22 */
 	resize_heap(sc);
-#else
-      gc(sc, func, line);
-      if ((int64_t)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction))
-	resize_heap(sc);
-#endif
     }
 }
   /* originally I tried to mark each temporary value until I was done with it, but
@@ -95133,7 +95125,7 @@ int main(int argc, char **argv)
  * tleft     10.4   10.2   7657   7472   7516
  * tgc       11.9   11.1   8177   7957   7964
  * thash     11.8   11.7   9734   9463   9469
- * cb        11.2   11.0   9658   9560   9563
+ * cb        11.2   11.0   9658   9560   9563  9536
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
