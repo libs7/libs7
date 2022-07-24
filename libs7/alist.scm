@@ -65,16 +65,19 @@
   (let ((+documentation+ "(assoc-in keypath alist) keypath: list of keys; alist: tree of alists. Returns the first assoc found by successively applying 'assoc'.")
         (+signature+ '(assoc-in keypath alist)))
     (lambda (key-path alist)
+      (format #t "~A: ~A :: ~A~%" (blue "assoc-in") key-path alist)
       (if (null? key-path)
           #f ;; alist
           (if (list? alist)
               (if (null? alist)
                   #f
-                  (if-let ((in-alist (assoc (car key-path) alist)))
-                          (if (null? (cdr key-path))
-                              in-alist
-                              (assoc-in (cdr key-path) (cdr in-alist)))
-                          #f))
+                  (if (alist? alist)
+                      (if-let ((in-alist (assoc (car key-path) alist)))
+                              (if (null? (cdr key-path))
+                                  in-alist
+                                  (assoc-in (cdr key-path) (cdr in-alist)))
+                              #f)
+                      #f))
               #f)))))
 
 ;; assoc-in*
@@ -86,6 +89,7 @@
   (let ((+documentation+ "(assoc-in* keypath alist) keypath: list of keys; alist: tree of alists. Returns all assocs for last key in keypath. For all preceding keys in keypath uses first match.")
         (+signature+ '(assoc-in* keypath alist)))
     (lambda (key-path alist)
+      (format #t "~A: ~A~%" (blue "assoc-in*") alist)
       (if (null? key-path)
           alist
           (if (list? alist)
@@ -132,7 +136,8 @@
   (let ((+documentation+ "Destructively remove keys from alist.")
         (+signature+ "(dissoc! ks alist)"))
     (lambda (ks als)
-      (filter! (lambda (y) (not (member (car y) ks))) als))))
+      (set! als
+            (filter! (lambda (y) (not (member (car y) ks))) als)))))
 
 ;; (define (alist-delete! key alist . maybe-=)
 ;;   (let ((= (:optional maybe-= equal?)))
@@ -198,7 +203,7 @@
           (begin
             ;; (display (format #f "KEY ~A" k)) (newline)
             ;; (display (format #f "ASSOC ~A" a)) (newline)
-            (cons (list k (fn a)) (alist-delete :k k als))
+            (cons (list k (fn a)) (alist-delete (list k) als))
             )
           (cons (list k (fn '())) als)))
 
@@ -229,67 +234,85 @@
           (if (null? als)
               (if (null? ks)
                   (begin
-                    ;; (format #t "als and ks null; invoking update fn\n")
+                    (format #t "~A~%" (yellow "als and ks null; invoking update fn"))
                     (fn '()))
-                  (let (;; (_ (format #t " empty als, ks: ~A\n" ks))
+                  (let ((_ (format #t "empty als, ks: ~A\n" ks))
                         (recres (recur als (cdr ks))))
-                    ;; (format #t " base recres for ~A: ~A\n" (car ks) recres)
-                    (if (alist? recres)
-                        (cons (car ks) recres)
-                        (cons (car ks) (list recres)))))
+                    (format #t " base recres for ~A: ~A\n" (car ks) recres)
+                    (format #t " (pair? recres): ~A\n" (pair? recres))
+                    (format #t " (proper-list? recres): ~A\n"
+                            (proper-list? recres))
+                    (if (pair? recres)
+                        (if (proper-list? recres)
+                            (list (cons (car ks) recres))
+                            (list (cons (car ks) recres)))
+                        (cons (car ks) recres))))
               ;; als not null
               (if (null? ks)
                   (begin
-                    ;; (format #t "matched all keys, applying fn to ~A\n" als)
+                    ;; (format #t "~A: ~A~%" (yellow "matched all keys, applying fn to") als)
                     (let ((base (fn als)))
                       ;; (format #t "fn result: ~A\n" base)
                       base))
                   ;; ks and als not null
                   (begin
-                    ;; (format #t "(alist? als) ~A\n" (alist? als))
+                    (format #t "(alist? als) ~A ~A\n" (alist? als) als)
                     ;; (format #t "intermediate match on k? ~A\n"
                     ;;         (assoc (car ks) als))
-                    (if-let ((sub-alist (assoc (car ks) als)))
-                          (begin
-                            ;; (format #t "intermediate match on k ~A\n"
-                            ;;         (car ks))
-                            ;; (format #t "isub-list before ~A\n" sub-alist)
-                            (let ((recres (recur (cdr sub-alist) (cdr ks))))
-                              ;; (format #t "imatch recres ~A\n" recres)
-                              ;; replaces sub-alist within als
-                              (set-cdr! sub-alist
-                                        recres)
-                              ;; (format #t "isub-list after ~A\n" sub-alist)
-                              ;; (format #t "als after ~A\n" als)
-                            als))
 
-                          ;; no match, both ks and als not null
-                          (begin
-                            ;; (format #t "nomatch for key ~A - adding ~A\n"
-                            ;;         (car ks) ks)
-                            ;; (format #t "old als: ~A\n" als)
-                            (let* (;;(_ (format
-                                    ;; #t "nomatch for key ~A - adding ~A\n"
-                                    ;; (car ks) ks))
-                                  ;; (_ (format #t "old als: ~A\n" als))
-                                  (recres (recur '() (cdr ks)))
-                                  ;; (_ (format
-                                  ;;     #t "i-nomatch recres for ~A: ~A\n"
-                                  ;;     (car ks) recres))
-                                  )
-                              ;; recres could be: (:ml d.ml) for new file
-                              ;; or (D (:ml d.ml)) for module
-                            (let ((newtree
-                                   (append! als
-                                            (list
-                                             (list (car ks)
-                                                   ;;FIXME: don't think this works generally, but it works for mibl
-                                                   (if (alist? recres)
-                                                       (car recres)
-                                                       recres))))))
-                              ;; (format #t "newtree: ~A\n" newtree)
-                              ;; (format #t "new als: ~A\n" als)
-                              newtree))))))))
+                    (if (alist? als)
+                        (if-let ((sub-alist (assoc (car ks) als)))
+                                (begin
+                                  (format #t "intermediate match on k ~A\n"
+                                          (car ks))
+                                  ;; (format #t "isub-list before ~A\n" sub-alist)
+                                  (let ((recres (recur (cdr sub-alist) (cdr ks))))
+                                    ;; (format #t "~A: ~A~%" (yellow "imatch recres") recres)
+                                    ;; replaces sub-alist within als
+                                    (set-cdr! sub-alist
+                                              recres)
+                                    ;; (format #t "isub-list after ~A\n" sub-alist)
+                                    ;; (format #t "als after ~A\n" als)
+                                    als))
+
+                                ;; no match, both ks and als not null
+                                (begin
+                                  (format #t "nomatch for key ~A - adding ~A\n"
+                                          (car ks) ks)
+                                  (format #t "Old als: ~A\n" als)
+                                  ;; recursion obtains value for key
+                                  (let* ((recres (recur '() (cdr ks)))
+                                         (_ (format
+                                             #t "i-nomatch recres for ~A is: ~A\n"
+                                             (car ks) recres))
+                                         )
+                                    ;; recres could be: (:ml . d.ml) for new file
+                                    ;; or (D (:ml . d.ml)) for module
+                                    (let* (;;(_ (format #t "~A: ~A~%" (red "XXXX") ks))
+                                           ;;(_ (format #t "~A: ~A~%" (red "YYYY") recres))
+                                           (subval (if (alist? recres)
+                                                                (car recres)
+                                                                recres))
+                                           (newtree
+                                            (append! als
+                                                     (list
+                                                      (if (> (length ks) 1)
+                                                          (list (car ks) subval)
+                                                          (cons (car ks) subval))))))
+                                      ;; (format #t "newtree: ~A\n" newtree)
+                                      ;; (format #t "new als: ~A\n" als)
+                                      newtree))))
+                        ;; else not an alist
+                        (begin
+                          (format #t "~A: ~A~%" (red "key not found") ks)
+                          (format #t "~A: ~A~%" (red "val not alist") als)
+                          ;; value at matched keypath seg not an alist,
+                          ;; so we cannot automatically add an assoc child
+                          ;; this should throw an exception
+                          ;;(fn (cons #<unspecified> als))
+                          (throw 'not-an-alist
+                                 (format #f "value ~A not an alist" als))
+                          ))))))
         the-alist))))
 
 ;;;;;;;;;;;;;;;; tests ;;;;;;;;;;;;;;;;
