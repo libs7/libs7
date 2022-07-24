@@ -376,6 +376,21 @@
 (define (s7-default-random-state) (*s7* 'default-random-state))
 (define (s7-cpu-time) (*s7* 'cpu-time))
 
+
+(define any-integer (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (- (random 1000000) 500000))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-ratio (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (/ (- (random 1000000) 500000) (- (random 1000000) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-real (let ((ctr 0) (val 0.0)) (if (zero? ctr) (set! val (- (random 1000000.0) 500000))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-complex (let ((ctr 0) (val 0.0)) (if (zero? ctr) (set! val (complex (- (random 1000000.0) 500000) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-char (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (integer->char (random 256)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-string (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-string (random 10) (integer->char (random 256))))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-float-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-float-vector (random 10) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-int-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-int-vector (random 10) (- (random 1000000) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-byte-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-byte-vector (random 10) (random 256)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-vector (random 10) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-c-pointer (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (c-pointer (random 10)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+(define any-list (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-list (random 10) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
+
+
 (define-macro (_mac_ x) `(+ ,x 1))
 (define-macro* (_mac*_ (x 1)) `(+ ,x 1))
 (define-macro* (_mac1*_ (x 1) :allow-other-keys) `(+ ,x 1))
@@ -725,7 +740,7 @@
 (define-constant imfv2 (immutable! #r2d((1 2 3) (4 5 6))))
 (define-constant imfv3 (immutable! #r3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imi (immutable! (inlet 'a 3 'b 2)))
-(define-constant ilt (immutable! (inlet 'a 1 'let-ref-fallback (lambda (e sym) #<undefined>))))
+(define-constant ilt (immutable! (openlet (inlet 'a 1 'let-ref-fallback (lambda (e sym) #<undefined>)))))
 
 (define-constant imh (immutable! (let ((H (make-hash-table 8 #f (cons symbol? integer?)))) (set! (H 'a) 1) (set! (H 'b) 2) H)))
 (define-constant imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
@@ -1001,7 +1016,6 @@
 			  'imv2 'imv3 'imfv2 'imfv3 'imiv2 'imiv3 'imbv2 'imbv3
 			  'vvv 'vvvi 'vvvf 'typed-hash 'typed-vector 'typed-let 'constant-let
 			  'a1 'a2 'a3 'a4 'a5 'a6
-
 			  ))
 	 
       (args (vector "-123" "1234" "-3/4" "-1" "1/2" "1+i" "1-i" "0+i" "0-i" "(expt 2 32)" "4294967297" "1001" "10001"
@@ -1015,7 +1029,7 @@
 		    "#f" "#t" "()" "#()" "\"\"" "#()" ; ":write" -- not this because sr2 calls write and this can be an arg to sublet redefining write
 		    ":readable" ":rest" ":allow-other-keys" ":a" ":frequency" ":scaler" ; for blocks5 s7test.scm
 		    "1/0+i" "0+0/0i" "0+1/0i" "1+0/0i" "0/0+0/0i" "0/0+i" "+nan.0-3i" "+inf.0-nan.0i"
-		    "cons" "\"ra\"" "''2" "'a" "_!asdf!_"
+		    "cons" "\"ra\"" "''2" "'a" "_!asdf!_" "let-ref-fallback"
 
 		    ;"#\\a" "#\\A" "\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-" "#\\x" ;"#\\"
 		    "(make-hook)" "(make-hook '__x__)"
@@ -1256,6 +1270,10 @@
 
 		    "my-let" "my-with-baffle" "fvset" "htset"
 		    "(catch #t (lambda () (+ 1 #(2))) (lambda (type info) 0))"
+
+		    "(any-integer)" "(any-ratio)" "(any-real)" "(any-complex)" "(any-char)" "(any-string)" "(any-float-vector)"
+		    "(any-int-vector)" "(any-byte-vector)" "(any-vector)" "(any-c-pointer)" "(any-list)"
+
 		    #f #f #f
 		    ))
 
@@ -1288,7 +1306,7 @@
                     (lambda (s) (string-append "(list (values " s "))")))
 	      (list (lambda (s) (string-append "(do () ((not false) " s "))")) 
                     (lambda (s) (string-append "(when (not false) " s ")")))
-	      (list (lambda (s) (string-append "(for-each display (list " s "))")) 
+	      (list (lambda (s) (string-append "(for-each display (list " s "))")) ; current-output-port is #f (set below)
                     (lambda (s) (string-append "(for-each (lambda (x) (display x)) (list " s "))")))
 	      (list (lambda (s) (string-append "(_ct1_ " s ")")) 
                     (lambda (s) (string-append "(_ct2_ " s ")")))
@@ -1366,6 +1384,8 @@
 		    (lambda (s) (string-append "(let ((x (list " s "))) x)")))
 	      (list (lambda (s) (string-append "(case 1 ((2 3 1) " s ") (else 'oops))"))
 		    (lambda (s) (string-append "(cond ((= 1 1) " s ") (else 'oops))")))
+	      (list (lambda (s) (string-append "(let ((one 1)) (case one ((2 3 1) => (lambda (i) " s ")) (else 'oops)))"))
+		    (lambda (s) (string-append "(let ((one 1)) (cond (one => (lambda (i) " s ")) (else 'oops)))")))
 	      (list (lambda (s) (string-append "(catch #t (lambda () (let-temporarily ((x (list " s "))) x)) (lambda (type info) 'error))"))
 		    (lambda (s) (string-append "(catch #t (lambda () (let ((x (list " s "))) x)) (lambda (type info) 'error))")))
 ;              (list (lambda (s) (string-append "(sort! (vector 3 2 4 5 1) (lambda (a b) (begin " s " (> a b))))"))
@@ -1669,7 +1689,12 @@
 	    (abort))
 	  (when (eq? type 'heap-too-big)
 	    (format *stderr* "heap overflow from ~S~%" str)
-	    (display (*s7* 'memory-usage) *stderr*) (newline *stderr*)
+	    (display (*s7* 'memory-usage) *stderr*) 
+	    (newline *stderr*)
+	    (format *stderr* "gc -> ")
+	    (gc) (gc)
+	    (display (*s7* 'memory-usage) *stderr*) 
+	    (newline *stderr*)
 	    (abort))
 	  (unless (or (not (eq? type 'read-error))
 		      (string-position "junk" (car info))

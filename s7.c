@@ -9186,6 +9186,15 @@ static s7_pointer g_coverlet(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- varlet -------------------------------- */
+static void check_let_fallback(s7_scheme *sc, s7_pointer symbol, s7_pointer let)
+{
+  if (symbol == sc->let_ref_fallback_symbol)
+    set_has_let_ref_fallback(let);
+  else
+    if (symbol == sc->let_set_fallback_symbol)
+      set_has_let_set_fallback(let);
+}
+
 static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
 {
   if ((old_e == sc->rootlet) || (new_e == sc->s7_let))
@@ -9244,7 +9253,11 @@ s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointe
 	slot_set_value(global_slot(symbol), value);
       else s7_make_slot(sc, let, symbol, value);
     }
-  else add_slot_checked_with_id(sc, let, symbol, value);
+  else 
+    {
+      add_slot_checked_with_id(sc, let, symbol, value);
+      check_let_fallback(sc, symbol, let);
+    }
   return(value);
 }
 
@@ -9303,6 +9316,8 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
 
 	case T_LET:
 	  append_let(sc, e, check_c_object_let(sc, p, sc->varlet_symbol));
+	  if (has_let_set_fallback(p)) set_has_let_set_fallback(e);
+	  if (has_let_ref_fallback(p)) set_has_let_ref_fallback(e);
 	  continue;
 
 	default:
@@ -9325,10 +9340,7 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
 	}
       else
 	{
-	  if ((has_let_fallback(e)) &&
-	      ((sym == sc->let_ref_fallback_symbol) || (sym == sc->let_set_fallback_symbol)))
-	    s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "varlet can't shadow ~S", 22), sym));
-
+	  check_let_fallback(sc, sym, e);
 	  add_slot_checked_with_id(sc, e, sym, val);
 	}}
       /* this used to check for sym already defined, and set its value, but that greatly slows down
@@ -9466,11 +9478,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	      sp = inline_add_slot_at_end(sc, let_id(new_e), sp, sym, val);
 	      set_local(sym); /* ? */
 	    }
-	  if (sym == sc->let_ref_fallback_symbol)
-	    set_has_let_ref_fallback(new_e);
-	  else
-	    if (sym == sc->let_set_fallback_symbol)
-	      set_has_let_set_fallback(new_e);
+	  check_let_fallback(sc, sym, new_e);
 	}
       sc->temp3 = sc->nil;
     }
@@ -9526,8 +9534,8 @@ static s7_pointer sublet_chooser(s7_scheme *sc, s7_pointer f, int32_t num_args, 
 /* -------------------------------- inlet -------------------------------- */
 s7_pointer s7_inlet(s7_scheme *sc, s7_pointer args)
 {
-  #define H_inlet "(inlet ...) adds its arguments, each a let, a cons: '(symbol . value), or a keyword/value pair, to a new let, and returns the \
-new let. (inlet :a 1 :b 2) or (inlet '(a . 1) '(b . 2))"
+  #define H_inlet "(inlet ...) adds its arguments, each a let, a cons: '(symbol . value), or a keyword/value pair, \
+to a new let, and returns the new let. (inlet :a 1 :b 2) or (inlet '(a . 1) '(b . 2))"
   #define Q_inlet s7_make_circular_signature(sc, 1, 2, sc->is_let_symbol, sc->T)
   return(sublet_1(sc, sc->rootlet, args, sc->inlet_symbol));
 }
@@ -11053,7 +11061,8 @@ bool s7_is_c_pointer_of_type(s7_pointer arg, s7_pointer type) {return((is_c_poin
 
 static s7_pointer g_is_c_pointer(s7_scheme *sc, s7_pointer args)
 {
-  #define H_is_c_pointer "(c-pointer? obj type) returns #t if obj is a C pointer being held in s7.  If type is given, the c_pointer's type is also checked."
+  #define H_is_c_pointer "(c-pointer? obj type) returns #t if obj is a C pointer being held in s7.  \
+If type is given, the c_pointer's type is also checked."
   #define Q_is_c_pointer s7_make_signature(sc, 3, sc->is_boolean_symbol, sc->T, sc->T)
 
   s7_pointer p = car(args);
@@ -11459,7 +11468,7 @@ static bool op_with_baffle_unchecked(s7_scheme *sc)
 /* -------------------------------- call/cc -------------------------------- */
 static void make_room_for_cc_stack(s7_scheme *sc)
 {
-  if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 8)) /* we probably never need this much space -- very often we don't need any */
+  if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 8)) /* we probably never need this much space */
     {
       int64_t freed_heap = call_gc(sc);
       if (freed_heap < (int64_t)(sc->heap_size / 8))
@@ -11682,7 +11691,8 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
   if (((!is_closure(p)) ||
        (closure_arity(p) != 1)) &&
       (!s7_is_aritable(sc, p, 1)))
-    s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "call/cc procedure, ~A, should take one argument", 47), p));
+    s7_error_nr(sc, sc->wrong_type_arg_symbol, 
+		set_elist_2(sc, wrap_string(sc, "call/cc procedure, ~A, should take one argument", 47), p));
 
   sc->w = s7_make_continuation(sc);
   if ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p)))))
@@ -12725,7 +12735,6 @@ static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
   #define subtract_overflow(A, B, C)       __builtin_ssubll_overflow((long long)A, (long long)B, (long long *)C)
   #define add_overflow(A, B, C)            __builtin_saddll_overflow((long long)A, (long long)B, (long long *)C)
   #define multiply_overflow(A, B, C)       __builtin_smulll_overflow((long long)A, (long long)B, (long long *)C)
-  /* #define int32_subtract_overflow(A, B, C) __builtin_ssub_overflow(A, B, C) */
   #define int32_add_overflow(A, B, C)      __builtin_sadd_overflow(A, B, C)
   #define int32_multiply_overflow(A, B, C) __builtin_smul_overflow(A, B, C)
 #else
@@ -12733,7 +12742,6 @@ static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
   #define subtract_overflow(A, B, C)       __builtin_sub_overflow(A, B, C)
   #define add_overflow(A, B, C)            __builtin_add_overflow(A, B, C)
   #define multiply_overflow(A, B, C)       __builtin_mul_overflow(A, B, C)
-  /* #define int32_subtract_overflow(A, B, C) __builtin_sub_overflow(A, B, C) */
   #define int32_add_overflow(A, B, C)      __builtin_add_overflow(A, B, C)
   #define int32_multiply_overflow(A, B, C) __builtin_mul_overflow(A, B, C)
 #endif
@@ -26624,7 +26632,7 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
 	  if (newlen < 0)
 	    {
 	      unstack(sc);
-	      wrong_type_argument_nr(sc, caller, position_of(x, args), p, T_STRING); /* TODO: something that can be turned into a seq of char */
+	      wrong_type_argument_nr(sc, caller, position_of(x, args), p, T_STRING);
 	    }
 	  just_strings = false;
 	  len += newlen;
@@ -34595,7 +34603,7 @@ static s7_pointer cyclic_out(s7_scheme *sc, s7_pointer obj, s7_pointer port, sha
   s7_gc_unprotect_at(sc, ci->cycle_loc);
   ci->cycle_port = sc->F;
 
-  if ((is_immutable(obj)) && (!is_let(obj))) /* TODO: check this -- maybe from let_to_port premature? */
+  if ((is_immutable(obj)) && (!is_let(obj)))
     port_write_string(port)(sc, "  (immutable! ", 14, port);
   else port_write_string(port)(sc, "  ", 2, port);
 
@@ -52128,7 +52136,6 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       return(sc->value);
 
     case T_C_FUNCTION:
-      /* TODO: if not safe, error? also syntax etc?? */
       return(apply_c_function(sc, obj, indices));
 
     case T_C_RST_NO_REQ_FUNCTION:
@@ -61997,7 +62004,6 @@ static bool p_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	}}
   pc_fallback(sc, pstart);
   return_false(sc, car_x);
-
 }
 
 /* -------- p_d -------- */
@@ -74334,7 +74340,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 
   /* fx_tree inits */
   if ((is_pair(code)) &&
-      /* (is_let(sc->curlet)) && */       /* not rootlet=() but treeable is only in functions */
+      /* (is_let(sc->curlet)) && */  /* not rootlet=() but treeable is only in functions */
       (is_fx_treeable(code)) &&      /* was is_funclet(sc->curlet) 27-Sep-21, but that seems too restrictive */
       (tis_slot(let_slots(sc->curlet))))
     {
@@ -74526,7 +74532,7 @@ static bool op_named_let(s7_scheme *sc)
 static void op_named_let_no_vars(s7_scheme *sc)
 {
   s7_pointer arg = cadr(sc->code);
-  sc->code = opt1_pair(sc->code); /* cdddr(sc->code) */
+  sc->code = opt1_pair(sc->code);        /* cdddr(sc->code) */
   sc->curlet = inline_make_let(sc, sc->curlet);
   sc->args = make_closure_unchecked(sc, sc->nil, sc->code, T_CLOSURE, 0);  /* sc->args is a temp here */
   add_slot_checked(sc, sc->curlet, arg, sc->args);
@@ -74541,7 +74547,7 @@ static void op_named_let_a(s7_scheme *sc)
   sc->curlet = make_let(sc, sc->curlet);
   sc->w = list_1_unchecked(sc, car(opt1_pair(args))); /* caaadr(args), subsequent calls will need a normal list of pars in closure_args */
   sc->x = make_closure_unchecked(sc, sc->w, sc->code, T_CLOSURE, 1); /* picks up curlet (this is the funclet?) */
-  add_slot(sc, sc->curlet, car(args), sc->x);      /* the function */
+  add_slot(sc, sc->curlet, car(args), sc->x);         /* the function */
   sc->curlet = inline_make_let_with_slot(sc, sc->curlet, car(sc->w), sc->args); /* inner let */
   closure_set_let(sc->x, sc->curlet);
   sc->x = sc->nil;
@@ -74557,7 +74563,7 @@ static void op_named_let_aa(s7_scheme *sc)
   sc->curlet = make_let(sc, sc->curlet);
   sc->w = list_2_unchecked(sc, car(opt1_pair(args)), car(opt3_pair(args)));  /* subsequent calls will need a normal list of pars in closure_args */
   sc->x = make_closure_unchecked(sc, sc->w, sc->code, T_CLOSURE, 2); /* picks up curlet (this is the funclet?) */
-  add_slot(sc, sc->curlet, car(args), sc->x);      /* the function */
+  add_slot(sc, sc->curlet, car(args), sc->x);           /* the function */
   sc->curlet = inline_make_let_with_two_slots(sc, sc->curlet, car(sc->w), sc->args, cadr(sc->w), sc->value); /* inner let */
   closure_set_let(sc->x, sc->curlet);
   sc->x = sc->nil;
@@ -74673,8 +74679,7 @@ static void op_let_a_na_new(s7_scheme *sc)
   sc->code = cdr(sc->code);
   binding = opt2_pair(sc->code);
   sc->curlet = make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding)));
-  for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p))
-    fx_call(sc, p);
+  for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p)) fx_call(sc, p);
   sc->value = fx_call(sc, p);
   free_cell(sc, sc->curlet); /* see above */
 }
@@ -74687,8 +74692,7 @@ static void op_let_a_na_old(s7_scheme *sc)
   let = update_let_with_slot(sc, opt3_let(sc->code), fx_call(sc, cdr(opt2_pair(sc->code))));
   let_set_outlet(let, sc->curlet);
   set_curlet(sc, let);
-  for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p))
-    fx_call(sc, p);
+  for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p)) fx_call(sc, p);
   sc->value = fx_call(sc, p);
 }
 
@@ -74723,7 +74727,6 @@ static inline void op_let_opassq_new(s7_scheme *sc)
 static Inline void inline_op_let_na_new(s7_scheme *sc) /* called once in eval, case gsl lg mock */
 {
   s7_pointer let, sp = NULL;
-
   new_cell(sc, let, T_LET | T_SAFE_PROCEDURE);
   let_set_id(let, sc->let_number + 1);
   let_set_slots(let, slot_end(sc));
@@ -74765,7 +74768,6 @@ static void op_let_na_old(s7_scheme *sc)
 
 static void op_let_2a_new(s7_scheme *sc) /* 2 vars, 1 expr in body */
 {
-  /* opt1|2 free */
   s7_pointer code = cdr(sc->code);
   s7_pointer a1 = opt1_pair(code); /* caar(code) */
   s7_pointer a2 = opt2_pair(code); /* cadar(code) */
@@ -88585,7 +88587,7 @@ static bool op_read_byte_vector(s7_scheme *sc)
 
 
 /* ---------------- unknown ops ---------------- */
-static bool fixup_unknown_op(s7_scheme *sc, s7_pointer code, s7_pointer func, opcode_t op) /* TODO: split when closure case known */
+static bool fixup_unknown_op(s7_scheme *sc, s7_pointer code, s7_pointer func, opcode_t op)
 {
   set_optimize_op(code, op);
   if (is_any_closure(func))
@@ -95135,11 +95137,6 @@ int main(int argc, char **argv)
  * --------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
- * rather than #u|i|r perhaps #byte|int|float-vector, then #hash-table #let? #oscil??
- * cutlet let-ref|set-fallback clears flag? see t600, blocked in cutlet 9390
- *   only sublet_1 sets these flags (i.e. not let(*)/add_slot varlet) -- see t600
- * hook -> apply_unsafe_closure*, op_c_na (sc->code op) -> op_apply_na or op_c_na_lambda_star, args is already (lambda* ...)
- *   thook: maybe a simple_sublet: 1 field -- can we be sure mv's won't interfere?
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
