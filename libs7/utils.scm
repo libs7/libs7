@@ -1,5 +1,18 @@
 ;; (display "loading libs7/utils.scm") (newline)
 
+;;; ----------------
+(define find-then
+  (let ((+documentation+ "(find-then fn sequence) applies fn to each member of sequence.\n\
+If func approves of one, find-then returns the result of applying fn to it."))
+    (lambda (f sequence)
+      (call-with-exit
+       (lambda (return)
+	 (for-each (lambda (arg)
+		     (if (f arg)
+			 (return (f arg))))
+		   sequence)
+	 #f)))))
+
 (define (subset? l1 l2)
   (or (null? l1)
       (and (member  (car l1) l2)
@@ -74,7 +87,10 @@
   (let* ((bn (basename path))
          (last-dot (string-index-right bn (lambda (c) (eq? c #\.))))
          )
-    (string-take bn last-dot)))
+    ;; (format #t "last-dot: ~A~%" last-dot)
+    (if last-dot
+        (string-take bn last-dot)
+        bn)))
 
 (define principal-name
   (let ((+documentation+ "Returns path segment with extension removed. Usually for filenames, but works for directory names too, if they contain a dot.")
@@ -83,7 +99,7 @@
       (bname path))))
 
 (define filename-extension
-  (let ((+documentation+ "Returns extension of filename (path), including dot.")
+  (let ((+documentation+ "Returns extension of filename (path), EXcluding dot.")
         (+signature+ "(filename-extension path)"))
     (lambda (path)
       (let* ((fname (basename path))
