@@ -31683,7 +31683,7 @@ static inline shared_info_t *new_shared_info(s7_scheme *sc)
 
 static shared_info_t *make_shared_info(s7_scheme *sc, s7_pointer top, bool stop_at_print_length)
 {
-  /* for the printer */
+  /* for the printer, here only if !is_structure(top) */
   bool no_problem = true;
   s7_int k, stop_len;
 
@@ -31697,69 +31697,42 @@ static shared_info_t *make_shared_info(s7_scheme *sc, s7_pointer top, bool stop_
 	  stop_len = sc->print_length;
 	  for (k = 0; k < stop_len; k += 2)
 	    {
-	      if (!is_pair(x))
-		break;
-	      if (has_structure(car(x)))
-		{
-		  no_problem = false;
-		  break;
-		}
+	      if (!is_pair(x)) break;
+	      if (has_structure(car(x))) {no_problem = false; break;}
 	      x = cdr(x);
-	      if (!is_pair(x))
-		break;
-	      if (has_structure(car(x)))
-		{
-		  no_problem = false;
-		  break;
-		}
+	      if (!is_pair(x)) break;
+	      if (has_structure(car(x))) {no_problem = false; break;}
 	      x = cdr(x);
 	      slow = cdr(slow);
-	      if (x == slow)
-		{
-		  no_problem = false;
-		  break;
-		}}}
+	      if (x == slow) {no_problem = false; break;}
+	    }}
       else
 	if (s7_list_length(sc, top) == 0) /* it is circular at the top level (following cdr) */
 	  no_problem = false;
 	else
 	  for (; is_pair(x); x = cdr(x))
-	    if (has_structure(car(x)))
-	      {
-		/* it can help a little in some cases to scan vectors here (and slots):
-		 *   if no element has structure, it's ok (maybe also hash_table_entries == 0)
-		 */
-		no_problem = false;
-		break;
-	      }
+	    if (has_structure(car(x))) {no_problem = false; break;} /* perhaps (and (length > 0)) or vector typer etc */
       if ((no_problem) &&
 	  (!is_null(x)) &&
 	  (has_structure(x)))
 	no_problem = false;
-
       if (no_problem)
 	return(NULL);
     }
   else
-    if (is_any_vector(top))
+    if (is_normal_vector(top)) /* any other vector can't happen */
       {
-	if (!is_normal_vector(top))
-	  return(NULL);
-
 	stop_len = vector_length(top);
 	if ((stop_at_print_length) &&
 	    (stop_len > sc->print_length))
 	  stop_len = sc->print_length;
-
 	for (k = 0; k < stop_len; k++)
-	  if (has_structure(vector_element(top, k)))
-	    {
-	      no_problem = false;
-	      break;
-	    }
+	  if (has_structure(vector_element(top, k))) {no_problem = false; break;}
 	if (no_problem)
 	  return(NULL);
       }
+  if ((S7_DEBUGGING) && (is_any_vector(top)) && (!is_normal_vector(top))) fprintf(stderr, "%s[%d]: got abnormal vector\n", __func__, __LINE__);
+  /* also hash-table slot let iterator c-pointer c-object */
 
   {
     shared_info_t *ci = new_shared_info(sc);

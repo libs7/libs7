@@ -9,7 +9,7 @@
 	(*pretty-print-float-format* "~,4F")
 	(*pretty-print-left-margin* 0)
 	(*pretty-print-cycles* #t)) ; if this is #f, you're guaranteeing that there won't be any circular structures
-
+    ;; e.g. (let-temporarily ((((outlet (funclet pretty-print)) '*pretty-print-cycles*) #f)) ...)
     (define pretty-print-1
       (letrec ((messy-number (lambda (z)
 			       (if (real? z)
