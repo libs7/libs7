@@ -553,7 +553,7 @@
 	    lst))
 (g6 gv)
 
-(define (g6 lst)
+(define (g61 lst)
   (for-each (lambda (p)
 	      (for-each (lambda (q)
 			  (if (integer? q)
@@ -562,7 +562,7 @@
 	    lst))
 
 (define glst1 (make-list 100 (make-list 100 #\a)))
-(g6 glst1)
+(g61 glst1)
 
 (define (g16 lst)
   (map (lambda (p)

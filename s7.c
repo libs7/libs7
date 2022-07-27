@@ -10881,9 +10881,14 @@ Only the let is searched if ignore-globals is not #f."
 static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args)
 {
   /* here we know arg2=(rootlet), and no arg3, arg1 is a symbol that needs to be looked-up */
-  s7_pointer sym = lookup(sc, car(args));
-  if (!is_symbol(sym))
-    return(method_or_bust(sc, sym, sc->is_defined_symbol, args, T_SYMBOL, 1));
+  s7_pointer sym = lookup_unexamined(sc, car(args));
+  if (!sym) 
+    return(sc->F);
+  if (!is_symbol(sym)) 
+    {
+      check_method(sc, sym, sc->is_undefined_symbol, args);
+      return(sc->F);
+    }
   return(make_boolean(sc, is_slot(global_slot(sym))));
 }
 
@@ -26522,8 +26527,8 @@ static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is so
     case T_PAIR:       return(false);
     case T_STRING:     return(string_length(obj) == 0);
     case T_HASH_TABLE: return(hash_table_entries(obj) == 0);
-    case T_LET:        return(!tis_slot(let_slots(obj)));
     case T_C_OBJECT:   return(s7_is_eqv(sc, c_object_length(sc, obj), int_zero));
+    case T_LET:        if (obj != sc->rootlet) return(!tis_slot(let_slots(obj))); /* (append (rootlet) #f) */
     default:           return(false);
     }
 }
@@ -71130,7 +71135,8 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
       {
 	bool old_with_let = sc->in_with_let;
 	sc->in_with_let = (old_with_let) || (!is_pair(body)) || (!is_pair(car(body))) ||
-	                  ((caar(body) != sc->unlet_symbol) && (caar(body) != sc->rootlet_symbol) && (caar(body) != sc->curlet_symbol));
+	                  ((caar(body) != sc->unlet_symbol) && /* (caar(body) != sc->rootlet_symbol) && */ (caar(body) != sc->curlet_symbol));
+	/* not rootlet here: (let ((i 0)) (_rd3_ (with-let (rootlet) ((null? i) i)))) */
 	for (p = body; is_pair(p); p = cdr(p))
 	  if ((is_pair(car(p))) &&
 	      (!is_checked(car(p))) &&
@@ -93625,7 +93631,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->keyword_to_symbol_symbol =     defun("keyword->symbol",	keyword_to_symbol,	1, 0, false);
 
   sc->outlet_symbol =                unsafe_defun("outlet",	outlet,			1, 0, false);
-  sc->rootlet_symbol =               defun("rootlet",		rootlet,		0, 0, false);
+  sc->rootlet_symbol =               unsafe_defun("rootlet",	rootlet,		0, 0, false);
   sc->curlet_symbol =                unsafe_defun("curlet",     curlet,			0, 0, false); /* (define (f a) (curlet)) exports the funclet */
   set_func_is_definer(sc->curlet_symbol);
   sc->unlet_symbol =                 defun("unlet",		unlet,			0, 0, false);
@@ -95067,7 +95073,7 @@ int main(int argc, char **argv)
  * thook     ----   ----   2590   2142   2103
  * lt        2187   2172   2150   2173   2180
  * tauto     ----   ----   2562   2196   2192
- * dup       3805   3788   2492   2278   2274
+ * dup       3805   3788   2492   2278   2264
  * tcopy     8035   5546   2539   2374   2375
  * tload     ----   ----   3046   2386   2388
  * fbench    2688   2583   2460   2404   2412
@@ -95088,24 +95094,24 @@ int main(int argc, char **argv)
  * tmap      8869   8774   4489   4473   4478
  * tshoot    5525   5447   5183   5083   5068
  * tstr      6880   6342   5488   5356   5114
- * tform     5357   5348   5307   5300   5292
- * tnum      6348   6013   5433   5364   5363
- * tlamb     6423   6273   5720   5544   5549
+ * tform     5357   5348   5307   5300   5285
+ * tnum      6348   6013   5433   5364   5359
+ * tlamb     6423   6273   5720   5544   5544
  * tmisc     8869   7612   6435   6250   6153
  * tset      ----   ----   ----   6208   6303
  * tgsl      8485   7802   6373   6307   6307
  * tlist     7896   7546   6558   6308   6356
  * tari      13.0   12.7   6827   6488   6486
  * trec      6936   6922   6521   6547   6559
- * tleft     10.4   10.2   7657   7472   7516
+ * tleft     10.4   10.2   7657   7472   7493
  * tgc       11.9   11.1   8177   7957   7964
  * thash     11.8   11.7   9734   9463   9469
- * cb        11.2   11.0   9658   9560   9563  9536
+ * cb        11.2   11.0   9658   9560   9533
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
  * sg        ----   ----   55.9   56.9   56.9
- * lg        ----   ----  105.2  106.1  106.6
+ * lg        ----   ----  105.2  106.1  106.4
  * tbig     177.4  175.8  156.5  149.6  149.9
  * --------------------------------------------
  *
