@@ -33,8 +33,8 @@
       (if (null? obj)
           #t ;; ?
           (if (pair? (car obj))
-              (and (> (length (car obj)) 1)
-                   (alist? (cdr obj)))
+              ;;(and (> (length (car obj)) 1)
+                   (alist? (cdr obj)) ;;)
               #f))
       #f))
 
@@ -65,19 +65,18 @@
   (let ((+documentation+ "(assoc-in keypath alist) keypath: list of keys; alist: tree of alists. Returns the first assoc found by successively applying 'assoc'.")
         (+signature+ '(assoc-in keypath alist)))
     (lambda (key-path alist)
-      (format #t "~A: ~A :: ~A~%" (blue "assoc-in") key-path alist)
+      ;; (format #t "~A: ~A :: ~A~%" (blue "assoc-in") key-path alist)
       (if (null? key-path)
           #f ;; alist
           (if (list? alist)
               (if (null? alist)
                   #f
-                  (if (alist? alist)
-                      (if-let ((in-alist (assoc (car key-path) alist)))
-                              (if (null? (cdr key-path))
+                  ;;(if (alist? alist)
+                  (if-let ((in-alist (assoc (car key-path) alist)))
+                          (if (null? (cdr key-path))
                                   in-alist
                                   (assoc-in (cdr key-path) (cdr in-alist)))
-                              #f)
-                      #f))
+                          #f))
               #f)))))
 
 ;; assoc-in*
@@ -89,7 +88,7 @@
   (let ((+documentation+ "(assoc-in* keypath alist) keypath: list of keys; alist: tree of alists. Returns all assocs for last key in keypath. For all preceding keys in keypath uses first match.")
         (+signature+ '(assoc-in* keypath alist)))
     (lambda (key-path alist)
-      (format #t "~A: ~A~%" (blue "assoc-in*") alist)
+      ;; (format #t "~A: ~A~%" (blue "assoc-in*") alist)
       (if (null? key-path)
           alist
           (if (list? alist)
