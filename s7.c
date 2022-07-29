@@ -9510,11 +9510,7 @@ static s7_pointer g_sublet_curlet(s7_scheme *sc, s7_pointer args)
   check_method(sc, sc->curlet, sc->sublet_symbol, args);
   new_e = inline_make_let_with_slot(sc, sc->curlet, sym, caddr(args));
   set_all_methods(new_e, sc->curlet);
-  if (sym == sc->let_ref_fallback_symbol)
-    set_has_let_ref_fallback(new_e);
-  else
-    if (sym == sc->let_set_fallback_symbol)
-      set_has_let_set_fallback(new_e);
+  check_let_fallback(sc, sym, new_e);
   return(new_e);
 }
 
@@ -9771,7 +9767,7 @@ inline s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
     }
   if (!is_symbol(symbol))
     {
-      if (has_let_ref_fallback(let))
+      if (has_let_ref_fallback(let)) /* let-ref|set-fallback refer to (explicit) let-ref in various forms, not the method lookup process */
 	return(call_let_ref_fallback(sc, let, symbol));
       wrong_type_argument_with_type_nr(sc, sc->let_ref_symbol, 2, symbol, a_symbol_string);
     }
@@ -34760,7 +34756,7 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
   /* can't use s7_object_to_string here anymore because it assumes use_write arg is a boolean */
 
   if (choice == P_READABLE)
-    sc->has_openlets = false;
+    sc->has_openlets = false; /* so (object->string obj :readable) ignores obj's object->string method -- is this a good idea? */
   else check_method(sc, obj, sc->object_to_string_symbol, args);
 
   strport = open_format_port(sc);
@@ -77515,7 +77511,8 @@ static void check_set(s7_scheme *sc)
 		    else pair_set_syntax_op(form, OP_SET_opSAq_P);  /* (set! (symbol fxable) any) */
 		  }}
 	    else
-	      if (is_null(cdddr(inner)))
+	      if ((is_null(cdddr(inner))) &&
+		  (car(inner) != sc->with_let_symbol))              /* (set! (with-let lt a) 32) needs to be handled by op_set_with_let_1 */
 		{
 		  s7_pointer index1 = cadr(inner), index2 = caddr(inner);
 		  if ((is_fxable(sc, index1)) && (is_fxable(sc, index2)))
@@ -95120,4 +95117,5 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
+ * track down source of open ports in t725: alloc line/holder
  */

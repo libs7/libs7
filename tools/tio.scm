@@ -229,6 +229,9 @@
 
 ;(call-funcs)
 
+;(gc) (gc)
+;(set! (*s7* 'print-length) 123123123)
+;(display (*s7* 'memory-usage)) (newline)
 ;(when (> (*s7* 'profile) 0) (show-profile 200))
 (exit)
 
