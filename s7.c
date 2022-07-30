@@ -1230,7 +1230,7 @@ struct s7_scheme {
   uint32_t syms_tag, syms_tag2;
   int32_t bignum_precision;
   s7_int baffle_ctr;
-  s7_pointer default_rng;
+  s7_pointer default_random_state;
 
   s7_pointer sort_body, sort_begin, sort_v1, sort_v2;
   opcode_t sort_op;
@@ -7222,7 +7222,7 @@ static int64_t gc(s7_scheme *sc)
   set_mark(sc->error_port);
   gc_mark(sc->stacktrace_defaults);
   gc_mark(sc->autoload_table);
-  gc_mark(sc->default_rng);
+  gc_mark(sc->default_random_state);
   if (sc->let_temp_hook) gc_mark(sc->let_temp_hook);
 
   gc_mark(sc->w);
@@ -24972,6 +24972,20 @@ static s7_int rsh_i_i2_direct(s7_int i1, s7_int unused_i2) {return(i1 >> 1);}
  *   random-state? returns #t if its arg is one of these guys
  */
 
+static s7_pointer random_state_copy(s7_scheme *sc, s7_pointer args)
+{
+#if WITH_GMP
+  return(sc->F); /* I can't find a way to copy a gmp random generator */
+#else
+  s7_pointer new_r, obj = car(args);
+  if (!is_random_state(obj)) return(sc->F);
+  new_cell(sc, new_r, T_RANDOM_STATE);
+  random_seed(new_r) = random_seed(obj);
+  random_carry(new_r) = random_carry(obj);
+  return(new_r);
+#endif
+}
+
 s7_pointer s7_random_state(s7_scheme *sc, s7_pointer args)
 {
   #define H_random_state "(random-state seed (carry plausible-default)) returns a new random number state initialized with 'seed'. \
@@ -24980,7 +24994,11 @@ Pass this as the second argument to 'random' to get a repeatable random number s
   #define Q_random_state s7_make_circular_signature(sc, 1, 2, sc->is_random_state_symbol, sc->is_integer_symbol)
 
 #if WITH_GMP
-  s7_pointer r, seed = car(args);
+  s7_pointer r, seed;
+  if (is_null(args))
+    return(sc->F); /* how to find current state, if any? */
+
+  seed = car(args);
   if (!s7_is_integer(seed))
     return(method_or_bust_one_arg(sc, seed, sc->random_state_symbol, args, T_INTEGER));
 
@@ -24993,9 +25011,12 @@ Pass this as the second argument to 'random' to get a repeatable random number s
   add_big_random_state(sc, r);
   return(r);
 #else
-  s7_pointer r1 = car(args), r2, p;
+  s7_pointer r1, r2, p;
   s7_int i1, i2;
+  if (is_null(args))
+    return(sc->default_random_state);
 
+  r1 = car(args);
   if (!s7_is_integer(r1))
     return(method_or_bust(sc, r1, sc->random_state_symbol, args, T_INTEGER, 1));
   i1 = integer(r1);
@@ -25026,18 +25047,26 @@ Pass this as the second argument to 'random' to get a repeatable random number s
 
 #define g_random_state s7_random_state
 
-static s7_pointer rng_copy(s7_scheme *sc, s7_pointer args)
+static s7_pointer random_state_getter(s7_scheme *sc, s7_pointer r, s7_int loc) 
 {
-#if WITH_GMP
-  return(sc->F); /* I can't find a way to copy a gmp random generator */
-#else
-  s7_pointer new_r, obj = car(args);
-  if (!is_random_state(obj)) return(sc->F);
-  new_cell(sc, new_r, T_RANDOM_STATE);
-  random_seed(new_r) = random_seed(obj);
-  random_carry(new_r) = random_carry(obj);
-  return(new_r);
+#if (!WITH_GMP)
+  if (loc == 0) return(make_integer(sc, random_seed(r)));
+  if (loc == 1) return(make_integer(sc, random_carry(r)));
 #endif
+  return(sc->F);
+}
+
+static s7_pointer random_state_setter(s7_scheme *sc, s7_pointer r, s7_int loc, s7_pointer val) 
+{
+#if (!WITH_GMP)
+  if (is_t_integer(val))
+    {
+      s7_int i = s7_integer_clamped_if_gmp(sc, val);
+      if (loc == 0) random_seed(r) = i;
+      if (loc == 1) random_carry(r) = i;
+    }
+#endif
+  return(sc->F);
 }
 
 
@@ -25065,7 +25094,7 @@ You can later apply random-state to this list to continue a random number sequen
     return(method_or_bust_with_type(sc, car(args), sc->random_state_to_list_symbol, args, a_random_state_object_string, 1));
   return(sc->nil);
 #else
-  s7_pointer r = (is_null(args)) ? sc->default_rng : car(args);
+  s7_pointer r = (is_null(args)) ? sc->default_random_state : car(args);
   if (!is_random_state(r))
     return(method_or_bust_with_type(sc, r, sc->random_state_to_list_symbol, args, a_random_state_object_string, 1));
   return(list_2(sc, make_integer(sc, random_seed(r)), make_integer_unchecked(sc, random_carry(r))));
@@ -25081,7 +25110,7 @@ void s7_set_default_random_state(s7_scheme *sc, s7_int seed, s7_int carry)
   new_cell(sc, p, T_RANDOM_STATE);
   random_seed(p) = (uint64_t)seed;
   random_carry(p) = (uint64_t)carry;
-  sc->default_rng = p;
+  sc->default_random_state = p;
 #endif
 }
 
@@ -25116,7 +25145,7 @@ static double next_random(s7_pointer r)
   /* (let ((mx 0) (mn 1000)) (do ((i 0 (+ i 1))) ((= i 10000)) (let ((val (random 123))) (set! mx (max mx val)) (set! mn (min mn val)))) (list mn mx)) */
   return(result);
 #else
-  mpfr_urandomb(sc->mpfr_1, random_gmp_state(sc->default_rng));
+  mpfr_urandomb(sc->mpfr_1, random_gmp_state(sc->default_random_state));
   return(mpfr_get_d(sc->mpfr_1, MPFR_RNDN));
 #endif
 }
@@ -25133,7 +25162,7 @@ static s7_pointer g_random(s7_scheme *sc, s7_pointer args)
    *   with (random 0) -> 0, simpler to use in practice, and certainly no worse than (/ 0 0) -> 1.
    */
   if (is_null(cdr(args)))
-    r = sc->default_rng;
+    r = sc->default_random_state;
   else
     {
       r = cadr(args);
@@ -25244,10 +25273,10 @@ s7_double s7_random(s7_scheme *sc, s7_pointer state)
 {
 #if WITH_GMP
   mpfr_set_ui(sc->mpfr_1, 1, MPFR_RNDN);
-  mpfr_urandomb(sc->mpfr_1, random_gmp_state((state) ? state : sc->default_rng));
+  mpfr_urandomb(sc->mpfr_1, random_gmp_state((state) ? state : sc->default_random_state));
   return((s7_double)mpfr_get_d(sc->mpfr_1, MPFR_RNDN));
 #else
-  return(next_random((state) ? state : sc->default_rng));
+  return(next_random((state) ? state : sc->default_random_state));
 #endif
 }
 
@@ -25256,7 +25285,7 @@ static s7_double random_d_7d(s7_scheme *sc, s7_double x)
 #if WITH_GMP
   return(real(g_random(sc, set_plist_1(sc, wrap_real(sc, x)))));
 #else
-  return(x * next_random(sc->default_rng));
+  return(x * next_random(sc->default_random_state));
 #endif
 }
 
@@ -25265,7 +25294,7 @@ static s7_int random_i_7i(s7_scheme *sc, s7_int i)
 #if WITH_GMP
   return(integer(g_random(sc, set_plist_1(sc, wrap_integer(sc, i)))));
 #else
-  return((s7_int)(i * next_random(sc->default_rng)));
+  return((s7_int)(i * next_random(sc->default_random_state)));
 #endif
 }
 
@@ -25274,7 +25303,7 @@ static s7_pointer g_random_i(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
   return(g_random(sc, args));
 #else
-  return(make_integer(sc, (s7_int)(integer(car(args)) * next_random(sc->default_rng))));
+  return(make_integer(sc, (s7_int)(integer(car(args)) * next_random(sc->default_random_state))));
 #endif
 }
 
@@ -25283,14 +25312,14 @@ static s7_pointer g_random_f(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
   return(g_random(sc, args));
 #else
-  return(make_real(sc, real(car(args)) * next_random(sc->default_rng)));
+  return(make_real(sc, real(car(args)) * next_random(sc->default_random_state)));
 #endif
 }
 
 static s7_pointer g_random_1(s7_scheme *sc, s7_pointer args)
 {
 #if (!WITH_GMP)
-  s7_pointer num = car(args), r = sc->default_rng;
+  s7_pointer num = car(args), r = sc->default_random_state;
   if (is_t_integer(num))
     return(make_integer(sc, (s7_int)(integer(num) * next_random(r))));
   if (is_t_real(num))
@@ -25303,9 +25332,9 @@ static s7_pointer random_p_p(s7_scheme *sc, s7_pointer num)
 {
 #if (!WITH_GMP)
   if (is_t_integer(num))
-    return(make_integer(sc, (s7_int)(integer(num) * next_random(sc->default_rng))));
+    return(make_integer(sc, (s7_int)(integer(num) * next_random(sc->default_random_state))));
   if (is_t_real(num))
-    return(make_real(sc, real(num) * next_random(sc->default_rng)));
+    return(make_real(sc, real(num) * next_random(sc->default_random_state)));
 #endif
   return(g_random(sc, set_plist_1(sc, num)));
 }
@@ -25328,7 +25357,7 @@ static s7_pointer g_add_i_random(s7_scheme *sc, s7_pointer args)
   return(add_p_pp(sc, car(args), random_p_p(sc, cadadr(args))));
 #else
   s7_int x = integer(car(args)), y = opt3_int(args); /* cadadr */
-  return(make_integer(sc, x + (s7_int)(y * next_random(sc->default_rng)))); /* (+ -1 (random 1)) -- placement of the (s7_int) cast matters! */
+  return(make_integer(sc, x + (s7_int)(y * next_random(sc->default_random_state)))); /* (+ -1 (random 1)) -- placement of the (s7_int) cast matters! */
 #endif
 }
 
@@ -34123,7 +34152,7 @@ static void c_pointer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
     }
 }
 
-static void rng_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
+static void random_state_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
   #define B_BUFSIZE 128
   char buf[B_BUFSIZE];
@@ -34131,11 +34160,11 @@ static void rng_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 #if WITH_GMP
   if (use_write == P_READABLE)
     nlen = snprintf(buf, B_BUFSIZE, "#<bignum random-state>");
-  else nlen = snprintf(buf, B_BUFSIZE, "#<rng %p>", obj);
+  else nlen = snprintf(buf, B_BUFSIZE, "#<random-state %p>", obj);
 #else
   if (use_write == P_READABLE)
     nlen = snprintf(buf, B_BUFSIZE, "(random-state %" PRIu64 " %" PRIu64 ")", random_seed(obj), random_carry(obj));
-  else nlen = snprintf(buf, B_BUFSIZE, "#<rng %" PRIu64 " %" PRIu64 ">", random_seed(obj), random_carry(obj));
+  else nlen = snprintf(buf, B_BUFSIZE, "#<random-state %" PRIu64 " %" PRIu64 ">", random_seed(obj), random_carry(obj));
 #endif
   port_write_string(port)(sc, buf, clamp_length(nlen, B_BUFSIZE), port);
 }
@@ -34486,7 +34515,7 @@ static void init_display_functions(void)
   display_functions[T_C_FUNCTION_STAR] = c_function_to_port;
   display_functions[T_C_MACRO] =      c_macro_to_port;
   display_functions[T_C_POINTER] =    c_pointer_to_port;
-  display_functions[T_RANDOM_STATE] = rng_to_port;
+  display_functions[T_RANDOM_STATE] = random_state_to_port;
   display_functions[T_CONTINUATION] = continuation_to_port;
   display_functions[T_GOTO] =         goto_to_port;
   display_functions[T_CATCH] =        catch_to_port;
@@ -47742,7 +47771,7 @@ static bool complex_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
   return(false);
 }
 
-static bool rng_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
+static bool random_state_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
 #if WITH_GMP
   return(x == y);
@@ -47764,7 +47793,7 @@ static void init_equals(void)
   equals[T_STRING] =       string_equal;
   equals[T_SYNTAX] =       syntax_equal;
   equals[T_C_OBJECT] =     c_objects_are_equal;
-  equals[T_RANDOM_STATE] = rng_equal;
+  equals[T_RANDOM_STATE] = random_state_equal;
   equals[T_ITERATOR] =     iterator_equal;
   equals[T_INPUT_PORT] =   port_equal;
   equals[T_OUTPUT_PORT] =  port_equal;
@@ -47798,7 +47827,7 @@ static void init_equals(void)
   equivalents[T_STRING] =       string_equal;
   equivalents[T_SYNTAX] =       syntax_equal;
   equivalents[T_C_OBJECT] =     c_objects_are_equivalent;
-  equivalents[T_RANDOM_STATE] = rng_equal;
+  equivalents[T_RANDOM_STATE] = random_state_equal;
   equivalents[T_ITERATOR] =     iterator_equivalent;
   equivalents[T_INPUT_PORT] =   port_equivalent;
   equivalents[T_OUTPUT_PORT] =  port_equivalent;
@@ -47921,6 +47950,8 @@ static s7_pointer op_length(s7_scheme *sc, s7_pointer port)
   return((is_string_port(port)) ? make_integer(sc, port_position(port)) : sc->F); /* length of string we've written */
 }
 
+static s7_pointer rs_length(s7_scheme *sc, s7_pointer port) {return((WITH_GMP) ? sc->F : int_two);}
+
 static void init_length_functions(void)
 {
   for (int32_t i = 0; i < 256; i++) length_functions[i] = any_length;
@@ -47939,6 +47970,7 @@ static void init_length_functions(void)
   length_functions[T_CLOSURE_STAR] = fnc_length;
   length_functions[T_INPUT_PORT]   = ip_length;
   length_functions[T_OUTPUT_PORT]  = op_length;
+  length_functions[T_RANDOM_STATE] = rs_length;
 }
 
 static s7_pointer s7_length(s7_scheme *sc, s7_pointer lst) {return((*length_functions[unchecked_type(lst)])(sc, lst));}
@@ -48035,7 +48067,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
       return(copy_c_object(sc, args));
 
     case T_RANDOM_STATE:
-      return(rng_copy(sc, args));
+      return(random_state_copy(sc, args));
 
     case T_HASH_TABLE:              /* this has to copy nearly everything */
       {
@@ -48162,6 +48194,13 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
       if (is_string(dest))
 	memcpy((void *)(string_value(dest) + dest_start), (void *)((string_value(source)) + source_start), source_len);
       else memcpy((void *)(byte_vector_bytes(dest) + dest_start), (void *)((string_value(source)) + source_start), source_len);
+      return(dest);
+
+    case T_RANDOM_STATE:
+#if (!WITH_GMP)
+      random_seed(dest) = random_seed(source);
+      random_carry(dest) = random_carry(source);
+#endif
       return(dest);
 
     case T_C_OBJECT:
@@ -48293,6 +48332,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       end = hash_table_entries(source);
       break;
 
+    case T_RANDOM_STATE:
+      get = random_state_getter;
+      end = 2;
+      break;
+
     case T_C_OBJECT:
       if (c_object_copy(sc, source))
 	{
@@ -48351,6 +48395,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
     }
   if ((start == 0) && (source == dest))
     return(dest);
+
   source_len = end - start;
   if (source_len == 0)
     {
@@ -48416,6 +48461,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 
     case T_NIL:
       return(sc->nil);
+
+    case T_RANDOM_STATE:
+      set = random_state_setter;
+      dest_len = 2;
+      break;
 
     default:
       s7_error_nr(sc, sc->wrong_type_arg_symbol, set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~S", 17), caller, source, dest));
@@ -52886,7 +52936,7 @@ static s7_pointer fx_random_i(s7_scheme *sc, s7_pointer arg)
 #if WITH_GMP
   return(g_random_i(sc, cdr(arg)));
 #else
-  return(make_integer(sc, (s7_int)(integer(cadr(arg)) * next_random(sc->default_rng))));
+  return(make_integer(sc, (s7_int)(integer(cadr(arg)) * next_random(sc->default_random_state))));
 #endif
 }
 
@@ -52895,7 +52945,7 @@ static s7_pointer fx_add_i_random(s7_scheme *sc, s7_pointer arg)
 {
   s7_int x = integer(cadr(arg));
   s7_int y = opt3_int(cdr(arg)); /* cadadr */
-  return(make_integer(sc, x + (s7_int)(y * next_random(sc->default_rng)))); /* (+ -1 (random 1)) -- placement of the (s7_int) cast matters! */
+  return(make_integer(sc, x + (s7_int)(y * next_random(sc->default_random_state)))); /* (+ -1 (random 1)) -- placement of the (s7_int) cast matters! */
 }
 #endif
 
@@ -57947,8 +57997,8 @@ static s7_int opt_i_7ii_ff(opt_info *o)
 static s7_int opt_add_i_random_i(opt_info *o)      {return(o->v[1].i + (s7_int)(o->v[2].i * next_random(o->sc)));}
 static s7_int opt_subtract_random_i_i(opt_info *o) {return((s7_int)(o->v[1].i * next_random(o->sc)) - o->v[2].i);}
 #else
-static s7_int opt_add_i_random_i(opt_info *o)      {return(o->v[1].i + (s7_int)(o->v[2].i * next_random(o->sc->default_rng)));}
-static s7_int opt_subtract_random_i_i(opt_info *o) {return((s7_int)(o->v[1].i * next_random(o->sc->default_rng)) - o->v[2].i);}
+static s7_int opt_add_i_random_i(opt_info *o)      {return(o->v[1].i + (s7_int)(o->v[2].i * next_random(o->sc->default_random_state)));}
+static s7_int opt_subtract_random_i_i(opt_info *o) {return((s7_int)(o->v[1].i * next_random(o->sc->default_random_state)) - o->v[2].i);}
 #endif
 
 static bool i_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
@@ -59276,7 +59326,7 @@ static s7_double opt_d_dd_fc(opt_info *o) {return(o->v[3].d_dd_f(o->v[5].fd(o->v
 #if WITH_GMP
 static s7_double opt_subtract_random_f_f(opt_info *o) {return(o->v[1].x * next_random(o->sc) - o->v[2].x);}
 #else
-static s7_double opt_subtract_random_f_f(opt_info *o) {return(o->v[1].x * next_random(o->sc->default_rng) - o->v[2].x);}
+static s7_double opt_subtract_random_f_f(opt_info *o) {return(o->v[1].x * next_random(o->sc->default_random_state) - o->v[2].x);}
 #endif
 
 static s7_double opt_d_dd_fc_add(opt_info *o) {return(o->v[5].fd(o->v[4].o1) + o->v[2].x);}
@@ -91791,7 +91841,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_C_TYPES:                       return(sl_c_types(sc));
     case SL_DEBUG:                         return(make_integer(sc, sc->debug));
     case SL_DEFAULT_HASH_TABLE_LENGTH:     return(make_integer(sc, sc->default_hash_table_length));
-    case SL_DEFAULT_RANDOM_STATE:          return(sc->default_rng);
+    case SL_DEFAULT_RANDOM_STATE:          return(sc->default_random_state);
     case SL_DEFAULT_RATIONALIZE_ERROR:     return(make_real(sc, sc->default_rationalize_error));
     case SL_EQUIVALENT_FLOAT_EPSILON:      return(s7_make_real(sc, sc->equivalent_float_epsilon));
     case SL_EXPANSIONS:                    return(s7_make_boolean(sc, sc->is_expanding));
@@ -92037,8 +92087,8 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       if (is_random_state(val))
 	{
 #if (!WITH_GMP)
-	  random_seed(sc->default_rng) = random_seed(val);
-	  random_carry(sc->default_rng) = random_carry(val);
+	  random_seed(sc->default_random_state) = random_seed(val);
+	  random_carry(sc->default_random_state) = random_carry(val);
 #endif
 	  return(val);
 	}
@@ -93780,7 +93830,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->lcm_symbol =                   defun("lcm",		lcm,			0, 0, true);
   sc->rationalize_symbol =           defun("rationalize",	rationalize,		1, 1, false);
   sc->random_symbol =                defun("random",		random,			1, 1, false); set_all_integer_and_float(sc->random_symbol);
-  sc->random_state_symbol =          defun("random-state",      random_state,	        1, (WITH_GMP) ? 0 : 1, false);
+  sc->random_state_symbol =          defun("random-state",      random_state,	        0, (WITH_GMP) ? 1 : 2, false);
   sc->expt_symbol =                  defun("expt",		expt,			2, 0, false);
   sc->log_symbol =                   defun("log",		log,			1, 1, false);
   sc->ash_symbol =                   defun("ash",		ash,			2, 0, false);
@@ -94526,8 +94576,8 @@ s7_scheme *s7_init(void)
 
   {
     s7_pointer p;
-    new_cell(sc, p, T_RANDOM_STATE); /* s7_set_default_random_state might set sc->default_rng, so this shouldn't be permanent */
-    sc->default_rng = p;
+    new_cell(sc, p, T_RANDOM_STATE); /* s7_set_default_random_state might set sc->default_random_state, so this shouldn't be permanent */
+    sc->default_random_state = p;
 
     sc->bignum_precision = DEFAULT_BIGNUM_PRECISION;
 #if WITH_GMP
@@ -94804,7 +94854,7 @@ void s7_free(s7_scheme *sc)
   for (i = 0; i < gp->loc; i++) gmp_randclear(random_gmp_state(gp->list[i]));
   gc_list_free(gp);
 
-  gmp_randclear(random_gmp_state(sc->default_rng));
+  gmp_randclear(random_gmp_state(sc->default_random_state));
 
   /* temps */
   if (sc->ratloc) free_rat_locals(sc);
@@ -95117,5 +95167,4 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
- * track down source of open ports in t725: alloc line/holder
  */

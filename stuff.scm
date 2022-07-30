@@ -874,7 +874,7 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 (define 2^n?
   (let ((+documentation+ "(2^n? x) returns #t if x is a power of 2"))
     (lambda (x)
-      (and (integer> x)
+      (and (integer? x)
 	   (not (zero? x))
 	   (zero? (logand x (- x 1)))))))
 

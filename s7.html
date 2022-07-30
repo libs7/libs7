@@ -459,8 +459,10 @@ The same problem afflicts memq and assq.
 <p>The <em class=def id="random">random</em> function takes a range and an optional state, and returns a number 
 between zero and the range, of the same type as the range.  It is perfectly reasonable
 to use a range of 0, in which case random returns 0.
-<em class=def id="randomstate">random-state</em> creates a new random state from a seed.  If no state is passed,
-random uses some default state initialized from the current time.  <em class=def id="randomstatep">random-state?</em> returns #t if passed a random state object.
+<em class=def id="randomstate">random-state</em> creates a new random state from a seed.  If no seed is passed,
+random-state returns the current state.
+If no state is passed to random,
+ir uses some default state initialized from the current time.  <em class=def id="randomstatep">random-state?</em> returns #t if passed a random state object.
 </p>
 
 <pre class="indented">
