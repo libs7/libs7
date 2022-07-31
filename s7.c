@@ -9253,7 +9253,7 @@ s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointe
 	slot_set_value(global_slot(symbol), value);
       else s7_make_slot(sc, let, symbol, value);
     }
-  else 
+  else
     {
       add_slot_checked_with_id(sc, let, symbol, value);
       check_let_fallback(sc, symbol, let);
@@ -10878,9 +10878,9 @@ static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args)
 {
   /* here we know arg2=(rootlet), and no arg3, arg1 is a symbol that needs to be looked-up */
   s7_pointer sym = lookup_unexamined(sc, car(args));
-  if (!sym) 
+  if (!sym)
     return(sc->F);
-  if (!is_symbol(sym)) 
+  if (!is_symbol(sym))
     {
       check_method(sc, sym, sc->is_undefined_symbol, args);
       return(sc->F);
@@ -11692,7 +11692,7 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
   if (((!is_closure(p)) ||
        (closure_arity(p) != 1)) &&
       (!s7_is_aritable(sc, p, 1)))
-    s7_error_nr(sc, sc->wrong_type_arg_symbol, 
+    s7_error_nr(sc, sc->wrong_type_arg_symbol,
 		set_elist_2(sc, wrap_string(sc, "call/cc procedure, ~A, should take one argument", 47), p));
 
   sc->w = s7_make_continuation(sc);
@@ -12569,7 +12569,7 @@ static s7_pointer string_to_either_integer(s7_scheme *sc, const char *str, int32
 static s7_pointer string_to_either_ratio(s7_scheme *sc, const char *nstr, const char *dstr, int32_t radix)
 {
   bool overflow = false;
-  /* gmp segfaults if passed a bignum/0 so this needs to check first that the denominator is not 0 before letting gmp screw up.  
+  /* gmp segfaults if passed a bignum/0 so this needs to check first that the denominator is not 0 before letting gmp screw up.
    *   Also, if the first character is '+', gmp returns 0!
    */
   s7_int d = string_to_integer(dstr, radix, &overflow);
@@ -25047,7 +25047,7 @@ Pass this as the second argument to 'random' to get a repeatable random number s
 
 #define g_random_state s7_random_state
 
-static s7_pointer random_state_getter(s7_scheme *sc, s7_pointer r, s7_int loc) 
+static s7_pointer random_state_getter(s7_scheme *sc, s7_pointer r, s7_int loc)
 {
 #if (!WITH_GMP)
   if (loc == 0) return(make_integer(sc, random_seed(r)));
@@ -25056,7 +25056,7 @@ static s7_pointer random_state_getter(s7_scheme *sc, s7_pointer r, s7_int loc)
   return(sc->F);
 }
 
-static s7_pointer random_state_setter(s7_scheme *sc, s7_pointer r, s7_int loc, s7_pointer val) 
+static s7_pointer random_state_setter(s7_scheme *sc, s7_pointer r, s7_int loc, s7_pointer val)
 {
 #if (!WITH_GMP)
   if (is_t_integer(val))
@@ -45795,7 +45795,7 @@ static s7_pointer copy_c_object(s7_scheme *sc, s7_pointer args)
   s7_pointer obj = car(args);
   check_method(sc, obj, sc->copy_symbol, args);
   if (!c_object_copy(sc, obj))
-    syntax_error_nr(sc, "attempt to copy ~S?", 19, obj);
+    missing_method_error_nr(sc, sc->copy_symbol, obj);
   return((*(c_object_copy(sc, obj)))(sc, args));
 }
 
@@ -48113,24 +48113,20 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
       new_cell(sc, dest, T_INTEGER);
       integer(dest) = integer(source);
       return(dest);
-
     case T_RATIO:
       new_cell(sc, dest, T_RATIO);
       numerator(dest) = numerator(source);
       denominator(dest) = denominator(source);
       return(dest);
-
     case T_REAL:
       new_cell(sc, dest, T_REAL);
       set_real(dest, real(source));
       return(dest);
-
     case T_COMPLEX:
       new_cell(sc, dest, T_COMPLEX);
       set_real_part(dest, real_part(source));
       set_imag_part(dest, imag_part(source));
       return(dest);
-
 #if WITH_GMP
     case T_BIG_INTEGER: return(mpz_to_big_integer(sc, big_integer(source)));
     case T_BIG_RATIO:   return(mpq_to_big_ratio(sc, big_ratio(source)));
@@ -48233,7 +48229,10 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
 
     case T_HASH_TABLE:
       {
-	s7_pointer p = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
+	s7_pointer p;
+	gc_protect_via_stack(sc, source);
+	p = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
+	unstack(sc);
 	/* TODO: what if is_typed and hash_table_procedures? */
 	if ((hash_table_checker(source) != hash_table_checker(dest)) &&
 	    (hash_table_mapper(dest) == default_hash_map))
@@ -51975,7 +51974,9 @@ static bool call_begin_hook(s7_scheme *sc)
 static s7_pointer apply_list_star(s7_scheme *sc, s7_pointer d)
 {
   /* we check this ahead of time: if (is_null(cdr(d))) return(car(d)); */
-  s7_pointer p = cons(sc, car(d), cdr(d));
+  s7_pointer p;
+  gc_protect_via_stack(sc, d);
+  p = cons(sc, car(d), cdr(d));
   sc->w = p;
   while (is_not_null(cddr(p)))
     {
@@ -51984,6 +51985,7 @@ static s7_pointer apply_list_star(s7_scheme *sc, s7_pointer d)
       if (is_not_null(cdr(d)))
 	p = cdr(p);
     }
+  unstack(sc);
   set_cdr(p, cadr(p));
   return(sc->w);
 }
@@ -77717,7 +77719,7 @@ static void op_set_s_a(s7_scheme *sc)
       (has_methods(sc->curlet)) &&
       (has_let_set_fallback(sc->curlet)))
     sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), fx_call(sc, cddr(sc->code)));
-  else 
+  else
 #endif
     slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
 }
@@ -78108,7 +78110,7 @@ static void op_set_safe(s7_scheme *sc)
   s7_pointer slot = lookup_slot_from(sc->code, sc->curlet);
   if (is_slot(slot))
     slot_set_value(slot, sc->value);
-  else 
+  else
     if ((has_methods(sc->curlet)) &&
 	(has_let_set_fallback(sc->curlet)))
       sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
@@ -87347,9 +87349,10 @@ static void op_safe_c_pa_mv(s7_scheme *sc)
 static void op_c_na(s7_scheme *sc)  /* (set-cdr! lst ()) */
 {
   s7_pointer new_args = make_list(sc, opt3_arglen(cdr(sc->code)), sc->nil);
-  sc->args = new_args;
+  gc_protect_via_stack(sc, new_args);
   for (s7_pointer args = cdr(sc->code), p = new_args; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
+  unstack(sc);
   sc->value = fn_proc(sc->code)(sc, new_args);
 }
 
