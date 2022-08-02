@@ -112,18 +112,22 @@
 ;; srfi 152
 (define (string-null? s) (zero? (string-length s)))
 
-(define (string-split str ch)
-  (let ((len (string-length str)))
-    (letrec
-      ((split
-        (lambda (a b)
-          (cond
-            ((>= b len) (if (= a b) '() (cons (substring str a b) '())))
-              ((char=? ch (string-ref str b)) (if (= a b)
-                (split (+ 1 a) (+ 1 b))
-                  (cons (substring str a b) (split b b))))
-                (else (split a (+ 1 b)))))))
-                  (split 0 0))))
+(define string-split
+  (let ((+documentation+
+         "(string-split str ch) splits str on char ch")
+        (+signature+ "(string-split str ch)"))
+    (lambda (str ch)
+      (let ((len (string-length str)))
+        (letrec
+            ((split
+              (lambda (a b)
+                (cond
+                 ((>= b len) (if (= a b) '() (cons (substring str a b) '())))
+                 ((char=? ch (string-ref str b)) (if (= a b)
+                                                     (split (+ 1 a) (+ 1 b))
+                                                     (cons (substring str a b) (split b b))))
+                 (else (split a (+ 1 b)))))))
+          (split 0 0))))))
 
 ;; srfi 152
 ;;; Returns starting-position in STRING or #f if not true.
@@ -357,9 +361,12 @@
 	       str
 	       (subseq str 0 (+ i 1))))))))
 
-(define (string-trim bag str)
-  (string-right-trim bag (string-left-trim bag str)))
-
+(define string-trim
+  (let ((+documentation+
+         "(string-trim bag str) trims chars in bag from ends of str")
+        (+signature+ "(string-trim bag str)"))
+    (lambda (bag str)
+      (string-right-trim bag (string-left-trim bag str)))))
 
 ;; srfi-152
 ;; the segment of characters in string1 from start1 to end1 is
