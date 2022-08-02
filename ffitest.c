@@ -1448,7 +1448,7 @@ int main(int argc, char **argv)
   {
     const char *s;
     s = s7_documentation(sc, s7_make_symbol(sc, "another_constant"));
-    if ((!s) || (strcmp(s1, "another constant") != 0))
+    if ((!s) || (strcmp(s, "another constant") != 0))
       fprintf(stderr, "%d: another_constant doc: %s\n", __LINE__, s);
   }
   s7_define_variable_with_documentation(sc, "another_variable", s7_t(sc), "another variable");

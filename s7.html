@@ -493,6 +493,25 @@ ir uses some default state initialized from the current time.  <em class=def id=
 <p>copy the random-state to save a spot in a random number sequence, or save the random-state as a list via
 random-state-&gt;list, then to restart from that point, apply random-state to that list.
 </p>
+
+<p>In the gmp s7, random calls gmp's random number generator.  There are
+also many generators in GSL (see libgsl.scm).  In the non-gmp s7, we use Marsaglia's MWC algorithm
+which I think is a good compromise between quality and speed.  If you're calling it more than 
+a billion times, it is probably a good idea to reseed it.  The code I use for this in the auto-tester
+is:
+</p>
+<pre class="indented">
+(require libc.scm)
+(define (reseed)
+  (let ((seed (with-let *libc* 
+		(let ((res (clock_gettime CLOCK_MONOTONIC)))
+		  (+ (* 1000000000 (cadr res)) (caddr res)))))
+	(carry (#(1791398085 1929682203 1683268614 1965537969 1675393560 1967773755 1517746329 
+                  1447497129 1655692410 1606218150 2051013963 1075433238 1557985959 1781943330
+                  1893513180 1631296680 2131995753 2083801278 1873196400 1554115554)
+		(random 20))))
+    (random-state seed carry)))
+</pre>
 </div>
 
 

@@ -10876,15 +10876,15 @@ Only the let is searched if ignore-globals is not #f."
 
 static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args)
 {
-  /* here we know arg2=(rootlet), and no arg3, arg1 is a symbol that needs to be looked-up */
-  s7_pointer sym = lookup_unexamined(sc, car(args));
-  if (!sym)
-    return(sc->F);
-  if (!is_symbol(sym))
-    {
-      check_method(sc, sym, sc->is_undefined_symbol, args);
-      return(sc->F);
-    }
+  /* here we know arg2=(rootlet), and no arg3, arg1 is a symbol (see chooser below) */
+  s7_pointer sym = lookup(sc, car(args)); /* args are unevalled because the chooser calls us through op_safe_c_nc?? */
+#if 1
+  if (!is_symbol(sym)) /* if sym is openlet with defined? perhaps it makes sense to call it, but we need to include the rootlet arg */
+    return(method_or_bust_pp(sc, sym, sc->is_defined_symbol, sym, sc->rootlet, T_SYMBOL, 1));
+#else
+  if (!is_symbol(sym)) /* possible method here is irrelevant -- we're specifically asking for defined in rootlet */
+    simple_wrong_type_argument_nr(sc, sc->is_defined_symbol, sym, T_SYMBOL);
+#endif
   return(make_boolean(sc, is_slot(global_slot(sym))));
 }
 
@@ -51105,6 +51105,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		sc->code = cons(sc, sc->value, sc->nil); /* if we end up at op_begin, give it something it can handle */
 	      return(true);
 	    }}
+      gc_protect_via_stack(sc, info);
       if (op == OP_CATCH_1)
 	{
 	  s7_pointer p;
@@ -51125,8 +51126,8 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
        */
       if (!s7_is_aritable(sc, sc->code, 2))
 	wrong_number_of_args_error_nr(sc, "catch error handler should accept two arguments: ~S", sc->code);
-
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
+      unstack(sc);
       sc->cur_op = OP_APPLY;
       /* explicit eval needed if s7_call called into scheme where a caught error occurred (ex6 in exs7.c)
        *  but putting it here (via eval(sc, OP_APPLY)) means the C stack is not cleared correctly in non-s7-call cases,
@@ -51305,6 +51306,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
   bool ignored_flag = false;
   s7_pointer type = car(args), info = cdr(args);
+  /* sc->w = args; */
 
   /* look for a catcher */
   for (int64_t i = current_stack_top(sc) - 1; i >= 3; i -= 4)
@@ -51313,11 +51315,13 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
+	  sc->w = sc->nil;
 	  if (sc->longjmp_ok) LongJmp(*(sc->goto_start), THROW_JUMP);
 	  return(sc->value);
 	}}
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
+  /* sc->w = sc->nil; */
   s7_error_nr(sc, make_symbol(sc, "uncaught-throw"),
 	      set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info));
   return(sc->F);
@@ -51709,11 +51713,9 @@ particular errors.  If the error is not caught, s7 treats the second argument as
 and applies it to the rest of the arguments."
   #define Q_error s7_make_circular_signature(sc, 1, 2, sc->values_symbol, sc->T)
 
-  if (is_null(args))
-    s7_error_nr(sc, sc->nil, sc->nil);
-  if (!is_string(car(args)))                     /* else a CL-style error? -- use tag = 'no-catch */
-    s7_error_nr(sc, car(args), cdr(args));
-  s7_error_nr(sc, sc->no_catch_symbol, args);       /* this can have trailing args (implicit format) */
+  if (is_string(car(args)))  /* a CL-style error -- use tag='no-catch */
+    s7_error_nr(sc, sc->no_catch_symbol, args);
+  s7_error_nr(sc, car(args), cdr(args));
   return(sc->unspecified);
 }
 
@@ -87949,7 +87951,6 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 
 static token_t read_comma(s7_scheme *sc, s7_pointer pt)
 {
-  int32_t c;
   /* here we probably should check for symbol names that start with "@":
        (define-macro (hi @foo) `(+ ,@foo 1)) -> hi
        (hi 2) -> ;foo: unbound variable
@@ -87960,8 +87961,8 @@ static token_t read_comma(s7_scheme *sc, s7_pointer pt)
        (define-macro (hi @foo . foo) `(list ,@foo))
      what about , @foo -- is the space significant?  We accept ,@ foo.
   */
-
-  if ((c = inchar(pt)) == '@')
+  int32_t c = inchar(pt);
+  if (c == '@')
     return(TOKEN_AT_MARK);
   if (c == EOF)
     {
@@ -88348,15 +88349,15 @@ static s7_pointer read_expression(s7_scheme *sc)
 	case TOKEN_SHARP_CONST:
 	  return(port_read_sharp(current_input_port(sc))(sc, current_input_port(sc)));
 
-	case TOKEN_DOT:                                             /* (catch #t (lambda () (+ 1 . . )) (lambda args 'hiho)) */
+	case TOKEN_DOT:                                        /* (catch #t (lambda () (+ 1 . . )) (lambda args 'hiho)) */
 	  {
 	    int32_t c;
 	    back_up_stack(sc);
 	    do {c = inchar(current_input_port(sc));} while ((c != ')') && (c != EOF));
-	    read_error_nr(sc, "stray dot in list?");             /* (+ 1 . . ) */
+	    read_error_nr(sc, "stray dot in list?");           /* (+ 1 . . ) */
 	  }
 
-	case TOKEN_RIGHT_PAREN:                                     /* (catch #t (lambda () '(1 2 . )) (lambda args 'hiho)) */
+	case TOKEN_RIGHT_PAREN:                                /* (catch #t (lambda () '(1 2 . )) (lambda args 'hiho)) */
 	  back_up_stack(sc);
 	  read_error_nr(sc, "unexpected close paren");         /* (+ 1 2)) or (+ 1 . ) */
 	}}
@@ -94065,7 +94066,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->dynamic_unwind_symbol =        semisafe_defun("dynamic-unwind", dynamic_unwind,   2, 0, false);
   sc->catch_symbol =                 semisafe_defun("catch",	catch,			3, 0, false);
   sc->throw_symbol =                 unsafe_defun("throw",	throw,			1, 0, true);
-  sc->error_symbol =                 unsafe_defun("error",	error,			0, 0, true);
+  sc->error_symbol =                 unsafe_defun("error",	error,			1, 0, true); /* was 0,0 -- 1-Aug-22 */
   /* not safe in catch if macro as error handler, (define-macro (m . args) `(apply ,(car args) ',(cadr args))) (catch #t (lambda () (error abs -1)) m) */
   sc->stacktrace_symbol =            defun("stacktrace",	stacktrace,		0, 5, false);
 
@@ -95123,39 +95124,39 @@ int main(int argc, char **argv)
  * thook     ----   ----   2590   2142   2103
  * lt        2187   2172   2150   2173   2180
  * tauto     ----   ----   2562   2196   2192
- * dup       3805   3788   2492   2278   2264
+ * dup       3805   3788   2492   2278   2272
  * tcopy     8035   5546   2539   2374   2375
  * tload     ----   ----   3046   2386   2388
  * fbench    2688   2583   2460   2404   2412
  * tread     2440   2421   2419   2404   2419
  * trclo     2735   2574   2454   2435   2447
- * titer     2865   2842   2641   2509   2509
+ * titer     2865   2842   2641   2509   2540
  * tmat      3065   3042   2524   2517   2508
  * tb        2735   2681   2612   2596   2601
  * tsort     3105   3104   2856   2805   2803
  * teq       4068   4045   3536   3453   3470
  * tobj      4016   3970   3828   3561   3556
  * tio       3816   3752   3683   3612   3604
- * tmac      3950   3873   3033   3664   3674
- * tclo      4787   4735   4390   4377   4376
+ * tmac      3950   3873   3033   3664   3670
+ * tclo      4787   4735   4390   4377   4384
  * tlet      7775   5640   4450   4415   4431
  * tcase     4960   4793   4439   4429   4435
  * tfft      7820   7729   4755   4450   4455
  * tmap      8869   8774   4489   4473   4478
  * tshoot    5525   5447   5183   5083   5068
- * tstr      6880   6342   5488   5356   5114
+ * tstr      6880   6342   5488   5356   5122
  * tform     5357   5348   5307   5300   5285
  * tnum      6348   6013   5433   5364   5359
  * tlamb     6423   6273   5720   5544   5544
  * tmisc     8869   7612   6435   6250   6153
- * tset      ----   ----   ----   6208   6303
+ * tset      ----   ----   ----   6208   6303  6441 [gc change?? c_pointer_type_p_p etc]
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6308   6356
+ * tlist     7896   7546   6558   6308   6363
  * tari      13.0   12.7   6827   6488   6486
  * trec      6936   6922   6521   6547   6559
  * tleft     10.4   10.2   7657   7472   7493
  * tgc       11.9   11.1   8177   7957   7964
- * thash     11.8   11.7   9734   9463   9469
+ * thash     11.8   11.7   9734   9463   9477
  * cb        11.2   11.0   9658   9560   9533
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
@@ -95170,4 +95171,8 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
+ * circular local_slot: id->slot?
+ *   at symbol creation: create circular list
+ *   at symbol binding: forward cycle, fill id/slot
+ *   at lookup, check local ids rather than search through outlet chain
  */
