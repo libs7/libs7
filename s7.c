@@ -182,7 +182,7 @@
   #define WITH_EXTRA_EXPONENT_MARKERS 0
   #define WITH_IMMUTABLE_UNQUOTE 1
   /* also omitted: *-ci* functions, char-ready?, cond-expand, multiple-values-bind|set!, call-with-values
-   *   and a lot more (inexact/exact, integer-length,  etc) -- see s7.html.
+   *   and a lot more (inexact/exact, integer-length, etc) -- see s7.html.
    */
 #endif
 
@@ -1329,7 +1329,7 @@ struct s7_scheme {
              rest_keyword, allow_other_keys_keyword, readable_keyword, display_keyword, write_keyword, value_symbol, type_symbol,
              baffled_symbol, set_symbol, body_symbol, class_name_symbol, feed_to_symbol, format_error_symbol, immutable_error_symbol,
              wrong_number_of_args_symbol, read_error_symbol, string_read_error_symbol, syntax_error_symbol, division_by_zero_symbol, bad_result_symbol,
-             no_catch_symbol, io_error_symbol, invalid_escape_function_symbol, wrong_type_arg_symbol, out_of_range_symbol, out_of_memory_symbol,
+             io_error_symbol, invalid_escape_function_symbol, wrong_type_arg_symbol, out_of_range_symbol, out_of_memory_symbol,
              missing_method_symbol, unbound_variable_symbol, if_keyword, symbol_table_symbol, profile_in_symbol, trace_in_symbol;
 
   /* signatures of sequences used as applicable objects: ("hi" 1) */
@@ -10878,13 +10878,8 @@ static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args)
 {
   /* here we know arg2=(rootlet), and no arg3, arg1 is a symbol (see chooser below) */
   s7_pointer sym = lookup(sc, car(args)); /* args are unevalled because the chooser calls us through op_safe_c_nc?? */
-#if 1
   if (!is_symbol(sym)) /* if sym is openlet with defined? perhaps it makes sense to call it, but we need to include the rootlet arg */
     return(method_or_bust_pp(sc, sym, sc->is_defined_symbol, sym, sc->rootlet, T_SYMBOL, 1));
-#else
-  if (!is_symbol(sym)) /* possible method here is irrelevant -- we're specifically asking for defined in rootlet */
-    simple_wrong_type_argument_nr(sc, sc->is_defined_symbol, sym, T_SYMBOL);
-#endif
   return(make_boolean(sc, is_slot(global_slot(sym))));
 }
 
@@ -11087,7 +11082,7 @@ void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_ty
 		(argnum == 0) ?
 		set_elist_4(sc, wrap_string(sc, "~S argument is a pointer of type ~S, but expected ~S", 52),
 			    wrap_string(sc, caller, strlen(caller)), c_pointer_type(p), expected_type) :
-		set_elist_5(sc, wrap_string(sc, "~S ~:D argument got a pointer of type ~S, but expected ~S", 56),
+		set_elist_5(sc, wrap_string(sc, "~S ~:D argument got a pointer of type ~S, but expected ~S", 57),
 			    wrap_string(sc, caller, strlen(caller)),
 			    wrap_integer(sc, argnum), c_pointer_type(p), expected_type));
   return(c_pointer(p));
@@ -12714,7 +12709,7 @@ static bool big_numbers_are_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
 {
   if (!mpz_fits_slong_p(n))
-    s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "bigint does not fit in s7_int: ~S", 34), mpz_to_big_integer(sc, n)));
+    s7_error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "bigint does not fit in s7_int: ~S", 33), mpz_to_big_integer(sc, n)));
   return(mpz_get_si(n));
 }
 #endif
@@ -30980,9 +30975,9 @@ static s7_pointer let_iterate(s7_scheme *sc, s7_pointer iterator)
   if (!tis_slot(slot))
     return(iterator_quit(iterator));
   iterator_set_current_slot(iterator, next_slot(slot));
-  if (!iterator_let_cons(iterator))
-    return(cons(sc, slot_symbol(slot), slot_value(slot)));
   p = iterator_let_cons(iterator);
+  if (!p)
+    return(cons(sc, slot_symbol(slot), slot_value(slot)));
   set_car(p, slot_symbol(slot));
   set_cdr(p, slot_value(slot));
   return(p);
@@ -34200,7 +34195,7 @@ static void undefined_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, us
   if ((obj != sc->undefined) &&
       (use_write == P_READABLE))
     {
-      port_write_string(port)(sc, "(with-input-from-string \"",25, port);
+      port_write_string(port)(sc, "(with-input-from-string \"", 25, port);
       port_write_string(port)(sc, undefined_name(obj), undefined_name_length(obj), port);
       port_write_string(port)(sc, "\" read)", 7, port);
     }
@@ -44441,7 +44436,7 @@ static s7_pointer g_hash_table_1(s7_scheme *sc, s7_pointer args, s7_pointer call
   s7_int len = proper_list_length(args);
   if (len & 1)
     s7_error_nr(sc, sc->wrong_number_of_args_symbol,
-		set_elist_3(sc, wrap_string(sc, "~A got an odd number of arguments: ~S", 45), caller, args));
+		set_elist_3(sc, wrap_string(sc, "~A got an odd number of arguments: ~S", 37), caller, args));
   len /= 2;
   ht = s7_make_hash_table(sc, (len > sc->default_hash_table_length) ? len : sc->default_hash_table_length);
   if (len > 0)
@@ -51116,16 +51111,20 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 	  closure_set_arity(p, CLOSURE_ARITY_NOT_SET);
 	  closure_set_let(p, sc->temp4);
 	  sc->code = p;
+	  if ((S7_DEBUGGING) && (!s7_is_aritable(sc, sc->code, 2))) fprintf(stderr, "%s[%d]: errfunc not aritable(2)!\n", __func__, __LINE__);
 	}
-      else sc->code = error_func;
+      else
+	{
+	  sc->code = error_func;
+	  if (!s7_is_aritable(sc, sc->code, 2)) /* op_catch_1 from op_c_catch already checks this */
+	    wrong_number_of_args_error_nr(sc, "catch error handler should accept two arguments: ~S", sc->code);
+	}
       sc->temp4 = sc->nil;
       /* if user (i.e. yers truly!) copies/pastes the preceding lambda () into the
        *   error handler portion of the catch, he gets the inexplicable message:
        *       ;(): too many arguments: (a1 ())
        *   when this apply tries to call the handler.  So, we need a special case error check here!
        */
-      if (!s7_is_aritable(sc, sc->code, 2))
-	wrong_number_of_args_error_nr(sc, "catch error handler should accept two arguments: ~S", sc->code);
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
       unstack(sc);
       sc->cur_op = OP_APPLY;
@@ -51714,7 +51713,7 @@ and applies it to the rest of the arguments."
   #define Q_error s7_make_circular_signature(sc, 1, 2, sc->values_symbol, sc->T)
 
   if (is_string(car(args)))  /* a CL-style error -- use tag='no-catch */
-    s7_error_nr(sc, sc->no_catch_symbol, args);
+    s7_error_nr(sc, make_symbol(sc, "no-catch"), args);
   s7_error_nr(sc, car(args), cdr(args));
   return(sc->unspecified);
 }
@@ -51728,10 +51727,7 @@ static char *truncate_string(char *form, s7_int len, use_write_t use_write)
       /* I guess we need to protect the outer double quotes in this case */
       for (i = len - 5; i >= (len / 2); i--)
 	if (is_white_space((int32_t)f[i]))
-	  {
-	    /* form[i] = '.'; form[i + 1] = '.'; form[i + 2] = '.'; form[i + 3] = '"'; form[i + 4] = '\0'; */
-	    return(form);
-	  }
+	  return(form);
       i = len - 5;
       if (i > 0) {form[i] = '.'; form[i + 1] = '.'; form[i + 2] = '.'; form[i + 3] = '"'; form[i + 4] = '\0';}
       else
@@ -74611,7 +74607,7 @@ static bool op_named_let_na(s7_scheme *sc)
       sc->args = cons_unchecked(sc, sc->value = fx_call(sc, cdar(p)), sc->args);
     }
   sc->args = proper_list_reverse_in_place(sc, sc->args);
-  return(op_named_let_1(sc, sc->args)); /* sc->code = (name vars . body),  args = vals in decl order, op_named_let_1 handles inner let */
+  return(op_named_let_1(sc, sc->args)); /* sc->code = (name vars . body), args = vals in decl order, op_named_let_1 handles inner let */
 }
 
 static void op_let_no_vars(s7_scheme *sc)
@@ -76715,10 +76711,10 @@ static s7_pointer check_define_macro(s7_scheme *sc, opcode_t op, s7_pointer form
   if (is_constant_symbol(sc, mac_name))
     syntax_error_with_caller_nr(sc, "~A: ~S is constant", 18, caller, mac_name);
 
-  if (!is_pair(cdr(sc->code)))                                        /* (define-macro (...)) */
+  if (!is_pair(cdr(sc->code)))                                    /* (define-macro (...)) */
     syntax_error_with_caller_nr(sc, "~A ~A, but no body?", 19, caller, mac_name);
 
-  if (s7_list_length(sc, cdr(sc->code)) < 0)                          /* (define-macro (hi) 1 . 2) */
+  if (s7_list_length(sc, cdr(sc->code)) < 0)                      /* (define-macro (hi) 1 . 2) */
     s7_error_nr(sc, sc->syntax_error_symbol,
 		set_elist_3(sc, wrap_string(sc, "~A: macro body messed up, ~A", 28), caller, sc->code));
 
@@ -76744,7 +76740,7 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
 {
   s7_pointer args, caller = cur_op_to_caller(sc, op);
 
-  if (!is_pair(sc->code)) /* sc->code = cdr(form) */                  /* (macro) or (macro . 1) */
+  if (!is_pair(sc->code)) /* sc->code = cdr(form) */              /* (macro) or (macro . 1) */
     syntax_error_with_caller_nr(sc, "~S: ~S has no parameters or body?", 33, caller, form);
   if (!is_pair(cdr(sc->code)))                                        /* (macro (a)) */
     syntax_error_with_caller_nr(sc, "~S: ~S has no body?", 19, caller, form);
@@ -76765,7 +76761,7 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
     }
   else set_car(sc->code, check_lambda_star_args(sc, args, NULL, form));
 
-  if (s7_list_length(sc, cdr(sc->code)) < 0)                          /* (macro () 1 . 2) */
+  if (s7_list_length(sc, cdr(sc->code)) < 0)                      /* (macro () 1 . 2) */
     s7_error_nr(sc, sc->syntax_error_symbol,
 		set_elist_3(sc, wrap_string(sc, "~A: macro body messed up, ~A", 28), caller, form));
 
@@ -77506,7 +77502,7 @@ static void check_set(s7_scheme *sc)
     {
       if (is_null(code))                                             /* (set!) */
 	syntax_error_nr(sc, "set!: not enough arguments: ~A", 30, form);
-      syntax_error_nr(sc, "set!: stray dot? ~A",19,  form);          /* (set! . 1) */
+      syntax_error_nr(sc, "set!: stray dot? ~A", 19, form);          /* (set! . 1) */
     }
   if (!is_pair(cdr(code)))
     {
@@ -77529,13 +77525,13 @@ static void check_set(s7_scheme *sc)
   else
     if (!is_symbol(car(code)))                                      /* (set! 12345 1) */
       s7_error_nr(sc, sc->syntax_error_symbol,
-		  set_elist_3(sc, wrap_string(sc, "set! can't change ~S, ~S",  24), car(code), form));
+		  set_elist_3(sc, wrap_string(sc, "set! can't change ~S, ~S", 24), car(code), form));
     else
       if (is_constant_symbol(sc, car(code)))                        /* (set! pi 3) */
 	s7_error_nr(sc, sc->syntax_error_symbol,
 		    set_elist_3(sc, wrap_string(sc, (is_keyword(car(code))) ? "set!: can't change keyword's value: ~S in ~S" :
 						"set!: can't alter constant's value: ~S in ~S", 44),
-			     car(code), form));
+				car(code), form));
   if (is_pair(car(code)))
     {
       /* here we have (set! (...) ...) */
@@ -79061,7 +79057,7 @@ static goto_t op_set2(s7_scheme *sc)
 
       if (is_multiple_value(sc->value)) /* this has to be at least 2 args, sc->args and sc->code make 2 more, so... */
 	syntax_error_nr(sc, "set!: too many arguments: ~S", 28,
-		     set_ulist_1(sc, sc->set_symbol, pair_append(sc, multiple_value(sc->value), pair_append(sc, sc->args, sc->code))));
+			set_ulist_1(sc, sc->set_symbol, pair_append(sc, multiple_value(sc->value), pair_append(sc, sc->args, sc->code))));
 
       if (sc->args == sc->nil)
 	syntax_error_nr(sc, "list set!: not enough arguments: ~S", 35, sc->code);
@@ -87811,7 +87807,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 	      {
 		sc->strbuf[loc++] = (unsigned char)d;
 		s7_error_nr(sc, sc->read_error_symbol,
-			    set_elist_3(sc, wrap_string(sc, "reading #~A...: ~A must be a positive integer", 37),
+			    set_elist_3(sc, wrap_string(sc, "reading #~A...: ~A must be a positive integer", 45),
 					wrap_string(sc, sc->strbuf, loc),
 					wrap_integer(sc, dims)));
 	      }
@@ -93520,7 +93516,6 @@ then returns each var to its original value."
   sc->autoload_error_symbol =       make_symbol(sc, "autoload-error");
   sc->out_of_range_symbol =         make_symbol(sc, "out-of-range");
   sc->out_of_memory_symbol =        make_symbol(sc, "out-of-memory");
-  sc->no_catch_symbol =             make_symbol(sc, "no-catch");
   sc->io_error_symbol =             make_symbol(sc, "io-error");
   sc->missing_method_symbol =       make_symbol(sc, "missing-method");
   sc->invalid_escape_function_symbol = make_symbol(sc, "invalid-escape-function");
@@ -95123,7 +95118,7 @@ int main(int argc, char **argv)
  * s7test    1873   1831   1818   1809   1815
  * thook     ----   ----   2590   2142   2103
  * lt        2187   2172   2150   2173   2180
- * tauto     ----   ----   2562   2196   2192
+ * tauto     ----   ----   2562   2196   2192  2172
  * dup       3805   3788   2492   2278   2272
  * tcopy     8035   5546   2539   2374   2375
  * tload     ----   ----   3046   2386   2388
@@ -95149,7 +95144,7 @@ int main(int argc, char **argv)
  * tnum      6348   6013   5433   5364   5359
  * tlamb     6423   6273   5720   5544   5544
  * tmisc     8869   7612   6435   6250   6153
- * tset      ----   ----   ----   6208   6303  6441 [gc change?? c_pointer_type_p_p etc]
+ * tset      ----   ----   ----   6208   6441
  * tgsl      8485   7802   6373   6307   6307
  * tlist     7896   7546   6558   6308   6363
  * tari      13.0   12.7   6827   6488   6486
@@ -95171,8 +95166,4 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?]
  *   threads.c -> tools + tests
- * circular local_slot: id->slot?
- *   at symbol creation: create circular list
- *   at symbol binding: forward cycle, fill id/slot
- *   at lookup, check local ids rather than search through outlet chain
  */

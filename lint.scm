@@ -11567,6 +11567,12 @@
 
 			      (else
 			       (let ((op (return-type (car arg) env)))
+				 (when (eq? (car arg) 'random) ; (make-byte-vector 2 (random 256)!
+				   (set! op (->lint-type (cadr arg)))
+				   (if (and (eq? checker 'byte?)
+					    (integer? (cadr arg))
+					    (<= 0 (cadr arg) 256))
+				       (set! op 'byte?)))
 				 (let ((v (var-member (car arg) env)))
 				   (when (and v (not (memq form (var-history v))))
 				     (set! (var-history v) (cons form (var-history v)))
