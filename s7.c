@@ -7194,7 +7194,6 @@ static int64_t gc(s7_scheme *sc)
 {
   s7_cell **old_free_heap_top;
   s7_int i;
-  s7_pointer p;
 
   if (sc->gc_in_progress)
     s7_error_nr(sc, sc->error_symbol, set_elist_1(sc, wrap_string(sc, "GC called recursively", 21)));
@@ -7246,7 +7245,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->t4_1));
   gc_mark(car(sc->plist_1));
   gc_mark(car(sc->plist_2)); gc_mark(cadr(sc->plist_2));
-  for (p = sc->plist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (s7_pointer p = sc->plist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
   gc_mark(car(sc->qlist_2)); gc_mark(cadr(sc->qlist_2));
   gc_mark(car(sc->qlist_3));
   gc_mark(car(sc->u1_1));
@@ -7256,15 +7255,15 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->rec_p2);
 
   /* these probably don't need to be marked */
-  for (p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-  for (p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-  for (p = sc->out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
-  for (p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (s7_pointer p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (s7_pointer p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (s7_pointer p = sc->out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (s7_pointer p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) gc_mark(car(p));
 
   gc_mark(car(sc->elist_1));
   gc_mark(car(sc->elist_2));
   gc_mark(cadr(sc->elist_2));
-  for (p = sc->elist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
+  for (s7_pointer p = sc->elist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
   gc_mark(car(sc->elist_4));
   gc_mark(car(sc->elist_5));
   gc_mark(car(sc->elist_6));
@@ -7273,7 +7272,7 @@ static int64_t gc(s7_scheme *sc)
   for (i = 1; i < NUM_SAFE_LISTS; i++)
     if ((is_pair(sc->safe_lists[i])) &&
 	(list_is_in_use(sc->safe_lists[i])))
-      for (p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
+      for (s7_pointer p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
 	gc_mark(car(p));
 
   for (i = 0; i < sc->setters_loc; i++)
@@ -7359,6 +7358,7 @@ static int64_t gc(s7_scheme *sc)
 #endif
     while (tp < heap_top)          /* != here or ^ makes no difference, and going to 64 (from 32) doesn't matter */
       {
+	s7_pointer p;
 	LOOP_8(gc_object(tp));
 	LOOP_8(gc_object(tp));
 	LOOP_8(gc_object(tp));
@@ -8509,7 +8509,6 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
     if (is_string(car(p)))
       len += string_length(car(p));
     else break;
-
   if (is_pair(p))
     {
       if (is_null(cdr(args)))
@@ -91532,8 +91531,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #endif
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size"), cons(sc, make_integer(sc, sc->heap_size),
-									    kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size"), 
+			     cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
@@ -93686,9 +93685,9 @@ static void init_rootlet(s7_scheme *sc)
   /* unlet (and with-let) don't actually need to be immutable, but s7.html says they are... */
   sc->is_funclet_symbol =            defun("funclet?",          is_funclet,             1, 0, false);
   sc->sublet_symbol =                defun("sublet",		sublet,			1, 0, true);
-  sc->varlet_symbol =                semisafe_defun("varlet",	varlet,			1, 0, true);
+  sc->varlet_symbol =                semisafe_defun("varlet",	varlet,			2, 0, true); /* was 1,0 13-Aug-22 */
   set_func_is_definer(sc->varlet_symbol);
-  sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			1, 0, true);
+  sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			2, 0, true); /* was 1,0 13-Aug-22 */
   set_func_is_definer(sc->cutlet_symbol);
   sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
