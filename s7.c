@@ -50506,7 +50506,8 @@ static void swap_stack(s7_scheme *sc, opcode_t new_op, s7_pointer new_code, s7_p
   e = sc->stack_end[1];
   args = sc->stack_end[2];
   op = (opcode_t)(sc->stack_end[3]); /* this should be begin1 */
-  if ((S7_DEBUGGING) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK)) fprintf(stderr, "swap %s\n", op_names[op]);
+  if ((S7_DEBUGGING) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK)) 
+    fprintf(stderr, "swap %s in %s\n", op_names[op], display(s7_name_to_value(sc, "estr")));
   push_stack(sc, new_op, new_args, new_code);
   sc->stack_end[0] = code;
   sc->stack_end[1] = e;
@@ -50718,7 +50719,10 @@ static s7_pointer g_dynamic_unwind(s7_scheme *sc, s7_pointer args)
 {
   #define H_dynamic_unwind "(dynamic-unwind func arg) pushes func and arg on the stack, then (func arg) is called when the stack unwinds."
   #define Q_dynamic_unwind s7_make_signature(sc, 3, sc->is_procedure_symbol, sc->is_procedure_symbol, sc->T)
-  swap_stack(sc, OP_DYNAMIC_UNWIND, car(args), cadr(args));
+  s7_pointer func = car(args);
+  if (!is_procedure(func))          /* this returns false for macros -- do we want is_applicable here? */
+    wrong_type_argument_with_type_nr(sc, sc->dynamic_unwind_symbol, 1, func, a_procedure_string);
+  swap_stack(sc, OP_DYNAMIC_UNWIND, func, cadr(args));
   return(cadr(args));
 }
 
@@ -57365,7 +57369,8 @@ static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer 
   if ((is_symbol(car(tree))) &&
       (is_definer_or_binder(car(tree))))
     {
-      if ((car(tree) == sc->let_symbol) && (is_pair(cdr(tree))) && (is_pair(cadr(tree))) && (is_null(cdadr(tree))))
+      if ((car(tree) == sc->let_symbol) && (is_pair(cdr(tree))) && (is_pair(cadr(tree))) && 
+	  (is_null(cdadr(tree))) && (is_pair(caadr(tree)))) /* (let (a) ...) */
 	fx_tree(sc, cddr(tree), caaadr(tree), NULL, NULL, more_vars);
       return;
     }
@@ -95163,6 +95168,6 @@ int main(int argc, char **argv)
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
- *   libpthread.scm -> main [but should it include the pool/start_routine?]
- *   threads.c -> tools + tests
+ *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
+ * t718 
  */
