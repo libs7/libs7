@@ -22,10 +22,12 @@
 	  (car alist)
 	  (rassoc-if predicate (cdr alist) key))))
 
-(define* (rassoc item alist (test eql) (key cdr))
-  (rassoc-if (lambda (obj)
-               ;; (format #t "rassoc test: ~A :: ~A\n" item obj)
-               (test item obj)) alist key))
+(define rassoc
+  (let ((+documentation+ "reverse assoc using equal?")
+        (+signature+ '(rassoc val alist)))
+    (lambda (val alist)
+      (rassoc-if (lambda (obj)
+                   (equal? val obj)) alist cdr))))
 
 ;;;;;;;;;;;;;;;;
 (define (alist? obj)
@@ -276,7 +278,7 @@
 
                                 ;; no match, both ks and als not null
                                 (begin
-                                  (format #t "nomatch for key ~A - adding ~A\n"
+                                  (format #t "~A ~A - adding ~A\n" (yellow "nomatch for key")
                                           (car ks) ks)
                                   (format #t "Old als: ~A\n" als)
                                   ;; recursion obtains value for key
@@ -287,16 +289,17 @@
                                          )
                                     ;; recres could be: (:ml . d.ml) for new file
                                     ;; or (D (:ml . d.ml)) for module
+                                    ;; or  ((:ml_ . goodbye.ml) (:mli . goodbye.mli))
+                                    ;; or new node like (:dynamic (Foo . foo.mli))
                                     (let* (;;(_ (format #t "~A: ~A~%" (red "XXXX") ks))
                                            ;;(_ (format #t "~A: ~A~%" (red "YYYY") recres))
-                                           (subval (if (alist? recres)
-                                                                (car recres)
-                                                                recres))
+                                           ;; (subval (if (alist? recres) (car recres) recres))
+                                           (subval recres)
                                            (newtree
                                             (append! als
                                                      (list
                                                       (if (> (length ks) 1)
-                                                          (list (car ks) subval)
+                                                          (cons (car ks) subval)
                                                           (cons (car ks) subval))))))
                                       ;; (format #t "newtree: ~A\n" newtree)
                                       ;; (format #t "new als: ~A\n" als)
