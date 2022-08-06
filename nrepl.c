@@ -402,5 +402,7 @@ static int nrepl(s7_scheme *sc)
       #include "./resources/main_scm.xxd"
       };
 
+C23 now has #embed to handle this case
+
 */
 #endif

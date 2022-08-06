@@ -4,6 +4,7 @@
   (lambda (op)
     (call-with-input-file "nrepl.scm"
       (lambda (ip)
+	(format op "/* created by make-nrepl-bits.scm reading nrepl.scm */~%")
 	(format op "unsigned char nrepl_scm[] = {~%  ")
 	(do ((c (read-char ip) (read-char ip))
 	     (i 0 (+ i 1)))

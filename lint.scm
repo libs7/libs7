@@ -11567,7 +11567,8 @@
 
 			      (else
 			       (let ((op (return-type (car arg) env)))
-				 (when (eq? (car arg) 'random) ; (make-byte-vector 2 (random 256)!
+				 (when (and (eq? (car arg) 'random) ; (make-byte-vector 2 (random 256)!
+					    (pair? (cdr arg)))      ; (random) in some schemes
 				   (set! op (->lint-type (cadr arg)))
 				   (if (and (eq? checker 'byte?)
 					    (integer? (cadr arg))
