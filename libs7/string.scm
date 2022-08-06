@@ -5,7 +5,8 @@
 
 ;; see   ~/scheme/srfi-152
 
-;; (load "srfi.scm")
+(load "r7rs.scm")
+(load "srfi-14.scm")
 
 (define CCRED (format #f "~C[0;31m" #\escape))
 (define CCGRN (format #f "~C[0;32m" #\escape))
@@ -76,6 +77,7 @@
 
 	  (else ""))))
 
+;;; Returns three values: rest start end
 (define (string-parse-start+end proc s args)
   (if (not (string? s)) (error "Non-string value" proc s))
   (let ((slen (string-length s)))
@@ -206,18 +208,30 @@
                (if (criterion (string-ref str i)) i
                    (lp (+ i 1)))))))))
 
-(define (string-index-right str criterion) ;; . maybe-start+end)
-  ;; (let-string-start+end (start end) string-index-right str maybe-start+end
-  (let* ((str (if (symbol? str) (symbol->string str) str))
-         (start 0)
-         (end (length str)))
-    (let lp ((i (- end 1)))
-      (if (< i 0)
-          #f
-          (and (>= i start)
-	       (if (criterion (string-ref str i))
-                   i
-	           (lp (- i 1))))))))
+(define string-index-right
+  (let ((+documentation+ "index string from right. criterion: char-set or char or predicate")
+        (+signature+ "(string-index-right s (criterion fn) (start 0) (end (string-length str)))"))
+    (lambda*
+     (str criterion (start 0) (end (string-length str)))
+     ;; (format #t "~A: ~A~%" (blue "string-index-right") str)
+     ;; (let ((end (string-length str)))
+     (cond ((char? criterion)
+	    (let lp ((i (- end 1)))
+	      (and (>= i start)
+		   (if (char=? criterion (string-ref str i)) i
+		       (lp (- i 1))))))
+	   ((char-set? criterion)
+	    (let lp ((i (- end 1)))
+	      (and (>= i start)
+		   (if (char-set-contains? criterion (string-ref str i)) i
+		       (lp (- i 1))))))
+	   ((procedure? criterion)
+	    (let lp ((i (- end 1)))
+	      (and (>= i start)
+		   (if (criterion (string-ref str i)) i
+		       (lp (- i 1))))))
+	   (else (error "Second param is neither char-set, char, or predicate procedure."
+		        string-index-right criterion))))))
 
 ;; srfi 152
 (define (%string-prefix-length s1 start1 end1 s2 start2 end2)
@@ -409,4 +423,78 @@
   (let ((segs (string-split s char-from)))
     (string-join segs (string char-to))))
 
-;; (display "loaded libs7/string.scm") (newline)
+(define string-skip-right
+  (let ((+documentation+ "complement of string-index-right")
+        (+signature+ "(string-skip-right s (criterion fn) (start 0) (end #f))"))
+    (lambda*
+     (str criterion (start 0) (end (string-length str)))
+     (format #t "~A: ~A~%" (blue "string-skip-right") str)
+     (format #t "~A: ~A, ~A~%" (blue "start, end") start end)
+     ;; (format #t "~A: ~A~%\n" (blue "criterion") criterion)
+     ;; (format #t "~A: ~A~%" (blue "criterion t") (type-of criterion))
+     ;; (let ((start 0) (end (length str)))
+     (cond ((char? criterion)
+	    (let lp ((i (- end 1)))
+              (format #t "~A: ~A~%" (red "char lp") i)
+	      (and (>= i start)
+		   (if (char=? criterion (string-ref str i))
+		       (lp (- i 1))
+		       i))))
+
+	   ((char-set? criterion)
+            (format #t "~A~%" (red "Char-set lp"))
+	    (let lp ((i (- end 1)))
+              ;; (format #t "~A: ~A~%" (red "sr") (string-ref str i))
+              ;; (format #t "~A: ~A~%" (red "sr t") (type-of (string-ref str i)))
+              ;; (format #t "~A: ~A~%" (red "cscon?")
+              ;; (char-set-contains? criterion (string-ref str i)))
+	    (and (>= i start)
+	         (if (char-set-contains? criterion (string-ref str i))
+	             (lp (- i 1))
+	             i))))
+
+           ((procedure? criterion)
+            (let lp ((i (- end 1)))
+	      (and (>= i start)
+	           (if (criterion (string-ref str i)) (lp (- i 1))
+		       i))))
+           (else (error 'fixme
+                        "CRITERION param is neither char-set or char."
+		        #|string-skip-right criterion|#))))))
+
+;;; string-tokenize s [token-set start end] -> list
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Break S up into a list of token strings, where a token is a maximal
+;;; non-empty contiguous sequence of chars belonging to TOKEN-SET.
+;;; (string-tokenize "hello, world") => ("hello," "world")
+
+(define string-tokenize
+(let ((+documentation+ "tokenizes string (by whitespace only, for now)")
+      (+signature+ "(string-tokenize s (token-chars #f) (start 0) (end #f))"))
+  (lambda*
+   (s (token-chars (lambda (ch) (member ch '(#\space #\newline))))
+      (start 0) (end (string-length s)))
+   (format #t "~A: ~A~%" (blue "string-tokenize") s)
+   ;; (let ((end (if end end )))
+   (let* lp ((i end) (ans '()))
+         (format #t "~A: ~A~%" (magenta "loop ans") ans)
+         (format #t "~A: ~A, ~A, ~A~%" (magenta "start, end, i") start end i)
+         (format #t "~A: ~A~%" (magenta "string") s)
+	 (cond ((and (< start i) (string-index-right s token-chars start i)) =>
+	             (lambda (tend-1)
+                       (format #t "~A: ~A~%" (cyan "tend-1") tend-1)
+		       (let ((tend (+ 1 tend-1)))
+		         (cond ((string-skip-right s token-chars start tend-1) =>
+			        (lambda (tstart-1)
+                                  (format #t "~A: ~A~%" (cyan "tstart-1") tstart-1)
+			          (lp tstart-1
+				      (cons (substring s (+ 1 tstart-1) tend)
+				            ans))))
+			       (else (cons (substring s start tend) ans))))))
+	       (else ans))))))
+
+(let ((s "a b
+c
+
+x"))
+  (string-tokenize s char-set:graphic))
