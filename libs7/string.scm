@@ -428,21 +428,21 @@
         (+signature+ "(string-skip-right s (criterion fn) (start 0) (end #f))"))
     (lambda*
      (str criterion (start 0) (end (string-length str)))
-     (format #t "~A: ~A~%" (blue "string-skip-right") str)
-     (format #t "~A: ~A, ~A~%" (blue "start, end") start end)
+     ;; (format #t "~A: ~A~%" (blue "string-skip-right") str)
+     ;; (format #t "~A: ~A, ~A~%" (blue "start, end") start end)
      ;; (format #t "~A: ~A~%\n" (blue "criterion") criterion)
      ;; (format #t "~A: ~A~%" (blue "criterion t") (type-of criterion))
      ;; (let ((start 0) (end (length str)))
      (cond ((char? criterion)
 	    (let lp ((i (- end 1)))
-              (format #t "~A: ~A~%" (red "char lp") i)
+              ;; (format #t "~A: ~A~%" (red "char lp") i)
 	      (and (>= i start)
 		   (if (char=? criterion (string-ref str i))
 		       (lp (- i 1))
 		       i))))
 
 	   ((char-set? criterion)
-            (format #t "~A~%" (red "Char-set lp"))
+            ;; (format #t "~A~%" (red "Char-set lp"))
 	    (let lp ((i (- end 1)))
               ;; (format #t "~A: ~A~%" (red "sr") (string-ref str i))
               ;; (format #t "~A: ~A~%" (red "sr t") (type-of (string-ref str i)))
@@ -474,27 +474,27 @@
   (lambda*
    (s (token-chars (lambda (ch) (member ch '(#\space #\newline))))
       (start 0) (end (string-length s)))
-   (format #t "~A: ~A~%" (blue "string-tokenize") s)
+   ;; (format #t "~A: ~A~%" (blue "string-tokenize") s)
    ;; (let ((end (if end end )))
    (let* lp ((i end) (ans '()))
-         (format #t "~A: ~A~%" (magenta "loop ans") ans)
-         (format #t "~A: ~A, ~A, ~A~%" (magenta "start, end, i") start end i)
-         (format #t "~A: ~A~%" (magenta "string") s)
+         ;; (format #t "~A: ~A~%" (magenta "loop ans") ans)
+         ;; (format #t "~A: ~A, ~A, ~A~%" (magenta "start, end, i") start end i)
+         ;; (format #t "~A: ~A~%" (magenta "string") s)
 	 (cond ((and (< start i) (string-index-right s token-chars start i)) =>
 	             (lambda (tend-1)
-                       (format #t "~A: ~A~%" (cyan "tend-1") tend-1)
+                       ;; (format #t "~A: ~A~%" (cyan "tend-1") tend-1)
 		       (let ((tend (+ 1 tend-1)))
 		         (cond ((string-skip-right s token-chars start tend-1) =>
 			        (lambda (tstart-1)
-                                  (format #t "~A: ~A~%" (cyan "tstart-1") tstart-1)
+                                  ;; (format #t "~A: ~A~%" (cyan "tstart-1") tstart-1)
 			          (lp tstart-1
 				      (cons (substring s (+ 1 tstart-1) tend)
 				            ans))))
 			       (else (cons (substring s start tend) ans))))))
 	       (else ans))))))
 
-(let ((s "a b
-c
+;; (let ((s "a b
+;; c
 
-x"))
-  (string-tokenize s char-set:graphic))
+;; x"))
+;;   (string-tokenize s char-set:graphic))

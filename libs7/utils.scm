@@ -157,9 +157,10 @@ If func approves of one, find-then returns the result of applying fn to it."))
 ;; 	    obj)))))
 
 ;; s7test.scm
-(define* (remove item sequence from-end (test eql) (start 0) end count (key identity))
-  (remove-if list (lambda (arg) (test item arg)) sequence))
-  ;; (remove-if (lambda (arg) (test item arg)) sequence from-end start end count key))
+(define (remove item sequence) ;; (test eql))
+  ;; (start 0) end count (key identity))
+  ;; (format #t "~A: ~A~%" (red "REMOVE") item)
+  (remove-if list (lambda (arg) (equal? item arg)) sequence))
 
 ;; s7test.scm
 (define-macro* (delete item sequence from-end (test eql) (start 0) end count (key identity))

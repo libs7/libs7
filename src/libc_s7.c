@@ -2175,27 +2175,27 @@ static s7_pointer s7__read(s7_scheme *sc, s7_pointer args)
 
 
 /* -------- write -------- */
-static s7_pointer s7__write(s7_scheme *sc, s7_pointer args)
-{
-  s7_pointer p, arg;
-  int s7__write_0;
-  void* s7__write_1;
-  size_t s7__write_2;
-  p = args;
-  arg = s7_car(p);
-  if (s7_is_integer(arg))
-    s7__write_0 = (int)s7_integer(arg);
-  else return(s7_wrong_type_arg_error(sc, __func__, 1, arg, "integer"));
-  p = s7_cdr(p);
-  arg = s7_car(p);
-  s7__write_1 = (void*)s7_c_pointer_with_type(sc, arg, void__symbol, __func__, 2);
-  p = s7_cdr(p);
-  arg = s7_car(p);
-  if (s7_is_integer(arg))
-    s7__write_2 = (size_t)s7_integer(arg);
-  else return(s7_wrong_type_arg_error(sc, __func__, 3, arg, "integer"));
-  return(s7_make_integer(sc, (s7_int)write(s7__write_0, s7__write_1, s7__write_2)));
-}
+/* static s7_pointer s7__write(s7_scheme *sc, s7_pointer args) */
+/* { */
+/*   s7_pointer p, arg; */
+/*   int s7__write_0; */
+/*   void* s7__write_1; */
+/*   size_t s7__write_2; */
+/*   p = args; */
+/*   arg = s7_car(p); */
+/*   if (s7_is_integer(arg)) */
+/*     s7__write_0 = (int)s7_integer(arg); */
+/*   else return(s7_wrong_type_arg_error(sc, __func__, 1, arg, "integer")); */
+/*   p = s7_cdr(p); */
+/*   arg = s7_car(p); */
+/*   s7__write_1 = (void*)s7_c_pointer_with_type(sc, arg, void__symbol, __func__, 2); */
+/*   p = s7_cdr(p); */
+/*   arg = s7_car(p); */
+/*   if (s7_is_integer(arg)) */
+/*     s7__write_2 = (size_t)s7_integer(arg); */
+/*   else return(s7_wrong_type_arg_error(sc, __func__, 3, arg, "integer")); */
+/*   return(s7_make_integer(sc, (s7_int)write(s7__write_0, s7__write_1, s7__write_2))); */
+/* } */
 
 
 /* -------- pread -------- */
@@ -4875,7 +4875,7 @@ static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
 void libc_s7_init(s7_scheme *sc);
 void libc_s7_init(s7_scheme *sc)
 {
-    printf("mibl: libc_s7_init\n");
+    printf("libs7: libc_s7_init (libc_s7.c)\n");
   s7_pointer cur_env;
   s7_pointer pcl_t, pl_tx, pl_ts, pl_ti, pl_txs, pcl_x, pl_xs, pcl_xi, pl_xi, pl_xt, pcl_xs, pl_xxi, pcl_xxi, pl_xis, pl_xxxi, pl_xssx, pcl_i, pl_ix, pl_it, pcl_is, pl_is, pcl_ix, pcl_iix, pcl_isi, pl_ixi, pl_isi, pl_iix, pl_isx, pcl_ixi, pl_isxi, pl_iisi, pcl_iixi, pl_iixi, pl_issi, pl_ixxi, pcl_ixsi, pl_ixiix, pl_iixiixi, pcl_di, pl_ds, pcl_s, pl_sx, pl_st, pl_si, pl_sis, pl_ssi, pl_sssi, pl_ssix, pl_sisi;
   {
@@ -8867,9 +8867,9 @@ void libc_s7_init(s7_scheme *sc)
             s7_make_symbol(sc, "pread"),
             s7_make_typed_function(sc, "pread", s7__pread, 4, 0, false, "ssize_t pread(int void* size_t int)", pcl_iixi));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "write"),
-            s7_make_typed_function(sc, "write", s7__write, 3, 0, false, "ssize_t write(int void* size_t)", pl_iixi));
+  /* s7_define(sc, cur_env, */
+  /*           s7_make_symbol(sc, "write"), */
+  /*           s7_make_typed_function(sc, "write", s7__write, 3, 0, false, "ssize_t write(int void* size_t)", pl_iixi)); */
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "read"),
@@ -8951,9 +8951,10 @@ void libc_s7_init(s7_scheme *sc)
             s7_make_symbol(sc, "abs"),
             s7_make_typed_function(sc, "abs", s7__abs, 1, 0, false, "int abs(int)", pcl_i));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "system"),
-            s7_make_typed_function(sc, "system", s7__system, 1, 0, false, "int system(char*)", pl_is));
+  /* avoid clash with g_system defined in s7.c (WITH_SYSTEM_EXTRAS) */
+  /* s7_define(sc, cur_env, */
+  /*           s7_make_symbol(sc, "system"), */
+  /*           s7_make_typed_function(sc, "system", s7__system, 1, 0, false, "int system(char*)", pl_is)); */
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "mkstemp"),

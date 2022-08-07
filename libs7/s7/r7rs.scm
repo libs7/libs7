@@ -390,21 +390,21 @@
 (define (current-jiffy) (round (* (jiffies-per-second) (*s7* 'cpu-time))))
 (define (current-second) (floor (*s7* 'cpu-time)))
 
-;; (define (get-environment-variable x)
-;;   (let ((val ((*libc* 'getenv) x)))
-;;     (and (string? val)
-;; 	 (> (length val) 0)
-;; 	 val)))
-;; (define get-environment-variables (*libc* 'getenvs))
-;; (define (r7rs-file-exists? arg) (= ((*libc* 'access) arg (*libc* 'F_OK)) 0))
-;; (define r7rs-delete-file (*libc* 'unlink))
+(define (get-environment-variable x)
+  (let ((val ((*libc* 'getenv) x)))
+    (and (string? val)
+	 (> (length val) 0)
+	 val)))
+(define get-environment-variables (*libc* 'getenvs))
+(define (r7rs-file-exists? arg) (= ((*libc* 'access) arg (*libc* 'F_OK)) 0))
+(define r7rs-delete-file (*libc* 'unlink))
 
-;; (define (os-type) (car ((*libc* 'uname))))
-;; (define (cpu-architecture) (cadr ((*libc* 'uname))))
-;; (define (machine-name) (caddr ((*libc* 'uname))))
-;; (define (os-version) (string-append (list-ref ((*libc* 'uname)) 3) " " (list-ref ((*libc* 'uname)) 4))) ; or perhaps use /etc/os-release
-;; (define (implementation-name) (copy "s7"))
-;; (define (implementation-version) (substring (*s7* 'version) 3 7))
+(define (os-type) (car ((*libc* 'uname))))
+(define (cpu-architecture) (cadr ((*libc* 'uname))))
+(define (machine-name) (caddr ((*libc* 'uname))))
+(define (os-version) (string-append (list-ref ((*libc* 'uname)) 3) " " (list-ref ((*libc* 'uname)) 4))) ; or perhaps use /etc/os-release
+(define (implementation-name) (copy "s7"))
+(define (implementation-version) (substring (*s7* 'version) 3 7))
 
 ;; command-line is problematic: s7 has no access to the caller's "main" function, and
 ;;   outside Windows, there's no reasonable way to get these arguments.

@@ -50,16 +50,21 @@
 ;;; Imports
 ;;; This code has the following non-R5RS dependencies:
 ;;; - ERROR
+;;; s7:  ?
+
 ;;; - %LATIN1->CHAR %CHAR->LATIN1
 (define %latin1->char integer->char) ;; s7
 (define %char->latin1 char->integer) ;; s7
 
-
 ;;; - LET-OPTIONALS* and :OPTIONAL macros for parsing, checking & defaulting
 ;;;   optional arguments from rest lists.
+;;; s7: not needed. we have define* and first-class environments for this
+
 ;;; - BITWISE-AND for CHAR-SET-HASH
 ;;; - The SRFI-19 DEFINE-RECORD-TYPE record macro
-;;; - A simple CHECK-ARG procedure: 
+;;; s7: implemented in r7rs.scm
+
+;;; - A simple CHECK-ARG procedure:
 ;;;   (lambda (pred val caller) (if (not (pred val)) (error val caller)))
 
 ;;; This is simple code, not great code. Char sets are represented as 256-char

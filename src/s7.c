@@ -94867,7 +94867,7 @@ static void dumb_repl(s7_scheme *sc)
 
 void s7_repl(s7_scheme *sc)
 {
-    printf("mibl: s7_repl\n");
+    printf("libs7: s7_repl\n");
 #if (!WITH_C_LOADER)
   dumb_repl(sc);
 #else
@@ -94896,6 +94896,7 @@ void s7_repl(s7_scheme *sc)
                                  e);
   if (val)
     {
+        printf("repl: load libc_s7.so succeeded\n");
       s7_pointer libs;
       uint64_t hash;
       hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
@@ -94903,9 +94904,9 @@ void s7_repl(s7_scheme *sc)
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
     }
-  else 
+  else
     {
-        printf("mibl: load libc_s7.so failed\n");
+        printf("repl: load libc_s7.so failed\n");
       val = s7_load(sc, "repl.scm");
       if (val) repl_loaded = true;
     }
@@ -94920,7 +94921,7 @@ void s7_repl(s7_scheme *sc)
       s7_autoload(sc, s7_make_symbol(sc, "compare-calls"), s7_make_string(sc, "compare-calls.scm"));
       s7_autoload(sc, s7_make_symbol(sc, "get-overheads"), s7_make_string(sc, "compare-calls.scm"));
 #endif
-      s7_provide(sc, "libc.scm");
+      /* s7_provide(sc, "libc.scm"); */
 
       /* OBAZL: loading repl.scm doesn't work in emacs */
       printf("repl_loaded? %d\n", repl_loaded); /* OBAZL */
@@ -94934,6 +94935,48 @@ void s7_repl(s7_scheme *sc)
     }
 #endif
 #endif
+}
+
+/* just the libc stuff, no repl stuff */
+void s7_config_libc_s7(s7_scheme *sc)
+{
+    printf("libs7: s7_config_libc_s7\n");
+/* #if (!WITH_C_LOADER) */
+/*   dumb_repl(sc); */
+/* #else */
+/* #if WITH_NOTCURSES */
+/*   s7_load(sc, "nrepl.scm"); */
+/* #else */
+  s7_pointer old_e, e, val;
+  s7_int gc_loc;
+  bool repl_loaded = false;
+  /* will be called when lib is dlopened? */
+  e = s7_inlet(sc, list_2(sc, s7_make_symbol(sc, "init_func"), s7_make_symbol(sc, "libc_s7_init")));
+  gc_loc = s7_gc_protect(sc, e);
+  old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
+
+  printf("Loading libc_s7.o\n");
+  printf("cwd: %s\n", getcwd(NULL, 0));
+
+  val = s7_load_with_environment(sc, "libc_s7.so", e);
+  if (val) {
+      printf("load libc_s7.so succeeded\n");
+      s7_pointer libs;
+      uint64_t hash;
+      hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
+      s7_define(sc, sc->nil, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
+      libs = global_slot(sc->libraries_symbol);
+      slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
+  } else {
+      printf("load libc_s7.so failed\n");
+      val = s7_load(sc, "repl.scm");
+      if (val) repl_loaded = true;
+  }
+  s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
+  s7_gc_unprotect_at(sc, gc_loc);
+
+/* #endif */
+/* #endif */
 }
 
 #if WITH_MAIN && (!USE_SND)
