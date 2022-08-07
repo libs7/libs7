@@ -77698,36 +77698,40 @@ static void check_set(s7_scheme *sc)
 static void op_set_s_c(s7_scheme *sc)
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((slot == sc->undefined) &&
-      (has_methods(sc->curlet)) &&
-      (has_let_set_fallback(sc->curlet)))
-    sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), opt2_con(cdr(sc->code)));
+  if (!is_slot(slot)) /* #<undefined> probably */
+    {
+      if ((has_methods(sc->curlet)) &&
+	  (has_let_set_fallback(sc->curlet)))
+	sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), opt2_con(cdr(sc->code)));
+      else unbound_variable_error_nr(sc, cadr(sc->code));
+    }
   else slot_set_value(slot, sc->value = opt2_con(cdr(sc->code)));
 }
 
 static void op_set_s_s(s7_scheme *sc)
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((slot == sc->undefined) &&
-      (has_methods(sc->curlet)) &&
-      (has_let_set_fallback(sc->curlet)))
-    sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), lookup(sc, opt2_sym(cdr(sc->code))));
+  if (!is_slot(slot))
+    {
+      if ((has_methods(sc->curlet)) &&
+	  (has_let_set_fallback(sc->curlet)))
+	sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), lookup(sc, opt2_sym(cdr(sc->code))));
+      else unbound_variable_error_nr(sc, cadr(sc->code));
+    }
   else slot_set_value(slot, sc->value = lookup(sc, opt2_sym(cdr(sc->code))));
 }
 
 static void op_set_s_a(s7_scheme *sc)
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-#if 0
-  /* not sure this can happen */
-  /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->code), display(sc->curlet)); */
-  if ((slot == sc->undefined) &&
-      (has_methods(sc->curlet)) &&
-      (has_let_set_fallback(sc->curlet)))
-    sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), fx_call(sc, cddr(sc->code)));
-  else
-#endif
-    slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
+  if (!is_slot(slot))
+    {
+      if ((has_methods(sc->curlet)) &&
+	  (has_let_set_fallback(sc->curlet)))
+	sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), fx_call(sc, cddr(sc->code)));
+      else unbound_variable_error_nr(sc, cadr(sc->code));
+    }
+  else slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
 }
 
 static void op_set_s_p(s7_scheme *sc)
@@ -95172,7 +95176,9 @@ int main(int argc, char **argv)
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
- * nrep-bits.h via #embed if __has_embed (C23)?
+ * nrepl-bits.h via #embed if __has_embed (C23)?
  * t718 msym4: need earlier recognition 77133, and see do_end_bad case
  * does r7rs have number literal separators? underscores seem most common -> symbol in s7
+ *   WITH_NUMBER_SEPARATORS, + a *s7* field? (set! (*s7* 'number-separator) #\,) (also floats)
+ *   make_atom
  */
