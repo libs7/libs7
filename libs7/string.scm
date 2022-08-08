@@ -25,6 +25,16 @@
 (define (cyan text) (format #f "~C[36m~A~C[0m" #\escape text #\escape))
 (define (white text) (format #f "~C[37m~A~C[0m" #\escape text #\escape))
 
+;; underlined
+(define (ured text) (format #f "~C[4;31m~A~C[0m" #\escape text #\escape))
+(define (ugreen text) (format #f "~C[4;32m~A~C[0m" #\escape text #\escape))
+(define (uyellow text) (format #f "~C[4;33m~A~C[0m" #\escape text #\escape))
+(define (ublue text) (format #f "~C[4;34m~A~C[0m" #\escape text #\escape))
+(define (umagenta text) (format #f "~C[4;35m~A~C[0m" #\escape text #\escape))
+(define (ucyan text) (format #f "~C[4;36m~A~C[0m" #\escape text #\escape))
+(define (uwhite text) (format #f "~C[4;37m~A~C[0m" #\escape text #\escape))
+
+
 (define (stringify x)
   (if (symbol? x) (symbol->string x)
       (if (string? x) x
@@ -57,52 +67,32 @@
 	    (lp (+ i slen) (cdr strings)))))
     ans))
 
-(define* (string-join strings (delim " "))
-  (let ((buildit (lambda (lis final)
-		     (let recur ((lis lis))
-		       (if (pair? lis)
-			   (cons delim (cons (car lis) (recur (cdr lis))))
-			   final)))))
-
-    (cond ((pair? strings)
-
-           ;; infix
-	   (string-concatenate
-	    (cons (car strings) (buildit (cdr strings) '()))))
-
-	  ((not (null? strings))
-	   (error "STRINGS parameter not list." strings string-join))
-
-	  ;; STRINGS is ()
-
-	  (else ""))))
-
 ;;; Returns three values: rest start end
-(define (string-parse-start+end proc s args)
-  (if (not (string? s)) (error "Non-string value" proc s))
-  (let ((slen (string-length s)))
-    (if (pair? args)
-	(let ((start (car args))
-	      (args (cdr args)))
-	  (if (and (integer? start) (exact? start) (>= start 0))
-	      (receive (end args)
-		  (if (pair? args)
-		      (let ((end (car args))
-			    (args (cdr args)))
-			(if (and (integer? end) (exact? end) (<= end slen))
-			    (values end args)
-			    (error "Illegal substring END spec" proc end s)))
-		      (values slen args))
-		(if (<= start end) (values args start end)
-		    (error "Illegal substring START/END spec"
-			   proc start end s)))
-	      (error "Illegal substring START spec" proc start s)))
-	(values '() 0 slen))))
+;; (define (string-parse-start+end proc s args)
+;;   (if (not (string? s)) (error "Non-string value" proc s))
+;;   (let ((slen (string-length s)))
+;;     (if (pair? args)
+;; 	(let ((start (car args))
+;; 	      (args (cdr args)))
+;; 	  (if (and (integer? start) (exact? start) (>= start 0))
+;; 	      (receive (end args)
+;; 		  (if (pair? args)
+;; 		      (let ((end (car args))
+;; 			    (args (cdr args)))
+;; 			(if (and (integer? end) (exact? end) (<= end slen))
+;; 			    (values end args)
+;; 			    (error "Illegal substring END spec" proc end s)))
+;; 		      (values slen args))
+;; 		(if (<= start end) (values args start end)
+;; 		    (error "Illegal substring START/END spec"
+;; 			   proc start end s)))
+;; 	      (error "Illegal substring START spec" proc start s)))
+;; 	(values '() 0 slen))))
 
-(define (string-parse-final-start+end proc s args)
-  (receive (rest start end) (string-parse-start+end proc s args)
-    (if (pair? rest) (error "Extra arguments to procedure" proc rest)
-	(values start end))))
+;; (define (string-parse-final-start+end proc s args)
+;;   (receive (rest start end) (string-parse-start+end proc s args)
+;;     (if (pair? rest) (error "Extra arguments to procedure" proc rest)
+;; 	(values start end))))
 
 ;; (define-syntax let-string-start+end
 ;; (define-macro
@@ -130,6 +120,29 @@
                                                      (cons (substring str a b) (split b b))))
                  (else (split a (+ 1 b)))))))
           (split 0 0))))))
+
+(define string-join
+  (let ((+documentation+ "split str on delim string, default: space ")
+        (+signature+ "(string-join strings (delim str))"))
+    (lambda* (strings (delim " "))
+             (let ((buildit (lambda (lis final)
+		              (let recur ((lis lis))
+		                (if (pair? lis)
+			            (cons delim (cons (car lis) (recur (cdr lis))))
+			            final)))))
+
+               (cond ((pair? strings)
+
+                      ;; infix
+	              (string-concatenate
+	               (cons (car strings) (buildit (cdr strings) '()))))
+
+	             ((not (null? strings))
+	              (error "STRINGS parameter not list." strings string-join))
+
+	             ;; STRINGS is ()
+
+	             (else ""))))))
 
 ;; srfi 152
 ;;; Returns starting-position in STRING or #f if not true.
