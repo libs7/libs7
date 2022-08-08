@@ -18,6 +18,8 @@
 
 #include "s7.h"
 
+#define ld64 PRId64
+
 #ifndef WITH_GMP
   #define WITH_GMP 0
 #endif
@@ -971,8 +973,8 @@ int main(int argc, char **argv)
     if (s7_vector_rank(p) != 2) fprintf(stderr, "int vector rank not 2?\n");
     p = s7_make_float_vector(sc, 6, 2, dims);
     if (s7_vector_rank(p) != 2) fprintf(stderr, "float vector rank not 2?\n");
-    if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %ld\n", __LINE__, s7_vector_dimension(p, 0));
-    if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %ld\n", __LINE__, s7_vector_dimension(p, 1));
+    if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 0));
+    if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 1));
 
     p = s7_make_float_vector(sc, 6, 1, NULL);
     s7_float_vector_set(p, 1, 32.0);
@@ -1002,7 +1004,7 @@ int main(int argc, char **argv)
     q = s7_vector_to_list(sc, p);
     if (!s7_is_pair(q)) fprintf(stderr, "%d vector->list is not a list %s\n", __LINE__, TO_STR(q));
     if (s7_list_length(sc, q) != 6) fprintf(stderr, "%d vector->list len != 6 %s\n", __LINE__, TO_STR(q));
-    if (s7_vector_dimension(p, 0) != 6) fprintf(stderr, "%d: s7_vector_dimension: %ld\n", __LINE__, s7_vector_dimension(p, 0));
+    if (s7_vector_dimension(p, 0) != 6) fprintf(stderr, "%d: s7_vector_dimension: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 0));
   }
 
   {
@@ -1014,8 +1016,8 @@ int main(int argc, char **argv)
     dims[1] = 3;
     p = s7_make_normal_vector(sc, 6, 2, dims);
     if (s7_vector_rank(p) != 2) fprintf(stderr, "vector rank not 2?\n");
-    if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %ld\n", __LINE__, s7_vector_dimension(p, 0));
-    if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %ld\n", __LINE__, s7_vector_dimension(p, 1));
+    if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 0));
+    if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 1));
     s7_vector_set(sc, p, 1, s7_make_integer(sc, 1));
     if (s7_integer(s7_vector_ref(sc, p, 1)) != 1) fprintf(stderr, "vector[1] not 1?\n");
     els = s7_vector_elements(p);

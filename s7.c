@@ -10569,8 +10569,9 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	set_is_definer(mac_name);            /* (list-values 'define ...) aux-13 */
     }
 
-  /* PERHAPS: if rest/dotted arg list, don't optimize */
   if ((!is_either_bacro(mac)) &&
+      (s7_is_proper_list(sc, closure_args(mac))) &&
+      (!direct_memq(sc->rest_keyword, closure_args(mac))) &&
       (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
     clear_all_optimizations(sc, body);
 
@@ -77128,7 +77129,7 @@ static void check_cond(s7_scheme *sc)
     {
       s7_pointer p = car(x);
       /* if (has_fx(p)) fprintf(stderr, "clear %s\n", display(car(p))); */
-      clear_has_fx(p); /* a kludge -- if has_fx here (and not re-fx'd below), someone messed up earlier */
+      clear_has_fx(p); /* a kludge -- if has_fx here (and not re-fx'd below), someone messed up earlier -- but was fx_treeable set? */
       if (is_fxable(sc, car(p)))
 	fx_annotate_arg(sc, p, sc->curlet);
       for (p = cdr(p); is_pair(p); p = cdr(p))
@@ -95181,4 +95182,5 @@ int main(int argc, char **argv)
  * does r7rs have number literal separators? underscores seem most common -> symbol in s7
  *   WITH_NUMBER_SEPARATORS, + a *s7* field? (set! (*s7* 'number-separator) #\,) (also floats)
  *   make_atom
+ * t101 errors?
  */
