@@ -230,6 +230,10 @@
   #define DEFAULT_PRINT_LENGTH 12 /* (*s7* 'print-length) initial value, was 32 but Snd uses 12, 23-Jul-21 */
 #endif
 
+#ifndef WITH_NUMBER_SEPARATOR
+  #define WITH_NUMBER_SEPARATOR 0
+#endif
+
 /* in case mus-config.h forgets these */
 #ifdef _MSC_VER
   #ifndef HAVE_COMPLEX_NUMBERS
@@ -1127,6 +1131,7 @@ struct s7_scheme {
   bool got_tc, got_rec, not_tc;
   s7_int rec_tc_args, continuation_counter;
   int64_t let_number;
+  unsigned char number_separator;
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
   s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_port_data_size;
   s7_int max_vector_length, max_string_length, max_list_length, max_vector_dimensions, max_format_length, max_port_data_size, rec_loc, rec_len;
@@ -15013,11 +15018,54 @@ static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radi
   return((want_symbol) ? make_symbol(sc, q) : sc->F);
 }
 
+#if WITH_NUMBER_SEPARATOR
+static s7_pointer string_to_number(s7_scheme *sc, char *str, int32_t radix);
+static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t radix, bool want_symbol)
+{
+  /* a placeholder... */
+  char *new_name;
+  char sep = sc->number_separator;
+  s7_int len, i, j;
+  s7_pointer res;
+  if (name[0] == sep)
+    return((want_symbol) ? make_symbol(sc, name) : sc->F);
+  len = safe_strlen(name);
+  new_name = (char *)malloc(len);
+  for (i = 0, j = 0; i < len; i++)
+    if (name[i] != sep)
+      {
+	/* TODO: make a table for this */
+	if ((digits[(uint8_t)(name[i])] < radix) || (name[i] == '+') || (name[i] == '-') || (name[i] == '.') || 
+	    (name[i] == '@') || (name[i] == '/') || (name[i] == 'i') || (name[i] == 'e'))
+	  new_name[j++] = name[i];
+	else 
+	  {
+	    free(new_name);
+	    return((want_symbol) ? make_symbol(sc, name) : sc->F);
+	  }}
+    else  /* sep has to be between two digits */
+      if ((digits[(uint8_t)(name[i - 1])] >= radix) || (digits[(uint8_t)(name[i + 1])] >= radix))
+	{
+	  free(new_name);
+	  return((want_symbol) ? make_symbol(sc, name) : sc->F);
+	}
+  new_name[j] = '\0';
+  res = string_to_number(sc, new_name, radix);
+  free(new_name);
+  return(res);
+}
+#else
+#define string_to_symbol_or_number(Sc, Name) make_symbol(Sc, Name)
+#endif
+
 static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_symbol, bool with_error)
 {
   /* make symbol or number from string, a number starts with + - . or digit, but so does 1+ for example */
+#if WITH_NUMBER_SEPARATOR
+  #define IS_DIGIT(Chr, Rad) ((digits[(uint8_t)Chr] < Rad) || ((Chr == sc->number_separator) && (sc->number_separator != '\0')))
+#else
   #define IS_DIGIT(Chr, Rad) (digits[(uint8_t)Chr] < Rad)
-
+#endif
   char c, *p = q;
   bool has_dec_point1 = false;
 
@@ -15065,7 +15113,6 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
     case '.':
       has_dec_point1 = true;
       c = *p++;
-
       if ((!c) || (!IS_DIGIT(c, radix)))
 	return((want_symbol) ? make_symbol(sc, q) : sc->F);
       break;
@@ -15235,6 +15282,11 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
     if ((has_plus_or_minus != 0) &&        /* that is, we have an internal + or - */
 	(!has_i))                          /*   but no i for the imaginary part */
       return((want_symbol) ? make_symbol(sc, q) : sc->F);
+
+#if WITH_NUMBER_SEPARATOR
+    if ((sc->number_separator != '\0') && (strchr(q, (int)(sc->number_separator))))
+      return(make_symbol_or_number(sc, q, radix, want_symbol));
+#endif
 
     if (has_i)
       {
@@ -91423,7 +91475,7 @@ typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS
 	      SL_HISTORY_SIZE, SL_PROFILE, SL_PROFILE_INFO, SL_PROFILE_PREFIX, SL_AUTOLOADING, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS,
 	      SL_MUFFLE_WARNINGS, SL_MOST_POSITIVE_FIXNUM, SL_MOST_NEGATIVE_FIXNUM, SL_OUTPUT_PORT_DATA_SIZE, SL_DEBUG, SL_VERSION,
 	      SL_GC_TEMPS_SIZE, SL_GC_RESIZE_HEAP_FRACTION, SL_GC_RESIZE_HEAP_BY_4_FRACTION, SL_OPENLETS, SL_EXPANSIONS,
-	      SL_NUM_FIELDS} s7_let_field_t;
+	      SL_NUMBER_SEPARATOR, SL_NUM_FIELDS} s7_let_field_t;
 
 static const char *s7_let_field_names[SL_NUM_FIELDS] =
   {"no-field", "stack-top", "stack-size", "stacktrace-defaults", "heap-size", "free-heap-size",
@@ -91436,7 +91488,7 @@ static const char *s7_let_field_names[SL_NUM_FIELDS] =
    "bignum-precision", "memory-usage", "float-format-precision", "history", "history-enabled",
    "history-size", "profile", "profile-info", "profile-prefix", "autoloading?", "accept-all-keyword-arguments",
    "muffle-warnings?", "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
-   "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?"};
+   "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?", "number-separator"};
 
 
 static noreturn void simple_s7_let_wrong_type_argument_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, int32_t desired_type)
@@ -91888,6 +91940,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
     case SL_MOST_NEGATIVE_FIXNUM:          return(sl_int_fixup(sc, leastfix));
     case SL_MOST_POSITIVE_FIXNUM:          return(sl_int_fixup(sc, mostfix));
     case SL_MUFFLE_WARNINGS:               return(s7_make_boolean(sc, sc->muffle_warnings));
+    case SL_NUMBER_SEPARATOR:              return(chars[(int)(sc->number_separator)]);
     case SL_OPENLETS:                      return(s7_make_boolean(sc, sc->has_openlets));
     case SL_OUTPUT_PORT_DATA_SIZE:         return(make_integer(sc, sc->output_port_data_size));
     case SL_PRINT_LENGTH:                  return(make_integer(sc, sc->print_length));
@@ -92217,6 +92270,18 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
     case SL_MUFFLE_WARNINGS:
       if (is_boolean(val)) {sc->muffle_warnings = s7_boolean(sc, val); return(val);}
       simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_BOOLEAN);
+
+    case SL_NUMBER_SEPARATOR:
+#if (!WITH_NUMBER_SEPARATOR)
+      s7_warn(sc, 128, "(set! (*s7* 'number-separator) ...) but number-separator is not included in this s7");
+#endif
+      if (!is_character(val))
+	simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_CHARACTER);
+      if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (character(val) == '+') || (character(val) == '-') || 
+	  (character(val) == '@') || (character(val) == '/') || (character(val) == 'i') || (character(val) == 'e'))
+	simple_s7_let_wrong_type_argument_with_type_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
+      sc->number_separator = character(val);
+      return(val);
 
     case SL_OPENLETS:
       if (is_boolean(val)) {sc->has_openlets = s7_boolean(sc, val); return(val);}
@@ -93175,6 +93240,9 @@ static void init_features(s7_scheme *sc)
 #endif
 #if HAVE_COMPLEX_NUMBERS
   s7_provide(sc, "complex-numbers");
+#endif
+#if WITH_NUMBER_SEPARATOR
+  s7_provide(sc, "number-separator");
 #endif
 #if WITH_HISTORY
   s7_provide(sc, "history");
@@ -94505,6 +94573,7 @@ s7_scheme *s7_init(void)
   sc->hash_table_float_epsilon = 1.0e-12;
   sc->equivalent_float_epsilon = 1.0e-15;
   sc->float_format_precision = WRITE_REAL_PRECISION;
+  sc->number_separator = '\0';
   sc->default_hash_table_length = 8;
   sc->gensym_counter = 0;
   sc->capture_let_counter = 0;
@@ -95117,70 +95186,68 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ------------------------------------------------
- *            20.9   21.0   22.0   22.5   22.6
- * ------------------------------------------------
- * tpeak      115    114    108    105    105
- * tref       691    687    463    459    467
- * index     1026   1016    973    963    964
- * tmock     1177   1165   1057   1053   1061
- * tvect     2519   2464   1772   1669   1676
- * timp      2637   2575   1930   1708   1717
- * texit     ----   ----   1778   1738   1736
- * s7test    1873   1831   1818   1809   1815
- * thook     ----   ----   2590   2142   2106
- * lt        2187   2172   2150   2173   2180
- * tauto     ----   ----   2562   2196   2171
- * dup       3805   3788   2492   2278   2263
- * tcopy     8035   5546   2539   2374   2376
- * tload     ----   ----   3046   2386   2379
- * fbench    2688   2583   2460   2404   2412
- * tread     2440   2421   2419   2404   2416
- * trclo     2735   2574   2454   2435   2447
- * titer     2865   2842   2641   2509   2540
- * tmat      3065   3042   2524   2517   2508
- * tb        2735   2681   2612   2596   2601
- * tsort     3105   3104   2856   2805   2803
- * teq       4068   4045   3536   3453   3465
- * tobj      4016   3970   3828   3561   3556
- * tio       3816   3752   3683   3612   3604
- * tmac      3950   3873   3033   3664   3670
- * tclo      4787   4735   4390   4377   4379
- * tlet      7775   5640   4450   4415   4433
- * tcase     4960   4793   4439   4429   4435
- * tfft      7820   7729   4755   4450   4455
- * tmap      8869   8774   4489   4473   4482
- * tshoot    5525   5447   5183   5083   5068
- * tstr      6880   6342   5488   5356   5122
- * tform     5357   5348   5307   5300   5279
- * tnum      6348   6013   5433   5364   5359
- * tlamb     6423   6273   5720   5544   5544
- * tmisc     8869   7612   6435   6250   6158
- * tset      ----   ----   ----   6208   6441
- * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6308   6367
- * tari      13.0   12.7   6827   6488   6486
- * trec      6936   6922   6521   6547   6559
- * tleft     10.4   10.2   7657   7472   7516
- * tgc       11.9   11.1   8177   7957   7964
- * thash     11.8   11.7   9734   9463   9477
- * cb        11.2   11.0   9658   9560   9533
- * tgen      11.2   11.4   12.0   12.0   12.0
- * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.6
- * sg        ----   ----   55.9   56.9   56.9
- * lg        ----   ----  105.2  106.1  106.4
- * tbig     177.4  175.8  156.5  149.6  149.9
- * --------------------------------------------
+/* --------------------------------------------------------
+ *            20.9   21.0   22.0   22.5   22.6   22.7
+ * --------------------------------------------------------
+ * tpeak      115    114    108    105    105    105
+ * tref       691    687    463    459    467    469
+ * index     1026   1016    973    963    964    965
+ * tmock     1177   1165   1057   1053   1061   1061
+ * tvect     2519   2464   1772   1669   1676   1677
+ * timp      2637   2575   1930   1708   1717   1721
+ * texit     ----   ----   1778   1738   1736   1739
+ * s7test    1873   1831   1818   1809   1815   1823
+ * thook     ----   ----   2590   2142   2106   2106
+ * lt        2187   2172   2150   2173   2180   2181
+ * tauto     ----   ----   2562   2196   2171   2170
+ * dup       3805   3788   2492   2278   2263   2263
+ * tcopy     8035   5546   2539   2374   2376   2376
+ * tload     ----   ----   3046   2386   2379   2377
+ * fbench    2688   2583   2460   2404   2412   2425
+ * tread     2440   2421   2419   2404   2416   2416
+ * trclo     2735   2574   2454   2435   2447   2448
+ * titer     2865   2842   2641   2509   2540   2540
+ * tmat      3065   3042   2524   2517   2508   2509
+ * tb        2735   2681   2612   2596   2601   2605
+ * tsort     3105   3104   2856   2805   2803   2802
+ * teq       4068   4045   3536   3453   3465   3467
+ * tobj      4016   3970   3828   3561   3556   3560
+ * tio       3816   3752   3683   3612   3604   3604
+ * tmac      3950   3873   3033   3664   3670   3792 [eval?] 3670 is make_macro old form 10578
+ * tclo      4787   4735   4390   4377   4379   4376
+ * tlet      7775   5640   4450   4415   4433   4436
+ * tcase     4960   4793   4439   4429   4435   4487 [eval?] 4440 make_macro
+ * tfft      7820   7729   4755   4450   4455   4455
+ * tmap      8869   8774   4489   4473   4482   4482
+ * tshoot    5525   5447   5183   5083   5068   5071
+ * tstr      6880   6342   5488   5356   5122   5126
+ * tform     5357   5348   5307   5300   5279   5293
+ * tnum      6348   6013   5433   5364   5359   5375 [eval?]
+ * tlamb     6423   6273   5720   5544   5544   5544
+ * tmisc     8869   7612   6435   6250   6158   6158
+ * tset      ----   ----   ----   6208   6441   6514 [eval?] 6470 make_macro
+ * tgsl      8485   7802   6373   6307   6307   6307
+ * tlist     7896   7546   6558   6308   6367   6367
+ * tari      13.0   12.7   6827   6488   6486   6486
+ * trec      6936   6922   6521   6547   6559   6559
+ * tleft     10.4   10.2   7657   7472   7516   7521
+ * tgc       11.9   11.1   8177   7957   7964   7963
+ * thash     11.8   11.7   9734   9463   9477   9479
+ * cb        11.2   11.0   9658   9560   9533   9533
+ * tgen      11.2   11.4   12.0   12.0   12.0   12.0
+ * tall      15.6   15.6   15.6   15.6   15.6   15.6
+ * calls     36.7   37.5   37.0   37.5   37.6   37.7
+ * sg        ----   ----   55.9   56.9   56.9   57.0
+ * lg        ----   ----  105.2  106.1  106.4  106.5
+ * tbig     177.4  175.8  156.5  149.6  149.9  149.8 [make_atom]
+ * ----------------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
- * t718 msym4: need earlier recognition 77133, and see do_end_bad case
- * does r7rs have number literal separators? underscores seem most common -> symbol in s7
- *   WITH_NUMBER_SEPARATORS, + a *s7* field? (set! (*s7* 'number-separator) #\,) (also floats)
- *   make_atom
- * t101 errors?
+ *   nrepl C-C leaves it hung? (c-q is ok)
+ * t718 msym4: need earlier recognition 77133, this needs re-opt see above make_macro
+ * number-separator (timing) tests etc
  */

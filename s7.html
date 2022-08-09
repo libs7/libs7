@@ -5616,6 +5616,7 @@ float-format-precision        digits to print for floats (16)
 default-random-state          the default arg for random
 most-positive-fixnum          if not using gmp, the most positive integer ("fixnum" comes from CL)
 most-negative-fixnum          as above, but negative
+number-separator              #\null
 
 safety                        0 (see below)
 undefined-identifier-warnings #f 
@@ -5743,6 +5744,14 @@ The defaults are '(3 45 80 45 #t).
 
 <p>The stack, history and gc-protected-objects fields are intended for debugging.  Don't keep 
 these hanging around and expect good things to happen!
+</p>
+
+<p>The *s7* field 'number-separator refers to what some languages call "numeric literal separator",
+a character that can appear in a number as a separator to make it more readable:  "123,321"
+as opposed to "123321".  If the compile time flag WITH_NUMBER_SEPARATOR is set, and 
+(*s7* 'number-separator) is not #\null (the default), then that character can appear anywhere
+in a number (except as the first character), and the reader will ignore it.  The *features*
+list will have the entry 'number-separator if s7 was compiled with WITH_NUMBER_SEPARATOR defined.
 </p>
 
 
