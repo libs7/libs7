@@ -5750,8 +5750,9 @@ these hanging around and expect good things to happen!
 a character that can appear in a number as a separator to make it more readable:  "123,321"
 as opposed to "123321".  If the compile time flag WITH_NUMBER_SEPARATOR is set, and 
 (*s7* 'number-separator) is not #\null (the default), then that character can appear anywhere
-in a number (except as the first character), and the reader will ignore it.  The *features*
+in a number (as long as it is between two digits), and the reader will ignore it.  The *features*
 list will have the entry 'number-separator if s7 was compiled with WITH_NUMBER_SEPARATOR defined.
+(Number separators don't work with bignums).
 </p>
 
 

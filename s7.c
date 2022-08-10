@@ -3614,7 +3614,6 @@ static s7_pointer make_permanent_integer(s7_int i)
 }
 
 #define NUM_CHARS 256
-
 #ifndef NUM_SMALL_INTS
   #define NUM_SMALL_INTS 8192
   /* 65536: tshoot -6, tvect -50, dup -26, trclo -27, tmap -48, tsort -14, tlet -16, trec -58, thash -40 */
@@ -3622,6 +3621,10 @@ static s7_pointer make_permanent_integer(s7_int i)
 #if (NUM_SMALL_INTS < NUM_CHARS) /* g_char_to_integer assumes this is at least NUM_CHARS, as does the byte_vector stuff (256) */
   #error NUM_SMALL_INTS is less than NUM_CHARS which will not work
 #endif
+#endif
+
+#if WITH_NUMBER_SEPARATOR
+static bool t_number_separator_p[NUM_CHARS];
 #endif
 
 static s7_pointer *small_ints = NULL;
@@ -3685,6 +3688,18 @@ static void init_small_ints(void)
   leastfix = make_permanent_integer(s7_int_min);
   set_number_name(mostfix, "9223372036854775807", 19);
   set_number_name(leastfix, "-9223372036854775808", 20);
+
+#if WITH_NUMBER_SEPARATOR
+  for (int32_t i = 0; i < NUM_CHARS; i++) t_number_separator_p[i] = true;
+  t_number_separator_p[(uint8_t)'i'] = false;
+  t_number_separator_p[(uint8_t)'+'] = false;
+  t_number_separator_p[(uint8_t)'-'] = false;
+  t_number_separator_p[(uint8_t)'/'] = false;
+  t_number_separator_p[(uint8_t)'@'] = false;
+  t_number_separator_p[(uint8_t)'.'] = false;
+  t_number_separator_p[(uint8_t)'e'] = false;
+  t_number_separator_p[(uint8_t)'E'] = false;
+#endif
 }
 
 /* -------------------------------------------------------------------------------- */
@@ -15022,36 +15037,40 @@ static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radi
 static s7_pointer string_to_number(s7_scheme *sc, char *str, int32_t radix);
 static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t radix, bool want_symbol)
 {
-  /* a placeholder... */
+  block_t *b;
   char *new_name;
   char sep = sc->number_separator;
   s7_int len, i, j;
   s7_pointer res;
+
   if (name[0] == sep)
     return((want_symbol) ? make_symbol(sc, name) : sc->F);
   len = safe_strlen(name);
-  new_name = (char *)malloc(len);
+  b = mallocate(sc, len + 1);
+  new_name = (char *)block_data(b);
+  memcpy((void *)new_name, (void *)name, len);
+  new_name[len] = 0;
+
   for (i = 0, j = 0; i < len; i++)
     if (name[i] != sep)
       {
-	/* TODO: make a table for this */
-	if ((digits[(uint8_t)(name[i])] < radix) || (name[i] == '+') || (name[i] == '-') || (name[i] == '.') || 
-	    (name[i] == '@') || (name[i] == '/') || (name[i] == 'i') || (name[i] == 'e'))
+	if ((digits[(uint8_t)(name[i])] < radix) || (!t_number_separator_p[(uint8_t)name[i]]))
 	  new_name[j++] = name[i];
 	else 
 	  {
-	    free(new_name);
+	    liberate(sc, b);
 	    return((want_symbol) ? make_symbol(sc, name) : sc->F);
 	  }}
     else  /* sep has to be between two digits */
       if ((digits[(uint8_t)(name[i - 1])] >= radix) || (digits[(uint8_t)(name[i + 1])] >= radix))
 	{
-	  free(new_name);
+	  liberate(sc, b);
 	  return((want_symbol) ? make_symbol(sc, name) : sc->F);
 	}
+
   new_name[j] = '\0';
   res = string_to_number(sc, new_name, radix);
-  free(new_name);
+  liberate(sc, b);
   return(res);
 }
 #else
@@ -95186,68 +95205,67 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* --------------------------------------------------------
- *            20.9   21.0   22.0   22.5   22.6   22.7
- * --------------------------------------------------------
- * tpeak      115    114    108    105    105    105
- * tref       691    687    463    459    467    469
- * index     1026   1016    973    963    964    965
- * tmock     1177   1165   1057   1053   1061   1061
- * tvect     2519   2464   1772   1669   1676   1677
- * timp      2637   2575   1930   1708   1717   1721
- * texit     ----   ----   1778   1738   1736   1739
- * s7test    1873   1831   1818   1809   1815   1823
- * thook     ----   ----   2590   2142   2106   2106
- * lt        2187   2172   2150   2173   2180   2181
- * tauto     ----   ----   2562   2196   2171   2170
- * dup       3805   3788   2492   2278   2263   2263
- * tcopy     8035   5546   2539   2374   2376   2376
- * tload     ----   ----   3046   2386   2379   2377
- * fbench    2688   2583   2460   2404   2412   2425
- * tread     2440   2421   2419   2404   2416   2416
- * trclo     2735   2574   2454   2435   2447   2448
- * titer     2865   2842   2641   2509   2540   2540
- * tmat      3065   3042   2524   2517   2508   2509
- * tb        2735   2681   2612   2596   2601   2605
- * tsort     3105   3104   2856   2805   2803   2802
- * teq       4068   4045   3536   3453   3465   3467
- * tobj      4016   3970   3828   3561   3556   3560
- * tio       3816   3752   3683   3612   3604   3604
- * tmac      3950   3873   3033   3664   3670   3792 [eval?] 3670 is make_macro old form 10578
- * tclo      4787   4735   4390   4377   4379   4376
- * tlet      7775   5640   4450   4415   4433   4436
- * tcase     4960   4793   4439   4429   4435   4487 [eval?] 4440 make_macro
- * tfft      7820   7729   4755   4450   4455   4455
- * tmap      8869   8774   4489   4473   4482   4482
- * tshoot    5525   5447   5183   5083   5068   5071
- * tstr      6880   6342   5488   5356   5122   5126
- * tform     5357   5348   5307   5300   5279   5293
- * tnum      6348   6013   5433   5364   5359   5375 [eval?]
- * tlamb     6423   6273   5720   5544   5544   5544
- * tmisc     8869   7612   6435   6250   6158   6158
- * tset      ----   ----   ----   6208   6441   6514 [eval?] 6470 make_macro
- * tgsl      8485   7802   6373   6307   6307   6307
- * tlist     7896   7546   6558   6308   6367   6367
- * tari      13.0   12.7   6827   6488   6486   6486
- * trec      6936   6922   6521   6547   6559   6559
- * tleft     10.4   10.2   7657   7472   7516   7521
- * tgc       11.9   11.1   8177   7957   7964   7963
- * thash     11.8   11.7   9734   9463   9477   9479
- * cb        11.2   11.0   9658   9560   9533   9533
- * tgen      11.2   11.4   12.0   12.0   12.0   12.0
- * tall      15.6   15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.6   37.7
- * sg        ----   ----   55.9   56.9   56.9   57.0
- * lg        ----   ----  105.2  106.1  106.4  106.5
- * tbig     177.4  175.8  156.5  149.6  149.9  149.8 [make_atom]
- * ----------------------------------------------------
+/* -------------------------------------------------
+ *            20.9   21.0   22.0   22.6   22.7
+ * -------------------------------------------------
+ * tpeak      115    114    108    105    105
+ * tref       691    687    463    467    469
+ * index     1026   1016    973    964    965
+ * tmock     1177   1165   1057   1061   1061
+ * tvect     2519   2464   1772   1676   1677
+ * timp      2637   2575   1930   1717   1721
+ * texit     ----   ----   1778   1736   1739
+ * s7test    1873   1831   1818   1815   1823
+ * thook     ----   ----   2590   2106   2106
+ * lt        2187   2172   2150   2180   2181
+ * tauto     ----   ----   2562   2171   2170
+ * dup       3805   3788   2492   2263   2263
+ * tcopy     8035   5546   2539   2376   2376
+ * tload     ----   ----   3046   2379   2377
+ * fbench    2688   2583   2460   2412   2425
+ * tread     2440   2421   2419   2416   2416
+ * trclo     2735   2574   2454   2447   2448
+ * titer     2865   2842   2641   2540   2540
+ * tmat      3065   3042   2524   2508   2509
+ * tb        2735   2681   2612   2601   2605
+ * tsort     3105   3104   2856   2803   2802
+ * teq       4068   4045   3536   3465   3467
+ * tobj      4016   3970   3828   3556   3560
+ * tio       3816   3752   3683   3604   3604
+ * tmac      3950   3873   3033   3670   3792 [eval?] 3670 is make_macro old form 10578
+ * tclo      4787   4735   4390   4379   4376
+ * tlet      7775   5640   4450   4433   4436
+ * tcase     4960   4793   4439   4435   4487 [eval?] 4440 make_macro
+ * tfft      7820   7729   4755   4455   4455
+ * tmap      8869   8774   4489   4482   4482
+ * tshoot    5525   5447   5183   5068   5071
+ * tstr      6880   6342   5488   5122   5126
+ * tform     5357   5348   5307   5279   5293
+ * tnum      6348   6013   5433   5359   5375 [eval?]
+ * tlamb     6423   6273   5720   5544   5544
+ * tmisc     8869   7612   6435   6158   6158
+ * tset      ----   ----   ----   6441   6514 [eval?] 6470 make_macro
+ * tgsl      8485   7802   6373   6307   6307
+ * tlist     7896   7546   6558   6367   6367
+ * tari      13.0   12.7   6827   6486   6486
+ * trec      6936   6922   6521   6559   6559
+ * tleft     10.4   10.2   7657   7516   7521
+ * tgc       11.9   11.1   8177   7964   7963
+ * thash     11.8   11.7   9734   9477   9479
+ * cb        11.2   11.0   9658   9533   9533
+ * tgen      11.2   11.4   12.0   12.0   12.0
+ * tall      15.6   15.6   15.6   15.6   15.6
+ * calls     36.7   37.5   37.0   37.6   37.7
+ * sg        ----   ----   55.9   56.9   57.0
+ * lg        ----   ----  105.2  106.4  106.5
+ * tbig     177.4  175.8  156.5  149.9  149.8 [make_atom]
+ * ---------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
- *   nrepl C-C leaves it hung? (c-q is ok)
- * t718 msym4: need earlier recognition 77133, this needs re-opt see above make_macro
- * number-separator (timing) tests etc
+ *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler
+ * t718 msym4: need earlier recognition 77133, this needs re-opt see above make_macro: maybe syntax-set tree check? (unrest tmac?)
  */
