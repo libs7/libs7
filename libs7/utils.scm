@@ -1,6 +1,91 @@
 ;; (display "loading libs7/utils.scm") (newline)
 
 ;;; ----------------
+;;; stuff.scm
+(define concatenate
+  (let ((+documentation+ "(concatenate type . sequences) concatenates sequences returning an object of type:\n\
+    (concatenate vector '(1 2) #(3 4)) -> #(1 2 3 4)"))
+    (lambda (type . sequences)
+      (apply type (apply sequences->list sequences)))))
+
+(define collect-if
+  (let ((+documentation+ "(collect-if type func sequence) gathers the elements of sequence that satisfy func, and returns them via type:\n\
+    (collect-if list integer? #(1.4 2/3 1 1+i 2)) -> '(1 2)"))
+    (lambda (type f sequence)
+      (unless (sequence? sequence)
+	(error 'wrong-type-arg "collect-if: sequence arg is ~A" sequence))
+      (if (eq? type hash-table)
+	  (apply hash-table (map (lambda (arg) (if (f arg) (values (car arg) (cdr arg)) (values))) sequence))
+	  (apply type (map (lambda (arg) (if (f arg) arg (values))) sequence))))))
+
+(define remove-if
+  (let ((+documentation+ "(remove-if type f sequence) returns via type the elements of sequence that do not satisfy func:\n\
+    (remove-if list integer? #(1.4 2/3 1 1+i 2)) -> '(1.4 2/3 1+1i)"))
+    (lambda (type f sequence)
+      (unless (sequence? sequence)
+	(error 'wrong-type-arg "remove-if: sequence arg is ~A" sequence))
+      (collect-if type (lambda (obj) (not (f obj))) sequence))))
+
+;;; ----------------
+;; s7test.scm
+(define* (find-if predicate sequence from-end (start 0) end (key identity))
+  (let* ((len (length sequence))
+	 (nd (or (and (number? end) end) len))) ; up to but not including end
+    (if (< nd start)
+	(error 'out-of-range "~A :start ~A is greater than ~A ~A" (*function* (curlet)) start (if end ":end" "length") nd))
+    (call-with-exit
+     (lambda (return)
+       (if (not from-end)
+	   (do ((i start (+ i 1)))
+	       ((= i nd) #f)
+	     (if (predicate (key (sequence i)))
+		 (return (sequence i))))
+	   (do ((i (- nd 1) (- i 1)))
+	       ((< i start) #f)
+	     (if (predicate (key (sequence i)))
+		 (return (sequence i)))))))))
+
+(define* (find item sequence from-end (test eql) (start 0) end (key identity))
+  (format #t "~A: ~A in ~A~%" (bgred "find") item sequence)
+  (find-if (lambda (arg) (test item arg)) sequence from-end start end key))
+
+(define (null obj) (or (not obj) (null? obj)))
+
+(define* (remove-duplicates sequence from-end (test eql) (start 0) end (key identity))
+  (format #t "~A: ~A~%" (ured "remove-duplicates") sequence)
+  (let* ((result ())
+	 (start-seq (+ start 1))
+	 (len (length sequence))
+	 (nd (if (number? end) end len)))
+    (do ((i start (+ i 1)))
+	((= i nd))
+      (let* ((orig-obj (sequence i))
+	     (obj (key orig-obj)))
+	(if (null from-end)
+	    (begin
+	      (if (not (find obj sequence :start start-seq :end nd :test test :key key))
+		  (set! result (cons orig-obj result)))
+	      (set! start-seq (+ start-seq 1)))
+	    (if (not (find obj result :test test :key key))
+		(set! result (cons orig-obj result))))))
+    (let* ((res (reverse result))
+	   (new-len (+ (length result) start (- len nd)))
+	   (new-seq (make sequence new-len)))
+      (let ((n 0))
+	(do ((i 0 (+ i 1)))
+	    ((= i len) new-seq)
+	  (if (or (< i start)
+		  (>= i nd))
+	      (begin
+		(set! (new-seq n) (sequence i))
+		(set! n (+ n 1)))
+	      (if (not (null? res))
+		  (begin
+		    (set! (new-seq n) (car res))
+		    (set! res (cdr res))
+		    (set! n (+ n 1))))))))))
+
+
 (define find-then
   (let ((+documentation+ "(find-then fn sequence) applies fn to each member of sequence.\n\
 If func approves of one, find-then returns the result of applying fn to it."))
@@ -33,7 +118,7 @@ If func approves of one, find-then returns the result of applying fn to it."))
 (define (but-last list)
   (reverse (cdr (reverse list))))
 
-(load "s7/stuff.scm")
+;; (load "s7/stuff.scm")
 
 (set! *#readers*
       (cons (cons #\h (lambda (str)

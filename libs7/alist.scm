@@ -235,14 +235,14 @@
           (if (null? als)
               (if (null? ks)
                   (begin
-                    (format #t "~A~%" (yellow "als and ks null; invoking update fn"))
+                    ;; (format #t "~A~%" (yellow "als and ks null; invoking update fn"))
                     (fn '()))
-                  (let ((_ (format #t "empty als, ks: ~A\n" ks))
+                  (let (;; (_ (format #t "empty als, ks: ~A\n" ks))
                         (recres (recur als (cdr ks))))
-                    (format #t " base recres for ~A: ~A\n" (car ks) recres)
-                    (format #t " (pair? recres): ~A\n" (pair? recres))
-                    (format #t " (proper-list? recres): ~A\n"
-                            (proper-list? recres))
+                    ;; (format #t " base recres for ~A: ~A\n" (car ks) recres)
+                    ;; (format #t " (pair? recres): ~A\n" (pair? recres))
+                    ;; (format #t " (proper-list? recres): ~A\n"
+                    ;;         (proper-list? recres))
                     (if (pair? recres)
                         (if (proper-list? recres)
                             (list (cons (car ks) recres))
@@ -257,15 +257,15 @@
                       base))
                   ;; ks and als not null
                   (begin
-                    (format #t "(alist? als) ~A ~A\n" (alist? als) als)
+                    ;; (format #t "(alist? als) ~A ~A\n" (alist? als) als)
                     ;; (format #t "intermediate match on k? ~A\n"
                     ;;         (assoc (car ks) als))
 
                     (if (alist? als)
                         (if-let ((sub-alist (assoc (car ks) als)))
                                 (begin
-                                  (format #t "intermediate match on k ~A\n"
-                                          (car ks))
+                                  ;; (format #t "intermediate match on k ~A\n"
+                                  ;;         (car ks))
                                   ;; (format #t "isub-list before ~A\n" sub-alist)
                                   (let ((recres (recur (cdr sub-alist) (cdr ks))))
                                     ;; (format #t "~A: ~A~%" (yellow "imatch recres") recres)
@@ -278,14 +278,14 @@
 
                                 ;; no match, both ks and als not null
                                 (begin
-                                  (format #t "~A ~A - adding ~A\n" (yellow "nomatch for key")
-                                          (car ks) ks)
-                                  (format #t "Old als: ~A\n" als)
+                                  ;; (format #t "~A ~A - adding ~A\n" (yellow "nomatch for key")
+                                  ;;         (car ks) ks)
+                                  ;; (format #t "Old als: ~A\n" als)
                                   ;; recursion obtains value for key
                                   (let* ((recres (recur '() (cdr ks)))
-                                         (_ (format
-                                             #t "i-nomatch recres for ~A is: ~A\n"
-                                             (car ks) recres))
+                                         ;; (_ (format
+                                         ;;     #t "i-nomatch recres for ~A is: ~A\n"
+                                         ;;     (car ks) recres))
                                          )
                                     ;; recres could be: (:ml . d.ml) for new file
                                     ;; or (D (:ml . d.ml)) for module
@@ -306,13 +306,13 @@
                                       newtree))))
                         ;; else not an alist
                         (begin
-                          (format #t "~A: ~A~%" (red "key not found") ks)
-                          (format #t "~A: ~A~%" (red "val not alist") als)
+                          ;; (format #t "~A: ~A~%" (red "key not found") ks)
+                          ;; (format #t "~A: ~A~%" (red "val not alist") als)
                           ;; value at matched keypath seg not an alist,
                           ;; so we cannot automatically add an assoc child
                           ;; this should throw an exception
                           ;;(fn (cons #<unspecified> als))
-                          (throw 'not-an-alist
+                          (error 'not-an-alist
                                  (format #f "value ~A not an alist" als))
                           ))))))
         the-alist))))

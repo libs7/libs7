@@ -115,7 +115,9 @@
 	 (if (pred (car list)) list
 	     (lp (cdr list))))))
 
+;; see utils.scm for find
 (define (find pred list)
+  ;; (format #t "~A: ~A~%" (bgred "srfi find") pred)
   (cond ((find-tail pred list) => car)
 	(else #f)))
 

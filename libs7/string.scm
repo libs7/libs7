@@ -25,6 +25,15 @@
 (define (cyan text) (format #f "~C[36m~A~C[0m" #\escape text #\escape))
 (define (white text) (format #f "~C[37m~A~C[0m" #\escape text #\escape))
 
+;; background
+(define (bgred text) (format #f "~C[41m~A~C[0m" #\escape text #\escape))
+(define (bggreen text) (format #f "~C[42m~A~C[0m" #\escape text #\escape))
+(define (bgyellow text) (format #f "~C[43m~A~C[0m" #\escape text #\escape))
+(define (bgblue text) (format #f "~C[44m~A~C[0m" #\escape text #\escape))
+(define (bgmagenta text) (format #f "~C[45m~A~C[0m" #\escape text #\escape))
+(define (bgcyan text) (format #f "~C[46m~A~C[0m" #\escape text #\escape))
+(define (bgwhite text) (format #f "~C[47m~A~C[0m" #\escape text #\escape))
+
 ;; underlined
 (define (ured text) (format #f "~C[4;31m~A~C[0m" #\escape text #\escape))
 (define (ugreen text) (format #f "~C[4;32m~A~C[0m" #\escape text #\escape))
