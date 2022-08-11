@@ -426,7 +426,7 @@ void init_fs_api(s7_scheme *sc)
               s7_make_symbol(sc, "fnmatch"),
               s7_make_typed_function(sc, "fnmatch", s7__fnmatch,
                                      3, 0, false,
-                                     "(fnmatch pattern file flags)",
+                                     "(fnmatch pattern file flags); returns zero on success. flag as in fnmatch(3)",
                                      pl_issi));
 
     s7_define(sc, cur_env,

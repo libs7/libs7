@@ -94015,10 +94015,10 @@ static void init_rootlet(s7_scheme *sc)
 
   s7_autoload(sc, make_symbol(sc, "cload.scm"),       s7_make_permanent_string(sc, "cload.scm"));
   s7_autoload(sc, make_symbol(sc, "lint.scm"),        s7_make_permanent_string(sc, "lint.scm"));
-  s7_autoload(sc, make_symbol(sc, "stuff.scm"),       s7_make_permanent_string(sc, "stuff.scm"));
-  s7_autoload(sc, make_symbol(sc, "mockery.scm"),     s7_make_permanent_string(sc, "mockery.scm"));
+  /* s7_autoload(sc, make_symbol(sc, "stuff.scm"),       s7_make_permanent_string(sc, "stuff.scm")); */
+  /* s7_autoload(sc, make_symbol(sc, "mockery.scm"),     s7_make_permanent_string(sc, "mockery.scm")); */
   s7_autoload(sc, make_symbol(sc, "write.scm"),       s7_make_permanent_string(sc, "write.scm"));
-  s7_autoload(sc, make_symbol(sc, "reactive.scm"),    s7_make_permanent_string(sc, "reactive.scm"));
+  /* s7_autoload(sc, make_symbol(sc, "reactive.scm"),    s7_make_permanent_string(sc, "reactive.scm")); */
   s7_autoload(sc, make_symbol(sc, "repl.scm"),        s7_make_permanent_string(sc, "repl.scm"));
   s7_autoload(sc, make_symbol(sc, "r7rs.scm"),        s7_make_permanent_string(sc, "r7rs.scm"));
   s7_autoload(sc, make_symbol(sc, "profile.scm"),     s7_make_permanent_string(sc, "profile.scm"));
@@ -94029,7 +94029,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_autoload(sc, make_symbol(sc, "libm.scm"),        s7_make_permanent_string(sc, "libm.scm"));
   s7_autoload(sc, make_symbol(sc, "libdl.scm"),       s7_make_permanent_string(sc, "libdl.scm"));
   s7_autoload(sc, make_symbol(sc, "libgsl.scm"),      s7_make_permanent_string(sc, "libgsl.scm"));
-  s7_autoload(sc, make_symbol(sc, "libgdbm.scm"),     s7_make_permanent_string(sc, "libgdbm.scm"));
+  /* s7_autoload(sc, make_symbol(sc, "libgdbm.scm"),     s7_make_permanent_string(sc, "libgdbm.scm")); */
   s7_autoload(sc, make_symbol(sc, "libutf8proc.scm"), s7_make_permanent_string(sc, "libutf8proc.scm"));
 
   sc->require_symbol = s7_define_macro(sc, "require", g_require, 1, 0, true, H_require);
