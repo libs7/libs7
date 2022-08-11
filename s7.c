@@ -10544,6 +10544,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 {
   s7_pointer mac, body, mac_name = NULL;
   uint64_t typ;
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(sc->code));
   switch (op)
     {
     case OP_DEFINE_MACRO:      case OP_MACRO:      typ = T_MACRO;      break;
@@ -10590,8 +10591,6 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
     }
 
   if ((!is_either_bacro(mac)) &&
-      (s7_is_proper_list(sc, closure_args(mac))) &&
-      (!direct_memq(sc->rest_keyword, closure_args(mac))) &&
       (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
     clear_all_optimizations(sc, body);
 
@@ -71509,6 +71508,7 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 {
   int32_t pairs = 0, symbols = 0, args = 0, bad_pairs = 0, quotes = 0;
   s7_pointer p;
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(expr));  
   for (p = cdr(expr); is_pair(p); p = cdr(p), args++) /* check the args (the calling expression) */
     {
       s7_pointer car_p = car(p);
@@ -71556,6 +71556,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 {
   s7_pointer car_expr = car(expr);
   int32_t orig_hop = hop;
+  /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(expr)); */
   set_checked(expr);
 
   if (is_symbol(car_expr))
@@ -71742,9 +71743,11 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 
       /* if car is a pair, we can't easily tell whether its value is (say) + or cond, so we need to catch this case and fixup fx settings */
       for (p = expr; is_pair(p); p = cdr(p))
-	if ((is_pair(car(p))) &&
-	    (!is_checked(car(p))) &&
-	    (optimize_expression(sc, car(p), hop, e, false) == OPT_OOPS))
+	if (((is_symbol(car(p))) && 
+	     (is_syntactic_symbol(car(p)))) ||
+	    ((is_pair(car(p))) &&
+	     (!is_checked(car(p))) &&
+	     (optimize_expression(sc, car(p), hop, e, false) == OPT_OOPS)))
 	  return(OPT_OOPS);
       /* here we get for example:
        *  ((if (not (let? p)) write write-to-vector) obj p) ; not uncomplicated/c-function [((if 3d fourth third) p) in index]
@@ -72238,7 +72241,19 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  if (!is_slot(f_slot))
 	    return(UNSAFE_BODY);
 	  f = slot_value(f_slot);
-	  c_safe = (is_c_function(f)) && (is_safe_or_scope_safe_procedure(f));
+	  if (is_c_function(f))
+	    {
+	      if ((expr == sc->apply_symbol) && (is_pair(cdr(x))) && (is_symbol(cadr(x)))) /* (apply <safe_c_function> ...) */
+		{
+		  s7_pointer cadr_f = lookup_unexamined(sc, cadr(x));
+		  c_safe = ((cadr_f) && 
+			    (((is_c_function(cadr_f)) && (is_safe_procedure(cadr_f))) ||
+			     ((is_closure(cadr_f)) && (is_very_safe_closure(cadr_f)))));
+		}
+	      else c_safe = (is_safe_or_scope_safe_procedure(f));
+	    }
+	  else c_safe = false;
+
 	  result = ((is_sequence(f)) ||
 		    ((is_closure(f)) && (is_very_safe_closure(f))) ||
 		    ((c_safe) && ((is_immutable(f_slot)) || (is_global(expr))))) ? VERY_SAFE_BODY : SAFE_BODY;
@@ -72302,7 +72317,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	      if ((is_pair(cdr(x))) && (is_null(cddr(x))))
 		return((is_pair(cadr(x))) ? min_body(result, form_is_safe(sc, func, cadr(x), false)) : result);
 	    }
-
+#if 0
 	  if ((expr == sc->apply_symbol) &&        /* (apply + ints) */
 	      (is_pair(cdr(x))) &&
 	      (is_pair(cddr(x))) &&
@@ -72320,8 +72335,13 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 		  fn = slot_value(fn_slot);
 		  if (((is_c_function(fn)) && (is_safe_procedure(fn))) ||
 		      ((is_closure(fn)) && (is_very_safe_closure(fn))))
-		    return(result);
-		}}}
+		    {
+		      if (S7_DEBUGGING) fprintf(stderr, "safe: %s\n", display_80(x));
+		      return(result);
+		    }
+		}}
+#endif
+	}
       return(UNSAFE_BODY); /* not recur_body here if at_end -- possible defines in body etc */
     }
   return(result);
@@ -73519,6 +73539,7 @@ static void mark_fx_treeable(s7_scheme *sc, s7_pointer body)
 static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer func, s7_pointer args, s7_pointer body)
 {                                                                 /* func is either sc->unused or a symbol */
   s7_int len = s7_list_length(sc, body);
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(body));
   if (len < 0)                /* (define (hi) 1 . 2) */
     error_nr(sc, sc->syntax_error_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~A: function body messed up, ~A", 31),
@@ -77200,7 +77221,7 @@ static void check_cond(s7_scheme *sc)
     {
       s7_pointer p = car(x);
       /* if (has_fx(p)) fprintf(stderr, "clear %s\n", display(car(p))); */
-      clear_has_fx(p); /* a kludge -- if has_fx here (and not re-fx'd below), someone messed up earlier -- but was fx_treeable set? */
+      /* clear_has_fx(p); */ /* a kludge -- if has_fx here (and not re-fx'd below), someone messed up earlier -- but was fx_treeable set? */
       if (is_fxable(sc, car(p)))
 	fx_annotate_arg(sc, p, sc->curlet);
       for (p = cdr(p); is_pair(p); p = cdr(p))
@@ -95210,12 +95231,12 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    467    469
- * index     1026   1016    973    964    965
+ * index     1026   1016    973    964    967
  * tmock     1177   1165   1057   1061   1061
  * tvect     2519   2464   1772   1676   1677
- * timp      2637   2575   1930   1717   1721
- * texit     ----   ----   1778   1736   1739
- * s7test    1873   1831   1818   1815   1823
+ * timp      2637   2575   1930   1717   1720
+ * texit     ----   ----   1778   1736   1737
+ * s7test    1873   1831   1818   1815   1822
  * thook     ----   ----   2590   2106   2106
  * lt        2187   2172   2150   2180   2181
  * tauto     ----   ----   2562   2171   2170
@@ -95226,39 +95247,39 @@ int main(int argc, char **argv)
  * tread     2440   2421   2419   2416   2416
  * trclo     2735   2574   2454   2447   2448
  * titer     2865   2842   2641   2540   2540
- * tmat      3065   3042   2524   2508   2509
+ * tmat      3065   3042   2524   2508   2502
  * tb        2735   2681   2612   2601   2605
  * tsort     3105   3104   2856   2803   2802
  * teq       4068   4045   3536   3465   3467
  * tobj      4016   3970   3828   3556   3560
  * tio       3816   3752   3683   3604   3604
- * tmac      3950   3873   3033   3670   3792 [eval?] 3670 is make_macro old form 10578
+ * tmac      3950   3873   3033   3670   3670
  * tclo      4787   4735   4390   4379   4376
- * tlet      7775   5640   4450   4433   4436
- * tcase     4960   4793   4439   4435   4487 [eval?] 4440 make_macro
+ * tlet      7775   5640   4450   4433   4435
+ * tcase     4960   4793   4439   4435   4437
  * tfft      7820   7729   4755   4455   4455
  * tmap      8869   8774   4489   4482   4482
  * tshoot    5525   5447   5183   5068   5071
  * tstr      6880   6342   5488   5122   5126
- * tform     5357   5348   5307   5279   5293
- * tnum      6348   6013   5433   5359   5375 [eval?]
+ * tform     5357   5348   5307   5279   5286
+ * tnum      6348   6013   5433   5359   5375
  * tlamb     6423   6273   5720   5544   5544
  * tmisc     8869   7612   6435   6158   6158
- * tset      ----   ----   ----   6441   6514 [eval?] 6470 make_macro
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6367   6367
+ * tlist     7896   7546   6558   6367   6362
+ * tset      ----   ----   ----   6441   6468
  * tari      13.0   12.7   6827   6486   6486
  * trec      6936   6922   6521   6559   6559
- * tleft     10.4   10.2   7657   7516   7521
+ * tleft     10.4   10.2   7657   7516   7493
  * tgc       11.9   11.1   8177   7964   7963
- * thash     11.8   11.7   9734   9477   9479
+ * thash     11.8   11.7   9734   9477   9477
  * cb        11.2   11.0   9658   9533   9533
  * tgen      11.2   11.4   12.0   12.0   12.0
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.7
+ * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.9   57.0
  * lg        ----   ----  105.2  106.4  106.5
- * tbig     177.4  175.8  156.5  149.9  149.8 [make_atom]
+ * tbig     177.4  175.8  156.5  149.9  149.6
  * ---------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95267,5 +95288,6 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler
- * t718 msym4: need earlier recognition 77133, this needs re-opt see above make_macro: maybe syntax-set tree check? (unrest tmac?)
+ * apply/quote/values(?) in do-is-safe [then opt_p_call in opt?]
+ *   do_tree_has_definers apply is a definer!
  */

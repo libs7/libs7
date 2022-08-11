@@ -150,7 +150,7 @@
 		(not (= z 5)))
 	    (format *stderr* "let*: ~D ~D ~D~%" x y z)))
       
-      (if (zero? (remainder i 9)) (gc)))))
+      (if (zero? (remainder i 9)) (gc)))))  ; [6572:6 6533:8 6514:9 6518:10 6546:12]
 
 (t)
 
