@@ -76,38 +76,6 @@
 ;;(define (remove pred l) (filter (lambda (x) (not (pred x))) l))
 ;; see 'remove' in utils.scm
 
-;; srfi1
-(define (filter! pred lis)
-  (check-arg procedure? pred filter!)
-  (let lp ((ans lis))
-    (cond ((null-list? ans)       ans)			; Scan looking for
-	  ((not (pred (car ans))) (lp (cdr ans)))	; first cons of result.
-
-	  ;; ANS is the eventual answer.
-	  ;; SCAN-IN: (CDR PREV) = LIS and (CAR PREV) satisfies PRED.
-	  ;;          Scan over a contiguous segment of the list that
-	  ;;          satisfies PRED.
-	  ;; SCAN-OUT: (CAR PREV) satisfies PRED. Scan over a contiguous
-	  ;;           segment of the list that *doesn't* satisfy PRED.
-	  ;;           When the segment ends, patch in a link from PREV
-	  ;;           to the start of the next good segment, and jump to
-	  ;;           SCAN-IN.
-	  (else (letrec ((scan-in (lambda (prev lis)
-				    (if (pair? lis)
-					(if (pred (car lis))
-					    (scan-in lis (cdr lis))
-					    (scan-out prev (cdr lis))))))
-			 (scan-out (lambda (prev lis)
-				     (let lp ((lis lis))
-				       (if (pair? lis)
-					   (if (pred (car lis))
-					       (begin (set-cdr! prev lis)
-						      (scan-in lis (cdr lis)))
-					       (lp (cdr lis)))
-					   (set-cdr! prev lis))))))
-		  (scan-in ans (cdr ans))
-		  ans)))))
-
 (define (delete! x lis . maybe-=)
   ;; (let ((= (:optional maybe-= equal?)))
   (filter! (lambda (y) (not (= x y))) lis))
@@ -205,6 +173,57 @@
 		(if (eq? tail new-tail) lis
 		    (cons head new-tail)))
 	      (recur tail))))))			; this one can be a tail call.
+
+;; srfi1
+(define (filter! pred lis)
+  (check-arg procedure? pred filter!)
+  (let lp ((ans lis))
+    (cond ((null-list? ans)       ans)			; Scan looking for
+	  ((not (pred (car ans))) (lp (cdr ans)))	; first cons of result.
+
+	  ;; ANS is the eventual answer.
+	  ;; SCAN-IN: (CDR PREV) = LIS and (CAR PREV) satisfies PRED.
+	  ;;          Scan over a contiguous segment of the list that
+	  ;;          satisfies PRED.
+	  ;; SCAN-OUT: (CAR PREV) satisfies PRED. Scan over a contiguous
+	  ;;           segment of the list that *doesn't* satisfy PRED.
+	  ;;           When the segment ends, patch in a link from PREV
+	  ;;           to the start of the next good segment, and jump to
+	  ;;           SCAN-IN.
+	  (else (letrec ((scan-in (lambda (prev lis)
+				    (if (pair? lis)
+					(if (pred (car lis))
+					    (scan-in lis (cdr lis))
+					    (scan-out prev (cdr lis))))))
+			 (scan-out (lambda (prev lis)
+				     (let lp ((lis lis))
+				       (if (pair? lis)
+					   (if (pred (car lis))
+					       (begin (set-cdr! prev lis)
+						      (scan-in lis (cdr lis)))
+					       (lp (cdr lis)))
+					   (set-cdr! prev lis))))))
+		  (scan-in ans (cdr ans))
+		  ans)))))
+
+;;; Map F across L, and save up all the non-false results.
+;; (filter-map (lambda (x) (and (number? x) (* x x))) '(a 1 b 3 c 7))
+;; => (1 9 49)
+(define (filter-map f lis1 . lists)
+  (check-arg procedure? f filter-map)
+  (if (pair? lists)
+      (let recur ((lists (cons lis1 lists)))
+	(receive (cars cdrs) (%cars+cdrs lists)
+	  (if (pair? cars)
+	      (cond ((apply f cars) => (lambda (x) (cons x (recur cdrs))))
+		    (else (recur cdrs))) ; Tail call in this arm.
+	      '())))
+      ;; Fast path.
+      (let recur ((lis lis1))
+	(if (null-list? lis) lis
+	    (let ((tail (recur (cdr lis))))
+	      (cond ((f (car lis)) => (lambda (x) (cons x tail)))
+		    (else tail)))))))
 
 (define (lset-difference = lis1 . lists)
   (check-arg procedure? = lset-difference)
