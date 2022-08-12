@@ -26712,7 +26712,6 @@ static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer c
 		      unstack(sc);
 		      return(s7_apply_function(sc, func, x)); /* not args (string-append "" "" ...) */
 		    }
-		  /* TODO: s7test this with non-string earlier arg */
 		  newstr = make_empty_string(sc, len, 0);
 		  string_append_2(sc, newstr, args, x, caller);
 		  unstack(sc);
@@ -48298,7 +48297,6 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
 	gc_protect_via_stack(sc, source);
 	p = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
 	unstack(sc);
-	/* TODO: what if is_typed and hash_table_procedures? */
 	if ((hash_table_checker(source) != hash_table_checker(dest)) &&
 	    (hash_table_mapper(dest) == default_hash_map))
 	  {
@@ -63537,22 +63535,15 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	       *   what the implicit call will do, and in the opt_* context, everything must be "safe" (i.e. no defines or
 	       *   hidden multiple-values, etc).
 	       */
+	      if ((!is_any_vector(obj)) || (vector_rank(obj) != (len - 1))) return_false(sc, car_x);
 	      opc->v[0].fp = opt_p_call_any;
-	      switch (type(obj))     /* string can't happen here (no multidimensional strings) */
+	      switch (type(obj))     /* string can't happen here (no multidimensional strings), for pair/hash/let see above */
 		{
-		  /* case T_PAIR:         opc->v[2].call = g_list_ref;       break; */
-		  /* case T_HASH_TABLE:   opc->v[2].call = g_hash_table_ref; break; */
-		  /* case T_LET:     opc->v[2].call = g_let_ref;             break; */ /* this doesn't handle implicit indices via g_let_ref! apply_let */
 		case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
 		case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
 		case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
-		  /* TODO: these should match rank/indices */
-		case T_VECTOR:
-		  if (vector_rank(obj) != (len - 1)) return_false(sc, car_x);
-		  opc->v[2].call = g_vector_ref;
-		  break;
-		default:
-		  return_false(sc, car_x);
+		case T_VECTOR:       opc->v[2].call = g_vector_ref;  	    break;
+		default:	     return_false(sc, car_x);
 		}
 	      return(true);
 	    }}}
@@ -70507,7 +70498,7 @@ static opt_t optimize_safe_c_func_three_args(s7_scheme *sc, s7_pointer expr, s7_
 			  if (is_normal_symbol(arg2))
 			    {
 			      set_optimize_op(expr, hop + OP_SAFE_C_SSA);
-			      clear_has_fx(cdr(expr)); /* TODO: why is this needed? should it be somewhere else? */
+			      clear_has_fx(cdr(expr)); /* has_fx might have been on (see s7test) */
 			    }
 			  else set_optimize_op(expr, hop + OP_SAFE_C_SAS);
 			}
@@ -72316,32 +72307,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	      if (is_null(cdr(x))) return(result);
 	      if ((is_pair(cdr(x))) && (is_null(cddr(x))))
 		return((is_pair(cadr(x))) ? min_body(result, form_is_safe(sc, func, cadr(x), false)) : result);
-	    }
-#if 0
-	  if ((expr == sc->apply_symbol) &&        /* (apply + ints) */
-	      (is_pair(cdr(x))) &&
-	      (is_pair(cddr(x))) &&
-	      (is_null(cdddr(x))) &&
-	      ((!is_pair(caddr(x))) ||
-	       (form_is_safe(sc, func, caddr(x), false))))
-	    {
-	      s7_pointer fn = cadr(x);
-	      if (is_symbol(fn))
-		{
-		  s7_pointer fn_slot;
-		  if (symbol_is_in_list(sc, fn)) return(UNSAFE_BODY);
-		  fn_slot = lookup_slot_from(fn, sc->curlet);
-		  if (!is_slot(fn_slot)) return(UNSAFE_BODY);
-		  fn = slot_value(fn_slot);
-		  if (((is_c_function(fn)) && (is_safe_procedure(fn))) ||
-		      ((is_closure(fn)) && (is_very_safe_closure(fn))))
-		    {
-		      if (S7_DEBUGGING) fprintf(stderr, "safe: %s\n", display_80(x));
-		      return(result);
-		    }
-		}}
-#endif
-	}
+	    }}
       return(UNSAFE_BODY); /* not recur_body here if at_end -- possible defines in body etc */
     }
   return(result);
@@ -79505,7 +79471,7 @@ static bool do_vector_has_definers(s7_scheme *sc, s7_pointer v)
   return(false);
 }
 
-static inline bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
+static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 {
   /* we can't be very fancy here because quote gloms up everything: (cond '(define x 0) ...) etc, and the tree here can
    *   be arbitrarily messed up, and we need to be reasonably fast.  So we accept some false positives: (case ((define)...)...) or '(define...)
@@ -79517,13 +79483,23 @@ static inline bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
       s7_pointer pp = car(p);
       if (is_symbol(pp))
 	{
-	  if ((is_definer(pp)) &&
-	      ((pp != sc->varlet_symbol) ||
-	       ((is_pair(cdr(p))) &&         /* if varlet, is target let local? */
-		(is_symbol(cadr(p))) &&
-		(!symbol_is_in_list(sc, cadr(p))))))
-	    return(true);
-	}
+	  if (is_definer(pp))
+	    {
+	      if (pp == sc->varlet_symbol) /* tlet case (varlet e1 ...) */
+		{
+		  if ((is_pair(cdr(p))) && (is_symbol(cadr(p))) && (!symbol_is_in_list(sc, cadr(p))))
+		    return(true);
+		}
+	      else
+		if (pp == sc->apply_symbol)
+		  {
+		    s7_pointer val;
+		    if ((!is_pair(cdr(p))) || (!is_symbol(cadr(p)))) return(true);
+		    val = lookup_unexamined(sc, cadr(p));
+		    if ((!val) || (!is_c_function(val))) return(true);
+		  }
+		else return(true);
+	    }}
       else
 	if (is_pair(pp))
 	  {
@@ -91528,7 +91504,8 @@ static const char *s7_let_field_names[SL_NUM_FIELDS] =
    "bignum-precision", "memory-usage", "float-format-precision", "history", "history-enabled",
    "history-size", "profile", "profile-info", "profile-prefix", "autoloading?", "accept-all-keyword-arguments",
    "muffle-warnings?", "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
-   "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?", "number-separator"};
+   "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?", 
+   "number-separator"};
 
 
 static noreturn void simple_s7_let_wrong_type_argument_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, int32_t desired_type)
@@ -95236,10 +95213,10 @@ int main(int argc, char **argv)
  * tvect     2519   2464   1772   1676   1677
  * timp      2637   2575   1930   1717   1720
  * texit     ----   ----   1778   1736   1737
- * s7test    1873   1831   1818   1815   1822
+ * s7test    1873   1831   1818   1815   1818
  * thook     ----   ----   2590   2106   2106
- * lt        2187   2172   2150   2180   2181
  * tauto     ----   ----   2562   2171   2170
+ * lt        2187   2172   2150   2180   2181
  * dup       3805   3788   2492   2263   2263
  * tcopy     8035   5546   2539   2376   2376
  * tload     ----   ----   3046   2379   2377
@@ -95266,15 +95243,15 @@ int main(int argc, char **argv)
  * tlamb     6423   6273   5720   5544   5544
  * tmisc     8869   7612   6435   6158   6158
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6367   6362
+ * tlist     7896   7546   6558   6367   6362  6356
  * tset      ----   ----   ----   6441   6468
  * tari      13.0   12.7   6827   6486   6486
  * trec      6936   6922   6521   6559   6559
- * tleft     10.4   10.2   7657   7516   7493
- * tgc       11.9   11.1   8177   7964   7963
+ * tleft     10.4   10.2   7657   7516   7493  7515
+ * tgc       11.9   11.1   8177   7964   7963  7909
  * thash     11.8   11.7   9734   9477   9477
  * cb        11.2   11.0   9658   9533   9533
- * tgen      11.2   11.4   12.0   12.0   12.0
+ * tgen      11.2   11.4   12.0   12.0   12.0  12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.9   57.0
@@ -95288,6 +95265,4 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler
- * apply/quote/values(?) in do-is-safe [then opt_p_call in opt?]
- *   do_tree_has_definers apply is a definer!
  */
