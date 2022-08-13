@@ -33658,6 +33658,8 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 static void write_macro_readably(s7_scheme *sc, s7_pointer obj, s7_pointer port)
 {
   s7_pointer expr, body = closure_body(obj), arglist = closure_args(obj);
+  /* this doesn't handle recursive macros well -- we need letrec or the equivalent as in write_closure_readably */
+  /*   (letrec ((m2 (macro (x) `(if (> ,x 0) (m2 (- ,x 1)) 32)))) (object->string m2 :readable)) */
 
   port_write_string(port)(sc, (is_either_macro(obj)) ? "(macro" : "(bacro", 6, port);
   if ((is_macro_star(obj)) || (is_bacro_star(obj)))
@@ -33775,14 +33777,7 @@ static s7_pointer find_closure(s7_scheme *sc, s7_pointer closure, s7_pointer cur
 static void write_closure_name(s7_scheme *sc, s7_pointer closure, s7_pointer port)
 {
   s7_pointer x = find_closure(sc, closure, closure_let(closure));
-  /* this can be confusing!
-   * (let ((a (lambda () 1))) a)             -> #<lambda ()>
-   * (letrec ((a (lambda () 1))) a)          -> a
-   * (let () (define (a) 1) a)               -> a
-   * (let () (define a (lambda () 1)))       -> a
-   * (let () (define (a) (lambda () 1)) (a)) -> #<lambda ()>
-   */
-  if (is_symbol(x)) /* after find_closure */
+  if (is_symbol(x))
     {
       port_write_string(port)(sc, symbol_name(x), symbol_name_length(x), port);
       return;
@@ -34372,6 +34367,16 @@ static void closure_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_
 
 static void macro_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
+  if (has_active_methods(sc, obj))
+    {
+      s7_pointer print_func = find_method(sc, closure_let(obj), sc->object_to_string_symbol);
+      if (print_func != sc->undefined)
+	{
+	  s7_pointer p = s7_apply_function(sc, print_func, set_plist_1(sc, obj));
+	  if (string_length(p) > 0)
+	    port_write_string(port)(sc, string_value(p), string_length(p), port);
+	  return;
+	}}
   if (use_write == P_READABLE)
     write_macro_readably(sc, obj, port);
   else write_closure_name(sc, obj, port);
@@ -45282,7 +45287,6 @@ static s7_pointer g_help(s7_scheme *sc, s7_pointer args)
 {
   #define H_help "(help obj) returns obj's documentation"
   #define Q_help s7_make_signature(sc, 2, s7_make_signature(sc, 2, sc->is_string_symbol, sc->is_boolean_symbol), sc->T)
-
   const char *doc;
   check_method(sc, car(args), sc->help_symbol, args);
   doc = s7_help(sc, car(args));
@@ -45892,10 +45896,8 @@ static bool op_implicit_c_object_ref_a(s7_scheme *sc)
 
 s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
 					const char *name,
-					s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
-					s7_int get_req_args, s7_int get_opt_args,
-					s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
-					s7_int set_req_args, s7_int set_opt_args,
+					s7_pointer (*getter)(s7_scheme *sc, s7_pointer args), s7_int get_req_args, s7_int get_opt_args,
+					s7_pointer (*setter)(s7_scheme *sc, s7_pointer args), s7_int set_req_args, s7_int set_opt_args,
 					const char *documentation)
 {
   s7_pointer get_func, set_func;
@@ -45916,10 +45918,8 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
 
 s7_pointer s7_dilambda(s7_scheme *sc,
 		       const char *name,
-		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
-		       s7_int get_req_args, s7_int get_opt_args,
-		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
-		       s7_int set_req_args, s7_int set_opt_args,
+		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args), s7_int get_req_args, s7_int get_opt_args,
+		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args), s7_int set_req_args, s7_int set_opt_args,
 		       const char *documentation)
 {
   return(s7_dilambda_with_environment(sc, sc->nil, name, getter, get_req_args, get_opt_args, setter, set_req_args, set_opt_args, documentation));
@@ -45927,10 +45927,8 @@ s7_pointer s7_dilambda(s7_scheme *sc,
 
 s7_pointer s7_typed_dilambda(s7_scheme *sc,
 			     const char *name,
-			     s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
-			     s7_int get_req_args, s7_int get_opt_args,
-			     s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
-			     s7_int set_req_args, s7_int set_opt_args,
+			     s7_pointer (*getter)(s7_scheme *sc, s7_pointer args), s7_int get_req_args, s7_int get_opt_args,
+			     s7_pointer (*setter)(s7_scheme *sc, s7_pointer args), s7_int set_req_args, s7_int set_opt_args,
 			     const char *documentation,
 			     s7_pointer get_sig, s7_pointer set_sig)
 {
@@ -77670,8 +77668,6 @@ static void check_set(s7_scheme *sc)
 	    else
 	      {
 		pair_set_syntax_op(form, OP_SET_S_P);
-		/* TODO? h_safe_sc (set! x (+ x 1)), sp: (set! x (+ x (f ...))) */
-
 		if (is_optimized(value))
 		  {
 		    if (optimize_op(value) == HOP_SAFE_C_NC)
@@ -78731,7 +78727,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer form
 	    }
 	  error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "value must be a character: ~S", 29), form));
 	}
-      /* PERHAPS: op_implicit_string_set_a as in vector? */
+      /* maybe op_implicit_string_set_a as in vector someday, but this code isn't (currently) called much */
       push_op_stack(sc, sc->string_set_function);
       sc->args = list_2(sc, index, str);
       sc->code = cdr(sc->code);
@@ -83818,11 +83814,10 @@ static inline void op_closure_fa(s7_scheme *sc)
 
 static void op_safe_closure_ns(s7_scheme *sc)
 {
-  s7_pointer args = cdr(sc->code), let;
+  s7_pointer args = cdr(sc->code);
+  s7_pointer f = opt1_lambda(sc->code);
+  s7_pointer let = closure_let(f);
   uint64_t id = ++sc->let_number;
-
-  sc->code = opt1_lambda(sc->code);
-  let = closure_let(sc->code);
   let_set_id(let, id);
   for (s7_pointer x = let_slots(let); tis_slot(x); x = next_slot(x), args = cdr(args))
     {
@@ -83830,7 +83825,7 @@ static void op_safe_closure_ns(s7_scheme *sc)
       symbol_set_local_slot(slot_symbol(x), id, x);
     }
   set_curlet(sc, let);
-  sc->code = closure_body(sc->code);
+  sc->code = closure_body(f);
   if_pair_set_up_begin_unchecked(sc);
 }
 
@@ -83857,7 +83852,6 @@ static void op_safe_closure_na(s7_scheme *sc)
   id = ++sc->let_number;
   let = closure_let(sc->code);
   let_set_id(let, id);
-
   for (s7_pointer x = let_slots(let), z = sc->args; tis_slot(x); x = next_slot(x), z = cdr(z))
     {
       slot_set_value(x, car(z));
@@ -83869,25 +83863,24 @@ static void op_safe_closure_na(s7_scheme *sc)
   if_pair_set_up_begin_unchecked(sc);
 }
 
-static inline void op_closure_ns(s7_scheme *sc) /* called once in eval, lg? */
+static /* inline */ void op_closure_ns(s7_scheme *sc) /* called once in eval, lg? */
 {
-  s7_pointer args = cdr(sc->code), p, e, last_slot;
-  s7_int id;
   /* in this case, we have just lambda (not lambda*), and no dotted arglist,
    *   and no accessed symbols in the arglist, and we know the arglist matches the parameter list.
    */
-  sc->code = opt1_lambda(sc->code);
-  e = inline_make_let(sc, closure_let(sc->code));
+  s7_pointer args = cdr(sc->code), last_slot;
+  s7_pointer f = opt1_lambda(sc->code);
+  s7_pointer p = closure_args(f);
+  s7_pointer e = inline_make_let(sc, closure_let(f));
+  s7_int id = let_id(e);
   sc->z = e;
-  id = let_id(e);
-  p = closure_args(sc->code);
   add_slot_unchecked(sc, e, car(p), lookup(sc, car(args)), id);
   last_slot = let_slots(e);
   for (p = cdr(p), args = cdr(args); is_pair(p); p = cdr(p), args = cdr(args))
     last_slot = inline_add_slot_at_end(sc, id, last_slot, car(p), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
   set_curlet(sc, e);
   sc->z = sc->nil;
-  sc->code = T_Pair(closure_body(sc->code));
+  sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
 }
 
@@ -95264,5 +95257,6 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (var 'a), but we need to copy rootlet, *s7* vals?
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
- *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler
+ *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
+ * t718 heap ovfl?
  */
