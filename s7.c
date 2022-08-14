@@ -3325,6 +3325,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define is_c_function(f)               (type(f) >= T_C_FUNCTION)
 #define is_c_function_star(f)          (type(f) == T_C_FUNCTION_STAR)
 #define is_any_c_function(f)           (type(f) >= T_C_FUNCTION_STAR)
+#define is_safe_c_function(f)          ((is_c_function(f)) && (is_safe_procedure(f)))
 #define c_function_data(f)             (T_Fnc(f))->object.fnc.c_proc
 #define c_function_call(f)             (T_Fnc(f))->object.fnc.ff
 #define c_function_min_args(f)         (T_Fnc(f))->object.fnc.required_args
@@ -7425,16 +7426,38 @@ static int64_t gc(s7_scheme *sc)
   return(sc->gc_freed);
 }
 
+
+#ifndef GC_RESIZE_HEAP_FRACTION
+  #define GC_RESIZE_HEAP_FRACTION 0.8
+/* 1/2 is ok, 3/4 speeds up some GC benchmarks, 7/8 is a bit faster, 95/100 comes to a halt (giant heap)
+ *    in my tests, only tvect.scm ends up larger if 3/4 used
+ */
+#endif
+
 #define GC_RESIZE_HEAP_BY_4_FRACTION 0.67
 /*   .5+.1: test -3?, dup +86, tmap +45, tsort -3, thash +305.  .85+.7: dup -5 */
 
+
+#if S7_DEBUGGING
+#define resize_heap_to(Sc, Size) resize_heap_to_1(Sc, Size, __func__, __LINE__)
+static void resize_heap_to_1(s7_scheme *sc, int64_t size, const char *func, int line)
+#else
 static void resize_heap_to(s7_scheme *sc, int64_t size)
+#endif
 {
   int64_t old_size = sc->heap_size;
   int64_t old_free = sc->free_heap_top - sc->free_heap;
   s7_cell *cells;
   s7_cell **cp;
   heap_block_t *hp;
+
+#if (S7_DEBUGGING) && (!MS_WINDOWS)
+  if ((show_gc_stats(sc)) || (true))
+    {
+      s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n", 
+	      __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
+    }
+#endif
 
   if (size == 0)
     {
@@ -7508,14 +7531,8 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 			 wrap_integer(sc, sc->heap_size)));
 }
 
-#define resize_heap(Sc) resize_heap_to(Sc, 0)
 
-#ifndef GC_RESIZE_HEAP_FRACTION
-  #define GC_RESIZE_HEAP_FRACTION 0.8
-/* 1/2 is ok, 3/4 speeds up some GC benchmarks, 7/8 is a bit faster, 95/100 comes to a halt (giant heap)
- *    in my tests, only tvect.scm ends up larger if 3/4 used
- */
-#endif
+#define resize_heap(Sc) resize_heap_to(Sc, 0)
 
 #if S7_DEBUGGING
 static void try_to_call_gc_1(s7_scheme *sc, const char *func, int32_t line)
@@ -11485,7 +11502,7 @@ static void make_room_for_cc_stack(s7_scheme *sc)
 {
   if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 8)) /* we probably never need this much space */
     {
-      int64_t freed_heap = call_gc(sc);
+      int64_t freed_heap = call_gc(sc);  /* TODO: perhaps use (sc->free_heap_top - sc->free_heap) here */
       if (freed_heap < (int64_t)(sc->heap_size / 8))
 	resize_heap(sc);
     }
@@ -38007,7 +38024,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       /* here we know x is a pair, but need to protect against circular lists */
       /* I wonder if the assoc equality function should get the cons, not just caar? */
 
-      if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
+      if (is_safe_c_function(eq_func))
 	{
 	  s7_function func = c_function_call(eq_func);
 	  if (func == g_is_eq) return(is_null(x) ? sc->F : s7_assq(sc, car(args), x));
@@ -38411,7 +38428,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
     {
       s7_pointer y, eq_func = caddr(args);
 
-      if ((is_c_function(eq_func)) && (is_safe_procedure(eq_func)))
+      if (is_safe_c_function(eq_func))
 	{
 	  s7_function func = c_function_call(eq_func);
 	  if (func == g_is_eq) return(is_null(x) ? sc->F : s7_memq(sc, car(args), x));
@@ -42188,7 +42205,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
   sort_func = NULL;
   sc->sort_f = NULL;
 
-  if ((is_c_function(lessp)) && (is_safe_procedure(lessp)))    /* (sort! a <) */
+  if (is_safe_c_function(lessp))    /* (sort! a <) */
     {
       s7_pointer sig = c_function_signature(lessp);
       if ((sig) &&
@@ -67013,7 +67030,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
   if (for_each_arg_is_null(sc, cdr(args))) return(sc->unspecified);
 
   /* if function is safe c func, do the for-each locally */
-  if ((is_c_function(f)) && (is_safe_procedure(f)))
+  if (is_safe_c_function(f))
     {
       s7_function func;
       s7_pointer iters;
@@ -69640,7 +69657,7 @@ static bool unsafe_is_safe(s7_scheme *sc, s7_pointer f, s7_pointer e)
   if (!is_symbol(f)) return(false);
   f = find_uncomplicated_symbol(sc, f, e); /* how to catch local c-funcs here? */
   if (!is_slot(f)) return(false);
-  return((is_c_function(slot_value(f))) && (is_safe_procedure(slot_value(f))));
+  return(is_safe_c_function(slot_value(f)));
 }
 
 static opt_t set_any_closure_np(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7_pointer e, int32_t num_args, opcode_t op)
@@ -72236,7 +72253,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 		{
 		  s7_pointer cadr_f = lookup_unexamined(sc, cadr(x));
 		  c_safe = ((cadr_f) && 
-			    (((is_c_function(cadr_f)) && (is_safe_procedure(cadr_f))) ||
+			    ((is_safe_c_function(cadr_f)) ||
 			     ((is_closure(cadr_f)) && (is_very_safe_closure(cadr_f)))));
 		}
 	      else c_safe = (is_safe_or_scope_safe_procedure(f));
@@ -79195,8 +79212,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
       if (is_pair(expr))
 	{
 	  s7_pointer x = car(expr);
-	  if ((is_symbol(x)) ||
-	      ((is_c_function(x)) && (is_safe_procedure(x))))
+	  if ((is_symbol(x)) || (is_safe_c_function(x)))
 	    {
 	      if (is_symbol_and_syntactic(x))
 		{
@@ -79684,7 +79700,7 @@ static s7_pointer check_do(s7_scheme *sc)
   if ((is_pair(end)) && (is_pair(car(end))) &&   /* end test is a pair */
       (is_pair(vars)) && (is_null(cdr(vars))) && /* one stepper */
       (is_pair(body)) && (is_pair(car(body))) && /* body is normal-looking */
-      ((is_symbol(caar(body))) || ((is_c_function(caar(body))) && (is_safe_procedure(caar(body))))))
+      ((is_symbol(caar(body))) || (is_safe_c_function(caar(body)))))
     {
       /* loop has one step variable, and normal-looking end test */
       s7_pointer v = car(vars), step_expr;
