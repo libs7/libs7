@@ -6351,24 +6351,11 @@ s7_pointer s7_gc_unprotect_via_location(s7_scheme *sc, s7_int loc)
 }
 
 
+/* these 3 are needed by sweep */
 static void (*mark_function[NUM_TYPES])(s7_pointer p);
-
 void s7_mark(s7_pointer p) {if (!is_marked(p)) (*mark_function[unchecked_type(p)])(p);}
-
-static inline void gc_mark(s7_pointer p) {if (!is_marked(p)) (*mark_function[unchecked_type(p)])(p);}
-
-static inline void mark_slot(s7_pointer p)
-{
-  set_mark(T_Slt(p));
-  gc_mark(slot_value(p));
-  if (slot_has_setter(p))
-    gc_mark(slot_setter(p));
-  if (slot_has_pending_value(p))
-    gc_mark(slot_pending_value(p));
-  set_mark(slot_symbol(p));
-}
-
 static void mark_noop(s7_pointer unused_p) {}
+
 
 static void close_output_port(s7_scheme *sc, s7_pointer p);
 static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym);
@@ -6761,6 +6748,9 @@ static void add_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
   sc->setters[sc->setters_loc++] = permanent_cons(sc, p, setter, T_PAIR | T_IMMUTABLE);
 }
 
+
+static inline void gc_mark(s7_pointer p) {if (!is_marked(p)) (*mark_function[unchecked_type(p)])(p);}
+
 static void mark_symbol_vector(s7_pointer p, s7_int len)
 {
   set_mark(p);
@@ -6801,6 +6791,17 @@ static void mark_typed_vector_1(s7_pointer p, s7_int top) /* for typed vectors w
 {
   gc_mark(typed_vector_typer(p));
   mark_vector_1(p, top);
+}
+
+static inline void mark_slot(s7_pointer p)
+{
+  set_mark(T_Slt(p));
+  gc_mark(slot_value(p));
+  if (slot_has_setter(p))
+    gc_mark(slot_setter(p));
+  if (slot_has_pending_value(p))
+    gc_mark(slot_pending_value(p));
+  set_mark(slot_symbol(p));
 }
 
 static void mark_let(s7_pointer let)
@@ -7461,11 +7462,11 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
   if (size == 0)
     {
-      /* (sc->heap_size < 2048000) */  /* 8192000 here improves various gc benchmarks only slightly */
-      /* maybe the choice of 4 should depend on how much space was freed rather than the current heap_size? */
       if (old_free < old_size * sc->gc_resize_heap_by_4_fraction)
 	sc->heap_size *= 4;          /* *8 if < 1M (or whatever) doesn't make much difference */
       else sc->heap_size *= 2;
+      if (sc->gc_resize_heap_fraction > .4)
+	sc->gc_resize_heap_fraction *= .95;
     }
   else
     if (size > sc->heap_size)
@@ -34550,9 +34551,11 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	}}
 }
 
-static void stack_to_port(s7_scheme *sc, s7_pointer unused_obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
+static void stack_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
 {
-  port_write_string(port)(sc, "#<stack>", 8, port);
+  if (obj == sc->stack)
+    port_write_string(port)(sc, "#<current stack>", 16, port);
+  else port_write_string(port)(sc, "#<stack>", 8, port);
 }
 
 static void init_display_functions(void)
@@ -91833,6 +91836,126 @@ static s7_pointer memory_usage(s7_scheme *sc)
   return(mu_let);
 }
 
+
+#if S7_DEBUGGING
+static bool is_stack_owner(s7_pointer p, s7_int top, s7_pointer target)
+{
+  if (stack_elements(p))
+    for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
+      if ((*tp++ == target) || (*tp++ == target) || (*tp++ == target)) return(true);
+  return(false);
+}
+
+static bool is_owner(s7_scheme *sc, s7_pointer p, s7_pointer target)
+{
+  if (p == target) return(false);
+  switch (unchecked_type(p))
+    {
+    case T_PAIR:         return((car(p) == target) || (cdr(p) == target));
+    case T_CATCH:        return((catch_tag(p) == target) || (catch_handler(p) == target));
+    case T_DYNAMIC_WIND: return((dynamic_wind_in(p) == target) || (dynamic_wind_out(p) == target) || (dynamic_wind_body(p) == target));
+    case T_ITERATOR:     return((iterator_sequence(p) == target) || ((is_mark_seq(p)) && (iterator_current(p) == target)));
+    case T_INPUT_PORT:   return(port_string_or_function(p) == target);
+    case T_OUTPUT_PORT:  return((is_function_port(p)) && (port_string_or_function(p) == target));
+    case T_C_POINTER:    return((c_pointer_type(p) == target) || (c_pointer_info(p) == target));
+    case T_COUNTER:      return((counter_result(p) == target) || (counter_list(p) == target) || (counter_let(p) == target));
+    case T_STACK:        return(is_stack_owner(p, current_stack_top(sc), target));
+    case T_SLOT:
+      if ((slot_value(p) == target) || (slot_symbol(p) == target)) return(true);
+      if ((slot_has_setter(p)) && (slot_setter(p) == target)) return(true);
+      if ((slot_has_pending_value(p)) && (slot_pending_value(p) == target)) return(true);
+      break;
+    case T_VECTOR:
+      if ((is_subvector(p)) && (subvector_vector(p) == target)) return(true);
+      for (s7_int i = 0, len = vector_length(p); i < len; i++)
+	if (vector_element(p, i) == target) return(true);
+      break;
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+      return((is_subvector(p)) && (subvector_vector(p) == target));
+    case T_LET:
+      if (p == sc->rootlet) return(false); /* TODO: do rootlet */
+      for (s7_pointer slot = let_slots(p); tis_slot(slot); slot = next_slot(slot))
+	if (slot == target) return(true);
+      if ((has_dox_slot1(p)) && (let_dox_slot1(p) == target)) return(true);
+      if ((has_dox_slot2(p)) && (is_slot(let_dox_slot2(p))) && (let_dox_slot2(p) == target)) return(true);
+      break;
+    case T_C_FUNCTION_STAR:
+      if ((!c_func_has_simple_defaults(p)) && (c_function_call_args(p)))
+	for (s7_pointer arg = c_function_call_args(p); is_pair(arg); arg = cdr(arg))
+	  if (car(arg) == target) return(true);
+      break;
+    case T_CLOSURE: case T_CLOSURE_STAR:
+    case T_MACRO: case T_MACRO_STAR:
+    case T_BACRO: case T_BACRO_STAR:
+      return((closure_args(p) == target) || (closure_body(p) == target) || (closure_let(p) == target) || (closure_setter_or_map_list(p) == target));
+    case T_HASH_TABLE:
+      if (hash_table_procedures(p) == target) return(true);
+      if ((is_pair(hash_table_procedures(p))) && ((hash_table_key_typer_unchecked(p) == target) || (hash_table_value_typer_unchecked(p) == target))) return(true);
+      if (hash_table_entries(p) > 0)
+	{
+	  s7_int len = hash_table_mask(p) + 1;
+	  hash_entry_t **entries = hash_table_elements(p);
+	  hash_entry_t **last = (hash_entry_t **)(entries + len);
+	  if ((is_weak_hash_table(p)) && (weak_hash_iters(p) == 0))
+	    while (entries < last)
+	      {
+		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
+		  if (hash_entry_value(xp) == target) return(true);
+	      }
+	  else
+	    while (entries < last)
+	      {
+		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
+		  if ((hash_entry_key(xp) == target) || (hash_entry_value(xp) == target))
+		    return(true);
+	      }}
+      break;
+    case T_CONTINUATION:
+      if (continuation_op_stack(p) == target) return(true);
+      return(is_stack_owner(continuation_stack(p), continuation_stack_top(p), target));
+    default: /* includes T_C_OBJECT */
+      break;
+    }
+  return(false);
+}
+
+void s7_heap_scan(s7_scheme *sc, int32_t typ)
+{
+  s7_int k, j, typs;
+  s7_pointer *objs, *owners;
+  for (k = 0, typs = 0; k < sc->heap_size; k++)
+    if (unchecked_type(sc->heap[k]) == typ) typs++;
+  if (typs == 0)
+    {
+      fprintf(stderr, "no %s found\n", s7_type_names[typ]);
+      return;
+    }
+  objs = (s7_pointer *)malloc(typs * sizeof(s7_pointer));
+  owners = (s7_pointer *)calloc(typs, sizeof(s7_pointer));
+  for (k = 0, j = 0; k < sc->heap_size; k++)
+    if (unchecked_type(sc->heap[k]) == typ)
+      objs[j++] = sc->heap[k];
+  for (k = 0; k < sc->heap_size; k++)
+    for (j = 0; j < typs; j++)
+      if (is_owner(sc, sc->heap[k], objs[j]))
+	{
+	  owners[j] = sc->heap[k];
+	  break;
+	}
+  /* also need all the roots here */
+  for (k = 0; k < typs; k++)
+    if (!owners[k])
+      {
+	fprintf(stderr, "%s has no holder!\n", display_80(objs[k]));
+	if (is_input_port(objs[k])) fprintf(stderr, "    alloc: %d\n", objs[k]->current_alloc_line);
+      }
+    else fprintf(stderr, "%s from %s (%s)\n", display_80(objs[k]), display_80(owners[k]), s7_type_names[unchecked_type(owners[k])]);
+  free(objs);
+  free(owners);
+}
+#endif
+
+
 static s7_pointer sl_c_types(s7_scheme *sc)
 {
   s7_pointer res;
@@ -95252,20 +95375,20 @@ int main(int argc, char **argv)
  * tlamb     6423   6273   5720   5544   5544
  * tmisc     8869   7612   6435   6158   6158
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6367   6362  6356
+ * tlist     7896   7546   6558   6367   6356
  * tset      ----   ----   ----   6441   6468
- * tari      13.0   12.7   6827   6486   6486
+ * tari      13.0   12.7   6827   6486   6586 [gc]
  * trec      6936   6922   6521   6559   6559
- * tleft     10.4   10.2   7657   7516   7493  7515
- * tgc       11.9   11.1   8177   7964   7963  7909
+ * tleft     10.4   10.2   7657   7516   7515
+ * tgc       11.9   11.1   8177   7964   7909
  * thash     11.8   11.7   9734   9477   9477
  * cb        11.2   11.0   9658   9533   9533
- * tgen      11.2   11.4   12.0   12.0   12.0  12.1
+ * tgen      11.2   11.4   12.0   12.0   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.9   57.0
+ * sg        ----   ----   55.9   56.9   56.9
  * lg        ----   ----  105.2  106.4  106.5
- * tbig     177.4  175.8  156.5  149.9  149.6
+ * tbig     177.4  175.8  156.5  149.9  148.3  [gc]
  * ---------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95274,5 +95397,6 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
- * t718 heap ovfl?
+ * t718 heap ovfl?  heap_scan all types in s7test etc -- need a way to call it from scheme
+ * t725 hash ratio/closure/c_func, op_implicit_hash_a
  */
