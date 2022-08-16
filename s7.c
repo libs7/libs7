@@ -6842,10 +6842,7 @@ static void mark_owlet(s7_scheme *sc)
 {
 #if WITH_HISTORY
   {
-    s7_pointer p1 = sc->eval_history1;
-    s7_pointer p2 = sc->eval_history2;
-    s7_pointer p3 = sc->history_pairs;
-    for (int32_t i = 1; ; i++, p2 = cdr(p2), p3 = cdr(p3))
+    for (s7_pointer p1 = sc->eval_history1, p2 = sc->eval_history2, p3 = sc->history_pairs; ; p2 = cdr(p2), p3 = cdr(p3))
       {
 	gc_owlet_mark(car(p1));
 	gc_owlet_mark(car(p2));
@@ -91488,6 +91485,304 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 }
 
 
+
+/* -------------------------------- scan-heap -------------------------------- */
+#if (S7_DEBUGGING)
+static bool is_stack_owner(s7_pointer p, s7_int top, s7_pointer target)
+{
+  if (stack_elements(p))
+    for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
+      if ((*tp++ == target) || (*tp++ == target) || (*tp++ == target)) return(true);
+  return(false);
+}
+
+static bool is_owner(s7_scheme *sc, s7_pointer p, s7_pointer target)
+{
+  if (p == target) return(false);
+  switch (unchecked_type(p))
+    {
+    case T_PAIR:         return((car(p) == target) || (cdr(p) == target));
+    case T_CATCH:        return((catch_tag(p) == target) || (catch_handler(p) == target));
+    case T_DYNAMIC_WIND: return((dynamic_wind_in(p) == target) || (dynamic_wind_out(p) == target) || (dynamic_wind_body(p) == target));
+    case T_ITERATOR:     return((iterator_sequence(p) == target) || ((is_mark_seq(p)) && (iterator_current(p) == target)));
+    case T_INPUT_PORT:   return(port_string_or_function(p) == target);
+    case T_OUTPUT_PORT:  return((is_function_port(p)) && (port_string_or_function(p) == target));
+    case T_C_POINTER:    return((c_pointer_type(p) == target) || (c_pointer_info(p) == target));
+    case T_COUNTER:      return((counter_result(p) == target) || (counter_list(p) == target) || (counter_let(p) == target));
+    case T_STACK:        return(is_stack_owner(p, current_stack_top(sc), target));
+
+    case T_SLOT:
+      if ((slot_value(p) == target) || (slot_symbol(p) == target)) return(true);
+      if ((slot_has_setter(p)) && (slot_setter(p) == target)) return(true);
+      if ((slot_has_pending_value(p)) && (slot_pending_value(p) == target)) return(true);
+      break;
+
+    case T_VECTOR:
+      if ((is_subvector(p)) && (subvector_vector(p) == target)) return(true);
+      for (s7_int i = 0, len = vector_length(p); i < len; i++)
+	if (vector_element(p, i) == target) return(true);
+      break;
+
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+      return((is_subvector(p)) && (subvector_vector(p) == target));
+
+    case T_LET:
+      if (p == sc->rootlet) return(false); /* TODO: do rootlet */
+      for (s7_pointer slot = let_slots(p); tis_slot(slot); slot = next_slot(slot))
+	if (slot == target) return(true);
+      if ((has_dox_slot1(p)) && (let_dox_slot1(p) == target)) return(true);
+      if ((has_dox_slot2(p)) && (is_slot(let_dox_slot2(p))) && (let_dox_slot2(p) == target)) return(true);
+      break;
+
+    case T_C_FUNCTION_STAR:
+      if ((!c_func_has_simple_defaults(p)) && (c_function_call_args(p)))
+	for (s7_pointer arg = c_function_call_args(p); is_pair(arg); arg = cdr(arg))
+	  if (car(arg) == target) return(true);
+      break;
+
+    case T_CLOSURE: case T_CLOSURE_STAR:
+    case T_MACRO: case T_MACRO_STAR:
+    case T_BACRO: case T_BACRO_STAR:
+      return((closure_args(p) == target) || (closure_body(p) == target) || 
+	     (closure_let(p) == target) || (closure_setter_or_map_list(p) == target));
+
+    case T_HASH_TABLE:
+      if (hash_table_procedures(p) == target) return(true);
+      if ((is_pair(hash_table_procedures(p))) && 
+	  ((hash_table_key_typer_unchecked(p) == target) || (hash_table_value_typer_unchecked(p) == target)))
+	return(true);
+      if (hash_table_entries(p) > 0)
+	{
+	  s7_int len = hash_table_mask(p) + 1;
+	  hash_entry_t **entries = hash_table_elements(p);
+	  hash_entry_t **last = (hash_entry_t **)(entries + len);
+	  if ((is_weak_hash_table(p)) && (weak_hash_iters(p) == 0))
+	    while (entries < last)
+	      {
+		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
+		  if (hash_entry_value(xp) == target) return(true);
+	      }
+	  else
+	    while (entries < last)
+	      {
+		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
+		  if ((hash_entry_key(xp) == target) || (hash_entry_value(xp) == target))
+		    return(true);
+	      }}
+      break;
+
+    case T_CONTINUATION:
+      if (continuation_op_stack(p) == target) return(true);
+      return(is_stack_owner(continuation_stack(p), continuation_stack_top(p), target));
+
+    default: /* includes T_C_OBJECT */
+      break;
+    }
+  return(false);
+}
+
+void s7_heap_scan(s7_scheme *sc, int32_t typ)
+{
+  s7_int k, j, typs;
+  s7_pointer *objs, *owners;
+  char **roots;
+
+  for (k = 0, typs = 0; k < sc->heap_size; k++)
+    if (unchecked_type(sc->heap[k]) == typ) typs++;
+  if (typs == 0)
+    {
+      fprintf(stderr, "no %s found\n", s7_type_names[typ]);
+      return;
+    }
+  objs = (s7_pointer *)malloc(typs * sizeof(s7_pointer));
+  owners = (s7_pointer *)calloc(typs, sizeof(s7_pointer));
+  roots = (char **)calloc(typs, sizeof(char *));
+
+  for (k = 0, j = 0; k < sc->heap_size; k++)
+    if (unchecked_type(sc->heap[k]) == typ)
+      objs[j++] = sc->heap[k];
+  for (k = 0; k < sc->heap_size; k++)
+    for (j = 0; j < typs; j++)
+      if (owners[j]) continue;
+      else
+	if (is_owner(sc, sc->heap[k], objs[j]))
+	  {
+	    owners[j] = sc->heap[k];
+	    break;
+	  }
+  for (j = 0; j < typs; j++)
+    {
+      s7_pointer target = objs[j];
+      if (owners[j]) continue;
+
+      {
+	s7_pointer *tmps = sc->free_heap_top;
+	s7_pointer *tmps_top = tmps + sc->gc_temps_size;
+	if (tmps_top > sc->previous_free_heap_top) tmps_top = sc->previous_free_heap_top;
+	while (tmps < tmps_top)
+	  {
+	    s7_pointer p = *tmps++;
+	    if (p == target) roots[j] = "gc temp";
+	  }}
+
+      if (sc->w == target) roots[j] = "sc->w";
+      if (sc->x == target) roots[j] = "sc->x";
+      if (sc->y == target) roots[j] = "sc->y";
+      if (sc->z == target) roots[j] = "sc->z";
+      if (sc->temp1 == target) roots[j] = "sc->temp1";
+      if (sc->temp2 == target) roots[j] = "sc->temp2";
+      if (sc->temp3 == target) roots[j] = "sc->temp3";
+      if (sc->temp4 == target) roots[j] = "sc->temp4";
+      if (sc->temp5 == target) roots[j] = "sc->temp5";
+      if (sc->temp6 == target) roots[j] = "sc->temp6";
+      if (sc->temp7 == target) roots[j] = "sc->temp7";
+      if (sc->temp8 == target) roots[j] = "sc->temp8";
+      if (sc->temp9 == target) roots[j] = "sc->temp9";
+      if (sc->temp10 == target) roots[j] = "sc->temp10";
+      if (sc->rec_p1 == target) roots[j] = "sc->rec_p1";
+      if (sc->rec_p2 == target) roots[j] = "sc->rec_p2";
+
+      if (car(sc->t1_1) == target) roots[j] = "car(sc->t1_1)";
+      if (car(sc->t2_1) == target) roots[j] = "car(sc->t2_1)";
+      if (car(sc->t2_2) == target) roots[j] = "car(sc->t2_2)";
+      if (car(sc->t3_1) == target) roots[j] = "car(sc->t3_1)";
+      if (car(sc->t3_2) == target) roots[j] = "car(sc->t3_2)";
+      if (car(sc->t3_3) == target) roots[j] = "car(sc->t3_3)";
+      if (car(sc->t4_1) == target) roots[j] = "car(sc->t4_1)";
+      if (car(sc->u1_1) == target) roots[j] = "car(sc->u1_1)";
+      if (car(sc->u2_1) == target) roots[j] = "car(sc->u2_1)";
+      if (car(sc->u2_2) == target) roots[j] = "car(sc->u2_2)";
+      if (car(sc->plist_1) == target) roots[j] = "car(sc->plist_1)";
+      if (car(sc->plist_2) == target) roots[j] = "car(sc->plist_2)";
+      if (car(sc->plist_3) == target) roots[j] = "car(sc->plist_3)";
+      if (car(sc->qlist_2) == target) roots[j] = "car(sc->qlist_2)";
+      if (car(sc->qlist_3) == target) roots[j] = "car(sc->qlist_3)";
+      if (car(sc->elist_1) == target) roots[j] = "car(sc->elist_1)";
+      if (car(sc->elist_2) == target) roots[j] = "car(sc->elist_2)";
+      if (car(sc->elist_3) == target) roots[j] = "car(sc->elist_3)";
+      if (car(sc->elist_4) == target) roots[j] = "car(sc->elist_4)";
+      if (car(sc->elist_5) == target) roots[j] = "car(sc->elist_5)";
+      if (car(sc->elist_6) == target) roots[j] = "car(sc->elist_6)";
+      if (car(sc->elist_7) == target) roots[j] = "car(sc->elist_7)";
+      if (cadr(sc->plist_2) == target) roots[j] = "cadr(sc->plist_2)";
+      if (cadr(sc->plist_3) == target) roots[j] = "cadr(sc->plist_3)";
+      if (cadr(sc->elist_2) == target) roots[j] = "cadr(sc->elist_2)";
+      if (cadr(sc->elist_3) == target) roots[j] = "cadr(sc->elist_3)";
+      if (cadr(sc->qlist_2) == target) roots[j] = "cadr(sc->qlist_2)";
+      if (caddr(sc->plist_3) == target) roots[j] = "caddr(sc->plist_3)";
+      if (caddr(sc->elist_3) == target) roots[j] = "caddr(sc->elist_3)";
+
+      if (sc->code == target) roots[j] = "sc->code";
+      if (sc->value == target) roots[j] = "sc->value";
+      if (sc->args == target) roots[j] = "sc->args";
+      if (sc->curlet == target) roots[j] = "sc->curlet";
+      if (sc->stack == target) roots[j] = "sc->stack";
+      if (sc->default_random_state == target) roots[j] = "sc->default_random_state";
+      if (sc->let_temp_hook == target) roots[j] = "sc->let_temp_hook";
+      if (sc->stacktrace_defaults == target) roots[j] = "sc->stacktrace_defaults";
+      if (sc->protected_objects == target) roots[j] = "sc->protected_objects";
+      if (sc->protected_setters == target) roots[j] = "sc->protected_setters";
+      if (sc->protected_setter_symbols == target) roots[j] = "sc->protected_setter_symbols";
+      if (sc->error_type == target) roots[j] = "sc->error_type";
+      if (sc->error_data == target) roots[j] = "sc->error_data";
+      if (sc->error_code == target) roots[j] = "sc->error_code";
+      if (sc->error_line == target) roots[j] = "sc->error_line";
+      if (sc->error_file == target) roots[j] = "sc->error_file";
+      if (sc->error_position == target) roots[j] = "sc->error_position";
+#if WITH_HISTORY
+      if (sc->error_history == target) roots[j] = "sc->error_history";
+#endif
+
+      for (gc_obj_t *g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
+	if (g->p == target) roots[j] = "permanent object";
+
+      for (s7_int i = 0; i < sc->protected_objects_size; i++)
+	if (vector_element(sc->protected_objects, i) == target) roots[j] = "gc protected object";
+
+      for (s7_int i = 0; i < sc->protected_setters_loc; i++)
+	if (vector_element(sc->protected_setters, i) == target) roots[j] = "gc protected setter";
+
+      for (s7_int i = 0; i < sc->setters_loc; i++)
+	if (cdr(sc->setters[i]) == target) roots[j] = "setter";
+
+      for (s7_int i = 0; i <= sc->format_depth; i++)
+	if ((sc->fdats[i]) && (sc->fdats[i]->curly_arg == target)) roots[j] = "fdat curly_arg";
+
+      {
+	s7_pointer *tp = (s7_pointer *)(sc->input_port_stack + sc->input_port_stack_loc);
+	for (s7_pointer *p = sc->input_port_stack; p < tp; p++)
+	  if (*p == target) roots[j] = "input stack";
+      }
+      {
+	s7_pointer *p = sc->op_stack;
+	s7_pointer *tp = sc->op_stack_now;
+	while (p < tp) {s7_pointer x = *p++; if (x == target) roots[j] = "op stack";}
+      }
+
+      if (sc->rec_stack)
+	for (s7_int i = 0; i < sc->rec_loc; i++)
+	  if (sc->rec_els[i] == target) roots[j] = "sc->rec_els";
+
+      {
+	gc_list_t *gp = sc->opt1_funcs;
+	for (s7_int i = 0; i < gp->loc; i++)
+	  {
+	    s7_pointer s1 = T_Pair(gp->list[i]);
+	    if (opt1_any(s1) == target) roots[j] = "opt1_funcs";
+	  }}
+
+      for (int32_t i = 1; i < NUM_SAFE_LISTS; i++)
+	if ((is_pair(sc->safe_lists[i])) &&
+	    (list_is_in_use(sc->safe_lists[i])))
+	  for (s7_pointer p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
+	    if (car(p) == target) roots[j] = "safe_lists";
+
+      for (s7_pointer p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "wrong-type-arg";
+      for (s7_pointer p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "simple wrong-type-arg";
+      for (s7_pointer p = sc->out_of_range_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "out-of-range";
+      for (s7_pointer p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "simple out-of-range";
+
+      {
+	s7_pointer *tmp = rootlet_elements(sc->rootlet);
+	s7_pointer *top = (s7_pointer *)(tmp + sc->rootlet_entries);
+	while (tmp < top) {s7_pointer slot = *tmp++; if (slot_value(slot) == target) roots[j] = "rootlet";}
+      }
+#if WITH_HISTORY
+      for (s7_pointer p1 = sc->eval_history1, p2 = sc->eval_history2, p3 = sc->history_pairs; ; p2 = cdr(p2), p3 = cdr(p3))
+	{
+	  if ((car(p1) == target) || (car(p2) == target) || (car(p3) == target)) roots[j] = "eval history";
+	  p1 = cdr(p1);
+	  if (p1 == sc->eval_history1) break;
+	}
+#else
+      if (sc->cur_code == target) roots[j] = "current code";
+#endif
+    }
+
+  for (k = 0; k < typs; k++)
+    if (!owners[k])
+      {
+	if (roots[k])
+	  fprintf(stderr, "%s from %s\n", display_80(objs[k]), roots[k]);
+	else fprintf(stderr, "%s has no holder (alloc: %d)\n", display_80(objs[k]), objs[k]->current_alloc_line);
+      }
+    else fprintf(stderr, "%s from %s (%s, %p, alloc: %d)\n", 
+		 display_80(objs[k]), display_80(owners[k]), 
+		 s7_type_names[unchecked_type(owners[k])], owners[k], objs[k]->current_alloc_line);
+  free(objs);
+  free(owners);
+}
+
+static s7_pointer g_heap_scan(s7_scheme *sc, s7_pointer args)
+{
+  #define H_heap_scan "(heap-scan type) scans the heap for objects of type and reports info about them"
+  #define Q_heap_scan s7_make_signature(sc, 2, sc->not_symbol, sc->is_integer_symbol)
+  s7_heap_scan(sc, (int32_t)integer(car(args))); /* 0..48 currently */
+  return(sc->F);
+}
+#endif
+
+
 /* -------------------------------- *s7* let -------------------------------- */
 /* maybe *features* field in *s7*, others are *libraries*, *load-path*, *cload-directory*, *autoload*, *#readers* */
 
@@ -91835,126 +92130,6 @@ static s7_pointer memory_usage(s7_scheme *sc)
   s7_gc_unprotect_at(sc, gc_loc);
   return(mu_let);
 }
-
-
-#if S7_DEBUGGING
-static bool is_stack_owner(s7_pointer p, s7_int top, s7_pointer target)
-{
-  if (stack_elements(p))
-    for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
-      if ((*tp++ == target) || (*tp++ == target) || (*tp++ == target)) return(true);
-  return(false);
-}
-
-static bool is_owner(s7_scheme *sc, s7_pointer p, s7_pointer target)
-{
-  if (p == target) return(false);
-  switch (unchecked_type(p))
-    {
-    case T_PAIR:         return((car(p) == target) || (cdr(p) == target));
-    case T_CATCH:        return((catch_tag(p) == target) || (catch_handler(p) == target));
-    case T_DYNAMIC_WIND: return((dynamic_wind_in(p) == target) || (dynamic_wind_out(p) == target) || (dynamic_wind_body(p) == target));
-    case T_ITERATOR:     return((iterator_sequence(p) == target) || ((is_mark_seq(p)) && (iterator_current(p) == target)));
-    case T_INPUT_PORT:   return(port_string_or_function(p) == target);
-    case T_OUTPUT_PORT:  return((is_function_port(p)) && (port_string_or_function(p) == target));
-    case T_C_POINTER:    return((c_pointer_type(p) == target) || (c_pointer_info(p) == target));
-    case T_COUNTER:      return((counter_result(p) == target) || (counter_list(p) == target) || (counter_let(p) == target));
-    case T_STACK:        return(is_stack_owner(p, current_stack_top(sc), target));
-    case T_SLOT:
-      if ((slot_value(p) == target) || (slot_symbol(p) == target)) return(true);
-      if ((slot_has_setter(p)) && (slot_setter(p) == target)) return(true);
-      if ((slot_has_pending_value(p)) && (slot_pending_value(p) == target)) return(true);
-      break;
-    case T_VECTOR:
-      if ((is_subvector(p)) && (subvector_vector(p) == target)) return(true);
-      for (s7_int i = 0, len = vector_length(p); i < len; i++)
-	if (vector_element(p, i) == target) return(true);
-      break;
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
-      return((is_subvector(p)) && (subvector_vector(p) == target));
-    case T_LET:
-      if (p == sc->rootlet) return(false); /* TODO: do rootlet */
-      for (s7_pointer slot = let_slots(p); tis_slot(slot); slot = next_slot(slot))
-	if (slot == target) return(true);
-      if ((has_dox_slot1(p)) && (let_dox_slot1(p) == target)) return(true);
-      if ((has_dox_slot2(p)) && (is_slot(let_dox_slot2(p))) && (let_dox_slot2(p) == target)) return(true);
-      break;
-    case T_C_FUNCTION_STAR:
-      if ((!c_func_has_simple_defaults(p)) && (c_function_call_args(p)))
-	for (s7_pointer arg = c_function_call_args(p); is_pair(arg); arg = cdr(arg))
-	  if (car(arg) == target) return(true);
-      break;
-    case T_CLOSURE: case T_CLOSURE_STAR:
-    case T_MACRO: case T_MACRO_STAR:
-    case T_BACRO: case T_BACRO_STAR:
-      return((closure_args(p) == target) || (closure_body(p) == target) || (closure_let(p) == target) || (closure_setter_or_map_list(p) == target));
-    case T_HASH_TABLE:
-      if (hash_table_procedures(p) == target) return(true);
-      if ((is_pair(hash_table_procedures(p))) && ((hash_table_key_typer_unchecked(p) == target) || (hash_table_value_typer_unchecked(p) == target))) return(true);
-      if (hash_table_entries(p) > 0)
-	{
-	  s7_int len = hash_table_mask(p) + 1;
-	  hash_entry_t **entries = hash_table_elements(p);
-	  hash_entry_t **last = (hash_entry_t **)(entries + len);
-	  if ((is_weak_hash_table(p)) && (weak_hash_iters(p) == 0))
-	    while (entries < last)
-	      {
-		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
-		  if (hash_entry_value(xp) == target) return(true);
-	      }
-	  else
-	    while (entries < last)
-	      {
-		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
-		  if ((hash_entry_key(xp) == target) || (hash_entry_value(xp) == target))
-		    return(true);
-	      }}
-      break;
-    case T_CONTINUATION:
-      if (continuation_op_stack(p) == target) return(true);
-      return(is_stack_owner(continuation_stack(p), continuation_stack_top(p), target));
-    default: /* includes T_C_OBJECT */
-      break;
-    }
-  return(false);
-}
-
-void s7_heap_scan(s7_scheme *sc, int32_t typ)
-{
-  s7_int k, j, typs;
-  s7_pointer *objs, *owners;
-  for (k = 0, typs = 0; k < sc->heap_size; k++)
-    if (unchecked_type(sc->heap[k]) == typ) typs++;
-  if (typs == 0)
-    {
-      fprintf(stderr, "no %s found\n", s7_type_names[typ]);
-      return;
-    }
-  objs = (s7_pointer *)malloc(typs * sizeof(s7_pointer));
-  owners = (s7_pointer *)calloc(typs, sizeof(s7_pointer));
-  for (k = 0, j = 0; k < sc->heap_size; k++)
-    if (unchecked_type(sc->heap[k]) == typ)
-      objs[j++] = sc->heap[k];
-  for (k = 0; k < sc->heap_size; k++)
-    for (j = 0; j < typs; j++)
-      if (is_owner(sc, sc->heap[k], objs[j]))
-	{
-	  owners[j] = sc->heap[k];
-	  break;
-	}
-  /* also need all the roots here */
-  for (k = 0; k < typs; k++)
-    if (!owners[k])
-      {
-	fprintf(stderr, "%s has no holder!\n", display_80(objs[k]));
-	if (is_input_port(objs[k])) fprintf(stderr, "    alloc: %d\n", objs[k]->current_alloc_line);
-      }
-    else fprintf(stderr, "%s from %s (%s)\n", display_80(objs[k]), display_80(owners[k]), s7_type_names[unchecked_type(owners[k])]);
-  free(objs);
-  free(owners);
-}
-#endif
-
 
 static s7_pointer sl_c_types(s7_scheme *sc)
 {
@@ -94324,6 +94499,9 @@ static void init_rootlet(s7_scheme *sc)
 #if WITH_GCC
   s7_define_function(sc, "abort", g_abort, 0, 0, false, "drop into gdb I hope");
 #endif
+#if S7_DEBUGGING
+  defun("heap-scan", heap_scan, 1, 0, false);
+#endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
   /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
@@ -95397,6 +95575,14 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
- * t718 heap ovfl?  heap_scan all types in s7test etc -- need a way to call it from scheme
+ * t718 heap ovfl?  
+ *    heap_scan: need s7_type_to_integer [scan s7_type_names maybe or use bool_func index]
+ *      do we need to scan the symbol table? -- are the lists permanent?
+ *      need s7_holder(sc, target) and some indication if its in the heap or permanent, s7_holders -> entire chain
+ *      (re)define in let -> shadows old? so old is still un-gcable??
+ *        (let ((a 3)) (define a 4) (curlet)): (inlet 'a 4)
+ *        (let ((a 3)) (define (a) 4) (curlet)): (inlet 'a a 'a 3)
+ *        (let ((a 3)) (define (a) 4) (define (a) 5) (curlet)): (inlet 'a a 'a a 'a 3)
+ *        so both defines need to be sets?  in lint we always get (inlet 'fp #<input-string-port>), so where are the old lets?
  * t725 hash ratio/closure/c_func, op_implicit_hash_a
  */
