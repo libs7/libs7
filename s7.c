@@ -1004,9 +1004,10 @@ typedef struct s7_cell {
   } object;
 
 #if S7_DEBUGGING
-  int32_t current_alloc_line, previous_alloc_line, uses, explicit_free_line, gc_line;
-  int64_t current_alloc_type, previous_alloc_type, debugger_bits;
-  const char *current_alloc_func, *previous_alloc_func, *gc_func;
+  int32_t alloc_line, uses, explicit_free_line, gc_line, holders;
+  int64_t alloc_type, debugger_bits;
+  const char *alloc_func, *gc_func, *root;
+  s7_pointer holder;
 #endif
 } s7_cell;
 
@@ -3538,12 +3539,9 @@ const char *display(s7_pointer obj) {return(string_value(s7_object_to_string(cur
 #if S7_DEBUGGING
 static void set_type_1(s7_pointer p, uint64_t f, const char *func, int32_t line)
 {
-  p->previous_alloc_line = p->current_alloc_line;
-  p->previous_alloc_func = p->current_alloc_func;
-  p->previous_alloc_type = p->current_alloc_type;
-  p->current_alloc_line = line;
-  p->current_alloc_func = func;
-  p->current_alloc_type = f;
+  p->alloc_line = line;
+  p->alloc_func = func;
+  p->alloc_type = f;
   p->explicit_free_line = 0;
   p->uses++;
   if (((f) & TYPE_MASK) == T_FREE)
@@ -5142,18 +5140,18 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 	s7_int free_type = full_type(obj);
 	char *bits;
 	char fline[128];
-	full_type(obj) = obj->current_alloc_type;
+	full_type(obj) = obj->alloc_type;
 	sc->printing_gc_info = true;
 	bits = describe_type_bits(sc, obj); /* this func called in type macro */
 	sc->printing_gc_info = false;
 	full_type(obj) = free_type;
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
-	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], previous: %s[%d], %sgc: %s[%d]%s",
-		BOLD_TEXT, obj, line, s7_type_names[obj->current_alloc_type & 0xff], obj->current_alloc_type, obj->current_alloc_type,
-		bits, obj->current_alloc_func, obj->current_alloc_line, obj->previous_alloc_func, obj->previous_alloc_line,
+	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], %sgc: %s[%d]%s",
+		BOLD_TEXT, obj, line, s7_type_names[obj->alloc_type & 0xff], obj->alloc_type, obj->alloc_type,
+		bits, obj->alloc_func, obj->alloc_line, 
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	UNBOLD_TEXT);
-	if (S7_DEBUGGING) fprintf(stderr, ", last gc line: %d", sc->last_gc_line);
+	if (S7_DEBUGGING) fprintf(stderr, "%s, last gc line: %d%s", BOLD_TEXT, sc->last_gc_line, UNBOLD_TEXT);
 	fprintf(stderr, "\n");
 	free(bits);
       }
@@ -5485,35 +5483,26 @@ static void set_opt3_len_1(s7_pointer p, uint64_t x)
 
 static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port)
 {
-  /* show current state, current allocated state, and previous allocated state */
-  char *current_bits, *allocated_bits, *previous_bits, *str;
+  /* show current state, current allocated state */
+  char *allocated_bits, *str;
   int64_t save_full_type = full_type(obj);
   s7_int len, nlen;
   const char *excl_name = (is_free(obj)) ? "free cell!" : "unknown object!";
   block_t *b;
+  char *current_bits = describe_type_bits(sc, obj);
 
-  current_bits = describe_type_bits(sc, obj);
-  full_type(obj) = obj->current_alloc_type;
+  full_type(obj) = obj->alloc_type;
   allocated_bits = describe_type_bits(sc, obj);
-  full_type(obj) = obj->previous_alloc_type;
-  previous_bits = describe_type_bits(sc, obj);
   full_type(obj) = save_full_type;
 
-  len = safe_strlen(excl_name) +
-    safe_strlen(current_bits) + safe_strlen(allocated_bits) + safe_strlen(previous_bits) +
-    safe_strlen(obj->previous_alloc_func) + safe_strlen(obj->current_alloc_func) + 512;
-
+  len = safe_strlen(excl_name) + safe_strlen(current_bits) + safe_strlen(allocated_bits) + safe_strlen(obj->alloc_func) + 512;
   b = mallocate(sc, len);
   str = (char *)block_data(b);
   nlen = snprintf(str, len,
-		  "\n<%s %s,\n  current: %s[%d] %s,\n  previous: %s[%d] %s\n  %d uses>",
-		  excl_name, current_bits,
-		  obj->current_alloc_func, obj->current_alloc_line, allocated_bits,
-		  obj->previous_alloc_func, obj->previous_alloc_line, previous_bits,
-		  obj->uses);
+		  "\n<%s %s,\n  current: %s[%d] %s, %d uses>", excl_name, current_bits,
+		  obj->alloc_func, obj->alloc_line, allocated_bits, obj->uses);
   free(current_bits);
   free(allocated_bits);
-  free(previous_bits);
   if (is_null(port))
     fprintf(stderr, "%p: %s\n", obj, str);
   else port_write_string(port)(sc, str, clamp_length(nlen, len), port);
@@ -7450,7 +7439,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   heap_block_t *hp;
 
 #if (S7_DEBUGGING) && (!MS_WINDOWS)
-  if ((show_gc_stats(sc)) || (true))
+  if (show_gc_stats(sc))
     {
       s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n", 
 	      __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
@@ -68740,7 +68729,8 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
        */
       s7_pointer args = (sc->args) ? sc->args : sc->nil;
       s7_pointer result = sc->undefined;
-      sc->temp7 = cons_unchecked(sc, code, cons_unchecked(sc, args, list_4(sc, value, cur_code, x, z))); /* not s7_list (debugger checks) */
+      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code, 
+                    cons_unchecked(sc, args, list_4(sc, value, cur_code, x, z)))); /* not s7_list (debugger checks) */
       if (!is_pair(cur_code))
 	{
 	  /* isolated typo perhaps -- no pair to hold the position info, so make one. current_code(sc) is GC-protected, so this should be safe */
@@ -70703,9 +70693,9 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	{
 	  choose_c_function(sc, expr, func, 3);
 	  if (((fn_proc(expr) == g_for_each) || (fn_proc(expr) == g_map)) &&
-	      (is_proper_list_2(sc, cadr(arg1))) &&    /* two parameters */
-	      (!is_possibly_constant(caadr(arg1))) &&  /* parameter name not trouble */
-	      (!is_possibly_constant(cadadr(arg1))))
+	      (is_proper_list_2(sc, cadr(arg1))) &&                                /* two parameters */
+	      (is_symbol(caadr(arg1))) && (!is_possibly_constant(caadr(arg1))) &&  /* parameter name not trouble */
+	      (is_symbol(cadadr(arg1))) && (!is_possibly_constant(cadadr(arg1))))
 	    {
 	      fx_annotate_args(sc, cddr(expr), e);
 	      check_lambda(sc, arg1, true);        /* this changes symbol_list */
@@ -83133,8 +83123,9 @@ static void op_define_with_setter(s7_scheme *sc)
       /* add the newly defined thing to the current environment */
       if (is_let(sc->curlet))
 	{
-	  if (let_id(sc->curlet) < symbol_id(code)) /* we're adding a later-bound symbol to an old let (?) */
-	    {
+	  /* fprintf(stderr, "%" ld64 " < %" ld64 "\n", let_id(sc->curlet), symbol_id(code)); */
+	  if (let_id(sc->curlet) <= symbol_id(code)) /* we're adding a later-bound symbol to an old let (?) */
+	    {                                        /* was < 16-Aug-22: (let ((a 3)) (define (a) 4) (curlet)) */
 	      s7_pointer slot;
 	      sc->let_number++; /* dummy let, force symbol lookup */
 	      for (slot = let_slots(sc->curlet); tis_slot(slot); slot = next_slot(slot))
@@ -91485,72 +91476,92 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 }
 
 
-
-/* -------------------------------- scan-heap -------------------------------- */
+/* -------------------------------- s7_heap_scan -------------------------------- */
 #if (S7_DEBUGGING)
-static bool is_stack_owner(s7_pointer p, s7_int top, s7_pointer target)
+static void mark_holdee(s7_pointer holder, s7_pointer holdee, const char *root)
+{
+  holdee->holders++;
+  holdee->holder = holder;
+  holdee->root = root;
+}
+
+static void mark_stack_holdees(s7_pointer p, s7_int top)
 {
   if (stack_elements(p))
     for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
-      if ((*tp++ == target) || (*tp++ == target) || (*tp++ == target)) return(true);
-  return(false);
+      {
+	mark_holdee(p, *tp++, NULL);
+	mark_holdee(p, *tp++, NULL);
+	mark_holdee(p, *tp++, NULL);
+      }
 }
 
-static bool is_owner(s7_scheme *sc, s7_pointer p, s7_pointer target)
+static void save_holder_data(s7_scheme *sc, s7_pointer p)
 {
-  if (p == target) return(false);
   switch (unchecked_type(p))
     {
-    case T_PAIR:         return((car(p) == target) || (cdr(p) == target));
-    case T_CATCH:        return((catch_tag(p) == target) || (catch_handler(p) == target));
-    case T_DYNAMIC_WIND: return((dynamic_wind_in(p) == target) || (dynamic_wind_out(p) == target) || (dynamic_wind_body(p) == target));
-    case T_ITERATOR:     return((iterator_sequence(p) == target) || ((is_mark_seq(p)) && (iterator_current(p) == target)));
-    case T_INPUT_PORT:   return(port_string_or_function(p) == target);
-    case T_OUTPUT_PORT:  return((is_function_port(p)) && (port_string_or_function(p) == target));
-    case T_C_POINTER:    return((c_pointer_type(p) == target) || (c_pointer_info(p) == target));
-    case T_COUNTER:      return((counter_result(p) == target) || (counter_list(p) == target) || (counter_let(p) == target));
-    case T_STACK:        return(is_stack_owner(p, current_stack_top(sc), target));
+    case T_PAIR:         mark_holdee(p, car(p), NULL); mark_holdee(p, cdr(p), NULL); break;
+    case T_CATCH:        mark_holdee(p, catch_tag(p), NULL); mark_holdee(p, catch_handler(p), NULL); break;
+    case T_DYNAMIC_WIND: mark_holdee(p, dynamic_wind_in(p), NULL); mark_holdee(p, dynamic_wind_out(p), NULL); mark_holdee(p, dynamic_wind_body(p), NULL); break;
+    case T_INPUT_PORT:   mark_holdee(p, port_string_or_function(p), NULL); break;
+    case T_C_POINTER:    mark_holdee(p, c_pointer_type(p), NULL); mark_holdee(p, c_pointer_info(p), NULL); break;
+    case T_COUNTER:      mark_holdee(p, counter_result(p), NULL); mark_holdee(p, counter_list(p), NULL); mark_holdee(p, counter_let(p), NULL); break;
+    case T_STACK:        mark_stack_holdees(p, current_stack_top(sc)); break;
+    case T_OUTPUT_PORT:  if (is_function_port(p)) mark_holdee(p, port_string_or_function(p), NULL); break;
+
+    case T_ITERATOR:     
+      mark_holdee(p, iterator_sequence(p), NULL);
+      if (is_mark_seq(p)) mark_holdee(p, iterator_current(p), NULL);
+      break;
 
     case T_SLOT:
-      if ((slot_value(p) == target) || (slot_symbol(p) == target)) return(true);
-      if ((slot_has_setter(p)) && (slot_setter(p) == target)) return(true);
-      if ((slot_has_pending_value(p)) && (slot_pending_value(p) == target)) return(true);
+      mark_holdee(p, slot_value(p), NULL);
+      mark_holdee(p, slot_symbol(p), NULL);
+      if (slot_has_setter(p)) mark_holdee(p, slot_setter(p), NULL);
+      if (slot_has_pending_value(p)) mark_holdee(p, slot_pending_value(p), NULL);
       break;
 
     case T_VECTOR:
-      if ((is_subvector(p)) && (subvector_vector(p) == target)) return(true);
+      if (is_subvector(p)) mark_holdee(p, subvector_vector(p), NULL);
       for (s7_int i = 0, len = vector_length(p); i < len; i++)
-	if (vector_element(p, i) == target) return(true);
+	if (vector_element(p, i)) mark_holdee(p, vector_element(p, i), NULL);
       break;
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
-      return((is_subvector(p)) && (subvector_vector(p) == target));
+      if (is_subvector(p)) mark_holdee(p, subvector_vector(p), NULL);
+      break;
 
     case T_LET:
-      if (p == sc->rootlet) return(false); /* TODO: do rootlet */
-      for (s7_pointer slot = let_slots(p); tis_slot(slot); slot = next_slot(slot))
-	if (slot == target) return(true);
-      if ((has_dox_slot1(p)) && (let_dox_slot1(p) == target)) return(true);
-      if ((has_dox_slot2(p)) && (is_slot(let_dox_slot2(p))) && (let_dox_slot2(p) == target)) return(true);
+      if (p != sc->rootlet) /* do rootlet later? */
+	{
+	  for (s7_pointer slot = let_slots(p); tis_slot(slot); slot = next_slot(slot)) mark_holdee(p, slot, NULL);
+	  if (has_dox_slot1(p)) mark_holdee(p, let_dox_slot1(p), NULL);
+	  if ((has_dox_slot2(p)) && (is_slot(let_dox_slot2(p)))) mark_holdee(p, let_dox_slot2(p), NULL);
+	}
       break;
 
     case T_C_FUNCTION_STAR:
       if ((!c_func_has_simple_defaults(p)) && (c_function_call_args(p)))
 	for (s7_pointer arg = c_function_call_args(p); is_pair(arg); arg = cdr(arg))
-	  if (car(arg) == target) return(true);
+	  mark_holdee(p, car(arg), NULL);
       break;
 
     case T_CLOSURE: case T_CLOSURE_STAR:
     case T_MACRO: case T_MACRO_STAR:
     case T_BACRO: case T_BACRO_STAR:
-      return((closure_args(p) == target) || (closure_body(p) == target) || 
-	     (closure_let(p) == target) || (closure_setter_or_map_list(p) == target));
+      mark_holdee(p, closure_args(p), NULL);
+      mark_holdee(p, closure_body(p), NULL);
+      mark_holdee(p, closure_let(p), NULL);
+      mark_holdee(p, closure_setter_or_map_list(p), NULL);
+      break;
 
     case T_HASH_TABLE:
-      if (hash_table_procedures(p) == target) return(true);
-      if ((is_pair(hash_table_procedures(p))) && 
-	  ((hash_table_key_typer_unchecked(p) == target) || (hash_table_value_typer_unchecked(p) == target)))
-	return(true);
+      mark_holdee(p, hash_table_procedures(p), NULL);
+      if (is_pair(hash_table_procedures(p)))
+	{
+	  mark_holdee(p, hash_table_key_typer_unchecked(p), NULL);
+	  mark_holdee(p, hash_table_value_typer_unchecked(p), NULL);
+	}
       if (hash_table_entries(p) > 0)
 	{
 	  s7_int len = hash_table_mask(p) + 1;
@@ -91560,225 +91571,246 @@ static bool is_owner(s7_scheme *sc, s7_pointer p, s7_pointer target)
 	    while (entries < last)
 	      {
 		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
-		  if (hash_entry_value(xp) == target) return(true);
+		  mark_holdee(p, hash_entry_value(xp), NULL);
 	      }
 	  else
 	    while (entries < last)
-	      {
-		for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
-		  if ((hash_entry_key(xp) == target) || (hash_entry_value(xp) == target))
-		    return(true);
-	      }}
+	      for (hash_entry_t *xp = *entries++; xp; xp = hash_entry_next(xp))
+		{
+		  mark_holdee(p, hash_entry_key(xp), NULL);
+		  mark_holdee(p, hash_entry_value(xp), NULL);
+		}}
       break;
 
     case T_CONTINUATION:
-      if (continuation_op_stack(p) == target) return(true);
-      return(is_stack_owner(continuation_stack(p), continuation_stack_top(p), target));
+      mark_holdee(p, continuation_op_stack(p), NULL);
+      mark_stack_holdees(continuation_stack(p), continuation_stack_top(p));
+      break;
 
     default: /* includes T_C_OBJECT */
       break;
     }
-  return(false);
+}
+
+void s7_heap_analyze(s7_scheme *sc)
+{
+  /* clear possible previous data */
+  for (s7_int k = 0; k < sc->heap_size; k++)
+    {
+      s7_pointer obj = sc->heap[k];
+      obj->root = NULL;
+      obj->holders = 0;
+      obj->holder = NULL;
+    }
+  /* now parcel out all the holdings */
+  for (s7_int k = 0; k < sc->heap_size; k++)
+    save_holder_data(sc, sc->heap[k]);
+
+  {
+    s7_pointer *tmps = sc->free_heap_top;
+    s7_pointer *tmps_top = tmps + sc->gc_temps_size;
+    if (tmps_top > sc->previous_free_heap_top) tmps_top = sc->previous_free_heap_top;
+    while (tmps < tmps_top)
+      {
+	s7_pointer p = *tmps++;
+	mark_holdee(NULL, p, "gc temp");
+      }}
+
+  mark_holdee(NULL, sc->w, "sc->w");
+  mark_holdee(NULL, sc->x, "sc->x");
+  mark_holdee(NULL, sc->y, "sc->y");
+  mark_holdee(NULL, sc->z, "sc->z");
+  mark_holdee(NULL, sc->temp1, "sc->temp1");
+  mark_holdee(NULL, sc->temp2, "sc->temp2");
+  mark_holdee(NULL, sc->temp3, "sc->temp3");
+  mark_holdee(NULL, sc->temp4, "sc->temp4");
+  mark_holdee(NULL, sc->temp5, "sc->temp5");
+  mark_holdee(NULL, sc->temp6, "sc->temp6");
+  mark_holdee(NULL, sc->temp7, "sc->temp7");
+  mark_holdee(NULL, sc->temp8, "sc->temp8");
+  mark_holdee(NULL, sc->temp9, "sc->temp9");
+  mark_holdee(NULL, sc->temp10, "sc->temp10");
+  mark_holdee(NULL, sc->rec_p1, "sc->rec_p1");
+  mark_holdee(NULL, sc->rec_p2, "sc->rec_p2");
+  
+  mark_holdee(NULL, car(sc->t1_1), "car(sc->t1_1)");
+  mark_holdee(NULL, car(sc->t2_1), "car(sc->t2_1)");
+  mark_holdee(NULL, car(sc->t2_2), "car(sc->t2_2)");
+  mark_holdee(NULL, car(sc->t3_1), "car(sc->t3_1)");
+  mark_holdee(NULL, car(sc->t3_2), "car(sc->t3_2)");
+  mark_holdee(NULL, car(sc->t3_3), "car(sc->t3_3)");
+  mark_holdee(NULL, car(sc->t4_1), "car(sc->t4_1)");
+  mark_holdee(NULL, car(sc->u1_1), "car(sc->u1_1)");
+  mark_holdee(NULL, car(sc->u2_1), "car(sc->u2_1)");
+  mark_holdee(NULL, car(sc->u2_2), "car(sc->u2_2)");
+  mark_holdee(NULL, car(sc->plist_1), "car(sc->plist_1)");
+  mark_holdee(NULL, car(sc->plist_2), "car(sc->plist_2)");
+  mark_holdee(NULL, car(sc->plist_3), "car(sc->plist_3)");
+  mark_holdee(NULL, car(sc->qlist_2), "car(sc->qlist_2)");
+  mark_holdee(NULL, car(sc->qlist_3), "car(sc->qlist_3)");
+  mark_holdee(NULL, car(sc->elist_1), "car(sc->elist_1)");
+  mark_holdee(NULL, car(sc->elist_2), "car(sc->elist_2)");
+  mark_holdee(NULL, car(sc->elist_3), "car(sc->elist_3)");
+  mark_holdee(NULL, car(sc->elist_4), "car(sc->elist_4)");
+  mark_holdee(NULL, car(sc->elist_5), "car(sc->elist_5)");
+  mark_holdee(NULL, car(sc->elist_6), "car(sc->elist_6)");
+  mark_holdee(NULL, car(sc->elist_7), "car(sc->elist_7)");
+  mark_holdee(NULL, cadr(sc->plist_2), "cadr(sc->plist_2)");
+  mark_holdee(NULL, cadr(sc->plist_3), "cadr(sc->plist_3)");
+  mark_holdee(NULL, cadr(sc->elist_2), "cadr(sc->elist_2)");
+  mark_holdee(NULL, cadr(sc->elist_3), "cadr(sc->elist_3)");
+  mark_holdee(NULL, cadr(sc->qlist_2), "cadr(sc->qlist_2)");
+  mark_holdee(NULL, caddr(sc->plist_3), "caddr(sc->plist_3)");
+  mark_holdee(NULL, caddr(sc->elist_3), "caddr(sc->elist_3)");
+  
+  mark_holdee(NULL, sc->code, "sc->code");
+  mark_holdee(NULL, sc->value, "sc->value");
+  mark_holdee(NULL, sc->args, "sc->args");
+  mark_holdee(NULL, sc->curlet, "sc->curlet");
+  mark_holdee(NULL, sc->stack, "sc->stack");
+  mark_holdee(NULL, sc->default_random_state, "sc->default_random_state");
+  mark_holdee(NULL, sc->let_temp_hook, "sc->let_temp_hook");
+  mark_holdee(NULL, sc->stacktrace_defaults, "sc->stacktrace_defaults");
+  mark_holdee(NULL, sc->protected_objects, "sc->protected_objects");
+  mark_holdee(NULL, sc->protected_setters, "sc->protected_setters");
+  mark_holdee(NULL, sc->protected_setter_symbols, "sc->protected_setter_symbols");
+  mark_holdee(NULL, sc->error_type, "sc->error_type");
+  mark_holdee(NULL, sc->error_data, "sc->error_data");
+  mark_holdee(NULL, sc->error_code, "sc->error_code");
+  mark_holdee(NULL, sc->error_line, "sc->error_line");
+  mark_holdee(NULL, sc->error_file, "sc->error_file");
+  mark_holdee(NULL, sc->error_position, "sc->error_position");
+#if WITH_HISTORY
+  mark_holdee(NULL, sc->error_history, "sc->error_history");
+#endif
+
+  for (gc_obj_t *g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
+    mark_holdee(NULL, g->p, "permanent object");
+  
+  for (s7_int i = 0; i < sc->protected_objects_size; i++)
+    mark_holdee(NULL, vector_element(sc->protected_objects, i), "gc protected object");
+
+  for (s7_int i = 0; i < sc->protected_setters_loc; i++)
+    mark_holdee(NULL, vector_element(sc->protected_setters, i), "gc protected setter");
+
+  for (s7_int i = 0; i < sc->setters_loc; i++)
+    mark_holdee(NULL, cdr(sc->setters[i]), "setter");
+
+  for (s7_int i = 0; i <= sc->format_depth; i++)
+    if (sc->fdats[i]) 
+      mark_holdee(NULL, sc->fdats[i]->curly_arg, "fdat curly_arg");
+
+  {
+    s7_pointer *tp = (s7_pointer *)(sc->input_port_stack + sc->input_port_stack_loc);
+    for (s7_pointer *p = sc->input_port_stack; p < tp; p++)
+      mark_holdee(NULL, *p, "input stack");
+  }
+  {
+    s7_pointer *p = sc->op_stack;
+    s7_pointer *tp = sc->op_stack_now;
+    while (p < tp) {s7_pointer x = *p++; mark_holdee(NULL, x, "op stack");}
+  }
+
+  if (sc->rec_stack)
+    for (s7_int i = 0; i < sc->rec_loc; i++)
+      mark_holdee(NULL, sc->rec_els[i], "sc->rec_els");
+  
+  {
+    gc_list_t *gp = sc->opt1_funcs;
+    for (s7_int i = 0; i < gp->loc; i++)
+      {
+	s7_pointer s1 = T_Pair(gp->list[i]);
+	mark_holdee(NULL, opt1_any(s1), "opt1_funcs");
+      }}
+
+  for (int32_t i = 1; i < NUM_SAFE_LISTS; i++)
+    if ((is_pair(sc->safe_lists[i])) &&
+	(list_is_in_use(sc->safe_lists[i])))
+      for (s7_pointer p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
+	mark_holdee(NULL, car(p), "safe_lists");
+  
+  for (s7_pointer p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "wrong-type-arg");
+  for (s7_pointer p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "simple wrong-type-arg");
+  for (s7_pointer p = sc->out_of_range_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "out-of-range");
+  for (s7_pointer p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "simple out-of-range");
+  
+  {
+    s7_pointer *tmp = rootlet_elements(sc->rootlet);
+    s7_pointer *top = (s7_pointer *)(tmp + sc->rootlet_entries);
+    while (tmp < top) {s7_pointer slot = *tmp++; mark_holdee(NULL, slot_value(slot), "rootlet");}
+    /* TODO: save_holder_data here? */
+  }
+#if WITH_HISTORY
+  for (s7_pointer p1 = sc->eval_history1, p2 = sc->eval_history2, p3 = sc->history_pairs; ; p2 = cdr(p2), p3 = cdr(p3))
+    {
+      mark_holdee(NULL, car(p1), "eval history1");
+      mark_holdee(NULL, car(p2), "eval history2");
+      mark_holdee(NULL, car(p3), "eval history3");
+      p1 = cdr(p1);
+      if (p1 == sc->eval_history1) break;
+    }
+#else
+  mark_holdee(NULL, sc->cur_code, "current code");
+#endif
 }
 
 void s7_heap_scan(s7_scheme *sc, int32_t typ)
 {
-  s7_int k, j, typs;
-  s7_pointer *objs, *owners;
-  char **roots;
-
-  for (k = 0, typs = 0; k < sc->heap_size; k++)
-    if (unchecked_type(sc->heap[k]) == typ) typs++;
-  if (typs == 0)
+  bool found_one = false;
+  for (s7_int k = 0; k < sc->heap_size; k++)
     {
-      fprintf(stderr, "no %s found\n", s7_type_names[typ]);
-      return;
-    }
-  objs = (s7_pointer *)malloc(typs * sizeof(s7_pointer));
-  owners = (s7_pointer *)calloc(typs, sizeof(s7_pointer));
-  roots = (char **)calloc(typs, sizeof(char *));
-
-  for (k = 0, j = 0; k < sc->heap_size; k++)
-    if (unchecked_type(sc->heap[k]) == typ)
-      objs[j++] = sc->heap[k];
-  for (k = 0; k < sc->heap_size; k++)
-    for (j = 0; j < typs; j++)
-      if (owners[j]) continue;
-      else
-	if (is_owner(sc, sc->heap[k], objs[j]))
-	  {
-	    owners[j] = sc->heap[k];
-	    break;
-	  }
-  for (j = 0; j < typs; j++)
-    {
-      s7_pointer target = objs[j];
-      if (owners[j]) continue;
-
-      {
-	s7_pointer *tmps = sc->free_heap_top;
-	s7_pointer *tmps_top = tmps + sc->gc_temps_size;
-	if (tmps_top > sc->previous_free_heap_top) tmps_top = sc->previous_free_heap_top;
-	while (tmps < tmps_top)
-	  {
-	    s7_pointer p = *tmps++;
-	    if (p == target) roots[j] = "gc temp";
-	  }}
-
-      if (sc->w == target) roots[j] = "sc->w";
-      if (sc->x == target) roots[j] = "sc->x";
-      if (sc->y == target) roots[j] = "sc->y";
-      if (sc->z == target) roots[j] = "sc->z";
-      if (sc->temp1 == target) roots[j] = "sc->temp1";
-      if (sc->temp2 == target) roots[j] = "sc->temp2";
-      if (sc->temp3 == target) roots[j] = "sc->temp3";
-      if (sc->temp4 == target) roots[j] = "sc->temp4";
-      if (sc->temp5 == target) roots[j] = "sc->temp5";
-      if (sc->temp6 == target) roots[j] = "sc->temp6";
-      if (sc->temp7 == target) roots[j] = "sc->temp7";
-      if (sc->temp8 == target) roots[j] = "sc->temp8";
-      if (sc->temp9 == target) roots[j] = "sc->temp9";
-      if (sc->temp10 == target) roots[j] = "sc->temp10";
-      if (sc->rec_p1 == target) roots[j] = "sc->rec_p1";
-      if (sc->rec_p2 == target) roots[j] = "sc->rec_p2";
-
-      if (car(sc->t1_1) == target) roots[j] = "car(sc->t1_1)";
-      if (car(sc->t2_1) == target) roots[j] = "car(sc->t2_1)";
-      if (car(sc->t2_2) == target) roots[j] = "car(sc->t2_2)";
-      if (car(sc->t3_1) == target) roots[j] = "car(sc->t3_1)";
-      if (car(sc->t3_2) == target) roots[j] = "car(sc->t3_2)";
-      if (car(sc->t3_3) == target) roots[j] = "car(sc->t3_3)";
-      if (car(sc->t4_1) == target) roots[j] = "car(sc->t4_1)";
-      if (car(sc->u1_1) == target) roots[j] = "car(sc->u1_1)";
-      if (car(sc->u2_1) == target) roots[j] = "car(sc->u2_1)";
-      if (car(sc->u2_2) == target) roots[j] = "car(sc->u2_2)";
-      if (car(sc->plist_1) == target) roots[j] = "car(sc->plist_1)";
-      if (car(sc->plist_2) == target) roots[j] = "car(sc->plist_2)";
-      if (car(sc->plist_3) == target) roots[j] = "car(sc->plist_3)";
-      if (car(sc->qlist_2) == target) roots[j] = "car(sc->qlist_2)";
-      if (car(sc->qlist_3) == target) roots[j] = "car(sc->qlist_3)";
-      if (car(sc->elist_1) == target) roots[j] = "car(sc->elist_1)";
-      if (car(sc->elist_2) == target) roots[j] = "car(sc->elist_2)";
-      if (car(sc->elist_3) == target) roots[j] = "car(sc->elist_3)";
-      if (car(sc->elist_4) == target) roots[j] = "car(sc->elist_4)";
-      if (car(sc->elist_5) == target) roots[j] = "car(sc->elist_5)";
-      if (car(sc->elist_6) == target) roots[j] = "car(sc->elist_6)";
-      if (car(sc->elist_7) == target) roots[j] = "car(sc->elist_7)";
-      if (cadr(sc->plist_2) == target) roots[j] = "cadr(sc->plist_2)";
-      if (cadr(sc->plist_3) == target) roots[j] = "cadr(sc->plist_3)";
-      if (cadr(sc->elist_2) == target) roots[j] = "cadr(sc->elist_2)";
-      if (cadr(sc->elist_3) == target) roots[j] = "cadr(sc->elist_3)";
-      if (cadr(sc->qlist_2) == target) roots[j] = "cadr(sc->qlist_2)";
-      if (caddr(sc->plist_3) == target) roots[j] = "caddr(sc->plist_3)";
-      if (caddr(sc->elist_3) == target) roots[j] = "caddr(sc->elist_3)";
-
-      if (sc->code == target) roots[j] = "sc->code";
-      if (sc->value == target) roots[j] = "sc->value";
-      if (sc->args == target) roots[j] = "sc->args";
-      if (sc->curlet == target) roots[j] = "sc->curlet";
-      if (sc->stack == target) roots[j] = "sc->stack";
-      if (sc->default_random_state == target) roots[j] = "sc->default_random_state";
-      if (sc->let_temp_hook == target) roots[j] = "sc->let_temp_hook";
-      if (sc->stacktrace_defaults == target) roots[j] = "sc->stacktrace_defaults";
-      if (sc->protected_objects == target) roots[j] = "sc->protected_objects";
-      if (sc->protected_setters == target) roots[j] = "sc->protected_setters";
-      if (sc->protected_setter_symbols == target) roots[j] = "sc->protected_setter_symbols";
-      if (sc->error_type == target) roots[j] = "sc->error_type";
-      if (sc->error_data == target) roots[j] = "sc->error_data";
-      if (sc->error_code == target) roots[j] = "sc->error_code";
-      if (sc->error_line == target) roots[j] = "sc->error_line";
-      if (sc->error_file == target) roots[j] = "sc->error_file";
-      if (sc->error_position == target) roots[j] = "sc->error_position";
-#if WITH_HISTORY
-      if (sc->error_history == target) roots[j] = "sc->error_history";
-#endif
-
-      for (gc_obj_t *g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
-	if (g->p == target) roots[j] = "permanent object";
-
-      for (s7_int i = 0; i < sc->protected_objects_size; i++)
-	if (vector_element(sc->protected_objects, i) == target) roots[j] = "gc protected object";
-
-      for (s7_int i = 0; i < sc->protected_setters_loc; i++)
-	if (vector_element(sc->protected_setters, i) == target) roots[j] = "gc protected setter";
-
-      for (s7_int i = 0; i < sc->setters_loc; i++)
-	if (cdr(sc->setters[i]) == target) roots[j] = "setter";
-
-      for (s7_int i = 0; i <= sc->format_depth; i++)
-	if ((sc->fdats[i]) && (sc->fdats[i]->curly_arg == target)) roots[j] = "fdat curly_arg";
-
-      {
-	s7_pointer *tp = (s7_pointer *)(sc->input_port_stack + sc->input_port_stack_loc);
-	for (s7_pointer *p = sc->input_port_stack; p < tp; p++)
-	  if (*p == target) roots[j] = "input stack";
-      }
-      {
-	s7_pointer *p = sc->op_stack;
-	s7_pointer *tp = sc->op_stack_now;
-	while (p < tp) {s7_pointer x = *p++; if (x == target) roots[j] = "op stack";}
-      }
-
-      if (sc->rec_stack)
-	for (s7_int i = 0; i < sc->rec_loc; i++)
-	  if (sc->rec_els[i] == target) roots[j] = "sc->rec_els";
-
-      {
-	gc_list_t *gp = sc->opt1_funcs;
-	for (s7_int i = 0; i < gp->loc; i++)
-	  {
-	    s7_pointer s1 = T_Pair(gp->list[i]);
-	    if (opt1_any(s1) == target) roots[j] = "opt1_funcs";
-	  }}
-
-      for (int32_t i = 1; i < NUM_SAFE_LISTS; i++)
-	if ((is_pair(sc->safe_lists[i])) &&
-	    (list_is_in_use(sc->safe_lists[i])))
-	  for (s7_pointer p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
-	    if (car(p) == target) roots[j] = "safe_lists";
-
-      for (s7_pointer p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "wrong-type-arg";
-      for (s7_pointer p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "simple wrong-type-arg";
-      for (s7_pointer p = sc->out_of_range_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "out-of-range";
-      for (s7_pointer p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) if (car(p) == target) roots[j] = "simple out-of-range";
-
-      {
-	s7_pointer *tmp = rootlet_elements(sc->rootlet);
-	s7_pointer *top = (s7_pointer *)(tmp + sc->rootlet_entries);
-	while (tmp < top) {s7_pointer slot = *tmp++; if (slot_value(slot) == target) roots[j] = "rootlet";}
-      }
-#if WITH_HISTORY
-      for (s7_pointer p1 = sc->eval_history1, p2 = sc->eval_history2, p3 = sc->history_pairs; ; p2 = cdr(p2), p3 = cdr(p3))
+      s7_pointer obj = sc->heap[k];
+      if (unchecked_type(obj) == typ)
 	{
-	  if ((car(p1) == target) || (car(p2) == target) || (car(p3) == target)) roots[j] = "eval history";
-	  p1 = cdr(p1);
-	  if (p1 == sc->eval_history1) break;
-	}
-#else
-      if (sc->cur_code == target) roots[j] = "current code";
-#endif
-    }
-
-  for (k = 0; k < typs; k++)
-    if (!owners[k])
-      {
-	if (roots[k])
-	  fprintf(stderr, "%s from %s\n", display_80(objs[k]), roots[k]);
-	else fprintf(stderr, "%s has no holder (alloc: %d)\n", display_80(objs[k]), objs[k]->current_alloc_line);
-      }
-    else fprintf(stderr, "%s from %s (%s, %p, alloc: %d)\n", 
-		 display_80(objs[k]), display_80(owners[k]), 
-		 s7_type_names[unchecked_type(owners[k])], owners[k], objs[k]->current_alloc_line);
-  free(objs);
-  free(owners);
+	  found_one = true;
+	  if (obj->holders == 0)
+	    fprintf(stderr, "%s has no holder (alloc: %d)\n", display_80(obj), obj->alloc_line);
+	  else
+	    if (obj->root)
+	      fprintf(stderr, "%s from %s (%d holders)\n", display_80(obj), obj->root, obj->holders);
+	    else fprintf(stderr, "%s from %s (%s, %p, alloc: %d, holders: %d)\n", 
+			 display_80(obj), display_80(obj->holder),
+			 s7_type_names[unchecked_type(obj->holder)], obj->holder, obj->alloc_line, obj->holders);
+	}}
+  if (!found_one)
+    fprintf(stderr, "no %s found\n", s7_type_names[typ]);
 }
 
 static s7_pointer g_heap_scan(s7_scheme *sc, s7_pointer args)
 {
   #define H_heap_scan "(heap-scan type) scans the heap for objects of type and reports info about them"
   #define Q_heap_scan s7_make_signature(sc, 2, sc->not_symbol, sc->is_integer_symbol)
-  s7_heap_scan(sc, (int32_t)integer(car(args))); /* 0..48 currently */
+  s7_pointer p = car(args);
+  if (!s7_is_integer(p))
+    simple_wrong_type_argument_nr(sc, make_symbol(sc, "heap-scan"), p, T_INTEGER);
+  if ((s7_integer(p) <= 0) || (s7_integer(p) >= NUM_TYPES))
+    out_of_range_error_nr(sc, "heap-scan", 1, p, "0 < type < 48");
+  s7_heap_scan(sc, (int32_t)s7_integer(p)); /* 0..48 currently */
   return(sc->F);
+}
+
+static s7_pointer g_heap_analyze(s7_scheme *sc, s7_pointer args)
+{
+  #define H_heap_analyze "(heap-analyze type) gets heap data for subsequent heap-scan"
+  #define Q_heap_analyze s7_make_signature(sc, 1, sc->not_symbol)
+  s7_heap_analyze(sc);
+  return(sc->F);
+}
+
+static s7_pointer g_heap_holder(s7_scheme *sc, s7_pointer args)
+{
+  #define H_heap_holder "(heap-holder obj) returns the object pointing to obj"
+  #define Q_heap_holder s7_make_signature(sc, 2, sc->T, sc->T)
+  s7_pointer p = car(args);
+  if ((p->holders == 0) || ((!(p->holder)) && (!(p->root)))) return(sc->F);
+  return((p->holder) ? p->holder : s7_make_string(sc, p->root));
+}
+
+static s7_pointer g_heap_holders(s7_scheme *sc, s7_pointer args)
+{
+  #define H_heap_holders "(heap-holders obj) returns the number of objects pointing to obj"
+  #define Q_heap_holders s7_make_signature(sc, 2, sc->is_integer_symbol, sc->T)
+  return(make_integer(sc, car(args)->holders));
 }
 #endif
 
@@ -94501,6 +94533,9 @@ static void init_rootlet(s7_scheme *sc)
 #endif
 #if S7_DEBUGGING
   defun("heap-scan", heap_scan, 1, 0, false);
+  defun("heap-analyze", heap_analyze, 0, 0, false);
+  defun("heap-holder", heap_holder, 1, 0, false);
+  defun("heap-holders", heap_holders, 1, 0, false);
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
@@ -95566,7 +95601,7 @@ int main(int argc, char **argv)
  * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   56.9   56.9
  * lg        ----   ----  105.2  106.4  106.5
- * tbig     177.4  175.8  156.5  149.9  148.3  [gc]
+ * tbig     177.4  175.8  156.5  149.9  148.3 [gc]
  * ---------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95578,11 +95613,6 @@ int main(int argc, char **argv)
  * t718 heap ovfl?  
  *    heap_scan: need s7_type_to_integer [scan s7_type_names maybe or use bool_func index]
  *      do we need to scan the symbol table? -- are the lists permanent?
- *      need s7_holder(sc, target) and some indication if its in the heap or permanent, s7_holders -> entire chain
- *      (re)define in let -> shadows old? so old is still un-gcable??
- *        (let ((a 3)) (define a 4) (curlet)): (inlet 'a 4)
- *        (let ((a 3)) (define (a) 4) (curlet)): (inlet 'a a 'a 3)
- *        (let ((a 3)) (define (a) 4) (define (a) 5) (curlet)): (inlet 'a a 'a a 'a 3)
- *        so both defines need to be sets?  in lint we always get (inlet 'fp #<input-string-port>), so where are the old lets?
+ *      need s7_heap_holder_chain -> entire chain (or all_...)
  * t725 hash ratio/closure/c_func, op_implicit_hash_a
  */
