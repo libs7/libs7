@@ -476,6 +476,16 @@ static const char *s7_type_names[] =
    "c_macro", "c_function*", "c_function", "c_rst_no_req_function",
    };
 
+/* 1:T_PAIR, 2:T_NIL, 3:T_UNUSED, 4:T_UNDEFINED, 5:T_UNSPECIFIED, 6:T_EOF, 7:T_BOOLEAN, 8:T_CHARACTER, 9:T_SYNTAX, 10:T_SYMBOL,
+   11:T_INTEGER, 12:T_RATIO, 13:T_REAL, 14:T_COMPLEX, 15:T_BIG_INTEGER, 16:T_BIG_RATIO, 17:T_BIG_REAL, 18:T_BIG_COMPLEX,
+   19:T_STRING, 20:T_C_OBJECT, 21:T_VECTOR, 22:T_INT_VECTOR, 23:T_FLOAT_VECTOR, 24:T_BYTE_VECTOR,
+   25:T_CATCH, 26:T_DYNAMIC_WIND, 27:T_HASH_TABLE, 28:T_LET, 29:T_ITERATOR,
+   30:T_STACK, 31:T_COUNTER, 32:T_SLOT, 33:T_C_POINTER, 34:T_OUTPUT_PORT, 35:T_INPUT_PORT, 36:T_RANDOM_STATE, 37:T_CONTINUATION, 38:T_GOTO,
+   39:T_CLOSURE, 40:T_CLOSURE_STAR, 41:T_MACRO, 42:T_MACRO_STAR, 43:T_BACRO, 44:T_BACRO_STAR,
+   45:T_C_MACRO, 46:T_C_FUNCTION_STAR, 47:T_C_FUNCTION, 48:T_C_RST_NO_REQ_FUNCTION,
+   49:NUM_TYPES
+*/
+
 typedef struct block_t {
   union {
     void *data;
@@ -4479,6 +4489,7 @@ static void segv(int32_t unused) {if (can_jump) LongJmp(senv, 1);}
 
 bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
 {
+  /* see also mark_stack_holdees (to see if arg is in the heap without segfault) */
   bool result = false;
   if (!arg) return(false);
 #if TRAP_SEGFAULT
@@ -5149,7 +5160,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
 	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], %sgc: %s[%d]%s",
 		BOLD_TEXT, obj, line, s7_type_names[obj->alloc_type & 0xff], obj->alloc_type, obj->alloc_type,
-		bits, obj->alloc_func, obj->alloc_line, 
+		bits, obj->alloc_func, obj->alloc_line,
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	UNBOLD_TEXT);
 	if (S7_DEBUGGING) fprintf(stderr, "%s, last gc line: %d%s", BOLD_TEXT, sc->last_gc_line, UNBOLD_TEXT);
 	fprintf(stderr, "\n");
@@ -7339,8 +7350,8 @@ static int64_t gc(s7_scheme *sc)
   old_free_heap_top = sc->free_heap_top;
   {
     s7_pointer *fp = sc->free_heap_top;
-    s7_pointer *tp = sc->heap, *heap_top;
-    heap_top = (s7_pointer *)(sc->heap + sc->heap_size);
+    s7_pointer *tp = sc->heap;
+    s7_pointer *heap_top = (s7_pointer *)(sc->heap + sc->heap_size);
 
 #if S7_DEBUGGING
   #define gc_object(Tp)							\
@@ -7441,7 +7452,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 #if (S7_DEBUGGING) && (!MS_WINDOWS)
   if (show_gc_stats(sc))
     {
-      s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n", 
+      s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n",
 	      __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
     }
 #endif
@@ -15059,7 +15070,7 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
       {
 	if ((digits[(uint8_t)(name[i])] < radix) || (!t_number_separator_p[(uint8_t)name[i]]))
 	  new_name[j++] = name[i];
-	else 
+	else
 	  {
 	    liberate(sc, b);
 	    return((want_symbol) ? make_symbol(sc, name) : sc->F);
@@ -50579,7 +50590,7 @@ static void swap_stack(s7_scheme *sc, opcode_t new_op, s7_pointer new_code, s7_p
   e = sc->stack_end[1];
   args = sc->stack_end[2];
   op = (opcode_t)(sc->stack_end[3]); /* this should be begin1 */
-  if ((S7_DEBUGGING) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK)) 
+  if ((S7_DEBUGGING) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK))
     fprintf(stderr, "swap %s in %s\n", op_names[op], display(s7_name_to_value(sc, "estr")));
   push_stack(sc, new_op, new_args, new_code);
   sc->stack_end[0] = code;
@@ -57442,7 +57453,7 @@ static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer 
   if ((is_symbol(car(tree))) &&
       (is_definer_or_binder(car(tree))))
     {
-      if ((car(tree) == sc->let_symbol) && (is_pair(cdr(tree))) && (is_pair(cadr(tree))) && 
+      if ((car(tree) == sc->let_symbol) && (is_pair(cdr(tree))) && (is_pair(cadr(tree))) &&
 	  (is_null(cdadr(tree))) && (is_pair(caadr(tree)))) /* (let (a) ...) */
 	fx_tree(sc, cddr(tree), caaadr(tree), NULL, NULL, more_vars);
       return;
@@ -68729,7 +68740,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
        */
       s7_pointer args = (sc->args) ? sc->args : sc->nil;
       s7_pointer result = sc->undefined;
-      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code, 
+      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code,
                     cons_unchecked(sc, args, list_4(sc, value, cur_code, x, z)))); /* not s7_list (debugger checks) */
       if (!is_pair(cur_code))
 	{
@@ -71504,7 +71515,7 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 {
   int32_t pairs = 0, symbols = 0, args = 0, bad_pairs = 0, quotes = 0;
   s7_pointer p;
-  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(expr));  
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(expr));
   for (p = cdr(expr); is_pair(p); p = cdr(p), args++) /* check the args (the calling expression) */
     {
       s7_pointer car_p = car(p);
@@ -71739,7 +71750,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 
       /* if car is a pair, we can't easily tell whether its value is (say) + or cond, so we need to catch this case and fixup fx settings */
       for (p = expr; is_pair(p); p = cdr(p))
-	if (((is_symbol(car(p))) && 
+	if (((is_symbol(car(p))) &&
 	     (is_syntactic_symbol(car(p)))) ||
 	    ((is_pair(car(p))) &&
 	     (!is_checked(car(p))) &&
@@ -72242,7 +72253,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	      if ((expr == sc->apply_symbol) && (is_pair(cdr(x))) && (is_symbol(cadr(x)))) /* (apply <safe_c_function> ...) */
 		{
 		  s7_pointer cadr_f = lookup_unexamined(sc, cadr(x));
-		  c_safe = ((cadr_f) && 
+		  c_safe = ((cadr_f) &&
 			    ((is_safe_c_function(cadr_f)) ||
 			     ((is_closure(cadr_f)) && (is_very_safe_closure(cadr_f)))));
 		}
@@ -91485,15 +91496,22 @@ static void mark_holdee(s7_pointer holder, s7_pointer holdee, const char *root)
   holdee->root = root;
 }
 
-static void mark_stack_holdees(s7_pointer p, s7_int top)
+static void mark_stack_holdees(s7_scheme *sc, s7_pointer p, s7_int top)
 {
   if (stack_elements(p))
-    for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
-      {
-	mark_holdee(p, *tp++, NULL);
-	mark_holdee(p, *tp++, NULL);
-	mark_holdee(p, *tp++, NULL);
-      }
+    {
+      s7_pointer heap0 = *(sc->heap);
+      s7_pointer heap1 = (s7_pointer)(heap0 + sc->heap_size);
+      for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
+	{
+	  s7_pointer x;
+	  x = *tp++;
+	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
+	  x = *tp++;
+	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
+	  x = *tp++;
+	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
+	}}
 }
 
 static void save_holder_data(s7_scheme *sc, s7_pointer p)
@@ -91506,10 +91524,10 @@ static void save_holder_data(s7_scheme *sc, s7_pointer p)
     case T_INPUT_PORT:   mark_holdee(p, port_string_or_function(p), NULL); break;
     case T_C_POINTER:    mark_holdee(p, c_pointer_type(p), NULL); mark_holdee(p, c_pointer_info(p), NULL); break;
     case T_COUNTER:      mark_holdee(p, counter_result(p), NULL); mark_holdee(p, counter_list(p), NULL); mark_holdee(p, counter_let(p), NULL); break;
-    case T_STACK:        mark_stack_holdees(p, current_stack_top(sc)); break;
+    case T_STACK:        mark_stack_holdees(sc, p, current_stack_top(sc)); break;
     case T_OUTPUT_PORT:  if (is_function_port(p)) mark_holdee(p, port_string_or_function(p), NULL); break;
 
-    case T_ITERATOR:     
+    case T_ITERATOR:
       mark_holdee(p, iterator_sequence(p), NULL);
       if (is_mark_seq(p)) mark_holdee(p, iterator_current(p), NULL);
       break;
@@ -91584,7 +91602,7 @@ static void save_holder_data(s7_scheme *sc, s7_pointer p)
 
     case T_CONTINUATION:
       mark_holdee(p, continuation_op_stack(p), NULL);
-      mark_stack_holdees(continuation_stack(p), continuation_stack_top(p));
+      mark_stack_holdees(sc, continuation_stack(p), continuation_stack_top(p));
       break;
 
     default: /* includes T_C_OBJECT */
@@ -91632,7 +91650,7 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, sc->temp10, "sc->temp10");
   mark_holdee(NULL, sc->rec_p1, "sc->rec_p1");
   mark_holdee(NULL, sc->rec_p2, "sc->rec_p2");
-  
+
   mark_holdee(NULL, car(sc->t1_1), "car(sc->t1_1)");
   mark_holdee(NULL, car(sc->t2_1), "car(sc->t2_1)");
   mark_holdee(NULL, car(sc->t2_2), "car(sc->t2_2)");
@@ -91662,7 +91680,7 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, cadr(sc->qlist_2), "cadr(sc->qlist_2)");
   mark_holdee(NULL, caddr(sc->plist_3), "caddr(sc->plist_3)");
   mark_holdee(NULL, caddr(sc->elist_3), "caddr(sc->elist_3)");
-  
+
   mark_holdee(NULL, sc->code, "sc->code");
   mark_holdee(NULL, sc->value, "sc->value");
   mark_holdee(NULL, sc->args, "sc->args");
@@ -91686,7 +91704,7 @@ void s7_heap_analyze(s7_scheme *sc)
 
   for (gc_obj_t *g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
     mark_holdee(NULL, g->p, "permanent object");
-  
+
   for (s7_int i = 0; i < sc->protected_objects_size; i++)
     mark_holdee(NULL, vector_element(sc->protected_objects, i), "gc protected object");
 
@@ -91697,7 +91715,7 @@ void s7_heap_analyze(s7_scheme *sc)
     mark_holdee(NULL, cdr(sc->setters[i]), "setter");
 
   for (s7_int i = 0; i <= sc->format_depth; i++)
-    if (sc->fdats[i]) 
+    if (sc->fdats[i])
       mark_holdee(NULL, sc->fdats[i]->curly_arg, "fdat curly_arg");
 
   {
@@ -91714,7 +91732,7 @@ void s7_heap_analyze(s7_scheme *sc)
   if (sc->rec_stack)
     for (s7_int i = 0; i < sc->rec_loc; i++)
       mark_holdee(NULL, sc->rec_els[i], "sc->rec_els");
-  
+
   {
     gc_list_t *gp = sc->opt1_funcs;
     for (s7_int i = 0; i < gp->loc; i++)
@@ -91728,12 +91746,12 @@ void s7_heap_analyze(s7_scheme *sc)
 	(list_is_in_use(sc->safe_lists[i])))
       for (s7_pointer p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
 	mark_holdee(NULL, car(p), "safe_lists");
-  
+
   for (s7_pointer p = sc->wrong_type_arg_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "wrong-type-arg");
   for (s7_pointer p = sc->simple_wrong_type_arg_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "simple wrong-type-arg");
   for (s7_pointer p = sc->out_of_range_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "out-of-range");
   for (s7_pointer p = sc->simple_out_of_range_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "simple out-of-range");
-  
+
   {
     s7_pointer *tmp = rootlet_elements(sc->rootlet);
     s7_pointer *top = (s7_pointer *)(tmp + sc->rootlet_entries);
@@ -91767,10 +91785,12 @@ void s7_heap_scan(s7_scheme *sc, int32_t typ)
 	    fprintf(stderr, "%s has no holder (alloc: %d)\n", display_80(obj), obj->alloc_line);
 	  else
 	    if (obj->root)
-	      fprintf(stderr, "%s from %s (%d holders)\n", display_80(obj), obj->root, obj->holders);
-	    else fprintf(stderr, "%s from %s (%s, %p, alloc: %d, holders: %d)\n", 
+	      fprintf(stderr, "%s from %s (%d holder%s)\n", display_80(obj), obj->root, 
+		      obj->holders, (obj->holders != 1) ? "s" : "");
+	    else fprintf(stderr, "%s from %s (%s, %p, alloc: %d, holder%s: %d)\n",
 			 display_80(obj), display_80(obj->holder),
-			 s7_type_names[unchecked_type(obj->holder)], obj->holder, obj->alloc_line, obj->holders);
+			 s7_type_names[unchecked_type(obj->holder)], obj->holder, obj->alloc_line, 
+			 (obj->holders != 1) ? "s" : "", obj->holders);
 	}}
   if (!found_one)
     fprintf(stderr, "no %s found\n", s7_type_names[typ]);
@@ -91812,6 +91832,13 @@ static s7_pointer g_heap_holders(s7_scheme *sc, s7_pointer args)
   #define Q_heap_holders s7_make_signature(sc, 2, sc->is_integer_symbol, sc->T)
   return(make_integer(sc, car(args)->holders));
 }
+
+static s7_pointer g_input_port_stack_size(s7_scheme *sc, s7_pointer args) /* temporary -- a debugging aid */
+{
+  #define H_input_port_stack_size "no help here"
+  #define Q_input_port_stack_size s7_make_signature(sc, 1, sc->is_integer_symbol)
+  return(make_integer(sc, sc->input_port_stack_loc));
+}
 #endif
 
 
@@ -91843,7 +91870,7 @@ static const char *s7_let_field_names[SL_NUM_FIELDS] =
    "bignum-precision", "memory-usage", "float-format-precision", "history", "history-enabled",
    "history-size", "profile", "profile-info", "profile-prefix", "autoloading?", "accept-all-keyword-arguments",
    "muffle-warnings?", "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
-   "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?", 
+   "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?",
    "number-separator"};
 
 
@@ -91952,7 +91979,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #endif
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size"), 
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size"),
 			     cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
@@ -92038,13 +92065,21 @@ static s7_pointer memory_usage(s7_scheme *sc)
                   sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
                                s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
-				       s7_list(sc, 14, make_integer(sc, sc->strings->size), make_integer(sc, sc->vectors->size),
-					       make_integer(sc, sc->input_ports->size), make_integer(sc, sc->output_ports->size),
-					       make_integer(sc, sc->input_string_ports->size), make_integer(sc, sc->continuations->size),
-					       make_integer(sc, sc->c_objects->size), make_integer(sc, sc->hash_tables->size),
-					       make_integer(sc, sc->gensyms->size), make_integer(sc, sc->undefineds->size),
-					       make_integer(sc, sc->multivectors->size), make_integer(sc, sc->weak_refs->size),
-					       make_integer(sc, sc->weak_hash_iterators->size), make_integer(sc, sc->opt1_funcs->size))));
+				       s7_list(sc, 14,
+					       cons(sc, make_symbol(sc, "string"),         make_integer(sc, sc->strings->size)),
+					       cons(sc, make_symbol(sc, "vector"),         make_integer(sc, sc->vectors->size)),
+					       cons(sc, make_symbol(sc, "multivector"),    make_integer(sc, sc->multivectors->size)),
+					       cons(sc, make_symbol(sc, "input"),          make_integer(sc, sc->input_ports->size)),
+					       cons(sc, make_symbol(sc, "output"),         make_integer(sc, sc->output_ports->size)),
+					       cons(sc, make_symbol(sc, "input-string"),   make_integer(sc, sc->input_string_ports->size)),
+					       cons(sc, make_symbol(sc, "continuation"),   make_integer(sc, sc->continuations->size)),
+					       cons(sc, make_symbol(sc, "c-object"),       make_integer(sc, sc->c_objects->size)),
+					       cons(sc, make_symbol(sc, "hash-table"),     make_integer(sc, sc->hash_tables->size)),
+					       cons(sc, make_symbol(sc, "gensym"),         make_integer(sc, sc->gensyms->size)),
+					       cons(sc, make_symbol(sc, "undefined"),      make_integer(sc, sc->undefineds->size)),
+					       cons(sc, make_symbol(sc, "weak-ref"),       make_integer(sc, sc->weak_refs->size)),
+					       cons(sc, make_symbol(sc, "weak-hash-iter"), make_integer(sc, sc->weak_hash_iterators->size)),
+					       cons(sc, make_symbol(sc, "opt1-func"),      make_integer(sc, sc->opt1_funcs->size)))));
   }
 
   /* strings */
@@ -92633,7 +92668,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
 #endif
       if (!is_character(val))
 	simple_s7_let_wrong_type_argument_nr(sc, sym, val, T_CHARACTER);
-      if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (character(val) == '+') || (character(val) == '-') || 
+      if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (character(val) == '+') || (character(val) == '-') ||
 	  (character(val) == '@') || (character(val) == '/') || (character(val) == 'i') || (character(val) == 'e'))
 	simple_s7_let_wrong_type_argument_with_type_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
       sc->number_separator = character(val);
@@ -94536,6 +94571,7 @@ static void init_rootlet(s7_scheme *sc)
   defun("heap-analyze", heap_analyze, 0, 0, false);
   defun("heap-holder", heap_holder, 1, 0, false);
   defun("heap-holders", heap_holders, 1, 0, false);
+  defun("input-port-stack-size", input_port_stack_size, 0, 0, false);
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
@@ -95554,23 +95590,23 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    467    469
  * index     1026   1016    973    964    967
- * tmock     1177   1165   1057   1061   1061
+ * tmock     1177   1165   1057   1061   1060
  * tvect     2519   2464   1772   1676   1677
  * timp      2637   2575   1930   1717   1720
- * texit     ----   ----   1778   1736   1737
+ * texit     ----   ----   1778   1736   1736
  * s7test    1873   1831   1818   1815   1818
  * thook     ----   ----   2590   2106   2106
  * tauto     ----   ----   2562   2171   2170
  * lt        2187   2172   2150   2180   2181
- * dup       3805   3788   2492   2263   2263
+ * dup       3805   3788   2492   2263   2277
  * tcopy     8035   5546   2539   2376   2376
- * tload     ----   ----   3046   2379   2377
+ * tload     ----   ----   3046   2379   2380
  * fbench    2688   2583   2460   2412   2425
  * tread     2440   2421   2419   2416   2416
  * trclo     2735   2574   2454   2447   2448
  * titer     2865   2842   2641   2540   2540
  * tmat      3065   3042   2524   2508   2502
- * tb        2735   2681   2612   2601   2605
+ * tb        2735   2681   2612   2601   2604
  * tsort     3105   3104   2856   2803   2802
  * teq       4068   4045   3536   3465   3467
  * tobj      4016   3970   3828   3556   3560
@@ -95592,7 +95628,7 @@ int main(int argc, char **argv)
  * tset      ----   ----   ----   6441   6468
  * tari      13.0   12.7   6827   6486   6586 [gc]
  * trec      6936   6922   6521   6559   6559
- * tleft     10.4   10.2   7657   7516   7515
+ * tleft     10.4   10.2   7657   7516   7493
  * tgc       11.9   11.1   8177   7964   7909
  * thash     11.8   11.7   9734   9477   9477
  * cb        11.2   11.0   9658   9533   9533
@@ -95610,9 +95646,6 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
- * t718 heap ovfl?  
- *    heap_scan: need s7_type_to_integer [scan s7_type_names maybe or use bool_func index]
- *      do we need to scan the symbol table? -- are the lists permanent?
- *      need s7_heap_holder_chain -> entire chain (or all_...)
  * t725 hash ratio/closure/c_func, op_implicit_hash_a
+ * reader-cond debugging t725
  */
