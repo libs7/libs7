@@ -5949,6 +5949,7 @@
 			    (eq? (caadr form) '/)
 			    (len=3? (cadr form)))
 		       (cons 'quotient (cdadr form)))
+		      ;; if we know arg1 is int, (quotient arg1 -1) -> (- arg1)
 
 		      ((memq (caar args) '(inexact->exact exact))
 		       (list (car form) (cadar args)))

@@ -403,6 +403,8 @@
 
 ;;; -------- expt --------
 
+;(define zratvals (unzero ratvals))
+
 (define (exptest)
   (do ((i 0 (+ i 1)))
       ((= i log-size))
