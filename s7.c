@@ -1187,7 +1187,7 @@ struct s7_scheme {
 
   s7_pointer w, x, y, z;
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
-  s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1, u2_1, u2_2;
+  s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1; /* dlist|clist and ulist can't overlap */
 
@@ -2457,10 +2457,6 @@ static void init_types(void)
 #define T_STEP_END_OK                  T_ITER_OK
 #define step_end_ok(p)                 has_type_bit(T_Pair(p), T_STEP_END_OK)
 #define set_step_end_ok(p)             set_type_bit(T_Pair(p), T_STEP_END_OK)
-
-#define T_IMPLICIT_SET_OK              T_ITER_OK
-#define implicit_set_ok(p)             has_type_bit(T_Pair(p), T_IMPLICIT_SET_OK)
-#define set_implicit_set_ok(p)         do {if (in_heap(p)) set_type_bit(T_Pair(p), T_IMPLICIT_SET_OK);} while (0)
 
 #define T_IN_ROOTLET                   T_ITER_OK
 #define in_rootlet(p)                  has_type_bit(T_Slt(p), T_IN_ROOTLET)
@@ -4694,7 +4690,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						   (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" : " ?22?") : "",
 	  /* bit 31 */
 	  ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" :
-						  ((is_pair(obj)) ? " step-end-ok/set-implicit-ok" :
+						  ((is_pair(obj)) ? " step-end-ok" :
 						   ((is_slot(obj)) ? " in-rootlet" :
 						    ((is_c_function(obj)) ? " bool-function" :
 						     " ?23?")))) : "",
@@ -7257,7 +7253,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->qlist_2)); gc_mark(cadr(sc->qlist_2));
   gc_mark(car(sc->qlist_3));
   gc_mark(car(sc->u1_1));
-  gc_mark(car(sc->u2_1)); gc_mark(car(sc->u2_2));
 
   gc_mark(sc->rec_p1);
   gc_mark(sc->rec_p2);
@@ -78469,18 +78464,9 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
   /* vect is the vector, sc->code is expr without the set!, form is the full expr, args have not been evaluated! */
   s7_pointer index;
   s7_int argnum;
-  /* fprintf(stderr, "%s code: %s, str: %s, inds: %s, val: %s, form: %s\n", __func__, display(sc->code), display(vect), display(inds), display(val), display(form)); */
 
-  if (!implicit_set_ok(sc->code))
-    {
-      if ((S7_DEBUGGING) && (!is_pair(val)))     /* (set! (v 0)) */
-	{fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "no value for implicit vector-set!: ~S", form);}
-      if ((S7_DEBUGGING) && (!is_null(cdr(val))))   /* (set! (v 0) 1 2) */
-	{fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "too many values for implicit vector-set!: ~S", form);}
-      if (!is_pair(inds))
-	wrong_number_of_args_error_nr(sc, "no index for implicit vector-set!: ~S", form);
-      set_implicit_set_ok(sc->code);
-    }
+  if (!is_pair(inds))
+    wrong_number_of_args_error_nr(sc, "no index for implicit vector-set!: ~S", form);
   if (is_immutable(vect))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, vect));
 
@@ -78547,7 +78533,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 		  if (!s7_is_integer(index))
 		    {
 		      if (in_heap(args)) unstack(sc);
-		      if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code));
 		      error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be an integer: ~S", 41), form));
 		    }
 		  car(pa) = index;
@@ -78618,15 +78603,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 static goto_t set_implicit_c_object(s7_scheme *sc, s7_pointer c_obj, s7_pointer inds, s7_pointer val, s7_pointer form)
 {
   s7_pointer index;
-  /* fprintf(stderr, "%s code: %s, str: %s, inds: %s, val: %s, form: %s\n", __func__, display(sc->code), display(c_obj), display(inds), display(val), display(form)); */
-  if (!implicit_set_ok(sc->code))
-    {
-      if (!is_pair(val))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "no value for object-set!: ~S", form);}
-      if (!is_null(cdr(val)))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "too many values for object-set!: ~S", form);}
-      set_implicit_set_ok(sc->code);
-    }
+  /* c_obj's set! method needs to provide error checks */
 
   if ((!is_pair(inds)) || (!is_null(cdr(inds))))
     {
@@ -78699,18 +78676,11 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer inds
 {
   /* here only one index makes sense and it is required, so (set! ("str") #\a), (set! ("str" . 1) #\a) and (set! ("str" 1 2) #\a) are all errors (but see below!) */
   s7_pointer index;
-  /* fprintf(stderr, "%s code: %s, str: %s, inds: %s, val: %s, form: %s\n", __func__, display(sc->code), display(str), display(inds), display(val), display(form)); */
 
-  if (!implicit_set_ok(sc->code))
-    {
-      if (!is_pair(val)) {if (S7_DEBUGGING) fprintf(stderr, "%d hit no value\n", __LINE__); wrong_number_of_args_error_nr(sc, "no value for string set!: ~S", form);}
-      if (!is_null(cdr(val))) {if (S7_DEBUGGING) fprintf(stderr, "%d too many vals\n", __LINE__); wrong_number_of_args_error_nr(sc, "too many values for string set!: ~S", form);}
-      if (!is_pair(inds)) 
-	wrong_number_of_args_error_nr(sc, "no index for string set!: ~S", form);
-      if (!is_null(cdr(inds))) 
-	wrong_number_of_args_error_nr(sc, "too many indices for string set!: ~S", form);
-      set_implicit_set_ok(sc->code);
-    }
+  if (!is_pair(inds)) 
+    wrong_number_of_args_error_nr(sc, "no index for string set!: ~S", form);
+  if (!is_null(cdr(inds))) 
+    wrong_number_of_args_error_nr(sc, "too many indices for string set!: ~S", form);
 
   index = car(inds);
   if (!is_pair(index))
@@ -78755,18 +78725,9 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer inds
 static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, s7_pointer val, s7_pointer form)
 {
   s7_pointer index, index_val = NULL, value = car(val);
-  /* fprintf(stderr, "code: %s, lst: %s, inds: %s, val: %s, form: %s\n", display(sc->code), display(lst), display(inds), display(val), display(form)); */
 
-  if (!implicit_set_ok(sc->code))
-    {
-      if (!is_pair(val))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: no val\n", __LINE__); wrong_number_of_args_error_nr(sc, "no value for list-set!: ~S", form);}
-      if (!is_null(cdr(val)))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: too many\n", __LINE__); wrong_number_of_args_error_nr(sc, "too many values for list-set!: ~S", form);}
-      if (!is_pair(inds))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: no index\n", __LINE__); wrong_number_of_args_error_nr(sc, "no index for list-set!: ~S", form);}
-      set_implicit_set_ok(sc->code);
-    }
+  if (!is_pair(inds)) /* (!is_pair(val)) and (!is_null(cdr(val))) are apparently caught somewhere else */
+    wrong_number_of_args_error_nr(sc, "no index for list-set!: ~S", form);
 
   index = car(inds);
   if (!is_pair(index))
@@ -78783,19 +78744,17 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, 
 		     set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~$) is ~S which can't take arguments", 47), form, lst, index_val, obj));
 	  return(call_set_implicit(sc, obj, cdr(inds), val, form));
 	}
-      push_stack(sc, OP_SET2, cddr(inds), value);
-      sc->code = set_plist_2(sc, lst, car(inds));
-      if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code));
+      push_stack(sc, OP_SET2, cdr(inds), val);            /* (let ((L (list (list 1 2 3)))) (set! (L (- (length L) 1) 2) 0) L) */
+      sc->code = set_plist_2(sc, caadr(form), car(inds)); /* TODO: need a way to use lst here, not caadr(form) */
       return(goto_unopt);
     }
   if (index_val)
     {
-      if (!is_pair(val))
+      if (!is_pair(value))
 	{
 	  set_car(sc->t2_1, index_val);
-	  set_car(sc->t2_2, (is_symbol(val)) ? lookup_checked(sc, value) : value);
+	  set_car(sc->t2_2, (is_symbol(value)) ? lookup_checked(sc, value) : value);
 	  sc->value = g_list_set_1(sc, lst, sc->t2_1, 2);
-	  if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->value));
 	  return(goto_start);
 	}
       push_op_stack(sc, sc->list_set_function); /* because cdr(inds) is nil, we're definitely calling list_set */
@@ -78807,26 +78766,15 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, 
   push_op_stack(sc, sc->list_set_function);
   sc->code = car(inds);
   sc->cur_op = optimize_op(sc->code);
-  if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code));
   return(goto_top_no_pop);
 }
 
 static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointer inds, s7_pointer val, s7_pointer form)
 {
   s7_pointer key, keyval = NULL;
-  /* fprintf(stderr, "code: %s, table: %s, inds: %s, val: %s, form: %s\n", display(sc->code), display(table), display(inds), display(val), display(form)); */
 
-  if (!implicit_set_ok(sc->code))
-    {
-      if (!is_pair(val))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "no value for hash-table-set!: ~S", form);}
-      if (!is_null(cdr(val)))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "too many values for hash-table-set!: ~S", form);}
-      if (!is_pair(inds))
-	wrong_number_of_args_error_nr(sc, "no key for hash-table-set!: ~S", form);
-      set_implicit_set_ok(sc->code);
-    }
-
+  if (!is_pair(inds)) /* (!is_pair(val)) and (!is_null(cdr(val))) are apparently caught elsewhere */
+    wrong_number_of_args_error_nr(sc, "no key for hash-table-set!: ~S", form);
   if (is_immutable(table))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, table));
 
@@ -78850,14 +78798,14 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 	    if (!is_applicable(obj))                  /* (let ((h (hash-table 'b 1))) (set! (h 'b 'asdf) 32)) */
 	      error_nr(sc, sc->no_setter_symbol,
 		       set_elist_5(sc, wrap_string(sc, "in ~S, (~S ~$) is ~S which can't take arguments", 47), form, table, keyval, obj));
-
-	  /* (let ((v (hash-table 'a (list 1 2)))) (set! (v 'a 1) 5)) -> code: (set! ((1 2) 1) 5) -> 5 (v: (hash-table 'a (1 5))) */
-	  /* (let ((v (hash-table 'a (hash-table 'b 1)))) (set! (v 'a 'b 'b) 32) v) -> error: in (set! (v 'a 'b 'b) 32), ((hash-table 'b 1) 'b) is 1 which can't take arguments */
+	  /* (let ((v (hash-table 'a (hash-table 'b 1)))) (set! (v 'a 'b 'b) 32) v) -> 
+	   *    error: in (set! (v 'a 'b 'b) 32), ((hash-table 'b 1) 'b) is 1 which can't take arguments
+	   * (let ((v (hash-table 'a (list 1 2)))) (set! (v 'a 1) 5)) -> code: (set! ((1 2) 1) 5) -> 5 (v: (hash-table 'a (1 5))) 
+	   */
 	  return(call_set_implicit(sc, obj, cdr(inds), val, form));
 	}
-      push_stack(sc, OP_SET2, cdr(inds), val);
-      sc->code = set_plist_2(sc, table, key); /* plist maybe unsafe */
-      if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code));
+      push_stack(sc, OP_SET2, cdr(inds), val); /* (let ((L (hash-table 'b (hash-table 'a 1)))) (set! (L (symbol "b") (symbol "a")) 0) L) */
+      sc->code = set_plist_2(sc, caadr(form), key);  /* plist maybe unsafe */
       return(goto_unopt);
     }
   if (keyval)
@@ -78890,19 +78838,9 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer inds, s7_pointer val, s7_pointer form)
 {
   s7_pointer sym, symval = NULL;
-  /* code: ((gen 'input) input) from (set! (gen 'input) input) */
-  /* fprintf(stderr, "code: %s, let: %s, inds: %s, val: %s, form: %s\n", display(sc->code), display(let), display(inds), display(val), display(form)); */
 
-  if (!implicit_set_ok(sc->code))
-    {
-      if (!is_pair(val))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "no value for let-set!: ~S", form);}
-      if (!is_null(cdr(val)))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "too many values for let-set!: ~S", form);}
-      if (!is_pair(inds))
-	{if (S7_DEBUGGING) fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code)); wrong_number_of_args_error_nr(sc, "no symbol (variable name) for let-set!: ~S", form);}
-      set_implicit_set_ok(sc->code);
-    }
+  if (!is_pair(inds)) /* as above, bad val caught elsewhere */
+    wrong_number_of_args_error_nr(sc, "no symbol (variable name) for let-set!: ~S", form);
 
   sym = car(inds);
   if (is_pair(sym))
@@ -78924,7 +78862,6 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer inds, s
 	}
       push_stack(sc, OP_SET2, cdr(inds), val);
       sc->code = list_2(sc, let, car(inds));
-      fprintf(stderr, "%d: %s\n", __LINE__, display(sc->code));
       return(goto_unopt);
     }
   if (symval)
@@ -79162,7 +79099,6 @@ static goto_t op_set2(s7_scheme *sc)
       return(goto_eval);
     }
   sc->code = cons_unchecked(sc, sc->set_symbol, cons(sc, set_ulist_1(sc, sc->value, sc->args), sc->code)); /* (let ((x 32)) (set! ((curlet) 'x) 3) x) */
-  /* not ulist_2 in place of the outer cons here -- implicit_set_ok can be set, but if ulist it's permanent and can infect later uses of ulist_2! */
   /* TODO: make a version of set_implicit that doesn't need all these cons's! */
   return(set_implicit(sc));
 }
@@ -91663,8 +91599,6 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, car(sc->t3_3), "car(sc->t3_3)");
   mark_holdee(NULL, car(sc->t4_1), "car(sc->t4_1)");
   mark_holdee(NULL, car(sc->u1_1), "car(sc->u1_1)");
-  mark_holdee(NULL, car(sc->u2_1), "car(sc->u2_1)");
-  mark_holdee(NULL, car(sc->u2_2), "car(sc->u2_2)");
   mark_holdee(NULL, car(sc->plist_1), "car(sc->plist_1)");
   mark_holdee(NULL, car(sc->plist_2), "car(sc->plist_2)");
   mark_holdee(NULL, car(sc->plist_3), "car(sc->plist_3)");
@@ -94793,8 +94727,6 @@ s7_scheme *s7_init(void)
   sc->t3_1 = permanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
   sc->t4_1 = permanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
   sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE); /* "ulist" */
-  sc->u2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->u2_1 = permanent_cons(sc, sc->nil, sc->u2_2, T_PAIR | T_IMMUTABLE);
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
@@ -95654,8 +95586,10 @@ int main(int argc, char **argv)
  * perhaps: input-stack display + callers, in-heap-validity-check -> s7_show_stack (brief op+args+code)
  * fully optimize gmp version
  *
- * call_set_implicit: get the unhit cases (about 12), clean up rest of consing? check the actual error messages
+ * call_set_implicit: clean up rest of consing?
+ *   t718 vector set bug/s7test hangs
  * other flags like no_cell_opt with in_heap check? or at least check if debugging
  *   maybe function to display bits of permanent cells?
  * snd.tar ->ccrma?
+ * snd-test 24 -> s7test 19070 + 2 others hangs 9000 lines later?
  */
