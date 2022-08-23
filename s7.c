@@ -2348,6 +2348,7 @@ static void init_types(void)
 #define set_step_end(p)                set_type_bit(T_Slt(p), T_STEP_END)
 /* marks a slot that holds a do-loop's step-or-end variable, numerator=current, denominator=end */
 
+static const char *decoded_name(s7_scheme *sc, const s7_pointer p);
 #define T_NO_CELL_OPT                  T_MUTABLE
 #define set_no_cell_opt(p)             set_type_bit(T_Pair(p), T_NO_CELL_OPT)
 #define no_cell_opt(p)                 has_type_bit(T_Pair(p), T_NO_CELL_OPT)
@@ -7189,10 +7190,8 @@ static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #endif
 
 #if S7_DEBUGGING
-#define call_gc(Sc) gc(Sc, __func__, __LINE__)
 static int64_t gc(s7_scheme *sc, const char *func, int32_t line)
 #else
-#define call_gc(Sc) gc(Sc)
 static int64_t gc(s7_scheme *sc)
 #endif
 {
@@ -7517,8 +7516,10 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 #define resize_heap(Sc) resize_heap_to(Sc, 0)
 
 #if S7_DEBUGGING
+#define call_gc(Sc) gc(Sc, __func__, __LINE__)
 static void try_to_call_gc_1(s7_scheme *sc, const char *func, int32_t line)
 #else
+#define call_gc(Sc) gc(Sc)
 static void try_to_call_gc(s7_scheme *sc)
 #endif
 {
@@ -7529,7 +7530,11 @@ static void try_to_call_gc(s7_scheme *sc)
     {
       if ((sc->gc_resize_heap_fraction > 0.5) && (sc->heap_size >= 4194304))
 	  sc->gc_resize_heap_fraction = 0.5;
-      call_gc(sc);
+#if S7_DEBUGGING
+      gc(sc, func, line); /* not call_gc! */
+#else
+      gc(sc);
+#endif
       if ((int64_t)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction)) /* changed 21-Jul-22 */
 	resize_heap(sc);
     }
@@ -8519,6 +8524,13 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
 {
   #define H_symbol "(symbol str ...) returns its string arguments concatenated and converted to a symbol"
   #define Q_symbol s7_make_circular_signature(sc, 1, 2, sc->is_symbol_symbol, sc->is_string_symbol)
+
+  /* (let ((x 0)) (set! (symbol "x") 12)) ;symbol (a c-function) does not have a setter: (set! (symbol "x") 12)
+   *   (let (((symbol "x") 3)) x) ; bad variable ((symbol "x")
+   *   (let ((x 2)) (+ (symbol "x") 1)) ;+ first argument, x, is a symbol but should be a number
+   *   maybe document this: (symbol...) just returns the symbol
+   *   (let ((x 3)) (+ (symbol->value (symbol "x")) 1)) -> 4, (let ((x 0)) (apply set! (symbol "x") (list 32)) x) -> 32
+   */
 
   s7_int len = 0, cur_len;
   s7_pointer p, sym;
@@ -10814,12 +10826,8 @@ static inline s7_int tree_len(s7_scheme *sc, s7_pointer p);
 static s7_pointer copy_body(s7_scheme *sc, s7_pointer p)
 {
   sc->w = p;
-  if (!is_safety_checked(p))
-    {
-      if (tree_is_cyclic(sc, p))
-	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "copy: tree is cyclic: ~S", 24), p));
-      else set_safety_checked(p);
-    }
+  if (tree_is_cyclic(sc, p)) /* don't wrap this in is_safety_checked */
+    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "copy: tree is cyclic: ~S", 24), p));
   check_free_heap_size(sc, tree_len(sc, p) * 2);
   return((sc->safety > NO_SAFETY) ? copy_tree_with_type(sc, p) : copy_tree(sc, p));
 }
@@ -10848,10 +10856,9 @@ static s7_pointer g_is_defined(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_defined "(defined? symbol (let (curlet)) ignore-globals) returns #t if symbol has a binding (a value) in the let. \
 Only the let is searched if ignore-globals is not #f."
-#define Q_is_defined s7_make_signature(sc, 4, sc->is_boolean_symbol, sc->is_symbol_symbol, \
+  #define Q_is_defined s7_make_signature(sc, 4, sc->is_boolean_symbol, sc->is_symbol_symbol, \
                        s7_make_signature(sc, 5, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, \
                                                 sc->is_c_object_symbol, sc->is_c_pointer_symbol), sc->is_boolean_symbol)
-
   /* if the symbol has a global slot and e is unset or rootlet, this returns #t */
   s7_pointer sym = car(args);
   if (!is_symbol(sym))
@@ -79085,7 +79092,8 @@ static goto_t op_set2(s7_scheme *sc)
       sc->code = car(sc->args);
       return(goto_eval);
     }
-  if (is_any_vector(sc->value))
+  if ((is_any_vector(sc->value)) && 
+      (vector_rank(sc->value) == proper_list_length(sc->args))) /* sc->code == new value? */
     {
       /* (let ((L #(#(1 2 3) #(4 5 6)))) (set! ((L 1) 0) 32) L)
        * bad case when args is nil: (let ((L #(#(1 2 3) #(4 5 6)))) (set! ((L 1)) 32) L)
@@ -79099,7 +79107,9 @@ static goto_t op_set2(s7_scheme *sc)
       return(goto_eval);
     }
   sc->code = cons_unchecked(sc, sc->set_symbol, cons(sc, set_ulist_1(sc, sc->value, sc->args), sc->code)); /* (let ((x 32)) (set! ((curlet) 'x) 3) x) */
-  /* TODO: make a version of set_implicit that doesn't need all these cons's! */
+  /* TODO: make a version of set_implicit that doesn't need all these cons's! expand set_implicit and clear out pointless stuff
+   *   we have: obj=sc->value [not pair], inds=sc->args, newval=sc->code, but we need the form for errors, and newval needs to be in a list? 
+   */
   return(set_implicit(sc));
 }
 
@@ -83440,20 +83450,15 @@ static void op_any_closure_3p(s7_scheme *sc)
 
 static bool closure_3p_end(s7_scheme *sc, s7_pointer p)
 {
-  /* sc->args == arg1, sc->value == arg2 */
   if (has_fx(p))
     {
       s7_pointer func = opt1_lambda(sc->code);
-      s7_pointer arg2 = sc->value;
-      s7_pointer arg3 = fx_call(sc, p);
+      gc_protect_2_via_stack(sc, sc->args, sc->value); /* sc->args == arg1, sc->value == arg2 */
+      stack_protected3(sc) = fx_call(sc, p);
       if (is_safe_closure(func))
-	sc->curlet = update_let_with_three_slots(sc, closure_let(func), sc->args, arg2, arg3);
-      else
-	{
-	  sc->value = arg2;
-	  sc->code = arg3;
-	  make_let_with_three_slots(sc, func, sc->args, arg2, arg3);
-	}
+	sc->curlet = update_let_with_three_slots(sc, closure_let(func), stack_protected1(sc), stack_protected2(sc), stack_protected3(sc));
+      else make_let_with_three_slots(sc, func, stack_protected1(sc), stack_protected2(sc), stack_protected3(sc));
+      unstack(sc);
       sc->code = T_Pair(closure_body(func));
       return(true);
     }
@@ -90467,7 +90472,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		{
 		  if (tree_is_cyclic(sc, sc->code))
 		    syntax_error_nr(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
-		  else set_safety_checked(sc->code);
+		  set_safety_checked(sc->code);
 		}
 
 	    EVAL_ARGS_PAIR:
@@ -92736,11 +92741,11 @@ static void init_s7_let_immutable_field(void)
 
 static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
 {
-  if (p == sc->value)           return("value");
-  if (p == sc->args)            return("args");
-  if (p == sc->code)            return("code");
-  if (p == sc->cur_code)        return("cur_code");
-  if (p == sc->curlet)          return("curlet");
+  if (p == sc->value)           return("sc->value");
+  if (p == sc->args)            return("sc->args");
+  if (p == sc->code)            return("sc->code");
+  if (p == sc->cur_code)        return("sc->cur_code");
+  if (p == sc->curlet)          return("sc->curlet");
   if (p == sc->nil)             return("()");
   if (p == sc->T)               return("#t");
   if (p == sc->F)               return("#f");
@@ -95530,7 +95535,7 @@ int main(int argc, char **argv)
  * tmock     1177   1165   1057   1061   1060
  * tvect     2519   2464   1772   1676   1677
  * timp      2637   2575   1930   1717   1720
- * texit     ----   ----   1778   1736   1736
+ * texit     ----   ----   1778   1736   1736  1739 [closure_3p_end stack protection]
  * s7test    1873   1831   1818   1815   1818
  * thook     ----   ----   2590   2106   2106
  * tauto     ----   ----   2562   2171   2170
@@ -95568,7 +95573,7 @@ int main(int argc, char **argv)
  * tleft     10.4   10.2   7657   7516   7493
  * tgc       11.9   11.1   8177   7964   7909  7921 [tree_is_cyclic]
  * thash     11.8   11.7   9734   9477   9477
- * cb        11.2   11.0   9658   9533   9533
+ * cb        11.2   11.0   9658   9533   9533  9538 [3p_end]
  * tgen      11.2   11.4   12.0   12.0   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
@@ -95583,13 +95588,9 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
- * perhaps: input-stack display + callers, in-heap-validity-check -> s7_show_stack (brief op+args+code)
+ * perhaps: in-heap-validity-check -> s7_show_stack (brief op+args+code)
  * fully optimize gmp version
  *
  * call_set_implicit: clean up rest of consing?
- *   t718 vector set bug/s7test hangs
- * other flags like no_cell_opt with in_heap check? or at least check if debugging
- *   maybe function to display bits of permanent cells?
  * snd.tar ->ccrma?
- * snd-test 24 -> s7test 19070 + 2 others hangs 9000 lines later?
  */
