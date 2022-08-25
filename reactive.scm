@@ -80,7 +80,7 @@
   ;; return a new setter with closure containing the followers and setters of var, and the c-pointer holding its name, environment, and expression
   (let ((followers followers)
 	(setters setters)
-	(cp (slot var expr env expr-env)))
+	(cp (slot var expr env expr-env))) ; sets slot-expr etc
     (lambda (sym val)
       ;(format *stderr* "make-setter ~S ~S~%" sym val)
       (let-temporarily (((setter (slot-symbol cp) (slot-env cp)) #f))

@@ -41292,6 +41292,9 @@ static s7_pointer univect_set(s7_scheme *sc, s7_pointer args, s7_pointer caller,
   else
     {
       s7_pointer p = cdr(args);
+      if (is_null(p))
+	error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, wrap_string(sc, "not enough arguments for ~A: ~S", 31), caller, args));
+      /* from (set! (v) val) after optimization into op_set_opsq_a which is completely confused -- set! gets v's setter (float-vector-set!) */
       index = car(p);
       if (!s7_is_integer(index))
 	return(method_or_bust(sc, index, caller, args, T_INTEGER, 2));
@@ -71323,8 +71326,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		break;
 	    if (!is_null(q)) break;
 	  }
-	if (!is_null(p))
-	  return(OPT_F);
+	if (!is_null(p)) return(OPT_F);
 	set_safe_optimize_op(expr, OP_COND_NA_NA);
       }
       for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
@@ -71363,15 +71365,15 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
     {
       if (op == OP_IF)
 	{
-	  s7_pointer test = cdr(expr), b1, b2;
-	  for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
+	  s7_pointer test = cdr(expr), b1, b2, p;
+	  for (p = cdr(expr); is_pair(p); p = cdr(p))
 	    if (!is_fxable(sc, car(p)))
 	      return(OPT_F);
-
+	  if (!is_null(p)) return(OPT_OOPS);
 	  if ((is_pair(cdr(test))) && (is_pair(cddr(test))) && (!is_null(cdddr(test))))
 	    return(OPT_OOPS);
 	  
-	  for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
+	  for (p = cdr(expr); is_pair(p); p = cdr(p))
 	    set_fx_direct(p, fx_choose(sc, p, e, pair_symbol_is_safe));
 	  
 	  b1 = cdr(test);
@@ -71437,7 +71439,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	      for (p = cdr(expr); is_pair(p); p = cdr(p))
 		if (!is_fxable(sc, car(p)))
 		  return(OPT_F);
-
+	      if (!is_null(p)) return(OPT_OOPS);
 	      for (args = 0, p = cdr(expr); is_pair(p); p = cdr(p), args++) /* this only applies to or/and */
 		if (is_pair(car(p)))
 		  {
@@ -71493,10 +71495,12 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	  else
 	    if (op == OP_BEGIN)
 	      {
+		s7_pointer p;
 		if (!is_pair(cdr(expr))) return(OPT_F);
-		for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
+		for (p = cdr(expr); is_pair(p); p = cdr(p))
 		  if (!is_fxable(sc, car(p)))
 		    return(OPT_F);
+		if (!is_null(p)) return(OPT_OOPS);
 		for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
 		  set_fx_direct(p, fx_choose(sc, p, e, pair_symbol_is_safe));
 		set_safe_optimize_op(expr, ((is_pair(cddr(expr))) && (is_null(cdddr(expr)))) ? OP_BEGIN_AA : OP_BEGIN_NA);
@@ -78272,15 +78276,19 @@ static bool op_set_with_let_2(s7_scheme *sc)
   if (!is_let(sc->value))
     wrong_type_argument_with_type_nr(sc, sc->let_set_symbol, 1, sc->value, a_let_string);
   b = car(sc->args);
+  if ((!is_symbol(b)) && (!is_pair(b)))
+    error_nr(sc, sc->syntax_error_symbol,
+	     set_elist_3(sc, wrap_string(sc, "can't set ~S in ~$", 18), b, set_ulist_1(sc, global_value(sc->set_symbol), sc->args)));
   x = cadr(sc->args);
   if (is_symbol(b))   /* b is a symbol -- everything else is ready so call let-set! */
     {
       sc->value = let_set_1(sc, sc->value, b, x);
       return(true); /* continue */
     }
-  if ((is_symbol(x)) || (is_pair(x)))                 /* (set! (with-let (inlet :v (vector 1 2)) (v 0)) 'a) */
-    sc->code = set_plist_3(sc, sc->set_symbol, b, ((is_symbol(x)) || (is_pair(x))) ? set_plist_2(sc, sc->quote_symbol, x) : x);
-  else sc->code = set_ulist_1(sc, sc->set_symbol, sc->args); /* (set! (with-let (curlet) (*s7* 'print-length)) 16), x=16 b=(*s7* 'print-length) */
+  if ((is_symbol(x)) || (is_pair(x)))                        /* (set! (with-let (inlet :v (vector 1 2)) (v 0)) 'a) */
+    sc->code = list_3(sc, sc->set_symbol, b, 
+		      ((is_symbol(x)) || (is_pair(x))) ? list_2(sc, sc->quote_symbol, x) : x);
+  else sc->code = cons(sc, sc->set_symbol, sc->args);        /* (set! (with-let (curlet) (*s7* 'print-length)) 16), x=16 b=(*s7* 'print-length) */
   return(false); /* fall into SET_WITH_LET */
 }
 
@@ -78746,7 +78754,7 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, 
 	  return(call_set_implicit(sc, obj, cdr(inds), val, form));
 	}
       push_stack(sc, OP_SET2, cdr(inds), val);            /* (let ((L (list (list 1 2 3)))) (set! (L (- (length L) 1) 2) 0) L) */
-      sc->code = set_plist_2(sc, caadr(form), car(inds)); /* TODO: need a way to use lst here, not caadr(form) */
+      sc->code = list_2(sc, caadr(form), car(inds)); /* TODO: need a way to use lst here, not caadr(form) */
       return(goto_unopt);
     }
   if (index_val)
@@ -78806,7 +78814,7 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 	  return(call_set_implicit(sc, obj, cdr(inds), val, form));
 	}
       push_stack(sc, OP_SET2, cdr(inds), val); /* (let ((L (hash-table 'b (hash-table 'a 1)))) (set! (L (symbol "b") (symbol "a")) 0) L) */
-      sc->code = set_plist_2(sc, caadr(form), key);  /* plist maybe unsafe */
+      sc->code = list_2(sc, caadr(form), key);  /* plist unsafe */
       return(goto_unopt);
     }
   if (keyval)
@@ -95547,52 +95555,52 @@ int main(int argc, char **argv)
  * index     1026   1016    973    964    967
  * tmock     1177   1165   1057   1061   1060
  * tvect     2519   2464   1772   1676   1677
- * timp      2637   2575   1930   1717   1720
+ * timp      2637   2575   1930   1717   1720  1712 [call_set_implicit]
  * texit     ----   ----   1778   1736   1736  1739 [closure_3p_end stack protection]
- * s7test    1873   1831   1818   1815   1818
- * thook     ----   ----   2590   2106   2106
+ * s7test    1873   1831   1818   1815   1818  1846 [op_set_s_a]
+ * thook     ----   ----   2590   2106   2104
  * tauto     ----   ----   2562   2171   2170
- * lt        2187   2172   2150   2180   2181
+ * lt        2187   2172   2150   2180   2181  2185 [op_set_s_a]
  * dup       3805   3788   2492   2263   2277
  * tcopy     8035   5546   2539   2376   2376
- * tload     ----   ----   3046   2379   2380
- * fbench    2688   2583   2460   2412   2425
- * tread     2440   2421   2419   2416   2421
+ * tload     ----   ----   3046   2379   2378
+ * fbench    2688   2583   2460   2412   2425  2480 [op_set_s_a]
+ * tread     2440   2421   2419   2416   2419
  * trclo     2735   2574   2454   2447   2448
  * titer     2865   2842   2641   2540   2540
  * tmat      3065   3042   2524   2508   2502  2577 [do_is_safe?]
- * tb        2735   2681   2612   2601   2604
+ * tb        2735   2681   2612   2601   2604  2619 [op_set_s_a]
  * tsort     3105   3104   2856   2803   2802
  * teq       4068   4045   3536   3465   3467
  * tobj      4016   3970   3828   3556   3560
  * tio       3816   3752   3683   3604   3604
- * tmac      3950   3873   3033   3670   3670
+ * tmac      3950   3873   3033   3670   3667
  * tclo      4787   4735   4390   4379   4376
- * tlet      7775   5640   4450   4433   4435
+ * tlet      7775   5640   4450   4433   4435  4447 [op_set_s_a]
  * tcase     4960   4793   4439   4435   4437
  * tfft      7820   7729   4755   4455   4455
  * tmap      8869   8774   4489   4482   4482
  * tshoot    5525   5447   5183   5068   5071
- * tstr      6880   6342   5488   5122   5126
- * tform     5357   5348   5307   5279   5286
- * tnum      6348   6013   5433   5359   5375
- * tlamb     6423   6273   5720   5544   5544
+ * tstr      6880   6342   5488   5122   5126  5141 [op_set_s_a]
+ * tform     5357   5348   5307   5279   5286  5310 same
+ * tnum      6348   6013   5433   5359   5375  5426 same
+ * tlamb     6423   6273   5720   5544   5541
  * tmisc     8869   7612   6435   6158   6158  6215 [gc!?]
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6367   6356
- * tari      13.0   12.7   6827   6486   6457  6586?
+ * tlist     7896   7546   6558   6367   6356  6366 [op_set_s_a]
+ * tari      13.0   12.7   6827   6486   6457  6590
  * tset      ----   ----   ----   6441   6468
  * trec      6936   6922   6521   6559   6559
- * tleft     10.4   10.2   7657   7516   7493
+ * tleft     10.4   10.2   7657   7516   7493  7500
  * tgc       11.9   11.1   8177   7964   7909  7921 [tree_is_cyclic]
- * thash     11.8   11.7   9734   9477   9477
+ * thash     11.8   11.7   9734   9477   9477  9486 [op_set_s_a]
  * cb        11.2   11.0   9658   9533   9533  9538 [3p_end]
  * tgen      11.2   11.4   12.0   12.0   12.1
- * tall      15.6   15.6   15.6   15.6   15.6
+ * tall      15.6   15.6   15.6   15.6   15.6  15.7 [op_set_s_a]
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.9   56.9
- * lg        ----   ----  105.2  106.4  106.5
- * tbig     177.4  175.8  156.5  149.9  148.3
+ * sg        ----   ----   55.9   56.9   56.9  57.1 same
+ * lg        ----   ----  105.2  106.4  106.5 106.7 same
+ * tbig     177.4  175.8  156.5  149.9  148.3 148.4 same
  * ---------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95601,10 +95609,13 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
- * perhaps: in-heap-validity-check -> s7_show_stack (brief op+args+code)
  * fully optimize gmp version
  *
- * call_set_implicit: clean up rest of consing?
- * snd.tar ->ccrma?
- * snd-test 24 hangs again? same as before op_pair_sym 'a, now 19075|077, new pair (changed vector_rank==remaining args line 79083)
+ * test/repair *error-hook*
+ * set_implicit: reduce consing (don't use plist/ulist!) -- check bits like syntactic set on plist etc
+ * show_stack: (*s7* 'stack->list) -> include code/args/curlet?? op-stack
+ *   perhaps: in-heap-validity-check -> s7_show_stack (brief op+args+code)
+ * t718 format error
+ * 41297 (set! (v) val) where v=vector gets the setter!  The setter needs to check argnum?
+ * inline op_set_s_a?
  */
