@@ -9866,8 +9866,7 @@ static s7_pointer lint_let_ref_p_pp(s7_scheme *sc, s7_pointer lt, s7_pointer sym
       if (slot_symbol(y) == sym)
 	return(slot_value(y));
 
-  if ((has_methods(lt)) &&
-      (has_let_ref_fallback(lt)))
+  if (has_let_ref_fallback(lt))
     return(call_let_ref_fallback(sc, lt, sym));
 
   return((is_slot(global_slot(sym))) ? global_value(sym) : sc->undefined);
@@ -9952,8 +9951,7 @@ static s7_pointer let_set_1(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7
       if (slot_symbol(y) == symbol)
 	return(checked_slot_set_value(sc, y, value));
 
-  if ((!has_methods(let)) ||
-      (!has_let_set_fallback(let)))
+  if (!has_let_set_fallback(let))
     error_nr(sc, sc->wrong_type_arg_symbol,
 	     set_elist_3(sc, wrap_string(sc, "let-set!: ~A is not defined in ~A", 33), symbol, let));
   /* not sure about this -- what's the most useful choice? */
@@ -10005,8 +10003,7 @@ static s7_pointer g_lint_let_set(s7_scheme *sc, s7_pointer args)
 	      slot_set_value(y, (slot_has_setter(y)) ? call_setter(sc, y, val) : val);
 	      return(slot_value(y));
 	    }
-      if ((has_methods(lt)) &&
-	  (has_let_set_fallback(lt)))
+      if (has_let_set_fallback(lt))
 	return(call_let_set_fallback(sc, lt, sym, val));
     }
   y = global_slot(sym);
@@ -75025,44 +75022,9 @@ static bool check_let_star(s7_scheme *sc)
 	{
 	  pair_set_syntax_op(form, OP_NAMED_LET_STAR);
 	  set_opt2_con(code, cadr(caadr(code)));
-	}}
-  else
-    if (is_null(car(code)))
-      pair_set_syntax_op(form, OP_LET_NO_VARS);       /* (let* () ...) */
-    else
-      if (is_null(cdar(code)))
-	{
-	  check_let_one_var(sc, form, car(code)); /* (let* ((var...))...) -> (let ((var...))...) */
-	  if (optimize_op(form) >= OP_LET_NA_OLD)
-	    {
-	      if ((!in_heap(form)) &&
-		  (body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY))
-		set_opt3_let(code, make_permanent_let(sc, car(code)));
-	      else
-		{
-		  set_optimize_op(form, optimize_op(form) + 1); /* *_old -> *_new */
-		  set_opt3_let(code, sc->nil);
-		}}}
-      else  /* multiple variables */
-	{
-	  if (fxable)
-	    {
-	      pair_set_syntax_op(form, OP_LET_STAR_NA);
-	      if ((is_null(cddr(code))) &&
-		  (is_fxable(sc, cadr(code))))
-		{
-		  fx_annotate_arg(sc, cdr(code), sc->curlet);
-		  pair_set_syntax_op(form, OP_LET_STAR_NA_A);
-		}}
-	  else pair_set_syntax_op(form, OP_LET_STAR2);
-	  set_opt2_con(code, cadaar(code));
 	}
-
-  /* let_star_unchecked... */
-  if (named_let)
-    {
       sc->value = cdr(code);
-      if (is_null(car(sc->value)))
+      if (is_null(car(sc->value)))                   /* (let* name () ... */
 	{
 	  s7_pointer let_sym = car(code);
 	  sc->curlet = make_let(sc, sc->curlet);
@@ -75070,28 +75032,52 @@ static bool check_let_star(s7_scheme *sc)
 	  add_slot_checked(sc, sc->curlet, let_sym, make_closure_unchecked(sc, sc->nil, sc->code, T_CLOSURE_STAR, 0));
 	  sc->curlet = make_let(sc, sc->curlet);  /* inner let */
 	  return(false);
-	}}
-  else
-    if (is_null(car(code)))
-      {
-	sc->curlet = make_let(sc, sc->curlet);
-	sc->code = T_Pair(cdr(code));
-	return(false);
-      }
-
-  if (named_let)
-    {
+	}
       sc->curlet = make_let(sc, sc->curlet);
       push_stack(sc, OP_LET_STAR1, code, cadr(code));
-      sc->code = cadr(caadr(code));
+      sc->code = cadr(caadr(code));               /* first var val */
+      return(true);
+    }
+  if (is_null(car(code)))
+    {
+      pair_set_syntax_op(form, OP_LET_NO_VARS);   /* (let* () ...) */
+      
+      sc->curlet = make_let(sc, sc->curlet);
+      sc->code = T_Pair(cdr(code));
+      return(false);
     }
   else
-    {
-      push_stack(sc, ((intptr_t)((shadowing) ? OP_LET_STAR_SHADOWED : OP_LET_STAR1)), code, car(code));
-      /* args is the let body, saved for later, code is the list of vars+initial-values */
-      sc->code = cadr(caar(code));
-      /* caar(code) = first var/val pair, we've checked that all these guys are legit, so cadr of that is the value */
-    }
+    if (is_null(cdar(code)))
+      {
+	check_let_one_var(sc, form, car(code));   /* (let* ((var...))...) -> (let ((var...))...) */
+	if (optimize_op(form) >= OP_LET_NA_OLD)
+	  {
+	    if ((!in_heap(form)) &&
+		(body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY))
+	      set_opt3_let(code, make_permanent_let(sc, car(code)));
+	    else
+	      {
+		set_optimize_op(form, optimize_op(form) + 1); /* *_old -> *_new */
+		set_opt3_let(code, sc->nil);
+	      }}}
+    else  /* multiple variables */
+      {
+	if (fxable)
+	  {
+	    pair_set_syntax_op(form, OP_LET_STAR_NA);
+	    if ((is_null(cddr(code))) &&
+		(is_fxable(sc, cadr(code))))
+	      {
+		fx_annotate_arg(sc, cdr(code), sc->curlet);
+		pair_set_syntax_op(form, OP_LET_STAR_NA_A);
+	      }}
+	else pair_set_syntax_op(form, OP_LET_STAR2);
+	set_opt2_con(code, cadaar(code));
+      }
+  push_stack(sc, ((intptr_t)((shadowing) ? OP_LET_STAR_SHADOWED : OP_LET_STAR1)), code, car(code));
+  /* args is the let body, saved for later, code is the list of vars+initial-values */
+  sc->code = cadr(caar(code));
+  /* caar(code) = first var/val pair, we've checked that all these guys are legit, so cadr of that is the value */
   return(true);
 }
 
@@ -75156,10 +75142,22 @@ static inline bool op_let_star1(s7_scheme *sc)
   sc->code = sc->args; /* original sc->code set in push_stack above */
   if (is_symbol(car(sc->code)))
     {
+      s7_pointer name = car(sc->code), body = cddr(sc->code), args = cadr(sc->code);
       /* now we need to declare the new function (in the outer let) -- must delay this because init might reference same-name outer func */
-      s7_pointer body = cddr(sc->code), args = cadr(sc->code);
-      add_slot_checked(sc, let_outlet(sc->curlet), car(sc->code),
-		       make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
+      /*   but the let name might be shadowed by a variable: (let* x ((x 1))...) so the name's symbol_id can be incorrect */
+      if (symbol_id(name) > let_id(let_outlet(sc->curlet)))
+	{
+	  s7_int cur_id = symbol_id(name);
+	  s7_pointer cur_slot = local_slot(name);
+	  symbol_set_id_unchecked(name, let_id(let_outlet(sc->curlet)));
+	  add_slot_checked(sc, let_outlet(sc->curlet), name,
+			   make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
+	  symbol_set_id_unchecked(name, cur_id);
+	  set_local_slot(name, cur_slot);
+	}
+      else add_slot_checked(sc, let_outlet(sc->curlet), name,
+			    make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
+	
       sc->code = body;
     }
   else sc->code = T_Pair(cdr(sc->code));
@@ -77783,9 +77781,8 @@ static void check_set(s7_scheme *sc)
     s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet); \
     if (!is_slot(slot)) /* #<undefined> probably */ \
       { \
-        if ((has_methods(sc->curlet)) && \
-	    (has_let_set_fallback(sc->curlet))) \
-          sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), opt2_con(cdr(sc->code))); \
+        if (has_let_set_fallback(sc->curlet)) \
+          sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), Expr); \
         else unbound_variable_error_nr(sc, cadr(sc->code)); \
       } \
     else  \
@@ -77798,7 +77795,23 @@ static void check_set(s7_scheme *sc)
 
 op_set_s_any(op_set_s_c, opt2_con(cdr(sc->code)))
 op_set_s_any(op_set_s_s, lookup(sc, opt2_sym(cdr(sc->code))))
-op_set_s_any(op_set_s_a, fx_call(sc, cddr(sc->code)))
+
+static Inline void op_set_s_a(s7_scheme *sc) /* split this way for the compiler (or at least callgrind) */
+{
+  s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
+  if (!is_slot(slot)) /* #<undefined> probably */
+    {
+      if (has_let_set_fallback(sc->curlet))
+	sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), fx_call(sc, cddr(sc->code)));
+      else unbound_variable_error_nr(sc, cadr(sc->code));
+    }
+  else 
+    {
+      if (is_immutable(slot))
+	error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
+      slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
+    }
+}
 
 static void op_set_s_p(s7_scheme *sc)
 {
@@ -78187,8 +78200,7 @@ static void op_set_safe(s7_scheme *sc)
   if (is_slot(slot))
     slot_set_value(slot, sc->value);
   else
-    if ((has_methods(sc->curlet)) &&
-	(has_let_set_fallback(sc->curlet)))
+    if (has_let_set_fallback(sc->curlet))
       sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
     else unbound_variable_error_nr(sc, sc->code);
 }
@@ -78204,11 +78216,12 @@ static bool op_set1(s7_scheme *sc)
 	{
 	  s7_pointer func = slot_setter(lx);
 	  if (is_c_function(func))
-	    sc->value = call_c_function_setter(sc, func, sc->code, sc->value);
+	    sc->value = call_c_function_setter(sc, func, sc->code, sc->value); /* perhaps better: apply_c_function -- has argnum error checks */
 	  else
 	    if (is_any_procedure(func))
 	      {
 		/* don't push OP_EVAL_DONE here and call eval(sc, OP_APPLY) below -- setter might hit an error */
+		/* 41297 (set! (v) val) where v=vector gets the setter, but calls vector-set! with no args */
 		push_stack_no_args(sc, OP_SET_FROM_SETTER, lx);
 		if (has_let_arg(func))
 		  sc->args = list_3(sc, sc->code, sc->value, sc->curlet);
@@ -78220,8 +78233,7 @@ static bool op_set1(s7_scheme *sc)
       symbol_increment_ctr(sc->code);                   /* see define setfib example in s7test.scm -- I'm having second thoughts about this... */
       return(true); /* continue */
     }
-  if ((!has_let_set_fallback(sc->curlet)) ||            /* (with-let (mock-hash-table 'b 2) (set! b 3)) */
-      (!has_methods(sc->curlet)))
+  if (!has_let_set_fallback(sc->curlet))                /* (with-let (mock-hash-table 'b 2) (set! b 3)) */
     error_nr(sc, sc->unbound_variable_symbol, set_elist_4(sc, wrap_string(sc, "~S is unbound in (set! ~S ~S)", 29), sc->code, sc->code, sc->value));
   sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
   return(true);
@@ -90778,12 +90790,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_INCREMENT_SA:   op_increment_sa(sc);   continue;
 	case OP_INCREMENT_SAA:  op_increment_saa(sc);  continue;
 
-	case OP_SET_S_C:        op_set_s_c(sc);        continue;
-	case OP_SET_S_S:        op_set_s_s(sc);        continue;
-	case OP_SET_S_A:        op_set_s_a(sc);        continue;
-	case OP_SET_S_P:        op_set_s_p(sc);        goto EVAL;
-	case OP_SET_CONS:       op_set_cons(sc);       continue;
- 	case OP_SET_SAFE:	op_set_safe(sc);       continue;
+	case OP_SET_S_C:        op_set_s_c(sc);  continue;
+	case OP_SET_S_S:        op_set_s_s(sc);  continue;
+	case OP_SET_S_A:        op_set_s_a(sc);  continue;
+	case OP_SET_S_P:        op_set_s_p(sc);  goto EVAL;
+	case OP_SET_CONS:       op_set_cons(sc); continue;
+ 	case OP_SET_SAFE:	op_set_safe(sc); continue;
 
 	case OP_SET_FROM_SETTER:  slot_set_value(sc->code, sc->value); continue; /* mv caught in splice_in_values */
 	case OP_SET_FROM_LET_TEMP: op_set_from_let_temp(sc); continue;
@@ -92222,14 +92234,14 @@ static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
     {
       s7_pointer func = stack_code(stack, i), args = stack_args(stack, i), e = stack_let(stack, i);
       opcode_t op = stack_op(stack, i);
-      if ((s7_is_valid(sc, func)) &&
-	  (s7_is_valid(sc, args)) &&
-	  (s7_is_valid(sc, e)) &&
-	  (op < NUM_OPS))
-	{
-	  lst = cons_unchecked(sc, list_4(sc, func, args, e, s7_make_string(sc, op_names[op])), lst);
-	  sc->w = lst;
-	}}
+      s7_pointer entry = sc->nil;
+      if (s7_is_valid(sc, e)) entry = cons(sc, e, entry);
+      if (s7_is_valid(sc, args)) entry = cons_unchecked(sc, args, entry);
+      if (s7_is_valid(sc, func)) entry = cons_unchecked(sc, func, entry);
+      if ((op >= 0) && (op < NUM_OPS)) entry = cons_unchecked(sc, s7_make_symbol(sc, op_names[op]), entry);
+      lst = cons_unchecked(sc, entry, lst);
+      sc->w = lst;
+    }
   sc->w = sc->nil;
   return(reverse_in_place_unchecked(sc, sc->nil, lst));
 }
@@ -95564,7 +95576,7 @@ int main(int argc, char **argv)
  * dup       3805   3788   2492   2263   2277
  * tcopy     8035   5546   2539   2376   2376
  * tload     ----   ----   3046   2379   2378
- * fbench    2688   2583   2460   2412   2425  2480 [op_set_s_a]
+ * fbench    2688   2583   2460   2412   2425  2480 [op_set_s_a] 2444 if Inlined
  * tread     2440   2421   2419   2416   2419
  * trclo     2735   2574   2454   2447   2448
  * titer     2865   2842   2641   2540   2540
@@ -95582,8 +95594,8 @@ int main(int argc, char **argv)
  * tmap      8869   8774   4489   4482   4482
  * tshoot    5525   5447   5183   5068   5071
  * tstr      6880   6342   5488   5122   5126  5141 [op_set_s_a]
- * tform     5357   5348   5307   5279   5286  5310 same
- * tnum      6348   6013   5433   5359   5375  5426 same
+ * tform     5357   5348   5307   5279   5286  5310 same 5290 if Inlined
+ * tnum      6348   6013   5433   5359   5375  5426 same 5389 if Inlined
  * tlamb     6423   6273   5720   5544   5541
  * tmisc     8869   7612   6435   6158   6158  6215 [gc!?]
  * tgsl      8485   7802   6373   6307   6307
@@ -95611,11 +95623,7 @@ int main(int argc, char **argv)
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
  * fully optimize gmp version
  *
- * test/repair *error-hook*
- * set_implicit: reduce consing (don't use plist/ulist!) -- check bits like syntactic set on plist etc
- * show_stack: (*s7* 'stack->list) -> include code/args/curlet?? op-stack
- *   perhaps: in-heap-validity-check -> s7_show_stack (brief op+args+code)
+ * op_set2: reduce consing (don't use plist/ulist!) -- check bits like syntactic set on plist etc
  * t718 format error
- * 41297 (set! (v) val) where v=vector gets the setter!  The setter needs to check argnum?
- * inline op_set_s_a?
+ * random cycle?
  */
