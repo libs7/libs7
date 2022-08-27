@@ -127,6 +127,7 @@
 (define estr "")
 (define nostr "")
 (define curstr "")
+(define last-func #f)
 
 (define error-type #f)
 (define error-info ())
@@ -394,19 +395,6 @@
 (define (s7-default-random-state) (*s7* 'default-random-state))
 (define (s7-cpu-time) (*s7* 'cpu-time))
 
-
-(define any-integer (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (- (random 1000000) 500000))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-ratio (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (/ (- (random 1000000) 500000) (- (random 1000000) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-real (let ((ctr 0) (val 0.0)) (if (zero? ctr) (set! val (- (random 1000000.0) 500000))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-complex (let ((ctr 0) (val 0.0)) (if (zero? ctr) (set! val (complex (- (random 1000000.0) 500000) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-char (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (integer->char (random 256)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-string (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-string (random 10) (integer->char (random 256))))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-float-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-float-vector (random 10) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-int-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-int-vector (random 10) (- (random 1000000) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-byte-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-byte-vector (random 10) (random 256)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-vector (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-vector (random 10) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-c-pointer (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (c-pointer (random 10)))) (set! ctr (modulo (+ ctr 1) 4)) val))
-(define any-list (let ((ctr 0) (val 0)) (if (zero? ctr) (set! val (make-list (random 10) (- (random 1000000.0) 500000)))) (set! ctr (modulo (+ ctr 1) 4)) val))
 
 (define-macro (_mac_ x) `(+ ,x 1))
 (define-macro* (_mac*_ (x 1)) `(+ ,x 1))
@@ -802,10 +790,10 @@
 (define-constant x8 :hi)
 (define-constant x9 'hi)
 
-(define typed-hash (make-hash-table 8 eq? (cons symbol? integer?)))
-(define typed-vector (make-vector 8 'a symbol?))
-(define typed-let1 (immutable! (let ((a 1)) (set! (setter 'a) integer?) (curlet))))
-(define constant-let (immutable! (let () (define-constant a 1) (curlet))))
+(define-constant typed-hash (make-hash-table 8 eq? (cons symbol? integer?)))
+(define-constant typed-vector (make-vector 8 'a symbol?))
+(define-constant typed-let1 (immutable! (let ((a 1)) (set! (setter 'a) integer?) (curlet))))
+(define-constant constant-let (immutable! (let () (define-constant a 1) (curlet))))
 
 (define-constant fvset float-vector-set!)
 (define-constant htset hash-table-set!)
@@ -828,6 +816,9 @@
 (define (bool/int? x) (or (boolean? x) (integer? x)))
 
 (set! (hook-functions *read-error-hook*) ())
+
+(define last-input-port-stack-size 0)
+
 
 (let ((functions (vector 'not '= '+ 'cdr 'real? 'rational? 'number? '> '- 'integer? 'apply 'subvector? 'subvector-position 'subvector-vector
 			  'abs '* 'null? 'imag-part '/ 'vector-set! 'equal? 'magnitude 'real-part 'pair? 'max 'nan? 'string->number 'list
@@ -858,7 +849,7 @@
 			  'symbol->keyword ; 'string->keyword 'symbol ; size grows
 			  'keyword->symbol 'keyword?
 			  'logxor  'memv 'char-ready?
-			  'exact? 'integer-length 'port-filename
+			  'exact? 'integer-length ;'port-filename ; -- (load (port-filename)) -> infinite loop
 			  'char>=?
 			  'string-length 'list->string 'inexact?
 			  'with-input-from-file 'type-of
@@ -886,8 +877,8 @@
 
 			  ;'make-hook
 			  'let 'let* 'letrec 'letrec*
-			  'lambda 'lambda*  ; these cause built-ins to become locals if with-method=#f?
-			  'macro 'macro* 'bacro 'bacro* ; -- same as lambda above
+			  ;'lambda 'lambda*  ; these cause built-ins to become locals if with-method=#f?
+			  ;'macro 'macro* 'bacro 'bacro* ; -- same as lambda above
 			  ;'define* 'define-macro 'define-macro* 'define-bacro 'define-bacro*
 			  ;'multiple-value-bind ; (multiple-value-bind (if) ...) gets all kinds of trouble
 			  'call-with-values
@@ -912,7 +903,7 @@
 			  'write 'display
 			  'outlet
 			  'directory->list
-			  'set!
+			  ;'set! ; this can clobber stuff making recreating a bug tricky
 			  'set-car!
 			  'call-with-output-file 'with-output-to-file
 			  ;'read-char 'read-byte 'read-line 'read-string 'read ; stdin=>hangs
@@ -924,7 +915,7 @@
                           ;'set-cdr!
                           ;'unlet ;-- spurious diffs
                           ;'port-line-number ;-- too many spurious diffs
-			  'load  ;'current-error-port ;-- spurious output
+			  ;'load  ; -- (load (port-filename)) ;'current-error-port ;-- spurious output
 			  ;'close-output-port
 			  'hash-table ; -- handled as equivalent via checked-hash-table
 			  'current-output-port
@@ -994,7 +985,7 @@
 			  's7-undefined-identifier-warnings
 			  's7-profile-info
 			  's7-autoloading?
-			  's7-safety
+			  ;'s7-safety
 			  's7-c-types
 			  's7-initial-string-port-length 's7-history-size
 			  's7-default-rationalize-error 's7-equivalent-float-epsilon
@@ -1271,6 +1262,7 @@
 		    "(begin (list? (*s7* 'catches)))"
 		    "(begin (integer? (*s7* 'stack-top)))"
 		    ;"(begin (list? (*s7* 'stacktrace-defaults)))"
+		    (reader-cond ((provided? 'debugging) "(begin (heap-analyze) (heap-scan 47))")) ;(+ 1 (random 47))))"))
 
 		    "(cons-r 0 0 6)"
 		    "(list-r 0 0 6)"
@@ -1281,7 +1273,7 @@
 		    ;"(copy (*s7* 'file-names))" ; one is *stdin* which can hang if read* gets it as the port
 		    ;"(*s7* 'gc-freed)" "(*s7* 'gc-total-freed)" "(*s7* 'free-heap-size)" ; variable
 		    ;"(*s7* 'gc-protected-objects)"  ; access + element set => not protected! perhaps copy it?
-		    ;"(*s7* 'memory-usage)"          ; variable
+		    ;"(pp (*s7* 'memory-usage))"          ; variable
 		    ;"(*s7* 'most-negative-fixnum)"
 		    ;"(*s7* 'most-positive-fixnum)"
 		    "(*s7* 'rootlet-size)"
@@ -1304,9 +1296,6 @@
 
 		    "my-let" "my-with-baffle" "fvset" "htset"
 		    "(catch #t (lambda () (+ 1 #(2))) (lambda (type info) 0))"
-
-		    "(any-integer)" "(any-ratio)" "(any-real)" "(any-complex)" "(any-char)" "(any-string)" "(any-float-vector)"
-		    "(any-int-vector)" "(any-byte-vector)" "(any-vector)" "(any-c-pointer)" "(any-list)"
 
 		    #f #f #f
 		    ))
@@ -1431,8 +1420,6 @@
 	      (list (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (car (list " last-s ")) (begin " s "))"))) (set! last-s s) res)))
                     (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (not (car (list " last-s "))) #<unspecified> (begin " s "))"))) (set! last-s s) res))))
 
-	      (list (lambda (s) (string-append "(map fop16-1 (list " s "))"))
-		    (lambda (s) (string-append "(map tf16 (list " s "))")))
 	      (list (lambda (s) (string-append "(let ((x #f)) (for-each (lambda (y) (set! x y)) (list " s ")) x)"))
 		    (lambda (s) (string-append "((lambda (x) (for-each (lambda y (set! x (car y))) (list " s ")) x) #f)")))
 	      ))
@@ -1490,7 +1477,6 @@
 	  (set! (str 0) #\()
 
           (let ((opstr (fix-op (functions (random flen)))))
-	    ;(if (string-position " # " str) (format *stderr* "opstr: ~S~%" (substring str 0 j)))
             (string-copy opstr str j)
             (set! j (+ j (length opstr))))
 
@@ -1501,7 +1487,6 @@
 	      ((= k size))
 
 	    (set! (str j) (chars (random clen)))
-	    ;(if (char=? (str j) #\#) (format *stderr* "chars: ~S~%" str))
 	    (if (= dqs 1)
 		(if (and (char=? (str j) #\")
 			 (or (= j 0)
@@ -1530,7 +1515,6 @@
 			 ((= n nargs))
 
                        (let ((argstr (get-arg)))
-			 ;(if (string-position " # " str) (format *stderr* "argstr: ~S~%" (substring str 0 j)))
                          (string-copy argstr str (+ j 1))
                          (set! j (+ j (length argstr) 1)))
 		       ;(set! j (+ j 1))
@@ -1554,7 +1538,6 @@
 		   (set! j n))
 		(string-set! str n #\))))
 
-	  ;(format *stderr* "~A~%" (substring str 0 j))
 	  (substring str 0 j))))
 
     (define (type-eqv? v1 v2 v3 v4)
@@ -1733,9 +1716,11 @@
 	    (newline *stderr*)
 	    (format *stderr* "gc -> ")
 	    (gc) (gc)
-	    (display (*s7* 'memory-usage) *stderr*)
+	    (let ((res (*s7* 'memory-usage)))
+	      (let-temporarily ((((funclet pretty-print) '*pretty-print-cycles*) #t))
+		(pp res *stderr*))) ; was display
 	    (newline *stderr*)
-	    (abort))
+	    (abort)) ; to keep Linux from killing the X server!
 	  (unless (or (not (eq? type 'read-error))
 		      (string-position "junk" (car info))
 		      (string-position "clobbered" (car info))
@@ -1750,6 +1735,7 @@
     (define (try-both str)
       ;(if (string-position " # " str) (format *stderr* "try-both: ~A~%" str))
       ;(if (> (random 1000) 990) (gc))
+      (set! nostr estr)
       (set! ostr str)
       (set! (current-output-port) #f)
       ;(procedure-source pp-checked)
@@ -1787,13 +1773,20 @@
 	      (val4 (begin (set! curstr str4) (eval-it str4))))
 	  ;(gc) (gc)
 	  (set! (*s7* 'print-length) 4096)
-	  (same-type? val1 val2 val3 val4 str str1 str2 str3 str4)))
+	  (same-type? val1 val2 val3 val4 str str1 str2 str3 str4))
+	(when (eq? outer-funcs last-func) (reseed))
+	(set! last-func outer-funcs))
       (if (string-position "H_1" str) (fill! H_1 #f))
       (if (string-position "H_2" str) (fill! H_2 #f))
       (if (string-position "H_3" str) (fill! H_3 #f))
       (if (string-position "H_4" str) (fill! H_4 #f))
       (if (string-position "H_5" str) (fill! H_5 #f))
       (when (string-position "H_6" str) (fill! H_6 #f) (hash-table-set! H_6 'a H_6))
+#|
+      (when (> (input-port-stack-size) last-input-port-stack-size)
+	(set! last-input-port-stack-size (input-port-stack-size))
+	(format *stderr* "stack size: ~D, estr: ~S~%" last-input-port-stack-size str))
+|#
       )
 
     (define dots (vector "." "-" "+" "-"))
@@ -1818,7 +1811,13 @@
 	  (lambda ()
 	    (try-both (make-expr (+ 1 (random both-ran))))) ; min 1 here not 0, was 6
 	  (lambda (type info)
-	    (format *stderr* "~%~%outer: ~S ~S from ~S~%" type info estr)))
+	    (write "outer: ")
+	    (write type *stderr*) (newline *stderr*)
+	    (write info *stderr*) (newline *stderr*)
+	    (write estr *stderr*) (newline *stderr*)
+	    ;(format *stderr* "~%~%outer: ~S~%" (list type info estr))
+	    (abort)
+	    ))
 	))
 #|
     (let ((functions-list (vector->list functions)))

@@ -7251,7 +7251,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->t1_1));
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
   gc_mark(car(sc->t3_1)); gc_mark(car(sc->t3_2)); gc_mark(car(sc->t3_3));
-  gc_mark(car(sc->t4_1));
+  gc_mark(car(sc->t4_1));  
   gc_mark(car(sc->plist_1));
   gc_mark(car(sc->plist_2)); gc_mark(cadr(sc->plist_2));
   for (s7_pointer p = sc->plist_3; is_pair(p); p = cdr(p)) gc_mark(car(p));
@@ -7348,7 +7348,6 @@ static int64_t gc(s7_scheme *sc)
     if (signed_type(p) > 0)						\
       {								        \
         p->debugger_bits = 0; p->gc_func = func; p->gc_line = line;	\
-        /* if (unchecked_type(p) == T_PAIR) {p->object.cons.opt1 = NULL; p->object.cons.o2.opt2 = NULL; p->object.cons.o3.opt3 = NULL;} */\
         if (has_odd_bits(p)) {char *s; fprintf(stderr, "odd bits: %s\n", s = describe_type_bits(sc, p)); free(s);} \
         signed_type(p) = 0;						\
         (*fp++) = p;							\
@@ -12944,7 +12943,6 @@ static s7_int c_gcd(s7_int u, s7_int v)
       a = b;
       b = temp;
     }
-  /* if (a < 0) return(-a); */ /* why this? */
   return(a);
 }
 
@@ -71559,7 +71557,6 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 {
   s7_pointer car_expr = car(expr);
   int32_t orig_hop = hop;
-  /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display_80(expr)); */
   set_checked(expr);
 
   if (is_symbol(car_expr))
@@ -77209,7 +77206,6 @@ static void check_cond(s7_scheme *sc)
   for (x = code; is_pair(x); x = cdr(x))
     {
       s7_pointer p = car(x);
-      /* if (has_fx(p)) fprintf(stderr, "clear %s\n", display(car(p))); */
       /* clear_has_fx(p); */ /* a kludge -- if has_fx here (and not re-fx'd below), someone messed up earlier -- but was fx_treeable set? */
       if (is_fxable(sc, car(p)))
 	fx_annotate_arg(sc, p, sc->curlet);
@@ -77672,7 +77668,8 @@ static void check_set(s7_scheme *sc)
     {
       s7_pointer settee = car(code), value = cadr(code);
       s7_pointer slot = lookup_slot_from(settee, sc->curlet);
-      if (((!is_slot(slot)) || (!slot_has_setter(slot))) &&
+      if ((is_slot(slot)) &&
+	  (!slot_has_setter(slot)) &&
 	  (!is_syntactic_symbol(settee)))
 	{
 	  if (is_normal_symbol(value))
@@ -77695,55 +77692,49 @@ static void check_set(s7_scheme *sc)
 		pair_set_syntax_op(form, OP_SET_S_P);
 		if (is_optimized(value))
 		  {
-		    if (optimize_op(value) == HOP_SAFE_C_NC)
+		    if (optimize_op(value) == HOP_SAFE_C_SS)
 		      {
-			pair_set_syntax_op(form, OP_SET_S_A);
-			fx_annotate_arg(sc, cdr(code), sc->curlet);
-		      }
+			if (settee == cadr(value))
+			  {
+			    pair_set_syntax_op(form, OP_INCREMENT_SA);
+			    fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
+			    set_opt2_pair(code, cddr(value));
+			  }
+			else
+			  {
+			    pair_set_syntax_op(form, OP_SET_S_A);
+			    fx_annotate_arg(sc, cdr(code), sc->curlet);
+			  }}
 		    else
-		      if (optimize_op(value) == HOP_SAFE_C_SS)
-			{
-			  if (settee == cadr(value))
-			    {
-			      pair_set_syntax_op(form, OP_INCREMENT_SA);
-			      fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
-			      set_opt2_pair(code, cddr(value));
-			    }
-			  else
-			    {
-			      pair_set_syntax_op(form, OP_SET_S_A);
-			      fx_annotate_arg(sc, cdr(code), sc->curlet);
-			    }}
-		      else
-			{
-			  if (is_fxable(sc, value)) /* value = cadr(code) */
-			    {
-			      pair_set_syntax_op(form, OP_SET_S_A);
-			      fx_annotate_arg(sc, cdr(code), sc->curlet);
-			    }
-			  if ((is_safe_c_op(optimize_op(value))) &&
-			      (is_pair(cdr(value))) &&
-			      (settee == cadr(value)) &&
-			      (!is_null(cddr(value))))
-			    {
-			      if (is_null(cdddr(value)))
-				{
-				  if (is_fxable(sc, caddr(value)))
-				    {
-				      pair_set_syntax_op(form, OP_INCREMENT_SA);
-				      fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
-				      set_opt2_pair(code, cddr(value));
-				    }}
-			      else
-				if ((is_null(cddddr(value))) &&
-				    (is_fxable(sc, caddr(value))) &&
-				    (is_fxable(sc, cadddr(value))))
+		      {
+			if (is_fxable(sc, value)) /* value = cadr(code) */
+			  {
+			    pair_set_syntax_op(form, OP_SET_S_A);
+			    fx_annotate_arg(sc, cdr(code), sc->curlet);
+			  }
+			if ((is_safe_c_op(optimize_op(value))) &&
+			    (is_pair(cdr(value))) &&
+			    (settee == cadr(value)) &&
+			    (!is_null(cddr(value))))
+			  {
+			    if (is_null(cdddr(value)))
+			      {
+				if (is_fxable(sc, caddr(value)))
 				  {
-				    pair_set_syntax_op(form, OP_INCREMENT_SAA);
-				    fx_annotate_args(sc, cddr(value), sc->curlet);
-				    /* fx_annotate_arg(sc, cdddr(value), sc->curlet); */
+				    pair_set_syntax_op(form, OP_INCREMENT_SA);
+				    fx_annotate_arg(sc, cddr(value), sc->curlet); /* this sets fx_proc(arg) */
 				    set_opt2_pair(code, cddr(value));
-				  }}}}
+				  }}
+			    else
+			      if ((is_null(cddddr(value))) &&
+				  (is_fxable(sc, caddr(value))) &&
+				  (is_fxable(sc, cadddr(value))))
+				{
+				  pair_set_syntax_op(form, OP_INCREMENT_SAA);
+				  fx_annotate_args(sc, cddr(value), sc->curlet);
+				  /* fx_annotate_arg(sc, cdddr(value), sc->curlet); */
+				  set_opt2_pair(code, cddr(value));
+				}}}}
 		if ((is_h_optimized(value)) &&
 		    (is_safe_c_op(optimize_op(value))) &&    /* else might not be opt1_cfunc? (opt1_lambda probably) */
 		    (!is_unsafe(value)) &&                   /* is_unsafe(value) can happen! */
@@ -77775,42 +77766,31 @@ static void check_set(s7_scheme *sc)
 			      }}}}}}
 }
 
-#define op_set_s_any(Name, Expr) \
-  static void Name(s7_scheme *sc) \
-  { \
-    s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet); \
-    if (!is_slot(slot)) /* #<undefined> probably */ \
-      { \
-        if (has_let_set_fallback(sc->curlet)) \
-          sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), Expr); \
-        else unbound_variable_error_nr(sc, cadr(sc->code)); \
-      } \
-    else  \
-      { \
-        if (is_immutable(slot)) \
-	  error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code))); \
-        slot_set_value(slot, sc->value = Expr); \
-      } \
-  }
+static void op_set_s_c(s7_scheme *sc)
+{
+  s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
+  if ((S7_DEBUGGING) && (!is_slot(slot))) fprintf(stderr, "%s: %s is %s\n", __func__, display(sc->code), display(slot));
+  if (is_immutable(slot))
+    error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
+  slot_set_value(slot, sc->value = opt2_con(cdr(sc->code)));
+}
 
-op_set_s_any(op_set_s_c, opt2_con(cdr(sc->code)))
-op_set_s_any(op_set_s_s, lookup(sc, opt2_sym(cdr(sc->code))))
+static inline void op_set_s_s(s7_scheme *sc)
+{
+  s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
+  if ((S7_DEBUGGING) && (!is_slot(slot))) fprintf(stderr, "%s: %s is %s\n", __func__, display(sc->code), display(slot));
+  if (is_immutable(slot))
+    error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
+  slot_set_value(slot, sc->value = lookup(sc, opt2_sym(cdr(sc->code))));
+}
 
 static Inline void op_set_s_a(s7_scheme *sc) /* split this way for the compiler (or at least callgrind) */
 {
   s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if (!is_slot(slot)) /* #<undefined> probably */
-    {
-      if (has_let_set_fallback(sc->curlet))
-	sc->value = call_let_set_fallback(sc, sc->curlet, cadr(sc->code), fx_call(sc, cddr(sc->code)));
-      else unbound_variable_error_nr(sc, cadr(sc->code));
-    }
-  else 
-    {
-      if (is_immutable(slot))
-	error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
-      slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
-    }
+  if ((S7_DEBUGGING) && (!is_slot(slot))) fprintf(stderr, "%s: %s is %s\n", __func__, display(sc->code), display(slot));
+  if (is_immutable(slot))
+    error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
+  slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
 }
 
 static void op_set_s_p(s7_scheme *sc)
@@ -78323,8 +78303,7 @@ static bool op_set_normal(s7_scheme *sc)
 static Inline void inline_op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) -- why is this always inlined? saves 22 in concordance */
 {
   s7_pointer val, y = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if (!is_slot(y))
-    error_nr(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
+  if ((S7_DEBUGGING) && (!is_slot(y))) fprintf(stderr, "%s %s is %s\n", __func__, display(sc->code), display(y));
   val = slot_value(y);
   if (is_t_integer(val))
     sc->value = make_integer(sc, integer(val) + 1);
@@ -78354,8 +78333,7 @@ static Inline void inline_op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ct
 static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
 {
   s7_pointer val, y = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if (!is_slot(y))
-    error_nr(sc, sc->unbound_variable_symbol, set_elist_3(sc, wrap_string(sc, "~S in ~S", 8), cadr(sc->code), sc->code));
+  if ((S7_DEBUGGING) && (!is_slot(y))) fprintf(stderr, "%s %s is %s\n", __func__, display(sc->code), display(y));
   val = slot_value(y);
   if (is_t_integer(val))
     sc->value = make_integer(sc, integer(val) - 1); /* increment (set!) returns the new value in sc->value */
@@ -79017,7 +78995,6 @@ static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer wlet)
 static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, s7_pointer val, s7_pointer form)
 {
   /* these depend on sc->code making sense given obj as the sequence being set */
-  /* fprintf(stderr, "%s[%d]: %s %s %s %s\n", __func__, __LINE__, display(obj), display(inds), display(val), display(form)); */
   switch (type(obj))
     {
     case T_STRING:     return(set_implicit_string(sc, obj, inds, val, form));
@@ -83091,7 +83068,6 @@ static void op_define_with_setter(s7_scheme *sc)
       /* add the newly defined thing to the current environment */
       if (is_let(sc->curlet))
 	{
-	  /* fprintf(stderr, "%" ld64 " < %" ld64 "\n", let_id(sc->curlet), symbol_id(code)); */
 	  if (let_id(sc->curlet) <= symbol_id(code)) /* we're adding a later-bound symbol to an old let (?) */
 	    {                                        /* was < 16-Aug-22: (let ((a 3)) (define (a) 4) (curlet)) */
 	      s7_pointer slot;
@@ -95565,54 +95541,54 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    467    469
  * index     1026   1016    973    964    967
- * tmock     1177   1165   1057   1061   1060
+ * tmock     1177   1165   1057   1061   1059
  * tvect     2519   2464   1772   1676   1677
- * timp      2637   2575   1930   1717   1720  1712 [call_set_implicit]
- * texit     ----   ----   1778   1736   1736  1739 [closure_3p_end stack protection]
- * s7test    1873   1831   1818   1815   1818  1846 [op_set_s_a]
+ * timp      2637   2575   1930   1717   1711
+ * texit     ----   ----   1778   1736   1739
+ * s7test    1873   1831   1818   1815   1818
  * thook     ----   ----   2590   2106   2104
- * tauto     ----   ----   2562   2171   2170
- * lt        2187   2172   2150   2180   2181  2185 [op_set_s_a]
- * dup       3805   3788   2492   2263   2277
+ * tauto     ----   ----   2562   2171   2171
+ * lt        2187   2172   2150   2180   2181
+ * dup       3805   3788   2492   2263   2278
  * tcopy     8035   5546   2539   2376   2376
  * tload     ----   ----   3046   2379   2378
- * fbench    2688   2583   2460   2412   2425  2480 [op_set_s_a] 2444 if Inlined
+ * fbench    2688   2583   2460   2412   2419
  * tread     2440   2421   2419   2416   2419
  * trclo     2735   2574   2454   2447   2448
  * titer     2865   2842   2641   2540   2540
- * tmat      3065   3042   2524   2508   2502  2577 [do_is_safe?]
- * tb        2735   2681   2612   2601   2604  2619 [op_set_s_a]
+ * tmat      3065   3042   2524   2508   2583
+ * tb        2735   2681   2612   2601   2607
  * tsort     3105   3104   2856   2803   2802
  * teq       4068   4045   3536   3465   3467
- * tobj      4016   3970   3828   3556   3560
+ * tobj      4016   3970   3828   3556   3556
  * tio       3816   3752   3683   3604   3604
  * tmac      3950   3873   3033   3670   3667
- * tclo      4787   4735   4390   4379   4376
- * tlet      7775   5640   4450   4433   4435  4447 [op_set_s_a]
+ * tclo      4787   4735   4390   4379   4381
+ * tlet      7775   5640   4450   4433   4437
  * tcase     4960   4793   4439   4435   4437
- * tfft      7820   7729   4755   4455   4455
- * tmap      8869   8774   4489   4482   4482
- * tshoot    5525   5447   5183   5068   5071
- * tstr      6880   6342   5488   5122   5126  5141 [op_set_s_a]
- * tform     5357   5348   5307   5279   5286  5310 same 5290 if Inlined
- * tnum      6348   6013   5433   5359   5375  5426 same 5389 if Inlined
- * tlamb     6423   6273   5720   5544   5541
- * tmisc     8869   7612   6435   6158   6158  6215 [gc!?]
+ * tfft      7820   7729   4755   4455   4457
+ * tmap      8869   8774   4489   4482   4485
+ * tshoot    5525   5447   5183   5068   5070
+ * tstr      6880   6342   5488   5122   5127
+ * tform     5357   5348   5307   5279   5285
+ * tnum      6348   6013   5433   5359   5373
+ * tlamb     6423   6273   5720   5544   5545
+ * tmisc     8869   7612   6435   6158   6214
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6367   6356  6366 [op_set_s_a]
- * tari      13.0   12.7   6827   6486   6457  6590
+ * tlist     7896   7546   6558   6367   6355
+ * tari      13.0   12.7   6827   6486   6591
  * tset      ----   ----   ----   6441   6468
  * trec      6936   6922   6521   6559   6559
- * tleft     10.4   10.2   7657   7516   7493  7500
- * tgc       11.9   11.1   8177   7964   7909  7921 [tree_is_cyclic]
- * thash     11.8   11.7   9734   9477   9477  9486 [op_set_s_a]
- * cb        11.2   11.0   9658   9533   9533  9538 [3p_end]
+ * tleft     10.4   10.2   7657   7516   7522
+ * tgc       11.9   11.1   8177   7964   7922
+ * thash     11.8   11.7   9734   9477   9476
+ * cb        11.2   11.0   9658   9533   9529
  * tgen      11.2   11.4   12.0   12.0   12.1
- * tall      15.6   15.6   15.6   15.6   15.6  15.7 [op_set_s_a]
+ * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.9   56.9  57.1 same
- * lg        ----   ----  105.2  106.4  106.5 106.7 same
- * tbig     177.4  175.8  156.5  149.9  148.3 148.4 same
+ * sg        ----   ----   55.9   56.9   57.0
+ * lg        ----   ----  105.2  106.4  106.4
+ * tbig     177.4  175.8  156.5  149.9  148.3
  * ---------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95623,7 +95599,6 @@ int main(int argc, char **argv)
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
  * fully optimize gmp version
  *
- * op_set2: reduce consing (don't use plist/ulist!) -- check bits like syntactic set on plist etc
- * t718 format error
- * random cycle?
+ * op_set2: reduce consing (don't use plist/ulist!)
+ * random cycle? check carry
  */
