@@ -2295,6 +2295,7 @@ static void init_types(void)
 #define is_immutable(p)                has_type_bit(T_Pos(p), T_IMMUTABLE)
 #define set_immutable(p)               set_type_bit(T_Pos(p), T_IMMUTABLE)
 #define set_immutable_let(p)           set_type_bit(T_Lid(p), T_IMMUTABLE)
+#define set_immutable_slot(p)          set_type_bit(T_Slt(p), T_IMMUTABLE)
 #define is_immutable_port(p)           has_type_bit(T_Prt(p), T_IMMUTABLE)
 #define is_immutable_symbol(p)         has_type_bit(T_Sym(p), T_IMMUTABLE)
 #define is_immutable_slot(p)           has_type_bit(T_Slt(p), T_IMMUTABLE)
@@ -5162,7 +5163,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 	full_type(obj) = free_type;
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
-	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), current: %s[%d], %sgc: %s[%d]%s",
+	fprintf(stderr, "%s%p is free (line %d, alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), alloc: %s[%d], %sgc: %s[%d]%s",
 		BOLD_TEXT, obj, line, s7_type_names[obj->alloc_type & 0xff], obj->alloc_type, obj->alloc_type,
 		bits, obj->alloc_func, obj->alloc_line,
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	UNBOLD_TEXT);
@@ -5513,7 +5514,7 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
   b = mallocate(sc, len);
   str = (char *)block_data(b);
   nlen = snprintf(str, len,
-		  "\n<%s %s,\n  current: %s[%d] %s, %d uses>", excl_name, current_bits,
+		  "\n<%s %s,\n  alloc: %s[%d] %s, %d uses>", excl_name, current_bits,
 		  obj->alloc_func, obj->alloc_line, allocated_bits, obj->uses);
   free(current_bits);
   free(allocated_bits);
@@ -6244,7 +6245,7 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
       s7_pointer slot = lookup_slot_from(p, sc->curlet);
       if (is_slot(slot))
 	{
-	  set_immutable(slot);
+	  set_immutable_slot(slot);
 	  return(p);   /* symbol is not set immutable ? */
 	}}
   set_immutable(p);   /* could set_immutable save the current file/line? Then the immutable error checks for define-constant and this setting */
@@ -7747,7 +7748,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_LET: /* very rare */
-      if (is_funclet(x)) set_immutable(x);
+      if (is_funclet(x)) set_immutable_let(x);
     case T_HASH_TABLE:
     case T_VECTOR:
       /* not int|float_vector or string because none of their elements are GC-able (so unheap below is ok)
@@ -9424,8 +9425,11 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	{
 	  if (is_slot(global_slot(sym)))
 	    {
+	      if (is_immutable(global_slot(sym)))
+		immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 	      symbol_set_id(sym, the_un_id);
 	      slot_set_value(global_slot(sym), sc->undefined);
+	      /* TODO: here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
 	    }}
       else
 	{
@@ -9439,6 +9443,8 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	    {
 	      if (slot_symbol(slot) == sym)
 		{
+		  if (is_immutable(slot))
+		    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 		  let_set_slots(e, next_slot(let_slots(e)));
 		  symbol_set_id(sym, the_un_id);
 		}
@@ -9448,6 +9454,8 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 		  for (slot = next_slot(let_slots(e)); tis_slot(slot); last_slot = slot, slot = next_slot(slot))
 		    if (slot_symbol(slot) == sym)
 		      {
+			if (is_immutable(slot))
+			  immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 			symbol_set_id(sym, the_un_id);
 			slot_set_next(last_slot, next_slot(slot));
 			break;
@@ -25055,6 +25063,9 @@ static s7_pointer random_state_copy(s7_scheme *sc, s7_pointer args)
   return(new_r);
 #endif
 }
+#if S7_DEBUGGING
+  static s7_int last_carry = 0;
+#endif
 
 s7_pointer s7_random_state(s7_scheme *sc, s7_pointer args)
 {
@@ -25092,12 +25103,14 @@ Pass this as the second argument to 'random' to get a repeatable random number s
   i1 = integer(r1);
   if (i1 < 0)
     out_of_range_nr(sc, sc->random_state_symbol, int_one, r1, its_negative_string);
-
   if (is_null(cdr(args)))
     {
       new_cell(sc, p, T_RANDOM_STATE);
       random_seed(p) = (uint64_t)i1;
       random_carry(p) = 1675393560;                          /* should this be dependent on the seed? */
+#if S7_DEBUGGING
+      last_carry = 1675393560;
+#endif
       return(p);
     }
 
@@ -25111,6 +25124,9 @@ Pass this as the second argument to 'random' to get a repeatable random number s
   new_cell(sc, p, T_RANDOM_STATE);
   random_seed(p) = (uint64_t)i1;
   random_carry(p) = (uint64_t)i2;
+#if S7_DEBUGGING
+  last_carry = i2;
+#endif
   return(p);
 #endif
 }
@@ -35129,6 +35145,14 @@ static s7_pointer g_with_output_to_file(s7_scheme *sc, s7_pointer args)
 #if S7_DEBUGGING
 static const char *format_err_func = NULL;
 static int format_err_line = 0;
+static const char *format_err_str = NULL;
+static s7_pointer format_err_args, format_err_msg, format_err_sym;
+static s7_pointer g_carry_format(s7_scheme *sc, s7_pointer args)
+{
+  #define H_carry_format "no help"
+  #define Q_carry_format s7_make_signature(sc, 1, sc->is_pair_symbol)
+  return(list_3(sc, make_integer(sc, last_carry), make_integer(sc, format_err_line), s7_make_string(sc, format_err_func)));
+}
 #define format_error_1_nr(Sc, Msg, Str, Args, Fdat) format_error_2_nr(Sc, Msg, Str, Args, Fdat, __func__, __LINE__)
 static noreturn void format_error_2_nr(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer args, format_data_t *fdat, const char *func, int line)
 #else
@@ -35140,6 +35164,9 @@ static noreturn void format_error_1_nr(s7_scheme *sc, s7_pointer msg, const char
 #if S7_DEBUGGING
   format_err_func = func;
   format_err_line = line;
+  format_err_str = str;
+  format_err_args = args;
+  format_err_msg = msg;
 #endif
   if (fdat->loc == 0)
     {
@@ -50849,7 +50876,6 @@ static s7_pointer g_catch(s7_scheme *sc, s7_pointer args)
   /* should we check here for (aritable? err 2)?  (catch #t (lambda () 1) "hiho") -> 1
    * currently this is checked only if the error handler is called
    */
-
   if (is_closure(proc))                        /* not also lambda* here because we need to handle the arg defaults */
     {
       /* is_thunk above checks is_aritable(proc, 0), but if it's (lambda args ...) we have to set up the let with args=()
@@ -51080,9 +51106,7 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
    *    (let () (define-macro (m . args) (apply (car args) (cadr args))) (catch #t (lambda () (error abs -1)) m))
    */
   s7_pointer x = T_Cat(stack_code(sc->stack, i));
-  if ((catch_tag(x) == sc->T) ||
-      (catch_tag(x) == type) ||
-      (type == sc->T))
+  if ((catch_tag(x) == sc->T) || (catch_tag(x) == type) || (type == sc->T))
     {
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(x));
       sc->stack_end = (s7_pointer *)(sc->stack_start + catch_goto_loc(x));
@@ -51108,6 +51132,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       s7_pointer catcher = x, error_body, error_args;
       s7_pointer error_func = catch_handler(catcher);
       uint64_t loc = catch_goto_loc(catcher);
+      sc->w = sc->args;
 
       sc->temp4 = stack_let(sc->stack, i); /* GC protect this, since we're moving the stack top below */
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(catcher));
@@ -51188,6 +51213,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 	       */
 	      sc->value = y;
 	      sc->temp4 = sc->nil;
+	      sc->w = sc->nil;
 	      if (loc == 4)
 		sc->code = cons(sc, sc->value, sc->nil); /* if we end up at op_begin, give it something it can handle */
 	      return(true);
@@ -51219,6 +51245,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
        */
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
       unstack(sc);
+      sc->w = sc->nil;
       sc->cur_op = OP_APPLY;
       /* explicit eval needed if s7_call called into scheme where a caught error occurred (ex6 in exs7.c)
        *  but putting it here (via eval(sc, OP_APPLY)) means the C stack is not cleared correctly in non-s7-call cases,
@@ -66437,7 +66464,7 @@ static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nr)
 }
 
 s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr)    {return(s7_optimize_1(sc, expr, false));}
-s7_pfunc s7_optimize_nr(s7_scheme *sc, s7_pointer expr) {return(s7_optimize_1(sc, expr, true));}
+s7_pfunc s7_optimize_nv(s7_scheme *sc, s7_pointer expr) {return(s7_optimize_1(sc, expr, true));}
 
 static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
 {
@@ -66677,7 +66704,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       slot = let_slots(sc->curlet);
 
       if (is_null(cdr(body)))
-	func = s7_optimize_nr(sc, body);
+	func = s7_optimize_nv(sc, body);
       else
 	if (is_null(cddr(body))) /* 3 sometimes works */
 	  {
@@ -66928,7 +66955,7 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
       slot2 = next_slot(slot1);
 
       if (is_null(cdr(body)))
-	func = s7_optimize_nr(sc, body);
+	func = s7_optimize_nv(sc, body);
       else
 	if (is_null(cddr(body)))
 	  {
@@ -68685,16 +68712,23 @@ static void pair_set_current_input_location(s7_scheme *sc, s7_pointer p)
 
 static noreturn void unbound_variable_error_nr(s7_scheme *sc, s7_pointer sym)
 {
-  if ((is_pair(current_code(sc))) &&
-      (!tree_is_cyclic(sc, current_code(sc))) &&
-      (s7_tree_memq(sc, sym, current_code(sc))))
-    error_nr(sc, sc->unbound_variable_symbol,
-	     set_elist_3(sc, wrap_string(sc, "unbound variable ~S in ~S", 25), sym, current_code(sc)));
+  s7_pointer err_code = NULL;
+#if S7_DEBUGGING
+  format_err_sym = sym;
+#endif
 
-  if ((is_pair(sc->code)) &&
-      (s7_tree_memq(sc, sym, sc->code)))
-    error_nr(sc, sc->unbound_variable_symbol,
-	     set_elist_3(sc, wrap_string(sc, "unbound variable ~S in ~S", 25), sym, sc->code));
+  if ((is_pair(current_code(sc))) && (s7_tree_memq(sc, sym, current_code(sc)))) err_code = current_code(sc);
+  if ((is_pair(sc->code)) && (s7_tree_memq(sc, sym, sc->code))) err_code = sc->code;
+#if WITH_HISTORY
+  {
+    s7_pointer p;
+    for (p = cdr(sc->cur_code); cdr(p) != sc->cur_code; p = cdr(p));
+    if ((is_pair(car(p))) && (s7_tree_memq(sc, sym, car(p)))) err_code = car(p);
+  }
+#endif
+    if (err_code)
+      error_nr(sc, sc->unbound_variable_symbol,
+	       set_elist_3(sc, wrap_string(sc, "unbound variable ~S in ~S", 25), sym, err_code));
 
   if ((symbol_name(sym)[symbol_name_length(sym) - 1] == ',') &&
       (lookup_unexamined(sc, make_symbol_with_length(sc, symbol_name(sym), symbol_name_length(sym) - 1))))
@@ -73862,7 +73896,7 @@ static s7_pointer check_case(s7_scheme *sc)
       (!bodies_simple) ||  /* x_x_g g=general keys or bodies */
       (!keys_single))
     {
-      if (!keys_simple)  /* x_g_g (no int32_t case here) */
+      if (!keys_simple)  /* x_g_g */
 	{
 	  if (is_fxable(sc, car(code)))
 	    {
@@ -75788,7 +75822,7 @@ static inline s7_pointer check_quote(s7_scheme *sc, s7_pointer code)
 /* -------------------------------- and -------------------------------- */
 static bool check_and(s7_scheme *sc, s7_pointer expr)
 {
-  /* this and check_or and check_if might not be called -- optimize_syntax can short-circuit it to return fx* choices */
+  /* this, check_or and check_if might not be called -- optimize_syntax can short-circuit it to return fx* choices */
   s7_pointer p, code = cdr(expr);
   int32_t any_nils = 0, len;
 
@@ -76706,7 +76740,7 @@ static bool op_define_constant(s7_scheme *sc)
       (is_null(cddr(code))))
     {
       s7_pointer sym = car(code);
-      set_immutable(global_slot(sym)); /* id == 0 so its global */
+      set_immutable_slot(global_slot(sym)); /* id == 0 so its global */
       set_possibly_constant(sym);
       sc->value = lookup_checked(sc, car(code));
       return(true);
@@ -76723,7 +76757,7 @@ static void op_define_constant1(s7_scheme *sc)
     {
       s7_pointer slot = lookup_slot_from(sc->code, sc->curlet);
       set_possibly_constant(sc->code);
-      set_immutable(slot);
+      set_immutable_slot(slot);
       if (is_any_closure(slot_value(slot)))
 	set_immutable(slot_value(slot)); /* for the optimizer mainly */
     }
@@ -77284,7 +77318,7 @@ static bool op_cond_unchecked(s7_scheme *sc)
   return(true);
 }
 
-static bool op_cond_simple(s7_scheme *sc)  /* no => */
+static bool op_cond_simple(s7_scheme *sc)     /* no => */
 {
   sc->code = cdr(sc->code);
   if (has_fx(car(sc->code)))
@@ -77356,10 +77390,7 @@ static bool op_cond1(s7_scheme *sc)
       sc->code = cdr(sc->code); /* go to next clause */
       if (is_null(sc->code))
 	{
-	  sc->value = sc->unspecified; /* changed 31-Dec-15 */
-	  /* r7rs sez the value if no else clause is unspecified, and this choice makes cond consistent with if and case,
-	   *   and rewrite choices between the three are simpler if they are consistent.
-	   */
+	  sc->value = sc->unspecified;
 	  pop_stack(sc);
 	  return(true);
 	}
@@ -80170,12 +80201,12 @@ static goto_t op_dox(s7_scheme *sc)
 	  (!got_bignum) &&
 #endif
 	  (has_safe_steppers(sc, sc->curlet)))
-	bodyf = s7_optimize_nr(sc, code);
+	bodyf = s7_optimize_nv(sc, code);
 
       if ((!bodyf) &&
 	  (is_fxable(sc, body)) &&     /* happens very rarely, #_* as car etc */
 	  (is_c_function(car(body))))
-	bodyf = s7_optimize_nr(sc, set_dlist_1(sc, set_ulist_1(sc, c_function_name_to_symbol(sc, car(body)), cdr(body))));
+	bodyf = s7_optimize_nv(sc, set_dlist_1(sc, set_ulist_1(sc, c_function_name_to_symbol(sc, car(body)), cdr(body))));
 
       if (bodyf)
 	{
@@ -80872,7 +80903,7 @@ static bool op_simple_do_1(s7_scheme *sc, s7_pointer code)
 
   if (no_cell_opt(cddr(code)))
     return(false);
-  func = s7_optimize_nr(sc, cddr(code));
+  func = s7_optimize_nv(sc, cddr(code));
   if (!func)
     {
       set_no_cell_opt(cddr(code));
@@ -81220,7 +81251,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
     {
       s7_pfunc func;
       if (no_cell_opt(code)) return(false);
-      func = s7_optimize_nr(sc, code);
+      func = s7_optimize_nv(sc, code);
       if (!func)
 	{
 	  set_no_cell_opt(code);
@@ -90457,7 +90488,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		    syntax_error_nr(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
 		  set_safety_checked(sc->code);
 		}
-
 	    EVAL_ARGS_PAIR:
 	      if (is_pair(car(sc->code)))
 		{
@@ -90487,15 +90517,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      /* drop into APPLY */
 	    }
 	  else                       /* got all args -- go to apply */
-	    /* *(--sc->op_stack_now) is the "function" (sc->value perhaps), sc->code is the arglist end, sc->args might be the preceding args reversed? */
-	    if (is_not_null(sc->code))
-	      improper_arglist_error_nr(sc);
-	    else
-	      {
-		sc->code = pop_op_stack(sc);
-		sc->args = proper_list_reverse_in_place(sc, sc->args);
-	      }
-
+	    {
+	      /* *(--sc->op_stack_now) is the "function" (sc->value perhaps), sc->code is the arglist end, sc->args might be the preceding args reversed? */
+	      if (is_not_null(sc->code))
+		improper_arglist_error_nr(sc);
+	      sc->code = pop_op_stack(sc);
+	      sc->args = proper_list_reverse_in_place(sc, sc->args);
+	    }
 	  /* turning this into a call on an array of functions was not a complete disaster, but tauto.scm was ~1.5% slower.
 	   *   the array-index overhead is the same as the current switch statement's, but there was also the boolean+jump overhead,
 	   *   and the function-local overhead currently otherwise 0 if inlined.
@@ -91760,14 +91788,6 @@ static s7_pointer g_heap_holders(s7_scheme *sc, s7_pointer args)
 }
 
 /* random debugging stuff */
-#if 0
-static s7_pointer g_input_port_stack_size(s7_scheme *sc, s7_pointer args) /* temporary -- a debugging aid */
-{
-  #define H_input_port_stack_size "no help here"
-  #define Q_input_port_stack_size s7_make_signature(sc, 1, sc->is_integer_symbol)
-  return(make_integer(sc, sc->input_port_stack_loc));
-}
-#endif
 static s7_pointer g_show_stack(s7_scheme *sc, s7_pointer args)
 {
   #define H_show_stack "no help"
@@ -91865,9 +91885,9 @@ static s7_pointer make_s7_let(s7_scheme *sc)  /* *s7* is permanent -- 20-May-21 
   symbol_set_local_slot(sc->let_ref_fallback_symbol, sc->let_number, slot2);
   slot_set_next(slot2, slot1);
   let_set_slots(x, slot2);
-  set_immutable(slot1);         /* make the *s7* let-ref|set! fallbacks immutable */
-  set_immutable(slot2);
-  set_immutable(x);
+  set_immutable_slot(slot1);         /* make the *s7* let-ref|set! fallbacks immutable */
+  set_immutable_slot(slot2);
+  set_immutable_let(x);
   sc->s7_let_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x));
   for (int32_t i = SL_STACK_TOP; i < SL_NUM_FIELDS; i++)
     symbol_set_s7_let(make_symbol(sc, s7_let_field_names[i]), (s7_let_field_t)i);
@@ -93912,6 +93932,7 @@ then returns each var to its original value."
   sc->with_baffle_symbol =       binder_syntax(sc, "with-baffle",      OP_WITH_BAFFLE,       int_zero, max_arity,  H_with_baffle); /* (with-baffle) is () */
   set_local_slot(sc->with_let_symbol, global_slot(sc->with_let_symbol)); /* for set_locals */
   set_immutable(sc->with_let_symbol);
+  set_immutable_slot(global_slot(sc->with_let_symbol));
   sc->setter_symbol = make_symbol(sc, "setter");
 
 #if WITH_IMMUTABLE_UNQUOTE
@@ -94103,6 +94124,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->unlet_symbol =                 defun("unlet",		unlet,			0, 0, false);
   set_local_slot(sc->unlet_symbol, global_slot(sc->unlet_symbol)); /* for set_locals */
   set_immutable(sc->unlet_symbol);
+  set_immutable_slot(global_slot(sc->unlet_symbol));
   /* unlet (and with-let) don't actually need to be immutable, but s7.html says they are... */
   sc->is_funclet_symbol =            defun("funclet?",          is_funclet,             1, 0, false);
   sc->sublet_symbol =                defun("sublet",		sublet,			1, 0, true);
@@ -94116,8 +94138,10 @@ static void init_rootlet(s7_scheme *sc)
   sc->openlet_symbol =               defun("openlet",		openlet,		1, 0, false);
   sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false);
   set_immutable(sc->let_ref_symbol);  /* 16-Sep-19 */
+  set_immutable_slot(global_slot(sc->let_ref_symbol));
   sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false);
   set_immutable(sc->let_set_symbol);
+  set_immutable_slot(global_slot(sc->let_set_symbol));
   sc->let_ref_fallback_symbol = make_symbol(sc, "let-ref-fallback");
   sc->let_set_fallback_symbol = make_symbol(sc, "let-set-fallback"); /* was let-set!-fallback until 9-Oct-17 */
 
@@ -94488,8 +94512,10 @@ static void init_rootlet(s7_scheme *sc)
   /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); /* values_symbol set above for signatures, not semisafe! */
   sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false);
   set_immutable(sc->apply_values_symbol);
+  set_immutable_slot(global_slot(sc->apply_values_symbol));
   sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true);
   set_immutable(sc->list_values_symbol);
+  set_immutable_slot(global_slot(sc->list_values_symbol));
 
   sc->documentation_symbol =         defun("documentation",     documentation,          1, 0, false);
   sc->signature_symbol =             defun("signature",         signature,	        1, 0, false);
@@ -94521,10 +94547,11 @@ static void init_rootlet(s7_scheme *sc)
   defun("heap-holder", heap_holder, 1, 0, false);
   defun("heap-holders", heap_holders, 1, 0, false);
 
-  /* defun("input-port-stack-size", input_port_stack_size, 0, 0, false); */
   defun("show-stack", show_stack, 0, 0, false);
   defun("show-op-stack", show_op_stack, 0, 0, false);
   defun("op-stack?", is_op_stack, 0, 0, false);
+
+  defun("carry/format", carry_format, 0, 0, false);
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
@@ -95576,9 +95603,9 @@ int main(int argc, char **argv)
  * tmisc     8869   7612   6435   6158   6214
  * tgsl      8485   7802   6373   6307   6307
  * tlist     7896   7546   6558   6367   6355
- * tari      13.0   12.7   6827   6486   6591
  * tset      ----   ----   ----   6441   6468
  * trec      6936   6922   6521   6559   6559
+ * tari      13.0   12.7   6827   6486   6591
  * tleft     10.4   10.2   7657   7516   7522
  * tgc       11.9   11.1   8177   7964   7922
  * thash     11.8   11.7   9734   9477   9476
@@ -95598,7 +95625,4 @@ int main(int argc, char **argv)
  * nrepl-bits.h via #embed if __has_embed (C23)?
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not fully exit?
  * fully optimize gmp version
- *
- * op_set2: reduce consing (don't use plist/ulist!)
- * random cycle? check carry
  */
