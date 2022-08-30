@@ -52,7 +52,7 @@
 (define (null obj) (or (not obj) (null? obj)))
 
 (define* (remove-duplicates sequence from-end (test eql) (start 0) end (key identity))
-  (format #t "~A: ~A~%" (ured "remove-duplicates") sequence)
+  ;; (format #t "~A: ~A~%" (ured "remove-duplicates") sequence)
   (let* ((result ())
 	 (start-seq (+ start 1))
 	 (len (length sequence))
@@ -167,7 +167,7 @@ If func approves of one, find-then returns the result of applying fn to it."))
   (let ((mname (copy libdep)))
     libdep))
 
-;; basename with extension removed
+;; bname (=principal-name) basename with extension removed
 (define (bname path)
   (let* ((bn (basename path))
          (last-dot (string-index-right bn (lambda (c) (eq? c #\.))))
@@ -187,7 +187,8 @@ If func approves of one, find-then returns the result of applying fn to it."))
   (let ((+documentation+ "Returns extension of filename (path), EXcluding dot.")
         (+signature+ "(filename-extension path)"))
     (lambda (path)
-      (let* ((fname (basename path))
+      (let* ((path (format #f "~A" path))
+             (fname (basename path))
              (len (string-length fname))
              (last-dot (string-index-right fname (lambda (c) (eq? c #\.)))))
         (if last-dot
