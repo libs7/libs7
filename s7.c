@@ -35138,32 +35138,14 @@ static s7_pointer g_with_output_to_file(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- format -------------------------------- */
-#if S7_DEBUGGING
-static const char *format_err_func = NULL;
-static int format_err_line = 0;
-static const char *format_err_str = NULL;
-static s7_pointer format_err_args, format_err_msg, format_err_sym;
-static s7_pointer g_carry_format(s7_scheme *sc, s7_pointer args)
-{
-  #define H_carry_format "no help"
-  #define Q_carry_format s7_make_signature(sc, 1, sc->is_pair_symbol)
-  return(list_3(sc, make_integer(sc, last_carry), make_integer(sc, format_err_line), s7_make_string(sc, format_err_func)));
-}
-#define format_error_1_nr(Sc, Msg, Str, Args, Fdat) format_error_2_nr(Sc, Msg, Str, Args, Fdat, __func__, __LINE__)
-static noreturn void format_error_2_nr(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer args, format_data_t *fdat, const char *func, int line)
-#else
-static noreturn void format_error_1_nr(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer args, format_data_t *fdat)
-#endif
+
+static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst);
+
+static noreturn void format_error_1_nr(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer ur_args, format_data_t *fdat)
 {
   s7_pointer x = NULL;
   s7_pointer ctrl_str = (fdat->orig_str) ? fdat->orig_str : s7_make_string_wrapper(sc, str);
-#if S7_DEBUGGING
-  format_err_func = func;
-  format_err_line = line;
-  format_err_str = str;
-  format_err_args = args;
-  format_err_msg = msg;
-#endif
+  s7_pointer args = (in_heap(ur_args)) ? ur_args : copy_proper_list(sc, ur_args);
   if (fdat->loc == 0)
     {
       if (is_pair(args))
@@ -48186,8 +48168,27 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
       check_method(sc, source, sc->copy_symbol, args);
       return(copy_closure(sc, source));
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
       return(s7_vector_copy(sc, source)); /* "shallow" copy */
+
+    case T_VECTOR:
+      {
+	s7_int len = vector_length(source);
+	s7_pointer vec;
+	if (!is_typed_vector(source))
+	  return(s7_vector_copy(sc, source));
+	if (len == 0) 
+	  return(make_simple_vector(sc, 0));
+	vec = make_vector_1(sc, len, NOT_FILLED, T_VECTOR);
+	set_typed_vector(vec);
+	typed_vector_set_typer(vec, typed_vector_typer(source));
+	if (has_simple_elements(source)) set_has_simple_elements(vec);
+	s7_vector_fill(sc, vec, vector_element(source, 0));
+	if (vector_rank(source) > 1) 
+	  return(make_multivector(sc, vec, g_vector_dimensions(sc, set_plist_1(sc, source)))); /* TODO: see g_subvector to avoid g_vector_dimensions */
+	add_vector(sc, vec);
+	return(vec);
+      }
 
     case T_PAIR:                    /* top level only, as in the other cases, checks for circles */
       return(copy_any_list(sc, source));
@@ -51190,7 +51191,6 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		sc->code = cons(sc, sc->value, sc->nil); /* if we end up at op_begin, give it something it can handle */
 	      return(true);
 	    }}
-      gc_protect_via_stack(sc, info);
       if (op == OP_CATCH_1)
 	{
 	  s7_pointer p;
@@ -51216,7 +51216,6 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
        *   when this apply tries to call the handler.  So, we need a special case error check here!
        */
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
-      unstack(sc);
       sc->w = sc->nil;
       sc->cur_op = OP_APPLY;
       /* explicit eval needed if s7_call called into scheme where a caught error occurred (ex6 in exs7.c)
@@ -51396,7 +51395,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
   bool ignored_flag = false;
   s7_pointer type = car(args), info = cdr(args);
-  /* sc->w = args; */
+  sc->value = info;
 
   /* look for a catcher */
   for (int64_t i = current_stack_top(sc) - 1; i >= 3; i -= 4)
@@ -51411,7 +51410,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 	}}
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
-  /* sc->w = sc->nil; */
+
   error_nr(sc, make_symbol(sc, "uncaught-throw"),
 	   set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info));
   return(sc->F);
@@ -51479,6 +51478,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   sc->format_depth = -1;
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
   sc->has_openlets = true;        /*   same problem -- we need a cleaner way to handle this */
+  sc->value = info;
 
   if (sc->current_safe_list > 0)
     clear_list_in_use(sc->safe_lists[sc->current_safe_list]);
@@ -68685,9 +68685,6 @@ static void pair_set_current_input_location(s7_scheme *sc, s7_pointer p)
 static noreturn void unbound_variable_error_nr(s7_scheme *sc, s7_pointer sym)
 {
   s7_pointer err_code = NULL;
-#if S7_DEBUGGING
-  format_err_sym = sym;
-#endif
 
   if ((is_pair(current_code(sc))) && (s7_tree_memq(sc, sym, current_code(sc)))) err_code = current_code(sc);
   if ((is_pair(sc->code)) && (s7_tree_memq(sc, sym, sc->code))) err_code = sc->code;
@@ -94523,8 +94520,6 @@ static void init_rootlet(s7_scheme *sc)
   defun("show-stack", show_stack, 0, 0, false);
   defun("show-op-stack", show_op_stack, 0, 0, false);
   defun("op-stack?", is_op_stack, 0, 0, false);
-
-  defun("carry/format", carry_format, 0, 0, false);
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
@@ -95570,7 +95565,7 @@ int main(int argc, char **argv)
  * tmap      8869   8774   4489   4482   4485
  * tshoot    5525   5447   5183   5068   5070
  * tstr      6880   6342   5488   5122   5127
- * tform     5357   5348   5307   5279   5285
+ * tform     5357   5348   5307   5279   5285  5388 [format_error_1 -- maybe restrict in_heap to is_elist?]
  * tnum      6348   6013   5433   5359   5366
  * tlamb     6423   6273   5720   5544   5545
  * tmisc     8869   7612   6435   6158   6214
@@ -95599,6 +95594,8 @@ int main(int argc, char **argv)
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not exit?
  * fully optimize gmp version
  *
+ * test all copy cases somehow, vector_dims subvector opt?
  * cutlet (or set!?) syntactic bits
- * in format bug, elist_1 = elist_4 -- make a checker and add to t725
+ * [error->format-error tests], stack ovfl + s7_show_stack, t725 tree->vals
+ * tform elists restriction?
  */

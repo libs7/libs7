@@ -48,11 +48,14 @@
   (define (with-mock-wrapper* func)
     (lambda args
       (let ((unknown-openlets #f)
-	    (new-args ()))
+	    (new-args ())
+	    (got-mock #f))
 	(for-each (lambda (arg) ; not map here because (values) should not be ignored: (+ (mock-number 4/3) (values))
 		    (set! new-args
 			  (cons (if (mock? arg)
-				    (arg 'value)
+				    (begin
+				      (set! got-mock #t)
+				      (arg 'value))
 				    (begin
 				      (if (and (openlet? arg)
 					       (not (procedure? arg))
@@ -62,7 +65,7 @@
 				      arg))
 				new-args)))
 		  args)
-	(if unknown-openlets
+	(if (and unknown-openlets got-mock)
 	    (apply func (reverse! new-args))
 	    (let-temporarily (((*s7* 'openlets) #f)) 
 	      (apply func (reverse! new-args)))))))

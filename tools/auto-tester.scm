@@ -1,6 +1,6 @@
 ;;; this is an extension of tauto.scm, an auto-tester
 
-(define with-mock-data #f)
+(define with-mock-data #t)
 ;(set! (*s7* 'profile) 1)
 (set! (*s7* 'number-separator) #\,)
 ;(set! (*s7* 'gc-stats) #t)
@@ -817,8 +817,6 @@
 
 (set! (hook-functions *read-error-hook*) ())
 
-(define last-input-port-stack-size 0)
-
 
 (let ((functions (vector 'not '= '+ 'cdr 'real? 'rational? 'number? '> '- 'integer? 'apply 'subvector? 'subvector-position 'subvector-vector
 			  'abs '* 'null? 'imag-part '/ 'vector-set! 'equal? 'magnitude 'real-part 'pair? 'max 'nan? 'string->number 'list
@@ -1262,7 +1260,7 @@
 		    "(begin (list? (*s7* 'catches)))"
 		    "(begin (integer? (*s7* 'stack-top)))"
 		    ;"(begin (list? (*s7* 'stacktrace-defaults)))"
-		    (reader-cond ((provided? 'debugging) "(begin (heap-analyze) (heap-scan 47))")) ;(+ 1 (random 47))))"))
+		    (reader-cond ((provided? 'debugging) "(when ((*s7* 'heap-size) < (ash 1 21)) (heap-analyze) (heap-scan 47))")) ;(+ 1 (random 47))))"))
 
 		    "(cons-r 0 0 6)"
 		    "(list-r 0 0 6)"
@@ -1345,7 +1343,7 @@
                     (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call/cc (lambda (goto) (goto 1))) " s "))")))
 	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let lt a) " s "))"))
 		    (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (lt 'a) " s "))")))
-	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let (curlet) a) " s "))"))
+	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let ((curlet) 'lt) a) " s "))"))
 		    (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (lt 'a) " s "))")))
 	      (list (lambda (s) (string-append "(set! (_dl_) " s ")"))
 		    (lambda (s) (string-append "(let ((v (vector 0))) (set! (v 0) " s "))")))
@@ -1540,11 +1538,21 @@
 
 	  (substring str 0 j))))
 
-    (define (type-eqv? v1 v2 v3 v4)
-      (let ((v1-type (type-of v1)))
-	(and (or (eq? v1-type (type-of v2)) (and (number? v1) (number? v2) (= v1 v2)))
-	     (or (eq? v1-type (type-of v3)) (and (number? v1) (number? v3) (= v1 v3)))
-	     (or (eq? v1-type (type-of v4)) (and (number? v1) (number? v4) (= v1 v4))))))
+    (define type-eqv?
+      (let ()
+	(define (local-type-of obj)
+	  (if (openlet? obj)
+	      (catch #t
+		(lambda ()
+		  (type-of (obj 'value)))
+		(lambda (type info)
+		  'let?))
+	      (type-of obj)))
+	(lambda (v1 v2 v3 v4)
+	  (let ((v1-type (local-type-of v1)))
+	    (and (or (eq? v1-type (local-type-of v2)) (and (number? v1) (number? v2) (= v1 v2)))
+		 (or (eq? v1-type (local-type-of v3)) (and (number? v1) (number? v3) (= v1 v3)))
+		 (or (eq? v1-type (local-type-of v4)) (and (number? v1) (number? v4) (= v1 v4))))))))
 
     (define (show-variables str)
       (if (string-position "int-var" str) (format *stderr* "int-var: ~W~%" int-var))
@@ -1593,7 +1601,15 @@
 			   (tp val1) (tp val2) (tp val3) (tp val4))
 		   (if (string? errstr) (display errstr *stderr*))))))
 
-	    ((or (catch #t (lambda () (openlet? val1)) (lambda args #t)) ; (openlet? (openlet (inlet 'openlet? ()))) -> error: attempt to apply nil to (inlet 'openlet? ())
+	    ((or (catch #t 
+		   (lambda () 
+		     (and (or (openlet? val1)
+			      (openlet? val3))
+			  (equivalent? v1 v2)
+			  (equivalent? v1 v3)
+			  (equivalent? v1 v4)))
+		   (lambda args 
+		     #t)) ; (openlet? (openlet (inlet 'openlet? ()))) -> error: attempt to apply nil to (inlet 'openlet? ())
 		 (string-position "(set!" str1)
 		 (string-position "gensym" str1)))
 
@@ -1774,19 +1790,16 @@
 	  ;(gc) (gc)
 	  (set! (*s7* 'print-length) 4096)
 	  (same-type? val1 val2 val3 val4 str str1 str2 str3 str4))
-	(when (eq? outer-funcs last-func) (reseed))
+	(when (eq? outer-funcs last-func)
+	  (reseed))
 	(set! last-func outer-funcs))
-      (if (string-position "H_1" str) (fill! H_1 #f))
-      (if (string-position "H_2" str) (fill! H_2 #f))
-      (if (string-position "H_3" str) (fill! H_3 #f))
-      (if (string-position "H_4" str) (fill! H_4 #f))
-      (if (string-position "H_5" str) (fill! H_5 #f))
-      (when (string-position "H_6" str) (fill! H_6 #f) (hash-table-set! H_6 'a H_6))
-#|
-      (when (> (input-port-stack-size) last-input-port-stack-size)
-	(set! last-input-port-stack-size (input-port-stack-size))
-	(format *stderr* "stack size: ~D, estr: ~S~%" last-input-port-stack-size str))
-|#
+      (when (string-position "H_" str)
+	(if (string-position "H_1" str) (fill! H_1 #f))
+	(if (string-position "H_2" str) (fill! H_2 #f))
+	(if (string-position "H_3" str) (fill! H_3 #f))
+	(if (string-position "H_4" str) (fill! H_4 #f))
+	(if (string-position "H_5" str) (fill! H_5 #f))
+	(when (string-position "H_6" str) (fill! H_6 #f) (hash-table-set! H_6 'a H_6)))
       )
 
     (define dots (vector "." "-" "+" "-"))
@@ -1816,7 +1829,8 @@
 	    (write info *stderr*) (newline *stderr*)
 	    (write estr *stderr*) (newline *stderr*)
 	    ;(format *stderr* "~%~%outer: ~S~%" (list type info estr))
-	    (abort)
+	    (write (carry/format) *stderr*) (newline *stderr*)
+	    ;(abort)
 	    ))
 	))
 #|
