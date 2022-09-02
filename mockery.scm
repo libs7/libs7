@@ -47,6 +47,7 @@
 
   (define (with-mock-wrapper* func)
     (lambda args
+      ;(format *stderr* "with-mock-wrapper ~S~%" args)
       (let ((unknown-openlets #f)
 	    (new-args ())
 	    (got-mock #f))
@@ -130,6 +131,7 @@
 		       'length             (with-mock-wrapper #_length)
 		       'vector-append      (with-mock-wrapper* #_vector-append)
 		       'append             (with-mock-wrapper* #_append)
+		       'vector-typer       (with-mock-wrapper #_vector-typer)
 		       'class-name         '*mock-vector*)))
 	  
 	  (define (make-mock-vector len . rest)
@@ -226,6 +228,8 @@
 		       'hash-table?        (with-mock-wrapper #_hash-table?)
 		       'length             (with-mock-wrapper #_length)
 		       'append             (with-mock-wrapper* #_append)
+		       'hash-table-key-typer (with-mock-wrapper #_hash-table-key-typer)
+		       'hash-table-value-typer (with-mock-wrapper #_hash-table-value-typer)
 		       'class-name         '*mock-hash-table*)))
 	  
 	  (define (make-mock-hash-table . rest)

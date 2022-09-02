@@ -1189,7 +1189,7 @@ struct s7_scheme {
   s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
-  s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1; /* dlist|clist and ulist can't overlap */
+  s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1, mlist_1, mlist_2; /* dlist|clist and ulist can't overlap */
 
   Jmp_Buf *goto_start;
   bool longjmp_ok;
@@ -1418,8 +1418,6 @@ struct s7_scheme {
   bool printing_gc_info;
 #endif
 };
-
-static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst);
 
 #if S7_DEBUGGING
   static void gdb_break(void) {};
@@ -2354,6 +2352,10 @@ static void init_types(void)
 #define T_NO_CELL_OPT                  T_MUTABLE
 #define set_no_cell_opt(p)             set_type_bit(T_Pair(p), T_NO_CELL_OPT)
 #define no_cell_opt(p)                 has_type_bit(T_Pair(p), T_NO_CELL_OPT)
+
+#define T_IS_ELIST                     T_MUTABLE
+#define set_is_elist(p)                set_type_bit(T_Lst(p), T_IS_ELIST)
+#define is_elist(p)                    has_type_bit(T_Lst(p), T_IS_ELIST)
 
 #define T_NO_INT_OPT                   T_SETTER
 #define set_no_int_opt(p)              set_type_bit(T_Pair(p), T_NO_INT_OPT)
@@ -4887,7 +4889,7 @@ static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int3
   if (is_global(symbol))
     fprintf(stderr, "%s[%d]: %s%s%s in %s\n",
 	    func, line,
-	    BOLD_TEXT, s7_object_to_c_string(sc, symbol), UNBOLD_TEXT,
+	    BOLD_TEXT, display(symbol), UNBOLD_TEXT,
 	    display_80(sc->cur_code));
   full_type(symbol) = (full_type(symbol) & ~(T_DONT_EVAL_ARGS | T_GLOBAL | T_SYNTACTIC));
 }
@@ -5277,8 +5279,7 @@ static s7_pointer set_opt1_1(s7_pointer p, s7_pointer x, uint64_t role, const ch
     fprintf(stderr, "%s[%d]: opt1_lambda -> %s, op: %s, x: %s,\n    %s\n",
 	    func, line, opt1_role_name(role),
 	    (is_optimized(x)) ? op_names[optimize_op(x)] : "unopt",
-	    s7_object_to_c_string(cur_sc, x),
-	    s7_object_to_c_string(cur_sc, p));
+	    display(x), display(p));
   p->object.cons.opt1 = x;
   base_opt1(p, role);
   return(x);
@@ -5626,6 +5627,19 @@ static s7_pointer set_wlist_4(s7_pointer lst, s7_pointer x1, s7_pointer x2, s7_p
   set_car(p, x3); p = cdr(p);
   set_car(p, x4);
   return(lst);
+}
+
+static s7_pointer set_mlist_1(s7_scheme *sc, s7_pointer x1)
+{
+  set_car(sc->mlist_1, x1);
+  return(sc->mlist_1);
+}
+
+static s7_pointer set_mlist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2)
+{
+  set_car(sc->mlist_2, x1);
+  set_cadr(sc->mlist_2, x2);
+  return(sc->mlist_2);
 }
 
 static s7_pointer set_plist_1(s7_scheme *sc, s7_pointer x1)
@@ -5999,7 +6013,7 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
 {
   s7_pointer func = find_method_with_let(sc, obj, method);
   if (func == sc->undefined) return(sc->F);
-  return(s7_apply_function(sc, func, list_1(sc, obj))); /* plist here and below will probably no work (_pp case known bad) */
+  return(s7_apply_function(sc, func, list_1(sc, obj))); /* plist here and below will probably not work (_pp case known bad) */
 }
 
 /* this is a macro mainly to simplify the Checker handling */
@@ -6030,14 +6044,14 @@ static s7_pointer method_or_bust_p(s7_scheme *sc, s7_pointer obj, s7_pointer met
 {
   if (!has_active_methods(sc, obj))
     simple_wrong_type_argument_nr(sc, method, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_1(sc, obj)));
+  return(find_and_apply_method(sc, obj, method, set_mlist_1(sc, obj)));
 }
 
 static s7_pointer method_or_bust_pp(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer x1, s7_pointer x2, uint8_t typ, int32_t num)
 {
   if (!has_active_methods(sc, obj))
     wrong_type_argument_nr(sc, method, num, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_2(sc, x1, x2)));
+  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
 static s7_pointer method_or_bust_ppp(s7_scheme *sc, s7_pointer obj, s7_pointer method,
@@ -6085,7 +6099,7 @@ static s7_pointer method_or_bust_with_type_pp(s7_scheme *sc, s7_pointer obj, s7_
 {
   if (!has_active_methods(sc, obj))
     wrong_type_argument_with_type_nr(sc, method, num, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_2(sc, x1, x2)));
+  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
 static s7_pointer method_or_bust_with_type_and_loc_pp(s7_scheme *sc, s7_pointer obj, s7_pointer method,
@@ -6095,7 +6109,7 @@ static s7_pointer method_or_bust_with_type_and_loc_pp(s7_scheme *sc, s7_pointer 
   sc->error_argnum = 0;
   if (!has_active_methods(sc, obj))
     wrong_type_argument_with_type_nr(sc, method, loc, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_2(sc, x1, x2)));
+  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
 static s7_pointer method_or_bust_with_type_pi(s7_scheme *sc, s7_pointer obj, s7_pointer method,
@@ -6103,7 +6117,7 @@ static s7_pointer method_or_bust_with_type_pi(s7_scheme *sc, s7_pointer obj, s7_
 {
   if (!has_active_methods(sc, obj))
     wrong_type_argument_with_type_nr(sc, method, num, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_2(sc, x1, make_integer(sc, x2))));
+  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, make_integer(sc, x2))));
 }
 
 static s7_pointer method_or_bust_with_type_pf(s7_scheme *sc, s7_pointer obj, s7_pointer method,
@@ -6111,14 +6125,14 @@ static s7_pointer method_or_bust_with_type_pf(s7_scheme *sc, s7_pointer obj, s7_
 {
   if (!has_active_methods(sc, obj))
     wrong_type_argument_with_type_nr(sc, method, num, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_2(sc, x1, make_real(sc, x2))));
+  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, make_real(sc, x2))));
 }
 
 static s7_pointer method_or_bust_with_type_one_arg_p(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer typ)
 {
   if (!has_active_methods(sc, obj))
     simple_wrong_type_argument_with_type_nr(sc, method, obj, typ);
-  return(find_and_apply_method(sc, obj, method, list_1(sc, obj)));
+  return(find_and_apply_method(sc, obj, method, set_mlist_1(sc, obj)));
 }
 
 
@@ -7265,6 +7279,8 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
   gc_mark(car(sc->t3_1)); gc_mark(car(sc->t3_2)); gc_mark(car(sc->t3_3));
   gc_mark(car(sc->t4_1));  
+  gc_mark(car(sc->mlist_1));
+  gc_mark(car(sc->mlist_2)); gc_mark(cadr(sc->mlist_2));
   gc_mark(car(sc->plist_1));
   gc_mark(car(sc->plist_2)); gc_mark(cadr(sc->plist_2));
   gc_mark(car(sc->plist_3)); gc_mark(cadr(sc->plist_3)); gc_mark(caddr(sc->plist_3));
@@ -7569,6 +7585,8 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   #define Q_gc s7_make_signature(sc, 2, sc->T, sc->is_boolean_symbol)
 
   /* g_gc can't be called in a situation where these lists matter (I think...) */
+  set_mlist_1(sc, sc->nil);
+  set_mlist_2(sc, sc->nil, sc->nil);
   set_plist_1(sc, sc->nil);
   set_plist_2(sc, sc->nil, sc->nil);
   set_plist_3(sc, sc->nil, sc->nil, sc->nil);
@@ -35146,12 +35164,13 @@ static s7_pointer g_with_output_to_file(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- format -------------------------------- */
+static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst);
 
 static noreturn void format_error_1_nr(s7_scheme *sc, s7_pointer msg, const char *str, s7_pointer ur_args, format_data_t *fdat)
 {
   s7_pointer x = NULL;
   s7_pointer ctrl_str = (fdat->orig_str) ? fdat->orig_str : s7_make_string_wrapper(sc, str);
-  s7_pointer args = (in_heap(ur_args)) ? ur_args : copy_proper_list(sc, ur_args);
+  s7_pointer args = (is_elist(ur_args)) ? copy_proper_list(sc, ur_args) : ur_args;
   if (fdat->loc == 0)
     {
       if (is_pair(args))
@@ -36459,7 +36478,7 @@ s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int 
   va_end(ap);
   if (end) set_cdr(end, back);
   if (i < len)
-    s7_warn(sc, 256, "s7_make_circular_signature got too few entries: %s\n", s7_object_to_c_string(sc, res));
+    s7_warn(sc, 256, "s7_make_circular_signature got too few entries: %s\n", display(res));
   return((s7_pointer)res);
 }
 
@@ -51197,6 +51216,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 		sc->code = cons(sc, sc->value, sc->nil); /* if we end up at op_begin, give it something it can handle */
 	      return(true);
 	    }}
+      /* here type and info need to be GC protected (new_cell below), g_throw and error_nr, throw sc->w for type, but error_nr nothing currently */
       if (op == OP_CATCH_1)
 	{
 	  s7_pointer p;
@@ -51401,6 +51421,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
   bool ignored_flag = false;
   s7_pointer type = car(args), info = cdr(args);
+  sc->w = type; /* might not be a symbol */
   sc->value = info;
 
   /* look for a catcher */
@@ -51414,6 +51435,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 	  if (sc->longjmp_ok) LongJmp(*(sc->goto_start), THROW_JUMP);
 	  return(sc->value);
 	}}
+  sc->w = sc->nil;
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
 
@@ -52137,11 +52159,11 @@ static s7_pointer g_apply(s7_scheme *sc, s7_pointer args)
       push_stack(sc, OP_APPLY, cdr(args), func);
       return(sc->nil);
     }
+  sc->code = func;
   sc->args = (is_null(cddr(args))) ? cadr(args) : apply_list_star(sc, cdr(args));
   if (!s7_is_proper_list(sc, sc->args))
     apply_list_error_nr(sc, args);
 
-  sc->code = func;
   /* (define imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
    * (define (fop4 x y) (apply x y))
    * (display (object->string (apply (lambda (a . b) (cons a b)) imp) :readable)) -> (list 0 1 2)
@@ -57499,7 +57521,7 @@ static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func
 				"o_p_ppi", "o_p_i", "o_p_pii", "o_p_pip", "o_p_pip_unchecked", "o_p_piip", "o_b_i", "o_b_d"};
   if (!is_c_function(f))
     {
-      fprintf(stderr, "%s[%d]: %s is not a c_function\n", __func__, __LINE__, s7_object_to_c_string(sc, f));
+      fprintf(stderr, "%s[%d]: %s is not a c_function\n", __func__, __LINE__, display(f));
       if (sc->stop_at_error) abort();
     }
   else
@@ -57508,10 +57530,10 @@ static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func
 	{
 	  if (p->typ == typ)
 	    fprintf(stderr, "%s[%d]: %s has a function of type %d (%s)\n",
-		    __func__, __LINE__, s7_object_to_c_string(sc, f), typ, o_names[typ]);
+		    __func__, __LINE__, display(f), typ, o_names[typ]);
 	  if (p->func == func)
 	    fprintf(stderr, "%s[%d]: %s already has this function as type %d %s (current: %d %s)\n",
-		    __func__, __LINE__, s7_object_to_c_string(sc, f), p->typ, o_names[p->typ], typ, o_names[typ]);
+		    __func__, __LINE__, display(f), p->typ, o_names[p->typ], typ, o_names[typ]);
 	}
 #endif
   op = alloc_permanent_opt_func(sc);
@@ -94963,6 +94985,8 @@ s7_scheme *s7_init(void)
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
+  sc->mlist_1 = permanent_list(sc, 1);
+  sc->mlist_2 = permanent_list(sc, 2);
   sc->plist_1 = permanent_list(sc, 1);
   sc->plist_2 = permanent_list(sc, 2);
   sc->plist_2_2 = cdr(sc->plist_2);
@@ -94972,13 +94996,13 @@ s7_scheme *s7_init(void)
   sc->clist_1 = permanent_list(sc, 1);
   sc->clist_2 = permanent_list(sc, 2);
   sc->dlist_1 = permanent_list(sc, 1);
-  sc->elist_1 = permanent_list(sc, 1);
-  sc->elist_2 = permanent_list(sc, 2);
-  sc->elist_3 = permanent_list(sc, 3);
-  sc->elist_4 = permanent_cons(sc, sc->F, sc->elist_3, T_PAIR | T_IMMUTABLE);
-  sc->elist_5 = permanent_cons(sc, sc->F, sc->elist_4, T_PAIR | T_IMMUTABLE);
-  sc->elist_6 = permanent_cons(sc, sc->F, sc->elist_5, T_PAIR | T_IMMUTABLE);
-  sc->elist_7 = permanent_cons(sc, sc->F, sc->elist_6, T_PAIR | T_IMMUTABLE);
+  sc->elist_1 = permanent_cons(sc, sc->F, sc->nil, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_2 = permanent_list(sc, 2); set_is_elist(sc->elist_2);
+  sc->elist_3 = permanent_list(sc, 3); set_is_elist(sc->elist_3);
+  sc->elist_4 = permanent_cons(sc, sc->F, sc->elist_3, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_5 = permanent_cons(sc, sc->F, sc->elist_4, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_6 = permanent_cons(sc, sc->F, sc->elist_5, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_7 = permanent_cons(sc, sc->F, sc->elist_6, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
   sc->undefined_identifier_warnings = false;
   sc->undefined_constant_warnings = false;
   sc->wrap_only = make_wrap_only(sc);
@@ -95541,8 +95565,8 @@ int main(int argc, char **argv)
  * -------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    467    469
- * index     1026   1016    973    964    967
- * tmock     1177   1165   1057   1061   1059
+ * index     1026   1016    973    964    966
+ * tmock     1177   1165   1057   1061   1059  1095 [3-way method]
  * tvect     2519   2464   1772   1676   1677
  * timp      2637   2575   1930   1717   1711
  * texit     ----   ----   1778   1736   1739
@@ -95551,10 +95575,10 @@ int main(int argc, char **argv)
  * tauto     ----   ----   2562   2171   2171
  * lt        2187   2172   2150   2180   2181
  * dup       3805   3788   2492   2263   2271
- * tcopy     8035   5546   2539   2376   2376
+ * tcopy     8035   5546   2539   2376   2374
  * tload     ----   ----   3046   2379   2378
  * fbench    2688   2583   2460   2412   2419
- * tread     2440   2421   2419   2416   2419
+ * tread     2440   2421   2419   2416   2417
  * trclo     2735   2574   2454   2447   2448
  * titer     2865   2842   2641   2540   2540
  * tmat      3065   3042   2524   2508   2572
@@ -95568,26 +95592,26 @@ int main(int argc, char **argv)
  * tlet      7775   5640   4450   4433   4437
  * tcase     4960   4793   4439   4435   4437
  * tfft      7820   7729   4755   4455   4457
- * tmap      8869   8774   4489   4482   4485
+ * tmap      8869   8774   4489   4482   4482
  * tshoot    5525   5447   5183   5068   5070
  * tstr      6880   6342   5488   5122   5127
- * tform     5357   5348   5307   5279   5285  5388 [format_error_1 -- maybe restrict in_heap to is_elist?]
+ * tform     5357   5348   5307   5279   5285  5406 5302 [is_elist for !in_heap]
  * tnum      6348   6013   5433   5359   5366
  * tlamb     6423   6273   5720   5544   5545
  * tmisc     8869   7612   6435   6158   6214
  * tgsl      8485   7802   6373   6307   6307
- * tlist     7896   7546   6558   6367   6351
+ * tlist     7896   7546   6558   6367   6350
  * tset      ----   ----   ----   6441   6468
  * trec      6936   6922   6521   6559   6559
- * tari      13.0   12.7   6827   6486   6591
+ * tari      13.0   12.7   6827   6486   6585
  * tleft     10.4   10.2   7657   7516   7512
  * tgc       11.9   11.1   8177   7964   7922
- * thash     11.8   11.7   9734   9477   9476
+ * thash     11.8   11.7   9734   9477   9463
  * cb        11.2   11.0   9658   9533   9535
  * tgen      11.2   11.4   12.0   12.0   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   56.9   57.0
+ * sg        ----   ----   55.9   56.9   56.9
  * lg        ----   ----  105.2  106.4  106.4
  * tbig     177.4  175.8  156.5  149.9  148.3
  * ---------------------------------------------
@@ -95600,8 +95624,8 @@ int main(int argc, char **argv)
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not exit?
  * fully optimize gmp version
  *
- * test all copy cases somehow, vector_dims subvector opt?
- * cutlet (or set!?) syntactic bits
+ * cutlet (or set!?) syntactic bits, no_cell_opt is set on plist etc
  * stack ovfl + s7_show_stack
- * tform elists restriction?
+ * mlist_3? (tmock)
+ * elist format_error_1 checked
  */
