@@ -1,3 +1,5 @@
+//FIXME: add cp, mktemp, mkdtemp, etc.
+
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +29,8 @@ char *canonical_path(char *path)
 
     char *src_cursor = path;
     char *dst_cursor = buf;
+    char *rewind     = buf;
+
     char *src_anchor = path;
     char *dst_anchor = path;
     char *start  = path;
@@ -34,13 +38,6 @@ char *canonical_path(char *path)
     char *prev_slash = NULL;
     /* char *prevprev_slash = NULL; */
     /* bool backup = false; */
-
-    /* if (path[0] == '.') { */
-    /*     if (path[1] == '/') { */
-    /*         src_cursor+=2; */
-    /*         src_anchor+=2; */
-    /*     } */
-    /* } */
 
     start = src_anchor;
 
@@ -52,171 +49,294 @@ char *canonical_path(char *path)
     int dotcount   = 0;    /* consecutive '.' */
     int slashcount = 0;    /* consecutive '/' or "/./" */
 
+    /* printf("prev_slash: %s (%x)\n", prev_slash, prev_slash); */
+    /* printf("slash ct: %d\n", slashcount); */
+
+    // dst_cursor lags by 1
+    *dst_cursor = *src_cursor++; /* prime */
     while (*src_cursor != '\0') {
         /* printf("\nbuf: %s\n", buf); */
         /* printf("dst_cursor: %s\n", dst_cursor); */
         /* printf("src_cursor: %s\n", src_cursor); */
-        /* printf("prev_slash: %s\n", prev_slash); */
-        if (*src_cursor == '/') {
-            /* printf("slash at %s; ct: %d, dotcount: %d\n", */
-            /*        src_cursor, slashcount, dotcount); */
-            /* printf("prevprev_slash: %s\n", prevprev_slash); */
-            if (slashcount == 0) {
-                if (dotcount > 0) {
-                    /* we're in ./ prefix  */
-                    slashcount++;
-                    src_cursor++;
-                    continue;
-                } else {
-                    /* we're in a filename somewhere */
-                    src_anchor = src_cursor;
-                    dst_anchor = dst_cursor;
-                    *dst_cursor++ = *src_cursor;
-                }
-            }
-            slashcount++;
-            buflen = strlen(buf) - 1;
-            if (*(buf + buflen) == '/') {
-                /* printf("searching buf backwards starting at: %s\n", */
-                /*        buf + buflen-1); */
-                for (i=buflen-1; i>0; i--) {
-                    /* printf("check: %s\n", buf + i); */
-                    if (*(buf + i) == '/') {
-                        /* printf("bingo: %s\n", (char*)buf + i); */
-                        prev_slash = buf + i;
-                        break;
-                    }
-                }
-                if (prev_slash == NULL)
-                    prev_slash = buf;
-                /* prev_slash = strrchr(buf, '/'); */
-                /* prev_slash--; */
-                /* prev_slash = strrchr(prev_slash, '/'); */
-            } else {
-                prev_slash = strrchr(buf, '/');
-            }
-            /* } */
-            if (slashcount == 1) {
-                src_cursor++; // continue
-            }
-            else if (dotcount == 2) {
-                /* printf("slashct: %d, dotcount 2\n", slashcount); */
-                if (slashcount == 2) {
-                    /* at end of "/../" */
-                    // back up one level
-                    /* printf("BACKING UP\n"); */
-                    /* printf("buf: %s\n", buf); */
-                    /* printf("prev_slash: %s\n", prev_slash); */
-                    dst_cursor = prev_slash + 1;
-                    dst_cursor++;
-                    *dst_cursor = '\0';
-                    dst_cursor--;
-                    src_cursor++;
-                } else {
-                    /* end of "/././" */
-                    src_cursor++;
-                }
-            }
-            else {              /* consecutive '/' and '.' */
-                /* printf("at %s, dotcount: %d, slashcount: %d\n", */
-                /*        src_cursor, dotcount, slashcount); */
-                src_cursor++;
-            }
-        }
-        else if (*src_cursor == '.') {
-            /* printf("DOT at %s, slashcount: %d\n", */
-            /*        src_cursor, slashcount); */
-            if (slashcount == 0) { /* "foo.ml" */
-                /* careful: "./a/b", "../a/b" */
-                if (src_cursor == start) {
-                    src_cursor++;
-                    if (*src_cursor == '.')
-                        src_cursor++;
-                    slashcount++; /* fake */
-                    dotcount++;
-                } else {
-                    dotcount=0;       /* e.g. a/.hidden */
-                    *dst_cursor++ = *src_cursor++;
-                    *dst_cursor = '\0';
-                }
-            }
-            else if (slashcount > 0) { /* we've seen at least one '/' */
-                dotcount++;       /* e.g. a/.hidden */
-                src_cursor++;
-            } else {            /* e.g. "a.c" */
-                /* careful:  "../a/b" */
-                src_cursor++;
-            }
-        }
-        else {                  /* not '.' nor '/' */
-            if (slashcount > 1) { /* we've seen consecutive '/', '.' */
-                if (dotcount == 1) {
-                    /* printf("Char at %s, sc: %d, dc: 1\n", */
-                    /*        src_cursor, slashcount); */
-                    if (*(src_cursor - 1) == '/') {
-                        /* printf("the b in a/./b, a/././b, etc.\n"); */
-                        *dst_cursor++ = *src_cursor++;
-                        *dst_cursor = '\0';
-                        slashcount = dotcount = 0;
-                    } else {
-                        /* printf("the h in  a/././.hidden\n"); */
-                        --src_cursor;
-                        *dst_cursor++ = *src_cursor++;
-                        src_cursor++;
-                        *dst_cursor = '\0';
-                        slashcount = dotcount = 0;
-                    }
-                } else { /* slashct > 1 */
-                    /* dotcount may be any */
-                    /* e.g. the c in "a/./c", "a///c", etc. */
-                    /* cp from src_cursor-1 to src_anchor, reset counters */
-                    src_anchor = src_cursor;
-                    dst_anchor = dst_cursor;
-                    /* printf("shifting at src_cursor %s, src_anchor %s, buf %s\n", */
-                    /*        src_cursor, src_anchor, buf); */
-                    /* printf("dotcount: %d, slashcount: %d\n", */
-                    /*        dotcount, slashcount); */
-                    /* mvlen = strlen(src_cursor); */
-                    /* printf("mvlen: %d\n", mvlen); */
-                    /* printf("src_anchor: %s\n", src_anchor); */
-                    /* printf("dst_anchor: %s\n", dst_anchor); */
-                    while ( *src_cursor != '\0') {
-                        /* printf("buf: %s, src_cursor: %s\n", */
-                        /*        buf, src_cursor); */
-                        *dst_cursor++ = *src_cursor++;
+        /* printf("rewind: %s\n", rewind); */
 
-                        /* printf("src_anchor: %s\n", src_anchor); */
-                    }
-                    *dst_cursor = '\0';
-                    /* printf("buf: %s\n", buf); */
-                    src_cursor = src_anchor;
-                    dst_cursor = dst_anchor;
-                    slashcount = dotcount = 0;
-                }
-            }
-            else if (slashcount == 1) {
-                /* printf("CHAR at %s, sc: %d, dc: %d\n", */
-                /*        src_cursor, slashcount, dotcount); */
-                if (dotcount > 0) {
-                    /* b of a/.b */
-                    --src_cursor;
-                    *dst_cursor++ = *src_cursor++;
-                    *dst_cursor++ = *src_cursor++;
-                    *dst_cursor = '\0';
-                     slashcount = dotcount = 0;
-                } else {
-                    /* b of a/b */
-                    *dst_cursor++ = *src_cursor++;
-                    *dst_cursor = '\0';
-                    slashcount = dotcount = 0;
-                }
-            } else {
-                *dst_cursor++ = *src_cursor++;
+        if ( *(src_cursor-1) == '/' ) {
+            while (*src_cursor == '.') {
+                dotcount++;
+                src_cursor++;
             }
         }
-    }
+        if (dotcount > 2) {
+            printf("ERR: too many dots\n");
+            exit(EXIT_FAILURE);
+        }
+        /* printf("src_cursor (advanced): %s\n", src_cursor); */
+        /* printf("dot ct: %d\n", dotcount); */
+
+        if (*src_cursor == '/') {
+            /* printf("*src_cursor == '/'\n"); */
+            // src: aaa/bbb</>../ccc, aaa/bbb</>./ccc, aaa/bbb</>/ccc, aaa/bbb</>ccc
+            if ( *dst_cursor == '/') {
+                /* printf("*dst_cursor == '/'\n"); */
+                if (dotcount == 0) {
+                    // src: aaa/</>//bbb/..., dst: (a)aa</>
+                    while (*src_cursor == '/')
+                        src_cursor++; /* advance past consecutive '/' */
+                    // src: aaa////<b>bb/..., dst: (a)aa</>
+                } else {
+                    if (dotcount == 1) {
+                        // src: aaa/bbb/.</>ccc, dst: aaa/(b)bb</>
+                        // src: aaa/bbb/.</>././ccc, dst: aaa/(b)bb</>
+                        /* advance past consecutive /./ */
+                        while(*src_cursor == '/') {
+                            // printf("while %s\n", src_cursor);
+                            src_cursor++;
+                            if (*src_cursor != '.') break;
+                        }
+                        /* src_cursor++; */
+                    } else {
+                        if (dotcount == 2) {
+                            // printf("Rewinding dst\n");
+                            // src: aaa/bbb/..</>ccc
+                            // dst: aaa/(b)bb</>
+
+                            src_cursor++;
+                            // reset dst_cursor
+                            dst_cursor = rewind;
+                            if (dst_cursor == buf) {
+                                // re-prime
+                                *dst_cursor = *src_cursor;
+                                src_cursor++;
+                            } else
+                                dst_cursor--;
+
+
+                            // printf("resetting rewind ptr: %s\n", rewind);
+                            // reset rewind ptr
+                            if ( rewind != buf) {
+                                // dst rewind ptr:  aaa/bbb/<c>
+                                rewind-=2; /* skip over preceding '/' */
+                                while ( *rewind != '/' && rewind != buf) rewind--;
+                            }
+                            // printf("reset rewind ptr: %s\n", rewind);
+                            // printf("reset dst_cursor: %s\n", dst_cursor);
+                            // printf("reset src_cursor: %s\n", src_cursor);
+                            /* *dst_cursor = *src_cursor; */
+                            /* src_cursor++; */
+                            dotcount = 0;
+                            /* exit(EXIT_FAILURE); */
+                        }
+                    }
+                }
+            } else {
+                // printf("*dst_cursor != '/'\n");
+                // src_cursor == '/', dst_cursor != '/'
+                // src: aaa</>bbb/...., dst: aa<a>
+                dst_cursor++;
+                *dst_cursor = *src_cursor++;
+                // src: aaa/<b>bb/...., dst: aaa</>
+            }
+        } else {
+            dotcount=0;
+            // printf("both cursors non-'/'\n");
+            // src_cursor != '/'
+            if (*dst_cursor == '/') {
+                // printf("resetting rewind ptr\n");
+                dst_cursor++;
+                rewind = dst_cursor;
+            } else {
+                dst_cursor++;
+            }
+            // src: a<a>a/bbb/..., dst: <a>  (initial state, primed)
+            // src: aaa/b<b>b/..., dst: aaa/<b>
+            *dst_cursor = *src_cursor++;
+            // src: aa<a>/bbb/..., dst: a<a>
+            // src: aaa/bb<b>/..., dst: aaa/b<b>
+        }
+    } /* end while (*src_cursor != '\0') { */
+    dst_cursor++;
+    // printf("DONE dst_cursor: %s\n", dst_cursor);
+    *dst_cursor = '\0';
+    // printf("DONE buf: %s\n", buf);
     return buf;
 }
+
+/*                 buflen = strlen(buf) - 2; */
+/*                 bool hit = false; */
+/*                 if (*(buf + buflen) == '/') { */
+/*                     printf("searching buf backwards starting at: %s\n", */
+/*                            buf + buflen-1); */
+/*                     for (i=buflen-1; i>0; i--) { */
+/*                         printf("check: %s\n", buf + i); */
+/*                         if (*(buf + i) == '/') { */
+/*                             printf("bingo: %s\n", (char*)buf + i); */
+/*                             hit = true; */
+/*                             prev_slash = buf + i; */
+/*                             break; */
+/*                         } */
+/*                     } */
+/*                     if ( !hit) prev_slash = buf - 1; */
+/*                     printf("new prev_slash: %s (%x)\n", prev_slash, prev_slash); */
+/*                     printf("new buf: %s\n", buf); */
+/*                     if (prev_slash == NULL) */
+/*                         prev_slash = buf; */
+/*                     /\* prev_slash = strrchr(buf, '/'); *\/ */
+/*                     /\* prev_slash--; *\/ */
+/*                     /\* prev_slash = strrchr(prev_slash, '/'); *\/ */
+/*                 } else { */
+/*                     prev_slash = strrchr(buf, '/'); */
+/*                 } */
+/*             } else { */
+/*                 if (dotcount > 0) { */
+/*                     /\* we're in ./ prefix  *\/ */
+/*                     /\* slashcount++; *\/ */
+/*                     src_cursor++; */
+/*                     continue; */
+/*                 } else { */
+/*                     /\* we're in a filename somewhere *\/ */
+/*                     /\* src_anchor = src_cursor; *\/ */
+/*                     /\* dst_anchor = dst_cursor; *\/ */
+/*                     *dst_cursor++ = *src_cursor++; */
+/*                 } */
+/*             } */
+/*             /\* } *\/ */
+/*             if (slashcount == 1) { */
+/*                 src_cursor++; // continue */
+/*             } */
+/*             else if (dotcount == 2) { */
+/*                 printf("slashct: %d, dotcount 2\n", slashcount); */
+/*                 if (slashcount == 2) { */
+/*                     /\* at end of "/../" *\/ */
+/*                     // back up one level */
+/*                     /\* printf("BACKING UP\n"); *\/ */
+/*                     /\* printf("buf: %s\n", buf); *\/ */
+/*                     /\* printf("prev_slash: %s\n", prev_slash); *\/ */
+/*                     dst_cursor = prev_slash; // + 1; */
+/*                     dst_cursor++; */
+/*                     *dst_cursor = '\0'; */
+/*                     /\* dst_cursor--; *\/ */
+/*                     src_cursor++; */
+/*                     slashcount = 1; */
+/*                     dotcount = 0; */
+
+/*                     /\* printf("Searching buf backwards starting at: %s\n", *\/ */
+/*                     /\*        buf + buflen-1); *\/ */
+/*                     /\* for (i=buflen-1; i>0; i--) { *\/ */
+/*                     /\*     /\\* printf("check: %s\n", buf + i); *\\/ *\/ */
+/*                     /\*     if (*(buf + i) == '/') { *\/ */
+/*                     /\*         /\\* printf("bingo: %s\n", (char*)buf + i); *\\/ *\/ */
+/*                     /\*         prev_slash = buf + i; *\/ */
+/*                     /\*         break; *\/ */
+/*                     /\*     } *\/ */
+/*                     /\* } *\/ */
+/*                     /\* if (prev_slash == NULL) *\/ */
+/*                     /\*     prev_slash = buf; *\/ */
+
+/*                 } else { */
+/*                     /\* end of "/././" *\/ */
+/*                     src_cursor++; */
+/*                 } */
+/*             } */
+/*             else {              /\* consecutive '/' and '.' *\/ */
+/*                 /\* printf("at %s, dotcount: %d, slashcount: %d\n", *\/ */
+/*                 /\*        src_cursor, dotcount, slashcount); *\/ */
+/*                 src_cursor++; */
+/*             } */
+/*         } */
+/*         else if (*src_cursor == '.') { */
+/*             printf("DOT at %s, slashcount: %d\n", */
+/*                    src_cursor, slashcount); */
+/*             if (slashcount == 0) { /\* "foo.ml" *\/ */
+/*                 /\* careful: "./a/b", "../a/b" *\/ */
+/*                 if (src_cursor == start) { */
+/*                     src_cursor++; */
+/*                     if (*src_cursor == '.') */
+/*                         src_cursor++; */
+/*                     slashcount++; /\* fake *\/ */
+/*                     dotcount++; */
+/*                 } else { */
+/*                     dotcount=0;       /\* e.g. a/.hidden *\/ */
+/*                     *dst_cursor++ = *src_cursor++; */
+/*                     *dst_cursor = '\0'; */
+/*                 } */
+/*             } */
+/*             else if (slashcount > 0) { /\* we've seen at least one '/' *\/ */
+/*                 dotcount++;       /\* e.g. a/.hidden *\/ */
+/*                 src_cursor++; */
+/*             } else {            /\* e.g. "a.c" *\/ */
+/*                 /\* careful:  "../a/b" *\/ */
+/*                 src_cursor++; */
+/*             } */
+/*         } */
+/*         else {                  /\* not '.' nor '/' *\/ */
+/*             if (slashcount > 1) { /\* we've seen consecutive '/', '.' *\/ */
+/*                 if (dotcount == 1) { */
+/*                     /\* printf("Char at %s, sc: %d, dc: 1\n", *\/ */
+/*                     /\*        src_cursor, slashcount); *\/ */
+/*                     if (*(src_cursor - 1) == '/') { */
+/*                         /\* printf("the b in a/./b, a/././b, etc.\n"); *\/ */
+/*                         *dst_cursor++ = *src_cursor++; */
+/*                         *dst_cursor = '\0'; */
+/*                         slashcount = dotcount = 0; */
+/*                     } else { */
+/*                         /\* printf("the h in  a/././.hidden\n"); *\/ */
+/*                         --src_cursor; */
+/*                         *dst_cursor++ = *src_cursor++; */
+/*                         src_cursor++; */
+/*                         *dst_cursor = '\0'; */
+/*                         slashcount = dotcount = 0; */
+/*                     } */
+/*                 } else { /\* slashct > 1 *\/ */
+/*                     /\* dotcount may be any *\/ */
+/*                     /\* e.g. the c in "a/./c", "a///c", etc. *\/ */
+/*                     /\* cp from src_cursor-1 to src_anchor, reset counters *\/ */
+/*                     src_anchor = src_cursor; */
+/*                     dst_anchor = dst_cursor; */
+/*                     /\* printf("shifting at src_cursor %s, src_anchor %s, buf %s\n", *\/ */
+/*                     /\*        src_cursor, src_anchor, buf); *\/ */
+/*                     /\* printf("dotcount: %d, slashcount: %d\n", *\/ */
+/*                     /\*        dotcount, slashcount); *\/ */
+/*                     /\* mvlen = strlen(src_cursor); *\/ */
+/*                     /\* printf("mvlen: %d\n", mvlen); *\/ */
+/*                     /\* printf("src_anchor: %s\n", src_anchor); *\/ */
+/*                     /\* printf("dst_anchor: %s\n", dst_anchor); *\/ */
+/*                     while ( *src_cursor != '\0') { */
+/*                         /\* printf("buf: %s, src_cursor: %s\n", *\/ */
+/*                         /\*        buf, src_cursor); *\/ */
+/*                         *dst_cursor++ = *src_cursor++; */
+
+/*                         /\* printf("src_anchor: %s\n", src_anchor); *\/ */
+/*                     } */
+/*                     *dst_cursor = '\0'; */
+/*                     /\* printf("buf: %s\n", buf); *\/ */
+/*                     src_cursor = src_anchor; */
+/*                     dst_cursor = dst_anchor; */
+/*                     slashcount = dotcount = 0; */
+/*                 } */
+/*             } */
+/*             else if (slashcount == 1) { */
+/*                 /\* printf("CHAR at %s, sc: %d, dc: %d\n", *\/ */
+/*                 /\*        src_cursor, slashcount, dotcount); *\/ */
+/*                 if (dotcount > 0) { */
+/*                     /\* b of a/.b *\/ */
+/*                     --src_cursor; */
+/*                     *dst_cursor++ = *src_cursor++; */
+/*                     *dst_cursor++ = *src_cursor++; */
+/*                     *dst_cursor = '\0'; */
+/*                      slashcount = dotcount = 0; */
+/*                 } else { */
+/*                     /\* b of a/b *\/ */
+/*                     *dst_cursor++ = *src_cursor++; */
+/*                     *dst_cursor = '\0'; */
+/*                     slashcount = dotcount = 0; */
+/*                 } */
+/*             } else { */
+/*                 *dst_cursor++ = *src_cursor++; */
+/*             } */
+/*         } */
+/*     } */
+/*     return buf; */
+/* } */
 
 /* one arg: a path string */
 static s7_pointer g_canonical_path(s7_scheme *sc, s7_pointer args)
