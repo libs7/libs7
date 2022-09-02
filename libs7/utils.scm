@@ -343,10 +343,11 @@ If func approves of one, find-then returns the result of applying fn to it."))
 	   ,false))))
 
 (define (dirname path)
-  (let ((last-slash (string-index-right path (lambda (c) (eq? c #\/)))))
+  (let* ((path (format #f "~A" path))
+         (last-slash (string-index-right path (lambda (c) (eq? c #\/)))))
     (if last-slash
         (string-take path last-slash)
-        path)))
+        "./")))
 
 (define (basename _path)
   (let* ((path (if (string? _path) _path
