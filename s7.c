@@ -1943,6 +1943,7 @@ static void init_types(void)
   #define T_Int(P) check_ref(P, T_INTEGER,           __func__, __LINE__, NULL, NULL)
   #define T_Itr(P) check_ref(P, T_ITERATOR,          __func__, __LINE__, "sweep", "process_iterator")
   #define T_Ivc(P) check_ref(P, T_INT_VECTOR,        __func__, __LINE__, "sweep", NULL)
+  #define T_Key(P) check_ref18(P,                    __func__, __LINE__)                /* keyword */
   #define T_Let(P) check_ref(P, T_LET,               __func__, __LINE__, NULL, NULL)
   #define T_Lid(P) check_ref16(P,                    __func__, __LINE__)                /* let/nil */
   #define T_Lst(P) check_ref2(P, T_PAIR, T_NIL,      __func__, __LINE__, "gc", NULL)
@@ -1999,6 +2000,7 @@ static void init_types(void)
   #define T_Int(P)  P
   #define T_Itr(P)  P
   #define T_Ivc(P)  P
+  #define T_Key(P)  P
   #define T_Let(P)  P
   #define T_Lid(P)  P
   #define T_Lst(P)  P
@@ -3053,8 +3055,9 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define unchecked_local_value(p)       local_slot(p)->object.slt.val
 #define global_value(p)                slot_value(global_slot(T_Sym(p)))
 
-#define keyword_symbol(p)              symbol_info(p)->nx.ksym               /* keyword only, so does not collide with documentation */
-#define keyword_set_symbol(p, Val)     symbol_info(p)->nx.ksym = T_Sym(Val)
+#define keyword_symbol(p)              symbol_info(T_Key(p))->nx.ksym        /* keyword only, so does not collide with documentation */
+#define keyword_symbol_unchecked(p)    symbol_info(p)->nx.ksym
+#define keyword_set_symbol(p, Val)     symbol_info(T_Key(p))->nx.ksym = T_Sym(Val)
 #define symbol_help(p)                 symbol_info(p)->nx.documentation
 #define symbol_set_help(p, Doc)        symbol_info(p)->nx.documentation = Doc
 #define symbol_tag(p)                  (T_Sym(p))->object.sym.tag
@@ -5142,6 +5145,22 @@ static s7_pointer check_ref17(s7_pointer p, const char *func, int32_t line)
   return(p);
 }
 
+static s7_pointer check_ref18(s7_pointer p, const char *func, int32_t line)
+{
+  if (!is_symbol_and_keyword(p))
+    complain("%s%s[%d]: not a keyword: %s (%s)%s?\n", p, func, line, unchecked_type(p));
+  if (strcmp(func, "new_symbol") != 0)
+    {
+      if (global_value(p) != p)
+	fprintf(stderr, "%s%s[%d]: keyword value is not itself (type: %d)%s\n", BOLD_TEXT, func, line, unchecked_type(global_value(p)), UNBOLD_TEXT);
+      if (in_heap(keyword_symbol_unchecked(p)))
+	fprintf(stderr, "%s%s[%d]: keyword symbol is in the heap%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
+      if (has_odd_bits(p))
+	{char *s; fprintf(stderr, "odd bits: %s\n", s = describe_type_bits(cur_sc, p)); free(s);}
+    }
+  return(p);
+}
+
 static s7_pointer check_cell(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if (!p)
@@ -5635,7 +5654,7 @@ static s7_pointer set_mlist_1(s7_scheme *sc, s7_pointer x1)
   return(sc->mlist_1);
 }
 
-static s7_pointer set_mlist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2)
+static s7_pointer set_mlist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2) /* mlist_3 saves 3 in tmock -- see ~/old/s7-mlist_3.c */
 {
   set_car(sc->mlist_2, x1);
   set_cadr(sc->mlist_2, x2);
@@ -7467,10 +7486,8 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
 #if (S7_DEBUGGING) && (!MS_WINDOWS)
   if (show_gc_stats(sc))
-    {
-      s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n",
-	      __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
-    }
+    s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n",
+	    __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
 #endif
 
   if (size == 0)
@@ -91249,13 +91266,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DYNAMIC_WIND:           if (op_dynamic_wind(sc)) goto APPLY;           continue;
 	case OP_DEACTIVATE_GOTO:        call_exit_active(sc->args) = false;            continue; /* deactivate the exiter */
 
-	case OP_WITH_LET_S:         sc->value = fx_with_let_s(sc, sc->code); continue;
-	case OP_WITH_LET:           check_with_let(sc);
-	case OP_WITH_LET_UNCHECKED: if (op_with_let_unchecked(sc)) goto EVAL;
-	case OP_WITH_LET1:          if (sc->value != sc->curlet) activate_with_let(sc, sc->value); goto BEGIN;
+	case OP_WITH_LET_S:             sc->value = fx_with_let_s(sc, sc->code); continue;
+	case OP_WITH_LET:               check_with_let(sc);
+	case OP_WITH_LET_UNCHECKED:     if (op_with_let_unchecked(sc)) goto EVAL;
+	case OP_WITH_LET1:              if (sc->value != sc->curlet) activate_with_let(sc, sc->value); goto BEGIN;
 
-	case OP_WITH_BAFFLE:           check_with_baffle(sc);
-	case OP_WITH_BAFFLE_UNCHECKED: if (op_with_baffle_unchecked(sc)) continue; goto BEGIN;
+	case OP_WITH_BAFFLE:            check_with_baffle(sc);
+	case OP_WITH_BAFFLE_UNCHECKED:  if (op_with_baffle_unchecked(sc)) continue; goto BEGIN;
 
 
 	case OP_READ_INTERNAL:             op_read_internal(sc); continue;
@@ -95566,7 +95583,7 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    467    469
  * index     1026   1016    973    964    966
- * tmock     1177   1165   1057   1061   1059  1095 [3-way method]
+ * tmock     1177   1165   1057   1061   1095
  * tvect     2519   2464   1772   1676   1677
  * timp      2637   2575   1930   1717   1711
  * texit     ----   ----   1778   1736   1739
@@ -95595,7 +95612,7 @@ int main(int argc, char **argv)
  * tmap      8869   8774   4489   4482   4482
  * tshoot    5525   5447   5183   5068   5070
  * tstr      6880   6342   5488   5122   5127
- * tform     5357   5348   5307   5279   5285  5406 5302 [is_elist for !in_heap]
+ * tform     5357   5348   5307   5279   5302
  * tnum      6348   6013   5433   5359   5366
  * tlamb     6423   6273   5720   5544   5545
  * tmisc     8869   7612   6435   6158   6214
@@ -95624,8 +95641,10 @@ int main(int argc, char **argv)
  *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not exit?
  * fully optimize gmp version
  *
- * cutlet (or set!?) syntactic bits, no_cell_opt is set on plist etc
  * stack ovfl + s7_show_stack
- * mlist_3? (tmock)
  * elist format_error_1 checked
+ * how did :scaler get the value #<undefined>? (gdb) p display(s7_name_to_value(sc, ":scaler")) -> $2 = 0x555556f41dd0 "#<undefined>"
+ *   type of that pointer is 4=undef, slot/value are garbage, symbol is partly junk?
+ * lint: reseed (line 33): carry is a pair, but random-state in (random-state seed carry) wants an integer?
+ *       fop14's first argument should be a number, but :par is a keyword?
  */
