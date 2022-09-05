@@ -2023,7 +2023,7 @@
     (define (->lint-type c)
       (cond ((not (pair? c))	        (->simple-type c))
 	    ((procedure? (car c))       (return-type (car c) ()))     ; (#_abs ...)
-	    ((not (symbol? (car c)))    (or (pair? (car c)) 'pair?))
+	    ((not (symbol? (car c)))    (or (sequence? (car c)) 'pair?))
 	    ((not (eq? (car c) 'quote)) (or (return-type (car c) ()) (define->type c)))
 	    ((not (pair? (cdr c)))      (->simple-type c)) ; ??
 	    ((symbol? (cadr c))         'symbol?)
@@ -11397,7 +11397,6 @@
 		    (if (not (or (memq op '(#f #t values))
 				 (every-compatible? checker op)))
 			(report-arg-trouble caller form head arg-number checker expr op env)))))
-
 	      (call-with-exit
 	       (lambda (done)
 		 (for-each
@@ -11411,7 +11410,6 @@
 			    (if (not (or (memq op '(#f #t values))
 					 (every-compatible? checker op)))
 				(report-arg-trouble caller form head arg-number checker expr op env)))))
-
 		      ;; special case checker?
 		      (if (and (symbol? checker)
 			       (not (memq checker '(unused-parameter? unused-set-parameter?)))
@@ -11466,7 +11464,10 @@
 						(not (keyword? val)))
 					   (any-checker? checker val)))
 				  (let ((op (->lint-type val)))
-				    (unless (memq op '(#f #t values))
+				    (unless (or (memq op '(#f #t values))
+						(and (keyword? arg) ; (f :par arg) where f is define*
+						     (var? v)
+						     (memq (var-ftype v) '(define* lambda*))))
 				      (report-arg-trouble caller form head arg-number checker arg op env)))))
 
 			    (case (car arg)
@@ -12531,40 +12532,40 @@
 		(when (and (pair? sig)
 			   (< pos (length sig)))
 		  (let ((desired-type (list-ref sig pos)))
-		      (cond ((not (or (symbol? desired-type)
-				      (eq? desired-type #t)
-				      (pair? desired-type)))
-			     (error 'wrong-type-arg "~S signature ~S is invalid" func sig))
-
-			    ((not (or (eq? desired-type #t)
-				       (any-compatible? vtype desired-type)))
-			     (lint-format "~A is ~A, but ~A in ~A wants ~A" caller
-					  vname (prettify-checker-unq vtype)
-					  func (truncated-list->string call)
-					  (prettify-checker desired-type)))
-
-			    ((and (memq vtype '(float-vector? int-vector?))
-				  (memq func '(vector-set! vector-ref)))
-			     (lint-format "~A is ~A, so perhaps use ~A, not ~A" caller
-					  vname (prettify-checker-unq vtype)
-					  (if (eq? vtype 'float-vector?)
-					      (if (eq? func 'vector-set!) 'float-vector-set! 'float-vector-ref)
-					      (if (eq? func 'vector-set!) 'int-vector-set! 'int-vector-ref))
-					  func))
-
-			    ((and (eq? vtype 'float-vector?)
-				  (eq? func 'equal?)
-				  (or (eq? (cadr call) vname)
-				      (not (symbol? (cadr call))))) ; don't repeat the suggestion when we hit the second vector
-			     (lint-format "perhaps use equivalent? in ~A" caller (truncated-list->string call)))
-
-			    ((and (eq? vtype 'vector?)
-				  (memq func '(float-vector-set! float-vector-ref int-vector-set! int-vector-ref)))
-			     (lint-format "~A is ~A, so use ~A, not ~A" caller
-					  vname (prettify-checker-unq vtype)
-					  (if (memq func '(float-vector-set! int-vector-set!))
-					      'vector-set! 'vector-ref)
-					  func)))))))))
+		    (cond ((not (or (symbol? desired-type)
+				    (eq? desired-type #t)
+				    (pair? desired-type)))
+			   (error 'wrong-type-arg "~S signature ~S is invalid" func sig))
+			  
+			  ((not (or (eq? desired-type #t)
+				    (any-compatible? vtype desired-type)))
+			   (lint-format "~A is ~A, but ~A in ~A wants ~A" caller
+					vname (prettify-checker-unq vtype)
+					func (truncated-list->string call)
+					(prettify-checker desired-type)))
+			  
+			  ((and (memq vtype '(float-vector? int-vector?))
+				(memq func '(vector-set! vector-ref)))
+			   (lint-format "~A is ~A, so perhaps use ~A, not ~A" caller
+					vname (prettify-checker-unq vtype)
+					(if (eq? vtype 'float-vector?)
+					    (if (eq? func 'vector-set!) 'float-vector-set! 'float-vector-ref)
+					    (if (eq? func 'vector-set!) 'int-vector-set! 'int-vector-ref))
+					func))
+			  
+			  ((and (eq? vtype 'float-vector?)
+				(eq? func 'equal?)
+				(or (eq? (cadr call) vname)
+				    (not (symbol? (cadr call))))) ; don't repeat the suggestion when we hit the second vector
+			   (lint-format "perhaps use equivalent? in ~A" caller (truncated-list->string call)))
+			  
+			  ((and (eq? vtype 'vector?)
+				(memq func '(float-vector-set! float-vector-ref int-vector-set! int-vector-ref)))
+			   (lint-format "~A is ~A, so use ~A, not ~A" caller
+					vname (prettify-checker-unq vtype)
+					(if (memq func '(float-vector-set! int-vector-set!))
+					    'vector-set! 'vector-ref)
+					func)))))))))
 
 	;; -------- pointless-type-check
 	(define (pointless-type-check caller local-var vtype func call call-arg1 vars)
@@ -12872,7 +12873,7 @@
 			   (unless vtype
 			     (set! vtype (or (eq? caller top-level:) ; might be a global var where init value is largely irrelevant
 					     (->lint-type (var-initial-value local-var)))))
-
+			   
 			   (let ((lit? (and (code-constant? (var-initial-value local-var))
 					    (not (quoted-null? (var-initial-value local-var)))))) ; something fishy is going on...
 

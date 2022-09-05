@@ -1092,11 +1092,11 @@
 								      (when (eq? (h 'plane) ncp)
 									(set! ncp-row (h 'y))
 									(set! ncp-col (h 'x)))))))
-					     (set-sigint-handler)                                  ; catch C-C to interrupt computation
+					     ;(set-sigint-handler)                                 ; catch C-C to interrupt computation -- this no longer works in notcurses
 					     (let ((str (with-output-to-string                     ; for scheme side output
 							  (lambda ()
 							    (set! val (list (new-eval form envir))))))) ; list, not lambda -- confuses trace!
-					       (unset-sigint-handler nc)                           ; catch C-C to exit cleanly
+					       ;(unset-sigint-handler nc)                           ; catch C-C to exit cleanly
 
 					       (for-each
 						(lambda (s)
@@ -1121,7 +1121,7 @@
 					   (nc-multiline-display (object->string val))))))
 
 				   (lambda (type info)
-				     (unset-sigint-handler nc)
+				     ;(unset-sigint-handler nc)
 				     (if (eq? type 'string-read-error)
 					 (begin
 					   ;; missing close paren, newline already added, spaces here are not optional!
@@ -1131,7 +1131,7 @@
 					 (apply throw type info)))))   ; re-raise error
 
 			       (lambda (type info)
-				 (unset-sigint-handler nc)
+				 ;(unset-sigint-handler nc)
 				 (if (and (eq? type 'read-error)       ; maybe we hit <enter> in a block comment
 					  (equal? info '("unexpected end of input while reading #|")))
 				     (begin
@@ -1297,6 +1297,10 @@
 				(if (< row old-row)
 				    (set-col (eols row))))
 			      (set-col (max (bols row) (- col 1))))))
+
+		  (set! (keymap (+ control-key (char->integer #\C)))
+			(lambda (c)
+			  (set! repl-done #t)))
 
 		  (set! (keymap (+ control-key (char->integer #\D)))
 			(lambda (c)

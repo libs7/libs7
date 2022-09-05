@@ -6358,9 +6358,7 @@ void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc)
     {
       if (vector_element(sc->protected_objects, loc) != sc->unused)
 	sc->protected_objects_free_list[++sc->protected_objects_free_list_loc] = loc;
-#if S7_DEBUGGING
-      else fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
-#endif
+      else if (S7_DEBUGGING) fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
       vector_element(sc->protected_objects, loc) = sc->unused;
     }
 }
@@ -9547,6 +9545,8 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 
 	    case T_LET:
 	      append_let(sc, new_e, check_c_object_let(sc, p, caller));
+	      if (tis_slot(let_slots(new_e))) /* make sure the end slot (sp) is correct */
+		for (sp = let_slots(new_e); tis_slot(next_slot(sp)); sp = next_slot(sp));
 	      continue;
 
 	    default:
@@ -36469,7 +36469,7 @@ s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...)
     {
       set_car(p, va_arg(ap, s7_pointer));
       if ((!is_normal_symbol(car(p))) && (!is_boolean(car(p))) && (!is_pair(car(p))))
-	s7_warn(sc, 512, "s7_make_signature got an invalid entry at position %" ld64, i);
+	s7_warn(sc, 512, "s7_make_signature got an invalid entry %s at position %" ld64, display(car(p)), i);
     }
   va_end(ap);
   return((s7_pointer)res);
@@ -36488,7 +36488,7 @@ s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int 
     {
       set_car(p, va_arg(ap, s7_pointer));
       if ((!is_normal_symbol(car(p))) && (!is_boolean(car(p))) && (!is_pair(car(p))))
-	s7_warn(sc, 512, "s7_make_circular_signature got an invalid entry at position %" ld64, i);
+	s7_warn(sc, 512, "s7_make_circular_signature got an invalid entry %s at position %" ld64, display(car(p)), i);
       if (i == cycle_point) back = p;
       if (i == (len - 1)) end = p;
     }
@@ -36538,17 +36538,8 @@ s7_pointer s7_cddddr(s7_pointer p) {return(cddddr(p));}
 s7_pointer s7_cdddar(s7_pointer p) {return(cdddar(p));}
 s7_pointer s7_cddaar(s7_pointer p) {return(cddaar(p));}
 
-s7_pointer s7_set_car(s7_pointer p, s7_pointer q)
-{
-  set_car(p, q);
-  return(q);
-}
-
-s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q)
-{
-  set_cdr(p, q);
-  return(q);
-}
+s7_pointer s7_set_car(s7_pointer p, s7_pointer q) {set_car(p, q); return(q);}
+s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q) {set_cdr(p, q); return(q);}
 
 
 /* -------------------------------------------------------------------------------- */
@@ -51438,24 +51429,21 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
   bool ignored_flag = false;
   s7_pointer type = car(args), info = cdr(args);
-  sc->w = type; /* might not be a symbol */
-  sc->value = info;
 
-  /* look for a catcher */
-  for (int64_t i = current_stack_top(sc) - 1; i >= 3; i -= 4)
+  set_car(sc->elist_7, type); /* GC protection? type can be anything: (throw (list 1 2 3) (make-list 512)), sc->w not good here */
+  sc->value = info;
+  for (int64_t i = current_stack_top(sc) - 1; i >= 3; i -= 4) /* look for a catcher */
     {
       catch_function_t catcher = catchers[stack_op(sc->stack, i)];
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &ignored_flag)))
 	{
-	  sc->w = sc->nil;
 	  if (sc->longjmp_ok) LongJmp(*(sc->goto_start), THROW_JUMP);
 	  return(sc->value);
 	}}
-  sc->w = sc->nil;
+
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
-
   error_nr(sc, make_symbol(sc, "uncaught-throw"),
 	   set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info));
   return(sc->F);
@@ -51523,7 +51511,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   sc->format_depth = -1;
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
   sc->has_openlets = true;        /*   same problem -- we need a cleaner way to handle this */
-  sc->value = info;               /* feeble GC protection (otherwise info is sometimes freed in this function) */
+  sc->value = info;               /* feeble GC protection (otherwise info is sometimes freed in this function), throw also protects type */
 
   if (sc->current_safe_list > 0)
     clear_list_in_use(sc->safe_lists[sc->current_safe_list]);
@@ -53936,7 +53924,11 @@ static s7_pointer fx_hash_table_increment(s7_scheme *sc, s7_pointer arg)
 static s7_pointer fx_lint_let_ref_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer sym;
-  s7_pointer lt = cdr(s_lookup(sc, opt2_sym(arg), arg));  /* (var-ref local-var) -> local-var, opt_sym2(arg) == cadr(arg) */
+  s7_pointer lt = s_lookup(sc, opt2_sym(arg), arg);  /* (var-ref local-var) -> local-var, opt_sym2(arg) == cadr(arg) */
+  if (!is_pair(lt)) 
+    error_nr(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_3(sc, wrap_string(sc, "~S should be (cons name let), but it is ~S", 42), opt2_sym(arg), lt));
+  lt = cdr(lt);
   if (!is_let(lt)) wrong_type_argument_with_type_nr(sc, sc->let_ref_symbol, 1, lt, a_let_string);
   sym = opt2_sym(cdr(arg));                  /* (let-ref (cdr v) 'ref) -> ref == opt3_sym(cdar(closure_body(opt1_lambda(arg)))); */
   for (s7_pointer y = let_slots(lt); tis_slot(y); y = next_slot(y))
@@ -64504,8 +64496,7 @@ static bool opt_cell_cond(s7_scheme *sc, s7_pointer car_x)
   if (branches == 2)
     {
       if ((max_blen == 1) &&
-	  ((car(last_clause) == sc->else_symbol) ||
-	   (car(last_clause) == sc->T)))
+	  ((car(last_clause) == sc->else_symbol) || (car(last_clause) == sc->T)))
 	{
 	  opt_info *o1;
 	  top->v[6].o1 = top->v[COND_O1].o1->v[COND_CLAUSE_O1].o1;
@@ -67647,7 +67638,6 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     case T_C_OBJECT:
       /* args if sc->args (plist + c_object) can be clobbered here by s7_is_aritable, so we need to protect it */
       args = copy_proper_list(sc, args);
-      /* gc_protect_via_stack(sc, args); */
       sc->temp10 = args;
 
     default:
@@ -77298,16 +77288,14 @@ static void check_cond(s7_scheme *sc)
 	      if (i == 2)
 		{
 		  p = caadr(code);
-		  if ((p == sc->else_symbol) ||
-		      (p == sc->T))
+		  if ((p == sc->else_symbol) || (p == sc->T))
 		    pair_set_syntax_op(form, OP_COND_NA_2E);
 		}
 	      else
 		if (i == 3)
 		  {
 		    p = caaddr(code);
-		    if ((p == sc->else_symbol) ||
-			(p == sc->T))
+		    if ((p == sc->else_symbol) || (p == sc->T))
 		      pair_set_syntax_op(form, OP_COND_NA_3E);
 		  }}}
       else
@@ -81095,7 +81083,7 @@ static bool op_simple_do(s7_scheme *sc)
 {
   /* body might not be safe in this case, but the step and end exprs are easy */
   s7_pointer code = cdr(sc->code);
-  s7_pointer end = opt1_any(code); /* caddr(caadr(code)) */
+  s7_pointer end = opt1_any(code);        /* caddr(caadr(code)) */
   s7_pointer body = cddr(code);
 
   sc->curlet = make_let(sc, sc->curlet);
@@ -81122,7 +81110,7 @@ static bool op_simple_do(s7_scheme *sc)
 
   push_stack_no_args(sc, OP_SIMPLE_DO_STEP, code);
   sc->code = body;
-  return(false); /* goto BEGIN */
+  return(false);                          /* goto BEGIN */
 }
 
 static bool op_simple_do_step(s7_scheme *sc)
@@ -91475,8 +91463,7 @@ static void mark_stack_holdees(s7_scheme *sc, s7_pointer p, s7_int top)
       s7_pointer heap1 = (s7_pointer)(heap0 + sc->heap_size);
       for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
 	{
-	  s7_pointer x;
-	  x = *tp++;
+	  s7_pointer x = *tp++;
 	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
 	  x = *tp++;
 	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
@@ -91761,7 +91748,7 @@ void s7_heap_scan(s7_scheme *sc, int32_t typ)
 			 s7_type_names[unchecked_type(obj->holder)], obj->holder, obj->alloc_line, 
 			 (obj->holders != 1) ? "s" : "", obj->holders);
 	}}
-  if ((!found_one) && (false))
+  if (!found_one)
     fprintf(stderr, "no %s found\n", s7_type_names[typ]);
 }
 
@@ -95637,14 +95624,11 @@ int main(int argc, char **argv)
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
- * nrepl-bits.h via #embed if __has_embed (C23)?
- *   nrepl C-C leaves it hung? (c-q is ok) -- nrepl.c has a sigint handler, but the exit handler does not exit?
- * fully optimize gmp version
+ * fully optimize gmp version or at least extend big_int to int128_t
  *
  * stack ovfl + s7_show_stack
  * elist format_error_1 checked
  * how did :scaler get the value #<undefined>? (gdb) p display(s7_name_to_value(sc, ":scaler")) -> $2 = 0x555556f41dd0 "#<undefined>"
  *   type of that pointer is 4=undef, slot/value are garbage, symbol is partly junk?
- * lint: reseed (line 33): carry is a pair, but random-state in (random-state seed carry) wants an integer?
- *       fop14's first argument should be a number, but :par is a keyword?
+ *   imfo val changed?
  */
