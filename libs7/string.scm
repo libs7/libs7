@@ -118,7 +118,12 @@
          "(string-split str ch) splits str on char ch")
         (+signature+ "(string-split str ch)"))
     (lambda (str ch)
-      (let ((len (string-length str)))
+      (let ((ch (if (char? ch) ch
+                    (if (string? ch)
+                        (if (= 1 (string-length ch))
+                            (car (string->list ch))
+                        (error 'wrong-type-arg "second arg must be a char")))))
+            (len (string-length str)))
         (letrec
             ((split
               (lambda (a b)
