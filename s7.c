@@ -1678,9 +1678,9 @@ typedef enum {P_DISPLAY, P_WRITE, P_READABLE, P_KEY, P_CODE} use_write_t;
 static s7_pointer too_many_arguments_string, not_enough_arguments_string, cant_bind_immutable_string,
   a_boolean_string, a_byte_vector_string, a_format_port_string, a_let_string, a_list_string, a_non_constant_symbol_string,
   a_non_negative_integer_string, a_normal_procedure_string, a_normal_real_string, a_number_string, a_procedure_string, a_procedure_or_a_macro_string,
-  a_proper_list_string, a_random_state_object_string, a_rational_string, a_sequence_string, a_symbol_string, a_thunk_string,
-  a_valid_radix_string, an_association_list_string, an_eq_func_string, an_input_file_port_string, an_input_port_string,
-  an_input_string_port_string, an_open_port_string, an_output_file_port_string, an_output_port_string, an_output_string_port_string,
+  a_proper_list_string, a_random_state_object_string, a_rational_string, a_sequence_string, a_symbol_string, a_thunk_string, a_valid_radix_string, 
+  an_association_list_string, an_eq_func_string, an_input_file_port_string, an_input_port_string, an_input_string_port_string, an_open_port_string, 
+  an_open_output_port_string, an_output_port_or_f_string, an_output_file_port_string, an_output_port_string, an_output_string_port_string,
   an_unsigned_byte_string, caaar_a_list_string, caadr_a_list_string, caar_a_list_string, cadar_a_list_string, caddr_a_list_string,
   cadr_a_list_string, car_a_list_string, cdaar_a_list_string, cdadr_a_list_string, cdar_a_list_string, cddar_a_list_string,
   cdddr_a_list_string, cddr_a_list_string, cdr_a_list_string, immutable_error_string, its_infinite_string, its_nan_string,
@@ -8171,7 +8171,14 @@ static uint8_t *alloc_symbol(s7_scheme *sc)
   return(result);
 }
 
-static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value);
+static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
+{
+  s7_pointer slot = alloc_pointer(sc);
+  set_full_type(slot, T_SLOT | T_UNHEAP);
+  slot_set_symbol_and_value(slot, symbol, value);
+  return(slot);
+}
+
 static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
 
 static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len, uint64_t hash, uint32_t location)
@@ -8898,14 +8905,6 @@ static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_p
   return(let);
 }
 
-static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
-{
-  s7_pointer slot = alloc_pointer(sc);
-  set_full_type(slot, T_SLOT | T_UNHEAP);
-  slot_set_symbol_and_value(slot, symbol, value);
-  return(slot);
-}
-
 static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
 {
   s7_pointer slot, let = alloc_pointer(sc);
@@ -9524,7 +9523,6 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 
 	  switch (type(p))
 	    {
-	      /* should this insist on one style of field arg?  i.e. (cons sym val) throughout, or :sym val etc? */
 	    case T_SYMBOL:
 	      sym = (is_keyword(p)) ? keyword_symbol(p) : p;
 	      if (!is_pair(cdr(x)))
@@ -9886,10 +9884,8 @@ inline s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 
   if (is_openlet(let))
     {
-      /* If a let is a mock-hash-table (for example), implicit
-       *   indexing of the hash-table collides with the same thing for the let (field names
-       *   versus keys), and we can't just try again here because that makes it too easy to
-       *   get into infinite recursion.  So, 'let-ref-fallback...
+      /* If a let is a mock-hash-table (for example), implicit indexing of the hash-table collides with the same thing for the let (field names
+       *   versus keys), and we can't just try again here because that makes it too easy to get into infinite recursion.  So, 'let-ref-fallback...
        */
       if (has_let_ref_fallback(let))
 	return(call_let_ref_fallback(sc, let, symbol));
@@ -15130,8 +15126,6 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
   liberate(sc, b);
   return(res);
 }
-#else
-#define string_to_symbol_or_number(Sc, Name) make_symbol(Sc, Name)
 #endif
 
 static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_symbol, bool with_error)
@@ -26366,7 +26360,9 @@ static void init_strings(void)
   a_byte_vector_string =          make_permanent_string("a byte-vector");
   an_input_port_string =          make_permanent_string("an input port");
   an_open_port_string =           make_permanent_string("an open port");
+  an_open_output_port_string =    make_permanent_string("an open output port");
   an_output_port_string =         make_permanent_string("an output port");
+  an_output_port_or_f_string =    make_permanent_string("an output port or #f");
   an_input_string_port_string =   make_permanent_string("an input string port");
   an_input_file_port_string =     make_permanent_string("an input file port");
   an_output_string_port_string =  make_permanent_string("an output string port");
@@ -27930,16 +27926,15 @@ static s7_pointer g_set_current_output_port(s7_scheme *sc, s7_pointer args)
   #define Q_set_current_output_port s7_make_signature(sc, 2, \
                                       s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol), \
                                       s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol))
-
-  s7_pointer port = car(args), old_port = current_output_port(sc);
+  s7_pointer port = car(args);
+  s7_pointer old_port = current_output_port(sc);
   if (((is_output_port(port)) &&
-       (!port_is_closed(port))) ||
-      (port == sc->F))
+       (!port_is_closed(port))) || (port == sc->F))
     set_current_output_port(sc, port);
   else
     {
       check_method(sc, port, sc->set_current_output_port_symbol, args);
-      wrong_type_arg_error_nr(sc, "set-current-output-port", 0, port, "an open output port");
+      wrong_type_argument_with_type_nr(sc, sc->set_current_output_port_symbol, 0, port, an_output_port_or_f_string);
     }
   return(old_port);
 }
@@ -27968,16 +27963,15 @@ static s7_pointer g_set_current_error_port(s7_scheme *sc, s7_pointer args)
   #define Q_set_current_error_port s7_make_signature(sc, 2, \
                                      s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol), \
                                      s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol))
-
-  s7_pointer port = car(args), old_port = sc->error_port;
+  s7_pointer port = car(args);
+  s7_pointer old_port = sc->error_port;
   if (((is_output_port(port)) &&
-       (!port_is_closed(port))) ||
-      (port == sc->F))
+       (!port_is_closed(port))) || (port == sc->F))
     sc->error_port = port;
   else
     {
       check_method(sc, port, sc->set_current_error_port_symbol, args);
-      wrong_type_arg_error_nr(sc, "set-current-error-port", 0, port, "an open output port");
+      wrong_type_argument_with_type_nr(sc, sc->set_current_error_port_symbol, 0, port, an_output_port_or_f_string);
     }
   return(old_port);
 }
@@ -28129,7 +28123,8 @@ static s7_pointer g_flush_output_port(s7_scheme *sc, s7_pointer args)
   if (!is_output_port(pt))
     {
       if (pt == sc->F) return(pt);
-      return(method_or_bust_with_type_one_arg_p(sc, pt, sc->flush_output_port_symbol, an_output_port_string));
+      check_method(sc, pt, sc->flush_output_port_symbol, args);
+      wrong_type_argument_with_type_nr(sc, sc->flush_output_port_symbol, 0, pt, an_output_port_or_f_string);
     }
   if (!s7_flush_output_port(sc, pt))
     error_nr(sc, sc->io_error_symbol, set_elist_2(sc, wrap_string(sc, "flush-output-port ~S failed", 27), pt));
@@ -28195,7 +28190,8 @@ static s7_pointer g_close_output_port(s7_scheme *sc, s7_pointer args)
   if (!is_output_port(pt))
     {
       if (pt == sc->F) return(sc->unspecified);
-      return(method_or_bust_with_type_one_arg_p(sc, pt, sc->close_output_port_symbol, an_output_port_string));
+      check_method(sc, pt, sc->close_output_port_symbol, args);
+      wrong_type_argument_with_type_nr(sc, sc->close_output_port_symbol, 0, pt, an_output_port_or_f_string);
     }
   s7_close_output_port(sc, pt);
   return(sc->unspecified);
@@ -28570,7 +28566,8 @@ static s7_pointer g_write_string(s7_scheme *sc, s7_pointer args)
 	  len = (s7_int)(end - start);
 	  return(make_string_with_length(sc, (char *)(string_value(str) + start), len));
 	}
-      return(method_or_bust_with_type(sc, port, sc->write_string_symbol, args, an_output_port_string, 2));
+      check_method(sc, port, sc->write_string_symbol, args);
+      wrong_type_argument_with_type_nr(sc, sc->write_string_symbol, 2, port, an_output_port_or_f_string);
     }
   if (port_is_closed(port)) wrong_type_argument_with_type_nr(sc, sc->write_string_symbol, 2, port, an_open_port_string);
   /* redundant error check, but otherwise caller is "write" */
@@ -29305,9 +29302,12 @@ static inline void check_get_output_string_port(s7_scheme *sc, s7_pointer p)
     simple_wrong_type_argument_with_type_nr(sc, sc->get_output_string_symbol, p, wrap_string(sc, "an active (open) string port", 28));
   if (port_position(p) > sc->max_string_length)
     error_nr(sc, sc->out_of_range_symbol,
-	     set_elist_2(sc, wrap_string(sc, "port-position ~D is greater than (*s7* 'max-string-length)", 58),
+	     set_elist_2(sc, wrap_string(sc, "get-output-string port-position ~D is greater than (*s7* 'max-string-length)", 76),
 			 wrap_integer(sc, port_position(p))));
 }
+/* TODO: if pos>max and clear, where should the clear be? similarly below if pos>size how can we call make_string (out-of-bounds) and ignore error?
+ *   if pos>size shouldn't we raise an error somewhere?
+ */
 
 static s7_pointer g_get_output_string(s7_scheme *sc, s7_pointer args)
 {
@@ -29329,7 +29329,8 @@ If the optional 'clear-port' is #t, the current string is flushed."
   if ((!is_output_port(p)) || (!is_string_port(p)))
     {
       if (p == sc->F) return(nil_string);
-      return(method_or_bust_with_type_one_arg_p(sc, p, sc->get_output_string_symbol, wrap_string(sc, "an output string port", 21)));
+      check_method(sc, p, sc->get_output_string_symbol, args);
+      wrong_type_arg_error_nr(sc, "get-output-string", 1, p, "an open string output port or #f");
     }
   check_get_output_string_port(sc, p);
 
@@ -29613,9 +29614,12 @@ static s7_pointer write_char_p_pp(s7_scheme *sc, s7_pointer c, s7_pointer port)
 {
   if (!is_character(c))
     return(method_or_bust_pp(sc, c, sc->write_char_symbol, c, port, T_CHARACTER, 1));
-  if (port == sc->F) return(c);
   if (!is_output_port(port))
-    return(method_or_bust_with_type_pp(sc, port, sc->write_char_symbol, c, port, an_output_port_string, 2));
+    {
+      if (port == sc->F) return(c);
+      check_method(sc, port, sc->write_char_symbol, set_mlist_2(sc, c, port));
+      wrong_type_argument_with_type_nr(sc, sc->write_char_symbol, 2, port, an_output_port_or_f_string);
+    }
   port_write_character(port)(sc, s7_character(c), port);
   return(c);
 }
@@ -29724,7 +29728,8 @@ static s7_pointer g_write_byte(s7_scheme *sc, s7_pointer args)
   if (!is_output_port(port))
     {
       if (port == sc->F) return(car(args));
-      return(method_or_bust_with_type(sc, port, sc->write_byte_symbol, args, an_output_port_string, 2));
+      check_method(sc, port, sc->write_byte_symbol, args);
+      wrong_type_argument_with_type_nr(sc, sc->write_byte_symbol, 2, port, an_output_port_or_f_string);
     }
   if (port_is_closed(port))          /* avoid reporting caller here as write-char */
     wrong_type_argument_with_type_nr(sc, sc->write_byte_symbol, 2, port, an_open_port_string);
@@ -34968,11 +34973,14 @@ static s7_pointer g_newline(s7_scheme *sc, s7_pointer args)
   #define Q_newline s7_make_signature(sc, 2, sc->is_char_symbol, s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol))
 
   s7_pointer port = (is_not_null(args)) ? car(args) : current_output_port(sc);
-  if (port == sc->F) return(newline_char);
   if (!is_output_port(port))
-    return(method_or_bust_with_type_one_arg_p(sc, port, sc->newline_symbol, an_output_port_string));
+    {
+      if (port == sc->F) return(newline_char);
+      check_method(sc, port, sc->newline_symbol, args);
+      wrong_type_argument_with_type_nr(sc, sc->newline_symbol, 0, port, an_output_port_or_f_string);
+    }
   if (port_is_closed(port))
-    wrong_type_arg_error_nr(sc, "newline", 1, port, "an open output port");
+    wrong_type_argument_with_type_nr(sc, sc->newline_symbol, 0, port, an_open_output_port_string);
   s7_newline(sc, port);
   return(newline_char);  /* return(sc->unspecified) until 28-Sep-17, but for example (display c) returns c */
 }
@@ -35001,7 +35009,7 @@ s7_pointer s7_write(s7_scheme *sc, s7_pointer obj, s7_pointer port)
   if (port != sc->F)
     {
       if (port_is_closed(port))
-	wrong_type_arg_error_nr(sc, "write", 2, port, "an open output port");
+	wrong_type_argument_with_type_nr(sc, sc->write_symbol, 2, port, an_open_output_port_string);
       object_out(sc, obj, port, P_WRITE);
     }
   return(obj);
@@ -35009,11 +35017,14 @@ s7_pointer s7_write(s7_scheme *sc, s7_pointer obj, s7_pointer port)
 
 static s7_pointer write_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer port)
 {
-  if (port == sc->F) return(x);
   if (!is_output_port(port))
-    return(method_or_bust_with_type_pp(sc, port, sc->write_symbol, x, port, an_output_port_string, 2));
+    {
+      if (port == sc->F) return(x);
+      check_method(sc, port, sc->write_symbol, set_mlist_2(sc, x, port));
+      wrong_type_argument_with_type_nr(sc, sc->write_symbol, 2, port, an_output_port_or_f_string);
+    }
   if (port_is_closed(port))
-    wrong_type_arg_error_nr(sc, "write", 2, port, "an open output port");
+    wrong_type_argument_with_type_nr(sc, sc->write_symbol, 2, port, an_open_output_port_string);
   return(object_out(sc, x, port, P_WRITE));
 }
 
@@ -35037,7 +35048,7 @@ s7_pointer s7_display(s7_scheme *sc, s7_pointer obj, s7_pointer port)
   if (port != sc->F)
     {
       if (port_is_closed(port))
-	wrong_type_arg_error_nr(sc, "display", 2, port, "an open output port");
+	wrong_type_argument_with_type_nr(sc, sc->display_symbol, 2, port, an_open_output_port_string);
       object_out(sc, obj, port, P_DISPLAY);
     }
   return(obj);
@@ -35045,11 +35056,14 @@ s7_pointer s7_display(s7_scheme *sc, s7_pointer obj, s7_pointer port)
 
 static s7_pointer display_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer port)
 {
-  if (port == sc->F) return(x);
   if (!is_output_port(port))
-    return(method_or_bust_with_type_pp(sc, port, sc->display_symbol, x, port, an_output_port_string, 2));
+    {
+      if (port == sc->F) return(x);
+      check_method(sc, port, sc->display_symbol, set_mlist_2(sc, x, port));
+      wrong_type_argument_with_type_nr(sc, sc->display_symbol, 2, port, an_output_port_or_f_string);
+    }
   if (port_is_closed(port))
-    wrong_type_arg_error_nr(sc, "display", 2, port, "an open output port");
+    wrong_type_argument_with_type_nr(sc, sc->display_symbol, 2, port, an_open_output_port_string);
   check_method(sc, x, sc->display_symbol, set_plist_2(sc, x, port));
   return(object_out(sc, x, port, P_DISPLAY));
 }
@@ -35063,13 +35077,16 @@ static s7_pointer g_display(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_display_2(s7_scheme *sc, s7_pointer args)
 {
-  /* calling display_p_pp here is much slower */
+  /* calling display_p_pp here is much slower */ /* TODO: check this -- does inline help? */
   s7_pointer port = cadr(args);
-  if (port == sc->F) return(car(args));
   if (!is_output_port(port))
-    return(method_or_bust_with_type(sc, port, sc->display_symbol, args, an_output_port_string, 2));
+    {
+      if (port == sc->F) return(car(args));
+      check_method(sc, port, sc->display_symbol, args);
+      wrong_type_argument_with_type_nr(sc, sc->display_symbol, 2, port, an_output_port_or_f_string);
+    }
   if (port_is_closed(port))
-    wrong_type_arg_error_nr(sc, "display", 2, port, "an open output port");
+    wrong_type_argument_with_type_nr(sc, sc->display_symbol, 2, port, an_open_output_port_string);
   check_method(sc, car(args), sc->display_symbol, args);
   return(object_out(sc, car(args), port, P_DISPLAY));
 }
@@ -44746,12 +44763,11 @@ static s7_pointer hash_table_reverse(s7_scheme *sc, s7_pointer old_hash)
   hash_entry_t **old_lists = hash_table_elements(old_hash);
   s7_pointer new_hash = s7_make_hash_table(sc, len);
   s7_int gc_loc = gc_protect_1(sc, new_hash);
-
-  /* I don't think the original hash functions can make any sense in general, so ignore them */
+  
+  /* old_hash checker/mapper functions don't always make sense reversed, although the key/value typers might be ok */
   for (s7_int i = 0; i < len; i++)
     for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
       s7_hash_table_set(sc, new_hash, hash_entry_value(x), hash_entry_key(x));
-
   s7_gc_unprotect_at(sc, gc_loc);
   return(new_hash);
 }
@@ -49060,7 +49076,12 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 	else np = make_simple_vector(sc, len);
 	dest = (s7_pointer *)(vector_elements(np) + len);
 	while (source < end) *(--dest) = *source++;
-      }
+	if (is_typed_vector(p))
+	  {
+	    set_typed_vector(np);
+	    typed_vector_set_typer(np, typed_vector_typer(p));
+	    if (has_simple_elements(p)) set_has_simple_elements(np);
+	  }}
       break;
 
     case T_HASH_TABLE:
@@ -95631,4 +95652,6 @@ int main(int argc, char **argv)
  * how did :scaler get the value #<undefined>? (gdb) p display(s7_name_to_value(sc, ":scaler")) -> $2 = 0x555556f41dd0 "#<undefined>"
  *   type of that pointer is 4=undef, slot/value are garbage, symbol is partly junk?
  *   imfo val changed?
+ * dynamic-unwind needs to check its proc arg for arity (for profile we want speed, but is that dynamic-unwind-profile?)
+ *   also needs s7tests (t615) including error checks
  */
