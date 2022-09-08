@@ -46,7 +46,7 @@
 		 (return (sequence i)))))))))
 
 (define* (find item sequence from-end (test eql) (start 0) end (key identity))
-  (format #t "~A: ~A in ~A~%" (bgred "find") item sequence)
+  ;; (format #t "~A: ~A in ~A~%" (bgred "find") item sequence)
   (find-if (lambda (arg) (test item arg)) sequence from-end start end key))
 
 (define (null obj) (or (not obj) (null? obj)))
@@ -368,5 +368,13 @@ If func approves of one, find-then returns the result of applying fn to it."))
 
 (define (pwd)
   (getcwd (make-string 1024) 1024))
+
+(define (mkdir-recursive path flags)
+  (let ((path (format #f "~A" path)))
+    (if (directory? path)
+        #t
+        (let ((dir (dirname path)))
+          (if (mkdir-recursive dir flags)
+              (mkdir path flags))))))
 
 ;; (display "loaded libs7/utils.scm") (newline)
