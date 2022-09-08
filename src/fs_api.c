@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "s7.h"
@@ -17,6 +18,8 @@ static s7_pointer FILE__symbol;
   Web search finds manpage for Linux canonicalize_filename, but it's
   not on macos.
  */
+
+/* FIXME: remove leading './' */
 /* FIXME: optimize. this does waaay too much copying. */
 /* FIXME: throw an error if too many '..' */
 /* e.g. a/b/../../../../../c */
@@ -24,6 +27,9 @@ char *canonical_path(char *path)
 {
     /* printf("canonical_path: %s\n", path); */
 
+    if (path[0] == '.' && path[1] == '/') {
+        path+=2;
+    }
     char *buf = calloc(strlen(path), sizeof(char*));
     memset(buf, '\0', strlen(path));
 
@@ -364,6 +370,25 @@ static s7_pointer s7__chdir(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, (s7_int)chdir(s7__chdir_0)));
 }
 
+/* -------- mkdir -------- */
+static s7_pointer s7__mkdir(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer p, arg;
+  char* s7__mkdir_0;
+  int s7__mkdir_1;
+  p = args;
+  arg = s7_car(p);
+  if (s7_is_string(arg))
+    s7__mkdir_0 = (char*)s7_string(arg);
+  else return(s7_wrong_type_arg_error(sc, __func__, 1, arg, "string"));
+  p = s7_cdr(p);
+  arg = s7_car(p);
+  if (s7_is_integer(arg))
+    s7__mkdir_1 = (int)s7_integer(arg);
+  else return(s7_wrong_type_arg_error(sc, __func__, 2, arg, "integer"));
+  return(s7_make_integer(sc, (s7_int)mkdir(s7__mkdir_0, s7__mkdir_1)));
+}
+
 /* -------- getcwd -------- */
 static s7_pointer s7__getcwd(s7_scheme *sc, s7_pointer args)
 {
@@ -496,7 +521,7 @@ static s7_pointer g_realpath(s7_scheme *sc, s7_pointer args)
 /* getcwd, chdir, fnmatch */
 void init_fs_api(s7_scheme *sc)
 {
-    s7_pointer cur_env, pl_issi, pl_ss, pl_iss, pl_ssi, pl_sss, pl_is, pl_xt; //  pl_ssix,
+    s7_pointer cur_env, pl_issi, pl_ss, pl_isi, pl_iss, pl_ssi, pl_sss, pl_is, pl_xt; //  pl_ssix,
     /* s7_int gc_loc; */
 
     s7_pointer s,i, t, x;
@@ -508,6 +533,7 @@ void init_fs_api(s7_scheme *sc)
     pl_is = s7_make_signature(sc, 2, i, s);
     pl_ss = s7_make_signature(sc, 2, s, s);
     pl_iss = s7_make_signature(sc, 3, i, s, s);
+    pl_isi = s7_make_signature(sc, 3, i, s, i);
     pl_issi = s7_make_signature(sc, 4, i, s, s, i);
     pl_ssi = s7_make_signature(sc, 3, s, s, i);
     pl_sss = s7_make_signature(sc, 3, s, s, s);
@@ -534,6 +560,10 @@ void init_fs_api(s7_scheme *sc)
                                      1, 0, false,
                                      "int chdir(char*)",
                                      pl_is));
+
+  s7_define(sc, cur_env,
+            s7_make_symbol(sc, "mkdir"),
+            s7_make_typed_function(sc, "mkdir", s7__mkdir, 2, 0, false, "int mkdir(char* int)", pl_isi));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "realpath"),
@@ -608,6 +638,43 @@ void init_fs_api(s7_scheme *sc)
 #endif
 #ifdef FNM_PATHNAME
     s7_define(sc, cur_env, s7_make_symbol(sc, "FNM_PATHNAME"), s7_make_integer(sc, (s7_int)FNM_PATHNAME));
+#endif
+
+#ifdef S_IRWXO
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IRWXO"), s7_make_integer(sc, (s7_int)S_IRWXO));
+#endif
+#ifdef S_IXOTH
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IXOTH"), s7_make_integer(sc, (s7_int)S_IXOTH));
+#endif
+#ifdef S_IWOTH
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IWOTH"), s7_make_integer(sc, (s7_int)S_IWOTH));
+#endif
+#ifdef S_IROTH
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IROTH"), s7_make_integer(sc, (s7_int)S_IROTH));
+#endif
+#ifdef S_IRWXG
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IRWXG"), s7_make_integer(sc, (s7_int)S_IRWXG));
+#endif
+#ifdef S_IXGRP
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IXGRP"), s7_make_integer(sc, (s7_int)S_IXGRP));
+#endif
+#ifdef S_IWGRP
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IWGRP"), s7_make_integer(sc, (s7_int)S_IWGRP));
+#endif
+#ifdef S_IRGRP
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IRGRP"), s7_make_integer(sc, (s7_int)S_IRGRP));
+#endif
+#ifdef S_IRWXU
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IRWXU"), s7_make_integer(sc, (s7_int)S_IRWXU));
+#endif
+#ifdef S_IXUSR
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IXUSR"), s7_make_integer(sc, (s7_int)S_IXUSR));
+#endif
+#ifdef S_IWUSR
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IWUSR"), s7_make_integer(sc, (s7_int)S_IWUSR));
+#endif
+#ifdef S_IRUSR
+  s7_define(sc, cur_env, s7_make_symbol(sc, "S_IRUSR"), s7_make_integer(sc, (s7_int)S_IRUSR));
 #endif
 }
 
