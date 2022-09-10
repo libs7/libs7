@@ -5913,7 +5913,7 @@ s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg
 }
 
 #if 0
-s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
+/* noreturn? */ s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
 {
   if (arg_n > 0) wrong_type_error_nr(sc, caller, arg_n, arg, descr);
   sole_arg_wrong_type_error_nr(sc, caller, arg, descr);
@@ -5948,7 +5948,7 @@ s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n
 }
 
 #if 0
-s7_pointer s7_out_of_range_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
+/* noreturn? */ s7_pointer s7_out_of_range_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
 {
   if (arg_n > 0) out_of_range_error_nr(sc, caller, arg_n, arg, descr);
   sole_arg_out_of_range_error_nr(sc, caller, arg, descr);
@@ -5999,8 +5999,7 @@ static noreturn void immutable_object_error_nr(s7_scheme *sc, s7_pointer info) {
 /* -------- method handlers -------- */
 s7_pointer s7_method(s7_scheme *sc, s7_pointer obj, s7_pointer method)
 {
-  if (has_active_methods(sc, obj))
-    return(find_method_with_let(sc, obj, method));
+  if (has_active_methods(sc, obj)) return(find_method_with_let(sc, obj, method));
   return(sc->undefined);
 }
 
@@ -6017,7 +6016,7 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
 {
   s7_pointer func = find_method_with_let(sc, obj, method);
   if (func == sc->undefined) return(sc->F);
-  return(s7_apply_function(sc, func, list_1(sc, obj))); /* plist here and below will probably not work (_pp case known bad) */
+  return(s7_apply_function(sc, func, set_mlist_1(sc, obj))); /* plist here and below will probably not work (_pp case known bad) */
 }
 
 /* this is a macro mainly to simplify the Checker handling */
@@ -6032,48 +6031,40 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
 static s7_pointer find_and_apply_method(s7_scheme *sc, s7_pointer obj, s7_pointer sym, s7_pointer args)
 {
   s7_pointer func = find_method_with_let(sc, obj, sym);
-  if (func == sc->undefined)
-    missing_method_error_nr(sc, sym, obj);
+  if (func == sc->undefined) missing_method_error_nr(sc, sym, obj);
   return(s7_apply_function(sc, func, args));
 }
 
 static s7_pointer method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, uint8_t typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
   return(find_and_apply_method(sc, obj, method, args));
 }
 
 static s7_pointer method_or_bust_p(s7_scheme *sc, s7_pointer obj, s7_pointer method, uint8_t typ)
 {
-  if (!has_active_methods(sc, obj))
-    sole_arg_wrong_type_error_nr(sc, method, obj, sc->type_names[typ]);
+  if (!has_active_methods(sc, obj)) sole_arg_wrong_type_error_nr(sc, method, obj, sc->type_names[typ]);
   return(find_and_apply_method(sc, obj, method, set_mlist_1(sc, obj)));
 }
 
 static s7_pointer method_or_bust_pp(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer x1, s7_pointer x2, uint8_t typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
   return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
 static s7_pointer method_or_bust_ppp(s7_scheme *sc, s7_pointer obj, s7_pointer method,
 				     s7_pointer x1, s7_pointer x2, s7_pointer x3, uint8_t typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
-  return(find_and_apply_method(sc, obj, method, list_3(sc, x1, x2, x3)));
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
+  return(find_and_apply_method(sc, obj, method, set_qlist_3(sc, x1, x2, x3))); /* was list_3, plist not safe */
 }
 
 static s7_pointer mutable_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, uint8_t typ, int32_t num)
 {
-  if (has_active_methods(sc, obj))
-    return(find_and_apply_method(sc, obj, method, args));
-  if (type(obj) != typ)
-    wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
-  if (!is_immutable(obj))
-    wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
+  if (has_active_methods(sc, obj)) return(find_and_apply_method(sc, obj, method, args));
+  if (type(obj) != typ) wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
+  if (!is_immutable(obj)) wrong_type_error_nr(sc, method, num, obj, sc->type_names[typ]);
   immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, method, obj));
   return(NULL);
 }
@@ -6081,28 +6072,25 @@ static s7_pointer mutable_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_point
 static s7_pointer mutable_method_or_bust_ppp(s7_scheme *sc, s7_pointer obj, s7_pointer method,
 					     s7_pointer x1, s7_pointer x2, s7_pointer x3, uint8_t typ, int32_t num)
 {
-  return(mutable_method_or_bust(sc, obj, method, list_3(sc, x1, x2, x3), typ, num));
+  return(mutable_method_or_bust(sc, obj, method, set_qlist_3(sc, x1, x2, x3), typ, num)); /* was list_3, plist_3 not safe */
 }
 
 static s7_pointer sole_arg_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, uint8_t typ)
 {
-  if (!has_active_methods(sc, obj))
-    sole_arg_wrong_type_error_nr(sc, method, obj, sc->type_names[typ]);
+  if (!has_active_methods(sc, obj))  sole_arg_wrong_type_error_nr(sc, method, obj, sc->type_names[typ]);
   return(find_and_apply_method(sc, obj, method, args));
 }
 
 static s7_pointer method_or_bust_with_type(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, s7_pointer typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, typ);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, typ);
   return(find_and_apply_method(sc, obj, method, args));
 }
 
 static s7_pointer method_or_bust_with_type_pp(s7_scheme *sc, s7_pointer obj, s7_pointer method,
 					      s7_pointer x1, s7_pointer x2, s7_pointer typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, typ);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
@@ -6111,31 +6099,27 @@ static s7_pointer method_or_bust_with_type_and_loc_pp(s7_scheme *sc, s7_pointer 
 {
   int32_t loc = sc->error_argnum + num;
   sc->error_argnum = 0;
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, loc, obj, typ);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, loc, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
 static s7_pointer method_or_bust_with_type_pi(s7_scheme *sc, s7_pointer obj, s7_pointer method,
 					      s7_pointer x1, s7_int x2, s7_pointer typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, typ);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, make_integer(sc, x2))));
 }
 
 static s7_pointer method_or_bust_with_type_pf(s7_scheme *sc, s7_pointer obj, s7_pointer method,
 					      s7_pointer x1, s7_double x2, s7_pointer typ, int32_t num)
 {
-  if (!has_active_methods(sc, obj))
-    wrong_type_error_nr(sc, method, num, obj, typ);
+  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, make_real(sc, x2))));
 }
 
 static s7_pointer sole_arg_method_or_bust_with_type_p(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer typ)
 {
-  if (!has_active_methods(sc, obj))
-    sole_arg_wrong_type_error_nr(sc, method, obj, typ);
+  if (!has_active_methods(sc, obj)) sole_arg_wrong_type_error_nr(sc, method, obj, typ);
   return(find_and_apply_method(sc, obj, method, set_mlist_1(sc, obj)));
 }
 
@@ -25083,6 +25067,7 @@ static s7_pointer random_state_copy(s7_scheme *sc, s7_pointer args)
 }
 #if S7_DEBUGGING
   static s7_int last_carry = 0;
+  /* 2083801278 */
 #endif
 
 s7_pointer s7_random_state(s7_scheme *sc, s7_pointer args)
@@ -36963,7 +36948,7 @@ static s7_pointer make_list_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer init)
   len = s7_integer_clamped_if_gmp(sc, n);
 #if WITH_GMP
   if ((len == 0) && (!is_zero(n)))
-    out_of_range_error_nr(sc, sc->make_list_symbol, 1, n, wrap_string(sc, "big integer is too big for s7_int", 33));
+    out_of_range_error_nr(sc, sc->make_list_symbol, int_one, n, wrap_string(sc, "big integer is too big for s7_int", 33));
 #endif
   if (len == 0) return(sc->nil);          /* what about (make-list 0 123)? */
   if ((len < 0) || (len > sc->max_list_length))
@@ -48621,19 +48606,20 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
     {
     case T_PAIR:
       {
-	s7_pointer p = source, dp;
+	s7_pointer p = source;
+	i = 0;
 	if (start > 0)
 	  for (i = 0; i < start; i++)
 	    p = cdr(p);
 	/* dest won't be a pair here if source != dest -- the pair->pair case was caught above */
 	if (source == dest) /* here start != 0 (see above) */
-	  for (dp = source, i = start; i < end; i++, p = cdr(p), dp = cdr(dp))
+	  for (s7_pointer dp = source /* i = start */; i < end; i++, p = cdr(p), dp = cdr(dp))
 	    set_car(dp, car(p));
 	else
 	  if (is_string(dest))
 	    {
 	      char *dst = string_value(dest);
-	      for (i = start, j = 0; i < end; i++, j++, p = cdr(p))
+	      for (/* i = start */ j = 0; i < end; i++, j++, p = cdr(p))
 		{
 		  if (!is_character(car(p)))
 		    copy_element_error_nr(sc, caller, i + 1, car(p), T_CHARACTER);
@@ -48643,11 +48629,11 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	    if ((is_normal_vector(dest)) && (set != typed_vector_setter))
 	      {
 		s7_pointer *els = vector_elements(dest);
-		for (i = start, j = 0; i < end; i++, j++, p = cdr(p))
+		for (/* i = start */ j = 0; i < end; i++, j++, p = cdr(p))
 		  els[j] = car(p);
 	      }
 	    else
-	      for (i = start, j = 0; i < end; i++, j++, p = cdr(p))
+	      for (/* i = start */ j = 0; i < end; i++, j++, p = cdr(p))
 		set(sc, dest, j, car(p));
 	return(dest);
       }
@@ -95644,8 +95630,5 @@ int main(int argc, char **argv)
  * how did :scaler get the value #<undefined>? (gdb) p display(s7_name_to_value(sc, ":scaler")) -> $2 = 0x555556f41dd0 "#<undefined>"
  *   type of that pointer is 4=undef, slot/value are garbage, symbol is partly junk?
  *   imfo val changed?
- * check remaining strlens, export new versions?  (safe_strlen(caller), make-string-wrapper)
- *   s7_wrong_type_error? s7_out_of_range_error? -- can we use these in clm2xen etc?
- *   to do so we need to export wrap_string, and save symbols where we now have S_* (S_vct etc -> vct_symbol perhaps)
- *   Xen_check_type: Xen_check_type(Xen_is_integer(type), type, 1, S_make_fft_window, "an integer (window type)");
+ * reduce method call variants
  */
