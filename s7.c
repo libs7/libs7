@@ -9430,7 +9430,9 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	      symbol_set_id(sym, the_un_id);
 	      slot_set_value(global_slot(sym), sc->undefined);
 	      /* TODO: here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
-	    }}
+	    }
+	  else error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "cutlet can't remove ~S", 22), sym));
+	}
       else
 	{
 	  s7_pointer slot;
@@ -49419,12 +49421,13 @@ static s7_int total_sequence_length(s7_scheme *sc, s7_pointer args, s7_pointer c
 
 static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_pointer caller)
 {
-  s7_pointer new_vec, p, pargs;
+  s7_pointer new_vec, p, pargs, vtyper = NULL;
   s7_pointer *v_elements = NULL;
   s7_double *fv_elements = NULL;
   s7_int *iv_elements = NULL;
   uint8_t *byte_elements = NULL;
   s7_int i, len;
+  bool typed;
 
   s7_gc_protect_via_stack(sc, args);
   len = total_sequence_length(sc, args, caller, (typ == T_VECTOR) ? T_FREE : ((typ == T_FLOAT_VECTOR) ? T_REAL : T_INTEGER));
@@ -49438,6 +49441,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 			   wrap_integer(sc, sc->max_vector_length)));
     }
   new_vec = make_vector_1(sc, len, (typ == T_VECTOR) ? FILLED : NOT_FILLED, typ);  /* might hit GC in loop below so we can't use NOT_FILLED here (??) */
+  typed = (typ == T_VECTOR);
   stack_protected2(sc) = new_vec;
   add_vector(sc, new_vec);
   if (len == 0)
@@ -49464,6 +49468,15 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
       s7_int n = sequence_length(sc, x);
       if (n > 0)
 	{
+	  if ((typed) && (is_normal_vector(x)) && (is_typed_vector(x)))
+	    {
+	      if (!vtyper) 
+		vtyper = typed_vector_typer(x);
+	      else
+		if (vtyper != typed_vector_typer(x))
+		  typed = false;
+	    }
+	  else typed = false;
 	  vector_length(new_vec) = n;
 	  set_car(pargs, x);
 	  s7_copy_1(sc, caller, pargs);             /* not set_plist_2 here! */
@@ -49492,21 +49505,50 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 	int_vector_ints(new_vec) = iv_elements;
       else byte_vector_bytes(new_vec) = byte_elements;
   vector_length(new_vec) = len;
-
+  if ((typed) && (vtyper))
+    {
+      set_typed_vector(new_vec);
+      typed_vector_set_typer(new_vec, vtyper);
+    }
   unstack(sc);
   return(new_vec);
 }
 
 static s7_pointer hash_table_append(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer new_hash;
+  s7_pointer new_hash, key_typer = NULL, value_typer = NULL;
+  bool typed = true;
   s7_gc_protect_via_stack(sc, args);
   check_stack_size(sc);
   new_hash = s7_make_hash_table(sc, sc->default_hash_table_length);
   stack_protected2(sc) = new_hash;
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
-    if (!sequence_is_empty(sc, car(p)))
-      s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, car(p), new_hash));
+    {
+      s7_pointer seq = car(p);
+      if (!sequence_is_empty(sc, seq))
+	{
+	  s7_copy_1(sc, sc->append_symbol, set_plist_2(sc, seq, new_hash));
+	  if ((typed) && (is_hash_table(seq)) && (is_typed_hash_table(seq)))
+	    {
+	      if (!key_typer)
+		{
+		  key_typer = hash_table_key_typer(seq);
+		  value_typer = hash_table_value_typer(seq);
+		}
+	      else
+		if ((hash_table_key_typer(seq) != key_typer) ||
+		    (hash_table_value_typer(seq) != value_typer))
+		  typed = false;
+	    }
+	  else typed = false;
+	}}
+  if ((typed) && (key_typer))
+    {
+      hash_table_set_procedures(new_hash, make_hash_table_procedures(sc));
+      set_is_typed_hash_table(new_hash);
+      hash_table_set_key_typer(new_hash, key_typer);
+      hash_table_set_value_typer(new_hash, value_typer);
+    }
   set_plist_2(sc, sc->nil, sc->nil);
   unstack(sc);
   return(new_hash);
@@ -82242,7 +82284,8 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 		 set_elist_5(sc, wrap_string(sc, "~S: not enough arguments: ((~S ~S ...)~{~^ ~S~})", 48),
 			     closure_name(sc, sc->code),
 			     (is_closure(sc->code)) ? sc->lambda_symbol : ((is_bacro(sc->code)) ? sc->bacro_symbol : sc->macro_symbol),
-			     closure_args(sc->code),	sc->args));
+			     closure_args(sc->code),
+			     sc->args));
       slot = make_slot(sc, sym, T_Pos(unchecked_car(z)));
       symbol_set_local_slot(sym, id, slot);
       if (tis_slot(last_slot))
@@ -82258,7 +82301,8 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 		 set_elist_5(sc, wrap_string(sc, "~S: too many arguments: ((~S ~S ...)~{~^ ~S~})", 46),
 			     closure_name(sc, sc->code),
 			     (is_closure(sc->code)) ? sc->lambda_symbol : ((is_bacro(sc->code)) ? sc->bacro_symbol : sc->macro_symbol),
-			     closure_args(sc->code),	sc->args));
+			     closure_args(sc->code),
+			     sc->args));
     }
   else
     {
@@ -95594,7 +95638,7 @@ int main(int argc, char **argv)
  * tfft      7820   7729   4755   4455   4456
  * tmap      8869   8774   4489   4482   4477
  * tshoot    5525   5447   5183   5068   5056
- * tstr      6880   6342   5488   5122   5131 [resize_heap]
+ * tstr      6880   6342   5488   5122   5131
  * tform     5357   5348   5307   5279   5320
  * tnum      6348   6013   5433   5359   5369
  * tlamb     6423   6273   5720   5544   5545
@@ -95622,11 +95666,7 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
  *
- * stack ovfl + s7_show_stack
  * how did :scaler get the value #<undefined>? (gdb) p display(s7_name_to_value(sc, ":scaler")) -> $2 = 0x555556f41dd0 "#<undefined>"
  *   type of that pointer is 4=undef, slot/value are garbage, symbol is partly junk?
- * check subvector typer + block/additive typer (see t718), opt+typers (see t718)
- *   (vector-typer (append (make-vector 1 'a symbol?) (make-vector 2 'b symbol?))) -> #f
- *   (hash-table-key-typer (append (let ((H (make-hash-table 4 eq? (cons symbol? integer?)))) (set! (H 'a) 1) H)
- *			      (let ((H (make-hash-table 4 eq? (cons symbol? integer?)))) (set! (H 'b) 2) H))) -> #f
+ * what about hash append mapper/checker?
  */
