@@ -7466,7 +7466,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
 #if (S7_DEBUGGING) && (!MS_WINDOWS)
   if (show_gc_stats(sc))
-    s7_warn(sc, 512, "%s from %s[%d]: old: %ld / %ld, new: %ld, fraction: %.3f -> %ld\n",
+    s7_warn(sc, 512, "%s from %s[%d]: old: %" ld64 " / %ld, new: %" ld64 ", fraction: %.3f -> %" ld64 "\n",
 	    __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
 #endif
 
@@ -24720,7 +24720,7 @@ static s7_pointer big_logior(s7_scheme *sc, s7_int start, s7_pointer args)
 	    wrong_type_error_nr(sc, sc->logior_symbol, position_of(x, args), i, sc->type_names[T_INTEGER]);
 	  return(method_or_bust(sc, i, sc->logior_symbol,
 				set_ulist_1(sc, mpz_to_integer(sc, sc->mpz_1), x),
-				T_INTEGER, position_of(x, args)));
+				sc->type_names[T_INTEGER], position_of(x, args)));
 	}}
   return(mpz_to_integer(sc, sc->mpz_1));
 }
@@ -25487,9 +25487,9 @@ static s7_pointer integer_to_char_p_p(s7_scheme *sc, s7_pointer x)
   if (!s7_is_integer(x))
     return(method_or_bust_p(sc, x, sc->integer_to_char_symbol, sc->type_names[T_INTEGER]));
   ind = s7_integer_clamped_if_gmp(sc, x);
-  if ((ind >= 0) && (ind < NUM_CHARS))
-    return(chars[(uint8_t)ind]);
-  sole_arg_out_of_range_error_nr(sc, sc->integer_to_char_symbol, x, wrap_string(sc, "it doen't fit in an unsigned byte", 33));
+  if ((ind < 0) || (ind >= NUM_CHARS))
+    sole_arg_out_of_range_error_nr(sc, sc->integer_to_char_symbol, x, wrap_string(sc, "it doen't fit in an unsigned byte", 33));
+  return(chars[(uint8_t)ind]);
 }
 
 static s7_pointer g_integer_to_char(s7_scheme *sc, s7_pointer args)
@@ -25501,9 +25501,10 @@ static s7_pointer g_integer_to_char(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer integer_to_char_p_i(s7_scheme *sc, s7_int ind)
 {
-  if ((ind >= 0) && (ind < NUM_CHARS))
-    return(chars[(uint8_t)ind]);
-  sole_arg_out_of_range_error_nr(sc, sc->integer_to_char_symbol, wrap_integer(sc, ind), wrap_string(sc, "it doen't fit in an unsigned byte", 33)); /* int2 s7_out... uses 1 */
+  if ((ind < 0) || (ind >= NUM_CHARS))
+    sole_arg_out_of_range_error_nr(sc, sc->integer_to_char_symbol, wrap_integer(sc, ind), 
+				   wrap_string(sc, "it doen't fit in an unsigned byte", 33)); /* int2 s7_out... uses 1 */
+  return(chars[(uint8_t)ind]);
 }
 
 
@@ -38947,12 +38948,10 @@ static s7_pointer byte_vector_setter(s7_scheme *sc, s7_pointer str, s7_int loc, 
   if (!s7_is_integer(val))
     wrong_type_error_nr(sc, sc->byte_vector_set_symbol, 3, val, sc->type_names[T_INTEGER]);
   byte = s7_integer_clamped_if_gmp(sc, val);
-  if ((byte >= 0) && (byte < 256))
-    {
-      byte_vector(str, loc) = (uint8_t)byte;
-      return(val);
-    }
-  wrong_type_error_nr(sc, sc->byte_vector_set_symbol, 3, val, wrap_string(sc, "a byte", 6));
+  if ((byte < 0) || (byte >= 256))
+    wrong_type_error_nr(sc, sc->byte_vector_set_symbol, 3, val, wrap_string(sc, "a byte", 6));
+  byte_vector(str, loc) = (uint8_t)byte;
+  return(val);
 }
 
 static block_t *mallocate_empty_block(s7_scheme *sc)
@@ -52816,7 +52815,7 @@ static s7_pointer g_exit(s7_scheme *sc, s7_pointer args)
 }
 
 #if WITH_GCC
-static s7_pointer g_abort(s7_scheme *sc, s7_pointer args) {abort();}
+static s7_pointer g_abort(s7_scheme *sc, s7_pointer args) {abort(); return(NULL);}
 #endif
 
 

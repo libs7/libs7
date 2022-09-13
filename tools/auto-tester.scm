@@ -26,9 +26,9 @@
   (let ((seed (with-let *libc*
 		(let ((res (clock_gettime CLOCK_MONOTONIC)))
 		  (+ (* 1000000000 (cadr res)) (caddr res)))))
-	(carry (#(1791398085 1929682203 1683268614 1965537969 1675393560 1967773755 1517746329
-                  1447497129 1655692410 1606218150 2051013963 1075433238 1557985959 1781943330
-                  1893513180 1631296680 2131995753 2083801278 1873196400 1554115554)
+	(carry (#i(1791398085 1929682203 1683268614 1965537969 1675393560 1967773755 1517746329
+                   1447497129 1655692410 1606218150 2051013963 1075433238 1557985959 1781943330
+                   1893513180 1631296680 2131995753 2083801278 1873196400 1554115554)
 		(random 20))))
     (random-state seed carry)))
 
@@ -129,8 +129,8 @@
 (define curstr "")
 (define last-func #f)
 
-(define error-type #f)
-(define error-info ())
+(define error-type 'no-error)
+(define error-info #f)
 (define false #f)
 (define-constant _undef_ (car (with-input-from-string "(#_asdf 1 2)" read)))
 (define kar car)
@@ -158,8 +158,7 @@
   (let ((H (hash-table 'v1 1 'v2 2 'v3 3))
 	(last-key #f))
     (define (valtyp val)
-      (or (not last-key)
-	  (eq? last-key 'v1)
+      (or (memq last-key '(#f v1))
 	  (and (eq? last-key 'v2)
 	       (<= 0 val 32))))
     (define (keytyp key)
@@ -181,8 +180,7 @@
 						 (cons eqf mapf))))
 			   (last-key #f))
 		       (define (valtyp val)
-			 (or (not last-key)
-			     (eq? last-key 'v1)
+			 (or (memq last-key '(#f v1))
 			     (and (eq? last-key 'v2)
 				  (<= 0 val 32))))
 		       (define (keytyp key)
@@ -194,7 +192,7 @@
 (define-constant H_6 (let ((h (make-hash-table 8 eq? (cons symbol? hash-table?))))
 		       (hash-table-set! h 'a h)
 		       h))
-(define-constant L_6 (immutable! (let ((L (inlet 'a #f))) (let-set! L 'a L) L)))
+(define-constant L_6 (let ((L (inlet 'a #f))) (let-set! L 'a L) (immutable! L)))
 
 (define fvref float-vector-ref)
 (define ivref int-vector-ref)
@@ -259,15 +257,15 @@
 (define (tf10 x)
   (fop9 x 1))
 (define fop13 ; op_closure_na
+  (lambda (i s L V S H E)
+    (vector (L (+ i 1)) (V (+ i 1)) (S (+ i 1)) (H (+ i 1)) (E (string->symbol s)))))
+(define (tf13 x)
   (let ((L1 (list 1 2 3))
 	(V1 (vector 1 2 3))
 	(S1 "123")
 	(H1 (hash-table 1 1 2 2 3 3))
 	(E1 (inlet :a 1 :b 2)))
-    (lambda (i s L V S H E)
-      (vector (L (+ i 1)) (V (+ i 1)) (S (+ i 1)) (H (+ i 1)) (E (string->symbol s))))))
-(define (tf13 x)
-  (fop13 x "a" L1 V1 S1 H1 E1) (vector 2 2 #\2 1 1))
+    (fop13 x "a" L1 V1 S1 H1 E1) (vector 2 2 #\2 1 1)))
 (define* (fop14 par) ; safe_closure*_ka
   (+ par 1))
 (define (tf14 x)
@@ -505,8 +503,7 @@
 	   (set-current-output-port _port_))
 	 (lambda ()
 	   ,@args
-	   (flush-output-port _port_)
-	   (get-output-string _port_))
+	   (get-output-string _port_ #t))
 	 (lambda ()
 	   (close-output-port _port_)
 	   (set-current-output-port _old_port_)))))
@@ -518,10 +515,10 @@
   `(call/cc (lambda (_x_) (_x_ ,@args))))
 
 (define-expansion (_ct1_ . args)
-  `(catch 'oops (lambda () (call-with-exit (lambda (goto) (values ,@args)))) (lambda args 'error)))
+  `(catch #t (lambda () (call-with-exit (lambda (goto) (values ,@args)))) (lambda args 'error)))
 
 (define-expansion (_ct2_ . args)
-  `(catch 'oops (lambda () (call-with-exit (lambda (goto) (goto ,@args)))) (lambda args 'error)))
+  `(catch #t (lambda () (call-with-exit (lambda (goto) (goto ,@args)))) (lambda args 'error)))
 
 (define-expansion (_ft1_ . args)
   `(let ((_f_ (lambda () ,@args))) (_f_) (_f_)))
@@ -546,14 +543,14 @@
        (do ((i 0 (+ i 1)))
 	   ((= i 1))
 	 ,@(map (lambda (x)
-		  (list 'display x))
+		  (list 'values x))
 		args)))))
 
 (define-expansion (_do2_ . args)
   `(with-output-to-string
      (lambda ()
        ,@(map (lambda (x)
-		(list 'display x))
+		(list 'values x))
 	      args))))
 
 (define-expansion (_do4_ . args)
@@ -635,7 +632,7 @@
 	   (set! port (open-output-string)))
 	 (lambda ()
 	   (format port "~S" (car (list ,@args)))
-	   (get-output-string port))
+	   (get-output-string port #t))
 	 (lambda ()
 	   (close-output-port port)))))
 
@@ -668,7 +665,7 @@
   `(map values (list ,@args)))
 
 (define-expansion (_cat1_ . args)
-  `(catch 'oops
+  `(catch #t
      (lambda ()
        (catch 'not-oops
 	 (lambda ()
@@ -679,7 +676,7 @@
        'error)))
 
 (define-expansion (_cat2_ . args)
-  `(catch 'oops
+  `(catch #t
      (lambda ()
        (catch 'not-oops
 	 (lambda ()
@@ -754,6 +751,7 @@
 (when with-mock-data
   (define-constant imfi (immutable! (mock-port (open-input-string "asdf"))))
   (define-constant imfo (immutable! (mock-port (open-output-string))))
+  (with-let imfo (set! (setter 'value) (lambda (obj field val) (error 'out-of-range "can't set imfo value"))))
   (define-constant imr (immutable! (mock-random-state 123456))))
 
 (define-constant bigi0 (bignum 0))
@@ -991,7 +989,7 @@
 			  's7-float-format-precision
 
 			  'block 'make-block 'block? 'block-ref 'block-set!
-			  'blocks 'unsafe-blocks 'blocks1 'unsafe-blocks1 'blocks3 'unsafe-blocks3 'blocks4 'unsafe-blocks3 'blocks5
+			  'blocks 'unsafe-blocks 'blocks1 'unsafe-blocks1 'blocks3 'unsafe-blocks3 'blocks4 'unsafe-blocks4 'blocks5
 			  'block-reverse! 'subblock 'block-append 'block-let
 			  ;'simple-block? 'make-simple-block ;'make-c-tag ; -- uninteresting diffs
 			  'make-cycle
@@ -1087,7 +1085,7 @@
 		    "float-var" "int-var" "ratio-var" "complex-var"
 		    (reader-cond ((provided? 'number-separator) "1,232"))
 
-                    "(apply + (make-list 2 3))" "(let ((a 1) (b 2) (c 3)) (+ a b c))" "(let ((x '(\"asdf\"))) (apply format #f x))"
+                    "(apply + (make-list 2 3))" "(let ((a 1) (b 2) (c 3)) (+ a b c))" "(let ((x '(\"asdf\"))) (apply #_format #f x))"
                     "(cons (cons + -) *)" "(list (list quasiquote +) -1)" "(let ((s '(1 2))) (list (car s) (cdr s)))"
                     "(let ((i 3)) (list i (expt 2 i)))" "(more-values)" "(- (+ x x) (* x x))"
 
@@ -1524,10 +1522,7 @@
 	    (set! j (+ j 1)))
 
 	  (if (= dqs 1)
-	      (begin
-		(set! (str j) #\")
-		;(set! j (+ j 1))
-		))
+	      (set! (str j) #\"))
 
 	  (if (> parens 0)
 	      (do ((k parens (- k 1))
@@ -1564,8 +1559,15 @@
       (if (string-position "a1" str) (format *stderr* "a1: ~W~%" a1))
       (if (string-position "a2" str) (format *stderr* "a2: ~W~%" a2))
       (if (string-position "a3" str) (format *stderr* "a3: ~W~%" a3))
-      (if (string-position "a4" str) (format *stderr* "a4: ~W~%" a4)))
-
+      (if (string-position "a4" str) (format *stderr* "a4: ~W~%" a4))
+      (newline *stderr*)
+      (let ((tree (with-input-from-string str read)))
+	(let walker ((p tree))
+	  (if (symbol? p)
+	      (format *stderr* "(~S ~S) " p (symbol->value p))
+	      (when (pair? p)
+		(walker (car p))
+		(walker (cdr p)))))))
 
     (define (same-type? val1 val2 val3 val4 str str1 str2 str3 str4)
       (cond ((not (type-eqv? val1 val2 val3 val4))
@@ -1584,10 +1586,19 @@
 				      (eq? val2 'error)
 				      (eq? val3 'error)
 				      (eq? val4 'error))
-				  (format #f "    ~S: ~S~%" error-type
+				  (format #f "    from same-type type-eqv: ~S: ~S~%" error-type
 					  (if (pair? error-info)
-					      (tp (apply format #f (car error-info) (cdr error-info)))
+					      (tp (catch #t
+						    (lambda ()
+						      (apply #_format #f error-info))
+						    (lambda (type info)
+						      (write "same-type format-error\n" *stderr*)
+						      (write error-info *stderr*) 
+						      (newline *stderr*)
+						      (write info)
+						      (newline *stderr*))))
 					      error-info)))))
+		 (set! error-info #f)
 		 (unless (and errstr
 			      (or (not (string? errstr))
 				  (string-position "unbound" errstr)
@@ -1635,10 +1646,14 @@
 			   (eq? val4 'error))
 		       (catch #t
 			 (lambda ()
-			   (format *stderr* "    ~S: ~S~%" error-type
+			   (format *stderr* "    from same-type symbol: ~S: ~S~%" error-type
 				   (if (and (pair? error-info)
 					    (string? (car error-info)))
-				       (tp (apply format #f (car error-info) (cdr error-info)))
+				       (tp (catch #t
+					     (lambda ()
+					       (apply #_format #f error-info))
+					     (lambda (type info)
+					       (format *stderr* "format error symbol? in same-type\n"))))
 				       error-info)))
 			 (lambda args
 			   (format *stderr* "error in format in t725: ~S~%" (list str val1 val2 val3 val4))))))))
@@ -1711,7 +1726,7 @@
       (set! (current-output-port) #f)
       (set! estr str)
       (set! old-definee _definee_)
-      (when with-mock-data (get-output-string imfo #t))
+      (when (and with-mock-data (output-port? imfo)) (get-output-string imfo #t))
       (catch #t
 	(lambda ()
 	  (car (list (eval-string str))))
@@ -1720,7 +1735,7 @@
 	  (set! error-info info)
 	  (when (and last-error-type
 		     (not (eq? error-type last-error-type)))
-	    (format *stderr* "~S ~S~%" last-error-type error-type)
+	    ;(format *stderr* "~S ~S~%" last-error-type error-type)
 	    (set! last-error-type error-type))
 	  (when (eq? type 'stack-too-big)
 					;     (not (string-position "lambda" str)))
@@ -1734,7 +1749,7 @@
 	    (gc) (gc)
 	    (let ((res (*s7* 'memory-usage)))
 	      (let-temporarily ((((funclet pretty-print) '*pretty-print-cycles*) #t))
-		(pp res *stderr*))) ; was display
+		(pp res))) ; was display
 	    (newline *stderr*)
 	    (abort)) ; to keep Linux from killing the X server!
 	  (unless (or (not (eq? type 'read-error))
@@ -1744,7 +1759,11 @@
 		      (string-position "eval-string" str))
 	    ;; "unexpected" close paren from: (eval-string (reverse (object->string ()))) -> (eval-string ")(")
 	    (if (and (pair? info) (string? (car info)))
-		(format *stderr* "read-error from ~S: ~S~%" str (apply format #f info))
+		(format *stderr* "read-error from ~S: ~S~%" str (catch #t 
+								  (lambda ()
+								    (apply #_format #f info))
+								  (lambda args
+								    (format *stderr* "eval-it: inner format error\n"))))
 		(format *stderr* "read-error bad info\n")))
           'error)))
 
@@ -1775,7 +1794,7 @@
 			       (lambda ()
 				 (with-input-from-string str read))
 			       (lambda args ())))))
-	(lambda arg 'error))
+	(lambda args 'error))
 
       (set! last-error-type #f)
       (let* ((outer-funcs (codes (random codes-len)))
@@ -1793,6 +1812,9 @@
 	(when (eq? outer-funcs last-func)
 	  (reseed))
 	(set! last-func outer-funcs))
+      (unless (output-port? imfo) (format *stderr* "(new) imfo ~S -> ~S~%" estr imfo) (abort))
+      (set! error-info #f)
+      (set! error-type 'no-error)
       (when (string-position "H_" str)
 	(if (string-position "H_1" str) (fill! H_1 #f))
 	(if (string-position "H_2" str) (fill! H_2 #f))
@@ -1824,26 +1846,16 @@
 	  (lambda ()
 	    (try-both (make-expr (+ 1 (random both-ran))))) ; min 1 here not 0, was 6
 	  (lambda (type info)
-	    (write "outer: ")
+	    (apply format *stderr* info)
+#|
+	    (write "outer: " *stderr*)
 	    (write type *stderr*) (newline *stderr*)
 	    (write info *stderr*) (newline *stderr*)
 	    (write estr *stderr*) (newline *stderr*)
 	    ;(format *stderr* "~%~%outer: ~S~%" (list type info estr))
-	    (write (carry/format) *stderr*) (newline *stderr*)
 	    ;(abort)
+|#
 	    ))
 	))
-#|
-    (let ((functions-list (vector->list functions)))
-      (for-each (lambda (s)
-		  (if (and (procedure? (symbol->value s))
-			   (not (memq s functions-list)))
-		      (format *stderr* "~S " s)))
-		(symbol-table)))
-|#
 
     (test-it)))
-
-;;; (let () ((lambda () str))) (let () (define _f_ (lambda () str)) (_f_))
-;;; (let _f_ ((x #f) (i 0)) str)
-;;; (do ((x #f) (i 0) (_k_ str)) ((= i 0) _k_))
