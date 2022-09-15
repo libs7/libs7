@@ -321,7 +321,7 @@
   #define WITH_VECTORIZE 1
 #endif
 
-#if (WITH_VECTORIZE) && (defined(__GNUC__) && __GNUC__ >= 5)
+#if (WITH_VECTORIZE) && (defined(__GNUC__) && __GNUC__ >= 5) /* is this included -in -O2 now? */
   #define Vectorized __attribute__((optimize("tree-vectorize")))
 #else
   #define Vectorized
@@ -1695,7 +1695,7 @@ static bool t_mappable_p[NUM_TYPES], t_sequence_p[NUM_TYPES], t_vector_p[NUM_TYP
 static bool t_procedure_p[NUM_TYPES], t_applicable_p[NUM_TYPES], t_macro_setter_p[NUM_TYPES];
 #if S7_DEBUGGING
 static bool t_freeze_p[NUM_TYPES]; /* free_cell sanity check */
-static bool t_ext_p[NUM_TYPES];    /* make sure "internal" types don't leak out */
+static bool t_ext_p[NUM_TYPES];    /* make sure internal types don't leak out */
 #endif
 
 static void init_types(void)
@@ -4765,7 +4765,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						  ((is_hash_table(obj)) ? " simple-values" :
 						   ((is_normal_symbol(obj)) ? " binder" :
 						    ((is_c_function(obj)) ? " safe-args" :
-						     " ?27?")))) : "",
+						     ((is_syntax(obj)) ?  " syntax-binder" : 
+						      " ?27?"))))) : "",
 	  /* bit 28+24 */
 	  ((full_typ & T_VERY_SAFE_CLOSURE) != 0) ? (((is_pair(obj)) || (is_any_closure(obj))) ? " very-safe-closure" :
 						     ((is_let(obj)) ? " baffle-let" :
@@ -18063,8 +18064,8 @@ static s7_pointer big_lcm(s7_scheme *sc, s7_int num, s7_int den, s7_pointer args
 	  wrong_type_error_nr(sc, sc->lcm_symbol, position_of(x, args), rat, a_rational_string);
 	default:
 	  return(method_or_bust(sc, rat, sc->lcm_symbol,
-					  set_ulist_1(sc, mpz_to_rational(sc, sc->mpz_3, sc->mpz_4), x),
-					  a_rational_string, position_of(x, args)));
+				set_ulist_1(sc, mpz_to_rational(sc, sc->mpz_3, sc->mpz_4), x),
+				a_rational_string, position_of(x, args)));
 	}}
   return(mpz_to_rational(sc, sc->mpz_3, sc->mpz_4));
 }
@@ -18184,8 +18185,8 @@ static s7_pointer g_lcm(s7_scheme *sc, s7_pointer args)
 
 	default:
 	  return(method_or_bust(sc, x, sc->lcm_symbol,
-					  set_ulist_1(sc, (d <= 1) ? make_integer(sc, n) : make_ratio_with_div_check(sc, sc->lcm_symbol, n, d), p),
-					  a_rational_string, position_of(p, args)));
+				set_ulist_1(sc, (d <= 1) ? make_integer(sc, n) : make_ratio_with_div_check(sc, sc->lcm_symbol, n, d), p),
+				a_rational_string, position_of(p, args)));
 	}}
   return((d <= 1) ? make_integer(sc, n) : make_simple_ratio(sc, n, d));
 }
@@ -18224,8 +18225,8 @@ static s7_pointer big_gcd(s7_scheme *sc, s7_int num, s7_int den, s7_pointer args
 	  wrong_type_error_nr(sc, sc->gcd_symbol, position_of(x, args), rat, a_rational_string);
 	default:
 	  return(method_or_bust(sc, rat, sc->gcd_symbol,
-					  set_ulist_1(sc, mpz_to_rational(sc, sc->mpz_3, sc->mpz_4), x),
-					  a_rational_string, position_of(x, args)));
+				set_ulist_1(sc, mpz_to_rational(sc, sc->mpz_3, sc->mpz_4), x),
+				a_rational_string, position_of(x, args)));
 	}}
   return(mpz_to_rational(sc, sc->mpz_3, sc->mpz_4));
 }
@@ -18299,8 +18300,8 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
 
 	default:
 	  return(method_or_bust(sc, x, sc->gcd_symbol,
-					  set_ulist_1(sc, (d <= 1) ? make_integer(sc, n) : make_ratio_with_div_check(sc, sc->gcd_symbol, n, d), p),
-					  a_rational_string, position_of(p, args)));
+				set_ulist_1(sc, (d <= 1) ? make_integer(sc, n) : make_ratio_with_div_check(sc, sc->gcd_symbol, n, d), p),
+				a_rational_string, position_of(p, args)));
 	}}
   return((d <= 1) ? make_integer(sc, n) : make_simple_ratio(sc, n, d));
 }
@@ -19183,8 +19184,8 @@ static s7_pointer g_add_x1_1(s7_scheme *sc, s7_pointer x, int32_t pos)
 #endif
     default:
       return(method_or_bust(sc, x, sc->add_symbol,
-				      (pos == 1) ? set_plist_2(sc, x, int_one) : set_plist_2(sc, int_one, x),
-				      a_number_string, pos));
+			    (pos == 1) ? set_plist_2(sc, x, int_one) : set_plist_2(sc, int_one, x),
+			    a_number_string, pos));
     }
   return(x);
 }
@@ -27551,7 +27552,7 @@ static s7_pointer g_list_to_string(s7_scheme *sc, s7_pointer args)
     return(nil_string);
   if (!s7_is_proper_list(sc, car(args)))
     return(sole_arg_method_or_bust_p(sc, car(args), sc->list_to_string_symbol,
-					    wrap_string(sc, "a (proper, non-circular) list of characters", 43)));
+				     wrap_string(sc, "a (proper, non-circular) list of characters", 43)));
   return(g_string_1(sc, car(args), sc->list_to_string_symbol));
 }
 #endif
@@ -28546,9 +28547,7 @@ static s7_pointer g_write_string(s7_scheme *sc, s7_pointer args)
       wrong_type_error_nr(sc, sc->write_string_symbol, 2, port, an_output_port_or_f_string);
     }
   if (port_is_closed(port)) wrong_type_error_nr(sc, sc->write_string_symbol, 2, port, an_open_output_port_string);
-  /* redundant error check, but otherwise caller is "write" */
-  if (start == end)
-    return(str);
+  if (start == end) return(str);
   port_write_string(port)(sc, (char *)(string_value(str) + start), (end - start), port);
   return(str);
 }
@@ -28559,8 +28558,7 @@ static s7_pointer write_string_p_pp(s7_scheme *sc, s7_pointer str, s7_pointer po
     return(method_or_bust_pp(sc, str, sc->write_string_symbol, str, port, sc->type_names[T_STRING], 1));
   if (!is_output_port(port))
     {
-      if (port == sc->F)
-	return(str);
+      if (port == sc->F) return(str);
       return(method_or_bust_pp(sc, port, sc->write_string_symbol, str, port, an_output_port_string, 2));
     }
   if (string_length(str) > 0)
@@ -29885,7 +29883,6 @@ s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
 	}
       pop_input_port(sc);
       set_curlet(sc, old_let);
-
       restore_jump_info(sc);
       return(sc->value);
     }
@@ -49498,8 +49495,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 		int_vector_ints(new_vec) = (s7_int *)(iv_elements + i);
 	      else byte_vector_bytes(new_vec) = (uint8_t *)(byte_elements + i);
 	}}
-  /* unstack(sc); */
-  /* free_cell(sc, pargs); */ /* this is trouble if any arg is openlet with append method -- e.g. block */
+  /* unstack(sc); */ /* free_cell(sc, pargs); */ /* this is trouble if any arg is openlet with append method -- e.g. block */
 
   if (typ == T_VECTOR)
     vector_elements(new_vec) = v_elements;
@@ -66054,7 +66050,7 @@ static bool float_optimize_1(s7_scheme *sc, s7_pointer expr)
 	case 6:
 	  if (d_7piiid_ok(sc, opc, s_func, car_x))
 	    return(true);
-	  break;
+	  /* break; */
 
 	default:
 	  if (d_add_any_ok(sc, opc, car_x))
@@ -67638,8 +67634,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  set_car(y, s7_iterate(sc, car(x)));
 		  if (iterator_is_at_end(car(x)))
 		    {
-		      unstack(sc);
-		      /* free_cell(sc, car(x)); */ /* 16-Jan-19 iterator in circular list -- see s7test */
+		      unstack(sc); /* free_cell(sc, car(x)); */ /* 16-Jan-19 iterator in circular list -- see s7test */
 		      sc->args = T_Pos(old_args); /* can be #<unused> */
 		      return(proper_list_reverse_in_place(sc, car(val)));
 		    }}
@@ -71657,7 +71652,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	    return(OPT_OOPS);
 	  return(optimize_syntax(sc, expr, T_Syn(global_value(car_expr)), hop, e, export_ok));
 	}
-      slot = find_uncomplicated_symbol(sc, car_expr, e); /* local vars (recursive calls too??) are considered "complicated" */
+      slot = find_uncomplicated_symbol(sc, car_expr, e); /* local vars (recursive calls too??) are considered complicated */
       if (is_slot(slot))
 	{
 	  s7_pointer func = slot_value(slot);
@@ -71724,7 +71719,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	    symbol_set_tag(car_expr, 1);        /* one warning is enough */
 	  }
 
-      /* car_expr is a symbol but it's not a built-in procedure or a "safe" case = vector etc */
+      /* car_expr is a symbol but it's not a built-in procedure or a safe case = vector etc */
       {
 	/* else maybe it's something like a let variable binding: (sqrtfreq (sqrt frequency)) */
 	s7_pointer p;
@@ -93664,6 +93659,9 @@ static void init_features(s7_scheme *sc)
 #if S7_ALIGNED
   s7_provide(sc, "aligned");
 #endif
+#if POINTER_32
+  s7_provide(sc, "32-bit");
+#endif
 
 #ifdef __APPLE__
   s7_provide(sc, "osx");
@@ -93705,9 +93703,6 @@ static void init_features(s7_scheme *sc)
   s7_provide(sc, "solaris");
 #endif
 
-#if POINTER_32
-  s7_provide(sc, "32-bit");
-#endif
 #ifdef __SUNPRO_C
   s7_provide(sc, "sunpro_c");
 #endif
@@ -93804,7 +93799,7 @@ static s7_pointer copy_args_syntax(s7_scheme *sc, const char *name, opcode_t op,
 {
   s7_pointer x = syntax(sc, name, op, min_args, max_args, doc);
   s7_pointer p = global_value(x);
-  full_type(p) |= T_COPY_ARGS; /* (for-each and ''2) -- maybe this is a mistake? (currently segfault if not copied) */
+  full_type(p) |= T_COPY_ARGS;
   return(x);
 }
 
@@ -94813,7 +94808,7 @@ s7_scheme *s7_init(void)
   sc->t3_2 = permanent_cons(sc, sc->nil, sc->t3_3, T_PAIR | T_IMMUTABLE);
   sc->t3_1 = permanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
   sc->t4_1 = permanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
-  sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE); /* "ulist" */
+  sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE); /* ulist */
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
@@ -95610,61 +95605,61 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* -------------------------------------------------
- *            20.9   21.0   22.0   22.6   22.7
- * -------------------------------------------------
+/* ------------------------------------------
+ *            20.9   21.0   22.0   22.7   22.8
+ * ------------------------------------------
  * tpeak      115    114    108    105    105
- * tref       691    687    463    467    457
+ * tref       691    687    463    457    457
  * index     1026   1016    973    964    964
- * tmock     1177   1165   1057   1061   1083
- * tvect     2519   2464   1772   1676   1667
- * timp      2637   2575   1930   1717   1696
- * texit     ----   ----   1778   1736   1738
- * s7test    1873   1831   1818   1815   1818
- * thook     ----   ----   2590   2106   2073
- * tauto     ----   ----   2562   2171   2171
- * lt        2187   2172   2150   2180   2179
- * dup       3805   3788   2492   2263   2272
- * tcopy     8035   5546   2539   2376   2373
- * tload     ----   ----   3046   2379   2377
- * fbench    2688   2583   2460   2412   2418
- * tread     2440   2421   2419   2416   2414
- * trclo     2735   2574   2454   2447   2439
- * titer     2865   2842   2641   2540   2509
- * tmat      3065   3042   2524   2508   2573
- * tb        2735   2681   2612   2601   2600
- * tsort     3105   3104   2856   2803   2801
- * teq       4068   4045   3536   3465   3469
- * tobj      4016   3970   3828   3556   3556
- * tio       3816   3752   3683   3604   3616
+ * tmock     1177   1165   1057   1083   1083
+ * tvect     2519   2464   1772   1667   1667
+ * timp      2637   2575   1930   1696   1692
+ * texit     ----   ----   1778   1738   1738
+ * s7test    1873   1831   1818   1818   1816
+ * thook     ----   ----   2590   2073   2073
+ * tauto     ----   ----   2562   2171   2171  2055
+ * lt        2187   2172   2150   2179   2178
+ * dup       3805   3788   2492   2272   2272
+ * tcopy     8035   5546   2539   2373   2372
+ * tload     ----   ----   3046   2377   2377
+ * tread     2440   2421   2419   2414   2414
+ * fbench    2688   2583   2460   2418   2419
+ * trclo     2735   2574   2454   2439   2440
+ * titer     2865   2842   2641   2509   2509
+ * tmat      3065   3042   2524   2573   2580
+ * tb        2735   2681   2612   2600   2600
+ * tsort     3105   3104   2856   2801   2801
+ * teq       4068   4045   3536   3469   3469
+ * tobj      4016   3970   3828   3556   3555
+ * tio       3816   3752   3683   3616   3616
  * tmac      3950   3873   3033   3670   3670
- * tclo      4787   4735   4390   4379   4376
- * tlet      7775   5640   4450   4433   4403
- * tcase     4960   4793   4439   4435   4429
- * tfft      7820   7729   4755   4455   4456
- * tmap      8869   8774   4489   4482   4477
- * tshoot    5525   5447   5183   5068   5056
- * tstr      6880   6342   5488   5122   5131
- * tform     5357   5348   5307   5279   5320
- * tnum      6348   6013   5433   5359   5369
- * tlamb     6423   6273   5720   5544   5545
- * tmisc     8869   7612   6435   6158   6184
- * tset      ----   ----   ----   6441   6238
- * tlist     7896   7546   6558   6367   6247
+ * tclo      4787   4735   4390   4376   4374
+ * tlet      7775   5640   4450   4403   4403
+ * tcase     4960   4793   4439   4429   4428
+ * tfft      7820   7729   4755   4456   4457
+ * tmap      8869   8774   4489   4477   4477
+ * tshoot    5525   5447   5183   5056   5056
+ * tstr      6880   6342   5488   5131   5130
+ * tform     5357   5348   5307   5320   5323
+ * tnum      6348   6013   5433   5369   5372
+ * tlamb     6423   6273   5720   5545   5545
+ * tmisc     8869   7612   6435   6184   6184
+ * tset      ----   ----   ----   6238   6238
+ * tlist     7896   7546   6558   6247   6246
  * tgsl      8485   7802   6373   6307   6307
- * trec      6936   6922   6521   6559   6558
- * tari      13.0   12.7   6827   6486   6583
- * tleft     10.4   10.2   7657   7516   7479
- * tgc       11.9   11.1   8177   7964   7913
- * thash     11.8   11.7   9734   9477   9467
- * cb        11.2   11.0   9658   9533   9528
- * tgen      11.2   11.4   12.0   12.0   12.1
+ * trec      6936   6922   6521   6558   6558
+ * tari      13.0   12.7   6827   6583   6581
+ * tleft     10.4   10.2   7657   7479   7481
+ * tgc       11.9   11.1   8177   7913   7913
+ * thash     11.8   11.7   9734   9467   9467
+ * cb        11.2   11.0   9658   9528   9527
+ * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.5
- * sg        ----   ----   55.9   56.9   56.7
- * lg        ----   ----  105.2  106.4  106.1
- * tbig     177.4  175.8  156.5  149.9  147.9
- * ---------------------------------------------
+ * calls     36.7   37.5   37.0   37.5   37.6
+ * sg        ----   ----   55.9   56.7   56.7
+ * lg        ----   ----  105.2  106.1  106.1
+ * tbig     177.4  175.8  156.5  147.9  147.9
+ * --------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * for multithread s7: (with-s7 ((var database)...) . body)
