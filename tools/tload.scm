@@ -53,7 +53,7 @@ s7_pointer tlib_init(s7_scheme *sc, s7_pointer args)
 ;;; --------------------------------------------------------------------------------
 
 (unless (file-exists? "s7test-block.so")
-  (system (string-append "gcc -fPIC -c s7test-block.c -I. -g -O2"))
+  (system "gcc -fPIC -c s7test-block.c -I. -g -O2")
   (system "gcc s7test-block.o -shared -o s7test-block.so -ldl -lm -Wl,-export-dynamic"))
 
 (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))

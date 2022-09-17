@@ -123,12 +123,6 @@
 			(autotest func c-args1 args-now1 args-left1 sig1))
 		      auto-constants)))))))))
   
-  (define safe-fill!
-    (let ((+signature+ '(#t sequence? #t)))
-      (lambda (obj arg)
-	(if (not (let? obj))
-	    (fill! obj arg)))))
-  
   (define (map-values lst)
     (do ((lst lst (cdr lst)))
 	((or (not (pair? lst))

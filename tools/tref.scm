@@ -60,8 +60,7 @@
 
 (define (ft5)
   (let ((size 100000))
-    (let ((v (make-string size #\a))
-	  (c #\a))
+    (let ((v (make-string size #\a)))
       (do ((i 0 (+ i 1)))
 	  ((= i tries))
 	(do ((j 0 (+ j 1)))
@@ -75,8 +74,7 @@
 
 (define (ft51)
   (let ((size 100000))
-    (let ((v (make-string size #\a))
-	  (c #\a))
+    (let ((v (make-string size #\a)))
       (do ((i 0 (+ i 1)))
 	  ((= i tries))
 	(do ((j 0 (+ j 1)))

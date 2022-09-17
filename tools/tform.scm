@@ -13,8 +13,7 @@
 		    clauses)))))
 
 
-(let ((new-env (sublet (curlet) (cons 'init_func 'block_init)))) ; load calls init_func if possible
-  (load "s7test-block.so" new-env))
+(load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init))) ; load calls init_func if possible
 
 (load "mockery.scm")
 

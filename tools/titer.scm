@@ -4,8 +4,7 @@
 
 (let ((with-blocks #f))
   (when with-blocks
-    (let ((new-env (sublet (curlet) (cons 'init_func 'block_init)))) ; load calls init_func if possible
-      (load "s7test-block.so" new-env)))
+    (load "s7test-block.so" (sublet (curlet) (cons 'init_func 'block_init)))) ; load calls init_func if possible
   
   (define-constant (find-if-a iter)
     (case (type-of (iterate iter)) ; op_tc_case

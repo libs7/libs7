@@ -9431,6 +9431,7 @@
 			     (lint-format "~A control string ends in tilde: ~A" caller head (truncated-list->string form))))
 		      (if tilde-time
 			  (let ((c (string-ref str i)))
+			    ;(format *stderr* "~C ~S~%" c str)
 			    (when (and (= curlys 0)
 				       (not (memv c '(#\~ #\T #\t #\& #\% #\^ #\| #\newline #\}))) ; ~* consumes an arg
 				       (not (and (char=? c #\:) (< i (- len 1)) (memv (string-ref str (+ i 1)) '(#\D #\d))))
@@ -9439,9 +9440,11 @@
 					       (do ((k i (+ k 1)))
 						   ((= k len) #f)
 						 ;; this can be confused by pad chars in ~T
-						 (if (not (or (char-numeric? (string-ref str k))
-							      (char=? (string-ref str k) #\,)))
-						     (return (char-ci=? (string-ref str k) #\t))))))))
+						 (unless (or (char-numeric? (string-ref str k))
+							     (char=? (string-ref str k) #\,))
+						   ;(format *stderr* "~C ~C~%" (string-ref str k) c)
+						   (return (or (char=? (string-ref str k) #\') ; ~12,'-T 
+							       (char-ci=? (string-ref str k) #\t)))))))))
 			      ;; the possibilities are endless, so I'll stick to the simplest
 			      (if (not (vector-ref format-control-char (char->integer c))) ; (format #f "~H" 1)
 				  (lint-format "unrecognized format directive: ~C in ~S, ~S" caller c str form))
@@ -11850,7 +11853,7 @@
 					    (pair? bad-quoted-locals)
 					    ;; (define-macro (mac8 b) `(let ((a 12)) (+ (symbol->value ,b) a)))
 					    ;; (let ((a 1)) (mac8 'a))
-					    ;; far-fetched!
+					    ;; far-fetched!  and can be confused by recursive macros (m1 in tmac.scm)
 					    (pair? bad-ops))
 				    (lint-format "possible problematic macro expansion:~%  ~A ~A collide with subsequently defined ~A~A~A"
 						 caller
@@ -23594,7 +23597,7 @@
     ;;; lint itself
     ;;;
     (let ((+documentation+ "(lint file port) looks for infelicities in file's scheme code")
-	  (+signature+ '(#t (string? input-port?) (output-port? null?) boolean?)) ; not list! we want a list of symbols
+	  (+signature+ '(#t (string? input-port?) (output-port? null? not) boolean?)) ; not list! we want a list of symbols
 	  (readers
 	   (list (cons #\e (lambda (str)
 			     (unless (string=? str "e")

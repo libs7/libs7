@@ -1339,7 +1339,7 @@ struct s7_scheme {
   /* syntax symbols et al */
   s7_pointer else_symbol, lambda_symbol, lambda_star_symbol, let_symbol, quote_symbol, quasiquote_symbol, unquote_symbol, macroexpand_symbol,
              define_expansion_symbol, define_expansion_star_symbol, with_let_symbol, if_symbol, autoload_error_symbol,
-             when_symbol, unless_symbol, begin_symbol, cond_symbol, case_symbol, and_symbol, or_symbol, do_symbol,
+             when_symbol, unless_symbol, begin_symbol, cond_symbol, case_symbol, and_symbol, or_symbol, do_symbol, number_to_real_symbol,
              define_symbol, define_star_symbol, define_constant_symbol, with_baffle_symbol, define_macro_symbol, no_setter_symbol,
              define_macro_star_symbol, define_bacro_symbol, define_bacro_star_symbol, letrec_symbol, letrec_star_symbol, let_star_symbol,
              rest_keyword, allow_other_keys_keyword, readable_keyword, display_keyword, write_keyword, value_symbol, type_symbol,
@@ -5938,14 +5938,12 @@ s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg
   return(sc->wrong_type_arg_symbol);
 }
 
-#if 0
 /* noreturn? */ s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
 {
   if (arg_n > 0) wrong_type_error_nr(sc, caller, arg_n, arg, descr);
   sole_arg_wrong_type_error_nr(sc, caller, arg, descr);
   return(sc->wrong_type_arg_symbol); /* never happens */
 }
-#endif
 
 static noreturn void sole_arg_out_of_range_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
 {
@@ -5972,15 +5970,6 @@ s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n
   error_nr(sc, sc->out_of_range_symbol, sc->sole_arg_out_of_range_info);
   return(sc->out_of_range_symbol);
 }
-
-#if 0
-/* noreturn? */ s7_pointer s7_out_of_range_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
-{
-  if (arg_n > 0) out_of_range_error_nr(sc, caller, arg_n, arg, descr);
-  sole_arg_out_of_range_error_nr(sc, caller, arg, descr);
-  return(sc->out_of_range_symbol);
-}
-#endif
 
 
 static noreturn void wrong_number_of_args_error_nr(s7_scheme *sc, const char *caller, s7_pointer args)
@@ -11125,15 +11114,15 @@ void *s7_c_pointer(s7_pointer p) {return(c_pointer(p));}
 void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_type, const char *caller, s7_int argnum)
 {
   if (!is_c_pointer(p))
-    wrong_type_error_nr(sc, wrap_string(sc, caller, strlen(caller)), argnum, p, sc->type_names[T_C_POINTER]);
+    wrong_type_error_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), argnum, p, sc->type_names[T_C_POINTER]);
   if ((c_pointer(p) != NULL) &&
       (c_pointer_type(p) != expected_type))
     error_nr(sc, sc->wrong_type_arg_symbol,
 	     (argnum == 0) ?
 	     set_elist_4(sc, wrap_string(sc, "~S argument is a pointer of type ~S, but expected ~S", 52),
-			 wrap_string(sc, caller, strlen(caller)), c_pointer_type(p), expected_type) :
+			 wrap_string(sc, caller, safe_strlen(caller)), c_pointer_type(p), expected_type) :
 	     set_elist_5(sc, wrap_string(sc, "~S ~:D argument got a pointer of type ~S, but expected ~S", 57),
-			 wrap_string(sc, caller, strlen(caller)),
+			 wrap_string(sc, caller, safe_strlen(caller)),
 			 wrap_integer(sc, argnum), c_pointer_type(p), expected_type));
   return(c_pointer(p));
 }
@@ -13241,6 +13230,7 @@ static s7_pointer make_ratio_with_div_check(s7_scheme *sc, s7_pointer caller, s7
  */
 
 /* this is a mess -- it's too late to clean up s7.h (sigh) */
+
 s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller)
 {
   if (is_t_real(x)) return(real(x));
@@ -13259,7 +13249,25 @@ s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char 
   return(0.0);
 }
 
-s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x) {return(s7_number_to_real_with_caller(sc, x, "s7_number_to_real"));}
+s7_double s7_number_to_real_with_symbol_caller(s7_scheme *sc, s7_pointer x, s7_pointer caller)
+{
+  if (is_t_real(x)) return(real(x));
+  switch (type(x))
+    {
+    case T_INTEGER:     return((s7_double)integer(x));
+    case T_RATIO:       return(fraction(x));
+#if WITH_GMP
+    case T_BIG_INTEGER: return((s7_double)big_integer_to_s7_int(sc, big_integer(x)));
+    case T_BIG_RATIO:   return((s7_double)((long_double)big_integer_to_s7_int(sc, mpq_numref(big_ratio(x))) /
+					   (long_double)big_integer_to_s7_int(sc, mpq_denref(big_ratio(x)))));
+    case T_BIG_REAL:    return((s7_double)mpfr_get_d(big_real(x), MPFR_RNDN));
+#endif
+    }
+  sole_arg_wrong_type_error_nr(sc, symbol_name_cell(caller), x, sc->type_names[T_REAL]);
+  return(0.0);
+}
+
+s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x) {return(s7_number_to_real_with_symbol_caller(sc, x, sc->number_to_real_symbol));}
 
 s7_int s7_number_to_integer_with_caller(s7_scheme *sc, s7_pointer x, const char *caller)
 {
@@ -30352,7 +30360,7 @@ static s7_pointer g_cload_directory_set(s7_scheme *sc, s7_pointer args)
   if (!is_string(cl_dir))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *cload-directory* to ~S", 33), cadr(args)));
   s7_symbol_set_value(sc, sc->cload_directory_symbol, cl_dir);
-  if (safe_strlen(string_value(cl_dir)) > 0)
+  if (string_length(cl_dir) > 0) /* was strlen(string_value)? */
     s7_add_to_load_path(sc, (const char *)(string_value(cl_dir)));
   /* should this remove the previous *cload-directory* name first? or not affect *load-path* at all? */
   return(cl_dir);
@@ -30944,7 +30952,7 @@ static void op_with_io_1_method(s7_scheme *sc)
   else
     if (is_symbol(car(sc->code)))           /* might be e.g. #_call-with-input-string so use c_function_name */
       wrong_type_error_nr(sc, car(sc->code), 1, lt, sc->type_names[T_STRING]);
-    else wrong_type_error_nr(sc, wrap_string(sc, c_function_name(car(sc->code)), strlen(c_function_name(car(sc->code)))), 1, lt, sc->type_names[T_STRING]);
+    else wrong_type_error_nr(sc, wrap_string(sc, c_function_name(car(sc->code)), c_function_name_length(car(sc->code))), 1, lt, sc->type_names[T_STRING]);
 }
 
 static bool op_with_io_op(s7_scheme *sc)
@@ -45736,7 +45744,7 @@ static s7_pointer g_c_object_type(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_c_object_set(s7_scheme *sc, s7_pointer args) /* called in c_object_set_function */
 {
   s7_pointer obj = car(args);
-  if (!is_c_object(obj))
+  if (!is_c_object(obj))        /* (call/cc (setter (block))) will call c-object-set! with the continuation as the argument! */
     wrong_type_error_nr(sc, make_symbol(sc, "c-object-set!"), 1, obj, sc->type_names[T_C_OBJECT]);
   return((*(c_object_set(sc, obj)))(sc, args));
 }
@@ -53379,7 +53387,7 @@ static s7_pointer fx_floor_sqrt_s(s7_scheme *sc, s7_pointer arg)
     }
 #else
   if (!is_negative_b_7p(sc, p))
-    return(make_integer(sc, (s7_int)floor(sqrt(s7_number_to_real_with_caller(sc, p, "sqrt")))));
+    return(make_integer(sc, (s7_int)floor(sqrt(s7_number_to_real_with_symbol_caller(sc, p, sc->sqrt_symbol)))));
 #endif
   return(floor_p_p(sc, sqrt_p_p(sc, p)));
 }
@@ -88817,7 +88825,7 @@ static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
 	    if (arglist_has_rest(sc, closure_args(f)))
 	      fixup_unknown_op(sc, code, f, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_NA_1 : OP_CLOSURE_STAR_NA));
 	    else fixup_unknown_op(sc, code, f, hop + ((safe_case) ?
-						  ((is_null(cdr(closure_args(f)))) ? OP_SAFE_CLOSURE_STAR_A1 : OP_SAFE_CLOSURE_STAR_A) : OP_CLOSURE_STAR_A));
+						      ((is_null(cdr(closure_args(f)))) ? OP_SAFE_CLOSURE_STAR_A1 : OP_SAFE_CLOSURE_STAR_A) : OP_CLOSURE_STAR_A));
 	    return(true);
 	  }
       fixup_unknown_op(sc, code, f, hop + ((safe_case) ? OP_SAFE_CLOSURE_STAR_NA_1 : OP_CLOSURE_STAR_NA));
@@ -94002,6 +94010,7 @@ then returns each var to its original value."
   sc->out_of_memory_symbol =        make_symbol(sc, "out-of-memory");
   sc->io_error_symbol =             make_symbol(sc, "io-error");
   sc->missing_method_symbol =       make_symbol(sc, "missing-method");
+  sc->number_to_real_symbol =       make_symbol(sc, "number_to_real");
   sc->invalid_escape_function_symbol = make_symbol(sc, "invalid-escape-function");
   sc->immutable_error_symbol =      make_symbol(sc, "immutable-error");
   sc->division_by_zero_symbol =     make_symbol(sc, "division-by-zero");
@@ -95611,53 +95620,53 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
  * index     1026   1016    973    964    964
- * tmock     1177   1165   1057   1083   1083
+ * tmock     1177   1165   1057   1083   1082
  * tvect     2519   2464   1772   1667   1667
  * timp      2637   2575   1930   1696   1692
- * texit     ----   ----   1778   1738   1738
+ * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
- * thook     ----   ----   2590   2073   2073
- * tauto     ----   ----   2562   2171   2171  2055
+ * tauto     ----   ----   2562   2171   2051
+ * thook     ----   ----   2590   2073   2072
  * lt        2187   2172   2150   2179   2178
  * dup       3805   3788   2492   2272   2272
  * tcopy     8035   5546   2539   2373   2372
- * tload     ----   ----   3046   2377   2377
- * tread     2440   2421   2419   2414   2414
+ * tload     ----   ----   3046   2377   2376
+ * tread     2440   2421   2419   2414   2409
  * fbench    2688   2583   2460   2418   2419
- * trclo     2735   2574   2454   2439   2440
+ * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2573   2580
- * tb        2735   2681   2612   2600   2600
- * tsort     3105   3104   2856   2801   2801
+ * tmat      3065   3042   2524   2573   2577
+ * tb        2735   2681   2612   2600   2599
+ * tsort     3105   3104   2856   2801   2805
  * teq       4068   4045   3536   3469   3469
- * tobj      4016   3970   3828   3556   3555
+ * tobj      4016   3970   3828   3556   3553
  * tio       3816   3752   3683   3616   3616
- * tmac      3950   3873   3033   3670   3670
+ * tmac      3950   3873   3033   3670   3667
  * tclo      4787   4735   4390   4376   4374
- * tlet      7775   5640   4450   4403   4403
- * tcase     4960   4793   4439   4429   4428
+ * tlet      7775   5640   4450   4403   4402
+ * tcase     4960   4793   4439   4429   4424
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4477
  * tshoot    5525   5447   5183   5056   5056
  * tstr      6880   6342   5488   5131   5130
- * tform     5357   5348   5307   5320   5323
- * tnum      6348   6013   5433   5369   5372
- * tlamb     6423   6273   5720   5545   5545
+ * tform     5357   5348   5307   5320   5317
+ * tnum      6348   6013   5433   5369   5369
+ * tlamb     6423   6273   5720   5545   5539
  * tmisc     8869   7612   6435   6184   6184
  * tset      ----   ----   ----   6238   6238
- * tlist     7896   7546   6558   6247   6246
+ * tlist     7896   7546   6558   6247   6243
  * tgsl      8485   7802   6373   6307   6307
  * trec      6936   6922   6521   6558   6558
  * tari      13.0   12.7   6827   6583   6581
- * tleft     10.4   10.2   7657   7479   7481
+ * tleft     10.4   10.2   7657   7479   7475
  * tgc       11.9   11.1   8177   7913   7913
- * thash     11.8   11.7   9734   9467   9467
+ * thash     11.8   11.7   9734   9467   9466
  * cb        11.2   11.0   9658   9528   9527
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.6
- * sg        ----   ----   55.9   56.7   56.7
- * lg        ----   ----  105.2  106.1  106.1
+ * calls     36.7   37.5   37.0   37.5   37.5
+ * sg        ----   ----   55.9   56.7   56.0
+ * lg        ----   ----  105.2  106.1  106.0
  * tbig     177.4  175.8  156.5  147.9  147.9
  * --------------------------------------
  *
@@ -95666,4 +95675,6 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
+ *
+ * (openlet (outlet (mock-number))) problem: try new t725
  */

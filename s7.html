@@ -6408,9 +6408,12 @@ This output is readable, and does not eat up perfectly good
 characters like vertical bar, but it means we can't easily use
 variable names like "| e t c |".  We could allow a name to
 contain any characters if it starts and ends with "|",
-but then one vertical bar is trouble.  (The symbol function
-actually accepts any number of string arguments which it concatenates
-to form the new symbol name).
+but then one vertical bar is trouble.
+</p>
+<p>
+The symbol function
+accepts any number of string arguments which it concatenates
+to form the new symbol name.
 </p>
 
 <p>
@@ -8880,6 +8883,7 @@ static s7_pointer my_car(s7_scheme *sc, s7_pointer lst)
 s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info);
 
 s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
+s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr);
 s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
 s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args);
 
@@ -8891,7 +8895,7 @@ s7_pointer s7_set_current_error_port(s7_scheme *sc, s7_pointer port);
 a symbol giving the error type, and a list giving the error data.  In s7, all of the data lists
 are organized so that you can <code>(apply format #f data)</code> to get an error string.
 If you're using catch to handle errors, the error type is what catch looks for.  So, the
-s7_wrong_type_arg call above could be:
+s7_wrong_type_arg_error call above could be:
 </p>
 <pre class="indented">
 s7_error(sc, s7_make_symbol(sc, "wrong-type-arg"), 
@@ -8904,6 +8908,8 @@ and a description of the type expected.  If the argument number is 0, that info 
 error message (that is, the caller takes only one argument).  s7_out_of_range_error is similar.
 s7_wrong_number_of_args_error takes the caller's name and the offending arg list.  The corresponding
 error types are 'wrong-type-arg, 'wrong-number-of-args, and 'out-of-range.
+A faster version is s7_wrong_type_error; here the caller is an s7 symbol, and the
+description is an s7 string.
 </p>
 
 <p>Normally, s7_error sends its error message
@@ -9750,6 +9756,7 @@ s7_pointer s7_make_real(s7_scheme *sc, s7_double num);
 s7_pointer s7_make_mutable_real(s7_scheme *sc, s7_double n);
 s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x);
 s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
+s7_double s7_number_to_real_with_symbol_caller(s7_scheme *sc, s7_pointer x, s7_pointer caller);
 
 bool s7_is_rational(s7_pointer arg);
 bool s7_is_ratio(s7_pointer arg);
@@ -9800,7 +9807,9 @@ data[kp] = opt_func(s7, res);             /* call opt_func */
 <p>s7_number_to_real returns any real number as an s7_double.  If it can't
 convert its argument, it signals an error, which is annoying because it doesn't
 know where that error occured in scheme.  So s7_number_to_real_with_caller gives
-you a way to tell it at lease the caller's name.
+you a way to tell it at least the caller's name.  s7_number_to_real_with_symbol_caller
+is the same function, but the caller argument is a symbol (this is much faster
+than using a char*).
 </p>
 <p>For the bignum functions, see <a href="#gmpex">Bignums in C</a>.
 </p>

@@ -20,9 +20,7 @@
   
   (set! (car (hook-functions H))
 	(lambda (h)
-	  (call-with-exit
-	   (lambda (return)
-	     (return h)))))
+	  (h 'result)))
   
   (H 32)
   (thook)

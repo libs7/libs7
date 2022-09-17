@@ -144,7 +144,7 @@ static s7_pointer make_dax(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer is_dax(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_boolean(sc, 
+  return(s7_make_boolean(sc,
 			 s7_is_c_object(s7_car(args)) &&
 			 s7_c_object_type(s7_car(args)) == dax_type_tag));
 }
@@ -182,7 +182,7 @@ static s7_pointer set_dax_data(s7_scheme *sc, s7_pointer args)
 static bool equal_dax(void *val1, void *val2) /* this is the old form of equal? */
 {
   dax *d1, *d2;
-  if (val1 == val2) 
+  if (val1 == val2)
     return(true);
   d1 = (dax *)val1;
   d2 = (dax *)val2;
@@ -196,7 +196,7 @@ static s7_pointer equality_dax(s7_scheme *sc, s7_pointer args) /* this is the ne
   dax *d1, *d2;
   p1 = s7_car(args);      /* we know this is a dax object */
   p2 = s7_cadr(args);
-  if (p1 == p2) 
+  if (p1 == p2)
     return(s7_t(sc));
   if ((!s7_is_c_object(p2)) ||
       (s7_c_object_type(p2) != dax_type_tag))
@@ -238,15 +238,15 @@ static s7_pointer plus1(s7_scheme *sc, s7_pointer args) /* check recursion in "u
 {
   s7_pointer d;
   if (s7_integer(s7_car(args)) == 4)
-    d = s7_apply_function_star(sc, s7_name_to_value(sc, "plus1"), 
-			       s7_list(sc, 3, 
-				       s7_make_integer(sc, 1), 
-				       s7_make_integer(sc, 2), 
+    d = s7_apply_function_star(sc, s7_name_to_value(sc, "plus1"),
+			       s7_list(sc, 3,
+				       s7_make_integer(sc, 1),
+				       s7_make_integer(sc, 2),
 				       s7_make_integer(sc, 3)));
   else d = s7_make_integer(sc, 0);
-  return(s7_make_integer(sc, s7_integer(s7_car(args)) + 
-			 s7_integer(s7_cadr(args)) + 
-			 s7_integer(s7_caddr(args)) + 
+  return(s7_make_integer(sc, s7_integer(s7_car(args)) +
+			 s7_integer(s7_cadr(args)) +
+			 s7_integer(s7_caddr(args)) +
 			 s7_integer(d)));
 }
 
@@ -295,7 +295,7 @@ static s7_pointer g_car(s7_scheme *sc, s7_pointer args) {return(s7_car(s7_car(ar
 typedef struct {
   size_t size;
   double *data;
-} g_block;    
+} g_block;
 
 static s7_int g_block_type = 0;
 static s7_pointer g_block_methods;
@@ -553,7 +553,7 @@ static s7_pointer big_add_1(s7_scheme *sc, s7_pointer args)
 
 static const char *snd_names[8] = {
     "*clm-array-print-length*", "ws.scm",
-    "*clm-channels*", "ws.scm",          
+    "*clm-channels*", "ws.scm",
     "zone-tailed-hawk", "animals.scm",
     "zoom-spectrum", "examp.scm",
 };
@@ -572,7 +572,7 @@ static s7_double opt_d_ddd_func(s7_double x, s7_double y, s7_double z) {return(x
 static s7_pointer g_d_ddd_func(s7_scheme *sc, s7_pointer args) {return(s7_make_real(sc, s7_real(s7_car(args)) + s7_real(s7_cadr(args)) + s7_real(s7_caddr(args))));}
 
 static s7_double opt_d_dddd_func(s7_double w, s7_double x, s7_double y, s7_double z) {return(w + x + y + z);}
-static s7_pointer g_d_dddd_func(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_d_dddd_func(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_real(sc, s7_real(s7_car(args)) + s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + s7_real(s7_cadddr(args))));
 }
@@ -617,34 +617,37 @@ static s7_double opt_d_v_func(void *x) {g_block *g = (g_block *)x; return(g->dat
 static s7_pointer g_d_v_func(s7_scheme *sc, s7_pointer args) {g_block *g; g = (g_block *)s7_c_object_value(s7_car(args)); return(s7_make_real(sc, g->data[0]));}
 
 static s7_double opt_d_vd_func(void *x, s7_double y) {g_block *g = (g_block *)x; return(y + g->data[0]);}
-static s7_pointer g_d_vd_func(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_d_vd_func(s7_scheme *sc, s7_pointer args)
 {
-  g_block *g; 
-  g = (g_block *)s7_c_object_value(s7_car(args)); 
+  g_block *g;
+  g = (g_block *)s7_c_object_value(s7_car(args));
   return(s7_make_real(sc, s7_real(s7_cadr(args)) + g->data[0]));
 }
 
 static s7_double opt_d_vid_func(void *x, s7_int y, s7_double z) {g_block *g = (g_block *)x; return(z + g->data[y]);}
-static s7_pointer g_d_vid_func(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_d_vid_func(s7_scheme *sc, s7_pointer args)
 {
-  g_block *g; 
-  g = (g_block *)s7_c_object_value(s7_car(args)); 
+  g_block *g;
+  g = (g_block *)s7_c_object_value(s7_car(args));
   return(s7_make_real(sc, s7_real(s7_caddr(args)) + g->data[s7_integer(s7_cadr(args))]));
 }
 
 static s7_double opt_d_vdd_func(void *x, s7_double y, s7_double z) {g_block *g = (g_block *)x; return(y + z + g->data[0]);}
-static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args)
 {
-  g_block *g; 
-  g = (g_block *)s7_c_object_value(s7_car(args)); 
+  g_block *g;
+  g = (g_block *)s7_c_object_value(s7_car(args));
   return(s7_make_real(sc, s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + g->data[0]));
 }
 
-static s7_pointer make_func, catcher1;
+static s7_pointer make_func, catcher1, catcher2;
 static s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {s7_eval_c_string(sc, "(/ 10 0)"); return(s7_t(sc));}
 static s7_pointer ter_error_handler(s7_scheme *sc, s7_pointer args) {return s7_f(sc);}
 static s7_pointer ter1_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_call_with_catch(sc, s7_t(sc), make_func, catcher1));}
 static s7_pointer ter1_error_handler(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, 123));}
+
+static s7_pointer ter2_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_wrong_type_error(sc, s7_make_symbol(sc, "ter2"), 0, args, s7_make_string(sc, "oops")));}
+static s7_pointer ter2_error_handler(s7_scheme *sc, s7_pointer args) {return(s7_apply_function(sc, s7_name_to_value(sc, "format"), s7_cons(sc, s7_f(sc), s7_cadr(args))));}
 
 
 int main(int argc, char **argv)
@@ -653,7 +656,7 @@ int main(int argc, char **argv)
   s7_pointer p, p1;
   s7_int i, gc_loc;
   char *s1, *s2;
-  
+
   sc = s7_init();
   cur_sc = sc;
 
@@ -666,19 +669,19 @@ int main(int argc, char **argv)
 
   s7_set_history_enabled(sc, false);
   if (s7_history_enabled(sc)) fprintf(stderr, "%d: history is enabled\n", __LINE__);
-  
+
   /* try each straight (no errors) case */
 
-  if (!s7_is_null(sc, s7_nil(sc))) 
+  if (!s7_is_null(sc, s7_nil(sc)))
     {fprintf(stderr, "%d: %s is not null?\n", __LINE__, s1 = TO_STR(s7_nil(sc))); free(s1);}
 
-  if (s7_is_pair(s7_nil(sc))) 
+  if (s7_is_pair(s7_nil(sc)))
     {fprintf(stderr, "%d: %s is a pair?\n", __LINE__, s1 = TO_STR(s7_nil(sc))); free(s1);}
 
-  if (!s7_is_boolean(s7_t(sc))) 
+  if (!s7_is_boolean(s7_t(sc)))
     {fprintf(stderr, "%d: %s is not boolean?\n", __LINE__, s1 = TO_STR(s7_t(sc))); free(s1);}
 
-  if (!s7_is_boolean(s7_f(sc))) 
+  if (!s7_is_boolean(s7_f(sc)))
     {fprintf(stderr, "%d: %s is not boolean?\n", __LINE__, s1 = TO_STR(s7_f(sc))); free(s1);}
 
   if (s7_boolean(sc, s7_f(sc)))
@@ -695,16 +698,16 @@ int main(int argc, char **argv)
   if (p != s7_f(sc))
     {fprintf(stderr, "%d: %s is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
-  if (!s7_is_eq(s7_f(sc), s7_f(sc))) 
+  if (!s7_is_eq(s7_f(sc), s7_f(sc)))
     {fprintf(stderr, "%d: (eq? %s %s) -> #f?\n", __LINE__, s1 = TO_STR(s7_f(sc)), s2 = TO_STR(s7_f(sc))); free(s1); free(s2);}
 
-  if (!s7_is_eqv(sc, s7_f(sc), s7_f(sc))) 
+  if (!s7_is_eqv(sc, s7_f(sc), s7_f(sc)))
     {fprintf(stderr, "%d: (eqv? %s %s) -> #f?\n", __LINE__, s1 = TO_STR(s7_f(sc)), s2 = TO_STR(s7_f(sc))); free(s1); free(s2);}
 
-  if (!s7_is_equal(sc, s7_f(sc), s7_f(sc))) 
+  if (!s7_is_equal(sc, s7_f(sc), s7_f(sc)))
     {fprintf(stderr, "%d: (equal? %s %s) -> #f?\n", __LINE__, s1 = TO_STR(s7_f(sc)), s2 = TO_STR(s7_f(sc))); free(s1); free(s2);}
 
-  if (!s7_is_unspecified(sc, s7_unspecified(sc))) 
+  if (!s7_is_unspecified(sc, s7_unspecified(sc)))
     {fprintf(stderr, "%d: %s is not #<unspecified>?\n", __LINE__, s1 = TO_STR(s7_unspecified(sc))); free(s1);}
 
   if (s7_is_eq(s7_eof_object(sc), s7_undefined(sc)))
@@ -755,13 +758,13 @@ int main(int argc, char **argv)
   gc_loc = s7_gc_protect(sc, p);
   if (p != s7_gc_protected_at(sc, gc_loc))
     {fprintf(stderr, "%d: %s is not gc protected at %" ld64 ": %s?\n", __LINE__, s1 = TO_STR(p), gc_loc, s2 = TO_STR(s7_gc_protected_at(sc, gc_loc))); free(s1); free(s2);}
-  
+
   if (s7_car(p) != s7_f(sc))
     {fprintf(stderr, "%d: (car %s) is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   if (s7_cdr(p) != s7_t(sc))
     {fprintf(stderr, "%d: (cdr %s) is not #t?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (!s7_is_pair(p))
     {fprintf(stderr, "%d: %s is not a pair?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
@@ -776,7 +779,7 @@ int main(int argc, char **argv)
   s7_gc_unprotect_at(sc, gc_loc);
 
 
-  
+
   p = TO_S7_INT(123);
   gc_loc = s7_gc_protect(sc, p);
 
@@ -817,7 +820,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "%s is not \"123\"", s7_string(s7_object_to_string(sc, p, true)));
 
   s7_gc_unprotect_at(sc, gc_loc);
-  
+
 
   p = s7_make_ratio(sc, 123, 5);
   gc_loc = s7_gc_protect(sc, p);
@@ -887,6 +890,8 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: s7_number_to_real %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   if (s7_number_to_real_with_caller(sc, p, "ffitest") != 1.5)
     {fprintf(stderr, "%d: s7_number_to_real_with_caller %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_number_to_real_with_symbol_caller(sc, p, s7_make_symbol(sc, "ffitest")) != 1.5)
+    {fprintf(stderr, "%d: s7_number_to_real_with_symbol_caller %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   s7_gc_unprotect_at(sc, gc_loc);
 
@@ -934,7 +939,7 @@ int main(int argc, char **argv)
   p = s7_signature(sc, s7_name_to_value(sc, "abs"));
   if (!s7_is_pair(p))
     {fprintf(stderr, "%d: %s is not a pair?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   {
     s7_pointer p;
     p = s7_shadow_rootlet(sc);
@@ -959,7 +964,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "s7_make_int_vector did not make an int-vector\n");
   if (s7_is_float_vector(s7_make_int_vector(sc, 3, 1, NULL)))
     fprintf(stderr, "s7_make_int_vector made a float-vector?\n");
-  
+
   {
     s7_int* dims;
     s7_pointer p;
@@ -1039,7 +1044,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "%d: ratio is %s?\n", __LINE__, s1);
   free(s1);
   s7_gc_unprotect_at(sc, gc_loc);
-  
+
   s7_set_default_random_state(sc, 1234, 5678);
   s7_random(sc, NULL);
   s7_stacktrace(sc);
@@ -1129,7 +1134,7 @@ int main(int argc, char **argv)
     if (s7_string_length(p) != 4)
       {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   }
-  
+
   p = s7_make_character(sc, 65);
   if (!s7_is_character(p))
     {fprintf(stderr, "%d: %s is not a character?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
@@ -1145,29 +1150,29 @@ int main(int argc, char **argv)
 
   if (!s7_is_list(sc, p))
     {fprintf(stderr, "%d: %s is not a list?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_list_length(sc, p) != 3)
     {fprintf(stderr, "%d: (length %s) is not 3?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_integer(s7_list_ref(sc, p, 1)) != 2)
     {fprintf(stderr, "%d: (%s 1) is not 2?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_integer(s7_car(p)) != 1)
     {fprintf(stderr, "%d: (car %s) is not 1?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_integer(s7_cadr(p)) != 2)
     {fprintf(stderr, "%d: (cadr %s) is not 2?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_integer(s7_caddr(p)) != 3)
     {fprintf(stderr, "%d: (caddr %s) is not 2?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_integer(s7_car(s7_cddr(p))) != 3)
     {fprintf(stderr, "%d: (car (cddr %s)) is not 2?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   s7_list_set(sc, p, 1, s7_f(sc));
   if (s7_list_ref(sc, p, 1) != s7_f(sc))
     {fprintf(stderr, "%d: (%s 1) is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   s7_gc_unprotect_at(sc, gc_loc);
 
   p = s7_make_list(sc, 3, s7_make_integer(sc, 123));
@@ -1222,88 +1227,88 @@ int main(int argc, char **argv)
     c23d4 = s7_cons(sc, TO_S7_INT(2), s7_cons(sc, TO_S7_INT(3), TO_S7_INT(4)));     /* (2 3 . 4) */
     c123d4 = s7_cons(sc, TO_S7_INT(1), s7_cons(sc, TO_S7_INT(2), s7_cons(sc, TO_S7_INT(3), TO_S7_INT(4))));                             /* (1 2 3 . 4) */
     c1234d5 = s7_cons(sc, TO_S7_INT(1), s7_cons(sc, TO_S7_INT(2), s7_cons(sc, TO_S7_INT(3), s7_cons(sc, TO_S7_INT(4), TO_S7_INT(5))))); /* (1 2 3 4 . 5) */
-    
+
     if (s7_integer(p = s7_caar(s7_list(sc, 1, c1))) != 1)
       {fprintf(stderr, "%d: caar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cadr(c12)) != 2)
       {fprintf(stderr, "%d: cadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdar(s7_list(sc, 1, c1d2))) != 2)
       {fprintf(stderr, "%d: cdar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cddr(c12d3)) != 3)
       {fprintf(stderr, "%d: cddr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caaar(s7_list(sc, 1, s7_list(sc, 1, c1)))) != 1)
       {fprintf(stderr, "%d: caaar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caadr(s7_list(sc, 2, TO_S7_INT(1), c2))) != 2)
       {fprintf(stderr, "%d: caadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cadar(s7_list(sc, 1, c12))) != 2)
       {fprintf(stderr, "%d: cadar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdaar(s7_list(sc, 1, s7_list(sc, 1, c1d2)))) != 2)
       {fprintf(stderr, "%d: cdaar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caddr(c123)) != 3)
       {fprintf(stderr, "%d: caddr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdddr(c123d4)) != 4)
       {fprintf(stderr, "%d: cdddr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdadr(s7_list(sc, 2, TO_S7_INT(1), c2d3))) != 3)
       {fprintf(stderr, "%d: cdadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cddar(s7_list(sc, 1, c12d3))) != 3)
       {fprintf(stderr, "%d: cddar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caaaar(s7_list(sc, 1, s7_list(sc, 1, s7_list(sc, 1, c1))))) != 1)
       {fprintf(stderr, "%d: caaaar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caaadr(s7_list(sc, 2, TO_S7_INT(1), s7_list(sc, 1, c2)))) != 2)
       {fprintf(stderr, "%d: caaadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caadar(s7_list(sc, 1, s7_list(sc, 2, TO_S7_INT(1), c2)))) != 2)
       {fprintf(stderr, "%d: caadar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cadaar(s7_list(sc, 1, s7_list(sc, 1, c12)))) != 2)
       {fprintf(stderr, "%d: cadaar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caaddr(s7_list(sc, 3, TO_S7_INT(1), TO_S7_INT(2), c3))) != 3)
       {fprintf(stderr, "%d: caaddr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cadddr(c1234)) != 4)
       {fprintf(stderr, "%d: cadddr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cadadr(s7_list(sc, 2, TO_S7_INT(1), c23))) != 3)
       {fprintf(stderr, "%d: cadadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_caddar(s7_list(sc, 1, c123))) != 3)
       {fprintf(stderr, "%d: caddar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdaaar(s7_list(sc, 1, s7_list(sc, 1, s7_list(sc, 1, c1d2))))) != 2)
       {fprintf(stderr, "%d: cdaaar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdaadr(s7_list(sc, 2, TO_S7_INT(1), s7_list(sc, 1, c2d3)))) != 3)
       {fprintf(stderr, "%d: cdaadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdadar(s7_list(sc, 1, s7_list(sc, 2, TO_S7_INT(1), c2d3)))) != 3)
       {fprintf(stderr, "%d: cdadar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cddaar(s7_list(sc, 1, s7_list(sc, 1, c12d3)))) != 3)
       {fprintf(stderr, "%d: cddaar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdaddr(s7_list(sc, 3, TO_S7_INT(1), TO_S7_INT(2), c3d4))) != 4)
       {fprintf(stderr, "%d: cdaddr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cddddr(c1234d5)) != 5)
       {fprintf(stderr, "%d: cdddd is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cddadr(s7_list(sc, 2, TO_S7_INT(1), c23d4))) != 4)
       {fprintf(stderr, "%d: cddadr is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    
+
     if (s7_integer(p = s7_cdddar(s7_list(sc, 1, c123d4))) != 4)
       {fprintf(stderr, "%d: cdddar is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
@@ -1325,7 +1330,7 @@ int main(int argc, char **argv)
     if (strcmp(s1, "(a . 32)") != 0)
       {fprintf(stderr, "%d: (assq 'a '((a . 32) (b . 1)))) is %s?\n", __LINE__, s1);}
     free(s1);
-    
+
     p1 = s7_assoc(sc, s7_make_symbol(sc, "b"), p);
     s1 = TO_STR(p1);
     if (strcmp(s1, "(b . 1)") != 0)
@@ -1343,9 +1348,9 @@ int main(int argc, char **argv)
     s1 = TO_STR(p1); /* s1 is "(b)" here but valgrind complains */
     if (strcmp(s1, "(b)") != 0)
       {fprintf(stderr, "%d: (memq 'b '(a b)) is %s?\n", __LINE__, s1);}
-    free(s1);    
+    free(s1);
 
-    s7_set_car(c1234, s7_make_symbol(sc, "+")); 
+    s7_set_car(c1234, s7_make_symbol(sc, "+"));
     p = s7_eval(sc, c1234, s7_sublet(sc, s7_rootlet(sc), s7_nil(sc)));
     if (s7_integer(p) != 9)
       {fprintf(stderr, "%d: (eval '(+ 2 3 4)) is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
@@ -1353,19 +1358,19 @@ int main(int argc, char **argv)
 
     p = s7_eval(sc, s7_cons(sc, s7_make_symbol(sc, "+"), /* s7.html example */
                s7_cons(sc, s7_make_integer(sc, 1),
-                  s7_cons(sc, s7_make_integer(sc, 2), s7_nil(sc)))), 
+                  s7_cons(sc, s7_make_integer(sc, 2), s7_nil(sc)))),
                s7_nil(sc));
     if (s7_integer(p) != 3)
        {fprintf(stderr, "%d: (eval '(+ 1 2)) is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-    p = s7_eval_with_location(sc, s7_cons(sc, s7_make_symbol(sc, "+"), 
+    p = s7_eval_with_location(sc, s7_cons(sc, s7_make_symbol(sc, "+"),
 					  s7_cons(sc, s7_make_integer(sc, 1),
-						  s7_cons(sc, s7_make_integer(sc, 2), s7_nil(sc)))), 
+						  s7_cons(sc, s7_make_integer(sc, 2), s7_nil(sc)))),
 			      s7_nil(sc), "ffitest", __FILE__, __LINE__);
     if (s7_integer(p) != 3)
        {fprintf(stderr, "%d: (eval '(+ 1 2)) is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
     p = s7_eval(sc, s7_cons(sc, s7_make_symbol(sc, "+"), /* s7.html example */
                s7_cons(sc, s7_make_integer(sc, 1),
-                  s7_cons(sc, s7_make_integer(sc, 3), s7_nil(sc)))), 
+                  s7_cons(sc, s7_make_integer(sc, 3), s7_nil(sc)))),
                s7_rootlet(sc));
     if (s7_integer(p) != 4)
        {fprintf(stderr, "%d: (eval '(+ 1 3)) is %s?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
@@ -1383,7 +1388,7 @@ int main(int argc, char **argv)
 
   if (!s7_is_hash_table(p))
     {fprintf(stderr, "%d: %s is not a hash-table?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_hash_table_ref(sc, p, s7_eof_object(sc)) != s7_f(sc))
     {fprintf(stderr, "%d: (hash-table-ref %s #<eof>) is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
@@ -1406,18 +1411,18 @@ int main(int argc, char **argv)
   p = s7_name_to_value(sc, "abs");
   if (!s7_is_procedure(p))
     {fprintf(stderr, "%d: %s is not a procedure?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   p = s7_make_symbol(sc, "abs");
   if (!s7_is_symbol(p))
     {fprintf(stderr, "%d: %s is not a symbol?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   if (s7_is_syntax(p))
     {fprintf(stderr, "%d: %s is syntax?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   p = s7_gensym(sc, "abs");
   if (!s7_is_symbol(p))
     {fprintf(stderr, "%d: %s is not a symbol?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   p = s7_make_keyword(sc, "key");
   if (!s7_is_keyword(p))
     {fprintf(stderr, "%d: %s is not a keyword?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
@@ -1430,11 +1435,11 @@ int main(int argc, char **argv)
   p = s7_rootlet(sc);
   if (!s7_is_let(p))
     {fprintf(stderr, "%d: %s is not an environment?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   p = s7_curlet(sc);
   if ((!s7_is_null(sc, p)) && (!s7_is_let(p)))
     {fprintf(stderr, "%d: %s is not an environment?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   s7_define_constant(sc, "a_constant", s7_t(sc));
   if (!s7_is_immutable(s7_name_to_value(sc, "a_constant")))
     {fprintf(stderr, "%d: a_constant is not a constant?\n", __LINE__);}
@@ -1492,15 +1497,15 @@ int main(int argc, char **argv)
   p = s7_make_safe_function(sc, "make-dax", make_dax, 2, 0, false, "(make-dax x data) makes a new dax");
   if (!s7_is_procedure(p)) fprintf(stderr, "%d: make-dax is not a (safe) procedure\n", __LINE__);
 
-  s7_define_variable(sc, "dax-x", 
+  s7_define_variable(sc, "dax-x",
                      s7_dilambda(sc, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field (a real)"));
 
-  s7_define_variable(sc, "dax-xx", 
-                     s7_typed_dilambda(sc, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field (a real)", 
+  s7_define_variable(sc, "dax-xx",
+                     s7_typed_dilambda(sc, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field (a real)",
 				       s7_make_signature(sc, 1, s7_make_symbol(sc, "real?")),
 				       s7_make_circular_signature(sc, 0, 1, s7_make_symbol(sc, "real?"))));
 
-  s7_define_variable(sc, "dax-data", 
+  s7_define_variable(sc, "dax-data",
                      s7_dilambda_with_environment(sc, s7_nil(sc), "dax-data", dax_data, 1, 0, set_dax_data, 2, 0, "dax data field"));
 
   if (!s7_is_dilambda(s7_name_to_value(sc, "dax-x")))
@@ -1510,7 +1515,7 @@ int main(int argc, char **argv)
   gc_loc = s7_gc_protect(sc, p);
 
   if (!s7_is_c_object(p))
-    {fprintf(stderr, "%d: %s is not a c_object?\n", __LINE__, s1 = TO_STR(p)); free(s1);}    
+    {fprintf(stderr, "%d: %s is not a c_object?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   p1 = s7_apply_function(sc, s7_name_to_value(sc, "dax?"), s7_cons(sc, p, s7_nil(sc)));
   if (p1 != s7_t(sc))
@@ -1518,7 +1523,7 @@ int main(int argc, char **argv)
 
   s1 = TO_STR(p);
   if (strcmp(s1, "#<dax 1.000 2>") != 0)
-    {fprintf(stderr, "%d: dax prints as %s?\n", __LINE__, s2 = TO_STR(p)); free(s2);}    
+    {fprintf(stderr, "%d: dax prints as %s?\n", __LINE__, s2 = TO_STR(p)); free(s2);}
   free(s1);
 
   p1 = s7_apply_function(sc, s7_name_to_value(sc, "dax-data"), s7_cons(sc, p, s7_nil(sc)));
@@ -1612,7 +1617,7 @@ int main(int argc, char **argv)
     val = s7_eval_c_string(sc, "(fs2)");
     if (!s7_is_null(sc, val)) fprintf(stderr, "(fs2): %s\n", s7_object_to_c_string(sc, val));
 
-    val = s7_eval_c_string(sc, "(fs31)"); 
+    val = s7_eval_c_string(sc, "(fs31)");
     if (s7_integer(val) != 32) fprintf(stderr, "(fs31): %s\n", s7_object_to_c_string(sc, val));
     val = s7_eval_c_string(sc, "(fs31 32)");
     if (s7_integer(val) != 32) fprintf(stderr, "(fs31 32): %s\n", s7_object_to_c_string(sc, val));
@@ -1645,13 +1650,13 @@ int main(int argc, char **argv)
     val = s7_eval_c_string(sc, "(fs61 :ignored #f :a 29)");
     if (s7_integer(val) != 29) fprintf(stderr, "(fs61 :ignored #f :a 29): %s\n", s7_object_to_c_string(sc, val));
   }
-  
+
   p = s7_apply_function(sc, s7_name_to_value(sc, "plus"), s7_cons(sc, s7_make_keyword(sc, "blue"), s7_cons(sc, TO_S7_INT(2), s7_nil(sc))));
   if (!s7_is_integer(p))
     {fprintf(stderr, "%d: %s is not an integer?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   if (s7_integer(p) != 66)
     {fprintf(stderr, "%d: %s is not 66?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  
+
   s7_define_variable(sc, "my-1", s7_make_integer(sc, 1));
   p = s7_name_to_value(sc, "my-1");
   if (!s7_is_integer(p))
@@ -1670,7 +1675,7 @@ int main(int argc, char **argv)
   p = s7_eval_c_string(sc, "(mac-plus 2 3)");
   if (s7_integer(p) != 5)
     {fprintf(stderr, "%d: %s is not 5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  p1 = s7_apply_function(sc, 
+  p1 = s7_apply_function(sc,
 	s7_name_to_value(sc, "mac-plus"),
 	s7_list(sc, 2, s7_make_integer(sc, 3), s7_make_integer(sc, 4)));
   p = s7_eval(sc, p1, s7_rootlet(sc));
@@ -1771,12 +1776,12 @@ int main(int argc, char **argv)
 
     if (new_env == s7_curlet(sc))
       {fprintf(stderr, "%d: %s is the current env?\n", __LINE__, s1 = TO_STR(new_env)); free(s1);}
-    
+
     s1 = TO_STR(s7_let_to_list(sc, new_env));
     if (strcmp(s1, "((var1 . 32))") != 0)
       {fprintf(stderr, "%d: new-env is %s?\n", __LINE__, s1);}
     free(s1);
-    
+
     p = s7_let_ref(sc, new_env, s7_make_symbol(sc, "var1"));
     if (s7_integer(p) != 32)
       {fprintf(stderr, "%d: %s is not 32?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
@@ -1807,8 +1812,8 @@ int main(int argc, char **argv)
     s7_symbol_set_value(sc, s7_make_symbol(sc, "var2"), s7_t(sc));
     p = s7_symbol_local_value(sc, s7_make_symbol(sc, "var2"), new_env);
     if (p != s7_t(sc))
-      {fprintf(stderr, "%d: set symbol-value %s is not #t?\n", __LINE__, s1 = TO_STR(p)); free(s1);}    
-    
+      {fprintf(stderr, "%d: set symbol-value %s is not #t?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+
     p = s7_let_to_list(sc, new_env);
     {
       int gloc;
@@ -1893,7 +1898,7 @@ int main(int argc, char **argv)
 		c = s7_character(s7_peek_char(sc, port));
 		if (c != (int)'(')
 		  {fprintf(stderr, "%d: peek-char sees %c?\n", __LINE__, (unsigned char)c);}
-		
+
 		c = s7_character(s7_read_char(sc, port));
 		if (c != (uint8_t)'(')
 		  {fprintf(stderr, "%d: read-char sees %c?\n", __LINE__, (unsigned char)c);}
@@ -1901,7 +1906,7 @@ int main(int argc, char **argv)
 		filename = s7_port_filename(sc, port);
 		if (strcmp(filename, "ffitest.scm") != 0)
 		  fprintf(stderr, "%d: s7_port_filename: %s\n", __LINE__, filename);
-		
+
 		s7_close_input_port(sc, port);
 		s7_gc_unprotect_at(sc, gc_loc);
 
@@ -2069,7 +2074,7 @@ int main(int argc, char **argv)
     if (last_c != '3')
       {fprintf(stderr, "%d: last_c: %c, c: %c\n", __LINE__, last_c, '3');}
     last_c = s7_character(s7_read_char(sc, p1));
-    if (last_c != '0') 
+    if (last_c != '0')
       {fprintf(stderr, "%d: last_c: %c\n", __LINE__, last_c);}
     s7_set_current_output_port(sc, p);
     s7_gc_unprotect_at(sc, gc_loc);
@@ -2079,7 +2084,7 @@ int main(int argc, char **argv)
     s7_pointer port, val;
     s7_autoload(sc, s7_make_symbol(sc, "auto_var"), s7_make_string(sc, "ffitest.scm"));
     port = s7_open_output_file(sc, "ffitest.scm", "w");
-    gc_loc = s7_gc_protect(sc, port);      
+    gc_loc = s7_gc_protect(sc, port);
     s7_display(sc, s7_make_string(sc, "(define auto_var 123)"), port);
     s7_newline(sc, port);
     s7_close_output_port(sc, port);
@@ -2090,13 +2095,13 @@ int main(int argc, char **argv)
       {fprintf(stderr, "%d: auto_var+1 = %s?\n", __LINE__, s1 = TO_STR(val)); free(s1);}
     s7_autoload_set_names(sc, snd_names, 8);
   }
-    
+
   {
     s7_pointer test_hook;
     test_hook = s7_eval_c_string(sc, "(make-hook 'a 'b)");
-    s7_define_constant(sc, "test-hook", test_hook); 
-    s7_hook_set_functions(sc, test_hook, 
-			  s7_cons(sc, s7_make_function(sc, "test-hook-function", test_hook_function, 1, 0, false, "a test-hook function"), 
+    s7_define_constant(sc, "test-hook", test_hook);
+    s7_hook_set_functions(sc, test_hook,
+			  s7_cons(sc, s7_make_function(sc, "test-hook-function", test_hook_function, 1, 0, false, "a test-hook function"),
 				  s7_hook_functions(sc, test_hook)));
     s7_call(sc, test_hook, s7_list(sc, 2, TO_S7_INT(1), TO_S7_INT(2)));
     s7_call_with_location(sc, test_hook, s7_list(sc, 2, TO_S7_INT(1), TO_S7_INT(2)), "ffitest", "ffitest.c", __LINE__);
@@ -2157,13 +2162,13 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: begin_hook was not set?\n", __LINE__);}
   s7_set_begin_hook(sc, NULL);
 
-  
+
   p1 = s7_name_to_value(sc, "abs");
   if (!s7_is_procedure(p1))
     {fprintf(stderr, "%d: (procedure? abs) = #f?\n", __LINE__);}
   if (s7_is_macro(sc, p1))
     {fprintf(stderr, "%d: (macro? abs) = #t?\n", __LINE__);}
-  
+
   if (!s7_is_aritable(sc, p1, 1))
     {fprintf(stderr, "%d: (aritable? abs 1) = #f?\n", __LINE__);}
   if (s7_is_aritable(sc, p1, 2))
@@ -2190,12 +2195,12 @@ int main(int argc, char **argv)
 
     s3 = s7_documentation(sc, s7_make_symbol(sc, "abs"));
     if (strcmp(s3, "(abs x) returns the absolute value of the real number x") != 0)
-      {fprintf(stderr, "%d: (documentation 'abs) = %s?\n", __LINE__, s3);}    
+      {fprintf(stderr, "%d: (documentation 'abs) = %s?\n", __LINE__, s3);}
   }
 
   p = s7_eval_c_string(sc, "(lambda (a b . c) (+ a b (apply * c)))");
   gc_loc = s7_gc_protect(sc, p);
-  
+
   if (!s7_is_procedure(p))
     {fprintf(stderr, "%d: %s is not a procedure?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
@@ -2203,24 +2208,24 @@ int main(int argc, char **argv)
   if (strcmp(s1, "((+ a b (apply * c)))") != 0)
     {fprintf(stderr, "%d: s7_closure_body is %s?\n", __LINE__, s1);}
   free(s1);
-  
+
   s1 = TO_STR(s7_closure_args(sc, p));
   if (strcmp(s1, "(a b . c)") != 0)
     {fprintf(stderr, "%d: s7_closure_args is %s?\n", __LINE__, s1);}
   free(s1);
-  
+
   s1 = TO_STR(s7_closure_let(sc, p));
   if (strcmp(s1, "()") != 0)
     {fprintf(stderr, "%d: s7_closure_let is %s?\n", __LINE__, s1);}
   free(s1);
-  
+
   if (s7_closure_body(sc, s7_name_to_value(sc, "abs")) != s7_nil(sc))
     fprintf(stderr, "closure_body(abs) is not nil?\n");
   if (s7_closure_args(sc, s7_name_to_value(sc, "abs"))  != s7_nil(sc))
     fprintf(stderr, "closure_args(abs) is not nil?\n");
   if (s7_closure_let(sc, s7_name_to_value(sc, "abs"))  != s7_nil(sc))
     fprintf(stderr, "closure_let(abs) is not nil?\n");
-  
+
   if (!s7_is_aritable(sc, p, 2))
     {fprintf(stderr, "%d: aritable? lambda 2 = #f?\n", __LINE__);}
   if (s7_is_aritable(sc, p, 1))
@@ -2309,8 +2314,8 @@ int main(int argc, char **argv)
       fprintf(stderr, "%d: s7_c_object_let trouble\n", __LINE__);
     s7_gc_unprotect_at(sc, gc_loc);
   }
-  
-  {                            
+
+  {
     s7_pointer old_port;
     const char *errmsg = NULL;
 
@@ -2327,7 +2332,7 @@ int main(int argc, char **argv)
     s7_gc_unprotect_at(sc, gc_loc);
   }
 
-  {                            
+  {
     int gc_loc1;
     s7_pointer old_port, result, func;
     const char *errmsg = NULL;
@@ -2498,7 +2503,7 @@ int main(int argc, char **argv)
     if (s7_integer(result) != 30)
       fprintf(stderr, "%d: catch my_error via my_error_handler: %s\n", __LINE__, TO_STR(result));
     s7_gc_unprotect_at(sc, gc_body);
-    
+
     body = s7_eval_c_string(sc, "(lambda () (+ 1 2))");
     gc_body = s7_gc_protect(sc, body);
     result = s7_call_with_catch(sc, s7_t(sc), body, err);                                                     /* Ln C */
@@ -2522,7 +2527,7 @@ int main(int argc, char **argv)
     s7_define_function(sc, "error-handler", ter_error_handler, 2, 0, false, NULL);
     result1 = s7_call_with_catch(sc, s7_t(sc), s7_name_to_value(sc, "bad-func"), s7_name_to_value(sc, "error-handler"));
     result2 = s7_eval_c_string(sc, "(catch #t bad-func error-handler)");
-    if (result1 != result2) 
+    if (result1 != result2)
       fprintf(stderr, "%d: %s != %s\n", __LINE__, s7_object_to_c_string(sc, result1), s7_object_to_c_string(sc, result2));
   }
 
@@ -2542,6 +2547,12 @@ int main(int argc, char **argv)
     if (s7_integer(val) != 123) fprintf(stderr, "%d: %s should be 123\n", __LINE__, s7_object_to_c_string(sc, val));
     val = s7_call_with_catch(sc, s7_t(sc), make_func, catcher);
     if (val != s7_f(sc)) fprintf(stderr, "%d: %s should be #f\n", __LINE__, s7_object_to_c_string(sc, val));
+
+    make_func = s7_make_function(sc, "bad2", ter2_bad_func, 0, 0, false, NULL);
+    catcher2 = s7_make_function(sc, "catcher2", ter2_error_handler, 2, 0, false, NULL);
+    val = s7_call_with_catch(sc, s7_t(sc), make_func, catcher2);
+    if (strcmp(s7_string(val), "ter2 argument, (), is nil but should be oops") != 0)
+      fprintf(stderr, "%d: %s is unexpected\n", __LINE__, s7_string(val));
   }
 
   {
@@ -2621,7 +2632,7 @@ int main(int argc, char **argv)
 
     symbol = s7_define_safe_function(sc, "d-dddd-func", g_d_dddd_func, 4, 0, false, "d-dddd opt func");
     s7_set_d_dddd_function(sc, s7_name_to_value(sc, "d-dddd-func"), opt_d_dddd_func);
-    sfunc = s7_optimize(sc, s7_list(sc, 1, 
+    sfunc = s7_optimize(sc, s7_list(sc, 1,
        s7_list(sc, 5, symbol, s7_make_real(sc, 2.0), s7_make_real(sc, 3.0), s7_make_real(sc, 4.0), s7_make_real(sc, 5.0)))); /* ((d-dddd-func 2.0 3.0 4.0 5.0)) */
     if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-dddd-func not optimized\n", __LINE__);
 
@@ -2692,16 +2703,16 @@ int main(int argc, char **argv)
 
     symbol = s7_define_safe_function(sc, "d-vd-func", g_d_vd_func, 2, 0, false, "d-vd opt func");
     s7_set_d_vd_function(sc, s7_name_to_value(sc, "d-vd-func"), opt_d_vd_func);
-    sfunc = s7_optimize(sc, s7_list(sc, 1, 
-                              s7_list(sc, 3, symbol, 
+    sfunc = s7_optimize(sc, s7_list(sc, 1,
+                              s7_list(sc, 3, symbol,
                                              s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
 				             s7_make_real(sc, 0.0)))); /* ((d-vd-func (block 2) 0.0)) */
     if ((!WITH_GMP) && (!sfunc)) fprintf(stderr, "%d: d-vd-func not optimized\n", __LINE__);
 
     symbol = s7_define_safe_function(sc, "d-vid-func", g_d_vid_func, 3, 0, false, "d-vid opt func");
     s7_set_d_vid_function(sc, s7_name_to_value(sc, "d-vid-func"), opt_d_vid_func);
-    sfunc = s7_optimize(sc, s7_list(sc, 1, 
-                              s7_list(sc, 4, symbol, 
+    sfunc = s7_optimize(sc, s7_list(sc, 1,
+                              s7_list(sc, 4, symbol,
                                              s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
 				             s7_make_integer(sc, 0),
 				             s7_make_real(sc, 0.0)))); /* ((d-vid-func (block 2) 0 0.0)) */
@@ -2709,8 +2720,8 @@ int main(int argc, char **argv)
 
     symbol = s7_define_safe_function(sc, "d-vdd-func", g_d_vdd_func, 3, 0, false, "d-vdd opt func");
     s7_set_d_vdd_function(sc, s7_name_to_value(sc, "d-vdd-func"), opt_d_vdd_func);
-    sfunc = s7_optimize(sc, s7_list(sc, 1, 
-                              s7_list(sc, 4, symbol, 
+    sfunc = s7_optimize(sc, s7_list(sc, 1,
+                              s7_list(sc, 4, symbol,
                                              s7_list(sc, 2, s7_make_symbol(sc, "block"), s7_make_integer(sc, 2)),
 				             s7_make_real(sc, 0.0),
 				             s7_make_real(sc, 0.0)))); /* ((d-vdd-func (block 2) 0.0 0.0)) */
