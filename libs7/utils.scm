@@ -378,6 +378,8 @@ If func approves of one, find-then returns the result of applying fn to it."))
               (mkdir path flags))))))
 
 (define (truthy? x)
-  (and (not #f) (not (null? x))))
+  (if (list? x)
+      (not (null? x))
+      (if x #t #f)))
 
 ;; (display "loaded libs7/utils.scm") (newline)
