@@ -1206,7 +1206,7 @@ struct s7_scheme {
 
   shared_info_t *circle_info;
   format_data_t **fdats;
-  int32_t num_fdats, last_error_line, safety;
+  int32_t num_fdats, safety;
   gc_list_t *strings, *vectors, *input_ports, *output_ports, *input_string_ports, *continuations, *c_objects, *hash_tables;
   gc_list_t *gensyms, *undefineds, *multivectors, *weak_refs, *weak_hash_iterators, *opt1_funcs;
 #if (WITH_GMP)
@@ -4048,6 +4048,7 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
 #else
   #define lookup_checked(Sc, Sym) lookup(Sc, Sym)
 #endif
+
 
 /* ---------------- evaluator ops ---------------- */
 /* C=constant, S=symbol, A=fx-callable, Q=quote, N=any number of next >= 1, FX=list of A's, P=parlous?, O=one form, M=multiform */
@@ -7200,6 +7201,8 @@ static void unmark_permanent_objects(s7_scheme *sc)
   #include <sys/time.h>
 #endif
 
+static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
+
 #if S7_DEBUGGING
 static bool has_odd_bits(s7_pointer obj);
 #endif
@@ -7526,7 +7529,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 		   sc->heap_size, old_free, old_size, str);
     }
   if (sc->heap_size >= sc->max_heap_size)
-    error_nr(sc, make_symbol(sc, "heap-too-big"),
+    error_nr(sc, make_symbol_with_length(sc, "heap-too-big", 12),
 	     set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~S > ~S", 50),
 			 wrap_integer(sc, sc->max_heap_size),
 			 wrap_integer(sc, sc->heap_size)));
@@ -8082,7 +8085,7 @@ static void resize_stack(s7_scheme *sc)
   if (show_stack_stats(sc))
     s7_warn(sc, 128, "stack grows to %u\n", new_size);
   if (new_size > sc->max_stack_size)
-    error_nr(sc, make_symbol(sc, "stack-too-big"),
+    error_nr(sc, make_symbol_with_length(sc, "stack-too-big", 13),
 	     set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
     /* error needs to follow realloc, else error -> catchers in error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
 }
@@ -8150,8 +8153,6 @@ static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_point
   slot_set_symbol_and_value(slot, symbol, value);
   return(slot);
 }
-
-static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
 
 static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len, uint64_t hash, uint32_t location)
 {
@@ -10211,7 +10212,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
       /* here it's possible to get cyclic let chains; maybe do this check only if safety>0 */
       for (s7_pointer lt = new_outer; (is_let(lt)) && (lt != sc->rootlet); lt = let_outlet(lt))
 	if (let == lt)
-	  error_nr(sc, make_symbol(sc, "cyclic-let"),
+	  error_nr(sc, make_symbol_with_length(sc, "cyclic-let", 10),
 		   set_elist_2(sc, wrap_string(sc, "set! (outlet ~A) creates a cyclic let chain", 43), let));
       let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);  /* outlet rootlet->() so that slot search can use is_let(outlet) I think */
     }
@@ -16196,7 +16197,7 @@ bignum returns that number as a bignum"
   if (is_number(p))
     {
       if (!is_null(cdr(args)))
-	error_nr(sc, make_symbol(sc, "bignum-error"),
+	error_nr(sc, make_symbol_with_length(sc, "bignum-error", 12),
 		 set_elist_2(sc, wrap_string(sc, "bignum of a number takes only one argument: ~S", 46), args));
 #if WITH_GMP
       switch (type(p))
@@ -16213,7 +16214,7 @@ bignum returns that number as a bignum"
     }
   p = g_string_to_number_1(sc, args, sc->bignum_symbol);
   if (is_false(sc, p))                                       /* (bignum "1/3.0") */
-    error_nr(sc, make_symbol(sc, "bignum-error"),
+    error_nr(sc, make_symbol_with_length(sc, "bignum-error", 12),
 	     set_elist_2(sc, wrap_string(sc, "bignum string argument does not represent a number: ~S", 54), car(args)));
 #if WITH_GMP
   switch (type(p))
@@ -26214,15 +26215,20 @@ static s7_pointer g_string_position(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- strings -------------------------------- */
-static s7_pointer nil_string; /* permanent "" */
-
 bool s7_is_string(s7_pointer p) {return(is_string(p));}
 
-const char *s7_string(s7_pointer p) {return(string_value(p));}
+static s7_pointer g_is_string(s7_scheme *sc, s7_pointer args)
+{
+  #define H_is_string "(string? obj) returns #t if obj is a string"
+  #define Q_is_string sc->pl_bt
+  check_boolean_method(sc, is_string, sc->is_string_symbol, args);
+}
+
+
+static s7_pointer nil_string; /* permanent "" */
 
 s7_int s7_string_length(s7_pointer str) {return(string_length(str));}
 
-s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len) {return(make_string_with_length(sc, str, len));}
 
 #define NUM_STRING_WRAPPERS 8
 
@@ -26236,6 +26242,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
 }
 
 s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str) {return(wrap_string(sc, str, safe_strlen(str)));}
+
 
 static Inline s7_pointer inline_make_empty_string(s7_scheme *sc, s7_int len, char fill)
 {
@@ -26259,7 +26266,7 @@ static s7_pointer make_empty_string(s7_scheme *sc, s7_int len, char fill) {retur
 
 s7_pointer s7_make_string(s7_scheme *sc, const char *str) {return((str) ? make_string_with_length(sc, str, safe_strlen(str)) : nil_string);}
 
-static char *make_permanent_c_string(s7_scheme *sc, const char *str)
+static char *make_permanent_c_string(s7_scheme *sc, const char *str) /* strcpy but avoid malloc */
 {
   s7_int len = safe_strlen(str);
   char *x = (char *)permalloc(sc, len + 1);
@@ -26268,9 +26275,8 @@ static char *make_permanent_c_string(s7_scheme *sc, const char *str)
   return(x);
 }
 
-s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
+s7_pointer make_semipermanent_string(s7_scheme *sc, const char *str) /* for (s7) string permanent within one s7 instance (freed upon s7_free) */
 {
-  /* for the symbol table which is never GC'd */
   s7_pointer x;
   s7_int len;
   if (!str) return(nil_string);
@@ -26287,14 +26293,7 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str)
   return(x);
 }
 
-static s7_pointer g_is_string(s7_scheme *sc, s7_pointer args)
-{
-  #define H_is_string "(string? obj) returns #t if obj is a string"
-  #define Q_is_string sc->pl_bt
-  check_boolean_method(sc, is_string, sc->is_string_symbol, args);
-}
-
-static s7_pointer make_permanent_string(const char *str)
+static s7_pointer make_permanent_string(const char *str)           /* for (s7) strings outside all s7 GC's */
 {
   s7_pointer x = (s7_pointer)Calloc(1, sizeof(s7_cell));
   s7_int len = safe_strlen(str);
@@ -26305,6 +26304,11 @@ static s7_pointer make_permanent_string(const char *str)
   string_value(x) = (char *)str;
   string_hash(x) = 0;
   return(x);
+}
+
+s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str) /* keep s7_scheme* arg for backwards compatibility */
+{
+  return(make_permanent_string(str));
 }
 
 static void init_strings(void)
@@ -26389,6 +26393,8 @@ static void init_strings(void)
 
 
 /* -------------------------------- make-string -------------------------------- */
+s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len) {return(make_string_with_length(sc, str, len));}
+
 static s7_pointer g_make_string(s7_scheme *sc, s7_pointer args)
 {
   #define H_make_string "(make-string len (val #\\space)) makes a string of length len filled with the character val (default: space)"
@@ -27480,6 +27486,8 @@ static s7_pointer g_string_fill(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- string -------------------------------- */
+const char *s7_string(s7_pointer p) {return(string_value(p));}
+
 static s7_pointer g_string_1(s7_scheme *sc, s7_pointer args, s7_pointer sym)
 {
   int32_t i, len;
@@ -28332,7 +28340,7 @@ static void resize_port_data(s7_scheme *sc, s7_pointer pt, s7_int new_size)
 
   if (new_size < loc) return;
   if (new_size > sc->max_port_data_size)
-    error_nr(sc, make_symbol(sc, "port-too-big"),
+    error_nr(sc, make_symbol_with_length(sc, "port-too-big", 12),
 	     set_elist_1(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size)", 56)));
 
   nb = reallocate(sc, port_data_block(pt), new_size);
@@ -28920,7 +28928,7 @@ static int32_t remember_file_name(s7_scheme *sc, const char *file)
       for (int32_t i = old_size; i < sc->file_names_size; i++)
 	sc->file_names[i] = sc->F;
     }
-  sc->file_names[sc->file_names_top] = s7_make_permanent_string(sc, file);
+  sc->file_names[sc->file_names_top] = make_semipermanent_string(sc, file);
   return(sc->file_names_top);
 }
 
@@ -30096,7 +30104,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
       else
 	if (let) /* look for 'init_func in let */
 	  {
-	    s7_pointer init = s7_let_ref(sc, let, make_symbol(sc, "init_func"));
+	    s7_pointer init = s7_let_ref(sc, let, make_symbol_with_length(sc, "init_func", 9));
 	    /* init is a symbol (surely not a gensym?), so it should not need to be protected */
 	    if (!is_symbol(init))
 	      s7_warn(sc, 512, "can't load %s: no init function\n", fname);
@@ -30114,7 +30122,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 		  {
 		    typedef void (*dl_func)(s7_scheme *sc);
 		    typedef s7_pointer (*dl_func_with_args)(s7_scheme *sc, s7_pointer args);
-		    s7_pointer init_args = s7_let_ref(sc, let, make_symbol(sc, "init_args"));
+		    s7_pointer init_args = s7_let_ref(sc, let, make_symbol_with_length(sc, "init_args", 9));
 		    s7_pointer p;
 		    gc_protect_via_stack(sc, init_args);
 		    if (is_pair(init_args))
@@ -30248,7 +30256,7 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   TRACK(sc);
 
   if (content[bytes] != 0)
-    error_nr(sc, make_symbol(sc, "bad-data"), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
+    error_nr(sc, make_symbol_with_length(sc, "bad-data", 8), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
   port = open_input_string(sc, content, bytes);
   port_loc = gc_protect_1(sc, port);
   set_loader_port(port);
@@ -30930,9 +30938,9 @@ static s7_pointer op_lambda(s7_scheme *sc, s7_pointer code);
 static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
 {
   if (!is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
-    return(make_symbol(sc, c_function_name(f)));
+    return(make_symbol_with_length(sc, c_function_name(f), c_function_name_length(f)));
   if (!c_function_symbol(f))
-    c_function_symbol(f) = make_symbol(sc, c_function_name(f));
+    c_function_symbol(f) = make_symbol_with_length(sc, c_function_name(f), c_function_name_length(f));
   return(c_function_symbol(f));
 }
 
@@ -40576,7 +40584,7 @@ static void check_vector_typer_c_function(s7_scheme *sc, s7_pointer caller, s7_p
   if (!c_function_marker(typf))
     c_function_set_marker(typf, mark_vector_1);
   if (!c_function_symbol(typf))
-    c_function_symbol(typf) = make_symbol(sc, c_function_name(typf));
+    c_function_symbol(typf) = make_symbol_with_length(sc, c_function_name(typf), c_function_name_length(typf));
 }
 
 static inline s7_pointer make_multivector(s7_scheme *sc, s7_pointer vec, s7_pointer x)
@@ -43456,7 +43464,7 @@ static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   s7_pointer f = hash_table_procedures_mapper(table);
   if (f == sc->unused)
-    error_nr(sc, make_symbol(sc, "hash-map-recursion"),
+    error_nr(sc, make_symbol_with_length(sc, "hash-map-recursion", 18),
 	     set_elist_1(sc, wrap_string(sc, "hash-table map function called recursively", 42)));
   /* check_stack_size(sc); -- perhaps clear typers as well here or save/restore hash-table-procedures */
   gc_protect_via_stack(sc, f);
@@ -44967,9 +44975,9 @@ static s7_pointer g_function(s7_scheme *sc, s7_pointer args)
   if (sym == sc->value_symbol) return(fval);
   if ((sym == sc->line_symbol) && (has_let_file(e))) return(make_integer(sc, let_line(e)));
   if ((sym == sc->file_symbol) && (has_let_file(e))) return(sc->file_names[let_file(e)]);
-  if (sym == make_symbol(sc, "funclet")) return(e);
-  if (sym == make_symbol(sc, "source")) return(g_procedure_source(sc, set_plist_1(sc, fval)));
-  if ((sym == make_symbol(sc, "arglist")) && ((is_any_closure(fval)) || (is_any_macro(fval)))) return(closure_args(fval));
+  if (sym == make_symbol_with_length(sc, "funclet", 7)) return(e);
+  if (sym == make_symbol_with_length(sc, "source", 6)) return(g_procedure_source(sc, set_plist_1(sc, fval)));
+  if ((sym == make_symbol_with_length(sc, "arglist", 7)) && ((is_any_closure(fval)) || (is_any_macro(fval)))) return(closure_args(fval));
   return(sc->F);
 }
 
@@ -45745,7 +45753,7 @@ static s7_pointer g_c_object_set(s7_scheme *sc, s7_pointer args) /* called in c_
 {
   s7_pointer obj = car(args);
   if (!is_c_object(obj))        /* (call/cc (setter (block))) will call c-object-set! with the continuation as the argument! */
-    wrong_type_error_nr(sc, make_symbol(sc, "c-object-set!"), 1, obj, sc->type_names[T_C_OBJECT]);
+    wrong_type_error_nr(sc, make_symbol_with_length(sc, "c-object-set!", 13), 1, obj, sc->type_names[T_C_OBJECT]);
   return((*(c_object_set(sc, obj)))(sc, args));
 }
 
@@ -45769,7 +45777,7 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name)
   c_type = (c_object_t *)Calloc(1, sizeof(c_object_t)); /* Malloc+field=NULL is slightly faster here */
   sc->c_object_types[tag] = c_type;
   c_type->type = tag;
-  c_type->scheme_name = s7_make_permanent_string(sc, name);
+  c_type->scheme_name = make_semipermanent_string(sc, name);
   c_type->getter = sc->F;
   c_type->setter = sc->F;
   c_type->free = fallback_free;
@@ -45944,15 +45952,16 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
 {
   s7_pointer get_func, set_func;
   char *internal_set_name;
-  s7_int len;
+  s7_int len, name_len;
 
   if (!name) return(sc->F);
-  len = 16 + safe_strlen(name);
+  name_len = safe_strlen(name);
+  len = 16 + name_len;
   internal_set_name = (char *)permalloc(sc, len);
   internal_set_name[0] = '\0';
   catstrs_direct(internal_set_name, "[set-", name, "]", (const char *)NULL);
   get_func = s7_make_safe_function(sc, name, getter, get_req_args, get_opt_args, false, documentation);
-  s7_define(sc, envir, make_symbol(sc, name), get_func);
+  s7_define(sc, envir, make_symbol_with_length(sc, name, name_len), get_func);
   set_func = s7_make_function(sc, internal_set_name, setter, set_req_args, set_opt_args, false, documentation);
   c_function_set_setter(get_func, set_func);
   return(get_func);
@@ -49791,7 +49800,7 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
       s7_int gc_loc = gc_protect_1(sc, let);
       s7_pointer val = s7_symbol_value(sc, obj);
       if (!sc->current_value_symbol)
-	sc->current_value_symbol = make_symbol(sc, "current-value");
+	sc->current_value_symbol = make_symbol_with_length(sc, "current-value", 13);
       s7_varlet(sc, let, sc->current_value_symbol, val);
       s7_varlet(sc, let, sc->setter_symbol, setter_p_pp(sc, obj, sc->curlet));
       s7_varlet(sc, let, sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_symbol(obj)));
@@ -50790,7 +50799,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	{
 	  #define PROFILE_MAX_STACK_SIZE 10000000  /* around 5G counting lets/arglists/slots, maybe an *s7* field for this? */
 	  if (sc->stack_size > PROFILE_MAX_STACK_SIZE)
-	    error_nr(sc, make_symbol(sc, "stack-too-big"),
+	    error_nr(sc, make_symbol_with_length(sc, "stack-too-big", 13),
 		     set_elist_2(sc, wrap_string(sc, "profiling stack size has grown past ~D", 38), wrap_integer(sc, PROFILE_MAX_STACK_SIZE)));
 	  /* rather than raise an error, we could unwind the stack here, popping off all unwind entries, but this is
 	   *   a very rare problem, and the results will be confusing anyway.
@@ -51443,7 +51452,7 @@ static bool catch_dynamic_unwind_function(s7_scheme *sc, s7_int i, s7_pointer ty
    */
   if (sc->debug > 0)
     {
-      s7_pointer spaces = lookup_slot_from(make_symbol(sc, "*debug-spaces*"), stack_let(sc->stack, i));
+      s7_pointer spaces = lookup_slot_from(make_symbol_with_length(sc, "*debug-spaces*", 14), stack_let(sc->stack, i));
       if (is_slot(spaces))
 	slot_set_value(spaces, make_integer(sc, max_i_ii(0LL, integer(slot_value(spaces)) - 2))); /* should involve only small_ints */
     }
@@ -51499,7 +51508,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
-  error_nr(sc, make_symbol(sc, "uncaught-throw"),
+  error_nr(sc, make_symbol_with_length(sc, "uncaught-throw", 14),
 	   set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info));
   return(sc->F);
 }
@@ -51589,12 +51598,12 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 #endif
   if (is_pair(cur_code))
     {
-      int32_t line = -1, file, position;
+      s7_int line = -1, file, position;
       if (has_location(cur_code))
 	{
-	  line = (int32_t)pair_line_number(cur_code); /* cast to int32_t (from uint32_t) for sc->last_error_line */
-	  file = (int32_t)pair_file_number(cur_code);
-	  position = (int32_t)pair_position(cur_code);
+	  line = pair_line_number(cur_code);
+	  file = pair_file_number(cur_code);
+	  position = pair_position(cur_code);
 	}
       else /* try to find a plausible line number! */
 	for (s7_pointer p = cur_code, sp = cur_code; is_pair(p); p = cdr(p), sp = cdr(sp))
@@ -51602,9 +51611,9 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	    if ((is_pair(car(p))) &&  /* what about p itself? */
 		(has_location(car(p))))
 	      {
-		line = (int32_t)pair_line_number(car(p));
-		file = (int32_t)pair_file_number(car(p));
-		position = (int32_t)pair_position(car(p));
+		line = pair_line_number(car(p));
+		file = pair_file_number(car(p));
+		position = pair_position(car(p));
 		break;
 	      }
 	    p = cdr(p);
@@ -51612,25 +51621,19 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	    if ((is_pair(car(p))) &&
 		(has_location(car(p))))
 	      {
-		line = (int32_t)pair_line_number(car(p));
-		file = (int32_t)pair_file_number(car(p));
-		position = (int32_t)pair_position(car(p));
+		line = pair_line_number(car(p));
+		file = pair_file_number(car(p));
+		position = pair_position(car(p));
 		break;
 	      }}
-      if ((line > 0) &&
-	  (line != sc->last_error_line))
+      if ((line <= 0) || (file < 0))
+	fill_error_location(sc);
+      else
 	{
-	  sc->last_error_line = line;
-	  if (file < 0)
-	    fill_error_location(sc);
-	  else
-	    {
-	      integer(slot_value(sc->error_line)) = line;
-	      integer(slot_value(sc->error_position)) = position;
-	      slot_set_value(sc->error_file, sc->file_names[file]);
-	    }}
-      else fill_error_location(sc);
-    }
+	  integer(slot_value(sc->error_line)) = line;
+	  integer(slot_value(sc->error_position)) = position;
+	  slot_set_value(sc->error_file, sc->file_names[file]);
+	}}
   else fill_error_location(sc);
 
   /* look for a catcher, call catch*function in the error context (before unwinding the stack), outlet(owlet) is curlet */
@@ -51892,7 +51895,7 @@ and applies it to the rest of the arguments."
   #define Q_error s7_make_circular_signature(sc, 1, 2, sc->values_symbol, sc->T)
 
   if (is_string(car(args)))  /* a CL-style error -- use tag='no-catch */
-    error_nr(sc, make_symbol(sc, "no-catch"), args);
+    error_nr(sc, make_symbol_with_length(sc, "no-catch", 8), args);
   error_nr(sc, car(args), cdr(args));
   return(sc->unspecified);
 }
@@ -52134,7 +52137,7 @@ static bool call_begin_hook(s7_scheme *sc)
       slot_set_value(sc->error_history, sc->F);
 #endif
       let_set_outlet(sc->owlet, sc->curlet);
-      sc->value = make_symbol(sc, "begin-hook-interrupt");
+      sc->value = make_symbol_with_length(sc, "begin-hook-interrupt", 20);
       /* otherwise the evaluator returns whatever random thing is in sc->value (normally #<closure>)
        *   which makes debugging unnecessarily difficult. ?? why not return something useful? make return s7_pointer*, not bool*
        */
@@ -81941,7 +81944,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
     }
   else
     {
-      slot = make_slot(sc, make_symbol(sc, "___end___"), end); /* name is ignored, but needs to be > 8 chars for gcc's benefit (version 10.2.1)! */
+      slot = make_slot(sc, make_symbol_with_length(sc, "___end___", 9), end); /* name is ignored, but needs to be > 8 chars for gcc's benefit (version 10.2.1)! */
       end_val = end;
     }
   if ((!s7_is_integer(init_val)) || (!s7_is_integer(end_val)))
@@ -91814,9 +91817,9 @@ static s7_pointer g_heap_scan(s7_scheme *sc, s7_pointer args)
   #define Q_heap_scan s7_make_signature(sc, 2, sc->not_symbol, sc->is_integer_symbol)
   s7_pointer p = car(args);
   if (!s7_is_integer(p))
-    sole_arg_wrong_type_error_nr(sc, make_symbol(sc, "heap-scan"), p, sc->type_names[T_INTEGER]);
+    sole_arg_wrong_type_error_nr(sc, make_symbol_with_length(sc, "heap-scan", 9), p, sc->type_names[T_INTEGER]);
   if ((s7_integer(p) <= 0) || (s7_integer(p) >= NUM_TYPES))
-    sole_arg_out_of_range_error_nr(sc, make_symbol(sc, "heap-scan"), p, wrap_string(sc, "0 < type < 48", 13));
+    sole_arg_out_of_range_error_nr(sc, make_symbol_with_length(sc, "heap-scan", 9), p, wrap_string(sc, "0 < type < 48", 13));
   s7_heap_scan(sc, (int32_t)s7_integer(p)); /* 0..48 currently */
   return(sc->F);
 }
@@ -92184,7 +92187,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-types"),
 			       cons(sc, make_integer(sc, sc->num_c_object_types),
 				    make_integer(sc, (sc->c_object_types_size * sizeof(c_object_t *)) + (sc->num_c_object_types * sizeof(c_object_t)))));
-				    /* we're ignoring c_type->scheme_name: s7_make_permanent_string(sc, name) */
+				    /* we're ignoring c_type->scheme_name: make_semipermanent_string(sc, name) */
 #if WITH_GMP
   add_slot_unchecked_with_id(sc, mu_let,
 			     make_symbol(sc, "bignums"),
@@ -94053,16 +94056,16 @@ static void init_rootlet(s7_scheme *sc)
   sc->owlet = init_owlet(sc);
 
   sc->wrong_type_arg_info = permanent_list(sc, 6);
-  set_car(sc->wrong_type_arg_info, s7_make_permanent_string(sc, "~A ~:D argument, ~S, is ~A but should be ~A"));
+  set_car(sc->wrong_type_arg_info, make_semipermanent_string(sc, "~A ~:D argument, ~S, is ~A but should be ~A"));
 
   sc->sole_arg_wrong_type_info = permanent_list(sc, 5);
-  set_car(sc->sole_arg_wrong_type_info, s7_make_permanent_string(sc, "~A argument, ~S, is ~A but should be ~A"));
+  set_car(sc->sole_arg_wrong_type_info, make_semipermanent_string(sc, "~A argument, ~S, is ~A but should be ~A"));
 
   sc->out_of_range_info = permanent_list(sc, 5);
-  set_car(sc->out_of_range_info, s7_make_permanent_string(sc, "~A ~:D argument, ~S, is out of range (~A)"));
+  set_car(sc->out_of_range_info, make_semipermanent_string(sc, "~A ~:D argument, ~S, is out of range (~A)"));
 
   sc->sole_arg_out_of_range_info = permanent_list(sc, 4);
-  set_car(sc->sole_arg_out_of_range_info, s7_make_permanent_string(sc, "~A argument, ~S, is out of range (~A)"));
+  set_car(sc->sole_arg_out_of_range_info, make_semipermanent_string(sc, "~A argument, ~S, is out of range (~A)"));
 
   sc->gc_off = false;
 
@@ -94666,24 +94669,24 @@ static void init_rootlet(s7_scheme *sc)
   sc->libraries_symbol = s7_define_variable_with_documentation(sc, "*libraries*", sc->nil, "list of currently loaded libraries (libc.scm, etc)");
   s7_set_setter(sc, sc->libraries_symbol, s7_make_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
 
-  s7_autoload(sc, make_symbol(sc, "cload.scm"),       s7_make_permanent_string(sc, "cload.scm"));
-  s7_autoload(sc, make_symbol(sc, "lint.scm"),        s7_make_permanent_string(sc, "lint.scm"));
-  s7_autoload(sc, make_symbol(sc, "stuff.scm"),       s7_make_permanent_string(sc, "stuff.scm"));
-  s7_autoload(sc, make_symbol(sc, "mockery.scm"),     s7_make_permanent_string(sc, "mockery.scm"));
-  s7_autoload(sc, make_symbol(sc, "write.scm"),       s7_make_permanent_string(sc, "write.scm"));
-  s7_autoload(sc, make_symbol(sc, "reactive.scm"),    s7_make_permanent_string(sc, "reactive.scm"));
-  s7_autoload(sc, make_symbol(sc, "repl.scm"),        s7_make_permanent_string(sc, "repl.scm"));
-  s7_autoload(sc, make_symbol(sc, "r7rs.scm"),        s7_make_permanent_string(sc, "r7rs.scm"));
-  s7_autoload(sc, make_symbol(sc, "profile.scm"),     s7_make_permanent_string(sc, "profile.scm"));
-  s7_autoload(sc, make_symbol(sc, "debug.scm"),       s7_make_permanent_string(sc, "debug.scm"));
-  s7_autoload(sc, make_symbol(sc, "case.scm"),        s7_make_permanent_string(sc, "case.scm"));
+  s7_autoload(sc, make_symbol(sc, "cload.scm"),       make_semipermanent_string(sc, "cload.scm"));
+  s7_autoload(sc, make_symbol(sc, "lint.scm"),        make_semipermanent_string(sc, "lint.scm"));
+  s7_autoload(sc, make_symbol(sc, "stuff.scm"),       make_semipermanent_string(sc, "stuff.scm"));
+  s7_autoload(sc, make_symbol(sc, "mockery.scm"),     make_semipermanent_string(sc, "mockery.scm"));
+  s7_autoload(sc, make_symbol(sc, "write.scm"),       make_semipermanent_string(sc, "write.scm"));
+  s7_autoload(sc, make_symbol(sc, "reactive.scm"),    make_semipermanent_string(sc, "reactive.scm"));
+  s7_autoload(sc, make_symbol(sc, "repl.scm"),        make_semipermanent_string(sc, "repl.scm"));
+  s7_autoload(sc, make_symbol(sc, "r7rs.scm"),        make_semipermanent_string(sc, "r7rs.scm"));
+  s7_autoload(sc, make_symbol(sc, "profile.scm"),     make_semipermanent_string(sc, "profile.scm"));
+  s7_autoload(sc, make_symbol(sc, "debug.scm"),       make_semipermanent_string(sc, "debug.scm"));
+  s7_autoload(sc, make_symbol(sc, "case.scm"),        make_semipermanent_string(sc, "case.scm"));
 
-  s7_autoload(sc, make_symbol(sc, "libc.scm"),        s7_make_permanent_string(sc, "libc.scm"));
-  s7_autoload(sc, make_symbol(sc, "libm.scm"),        s7_make_permanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
-  s7_autoload(sc, make_symbol(sc, "libdl.scm"),       s7_make_permanent_string(sc, "libdl.scm"));
-  s7_autoload(sc, make_symbol(sc, "libgsl.scm"),      s7_make_permanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
-  s7_autoload(sc, make_symbol(sc, "libgdbm.scm"),     s7_make_permanent_string(sc, "libgdbm.scm"));
-  s7_autoload(sc, make_symbol(sc, "libutf8proc.scm"), s7_make_permanent_string(sc, "libutf8proc.scm"));
+  s7_autoload(sc, make_symbol(sc, "libc.scm"),        make_semipermanent_string(sc, "libc.scm"));
+  s7_autoload(sc, make_symbol(sc, "libm.scm"),        make_semipermanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
+  s7_autoload(sc, make_symbol(sc, "libdl.scm"),       make_semipermanent_string(sc, "libdl.scm"));
+  s7_autoload(sc, make_symbol(sc, "libgsl.scm"),      make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
+  s7_autoload(sc, make_symbol(sc, "libgdbm.scm"),     make_semipermanent_string(sc, "libgdbm.scm"));
+  s7_autoload(sc, make_symbol(sc, "libutf8proc.scm"), make_semipermanent_string(sc, "libutf8proc.scm"));
 
   sc->require_symbol = s7_define_macro(sc, "require", g_require, 1, 0, true, H_require);
   sc->stacktrace_defaults = s7_list(sc, 5, int_three, small_int(45), small_int(80), small_int(45), sc->T); /* assume NUM_SMALL_INTS >= NUM_CHARS == 256 */
@@ -94791,7 +94794,6 @@ s7_scheme *s7_init(void)
   add_saved_pointer(sc, sc->singletons);
   sc->read_line_buf = NULL;
   sc->read_line_buf_size = 0;
-  sc->last_error_line = -1;
   sc->stop_at_error = true;
 
   sc->nil =         make_unique(sc, "()",             T_NIL);
@@ -94978,7 +94980,7 @@ s7_scheme *s7_init(void)
       }}
 
   for (i = 0; i < NUM_TYPES; i++)
-    sc->type_names[i] = s7_make_permanent_string(sc, (const char *)type_name_from_type(i, INDEFINITE_ARTICLE));
+    sc->type_names[i] = make_semipermanent_string(sc, (const char *)type_name_from_type(i, INDEFINITE_ARTICLE));
 
 #if WITH_MULTITHREAD_CHECKS
   sc->lock_count = 0;
@@ -95625,7 +95627,7 @@ int main(int argc, char **argv)
  * timp      2637   2575   1930   1696   1692
  * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
- * tauto     ----   ----   2562   2171   2051
+ * tauto     ----   ----   2562   2171   2051  2045
  * thook     ----   ----   2590   2073   2072
  * lt        2187   2172   2150   2179   2178
  * dup       3805   3788   2492   2272   2272
@@ -95665,7 +95667,7 @@ int main(int argc, char **argv)
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.5
- * sg        ----   ----   55.9   56.7   56.0
+ * sg        ----   ----   55.9   56.7   56.0  55.6
  * lg        ----   ----  105.2  106.1  106.0
  * tbig     177.4  175.8  156.5  147.9  147.9
  * --------------------------------------
@@ -95677,4 +95679,12 @@ int main(int argc, char **argv)
  * fully optimize gmp version or at least extend big_int to int128_t
  *
  * (openlet (outlet (mock-number))) problem: try new t725
+ *
+ * wrong-type-arg -> wrong-type? number_to_real_with_caller->symbol_caller (clm2xen.c snd-sig.c)
+ *   there are a lot of s7_number_to_reals (libm|libgsl|clm2xen) -- these symbols are not pulled out [need libm: prefix]
+ *   wta is also (xen.h) XEN_WRONG_TYPE_ARG_ERROR which is also Xen_wrong_type_arg_error
+ *     wta is everywhere [3390] (libm|libgsl|clm2xen|libarb|libc|libdbm|libdl|nrepl|notcurses|s7test.scm|snd-dac,region,snd,sig,select|vct.c)
+ *     xwta only about 15 all lower-case
+ *
+ * add s7_free + use to ffitest.c, timing test make/free s7's?  threads.c -> ffitest?
  */
