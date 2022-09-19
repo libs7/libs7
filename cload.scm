@@ -179,6 +179,8 @@
 
 		(#t #t)))))
 
+  ;; need c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string
+
   (define (find-handler type choice)
     (cond ((assq (C-type->s7-type type) handlers) => choice) (else #t)))
 
@@ -288,7 +290,8 @@
 	     (lambda (header)
 	       (format p "#include <~A>~%" header))
 	     headers))
-	(format p "#include \"s7.h\"~%~%"))
+	(format p "#include \"s7.h\"~%~%")
+	(format p "static s7_pointer c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
       
       (define collides?
 	(let ((all-names (hash-table)))
@@ -375,11 +378,11 @@
 					(s7->C true-type)                               ; s7_number_to_real which requires 
 					(if (memq s7-type '(boolean real))              ;   the extra sc arg
 					    "sc, " ""))
-				(format pp "  else return(s7_wrong_type_arg_error(sc, __func__, ~D, arg, ~S));~%"
+				(format pp "  else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, ~S, ~D), ~D, arg, ~A_string));~%"
+					base-name
+					(length base-name)
 					(if (= num-args 1) 0 (+ i 1))
-					(if (symbol? s7-type) 
-					    (symbol->string s7-type) 
-					    (error 'bad-arg (format #f "in ~S, ~S is not a symbol~%" name s7-type)))))))
+					s7-type))))
 		      (if (< i (- num-args 1))
 			  (format pp "  p = s7_cdr(p);~%")))))
 		
@@ -544,6 +547,14 @@
 	       (format p ");~%")))
 	   signatures)
 	  (format p "  }~%~%"))
+
+	(format p "  string_string = s7_make_permanent_string(sc, \"string\");~%")
+	(format p "  c_pointer_string = s7_make_permanent_string(sc, \"c-pointer\");~%")
+	(format p "  character_string = s7_make_permanent_string(sc, \"character\");~%")
+	(format p "  boolean_string = s7_make_permanent_string(sc, \"boolean\");~%")
+	(format p "  real_string = s7_make_permanent_string(sc, \"real\");~%")
+	(format p "  complex_string = s7_make_permanent_string(sc, \"complex\");~%")
+	(format p "  integer_string = s7_make_permanent_string(sc, \"integer\");~%")
 
 	(format p "  cur_env = s7_curlet(sc);~%") ; changed from s7_outlet(s7_curlet) 20-Aug-17
 	

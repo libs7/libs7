@@ -4892,6 +4892,7 @@ static bool has_odd_bits(s7_pointer obj)
 	return(true);
     }
   if ((signed_type(obj) == 0) && ((full_typ & T_GC_MARK) != 0)) return(true);
+  if ((in_heap(obj)) && ((type(obj) == T_C_FUNCTION) || (type(obj) == T_C_FUNCTION_STAR) || (type(obj) == T_C_MACRO))) return(true);
   return(false);
 }
 
@@ -7202,12 +7203,8 @@ static void unmark_permanent_objects(s7_scheme *sc)
 #endif
 
 static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
-
-#if S7_DEBUGGING
-static bool has_odd_bits(s7_pointer obj);
-#endif
-static char *describe_type_bits(s7_scheme *sc, s7_pointer obj);
 static s7_pointer make_symbol(s7_scheme *sc, const char *name);
+
 #if WITH_GCC
 static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #else
@@ -8146,7 +8143,7 @@ static uint8_t *alloc_symbol(s7_scheme *sc)
   return(result);
 }
 
-static s7_pointer make_permanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
+static s7_pointer make_semipermanent_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot = alloc_pointer(sc);
   set_full_type(slot, T_SLOT | T_UNHEAP);
@@ -8194,7 +8191,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
       if ((is_gensym(ksym)) &&
 	  (in_heap(ksym)))
 	remove_gensym_from_heap(sc, ksym);
-      slot = make_permanent_slot(sc, x, x);
+      slot = make_semipermanent_slot(sc, x, x);
       set_global_slot(x, slot);
       set_local_slot(x, slot);
     }
@@ -8860,20 +8857,20 @@ static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_p
   return(let);
 }
 
-static s7_pointer make_permanent_let(s7_scheme *sc, s7_pointer vars)
+static s7_pointer make_semipermanent_let(s7_scheme *sc, s7_pointer vars)
 {
   s7_pointer slot, let = alloc_pointer(sc);
   set_full_type(let, T_LET | T_SAFE_PROCEDURE | T_UNHEAP);
   let_set_id(let, ++sc->let_number);
   let_set_outlet(let, sc->curlet);
-  slot = make_permanent_slot(sc, caar(vars), sc->F);
+  slot = make_semipermanent_slot(sc, caar(vars), sc->F);
   add_permanent_let_or_slot(sc, slot);
   symbol_set_local_slot(caar(vars), sc->let_number, slot);
   let_set_slots(let, slot);
   for (s7_pointer var = cdr(vars); is_pair(var); var = cdr(var))
     {
       s7_pointer last_slot = slot;
-      slot = make_permanent_slot(sc, caar(var), sc->F);
+      slot = make_semipermanent_slot(sc, caar(var), sc->F);
       add_permanent_let_or_slot(sc, slot);
       symbol_set_local_slot(caar(var), sc->let_number, slot);
       slot_set_next(last_slot, slot);
@@ -9032,7 +9029,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	  return(slot);
 	}
 
-      slot = make_permanent_slot(sc, symbol, value);
+      slot = make_semipermanent_slot(sc, symbol, value);
       add_slot_to_rootlet(sc, slot);
       set_global_slot(symbol, slot);
       if (symbol_id(symbol) == 0)         /* never defined locally? */
@@ -9042,7 +9039,7 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	      (!in_heap(value)) &&        /* else initial_slot value can be GC'd if symbol set! (initial != global, initial unprotected) */
 	      ((!sc->unlet) ||            /* init_unlet creates sc->unlet (includes syntax), after that initial_slot is for c_functions?? */
 	       (is_c_function(value))))   /* || (is_syntax(value)) -- we need 'else as a special case? */
-	    set_initial_slot(symbol, make_permanent_slot(sc, symbol, value));
+	    set_initial_slot(symbol, make_semipermanent_slot(sc, symbol, value));
 	  set_local_slot(symbol, slot);
 	  set_global(symbol);
 	}
@@ -26242,7 +26239,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
 }
 
 s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str) {return(wrap_string(sc, str, safe_strlen(str)));}
-
+s7_pointer s7_make_string_wrapper_with_length(s7_scheme *sc, const char *str, s7_int len) {return(wrap_string(sc, str, len));}
 
 static Inline s7_pointer inline_make_empty_string(s7_scheme *sc, s7_int len, char fill)
 {
@@ -26266,7 +26263,7 @@ static s7_pointer make_empty_string(s7_scheme *sc, s7_int len, char fill) {retur
 
 s7_pointer s7_make_string(s7_scheme *sc, const char *str) {return((str) ? make_string_with_length(sc, str, safe_strlen(str)) : nil_string);}
 
-static char *make_permanent_c_string(s7_scheme *sc, const char *str) /* strcpy but avoid malloc */
+static char *make_semipermanent_c_string(s7_scheme *sc, const char *str) /* strcpy but avoid malloc */
 {
   s7_int len = safe_strlen(str);
   char *x = (char *)permalloc(sc, len + 1);
@@ -26604,12 +26601,17 @@ static s7_pointer g_string_set(s7_scheme *sc, s7_pointer args)
   #define H_string_set "(string-set! str index chr) sets the index-th element of the string str to the character chr"
   #define Q_string_set s7_make_signature(sc, 4, sc->is_char_symbol, sc->is_string_symbol, sc->is_integer_symbol, sc->is_char_symbol)
 
-  s7_pointer strng = car(args), c, index = cadr(args);
+  s7_pointer strng = car(args), c, index;
   char *str;
   s7_int ind;
 
+  if (!is_pair(cdr(args))) /* (let () (define (func) (set! (str) "asdf")) (catch #t func (lambda args #f)) (func)) */
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->string_set_symbol, sc->code));
+
   if (!is_mutable_string(strng))
     return(mutable_method_or_bust(sc, strng, sc->string_set_symbol, args, sc->type_names[T_STRING], 1));
+  index = cadr(args);
   if (!s7_is_integer(index))
     return(method_or_bust(sc, index, sc->string_set_symbol, args, sc->type_names[T_INTEGER], 2));
 
@@ -37142,6 +37144,10 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
   if (!is_mutable_pair(lst))
     return(mutable_method_or_bust(sc, lst, sc->list_set_symbol, set_ulist_1(sc, lst, args), sc->type_names[T_PAIR], 1));
 
+  if (!is_pair(args)) /* (let ((v (list 1 2))) (define (func) (set! (v) (list 1))) (catch #t func (lambda args #f)) (func)) */
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->list_set_symbol, sc->code));
+
   ind = car(args);
   if ((arg_num > 2) && (is_null(cdr(args))))
     {
@@ -44487,6 +44493,10 @@ static s7_pointer g_hash_table_set(s7_scheme *sc, s7_pointer args)
   s7_pointer table = car(args);
   if (!is_mutable_hash_table(table))
     return(mutable_method_or_bust(sc, table, sc->hash_table_set_symbol, args, sc->type_names[T_HASH_TABLE], 1));
+
+  if (!is_pair(cdr(args))) /* (let ((v (hash-table 'a 1))) (define (func) (set! (v) (hash-table 'b 1))) (catch #t func (lambda args #f)) (func)) */
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->hash_table_set_symbol, sc->code));
   return(s7_hash_table_set(sc, table, cadr(args), caddr(args)));
 }
 
@@ -44792,7 +44802,7 @@ static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, 
   c_function_set_setter(x, sc->F);
   c_function_name(x) = name;            /* (procedure-name proc) => (format #f "~A" proc) */
   c_function_name_length(x) = safe_strlen(name);
-  c_function_documentation(x) = (doc) ? make_permanent_c_string(sc, doc) : NULL;
+  c_function_documentation(x) = (doc) ? make_semipermanent_c_string(sc, doc) : NULL;
   c_function_signature(x) = sc->F;
 
   c_function_min_args(x) = req;
@@ -45777,7 +45787,7 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name)
   c_type = (c_object_t *)Calloc(1, sizeof(c_object_t)); /* Malloc+field=NULL is slightly faster here */
   sc->c_object_types[tag] = c_type;
   c_type->type = tag;
-  c_type->scheme_name = make_semipermanent_string(sc, name);
+  c_type->scheme_name = make_permanent_string(name);
   c_type->getter = sc->F;
   c_type->setter = sc->F;
   c_type->free = fallback_free;
@@ -74536,7 +74546,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
     {
       if ((!in_heap(form)) &&
 	  (body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY)) /* recur_body is apparently never hit */
-	set_opt3_let(code, make_permanent_let(sc, car(code)));
+	set_opt3_let(code, make_semipermanent_let(sc, car(code)));
       else
 	{
 	  set_optimize_op(form, optimize_op(form) + 1); /* *_old -> *_new */
@@ -75146,7 +75156,7 @@ static bool check_let_star(s7_scheme *sc)
 	  {
 	    if ((!in_heap(form)) &&
 		(body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY))
-	      set_opt3_let(code, make_permanent_let(sc, car(code)));
+	      set_opt3_let(code, make_semipermanent_let(sc, car(code)));
 	    else
 	      {
 		set_optimize_op(form, optimize_op(form) + 1); /* *_old -> *_new */
@@ -79891,7 +79901,7 @@ static s7_pointer check_do(s7_scheme *sc)
       {
 	s7_pointer var = caar(vars);
 	s7_pointer step = cddar(vars);
-	set_opt3_any(code, (in_heap(code)) ? sc->F : make_permanent_let(sc, vars));
+	set_opt3_any(code, (in_heap(code)) ? sc->F : make_semipermanent_let(sc, vars));
 	if (!got_pending)
 	  pair_set_syntax_op(form, OP_DOX_NO_BODY);
 	if (is_safe_stepper_expr(step))
@@ -91928,8 +91938,8 @@ static s7_int s7_let_length(void) {return(SL_NUM_FIELDS - 1);}
 
 static s7_pointer make_s7_let(s7_scheme *sc)  /* *s7* is permanent -- 20-May-21 */
 {
-  s7_pointer slot1 = make_permanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
-  s7_pointer slot2 = make_permanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
+  s7_pointer slot1 = make_semipermanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
+  s7_pointer slot2 = make_semipermanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
   s7_pointer x = alloc_pointer(sc);
   set_full_type(x, T_LET | T_SAFE_PROCEDURE | T_UNHEAP | T_HAS_METHODS | T_HAS_LET_REF_FALLBACK | T_HAS_LET_SET_FALLBACK);
   let_set_id(x, ++sc->let_number);
@@ -92187,7 +92197,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-types"),
 			       cons(sc, make_integer(sc, sc->num_c_object_types),
 				    make_integer(sc, (sc->c_object_types_size * sizeof(c_object_t *)) + (sc->num_c_object_types * sizeof(c_object_t)))));
-				    /* we're ignoring c_type->scheme_name: make_semipermanent_string(sc, name) */
+				    /* we're ignoring c_type->scheme_name: make_permanent_string(sc, name) */
 #if WITH_GMP
   add_slot_unchecked_with_id(sc, mu_let,
 			     make_symbol(sc, "bignums"),
@@ -93784,8 +93794,8 @@ static s7_pointer syntax(s7_scheme *sc, const char *name, opcode_t op, s7_pointe
   syntax_min_args(syn) = integer(min_args);
   syntax_max_args(syn) = ((max_args == max_arity) ? -1 : integer(max_args));
   syntax_documentation(syn) = doc;
-  set_global_slot(x, make_permanent_slot(sc, x, syn));
-  set_initial_slot(x, make_permanent_slot(sc, x, syn));  /* set_local_slot(x, global_slot(x)); */
+  set_global_slot(x, make_semipermanent_slot(sc, x, syn));
+  set_initial_slot(x, make_semipermanent_slot(sc, x, syn));  /* set_local_slot(x, global_slot(x)); */
   set_type_bit(x, T_SYMBOL | T_SYNTACTIC | T_GLOBAL | T_UNHEAP);
   symbol_set_local_slot_unchecked(x, 0LL, sc->nil);
   symbol_clear_ctr(x);
@@ -95110,7 +95120,7 @@ s7_scheme *s7_init(void)
     gmp_randseed(random_gmp_state(p), sc->mpz_1);
 
     sc->pi_symbol = s7_define_constant(sc, "pi", big_pi(sc));
-    set_initial_slot(sc->pi_symbol, make_permanent_slot(sc, sc->pi_symbol, big_pi(sc))); /* s7_make_slot does not handle this */
+    set_initial_slot(sc->pi_symbol, make_semipermanent_slot(sc, sc->pi_symbol, big_pi(sc))); /* s7_make_slot does not handle this */
     s7_provide(sc, "gmp");
 #else
     random_seed(p) = (uint64_t)my_clock(); /* used to be time(NULL), but that means separate threads can get the same random number sequence */
@@ -95514,7 +95524,7 @@ void s7_repl(s7_scheme *sc)
       s7_pointer libs = global_slot(sc->libraries_symbol);
       uint64_t hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
       s7_define(sc, sc->nil, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
-      slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
+      slot_set_value(libs, cons(sc, cons(sc, make_semipermanent_string(sc, "libc.scm"), e), slot_value(libs)));
     }
 
   s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
@@ -95632,7 +95642,7 @@ int main(int argc, char **argv)
  * lt        2187   2172   2150   2179   2178
  * dup       3805   3788   2492   2272   2272
  * tcopy     8035   5546   2539   2373   2372
- * tload     ----   ----   3046   2377   2376
+ * tload     ----   ----   3046   2377   2376  2374
  * tread     2440   2421   2419   2414   2409
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
@@ -95657,7 +95667,7 @@ int main(int argc, char **argv)
  * tmisc     8869   7612   6435   6184   6184
  * tset      ----   ----   ----   6238   6238
  * tlist     7896   7546   6558   6247   6243
- * tgsl      8485   7802   6373   6307   6307
+ * tgsl      8485   7802   6373   6307   6307  6280
  * trec      6936   6922   6521   6558   6558
  * tari      13.0   12.7   6827   6583   6581
  * tleft     10.4   10.2   7657   7479   7475
@@ -95678,13 +95688,13 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
  *
- * (openlet (outlet (mock-number))) problem: try new t725
- *
  * wrong-type-arg -> wrong-type? number_to_real_with_caller->symbol_caller (clm2xen.c snd-sig.c)
  *   there are a lot of s7_number_to_reals (libm|libgsl|clm2xen) -- these symbols are not pulled out [need libm: prefix]
  *   wta is also (xen.h) XEN_WRONG_TYPE_ARG_ERROR which is also Xen_wrong_type_arg_error
- *     wta is everywhere [3390] (libm|libgsl|clm2xen|libarb|libc|libdbm|libdl|nrepl|notcurses|s7test.scm|snd-dac,region,snd,sig,select|vct.c)
+ *     wta is everywhere [314 left] (clm2xen|libarb|nrepl|notcurses|s7test.scm|snd-dac,region,snd,sig,select|vct.c)
  *     xwta only about 15 all lower-case
+ *   currently s7__hypot, was hypot -- (*libm* 'hypot)? 
  *
  * add s7_free + use to ffitest.c, timing test make/free s7's?  threads.c -> ffitest?
+ * export semi string?
  */

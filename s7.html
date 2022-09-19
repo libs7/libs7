@@ -8908,7 +8908,7 @@ and a description of the type expected.  If the argument number is 0, that info 
 error message (that is, the caller takes only one argument).  s7_out_of_range_error is similar.
 s7_wrong_number_of_args_error takes the caller's name and the offending arg list.  The corresponding
 error types are 'wrong-type-arg, 'wrong-number-of-args, and 'out-of-range.
-A faster version is s7_wrong_type_error; here the caller is an s7 symbol, and the
+A faster version is s7_wrong_type_error; here the caller is an s7 symbol or string, and the
 description is an s7 string.
 </p>
 
@@ -9956,6 +9956,7 @@ const char *s7_string(s7_pointer p);
 s7_pointer s7_make_string(s7_scheme *sc, const char *str);
 s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len);
 s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str);
+s7_pointer s7_make_string_wrapper_with_length(s7_scheme *sc, const char *str, s7_int len);
 s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str);
 s7_int s7_string_length(s7_pointer str);
 </pre>
@@ -9968,7 +9969,7 @@ s7_make_permanent_string returns a scheme string that is not in the heap; it wil
 s7_make_string_wrapper creates a temporary string.  This saves the overhead of getting a free cell
 from the heap and later GC-ing it, but the string may be reused at any time.  It is useful as
 an argument to s7_call and similar functions where you know no other strings will be needed
-during that call.
+during that call.  s7_make_string_wrapper_with_length is the same but passes in the string length.
 </p>
 
 
