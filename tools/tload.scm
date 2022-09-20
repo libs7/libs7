@@ -9,7 +9,8 @@ static s7_pointer add1(s7_scheme *sc, s7_pointer args)
 {
   if (s7_is_integer(s7_car(args)))
     return(s7_make_integer(sc, 1 + s7_integer(s7_car(args))));
-  return(s7_wrong_type_arg_error(sc, \"add1\", 1, s7_car(args), \"an integer\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"add1\", 4), 0, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"an integer\", 10)));
 }
 void add1_init(s7_scheme *sc);
 void add1_init(s7_scheme *sc)

@@ -17,6 +17,8 @@
 (unless (defined? '*libc*)
     (define *libc*
       (with-let (unlet)
+
+	(set! *cload-library-name* "*libc*")
 	
 	;; -------- stddef.h --------
 	(define NULL (c-pointer 0 'void*))
@@ -140,17 +142,17 @@
                     arg = args;
                     if (s7_is_string(s7_car(arg)))
                        name = (char*)s7_string(s7_car(arg));
-                    else return(s7_wrong_type_arg_error(sc, \"open\", 1, s7_car(arg), \"string\"));
+                    else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'open)\", 14), 1, s7_car(arg), string_string));
                     arg = s7_cdr(arg);
                     if (s7_is_integer(s7_car(arg)))
                        flags = (int)s7_integer(s7_car(arg));
-                    else return(s7_wrong_type_arg_error(sc, \"open\", 2, s7_car(arg), \"integer\"));
+                    else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'open)\", 14), 2, s7_car(arg), integer_string));
                     if (s7_is_pair(s7_cdr(arg)))
                       {
                         arg = s7_cdr(arg);
                         if (s7_is_integer(s7_car(arg)))
                           mode = (int)s7_integer(s7_car(arg));
-                        else return(s7_wrong_type_arg_error(sc, \"open\", 3, s7_car(arg), \"integer\"));
+                        else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'open)\", 14), 3, s7_car(arg), integer_string));
                         return(s7_make_integer(sc, (s7_int)open(name, flags, mode)));
                        }
                      return(s7_make_integer(sc, (s7_int)open(name, flags)));
@@ -337,7 +339,7 @@
                     char *s7_dl_realpath_0, *res;
                     if (s7_is_string(s7_car(args)))
                        s7_dl_realpath_0 = (char*)s7_string(s7_car(args));
-                    else return(s7_wrong_type_arg_error(sc, \"realpath\", 1, s7_car(args), \"string\"));
+                    else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'realpath)\", 18), 1, s7_car(args), string_string));
                     res = realpath(s7_dl_realpath_0, NULL);
                     if (res) {s7_pointer str; str = s7_make_string(sc, res); free(res); return(str);}
                     return(s7_f(sc));
@@ -355,8 +357,8 @@
                  static s7_pointer g_ldiv(s7_scheme *sc, s7_pointer args)
                  {
                    ldiv_t d;
-                   if (!s7_is_integer(s7_car(args))) return(s7_wrong_type_arg_error(sc, \"ldiv\", 1, s7_car(args), \"integer\"));
-                   if (!s7_is_integer(s7_cadr(args))) return(s7_wrong_type_arg_error(sc, \"ldiv\", 2, s7_cadr(args), \"integer\"));
+                   if (!s7_is_integer(s7_car(args))) return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'ldiv)\", 14), 1, s7_car(args), integer_string));
+                   if (!s7_is_integer(s7_cadr(args))) return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'ldiv)\", 14), 2, s7_cadr(args), integer_string));
                    d = ldiv(s7_integer(s7_car(args)), s7_integer(s7_cadr(args)));
                    return(s7_list(sc, 2, s7_make_integer(sc, d.quot), s7_make_integer(sc, d.rem)));
                  }
@@ -1757,8 +1759,10 @@
                     int res, flags;
                     regex_t *regexp;
                     const char *str;
-                    if (!s7_is_string(s7_cadr(args))) return(s7_wrong_type_arg_error(sc, \"regcomp\", 2, s7_cadr(args), \"string\"));
-                    if (!s7_is_integer(s7_caddr(args))) return(s7_wrong_type_arg_error(sc, \"regcomp\", 3, s7_caddr(args), \"integer\"));
+                    if (!s7_is_string(s7_cadr(args))) 
+                       return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'regcomp)\", 17), 2, s7_cadr(args), string_string));
+                    if (!s7_is_integer(s7_caddr(args))) 
+                       return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'regcomp)\", 17), 3, s7_caddr(args), integer_string));
                     regexp = (regex_t *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"regex_t*\"), __func__, 1);
                     str = (const char *)s7_string(s7_cadr(args));
                     flags = s7_integer(s7_caddr(args));
@@ -1775,9 +1779,12 @@
                     s7_pointer subs;
                     s7_int *els;
 
-                    if (!s7_is_string(s7_cadr(args))) return(s7_wrong_type_arg_error(sc, \"regexec\", 2, s7_cadr(args), \"string\"));
-                    if (!s7_is_integer(s7_caddr(args))) return(s7_wrong_type_arg_error(sc, \"regexec\", 3, s7_caddr(args), \"integer\"));
-                    if (!s7_is_integer(s7_cadddr(args))) return(s7_wrong_type_arg_error(sc, \"regexec\", 4, s7_cadddr(args), \"integer\"));
+                    if (!s7_is_string(s7_cadr(args))) 
+                       return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'regexec)\", 17), 2, s7_cadr(args), string_string));
+                    if (!s7_is_integer(s7_caddr(args))) 
+                       return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'regexec)\", 17), 3, s7_caddr(args), integer_string));
+                    if (!s7_is_integer(s7_cadddr(args))) 
+                       return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libc* 'regexec)\", 17), 4, s7_cadddr(args), integer_string));
                     regexp = (regex_t *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"regex_t*\"), __func__, 1);
                     str = (const char *)s7_string(s7_cadr(args));
                     nmatches = s7_integer(s7_caddr(args));

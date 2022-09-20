@@ -890,8 +890,8 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: s7_number_to_real %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   if (s7_number_to_real_with_caller(sc, p, "ffitest") != 1.5)
     {fprintf(stderr, "%d: s7_number_to_real_with_caller %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
-  if (s7_number_to_real_with_symbol_caller(sc, p, s7_make_symbol(sc, "ffitest")) != 1.5)
-    {fprintf(stderr, "%d: s7_number_to_real_with_symbol_caller %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_number_to_real_with_location(sc, p, s7_make_symbol(sc, "ffitest")) != 1.5)
+    {fprintf(stderr, "%d: s7_number_to_real_with_location %s is not 1.5?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   s7_gc_unprotect_at(sc, gc_loc);
 

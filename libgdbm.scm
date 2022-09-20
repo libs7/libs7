@@ -21,6 +21,7 @@
     (define *libgdbm*
       (with-let (unlet)
 	(set! *libraries* (cons (cons "libgdbm.scm" (curlet)) *libraries*))
+	(set! *cload-library-name* "*libgdbm*")
 	
 	(c-define '((C-macro (int (GDBM_READER GDBM_WRITER GDBM_WRCREAT GDBM_NEWDB GDBM_FAST GDBM_SYNC GDBM_NOLOCK
 				   GDBM_INSERT GDBM_REPLACE GDBM_CACHESIZE GDBM_FASTMODE GDBM_SYNCMODE GDBM_CENTFREE 
@@ -62,7 +63,8 @@ static s7_pointer g_gdbm_firstkey(s7_scheme *sc, s7_pointer args)
                             s7_make_c_pointer_with_type(sc, make_datum(key), s7_make_symbol(sc, \"datum*\"), s7_f(sc))));
       return(s7_eof_object(sc));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_firstkey\", 0, s7_car(args), \"a gdbm file\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'firstkey)\", 21), 0, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"a gdbm file\", 11)));
 }
 
 static s7_pointer g_gdbm_nextkey(s7_scheme *sc, s7_pointer args)
@@ -84,9 +86,10 @@ static s7_pointer g_gdbm_nextkey(s7_scheme *sc, s7_pointer args)
                                 s7_make_c_pointer_with_type(sc, make_datum(rtn), s7_make_symbol(sc, \"datum*\"), s7_f(sc))));
           return(s7_eof_object(sc));
 	}
-      return(s7_wrong_type_arg_error(sc, \"gdbm_nextkey\", 2, s7_cadr(args), \"a string\"));
+      return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'nextkey)\", 20), 2, s7_cadr(args), string_string));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_nextkey\", 1, s7_car(args), \"a gdbm file\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'nextkey)\", 20), 1, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"a gdbm file\", 11)));
 }
 
 static s7_pointer g_gdbm_exists(s7_scheme *sc, s7_pointer args)
@@ -100,9 +103,10 @@ static s7_pointer g_gdbm_exists(s7_scheme *sc, s7_pointer args)
           key.dsize = (int)s7_string_length(s7_cadr(args));
           return(s7_make_integer(sc, gdbm_exists((GDBM_FILE)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"GDBM_FILE\"), __func__, 0), key)));
 	}
-      return(s7_wrong_type_arg_error(sc, \"gdbm_exists\", 2, s7_cadr(args), \"a string\"));
+      return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'exists)\", 19), 2, s7_cadr(args), string_string));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_exists\", 1, s7_car(args), \"a gdbm file\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'exists)\", 19), 1, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"a gdbm file\", 11)));
 }
 
 static s7_pointer g_gdbm_delete(s7_scheme *sc, s7_pointer args)
@@ -116,9 +120,10 @@ static s7_pointer g_gdbm_delete(s7_scheme *sc, s7_pointer args)
           key.dsize = (int)s7_string_length(s7_cadr(args));
           return(s7_make_integer(sc, gdbm_delete((GDBM_FILE)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"GDBM_FILE\"), __func__, 0), key)));
         }  
-      return(s7_wrong_type_arg_error(sc, \"gdbm_delete\", 2, s7_cadr(args), \"a string\"));
+      return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'delete)\", 19), 2, s7_cadr(args), string_string));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_delete\", 1, s7_car(args), \"a gdbm file\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'delete)\", 19), 1, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"a gdbm file\", 11)));
 }
 
 static s7_pointer g_gdbm_fetch(s7_scheme *sc, s7_pointer args)
@@ -140,9 +145,10 @@ static s7_pointer g_gdbm_fetch(s7_scheme *sc, s7_pointer args)
 	    }
           else return(s7_make_string_with_length(sc, \"#<undefined>\", 12));
 	}
-      return(s7_wrong_type_arg_error(sc, \"gdbm_fetch\", 2, s7_cadr(args), \"a string\"));
+      return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'fetch)\", 18), 2, s7_cadr(args), string_string));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_fetch\", 1, s7_car(args), \"a gdbm file\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'fetch)\", 18), 1, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"a gdbm file\", 11)));
 }
 
 static s7_pointer g_gdbm_store(s7_scheme *sc, s7_pointer args)
@@ -163,13 +169,15 @@ static s7_pointer g_gdbm_store(s7_scheme *sc, s7_pointer args)
                   return(s7_make_integer(sc, gdbm_store((GDBM_FILE)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"GDBM_FILE\"), __func__, 1),
                                                         key, val, (int)s7_integer(s7_cadddr(args)))));
                 }
-              return(s7_wrong_type_arg_error(sc, \"gdbm_fetch\", 4, s7_cadddr(args), \"an integer (flag)\"));
+              return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'store)\", 18), 4, s7_cadddr(args), 
+                                             s7_make_string_wrapper_with_length(sc, \"an integer (flag)\", 17)));
 	    }
-          return(s7_wrong_type_arg_error(sc, \"gdbm_fetch\", 3, s7_caddr(args), \"a string\"));
+          return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'store)\", 18), 3, s7_caddr(args), string_string));
 	}
-      return(s7_wrong_type_arg_error(sc, \"gdbm_fetch\", 2, s7_cadr(args), \"a string\"));
+      return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'store)\", 18), 2, s7_cadr(args), string_string));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_fetch\", 1, s7_car(args), \"a gdbm file\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'store)\", 18), 1, s7_car(args), 
+                                 s7_make_string_wrapper_with_length(sc, \"a gdbm file\", 11)));
 }
 
 static s7_pointer open_error_func = NULL;
@@ -213,13 +221,16 @@ static s7_pointer g_gdbm_open(s7_scheme *sc, s7_pointer args)
                     }
                   return(s7_make_c_pointer_with_type(sc, (void *)gdbm_open(name, block_size, flags, mode, gdbm_open_error), s7_make_symbol(sc, \"GDBM_FILE\"), s7_f(sc)));
                 }
-              return(s7_wrong_type_arg_error(sc, \"gdbm_open\", 4, s7_car(args), \"an integer (mode)\"));
+              return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'open)\", 17), 4, s7_car(args), 
+                                             s7_make_string_wrapper_with_length(sc, \"an integer (mode)\", 17)));
             }
-          return(s7_wrong_type_arg_error(sc, \"gdbm_open\", 3, s7_car(args), \"an integer (flags)\"));
+          return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'open)\", 17), 3, s7_car(args), 
+                                         s7_make_string_wrapper_with_length(sc, \"an integer (flags)\", 18)));
         }
-      return(s7_wrong_type_arg_error(sc, \"gdbm_open\", 2, s7_car(args), \"an integer (block_size)\"));
+      return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'open)\", 17), 2, s7_car(args), 
+                                     s7_make_string_wrapper_with_length(sc, \"an integer (block_size)\", 23)));
     }
-  return(s7_wrong_type_arg_error(sc, \"gdbm_open\", 1, s7_car(args), \"a string (file name)\"));
+  return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, \"(*libgdbm* 'open)\", 17), 1, s7_car(args), string_string));
 }
 ")
                     (C-function ("gdbm_firstkey" g_gdbm_firstkey "(gdbm_firstkey gdbm)" 1))

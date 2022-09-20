@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.5"
-#define S7_DATE "20-Sep-2022"
+#define S7_DATE "21-Sep-2022"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 5
 
@@ -273,7 +273,7 @@ s7_pointer s7_make_real(s7_scheme *sc, s7_double num);                       /* 
 s7_pointer s7_make_mutable_real(s7_scheme *sc, s7_double n);
 s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x);                    /* x can be any kind of number */
 s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
-s7_double s7_number_to_real_with_symbol_caller(s7_scheme *sc, s7_pointer x, s7_pointer caller);
+s7_double s7_number_to_real_with_location(s7_scheme *sc, s7_pointer x, s7_pointer caller);
 s7_int s7_number_to_integer(s7_scheme *sc, s7_pointer x);
 s7_int s7_number_to_integer_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
 
@@ -901,7 +901,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
- * 16-Sep:    s7_number_to_real_with_symbol_caller. s7_wrong_type_error. s7_make_string_wrapper_with_length.
+ * 16-Sep:    s7_number_to_real_location. s7_wrong_type_error. s7_make_string_wrapper_with_length.
  * 21-Apr:    s7_is_multiple_value.
  * 11-Apr:    removed s7_apply_*.
  * 22-Mar:    s7_eval_with_location.

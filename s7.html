@@ -9756,7 +9756,7 @@ s7_pointer s7_make_real(s7_scheme *sc, s7_double num);
 s7_pointer s7_make_mutable_real(s7_scheme *sc, s7_double n);
 s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x);
 s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
-s7_double s7_number_to_real_with_symbol_caller(s7_scheme *sc, s7_pointer x, s7_pointer caller);
+s7_double s7_number_to_real_with_location(s7_scheme *sc, s7_pointer x, s7_pointer caller);
 
 bool s7_is_rational(s7_pointer arg);
 bool s7_is_ratio(s7_pointer arg);
@@ -9807,8 +9807,8 @@ data[kp] = opt_func(s7, res);             /* call opt_func */
 <p>s7_number_to_real returns any real number as an s7_double.  If it can't
 convert its argument, it signals an error, which is annoying because it doesn't
 know where that error occured in scheme.  So s7_number_to_real_with_caller gives
-you a way to tell it at least the caller's name.  s7_number_to_real_with_symbol_caller
-is the same function, but the caller argument is a symbol (this is much faster
+you a way to tell it at least the caller's name.  s7_number_to_real_with_location
+is the same function, but the caller argument is a s7 symbol or string (this is much faster
 than using a char*).
 </p>
 <p>For the bignum functions, see <a href="#gmpex">Bignums in C</a>.

@@ -66,6 +66,7 @@
       (define gsl_min min)
       
       (set! *libraries* (cons (cons "libgsl.scm" (curlet)) *libraries*))
+      (set! *cload-library-name* "*libgsl*")
 
       (c-define 
        '((C-macro (double (GSL_CONST_CGS_SPEED_OF_LIGHT GSL_CONST_CGS_GRAVITATIONAL_CONSTANT GSL_CONST_CGS_PLANCKS_CONSTANT_H 
@@ -1237,7 +1238,7 @@
                 static s7_pointer s7_gsl_r_c(s7_scheme *sc, s7_pointer arg1, gsl_complex (*callee)(double a))
                 {
                   gsl_complex g;
-                  g = callee(s7_number_to_real(sc, arg1));
+                  g = callee(s7_number_to_real_with_caller(sc, arg1, __func__));
                   return(GSL_TO_S7_COMPLEX(sc, g));
                 }
                 static s7_pointer s7_gsl_c_r(s7_scheme *sc, s7_pointer arg1, double (*callee)(gsl_complex a))
@@ -1258,7 +1259,7 @@
                 {
                   gsl_complex g, g1;
                   S7_TO_GSL_COMPLEX(arg1, g1);
-                  g = callee(g1, s7_number_to_real(sc, arg2));
+                  g = callee(g1, s7_number_to_real_with_caller(sc, arg2, __func__));
                   return(GSL_TO_S7_COMPLEX(sc, g));
                 }
                 static s7_pointer g_gsl_complex_arg(s7_scheme *sc, s7_pointer args) {return(s7_gsl_c_r(sc, s7_car(args), gsl_complex_arg));}
@@ -1530,8 +1531,9 @@
                   s7_pointer res;
                 
                   res = s7_cadddr(args);
-                  result = gsl_poly_complex_solve_quadratic(s7_number_to_real(sc, s7_car(args)), s7_number_to_real(sc, s7_cadr(args)), 
-                                                            s7_number_to_real(sc, s7_caddr(args)), &z0, &z1);
+                  result = gsl_poly_complex_solve_quadratic(s7_number_to_real_with_caller(sc, s7_car(args), __func__), 
+                                                            s7_number_to_real_with_caller(sc, s7_cadr(args), __func__), 
+                                                            s7_number_to_real_with_caller(sc, s7_caddr(args), __func__), &z0, &z1);
                   s7_vector_set(sc, res, 0, GSL_TO_S7_COMPLEX(sc, z0));
                   s7_vector_set(sc, res, 1, GSL_TO_S7_COMPLEX(sc, z1));
                 
@@ -1544,8 +1546,9 @@
                   int result;
                   s7_pointer res;
                 
-                  result = gsl_poly_complex_solve_cubic(s7_number_to_real(sc, s7_car(args)), s7_number_to_real(sc, s7_cadr(args)), 
-                                                        s7_number_to_real(sc, s7_caddr(args)), &z0, &z1, &z2);
+                  result = gsl_poly_complex_solve_cubic(s7_number_to_real_with_caller(sc, s7_car(args), __func__), 
+                                                        s7_number_to_real_with_caller(sc, s7_cadr(args), __func__), 
+                                                        s7_number_to_real_with_caller(sc, s7_caddr(args), __func__), &z0, &z1, &z2);
                   res = s7_cadddr(args);
                   s7_vector_set(sc, res, 0, GSL_TO_S7_COMPLEX(sc, z0));
                   s7_vector_set(sc, res, 1, GSL_TO_S7_COMPLEX(sc, z1));
@@ -1583,8 +1586,9 @@
                   int result;
                   double *res;
                   res = (double *)s7_c_pointer_with_type(sc, s7_cadddr(args), double__symbol, __func__, 4);
-                  result = gsl_poly_solve_quadratic(s7_number_to_real(sc, s7_car(args)), s7_number_to_real(sc, s7_cadr(args)), 
-                                                    s7_number_to_real(sc, s7_caddr(args)), &x0, &x1);
+                  result = gsl_poly_solve_quadratic(s7_number_to_real_with_caller(sc, s7_car(args), __func__), 
+                                                    s7_number_to_real_with_caller(sc, s7_cadr(args), __func__), 
+                                                    s7_number_to_real_with_caller(sc, s7_caddr(args), __func__), &x0, &x1);
                   res[0] = x0;
                   res[1] = x1;
                   return(s7_make_integer(sc, result));
@@ -1596,8 +1600,9 @@
                   int result;
                   double *res;
                   res = (double *)s7_c_pointer_with_type(sc, s7_cadddr(args), double__symbol, __func__, 4);
-                  result = gsl_poly_solve_cubic(s7_number_to_real(sc, s7_car(args)), s7_number_to_real(sc, s7_cadr(args)), 
-                                                s7_number_to_real(sc, s7_caddr(args)), &x0, &x1, &x2);
+                  result = gsl_poly_solve_cubic(s7_number_to_real_with_caller(sc, s7_car(args), __func__), 
+                                                s7_number_to_real_with_caller(sc, s7_cadr(args), __func__), 
+                                                s7_number_to_real_with_caller(sc, s7_caddr(args), __func__), &x0, &x1, &x2);
                   res[0] = x0;
                   res[1] = x1;
                   res[2] = x2;

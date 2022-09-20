@@ -98,8 +98,10 @@
 
 (define *cload-cflags* (if (provided? 'clang) "-fPIC" ""))
 (define *cload-ldflags* "")
-(if (not (defined? '*cload-directory*))
-    (define *cload-directory* ""))
+(unless (defined? '*cload-directory*)
+  (define *cload-directory* ""))
+(unless (defined? '*cload-library-name*)
+  (define *cload-library-name* #f))
 
 (define *cload-c-compiler* ;(if (provided? 'tcc)  ; how to get tcc to write a .so file?
 			       ;"tcc"
@@ -129,7 +131,7 @@
 
   (define handlers (list '(integer s7_is_integer s7_integer s7_make_integer s7_int)
 			 '(boolean s7_is_boolean s7_boolean s7_make_boolean bool)
-			 '(real s7_is_real s7_number_to_real s7_make_real s7_double)
+			 '(real s7_is_real s7_number_to_real_with_caller s7_make_real s7_double)
 
 			 ;; '(complex s7_is_complex #f s7_make_complex s7_Complex)
 			 ;; the typedef is around line 6116 in s7.c, but we also need s7_complex which requires the s7_Complex type
@@ -178,8 +180,6 @@
 		 'integer)
 
 		(#t #t)))))
-
-  ;; need c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string
 
   (define (find-handler type choice)
     (cond ((assq (C-type->s7-type type) handlers) => choice) (else #t)))
@@ -370,19 +370,29 @@
 				      (hyphen->space nominal-type)
 				      (type->type-symbol nominal-type)  ;(symbol->string nominal-type)
 				      (if (= num-args 1) 0 (+ i 1)))
-			      (begin
+
+			      (let ((function-name (if *cload-library-name*
+						       (string-append "(" *cload-library-name* " '" scheme-name ")")
+						       (if (> (length prefix) 0)
+							   scheme-name
+							   (substring base-name 4)))))
 				(format pp "  if (~A(arg))~%" (checker true-type))
-				(format pp "    ~A_~D = (~A)~A(~Aarg);~%"
+				(format pp "    ~A_~D = (~A)~A(~Aarg~A);~%"
 					base-name i
 					(hyphen->space nominal-type)
 					(s7->C true-type)                               ; s7_number_to_real which requires 
 					(if (memq s7-type '(boolean real))              ;   the extra sc arg
-					    "sc, " ""))
+					    "sc, " 
+					    "")
+					(if (memq s7-type '(boolean real))              ;   the extra trailing caller arg
+					    ", __func__" 
+					    ""))
 				(format pp "  else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, ~S, ~D), ~D, arg, ~A_string));~%"
-					base-name
-					(length base-name)
+					function-name
+					(length function-name)
 					(if (= num-args 1) 0 (+ i 1))
 					s7-type))))
+
 		      (if (< i (- num-args 1))
 			  (format pp "  p = s7_cdr(p);~%")))))
 		
@@ -548,13 +558,13 @@
 	   signatures)
 	  (format p "  }~%~%"))
 
-	(format p "  string_string = s7_make_permanent_string(sc, \"string\");~%")
-	(format p "  c_pointer_string = s7_make_permanent_string(sc, \"c-pointer\");~%")
-	(format p "  character_string = s7_make_permanent_string(sc, \"character\");~%")
-	(format p "  boolean_string = s7_make_permanent_string(sc, \"boolean\");~%")
-	(format p "  real_string = s7_make_permanent_string(sc, \"real\");~%")
-	(format p "  complex_string = s7_make_permanent_string(sc, \"complex\");~%")
-	(format p "  integer_string = s7_make_permanent_string(sc, \"integer\");~%")
+	(format p "  string_string = s7_make_permanent_string(sc, \"a string\");~%")
+	(format p "  c_pointer_string = s7_make_permanent_string(sc, \"a c-pointer\");~%")
+	(format p "  character_string = s7_make_permanent_string(sc, \"a character\");~%")
+	(format p "  boolean_string = s7_make_permanent_string(sc, \"a boolean\");~%")
+	(format p "  real_string = s7_make_permanent_string(sc, \"a real\");~%")
+	(format p "  complex_string = s7_make_permanent_string(sc, \"a complex number\");~%")
+	(format p "  integer_string = s7_make_permanent_string(sc, \"an integer\");~%")
 
 	(format p "  cur_env = s7_curlet(sc);~%") ; changed from s7_outlet(s7_curlet) 20-Aug-17
 	

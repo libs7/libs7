@@ -13227,8 +13227,6 @@ static s7_pointer make_ratio_with_div_check(s7_scheme *sc, s7_pointer caller, s7
  *    but we don't currently give an error in this case -- not sure what the right thing is.
  */
 
-/* this is a mess -- it's too late to clean up s7.h (sigh) */
-
 s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller)
 {
   if (is_t_real(x)) return(real(x));
@@ -13247,7 +13245,7 @@ s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char 
   return(0.0);
 }
 
-s7_double s7_number_to_real_with_symbol_caller(s7_scheme *sc, s7_pointer x, s7_pointer caller)
+s7_double s7_number_to_real_with_location(s7_scheme *sc, s7_pointer x, s7_pointer caller)
 {
   if (is_t_real(x)) return(real(x));
   switch (type(x))
@@ -13261,11 +13259,11 @@ s7_double s7_number_to_real_with_symbol_caller(s7_scheme *sc, s7_pointer x, s7_p
     case T_BIG_REAL:    return((s7_double)mpfr_get_d(big_real(x), MPFR_RNDN));
 #endif
     }
-  sole_arg_wrong_type_error_nr(sc, symbol_name_cell(caller), x, sc->type_names[T_REAL]);
+  sole_arg_wrong_type_error_nr(sc, caller, x, sc->type_names[T_REAL]);
   return(0.0);
 }
 
-s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x) {return(s7_number_to_real_with_symbol_caller(sc, x, sc->number_to_real_symbol));}
+s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x) {return(s7_number_to_real_with_location(sc, x, sc->number_to_real_symbol));}
 
 s7_int s7_number_to_integer_with_caller(s7_scheme *sc, s7_pointer x, const char *caller)
 {
@@ -25077,7 +25075,7 @@ static s7_pointer random_state_copy(s7_scheme *sc, s7_pointer args)
   return(new_r);
 #endif
 }
-#if S7_DEBUGGING
+#if S7_DEBUGGING && (!WITH_GMP)
   static s7_int last_carry = 0;
   /* 2083801278 */
 #endif
@@ -53400,7 +53398,7 @@ static s7_pointer fx_floor_sqrt_s(s7_scheme *sc, s7_pointer arg)
     }
 #else
   if (!is_negative_b_7p(sc, p))
-    return(make_integer(sc, (s7_int)floor(sqrt(s7_number_to_real_with_symbol_caller(sc, p, sc->sqrt_symbol)))));
+    return(make_integer(sc, (s7_int)floor(sqrt(s7_number_to_real_with_location(sc, p, sc->sqrt_symbol)))));
 #endif
   return(floor_p_p(sc, sqrt_p_p(sc, p)));
 }
@@ -54722,8 +54720,8 @@ static s7_pointer fx_c_c_opssq_direct(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_c_nc_opssq_direct(s7_scheme *sc, s7_pointer arg) /* clm2xen (* 1.0 (oscil g2 x2)) */
 {
-  s7_double x2 = ((s7_d_pd_t)opt3_direct(cdr(arg)))(lookup(sc, opt3_sym(arg)), real_to_double(sc, lookup(sc, opt1_sym(cdr(arg))), "number_to_double"));
-  return(((s7_p_dd_t)opt2_direct(cdr(arg)))(sc, real_to_double(sc, cadr(arg), "*"), x2));
+  s7_double x2 = ((s7_d_pd_t)opt3_direct(cdr(arg)))(lookup(sc, opt3_sym(arg)), real_to_double(sc, lookup(sc, opt1_sym(cdr(arg))), __func__));
+  return(((s7_p_dd_t)opt2_direct(cdr(arg)))(sc, real_to_double(sc, cadr(arg), __func__), x2));
 }
 
 static s7_pointer fx_multiply_c_opssq(s7_scheme *sc, s7_pointer arg) /* (* c=float (* x1 x2))! */
@@ -62227,7 +62225,7 @@ static bool p_ii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 }
 
 /* -------- p_d -------- */
-static s7_pointer opt_p_d_s(opt_info *o) {return(o->v[2].p_d_f(o->sc, real_to_double(o->sc, slot_value(o->v[1].p), "p_d")));}
+static s7_pointer opt_p_d_s(opt_info *o) {return(o->v[2].p_d_f(o->sc, real_to_double(o->sc, slot_value(o->v[1].p), __func__)));}
 static s7_pointer opt_p_d_f(opt_info *o) {return(o->v[2].p_d_f(o->sc, o->v[4].fd(o->v[3].o1)));}
 
 static bool p_d_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, int32_t pstart)
@@ -62261,8 +62259,8 @@ static bool p_d_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 }
 
 /* -------- p_dd -------- */
-static s7_pointer opt_p_dd_sc(opt_info *o) {return(o->v[3].p_dd_f(o->sc, real_to_double(o->sc, slot_value(o->v[1].p), "p_dd"), o->v[2].x));}
-static s7_pointer opt_p_dd_cs(opt_info *o) {return(o->v[3].p_dd_f(o->sc, o->v[2].x, real_to_double(o->sc, slot_value(o->v[1].p), "p_dd")));}
+static s7_pointer opt_p_dd_sc(opt_info *o) {return(o->v[3].p_dd_f(o->sc, real_to_double(o->sc, slot_value(o->v[1].p), __func__), o->v[2].x));}
+static s7_pointer opt_p_dd_cs(opt_info *o) {return(o->v[3].p_dd_f(o->sc, o->v[2].x, real_to_double(o->sc, slot_value(o->v[1].p), __func__)));}
 static s7_pointer opt_p_dd_cc(opt_info *o) {return(o->v[3].p_dd_f(o->sc, o->v[1].x, o->v[2].x));}
 
 static bool p_dd_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, int32_t pstart)
@@ -86906,7 +86904,7 @@ static void op_x_aa(s7_scheme *sc, s7_pointer f)
   else
     {
       sc->args = fx_call(sc, cddr(code));
-      if (!needs_copied_args(f)) /* && (is_c_function(f))) -- set_was plist_2 which could collide with c_object_equal */
+      if (!needs_copied_args(f))
 	sc->args = set_plist_2(sc, fx_call(sc, cdr(code)), sc->args);
       else sc->args = list_2(sc, sc->value = fx_call(sc, cdr(code)), sc->args);
     }
@@ -88672,7 +88670,7 @@ static goto_t op_read_dot(s7_scheme *sc)
       read_error_nr(sc, "stray dot?");            /* (+ 1 . 2 3) or (list . ) */
     }
   /* args = previously read stuff, value = thing just after the dot and before the ')':
-   *   (list 1 2 . 3) -> value: 3, args: (2 1 list), '(1 . 2) ->       value: 2, args: (1)
+   *   (list 1 2 . 3) -> value: 3, args: (2 1 list), '(1 . 2) -> value: 2, args: (1)
    * but we also get here in a lambda arg list: (lambda (a b . c) #f) -> value: c, args: (b a)
    */
   sc->value = any_list_reverse_in_place(sc, sc->value, sc->args);
@@ -88702,7 +88700,6 @@ static bool op_read_unquote(s7_scheme *sc)
 
 /* safety check is at read time, so (immutable? (let-temporarily (((*s7* 'safety) 2)) #(1 2 3))) is #f
  *    but (immutable? (let-temporarily (((*s7* 'safety) 2)) (eval-string "#(1 2 3)"))) is #t
- *    at run time we just see the vector
  */
 static bool op_read_vector(s7_scheme *sc)
 {
@@ -95626,30 +95623,30 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ------------------------------------------
+/* --------------------------------------------------
  *            20.9   21.0   22.0   22.7   22.8
- * ------------------------------------------
+ * --------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
- * index     1026   1016    973    964    964
+ * index     1026   1016    973    964    963
  * tmock     1177   1165   1057   1083   1082
  * tvect     2519   2464   1772   1667   1667
  * timp      2637   2575   1930   1696   1692
  * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
- * tauto     ----   ----   2562   2171   2051  2045
+ * tauto     ----   ----   2562   2171   2044
  * thook     ----   ----   2590   2073   2072
  * lt        2187   2172   2150   2179   2178
- * dup       3805   3788   2492   2272   2272
+ * dup       3805   3788   2492   2272   2270
  * tcopy     8035   5546   2539   2373   2372
- * tload     ----   ----   3046   2377   2376  2374
- * tread     2440   2421   2419   2414   2409
+ * tload     ----   ----   3046   2377   2373
+ * tread     2440   2421   2419   2414   2414
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2573   2577
+ * tmat      3065   3042   2524   2573   2571
  * tb        2735   2681   2612   2600   2599
- * tsort     3105   3104   2856   2801   2805
+ * tsort     3105   3104   2856   2801   2801
  * teq       4068   4045   3536   3469   3469
  * tobj      4016   3970   3828   3556   3553
  * tio       3816   3752   3683   3616   3616
@@ -95660,27 +95657,27 @@ int main(int argc, char **argv)
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4477
  * tshoot    5525   5447   5183   5056   5056
- * tstr      6880   6342   5488   5131   5130
- * tform     5357   5348   5307   5320   5317
- * tnum      6348   6013   5433   5369   5369
+ * tstr      6880   6342   5488   5131   5137 [g_string_set]
+ * tform     5357   5348   5307   5320   5312
+ * tnum      6348   6013   5433   5369   5371
  * tlamb     6423   6273   5720   5545   5539
  * tmisc     8869   7612   6435   6184   6184
  * tset      ----   ----   ----   6238   6238
  * tlist     7896   7546   6558   6247   6243
- * tgsl      8485   7802   6373   6307   6307  6280
+ * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6558
  * tari      13.0   12.7   6827   6583   6581
  * tleft     10.4   10.2   7657   7479   7475
- * tgc       11.9   11.1   8177   7913   7913
+ * tgc       11.9   11.1   8177   7913   7919
  * thash     11.8   11.7   9734   9467   9466
  * cb        11.2   11.0   9658   9528   9527
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.5
- * sg        ----   ----   55.9   56.7   56.0  55.6
+ * sg        ----   ----   55.9   56.7   55.6  55.5
  * lg        ----   ----  105.2  106.1  106.0
  * tbig     177.4  175.8  156.5  147.9  147.9
- * --------------------------------------
+ * ----------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
  * for multithread s7: (with-s7 ((var database)...) . body)
@@ -95688,13 +95685,6 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
  *
- * wrong-type-arg -> wrong-type? number_to_real_with_caller->symbol_caller (clm2xen.c snd-sig.c)
- *   there are a lot of s7_number_to_reals (libm|libgsl|clm2xen) -- these symbols are not pulled out [need libm: prefix]
- *   wta is also (xen.h) XEN_WRONG_TYPE_ARG_ERROR which is also Xen_wrong_type_arg_error
- *     wta is everywhere [314 left] (clm2xen|libarb|nrepl|notcurses|s7test.scm|snd-dac,region,snd,sig,select|vct.c)
- *     xwta only about 15 all lower-case
- *   currently s7__hypot, was hypot -- (*libm* 'hypot)? 
- *
  * add s7_free + use to ffitest.c, timing test make/free s7's?  threads.c -> ffitest?
- * export semi string?
+ * set! cdr check?
  */
