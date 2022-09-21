@@ -1099,7 +1099,7 @@ struct s7_scheme {
   pthread_mutex_t lock;
 #endif
 
-  gc_obj_t *permanent_objects, *permanent_lets;
+  gc_obj_t *semipermanent_objects, *semipermanent_lets;
   s7_pointer protected_objects, protected_setters, protected_setter_symbols;  /* vectors of gc-protected objects */
   s7_int *protected_objects_free_list;    /* to avoid a linear search for a place to store an object in sc->protected_objects */
   s7_int protected_objects_size, protected_setters_size, protected_setters_loc;
@@ -1224,7 +1224,7 @@ struct s7_scheme {
   s7_pointer *setters;
   s7_int setters_size, setters_loc;
   s7_pointer *tree_pointers;
-  int32_t tree_pointers_size, tree_pointers_top, permanent_cells, num_to_str_size;
+  int32_t tree_pointers_size, tree_pointers_top, semipermanent_cells, num_to_str_size;
   s7_pointer format_ports;
   uint32_t alloc_pointer_k, alloc_function_k, alloc_symbol_k;
   s7_cell *alloc_pointer_cells;
@@ -4892,7 +4892,8 @@ static bool has_odd_bits(s7_pointer obj)
 	return(true);
     }
   if ((signed_type(obj) == 0) && ((full_typ & T_GC_MARK) != 0)) return(true);
-  if ((in_heap(obj)) && ((type(obj) == T_C_FUNCTION) || (type(obj) == T_C_FUNCTION_STAR) || (type(obj) == T_C_MACRO))) return(true);
+  /* if ((in_heap(obj)) && ((type(obj) == T_C_FUNCTION) || (type(obj) == T_C_FUNCTION_STAR) || (type(obj) == T_C_MACRO))) return(true); */
+  /*   this is currently impossible -- s7_make_function et al use semipermanent pointers, but is that a bug? */
   return(false);
 }
 
@@ -5732,7 +5733,7 @@ static s7_pointer set_clist_2(s7_scheme *sc, s7_pointer x1, s7_pointer x2) /* fo
   return(sc->clist_2);
 }
 
-static s7_pointer set_dlist_1(s7_scheme *sc, s7_pointer x1) /* another like clist: temp usage, "weak" (not gc_marked), but permanent list */
+static s7_pointer set_dlist_1(s7_scheme *sc, s7_pointer x1) /* another like clist: temp usage, "weak" (not gc_marked), but semipermanent list */
 {
   set_car(sc->dlist_1, x1);
   return(sc->dlist_1);
@@ -6735,7 +6736,7 @@ static void init_gc_caches(s7_scheme *sc)
   sc->setters = (s7_pointer *)Malloc(sc->setters_size * sizeof(s7_pointer));
 }
 
-static s7_pointer permanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type);
+static s7_pointer semipermanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type);
 
 static void add_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
 {
@@ -6755,7 +6756,7 @@ static void add_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
       sc->setters_size *= 2;
       sc->setters = (s7_pointer *)Realloc(sc->setters, sc->setters_size * sizeof(s7_pointer));
     }
-  sc->setters[sc->setters_loc++] = permanent_cons(sc, p, setter, T_PAIR | T_IMMUTABLE);
+  sc->setters[sc->setters_loc++] = semipermanent_cons(sc, p, setter, T_PAIR | T_IMMUTABLE);
 }
 
 
@@ -7176,24 +7177,24 @@ static void mark_rootlet(s7_scheme *sc)
  *   or save safe-closure lets to handle all at end?  or a gc_list of safe closure lets and only mark let if not safe?
  */
 
-static void mark_permanent_objects(s7_scheme *sc)
+static void mark_semipermanent_objects(s7_scheme *sc)
 {
-  for (gc_obj_t *g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
+  for (gc_obj_t *g = sc->semipermanent_objects; g; g = (gc_obj_t *)(g->nxt))
     gc_mark(g->p);
-  /* permanent_objects also has lets (removed from heap) -- should they be handled like permanent_lets?
+  /* semipermanent_objects also has lets (removed from heap) -- should they be handled like semipermanent_lets?
    *    if unmarked should either be removed from the list and perhaps placed on a free list?
    *    if outlet is free can the let potentially be in use?
-   *    there are many more permanent_lets(slots) than permanent objects
+   *    there are many more semipermanent_lets(slots) than semipermanent objects
    */
 }
-/* do we mark funclet slot values from the function as root?  Maybe treat them like permanent_lets here? */
+/* do we mark funclet slot values from the function as root?  Maybe treat them like semipermanent_lets here? */
 
-static void unmark_permanent_objects(s7_scheme *sc)
+static void unmark_semipermanent_objects(s7_scheme *sc)
 {
   gc_obj_t *g;
-  for (g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
+  for (g = sc->semipermanent_objects; g; g = (gc_obj_t *)(g->nxt))
     clear_mark(g->p);
-  for (g = sc->permanent_lets; g; g = (gc_obj_t *)(g->nxt)) /* there are lets and slots in this list */
+  for (g = sc->semipermanent_lets; g; g = (gc_obj_t *)(g->nxt)) /* there are lets and slots in this list */
     clear_mark(g->p);
 }
 
@@ -7333,7 +7334,7 @@ static int64_t gc(s7_scheme *sc)
       gc_mark(*tmps++);
   }
   mark_op_stack(sc);
-  mark_permanent_objects(sc);
+  mark_semipermanent_objects(sc);
 
   if (sc->profiling_gensyms)
     {
@@ -7396,7 +7397,7 @@ static int64_t gc(s7_scheme *sc)
     sweep(sc);
   }
 
-  unmark_permanent_objects(sc);
+  unmark_semipermanent_objects(sc);
   sc->gc_freed = (int64_t)(sc->free_heap_top - old_free_heap_top);
   sc->gc_total_freed += sc->gc_freed;
   sc->gc_end = my_clock();
@@ -7587,6 +7588,9 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   set_car(sc->elist_6, sc->nil);
   set_car(sc->elist_7, sc->nil);
   set_car(sc->dlist_1, sc->nil);
+  /* ulist = sc->u1? dlist unneeded here? what about w|x|y|x and temp*? */
+  
+  sc->y = sc->nil; /* experiment */
 
   if (is_not_null(args))
     {
@@ -7631,7 +7635,7 @@ static s7_cell *alloc_pointer(s7_scheme *sc)
 {
   if (sc->alloc_pointer_k == ALLOC_POINTER_SIZE)     /* if either no current block or the block is used up, make a new block */
     {
-      sc->permanent_cells += ALLOC_POINTER_SIZE;
+      sc->semipermanent_cells += ALLOC_POINTER_SIZE;
       sc->alloc_pointer_cells = (s7_cell *)Calloc(ALLOC_POINTER_SIZE, sizeof(s7_cell)); /* not Malloc here or below (maybe set full type to 0 if Malloc) */
       add_saved_pointer(sc, sc->alloc_pointer_cells);
       sc->alloc_pointer_k = 0;
@@ -7645,7 +7649,7 @@ static s7_big_cell *alloc_big_pointer(s7_scheme *sc, int64_t loc)
   s7_big_pointer p;
   if (sc->alloc_big_pointer_k == ALLOC_BIG_POINTER_SIZE)
     {
-      sc->permanent_cells += ALLOC_BIG_POINTER_SIZE;
+      sc->semipermanent_cells += ALLOC_BIG_POINTER_SIZE;
       sc->alloc_big_pointer_cells = (s7_big_cell *)Calloc(ALLOC_BIG_POINTER_SIZE, sizeof(s7_big_cell));
       add_saved_pointer(sc, sc->alloc_big_pointer_cells);
       sc->alloc_big_pointer_k = 0;
@@ -7658,20 +7662,20 @@ static s7_big_cell *alloc_big_pointer(s7_scheme *sc, int64_t loc)
   return(p);
 }
 
-static void add_permanent_object(s7_scheme *sc, s7_pointer obj) /* called by remove_from_heap */
+static void add_semipermanent_object(s7_scheme *sc, s7_pointer obj) /* called by remove_from_heap */
 {
   gc_obj_t *g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
   g->p = obj;
-  g->nxt = sc->permanent_objects;
-  sc->permanent_objects = g;
+  g->nxt = sc->semipermanent_objects;
+  sc->semipermanent_objects = g;
 }
 
-static void add_permanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
+static void add_semipermanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
 {
   gc_obj_t *g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
   g->p = obj;
-  g->nxt = sc->permanent_lets;
-  sc->permanent_lets = g;
+  g->nxt = sc->semipermanent_lets;
+  sc->semipermanent_lets = g;
 }
 
 #if S7_DEBUGGING
@@ -7770,7 +7774,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
       /* not int|float_vector or string because none of their elements are GC-able (so unheap below is ok)
        *   but hash-table and let seem like they need protection? And let does happen via define-class.
        */
-      add_permanent_object(sc, x);
+      add_semipermanent_object(sc, x);
       return;
 
     case T_SYMBOL:
@@ -7782,7 +7786,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
       /* these need to be GC-protected! */
-      add_permanent_object(sc, x);
+      add_semipermanent_object(sc, x);
       return;
 
     default:
@@ -8153,7 +8157,7 @@ static s7_pointer make_semipermanent_slot(s7_scheme *sc, s7_pointer symbol, s7_p
 
 static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len, uint64_t hash, uint32_t location)
 {
-  /* name might not be null-terminated, these are permanent symbols even in s7_gensym; g_gensym handles everything separately */
+  /* name might not be null-terminated, these are semipermanent symbols even in s7_gensym; g_gensym handles everything separately */
   uint8_t *base = alloc_symbol(sc);
   s7_pointer x = (s7_pointer)base;
   s7_pointer str = (s7_pointer)(base + sizeof(s7_cell));
@@ -8187,7 +8191,7 @@ static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len,
       ksym = make_symbol_with_length(sc, (name[0] == ':') ? (char *)(name + 1) : name, len - 1);
       keyword_set_symbol(x, ksym);
       set_has_keyword(ksym);
-      /* the keyword symbol needs to be permanent (not a gensym) else we have to laboriously gc-protect it */
+      /* the keyword symbol needs to be semipermanent (not a gensym) else we have to laboriously gc-protect it */
       if ((is_gensym(ksym)) &&
 	  (in_heap(ksym)))
 	remove_gensym_from_heap(sc, ksym);
@@ -8864,19 +8868,19 @@ static s7_pointer make_semipermanent_let(s7_scheme *sc, s7_pointer vars)
   let_set_id(let, ++sc->let_number);
   let_set_outlet(let, sc->curlet);
   slot = make_semipermanent_slot(sc, caar(vars), sc->F);
-  add_permanent_let_or_slot(sc, slot);
+  add_semipermanent_let_or_slot(sc, slot);
   symbol_set_local_slot(caar(vars), sc->let_number, slot);
   let_set_slots(let, slot);
   for (s7_pointer var = cdr(vars); is_pair(var); var = cdr(var))
     {
       s7_pointer last_slot = slot;
       slot = make_semipermanent_slot(sc, caar(var), sc->F);
-      add_permanent_let_or_slot(sc, slot);
+      add_semipermanent_let_or_slot(sc, slot);
       symbol_set_local_slot(caar(var), sc->let_number, slot);
       slot_set_next(last_slot, slot);
     }
   slot_set_next(slot, slot_end(sc));
-  add_permanent_let_or_slot(sc, let); /* need to mark outlet and maybe slot values */
+  add_semipermanent_let_or_slot(sc, let); /* need to mark outlet and maybe slot values */
   return(let);
 }
 
@@ -9989,6 +9993,7 @@ static s7_pointer g_let_set(s7_scheme *sc, s7_pointer args)
   if (!is_pair(cdr(args))) /* (let ((a 123.0)) (define (f) (set! (let-ref) a)) (catch #t f (lambda args #f)) (f)) */
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->let_set_symbol, sc->code));
+
   return(s7_let_set(sc, car(args), cadr(args), caddr(args)));
 }
 
@@ -10962,7 +10967,7 @@ void s7_define(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer valu
   else
     {
       s7_make_slot(sc, let, symbol, value); /* I think this means C code can override "constant" defs */
-      /* if let is sc->nil or rootlet, s7_make_slot makes a permanent_slot */
+      /* if let is sc->nil or rootlet, s7_make_slot makes a semipermanent_slot */
       if ((let == sc->shadow_rootlet) &&
 	  (!is_slot(global_slot(symbol))))
 	{
@@ -26603,10 +26608,11 @@ static s7_pointer g_string_set(s7_scheme *sc, s7_pointer args)
   char *str;
   s7_int ind;
 
+#if 0
   if (!is_pair(cdr(args))) /* (let () (define (func) (set! (str) "asdf")) (catch #t func (lambda args #f)) (func)) */
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->string_set_symbol, sc->code));
-
+#endif
   if (!is_mutable_string(strng))
     return(mutable_method_or_bust(sc, strng, sc->string_set_symbol, args, sc->type_names[T_STRING], 1));
   index = cadr(args);
@@ -36443,7 +36449,7 @@ static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b)
   return(x);
 }
 
-static s7_pointer permanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type)
+static s7_pointer semipermanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type)
 {
   s7_pointer x = alloc_pointer(sc);
   set_full_type(x, type | T_UNHEAP);
@@ -36452,11 +36458,11 @@ static s7_pointer permanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint
   return(x);
 }
 
-static s7_pointer permanent_list(s7_scheme *sc, s7_int len)
+static s7_pointer semipermanent_list(s7_scheme *sc, s7_int len)
 {
   s7_pointer p = sc->nil;
   for (s7_int j = 0; j < len; j++)
-    p = permanent_cons(sc, sc->nil, p, T_PAIR | T_IMMUTABLE);
+    p = semipermanent_cons(sc, sc->nil, p, T_PAIR | T_IMMUTABLE);
   return(p);
 }
 
@@ -36467,7 +36473,7 @@ s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...)
   s7_pointer res = sc->nil;
 
   for (i = 0; i < len; i++)
-    res = permanent_cons(sc, sc->nil, res, T_PAIR | T_IMMUTABLE);
+    res = semipermanent_cons(sc, sc->nil, res, T_PAIR | T_IMMUTABLE);
   va_start(ap, len);
   i = 0;
   for (s7_pointer p = res; is_pair(p); p = cdr(p), i++)
@@ -36487,7 +36493,7 @@ s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int 
   s7_pointer p, res = sc->nil, back = NULL, end = NULL;
 
   for (i = 0; i < len; i++)
-    res = permanent_cons(sc, sc->nil, res, T_PAIR | T_IMMUTABLE);
+    res = semipermanent_cons(sc, sc->nil, res, T_PAIR | T_IMMUTABLE);
   va_start(ap, len);
   for (p = res, i = 0; is_pair(p); p = cdr(p), i++)
     {
@@ -37141,11 +37147,11 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
 
   if (!is_mutable_pair(lst))
     return(mutable_method_or_bust(sc, lst, sc->list_set_symbol, set_ulist_1(sc, lst, args), sc->type_names[T_PAIR], 1));
-
+#if 0
   if (!is_pair(args)) /* (let ((v (list 1 2))) (define (func) (set! (v) (list 1))) (catch #t func (lambda args #f)) (func)) */
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->list_set_symbol, sc->code));
-
+#endif
   ind = car(args);
   if ((arg_num > 2) && (is_null(cdr(args))))
     {
@@ -38757,7 +38763,7 @@ static s7_pointer make_safe_list(s7_scheme *sc, s7_int num_args)
     {
       sc->current_safe_list = num_args;
       if (!is_pair(sc->safe_lists[num_args]))
-	sc->safe_lists[num_args] = permanent_list(sc, num_args);
+	sc->safe_lists[num_args] = semipermanent_list(sc, num_args);
       if (!list_is_in_use(sc->safe_lists[num_args]))
 	{
 	  set_list_in_use(sc->safe_lists[num_args]);
@@ -44491,10 +44497,11 @@ static s7_pointer g_hash_table_set(s7_scheme *sc, s7_pointer args)
   s7_pointer table = car(args);
   if (!is_mutable_hash_table(table))
     return(mutable_method_or_bust(sc, table, sc->hash_table_set_symbol, args, sc->type_names[T_HASH_TABLE], 1));
-
+#if 0
   if (!is_pair(cdr(args))) /* (let ((v (hash-table 'a 1))) (define (func) (set! (v) (hash-table 'b 1))) (catch #t func (lambda args #f)) (func)) */
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->hash_table_set_symbol, sc->code));
+#endif
   return(s7_hash_table_set(sc, table, cadr(args), caddr(args)));
 }
 
@@ -44815,7 +44822,7 @@ static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, 
   return(x);
 }
 
-static c_proc_t *alloc_permanent_function(s7_scheme *sc)
+static c_proc_t *alloc_semipermanent_function(s7_scheme *sc)
 {
   #define ALLOC_FUNCTION_SIZE 256
   if (sc->alloc_function_k == ALLOC_FUNCTION_SIZE)
@@ -44830,7 +44837,7 @@ static c_proc_t *alloc_permanent_function(s7_scheme *sc)
 s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function f, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer x = alloc_pointer(sc);
-  x = make_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_permanent_function(sc));
+  x = make_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_semipermanent_function(sc));
   unheap(sc, x);
   return(x);
 }
@@ -45176,7 +45183,7 @@ s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_functi
   s7_pointer func = s7_make_function_star(sc, name, fnc, arglist, doc);
   set_full_type(func, full_type(func) | T_SAFE_PROCEDURE);   /* don't step on the c_func_has_simple_defaults flag */
   if (is_c_function_star(func))                        /* thunk -> c_function */
-    c_function_call_args(func) = permanent_list(sc, c_function_optional_args(func));
+    c_function_call_args(func) = semipermanent_list(sc, c_function_optional_args(func));
   return(func);
 }
 
@@ -51495,16 +51502,15 @@ static void init_catchers(void)
 /* -------------------------------- throw -------------------------------- */
 static s7_pointer g_throw(s7_scheme *sc, s7_pointer args)
 {
-  #define H_throw "(throw tag . info) is like (error ...) but it does not affect the owlet. \
+  #define H_throw "(throw tag . info) is like (error ...) but it does not affect owlet. \
 It looks for an existing catch with a matching tag, and jumps to it if found.  Otherwise it raises an error."
   #define Q_throw s7_make_circular_signature(sc, 1, 2, sc->values_symbol, sc->T)
 
   bool ignored_flag = false;
   s7_pointer type = car(args), info = cdr(args);
+  gc_protect_via_stack(sc, args); /* type can be anything: (throw (list 1 2 3) (make-list 512)), sc->w not good here */
 
-  set_car(sc->elist_7, type); /* GC protection? type can be anything: (throw (list 1 2 3) (make-list 512)), sc->w not good here */
-  sc->value = info;
-  for (int64_t i = current_stack_top(sc) - 1; i >= 3; i -= 4) /* look for a catcher */
+  for (int64_t i = current_stack_top(sc) - 5; i >= 3; i -= 4) /* look for a catcher */
     {
       catch_function_t catcher = catchers[stack_op(sc->stack, i)];
       if ((catcher) &&
@@ -51513,7 +51519,6 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 	  if (sc->longjmp_ok) LongJmp(*(sc->goto_start), THROW_JUMP);
 	  return(sc->value);
 	}}
-
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
   error_nr(sc, make_symbol_with_length(sc, "uncaught-throw", 14),
@@ -57573,7 +57578,7 @@ static void fx_tree(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_pointer 
 }
 
 /* -------------------------------------------------------------------------------- */
-static opt_funcs_t *alloc_permanent_opt_func(s7_scheme *sc)
+static opt_funcs_t *alloc_semipermanent_opt_func(s7_scheme *sc)
 {
   if (sc->alloc_opt_func_k == ALLOC_FUNCTION_SIZE)
     {
@@ -57611,7 +57616,7 @@ static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func
 		    __func__, __LINE__, display(f), p->typ, o_names[p->typ], typ, o_names[typ]);
 	}
 #endif
-  op = alloc_permanent_opt_func(sc);
+  op = alloc_semipermanent_opt_func(sc);
   op->typ = typ;
   op->func = func;
   op->next = c_function_opt_data(f);
@@ -74970,7 +74975,7 @@ static void op_let_na_old(s7_scheme *sc)
   let_set_outlet(let, sc->curlet);
   for (s7_pointer p = cadr(sc->code); is_pair(p); p = cdr(p), slot = next_slot(slot))
     {
-      /* GC protected because it's a permanent let? or perhaps use sc->args? */
+      /* GC protected because it's a semipermanent let? or perhaps use sc->args? */
       slot_set_value(slot, fx_call(sc, cdar(p)));
       symbol_set_local_slot_unincremented(slot_symbol(slot), id, slot);
     }
@@ -78074,9 +78079,14 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 
 static bool op_set_opsq_a(s7_scheme *sc)        /* (set! (symbol) fxable) */
 {
-  s7_pointer value, code = cdr(sc->code);
+  s7_pointer setf, value, code = cdr(sc->code);
   s7_pointer obj = lookup_checked(sc, caar(code));
-  s7_pointer setf = setter_p_pp(sc, obj, sc->curlet);
+
+  if ((is_sequence(obj)) && (!is_c_object(obj)))
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_3(sc, wrap_string(sc, "set!: not enough arguments for ~S: ~S", 37), caar(code), sc->code));
+
+  setf = setter_p_pp(sc, obj, sc->curlet);
   if (is_any_macro(setf))
     {
       sc->code = setf;
@@ -79778,7 +79788,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		      (do_is_safe(sc, body, car(v), sc->nil, &has_set)))
 		    {
 		      pair_set_syntax_op(form, OP_SAFE_DO);          /* safe_do: body is safe, step by 1 */
-		      /* no permanent let here because apparently do_is_safe accepts recursive calls? */
+		      /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
 		      if ((!has_set) &&
 			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			{
@@ -91724,7 +91734,7 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, sc->error_history, "sc->error_history");
 #endif
 
-  for (gc_obj_t *g = sc->permanent_objects; g; g = (gc_obj_t *)(g->nxt))
+  for (gc_obj_t *g = sc->semipermanent_objects; g; g = (gc_obj_t *)(g->nxt))
     mark_holdee(NULL, g->p, "permanent object");
 
   for (s7_int i = 0; i < sc->protected_objects_size; i++)
@@ -91933,7 +91943,7 @@ static noreturn void s7_let_out_of_range_error_nr(s7_scheme *sc, s7_pointer call
 
 static s7_int s7_let_length(void) {return(SL_NUM_FIELDS - 1);}
 
-static s7_pointer make_s7_let(s7_scheme *sc)  /* *s7* is permanent -- 20-May-21 */
+static s7_pointer make_s7_let(s7_scheme *sc)  /* *s7* is semipermanent -- 20-May-21 */
 {
   s7_pointer slot1 = make_semipermanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_let_set_fallback, 3, 0, false, "*s7* writer"));
   s7_pointer slot2 = make_semipermanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_let_ref_fallback, 2, 0, false, "*s7* reader"));
@@ -92018,13 +92028,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "small_ints"),
 			     cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->permanent_cells),
-										  kmg(sc, sc->permanent_cells * sizeof(s7_cell))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->semipermanent_cells),
+										  kmg(sc, sc->semipermanent_cells * sizeof(s7_cell))));
   {
     gc_obj_t *g;
-    for (i = 0, g = sc->permanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
+    for (i = 0, g = sc->semipermanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects"), make_integer(sc, i));
-    for (i = 0, g = sc->permanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
+    for (i = 0, g = sc->semipermanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets"), make_integer(sc, i));
   }
 
@@ -92045,7 +92055,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   if (is_pair(sc->w))
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
   sc->w = sc->nil;
-  /* same for permanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
+  /* same for semipermanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
 			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->protected_objects_free_list_loc),
@@ -92220,7 +92230,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     sc->w = sc->nil;
     add_slot_unchecked_with_id(sc, mu_let,
 			       make_symbol(sc, "approximate-s7-size"),
-			       kmg(sc, ((sc->permanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
+			       kmg(sc, ((sc->semipermanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
 				   ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
 				   len + hlen + (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
   }
@@ -92474,11 +92484,11 @@ static void sl_set_history_size(s7_scheme *sc, s7_int iv)
       s7_pointer next1 = cdr(sc->eval_history1);
       s7_pointer next2 = cdr(sc->eval_history2);
       s7_pointer next3 = cdr(sc->history_pairs);
-      set_cdr(sc->eval_history1, permanent_list(sc, iv - sc->true_history_size));
-      set_cdr(sc->eval_history2, permanent_list(sc, iv - sc->true_history_size));
-      set_cdr(sc->history_pairs, permanent_list(sc, iv - sc->true_history_size));
-      for (p3 = cdr(sc->history_pairs); is_pair(cdr(p3)); p3 = cdr(p3)) set_car(p3, permanent_list(sc, 1));
-      set_car(p3, permanent_list(sc, 1));
+      set_cdr(sc->eval_history1, semipermanent_list(sc, iv - sc->true_history_size));
+      set_cdr(sc->eval_history2, semipermanent_list(sc, iv - sc->true_history_size));
+      set_cdr(sc->history_pairs, semipermanent_list(sc, iv - sc->true_history_size));
+      for (p3 = cdr(sc->history_pairs); is_pair(cdr(p3)); p3 = cdr(p3)) set_car(p3, semipermanent_list(sc, 1));
+      set_car(p3, semipermanent_list(sc, 1));
       set_cdr(p3, next3);
       for (p1 = sc->eval_history1, p2 = sc->eval_history2; is_pair(cdr(p1)); p1 = cdr(p1), p2 = cdr(p2));
       set_cdr(p1, next1);
@@ -93744,7 +93754,7 @@ static void init_wrappers(s7_scheme *sc)
   #define NUM_INTEGER_WRAPPERS 4
   #define NUM_REAL_WRAPPERS 4
 
-  sc->integer_wrappers = permanent_list(sc, NUM_INTEGER_WRAPPERS);
+  sc->integer_wrappers = semipermanent_list(sc, NUM_INTEGER_WRAPPERS);
   for (cp = sc->integer_wrappers, qp = sc->integer_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
     {
       s7_pointer p = alloc_pointer(sc);
@@ -93754,7 +93764,7 @@ static void init_wrappers(s7_scheme *sc)
     }
   cdr(qp) = sc->integer_wrappers;
 
-  sc->real_wrappers = permanent_list(sc, NUM_REAL_WRAPPERS);
+  sc->real_wrappers = semipermanent_list(sc, NUM_REAL_WRAPPERS);
   for (cp = sc->real_wrappers, qp = sc->real_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
     {
       s7_pointer p = alloc_pointer(sc);
@@ -93764,7 +93774,7 @@ static void init_wrappers(s7_scheme *sc)
     }
   cdr(qp) = sc->real_wrappers;
 
-  sc->string_wrappers = permanent_list(sc, NUM_STRING_WRAPPERS);
+  sc->string_wrappers = semipermanent_list(sc, NUM_STRING_WRAPPERS);
   for (cp = sc->string_wrappers, qp = sc->string_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
     {
       s7_pointer p = alloc_pointer(sc);
@@ -94062,16 +94072,16 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->owlet = init_owlet(sc);
 
-  sc->wrong_type_arg_info = permanent_list(sc, 6);
+  sc->wrong_type_arg_info = semipermanent_list(sc, 6);
   set_car(sc->wrong_type_arg_info, make_semipermanent_string(sc, "~A ~:D argument, ~S, is ~A but should be ~A"));
 
-  sc->sole_arg_wrong_type_info = permanent_list(sc, 5);
+  sc->sole_arg_wrong_type_info = semipermanent_list(sc, 5);
   set_car(sc->sole_arg_wrong_type_info, make_semipermanent_string(sc, "~A argument, ~S, is ~A but should be ~A"));
 
-  sc->out_of_range_info = permanent_list(sc, 5);
+  sc->out_of_range_info = semipermanent_list(sc, 5);
   set_car(sc->out_of_range_info, make_semipermanent_string(sc, "~A ~:D argument, ~S, is out of range (~A)"));
 
-  sc->sole_arg_out_of_range_info = permanent_list(sc, 4);
+  sc->sole_arg_out_of_range_info = semipermanent_list(sc, 4);
   set_car(sc->sole_arg_out_of_range_info, make_semipermanent_string(sc, "~A argument, ~S, is out of range (~A)"));
 
   sc->gc_off = false;
@@ -94762,7 +94772,7 @@ s7_scheme *s7_init(void)
   sc->saved_pointers_size = INITIAL_SAVED_POINTERS_SIZE;
 
   init_gc_caches(sc);
-  sc->permanent_cells = 0;
+  sc->semipermanent_cells = 0;
   sc->alloc_pointer_k = ALLOC_POINTER_SIZE;
   sc->alloc_pointer_cells = NULL;
   sc->alloc_big_pointer_k = ALLOC_BIG_POINTER_SIZE;
@@ -94819,18 +94829,18 @@ s7_scheme *s7_init(void)
   let_set_id(sc->nil, -1);
   unique_cdr(sc->unspecified) = sc->unspecified;
 
-  sc->t1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->t2_2 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->t2_1 = permanent_cons(sc, sc->nil, sc->t2_2, T_PAIR | T_IMMUTABLE);
-  sc->t3_3 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->t3_2 = permanent_cons(sc, sc->nil, sc->t3_3, T_PAIR | T_IMMUTABLE);
-  sc->t3_1 = permanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
-  sc->t4_1 = permanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
-  sc->u1_1 = permanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE); /* ulist */
+  sc->t1_1 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t2_2 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t2_1 = semipermanent_cons(sc, sc->nil, sc->t2_2, T_PAIR | T_IMMUTABLE);
+  sc->t3_3 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t3_2 = semipermanent_cons(sc, sc->nil, sc->t3_3, T_PAIR | T_IMMUTABLE);
+  sc->t3_1 = semipermanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
+  sc->t4_1 = semipermanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
+  sc->u1_1 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE); /* ulist */
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
-    sc->safe_lists[i] = permanent_list(sc, i);
+    sc->safe_lists[i] = semipermanent_list(sc, i);
   for (i = NUM_SAFE_PRELISTS; i < NUM_SAFE_LISTS; i++)
     sc->safe_lists[i] = sc->nil;
   sc->current_safe_list = 0;
@@ -94841,15 +94851,15 @@ s7_scheme *s7_init(void)
 
   sc->code = sc->nil;
 #if WITH_HISTORY
-  sc->eval_history1 = permanent_list(sc, DEFAULT_HISTORY_SIZE);
-  sc->eval_history2 = permanent_list(sc, DEFAULT_HISTORY_SIZE);
-  sc->history_pairs = permanent_list(sc, DEFAULT_HISTORY_SIZE);
-  sc->history_sink = permanent_list(sc, 1);
+  sc->eval_history1 = semipermanent_list(sc, DEFAULT_HISTORY_SIZE);
+  sc->eval_history2 = semipermanent_list(sc, DEFAULT_HISTORY_SIZE);
+  sc->history_pairs = semipermanent_list(sc, DEFAULT_HISTORY_SIZE);
+  sc->history_sink = semipermanent_list(sc, 1);
   cdr(sc->history_sink) = sc->history_sink;
   {
     s7_pointer p1, p2, p3;
-    for (p3 = sc->history_pairs; is_pair(cdr(p3)); p3 = cdr(p3)) set_car(p3, permanent_list(sc, 1));
-    set_car(p3, permanent_list(sc, 1));
+    for (p3 = sc->history_pairs; is_pair(cdr(p3)); p3 = cdr(p3)) set_car(p3, semipermanent_list(sc, 1));
+    set_car(p3, semipermanent_list(sc, 1));
     set_cdr(p3, sc->history_pairs);
     for (p1 = sc->eval_history1, p2 = sc->eval_history2; is_pair(cdr(p1)); p1 = cdr(p1), p2 = cdr(p2));
     set_cdr(p1, sc->eval_history1);
@@ -95048,24 +95058,24 @@ s7_scheme *s7_init(void)
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
-  sc->mlist_1 = permanent_list(sc, 1);
-  sc->mlist_2 = permanent_list(sc, 2);
-  sc->plist_1 = permanent_list(sc, 1);
-  sc->plist_2 = permanent_list(sc, 2);
+  sc->mlist_1 = semipermanent_list(sc, 1);
+  sc->mlist_2 = semipermanent_list(sc, 2);
+  sc->plist_1 = semipermanent_list(sc, 1);
+  sc->plist_2 = semipermanent_list(sc, 2);
   sc->plist_2_2 = cdr(sc->plist_2);
-  sc->plist_3 = permanent_list(sc, 3);
-  sc->qlist_2 = permanent_list(sc, 2);
-  sc->qlist_3 = permanent_cons(sc, sc->F, sc->qlist_2, T_PAIR | T_IMMUTABLE);
-  sc->clist_1 = permanent_list(sc, 1);
-  sc->clist_2 = permanent_list(sc, 2);
-  sc->dlist_1 = permanent_list(sc, 1);
-  sc->elist_1 = permanent_cons(sc, sc->F, sc->nil, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_2 = permanent_list(sc, 2); set_is_elist(sc->elist_2);
-  sc->elist_3 = permanent_list(sc, 3); set_is_elist(sc->elist_3);
-  sc->elist_4 = permanent_cons(sc, sc->F, sc->elist_3, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_5 = permanent_cons(sc, sc->F, sc->elist_4, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_6 = permanent_cons(sc, sc->F, sc->elist_5, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_7 = permanent_cons(sc, sc->F, sc->elist_6, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->plist_3 = semipermanent_list(sc, 3);
+  sc->qlist_2 = semipermanent_list(sc, 2);
+  sc->qlist_3 = semipermanent_cons(sc, sc->F, sc->qlist_2, T_PAIR | T_IMMUTABLE);
+  sc->clist_1 = semipermanent_list(sc, 1);
+  sc->clist_2 = semipermanent_list(sc, 2);
+  sc->dlist_1 = semipermanent_list(sc, 1);
+  sc->elist_1 = semipermanent_cons(sc, sc->F, sc->nil, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_2 = semipermanent_list(sc, 2); set_is_elist(sc->elist_2);
+  sc->elist_3 = semipermanent_list(sc, 3); set_is_elist(sc->elist_3);
+  sc->elist_4 = semipermanent_cons(sc, sc->F, sc->elist_3, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_5 = semipermanent_cons(sc, sc->F, sc->elist_4, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_6 = semipermanent_cons(sc, sc->F, sc->elist_5, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_7 = semipermanent_cons(sc, sc->F, sc->elist_6, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
   sc->undefined_identifier_warnings = false;
   sc->undefined_constant_warnings = false;
   sc->wrap_only = make_wrap_only(sc);
@@ -95414,8 +95424,8 @@ void s7_free(s7_scheme *sc)
   {
     gc_obj_t *g, *gnxt;
     heap_block_t *hpnxt;
-    for (g = sc->permanent_lets; g; g = gnxt)    {gnxt = g->nxt; free(g);}
-    for (g = sc->permanent_objects; g; g = gnxt) {gnxt = g->nxt; free(g);}
+    for (g = sc->semipermanent_lets; g; g = gnxt)    {gnxt = g->nxt; free(g);}
+    for (g = sc->semipermanent_objects; g; g = gnxt) {gnxt = g->nxt; free(g);}
     for (heap_block_t *hp = sc->heap_blocks; hp; hp = hpnxt) {hpnxt = hp->next; free(hp);}
   }
 
@@ -95657,7 +95667,7 @@ int main(int argc, char **argv)
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4477
  * tshoot    5525   5447   5183   5056   5056
- * tstr      6880   6342   5488   5131   5137 [g_string_set]
+ * tstr      6880   6342   5488   5131   5137 [g_string_set -- fixed?]
  * tform     5357   5348   5307   5320   5312
  * tnum      6348   6013   5433   5369   5371
  * tlamb     6423   6273   5720   5545   5539
@@ -95685,6 +95695,10 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
  *
- * add s7_free + use to ffitest.c, timing test make/free s7's?  threads.c -> ffitest?
- * set! cdr check?
+ * set! cdr check -- need to revert to old form for string|list|hash-table eventually
+ *   why is optable dot-product in cb.scm slower? int_optimize
+ * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
+ *   y only in copy_any_list!  could be a stack protect instead
+ *   can g_gc clear the temporary "temps" like sc->y?
+ * all c_func* are semipermanent, but might be local? (let () (load "libm.scm") ...)
  */

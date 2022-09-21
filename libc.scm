@@ -611,12 +611,10 @@
                     
                   static s7_pointer g_ftw(s7_scheme *sc, s7_pointer args)
                   {
-                    if (!internal_ftw_sc)
-                      {
-                        internal_ftw_sc = sc;
-                        internal_ftw_arglist = s7_list(sc, 3, s7_nil(sc), s7_nil(sc), s7_nil(sc));
-                        s7_gc_protect(sc, internal_ftw_arglist);
-                      }
+                    /* ftw(file-name, function(path, stat, type), nopenfd=max open dirs) */
+                    internal_ftw_sc = sc;
+                    internal_ftw_arglist = s7_list(sc, 3, s7_nil(sc), s7_nil(sc), s7_nil(sc));
+                    s7_gc_protect_via_stack(sc, internal_ftw_arglist);
                     internal_ftw_closure = s7_cadr(args);
                     return(s7_make_integer(sc, ftw(s7_string(s7_car(args)), internal_ftw_function, s7_integer(s7_caddr(args)))));
                   }")

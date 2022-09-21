@@ -10214,7 +10214,8 @@ void s7_set_begin_hook(s7_scheme *sc, void (*hook)(s7_scheme *sc, bool *val));
 
 <p>s7_init creates a scheme interpreter.  The returned value is the s7_scheme* used by many of the FFI functions.
 s7_quit exits the interpreter.  The memory allocated for it by s7_init is not freed unless you call s7_free.
-(s7_free also frees its s7_scheme* argument).
+(s7_free also frees its s7_scheme* argument, you may need to call s7_quit before s7_free to clean up the C stack,
+and as in multithreaded cases, global variables may need to be reinitialized after calling s7_free).
 s7_repl fires up a REPL.
 s7_is_eq and friends correspond to scheme's eq?, eqv?, equal?, and equivalent?.  s7_provide and s7_is_provided
 add a symbol to the *features* list, or check for its presence there.
