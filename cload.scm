@@ -558,13 +558,13 @@
 	   signatures)
 	  (format p "  }~%~%"))
 
-	(format p "  string_string = s7_make_permanent_string(sc, \"a string\");~%")
-	(format p "  c_pointer_string = s7_make_permanent_string(sc, \"a c-pointer\");~%")
-	(format p "  character_string = s7_make_permanent_string(sc, \"a character\");~%")
-	(format p "  boolean_string = s7_make_permanent_string(sc, \"a boolean\");~%")
-	(format p "  real_string = s7_make_permanent_string(sc, \"a real\");~%")
-	(format p "  complex_string = s7_make_permanent_string(sc, \"a complex number\");~%")
-	(format p "  integer_string = s7_make_permanent_string(sc, \"an integer\");~%")
+	(format p "  string_string = s7_make_semipermanent_string(sc, \"a string\");~%")
+	(format p "  c_pointer_string = s7_make_semipermanent_string(sc, \"a c-pointer\");~%")
+	(format p "  character_string = s7_make_semipermanent_string(sc, \"a character\");~%")
+	(format p "  boolean_string = s7_make_semipermanent_string(sc, \"a boolean\");~%")
+	(format p "  real_string = s7_make_semipermanent_string(sc, \"a real\");~%")
+	(format p "  complex_string = s7_make_semipermanent_string(sc, \"a complex number\");~%")
+	(format p "  integer_string = s7_make_semipermanent_string(sc, \"an integer\");~%")
 
 	(format p "  cur_env = s7_curlet(sc);~%") ; changed from s7_outlet(s7_curlet) 20-Aug-17
 	

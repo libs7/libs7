@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.5"
-#define S7_DATE "22-Sep-2022"
+#define S7_DATE "23-Sep-2022"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 5
 
@@ -254,6 +254,7 @@ s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len
 s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str);
 s7_pointer s7_make_string_wrapper_with_length(s7_scheme *sc, const char *str, s7_int len);
 s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str);         /* make a string that will never be GC'd */
+s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str);     /* for (s7) string permanent within one s7 instance (freed upon s7_free) */
 s7_int s7_string_length(s7_pointer str);                                     /* (string-length str) */
 
 
@@ -901,7 +902,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
- * 16-Sep:    s7_number_to_real_location. s7_wrong_type_error. s7_make_string_wrapper_with_length.
+ * 16-Sep:    s7_number_to_real_location. s7_wrong_type_error. s7_make_string_wrapper_with_length. s7_make_semipermanent_string.
  * 21-Apr:    s7_is_multiple_value.
  * 11-Apr:    removed s7_apply_*.
  * 22-Mar:    s7_eval_with_location.
