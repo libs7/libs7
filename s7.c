@@ -2470,7 +2470,7 @@ static void init_types(void)
 #define slot_clear_has_pending_value(p) clear_type_bit(T_Slt(p), T_HAS_PENDING_VALUE)
 
 #define T_HAS_METHODS                  (1 << (TYPE_BITS + 22))
-#define has_methods(p)                 has_type_bit(T_Ext(p), T_HAS_METHODS)
+#define has_methods(p)                 has_type_bit(T_Pos(p), T_HAS_METHODS) /* display slot hits T_Ext here */
 #define is_openlet(p)                  has_type_bit(T_Let(p), T_HAS_METHODS)
 #define has_active_methods(sc, p)      ((has_type_bit(T_Ext(p), T_HAS_METHODS)) && (sc->has_openlets)) /* g_char #<eof> */
 #define set_has_methods(p)             set_type_bit(T_Met(p), T_HAS_METHODS)
@@ -3104,7 +3104,12 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_symbol(p)                 T_Sym((T_Slt(p))->object.slt.sym)
 #define slot_set_symbol(p, Sym)        (T_Slt(p))->object.slt.sym = T_Sym(Sym)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
+#if S7_DEBUGGING
+static bool slot_check_ok = false;
+#define slot_set_value(p, Val)         do {if ((slot_check_ok) && (is_immutable_slot(p))) fprintf(stderr, "%s = %s\n", display(p), display(Val)); (T_Slt(p))->object.slt.val = T_Nmv(Val);} while (0)
+#else
 #define slot_set_value(p, Val)         (T_Slt(p))->object.slt.val = T_Nmv(Val)
+#endif
 #define slot_set_symbol_and_value(Slot, Symbol, Value) do {slot_set_symbol(Slot, Symbol); slot_set_value(Slot, Value);} while (0)
 #define slot_set_value_with_hook(Slot, Value) \
   do {if (hook_has_functions(sc->rootlet_redefinition_hook)) slot_set_value_with_hook_1(sc, Slot, T_Nmv(Value)); else slot_set_value(Slot, T_Nmv(Value));} while (0)
@@ -5188,7 +5193,7 @@ static s7_pointer check_ref19(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
   check_nref(p, func, line);
-  if (t_ext_p[typ]) fprintf(stderr, "%s%s[%d]: attempt to use %s cell%s\n", BOLD_TEXT, func, line, s7_type_names[typ], UNBOLD_TEXT);
+  if (t_ext_p[typ]) fprintf(stderr, "%s%s[%d]: attempt to use (internal) %s cell%s\n", BOLD_TEXT, func, line, s7_type_names[typ], UNBOLD_TEXT);
   return(p);
 }
 
@@ -7562,10 +7567,9 @@ static void try_to_call_gc(s7_scheme *sc)
 	resize_heap(sc);
     }
 }
-  /* originally I tried to mark each temporary value until I was done with it, but
-   *   that way madness lies... By delaying GC of _every_ %$^#%@ pointer, I can dispense
-   *   with hundreds of individual protections.  So the free_heap's last GC_TEMPS_SIZE
-   *   allocated pointers are protected during the mark sweep.
+  /* originally I tried to mark each temporary value until I was done with it, but that way madness lies... By delaying 
+   *   GC of _every_ %$^#%@ pointer, I can dispense with hundreds of individual protections.  So the free_heap's last
+   *   GC_TEMPS_SIZE allocated pointers are protected during the mark sweep.
    */
 
 static s7_pointer g_gc(s7_scheme *sc, s7_pointer args)
@@ -7588,12 +7592,8 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   set_car(sc->elist_4, sc->nil);
   set_car(sc->elist_5, sc->nil);
   set_car(sc->elist_6, sc->nil);
-  set_car(sc->elist_7, sc->nil);
-  set_car(sc->dlist_1, sc->nil);
-  /* ulist = sc->u1? dlist unneeded here? what about w|x|y|x and temp*? */
-  
-  sc->y = sc->nil; /* experiment */
-
+  set_car(sc->elist_7, sc->nil); /* clist and dlist are weak references */
+  set_ulist_1(sc, sc->nil, sc->nil);
   if (is_not_null(args))
     {
       if (!is_boolean(car(args)))
@@ -7756,7 +7756,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
 {
   /* global functions are very rarely redefined, so we can remove the function body from the heap when it is defined */
   if (!in_heap(x)) return;
-  if (is_pair(x))
+  if (is_pair(x))   /* all the compute time is here, might be faster to go down a level explicitly */
     {
       s7_pointer p = x;
       do {
@@ -8062,7 +8062,28 @@ static void stack_reset(s7_scheme *sc)
   push_stack_op(sc, OP_EVAL_DONE);
 }
 
+#if S7_DEBUGGING
+static void resize_stack_1(s7_scheme *sc);
+#define resize_stack(Sc) resize_stack_2(Sc, __func__, __LINE__)
+static void resize_stack_2(s7_scheme *sc, const char *func, int line)
+{
+  if ((sc->stack_size * 2) > sc->max_stack_size)
+    {
+      fprintf(stderr, "%s%s[%d]: stack too big, %" ld64 " > %u, trigger: %" ld64 " %s\n",
+	      BOLD_TEXT, func, line,
+	      (s7_int)((intptr_t)(sc->stack_end - sc->stack_start)), sc->stack_size,
+	      (s7_int)((intptr_t)(sc->stack_resize_trigger - sc->stack_start)),
+	      UNBOLD_TEXT);
+      s7_show_stack(sc);
+      abort();
+      if (sc->stop_at_error) abort();
+    }
+  resize_stack_1(sc);
+}
+static void resize_stack_1(s7_scheme *sc)
+#else
 static void resize_stack(s7_scheme *sc)
+#endif
 {
   uint64_t loc = current_stack_top(sc);
   uint32_t new_size = sc->stack_size * 2;
@@ -8090,7 +8111,7 @@ static void resize_stack(s7_scheme *sc)
   if (new_size > sc->max_stack_size)
     error_nr(sc, make_symbol_with_length(sc, "stack-too-big", 13),
 	     set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
-    /* error needs to follow realloc, else error -> catchers in error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
+  /* error needs to follow realloc, else error -> catchers in error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
 }
 
 #define check_stack_size(Sc) do {if (Sc->stack_end >= Sc->stack_resize_trigger) resize_stack(Sc);} while (0)
@@ -11303,7 +11324,7 @@ static s7_pointer copy_any_list(s7_scheme *sc, s7_pointer a)
 #else
   #define wrap_return(W) do {fast = W; W = sc->nil; sc->y = sc->nil; return(fast);} while (0)
 #endif
-  sc->y = a; /* gc_protect_via_stack work here because we're called in copy_stack, I think (trouble is in call/cc stuff) */
+  sc->y = a; /* gc_protect_via_stack doesn't work here because we're called in copy_stack, I think (trouble is in call/cc stuff) */
   sc->w = list_1(sc, car(a));
   p = sc->w;
   while (true)
@@ -13245,8 +13266,9 @@ s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char 
 					   (long_double)big_integer_to_s7_int(sc, mpq_denref(big_ratio(x)))));
     case T_BIG_REAL:    return((s7_double)mpfr_get_d(big_real(x), MPFR_RNDN));
 #endif
+    default:
+      sole_arg_wrong_type_error_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), x, sc->type_names[T_REAL]);
     }
-  sole_arg_wrong_type_error_nr(sc, wrap_string(sc, caller, safe_strlen(caller)), x, sc->type_names[T_REAL]);
   return(0.0);
 }
 
@@ -13263,8 +13285,9 @@ s7_double s7_number_to_real_with_location(s7_scheme *sc, s7_pointer x, s7_pointe
 					   (long_double)big_integer_to_s7_int(sc, mpq_denref(big_ratio(x)))));
     case T_BIG_REAL:    return((s7_double)mpfr_get_d(big_real(x), MPFR_RNDN));
 #endif
+    default: 
+      sole_arg_wrong_type_error_nr(sc, caller, x, sc->type_names[T_REAL]);
     }
-  sole_arg_wrong_type_error_nr(sc, caller, x, sc->type_names[T_REAL]);
   return(0.0);
 }
 
@@ -26583,18 +26606,12 @@ static s7_pointer g_string_set(s7_scheme *sc, s7_pointer args)
   #define H_string_set "(string-set! str index chr) sets the index-th element of the string str to the character chr"
   #define Q_string_set s7_make_signature(sc, 4, sc->is_char_symbol, sc->is_string_symbol, sc->is_integer_symbol, sc->is_char_symbol)
 
-  s7_pointer strng = car(args), c, index;
+  s7_pointer strng = car(args), c, index = cadr(args);
   char *str;
   s7_int ind;
 
-#if 0
-  if (!is_pair(cdr(args))) /* (let () (define (func) (set! (str) "asdf")) (catch #t func (lambda args #f)) (func)) */
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->string_set_symbol, sc->code));
-#endif
   if (!is_mutable_string(strng))
     return(mutable_method_or_bust(sc, strng, sc->string_set_symbol, args, sc->type_names[T_STRING], 1));
-  index = cadr(args);
   if (!s7_is_integer(index))
     return(method_or_bust(sc, index, sc->string_set_symbol, args, sc->type_names[T_INTEGER], 2));
 
@@ -37112,11 +37129,6 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
 
   if (!is_mutable_pair(lst))
     return(mutable_method_or_bust(sc, lst, sc->list_set_symbol, set_ulist_1(sc, lst, args), sc->type_names[T_PAIR], 1));
-#if 0
-  if (!is_pair(args)) /* (let ((v (list 1 2))) (define (func) (set! (v) (list 1))) (catch #t func (lambda args #f)) (func)) */
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->list_set_symbol, sc->code));
-#endif
   ind = car(args);
   if ((arg_num > 2) && (is_null(cdr(args))))
     {
@@ -44462,11 +44474,6 @@ static s7_pointer g_hash_table_set(s7_scheme *sc, s7_pointer args)
   s7_pointer table = car(args);
   if (!is_mutable_hash_table(table))
     return(mutable_method_or_bust(sc, table, sc->hash_table_set_symbol, args, sc->type_names[T_HASH_TABLE], 1));
-#if 0
-  if (!is_pair(cdr(args))) /* (let ((v (hash-table 'a 1))) (define (func) (set! (v) (hash-table 'b 1))) (catch #t func (lambda args #f)) (func)) */
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_3(sc, wrap_string(sc, "~S: not enough arguments: ~S", 28), sc->hash_table_set_symbol, sc->code));
-#endif
   return(s7_hash_table_set(sc, table, cadr(args), caddr(args)));
 }
 
@@ -51182,7 +51189,9 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       s7_pointer catcher = x, error_body, error_args;
       s7_pointer error_func = catch_handler(catcher);
       uint64_t loc = catch_goto_loc(catcher);
-      sc->w = sc->args;
+
+      sc->y = type;
+      sc->value = info;
 
       sc->temp4 = stack_let(sc->stack, i); /* GC protect this, since we're moving the stack top below */
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(catcher));
@@ -67825,18 +67834,6 @@ static Inline void inline_op_map_gather(s7_scheme *sc) /* called thrice in eval,
 
 
 /* -------------------------------- multiple-values -------------------------------- */
-#if S7_DEBUGGING
-#define T_Mut(p) T_Mut_1(p, __func__, __LINE__)
-static s7_pointer T_Mut_1(s7_pointer p, const char *func, int32_t line)
-{
-  if ((is_pair(p)) && ((is_immutable(p)) || (!in_heap(p)))) /* might be nil */
-    fprintf(stderr, "%s[%d]: immutable list: %p\n", func, line, p);
-  return(p);
-}
-#else
-#define T_Mut(p) p
-#endif
-
 static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 {
   int64_t top = current_stack_top(sc) - 1; /* stack_end - stack_start if negative, we're in big trouble */
@@ -67857,7 +67854,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
        */
       sc->w = args;
       for (x = args; is_not_null(cdr(x)); x = cdr(x))
-	stack_args(sc->stack, top) = cons(sc, car(x), T_Mut(stack_args(sc->stack, top)));
+	stack_args(sc->stack, top) = cons(sc, car(x), stack_args(sc->stack, top));
       sc->w = sc->nil;
       return(car(x));
 
@@ -67945,7 +67942,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       if (is_null(cdr(args)))
 	return(car(args));
 
-      stack_args(sc->stack, top) = cons(sc, stack_code(sc->stack, top), T_Mut(stack_args(sc->stack, top)));
+      stack_args(sc->stack, top) = cons(sc, stack_code(sc->stack, top), stack_args(sc->stack, top));
       for (x = args; is_not_null(cddr(x)); x = cdr(x))
 	stack_args(sc->stack, top) = cons(sc, car(x), stack_args(sc->stack, top));
       stack_code(sc->stack, top) = car(x);
@@ -68061,7 +68058,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
        */
       top -= 4;
       for (x = args; is_not_null(cdr(x)); x = cdr(x))
-	stack_args(sc->stack, top) = cons(sc, car(x), T_Mut(stack_args(sc->stack, top)));
+	stack_args(sc->stack, top) = cons(sc, car(x), stack_args(sc->stack, top));
       pop_stack(sc);               /* need GC protection in loop above, so do this afterwards */
       return(car(x));              /* sc->value from OP_READ_LIST point of view */
 
@@ -95244,6 +95241,8 @@ s7_scheme *s7_init(void)
   if (NUM_OPS != 920)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
+
+  slot_check_ok = true;
 #endif
 
   return(sc);
@@ -95660,9 +95659,9 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
- *
- * [set! cdr check -- need to revert to old form for string|list|hash-table eventually]
- * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
- *   can g_gc clear the other temps?
  * all c_func* are semipermanent, but might be local? (let () (load "libm.scm") ...)
+ *
+ * [why is s7_number_to_real_with_caller suddenly expensive?]
+ * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
+ * how are immutable globals getting changed?
  */
