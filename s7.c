@@ -51482,7 +51482,8 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 
   bool ignored_flag = false;
   s7_pointer type = car(args), info = cdr(args);
-  gc_protect_via_stack(sc, args); /* type can be anything: (throw (list 1 2 3) (make-list 512)), sc->w not good here */
+  gc_protect_via_stack(sc, args);
+  /* type can be anything: (throw (list 1 2 3) (make-list 512)), sc->w and sc->value not good here for gc protection */
 
   for (int64_t i = current_stack_top(sc) - 5; i >= 3; i -= 4) /* look for a catcher */
     {
@@ -52212,7 +52213,7 @@ static s7_pointer g_apply(s7_scheme *sc, s7_pointer args)
   sc->code = func;
   sc->args = (is_null(cddr(args))) ? cadr(args) : apply_list_star(sc, cdr(args));
   if (!s7_is_proper_list(sc, sc->args))
-    apply_list_error_nr(sc, args);
+    apply_list_error_nr(sc, sc->args);
 
   /* (define imp (immutable! (cons 0 (immutable! (cons 1 (immutable! (cons 2 ())))))))
    * (define (fop4 x y) (apply x y))
@@ -78058,6 +78059,9 @@ static bool op_set_opsq_a(s7_scheme *sc)        /* (set! (symbol) fxable) */
   value = fx_call(sc, cdr(code));
   if (is_c_function(setf))
     {
+      if (c_function_min_args(setf) > 1)
+	error_nr(sc, sc->wrong_number_of_args_symbol,
+		 set_elist_3(sc, wrap_string(sc, "set!: not enough arguments: (~A ~S)", 35), setf, value));
       sc->value = c_function_call(setf)(sc, with_list_t1(value));
       return(false);
     }
@@ -78071,6 +78075,12 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
   s7_pointer index, value, code = cdr(sc->code);
   s7_pointer obj = lookup_checked(sc, caar(code));
   bool result;
+
+  if ((!is_pair(cddr(code))) && (caar(code) == sc->let_ref_symbol))
+    /* (let () (define (func) (catch #t (lambda () (set! (let-ref (list 1)) 1)) (lambda args 'error))) (func) (func)) */
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_3(sc, wrap_string(sc, "set!: not enough arguments for ~S: ~S", 37), caar(code), sc->code));
+    
   if (could_be_macro_setter(obj))
     {
       s7_pointer setf = setter_p_pp(sc, obj, sc->curlet);
@@ -79216,187 +79226,186 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
       if (is_pair(expr))
 	{
 	  s7_pointer x = car(expr);
-	  if ((is_symbol(x)) || (is_safe_c_function(x)))
-	    {
-	      if (is_symbol_and_syntactic(x))
-		{
-		  s7_pointer func = global_value(x), vars, cp;
-		  opcode_t op = syntax_opcode(func);
-		  switch (op)
-		    {
-		    case OP_MACROEXPAND:
-		      return(false);
 
-		    case OP_QUOTE:
-		      if ((!is_pair(cdr(expr))) || (!is_null(cddr(expr))))  /* (quote . 1) or (quote 1 2) etc */
-			return(false);
-		      break;
-
-		    case OP_LET:    case OP_LET_STAR:
-		    case OP_LETREC: case OP_LETREC_STAR:
-		      if ((!is_pair(cdr(expr))) ||
-			  (!is_list(cadr(expr))) ||
-			  (!is_pair(cddr(expr))))
-			return(false);
-		      cp = var_list;
-		      for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
-			{
-			  s7_pointer var;
-			  if (!is_pair(car(vars))) return(false);
-			  var = caar(vars);
-			  if (direct_memq(var, ((op == OP_LET) || (op == OP_LETREC)) ? cp : var_list)) return(false);
-			  if ((!is_symbol(var)) || (is_keyword(var))) return(false);
-			  cp = cons(sc, var, cp);
-			  sc->x = cp;
-			}
-		      sc->x = sc->nil;
-		      if (!do_is_safe(sc, cddr(expr), stepper, cp, has_set)) return(false);
-		      break;
-
-		    case OP_DO:
-		      if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (do) or (do (...)) */
-			return(false);
-		      cp = var_list;
-		      for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
-			{
-			  s7_pointer var;
-			  if (!is_pair(car(vars))) return(false);
-			  var = caar(vars);
-			  if ((direct_memq(var, cp)) || (var == stepper)) return(false);
-			  cp = cons(sc, var, cp);
-			  sc->x = cp;
-			  if ((is_pair(cdar(vars))) &&
-			      (!do_is_safe(sc, cdar(vars), stepper, cp, has_set)))
-			    {
-			      sc->x = sc->nil;
-			      return(false);
-			    }}
-		      sc->x = sc->nil;
-		      if (!do_is_safe(sc, caddr(expr), stepper, cp, has_set)) return(false);
-		      if ((is_pair(cdddr(expr))) &&
-			  (!do_is_safe(sc, cdddr(expr), stepper, cp, has_set)))
-			return(false);
-		      break;
-
-		    case OP_SET:
-		      {
-			s7_pointer settee;
-			if (!is_pair(cdr(expr)))            /* (set!) */
-			  return(false);
-			settee = cadr(expr);
-			if (!is_symbol(settee))             /* (set! (...) ...) which is tricky due to setter functions/macros */
-			  {
-			    s7_pointer setv;
-			    if ((!is_pair(settee)) || (!is_symbol(car(settee))))
-			      return(false);
-			    setv = lookup_unexamined(sc, car(settee));
-			    if (!((setv) &&
-				  ((is_sequence(setv)) ||
-				   ((is_c_function(setv)) &&
-				    (is_safe_procedure(c_function_setter(setv)))))))
-			      return(false);
-			    if (has_set) (*has_set) = true;
-			  }
-			else
-			  {
-			    if ((is_pair(caddr(sc->code))) &&        /* sc->code = do-form (formerly (cdr(do-form)) causing a bug here) */
-				(is_pair(caaddr(sc->code))))
-			      {
-				bool res;
-				set_match_symbol(settee);
-				res = tree_match(caaddr(sc->code));  /* (set! end ...) in some fashion */
-				clear_match_symbol(settee);
-				if (res) return(false);
-			      }
-			    if ((has_set) && (!direct_memq(cadr(expr), var_list))) /* is some non-local variable being set? */
-			      (*has_set) = true;
-			  }
-			if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set)) return(false);
-			if (!safe_stepper_expr(expr, stepper))      /* is step var's value used as the stored value by set!? */
-			  return(false);
-		      }
-		      break;
-
-		    case OP_LET_TEMPORARILY:
-		      if ((!is_pair(cdr(expr))) ||
-			  (!is_pair(cadr(expr))) ||
-			  (!is_pair(cddr(expr))))
-			return(false);
-		      for (cp = cadr(expr); is_pair(cp); cp = cdr(cp))
-			if ((!is_pair(car(cp))) ||
-			    (!is_pair(cdar(cp))) ||
-			    (!do_is_safe(sc, cdar(cp), stepper, var_list, has_set)))
-			  return(false);
-		      if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set)) return(false);
-		      break;
-
-		    case OP_COND:
-		      for (cp = cdr(expr); is_pair(cp); cp = cdr(cp))
-			if (!do_is_safe(sc, car(cp), stepper, var_list, has_set))
-			  return(false);
-		      break;
-
-		    case OP_CASE:
-		      if ((!is_pair(cdr(expr))) ||
-			  (!do_is_safe(sc, cadr(expr), stepper, var_list, has_set)))
-			return(false);
-		      for (cp = cddr(expr); is_pair(cp); cp = cdr(cp))
-			if ((!is_pair(car(cp))) ||      /* (case x #(123)...) */
-			    (!do_is_safe(sc, cdar(cp), stepper, var_list, has_set)))
-			  return(false);
-		      break;
-
-		    case OP_IF: case OP_WHEN: case OP_UNLESS:
-		    case OP_AND: case OP_OR: case OP_BEGIN:
-		    case OP_WITH_BAFFLE:
-		      if (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set))
-			return(false);
-		      break;
-
-		    case OP_WITH_LET:
-		      return(true); /* ?? did I mean false here?? */
-
-		    default:
-		      return(false);
-		    }} /* is_syntax(x=car(expr)) */
-	      else
-		{
-		  /* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
-		  if ((!is_optimized(expr)) ||
-		      (optimize_op(expr) == OP_UNKNOWN_NP) ||
-		      (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set)))
-		    return(false);
-
-		  if ((is_symbol(x)) && (is_setter(x)))             /* "setter" includes stuff like cons and vector -- x is a symbol */
-		    {
-		      /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
-		       *   similarly (vector-set! v 0 i) etc
-		       */
-		      if (is_null(cdr(expr)))                       /* (vector) for example */
-			return((x == sc->vector_symbol) || (x == sc->list_symbol) || (x == sc->string_symbol));
-
-		      if ((has_set) &&
-			  (!direct_memq(cadr(expr), var_list)) &&   /* non-local is being changed */
-			  ((cadr(expr) == stepper) ||               /* stepper is being set? */
-			   (!is_pair(cddr(expr))) ||
-			   (!is_pair(cdddr(expr))) ||
-			   (is_pair(cddddr(expr))) ||
-			   ((x == sc->hash_table_set_symbol) && (caddr(expr) == stepper)) ||
-			   (cadddr(expr) == stepper) ||             /* used to check is_symbol here and above but that's unnecessary */
-			   ((is_pair(cadddr(expr))) && (s7_tree_memq(sc, stepper, cadddr(expr))))))
-			(*has_set) = true;
-
-		      if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
-			return(false);
-		      if (!safe_stepper_expr(expr, stepper))
-			return(false);
-		    }}} /* is_symbol(x=car(expr)) */
-	  else return(false);
-	  /* car(expr) ("x") is not a symbol: ((mus-data loc) chan) for example
-	   *   but that's actually safe since it's just in effect vector-ref
-	   *   there are several examples in dlocsig: ((group-speakers group) i) etc
+	  if ((!is_symbol(x)) && (!is_safe_c_function(x)))
+	    return(false);
+	  /* car(expr) ("x") is not a symbol: ((mus-data loc) chan) for example, but that's actually safe since it's 
+	   * just in effect vector-ref, there are several examples in dlocsig: ((group-speakers group) i) etc
 	   */
-	}}
+
+	  if (is_symbol_and_syntactic(x))
+	    {
+	      s7_pointer func = global_value(x), vars, cp;
+	      opcode_t op = syntax_opcode(func);
+	      switch (op)
+		{
+		case OP_MACROEXPAND:
+		  return(false);
+		  
+		case OP_QUOTE:
+		  if ((!is_pair(cdr(expr))) || (!is_null(cddr(expr))))  /* (quote . 1) or (quote 1 2) etc */
+		    return(false);
+		  break;
+		  
+		case OP_LET:    case OP_LET_STAR:
+		case OP_LETREC: case OP_LETREC_STAR:
+		  if ((!is_pair(cdr(expr))) ||
+		      (!is_list(cadr(expr))) ||
+		      (!is_pair(cddr(expr))))
+		    return(false);
+		  cp = var_list;
+		  for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
+		    {
+		      s7_pointer var;
+		      if (!is_pair(car(vars))) return(false);
+		      var = caar(vars);
+		      if (direct_memq(var, ((op == OP_LET) || (op == OP_LETREC)) ? cp : var_list)) return(false);
+		      if ((!is_symbol(var)) || (is_keyword(var))) return(false);
+		      cp = cons(sc, var, cp);
+		      sc->x = cp;
+		    }
+		  sc->x = sc->nil;
+		  if (!do_is_safe(sc, cddr(expr), stepper, cp, has_set)) return(false);
+		  break;
+		  
+		case OP_DO:
+		  if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (do) or (do (...)) */
+		    return(false);
+		  cp = var_list;
+		  for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
+		    {
+		      s7_pointer var;
+		      if (!is_pair(car(vars))) return(false);
+		      var = caar(vars);
+		      if ((direct_memq(var, cp)) || (var == stepper)) return(false);
+		      cp = cons(sc, var, cp);
+		      sc->x = cp;
+		      if ((is_pair(cdar(vars))) &&
+			  (!do_is_safe(sc, cdar(vars), stepper, cp, has_set)))
+			{
+			  sc->x = sc->nil;
+			  return(false);
+			}}
+		  sc->x = sc->nil;
+		  if (!do_is_safe(sc, caddr(expr), stepper, cp, has_set)) return(false);
+		  if ((is_pair(cdddr(expr))) &&
+		      (!do_is_safe(sc, cdddr(expr), stepper, cp, has_set)))
+		    return(false);
+		  break;
+		  
+		case OP_SET:
+		  {
+		    s7_pointer settee;
+		    if (!is_pair(cdr(expr)))            /* (set!) */
+		      return(false);
+		    settee = cadr(expr);
+		    if (!is_symbol(settee))             /* (set! (...) ...) which is tricky due to setter functions/macros */
+		      {
+			s7_pointer setv;
+			if ((!is_pair(settee)) || (!is_symbol(car(settee))))
+			  return(false);
+			setv = lookup_unexamined(sc, car(settee));
+			if (!((setv) &&
+			      ((is_sequence(setv)) ||
+			       ((is_c_function(setv)) &&
+				(is_safe_procedure(c_function_setter(setv)))))))
+			  return(false);
+			if (has_set) (*has_set) = true;
+		      }
+		    else
+		      {
+			if ((is_pair(caddr(sc->code))) &&        /* sc->code = do-form (formerly (cdr(do-form)) causing a bug here) */
+			    (is_pair(caaddr(sc->code))))
+			  {
+			    bool res;
+			    set_match_symbol(settee);
+			    res = tree_match(caaddr(sc->code));  /* (set! end ...) in some fashion */
+			    clear_match_symbol(settee);
+			    if (res) return(false);
+			  }
+			if ((has_set) && (!direct_memq(cadr(expr), var_list))) /* is some non-local variable being set? */
+			  (*has_set) = true;
+		      }
+		    if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set)) return(false);
+		    if (!safe_stepper_expr(expr, stepper))      /* is step var's value used as the stored value by set!? */
+		      return(false);
+		  }
+		  break;
+		  
+		case OP_LET_TEMPORARILY:
+		  if ((!is_pair(cdr(expr))) ||
+		      (!is_pair(cadr(expr))) ||
+		      (!is_pair(cddr(expr))))
+		    return(false);
+		  for (cp = cadr(expr); is_pair(cp); cp = cdr(cp))
+		    if ((!is_pair(car(cp))) ||
+			(!is_pair(cdar(cp))) ||
+			(!do_is_safe(sc, cdar(cp), stepper, var_list, has_set)))
+		      return(false);
+		  if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set)) return(false);
+		  break;
+		  
+		case OP_COND:
+		  for (cp = cdr(expr); is_pair(cp); cp = cdr(cp))
+		    if (!do_is_safe(sc, car(cp), stepper, var_list, has_set))
+		      return(false);
+		  break;
+		  
+		case OP_CASE:
+		  if ((!is_pair(cdr(expr))) ||
+		      (!do_is_safe(sc, cadr(expr), stepper, var_list, has_set)))
+		    return(false);
+		  for (cp = cddr(expr); is_pair(cp); cp = cdr(cp))
+		    if ((!is_pair(car(cp))) ||      /* (case x #(123)...) */
+			(!do_is_safe(sc, cdar(cp), stepper, var_list, has_set)))
+		      return(false);
+		  break;
+		  
+		case OP_IF: case OP_WHEN: case OP_UNLESS:
+		case OP_AND: case OP_OR: case OP_BEGIN:
+		case OP_WITH_BAFFLE:
+		  if (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set))
+		    return(false);
+		  break;
+		  
+		case OP_WITH_LET:
+		  return(true); /* ?? did I mean false here?? */
+		  
+		default:
+		  return(false);
+		}} /* is_syntax(x=car(expr)) */
+	  else
+	    {
+	      /* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
+	      if ((!is_optimized(expr)) ||
+		  (optimize_op(expr) == OP_UNKNOWN_NP) ||
+		  (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set)))
+		return(false);
+	      
+	      if ((is_symbol(x)) && (is_setter(x)))             /* "setter" includes stuff like cons and vector -- x is a symbol */
+		{
+		  /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
+		   *   similarly (vector-set! v 0 i) etc
+		   */
+		  if (is_null(cdr(expr)))                       /* (vector) for example */
+		    return((x == sc->vector_symbol) || (x == sc->list_symbol) || (x == sc->string_symbol));
+		  
+		  if ((has_set) &&
+		      (!direct_memq(cadr(expr), var_list)) &&   /* non-local is being changed */
+		      ((cadr(expr) == stepper) ||               /* stepper is being set? */
+		       (!is_pair(cddr(expr))) ||
+		       (!is_pair(cdddr(expr))) ||
+		       (is_pair(cddddr(expr))) ||
+		       ((x == sc->hash_table_set_symbol) && (caddr(expr) == stepper)) ||
+		       (cadddr(expr) == stepper) ||             /* used to check is_symbol here and above but that's unnecessary */
+		       ((is_pair(cadddr(expr))) && (s7_tree_memq(sc, stepper, cadddr(expr))))))
+		    (*has_set) = true;
+		  
+		  if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
+		    return(false);
+		  if (!safe_stepper_expr(expr, stepper))
+		    return(false);
+		}}}}
   return(true);
 }
 
@@ -80326,7 +80335,8 @@ static goto_t op_dox(s7_scheme *sc)
 		  s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
 		  /* maybe this can be generalized (thash:79) -- explicit integer stepper, but there must be a simpler way */
 		  if ((f2 == fx_add_u1) && (is_t_integer(slot_value(s2))) && (endf == fx_num_eq_ui) &&
-		      (is_symbol(cadr(endp))) && (cadr(endp) == slot_symbol(s2)) && (is_t_integer(caddr(endp))) && (!s7_tree_memq(sc, cadr(endp), body)))
+		      (is_symbol(cadr(endp))) && (cadr(endp) == slot_symbol(s2)) && 
+		      (is_t_integer(caddr(endp))) && (!s7_tree_memq(sc, cadr(endp), body)))
 		    {
 		      s7_int i = integer(slot_value(s2)), endi = integer(caddr(endp));
 		      do {
@@ -82028,7 +82038,9 @@ static bool op_do_init_1(s7_scheme *sc)
 static bool op_do_init(s7_scheme *sc)
 {
   if (is_multiple_value(sc->value))               /* (do ((i (values 1 2)))...) */
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "do: variable initial value can't be ~S", 38), set_ulist_1(sc, sc->values_symbol, sc->value)));
+    error_nr(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_2(sc, wrap_string(sc, "do: variable initial value can't be ~S", 38), 
+			     set_ulist_1(sc, sc->values_symbol, sc->value)));
   return(!op_do_init_1(sc));
 }
 
@@ -95325,7 +95337,6 @@ void s7_free(s7_scheme *sc)
   {bigflt *p, *np; for (p = sc->bigflts; p; p = np) {mpfr_clear(p->x); np = p->nxt; free(p);}}
   {bigcmp *p, *np; for (p = sc->bigcmps; p; p = np) {mpc_clear(p->z); np = p->nxt; free(p);}}
 
-  /* in-use lists */
   gp = sc->big_integers;
   for (i = 0; i < gp->loc; i++) {bigint *p; p = big_integer_bgi(gp->list[i]); mpz_clear(p->n); free(p);}
   gc_list_free(gp);
@@ -95664,4 +95675,5 @@ int main(int argc, char **argv)
  * [why is s7_number_to_real_with_caller suddenly expensive?]
  * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
  * how are immutable globals getting changed?
+ * should number output use (*s7* 'number-separator)?
  */

@@ -9958,6 +9958,7 @@ s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len
 s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str);
 s7_pointer s7_make_string_wrapper_with_length(s7_scheme *sc, const char *str, s7_int len);
 s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str);
+s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str);
 s7_int s7_string_length(s7_pointer str);
 </pre>
 <p>These handle s7 strings.  s7_is_string corresponds to scheme's string?, 
@@ -9965,7 +9966,8 @@ and s7_string_length to scheme's string-length. s7_string returns the scheme str
 Don't free the returned string!  s7_make_string takes a C string, and returns its scheme
 equivalent.  s7_make_string_with_length is the same, but it is faster because you pass the
 new string's length (s7_make_string has to use strlen).  
-s7_make_permanent_string returns a scheme string that is not in the heap; it will never be GC'd.
+s7_make_permanent_string returns a scheme string that is not in the heap; it will never be GC'd or freed by s7.
+s7_make_semipermanent_string is similar, but the string will be freed if you call s7_free.
 s7_make_string_wrapper creates a temporary string.  This saves the overhead of getting a free cell
 from the heap and later GC-ing it, but the string may be reused at any time.  It is useful as
 an argument to s7_call and similar functions where you know no other strings will be needed
