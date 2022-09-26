@@ -7,6 +7,11 @@
   (if-let ((a (assoc k alist)))
           (cdr a)
           #f))
+;; same as assoc-val but returns '() on miss
+(define (assoc-val* k alist)
+  (if-let ((a (assoc k alist)))
+          (cdr a)
+          '()))
 
 ;; s7test.scm
 (define eq eq?)
