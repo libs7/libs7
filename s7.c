@@ -933,7 +933,7 @@ typedef struct s7_cell {
     } syn;
 
     struct {                       /* slots (bindings) */
-      s7_pointer sym, val, nxt, pending_value, expr;
+      s7_pointer sym, val, nxt, pending_value, expr;  /* pending_value is also the setter field which works by a whisker except in do */
     } slt;
 
     struct {                       /* lets (environments) */
@@ -3128,8 +3128,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #endif
 #define slot_set_expression(p, Val)    do {(T_Slt(p))->object.slt.expr = T_Ext(Val); slot_set_has_expression(p);} while (0)
 #define slot_just_set_expression(p, Val) (T_Slt(p))->object.slt.expr = T_Ext(Val)
-#define slot_setter(p)                 T_Prc(T_Slt(p)->object.slt.expr)
-#define slot_set_setter_1(p, Val)      (T_Slt(p))->object.slt.expr = T_Prc(Val)
+#define slot_setter(p)                 T_Prc(T_Slt(p)->object.slt.pending_value)
+#define slot_set_setter_1(p, Val)      (T_Slt(p))->object.slt.pending_value = T_Prc(Val)
 #if S7_DEBUGGING
 #define tis_slot(p) ((p) && (T_Slt(p)))
 #else
@@ -5141,7 +5141,7 @@ static s7_pointer check_ref13(s7_pointer p, const char *func, int32_t line)
 static s7_pointer check_ref14(s7_pointer p, const char *func, int32_t line)
 {
   if ((!is_any_procedure(p)) && (!is_boolean(p)))
-    complain("%s%s[%d]: setter (with let arg) is %s (%s)%s?\n", p, func, line, unchecked_type(p));
+    complain("%s%s[%d]: setter is %s (%s)%s?\n", p, func, line, unchecked_type(p));
   return(p);
 }
 
@@ -80833,9 +80833,9 @@ static bool do_step1(s7_scheme *sc)
 	  return(true);
 	}
       code = slot_expression(car(sc->args)); /* get the next stepper new value */
-      if (!is_pair(code)) /* (do ((i 0 (+ i 1))) (= i 10)) (apply values (set! (setter 'i) (weak-hash-table? 1)) ())) -> #f */
+      if (!is_pair(code))
 	{
-	  /* this is the setter's fault! */
+	  /* TODO: this can't be right -- did it intend code not sc->code? */
 	  slot_set_pending_value(car(sc->args), sc->code);
 	  sc->args = cdr(sc->args);                   /* go to next step var */
 	}
@@ -95617,51 +95617,51 @@ int main(int argc, char **argv)
  * index     1026   1016    973    964    963
  * tmock     1177   1165   1057   1083   1082
  * tvect     2519   2464   1772   1667   1667
- * timp      2637   2575   1930   1696   1692
+ * timp      2637   2575   1930   1696   1692  1700 [op_set_opsaq_a]
  * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
  * tauto     ----   ----   2562   2171   2044
- * thook     ----   ----   2590   2073   2072
- * lt        2187   2172   2150   2179   2178
+ * thook     ----   ----   2590   2073   2072  2081 [same]
+ * lt        2187   2172   2150   2179   2178  2182 [same]
  * dup       3805   3788   2492   2272   2270
  * tcopy     8035   5546   2539   2373   2372
- * tload     ----   ----   3046   2377   2373
- * tread     2440   2421   2419   2414   2409
+ * tload     ----   ----   3046   2377   2368
+ * tread     2440   2421   2419   2414   2409  2414 [same]
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2573   2571
- * tb        2735   2681   2612   2600   2599
- * tsort     3105   3104   2856   2801   2801
+ * tmat      3065   3042   2524   2573   2574
+ * tb        2735   2681   2612   2600   2600
+ * tsort     3105   3104   2856   2801   2805
  * teq       4068   4045   3536   3469   3469
- * tobj      4016   3970   3828   3556   3553
+ * tobj      4016   3970   3828   3556   3553  3572 [same]
  * tio       3816   3752   3683   3616   3618
  * tmac      3950   3873   3033   3670   3667
  * tclo      4787   4735   4390   4376   4374
  * tlet      7775   5640   4450   4403   4402
- * tcase     4960   4793   4439   4429   4424
+ * tcase     4960   4793   4439   4429   4424  4442 [same]
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4477
  * tshoot    5525   5447   5183   5056   5056
  * tstr      6880   6342   5488   5131   5130
  * tform     5357   5348   5307   5320   5309
- * tnum      6348   6013   5433   5369   5365
- * tlamb     6423   6273   5720   5545   5539
+ * tnum      6348   6013   5433   5369   5365  5376 [same]
+ * tlamb     6423   6273   5720   5545   5539  5553
  * tmisc     8869   7612   6435   6184   6186
- * tset      ----   ----   ----   6238   6238
+ * tset      ----   ----   ----   6238   6238  6261 ...
  * tlist     7896   7546   6558   6247   6243
  * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6558
  * tari      13.0   12.7   6827   6583   6581
- * tleft     10.4   10.2   7657   7479   7475
+ * tleft     10.4   10.2   7657   7479   7475  7499
  * tgc       11.9   11.1   8177   7913   7919
  * thash     11.8   11.7   9734   9467   9466
- * cb        11.2   11.0   9658   9528   9523
+ * cb        11.2   11.0   9658   9528   9523  9539 ...
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.5
- * sg        ----   ----   55.9   56.7   55.6  55.5 55.9 [number_to_real_with_caller, make_string_wrapper]
- * lg        ----   ----  105.2  106.1  106.0
+ * calls     36.7   37.5   37.0   37.5   37.5  37.6 ...
+ * sg        ----   ----   55.9   56.7   55.6  55.5 55.9 [number_to_real_with_caller, make_string_wrapper, op_set_opsaq_a]
+ * lg        ----   ----  105.2  106.1  106.0 106.3 ...
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
  *
@@ -95671,9 +95671,11 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
  * all c_func* are semipermanent, but might be local? (let () (load "libm.scm") ...)
+ * should number output use (*s7* 'number-separator)?
  *
  * [why is s7_number_to_real_with_caller suddenly expensive?]
  * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
  * how are immutable globals getting changed?
- * should number output use (*s7* 'number-separator)?
+ * do setters are ignored I think -- need warning or fix and tests of letrec|letrec*|lambda* t718 and need full s7test (setter #f|func)
+ * fix op_set_opsaq_a!
  */
