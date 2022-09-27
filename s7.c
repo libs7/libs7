@@ -933,7 +933,7 @@ typedef struct s7_cell {
     } syn;
 
     struct {                       /* slots (bindings) */
-      s7_pointer sym, val, nxt, pending_value, expr;  /* pending_value is also the setter field which works by a whisker except in do */
+      s7_pointer sym, val, nxt, pending_value, expr;  /* pending_value is also the setter field which works by a whisker */
     } slt;
 
     struct {                       /* lets (environments) */
@@ -3106,7 +3106,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
 #if S7_DEBUGGING
 static bool slot_check_ok = false;
-#define slot_set_value(p, Val)         do {if ((slot_check_ok) && (is_immutable_slot(p))) fprintf(stderr, "%s = %s\n", display(p), display(Val)); (T_Slt(p))->object.slt.val = T_Nmv(Val);} while (0)
+#define slot_set_value(p, Val)         do {if ((slot_check_ok) && (is_immutable_slot(p)) && (!s7_is_equal(cur_sc, slot_value(p), Val))) {fprintf(stderr, "%s = %s\n", display(p), display(Val)); /* abort(); */} (T_Slt(p))->object.slt.val = T_Nmv(Val);} while (0)
 #else
 #define slot_set_value(p, Val)         (T_Slt(p))->object.slt.val = T_Nmv(Val)
 #endif
@@ -77702,6 +77702,10 @@ static void check_set(s7_scheme *sc)
 		s7_pointer index = cadr(inner);
 		if (is_fxable(sc, index))
 		  {
+		    if ((car(inner) == sc->let_ref_symbol) && (!is_pair(cddr(inner)))) /* perhaps also check for hash-table-ref */
+		      /* (let () (define (func) (catch #t (lambda () (set! (let-ref (list 1)) 1)) (lambda args 'error))) (func) (func)) */
+		      error_nr(sc, sc->wrong_number_of_args_symbol,
+			       set_elist_2(sc, wrap_string(sc, "set!: not enough arguments for let-ref: ~S", 42), sc->code));
 		    fx_annotate_arg(sc, cdar(code), sc->curlet);    /* cdr(inner) -> index */
 		    if (is_fxable(sc, value))
 		      {
@@ -78075,12 +78079,6 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
   s7_pointer index, value, code = cdr(sc->code);
   s7_pointer obj = lookup_checked(sc, caar(code));
   bool result;
-
-  if ((!is_pair(cddr(code))) && (caar(code) == sc->let_ref_symbol))
-    /* (let () (define (func) (catch #t (lambda () (set! (let-ref (list 1)) 1)) (lambda args 'error))) (func) (func)) */
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_3(sc, wrap_string(sc, "set!: not enough arguments for ~S: ~S", 37), caar(code), sc->code));
-    
   if (could_be_macro_setter(obj))
     {
       s7_pointer setf = setter_p_pp(sc, obj, sc->curlet);
@@ -79971,59 +79969,52 @@ static bool has_safe_steppers(s7_scheme *sc, s7_pointer let)
       if (slot_has_expression(slot))
 	{
 	  s7_pointer step_expr = slot_expression(slot);
-	  if (!is_pair(step_expr))
+	  if ((S7_DEBUGGING) && (!is_pair(step_expr))) fprintf(stderr, "%s step: %s\n", __func__, display(step_expr));
+	  if (is_safe_stepper_expr(step_expr))
 	    {
-	      if ((is_null(step_expr)) ||
-		  (type(step_expr) == type(val)))
-		set_safe_stepper(slot);
-	      else clear_safe_stepper(slot);
-	    }
-	  else
-	    if (is_safe_stepper_expr(step_expr))
-	      {
-		if (is_t_integer(val))
+	      if (is_t_integer(val))
+		{
+		  if (is_int_optable(step_expr))
+		    set_safe_stepper(slot);
+		  else
+		    if (no_int_opt(step_expr))
+		      clear_safe_stepper(slot);
+		    else
+		      {
+			sc->pc = 0;
+			if (int_optimize(sc, step_expr))
+			  {
+			    set_safe_stepper(slot);
+			    set_is_int_optable(step_expr);
+			  }
+			else
+			  {
+			    clear_safe_stepper(slot);
+			    set_no_int_opt(step_expr);
+			  }}}
+	      else
+		if (is_small_real(val))
 		  {
-		    if (is_int_optable(step_expr))
+		    if (is_float_optable(step_expr))
 		      set_safe_stepper(slot);
 		    else
-		      if (no_int_opt(step_expr))
+		      if (no_float_opt(step_expr))
 			clear_safe_stepper(slot);
 		      else
 			{
 			  sc->pc = 0;
-			  if (int_optimize(sc, step_expr))
+			  if (float_optimize(sc, step_expr))
 			    {
 			      set_safe_stepper(slot);
-			      set_is_int_optable(step_expr);
+			      set_is_float_optable(step_expr);
 			    }
 			  else
 			    {
 			      clear_safe_stepper(slot);
-			      set_no_int_opt(step_expr);
+			      set_no_float_opt(step_expr);
 			    }}}
-		else
-		  if (is_small_real(val))
-		    {
-		      if (is_float_optable(step_expr))
-			set_safe_stepper(slot);
-		      else
-			if (no_float_opt(step_expr))
-			  clear_safe_stepper(slot);
-			else
-			  {
-			    sc->pc = 0;
-			    if (float_optimize(sc, step_expr))
-			      {
-				set_safe_stepper(slot);
-				set_is_float_optable(step_expr);
-			      }
-			    else
-			      {
-				clear_safe_stepper(slot);
-				set_no_float_opt(step_expr);
-			      }}}
-		  else set_safe_stepper(slot);  /* ?? shouldn't this check types ?? */
-	      }}
+		else set_safe_stepper(slot);  /* ?? shouldn't this check types ?? */
+	    }}
       else
 	{
 	  if (is_t_real(val))
@@ -80833,25 +80824,19 @@ static bool do_step1(s7_scheme *sc)
 	  return(true);
 	}
       code = slot_expression(car(sc->args)); /* get the next stepper new value */
-      if (!is_pair(code))
+      if ((S7_DEBUGGING) && (!is_pair(code))) fprintf(stderr, "%s code: %s\n", __func__, display(code));
+      if (has_fx(code))
 	{
-	  /* TODO: this can't be right -- did it intend code not sc->code? */
-	  slot_set_pending_value(car(sc->args), sc->code);
+	  sc->value = fx_call(sc, code);
+	  slot_set_pending_value(car(sc->args), sc->value); /* consistently slower if slot_simply_set... here? */
 	  sc->args = cdr(sc->args);                   /* go to next step var */
 	}
       else
-	if (has_fx(code))
-	  {
-	    sc->value = fx_call(sc, code);
-	    slot_set_pending_value(car(sc->args), sc->value); /* consistently slower if slot_simply_set... here? */
-	    sc->args = cdr(sc->args);                   /* go to next step var */
-	  }
-	else
-	  {
-	    push_stack_direct(sc, OP_DO_STEP2);
-	    sc->code = car(code);
-	    return(false);
-	  }}
+	{
+	  push_stack_direct(sc, OP_DO_STEP2);
+	  sc->code = car(code);
+	  return(false);
+	}}
 }
 
 static bool op_do_step2(s7_scheme *sc)
@@ -95614,54 +95599,54 @@ int main(int argc, char **argv)
  * --------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
- * index     1026   1016    973    964    963
+ * index     1026   1016    973    964    962
  * tmock     1177   1165   1057   1083   1082
  * tvect     2519   2464   1772   1667   1667
- * timp      2637   2575   1930   1696   1692  1700 [op_set_opsaq_a]
+ * timp      2637   2575   1930   1696   1693
  * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
- * tauto     ----   ----   2562   2171   2044
- * thook     ----   ----   2590   2073   2072  2081 [same]
- * lt        2187   2172   2150   2179   2178  2182 [same]
+ * tauto     ----   ----   2562   2171   2046
+ * thook     ----   ----   2590   2073   2072
+ * lt        2187   2172   2150   2179   2181
  * dup       3805   3788   2492   2272   2270
  * tcopy     8035   5546   2539   2373   2372
  * tload     ----   ----   3046   2377   2368
- * tread     2440   2421   2419   2414   2409  2414 [same]
+ * tread     2440   2421   2419   2414   2412
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2573   2574
+ * tmat      3065   3042   2524   2573   2571
  * tb        2735   2681   2612   2600   2600
- * tsort     3105   3104   2856   2801   2805
+ * tsort     3105   3104   2856   2801   2801
  * teq       4068   4045   3536   3469   3469
- * tobj      4016   3970   3828   3556   3553  3572 [same]
+ * tobj      4016   3970   3828   3556   3567
  * tio       3816   3752   3683   3616   3618
  * tmac      3950   3873   3033   3670   3667
- * tclo      4787   4735   4390   4376   4374
+ * tclo      4787   4735   4390   4376   4379
  * tlet      7775   5640   4450   4403   4402
- * tcase     4960   4793   4439   4429   4424  4442 [same]
+ * tcase     4960   4793   4439   4429   4440
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4477
- * tshoot    5525   5447   5183   5056   5056
+ * tshoot    5525   5447   5183   5056   5055
  * tstr      6880   6342   5488   5131   5130
  * tform     5357   5348   5307   5320   5309
- * tnum      6348   6013   5433   5369   5365  5376 [same]
- * tlamb     6423   6273   5720   5545   5539  5553
- * tmisc     8869   7612   6435   6184   6186
- * tset      ----   ----   ----   6238   6238  6261 ...
+ * tnum      6348   6013   5433   5369   5365
+ * tlamb     6423   6273   5720   5545   5545
+ * tmisc     8869   7612   6435   6184   6185
+ * tset      ----   ----   ----   6238   6238
  * tlist     7896   7546   6558   6247   6243
  * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6558
  * tari      13.0   12.7   6827   6583   6581
- * tleft     10.4   10.2   7657   7479   7475  7499
+ * tleft     10.4   10.2   7657   7479   7480
  * tgc       11.9   11.1   8177   7913   7919
  * thash     11.8   11.7   9734   9467   9466
- * cb        11.2   11.0   9658   9528   9523  9539 ...
+ * cb        11.2   11.0   9658   9528   9528
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.5  37.6 ...
- * sg        ----   ----   55.9   56.7   55.6  55.5 55.9 [number_to_real_with_caller, make_string_wrapper, op_set_opsaq_a]
- * lg        ----   ----  105.2  106.1  106.0 106.3 ...
+ * calls     36.7   37.5   37.0   37.5   37.5
+ * sg        ----   ----   55.9   56.7   55.8
+ * lg        ----   ----  105.2  106.1  106.2
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
  *
@@ -95670,12 +95655,9 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
- * all c_func* are semipermanent, but might be local? (let () (load "libm.scm") ...)
+ * all c_func* are semipermanent, but might be local? (let () (load "libm.scm" (curlet)) ...)
  * should number output use (*s7* 'number-separator)?
  *
- * [why is s7_number_to_real_with_caller suddenly expensive?]
  * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
  * how are immutable globals getting changed?
- * do setters are ignored I think -- need warning or fix and tests of letrec|letrec*|lambda* t718 and need full s7test (setter #f|func)
- * fix op_set_opsaq_a!
  */

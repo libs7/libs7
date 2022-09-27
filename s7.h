@@ -902,7 +902,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
- * 16-Sep:    s7_number_to_real_location. s7_wrong_type_error. s7_make_string_wrapper_with_length. s7_make_semipermanent_string.
+ * 16-Sep:    s7_number_to_real_with_location. s7_wrong_type_error. s7_make_string_wrapper_with_length. s7_make_semipermanent_string.
  * 21-Apr:    s7_is_multiple_value.
  * 11-Apr:    removed s7_apply_*.
  * 22-Mar:    s7_eval_with_location.
