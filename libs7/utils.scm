@@ -279,37 +279,26 @@ If func approves of one, find-then returns the result of applying fn to it."))
                            ch))
                      str)))
 
-(define (normalize-module-name mname)
-  (let ((s (if (symbol? mname)
-               (symbol->string mname)
-               (if (string? mname)
-                   mname
-                   (error 'bad-type
-                          (format #f "module name not sym or string: ~A"
-                                  mname))))))
-    (string-set! s 0 (char-upcase (string-ref s 0)))
-    (string->symbol s)))
-
 (define filename-cache (make-hash-table))
 
-(define (file-name->module-name path)
-  (if-let ((modname (filename-cache path)))
-          modname
-          (let* ((last-slash (string-index-right path
-                                                 (lambda (c) (eq? c #\/))))
-                 (fname (if last-slash
-                            (string-drop path (+ last-slash 1))
-                            path))
-                 (mraw (if (string-suffix? ".ml" fname)
-                           (string-drop-right fname 3)
-                           (if (string-suffix? ".mli" fname)
-                               (string-drop-right fname 4)
-                               (error 'bad-filename
-                                      (string-append "extension should be .ml or .mli: "
-                                                     fname)))))
-                 (modname (normalize-module-name mraw)))
-            (hash-table-set! filename-cache path modname)
-            modname)))
+;; (define (file-name->module-name path)
+;;   (if-let ((modname (filename-cache path)))
+;;           modname
+;;           (let* ((last-slash (string-index-right path
+;;                                                  (lambda (c) (eq? c #\/))))
+;;                  (fname (if last-slash
+;;                             (string-drop path (+ last-slash 1))
+;;                             path))
+;;                  (mraw (if (string-suffix? ".ml" fname)
+;;                            (string-drop-right fname 3)
+;;                            (if (string-suffix? ".mli" fname)
+;;                                (string-drop-right fname 4)
+;;                                (error 'bad-filename
+;;                                       (string-append "extension should be .ml or .mli: "
+;;                                                      fname)))))
+;;                  (modname (normalize-module-name mraw)))
+;;             (hash-table-set! filename-cache path modname)
+;;             modname)))
 
 ;; s7test.scm
 (define (flatten lst)
