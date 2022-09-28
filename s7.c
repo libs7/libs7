@@ -3104,12 +3104,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_symbol(p)                 T_Sym((T_Slt(p))->object.slt.sym)
 #define slot_set_symbol(p, Sym)        (T_Slt(p))->object.slt.sym = T_Sym(Sym)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
-#if S7_DEBUGGING
-static bool slot_check_ok = false;
-#define slot_set_value(p, Val)         do {if ((slot_check_ok) && (is_immutable_slot(p)) && (!s7_is_equal(cur_sc, slot_value(p), Val))) {fprintf(stderr, "%s = %s\n", display(p), display(Val)); /* abort(); */} (T_Slt(p))->object.slt.val = T_Nmv(Val);} while (0)
-#else
 #define slot_set_value(p, Val)         (T_Slt(p))->object.slt.val = T_Nmv(Val)
-#endif
 #define slot_set_symbol_and_value(Slot, Symbol, Value) do {slot_set_symbol(Slot, Symbol); slot_set_value(Slot, Value);} while (0)
 #define slot_set_value_with_hook(Slot, Value) \
   do {if (hook_has_functions(sc->rootlet_redefinition_hook)) slot_set_value_with_hook_1(sc, Slot, T_Nmv(Value)); else slot_set_value(Slot, T_Nmv(Value));} while (0)
@@ -29297,7 +29292,8 @@ static inline void check_get_output_string_port(s7_scheme *sc, s7_pointer p)
 	     set_elist_2(sc, wrap_string(sc, "get-output-string port-position ~D is greater than (*s7* 'max-string-length)", 76),
 			 wrap_integer(sc, port_position(p))));
 }
-/* TODO: if pos>max and clear, where should the clear be? similarly below if pos>size how can we call make_string (out-of-bounds) and ignore error?
+/* if pos>max and clear, where should the clear be?  Not here because we might want to see output in error handler.
+ *   similarly below if pos>size how can we call make_string (out-of-bounds) and ignore error?
  *   if pos>size shouldn't we raise an error somewhere?
  */
 
@@ -44996,7 +44992,11 @@ static s7_pointer g_funclet(s7_scheme *sc, s7_pointer args)
 }
 
 
-/* -------------------------------- s7_define_function and friends -------------------------------- */
+/* -------------------------------- s7_define_function and friends --------------------------------
+ *
+ * all c_func* are semipermanent, but they might be local: (let () (load "libm.scm" (curlet)) ...)
+ *   but there's no way to tell in general that the let is not exported.
+ */
 s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc,
 			      s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
@@ -48220,7 +48220,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
 	if (has_simple_elements(source)) set_has_simple_elements(vec);
 	s7_vector_fill(sc, vec, vector_element(source, 0));
 	if (vector_rank(source) > 1)
-	  return(make_multivector(sc, vec, g_vector_dimensions(sc, set_plist_1(sc, source)))); /* TODO: see g_subvector to avoid g_vector_dimensions */
+	  return(make_multivector(sc, vec, g_vector_dimensions(sc, set_plist_1(sc, source)))); /* see g_subvector to avoid g_vector_dimensions */
 	add_vector(sc, vec);
 	return(vec);
       }
@@ -77864,8 +77864,23 @@ static Inline void op_set_s_a(s7_scheme *sc)
 static void op_set_s_p(s7_scheme *sc)
 {
   check_stack_size(sc);
-  push_stack_no_args(sc, OP_SET_SAFE, cadr(sc->code));
+  push_stack_no_args(sc, OP_SET_SAFE, cadr(sc->code)); /* only path to op_set_safe, but we're not safe! cadr(sc->code) might be immutable */
   sc->code = caddr(sc->code);
+}
+
+static void op_set_safe(s7_scheme *sc) /* name is misleading -- we need to check for immutable slot */
+{
+  s7_pointer slot = lookup_slot_from(sc->code, sc->curlet);
+  if (is_slot(slot))
+    {
+      if (is_immutable_slot(slot))
+	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->set_symbol, sc->code));
+      slot_set_value(slot, sc->value);
+    }
+  else
+    if (has_let_set_fallback(sc->curlet))
+      sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
+    else unbound_variable_error_nr(sc, sc->code);
 }
 
 static void op_set_from_let_temp(s7_scheme *sc)
@@ -78248,17 +78263,6 @@ static bool op_set_opsaaq_p_1(s7_scheme *sc)
   result = set_pair4(sc, sc->args, index1, fx_call(sc, cddar(sc->code)), value);
   unstack(sc);
   return(result);
-}
-
-static void op_set_safe(s7_scheme *sc)
-{
-  s7_pointer slot = lookup_slot_from(sc->code, sc->curlet);
-  if (is_slot(slot))
-    slot_set_value(slot, sc->value);
-  else
-    if (has_let_set_fallback(sc->curlet))
-      sc->value = call_let_set_fallback(sc, sc->curlet, sc->code, sc->value);
-    else unbound_variable_error_nr(sc, sc->code);
 }
 
 static bool op_set1(s7_scheme *sc)
@@ -95238,8 +95242,6 @@ s7_scheme *s7_init(void)
   if (NUM_OPS != 920)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
-
-  slot_check_ok = true;
 #endif
 
   return(sc);
@@ -95655,9 +95657,5 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t
- * all c_func* are semipermanent, but might be local? (let () (load "libm.scm" (curlet)) ...)
  * should number output use (*s7* 'number-separator)?
- *
- * temp-in-use checks: add_temp_in_use[incr temps-in-use, check temps[n], set temps[n]] remove..[decr, clear temps[n]], error [if temps-in-use>0 clear?]
- * how are immutable globals getting changed?
  */
