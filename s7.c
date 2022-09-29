@@ -8821,7 +8821,7 @@ static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_le
   let->debugger_bits = 0;
   if (!in_heap(let)) {fprintf(stderr, "reusing an unheaped %s as a let?\n", s7_type_names[type(let)]); abort();}
 #endif
-  set_full_type(let, T_LET | T_SAFE_PROCEDURE);
+  set_full_type(T_Pair(let), T_LET | T_SAFE_PROCEDURE);
   let_set_slots(let, slot_end(sc));
   let_set_outlet(let, next_let);
   let_set_id(let, ++sc->let_number);
@@ -8830,7 +8830,7 @@ static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_le
 
 static s7_pointer reuse_as_slot(s7_scheme *sc, s7_pointer slot, s7_pointer symbol, s7_pointer value)
 {
-  set_full_type(slot, T_SLOT);
+  set_full_type(T_Pair(slot), T_SLOT);
   slot_set_symbol_and_value(slot, symbol, value);
   return(slot);
 }
@@ -9121,7 +9121,7 @@ static void init_unlet(s7_scheme *sc)
   s7_pointer *inits;
   s7_pointer *els = vector_elements(sc->symbol_table);
   block_t *block = mallocate(sc, UNLET_ENTRIES * sizeof(s7_pointer));
-  sc->unlet = (s7_pointer)Calloc(1, sizeof(s7_cell));
+  sc->unlet = (s7_pointer)Calloc(1, sizeof(s7_cell));  /* freed explicitly in s7_free */
   set_full_type(sc->unlet, T_VECTOR | T_UNHEAP);
   vector_length(sc->unlet) = UNLET_ENTRIES;
   vector_block(sc->unlet) = block;
@@ -73815,7 +73815,7 @@ static s7_pointer check_case(s7_scheme *sc)
   if (!is_pair(cdr(code)))                                       /* (case 1) or (case 1 . 1) */
     syntax_error_nr(sc, "case has no clauses?:  ~S", 25, form);
   if (!is_pair(cadr(code)))                                      /* (case 1 1) */
-    syntax_error_nr(sc, "case clause is not a list? ~S", 29, form);
+    syntax_error_nr(sc, "case clause is not a pair? ~S", 29, form);
   set_opt3_any(code, sc->unspecified);
 
   for (x = cdr(code); is_pair(x); x = cdr(x))
@@ -75903,6 +75903,7 @@ static bool check_and(s7_scheme *sc, s7_pointer expr)
 		pair_set_syntax_op(expr, OP_AND_SAFE_P3);
 	}}
   if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
+  set_current_code(sc, sc->code);
   return(false);
 }
 
@@ -75963,7 +75964,6 @@ static bool check_or(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer p, code = cdr(expr);
   bool any_nils = false;
-
   if (is_null(code))
     {
       sc->value = sc->F;
@@ -75984,6 +75984,7 @@ static bool check_or(s7_scheme *sc, s7_pointer expr)
   else pair_set_syntax_op(expr, (any_nils) ? OP_OR_P : OP_OR_N);
 
   if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) fx_curlet_tree(sc, code);
+  set_current_code(sc, sc->code);
   return(false);
 }
 
@@ -76263,6 +76264,7 @@ static s7_pointer check_if(s7_scheme *sc, s7_pointer form)
 
   pair_set_syntax_op(form, OP_IF_UNCHECKED);
   set_if_opts(sc, form, is_null(cdr(cdr_code)), false);
+  set_current_code(sc, sc->code);
   return(code);
 }
 
@@ -76340,6 +76342,7 @@ static void check_when(s7_scheme *sc)
 		pair_set_syntax_op(form, OP_WHEN_AND_AP);
 	    }}
   push_stack_no_args(sc, OP_WHEN_PP, cdr(code));
+  set_current_code(sc, sc->code);  
   sc->code = car(code);
 }
 
@@ -76455,6 +76458,7 @@ static void check_unless(s7_scheme *sc)
 	  set_fx_direct(code, fx_choose(sc, code, sc->curlet, let_symbol_is_safe));
 	}
   push_stack_no_args(sc, OP_UNLESS_PP, cdr(code));
+  set_current_code(sc, sc->code);  
   sc->code = car(code);
 }
 
@@ -77179,6 +77183,7 @@ static void check_with_let(s7_scheme *sc)
   pair_set_syntax_op(sc->code, ((is_normal_symbol(car(form))) &&
 				(is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
 				(is_null(cddr(form)))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
+  set_current_code(sc, sc->code);
 }
 
 static bool op_with_let_unchecked(s7_scheme *sc)
@@ -77243,7 +77248,7 @@ static void check_cond(s7_scheme *sc)
   for (x = code; is_pair(x); x = cdr(x))
     if (!is_pair(car(x)))                                       /* (cond 1) or (cond (#t 1) 3) */
       error_nr(sc, sc->syntax_error_symbol,
-	       set_elist_3(sc, wrap_string(sc, "every clause in cond must be a list: ~S in ~A", 45),
+	       set_elist_3(sc, wrap_string(sc, "every clause in cond must be a pair: ~S in ~A", 45),
 			   car(x), object_to_truncated_string(sc, form, 80)));
     else
       {
@@ -82175,6 +82180,7 @@ static void apply_syntax(s7_scheme *sc)                    /* -------- syntactic
   sc->cur_op = syntax_opcode(sc->code);          /* (apply begin '((define x 3) (+ x 2))) */
   /* I had elaborate checks here for embedded circular lists, but now I think that is the caller's problem */
   sc->code = cons(sc, sc->code, sc->args);
+  set_current_code(sc, sc->code);
   pair_set_syntax_op(sc->code, sc->cur_op);
 }
 
@@ -95602,14 +95608,14 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
  * index     1026   1016    973    964    962
- * tmock     1177   1165   1057   1083   1082
+ * tmock     1177   1165   1057   1083   1083
  * tvect     2519   2464   1772   1667   1667
- * timp      2637   2575   1930   1696   1693
+ * timp      2637   2575   1930   1696   1692
  * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
  * tauto     ----   ----   2562   2171   2046
- * thook     ----   ----   2590   2073   2072
- * lt        2187   2172   2150   2179   2181
+ * thook     ----   ----   2590   2073   2071
+ * lt        2187   2172   2150   2179   2179
  * dup       3805   3788   2492   2272   2270
  * tcopy     8035   5546   2539   2373   2372
  * tload     ----   ----   3046   2377   2368
@@ -95617,7 +95623,7 @@ int main(int argc, char **argv)
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2573   2571
+ * tmat      3065   3042   2524   2573   2569
  * tb        2735   2681   2612   2600   2600
  * tsort     3105   3104   2856   2801   2801
  * teq       4068   4045   3536   3469   3469
@@ -95643,12 +95649,12 @@ int main(int argc, char **argv)
  * tleft     10.4   10.2   7657   7479   7480
  * tgc       11.9   11.1   8177   7913   7919
  * thash     11.8   11.7   9734   9467   9466
- * cb        11.2   11.0   9658   9528   9528
+ * cb        11.2   11.0   9658   9528   9522
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.5
  * sg        ----   ----   55.9   56.7   55.8
- * lg        ----   ----  105.2  106.1  106.2
+ * lg        ----   ----  105.2  106.1  106.1
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
  *

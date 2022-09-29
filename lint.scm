@@ -17213,6 +17213,7 @@
 
 	;; ---------------- cond ----------------
 	(let ()
+	  ;; in s7, (cond (A) (B) (else #f)) is (or A B), but it probably never happens
 
 	  ;; -------- cond->header+cond+trailer --------
 	  (define (cond->header+cond+trailer caller form len env)
