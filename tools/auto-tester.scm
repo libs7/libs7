@@ -1,24 +1,19 @@
 ;;; this is an extension of tauto.scm, an auto-tester
 
-(define with-mock-data #t)
+(define with-mock-data #f)
 ;(set! (*s7* 'profile) 1)
-(set! (*s7* 'number-separator) #\,)
+(when (provided? 'number-separator) (set! (*s7* 'number-separator) #\,))
 ;(set! (*s7* 'gc-stats) #t)
 
 (for-each (lambda (x)
-	    (unless (memq (car x) '(make-string make-byte-vector *features* *libraries* *#readers*)) ; last 2 for sandbox
+	    (unless (memq (car x) '(*features* *libraries* *#readers*)) ; last 2 for sandbox
 	      (immutable! (car x))))
 	  (rootlet))
 
-(define (no-set s v)
-  (error 'bad "can't set ~S" s))
-
-(immutable! quote)
-
 (for-each (lambda (x)
 	    (when (syntax? (symbol->value x))
-	      (set! (setter x) no-set)
-	      (immutable! x)))
+	      (immutable! x)
+	      (immutable! (symbol->value x))))
 	  (symbol-table))
 
 (require libc.scm)
@@ -29,6 +24,7 @@
 	(carry (#i(1791398085 1929682203 1683268614 1965537969 1675393560 1967773755 1517746329
                    1447497129 1655692410 1606218150 2051013963 1075433238 1557985959 1781943330
                    1893513180 1631296680 2131995753 2083801278 1873196400 1554115554)
+		  ;; possibly problematic: 2083801278
 		(random 20))))
     (random-state seed carry)))
 
@@ -897,9 +893,9 @@
 			  'write-char 'call/cc 'write-byte 'write-string
 			  'file-mtime
 			  'write 'display
-			  'outlet
+			  (reader-cond ((not with-mock-data) 'outlet))
 			  'directory->list
-			  ;'set! ; this can clobber stuff making recreating a bug tricky
+			  'set! ; this can clobber stuff making recreating a bug tricky
 			  'set-car!
 			  'call-with-output-file 'with-output-to-file
 			  ;'read-char 'read-byte 'read-line 'read-string 'read ; stdin=>hangs
@@ -938,7 +934,7 @@
 			  ;'random-state->list
                           ;'pair-line-number
 			  ;'pair-filename ; -- too many uninteresting diffs
-			  'let-set! ;-- rootlet troubles?
+			  'let-set!
 			  ;'coverlet ;-- blocks block's equivalent?
                           'help ;-- snd goes crazy
 			  'macroexpand ;-- uninteresting objstr stuff
@@ -952,7 +948,7 @@
 			  '=>
 
 			  'constant?
-			  'openlet
+			  (reader-cond ((not with-mock-data) 'openlet))
 			  '*unbound-variable-hook* '*load-hook* '*rootlet-redefinition-hook* '*missing-close-paren-hook* ;'*read-error-hook* 
 			  '*after-gc-hook*
 			  '*autoload*
@@ -1369,16 +1365,16 @@
                     (lambda (s) (string-append "(_wr4_ " s ")")))
 	      (list (lambda (s) (string-append "(vector " s ")"))
                     (lambda (s) (string-append "(apply vector (list " s "))")))
-	      (list (lambda (s) (string-append "(string " s ")"))
-                    (lambda (s) (string-append "(apply string (list " s "))")))
-	      (list (lambda (s) (string-append "(float-vector " s ")"))
-                    (lambda (s) (string-append "(apply float-vector (list " s "))")))
+;	      (list (lambda (s) (string-append "(string " s ")"))
+;                    (lambda (s) (string-append "(apply string (list " s "))")))
+;	      (list (lambda (s) (string-append "(float-vector " s ")"))
+;                    (lambda (s) (string-append "(apply float-vector (list " s "))")))
 	      (list (lambda (s) (string-append "(values " s ")"))
                     (lambda (s) (string-append "(apply values (list " s "))")))
 	      (list (lambda (s) (string-append "(vector (values " s "))"))
                     (lambda (s) (string-append "(apply vector (list " s "))")))
-	      (list (lambda (s) (string-append "(vector 1 (values " s "))"))
-                    (lambda (s) (string-append "(apply vector (list 1 " s "))")))
+;	      (list (lambda (s) (string-append "(vector 1 (values " s "))"))
+;                    (lambda (s) (string-append "(apply vector (list 1 " s "))")))
 	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 1)) " s ")"))
                     (lambda (s) (string-append "(let ((__x__ 1)) (do ((i 0 (+ i __x__))) ((= i __x__)) " s "))")))
 	      (list (lambda (s) (string-append "(cond ((eqv? x 0) " s "))"))
@@ -1407,17 +1403,17 @@
 		    (lambda (s) (string-append "(let ((one 1)) (cond (one => (lambda (i) " s ")) (else 'oops)))")))
 	      (list (lambda (s) (string-append "(catch #t (lambda () (let-temporarily ((x (list " s "))) x)) (lambda (type info) 'error))"))
 		    (lambda (s) (string-append "(catch #t (lambda () (let ((x (list " s "))) x)) (lambda (type info) 'error))")))
-
 	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 100)) " s ")"))
                     (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) " s "))")))
 	      (list (lambda (s) (string-append "(do ((i 0 (+ i 1))) ((= i 100)) (apply values " s " ()))"))
                     (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 100)) (apply values " s " ())))")))
-
 	      (list (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (car (list " last-s ")) (begin " s "))"))) (set! last-s s) res)))
                     (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (not (car (list " last-s "))) #<unspecified> (begin " s "))"))) (set! last-s s) res))))
 
 	      (list (lambda (s) (string-append "(let ((x #f)) (for-each (lambda (y) (set! x y)) (list " s ")) x)"))
 		    (lambda (s) (string-append "((lambda (x) (for-each (lambda y (set! x (car y))) (list " s ")) x) #f)")))
+	      (list (lambda (s) (string-append "(let-temporarily (((*s7* 'safety) 1)) (apply begin (list " s ")))"))
+		    (lambda (s) (string-append "(let-temporarily (((*s7* 'safety) 1)) ((apply lambda () (list " s "))))")))
 	      ))
 
       (chars (vector #\( #\( #\) #\space))) ; #\' #\/ #\# #\, #\` #\@ #\. #\:))  ; #\\ #\> #\space))
@@ -1426,8 +1422,8 @@
 	(flen (length functions))
 	(alen (length args))
 	(codes-len (length codes))
-	(args-ran (+ 3 (random 5)))
-	(both-ran (+ 4 (random 8))))
+	(args-ran (+ 2 (random 5)))
+	(both-ran (+ 3 (random 8))))
 
     (define (get-arg)
       (let ((str (args (random alen))))
@@ -1812,7 +1808,7 @@
 	(when (eq? outer-funcs last-func)
 	  (reseed))
 	(set! last-func outer-funcs))
-      (unless (output-port? imfo) (format *stderr* "(new) imfo ~S -> ~S~%" estr imfo) (abort))
+      ;(unless (output-port? imfo) (format *stderr* "(new) imfo ~S -> ~S~%" estr imfo) (abort)) ; with-mock-data
       (set! error-info #f)
       (set! error-type 'no-error)
       (when (string-position "H_" str)
@@ -1847,14 +1843,6 @@
 	    (try-both (make-expr (+ 1 (random both-ran))))) ; min 1 here not 0, was 6
 	  (lambda (type info)
 	    (apply format *stderr* info)
-#|
-	    (write "outer: " *stderr*)
-	    (write type *stderr*) (newline *stderr*)
-	    (write info *stderr*) (newline *stderr*)
-	    (write estr *stderr*) (newline *stderr*)
-	    ;(format *stderr* "~%~%outer: ~S~%" (list type info estr))
-	    ;(abort)
-|#
 	    ))
 	))
 

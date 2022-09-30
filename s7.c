@@ -1186,7 +1186,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer w, x, y, z;
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10, temp11;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1, mlist_1, mlist_2; /* dlist|clist and ulist can't overlap */
@@ -1245,7 +1245,7 @@ struct s7_scheme {
 
   uint32_t syms_tag, syms_tag2;
   int32_t bignum_precision;
-  s7_int baffle_ctr;
+  s7_int baffle_ctr, map_call_ctr;
   s7_pointer default_random_state;
 
   s7_pointer sort_body, sort_begin, sort_v1, sort_v2;
@@ -3524,6 +3524,12 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define counter_set_let(p, L)          (T_Ctr(p))->object.ctr.env = T_Lid(L)
 #define counter_slots(p)               T_Sln(T_Ctr(p)->object.ctr.slots)
 #define counter_set_slots(p, Val)      (T_Ctr(p))->object.ctr.slots = T_Sln(Val)
+
+#if S7_DEBUGGING
+#define init_temp(p, Val)              do {if (p != sc->unused) fprintf(stderr, "%s[%d]: temp %s\n", __func__, __LINE__, display(p)); p = T_Ext(Val);} while (0)
+#else
+#define init_temp(p, Val)              p = Val
+#endif
 
 #if __cplusplus && HAVE_COMPLEX_NUMBERS
   using namespace std;                /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
@@ -7266,6 +7272,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
   gc_mark(sc->temp10);
+  gc_mark(sc->temp11);
 
   gc_mark(car(sc->t1_1));
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
@@ -7574,21 +7581,21 @@ Evaluation produces a surprising amount of garbage, so don't leave the GC off fo
   #define Q_gc s7_make_signature(sc, 2, sc->T, sc->is_boolean_symbol)
 
   /* g_gc can't be called in a situation where these lists matter (I think...) */
-  set_mlist_1(sc, sc->nil);
-  set_mlist_2(sc, sc->nil, sc->nil);
-  set_plist_1(sc, sc->nil);
-  set_plist_2(sc, sc->nil, sc->nil);
-  set_plist_3(sc, sc->nil, sc->nil, sc->nil);
-  set_qlist_2(sc, sc->nil, sc->nil);
-  set_car(sc->qlist_3, sc->nil);
-  set_elist_1(sc, sc->nil);
-  set_elist_2(sc, sc->nil, sc->nil);
-  set_elist_3(sc, sc->nil, sc->nil, sc->nil);
-  set_car(sc->elist_4, sc->nil);
-  set_car(sc->elist_5, sc->nil);
-  set_car(sc->elist_6, sc->nil);
-  set_car(sc->elist_7, sc->nil); /* clist and dlist are weak references */
-  set_ulist_1(sc, sc->nil, sc->nil);
+  set_mlist_1(sc, sc->unused);
+  set_mlist_2(sc, sc->unused, sc->unused);
+  set_plist_1(sc, sc->unused);
+  set_plist_2(sc, sc->unused, sc->unused);
+  set_plist_3(sc, sc->unused, sc->unused, sc->unused);
+  set_qlist_2(sc, sc->unused, sc->unused);
+  set_car(sc->qlist_3, sc->unused);
+  set_elist_1(sc, sc->unused);
+  set_elist_2(sc, sc->unused, sc->unused);
+  set_elist_3(sc, sc->unused, sc->unused, sc->unused);
+  set_car(sc->elist_4, sc->unused);
+  set_car(sc->elist_5, sc->unused);
+  set_car(sc->elist_6, sc->unused);
+  set_car(sc->elist_7, sc->unused); /* clist and dlist are weak references */
+  set_ulist_1(sc, sc->unused, sc->unused);
   if (is_not_null(args))
     {
       if (!is_boolean(car(args)))
@@ -7809,7 +7816,7 @@ static void push_op_stack(s7_scheme *sc, s7_pointer op)
 
 static s7_pointer pop_op_stack(s7_scheme *sc)
 {
-  s7_pointer op = (*(--(sc->op_stack_now)));
+  s7_pointer op = T_Ext(*(--(sc->op_stack_now)));
   if (sc->op_stack_now < sc->op_stack)
     {
       fprintf(stderr, "%sop_stack underflow%s\n", BOLD_TEXT, UNBOLD_TEXT);
@@ -7828,7 +7835,7 @@ static void initialize_op_stack(s7_scheme *sc)
   sc->op_stack_size = OP_STACK_INITIAL_SIZE;
   sc->op_stack_now = sc->op_stack;
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
-  for (int32_t i = 0; i < OP_STACK_INITIAL_SIZE; i++) sc->op_stack[i] = sc->nil;
+  for (int32_t i = 0; i < OP_STACK_INITIAL_SIZE; i++) sc->op_stack[i] = sc->unused;
 }
 
 static void resize_op_stack(s7_scheme *sc)
@@ -7836,7 +7843,7 @@ static void resize_op_stack(s7_scheme *sc)
   int32_t new_size = sc->op_stack_size * 2;
   int32_t loc = (int32_t)(sc->op_stack_now - sc->op_stack);
   sc->op_stack = (s7_pointer *)Realloc((void *)(sc->op_stack), new_size * sizeof(s7_pointer));
-  for (int32_t i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->nil;
+  for (int32_t i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->unused;
   sc->op_stack_size = (uint32_t)new_size;
   sc->op_stack_now = (s7_pointer *)(sc->op_stack + loc);
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
@@ -8092,9 +8099,9 @@ static void resize_stack(s7_scheme *sc)
     s7_int i = sc->stack_size;
     s7_int left = new_size - i - 8;
     while (i <= left)
-      LOOP_8(orig[i++] = sc->nil);
+      LOOP_8(orig[i++] = sc->unused);
     for (; i < new_size; i++)
-      orig[i] = sc->nil;
+      orig[i] = sc->unused;
   }
   vector_length(sc->stack) = new_size;
   sc->stack_size = new_size;
@@ -8300,7 +8307,7 @@ static s7_pointer g_symbol_table(s7_scheme *sc, s7_pointer unused_args)
   }
   {
     s7_pointer lst = sc->w;
-    sc->w = sc->nil;
+    sc->w = sc->unused;
     return(lst);
   }
 }
@@ -9172,7 +9179,7 @@ static s7_pointer g_unlet(s7_scheme *sc, s7_pointer unused_args)
    *   (define (f x) (with-let (unlet) (+ x 1)))
    */
   res = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(res);
 }
 
@@ -9544,7 +9551,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	    }
 	  check_let_fallback(sc, sym, new_e);
 	}
-      sc->temp3 = sc->nil;
+      sc->temp3 = sc->unused;
     }
   return(new_e);
 }
@@ -9624,7 +9631,7 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 	}
       else sp = inline_add_slot_at_end(sc, id, sp, symbol, cadr(x));
     }
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(new_e);
 }
 
@@ -9648,7 +9655,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   let_set_outlet(x, sc->nil);
   let_set_slots(x, slot_end(sc));
   add_slot_unchecked(sc, x, symbol, value, let_id(x));
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(x);
 }
 
@@ -9674,7 +9681,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
       else sp = inline_add_slot_at_end(sc, id, sp, symbol, value);
     }
   va_end(ap);
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(new_e);
 }
 
@@ -9770,7 +9777,7 @@ s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer let)
     }
   x = sc->w;
   sc->w = sc->temp3;
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(x);
 }
 
@@ -10117,7 +10124,7 @@ static s7_pointer let_copy(s7_scheme *sc, s7_pointer let)
    *    match the unshadowed slot, not the last in the list:
    *    (let ((e1 (inlet 'a 1 'a 2))) (let ((e2 (copy e1))) (list (equal? e1 e2) (equal? (e1 'a) (e2 'a)))))
    */
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(new_e);
 }
 
@@ -11315,11 +11322,11 @@ static s7_pointer copy_any_list(s7_scheme *sc, s7_pointer a)
   s7_pointer fast = slow;
   s7_pointer p;
 #if S7_DEBUGGING
-  #define wrap_return(W) do {fast = W; W = sc->nil; sc->y = sc->nil; return(check_wrap_return(fast));} while (0)
+  #define wrap_return(W) do {fast = W; W = sc->unused; sc->y = sc->unused; return(check_wrap_return(fast));} while (0)
 #else
-  #define wrap_return(W) do {fast = W; W = sc->nil; sc->y = sc->nil; return(fast);} while (0)
+  #define wrap_return(W) do {fast = W; W = sc->unused; sc->y = sc->unused; return(fast);} while (0)
 #endif
-  sc->y = a; /* gc_protect_via_stack doesn't work here because we're called in copy_stack, I think (trouble is in call/cc stuff) */
+  init_temp(sc->y, a); /* gc_protect_via_stack doesn't work here because we're called in copy_stack, I think (trouble is in call/cc stuff) */
   sc->w = list_1(sc, car(a));
   p = sc->w;
   while (true)
@@ -11559,7 +11566,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   continuation_op_size(x) = sc->op_stack_size;
   continuation_key(x) = find_any_baffle(sc);
   continuation_name(x) = sc->F;
-  sc->temp7 = sc->nil;
+  sc->temp7 = sc->unused;
 
   add_continuation(sc, x);
   return(x);
@@ -11752,7 +11759,7 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
   if ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p)))))
     continuation_name(sc->w) = car(closure_args(p));
   push_stack(sc, OP_APPLY, list_1_unchecked(sc, sc->w), p); /* apply function p to continuation sc->w */
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(sc->nil);
 }
 
@@ -11766,7 +11773,7 @@ static void op_call_cc(s7_scheme *sc)
   sc->w = s7_make_continuation(sc);
   continuation_name(sc->w) = caar(opt2_pair(sc->code)); /* caadadr(sc->code) */
   sc->curlet = inline_make_let_with_slot(sc, sc->curlet, continuation_name(sc->w), sc->w);
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   sc->code = cdr(opt2_pair(sc->code)); /* cddadr(sc->code) */
 }
 
@@ -27582,7 +27589,7 @@ static s7_pointer string_to_list(s7_scheme *sc, const char *str, s7_int len)
   for (s7_int i = len - 1; i >= 0; i--)
     sc->temp6 = cons_unchecked(sc, chars[((uint8_t)str[i])], sc->temp6);
   result = sc->temp6;
-  sc->temp6 = sc->nil;
+  sc->temp6 = sc->unused;
   return(result);
 }
 
@@ -27614,7 +27621,7 @@ static s7_pointer g_string_to_list(s7_scheme *sc, s7_pointer args)
   for (s7_int i = end - 1; i >= start; i--)
     sc->w = cons_unchecked(sc, chars[((uint8_t)string_value(str)[i])], sc->w);
   p = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -31932,7 +31939,7 @@ static s7_pointer cyclic_sequences_p_p(s7_scheme *sc, s7_pointer obj)
 	  for (int32_t i = 0; i < ci->top; i++)
 	    sc->w = cons_unchecked(sc, ci->objs[i], sc->w);
 	  lst = sc->w;
-	  sc->w = sc->nil;
+	  sc->w = sc->unused;
 	  return(lst);
 	}}
   return(sc->nil);
@@ -33946,7 +33953,7 @@ static void write_closure_readably_1(s7_scheme *sc, s7_pointer obj, s7_pointer a
 	set_plist_2(sc, car(arglist), sc->allow_other_keys_keyword) :
 	pair_append(sc, arglist, list_1(sc, sc->allow_other_keys_keyword));
       object_to_port(sc, sc->temp9, port, P_WRITE, NULL);
-      sc->temp9 = sc->nil;
+      sc->temp9 = sc->unused;
     }
   else object_to_port(sc, arglist, port, P_WRITE, NULL); /* here we just want the straight output (a b) not (list 'a 'b) */
 
@@ -36383,7 +36390,7 @@ static s7_pointer g_directory_to_list(s7_scheme *sc, s7_pointer args)
       closedir(dpos);
     }
   result = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(result);
 }
 
@@ -36440,7 +36447,7 @@ static s7_pointer semipermanent_list(s7_scheme *sc, s7_int len)
 {
   s7_pointer p = sc->nil;
   for (s7_int j = 0; j < len; j++)
-    p = semipermanent_cons(sc, sc->nil, p, T_PAIR | T_IMMUTABLE);
+    p = semipermanent_cons(sc, sc->unused, p, T_PAIR | T_IMMUTABLE);
   return(p);
 }
 
@@ -36451,7 +36458,7 @@ s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...)
   s7_pointer res = sc->nil;
 
   for (i = 0; i < len; i++)
-    res = semipermanent_cons(sc, sc->nil, res, T_PAIR | T_IMMUTABLE);
+    res = semipermanent_cons(sc, sc->unused, res, T_PAIR | T_IMMUTABLE);
   va_start(ap, len);
   i = 0;
   for (s7_pointer p = res; is_pair(p); p = cdr(p), i++)
@@ -36875,8 +36882,8 @@ static inline s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
       p = cdr(p);
       if (is_pair(p)) {np = cdr(np); set_cdr(np, list_1(sc, car(p)));} else break;
     }
-  sc->temp8 = sc->nil;
-  sc->temp5 = sc->nil;
+  sc->temp8 = sc->unused;
+  sc->temp5 = sc->unused;
   return(tp);
 }
 
@@ -38671,7 +38678,7 @@ s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...)
     check_list_validity(sc, "s7_list", sc->w);
 
   p = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -38704,7 +38711,7 @@ s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...) /* arglist should b
     check_list_validity(sc, "s7_list_nl", sc->w);
 
   p = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -38795,7 +38802,7 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 		if (len < 0)
 		  set_cdr(np, p);
 	    }
-	  sc->temp8 = sc->nil;
+	  sc->temp8 = sc->unused;
 	  unstack(sc);
 	  return(tp);
 	}
@@ -38811,7 +38818,7 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 	    {
 	      if (!s7_is_proper_list(sc, p))
 		{
-		  sc->temp8 = sc->nil;
+		  sc->temp8 = sc->unused;
 		  unstack(sc);
 		  wrong_type_error_nr(sc, sc->append_symbol, position_of(y, args), p, a_proper_list_string);
 		}
@@ -39431,7 +39438,7 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 		    set_car(v, car(y));
 		  v = g_vector_append(sc, sc->temp9);
 		  y = s7_apply_function(sc, func, set_ulist_1(sc, v, p));
-		  sc->temp9 = sc->nil;
+		  sc->temp9 = sc->unused;
 		  return(y);
 		}}
 	  wrong_type_error_nr(sc, sc->vector_append_symbol, i + 1, x, sc->type_names[T_VECTOR]);
@@ -39444,7 +39451,7 @@ static s7_pointer vector_append_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2
   s7_pointer val;
   sc->temp7 = list_2(sc, p1, p2);
   val = g_vector_append(sc, sc->temp7);
-  sc->temp7 = sc->nil;
+  sc->temp7 = sc->unused;
   return(val);
 }
 
@@ -39453,7 +39460,7 @@ static s7_pointer vector_append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p
   s7_pointer val;
   sc->temp7 = list_3(sc, p1, p2, p3);
   val = g_vector_append(sc, sc->temp7);
-  sc->temp7 = sc->nil;
+  sc->temp7 = sc->unused;
   return(val);
 }
 #endif
@@ -39586,34 +39593,34 @@ s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect)
   s7_int len = vector_length(vect);
   s7_pointer result;
   if (len == 0) return(sc->nil);
-  sc->temp6 = sc->nil;
+  init_temp(sc->y, sc->nil);
   gc_protect_via_stack(sc, vect);
   switch (type(vect))
     {
     case T_VECTOR:
       check_free_heap_size(sc, len);
       for (s7_int i = len - 1; i >= 0; i--)
-	sc->temp6 = cons_unchecked(sc, vector_element(vect, i), sc->temp6);
+	sc->y = cons_unchecked(sc, vector_element(vect, i), sc->y);
       break;
     case T_BYTE_VECTOR:
       check_free_heap_size(sc, len);
       for (s7_int i = len - 1; i >= 0; i--)
-	sc->temp6 = cons_unchecked(sc, small_int(byte_vector(vect, i)), sc->temp6);
+	sc->y = cons_unchecked(sc, small_int(byte_vector(vect, i)), sc->y);
       break;
     case T_INT_VECTOR:
       check_free_heap_size(sc, 2 * len);
       for (s7_int i = len - 1; i >= 0; i--)
-	sc->temp6 = cons_unchecked(sc, make_integer_unchecked(sc, int_vector(vect, i)), sc->temp6);
+	sc->y = cons_unchecked(sc, make_integer_unchecked(sc, int_vector(vect, i)), sc->y);
       break;
     case T_FLOAT_VECTOR:
       check_free_heap_size(sc, 2 * len);
       for (s7_int i = len - 1; i >= 0; i--)
-	sc->temp6 = cons_unchecked(sc, make_real_unchecked(sc, float_vector(vect, i)), sc->temp6);
+	sc->y = cons_unchecked(sc, make_real_unchecked(sc, float_vector(vect, i)), sc->y);
       break;
     }
   unstack(sc);
-  result = sc->temp6;
-  sc->temp6 = sc->nil;
+  result = sc->y;
+  sc->y = sc->unused;
   return(result);
 }
 
@@ -39621,14 +39628,14 @@ s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array)
 {
   s7_pointer result;
   if (num_values == 0) return(sc->nil);
-  sc->temp6 = sc->nil;
+  init_temp(sc->y, sc->nil);
   check_free_heap_size(sc, num_values);
   for (s7_int i = num_values - 1; i >= 0; i--)
-    sc->temp6 = cons_unchecked(sc, array[i], sc->temp6);
-  result = sc->temp6;
+    sc->y = cons_unchecked(sc, array[i], sc->y);
+  result = sc->y;
   if (sc->safety > NO_SAFETY)
     check_list_validity(sc, "s7_array_to_list", result);
-  sc->temp6 = sc->nil;
+  sc->y = sc->unused;
   return(result);
 }
 
@@ -39661,7 +39668,7 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
   else for (i = end - 1; i >= start; i--) sc->w = cons_unchecked(sc, vector_getter(vec)(sc, vec, i), sc->w);
   unstack(sc);
   p = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -39890,7 +39897,7 @@ static s7_pointer g_list_to_vector(s7_scheme *sc, s7_pointer args)
   if (!s7_is_proper_list(sc, p))
     return(sole_arg_method_or_bust_p(sc, p, sc->list_to_vector_symbol, a_proper_list_string));
   p = g_vector(sc, p);
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(p);
 }
 
@@ -40953,7 +40960,7 @@ static s7_pointer g_vector_dimensions(s7_scheme *sc, s7_pointer args)
   for (s7_int i = vector_ndims(x) - 1; i >= 0; i--)
     sc->w = cons(sc, make_integer(sc, vector_dimension(x, i)), sc->w);
   x = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(x);
 }
 
@@ -41108,7 +41115,7 @@ static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 
   vec = g_make_vector(sc, set_plist_1(sc, sc->w = proper_list_reverse_in_place(sc, sc->w)));
   vec_loc = gc_protect_1(sc, vec);
-  sc->w = sc->nil;
+  sc->w = sc->unused;
 
   /* now fill the vector checking that all the lists match */
   err = traverse_vector_data(sc, vec, 0, 0, dims, sizes, data);
@@ -42369,7 +42376,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 		immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->sort_symbol, data));
 	      set_car(p, elements[i]);
 	    }
-	  sc->temp6 = sc->nil;
+	  sc->temp6 = sc->unused;
 	  unstack(sc); /* not pop_stack! */
 	  return(data);
 	}
@@ -42421,7 +42428,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    if (is_byte_vector(data))
 	      for (i = 0; i < len; i++)	chrs[i] = (char)integer(elements[i]);
 	    else for (i = 0; i < len; i++) chrs[i] = character(elements[i]);
-	    sc->temp6 = sc->nil;
+	    sc->temp6 = sc->unused;
 	    unstack(sc); /* not pop_stack! */
 	    return(data);
 	  }
@@ -42478,7 +42485,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    if (is_float_vector(data))
 	      for (i = 0; i < len; i++)	float_vector(data, i) = real(elements[i]);
 	    else for (i = 0; i < len; i++) int_vector(data, i) = integer(elements[i]);
-	    sc->temp6 = sc->nil;
+	    sc->temp6 = sc->unused;
 	    unstack(sc);
 	    return(data);
 	  }
@@ -42486,7 +42493,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	sc->temp6 = cons(sc, data, lessp);
 	unstack(sc);
 	push_stack(sc, OP_SORT_VECTOR_END, sc->temp6, sc->code); /* save and gc protect the original homogeneous vector and func */
-	sc->temp6 = sc->nil;
+	sc->temp6 = sc->unused;
       }
       break;
 
@@ -42554,7 +42561,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       vector_element(lx, 5) = make_integer_unchecked(sc, n * n);
     }
   push_stack(sc, OP_SORT, args, lx);
-  sc->temp6 = sc->nil;
+  sc->temp6 = sc->unused;
   return(sc->F);
   /* if the comparison function waffles, sort! can hang: (sort! '(1 2 3) (lambda (a b) (= a b)))
    * set 'safety to 1 to add a check for this loop, but the "safe" procedures are direct, so unchecked.
@@ -46635,7 +46642,7 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
   sc->temp10 = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
   result = s7_call(sc, func, sc->temp10);
-  sc->temp10 = sc->nil;
+  sc->temp10 = sc->unused;
   return(result);
 }
 
@@ -48984,7 +48991,7 @@ s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a) /* just pairs */
 	break;
     }
   p = (is_null(x)) ? sc->w : cons(sc, x, sc->w);    /* ?? this means that (reverse '(1 2 . 3)) returns '(3 2 1) -- we used to return () here */
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -49621,7 +49628,7 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       if (!is_null(p))
 	wrong_type_error_nr(sc, sc->append_symbol, 1, a, a_proper_list_string);
       set_cdr(np, b);
-      sc->temp8 = sc->nil;
+      sc->temp8 = sc->unused;
       return(q);
     }
   if (is_null(a)) return(b);
@@ -49647,7 +49654,7 @@ static s7_pointer byte_vector_to_list(s7_scheme *sc, const uint8_t *str, s7_int 
   for (s7_int i = len - 1; i >= 0; i--)
     sc->w = cons_unchecked(sc, small_int((uint32_t)(str[i])), sc->w);
   p = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -49665,7 +49672,7 @@ static s7_pointer hash_table_to_list(s7_scheme *sc, s7_pointer obj)
       sc->w = cons(sc, x, sc->w);
     }
   x = sc->w;
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   unstack(sc);
   return(x);
 }
@@ -49751,7 +49758,7 @@ static s7_pointer c_obj_to_list(s7_scheme *sc, s7_pointer obj) /* "c_object_to_l
       set_car(x, (*(c_object_ref(sc, obj)))(sc, z));
     }
   s7_gc_unprotect_at(sc, gc_z);
-  sc->temp7 = sc->nil;
+  sc->temp7 = sc->unused;
   return(result);
 }
 
@@ -50832,7 +50839,7 @@ static s7_pointer profile_info_out(s7_scheme *sc)
   for (i = 0; i < pd->top; i++) if (pd->funcs[i]) clear_match_symbol(pd->funcs[i]);
   memcpy((void *)int_vector_ints(vl), (void *)pd->lines, pd->top * sizeof(s7_int));
   memcpy((void *)int_vector_ints(vi), (void *)pd->timing_data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -51058,7 +51065,7 @@ static s7_pointer init_owlet(s7_scheme *sc)
 #if WITH_HISTORY
   sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
 #endif
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(e);
 }
 
@@ -51190,7 +51197,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       s7_pointer error_func = catch_handler(catcher);
       uint64_t loc = catch_goto_loc(catcher);
 
-      sc->y = type;
+      init_temp(sc->y, type);
       sc->value = info;
 
       sc->temp4 = stack_let(sc->stack, i); /* GC protect this, since we're moving the stack top below */
@@ -51271,8 +51278,9 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 	       *   in any case the OP_EVAL_DONE is not useful (it marks the end of the no-error case).
 	       */
 	      sc->value = y;
-	      sc->temp4 = sc->nil;
-	      sc->w = sc->nil;
+	      sc->y = sc->unused;
+	      sc->temp4 = sc->unused;
+	      sc->w = sc->unused;
 	      if (loc == 4)
 		sc->code = cons(sc, sc->value, sc->nil); /* if we end up at op_begin, give it something it can handle */
 	      return(true);
@@ -51293,17 +51301,19 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
       else
 	{
 	  sc->code = error_func;
+	  sc->y = sc->unused;
 	  if (!s7_is_aritable(sc, sc->code, 2)) /* op_catch_1 from op_c_catch already checks this */
 	    wrong_number_of_args_error_nr(sc, "catch error handler should accept two arguments: ~S", sc->code);
 	}
-      sc->temp4 = sc->nil;
+      sc->temp4 = sc->unused;
       /* if user (i.e. yers truly!) copies/pastes the preceding lambda () into the
        *   error handler portion of the catch, he gets the inexplicable message:
        *       ;(): too many arguments: (a1 ())
        *   when this apply tries to call the handler.  So, we need a special case error check here!
        */
       sc->args = list_2(sc, type, info); /* almost never able to skip this -- costs more to check! */
-      sc->w = sc->nil;
+      sc->w = sc->unused;
+      sc->y = sc->unused;
       sc->cur_op = OP_APPLY;
       /* explicit eval needed if s7_call called into scheme where a caught error occurred (ex6 in exs7.c)
        *  but putting it here (via eval(sc, OP_APPLY)) means the C stack is not cleared correctly in non-s7-call cases,
@@ -52324,7 +52334,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       check_stack_size(sc);
       sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
       sc->value = s7_call(sc, obj, sc->temp10);
-      sc->temp10 = sc->nil;
+      sc->temp10 = sc->unused;
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
@@ -52340,7 +52350,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 	apply_error_nr(sc, obj, indices);
       sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; /* do not use sc->args here! */
       sc->value = s7_call(sc, obj, sc->temp10);
-      sc->temp10 = sc->nil;
+      sc->temp10 = sc->unused;
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
@@ -52640,7 +52650,7 @@ s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args)
     if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s: %s %s\n", __func__, display(func), display_80(args)));
 
     sc->temp4 = T_App(func);                           /* this is feeble GC protection */
-    sc->temp2 = T_Lst(args);
+    sc->temp2 = T_Lst(args);                           /* only use of temp2 */
 
     store_jump_info(sc);
     set_jump_info(sc, S7_CALL_SET_JUMP);
@@ -66731,7 +66741,7 @@ static s7_pointer make_iterators(s7_scheme *sc, s7_pointer caller, s7_pointer ar
 	}
       sc->z = cons(sc, iter, sc->z);
     }
-  sc->temp3 = sc->nil;
+  sc->temp3 = sc->unused;
   return(proper_list_reverse_in_place(sc, sc->z));
 }
 
@@ -66873,7 +66883,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	    }
 	  else sc->z = seq;
 	  push_stack_no_let(sc, OP_GC_PROTECT, seq, f);
-	  sc->z = sc->nil;
+	  sc->z = sc->unused;
 	  if (func == opt_cell_any_nv)
 	    {
 	      opt_info *o = sc->opts[0];
@@ -66923,7 +66933,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
     }
   else sc->z = seq;
   push_stack(sc, OP_FOR_EACH_1, inline_make_counter(sc, sc->z), f);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   return(sc->unspecified);
 }
 
@@ -66939,7 +66949,7 @@ static void map_or_for_each_closure_pair_2(s7_scheme *sc, s7_pfunc func, s7_poin
       else
 	{
 	  s7_pointer val = func(sc);
-	  if (val != sc->no_value) sc->temp6 = cons(sc, val, sc->temp6);
+	  if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11); /* yow! we're assuming temp11 crosses map iterations and is used only in this context */
 	}
       if ((is_pair(cdr(fast1))) && (is_pair(cdr(fast2))))
 	{
@@ -66954,7 +66964,7 @@ static void map_or_for_each_closure_pair_2(s7_scheme *sc, s7_pfunc func, s7_poin
 	  else
 	    {
 	      s7_pointer val = func(sc);
-	      if (val != sc->no_value) sc->temp6 = cons(sc, val, sc->temp6);
+	      if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11);
 	    }}}
 }
 
@@ -66971,7 +66981,7 @@ static void map_or_for_each_closure_vector_2(s7_scheme *sc, s7_pfunc func, s7_po
       else
 	{
 	  s7_pointer val = func(sc);
-	  if (val != sc->no_value) sc->temp6 = cons(sc, val, sc->temp6);
+	  if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11);
 	}}
 }
 
@@ -66989,7 +66999,7 @@ static void map_or_for_each_closure_string_2(s7_scheme *sc, s7_pfunc func, s7_po
       else
 	{
 	  s7_pointer val = func(sc);
-	  if (val != sc->no_value) sc->temp6 = cons(sc, val, sc->temp6);
+	  if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11);
 	}}
 }
 
@@ -67061,7 +67071,7 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
     }
   else sc->z = list_2(sc, sc->z, seq2);
   push_stack(sc, OP_FOR_EACH, cons_unchecked(sc, sc->z, make_list(sc, 2, sc->nil)), f);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   return(sc->unspecified);
 }
 
@@ -67158,7 +67168,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
       if (len == 1)
 	{
 	  s7_pointer x = caar(sc->z), y = cdr(sc->z);
-	  sc->z = sc->nil;
+	  sc->z = sc->unused;
 	  while (true)
 	    {
 	      set_car(y, s7_iterate(sc, x));
@@ -67173,7 +67183,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	      func(sc, y);
 	    }}
       iters = sc->z;
-      sc->z = sc->nil;
+      sc->z = sc->unused;
       while (true)
 	{
 	  for (s7_pointer x = car(iters), y = cdr(iters); is_pair(x); x = cdr(x), y = cdr(y))
@@ -67198,7 +67208,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
     return(g_for_each_closure(sc, f, cadr(args)));
 
   push_stack(sc, OP_FOR_EACH, cons_unchecked(sc, make_iterators(sc, sc->for_each_symbol, args), make_list(sc, len, sc->nil)), f);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   return(sc->unspecified);
 }
 
@@ -67301,10 +67311,15 @@ static Inline bool inline_op_for_each_2(s7_scheme *sc) /* called once in eval, l
 
 
 /* ---------------------------------------- map ---------------------------------------- */
+
+/* TODO: need map_unwind(?) to clear map_call_ctr in case error jumps past current map (s7test/t622=1) */
+/* TODO: remove temp11 */
+
 static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* one sequence argument */
 {
   s7_pointer body = closure_body(f);
   sc->value = f;
+  /* fprintf(stderr, "map: %ld\n", sc->map_call_ctr); */
 
   if (!no_cell_opt(body))
     {
@@ -67314,89 +67329,103 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
       sc->curlet = inline_make_let_with_slot(sc, closure_let(f), (is_pair(car(pars))) ? caar(pars) : car(pars), val);
       slot = let_slots(sc->curlet);
 
-      if (is_null(cdr(body)))
-	func = s7_cell_optimize(sc, body, false);
+      if (sc->map_call_ctr > 0)
+	func = NULL;
       else
-	if (is_null(cddr(body)))
-	  {
-	    set_ulist_1(sc, sc->begin_symbol, body);
-	    func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), false); /* list_1 8-Apr-21 */
-	  }
-	else func = NULL;
+	if (is_null(cdr(body)))
+	  func = s7_cell_optimize(sc, body, false);
+	else
+	  if (is_null(cddr(body)))
+	    {
+	      set_ulist_1(sc, sc->begin_symbol, body);
+	      func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), false); /* list_1 8-Apr-21 */
+	    }
+	  else func = NULL;
       if (func)
 	{
-	  s7_pointer z;
-	  sc->temp6 = sc->nil;
+	  s7_pointer z, res;
 	  push_stack_no_let(sc, OP_GC_PROTECT, f, seq);
 	  if (is_pair(seq))
 	    {
+	      stack_protected3(sc) = sc->nil;
+	      sc->map_call_ctr++;
 	      for (s7_pointer fast = seq, slow = seq; is_pair(fast); fast = cdr(fast), slow = cdr(slow))
 		{
 		  slot_set_value(slot, car(fast));
 		  z = func(sc);
-		  if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
+		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		  if (is_pair(cdr(fast)))
 		    {
 		      fast = cdr(fast);
 		      if (fast == slow)	break;
 		      slot_set_value(slot, car(fast));
 		      z = func(sc);
-		      if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
+		      if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		    }}
+	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
+	      sc->map_call_ctr--;
 	      unstack(sc);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      return(res);
 	    }
 	  if (is_float_vector(seq))
 	    {
 	      s7_double *vals = float_vector_floats(seq);
 	      s7_int len = vector_length(seq);
+	      stack_protected3(sc) = sc->nil;
 	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, make_real(sc, vals[i]));
 		  z = func(sc);
-		  if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
+		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		}
+	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
 	      unstack(sc);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      return(res);
 	    }
 	  if (is_int_vector(seq))
 	    {
 	      s7_int *vals = int_vector_ints(seq);
 	      s7_int len = vector_length(seq);
+	      stack_protected3(sc) = sc->nil;
 	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, make_integer(sc, vals[i]));
 		  z = func(sc);
-		  if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
+		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		}
+	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
 	      unstack(sc);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      return(res);
 	    }
 	  if (is_normal_vector(seq))
 	    {
 	      s7_pointer *vals = vector_elements(seq);
 	      s7_int len = vector_length(seq);
+	      stack_protected3(sc) = sc->nil;
 	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, vals[i]);
 		  z = func(sc);
-		  if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
+		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		}
+	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
 	      unstack(sc);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      return(res);
 	    }
 	  if (is_string(seq))
 	    {
 	      s7_int len = string_length(seq);
 	      const char *str = string_value(seq);
+	      stack_protected3(sc) = sc->nil;
 	      for (s7_int i = 0; i < len; i++)
 		{
 		  slot_set_value(slot, chars[(uint8_t)(str[i])]);
 		  z = func(sc);
-		  if (z != sc->no_value) sc->temp6 = cons(sc, z, sc->temp6);
+		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		}
+	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
 	      unstack(sc);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      return(res);
 	    }}
       set_no_cell_opt(body);
       set_curlet(sc, old_e);
@@ -67406,7 +67435,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
     {
       sc->z = make_iterators(sc, sc->map_symbol, set_plist_2(sc, sc->nil, seq));
       push_stack(sc, OP_MAP, inline_make_counter(sc, sc->z), f);
-      sc->z = sc->nil;
+      sc->z = sc->unused;
       return(sc->nil);
     }
   if ((is_null(cdr(body))) &&
@@ -67424,7 +67453,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
     }
   else sc->z = seq;
   push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->z), f);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   return(sc->nil);
 }
 
@@ -67454,26 +67483,33 @@ static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, 
 	else func = NULL;
       if (func)
 	{
+	  s7_pointer res;
 	  if ((is_pair(seq1)) && (is_pair(seq2)))
 	    {
-	      sc->temp6 = sc->nil;
+	      sc->temp11 = sc->nil;
 	      map_or_for_each_closure_pair_2(sc, func, seq1, seq2, slot1, slot2, false);
 	      set_curlet(sc, old_e);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      res = proper_list_reverse_in_place(sc, sc->temp11);
+	      sc->temp11 = sc->unused;
+	      return(res);
 	    }
 	  if ((is_any_vector(seq1)) && (is_any_vector(seq2)))
 	    {
-	      sc->temp6 = sc->nil;
+	      sc->temp11 = sc->nil;
 	      map_or_for_each_closure_vector_2(sc, func, seq1, seq2, slot1, slot2, false);
 	      set_curlet(sc, old_e);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      res = proper_list_reverse_in_place(sc, sc->temp11);
+	      sc->temp11 = sc->unused;
+	      return(res);
 	    }
 	  if ((is_string(seq1)) && (is_string(seq2)))
 	    {
-	      sc->temp6 = sc->nil;
+	      sc->temp11 = sc->nil;
 	      map_or_for_each_closure_string_2(sc, func, seq1, seq2, slot1, slot2, false);
 	      set_curlet(sc, old_e);
-	      return(proper_list_reverse_in_place(sc, sc->temp6));
+	      res = proper_list_reverse_in_place(sc, sc->temp11);
+	      sc->temp11 = sc->unused;
+	      return(res);
 	    }
 	  set_no_cell_opt(body);
 	  set_curlet(sc, old_e);
@@ -67500,7 +67536,7 @@ static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, 
   else sc->z = list_2(sc, sc->z, seq2);
 
   push_stack(sc, OP_MAP, inline_make_counter(sc, sc->z), f);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   return(sc->unspecified);
 }
 
@@ -67624,7 +67660,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  iter_list = sc->z;
 	  old_args = sc->args;
 	  push_stack_no_let(sc, OP_GC_PROTECT, val1, val = cons(sc, sc->nil, sc->code)); /* temporary GC protection: need to protect val1, iter_list, val */
-	  sc->z = sc->nil;
+	  sc->z = sc->unused;
 	  while (true)
 	    {
 	      s7_pointer z;
@@ -67668,7 +67704,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	    /* don't go to OP_MAP_2 here! It assumes no recursion */
 	    sc->z = (!is_iterator(cadr(args))) ? s7_make_iterator(sc, cadr(args)) : cadr(args);
 	    push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->z), f);
-	    sc->z = sc->nil;
+	    sc->z = sc->unused;
 	    symbol_increment_ctr(car(closure_args(f)));
 	    return(sc->nil);
 	  }
@@ -67698,7 +67734,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 
   sc->z = make_iterators(sc, sc->map_symbol, args);
   push_stack(sc, OP_MAP, inline_make_counter(sc, sc->z), f);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   return(sc->nil);
 }
 
@@ -67720,7 +67756,7 @@ static bool op_map(s7_scheme *sc)
   sc->x = proper_list_reverse_in_place(sc, sc->x);
   push_stack_direct(sc, OP_MAP_GATHER);
   sc->args = sc->x;
-  sc->x = sc->nil;
+  sc->x = sc->unused;
   if (needs_copied_args(sc->code))
     sc->args = copy_proper_list(sc, sc->args);
   return(false);
@@ -67856,7 +67892,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       sc->w = args;
       for (x = args; is_not_null(cdr(x)); x = cdr(x))
 	stack_args(sc->stack, top) = cons(sc, car(x), stack_args(sc->stack, top));
-      sc->w = sc->nil;
+      sc->w = sc->unused;
       return(car(x));
 
       /* in the next set, the main evaluator branches blithely assume no multiple-values,
@@ -68135,7 +68171,7 @@ static s7_pointer splice_out_values(s7_scheme *sc, s7_pointer args)
 	set_cdr(np, list_1(sc, car(p)));
 	np = cdr(np);
       }
-  sc->temp8 = sc->nil;
+  sc->temp8 = sc->unused;
   return(tp);
 }
 
@@ -68177,7 +68213,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 				  (is_unquoted_pair(cdr(args))) ? copy_tree_with_type(sc, cdr(args)) : cdr(args));
 	}
       else args = copy_tree(sc, args);      /* not copy_any_list here -- see comment below */
-      sc->temp5 = sc->nil;
+      sc->temp5 = sc->unused;
       return(args);
     }
   /* if a macro expands into a recursive function with a macro argument as its body (or reasonable facsimile thereof),
@@ -68899,7 +68935,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
       set_curlet(sc, current_let);
       sc->x = x;
       sc->z = z;
-      sc->temp7 = sc->nil;
+      sc->temp7 = sc->unused;
       if ((result != sc->undefined) &&
 	  (result != sc->unspecified))
 	return(result);
@@ -71271,8 +71307,11 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		if ((is_pair(car(p))) &&
 		    (!is_checked(car(p))) && /* ((full_type(p) & (TYPE_MASK | T_CHECKED)) == T_PAIR) is not faster */
 		    (optimize_expression(sc, car(p), hop, e, false) == OPT_OOPS)) /* "body" here is not body in terms of export_ok */
-		  return(OPT_OOPS);
-	      sc->temp9 = sc->nil;
+		  {
+		    sc->temp9 = sc->unused;
+		    return(OPT_OOPS);
+		  }
+	      sc->temp9 = sc->unused;
 
 	      add_symbol_to_list(sc, vars);
 	      if (is_pair(e))
@@ -71420,10 +71459,10 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	(!is_checked(car(p))) && /* ((full_type(p) & (TYPE_MASK | T_CHECKED)) == T_PAIR) is not faster */
 	(optimize_expression(sc, car(p), hop, e, body_export_ok) == OPT_OOPS))
       {
-	sc->temp9 = sc->nil;
+	sc->temp9 = sc->unused;
 	return(OPT_OOPS);
       }
-  sc->temp9 = sc->nil;
+  sc->temp9 = sc->unused;
 
   if ((hop == 1) &&
       ((is_syntax(car(expr))) ||
@@ -73691,7 +73730,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	      }}
       if (is_symbol(func))
 	{
-	  sc->temp1 = sc->nil;
+	  sc->temp1 = sc->unused;
 	  free_cell(sc, lst);
 	}
       sc->got_tc = false;
@@ -74574,9 +74613,9 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
     }
   closure_set_let(sc->x, sc->curlet);
   let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
-  sc->x = sc->nil;
+  sc->x = sc->unused;
   sc->code = T_Pair(body);
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(true);
 }
 
@@ -74645,7 +74684,7 @@ static bool op_let1(s7_scheme *sc)
       slot_set_next(sp, slot_end(sc));
     }
   sc->code = T_Pair(cdr(sc->code));
-  sc->temp8 = sc->nil;
+  sc->temp8 = sc->unused;
   return(true);
 }
 
@@ -74675,7 +74714,7 @@ static bool op_let(s7_scheme *sc)
 	  add_slot_checked(sc, sc->curlet, car(sc->code), sc->x);
 	  sc->curlet = make_let(sc, sc->curlet); /* inner let */
 	  sc->code = T_Pair(body);
-	  sc->x = sc->nil;
+	  sc->x = sc->unused;
 	}
       else sc->code = T_Pair(cdr(sc->code));
       return(true);
@@ -74730,8 +74769,8 @@ static void op_named_let_a(s7_scheme *sc)
   add_slot(sc, sc->curlet, car(args), sc->x);         /* the function */
   sc->curlet = inline_make_let_with_slot(sc, sc->curlet, car(sc->w), sc->args); /* inner let */
   closure_set_let(sc->x, sc->curlet);
-  sc->x = sc->nil;
-  sc->w = sc->nil;
+  sc->x = sc->unused;
+  sc->w = sc->unused;
 }
 
 static void op_named_let_aa(s7_scheme *sc)
@@ -74746,8 +74785,8 @@ static void op_named_let_aa(s7_scheme *sc)
   add_slot(sc, sc->curlet, car(args), sc->x);           /* the function */
   sc->curlet = inline_make_let_with_two_slots(sc, sc->curlet, car(sc->w), sc->args, cadr(sc->w), sc->value); /* inner let */
   closure_set_let(sc->x, sc->curlet);
-  sc->x = sc->nil;
-  sc->w = sc->nil;
+  sc->x = sc->unused;
+  sc->w = sc->unused;
 }
 
 static bool op_named_let_na(s7_scheme *sc)
@@ -79271,7 +79310,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      cp = cons(sc, var, cp);
 		      sc->x = cp;
 		    }
-		  sc->x = sc->nil;
+		  sc->x = sc->unused;
 		  if (!do_is_safe(sc, cddr(expr), stepper, cp, has_set)) return(false);
 		  break;
 		  
@@ -79290,10 +79329,10 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      if ((is_pair(cdar(vars))) &&
 			  (!do_is_safe(sc, cdar(vars), stepper, cp, has_set)))
 			{
-			  sc->x = sc->nil;
+			  sc->x = sc->unused;
 			  return(false);
 			}}
-		  sc->x = sc->nil;
+		  sc->x = sc->unused;
 		  if (!do_is_safe(sc, caddr(expr), stepper, cp, has_set)) return(false);
 		  if ((is_pair(cdddr(expr))) &&
 		      (!do_is_safe(sc, cdddr(expr), stepper, cp, has_set)))
@@ -80065,7 +80104,7 @@ static bool op_dox_init(s7_scheme *sc)
       else slot_just_set_expression(let_slots(let), sc->nil);
     }
   set_curlet(sc, let);
-  sc->temp1 = sc->nil;
+  sc->temp1 = sc->unused;
   test = cadr(code);
   if (is_true(sc, sc->value = fx_call(sc, test)))
     {
@@ -80206,7 +80245,7 @@ static goto_t op_dox(s7_scheme *sc)
     }
   set_curlet(sc, let);
   slots = let_slots(sc->curlet);
-  sc->temp1 = sc->nil;
+  sc->temp1 = sc->unused;
   id = let_id(let);
 
   /* the fn_calls above could have redefined a previous stepper, so that its symbol_id is > let let_id when we get here,
@@ -80652,7 +80691,7 @@ static void op_dox_pending_no_body(s7_scheme *sc)
 	}}
   slots = let_slots(let);
   set_curlet(sc, let);
-  sc->temp1 = sc->nil;
+  sc->temp1 = sc->unused;
   test = cadr(sc->code);
 
   let_set_has_pending_value(sc->curlet);
@@ -80784,7 +80823,7 @@ static void op_do_no_body_na_vars(s7_scheme *sc) /* vars fxable, end-test not */
     }
   if (steppers == 1) let_set_dox_slot1(let, stepper);
   set_curlet(sc, let);
-  sc->temp1 = sc->nil;
+  sc->temp1 = sc->unused;
   push_stack_no_args_direct(sc, (intptr_t)((steppers == 1) ? OP_DO_NO_BODY_NA_VARS_STEP_1 : OP_DO_NO_BODY_NA_VARS_STEP));
   sc->code = caadr(sc->code);
 }
@@ -81874,7 +81913,7 @@ static goto_t op_safe_do(s7_scheme *sc)
       if (opt_dotimes(sc, cddr(sc->code), sc->code, false))
 	return(goto_safe_do_end_clauses);
       set_curlet(sc, old_let);  /* apparently s7_optimize can step on sc->curlet? */
-      sc->temp7 = sc->nil;
+      sc->temp7 = sc->unused;
     }
   if (is_null(cdddr(sc->code)))
     {
@@ -83022,7 +83061,7 @@ static inline bool op_closure_star_na(s7_scheme *sc, s7_pointer code)
       sc->args = make_list(sc, opt3_arglen(cdr(code)), sc->F);
       for (s7_pointer p = sc->args, old_args = sc->w; is_pair(p); p = cdr(p), old_args = cdr(old_args))
 	set_car(p, fx_call(sc, old_args));
-      sc->w = sc->nil;
+      sc->w = sc->unused;
     }
   else sc->args = sc->nil;
   sc->code = opt1_lambda(code);
@@ -83904,7 +83943,7 @@ static /* inline */ void op_closure_ns(s7_scheme *sc) /* called once in eval, lg
   for (p = cdr(p), args = cdr(args); is_pair(p); p = cdr(p), args = cdr(args))
     last_slot = inline_add_slot_at_end(sc, id, last_slot, car(p), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
   set_curlet(sc, e);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
 }
@@ -84005,7 +84044,7 @@ static void op_closure_na(s7_scheme *sc)
       last_slot = slot;
     }
   set_curlet(sc, e);
-  sc->z = sc->nil;
+  sc->z = sc->unused;
   let_set_id(e, ++sc->let_number);
   for (id = let_id(e), slot = let_slots(e); tis_slot(slot); slot = next_slot(slot))
     {
@@ -84340,7 +84379,7 @@ static s7_pointer fx_tc_and_a_or_a_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_AND_A_OR_A_LAA);
   op_tc_and_a_or_a_laa(sc, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84366,7 +84405,7 @@ static s7_pointer fx_tc_or_a_and_a_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_OR_A_AND_A_LAA);
   op_tc_or_a_and_a_laa(sc, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84397,8 +84436,8 @@ static s7_pointer fx_tc_and_a_or_a_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_AND_A_OR_A_L3A);
   op_tc_and_a_or_a_l3a(sc, arg);
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
   return(sc->value);
 }
 
@@ -84428,8 +84467,8 @@ static s7_pointer fx_tc_or_a_and_a_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_OR_A_AND_A_L3A);
   op_tc_or_a_and_a_l3a(sc, arg);
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
   return(sc->value);
 }
 
@@ -84475,8 +84514,8 @@ static s7_pointer fx_tc_or_a_and_a_a_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_OR_A_AND_A_A_L3A);
   op_tc_or_a_and_a_a_l3a(sc, arg);
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
   return(sc->value);
 }
 
@@ -84696,7 +84735,7 @@ static s7_pointer fx_tc_if_a_z_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_LAA);
   op_tc_if_a_z_laa(sc, arg, true, TC_IF);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84704,7 +84743,7 @@ static s7_pointer fx_tc_cond_a_z_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_COND_A_Z_LAA);
   op_tc_if_a_z_laa(sc, arg, true, TC_COND);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84712,7 +84751,7 @@ static s7_pointer fx_tc_if_a_laa_z(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_LAA_Z);
   op_tc_if_a_z_laa(sc, arg, false, TC_IF);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84720,7 +84759,7 @@ static s7_pointer fx_tc_cond_a_laa_z(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_COND_A_LAA_Z);
   op_tc_if_a_z_laa(sc, arg, false, TC_COND);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84753,7 +84792,7 @@ static void op_tc_when_laa(s7_scheme *sc, s7_pointer code)
       slot_set_value(laa_slot, fx_call(sc, laa));
       slot_set_value(la_slot, sc->rec_p1);
     }
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   sc->value = sc->unspecified;
 }
 
@@ -84776,7 +84815,7 @@ static void op_tc_when_l3a(s7_scheme *sc, s7_pointer code)
       slot_set_value(laa_slot, sc->rec_p2);
       slot_set_value(la_slot, sc->rec_p1);
     }
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   sc->value = sc->unspecified;
 }
 
@@ -84806,8 +84845,8 @@ static s7_pointer fx_tc_if_a_z_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_L3A);
   op_tc_if_a_z_l3a(sc, arg, true);
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
   return(sc->value);
 }
 
@@ -84815,8 +84854,8 @@ static s7_pointer fx_tc_if_a_l3a_z(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_L3A_Z);
   op_tc_if_a_z_l3a(sc, arg, false);
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
   return(sc->value);
 }
 
@@ -84974,7 +85013,7 @@ static s7_pointer fx_tc_if_a_z_if_a_z_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_IF_A_Z_LAA);
   op_tc_if_a_z_if_a_z_laa(sc, false, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -84982,7 +85021,7 @@ static s7_pointer fx_tc_cond_a_z_a_z_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_COND_A_Z_A_Z_LAA);
   op_tc_if_a_z_if_a_z_laa(sc, true, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -85013,7 +85052,7 @@ static s7_pointer fx_tc_if_a_z_if_a_laa_z(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_IF_A_LAA_Z);
   op_tc_if_a_z_if_a_laa_z(sc, false, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -85021,7 +85060,7 @@ static s7_pointer fx_tc_cond_a_z_a_laa_z(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_COND_A_Z_A_LAA_Z);
   op_tc_if_a_z_if_a_laa_z(sc, true, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -85067,8 +85106,8 @@ static s7_pointer fx_tc_if_a_z_if_a_l3a_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_IF_A_L3A_L3A);
   op_tc_if_a_z_if_a_l3a_l3a(sc, arg);
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
   return(sc->value);
 }
 
@@ -85192,7 +85231,7 @@ static s7_pointer fx_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_LET_IF_A_Z_LAA);
   op_tc_let_if_a_z_laa(sc, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -85276,7 +85315,7 @@ static s7_pointer fx_tc_let_when_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_LET_WHEN_LAA);
   op_tc_let_when_laa(sc, true, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -85284,7 +85323,7 @@ static s7_pointer fx_tc_let_unless_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_LET_WHEN_LAA);
   op_tc_let_when_laa(sc, false, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -85325,7 +85364,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
       slot_set_value(la_slot, sc->rec_p1);
       set_curlet(sc, outer_let);
     }
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   unstack(sc);
   if (!op_tc_z(sc, endp))  /* might refer to inner_let slots */
     return(false);
@@ -85469,7 +85508,7 @@ static s7_pointer fx_tc_cond_a_z_a_laa_laa(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_COND_A_Z_A_LAA_LAA);
   op_tc_cond_a_z_a_laa_laa(sc, arg);
-  sc->rec_p1 = sc->F;
+  sc->rec_p1 = sc->unused;
   return(sc->value);
 }
 
@@ -87372,7 +87411,7 @@ static void op_any_closure_np_end(s7_scheme *sc)
       for (p = cdr(p), z = cdr(sc->args); is_pair(p); p = cdr(p), z = cdr(z))
 	last_slot = inline_add_slot_at_end(sc, id, last_slot, car(p), car(z)); /* sets last_slot, don't free sc->args -- used below */
       set_curlet(sc, e);
-      sc->z = sc->nil;
+      sc->z = sc->unused;
       if (is_pair(p))
 	error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
     }
@@ -91650,6 +91689,7 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, sc->temp8, "sc->temp8");
   mark_holdee(NULL, sc->temp9, "sc->temp9");
   mark_holdee(NULL, sc->temp10, "sc->temp10");
+  mark_holdee(NULL, sc->temp11, "sc->temp11");
   mark_holdee(NULL, sc->rec_p1, "sc->rec_p1");
   mark_holdee(NULL, sc->rec_p2, "sc->rec_p2");
 
@@ -92021,7 +92061,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 			     cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   /* same for semipermanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
@@ -92194,7 +92234,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists"),
 			       list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
 				      cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
-    sc->w = sc->nil;
+    sc->w = sc->unused;
     add_slot_unchecked_with_id(sc, mu_let,
 			       make_symbol(sc, "approximate-s7-size"),
 			       kmg(sc, ((sc->semipermanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
@@ -92212,7 +92252,7 @@ static s7_pointer sl_c_types(s7_scheme *sc)
   for (int32_t i = 0; i < sc->num_c_object_types; i++)               /*   c-object type (tag) is i */
     sc->w = cons(sc, sc->c_object_types[i]->scheme_name, sc->w);
   res = proper_list_reverse_in_place(sc, sc->w);                     /*   so car(types) has tag 0 */
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(res);
 }
 
@@ -92223,7 +92263,7 @@ static s7_pointer sl_file_names(s7_scheme *sc)
   for (int32_t i = 0; i <= sc->file_names_top; i++)
     sc->w = cons(sc, sc->file_names[i], sc->w);
   p = proper_list_reverse_in_place(sc, sc->w);
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(p);
 }
 
@@ -92276,7 +92316,7 @@ static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
       lst = cons_unchecked(sc, entry, lst);
       sc->w = lst;
     }
-  sc->w = sc->nil;
+  sc->w = sc->unused;
   return(reverse_in_place_unchecked(sc, sc->nil, lst));
 }
 
@@ -94842,22 +94882,23 @@ s7_scheme *s7_init(void)
 #endif
   sc->args = sc->nil;
   sc->value = sc->nil;
-  sc->w = sc->nil;
-  sc->x = sc->nil;
-  sc->y = sc->nil;
-  sc->z = sc->nil;
-  sc->temp1 = sc->nil;
-  sc->temp2 = sc->nil;
-  sc->temp3 = sc->nil;
-  sc->temp4 = sc->nil;
-  sc->temp5 = sc->nil;
-  sc->temp6 = sc->nil;
-  sc->temp7 = sc->nil;
-  sc->temp8 = sc->nil;
-  sc->temp9 = sc->nil;
-  sc->temp10 = sc->nil;
-  sc->rec_p1 = sc->F;
-  sc->rec_p2 = sc->F;
+  sc->w = sc->unused;
+  sc->x = sc->unused;
+  sc->y = sc->unused;
+  sc->z = sc->unused;
+  sc->temp1 = sc->unused;
+  sc->temp2 = sc->unused;
+  sc->temp3 = sc->unused;
+  sc->temp4 = sc->unused;
+  sc->temp5 = sc->unused;
+  sc->temp6 = sc->unused;
+  sc->temp7 = sc->unused;
+  sc->temp8 = sc->unused;
+  sc->temp9 = sc->unused;
+  sc->temp10 = sc->unused;
+  sc->temp11 = sc->unused;
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
 
   sc->begin_hook = NULL;
   sc->autoload_table = sc->nil;
@@ -95016,6 +95057,7 @@ s7_scheme *s7_init(void)
   sc->history_size = DEFAULT_HISTORY_SIZE;
   sc->true_history_size = DEFAULT_HISTORY_SIZE;
   sc->baffle_ctr = 0;
+  sc->map_call_ctr = 0;
   sc->syms_tag = 0;
   sc->syms_tag2 = 0;
   sc->class_name_symbol = make_symbol(sc, "class-name");
@@ -95034,17 +95076,17 @@ s7_scheme *s7_init(void)
   sc->plist_2_2 = cdr(sc->plist_2);
   sc->plist_3 = semipermanent_list(sc, 3);
   sc->qlist_2 = semipermanent_list(sc, 2);
-  sc->qlist_3 = semipermanent_cons(sc, sc->F, sc->qlist_2, T_PAIR | T_IMMUTABLE);
+  sc->qlist_3 = semipermanent_cons(sc, sc->unused, sc->qlist_2, T_PAIR | T_IMMUTABLE);
   sc->clist_1 = semipermanent_list(sc, 1);
   sc->clist_2 = semipermanent_list(sc, 2);
   sc->dlist_1 = semipermanent_list(sc, 1);
-  sc->elist_1 = semipermanent_cons(sc, sc->F, sc->nil, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_1 = semipermanent_cons(sc, sc->unused, sc->nil, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
   sc->elist_2 = semipermanent_list(sc, 2); set_is_elist(sc->elist_2);
   sc->elist_3 = semipermanent_list(sc, 3); set_is_elist(sc->elist_3);
-  sc->elist_4 = semipermanent_cons(sc, sc->F, sc->elist_3, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_5 = semipermanent_cons(sc, sc->F, sc->elist_4, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_6 = semipermanent_cons(sc, sc->F, sc->elist_5, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
-  sc->elist_7 = semipermanent_cons(sc, sc->F, sc->elist_6, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_4 = semipermanent_cons(sc, sc->unused, sc->elist_3, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_5 = semipermanent_cons(sc, sc->unused, sc->elist_4, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_6 = semipermanent_cons(sc, sc->unused, sc->elist_5, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
+  sc->elist_7 = semipermanent_cons(sc, sc->unused, sc->elist_6, T_PAIR | T_IMMUTABLE | T_IS_ELIST);
   sc->undefined_identifier_warnings = false;
   sc->undefined_constant_warnings = false;
   sc->wrap_only = make_wrap_only(sc);
@@ -95616,7 +95658,7 @@ int main(int argc, char **argv)
  * tauto     ----   ----   2562   2171   2046
  * thook     ----   ----   2590   2073   2071
  * lt        2187   2172   2150   2179   2179
- * dup       3805   3788   2492   2272   2270
+ * dup       3805   3788   2492   2272   2251
  * tcopy     8035   5546   2539   2373   2372
  * tload     ----   ----   3046   2377   2368
  * tread     2440   2421   2419   2414   2412
@@ -95632,7 +95674,7 @@ int main(int argc, char **argv)
  * tmac      3950   3873   3033   3670   3667
  * tclo      4787   4735   4390   4376   4379
  * tlet      7775   5640   4450   4403   4402
- * tcase     4960   4793   4439   4429   4440
+ * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4477
  * tshoot    5525   5447   5183   5056   5055
@@ -95641,19 +95683,19 @@ int main(int argc, char **argv)
  * tnum      6348   6013   5433   5369   5365
  * tlamb     6423   6273   5720   5545   5545
  * tmisc     8869   7612   6435   6184   6185
- * tset      ----   ----   ----   6238   6238
+ * tset      ----   ----   ----   6238   6219
  * tlist     7896   7546   6558   6247   6243
  * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6558
  * tari      13.0   12.7   6827   6583   6581
- * tleft     10.4   10.2   7657   7479   7480
+ * tleft     10.4   10.2   7657   7479   7475
  * tgc       11.9   11.1   8177   7913   7919
  * thash     11.8   11.7   9734   9467   9466
  * cb        11.2   11.0   9658   9528   9522
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.5
- * sg        ----   ----   55.9   56.7   55.8
+ * sg        ----   ----   55.9   56.7   55.7
  * lg        ----   ----  105.2  106.1  106.1
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
@@ -95662,6 +95704,13 @@ int main(int argc, char **argv)
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
- * fully optimize gmp version or at least extend big_int to int128_t
+ * fully optimize gmp version or at least extend big_int to int128_t; will make opt* fx* much more complex
  * should number output use (*s7* 'number-separator)?
+ *
+ * temp11 should be either stack_gc or vector_gc and recur-safe, most temps need init_temp check
+ *   temp3|5|8|9 need clear in error_nr (fx_call), temp2(only) and temp4 used in s7_call and not cleared, temp3 not cleared in several places
+ *   temp5 fx w/o clear, temp6 not cleared in clo*, w not clear collect_vars, z in apply_func
+ *   temp7|x messy in unb var, temp10 not cleared in g_map, temp8 a mess, temp9 a mess (every opt_syn call
+ * map/for-each in t725 (aux18), (map (functions (random (length functions))) s) (map (lambda (x) ((functions...) x)) s)?
+ * map iter recur as in 18
  */
