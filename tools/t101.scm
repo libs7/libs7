@@ -54,6 +54,7 @@
   "`(ok? ',tst (lambda () (define (!f!) (let ((!v! (vector #f))) (do ((!i! 0 (+ !i! 1))) ((= !i! 1) (!v! 0)) (vector-set! !v! 0 ,tst)))) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!v! #f)) (do ((!i! 0 (+ !i! 1))) ((= !i! 1) !v!) (set! !v! ,tst)))) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (define (!f!) (let ((!x! (map (lambda (!a!) ,tst) '(0)))) (if (pair? !x!) (car !x!) :no-value))) (!f!)) ,expected)"
+  "`(ok? ',tst (lambda () (define (!f!) (let ((!x! #f)) (for-each (lambda (!a!) (set! !x! ,tst)) '(0)) !x!)) (!f!)) ,expected)"
   "`(ok? ',tst (lambda () (call-with-exit (lambda (!a!) (!a! ,tst)))) ,expected)"
   "`(ok? ',tst (lambda () (call/cc (lambda (!a!) (!a! ,tst)))) ,expected)"
   "`(ok? ',tst (lambda () (values ,tst)) ,expected)"
@@ -78,7 +79,6 @@
   "`(ok? ',tst (lambda () (let-temporarily (((*s7* 'autoloading?) #f)) (with-let (sublet (curlet)) ,tst))) ,expected)"
   "`(ok? ',tst (lambda () (let-temporarily (((*s7* 'safety) 1)) ,tst)) (let-temporarily (((*s7* 'safety) 1)) ,expected))"
   ;; "`(ok? ',tst (lambda () (let* _L_ ((_Lx_ 1)) (if (> _Lx_ 0) (_L_ (- _Lx_ 1)) ,tst))) ,expected)"
-
   ;; this confuses get-zero-count, but otherwise is ok: `(ok? ',tst (lambda () (gc) ,tst) ,expected)
   ;; these are ok: "`(ok? ',tst (lambda () (define-macro (!m x) `(values ,x)) (!m ,tst)) ,expected)"
   ;;               "`(ok? ',tst (lambda () (let ((!x 0)) (let-temporarily ((!x ,tst)) !x))) ,expected)"

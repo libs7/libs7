@@ -1186,7 +1186,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer w, x, y, z;
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10, temp11;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1, mlist_1, mlist_2; /* dlist|clist and ulist can't overlap */
@@ -4178,7 +4178,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_WITH_LET, OP_WITH_LET1, OP_WITH_LET_UNCHECKED, OP_WITH_LET_S,
       OP_WITH_BAFFLE, OP_WITH_BAFFLE_UNCHECKED, OP_EXPANSION,
       OP_FOR_EACH, OP_FOR_EACH_1, OP_FOR_EACH_2, OP_FOR_EACH_3,
-      OP_MAP, OP_MAP_1, OP_MAP_2, OP_MAP_GATHER, OP_MAP_GATHER_1, OP_MAP_GATHER_2, OP_MAP_GATHER_3,
+      OP_MAP, OP_MAP_1, OP_MAP_2, OP_MAP_GATHER, OP_MAP_GATHER_1, OP_MAP_GATHER_2, OP_MAP_GATHER_3, OP_MAP_UNWIND,
       OP_BARRIER, OP_DEACTIVATE_GOTO,
       OP_DEFINE_BACRO, OP_DEFINE_BACRO_STAR, OP_BACRO, OP_BACRO_STAR,
       OP_GET_OUTPUT_STRING,
@@ -4395,7 +4395,7 @@ static const char* op_names[NUM_OPS] =
       "with_let", "with_let1", "with_let_unchecked", "with_let_s",
       "with_baffle", "with_baffle_unchecked", "expansion",
       "for_each", "for_each_1", "for_each_2", "for_each_3",
-      "map", "map_1", "map_2", "map_gather", "map_gather_1", "map_gather_2", "map_gather_3",
+      "map", "map_1", "map_2", "map_gather", "map_gather_1", "map_gather_2", "map_gather_3", "map_unwind",
       "barrier", "deactivate_goto",
       "define_bacro", "define_bacro*", "bacro", "bacro*",
       "get_output_string",
@@ -7272,7 +7272,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
   gc_mark(sc->temp10);
-  gc_mark(sc->temp11);
 
   gc_mark(car(sc->t1_1));
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
@@ -7806,7 +7805,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
 #if S7_DEBUGGING
 static void push_op_stack(s7_scheme *sc, s7_pointer op)
 {
-  (*sc->op_stack_now++) = T_Ext(op);
+  (*sc->op_stack_now++) = T_Ext(op); /* not T_App etc -- args can be pushed */
   if (sc->op_stack_now > (sc->op_stack + sc->op_stack_size))
     {
       fprintf(stderr, "%sop_stack overflow%s\n", BOLD_TEXT, UNBOLD_TEXT);
@@ -11657,6 +11656,12 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	    set_current_output_port(sc, stack_args(sc->stack, i));        /* "args" = port that we shadowed */
 	  break;
 
+	case OP_MAP_UNWIND: /* can this happen? */
+	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
+	  sc->map_call_ctr--;
+	  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64" \n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
+	  break;
+
 	default:
 	  break;
 	}}
@@ -11874,6 +11879,12 @@ static void call_with_exit(s7_scheme *sc)
 	s7_close_input_port(sc, stack_code(sc->stack, i));       /* "code" = port that we opened */
 	if (stack_args(sc->stack, i) != sc->unused)
 	  set_current_input_port(sc, stack_args(sc->stack, i));  /* "args" = port that we shadowed */
+	break;
+
+      case OP_MAP_UNWIND:  /* can this happen? */
+	if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
+	sc->map_call_ctr--;
+	if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
 	break;
 
       case OP_EVAL_DONE: /* goto called in a method -- put off the inner eval return(s) until we clean up the stack */
@@ -51393,6 +51404,14 @@ static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
   return(false);
 }
 
+static bool catch_map_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
+{
+  /* fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); */
+  sc->map_call_ctr--;
+  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
+  return(false);
+}
+
 static bool op_let_temp_done1(s7_scheme *sc);
 
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
@@ -51481,6 +51500,7 @@ static void init_catchers(void)
   catchers[OP_LET_TEMP_UNWIND] =    catch_let_temp_unwind_function;
   catchers[OP_LET_TEMP_S7_UNWIND] = catch_let_temp_s7_unwind_function;
   catchers[OP_ERROR_HOOK_QUIT] =    catch_hook_function;
+  catchers[OP_MAP_UNWIND] =         catch_map_unwind_function;
 }
 
 /* -------------------------------- throw -------------------------------- */
@@ -66755,29 +66775,40 @@ static s7_pointer seq_init(s7_scheme *sc, s7_pointer seq)
 
 #define MUTLIM 32 /* was 1000 */
 
+static s7_pointer clear_for_each(s7_scheme *sc)
+{
+  sc->map_call_ctr--;
+  unstack_with(sc, OP_MAP_UNWIND);
+  return(sc->unspecified);
+}
+
 static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* one sequence arg */
 {
   s7_pointer body = closure_body(f);
   if (!no_cell_opt(body)) /* if at top level we often get an unoptimized (not safe) function here that can be cell_optimized below */
     {
-      s7_pfunc func;
-      s7_pointer old_e = sc->curlet, pars = closure_args(f), val, slot;
+      s7_pfunc func = NULL;
+      s7_pointer old_e = sc->curlet, pars = closure_args(f), val, slot, res = NULL;
 
       val = seq_init(sc, seq);
       sc->curlet = inline_make_let_with_slot(sc, closure_let(f), (is_pair(car(pars))) ? caar(pars) : car(pars), val);
       slot = let_slots(sc->curlet);
 
-      if (is_null(cdr(body)))
-	func = s7_optimize_nv(sc, body);
-      else
-	if (is_null(cddr(body))) /* 3 sometimes works */
-	  {
-	    set_ulist_1(sc, sc->begin_symbol, body);
-	    func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true); /* was list_1 via cons 8-Apr-21, true=nr */
-	  }
-	else func = NULL;
+      if (sc->map_call_ctr == 0)
+	{
+	  if (is_null(cdr(body)))
+	    func = s7_optimize_nv(sc, body);
+	  else
+	    if (is_null(cddr(body))) /* 3 sometimes works */
+	      {
+		set_ulist_1(sc, sc->begin_symbol, body);
+		func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true); /* was list_1 via cons 8-Apr-21, true=nr */
+	      }}
+
       if (func)
 	{
+	  push_stack_no_let(sc, OP_MAP_UNWIND, f, seq);
+	  sc->map_call_ctr++;
 	  if (is_pair(seq))
 	    {
 	      for (s7_pointer x = seq, y = x; is_pair(x); )
@@ -66793,96 +66824,104 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      y = cdr(y);
 		      if (x == y) break;
 		    }}
-	      return(sc->unspecified);
+	      res = sc->unspecified;
 	    }
-	  if (is_float_vector(seq))
-	    {
-	      s7_double *vals = float_vector_floats(seq);
-	      s7_int i, len = vector_length(seq);
-	      if ((len > MUTLIM) &&
-		  (!tree_has_setters(sc, body)))
+	  else
+	    if (is_float_vector(seq))
+	      {
+		s7_double *vals = float_vector_floats(seq);
+		s7_int i, len = vector_length(seq);
+		if ((len > MUTLIM) &&
+		    (!tree_has_setters(sc, body)))
+		  {
+		    s7_pointer sv = s7_make_mutable_real(sc, 0.0);
+		    slot_set_value(slot, sv);
+		    if (func == opt_float_any_nv)
+		      {
+			opt_info *o = sc->opts[0];
+			s7_double (*fd)(opt_info *o) = o->v[0].fd;
+			for (i = 0; i < len; i++)	{real(sv) = vals[i]; fd(o);}}
+		    else
+		      if (func == opt_cell_any_nv)
+			{
+			  opt_info *o = sc->opts[0];
+			  s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
+			  if (fp == opt_unless_p_1)
+			    for (i = 0; i < len; i++) {real(sv) = vals[i]; if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);}
+			  else for (i = 0; i < len; i++) {real(sv) = vals[i]; fp(o);}
+			}
+		      else for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}
+		else for (i = 0; i < len; i++) {slot_set_value(slot, make_real(sc, vals[i])); func(sc);}
+		res = sc->unspecified;
+	      }
+	    else
+	      if (is_int_vector(seq))
 		{
-		  s7_pointer sv = s7_make_mutable_real(sc, 0.0);
-		  slot_set_value(slot, sv);
-		  if (func == opt_float_any_nv)
+		  s7_int *vals = int_vector_ints(seq);
+		  s7_int i, len = vector_length(seq);
+		  if ((len > MUTLIM) &&
+		      (!tree_has_setters(sc, body)))
 		    {
-		      opt_info *o = sc->opts[0];
-		      s7_double (*fd)(opt_info *o) = o->v[0].fd;
-		      for (i = 0; i < len; i++)	{real(sv) = vals[i]; fd(o);}}
-		  else
+		      s7_pointer sv = make_mutable_integer(sc, 0);
+		      slot_set_value(slot, sv);
+		      /* since there are no setters, the inner step is also mutable if there is one.
+		       *    func=opt_cell_any_nv, sc->opts[0]->v[0].fp(sc->opts[0]) fp=opt_do_1 -> mutable version
+		       */
+		      if (func == opt_int_any_nv)
+			{
+			  opt_info *o = sc->opts[0];
+			  s7_int (*fi)(opt_info *o) = o->v[0].fi;
+			  for (i = 0; i < len; i++)	{integer(sv) = vals[i]; fi(o);}}
+		      else for (i = 0; i < len; i++) {integer(sv) = vals[i]; func(sc);}}
+		  else for (i = 0; i < len; i++) {slot_set_value(slot, make_integer(sc, vals[i])); func(sc);}
+		  res = sc->unspecified;
+		}
+	      else
+		if (is_normal_vector(seq))
+		  {
+		    s7_pointer *vals = vector_elements(seq);
+		    s7_int i, len = vector_length(seq);
 		    if (func == opt_cell_any_nv)
 		      {
 			opt_info *o = sc->opts[0];
 			s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
-			if (fp == opt_unless_p_1)
-			  for (i = 0; i < len; i++) {real(sv) = vals[i]; if (!(o->v[4].fb(o->v[3].o1))) o->v[5].o1->v[0].fp(o->v[5].o1);}
-			else for (i = 0; i < len; i++) {real(sv) = vals[i]; fp(o);}
-		      }
-		    else for (i = 0; i < len; i++) {real(sv) = vals[i]; func(sc);}}
-	      else for (i = 0; i < len; i++) {slot_set_value(slot, make_real(sc, vals[i])); func(sc);}
-	      return(sc->unspecified);
-	    }
-	  if (is_int_vector(seq))
-	    {
-	      s7_int *vals = int_vector_ints(seq);
-	      s7_int i, len = vector_length(seq);
-	      if ((len > MUTLIM) &&
-		  (!tree_has_setters(sc, body)))
-		{
-		  s7_pointer sv = make_mutable_integer(sc, 0);
-		  slot_set_value(slot, sv);
-		  /* since there are no setters, the inner step is also mutable if there is one.
-		   *    func=opt_cell_any_nv, sc->opts[0]->v[0].fp(sc->opts[0]) fp=opt_do_1 -> mutable version
-		   */
-		  if (func == opt_int_any_nv)
+			for (i = 0; i < len; i++) {slot_set_value(slot, vals[i]); fp(o);}}
+		    else for (i = 0; i < len; i++) {slot_set_value(slot, vals[i]); func(sc);}
+		    res = sc->unspecified;
+		  }
+		else
+		  if (is_string(seq))
 		    {
-		      opt_info *o = sc->opts[0];
-		      s7_int (*fi)(opt_info *o) = o->v[0].fi;
-		      for (i = 0; i < len; i++)	{integer(sv) = vals[i]; fi(o);}}
-		  else for (i = 0; i < len; i++) {integer(sv) = vals[i]; func(sc);}}
-	      else for (i = 0; i < len; i++) {slot_set_value(slot, make_integer(sc, vals[i])); func(sc);}
-	      return(sc->unspecified);
-	    }
-	  if (is_normal_vector(seq))
-	    {
-	      s7_pointer *vals = vector_elements(seq);
-	      s7_int i, len = vector_length(seq);
-	      if (func == opt_cell_any_nv)
-		{
-		  opt_info *o = sc->opts[0];
-		  s7_pointer (*fp)(opt_info *o) = o->v[0].fp;
-		  for (i = 0; i < len; i++) {slot_set_value(slot, vals[i]); fp(o);}}
-	      else for (i = 0; i < len; i++) {slot_set_value(slot, vals[i]); func(sc);}
-	      return(sc->unspecified);
-	    }
-	  if (is_string(seq))
-	    {
-	      const char *str = string_value(seq);
-	      s7_int len = string_length(seq);
-	      for (s7_int i = 0; i < len; i++) {slot_set_value(slot, chars[(uint8_t)(str[i])]); func(sc);}
-	      return(sc->unspecified);
-	    }
-	  if (is_byte_vector(seq))
-	    {
-	      const uint8_t *vals = (const uint8_t *)byte_vector_bytes(seq);
-	      s7_int i, len = vector_length(seq);
-	      if (func == opt_int_any_nv)
-		{
-		  opt_info *o = sc->opts[0];
-		  s7_int (*fi)(opt_info *o) = o->v[0].fi;
-		  for (i = 0; i < len; i++) {slot_set_value(slot, small_int(vals[i])); fi(o);}}
-	      else for (i = 0; i < len; i++) {slot_set_value(slot, small_int(vals[i])); func(sc);}
-	      return(sc->unspecified);
-	    }
+		      const char *str = string_value(seq);
+		      s7_int len = string_length(seq);
+		      for (s7_int i = 0; i < len; i++) {slot_set_value(slot, chars[(uint8_t)(str[i])]); func(sc);}
+		      res = sc->unspecified;
+		    }
+		  else
+		    if (is_byte_vector(seq))
+		      {
+			const uint8_t *vals = (const uint8_t *)byte_vector_bytes(seq);
+			s7_int i, len = vector_length(seq);
+			if (func == opt_int_any_nv)
+			  {
+			    opt_info *o = sc->opts[0];
+			    s7_int (*fi)(opt_info *o) = o->v[0].fi;
+			    for (i = 0; i < len; i++) {slot_set_value(slot, small_int(vals[i])); fi(o);}}
+			else for (i = 0; i < len; i++) {slot_set_value(slot, small_int(vals[i])); func(sc);}
+			res = sc->unspecified;
+		      }
+	  if (res)
+	    return(clear_for_each(sc));
 	  if (!is_iterator(seq))
 	    {
 	      if (!is_mappable(seq))
 		wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq, a_sequence_string);
 	      sc->z = s7_make_iterator(sc, seq);
 	      seq = sc->z;
+	      stack_protected2(sc) = seq; /* GC protect new iterator */
 	    }
-	  else sc->z = seq;
-	  push_stack_no_let(sc, OP_GC_PROTECT, seq, f);
+	  else sc->z = T_Ext(seq);
+	  /* push_stack_no_let(sc, OP_GC_PROTECT, seq, f); */
 	  sc->z = sc->unused;
 	  if (func == opt_cell_any_nv)
 	    {
@@ -66891,7 +66930,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	      while (true)
 		{
 		  slot_set_value(slot, s7_iterate(sc, seq));
-		  if (iterator_is_at_end(seq)) {unstack(sc); return(sc->unspecified);}
+		  if (iterator_is_at_end(seq)) return(clear_for_each(sc));
 		  fp(o);
 		}}
 	  if (func == opt_int_any_nv)
@@ -66901,13 +66940,13 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	      while (true)
 		{
 		  slot_set_value(slot, s7_iterate(sc, seq));
-		  if (iterator_is_at_end(seq)) {unstack(sc); return(sc->unspecified);}
+		  if (iterator_is_at_end(seq)) return(clear_for_each(sc));
 		  fi(o);
 		}}
 	  while (true)
 	    {
 	      slot_set_value(slot, s7_iterate(sc, seq));
-	      if (iterator_is_at_end(seq)) {unstack(sc); return(sc->unspecified);}
+	      if (iterator_is_at_end(seq)) return(clear_for_each(sc));
 	      func(sc);
 	    }} /* we never get here -- the while loops above exit via return #<unspecified> */
       else /* not func -- unneeded "else" but otherwise confusing code */
@@ -66949,7 +66988,8 @@ static void map_or_for_each_closure_pair_2(s7_scheme *sc, s7_pfunc func, s7_poin
       else
 	{
 	  s7_pointer val = func(sc);
-	  if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11); /* yow! we're assuming temp11 crosses map iterations and is used only in this context */
+	  if (val != sc->no_value) 
+	    stack_protected3(sc) = cons(sc, val, stack_protected3(sc)); /* see map_closure_2 below -- stack_protected3 is our temp */
 	}
       if ((is_pair(cdr(fast1))) && (is_pair(cdr(fast2))))
 	{
@@ -66964,7 +67004,8 @@ static void map_or_for_each_closure_pair_2(s7_scheme *sc, s7_pfunc func, s7_poin
 	  else
 	    {
 	      s7_pointer val = func(sc);
-	      if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11);
+	      if (val != sc->no_value) 
+		stack_protected3(sc) = cons(sc, val, stack_protected3(sc));
 	    }}}
 }
 
@@ -66981,7 +67022,8 @@ static void map_or_for_each_closure_vector_2(s7_scheme *sc, s7_pfunc func, s7_po
       else
 	{
 	  s7_pointer val = func(sc);
-	  if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11);
+	  if (val != sc->no_value) 
+	    stack_protected3(sc) = cons(sc, val, stack_protected3(sc));
 	}}
 }
 
@@ -66999,7 +67041,8 @@ static void map_or_for_each_closure_string_2(s7_scheme *sc, s7_pfunc func, s7_po
       else
 	{
 	  s7_pointer val = func(sc);
-	  if (val != sc->no_value) sc->temp11 = cons(sc, val, sc->temp11);
+	  if (val != sc->no_value) 
+	    stack_protected3(sc) = cons(sc, val, stack_protected3(sc));
 	}}
 }
 
@@ -67008,7 +67051,7 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
   s7_pointer body = closure_body(f);
   if (!no_cell_opt(body))
     {
-      s7_pfunc func;
+      s7_pfunc func = NULL;
       s7_pointer olde = sc->curlet, pars = closure_args(f), slot1, slot2;
       s7_pointer val1 = seq_init(sc, seq1);
       s7_pointer val2 = seq_init(sc, seq2);
@@ -67017,38 +67060,48 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
 					   (is_pair(cadr(pars))) ? cadar(pars) : cadr(pars), val2);
       slot1 = let_slots(sc->curlet);
       slot2 = next_slot(slot1);
+      
+      if (sc->map_call_ctr == 0)
+	{
+	  if (is_null(cdr(body)))
+	    func = s7_optimize_nv(sc, body);
+	  else
+	    if (is_null(cddr(body)))
+	      {
+		set_ulist_1(sc, sc->begin_symbol, body);
+		func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true);
+	      }}
 
-      if (is_null(cdr(body)))
-	func = s7_optimize_nv(sc, body);
-      else
-	if (is_null(cddr(body)))
-	  {
-	    set_ulist_1(sc, sc->begin_symbol, body);
-	    func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), true);
-	  }
-	else func = NULL;
       if (func)
 	{
+	  s7_pointer res = NULL;
+	  push_stack_no_let(sc, OP_MAP_UNWIND, f, seq1);
+	  sc->map_call_ctr++;
 	  if ((is_pair(seq1)) && (is_pair(seq2)))
 	    {
 	      map_or_for_each_closure_pair_2(sc, func, seq1, seq2, slot1, slot2, true);
 	      set_curlet(sc, olde);
-	      return(sc->unspecified);
+	      res = sc->unspecified;
 	    }
-	  if ((is_any_vector(seq1)) && (is_any_vector(seq2)))
-	    {
-	      map_or_for_each_closure_vector_2(sc, func, seq1, seq2, slot1, slot2, true);
-	      set_curlet(sc, olde);
-	      return(sc->unspecified);
-	    }
-	  if ((is_string(seq1)) && (is_string(seq2)))
-	    {
-	      map_or_for_each_closure_string_2(sc, func, seq1, seq2, slot1, slot2, true);
-	      set_curlet(sc, olde);
-	      return(sc->unspecified);
-	    }
-	  set_no_cell_opt(body);
+	  else
+	    if ((is_any_vector(seq1)) && (is_any_vector(seq2)))
+	      {
+		map_or_for_each_closure_vector_2(sc, func, seq1, seq2, slot1, slot2, true);
+		set_curlet(sc, olde);
+		res = sc->unspecified;
+	      }
+	    else
+	      if ((is_string(seq1)) && (is_string(seq2)))
+		{
+		  map_or_for_each_closure_string_2(sc, func, seq1, seq2, slot1, slot2, true);
+		  set_curlet(sc, olde);
+		  res = sc->unspecified;
+		}
+	  sc->map_call_ctr--;
+	  unstack_with(sc, OP_MAP_UNWIND);
 	  set_curlet(sc, olde);
+	  if (res) return(res);
+	  set_no_cell_opt(body);
 	}
       else /* not func */
 	{
@@ -67312,14 +67365,11 @@ static Inline bool inline_op_for_each_2(s7_scheme *sc) /* called once in eval, l
 
 /* ---------------------------------------- map ---------------------------------------- */
 
-/* TODO: need map_unwind(?) to clear map_call_ctr in case error jumps past current map (s7test/t622=1) */
-/* TODO: remove temp11 */
-
 static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* one sequence argument */
 {
   s7_pointer body = closure_body(f);
   sc->value = f;
-  /* fprintf(stderr, "map: %ld\n", sc->map_call_ctr); */
+  /* fprintf(stderr, "%s[%d]: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); */
 
   if (!no_cell_opt(body))
     {
@@ -67329,26 +67379,25 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
       sc->curlet = inline_make_let_with_slot(sc, closure_let(f), (is_pair(car(pars))) ? caar(pars) : car(pars), val);
       slot = let_slots(sc->curlet);
 
-      if (sc->map_call_ctr > 0)
-	func = NULL;
-      else
-	if (is_null(cdr(body)))
-	  func = s7_cell_optimize(sc, body, false);
-	else
-	  if (is_null(cddr(body)))
-	    {
-	      set_ulist_1(sc, sc->begin_symbol, body);
-	      func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), false); /* list_1 8-Apr-21 */
-	    }
-	  else func = NULL;
+      if (sc->map_call_ctr == 0)
+	{
+	  if (is_null(cdr(body)))
+	    func = s7_cell_optimize(sc, body, false);
+	  else
+	    if (is_null(cddr(body)))
+	      {
+		set_ulist_1(sc, sc->begin_symbol, body);
+		func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), false); /* list_1 8-Apr-21 */
+	      }}
       if (func)
 	{
-	  s7_pointer z, res;
-	  push_stack_no_let(sc, OP_GC_PROTECT, f, seq);
+	  s7_pointer z, res = NULL;
+	  /* fprintf(stderr, "%s[%d]: push map unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); */
+	  push_stack_no_let(sc, OP_MAP_UNWIND, f, seq);
+	  sc->map_call_ctr++;
 	  if (is_pair(seq))
 	    {
 	      stack_protected3(sc) = sc->nil;
-	      sc->map_call_ctr++;
 	      for (s7_pointer fast = seq, slow = seq; is_pair(fast); fast = cdr(fast), slow = cdr(slow))
 		{
 		  slot_set_value(slot, car(fast));
@@ -67363,70 +67412,68 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 		      if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
 		    }}
 	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
-	      sc->map_call_ctr--;
-	      unstack(sc);
-	      return(res);
 	    }
-	  if (is_float_vector(seq))
-	    {
-	      s7_double *vals = float_vector_floats(seq);
-	      s7_int len = vector_length(seq);
-	      stack_protected3(sc) = sc->nil;
-	      for (s7_int i = 0; i < len; i++)
+	  else
+	    if (is_float_vector(seq))
+	      {
+		s7_double *vals = float_vector_floats(seq);
+		s7_int len = vector_length(seq);
+		stack_protected3(sc) = sc->nil;
+		for (s7_int i = 0; i < len; i++)
+		  {
+		    slot_set_value(slot, make_real(sc, vals[i]));
+		    z = func(sc);
+		    if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
+		  }
+		res = proper_list_reverse_in_place(sc, stack_protected3(sc));
+	      }
+	    else
+	      if (is_int_vector(seq))
 		{
-		  slot_set_value(slot, make_real(sc, vals[i]));
-		  z = func(sc);
-		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
+		  s7_int *vals = int_vector_ints(seq);
+		  s7_int len = vector_length(seq);
+		  stack_protected3(sc) = sc->nil;
+		  for (s7_int i = 0; i < len; i++)
+		    {
+		      slot_set_value(slot, make_integer(sc, vals[i]));
+		      z = func(sc);
+		      if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
+		    }
+		  res = proper_list_reverse_in_place(sc, stack_protected3(sc));
 		}
-	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
-	      unstack(sc);
-	      return(res);
-	    }
-	  if (is_int_vector(seq))
-	    {
-	      s7_int *vals = int_vector_ints(seq);
-	      s7_int len = vector_length(seq);
-	      stack_protected3(sc) = sc->nil;
-	      for (s7_int i = 0; i < len; i++)
-		{
-		  slot_set_value(slot, make_integer(sc, vals[i]));
-		  z = func(sc);
-		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
-		}
-	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
-	      unstack(sc);
-	      return(res);
-	    }
-	  if (is_normal_vector(seq))
-	    {
-	      s7_pointer *vals = vector_elements(seq);
-	      s7_int len = vector_length(seq);
-	      stack_protected3(sc) = sc->nil;
-	      for (s7_int i = 0; i < len; i++)
-		{
-		  slot_set_value(slot, vals[i]);
-		  z = func(sc);
-		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
-		}
-	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
-	      unstack(sc);
-	      return(res);
-	    }
-	  if (is_string(seq))
-	    {
-	      s7_int len = string_length(seq);
-	      const char *str = string_value(seq);
-	      stack_protected3(sc) = sc->nil;
-	      for (s7_int i = 0; i < len; i++)
-		{
-		  slot_set_value(slot, chars[(uint8_t)(str[i])]);
-		  z = func(sc);
-		  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
-		}
-	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
-	      unstack(sc);
-	      return(res);
-	    }}
+	      else
+		if (is_normal_vector(seq))
+		  {
+		    s7_pointer *vals = vector_elements(seq);
+		    s7_int len = vector_length(seq);
+		    stack_protected3(sc) = sc->nil;
+		    for (s7_int i = 0; i < len; i++)
+		      {
+			slot_set_value(slot, vals[i]);
+			z = func(sc);
+			if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
+		      }
+		    res = proper_list_reverse_in_place(sc, stack_protected3(sc));
+		  }
+		else
+		  if (is_string(seq))
+		    {
+		      s7_int len = string_length(seq);
+		      const char *str = string_value(seq);
+		      stack_protected3(sc) = sc->nil;
+		      for (s7_int i = 0; i < len; i++)
+			{
+			  slot_set_value(slot, chars[(uint8_t)(str[i])]);
+			  z = func(sc);
+			  if (z != sc->no_value) stack_protected3(sc) = cons(sc, z, stack_protected3(sc));
+			}
+		      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
+		    }
+	  sc->map_call_ctr--;
+	  unstack_with(sc, OP_MAP_UNWIND);
+	  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
+	  if (res) return(res);
+	}
       set_no_cell_opt(body);
       set_curlet(sc, old_e);
     }
@@ -67457,12 +67504,13 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
   return(sc->nil);
 }
 
-static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, s7_pointer seq2)
+static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, s7_pointer seq2) /* two sequences */
 {
   s7_pointer body = closure_body(f);
+  /* fprintf(stderr, "%s[%d]: %" ld64 " %s %s\n", __func__, __LINE__, sc->map_call_ctr, display(seq1), display(seq2)); */
   if (!no_cell_opt(body))
     {
-      s7_pfunc func;
+      s7_pfunc func = NULL;
       s7_pointer old_e = sc->curlet, pars = closure_args(f), slot1, slot2;
       s7_pointer val1 = seq_init(sc, seq1);
       s7_pointer val2 = seq_init(sc, seq2);
@@ -67472,47 +67520,46 @@ static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, 
       slot1 = let_slots(sc->curlet);
       slot2 = next_slot(slot1);
 
-      if (is_null(cdr(body)))
-	func = s7_cell_optimize(sc, body, false);
-      else
-	if (is_null(cddr(body)))
-	  {
-	    set_ulist_1(sc, sc->begin_symbol, body);
-	    func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), false);
-	  }
-	else func = NULL;
+      if (sc->map_call_ctr == 0)
+	{
+	  if (is_null(cdr(body)))
+	    func = s7_cell_optimize(sc, body, false);
+	  else
+	    if (is_null(cddr(body)))
+	      {
+		set_ulist_1(sc, sc->begin_symbol, body);
+		func = s7_cell_optimize(sc, set_clist_1(sc, sc->u1_1), false);
+	      }}
       if (func)
 	{
-	  s7_pointer res;
+	  s7_pointer res = NULL;
+	  push_stack_no_let(sc, OP_MAP_UNWIND, f, seq1);
+	  sc->map_call_ctr++;
 	  if ((is_pair(seq1)) && (is_pair(seq2)))
 	    {
-	      sc->temp11 = sc->nil;
-	      map_or_for_each_closure_pair_2(sc, func, seq1, seq2, slot1, slot2, false);
-	      set_curlet(sc, old_e);
-	      res = proper_list_reverse_in_place(sc, sc->temp11);
-	      sc->temp11 = sc->unused;
-	      return(res);
+	      stack_protected3(sc) = sc->nil;
+	      map_or_for_each_closure_pair_2(sc, func, seq1, seq2, slot1, slot2, false); /* builds result on stack_protected3 */
+	      res = proper_list_reverse_in_place(sc, stack_protected3(sc));
 	    }
-	  if ((is_any_vector(seq1)) && (is_any_vector(seq2)))
-	    {
-	      sc->temp11 = sc->nil;
-	      map_or_for_each_closure_vector_2(sc, func, seq1, seq2, slot1, slot2, false);
-	      set_curlet(sc, old_e);
-	      res = proper_list_reverse_in_place(sc, sc->temp11);
-	      sc->temp11 = sc->unused;
-	      return(res);
-	    }
-	  if ((is_string(seq1)) && (is_string(seq2)))
-	    {
-	      sc->temp11 = sc->nil;
-	      map_or_for_each_closure_string_2(sc, func, seq1, seq2, slot1, slot2, false);
-	      set_curlet(sc, old_e);
-	      res = proper_list_reverse_in_place(sc, sc->temp11);
-	      sc->temp11 = sc->unused;
-	      return(res);
-	    }
-	  set_no_cell_opt(body);
+	  else
+	    if ((is_any_vector(seq1)) && (is_any_vector(seq2)))
+	      {
+		stack_protected3(sc) = sc->nil;
+		map_or_for_each_closure_vector_2(sc, func, seq1, seq2, slot1, slot2, false);
+		res = proper_list_reverse_in_place(sc, stack_protected3(sc));
+	      }
+	    else
+	      if ((is_string(seq1)) && (is_string(seq2)))
+		{
+		  stack_protected3(sc) = sc->nil;
+		  map_or_for_each_closure_string_2(sc, func, seq1, seq2, slot1, slot2, false);
+		  res = proper_list_reverse_in_place(sc, stack_protected3(sc));
+		}
+	  sc->map_call_ctr--;
+	  unstack_with(sc, OP_MAP_UNWIND);
 	  set_curlet(sc, old_e);
+	  if (res) return(res);
+	  set_no_cell_opt(body);
 	}
       else /* not func */
 	{
@@ -68350,7 +68397,7 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
 
   {
     s7_int i;
-    s7_pointer orig, bq, old_scw = sc->w;
+    s7_pointer orig, bq, old_scw = sc->w; /* very often, sc->w is in use here */
     bool dotted = false;
     s7_int len = s7_list_length(sc, form);
     if (len < 0)
@@ -90671,6 +90718,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SORT_STRING_END: sc->value = vector_into_string(sc->value, car(sc->args)); continue;
 
 
+	case OP_MAP_UNWIND: /* this probably can't happen */
+	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: op_map_unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
+	  sc->map_call_ctr--; 
+	  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
+	  continue;
 	case OP_MAP_GATHER: inline_op_map_gather(sc);
 	case OP_MAP: if (op_map(sc)) continue; goto APPLY;
 
@@ -91689,7 +91741,6 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, sc->temp8, "sc->temp8");
   mark_holdee(NULL, sc->temp9, "sc->temp9");
   mark_holdee(NULL, sc->temp10, "sc->temp10");
-  mark_holdee(NULL, sc->temp11, "sc->temp11");
   mark_holdee(NULL, sc->rec_p1, "sc->rec_p1");
   mark_holdee(NULL, sc->rec_p2, "sc->rec_p2");
 
@@ -92436,7 +92487,7 @@ static s7_pointer s7_let_iterate(s7_scheme *sc, s7_pointer iterator)
     value = sc->F;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
   else
     {
-      s7_pointer osw = sc->w;  /* protect against s7_let_field list making (why? and should this use the stack?) */
+      s7_pointer osw = sc->w;  /* protect against s7_let_field list making */
       value = s7_let_field(sc, symbol);
       sc->w = osw;
     }
@@ -94896,7 +94947,6 @@ s7_scheme *s7_init(void)
   sc->temp8 = sc->unused;
   sc->temp9 = sc->unused;
   sc->temp10 = sc->unused;
-  sc->temp11 = sc->unused;
   sc->rec_p1 = sc->unused;
   sc->rec_p2 = sc->unused;
 
@@ -95287,7 +95337,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 920)
+  if (NUM_OPS != 921)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95676,7 +95726,7 @@ int main(int argc, char **argv)
  * tlet      7775   5640   4450   4403   4402
  * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4456   4457
- * tmap      8869   8774   4489   4477   4477
+ * tmap      8869   8774   4489   4477   4477  4499
  * tshoot    5525   5447   5183   5056   5055
  * tstr      6880   6342   5488   5131   5130
  * tform     5357   5348   5307   5320   5309
@@ -95707,10 +95757,6 @@ int main(int argc, char **argv)
  * fully optimize gmp version or at least extend big_int to int128_t; will make opt* fx* much more complex
  * should number output use (*s7* 'number-separator)?
  *
- * temp11 should be either stack_gc or vector_gc and recur-safe, most temps need init_temp check
- *   temp3|5|8|9 need clear in error_nr (fx_call), temp2(only) and temp4 used in s7_call and not cleared, temp3 not cleared in several places
- *   temp5 fx w/o clear, temp6 not cleared in clo*, w not clear collect_vars, z in apply_func
- *   temp7|x messy in unb var, temp10 not cleared in g_map, temp8 a mess, temp9 a mess (every opt_syn call
- * map/for-each in t725 (aux18), (map (functions (random (length functions))) s) (map (lambda (x) ((functions...) x)) s)?
- * map iter recur as in 18
+ * check error_nr cleared vars, are there other such cases (sort! etc)?
+ * t718 kw
  */
