@@ -1186,7 +1186,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer w, x, y, z;
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp7, temp8, temp9, temp10;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, qlist_2, qlist_3, clist_1, clist_2, dlist_1, mlist_1, mlist_2; /* dlist|clist and ulist can't overlap */
@@ -3104,7 +3104,14 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_symbol(p)                 T_Sym((T_Slt(p))->object.slt.sym)
 #define slot_set_symbol(p, Sym)        (T_Slt(p))->object.slt.sym = T_Sym(Sym)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
+
+#if S7_DEBUGGING
+static bool slot_check_ok = false;
+#define slot_set_value(p, Val)         do {if ((slot_check_ok) && (is_immutable_slot(p)) && (!s7_is_equal(cur_sc, slot_value(p), Val))) {fprintf(stderr, "%s = %s\n", display(p), display(Val)); if (is_keyword(slot_symbol(p))) abort();} (T_Slt(p))->object.slt.val = T_Nmv(Val);} while (0)
+#else
 #define slot_set_value(p, Val)         (T_Slt(p))->object.slt.val = T_Nmv(Val)
+#endif
+
 #define slot_set_symbol_and_value(Slot, Symbol, Value) do {slot_set_symbol(Slot, Symbol); slot_set_value(Slot, Value);} while (0)
 #define slot_set_value_with_hook(Slot, Value) \
   do {if (hook_has_functions(sc->rootlet_redefinition_hook)) slot_set_value_with_hook_1(sc, Slot, T_Nmv(Value)); else slot_set_value(Slot, T_Nmv(Value));} while (0)
@@ -3671,10 +3678,7 @@ static s7_pointer make_permanent_integer(s7_int i)
 #endif
 #endif
 
-#if WITH_NUMBER_SEPARATOR
 static bool t_number_separator_p[NUM_CHARS];
-#endif
-
 static s7_pointer *small_ints = NULL;
 #define small_int(Val) small_ints[Val]
 #define is_small_int(n) ((n & ~(NUM_SMALL_INTS - 1)) == 0)   /* ((n >= 0) && (n < NUM_SMALL_INTS)) is slower */
@@ -3737,7 +3741,6 @@ static void init_small_ints(void)
   set_number_name(mostfix, "9223372036854775807", 19);
   set_number_name(leastfix, "-9223372036854775808", 20);
 
-#if WITH_NUMBER_SEPARATOR
   for (int32_t i = 0; i < NUM_CHARS; i++) t_number_separator_p[i] = true;
   t_number_separator_p[(uint8_t)'i'] = false;
   t_number_separator_p[(uint8_t)'+'] = false;
@@ -3747,7 +3750,6 @@ static void init_small_ints(void)
   t_number_separator_p[(uint8_t)'.'] = false;
   t_number_separator_p[(uint8_t)'e'] = false;
   t_number_separator_p[(uint8_t)'E'] = false;
-#endif
 }
 
 /* -------------------------------------------------------------------------------- */
@@ -7267,7 +7269,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp3);
   gc_mark(sc->temp4);
   gc_mark(sc->temp5);
-  gc_mark(sc->temp6);
   gc_mark(sc->temp7);
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
@@ -27614,11 +27615,11 @@ static s7_pointer string_to_list(s7_scheme *sc, const char *str, s7_int len)
   if (len == 0)
     return(sc->nil);
   check_free_heap_size(sc, len);
-  init_temp(sc->temp6, sc->nil);
+  init_temp(sc->y, sc->nil);
   for (s7_int i = len - 1; i >= 0; i--)
-    sc->temp6 = cons_unchecked(sc, chars[((uint8_t)str[i])], sc->temp6);
-  result = sc->temp6;
-  sc->temp6 = sc->unused;
+    sc->y = cons_unchecked(sc, chars[((uint8_t)str[i])], sc->y);
+  result = sc->y;
+  sc->y = sc->unused;
   return(result);
 }
 
@@ -42516,10 +42517,10 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    return(data);
 	  }
 	set_car(args, vec);
-	init_temp(sc->temp6, cons(sc, data, lessp));
+	init_temp(sc->y, cons(sc, data, lessp));
 	unstack(sc);
-	push_stack(sc, OP_SORT_VECTOR_END, sc->temp6, sc->code); /* save and gc protect the original homogeneous vector and func */
-	sc->temp6 = sc->unused;
+	push_stack(sc, OP_SORT_VECTOR_END, sc->y, sc->code); /* save and gc protect the original homogeneous vector and func */
+	sc->y = sc->unused;
       }
       break;
 
@@ -42576,7 +42577,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
   /* lx = s7_make_vector(sc, (sc->safety <= NO_SAFETY) ? 4 : 6); */
   lx = make_simple_vector(sc, (sc->safety <= NO_SAFETY) ? 4 : 6);
   normal_vector_fill(lx, sc->nil); /* make_mutable_integer below can trigger GC, so all elements of lx must be legit */
-  init_temp(sc->temp6, lx);
+  init_temp(sc->y, lx);
   vector_element(lx, 0) = make_mutable_integer(sc, n);
   vector_element(lx, 1) = make_mutable_integer(sc, k);
   vector_element(lx, 2) = make_mutable_integer(sc, 0);
@@ -42587,7 +42588,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       vector_element(lx, 5) = make_integer_unchecked(sc, n * n);
     }
   push_stack(sc, OP_SORT, args, lx);
-  sc->temp6 = sc->unused;
+  sc->y = sc->unused;
   return(sc->F);
   /* if the comparison function waffles, sort! can hang: (sort! '(1 2 3) (lambda (a b) (= a b)))
    * set 'safety to 1 to add a check for this loop, but the "safe" procedures are direct, so unchecked.
@@ -52364,13 +52365,28 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices));
 
     case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
-      if (!is_safe_closure(obj))
+#if 1
+      /* I think we're making some assumption about *-ref, but if it returns (say) an unsafe closure, the stack assumes somewhere that it was safe? 
+       *   good (no list-ref): stack: let1 begin_no_hook
+       * begin_no_hook (444), code: ((vector (P_3 0 12)))
+         h_safe_c_p (143), code: (vector (P_3 0 12))
+         implicit_pair_ref_aa (398), code: (P_3 0 12)
+       *   bad:                stack: let_one_p_old_1
+       * begin_no_hook (444), code: ((vector (list-ref P_3 0 12)))
+         h_safe_c_a (87), code: (vector (list-ref P_3 0 12))
+         maybe no "a" if list-ref has multiple indices?  But would that break multidim seq opts?
+         or can implicit_index fixup the stack?
+       */
+      if (!is_safe_closure(obj)) /* TODO: add alternative */
 	error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "can't call a (possibly unsafe) function implicitly: ~S ~S", 57), obj, indices));
+#endif
+      /* s7_show_stack(sc); */
       check_stack_size(sc);
-      sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices;
+      /* fprintf(stderr, "%s %s %s\n", __func__, display(obj), display(indices)); */
+      sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* s7_call copies and this is safe? 2-Oct-22 (and below) */
       sc->value = s7_call(sc, obj, sc->temp10);
       sc->temp10 = sc->unused;
-      if (is_multiple_value(sc->value))
+      if (is_multiple_value(sc->value)) /* can this happen if safe? */
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
 
@@ -52383,7 +52399,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
     default: /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi"?, also here with (apply (inlet) '(define y 32)) */
       if (!is_applicable(obj))            /* (apply (list cons cons) (list 1 2)) needs the argnum check mentioned below */
 	apply_error_nr(sc, obj, indices);
-      sc->temp10 = (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; /* do not use sc->args here! */
+      sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* do not use sc->args here! */
       sc->value = s7_call(sc, obj, sc->temp10);
       sc->temp10 = sc->unused;
       if (is_multiple_value(sc->value))
@@ -78110,7 +78126,6 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 	  error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "index must be less than sequence length: ~S", 43), sc->code));
 	if (is_immutable(obj))
 	  immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, obj));
-
 	if (!is_character(value))
 	  error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "string-set!: value must be a character: ~S", 42), sc->code));
 	string_value(obj)[index] = (char)s7_character(value);
@@ -78136,7 +78151,14 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
     case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
       if (is_c_function(c_function_setter(obj)))
-	sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t2(arg, value));
+	{
+	  s7_pointer setf = c_function_setter(obj);
+	  if (c_function_min_args(setf) == 2)
+	    sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
+	  else error_nr(sc, sc->wrong_number_of_args_symbol,
+			set_elist_6(sc, wrap_string(sc, "set!: not enough arguments: (~A ~S ~S), ~A is (setter ~A)", 57), 
+				    setf, arg, value, setf, obj));
+	}
       else
 	{
 	  sc->code = c_function_setter(obj); /* closure/macro */
@@ -91755,7 +91777,6 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, sc->temp3, "sc->temp3");
   mark_holdee(NULL, sc->temp4, "sc->temp4");
   mark_holdee(NULL, sc->temp5, "sc->temp5");
-  mark_holdee(NULL, sc->temp6, "sc->temp6");
   mark_holdee(NULL, sc->temp7, "sc->temp7");
   mark_holdee(NULL, sc->temp8, "sc->temp8");
   mark_holdee(NULL, sc->temp9, "sc->temp9");
@@ -92779,14 +92800,15 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
       if (is_boolean(val)) {sc->muffle_warnings = s7_boolean(sc, val); return(val);}
       s7_let_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
 
-    case SL_NUMBER_SEPARATOR:
+    case SL_NUMBER_SEPARATOR:   /* I think no PL uses the separator in output */
 #if (!WITH_NUMBER_SEPARATOR)
       s7_warn(sc, 128, "(set! (*s7* 'number-separator) ...) but number-separator is not included in this s7");
 #endif
       if (!is_character(val))
 	s7_let_wrong_type_error_nr(sc, sym, val, sc->type_names[T_CHARACTER]);
-      if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (character(val) == '+') || (character(val) == '-') ||
-	  (character(val) == '@') || (character(val) == '/') || (character(val) == 'i') || (character(val) == 'e'))
+      if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (!t_number_separator_p[character(val)]) ||
+	  (character(val) == 'i') || (character(val) == 'e') || (character(val) == 'E'))
+	/* I guess +nan.0 and +inf.0 are not numeric literals, so we don't need to catch +n_a_n.0 */
 	s7_let_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
       sc->number_separator = character(val);
       return(val);
@@ -94961,7 +94983,6 @@ s7_scheme *s7_init(void)
   sc->temp3 = sc->unused;
   sc->temp4 = sc->unused;
   sc->temp5 = sc->unused;
-  sc->temp6 = sc->unused;
   sc->temp7 = sc->unused;
   sc->temp8 = sc->unused;
   sc->temp9 = sc->unused;
@@ -95359,6 +95380,7 @@ s7_scheme *s7_init(void)
   if (NUM_OPS != 921)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
+  slot_check_ok = true;
 #endif
 
   return(sc);
@@ -95774,10 +95796,19 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t; will make opt* fx* much more complex
- * should number output use (*s7* 'number-separator)?
+ * a setter for (symbol...)? (set! (symbol "0") 123) etc, currently:
+     (apply define (list (symbol "[#]") 0)) -> 0
+     (set! (setter symbol) (lambda (s v) v))
+     (set! (symbol "[#]") 32) -> 32
+     (eval (symbol "[#]")) -> 0 so currently we can't set! one of these symbols
+     (set! (setter symbol) (lambda (s v) (format *stderr* "~S ~S" s v) v)) -- normally the "s" arg is a symbol, not a string
+     (set! (symbol "[#]") 32) -> "[#]" 32 ??
  *
- * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list
+ * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
+ *   (let-temporarily (((*s7* 'openlets) #f)) <expr-with-local-error> <now openlets=#t> <expr expecting it to be #f>)
  * check for opt within opt
- * t718 kw, tmp has old checker
- * temp6 could be removed? replace with sc->y I think
+ *    sc->pc = 0 occurs 21 times! and reset is complicated. 
+ * t718 kw (reinstalled old checker)
+ * implicit index non-safe closure case
+ *   to handle unsafe cases, need to push fixup op, continue via apply/eval -- maybe one op if both cases can be combined
  */
