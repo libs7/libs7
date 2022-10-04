@@ -2493,6 +2493,10 @@ static void init_types(void)
 #define is_bool_function(p)            has_type_bit(T_Prc(p), T_BOOL_FUNCTION)
 #define set_is_bool_function(p)        set_type_bit(T_Fnc(p), T_BOOL_FUNCTION)
 
+#define T_SYMBOL_FROM_SYMBOL           T_ITER_OK
+#define is_symbol_from_symbol(p)       has_type_bit(T_Sym(p), T_SYMBOL_FROM_SYMBOL)
+#define set_is_symbol_from_symbol(p)   set_type_bit(T_Sym(p), T_SYMBOL_FROM_SYMBOL)
+
 /* it's faster here to use the high_flag bits rather than typeflag bits */
 #define BIT_ROOM                       16
 #define T_FULL_SYMCONS                 (1LL << (TYPE_BITS + BIT_ROOM + 24))
@@ -4746,7 +4750,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 						  ((is_pair(obj)) ? " step-end-ok" :
 						   ((is_slot(obj)) ? " in-rootlet" :
 						    ((is_c_function(obj)) ? " bool-function" :
-						     " ?23?")))) : "",
+						     ((is_symbol(obj)) ? " symbol-from-symbol" :
+						      " ?23?"))))) : "",
 	  /* bit 24+24 */
 	  ((full_typ & T_FULL_SYMCONS) != 0) ?   ((is_symbol(obj)) ? " possibly-constant" :
 						  ((is_any_procedure(obj)) ? " has-let-arg" :
@@ -4844,7 +4849,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_EXPANSION) != 0) && (!is_normal_symbol(obj)) && (!is_either_macro(obj))) return(true);
   if (((full_typ & T_MULTIPLE_VALUE) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_GLOBAL) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_let(obj)) && (!is_syntax(obj))) return(true);
-  if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_c_function(obj))) return(true);
+  if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_c_function(obj)) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_LOCAL) != 0) && (!is_normal_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_UNSAFE) != 0) && (!is_symbol(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_VERY_SAFE_CLOSURE) != 0) && (!is_pair(obj)) && (!is_any_closure(obj)) && (!is_let(obj))) return(true);
@@ -8591,6 +8596,12 @@ static s7_pointer string_to_symbol_p_p(s7_scheme *sc, s7_pointer p) {return(g_st
 /* -------------------------------- symbol -------------------------------- */
 static s7_pointer g_string_append_1(s7_scheme *sc, s7_pointer args, s7_pointer caller);
 
+static s7_pointer mark_as_symbol_from_symbol(s7_pointer sym)
+{
+  set_is_symbol_from_symbol(sym);
+  return(sym);
+}
+
 static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
 {
   #define H_symbol "(symbol str ...) returns its string arguments concatenated and converted to a symbol"
@@ -8615,8 +8626,8 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
   if (is_pair(p))
     {
       if (is_null(cdr(args)))
-	return(g_string_to_symbol_1(sc, car(args), sc->symbol_symbol));
-      return(g_string_to_symbol_1(sc, g_string_append_1(sc, args, sc->symbol_symbol), sc->symbol_symbol));
+	return(mark_as_symbol_from_symbol(g_string_to_symbol_1(sc, car(args), sc->symbol_symbol)));
+      return(mark_as_symbol_from_symbol(g_string_to_symbol_1(sc, g_string_append_1(sc, args, sc->symbol_symbol), sc->symbol_symbol)));
     }
   if (len == 0)
     sole_arg_wrong_type_error_nr(sc, sc->symbol_symbol, car(args), wrap_string(sc, "a non-null string", 17));
@@ -8633,7 +8644,7 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
 	  cur_len += string_length(str);
 	}}
   name[len] = '\0';
-  sym = make_symbol_with_length(sc, name, len);
+  sym = mark_as_symbol_from_symbol(make_symbol_with_length(sc, name, len));
   liberate(sc, b);
   return(sym);
 }
@@ -8647,7 +8658,7 @@ static s7_pointer symbol_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
   if ((len == 0) || (len >= 256)) return(g_symbol(sc, set_plist_2(sc, p1, p2)));
   memcpy((void *)buf, (void *)string_value(p1), string_length(p1));
   memcpy((void *)(buf + string_length(p1)), (void *)string_value(p2), string_length(p2));
-  return(make_symbol_with_length(sc, buf, len));
+  return(mark_as_symbol_from_symbol(make_symbol_with_length(sc, buf, len)));
 }
 
 
@@ -52365,29 +52376,15 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices));
 
     case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
-#if 1
-      /* I think we're making some assumption about *-ref, but if it returns (say) an unsafe closure, the stack assumes somewhere that it was safe? 
-       *   good (no list-ref): stack: let1 begin_no_hook
-       * begin_no_hook (444), code: ((vector (P_3 0 12)))
-         h_safe_c_p (143), code: (vector (P_3 0 12))
-         implicit_pair_ref_aa (398), code: (P_3 0 12)
-       *   bad:                stack: let_one_p_old_1
-       * begin_no_hook (444), code: ((vector (list-ref P_3 0 12)))
-         h_safe_c_a (87), code: (vector (list-ref P_3 0 12))
-         maybe no "a" if list-ref has multiple indices?  But would that break multidim seq opts?
-         or can implicit_index fixup the stack?
-       */
-      if (!is_safe_closure(obj)) /* TODO: add alternative */
-	error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "can't call a (possibly unsafe) function implicitly: ~S ~S", 57), obj, indices));
-#endif
-      /* s7_show_stack(sc); */
+      if (!is_safe_closure(obj))               /* s7_call can't work in general with unsafe stuff -- maybe an alternative? */
+	error_nr(sc, sc->syntax_error_symbol, 
+		 set_elist_3(sc, wrap_string(sc, "can't call a (possibly unsafe) function implicitly: ~S ~S", 57), obj, indices));
       check_stack_size(sc);
-      /* fprintf(stderr, "%s %s %s\n", __func__, display(obj), display(indices)); */
       sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* s7_call copies and this is safe? 2-Oct-22 (and below) */
       sc->value = s7_call(sc, obj, sc->temp10);
       sc->temp10 = sc->unused;
-      if (is_multiple_value(sc->value)) /* can this happen if safe? */
-	sc->value = splice_in_values(sc, multiple_value(sc->value));
+      if ((S7_DEBUGGING) && (is_multiple_value(sc->value))) fprintf(stderr, "mv: %s %s %s\n", display(obj), display(indices), display(sc->value));
+      /* if mv: sc->value = splice_in_values(sc, multiple_value(sc->value)); */
       return(sc->value);
 
     case T_C_FUNCTION:
@@ -75685,6 +75682,7 @@ static void check_let_temporarily(s7_scheme *sc)
 	  var = car(var);
 	  if ((is_pair(var)) && (car(var) == sc->setter_symbol) && (is_pair(cdr(var))) && (is_pair(cddr(var))) && (val == sc->F))
 	    {
+	      /* (let-temporarily (((setter (slot-symbol cp) (slot-env cp)) #f)) ...) reactive.scm */
 	      optimize_expression(sc, cadr(var), 0, sc->curlet, false);
 	      optimize_expression(sc, caddr(var), 0, sc->curlet, false);
 	      if ((is_fxable(sc, cadr(var))) && (is_fxable(sc, caddr(var))))
@@ -75700,6 +75698,17 @@ static void op_let_temp_unchecked(s7_scheme *sc)
   sc->args = list_4(sc, car(sc->code), sc->nil, sc->nil, sc->nil);
   push_stack_direct(sc, OP_GC_PROTECT);
   /* sc->args: varlist, settees, old_values, new_values */
+}
+
+static void op_let_temp_init1_1(s7_scheme *sc)
+{
+  if ((is_symbol(sc->value)) && (is_symbol_from_symbol(sc->value))) /* (let-temporarily (((symbol ...))) ..) */
+    {
+      if (is_immutable(sc->value))
+	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_temporarily_symbol, sc->value));
+      sc->value = s7_symbol_value(sc, sc->value);
+    }
+  set_caddr(sc->args, cons(sc, sc->value, caddr(sc->args)));
 }
 
 static bool op_let_temp_init1(s7_scheme *sc)
@@ -90980,7 +90989,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SET_CONS:       op_set_cons(sc); continue;
  	case OP_SET_SAFE:	op_set_safe(sc); continue;
 
-	case OP_SET_FROM_SETTER:  slot_set_value(sc->code, sc->value); continue; /* mv caught in splice_in_values */
+	case OP_SET_FROM_SETTER: slot_set_value(sc->code, sc->value); continue; /* mv caught in splice_in_values */
 	case OP_SET_FROM_LET_TEMP: op_set_from_let_temp(sc); continue;
 
 	case OP_SET2:
@@ -91318,7 +91327,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_LET_TEMP_UNCHECKED: op_let_temp_unchecked(sc); goto LET_TEMP_INIT1;
 
 	case OP_LET_TEMP_INIT1:
-	  set_caddr(sc->args, cons(sc, sc->value, caddr(sc->args)));
+	  op_let_temp_init1_1(sc);
 	LET_TEMP_INIT1:
 	  if (op_let_temp_init1(sc)) goto EVAL;
 	case OP_LET_TEMP_INIT2:
@@ -93949,6 +93958,32 @@ static s7_pointer make_unique(s7_scheme *sc, const char* name, uint64_t typ)
   return(p);
 }
 
+static s7_pointer symbol_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  s7_pointer slot = lookup_slot_from(sym, sc->curlet);
+  if (!is_slot(slot))
+    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "set!: '~S, is unbound", 21), sym));
+  if (is_immutable(slot))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->symbol_symbol, sym));
+  slot_set_value(slot, val);
+  return(val);
+}
+
+static s7_pointer g_symbol_set(s7_scheme *sc, s7_pointer args) /* (set! (symbol <lst>) <val>) */
+{
+  s7_int i = 0, len;
+  s7_pointer lst, val;
+  if (is_null(cddr(args)))
+    return(symbol_set_1(sc, g_symbol(sc, set_plist_1(sc, car(args))), cadr(args)));
+  len = proper_list_length(args) - 1;
+  lst = safe_list_if_possible(sc, len);
+  if (in_heap(lst)) gc_protect_via_stack(sc, lst);
+  for (s7_pointer ap = args, lp = lst; i < len; ap = cdr(ap), lp = cdr(lp), i++) car(lp) = car(ap);
+  val = symbol_set_1(sc, g_symbol(sc, lst), s7_list_ref(sc, args, len));
+  if (in_heap(lst)) unstack(sc); else clear_list_in_use(lst);
+  return(val);
+}
+
 static void init_setters(s7_scheme *sc)
 {
   sc->vector_set_function = global_value(sc->vector_set_symbol);
@@ -94016,6 +94051,7 @@ static void init_setters(s7_scheme *sc)
 			s7_make_function(sc, "#<set-hash-table-key-typer>", g_set_hash_table_key_typer, 2, 0, false, "hash-table-key-typer setter"));
   c_function_set_setter(global_value(sc->hash_table_value_typer_symbol),
 			s7_make_function(sc, "#<set-hash-table-value-typer>", g_set_hash_table_value_typer, 2, 0, false, "hash-table-value-typer setter"));
+  c_function_set_setter(global_value(sc->symbol_symbol), s7_make_function(sc, "symbol-set", g_symbol_set, 2, 0, true, "symbol setter"));
 }
 
 static void init_syntax(s7_scheme *sc)
@@ -94930,14 +94966,14 @@ s7_scheme *s7_init(void)
   let_set_id(sc->nil, -1);
   unique_cdr(sc->unspecified) = sc->unspecified;
 
-  sc->t1_1 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->t2_2 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->t2_1 = semipermanent_cons(sc, sc->nil, sc->t2_2, T_PAIR | T_IMMUTABLE);
-  sc->t3_3 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE);
-  sc->t3_2 = semipermanent_cons(sc, sc->nil, sc->t3_3, T_PAIR | T_IMMUTABLE);
-  sc->t3_1 = semipermanent_cons(sc, sc->nil, sc->t3_2, T_PAIR | T_IMMUTABLE);
-  sc->t4_1 = semipermanent_cons(sc, sc->nil, sc->t3_1, T_PAIR | T_IMMUTABLE);
-  sc->u1_1 = semipermanent_cons(sc, sc->nil, sc->nil,  T_PAIR | T_IMMUTABLE); /* ulist */
+  sc->t1_1 = semipermanent_cons(sc, sc->unused, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t2_2 = semipermanent_cons(sc, sc->unused, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t2_1 = semipermanent_cons(sc, sc->unused, sc->t2_2, T_PAIR | T_IMMUTABLE);
+  sc->t3_3 = semipermanent_cons(sc, sc->unused, sc->nil,  T_PAIR | T_IMMUTABLE);
+  sc->t3_2 = semipermanent_cons(sc, sc->unused, sc->t3_3, T_PAIR | T_IMMUTABLE);
+  sc->t3_1 = semipermanent_cons(sc, sc->unused, sc->t3_2, T_PAIR | T_IMMUTABLE);
+  sc->t4_1 = semipermanent_cons(sc, sc->unused, sc->t3_1, T_PAIR | T_IMMUTABLE);
+  sc->u1_1 = semipermanent_cons(sc, sc->unused, sc->nil,  T_PAIR | T_IMMUTABLE); /* ulist */
 
   sc->safe_lists[0] = sc->nil;
   for (i = 1; i < NUM_SAFE_PRELISTS; i++)
@@ -95796,19 +95832,12 @@ int main(int argc, char **argv)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  * fully optimize gmp version or at least extend big_int to int128_t; will make opt* fx* much more complex
- * a setter for (symbol...)? (set! (symbol "0") 123) etc, currently:
-     (apply define (list (symbol "[#]") 0)) -> 0
-     (set! (setter symbol) (lambda (s v) v))
-     (set! (symbol "[#]") 32) -> 32
-     (eval (symbol "[#]")) -> 0 so currently we can't set! one of these symbols
-     (set! (setter symbol) (lambda (s v) (format *stderr* "~S ~S" s v) v)) -- normally the "s" arg is a symbol, not a string
-     (set! (symbol "[#]") 32) -> "[#]" 32 ??
  *
  * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
- *   (let-temporarily (((*s7* 'openlets) #f)) <expr-with-local-error> <now openlets=#t> <expr expecting it to be #f>)
- * check for opt within opt
- *    sc->pc = 0 occurs 21 times! and reset is complicated. 
+ *   see t624 for openlets
+ * check for opt within opt: sc->pc = 0 occurs 21 times! and reset is complicated. 
  * t718 kw (reinstalled old checker)
- * implicit index non-safe closure case
- *   to handle unsafe cases, need to push fixup op, continue via apply/eval -- maybe one op if both cases can be combined
+ * implicit index non-safe closure case (mention alternative syntax)
+ *   s7_call is the problem -- we have to continue in eval -- impossible currently
+ *   let/vector/hash are affected (maybe c-object), not all have checks currently
  */
