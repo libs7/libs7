@@ -2496,6 +2496,7 @@ static void init_types(void)
 #define T_SYMBOL_FROM_SYMBOL           T_ITER_OK
 #define is_symbol_from_symbol(p)       has_type_bit(T_Sym(p), T_SYMBOL_FROM_SYMBOL)
 #define set_is_symbol_from_symbol(p)   set_type_bit(T_Sym(p), T_SYMBOL_FROM_SYMBOL)
+#define clear_symbol_from_symbol(p)    clear_type1_bit(T_Sym(p), T_SYMBOL_FROM_SYMBOL)
 
 /* it's faster here to use the high_flag bits rather than typeflag bits */
 #define BIT_ROOM                       16
@@ -3212,8 +3213,9 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define vector_length(p)               (p)->object.vector.length
 #define unchecked_vector_elements(p)   (p)->object.vector.elements.objects
 #define unchecked_vector_element(p, i) ((p)->object.vector.elements.objects[i])
-#define vector_element(p, i)           ((T_Vec(p))->object.vector.elements.objects[i])
-#define vector_elements(p)             (T_Vec(p))->object.vector.elements.objects
+#define vector_element(p, i)           ((T_Nvc(p))->object.vector.elements.objects[i])
+#define vector_elements(p)             (T_Nvc(p))->object.vector.elements.objects
+#define any_vector_elements(p)         (T_Vec(p))->object.vector.elements.objects
 #define vector_getter(p)               (T_Vec(p))->object.vector.vget
 #define vector_setter(p)               (T_Vec(p))->object.vector.setv.vset
 #define vector_block(p)                (T_Vec(p))->object.vector.block
@@ -6407,7 +6409,7 @@ static void process_multivector(s7_scheme *sc, s7_pointer s1)
     {
       if (vector_elements_should_be_freed(info)) /* a kludge for foreign code convenience */
 	{
-	  free(vector_elements(s1));
+	  free(any_vector_elements(s1));
 	  vector_elements_should_be_freed(info) = false;
 	}
       liberate(sc, info);
@@ -9146,8 +9148,8 @@ static s7_pointer g_is_funclet(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- unlet -------------------------------- */
-static s7_pointer default_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val);
-static s7_pointer default_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc);
+static s7_pointer normal_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val);
+static s7_pointer normal_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc);
 
 #define UNLET_ENTRIES 512 /* 397 if not --disable-deprecated etc */
 
@@ -9163,8 +9165,8 @@ static void init_unlet(s7_scheme *sc)
   vector_block(sc->unlet) = block;
   vector_elements(sc->unlet) = (s7_pointer *)block_data(block);
   vector_set_dimension_info(sc->unlet, NULL);
-  vector_getter(sc->unlet) = default_vector_getter;
-  vector_setter(sc->unlet) = default_vector_setter;
+  vector_getter(sc->unlet) = normal_vector_getter;
+  vector_setter(sc->unlet) = normal_vector_setter;
   inits = vector_elements(sc->unlet);
   s7_vector_fill(sc, sc->unlet, sc->nil);
 
@@ -11685,14 +11687,9 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  if (stack_args(sc->stack, i) != sc->unused)
 	    set_current_output_port(sc, stack_args(sc->stack, i));        /* "args" = port that we shadowed */
 	  break;
-#if S7_DEBUGGING
-	case OP_MAP_UNWIND: /* can this happen? no, pushed only if opt succeeds */
-	  fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
-	  sc->map_call_ctr--;
-	  if (sc->map_call_ctr < 0) {fprintf(stderr, "%s[%d]: map ctr: %" ld64" \n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
-	  break;
-#endif
+
 	default:
+	  if ((S7_DEBUGGING) && (op == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
 	  break;
 	}}
 
@@ -11910,18 +11907,13 @@ static void call_with_exit(s7_scheme *sc)
 	if (stack_args(sc->stack, i) != sc->unused)
 	  set_current_input_port(sc, stack_args(sc->stack, i));  /* "args" = port that we shadowed */
 	break;
-#if S7_DEBUGGING
-      case OP_MAP_UNWIND:  /* can this happen? see above */
-	fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
-	sc->map_call_ctr--;
-	if (sc->map_call_ctr < 0) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
-	break;
-#endif
+
       case OP_EVAL_DONE: /* goto called in a method -- put off the inner eval return(s) until we clean up the stack */
 	quit++;
 	break;
 
       default:
+	if ((S7_DEBUGGING) && (stack_op(sc->stack, i) == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
 	break;
       }
     i -= 4;
@@ -38921,7 +38913,7 @@ static bool is_byte_vector_b_p(s7_pointer b) {return(is_byte_vector(b));}
 
 s7_int s7_vector_length(s7_pointer vec) {return(vector_length(vec));}
 
-static s7_pointer default_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
+static s7_pointer normal_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
   vector_element(vec, loc) = val;
   return(val);
@@ -38967,7 +38959,7 @@ static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_i
   return(val);
 }
 
-static s7_pointer default_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(vector_element(vec, loc));}
+static s7_pointer normal_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(vector_element(vec, loc));}
 static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)     {return(make_integer(sc, int_vector(vec, loc)));}
 static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)   {return(make_real(sc, float_vector(vec, loc)));}
 static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)     {return(small_int(byte_vector(bv, loc)));}
@@ -39018,8 +39010,8 @@ static inline s7_pointer make_simple_vector(s7_scheme *sc, s7_int len) /* len >=
   vector_block(x) = b;
   vector_elements(x) = (s7_pointer *)block_data(b);
   vector_set_dimension_info(x, NULL);
-  vector_getter(x) = default_vector_getter;
-  vector_setter(x) = default_vector_setter;
+  vector_getter(x) = normal_vector_getter;
+  vector_setter(x) = normal_vector_setter;
   add_vector(sc, x);
   return(x);
 }
@@ -39096,7 +39088,7 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
   if (len == 0)
     {
       vector_block(x) = mallocate_empty_block(sc);
-      vector_elements(x) = NULL;
+      any_vector_elements(x) = NULL;
       if (typ == T_VECTOR) set_has_simple_elements(x);
     }
   else
@@ -39105,8 +39097,8 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 	block_t *b = inline_mallocate(sc, len * sizeof(s7_pointer));
 	vector_block(x) = b;
 	vector_elements(x) = (s7_pointer *)block_data(b);
-	vector_getter(x) = default_vector_getter;
-	vector_setter(x) = default_vector_setter;
+	vector_getter(x) = normal_vector_getter;
+	vector_setter(x) = normal_vector_setter;
 	if (filled)
 	  normal_vector_fill(x, sc->nil);
       }
@@ -39119,8 +39111,8 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 	  if (filled)
 	    {
 	      if (STEP_8(len))
-		memclr64((void *)vector_elements(x), len * sizeof(s7_double));
-	      else memclr((void *)vector_elements(x), len * sizeof(s7_double));
+		memclr64((void *)float_vector_floats(x), len * sizeof(s7_double));
+	      else memclr((void *)float_vector_floats(x), len * sizeof(s7_double));
 	    }
 	  vector_getter(x) = float_vector_getter;
 	  vector_setter(x) = float_vector_setter;
@@ -39134,8 +39126,8 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 	    if (filled)
 	      {
 		if (STEP_8(len))
-		  memclr64((void *)vector_elements(x), len * sizeof(s7_int));
-		else memclr((void *)vector_elements(x), len * sizeof(s7_int));
+		  memclr64((void *)int_vector_ints(x), len * sizeof(s7_int));
+		else memclr((void *)int_vector_ints(x), len * sizeof(s7_int));
 	      }
 	    vector_getter(x) = int_vector_getter;
 	    vector_setter(x) = int_vector_setter;
@@ -39490,7 +39482,7 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 static s7_pointer vector_append_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   s7_pointer val;
-  sc->temp7 = list_2(sc, p1, p2);
+  sc->temp7 = list_2(sc, p1, p2); /* here and below we should use stack_protect */
   val = g_vector_append(sc, sc->temp7);
   sc->temp7 = sc->unused;
   return(val);
@@ -40019,7 +40011,7 @@ static s7_pointer subvector(s7_scheme *sc, s7_pointer vect, s7_int skip_dims, s7
   new_cell(sc, x, (full_type(vect) & (~T_COLLECTED)) | T_SUBVECTOR | T_SAFE_PROCEDURE);
   vector_length(x) = 0;
   vector_block(x) = mallocate_empty_block(sc);
-  vector_elements(x) = NULL;
+  any_vector_elements(x) = NULL;
   vector_getter(x) = vector_getter(vect);
   vector_setter(x) = vector_setter(vect);
   if (dims > 1)
@@ -42490,15 +42482,15 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	    if (sc->sort_f == lt_b_7pp)
 	      {
 		if (is_float_vector(data))
-		  qsort((void *)vector_elements(data), len, sizeof(s7_double), dbl_less);
-		else qsort((void *)vector_elements(data), len, sizeof(s7_int), int_less);
+		  qsort((void *)float_vector_floats(data), len, sizeof(s7_double), dbl_less);
+		else qsort((void *)int_vector_ints(data), len, sizeof(s7_int), int_less);
 		return(data);
 	      }
 	    if (sc->sort_f == gt_b_7pp)
 	      {
 		if (is_float_vector(data))
-		  qsort((void *)vector_elements(data), len, sizeof(s7_double), dbl_greater);
-		else qsort((void *)vector_elements(data), len, sizeof(s7_int), int_greater);
+		  qsort((void *)float_vector_floats(data), len, sizeof(s7_double), dbl_greater);
+		else qsort((void *)int_vector_ints(data), len, sizeof(s7_int), int_greater);
 		return(data);
 	      }}
 	/* currently we have to make the ordinary vector here even if not sf1
@@ -51433,7 +51425,6 @@ static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
 
 static bool catch_map_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  /* fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); */
   sc->map_call_ctr--;
   if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
   return(false);
@@ -51608,18 +51599,9 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   bool reset_error_hook = false;
   s7_pointer cur_code = current_code(sc);
 
-  /* type is a symbol normally, and info is compatible with format: (apply format #f info) --
-   *    car(info) is the control string, cdr(info) its args
-   *    type/range errors have cadr(info)=caller, caddr(info)=offending arg number
-   *    null info can mean symbol table is locked so make-symbol uses s7_error to get out
-   *
-   * set up (owlet), look for a catch that matches 'type', if found
-   *   call its error-handler, else if *error-hook* is bound, call it,
-   *   else send out the error info ourselves.
-   */
   sc->format_depth = -1;
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
-  sc->has_openlets = true;        /*   same problem -- we need a cleaner way to handle this */
+  sc->has_openlets = true;        /*   same problem -- we need a cleaner way to handle this, op_?_unwind */
   sc->value = info;               /* feeble GC protection (otherwise info is sometimes freed in this function), throw also protects type */
 
   if (sc->current_safe_list > 0)
@@ -52375,8 +52357,8 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
     case T_ITERATOR: /* indices is not nil, so this is an error */
       error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, obj, indices));
 
-    case T_CLOSURE: case T_CLOSURE_STAR: /* and others similarly? */
-      if (!is_safe_closure(obj))               /* s7_call can't work in general with unsafe stuff -- maybe an alternative? */
+    case T_CLOSURE: case T_CLOSURE_STAR:
+      if (!is_safe_closure(obj))               /* s7_call can't work in general with unsafe stuff */
 	error_nr(sc, sc->syntax_error_symbol, 
 		 set_elist_3(sc, wrap_string(sc, "can't call a (possibly unsafe) function implicitly: ~S ~S", 57), obj, indices));
       check_stack_size(sc);
@@ -52393,7 +52375,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
     case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_call(obj)(sc, indices));
 
-    default: /* (#(a b c) 0 1) -> error, but ((list (lambda (x) x)) 0 "hi") -> "hi"?, also here with (apply (inlet) '(define y 32)) */
+    default:
       if (!is_applicable(obj))            /* (apply (list cons cons) (list 1 2)) needs the argnum check mentioned below */
 	apply_error_nr(sc, obj, indices);
       sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* do not use sc->args here! */
@@ -67232,6 +67214,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	      s7_pointer v = cadr(args);
 	      s7_int vlen = vector_length(v);
 	      for (s7_int i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
+	      /* TODO: try mutable int/float here and explicit getter (tmisc) */
 	      return(sc->unspecified);
 	    }
 	  if (is_string(cadr(args)))
@@ -68922,7 +68905,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
        */
       s7_pointer args = (sc->args) ? sc->args : sc->nil;
       s7_pointer result = sc->undefined;
-      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code,
+      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code,         /* perhaps elist_7 except we use elist_3 above? */
                     cons_unchecked(sc, args, list_4(sc, value, cur_code, x, z)))); /* not s7_list (debugger checks) */
       if (!is_pair(cur_code))
 	{
@@ -75704,6 +75687,7 @@ static void op_let_temp_init1_1(s7_scheme *sc)
 {
   if ((is_symbol(sc->value)) && (is_symbol_from_symbol(sc->value))) /* (let-temporarily (((symbol ...))) ..) */
     {
+      clear_symbol_from_symbol(sc->value);
       if (is_immutable(sc->value))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_temporarily_symbol, sc->value));
       sc->value = s7_symbol_value(sc, sc->value);
@@ -78162,11 +78146,10 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
       if (is_c_function(c_function_setter(obj)))
 	{
 	  s7_pointer setf = c_function_setter(obj);
-	  if (c_function_min_args(setf) == 2)
+	  if (c_function_is_aritable(setf, 2))
 	    sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
 	  else error_nr(sc, sc->wrong_number_of_args_symbol,
-			set_elist_6(sc, wrap_string(sc, "set!: not enough arguments: (~A ~S ~S), ~A is (setter ~A)", 57), 
-				    setf, arg, value, setf, obj));
+			set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
 	}
       else
 	{
@@ -95118,8 +95101,8 @@ s7_scheme *s7_init(void)
   full_type(sc->symbol_table) = T_VECTOR | T_UNHEAP;
   vector_length(sc->symbol_table) = SYMBOL_TABLE_SIZE;
   vector_elements(sc->symbol_table) = (s7_pointer *)Malloc(SYMBOL_TABLE_SIZE * sizeof(s7_pointer));
-  vector_getter(sc->symbol_table) = default_vector_getter;
-  vector_setter(sc->symbol_table) = default_vector_setter;
+  vector_getter(sc->symbol_table) = normal_vector_getter;
+  vector_setter(sc->symbol_table) = normal_vector_setter;
   normal_vector_fill(sc->symbol_table, sc->nil);
 
   { /* sc->opts */
@@ -95779,16 +95762,16 @@ int main(int argc, char **argv)
  * index     1026   1016    973    964    962
  * tmock     1177   1165   1057   1083   1083
  * tvect     2519   2464   1772   1667   1667
- * timp      2637   2575   1930   1696   1692
+ * timp      2637   2575   1930   1696   1687
  * texit     ----   ----   1778   1738   1737
  * s7test    1873   1831   1818   1818   1816
- * tauto     ----   ----   2562   2171   2046
- * thook     ----   ----   2590   2073   2071
+ * tauto     ----   ----   2562   2171   2045
+ * thook     ----   ----   2590   2073   2074
  * lt        2187   2172   2150   2179   2179
  * dup       3805   3788   2492   2272   2251
  * tcopy     8035   5546   2539   2373   2372
  * tload     ----   ----   3046   2377   2368
- * tread     2440   2421   2419   2414   2412
+ * tread     2440   2421   2419   2414   2414
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
@@ -95803,22 +95786,22 @@ int main(int argc, char **argv)
  * tlet      7775   5640   4450   4403   4402
  * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4456   4457
- * tmap      8869   8774   4489   4477   4477  4499 4554 [g_for_each_closure g_map_closure]
+ * tmap      8869   8774   4489   4477   4554
  * tshoot    5525   5447   5183   5056   5055
- * tstr      6880   6342   5488   5131   5130
+ * tstr      6880   6342   5488   5131   5136
  * tform     5357   5348   5307   5320   5309
- * tnum      6348   6013   5433   5369   5365
+ * tnum      6348   6013   5433   5369   5372
  * tlamb     6423   6273   5720   5545   5545
- * tmisc     8869   7612   6435   6184   6185  6210 [same]
- * tset      ----   ----   ----   6238   6219
- * tlist     7896   7546   6558   6247   6243  6249 [g_for_each_closure]
+ * tmisc     8869   7612   6435   6184   6212
+ * tset      ----   ----   ----   6238   6227
+ * tlist     7896   7546   6558   6247   6249
  * tgsl      8485   7802   6373   6307   6280
- * trec      6936   6922   6521   6558   6558  6565 [op_safe_closure_star_aaa]
- * tari      13.0   12.7   6827   6583   6581
- * tleft     10.4   10.2   7657   7479   7475
- * tgc       11.9   11.1   8177   7913   7919
- * thash     11.8   11.7   9734   9467   9466
- * cb        11.2   11.0   9658   9528   9522  9534 [g_for_each_closure]
+ * trec      6936   6922   6521   6558   6565
+ * tari      13.0   12.7   6827   6583   6583
+ * tleft     10.4   10.2   7657   7479   7479
+ * tgc       11.9   11.1   8177   7913   7927
+ * thash     11.8   11.7   9734   9467   9471
+ * cb        11.2   11.0   9658   9528   9532
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.5
@@ -95831,13 +95814,9 @@ int main(int argc, char **argv)
  * for multithread s7: (with-s7 ((var database)...) . body)
  *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
- * fully optimize gmp version or at least extend big_int to int128_t; will make opt* fx* much more complex
  *
  * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
- *   see t624 for openlets
+ *   see t624 for openlets -- would let-temp work? [mockery uses this -- maybe the error clear is unnecessary]
  * check for opt within opt: sc->pc = 0 occurs 21 times! and reset is complicated. 
- * t718 kw (reinstalled old checker)
- * implicit index non-safe closure case (mention alternative syntax)
- *   s7_call is the problem -- we have to continue in eval -- impossible currently
- *   let/vector/hash are affected (maybe c-object), not all have checks currently
+ * t718 kw
  */
