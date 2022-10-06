@@ -633,7 +633,7 @@
 	 (lambda (f) 
 	   (let ((scheme-name (f 0))
 		 (base-name   (f 1))
-		 (help        (f 2))
+		 (helpf       (f 2))
 		 (num-args    (f 3))
 		 (opt-args    (if (> (length f) 4) (f 4) 0))
 		 (sig         (and (> (length f) 5) (f 5))))
@@ -643,7 +643,7 @@
 		     base-name
 		     num-args
 		     opt-args
-		     help
+		     helpf
 		     (if (pair? sig) (signatures sig) 'NULL))))
 	 functions)
 	

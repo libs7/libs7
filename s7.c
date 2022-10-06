@@ -8035,6 +8035,7 @@ static void unstack_1(s7_scheme *sc, const char *func, int32_t line)
   if (((opcode_t)sc->stack_end[3]) != OP_GC_PROTECT)
     {
       fprintf(stderr, "%s%s[%d]: popped %s?%s\n", BOLD_TEXT, func, line, op_names[(opcode_t)sc->stack_end[3]], UNBOLD_TEXT);
+      /* "popped apply" means we called something that went to eval+apply when we thought it was a safe function */
       fprintf(stderr, "    code: %s, args: %s\n", display(sc->code), display(sc->args));
       fprintf(stderr, "    cur_code: %s, estr: %s\n", display(current_code(sc)), display(s7_name_to_value(sc, "estr")));
       if (sc->stop_at_error) abort();
@@ -8046,7 +8047,7 @@ static void unstack_2(s7_scheme *sc, opcode_t op, const char *func, int32_t line
   sc->stack_end -= 4;
   if (((opcode_t)sc->stack_end[3]) != op)
     {
-      fprintf(stderr, "%s%s[%d]: popped %s?%s\n", BOLD_TEXT, func, line, op_names[(opcode_t)sc->stack_end[3]], UNBOLD_TEXT);
+      fprintf(stderr, "%s%s[%d]: popped %s? (expected %s)%s\n", BOLD_TEXT, func, line, op_names[(opcode_t)sc->stack_end[3]], op_names[op], UNBOLD_TEXT);
       fprintf(stderr, "    code: %s, args: %s\n", display(sc->code), display(sc->args));
       fprintf(stderr, "    cur_code: %s, estr: %s\n", display(current_code(sc)), display(s7_name_to_value(sc, "estr")));
       if (sc->stop_at_error) abort();
@@ -8161,6 +8162,7 @@ s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x)
 
 #define gc_protect_via_stack(Sc, Obj) push_stack_no_let_no_code(Sc, OP_GC_PROTECT, Obj)
 #define gc_protect_2_via_stack(Sc, X, Y) do {push_stack_no_let_no_code(Sc, OP_GC_PROTECT, X); stack_protected2(Sc) = Y;} while (0)
+#define gc_protect_3_via_stack(Sc, X, Y, Z) do {push_stack_no_let_no_code(Sc, OP_GC_PROTECT, X); stack_protected2(Sc) = Y; stack_protected3(sc) = Z;} while (0)
 /* often X and Y are fx_calls, so push X, then set Y */
 
 
@@ -39465,8 +39467,7 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 		  s7_pointer v, y;
 		  if (i == 0)
 		    return(s7_apply_function(sc, func, args));
-		  /* we have to copy the arglist here */
-		  sc->temp9 = make_list(sc, i, sc->F);
+		  sc->temp9 = make_list(sc, i, sc->F); /* we have to copy the arglist here */
 		  for (k = 0, y = args, v = sc->temp9; k < i; k++, y = cdr(y), v = cdr(v))
 		    set_car(v, car(y));
 		  v = g_vector_append(sc, sc->temp9);
@@ -39482,7 +39483,7 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 static s7_pointer vector_append_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
 {
   s7_pointer val;
-  sc->temp7 = list_2(sc, p1, p2); /* here and below we should use stack_protect */
+  sc->temp7 = list_2(sc, p1, p2); /* ideally this list would be stack_protected, avoiding temp7 (method call above) */
   val = g_vector_append(sc, sc->temp7);
   sc->temp7 = sc->unused;
   return(val);
@@ -42401,7 +42402,6 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  s7_pointer vec = g_vector(sc, data);
 	  gc_protect_2_via_stack(sc, vec, data);
 	  elements = s7_vector_elements(vec);
-	  set_stack_protected3(sc, vec);
 	  local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 	  for (s7_pointer p = data; i < len; i++, p = cdr(p))
 	    {
@@ -42455,7 +42455,6 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	else for (i = 0; i < len; i++) elements[i] = chars[chrs[i]];
 	if (sort_func)
 	  {
-	    set_stack_protected3(sc, vec);
 	    local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 	    if (is_byte_vector(data))
 	      for (i = 0; i < len; i++)	chrs[i] = (char)integer(elements[i]);
@@ -42511,7 +42510,6 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	else for (i = 0; i < len; i++) elements[i] = make_integer_unchecked(sc, int_vector(data, i));
 	if (sort_func)
 	  {
-	    set_stack_protected3(sc, vec);
 	    local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 	    if (is_float_vector(data))
 	      for (i = 0; i < len; i++)	float_vector(data, i) = real(elements[i]);
@@ -67213,8 +67211,28 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	    {
 	      s7_pointer v = cadr(args);
 	      s7_int vlen = vector_length(v);
-	      for (s7_int i = 0; i < vlen; i++) fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
-	      /* TODO: try mutable int/float here and explicit getter (tmisc) */
+	      if (is_float_vector(v))
+		{
+		  s7_pointer rl = s7_make_mutable_real(sc, 0.0);
+		  sc->temp7 = rl;
+		  for (s7_int i = 0; i < vlen; i++)
+		    {
+		      real(rl) = float_vector(v, i);
+		      fp(sc, rl);
+		    }}
+	      else
+		if (is_int_vector(v))
+		  {
+		    s7_pointer iv = make_mutable_integer(sc, 0);
+		    sc->temp7 = iv;
+		    for (s7_int i = 0; i < vlen; i++)
+		      {
+			integer(iv) = int_vector(v, i);
+			fp(sc, iv);
+		      }}
+		else
+		  for (s7_int i = 0; i < vlen; i++) 
+		    fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
 	      return(sc->unspecified);
 	    }
 	  if (is_string(cadr(args)))
@@ -69110,7 +69128,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
       if (c_function_min_args(func) != 0)
 	return(OPT_F);
       if ((hop == 0) && (symbol_id(car(expr)) == 0)) hop = 1;
-
       if (is_safe_procedure(func))
 	{
 	  set_safe_optimize_op(expr, hop + OP_SAFE_C_NC);
@@ -69423,7 +69440,9 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       if (func_is_safe)
 	{
 	  int32_t op = combine_ops(sc, expr, E_C_P, arg1, NULL);
+	  /* if ((hop == 1) && (!op_has_hop(arg1))) hop = 0; *//* probably not the right way to fix this (s7test tc_or_a_and_a_a_la) */
 	  set_safe_optimize_op(expr, hop + op);
+
 	  if ((op == OP_SAFE_C_P) &&
 	      (is_fxable(sc, arg1)))
 	    {
@@ -71179,6 +71198,9 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
       s7_pointer init = cadar(p);
+      if ((is_slot(global_slot(caar(p)))) && 
+	  (is_c_function(global_value(caar(p)))))
+	return(false);
       if ((is_pair(init)) &&
 	  (!is_checked(init)) &&
 	  (optimize_expression(sc, init, hop, e, false) == OPT_OOPS))
@@ -71748,7 +71770,6 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 
 	  /* we miss implicit indexing here because at this time, the data are not set */
 	  if ((is_t_procedure(func)) ||                  /* t_procedure_p: c_funcs, closures, etc */
-	      /* (is_any_closure(func)) || */            /* added 11-Mar-20, but it's redundant!? */
 	      ((is_applicable(func)) &&
 	       (is_safe_procedure(func))))               /* built-in applicable objects like vectors */
 	    {
@@ -78146,10 +78167,16 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
       if (is_c_function(c_function_setter(obj)))
 	{
 	  s7_pointer setf = c_function_setter(obj);
-	  if (c_function_is_aritable(setf, 2))
-	    sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
-	  else error_nr(sc, sc->wrong_number_of_args_symbol,
-			set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
+	  if (!c_function_is_aritable(setf, 2))
+	    error_nr(sc, sc->wrong_number_of_args_symbol,
+		     set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
+	  if (!is_safe_procedure(setf)) /* if unsafe, we can't call c_function_call(setf) directly (need drop into eval+apply) */
+	    {
+	      sc->code = setf;
+	      sc->args = list_2(sc, arg, value);
+	      return(true);
+	    }
+	  sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
 	}
       else
 	{
@@ -78163,7 +78190,19 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       if (is_c_function(closure_setter(obj)))
-	sc->value = c_function_call(closure_setter(obj))(sc, with_list_t2(arg, value));
+	{
+	  s7_pointer setf = closure_setter(obj);
+	  if (!c_function_is_aritable(setf, 2))
+	    error_nr(sc, sc->wrong_number_of_args_symbol,
+		     set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
+	  if (!is_safe_procedure(setf)) /* if unsafe, we can't call c_function_call(setf) directly (need drop into eval+apply) */
+	    {
+	      sc->code = setf;
+	      sc->args = list_2(sc, arg, value);
+	      return(true);
+	    }
+	  sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
+	}
       else
 	{
 	  sc->code = closure_setter(obj);
@@ -78305,7 +78344,19 @@ static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_point
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
     case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
       if (is_c_function(c_function_setter(obj)))
-	sc->value = c_function_call(c_function_setter(obj))(sc, with_list_t3(index1, index2, value));
+	{
+	  s7_pointer setf = c_function_setter(obj);
+	  if (!c_function_is_aritable(setf, 3))
+	    error_nr(sc, sc->wrong_number_of_args_symbol,
+		     set_elist_7(sc, wrap_string(sc, "set!: three arguments? (~A ~S ~S ~S), ~A is (setter ~A)", 55), setf, index1, index2, value, setf, obj));
+	  if (!is_safe_procedure(setf))
+	    {
+	      sc->code = setf;
+	      sc->args = list_3(sc, index1, index2, value);
+	      return(true);
+	    }
+	  sc->value = c_function_call(setf)(sc, with_list_t3(index1, index2, value));
+	}
       else
 	{
 	  sc->code = c_function_setter(obj); /* closure|macro */
@@ -78318,7 +78369,19 @@ static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_point
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       if (is_c_function(closure_setter(obj)))
-	sc->value = c_function_call(closure_setter(obj))(sc, with_list_t3(index1, index2, value));
+	{
+	  s7_pointer setf = closure_setter(obj);
+	  if (!c_function_is_aritable(setf, 3))
+	    error_nr(sc, sc->wrong_number_of_args_symbol,
+		     set_elist_7(sc, wrap_string(sc, "set!: three arguments? (~A ~S ~S ~S), ~A is (setter ~A)", 55), setf, index1, index2, value, setf, obj));
+	  if (!is_safe_procedure(setf))
+	    {
+	      sc->code = setf;
+	      sc->args = list_3(sc, index1, index2, value);
+	      return(true);
+	    }
+	  sc->value = c_function_call(setf)(sc, with_list_t3(index1, index2, value));
+	}
       else
 	{
 	  sc->code = closure_setter(obj);
@@ -78351,7 +78414,9 @@ static bool op_set_opsaaq_a(s7_scheme *sc)        /* (set! (symbol fxable fxable
   gc_protect_via_stack(sc, value);
   index1 = fx_call(sc, cdar(code));
   set_stack_protected2(sc, index1);
+  fprintf(stderr, "obj: %s, index1: %s, value: %s, code: %s\n", display(obj), display(index1), display(value), display(code));
   result = set_pair4(sc, obj, index1, fx_call(sc, cddar(code)), value);
+  fprintf(stderr, "result: %d\n", result);
   unstack(sc);
   return(result);
 }
@@ -87302,7 +87367,7 @@ static void op_safe_c_pp_6_mv(s7_scheme *sc) /* both args mv */
 
 static void op_safe_c_3p(s7_scheme *sc)
 {
-  /* check_stack_size(sc); */
+  check_stack_size(sc);
   push_stack_no_args_direct(sc, OP_SAFE_C_3P_1);
   sc->code = cadr(sc->code);
 }
@@ -95792,7 +95857,7 @@ int main(int argc, char **argv)
  * tform     5357   5348   5307   5320   5309
  * tnum      6348   6013   5433   5369   5372
  * tlamb     6423   6273   5720   5545   5545
- * tmisc     8869   7612   6435   6184   6212
+ * tmisc     8869   7612   6435   6184   6212  6097
  * tset      ----   ----   ----   6238   6227
  * tlist     7896   7546   6558   6247   6249
  * tgsl      8485   7802   6373   6307   6280
@@ -95816,7 +95881,6 @@ int main(int argc, char **argv)
  *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
  *
  * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
- *   see t624 for openlets -- would let-temp work? [mockery uses this -- maybe the error clear is unnecessary]
- * check for opt within opt: sc->pc = 0 occurs 21 times! and reset is complicated. 
- * t718 kw
+ *   see t624 for openlets
+ * t718 catch=setter for 2/3 args closure/c-func -> s7test, also the "p" cases need similar tests/code, op_set1 probably needs the is_aritable check
  */
