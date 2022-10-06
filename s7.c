@@ -78414,9 +78414,7 @@ static bool op_set_opsaaq_a(s7_scheme *sc)        /* (set! (symbol fxable fxable
   gc_protect_via_stack(sc, value);
   index1 = fx_call(sc, cdar(code));
   set_stack_protected2(sc, index1);
-  fprintf(stderr, "obj: %s, index1: %s, value: %s, code: %s\n", display(obj), display(index1), display(value), display(code));
   result = set_pair4(sc, obj, index1, fx_call(sc, cddar(code)), value);
-  fprintf(stderr, "result: %d\n", result);
   unstack(sc);
   return(result);
 }
