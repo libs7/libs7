@@ -7921,8 +7921,12 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
   if (sc->stack_end >= sc->stack_resize_trigger)
     {
       fprintf(stderr, "%s%s[%d]: stack resize skipped%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
-      if (sc->stop_at_error) abort();
-    }
+      if (sc->stop_at_error) 
+	{
+	  /* this is pointless if we can't look around in gdb, so give us some room */
+	  sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + (sc->stack_size - ((STACK_RESIZE_TRIGGER) / 2)));
+	  abort();
+	}}
   if (sc->stack_end != end)
     fprintf(stderr, "%s[%d]: stack changed in push_stack\n", func, line);
   if (op >= NUM_OPS)
@@ -9486,7 +9490,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 		immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 	      symbol_set_id(sym, the_un_id);
 	      slot_set_value(global_slot(sym), sc->undefined);
-	      /* TODO: here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
+	      /* here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
 	    }
 	  else error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "cutlet can't remove ~S", 22), sym));
 	}
@@ -18467,6 +18471,8 @@ static s7_int floor_i_7p(s7_scheme *sc, s7_pointer p)
     }
   return(s7_integer(method_or_bust_p(sc, p, sc->floor_symbol, sc->type_names[T_REAL])));
 }
+
+static s7_pointer floor_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc,floor_i_7d(sc, x)));}
 #endif
 
 
@@ -18551,6 +18557,8 @@ static s7_int ceiling_i_7p(s7_scheme *sc, s7_pointer p)
   if (is_t_ratio(p)) return((s7_int)(ceil(fraction(p))));
   return(s7_integer(method_or_bust_p(sc, p, sc->ceiling_symbol, sc->type_names[T_REAL])));
 }
+
+static s7_pointer ceiling_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, ceiling_i_7d(sc, x)));}
 #endif
 
 
@@ -18625,6 +18633,8 @@ static s7_int truncate_i_7d(s7_scheme *sc, s7_double x)
     sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, wrap_real(sc, x), its_too_large_string);
   return((x > 0.0) ? (s7_int)floor(x) : (s7_int)ceil(x));
 }
+
+static s7_pointer truncate_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, truncate_i_7d(sc, x)));}
 #endif
 
 
@@ -18731,6 +18741,8 @@ static s7_int round_i_7d(s7_scheme *sc, s7_double z)
     sole_arg_out_of_range_error_nr(sc, sc->round_symbol, wrap_real(sc, z), its_too_large_string);
   return((s7_int)r5rs_round(z));
 }
+
+static s7_pointer round_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc,round_i_7d(sc, x)));}
 #endif
 
 
@@ -30536,6 +30548,7 @@ in the file, or by the function."
 
   check_method(sc, value, sc->autoload_symbol, args);
   wrong_type_error_nr(sc, sc->autoload_symbol, 2, value, wrap_string(sc, "a string (file-name) or a thunk", 31));
+  return(NULL); /* make tcc happy */
 }
 
 
@@ -35185,10 +35198,6 @@ calls thunk, then returns the collected output"
   return(sc->F);
 }
 
-/* (let () (define-macro (mac) (write "123")) (with-output-to-string mac))
- * (string-ref (with-output-to-string (lambda () (write "1234") (values (get-output-string) 1))))
- */
-
 
 /* -------------------------------- with-output-to-file -------------------------------- */
 static s7_pointer g_with_output_to_file(s7_scheme *sc, s7_pointer args)
@@ -35243,13 +35252,6 @@ static void format_append_char(s7_scheme *sc, char c, s7_pointer port)
 {
   port_write_character(port)(sc, c, port);
   sc->format_column++;
-
-  /* if c is #\null, is this the right thing to do?
-   * We used to return "1 2 3 4" because ~C was first turned into a string (empty in this case)
-   *   (format #f "1 2~C3 4" #\null) -> "1 2"
-   * Clisp: (format nil "1 2~C3 4" (int-char 0)) -> "1 23 4"
-   * whereas sbcl says int-char is undefined, and Guile returns "1 2\x003 4"
-   */
 }
 
 static void format_append_newline(s7_scheme *sc, s7_pointer port)
@@ -44837,7 +44839,8 @@ static c_proc_t *alloc_semipermanent_function(s7_scheme *sc)
   return(&(sc->alloc_function_cells[sc->alloc_function_k++]));
 }
 
-s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function f, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
+s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function f, 
+			    s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer x = alloc_pointer(sc);
   x = make_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_semipermanent_function(sc));
@@ -45077,7 +45080,7 @@ static s7_pointer define_bool_function(s7_scheme *sc, const char *name, s7_funct
   c_function_symbol(func) = sym;
   c_function_set_marker(func, marker);
   if (simple) c_function_set_has_simple_elements(func);
-  c_function_set_bool_setter(func, bfunc = s7_make_function(sc, name, bool_setter, 2, 0, false, NULL));
+  c_function_set_bool_setter(func, bfunc = s7_make_safe_function(sc, name, bool_setter, 2, 0, false, NULL));
   c_function_set_has_bool_setter(func);
   c_function_set_setter(bfunc, func);
   set_is_bool_function(bfunc);
@@ -45984,7 +45987,7 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
   catstrs_direct(internal_set_name, "[set-", name, "]", (const char *)NULL);
   get_func = s7_make_safe_function(sc, name, getter, get_req_args, get_opt_args, false, documentation);
   s7_define(sc, envir, make_symbol_with_length(sc, name, name_len), get_func);
-  set_func = s7_make_function(sc, internal_set_name, setter, set_req_args, set_opt_args, false, documentation);
+  set_func = s7_make_safe_function(sc, internal_set_name, setter, set_req_args, set_opt_args, false, documentation);
   c_function_set_setter(get_func, set_func);
   return(get_func);
 }
@@ -46470,6 +46473,7 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 	return(setter);
       }}
   wrong_type_error_nr(sc, sc->setter_symbol, 1, p, wrap_string(sc, "something that might have a setter", 34));
+  return(NULL); /* make tcc happy */
 }
 
 static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
@@ -68667,7 +68671,7 @@ static void init_choosers(s7_scheme *sc)
   sc->string_equal_2c = make_function_with_class(sc, f, "string=?", g_string_equal_2c, 2, 0, false);
 
   /* substring */
-  sc->substring_uncopied = s7_make_function(sc, "substring", g_substring_uncopied, 2, 1, false, NULL);
+  sc->substring_uncopied = s7_make_safe_function(sc, "substring", g_substring_uncopied, 2, 1, false, NULL);
   s7_function_set_class(sc, sc->substring_uncopied, global_value(sc->substring_symbol));
 
   /* string>? */
@@ -68701,7 +68705,7 @@ static void init_choosers(s7_scheme *sc)
 
   /* symbol->string */
   f = global_value(sc->symbol_to_string_symbol);
-  sc->symbol_to_string_uncopied = s7_make_function(sc, "symbol->string", g_symbol_to_string_uncopied, 1, 0, false, NULL);
+  sc->symbol_to_string_uncopied = s7_make_safe_function(sc, "symbol->string", g_symbol_to_string_uncopied, 1, 0, false, NULL);
   s7_function_set_class(sc, sc->symbol_to_string_uncopied, f);
 
   /* display */
@@ -71198,9 +71202,11 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
       s7_pointer init = cadar(p);
+#if 0
       if ((is_slot(global_slot(caar(p)))) && 
 	  (is_c_function(global_value(caar(p)))))
 	return(false);
+#endif
       if ((is_pair(init)) &&
 	  (!is_checked(init)) &&
 	  (optimize_expression(sc, init, hop, e, false) == OPT_OOPS))
@@ -81931,14 +81937,12 @@ static goto_t op_safe_dotimes(s7_scheme *sc)
 	   *   else goto opt_dotimes then safe_dotimes_step_o
 	   *   if multi-line body, check opt_dotimes, then safe_dotimes_step
 	   */
-
 	  if (s7_integer_clamped_if_gmp(sc, init_val) == s7_integer_clamped_if_gmp(sc, end_val))
 	    {
 	      sc->value = sc->T;
 	      sc->code = cdadr(code);
 	      return(goto_safe_do_end_clauses);
 	    }
-
 	  if ((is_null(cdr(sc->code))) &&
 	      (is_pair(car(sc->code))))
 	    {
@@ -82460,8 +82464,7 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 		 set_elist_5(sc, wrap_string(sc, "~S: not enough arguments: ((~S ~S ...)~{~^ ~S~})", 48),
 			     closure_name(sc, sc->code),
 			     (is_closure(sc->code)) ? sc->lambda_symbol : ((is_bacro(sc->code)) ? sc->bacro_symbol : sc->macro_symbol),
-			     closure_args(sc->code),
-			     sc->args));
+			     closure_args(sc->code), sc->args));
       slot = make_slot(sc, sym, T_Ext(unchecked_car(z)));
       symbol_set_local_slot(sym, id, slot);
       if (tis_slot(last_slot))
@@ -82477,8 +82480,7 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 		 set_elist_5(sc, wrap_string(sc, "~S: too many arguments: ((~S ~S ...)~{~^ ~S~})", 46),
 			     closure_name(sc, sc->code),
 			     (is_closure(sc->code)) ? sc->lambda_symbol : ((is_bacro(sc->code)) ? sc->bacro_symbol : sc->macro_symbol),
-			     closure_args(sc->code),
-			     sc->args));
+			     closure_args(sc->code), sc->args));
     }
   else
     {
@@ -93473,6 +93475,10 @@ static void init_opt_functions(s7_scheme *sc)
 #if (!WITH_GMP)
   s7_set_p_pp_function(sc, global_value(sc->expt_symbol), expt_p_pp);
   /* same problem affects big_log|logior|logand|logxor|lcm|gcd|rationalize|remainder|modulo -- *_p_* will fail in gmp s7 */
+  s7_set_p_d_function(sc, global_value(sc->ceiling_symbol), ceiling_p_d);
+  s7_set_p_d_function(sc, global_value(sc->floor_symbol), floor_p_d);
+  s7_set_p_d_function(sc, global_value(sc->truncate_symbol), truncate_p_d);
+  s7_set_p_d_function(sc, global_value(sc->round_symbol), round_p_d);
 #endif
   s7_set_d_7dd_function(sc, global_value(sc->remainder_symbol), remainder_d_7dd);
   s7_set_i_7ii_function(sc, global_value(sc->remainder_symbol), remainder_i_7ii);
@@ -94059,9 +94065,9 @@ static void init_setters(s7_scheme *sc)
 #if (WITH_PURE_S7)
   /* we need to be able at least to set (current-output-port) to #f */
   c_function_set_setter(global_value(sc->current_input_port_symbol),
-			s7_make_function(sc, "#<set-*stdin*>", g_set_current_input_port, 1, 0, false, "*stdin* setter"));
+			s7_make_safe_function(sc, "#<set-*stdin*>", g_set_current_input_port, 1, 0, false, "*stdin* setter"));
   c_function_set_setter(global_value(sc->current_output_port_symbol),
-			s7_make_function(sc, "#<set-*stdout*>", g_set_current_output_port, 1, 0, false, "*stdout* setter"));
+			s7_make_safe_function(sc, "#<set-*stdout*>", g_set_current_output_port, 1, 0, false, "*stdout* setter"));
 #else
   set_is_setter(sc->set_current_input_port_symbol);
   set_is_setter(sc->set_current_output_port_symbol);
@@ -94086,18 +94092,18 @@ static void init_setters(s7_scheme *sc)
   s7_function_set_setter(sc, "let-ref",          "let-set!");
   s7_function_set_setter(sc, "string-ref",       "string-set!");
   c_function_set_setter(global_value(sc->outlet_symbol),
-			s7_make_function(sc, "#<set-outlet>", g_set_outlet, 2, 0, false, "outlet setter"));
+			s7_make_safe_function(sc, "#<set-outlet>", g_set_outlet, 2, 0, false, "outlet setter"));
   c_function_set_setter(global_value(sc->port_line_number_symbol),
-			s7_make_function(sc, "#<set-port-line-number>", g_set_port_line_number, 1, 1, false, "port-line setter"));
+			s7_make_safe_function(sc, "#<set-port-line-number>", g_set_port_line_number, 1, 1, false, "port-line setter"));
   c_function_set_setter(global_value(sc->port_position_symbol),
-			s7_make_function(sc, "#<set-port-position>", g_set_port_position, 2, 0, false, "port-position setter"));
+			s7_make_safe_function(sc, "#<set-port-position>", g_set_port_position, 2, 0, false, "port-position setter"));
   c_function_set_setter(global_value(sc->vector_typer_symbol),
-			s7_make_function(sc, "#<set-vector-typer>", g_set_vector_typer, 2, 0, false, "vector-typer setter"));
+			s7_make_safe_function(sc, "#<set-vector-typer>", g_set_vector_typer, 2, 0, false, "vector-typer setter"));
   c_function_set_setter(global_value(sc->hash_table_key_typer_symbol),
-			s7_make_function(sc, "#<set-hash-table-key-typer>", g_set_hash_table_key_typer, 2, 0, false, "hash-table-key-typer setter"));
+			s7_make_safe_function(sc, "#<set-hash-table-key-typer>", g_set_hash_table_key_typer, 2, 0, false, "hash-table-key-typer setter"));
   c_function_set_setter(global_value(sc->hash_table_value_typer_symbol),
-			s7_make_function(sc, "#<set-hash-table-value-typer>", g_set_hash_table_value_typer, 2, 0, false, "hash-table-value-typer setter"));
-  c_function_set_setter(global_value(sc->symbol_symbol), s7_make_function(sc, "symbol-set", g_symbol_set, 2, 0, true, "symbol setter"));
+			s7_make_safe_function(sc, "#<set-hash-table-value-typer>", g_set_hash_table_value_typer, 2, 0, false, "hash-table-value-typer setter"));
+  c_function_set_setter(global_value(sc->symbol_symbol), s7_make_safe_function(sc, "symbol-set", g_symbol_set, 2, 0, true, "symbol setter"));
 }
 
 static void init_syntax(s7_scheme *sc)
@@ -94443,12 +94449,12 @@ static void init_rootlet(s7_scheme *sc)
   sc->open_input_string_symbol =     defun("open-input-string",  open_input_string,	1, 0, false);
   sc->open_output_string_symbol =    defun("open-output-string", open_output_string,	0, 0, false);
   sc->get_output_string_symbol =     defun("get-output-string",  get_output_string,	1, 1, false);
-  sc->get_output_string_uncopied =   s7_make_function(sc, "get-output-string", g_get_output_string_uncopied, 1, 1, false, NULL);
+  sc->get_output_string_uncopied =   s7_make_safe_function(sc, "get-output-string", g_get_output_string_uncopied, 1, 1, false, NULL);
   sc->open_input_function_symbol =   defun("open-input-function",open_input_function,	1, 0, false);
   sc->open_output_function_symbol =  defun("open-output-function",open_output_function,	1, 0, false);
 
-  sc->closed_input_function = s7_make_function(sc, "closed-input-function", g_closed_input_function_port, 2, 0, false, "input-function error"),
-  sc->closed_output_function = s7_make_function(sc, "closed-output-function", g_closed_output_function_port, 1, 0, false, "output-function error"),
+  sc->closed_input_function = s7_make_safe_function(sc, "closed-input-function", g_closed_input_function_port, 2, 0, false, "input-function error"),
+  sc->closed_output_function = s7_make_safe_function(sc, "closed-output-function", g_closed_output_function_port, 1, 0, false, "output-function error"),
 
   sc->newline_symbol =               defun("newline",		newline,		0, 1, false);
   sc->write_symbol =                 defun("write",		write,			1, 1, false);
@@ -94805,7 +94811,7 @@ static void init_rootlet(s7_scheme *sc)
   defun("op-stack?", is_op_stack, 0, 0, false);
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
-  sc->c_object_set_function = s7_make_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
+  sc->c_object_set_function = s7_make_safe_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
   /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
 
   set_scope_safe(global_value(sc->call_with_input_string_symbol));
@@ -94844,12 +94850,12 @@ static void init_rootlet(s7_scheme *sc)
 
   /* -------- *features* -------- */
   sc->features_symbol = s7_define_variable_with_documentation(sc, "*features*", sc->nil, "list of currently available features ('complex-numbers, etc)");
-  s7_set_setter(sc, sc->features_symbol, s7_make_function(sc, "#<set-*features*>", g_features_set, 2, 0, false, "*features* setter"));
+  s7_set_setter(sc, sc->features_symbol, s7_make_safe_function(sc, "#<set-*features*>", g_features_set, 2, 0, false, "*features* setter"));
 
   /* -------- *load-path* -------- */
   sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*", list_1(sc, s7_make_string(sc, ".")), /* not plist! */
 			   "*load-path* is a list of directories (strings) that the load function searches if it is passed an incomplete file name");
-  s7_set_setter(sc, sc->load_path_symbol, s7_make_function(sc, "#<set-*load-path*>", g_load_path_set, 2, 0, false, "*load-path* setter"));
+  s7_set_setter(sc, sc->load_path_symbol, s7_make_safe_function(sc, "#<set-*load-path*>", g_load_path_set, 2, 0, false, "*load-path* setter"));
 
 #ifdef CLOAD_DIR
   sc->cload_directory_symbol = s7_define_variable(sc, "*cload-directory*", s7_make_string(sc, (char *)CLOAD_DIR));
@@ -94858,14 +94864,14 @@ static void init_rootlet(s7_scheme *sc)
   sc->cload_directory_symbol = s7_define_variable(sc, "*cload-directory*", nil_string);
 #endif
   s7_set_setter(sc, sc->cload_directory_symbol,
-		s7_make_function(sc, "#<set-*cload-directory*>", g_cload_directory_set, 2, 0, false, "*cload-directory* setter"));
+		s7_make_safe_function(sc, "#<set-*cload-directory*>", g_cload_directory_set, 2, 0, false, "*cload-directory* setter"));
 
   /* -------- *autoload* -------- this pretends to be a hash-table or environment, but it's actually a function */
   sc->autoloader_symbol = s7_define_typed_function(sc, "*autoload*", g_autoloader, 1, 0, false, H_autoloader, Q_autoloader);
   c_function_set_setter(global_value(sc->autoloader_symbol), global_value(sc->autoload_symbol)); /* (set! (*autoload* x) y) */
 
   sc->libraries_symbol = s7_define_variable_with_documentation(sc, "*libraries*", sc->nil, "list of currently loaded libraries (libc.scm, etc)");
-  s7_set_setter(sc, sc->libraries_symbol, s7_make_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
+  s7_set_setter(sc, sc->libraries_symbol, s7_make_safe_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
 
   s7_autoload(sc, make_symbol(sc, "cload.scm"),       s7_make_semipermanent_string(sc, "cload.scm"));
   s7_autoload(sc, make_symbol(sc, "lint.scm"),        s7_make_semipermanent_string(sc, "lint.scm"));
@@ -94892,7 +94898,7 @@ static void init_rootlet(s7_scheme *sc)
   /* -------- *#readers* -------- */
   sym = s7_define_variable_with_documentation(sc, "*#readers*", sc->nil, "list of current reader macros");
   sc->sharp_readers = global_slot(sym);
-  s7_set_setter(sc, sym, s7_make_function(sc, "#<set-*#readers*>", g_sharp_readers_set, 2, 0, false, "*#readers* setter"));
+  s7_set_setter(sc, sym, s7_make_safe_function(sc, "#<set-*#readers*>", g_sharp_readers_set, 2, 0, false, "*#readers* setter"));
 
   sc->local_documentation_symbol = make_symbol(sc, "+documentation+");
   sc->local_signature_symbol =     make_symbol(sc, "+signature+");
@@ -95822,7 +95828,7 @@ int main(int argc, char **argv)
  * --------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
- * index     1026   1016    973    964    962
+ * index     1026   1016    973    964    962   970
  * tmock     1177   1165   1057   1083   1083
  * tvect     2519   2464   1772   1667   1667
  * timp      2637   2575   1930   1696   1687
@@ -95831,9 +95837,9 @@ int main(int argc, char **argv)
  * tauto     ----   ----   2562   2171   2045
  * thook     ----   ----   2590   2073   2074
  * lt        2187   2172   2150   2179   2179
- * dup       3805   3788   2492   2272   2251
- * tcopy     8035   5546   2539   2373   2372
+ * dup       3805   3788   2492   2272   2251  2333?
  * tload     ----   ----   3046   2377   2368
+ * tcopy     8035   5546   2539   2373   2372
  * tread     2440   2421   2419   2414   2414
  * fbench    2688   2583   2460   2418   2419
  * trclo     2735   2574   2454   2439   2439
@@ -95849,28 +95855,28 @@ int main(int argc, char **argv)
  * tlet      7775   5640   4450   4403   4402
  * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4456   4457
- * tmap      8869   8774   4489   4477   4554
+ * tmap      8869   8774   4489   4477   4541
  * tshoot    5525   5447   5183   5056   5055
  * tstr      6880   6342   5488   5131   5136
  * tform     5357   5348   5307   5320   5309
- * tnum      6348   6013   5433   5369   5372
+ * tnum      6348   6013   5433   5369   5366
  * tlamb     6423   6273   5720   5545   5545
- * tmisc     8869   7612   6435   6184   6212  6097
- * tset      ----   ----   ----   6238   6227
- * tlist     7896   7546   6558   6247   6249
+ * tmisc     8869   7612   6435   6184   6098
+ * tset      ----   ----   ----   6238   6227  6322
+ * tlist     7896   7546   6558   6247   6242
  * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6565
- * tari      13.0   12.7   6827   6583   6583
- * tleft     10.4   10.2   7657   7479   7479
- * tgc       11.9   11.1   8177   7913   7927
+ * tari      13.0   12.7   6827   6583   6573
+ * tleft     10.4   10.2   7657   7479   7475
+ * tgc       11.9   11.1   8177   7913   7932
  * thash     11.8   11.7   9734   9467   9471
- * cb        11.2   11.0   9658   9528   9532
+ * cb        11.2   11.0   9658   9528   9527
  * tgen      11.2   11.4   12.0   12.1   12.1
- * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.5
- * sg        ----   ----   55.9   56.7   55.7
+ * tall      15.6   15.6   15.6   15.6   15.6  16.1?
+ * calls     36.7   37.5   37.0   37.5   37.5  39.8|7  37.5 vars_opt_ok
+ * sg        ----   ----   55.9   56.7   55.7  58.1
  * lg        ----   ----  105.2  106.1  106.1
- * tbig     177.4  175.8  156.5  147.9  147.9
+ * tbig     177.4  175.8  156.5  147.9  147.9 148.0
  * ----------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95880,5 +95886,6 @@ int main(int argc, char **argv)
  *
  * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
  *   see t624 for openlets
- * t718 catch=setter for 2/3 args closure/c-func -> s7test, also the "p" cases need similar tests/code, op_set1 probably needs the is_aritable check
+ * p_d: opt_p_d_fvref? trig
+ * why is snd so much slower suddenly?
  */
