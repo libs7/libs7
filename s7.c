@@ -38698,22 +38698,18 @@ static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer ls
 
 s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...)
 {
-  s7_int i;
   va_list ap;
   s7_pointer p;
-
   if (num_values == 0)
     return(sc->nil);
-
   sc->w = make_list(sc, num_values, sc->nil);
+  p = sc->w;
   va_start(ap, num_values);
-  for (i = 0, p = sc->w; i < num_values; i++, p = cdr(p))
+  for (s7_int i = 0; i < num_values; i++, p = cdr(p))
     set_car(p, va_arg(ap, s7_pointer));
   va_end(ap);
-
   if (sc->safety > NO_SAFETY)
     check_list_validity(sc, "s7_list", sc->w);
-
   p = sc->w;
   sc->w = sc->unused;
   return(p);
@@ -38817,7 +38813,6 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 	  unstack(sc);
 	  return(s7_apply_function(sc, func, (is_null(tp)) ? y : set_ulist_1(sc, tp, y)));
 	}
-
       if (is_null(cdr(y)))
 	{
 	  if (is_null(tp))
@@ -38898,8 +38893,7 @@ static s7_pointer append_in_place(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
   /* tack b onto the end of a without copying either -- 'a' is changed! */
   s7_pointer p;
-  if (is_null(a))
-    return(b);
+  if (is_null(a)) return(b);
   p = a;
   while (is_not_null(cdr(p))) p = cdr(p);
   set_cdr(p, b);
@@ -39318,19 +39312,16 @@ void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
 	wrong_type_error_nr(sc, wrap_string(sc, "float-vector fill!", 18), 2, obj, sc->type_names[T_REAL]);
       float_vector_fill(vec, s7_real(obj));
       break;
-
     case T_INT_VECTOR:
       if (!s7_is_integer(obj)) /* possibly a bignum */
 	wrong_type_error_nr(sc, wrap_string(sc, "int-vector fill!", 16), 2, obj, sc->type_names[T_INTEGER]);
       int_vector_fill(vec, s7_integer_clamped_if_gmp(sc, obj));
       break;
-
     case T_BYTE_VECTOR:
       if (!is_byte(obj))
 	wrong_type_error_nr(sc, wrap_string(sc, "byte-vector fill!", 17), 2, obj, wrap_string(sc, "a byte", 6));
       byte_vector_fill(vec, (uint8_t)s7_integer_clamped_if_gmp(sc, obj));
       break;
-
     case T_VECTOR:
     default:
       normal_vector_fill(vec, obj);
@@ -39519,7 +39510,6 @@ s7_pointer s7_vector_set(s7_scheme *sc, s7_pointer vec, s7_int index, s7_pointer
   vector_setter(vec)(sc, vec, index, T_Ext(a));
   return(a);
 }
-
 
 s7_pointer *s7_vector_elements(s7_pointer vec) {return(vector_elements(vec));}
 
@@ -39897,7 +39887,6 @@ static s7_pointer g_byte_vector(s7_scheme *sc, s7_pointer args)
 
   vec = make_simple_byte_vector(sc, len);
   str = byte_vector_bytes(vec);
-
   for (s7_pointer x = args; is_pair(x); i++, x = cdr(x))
     {
       s7_pointer byte = car(x);
@@ -40032,7 +40021,6 @@ static s7_pointer subvector(s7_scheme *sc, s7_pointer vect, s7_int skip_dims, s7
       vector_set_dimension_info(x, NULL);
       subvector_set_vector(x, vect);
     }
-
   if (is_normal_vector(vect))
     mark_function[T_VECTOR] = mark_vector_possibly_shared;
   else mark_function[type(vect)] = mark_int_or_float_vector_possibly_shared;
@@ -71202,11 +71190,7 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
       s7_pointer init = cadar(p);
-#if 0
-      if ((is_slot(global_slot(caar(p)))) && 
-	  (is_c_function(global_value(caar(p)))))
-	return(false);
-#endif
+      /* if ((is_slot(global_slot(caar(p)))) && (is_c_function(global_value(caar(p))))) return(false); */ /* too draconian (see snd-test) */
       if ((is_pair(init)) &&
 	  (!is_checked(init)) &&
 	  (optimize_expression(sc, init, hop, e, false) == OPT_OOPS))
@@ -78088,6 +78072,21 @@ static noreturn void no_setter_error_nr(s7_scheme *sc, s7_pointer obj)
   /* copy is necessary due to the way quoted lists|symbols are handled in op_set_with_let_1|2 and copy_tree */
 }
 
+static bool pair3_cfunc(s7_scheme *sc, s7_pointer obj, s7_pointer setf, s7_pointer arg, s7_pointer value)
+{
+  if (!c_function_is_aritable(setf, 2))
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
+  if (!is_safe_procedure(setf)) /* if unsafe, we can't call c_function_call(setf) directly (need drop into eval+apply) */
+    {
+      sc->code = setf;
+      sc->args = list_2(sc, arg, value);
+      return(true);
+    }
+  sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
+  return(false);
+}
+
 static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer value)
 {
   switch (type(obj))
@@ -78171,51 +78170,19 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
     case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
       if (is_c_function(c_function_setter(obj)))
-	{
-	  s7_pointer setf = c_function_setter(obj);
-	  if (!c_function_is_aritable(setf, 2))
-	    error_nr(sc, sc->wrong_number_of_args_symbol,
-		     set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
-	  if (!is_safe_procedure(setf)) /* if unsafe, we can't call c_function_call(setf) directly (need drop into eval+apply) */
-	    {
-	      sc->code = setf;
-	      sc->args = list_2(sc, arg, value);
-	      return(true);
-	    }
-	  sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
-	}
-      else
-	{
-	  sc->code = c_function_setter(obj); /* closure/macro */
-	  sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
-	  return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
-	}
-      break;
+	return(pair3_cfunc(sc, obj, c_function_setter(obj), arg, value));
+      sc->code = c_function_setter(obj); /* closure/macro */
+      sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
+      return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
 
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       if (is_c_function(closure_setter(obj)))
-	{
-	  s7_pointer setf = closure_setter(obj);
-	  if (!c_function_is_aritable(setf, 2))
-	    error_nr(sc, sc->wrong_number_of_args_symbol,
-		     set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
-	  if (!is_safe_procedure(setf)) /* if unsafe, we can't call c_function_call(setf) directly (need drop into eval+apply) */
-	    {
-	      sc->code = setf;
-	      sc->args = list_2(sc, arg, value);
-	      return(true);
-	    }
-	  sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
-	}
-      else
-	{
-	  sc->code = closure_setter(obj);
-	  sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
-	  return(true); /* goto APPLY; */
-	}
-      break;
+	return(pair3_cfunc(sc, obj, closure_setter(obj), arg, value));
+      sc->code = closure_setter(obj);
+      sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
+      return(true); /* goto APPLY; */
 
     default:
       no_setter_error_nr(sc, obj); /* possibly a continuation/goto? */
@@ -78308,6 +78275,21 @@ static inline bool op_set_opsaq_p_1(s7_scheme *sc)
   return(set_pair3(sc, sc->args, index, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
 }
 
+static bool pair4_cfunc(s7_scheme *sc, s7_pointer obj, s7_pointer setf, s7_pointer index1, s7_pointer index2, s7_pointer value)
+{
+  if (!c_function_is_aritable(setf, 3))
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_7(sc, wrap_string(sc, "set!: three arguments? (~A ~S ~S ~S), ~A is (setter ~A)", 55), setf, index1, index2, value, setf, obj));
+  if (!is_safe_procedure(setf))
+    {
+      sc->code = setf;
+      sc->args = list_3(sc, index1, index2, value);
+      return(true);
+    }
+  sc->value = c_function_call(setf)(sc, with_list_t3(index1, index2, value));
+  return(false);
+}
+
 static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_pointer index2, s7_pointer value)
 {
   switch (type(obj))
@@ -78350,51 +78332,19 @@ static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_point
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
     case T_C_FUNCTION_STAR:      /* obj here is a c_function, but its setter could be a closure and vice versa below */
       if (is_c_function(c_function_setter(obj)))
-	{
-	  s7_pointer setf = c_function_setter(obj);
-	  if (!c_function_is_aritable(setf, 3))
-	    error_nr(sc, sc->wrong_number_of_args_symbol,
-		     set_elist_7(sc, wrap_string(sc, "set!: three arguments? (~A ~S ~S ~S), ~A is (setter ~A)", 55), setf, index1, index2, value, setf, obj));
-	  if (!is_safe_procedure(setf))
-	    {
-	      sc->code = setf;
-	      sc->args = list_3(sc, index1, index2, value);
-	      return(true);
-	    }
-	  sc->value = c_function_call(setf)(sc, with_list_t3(index1, index2, value));
-	}
-      else
-	{
-	  sc->code = c_function_setter(obj); /* closure|macro */
-	  sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
-	  return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
-	}
-      break;
+	return(pair4_cfunc(sc, obj, c_function_setter(obj), index1, index2, value));
+      sc->code = c_function_setter(obj); /* closure|macro */
+      sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
+      return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
 
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       if (is_c_function(closure_setter(obj)))
-	{
-	  s7_pointer setf = closure_setter(obj);
-	  if (!c_function_is_aritable(setf, 3))
-	    error_nr(sc, sc->wrong_number_of_args_symbol,
-		     set_elist_7(sc, wrap_string(sc, "set!: three arguments? (~A ~S ~S ~S), ~A is (setter ~A)", 55), setf, index1, index2, value, setf, obj));
-	  if (!is_safe_procedure(setf))
-	    {
-	      sc->code = setf;
-	      sc->args = list_3(sc, index1, index2, value);
-	      return(true);
-	    }
-	  sc->value = c_function_call(setf)(sc, with_list_t3(index1, index2, value));
-	}
-      else
-	{
-	  sc->code = closure_setter(obj);
-	  sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
-	  return(true); /* goto APPLY; */
-	}
-      break;
+	return(pair4_cfunc(sc, obj, closure_setter(obj), index1, index2, value));
+      sc->code = closure_setter(obj);
+      sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
+      return(true); /* goto APPLY; */
 
     default:
       no_setter_error_nr(sc, obj); /* possibly a continuation/goto or string */
@@ -95828,7 +95778,7 @@ int main(int argc, char **argv)
  * --------------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
- * index     1026   1016    973    964    962   970
+ * index     1026   1016    973    964    962
  * tmock     1177   1165   1057   1083   1083
  * tvect     2519   2464   1772   1667   1667
  * timp      2637   2575   1930   1696   1687
@@ -95837,7 +95787,7 @@ int main(int argc, char **argv)
  * tauto     ----   ----   2562   2171   2045
  * thook     ----   ----   2590   2073   2074
  * lt        2187   2172   2150   2179   2179
- * dup       3805   3788   2492   2272   2251  2333?
+ * dup       3805   3788   2492   2272   2333  2259
  * tload     ----   ----   3046   2377   2368
  * tcopy     8035   5546   2539   2373   2372
  * tread     2440   2421   2419   2414   2414
@@ -95851,18 +95801,18 @@ int main(int argc, char **argv)
  * tobj      4016   3970   3828   3556   3567
  * tio       3816   3752   3683   3616   3618
  * tmac      3950   3873   3033   3670   3667
- * tclo      4787   4735   4390   4376   4379
+ * tclo      4787   4735   4390   4376   4375
  * tlet      7775   5640   4450   4403   4402
  * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4541
  * tshoot    5525   5447   5183   5056   5055
  * tstr      6880   6342   5488   5131   5136
- * tform     5357   5348   5307   5320   5309
+ * tform     5357   5348   5307   5320   5316
  * tnum      6348   6013   5433   5369   5366
  * tlamb     6423   6273   5720   5545   5545
  * tmisc     8869   7612   6435   6184   6098
- * tset      ----   ----   ----   6238   6227  6322
+ * tset      ----   ----   ----   6238   6230
  * tlist     7896   7546   6558   6247   6242
  * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6565
@@ -95870,13 +95820,13 @@ int main(int argc, char **argv)
  * tleft     10.4   10.2   7657   7479   7475
  * tgc       11.9   11.1   8177   7913   7932
  * thash     11.8   11.7   9734   9467   9471
- * cb        11.2   11.0   9658   9528   9527
+ * cb        11.2   11.0   9658   9528   9539
  * tgen      11.2   11.4   12.0   12.1   12.1
- * tall      15.6   15.6   15.6   15.6   15.6  16.1?
- * calls     36.7   37.5   37.0   37.5   37.5  39.8|7  37.5 vars_opt_ok
- * sg        ----   ----   55.9   56.7   55.7  58.1
- * lg        ----   ----  105.2  106.1  106.1
- * tbig     177.4  175.8  156.5  147.9  147.9 148.0
+ * tall      15.6   15.6   15.6   15.6   15.6
+ * calls     36.7   37.5   37.0   37.5   37.7
+ * sg        ----   ----   55.9   56.7   55.8
+ * lg        ----   ----  105.2  106.1  106.2
+ * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
  *
  * utf8proc_s7.c could add c-object utf8-string with mock-string methods
@@ -95886,6 +95836,6 @@ int main(int argc, char **argv)
  *
  * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
  *   see t624 for openlets
+ * (+ -) problem
  * p_d: opt_p_d_fvref? trig
- * why is snd so much slower suddenly?
  */
