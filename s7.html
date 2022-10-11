@@ -4042,9 +4042,9 @@ a procedure's environment.
 </pre>
 
 <p>
-<b>documentation</b> returns the documentation string associated with a procedure.  This used to be 
-the initial string in the function's body (as in CL), but now it is the value of the '+documentation+ variable, if any,
-in the procedure's local environment:
+<b>documentation</b> returns the documentation string associated with a procedure.  This is normally
+provided via the '+documentation+ variable in the function's environment.  If you'd rather, 
+you can treat the initial string in the function's body as documentation.
 </p>
 <pre class="indented">
 (define func 
@@ -4053,6 +4053,13 @@ in the procedure's local environment:
 
 &gt; (documentation func)
 <em class="gray">"helpful info"</em>
+
+(define (cl-func) 
+  "this is documentation"
+  123)
+
+&gt; (documentation cl-func)
+<em class="gray">"this is documentation"</em>
 </pre>
 <p>Since documentation is a method, a function's documentation can be computed at run-time:
 </p>
@@ -6008,7 +6015,8 @@ refer to the source, not the destination.  substring should be like subvector, b
 get-output-string should be current-output-string. write-char behaves like display, not write.
 provided? should be feature? or *features* should be *provisions*.
 list-ref, list-set!, and list-tail actually only apply to pairs.
-let-temporarily should be templet, or maybe set-temporarily.
+let-temporarily should be templet, or maybe set-temporarily.  define-expansion should be define-reader-macro, but
+that name collides with reader macros in Common Lisp.
 There should not be two names for the same thing: call/cc and call-with-current-continuation: flush the latter!
 The CL-inspired "log*" names such as logand look very old-fashioned.  Standard scheme opts
 for the name "bitwise*"; why not "integerwise" or "bytevectorwise"?  The "wise" business is just noise; are they thinking of The Hobbit?
