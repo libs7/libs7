@@ -16396,9 +16396,8 @@ static s7_pointer g_exp(s7_scheme *sc, s7_pointer args)
   return(exp_p_p(sc, car(args)));
 }
 
-#if (!WITH_GMP)
 static s7_double exp_d_d(s7_double x) {return(exp(x));}
-#endif
+static s7_pointer exp_p_d(s7_scheme *sc, s7_double x) {return(make_real(sc, exp(x)));}
 
 
 /* -------------------------------- log -------------------------------- */
@@ -17232,9 +17231,8 @@ static s7_pointer g_sinh(s7_scheme *sc, s7_pointer args)
   return(sinh_p_p(sc, car(args)));
 }
 
-#if (!WITH_GMP)
 static s7_double sinh_d_d(s7_double x) {return(sinh(x));}
-#endif
+static s7_pointer sinh_p_d(s7_scheme *sc, s7_double x) {return(make_real(sc, sinh(x)));}
 
 
 /* -------------------------------- cosh -------------------------------- */
@@ -17305,9 +17303,8 @@ static s7_pointer g_cosh(s7_scheme *sc, s7_pointer args)
   return(cosh_p_p(sc, car(args)));
 }
 
-#if (!WITH_GMP)
 static s7_double cosh_d_d(s7_double x) {return(cosh(x));}
-#endif
+static s7_pointer cosh_p_d(s7_scheme *sc, s7_double x) {return(make_real(sc, cosh(x)));}
 
 
 /* -------------------------------- tanh -------------------------------- */
@@ -35006,6 +35003,10 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
   sc->has_openlets = old_openlets;
   return(res);
 }
+
+#if S7_DEBUGGING
+const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice) {return(string_value(g_object_to_string(sc, list_2(sc, obj, urchoice))));}
+#endif
 
 
 /* -------------------------------- newline -------------------------------- */
@@ -66540,7 +66541,7 @@ s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr)
   return(NULL);
 }
 
-static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nr)
+static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nv)
 {
   if (WITH_GMP) return(NULL);
   if ((!is_pair(expr)) || (no_cell_opt(expr)) || (sc->debug != 0))
@@ -66549,26 +66550,26 @@ static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nr)
   if (!no_int_opt(expr))
     {
       if (int_optimize(sc, expr))
-	return((nr) ? opt_int_any_nv : opt_wrap_int);
+	return((nv) ? opt_int_any_nv : opt_wrap_int);
       pc_fallback(sc, 0);
       set_no_int_opt(expr);
     }
   if (!no_float_opt(expr))
     {
       if (float_optimize(sc, expr))
-	return_success(sc, (nr) ? opt_float_any_nv : opt_wrap_float, expr);
+	return_success(sc, (nv) ? opt_float_any_nv : opt_wrap_float, expr);
       pc_fallback(sc, 0);
       set_no_float_opt(expr);
     }
   if (!no_bool_opt(expr))
     {
       if (bool_optimize_nw(sc, expr))
-	return_success(sc, (nr) ? opt_bool_any_nv : opt_wrap_bool, expr);
+	return_success(sc, (nv) ? opt_bool_any_nv : opt_wrap_bool, expr);
       pc_fallback(sc, 0);
       set_no_bool_opt(expr);
     }
   if (cell_optimize(sc, expr))
-    return_success(sc, (nr) ? opt_cell_any_nv : opt_wrap_cell, expr);
+    return_success(sc, (nv) ? opt_cell_any_nv : opt_wrap_cell, expr);
   set_no_cell_opt(expr); /* checked above */
   return_null(sc, expr);
 }
@@ -66587,11 +66588,11 @@ static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
   return(result);
 }
 
-static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nr)
+static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nv)
 {
   sc->pc = 0;
   if ((cell_optimize(sc, expr)) && (sc->pc < OPTS_SIZE))
-    return((nr) ? opt_cell_any_nv : opt_wrap_cell);
+    return((nv) ? opt_cell_any_nv : opt_wrap_cell);
   return_null(sc, expr);
 }
 
@@ -66866,7 +66867,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      {
 			opt_info *o = sc->opts[0];
 			s7_double (*fd)(opt_info *o) = o->v[0].fd;
-			for (i = 0; i < len; i++)	{real(sv) = vals[i]; fd(o);}}
+			for (i = 0; i < len; i++) {real(sv) = vals[i]; fd(o);}}
 		    else
 		      if (func == opt_cell_any_nv)
 			{
@@ -66897,7 +66898,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 			{
 			  opt_info *o = sc->opts[0];
 			  s7_int (*fi)(opt_info *o) = o->v[0].fi;
-			  for (i = 0; i < len; i++)	{integer(sv) = vals[i]; fi(o);}}
+			  for (i = 0; i < len; i++) {integer(sv) = vals[i]; fi(o);}}
 		      else for (i = 0; i < len; i++) {integer(sv) = vals[i]; func(sc);}}
 		  else for (i = 0; i < len; i++) {slot_set_value(slot, make_integer(sc, vals[i])); func(sc);}
 		  res = sc->unspecified;
@@ -90732,9 +90733,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	   */
 	APPLY:
 	case OP_APPLY:
-	  /* set_current_code(sc, history_cons(sc, sc->code, sc->args)); */ /* this erases info -- intended for apply_error */
-	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_apply %s (%s) to %s\n",
-						__func__, __LINE__, display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
+	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_apply %s (%s) to %s\n", __func__, __LINE__, 
+						display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
 	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue;
@@ -91544,6 +91544,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	      case '\'':
 		sc->tok = TOKEN_QUOTE;
+		/* might need check_stack_size(sc) here */
 		push_stack_no_let_no_code(sc, OP_READ_LIST, sc->args);
 		sc->value = read_expression(sc);
 		continue;
@@ -93435,6 +93436,14 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->acosh_symbol), acosh_p_p);
   s7_set_p_p_function(sc, global_value(sc->atanh_symbol), atanh_p_p);
   s7_set_p_p_function(sc, global_value(sc->tanh_symbol), tanh_p_p);
+  s7_set_d_d_function(sc, global_value(sc->sin_symbol), sin_d_d);
+  s7_set_d_d_function(sc, global_value(sc->cos_symbol), cos_d_d);
+  s7_set_d_d_function(sc, global_value(sc->sinh_symbol), sinh_d_d);
+  s7_set_p_d_function(sc, global_value(sc->sinh_symbol), sinh_p_d);
+  s7_set_d_d_function(sc, global_value(sc->cosh_symbol), cosh_d_d);
+  s7_set_p_d_function(sc, global_value(sc->cosh_symbol), cosh_p_d);
+  s7_set_d_d_function(sc, global_value(sc->exp_symbol), exp_d_d);
+  s7_set_p_d_function(sc, global_value(sc->exp_symbol), exp_p_d);
 
   s7_set_p_d_function(sc, global_value(sc->rationalize_symbol), rationalize_p_d);
   s7_set_p_i_function(sc, global_value(sc->rationalize_symbol), rationalize_p_i);
@@ -93499,11 +93508,6 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->exp_symbol), exp_p_p);
 #if (!WITH_GMP)
   s7_set_i_7ii_function(sc, global_value(sc->ash_symbol), ash_i_7ii);
-  s7_set_d_d_function(sc, global_value(sc->sin_symbol), sin_d_d);
-  s7_set_d_d_function(sc, global_value(sc->cos_symbol), cos_d_d);
-  s7_set_d_d_function(sc, global_value(sc->sinh_symbol), sinh_d_d);
-  s7_set_d_d_function(sc, global_value(sc->cosh_symbol), cosh_d_d);
-  s7_set_d_d_function(sc, global_value(sc->exp_symbol), exp_d_d);
   s7_set_i_7d_function(sc, global_value(sc->round_symbol), round_i_7d);
   s7_set_i_7d_function(sc, global_value(sc->floor_symbol), floor_i_7d);
   s7_set_i_7d_function(sc, global_value(sc->ceiling_symbol), ceiling_i_7d);
@@ -95810,7 +95814,7 @@ int main(int argc, char **argv)
  * tauto     ----   ----   2562   2171   2045
  * thook     ----   ----   2590   2073   2074
  * lt        2187   2172   2150   2179   2179
- * dup       3805   3788   2492   2272   2259
+ * dup       3805   3788   2492   2272   2227
  * tload     ----   ----   3046   2377   2368
  * tcopy     8035   5546   2539   2373   2372
  * tread     2440   2421   2419   2414   2414
@@ -95829,8 +95833,8 @@ int main(int argc, char **argv)
  * tcase     4960   4793   4439   4429   4434
  * tfft      7820   7729   4755   4456   4457
  * tmap      8869   8774   4489   4477   4541
- * tshoot    5525   5447   5183   5056   5055
- * tstr      6880   6342   5488   5131   5136
+ * tshoot    5525   5447   5183   5056   5057
+ * tstr      6880   6342   5488   5131   5141
  * tform     5357   5348   5307   5320   5316
  * tnum      6348   6013   5433   5369   5366
  * tlamb     6423   6273   5720   5545   5545
@@ -95839,7 +95843,7 @@ int main(int argc, char **argv)
  * tlist     7896   7546   6558   6247   6242
  * tgsl      8485   7802   6373   6307   6280
  * trec      6936   6922   6521   6558   6565
- * tari      13.0   12.7   6827   6583   6552  6545
+ * tari      13.0   12.7   6827   6583   6535
  * tleft     10.4   10.2   7657   7479   7475
  * tgc       11.9   11.1   8177   7913   7932
  * thash     11.8   11.7   9734   9467   9471
@@ -95848,16 +95852,8 @@ int main(int argc, char **argv)
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.6
  * sg        ----   ----   55.9   56.7   55.7
- * lg        ----   ----  105.2  106.1  106.2
+ * lg        ----   ----  105.2  106.1  106.1
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
  *
- * utf8proc_s7.c could add c-object utf8-string with mock-string methods
- * for multithread s7: (with-s7 ((var database)...) . body)
- *   new thread running separate s7 process, communicating global vars via database using let syntax: (database 'a)
- *   libpthread.scm -> main [but should it include the pool/start_routine?], threads.c -> tools + tests
- *
- * check error_nr cleared vars, are there other such cases (sort! assoc member etc)?, map+sort etc, format(?)/has_openlets, clears safe_list(?)
- *   see t624 for openlets
- * (+ -) problem
  */
