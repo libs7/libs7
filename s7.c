@@ -82982,7 +82982,7 @@ static void apply_bacro_star(s7_scheme *sc)
 
 static void apply_closure(s7_scheme *sc)
 {
-  /* we can get safe_closures here, but can't easily determine whether we have the expected saved funclet -- see ~/old/safe-closure-s7.c */
+  /* we can get safe_closures here, but can't easily determine whether we have the expected saved funclet */
   check_stack_size(sc);
   sc->curlet = inline_make_let(sc, closure_let(sc->code));
 }
@@ -95855,5 +95855,6 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.1  106.1
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ----------------------------------------------
- *
+ * 
+ * *s7* in let-temp is very slow but could be almost no overhead: t627 (50-70 in tmock), methods are also slow
  */
