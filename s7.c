@@ -44737,23 +44737,22 @@ static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
 	      hash_clear_chosen(table);
 	    }
 	  hash_table_entries(table) = 0;
+	  return(val);
 	}
-      else
+      if ((is_typed_hash_table(table)) &&
+	  (((is_c_function(hash_table_value_typer(table))) &&
+	    (c_function_call(hash_table_value_typer(table))(sc, set_plist_1(sc, val)) == sc->F)) ||
+	   ((is_any_closure(hash_table_value_typer(table))) &&
+	    (s7_apply_function(sc, hash_table_value_typer(table), set_plist_1(sc, val)) == sc->F))))
 	{
-	  if ((is_typed_hash_table(table)) &&
-	      (((is_c_function(hash_table_value_typer(table))) &&
-		(c_function_call(hash_table_value_typer(table))(sc, set_plist_1(sc, val)) == sc->F)) ||
-	       ((is_any_closure(hash_table_value_typer(table))) &&
-		(s7_apply_function(sc, hash_table_value_typer(table), set_plist_1(sc, val)) == sc->F))))
-	    {
-	      const char *tstr = make_type_name(sc, hash_table_typer_name(sc, hash_table_value_typer(table)), INDEFINITE_ARTICLE);
-	      wrong_type_error_nr(sc, sc->fill_symbol, 2, val, wrap_string(sc, tstr, safe_strlen(tstr)));
-	    }
-	  for (s7_int i = 0; i < len; i++)
-	    for (hash_entry_t *x = entries[i]; x; x = hash_entry_next(x))
-	      hash_entry_set_value(x, val);
-	  /* keys haven't changed, so no need to mess with hash_table_checker */
-	}}
+	  const char *tstr = make_type_name(sc, hash_table_typer_name(sc, hash_table_value_typer(table)), INDEFINITE_ARTICLE);
+	  wrong_type_error_nr(sc, sc->fill_symbol, 2, val, wrap_string(sc, tstr, safe_strlen(tstr)));
+	}
+      for (s7_int i = 0; i < len; i++)
+	for (hash_entry_t *x = entries[i]; x; x = hash_entry_next(x))
+	  hash_entry_set_value(x, val);
+      /* keys haven't changed, so no need to mess with hash_table_checker */
+    }
   return(val);
 }
 
@@ -83577,6 +83576,7 @@ static void op_closure_pa(s7_scheme *sc)
 {
   s7_pointer code = sc->code;
   sc->args = fx_call(sc, cddr(code));
+  check_stack_size(sc);
   push_stack(sc, OP_CLOSURE_PA_1, sc->args, opt1_lambda(sc->code)); /* "p" can be self-call changing func locally! so pass opt1_lambda(sc->code), not sc->code */
   sc->code = cadr(code);
 }
@@ -91431,6 +91431,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CASE_A_E_S_A: sc->value = fx_case_a_e_s_a(sc, sc->code); continue;
 	case OP_CASE_A_G_S_A: sc->value = fx_case_a_g_s_a(sc, sc->code); continue;
 	case OP_CASE_A_S_G_A: sc->value = fx_case_a_s_g_a(sc, sc->code); continue;
+
 
 	case OP_ERROR_QUIT:
 	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_eval_done */

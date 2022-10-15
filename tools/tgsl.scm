@@ -5,6 +5,7 @@
 
 (set! (*s7* 'heap-size) 1024000)
 
+
 (define libgsl:jn (*libgsl* 'gsl_sf_bessel_Jn))
 (define libm:jn (*libm* 'jn))
 
@@ -34,8 +35,8 @@
 	      
     sum))
 
-
 (format *stderr* "~A ~A~%" (fm-cascade-component-m 2000 2000 500 1.5 50 1.0) (fm-cascade-component-g 2000 2000 500 1.5 50 1.0))
+
 
 (define (testfm)
   (do ((i 0 (+ i 1)))
@@ -44,6 +45,7 @@
     (fm-cascade-component-g 2000 2000 500 1.5 50 1.0)))
 
 (testfm)
+
 
 (define (immutable-let L)
   (with-let L 
@@ -563,6 +565,7 @@
       ))
 
   (testrst))
+
 
 (require libm.scm)
 (define jn (*libm* 'jn)) ; coverage tests for opt_d_id*
