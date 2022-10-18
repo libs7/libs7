@@ -4163,7 +4163,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_LETREC, OP_LETREC1, OP_LETREC_STAR, OP_LETREC_STAR1,
       OP_LET_TEMPORARILY, OP_LET_TEMP_UNCHECKED, OP_LET_TEMP_INIT1, OP_LET_TEMP_INIT2, OP_LET_TEMP_DONE, OP_LET_TEMP_DONE1,
       OP_LET_TEMP_S7, OP_LET_TEMP_NA, OP_LET_TEMP_A, OP_LET_TEMP_SETTER, OP_LET_TEMP_UNWIND, OP_LET_TEMP_S7_UNWIND, OP_LET_TEMP_SETTER_UNWIND,
-      OP_LET_TEMP_A_A,
+      OP_LET_TEMP_A_A, OP_LET_TEMP_S7_DIRECT, OP_LET_TEMP_S7_DIRECT_UNWIND,
       OP_COND, OP_COND1, OP_FEED_TO_1, OP_COND_SIMPLE, OP_COND1_SIMPLE, OP_COND_SIMPLE_O, OP_COND1_SIMPLE_O,
       OP_AND, OP_OR,
       OP_DEFINE_MACRO, OP_DEFINE_MACRO_STAR, OP_DEFINE_EXPANSION, OP_DEFINE_EXPANSION_STAR, OP_MACRO, OP_MACRO_STAR,
@@ -4381,7 +4381,7 @@ static const char* op_names[NUM_OPS] =
       "letrec", "letrec1", "letrec*", "letrec*1",
       "let_temporarily", "let_temp_unchecked", "let_temp_init1", "let_temp_init2", "let_temp_done", "let_temp_done1",
       "let_temp_s7", "let_temp_na", "let_temp_a", "let_temp_setter", "let_temp_unwind", "let_temp_s7_unwind", "let_temp_setter_unwind",
-      "let_temp_a_a",
+      "let_temp_a_a", "let_temp_s7_direct", "let_temp_s7_direct_unwind",
       "cond", "cond1", "feed_to_1", "cond_simple", "cond1_simple", "cond_simple_o", "cond1_simple_o",
       "and", "or",
       "define_macro", "define_macro*", "define_expansion", "define_expansion*", "macro", "macro*",
@@ -7908,6 +7908,8 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
 	      (s7_int)((intptr_t)(sc->stack_resize_trigger - sc->stack_start)),
 	      UNBOLD_TEXT);
       s7_show_stack(sc);
+      /* make room for debugging */
+
       abort();
       if (sc->stop_at_error) abort();
     }
@@ -8069,32 +8071,7 @@ static void stack_reset(s7_scheme *sc)
   push_stack_op(sc, OP_EVAL_DONE);
 }
 
-#if S7_DEBUGGING
-static void resize_stack_1(s7_scheme *sc);
-#define resize_stack(Sc) resize_stack_2(Sc, __func__, __LINE__)
-static void resize_stack_2(s7_scheme *sc, const char *func, int line)
-{
-  if ((sc->stack_size * 2) > sc->max_stack_size)
-    {
-      fprintf(stderr, "%s%s[%d]: stack too big, %" ld64 " > %u, trigger: %" ld64 " %s\n",
-	      BOLD_TEXT, func, line,
-	      (s7_int)((intptr_t)(sc->stack_end - sc->stack_start)), sc->stack_size,
-	      (s7_int)((intptr_t)(sc->stack_resize_trigger - sc->stack_start)),
-	      UNBOLD_TEXT);
-      /* s7_show_stack(sc); */ /* prints so much the error message is inaccessible */
-      fprintf(stderr, "stack:\n");
-      for (int64_t i = current_stack_top(sc) - 1; i >= current_stack_top(sc) - 100; i -= 4)
-	fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
-      abort();
-      if (sc->stop_at_error) abort();
-    }
-  resize_stack_1(sc);
-}
-
-static void resize_stack_1(s7_scheme *sc)
-#else
-static void resize_stack(s7_scheme *sc)
-#endif
+static uint32_t resize_stack_unchecked(s7_scheme *sc)
 {
   uint64_t loc = current_stack_top(sc);
   uint32_t new_size = sc->stack_size * 2;
@@ -8117,6 +8094,34 @@ static void resize_stack(s7_scheme *sc)
   sc->stack_start = stack_elements(sc->stack);
   sc->stack_end = (s7_pointer *)(sc->stack_start + loc);
   sc->stack_resize_trigger = (s7_pointer *)(sc->stack_start + (new_size - STACK_RESIZE_TRIGGER));
+  return(new_size);
+}
+
+#if S7_DEBUGGING
+#define resize_stack(Sc) resize_stack_1(Sc, __func__, __LINE__)
+static void resize_stack_1(s7_scheme *sc, const char *func, int line)
+{
+  if ((sc->stack_size * 2) > sc->max_stack_size)
+    {
+      fprintf(stderr, "%s%s[%d]: stack too big, %" ld64 " > %u, trigger: %" ld64 " %s\n",
+	      BOLD_TEXT, func, line,
+	      (s7_int)((intptr_t)(sc->stack_end - sc->stack_start)), sc->stack_size,
+	      (s7_int)((intptr_t)(sc->stack_resize_trigger - sc->stack_start)),
+	      UNBOLD_TEXT);
+      /* s7_show_stack(sc); */ /* prints so much the error message is inaccessible */
+      fprintf(stderr, "stack:\n");
+      for (int64_t i = current_stack_top(sc) - 1; i >= current_stack_top(sc) - 100; i -= 4)
+	fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
+      resize_stack_unchecked(sc); /* give us some room while debugging! */
+      abort();
+      if (sc->stop_at_error) abort();
+    }
+  resize_stack_unchecked(sc);
+}
+#else
+static void resize_stack(s7_scheme *sc)
+{
+  uint32_t new_size = resize_stack_unchecked(sc);
   if (show_stack_stats(sc))
     s7_warn(sc, 128, "stack grows to %u\n", new_size);
   if (new_size > sc->max_stack_size)
@@ -8124,6 +8129,7 @@ static void resize_stack(s7_scheme *sc)
 	     set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
   /* error needs to follow realloc, else error -> catchers in error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
 }
+#endif
 
 #define check_stack_size(Sc) do {if (Sc->stack_end >= Sc->stack_resize_trigger) resize_stack(Sc);} while (0)
 
@@ -11671,6 +11677,10 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  g_s7_let_set_fallback(sc, set_plist_3(sc, sc->s7_let, stack_code(sc->stack, i), stack_args(sc->stack, i)));
 	  break;
 
+	case OP_LET_TEMP_S7_DIRECT_UNWIND:
+	  sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
+	  break;
+
 	case OP_BARRIER:
 	  if (i > top2)                       /* otherwise it's some unproblematic outer eval-string? */
 	    return(false);                    /*    but what if we've already evaluated a dynamic-wind closer? */
@@ -11891,6 +11901,10 @@ static void call_with_exit(s7_scheme *sc)
 
       case OP_LET_TEMP_S7_UNWIND:
 	g_s7_let_set_fallback(sc, set_plist_3(sc, sc->s7_let, stack_code(sc->stack, i), stack_args(sc->stack, i)));
+	break;
+
+      case OP_LET_TEMP_S7_DIRECT_UNWIND:
+	sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
 	break;
 
 	/* call/cc does not close files, but I think call-with-exit should */
@@ -51475,6 +51489,12 @@ static bool catch_let_temp_s7_unwind_function(s7_scheme *sc, s7_int i, s7_pointe
   return(false);
 }
 
+static bool catch_let_temp_s7_direct_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
+{
+  sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
+  return(false);
+}
+
 static bool catch_dynamic_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   /* if func has an error, s7_error will call it as it unwinds the stack -- an infinite loop. So, cancel the unwind first */
@@ -51514,6 +51534,7 @@ static void init_catchers(void)
   catchers[OP_LET_TEMP_DONE] =      catch_let_temporarily_function;
   catchers[OP_LET_TEMP_UNWIND] =    catch_let_temp_unwind_function;
   catchers[OP_LET_TEMP_S7_UNWIND] = catch_let_temp_s7_unwind_function;
+  catchers[OP_LET_TEMP_S7_DIRECT_UNWIND] = catch_let_temp_s7_direct_unwind_function;
   catchers[OP_ERROR_HOOK_QUIT] =    catch_hook_function;
   catchers[OP_MAP_UNWIND] =         catch_map_unwind_function;
 }
@@ -75665,7 +75686,7 @@ static void check_let_temporarily(s7_scheme *sc)
 	syntax_error_nr(sc, "let-temporarily: variable declaration has more than one value?: ~A", 66, carx);
 
       if ((all_fx) &&
-	  ((!is_symbol(caarx)) || (!is_fxable(sc, cadr(carx)))))
+	  ((!is_symbol(caarx)) || (!is_fxable(sc, cadr(carx))))) /* if all_fx, each var is (symbol fxable-expr) */
 	all_fx = false;
       if ((all_s7) &&
 	  ((!is_pair(caarx)) || (car(caarx) != sc->s7_let_symbol) ||
@@ -75687,6 +75708,21 @@ static void check_let_temporarily(s7_scheme *sc)
 	  fx_annotate_arg(sc, cdr(code), sc->curlet);
 	  pair_set_syntax_op(form, OP_LET_TEMP_A_A);
 	}
+      else
+	if (all_s7) /* not OP_LET_TEMP_NA */
+	  {
+	    s7_pointer var = caar(code);
+	    if ((is_fxable(sc, cadr(var))) &&  /* code: ((((*s7* 'openlets) fxable-expr)) ...) */
+		(is_null(cdar(code))))
+	      {
+		if ((is_quoted_symbol(cadar(var))) &&
+		    /* (symbol_s7_let(cadr(cadar(var))) == SL_OPENLETS)) *//* requires SL_OPENLETS defined */
+		    (cadr(cadar(var)) == make_symbol(sc, "openlets")))
+		  {
+		    pair_set_syntax_op(form, OP_LET_TEMP_S7_DIRECT);
+		    set_opt1_pair(form, cdr(var));
+		  }}}
+
       if ((is_fx_treeable(code)) && (tis_slot(let_slots(sc->curlet)))) {fx_curlet_tree(sc, code); fx_curlet_tree_in(sc, code);}
     }
   else
@@ -75866,6 +75902,30 @@ static bool op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 
   return(is_pair(sc->code)); /* sc->code can be null if no body */
 }
 
+static void op_let_temp_s7_unwind(s7_scheme *sc)
+{
+  g_s7_let_set_fallback(sc, set_plist_3(sc, sc->s7_let, sc->code, sc->args));
+  if (is_multiple_value(sc->value))
+    sc->value = splice_in_values(sc, multiple_value(sc->value));
+}
+
+static bool op_let_temp_s7_direct(s7_scheme *sc)
+{
+  s7_pointer new_val;
+  push_stack_no_code(sc, OP_LET_TEMP_S7_DIRECT_UNWIND, (sc->has_openlets) ? sc->T : sc->F);
+  new_val = fx_call(sc, opt1_pair(sc->code));
+  sc->has_openlets = (new_val != sc->F);
+  sc->code = cddr(sc->code); /* cddr is body of let-temp */
+  return(is_pair(sc->code));
+}
+
+static void op_let_temp_s7_direct_unwind(s7_scheme *sc)
+{
+  sc->has_openlets = (sc->args != sc->F);
+  if (is_multiple_value(sc->value))
+    sc->value = splice_in_values(sc, multiple_value(sc->value));
+}
+
 static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let)
 {
   /* called in call/cc, call-with-exit and, catch (unwind to catch) */
@@ -75885,6 +75945,13 @@ static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value
       sc->value = old_value;
     }
   else slot_set_value(slot, new_value);
+}
+
+static void op_let_temp_unwind(s7_scheme *sc)
+{
+  let_temp_unwind(sc, sc->code, sc->args);
+  if (is_multiple_value(sc->value))
+    sc->value = splice_in_values(sc, multiple_value(sc->value));
 }
 
 static bool op_let_temp_na(s7_scheme *sc) /* all entries are of the form (symbol fx-able-value) */
@@ -75960,20 +76027,6 @@ static bool op_let_temp_setter(s7_scheme *sc)
   slot_set_setter(slot, sc->F);
   sc->code = cdr(sc->code);
   return(is_pair(sc->code)); /* sc->code can be null if no body */
-}
-
-static void op_let_temp_unwind(s7_scheme *sc)
-{
-  let_temp_unwind(sc, sc->code, sc->args);
-  if (is_multiple_value(sc->value))
-    sc->value = splice_in_values(sc, multiple_value(sc->value));
-}
-
-static void op_let_temp_s7_unwind(s7_scheme *sc)
-{
-  g_s7_let_set_fallback(sc, set_plist_3(sc, sc->s7_let, sc->code, sc->args));
-  if (is_multiple_value(sc->value))
-    sc->value = splice_in_values(sc, multiple_value(sc->value));
 }
 
 static void op_let_temp_setter_unwind(s7_scheme *sc)
@@ -77356,7 +77409,10 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
       if (!is_let(e))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), car(code)));
     }
-  return(s7_let_ref(sc, e, cadr(code))); /* (with-let e s) -> (let-ref e s) */
+  e = s7_let_ref(sc, e, cadr(code)); /* (with-let e s) -> (let-ref e s) */
+  if (e == sc->undefined)
+    unbound_variable_error_nr(sc, cadr(code));
+  return(e);
 }
 
 static void activate_with_let(s7_scheme *sc, s7_pointer e)
@@ -90733,7 +90789,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	   */
 	APPLY:
 	case OP_APPLY:
-	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_apply %s (%s) to %s\n", __func__, __LINE__, 
+	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "%s[%d]: op_apply %s (%s) to %s\n", __func__, __LINE__,
 						display_80(sc->code), s7_type_names[type(sc->code)], display_80(sc->args)));
 	  switch (type(sc->code))
 	    {
@@ -91368,15 +91424,18 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  goto SET_UNCHECKED;
 
 
-	case OP_LET_TEMP_S7:     if(op_let_temp_s7(sc))      goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_S7:        if(op_let_temp_s7(sc))         goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_S7_DIRECT: if (op_let_temp_s7_direct(sc)) goto BEGIN; sc->value = sc->nil; continue;
+
 	case OP_LET_TEMP_NA:     if (op_let_temp_na(sc))     goto BEGIN; sc->value = sc->nil; continue;
 	case OP_LET_TEMP_A:      if (op_let_temp_a(sc))      goto BEGIN; sc->value = sc->nil; continue;
 	case OP_LET_TEMP_SETTER: if (op_let_temp_setter(sc)) goto BEGIN; sc->value = sc->nil; continue;
 	case OP_LET_TEMP_A_A:    sc->value = fx_let_temp_a_a(sc, sc->code); continue;
 
-	case OP_LET_TEMP_UNWIND:        op_let_temp_unwind(sc);        continue;
-	case OP_LET_TEMP_S7_UNWIND:     op_let_temp_s7_unwind(sc);     continue;
-	case OP_LET_TEMP_SETTER_UNWIND: op_let_temp_setter_unwind(sc); continue;
+	case OP_LET_TEMP_UNWIND:           op_let_temp_unwind(sc);           continue;
+	case OP_LET_TEMP_S7_UNWIND:        op_let_temp_s7_unwind(sc);        continue;
+	case OP_LET_TEMP_S7_DIRECT_UNWIND: op_let_temp_s7_direct_unwind(sc); continue;
+	case OP_LET_TEMP_SETTER_UNWIND:    op_let_temp_setter_unwind(sc);    continue;
 
 
 	case OP_EVAL_MACRO:    op_eval_macro(sc);                  goto EVAL;
@@ -92522,7 +92581,7 @@ static s7_pointer s7_let_field(s7_scheme *sc, s7_pointer sym)
   return(sc->undefined);
 }
 
-s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym)
+s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym) /* s7.h, not used here */
 {
   if (is_symbol(sym))
     {
@@ -92924,7 +92983,7 @@ static s7_pointer g_s7_let_set_fallback(s7_scheme *sc, s7_pointer args)
   return(sc->undefined);
 }
 
-s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
+s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value) /* s7.h, not used here */
 {
   if (is_symbol(sym))
     {
@@ -95444,7 +95503,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 921)
+  if (NUM_OPS != 923)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95801,61 +95860,66 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* --------------------------------------------------
- *            20.9   21.0   22.0   22.7   22.8
- * --------------------------------------------------
+/* ---------------------------------------------
+ *            20.9   21.0   22.0   22.8   22.9
+ * ---------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    457
- * index     1026   1016    973    964    962
- * tmock     1177   1165   1057   1083   1083
+ * index     1026   1016    973    962    962
+ * tmock     1177   1165   1057   1083   1021
  * tvect     2519   2464   1772   1667   1667
- * timp      2637   2575   1930   1696   1687
- * texit     ----   ----   1778   1738   1737
- * s7test    1873   1831   1818   1818   1816
- * tauto     ----   ----   2562   2171   2045
- * thook     ----   ----   2590   2073   2074
+ * timp      2637   2575   1930   1687   1687
+ * texit     ----   ----   1778   1737   1737
+ * s7test    1873   1831   1818   1816   1816
+ * tauto     ----   ----   2562   2045   2045
+ * thook     ----   ----   2590   2074   2074
  * lt        2187   2172   2150   2179   2179
- * dup       3805   3788   2492   2272   2227
- * tload     ----   ----   3046   2377   2368
- * tcopy     8035   5546   2539   2373   2372
+ * dup       3805   3788   2492   2227   2248
+ * tload     ----   ----   3046   2368   2368
+ * tcopy     8035   5546   2539   2372   2372
  * tread     2440   2421   2419   2414   2414
- * fbench    2688   2583   2460   2418   2419
+ * fbench    2688   2583   2460   2419   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2573   2569
- * tb        2735   2681   2612   2600   2600
+ * tmat      3065   3042   2524   2569   2583
+ * tb        2735   2681   2612   2600   2603
  * tsort     3105   3104   2856   2801   2801
  * teq       4068   4045   3536   3469   3469
- * tobj      4016   3970   3828   3556   3567
- * tio       3816   3752   3683   3616   3618
- * tmac      3950   3873   3033   3670   3667
- * tclo      4787   4735   4390   4376   4375
- * tlet      7775   5640   4450   4403   4402
- * tcase     4960   4793   4439   4429   4434
- * tfft      7820   7729   4755   4456   4457
- * tmap      8869   8774   4489   4477   4541
- * tshoot    5525   5447   5183   5056   5057
- * tstr      6880   6342   5488   5131   5141
- * tform     5357   5348   5307   5320   5316
- * tnum      6348   6013   5433   5369   5366
+ * tobj      4016   3970   3828   3567   3567
+ * tio       3816   3752   3683   3618   3618
+ * tmac      3950   3873   3033   3667   3667
+ * tclo      4787   4735   4390   4375   4375
+ * tlet      7775   5640   4450   4402   4402
+ * tcase     4960   4793   4439   4434   4434
+ * tfft      7820   7729   4755   4457   4457
+ * tmap      8869   8774   4489   4541   4541
+ * tshoot    5525   5447   5183   5057   5057
+ * tstr      6880   6342   5488   5141   5141
+ * tform     5357   5348   5307   5316   5310
+ * tnum      6348   6013   5433   5366   5366
  * tlamb     6423   6273   5720   5545   5545
- * tmisc     8869   7612   6435   6184   6098
- * tset      ----   ----   ----   6238   6242
- * tlist     7896   7546   6558   6247   6242
- * tgsl      8485   7802   6373   6307   6280
- * trec      6936   6922   6521   6558   6565
- * tari      13.0   12.7   6827   6583   6535
- * tleft     10.4   10.2   7657   7479   7475
- * tgc       11.9   11.1   8177   7913   7932
- * thash     11.8   11.7   9734   9467   9471
- * cb        11.2   11.0   9658   9528   9544
+ * tmisc     8869   7612   6435   6098   6098
+ * tset      ----   ----   ----   6242   6242
+ * tlist     7896   7546   6558   6242   6242
+ * tgsl      8485   7802   6373   6280   6280
+ * trec      6936   6922   6521   6565   6565
+ * tari      13.0   12.7   6827   6535   6535
+ * tleft     10.4   10.2   7657   7475   7475
+ * tgc       11.9   11.1   8177   7932   7932
+ * thash     11.8   11.7   9734   9471   9471
+ * cb        11.2   11.0   9658   9544   9544
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.6
- * sg        ----   ----   55.9   56.7   55.7
+ * calls     36.7   37.5   37.0   37.6   37.6
+ * sg        ----   ----   55.9   55.7   55.7
  * lg        ----   ----  105.2  106.1  106.1
  * tbig     177.4  175.8  156.5  147.9  147.9
- * ----------------------------------------------
- * 
- * *s7* in let-temp is very slow but could be almost no overhead: t627 (50-70 in tmock), methods are also slow
+ * ---------------------------------------------
+ *
+ * fx support for (set! (*s7* 'sym) fxable): store sl field, see fx_implicit_s7_let_ref_s and OP_IMPLICIT_S7_LET_REF_S
+ *   there's no implicit_let_set or implicit_s7_let_set, need to split s7_let_set_fallback (like the ref case)
+ *   possibly more direct cases: safety, print-length, history-enabled?
+ * mv timings? method timings outside tmock (simplified + setters): t627
+ * need checks for t_pair+!mv where we know !mv, move t_matched, t_pair->no mv, t_pmv for old t_pair, t_mv, follow imp_hash|let_ref|set?
+ * t718
  */
