@@ -95,7 +95,7 @@ static s7_pointer aci(s7_scheme *sc, s7_pointer args, const char *b_name, void a
   s7_pointer n;
   slong prec;
 
-  prec = s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "bignum-precision")));
+  prec = s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "bignum-precision")));
 
   n = s7_car(args);
   if (!s7_is_number(n))
@@ -150,7 +150,7 @@ static s7_pointer acci(s7_scheme *sc, s7_pointer args, const char *b_name, void 
   s7_pointer n, x;
   slong prec;
 
-  prec = s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "bignum-precision")));
+  prec = s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "bignum-precision")));
 
   n = s7_car(args);
   if (!s7_is_number(n))
@@ -198,7 +198,7 @@ static s7_pointer accii(s7_scheme *sc, s7_pointer args, const char *b_name, void
   slong prec;
   s7_int scaled;
 
-  prec = s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "bignum-precision")));
+  prec = s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "bignum-precision")));
 
   n = s7_car(args);
   if (!s7_is_number(n))
@@ -241,7 +241,7 @@ static s7_pointer accci(s7_scheme *sc, s7_pointer args, const char *b_name, void
   s7_pointer n, x, b1;
   slong prec;
 
-  prec = s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "bignum-precision")));
+  prec = s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "bignum-precision")));
 
   n = s7_car(args);
   if (!s7_is_number(n))
@@ -275,7 +275,7 @@ static s7_pointer acccii(s7_scheme *sc, s7_pointer args, const char *b_name, voi
   slong prec;
   s7_int scaled;
 
-  prec = s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "bignum-precision")));
+  prec = s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "bignum-precision")));
 
   n = s7_car(args);
   if (!s7_is_number(n))

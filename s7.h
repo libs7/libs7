@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.5"
-#define S7_DATE "20-Oct-2022"
+#define S7_DATE "21-Oct-2022"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 5
 
@@ -422,9 +422,12 @@ bool s7_is_openlet(s7_pointer e);                                           /* (
 s7_pointer s7_method(s7_scheme *sc, s7_pointer obj, s7_pointer method);
 
 /* *s7* */
-s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym);                 /* (*s7* sym) */
+/* these renamed because "s7_let_field" seems the same as "s7_let", but here we're referring to *s7*, not any let */
+s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym);               /* (*s7* sym) */
 s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value); /* (set! (*s7* sym) new_value) */
-
+/* new names */
+s7_pointer s7_starlet_ref(s7_scheme *sc, s7_pointer sym);                   /* (*s7* sym) */
+s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value); /* (set! (*s7* sym) new_value) */
 
 s7_pointer s7_name_to_value(s7_scheme *sc, const char *name);               /* name's value in the current environment (after turning name into a symbol) */
 s7_pointer s7_symbol_table_find_name(s7_scheme *sc, const char *name);
@@ -902,6 +905,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
+ * 19-Oct:    s7_let_field* synonyms: s7_starlet*.
  * 16-Sep:    s7_number_to_real_with_location. s7_wrong_type_error. s7_make_string_wrapper_with_length. s7_make_semipermanent_string.
  * 21-Apr:    s7_is_multiple_value.
  * 11-Apr:    removed s7_apply_*.
