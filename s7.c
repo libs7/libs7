@@ -4147,7 +4147,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
       OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_HASH_TABLE_REF_AA,
-      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_STARLET_REF_S,
+      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_STARLET_REF_S, OP_IMPLICIT_S7_STARLET_SET,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_S, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
       OP_SYMBOL, OP_CONSTANT, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
@@ -4365,7 +4365,7 @@ static const char* op_names[NUM_OPS] =
       "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
       "implicit_string_ref_a", "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_pair_ref_aa",
       "implicit_hash_table_ref_a", "implicit_hash_table_ref_aa",
-      "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s",
+      "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", "implicit_*s7*_set",
       "unknown_thunk", "unknown_ns", "unknown_na", "unknown_s", "unknown_gg", "unknown_a", "unknown_aa", "unknown_np",
 
       "symbol", "constant", "pair_sym", "pair_pair", "pair_any", "h_hash_table_increment", "clear_opts",
@@ -6077,9 +6077,11 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
     return(apply_boolean_method(Sc, p, Method));	       \
   }
 
+static s7_pointer apply_method_closure(s7_scheme *sc, s7_pointer func, s7_pointer args);
 static s7_pointer find_and_apply_method(s7_scheme *sc, s7_pointer obj, s7_pointer sym, s7_pointer args)
 {
   s7_pointer func = find_method_with_let(sc, obj, sym);
+  if (is_closure(func)) return(apply_method_closure(sc, func, args));
   if (func == sc->undefined) missing_method_error_nr(sc, sym, obj);
   return(s7_apply_function(sc, func, args));
 }
@@ -8235,7 +8237,7 @@ static s7_pointer make_semipermanent_slot(s7_scheme *sc, s7_pointer symbol, s7_p
   return(slot);
 }
 
-static inline s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len, uint64_t hash, uint32_t location)
+static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_int len, uint64_t hash, uint32_t location) /* inline useless here 20-Oct-22 */
 {
   /* name might not be null-terminated, these are semipermanent symbols even in s7_gensym; g_gensym handles everything separately */
   uint8_t *base = alloc_symbol(sc);
@@ -10984,7 +10986,7 @@ Only the let is searched if ignore-globals is not #f."
 	      wrong_type_error_nr(sc, sc->is_defined_symbol, 2, cadr(args), a_let_string);
 	}
       if (e == sc->s7_starlet)
-	return(make_boolean(sc, s7_starlet_symbol(sym) != 0));
+	return(make_boolean(sc, s7_starlet_symbol(sym) != SL_NO_FIELD));
       if (is_pair(cddr(args)))
 	{
 	  b = caddr(args);
@@ -32309,7 +32311,7 @@ static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
   return(false);
 }
 
-static inline void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
+static /* inline */ void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
   /* I think this is the only place we print a symbol's name; ci is needed to be a display_function, it is not used */
   if ((!is_clean_symbol(obj)) &&
@@ -34867,7 +34869,7 @@ static void object_out_1(s7_scheme *sc, s7_pointer obj, s7_pointer strport, use_
     object_to_port_with_circle_check(sc, T_Pos(obj), strport, choice, sc->circle_info);
   else
     {
-      shared_info_t *ci = make_shared_info(sc, obj, choice != P_READABLE);
+      shared_info_t *ci = make_shared_info(sc, T_Pos(obj), choice != P_READABLE);
       if (ci)
 	{
 	  sc->object_out_locked = true;
@@ -52344,6 +52346,16 @@ s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args)
   return(sc->value);
 }
 
+static s7_pointer apply_method_closure(s7_scheme *sc, s7_pointer func, s7_pointer args)
+{
+  push_stack_direct(sc, OP_EVAL_DONE);
+  sc->code = func;
+  sc->args = (needs_copied_args(sc->code)) ? copy_proper_list(sc, args) : args;
+  sc->curlet = make_let(sc, closure_let(sc->code));
+  eval(sc, OP_APPLY_LAMBDA);
+  return(sc->value);
+}
+
 static inline s7_pointer apply_c_function(s7_scheme *sc, s7_pointer func, s7_pointer args);
 
 static s7_pointer implicit_index_checked(s7_scheme *sc, s7_pointer obj, s7_pointer in_obj, s7_pointer indices)
@@ -56100,9 +56112,9 @@ static inline s7_pointer fx_cond_na_na(s7_scheme *sc, s7_pointer code)  /* all t
   return(sc->unspecified);
 }
 
-static s7_pointer s7_starlet_field(s7_scheme *sc, s7_pointer sym);
+static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
 
-static s7_pointer fx_implicit_s7_starlet_ref_s(s7_scheme *sc, s7_pointer arg) {return(s7_starlet_field(sc, opt3_sym(arg)));}
+static s7_pointer fx_implicit_s7_starlet_ref_s(s7_scheme *sc, s7_pointer arg) {return(s7_starlet(sc, opt3_int(arg)));}
 static s7_pointer fx_implicit_s7_starlet_print_length(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->print_length));}
 
 static s7_function *fx_function = NULL;
@@ -56845,13 +56857,15 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 
 	case HOP_SAFE_CLOSURE_3S_A:
 	  if (fx_proc(closure_body(opt1_lambda(arg))) == fx_vref_vref_tu_v) return(fx_vref_vref_3_no_let);
+	  return(fx_function[optimize_op(arg)]);
 
 	case OP_IMPLICIT_S7_STARLET_REF_S:
-	  if (s7_starlet_symbol(opt3_sym(arg)) == SL_PRINT_LENGTH) return(fx_implicit_s7_starlet_print_length);
+	  if (opt3_int(arg) == SL_PRINT_LENGTH) return(fx_implicit_s7_starlet_print_length);
 	  return(fx_implicit_s7_starlet_ref_s);
 
 	case HOP_C:
 	  if ((is_unchanged_global(car(arg))) && (car(arg) == sc->curlet_symbol)) return(fx_curlet);
+	  /* fall through */
 
 	default:
 	  /* if ((!fx_function[optimize_op(arg)]) && (is_h_optimized(arg))) fprintf(stderr, "fx_choose %s %s\n", op_names[optimize_op(arg)], display(arg)); */
@@ -69897,7 +69911,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       s7_pointer sym = (quotes == 1) ? cadr(arg1) : arg1;
       if (is_keyword(sym)) sym = keyword_symbol(sym); /* might even be ':print-length */
       set_safe_optimize_op(expr, OP_IMPLICIT_S7_STARLET_REF_S);
-      set_opt3_sym(expr, sym);
+      set_opt3_int(expr, s7_starlet_symbol(sym));
       return(OPT_T);
     }
 
@@ -77968,7 +77982,17 @@ static void check_set(s7_scheme *sc)
 		      {
 			pair_set_syntax_op(form, OP_SET_opSAq_A);   /* (set! (symbol fxable) fxable) */
 			fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
-		      }
+
+			if (car(inner) == sc->s7_starlet_symbol) /* (set! (*s7* 'field) value) */
+			  {
+			    s7_pointer sym = (is_symbol(index)) ? 
+			                       ((is_keyword(index)) ? keyword_symbol(index) : index) : 
+                                               ((is_quoted_symbol(index)) ? cadr(index) : index);
+			    if ((is_symbol(sym)) && (s7_starlet_symbol(sym) != SL_NO_FIELD))
+			      {
+				set_safe_optimize_op(form, OP_IMPLICIT_S7_STARLET_SET);
+				set_opt3_sym(form, sym);
+			      }}}
 		    else pair_set_syntax_op(form, OP_SET_opSAq_P);  /* (set! (symbol fxable) any) */
 		  }}
 	    else
@@ -90756,8 +90780,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_GOTO_A:            if (!op_implicit_goto_a(sc))            {if (op_unknown_a(sc))  goto EVAL;} continue;
 	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
-	case OP_IMPLICIT_S7_STARLET_REF_S:  sc->value = s7_starlet_field(sc, opt3_sym(sc->code)); continue;
-
+	case OP_IMPLICIT_S7_STARLET_REF_S:  sc->value = s7_starlet(sc, opt3_int(sc->code)); continue;
+	case OP_IMPLICIT_S7_STARLET_SET:    
+	  sc->value = g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet_symbol, opt3_sym(sc->code), fx_call(sc, cddr(sc->code)))); 
+	  continue;
 
 	case OP_UNOPT:       goto UNOPT;
 	case OP_SYMBOL:      sc->value = lookup_checked(sc, sc->code);     continue;
@@ -90871,7 +90897,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    }
 
 	case OP_MACRO_STAR_D: if (op_macro_star_d(sc))     goto EVAL_ARGS_TOP; goto BEGIN;
-	case OP_MACRO_D:      if (op_macro_d(sc, T_MACRO)) goto EVAL_ARGS_TOP;
+	case OP_MACRO_D:      if (op_macro_d(sc, T_MACRO)) goto EVAL_ARGS_TOP; /* fall through presumably */
 
 	APPLY_LAMBDA:
 	case OP_APPLY_LAMBDA:
@@ -92171,7 +92197,7 @@ static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20
   set_immutable_slot(slot1);         /* make the *s7* let-ref|set! fallbacks immutable */
   set_immutable_slot(slot2);
   set_immutable_let(x);
-  sc->s7_starlet_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x));
+  sc->s7_starlet_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x)); /* define_constant returns the symbol */
   for (int32_t i = SL_STACK_TOP; i < SL_NUM_FIELDS; i++)
     s7_starlet_symbol_set(make_symbol(sc, s7_starlet_names[i]), (s7_starlet_t)i);
   return(x);
@@ -92536,9 +92562,9 @@ static s7_pointer sl_protected_objects(s7_scheme *sc)
   return(nv);
 }
 
-static s7_pointer s7_starlet_field(s7_scheme *sc, s7_pointer sym)
+static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice)
 {
-  switch (s7_starlet_symbol(sym))
+  switch (choice)
     {
     case SL_ACCEPT_ALL_KEYWORD_ARGUMENTS:  return(make_boolean(sc, sc->accept_all_keyword_arguments));
     case SL_AUTOLOADING:                   return(s7_make_boolean(sc, sc->is_autoloading));
@@ -92599,8 +92625,6 @@ static s7_pointer s7_starlet_field(s7_scheme *sc, s7_pointer sym)
     case SL_UNDEFINED_CONSTANT_WARNINGS:   return(s7_make_boolean(sc, sc->undefined_constant_warnings));
     case SL_UNDEFINED_IDENTIFIER_WARNINGS: return(s7_make_boolean(sc, sc->undefined_identifier_warnings));
     case SL_VERSION:                       return(s7_make_string(sc, "s7 " S7_VERSION ", " S7_DATE));
-    default:
-      error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't get (*s7* '~S); no such field in *s7*", 43), sym));
     }
   return(sc->undefined);
 }
@@ -92612,7 +92636,7 @@ s7_pointer s7_starlet_ref(s7_scheme *sc, s7_pointer sym) /* s7.h, not used here 
       if (is_keyword(sym))
 	sym = keyword_symbol(sym);
       if (s7_starlet_symbol(sym) != SL_NO_FIELD)
-	return(s7_starlet_field(sc, sym));
+	return(s7_starlet(sc, s7_starlet_symbol(sym)));
     }
   return(sc->undefined);
 }
@@ -92626,7 +92650,7 @@ static s7_pointer g_s7_starlet_ref_fallback(s7_scheme *sc, s7_pointer args)
     sole_arg_wrong_type_error_nr(sc, sc->let_ref_symbol, sym, sc->type_names[T_SYMBOL]);
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
-  return(s7_starlet_field(sc, sym));
+  return(s7_starlet(sc, s7_starlet_symbol(sym)));
 }
 
 static s7_pointer s7_starlet_iterate(s7_scheme *sc, s7_pointer iterator)
@@ -92643,8 +92667,8 @@ static s7_pointer s7_starlet_iterate(s7_scheme *sc, s7_pointer iterator)
     value = sc->F;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
   else
     {
-      s7_pointer osw = sc->w;  /* protect against s7_starlet_field list making */
-      value = s7_starlet_field(sc, symbol);
+      s7_pointer osw = sc->w;  /* protect against s7_starlet list making */
+      value = s7_starlet(sc, s7_starlet_symbol(symbol));
       sc->w = osw;
     }
   if (iterator_let_cons(iterator))
@@ -92751,7 +92775,7 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
     sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
-
+  
   switch (s7_starlet_symbol(sym))
     {
     case SL_ACCEPT_ALL_KEYWORD_ARGUMENTS:
@@ -93069,7 +93093,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
   if (p == sc->unused)          return("#<unused>");
   if (p == sc->symbol_table)    return("symbol_table");
   if (p == sc->rootlet)         return("rootlet");
-  if (p == sc->s7_starlet)      return("*s7*");
+  if (p == sc->s7_starlet)      return("*s7*"); /* this is the function */
   if (p == sc->unlet)           return("unlet");
   if (p == sc->error_port)      return("error_port");
   if (p == sc->owlet)           return("owlet");
@@ -95531,7 +95555,7 @@ s7_scheme *s7_init(void)
     fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0)
     fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 923)
+  if (NUM_OPS != 924)
     fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
 #endif
@@ -95892,11 +95916,11 @@ int main(int argc, char **argv)
  *            20.9   21.0   22.0   22.8   22.9
  * ---------------------------------------------
  * tpeak      115    114    108    105    105
- * tref       691    687    463    457    457
+ * tref       691    687    463    457    459
  * index     1026   1016    973    962    963
- * tmock     1177   1165   1057   1083   1022
- * tvect     2519   2464   1772   1667   1667
- * timp      2637   2575   1930   1687   1687
+ * tmock     1177   1165   1057   1083   1018
+ * tvect     2519   2464   1772   1667   1669
+ * timp      2637   2575   1930   1687   1690
  * texit     ----   ----   1778   1737   1737
  * s7test    1873   1831   1818   1816   1822
  * tauto     ----   ----   2562   2045   2045
@@ -95905,14 +95929,14 @@ int main(int argc, char **argv)
  * dup       3805   3788   2492   2227   2242
  * tload     ----   ----   3046   2368   2368
  * tcopy     8035   5546   2539   2372   2372
- * tread     2440   2421   2419   2414   2414  2409
+ * tread     2440   2421   2419   2414   2409
  * fbench    2688   2583   2460   2419   2419
  * trclo     2735   2574   2454   2439   2439
  * titer     2865   2842   2641   2509   2509
  * tmat      3065   3042   2524   2569   2576
  * tb        2735   2681   2612   2600   2601
  * tsort     3105   3104   2856   2801   2801
- * teq       4068   4045   3536   3469   3469  3487
+ * teq       4068   4045   3536   3469   3487
  * tobj      4016   3970   3828   3567   3569
  * tio       3816   3752   3683   3618   3618
  * tmac      3950   3873   3033   3667   3667
@@ -95926,29 +95950,27 @@ int main(int argc, char **argv)
  * tform     5357   5348   5307   5316   5310
  * tnum      6348   6013   5433   5366   5371
  * tlamb     6423   6273   5720   5545   5545
- * tmisc     8869   7612   6435   6098   6098  6073
- * tset      ----   ----   ----   6242   6242
+ * tmisc     8869   7612   6435   6098   6087
+ * tset      ----   ----   ----   6242   6233
  * tlist     7896   7546   6558   6242   6243
  * tgsl      8485   7802   6373   6280   6280
  * trec      6936   6922   6521   6565   6565
  * tari      13.0   12.7   6827   6535   6535
  * tleft     10.4   10.2   7657   7475   7477
- * tgc       11.9   11.1   8177   7932   7932  7866
+ * tgc       11.9   11.1   8177   7932   7867
  * thash     11.8   11.7   9734   9471   9471
  * cb        11.2   11.0   9658   9544   9540
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   55.7   55.8
+ * sg        ----   ----   55.9   55.7   55.7
  * lg        ----   ----  105.2  106.1  106.2
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ---------------------------------------------
  *
- * fx support for (set! (*s7* 'sym) fxable): store sl field, see fx_implicit_s7_starlet_ref_s and OP_IMPLICIT_S7_STARLET_REF_S
- *   there's no implicit_let_set or implicit_s7_starlet_set, need to split s7_starlet_set_fallback (like the ref case)
- *   possibly more direct cases: safety, [print-length], history-enabled? bignum-precision if gmp?
+ * *s7*: possibly more direct cases: safety, [print-length], history-enabled? bignum-precision if gmp?
  *   follow imp_hash|let_ref|set? also no string|hash|pair-set implicit [see 79009 -- says few calls for string-set]
  *     via set_implicit_hash_table|let neither of which is called much in t*
- *   t628: set is more than 3 times slower than ref
  * mv timings? method timings outside tmock (simplified + setters): t627
+ * reduce inlining [ca 160]
  */
