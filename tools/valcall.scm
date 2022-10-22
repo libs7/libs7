@@ -51,6 +51,7 @@
 		     ("timp.scm" . "v-imp")
 		     ("tlamb.scm" . "v-lamb")
 		     ("thook.scm" . "v-hook")
+		     ("tstar.scm" . "v-star")
 		     ))
 
 (define (last-callg)
@@ -112,6 +113,7 @@
 	 (list "repl" "tcase.scm")
 	 (list "repl" "tfft.scm")
 	 (list "repl" "tmap.scm")
+	 (list "repl" "tstar.scm")
 	 (list "repl" "tshoot.scm")
 	 (list "repl" "concordance.scm")
 	 (list "repl" "tform.scm")

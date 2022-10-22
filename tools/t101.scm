@@ -245,6 +245,9 @@
 (format *stderr* "~NC fbench ~NC~%" 20 #\- 20 #\-)
 (system "./repl fbench.scm")
 
+(format *stderr* "~NC tstar ~NC~%" 20 #\- 20 #\-)
+(system "./repl tstar.scm")
+
 (format *stderr* "~NC tshoot ~NC~%" 20 #\- 20 #\-)
 (system "./repl tshoot.scm")
 

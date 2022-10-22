@@ -7803,19 +7803,16 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
        */
       add_semipermanent_object(sc, x);
       return;
-
     case T_SYMBOL:
       if (is_gensym(x))
 	remove_gensym_from_heap(sc, x);
       return;
-
     case T_CLOSURE: case T_CLOSURE_STAR:
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
       /* these need to be GC-protected! */
       add_semipermanent_object(sc, x);
       return;
-
     default:
       break;
     }
@@ -8281,7 +8278,6 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       set_global_slot(x, slot);
       set_local_slot(x, slot);
     }
-
   full_type(p) = T_PAIR | T_IMMUTABLE | T_UNHEAP;  /* add x to the symbol table */
   set_car(p, x);
   set_cdr(p, vector_element(sc->symbol_table, location));
@@ -8292,7 +8288,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
   return(x);
 }
 
-static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len)
+static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) /* inline out: about 40 in tload, but not else I think */
 {
   uint64_t hash = raw_string_hash((const uint8_t *)name, len);
   uint32_t location = hash % SYMBOL_TABLE_SIZE;
@@ -8342,9 +8338,9 @@ static s7_pointer g_symbol_table(s7_scheme *sc, s7_pointer unused_args)
   #define H_symbol_table "(symbol-table) returns a vector containing the current symbol-table symbols"
   #define Q_symbol_table s7_make_signature(sc, 1, sc->is_vector_symbol)
 
-  s7_pointer *entries = vector_elements(sc->symbol_table);
+  s7_pointer *els, *entries = vector_elements(sc->symbol_table);
   int32_t syms = 0;
-
+  s7_pointer lst;
   /* this can't be optimized by returning the actual symbol-table (a vector of lists), because
    *    gensyms can cause the table's lists and symbols to change at any time.  This wreaks havoc
    *    on traversals like for-each.  So, symbol-table returns a snap-shot of the table contents
@@ -8356,17 +8352,13 @@ static s7_pointer g_symbol_table(s7_scheme *sc, s7_pointer unused_args)
     for (s7_pointer x = entries[i]; is_not_null(x); x = cdr(x))
       syms++;
   sc->w = make_simple_vector(sc, syms);
-  {
-    s7_pointer *els = vector_elements(sc->w);
-    for (int32_t i = 0, j = 0; i < SYMBOL_TABLE_SIZE; i++)
-      for (s7_pointer x = entries[i]; is_not_null(x); x = cdr(x))
-	els[j++] = car(x);
-  }
-  {
-    s7_pointer lst = sc->w;
-    sc->w = sc->unused;
-    return(lst);
-  }
+  els = vector_elements(sc->w);
+  for (int32_t i = 0, j = 0; i < SYMBOL_TABLE_SIZE; i++)
+    for (s7_pointer x = entries[i]; is_not_null(x); x = cdr(x))
+      els[j++] = car(x);
+  lst = sc->w;
+  sc->w = sc->unused;
+  return(lst);
 }
 
 bool s7_for_each_symbol_name(s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data)
@@ -39004,27 +38996,24 @@ static void port_write_vector_typer(s7_scheme *sc, s7_pointer vect, s7_pointer p
   port_write_string(port)(sc, setter, safe_strlen(setter), port);
 }
 
-static noreturn void typed_vector_setter_error_nr(s7_scheme *sc, s7_pointer vec, s7_pointer val)
-{
-  const char *descr = typed_vector_typer_name(sc, vec);
-  error_nr(sc, sc->wrong_type_arg_symbol,
-	   set_elist_4(sc, wrap_string(sc, "vector-set! third argument ~$, is ~A, but the vector's element type checker, ~A, rejects it", 91),
-		       val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr))));
-}
-
-static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
+static /* inline */ s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val) /* inline saves about 10 in concordance */
 {
   if ((sc->safety >= NO_SAFETY) &&
       (typed_vector_typer_call(sc, vec, set_plist_1(sc, val)) == sc->F))
-    typed_vector_setter_error_nr(sc, vec, val);
+    {
+      const char *descr = typed_vector_typer_name(sc, vec);
+      error_nr(sc, sc->wrong_type_arg_symbol,
+	       set_elist_4(sc, wrap_string(sc, "vector-set! third argument ~$, is ~A, but the vector's element type checker, ~A, rejects it", 91),
+			   val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr))));
+    }
   vector_element(vec, loc) = val;
   return(val);
 }
 
 static s7_pointer normal_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(vector_element(vec, loc));}
-static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)     {return(make_integer(sc, int_vector(vec, loc)));}
-static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)   {return(make_real(sc, float_vector(vec, loc)));}
-static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)     {return(small_int(byte_vector(bv, loc)));}
+static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)    {return(make_integer(sc, int_vector(vec, loc)));}
+static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)  {return(make_real(sc, float_vector(vec, loc)));}
+static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)    {return(small_int(byte_vector(bv, loc)));}
 
 static s7_pointer int_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
@@ -55431,6 +55420,8 @@ static s7_pointer fx_add_aa(s7_scheme *sc, s7_pointer arg)
   sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
   if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) + real(x2)));
+  if ((is_t_integer(x1)) && (is_t_integer(x2))) return(make_integer(sc, integer(x1) + integer(x2)));
+  /* maybe use add_if_overflow_to_real_or_big_integer, but that seems unnecessary currently */
   return(add_p_pp(sc, x1, x2));
 }
 
@@ -56116,6 +56107,7 @@ static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
 
 static s7_pointer fx_implicit_s7_starlet_ref_s(s7_scheme *sc, s7_pointer arg) {return(s7_starlet(sc, opt3_int(arg)));}
 static s7_pointer fx_implicit_s7_starlet_print_length(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->print_length));}
+static s7_pointer fx_implicit_s7_starlet_safety(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->safety));}
 
 static s7_function *fx_function = NULL;
 
@@ -56861,6 +56853,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 
 	case OP_IMPLICIT_S7_STARLET_REF_S:
 	  if (opt3_int(arg) == SL_PRINT_LENGTH) return(fx_implicit_s7_starlet_print_length);
+	  if (opt3_int(arg) == SL_SAFETY) return(fx_implicit_s7_starlet_safety);
 	  return(fx_implicit_s7_starlet_ref_s);
 
 	case HOP_C:
@@ -79293,8 +79286,7 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((ls
 static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer fnc)
 {
   s7_pointer setter = closure_setter(fnc);
-  if ((setter == sc->F) &&
-      (!closure_no_setter(fnc)))
+  if ((setter == sc->F) && (!closure_no_setter(fnc))) /* maybe closure_setter hasn't been set yet: see fset3 in s7test.scm */
     setter = setter_p_pp(sc, fnc, sc->curlet);
   if (is_t_procedure(setter))
     {
@@ -95945,8 +95937,9 @@ int main(int argc, char **argv)
  * tcase     4960   4793   4439   4434   4437
  * tfft      7820   7729   4755   4457   4457
  * tmap      8869   8774   4489   4541   4541
+ * tstar     6139   5923   5519   ----   4906  4871
  * tshoot    5525   5447   5183   5057   5055
- * tstr      6880   6342   5488   5141   5141
+ * tstr      6880   6342   5488   5141   5141  5149
  * tform     5357   5348   5307   5316   5310
  * tnum      6348   6013   5433   5366   5371
  * tlamb     6423   6273   5720   5545   5545
@@ -95968,9 +95961,5 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ---------------------------------------------
  *
- * *s7*: possibly more direct cases: safety, [print-length], history-enabled? bignum-precision if gmp?
- *   follow imp_hash|let_ref|set? also no string|hash|pair-set implicit [see 79009 -- says few calls for string-set]
- *     via set_implicit_hash_table|let neither of which is called much in t*
- * mv timings? method timings outside tmock (simplified + setters): t627
  * reduce inlining [ca 160]
  */

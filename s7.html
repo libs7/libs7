@@ -8753,7 +8753,7 @@ static s7_pointer gmp_bessel_j0(s7_scheme *sc, s7_pointer args)
   s7_pointer x, result;
   mpfr_t mp;
 
-  mpfr_init2(mp, s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "bignum-precision"))));
+  mpfr_init2(mp, s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "bignum-precision"))));
   /* initialize the mpfr variable mp to the current s7 bignum-precision */
 
   x = s7_car(args);
@@ -9610,8 +9610,12 @@ s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer let);
 bool s7_is_let(s7_pointer e);
 s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol);
 s7_pointer s7_let_set(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer val);
-s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer symbol);
-s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer symbol, s7_pointer new_value);
+
+s7_pointer s7_starlet_ref(s7_scheme *sc, s7_pointer sym);
+s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value);
+/* the old confusing names for the same functions: */
+  s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer symbol);
+  s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer symbol, s7_pointer new_value);
 
 s7_pointer s7_openlet(s7_scheme *sc, s7_pointer e);
 bool s7_is_openlet(s7_pointer e);
@@ -9628,11 +9632,11 @@ void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value);
 s7_sublet, s7_inlet, s7_varlet, s7_let_to_list, s7_is_let, s7_let_ref, s7_let_set, s7_openlet,
 and s7_is_openlet.
 </p>
-<p>s7_let_field_ref and s7_let_field_set refer to *s7*, the let that holds various s7 settings.
+<p>s7_starlet_ref and s7_starlet_set refer to *s7*, the let that holds various s7 settings.
 To get the current default print-length,
 </p>
 <pre class="indented">
-s7_integer(s7_let_field_ref(s7, s7_make_symbol(s7, "print-length")))
+s7_integer(s7_starlet_ref(s7, s7_make_symbol(s7, "print-length")))
 </pre>
 <p>s7_method looks for a field in "object" with the name "method", a symbol.
 For example, in clm2xen.c, if mus-copy is called on an object that Snd does not
