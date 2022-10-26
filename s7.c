@@ -280,7 +280,6 @@
 #define HAVE_GMP typo!
 
 #define SHOW_EVAL_OPS 0
-
 #ifndef _GNU_SOURCE
   #define _GNU_SOURCE  /* for qsort_r, grumble... */
 #endif
@@ -3750,6 +3749,9 @@ static void init_small_ints(void)
   t_number_separator_p[(uint8_t)'E'] = false;
 }
 
+#define clamp_length(NLen, Len) (((NLen) < (Len)) ? (NLen) : (Len))
+
+
 /* -------------------------------------------------------------------------------- */
 #if (defined(__FreeBSD__)) || ((defined(__linux__)) && (__GLIBC__ >= 2) && (__GLIBC_MINOR__ > 17)) || (defined(__OpenBSD__)) || (defined(__NetBSD__))
   static inline s7_int my_clock(void)
@@ -4591,22 +4593,6 @@ bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
   return(result);
 }
 
-void s7_show_let(s7_scheme *sc) /* debugging convenience */
-{
-  for (s7_pointer olet = sc->curlet; is_let(T_Lid(olet)); olet = let_outlet(olet))
-    {
-      if (olet == sc->owlet)
-	fprintf(stderr, "(owlet): ");
-      else
-	if (is_funclet(olet))
-	  fprintf(stderr, "(%s funclet): ", display(funclet_function(olet)));
-	else
-	  if (olet == sc->shadow_rootlet)
-	    fprintf(stderr, "(shadow rootlet): ");
-      fprintf(stderr, "%s\n", display(olet));
-    }
-}
-
 #define safe_print(Code)	   \
   do {				   \
     bool old_open = sc->has_openlets, old_stop = sc->stop_at_error;  \
@@ -4648,13 +4634,7 @@ void s7_show_stack(s7_scheme *sc)
     fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
 }
 
-void s7_show_op_stack(s7_scheme *sc)
-{
-  fprintf(stderr, "op_stack:\n");
-  for (s7_pointer *p = sc->op_stack, *tp = sc->op_stack_now; (p < tp); p++)
-    fprintf(stderr, "  %s\n", display(*p));
-}
-
+#if S7_DEBUGGING
 #define UNUSED_BITS 0xfc00000000c0 /* high 6 bits of optimizer code + high 2 bits of type */
 
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S7_DEBUGGING in display_fallback (for display_functions) */
@@ -4854,9 +4834,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S
 }
 
 /* snprintf returns the number of bytes that would have been written: (display (c-pointer 123123123 (symbol (make-string 130 #\a)))) */
-#define clamp_length(NLen, Len) (((NLen) < (Len)) ? (NLen) : (Len))
 
-#if S7_DEBUGGING
 static bool has_odd_bits(s7_pointer obj)
 {
   uint64_t full_typ = full_type(obj);
@@ -4932,6 +4910,22 @@ static bool has_odd_bits(s7_pointer obj)
   /* if ((in_heap(obj)) && ((type(obj) == T_C_FUNCTION) || (type(obj) == T_C_FUNCTION_STAR) || (type(obj) == T_C_MACRO))) return(true); */
   /*   this is currently impossible -- s7_make_function et al use semipermanent pointers, but is that a bug? */
   return(false);
+}
+
+void s7_show_let(s7_scheme *sc) /* debugging convenience */
+{
+  for (s7_pointer olet = sc->curlet; is_let(T_Lid(olet)); olet = let_outlet(olet))
+    {
+      if (olet == sc->owlet)
+	fprintf(stderr, "(owlet): ");
+      else
+	if (is_funclet(olet))
+	  fprintf(stderr, "(%s funclet): ", display(funclet_function(olet)));
+	else
+	  if (olet == sc->shadow_rootlet)
+	    fprintf(stderr, "(shadow rootlet): ");
+      fprintf(stderr, "%s\n", display(olet));
+    }
 }
 
 static const char *check_name(s7_scheme *sc, int32_t typ)
@@ -6618,7 +6612,8 @@ static void sweep(s7_scheme *sc)
 	  else
 	    {
 	      if ((is_weak_hash_table(s1)) &&
-		  (weak_hash_iters(s1) == 0))
+		  (weak_hash_iters(s1) == 0) &&
+		  (hash_table_entries(s1) > 0))
 		cull_weak_hash_table(sc, s1);
 	      gp->list[j++] = s1;
 	    }}
@@ -12085,7 +12080,7 @@ static inline s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den
   if ((den == S7_INT64_MIN) && ((num & 1) != 0))
     return(make_real(sc, (long_double)num / (long_double)den));
   new_cell(sc, x, T_RATIO);
-  if (den < 0)
+  if (den < 0) /* this is noticeably faster in callgrind than using (den < 0) ? ... twice */
     {
       numerator(x) = -num;
       denominator(x) = -den;
@@ -13109,7 +13104,6 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
   e1 = x0 - p0;
   e0p = p1 - x1;
   e1p = x1 - p0;
-
   while (true)
     {
       s7_int old_p1, old_q1;
@@ -13132,11 +13126,9 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	  return(true);
 	}
       tries++;
-
       r = (s7_int)floor(e0 / e1);
       r1 = (s7_int)ceil(e0p / e1p);
       if (r1 < r) r = r1;
-
       /* do handles all step vars in parallel */
       old_p1 = p1;
       p1 = p0;
@@ -34392,19 +34384,9 @@ static void display_fallback(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 #if S7_DEBUGGING
   print_debugging_state(sc, obj, port);
 #else
-  {
-    char *tmp = describe_type_bits(sc, obj);
-    s7_int len = 32 + safe_strlen(tmp);
-    block_t *b = mallocate(sc, len);
-    char *str = (char *)block_data(b);
-    s7_int nlen;
-    if (is_free(obj))
-      nlen = catstrs_direct(str, "<free cell! ", tmp, ">", (const char *)NULL);
-    else nlen = catstrs_direct(str, "<unknown object! ", tmp, ">", (const char *)NULL);
-    port_write_string(port)(sc, str, nlen, port);
-    free(tmp);
-    liberate(sc, b);
-  }
+  if (is_free(obj))
+    port_write_string(port)(sc, "<free cell!>", 12, port);
+  else port_write_string(port)(sc, "<unknown object!>", 17, port);
 #endif
 }
 
@@ -44345,37 +44327,35 @@ static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, hash_e
 
 static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table)
 {
-  if (hash_table_entries(table) > 0)
+  s7_int len = hash_table_mask(table) + 1;
+  hash_entry_t **entries = hash_table_elements(table);
+  for (s7_int i = 0; i < len; i++)
     {
-      s7_int len = hash_table_mask(table) + 1;
-      hash_entry_t **entries = hash_table_elements(table);
-      for (s7_int i = 0; i < len; i++)
+      hash_entry_t *nxp, *lxp = entries[i];
+      for (hash_entry_t *xp = entries[i]; xp; xp = nxp)
 	{
-	  hash_entry_t *nxp, *lxp = entries[i];
-	  for (hash_entry_t *xp = entries[i]; xp; xp = nxp)
+	  nxp = hash_entry_next(xp);
+	  if (is_free_and_clear(hash_entry_key(xp)))
 	    {
-	      nxp = hash_entry_next(xp);
-	      if (is_free_and_clear(hash_entry_key(xp)))
+	      if (xp == entries[i])
 		{
-		  if (xp == entries[i])
+		  entries[i] = nxp;
+		  lxp = nxp;
+		}
+	      else hash_entry_next(lxp) = nxp;
+	      liberate_block(sc, xp);
+	      hash_table_entries(table)--;
+	      if (hash_table_entries(table) == 0)
+		{
+		  if (hash_table_mapper(table) == default_hash_map)
 		    {
-		      entries[i] = nxp;
-		      lxp = nxp;
+		      hash_table_checker(table) = hash_empty;
+		      hash_clear_chosen(table);
 		    }
-		  else hash_entry_next(lxp) = nxp;
-                  liberate_block(sc, xp);
-		  hash_table_entries(table)--;
-		  if (hash_table_entries(table) == 0)
-		    {
-		      if (hash_table_mapper(table) == default_hash_map)
-			{
-			  hash_table_checker(table) = hash_empty;
-			  hash_clear_chosen(table);
-			}
-		      return;
-		    }}
-	      else lxp = xp;
-	    }}}
+		  return;
+		}}
+	  else lxp = xp;
+	}}
 }
 
 static void hash_table_set_default_checker(s7_pointer table, uint8_t typ)
@@ -71514,13 +71494,10 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
       break;
 
     case OP_SET:
-      if ((is_pair(cadr(expr))) &&
-	  (caadr(expr) == sc->outlet_symbol))
+      if ((is_pair(cadr(expr))) && (caadr(expr) == sc->outlet_symbol))
 	return(OPT_OOPS);
-
       if (!is_pair(cddr(expr)))
 	return(OPT_OOPS);
-
       if ((is_pair(cadr(expr))) &&
 	  (!is_checked(cadr(expr))))
 	{
@@ -71531,11 +71508,13 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		(optimize_expression(sc, car(lp), hop, e, body_export_ok) == OPT_OOPS))
 	      return(OPT_OOPS);
 	}
-
       if ((is_pair(caddr(expr))) &&
 	  (!is_checked(caddr(expr))) &&
 	  (optimize_expression(sc, caddr(expr), hop, e, body_export_ok) == OPT_OOPS))
 	return(OPT_OOPS);
+
+      if ((is_pair(cadr(expr))) && (caadr(expr) == sc->s7_starlet_symbol))
+	return(OPT_T);
       return(OPT_F);
 
     case OP_WITH_LET:
@@ -71784,7 +71763,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  set_fx_direct(p, fx_choose(sc, p, e, pair_symbol_is_safe));
 		set_safe_optimize_op(expr, ((is_pair(cddr(expr))) && (is_null(cdddr(expr)))) ? OP_BEGIN_AA : OP_BEGIN_NA);
 		return(OPT_T);
-	      }}}   /* fully fxable lets don't happen much: even op_let_2a_a is scarcely used */
+	      }}}   /* fully fxable lets don't happen much: even let-2a-a is scarcely used */
   return(OPT_F);
 }
 
@@ -71805,7 +71784,10 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	    pairs++;
 	    if (!is_checked(car_p))
 	      {
-		opt_t res = optimize_expression(sc, car_p, orig_hop, e, false);
+		opt_t res;
+		if ((is_pair(car(car_p))) && (caar(car_p) == sc->let_symbol)) /* TODO: fix this! ((let () quasiquote) (vector i x)) -> apply in a function! */
+		  res = OPT_F;                                                /*   maybe: is_syntactic_symbol through car(car_p)? */
+		else res = optimize_expression(sc, car_p, orig_hop, e, false);
 		if (res == OPT_F)
 		  {
 		    bad_pairs++;
@@ -71824,7 +71806,7 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 		  if (is_proper_quote(sc, car_p))
 		    quotes++;
 		}}}
-  if (is_null(p))                    /* if not null, dotted list of args? */
+  if (is_null(p))            /* if not null, dotted list of args, (cons 1 . 2) etc -- error perhaps? */
     {
       switch (args)
 	{
@@ -71834,7 +71816,7 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	case 3:  return(optimize_func_three_args(sc, expr, func, hop, pairs, symbols, quotes, bad_pairs, e));
 	default: return(optimize_func_many_args(sc, expr, func, hop, args, pairs, symbols, quotes, bad_pairs, e));
 	}}
-  return(OPT_F);
+  return(OPT_OOPS); /* was OPT_F, but this is always an error */
 }
 
 static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7_pointer e, bool export_ok)
@@ -71856,7 +71838,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
       if (is_slot(slot))
 	{
 	  s7_pointer func = slot_value(slot);
-	  if (is_syntax(func))                           /* 12-8-16 was is_syntactic, but that is only appropriate above -- here we have the value */
+	  if (is_syntax(func))                           /* not is_syntactic -- here we have the value */
 	    return((is_pair(cdr(expr))) ? optimize_syntax(sc, expr, func, hop, e, export_ok) : OPT_OOPS);  /* e can be extended via set-cdr! here */
 
 	  if (is_any_macro(func))
@@ -73865,8 +73847,6 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	  sc->temp1 = lst;
 	}
       else lst = sc->nil;
-
-      /* if (result >= RECUR_BODY) ... */
 
       if (optimize(sc, body, 1, cleared_args = collect_parameters(sc, args, lst)) == OPT_OOPS)
 	clear_all_optimizations(sc, body);
@@ -79112,9 +79092,6 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, 
 	}
       push_stack(sc, OP_SET2, cdr(inds), val);            /* (let ((L (list (list 1 2 3)))) (set! (L (- (length L) 1) 2) 0) L) */
       sc->code = list_2(sc, caadr(form), car(inds));
-      /* TODO: need a way to use lst here, not caadr(form), but somewhere down the line we insist on looking up obj
-       *       lst is the list being applied, so we need to follow from here and find who assumes it is car(), that is (set! ('(1 2) 0) 32) etc.
-       */
       return(goto_unopt);
     }
   if (index_val)
@@ -90007,7 +89984,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       /* it is only slightly faster to use labels as values (computed gotos) here. In my timing tests (June-2018), the best case speedup was in titer.scm
        *    callgrind numbers 4808 to 4669; another good case was tread.scm: 2410 to 2386.  Most timings were a draw.  computed-gotos-s7.c has the code,
        *    macroized so it will work if such gotos aren't available.  I think I'll stick with a switch statement.
-       * Another seductive idea is to put the function in the tree, not an index to it (the optimize_op business above),
+       * Another idea is to put the function in the tree, not an index to it (the optimize_op business above),
        *    then the switch below is not needed, and we free up 16 type bits.  C does not guarantee tail calls (I think)
        *    so we'd have each function return the next, and eval would be [while (true) f = f(sc)] but would the function
        *    call overhead be less expensive than the switch? (We get most functions inlined in the current code).
@@ -92131,6 +92108,13 @@ static s7_pointer g_show_stack(s7_scheme *sc, s7_pointer args)
   #define Q_show_stack s7_make_signature(sc, 1, sc->not_symbol)
   s7_show_stack(sc);
   return(sc->F);
+}
+
+void s7_show_op_stack(s7_scheme *sc)
+{
+  fprintf(stderr, "op_stack:\n");
+  for (s7_pointer *p = sc->op_stack, *tp = sc->op_stack_now; (p < tp); p++)
+    fprintf(stderr, "  %s\n", display(*p));
 }
 static s7_pointer g_show_op_stack(s7_scheme *sc, s7_pointer args)
 {
@@ -95947,8 +95931,8 @@ int main(int argc, char **argv)
  * tset      ----   ----   ----   6242   6233
  * tlist     7896   7546   6558   6242   6243
  * tgsl      8485   7802   6373   6280   6280
- * trec      6936   6922   6521   6565   6565
  * tari      13.0   12.7   6827   6535   6535
+ * trec      6936   6922   6521   6565   6565
  * tleft     10.4   10.2   7657   7475   7477
  * tgc       11.9   11.1   8177   7932   7867
  * thash     11.8   11.7   9734   9471   9471
@@ -95961,5 +95945,4 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  147.9  147.9
  * ---------------------------------------------
  *
- * reduce inlining [ca 160]
  */
