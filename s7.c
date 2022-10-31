@@ -38978,16 +38978,19 @@ static void port_write_vector_typer(s7_scheme *sc, s7_pointer vect, s7_pointer p
   port_write_string(port)(sc, setter, safe_strlen(setter), port);
 }
 
-static /* inline */ s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val) /* inline saves about 10 in concordance */
+static noreturn void typed_vector_type_error_nr(s7_scheme *sc, s7_pointer vec, s7_pointer val)
+{
+  const char *descr = typed_vector_typer_name(sc, vec);
+  error_nr(sc, sc->wrong_type_arg_symbol,
+	   set_elist_4(sc, wrap_string(sc, "vector-set! third argument ~$, is ~A, but the vector's element type checker, ~A, rejects it", 91),
+		       val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr))));
+}
+
+static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
   if ((sc->safety >= NO_SAFETY) &&
       (typed_vector_typer_call(sc, vec, set_plist_1(sc, val)) == sc->F))
-    {
-      const char *descr = typed_vector_typer_name(sc, vec);
-      error_nr(sc, sc->wrong_type_arg_symbol,
-	       set_elist_4(sc, wrap_string(sc, "vector-set! third argument ~$, is ~A, but the vector's element type checker, ~A, rejects it", 91),
-			   val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr))));
-    }
+    typed_vector_type_error_nr(sc, vec, val);
   vector_element(vec, loc) = val;
   return(val);
 }
@@ -46576,6 +46579,9 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	{
 	  if (sym == sc->setter_symbol)
 	    immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), func));
+	  if ((is_syntax(slot_value(slot))) ||                            /* (set! (setter 'begin) ...) */
+	      (slot_value(slot) == initial_value(sc->quasiquote_symbol))) /* qq=syntax sez r7rs */
+	    immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't set (setter '~S) to ~S", 28), sym, func));
 
 	  if (!is_any_procedure(func))   /* disallow continuation/goto here */
 	    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 3, func, wrap_string(sc, "a function or #f", 16));
@@ -55399,8 +55405,8 @@ static s7_pointer fx_add_aa(s7_scheme *sc, s7_pointer arg)
   s7_pointer x1 = fx_call(sc, cdr(arg));
   sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
-  if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) + real(x2)));
-  if ((is_t_integer(x1)) && (is_t_integer(x2))) return(make_integer(sc, integer(x1) + integer(x2)));
+  if (is_t_real(x1)) {if (is_t_real(x2)) return(make_real(sc, real(x1) + real(x2)));}
+  else if ((is_t_integer(x1)) && (is_t_integer(x2))) return(make_integer(sc, integer(x1) + integer(x2)));
   /* maybe use add_if_overflow_to_real_or_big_integer, but that seems unnecessary currently */
   return(add_p_pp(sc, x1, x2));
 }
@@ -78318,7 +78324,6 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
   return(false);
 }
 
-
 static bool op_set_opsq_a(s7_scheme *sc)        /* (set! (symbol) fxable) */
 {
   s7_pointer setf, value, code = cdr(sc->code);
@@ -79356,7 +79361,7 @@ static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, 
 
     case T_C_MACRO: case T_C_FUNCTION_STAR:
     case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION:
-      return(set_implicit_function(sc, obj));
+      return(set_implicit_function(sc, obj)); /* (set! (setter...) ...) also comes here */
 
     case T_MACRO: case T_MACRO_STAR: case T_BACRO: case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
@@ -81833,7 +81838,6 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
   let_vars = cadr(let_code);
   set_safe_stepper(step_slot);
   stepper = slot_value(step_slot);
-
   old_e = sc->curlet;
   sc->curlet = make_let(sc, sc->curlet);
 
@@ -82256,7 +82260,6 @@ static bool op_do_init_1(s7_scheme *sc)
   /* all the initial values are now in the args list */
   sc->args = proper_list_reverse_in_place(sc, sc->args);
   sc->code = car(sc->args);                       /* saved at the start */
-
   z = sc->args;
   sc->args = cdr(sc->args);                       /* init values */
 
@@ -86618,7 +86621,7 @@ static void opinit_cond_a_a_a_a_opla_laq(s7_scheme *sc, s7_pointer code, bool co
   sc->rec_fn = fn_proc(caller);
 }
 
-static inline s7_pointer oprec_cond_a_a_a_a_opla_laq(s7_scheme *sc)
+static inline s7_pointer oprec_cond_a_a_a_a_opla_laq(s7_scheme *sc) /* inline = 27 in trec */
 {
   if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
   if (sc->rec_f1f(sc, sc->rec_f1p) != sc->F) return(sc->rec_f2f(sc, sc->rec_f2p));
@@ -88639,7 +88642,7 @@ static s7_pointer read_expression(s7_scheme *sc)
 	  break;
 
 	case TOKEN_VECTOR:         /* already read #( -- TOKEN_VECTOR is triggered by #( */
-	  push_stack_no_let_no_code(sc, OP_READ_VECTOR, sc->w);   /* sc->w is the dimensions */
+	  push_stack_no_let_no_code(sc, OP_READ_VECTOR, sc->w);  /* sc->w is the dimensions */
 	  /* fall through */
 
 	case TOKEN_LEFT_PAREN:
@@ -88655,9 +88658,8 @@ static s7_pointer read_expression(s7_scheme *sc)
 	    }
 	  if (sc->tok == TOKEN_EOF)
 	    missing_close_paren_error_nr(sc);
-	  push_stack_no_let_no_code(sc, OP_READ_LIST, sc->nil);
-	  /* here we need to clear args, but code is ignored */
-	  check_stack_size(sc); /* s7test */
+	  push_stack_no_let_no_code(sc, OP_READ_LIST, sc->nil);  /* here we need to clear args, but code is ignored */
+	  check_stack_size(sc);                                  /* s7test */
 	  break;
 
 	case TOKEN_QUOTE:
@@ -91738,13 +91740,12 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  break;
 
 	default:
-	  fprintf(stderr, "unknown operator: %" p64 " in %s\n", sc->cur_op, display(current_code(sc)));
 	  return(sc->F);
 	}
 
+      /* this code is reached from OP_CLEAR_OPTS and many others where the optimization has turned out to be incorrect, OP_CLOSURE_SYM for example; search for break */
       if (!tree_is_cyclic(sc, sc->code))
 	clear_all_optimizations(sc, sc->code);
-
     UNOPT:
       switch (trailers(sc))
 	{
@@ -92116,6 +92117,7 @@ void s7_show_op_stack(s7_scheme *sc)
   for (s7_pointer *p = sc->op_stack, *tp = sc->op_stack_now; (p < tp); p++)
     fprintf(stderr, "  %s\n", display(*p));
 }
+
 static s7_pointer g_show_op_stack(s7_scheme *sc, s7_pointer args)
 {
   #define H_show_op_stack "no help"
@@ -92123,6 +92125,7 @@ static s7_pointer g_show_op_stack(s7_scheme *sc, s7_pointer args)
   s7_show_op_stack(sc);
   return(sc->F);
 }
+
 static s7_pointer g_is_op_stack(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_op_stack "no help"
@@ -94910,7 +94913,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->tree_count_symbol =     defun("tree-count",    tree_count,     2, 1, false);
   sc->tree_is_cyclic_symbol = defun("tree-cyclic?",  tree_is_cyclic, 1, 0, false);
 
-  sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote);
+  sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote); /* is this considered syntax? r7rs says yes; also unquote */
   sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 2, 0, false); /* calls dynamic-unwind */
   sc->profile_out = NULL;
 
@@ -95882,7 +95885,7 @@ int main(int argc, char **argv)
  *
  * for nrepl: gcc s7.c -o repl -DWITH_MAIN -DWITH_NOTCURSES -I. -O2 -g -lnotcurses-core -ldl -lm -Wl,-export-dynamic
  *
- * (s7.c compile time 17-Mar-22 50 secs)
+ * (s7.c compile time 27-Oct-22 49 secs)
  * musl works, but there is some problem in libgsl.scm with gsl/gsl_blas.h I think
  */
 #endif
@@ -95894,55 +95897,54 @@ int main(int argc, char **argv)
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    459
  * index     1026   1016    973    962    963
- * tmock     1177   1165   1057   1083   1018
- * tvect     2519   2464   1772   1667   1669
- * timp      2637   2575   1930   1687   1690
- * texit     ----   ----   1778   1737   1737
- * s7test    1873   1831   1818   1816   1822
- * tauto     ----   ----   2562   2045   2045
+ * tmock     1177   1165   1057   1083   1019
+ * tvect     2519   2464   1772   1667   1670
+ * timp      2637   2575   1930   1687   1689
+ * texit     ----   ----   1778   1737   1741
+ * s7test    1873   1831   1818   1816   1826
+ * tauto     ----   ----   2562   2045   2055
  * thook     ----   ----   2590   2074   2074
- * lt        2187   2172   2150   2179   2179
- * dup       3805   3788   2492   2227   2242
- * tload     ----   ----   3046   2368   2368
- * tcopy     8035   5546   2539   2372   2372
- * tread     2440   2421   2419   2414   2409
- * fbench    2688   2583   2460   2419   2419
- * trclo     2735   2574   2454   2439   2439
+ * lt        2187   2172   2150   2179   2182
+ * dup       3805   3788   2492   2227   2250
+ * tload     ----   ----   3046   2368   2370
+ * tcopy     8035   5546   2539   2372   2373
+ * tread     2440   2421   2419   2414   2408
+ * fbench    2688   2583   2460   2419   2428
+ * trclo     2735   2574   2454   2439   2435
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2569   2576
- * tb        2735   2681   2612   2600   2601
- * tsort     3105   3104   2856   2801   2801
+ * tmat      3065   3042   2524   2569   2580
+ * tb        2735   2681   2612   2600   2603
+ * tsort     3105   3104   2856   2801   2804
  * teq       4068   4045   3536   3469   3487
- * tobj      4016   3970   3828   3567   3569
- * tio       3816   3752   3683   3618   3618
- * tmac      3950   3873   3033   3667   3667
- * tclo      4787   4735   4390   4375   4375
- * tlet      7775   5640   4450   4402   4406
+ * tobj      4016   3970   3828   3567   3572
+ * tio       3816   3752   3683   3618   3620
+ * tmac      3950   3873   3033   3667   3685
+ * tclo      4787   4735   4390   4375   4389
+ * tlet      7775   5640   4450   4402   4445
  * tcase     4960   4793   4439   4434   4437
- * tfft      7820   7729   4755   4457   4457
+ * tfft      7820   7729   4755   4457   4465
  * tmap      8869   8774   4489   4541   4541
- * tstar     6139   5923   5519   ----   4906  4871
+ * tstar     6139   5923   5519   ----   4863
  * tshoot    5525   5447   5183   5057   5055
- * tstr      6880   6342   5488   5141   5141  5149
- * tform     5357   5348   5307   5316   5310
- * tnum      6348   6013   5433   5366   5371
- * tlamb     6423   6273   5720   5545   5545
- * tmisc     8869   7612   6435   6098   6087
- * tset      ----   ----   ----   6242   6233
- * tlist     7896   7546   6558   6242   6243
- * tgsl      8485   7802   6373   6280   6280
- * tari      13.0   12.7   6827   6535   6535
- * trec      6936   6922   6521   6565   6565
+ * tstr      6880   6342   5488   5141   5149
+ * tform     5357   5348   5307   5316   5304
+ * tnum      6348   6013   5433   5366   5385
+ * tlamb     6423   6273   5720   5545   5558
+ * tmisc     8869   7612   6435   6098   6085
+ * tset      ----   ----   ----   6242   6242
+ * tlist     7896   7546   6558   6242   6242
+ * tgsl      8485   7802   6373   6280   6281
+ * tari      13.0   12.7   6827   6535   6543
+ * trec      6936   6922   6521   6565   6588
  * tleft     10.4   10.2   7657   7475   7477
- * tgc       11.9   11.1   8177   7932   7867
- * thash     11.8   11.7   9734   9471   9471
- * cb        11.2   11.0   9658   9544   9540
+ * tgc       11.9   11.1   8177   7932   7842
+ * thash     11.8   11.7   9734   9471   9475
+ * cb        11.2   11.0   9658   9544   9545
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   55.7   55.7
- * lg        ----   ----  105.2  106.1  106.2
- * tbig     177.4  175.8  156.5  147.9  147.9
+ * sg        ----   ----   55.9   55.7   55.8
+ * lg        ----   ----  105.2  106.1  106.3
+ * tbig     177.4  175.8  156.5  147.9  148.1
  * ---------------------------------------------
- *
  */
