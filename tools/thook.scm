@@ -20,7 +20,7 @@
   
   (set! (car (hook-functions H))
 	(lambda (h)
-	  (h 'result)))
+	  (let-ref h 'result)))
   
   (H 32)
   (thook)
@@ -42,7 +42,7 @@
 	(set! (v i) (make-hook 'x 'y))
 	(set! (hook-functions (v i)) 
 	      (list (lambda (h) 
-		      (set! (h 'result) j)))))))
+		      (let-set! h 'result j)))))))
   
   (define (trun)
     (do ((i 0 (+ i 1)))
@@ -53,7 +53,7 @@
 	(set! (hook-functions (v i)) 
 	      (list (car (hook-functions (v i)))
 		    (lambda (h) 
-		      (set! (h 'result) (+ (h 'result) j))))))))
+		      (let-set! h 'result (+ (let-ref h 'result) j))))))))
   
   (define (trun1)
     (do ((i 0 (+ i 1)))
@@ -71,7 +71,7 @@
 (let ((hook-result #f))
   (let-temporarily (((hook-functions *unbound-variable-hook*) ; variable
 		     (list (lambda (hook)
-			     (set! hook-result (hook 'variable))))))
+			     (set! hook-result (let-ref hook 'variable))))))
     (define (f)
       (do ((i 0 (+ i 1)))
 	  ((= i 1000))
@@ -83,7 +83,7 @@
 
 (let-temporarily (((hook-functions *missing-close-paren-hook*) ; no locals
 		   (list (lambda (h) 
-			   (set! (h 'result) 'incomplete-expr)))))
+			   (let-set! h 'result 'incomplete-expr)))))
   (define (f)
     (do ((i 0 (+ i 1)))
 	((= i 1000))
@@ -96,7 +96,7 @@
 (let ((hook-result #f))
   (let-temporarily (((hook-functions *load-hook*) ; name
 		     (list (lambda (hook)
-			     (set! hook-result (hook 'name))))))
+			     (set! hook-result (let-ref hook 'name))))))
     (with-output-to-file "load-hook-test.scm"
       (lambda ()
 	(format #t "(define (load-hook-test val) (+ val 1))")))
@@ -117,8 +117,8 @@
 	(catch #t (lambda () 
 		    (let-temporarily (((hook-functions *error-hook*) ; type data -- why does this have to be in the catch?
 				       (list (lambda (hook)
-					       (set! hook-type (hook 'type))
-					       (set! hook-data (apply format #f (hook 'data)))))))
+					       (set! hook-type (let-ref hook 'type))
+					       (set! hook-data (apply format #f (let-ref hook 'data)))))))
 		      (+ 1 #())))
 	       (lambda (type info)
 		 'error))
@@ -140,7 +140,7 @@
 			     (list (lambda (hook)
 				     (set! hook-type (hook 'type)) 
 				     ;; why isn't this 'read-error? #t=unknown_sharp_constant, #f=unknown_string_constant (read_string_constant)
-				     (set! hook-data (hook 'data))))))
+				     (set! hook-data (let-ref hook 'data))))))
 	    (eval-string "(+ 1 #T)")))
 	(lambda (type info)
 	  'error))
@@ -157,7 +157,7 @@
   
   (set! (hook-functions H3)
 	(list (lambda (h)
-		(set! (h 'result) ((h 'x) (h 'y))))))
+		(let-set! h 'result ((let-ref h 'x) (let-ref h 'y))))))
   
   (unless (= (H3 (lambda (y) (+ y 1))) 33) 
     (format *stderr* "H3: ~S~%" (H3 (lambda (y) (+ y 1)))))
@@ -166,7 +166,7 @@
   
   (set! (hook-functions H4)
 	(list (lambda (h)
-		(set! (h 'result) (+ (h 'z) (H3 (lambda (y) (+ y 1))))))))
+		(let-set! h 'result (+ (let-ref h 'z) (H3 (lambda (y) (+ y 1))))))))
   
   (unless (= (H4 12) 45)
     (format *stderr* "H4: ~S~%" (H4 12)))
@@ -175,10 +175,10 @@
   
   (set! (hook-functions H5)
 	(list (lambda (h)
-		(set! (h 'result) 100))
+		(let-set! h 'result 100))
 	      (lambda (h)
-		(set! (h 'result)
-		      (+ (sqrt (h 'result))
+		(let-set! h 'result
+		      (+ (sqrt (let-ref h 'result))
 			 (H4 12))))))
   
   (define (f)

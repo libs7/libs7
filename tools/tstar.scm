@@ -100,7 +100,7 @@
   
   (define-constant (f8 x)
     (if (let? x)
-	((x 'f82) x)
+	((let-ref x 'f82) x)
 	(+ x 1)))
   
   (define (f81)
@@ -117,11 +117,11 @@
   (define f9 (dilambda
 	      (lambda (x)
 		(if (let? x)
-		    ((x 'f9) x)
+		    ((let-ref x 'f9) x)
 		    (+ x 1)))
 	      (lambda (x y)
 		(if (let? x)
-		    ((x 'set-f9) x y)
+		    ((let-ref x 'set-f9) x y)
 		    'oops))))
   
   (define (f91)
@@ -150,7 +150,7 @@
       (set! (setter abs)
 	    (lambda (x y)
 	      (if (let? x)
-		  ((x 'set-abs) x y)
+		  ((let-ref x 'set-abs) x y)
 		  'oops)))
       (display (abs obj)) (newline) ; 1
       (set! (abs obj) 32)

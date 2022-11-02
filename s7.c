@@ -3146,6 +3146,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define pair_set_syntax_op(p, X)       do {set_optimize_op(p, X); set_syntactic_pair(p);} while (0)
 #define symbol_syntax_op_checked(p)    ((is_syntactic_pair(p)) ? optimize_op(p) : symbol_syntax_op(car(p)))
 #define symbol_syntax_op(p)            syntax_opcode(global_value(p))
+#define is_syntax_or_qq(p)	       ((is_syntax(p)) || ((p) == initial_value(sc->quasiquote_symbol)))
 
 #define INITIAL_ROOTLET_SIZE           512
 #define let_id(p)                      (T_Lid(p))->object.envr.id
@@ -6072,14 +6073,13 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
   }
 
 static s7_pointer apply_method_closure(s7_scheme *sc, s7_pointer func, s7_pointer args);
-static s7_pointer find_and_apply_method(s7_scheme *sc, s7_pointer obj, s7_pointer sym, s7_pointer args)
+static s7_pointer find_and_apply_method(s7_scheme *sc, s7_pointer obj, s7_pointer sym, s7_pointer args) /* slower if inline */
 {
   s7_pointer func = find_method_with_let(sc, obj, sym);
   if (is_closure(func)) return(apply_method_closure(sc, func, args));
   if (func == sc->undefined) missing_method_error_nr(sc, sym, obj);
   return(s7_apply_function(sc, func, args));
 }
-
 
 static s7_pointer method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, s7_pointer typ, int32_t num)
 {
@@ -46546,64 +46546,62 @@ static void protect_setter(s7_scheme *sc, s7_pointer sym, s7_pointer acc)
   vector_element(sc->protected_setter_symbols, loc) = sym;
 }
 
+static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer args)
+{
+  s7_pointer func, slot;
+  if (is_keyword(sym))
+    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, sym, wrap_string(sc, "a normal symbol (a keyword can't be set)", 40));
+  
+  if (is_pair(cddr(args)))
+    {
+      s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))) */
+      func = caddr(args);
+      if ((e == sc->rootlet) || (e == sc->nil))
+	slot = global_slot(sym);
+      else
+	{
+	  if (!is_let(e))
+	    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 2, e, sc->type_names[T_LET]);
+	  slot = lookup_slot_from(sym, e);
+	}}
+  else
+    {
+      slot = lookup_slot_from(sym, sc->curlet); /* (set! (setter 'x) (lambda (s v) ...)) */
+      func = cadr(args);
+    }
+  if (!is_slot(slot))
+    return(sc->F);
+  
+  if (func != sc->F)
+    {
+      if (sym == sc->setter_symbol)
+	immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), func));
+      if (is_syntax_or_qq(slot_value(slot)))         /* (set! (setter 'begin) ...), qq is syntax sez r7rs */
+	immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't set (setter '~S) to ~S", 28), sym, func));
+      if (!is_any_procedure(func))   /* disallow continuation/goto here */
+	wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 3, func, wrap_string(sc, "a function or #f", 16));
+      if ((!is_c_function(func)) || (!c_function_has_bool_setter(func)))
+	{
+	  if (s7_is_aritable(sc, func, 3))
+	    set_has_let_arg(func);
+	  else
+	    if (!s7_is_aritable(sc, func, 2))
+	      error_nr(sc, sc->wrong_type_arg_symbol,
+		       set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take 2 or 3 arguments", 49), func));
+	}}
+  if (slot == global_slot(sym))
+    s7_set_setter(sc, sym, func); /* special GC protection for global vars */
+  else slot_set_setter(slot, func); /* func might be #f */
+  if (func != sc->F)
+    slot_set_has_setter(slot);
+  return(func);
+}
+
 static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p = car(args), setter;
   if (is_symbol(p))
-    {
-      s7_pointer sym = p, func, slot;
-      if (is_keyword(sym))
-	wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, sym, wrap_string(sc, "a normal symbol (a keyword can't be set)", 40));
-
-      if (is_pair(cddr(args)))
-	{
-	  s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))) */
-	  func = caddr(args);
-	  if ((e == sc->rootlet) || (e == sc->nil))
-	    slot = global_slot(sym);
-	  else
-	    {
-	      if (!is_let(e))
-		wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 2, e, sc->type_names[T_LET]);
-	      slot = lookup_slot_from(sym, e);
-	    }}
-      else
-	{
-	  slot = lookup_slot_from(sym, sc->curlet); /* (set! (setter 'x) (lambda (s v) ...)) */
-	  func = cadr(args);
-	}
-      if (!is_slot(slot))
-	return(sc->F);
-
-      if (func != sc->F)
-	{
-	  if (sym == sc->setter_symbol)
-	    immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), func));
-	  if ((is_syntax(slot_value(slot))) ||                            /* (set! (setter 'begin) ...) */
-	      (slot_value(slot) == initial_value(sc->quasiquote_symbol))) /* qq=syntax sez r7rs */
-	    immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't set (setter '~S) to ~S", 28), sym, func));
-
-	  if (!is_any_procedure(func))   /* disallow continuation/goto here */
-	    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 3, func, wrap_string(sc, "a function or #f", 16));
-
-	  if ((!is_c_function(func)) || (!c_function_has_bool_setter(func)))
-	    {
-	      if (s7_is_aritable(sc, func, 3))
-		set_has_let_arg(func);
-	      else
-		if (!s7_is_aritable(sc, func, 2))
-		  error_nr(sc, sc->wrong_type_arg_symbol,
-			   set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take 2 or 3 arguments", 49), func));
-	    }}
-
-      if (slot == global_slot(sym))
-	s7_set_setter(sc, sym, func); /* special GC protection for global vars */
-      else slot_set_setter(slot, func); /* func might be #f */
-      if (func != sc->F)
-	slot_set_has_setter(slot);
-      return(func);
-    }
-
+    return(symbol_set_setter(sc, p, args));
   if (p == sc->s7_starlet)
     wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, p, wrap_string(sc, "something other than *s7*", 25));
 
@@ -46616,7 +46614,6 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take at least one argument", 54), setter));
     }
-
   switch (type(p))
     {
     case T_MACRO:   case T_MACRO_STAR:
@@ -46759,17 +46756,13 @@ static s7_pointer g_is_eq(s7_scheme *sc, s7_pointer args)
 bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b)
 {
 #if WITH_GMP
-  if ((is_big_number(a)) || (is_big_number(b)))
-    return(big_numbers_are_eqv(sc, a, b));
+  if ((is_big_number(a)) || (is_big_number(b))) return(big_numbers_are_eqv(sc, a, b));
 #endif
-  if (type(a) != type(b))
-    return(false);
+  if (type(a) != type(b)) return(false);
   if ((a == b) && (!is_number(a)))         /* if a is NaN, a == b doesn't mean (eqv? a b) */
     return(true);                          /* a == b means (let ((x "a")) (let ((y x)) (eqv? x y))) is #t */
-  if (is_number(a))
-    return(numbers_are_eqv(sc, a, b));
-  if (is_unspecified(a))                   /* types are the same so we know b is also unspecified */
-    return(true);
+  if (is_number(a)) return(numbers_are_eqv(sc, a, b));
+  if (is_unspecified(a)) return(true);     /* types are the same so we know b is also unspecified */
   return(false);
 }
 
@@ -83324,7 +83317,7 @@ static bool op_define1(s7_scheme *sc)
 
       if (!((is_slot(x)) &&
 	    (type(sc->value) == unchecked_type(slot_value(x))) &&
-	    (s7_is_equivalent(sc, sc->value, slot_value(x)))))    /* if value is unchanged, just ignore this (re)definition */
+	    (s7_is_equivalent(sc, sc->value, slot_value(x)))))                                    /* if value is unchanged, just ignore this (re)definition */
 	syntax_error_with_caller_nr(sc, "~A: ~S is immutable", 19, define1_caller(sc), sc->code); /*   can't use s7_is_equal because value might be NaN, etc */
 
       if ((sc->safety > 0) &&          /* (define-constant x 3) (define x 3)... */
@@ -83336,8 +83329,7 @@ static bool op_define1(s7_scheme *sc)
     {
       sc->value = bind_symbol_with_setter(sc, OP_DEFINE_WITH_SETTER, sc->code, sc->value);
       if (sc->value == sc->no_value)
-	return(true); /* goto apply */
-      /* if all goes well, OP_DEFINE_WITH_SETTER will jump to DEFINE2 */
+	return(true); /* goto apply, if all goes well, OP_DEFINE_WITH_SETTER will jump to DEFINE2 */
     }
   return(false); /* fall through */
 }
@@ -87999,7 +87991,7 @@ static bool eval_car_pair(s7_scheme *sc)
 	  sc->code = carc;
 	  return(false);  /* goto eval in trailers */
 	}
-      if ((is_null(cddr(code))) && (is_symbol(cadr(code))))
+      if ((is_null(cddr(code))) && (is_symbol(cadr(code)))) /* ((x 'f82) x) in tstar for example */
 	{
 	  set_optimize_op(code, OP_P_S);
 	  set_opt3_sym(code, cadr(code));
@@ -95903,7 +95895,7 @@ int main(int argc, char **argv)
  * texit     ----   ----   1778   1737   1741
  * s7test    1873   1831   1818   1816   1826
  * tauto     ----   ----   2562   2045   2055
- * thook     ----   ----   2590   2074   2074
+ * thook     ----   ----   2590   2074   2074  2030
  * lt        2187   2172   2150   2179   2182
  * dup       3805   3788   2492   2227   2250
  * tload     ----   ----   3046   2368   2370
@@ -95924,7 +95916,7 @@ int main(int argc, char **argv)
  * tcase     4960   4793   4439   4434   4437
  * tfft      7820   7729   4755   4457   4465
  * tmap      8869   8774   4489   4541   4541
- * tstar     6139   5923   5519   ----   4863
+ * tstar     6139   5923   5519   ----   4863  4413
  * tshoot    5525   5447   5183   5057   5055
  * tstr      6880   6342   5488   5141   5149
  * tform     5357   5348   5307   5316   5304
@@ -95947,4 +95939,18 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.1  106.3
  * tbig     177.4  175.8  156.5  147.9  148.1
  * ---------------------------------------------
+ *
+ * qq diffs from q etc:
+ *   (inlet 'quasiquote 32): (inlet 'quasiquote 32)
+ *   (inlet 'quote 32): error: inlet second argument, quote, is a symbol but should be a non-syntactic name
+ *   (set! quasiquote 32): 32
+ *   (set! quote 32): 32, trailers[88047]: not syntactic, but an integer (type: 11), Abort (core dumped)
+ *     also (set! quote begin) is accepted: (quote 32 33): 33
+ *   (set! begin abs): abs, (begin -1): trailers[88047]: not syntactic, but a c-function (type: 47)
+ *   (inlet 'quasiquote 32): (inlet 'quasiquote 32)
+ *   (inlet 'quote 32): error: inlet second argument, quote, is a symbol but should be a non-syntactic name
+ *   (let-set! (rootlet) 'quasiquote abs): abs
+ *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
+ *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
+ *     [but isn't this inconsistent with (set! begin abs) above?]
  */
