@@ -9587,7 +9587,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	  if (is_constant_symbol(sc, sym))
 	    wrong_type_error_nr(sc, caller, 1 + position_of(x, bindings), sym, a_non_constant_symbol_string);
 	  if ((is_slot(global_slot(sym))) &&
-	      (is_syntax(global_value(sym))))
+	      (is_syntax_or_qq(global_value(sym))))
 	    wrong_type_error_nr(sc, caller, 2, sym, wrap_string(sc, "a non-syntactic name", 20));
 
 	  /* here we know new_e is a let and is not rootlet */
@@ -9661,7 +9661,7 @@ to a new let, and returns the new let. (inlet :a 1 :b 2) or (inlet '(a . 1) '(b 
 
 static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 {
-  /* here all args are paired with normal symbol/value, no fallbacks, no immutable symbols etc */
+  /* here all args are paired with normal symbol/value, no fallbacks, no immutable symbols, no syntax, etc */
   s7_pointer new_e = make_let(sc, sc->nil);
   int64_t id = let_id(new_e);
   s7_pointer sp = NULL;
@@ -9696,7 +9696,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   if (is_constant_symbol(sc, symbol))
     wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string);
   if ((is_global(symbol)) &&
-      (is_syntax(global_value(symbol))))
+      (is_syntax_or_qq(global_value(symbol))))
     wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, wrap_string(sc, "a non-syntactic name", 20));
 
   new_cell(sc, x, T_LET | T_SAFE_PROCEDURE);
@@ -9760,7 +9760,7 @@ static s7_pointer inlet_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_po
 		(is_possibly_constant(sym)) ||            /* define-constant etc */
 		(is_syntactic_symbol(sym))  ||            /* (inlet 'if 3) */
 		((is_slot(global_slot(sym))) &&
-		 (is_syntax(global_value(sym)))) ||
+		 (is_syntax_or_qq(global_value(sym)))) || /* (inlet 'quasiquote 1) */
 		(sym == sc->let_ref_fallback_symbol) ||
 		(sym == sc->let_set_fallback_symbol))
 	      return(f);
@@ -10020,7 +10020,6 @@ static s7_pointer let_set_1(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7
 		 set_elist_3(sc, wrap_string(sc, "let-set!: ~A is not defined in ~A", 33), symbol, let));
       if (is_syntax(slot_value(slot)))
 	wrong_type_error_nr(sc, sc->let_set_symbol, 2, symbol, wrap_string(sc, "a non-syntactic keyword", 23));
-
       slot_set_value(slot, (slot_has_setter(slot)) ? call_setter(sc, slot, value) : value);
       return(slot_value(slot));
     }
@@ -82642,13 +82641,13 @@ static bool op_f_np_1(s7_scheme *sc)
       slot = oslot; /* snd-test 22 grani */
     }
   else /* not mv */
-    if (is_rest_slot(slot))
-      {
-	if (slot_value(slot) == sc->undefined)
-	  slot_set_value(slot, list_1(sc, sc->value));
-	else slot_set_value(slot, pair_append(sc, slot_value(slot), list_1(sc, sc->value)));
-      }
-    else slot_set_value(slot, sc->value);
+    if (!is_rest_slot(slot))
+      slot_set_value(slot, sc->value);
+    else
+      if (slot_value(slot) == sc->undefined)
+	slot_set_value(slot, list_1(sc, sc->value));
+      else slot_set_value(slot, pair_append(sc, slot_value(slot), list_1(sc, sc->value)));
+
   if (is_pair(arg))
     {
       if ((!tis_slot(next_slot(slot))) && (!is_rest_slot(slot)))
@@ -85620,14 +85619,12 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 	  if (fx_call(sc, car(p)) != sc->F)
 	    {
 	      result = cdar(p);
-	      if (has_tc(result))
-		{
-		  set_curlet(sc, outer_let);
-		  slot_set_value(let_slot, letf(sc, let_var));
-		  set_curlet(sc, inner_let);
-		  break;
-		}
-	      else goto TC_LET_COND_DONE;
+	      if (!has_tc(result))
+		goto TC_LET_COND_DONE;
+	      set_curlet(sc, outer_let);
+	      slot_set_value(let_slot, letf(sc, let_var));
+	      set_curlet(sc, inner_let);
+	      break;
 	    }}
   else
     if (opt3_arglen(cdr(code)) == 1)
@@ -85636,15 +85633,13 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 	  if (fx_call(sc, car(p)) != sc->F)
 	    {
 	      result = cdar(p);
-	      if (has_tc(result))
-		{
-		  slot_set_value(slots, fx_call(sc, cdar(result))); /* arg to recursion */
-		  set_curlet(sc, outer_let);
-		  slot_set_value(let_slot, letf(sc, let_var));   /* inner let var */
-		  set_curlet(sc, inner_let);
-		  break;
-		}
-	      else goto TC_LET_COND_DONE;
+	      if (!has_tc(result))
+		goto TC_LET_COND_DONE;
+	      slot_set_value(slots, fx_call(sc, cdar(result))); /* arg to recursion */
+	      set_curlet(sc, outer_let);
+	      slot_set_value(let_slot, letf(sc, let_var));   /* inner let var */
+	      set_curlet(sc, inner_let);
+	      break;
 	    }
 
   let_set_has_pending_value(outer_let);
@@ -85654,24 +85649,22 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
       if (fx_call(sc, car(p)) != sc->F)
 	{
 	  result = cdar(p);
-	  if (has_tc(result))
+	  if (!has_tc(result))
+	    goto TC_LET_COND_DONE;
+	  for (s7_pointer slot = slots, arg = cdar(result); is_pair(arg); slot = next_slot(slot), arg = cdr(arg))
+	    slot_simply_set_pending_value(slot, fx_call(sc, arg));
+	  for (s7_pointer slot = slots; tis_slot(slot); slot = next_slot(slot)) /* using two swapping lets instead is slightly slower */
+	    slot_set_value(slot, slot_pending_value(slot));
+	  
+	  if (read_case)
+	    slot_set_value(let_slot, chars[string_read_char(sc, let_var)]);
+	  else
 	    {
-	      for (s7_pointer slot = slots, arg = cdar(result); is_pair(arg); slot = next_slot(slot), arg = cdr(arg))
-		slot_simply_set_pending_value(slot, fx_call(sc, arg));
-	      for (s7_pointer slot = slots; tis_slot(slot); slot = next_slot(slot)) /* using two swapping lets instead is slightly slower */
-		slot_set_value(slot, slot_pending_value(slot));
-
-	      if (read_case)
-		slot_set_value(let_slot, chars[string_read_char(sc, let_var)]);
-	      else
-		{
-		  set_curlet(sc, outer_let);
-		  slot_set_value(let_slot, letf(sc, let_var));
-		  set_curlet(sc, inner_let);
-		}
-	      break;
+	      set_curlet(sc, outer_let);
+	      slot_set_value(let_slot, letf(sc, let_var));
+	      set_curlet(sc, inner_let);
 	    }
-	  else goto TC_LET_COND_DONE;
+	  break;
 	}
   let_clear_has_pending_value(outer_let);
 
@@ -87364,13 +87357,12 @@ static void op_cl_na(s7_scheme *sc)
   for (s7_pointer args = cdr(sc->code), p = val; is_pair(args); args = cdr(args), p = cdr(p))
     set_car(p, fx_call(sc, args));
   sc->value = fn_proc(sc->code)(sc, val);
-  if (in_heap(val))
-    {
-      /* the fn_proc call might push its own op (e.g. for-each/map) so we have to check for that */
-      if (main_stack_op(sc) == OP_GC_PROTECT)
-	unstack(sc);
-    }
-  else clear_list_in_use(val);
+  if (!in_heap(val))
+    clear_list_in_use(val);
+  else
+    /* the fn_proc call might push its own op (e.g. for-each/map) so we have to check for that */
+    if (main_stack_op(sc) == OP_GC_PROTECT)
+      unstack(sc);
 }
 
 static void op_cl_sas(s7_scheme *sc)
@@ -89121,7 +89113,7 @@ static bool op_unknown_s(s7_scheme *sc)
       break;
 
     case T_CLOSURE:
-      if ((sym_case) &&  /* keyword happens rarely, other constants never */
+      if ((sym_case) &&  /* this is always true I think */
 	  (!has_methods(f)) &&
 	  (closure_arity_to_int(sc, f) == 1))
 	{
@@ -89161,20 +89153,18 @@ static bool op_unknown_s(s7_scheme *sc)
 	      set_opt1_lambda_add(code, f);
 	      return(true);
 	    }
-	  if (is_safe_closure(f))
-	    {
-	      if (is_null(cdr(body)))
-		{
-		  if (is_fxable(sc, car(body)))
-		    fxify_closure_s(sc, f, code, sc->curlet, hop);
-		  else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S_O);
-		  /* hop if is_constant(sc, car(code)) is not foolproof here (see t967.scm):
-		   *    (define (f) (define-constant (f1) ... (f1))...) where each call on f makes a different f1
-		   */
-		}
-	      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S);
-	    }
-	  else set_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
+	  if (!is_safe_closure(f))
+	    set_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
+	  else
+	    if (!is_null(cdr(body)))
+	      set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S);
+	    else
+	      if (is_fxable(sc, car(body)))
+		fxify_closure_s(sc, f, code, sc->curlet, hop);
+	      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S_O);
+	  /* hop if is_constant(sc, car(code)) is not foolproof here (see t967.scm):
+	   *    (define (f) (define-constant (f1) ... (f1))...) where each call on f makes a different f1
+	   */
 	  set_is_unknopt(code);
 	  set_opt1_lambda_add(code, f);
 	  return(true);
@@ -89191,13 +89181,8 @@ static bool op_unknown_s(s7_scheme *sc)
       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO_A));
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
-      if ((sym_case) ||                    /* (v i) */
-	  (is_t_integer(cadr(code))))      /* (v 4/3) */
-	{
-	  fx_annotate_arg(sc, cdr(code), sc->curlet);
-	  return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A));
-	}
-      break;
+      fx_annotate_arg(sc, cdr(code), sc->curlet);
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A)); /* TODO: perhaps implicit_float_vector_ref_a etc? */
 
     case T_STRING:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
@@ -89452,7 +89437,6 @@ static bool op_unknown_gg(s7_scheme *sc)
   if ((is_symbol(car(code))) &&
       (!is_slot(lookup_slot_from(car(code), sc->curlet))))
     unbound_variable_error_nr(sc, car(code));
-
   fx_annotate_args(sc, cdr(code), sc->curlet);
   return(fixup_unknown_op(sc, code, f, OP_S_AA));
 }
@@ -89522,7 +89506,7 @@ static bool op_unknown_ns(s7_scheme *sc)
     case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
     case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
-      /* vector/pair */
+      /* TODO: perhaps vector */
     default:
       break;
     }
@@ -89732,6 +89716,7 @@ static bool op_unknown_na(s7_scheme *sc)
       break;
     }
   /* closure happens if wrong-number-of-args passed -- probably no need for op_s_na */
+  /* TODO: perhaps vector? */
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
 
@@ -95941,14 +95926,10 @@ int main(int argc, char **argv)
  * ---------------------------------------------
  *
  * qq diffs from q etc:
- *   (inlet 'quasiquote 32): (inlet 'quasiquote 32)
- *   (inlet 'quote 32): error: inlet second argument, quote, is a symbol but should be a non-syntactic name
  *   (set! quasiquote 32): 32
  *   (set! quote 32): 32, trailers[88047]: not syntactic, but an integer (type: 11), Abort (core dumped)
  *     also (set! quote begin) is accepted: (quote 32 33): 33
  *   (set! begin abs): abs, (begin -1): trailers[88047]: not syntactic, but a c-function (type: 47)
- *   (inlet 'quasiquote 32): (inlet 'quasiquote 32)
- *   (inlet 'quote 32): error: inlet second argument, quote, is a symbol but should be a non-syntactic name
  *   (let-set! (rootlet) 'quasiquote abs): abs
  *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
