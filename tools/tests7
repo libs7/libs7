@@ -109,6 +109,13 @@ gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl fulltest.scm
 
 echo ' '
+echo '-------- disable-autoload --------'
+echo ' '
+gcc s7.c -c -I. -DDISABLE_AUTOLOAD=1 -g3 -ldl -lm -Wl,-export-dynamic
+gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
+repl fulltest.scm
+
+echo ' '
 echo '-------- silly stuff --------'
 echo ' '
 gcc s7.c -c -I. -DEXTRA_EXPONENT_MARKERS=1 -DS7_ALIGNED=1 -DWITH_VECTORIZE=0 -DWITH_MULTITHREAD_CHECKS=0 -g3 -ldl -lm -Wl,-export-dynamic

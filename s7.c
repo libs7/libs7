@@ -4047,7 +4047,8 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
   #define lookup_unexamined(Sc, Sym) lookup_1(Sc, Sym)
 #else
   static inline s7_pointer lookup(s7_scheme *sc, s7_pointer symbol);
-  #define lookup_unexamined(Sc, Sym) lookup(Sc, Sym)
+  /* #define lookup_unexamined(Sc, Sym) lookup(Sc, Sym) */ /* changed 3-Nov-22 -- we're using lookup_unexamined below to avoid the unbound_variable check */
+  #define lookup_unexamined(Sc, Sym) s7_symbol_value(Sc, Sym)
 #endif
 
 #if WITH_GCC
@@ -10332,8 +10333,6 @@ static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol) /* looku
 {
   return(inline_lookup_from(sc, symbol, sc->curlet));
 }
-
-/* #define inline_lookup(Sc, Symbol) inline_lookup_from(Sc, Symbol, Sc->curlet) */
 
 static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e)
 {
@@ -72519,8 +72518,8 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	    {
 	      if ((expr == sc->apply_symbol) && (is_pair(cdr(x))) && (is_symbol(cadr(x)))) /* (apply <safe_c_function> ...) */
 		{
-		  s7_pointer cadr_f = lookup_unexamined(sc, cadr(x));
-		  c_safe = ((cadr_f) &&
+		  s7_pointer cadr_f = lookup_unexamined(sc, cadr(x)); /* "unexamined" to skip unbound_variable */
+		  c_safe = ((cadr_f) && /* (cadr_f != sc->undefined) && */
 			    ((is_safe_c_function(cadr_f)) ||
 			     ((is_closure(cadr_f)) && (is_very_safe_closure(cadr_f)))));
 		}
@@ -89069,15 +89068,12 @@ static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
 static bool op_unknown_s(s7_scheme *sc)
 {
   s7_pointer code = sc->code, f = sc->last_function;
-  bool sym_case;
 
   if (!f) unbound_variable_error_nr(sc, car(sc->code));
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s %s\n", __func__, display(f));
 
-  sym_case = is_normal_symbol(cadr(code));
-  if ((S7_DEBUGGING) && (!sym_case)) fprintf(stderr, "%s[%d]: not a symbol: %s\n", __func__, __LINE__, display(code));
-  if ((sym_case) &&
-      (!is_any_macro(f)) &&   /* if f is a macro, its argument can be unbound legitimately */
+  if ((S7_DEBUGGING) && (!is_normal_symbol(cadr(code)))) fprintf(stderr, "%s[%d]: not a symbol: %s\n", __func__, __LINE__, display(code));
+  if ((!is_any_macro(f)) &&   /* if f is a macro, its argument can be unbound legitimately */
       (!is_slot(lookup_slot_from(cadr(code), sc->curlet))))
     return(unknown_unknown(sc, sc->code, (is_normal_symbol(cadr(sc->code))) ? OP_CLEAR_OPTS : OP_S_G));
 
@@ -89089,32 +89085,21 @@ static bool op_unknown_s(s7_scheme *sc)
     case T_C_FUNCTION:
       if (!(c_function_is_aritable(f, 1))) break;
     case T_C_RST_NO_REQ_FUNCTION:
-      if (sym_case)
-	{
-	  set_c_function(code, f);
-	  if (is_safe_procedure(f))
-	    {
-	      set_optimize_op(code, OP_SAFE_C_S);
-	      sc->value = fx_c_s(sc, sc->code);
-	    }
-	  else
-	    {
-	      set_optimize_op(code, OP_C_S);
-	      op_c_s(sc);
-	    }
-	  return(false);
-	}
+      set_c_function(code, f);
       if (is_safe_procedure(f))
 	{
-	  set_optimize_op(code, OP_SAFE_C_NC);
-	  set_c_function(code, f);
-	  return(true);
+	  set_optimize_op(code, OP_SAFE_C_S);
+	  sc->value = fx_c_s(sc, sc->code);
 	}
-      break;
+      else
+	{
+	  set_optimize_op(code, OP_C_S);
+	  op_c_s(sc);
+	}
+      return(false);
 
     case T_CLOSURE:
-      if ((sym_case) &&  /* this is always true I think */
-	  (!has_methods(f)) &&
+      if ((!has_methods(f)) &&
 	  (closure_arity_to_int(sc, f) == 1))
 	{
 	  s7_pointer body = closure_body(f);
@@ -89201,13 +89186,8 @@ static bool op_unknown_s(s7_scheme *sc)
       break;
 
     case T_LET:
-      if (sym_case)
-	{
-	  fx_annotate_arg(sc, cdr(code), sc->curlet);
-	  return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_A));
-	}
-      set_opt3_con(code, cadr(code));
-      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_C));
+      fx_annotate_arg(sc, cdr(code), sc->curlet);
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_LET_REF_A));
 
     case T_HASH_TABLE:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
