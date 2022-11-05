@@ -427,7 +427,7 @@
 #endif
 
 #ifndef NAN
-  #define NAN (INFINITY / INFINITY)
+  #define NAN (INFINITY / INFINITY) /* apparently ieee754 suggests 0.0/0.0 */
 #endif
 
 #define BOLD_TEXT "\033[1m"
@@ -9498,15 +9498,13 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 
       if (e == sc->rootlet)
 	{
-	  if (is_slot(global_slot(sym)))
-	    {
-	      if (is_immutable(global_slot(sym)))
-		immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
-	      symbol_set_id(sym, the_un_id);
-	      slot_set_value(global_slot(sym), sc->undefined);
-	      /* here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
-	    }
-	  else error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "cutlet can't remove ~S", 22), sym));
+	  if (!is_slot(global_slot(sym)))
+	    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "cutlet can't remove ~S", 22), sym));
+	  if (is_immutable(global_slot(sym)))
+	    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
+	  symbol_set_id(sym, the_un_id);
+	  slot_set_value(global_slot(sym), sc->undefined);
+	  /* here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
 	}
       else
 	{
@@ -53882,7 +53880,8 @@ static s7_pointer fx_lt_gsg(s7_scheme *sc, s7_pointer arg) /* gsg is much faster
   s7_pointer v3 = lookup_global(sc, opt2_sym(cdr(arg))); /* cadddr(arg) */
   if ((is_t_integer(v1)) && (is_t_integer(v2)) && (is_t_integer(v3)))
     return(make_boolean(sc, ((integer(v1) < integer(v2)) && (integer(v2) < integer(v3)))));
-  if (!is_real(v3)) wrong_type_error_nr(sc, sc->lt_symbol, 3, v3, sc->type_names[T_REAL]); /* else (< 2 1 1+i) returns #f */
+  if (!is_real(v3)) 
+    wrong_type_error_nr(sc, sc->lt_symbol, 3, v3, sc->type_names[T_REAL]); /* else (< 2 1 1+i) returns #f */
   return(make_boolean(sc, (lt_b_7pp(sc, v1, v2)) && (lt_b_7pp(sc, v2, v3))));
 }
 
@@ -72168,22 +72167,20 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	  {
 	    if (is_constant(sc, car_w))
 	      {
-		if (car_w == sc->allow_other_keys_keyword)
-		  {
-		    if (is_not_null(cdr(w)))                    /* (lambda* (:allow-other-keys x) x) */
-		      error_nr(sc, sc->syntax_error_symbol,
-			       set_elist_3(sc, wrap_string(sc, ":allow-other-keys should be the last parameter: (~S ~S ...)", 59),
-					   car(form), cadr(form)));
-		    if (w == top)                               /* (lambda* (:allow-other-keys) 1) */
-		      error_nr(sc, sc->syntax_error_symbol,
-			       set_elist_3(sc, wrap_string(sc, ":allow-other-keys can't be the only parameter: (~S ~S ...)", 58),
-					   car(form), cadr(form)));
-		    set_allow_other_keys(top);
-		    set_cdr(v, sc->nil);
-		  }
-		else error_nr(sc, sc->syntax_error_symbol,      /* (lambda* (pi) ...) */
-			      set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47),
-					  car_w, car(form), cadr(form)));
+		if (car_w != sc->allow_other_keys_keyword)
+		  error_nr(sc, sc->syntax_error_symbol,      /* (lambda* (pi) ...) */
+			   set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47),
+				       car_w, car(form), cadr(form)));
+		if (is_not_null(cdr(w)))                    /* (lambda* (:allow-other-keys x) x) */
+		  error_nr(sc, sc->syntax_error_symbol,
+			   set_elist_3(sc, wrap_string(sc, ":allow-other-keys should be the last parameter: (~S ~S ...)", 59),
+				       car(form), cadr(form)));
+		if (w == top)                               /* (lambda* (:allow-other-keys) 1) */
+		  error_nr(sc, sc->syntax_error_symbol,
+			   set_elist_3(sc, wrap_string(sc, ":allow-other-keys can't be the only parameter: (~S ~S ...)", 58),
+				       car(form), cadr(form)));
+		set_allow_other_keys(top);
+		set_cdr(v, sc->nil);
 	      }
 	    if (symbol_is_in_arg_list(car_w, cdr(w)))           /* (lambda* (a a) ...) or (lambda* (a . a) ...) */
 	      error_nr(sc, sc->syntax_error_symbol,
@@ -75223,9 +75220,9 @@ static bool check_let_star(s7_scheme *sc)
 	    error_nr(sc, sc->syntax_error_symbol,
 		     set_elist_3(sc, wrap_string(sc, "let* variable declaration, but no value?: ~A in ~A", 50),
 				 var_and_val, object_to_truncated_string(sc, form, 80)));
-	  else error_nr(sc, sc->syntax_error_symbol,
-			set_elist_3(sc, wrap_string(sc, "let* variable declaration is not a proper list: ~A in ~A", 56),
-				    var_and_val, object_to_truncated_string(sc, form, 80)));
+	  error_nr(sc, sc->syntax_error_symbol,
+		   set_elist_3(sc, wrap_string(sc, "let* variable declaration is not a proper list: ~A in ~A", 56),
+			       var_and_val, object_to_truncated_string(sc, form, 80)));
 	}
       if (!is_null(cddr(var_and_val)))              /* (let* ((c 1 2)) ...) */
 	error_nr(sc, sc->syntax_error_symbol,
@@ -75249,7 +75246,6 @@ static bool check_let_star(s7_scheme *sc)
 
       if (symbol_is_in_list(sc, var)) shadowing = true;
       add_symbol_to_list(sc, var);
-
       set_local(var);
     }
   if (!is_null(vars))
@@ -79359,13 +79355,13 @@ static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, 
       return(set_implicit_closure(sc, obj));
 
     default:                    /* (set! (1 2) 3) */
-      if (!is_applicable(obj))
-	error_nr(sc, sc->no_setter_symbol,
-		 list_3(sc, wrap_string(sc, "in ~S, ~S has no setter", 23),
-			cons_unchecked(sc, sc->set_symbol,       /* copy_tree(sc, form) also works but copies too much: we want to copy the ulists */
-				       cons(sc, copy_proper_list(sc, cadr(form)), cddr(form))),
-			obj));
-      else no_setter_error_nr(sc, obj); /* this is reachable if obj is a goto or continuation: (set! (go 1) 2) in s7test.scm */
+      if (is_applicable(obj))
+	no_setter_error_nr(sc, obj); /* this is reachable if obj is a goto or continuation: (set! (go 1) 2) in s7test.scm */
+      error_nr(sc, sc->no_setter_symbol,
+	       list_3(sc, wrap_string(sc, "in ~S, ~S has no setter", 23),
+		      cons_unchecked(sc, sc->set_symbol,       /* copy_tree(sc, form) also works but copies too much: we want to copy the ulists */
+				     cons(sc, copy_proper_list(sc, cadr(form)), cddr(form))),
+		      obj));
     }
   return(goto_top_no_pop);
 }
@@ -82661,14 +82657,12 @@ static bool op_f_np_1(s7_scheme *sc)
     }
   if (tis_slot(next_slot(slot)))
     {
-      if (is_rest_slot(next_slot(slot)))
-	{
-	  if (slot_value(next_slot(slot)) == sc->undefined)
-	    slot_set_value(next_slot(slot), sc->nil);
-	}
-      else error_nr(sc, sc->wrong_number_of_args_symbol,
-		    set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48),
-				cadar(sc->code), cdr(sc->code)));
+      if (!is_rest_slot(next_slot(slot)))
+	error_nr(sc, sc->wrong_number_of_args_symbol,
+		 set_elist_3(sc, wrap_string(sc, "not enough arguments: ((lambda ~S ...)~{~^ ~S~})", 48),
+			     cadar(sc->code), cdr(sc->code)));
+      if (slot_value(next_slot(slot)) == sc->undefined)
+	slot_set_value(next_slot(slot), sc->nil);
     }
   e = sc->args;
   let_set_id(e, ++sc->let_number);
@@ -89167,7 +89161,7 @@ static bool op_unknown_s(s7_scheme *sc)
 
     case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
-      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A)); /* TODO: perhaps implicit_float_vector_ref_a etc? */
+      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A));
 
     case T_STRING:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
@@ -89486,7 +89480,7 @@ static bool op_unknown_ns(s7_scheme *sc)
     case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
     case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
-      /* TODO: perhaps vector */
+      /* TODO: perhaps vector, but need op_implicit_vector_ns? */
     default:
       break;
     }
@@ -93932,6 +93926,9 @@ static void init_features(s7_scheme *sc)
 #ifdef __EMSCRIPTEN__
   s7_provide(sc, "emscripten");
 #endif
+#ifdef _MSC_VER
+  s7_provide(sc, "msvc");
+#endif
 }
 
 static void init_wrappers(s7_scheme *sc)
@@ -95914,4 +95911,9 @@ int main(int argc, char **argv)
  *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
  *     [but isn't this inconsistent with (set! begin abs) above?]
+ * to add line-number for nan, we'd need real_nan+line# -- 55 cases or create the number as a real, but then need to write line# in "payload" (and check everything like =)
+ *   real_NaN(__LINE__) and display: "+nan.__LINE__", (nan-payload x)->__LINE__ etc making sure is_nan et al still work
+ *   (NAN-as-int |  __LINE__), then (payload-nan & 0xffffffff) to get __LINE__
+ *   this will change s7test a lot!
+ *   +nan.123 for user payload, inf also, quote as numsep
  */

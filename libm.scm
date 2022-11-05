@@ -60,6 +60,7 @@
 	 (double nan (char*))
 	 (double nextafter (double double))
 	 (double nexttoward (double double))
+	 ;; C2x: double getpayload(const double *x), int setpayload(double *x, double payload)
 	 
 	 (reader-cond ((not (provided? 'solaris)) 
 		       (int fpclassify (double))
