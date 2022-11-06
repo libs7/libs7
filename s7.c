@@ -12121,6 +12121,63 @@ static bool is_NaN(s7_double x) {return(x != x);}
 #endif /* not sun */
 
 
+typedef union {int64_t ix; double fx;} decode_float_t;
+
+#if EXPERIMENT
+static double nan_with_payload(int64_t payload)
+{
+  decode_float_t num;
+  if (payload <= 0) return(NAN);
+  num.fx = NAN;
+  num.ix = num.ix | payload;
+  return(num.fx);
+}
+
+static s7_pointer make_nan_with_payload(s7_scheme *sc, s7_int payload)
+{
+  s7_pointer x = make_real(sc, nan_with_payload(payload));
+  char buf[32];
+  s7_int nlen = 0;
+  nlen = snprintf(buf, 32, "+nan.%" ld64, payload);
+  set_number_name(x, buf, nlen);
+  return(x);
+}
+
+static s7_pointer g_nan_with_payload(s7_scheme *sc, s7_pointer args) {return(make_nan_with_payload(sc, integer(car(args))));}
+
+static s7_int nan_payload(s7_scheme *sc, double x)
+{
+  decode_float_t num;
+  num.fx = x;
+  return(num.ix & 0xffffffffffff);
+}
+
+static s7_pointer g_nan_payload(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer x = car(args);
+  if (!is_NaN(real(x))) return(int_zero);
+  return(make_integer(sc, nan_payload(sc, real(x))));
+}
+
+/* <1> (nan/int 123)
+ * +nan.123
+ * <2> (nan? (nan/int 123))
+ * #t
+ * <3> (nan->int (nan/int 123))
+ * 123
+ * <4> (nan/int 0)
+ * +nan.0
+ * <5> +nan.123 ; see below ca line 15294
+ * +nan.123
+ * <6> (nan? +nan.123)
+ * #t
+ * <7> (nan->int +nan.123)
+ * 123
+ */
+/* no similar support for +inf.0 because inf is just 1 bit pattern in ieee754 */
+#endif
+
+
 #if WITH_GMP
 static mp_prec_t mpc_precision = DEFAULT_BIGNUM_PRECISION;
 static mp_prec_t mpc_set_default_precision(mp_prec_t prec) {mpc_precision = prec; return(prec);}
@@ -15123,7 +15180,7 @@ static s7_pointer make_undefined_bignum(s7_scheme *sc, const char *name)
 static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int32_t radix, bool want_symbol)
 {
   s7_int len = safe_strlen(p);
-  if (p[len - 1] == 'i')        /* +nan.0[+/-]...i */
+  if (p[len - 1] == 'i')       /* +nan.0[+/-]...i */
     {
       if (len == 6)            /* +nan.0+i */
 	return(make_complex_not_0i(sc, x, (p[4] == '+') ? 1.0 : -1.0));
@@ -15228,11 +15285,19 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	    return((want_symbol) ? make_symbol(sc, q) : sc->F);
 	  if (c == 'n')
 	    {
-	      if (local_strcmp(p, "an.0"))      /* +nan.0 */
+	      if (local_strcmp(p, "an.0"))         /* +nan.0 */
 		return(real_NaN);
-	      if ((local_strncmp(p, "an.0", 4)) &&
+	      if ((local_strncmp(p, "an.0", 4)) && /* +nan.0[+/-]...i */
 		  ((p[4] == '+') || (p[4] == '-')))
 		return(nan1_or_bust(sc, NAN, p, q, radix, want_symbol));
+#if EXPERIMENT
+	      /* read +/-nan.<int> or +/-nan.<int>+/-...i */
+	      if (local_strncmp(p, "an.", 3))         /* +nan.<int> */
+		{
+		  bool overflow = false;
+		  return(make_nan_with_payload(sc, string_to_integer((char *)(p + 3), 10, &overflow)));
+		}
+#endif
 	    }
 	  if (c == 'i')
 	    {
@@ -24758,11 +24823,6 @@ static s7_pointer g_integer_decode_float(s7_scheme *sc, s7_pointer args)
   #define H_integer_decode_float "(integer-decode-float x) returns a list containing the significand, exponent, and \
 sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
   #define Q_integer_decode_float s7_make_signature(sc, 2, sc->is_pair_symbol, sc->is_float_symbol)
-
-  typedef union {
-    int64_t ix;
-    double fx;
-  } decode_float_t;
 
   decode_float_t num;
   s7_pointer x = car(args);
@@ -94837,6 +94897,11 @@ static void init_rootlet(s7_scheme *sc)
   sc->c_object_set_function = s7_make_safe_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
   /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
 
+#if EXPERIMENT
+  s7_define_function(sc, "nan/int", g_nan_with_payload, 1, 0, false, "");
+  s7_define_function(sc, "nan->int", g_nan_payload, 1, 0, false, "");
+#endif
+
   set_scope_safe(global_value(sc->call_with_input_string_symbol));
   set_scope_safe(global_value(sc->call_with_input_file_symbol));
   set_scope_safe(global_value(sc->call_with_output_string_symbol));
@@ -95911,9 +95976,6 @@ int main(int argc, char **argv)
  *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
  *     [but isn't this inconsistent with (set! begin abs) above?]
- * to add line-number for nan, we'd need real_nan+line# -- 55 cases or create the number as a real, but then need to write line# in "payload" (and check everything like =)
- *   real_NaN(__LINE__) and display: "+nan.__LINE__", (nan-payload x)->__LINE__ etc making sure is_nan et al still work
- *   (NAN-as-int |  __LINE__), then (payload-nan & 0xffffffff) to get __LINE__
- *   this will change s7test a lot!
- *   +nan.123 for user payload, inf also, quote as numsep
+ * to add line-number for nan, see #if EXPERIMENT code -- so far so good...
+ *   this will change s7test a lot!, complex nan, negative nan I guess
  */
