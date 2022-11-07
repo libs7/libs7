@@ -1301,7 +1301,7 @@ struct s7_scheme {
              macro_symbol, macro_star_symbol, magnitude_symbol, make_byte_vector_symbol, make_float_vector_symbol, make_hash_table_symbol,
              make_weak_hash_table_symbol, make_int_vector_symbol, make_iterator_symbol, string_to_keyword_symbol, make_list_symbol, make_string_symbol,
              make_vector_symbol, map_symbol, max_symbol, member_symbol, memq_symbol, memv_symbol, min_symbol, modulo_symbol, multiply_symbol,
-             name_symbol, newline_symbol, not_symbol, number_to_string_symbol, numerator_symbol,
+             name_symbol, nan_symbol, nan_payload_symbol, newline_symbol, not_symbol, number_to_string_symbol, numerator_symbol,
              object_to_string_symbol, object_to_let_symbol, open_input_file_symbol, open_input_function_symbol, open_input_string_symbol,
              open_output_file_symbol, open_output_function_symbol, open_output_string_symbol, openlet_symbol, outlet_symbol, owlet_symbol,
              pair_filename_symbol, pair_line_number_symbol, peek_char_symbol, pi_symbol, port_filename_symbol, port_line_number_symbol,
@@ -1684,8 +1684,8 @@ static s7_pointer too_many_arguments_string, not_enough_arguments_string, cant_b
   an_open_output_port_string, an_output_port_or_f_string, an_output_file_port_string, an_output_port_string, an_output_string_port_string,
   an_unsigned_byte_string, caaar_a_list_string, caadr_a_list_string, caar_a_list_string, cadar_a_list_string, caddr_a_list_string,
   cadr_a_list_string, car_a_list_string, cdaar_a_list_string, cdadr_a_list_string, cdar_a_list_string, cddar_a_list_string,
-  cdddr_a_list_string, cddr_a_list_string, cdr_a_list_string, immutable_error_string, its_infinite_string, its_nan_string,
-  its_negative_string, its_too_large_string, its_too_small_string, parameter_set_twice_string, result_is_too_large_string,
+  cdddr_a_list_string, cddr_a_list_string, cdr_a_list_string, immutable_error_string, it_is_infinite_string, it_is_nan_string,
+  it_is_negative_string, it_is_too_large_string, it_is_too_small_string, parameter_set_twice_string, result_is_too_large_string,
   something_applicable_string, too_many_indices_string, intermediate_too_large_string,
   format_string_1, format_string_2, format_string_3, format_string_4, keyword_value_missing_string;
 
@@ -12143,7 +12143,17 @@ static s7_pointer make_nan_with_payload(s7_scheme *sc, s7_int payload)
   return(x);
 }
 
-static s7_pointer g_nan_with_payload(s7_scheme *sc, s7_pointer args) {return(make_nan_with_payload(sc, integer(car(args))));}
+static s7_pointer g_nan(s7_scheme *sc, s7_pointer args)
+{
+  #define H_nan "(nan int) returns a NaN with payload int"
+  #define Q_nan s7_make_signature(sc, 2, sc->is_real_symbol, sc->is_integer_symbol)
+  s7_pointer x = car(args);
+  if (!is_t_integer(x))
+    sole_arg_wrong_type_error_nr(sc, sc->nan_symbol, x, sc->type_names[T_INTEGER]);
+  if (integer(x) < 0)
+    sole_arg_out_of_range_error_nr(sc, sc->nan_symbol, set_elist_1(sc, x), it_is_negative_string);
+  return(make_nan_with_payload(sc, integer(x)));
+}
 
 static s7_int nan_payload(s7_scheme *sc, double x)
 {
@@ -12154,25 +12164,42 @@ static s7_int nan_payload(s7_scheme *sc, double x)
 
 static s7_pointer g_nan_payload(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer x = car(args);
-  if (!is_NaN(real(x))) return(int_zero);
+  #define H_nan_payload "(nan-payload x) returns the payload associated with the NaN x"
+  #define Q_nan_payload s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
+  s7_pointer x = car(args);  /* TODO: might be complex */
+  if ((!is_t_real(x)) || (!is_NaN(real(x))))
+    sole_arg_wrong_type_error_nr(sc, sc->nan_payload_symbol, x, wrap_string(sc, "a NaN", 5));
   return(make_integer(sc, nan_payload(sc, real(x))));
 }
 
-/* <1> (nan/int 123)
+/* <1> (nan 123)  ; maybe (nan) -> +nan.0?
  * +nan.123
- * <2> (nan? (nan/int 123))
+ * <2> (nan? (nan 123))
  * #t
- * <3> (nan->int (nan/int 123))
+ * <3> (nan-payload (nan 123))
  * 123
- * <4> (nan/int 0)
+ * <4> (nan 0)
  * +nan.0
  * <5> +nan.123 ; see below ca line 15294
  * +nan.123
  * <6> (nan? +nan.123)
  * #t
- * <7> (nan->int +nan.123)
+ * <7> (nan-payload +nan.123)
  * 123
+ * <8> (nan 123.1)
+ * error: nan argument, 123.1, is a real but should be an integer
+ * <9> (nan -123)
+ * error: nan argument, (-123), is out of range (it is negative)
+ * <10> (nan-payload 123)
+ * error: nan-payload argument, 123, is an integer but should be a NaN
+ * <11> (arity nan)
+ * (1 . 1)
+ * <12> (arity nan-payload)
+ * (1 . 1)
+ * <13> (signature nan)
+ * (real? integer?)
+ * <14> (signature nan-payload)
+ * (integer? real?)
  */
 /* no similar support for +inf.0 because inf is just 1 bit pattern in ieee754 */
 #endif
@@ -15919,9 +15946,9 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
       break;
     case T_REAL:
       if (is_NaN(real(pp0)))
-	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, its_nan_string);
+	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, it_is_nan_string);
       if (is_inf(real(pp0)))
-	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, its_infinite_string);
+	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, it_is_infinite_string);
       mpfr_set_d(r->ux, real(pp0), MPFR_RNDN);
       break;
     case T_BIG_INTEGER:
@@ -15932,9 +15959,9 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
       break;
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(pp0)))
-	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, its_nan_string);
+	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, it_is_nan_string);
       if (mpfr_inf_p(big_real(pp0)))
-	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, its_infinite_string);
+	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, it_is_infinite_string);
       mpfr_set(r->ux, big_real(pp0), MPFR_RNDN);
       break;
     case T_COMPLEX:
@@ -15960,7 +15987,7 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
 	  break;
 	case T_REAL:
 	  if (is_NaN(real(pp1)))
-	    out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, pp1, its_nan_string);
+	    out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, pp1, it_is_nan_string);
 	  if (is_inf(real(pp1)))
 	    return(int_zero);
 	  mpfr_set_d(r->error, real(pp1), MPFR_RNDN);
@@ -15973,7 +16000,7 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
 	  break;
 	case T_BIG_REAL:
 	  if (mpfr_nan_p(big_real(pp1)))
-	    out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, pp1, its_nan_string);
+	    out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, pp1, it_is_nan_string);
 	  if (mpfr_inf_p(big_real(pp1)))
 	    return(int_zero);
 	  mpfr_set(r->error, big_real(pp1), MPFR_RNDN);
@@ -16105,7 +16132,7 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	return(method_or_bust(sc, ex, sc->rationalize_symbol, args, sc->type_names[T_REAL], 2));
       err = real_to_double(sc, ex, "rationalize");
       if (is_NaN(err))
-	out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, cadr(args), its_nan_string);
+	out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, cadr(args), it_is_nan_string);
       if (err < 0.0) err = -err;
     }
 
@@ -16143,7 +16170,7 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	  return(big_rationalize(sc, set_plist_2(sc, x, wrap_real(sc, err))));
 #else
 	if (fabs(rat) > RATIONALIZE_LIMIT)
-	  out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, x, its_too_large_string);
+	  out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, x, it_is_too_large_string);
 #endif
 	if ((fabs(rat) + fabs(err)) < 1.0e-18)
 	  err = 1.0e-18;
@@ -16169,7 +16196,7 @@ static s7_pointer rationalize_p_d(s7_scheme *sc, s7_double x)
 #if WITH_GMP
     return(big_rationalize(sc, set_plist_1(sc, wrap_real(sc, x))));
 #else
-    out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, wrap_real(sc, x), its_too_large_string);
+    out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, wrap_real(sc, x), it_is_too_large_string);
 #endif
   return(s7_rationalize(sc, x, sc->default_rationalize_error));
 }
@@ -18285,7 +18312,7 @@ static s7_pointer g_lcm(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
 		return(big_lcm(sc, n, d, p));
 #else
-		sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, its_too_large_string);
+		sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, it_is_too_large_string);
 #endif
 	      b = -b;
 	    }
@@ -18310,7 +18337,7 @@ static s7_pointer g_lcm(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
 		return(big_lcm(sc, n, d, p));
 #else
-		sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, its_too_large_string);
+		sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, it_is_too_large_string);
 #endif
 	      b = -b;
 	    }
@@ -18415,7 +18442,7 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
 	    return(big_gcd(sc, n, d, p));
 #else
-	    sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, its_too_large_string);
+	    sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, it_is_too_large_string);
 #endif
 	  n = c_gcd(n, integer(x));
 	  break;
@@ -18485,9 +18512,9 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
       {
 	s7_double z = real(x);
 	if (is_NaN(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, its_nan_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, it_is_nan_string);
 	if (is_inf(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, its_infinite_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, it_is_infinite_string);
 #if WITH_GMP
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
 	  {
@@ -18497,7 +18524,7 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
 	  }
 #else
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
-	  sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, its_too_large_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, it_is_too_large_string);
 #endif
 	return(make_integer(sc, (s7_int)floor(z)));
 	/* floor here rounds down, whereas a straight int<=real coercion apparently rounds towards 0 */
@@ -18510,9 +18537,9 @@ static s7_pointer floor_p_p(s7_scheme *sc, s7_pointer x)
       return(mpz_to_integer(sc, sc->mpz_1));
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, its_nan_string);
+	sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, it_is_nan_string);
       if (mpfr_inf_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, its_infinite_string);
+	sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, x, it_is_infinite_string);
       mpfr_get_z(sc->mpz_1, big_real(x), MPFR_RNDD);
       return(mpz_to_integer(sc, sc->mpz_1));
     case T_BIG_COMPLEX:
@@ -18537,9 +18564,9 @@ static s7_int floor_i_i(s7_int i) {return(i);}
 static s7_int floor_i_7d(s7_scheme *sc, s7_double x)
 {
   if (is_NaN(x))
-    sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, real_NaN, its_nan_string);
+    sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, real_NaN, it_is_nan_string);
   if (fabs(x) > DOUBLE_TO_INT64_LIMIT)
-    sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, wrap_real(sc, x), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->floor_symbol, wrap_real(sc, x), it_is_too_large_string);
   return((s7_int)floor(x));
 }
 
@@ -18575,9 +18602,9 @@ static s7_pointer ceiling_p_p(s7_scheme *sc, s7_pointer x)
       {
 	s7_double z = real(x);
 	if (is_NaN(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, its_nan_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, it_is_nan_string);
 	if (is_inf(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, its_infinite_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, it_is_infinite_string);
 #if WITH_GMP
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
 	  {
@@ -18587,7 +18614,7 @@ static s7_pointer ceiling_p_p(s7_scheme *sc, s7_pointer x)
 	  }
 #else
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
-	  sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, its_too_large_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, it_is_too_large_string);
 #endif
 	return(make_integer(sc, (s7_int)ceil(real(x))));
       }
@@ -18599,9 +18626,9 @@ static s7_pointer ceiling_p_p(s7_scheme *sc, s7_pointer x)
       return(mpz_to_integer(sc, sc->mpz_1));
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, its_nan_string);
+	sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, it_is_nan_string);
       if (mpfr_inf_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, its_infinite_string);
+	sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, x, it_is_infinite_string);
       mpfr_get_z(sc->mpz_1, big_real(x), MPFR_RNDU);
       return(mpz_to_integer(sc, sc->mpz_1));
     case T_BIG_COMPLEX:
@@ -18626,10 +18653,10 @@ static s7_int ceiling_i_i(s7_int i) {return(i);}
 static s7_int ceiling_i_7d(s7_scheme *sc, s7_double x)
 {
   if (is_NaN(x))
-    sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, real_NaN, its_nan_string);
+    sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, real_NaN, it_is_nan_string);
   if ((is_inf(x)) ||
       (x > DOUBLE_TO_INT64_LIMIT) || (x < -DOUBLE_TO_INT64_LIMIT))
-    sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, wrap_real(sc, x), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->ceiling_symbol, wrap_real(sc, x), it_is_too_large_string);
   return((s7_int)ceil(x));
 }
 
@@ -18658,9 +18685,9 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
       {
 	s7_double z = real(x);
 	if (is_NaN(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, its_nan_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, it_is_nan_string);
 	if (is_inf(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, its_infinite_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, it_is_infinite_string);
 #if WITH_GMP
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
 	  {
@@ -18670,7 +18697,7 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
 	  }
 #else
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
-	  sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, its_too_large_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, it_is_too_large_string);
 #endif
 	return(make_integer(sc, (z > 0.0) ? (s7_int)floor(z) : (s7_int)ceil(z)));
       }
@@ -18682,9 +18709,9 @@ static s7_pointer truncate_p_p(s7_scheme *sc, s7_pointer x)
       return(mpz_to_integer(sc, sc->mpz_1));
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, its_nan_string);
+	sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, it_is_nan_string);
       if (mpfr_inf_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, its_infinite_string);
+	sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, x, it_is_infinite_string);
       mpfr_get_z(sc->mpz_1, big_real(x), MPFR_RNDZ);
       return(mpz_to_integer(sc, sc->mpz_1));
     case T_BIG_COMPLEX:
@@ -18709,11 +18736,11 @@ static s7_int truncate_i_i(s7_int i) {return(i);}
 static s7_int truncate_i_7d(s7_scheme *sc, s7_double x)
 {
   if (is_NaN(x))
-    sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, real_NaN, its_nan_string);
+    sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, real_NaN, it_is_nan_string);
   if (is_inf(x))
-    sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, wrap_real(sc, x), its_infinite_string);
+    sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, wrap_real(sc, x), it_is_infinite_string);
   if (fabs(x) > DOUBLE_TO_INT64_LIMIT)
-    sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, wrap_real(sc, x), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->truncate_symbol, wrap_real(sc, x), it_is_too_large_string);
   return((x > 0.0) ? (s7_int)floor(x) : (s7_int)ceil(x));
 }
 
@@ -18752,9 +18779,9 @@ static s7_pointer round_p_p(s7_scheme *sc, s7_pointer x)
       {
 	s7_double z = real(x);
 	if (is_NaN(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, its_nan_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, it_is_nan_string);
 	if (is_inf(z))
-	  sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, its_infinite_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, it_is_infinite_string);
 #if WITH_GMP
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
 	  {
@@ -18765,7 +18792,7 @@ static s7_pointer round_p_p(s7_scheme *sc, s7_pointer x)
 	  }
 #else
 	if (fabs(z) > DOUBLE_TO_INT64_LIMIT)
-	  sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, its_too_large_string);
+	  sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, it_is_too_large_string);
 #endif
 	return(make_integer(sc, (s7_int)r5rs_round(z)));
       }
@@ -18789,9 +18816,9 @@ static s7_pointer round_p_p(s7_scheme *sc, s7_pointer x)
       }
     case T_BIG_REAL:
       if (mpfr_nan_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, its_nan_string);
+	sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, it_is_nan_string);
       if (mpfr_inf_p(big_real(x)))
-	sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, its_infinite_string);
+	sole_arg_out_of_range_error_nr(sc, sc->round_symbol, x, it_is_infinite_string);
       mpfr_set(sc->mpfr_1, big_real(x), MPFR_RNDN);
       mpfr_rint(sc->mpfr_2, sc->mpfr_1, MPFR_RNDN);
       mpfr_get_z(sc->mpz_3, sc->mpfr_2, MPFR_RNDN);
@@ -18818,10 +18845,10 @@ static s7_int round_i_i(s7_int i) {return(i);}
 static s7_int round_i_7d(s7_scheme *sc, s7_double z)
 {
   if (is_NaN(z))
-    sole_arg_out_of_range_error_nr(sc, sc->round_symbol, real_NaN, its_nan_string);
+    sole_arg_out_of_range_error_nr(sc, sc->round_symbol, real_NaN, it_is_nan_string);
   if ((is_inf(z)) ||
       (z > DOUBLE_TO_INT64_LIMIT) || (z < -DOUBLE_TO_INT64_LIMIT))
-    sole_arg_out_of_range_error_nr(sc, sc->round_symbol, wrap_real(sc, z), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->round_symbol, wrap_real(sc, z), it_is_too_large_string);
   return((s7_int)r5rs_round(z));
 }
 
@@ -21581,7 +21608,7 @@ static inline s7_int quotient_i_7ii(s7_scheme *sc, s7_int x, s7_int y)
   if (y == 0)
     division_by_zero_error_2_nr(sc, sc->quotient_symbol, wrap_integer(sc, x), int_zero);
   if (x == S7_INT64_MIN)   /* (quotient most-negative-fixnum -1) */
-    sole_arg_out_of_range_error_nr(sc, sc->quotient_symbol, set_elist_2(sc, leastfix, minus_one), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->quotient_symbol, set_elist_2(sc, leastfix, minus_one), it_is_too_large_string);
   return(-x); /* (quotient x -1) */
 }
 
@@ -21589,7 +21616,7 @@ static inline s7_int quotient_i_7ii(s7_scheme *sc, s7_int x, s7_int y)
 static s7_pointer s7_truncate(s7_scheme *sc, s7_pointer caller, s7_double xf)   /* can't use "truncate" -- it's in unistd.h */
 {
   if (fabs(xf) > QUOTIENT_FLOAT_LIMIT)
-    sole_arg_out_of_range_error_nr(sc, caller, wrap_real(sc, xf), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, caller, wrap_real(sc, xf), it_is_too_large_string);
   return(make_integer(sc, (xf > 0.0) ? (s7_int)floor(xf) : (s7_int)ceil(xf)));
 }
 
@@ -21602,7 +21629,7 @@ static s7_int c_quo_dbl(s7_scheme *sc, s7_double x, s7_double y)
     wrong_type_error_nr(sc, sc->quotient_symbol, 2, wrap_real(sc, y), a_normal_real_string);
   xf = x / y;
   if (fabs(xf) > QUOTIENT_FLOAT_LIMIT)
-    sole_arg_out_of_range_error_nr(sc, sc->quotient_symbol, wrap_real(sc, xf), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->quotient_symbol, wrap_real(sc, xf), it_is_too_large_string);
   return((xf > 0.0) ? (s7_int)floor(xf) : (s7_int)ceil(xf));
 }
 #endif
@@ -21822,7 +21849,7 @@ static s7_double c_rem_dbl(s7_scheme *sc, s7_double x, s7_double y)
     return(NAN);
   pre_quo = x / y;
   if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
-    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, wrap_real(sc, x), wrap_real(sc, y)), its_too_large_string);
+    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, wrap_real(sc, x), wrap_real(sc, y)), it_is_too_large_string);
   quo = (pre_quo > 0.0) ? (s7_int)floor(pre_quo) : (s7_int)ceil(pre_quo);
   return(x - (y * quo));
 }
@@ -21872,7 +21899,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    return(real_NaN);
 	  pre_quo = (long_double)integer(x) / (long_double)real(y);
 	  if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
-	    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), its_too_large_string);
+	    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), it_is_too_large_string);
 	  quo = (pre_quo > 0.0) ? (s7_int)floor(pre_quo) : (s7_int)ceil(pre_quo);
 	  return(make_real(sc, integer(x) - real(y) * quo));
 
@@ -21910,7 +21937,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 		    {
 		      pre_quo = ((long_double)n1 / (long_double)n2) * ((long_double)d2 / (long_double)d1);
 		      if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
-			sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), its_too_large_string);
+			sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), it_is_too_large_string);
 		      quo = (pre_quo > 0.0) ? (s7_int)floor(pre_quo) : (s7_int)ceil(pre_quo);
 		    }
 		  else quo = n1d2 / n2d1;
@@ -21956,7 +21983,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    frac = (s7_double)fraction(x);
 	    pre_quo = frac / real(y);
 	    if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
-	      sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), its_too_large_string);
+	      sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), it_is_too_large_string);
 	    quo = (pre_quo > 0.0) ? (s7_int)floor(pre_quo) : (s7_int)ceil(pre_quo);
 	    return(make_real(sc, frac - real(y) * quo));
 	  }
@@ -21980,7 +22007,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  /* actually here (and elsewhere) if y > INT64_TO_DOUBLE_LIMIT, the result is probably wrong */
 	  pre_quo = (long_double)real(x) / (long_double)integer(y);
 	  if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
-	    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), its_too_large_string);
+	    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), it_is_too_large_string);
 	  quo = (pre_quo > 0.0) ? (s7_int)floor(pre_quo) : (s7_int)ceil(pre_quo);
 	  return(make_real(sc, real(x) - integer(y) * quo));
 	  /* but... (remainder 1e+18 9223372036854775807) -> 1e+18 */
@@ -21992,7 +22019,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    s7_double frac = (s7_double)fraction(y);
 	    pre_quo = real(x) / frac;
 	    if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
-	      sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), its_too_large_string);
+	      sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), it_is_too_large_string);
 	    quo = (pre_quo > 0.0) ? (s7_int)floor(pre_quo) : (s7_int)ceil(pre_quo);
 	    return(make_real(sc, real(x) - frac * quo));
 	  }
@@ -22066,7 +22093,7 @@ static s7_double modulo_d_7dd(s7_scheme *sc, s7_double x1, s7_double x2)
   if ((is_NaN(x1)) || (is_NaN(x2)) || (is_inf(x1)) || (is_inf(x2))) return(NAN);
   if (x2 == 0.0) return(x1);
   if (fabs(x1) > 1e17)
-    out_of_range_error_nr(sc, sc->modulo_symbol, int_one, wrap_real(sc, x1), its_too_large_string);
+    out_of_range_error_nr(sc, sc->modulo_symbol, int_one, wrap_real(sc, x1), it_is_too_large_string);
   c = x1 / x2;
   if ((c > 1e19) || (c < -1e19))
     sole_arg_out_of_range_error_nr(sc, sc->modulo_symbol,
@@ -22108,7 +22135,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 
 	case T_REAL:
 	  if ((integer(x) == S7_INT64_MIN) || (s7_int_abs(integer(x)) > QUOTIENT_INT_LIMIT))
-	    out_of_range_error_nr(sc, sc->modulo_symbol, int_one, x, its_too_large_string);
+	    out_of_range_error_nr(sc, sc->modulo_symbol, int_one, x, it_is_too_large_string);
 	  b = real(y);
 	  if (b == 0.0) return(x);
 	  if (is_NaN(b)) return(y);
@@ -22199,7 +22226,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  b = real(y);
 	  if (is_inf(b)) return(real_NaN);
 	  if (fabs(b) > 1e17)
-	    out_of_range_error_nr(sc, sc->modulo_symbol, int_two, y, its_too_large_string);
+	    out_of_range_error_nr(sc, sc->modulo_symbol, int_two, y, it_is_too_large_string);
 	  if (b == 0.0) return(x);
 	  if (is_NaN(b)) return(y);
 	  a = fraction(x);
@@ -22218,14 +22245,14 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	if (is_NaN(a)) return(x);
 	if (is_inf(a)) return(real_NaN); /* not b */
 	if (fabs(a) > 1e17)
-	  out_of_range_error_nr(sc, sc->modulo_symbol, int_one, x, its_too_large_string);
+	  out_of_range_error_nr(sc, sc->modulo_symbol, int_one, x, it_is_too_large_string);
 
 	switch (type(y))
 	  {
 	  case T_INTEGER:
 	    if (integer(y) == 0) return(x);
 	    if ((integer(y) == S7_INT64_MIN) || (s7_int_abs(integer(y)) > QUOTIENT_INT_LIMIT))
-	      out_of_range_error_nr(sc, sc->modulo_symbol, int_two, y, its_too_large_string);
+	      out_of_range_error_nr(sc, sc->modulo_symbol, int_two, y, it_is_too_large_string);
 	    b = (s7_double)integer(y);
 	    goto REAL_MOD;
 
@@ -24701,7 +24728,7 @@ static s7_pointer inexact_to_exact_p_p(s7_scheme *sc, s7_pointer x)
 #if WITH_GMP
 	    return(big_rationalize(sc, set_plist_1(sc, x))); /* this can handle t_real as well as t_big_real */
 #else
-	    sole_arg_out_of_range_error_nr(sc, sc->inexact_to_exact_symbol, x, its_too_large_string);
+	    sole_arg_out_of_range_error_nr(sc, sc->inexact_to_exact_symbol, x, it_is_too_large_string);
 #endif
 	  }
 	/* c_rationalize limit is RATIONALIZE_LIMIT=1e12 currently so this is a tighter limit than DOUBLE_TO_INT64_LIMIT */
@@ -25055,7 +25082,7 @@ order here follows gmp, and is the opposite of the CL convention.  (logbit? int 
 
   index = s7_integer_clamped_if_gmp(sc, y);
   if (index < 0)
-    out_of_range_error_nr(sc, sc->logbit_symbol, int_two, y, its_negative_string);
+    out_of_range_error_nr(sc, sc->logbit_symbol, int_two, y, it_is_negative_string);
 
 #if WITH_GMP
   if (is_t_big_integer(x))
@@ -25076,7 +25103,7 @@ static bool logbit_b_7ii(s7_scheme *sc, s7_int i1, s7_int i2)
 {
   if (i2 < 0)
     {
-      out_of_range_error_nr(sc, sc->logbit_symbol, int_two, wrap_integer(sc, i1), its_negative_string);
+      out_of_range_error_nr(sc, sc->logbit_symbol, int_two, wrap_integer(sc, i1), it_is_negative_string);
       return(false);
     }
   if (i2 >= S7_INT_BITS) return(i1 < 0);
@@ -25107,7 +25134,7 @@ static s7_int c_ash(s7_scheme *sc, s7_int arg1, s7_int arg2)
     {
       if ((arg1 == -1) && (arg2 == 63))   /* (ash -1 63): most-negative-fixnum */
 	return(S7_INT64_MIN);
-      out_of_range_error_nr(sc, sc->ash_symbol, int_two, wrap_integer(sc, arg2), its_too_large_string);
+      out_of_range_error_nr(sc, sc->ash_symbol, int_two, wrap_integer(sc, arg2), it_is_too_large_string);
     }
   if (arg2 < -S7_INT_BITS)
     return((arg1 < 0) ? -1 : 0);        /* (ash -31 -100) */
@@ -25155,7 +25182,7 @@ static s7_pointer g_ash(s7_scheme *sc, s7_pointer args)
 	  if (!mpz_fits_sint_p(big_integer(p1)))
 	    {
 	      if (mpz_cmp_ui(big_integer(p1), 0) > 0)
-		out_of_range_error_nr(sc, sc->ash_symbol, int_two, p1, its_too_large_string);
+		out_of_range_error_nr(sc, sc->ash_symbol, int_two, p1, it_is_too_large_string);
 
 	      /* here if p0 is negative, we need to return -1 */
 	      return((p0_compared_to_zero == 1) ? int_zero : minus_one);
@@ -25169,7 +25196,7 @@ static s7_pointer g_ash(s7_scheme *sc, s7_pointer args)
 	    return((p0_compared_to_zero == 1) ? int_zero : minus_one);
 	}
       if (shift > S7_INT32_MAX)
-	out_of_range_error_nr(sc, sc->ash_symbol, int_two, p1, its_too_large_string); /* gmp calls abort if overflow here */
+	out_of_range_error_nr(sc, sc->ash_symbol, int_two, p1, it_is_too_large_string); /* gmp calls abort if overflow here */
 
       if (is_t_big_integer(p0))
 	mpz_set(sc->mpz_1, big_integer(p0));
@@ -25264,7 +25291,7 @@ Pass this as the second argument to 'random' to get a repeatable random number s
     return(method_or_bust(sc, r1, sc->random_state_symbol, args, sc->type_names[T_INTEGER], 1));
   i1 = integer(r1);
   if (i1 < 0)
-    out_of_range_error_nr(sc, sc->random_state_symbol, int_one, r1, its_negative_string);
+    out_of_range_error_nr(sc, sc->random_state_symbol, int_one, r1, it_is_negative_string);
   if (is_null(cdr(args)))
     {
       new_cell(sc, p, T_RANDOM_STATE);
@@ -25281,7 +25308,7 @@ Pass this as the second argument to 'random' to get a repeatable random number s
     return(method_or_bust(sc, r2, sc->random_state_symbol, args, sc->type_names[T_INTEGER], 2));
   i2 = integer(r2);
   if (i2 < 0)
-    out_of_range_error_nr(sc, sc->random_state_symbol, int_two, r2, its_negative_string);
+    out_of_range_error_nr(sc, sc->random_state_symbol, int_two, r2, it_is_negative_string);
 
   new_cell(sc, p, T_RANDOM_STATE);
   random_seed(p) = (uint64_t)i1;
@@ -26508,11 +26535,11 @@ static void init_strings(void)
   a_sequence_string =             make_permanent_string("a sequence");
   a_valid_radix_string =          make_permanent_string("it should be between 2 and 16");
   result_is_too_large_string =    make_permanent_string("result is too large");
-  its_too_large_string =          make_permanent_string("it is too large");
-  its_too_small_string =          make_permanent_string("it is less than the start position");
-  its_negative_string =           make_permanent_string("it is negative");
-  its_nan_string =                make_permanent_string("NaN usually indicates a numerical error");
-  its_infinite_string =           make_permanent_string("it is infinite");
+  it_is_too_large_string =        make_permanent_string("it is too large");
+  it_is_too_small_string =        make_permanent_string("it is less than the start position");
+  it_is_negative_string =         make_permanent_string("it is negative");
+  it_is_nan_string =              make_permanent_string("NaN usually indicates a numerical error");
+  it_is_infinite_string =         make_permanent_string("it is infinite");
   too_many_indices_string =       make_permanent_string("too many indices");
   parameter_set_twice_string =    make_permanent_string("parameter set twice, ~S in ~S");
   immutable_error_string =        make_permanent_string("can't ~S ~S (it is immutable)");
@@ -26556,7 +26583,7 @@ static s7_pointer g_make_string(s7_scheme *sc, s7_pointer args)
   len = s7_integer_clamped_if_gmp(sc, n);
   if (len == 0) return(nil_string);
   if ((len < 0) || (len > sc->max_string_length))
-    out_of_range_error_nr(sc, sc->make_string_symbol, int_one, n, (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_string_symbol, int_one, n, (len < 0) ? it_is_negative_string : it_is_too_large_string);
   if (is_null(cdr(args)))
     return(make_empty_string(sc, len, '\0')); /* #\null here means "don't fill/clear" */
   fill = s7_character(cadr(args));
@@ -26570,7 +26597,7 @@ static s7_pointer make_string_p_i(s7_scheme *sc, s7_int len)
 {
   if (len == 0) return(nil_string);
   if ((len < 0) || (len > sc->max_string_length))
-    out_of_range_error_nr(sc, sc->make_string_symbol, int_one, wrap_integer(sc, len), (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_string_symbol, int_one, wrap_integer(sc, len), (len < 0) ? it_is_negative_string : it_is_too_large_string);
   return(make_empty_string(sc, len, '\0'));
 }
 
@@ -26666,9 +26693,9 @@ static s7_pointer string_ref_1(s7_scheme *sc, s7_pointer strng, s7_pointer index
     return(method_or_bust_pp(sc, index, sc->string_ref_symbol, strng, index, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if (ind < 0)
-    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, index, its_negative_string);
+    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, index, it_is_negative_string);
   if (ind >= string_length(strng))
-    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, index, its_too_large_string);
+    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, index, it_is_too_large_string);
 
   str = string_value(strng);
   return(chars[((uint8_t *)str)[ind]]);
@@ -26691,7 +26718,7 @@ static s7_pointer string_ref_p_pi(s7_scheme *sc, s7_pointer p1, s7_int i1)
     return(method_or_bust(sc, p1, sc->string_ref_symbol, set_plist_2(sc, p1, make_integer(sc, i1)), sc->type_names[T_STRING], 1));
   if ((i1 >= 0) && (i1 < string_length(p1)))
     return(chars[((uint8_t *)string_value(p1))[i1]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p1);
 }
 
@@ -26708,7 +26735,7 @@ static s7_pointer string_ref_p_p0(s7_scheme *sc, s7_pointer p1, s7_pointer unuse
     return(method_or_bust_pp(sc, p1, sc->string_ref_symbol, p1, int_zero, sc->type_names[T_STRING], 1));
   if (string_length(p1) > 0)
     return(chars[((uint8_t *)string_value(p1))[0]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, int_zero, its_too_large_string);
+  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, int_zero, it_is_too_large_string);
   return(p1);
 }
 
@@ -26724,7 +26751,7 @@ static s7_pointer string_ref_p_plast(s7_scheme *sc, s7_pointer p1, s7_pointer un
     return(string_plast_via_method(sc, p1));
   if (string_length(p1) > 0)
     return(chars[((uint8_t *)string_value(p1))[string_length(p1) - 1]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, string_length(p1) - 1), its_too_large_string);
+  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, string_length(p1) - 1), it_is_too_large_string);
   return(p1);
 }
 
@@ -26732,7 +26759,7 @@ static inline s7_pointer string_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer p1,
 {
   if ((i1 >= 0) && (i1 < string_length(p1)))
     return(chars[((uint8_t *)string_value(p1))[i1]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p1);
 }
 
@@ -26758,7 +26785,7 @@ static s7_pointer g_string_set(s7_scheme *sc, s7_pointer args)
   if (ind < 0)
     out_of_range_error_nr(sc, sc->string_set_symbol, int_two, index, a_non_negative_integer_string);
   if (ind >= string_length(strng))
-    out_of_range_error_nr(sc, sc->string_set_symbol, int_two, index, its_too_large_string);
+    out_of_range_error_nr(sc, sc->string_set_symbol, int_two, index, it_is_too_large_string);
 
   str = string_value(strng);
   c = caddr(args);
@@ -26777,7 +26804,7 @@ static s7_pointer string_set_p_pip(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_p
     wrong_type_error_nr(sc, sc->string_set_symbol, 2, p2, sc->type_names[T_CHARACTER]);
   if ((i1 >= 0) && (i1 < string_length(p1)))
     string_value(p1)[i1] = s7_character(p2);
-  else out_of_range_error_nr(sc, sc->string_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+  else out_of_range_error_nr(sc, sc->string_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p2);
 }
 
@@ -26785,7 +26812,7 @@ static s7_pointer string_set_p_pip_unchecked(s7_scheme *sc, s7_pointer p1, s7_in
 {
   if ((i1 >= 0) && (i1 < string_length(p1)))
     string_value(p1)[i1] = s7_character(p2);
-  else out_of_range_error_nr(sc, sc->string_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+  else out_of_range_error_nr(sc, sc->string_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p2);
 }
 
@@ -26996,7 +27023,7 @@ static s7_pointer start_and_end(s7_scheme *sc, s7_pointer caller, s7_pointer arg
   index = s7_integer_clamped_if_gmp(sc, pstart);
   if ((index < 0) ||
       (index > *end)) /* *end == length here */
-    out_of_range_error_nr(sc, caller, small_int(position), pstart, (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, caller, small_int(position), pstart, (index < 0) ? it_is_negative_string : it_is_too_large_string);
   *start = index;
 
   if (is_pair(cdr(index_args)))
@@ -27007,7 +27034,7 @@ static s7_pointer start_and_end(s7_scheme *sc, s7_pointer caller, s7_pointer arg
       index = s7_integer_clamped_if_gmp(sc, pend);
       if ((index < *start) ||
 	  (index > *end))
-	out_of_range_error_nr(sc, caller, small_int(position + 1), pend, (index < *start) ? its_too_small_string : its_too_large_string);
+	out_of_range_error_nr(sc, caller, small_int(position + 1), pend, (index < *start) ? it_is_too_small_string : it_is_too_large_string);
       *end = index;
     }
   return(sc->unused);
@@ -27059,9 +27086,9 @@ static s7_pointer substring_uncopied_p_pii(s7_scheme *sc, s7_pointer str, s7_int
 {
   /* is_string arg1 checked in opt */
   if ((end < start) || (end > string_length(str)))
-    out_of_range_error_nr(sc, sc->substring_symbol, int_three, wrap_integer(sc, end), (end < start) ? its_too_small_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->substring_symbol, int_three, wrap_integer(sc, end), (end < start) ? it_is_too_small_string : it_is_too_large_string);
   if (start < 0)
-    out_of_range_error_nr(sc, sc->substring_symbol, int_two, wrap_integer(sc, start), its_negative_string);
+    out_of_range_error_nr(sc, sc->substring_symbol, int_two, wrap_integer(sc, start), it_is_negative_string);
   return(wrap_string(sc, (char *)(string_value(str) + start), end - start));
 }
 
@@ -27751,7 +27778,7 @@ static s7_pointer g_string_to_list(s7_scheme *sc, s7_pointer args)
   else
     if (end == 0) return(sc->nil);
   if ((end - start) > sc->max_list_length)
-    out_of_range_error_nr(sc, sc->string_to_list_symbol, int_one, car(args), its_too_large_string);
+    out_of_range_error_nr(sc, sc->string_to_list_symbol, int_one, car(args), it_is_too_large_string);
 
   sc->w = sc->nil;
   check_free_heap_size(sc, end - start);
@@ -27838,7 +27865,7 @@ static s7_pointer g_set_port_position(s7_scheme *sc, s7_pointer args)
     wrong_type_error_nr(sc, wrap_string(sc, "set! port-position", 18), 2, pos, sc->type_names[T_INTEGER]);
   position = s7_integer_clamped_if_gmp(sc, pos);
   if (position < 0)
-    out_of_range_error_nr(sc, sc->port_position_symbol, int_two, pos, its_negative_string);
+    out_of_range_error_nr(sc, sc->port_position_symbol, int_two, pos, it_is_negative_string);
   if (is_string_port(port))
     port_position(port) = (position > port_data_size(port)) ? port_data_size(port) : position;
 #if (!MS_WINDOWS)
@@ -29931,7 +29958,7 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, k, sc->read_string_symbol, args, sc->type_names[T_INTEGER], 1));
   nchars = s7_integer_clamped_if_gmp(sc, k);
   if ((nchars < 0) || (nchars > sc->max_string_length))
-    out_of_range_error_nr(sc, sc->read_string_symbol, int_one, k, (nchars < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->read_string_symbol, int_one, k, (nchars < 0) ? it_is_negative_string : it_is_too_large_string);
 
   if (!is_null(cdr(args)))
     port = cadr(args);
@@ -37093,7 +37120,7 @@ static s7_pointer make_list_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer init)
 #endif
   if (len == 0) return(sc->nil);          /* what about (make-list 0 123)? */
   if ((len < 0) || (len > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->make_list_symbol, int_one, n, (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_list_symbol, int_one, n, (len < 0) ? it_is_negative_string : it_is_too_large_string);
   return(make_list(sc, len, init));
 }
 
@@ -37125,12 +37152,12 @@ static s7_pointer list_ref_1(s7_scheme *sc, s7_pointer lst, s7_pointer ind)
     return(method_or_bust_pp(sc, ind, sc->list_ref_symbol, lst, ind, sc->type_names[T_INTEGER], 2));
   index = s7_integer_clamped_if_gmp(sc, ind);
   if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, ind, (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, ind, (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
   for (s7_int i = 0; (i < index) && is_pair(p); i++, p = cdr(p)) {}
   if (is_pair(p)) return(car(p));
   if (is_null(p))
-    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, ind, its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, ind, it_is_too_large_string);
   wrong_type_error_nr(sc, sc->list_ref_symbol, 1, lst, a_proper_list_string);
   return(NULL);
 }
@@ -37212,12 +37239,12 @@ static inline s7_pointer list_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer p1, s
 {
   s7_pointer p = p1;
   if ((i1 < 0) || (i1 > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   for (s7_int i = 0; ((is_pair(p)) && (i < i1)); i++, p = cdr(p));
   if (!is_pair(p))
     {
       if (is_null(p))
-	out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, wrap_integer(sc, i1), its_too_large_string);
+	out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, wrap_integer(sc, i1), it_is_too_large_string);
       wrong_type_error_nr(sc, sc->list_ref_symbol, 1, p1, a_proper_list_string);
     }
   return(car(p));
@@ -37273,14 +37300,14 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
     return(method_or_bust(sc, ind, sc->list_set_symbol, set_ulist_1(sc, lst, args), sc->type_names[T_INTEGER], 2));
   index = s7_integer_clamped_if_gmp(sc, ind);
   if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
   for (s7_int i = 0; (i < index) && is_pair(p); i++, p = cdr(p)) {}
 
   if (!is_pair(p))
     {
       if (is_null(p))
-	out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, its_too_large_string);
+	out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, it_is_too_large_string);
       wrong_type_error_nr(sc, sc->list_set_symbol, 1, lst, a_proper_list_string);
     }
   if (is_null(cddr(args)))
@@ -37300,12 +37327,12 @@ static inline s7_pointer list_set_p_pip_unchecked(s7_scheme *sc, s7_pointer p1, 
 {
   s7_pointer p = p1;
   if ((i1 < 0) || (i1 > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   for (s7_int i = 0; ((is_pair(p)) && (i < i1)); i++, p = cdr(p));
   if (!is_pair(p))
     {
       if (is_null(p))
-	out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), its_too_large_string);
+	out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), it_is_too_large_string);
       wrong_type_error_nr(sc, sc->list_set_symbol, 1, p1, a_proper_list_string);
     }
   set_car(p, p2);
@@ -37318,14 +37345,14 @@ static s7_pointer list_increment_p_pip_unchecked(opt_info *o)
   s7_pointer p = slot_value(o->v[2].p), p1, p2;
   s7_int index = integer(p);
   if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, p, (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, p, (index < 0) ? it_is_negative_string : it_is_too_large_string);
   p1 = slot_value(o->v[1].p);
   p = p1;
   for (s7_int i = 0; ((is_pair(p)) && (i < index)); i++, p = cdr(p));
   if (!is_pair(p))
     {
       if (is_null(p))
-	out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), its_too_large_string);
+	out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), it_is_too_large_string);
       wrong_type_error_nr(sc, sc->list_set_symbol, 1, p1, a_proper_list_string);
     }
   p2 = g_add_xi(sc, car(p), integer(o->v[3].p), index);
@@ -37350,13 +37377,13 @@ static s7_pointer g_list_set_i(s7_scheme *sc, s7_pointer args)
 
   index = s7_integer_clamped_if_gmp(sc, cadr(args));
   if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
   for (s7_int i = 0; (i < index) && is_pair(p); i++, p = cdr(p)) {}
   if (!is_pair(p))
     {
       if (is_null(p))
-	out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), its_too_large_string);
+	out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), it_is_too_large_string);
       wrong_type_error_nr(sc, sc->list_set_symbol, 1, lst, a_proper_list_string);
     }
   val = caddr(args);
@@ -37386,11 +37413,11 @@ static s7_pointer list_tail_p_pp(s7_scheme *sc, s7_pointer lst, s7_pointer p)
   if (!is_list(lst)) /* (list-tail () 0) -> () */
     return(method_or_bust_with_type_pi(sc, lst, sc->list_tail_symbol, lst, index, a_list_string, 1));
   if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
   for (i = 0; (i < index) && (is_pair(lst)); i++, lst = cdr(lst)) {}
   if (i < index)
-    out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), it_is_too_large_string);
   return(lst);
 }
 
@@ -37559,7 +37586,7 @@ static s7_pointer g_list_ref_at_1(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer lst = car(args);
   if (!is_pair(lst)) return(method_or_bust(sc, lst, sc->list_ref_symbol, args, sc->type_names[T_PAIR], 1));
-  if (!is_pair(cdr(lst))) out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, cadr(args), its_too_large_string);
+  if (!is_pair(cdr(lst))) out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, cadr(args), it_is_too_large_string);
   return(cadr(lst));
 }
 
@@ -37707,7 +37734,7 @@ static s7_pointer g_list_ref_at_2(s7_scheme *sc, s7_pointer args)
   if (!is_pair(lst))
     return(method_or_bust(sc, lst, sc->list_ref_symbol, args, sc->type_names[T_PAIR], 1));
   if ((!is_pair(cdr(lst))) || (!is_pair(cddr(lst))))
-    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, cadr(args), its_too_large_string);
+    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, cadr(args), it_is_too_large_string);
   return(caddr(lst));
 }
 
@@ -39172,7 +39199,7 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
   s7_pointer x;
 
   if ((len < 0) || (len > sc->max_vector_length))
-    out_of_range_error_nr(sc, sc->make_vector_symbol, int_one, wrap_integer(sc, len), (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_vector_symbol, int_one, wrap_integer(sc, len), (len < 0) ? it_is_negative_string : it_is_too_large_string);
 
   /* this has to follow the error checks! (else garbage in free_heap temps portion confuses GC when "vector" is finalized) */
   new_cell(sc, x, typ | T_SAFE_PROCEDURE);
@@ -39591,14 +39618,14 @@ static s7_pointer vector_append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p
 s7_pointer s7_vector_ref(s7_scheme *sc, s7_pointer vec, s7_int index)
 {
   if (index >= vector_length(vec))
-    out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, wrap_integer(sc, index), its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, wrap_integer(sc, index), it_is_too_large_string);
   return(vector_getter(vec)(sc, vec, index));
 }
 
 s7_pointer s7_vector_set(s7_scheme *sc, s7_pointer vec, s7_int index, s7_pointer a)
 {
   if (index >= vector_length(vec))
-    out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), it_is_too_large_string);
   if (is_typed_vector(vec))
     return(typed_vector_setter(sc, vec, index, a));
   vector_setter(vec)(sc, vec, index, T_Ext(a));
@@ -39677,7 +39704,7 @@ static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_i
 	  if ((ind < 0) || (ind >= dimensions[i]))
 	    {
 	      va_end(ap);
-	      out_of_range_error_nr(sc, sc->vector_ref_symbol, wrap_integer(sc, i), wrap_integer(sc, ind), (ind < 0) ? its_negative_string : its_too_large_string);
+	      out_of_range_error_nr(sc, sc->vector_ref_symbol, wrap_integer(sc, i), wrap_integer(sc, ind), (ind < 0) ? it_is_negative_string : it_is_too_large_string);
 	      return(-1);
 	    }
 	  index += (ind * offsets[i]);
@@ -39778,7 +39805,7 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
       if (start == end) return(sc->nil);
     }
   if ((end - start) > sc->max_list_length)
-    out_of_range_error_nr(sc, sc->vector_to_list_symbol, int_one, car(args), its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_to_list_symbol, int_one, car(args), it_is_too_large_string);
 
   check_free_heap_size(sc, end - start);
   sc->w = sc->nil;
@@ -40183,7 +40210,7 @@ a vector that points to the same elements as the original-vector but with differ
 	return(method_or_bust(sc, start, sc->subvector_symbol, args, sc->type_names[T_INTEGER], 2));
       offset = s7_integer_clamped_if_gmp(sc, start);
       if ((offset < 0) || (offset > orig_len))  /* we need this if, for example, offset == 9223372036854775807 */
-	out_of_range_error_nr(sc, sc->subvector_symbol, int_two, start, (offset < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->subvector_symbol, int_two, start, (offset < 0) ? it_is_negative_string : it_is_too_large_string);
       new_len -= offset;
 
       if (is_pair(cddr(args))) /* get end point in vector */
@@ -40194,7 +40221,7 @@ a vector that points to the same elements as the original-vector but with differ
 	    return(method_or_bust(sc, end, sc->subvector_symbol, args, sc->type_names[T_INTEGER], 3));
 	  new_end = s7_integer_clamped_if_gmp(sc, end);
 	  if ((new_end < 0) || (new_end > orig_len))
-	    out_of_range_error_nr(sc, sc->subvector_symbol, int_three, end, (new_end < 0) ? its_negative_string : its_too_large_string);
+	    out_of_range_error_nr(sc, sc->subvector_symbol, int_three, end, (new_end < 0) ? it_is_negative_string : it_is_too_large_string);
 	  if (offset > new_end)
 	    out_of_range_error_nr(sc, sc->subvector_symbol, int_two, start, wrap_string(sc, "start point > end point", 23));
 	  new_len = new_end - offset;
@@ -40255,7 +40282,7 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 {
   s7_int index = 0;
   if (vector_length(vect) == 0)
-    out_of_range_error_nr(sc, sc->vector_ref_symbol, int_one, vect, its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_ref_symbol, int_one, vect, it_is_too_large_string);
 
   if (vector_rank(vect) > 1)
     {
@@ -40269,7 +40296,7 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
 	    return(method_or_bust(sc, p, sc->vector_ref_symbol, set_ulist_1(sc, vect, indices), sc->type_names[T_INTEGER], i + 2));
           n = s7_integer_clamped_if_gmp(sc, p);
 	  if ((n < 0) || (n >= vector_dimension(vect, i)))
-	    out_of_range_error_nr(sc, sc->vector_ref_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? its_negative_string : its_too_large_string);
+	    out_of_range_error_nr(sc, sc->vector_ref_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? it_is_negative_string : it_is_too_large_string);
 
 	  index += n * vector_offset(vect, i);
 	}
@@ -40296,7 +40323,7 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
       index = s7_integer_clamped_if_gmp(sc, p);
 
       if ((index < 0) || (index >= vector_length(vect)))
-	out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, p, (index < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, p, (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
       if (is_not_null(cdr(indices)))                /* (let ((L #(#(1 2 3) #(4 5 6)))) (vector-ref L 1 2)) */
 	{
@@ -40334,7 +40361,7 @@ static s7_pointer vector_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer v, s7_int 
 {
   if ((i >= 0) && (i < vector_length(v)))
     return(vector_getter(v)(sc, v, i));
-  out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+  out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(v);
 }
 
@@ -40342,7 +40369,7 @@ static s7_pointer normal_vector_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer v, 
 {
   if ((i >= 0) && (i < vector_length(v)))
     return(vector_element(v, i));
-  out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+  out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(v);
 }
 
@@ -40375,7 +40402,7 @@ static inline s7_pointer vector_ref_p_pp(s7_scheme *sc, s7_pointer vec, s7_point
     return(g_vector_ref(sc, set_plist_2(sc, vec, ind)));
   index = s7_integer_clamped_if_gmp(sc, ind);
   if ((index < 0) || (index >= vector_length(vec)))
-    out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, ind, (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, ind, (index < 0) ? it_is_negative_string : it_is_too_large_string);
   return(vector_element(vec, index));
 }
 
@@ -40430,7 +40457,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
   if (is_immutable_vector(vec))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, vec));
   if (vector_length(vec) == 0)
-    out_of_range_error_nr(sc, sc->vector_set_symbol, int_one, vec, its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_set_symbol, int_one, vec, it_is_too_large_string);
 
   if (vector_rank(vec) > 1)
     {
@@ -40445,7 +40472,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	    return(method_or_bust(sc, p, sc->vector_set_symbol, args, sc->type_names[T_INTEGER], i + 2));
           n = s7_integer_clamped_if_gmp(sc, p);
 	  if ((n < 0) || (n >= vector_dimension(vec, i)))
-	    out_of_range_error_nr(sc, sc->vector_set_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? its_negative_string : its_too_large_string);
+	    out_of_range_error_nr(sc, sc->vector_set_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? it_is_negative_string : it_is_too_large_string);
 
 	  index += n * vector_offset(vec, i);
 	}
@@ -40470,7 +40497,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	return(method_or_bust(sc, p, sc->vector_set_symbol, args, sc->type_names[T_INTEGER], 2));
       index = s7_integer_clamped_if_gmp(sc, p);
       if ((index < 0) || (index >= vector_length(vec)))
-	out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, p, (index < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, p, (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
       if (is_not_null(cdddr(args)))
 	{
@@ -40508,7 +40535,7 @@ static s7_pointer vector_set_p_pip_unchecked(s7_scheme *sc, s7_pointer v, s7_int
 {
   if ((i >= 0) && (i < vector_length(v)))
     vector_element(v, i) = p;
-  else out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+  else out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p);
 }
 
@@ -40543,7 +40570,7 @@ static s7_pointer typed_vector_set_p_pip_unchecked(s7_scheme *sc, s7_pointer v, 
 {
   if ((i >= 0) && (i < vector_length(v)))
     typed_vector_setter(sc, v, i, p);
-  else out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+  else out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p);
 }
 
@@ -40581,7 +40608,7 @@ static s7_pointer g_vector_set_3(s7_scheme *sc, s7_pointer args)
     return(g_vector_set(sc, args));
   index = s7_integer_clamped_if_gmp(sc, ind);
   if ((index < 0) || (index >= vector_length(vec)))
-    out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
   val = caddr(args);
   if (is_typed_vector(vec))
@@ -40604,7 +40631,7 @@ static s7_pointer vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_pointer ind
     return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
   index = s7_integer_clamped_if_gmp(sc, ind);
   if ((index < 0) || (index >= vector_length(vec)))
-    out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
 
   if (is_typed_vector(vec))
     return(typed_vector_setter(sc, vec, index, val));
@@ -40651,7 +40678,7 @@ static s7_int multivector_length(s7_scheme *sc, s7_pointer x, s7_pointer caller)
   if (dims <= 0)                /* 0 if circular, negative if dotted */
     wrong_type_error_nr(sc, caller, 1, x, a_proper_list_string);
   if (dims > sc->max_vector_dimensions)
-    out_of_range_error_nr(sc, caller, int_one, x, its_too_large_string);
+    out_of_range_error_nr(sc, caller, int_one, x, it_is_too_large_string);
 
   for (y = x, len = 1; is_pair(y); y = cdr(y))
     {
@@ -40659,7 +40686,7 @@ static s7_int multivector_length(s7_scheme *sc, s7_pointer x, s7_pointer caller)
 	wrong_type_error_nr(sc, caller, position_of(y, x), car(y), sc->type_names[T_INTEGER]);
 #if HAVE_OVERFLOW_CHECKS
       if (multiply_overflow(len, s7_integer_clamped_if_gmp(sc, car(y)), &len)) /* or better perhaps len > sc->max_vector_length */
-	out_of_range_error_nr(sc, caller, wrap_integer(sc, position_of(y, x)), car(y), its_too_large_string);
+	out_of_range_error_nr(sc, caller, wrap_integer(sc, position_of(y, x)), car(y), it_is_too_large_string);
 #else
       len *= s7_integer_clamped_if_gmp(sc, car(y));
 #endif
@@ -40848,7 +40875,7 @@ static s7_pointer g_make_float_vector(s7_scheme *sc, s7_pointer args)
 
   len = s7_integer_clamped_if_gmp(sc, p);
   if ((len < 0) || (len > sc->max_vector_length))
-    out_of_range_error_nr(sc, sc->make_float_vector_symbol, int_one, p, (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_float_vector_symbol, int_one, p, (len < 0) ? it_is_negative_string : it_is_too_large_string);
 
   arr = mallocate_vector(sc, len * sizeof(s7_double));
   new_cell(sc, x, T_FLOAT_VECTOR | T_SAFE_PROCEDURE);
@@ -40921,7 +40948,7 @@ static s7_pointer g_make_int_vector(s7_scheme *sc, s7_pointer args)
 
   len = s7_integer_clamped_if_gmp(sc, p);
   if ((len < 0) || (len > sc->max_vector_length))
-    out_of_range_error_nr(sc, sc->make_int_vector_symbol, int_one, p, (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_int_vector_symbol, int_one, p, (len < 0) ? it_is_negative_string : it_is_too_large_string);
 
   arr = mallocate_vector(sc, len * sizeof(s7_int));
   new_cell(sc, x, T_INT_VECTOR | T_SAFE_PROCEDURE);
@@ -40966,7 +40993,7 @@ static s7_pointer g_make_byte_vector(s7_scheme *sc, s7_pointer args)
 	return(method_or_bust(sc, p, sc->make_byte_vector_symbol, args, sc->type_names[T_INTEGER], 1));
       len = s7_integer_clamped_if_gmp(sc, p);
       if ((len < 0) || (len > sc->max_vector_length))
-	out_of_range_error_nr(sc, sc->make_byte_vector_symbol, int_one, p, (len < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->make_byte_vector_symbol, int_one, p, (len < 0) ? it_is_negative_string : it_is_too_large_string);
     }
   if (is_pair(cdr(args)))
     {
@@ -40992,7 +41019,7 @@ static s7_pointer make_byte_vector_p_ii(s7_scheme *sc, s7_int len, s7_int init)
 {
   s7_pointer p;
   if ((len < 0) || (len > sc->max_vector_length))
-    out_of_range_error_nr(sc, sc->make_byte_vector_symbol, int_one, wrap_integer(sc, len), (len < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->make_byte_vector_symbol, int_one, wrap_integer(sc, len), (len < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((init < 0) || (init > 255))
     wrong_type_error_nr(sc, sc->make_byte_vector_symbol, 2, wrap_integer(sc, init), an_unsigned_byte_string);
   p = make_simple_byte_vector(sc, len);
@@ -41360,7 +41387,7 @@ static s7_pointer univect_ref(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	return(method_or_bust(sc, index, caller, args, sc->type_names[T_INTEGER], 2));
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= vector_length(v)))
-	sole_arg_out_of_range_error_nr(sc, caller, index, (ind < 0) ? its_negative_string : its_too_large_string);
+	sole_arg_out_of_range_error_nr(sc, caller, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
       if (!is_null(cddr(args)))
 	out_of_range_error_nr(sc, caller, int_two, cdr(args), too_many_indices_string);
     }
@@ -41377,7 +41404,7 @@ static s7_pointer univect_ref(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	    return(method_or_bust(sc, index, caller, args, sc->type_names[T_INTEGER], i + 2));
 	  n = s7_integer_clamped_if_gmp(sc, index);
 	  if ((n < 0) || (n >= vector_dimension(v, i)))
-	    out_of_range_error_nr(sc, caller, wrap_integer(sc, i + 2), index, (n < 0) ? its_negative_string : its_too_large_string);
+	    out_of_range_error_nr(sc, caller, wrap_integer(sc, i + 2), index, (n < 0) ? it_is_negative_string : it_is_too_large_string);
 	  ind += n * vector_offset(v, i);
 	}
       if (is_not_null(x))
@@ -41415,7 +41442,7 @@ static s7_pointer univect_set(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	    return(method_or_bust(sc, index, caller, args, sc->type_names[T_INTEGER], i + 2));
 	  n = s7_integer_clamped_if_gmp(sc, index);
 	  if ((n < 0) || (n >= vector_dimension(vec, i)))
-	    out_of_range_error_nr(sc, caller, wrap_integer(sc, i + 2), index, (n < 0) ? its_negative_string : its_too_large_string);
+	    out_of_range_error_nr(sc, caller, wrap_integer(sc, i + 2), index, (n < 0) ? it_is_negative_string : it_is_too_large_string);
 	  ind += n * vector_offset(vec, i);
 	}
       if (is_not_null(cdr(x)))
@@ -41435,7 +41462,7 @@ static s7_pointer univect_set(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	return(method_or_bust(sc, index, caller, args, sc->type_names[T_INTEGER], 2));
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= vector_length(vec)))
-	out_of_range_error_nr(sc, caller, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, caller, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
       if (is_not_null(cddr(p)))
 	error_nr(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_3(sc, wrap_string(sc, "too many arguments for ~A: ~S", 29), caller, args));
@@ -41486,7 +41513,7 @@ static inline s7_pointer float_vector_ref_p_pp(s7_scheme *sc, s7_pointer v, s7_p
     return(method_or_bust_pp(sc, index, sc->float_vector_ref_symbol, v, index, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
   return(make_real(sc, float_vector(v, ind)));
 }
 
@@ -41505,13 +41532,13 @@ static s7_pointer g_fv_ref_3(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->float_vector_ref_symbol, args, sc->type_names[T_INTEGER], 2));
   ind1 = s7_integer_clamped_if_gmp(sc, index);
   if ((ind1 < 0) || (ind1 >= vector_dimension(fv, 0)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, index, (ind1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, index, (ind1 < 0) ? it_is_negative_string : it_is_too_large_string);
   index = caddr(args);
   if (!s7_is_integer(index))
     return(method_or_bust(sc, index, sc->float_vector_ref_symbol, args, sc->type_names[T_INTEGER], 3));
   ind2 = s7_integer_clamped_if_gmp(sc, index);
   if ((ind2 < 0) || (ind2 >= vector_dimension(fv, 1)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_three, index, (ind2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_three, index, (ind2 < 0) ? it_is_negative_string : it_is_too_large_string);
   ind1 = ind1 * vector_offset(fv, 0) + ind2;
   return(make_real(sc, float_vector(fv, ind1)));
 }
@@ -41520,7 +41547,7 @@ static inline s7_int ref_check_index(s7_scheme *sc, s7_pointer v, s7_int i)
 {
   /* according to callgrind, it is faster to split out the bounds check */
   if ((i < 0) || (i >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(i);
 }
 
@@ -41530,20 +41557,20 @@ static s7_pointer float_vector_ref_p_pi_direct(s7_scheme *sc, s7_pointer v, s7_i
 static inline s7_double float_vector_ref_d_7pii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(float_vector(v, i2 + (i1 * vector_offset(v, 0))));
 }
 
 static s7_double float_vector_ref_d_7piii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i3 < 0) || (i3 >= vector_dimension(v, 2)))
-    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, small_int(4), wrap_integer(sc, i3), (i3 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_ref_symbol, small_int(4), wrap_integer(sc, i3), (i3 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(float_vector(v, i3 + (i2 * vector_offset(v, 1)) + (i1 * vector_offset(v, 0))));
 }
 
@@ -41577,7 +41604,7 @@ static s7_pointer g_fv_set_3(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->float_vector_set_symbol, args, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(fv)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
   value = caddr(args);
   if (!is_real(value))
     return(method_or_bust(sc, value, sc->float_vector_set_symbol, args, sc->type_names[T_REAL], 3));
@@ -41635,7 +41662,7 @@ static s7_double float_vector_set_d_7pid_direct(s7_scheme *unused_sc, s7_pointer
 static s7_int set_check_index(s7_scheme *sc, s7_pointer v, s7_int i)
 {
   if ((i < 0) || (i >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(i);
 }
 
@@ -41644,9 +41671,9 @@ static s7_double float_vector_set_d_7pid(s7_scheme *sc, s7_pointer v, s7_int i, 
 static s7_double float_vector_set_d_7piid(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_double x)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   float_vector(v, i2 + (i1 * vector_offset(v, 0))) = x;
   return(x);
 }
@@ -41654,11 +41681,11 @@ static s7_double float_vector_set_d_7piid(s7_scheme *sc, s7_pointer v, s7_int i1
 static s7_double float_vector_set_d_7piiid(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3, s7_double x)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i3 < 0) || (i3 >= vector_dimension(v, 2)))
-    out_of_range_error_nr(sc, sc->float_vector_set_symbol, small_int(4), wrap_integer(sc, i3), (i3 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, small_int(4), wrap_integer(sc, i3), (i3 < 0) ? it_is_negative_string : it_is_too_large_string);
   float_vector(v, i3 + (i2 * vector_offset(v, 1)) + (i1 * vector_offset(v, 0))) = x;
   return(x);
 }
@@ -41686,27 +41713,27 @@ static s7_pointer int_vector_ref_p_pi_direct(s7_scheme *sc, s7_pointer v, s7_int
 static s7_int int_vector_ref_i_7pi(s7_scheme *sc, s7_pointer v, s7_int i)
 {
   if ((i < 0) || (i >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(int_vector(v, i));
 }
 
 static s7_int int_vector_ref_i_7pii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(int_vector(v, i2 + (i1 * vector_offset(v, 0))));
 }
 
 static s7_int int_vector_ref_i_7piii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i3 < 0) || (i3 >= vector_dimension(v, 2)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, small_int(4), wrap_integer(sc, i3), (i3 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, small_int(4), wrap_integer(sc, i3), (i3 < 0) ? it_is_negative_string : it_is_too_large_string);
   return(int_vector(v, i3 + (i2 * vector_offset(v, 1)) + (i1 * vector_offset(v, 0))));
 }
 
@@ -41721,7 +41748,7 @@ static inline s7_pointer int_vector_ref_p_pp(s7_scheme *sc, s7_pointer v, s7_poi
     return(method_or_bust_pp(sc, index, sc->int_vector_ref_symbol, v, index, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
   return(make_integer(sc, int_vector(v, ind)));
 }
 
@@ -41740,13 +41767,13 @@ static s7_pointer g_iv_ref_3(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->int_vector_ref_symbol, args, sc->type_names[T_INTEGER], 2));
   ind1 = s7_integer_clamped_if_gmp(sc, index);
   if ((ind1 < 0) || (ind1 >= vector_dimension(iv, 0)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, index, (ind1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_two, index, (ind1 < 0) ? it_is_negative_string : it_is_too_large_string);
   index = caddr(args);
   if (!s7_is_integer(index))
     return(method_or_bust(sc, index, sc->int_vector_ref_symbol, args, sc->type_names[T_INTEGER], 3));
   ind2 = s7_integer_clamped_if_gmp(sc, index);
   if ((ind2 < 0) || (ind2 >= vector_dimension(iv, 1)))
-    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_three, index, (ind2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_ref_symbol, int_three, index, (ind2 < 0) ? it_is_negative_string : it_is_too_large_string);
   ind1 = ind1 * vector_offset(iv, 0) + ind2;
   return(make_integer(sc, int_vector(iv, ind1)));
 }
@@ -41776,7 +41803,7 @@ static s7_pointer int_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_in
 static s7_int int_vector_set_i_7pii(s7_scheme *sc, s7_pointer v, s7_int i, s7_int x)
 {
   if ((i < 0) || (i >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   int_vector(v, i) = x;
   return(x);
 }
@@ -41784,9 +41811,9 @@ static s7_int int_vector_set_i_7pii(s7_scheme *sc, s7_pointer v, s7_int i, s7_in
 static s7_int int_vector_set_i_7piii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   int_vector(v, i2 + (i1 * vector_offset(v, 0))) = i3;
   return(i3);
 }
@@ -41798,7 +41825,7 @@ static s7_pointer int_vector_set_p_ppp(s7_scheme *sc, s7_pointer v, s7_pointer i
     {
       s7_int i = integer(index);
       if ((i < 0) || (i >= vector_length(v)))
-	out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, index, (i < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, index, (i < 0) ? it_is_negative_string : it_is_too_large_string);
       int_vector(v, i) = integer(val);
     }
   else
@@ -41817,7 +41844,7 @@ static s7_pointer int_vector_set_p_ppp(s7_scheme *sc, s7_pointer v, s7_pointer i
       {
 	s7_int i = s7_integer_clamped_if_gmp(sc, index);
 	if ((i < 0) || (i >= vector_length(v)))
-	  out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, index, (i < 0) ? its_negative_string : its_too_large_string);
+	  out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, index, (i < 0) ? it_is_negative_string : it_is_too_large_string);
 	int_vector(v, i) = s7_integer_clamped_if_gmp(sc, val);
       }
 #else
@@ -41842,7 +41869,7 @@ static s7_pointer g_iv_set_3(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->int_vector_set_symbol, args, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
   value = caddr(args);
   if (!s7_is_integer(value))
     return(method_or_bust(sc, value, sc->int_vector_set_symbol, args, sc->type_names[T_INTEGER], 3));
@@ -41869,16 +41896,16 @@ static s7_pointer g_byte_vector_ref(s7_scheme *sc, s7_pointer args)
 static s7_int byte_vector_ref_i_7pi(s7_scheme *sc, s7_pointer p1, s7_int i1)
 {
   if ((i1 < 0) || (i1 >= byte_vector_length(p1)))
-    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   return((s7_int)((byte_vector(p1, i1))));
 }
 
 static s7_int byte_vector_ref_i_7pii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2)
 {
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   return((s7_int)byte_vector(v, i2 + (i1 * vector_offset(v, 0))));
 }
 
@@ -41898,7 +41925,7 @@ static s7_pointer g_bv_ref_2(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->byte_vector_ref_symbol, args, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
   return(small_int(byte_vector(v, ind)));
 }
 
@@ -41915,13 +41942,13 @@ static s7_pointer g_bv_ref_3(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->byte_vector_ref_symbol, args, sc->type_names[T_INTEGER], 2));
   ind1 = s7_integer_clamped_if_gmp(sc, index);
   if ((ind1 < 0) || (ind1 >= vector_dimension(iv, 0)))
-    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, index, (ind1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_two, index, (ind1 < 0) ? it_is_negative_string : it_is_too_large_string);
   index = caddr(args);
   if (!s7_is_integer(index))
     return(method_or_bust(sc, index, sc->byte_vector_ref_symbol, args, sc->type_names[T_INTEGER], 3));
   ind2 = s7_integer_clamped_if_gmp(sc, index);
   if ((ind2 < 0) || (ind2 >= vector_dimension(iv, 1)))
-    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_three, index, (ind2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_ref_symbol, int_three, index, (ind2 < 0) ? it_is_negative_string : it_is_too_large_string);
   ind1 = ind1 * vector_offset(iv, 0) + ind2;
   return(small_int(byte_vector(iv, ind1)));
 }
@@ -41947,7 +41974,7 @@ static s7_int byte_vector_set_i_7pii(s7_scheme *sc, s7_pointer p1, s7_int i1, s7
   if ((i2 < 0) || (i2 > 255))
     wrong_type_error_nr(sc, sc->byte_vector_set_symbol, 3, wrap_integer(sc, i2), an_unsigned_byte_string);
   if ((i1 < 0) || (i1 >= byte_vector_length(p1)))
-    out_of_range_error_nr(sc, sc->byte_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   byte_vector(p1, i1) = (uint8_t)i2;
   return(i2);
 }
@@ -41967,9 +41994,9 @@ static s7_int byte_vector_set_i_7piii(s7_scheme *sc, s7_pointer v, s7_int i1, s7
   if ((i3 < 0) || (i3 > 255))
     wrong_type_error_nr(sc, sc->byte_vector_set_symbol, 4, wrap_integer(sc, i3), an_unsigned_byte_string);
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
-    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
-    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->int_vector_set_symbol, int_three, wrap_integer(sc, i2), (i2 < 0) ? it_is_negative_string : it_is_too_large_string);
   byte_vector(v, i2 + (i1 * vector_offset(v, 0))) = i3;
   return(i3);
 }
@@ -41989,7 +42016,7 @@ static s7_pointer g_bv_set_3(s7_scheme *sc, s7_pointer args)
     return(method_or_bust(sc, index, sc->byte_vector_set_symbol, args, sc->type_names[T_INTEGER], 2));
   ind = s7_integer_clamped_if_gmp(sc, index);
   if ((ind < 0) || (ind >= vector_length(v)))
-    out_of_range_error_nr(sc, sc->byte_vector_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+    out_of_range_error_nr(sc, sc->byte_vector_set_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
   value = caddr(args);
   if (!s7_is_integer(value))
     return(method_or_bust(sc, value, sc->byte_vector_set_symbol, args, sc->type_names[T_INTEGER], 3));
@@ -43921,7 +43948,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 	out_of_range_error_nr(sc, caller, int_one, p, wrap_string(sc, "it should be a positive integer", 31));
       if ((size > sc->max_vector_length) ||
 	  (size >= (1LL << 32LL)))
-	out_of_range_error_nr(sc, caller, int_one, p, its_too_large_string);
+	out_of_range_error_nr(sc, caller, int_one, p, it_is_too_large_string);
 
       if (is_not_null(cdr(args)))
 	{
@@ -46356,7 +46383,7 @@ static s7_pointer g_is_aritable(s7_scheme *sc, s7_pointer args)
 
   num = s7_integer_clamped_if_gmp(sc, n);
   if (num < 0)
-    out_of_range_error_nr(sc, sc->is_aritable_symbol, int_two, n, its_negative_string);
+    out_of_range_error_nr(sc, sc->is_aritable_symbol, int_two, n, it_is_negative_string);
   if (num > MAX_ARITY) num = MAX_ARITY;
   return(make_boolean(sc, s7_is_aritable(sc, car(args), num)));
 }
@@ -78886,7 +78913,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 	      s7_pointer obj;
 	      s7_int index1 = integer(ind);
 	      if ((index1 < 0) || (index1 >= vector_length(vect)))
-		out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, car(inds), (index1 < 0) ? its_negative_string : its_too_large_string);
+		out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, car(inds), (index1 < 0) ? it_is_negative_string : it_is_too_large_string);
 	      obj = vector_element(vect, index1);
 	      if (!is_applicable(obj))
 		error_nr(sc, sc->no_setter_symbol,
@@ -78973,7 +79000,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be an integer: ~S", 41), sc->code));
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= vector_length(vect)))
-	out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->vector_set_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
       value = car(val);
       if (!is_pair(value))
 	{
@@ -79090,7 +79117,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer inds
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "index must be an integer: ~S", 28), form));
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= string_length(str)))
-	out_of_range_error_nr(sc, sc->string_set_symbol, int_two, index, (ind < 0) ? its_negative_string : its_too_large_string);
+	out_of_range_error_nr(sc, sc->string_set_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
       if (is_immutable(str))
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, str));
 
@@ -81239,9 +81266,9 @@ static bool opt_do_copy(s7_scheme *sc, opt_info *o, s7_int start, s7_int stop)
 	    caller = sc->list_set_symbol;
 	  else return(false);
       if (start < 0)
-	out_of_range_error_nr(sc, caller, wrap_integer(sc, 2), wrap_integer(sc, start), its_negative_string);
+	out_of_range_error_nr(sc, caller, wrap_integer(sc, 2), wrap_integer(sc, start), it_is_negative_string);
       if ((stop > integer(s7_length(sc, source))) || (stop > integer(s7_length(sc, dest))))
-	out_of_range_error_nr(sc, caller, wrap_integer(sc, 2), wrap_integer(sc, stop), its_too_large_string);
+	out_of_range_error_nr(sc, caller, wrap_integer(sc, 2), wrap_integer(sc, stop), it_is_too_large_string);
       if ((caller) && (copy_to_same_type(sc, dest, source, start, stop, start)))
 	return(true);
     }
@@ -82504,7 +82531,7 @@ static void apply_vector(s7_scheme *sc)                    /* -------- vector as
       if ((index >= 0) &&
 	  (index < vector_length(sc->code)))
 	sc->value = vector_getter(sc->code)(sc, sc->code, index);
-      else out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, car(sc->args), (index < 0) ? its_negative_string : its_too_large_string);
+      else out_of_range_error_nr(sc, sc->vector_ref_symbol, int_two, car(sc->args), (index < 0) ? it_is_negative_string : it_is_too_large_string);
     }
   else sc->value = vector_ref_1(sc, sc->code, sc->args);
 }
@@ -94898,8 +94925,8 @@ static void init_rootlet(s7_scheme *sc)
   /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
 
 #if EXPERIMENT
-  s7_define_function(sc, "nan/int", g_nan_with_payload, 1, 0, false, "");
-  s7_define_function(sc, "nan->int", g_nan_payload, 1, 0, false, "");
+  sc->nan_symbol = defun("nan", nan, 1, 0, false);
+  sc->nan_payload_symbol = defun("nan-payload", nan_payload, 1, 0, false);
 #endif
 
   set_scope_safe(global_value(sc->call_with_input_string_symbol));
@@ -95976,6 +96003,13 @@ int main(int argc, char **argv)
  *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
  *     [but isn't this inconsistent with (set! begin abs) above?]
- * to add line-number for nan, see #if EXPERIMENT code -- so far so good...
- *   this will change s7test a lot!, complex nan, negative nan I guess
+ * to add line-number for nan, see #if EXPERIMENT code
+ *   this will change s7test, complex nan, negative nan I guess
+ *   88716: (string->number "+nan.1") got +nan.1 but expected #f
+ *   88719: (string->number "+nan.0i") got +nan.0 but expected #f
+ *   88720: (string->number "+nan.00") got +nan.0 but expected #f
+ *   88721: (string->number "+nan.01i") got +nan.1 but expected #f
+ *   need nan-payload *feature*, need better num err checker (nan.-1, nan.+1, nan.nan|inf\-0 etc)
+ *   all real_NaN should pass the original through, -nan.123, nan.123+0i, nan.123+nan.123i??
+ *   need doc/msg229, maybe t725
  */
