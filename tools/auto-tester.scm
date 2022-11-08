@@ -817,7 +817,7 @@
 			  'negative? 'cons 'string-set! 'list-ref 'eqv? 'positive? '>= 'expt 'number->string 'zero? 'floor 'denominator 'integer->char
 			  'string? 'min '<= 'char->integer 'cos 'rationalize 'cadr 'sin 'char=?
 			  'list-set! 'defined? 'memq 'string-ref 'log
-			  'for-each 'map
+			  'for-each 'map 'nan 'nan-payload
 			  'round 'ceiling 'truncate 'string=? 'atan 'eof-object? 'numerator 'char? 'cosh 'member 'vector
 			  'even? 'string-append 'char-upcase 'sqrt 'my-make-string
 			  'char-alphabetic? 'odd? 'call-with-exit 'tanh 'copy 'sinh 'make-vector
@@ -996,7 +996,7 @@
 			  'undefined-function
 			  'subsequence
 			  'empty? 'indexable?
-			  'adjoin 'cdr-assoc
+			  ;'adjoin 'cdr-assoc
 			  'progv ;'value->symbol ;-- correctly different values sometimes, progv localizes
 			  'string-case 'concatenate
 			  '2^n? 'lognor 'ldb 'clamp
@@ -1048,7 +1048,7 @@
 		    "(make-hook)" "(make-hook '__x__)"
 		    "1+i" "0+i" "(ash 1 43)"  "(fib 8)" "(fibr 8)" "(fibf 8.0)"
 		    "(integer->char 255)" "(string (integer->char 255))" "(string #\\null)" "(byte-vector 0)"
-		    "pi" "+nan.0" "+inf.0" "-inf.0" "-nan.0"
+		    "pi" "+nan.0" "+nan.123" "+inf.0" "-inf.0" "-nan.0" "1.0e-309"
 		    "(list)" "(string)" "#r()" "#u()" "(vector)" "#i()" "(make-iterator #(10 20))" "#i(1)"
 		    "0" "1" "4" "1.0" "-1.0" "1.0+123.0i" "3/4" "(make-vector 3)" "(make-string 3 #\\space)" "(make-vector '(2 3))"
 		    "'((111 2222) (3 4))" "'((1 (2)) (((3) 4)))" "(byte-vector 255)" "(make-byte-vector '(2 3) 0)"
@@ -1190,6 +1190,7 @@
 		      "(mock-vector 1 2 3 4)"
 		      "(mock-hash-table 'b 2)"
 		      "(mock-c-pointer -1)"
+		      ;"(mock-port (open-input-port \"s7test.scm\"))"
 		      "(mock-random-state 1234)"))
 		    "'value"
 
@@ -1256,6 +1257,8 @@
 		    ;"(begin (list? (*s7* 'stacktrace-defaults)))"
 		    (reader-cond ((provided? 'debugging) "(when ((*s7* 'heap-size) < (ash 1 21)) (heap-analyze) (heap-scan 47))")) ;(+ 1 (random 47))))"))
 
+		    "(map (lambda (x) (catch #t (lambda () (vector->list x)) (lambda (t i) 'err))) (list #(1 2) 1))"
+
 		    "(cons-r 0 0 6)"
 		    "(list-r 0 0 6)"
 
@@ -1289,7 +1292,7 @@
 		    "my-let" "my-with-baffle" "fvset" "htset"
 		    "(catch #t (lambda () (+ 1 #(2))) (lambda (type info) 0))"
 
-		    #f #f #f
+		    ;#f #f #f
 		    ))
 
       (codes (vector
@@ -1412,8 +1415,13 @@
 
 	      (list (lambda (s) (string-append "(let ((x #f)) (for-each (lambda (y) (set! x y)) (list " s ")) x)"))
 		    (lambda (s) (string-append "((lambda (x) (for-each (lambda y (set! x (car y))) (list " s ")) x) #f)")))
-	      (list (lambda (s) (string-append "(let-temporarily (((*s7* 'safety) 1)) (apply begin (list " s ")))"))
-		    (lambda (s) (string-append "(let-temporarily (((*s7* 'safety) 1)) ((apply lambda () (list " s "))))")))
+
+	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'openlets) #f)) " s ")))"))
+                    (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'openlets))) (lambda () " s ") (lambda () (set! (*s7* 'openlets) old)))))")))
+	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'safety) 1)) " s ")))"))
+                    (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'safety))) (lambda () " s ") (lambda () (set! (*s7* 'safety) old)))))")))
+;;; (+ (dynamic-wind (lambda () #f) (lambda () (values 1 2 3)) (lambda () #f))): 6
+
 	      ))
 
       (chars (vector #\( #\( #\) #\space))) ; #\' #\/ #\# #\, #\` #\@ #\. #\:))  ; #\\ #\> #\space))
@@ -1427,7 +1435,7 @@
 
     (define (get-arg)
       (let ((str (args (random alen))))
-	(if (string? str) ; else #f
+	(if (string? str) ; else #f -> cyclic struct
 	    str
 	    (cycler (+ 3 (random 3))))))
 
@@ -1560,7 +1568,9 @@
       (let ((tree (with-input-from-string str read)))
 	(let walker ((p tree))
 	  (if (symbol? p)
-	      (format *stderr* "(~S ~S) " p (symbol->value p))
+	      (if (or (setter p) (setter (symbol->value p)))
+		  (format *stderr* "(~S ~S ~S) " p (symbol->value p) (or (setter p) (setter (symbol->value p))))
+		  (format *stderr* "(~S ~S) " p (symbol->value p)))
 	      (when (pair? p)
 		(walker (car p))
 		(walker (cdr p)))))))
@@ -1642,6 +1652,7 @@
 			   (eq? val4 'error))
 		       (catch #t
 			 (lambda ()
+			   (show-variables str)
 			   (format *stderr* "    from same-type symbol: ~S: ~S~%" error-type
 				   (if (and (pair? error-info)
 					    (string? (car error-info)))
@@ -1808,6 +1819,7 @@
 	(when (eq? outer-funcs last-func)
 	  (reseed))
 	(set! last-func outer-funcs))
+
       ;(unless (output-port? imfo) (format *stderr* "(new) imfo ~S -> ~S~%" estr imfo) (abort)) ; with-mock-data
       (set! error-info #f)
       (set! error-type 'no-error)

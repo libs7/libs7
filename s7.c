@@ -12121,9 +12121,9 @@ static bool is_NaN(s7_double x) {return(x != x);}
 #endif /* not sun */
 
 
+/* -------------------------------- NaN payloads -------------------------------- */
 typedef union {int64_t ix; double fx;} decode_float_t;
 
-#if EXPERIMENT
 static double nan_with_payload(int64_t payload)
 {
   decode_float_t num;
@@ -12147,15 +12147,20 @@ static s7_pointer g_nan(s7_scheme *sc, s7_pointer args)
 {
   #define H_nan "(nan int) returns a NaN with payload int"
   #define Q_nan s7_make_signature(sc, 2, sc->is_real_symbol, sc->is_integer_symbol)
-  s7_pointer x = car(args);
+  #define NAN_PAYLOAD_LIMIT (1LL << 51LL) /* 53 is probably ok, (nan (- (ash 1 53) 1)): +nan.9007199254740991 -- 52 bits available? */
+  s7_pointer x;
+  if (is_null(args)) return(real_NaN);
+  x = car(args);
   if (!is_t_integer(x))
     sole_arg_wrong_type_error_nr(sc, sc->nan_symbol, x, sc->type_names[T_INTEGER]);
   if (integer(x) < 0)
     sole_arg_out_of_range_error_nr(sc, sc->nan_symbol, set_elist_1(sc, x), it_is_negative_string);
+  if (integer(x) >= NAN_PAYLOAD_LIMIT)
+    sole_arg_out_of_range_error_nr(sc, sc->nan_symbol, set_elist_1(sc, x), it_is_too_large_string);
   return(make_nan_with_payload(sc, integer(x)));
 }
 
-static s7_int nan_payload(s7_scheme *sc, double x)
+static s7_int nan_payload(double x)
 {
   decode_float_t num;
   num.fx = x;
@@ -12166,45 +12171,17 @@ static s7_pointer g_nan_payload(s7_scheme *sc, s7_pointer args)
 {
   #define H_nan_payload "(nan-payload x) returns the payload associated with the NaN x"
   #define Q_nan_payload s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
-  s7_pointer x = car(args);  /* TODO: might be complex */
-  if ((!is_t_real(x)) || (!is_NaN(real(x))))
+  s7_pointer x = car(args);
+  if ((!is_t_real(x)) || (!is_NaN(real(x)))) /* for complex case, use real-part etc (see s7test.scm) */
     sole_arg_wrong_type_error_nr(sc, sc->nan_payload_symbol, x, wrap_string(sc, "a NaN", 5));
-  return(make_integer(sc, nan_payload(sc, real(x))));
+  return(make_integer(sc, nan_payload(real(x))));
 }
 
-/* <1> (nan 123)  ; maybe (nan) -> +nan.0?
- * +nan.123
- * <2> (nan? (nan 123))
- * #t
- * <3> (nan-payload (nan 123))
- * 123
- * <4> (nan 0)
- * +nan.0
- * <5> +nan.123 ; see below ca line 15294
- * +nan.123
- * <6> (nan? +nan.123)
- * #t
- * <7> (nan-payload +nan.123)
- * 123
- * <8> (nan 123.1)
- * error: nan argument, 123.1, is a real but should be an integer
- * <9> (nan -123)
- * error: nan argument, (-123), is out of range (it is negative)
- * <10> (nan-payload 123)
- * error: nan-payload argument, 123, is an integer but should be a NaN
- * <11> (arity nan)
- * (1 . 1)
- * <12> (arity nan-payload)
- * (1 . 1)
- * <13> (signature nan)
- * (real? integer?)
- * <14> (signature nan-payload)
- * (integer? real?)
- */
-/* no similar support for +inf.0 because inf is just 1 bit pattern in ieee754 */
-#endif
+/* no similar support for +inf.0 because inf is just a single bit pattern in ieee754 */
+/* all are "quiet" NaNs -- the "signalling" NaN is also single bit pattern, and no one actually wants one anyway */
 
 
+/* -------- gmp stuff -------- */
 #if WITH_GMP
 static mp_prec_t mpc_precision = DEFAULT_BIGNUM_PRECISION;
 static mp_prec_t mpc_set_default_precision(mp_prec_t prec) {mpc_precision = prec; return(prec);}
@@ -13873,23 +13850,24 @@ static int32_t dtoa_filter_special(double fp, char* dest, bool neg)
 
   if (!neg)
     {
-      dest[0] = '+';
+      dest[0] = '+'; /* else 1.0-nan...? */
       dest++;
     }
   if (bits & dtoa_fracmask)
     {
-      dest[0] = 'n'; dest[1] = 'a'; dest[2] = 'n'; dest[3] = '.'; dest[4] = '0';
+      s7_int payload = nan_payload(fp);
+      size_t len;
+      len = snprintf(dest, 22, "nan.%" ld64, payload);
+      /* dest[0] = 'n'; dest[1] = 'a'; dest[2] = 'n'; dest[3] = '.'; dest[4] = '0'; */
+      return((neg) ? len : len + 1);
     }
-  else
-    {
-      dest[0] = 'i'; dest[1] = 'n'; dest[2] = 'f'; dest[3] = '.'; dest[4] = '0';
-    }
+  dest[0] = 'i'; dest[1] = 'n'; dest[2] = 'f'; dest[3] = '.'; dest[4] = '0';
   return((neg) ? 5 : 6);
 }
 
 static inline int32_t fpconv_dtoa(double d, char dest[24])
 {
-  char digit[18];
+  char digit[23];
   int32_t str_len = 0, spec, K, ndigits;
   bool neg = false;
 
@@ -15204,16 +15182,16 @@ static s7_pointer make_undefined_bignum(s7_scheme *sc, const char *name)
 }
 #endif
 
-static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int32_t radix, bool want_symbol)
+static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int32_t radix, bool want_symbol, int32_t offset)
 {
   s7_int len = safe_strlen(p);
   if (p[len - 1] == 'i')       /* +nan.0[+/-]...i */
     {
-      if (len == 6)            /* +nan.0+i */
-	return(make_complex_not_0i(sc, x, (p[4] == '+') ? 1.0 : -1.0));
-      if ((len > 5) && (len < 1024)) /* make compiler happy */
+      if (len == (offset + 2))            /* +nan.0+i */
+	return(make_complex_not_0i(sc, x, (p[offset] == '+') ? 1.0 : -1.0));
+      if ((len > (offset + 1)) && (len < 1024)) /* make compiler happy */
 	{
-	  char *ip = copy_string_with_length((const char *)(p + 4), len - 5);
+	  char *ip = copy_string_with_length((const char *)(p + offset), len - offset - 1);
 	  s7_pointer imag = make_atom(sc, ip, radix, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR);
 	  free(ip);
 	  if (is_real(imag))
@@ -15222,14 +15200,16 @@ static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int
   return((want_symbol) ? make_symbol(sc, q) : sc->F);
 }
 
-static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radix, bool want_symbol)
+static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radix, bool want_symbol, int64_t rl_len)
 {
   s7_int len = safe_strlen(q);
-  if ((len > 7) && (len < 1024)) /* make compiler happy */
+  /* fprintf(stderr, "\n%s %s %" ld64, __func__, q, len); */
+  if ((len > rl_len) && (len < 1024)) /* make compiler happy */
     {
-      char *ip = copy_string_with_length((const char *)q, len - 7);
+      char *ip = copy_string_with_length((const char *)q, rl_len);
       s7_pointer rl = make_atom(sc, ip, radix, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR);
       free(ip);
+      /* fprintf(stderr, "\nrl: %s\n", display(rl)); */
       if (is_real(rl))
 	return(make_complex(sc, real_to_double(sc, rl, __func__), x));
     }
@@ -15312,19 +15292,26 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	    return((want_symbol) ? make_symbol(sc, q) : sc->F);
 	  if (c == 'n')
 	    {
-	      if (local_strcmp(p, "an.0"))         /* +nan.0 */
+	      if (local_strcmp(p, "an.0"))            /* +nan.0, even if we read -nan.0 -- what's the point of a negative NaN? */
 		return(real_NaN);
-	      if ((local_strncmp(p, "an.0", 4)) && /* +nan.0[+/-]...i */
+	      if ((local_strncmp(p, "an.0", 4)) &&    /* +nan.0[+/-]...i */
 		  ((p[4] == '+') || (p[4] == '-')))
-		return(nan1_or_bust(sc, NAN, p, q, radix, want_symbol));
-#if EXPERIMENT
+		return(nan1_or_bust(sc, NAN, p, q, radix, want_symbol, 4));
 	      /* read +/-nan.<int> or +/-nan.<int>+/-...i */
 	      if (local_strncmp(p, "an.", 3))         /* +nan.<int> */
 		{
 		  bool overflow = false;
+		  int32_t i;
+		  for (i = 3; IS_DIGIT(p[i], 10); i++);
+		  if ((p[i] == '+') || (p[i] == '-')) /* complex case */
+		    {
+		      int64_t payload = string_to_integer((char *)(p + 3), 10, &overflow);
+		      return(nan1_or_bust(sc, nan_with_payload(payload), p, q, radix, want_symbol, i));
+		    }
+		  if ((p[i] != '\0') && (!white_space[(uint8_t)(p[i])])) /* check for +nan.0i etc, '\0' is not white_space apparently */
+		    return((want_symbol) ? make_symbol(sc, q) : sc->F);
 		  return(make_nan_with_payload(sc, string_to_integer((char *)(p + 3), 10, &overflow)));
 		}
-#endif
 	    }
 	  if (c == 'i')
 	    {
@@ -15332,7 +15319,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		return((q[0] == '+') ? real_infinity : real_minus_infinity);
 	      if ((local_strncmp(p, "nf.0", 4)) &&
 		  ((p[4] == '+') || (p[4] == '-')))
-		return(nan1_or_bust(sc, (q[0] == '-') ? -INFINITY : INFINITY, p, q, radix, want_symbol));
+		return(nan1_or_bust(sc, (q[0] == '-') ? -INFINITY : INFINITY, p, q, radix, want_symbol, 4));
 	    }
 	  return((want_symbol) ? make_symbol(sc, q) : sc->F);
 	}
@@ -15460,11 +15447,16 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		/* now check for nan/inf as imaginary part */
 
 		if ((plus[0] == 'n') &&
-		    (local_strcmp(plus, "nan.0i")))
-		  return(nan2_or_bust(sc, (c == '+') ? NAN : -NAN, q, radix, want_symbol));
+		    (local_strncmp(plus, "nan.", 4)))
+		  {
+		    bool overflow = false;
+		    int64_t payload = string_to_integer((char *)(p + 5), 10, &overflow);
+		    /* fprintf(stderr, "\n%s: %s %s %ld %ld\n", __func__, p, q, (intptr_t)(p - q), payload); */
+		    return(nan2_or_bust(sc, nan_with_payload(payload), q, radix, want_symbol, (intptr_t)(p - q)));
+		  }
 		if ((plus[0] == 'i') &&
 		    (local_strcmp(plus, "inf.0i")))
-		  return(nan2_or_bust(sc, (c == '+') ? INFINITY : -INFINITY, q, radix, want_symbol));
+		  return(nan2_or_bust(sc, (c == '+') ? INFINITY : -INFINITY, q, radix, want_symbol, (intptr_t)(p - q)));
 		continue;
 
 		/* ratio marker */
@@ -94924,10 +94916,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->c_object_set_function = s7_make_safe_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
   /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
 
-#if EXPERIMENT
-  sc->nan_symbol = defun("nan", nan, 1, 0, false);
+  sc->nan_symbol = defun("nan", nan, 0, 1, false); /* (nan) -> +nan.0, (nan 123) -> +nan.123 */
   sc->nan_payload_symbol = defun("nan-payload", nan_payload, 1, 0, false);
-#endif
 
   set_scope_safe(global_value(sc->call_with_input_string_symbol));
   set_scope_safe(global_value(sc->call_with_input_file_symbol));
@@ -96003,13 +95993,5 @@ int main(int argc, char **argv)
  *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
  *     [but isn't this inconsistent with (set! begin abs) above?]
- * to add line-number for nan, see #if EXPERIMENT code
- *   this will change s7test, complex nan, negative nan I guess
- *   88716: (string->number "+nan.1") got +nan.1 but expected #f
- *   88719: (string->number "+nan.0i") got +nan.0 but expected #f
- *   88720: (string->number "+nan.00") got +nan.0 but expected #f
- *   88721: (string->number "+nan.01i") got +nan.1 but expected #f
- *   need nan-payload *feature*, need better num err checker (nan.-1, nan.+1, nan.nan|inf\-0 etc)
- *   all real_NaN should pass the original through, -nan.123, nan.123+0i, nan.123+nan.123i??
- *   need doc/msg229, maybe t725
+ * to add line-number for nan: all real_NaN should pass the original through
  */

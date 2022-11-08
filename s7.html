@@ -345,7 +345,7 @@ s7 includes:
 <li>sinh, cosh, tanh, asinh, acosh, atanh
 <li>logior, logxor, logand, lognot, logbit?, ash, integer-decode-float
 <li>random
-<li>nan?, infinite?
+<li>nan?, infinite?, nan, nan-payload
 </ul>
 
 <p>
@@ -419,9 +419,24 @@ In s7, "@" is an exponent marker.
 </pre>
 </div>
 
+<div class="indented">
+<p>
+The funtions <b>nan</b> and <b>nan-payload</b> refer to the "payload" that can be associated with a NaN.  s7's reader
+can read NaNs with these payloads: <code>+nan.123</code> is a NaN with payload 123.  s7 displays the NaN payload
+in the same way: +nan.123.  A NaN without any payload (or payload 0) is written +nan.0.
+</p>
+<pre class="indented">
+&gt; (nan 123)
+<em class="gray">+nan.123</em>
+&gt; (nan-payload (nan 123))
+<em class="gray">123</em>
+</pre>
+<p>
+The nan function (and s7's reader) always returns a positive NaN.  What is the point of a negative NaN, -nan.0?
+</p>
+</div>
 
 <div class="indented">
-
 <p>
 What is <code>(/ 1.0 0.0)</code>?  s7 gives a "division by zero" error here, and also in <code>(/ 1 0)</code>.
 Guile returns +inf.0 in the first case, which seems reasonable, but a "numerical overflow" error in the second.
