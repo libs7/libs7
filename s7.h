@@ -905,6 +905,7 @@ typedef s7_double s7_Double;
  *        s7 changes
  * 
  * --------
+ * 9-Nov:     nan, nan-payload, +nan.<int>.
  * 19-Oct:    s7_let_field* synonyms: s7_starlet*.
  * 16-Sep:    s7_number_to_real_with_location. s7_wrong_type_error. s7_make_string_wrapper_with_length. s7_make_semipermanent_string.
  * 21-Apr:    s7_is_multiple_value.

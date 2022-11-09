@@ -740,10 +740,6 @@
                   					     s7_string(s7_caddr(args)), 
                   					     (const struct tm *)s7_c_pointer(s7_cadddr(args)))));
                   }
-                  static s7_pointer g_asctime(s7_scheme *sc, s7_pointer args) 
-                  {
-                    return(s7_make_string(sc, asctime((const struct tm *)s7_c_pointer(s7_car(args)))));
-                  }
                   static s7_pointer g_gettimeofday(s7_scheme *sc, s7_pointer args)
                   {
                     struct timeval t0;
@@ -814,7 +810,6 @@
                   ")
 	   (C-function ("time.make" g_time_make "" 1))
 	   (C-function ("mktime" g_mktime "" 1))
-	   (C-function ("asctime" g_asctime "" 1))
 	   (C-function ("strftime" g_strftime "" 4))
 	   (C-function ("gettimeofday" g_gettimeofday "" 0))
 	   (C-function ("nanosleep" g_nanosleep "" 2))

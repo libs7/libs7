@@ -333,7 +333,7 @@
 #endif
 
 #ifdef _MSC_VER
-  #define noreturn _Noreturn
+  #define noreturn _Noreturn /* deprecated in C23 */
 #else
   #define noreturn __attribute__((noreturn))
   /* this is ok in gcc/g++/clang and tcc; pure attribute is rarely applicable here, and does not seem to be helpful (maybe safe_strlen) */
@@ -4040,24 +4040,20 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
   return((char *)(p + 1));
 }
 
-#if S7_DEBUGGING && WITH_GCC
-  static s7_pointer lookup_1(s7_scheme *sc, s7_pointer symbol);
-  #define lookup(Sc, Sym) check_null_sym(Sc, lookup_1(Sc, Sym), Sym, __LINE__, __func__)
-  static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, int32_t line, const char *func);
-  #define lookup_unexamined(Sc, Sym) lookup_1(Sc, Sym)
-#else
-  static inline s7_pointer lookup(s7_scheme *sc, s7_pointer symbol);
-  /* #define lookup_unexamined(Sc, Sym) lookup(Sc, Sym) */ /* changed 3-Nov-22 -- we're using lookup_unexamined below to avoid the unbound_variable check */
-  #define lookup_unexamined(Sc, Sym) s7_symbol_value(Sc, Sym)
-#endif
-
 #if WITH_GCC
   #if S7_DEBUGGING
+    static s7_pointer lookup_1(s7_scheme *sc, s7_pointer symbol);
+    #define lookup(Sc, Sym) check_null_sym(Sc, lookup_1(Sc, Sym), Sym, __LINE__, __func__)
+    static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, int32_t line, const char *func);
+    #define lookup_unexamined(Sc, Sym) lookup_1(Sc, Sym)
     #define lookup_checked(Sc, Sym) ({s7_pointer _x_; _x_ = lookup_1(Sc, Sym); ((_x_) ? _x_ : unbound_variable(Sc, Sym));})
   #else
+    static inline s7_pointer lookup(s7_scheme *sc, s7_pointer symbol);
+    #define lookup_unexamined(Sc, Sym) lookup(Sc, Sym)
     #define lookup_checked(Sc, Sym) ({s7_pointer _x_; _x_ = lookup(Sc, Sym); ((_x_) ? _x_ : unbound_variable(Sc, Sym));})
   #endif
 #else
+  #define lookup_unexamined(Sc, Sym) s7_symbol_value(Sc, Sym)  /* changed 3-Nov-22 -- we're using lookup_unexamined below to avoid the unbound_variable check */
   #define lookup_checked(Sc, Sym) lookup(Sc, Sym)
 #endif
 
@@ -5968,7 +5964,7 @@ s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg
   return(sc->wrong_type_arg_symbol);
 }
 
-/* noreturn? */ s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
+s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr)
 {
   if (arg_n > 0) wrong_type_error_nr(sc, caller, arg_n, arg, descr);
   sole_arg_wrong_type_error_nr(sc, caller, arg, descr);
@@ -9357,7 +9353,7 @@ s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointe
 
   if ((is_slot(global_slot(symbol))) &&
       (is_syntax(global_value(symbol))))
-    wrong_type_error_nr(sc, sc->varlet_symbol, 2, symbol, wrap_string(sc, "a non-syntactic name", 20));
+    wrong_type_error_nr(sc, sc->varlet_symbol, 2, symbol, wrap_string(sc, "a non-syntactic symbol", 22));
 
   if (let == sc->rootlet)
     {
@@ -9440,7 +9436,7 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
 	  if (is_slot(global_slot(sym)))
 	    {
 	      if (is_syntax(global_value(sym)))
-		wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, wrap_string(sc, "a non-syntactic keyword", 23));
+		wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, wrap_string(sc, "a non-syntactic symbol", 22));
 	      /*  without this check we can end up turning our code into gibberish:
 	       *    (set! quote 1) -> ;can't set! quote
 	       *    (varlet (rootlet) '(quote . 1)), :quote -> 1
@@ -9587,7 +9583,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	    wrong_type_error_nr(sc, caller, 1 + position_of(x, bindings), sym, a_non_constant_symbol_string);
 	  if ((is_slot(global_slot(sym))) &&
 	      (is_syntax_or_qq(global_value(sym))))
-	    wrong_type_error_nr(sc, caller, 2, sym, wrap_string(sc, "a non-syntactic name", 20));
+	    wrong_type_error_nr(sc, caller, 2, sym, wrap_string(sc, "a non-syntactic symbol", 22));
 
 	  /* here we know new_e is a let and is not rootlet */
 	  if (!sp)
@@ -9696,7 +9692,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
     wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string);
   if ((is_global(symbol)) &&
       (is_syntax_or_qq(global_value(symbol))))
-    wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, wrap_string(sc, "a non-syntactic name", 20));
+    wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, wrap_string(sc, "a non-syntactic symbol", 22));
 
   new_cell(sc, x, T_LET | T_SAFE_PROCEDURE);
   sc->temp3 = x;
@@ -10018,7 +10014,7 @@ static s7_pointer let_set_1(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_3(sc, wrap_string(sc, "let-set!: ~A is not defined in ~A", 33), symbol, let));
       if (is_syntax(slot_value(slot)))
-	wrong_type_error_nr(sc, sc->let_set_symbol, 2, symbol, wrap_string(sc, "a non-syntactic keyword", 23));
+	wrong_type_error_nr(sc, sc->let_set_symbol, 2, symbol, wrap_string(sc, "a non-syntactic symbol", 22));
       slot_set_value(slot, (slot_has_setter(slot)) ? call_setter(sc, slot, value) : value);
       return(slot_value(slot));
     }
@@ -12757,8 +12753,7 @@ static s7_pointer string_to_either_ratio(s7_scheme *sc, const char *nstr, const 
   if (!overflow)
     {
       s7_int n;
-      if (d == 0)
-	return(real_NaN);
+      if (d == 0) return(real_NaN);
       n = string_to_integer(nstr, radix, &overflow);
       if (!overflow)
 	return(make_ratio(sc, n, d));
@@ -15262,9 +15257,9 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 {
   /* make symbol or number from string, a number starts with + - . or digit, but so does 1+ for example */
 #if WITH_NUMBER_SEPARATOR
-  #define IS_DIGIT(Chr, Rad) ((digits[(uint8_t)Chr] < Rad) || ((Chr == sc->number_separator) && (sc->number_separator != '\0')))
+  #define is_digit(Chr, Rad) ((digits[(uint8_t)Chr] < Rad) || ((Chr == sc->number_separator) && (sc->number_separator != '\0')))
 #else
-  #define IS_DIGIT(Chr, Rad) (digits[(uint8_t)Chr] < Rad)
+  #define is_digit(Chr, Rad) (digits[(uint8_t)Chr] < Rad)
 #endif
   char c, *p = q;
   bool has_dec_point1 = false;
@@ -15286,7 +15281,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	}
       if (!c)
 	return((want_symbol) ? make_symbol(sc, q) : sc->F);
-      if (!IS_DIGIT(c, radix))
+      if (!is_digit(c, radix))
 	{
 	  if (has_dec_point1)
 	    return((want_symbol) ? make_symbol(sc, q) : sc->F);
@@ -15302,7 +15297,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		{
 		  bool overflow = false;
 		  int32_t i;
-		  for (i = 3; IS_DIGIT(p[i], 10); i++);
+		  for (i = 3; is_digit(p[i], 10); i++);
 		  if ((p[i] == '+') || (p[i] == '-')) /* complex case */
 		    {
 		      int64_t payload = string_to_integer((char *)(p + 3), 10, &overflow);
@@ -15311,8 +15306,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		  if ((p[i] != '\0') && (!white_space[(uint8_t)(p[i])])) /* check for +nan.0i etc, '\0' is not white_space apparently */
 		    return((want_symbol) ? make_symbol(sc, q) : sc->F);
 		  return(make_nan_with_payload(sc, string_to_integer((char *)(p + 3), 10, &overflow)));
-		}
-	    }
+		}}
 	  if (c == 'i')
 	    {
 	      if (local_strcmp(p, "nf.0"))  /* +inf.0 */
@@ -15328,7 +15322,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
     case '.':
       has_dec_point1 = true;
       c = *p++;
-      if ((!c) || (!IS_DIGIT(c, radix)))
+      if ((!c) || (!is_digit(c, radix)))
 	return((want_symbol) ? make_symbol(sc, q) : sc->F);
       break;
 
@@ -15343,7 +15337,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
       break;
 
     default:
-      if (!IS_DIGIT(c, radix))
+      if (!is_digit(c, radix))
 	return((want_symbol) ? make_symbol(sc, q) : sc->F);
       break;
     }
@@ -15364,7 +15358,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	 *   currently we stop and return 1, but Guile returns #f.
 	 *   this also means we can't use substring_uncopied if (string->number (substring...))
 	 */
-	if (!IS_DIGIT(c, current_radix))         /* moving this inside the switch statement was much slower */
+	if (!is_digit(c, current_radix))         /* moving this inside the switch statement was much slower */
 	  {
 	    current_radix = radix;
 
@@ -15372,8 +15366,8 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	      {
 		/* -------- decimal point -------- */
 	      case '.':
-		if ((!IS_DIGIT(p[1], current_radix)) &&
-		    (!IS_DIGIT(p[-1], current_radix)))
+		if ((!is_digit(p[1], current_radix)) &&
+		    (!is_digit(p[-1], current_radix)))
 		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
 
 		if (has_plus_or_minus == 0)
@@ -15416,7 +15410,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		    (has_plus_or_minus != 0)) /* 1+1.0ee */
 		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
 
-		if ((!IS_DIGIT(p[-1], radix)) && /* was current_radix but that's always 10! */
+		if ((!is_digit(p[-1], radix)) && /* was current_radix but that's always 10! */
 		    (p[-1] != '.'))
 		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
 
@@ -15432,7 +15426,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		  }
 		p++;
 		if ((*p == '-') || (*p == '+')) p++;
-		if (IS_DIGIT(*p, current_radix))
+		if (is_digit(*p, current_radix))
 		  continue;
 		break;
 
@@ -15477,8 +15471,8 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		  slash1 = (char *)(p + 1);
 		else slash2 = (char *)(p + 1);
 
-		if ((!IS_DIGIT(p[1], current_radix)) ||
-		    (!IS_DIGIT(p[-1], current_radix)))
+		if ((!is_digit(p[1], current_radix)) ||
+		    (!is_digit(p[-1], current_radix)))
 		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
 
 		continue;
@@ -15650,8 +15644,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 
 	if ((n == 0) && (d != 0))                        /* 0/100000000000000000000000000000000000000 */
 	  return(int_zero);
-	if (d == 0)
-	  return(real_NaN);
+	if (d == 0) return(real_NaN);
 	if (overflow) return(make_undefined_bignum(sc, q));
 	/* it would be neat to return 1 from 10000000000000000000000000000/10000000000000000000000000000
 	 *   but q is the entire number ('/' included) and slash1 is the stuff after the '/', and every
@@ -15757,8 +15750,8 @@ static inline s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
     }
   if (is_t_real(x))
     {
-      if (is_NaN(real(x)))                  /* (abs -nan.0) -> +nan.0, not -nan.0 */
-	return(real_NaN);
+      if (is_NaN(real(x))) 
+	return((nan_payload(real(x)) > 0) ? x : real_NaN);         /* (abs -nan.0) -> +nan.0?? */
       return((signbit(real(x))) ? make_real(sc, -real(x)) : x);
     }
 #endif
@@ -15803,7 +15796,7 @@ static inline s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
 
     case T_REAL:
       if (is_NaN(real(x)))                  /* (abs -nan.0) -> +nan.0, not -nan.0 */
-	return(real_NaN);
+	return((nan_payload(real(x)) > 0) ? x : real_NaN);
       return((signbit(real(x))) ? make_real(sc, -real(x)) : x); /* (abs -0.0) returns -0.0 -- Shiro Kawai */
 #if WITH_GMP
     case T_BIG_INTEGER:
@@ -15839,14 +15832,15 @@ static double my_hypot(double x, double y)
   if (x == 0.0) return(fabs(y));
   if (y == 0.0) return(fabs(x));
   if (x == y) return(1.414213562373095 * fabs(x));
-  if ((is_NaN(x)) || (is_NaN(y))) return(NAN);
+  if (is_NaN(x)) return(x);
+  if (is_NaN(y)) return(y);
   return(sqrt(x * x + y * y));
 }
 
 static s7_pointer magnitude_p_p(s7_scheme *sc, s7_pointer x)
 {
   if (is_t_complex(x))
-    return(make_real(sc, my_hypot(imag_part(x), real_part(x))));
+    return(make_real(sc, my_hypot(real_part(x), imag_part(x)))); /* was reversed? 8-Nov-22 */
 
   switch (type(x))
     {
@@ -15860,7 +15854,7 @@ static s7_pointer magnitude_p_p(s7_scheme *sc, s7_pointer x)
       return((numerator(x) < 0) ? make_simple_ratio(sc, -numerator(x), denominator(x)) : x);
     case T_REAL:
       if (is_NaN(real(x)))                 /* (magnitude -nan.0) -> +nan.0, not -nan.0 */
-	return(real_NaN);
+	return((nan_payload(real(x)) > 0) ? x : real_NaN);
       return((signbit(real(x))) ? make_real(sc, -real(x)) : x);
 #if WITH_GMP
     case T_BIG_INTEGER:
@@ -16647,8 +16641,8 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
 	  out_of_range_error_nr(sc, sc->log_symbol, int_two, y, wrap_string(sc, "can't be zero", 13));
 	}
 
-      if ((is_t_real(x)) && (is_NaN(real(x))))
-	return(real_NaN);
+      if ((is_t_real(x)) && (is_NaN(real(x)))) 
+	return(x);
       if (is_one(y))                                     /* this used to raise an error, but the bignum case is simpler if we return inf */
 	return((is_one(x)) ? real_zero : real_infinity); /* but (log 1.0 1.0) -> 0.0, currently (log 1/0 1) is inf? */
 
@@ -16679,9 +16673,9 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
 	  return(make_real(sc, log(s7_real(x)) / log(s7_real(y))));
 	}
       if ((is_t_real(x)) && (is_NaN(real(x))))
-	return(real_NaN);
+	return(x);
       if ((is_t_complex(y)) && ((is_NaN(real_part(y))) || (is_NaN(imag_part(y)))))
-	return(real_NaN);
+	return(y);
       return(c_complex_to_s7(sc, clog(s7_to_c_complex(x)) / clog(s7_to_c_complex(y))));
     }
 
@@ -17441,7 +17435,7 @@ static s7_pointer tanh_p_p(s7_scheme *sc, s7_pointer x)
       mpfr_set_q(sc->mpfr_1, big_ratio(x), MPFR_RNDN);
       goto BIG_REAL_TANH;
     case T_BIG_REAL:
-      if (mpfr_nan_p(big_real(x))) return(real_NaN);
+      if (mpfr_nan_p(big_real(x))) return(x);
       mpfr_set(sc->mpfr_1, big_real(x), MPFR_RNDN);
     BIG_REAL_TANH:
       if (mpfr_cmp_d(sc->mpfr_1, TANH_LIMIT) > 0) return(real_one);
@@ -17713,8 +17707,7 @@ static s7_pointer sqrt_p_p(s7_scheme *sc, s7_pointer p)
 #endif
 
     case T_REAL:
-      if (is_NaN(real(p)))
-	return(real_NaN);
+      if (is_NaN(real(p))) return(p);
       if (real(p) >= 0.0)
 	return(make_real(sc, sqrt(real(p))));
       return(make_complex_not_0i(sc, 0.0, sqrt(-real(p))));
@@ -18050,7 +18043,7 @@ static s7_pointer expt_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer pw)
 	    division_by_zero_error_2_nr(sc, sc->expt_symbol, n, pw);
 	  if ((is_NaN(real_part(pw))) ||                       /* (expt 0 0+1/0i) */
 	      (is_NaN(imag_part(pw))))
-	    return(real_NaN);
+	    return(pw);
 	}
       if ((s7_is_integer(n)) && (s7_is_integer(pw)))           /* pw != 0, (expt 0 2312) */
 	return(int_zero);
@@ -19140,7 +19133,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_add(sc->mpq_1, sc->mpq_2, sc->mpq_1);
 	  return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_set_d(sc->mpfr_1, real(y), MPFR_RNDN);
 	  mpfr_add_z(sc->mpfr_1, sc->mpfr_1, big_integer(x), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
@@ -19179,7 +19172,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_add(sc->mpq_1, big_ratio(x), sc->mpq_1);
 	  return(mpq_to_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_set_d(sc->mpfr_1, real(y), MPFR_RNDN);
 	  mpfr_add_q(sc->mpfr_1, sc->mpfr_1, big_ratio(x), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
@@ -19217,7 +19210,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpfr_add_q(sc->mpfr_1, big_real(x), sc->mpq_1, MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_add_d(sc->mpfr_1, big_real(x), real(y), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_COMPLEX:
@@ -19252,7 +19245,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpc_add(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
 	case T_REAL:
-	  /* if (is_NaN(real(y))) return(real_NaN); */
+	  /* if (is_NaN(real(y))) return(y); */
 	  mpc_set_d_d(sc->mpc_1, real(y), 0.0, MPC_RNDNN);
 	  mpc_add(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
@@ -19917,7 +19910,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_sub(sc->mpq_1, sc->mpq_2, sc->mpq_1);
 	  return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_set_z(sc->mpfr_1, big_integer(x), MPFR_RNDN);
 	  mpfr_sub_d(sc->mpfr_1, sc->mpfr_1, real(y), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
@@ -19957,7 +19950,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_sub(sc->mpq_1, big_ratio(x), sc->mpq_1);
 	  return(mpq_to_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_set_q(sc->mpfr_1, big_ratio(x), MPFR_RNDN);
 	  mpfr_sub_d(sc->mpfr_1, sc->mpfr_1, real(y), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
@@ -19996,7 +19989,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpfr_sub_q(sc->mpfr_1, big_real(x), sc->mpq_1, MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_sub_d(sc->mpfr_1, big_real(x), real(y), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_COMPLEX:
@@ -20031,7 +20024,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpc_sub(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
 	case T_REAL:
-	  /* if (is_NaN(real(y))) return(real_NaN); */
+	  /* if (is_NaN(real(y))) return(y); */
 	  mpc_set_d_d(sc->mpc_1, real(y), 0.0, MPC_RNDNN);
 	  mpc_sub(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
@@ -20477,7 +20470,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_mul(sc->mpq_1, sc->mpq_2, sc->mpq_1);
 	  return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_set_d(sc->mpfr_1, real(y), MPFR_RNDN);
 	  mpfr_mul_z(sc->mpfr_1, sc->mpfr_1, big_integer(x), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
@@ -20516,7 +20509,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_mul(sc->mpq_1, big_ratio(x), sc->mpq_1);
 	  return(mpq_to_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_set_d(sc->mpfr_1, real(y), MPFR_RNDN);
 	  mpfr_mul_q(sc->mpfr_1, sc->mpfr_1, big_ratio(x), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
@@ -20554,7 +20547,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpfr_mul_q(sc->mpfr_1, big_real(x), sc->mpq_1, MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  mpfr_mul_d(sc->mpfr_1, big_real(x), real(y), MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_COMPLEX:
@@ -20588,7 +20581,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpc_mul(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
 	case T_REAL:
-	  /* if (is_NaN(real(y))) return(real_NaN); */
+	  /* if (is_NaN(real(y))) return(y); */
 	  mpc_set_d_d(sc->mpc_1, real(y), 0.0, MPC_RNDNN);
 	  mpc_mul(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
@@ -20949,7 +20942,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #endif
 
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  if (is_inf(real(y))) return(real_zero);
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
@@ -21111,22 +21104,22 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_INTEGER:
 	  if (integer(y) == 0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
-	  if (is_NaN(real(x))) return(real_NaN); /* what is (/ +nan.0 0)? */
+	  if (is_NaN(real(x))) return(x); /* what is (/ +nan.0 0)? */
 	  if (is_inf(real(x)))
 	    return((real(x) > 0.0) ? ((integer(y) > 0) ? real_infinity : real_minus_infinity) : ((integer(y) > 0) ? real_minus_infinity : real_infinity));
 	  return(make_real(sc, (long_double)real(x) / (long_double)integer(y)));
 
 	case T_RATIO:
-	  if (is_NaN(real(x))) return(real_NaN);
+	  if (is_NaN(real(x))) return(x);
 	  if (is_inf(real(x)))
 	    return((real(x) > 0) ? ((numerator(y) > 0) ? real_infinity : real_minus_infinity) : ((numerator(y) > 0) ? real_minus_infinity : real_infinity));
 	  return(make_real(sc, real(x) * inverted_fraction(y)));
 
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
-	  if (is_NaN(real(x))) return(real_NaN);
+	  if (is_NaN(real(x))) return(x);
 	  if (is_inf(real(y)))
 	    return((is_inf(real(x))) ? real_NaN : real_zero);
 	  return(make_real(sc, real(x) / real(y)));
@@ -21201,14 +21194,14 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_COMPLEX:
 	  {
 	    s7_double r1 = real_part(x), r2, i1, i2, den;
-	    if (is_NaN(r1)) return(real_NaN);
+	    if (is_NaN(r1)) return(x);
 	    i1 = imag_part(x);
-	    if (is_NaN(i1)) return(real_NaN);
+	    if (is_NaN(i1)) return(x);
 	    r2 = real_part(y);
-	    if (is_NaN(r2)) return(real_NaN);
+	    if (is_NaN(r2)) return(y);
 	    if (is_inf(r2)) return(complex_NaN);
 	    i2 = imag_part(y);
-	    if (is_NaN(i2)) return(real_NaN);
+	    if (is_NaN(i2)) return(y);
 	    den = 1.0 / (r2 * r2 + i2 * i2);
 	    return(s7_make_complex(sc, (r1 * r2 + i1 * i2) * den, (r2 * i1 - r1 * i2) * den));
 	  }
@@ -21260,7 +21253,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_div(sc->mpq_1, sc->mpq_2, sc->mpq_1);
 	  return(mpq_to_canonicalized_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
 	  mpfr_set_z(sc->mpfr_1, big_integer(x), MPFR_RNDN);
@@ -21314,7 +21307,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpq_div(sc->mpq_1, big_ratio(x), sc->mpq_1);
 	  return(mpq_to_rational(sc, sc->mpq_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
 	  mpfr_set_q(sc->mpfr_1, big_ratio(x), MPFR_RNDN);
@@ -21365,7 +21358,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpfr_div_q(sc->mpfr_1, big_real(x), sc->mpq_1, MPFR_RNDN);
 	  return(mpfr_to_big_real(sc, sc->mpfr_1));
 	case T_REAL:
-	  if (is_NaN(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
 	  mpfr_div_d(sc->mpfr_1, big_real(x), real(y), MPFR_RNDN);
@@ -21413,7 +21406,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  mpc_div(sc->mpc_1, big_complex(x), sc->mpc_1, MPC_RNDNN);
 	  return(mpc_to_number(sc, sc->mpc_1));
 	case T_REAL:
-	  /* if (is_NaN(real(y))) return(real_NaN); */
+	  /* if (is_NaN(real(y))) return(y); */
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
 	  mpc_set_d_d(sc->mpc_1, real(y), 0.0, MPC_RNDNN);
@@ -21558,7 +21551,7 @@ static s7_pointer g_invert_x(s7_scheme *sc, s7_pointer args)
       s7_double rl = real(cadr(args));
       if (rl == 0.0)
 	division_by_zero_error_2_nr(sc, sc->divide_symbol, car(args), cadr(args));
-      return((is_NaN(rl)) ? real_NaN : make_real(sc, 1.0 / rl));
+      return((is_NaN(rl)) ? cadr(args) : make_real(sc, 1.0 / rl));
     }
   return(g_divide(sc, args));
 }
@@ -21684,8 +21677,8 @@ static s7_pointer quotient_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_REAL:
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->quotient_symbol, x, y);
-	  if ((is_inf(real(y))) || (is_NaN(real(y))))
-	    return(real_NaN);
+	  if (is_inf(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  return(s7_truncate(sc, sc->quotient_symbol, (s7_double)integer(x) / real(y))); /* s7_truncate returns an integer */
 
 	default:
@@ -21730,8 +21723,8 @@ static s7_pointer quotient_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_REAL:
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->quotient_symbol, x, y);
-	  if ((is_inf(real(y))) || (is_NaN(real(y))))
-	    return(real_NaN);
+	  if (is_inf(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  return(s7_truncate(sc, sc->quotient_symbol, (s7_double)fraction(x) / real(y)));
 
 	default:
@@ -21887,8 +21880,8 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_REAL:
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->remainder_symbol, x, y);
-	  if ((is_inf(real(y))) || (is_NaN(real(y))))
-	    return(real_NaN);
+	  if (is_inf(real(y))) return(real_NaN);
+	  if (is_NaN(real(y))) return(y);
 	  pre_quo = (long_double)integer(x) / (long_double)real(y);
 	  if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
 	    sole_arg_out_of_range_error_nr(sc, sc->remainder_symbol, set_elist_2(sc, x, y), it_is_too_large_string);
@@ -21968,8 +21961,8 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    s7_double frac;
 	    if (real(y) == 0.0)
 	      division_by_zero_error_2_nr(sc, sc->remainder_symbol, x, y);
-	    if ((is_inf(real(y))) || (is_NaN(real(y))))
-	      return(real_NaN);
+	    if (is_inf(real(y))) return(real_NaN);
+	    if (is_NaN(real(y))) return(y);
 	    if (s7_int_abs(numerator(x)) > QUOTIENT_INT_LIMIT)
 	      return(subtract_p_pp(sc, x, multiply_p_pp(sc, y, quotient_p_pp(sc, x, y))));
 	    frac = (s7_double)fraction(x);
@@ -31091,10 +31084,6 @@ static s7_pointer call_file_out(s7_scheme *sc, s7_pointer args)
   return(opt2_pair(sc->code));
 }
 
-#define op_with_io_1(Sc) (((s7_function)((Sc->code)->object.cons.opt1))(Sc, Sc->nil))
-
-static s7_pointer op_lambda(s7_scheme *sc, s7_pointer code);
-
 static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
 {
   if (!is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
@@ -31103,6 +31092,9 @@ static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
     c_function_symbol(f) = make_symbol_with_length(sc, c_function_name(f), c_function_name_length(f));
   return(c_function_symbol(f));
 }
+
+#define op_with_io_1(Sc) (((s7_function)((Sc->code)->object.cons.opt1))(Sc, Sc->nil))
+static s7_pointer op_lambda(s7_scheme *sc, s7_pointer code);
 
 static void op_with_io_1_method(s7_scheme *sc)
 {
@@ -93185,7 +93177,7 @@ char *s7_decode_bt(s7_scheme *sc)
 		if ((vp) && (vals == 1))
 		  {
 		    int32_t k;
-		    for (k = i + ((bt[i + 2] == 'x') ? 3 : 4); (k < size) && (IS_DIGIT(bt[k], 16)); k++);
+		    for (k = i + ((bt[i + 2] == 'x') ? 3 : 4); (k < size) && (is_digit(bt[k], 16)); k++);
 		    if ((bt[k] != ' ') || (bt[k + 1] != '"'))
 		      {
 			if (vp == (void *)sc)
@@ -94665,6 +94657,9 @@ static void init_rootlet(s7_scheme *sc)
   sc->lognot_symbol =                defun("lognot",		lognot,			1, 0, false);
   sc->logbit_symbol =                defun("logbit?",		logbit,			2, 0, false);
   sc->integer_decode_float_symbol =  defun("integer-decode-float", integer_decode_float, 1, 0, false);
+  sc->nan_symbol =                   defun("nan",               nan,                    0, 1, false); /* (nan) -> +nan.0, (nan 123) -> +nan.123 */
+  sc->nan_payload_symbol =           defun("nan-payload",       nan_payload,            1, 0, false);
+
 #if (!WITH_PURE_S7)
   sc->integer_length_symbol =        defun("integer-length",	integer_length,		1, 0, false);
   sc->inexact_to_exact_symbol =      defun("inexact->exact",	inexact_to_exact,	1, 0, false);
@@ -94915,9 +94910,6 @@ static void init_rootlet(s7_scheme *sc)
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_safe_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
   /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
-
-  sc->nan_symbol = defun("nan", nan, 0, 1, false); /* (nan) -> +nan.0, (nan 123) -> +nan.123 */
-  sc->nan_payload_symbol = defun("nan-payload", nan_payload, 1, 0, false);
 
   set_scope_safe(global_value(sc->call_with_input_string_symbol));
   set_scope_safe(global_value(sc->call_with_input_file_symbol));
@@ -95932,55 +95924,55 @@ int main(int argc, char **argv)
  * ---------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    457    459
- * index     1026   1016    973    962    963
+ * index     1026   1016    973    962    966
  * tmock     1177   1165   1057   1083   1019
  * tvect     2519   2464   1772   1667   1670
  * timp      2637   2575   1930   1687   1689
  * texit     ----   ----   1778   1737   1741
  * s7test    1873   1831   1818   1816   1826
  * tauto     ----   ----   2562   2045   2055
- * thook     ----   ----   2590   2074   2074  2030
+ * thook     ----   ----   2590   2074   2030
  * lt        2187   2172   2150   2179   2182
- * dup       3805   3788   2492   2227   2250
+ * dup       3805   3788   2492   2227   2243
  * tload     ----   ----   3046   2368   2370
  * tcopy     8035   5546   2539   2372   2373
  * tread     2440   2421   2419   2414   2408
  * fbench    2688   2583   2460   2419   2428
- * trclo     2735   2574   2454   2439   2435
+ * trclo     2735   2574   2454   2439   2446
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2569   2580
+ * tmat      3065   3042   2524   2569   2567
  * tb        2735   2681   2612   2600   2603
  * tsort     3105   3104   2856   2801   2804
  * teq       4068   4045   3536   3469   3487
- * tobj      4016   3970   3828   3567   3572
+ * tobj      4016   3970   3828   3567   3570
  * tio       3816   3752   3683   3618   3620
- * tmac      3950   3873   3033   3667   3685
+ * tmac      3950   3873   3033   3667   3677
  * tclo      4787   4735   4390   4375   4389
- * tlet      7775   5640   4450   4402   4445
- * tcase     4960   4793   4439   4434   4437
+ * tstar     6139   5923   5519   ----   4414
+ * tlet      7775   5640   4450   4402   4431
+ * tcase     4960   4793   4439   4434   4432
  * tfft      7820   7729   4755   4457   4465
  * tmap      8869   8774   4489   4541   4541
- * tstar     6139   5923   5519   ----   4863  4413
  * tshoot    5525   5447   5183   5057   5055
- * tstr      6880   6342   5488   5141   5149
+ * tstr      6880   6342   5488   5141   5161
  * tform     5357   5348   5307   5316   5304
  * tnum      6348   6013   5433   5366   5385
- * tlamb     6423   6273   5720   5545   5558
+ * tlamb     6423   6273   5720   5545   5554
  * tmisc     8869   7612   6435   6098   6085
  * tset      ----   ----   ----   6242   6242
- * tlist     7896   7546   6558   6242   6242
+ * tlist     7896   7546   6558   6242   6244
  * tgsl      8485   7802   6373   6280   6281
  * tari      13.0   12.7   6827   6535   6543
  * trec      6936   6922   6521   6565   6588
  * tleft     10.4   10.2   7657   7475   7477
- * tgc       11.9   11.1   8177   7932   7842
- * thash     11.8   11.7   9734   9471   9475
- * cb        11.2   11.0   9658   9544   9545
+ * tgc       11.9   11.1   8177   7932   7868
+ * thash     11.8   11.7   9734   9471   9483
+ * cb        11.2   11.0   9658   9544   9551
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.6   37.6
  * sg        ----   ----   55.9   55.7   55.8
- * lg        ----   ----  105.2  106.1  106.3
+ * lg        ----   ----  105.2  106.1  106.2
  * tbig     177.4  175.8  156.5  147.9  148.1
  * ---------------------------------------------
  *
@@ -95990,8 +95982,8 @@ int main(int argc, char **argv)
  *     also (set! quote begin) is accepted: (quote 32 33): 33
  *   (set! begin abs): abs, (begin -1): trailers[88047]: not syntactic, but a c-function (type: 47)
  *   (let-set! (rootlet) 'quasiquote abs): abs
- *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic keyword [keyword?? -- "not be a syntactic keyword"]
+ *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic symbol
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
  *     [but isn't this inconsistent with (set! begin abs) above?]
- * to add line-number for nan: all real_NaN should pass the original through
+ * C23 [[fallthrough]] [[noreturn]] (not msvc)
  */
