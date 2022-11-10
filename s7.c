@@ -21546,12 +21546,13 @@ static s7_pointer g_divide_by_2(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_invert_x(s7_scheme *sc, s7_pointer args)
 {
   /* (/ 1.0 x) */
-  if (is_t_real(cadr(args)))
+  s7_pointer x = cadr(args);
+  if (is_t_real(x))
     {
-      s7_double rl = real(cadr(args));
+      s7_double rl = real(x);
       if (rl == 0.0)
-	division_by_zero_error_2_nr(sc, sc->divide_symbol, car(args), cadr(args));
-      return((is_NaN(rl)) ? cadr(args) : make_real(sc, 1.0 / rl));
+	division_by_zero_error_2_nr(sc, sc->divide_symbol, car(args), x);
+      return((is_NaN(rl)) ? x : make_real(sc, 1.0 / rl));
     }
   return(g_divide(sc, args));
 }
