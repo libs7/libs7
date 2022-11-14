@@ -8360,7 +8360,6 @@ bool s7_for_each_symbol_name(s7_scheme *sc, bool (*symbol_func)(const char *symb
     for (s7_pointer x = vector_element(sc->symbol_table, i); is_not_null(x); x = cdr(x))
       if (symbol_func(symbol_name(car(x)), data))
 	return(true);
-
   return((symbol_func("#t", data))             || (symbol_func("#f", data))             ||
 	 (symbol_func("#<unspecified>", data)) || (symbol_func("#<undefined>", data))   ||
 	 (symbol_func("#<eof>", data))         ||
@@ -9406,7 +9405,7 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
 	  sym = (is_keyword(p)) ? keyword_symbol(p) : p;
 	  if (!is_pair(cdr(x)))
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_3(sc, wrap_string(sc, "varlet: keyword ~S, but no value: ~S", 36), p, args));
+		     set_elist_3(sc, wrap_string(sc, "varlet: symbol ~S, but no value: ~S", 35), p, args));
 	  if (is_constant_symbol(sc, sym))
 	    wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), sym, a_non_constant_symbol_string);
 	  x = cdr(x);
@@ -95986,5 +95985,5 @@ int main(int argc, char **argv)
  *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic symbol
  *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
  *     [but isn't this inconsistent with (set! begin abs) above?]
- * C23 [[fallthrough]] [[noreturn]] (not msvc)
+ * varlet trouble: let that is a pair?? need a repeatable test case!
  */
