@@ -30606,7 +30606,7 @@ s7_pointer s7_autoload(s7_scheme *sc, s7_pointer symbol, s7_pointer file_or_func
 {
   /* add '(symbol . file) to s7's autoload table */
   if (is_null(sc->autoload_table))
-    sc->autoload_table = s7_make_hash_table(sc, sc->default_hash_table_length);
+    sc->autoload_table = s7_make_hash_table(sc, sc->default_hash_table_length); /* add_hash_table here, perhaps sc->hash_tables->loc-- */
   if (sc->safety >= MORE_SAFETY_WARNINGS)
     {
       s7_pointer p = s7_hash_table_ref(sc, sc->autoload_table, symbol);
@@ -39202,8 +39202,7 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 	vector_elements(x) = (s7_pointer *)block_data(b);
 	vector_getter(x) = normal_vector_getter;
 	vector_setter(x) = normal_vector_setter;
-	if (filled)
-	  normal_vector_fill(x, sc->nil);
+	if (filled) normal_vector_fill(x, sc->nil);
       }
     else
       if (typ == T_FLOAT_VECTOR)
@@ -39294,7 +39293,6 @@ static vdims_t *make_vdims(s7_scheme *sc, bool elements_should_be_freed, s7_int 
       vector_elements_should_be_freed(v) = elements_should_be_freed;
       vdims_rank(v) = dims;
       vdims_offsets(v) = (s7_int *)(vdims_dims(v) + dims);
-
       for (s7_int i = 0; i < dims; i++)
 	vdims_dims(v)[i] = dim_info[i];
       for (s7_int i = dims - 1; i >= 0; i--)
@@ -42659,7 +42657,6 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 
   n = len - 1;
   k = (n / 2) + 1;
-  /* lx = s7_make_vector(sc, (sc->safety <= NO_SAFETY) ? 4 : 6); */
   lx = make_simple_vector(sc, (sc->safety <= NO_SAFETY) ? 4 : 6);
   normal_vector_fill(lx, sc->nil); /* make_mutable_integer below can trigger GC, so all elements of lx must be legit */
   init_temp(sc->y, lx);
@@ -46533,7 +46530,7 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
     case T_ITERATOR:                           /* (set! (iter) val) doesn't fit the other setters */
       return((is_any_closure(iterator_sequence(p))) ? closure_setter(iterator_sequence(p)) : sc->F);
 
-    case T_PAIR:         return(global_value(sc->list_set_symbol));
+    case T_PAIR:         return(global_value(sc->list_set_symbol)); /* or maybe initial-value? */
     case T_HASH_TABLE:   return(global_value(sc->hash_table_set_symbol));
     case T_STRING:       return(global_value(sc->string_set_symbol));
     case T_BYTE_VECTOR:  return(global_value(sc->byte_vector_set_symbol));
@@ -46642,7 +46639,7 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
   if (func != sc->F)
     {
       if (sym == sc->setter_symbol)
-	immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), func));
+	immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter 'setter) to ~S", 32), func));
       if (is_syntax_or_qq(slot_value(slot)))         /* (set! (setter 'begin) ...), qq is syntax sez r7rs */
 	immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't set (setter '~S) to ~S", 28), sym, func));
       if (!is_any_procedure(func))   /* disallow continuation/goto here */
@@ -46654,7 +46651,7 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
 	  else
 	    if (!s7_is_aritable(sc, func, 2))
 	      error_nr(sc, sc->wrong_type_arg_symbol,
-		       set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take 2 or 3 arguments", 49), func));
+		       set_elist_2(sc, wrap_string(sc, "symbol setter function, ~A, should take 2 or 3 arguments", 56), func));
 	}}
   if (slot == global_slot(sym))
     s7_set_setter(sc, sym, func); /* special GC protection for global vars */
@@ -92334,7 +92331,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "circle_info"),
 			     make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
 
-  /* check the gc lists (finalizations) */
+  /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-polar et el */
   len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
     sc->continuations->size + sc->c_objects->size + sc->hash_tables->size + sc->gensyms->size + sc->undefineds->size +
     sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->opt1_funcs->size;
@@ -92343,22 +92340,22 @@ static s7_pointer memory_usage(s7_scheme *sc)
                   sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
                   sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
-                               s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
-				       s7_list(sc, 14,
-					       cons(sc, make_symbol(sc, "string"),         make_integer(sc, sc->strings->size)),
-					       cons(sc, make_symbol(sc, "vector"),         make_integer(sc, sc->vectors->size)),
-					       cons(sc, make_symbol(sc, "multivector"),    make_integer(sc, sc->multivectors->size)),
-					       cons(sc, make_symbol(sc, "input"),          make_integer(sc, sc->input_ports->size)),
-					       cons(sc, make_symbol(sc, "output"),         make_integer(sc, sc->output_ports->size)),
-					       cons(sc, make_symbol(sc, "input-string"),   make_integer(sc, sc->input_string_ports->size)),
-					       cons(sc, make_symbol(sc, "continuation"),   make_integer(sc, sc->continuations->size)),
-					       cons(sc, make_symbol(sc, "c-object"),       make_integer(sc, sc->c_objects->size)),
-					       cons(sc, make_symbol(sc, "hash-table"),     make_integer(sc, sc->hash_tables->size)),
-					       cons(sc, make_symbol(sc, "gensym"),         make_integer(sc, sc->gensyms->size)),
-					       cons(sc, make_symbol(sc, "undefined"),      make_integer(sc, sc->undefineds->size)),
-					       cons(sc, make_symbol(sc, "weak-ref"),       make_integer(sc, sc->weak_refs->size)),
-					       cons(sc, make_symbol(sc, "weak-hash-iter"), make_integer(sc, sc->weak_hash_iterators->size)),
-					       cons(sc, make_symbol(sc, "opt1-func"),      make_integer(sc, sc->opt1_funcs->size)))));
+       s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
+	 s7_list(sc, 14,
+	         list_3(sc, make_symbol(sc, "string"),         make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
+		 list_3(sc, make_symbol(sc, "vector"),         make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
+		 list_3(sc, make_symbol(sc, "multivector"),    make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
+		 list_3(sc, make_symbol(sc, "input"),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
+		 list_3(sc, make_symbol(sc, "output"),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
+		 list_3(sc, make_symbol(sc, "input-string"),   make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
+		 list_3(sc, make_symbol(sc, "continuation"),   make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
+		 list_3(sc, make_symbol(sc, "c-object"),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
+		 list_3(sc, make_symbol(sc, "hash-table"),     make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
+		 list_3(sc, make_symbol(sc, "gensym"),         make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
+		 list_3(sc, make_symbol(sc, "undefined"),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
+		 list_3(sc, make_symbol(sc, "weak-ref"),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
+		 list_3(sc, make_symbol(sc, "weak-hash-iter"), make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
+		 list_3(sc, make_symbol(sc, "opt1-func"),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
   }
 
   /* strings */
@@ -95237,13 +95234,13 @@ s7_scheme *s7_init(void)
   /* this has to precede s7_make_* allocations */
   sc->protected_setters_size = INITIAL_PROTECTED_OBJECTS_SIZE;
   sc->protected_setters_loc = 0;
-  sc->protected_setters = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
-  sc->protected_setter_symbols = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
+  sc->protected_setters = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
+  sc->protected_setter_symbols = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
 
   sc->protected_objects_size = INITIAL_PROTECTED_OBJECTS_SIZE;
   sc->protected_objects_free_list = (s7_int *)Malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
   sc->protected_objects_free_list_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
-  sc->protected_objects = s7_make_vector(sc, INITIAL_PROTECTED_OBJECTS_SIZE);
+  sc->protected_objects = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
   for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++) /* using #<unused> as the not-set indicator here lets that value leak out! */
     {
       vector_element(sc->protected_objects, i) = sc->unused;
@@ -95252,7 +95249,8 @@ s7_scheme *s7_init(void)
       sc->protected_objects_free_list[i] = i;
     }
 
-  sc->stack = s7_make_vector(sc, INITIAL_STACK_SIZE); /* this fills it with sc->nil */
+  sc->stack = make_vector_1(sc, INITIAL_STACK_SIZE, FILLED, T_VECTOR); 
+  /* if not_filled, segfault in gc_mark in mark_stack_1 after size check? probably unfilled OP_BARRIER etc? */
   sc->stack_start = vector_elements(sc->stack); /* stack type set below */
   sc->stack_end = sc->stack_start;
   sc->stack_size = INITIAL_STACK_SIZE;
@@ -95373,11 +95371,10 @@ s7_scheme *s7_init(void)
   sc->tree_pointers_size = 0;
   sc->tree_pointers_top = 0;
 
-  sc->rootlet = s7_make_vector(sc, INITIAL_ROOTLET_SIZE);
+  sc->rootlet = make_vector_1(sc, INITIAL_ROOTLET_SIZE, FILLED, T_VECTOR);
   set_full_type(sc->rootlet, T_LET | T_SAFE_PROCEDURE);
   sc->rootlet_entries = 0;
-  for (i = 0; i < INITIAL_ROOTLET_SIZE; i++)
-    rootlet_element(sc->rootlet, i) = sc->nil;
+  for (i = 0; i < INITIAL_ROOTLET_SIZE; i++) rootlet_element(sc->rootlet, i) = sc->nil;
   sc->curlet = sc->nil;
   sc->shadow_rootlet = sc->nil;
   sc->objstr_max_len = S7_INT64_MAX;
@@ -95976,14 +95973,4 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  147.9  148.1
  * ---------------------------------------------
  *
- * qq diffs from q etc:
- *   (set! quasiquote 32): 32
- *   (set! quote 32): 32, trailers[88047]: not syntactic, but an integer (type: 11), Abort (core dumped)
- *     also (set! quote begin) is accepted: (quote 32 33): 33
- *   (set! begin abs): abs, (begin -1): trailers[88047]: not syntactic, but a c-function (type: 47)
- *   (let-set! (rootlet) 'quasiquote abs): abs
- *   (let-set! (rootlet) 'quote abs): error: let-set! second argument, quote, is a symbol but should be a non-syntactic symbol
- *     [better maybe: "quote, is a syntactic keyword; setting it to some other value is a bad idea" or something]
- *     [but isn't this inconsistent with (set! begin abs) above?]
- * varlet trouble: let that is a pair?? need a repeatable test case!
  */
