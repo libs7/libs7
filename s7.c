@@ -8281,7 +8281,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
 }
 
 static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) /* inline out: about 40 in tload, but not else I think */
-{
+{ /* name here might not be null-terminated */
   uint64_t hash = raw_string_hash((const uint8_t *)name, len);
   uint32_t location = hash % SYMBOL_TABLE_SIZE;
   if (len <= 8)
@@ -30825,9 +30825,8 @@ static s7_pointer g_features_set(s7_scheme *sc, s7_pointer args) /* *features* s
   s7_pointer nf = cadr(args);
   if (is_null(nf))
     return(sc->nil);
-  if (!is_pair(nf))
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *features* to ~S", 26), nf));
-  if (s7_list_length(sc, nf) <= 0)
+  if ((!is_pair(nf)) ||
+      (s7_list_length(sc, nf) <= 0))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *features* to ~S", 26), nf));
   for (s7_pointer p = nf; is_pair(p); p = cdr(p))
     if (!is_symbol(car(p)))
@@ -30840,9 +30839,8 @@ static s7_pointer g_libraries_set(s7_scheme *sc, s7_pointer args) /* *libraries*
   s7_pointer nf = cadr(args);
   if (is_null(nf))
     return(sc->nil);
-  if (!is_pair(nf))
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *libraries* to ~S", 27), nf));
-  if (s7_list_length(sc, nf) <= 0)
+  if ((!is_pair(nf)) ||
+      (s7_list_length(sc, nf) <= 0))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *libraries* to ~S", 27), nf));
   for (s7_pointer p = nf; is_pair(p); p = cdr(p))
     if ((!is_pair(car(p))) ||
@@ -42960,7 +42958,7 @@ static void check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_pointer 
   if (is_c_function(typer))
     {
       if (!c_function_symbol(typer))
-	c_function_symbol(typer) = make_symbol(sc, c_function_name(typer));
+	c_function_symbol(typer) = make_symbol_with_length(sc, c_function_name(typer), c_function_name_length(typer));
       if (c_function_has_simple_elements(typer))
 	{
 	  if (caller == sc->hash_table_value_typer_symbol)
@@ -43965,7 +43963,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  if (c_function_has_simple_elements(keyp))
 			    set_has_simple_keys(ht);
 			  if (!c_function_symbol(keyp))
-			    c_function_symbol(keyp) = make_symbol(sc, c_function_name(keyp));
+			    c_function_symbol(keyp) = make_symbol_with_length(sc, c_function_name(keyp), c_function_name_length(keyp));
 			  if (symbol_type(c_function_symbol(keyp)) != T_FREE)
 			    set_has_hash_key_type(ht);
 			  /* c_function_marker is not currently used in this context */
@@ -44003,7 +44001,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  if (c_function_has_simple_elements(valp))
 			    set_has_simple_values(ht);
 			  if (!c_function_symbol(valp))
-			    c_function_symbol(valp) = make_symbol(sc, c_function_name(valp));
+			    c_function_symbol(valp) = make_symbol_with_length(sc, c_function_name(valp), c_function_name_length(valp));
 			  if (symbol_type(c_function_symbol(valp)) != T_FREE)
 			    set_has_hash_value_type(ht);
 			}
@@ -49934,8 +49932,8 @@ static s7_pointer random_state_to_let(s7_scheme *sc, s7_pointer obj)
 #else
   if (!sc->seed_symbol)
     {
-      sc->seed_symbol = make_symbol(sc, "seed");
-      sc->carry_symbol = make_symbol(sc, "carry");
+      sc->seed_symbol = make_symbol_with_length(sc, "seed", 4);
+      sc->carry_symbol = make_symbol_with_length(sc, "carry", 5);
     }
   return(internal_inlet(sc, 8, sc->value_symbol, obj,
 			sc->type_symbol, sc->is_random_state_symbol,
@@ -49949,8 +49947,8 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let;
   s7_int gc_loc;
 
-  if (!sc->dimensions_symbol) sc->dimensions_symbol = make_symbol(sc, "dimensions");
-  if (!sc->original_vector_symbol) sc->original_vector_symbol = make_symbol(sc, "original-vector");
+  if (!sc->dimensions_symbol) sc->dimensions_symbol = make_symbol_with_length(sc, "dimensions", 10);
+  if (!sc->original_vector_symbol) sc->original_vector_symbol = make_symbol_with_length(sc, "original-vector", 15);
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, (is_subvector(obj)) ? cons(sc, sc->is_subvector_symbol, s7_type_of(sc, subvector_vector(obj))) : s7_type_of(sc, obj),
 		       sc->size_symbol, s7_length(sc, obj),
@@ -50022,8 +50020,8 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->entries_symbol)
     {
-      sc->entries_symbol = make_symbol(sc, "entries");
-      sc->weak_symbol = make_symbol(sc, "weak");
+      sc->entries_symbol = make_symbol_with_length(sc, "entries", 7);
+      sc->weak_symbol = make_symbol_with_length(sc, "weak", 4);
     }
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_hash_table_symbol,
@@ -50059,8 +50057,8 @@ static s7_pointer iterator_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->at_end_symbol)
     {
-      sc->at_end_symbol = make_symbol(sc, "at-end");
-      sc->sequence_symbol = make_symbol(sc, "sequence");
+      sc->at_end_symbol = make_symbol_with_length(sc, "at-end", 6);
+      sc->sequence_symbol = make_symbol_with_length(sc, "sequence", 8);
     }
   let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_iterator_symbol,
@@ -50096,8 +50094,8 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->open_symbol)
     {
-      sc->open_symbol = make_symbol(sc, "open");
-      sc->alias_symbol = make_symbol(sc, "alias");
+      sc->open_symbol = make_symbol_with_length(sc, "open", 4);
+      sc->alias_symbol = make_symbol_with_length(sc, "alias", 5);
     }
   let = internal_inlet(sc, 12, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_let_symbol,
@@ -50151,8 +50149,8 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let, clet = c_object_let(obj);
   if (!sc->class_symbol)
     {
-      sc->class_symbol = make_symbol(sc, "class");
-      sc->c_object_let_symbol = make_symbol(sc, "c-object-let");
+      sc->class_symbol = make_symbol_with_length(sc, "class", 5);
+      sc->c_object_let_symbol = make_symbol_with_length(sc, "c-object-let", 12);
     }
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_c_object_symbol,
@@ -50177,10 +50175,10 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
   s7_int gc_loc;
   if (!sc->data_symbol)
     {
-      sc->data_symbol = make_symbol(sc, "data");
-      sc->port_type_symbol = make_symbol(sc, "port-type");
-      sc->closed_symbol = make_symbol(sc, "closed");
-      sc->file_info_symbol = make_symbol(sc, "file-info");
+      sc->data_symbol = make_symbol_with_length(sc, "data", 4);
+      sc->port_type_symbol = make_symbol_with_length(sc, "port-type", 9);
+      sc->closed_symbol = make_symbol_with_length(sc, "closed", 6);
+      sc->file_info_symbol = make_symbol_with_length(sc, "file-info", 9);
     }
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       /* obj as 'value means it will say "(closed)" when subsequently the let is displayed */
@@ -50263,7 +50261,7 @@ static s7_pointer closure_to_let(s7_scheme *sc, s7_pointer obj)
     s7_varlet(sc, let, sc->local_setter_symbol, closure_setter(obj));
 
   if (!sc->source_symbol)
-    sc->source_symbol = make_symbol(sc, "source");
+    sc->source_symbol = make_symbol_with_length(sc, "source", 6);
   s7_varlet(sc, let, sc->source_symbol,
 	    append_in_place(sc, list_2(sc, procedure_type_to_symbol(sc, type(obj)), closure_args(obj)),
 			    closure_body(obj)));
@@ -50276,10 +50274,10 @@ static s7_pointer c_pointer_to_let(s7_scheme *sc, s7_pointer obj)
   /* c_pointer_info can be a let and might have an object->let method (see c_object below) */
   if (!sc->c_type_symbol)
     {
-      sc->c_type_symbol = make_symbol(sc, "c-type");
-      sc->info_symbol = make_symbol(sc, "info");
+      sc->c_type_symbol = make_symbol_with_length(sc, "c-type", 6);
+      sc->info_symbol = make_symbol_with_length(sc, "info", 4);
     }
-  if (!sc->pointer_symbol) sc->pointer_symbol = make_symbol(sc, "pointer");
+  if (!sc->pointer_symbol) sc->pointer_symbol = make_symbol_with_length(sc, "pointer", 7);
   return(internal_inlet(sc, 10, sc->value_symbol, obj,
 			sc->type_symbol, sc->is_c_pointer_symbol,
 			sc->pointer_symbol, make_integer(sc, (s7_int)((intptr_t)c_pointer(obj))),
@@ -50313,8 +50311,8 @@ static s7_pointer goto_to_let(s7_scheme *sc, s7_pointer obj)
   /* there's room in s7_cell to store the procedure, but we would have to mark it (goto escapes, context GC'd) */
   if (!sc->active_symbol)
     {
-      sc->active_symbol = make_symbol(sc, "active");
-      sc->goto_symbol = make_symbol(sc, "goto?");
+      sc->active_symbol = make_symbol_with_length(sc, "active", 6);
+      sc->goto_symbol = make_symbol_with_length(sc, "goto?", 5);
     }
   if (is_symbol(call_exit_name(obj)))
     return(internal_inlet(sc, 8, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
@@ -51172,16 +51170,16 @@ static s7_pointer init_owlet(s7_scheme *sc)
   s7_pointer p; /* watch out for order below */
   s7_pointer e = make_let(sc, sc->nil);
   sc->temp3 = e;
-  sc->error_type = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-type"), sc->F);    /* the error type or tag ('division-by-zero) */
-  sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-data"), sc->F);  /* the message or information passed by the error function */
-  sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-code"), sc->F);  /* the code that s7 thinks triggered the error */
-  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-line"), p = make_permanent_integer(0));  /* the line number of that code */
+  sc->error_type = add_slot_checked_with_id(sc, e, make_symbol_with_length(sc, "error-type", 10), sc->F);    /* the error type or tag ('division-by-zero) */
+  sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-data", 10), sc->F);  /* the message or information passed by the error function */
+  sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-code", 10), sc->F);  /* the code that s7 thinks triggered the error */
+  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-line", 10), p = make_permanent_integer(0));  /* the line number of that code */
   add_saved_pointer(sc, p);
-  sc->error_file = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-file"), sc->F);  /* the file name of that code */
-  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-position"), p = make_permanent_integer(0)); /* the file-byte position of that code */
+  sc->error_file = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-file", 10), sc->F);  /* the file name of that code */
+  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-position", 14), p = make_permanent_integer(0)); /* file-byte position of that code */
   add_saved_pointer(sc, p);
 #if WITH_HISTORY
-  sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-history"), sc->F); /* buffer of previous evaluations */
+  sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-history", 13), sc->F); /* buffer of previous evaluations */
 #endif
   sc->temp3 = sc->unused;
   return(e);
@@ -51193,11 +51191,11 @@ static s7_pointer cull_history(s7_scheme *sc, s7_pointer code)
   clear_symbol_list(sc); /* make a list of words banned from the history */
   add_symbol_to_list(sc, sc->s7_starlet_symbol);
   add_symbol_to_list(sc, sc->eval_symbol);
-  add_symbol_to_list(sc, make_symbol(sc, "debug"));
-  add_symbol_to_list(sc, make_symbol(sc, "trace-in"));
-  add_symbol_to_list(sc, make_symbol(sc, "trace-out"));
+  add_symbol_to_list(sc, make_symbol_with_length(sc, "debug", 5));
+  add_symbol_to_list(sc, make_symbol_with_length(sc, "trace-in", 8));
+  add_symbol_to_list(sc, make_symbol_with_length(sc, "trace-out", 9));
   add_symbol_to_list(sc, sc->dynamic_unwind_symbol);
-  add_symbol_to_list(sc, make_symbol(sc, "history-enabled"));
+  add_symbol_to_list(sc, make_symbol_with_length(sc, "history-enabled", 15));
   for (s7_pointer p = code; is_pair(p); p = cdr(p))
     {
       if (tree_set_memq(sc, car(p)))
@@ -68652,7 +68650,7 @@ static s7_pointer make_function_with_class(s7_scheme *sc, s7_pointer cls, const 
 					   int32_t required_args, int32_t optional_args, bool rest_arg)
 {
   s7_pointer uf = s7_make_safe_function(sc, name, f, required_args, optional_args, rest_arg, NULL);
-  if ((S7_DEBUGGING) && (!is_safe_procedure(global_value(s7_make_symbol(sc, name))))) fprintf(stderr, "%s unsafe: %s\n", __func__, name);
+  if ((S7_DEBUGGING) && (!is_safe_procedure(global_value(make_symbol(sc, name))))) fprintf(stderr, "%s unsafe: %s\n", __func__, name);
   s7_function_set_class(sc, uf, cls);
   c_function_signature(uf) = c_function_signature(cls);
   return(uf);
@@ -92541,7 +92539,7 @@ static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
       if (s7_is_valid(sc, e)) entry = cons(sc, e, entry);
       if (s7_is_valid(sc, args)) entry = cons_unchecked(sc, args, entry);
       if (s7_is_valid(sc, func)) entry = cons_unchecked(sc, func, entry);
-      if ((op >= 0) && (op < NUM_OPS)) entry = cons_unchecked(sc, s7_make_symbol(sc, op_names[op]), entry);
+      if ((op >= 0) && (op < NUM_OPS)) entry = cons_unchecked(sc, make_symbol(sc, op_names[op]), entry);
       lst = cons_unchecked(sc, entry, lst);
       sc->w = lst;
     }
@@ -92807,7 +92805,7 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
       sc->debug = s7_integer_clamped_if_gmp(sc, val);
       sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
       if ((sc->debug > 0) &&
-	  (!is_memq(make_symbol(sc, "debug.scm"), s7_symbol_value(sc, sc->features_symbol))))
+	  (!is_memq(make_symbol_with_length(sc, "debug.scm", 9), s7_symbol_value(sc, sc->features_symbol))))
 	s7_load(sc, "debug.scm");
       return(val);
 
@@ -92965,7 +92963,7 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
       sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
       if (sc->profile > 0)
 	{
-	  if (!is_memq(make_symbol(sc, "profile.scm"), s7_symbol_value(sc, sc->features_symbol)))
+	  if (!is_memq(make_symbol_with_length(sc, "profile.scm", 11), s7_symbol_value(sc, sc->features_symbol)))
 	    s7_load(sc, "profile.scm");
 	  if (!sc->profile_data)
 	    make_profile_info(sc);
@@ -94282,46 +94280,46 @@ then returns each var to its original value."
   set_local_slot(sc->with_let_symbol, global_slot(sc->with_let_symbol)); /* for set_locals */
   set_immutable(sc->with_let_symbol);
   set_immutable_slot(global_slot(sc->with_let_symbol));
-  sc->setter_symbol = make_symbol(sc, "setter");
+  sc->setter_symbol = make_symbol_with_length(sc, "setter", 6);
 
 #if WITH_IMMUTABLE_UNQUOTE
   /* this code solves the various unquote redefinition troubles
    * if "," -> "(unquote...)" in the reader, (let (, (lambda (x) (+ x 1))) ,,,,'1) -> 5
    */
-  sc->unquote_symbol =              make_symbol(sc, ",");
+  sc->unquote_symbol =              make_symbol_with_length(sc, ",", 1);
   set_immutable(sc->unquote_symbol);
 #else
-  sc->unquote_symbol =              make_symbol(sc, "unquote");
+  sc->unquote_symbol =              make_symbol_with_length(sc, "unquote", 7);
 #endif
 
-  sc->feed_to_symbol =              make_symbol(sc, "=>");
-  sc->body_symbol =                 make_symbol(sc, "body");
-  sc->read_error_symbol =           make_symbol(sc, "read-error");
-  sc->string_read_error_symbol =    make_symbol(sc, "string-read-error");
-  sc->syntax_error_symbol =         make_symbol(sc, "syntax-error");
-  sc->unbound_variable_symbol =     make_symbol(sc, "unbound-variable");
-  sc->wrong_type_arg_symbol =       make_symbol(sc, "wrong-type-arg");
-  sc->wrong_number_of_args_symbol = make_symbol(sc, "wrong-number-of-args");
-  sc->format_error_symbol =         make_symbol(sc, "format-error");
-  sc->autoload_error_symbol =       make_symbol(sc, "autoload-error");
-  sc->out_of_range_symbol =         make_symbol(sc, "out-of-range");
-  sc->out_of_memory_symbol =        make_symbol(sc, "out-of-memory");
-  sc->io_error_symbol =             make_symbol(sc, "io-error");
-  sc->missing_method_symbol =       make_symbol(sc, "missing-method");
-  sc->number_to_real_symbol =       make_symbol(sc, "number_to_real");
-  sc->invalid_escape_function_symbol = make_symbol(sc, "invalid-escape-function");
-  sc->immutable_error_symbol =      make_symbol(sc, "immutable-error");
-  sc->division_by_zero_symbol =     make_symbol(sc, "division-by-zero");
-  sc->bad_result_symbol =           make_symbol(sc, "bad-result");
-  sc->no_setter_symbol =            make_symbol(sc, "no-setter");
-  sc->baffled_symbol =              make_symbol(sc, "baffled!");
-  sc->value_symbol =                make_symbol(sc, "value");
-  sc->type_symbol =                 make_symbol(sc, "type");
-  sc->position_symbol =             make_symbol(sc, "position");
-  sc->file_symbol =                 make_symbol(sc, "file");
-  sc->line_symbol =                 make_symbol(sc, "line");
-  sc->function_symbol =             make_symbol(sc, "function");
-  sc->else_symbol =                 make_symbol(sc, "else");
+  sc->feed_to_symbol =              make_symbol_with_length(sc, "=>", 2);
+  sc->body_symbol =                 make_symbol_with_length(sc, "body", 4);
+  sc->read_error_symbol =           make_symbol_with_length(sc, "read-error", 10);
+  sc->string_read_error_symbol =    make_symbol_with_length(sc, "string-read-error", 17);
+  sc->syntax_error_symbol =         make_symbol_with_length(sc, "syntax-error", 12);
+  sc->unbound_variable_symbol =     make_symbol_with_length(sc, "unbound-variable", 16);
+  sc->wrong_type_arg_symbol =       make_symbol_with_length(sc, "wrong-type-arg", 14);
+  sc->wrong_number_of_args_symbol = make_symbol_with_length(sc, "wrong-number-of-args", 20);
+  sc->format_error_symbol =         make_symbol_with_length(sc, "format-error", 12);
+  sc->autoload_error_symbol =       make_symbol_with_length(sc, "autoload-error", 14);
+  sc->out_of_range_symbol =         make_symbol_with_length(sc, "out-of-range", 12);
+  sc->out_of_memory_symbol =        make_symbol_with_length(sc, "out-of-memory", 13);
+  sc->io_error_symbol =             make_symbol_with_length(sc, "io-error", 8);
+  sc->missing_method_symbol =       make_symbol_with_length(sc, "missing-method", 14);
+  sc->number_to_real_symbol =       make_symbol_with_length(sc, "number_to_real", 14);
+  sc->invalid_escape_function_symbol = make_symbol_with_length(sc, "invalid-escape-function", 23);
+  sc->immutable_error_symbol =      make_symbol_with_length(sc, "immutable-error", 15);
+  sc->division_by_zero_symbol =     make_symbol_with_length(sc, "division-by-zero", 16);
+  sc->bad_result_symbol =           make_symbol_with_length(sc, "bad-result", 10);
+  sc->no_setter_symbol =            make_symbol_with_length(sc, "no-setter", 9);
+  sc->baffled_symbol =              make_symbol_with_length(sc, "baffled!", 8);
+  sc->value_symbol =                make_symbol_with_length(sc, "value", 5);
+  sc->type_symbol =                 make_symbol_with_length(sc, "type", 4);
+  sc->position_symbol =             make_symbol_with_length(sc, "position", 8);
+  sc->file_symbol =                 make_symbol_with_length(sc, "file", 4);
+  sc->line_symbol =                 make_symbol_with_length(sc, "line", 4);
+  sc->function_symbol =             make_symbol_with_length(sc, "function", 8);
+  sc->else_symbol =                 make_symbol_with_length(sc, "else", 4);
   s7_make_slot(sc, sc->nil, sc->else_symbol, sc->else_symbol);
   slot_set_value(initial_slot(sc->else_symbol), sc->T);
   /* if we set #_else to 'else, it can pick up a local else value: (let ((else #f)) (cond (#_else 2)...)) */
@@ -94377,7 +94375,7 @@ static void init_rootlet(s7_scheme *sc)
     define_bool_function(sc, Scheme_Name, g_ ## C_Name, Opt, H_ ## C_Name, Q_ ## C_Name, SymId, Marker, Simple, b_ ## C_Name ## _setter)
 
   /* we need the sc->is_* symbols first for the procedure signature lists */
-  sc->is_boolean_symbol = make_symbol(sc, "boolean?");
+  sc->is_boolean_symbol = make_symbol_with_length(sc, "boolean?", 8);
   sc->pl_bt = s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->T);
 
   sc->is_symbol_symbol =          b_defun("symbol?",	      is_symbol,	  0, T_SYMBOL,       mark_symbol_vector, true);
@@ -94425,8 +94423,8 @@ static void init_rootlet(s7_scheme *sc)
 
   /* these are for signatures */
   sc->not_symbol = defun("not",	not, 1, 0, false);
-  sc->is_integer_or_real_at_end_symbol = make_symbol(sc, "integer:real?");
-  sc->is_integer_or_any_at_end_symbol =  make_symbol(sc, "integer:any?");
+  sc->is_integer_or_real_at_end_symbol = make_symbol_with_length(sc, "integer:real?", 13);
+  sc->is_integer_or_any_at_end_symbol =  make_symbol_with_length(sc, "integer:any?", 12);
 
   sc->pl_p =   s7_make_signature(sc, 2, sc->T, sc->is_pair_symbol);
   sc->pl_tl =  s7_make_signature(sc, 3,
@@ -94448,7 +94446,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->pcl_e =  s7_make_circular_signature(sc, 0, 1,
                   s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol));
 
-  sc->values_symbol = make_symbol(sc, "values");
+  sc->values_symbol = make_symbol_with_length(sc, "values", 6);
 
   sc->is_bignum_symbol =             defun("bignum?",           is_bignum,              1, 0, false);
   sc->bignum_symbol =                defun("bignum",            bignum,                 1, 1, false);
@@ -94492,8 +94490,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false);
   set_immutable(sc->let_set_symbol);
   set_immutable_slot(global_slot(sc->let_set_symbol));
-  sc->let_ref_fallback_symbol = make_symbol(sc, "let-ref-fallback");
-  sc->let_set_fallback_symbol = make_symbol(sc, "let-set-fallback"); /* was let-set!-fallback until 9-Oct-17 */
+  sc->let_ref_fallback_symbol = make_symbol_with_length(sc, "let-ref-fallback", 16);
+  sc->let_set_fallback_symbol = make_symbol_with_length(sc, "let-set-fallback", 16); /* was let-set!-fallback until 9-Oct-17 */
 
   sc->make_iterator_symbol =         defun("make-iterator",	make_iterator,		1, 1, false);
   sc->iterate_symbol =               defun("iterate",		iterate,		1, 0, false);
@@ -94994,10 +94992,10 @@ static void init_rootlet(s7_scheme *sc)
   sc->sharp_readers = global_slot(sym);
   s7_set_setter(sc, sym, s7_make_safe_function(sc, "#<set-*#readers*>", g_sharp_readers_set, 2, 0, false, "*#readers* setter"));
 
-  sc->local_documentation_symbol = make_symbol(sc, "+documentation+");
-  sc->local_signature_symbol =     make_symbol(sc, "+signature+");
-  sc->local_setter_symbol =        make_symbol(sc, "+setter+");
-  sc->local_iterator_symbol =      make_symbol(sc, "+iterator+");
+  sc->local_documentation_symbol = make_symbol_with_length(sc, "+documentation+", 15);
+  sc->local_signature_symbol =     make_symbol_with_length(sc, "+signature+", 11);
+  sc->local_setter_symbol =        make_symbol_with_length(sc, "+setter+", 8);
+  sc->local_iterator_symbol =      make_symbol_with_length(sc, "+iterator+", 10);
 
   init_features(sc);
   init_setters(sc);
@@ -95333,12 +95331,12 @@ s7_scheme *s7_init(void)
   sc->map_call_ctr = 0;
   sc->syms_tag = 0;
   sc->syms_tag2 = 0;
-  sc->class_name_symbol = make_symbol(sc, "class-name");
-  sc->name_symbol = make_symbol(sc, "name");
-  sc->trace_in_symbol = make_symbol(sc, "trace-in");
-  sc->size_symbol = make_symbol(sc, "size");
-  sc->mutable_symbol = make_symbol(sc, "mutable?");
-  sc->file__symbol = make_symbol(sc, "FILE*");
+  sc->class_name_symbol = make_symbol_with_length(sc, "class-name", 10);
+  sc->name_symbol = make_symbol_with_length(sc, "name", 4);
+  sc->trace_in_symbol = make_symbol_with_length(sc, "trace-in", 8);
+  sc->size_symbol = make_symbol_with_length(sc, "size", 4);
+  sc->mutable_symbol = make_symbol_with_length(sc, "mutable?", 8);
+  sc->file__symbol = make_symbol_with_length(sc, "FILE*", 5);
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
@@ -95927,17 +95925,17 @@ int main(int argc, char **argv)
  * timp      2637   2575   1930   1687   1689
  * texit     ----   ----   1778   1737   1741
  * s7test    1873   1831   1818   1816   1826
- * tauto     ----   ----   2562   2045   2055
  * thook     ----   ----   2590   2074   2030
+ * tauto     ----   ----   2562   2045   2055
  * lt        2187   2172   2150   2179   2182
  * dup       3805   3788   2492   2227   2243
- * tload     ----   ----   3046   2368   2370
+ * tload     ----   ----   3046   2368   2370  2382 [s7_define]
  * tcopy     8035   5546   2539   2372   2373
- * tread     2440   2421   2419   2414   2408
+ * tread     2440   2421   2419   2414   2407
  * fbench    2688   2583   2460   2419   2428
  * trclo     2735   2574   2454   2439   2446
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2569   2567
+ * tmat      3065   3042   2524   2569   2567  2579
  * tb        2735   2681   2612   2600   2603
  * tsort     3105   3104   2856   2801   2804
  * teq       4068   4045   3536   3469   3487
@@ -95947,7 +95945,7 @@ int main(int argc, char **argv)
  * tclo      4787   4735   4390   4375   4389
  * tstar     6139   5923   5519   ----   4414
  * tlet      7775   5640   4450   4402   4431
- * tcase     4960   4793   4439   4434   4432
+ * tcase     4960   4793   4439   4434   4425
  * tfft      7820   7729   4755   4457   4465
  * tmap      8869   8774   4489   4541   4541
  * tshoot    5525   5447   5183   5057   5055
