@@ -7228,8 +7228,8 @@ static void unmark_semipermanent_objects(s7_scheme *sc)
   #include <sys/time.h>
 #endif
 
-static inline s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
-static s7_pointer make_symbol(s7_scheme *sc, const char *name);
+static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
+#define make_symbol(Sc, Name) make_symbol_with_length(Sc, Name, safe_strlen(Name))
 
 #if WITH_GCC
 static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
@@ -8280,10 +8280,11 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
   return(x);
 }
 
-static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) /* inline out: about 40 in tload, but not else I think */
+static Inline s7_pointer inline_make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) /* inline out: ca 40 in tload */
 { /* name here might not be null-terminated */
   uint64_t hash = raw_string_hash((const uint8_t *)name, len);
   uint32_t location = hash % SYMBOL_TABLE_SIZE;
+
   if (len <= 8)
     {
       for (s7_pointer x = vector_element(sc->symbol_table, location); is_pair(x); x = cdr(x))
@@ -8300,9 +8301,9 @@ static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_in
   return(new_symbol(sc, name, len, hash, location));
 }
 
-static s7_pointer make_symbol(s7_scheme *sc, const char *name) {return(make_symbol_with_length(sc, name, safe_strlen(name)));}
+static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) {return(inline_make_symbol_with_length(sc, name, len));}
 
-s7_pointer s7_make_symbol(s7_scheme *sc, const char *name) {return((name) ? make_symbol_with_length(sc, name, safe_strlen(name)) : sc->F);}
+s7_pointer s7_make_symbol(s7_scheme *sc, const char *name) {return(inline_make_symbol_with_length(sc, name, safe_strlen(name)));}
 
 static s7_pointer symbol_table_find_by_name(s7_scheme *sc, const char *name, uint64_t hash, uint32_t location, s7_int len)
 {
@@ -8661,7 +8662,7 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
 	  cur_len += string_length(str);
 	}}
   name[len] = '\0';
-  sym = mark_as_symbol_from_symbol(make_symbol_with_length(sc, name, len));
+  sym = mark_as_symbol_from_symbol(inline_make_symbol_with_length(sc, name, len));
   liberate(sc, b);
   return(sym);
 }
@@ -8675,7 +8676,7 @@ static s7_pointer symbol_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
   if ((len == 0) || (len >= 256)) return(g_symbol(sc, set_plist_2(sc, p1, p2)));
   memcpy((void *)buf, (void *)string_value(p1), string_length(p1));
   memcpy((void *)(buf + string_length(p1)), (void *)string_value(p2), string_length(p2));
-  return(mark_as_symbol_from_symbol(make_symbol_with_length(sc, buf, len)));
+  return(mark_as_symbol_from_symbol(inline_make_symbol_with_length(sc, buf, len)));
 }
 
 
@@ -11113,7 +11114,7 @@ s7_pointer s7_make_keyword(s7_scheme *sc, const char *key)
   name[0] = ':';
   memcpy((void *)(name + 1), (void *)key, slen);
   name[slen + 1] = '\0';
-  sym = make_symbol_with_length(sc, name, slen + 1); /* keyword slot etc taken care of here (in new_symbol actually) */
+  sym = inline_make_symbol_with_length(sc, name, slen + 1); /* keyword slot etc taken care of here (in new_symbol actually) */
   liberate(sc, b);
   return(sym);
 }
@@ -28846,7 +28847,7 @@ static s7_pointer string_read_name_no_free(s7_scheme *sc, s7_pointer pt)
        * but slightly faster.
        */
       if (!number_table[*orig_str])
-	return(make_symbol_with_length(sc, (const char *)orig_str, k));
+	return(inline_make_symbol_with_length(sc, (const char *)orig_str, k));
 
       /* eval_c_string string is a constant so we can't set and unset the token's end char */
       if ((k + 1) >= sc->strbuf_size)
@@ -28916,7 +28917,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
       k = str - orig_str;
       port_position(pt) += (k - 1);
       if (!number_table[*orig_str])
-	return(make_symbol_with_length(sc, (const char *)orig_str, k));
+	return(inline_make_symbol_with_length(sc, (const char *)orig_str, k));
       endc = *str;
       *str = 0;
       result = make_atom(sc, (char *)orig_str, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR);
@@ -30493,8 +30494,7 @@ s7_pointer s7_load_path(s7_scheme *sc) {return(s7_symbol_value(sc, sc->load_path
 
 s7_pointer s7_add_to_load_path(s7_scheme *sc, const char *dir)
 {
-  s7_symbol_set_value(sc, sc->load_path_symbol,
-		      cons(sc, s7_make_string(sc, dir), s7_symbol_value(sc, sc->load_path_symbol)));
+  s7_symbol_set_value(sc, sc->load_path_symbol, cons(sc, s7_make_string(sc, dir), s7_symbol_value(sc, sc->load_path_symbol)));
   return(s7_symbol_value(sc, sc->load_path_symbol));
 }
 
@@ -44951,10 +44951,10 @@ static s7_pointer g_is_procedure(s7_scheme *sc, s7_pointer args)
 }
 
 
-static void s7_function_set_setter(s7_scheme *sc, const char *getter, const char *setter)
+static void s7_function_set_setter(s7_scheme *sc, s7_pointer getter, s7_pointer setter)
 {
   /* this is internal, used only with c_function setters, so we don't need to worry about the GC mark choice */
-  c_function_set_setter(s7_name_to_value(sc, getter), s7_name_to_value(sc, setter));
+  c_function_set_setter(global_value(getter), global_value(setter));
 }
 
 s7_pointer s7_closure_body(s7_scheme *sc, s7_pointer p) {return((has_closure_let(p)) ? closure_body(p) : sc->nil);}
@@ -68650,7 +68650,6 @@ static s7_pointer make_function_with_class(s7_scheme *sc, s7_pointer cls, const 
 					   int32_t required_args, int32_t optional_args, bool rest_arg)
 {
   s7_pointer uf = s7_make_safe_function(sc, name, f, required_args, optional_args, rest_arg, NULL);
-  if ((S7_DEBUGGING) && (!is_safe_procedure(global_value(make_symbol(sc, name))))) fprintf(stderr, "%s unsafe: %s\n", __func__, name);
   s7_function_set_class(sc, uf, cls);
   c_function_signature(uf) = c_function_signature(cls);
   return(uf);
@@ -88787,7 +88786,7 @@ static int32_t read_atom(s7_scheme *sc, s7_pointer pt)
   return(port_read_white_space(pt)(sc, pt));
 }
 
-static inline int32_t read_start_list(s7_scheme *sc, s7_pointer pt, int32_t c)
+static /* inline */ int32_t read_start_list(s7_scheme *sc, s7_pointer pt, int32_t c)
 {
   sc->strbuf[0] = (unsigned char)c;
   push_stack_no_let_no_code(sc, OP_READ_LIST, sc->args);
@@ -92195,7 +92194,10 @@ static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20
   set_immutable_let(x);
   sc->s7_starlet_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x)); /* define_constant returns the symbol */
   for (int32_t i = SL_STACK_TOP; i < SL_NUM_FIELDS; i++)
-    s7_starlet_symbol_set(make_symbol(sc, s7_starlet_names[i]), (s7_starlet_t)i);
+    {
+      s7_pointer sym = make_symbol(sc, s7_starlet_names[i]);
+      s7_starlet_symbol_set(sym, (s7_starlet_t)i); /* evaluates sym twice */
+    }
   return(x);
 }
 
@@ -92241,35 +92243,35 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #if (!_WIN32) /* (!MS_WINDOWS) */
   getrusage(RUSAGE_SELF, &info);
   ut = info.ru_utime;
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-time"), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "process-time", 12), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
 #ifdef __APPLE__
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "process-resident-size", 21), kmg(sc, info.ru_maxrss));
   /* apple docs say this is in kilobytes, but apparently that is an error */
 #else
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size"), kmg(sc, info.ru_maxrss * 1024));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "process-resident-size", 21), kmg(sc, info.ru_maxrss * 1024));
   /* why does this number sometimes have no relation to RES in top? */
 #endif
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "IO"), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "IO", 2), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
 #endif
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size"), make_integer(sc, sc->rootlet_entries));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "rootlet-size", 12), make_integer(sc, sc->rootlet_entries));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "heap-size", 9),
 			     cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cell-size"), make_integer(sc, sizeof(s7_cell)));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed"), make_integer(sc, sc->gc_total_freed));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time"), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "cell-size", 9), make_integer(sc, sizeof(s7_cell)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-total-freed", 14), make_integer(sc, sc->gc_total_freed));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-total-time", 13), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "small_ints"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "small_ints", 10),
 			     cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells"), cons(sc, make_integer(sc, sc->semipermanent_cells),
-										  kmg(sc, sc->semipermanent_cells * sizeof(s7_cell))));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "permanent-cells", 15), 
+			     cons(sc, make_integer(sc, sc->semipermanent_cells), kmg(sc, sc->semipermanent_cells * sizeof(s7_cell))));
   {
     gc_obj_t *g;
     for (i = 0, g = sc->semipermanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects"), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "permanent_objects", 17), make_integer(sc, i));
     for (i = 0, g = sc->semipermanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets"), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "permanent_lets", 14), make_integer(sc, i));
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
@@ -92284,17 +92286,17 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	sc->w = cons_unchecked(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)),
 					    make_integer(sc, ts[i])), sc->w);
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "cells-in-use/free", 17),
 			     cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "types"), proper_list_reverse_in_place(sc, sc->w));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "types", 5), proper_list_reverse_in_place(sc, sc->w));
   sc->w = sc->unused;
   /* same for semipermanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-protected-objects", 20),
 			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->protected_objects_free_list_loc),
 				  make_integer(sc, sc->protected_objects_size)));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "setters"), make_integer(sc, sc->protected_setters_loc));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "setters", 7), make_integer(sc, sc->protected_setters_loc));
 
   /* check the symbol table, counting gensyms etc */
   {
@@ -92311,22 +92313,21 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	  }
 	if (k > mx_list) mx_list = k;
       }
-    add_slot_unchecked_with_id(sc, mu_let,
-			       make_symbol(sc, "symbol-table"),
+    add_slot_unchecked_with_id(sc, mu_let, sc->symbol_table_symbol,
 			       s7_list(sc, 9,
 				       make_integer(sc, SYMBOL_TABLE_SIZE),
-				       make_symbol(sc, "max-bin"), make_integer(sc, mx_list),
-				       make_symbol(sc, "symbols"), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
-				       make_symbol(sc, "gensyms"), make_integer(sc, gens),
-				       make_symbol(sc, "keys"),    make_integer(sc, keys)));
+				       make_symbol_with_length(sc, "max-bin", 7), make_integer(sc, mx_list),
+				       make_symbol_with_length(sc, "symbols", 7), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
+				       make_symbol_with_length(sc, "gensyms", 7), make_integer(sc, gens),
+				       make_symbol_with_length(sc, "keys", 4),    make_integer(sc, keys)));
   }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "stack"), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "stack", 5), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
 
   len = sc->autoload_names_top * (sizeof(const char **) + sizeof(s7_int) + sizeof(bool));
   for (i = 0; i < sc->autoload_names_loc; i++) len += sc->autoload_names_sizes[i];
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "autoload"), make_integer(sc, len));
+  add_slot_unchecked_with_id(sc, mu_let, sc->autoload_symbol, make_integer(sc, len));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "circle_info"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "circle_info", 11),
 			     make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
 
   /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-polar et el */
@@ -92337,30 +92338,30 @@ static s7_pointer memory_usage(s7_scheme *sc)
     int32_t loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
                   sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
                   sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists"),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-lists", 8),
        s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
 	 s7_list(sc, 14,
-	         list_3(sc, make_symbol(sc, "string"),         make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
-		 list_3(sc, make_symbol(sc, "vector"),         make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
-		 list_3(sc, make_symbol(sc, "multivector"),    make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
-		 list_3(sc, make_symbol(sc, "input"),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
-		 list_3(sc, make_symbol(sc, "output"),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
-		 list_3(sc, make_symbol(sc, "input-string"),   make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
-		 list_3(sc, make_symbol(sc, "continuation"),   make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
-		 list_3(sc, make_symbol(sc, "c-object"),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
-		 list_3(sc, make_symbol(sc, "hash-table"),     make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
-		 list_3(sc, make_symbol(sc, "gensym"),         make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
-		 list_3(sc, make_symbol(sc, "undefined"),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
-		 list_3(sc, make_symbol(sc, "weak-ref"),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
-		 list_3(sc, make_symbol(sc, "weak-hash-iter"), make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
-		 list_3(sc, make_symbol(sc, "opt1-func"),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
+	   list_3(sc, sc->string_symbol,                                make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
+	   list_3(sc, sc->vector_symbol,                                make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
+	   list_3(sc, sc->hash_table_symbol,                            make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
+	   list_3(sc, make_symbol_with_length(sc, "multivector", 11),   make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
+	   list_3(sc, make_symbol_with_length(sc, "input", 5),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
+	   list_3(sc, make_symbol_with_length(sc, "output", 6),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
+	   list_3(sc, make_symbol_with_length(sc, "input-string", 12),  make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
+	   list_3(sc, make_symbol_with_length(sc, "continuation", 12),  make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
+	   list_3(sc, make_symbol_with_length(sc, "c-object", 8),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
+	   list_3(sc, make_symbol_with_length(sc, "gensym", 6),         make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
+	   list_3(sc, make_symbol_with_length(sc, "undefined", 9),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
+	   list_3(sc, make_symbol_with_length(sc, "weak-ref", 8),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
+	   list_3(sc, make_symbol_with_length(sc, "weak-hash-iter", 14),make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
+	   list_3(sc, make_symbol_with_length(sc, "opt1-func", 9),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
   }
 
   /* strings */
   gp = sc->strings;
   for (len = 0, i = 0; i < (int32_t)(gp->loc); i++)
     len += string_length(gp->list[i]);
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "strings"), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "strings", 7), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
 
   /* vectors */
   for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
@@ -92378,13 +92379,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	    else vlen += vector_length(v);
       }
   add_slot_unchecked_with_id(sc, mu_let,
-			     make_symbol(sc, "vectors"),
+			     make_symbol_with_length(sc, "vectors", 7),
 			     s7_list(sc, 9,
 				     make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
-				     make_symbol(sc, "vlen"),  make_integer(sc, vlen),
-				     make_symbol(sc, "fvlen"), make_integer(sc, flen),
-				     make_symbol(sc, "ivlen"), make_integer(sc, ilen),
-				     make_symbol(sc, "bvlen"), make_integer(sc, blen)));
+				     make_symbol_with_length(sc, "vlen", 4),  make_integer(sc, vlen),
+				     make_symbol_with_length(sc, "fvlen", 5), make_integer(sc, flen),
+				     make_symbol_with_length(sc, "ivlen", 5), make_integer(sc, ilen),
+				     make_symbol_with_length(sc, "bvlen", 5), make_integer(sc, blen)));
   /* hash-tables */
   for (i = 0, gp = sc->hash_tables; i < gp->loc; i++)
     {
@@ -92392,7 +92393,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
       hlen += ((hash_table_mask(v) + 1) * sizeof(hash_entry_t *));
       hlen += (hash_table_entries(v) * sizeof(hash_entry_t));
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "hash-tables"), cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "hash-tables", 11), 
+			     cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
 
   /* ports */
   gp = sc->input_ports;
@@ -92407,7 +92409,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "input-ports"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "input-ports", 11),
 			     cons(sc, make_integer(sc, sc->input_ports->loc + sc->input_string_ports->loc), make_integer(sc, len)));
   gp = sc->output_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
@@ -92415,12 +92417,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
       s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "output-ports"),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "output-ports", 12),
 			     cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
   {
     s7_pointer p;
     for (i = 0, p = sc->format_ports; p; p = (s7_pointer)port_next(p));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "format-ports"), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "format-ports", 12), make_integer(sc, i));
   }
 
   /* continuations (sketchy!) */
@@ -92429,19 +92431,19 @@ static s7_pointer memory_usage(s7_scheme *sc)
     if (is_continuation(gp->list[i]))
       len += continuation_stack_size(gp->list[i]);
   if (len > 0)
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "continuations"),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "continuations", 13),
 			       cons(sc, make_integer(sc, sc->continuations->loc), make_integer(sc, len * sizeof(s7_pointer))));
   /* c-objects */
   if (sc->c_objects->loc > 0)
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-objects"), make_integer(sc, sc->c_objects->loc));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "c-objects", 9), make_integer(sc, sc->c_objects->loc));
   if (sc->num_c_object_types > 0)
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-types"),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "c-types", 7),
 			       cons(sc, make_integer(sc, sc->num_c_object_types),
 				    make_integer(sc, (sc->c_object_types_size * sizeof(c_object_t *)) + (sc->num_c_object_types * sizeof(c_object_t)))));
 				    /* we're ignoring c_type->scheme_name: make_permanent_string(sc, name) */
 #if WITH_GMP
   add_slot_unchecked_with_id(sc, mu_let,
-			     make_symbol(sc, "bignums"),
+			     make_symbol_with_length(sc, "bignums", 7),
 			     s7_list(sc, 5, make_integer(sc, sc->big_integers->loc), make_integer(sc, sc->big_ratios->loc),
 				     make_integer(sc, sc->big_reals->loc), make_integer(sc, sc->big_complexes->loc),
 				     make_integer(sc, sc->big_random_states->loc)));
@@ -92458,12 +92460,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
     for (b = sc->block_lists[TOP_BLOCK_LIST], k = 0; b; b = block_next(b), k++)
       len += (sizeof(block_t) + block_size(b));
     sc->w = cons(sc, make_integer(sc, k), sc->w);
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists"),
-			       list_2(sc, cons(sc, make_symbol(sc, "bytes"), kmg(sc, len)),
-				      cons(sc, make_symbol(sc, "bins"), proper_list_reverse_in_place(sc, sc->w))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "free-lists", 10),
+			       list_2(sc, cons(sc, make_symbol_with_length(sc, "bytes", 5), kmg(sc, len)),
+				      cons(sc, make_symbol_with_length(sc, "bins", 4), proper_list_reverse_in_place(sc, sc->w))));
     sc->w = sc->unused;
     add_slot_unchecked_with_id(sc, mu_let,
-			       make_symbol(sc, "approximate-s7-size"),
+			       make_symbol_with_length(sc, "approximate-s7-size", 19),
 			       kmg(sc, ((sc->semipermanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
 				   ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
 				   len + hlen + (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
@@ -94160,26 +94162,26 @@ static void init_setters(s7_scheme *sc)
 #else
   set_is_setter(sc->set_current_input_port_symbol);
   set_is_setter(sc->set_current_output_port_symbol);
-  s7_function_set_setter(sc, "current-input-port",  "set-current-input-port");
-  s7_function_set_setter(sc, "current-output-port", "set-current-output-port");
+  s7_function_set_setter(sc, sc->current_input_port_symbol,  sc->set_current_input_port_symbol);
+  s7_function_set_setter(sc, sc->current_output_port_symbol, sc->set_current_output_port_symbol);
 #endif
 
   set_is_setter(sc->set_current_error_port_symbol);
-  s7_function_set_setter(sc, "current-error-port",  "set-current-error-port");
+  s7_function_set_setter(sc, sc->current_error_port_symbol, sc->set_current_error_port_symbol);
   /* despite the similar names, current-error-port is different from the other two, and a setter is needed
    *    in scheme because error and warn send output to it by default.  It is not a "dynamic variable".
    */
 
-  s7_function_set_setter(sc, "car",              "set-car!");
-  s7_function_set_setter(sc, "cdr",              "set-cdr!");
-  s7_function_set_setter(sc, "hash-table-ref",   "hash-table-set!");
-  s7_function_set_setter(sc, "vector-ref",       "vector-set!");
-  s7_function_set_setter(sc, "float-vector-ref", "float-vector-set!");
-  s7_function_set_setter(sc, "int-vector-ref",   "int-vector-set!");
-  s7_function_set_setter(sc, "byte-vector-ref",  "byte-vector-set!");
-  s7_function_set_setter(sc, "list-ref",         "list-set!");
-  s7_function_set_setter(sc, "let-ref",          "let-set!");
-  s7_function_set_setter(sc, "string-ref",       "string-set!");
+  s7_function_set_setter(sc, sc->car_symbol,              sc->set_car_symbol);
+  s7_function_set_setter(sc, sc->cdr_symbol,              sc->set_cdr_symbol);
+  s7_function_set_setter(sc, sc->hash_table_ref_symbol,   sc->hash_table_set_symbol);
+  s7_function_set_setter(sc, sc->vector_ref_symbol,       sc->vector_set_symbol);
+  s7_function_set_setter(sc, sc->float_vector_ref_symbol, sc->float_vector_set_symbol);
+  s7_function_set_setter(sc, sc->int_vector_ref_symbol,   sc->int_vector_set_symbol);
+  s7_function_set_setter(sc, sc->byte_vector_ref_symbol,  sc->byte_vector_set_symbol);
+  s7_function_set_setter(sc, sc->list_ref_symbol,         sc->list_set_symbol);
+  s7_function_set_setter(sc, sc->let_ref_symbol,          sc->let_set_symbol);
+  s7_function_set_setter(sc, sc->string_ref_symbol,       sc->string_set_symbol);
   c_function_set_setter(global_value(sc->outlet_symbol),
 			s7_make_safe_function(sc, "#<set-outlet>", g_set_outlet, 2, 0, false, "outlet setter"));
   c_function_set_setter(global_value(sc->port_line_number_symbol),
@@ -94945,7 +94947,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_set_setter(sc, sc->features_symbol, s7_make_safe_function(sc, "#<set-*features*>", g_features_set, 2, 0, false, "*features* setter"));
 
   /* -------- *load-path* -------- */
-  sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*", list_1(sc, s7_make_string(sc, ".")), /* not plist! */
+  sc->load_path_symbol = s7_define_variable_with_documentation(sc, "*load-path*", list_1(sc, make_string_with_length(sc, ".", 1)), /* not plist! */
 			   "*load-path* is a list of directories (strings) that the load function searches if it is passed an incomplete file name");
   s7_set_setter(sc, sc->load_path_symbol, s7_make_safe_function(sc, "#<set-*load-path*>", g_load_path_set, 2, 0, false, "*load-path* setter"));
 
@@ -94965,24 +94967,24 @@ static void init_rootlet(s7_scheme *sc)
   sc->libraries_symbol = s7_define_variable_with_documentation(sc, "*libraries*", sc->nil, "list of currently loaded libraries (libc.scm, etc)");
   s7_set_setter(sc, sc->libraries_symbol, s7_make_safe_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
 
-  s7_autoload(sc, make_symbol(sc, "cload.scm"),       s7_make_semipermanent_string(sc, "cload.scm"));
-  s7_autoload(sc, make_symbol(sc, "lint.scm"),        s7_make_semipermanent_string(sc, "lint.scm"));
-  s7_autoload(sc, make_symbol(sc, "stuff.scm"),       s7_make_semipermanent_string(sc, "stuff.scm"));
-  s7_autoload(sc, make_symbol(sc, "mockery.scm"),     s7_make_semipermanent_string(sc, "mockery.scm"));
-  s7_autoload(sc, make_symbol(sc, "write.scm"),       s7_make_semipermanent_string(sc, "write.scm"));
-  s7_autoload(sc, make_symbol(sc, "reactive.scm"),    s7_make_semipermanent_string(sc, "reactive.scm"));
-  s7_autoload(sc, make_symbol(sc, "repl.scm"),        s7_make_semipermanent_string(sc, "repl.scm"));
-  s7_autoload(sc, make_symbol(sc, "r7rs.scm"),        s7_make_semipermanent_string(sc, "r7rs.scm"));
-  s7_autoload(sc, make_symbol(sc, "profile.scm"),     s7_make_semipermanent_string(sc, "profile.scm"));
-  s7_autoload(sc, make_symbol(sc, "debug.scm"),       s7_make_semipermanent_string(sc, "debug.scm"));
-  s7_autoload(sc, make_symbol(sc, "case.scm"),        s7_make_semipermanent_string(sc, "case.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "cload.scm", 9),        s7_make_semipermanent_string(sc, "cload.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "lint.scm", 8),         s7_make_semipermanent_string(sc, "lint.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "stuff.scm", 9),        s7_make_semipermanent_string(sc, "stuff.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "mockery.scm", 11),     s7_make_semipermanent_string(sc, "mockery.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "write.scm", 9),        s7_make_semipermanent_string(sc, "write.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "reactive.scm", 12),    s7_make_semipermanent_string(sc, "reactive.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "repl.scm", 8),         s7_make_semipermanent_string(sc, "repl.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "r7rs.scm", 8),         s7_make_semipermanent_string(sc, "r7rs.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "profile.scm", 11),     s7_make_semipermanent_string(sc, "profile.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "debug.scm", 9),        s7_make_semipermanent_string(sc, "debug.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "case.scm", 8),         s7_make_semipermanent_string(sc, "case.scm"));
 
-  s7_autoload(sc, make_symbol(sc, "libc.scm"),        s7_make_semipermanent_string(sc, "libc.scm"));
-  s7_autoload(sc, make_symbol(sc, "libm.scm"),        s7_make_semipermanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
-  s7_autoload(sc, make_symbol(sc, "libdl.scm"),       s7_make_semipermanent_string(sc, "libdl.scm"));
-  s7_autoload(sc, make_symbol(sc, "libgsl.scm"),      s7_make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
-  s7_autoload(sc, make_symbol(sc, "libgdbm.scm"),     s7_make_semipermanent_string(sc, "libgdbm.scm"));
-  s7_autoload(sc, make_symbol(sc, "libutf8proc.scm"), s7_make_semipermanent_string(sc, "libutf8proc.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "libc.scm", 8),         s7_make_semipermanent_string(sc, "libc.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "libm.scm", 8),         s7_make_semipermanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
+  s7_autoload(sc, make_symbol_with_length(sc, "libdl.scm", 9),        s7_make_semipermanent_string(sc, "libdl.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "libgsl.scm", 10),      s7_make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
+  s7_autoload(sc, make_symbol_with_length(sc, "libgdbm.scm", 11),     s7_make_semipermanent_string(sc, "libgdbm.scm"));
+  s7_autoload(sc, make_symbol_with_length(sc, "libutf8proc.scm", 15), s7_make_semipermanent_string(sc, "libutf8proc.scm"));
 
   sc->require_symbol = s7_define_macro(sc, "require", g_require, 1, 0, true, H_require);
   sc->stacktrace_defaults = s7_list(sc, 5, int_three, small_int(45), small_int(80), small_int(45), sc->T); /* assume NUM_SMALL_INTS >= NUM_CHARS == 256 */
@@ -95803,7 +95805,7 @@ void s7_repl(s7_scheme *sc)
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
   bool repl_loaded = false;
-  s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol(sc, "init_func"), make_symbol(sc, "libc_s7_init")));
+  s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol_with_length(sc, "init_func", 9), make_symbol_with_length(sc, "libc_s7_init", 12)));
   s7_int gc_loc = s7_gc_protect(sc, e);
   s7_pointer old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
   s7_pointer val = s7_load_with_environment(sc, "libc_s7.so", e);
@@ -95823,8 +95825,8 @@ void s7_repl(s7_scheme *sc)
   else
     {
 #if S7_DEBUGGING
-      s7_autoload(sc, make_symbol(sc, "compare-calls"), s7_make_string(sc, "compare-calls.scm"));
-      s7_autoload(sc, make_symbol(sc, "get-overheads"), s7_make_string(sc, "compare-calls.scm"));
+      s7_autoload(sc, make_symbol_with_length(sc, "compare-calls", 13), s7_make_string(sc, "compare-calls.scm"));
+      s7_autoload(sc, make_symbol_with_length(sc, "get-overheads", 13), s7_make_string(sc, "compare-calls.scm"));
 #endif
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) s7_load(sc, "repl.scm");
@@ -95917,19 +95919,19 @@ int main(int argc, char **argv)
 /* ---------------------------------------------
  *            20.9   21.0   22.0   22.8   22.9
  * ---------------------------------------------
- * tpeak      115    114    108    105    105
+ * tpeak      115    114    108    105    105   102
  * tref       691    687    463    457    459
- * index     1026   1016    973    962    966
+ * index     1026   1016    973    962    966   963
  * tmock     1177   1165   1057   1083   1019
  * tvect     2519   2464   1772   1667   1670
  * timp      2637   2575   1930   1687   1689
  * texit     ----   ----   1778   1737   1741
  * s7test    1873   1831   1818   1816   1826
  * thook     ----   ----   2590   2074   2030
- * tauto     ----   ----   2562   2045   2055
+ * tauto     ----   ----   2562   2045   2055  2048
  * lt        2187   2172   2150   2179   2182
- * dup       3805   3788   2492   2227   2243
- * tload     ----   ----   3046   2368   2370  2382 [s7_define]
+ * dup       3805   3788   2492   2227   2243  2238
+ * tload     ----   ----   3046   2368   2370  2382 [s7_define] 2408 [make_symbol/length]
  * tcopy     8035   5546   2539   2372   2373
  * tread     2440   2421   2419   2414   2407
  * fbench    2688   2583   2460   2419   2428
@@ -95937,14 +95939,14 @@ int main(int argc, char **argv)
  * titer     2865   2842   2641   2509   2509
  * tmat      3065   3042   2524   2569   2567  2579
  * tb        2735   2681   2612   2600   2603
- * tsort     3105   3104   2856   2801   2804
+ * tsort     3105   3104   2856   2801   2804  2809
  * teq       4068   4045   3536   3469   3487
  * tobj      4016   3970   3828   3567   3570
  * tio       3816   3752   3683   3618   3620
  * tmac      3950   3873   3033   3667   3677
  * tclo      4787   4735   4390   4375   4389
  * tstar     6139   5923   5519   ----   4414
- * tlet      7775   5640   4450   4402   4431
+ * tlet      7775   5640   4450   4402   4431  4451 [make_symbol/length] 4429
  * tcase     4960   4793   4439   4434   4425
  * tfft      7820   7729   4755   4457   4465
  * tmap      8869   8774   4489   4541   4541
@@ -95955,20 +95957,19 @@ int main(int argc, char **argv)
  * tlamb     6423   6273   5720   5545   5554
  * tmisc     8869   7612   6435   6098   6085
  * tset      ----   ----   ----   6242   6242
- * tlist     7896   7546   6558   6242   6244
+ * tlist     7896   7546   6558   6242   6244  6237
  * tgsl      8485   7802   6373   6280   6281
  * tari      13.0   12.7   6827   6535   6543
  * trec      6936   6922   6521   6565   6588
  * tleft     10.4   10.2   7657   7475   7477
- * tgc       11.9   11.1   8177   7932   7868
+ * tgc       11.9   11.1   8177   7932   7868  7862
  * thash     11.8   11.7   9734   9471   9483
  * cb        11.2   11.0   9658   9544   9551
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.6
+ * calls     36.7   37.5   37.0   37.6   37.6  37.7
  * sg        ----   ----   55.9   55.7   55.8
- * lg        ----   ----  105.2  106.1  106.2
+ * lg        ----   ----  105.2  106.1  106.2 106.3 [make_symbol/length]
  * tbig     177.4  175.8  156.5  147.9  148.1
  * ---------------------------------------------
- *
  */
