@@ -3945,6 +3945,7 @@ static char *copy_string_with_length(const char *str, s7_int len)
 
 static char *copy_string(const char *str) {return(copy_string_with_length(str, safe_strlen(str)));}
 
+#if 0
 static bool local_strcmp(const char *s1, const char *s2)
 {
   while (true)
@@ -3954,6 +3955,10 @@ static bool local_strcmp(const char *s1, const char *s2)
     }
   return(true);
 }
+#else
+#define local_strcmp(S1, S2) (strcmp(S1, S2) == 0)
+/* I think libc strcmp is much faster than it used to be, and beats the code above */
+#endif
 
 #define c_strings_are_equal(Str1, Str2) (local_strcmp(Str1, Str2))
 /* scheme strings can have embedded nulls */
@@ -3964,7 +3969,7 @@ static bool safe_strcmp(const char *s1, const char *s2)
   return(local_strcmp(s1, s2));
 }
 
-static bool local_strncmp(const char *s1, const char *s2, size_t n)
+static bool local_strncmp(const char *s1, const char *s2, size_t n) /* not strncmp because scheme strings can have embedded nulls */
 {
 #if ((!S7_ALIGNED) && (defined(__x86_64__) || defined(__i386__))) /* unaligned accesses are safe on i386 hardware, sez everyone */
   if (n >= 8)
@@ -6211,8 +6216,6 @@ static bool is_eof_object_b_p(s7_pointer p) {return(p == eof_object);}
 
 /* -------------------------------- not -------------------------------- */
 static bool not_b_7p(s7_scheme *sc, s7_pointer p) {return(p == sc->F);}
-bool s7_boolean(s7_scheme *sc, s7_pointer x)      {return(x != sc->F);}
-s7_pointer s7_make_boolean(s7_scheme *sc, bool x) {return(make_boolean(sc, x));}
 
 static s7_pointer g_not(s7_scheme *sc, s7_pointer args)
 {
@@ -6223,6 +6226,9 @@ static s7_pointer g_not(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- boolean? -------------------------------- */
+bool s7_boolean(s7_scheme *sc, s7_pointer x)      {return(x != sc->F);}
+s7_pointer s7_make_boolean(s7_scheme *sc, bool x) {return(make_boolean(sc, x));}
+
 bool s7_is_boolean(s7_pointer x) {return(type(x) == T_BOOLEAN);}
 
 static s7_pointer g_is_boolean(s7_scheme *sc, s7_pointer args)
@@ -7228,8 +7234,8 @@ static void unmark_semipermanent_objects(s7_scheme *sc)
   #include <sys/time.h>
 #endif
 
-static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
-#define make_symbol(Sc, Name) make_symbol_with_length(Sc, Name, safe_strlen(Name))
+static s7_pointer make_symbol(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
+#define make_symbol_with_strlen(Sc, Name) make_symbol(Sc, Name, safe_strlen(Name))
 
 #if WITH_GCC
 static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
@@ -7551,7 +7557,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 		   sc->heap_size, old_free, old_size, str);
     }
   if (sc->heap_size >= sc->max_heap_size)
-    error_nr(sc, make_symbol_with_length(sc, "heap-too-big", 12),
+    error_nr(sc, make_symbol(sc, "heap-too-big", 12),
 	     set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~S > ~S", 50),
 			 wrap_integer(sc, sc->max_heap_size),
 			 wrap_integer(sc, sc->heap_size)));
@@ -8137,7 +8143,7 @@ static void resize_stack(s7_scheme *sc)
   if (show_stack_stats(sc))
     s7_warn(sc, 128, "stack grows to %u\n", new_size);
   if (new_size > sc->max_stack_size)
-    error_nr(sc, make_symbol_with_length(sc, "stack-too-big", 13),
+    error_nr(sc, make_symbol(sc, "stack-too-big", 13),
 	     set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
   /* error needs to follow realloc, else error -> catchers in error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
 }
@@ -8259,7 +8265,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       s7_pointer slot, ksym;
       set_type_bit(x, T_IMMUTABLE | T_KEYWORD | T_GLOBAL);
       set_optimize_op(str, OP_CONSTANT);
-      ksym = make_symbol_with_length(sc, (name[0] == ':') ? (char *)(name + 1) : name, len - 1);
+      ksym = make_symbol(sc, (name[0] == ':') ? (char *)(name + 1) : name, len - 1);
       keyword_set_symbol(x, ksym);
       set_has_keyword(ksym);
       /* the keyword symbol needs to be semipermanent (not a gensym) else we have to laboriously gc-protect it */
@@ -8280,7 +8286,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
   return(x);
 }
 
-static Inline s7_pointer inline_make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) /* inline out: ca 40 in tload */
+static Inline s7_pointer inline_make_symbol(s7_scheme *sc, const char *name, s7_int len) /* inline out: ca 40 in tload */
 { /* name here might not be null-terminated */
   uint64_t hash = raw_string_hash((const uint8_t *)name, len);
   uint32_t location = hash % SYMBOL_TABLE_SIZE;
@@ -8292,7 +8298,7 @@ static Inline s7_pointer inline_make_symbol_with_length(s7_scheme *sc, const cha
 	    ((uint64_t)len == pair_raw_len(x)))
 	  return(car(x));
     }
-  else
+  else /* checking name[len=='\0' and using strcmp if so was not a big win */
     for (s7_pointer x = vector_element(sc->symbol_table, location); is_pair(x); x = cdr(x))
       if ((hash == pair_raw_hash(x)) &&
 	  ((uint64_t)len == pair_raw_len(x)) &&
@@ -8301,9 +8307,9 @@ static Inline s7_pointer inline_make_symbol_with_length(s7_scheme *sc, const cha
   return(new_symbol(sc, name, len, hash, location));
 }
 
-static s7_pointer make_symbol_with_length(s7_scheme *sc, const char *name, s7_int len) {return(inline_make_symbol_with_length(sc, name, len));}
+static s7_pointer make_symbol(s7_scheme *sc, const char *name, s7_int len) {return(inline_make_symbol(sc, name, len));}
 
-s7_pointer s7_make_symbol(s7_scheme *sc, const char *name) {return(inline_make_symbol_with_length(sc, name, safe_strlen(name)));}
+s7_pointer s7_make_symbol(s7_scheme *sc, const char *name) {return(inline_make_symbol(sc, name, safe_strlen(name)));}
 
 static s7_pointer symbol_table_find_by_name(s7_scheme *sc, const char *name, uint64_t hash, uint32_t location, s7_int len)
 {
@@ -8528,7 +8534,7 @@ static s7_pointer g_is_symbol(s7_scheme *sc, s7_pointer args)
 
 const char *s7_symbol_name(s7_pointer p) {return(symbol_name(p));}
 
-s7_pointer s7_name_to_value(s7_scheme *sc, const char *name) {return(s7_symbol_value(sc, make_symbol(sc, name)));}
+s7_pointer s7_name_to_value(s7_scheme *sc, const char *name) {return(s7_symbol_value(sc, make_symbol_with_strlen(sc, name)));}
 /* should this also handle non-symbols such as "+nan.0"? */
 
 
@@ -8598,7 +8604,7 @@ static inline s7_pointer g_string_to_symbol_1(s7_scheme *sc, s7_pointer str, s7_
     return(method_or_bust_p(sc, str, caller, sc->type_names[T_STRING]));
   if (string_length(str) <= 0)
     sole_arg_wrong_type_error_nr(sc, caller, str, wrap_string(sc, "a non-null string", 17));
-  return(make_symbol_with_length(sc, string_value(str), string_length(str)));
+  return(make_symbol(sc, string_value(str), string_length(str)));
 }
 
 static s7_pointer g_string_to_symbol(s7_scheme *sc, s7_pointer args)
@@ -8662,7 +8668,7 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
 	  cur_len += string_length(str);
 	}}
   name[len] = '\0';
-  sym = mark_as_symbol_from_symbol(inline_make_symbol_with_length(sc, name, len));
+  sym = mark_as_symbol_from_symbol(inline_make_symbol(sc, name, len));
   liberate(sc, b);
   return(sym);
 }
@@ -8676,7 +8682,7 @@ static s7_pointer symbol_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
   if ((len == 0) || (len >= 256)) return(g_symbol(sc, set_plist_2(sc, p1, p2)));
   memcpy((void *)buf, (void *)string_value(p1), string_length(p1));
   memcpy((void *)(buf + string_length(p1)), (void *)string_value(p2), string_length(p2));
-  return(mark_as_symbol_from_symbol(inline_make_symbol_with_length(sc, buf, len)));
+  return(mark_as_symbol_from_symbol(inline_make_symbol(sc, buf, len)));
 }
 
 
@@ -10287,7 +10293,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
       /* here it's possible to get cyclic let chains; maybe do this check only if safety>0 */
       for (s7_pointer lt = new_outer; (is_let(lt)) && (lt != sc->rootlet); lt = let_outlet(lt))
 	if (let == lt)
-	  error_nr(sc, make_symbol_with_length(sc, "cyclic-let", 10),
+	  error_nr(sc, make_symbol(sc, "cyclic-let", 10),
 		   set_elist_2(sc, wrap_string(sc, "set! (outlet ~A) creates a cyclic let chain", 43), let));
       let_set_outlet(let, (new_outer == sc->rootlet) ? sc->nil : new_outer);  /* outlet rootlet->() so that slot search can use is_let(outlet) I think */
     }
@@ -11049,7 +11055,7 @@ void s7_define(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer valu
 
 s7_pointer s7_define_variable(s7_scheme *sc, const char *name, s7_pointer value)
 {
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   s7_define(sc, sc->nil, sym, value);
   return(sym);
 }
@@ -11065,7 +11071,7 @@ s7_pointer s7_define_variable_with_documentation(s7_scheme *sc, const char *name
 
 s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value)
 {
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   s7_define(sc, envir, sym, value);
   set_immutable(sym);
   set_possibly_constant(sym);
@@ -11114,7 +11120,7 @@ s7_pointer s7_make_keyword(s7_scheme *sc, const char *key)
   name[0] = ':';
   memcpy((void *)(name + 1), (void *)key, slen);
   name[slen + 1] = '\0';
-  sym = inline_make_symbol_with_length(sc, name, slen + 1); /* keyword slot etc taken care of here (in new_symbol actually) */
+  sym = inline_make_symbol(sc, name, slen + 1); /* keyword slot etc taken care of here (in new_symbol actually) */
   liberate(sc, b);
   return(sym);
 }
@@ -14667,7 +14673,7 @@ static s7_pointer make_sharp_constant(s7_scheme *sc, const char *name, bool with
        *    (set! *#readers* (list (cons #\_ (lambda (str) (string->symbol (substring str 1))))))
        *    (let ((+ -)) (#_+ 1 2)): -1
        */
-      s7_pointer sym = make_symbol(sc, (char *)(name + 1));
+      s7_pointer sym = make_symbol_with_strlen(sc, (char *)(name + 1));
       if ((!is_gensym(sym)) && (is_slot(initial_slot(sym))))
 	return(initial_value(sym));
       /* here we should not necessarily raise an error that *_... is undefined.  reader-cond, for example, needs to
@@ -15192,7 +15198,7 @@ static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int
 	  if (is_real(imag))
 	    return(make_complex(sc, x, real_to_double(sc, imag, __func__))); /* +nan.0+2/3i etc */
 	}}
-  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 }
 
 static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radix, bool want_symbol, int64_t rl_len)
@@ -15208,7 +15214,7 @@ static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radi
       if (is_real(rl))
 	return(make_complex(sc, real_to_double(sc, rl, __func__), x));
     }
-  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 }
 
 #if WITH_NUMBER_SEPARATOR
@@ -15222,7 +15228,7 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
   s7_pointer res;
 
   if (name[0] == sep)
-    return((want_symbol) ? make_symbol(sc, name) : sc->F);
+    return((want_symbol) ? make_symbol_with_strlen(sc, name) : sc->F);
   len = safe_strlen(name);
   b = mallocate(sc, len + 1);
   new_name = (char *)block_data(b);
@@ -15237,13 +15243,13 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
 	else
 	  {
 	    liberate(sc, b);
-	    return((want_symbol) ? make_symbol(sc, name) : sc->F);
+	    return((want_symbol) ? make_symbol_with_strlen(sc, name) : sc->F);
 	  }}
     else  /* sep has to be between two digits */
       if ((digits[(uint8_t)(name[i - 1])] >= radix) || (digits[(uint8_t)(name[i + 1])] >= radix))
 	{
 	  liberate(sc, b);
-	  return((want_symbol) ? make_symbol(sc, name) : sc->F);
+	  return((want_symbol) ? make_symbol_with_strlen(sc, name) : sc->F);
 	}
 
   new_name[j] = '\0';
@@ -15280,11 +15286,11 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	  c = *p++;
 	}
       if (!c)
-	return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
       if (!is_digit(c, radix))
 	{
 	  if (has_dec_point1)
-	    return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	    return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 	  if (c == 'n')
 	    {
 	      if (local_strcmp(p, "an.0"))            /* +nan.0, even if we read -nan.0 -- what's the point of a negative NaN? */
@@ -15304,7 +15310,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		      return(nan1_or_bust(sc, nan_with_payload(payload), p, q, radix, want_symbol, i));
 		    }
 		  if ((p[i] != '\0') && (!white_space[(uint8_t)(p[i])])) /* check for +nan.0i etc, '\0' is not white_space apparently */
-		    return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		    return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 		  return(make_nan_with_payload(sc, string_to_integer((char *)(p + 3), 10, &overflow)));
 		}}
 	  if (c == 'i')
@@ -15315,7 +15321,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		  ((p[4] == '+') || (p[4] == '-')))
 		return(nan1_or_bust(sc, (q[0] == '-') ? -INFINITY : INFINITY, p, q, radix, want_symbol, 4));
 	    }
-	  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 	}
       break;
 
@@ -15323,14 +15329,14 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
       has_dec_point1 = true;
       c = *p++;
       if ((!c) || (!is_digit(c, radix)))
-	return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
       break;
 
     case 'n':
-      return((want_symbol) ? make_symbol(sc, q) : sc->F);
+      return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
     case 'i':
-      return((want_symbol) ? make_symbol(sc, q) : sc->F);
+      return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
     case '0':        /* these two are always digits */
     case '1':
@@ -15338,7 +15344,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 
     default:
       if (!is_digit(c, radix))
-	return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
       break;
     }
 
@@ -15368,18 +15374,18 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	      case '.':
 		if ((!is_digit(p[1], current_radix)) &&
 		    (!is_digit(p[-1], current_radix)))
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		if (has_plus_or_minus == 0)
 		  {
 		    if ((has_dec_point1) || (slash1))
-		      return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		      return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 		    has_dec_point1 = true;
 		  }
 		else
 		  {
 		    if ((has_dec_point2) || (slash2))
-		      return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		      return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 		    has_dec_point2 = true;
 		  }
 		continue;
@@ -15394,7 +15400,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 #endif
 	      case 'e': case 'E':
 		if (current_radix > 10) /* see above */
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 		/* fall through -- if '@' used, radices>10 are ok */
 
 	      case '@':
@@ -15403,16 +15409,16 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		if (((ex1) ||
 		     (slash1)) &&
 		    (has_plus_or_minus == 0)) /* ee */
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		if (((ex2) ||
 		     (slash2)) &&
 		    (has_plus_or_minus != 0)) /* 1+1.0ee */
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		if ((!is_digit(p[-1], radix)) && /* was current_radix but that's always 10! */
 		    (p[-1] != '.'))
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		if (has_plus_or_minus == 0)
 		  {
@@ -15434,7 +15440,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	      case '+':
 	      case '-':
 		if (has_plus_or_minus != 0) /* already have the separator */
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		has_plus_or_minus = (c == '+') ? 1 : -1;
 		plus = (char *)(p + 1);
@@ -15459,13 +15465,13 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		    ((ex1) ||
 		     (slash1) ||
 		     (has_dec_point1)))
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		if ((has_plus_or_minus != 0) &&
 		    ((ex2) ||
 		     (slash2) ||
 		     (has_dec_point2)))
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		if (has_plus_or_minus == 0)
 		  slash1 = (char *)(p + 1);
@@ -15473,7 +15479,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 
 		if ((!is_digit(p[1], current_radix)) ||
 		    (!is_digit(p[-1], current_radix)))
-		  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+		  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 		continue;
 
@@ -15490,12 +15496,12 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	      default:
 		break;
 	      }
-	    return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	    return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 	  }}
 
     if ((has_plus_or_minus != 0) &&        /* that is, we have an internal + or - */
 	(!has_i))                          /*   but no i for the imaginary part */
-      return((want_symbol) ? make_symbol(sc, q) : sc->F);
+      return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 #if WITH_NUMBER_SEPARATOR
     if ((sc->number_separator != '\0') && (strchr(q, (int)(sc->number_separator))))
@@ -15514,7 +15520,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 	char ql1, pl1;
 
 	if (q[len - 1] != 'i')
-	  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 	/* save original string */
 	ql1 = q[len - 1];
@@ -15614,7 +15620,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
       {
 	s7_pointer result;
 	if (slash1)  /* not complex, so slash and "." is not a number */
-	  return((want_symbol) ? make_symbol(sc, q) : sc->F);
+	  return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 
 #if (!WITH_GMP)
 	result = make_real(sc, string_to_double_with_radix(q, radix, ignored));
@@ -15750,7 +15756,7 @@ static inline s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
     }
   if (is_t_real(x))
     {
-      if (is_NaN(real(x))) 
+      if (is_NaN(real(x)))
 	return((nan_payload(real(x)) > 0) ? x : real_NaN);         /* (abs -nan.0) -> +nan.0?? */
       return((signbit(real(x))) ? make_real(sc, -real(x)) : x);
     }
@@ -16360,7 +16366,7 @@ bignum returns that number as a bignum"
   if (is_number(p))
     {
       if (!is_null(cdr(args)))
-	error_nr(sc, make_symbol_with_length(sc, "bignum-error", 12),
+	error_nr(sc, make_symbol(sc, "bignum-error", 12),
 		 set_elist_2(sc, wrap_string(sc, "bignum of a number takes only one argument: ~S", 46), args));
 #if WITH_GMP
       switch (type(p))
@@ -16377,7 +16383,7 @@ bignum returns that number as a bignum"
     }
   p = g_string_to_number_1(sc, args, sc->bignum_symbol);
   if (is_false(sc, p))                                       /* (bignum "1/3.0") */
-    error_nr(sc, make_symbol_with_length(sc, "bignum-error", 12),
+    error_nr(sc, make_symbol(sc, "bignum-error", 12),
 	     set_elist_2(sc, wrap_string(sc, "bignum string argument does not represent a number: ~S", 54), car(args)));
 #if WITH_GMP
   switch (type(p))
@@ -16641,7 +16647,7 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
 	  out_of_range_error_nr(sc, sc->log_symbol, int_two, y, wrap_string(sc, "can't be zero", 13));
 	}
 
-      if ((is_t_real(x)) && (is_NaN(real(x)))) 
+      if ((is_t_real(x)) && (is_NaN(real(x))))
 	return(x);
       if (is_one(y))                                     /* this used to raise an error, but the bignum case is simpler if we return inf */
 	return((is_one(x)) ? real_zero : real_infinity); /* but (log 1.0 1.0) -> 0.0, currently (log 1/0 1) is inf? */
@@ -28494,7 +28500,7 @@ static void resize_port_data(s7_scheme *sc, s7_pointer pt, s7_int new_size)
 
   if (new_size < loc) return;
   if (new_size > sc->max_port_data_size)
-    error_nr(sc, make_symbol_with_length(sc, "port-too-big", 12),
+    error_nr(sc, make_symbol(sc, "port-too-big", 12),
 	     set_elist_1(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size)", 56)));
 
   nb = reallocate(sc, port_data_block(pt), new_size);
@@ -28847,7 +28853,7 @@ static s7_pointer string_read_name_no_free(s7_scheme *sc, s7_pointer pt)
        * but slightly faster.
        */
       if (!number_table[*orig_str])
-	return(inline_make_symbol_with_length(sc, (const char *)orig_str, k));
+	return(inline_make_symbol(sc, (const char *)orig_str, k));
 
       /* eval_c_string string is a constant so we can't set and unset the token's end char */
       if ((k + 1) >= sc->strbuf_size)
@@ -28861,7 +28867,7 @@ static s7_pointer string_read_name_no_free(s7_scheme *sc, s7_pointer pt)
   if (!result)
     {
       sc->strbuf[1] = '\0';
-      result = make_symbol_with_length(sc, sc->strbuf, 1);
+      result = make_symbol(sc, sc->strbuf, 1);
       sc->singletons[(uint8_t)(sc->strbuf[0])] = result;
     }
   return(result);
@@ -28917,7 +28923,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
       k = str - orig_str;
       port_position(pt) += (k - 1);
       if (!number_table[*orig_str])
-	return(inline_make_symbol_with_length(sc, (const char *)orig_str, k));
+	return(inline_make_symbol(sc, (const char *)orig_str, k));
       endc = *str;
       *str = 0;
       result = make_atom(sc, (char *)orig_str, BASE_10, SYMBOL_OK, WITH_OVERFLOW_ERROR);
@@ -28928,7 +28934,7 @@ static s7_pointer string_read_name(s7_scheme *sc, s7_pointer pt)
   if (!result)
     {
       sc->strbuf[1] = '\0';
-      result = make_symbol_with_length(sc, sc->strbuf, 1);
+      result = make_symbol(sc, sc->strbuf, 1);
       sc->singletons[(uint8_t)(sc->strbuf[0])] = result;
     }
   return(result);
@@ -30258,7 +30264,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
       else
 	if (let) /* look for 'init_func in let */
 	  {
-	    s7_pointer init = let_ref(sc, let, make_symbol_with_length(sc, "init_func", 9));
+	    s7_pointer init = let_ref(sc, let, make_symbol(sc, "init_func", 9));
 	    /* init is a symbol (surely not a gensym?), so it should not need to be protected */
 	    if (!is_symbol(init))
 	      s7_warn(sc, 512, "can't load %s: no init function\n", fname);
@@ -30276,7 +30282,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 		  {
 		    typedef void (*dl_func)(s7_scheme *sc);
 		    typedef s7_pointer (*dl_func_with_args)(s7_scheme *sc, s7_pointer args);
-		    s7_pointer init_args = let_ref(sc, let, make_symbol_with_length(sc, "init_args", 9));
+		    s7_pointer init_args = let_ref(sc, let, make_symbol(sc, "init_args", 9));
 		    s7_pointer p;
 		    gc_protect_via_stack(sc, init_args);
 		    if (is_pair(init_args))
@@ -30410,7 +30416,7 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   TRACK(sc);
 
   if (content[bytes] != 0)
-    error_nr(sc, make_symbol_with_length(sc, "bad-data", 8), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
+    error_nr(sc, make_symbol(sc, "bad-data", 8), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
   port = open_input_string(sc, content, bytes);
   port_loc = gc_protect_1(sc, port);
   set_loader_port(port);
@@ -30630,7 +30636,7 @@ in the file, or by the function."
     {
       if (string_length(sym) == 0)                   /* (autoload "" ...) */
 	wrong_type_error_nr(sc, sc->autoload_symbol, 1, sym, wrap_string(sc, "a symbol-name or a symbol", 25));
-      sym = make_symbol_with_length(sc, string_value(sym), string_length(sym));
+      sym = make_symbol(sc, string_value(sym), string_length(sym));
     }
   if (!is_symbol(sym))
     {
@@ -30766,7 +30772,7 @@ static s7_pointer g_is_provided(s7_scheme *sc, s7_pointer args)
 
 bool s7_is_provided(s7_scheme *sc, const char *feature)
 {
-  return(is_memq(make_symbol(sc, feature), s7_symbol_value(sc, sc->features_symbol))); /* this goes from local outward */
+  return(is_memq(make_symbol_with_strlen(sc, feature), s7_symbol_value(sc, sc->features_symbol))); /* this goes from local outward */
 }
 
 static bool is_provided_b_7p(s7_scheme *sc, s7_pointer sym)
@@ -30817,7 +30823,7 @@ static s7_pointer g_provide(s7_scheme *sc, s7_pointer args)
   return(c_provide(sc, car(args)));
 }
 
-void s7_provide(s7_scheme *sc, const char *feature) {c_provide(sc, s7_make_symbol(sc, feature));}
+void s7_provide(s7_scheme *sc, const char *feature) {c_provide(sc, make_symbol_with_strlen(sc, feature));}
 
 
 static s7_pointer g_features_set(s7_scheme *sc, s7_pointer args) /* *features* setter */
@@ -31085,9 +31091,9 @@ static s7_pointer call_file_out(s7_scheme *sc, s7_pointer args)
 static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
 {
   if (!is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
-    return(make_symbol_with_length(sc, c_function_name(f), c_function_name_length(f)));
+    return(make_symbol(sc, c_function_name(f), c_function_name_length(f)));
   if (!c_function_symbol(f))
-    c_function_symbol(f) = make_symbol_with_length(sc, c_function_name(f), c_function_name_length(f));
+    c_function_symbol(f) = make_symbol(sc, c_function_name(f), c_function_name_length(f));
   return(c_function_symbol(f));
 }
 
@@ -33813,7 +33819,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	    port_write_string(port)(sc, "(openlet ", 9, port);
 	  if (is_immutable(obj))
 	    port_write_string(port)(sc, "(immutable! ", 12, port);
-	  
+
 	  /* this ignores outlet -- but is that a problem? */
 	  /* (object->string (let ((i 0)) (set! (setter 'i) integer?) (curlet)) :readable) -> "(let ((i 0)) (set! (setter 'i) #_integer?) (curlet))" */
 	  if (let_has_setter(obj))
@@ -40688,7 +40694,7 @@ static void check_vector_typer_c_function(s7_scheme *sc, s7_pointer caller, s7_p
   if (!c_function_marker(typf))
     c_function_set_marker(typf, mark_vector_1);
   if (!c_function_symbol(typf))
-    c_function_symbol(typf) = make_symbol_with_length(sc, c_function_name(typf), c_function_name_length(typf));
+    c_function_symbol(typf) = make_symbol(sc, c_function_name(typf), c_function_name_length(typf));
 }
 
 static inline s7_pointer make_multivector(s7_scheme *sc, s7_pointer vec, s7_pointer x)
@@ -42958,7 +42964,7 @@ static void check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_pointer 
   if (is_c_function(typer))
     {
       if (!c_function_symbol(typer))
-	c_function_symbol(typer) = make_symbol_with_length(sc, c_function_name(typer), c_function_name_length(typer));
+	c_function_symbol(typer) = make_symbol(sc, c_function_name(typer), c_function_name_length(typer));
       if (c_function_has_simple_elements(typer))
 	{
 	  if (caller == sc->hash_table_value_typer_symbol)
@@ -43561,7 +43567,7 @@ static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   s7_pointer f = hash_table_procedures_mapper(table);
   if (f == sc->unused)
-    error_nr(sc, make_symbol_with_length(sc, "hash-map-recursion", 18),
+    error_nr(sc, make_symbol(sc, "hash-map-recursion", 18),
 	     set_elist_1(sc, wrap_string(sc, "hash-table map function called recursively", 42)));
   /* check_stack_size(sc); -- perhaps clear typers as well here or save/restore hash-table-procedures */
   gc_protect_via_stack(sc, f);
@@ -43963,7 +43969,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  if (c_function_has_simple_elements(keyp))
 			    set_has_simple_keys(ht);
 			  if (!c_function_symbol(keyp))
-			    c_function_symbol(keyp) = make_symbol_with_length(sc, c_function_name(keyp), c_function_name_length(keyp));
+			    c_function_symbol(keyp) = make_symbol(sc, c_function_name(keyp), c_function_name_length(keyp));
 			  if (symbol_type(c_function_symbol(keyp)) != T_FREE)
 			    set_has_hash_key_type(ht);
 			  /* c_function_marker is not currently used in this context */
@@ -44001,7 +44007,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  if (c_function_has_simple_elements(valp))
 			    set_has_simple_values(ht);
 			  if (!c_function_symbol(valp))
-			    c_function_symbol(valp) = make_symbol_with_length(sc, c_function_name(valp), c_function_name_length(valp));
+			    c_function_symbol(valp) = make_symbol(sc, c_function_name(valp), c_function_name_length(valp));
 			  if (symbol_type(c_function_symbol(valp)) != T_FREE)
 			    set_has_hash_value_type(ht);
 			}
@@ -45070,9 +45076,9 @@ static s7_pointer g_function(s7_scheme *sc, s7_pointer args)
   if (sym == sc->value_symbol) return(fval);
   if ((sym == sc->line_symbol) && (has_let_file(e))) return(make_integer(sc, let_line(e)));
   if ((sym == sc->file_symbol) && (has_let_file(e))) return(sc->file_names[let_file(e)]);
-  if (sym == make_symbol_with_length(sc, "funclet", 7)) return(e);
-  if (sym == make_symbol_with_length(sc, "source", 6)) return(g_procedure_source(sc, set_plist_1(sc, fval)));
-  if ((sym == make_symbol_with_length(sc, "arglist", 7)) && ((is_any_closure(fval)) || (is_any_macro(fval)))) return(closure_args(fval));
+  if (sym == make_symbol(sc, "funclet", 7)) return(e);
+  if (sym == make_symbol(sc, "source", 6)) return(g_procedure_source(sc, set_plist_1(sc, fval)));
+  if ((sym == make_symbol(sc, "arglist", 7)) && ((is_any_closure(fval)) || (is_any_macro(fval)))) return(closure_args(fval));
   return(sc->F);
 }
 
@@ -45113,7 +45119,7 @@ s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc,
 			      s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   s7_define(sc, sc->nil, sym, func);
   return(sym);
 }
@@ -45123,7 +45129,7 @@ s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function 
 {
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_safe_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   s7_define(sc, sc->nil, sym, func);
   return(sym);
 }
@@ -45134,7 +45140,7 @@ s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function
 {
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_typed_function(sc, name, fnc, required_args, optional_args, rest_arg, doc, signature);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   s7_define(sc, sc->nil, sym, func);
   c_function_set_marker(func, NULL);
   return(sym);
@@ -45147,7 +45153,7 @@ static s7_pointer define_bool_function(s7_scheme *sc, const char *name, s7_funct
 {
   s7_pointer bfunc;
   s7_pointer func = s7_make_typed_function(sc, name, fnc, 1, optional_args, false, doc, signature);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   s7_define(sc, sc->nil, sym, func);
   if (sym_to_type != T_FREE)
     symbol_set_type(sym, sym_to_type);
@@ -45167,7 +45173,7 @@ s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_f
 {
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   if (signature) c_function_signature(func) = signature;
   s7_define(sc, sc->nil, sym, func);
   return(sym);
@@ -45178,7 +45184,7 @@ s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7
 					     const char *doc, s7_pointer signature)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   if (signature) c_function_signature(func) = signature;
   set_is_semisafe(func);
   s7_define(sc, sc->nil, sym, func);
@@ -45277,7 +45283,7 @@ static void define_function_star_1(s7_scheme *sc, const char *name, s7_function 
   if (safe)
     func = s7_make_safe_function_star(sc, name, fnc, arglist, doc);
   else func = s7_make_function_star(sc, name, fnc, arglist, doc);
-  s7_define(sc, sc->nil, make_symbol(sc, name), func);
+  s7_define(sc, sc->nil, make_symbol_with_strlen(sc, name), func);
   if (signature) c_function_signature(func) = signature;
 }
 
@@ -45301,7 +45307,7 @@ s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
 			   s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol(sc, name);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
   set_full_type(func, T_C_MACRO | T_DONT_EVAL_ARGS | T_UNHEAP); /* s7_make_function includes T_UNHEAP */
   s7_define(sc, sc->nil, sym, func);
   return(sym);
@@ -45862,7 +45868,7 @@ static s7_pointer g_c_object_set(s7_scheme *sc, s7_pointer args) /* called in c_
 {
   s7_pointer obj = car(args);
   if (!is_c_object(obj))        /* (call/cc (setter (block))) will call c-object-set! with the continuation as the argument! */
-    wrong_type_error_nr(sc, make_symbol_with_length(sc, "c-object-set!", 13), 1, obj, sc->type_names[T_C_OBJECT]);
+    wrong_type_error_nr(sc, make_symbol(sc, "c-object-set!", 13), 1, obj, sc->type_names[T_C_OBJECT]);
   return((*(c_object_set(sc, obj)))(sc, args));
 }
 
@@ -46070,7 +46076,7 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
   internal_set_name[0] = '\0';
   catstrs_direct(internal_set_name, "[set-", name, "]", (const char *)NULL);
   get_func = s7_make_safe_function(sc, name, getter, get_req_args, get_opt_args, false, documentation);
-  s7_define(sc, envir, make_symbol_with_length(sc, name, name_len), get_func);
+  s7_define(sc, envir, make_symbol(sc, name, name_len), get_func);
   set_func = s7_make_safe_function(sc, internal_set_name, setter, set_req_args, set_opt_args, false, documentation);
   c_function_set_setter(get_func, set_func);
   return(get_func);
@@ -46613,7 +46619,7 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
   s7_pointer func, slot;
   if (is_keyword(sym))
     wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, sym, wrap_string(sc, "a normal symbol (a keyword can't be set)", 40));
-  
+
   if (is_pair(cddr(args)))
     {
       s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))) */
@@ -46633,7 +46639,7 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
     }
   if (!is_slot(slot))
     return(sc->F);
-  
+
   if (func != sc->F)
     {
       if (sym == sc->setter_symbol)
@@ -49910,7 +49916,7 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
       s7_int gc_loc = gc_protect_1(sc, let);
       s7_pointer val = s7_symbol_value(sc, obj);
       if (!sc->current_value_symbol)
-	sc->current_value_symbol = make_symbol_with_length(sc, "current-value", 13);
+	sc->current_value_symbol = make_symbol(sc, "current-value", 13);
       s7_varlet(sc, let, sc->current_value_symbol, val);
       s7_varlet(sc, let, sc->setter_symbol, setter_p_pp(sc, obj, sc->curlet));
       s7_varlet(sc, let, sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_symbol(obj)));
@@ -49932,8 +49938,8 @@ static s7_pointer random_state_to_let(s7_scheme *sc, s7_pointer obj)
 #else
   if (!sc->seed_symbol)
     {
-      sc->seed_symbol = make_symbol_with_length(sc, "seed", 4);
-      sc->carry_symbol = make_symbol_with_length(sc, "carry", 5);
+      sc->seed_symbol = make_symbol(sc, "seed", 4);
+      sc->carry_symbol = make_symbol(sc, "carry", 5);
     }
   return(internal_inlet(sc, 8, sc->value_symbol, obj,
 			sc->type_symbol, sc->is_random_state_symbol,
@@ -49947,8 +49953,8 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let;
   s7_int gc_loc;
 
-  if (!sc->dimensions_symbol) sc->dimensions_symbol = make_symbol_with_length(sc, "dimensions", 10);
-  if (!sc->original_vector_symbol) sc->original_vector_symbol = make_symbol_with_length(sc, "original-vector", 15);
+  if (!sc->dimensions_symbol) sc->dimensions_symbol = make_symbol(sc, "dimensions", 10);
+  if (!sc->original_vector_symbol) sc->original_vector_symbol = make_symbol(sc, "original-vector", 15);
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, (is_subvector(obj)) ? cons(sc, sc->is_subvector_symbol, s7_type_of(sc, subvector_vector(obj))) : s7_type_of(sc, obj),
 		       sc->size_symbol, s7_length(sc, obj),
@@ -50020,8 +50026,8 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->entries_symbol)
     {
-      sc->entries_symbol = make_symbol_with_length(sc, "entries", 7);
-      sc->weak_symbol = make_symbol_with_length(sc, "weak", 4);
+      sc->entries_symbol = make_symbol(sc, "entries", 7);
+      sc->weak_symbol = make_symbol(sc, "weak", 4);
     }
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_hash_table_symbol,
@@ -50057,8 +50063,8 @@ static s7_pointer iterator_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->at_end_symbol)
     {
-      sc->at_end_symbol = make_symbol_with_length(sc, "at-end", 6);
-      sc->sequence_symbol = make_symbol_with_length(sc, "sequence", 8);
+      sc->at_end_symbol = make_symbol(sc, "at-end", 6);
+      sc->sequence_symbol = make_symbol(sc, "sequence", 8);
     }
   let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_iterator_symbol,
@@ -50094,8 +50100,8 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
   s7_int gc_loc;
   if (!sc->open_symbol)
     {
-      sc->open_symbol = make_symbol_with_length(sc, "open", 4);
-      sc->alias_symbol = make_symbol_with_length(sc, "alias", 5);
+      sc->open_symbol = make_symbol(sc, "open", 4);
+      sc->alias_symbol = make_symbol(sc, "alias", 5);
     }
   let = internal_inlet(sc, 12, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_let_symbol,
@@ -50149,8 +50155,8 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let, clet = c_object_let(obj);
   if (!sc->class_symbol)
     {
-      sc->class_symbol = make_symbol_with_length(sc, "class", 5);
-      sc->c_object_let_symbol = make_symbol_with_length(sc, "c-object-let", 12);
+      sc->class_symbol = make_symbol(sc, "class", 5);
+      sc->c_object_let_symbol = make_symbol(sc, "c-object-let", 12);
     }
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_c_object_symbol,
@@ -50175,10 +50181,10 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
   s7_int gc_loc;
   if (!sc->data_symbol)
     {
-      sc->data_symbol = make_symbol_with_length(sc, "data", 4);
-      sc->port_type_symbol = make_symbol_with_length(sc, "port-type", 9);
-      sc->closed_symbol = make_symbol_with_length(sc, "closed", 6);
-      sc->file_info_symbol = make_symbol_with_length(sc, "file-info", 9);
+      sc->data_symbol = make_symbol(sc, "data", 4);
+      sc->port_type_symbol = make_symbol(sc, "port-type", 9);
+      sc->closed_symbol = make_symbol(sc, "closed", 6);
+      sc->file_info_symbol = make_symbol(sc, "file-info", 9);
     }
   let = internal_inlet(sc, 10, sc->value_symbol, obj,
 		       /* obj as 'value means it will say "(closed)" when subsequently the let is displayed */
@@ -50261,7 +50267,7 @@ static s7_pointer closure_to_let(s7_scheme *sc, s7_pointer obj)
     s7_varlet(sc, let, sc->local_setter_symbol, closure_setter(obj));
 
   if (!sc->source_symbol)
-    sc->source_symbol = make_symbol_with_length(sc, "source", 6);
+    sc->source_symbol = make_symbol(sc, "source", 6);
   s7_varlet(sc, let, sc->source_symbol,
 	    append_in_place(sc, list_2(sc, procedure_type_to_symbol(sc, type(obj)), closure_args(obj)),
 			    closure_body(obj)));
@@ -50274,10 +50280,10 @@ static s7_pointer c_pointer_to_let(s7_scheme *sc, s7_pointer obj)
   /* c_pointer_info can be a let and might have an object->let method (see c_object below) */
   if (!sc->c_type_symbol)
     {
-      sc->c_type_symbol = make_symbol_with_length(sc, "c-type", 6);
-      sc->info_symbol = make_symbol_with_length(sc, "info", 4);
+      sc->c_type_symbol = make_symbol(sc, "c-type", 6);
+      sc->info_symbol = make_symbol(sc, "info", 4);
     }
-  if (!sc->pointer_symbol) sc->pointer_symbol = make_symbol_with_length(sc, "pointer", 7);
+  if (!sc->pointer_symbol) sc->pointer_symbol = make_symbol(sc, "pointer", 7);
   return(internal_inlet(sc, 10, sc->value_symbol, obj,
 			sc->type_symbol, sc->is_c_pointer_symbol,
 			sc->pointer_symbol, make_integer(sc, (s7_int)((intptr_t)c_pointer(obj))),
@@ -50311,8 +50317,8 @@ static s7_pointer goto_to_let(s7_scheme *sc, s7_pointer obj)
   /* there's room in s7_cell to store the procedure, but we would have to mark it (goto escapes, context GC'd) */
   if (!sc->active_symbol)
     {
-      sc->active_symbol = make_symbol_with_length(sc, "active", 6);
-      sc->goto_symbol = make_symbol_with_length(sc, "goto?", 5);
+      sc->active_symbol = make_symbol(sc, "active", 6);
+      sc->goto_symbol = make_symbol(sc, "goto?", 5);
     }
   if (is_symbol(call_exit_name(obj)))
     return(internal_inlet(sc, 8, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
@@ -50909,7 +50915,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	{
 	  #define PROFILE_MAX_STACK_SIZE 10000000  /* around 5G counting lets/arglists/slots, maybe an *s7* field for this? */
 	  if (sc->stack_size > PROFILE_MAX_STACK_SIZE)
-	    error_nr(sc, make_symbol_with_length(sc, "stack-too-big", 13),
+	    error_nr(sc, make_symbol(sc, "stack-too-big", 13),
 		     set_elist_2(sc, wrap_string(sc, "profiling stack size has grown past ~D", 38), wrap_integer(sc, PROFILE_MAX_STACK_SIZE)));
 	  /* rather than raise an error, we could unwind the stack here, popping off all unwind entries, but this is
 	   *   a very rare problem, and the results will be confusing anyway.
@@ -51170,16 +51176,16 @@ static s7_pointer init_owlet(s7_scheme *sc)
   s7_pointer p; /* watch out for order below */
   s7_pointer e = make_let(sc, sc->nil);
   sc->temp3 = e;
-  sc->error_type = add_slot_checked_with_id(sc, e, make_symbol_with_length(sc, "error-type", 10), sc->F);    /* the error type or tag ('division-by-zero) */
-  sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-data", 10), sc->F);  /* the message or information passed by the error function */
-  sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-code", 10), sc->F);  /* the code that s7 thinks triggered the error */
-  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-line", 10), p = make_permanent_integer(0));  /* the line number of that code */
+  sc->error_type = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-type", 10), sc->F);    /* the error type or tag ('division-by-zero) */
+  sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-data", 10), sc->F);  /* the message or information passed by the error function */
+  sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-code", 10), sc->F);  /* the code that s7 thinks triggered the error */
+  sc->error_line = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-line", 10), p = make_permanent_integer(0));  /* the line number of that code */
   add_saved_pointer(sc, p);
-  sc->error_file = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-file", 10), sc->F);  /* the file name of that code */
-  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-position", 14), p = make_permanent_integer(0)); /* file-byte position of that code */
+  sc->error_file = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-file", 10), sc->F);  /* the file name of that code */
+  sc->error_position = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-position", 14), p = make_permanent_integer(0)); /* file-byte position of that code */
   add_saved_pointer(sc, p);
 #if WITH_HISTORY
-  sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol_with_length(sc, "error-history", 13), sc->F); /* buffer of previous evaluations */
+  sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-history", 13), sc->F); /* buffer of previous evaluations */
 #endif
   sc->temp3 = sc->unused;
   return(e);
@@ -51191,11 +51197,11 @@ static s7_pointer cull_history(s7_scheme *sc, s7_pointer code)
   clear_symbol_list(sc); /* make a list of words banned from the history */
   add_symbol_to_list(sc, sc->s7_starlet_symbol);
   add_symbol_to_list(sc, sc->eval_symbol);
-  add_symbol_to_list(sc, make_symbol_with_length(sc, "debug", 5));
-  add_symbol_to_list(sc, make_symbol_with_length(sc, "trace-in", 8));
-  add_symbol_to_list(sc, make_symbol_with_length(sc, "trace-out", 9));
+  add_symbol_to_list(sc, make_symbol(sc, "debug", 5));
+  add_symbol_to_list(sc, make_symbol(sc, "trace-in", 8));
+  add_symbol_to_list(sc, make_symbol(sc, "trace-out", 9));
   add_symbol_to_list(sc, sc->dynamic_unwind_symbol);
-  add_symbol_to_list(sc, make_symbol_with_length(sc, "history-enabled", 15));
+  add_symbol_to_list(sc, make_symbol(sc, "history-enabled", 15));
   for (s7_pointer p = code; is_pair(p); p = cdr(p))
     {
       if (tree_set_memq(sc, car(p)))
@@ -51580,7 +51586,7 @@ static bool catch_dynamic_unwind_function(s7_scheme *sc, s7_int i, s7_pointer ty
    */
   if (sc->debug > 0)
     {
-      s7_pointer spaces = lookup_slot_from(make_symbol_with_length(sc, "*debug-spaces*", 14), stack_let(sc->stack, i));
+      s7_pointer spaces = lookup_slot_from(make_symbol(sc, "*debug-spaces*", 14), stack_let(sc->stack, i));
       if (is_slot(spaces))
 	slot_set_value(spaces, make_integer(sc, max_i_ii(0LL, integer(slot_value(spaces)) - 2))); /* should involve only small_ints */
     }
@@ -51637,7 +51643,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
 	}}
   if (is_let(car(args)))
     check_method(sc, car(args), sc->throw_symbol, args);
-  error_nr(sc, make_symbol_with_length(sc, "uncaught-throw", 14),
+  error_nr(sc, make_symbol(sc, "uncaught-throw", 14),
 	   set_elist_3(sc, wrap_string(sc, "no catch found for (throw ~W~{~^ ~S~})", 38), type, info));
   return(sc->F);
 }
@@ -52015,7 +52021,7 @@ and applies it to the rest of the arguments."
   #define Q_error s7_make_circular_signature(sc, 1, 2, sc->values_symbol, sc->T)
 
   if (is_string(car(args)))  /* a CL-style error -- use tag='no-catch */
-    error_nr(sc, make_symbol_with_length(sc, "no-catch", 8), args);
+    error_nr(sc, make_symbol(sc, "no-catch", 8), args);
   error_nr(sc, car(args), cdr(args));
   return(sc->unspecified);
 }
@@ -52257,7 +52263,7 @@ static bool call_begin_hook(s7_scheme *sc)
       slot_set_value(sc->error_history, sc->F);
 #endif
       let_set_outlet(sc->owlet, sc->curlet);
-      sc->value = make_symbol_with_length(sc, "begin-hook-interrupt", 20);
+      sc->value = make_symbol(sc, "begin-hook-interrupt", 20);
       /* otherwise the evaluator returns whatever random thing is in sc->value (normally #<closure>)
        *   which makes debugging unnecessarily difficult. ?? why not return something useful? make return s7_pointer*, not bool*
        */
@@ -53946,7 +53952,7 @@ static s7_pointer fx_lt_gsg(s7_scheme *sc, s7_pointer arg) /* gsg is much faster
   s7_pointer v3 = lookup_global(sc, opt2_sym(cdr(arg))); /* cadddr(arg) */
   if ((is_t_integer(v1)) && (is_t_integer(v2)) && (is_t_integer(v3)))
     return(make_boolean(sc, ((integer(v1) < integer(v2)) && (integer(v2) < integer(v3)))));
-  if (!is_real(v3)) 
+  if (!is_real(v3))
     wrong_type_error_nr(sc, sc->lt_symbol, 3, v3, sc->type_names[T_REAL]); /* else (< 2 1 1+i) returns #f */
   return(make_boolean(sc, (lt_b_7pp(sc, v1, v2)) && (lt_b_7pp(sc, v2, v3))));
 }
@@ -69018,7 +69024,7 @@ static noreturn void unbound_variable_error_nr(s7_scheme *sc, s7_pointer sym)
 	       set_elist_3(sc, wrap_string(sc, "unbound variable ~S in ~S", 25), sym, err_code));
 
   if ((symbol_name(sym)[symbol_name_length(sym) - 1] == ',') &&
-      (lookup_unexamined(sc, make_symbol_with_length(sc, symbol_name(sym), symbol_name_length(sym) - 1))))
+      (lookup_unexamined(sc, make_symbol(sc, symbol_name(sym), symbol_name_length(sym) - 1))))
     error_nr(sc, sc->unbound_variable_symbol,
 	     set_elist_2(sc, wrap_string(sc, "unbound variable ~S (perhaps a stray comma?)", 44), sym));
 
@@ -75814,7 +75820,7 @@ static void check_let_temporarily(s7_scheme *sc)
 		(is_null(cdar(code))))
 	      {
 		if ((is_quoted_symbol(cadar(var))) &&
-		    (s7_starlet_symbol(cadr(cadar(var))) == SL_OPENLETS)) /* (cadr(cadar(var)) == make_symbol(sc, "openlets"))) */
+		    (s7_starlet_symbol(cadr(cadar(var))) == SL_OPENLETS)) /* (cadr(cadar(var)) == make_symbol_with_strlen(sc, "openlets"))) */
 		  {
 		    pair_set_syntax_op(form, OP_LET_TEMP_S7_DIRECT);
 		    set_opt1_pair(form, cdr(var));
@@ -78016,8 +78022,8 @@ static void check_set(s7_scheme *sc)
 
 			if (car(inner) == sc->s7_starlet_symbol) /* (set! (*s7* 'field) value) */
 			  {
-			    s7_pointer sym = (is_symbol(index)) ? 
-			                       ((is_keyword(index)) ? keyword_symbol(index) : index) : 
+			    s7_pointer sym = (is_symbol(index)) ?
+			                       ((is_keyword(index)) ? keyword_symbol(index) : index) :
                                                ((is_quoted_symbol(index)) ? cadr(index) : index);
 			    if ((is_symbol(sym)) && (s7_starlet_symbol(sym) != SL_NO_FIELD))
 			      {
@@ -82239,7 +82245,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
     }
   else
     {
-      slot = make_slot(sc, make_symbol_with_length(sc, "___end___", 9), end); /* name is ignored, but needs to be > 8 chars for gcc's benefit (version 10.2.1)! */
+      slot = make_slot(sc, make_symbol(sc, "___end___", 9), end); /* name is ignored, but needs to be > 8 chars for gcc's benefit (version 10.2.1)! */
       end_val = end;
     }
   if ((!s7_is_integer(init_val)) || (!s7_is_integer(end_val)))
@@ -85713,7 +85719,7 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 	    slot_simply_set_pending_value(slot, fx_call(sc, arg));
 	  for (s7_pointer slot = slots; tis_slot(slot); slot = next_slot(slot)) /* using two swapping lets instead is slightly slower */
 	    slot_set_value(slot, slot_pending_value(slot));
-	  
+
 	  if (read_case)
 	    slot_set_value(let_slot, chars[string_read_char(sc, let_var)]);
 	  else
@@ -90768,8 +90774,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_S7_STARLET_REF_S:  sc->value = s7_starlet(sc, opt3_int(sc->code)); continue;
-	case OP_IMPLICIT_S7_STARLET_SET:    
-	  sc->value = g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet_symbol, opt3_sym(sc->code), fx_call(sc, cddr(sc->code)))); 
+	case OP_IMPLICIT_S7_STARLET_SET:
+	  sc->value = g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet_symbol, opt3_sym(sc->code), fx_call(sc, cddr(sc->code))));
 	  continue;
 
 	case OP_UNOPT:       goto UNOPT;
@@ -92087,9 +92093,9 @@ static s7_pointer g_heap_scan(s7_scheme *sc, s7_pointer args)
   #define Q_heap_scan s7_make_signature(sc, 2, sc->not_symbol, sc->is_integer_symbol)
   s7_pointer p = car(args);
   if (!s7_is_integer(p))
-    sole_arg_wrong_type_error_nr(sc, make_symbol_with_length(sc, "heap-scan", 9), p, sc->type_names[T_INTEGER]);
+    sole_arg_wrong_type_error_nr(sc, make_symbol(sc, "heap-scan", 9), p, sc->type_names[T_INTEGER]);
   if ((s7_integer(p) <= 0) || (s7_integer(p) >= NUM_TYPES))
-    sole_arg_out_of_range_error_nr(sc, make_symbol_with_length(sc, "heap-scan", 9), p, wrap_string(sc, "0 < type < 48", 13));
+    sole_arg_out_of_range_error_nr(sc, make_symbol(sc, "heap-scan", 9), p, wrap_string(sc, "0 < type < 48", 13));
   s7_heap_scan(sc, (int32_t)s7_integer(p)); /* 0..48 currently */
   return(sc->F);
 }
@@ -92195,7 +92201,7 @@ static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20
   sc->s7_starlet_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x)); /* define_constant returns the symbol */
   for (int32_t i = SL_STACK_TOP; i < SL_NUM_FIELDS; i++)
     {
-      s7_pointer sym = make_symbol(sc, s7_starlet_names[i]);
+      s7_pointer sym = make_symbol_with_strlen(sc, s7_starlet_names[i]);
       s7_starlet_symbol_set(sym, (s7_starlet_t)i); /* evaluates sym twice */
     }
   return(x);
@@ -92243,35 +92249,35 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #if (!_WIN32) /* (!MS_WINDOWS) */
   getrusage(RUSAGE_SELF, &info);
   ut = info.ru_utime;
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "process-time", 12), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-time", 12), make_real(sc, ut.tv_sec + (floor(ut.tv_usec / 1000.0) / 1000.0)));
 #ifdef __APPLE__
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "process-resident-size", 21), kmg(sc, info.ru_maxrss));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size", 21), kmg(sc, info.ru_maxrss));
   /* apple docs say this is in kilobytes, but apparently that is an error */
 #else
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "process-resident-size", 21), kmg(sc, info.ru_maxrss * 1024));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "process-resident-size", 21), kmg(sc, info.ru_maxrss * 1024));
   /* why does this number sometimes have no relation to RES in top? */
 #endif
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "IO", 2), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "IO", 2), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
 #endif
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "rootlet-size", 12), make_integer(sc, sc->rootlet_entries));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "heap-size", 9),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size", 12), make_integer(sc, sc->rootlet_entries));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size", 9),
 			     cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "cell-size", 9), make_integer(sc, sizeof(s7_cell)));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-total-freed", 14), make_integer(sc, sc->gc_total_freed));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-total-time", 13), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cell-size", 9), make_integer(sc, sizeof(s7_cell)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed", 14), make_integer(sc, sc->gc_total_freed));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time", 13), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "small_ints", 10),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "small_ints", 10),
 			     cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * sizeof(s7_cell))));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "permanent-cells", 15), 
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells", 15),
 			     cons(sc, make_integer(sc, sc->semipermanent_cells), kmg(sc, sc->semipermanent_cells * sizeof(s7_cell))));
   {
     gc_obj_t *g;
     for (i = 0, g = sc->semipermanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "permanent_objects", 17), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects", 17), make_integer(sc, i));
     for (i = 0, g = sc->semipermanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "permanent_lets", 14), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets", 14), make_integer(sc, i));
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
@@ -92283,20 +92289,20 @@ static s7_pointer memory_usage(s7_scheme *sc)
     {
       if (i > 0) in_use += ts[i];
       if (ts[i] > 50)
-	sc->w = cons_unchecked(sc, cons(sc, make_symbol(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)),
+	sc->w = cons_unchecked(sc, cons(sc, make_symbol_with_strlen(sc, (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE)),
 					    make_integer(sc, ts[i])), sc->w);
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "cells-in-use/free", 17),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free", 17),
 			     cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   if (is_pair(sc->w))
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "types", 5), proper_list_reverse_in_place(sc, sc->w));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "types", 5), proper_list_reverse_in_place(sc, sc->w));
   sc->w = sc->unused;
   /* same for semipermanent cells requires traversing saved_pointers and the alloc and big_alloc blocks up to alloc_k, or keeping explicit counts */
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-protected-objects", 20),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects", 20),
 			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->protected_objects_free_list_loc),
 				  make_integer(sc, sc->protected_objects_size)));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "setters", 7), make_integer(sc, sc->protected_setters_loc));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "setters", 7), make_integer(sc, sc->protected_setters_loc));
 
   /* check the symbol table, counting gensyms etc */
   {
@@ -92316,18 +92322,18 @@ static s7_pointer memory_usage(s7_scheme *sc)
     add_slot_unchecked_with_id(sc, mu_let, sc->symbol_table_symbol,
 			       s7_list(sc, 9,
 				       make_integer(sc, SYMBOL_TABLE_SIZE),
-				       make_symbol_with_length(sc, "max-bin", 7), make_integer(sc, mx_list),
-				       make_symbol_with_length(sc, "symbols", 7), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
-				       make_symbol_with_length(sc, "gensyms", 7), make_integer(sc, gens),
-				       make_symbol_with_length(sc, "keys", 4),    make_integer(sc, keys)));
+				       make_symbol(sc, "max-bin", 7), make_integer(sc, mx_list),
+				       make_symbol(sc, "symbols", 7), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
+				       make_symbol(sc, "gensyms", 7), make_integer(sc, gens),
+				       make_symbol(sc, "keys", 4),    make_integer(sc, keys)));
   }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "stack", 5), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "stack", 5), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
 
   len = sc->autoload_names_top * (sizeof(const char **) + sizeof(s7_int) + sizeof(bool));
   for (i = 0; i < sc->autoload_names_loc; i++) len += sc->autoload_names_sizes[i];
   add_slot_unchecked_with_id(sc, mu_let, sc->autoload_symbol, make_integer(sc, len));
 
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "circle_info", 11),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "circle_info", 11),
 			     make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
 
   /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-polar et el */
@@ -92338,30 +92344,30 @@ static s7_pointer memory_usage(s7_scheme *sc)
     int32_t loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
                   sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
                   sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "gc-lists", 8),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists", 8),
        s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
 	 s7_list(sc, 14,
-	   list_3(sc, sc->string_symbol,                                make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
-	   list_3(sc, sc->vector_symbol,                                make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
-	   list_3(sc, sc->hash_table_symbol,                            make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
-	   list_3(sc, make_symbol_with_length(sc, "multivector", 11),   make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
-	   list_3(sc, make_symbol_with_length(sc, "input", 5),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
-	   list_3(sc, make_symbol_with_length(sc, "output", 6),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
-	   list_3(sc, make_symbol_with_length(sc, "input-string", 12),  make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
-	   list_3(sc, make_symbol_with_length(sc, "continuation", 12),  make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
-	   list_3(sc, make_symbol_with_length(sc, "c-object", 8),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
-	   list_3(sc, make_symbol_with_length(sc, "gensym", 6),         make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
-	   list_3(sc, make_symbol_with_length(sc, "undefined", 9),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
-	   list_3(sc, make_symbol_with_length(sc, "weak-ref", 8),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
-	   list_3(sc, make_symbol_with_length(sc, "weak-hash-iter", 14),make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
-	   list_3(sc, make_symbol_with_length(sc, "opt1-func", 9),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
+	   list_3(sc, sc->string_symbol,                    make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
+	   list_3(sc, sc->vector_symbol,                    make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
+	   list_3(sc, sc->hash_table_symbol,                make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
+	   list_3(sc, make_symbol(sc, "multivector", 11),   make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
+	   list_3(sc, make_symbol(sc, "input", 5),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
+	   list_3(sc, make_symbol(sc, "output", 6),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
+	   list_3(sc, make_symbol(sc, "input-string", 12),  make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
+	   list_3(sc, make_symbol(sc, "continuation", 12),  make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
+	   list_3(sc, make_symbol(sc, "c-object", 8),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
+	   list_3(sc, make_symbol(sc, "gensym", 6),         make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
+	   list_3(sc, make_symbol(sc, "undefined", 9),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
+	   list_3(sc, make_symbol(sc, "weak-ref", 8),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
+	   list_3(sc, make_symbol(sc, "weak-hash-iter", 14),make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
+	   list_3(sc, make_symbol(sc, "opt1-func", 9),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
   }
 
   /* strings */
   gp = sc->strings;
   for (len = 0, i = 0; i < (int32_t)(gp->loc); i++)
     len += string_length(gp->list[i]);
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "strings", 7), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "strings", 7), cons(sc, make_integer(sc, gp->loc), make_integer(sc, len)));
 
   /* vectors */
   for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
@@ -92379,13 +92385,13 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	    else vlen += vector_length(v);
       }
   add_slot_unchecked_with_id(sc, mu_let,
-			     make_symbol_with_length(sc, "vectors", 7),
+			     make_symbol(sc, "vectors", 7),
 			     s7_list(sc, 9,
 				     make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
-				     make_symbol_with_length(sc, "vlen", 4),  make_integer(sc, vlen),
-				     make_symbol_with_length(sc, "fvlen", 5), make_integer(sc, flen),
-				     make_symbol_with_length(sc, "ivlen", 5), make_integer(sc, ilen),
-				     make_symbol_with_length(sc, "bvlen", 5), make_integer(sc, blen)));
+				     make_symbol(sc, "vlen", 4),  make_integer(sc, vlen),
+				     make_symbol(sc, "fvlen", 5), make_integer(sc, flen),
+				     make_symbol(sc, "ivlen", 5), make_integer(sc, ilen),
+				     make_symbol(sc, "bvlen", 5), make_integer(sc, blen)));
   /* hash-tables */
   for (i = 0, gp = sc->hash_tables; i < gp->loc; i++)
     {
@@ -92393,7 +92399,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       hlen += ((hash_table_mask(v) + 1) * sizeof(hash_entry_t *));
       hlen += (hash_table_entries(v) * sizeof(hash_entry_t));
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "hash-tables", 11), 
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "hash-tables", 11),
 			     cons(sc, make_integer(sc, sc->hash_tables->loc), make_integer(sc, hlen)));
 
   /* ports */
@@ -92409,7 +92415,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "input-ports", 11),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "input-ports", 11),
 			     cons(sc, make_integer(sc, sc->input_ports->loc + sc->input_string_ports->loc), make_integer(sc, len)));
   gp = sc->output_ports;
   for (i = 0, len = 0; i < gp->loc; i++)
@@ -92417,12 +92423,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
       s7_pointer v = gp->list[i];
       if (port_data(v)) len += port_data_size(v);
     }
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "output-ports", 12),
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "output-ports", 12),
 			     cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
   {
     s7_pointer p;
     for (i = 0, p = sc->format_ports; p; p = (s7_pointer)port_next(p));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "format-ports", 12), make_integer(sc, i));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "format-ports", 12), make_integer(sc, i));
   }
 
   /* continuations (sketchy!) */
@@ -92431,19 +92437,19 @@ static s7_pointer memory_usage(s7_scheme *sc)
     if (is_continuation(gp->list[i]))
       len += continuation_stack_size(gp->list[i]);
   if (len > 0)
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "continuations", 13),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "continuations", 13),
 			       cons(sc, make_integer(sc, sc->continuations->loc), make_integer(sc, len * sizeof(s7_pointer))));
   /* c-objects */
   if (sc->c_objects->loc > 0)
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "c-objects", 9), make_integer(sc, sc->c_objects->loc));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-objects", 9), make_integer(sc, sc->c_objects->loc));
   if (sc->num_c_object_types > 0)
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "c-types", 7),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "c-types", 7),
 			       cons(sc, make_integer(sc, sc->num_c_object_types),
 				    make_integer(sc, (sc->c_object_types_size * sizeof(c_object_t *)) + (sc->num_c_object_types * sizeof(c_object_t)))));
 				    /* we're ignoring c_type->scheme_name: make_permanent_string(sc, name) */
 #if WITH_GMP
   add_slot_unchecked_with_id(sc, mu_let,
-			     make_symbol_with_length(sc, "bignums", 7),
+			     make_symbol(sc, "bignums", 7),
 			     s7_list(sc, 5, make_integer(sc, sc->big_integers->loc), make_integer(sc, sc->big_ratios->loc),
 				     make_integer(sc, sc->big_reals->loc), make_integer(sc, sc->big_complexes->loc),
 				     make_integer(sc, sc->big_random_states->loc)));
@@ -92460,12 +92466,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
     for (b = sc->block_lists[TOP_BLOCK_LIST], k = 0; b; b = block_next(b), k++)
       len += (sizeof(block_t) + block_size(b));
     sc->w = cons(sc, make_integer(sc, k), sc->w);
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol_with_length(sc, "free-lists", 10),
-			       list_2(sc, cons(sc, make_symbol_with_length(sc, "bytes", 5), kmg(sc, len)),
-				      cons(sc, make_symbol_with_length(sc, "bins", 4), proper_list_reverse_in_place(sc, sc->w))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists", 10),
+			       list_2(sc, cons(sc, make_symbol(sc, "bytes", 5), kmg(sc, len)),
+				      cons(sc, make_symbol(sc, "bins", 4), proper_list_reverse_in_place(sc, sc->w))));
     sc->w = sc->unused;
     add_slot_unchecked_with_id(sc, mu_let,
-			       make_symbol_with_length(sc, "approximate-s7-size", 19),
+			       make_symbol(sc, "approximate-s7-size", 19),
 			       kmg(sc, ((sc->semipermanent_cells + NUM_SMALL_INTS + sc->heap_size) * sizeof(s7_cell)) +
 				   ((2 * sc->heap_size + SYMBOL_TABLE_SIZE + sc->stack_size) * sizeof(s7_pointer)) +
 				   len + hlen + (vlen * sizeof(s7_pointer)) + (flen * sizeof(s7_double)) + (ilen * sizeof(s7_int)) + blen));
@@ -92541,7 +92547,7 @@ static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
       if (s7_is_valid(sc, e)) entry = cons(sc, e, entry);
       if (s7_is_valid(sc, args)) entry = cons_unchecked(sc, args, entry);
       if (s7_is_valid(sc, func)) entry = cons_unchecked(sc, func, entry);
-      if ((op >= 0) && (op < NUM_OPS)) entry = cons_unchecked(sc, make_symbol(sc, op_names[op]), entry);
+      if ((op >= 0) && (op < NUM_OPS)) entry = cons_unchecked(sc, make_symbol_with_strlen(sc, op_names[op]), entry);
       lst = cons_unchecked(sc, entry, lst);
       sc->w = lst;
     }
@@ -92657,7 +92663,7 @@ static s7_pointer s7_starlet_iterate(s7_scheme *sc, s7_pointer iterator)
   iterator_position(iterator)++;
   if (iterator_position(iterator) >= SL_NUM_FIELDS)
     return(iterator_quit(iterator));
-  symbol = make_symbol(sc, s7_starlet_names[iterator_position(iterator)]);
+  symbol = make_symbol_with_strlen(sc, s7_starlet_names[iterator_position(iterator)]);
 
   if ((iterator_position(iterator) == SL_STACK) ||
       (iterator_position(iterator) == SL_GC_PROTECTED_OBJECTS) ||
@@ -92773,7 +92779,7 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
     sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
-  
+
   switch (s7_starlet_symbol(sym))
     {
     case SL_ACCEPT_ALL_KEYWORD_ARGUMENTS:
@@ -92807,7 +92813,7 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
       sc->debug = s7_integer_clamped_if_gmp(sc, val);
       sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
       if ((sc->debug > 0) &&
-	  (!is_memq(make_symbol_with_length(sc, "debug.scm", 9), s7_symbol_value(sc, sc->features_symbol))))
+	  (!is_memq(make_symbol(sc, "debug.scm", 9), s7_symbol_value(sc, sc->features_symbol))))
 	s7_load(sc, "debug.scm");
       return(val);
 
@@ -92965,7 +92971,7 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
       sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
       if (sc->profile > 0)
 	{
-	  if (!is_memq(make_symbol_with_length(sc, "profile.scm", 11), s7_symbol_value(sc, sc->features_symbol)))
+	  if (!is_memq(make_symbol(sc, "profile.scm", 11), s7_symbol_value(sc, sc->features_symbol)))
 	    s7_load(sc, "profile.scm");
 	  if (!sc->profile_data)
 	    make_profile_info(sc);
@@ -94282,46 +94288,46 @@ then returns each var to its original value."
   set_local_slot(sc->with_let_symbol, global_slot(sc->with_let_symbol)); /* for set_locals */
   set_immutable(sc->with_let_symbol);
   set_immutable_slot(global_slot(sc->with_let_symbol));
-  sc->setter_symbol = make_symbol_with_length(sc, "setter", 6);
+  sc->setter_symbol = make_symbol(sc, "setter", 6);
 
 #if WITH_IMMUTABLE_UNQUOTE
   /* this code solves the various unquote redefinition troubles
    * if "," -> "(unquote...)" in the reader, (let (, (lambda (x) (+ x 1))) ,,,,'1) -> 5
    */
-  sc->unquote_symbol =              make_symbol_with_length(sc, ",", 1);
+  sc->unquote_symbol =              make_symbol(sc, ",", 1);
   set_immutable(sc->unquote_symbol);
 #else
-  sc->unquote_symbol =              make_symbol_with_length(sc, "unquote", 7);
+  sc->unquote_symbol =              make_symbol(sc, "unquote", 7);
 #endif
 
-  sc->feed_to_symbol =              make_symbol_with_length(sc, "=>", 2);
-  sc->body_symbol =                 make_symbol_with_length(sc, "body", 4);
-  sc->read_error_symbol =           make_symbol_with_length(sc, "read-error", 10);
-  sc->string_read_error_symbol =    make_symbol_with_length(sc, "string-read-error", 17);
-  sc->syntax_error_symbol =         make_symbol_with_length(sc, "syntax-error", 12);
-  sc->unbound_variable_symbol =     make_symbol_with_length(sc, "unbound-variable", 16);
-  sc->wrong_type_arg_symbol =       make_symbol_with_length(sc, "wrong-type-arg", 14);
-  sc->wrong_number_of_args_symbol = make_symbol_with_length(sc, "wrong-number-of-args", 20);
-  sc->format_error_symbol =         make_symbol_with_length(sc, "format-error", 12);
-  sc->autoload_error_symbol =       make_symbol_with_length(sc, "autoload-error", 14);
-  sc->out_of_range_symbol =         make_symbol_with_length(sc, "out-of-range", 12);
-  sc->out_of_memory_symbol =        make_symbol_with_length(sc, "out-of-memory", 13);
-  sc->io_error_symbol =             make_symbol_with_length(sc, "io-error", 8);
-  sc->missing_method_symbol =       make_symbol_with_length(sc, "missing-method", 14);
-  sc->number_to_real_symbol =       make_symbol_with_length(sc, "number_to_real", 14);
-  sc->invalid_escape_function_symbol = make_symbol_with_length(sc, "invalid-escape-function", 23);
-  sc->immutable_error_symbol =      make_symbol_with_length(sc, "immutable-error", 15);
-  sc->division_by_zero_symbol =     make_symbol_with_length(sc, "division-by-zero", 16);
-  sc->bad_result_symbol =           make_symbol_with_length(sc, "bad-result", 10);
-  sc->no_setter_symbol =            make_symbol_with_length(sc, "no-setter", 9);
-  sc->baffled_symbol =              make_symbol_with_length(sc, "baffled!", 8);
-  sc->value_symbol =                make_symbol_with_length(sc, "value", 5);
-  sc->type_symbol =                 make_symbol_with_length(sc, "type", 4);
-  sc->position_symbol =             make_symbol_with_length(sc, "position", 8);
-  sc->file_symbol =                 make_symbol_with_length(sc, "file", 4);
-  sc->line_symbol =                 make_symbol_with_length(sc, "line", 4);
-  sc->function_symbol =             make_symbol_with_length(sc, "function", 8);
-  sc->else_symbol =                 make_symbol_with_length(sc, "else", 4);
+  sc->feed_to_symbol =              make_symbol(sc, "=>", 2);
+  sc->body_symbol =                 make_symbol(sc, "body", 4);
+  sc->read_error_symbol =           make_symbol(sc, "read-error", 10);
+  sc->string_read_error_symbol =    make_symbol(sc, "string-read-error", 17);
+  sc->syntax_error_symbol =         make_symbol(sc, "syntax-error", 12);
+  sc->unbound_variable_symbol =     make_symbol(sc, "unbound-variable", 16);
+  sc->wrong_type_arg_symbol =       make_symbol(sc, "wrong-type-arg", 14);
+  sc->wrong_number_of_args_symbol = make_symbol(sc, "wrong-number-of-args", 20);
+  sc->format_error_symbol =         make_symbol(sc, "format-error", 12);
+  sc->autoload_error_symbol =       make_symbol(sc, "autoload-error", 14);
+  sc->out_of_range_symbol =         make_symbol(sc, "out-of-range", 12);
+  sc->out_of_memory_symbol =        make_symbol(sc, "out-of-memory", 13);
+  sc->io_error_symbol =             make_symbol(sc, "io-error", 8);
+  sc->missing_method_symbol =       make_symbol(sc, "missing-method", 14);
+  sc->number_to_real_symbol =       make_symbol(sc, "number_to_real", 14);
+  sc->invalid_escape_function_symbol = make_symbol(sc, "invalid-escape-function", 23);
+  sc->immutable_error_symbol =      make_symbol(sc, "immutable-error", 15);
+  sc->division_by_zero_symbol =     make_symbol(sc, "division-by-zero", 16);
+  sc->bad_result_symbol =           make_symbol(sc, "bad-result", 10);
+  sc->no_setter_symbol =            make_symbol(sc, "no-setter", 9);
+  sc->baffled_symbol =              make_symbol(sc, "baffled!", 8);
+  sc->value_symbol =                make_symbol(sc, "value", 5);
+  sc->type_symbol =                 make_symbol(sc, "type", 4);
+  sc->position_symbol =             make_symbol(sc, "position", 8);
+  sc->file_symbol =                 make_symbol(sc, "file", 4);
+  sc->line_symbol =                 make_symbol(sc, "line", 4);
+  sc->function_symbol =             make_symbol(sc, "function", 8);
+  sc->else_symbol =                 make_symbol(sc, "else", 4);
   s7_make_slot(sc, sc->nil, sc->else_symbol, sc->else_symbol);
   slot_set_value(initial_slot(sc->else_symbol), sc->T);
   /* if we set #_else to 'else, it can pick up a local else value: (let ((else #f)) (cond (#_else 2)...)) */
@@ -94377,7 +94383,7 @@ static void init_rootlet(s7_scheme *sc)
     define_bool_function(sc, Scheme_Name, g_ ## C_Name, Opt, H_ ## C_Name, Q_ ## C_Name, SymId, Marker, Simple, b_ ## C_Name ## _setter)
 
   /* we need the sc->is_* symbols first for the procedure signature lists */
-  sc->is_boolean_symbol = make_symbol_with_length(sc, "boolean?", 8);
+  sc->is_boolean_symbol = make_symbol(sc, "boolean?", 8);
   sc->pl_bt = s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->T);
 
   sc->is_symbol_symbol =          b_defun("symbol?",	      is_symbol,	  0, T_SYMBOL,       mark_symbol_vector, true);
@@ -94425,8 +94431,8 @@ static void init_rootlet(s7_scheme *sc)
 
   /* these are for signatures */
   sc->not_symbol = defun("not",	not, 1, 0, false);
-  sc->is_integer_or_real_at_end_symbol = make_symbol_with_length(sc, "integer:real?", 13);
-  sc->is_integer_or_any_at_end_symbol =  make_symbol_with_length(sc, "integer:any?", 12);
+  sc->is_integer_or_real_at_end_symbol = make_symbol(sc, "integer:real?", 13);
+  sc->is_integer_or_any_at_end_symbol =  make_symbol(sc, "integer:any?", 12);
 
   sc->pl_p =   s7_make_signature(sc, 2, sc->T, sc->is_pair_symbol);
   sc->pl_tl =  s7_make_signature(sc, 3,
@@ -94448,7 +94454,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->pcl_e =  s7_make_circular_signature(sc, 0, 1,
                   s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol));
 
-  sc->values_symbol = make_symbol_with_length(sc, "values", 6);
+  sc->values_symbol = make_symbol(sc, "values", 6);
 
   sc->is_bignum_symbol =             defun("bignum?",           is_bignum,              1, 0, false);
   sc->bignum_symbol =                defun("bignum",            bignum,                 1, 1, false);
@@ -94492,8 +94498,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false);
   set_immutable(sc->let_set_symbol);
   set_immutable_slot(global_slot(sc->let_set_symbol));
-  sc->let_ref_fallback_symbol = make_symbol_with_length(sc, "let-ref-fallback", 16);
-  sc->let_set_fallback_symbol = make_symbol_with_length(sc, "let-set-fallback", 16); /* was let-set!-fallback until 9-Oct-17 */
+  sc->let_ref_fallback_symbol = make_symbol(sc, "let-ref-fallback", 16);
+  sc->let_set_fallback_symbol = make_symbol(sc, "let-set-fallback", 16); /* was let-set!-fallback until 9-Oct-17 */
 
   sc->make_iterator_symbol =         defun("make-iterator",	make_iterator,		1, 1, false);
   sc->iterate_symbol =               defun("iterate",		iterate,		1, 0, false);
@@ -94967,24 +94973,24 @@ static void init_rootlet(s7_scheme *sc)
   sc->libraries_symbol = s7_define_variable_with_documentation(sc, "*libraries*", sc->nil, "list of currently loaded libraries (libc.scm, etc)");
   s7_set_setter(sc, sc->libraries_symbol, s7_make_safe_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
 
-  s7_autoload(sc, make_symbol_with_length(sc, "cload.scm", 9),        s7_make_semipermanent_string(sc, "cload.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "lint.scm", 8),         s7_make_semipermanent_string(sc, "lint.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "stuff.scm", 9),        s7_make_semipermanent_string(sc, "stuff.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "mockery.scm", 11),     s7_make_semipermanent_string(sc, "mockery.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "write.scm", 9),        s7_make_semipermanent_string(sc, "write.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "reactive.scm", 12),    s7_make_semipermanent_string(sc, "reactive.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "repl.scm", 8),         s7_make_semipermanent_string(sc, "repl.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "r7rs.scm", 8),         s7_make_semipermanent_string(sc, "r7rs.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "profile.scm", 11),     s7_make_semipermanent_string(sc, "profile.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "debug.scm", 9),        s7_make_semipermanent_string(sc, "debug.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "case.scm", 8),         s7_make_semipermanent_string(sc, "case.scm"));
+  s7_autoload(sc, make_symbol(sc, "cload.scm", 9),        s7_make_semipermanent_string(sc, "cload.scm"));
+  s7_autoload(sc, make_symbol(sc, "lint.scm", 8),         s7_make_semipermanent_string(sc, "lint.scm"));
+  s7_autoload(sc, make_symbol(sc, "stuff.scm", 9),        s7_make_semipermanent_string(sc, "stuff.scm"));
+  s7_autoload(sc, make_symbol(sc, "mockery.scm", 11),     s7_make_semipermanent_string(sc, "mockery.scm"));
+  s7_autoload(sc, make_symbol(sc, "write.scm", 9),        s7_make_semipermanent_string(sc, "write.scm"));
+  s7_autoload(sc, make_symbol(sc, "reactive.scm", 12),    s7_make_semipermanent_string(sc, "reactive.scm"));
+  s7_autoload(sc, make_symbol(sc, "repl.scm", 8),         s7_make_semipermanent_string(sc, "repl.scm"));
+  s7_autoload(sc, make_symbol(sc, "r7rs.scm", 8),         s7_make_semipermanent_string(sc, "r7rs.scm"));
+  s7_autoload(sc, make_symbol(sc, "profile.scm", 11),     s7_make_semipermanent_string(sc, "profile.scm"));
+  s7_autoload(sc, make_symbol(sc, "debug.scm", 9),        s7_make_semipermanent_string(sc, "debug.scm"));
+  s7_autoload(sc, make_symbol(sc, "case.scm", 8),         s7_make_semipermanent_string(sc, "case.scm"));
 
-  s7_autoload(sc, make_symbol_with_length(sc, "libc.scm", 8),         s7_make_semipermanent_string(sc, "libc.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "libm.scm", 8),         s7_make_semipermanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
-  s7_autoload(sc, make_symbol_with_length(sc, "libdl.scm", 9),        s7_make_semipermanent_string(sc, "libdl.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "libgsl.scm", 10),      s7_make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
-  s7_autoload(sc, make_symbol_with_length(sc, "libgdbm.scm", 11),     s7_make_semipermanent_string(sc, "libgdbm.scm"));
-  s7_autoload(sc, make_symbol_with_length(sc, "libutf8proc.scm", 15), s7_make_semipermanent_string(sc, "libutf8proc.scm"));
+  s7_autoload(sc, make_symbol(sc, "libc.scm", 8),         s7_make_semipermanent_string(sc, "libc.scm"));
+  s7_autoload(sc, make_symbol(sc, "libm.scm", 8),         s7_make_semipermanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
+  s7_autoload(sc, make_symbol(sc, "libdl.scm", 9),        s7_make_semipermanent_string(sc, "libdl.scm"));
+  s7_autoload(sc, make_symbol(sc, "libgsl.scm", 10),      s7_make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
+  s7_autoload(sc, make_symbol(sc, "libgdbm.scm", 11),     s7_make_semipermanent_string(sc, "libgdbm.scm"));
+  s7_autoload(sc, make_symbol(sc, "libutf8proc.scm", 15), s7_make_semipermanent_string(sc, "libutf8proc.scm"));
 
   sc->require_symbol = s7_define_macro(sc, "require", g_require, 1, 0, true, H_require);
   sc->stacktrace_defaults = s7_list(sc, 5, int_three, small_int(45), small_int(80), small_int(45), sc->T); /* assume NUM_SMALL_INTS >= NUM_CHARS == 256 */
@@ -94994,10 +95000,10 @@ static void init_rootlet(s7_scheme *sc)
   sc->sharp_readers = global_slot(sym);
   s7_set_setter(sc, sym, s7_make_safe_function(sc, "#<set-*#readers*>", g_sharp_readers_set, 2, 0, false, "*#readers* setter"));
 
-  sc->local_documentation_symbol = make_symbol_with_length(sc, "+documentation+", 15);
-  sc->local_signature_symbol =     make_symbol_with_length(sc, "+signature+", 11);
-  sc->local_setter_symbol =        make_symbol_with_length(sc, "+setter+", 8);
-  sc->local_iterator_symbol =      make_symbol_with_length(sc, "+iterator+", 10);
+  sc->local_documentation_symbol = make_symbol(sc, "+documentation+", 15);
+  sc->local_signature_symbol =     make_symbol(sc, "+signature+", 11);
+  sc->local_setter_symbol =        make_symbol(sc, "+setter+", 8);
+  sc->local_iterator_symbol =      make_symbol(sc, "+iterator+", 10);
 
   init_features(sc);
   init_setters(sc);
@@ -95249,7 +95255,7 @@ s7_scheme *s7_init(void)
       sc->protected_objects_free_list[i] = i;
     }
 
-  sc->stack = make_vector_1(sc, INITIAL_STACK_SIZE, FILLED, T_VECTOR); 
+  sc->stack = make_vector_1(sc, INITIAL_STACK_SIZE, FILLED, T_VECTOR);
   /* if not_filled, segfault in gc_mark in mark_stack_1 after size check? probably unfilled OP_BARRIER etc? */
   sc->stack_start = vector_elements(sc->stack); /* stack type set below */
   sc->stack_end = sc->stack_start;
@@ -95333,12 +95339,12 @@ s7_scheme *s7_init(void)
   sc->map_call_ctr = 0;
   sc->syms_tag = 0;
   sc->syms_tag2 = 0;
-  sc->class_name_symbol = make_symbol_with_length(sc, "class-name", 10);
-  sc->name_symbol = make_symbol_with_length(sc, "name", 4);
-  sc->trace_in_symbol = make_symbol_with_length(sc, "trace-in", 8);
-  sc->size_symbol = make_symbol_with_length(sc, "size", 4);
-  sc->mutable_symbol = make_symbol_with_length(sc, "mutable?", 8);
-  sc->file__symbol = make_symbol_with_length(sc, "FILE*", 5);
+  sc->class_name_symbol = make_symbol(sc, "class-name", 10);
+  sc->name_symbol = make_symbol(sc, "name", 4);
+  sc->trace_in_symbol = make_symbol(sc, "trace-in", 8);
+  sc->size_symbol = make_symbol(sc, "size", 4);
+  sc->mutable_symbol = make_symbol(sc, "mutable?", 8);
+  sc->file__symbol = make_symbol(sc, "FILE*", 5);
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
@@ -95805,7 +95811,7 @@ void s7_repl(s7_scheme *sc)
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
   bool repl_loaded = false;
-  s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol_with_length(sc, "init_func", 9), make_symbol_with_length(sc, "libc_s7_init", 12)));
+  s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol(sc, "init_func", 9), make_symbol(sc, "libc_s7_init", 12)));
   s7_int gc_loc = s7_gc_protect(sc, e);
   s7_pointer old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
   s7_pointer val = s7_load_with_environment(sc, "libc_s7.so", e);
@@ -95825,8 +95831,8 @@ void s7_repl(s7_scheme *sc)
   else
     {
 #if S7_DEBUGGING
-      s7_autoload(sc, make_symbol_with_length(sc, "compare-calls", 13), s7_make_string(sc, "compare-calls.scm"));
-      s7_autoload(sc, make_symbol_with_length(sc, "get-overheads", 13), s7_make_string(sc, "compare-calls.scm"));
+      s7_autoload(sc, make_symbol(sc, "compare-calls", 13), s7_make_string(sc, "compare-calls.scm"));
+      s7_autoload(sc, make_symbol(sc, "get-overheads", 13), s7_make_string(sc, "compare-calls.scm"));
 #endif
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) s7_load(sc, "repl.scm");
@@ -95919,19 +95925,19 @@ int main(int argc, char **argv)
 /* ---------------------------------------------
  *            20.9   21.0   22.0   22.8   22.9
  * ---------------------------------------------
- * tpeak      115    114    108    105    105   102
+ * tpeak      115    114    108    105    105   102|5
  * tref       691    687    463    457    459
- * index     1026   1016    973    962    966   963
+ * index     1026   1016    973    962    966   963|7
  * tmock     1177   1165   1057   1083   1019
  * tvect     2519   2464   1772   1667   1670
  * timp      2637   2575   1930   1687   1689
  * texit     ----   ----   1778   1737   1741
- * s7test    1873   1831   1818   1816   1826
+ * s7test    1873   1831   1818   1816   1826         1880 [string_read_name]
  * thook     ----   ----   2590   2074   2030
  * tauto     ----   ----   2562   2045   2055  2048
  * lt        2187   2172   2150   2179   2182
  * dup       3805   3788   2492   2227   2243  2238
- * tload     ----   ----   3046   2368   2370  2382 [s7_define] 2408 [make_symbol/length]
+ * tload     ----   ----   3046   2368   2370  2382 [s7_define] 2408 [make_symbol/length] 2400 [strcmp]
  * tcopy     8035   5546   2539   2372   2373
  * tread     2440   2421   2419   2414   2407
  * fbench    2688   2583   2460   2419   2428
