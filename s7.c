@@ -6,7 +6,7 @@
  * Bill Schottstaedt, bil@ccrma.stanford.edu
  *
  * Mike Scholz provided the FreeBSD support (complex trig funcs, etc)
- * Rick Taube, Andrew Burnson, Donny Ward, Greg Santucci, and Christos Vagias provided the MS Visual C++ support
+ * Rick Taube, Andrew Burnson, Donny Ward, Greg Santucci, Christos Vagias, and vladimir florenta provided the MS Visual C++ support
  * Kjetil Matheussen provided the mingw support
  *
  * Documentation is in s7.h and s7.html.
@@ -2856,7 +2856,7 @@ static void init_types(void)
 #define opt1_fast(P)                   T_Lst(opt1(P,                OPT1_FAST))
 #define set_opt1_fast(P, X)            set_opt1(P, T_Pair(X),       OPT1_FAST)
 #define opt1_cfunc(P)                  T_Pos(opt1(P,                OPT1_CFUNC))
-#define set_opt1_cfunc(P, X)           set_opt1(P, T_Fnc(X),        OPT1_CFUNC)
+#define set_opt1_cfunc(P, X)           set_opt1(P, T_Fnc(X),       OPT1_CFUNC)
 #define opt1_lambda_unchecked(P)       opt1(P,                      OPT1_LAMBDA) /* can be free/null? from s7_call? */
 #define opt1_lambda(P)                 T_Clo(opt1(P,                OPT1_LAMBDA))
 #define set_opt1_lambda(P, X)          set_opt1(P, T_Clo(X),        OPT1_LAMBDA)
@@ -3401,7 +3401,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_macro_call(f)                (T_CMac(f))->object.fnc.ff
 #define c_macro_name(f)                c_macro_data(f)->name
 #define c_macro_name_length(f)         c_macro_data(f)->name_length
-#define c_macro_min_args(f)       (T_CMac(f))->object.fnc.required_args
+#define c_macro_min_args(f)            (T_CMac(f))->object.fnc.required_args
 #define c_macro_max_args(f)            (T_CMac(f))->object.fnc.all_args
 #define c_macro_setter(f)              T_Prc(c_macro_data(f)->setter)
 #define c_macro_set_setter(f, Val)     c_macro_data(f)->setter = T_Prc(Val)
@@ -5084,8 +5084,7 @@ static s7_pointer check_ref4(s7_pointer p, const char *func, int32_t line)
       (strcmp(func, "process_multivector") != 0))
     {
       uint8_t typ = unchecked_type(p);
-      if (!t_vector_p[typ])
-	complain("%s%s[%d]: not a vector, but %s (%s)%s\n", p, func, line, typ);
+      if (!t_vector_p[typ]) complain("%s%s[%d]: not a vector, but %s (%s)%s\n", p, func, line, typ);
     }
   return(p);
 }
@@ -5093,16 +5092,14 @@ static s7_pointer check_ref4(s7_pointer p, const char *func, int32_t line)
 static s7_pointer check_ref5(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
-  if (!t_has_closure_let[typ])
-    complain("%s%s[%d]: not a closure, but %s (%s)%s\n", p, func, line, typ);
+  if (!t_has_closure_let[typ]) complain("%s%s[%d]: not a closure, but %s (%s)%s\n", p, func, line, typ);
   return(p);
 }
 
 static s7_pointer check_ref6(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
-  if (typ < T_C_MACRO)
-    complain("%s%s[%d]: not a c function, but %s (%s)%s\n", p, func, line, typ);
+  if (typ < T_C_MACRO) complain("%s%s[%d]: not a c function or macro, but %s (%s)%s\n", p, func, line, typ);
   return(p);
 }
 
@@ -5158,10 +5155,8 @@ static s7_pointer check_ref12(s7_pointer p, const char *func, int32_t line)
 
 static s7_pointer check_ref13(s7_pointer p, const char *func, int32_t line)
 {
-  if (!is_any_vector(p))
-    complain("%s%s[%d]: subvector is %s (%s)%s?\n", p, func, line, unchecked_type(p));
-  if (!is_subvector(p))
-    complain("%s%s[%d]: subvector is %s (%s), but not a subvector?%s\n", p, func, line, unchecked_type(p));
+  if (!is_any_vector(p)) complain("%s%s[%d]: subvector is %s (%s)%s?\n", p, func, line, unchecked_type(p));
+  if (!is_subvector(p)) complain("%s%s[%d]: subvector is %s (%s), but not a subvector?%s\n", p, func, line, unchecked_type(p));
   return(p);
 }
 
@@ -5239,22 +5234,19 @@ static s7_pointer check_ref16(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
   check_nref(p, func, line);
-  if ((typ != T_LET) && (typ != T_NIL))
-    complain("%s%s[%d]: not a let or nil, but %s (%s)%s\n", p, func, line, typ);
+  if ((typ != T_LET) && (typ != T_NIL)) complain("%s%s[%d]: not a let or nil, but %s (%s)%s\n", p, func, line, typ);
   return(p);
 }
 
 static s7_pointer check_ref17(s7_pointer p, const char *func, int32_t line)
 {
-  if ((!is_any_macro(p)) || (is_c_macro(p)))
-    complain("%s%s[%d]: macro is %s (%s)%s?\n", p, func, line, unchecked_type(p));
+  if ((!is_any_macro(p)) || (is_c_macro(p))) complain("%s%s[%d]: macro is %s (%s)%s?\n", p, func, line, unchecked_type(p));
   return(p);
 }
 
 static s7_pointer check_ref18(s7_pointer p, const char *func, int32_t line)
 {
-  if (!is_symbol_and_keyword(p))
-    complain("%s%s[%d]: not a keyword: %s (%s)%s?\n", p, func, line, unchecked_type(p));
+  if (!is_symbol_and_keyword(p)) complain("%s%s[%d]: not a keyword: %s (%s)%s?\n", p, func, line, unchecked_type(p));
   if (strcmp(func, "new_symbol") != 0)
     {
       if (global_value(p) != p)
@@ -77198,7 +77190,7 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
 {
   s7_pointer args, caller = cur_op_to_caller(sc, op);
 
-  if (!is_pair(sc->code)) /* sc->code = cdr(form) */              /* (macro) or (macro . 1) */
+  if (!is_pair(sc->code)) /* sc->code = cdr(form) */           /* (macro) or (macro . 1) */
     syntax_error_with_caller_nr(sc, "~S: ~S has no parameters or body?", 33, caller, form);
   if (!is_pair(cdr(sc->code)))                                        /* (macro (a)) */
     syntax_error_with_caller_nr(sc, "~S: ~S has no body?", 19, caller, form);
@@ -77219,7 +77211,7 @@ static s7_pointer check_macro(s7_scheme *sc, opcode_t op, s7_pointer form)
     }
   else set_car(sc->code, check_lambda_star_args(sc, args, NULL, form));
 
-  if (s7_list_length(sc, cdr(sc->code)) < 0)                      /* (macro () 1 . 2) */
+  if (s7_list_length(sc, cdr(sc->code)) < 0)                   /* (macro () 1 . 2) */
     error_nr(sc, sc->syntax_error_symbol,
 	     set_elist_3(sc, wrap_string(sc, "~A: macro body messed up, ~A", 28), caller, form));
 
@@ -77577,7 +77569,7 @@ static void check_cond(s7_scheme *sc)
 	      }}
 	else result_single = false;
       }
-  if (is_not_null(x))                                            /* (cond ((1 2)) . 1) */
+  if (is_not_null(x))                                          /* (cond ((1 2)) . 1) */
     error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "cond: stray dot? ~S", 19), form));
 
   for (x = code; is_pair(x); x = cdr(x))
@@ -78020,7 +78012,7 @@ static void check_set(s7_scheme *sc)
 			pair_set_syntax_op(form, OP_SET_opSAq_A);   /* (set! (symbol fxable) fxable) */
 			fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
 
-			if (car(inner) == sc->s7_starlet_symbol) /* (set! (*s7* 'field) value) */
+			if (car(inner) == sc->s7_starlet_symbol)    /* (set! (*s7* 'field) value) */
 			  {
 			    s7_pointer sym = (is_symbol(index)) ?
 			                       ((is_keyword(index)) ? keyword_symbol(index) : index) :
@@ -82456,7 +82448,7 @@ static inline s7_pointer apply_c_function(s7_scheme *sc, s7_pointer func, s7_poi
    */
 }
 
-static void apply_c_rst_no_req_function(s7_scheme *sc)        /* -------- C-based function that can take any number of arguments -------- */
+static void apply_c_rst_no_req_function(s7_scheme *sc)      /* -------- C-based function that can take any number of arguments -------- */
 {
   sc->value = c_function_call(sc->code)(sc, sc->args);
 }
@@ -88805,11 +88797,10 @@ static /* inline */ int32_t read_start_list(s7_scheme *sc, s7_pointer pt, int32_
 
 static void op_read_internal(s7_scheme *sc)
 {
-  /* if we're loading a file, and in the file we evaluate something like:
-   *    (let ()
+  /* if we're loading a file, and in the file we evaluate (at top-level) something like:
    *      (set-current-input-port (open-input-file "tmp2.r5rs"))
-   *      (close-input-port (current-input-port)))
-   *    ... (with no reset of input port to its original value)
+   *      (close-input-port (current-input-port))
+   *      ... (with no reset of input port to its original value)
    * the load process tries to read the loaded string, but the current-input-port is now closed,
    * and the original is inaccessible!  So we get a segfault in token.  We don't want to put
    * a port_is_closed check there because token only rarely is in this danger.  I think this
@@ -95932,7 +95923,7 @@ int main(int argc, char **argv)
  * tvect     2519   2464   1772   1667   1670
  * timp      2637   2575   1930   1687   1689
  * texit     ----   ----   1778   1737   1741
- * s7test    1873   1831   1818   1816   1826         1880 [string_read_name]
+ * s7test    1873   1831   1818   1816   1826         1830
  * thook     ----   ----   2590   2074   2030
  * tauto     ----   ----   2562   2045   2055  2048
  * lt        2187   2172   2150   2179   2182
@@ -95952,8 +95943,8 @@ int main(int argc, char **argv)
  * tmac      3950   3873   3033   3667   3677
  * tclo      4787   4735   4390   4375   4389
  * tstar     6139   5923   5519   ----   4414
- * tlet      7775   5640   4450   4402   4431  4451 [make_symbol/length] 4429
  * tcase     4960   4793   4439   4434   4425
+ * tlet      7775   5640   4450   4402   4431  4451 [make_symbol/length] 4429
  * tfft      7820   7729   4755   4457   4465
  * tmap      8869   8774   4489   4541   4541
  * tshoot    5525   5447   5183   5057   5055
