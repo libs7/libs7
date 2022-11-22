@@ -30,21 +30,6 @@ typedef double s7_double;
   #include <mpc.h>
 #endif
 
-#ifdef _MSC_VER
-  /* Enable using s7 across DLLs on Microsoft Windows.
-   * This marks the S7 API as exportable in Windows .lib files.
-   * To use, define S7_EXPORT_LIB in the library/exe that compiles the s7 runtime (s7.c).
-   * Do not define the symbol in the importing library that only uses the s7 headers.
-   */
-  #ifdef S7_EXPORT_LIB
-    #define S7_EXPORT __declspec(dllexport)
-  #else
-    #define S7_EXPORT
-  #endif
-#else
-  #define S7_EXPORT
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -52,53 +37,54 @@ extern "C" {
 typedef struct s7_scheme s7_scheme;
 typedef struct s7_cell *s7_pointer;
 
-S7_EXPORT s7_scheme *s7_init(void);
+s7_scheme *s7_init(void);
+
   /* s7_scheme is our interpreter
    * s7_pointer is a Scheme object of any (Scheme) type
    * s7_init creates the interpreter.
    */
-S7_EXPORT void s7_free(s7_scheme *sc);
+void s7_free(s7_scheme *sc);
 
 typedef s7_pointer (*s7_function)(s7_scheme *sc, s7_pointer args);   /* that is, obj = func(s7, args) -- args is a list of arguments */
 typedef s7_pointer (*s7_pfunc)(s7_scheme *sc);
 
-S7_EXPORT s7_pointer s7_f(s7_scheme *sc);                                      /* #f */
-S7_EXPORT s7_pointer s7_t(s7_scheme *sc);                                      /* #t */
-S7_EXPORT s7_pointer s7_nil(s7_scheme *sc);                                    /* () */
-S7_EXPORT s7_pointer s7_undefined(s7_scheme *sc);                              /* #<undefined> */
-S7_EXPORT s7_pointer s7_unspecified(s7_scheme *sc);                            /* #<unspecified> */
-S7_EXPORT bool s7_is_unspecified(s7_scheme *sc, s7_pointer val);               /*     returns true if val is #<unspecified> */
-S7_EXPORT s7_pointer s7_eof_object(s7_scheme *sc);                             /* #<eof> */
-S7_EXPORT bool s7_is_null(s7_scheme *sc, s7_pointer p);                        /* null? */
+s7_pointer s7_f(s7_scheme *sc);                                      /* #f */
+s7_pointer s7_t(s7_scheme *sc);                                      /* #t */
+s7_pointer s7_nil(s7_scheme *sc);                                    /* () */
+s7_pointer s7_undefined(s7_scheme *sc);                              /* #<undefined> */
+s7_pointer s7_unspecified(s7_scheme *sc);                            /* #<unspecified> */
+bool s7_is_unspecified(s7_scheme *sc, s7_pointer val);               /*     returns true if val is #<unspecified> */
+s7_pointer s7_eof_object(s7_scheme *sc);                             /* #<eof> */
+bool s7_is_null(s7_scheme *sc, s7_pointer p);                        /* null? */
 
   /* these are the Scheme constants; they do not change in value during a run,
    *   so they can be safely assigned to C global variables if desired.
    */
 
-S7_EXPORT bool s7_is_valid(s7_scheme *sc, s7_pointer arg);                     /* does 'arg' look like an s7 object? */
-S7_EXPORT bool s7_is_c_pointer(s7_pointer arg);                                /* (c-pointer? arg) */
-S7_EXPORT bool s7_is_c_pointer_of_type(s7_pointer arg, s7_pointer type);
-S7_EXPORT void *s7_c_pointer(s7_pointer p);
-S7_EXPORT void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_type, const char *caller, s7_int argnum);
-S7_EXPORT s7_pointer s7_c_pointer_type(s7_pointer p);
-S7_EXPORT s7_pointer s7_make_c_pointer(s7_scheme *sc, void *ptr);              /* these are for passing uninterpreted C pointers through Scheme */
-S7_EXPORT s7_pointer s7_make_c_pointer_with_type(s7_scheme *sc, void *ptr, s7_pointer type, s7_pointer info);
+bool s7_is_valid(s7_scheme *sc, s7_pointer arg);                     /* does 'arg' look like an s7 object? */
+bool s7_is_c_pointer(s7_pointer arg);                                /* (c-pointer? arg) */
+bool s7_is_c_pointer_of_type(s7_pointer arg, s7_pointer type);
+void *s7_c_pointer(s7_pointer p);
+void *s7_c_pointer_with_type(s7_scheme *sc, s7_pointer p, s7_pointer expected_type, const char *caller, s7_int argnum);
+s7_pointer s7_c_pointer_type(s7_pointer p);
+s7_pointer s7_make_c_pointer(s7_scheme *sc, void *ptr);              /* these are for passing uninterpreted C pointers through Scheme */
+s7_pointer s7_make_c_pointer_with_type(s7_scheme *sc, void *ptr, s7_pointer type, s7_pointer info);
 
-S7_EXPORT s7_pointer s7_eval_c_string(s7_scheme *sc, const char *str);         /* (eval-string str) */
-S7_EXPORT s7_pointer s7_eval_c_string_with_environment(s7_scheme *sc, const char *str, s7_pointer e);
-S7_EXPORT s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer arg, bool use_write);
-                                                                      /* (object->string obj) */
-S7_EXPORT char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj); /* same as object->string but returns a C char* directly */
-                                                                      /*   the returned value should be freed by the caller */
+s7_pointer s7_eval_c_string(s7_scheme *sc, const char *str);         /* (eval-string str) */
+s7_pointer s7_eval_c_string_with_environment(s7_scheme *sc, const char *str, s7_pointer e);
+s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer arg, bool use_write);
+                                                                     /* (object->string obj) */
+char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj);          /* same as object->string but returns a C char* directly */
+                                                                     /*   the returned value should be freed by the caller */
 
-S7_EXPORT s7_pointer s7_load(s7_scheme *sc, const char *file);                 /* (load file) */
-S7_EXPORT s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_pointer e);
-S7_EXPORT s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes);
-S7_EXPORT s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content, s7_int bytes, s7_pointer e);
-S7_EXPORT s7_pointer s7_load_path(s7_scheme *sc);                              /* *load-path* */
-S7_EXPORT s7_pointer s7_add_to_load_path(s7_scheme *sc, const char *dir);      /* (set! *load-path* (cons dir *load-path*)) */
-S7_EXPORT s7_pointer s7_autoload(s7_scheme *sc, s7_pointer symbol, s7_pointer file_or_function);  /* (autoload symbol file-or-function) */
-S7_EXPORT void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size);
+s7_pointer s7_load(s7_scheme *sc, const char *file);                 /* (load file) */
+s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_pointer e);
+s7_pointer s7_load_c_string(s7_scheme *sc, const char *content, s7_int bytes);
+s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content, s7_int bytes, s7_pointer e);
+s7_pointer s7_load_path(s7_scheme *sc);                              /* *load-path* */
+s7_pointer s7_add_to_load_path(s7_scheme *sc, const char *dir);      /* (set! *load-path* (cons dir *load-path*)) */
+s7_pointer s7_autoload(s7_scheme *sc, s7_pointer symbol, s7_pointer file_or_function);  /* (autoload symbol file-or-function) */
+void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size);
 
   /* the load path is a list of directories to search if load can't find the file passed as its argument.
    *
@@ -107,27 +93,27 @@ S7_EXPORT void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int s
    *     s7_load_with_environment(s7, "somelib.so", s7_inlet(s7, s7_list(s7, 2, s7_make_symbol(s7, "init_func"), s7_make_symbol(s7, "somelib_init"))))
    *   s7_load_with_environment returns NULL if it can't load the file.
    */
-S7_EXPORT void s7_quit(s7_scheme *sc);
+void s7_quit(s7_scheme *sc);
   /* this tries to break out of the current evaluation, leaving everything else intact */
 
-S7_EXPORT void (*s7_begin_hook(s7_scheme *sc))(s7_scheme *sc, bool *val);
-S7_EXPORT void s7_set_begin_hook(s7_scheme *sc, void (*hook)(s7_scheme *sc, bool *val));
+void (*s7_begin_hook(s7_scheme *sc))(s7_scheme *sc, bool *val);
+void s7_set_begin_hook(s7_scheme *sc, void (*hook)(s7_scheme *sc, bool *val));
   /* call "hook" at the start of any block; use NULL to cancel.
    *   s7_begin_hook returns the current begin_hook function or NULL.
    */
 
-S7_EXPORT s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e);    /* (eval code e) -- e is the optional environment */
-S7_EXPORT s7_pointer s7_eval_with_location(s7_scheme *sc, s7_pointer code, s7_pointer e, const char *caller, const char *file, s7_int line);
-S7_EXPORT void s7_provide(s7_scheme *sc, const char *feature);                 /* add feature (as a symbol) to the *features* list */
-S7_EXPORT bool s7_is_provided(s7_scheme *sc, const char *feature);             /* (provided? feature) */
-S7_EXPORT void s7_repl(s7_scheme *sc);
+s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e);    /* (eval code e) -- e is the optional environment */
+s7_pointer s7_eval_with_location(s7_scheme *sc, s7_pointer code, s7_pointer e, const char *caller, const char *file, s7_int line);
+void s7_provide(s7_scheme *sc, const char *feature);                 /* add feature (as a symbol) to the *features* list */
+bool s7_is_provided(s7_scheme *sc, const char *feature);             /* (provided? feature) */
+void s7_repl(s7_scheme *sc);
 
-S7_EXPORT s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info);
-S7_EXPORT s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
-S7_EXPORT s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr);
+s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info);
+s7_pointer s7_wrong_type_arg_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
+s7_pointer s7_wrong_type_error(s7_scheme *sc, s7_pointer caller, s7_int arg_n, s7_pointer arg, s7_pointer descr);
   /* set arg_n to 0 to indicate that caller takes only one argument (so the argument number need not be reported */
-S7_EXPORT s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
-S7_EXPORT s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args);
+s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n, s7_pointer arg, const char *descr);
+s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args);
 
   /* these are equivalent to (error ...) in Scheme
    *   the first argument to s7_error is a symbol that can be caught (via (catch tag ...))
@@ -150,21 +136,21 @@ S7_EXPORT s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *ca
    *  normally printing the error arguments to current-error-port.
    */
 
-S7_EXPORT s7_pointer s7_stacktrace(s7_scheme *sc);
-S7_EXPORT s7_pointer s7_history(s7_scheme *sc);                                /* the current (circular backwards) history buffer */
-S7_EXPORT s7_pointer s7_add_to_history(s7_scheme *sc, s7_pointer entry);       /* add entry to the history buffer */
-S7_EXPORT bool s7_history_enabled(s7_scheme *sc);
-S7_EXPORT bool s7_set_history_enabled(s7_scheme *sc, bool enabled);
+s7_pointer s7_stacktrace(s7_scheme *sc);
+s7_pointer s7_history(s7_scheme *sc);                                /* the current (circular backwards) history buffer */
+s7_pointer s7_add_to_history(s7_scheme *sc, s7_pointer entry);       /* add entry to the history buffer */
+bool s7_history_enabled(s7_scheme *sc);
+bool s7_set_history_enabled(s7_scheme *sc, bool enabled);
 
-S7_EXPORT s7_pointer s7_gc_on(s7_scheme *sc, bool on);                         /* (gc on) */
+s7_pointer s7_gc_on(s7_scheme *sc, bool on);                         /* (gc on) */
 
-S7_EXPORT s7_int s7_gc_protect(s7_scheme *sc, s7_pointer x);
-S7_EXPORT void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc);
-S7_EXPORT s7_pointer s7_gc_protected_at(s7_scheme *sc, s7_int loc);
-S7_EXPORT s7_pointer s7_gc_protect_via_stack(s7_scheme *sc, s7_pointer x);
-S7_EXPORT s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x);
-S7_EXPORT s7_pointer s7_gc_protect_via_location(s7_scheme *sc, s7_pointer x, s7_int loc);
-S7_EXPORT s7_pointer s7_gc_unprotect_via_location(s7_scheme *sc, s7_int loc);
+s7_int s7_gc_protect(s7_scheme *sc, s7_pointer x);
+void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc);
+s7_pointer s7_gc_protected_at(s7_scheme *sc, s7_int loc);
+s7_pointer s7_gc_protect_via_stack(s7_scheme *sc, s7_pointer x);
+s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x);
+s7_pointer s7_gc_protect_via_location(s7_scheme *sc, s7_pointer x, s7_int loc);
+s7_pointer s7_gc_unprotect_via_location(s7_scheme *sc, s7_int loc);
 
   /* any s7_pointer object held in C (as a local variable for example) needs to be
    *   protected from garbage collection if there is any chance the GC may run without
@@ -184,14 +170,14 @@ S7_EXPORT s7_pointer s7_gc_unprotect_via_location(s7_scheme *sc, s7_int loc);
    *                s7_cons(s7, s7_make_integer(s7, 123), s7_nil(s7)));
    */
 
-S7_EXPORT bool s7_is_eq(s7_pointer a, s7_pointer b);                          /* (eq? a b) */
-S7_EXPORT bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b);          /* (eqv? a b) */
-S7_EXPORT bool s7_is_equal(s7_scheme *sc, s7_pointer a, s7_pointer b);        /* (equal? a b) */
-S7_EXPORT bool s7_is_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y);   /* (equivalent? x y) */
+bool s7_is_eq(s7_pointer a, s7_pointer b);                                   /* (eq? a b) */
+bool s7_is_eqv(s7_scheme *sc, s7_pointer a, s7_pointer b);                   /* (eqv? a b) */
+bool s7_is_equal(s7_scheme *sc, s7_pointer a, s7_pointer b);                 /* (equal? a b) */
+bool s7_is_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y);            /* (equivalent? x y) */
 
-S7_EXPORT bool s7_is_boolean(s7_pointer x);                                   /* (boolean? x) */
-S7_EXPORT bool s7_boolean(s7_scheme *sc, s7_pointer x);                       /* Scheme boolean -> C bool */
-S7_EXPORT s7_pointer s7_make_boolean(s7_scheme *sc, bool x);                  /* C bool -> Scheme boolean */
+bool s7_is_boolean(s7_pointer x);                                            /* (boolean? x) */
+bool s7_boolean(s7_scheme *sc, s7_pointer x);                                /* Scheme boolean -> C bool */
+s7_pointer s7_make_boolean(s7_scheme *sc, bool x);                           /* C bool -> Scheme boolean */
 
   /* for each Scheme type (boolean, integer, string, etc), there are three
    *   functions: s7_<type>(...), s7_make_<type>(...), and s7_is_<type>(...):
@@ -202,151 +188,151 @@ S7_EXPORT s7_pointer s7_make_boolean(s7_scheme *sc, bool x);                  /*
    */
 
 
-S7_EXPORT bool s7_is_pair(s7_pointer p);                                      /* (pair? p) */
-S7_EXPORT s7_pointer s7_cons(s7_scheme *sc, s7_pointer a, s7_pointer b);      /* (cons a b) */
+bool s7_is_pair(s7_pointer p);                                               /* (pair? p) */
+s7_pointer s7_cons(s7_scheme *sc, s7_pointer a, s7_pointer b);               /* (cons a b) */
 
-S7_EXPORT s7_pointer s7_car(s7_pointer p);                                    /* (car p) */
-S7_EXPORT s7_pointer s7_cdr(s7_pointer p);                                    /* (cdr p) */
+s7_pointer s7_car(s7_pointer p);                                             /* (car p) */
+s7_pointer s7_cdr(s7_pointer p);                                             /* (cdr p) */
 
-S7_EXPORT s7_pointer s7_set_car(s7_pointer p, s7_pointer q);                  /* (set-car! p q) */
-S7_EXPORT s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q);                  /* (set-cdr! p q) */
+s7_pointer s7_set_car(s7_pointer p, s7_pointer q);                           /* (set-car! p q) */
+s7_pointer s7_set_cdr(s7_pointer p, s7_pointer q);                           /* (set-cdr! p q) */
 
-S7_EXPORT s7_pointer s7_cadr(s7_pointer p);                                   /* (cadr p) */
-S7_EXPORT s7_pointer s7_cddr(s7_pointer p);                                   /* (cddr p) */
-S7_EXPORT s7_pointer s7_cdar(s7_pointer p);                                   /* (cdar p) */
-S7_EXPORT s7_pointer s7_caar(s7_pointer p);                                   /* (caar p) */
+s7_pointer s7_cadr(s7_pointer p);                                            /* (cadr p) */
+s7_pointer s7_cddr(s7_pointer p);                                            /* (cddr p) */
+s7_pointer s7_cdar(s7_pointer p);                                            /* (cdar p) */
+s7_pointer s7_caar(s7_pointer p);                                            /* (caar p) */
 
-S7_EXPORT s7_pointer s7_caadr(s7_pointer p);                                  /* etc */
-S7_EXPORT s7_pointer s7_caddr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cadar(s7_pointer p);
-S7_EXPORT s7_pointer s7_caaar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdadr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdddr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cddar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdaar(s7_pointer p);
+s7_pointer s7_caadr(s7_pointer p);                                           /* etc */
+s7_pointer s7_caddr(s7_pointer p);
+s7_pointer s7_cadar(s7_pointer p);
+s7_pointer s7_caaar(s7_pointer p);
+s7_pointer s7_cdadr(s7_pointer p);
+s7_pointer s7_cdddr(s7_pointer p);
+s7_pointer s7_cddar(s7_pointer p);
+s7_pointer s7_cdaar(s7_pointer p);
 
-S7_EXPORT s7_pointer s7_caaadr(s7_pointer p);
-S7_EXPORT s7_pointer s7_caaddr(s7_pointer p);
-S7_EXPORT s7_pointer s7_caadar(s7_pointer p);
-S7_EXPORT s7_pointer s7_caaaar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cadadr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cadddr(s7_pointer p);
-S7_EXPORT s7_pointer s7_caddar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cadaar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdaadr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdaddr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdadar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdaaar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cddadr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cddddr(s7_pointer p);
-S7_EXPORT s7_pointer s7_cdddar(s7_pointer p);
-S7_EXPORT s7_pointer s7_cddaar(s7_pointer p);
+s7_pointer s7_caaadr(s7_pointer p);
+s7_pointer s7_caaddr(s7_pointer p);
+s7_pointer s7_caadar(s7_pointer p);
+s7_pointer s7_caaaar(s7_pointer p);
+s7_pointer s7_cadadr(s7_pointer p);
+s7_pointer s7_cadddr(s7_pointer p);
+s7_pointer s7_caddar(s7_pointer p);
+s7_pointer s7_cadaar(s7_pointer p);
+s7_pointer s7_cdaadr(s7_pointer p);
+s7_pointer s7_cdaddr(s7_pointer p);
+s7_pointer s7_cdadar(s7_pointer p);
+s7_pointer s7_cdaaar(s7_pointer p);
+s7_pointer s7_cddadr(s7_pointer p);
+s7_pointer s7_cddddr(s7_pointer p);
+s7_pointer s7_cdddar(s7_pointer p);
+s7_pointer s7_cddaar(s7_pointer p);
 
-S7_EXPORT bool s7_is_list(s7_scheme *sc, s7_pointer p);                                /* (list? p) -> (or (pair? p) (null? p)) */
-S7_EXPORT bool s7_is_proper_list(s7_scheme *sc, s7_pointer p);                         /* (proper-list? p) */
-S7_EXPORT s7_int s7_list_length(s7_scheme *sc, s7_pointer a);                          /* (length a) */
-S7_EXPORT s7_pointer s7_make_list(s7_scheme *sc, s7_int len, s7_pointer init);         /* (make-list len init) */
-S7_EXPORT s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...);                   /* (list ...) */
-S7_EXPORT s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...);                /* (list ...) arglist should be NULL terminated (more error checks than s7_list) */
-S7_EXPORT s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array); /* array contents -> list */
-S7_EXPORT void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t len); /* list -> array (intended for old code) */
-S7_EXPORT s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a);                          /* (reverse a) */
-S7_EXPORT s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b);             /* (append a b) */
-S7_EXPORT s7_pointer s7_list_ref(s7_scheme *sc, s7_pointer lst, s7_int num);           /* (list-ref lst num) */
-S7_EXPORT s7_pointer s7_list_set(s7_scheme *sc, s7_pointer lst, s7_int num, s7_pointer val); /* (list-set! lst num val) */
-S7_EXPORT s7_pointer s7_assoc(s7_scheme *sc, s7_pointer obj, s7_pointer lst);          /* (assoc obj lst) */
-S7_EXPORT s7_pointer s7_assq(s7_scheme *sc, s7_pointer obj, s7_pointer x);             /* (assq obj lst) */
-S7_EXPORT s7_pointer s7_member(s7_scheme *sc, s7_pointer obj, s7_pointer lst);         /* (member obj lst) */
-S7_EXPORT s7_pointer s7_memq(s7_scheme *sc, s7_pointer obj, s7_pointer x);             /* (memq obj lst) */
-S7_EXPORT bool s7_tree_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree);           /* (tree-memq sym tree) */
-
-
-S7_EXPORT bool s7_is_string(s7_pointer p);                                             /* (string? p) */
-S7_EXPORT const char *s7_string(s7_pointer p);                                         /* Scheme string -> C string (do not free the string) */
-S7_EXPORT s7_pointer s7_make_string(s7_scheme *sc, const char *str);                   /* C string -> Scheme string (str is copied) */
-S7_EXPORT s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len);  /* same as s7_make_string, but provides strlen */
-S7_EXPORT s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str);
-S7_EXPORT s7_pointer s7_make_string_wrapper_with_length(s7_scheme *sc, const char *str, s7_int len);
-S7_EXPORT s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str);         /* make a string that will never be GC'd */
-S7_EXPORT s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str);     /* for (s7) string permanent within one s7 instance (freed upon s7_free) */
-S7_EXPORT s7_int s7_string_length(s7_pointer str);                                     /* (string-length str) */
+bool s7_is_list(s7_scheme *sc, s7_pointer p);                                /* (list? p) -> (or (pair? p) (null? p)) */
+bool s7_is_proper_list(s7_scheme *sc, s7_pointer p);                         /* (proper-list? p) */
+s7_int s7_list_length(s7_scheme *sc, s7_pointer a);                          /* (length a) */
+s7_pointer s7_make_list(s7_scheme *sc, s7_int len, s7_pointer init);         /* (make-list len init) */
+s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...);                   /* (list ...) */
+s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...);                /* (list ...) arglist should be NULL terminated (more error checks than s7_list) */
+s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array); /* array contents -> list */
+void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t len); /* list -> array (intended for old code) */
+s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a);                          /* (reverse a) */
+s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b);             /* (append a b) */
+s7_pointer s7_list_ref(s7_scheme *sc, s7_pointer lst, s7_int num);           /* (list-ref lst num) */
+s7_pointer s7_list_set(s7_scheme *sc, s7_pointer lst, s7_int num, s7_pointer val); /* (list-set! lst num val) */
+s7_pointer s7_assoc(s7_scheme *sc, s7_pointer obj, s7_pointer lst);          /* (assoc obj lst) */
+s7_pointer s7_assq(s7_scheme *sc, s7_pointer obj, s7_pointer x);             /* (assq obj lst) */
+s7_pointer s7_member(s7_scheme *sc, s7_pointer obj, s7_pointer lst);         /* (member obj lst) */
+s7_pointer s7_memq(s7_scheme *sc, s7_pointer obj, s7_pointer x);             /* (memq obj lst) */
+bool s7_tree_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree);           /* (tree-memq sym tree) */
 
 
-S7_EXPORT bool s7_is_character(s7_pointer p);                                          /* (character? p) */
-S7_EXPORT uint8_t s7_character(s7_pointer p);                                          /* Scheme character -> unsigned C char */
-S7_EXPORT s7_pointer s7_make_character(s7_scheme *sc, uint8_t c);                      /* unsigned C char -> Scheme character */
+bool s7_is_string(s7_pointer p);                                             /* (string? p) */
+const char *s7_string(s7_pointer p);                                         /* Scheme string -> C string (do not free the string) */
+s7_pointer s7_make_string(s7_scheme *sc, const char *str);                   /* C string -> Scheme string (str is copied) */
+s7_pointer s7_make_string_with_length(s7_scheme *sc, const char *str, s7_int len);  /* same as s7_make_string, but provides strlen */
+s7_pointer s7_make_string_wrapper(s7_scheme *sc, const char *str);
+s7_pointer s7_make_string_wrapper_with_length(s7_scheme *sc, const char *str, s7_int len);
+s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str);         /* make a string that will never be GC'd */
+s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str);     /* for (s7) string permanent within one s7 instance (freed upon s7_free) */
+s7_int s7_string_length(s7_pointer str);                                     /* (string-length str) */
 
 
-S7_EXPORT bool s7_is_number(s7_pointer p);                                             /* (number? p) */
-S7_EXPORT bool s7_is_integer(s7_pointer p);                                            /* (integer? p) */
-S7_EXPORT s7_int s7_integer(s7_pointer p);                                             /* Scheme integer -> C integer (s7_int) */
-S7_EXPORT s7_pointer s7_make_integer(s7_scheme *sc, s7_int num);                       /* C s7_int -> Scheme integer */
+bool s7_is_character(s7_pointer p);                                          /* (character? p) */
+uint8_t s7_character(s7_pointer p);                                          /* Scheme character -> unsigned C char */
+s7_pointer s7_make_character(s7_scheme *sc, uint8_t c);                      /* unsigned C char -> Scheme character */
 
-S7_EXPORT bool s7_is_real(s7_pointer p);                                               /* (real? p) */
-S7_EXPORT s7_double s7_real(s7_pointer p);                                             /* Scheme real -> C double */
-S7_EXPORT s7_pointer s7_make_real(s7_scheme *sc, s7_double num);                       /* C double -> Scheme real */
-S7_EXPORT s7_pointer s7_make_mutable_real(s7_scheme *sc, s7_double n);
-S7_EXPORT s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x);                    /* x can be any kind of number */
-S7_EXPORT s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
-S7_EXPORT s7_double s7_number_to_real_with_location(s7_scheme *sc, s7_pointer x, s7_pointer caller);
-S7_EXPORT s7_int s7_number_to_integer(s7_scheme *sc, s7_pointer x);
-S7_EXPORT s7_int s7_number_to_integer_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
 
-S7_EXPORT bool s7_is_rational(s7_pointer arg);                                        /* (rational? arg) -- integer or ratio */
-S7_EXPORT bool s7_is_ratio(s7_pointer arg);                                           /* true if arg is a ratio, not an integer */
-S7_EXPORT s7_pointer s7_make_ratio(s7_scheme *sc, s7_int a, s7_int b);                /* returns the Scheme object a/b */
-S7_EXPORT s7_pointer s7_rationalize(s7_scheme *sc, s7_double x, s7_double error);     /* (rationalize x error) */
-S7_EXPORT s7_int s7_numerator(s7_pointer x);                                          /* (numerator x) */
-S7_EXPORT s7_int s7_denominator(s7_pointer x);                                        /* (denominator x) */
-S7_EXPORT s7_double s7_random(s7_scheme *sc, s7_pointer state);                       /* (random x) */
-S7_EXPORT s7_pointer s7_random_state(s7_scheme *sc, s7_pointer seed);                 /* (random-state seed) */
-S7_EXPORT s7_pointer s7_random_state_to_list(s7_scheme *sc, s7_pointer args);         /* (random-state->list r) */
-S7_EXPORT void s7_set_default_random_state(s7_scheme *sc, s7_int seed, s7_int carry);
-S7_EXPORT bool s7_is_random_state(s7_pointer p);                                      /* (random-state? p) */
+bool s7_is_number(s7_pointer p);                                             /* (number? p) */
+bool s7_is_integer(s7_pointer p);                                            /* (integer? p) */
+s7_int s7_integer(s7_pointer p);                                             /* Scheme integer -> C integer (s7_int) */
+s7_pointer s7_make_integer(s7_scheme *sc, s7_int num);                       /* C s7_int -> Scheme integer */
 
-S7_EXPORT bool s7_is_complex(s7_pointer arg);                                         /* (complex? arg) */
-S7_EXPORT s7_pointer s7_make_complex(s7_scheme *sc, s7_double a, s7_double b);        /* returns the Scheme object a+bi */
-S7_EXPORT s7_double s7_real_part(s7_pointer z);                                       /* (real-part z) */
-S7_EXPORT s7_double s7_imag_part(s7_pointer z);                                       /* (imag-part z) */
-S7_EXPORT char *s7_number_to_string(s7_scheme *sc, s7_pointer obj, s7_int radix);     /* (number->string obj radix) */
+bool s7_is_real(s7_pointer p);                                               /* (real? p) */
+s7_double s7_real(s7_pointer p);                                             /* Scheme real -> C double */
+s7_pointer s7_make_real(s7_scheme *sc, s7_double num);                       /* C double -> Scheme real */
+s7_pointer s7_make_mutable_real(s7_scheme *sc, s7_double n);
+s7_double s7_number_to_real(s7_scheme *sc, s7_pointer x);                    /* x can be any kind of number */
+s7_double s7_number_to_real_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
+s7_double s7_number_to_real_with_location(s7_scheme *sc, s7_pointer x, s7_pointer caller);
+s7_int s7_number_to_integer(s7_scheme *sc, s7_pointer x);
+s7_int s7_number_to_integer_with_caller(s7_scheme *sc, s7_pointer x, const char *caller);
 
-S7_EXPORT bool s7_is_vector(s7_pointer p);                                            /* (vector? p) */
-S7_EXPORT s7_int s7_vector_length(s7_pointer vec);                                    /* (vector-length vec) */
-S7_EXPORT s7_int s7_vector_rank(s7_pointer vect);                                     /* number of dimensions in vect */
-S7_EXPORT s7_int s7_vector_dimension(s7_pointer vec, s7_int dim);
-S7_EXPORT s7_pointer *s7_vector_elements(s7_pointer vec);                             /* a pointer to the array of s7_pointers */
-S7_EXPORT s7_int *s7_int_vector_elements(s7_pointer vec);
-S7_EXPORT uint8_t *s7_byte_vector_elements(s7_pointer vec);
-S7_EXPORT s7_double *s7_float_vector_elements(s7_pointer vec);
-S7_EXPORT bool s7_is_float_vector(s7_pointer p);                                      /* (float-vector? p) */
-S7_EXPORT bool s7_is_int_vector(s7_pointer p);                                        /* (int-vector? p) */
-S7_EXPORT bool s7_is_byte_vector(s7_pointer p);                                       /* (byte-vector? p) */
+bool s7_is_rational(s7_pointer arg);                                        /* (rational? arg) -- integer or ratio */
+bool s7_is_ratio(s7_pointer arg);                                           /* true if arg is a ratio, not an integer */
+s7_pointer s7_make_ratio(s7_scheme *sc, s7_int a, s7_int b);                /* returns the Scheme object a/b */
+s7_pointer s7_rationalize(s7_scheme *sc, s7_double x, s7_double error);     /* (rationalize x error) */
+s7_int s7_numerator(s7_pointer x);                                          /* (numerator x) */
+s7_int s7_denominator(s7_pointer x);                                        /* (denominator x) */
+s7_double s7_random(s7_scheme *sc, s7_pointer state);                       /* (random x) */
+s7_pointer s7_random_state(s7_scheme *sc, s7_pointer seed);                 /* (random-state seed) */
+s7_pointer s7_random_state_to_list(s7_scheme *sc, s7_pointer args);         /* (random-state->list r) */
+void s7_set_default_random_state(s7_scheme *sc, s7_int seed, s7_int carry);
+bool s7_is_random_state(s7_pointer p);                                      /* (random-state? p) */
 
-S7_EXPORT s7_pointer s7_vector_ref(s7_scheme *sc, s7_pointer vec, s7_int index);                /* (vector-ref vec index) */
-S7_EXPORT s7_pointer s7_vector_set(s7_scheme *sc, s7_pointer vec, s7_int index, s7_pointer a);  /* (vector-set! vec index a) */
-S7_EXPORT s7_pointer s7_vector_ref_n(s7_scheme *sc, s7_pointer vector, s7_int indices, ...);    /* multidimensional vector-ref */
-S7_EXPORT s7_pointer s7_vector_set_n(s7_scheme *sc, s7_pointer vector, s7_pointer value, s7_int indices, ...); /* multidimensional vector-set! */
-S7_EXPORT s7_int s7_vector_dimensions(s7_pointer vec, s7_int *dims, s7_int dims_size);          /* vector dimensions */
-S7_EXPORT s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size);
+bool s7_is_complex(s7_pointer arg);                                         /* (complex? arg) */
+s7_pointer s7_make_complex(s7_scheme *sc, s7_double a, s7_double b);        /* returns the Scheme object a+bi */
+s7_double s7_real_part(s7_pointer z);                                       /* (real-part z) */
+s7_double s7_imag_part(s7_pointer z);                                       /* (imag-part z) */
+char *s7_number_to_string(s7_scheme *sc, s7_pointer obj, s7_int radix);     /* (number->string obj radix) */
 
-S7_EXPORT s7_int s7_int_vector_ref(s7_pointer vec, s7_int index);
-S7_EXPORT s7_int s7_int_vector_set(s7_pointer vec, s7_int index, s7_int value);
-S7_EXPORT uint8_t s7_byte_vector_ref(s7_pointer vec, s7_int index);
-S7_EXPORT uint8_t s7_byte_vector_set(s7_pointer vec, s7_int index, uint8_t value);
-S7_EXPORT s7_double s7_float_vector_ref(s7_pointer vec, s7_int index);
-S7_EXPORT s7_double s7_float_vector_set(s7_pointer vec, s7_int index, s7_double value);
+bool s7_is_vector(s7_pointer p);                                            /* (vector? p) */
+s7_int s7_vector_length(s7_pointer vec);                                    /* (vector-length vec) */
+s7_int s7_vector_rank(s7_pointer vect);                                     /* number of dimensions in vect */
+s7_int s7_vector_dimension(s7_pointer vec, s7_int dim);
+s7_pointer *s7_vector_elements(s7_pointer vec);                             /* a pointer to the array of s7_pointers */
+s7_int *s7_int_vector_elements(s7_pointer vec);
+uint8_t *s7_byte_vector_elements(s7_pointer vec);
+s7_double *s7_float_vector_elements(s7_pointer vec);
+bool s7_is_float_vector(s7_pointer p);                                      /* (float-vector? p) */
+bool s7_is_int_vector(s7_pointer p);                                        /* (int-vector? p) */
+bool s7_is_byte_vector(s7_pointer p);                                       /* (byte-vector? p) */
 
-S7_EXPORT s7_pointer s7_make_vector(s7_scheme *sc, s7_int len);                                 /* (make-vector len) */
-S7_EXPORT s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
-S7_EXPORT s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
-S7_EXPORT s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
-S7_EXPORT s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info); /* make-vector but possibly multidimensional */
-S7_EXPORT s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
-S7_EXPORT s7_pointer s7_make_and_fill_vector(s7_scheme *sc, s7_int len, s7_pointer fill);       /* (make-vector len fill) */
+s7_pointer s7_vector_ref(s7_scheme *sc, s7_pointer vec, s7_int index);                            /* (vector-ref vec index) */
+s7_pointer s7_vector_set(s7_scheme *sc, s7_pointer vec, s7_int index, s7_pointer a);              /* (vector-set! vec index a) */
+s7_pointer s7_vector_ref_n(s7_scheme *sc, s7_pointer vector, s7_int indices, ...);                   /* multidimensional vector-ref */
+s7_pointer s7_vector_set_n(s7_scheme *sc, s7_pointer vector, s7_pointer value, s7_int indices, ...); /* multidimensional vector-set! */
+s7_int s7_vector_dimensions(s7_pointer vec, s7_int *dims, s7_int dims_size); /* vector dimensions */
+s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size);
 
-S7_EXPORT void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj);         /* (vector-fill! vec obj) */
-S7_EXPORT s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect);
-S7_EXPORT s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect);               /* (vector->list vec) */
+s7_int s7_int_vector_ref(s7_pointer vec, s7_int index);
+s7_int s7_int_vector_set(s7_pointer vec, s7_int index, s7_int value);
+uint8_t s7_byte_vector_ref(s7_pointer vec, s7_int index);
+uint8_t s7_byte_vector_set(s7_pointer vec, s7_int index, uint8_t value);
+s7_double s7_float_vector_ref(s7_pointer vec, s7_int index);
+s7_double s7_float_vector_set(s7_pointer vec, s7_int index, s7_double value);
+
+s7_pointer s7_make_vector(s7_scheme *sc, s7_int len);                                 /* (make-vector len) */
+s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
+s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
+s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
+s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info); /* make-vector but possibly multidimensional */
+s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
+s7_pointer s7_make_and_fill_vector(s7_scheme *sc, s7_int len, s7_pointer fill);       /* (make-vector len fill) */
+
+void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj);                   /* (vector-fill! vec obj) */
+s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect);
+s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect);                         /* (vector->list vec) */
   /*
    *  (vect i) is the same as (vector-ref vect i)
    *  (set! (vect i) x) is the same as (vector-set! vect i x)
@@ -356,100 +342,100 @@ S7_EXPORT s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect);         
    *  (make-vector '(2 3) 1.0) returns a 2-dim vector with all elements set to 1.0
    */
 
-S7_EXPORT bool s7_is_hash_table(s7_pointer p);                                        /* (hash-table? p) */
-S7_EXPORT s7_pointer s7_make_hash_table(s7_scheme *sc, s7_int size);                  /* (make-hash-table size) */
-S7_EXPORT s7_pointer s7_hash_table_ref(s7_scheme *sc, s7_pointer table, s7_pointer key);
-                                                                                      /* (hash-table-ref table key) */
-S7_EXPORT s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value);
-                                                                                      /* (hash-table-set! table key value) */
-S7_EXPORT s7_int s7_hash_code(s7_scheme *sc, s7_pointer obj, s7_pointer eqfunc);      /* (hash-code obj [eqfunc]) */
+bool s7_is_hash_table(s7_pointer p);                                        /* (hash-table? p) */
+s7_pointer s7_make_hash_table(s7_scheme *sc, s7_int size);                  /* (make-hash-table size) */
+s7_pointer s7_hash_table_ref(s7_scheme *sc, s7_pointer table, s7_pointer key);
+                                                                            /* (hash-table-ref table key) */
+s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value);
+                                                                            /* (hash-table-set! table key value) */
+s7_int s7_hash_code(s7_scheme *sc, s7_pointer obj, s7_pointer eqfunc);      /* (hash-code obj [eqfunc]) */
 
-S7_EXPORT s7_pointer s7_hook_functions(s7_scheme *sc, s7_pointer hook);               /* (hook-functions hook) */
-S7_EXPORT s7_pointer s7_hook_set_functions(s7_scheme *sc, s7_pointer hook, s7_pointer functions); /* (set! (hook-functions hook) ...) */
+s7_pointer s7_hook_functions(s7_scheme *sc, s7_pointer hook);                              /* (hook-functions hook) */
+s7_pointer s7_hook_set_functions(s7_scheme *sc, s7_pointer hook, s7_pointer functions);    /* (set! (hook-functions hook) ...) */
 
 
-S7_EXPORT bool s7_is_input_port(s7_scheme *sc, s7_pointer p);                         /* (input-port? p) */
-S7_EXPORT bool s7_is_output_port(s7_scheme *sc, s7_pointer p);                        /* (output-port? p) */
-S7_EXPORT const char *s7_port_filename(s7_scheme *sc, s7_pointer x);                  /* (port-filename p) */
-S7_EXPORT s7_int s7_port_line_number(s7_scheme *sc, s7_pointer p);                    /* (port-line-number p) */
+bool s7_is_input_port(s7_scheme *sc, s7_pointer p);                         /* (input-port? p) */
+bool s7_is_output_port(s7_scheme *sc, s7_pointer p);                        /* (output-port? p) */
+const char *s7_port_filename(s7_scheme *sc, s7_pointer x);                  /* (port-filename p) */
+s7_int s7_port_line_number(s7_scheme *sc, s7_pointer p);                    /* (port-line-number p) */
 
-S7_EXPORT s7_pointer s7_current_input_port(s7_scheme *sc);                            /* (current-input-port) */
-S7_EXPORT s7_pointer s7_set_current_input_port(s7_scheme *sc, s7_pointer p);          /* (set-current-input-port) */
-S7_EXPORT s7_pointer s7_current_output_port(s7_scheme *sc);                           /* (current-output-port) */
-S7_EXPORT s7_pointer s7_set_current_output_port(s7_scheme *sc, s7_pointer p);         /* (set-current-output-port) */
-S7_EXPORT s7_pointer s7_current_error_port(s7_scheme *sc);                            /* (current-error-port) */
-S7_EXPORT s7_pointer s7_set_current_error_port(s7_scheme *sc, s7_pointer port);       /* (set-current-error-port port) */
-S7_EXPORT void s7_close_input_port(s7_scheme *sc, s7_pointer p);                      /* (close-input-port p) */
-S7_EXPORT void s7_close_output_port(s7_scheme *sc, s7_pointer p);                     /* (close-output-port p) */
-S7_EXPORT s7_pointer s7_open_input_file(s7_scheme *sc, const char *name, const char *mode);
-                                                                                      /* (open-input-file name mode) */
-S7_EXPORT s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode);
-                                                                                      /* (open-output-file name mode) */
+s7_pointer s7_current_input_port(s7_scheme *sc);                            /* (current-input-port) */
+s7_pointer s7_set_current_input_port(s7_scheme *sc, s7_pointer p);          /* (set-current-input-port) */
+s7_pointer s7_current_output_port(s7_scheme *sc);                           /* (current-output-port) */
+s7_pointer s7_set_current_output_port(s7_scheme *sc, s7_pointer p);         /* (set-current-output-port) */
+s7_pointer s7_current_error_port(s7_scheme *sc);                            /* (current-error-port) */
+s7_pointer s7_set_current_error_port(s7_scheme *sc, s7_pointer port);       /* (set-current-error-port port) */
+void s7_close_input_port(s7_scheme *sc, s7_pointer p);                      /* (close-input-port p) */
+void s7_close_output_port(s7_scheme *sc, s7_pointer p);                     /* (close-output-port p) */
+s7_pointer s7_open_input_file(s7_scheme *sc, const char *name, const char *mode);
+                                                                            /* (open-input-file name mode) */
+s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode);
+                                                                            /* (open-output-file name mode) */
   /* mode here is an optional C style flag, "a" for "alter", etc ("r" is the input default, "w" is the output default) */
-S7_EXPORT s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);
-                                                                                      /* (open-input-string str) */
-S7_EXPORT s7_pointer s7_open_output_string(s7_scheme *sc);                            /* (open-output-string) */
-S7_EXPORT const char *s7_get_output_string(s7_scheme *sc, s7_pointer out_port);       /* (get-output-string port) -- current contents of output string */
+s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);
+                                                                            /* (open-input-string str) */
+s7_pointer s7_open_output_string(s7_scheme *sc);                            /* (open-output-string) */
+const char *s7_get_output_string(s7_scheme *sc, s7_pointer out_port);       /* (get-output-string port) -- current contents of output string */
   /*    don't free the string */
-S7_EXPORT s7_pointer s7_output_string(s7_scheme *sc, s7_pointer p);                   /*    same but returns an s7 string */
-S7_EXPORT bool s7_flush_output_port(s7_scheme *sc, s7_pointer p);                     /* (flush-output-port port) */
+s7_pointer s7_output_string(s7_scheme *sc, s7_pointer p);                   /*    same but returns an s7 string */
+bool s7_flush_output_port(s7_scheme *sc, s7_pointer p);                     /* (flush-output-port port) */
 
 typedef enum {S7_READ, S7_READ_CHAR, S7_READ_LINE, S7_PEEK_CHAR, S7_IS_CHAR_READY, S7_NUM_READ_CHOICES} s7_read_t;
-S7_EXPORT s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port));
-S7_EXPORT s7_pointer s7_open_input_function(s7_scheme *sc, s7_pointer (*function)(s7_scheme *sc, s7_read_t read_choice, s7_pointer port));
+s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port));
+s7_pointer s7_open_input_function(s7_scheme *sc, s7_pointer (*function)(s7_scheme *sc, s7_read_t read_choice, s7_pointer port));
 
-S7_EXPORT s7_pointer s7_read_char(s7_scheme *sc, s7_pointer port);                    /* (read-char port) */
-S7_EXPORT s7_pointer s7_peek_char(s7_scheme *sc, s7_pointer port);                    /* (peek-char port) */
-S7_EXPORT s7_pointer s7_read(s7_scheme *sc, s7_pointer port);                         /* (read port) */
-S7_EXPORT void s7_newline(s7_scheme *sc, s7_pointer port);                            /* (newline port) */
-S7_EXPORT s7_pointer s7_write_char(s7_scheme *sc, s7_pointer c, s7_pointer port);     /* (write-char c port) */
-S7_EXPORT s7_pointer s7_write(s7_scheme *sc, s7_pointer obj, s7_pointer port);        /* (write obj port) */
-S7_EXPORT s7_pointer s7_display(s7_scheme *sc, s7_pointer obj, s7_pointer port);      /* (display obj port) */
-S7_EXPORT const char *s7_format(s7_scheme *sc, s7_pointer args);                      /* (format ... */
+s7_pointer s7_read_char(s7_scheme *sc, s7_pointer port);                    /* (read-char port) */
+s7_pointer s7_peek_char(s7_scheme *sc, s7_pointer port);                    /* (peek-char port) */
+s7_pointer s7_read(s7_scheme *sc, s7_pointer port);                         /* (read port) */
+void s7_newline(s7_scheme *sc, s7_pointer port);                            /* (newline port) */
+s7_pointer s7_write_char(s7_scheme *sc, s7_pointer c, s7_pointer port);     /* (write-char c port) */
+s7_pointer s7_write(s7_scheme *sc, s7_pointer obj, s7_pointer port);        /* (write obj port) */
+s7_pointer s7_display(s7_scheme *sc, s7_pointer obj, s7_pointer port);      /* (display obj port) */
+const char *s7_format(s7_scheme *sc, s7_pointer args);                      /* (format ... */
 
 
-S7_EXPORT bool s7_is_syntax(s7_pointer p);                                            /* (syntax? p) */
-S7_EXPORT bool s7_is_symbol(s7_pointer p);                                            /* (symbol? p) */
-S7_EXPORT const char *s7_symbol_name(s7_pointer p);                                   /* (symbol->string p) -- don't free the string */
-S7_EXPORT s7_pointer s7_make_symbol(s7_scheme *sc, const char *name);                 /* (string->symbol name) */
-S7_EXPORT s7_pointer s7_gensym(s7_scheme *sc, const char *prefix);                    /* (gensym prefix) */
+bool s7_is_syntax(s7_pointer p);                                            /* (syntax? p) */
+bool s7_is_symbol(s7_pointer p);                                            /* (symbol? p) */
+const char *s7_symbol_name(s7_pointer p);                                   /* (symbol->string p) -- don't free the string */
+s7_pointer s7_make_symbol(s7_scheme *sc, const char *name);                 /* (string->symbol name) */
+s7_pointer s7_gensym(s7_scheme *sc, const char *prefix);                    /* (gensym prefix) */
 
-S7_EXPORT bool s7_is_keyword(s7_pointer obj);                                         /* (keyword? obj) */
-S7_EXPORT s7_pointer s7_make_keyword(s7_scheme *sc, const char *key);                 /* (string->keyword key) */
-S7_EXPORT s7_pointer s7_keyword_to_symbol(s7_scheme *sc, s7_pointer key);             /* (keyword->symbol key) */
+bool s7_is_keyword(s7_pointer obj);                                         /* (keyword? obj) */
+s7_pointer s7_make_keyword(s7_scheme *sc, const char *key);                 /* (string->keyword key) */
+s7_pointer s7_keyword_to_symbol(s7_scheme *sc, s7_pointer key);             /* (keyword->symbol key) */
 
-S7_EXPORT s7_pointer s7_rootlet(s7_scheme *sc);                                       /* (rootlet) */
-S7_EXPORT s7_pointer s7_shadow_rootlet(s7_scheme *sc);
-S7_EXPORT s7_pointer s7_set_shadow_rootlet(s7_scheme *sc, s7_pointer let);
-S7_EXPORT s7_pointer s7_curlet(s7_scheme *sc);                                        /* (curlet) */
-S7_EXPORT s7_pointer s7_set_curlet(s7_scheme *sc, s7_pointer e);                      /* returns previous curlet */
-S7_EXPORT s7_pointer s7_outlet(s7_scheme *sc, s7_pointer e);                          /* (outlet e) */
-S7_EXPORT s7_pointer s7_sublet(s7_scheme *sc, s7_pointer env, s7_pointer bindings);   /* (sublet e ...) */
-S7_EXPORT s7_pointer s7_inlet(s7_scheme *sc, s7_pointer bindings);                    /* (inlet ...) */
-S7_EXPORT s7_pointer s7_varlet(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value); /* (varlet env symbol value) */
-S7_EXPORT s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer env);                   /* (let->list env) */
-S7_EXPORT bool s7_is_let(s7_pointer e);                                               /* )let? e) */
-S7_EXPORT s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer env, s7_pointer sym);       /* (let-ref e sym) */
-S7_EXPORT s7_pointer s7_let_set(s7_scheme *sc, s7_pointer env, s7_pointer sym, s7_pointer val); /* (let-set! e sym val) */
-S7_EXPORT s7_pointer s7_openlet(s7_scheme *sc, s7_pointer e);                         /* (openlet e) */
-S7_EXPORT bool s7_is_openlet(s7_pointer e);                                           /* (openlet? e) */
-S7_EXPORT s7_pointer s7_method(s7_scheme *sc, s7_pointer obj, s7_pointer method);
+s7_pointer s7_rootlet(s7_scheme *sc);                                       /* (rootlet) */
+s7_pointer s7_shadow_rootlet(s7_scheme *sc);
+s7_pointer s7_set_shadow_rootlet(s7_scheme *sc, s7_pointer let);
+s7_pointer s7_curlet(s7_scheme *sc);                                        /* (curlet) */
+s7_pointer s7_set_curlet(s7_scheme *sc, s7_pointer e);                      /* returns previous curlet */
+s7_pointer s7_outlet(s7_scheme *sc, s7_pointer e);                          /* (outlet e) */
+s7_pointer s7_sublet(s7_scheme *sc, s7_pointer env, s7_pointer bindings);   /* (sublet e ...) */
+s7_pointer s7_inlet(s7_scheme *sc, s7_pointer bindings);                    /* (inlet ...) */
+s7_pointer s7_varlet(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value); /* (varlet env symbol value) */
+s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer env);                   /* (let->list env) */
+bool s7_is_let(s7_pointer e);                                               /* )let? e) */
+s7_pointer s7_let_ref(s7_scheme *sc, s7_pointer env, s7_pointer sym);       /* (let-ref e sym) */
+s7_pointer s7_let_set(s7_scheme *sc, s7_pointer env, s7_pointer sym, s7_pointer val); /* (let-set! e sym val) */
+s7_pointer s7_openlet(s7_scheme *sc, s7_pointer e);                         /* (openlet e) */
+bool s7_is_openlet(s7_pointer e);                                           /* (openlet? e) */
+s7_pointer s7_method(s7_scheme *sc, s7_pointer obj, s7_pointer method);
 
 /* *s7* */
 /* these renamed because "s7_let_field" seems the same as "s7_let", but here we're referring to *s7*, not any let */
-S7_EXPORT s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym);                 /* (*s7* sym) */
-S7_EXPORT s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value); /* (set! (*s7* sym) new_value) */
+s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym);               /* (*s7* sym) */
+s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value); /* (set! (*s7* sym) new_value) */
 /* new names */
-S7_EXPORT s7_pointer s7_starlet_ref(s7_scheme *sc, s7_pointer sym);                   /* (*s7* sym) */
-S7_EXPORT s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value); /* (set! (*s7* sym) new_value) */
+s7_pointer s7_starlet_ref(s7_scheme *sc, s7_pointer sym);                   /* (*s7* sym) */
+s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value); /* (set! (*s7* sym) new_value) */
 
-S7_EXPORT s7_pointer s7_name_to_value(s7_scheme *sc, const char *name);               /* name's value in the current environment (after turning name into a symbol) */
-S7_EXPORT s7_pointer s7_symbol_table_find_name(s7_scheme *sc, const char *name);
-S7_EXPORT s7_pointer s7_symbol_value(s7_scheme *sc, s7_pointer sym);
-S7_EXPORT s7_pointer s7_symbol_set_value(s7_scheme *sc, s7_pointer sym, s7_pointer val);
-S7_EXPORT s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer local_env);
-S7_EXPORT bool s7_for_each_symbol_name(s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data);
-S7_EXPORT bool s7_for_each_symbol(s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data);
+s7_pointer s7_name_to_value(s7_scheme *sc, const char *name);               /* name's value in the current environment (after turning name into a symbol) */
+s7_pointer s7_symbol_table_find_name(s7_scheme *sc, const char *name);
+s7_pointer s7_symbol_value(s7_scheme *sc, s7_pointer sym);
+s7_pointer s7_symbol_set_value(s7_scheme *sc, s7_pointer sym, s7_pointer val);
+s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer local_env);
+bool s7_for_each_symbol_name(s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data);
+bool s7_for_each_symbol(s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data);
 
   /* these access the current environment and symbol table, providing
    *   a symbol's current binding (s7_name_to_value takes the symbol name as a char*,
@@ -464,18 +450,18 @@ S7_EXPORT bool s7_for_each_symbol(s7_scheme *sc, bool (*symbol_func)(const char 
    *   or at the end of the table.
    */
 
-S7_EXPORT s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_pointer finish);
+s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_pointer finish);
 
-S7_EXPORT bool s7_is_immutable(s7_pointer p);
-S7_EXPORT s7_pointer s7_immutable(s7_pointer p);
+bool s7_is_immutable(s7_pointer p);
+s7_pointer s7_immutable(s7_pointer p);
 
-S7_EXPORT void s7_define(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value);
-S7_EXPORT bool s7_is_defined(s7_scheme *sc, const char *name);
-S7_EXPORT s7_pointer s7_define_variable(s7_scheme *sc, const char *name, s7_pointer value);
-S7_EXPORT s7_pointer s7_define_variable_with_documentation(s7_scheme *sc, const char *name, s7_pointer value, const char *help);
-S7_EXPORT s7_pointer s7_define_constant(s7_scheme *sc, const char *name, s7_pointer value);
-S7_EXPORT s7_pointer s7_define_constant_with_documentation(s7_scheme *sc, const char *name, s7_pointer value, const char *help);
-S7_EXPORT s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value);
+void s7_define(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value);
+bool s7_is_defined(s7_scheme *sc, const char *name);
+s7_pointer s7_define_variable(s7_scheme *sc, const char *name, s7_pointer value);
+s7_pointer s7_define_variable_with_documentation(s7_scheme *sc, const char *name, s7_pointer value, const char *help);
+s7_pointer s7_define_constant(s7_scheme *sc, const char *name, s7_pointer value);
+s7_pointer s7_define_constant_with_documentation(s7_scheme *sc, const char *name, s7_pointer value, const char *help);
+s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value);
   /* These functions add a symbol and its binding to either the top-level environment
    *    or the 'env' passed as the second argument to s7_define.  Except for s7_define, they return
    *    the name as a symbol.
@@ -491,69 +477,59 @@ S7_EXPORT s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_point
    * s7_define is equivalent to define in Scheme, except that it does not return the value.
    */
 
-S7_EXPORT bool s7_is_function(s7_pointer p);
-S7_EXPORT bool s7_is_procedure(s7_pointer x);                                         /* (procedure? x) */
-S7_EXPORT bool s7_is_macro(s7_scheme *sc, s7_pointer x);                              /* (macro? x) */
-S7_EXPORT s7_pointer s7_closure_body(s7_scheme *sc, s7_pointer p);
-S7_EXPORT s7_pointer s7_closure_let(s7_scheme *sc, s7_pointer p);
-S7_EXPORT s7_pointer s7_closure_args(s7_scheme *sc, s7_pointer p);
-S7_EXPORT s7_pointer s7_funclet(s7_scheme *sc, s7_pointer p);                         /* (funclet x) */
-S7_EXPORT bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args);              /* (aritable? x args) */
-S7_EXPORT s7_pointer s7_arity(s7_scheme *sc, s7_pointer x);                           /* (arity x) */
-S7_EXPORT const char *s7_help(s7_scheme *sc, s7_pointer obj);                         /* (help obj) */
-S7_EXPORT s7_pointer s7_make_continuation(s7_scheme *sc);                             /* call/cc... (see example below) */
+bool s7_is_function(s7_pointer p);
+bool s7_is_procedure(s7_pointer x);                                         /* (procedure? x) */
+bool s7_is_macro(s7_scheme *sc, s7_pointer x);                              /* (macro? x) */
+s7_pointer s7_closure_body(s7_scheme *sc, s7_pointer p);
+s7_pointer s7_closure_let(s7_scheme *sc, s7_pointer p);
+s7_pointer s7_closure_args(s7_scheme *sc, s7_pointer p);
+s7_pointer s7_funclet(s7_scheme *sc, s7_pointer p);                         /* (funclet x) */
+bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args);              /* (aritable? x args) */
+s7_pointer s7_arity(s7_scheme *sc, s7_pointer x);                           /* (arity x) */
+const char *s7_help(s7_scheme *sc, s7_pointer obj);                         /* (help obj) */
+s7_pointer s7_make_continuation(s7_scheme *sc);                             /* call/cc... (see example below) */
 
-S7_EXPORT const char *s7_documentation(s7_scheme *sc, s7_pointer p);                  /* (documentation x) if any (don't free the string) */
-S7_EXPORT const char *s7_set_documentation(s7_scheme *sc, s7_pointer p, const char *new_doc);
-S7_EXPORT s7_pointer s7_setter(s7_scheme *sc, s7_pointer obj);                        /* (setter obj) */
-S7_EXPORT s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter);   /* (set! (setter p) setter) */
-S7_EXPORT s7_pointer s7_signature(s7_scheme *sc, s7_pointer func);                    /* (signature obj) */
-S7_EXPORT s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...);               /* procedure-signature data */
-S7_EXPORT s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int len, ...);
+const char *s7_documentation(s7_scheme *sc, s7_pointer p);                  /* (documentation x) if any (don't free the string) */
+const char *s7_set_documentation(s7_scheme *sc, s7_pointer p, const char *new_doc);
+s7_pointer s7_setter(s7_scheme *sc, s7_pointer obj);                        /* (setter obj) */
+s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter);   /* (set! (setter p) setter) */
+s7_pointer s7_signature(s7_scheme *sc, s7_pointer func);                    /* (signature obj) */
+s7_pointer s7_make_signature(s7_scheme *sc, s7_int len, ...);               /* procedure-signature data */
+s7_pointer s7_make_circular_signature(s7_scheme *sc, s7_int cycle_point, s7_int len, ...);
 
 /* possibly unsafe functions: */
-S7_EXPORT s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function fnc, 
-				      s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 
 /* safe functions: */
-S7_EXPORT s7_pointer s7_make_safe_function(s7_scheme *sc, const char *name, s7_function fnc, 
-					   s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
-S7_EXPORT s7_pointer s7_make_typed_function(s7_scheme *sc, const char *name, s7_function f,
-					    s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature);
+s7_pointer s7_make_safe_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_make_typed_function(s7_scheme *sc, const char *name, s7_function f,
+				  s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature);
 
 /* arglist or body possibly unsafe: */
-S7_EXPORT s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc, 
-					s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 
 /* arglist and body safe: */
-S7_EXPORT s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function fnc, 
-					     s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
-S7_EXPORT s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
-					      s7_int required_args, s7_int optional_args, bool rest_arg,
-					      const char *doc, s7_pointer signature);
+s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
+				    s7_int required_args, s7_int optional_args, bool rest_arg,
+				    const char *doc, s7_pointer signature);
 
 /* arglist unsafe or body unsafe: */
-S7_EXPORT s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
-						     s7_int required_args, s7_int optional_args, bool rest_arg,
-						     const char *doc, s7_pointer signature);
+s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
+					   s7_int required_args, s7_int optional_args, bool rest_arg,
+					   const char *doc, s7_pointer signature);
 
 /* arglist safe, body possibly unsafe: */
-S7_EXPORT s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
-						       s7_int required_args, s7_int optional_args, bool rest_arg,
-						       const char *doc, s7_pointer signature);
+s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
+					     s7_int required_args, s7_int optional_args, bool rest_arg,
+					     const char *doc, s7_pointer signature);
 
-S7_EXPORT s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
-					   const char *arglist, const char *doc);
-S7_EXPORT s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
-						const char *arglist, const char *doc);
-S7_EXPORT void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
-				       const char *arglist, const char *doc);
-S7_EXPORT void s7_define_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc,
-					    const char *arglist, const char *doc);
-S7_EXPORT void s7_define_typed_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
-					     const char *arglist, const char *doc, s7_pointer signature);
-S7_EXPORT s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc, 
-				     s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
+s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
+void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
+void s7_define_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
+void s7_define_typed_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc, s7_pointer signature);
+s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 
   /* s7_make_function creates a Scheme function object from the s7_function 'fnc'.
    *   Its name (for s7_describe_object) is 'name', it requires 'required_args' arguments,
@@ -612,12 +588,12 @@ S7_EXPORT s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_functio
    *   for C-level functions (as well as optional/rest arguments).
    */
 
-S7_EXPORT s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args);
-S7_EXPORT s7_pointer s7_apply_function_star(s7_scheme *sc, s7_pointer fnc, s7_pointer args);
+s7_pointer s7_apply_function(s7_scheme *sc, s7_pointer fnc, s7_pointer args);
+s7_pointer s7_apply_function_star(s7_scheme *sc, s7_pointer fnc, s7_pointer args);
 
-S7_EXPORT s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args);
-S7_EXPORT s7_pointer s7_call_with_location(s7_scheme *sc, s7_pointer func, s7_pointer args, const char *caller, const char *file, s7_int line);
-S7_EXPORT s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler);
+s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args);
+s7_pointer s7_call_with_location(s7_scheme *sc, s7_pointer func, s7_pointer args, const char *caller, const char *file, s7_int line);
+s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler);
 
   /* s7_call takes a Scheme function and applies it to 'args' (a list of arguments) returning the result.
    *   s7_pointer kar;
@@ -632,83 +608,83 @@ S7_EXPORT s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointe
    *   s7_call_with_catch(sc, tag, body, err) is equivalent to (catch tag body err).
    */
 
-S7_EXPORT bool s7_is_dilambda(s7_pointer obj);
-S7_EXPORT s7_pointer s7_dilambda(s7_scheme *sc,
-				 const char *name,
-				 s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
-				 s7_int get_req_args, s7_int get_opt_args,
-				 s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
-				 s7_int set_req_args, s7_int set_opt_args,
-				 const char *documentation);
-S7_EXPORT s7_pointer s7_typed_dilambda(s7_scheme *sc,
-				       const char *name,
-				       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
-				       s7_int get_req_args, s7_int get_opt_args,
-				       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
-				       s7_int set_req_args, s7_int set_opt_args,
-				       const char *documentation,
-				       s7_pointer get_sig, s7_pointer set_sig);
-S7_EXPORT s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
-						  const char *name,
-						  s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
-						  s7_int get_req_args, s7_int get_opt_args,
-						  s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
-						  s7_int set_req_args, s7_int set_opt_args,
-						  const char *documentation);
+bool s7_is_dilambda(s7_pointer obj);
+s7_pointer s7_dilambda(s7_scheme *sc,
+		       const char *name,
+		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
+		       s7_int get_req_args, s7_int get_opt_args,
+		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
+		       s7_int set_req_args, s7_int set_opt_args,
+		       const char *documentation);
+s7_pointer s7_typed_dilambda(s7_scheme *sc,
+		       const char *name,
+		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
+		       s7_int get_req_args, s7_int get_opt_args,
+		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
+		       s7_int set_req_args, s7_int set_opt_args,
+		       const char *documentation,
+ 		       s7_pointer get_sig, s7_pointer set_sig);
+s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
+					const char *name,
+					s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
+					s7_int get_req_args, s7_int get_opt_args,
+					s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
+					s7_int set_req_args, s7_int set_opt_args,
+					const char *documentation);
 
-S7_EXPORT s7_pointer s7_values(s7_scheme *sc, s7_pointer args);          /* (values ...) */
-S7_EXPORT bool s7_is_multiple_value(s7_pointer obj);                     /*    is obj the results of (values ...) */
+s7_pointer s7_values(s7_scheme *sc, s7_pointer args);          /* (values ...) */
+bool s7_is_multiple_value(s7_pointer obj);                     /*    is obj the results of (values ...) */
 
-S7_EXPORT s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e);      /* (make-iterator e) */
-S7_EXPORT bool s7_is_iterator(s7_pointer obj);                           /* (iterator? obj) */
-S7_EXPORT bool s7_iterator_is_at_end(s7_scheme *sc, s7_pointer obj);     /* (iterator-at-end? obj) */
-S7_EXPORT s7_pointer s7_iterate(s7_scheme *sc, s7_pointer iter);         /* (iterate iter) */
+s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e);      /* (make-iterator e) */
+bool s7_is_iterator(s7_pointer obj);                           /* (iterator? obj) */
+bool s7_iterator_is_at_end(s7_scheme *sc, s7_pointer obj);     /* (iterator-at-end? obj) */
+s7_pointer s7_iterate(s7_scheme *sc, s7_pointer iter);         /* (iterate iter) */
 
-S7_EXPORT s7_pointer s7_copy(s7_scheme *sc, s7_pointer args);            /* (copy ...) */
-S7_EXPORT s7_pointer s7_fill(s7_scheme *sc, s7_pointer args);            /* (fill! ...) */
-S7_EXPORT s7_pointer s7_type_of(s7_scheme *sc, s7_pointer arg);          /* (type-of arg) */
+s7_pointer s7_copy(s7_scheme *sc, s7_pointer args);            /* (copy ...) */
+s7_pointer s7_fill(s7_scheme *sc, s7_pointer args);            /* (fill! ...) */
+s7_pointer s7_type_of(s7_scheme *sc, s7_pointer arg);          /* (type-of arg) */
 
 
 
 /* -------------------------------------------------------------------------------- */
 /* c types/objects */
 
-S7_EXPORT void s7_mark(s7_pointer p);
+void s7_mark(s7_pointer p);
 
-S7_EXPORT bool s7_is_c_object(s7_pointer p);
-S7_EXPORT s7_int s7_c_object_type(s7_pointer obj);
-S7_EXPORT void *s7_c_object_value(s7_pointer obj);
-S7_EXPORT void *s7_c_object_value_checked(s7_pointer obj, s7_int type);
-S7_EXPORT s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value);
-S7_EXPORT s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let);
-S7_EXPORT s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value);
-S7_EXPORT s7_pointer s7_c_object_let(s7_pointer obj);
-S7_EXPORT s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e);
+bool s7_is_c_object(s7_pointer p);
+s7_int s7_c_object_type(s7_pointer obj);
+void *s7_c_object_value(s7_pointer obj);
+void *s7_c_object_value_checked(s7_pointer obj, s7_int type);
+s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value);
+s7_pointer s7_make_c_object_with_let(s7_scheme *sc, s7_int type, void *value, s7_pointer let);
+s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value);
+s7_pointer s7_c_object_let(s7_pointer obj);
+s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e);
 /* the "let" in s7_make_c_object_with_let and s7_c_object_set_let needs to be GC protected by marking it in the c_object's mark function */
 
-S7_EXPORT s7_int s7_make_c_type(s7_scheme *sc, const char *name);     /* create a new c_object type */
+s7_int s7_make_c_type(s7_scheme *sc, const char *name);     /* create a new c_object type */
 
 /* old style free/mark/equal */
-S7_EXPORT void s7_c_type_set_free         (s7_scheme *sc, s7_int tag, void (*gc_free)(void *value));
-S7_EXPORT void s7_c_type_set_mark         (s7_scheme *sc, s7_int tag, void (*mark)(void *value));
-S7_EXPORT void s7_c_type_set_equal        (s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, void *value2));
+void s7_c_type_set_free         (s7_scheme *sc, s7_int tag, void (*gc_free)(void *value));
+void s7_c_type_set_mark         (s7_scheme *sc, s7_int tag, void (*mark)(void *value));
+void s7_c_type_set_equal        (s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, void *value2));
 
 /* new style free/mark/equal and equivalent */
-S7_EXPORT void s7_c_type_set_gc_free      (s7_scheme *sc, s7_int tag, s7_pointer (*gc_free)   (s7_scheme *sc, s7_pointer obj)); /* free c_object function, new style*/
-S7_EXPORT void s7_c_type_set_gc_mark      (s7_scheme *sc, s7_int tag, s7_pointer (*mark)      (s7_scheme *sc, s7_pointer obj)); /* mark function, new style */
-S7_EXPORT void s7_c_type_set_is_equal     (s7_scheme *sc, s7_int tag, s7_pointer (*is_equal)  (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_is_equivalent(s7_scheme *sc, s7_int tag, s7_pointer (*is_equivalent)(s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_gc_free      (s7_scheme *sc, s7_int tag, s7_pointer (*gc_free)   (s7_scheme *sc, s7_pointer obj)); /* free c_object function, new style*/
+void s7_c_type_set_gc_mark      (s7_scheme *sc, s7_int tag, s7_pointer (*mark)      (s7_scheme *sc, s7_pointer obj)); /* mark function, new style */
+void s7_c_type_set_is_equal     (s7_scheme *sc, s7_int tag, s7_pointer (*is_equal)  (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_is_equivalent(s7_scheme *sc, s7_int tag, s7_pointer (*is_equivalent)(s7_scheme *sc, s7_pointer args));
 
-S7_EXPORT void s7_c_type_set_ref          (s7_scheme *sc, s7_int tag, s7_pointer (*ref)       (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_set          (s7_scheme *sc, s7_int tag, s7_pointer (*set)       (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_length       (s7_scheme *sc, s7_int tag, s7_pointer (*length)    (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_copy         (s7_scheme *sc, s7_int tag, s7_pointer (*copy)      (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_fill         (s7_scheme *sc, s7_int tag, s7_pointer (*fill)      (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_reverse      (s7_scheme *sc, s7_int tag, s7_pointer (*reverse)   (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_to_list      (s7_scheme *sc, s7_int tag, s7_pointer (*to_list)   (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_to_string    (s7_scheme *sc, s7_int tag, s7_pointer (*to_string) (s7_scheme *sc, s7_pointer args));
-S7_EXPORT void s7_c_type_set_getter       (s7_scheme *sc, s7_int tag, s7_pointer getter);
-S7_EXPORT void s7_c_type_set_setter       (s7_scheme *sc, s7_int tag, s7_pointer setter);
+void s7_c_type_set_ref          (s7_scheme *sc, s7_int tag, s7_pointer (*ref)       (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_set          (s7_scheme *sc, s7_int tag, s7_pointer (*set)       (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_length       (s7_scheme *sc, s7_int tag, s7_pointer (*length)    (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_copy         (s7_scheme *sc, s7_int tag, s7_pointer (*copy)      (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_fill         (s7_scheme *sc, s7_int tag, s7_pointer (*fill)      (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_reverse      (s7_scheme *sc, s7_int tag, s7_pointer (*reverse)   (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_to_list      (s7_scheme *sc, s7_int tag, s7_pointer (*to_list)   (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_to_string    (s7_scheme *sc, s7_int tag, s7_pointer (*to_string) (s7_scheme *sc, s7_pointer args));
+void s7_c_type_set_getter       (s7_scheme *sc, s7_int tag, s7_pointer getter);
+void s7_c_type_set_setter       (s7_scheme *sc, s7_int tag, s7_pointer setter);
 /* For the copy function, either the first or second argument can be a c-object of the given type. */
 
   /* These functions create a new Scheme object type.  There is a simple example in s7.html.
@@ -758,106 +734,106 @@ S7_EXPORT void s7_c_type_set_setter       (s7_scheme *sc, s7_int tag, s7_pointer
  *   wrapping up the result as a scheme cell.
  */
 
-S7_EXPORT s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr);
+s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr);
 
 typedef s7_double (*s7_float_function)(s7_scheme *sc);
-S7_EXPORT s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr);
+s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr);
 
 typedef s7_double (*s7_d_t)(void);
-S7_EXPORT void s7_set_d_function(s7_scheme *sc, s7_pointer f, s7_d_t df);
-S7_EXPORT s7_d_t s7_d_function(s7_pointer f);
+void s7_set_d_function(s7_scheme *sc, s7_pointer f, s7_d_t df);
+s7_d_t s7_d_function(s7_pointer f);
 
 typedef s7_double (*s7_d_d_t)(s7_double x);
-S7_EXPORT void s7_set_d_d_function(s7_scheme *sc, s7_pointer f, s7_d_d_t df);
-S7_EXPORT s7_d_d_t s7_d_d_function(s7_pointer f);
+void s7_set_d_d_function(s7_scheme *sc, s7_pointer f, s7_d_d_t df);
+s7_d_d_t s7_d_d_function(s7_pointer f);
 
 typedef s7_double (*s7_d_dd_t)(s7_double x1, s7_double x2);
-S7_EXPORT void s7_set_d_dd_function(s7_scheme *sc, s7_pointer f, s7_d_dd_t df);
-S7_EXPORT s7_d_dd_t s7_d_dd_function(s7_pointer f);
+void s7_set_d_dd_function(s7_scheme *sc, s7_pointer f, s7_d_dd_t df);
+s7_d_dd_t s7_d_dd_function(s7_pointer f);
 
 typedef s7_double (*s7_d_ddd_t)(s7_double x1, s7_double x2, s7_double x3);
-S7_EXPORT void s7_set_d_ddd_function(s7_scheme *sc, s7_pointer f, s7_d_ddd_t df);
-S7_EXPORT s7_d_ddd_t s7_d_ddd_function(s7_pointer f);
+void s7_set_d_ddd_function(s7_scheme *sc, s7_pointer f, s7_d_ddd_t df);
+s7_d_ddd_t s7_d_ddd_function(s7_pointer f);
 
 typedef s7_double (*s7_d_dddd_t)(s7_double x1, s7_double x2, s7_double x3, s7_double x4);
-S7_EXPORT void s7_set_d_dddd_function(s7_scheme *sc, s7_pointer f, s7_d_dddd_t df);
-S7_EXPORT s7_d_dddd_t s7_d_dddd_function(s7_pointer f);
+void s7_set_d_dddd_function(s7_scheme *sc, s7_pointer f, s7_d_dddd_t df);
+s7_d_dddd_t s7_d_dddd_function(s7_pointer f);
 
 typedef s7_double (*s7_d_v_t)(void *v);
-S7_EXPORT void s7_set_d_v_function(s7_scheme *sc, s7_pointer f, s7_d_v_t df);
-S7_EXPORT s7_d_v_t s7_d_v_function(s7_pointer f);
+void s7_set_d_v_function(s7_scheme *sc, s7_pointer f, s7_d_v_t df);
+s7_d_v_t s7_d_v_function(s7_pointer f);
 
 typedef s7_double (*s7_d_vd_t)(void *v, s7_double d);
-S7_EXPORT void s7_set_d_vd_function(s7_scheme *sc, s7_pointer f, s7_d_vd_t df);
-S7_EXPORT s7_d_vd_t s7_d_vd_function(s7_pointer f);
+void s7_set_d_vd_function(s7_scheme *sc, s7_pointer f, s7_d_vd_t df);
+s7_d_vd_t s7_d_vd_function(s7_pointer f);
 
 typedef s7_double (*s7_d_vdd_t)(void *v, s7_double x1, s7_double x2);
-S7_EXPORT void s7_set_d_vdd_function(s7_scheme *sc, s7_pointer f, s7_d_vdd_t df);
-S7_EXPORT s7_d_vdd_t s7_d_vdd_function(s7_pointer f);
+void s7_set_d_vdd_function(s7_scheme *sc, s7_pointer f, s7_d_vdd_t df);
+s7_d_vdd_t s7_d_vdd_function(s7_pointer f);
 
 typedef s7_double (*s7_d_vid_t)(void *v, s7_int i, s7_double d);
-S7_EXPORT void s7_set_d_vid_function(s7_scheme *sc, s7_pointer f, s7_d_vid_t df);
-S7_EXPORT s7_d_vid_t s7_d_vid_function(s7_pointer f);
+void s7_set_d_vid_function(s7_scheme *sc, s7_pointer f, s7_d_vid_t df);
+s7_d_vid_t s7_d_vid_function(s7_pointer f);
 
 typedef s7_double (*s7_d_p_t)(s7_pointer p);
-S7_EXPORT void s7_set_d_p_function(s7_scheme *sc, s7_pointer f, s7_d_p_t df);
-S7_EXPORT s7_d_p_t s7_d_p_function(s7_pointer f);
+void s7_set_d_p_function(s7_scheme *sc, s7_pointer f, s7_d_p_t df);
+s7_d_p_t s7_d_p_function(s7_pointer f);
 
 typedef s7_double (*s7_d_pd_t)(s7_pointer v, s7_double x);
-S7_EXPORT void s7_set_d_pd_function(s7_scheme *sc, s7_pointer f, s7_d_pd_t df);
-S7_EXPORT s7_d_pd_t s7_d_pd_function(s7_pointer f);
+void s7_set_d_pd_function(s7_scheme *sc, s7_pointer f, s7_d_pd_t df);
+s7_d_pd_t s7_d_pd_function(s7_pointer f);
 
 typedef s7_double (*s7_d_7pi_t)(s7_scheme *sc, s7_pointer v, s7_int i);
-S7_EXPORT void s7_set_d_7pi_function(s7_scheme *sc, s7_pointer f, s7_d_7pi_t df);
-S7_EXPORT s7_d_7pi_t s7_d_7pi_function(s7_pointer f);
+void s7_set_d_7pi_function(s7_scheme *sc, s7_pointer f, s7_d_7pi_t df);
+s7_d_7pi_t s7_d_7pi_function(s7_pointer f);
 
 typedef s7_double (*s7_d_7pid_t)(s7_scheme *sc, s7_pointer v, s7_int i, s7_double d);
-S7_EXPORT void s7_set_d_7pid_function(s7_scheme *sc, s7_pointer f, s7_d_7pid_t df);
-S7_EXPORT s7_d_7pid_t s7_d_7pid_function(s7_pointer f);
+void s7_set_d_7pid_function(s7_scheme *sc, s7_pointer f, s7_d_7pid_t df);
+s7_d_7pid_t s7_d_7pid_function(s7_pointer f);
 
 typedef s7_double (*s7_d_id_t)(s7_int i, s7_double d);
-S7_EXPORT void s7_set_d_id_function(s7_scheme *sc, s7_pointer f, s7_d_id_t df);
-S7_EXPORT s7_d_id_t s7_d_id_function(s7_pointer f);
+void s7_set_d_id_function(s7_scheme *sc, s7_pointer f, s7_d_id_t df);
+s7_d_id_t s7_d_id_function(s7_pointer f);
 
 typedef s7_double (*s7_d_ip_t)(s7_int i, s7_pointer p);
-S7_EXPORT void s7_set_d_ip_function(s7_scheme *sc, s7_pointer f, s7_d_ip_t df);
-S7_EXPORT s7_d_ip_t s7_d_ip_function(s7_pointer f);
+void s7_set_d_ip_function(s7_scheme *sc, s7_pointer f, s7_d_ip_t df);
+s7_d_ip_t s7_d_ip_function(s7_pointer f);
 
 typedef s7_int (*s7_i_i_t)(s7_int x);
-S7_EXPORT void s7_set_i_i_function(s7_scheme *sc, s7_pointer f, s7_i_i_t df);
-S7_EXPORT s7_i_i_t s7_i_i_function(s7_pointer f);
+void s7_set_i_i_function(s7_scheme *sc, s7_pointer f, s7_i_i_t df);
+s7_i_i_t s7_i_i_function(s7_pointer f);
 
 typedef s7_int (*s7_i_7d_t)(s7_scheme *sc, s7_double x);
-S7_EXPORT void s7_set_i_7d_function(s7_scheme *sc, s7_pointer f, s7_i_7d_t df);
-S7_EXPORT s7_i_7d_t s7_i_7d_function(s7_pointer f);
+void s7_set_i_7d_function(s7_scheme *sc, s7_pointer f, s7_i_7d_t df);
+s7_i_7d_t s7_i_7d_function(s7_pointer f);
 
 typedef s7_int (*s7_i_ii_t)(s7_int i1, s7_int i2);
-S7_EXPORT void s7_set_i_ii_function(s7_scheme *sc, s7_pointer f, s7_i_ii_t df);
-S7_EXPORT s7_i_ii_t s7_i_ii_function(s7_pointer f);
+void s7_set_i_ii_function(s7_scheme *sc, s7_pointer f, s7_i_ii_t df);
+s7_i_ii_t s7_i_ii_function(s7_pointer f);
 
 typedef s7_int (*s7_i_7p_t)(s7_scheme *sc, s7_pointer p);
-S7_EXPORT void s7_set_i_7p_function(s7_scheme *sc, s7_pointer f, s7_i_7p_t df);
-S7_EXPORT s7_i_7p_t s7_i_7p_function(s7_pointer f);
+void s7_set_i_7p_function(s7_scheme *sc, s7_pointer f, s7_i_7p_t df);
+s7_i_7p_t s7_i_7p_function(s7_pointer f);
 
 typedef bool (*s7_b_p_t)(s7_pointer p);
-S7_EXPORT void s7_set_b_p_function(s7_scheme *sc, s7_pointer f, s7_b_p_t df);
-S7_EXPORT s7_b_p_t s7_b_p_function(s7_pointer f);
+void s7_set_b_p_function(s7_scheme *sc, s7_pointer f, s7_b_p_t df);
+s7_b_p_t s7_b_p_function(s7_pointer f);
 
 typedef s7_pointer (*s7_p_d_t)(s7_scheme *sc, s7_double x);
-S7_EXPORT void s7_set_p_d_function(s7_scheme *sc, s7_pointer f, s7_p_d_t df);
-S7_EXPORT s7_p_d_t s7_p_d_function(s7_pointer f);
+void s7_set_p_d_function(s7_scheme *sc, s7_pointer f, s7_p_d_t df);
+s7_p_d_t s7_p_d_function(s7_pointer f);
 
 typedef s7_pointer (*s7_p_p_t)(s7_scheme *sc, s7_pointer p);
-S7_EXPORT void s7_set_p_p_function(s7_scheme *sc, s7_pointer f, s7_p_p_t df);
-S7_EXPORT s7_p_p_t s7_p_p_function(s7_pointer f);
+void s7_set_p_p_function(s7_scheme *sc, s7_pointer f, s7_p_p_t df);
+s7_p_p_t s7_p_p_function(s7_pointer f);
 
 typedef s7_pointer (*s7_p_pp_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2);
-S7_EXPORT void s7_set_p_pp_function(s7_scheme *sc, s7_pointer f, s7_p_pp_t df);
-S7_EXPORT s7_p_pp_t s7_p_pp_function(s7_pointer f);
+void s7_set_p_pp_function(s7_scheme *sc, s7_pointer f, s7_p_pp_t df);
+s7_p_pp_t s7_p_pp_function(s7_pointer f);
 
 typedef s7_pointer (*s7_p_ppp_t)(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s7_pointer p3);
-S7_EXPORT void s7_set_p_ppp_function(s7_scheme *sc, s7_pointer f, s7_p_ppp_t df);
-S7_EXPORT s7_p_ppp_t s7_p_ppp_function(s7_pointer f);
+void s7_set_p_ppp_function(s7_scheme *sc, s7_pointer f, s7_p_ppp_t df);
+s7_p_ppp_t s7_p_ppp_function(s7_pointer f);
 
 /* Here is an example of using these functions; more extensive examples are in clm2xen.c in sndlib, and in s7.c.
  * (This example comes from a HackerNews discussion):
@@ -884,11 +860,11 @@ S7_EXPORT s7_p_ppp_t s7_p_ppp_function(s7_pointer f);
 /* -------------------------------------------------------------------------------- */
 
 /* maybe remove these? */
-S7_EXPORT s7_pointer s7_slot(s7_scheme *sc, s7_pointer symbol);
-S7_EXPORT s7_pointer s7_slot_value(s7_pointer slot);
-S7_EXPORT s7_pointer s7_slot_set_value(s7_scheme *sc, s7_pointer slot, s7_pointer value);
-S7_EXPORT s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value);
-S7_EXPORT void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value);
+s7_pointer s7_slot(s7_scheme *sc, s7_pointer symbol);
+s7_pointer s7_slot_value(s7_pointer slot);
+s7_pointer s7_slot_set_value(s7_scheme *sc, s7_pointer slot, s7_pointer value);
+s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value);
+void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value);
 
 /* -------------------------------------------------------------------------------- */
 
@@ -929,7 +905,6 @@ typedef s7_double s7_Double;
  *        s7 changes
  *
  * --------
- * 19-Nov:    S7_EXPORT for MSVC thanks to vladimir florentino.
  * 9-Nov:     nan, nan-payload, +nan.<int>.
  * 19-Oct:    s7_let_field* synonyms: s7_starlet*.
  * 16-Sep:    s7_number_to_real_with_location. s7_wrong_type_error. s7_make_string_wrapper_with_length. s7_make_semipermanent_string.
