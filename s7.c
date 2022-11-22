@@ -573,7 +573,7 @@ typedef struct {
   uint32_t line_number, file_number;
   s7_int filename_length;
   block_t *block;
-  s7_pointer orig_str;    /* GC protection for string port string */
+  s7_pointer orig_str;    /* GC protection for string port string or function port function */
   const port_functions_t *pf;
   s7_pointer (*input_function)(s7_scheme *sc, s7_read_t read_choice, s7_pointer port);
   void (*output_function)(s7_scheme *sc, uint8_t c, s7_pointer port);
@@ -12172,7 +12172,6 @@ static s7_pointer g_nan_payload(s7_scheme *sc, s7_pointer args)
 }
 
 /* no similar support for +inf.0 because inf is just a single bit pattern in ieee754 */
-/* all are "quiet" NaNs -- the "signalling" NaN is also single bit pattern, and no one actually wants one anyway */
 
 
 /* -------- gmp stuff -------- */
@@ -28520,7 +28519,8 @@ static void stderr_write_char(s7_scheme *sc, uint8_t c, s7_pointer port) {fputc(
 
 static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
-  push_stack_no_let_no_code(sc, OP_NO_VALUES, sc->nil);
+  push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
+  sc->args = sc->nil;
   (*(port_output_function(port)))(sc, c, port);
   unstack_with(sc, OP_NO_VALUES);
 }
@@ -28662,15 +28662,21 @@ static void file_display(s7_scheme *sc, const char *s, s7_pointer port)
 
 static void function_display(s7_scheme *sc, const char *s, s7_pointer port)
 {
-  if (s)
-    for (; *s; s++)
-      (*(port_output_function(port)))(sc, *s, port);
+  if (!s) return;
+  push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
+  sc->args = sc->nil; /* TODO: is this needed? */
+  for (; *s; s++)
+    (*(port_output_function(port)))(sc, *s, port);
+  unstack_with(sc, OP_NO_VALUES);
 }
 
 static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
 {
+  push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
+  sc->args = sc->nil; /* TODO: is this needed? */
   for (s7_int i = 0; i < len; i++)
     (*(port_output_function(pt)))(sc, str[i], pt);
+  unstack_with(sc, OP_NO_VALUES); /* TODO: s7test for mv error and above */
 }
 
 static void stdout_display(s7_scheme *sc, const char *s, s7_pointer port) {if (s) fputs(s, stdout);}
@@ -95969,4 +95975,11 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.1  106.2 106.3 [make_symbol/length]
  * tbig     177.4  175.8  156.5  147.9  148.1
  * ---------------------------------------------
+ *
+ * should #<x y z> work? currently gets unbound variable y in (undefined? #<x y z>)
+ *   currently <1> #<+>> -> #<+>>  <2> #<+>*> -> #<+>*>  <3> (cons #<x>> 1) -> (#<x>> . 1)
+ * perhaps: add output_function_string union with ?? to port_t, some way to set it, call in function_display|write_string
+ *   but also need scheme-side support+gc protection [port_string_or_function], so we need func in s7.h + two fields in port_t
+ *   use a cons where currently func so car=always char, cdr=nil or string
+ * void+sc case: define c-pointer var in rootlet at s7 init time, set to userdata, save for C side, on scheme side use var to access
  */
