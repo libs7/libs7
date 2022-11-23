@@ -6,7 +6,7 @@
  * Bill Schottstaedt, bil@ccrma.stanford.edu
  *
  * Mike Scholz provided the FreeBSD support (complex trig funcs, etc)
- * Rick Taube, Andrew Burnson, Donny Ward, Greg Santucci, Christos Vagias, and vladimir florenta provided the MS Visual C++ support
+ * Rick Taube, Andrew Burnson, Donny Ward, Greg Santucci, and Christos Vagias provided the MS Visual C++ support
  * Kjetil Matheussen provided the mingw support
  *
  * Documentation is in s7.h and s7.html.
@@ -14590,6 +14590,8 @@ static s7_pointer *chars;
 
 static s7_pointer unknown_sharp_constant(s7_scheme *sc, const char *name, s7_pointer pt)
 {
+  /* if name[len - 1] != '>' there's no > delimiter at the end */
+
   if (hook_has_functions(sc->read_error_hook))  /* check *read-error-hook* */
     {
       bool old_history_enabled = s7_set_history_enabled(sc, false); /* see sc->error_hook for a more robust way to handle this */
@@ -14607,6 +14609,7 @@ static s7_pointer unknown_sharp_constant(s7_scheme *sc, const char *name, s7_poi
 	{
 	  if (s7_peek_char(sc, pt) != chars[(uint8_t)'"']) /* if not #<"...">, just return it */
 	    return(make_undefined(sc, name));
+	  /* PERHAPS: strchr port-data '>'?? it might be #<x y> etc -- what would this break? maybe extend section below */
 
 	  if (is_string_port(pt)) /* probably unnecessary (see below) */
 	    {
@@ -95978,8 +95981,4 @@ int main(int argc, char **argv)
  *
  * should #<x y z> work? currently gets unbound variable y in (undefined? #<x y z>)
  *   currently <1> #<+>> -> #<+>>  <2> #<+>*> -> #<+>*>  <3> (cons #<x>> 1) -> (#<x>> . 1)
- * perhaps: add output_function_string union with ?? to port_t, some way to set it, call in function_display|write_string
- *   but also need scheme-side support+gc protection [port_string_or_function], so we need func in s7.h + two fields in port_t
- *   use a cons where currently func so car=always char, cdr=nil or string
- * void+sc case: define c-pointer var in rootlet at s7 init time, set to userdata, save for C side, on scheme side use var to access
  */

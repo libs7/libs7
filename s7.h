@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.5"
-#define S7_DATE "23-Nov-2022"
+#define S7_DATE "24-Nov-2022"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 5
 
@@ -38,7 +38,6 @@ typedef struct s7_scheme s7_scheme;
 typedef struct s7_cell *s7_pointer;
 
 s7_scheme *s7_init(void);
-
   /* s7_scheme is our interpreter
    * s7_pointer is a Scheme object of any (Scheme) type
    * s7_init creates the interpreter.
