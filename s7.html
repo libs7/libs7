@@ -5870,8 +5870,7 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static void *run_thread(void *obj)
 {
   s7_scheme *sc = (s7_scheme *)obj;
-  const char *str;
-  str = s7_object_to_c_string(sc, s7_make_integer(sc, 123));
+  const char *str = s7_object_to_c_string(sc, s7_make_integer(sc, 123));
   s7_eval_c_string(sc, "(let () \
                           (define (f) \
                             (do ((i 0 (+ i 1))) ((= i 10)) \
@@ -5885,10 +5884,9 @@ static void *run_thread(void *obj)
 
 int main(int argc, char **argv)
 {
-  int32_t i;
-  for (i = 0; i &lt; NUM_THREADS; i++)
+  for (int32_t i = 0; i &lt; NUM_THREADS; i++)
     pthread_create(&amp;threads[i], NULL, run_thread, (void *)s7_init());
-  for (i = 0; i &lt; NUM_THREADS; i++)
+  for (int32_t i = 0; i &lt; NUM_THREADS; i++)
     pthread_join(threads[i], NULL);
   exit(0);
 }
@@ -6889,18 +6887,16 @@ The examples that follow show:
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = <em class=red>s7_init</em>();                 /* initialize the interpreter */
+  s7_scheme *s7 = <em class=red>s7_init</em>();                 /* initialize the interpreter */
   while (1)                       /* fire up a read-eval-print loop */
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");    /* prompt for input */
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                         /* evaluate the input and print the result */
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  <em class=red>s7_eval_c_string</em>(s7, response); 
 	}}
@@ -7003,20 +6999,16 @@ g_io_channel_unref(channel);
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char *buffer;
-  char response[1024];
-  GetLine *gl;            /* The tecla line editor */
-
-  gl = new_GetLine(500, 5000);
-  s7 = s7_init();  
-
+  GetLine *gl = new_GetLine(500, 5000); /* The tecla line editor */
+  s7_scheme *s7 = s7_init();  
   while (1) 
     {
+      char *buffer;
       buffer = gl_get_line(gl, "&gt; ", NULL, 0);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	  fprintf(stdout, "\n");
@@ -7097,9 +7089,7 @@ static void <em class=red>watch_for_c_g</em>(s7_scheme *sc, bool *all_done)
 int main(int argc, char **argv)
 {
   s7_scheme *s7;
-  bool use_begin_hook;
-
-  use_begin_hook = (tcgetattr(fileno(stdin), &amp;save_buf) &gt;= 0);
+  bool use_begin_hook = (tcgetattr(fileno(stdin), &amp;save_buf) &gt;= 0);
   if (use_begin_hook)
     {
       buf = save_buf;
@@ -7121,7 +7111,6 @@ int main(int argc, char **argv)
     }
   else
     {
-      char response[1024];
       while (1) 
 	{
 	  fprintf(stdout, "\n&gt; ");
@@ -7131,6 +7120,7 @@ int main(int argc, char **argv)
 	  if ((buffer[0] != '\n') || 
 	      (strlen(buffer) &gt; 1))
 	    {                            
+              char response[1024];
 	      snprintf(response, 1024, "(write %s)", buffer);
 
 	      if (use_begin_hook)
@@ -7171,12 +7161,7 @@ static s7_pointer add1(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();
-  
+  s7_scheme *s7 = s7_init();
   s7_define_function(s7, "add1", add1, 1, 0, false, "(add1 int) adds 1 to int");
                                       /* add the function "add1" to the interpreter.
                                        *   1, 0, false -&gt; one required arg,
@@ -7187,11 +7172,13 @@ int main(int argc, char **argv)
 
   while (1)                           /* fire up a "repl" */
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");        /* prompt for input */
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response); /* evaluate input and write the result */
 	}}
@@ -7296,10 +7283,10 @@ int main(int argc, const char* argv[])
       return -1; 
     } 
 
-  s7_pointer val; 
-  std::string str; 
   while (true) 
     { 
+      s7_pointer val; 
+      std::string str; 
       std::cout &lt;&lt; "\ns7&gt; "; 
       std::getline(std::cin, str); 
       val = s7_eval_c_string(s7, str.c_str()); 
@@ -7347,9 +7334,6 @@ static void mus_error_to_s7(int type, char *msg)
 
 int main(int argc, char **argv)
 {
-  char buffer[512];
-  char response[1024];
-
   s7 = s7_init();                     /* initialize the interpreter */
   s7_xen_initialize(s7);              /* initialize the xen stuff (hooks and the xen s7 FFI used by sndlib) */
   Init_sndlib();                      /* initialize sndlib with all the functions linked into s7 */  
@@ -7358,12 +7342,13 @@ int main(int argc, char **argv)
 
   while (1)                           /* fire up a "repl" */
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");        /* prompt for input */
       fgets(buffer, 512, stdin);
-
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response); /* evaluate input and write the result */
 	}}
@@ -7579,12 +7564,7 @@ static s7_pointer dax_is_equal(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();
-  
+  s7_scheme *s7 = s7_init();
   s7_define_variable(s7, "*listener-prompt*", s7_make_string(s7, "&gt;"));
 
   dax_type_tag = <em class=red>s7_make_c_type</em>(s7, "dax");
@@ -7604,11 +7584,13 @@ int main(int argc, char **argv)
 
   while (1)
     {
+      char buffer[512];
       fprintf(stdout, "\n%s ", listener_prompt(s7));
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response); /* evaluate input and write the result */
 	}}
@@ -7666,22 +7648,20 @@ static s7_pointer my_read(s7_scheme *sc, s7_read_t peek, s7_pointer port)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();  
+  s7_scheme *s7 = s7_init();  
 
   <em class=red>s7_set_current_output_port</em>(s7, <em class=red>s7_open_output_function</em>(s7, my_print));
   s7_define_variable(s7, "io-port", <em class=red>s7_open_input_function</em>(s7, my_read));
 
   while (1) 
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -7760,10 +7740,7 @@ static s7_pointer our_add(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-  s7 = s7_init();
+  s7_scheme *s7 = s7_init();
 
   /* get built-in + and string-append */
   old_add = s7_name_to_value(s7, "+");      
@@ -7774,11 +7751,13 @@ int main(int argc, char **argv)
 
   while (1)
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -7805,8 +7784,7 @@ int main(int argc, char **argv)
 
 static s7_pointer our_abs(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer x;
-  x = s7_car(args);
+  s7_pointer x = s7_car(args);
   if (!s7_is_number(x))
     {
       s7_pointer method = <em class=red>s7_method</em>(sc, x, s7_make_symbol(sc, "abs"));
@@ -7819,20 +7797,18 @@ static s7_pointer our_abs(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();
+  s7_scheme *s7 = s7_init();
   s7_define_function(s7, "our-abs", our_abs, 1, 0, false, "abs replacement");
 
   while (1)
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -7868,20 +7844,18 @@ static s7_pointer plus(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();
+  s7_scheme *s7 = s7_init();
   <em class=red>s7_define_function_star</em>(s7, "plus", plus, "(red 32) blue", "an example of define* from C");
 
   while (1)
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -7919,28 +7893,25 @@ int main(int argc, char **argv)
 static s7_pointer plus(s7_scheme *sc, s7_pointer args)
 {
   /* (define-macro (plus a b) `(+ ,a ,b)) */
-  s7_pointer a, b;
-  a = s7_car(args);
-  b = s7_cadr(args);
+  s7_pointer a = s7_car(args);
+  s7_pointer b = s7_cadr(args);
   return(s7_list(sc, 3, s7_make_symbol(sc, "+"),  a, b));
 }
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();
+  s7_scheme *s7 = s7_init();
   <em class=red>s7_define_macro</em>(s7, "plus", plus, 2, 0, false, "plus adds its two arguments");
 
   while (1)
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -7971,9 +7942,8 @@ To accomplish the same thing in C, we use s7_method and s7_apply_function:
 static s7_pointer plus(s7_scheme *sc, s7_pointer args)
 {
   #define plus_help "(plus obj ...) applies obj's plus method to obj and any trailing arguments."
-  s7_pointer obj, method;
-  obj = s7_car(args);
-  method = <em class=red>s7_method</em>(sc, obj, s7_make_symbol(sc, "plus"));
+  s7_pointer obj = s7_car(args);
+  s7_pointer method = <em class=red>s7_method</em>(sc, obj, s7_make_symbol(sc, "plus"));
   if (s7_is_procedure(method))
     return(<em class=red>s7_apply_function</em>(sc, method, args));
   return(s7_f(sc));
@@ -7981,18 +7951,17 @@ static s7_pointer plus(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  s7 = s7_init();
+  s7_scheme *s7 = s7_init();
   s7_define_function(s7, "plus", plus, 1, 0, true, plus_help);
   while (1)
     {
       char buffer[512];
-      char response[1024];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -8045,9 +8014,6 @@ static s7_pointer our_sleep(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  char buffer[512];
-  char response[1024];
-
   s7 = s7_init();
   s7_define_function(s7, "sleep", our_sleep, 0, 0, false, "(sleep) sleeps");
   s7_define_variable(s7, "*interrupt*", s7_f(s7)); 
@@ -8063,11 +8029,13 @@ int main(int argc, char **argv)
 
   while (1)
     {
+      char buffer[512];
       fprintf(stderr, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -8125,16 +8093,16 @@ int main(int argc, char **argv)
     }
   else
     {
-      char buffer[512];
-      char response[1024];
       while (1) 
 	{
+          char buffer[512];
 	  fprintf(stdout, "\n&gt; ");
 	  fgets(buffer, 512, stdin);
 	  
 	  if ((buffer[0] != '\n') || 
 	      (strlen(buffer) &gt; 1))
 	    {                            
+              char response[1024];
 	      snprintf(response, 1024, "(write %s)", buffer);
 	      s7_eval_c_string(s7, response);
 	    }}}
@@ -8171,13 +8139,10 @@ static s7_pointer func1(s7_scheme *sc, s7_pointer args)
 int main(int argc, char **argv)
 {
   s7_scheme *s7 = s7_init();  
-  s7_pointer new_env;
-
   /* "func1" and "var1" will be placed in an anonymous environment,
    *   accessible from Scheme via the global variable "lib-exports"
    */
-  
-  new_env = <em class=red>s7_inlet</em>(s7, s7_curlet(s7), s7_nil(s7));
+  s7_pointer new_env = <em class=red>s7_inlet</em>(s7, s7_curlet(s7), s7_nil(s7));
   /* make a private environment for func1 and var1 below (this is our "namespace") */
   s7_gc_protect(s7, new_env);
 
@@ -8199,16 +8164,16 @@ int main(int argc, char **argv)
     }
   else
     {
-      char buffer[512];
-      char response[1024];
       while (1) 
 	{
+          char buffer[512];
 	  fprintf(stdout, "\n&gt; ");
 	  fgets(buffer, 512, stdin);
 	  
 	  if ((buffer[0] != '\n') || 
 	      (strlen(buffer) &gt; 1))
 	    {                            
+              char response[1024];
 	      snprintf(response, 1024, "(write %s)", buffer);
 	      s7_eval_c_string(s7, response);
 	    }}}
@@ -8269,12 +8234,8 @@ static s7_pointer error_handler(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
+  s7_scheme *s7 = s7_init();  
   bool with_error_hook = false;
-
-  s7 = s7_init();  
   s7_define_function(s7, "error-handler", error_handler, 1, 0, false, "our error handler");
 
   if (with_error_hook)
@@ -8285,18 +8246,19 @@ int main(int argc, char **argv)
                                     (set! (hook 'result) 'our-error))))");
   while (1) 
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
 	  
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
-	  s7_pointer old_port, result;
+	  s7_pointer result;
 	  int gc_loc = -1;
 	  const char *errmsg = NULL;
 
 	  /* trap error messages */
-	  old_port = s7_set_current_error_port(s7, s7_open_output_string(s7));
+	  s7_pointer old_port = s7_set_current_error_port(s7, s7_open_output_string(s7));
 	  if (old_port != s7_nil(s7))
 	    gc_loc = s7_gc_protect(s7, old_port);
 
@@ -8371,15 +8333,10 @@ static s7_pointer my_hook_function(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-  s7_pointer test_hook;
-
-  s7 = s7_init();  
+  s7_scheme *s7 = s7_init();  
 
   /* define test_hook in C, test-hook in Scheme, arguments are named a and b */
-  test_hook = <em class=red>s7_eval_c_string</em>(s7, "(make-hook 'a 'b)");
+  s7_pointer test_hook = <em class=red>s7_eval_c_string</em>(s7, "(make-hook 'a 'b)");
   s7_define_constant(s7, "test-hook", test_hook); 
 
   /* add my_hook_function to the test_hook function list */
@@ -8389,12 +8346,14 @@ int main(int argc, char **argv)
 				s7_hook_functions(s7, test_hook)));
   while (1) 
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
 	  
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -8507,22 +8466,21 @@ static s7_pointer cload(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  char buffer[512];
-  char response[1024];
   s7_scheme *s7 = s7_init();  
-
   s7_define_function(s7, "cload", cload, 2, 0, false, CLOAD_HELP);
   s7_define_function(s7, "try", try, 2, 0, false, 
                          "(try name num) tries to call name in the shared library with the argument num.");
 
   while (1) 
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
 	  
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -8628,8 +8586,8 @@ void add1_init(s7_scheme *sc)
 static s7_pointer big_add_1(s7_scheme *sc, s7_pointer args)
 {
   /* add 1 to either a normal number or a bignum */
-  s7_pointer x, n;
-  x = s7_car(args);
+  s7_pointer n;
+  s7_pointer x = s7_car(args);
   if (s7_is_big_integer(x))
     {
       mpz_t big_n;
@@ -8681,20 +8639,18 @@ static s7_pointer big_add_1(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7;
-  char buffer[512];
-  char response[1024];
-
-  s7 = s7_init();  
+  s7_scheme *s7 = s7_init();  
   s7_define_function(s7, "add-1", big_add_1, 1, 0, false, "(add-1 num) adds 1 to num");
 
   while (1) 
     {
+      char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
       if ((buffer[0] != '\n') || 
 	  (strlen(buffer) &gt; 1))
 	{                            
+          char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
@@ -10132,12 +10088,11 @@ Here's an example where we want to call <code>(list 1 2 3)</code> a bazillion ti
 #include "s7.h"
 int main(int argc, char **argv)
 {
-  s7_scheme *s;
+  s7_scheme *s = s7_init();
   s7_pfunc f;
   s7_pointer body;
   s7_int gc_loc;
   int i;
-  s = s7_init();
   body = s7_list_nl(s, 4, s7_make_symbol(s, "list"),
 	                  s7_make_integer(s, 1),
 	                  s7_make_integer(s, 2),
@@ -10888,8 +10843,7 @@ or conjure up a wrapper:
 
 int main(int argc, char **argv)
 {
-  s7_scheme *sc;
-  sc = s7_init();
+  s7_scheme *sc = s7_init();
   s7_load(sc, "repl.scm");
   s7_eval_c_string(sc, "((*repl* 'run))");
   return(0);
