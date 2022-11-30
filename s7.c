@@ -1860,7 +1860,7 @@ static void init_types(void)
   t_simple_p[T_C_FUNCTION_STAR] = true;
   t_simple_p[T_C_RST_NO_REQ_FUNCTION] = true;
   /* not completely sure about the next ones */
-  t_simple_p[T_LET] = true;
+  /* t_simple_p[T_LET] = true; */ /* this needs let_equal in member et al, 29-Nov-22 */
   t_simple_p[T_INPUT_PORT] = true;
   t_simple_p[T_OUTPUT_PORT] = true;
 
@@ -28667,7 +28667,7 @@ static void function_display(s7_scheme *sc, const char *s, s7_pointer port)
 {
   if (!s) return;
   push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
-  sc->args = sc->nil; /* TODO: is this needed? */
+  /* sc->args = sc->nil; */ /* is this needed? */
   for (; *s; s++)
     (*(port_output_function(port)))(sc, *s, port);
   unstack_with(sc, OP_NO_VALUES);
@@ -28676,10 +28676,10 @@ static void function_display(s7_scheme *sc, const char *s, s7_pointer port)
 static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
 {
   push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
-  sc->args = sc->nil; /* TODO: is this needed? */
+  /* sc->args = sc->nil; */ /* is this needed? */
   for (s7_int i = 0; i < len; i++)
     (*(port_output_function(pt)))(sc, str[i], pt);
-  unstack_with(sc, OP_NO_VALUES); /* TODO: s7test for mv error and above */
+  unstack_with(sc, OP_NO_VALUES);
 }
 
 static void stdout_display(s7_scheme *sc, const char *s, s7_pointer port) {if (s) fputs(s, stdout);}
@@ -88753,12 +88753,9 @@ static s7_pointer read_expression(s7_scheme *sc)
 	  return(port_read_sharp(current_input_port(sc))(sc, current_input_port(sc)));
 
 	case TOKEN_DOT:                                        /* (catch #t (lambda () (+ 1 . . )) (lambda args 'hiho)) */
-	  {
-	    int32_t c;
-	    back_up_stack(sc);
-	    do {c = inchar(current_input_port(sc));} while ((c != ')') && (c != EOF));
-	    read_error_nr(sc, "stray dot in list?");           /* (+ 1 . . ) */
-	  }
+	  back_up_stack(sc);
+	  {int32_t c; do {c = inchar(current_input_port(sc));} while ((c != ')') && (c != EOF));}
+	  read_error_nr(sc, "stray dot in list?");           /* (+ 1 . . ) */
 
 	case TOKEN_RIGHT_PAREN:                                /* (catch #t (lambda () '(1 2 . )) (lambda args 'hiho)) */
 	  back_up_stack(sc);
