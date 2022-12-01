@@ -437,9 +437,12 @@
 ;; and why no euclidean-rationalize or exact-integer-expt?
 ;;   (imagine what will happen when r8rs stumbles on the zoo of continued fraction algorithms!)
 
-(define (jiffies-per-second) 1000)
-(define (current-jiffy) (round (* (jiffies-per-second) (*s7* 'cpu-time))))
-(define (current-second) (floor (*s7* 'cpu-time)))
+(define (jiffies-per-second) 1000000000)
+(define (current-jiffy)
+  (with-let *libc*
+    (let ((res (clock_gettime CLOCK_MONOTONIC)))
+      (+ (* 1000000000 (cadr res)) (caddr res)))))
+(define (current-second) (* 1.0 ((*libc* 'time) (c-pointer 0 'time_t*))))
 
 (define get-environment-variable getenv)
 (define get-environment-variables (*libc* 'getenvs))

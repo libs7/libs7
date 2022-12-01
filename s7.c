@@ -3777,7 +3777,7 @@ static void init_small_ints(void)
     return((ts.tv_nsec == 0) ? 1000000000 : (1000000000 / ts.tv_nsec));
   }
 #else
-  #define my_clock clock
+  #define my_clock clock /* but this is cpu time? */
   #define ticks_per_second() CLOCKS_PER_SEC
 #endif
 
@@ -28526,6 +28526,8 @@ static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
   sc->args = sc->nil;
   (*(port_output_function(port)))(sc, c, port);
   unstack_with(sc, OP_NO_VALUES);
+  sc->code = sc->stack_end[0];
+  sc->args = sc->stack_end[2];
 }
 
 static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
@@ -28671,6 +28673,8 @@ static void function_display(s7_scheme *sc, const char *s, s7_pointer port)
   for (; *s; s++)
     (*(port_output_function(port)))(sc, *s, port);
   unstack_with(sc, OP_NO_VALUES);
+  sc->code = sc->stack_end[0];
+  sc->args = sc->stack_end[2];
 }
 
 static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
@@ -28680,6 +28684,8 @@ static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7
   for (s7_int i = 0; i < len; i++)
     (*(port_output_function(pt)))(sc, str[i], pt);
   unstack_with(sc, OP_NO_VALUES);
+  sc->code = sc->stack_end[0];
+  sc->args = sc->stack_end[2];
 }
 
 static void stdout_display(s7_scheme *sc, const char *s, s7_pointer port) {if (s) fputs(s, stdout);}
@@ -74856,7 +74862,19 @@ static bool op_let1(s7_scheme *sc)
 	{
 	  x = cdar(sc->code);
 	  if (has_fx(x))
-	    sc->value = fx_call(sc, x);
+	    {
+#if S7_DEBUGGING
+	      s7_pointer old_args = sc->args;
+#endif
+	      sc->value = fx_call(sc, x);
+#if S7_DEBUGGING
+	      if (sc->args != old_args)
+		{
+		  fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(old_args), display(sc->args));
+		  gdb_break();
+		}
+#endif
+	    }
 	  else
 	    {
 	      check_stack_size(sc);
@@ -88057,7 +88075,6 @@ static bool eval_car_pair(s7_scheme *sc)
       else set_optimize_op(code, OP_PAIR_PAIR);
     }
   else set_optimize_op(code, OP_PAIR_PAIR);
-
   push_stack_no_args(sc, OP_EVAL_ARGS, carc);
   sc->code = car(carc);
   return(false);
@@ -88356,13 +88373,10 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 static token_t read_comma(s7_scheme *sc, s7_pointer pt)
 {
   /* here we probably should check for symbol names that start with "@":
-       (define-macro (hi @foo) `(+ ,@foo 1)) -> hi
-       (hi 2) -> ;foo: unbound variable
-     but
-       (define-macro (hi .foo) `(+ ,.foo 1)) -> hi
-       (hi 2) -> 3
+         (define-macro (hi @foo) `(+ ,@foo 1)) -> hi, (hi 2) -> ;foo: unbound variable
+     but (define-macro (hi .foo) `(+ ,.foo 1)) -> hi, (hi 2) -> 3
      and ambiguous:
-       (define-macro (hi @foo . foo) `(list ,@foo))
+         (define-macro (hi @foo . foo) `(list ,@foo))
      what about , @foo -- is the space significant?  We accept ,@ foo.
   */
   int32_t c = inchar(pt);
@@ -92081,7 +92095,7 @@ void s7_heap_scan(s7_scheme *sc, int32_t typ)
 			 (obj->holders != 1) ? "s" : "", obj->holders);
 	}}
   if (!found_one)
-    fprintf(stderr, "no %s found\n", s7_type_names[typ]);
+    fprintf(stderr, "heap-scan: no %s found\n", s7_type_names[typ]);
 }
 
 static s7_pointer g_heap_scan(s7_scheme *sc, s7_pointer args)
