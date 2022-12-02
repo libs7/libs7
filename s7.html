@@ -4400,6 +4400,7 @@ read (or one of its friends) in a loop which first checks for #&lt;eof&gt;, then
 a case statement.  In s7, we can dispense with the extra if (and let), and include
 the #&lt;eof&gt; in the case statement: <code>(case (read-char) ((#&lt;eof&gt;) (quit-reading)) ((#\a)...))</code>.
 Another example: <code>(or (eof-object? x) (eqv x 24)...)</code> can be instead: <code>(memv x '(#&lt;eof&gt; 24 ...)</code>.
+(All the discussions online that I've seen of #&lt;eof&gt; or its equivalent confuse the thing (end of file indication) with its name (#&lt;eof&gt;).
 </p>
 </div>
 
@@ -6887,7 +6888,7 @@ The examples that follow show:
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = <em class=red>s7_init</em>();                 /* initialize the interpreter */
+  s7_scheme *s7 = <em class=red>s7_init</em>();      /* initialize the interpreter */
   while (1)                       /* fire up a read-eval-print loop */
     {
       char buffer[512];

@@ -440,7 +440,7 @@
 (define (jiffies-per-second) 1000000000)
 (define (current-jiffy)
   (with-let *libc*
-    (let ((res (clock_gettime CLOCK_MONOTONIC)))
+    (let ((res (clock_gettime CLOCK_REALTIME)))
       (+ (* 1000000000 (cadr res)) (caddr res)))))
 (define (current-second) (* 1.0 ((*libc* 'time) (c-pointer 0 'time_t*))))
 

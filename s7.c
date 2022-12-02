@@ -28522,12 +28522,16 @@ static void stderr_write_char(s7_scheme *sc, uint8_t c, s7_pointer port) {fputc(
 
 static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
-  push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
-  sc->args = sc->nil;
+  push_stack_direct(sc, OP_NO_VALUES);
+  /* sc->args = sc->nil; */
   (*(port_output_function(port)))(sc, c, port);
   unstack_with(sc, OP_NO_VALUES);
+#if 1
+  memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
+#else
   sc->code = sc->stack_end[0];
   sc->args = sc->stack_end[2];
+#endif
 }
 
 static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
@@ -28668,24 +28672,32 @@ static void file_display(s7_scheme *sc, const char *s, s7_pointer port)
 static void function_display(s7_scheme *sc, const char *s, s7_pointer port)
 {
   if (!s) return;
-  push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
+  push_stack_direct(sc, OP_NO_VALUES);
   /* sc->args = sc->nil; */ /* is this needed? */
   for (; *s; s++)
     (*(port_output_function(port)))(sc, *s, port);
   unstack_with(sc, OP_NO_VALUES);
-  sc->code = sc->stack_end[0];
+#if 1
+  memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
+#else
+  sc->code = sc->stack_end[0]; /* sc->curlet = sc->stack_end[1] */
   sc->args = sc->stack_end[2];
+#endif
 }
 
 static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
 {
-  push_stack_direct(sc, OP_NO_VALUES); /* protect let/code across call */
+  push_stack_direct(sc, OP_NO_VALUES);
   /* sc->args = sc->nil; */ /* is this needed? */
   for (s7_int i = 0; i < len; i++)
     (*(port_output_function(pt)))(sc, str[i], pt);
   unstack_with(sc, OP_NO_VALUES);
+#if 1
+  memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
+#else
   sc->code = sc->stack_end[0];
   sc->args = sc->stack_end[2];
+#endif
 }
 
 static void stdout_display(s7_scheme *sc, const char *s, s7_pointer port) {if (s) fputs(s, stdout);}
@@ -92283,13 +92295,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells", 15),
 			     cons(sc, make_integer(sc, sc->semipermanent_cells), kmg(sc, sc->semipermanent_cells * sizeof(s7_cell))));
-  {
-    gc_obj_t *g;
-    for (i = 0, g = sc->semipermanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects", 17), make_integer(sc, i));
-    for (i = 0, g = sc->semipermanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets", 14), make_integer(sc, i));
-  }
+  i = 0;
+  for (gc_obj_t *g = sc->semipermanent_objects; g; i++, g = (gc_obj_t *)(g->nxt));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_objects", 17), make_integer(sc, i));
+  i = 0;
+  for (gc_obj_t *g = sc->semipermanent_lets; g; i++, g = (gc_obj_t *)(g->nxt));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent_lets", 14), make_integer(sc, i));
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
   for (i = 0; i < NUM_TYPES; i++) ts[i] = 0;
@@ -92436,11 +92447,10 @@ static s7_pointer memory_usage(s7_scheme *sc)
     }
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "output-ports", 12),
 			     cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
-  {
-    s7_pointer p;
-    for (i = 0, p = sc->format_ports; p; p = (s7_pointer)port_next(p));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "format-ports", 12), make_integer(sc, i));
-  }
+
+  i = 0;
+  for (s7_pointer p = sc->format_ports; p; i++, p = (s7_pointer)port_next(p));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "format-ports", 12), make_integer(sc, i));
 
   /* continuations (sketchy!) */
   gp = sc->continuations;
@@ -95943,54 +95953,50 @@ int main(int argc, char **argv)
  * tvect     2519   2464   1772   1670   1669
  * timp      2637   2575   1930   1689   1689
  * texit     ----   ----   1778   1741   1741
- * s7test    1873   1831   1818   1826   1837
+ * s7test    1873   1831   1818   1826   1834
  * thook     ----   ----   2590   2030   2030
  * tauto     ----   ----   2562   2055   2048
- * lt        2187   2172   2150   2182   2183
- * dup       3805   3788   2492   2243   2244
+ * lt        2187   2172   2150   2182   2182
+ * dup       3805   3788   2492   2243   2241
  * tcopy     8035   5546   2539   2373   2375
- * tload     ----   ----   3046   2370   2408 [local_strncmp from strcmp?]
- * tread     2440   2421   2419   2407   2410
+ * tload     ----   ----   3046   2370   2408
+ * tread     2440   2421   2419   2407   2406
  * fbench    2688   2583   2460   2428   2431
  * trclo     2735   2574   2454   2446   2446
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2567   2576
+ * tmat      3065   3042   2524   2567   2575
  * tb        2735   2681   2612   2603   2603
  * tsort     3105   3104   2856   2804   2804
  * teq       4068   4045   3536   3487   3486
  * tobj      4016   3970   3828   3570   3572
  * tio       3816   3752   3683   3620   3620
  * tmac      3950   3873   3033   3677   3677
- * tclo      4787   4735   4390   4389   4391
+ * tclo      4787   4735   4390   4389   4389
  * tstar     6139   5923   5519   4414   4413
  * tcase     4960   4793   4439   4425   4426
  * tlet      7775   5640   4450   4431   4427
  * tfft      7820   7729   4755   4465   4467
  * tmap      8869   8774   4489   4541   4541
  * tshoot    5525   5447   5183   5055   5054
- * tstr      6880   6342   5488   5161   5164
- * tform     5357   5348   5307   5304   5322 [local_strncmp]
+ * tstr      6880   6342   5488   5161   5162
+ * tform     5357   5348   5307   5304   5316
  * tnum      6348   6013   5433   5385   5383
  * tlamb     6423   6273   5720   5554   5553
- * tmisc     8869   7612   6435   6085   6085
+ * tmisc     8869   7612   6435   6085   6084
  * tset      ----   ----   ----   6242   6245
  * tlist     7896   7546   6558   6244   6237
  * tgsl      8485   7802   6373   6281   6282
  * tari      13.0   12.7   6827   6543   6543
  * trec      6936   6922   6521   6588   6588
- * tleft     10.4   10.2   7657   7477   7480
+ * tleft     10.4   10.2   7657   7477   7478
  * tgc       11.9   11.1   8177   7868   7862
  * thash     11.8   11.7   9734   9483   9475
  * cb        11.2   11.0   9658   9551   9557
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.6
- * sg        ----   ----   55.9   55.8   55.9
+ * calls     36.7   37.5   37.0   37.6   37.5
+ * sg        ----   ----   55.9   55.8   55.8
  * lg        ----   ----  105.2  106.2  106.3
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ---------------------------------------------
- *
- * should #<x y z> work? currently gets unbound variable y in (undefined? #<x y z>)
- *     <1> #<+>> -> #<+>>  <2> #<+>*> -> #<+>*>  <3> (cons #<x>> 1) -> (#<x>> . 1)
- *     <2> (undefined? #<1): #t but here the close-paren is the end marker??  maybe just space/tab?
  */
