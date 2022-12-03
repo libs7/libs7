@@ -10134,10 +10134,8 @@ static s7_pointer let_copy(s7_scheme *sc, s7_pointer let)
 {
   s7_pointer new_e;
 
-  if ((S7_DEBUGGING) && (!is_let(let))) fprintf(stderr, "%s let is not a let %s\n", __func__, display(let));
-  if (let == sc->rootlet)   /* (copy (rootlet)) or (copy (funclet abs)) etc */
+  if (T_Let(let) == sc->rootlet)   /* (copy (rootlet)) or (copy (funclet abs)) etc */
     return(sc->rootlet);
-
   /* we can't make copy handle lets-as-objects specially because the make-object function in define-class uses copy to make a new object!
    *   So if it is present, we get it here, and then there's almost surely trouble.
    */
@@ -68403,7 +68401,6 @@ bool s7_is_multiple_value(s7_pointer obj) {return(is_multiple_value(obj));}
 static s7_pointer splice_out_values(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer tp;
-  if ((S7_DEBUGGING) && (is_null(args))) {fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(args)); return(sc->nil);}
   while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
   tp = list_1(sc, car(args));
   sc->temp8 = tp;
@@ -78185,8 +78182,7 @@ static void check_set(s7_scheme *sc)
 
 static void op_set_s_c(s7_scheme *sc)
 {
-  s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((S7_DEBUGGING) && (!is_slot(slot))) fprintf(stderr, "%s: %s is %s\n", __func__, display(sc->code), display(slot));
+  s7_pointer slot = T_Slt(lookup_slot_from(cadr(sc->code), sc->curlet));
   if (is_immutable(slot))
     error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
   slot_set_value(slot, sc->value = opt2_con(cdr(sc->code)));
@@ -78194,8 +78190,7 @@ static void op_set_s_c(s7_scheme *sc)
 
 static inline void op_set_s_s(s7_scheme *sc)
 {
-  s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((S7_DEBUGGING) && (!is_slot(slot))) fprintf(stderr, "%s: %s is %s\n", __func__, display(sc->code), display(slot));
+  s7_pointer slot = T_Slt(lookup_slot_from(cadr(sc->code), sc->curlet));
   if (is_immutable(slot))
     error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
   slot_set_value(slot, sc->value = lookup(sc, opt2_sym(cdr(sc->code))));
@@ -78203,8 +78198,7 @@ static inline void op_set_s_s(s7_scheme *sc)
 
 static Inline void op_set_s_a(s7_scheme *sc)
 {
-  s7_pointer slot = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((S7_DEBUGGING) && (!is_slot(slot))) fprintf(stderr, "%s: %s is %s\n", __func__, display(sc->code), display(slot));
+  s7_pointer slot = T_Slt(lookup_slot_from(cadr(sc->code), sc->curlet));
   if (is_immutable(slot))
     error_nr(sc, sc->immutable_error_symbol, set_elist_3(sc, wrap_string(sc, "~S, but ~S is immutable", 23), sc->code, cadr(sc->code)));
   slot_set_value(slot, sc->value = fx_call(sc, cddr(sc->code)));
@@ -78743,8 +78737,7 @@ static bool op_set_normal(s7_scheme *sc)
 
 static Inline void inline_op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ctr 1)) -- why is this always inlined? saves 22 in concordance */
 {
-  s7_pointer val, y = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((S7_DEBUGGING) && (!is_slot(y))) fprintf(stderr, "%s %s is %s\n", __func__, display(sc->code), display(y));
+  s7_pointer val, y = T_Slt(lookup_slot_from(cadr(sc->code), sc->curlet));
   val = slot_value(y);
   if (is_t_integer(val))
     sc->value = make_integer(sc, integer(val) + 1);
@@ -78773,8 +78766,7 @@ static Inline void inline_op_increment_by_1(s7_scheme *sc)  /* ([set!] ctr (+ ct
 
 static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
 {
-  s7_pointer val, y = lookup_slot_from(cadr(sc->code), sc->curlet);
-  if ((S7_DEBUGGING) && (!is_slot(y))) fprintf(stderr, "%s %s is %s\n", __func__, display(sc->code), display(y));
+  s7_pointer val, y = T_Slt(lookup_slot_from(cadr(sc->code), sc->curlet));
   val = slot_value(y);
   if (is_t_integer(val))
     sc->value = make_integer(sc, integer(val) - 1); /* increment (set!) returns the new value in sc->value */
@@ -80329,8 +80321,7 @@ static bool has_safe_steppers(s7_scheme *sc, s7_pointer let)
       s7_pointer val = slot_value(slot);
       if (slot_has_expression(slot))
 	{
-	  s7_pointer step_expr = slot_expression(slot);
-	  if ((S7_DEBUGGING) && (!is_pair(step_expr))) fprintf(stderr, "%s step: %s\n", __func__, display(step_expr));
+	  s7_pointer step_expr = T_Pair(slot_expression(slot));
 	  if (is_safe_stepper_expr(step_expr))
 	    {
 	      if (is_t_integer(val))
@@ -81184,8 +81175,7 @@ static bool do_step1(s7_scheme *sc)
 	  pop_stack_no_op(sc);
 	  return(true);
 	}
-      code = slot_expression(car(sc->args)); /* get the next stepper new value */
-      if ((S7_DEBUGGING) && (!is_pair(code))) fprintf(stderr, "%s code: %s\n", __func__, display(code));
+      code = T_Pair(slot_expression(car(sc->args))); /* get the next stepper new value */
       if (has_fx(code))
 	{
 	  sc->value = fx_call(sc, code);
@@ -91807,7 +91797,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 /* -------------------------------- s7_heap_scan -------------------------------- */
-#if (S7_DEBUGGING)
+#if S7_DEBUGGING
 static void mark_holdee(s7_pointer holder, s7_pointer holdee, const char *root)
 {
   holdee->holders++;
@@ -94371,7 +94361,6 @@ static void init_rootlet(s7_scheme *sc)
    *   unlet has only c_functions/syntax but should we support #_gsl* etc?
    *   split init_unlet, add load to defun macros
    */
-
   s7_pointer sym;
   init_syntax(sc);
 

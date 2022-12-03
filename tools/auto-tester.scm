@@ -349,6 +349,8 @@
 (define (f41 c) ; member_if
   (member c (list 1 2 3 4 5) (lambda* (a b) (= a b))))
 
+(define (fequal? a b) (equal? a b))
+
 (define (sym1 . a) (copy a))
 (define (sym2 a . b) (cons a (copy b)))
 (define (sym3 a b . c) (list a b (copy c)))
@@ -895,7 +897,7 @@
 			  'write 'display
 			  (reader-cond ((not with-mock-data) 'outlet))
 			  'directory->list
-			  'set! ; this can clobber stuff making recreating a bug tricky
+			  ;'set! ; this can clobber stuff making recreating a bug tricky
 			  'set-car!
 			  'call-with-output-file 'with-output-to-file
 			  ;'read-char 'read-byte 'read-line 'read-string 'read ; stdin=>hangs
@@ -1141,7 +1143,7 @@
 
 		    "1+1e10i" "1e15-1e15i" "0+1e18i" "-1e18"
 		    ;"(random 1.0)" ; number->string so lengths differ
-		    ;"(random 1)"
+		    "(random 1)" "(random 0)" "(random -1)"
 		    ;"(else ())" "(else (f x) B)"
 		    "(else)"
 		    "else" "x" "(+ x 1)" "(+ 1/2 x)" "(abs x)" "(+ x 1 2+i)" "(* 2 x 3.0 4)" "((x 1234))" "((x 1234) (y 1/2))" "'x" "(x 1)"
@@ -1238,6 +1240,7 @@
 		    "(make-vector '(2 3) 'a symbol?)"
 		    "(make-hash-table 8 #f (cons symbol? integer?))"
 		    "(let ((i 32)) (set! (setter 'i) integer?) (curlet))"
+		    "(let ((i 32)) (set! (setter 'i) integer?) (set! i 3) (curlet))"
 
 		    "(make-vector 3 #f bool/int?)"
 		    "(make-float-vector 3 1.0 (lambda (x) (< x pi)))"
@@ -1292,7 +1295,7 @@
 		    "my-let" "my-with-baffle" "fvset" "htset"
 		    "(catch #t (lambda () (+ 1 #(2))) (lambda (type info) 0))"
 
-		    ;#f #f #f
+		    #f #f #f ; cyclic here (see get-arg)
 		    ))
 
       (codes (vector
@@ -1336,8 +1339,8 @@
                     (lambda (s) (string-append "(_rf3_ " s ")")))
 	      (list (lambda (s) (string-append "(_do1_ " s ")"))
                     (lambda (s) (string-append "(_do2_ " s ")")))
-	      (list (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call-with-exit (lambda (goto) (goto 1))) " s "))"))
-                    (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call/cc (lambda (goto) (goto 1))) " s "))")))
+	      (list (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call-with-exit (lambda (goto) (goto x))) " s "))"))
+                    (lambda (s) (string-append "(let () (let-temporarily ((x 1234)) (call/cc (lambda (goto) (goto x))) " s "))")))
 	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let lt a) " s "))"))
 		    (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (lt 'a) " s "))")))
 	      (list (lambda (s) (string-append "(let ((lt (inlet 'a 1))) (set! (with-let ((curlet) 'lt) a) " s "))"))
@@ -1388,6 +1391,8 @@
                     (lambda (s) (string-append "(_map_ " s ")")))
 	      (list (lambda (s) (string-append "(_cat1_ " s ")"))
                     (lambda (s) (string-append "(_cat2_ " s ")")))
+	      (list (lambda (s) s)
+                    (lambda (s) (string-append "(begin " s ")")))
 	      (list (lambda (s) (string-append "(let ((+ -)) " s ")"))
                     (lambda (s) (string-append "(let () (define + -) " s ")")))
 	      (list (lambda (s) (string-append "(let ((+ -)) (let ((cons list)) " s "))"))
@@ -1413,11 +1418,18 @@
 	      (list (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (car (list " last-s ")) (begin " s "))"))) (set! last-s s) res)))
                     (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (not (car (list " last-s "))) #<unspecified> (begin " s "))"))) (set! last-s s) res))))
 
+	      (list (lambda (s) (string-append "(let ((s1 (begin " s ")) (s2 (copy s1))) (member s1 (list s2)))"))
+                    (lambda (s) (string-append "(let ((s1 (begin " s ")) (s2 (copy s1))) (member s1 (list s2) fequal?))")))
+	      (list (lambda (s) (string-append "(iterate (make-iterator (vector " s ")))"))
+		    (lambda (s) (string-append "(car (list " s "))")))
+	      (list (lambda (s) (string-append "(call-with-exit (lambda (return) (return " s ")))"))
+		    (lambda (s) (string-append "((lambda () (values " s ")))")))
+
 	      (list (lambda (s) (string-append "(let ((x #f)) (for-each (lambda (y) (set! x y)) (list " s ")) x)"))
 		    (lambda (s) (string-append "((lambda (x) (for-each (lambda y (set! x (car y))) (list " s ")) x) #f)")))
 
 	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'openlets) #f)) " s ")))"))
-                    (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'openlets))) (lambda () " s ") (lambda () (set! (*s7* 'openlets) old)))))")))
+                    (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'openlets)) (set! (*s7* 'openlets) #f)) (lambda () " s ") (lambda () (set! (*s7* 'openlets) old)))))")))
 	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'safety) 1)) " s ")))"))
                     (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'safety))) (lambda () " s ") (lambda () (set! (*s7* 'safety) old)))))")))
 ;;; (+ (dynamic-wind (lambda () #f) (lambda () (values 1 2 3)) (lambda () #f))): 6
@@ -1430,7 +1442,7 @@
 	(flen (length functions))
 	(alen (length args))
 	(codes-len (length codes))
-	(args-ran (+ 2 (random 5)))
+	(args-ran (+ 1 (random 5)))
 	(both-ran (+ 3 (random 8))))
 
     (define (get-arg)
