@@ -29843,10 +29843,12 @@ static s7_pointer g_peek_char(s7_scheme *sc, s7_pointer args)
   if (is_multiple_value(res))
     {
       clear_multiple_value(res);
-      error_nr(sc, sc->bad_result_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned: ~S", 42), res));
+      error_nr(sc, sc->bad_result_symbol, 
+	       set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned multiple values: ~S", 58), res));
     }
   if (!is_character(res))
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned: ~S", 42), res));
+    error_nr(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned: ~S", 42), res));
   return(res);
 }
 
@@ -78392,6 +78394,13 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
       sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
       return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
 
+    case T_C_MACRO: /* (set! (setter quasiquote) (lambda args args)) (define (f) (set! (quasiquote 1) (setter 'i))) (f) (f) */
+      if (is_c_function(c_macro_setter(obj)))
+	return(pair3_cfunc(sc, obj, c_macro_setter(obj), arg, value));
+      sc->code = c_macro_setter(obj);
+      sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
+      return(true); /* goto APPLY; */
+
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
@@ -78453,7 +78462,9 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
 	}}
   value = fx_call(sc, cdr(code));
   gc_protect_via_stack(sc, value);
-  index = fx_call(sc, cdar(code));
+  if (is_any_macro(obj))
+    index = cadar(code); /* if obj is a c_macro, surely we don't want to evaluate cdar(code)? */
+  else index = fx_call(sc, cdar(code));
   set_stack_protected2(sc, index);
   result = set_pair3(sc, obj, index, value);
   unstack(sc);
@@ -78487,7 +78498,10 @@ static inline bool op_set_opsaq_p(s7_scheme *sc)
 static inline bool op_set_opsaq_p_1(s7_scheme *sc)
 {
   s7_pointer value = sc->value;
-  s7_pointer index = fx_call(sc, cdar(sc->code));
+  s7_pointer index;
+  if (is_any_macro(sc->args)) /* see above */
+    index = cadar(sc->code);
+  else index = fx_call(sc, cdar(sc->code));
   return(set_pair3(sc, sc->args, index, value)); /* not lookup, (set! (_!asdf!_ 3) 'a) -> unbound_variable */
 }
 
