@@ -79340,19 +79340,31 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((ls
 	no_setter_error_nr(sc, fnc);
       sc->args = (is_null(cdar(sc->code))) ? cdr(sc->code) : pair_append(sc, cdar(sc->code), cdr(sc->code));
       sc->code = c_function_setter(fnc);
+      /* here multiple-values can't happen because we don't eval the new-value argument */
       return(goto_apply);
     }
   /* here the setter can be anything, so we need to check the needs_copied_args bit. (set! ((dilambda / (let ((x 3)) (lambda (y) (+ x y))))) 3)! */
+  
+  /* TODO: if (is_pair(cadr(sc->code))) we need to protect against values somehow
+   *   (let-temporarily (((setter list) list)) (let () (define (f1) (values 3 4 5)) (set! (list 1 2) (f1))))
+   *   (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5)))
+   *   these are errors (too many args to set!) after optimization, but before they go through eval-args and return a list '(1 2 3 4 5)!
+   *   maybe the fix is to accept values in both cases?  (it's apparently impossible to catch this error currently)
+   * currently:
+   * (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5))) ;'(1 2 3 4 5)
+   * (let-temporarily (((setter list) list)) (set! (list 1 2) 3 4 5)) ; error too many arguments to set!
+   * (let-temporarily (((setter list) list)) (let () (define (f) (set! (list 1 2) (values 3 4 5))) (f))) ;'(1 2 3 4 5)
+   * (let-temporarily (((setter list) list)) (let () (define (f) (set! (list 1 2) (values 3 4 5))) (f) (f))) ;error: too many values to set! (values 3 4 5)
+   */
+  push_op_stack(sc, c_function_setter(fnc));
   if (is_pair(cdar(sc->code)))
     {
-      push_op_stack(sc, c_function_setter(fnc));
       sc->value = (is_null(cddar(sc->code))) ? cdr(sc->code) : pair_append(sc, cddar(sc->code), cdr(sc->code));
       push_stack(sc, OP_EVAL_ARGS1, sc->nil, sc->value);
       sc->code = cadar(sc->code);
     }
   else
     {
-      push_op_stack(sc, c_function_setter(fnc));
       push_stack(sc, OP_EVAL_ARGS1, sc->nil, sc->nil);
       sc->code = cadr(sc->code); /* new value */
     }
@@ -96002,4 +96014,8 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.2  106.5
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ---------------------------------------------
+ *
+ * (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5))) should be an error? (any mv 3rd arg)
+ *    se 79352 -- there is no way to treat this as an error consistently
+ * split out *s7* op_set_opsaq_a cases to avoid macro checks
  */
