@@ -124,12 +124,18 @@
 	 (c (read-byte pt) (read-byte pt)))
 	((or (>= i lim)
 	     (eof-object? c))
-	 (if (< i lim)
-	     (copy (subvector bv 0 i))
-	     bv))
+	 (if (= i start) #<eof> (- i start))) ; or i?
       (set! (bv i) c))))
 
-(define* (read-bytevector k port) (read-bytevector! (make-byte-vector k) port))
+(define* (read-bytevector k port)
+  (let* ((buf (make-byte-vector k))
+	 (bytes (read-bytevector! buf port)))
+    (if (eof-object? bytes)
+	bytes
+	(if (= k bytes)
+	    buf
+	    (subvector buf 0 bytes)))))
+
 (define (get-output-bytevector port) (string->byte-vector (get-output-string port)))
 (define (open-input-bytevector bv) (open-input-string (copy bv (make-string (length bv)))))
 (define open-output-bytevector open-output-string)
