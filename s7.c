@@ -10400,8 +10400,8 @@ s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 /* -------------------------------- symbol->value -------------------------------- */
 #define lookup_global(Sc, Sym) ((is_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
 
-static s7_pointer g_s7_starlet_ref_fallback(s7_scheme *sc, s7_pointer args);
-static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args);
+static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
+static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
 
 static s7_pointer g_symbol_to_value(s7_scheme *sc, s7_pointer args)
 {
@@ -10427,7 +10427,7 @@ symbol sym in the given let: (let ((x 32)) (symbol->value 'x)) -> 32"
 	    return(method_or_bust(sc, cadr(args), sc->symbol_to_value_symbol, args, a_let_string, 2));
 	}
       if (local_let == sc->s7_starlet)
-	return(g_s7_starlet_ref_fallback(sc, set_qlist_2(sc, local_let, sym)));
+	return(s7_starlet(sc, s7_starlet_symbol(sym)));
 
       return(s7_symbol_local_value(sc, sym, local_let));
     }
@@ -10960,6 +10960,8 @@ Only the let is searched if ignore-globals is not #f."
 	    if (!is_let(e))
 	      wrong_type_error_nr(sc, sc->is_defined_symbol, 2, cadr(args), a_let_string);
 	}
+      if (is_keyword(sym))                       /* if no "e", is global -> #t */
+	sym = keyword_symbol(sym);               /* (defined? :print-length *s7*) */
       if (e == sc->s7_starlet)
 	return(make_boolean(sc, s7_starlet_symbol(sym) != SL_NO_FIELD));
       if (is_pair(cddr(args)))
@@ -11676,7 +11678,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  break;
 
 	case OP_LET_TEMP_S7_UNWIND:
-	  g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet, stack_code(sc->stack, i), stack_args(sc->stack, i)));
+	  s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
 	  break;
 
 	case OP_LET_TEMP_S7_DIRECT_UNWIND:
@@ -11902,7 +11904,7 @@ static void call_with_exit(s7_scheme *sc)
 	break;
 
       case OP_LET_TEMP_S7_UNWIND:
-	g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet, stack_code(sc->stack, i), stack_args(sc->stack, i)));
+	s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
 	break;
 
       case OP_LET_TEMP_S7_DIRECT_UNWIND:
@@ -29843,11 +29845,11 @@ static s7_pointer g_peek_char(s7_scheme *sc, s7_pointer args)
   if (is_multiple_value(res))
     {
       clear_multiple_value(res);
-      error_nr(sc, sc->bad_result_symbol, 
+      error_nr(sc, sc->bad_result_symbol,
 	       set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned multiple values: ~S", 58), res));
     }
   if (!is_character(res))
-    error_nr(sc, sc->wrong_type_arg_symbol, 
+    error_nr(sc, sc->wrong_type_arg_symbol,
 	     set_elist_2(sc, wrap_string(sc, "input-function-port peek-char returned: ~S", 42), res));
   return(res);
 }
@@ -51585,7 +51587,7 @@ static bool catch_let_temp_unwind_function(s7_scheme *sc, s7_int i, s7_pointer t
 
 static bool catch_let_temp_s7_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet, stack_code(sc->stack, i), stack_args(sc->stack, i)));
+  s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
   return(false);
 }
 
@@ -75987,7 +75989,7 @@ static bool op_let_temp_done1(s7_scheme *sc)
 	{
 	  s7_pointer sym = cadr(settee);
 	  if (is_pair(sym)) sym = cadr(sym);
-	  g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet, sym, sc->value));
+	  s7_starlet_set_1(sc, T_Sym(sym), sc->value);
 	}
       else
 	{
@@ -76026,18 +76028,18 @@ static bool op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 
       if (s7_starlet_immutable_field[s7_starlet_symbol(field)])
 	error_nr(sc, sc->immutable_error_symbol,
 		 set_elist_2(sc, wrap_string(sc, "let-temporarily: can't set! (*s7* '~S)", 38), field));
-      old_value = g_s7_starlet_ref_fallback(sc, set_qlist_2(sc, sc->s7_starlet, field)); /* qlist to avoid stepping on plist-in-use */
+      old_value = s7_starlet(sc, s7_starlet_symbol(field));
       push_stack(sc, OP_LET_TEMP_S7_UNWIND, old_value, field);
     }
   for (p = car(code); is_pair(p); p = cdr(p), end += 4)
-    g_s7_starlet_set_fallback(sc, set_qlist_3(sc, sc->s7_starlet, end[0], fx_call(sc, cdar(p))));
+    s7_starlet_set_1(sc, T_Sym(end[0]), fx_call(sc, cdar(p)));
   sc->code = cdr(code);
   return(is_pair(sc->code)); /* sc->code can be null if no body */
 }
 
 static void op_let_temp_s7_unwind(s7_scheme *sc)
 {
-  g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet, sc->code, sc->args));
+  s7_starlet_set_1(sc, T_Sym(sc->code), sc->args);
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
 }
@@ -79344,7 +79346,7 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((ls
       return(goto_apply);
     }
   /* here the setter can be anything, so we need to check the needs_copied_args bit. (set! ((dilambda / (let ((x 3)) (lambda (y) (+ x y))))) 3)! */
-  
+
   /* TODO: if (is_pair(cadr(sc->code))) we need to protect against values somehow
    *   (let-temporarily (((setter list) list)) (let () (define (f1) (values 3 4 5)) (set! (list 1 2) (f1))))
    *   (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5)))
@@ -90814,7 +90816,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_S7_STARLET_REF_S:  sc->value = s7_starlet(sc, opt3_int(sc->code)); continue;
 	case OP_IMPLICIT_S7_STARLET_SET:
-	  sc->value = g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet_symbol, opt3_sym(sc->code), fx_call(sc, cddr(sc->code))));
+	  sc->value = s7_starlet_set_1(sc, opt3_sym(sc->code), fx_call(sc, cddr(sc->code)));
 	  continue;
 
 	case OP_UNOPT:       goto UNOPT;
@@ -92221,6 +92223,16 @@ static noreturn void s7_starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer 
 
 static s7_int s7_starlet_length(void) {return(SL_NUM_FIELDS - 1);}
 
+static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer sym = cadr(args);
+  if (!is_symbol(sym))
+    sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
+  return(s7_starlet_set_1(sc, sym, caddr(args)));
+}
+
+static s7_pointer g_s7_starlet_ref_fallback(s7_scheme *sc, s7_pointer args);
+
 static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20-May-21 */
 {
   s7_pointer slot1 = make_semipermanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_starlet_set_fallback, 3, 0, false, "*s7* writer"));
@@ -92807,13 +92819,15 @@ static noreturn void sl_unsettable_error_nr(s7_scheme *sc, s7_pointer sym)
   error_nr(sc, sc->immutable_error_symbol, set_elist_2(sc, wrap_string(sc, "can't set (*s7* '~S)", 20), sym));
 }
 
-static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
+static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
-  s7_pointer sym = cadr(args), val = caddr(args);
   s7_int iv;
 
-  if (!is_symbol(sym))
-    sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
+  if ((S7_DEBUGGING) && (!is_symbol(sym)))
+    {
+      fprintf(stderr, "%s: %s\n", __func__, display(sym));
+      sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
+    }
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
 
@@ -93074,14 +93088,14 @@ static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
   return(sc->undefined);
 }
 
-s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value) /* s7.h, not used here */
+s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
 {
   if (is_symbol(sym))
     {
       if (is_keyword(sym))
 	sym = keyword_symbol(sym);
       if (s7_starlet_symbol(sym) != SL_NO_FIELD)
-	return(g_s7_starlet_set_fallback(sc, set_plist_3(sc, sc->s7_starlet_symbol, sym, new_value)));
+	return(s7_starlet_set_1(sc, sym, new_value));
     }
   return(sc->undefined);
 }
@@ -95966,50 +95980,50 @@ int main(int argc, char **argv)
  * index     1026   1016    973    966    967
  * tmock     1177   1165   1057   1019   1019
  * tvect     2519   2464   1772   1670   1669
- * timp      2637   2575   1930   1689   1700
+ * timp      2637   2575   1930   1689   1694
  * texit     ----   ----   1778   1741   1741
- * s7test    1873   1831   1818   1826   1830
+ * s7test    1873   1831   1818   1826   1829
  * thook     ----   ----   2590   2030   2030
  * tauto     ----   ----   2562   2055   2048
  * lt        2187   2172   2150   2182   2185
  * dup       3805   3788   2492   2243   2239
  * tcopy     8035   5546   2539   2373   2375
  * tload     ----   ----   3046   2370   2408
- * tread     2440   2421   2419   2407   2409
- * fbench    2688   2583   2460   2428   2431
+ * tread     2440   2421   2419   2407   2408
+ * fbench    2688   2583   2460   2428   2430
  * trclo     2735   2574   2454   2446   2445
  * titer     2865   2842   2641   2509   2509
  * tmat      3065   3042   2524   2567   2574
- * tb        2735   2681   2612   2603   2603
+ * tb        2735   2681   2612   2603   2604
  * tsort     3105   3104   2856   2804   2804
  * teq       4068   4045   3536   3487   3486
  * tobj      4016   3970   3828   3570   3577
  * tio       3816   3752   3683   3620   3620
  * tmac      3950   3873   3033   3677   3677
  * tclo      4787   4735   4390   4389   4384
- * tstar     6139   5923   5519   4414   4479
  * tcase     4960   4793   4439   4425   4430
  * tlet      7775   5640   4450   4431   4427
- * tfft      7820   7729   4755   4465   4480
+ * tstar     6139   5923   5519   4414   4451
+ * tfft      7820   7729   4755   4465   4476
  * tmap      8869   8774   4489   4541   4541
- * tshoot    5525   5447   5183   5055   5056
+ * tshoot    5525   5447   5183   5055   5055
  * tstr      6880   6342   5488   5161   5162
  * tform     5357   5348   5307   5304   5316
- * tnum      6348   6013   5433   5385   5399
+ * tnum      6348   6013   5433   5385   5396
  * tlamb     6423   6273   5720   5554   5560
- * tmisc     8869   7612   6435   6085   6084
+ * tmisc     8869   7612   6435   6085   6076
  * tset      ----   ----   ----   6242   6260
- * tlist     7896   7546   6558   6244   6237
+ * tlist     7896   7546   6558   6244   6240
  * tgsl      8485   7802   6373   6281   6282
  * tari      13.0   12.7   6827   6543   6543
  * trec      6936   6922   6521   6588   6588
  * tleft     10.4   10.2   7657   7477   7479
- * tgc       11.9   11.1   8177   7868   7862
+ * tgc       11.9   11.1   8177   7868   7857
  * thash     11.8   11.7   9734   9483   9479
  * cb        11.2   11.0   9658   9551   9564
  * tgen      11.2   11.4   12.0   12.1   12.1
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.6
+ * calls     36.7   37.5   37.0   37.6   37.5
  * sg        ----   ----   55.9   55.8   55.8
  * lg        ----   ----  105.2  106.2  106.5
  * tbig     177.4  175.8  156.5  148.1  148.1
@@ -96017,5 +96031,5 @@ int main(int argc, char **argv)
  *
  * (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5))) should be an error? (any mv 3rd arg)
  *    se 79352 -- there is no way to treat this as an error consistently
- * split out *s7* op_set_opsaq_a cases to avoid macro checks
+ * where are non-symbols->*s7* set? eval at op and g_s7... both could be checked
  */
