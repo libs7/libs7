@@ -35879,7 +35879,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	      format_error_nr(sc, "unmatched '}'", 13, str, args, fdat);
 
 	    case '$':
-	      use_write = P_CODE;
+	      use_write = P_CODE; /* affects when symbols but not keywords are quoted (symbol_to_port and hash_table_to_port) */
 	      goto OBJSTR;
 
 	    case 'W': case 'w':
@@ -38823,7 +38823,11 @@ static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer ls
   s7_pointer p = lst;
   for (int32_t i = 1; is_pair(p); p = cdr(p), i++)
     if (!s7_is_valid(sc, car(p)))
-      s7_warn(sc, 256, "bad argument (#%d) to %s: %p\n", i, caller, car(p));
+      {
+	if (i < 11)
+	  s7_warn(sc, 256, "bad %s argument to %s: %p\n", ordinal[i], caller, car(p));
+	else s7_warn(sc, 256, "%s: argument number %d is bad: %p\n", caller, i, car(p));
+      }
 }
 
 s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...)
@@ -68237,7 +68241,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
       syntax_error_with_caller_nr(sc, "set!: can't set ~A to ~S", 24, stack_code(sc->stack, top), set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_SET_opSAq_P_1: case OP_SET_opSAAq_P_1:
-      syntax_error_nr(sc, "too many values to set! ~S", 26, set_ulist_1(sc, sc->values_symbol, args));
+      syntax_error_nr(sc, "too many arguments to set! ~S", 29, set_ulist_1(sc, sc->values_symbol, args));
 
     case OP_LET1:                         /* (let ((var (values 1 2 3))) ...) */
       {
@@ -79346,18 +79350,6 @@ static goto_t set_implicit_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((ls
       return(goto_apply);
     }
   /* here the setter can be anything, so we need to check the needs_copied_args bit. (set! ((dilambda / (let ((x 3)) (lambda (y) (+ x y))))) 3)! */
-
-  /* TODO: if (is_pair(cadr(sc->code))) we need to protect against values somehow
-   *   (let-temporarily (((setter list) list)) (let () (define (f1) (values 3 4 5)) (set! (list 1 2) (f1))))
-   *   (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5)))
-   *   these are errors (too many args to set!) after optimization, but before they go through eval-args and return a list '(1 2 3 4 5)!
-   *   maybe the fix is to accept values in both cases?  (it's apparently impossible to catch this error currently)
-   * currently:
-   * (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5))) ;'(1 2 3 4 5)
-   * (let-temporarily (((setter list) list)) (set! (list 1 2) 3 4 5)) ; error too many arguments to set!
-   * (let-temporarily (((setter list) list)) (let () (define (f) (set! (list 1 2) (values 3 4 5))) (f))) ;'(1 2 3 4 5)
-   * (let-temporarily (((setter list) list)) (let () (define (f) (set! (list 1 2) (values 3 4 5))) (f) (f))) ;error: too many values to set! (values 3 4 5)
-   */
   push_op_stack(sc, c_function_setter(fnc));
   if (is_pair(cdar(sc->code)))
     {
@@ -96028,8 +96020,4 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.2  106.5
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ---------------------------------------------
- *
- * (let-temporarily (((setter list) list)) (set! (list 1 2) (values 3 4 5))) should be an error? (any mv 3rd arg)
- *    se 79352 -- there is no way to treat this as an error consistently
- * where are non-symbols->*s7* set? eval at op and g_s7... both could be checked
  */
