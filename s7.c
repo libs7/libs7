@@ -35005,7 +35005,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   TRACK(sc);
   if ((sc->safety > NO_SAFETY) &&
       (!s7_is_valid(sc, obj)))
-    s7_warn(sc, 256, "bad argument to %s: %p\n", __func__, obj);
+    s7_warn(sc, 256, "the second argument to %s (the object): %p, is not an s7 object\n", __func__, obj);
 
   strport = open_format_port(sc);
   object_out(sc, T_Pos(obj), strport, P_WRITE);
@@ -35039,7 +35039,7 @@ s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer obj, bool use_write) /*
 
   if ((sc->safety > NO_SAFETY) &&
       (!s7_is_valid(sc, obj)))
-    s7_warn(sc, 256, "bad argument to %s: %p\n", __func__, obj);
+    s7_warn(sc, 256, "the second argument to %s (the object): %p, is not an s7 object\n", __func__, obj);
 
   strport = open_format_port(sc);
   object_out(sc, obj, strport, (use_write) ? P_WRITE : P_DISPLAY);
@@ -35264,6 +35264,8 @@ static s7_pointer display_p_p(s7_scheme *sc, s7_pointer x)
   check_method(sc, x, sc->display_symbol, set_plist_1(sc, x));
   return(object_out(sc, x, current_output_port(sc), P_DISPLAY));
 }
+
+/* display may not be following the spec: (display '("a" #\b)): ("a" #\b), whereas Guile says (a b) */
 
 
 /* -------------------------------- call-with-output-string -------------------------------- */
@@ -36287,9 +36289,8 @@ const char *s7_format(s7_scheme *sc, s7_pointer args)
   return((is_string(result)) ? string_value(result) : NULL);
 }
 
-static s7_pointer g_format_f(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_format_f(s7_scheme *sc, s7_pointer args)  /* port == #f, there are other args */
 {
-  /* port == #f, there are other args */
   s7_pointer str = cadr(args);
   sc->format_column = 0;
   if (!is_string(str))
@@ -38825,8 +38826,8 @@ static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer ls
     if (!s7_is_valid(sc, car(p)))
       {
 	if (i < 11)
-	  s7_warn(sc, 256, "bad %s argument to %s: %p\n", ordinal[i], caller, car(p));
-	else s7_warn(sc, 256, "%s: argument number %d is bad: %p\n", caller, i, car(p));
+	  s7_warn(sc, 256, "the %s argument to %s: %p, is not an s7 object\n", ordinal[i], caller, car(p));
+	else s7_warn(sc, 256, "%s: argument number %d is not an s7 object: %p\n", caller, i, car(p));
       }
 }
 
@@ -38843,7 +38844,7 @@ s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...)
     set_car(p, va_arg(ap, s7_pointer));
   va_end(ap);
   if (sc->safety > NO_SAFETY)
-    check_list_validity(sc, "s7_list", sc->w);
+    check_list_validity(sc, __func__, sc->w);
   p = sc->w;
   sc->w = sc->unused;
   return(p);
@@ -38875,7 +38876,7 @@ s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...) /* arglist should b
   if (p) wrong_number_of_args_error_nr(sc, "too many arguments for s7_list_nl: ~S", sc->w);
 
   if (sc->safety > NO_SAFETY)
-    check_list_validity(sc, "s7_list_nl", sc->w);
+    check_list_validity(sc, __func__, sc->w);
 
   p = sc->w;
   sc->w = sc->unused;
@@ -39792,7 +39793,7 @@ s7_pointer s7_array_to_list(s7_scheme *sc, s7_int num_values, s7_pointer *array)
     sc->y = cons_unchecked(sc, array[i], sc->y);
   result = sc->y;
   if (sc->safety > NO_SAFETY)
-    check_list_validity(sc, "s7_array_to_list", result);
+    check_list_validity(sc, __func__, result);
   sc->y = sc->unused;
   return(result);
 }
@@ -52717,9 +52718,9 @@ s7_pointer s7_eval(s7_scheme *sc, s7_pointer code, s7_pointer e)
   if (sc->safety > NO_SAFETY)
     {
       if (!s7_is_valid(sc, code))
-	s7_warn(sc, 256, "bad code argument to %s: %p\n", __func__, code);
+	s7_warn(sc, 256, "the second argument to %s (the code to be evaluated): %p, is not an s7 object\n", __func__, code);
       if (!s7_is_valid(sc, e))
-	s7_warn(sc, 256, "bad environment argument to %s: %p\n", __func__, e);
+	s7_warn(sc, 256, "the third argument to %s (the environment): %p, is not an s7 object\n", __func__, e);
     }
   store_jump_info(sc);
   set_jump_info(sc, EVAL_SET_JUMP);
@@ -52831,7 +52832,7 @@ s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args)
     else
       {
 	if (sc->safety > NO_SAFETY)
-	  check_list_validity(sc, "s7_call", args);
+	  check_list_validity(sc, __func__, args);
 	push_stack_direct(sc, OP_EVAL_DONE); /* this saves the current evaluation and will eventually finish this (possibly) nested call */
 	sc->code = func;
 	sc->args = (needs_copied_args(func)) ? copy_proper_list(sc, args) : args;
@@ -75617,7 +75618,7 @@ static void check_letrec(s7_scheme *sc, bool letrec)
       if (!is_pair(carx))                     /* (letrec (1 2) #t) */
 	syntax_error_with_caller_nr(sc, "~A: bad variable ~S (should be a pair (name value))", 51, caller, carx);
       if (!(is_symbol(car(carx))))
-	syntax_error_with_caller_nr(sc, "~A: bad variable ~S (it is not a symbol)", 40, caller, carx);
+	syntax_error_with_caller_nr(sc, "~A: bad variable ~S (it is not a symbol)", 40, caller, car(carx));
 
       y = car(carx);
       if (is_constant_symbol(sc, y))
@@ -75817,7 +75818,7 @@ static void check_let_temporarily(s7_scheme *sc)
 	}
       else
 	if (!is_pair(caarx))                 /* (let-temporarily ((1 2)) ...) */
-	  syntax_error_nr(sc, "let-temporarily: bad variable ~S (the name should be a symbol  or a pair)", 73, carx);
+	  syntax_error_nr(sc, "let-temporarily: bad variable ~S (it should be a symbol or a pair)", 66, caarx);
 
       if (!is_pair(cdr(carx)))               /* (let-temporarily ((x . 1))...) */
 	syntax_error_nr(sc, "let-temporarily: variable declaration value is messed up: ~S", 60, carx);
@@ -78572,6 +78573,13 @@ static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_point
       sc->code = c_function_setter(obj); /* closure|macro */
       sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
       return(true); /* goto APPLY; not redundant -- setter type might not match getter type */
+
+    case T_C_MACRO: /* (set! (setter quasiquote) (lambda (a . b) a)) (let () (define (func) (set! (quasiquote 'a 0) 3)) (func) (func)) */
+      if (is_c_function(c_macro_setter(obj)))
+	return(pair4_cfunc(sc, obj, c_macro_setter(obj), index1, index2, value));
+      sc->code = c_macro_setter(obj);
+      sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
+      return(true); /* goto APPLY; */
 
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
@@ -95514,7 +95522,7 @@ s7_scheme *s7_init(void)
 		                               (if (pair? clause)                                         \n\
                                                    (cons (traverse (car clause))                          \n\
 			                                 (case (cdr clause) ((()) '(#f)) (else)))         \n\
-                                                   (error 'read-error \"cond-expand: bad clause\")))      \n\
+                                                   (error 'read-error \"cond-expand: clause is not a pair\"))) \n\
 		                             clauses))))");
 #endif
 
