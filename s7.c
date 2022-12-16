@@ -78880,7 +78880,7 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* if Inline 70 in concorda
   return(true);
 }
 
-static inline bool op_implicit_vector_set_3(s7_scheme *sc)
+static /* inline */ bool op_implicit_vector_set_3(s7_scheme *sc) /* inline no diffs? */
 {
   s7_pointer i1, code = cdr(sc->code);
   s7_pointer v = lookup(sc, caar(code));
@@ -82915,8 +82915,7 @@ static s7_pointer lambda_star_set_args(s7_scheme *sc)
 	  else                                  /* not a key/value pair */
 	    {
 	      if (is_checked_slot(slot))
-		error_nr(sc, sc->wrong_type_arg_symbol,
-			 set_elist_3(sc, parameter_set_twice_string, slot_symbol(slot), sc->args));
+		error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, parameter_set_twice_string, slot_symbol(slot), sc->args));
 	      set_checked_slot(slot);
 	      slot_set_value(slot, car(arg_vals));
 	      slot = next_slot(slot);
@@ -87975,7 +87974,6 @@ static bool eval_args_no_eval_args(s7_scheme *sc)
   return(false);
 }
 
-
 static inline void eval_last_arg(s7_scheme *sc, s7_pointer car_code)
 {
   /* here we've reached the last arg (sc->code == nil), it is not a pair */
@@ -88110,7 +88108,7 @@ static bool eval_car_pair(s7_scheme *sc)
   return(false);
 }
 
-static inline bool eval_args_last_arg(s7_scheme *sc)
+static /* inline */ bool eval_args_last_arg(s7_scheme *sc) /* inline: no diff tmisc, small diff tmac (3) */
 {
   s7_pointer car_code = car(sc->code);  /* we're at the last arg, sc->value is the previous one, not yet saved in the args list */
   if (is_pair(car_code))
@@ -88672,7 +88670,7 @@ static void read_double_quote(s7_scheme *sc)
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
 }
 
-static inline bool read_sharp_const(s7_scheme *sc)
+static /* inline */ bool read_sharp_const(s7_scheme *sc) /* tread but inline makes no difference? (it's currently inlined anyway) */
 {
   sc->value = port_read_sharp(current_input_port(sc))(sc, current_input_port(sc));
   if (sc->value == sc->no_value)
@@ -94162,7 +94160,7 @@ static s7_pointer symbol_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   s7_pointer slot = lookup_slot_from(sym, sc->curlet);
   if (!is_slot(slot))
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "set!: '~S, is unbound", 21), sym));
+    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "set!: '~S is unbound", 20), sym));
   if (is_immutable(slot))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->symbol_symbol, sym));
   slot_set_value(slot, val);
@@ -95988,12 +95986,12 @@ int main(int argc, char **argv)
  * lt        2187   2172   2150   2182   2185
  * dup       3805   3788   2492   2243   2239
  * tcopy     8035   5546   2539   2373   2375
- * tload     ----   ----   3046   2370   2408
+ * tload     ----   ----   3046   2370   2404
  * tread     2440   2421   2419   2407   2408
  * fbench    2688   2583   2460   2428   2430
  * trclo     2735   2574   2454   2446   2445
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2567   2574
+ * tmat      3065   3042   2524   2567   2578
  * tb        2735   2681   2612   2603   2604
  * tsort     3105   3104   2856   2804   2804
  * teq       4068   4045   3536   3487   3486
@@ -96003,7 +96001,7 @@ int main(int argc, char **argv)
  * tclo      4787   4735   4390   4389   4384
  * tcase     4960   4793   4439   4425   4430
  * tlet      7775   5640   4450   4431   4427
- * tstar     6139   5923   5519   4414   4451
+ * tstar     6139   5923   5519   4414   4449
  * tfft      7820   7729   4755   4465   4476
  * tmap      8869   8774   4489   4541   4541
  * tshoot    5525   5447   5183   5055   5055
@@ -96028,4 +96026,8 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.2  106.5
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ---------------------------------------------
+ *
+ * should this difference (with Guile/spec) be fixed:
+ *      s7: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(\"a\" #\\a)"
+ *   guile: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(a a)"
  */

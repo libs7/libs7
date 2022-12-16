@@ -5974,9 +5974,7 @@ but:
 a mistake and "fixed" it; now I'm having second thoughts).
 </p>
 
-
-<!-- another case:  (with-let (inlet '+ -) (+ 2 3)) -> 5 -->
-<!-- also, (eq? (if #f #f) (apply values ())) is #t, but memq and assq don't treat them as equal -->
+<!-- (eq? (if #f #f) (apply values ())) is #t, but memq and assq don't treat them as equal -->
 
 </div>
 
@@ -6012,6 +6010,22 @@ a mistake and "fixed" it; now I'm having second thoughts).
 <li>remove the with-* IO functions (e.g. with-input-from-string), keeping the call-with-* versions (call-with-input-string).
 <li>remove assq, assv, memq, and memv (these are pointless now that assoc and member can be passed eq? and eqv?).
 <li>move all the "*var*" names to *s7*: *load-hook* becomes (*s7* 'load-hook) for example.
+</ul>
+
+<p>Currently WITH_PURE_S7:
+</p>
+<ul style="list-style-type:disc;">
+<li>places 'pure-s7 in *features*
+<li>omits char-ready, char-ci*, string-ci*
+<li>omits string-fill!, vector-fill!, vector-append
+<li>omits list-&gt;string, list-&gt;vector, string-&gt;list, vector-&gt;list, let-&gt;list
+<li>omits string-length and vector-length
+<li>omits cond-expand, multiple-values-bind|set!, call-with-values
+<li>omits unquote (the name)
+<li>omits d/f/s/l exponents
+<li>omits make-polar and make-rectangular (use complex)
+<li>omits exact?, inexact?, exact-&gt;inexact, inexact-&gt;exact
+<li>omits set-current-output-port and set-current-input-port
 </ul>
 
 <p>With the move to s7_setter and s7_set_setter (setter in Scheme), 
@@ -6147,22 +6161,6 @@ Other possibilities are <code>signature</code>, <code>documentation</code>,
 <code>arity</code>, <code>arglist</code>, <code>value</code>, and <code>source</code>.
 <code>funclet</code> returns the current function's funclet.
 </p>
-
-<p>Currently WITH_PURE_S7:
-</p>
-<ul style="list-style-type:disc;">
-<li>places 'pure-s7 in *features*
-<li>omits char-ready, char-ci*, string-ci*
-<li>omits string-fill!, vector-fill!, vector-append
-<li>omits list-&gt;string, list-&gt;vector, string-&gt;list, vector-&gt;list, let-&gt;list
-<li>omits string-length and vector-length
-<li>omits cond-expand, multiple-values-bind|set!, call-with-values
-<li>omits unquote (the name)
-<li>omits d/f/s/l exponents
-<li>omits make-polar and make-rectangular (use complex)
-<li>omits exact?, inexact?, exact-&gt;inexact, inexact-&gt;exact
-<li>omits set-current-output-port and set-current-input-port
-</ul>
 
 </div>
 
