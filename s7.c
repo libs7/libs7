@@ -5994,11 +5994,9 @@ s7_pointer s7_out_of_range_error(s7_scheme *sc, const char *caller, s7_int arg_n
   return(sc->out_of_range_symbol);
 }
 
-
-static noreturn void wrong_number_of_args_error_nr(s7_scheme *sc, const char *caller, s7_pointer args)
+static noreturn void wrong_number_of_arguments_error_nr(s7_scheme *sc, const char *errmsg, s7_int len, s7_pointer args)
 {
-  error_nr(sc, sc->wrong_number_of_args_symbol,
-	   set_elist_2(sc, s7_make_string_wrapper(sc, caller), args)); /* "caller" includes the format directives */
+  error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_2(sc, wrap_string(sc, errmsg, len), args));
 }
 
 s7_pointer s7_wrong_number_of_args_error(s7_scheme *sc, const char *caller, s7_pointer args)
@@ -37325,7 +37323,7 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
   else
     {
       if (!s7_is_pair(car(p)))
-	wrong_number_of_args_error_nr(sc, "too many arguments for list-set!: ~S", args);
+	wrong_number_of_arguments_error_nr(sc, "too many arguments for list-set!: ~S", 36, args);
       return(g_list_set_1(sc, car(p), cdr(args), arg_num + 1));
     }
   return(cadr(args));
@@ -38867,13 +38865,13 @@ s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...) /* arglist should b
       if (!p)
 	{
 	  va_end(ap);
-	  wrong_number_of_args_error_nr(sc, "not enough arguments for s7_list_nl: ~S", sc->w); /* ideally we'd sublist this and append extra below */
+	  wrong_number_of_arguments_error_nr(sc, "not enough arguments for s7_list_nl: ~S", 39, sc->w); /* ideally we'd sublist this and append extra below */
 	}
       set_car(q, p);
     }
   p = va_arg(ap, s7_pointer);
   va_end(ap);
-  if (p) wrong_number_of_args_error_nr(sc, "too many arguments for s7_list_nl: ~S", sc->w);
+  if (p) wrong_number_of_arguments_error_nr(sc, "too many arguments for s7_list_nl: ~S", 37, sc->w);
 
   if (sc->safety > NO_SAFETY)
     check_list_validity(sc, __func__, sc->w);
@@ -39701,7 +39699,7 @@ static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_i
   if (rank != indices)
     {
       va_end(ap);
-      wrong_number_of_args_error_nr(sc, "s7_vector_ref_n: wrong number of indices: ~A", wrap_integer(sc, indices));
+      wrong_number_of_arguments_error_nr(sc, "s7_vector_ref_n: wrong number of indices: ~A", 44, wrap_integer(sc, indices));
     }
   if (rank == 1)
     index = va_arg(ap, s7_int);
@@ -40489,9 +40487,9 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	  index += n * vector_offset(vec, i);
 	}
       if (is_not_null(cdr(x)))
-	wrong_number_of_args_error_nr(sc, "too many arguments for vector-set!: ~S", args);
+	wrong_number_of_arguments_error_nr(sc, "too many arguments for vector-set!: ~S", 38, args);
       if (i != vector_ndims(vec))
-	wrong_number_of_args_error_nr(sc, "not enough arguments for vector-set!: ~S", args);
+	wrong_number_of_arguments_error_nr(sc, "not enough arguments for vector-set!: ~S", 40, args);
 
       /* since vector-ref can return a subvector (if not passed enough args), it might be interesting to
        *   also set a complete subvector via set!, but would that introduce ambiguity?  Only copy the vector
@@ -40515,7 +40513,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 	{
 	  s7_pointer v = vector_getter(vec)(sc, vec, index);
 	  if (!is_any_vector(v))
-	    wrong_number_of_args_error_nr(sc, "too many arguments for vector-set!: ~S", args);
+	    wrong_number_of_arguments_error_nr(sc, "too many arguments for vector-set!: ~S", 38, args);
 	  return(g_vector_set(sc, set_ulist_1(sc, v, cddr(args))));
 	}
       val = caddr(args);
@@ -51451,7 +51449,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 	  sc->code = error_func;
 	  sc->y = sc->unused;
 	  if (!s7_is_aritable(sc, sc->code, 2)) /* op_catch_1 from op_c_catch already checks this */
-	    wrong_number_of_args_error_nr(sc, "catch error handler should accept two arguments: ~S", sc->code);
+	    wrong_number_of_arguments_error_nr(sc, "catch error handler should accept two arguments: ~S", 51, sc->code);
 	}
       sc->temp4 = sc->unused;
       /* if user (i.e. yers truly!) copies/pastes the preceding lambda () into the
@@ -78926,7 +78924,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
   s7_int argnum;
 
   if (!is_pair(inds))
-    wrong_number_of_args_error_nr(sc, "no index for implicit vector-set!: ~S", form);
+    wrong_number_of_arguments_error_nr(sc, "no index for implicit vector-set!: ~S", 37, form);
   if (is_immutable(vect))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, vect));
 
@@ -79138,9 +79136,9 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer inds
   s7_pointer index;
 
   if (!is_pair(inds))
-    wrong_number_of_args_error_nr(sc, "no index for string set!: ~S", form);
+    wrong_number_of_arguments_error_nr(sc, "no index for string set!: ~S", 28, form);
   if (!is_null(cdr(inds)))
-    wrong_number_of_args_error_nr(sc, "too many indices for string set!: ~S", form);
+    wrong_number_of_arguments_error_nr(sc, "too many indices for string set!: ~S", 36, form);
 
   index = car(inds);
   if (!is_pair(index))
@@ -79187,7 +79185,7 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, 
   s7_pointer index, index_val = NULL, value = car(val);
 
   if (!is_pair(inds)) /* (!is_pair(val)) and (!is_null(cdr(val))) are apparently caught somewhere else */
-    wrong_number_of_args_error_nr(sc, "no index for list-set!: ~S", form);
+    wrong_number_of_arguments_error_nr(sc, "no index for list-set!: ~S", 26, form);
 
   index = car(inds);
   if (!is_pair(index))
@@ -79234,7 +79232,7 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
   s7_pointer key, keyval = NULL;
 
   if (!is_pair(inds)) /* (!is_pair(val)) and (!is_null(cdr(val))) are apparently caught elsewhere */
-    wrong_number_of_args_error_nr(sc, "no key for hash-table-set!: ~S", form);
+    wrong_number_of_arguments_error_nr(sc, "no key for hash-table-set!: ~S", 30, form);
   if (is_immutable(table))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, table));
 
@@ -79300,7 +79298,7 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer inds, s
   s7_pointer sym, symval = NULL;
 
   if (!is_pair(inds)) /* as above, bad val caught elsewhere */
-    wrong_number_of_args_error_nr(sc, "no symbol (variable name) for let-set!: ~S", form);
+    wrong_number_of_arguments_error_nr(sc, "no symbol (variable name) for let-set!: ~S", 42, form);
 
   sym = car(inds);
   if (is_pair(sym))
@@ -82555,7 +82553,7 @@ static void apply_vector(s7_scheme *sc)                    /* -------- vector as
 {
   /* sc->code is the vector, sc->args is the list of indices */
   if (is_null(sc->args))                  /* (#2d((1 2) (3 4))) */
-    wrong_number_of_args_error_nr(sc, "vector ref: no index: (~A)", sc->code);
+    wrong_number_of_arguments_error_nr(sc, "vector ref: no index: (~A)", 26, sc->code);
   if ((is_null(cdr(sc->args))) &&
       (s7_is_integer(car(sc->args))) &&
       (vector_rank(sc->code) == 1))
@@ -82600,7 +82598,7 @@ static bool apply_pair(s7_scheme *sc)                       /* -------- list as 
       return(false);
     }
   if (is_null(sc->args))
-    wrong_number_of_args_error_nr(sc, "list ref: no index: (~S)", sc->code);
+    wrong_number_of_arguments_error_nr(sc, "list ref: no index: (~S)", 24, sc->code);
   sc->value = list_ref_1(sc, sc->code, car(sc->args));    /* (L 1) */
   if (!is_null(cdr(sc->args)))
     sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
@@ -82610,7 +82608,7 @@ static bool apply_pair(s7_scheme *sc)                       /* -------- list as 
 static void apply_hash_table(s7_scheme *sc)                /* -------- hash-table as applicable object -------- */
 {
   if (is_null(sc->args))
-    wrong_number_of_args_error_nr(sc, "hash-table ref: no key: (~S)", sc->code);
+    wrong_number_of_arguments_error_nr(sc, "hash-table ref: no key: (~S)", 28, sc->code);
   sc->value = s7_hash_table_ref(sc, sc->code, car(sc->args));
   if (!is_null(cdr(sc->args)))
     sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
@@ -82619,7 +82617,7 @@ static void apply_hash_table(s7_scheme *sc)                /* -------- hash-tabl
 static void apply_let(s7_scheme *sc)                       /* -------- environment as applicable object -------- */
 {
   if (is_null(sc->args))
-    wrong_number_of_args_error_nr(sc, "let ref: no field: (~S)", sc->code);
+    wrong_number_of_arguments_error_nr(sc, "let ref: no field: (~S)", 23, sc->code);
   sc->value = let_ref(sc, sc->code, car(sc->args));
   if (is_pair(cdr(sc->args)))
     sc->value = implicit_index_checked(sc, sc->code, sc->value, sc->args);
@@ -88401,11 +88399,10 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 static token_t read_comma(s7_scheme *sc, s7_pointer pt)
 {
   /* here we probably should check for symbol names that start with "@":
-         (define-macro (hi @foo) `(+ ,@foo 1)) -> hi, (hi 2) -> ;foo: unbound variable
-     but (define-macro (hi .foo) `(+ ,.foo 1)) -> hi, (hi 2) -> 3
-     and ambiguous:
-         (define-macro (hi @foo . foo) `(list ,@foo))
-     what about , @foo -- is the space significant?  We accept ,@ foo.
+         (define-macro (hi @foo) `(+ ,@foo 1)): (hi 2) -> ;foo: unbound variable
+     but (define-macro (hi .foo) `(+ ,.foo 1)): (hi 2) -> 3
+     and ambiguous: (define-macro (hi @foo . foo) `(list ,@foo))
+     what about , @foo -- is the space significant?  We accept ,@ foo. (Currently , @ says unbound variable @foo).
   */
   int32_t c = inchar(pt);
   if (c == '@')
