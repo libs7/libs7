@@ -72601,9 +72601,12 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  bool c_safe;
 
 	  if (symbol_is_in_list(sc, expr)) return(UNSAFE_BODY);
+	  if ((is_slot(global_slot(expr))) && (is_syntax(global_value(expr)))) 
+	    return(UNSAFE_BODY); /* syntax hidden behind some other name */
+
 	  f_slot = lookup_slot_from(expr, sc->curlet);
-	  if (!is_slot(f_slot))
-	    return(UNSAFE_BODY);
+	  if (!is_slot(f_slot)) return(UNSAFE_BODY);
+
 	  f = slot_value(f_slot);
 	  if (is_c_function(f))
 	    {
@@ -79597,6 +79600,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
    *   we can free var_list if return(false) not after (!do_is_safe...), but it seems to make no difference, or be slightly slower
    */
   /* sc->code is the complete do form (do ...) */
+
   for (s7_pointer p = body; is_pair(p); p = cdr(p))
     {
       s7_pointer expr = car(p);
@@ -79759,30 +79763,38 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		  (!do_is_safe(sc, cdr(expr), stepper, var_list, has_set)))
 		return(false);
 
+	      /* is this still needed? fx_c_optcq bug -- tests seem ok without it -- 3.5 in tmat */
+	      if ((is_symbol(x)) && (is_slot(global_slot(x))) && (is_syntax(global_value(x))))
+		return(false); /* syntax hidden behind some other name */
+
 	      if ((is_symbol(x)) && (is_setter(x)))             /* "setter" includes stuff like cons and vector -- x is a symbol */
 		{
 		  /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
 		   *   similarly (vector-set! v 0 i) etc
 		   */
-		  if (is_null(cdr(expr)))                       /* (vector) for example */
-		    return((x == sc->vector_symbol) || (x == sc->list_symbol) || (x == sc->string_symbol));
-
-		  if ((has_set) &&
-		      (!direct_memq(cadr(expr), var_list)) &&   /* non-local is being changed */
-		      ((cadr(expr) == stepper) ||               /* stepper is being set? */
-		       (!is_pair(cddr(expr))) ||
-		       (!is_pair(cdddr(expr))) ||
-		       (is_pair(cddddr(expr))) ||
-		       ((x == sc->hash_table_set_symbol) && (caddr(expr) == stepper)) ||
-		       (cadddr(expr) == stepper) ||             /* used to check is_symbol here and above but that's unnecessary */
-		       ((is_pair(cadddr(expr))) && (s7_tree_memq(sc, stepper, cadddr(expr))))))
-		    (*has_set) = true;
-
-		  if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
-		    return(false);
-		  if (!safe_stepper_expr(expr, stepper))
-		    return(false);
-		}}}}
+		  if (is_null(cdr(expr)))
+		    {
+		      if (is_null(cdr(p)))                    /* (vector) for example */
+			return((x == sc->vector_symbol) || (x == sc->list_symbol) || (x == sc->string_symbol));
+		    }
+		  else
+		    {
+		      if ((has_set) &&
+			  (!direct_memq(cadr(expr), var_list)) &&   /* non-local is being changed */
+			  ((cadr(expr) == stepper) ||               /* stepper is being set? */
+			   (!is_pair(cddr(expr))) ||
+			   (!is_pair(cdddr(expr))) ||
+			   (is_pair(cddddr(expr))) ||
+			   ((x == sc->hash_table_set_symbol) && (caddr(expr) == stepper)) ||
+			   (cadddr(expr) == stepper) ||             /* used to check is_symbol here and above but that's unnecessary */
+			   ((is_pair(cadddr(expr))) && (s7_tree_memq(sc, stepper, cadddr(expr))))))
+			(*has_set) = true;
+		      
+		      if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
+			return(false);
+		      if (!safe_stepper_expr(expr, stepper))
+			return(false);
+		    }}}}}
   return(true);
 }
 
@@ -95967,64 +95979,65 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ---------------------------------------------
- *            20.9   21.0   22.0   22.9   23.0
- * ---------------------------------------------
- * tpeak      115    114    108    105    105
- * tref       691    687    463    459    459
- * index     1026   1016    973    966    967
- * tmock     1177   1165   1057   1019   1019
- * tvect     2519   2464   1772   1670   1669
- * timp      2637   2575   1930   1689   1694
- * texit     ----   ----   1778   1741   1741
- * s7test    1873   1831   1818   1826   1829
- * thook     ----   ----   2590   2030   2030
- * tauto     ----   ----   2562   2055   2048
- * lt        2187   2172   2150   2182   2185
- * dup       3805   3788   2492   2243   2239
- * tcopy     8035   5546   2539   2373   2375
- * tload     ----   ----   3046   2370   2404
- * tread     2440   2421   2419   2407   2408
- * fbench    2688   2583   2460   2428   2430
- * trclo     2735   2574   2454   2446   2445
- * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2567   2578
- * tb        2735   2681   2612   2603   2604
- * tsort     3105   3104   2856   2804   2804
- * teq       4068   4045   3536   3487   3486
- * tobj      4016   3970   3828   3570   3577
- * tio       3816   3752   3683   3620   3620
- * tmac      3950   3873   3033   3677   3677
- * tclo      4787   4735   4390   4389   4384
- * tcase     4960   4793   4439   4425   4430
- * tlet      7775   5640   4450   4431   4427
- * tstar     6139   5923   5519   4414   4449
- * tfft      7820   7729   4755   4465   4476
- * tmap      8869   8774   4489   4541   4541
- * tshoot    5525   5447   5183   5055   5055
- * tstr      6880   6342   5488   5161   5162
- * tform     5357   5348   5307   5304   5316
- * tnum      6348   6013   5433   5385   5396
- * tlamb     6423   6273   5720   5554   5560
- * tmisc     8869   7612   6435   6085   6076
- * tset      ----   ----   ----   6242   6260
- * tlist     7896   7546   6558   6244   6240
- * tgsl      8485   7802   6373   6281   6282
- * tari      13.0   12.7   6827   6543   6543
- * trec      6936   6922   6521   6588   6588
- * tleft     10.4   10.2   7657   7477   7479
- * tgc       11.9   11.1   8177   7868   7857
- * thash     11.8   11.7   9734   9483   9479
- * cb        11.2   11.0   9658   9551   9564
- * tgen      11.2   11.4   12.0   12.1   12.1
- * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.6   37.5
- * sg        ----   ----   55.9   55.8   55.8
- * lg        ----   ----  105.2  106.2  106.5
- * tbig     177.4  175.8  156.5  148.1  148.1
- * ---------------------------------------------
+/* --------------------------------------
+ *            20.9   21.0   22.0   23.0
+ * --------------------------------------
+ * tpeak      115    114    108    105
+ * tref       691    687    463    459
+ * index     1026   1016    973    967
+ * tmock     1177   1165   1057   1019
+ * tvect     2519   2464   1772   1669
+ * timp      2637   2575   1930   1694
+ * texit     ----   ----   1778   1741
+ * s7test    1873   1831   1818   1829
+ * thook     ----   ----   2590   2030
+ * tauto     ----   ----   2562   2048
+ * lt        2187   2172   2150   2185
+ * dup       3805   3788   2492   2239
+ * tcopy     8035   5546   2539   2375
+ * tload     ----   ----   3046   2404
+ * tread     2440   2421   2419   2408
+ * fbench    2688   2583   2460   2430
+ * trclo     2735   2574   2454   2445
+ * titer     2865   2842   2641   2509
+ * tmat      3065   3042   2524   2578 [do_is_safe]
+ * tb        2735   2681   2612   2604
+ * tsort     3105   3104   2856   2804
+ * teq       4068   4045   3536   3486
+ * tobj      4016   3970   3828   3577
+ * tio       3816   3752   3683   3620
+ * tmac      3950   3873   3033   3677
+ * tclo      4787   4735   4390   4384
+ * tcase     4960   4793   4439   4430
+ * tlet      7775   5640   4450   4427
+ * tstar     6139   5923   5519   4449
+ * tfft      7820   7729   4755   4476
+ * tmap      8869   8774   4489   4541
+ * tshoot    5525   5447   5183   5055
+ * tstr      6880   6342   5488   5162
+ * tform     5357   5348   5307   5316
+ * tnum      6348   6013   5433   5396
+ * tlamb     6423   6273   5720   5560
+ * tmisc     8869   7612   6435   6076
+ * tlist     7896   7546   6558   6240
+ * tset      ----   ----   ----   6260
+ * tgsl      8485   7802   6373   6282
+ * tari      13.0   12.7   6827   6543
+ * trec      6936   6922   6521   6588
+ * tleft     10.4   10.2   7657   7479
+ * tgc       11.9   11.1   8177   7857
+ * thash     11.8   11.7   9734   9479
+ * cb        11.2   11.0   9658   9564
+ * tgen      11.2   11.4   12.0   12.1
+ * tall      15.6   15.6   15.6   15.6
+ * calls     36.7   37.5   37.0   37.5
+ * sg        ----   ----   55.9   55.8
+ * lg        ----   ----  105.2  106.4
+ * tbig     177.4  175.8  156.5  148.1
+ * --------------------------------------
  *
  * should this difference (with Guile/spec) be fixed:
  *      s7: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(\"a\" #\\a)"
  *   guile: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(a a)"
+ *   is there any point to the display/write distinction?
  */
