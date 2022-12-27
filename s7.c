@@ -70700,6 +70700,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 
   if (is_closure_star(func))
     {
+      if (!closure_star_is_aritable(sc, func, closure_args(func), 2)) 
+	return(OPT_OOPS); /* (let* cons () (lambda* (a . b) (cons a b))) */
       if (is_immutable(func)) hop = 1;
       if (fx_count(sc, expr) == 2)
 	{
@@ -70713,7 +70715,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       (fx_count(sc, expr) == 2) &&
       (c_function_max_args(func) >= 1) &&
       (!is_symbol_and_keyword(arg2)))
-    {
+    { /* does this need an arity check? */
       if ((hop == 0) && ((is_immutable(func)) || ((!sc->in_with_let) && (symbol_id(car(expr)) == 0)))) hop = 1;
       set_optimized(expr);
       set_optimize_op(expr, hop + OP_SAFE_C_STAR_AA); /* k+c? = cc */
@@ -77544,16 +77546,22 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer code = cdr(arg);
   s7_pointer e = lookup_checked(sc, car(code));
+  s7_pointer sym = cadr(code);
+  s7_pointer val;
   if ((!is_let(e)) && (e != sc->rootlet))
     {
       e = find_let(sc, e);
       if (!is_let(e))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), car(code)));
     }
-  e = let_ref(sc, e, cadr(code)); /* (with-let e s) -> (let-ref e s) */
-  if (e == sc->undefined)
-    unbound_variable_error_nr(sc, cadr(code));
-  return(e);
+  val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled? */
+  if (val == sc->undefined)
+    {
+      if ((e == sc->s7_starlet) && (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
+	return(global_value(sym));                              /* perhaps the e=*s7* check is not needed */
+      unbound_variable_error_nr(sc, sym);
+    }
+  return(val);
 }
 
 static void activate_with_let(s7_scheme *sc, s7_pointer e)
@@ -96039,5 +96047,5 @@ int main(int argc, char **argv)
  * should this difference (with Guile/spec) be fixed:
  *      s7: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(\"a\" #\\a)"
  *   guile: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(a a)"
- *   is there any point to the display/write distinction?
+ *   is there any point to the display/write distinction? (why would anyone want display?)
  */
