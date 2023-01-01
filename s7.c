@@ -4047,17 +4047,18 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
 
 #if WITH_GCC
   #if S7_DEBUGGING
-    static s7_pointer lookup_1(s7_scheme *sc, s7_pointer symbol);
+    static s7_pointer lookup_1(s7_scheme *sc, const s7_pointer symbol);
     #define lookup(Sc, Sym) check_null_sym(Sc, lookup_1(Sc, Sym), Sym, __LINE__, __func__)
     static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, int32_t line, const char *func);
     #define lookup_unexamined(Sc, Sym) lookup_1(Sc, Sym)
     #define lookup_checked(Sc, Sym) ({s7_pointer _x_; _x_ = lookup_1(Sc, Sym); ((_x_) ? _x_ : unbound_variable(Sc, Sym));})
   #else
-    static inline s7_pointer lookup(s7_scheme *sc, s7_pointer symbol);
+    static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol);
     #define lookup_unexamined(Sc, Sym) lookup(Sc, Sym)
     #define lookup_checked(Sc, Sym) ({s7_pointer _x_; _x_ = lookup(Sc, Sym); ((_x_) ? _x_ : unbound_variable(Sc, Sym));})
   #endif
 #else
+  static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol);
   #define lookup_unexamined(Sc, Sym) s7_symbol_value(Sc, Sym)  /* changed 3-Nov-22 -- we're using lookup_unexamined below to avoid the unbound_variable check */
   #define lookup_checked(Sc, Sym) lookup(Sc, Sym)
 #endif
@@ -7477,7 +7478,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
 #if (S7_DEBUGGING) && (!MS_WINDOWS)
   if (show_gc_stats(sc))
-    s7_warn(sc, 512, "%s from %s[%d]: old: %" ld64 " / %ld, new: %" ld64 ", fraction: %.3f -> %" ld64 "\n",
+    s7_warn(sc, 512, "%s from %s[%d]: old: %" ld64 " / %" ld64 ", new: %" ld64 ", fraction: %.3f -> %" ld64 "\n",
 	    __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
 #endif
 
@@ -9850,6 +9851,7 @@ static s7_pointer call_let_ref_fallback(s7_scheme *sc, s7_pointer let, s7_pointe
 {
   s7_pointer p;
   push_stack_no_let(sc, OP_GC_PROTECT, sc->value, sc->code);
+  /* (let ((x #f)) (let begin ((x 1234)) (begin 1) 2)) -> stack overflow eventually, but should we try to catch it? */
   p = s7_apply_function(sc, find_method(sc, let, sc->let_ref_fallback_symbol), set_qlist_2(sc, let, symbol));
   unstack(sc);
   sc->code = T_Pos(sc->stack_end[0]); /* can be #<unused> */
@@ -13846,9 +13848,8 @@ static int32_t dtoa_filter_special(double fp, char* dest, bool neg)
   if (bits & dtoa_fracmask)
     {
       s7_int payload = nan_payload(fp);
-      size_t len;
-      len = snprintf(dest, 22, "nan.%" ld64, payload);
-      /* dest[0] = 'n'; dest[1] = 'a'; dest[2] = 'n'; dest[3] = '.'; dest[4] = '0'; */
+      int32_t len;
+      len = (int32_t)snprintf(dest, 22, "nan.%" ld64, payload);
       return((neg) ? len : len + 1);
     }
   dest[0] = 'i'; dest[1] = 'n'; dest[2] = 'f'; dest[3] = '.'; dest[4] = '0';
@@ -25712,7 +25713,7 @@ static void init_chars(void)
       is_char_lowercase(cp) = (bool)islower(i);
       chars[i] = cp;
 
-      #define make_character_name(S) memcpy((void *)(&(character_name(cp))), (const void *)(S), character_name_length(cp) = strlen(S))
+      #define make_character_name(S) memcpy((void *)(&(character_name(cp))), (const void *)(S), character_name_length(cp) = (int32_t)strlen(S))
       switch (c)
 	{
 	case ' ':	 make_character_name("#\\space");     break;
@@ -32281,7 +32282,7 @@ static void output_port_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, 
 		char str[256];
 		int32_t nlen;
 		str[0] = '\0';
-		nlen = catstrs(str, 256, "(open-output-file \"", port_filename(obj), "\" \"a\")", (char *)NULL);
+		nlen = (int32_t)catstrs(str, 256, "(open-output-file \"", port_filename(obj), "\" \"a\")", (char *)NULL);
 		port_write_string(port)(sc, str, nlen, port);
 	      }
 	    else port_write_string(port)(sc, "#<output-function-port>", 23, port);
@@ -32318,7 +32319,7 @@ static void input_port_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, u
 		char str[256];
 		int32_t nlen;
 		str[0] = '\0';
-		nlen = catstrs(str, 256, "(open-input-file \"", port_filename(obj), "\")", (char *)NULL);
+		nlen = (int32_t)catstrs(str, 256, "(open-input-file \"", port_filename(obj), "\")", (char *)NULL);
 		port_write_string(port)(sc, str, nlen, port);
 	      }
 	    else
@@ -32335,14 +32336,14 @@ static void input_port_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, u
 			do_str[0] = '\0';
 			if (port_position(obj) > 0)
 			  {
-			    len = catstrs(do_str, DO_STR_LEN, "(let ((port (open-input-file \"", filename, "\")))", (char *)NULL);
+			    len = (int32_t)catstrs(do_str, DO_STR_LEN, "(let ((port (open-input-file \"", filename, "\")))", (char *)NULL);
 			    port_write_string(port)(sc, do_str, len, port);
 			    do_str[0] = '\0';
-			    len = catstrs(do_str, DO_STR_LEN, " (do ((i 0 (+ i 1)) (c (read-char port) (read-char port))) ((= i ",
-					  pos_int_to_str_direct(sc, port_position(obj) - 1),
-					  ") port)))", (char *)NULL);
+			    len = (int32_t)catstrs(do_str, DO_STR_LEN, " (do ((i 0 (+ i 1)) (c (read-char port) (read-char port))) ((= i ",
+						   pos_int_to_str_direct(sc, port_position(obj) - 1),
+						   ") port)))", (char *)NULL);
 			  }
-			else len = catstrs(do_str, DO_STR_LEN, "(open-input-file \"", filename, "\")", (char *)NULL);
+			else len = (int32_t)catstrs(do_str, DO_STR_LEN, "(open-input-file \"", filename, "\")", (char *)NULL);
 			port_write_string(port)(sc, do_str, len, port);
 			return;
 		      }}
@@ -32503,20 +32504,20 @@ static void make_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port)
 
   if (vector_rank(vect) == 1)
     {
-      plen = catstrs_direct(buf, "(make-", vtyp, "vector ", integer_to_string_no_length(sc, vlen), " ", (const char *)NULL);
+      plen = (int32_t)catstrs_direct(buf, "(make-", vtyp, "vector ", integer_to_string_no_length(sc, vlen), " ", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
     }
   else
     {
       s7_int dim;
-      plen = catstrs_direct(buf, "(make-", vtyp, "vector '(", (const char *)NULL);
+      plen = (int32_t)catstrs_direct(buf, "(make-", vtyp, "vector '(", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
       for (dim = 0; dim < vector_ndims(vect) - 1; dim++)
 	{
-	  plen = catstrs_direct(buf, integer_to_string_no_length(sc, vector_dimension(vect, dim)), " ", (const char *)NULL);
+	  plen = (int32_t)catstrs_direct(buf, integer_to_string_no_length(sc, vector_dimension(vect, dim)), " ", (const char *)NULL);
 	  port_write_string(port)(sc, buf, plen, port);
 	}
-      plen = catstrs_direct(buf, integer_to_string_no_length(sc, vector_dimension(vect, dim)), ") ", (const char *)NULL);
+      plen = (int32_t)catstrs_direct(buf, integer_to_string_no_length(sc, vector_dimension(vect, dim)), ") ", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
     }
 }
@@ -32759,8 +32760,8 @@ static int32_t print_vector_length(s7_scheme *sc, s7_pointer vect, s7_pointer po
   if (len == 0)
     {
       if (vector_rank(vect) > 1)
-	plen = catstrs_direct(buf, "#", vtype, pos_int_to_str_direct(sc, vector_ndims(vect)), "d()", (const char *)(const char *)NULL);
-      else plen = catstrs_direct(buf, "#", vtype, "()", (const char *)NULL);
+	plen = (int32_t)catstrs_direct(buf, "#", vtype, pos_int_to_str_direct(sc, vector_ndims(vect)), "d()", (const char *)(const char *)NULL);
+      else plen = (int32_t)catstrs_direct(buf, "#", vtype, "()", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
       return(-1);
     }
@@ -32771,7 +32772,7 @@ static int32_t print_vector_length(s7_scheme *sc, s7_pointer vect, s7_pointer po
 
   if (vector_rank(vect) > 1)
     {
-      plen = catstrs_direct(buf, "#", vtype, pos_int_to_str_direct(sc, vector_ndims(vect)), "d(...)", (const char *)NULL);
+      plen = (int32_t)catstrs_direct(buf, "#", vtype, pos_int_to_str_direct(sc, vector_ndims(vect)), "d(...)", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
     }
   else
@@ -33016,7 +33017,7 @@ static void string_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
 	  if (size == (size_t)(string_length(obj) - 1))
 	    {
 	      s7_pointer c = chars[(int32_t)((uint8_t)(buf[0]))];
-	      int32_t nlen = catstrs_direct(buf, "(make-string ", pos_int_to_str_direct(sc, string_length(obj)), " ", (const char *)NULL);
+	      int32_t nlen = (int32_t)catstrs_direct(buf, "(make-string ", pos_int_to_str_direct(sc, string_length(obj)), " ", (const char *)NULL);
 	      port_write_string(port)(sc, buf, nlen, port);
 	      port_write_string(port)(sc, character_name(c), character_name_length(c), port);
 	      if (immutable)
@@ -33130,7 +33131,7 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 	  if ((ci->defined[href]) || (port == ci->cycle_port))
 	    {
 	      char buf[128];
-	      int32_t plen = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, href), ">", (const char *)NULL);
+	      int32_t plen = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, href), ">", (const char *)NULL);
 	      port_write_string(port)(sc, buf, plen, port);
 	      return;
 	    }}}
@@ -33234,8 +33235,8 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 		  (is_cyclic(car(x))))
 		{
 		  if (i == 0)
-		    plen = catstrs_direct(buf, "  (set-car! ", lst_name, " ", (const char *)NULL);
-		  else plen = catstrs_direct(buf, "  (set! (", lst_name, " ", pos_int_to_str_direct(sc, i), ") ", (const char *)NULL);
+		    plen = (int32_t)catstrs_direct(buf, "  (set-car! ", lst_name, " ", (const char *)NULL);
+		  else plen = (int32_t)catstrs_direct(buf, "  (set! (", lst_name, " ", pos_int_to_str_direct(sc, i), ") ", (const char *)NULL);
 		  port_write_string(local_port)(sc, buf, plen, local_port);
 		  lref = peek_shared_ref(ci, car(x));
 		  if (lref == 0)
@@ -33243,7 +33244,7 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 		  else
 		    {
 		      if (lref < 0) lref = -lref;
-		      plen = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, lref), ">", (const char *)NULL);
+		      plen = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, lref), ">", (const char *)NULL);
 		      port_write_string(local_port)(sc, buf, plen, local_port);
 		    }
 		  port_write_string(local_port)(sc, ") ", 2, local_port);
@@ -33253,15 +33254,15 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 		{
 		  if (lref < 0) lref = -lref;
 		  if (i == 0)
-		    plen = catstrs_direct(buf, (lst_local) ? "    " : "  ",
-					  "(set-cdr! ", lst_name, " <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
+		    plen = (int32_t)catstrs_direct(buf, (lst_local) ? "    " : "  ",
+						   "(set-cdr! ", lst_name, " <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
 		  else
 		    if (i == 1)
-		      plen = catstrs_direct(buf, (lst_local) ? "    " : "  ",
-					    "(set-cdr! (cdr ", lst_name, ") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
-		    else plen = catstrs_direct(buf, (lst_local) ? "    " : "  ",
-					       "(set-cdr! (list-tail ", lst_name, " ", pos_int_to_str_direct_1(sc, i),
-					       ") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
+		      plen = (int32_t)catstrs_direct(buf, (lst_local) ? "    " : "  ",
+						     "(set-cdr! (cdr ", lst_name, ") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
+		    else plen = (int32_t)catstrs_direct(buf, (lst_local) ? "    " : "  ",
+							"(set-cdr! (list-tail ", lst_name, " ", pos_int_to_str_direct_1(sc, i),
+							") <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
 		  port_write_string(local_port)(sc, buf, plen, local_port);
 		  break;
 		}}
@@ -33271,11 +33272,11 @@ static void pair_to_port(s7_scheme *sc, s7_pointer lst, s7_pointer port, use_wri
 	      for (end_x = lst; is_pair(end_x); end_x = cdr(end_x)); /* or maybe faster, start at x? */
 	      /* we can't depend on the loops above to set x to the last element because they sometimes break out */
 	      if (true_len == -1) /* cons cell */
-		plen = catstrs_direct(buf, (lst_local) ? "    " : "  ", "(set-cdr! ", lst_name, " ", (const char *)NULL);
+		plen = (int32_t)catstrs_direct(buf, (lst_local) ? "    " : "  ", "(set-cdr! ", lst_name, " ", (const char *)NULL);
 	      else
 		if (true_len == -2)
-		  plen = catstrs_direct(buf, (lst_local) ? "    " : "  ", "(set-cdr! (cdr ", lst_name, ") ", (const char *)NULL);
-		else plen = catstrs_direct(buf, "(set-cdr! (list-tail ", lst_name, " ", pos_int_to_str_direct(sc, len - 2), ") ", (const char *)NULL);
+		  plen = (int32_t)catstrs_direct(buf, (lst_local) ? "    " : "  ", "(set-cdr! (cdr ", lst_name, ") ", (const char *)NULL);
+		else plen = (int32_t)catstrs_direct(buf, "(set-cdr! (list-tail ", lst_name, " ", pos_int_to_str_direct(sc, len - 2), ") ", (const char *)NULL);
 	      port_write_string(local_port)(sc, buf, plen, local_port);
 	      object_to_port_with_circle_check(sc, end_x, local_port, use_write, ci);
 	      port_write_string(local_port)(sc, ") ", 2, local_port);
@@ -33799,7 +33800,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	  if ((ci->defined[lref]) || (port == ci->cycle_port))
 	    {
 	      char buf[128];
-	      int32_t len = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, lref), ">", (const char *)NULL);
+	      int32_t len = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, lref), ">", (const char *)NULL);
 	      port_write_string(ci->cycle_port)(sc, buf, len, ci->cycle_port);
 	      return;
 	    }
@@ -33807,7 +33808,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	      (let_outlet(obj) != sc->rootlet))
 	    {
 	      char buf[128];
-	      int32_t len = catstrs_direct(buf, "  (set! (outlet <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
+	      int32_t len = (int32_t)catstrs_direct(buf, "  (set! (outlet <", pos_int_to_str_direct(sc, lref), ">) ", (const char *)NULL);
 	      port_write_string(ci->cycle_port)(sc, buf, len, ci->cycle_port);
 	      let_to_port(sc, let_outlet(obj), ci->cycle_port, use_write, ci);
 	      port_write_string(ci->cycle_port)(sc, ") ", 2, ci->cycle_port);
@@ -33860,7 +33861,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 		  if ((ci) && ((ref = peek_shared_ref(ci, let_outlet(obj))) < 0))
 		    {
 		      char buf[128];
-		      int32_t len = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, -ref), ">", (const char *)NULL);
+		      int32_t len = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, -ref), ">", (const char *)NULL);
 		      port_write_string(port)(sc, buf, len, port);
 		    }
 		  else
@@ -34307,7 +34308,7 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		      ci->init_loc = gc_protect_1(sc, ci->init_port);
 		    }
 		  port_write_string(port)(sc, "#f", 2, port);
-		  nlen = catstrs_direct(buf, "  (set! <", pos_int_to_str_direct(sc, iter_ref), "> (make-iterator ", (const char *)NULL);
+		  nlen = (int32_t)catstrs_direct(buf, "  (set! <", pos_int_to_str_direct(sc, iter_ref), "> (make-iterator ", (const char *)NULL);
 		  port_write_string(ci->init_port)(sc, buf, nlen, ci->init_port);
 
 		  flip_ref(ci, seq);
@@ -34365,9 +34366,9 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 			  else
 			    {
 			      char str[128];
-			      int32_t nlen = catstrs_direct(str, "))) (do ((i 0 (+ i 1))) ((= i ",
-							    pos_int_to_str_direct(sc, iterator_position(obj)),
-							    ") iter) (iter)))", (const char *)NULL);
+			      int32_t nlen = (int32_t)catstrs_direct(str, "))) (do ((i 0 (+ i 1))) ((= i ",
+								     pos_int_to_str_direct(sc, iterator_position(obj)),
+								     ") iter) (iter)))", (const char *)NULL);
 			      port_write_string(port)(sc, str, nlen, port);
 			    }}
 		      else port_write_character(port)(sc, ')', port);
@@ -34719,7 +34720,7 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		    {
 		      char buf[128];
 		      int32_t symref;
-		      int32_t len = catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, href), "> ", pos_int_to_str_direct_1(sc, i), ") ", (const char *)NULL);
+		      int32_t len = (int32_t)catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, href), "> ", pos_int_to_str_direct_1(sc, i), ") ", (const char *)NULL);
 		      port_write_string(port)(sc, " #f", 3, port);
 		      port_write_string(ci->cycle_port)(sc, buf, len, ci->cycle_port);
 
@@ -34727,7 +34728,7 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		      if (symref != 0)
 			{
 			  if (symref < 0) symref = -symref;
-			  len = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, symref), ">)\n", (const char *)NULL);
+			  len = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, symref), ">)\n", (const char *)NULL);
 			  port_write_string(ci->cycle_port)(sc, buf, len, ci->cycle_port);
 			}
 		      else
@@ -34842,7 +34843,7 @@ static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_
 	      if (ci->defined[ref])
 		{
 		  flip_ref(ci, vr);
-		  nlen = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, ref), ">", (const char *)NULL);
+		  nlen = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, ref), ">", (const char *)NULL);
 		  port_write_string(port)(sc, buf, nlen, port);
 		  return;
 		}
@@ -34859,7 +34860,7 @@ static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_
       else
 	if (use_write == P_READABLE)
 	  {
-	    nlen = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, -ref), ">", (const char *)NULL);
+	    nlen = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, -ref), ">", (const char *)NULL);
 	    port_write_string(port)(sc, buf, nlen, port);
 	  }
 	else
@@ -34884,7 +34885,7 @@ static s7_pointer cyclic_out(s7_scheme *sc, s7_pointer obj, s7_pointer port, sha
     {
       ref = peek_shared_ref(ci, ci->objs[i]); /* refs may be in any order */
       if (ref < 0) {ref = -ref; flip_ref(ci, ci->objs[i]);}
-      len = catstrs_direct(buf, (i == 0) ? "(<" : "\n      (<", pos_int_to_str_direct(sc, ref), "> ", (const char *)NULL);
+      len = (int32_t)catstrs_direct(buf, (i == 0) ? "(<" : "\n      (<", pos_int_to_str_direct(sc, ref), "> ", (const char *)NULL);
       port_write_string(port)(sc, buf, len, port);
       ci->defined[ref] = false;
       object_to_port_with_circle_check(sc, ci->objs[i], port, P_READABLE, ci);
@@ -34917,7 +34918,7 @@ static s7_pointer cyclic_out(s7_scheme *sc, s7_pointer obj, s7_pointer port, sha
     object_to_port_with_circle_check(sc, obj, port, P_READABLE, ci);
   else
     {
-      len = catstrs_direct(buf, "<", pos_int_to_str_direct(sc, (ref < 0) ? -ref : ref), ">", (const char *)NULL);
+      len = (int32_t)catstrs_direct(buf, "<", pos_int_to_str_direct(sc, (ref < 0) ? -ref : ref), ">", (const char *)NULL);
       port_write_string(port)(sc, buf, len, port);
     }
 
@@ -96045,7 +96046,6 @@ int main(int argc, char **argv)
  * --------------------------------------
  *
  * should this difference (with Guile/spec) be fixed:
- *      s7: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(\"a\" #\\a)"
- *   guile: (with-output-to-string (lambda () (display '("a" #\a)))) -> "(a a)"
+ *   (with-output-to-string (lambda () (display '("a" #\a)))), s7 -> "(\"a\" #\\a)", guile -> "(a a)"
  *   is there any point to the display/write distinction? (why would anyone want display?)
  */
