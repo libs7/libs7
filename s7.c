@@ -1372,10 +1372,10 @@ struct s7_scheme {
   s7_pointer seed_symbol, carry_symbol;
 
   /* object->let symbols */
-  s7_pointer active_symbol, goto_symbol, data_symbol, weak_symbol, dimensions_symbol, info_symbol, c_type_symbol, source_symbol, c_object_ref_symbol,
+  s7_pointer active_symbol, data_symbol, weak_symbol, dimensions_symbol, info_symbol, c_type_symbol, source_symbol, c_object_ref_symbol,
              at_end_symbol, sequence_symbol, position_symbol, entries_symbol, function_symbol, open_symbol, alias_symbol, port_type_symbol,
              file_symbol, file_info_symbol, line_symbol, c_object_let_symbol, class_symbol, current_value_symbol, closed_symbol,
-             mutable_symbol, size_symbol, original_vector_symbol, pointer_symbol;
+             is_mutable_symbol, size_symbol, original_vector_symbol, pointer_symbol;
 
 #if WITH_SYSTEM_EXTRAS
   s7_pointer is_directory_symbol, file_exists_symbol, delete_file_symbol, getenv_symbol, system_symbol, directory_to_list_symbol, file_mtime_symbol;
@@ -49944,7 +49944,7 @@ static s7_pointer symbol_to_let(s7_scheme *sc, s7_pointer obj)
 	sc->current_value_symbol = make_symbol(sc, "current-value", 13);
       s7_varlet(sc, let, sc->current_value_symbol, val);
       s7_varlet(sc, let, sc->setter_symbol, setter_p_pp(sc, obj, sc->curlet));
-      s7_varlet(sc, let, sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_symbol(obj)));
+      s7_varlet(sc, let, sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable_symbol(obj)));
       if (!is_undefined(val))
 	{
 	  const char *doc = s7_documentation(sc, obj);
@@ -49984,7 +49984,7 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
 		       sc->type_symbol, (is_subvector(obj)) ? cons(sc, sc->is_subvector_symbol, s7_type_of(sc, subvector_vector(obj))) : s7_type_of(sc, obj),
 		       sc->size_symbol, s7_length(sc, obj),
 		       sc->dimensions_symbol, g_vector_dimensions(sc, set_plist_1(sc, obj)),
-		       sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_vector(obj)));
+		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable_vector(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (is_subvector(obj))
     {
@@ -50058,7 +50058,7 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
 		       sc->type_symbol, sc->is_hash_table_symbol,
 		       sc->size_symbol, s7_length(sc, obj),
 		       sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
-		       sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (is_weak_hash_table(obj))
     s7_varlet(sc, let, sc->weak_symbol, sc->T);
@@ -50133,7 +50133,7 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
 		       sc->size_symbol, s7_length(sc, obj),
 		       sc->open_symbol, s7_make_boolean(sc, is_openlet(obj)),
 		       sc->outlet_symbol, (obj == sc->rootlet) ? sc->nil : let_outlet(obj),
-		       sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (obj == sc->rootlet)
     s7_varlet(sc, let, sc->alias_symbol, sc->rootlet_symbol);
@@ -50216,7 +50216,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
 		       sc->type_symbol, (is_input_port(obj)) ? sc->is_input_port_symbol : sc->is_output_port_symbol,
 		       sc->port_type_symbol, (is_string_port(obj)) ? sc->string_symbol : ((is_file_port(obj)) ? sc->file_symbol : sc->function_symbol),
 		       sc->closed_symbol, s7_make_boolean(sc, port_is_closed(obj)),
-		       sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_port(obj)));
+		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable_port(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (is_file_port(obj))
     {
@@ -50269,7 +50269,7 @@ static s7_pointer closure_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let = internal_inlet(sc, 8, sc->value_symbol, obj,
 				  sc->type_symbol, (is_t_procedure(obj)) ? sc->is_procedure_symbol : sc->is_macro_symbol,
 				  sc->arity_symbol, s7_arity(sc, obj),
-				  sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+				  sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   s7_int gc_loc = gc_protect_1(sc, let);
 
   if (is_pair(sig))
@@ -50323,7 +50323,7 @@ static s7_pointer c_function_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let = internal_inlet(sc, 8, sc->value_symbol, obj,
 				  sc->type_symbol, (is_t_procedure(obj)) ? sc->is_procedure_symbol : sc->is_macro_symbol,
 				  sc->arity_symbol, s7_arity(sc, obj),
-				  sc->mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+				  sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
   s7_int gc_loc = gc_protect_1(sc, let);
 
   if (is_pair(sig))
@@ -50341,15 +50341,12 @@ static s7_pointer goto_to_let(s7_scheme *sc, s7_pointer obj)
 {
   /* there's room in s7_cell to store the procedure, but we would have to mark it (goto escapes, context GC'd) */
   if (!sc->active_symbol)
-    {
-      sc->active_symbol = make_symbol(sc, "active", 6);
-      sc->goto_symbol = make_symbol(sc, "goto?", 5);
-    }
+    sc->active_symbol = make_symbol(sc, "active", 6);
   if (is_symbol(call_exit_name(obj)))
-    return(internal_inlet(sc, 8, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
+    return(internal_inlet(sc, 8, sc->value_symbol, obj, sc->type_symbol, sc->is_goto_symbol,
 			  sc->active_symbol, s7_make_boolean(sc, call_exit_active(obj)),
 			  sc->name_symbol, call_exit_name(obj)));
-  return(internal_inlet(sc, 6, sc->value_symbol, obj, sc->type_symbol, sc->goto_symbol,
+  return(internal_inlet(sc, 6, sc->value_symbol, obj, sc->type_symbol, sc->is_goto_symbol,
 			sc->active_symbol, s7_make_boolean(sc, call_exit_active(obj))));
 }
 
@@ -50381,7 +50378,7 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
       return(internal_inlet(sc, 8, sc->value_symbol, obj,
 			    sc->type_symbol, sc->is_string_symbol,
 			    sc->size_symbol, str_length(sc, obj),
-			    sc->mutable_symbol, s7_make_boolean(sc, !is_immutable_string(obj))));
+			    sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable_string(obj))));
     case T_PAIR:
       return(internal_inlet(sc, 6, sc->value_symbol, obj,
 			    sc->type_symbol, sc->is_pair_symbol,
@@ -92422,7 +92419,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	   list_3(sc, make_symbol(sc, "input-string", 12),  make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
 	   list_3(sc, make_symbol(sc, "continuation", 12),  make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
 	   list_3(sc, make_symbol(sc, "c-object", 8),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
-	   list_3(sc, make_symbol(sc, "gensym", 6),         make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
+	   list_3(sc, sc->gensym_symbol,                    make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
 	   list_3(sc, make_symbol(sc, "undefined", 9),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
 	   list_3(sc, make_symbol(sc, "weak-ref", 8),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
 	   list_3(sc, make_symbol(sc, "weak-hash-iter", 14),make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
@@ -95409,7 +95406,7 @@ s7_scheme *s7_init(void)
   sc->name_symbol = make_symbol(sc, "name", 4);
   sc->trace_in_symbol = make_symbol(sc, "trace-in", 8);
   sc->size_symbol = make_symbol(sc, "size", 4);
-  sc->mutable_symbol = make_symbol(sc, "mutable?", 8);
+  sc->is_mutable_symbol = make_symbol(sc, "mutable?", 8);
   sc->file__symbol = make_symbol(sc, "FILE*", 5);
   sc->circle_info = init_circle_info(sc);
   sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
@@ -95988,9 +95985,9 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* --------------------------------------
- *            20.9   21.0   22.0   23.0
- * --------------------------------------
+/* ----------------------------------------------
+ *            20.9   21.0   22.0   23.0   23.1
+ * ----------------------------------------------
  * tpeak      115    114    108    105
  * tref       691    687    463    459
  * index     1026   1016    973    967
@@ -96009,7 +96006,7 @@ int main(int argc, char **argv)
  * fbench    2688   2583   2460   2430
  * trclo     2735   2574   2454   2445
  * titer     2865   2842   2641   2509
- * tmat      3065   3042   2524   2578 [do_is_safe]
+ * tmat      3065   3042   2524   2578
  * tb        2735   2681   2612   2604
  * tsort     3105   3104   2856   2804
  * teq       4068   4045   3536   3486
@@ -96043,7 +96040,7 @@ int main(int argc, char **argv)
  * sg        ----   ----   55.9   55.8
  * lg        ----   ----  105.2  106.4
  * tbig     177.4  175.8  156.5  148.1
- * --------------------------------------
+ * ----------------------------------------------
  *
  * should this difference (with Guile/spec) be fixed:
  *   (with-output-to-string (lambda () (display '("a" #\a)))), s7 -> "(\"a\" #\\a)", guile -> "(a a)"
