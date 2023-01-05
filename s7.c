@@ -70698,7 +70698,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 
   if (is_closure_star(func))
     {
-      if (!closure_star_is_aritable(sc, func, closure_args(func), 2)) 
+      if (!closure_star_is_aritable(sc, func, closure_args(func), 2))
 	return(OPT_OOPS); /* (let* cons () (lambda* (a . b) (cons a b))) */
       if (is_immutable(func)) hop = 1;
       if (fx_count(sc, expr) == 2)
@@ -72601,7 +72601,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  bool c_safe;
 
 	  if (symbol_is_in_list(sc, expr)) return(UNSAFE_BODY);
-	  if ((is_slot(global_slot(expr))) && (is_syntax(global_value(expr)))) 
+	  if ((is_slot(global_slot(expr))) && (is_syntax(global_value(expr))))
 	    return(UNSAFE_BODY); /* syntax hidden behind some other name */
 
 	  f_slot = lookup_slot_from(expr, sc->curlet);
@@ -79795,7 +79795,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			   (cadddr(expr) == stepper) ||             /* used to check is_symbol here and above but that's unnecessary */
 			   ((is_pair(cadddr(expr))) && (s7_tree_memq(sc, stepper, cadddr(expr))))))
 			(*has_set) = true;
-		      
+
 		      if (!do_is_safe(sc, cddr(expr), stepper, var_list, has_set))
 			return(false);
 		      if (!safe_stepper_expr(expr, stepper))
@@ -92827,6 +92827,121 @@ static s7_pointer set_bignum_precision(s7_scheme *sc, int32_t precision)
 }
 #endif
 
+static s7_pointer sl_set_stacktrace_defaults(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  if (!is_pair(val))
+    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_PAIR]);
+  if (s7_list_length(sc, val) != 5)
+    s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a list with 5 entries", 21));
+  if (!is_t_integer(car(val)))
+    sl_stacktrace_wrong_type_error_nr(sc, sym, 1, car(val), wrap_string(sc, "an integer (stack frames)", 25), val);
+  if (!is_t_integer(cadr(val)))
+    sl_stacktrace_wrong_type_error_nr(sc, sym, 2, cadr(val), wrap_string(sc, "an integer (cols-for-data)", 26), val);
+  if (!is_t_integer(caddr(val)))
+    sl_stacktrace_wrong_type_error_nr(sc, sym, 3, caddr(val), wrap_string(sc, "an integer (line length)", 24), val);
+  if (!is_t_integer(cadddr(val)))
+    sl_stacktrace_wrong_type_error_nr(sc, sym, 4, cadddr(val), wrap_string(sc, "an integer (comment position)", 29), val);
+  if (!is_boolean(s7_list_ref(sc, val, 4)))
+    sl_stacktrace_wrong_type_error_nr(sc, sym, 5, s7_list_ref(sc, val, 4), wrap_string(sc, "a boolean (treat-data-as-comment)", 33), val);
+  sc->stacktrace_defaults = copy_proper_list(sc, val);
+  return(val);
+}
+
+static s7_pointer sl_set_gc_stats(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  if (is_boolean(val))
+    {
+      sc->gc_stats = ((val == sc->T) ? GC_STATS : 0);
+      return(val);
+    }
+  if (!s7_is_integer(val))
+    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+  sc->gc_stats = s7_integer_clamped_if_gmp(sc, val);
+  if (sc->gc_stats < 16) /* gc_stats is uint32_t */
+    return(val);
+  sc->gc_stats = 0;
+  s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be between 0 and 15", 29));
+}
+
+static s7_pointer sl_set_gc_info(s7_scheme *sc, s7_pointer sym, s7_pointer val) /* ticks_per_second is not settable */
+{
+  if (val == sc->F)
+    {
+      sc->gc_total_time = 0;
+      sc->gc_calls = 0;
+    }
+  else
+    if ((is_pair(val)) && (s7_is_integer(car(val))) &&
+	(is_pair(cdr(val))) && (s7_is_integer(cadr(val))) &&
+	(is_pair(cddr(val))) && (s7_is_integer(caddr(val))))
+      {
+	sc->gc_total_time = s7_integer(car(val));
+	sc->gc_calls = s7_integer(cadr(val));
+      }
+    else s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f or a list of three integers", 30));
+  return(sc->F);
+}
+
+static s7_pointer sl_set_profile(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  if (!s7_is_integer(val))
+    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+  sc->profile = s7_integer_clamped_if_gmp(sc, val);
+  sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
+  if (sc->profile > 0)
+    {
+      if (!is_memq(make_symbol(sc, "profile.scm", 11), s7_symbol_value(sc, sc->features_symbol)))
+	s7_load(sc, "profile.scm");
+      if (!sc->profile_data)
+	make_profile_info(sc);
+      if (!sc->profile_out)
+	sc->profile_out = s7_make_function(sc, "profile-out", g_profile_out, 2, 0, false, NULL);
+    }
+  return(val);
+}
+
+static s7_pointer sl_set_debug(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  if (!s7_is_integer(val))
+    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+  sc->debug = s7_integer_clamped_if_gmp(sc, val);
+  sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
+  if ((sc->debug > 0) &&
+      (!is_memq(make_symbol(sc, "debug.scm", 9), s7_symbol_value(sc, sc->features_symbol))))
+    s7_load(sc, "debug.scm");
+  return(val);
+}
+
+static s7_pointer sl_set_number_separator(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+#if (!WITH_NUMBER_SEPARATOR)
+  s7_warn(sc, 128, "(set! (*s7* 'number-separator) ...) but number-separator is not included in this s7");
+#endif
+  if (!is_character(val))
+    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_CHARACTER]);
+  if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (!t_number_separator_p[character(val)]) ||
+      (character(val) == 'i') || (character(val) == 'e') || (character(val) == 'E'))
+    /* I guess +nan.0 and +inf.0 are not numeric literals, so we don't need to catch +n_a_n.0 */
+    s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
+  sc->number_separator = character(val);
+  return(val);
+}
+
+static s7_pointer sl_set_bignum_precision(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  s7_int iv;
+  iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+  sc->bignum_precision = iv;
+#if WITH_GMP
+  set_bignum_precision(sc, sc->bignum_precision);
+  mpfr_set_prec(sc->mpfr_1, sc->bignum_precision);
+  mpfr_set_prec(sc->mpfr_2, sc->bignum_precision);
+  mpc_set_prec(sc->mpc_1, sc->bignum_precision);
+  mpc_set_prec(sc->mpc_2, sc->bignum_precision);
+#endif
+  return(val);
+}
+
 static noreturn void sl_unsettable_error_nr(s7_scheme *sc, s7_pointer sym)
 {
   error_nr(sc, sc->immutable_error_symbol, set_elist_2(sc, wrap_string(sc, "can't set (*s7* '~S)", 20), sym));
@@ -92855,16 +92970,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
 
     case SL_BIGNUM_PRECISION:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
-      sc->bignum_precision = iv;
-#if WITH_GMP
-      set_bignum_precision(sc, sc->bignum_precision);
-      mpfr_set_prec(sc->mpfr_1, sc->bignum_precision);
-      mpfr_set_prec(sc->mpfr_2, sc->bignum_precision);
-      mpc_set_prec(sc->mpc_1, sc->bignum_precision);
-      mpc_set_prec(sc->mpc_2, sc->bignum_precision);
-#endif
-      return(val);
+      return(sl_set_bignum_precision(sc, sym, val));
 
     case SL_CATCHES:
     case SL_CPU_TIME:
@@ -92872,14 +92978,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       sl_unsettable_error_nr(sc, sym);
 
     case SL_DEBUG:
-      if (!s7_is_integer(val))
-	s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
-      sc->debug = s7_integer_clamped_if_gmp(sc, val);
-      sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
-      if ((sc->debug > 0) &&
-	  (!is_memq(make_symbol(sc, "debug.scm", 9), s7_symbol_value(sc, sc->features_symbol))))
-	s7_load(sc, "debug.scm");
-      return(val);
+      return(sl_set_debug(sc, sym, val));
 
     case SL_DEFAULT_HASH_TABLE_LENGTH:
       sc->default_hash_table_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
@@ -92918,42 +93017,22 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
     case SL_FREE_HEAP_SIZE:
     case SL_GC_FREED:
     case SL_GC_TOTAL_FREED:
-    case SL_GC_PROTECTED_OBJECTS: sl_unsettable_error_nr(sc, sym);
+    case SL_GC_PROTECTED_OBJECTS:
+      sl_unsettable_error_nr(sc, sym);
 
-    case SL_GC_TEMPS_SIZE:                sc->gc_temps_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
-    case SL_GC_RESIZE_HEAP_FRACTION:      sc->gc_resize_heap_fraction = s7_real(sl_real_geq_0(sc, sym, val)); return(val);
-    case SL_GC_RESIZE_HEAP_BY_4_FRACTION: sc->gc_resize_heap_by_4_fraction = s7_real(sl_real_geq_0(sc, sym, val)); return(val);
-
+    case SL_GC_TEMPS_SIZE:
+      sc->gc_temps_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
+    case SL_GC_RESIZE_HEAP_FRACTION:
+      sc->gc_resize_heap_fraction = s7_real(sl_real_geq_0(sc, sym, val));
+      return(val);
+    case SL_GC_RESIZE_HEAP_BY_4_FRACTION:
+      sc->gc_resize_heap_by_4_fraction = s7_real(sl_real_geq_0(sc, sym, val));
+      return(val);
     case SL_GC_STATS:
-      if (is_boolean(val))
-	{
-	  sc->gc_stats = ((val == sc->T) ? GC_STATS : 0);
-	  return(val);
-	}
-      if (!s7_is_integer(val))
-	s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
-      sc->gc_stats = s7_integer_clamped_if_gmp(sc, val);
-      if (sc->gc_stats < 16) /* gc_stats is uint32_t */
-	return(val);
-      sc->gc_stats = 0;
-      s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be between 0 and 15", 29));
-
-    case SL_GC_INFO:   /* ticks_per_second is not settable */
-      if (val == sc->F)
-	{
-	  sc->gc_total_time = 0;
-	  sc->gc_calls = 0;
-	}
-      else
-	if ((is_pair(val)) && (s7_is_integer(car(val))) &&
-	    (is_pair(cdr(val))) && (s7_is_integer(cadr(val))) &&
-	    (is_pair(cddr(val))) && (s7_is_integer(caddr(val))))
-	  {
-	    sc->gc_total_time = s7_integer(car(val));
-	    sc->gc_calls = s7_integer(cadr(val));
-	  }
-	else s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f or a list of three integers", 30));
-      return(sc->F);
+      return(sl_set_gc_stats(sc, sym, val));
+    case SL_GC_INFO:
+      return(sl_set_gc_info(sc, sym, val));
 
     case SL_HASH_TABLE_FLOAT_EPSILON:
       sc->hash_table_float_epsilon = s7_real(sl_real_geq_0(sc, sym, val));
@@ -93002,57 +93081,38 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
 
     case SL_MEMORY_USAGE:
     case SL_MOST_NEGATIVE_FIXNUM:
-    case SL_MOST_POSITIVE_FIXNUM:  sl_unsettable_error_nr(sc, sym);
+    case SL_MOST_POSITIVE_FIXNUM:  
+      sl_unsettable_error_nr(sc, sym);
 
     case SL_MUFFLE_WARNINGS:
       if (is_boolean(val)) {sc->muffle_warnings = s7_boolean(sc, val); return(val);}
       s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
 
     case SL_NUMBER_SEPARATOR:   /* I think no PL uses the separator in output */
-#if (!WITH_NUMBER_SEPARATOR)
-      s7_warn(sc, 128, "(set! (*s7* 'number-separator) ...) but number-separator is not included in this s7");
-#endif
-      if (!is_character(val))
-	s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_CHARACTER]);
-      if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (!t_number_separator_p[character(val)]) ||
-	  (character(val) == 'i') || (character(val) == 'e') || (character(val) == 'E'))
-	/* I guess +nan.0 and +inf.0 are not numeric literals, so we don't need to catch +n_a_n.0 */
-	s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
-      sc->number_separator = character(val);
-      return(val);
+      return(sl_set_number_separator(sc, sym, val));
 
     case SL_OPENLETS:
       if (is_boolean(val)) {sc->has_openlets = s7_boolean(sc, val); return(val);}
       s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
 
-    case SL_OUTPUT_PORT_DATA_SIZE: sc->output_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
-    case SL_PRINT_LENGTH:          sc->print_length = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));         return(val);
-
-    case SL_PROFILE:
-      if (!s7_is_integer(val))
-	s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
-      sc->profile = s7_integer_clamped_if_gmp(sc, val);
-      sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
-      if (sc->profile > 0)
-	{
-	  if (!is_memq(make_symbol(sc, "profile.scm", 11), s7_symbol_value(sc, sc->features_symbol)))
-	    s7_load(sc, "profile.scm");
-	  if (!sc->profile_data)
-	    make_profile_info(sc);
-	  if (!sc->profile_out)
-	    sc->profile_out = s7_make_function(sc, "profile-out", g_profile_out, 2, 0, false, NULL);
-	}
+    case SL_OUTPUT_PORT_DATA_SIZE:
+      sc->output_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
+    case SL_PRINT_LENGTH:
+      sc->print_length = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
       return(val);
 
+    case SL_PROFILE:
+      return(sl_set_profile(sc,  sym, val));
     case SL_PROFILE_INFO:
       if (val != sc->F) s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f (to clear the table)", 23));
-      clear_profile_info(sc);
-
+      return(clear_profile_info(sc));
     case SL_PROFILE_PREFIX:
       if ((is_symbol(val)) || val == sc->F) {sc->profile_prefix = val; return(val);}
       s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a symbol or #f", 14));
 
-    case SL_ROOTLET_SIZE: sl_unsettable_error_nr(sc, sym);
+    case SL_ROOTLET_SIZE: 
+      sl_unsettable_error_nr(sc, sym);
 
     case SL_SAFETY:
       if (!s7_is_integer(val))
@@ -93063,26 +93123,12 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(val);
 
     case SL_STACKTRACE_DEFAULTS:
-      if (!is_pair(val))
-	s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_PAIR]);
-      if (s7_list_length(sc, val) != 5)
-	s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a list with 5 entries", 21));
-      if (!is_t_integer(car(val)))
-	sl_stacktrace_wrong_type_error_nr(sc, sym, 1, car(val), wrap_string(sc, "an integer (stack frames)", 25), val);
-      if (!is_t_integer(cadr(val)))
-	sl_stacktrace_wrong_type_error_nr(sc, sym, 2, cadr(val), wrap_string(sc, "an integer (cols-for-data)", 26), val);
-      if (!is_t_integer(caddr(val)))
-	sl_stacktrace_wrong_type_error_nr(sc, sym, 3, caddr(val), wrap_string(sc, "an integer (line length)", 24), val);
-      if (!is_t_integer(cadddr(val)))
-	sl_stacktrace_wrong_type_error_nr(sc, sym, 4, cadddr(val), wrap_string(sc, "an integer (comment position)", 29), val);
-      if (!is_boolean(s7_list_ref(sc, val, 4)))
-	sl_stacktrace_wrong_type_error_nr(sc, sym, 5, s7_list_ref(sc, val, 4), wrap_string(sc, "a boolean (treat-data-as-comment)", 33), val);
-      sc->stacktrace_defaults = copy_proper_list(sc, val);
-      return(val);
+      return(sl_set_stacktrace_defaults(sc, sym,val));
 
     case SL_STACK:
     case SL_STACK_SIZE:
-    case SL_STACK_TOP:  sl_unsettable_error_nr(sc, sym);
+    case SL_STACK_TOP:
+      sl_unsettable_error_nr(sc, sym);
 
     case SL_UNDEFINED_CONSTANT_WARNINGS:
       if (is_boolean(val)) {sc->undefined_constant_warnings = s7_boolean(sc, val); return(val);}
@@ -93092,7 +93138,8 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       if (is_boolean(val)) {sc->undefined_identifier_warnings = s7_boolean(sc, val); return(val);}
       s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
 
-    case SL_VERSION:  sl_unsettable_error_nr(sc, sym);
+    case SL_VERSION:
+      sl_unsettable_error_nr(sc, sym);
 
     default:
       error_nr(sc, sc->out_of_range_symbol,
@@ -95988,61 +96035,57 @@ int main(int argc, char **argv)
 /* ----------------------------------------------
  *            20.9   21.0   22.0   23.0   23.1
  * ----------------------------------------------
- * tpeak      115    114    108    105
- * tref       691    687    463    459
- * index     1026   1016    973    967
- * tmock     1177   1165   1057   1019
- * tvect     2519   2464   1772   1669
- * timp      2637   2575   1930   1694
- * texit     ----   ----   1778   1741
- * s7test    1873   1831   1818   1829
- * thook     ----   ----   2590   2030
- * tauto     ----   ----   2562   2048
- * lt        2187   2172   2150   2185
- * dup       3805   3788   2492   2239
- * tcopy     8035   5546   2539   2375
- * tload     ----   ----   3046   2404
- * tread     2440   2421   2419   2408
- * fbench    2688   2583   2460   2430
- * trclo     2735   2574   2454   2445
- * titer     2865   2842   2641   2509
- * tmat      3065   3042   2524   2578
- * tb        2735   2681   2612   2604
- * tsort     3105   3104   2856   2804
- * teq       4068   4045   3536   3486
- * tobj      4016   3970   3828   3577
- * tio       3816   3752   3683   3620
- * tmac      3950   3873   3033   3677
- * tclo      4787   4735   4390   4384
- * tcase     4960   4793   4439   4430
- * tlet      7775   5640   4450   4427
- * tstar     6139   5923   5519   4449
- * tfft      7820   7729   4755   4476
- * tmap      8869   8774   4489   4541
- * tshoot    5525   5447   5183   5055
- * tstr      6880   6342   5488   5162
- * tform     5357   5348   5307   5316
- * tnum      6348   6013   5433   5396
- * tlamb     6423   6273   5720   5560
- * tmisc     8869   7612   6435   6076
- * tlist     7896   7546   6558   6240
- * tset      ----   ----   ----   6260
- * tgsl      8485   7802   6373   6282
- * tari      13.0   12.7   6827   6543
- * trec      6936   6922   6521   6588
- * tleft     10.4   10.2   7657   7479
- * tgc       11.9   11.1   8177   7857
- * thash     11.8   11.7   9734   9479
- * cb        11.2   11.0   9658   9564
- * tgen      11.2   11.4   12.0   12.1
- * tall      15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5
- * sg        ----   ----   55.9   55.8
- * lg        ----   ----  105.2  106.4
- * tbig     177.4  175.8  156.5  148.1
+ * tpeak      115    114    108    105    105
+ * tref       691    687    463    459    459
+ * index     1026   1016    973    967    967
+ * tmock     1177   1165   1057   1019   1019
+ * tvect     2519   2464   1772   1669   1669
+ * timp      2637   2575   1930   1694   1694
+ * texit     ----   ----   1778   1741   1741
+ * s7test    1873   1831   1818   1829   1829
+ * thook     ----   ----   2590   2030   2030
+ * tauto     ----   ----   2562   2048   2048
+ * lt        2187   2172   2150   2185   2185
+ * dup       3805   3788   2492   2239   2239
+ * tcopy     8035   5546   2539   2375   2375
+ * tload     ----   ----   3046   2404   2404
+ * tread     2440   2421   2419   2408   2408
+ * fbench    2688   2583   2460   2430   2430
+ * trclo     2735   2574   2454   2445   2445
+ * titer     2865   2842   2641   2509   2509
+ * tmat      3065   3042   2524   2578   2578
+ * tb        2735   2681   2612   2604   2604
+ * tsort     3105   3104   2856   2804   2804
+ * teq       4068   4045   3536   3486   3486
+ * tobj      4016   3970   3828   3577   3577
+ * tio       3816   3752   3683   3620   3620
+ * tmac      3950   3873   3033   3677   3677
+ * tclo      4787   4735   4390   4384   4384
+ * tcase     4960   4793   4439   4430   4430
+ * tlet      7775   5640   4450   4427   4427
+ * tstar     6139   5923   5519   4449   4449
+ * tfft      7820   7729   4755   4476   4476
+ * tmap      8869   8774   4489   4541   4541
+ * tshoot    5525   5447   5183   5055   5055
+ * tstr      6880   6342   5488   5162   5162
+ * tform     5357   5348   5307   5316   5316
+ * tnum      6348   6013   5433   5396   5396
+ * tlamb     6423   6273   5720   5560   5560
+ * tmisc     8869   7612   6435   6076   6076
+ * tlist     7896   7546   6558   6240   6240
+ * tset      ----   ----   ----   6260   6260
+ * tgsl      8485   7802   6373   6282   6282
+ * tari      13.0   12.7   6827   6543   6543
+ * trec      6936   6922   6521   6588   6588
+ * tleft     10.4   10.2   7657   7479   7479
+ * tgc       11.9   11.1   8177   7857   7857
+ * thash     11.8   11.7   9734   9479   9479
+ * cb        11.2   11.0   9658   9564   9564
+ * tgen      11.2   11.4   12.0   12.1   12.1
+ * tall      15.6   15.6   15.6   15.6   15.6
+ * calls     36.7   37.5   37.0   37.5   37.5
+ * sg        ----   ----   55.9   55.8   55.8
+ * lg        ----   ----  105.2  106.4  106.4
+ * tbig     177.4  175.8  156.5  148.1  148.1
  * ----------------------------------------------
- *
- * should this difference (with Guile/spec) be fixed:
- *   (with-output-to-string (lambda () (display '("a" #\a)))), s7 -> "(\"a\" #\\a)", guile -> "(a a)"
- *   is there any point to the display/write distinction? (why would anyone want display?)
  */
