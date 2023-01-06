@@ -35466,16 +35466,10 @@ static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_
 	  (float_choice == 'g'))
 	precision = 6;
       else
-	/* in the "int" cases, precision depends on the arg type */
-	switch (type(car(fdat->args)))
-	  {
-	  case T_INTEGER: case T_RATIO:
-	    precision = 0;
-	    break;
-	  default:
-	    precision = 6;
-	    break;
-	  }}
+	{
+	  int32_t typ = type(car(fdat->args)); /* in the "int" cases, precision depends on the arg type */
+	  precision = ((typ == T_INTEGER) || (typ == T_RATIO)) ? 0 : 6;
+	}}
   /* should (format #f "~F" 1/3) return "1/3"?? in CL it's "0.33333334" */
 
   if (pad != ' ')
@@ -45016,12 +45010,10 @@ static s7_pointer g_procedure_source(s7_scheme *sc, s7_pointer args)
   /* make it look like a scheme-level lambda */
   s7_pointer p = car(args);
 
-  if (is_symbol(p))
-    {
-      if ((symbol_ctr(p) == 0) || ((p = s7_symbol_value(sc, p)) == sc->undefined))
-	error_nr(sc, sc->wrong_type_arg_symbol,
-		 set_elist_2(sc, wrap_string(sc, "procedure-source arg, '~S, is unbound", 37), car(args)));
-    }
+  if ((is_symbol(p)) &&
+      ((symbol_ctr(p) == 0) || ((p = s7_symbol_value(sc, p)) == sc->undefined)))
+    error_nr(sc, sc->wrong_type_arg_symbol,
+	     set_elist_2(sc, wrap_string(sc, "procedure-source arg, '~S, is unbound", 37), car(args)));
   if ((is_c_function(p)) || (is_c_macro(p)))
     return(sc->nil);
 
