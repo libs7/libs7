@@ -70677,10 +70677,9 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 
   if (is_closure_star(func))
     {
-#if 0
-      if (!closure_star_is_aritable(sc, func, closure_args(func), 2))
-	return(OPT_OOPS); /* (let* cons () (lambda* (a . b) (cons a b))) */
-#endif
+      /* fprintf(stderr, "%s %s %s\n", display(expr), display(func), display(closure_args(func))); */
+      if (!closure_star_is_aritable(sc, func, closure_args(func), 1)) /* not 2, cadr(expr) might be keyword or pair->keyword etc */
+	return(OPT_OOPS);                                             /* (let* cons () (lambda* (a . b) (cons a b))) so closure_args=(), arity=0 ?? */
       if (is_immutable(func)) hop = 1;
       if (fx_count(sc, expr) == 2)
 	{
@@ -96040,7 +96039,7 @@ int main(int argc, char **argv)
  * tobj      4016   3970   3828   3577   3577
  * tio       3816   3752   3683   3620   3620
  * tmac      3950   3873   3033   3677   3677
- * tclo      4787   4735   4390   4384   4384  5427? [arity check 70683!]
+ * tclo      4787   4735   4390   4384   4384
  * tcase     4960   4793   4439   4430   4430
  * tlet      7775   5640   4450   4427   4427
  * tstar     6139   5923   5519   4449   4449
@@ -96068,6 +96067,4 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.4  106.4
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ----------------------------------------------
- *
- * track down the closure* arity mixup 70683
  */
