@@ -2465,6 +2465,7 @@ static void init_types(void)
 #define slot_set_has_pending_value(p)  set_type_bit(T_Slt(p), T_HAS_PENDING_VALUE)
 #define slot_has_pending_value(p)      has_type_bit(T_Slt(p), T_HAS_PENDING_VALUE)
 #define slot_clear_has_pending_value(p) clear_type_bit(T_Slt(p), T_HAS_PENDING_VALUE)
+#define slot_has_setter_or_pending_value(p) has_type_bit(p, T_HAS_SETTER | T_HAS_PENDING_VALUE)
 
 #define T_HAS_METHODS                  (1 << (TYPE_BITS + 22))
 #define has_methods(p)                 has_type_bit(T_Pos(p), T_HAS_METHODS) /* display slot hits T_Ext here */
@@ -3124,6 +3125,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define slot_pending_value(p)          (T_Slt(p))->object.slt.pending_value
 #define slot_expression(p)             (T_Slt(p))->object.slt.expr
 #endif
+#define slot_pending_value_unchecked(p) (T_Slt(p))->object.slt.pending_value
+
 #define slot_set_expression(p, Val)    do {(T_Slt(p))->object.slt.expr = T_Ext(Val); slot_set_has_expression(p);} while (0)
 #define slot_just_set_expression(p, Val) (T_Slt(p))->object.slt.expr = T_Ext(Val)
 #define slot_setter(p)                 T_Prc(T_Slt(p)->object.slt.pending_value)
@@ -5215,6 +5218,7 @@ static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line)
     {
       fprintf(stderr, "%s%s[%d]: attempt to use free cell%s\n", BOLD_TEXT, func, line, UNBOLD_TEXT);
       print_gc_info(cur_sc, p, line);
+      if (cur_sc->stop_at_error) abort();
     }
   return(p);
 }
@@ -5264,7 +5268,11 @@ static s7_pointer check_ref19(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
   check_nref(p, func, line);
-  if (t_ext_p[typ]) fprintf(stderr, "%s%s[%d]: attempt to use (internal) %s cell%s\n", BOLD_TEXT, func, line, s7_type_names[typ], UNBOLD_TEXT);
+  if (t_ext_p[typ]) 
+    {
+      fprintf(stderr, "%s%s[%d]: attempt to use (internal) %s cell%s\n", BOLD_TEXT, func, line, s7_type_names[typ], UNBOLD_TEXT);
+      if (cur_sc->stop_at_error) abort();
+    }
   return(p);
 }
 
@@ -6824,10 +6832,15 @@ static inline void mark_slot(s7_pointer p)
 {
   set_mark(T_Slt(p));
   gc_mark(slot_value(p));
+#if 0
   if (slot_has_setter(p))
     gc_mark(slot_setter(p));
   if (slot_has_pending_value(p))
     gc_mark(slot_pending_value(p));
+#else
+  if (slot_has_setter_or_pending_value(p))
+    gc_mark(slot_pending_value_unchecked(p)); /* setter field == pending_value */
+#endif
   set_mark(slot_symbol(p));
 }
 
@@ -70084,7 +70097,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
       /* wrap bad args */
       if ((is_fxable(sc, arg1)) &&
 	  (is_fxable(sc, arg2)) &&
-	  (s7_is_aritable(sc, func, 2)))
+	  (s7_is_aritable(sc, func, 2))) /* arg_findable key -> #t(?) so clo* ok */
 	{
 	  fx_annotate_args(sc, cdr(expr), e);
 	  return(wrap_bad_args(sc, func, expr, 2, hop, e));
@@ -70677,7 +70690,6 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 
   if (is_closure_star(func))
     {
-      /* fprintf(stderr, "%s %s %s\n", display(expr), display(func), display(closure_args(func))); */
       if (!closure_star_is_aritable(sc, func, closure_args(func), 1)) /* not 2, cadr(expr) might be keyword or pair->keyword etc */
 	return(OPT_OOPS);                                             /* (let* cons () (lambda* (a . b) (cons a b))) so closure_args=(), arity=0 ?? */
       if (is_immutable(func)) hop = 1;
@@ -71366,10 +71378,8 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
     case OP_MACROEXPAND:
       return((is_proper_list_1(sc, body)) ? OPT_F : OPT_OOPS);
 
-    case OP_LET:
-    case OP_LETREC:
-    case OP_LET_STAR:
-    case OP_LETREC_STAR:
+    case OP_LET: case OP_LETREC:
+    case OP_LET_STAR: case OP_LETREC_STAR:
       if (is_symbol(cadr(expr)))
 	{
 	  if (!is_pair(cddr(expr))) /* (let name . x) */
@@ -92579,7 +92589,7 @@ static s7_pointer sl_active_catches(s7_scheme *sc)
 
 static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
 {
-  s7_pointer lst = sc->nil;
+  s7_pointer lst = sc->nil;       /* the stack can contain  anything (like #<unused>): this is a dangerous function */
   for (int64_t i = top - 1; i >= 3; i -= 4)
     {
       s7_pointer func = stack_code(stack, i), args = stack_args(stack, i), e = stack_let(stack, i);

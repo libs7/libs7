@@ -4093,7 +4093,7 @@ you can treat the initial string in the function's body as documentation.
 or a cons containing the minimum and maximum number of arguments acceptable.  If the maximum reported
 is a really big number, that means any number of arguments is ok.
 <b>aritable?</b> takes two arguments, an object and an integer, and returns #t if the object can be
-applied to that many arguments. 
+applied to that many arguments.  (For define* and friends, a key+value pair is considered to be one argument).
 </p>
 
 <pre class="indented">
@@ -4105,6 +4105,10 @@ applied to that many arguments.
 <em class="gray">(0 . 2)</em>
 &gt; (aritable? add-2 1)
 <em class="gray">#t</em>
+&gt; (aritable? add-2 2)
+<em class="gray">#t</em>
+&gt; (aritable? add-2 3) ; we can call (add-2 1 :b 2), but
+<em class="gray">#f</em> ;   as mentioned above, the key+value pair is one argument
 </pre>
 
 <p>
