@@ -16292,18 +16292,19 @@ static s7_pointer complex_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
       return(p);
     }
 #endif
+  if ((is_t_real(x)) && (is_t_real(y))) return((real(y) == 0.0) ? x : make_complex_not_0i(sc, real(x), real(y)));
   switch (type(y))
     {
     case T_INTEGER:
       switch (type(x))
 	{
-	case T_INTEGER: return((integer(y) == 0) ? x : s7_make_complex(sc, (s7_double)integer(x), (s7_double)integer(y)));
+	case T_INTEGER: return((integer(y) == 0) ? x : make_complex_not_0i(sc, (s7_double)integer(x), (s7_double)integer(y)));
 	  /* these int->dbl's are problematic:
 	   *   (complex 9223372036854775807 9007199254740995): 9223372036854776000.0+9007199254740996.0i
 	   * should we raise an error?
 	   */
-	case T_RATIO:  return((integer(y) == 0) ? x : s7_make_complex(sc, (s7_double)fraction(x), (s7_double)integer(y)));
-	case T_REAL:   return((integer(y) == 0) ? x : s7_make_complex(sc, real(x), (s7_double)integer(y)));
+	case T_RATIO:  return((integer(y) == 0) ? x : make_complex_not_0i(sc, (s7_double)fraction(x), (s7_double)integer(y)));
+	case T_REAL:   return((integer(y) == 0) ? x : make_complex_not_0i(sc, real(x), (s7_double)integer(y)));
 	default:       return(method_or_bust(sc, x, sc->complex_symbol, set_plist_2(sc, x, y), sc->type_names[T_REAL], 1));
 	}
     case T_RATIO:
@@ -16317,9 +16318,9 @@ static s7_pointer complex_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     case T_REAL:
       switch (type(x))
 	{
-	case T_INTEGER: return((real(y) == 0.0) ? x : s7_make_complex(sc, (s7_double)integer(x), real(y)));
-	case T_RATIO:	return((real(y) == 0.0) ? x : s7_make_complex(sc, (s7_double)fraction(x), real(y)));
-	case T_REAL:    return((real(y) == 0.0) ? x : s7_make_complex(sc, real(x), real(y)));
+	case T_INTEGER: return((real(y) == 0.0) ? x : make_complex_not_0i(sc, (s7_double)integer(x), real(y)));
+	case T_RATIO:	return((real(y) == 0.0) ? x : make_complex_not_0i(sc, (s7_double)fraction(x), real(y)));
+	case T_REAL:    return((real(y) == 0.0) ? x : make_complex_not_0i(sc, real(x), real(y)));
 	default:	return(method_or_bust(sc, x, sc->complex_symbol, set_plist_2(sc, x, y), sc->type_names[T_REAL], 1));
 	}
     default:
