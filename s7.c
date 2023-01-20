@@ -1949,7 +1949,7 @@ static void init_types(void)
   #define T_Ctr(P) check_ref(P, T_COUNTER,           __func__, __LINE__, NULL, NULL)
   #define T_Dyn(P) check_ref(P, T_DYNAMIC_WIND,      __func__, __LINE__, NULL, NULL)
   #define T_Eof(P) check_ref(P, T_EOF,               __func__, __LINE__, "sweep", NULL)
-  #define T_Ext(P) check_ref19(P,                    __func__, __LINE__)
+  #define T_Ext(P) check_ref19(P,                    __func__, __LINE__)                /* not an internal type */
   #define T_Fnc(P) check_ref6(P,                     __func__, __LINE__)                /* any c_function|c_macro */
   #define T_Frc(P) check_ref2(P, T_RATIO, T_INTEGER, __func__, __LINE__, NULL, NULL)
   #define T_Fst(P) check_ref(P, T_C_FUNCTION_STAR,   __func__, __LINE__, NULL, NULL)
@@ -2311,7 +2311,7 @@ static void init_types(void)
 
 #define T_IMMUTABLE                    (1 << (TYPE_BITS + 16))
 #define is_immutable(p)                has_type_bit(T_Pos(p), T_IMMUTABLE)
-#define set_immutable(p)               set_type_bit(T_Pos(p), T_IMMUTABLE)
+#define set_immutable(p)               set_type_bit(T_Pos(p), T_IMMUTABLE) /* can be a slot, so not T_Ext */
 #define set_immutable_let(p)           set_type_bit(T_Lid(p), T_IMMUTABLE)
 #define set_immutable_slot(p)          set_type_bit(T_Slt(p), T_IMMUTABLE)
 #define is_immutable_port(p)           has_type_bit(T_Prt(p), T_IMMUTABLE)
@@ -2320,6 +2320,8 @@ static void init_types(void)
 #define is_immutable_pair(p)           has_type_bit(T_Pair(p), T_IMMUTABLE)
 #define is_immutable_vector(p)         has_type_bit(T_Vec(p), T_IMMUTABLE)
 #define is_immutable_string(p)         has_type_bit(T_Str(p), T_IMMUTABLE)
+#define is_immutable_hash_table(p)     has_type_bit(T_Hsh(p), T_IMMUTABLE)
+#define is_immutable_let(p)            has_type_bit(T_Let(p), T_IMMUTABLE)
 /* T_IMMUTABLE is compatible with T_MUTABLE -- the latter is an internal bit for locally mutable numbers */
 
 #define T_SETTER                       (1 << (TYPE_BITS + 17))
@@ -9397,7 +9399,7 @@ to the let let, and returns let.  (varlet (curlet) 'a 1) adds 'a to the current 
       check_method(sc, e, sc->varlet_symbol, args);
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
-      if ((is_immutable(e)) || (e == sc->s7_starlet))
+      if ((is_immutable_let(e)) || (e == sc->s7_starlet))
 	error_nr(sc, sc->immutable_error_symbol,
 		 set_elist_3(sc, wrap_string(sc, "can't (varlet ~{~S~^ ~}), ~S is immutable", 41), args, e));
     }
@@ -9478,7 +9480,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
       check_method(sc, e, sc->cutlet_symbol, args);
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
-      if ((is_immutable(e)) || (e == sc->s7_starlet))
+      if ((is_immutable_let(e)) || (e == sc->s7_starlet))
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, e));
     }
   /* besides removing the slot we have to make sure the symbol_id does not match else
@@ -9518,7 +9520,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	    {
 	      if (slot_symbol(slot) == sym)
 		{
-		  if (is_immutable(slot))
+		  if (is_immutable_slot(slot))
 		    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 		  let_set_slots(e, next_slot(let_slots(e)));
 		  symbol_set_id(sym, the_un_id);
@@ -9529,7 +9531,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 		  for (slot = next_slot(let_slots(e)); tis_slot(slot); last_slot = slot, slot = next_slot(slot))
 		    if (slot_symbol(slot) == sym)
 		      {
-			if (is_immutable(slot))
+			if (is_immutable_slot(slot))
 			  immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 			symbol_set_id(sym, the_un_id);
 			slot_set_next(last_slot, next_slot(slot));
@@ -10280,7 +10282,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
     wrong_type_error_nr(sc, wrap_string(sc, "set! outlet", 11), 1, let, sc->type_names[T_LET]);
   if (let == sc->s7_starlet)
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't set! (outlet *s7*)", 24)));
-  if (is_immutable(let))
+  if (is_immutable_let(let))
     immutable_object_error_nr(sc, set_elist_4(sc, wrap_string(sc, "can't (set! (outlet ~S) ~S), ~S is immutable", 44), let, cadr(args), let));
   new_outer = cadr(args);
   if (!is_let(new_outer))
@@ -27137,7 +27139,7 @@ static s7_pointer g_string_copy(s7_scheme *sc, s7_pointer args)
   dest = cadr(args);
   if (!is_string(dest))
     wrong_type_error_nr(sc, sc->string_copy_symbol, 2, dest, sc->type_names[T_STRING]);
-  if (is_immutable(dest))
+  if (is_immutable_string(dest))
     immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't string-copy to ~S; it is immutable", 40), dest));
 
   end = string_length(dest);
@@ -30822,7 +30824,7 @@ static s7_pointer c_provide(s7_scheme *sc, s7_pointer sym)
   if ((sc->curlet == sc->nil) || (sc->curlet == sc->shadow_rootlet))
     p = global_slot(sc->features_symbol);
   else p = symbol_to_local_slot(sc, sc->features_symbol, sc->curlet); /* if sc->curlet is nil, this returns the global slot, else local slot */
-  if ((is_slot(p)) && (is_immutable(p)))
+  if ((is_slot(p)) && (is_immutable_slot(p)))
     s7_warn(sc, 256, "provide: *features* is immutable!\n");
   else
     {
@@ -33055,10 +33057,10 @@ static s7_int list_length_with_immutable_check(s7_scheme *sc, s7_pointer a, bool
   for (s7_int i = 0; ; i += 2)
     {
       if (!is_pair(fast)) return((is_null(fast)) ? i : -i);
-      if (is_immutable(fast)) *immutable = true;
+      if (is_immutable_pair(fast)) *immutable = true;
       fast = cdr(fast);
       if (!is_pair(fast)) return((is_null(fast)) ? (i + 1) : (-i - 1));
-      if (is_immutable(fast)) *immutable = true;
+      if (is_immutable_pair(fast)) *immutable = true;
       fast = cdr(fast);
       slow = cdr(slow);
       if (fast == slow) return(0);
@@ -33084,7 +33086,7 @@ static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int t
   else
     {
       s7_int immutable_ctr = 0;
-      if (is_immutable(lst))
+      if (is_immutable_pair(lst))
 	{
 	  port_write_string(port)(sc, "immutable! (cons ", 17, port);
 	  immutable_ctr++;
@@ -33094,7 +33096,7 @@ static void simple_list_readable_display(s7_scheme *sc, s7_pointer lst, s7_int t
 
       for (x = cdr(lst); is_pair(x); x = cdr(x))
 	{
-	  if (is_immutable(x))
+	  if (is_immutable_pair(x))
 	    {
 	      port_write_string(port)(sc, " (immutable! (cons ", 19, port);
 	      immutable_ctr++;
@@ -33403,7 +33405,7 @@ static void hash_typers_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port)
 static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, bool closed, shared_info_t *ci)
 {
   const char *typer = hash_table_checker_name(sc, hash);
-  if ((closed) && (is_immutable(hash)))
+  if ((closed) && (is_immutable_hash_table(hash)))
     port_write_string(port)(sc, "(immutable! ", 12, port);
 
   if (typer[0] == '#') /* #f */
@@ -33464,7 +33466,7 @@ static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_poi
       port_write_string(port)(sc, typer, safe_strlen(typer), port);
       hash_typers_to_port(sc, hash, port);
     }
-  if (is_immutable(hash))
+  if (is_immutable_hash_table(hash))
     port_write_character(port)(sc, ')', port);
 }
 
@@ -33532,7 +33534,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  letd = true;
 	}
       else
-	if ((is_immutable(hash)) && (!hash_cyclic))
+	if ((is_immutable_hash_table(hash)) && (!hash_cyclic))
 	  {
 	    port_write_string(port)(sc, "(immutable! ", 12, port);
 	    immut = true;
@@ -33633,10 +33635,10 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	  port_write_string(port)(sc, ") <h>)", 6, port);
 	else port_write_character(port)(sc, ')', port);
 
-      if ((is_immutable(hash)) && (!hash_cyclic) && (!is_typed_hash_table(hash)))
+      if ((is_immutable_hash_table(hash)) && (!hash_cyclic) && (!is_typed_hash_table(hash)))
 	port_write_character(port)(sc, ')', port);
 
-      if ((!immut) && (is_immutable(hash)) && (!hash_cyclic))
+      if ((!immut) && (is_immutable_hash_table(hash)) && (!hash_cyclic))
 	port_write_string(port)(sc, ") (immutable! <h>))", 19, port);
     }
   s7_gc_unprotect_at(sc, gc_iter);
@@ -33722,7 +33724,7 @@ static void slot_list_to_port_with_cycle(s7_scheme *sc, s7_pointer obj, s7_point
 static bool let_has_setter(s7_pointer obj)
 {
   for (s7_pointer slot = let_slots(obj); tis_slot(slot); slot = next_slot(slot))
-    if ((slot_has_setter(slot)) || (is_immutable(slot)))
+    if ((slot_has_setter(slot)) || (is_immutable_slot(slot)))
       return(true);
   return(false);
 }
@@ -33746,7 +33748,7 @@ static bool slot_setters_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port,
 static void immutable_slots_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, bool spaced_out)
 {
   for (s7_pointer slot = let_slots(obj); tis_slot(slot); slot = next_slot(slot))
-    if (is_immutable(slot))
+    if (is_immutable_slot(slot))
       {
 	if (spaced_out) port_write_character(port)(sc, ' ', port); else spaced_out = true;
 	port_write_string(port)(sc, "(immutable! '", 13, port);
@@ -33842,7 +33844,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	{
 	  if (is_openlet(obj))
 	    port_write_string(port)(sc, "(openlet ", 9, port);
-	  if (is_immutable(obj))
+	  if (is_immutable_let(obj))
 	    port_write_string(port)(sc, "(immutable! ", 12, port);
 
 	  /* this ignores outlet -- but is that a problem? */
@@ -33880,7 +33882,7 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	      slot_list_to_port(sc, let_slots(obj), port, ci, false);
 	      port_write_character(port)(sc, ')', port);
 	    }
-	  if (is_immutable(obj))
+	  if (is_immutable_let(obj))
 	    port_write_character(port)(sc, ')', port);
 	  if (is_openlet(obj))
 	    port_write_character(port)(sc, ')', port);
@@ -40655,7 +40657,7 @@ static s7_pointer g_vector_set_4(s7_scheme *sc, s7_pointer args)
   s7_int i1, i2;
   if ((!is_any_vector(v)) ||
       (vector_rank(v) != 2) ||
-      (is_immutable(v)) ||
+      (is_immutable_vector(v)) ||
       (!s7_is_integer(ip1)) ||
       (!s7_is_integer(ip2)))
     return(g_vector_set(sc, args));
@@ -42515,7 +42517,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 	  for (s7_pointer p = data; i < len; i++, p = cdr(p))
 	    {
-	      if (is_immutable(p))
+	      if (is_immutable_pair(p))
 		immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->sort_symbol, data));
 	      set_car(p, elements[i]);
 	    }
@@ -42712,7 +42714,7 @@ static s7_pointer vector_into_list(s7_scheme *sc, s7_pointer vect, s7_pointer ls
   s7_int i = 0, len = vector_length(vect);
   for (s7_pointer p = lst; i < len; i++, p = cdr(p))
     {
-      if (is_immutable(p))
+      if (is_immutable_pair(p))
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->sort_symbol, lst));
       set_car(p, elements[i]);
     }
@@ -44819,7 +44821,7 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
 static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer table = car(args), val = cadr(args);
-  if (is_immutable(table))
+  if (is_immutable_hash_table(table))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->fill_symbol, table));
 
   if (hash_table_entries(table) > 0)
@@ -50055,7 +50057,7 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
 		       sc->type_symbol, sc->is_hash_table_symbol,
 		       sc->size_symbol, s7_length(sc, obj),
 		       sc->entries_symbol, make_integer(sc, hash_table_entries(obj)),
-		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable_hash_table(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (is_weak_hash_table(obj))
     s7_varlet(sc, let, sc->weak_symbol, sc->T);
@@ -50130,7 +50132,7 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
 		       sc->size_symbol, s7_length(sc, obj),
 		       sc->open_symbol, s7_make_boolean(sc, is_openlet(obj)),
 		       sc->outlet_symbol, (obj == sc->rootlet) ? sc->nil : let_outlet(obj),
-		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable(obj)));
+		       sc->is_mutable_symbol, s7_make_boolean(sc, !is_immutable_let(obj)));
   gc_loc = gc_protect_1(sc, let);
   if (obj == sc->rootlet)
     s7_varlet(sc, let, sc->alias_symbol, sc->rootlet_symbol);
@@ -59039,7 +59041,7 @@ static bool i_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  settee = lookup_slot_from(cadr(car_x), sc->curlet);
 	  if ((is_slot(settee)) &&
 	      (is_t_integer(slot_value(settee))) &&
-	      (!is_immutable(settee)) &&
+	      (!is_immutable_slot(settee)) &&
 	      ((!slot_has_setter(settee)) ||
 	       ((is_c_function(slot_setter(settee))) &&
 		((slot_setter(settee) == initial_value(sc->is_integer_symbol)) ||
@@ -61197,7 +61199,7 @@ static bool d_syntax_ok(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  settee = lookup_slot_from(cadr(car_x), sc->curlet);
 	  if ((is_slot(settee)) &&
 	      (is_t_real(slot_value(settee))) &&
-	      (!is_immutable(settee)) &&
+	      (!is_immutable_slot(settee)) &&
 	      ((!slot_has_setter(settee)) ||
 	       ((is_c_function(slot_setter(settee))) &&
 		((slot_setter(settee) == initial_value(sc->is_float_symbol)) ||
@@ -63388,7 +63390,7 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 
       if (is_target_or_its_alias(car(car_x), s_func, sc->hash_table_set_symbol))
 	{
-	  if ((!is_hash_table(obj)) || (is_immutable(obj)))
+	  if ((!is_hash_table(obj)) || (is_immutable_hash_table(obj)))
 	    return_false(sc, car_x);
 	}
       else
@@ -64095,7 +64097,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 
       settee = lookup_slot_from(target, sc->curlet);
       if ((is_slot(settee)) &&
-	  (!is_immutable(settee)) &&
+	  (!is_immutable_slot(settee)) &&
 	  (!is_syntax(slot_value(settee))))
 	{
  	  int32_t start_pc = sc->pc;
@@ -65167,7 +65169,7 @@ static bool opt_cell_let_temporarily(s7_scheme *sc, s7_pointer car_x, int32_t le
       (is_proper_list_1(sc, vars)) &&       /* just one var for now */
       (is_proper_list_2(sc, car(vars))) &&  /*   and var is (sym val) */
       (is_symbol(caar(vars))) &&
-      (!is_immutable(caar(vars))) &&
+      (!is_immutable_symbol(caar(vars))) &&
       (!is_syntactic_symbol(caar(vars))))
     {
       int32_t i;
@@ -68436,7 +68438,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
       if (!checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
 	{
 	  for (s7_pointer p = args; is_pair(p); p = cdr(p)) /* embedded list can be immutable, so we need to copy (sigh) */
-	    if (is_immutable(p))
+	    if (is_immutable_pair(p))
 	      return(copy_proper_list(sc, args));
 	  return(args);
 	}
@@ -71936,7 +71938,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 		    ((!is_slot(global_slot(car_expr))) ||
 		     (global_value(car_expr) != func)))) &&
 		  (!is_immutable(car_expr)) && /* list|apply-values -- can't depend on opt1 here because it might not be global, or might be redefined locally */
-		  (!is_immutable(slot)))       /* (define-constant...) */
+		  (!is_immutable_slot(slot)))       /* (define-constant...) */
 		{
 		  /* (let () (define (f2 a) (+ a 1)) (define (f1 a) (f2 a)) (define (f2 a) (- a)) (f1 12))
 		   * (let () (define (f2 a) (+ a 1)) (define (f1 a) (f2 a)) (define (f2 a) (- a 1)) (f1 12))
@@ -72614,7 +72616,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 
 	  result = ((is_sequence(f)) ||
 		    ((is_closure(f)) && (is_very_safe_closure(f))) ||
-		    ((c_safe) && ((is_immutable(f_slot)) || (is_global(expr))))) ? VERY_SAFE_BODY : SAFE_BODY;
+		    ((c_safe) && ((is_immutable_slot(f_slot)) || (is_global(expr))))) ? VERY_SAFE_BODY : SAFE_BODY;
 
 	  if ((c_safe) ||
 	      ((is_any_closure(f)) && (is_safe_closure(f))) ||
@@ -75890,7 +75892,7 @@ static void op_let_temp_init1_1(s7_scheme *sc)
   if ((is_symbol(sc->value)) && (is_symbol_from_symbol(sc->value))) /* (let-temporarily (((symbol ...))) ..) */
     {
       clear_symbol_from_symbol(sc->value);
-      if (is_immutable(sc->value))
+      if (is_immutable_symbol(sc->value))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_temporarily_symbol, sc->value));
       sc->value = s7_symbol_value(sc, sc->value);
     }
@@ -78344,7 +78346,7 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 	    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must not be negative: ~S", 43), sc->code));
 	  if (index >= vector_length(obj))
 	    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "vector-set!: index must be less than vector length: ~S", 54), sc->code));
-	  if (is_immutable(obj))
+	  if (is_immutable_vector(obj))
 	    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, obj));
 	  if (is_typed_vector(obj))
 	    value = typed_vector_setter(sc, obj, index, value);
@@ -78367,7 +78369,7 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
 	  error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "index must not be negative: ~S", 30), sc->code));
 	if (index >= string_length(obj))
 	  error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "index must be less than sequence length: ~S", 43), sc->code));
-	if (is_immutable(obj))
+	if (is_immutable_string(obj))
 	  immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, obj));
 	if (!is_character(value))
 	  error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "string-set!: value must be a character: ~S", 42), sc->code));
@@ -78382,7 +78384,7 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
       break;
 
     case T_HASH_TABLE:
-      if (is_immutable(obj))  /* not checked in s7_hash_table_set */
+      if (is_immutable_hash_table(obj))  /* not checked in s7_hash_table_set */
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, obj));
       sc->value = s7_hash_table_set(sc, obj, arg, value);
       break;
@@ -78651,7 +78653,7 @@ static bool op_set1(s7_scheme *sc)
   s7_pointer lx = lookup_slot_from(sc->code, sc->curlet);    /* if unbound variable hook here, we need the binding, not the current value */
   if (is_slot(lx))
     {
-      if (is_immutable(lx))
+      if (is_immutable_slot(lx))
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->set_symbol, slot_symbol(lx)));
       if (slot_has_setter(lx))
 	{
@@ -78925,7 +78927,7 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 
   if (!is_pair(inds))
     wrong_number_of_arguments_error_nr(sc, "no index for implicit vector-set!: ~S", 37, form);
-  if (is_immutable(vect))
+  if (is_immutable_vector(vect))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->vector_set_symbol, vect));
 
   argnum = proper_list_length(inds);
@@ -79151,7 +79153,7 @@ static goto_t set_implicit_string(s7_scheme *sc, s7_pointer str, s7_pointer inds
       ind = s7_integer_clamped_if_gmp(sc, index);
       if ((ind < 0) || (ind >= string_length(str)))
 	out_of_range_error_nr(sc, sc->string_set_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
-      if (is_immutable(str))
+      if (is_immutable_string(str))
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->string_set_symbol, str));
 
       val = car(val);
@@ -79233,7 +79235,7 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 
   if (!is_pair(inds)) /* (!is_pair(val)) and (!is_null(cdr(val))) are apparently caught elsewhere */
     wrong_number_of_arguments_error_nr(sc, "no key for hash-table-set!: ~S", 30, form);
-  if (is_immutable(table))
+  if (is_immutable_hash_table(table))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->hash_table_set_symbol, table));
 
   key = car(inds);
@@ -83523,7 +83525,7 @@ static void op_define_with_setter(s7_scheme *sc)
 	      for (slot = let_slots(sc->curlet); tis_slot(slot); slot = next_slot(slot))
 		if (slot_symbol(slot) == code)
 		  {
-		    if (is_immutable(slot))
+		    if (is_immutable_slot(slot))
 		      syntax_error_nr(sc, "define ~S, but it is immutable", 30, code); /* someday give the location of the immutable definition or setting */
 		    slot_set_value(slot, new_func);
 		    symbol_set_local_slot(code, sc->let_number, slot);
@@ -83543,7 +83545,7 @@ static void op_define_with_setter(s7_scheme *sc)
       else
 	{
 	  if ((is_slot(global_slot(code))) &&
-	      (is_immutable(global_slot(code))))
+	      (is_immutable_slot(global_slot(code))))
 	    {
 	      s7_pointer old_symbol = code, old_value = global_value(code);
 	      if ((type(old_value) != type(new_func)) ||
@@ -83559,7 +83561,7 @@ static void op_define_with_setter(s7_scheme *sc)
       s7_pointer slot = symbol_to_local_slot(sc, code, sc->curlet); /* add the newly defined thing to the current environment */
       if (is_slot(slot))
 	{
-	  if (is_immutable(slot))
+	  if (is_immutable_slot(slot))
 	    {
 	      s7_pointer old_symbol = code, old_value = slot_value(slot);
 	      if ((type(old_value) != type(sc->value)) ||
@@ -94213,7 +94215,7 @@ static s7_pointer symbol_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
   s7_pointer slot = lookup_slot_from(sym, sc->curlet);
   if (!is_slot(slot))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "set!: '~S is unbound", 20), sym));
-  if (is_immutable(slot))
+  if (is_immutable_slot(slot))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->symbol_symbol, sym));
   slot_set_value(slot, val);
   return(val);
