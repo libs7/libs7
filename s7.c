@@ -6235,7 +6235,7 @@ static s7_pointer g_is_boolean(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- constant? -------------------------------- */
-static inline bool is_constant_symbol(s7_scheme *sc, s7_pointer sym)
+static inline bool is_constant_symbol(s7_scheme *sc, s7_pointer sym) /* inline: 7 in cb, 5 in tgen */
 {
   if (is_immutable_symbol(sym))    /* for keywords */
     return(true);
@@ -39083,7 +39083,7 @@ static noreturn void typed_vector_type_error_nr(s7_scheme *sc, s7_pointer vec, s
 		       val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr))));
 }
 
-static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
+static /* inline */ s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val) /* tstr faster without inline! */
 {
   if ((sc->safety >= NO_SAFETY) &&
       (typed_vector_typer_call(sc, vec, set_plist_1(sc, val)) == sc->F))
@@ -68500,7 +68500,7 @@ static s7_pointer g_apply_values(s7_scheme *sc, s7_pointer args)
     return(sc->no_value);
   if (!s7_is_proper_list(sc, x))
     apply_list_error_nr(sc, args);
-  return(g_values(sc, x));
+  return(s7_values(sc, x)); /* g_values == s7_values */
 }
 
 /* (apply values ...) replaces (unquote_splicing ...)
@@ -93055,6 +93055,11 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(val);
 
     case SL_INITIAL_STRING_PORT_LENGTH: sc->initial_string_port_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
+
+    case SL_MAJOR_VERSION:
+    case SL_MINOR_VERSION:
+      sl_unsettable_error_nr(sc, sym);
+
     case SL_MAX_FORMAT_LENGTH:          sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));          return(val);
     case SL_MAX_HEAP_SIZE:              sc->max_heap_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));              return(val);
     case SL_MAX_LIST_LENGTH:            sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));            return(val);
