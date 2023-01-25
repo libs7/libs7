@@ -41848,6 +41848,7 @@ static s7_pointer int_vector_set_p_ppp(s7_scheme *sc, s7_pointer v, s7_pointer i
 	return(univect_set(sc, set_plist_3(sc, v, index, val), sc->int_vector_set_symbol, T_INT_VECTOR));
       if (is_immutable_vector(v))
 	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->int_vector_set_symbol, v));
+      /* (int-vector-set!  #i() `(x 1) (abs x)) in a do loop in a function... */
       if (!s7_is_integer(index))
 	return(method_or_bust_ppp(sc, index, sc->int_vector_set_symbol, v, index, val, sc->type_names[T_INTEGER], 2));
       if (!s7_is_integer(val))

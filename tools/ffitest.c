@@ -778,7 +778,13 @@ int main(int argc, char **argv)
 
   s7_gc_unprotect_at(sc, gc_loc);
 
-
+  { /* force realloc of protected_objects array */
+    s7_int gc_locs[20];
+    for (i = 0; i < 18; i++) /* initial size = 16 */
+      gc_locs[i] = s7_gc_protect(sc, s7_cons(sc, s7_f(sc), s7_t(sc)));
+    for (i = 0; i < 18; i++)
+      s7_gc_unprotect_at(sc, gc_locs[i]);
+  }
 
   p = TO_S7_INT(123);
   gc_loc = s7_gc_protect(sc, p);
@@ -1033,8 +1039,8 @@ int main(int argc, char **argv)
 
   {
     s7_int len;
-    len = s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "print-length")));
-    s7_let_field_set(sc, s7_make_symbol(sc, "print-length"), s7_make_integer(sc, len));
+    len = s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "print-length")));
+    s7_starlet_set(sc, s7_make_symbol(sc, "print-length"), s7_make_integer(sc, len));
   }
 
   p = s7_rationalize(sc, 1.5, 1e-12);
@@ -2422,7 +2428,7 @@ int main(int argc, char **argv)
     mpz_t val, val1;
     mpz_init_set(val, *s7_big_integer(p));
     mpz_init(val1);
-    mpz_set_si(val1, s7_integer(s7_let_field_ref(sc, s7_make_symbol(sc, "most-positive-fixnum"))));
+    mpz_set_si(val1, s7_integer(s7_starlet_ref(sc, s7_make_symbol(sc, "most-positive-fixnum"))));
     mpz_add_ui(val1, val1, 1);
     if (mpz_cmp(val, val1) != 0) {fprintf(stderr, "add-1: %s\n", s1 = TO_STR(p)); free(s1);}
     mpz_clear(val);
@@ -2739,6 +2745,7 @@ int main(int argc, char **argv)
 
   s7_make_continuation(sc);
 
+  s7_quit(sc);
   s7_free(sc);
 
   return(0);
