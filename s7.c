@@ -26708,10 +26708,9 @@ static s7_pointer string_ref_p_pi(s7_scheme *sc, s7_pointer p1, s7_int i1)
 {
   if (!is_string(p1))
     return(method_or_bust(sc, p1, sc->string_ref_symbol, set_plist_2(sc, p1, make_integer(sc, i1)), sc->type_names[T_STRING], 1));
-  if ((i1 >= 0) && (i1 < string_length(p1)))
-    return(chars[((uint8_t *)string_value(p1))[i1]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
-  return(p1);
+  if ((i1 < 0) || (i1 >= string_length(p1)))
+    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
+  return(chars[((uint8_t *)string_value(p1))[i1]]);
 }
 
 static s7_pointer string_ref_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer i1)
@@ -26725,13 +26724,12 @@ static s7_pointer string_ref_p_p0(s7_scheme *sc, s7_pointer p1, s7_pointer unuse
 {
   if (!is_string(p1))
     return(method_or_bust_pp(sc, p1, sc->string_ref_symbol, p1, int_zero, sc->type_names[T_STRING], 1));
-  if (string_length(p1) > 0)
-    return(chars[((uint8_t *)string_value(p1))[0]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, int_zero, it_is_too_large_string);
-  return(p1);
+  if (string_length(p1) <= 0)
+    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, int_zero, it_is_too_large_string);
+  return(chars[((uint8_t *)string_value(p1))[0]]);
 }
 
-static s7_pointer string_plast_via_method(s7_scheme *sc, s7_pointer p1)
+static s7_pointer string_plast_via_method(s7_scheme *sc, s7_pointer p1) /* tmock */
 {
   s7_pointer len = method_or_bust_p(sc, p1, sc->length_symbol, sc->type_names[T_STRING]);
   return(method_or_bust_with_type_pi(sc, p1, sc->string_ref_symbol, p1, integer(len) - 1, sc->type_names[T_STRING], 1));
@@ -26741,18 +26739,16 @@ static s7_pointer string_ref_p_plast(s7_scheme *sc, s7_pointer p1, s7_pointer un
 {
   if (!is_string(p1))
     return(string_plast_via_method(sc, p1));
-  if (string_length(p1) > 0)
-    return(chars[((uint8_t *)string_value(p1))[string_length(p1) - 1]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, string_length(p1) - 1), it_is_too_large_string);
-  return(p1);
+  if (string_length(p1) <= 0)
+    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, string_length(p1) - 1), it_is_too_large_string);
+  return(chars[((uint8_t *)string_value(p1))[string_length(p1) - 1]]);
 }
 
 static inline s7_pointer string_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer p1, s7_int i1)
 {
-  if ((i1 >= 0) && (i1 < string_length(p1)))
-    return(chars[((uint8_t *)string_value(p1))[i1]]);
-  out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
-  return(p1);
+  if ((i1 < 0) || (i1 >= string_length(p1)))
+    out_of_range_error_nr(sc, sc->string_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
+  return(chars[((uint8_t *)string_value(p1))[i1]]);
 }
 
 static s7_pointer string_ref_p_pi_direct(s7_scheme *unused_sc, s7_pointer p1, s7_int i1) {return(chars[((uint8_t *)string_value(p1))[i1]]);}
@@ -96086,4 +96082,6 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.4  106.4
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ----------------------------------------------
+ *
+ * file-exists? with "~" file names?
  */
