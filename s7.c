@@ -29140,9 +29140,29 @@ static bool is_directory(const char *filename)
   return(false);
 }
 
+static block_t *expand_filename(s7_scheme *sc, const char *name)
+{
+#if WITH_GCC
+  if ((name[0] == '~') && (name[1] == '/'))    /* catch one special case, "~/..." */
+    {
+      char *home = getenv("HOME");
+      if (home)
+	{
+	  s7_int len = safe_strlen(name) + safe_strlen(home) + 1;
+	  block_t *b = mallocate(sc, len);
+	  char *filename = (char *)block_data(b);
+	  filename[0] = '\0';
+	  catstrs(filename, len, home, (char *)(name + 1), (char *)NULL);
+	  return(b);
+	}}
+#endif
+  return(NULL);
+}
+
 static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char *mode, const char *caller)
 {
   FILE *fp;
+  block_t *b;
   /* see if we can open this file before allocating a port */
   if (is_directory(name))
     file_error_nr(sc, caller, "file is a directory:", name);
@@ -29157,21 +29177,15 @@ static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char 
 #if WITH_GCC
   if ((!name) || (!*name))
     file_error_nr(sc, caller, strerror(errno), name);
-  if ((name[0] == '~') && (name[1] == '/'))    /* catch one special case, "~/..." */
+  b = expand_filename(sc, name);
+  if (b)
     {
-      char *home = getenv("HOME");
-      if (home)
-	{
-	  s7_int len = safe_strlen(name) + safe_strlen(home) + 1;
-	  block_t *b = mallocate(sc, len);
-	  char *filename = (char *)block_data(b);
-	  filename[0] = '\0';
-	  catstrs(filename, len, home, (char *)(name + 1), (char *)NULL);
-	  fp = fopen(filename, "r");
-	  liberate(sc, b);
-	  if (fp)
-	    return(make_input_file(sc, name, fp));
-	}}
+      char *new_name = (char *)block_data(b);
+      fp = fopen(new_name, "r");
+      liberate(sc, b);
+      if (fp)
+	return(make_input_file(sc, name, fp));
+    }
 #endif
 #endif
   file_error_nr(sc, caller, strerror(errno), name);
@@ -30348,22 +30362,13 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
   char *local_file_name = (char *)filename;
   FILE* fp = fopen(filename, "r");
 #if WITH_GCC
-  if ((!fp) && /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
-      (filename[0] == '~') && (filename[1] == '/'))
+  if (!fp) /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
     {
-      char *home = getenv("HOME");
-      if (home)
+      block_t *b = expand_filename(sc, filename);
+      if (b)
 	{
-	  s7_int file_len = safe_strlen(filename);
-	  s7_int home_len = safe_strlen(home);
-	  s7_int len = file_len + home_len;
-	  block_t *b = mallocate(sc, len);
-	  char *fname = (char *)block_data(b);
-	  memcpy((void *)fname, home, home_len);
-	  memcpy((void *)(fname + home_len), (char *)(filename + 1), file_len - 1);
-	  fname[len - 1] = '\0';
-	  fp = fopen(fname, "r");
-	  if (fp) local_file_name = copy_string_with_length(fname, len - 1);
+	  fp = fopen((char *)block_data(b), "r");
+	  if (fp) local_file_name = copy_string((char *)block_data(b));
 	  liberate(sc, b);
 	}}
 #endif
@@ -36405,24 +36410,30 @@ static s7_pointer format_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
 #include <fcntl.h>
 
 /* -------------------------------- directory? -------------------------------- */
-static s7_pointer g_is_directory(s7_scheme *sc, s7_pointer args)
-{
-  #define H_is_directory "(directory? str) returns #t if str is the name of a directory"
-  #define Q_is_directory s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_string_symbol)
-
-  s7_pointer name = car(args);
-  if (!is_string(name))
-    return(sole_arg_method_or_bust(sc, name, sc->is_directory_symbol, args, sc->type_names[T_STRING]));
-  return(s7_make_boolean(sc, is_directory(string_value(name))));
-}
-
 static bool is_directory_b_7p(s7_scheme *sc, s7_pointer p)
 {
   if (!is_string(p))
     sole_arg_wrong_type_error_nr(sc, sc->is_directory_symbol, p, sc->type_names[T_STRING]);
+  if (string_length(p) >= 2)
+    {
+      block_t *b = expand_filename(sc, string_value(p));
+      if (b)
+	{
+	  bool result = is_directory((char *)block_data(b));
+	  liberate(sc, b);
+	  return(result);
+	}}
   return(is_directory(string_value(p)));
 }
 
+static s7_pointer g_is_directory(s7_scheme *sc, s7_pointer args)
+{
+  #define H_is_directory "(directory? str) returns #t if str is the name of a directory"
+  #define Q_is_directory s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_string_symbol)
+  return(s7_make_boolean(sc, is_directory_b_7p(sc, car(args))));
+}
+
+/* -------------------------------- file-exists? -------------------------------- */
 static bool file_probe(const char *arg)
 {
 #if (!MS_WINDOWS)
@@ -36435,23 +36446,27 @@ static bool file_probe(const char *arg)
 #endif
 }
 
-/* -------------------------------- file-exists? -------------------------------- */
-static s7_pointer g_file_exists(s7_scheme *sc, s7_pointer args)
-{
-  #define H_file_exists "(file-exists? filename) returns #t if the file exists"
-  #define Q_file_exists s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_string_symbol)
-
-  s7_pointer name = car(args);
-  if (!is_string(name))
-    return(sole_arg_method_or_bust(sc, name, sc->file_exists_symbol, args, sc->type_names[T_STRING]));
-  return(s7_make_boolean(sc, file_probe(string_value(name))));
-}
-
 static bool file_exists_b_7p(s7_scheme *sc, s7_pointer p)
 {
   if (!is_string(p))
     sole_arg_wrong_type_error_nr(sc, sc->file_exists_symbol, p, sc->type_names[T_STRING]);
+  if (string_length(p) >= 2)
+    {
+      block_t *b = expand_filename(sc, string_value(p));
+      if (b)
+	{
+	  bool result = file_probe((char *)block_data(b));
+	  liberate(sc, b);
+	  return(result);
+	}}
   return(file_probe(string_value(p)));
+}
+
+static s7_pointer g_file_exists(s7_scheme *sc, s7_pointer args)
+{
+  #define H_file_exists "(file-exists? filename) returns #t if the file exists"
+  #define Q_file_exists s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_string_symbol)
+  return(s7_make_boolean(sc, file_exists_b_7p(sc, car(args))));
 }
 
 /* -------------------------------- delete-file -------------------------------- */
@@ -36463,6 +36478,15 @@ static s7_pointer g_delete_file(s7_scheme *sc, s7_pointer args)
   s7_pointer name = car(args);
   if (!is_string(name))
     return(sole_arg_method_or_bust(sc, name, sc->delete_file_symbol, args, sc->type_names[T_STRING]));
+  if (string_length(name) > 2)
+    {
+      block_t *b = expand_filename(sc, string_value(name));
+      if (b)
+	{
+	  s7_int result = unlink((char *)block_data(b));
+	  liberate(sc, b);
+	  return(make_integer(sc, result));
+	}}
   return(make_integer(sc, unlink(string_value(name))));
 }
 
@@ -36533,20 +36557,12 @@ system captures the output as a string and returns it."
 #include <dirent.h>
 
 /* -------------------------------- directory->list -------------------------------- */
-static s7_pointer g_directory_to_list(s7_scheme *sc, s7_pointer args)
+static s7_pointer directory_to_list_1(s7_scheme *sc, const char *dir_name)
 {
-  #define H_directory_to_list "(directory->list directory) returns the contents of the directory as a list of strings (filenames)."
-  #define Q_directory_to_list s7_make_signature(sc, 2, sc->is_list_symbol, sc->is_string_symbol)   /* can return nil */
-
-  s7_pointer name = car(args);
-  DIR *dpos;
   s7_pointer result;
-
-  if (!is_string(name))
-    return(method_or_bust_p(sc, name, sc->directory_to_list_symbol, sc->type_names[T_STRING]));
-
+  DIR *dpos;
   sc->w = sc->nil;
-  if ((dpos = opendir(string_value(name))))
+  if ((dpos = opendir(dir_name)))
     {
       struct dirent *dirp;
       while ((dirp = readdir(dpos)))
@@ -36558,6 +36574,26 @@ static s7_pointer g_directory_to_list(s7_scheme *sc, s7_pointer args)
   return(result);
 }
 
+static s7_pointer g_directory_to_list(s7_scheme *sc, s7_pointer args)
+{
+  #define H_directory_to_list "(directory->list directory) returns the contents of the directory as a list of strings (filenames)."
+  #define Q_directory_to_list s7_make_signature(sc, 2, sc->is_list_symbol, sc->is_string_symbol)   /* can return nil */
+
+  s7_pointer name = car(args);
+  if (!is_string(name))
+    return(method_or_bust_p(sc, name, sc->directory_to_list_symbol, sc->type_names[T_STRING]));
+  if (string_length(name) >= 2)
+    {
+      block_t *b = expand_filename(sc, string_value(name));
+      if (b)
+	{
+	  s7_pointer result = directory_to_list_1(sc, (char *)block_data(b));
+	  liberate(sc, b);
+	  return(result);
+	}}
+  return(directory_to_list_1(sc, string_value(name)));
+}
+
 /* -------------------------------- file-mtime -------------------------------- */
 static s7_pointer g_file_mtime(s7_scheme *sc, s7_pointer args)
 {
@@ -36567,8 +36603,20 @@ static s7_pointer g_file_mtime(s7_scheme *sc, s7_pointer args)
   struct stat statbuf;
   int32_t err;
   s7_pointer name = car(args);
+
   if (!is_string(name))
     return(sole_arg_method_or_bust(sc, name, sc->file_mtime_symbol, args, sc->type_names[T_STRING]));
+  if (string_length(name) >= 2)
+    {
+      block_t *b = expand_filename(sc, string_value(name));
+      if (b)
+	{
+	  err = stat((char *)block_data(b), &statbuf);
+	  liberate(sc, b);
+	  if (err < 0)
+	    file_error_nr(sc, "file-mtime", strerror(errno), string_value(name));
+	  return(make_integer(sc, (s7_int)(statbuf.st_mtime)));
+	}}
   err = stat(string_value(name), &statbuf);
   if (err < 0)
     file_error_nr(sc, "file-mtime", strerror(errno), string_value(name));
@@ -45599,7 +45647,8 @@ static bool is_dwind_thunk(s7_scheme *sc, s7_pointer x)
 {
   switch (type(x))
     {
-    case T_MACRO: case T_BACRO: case T_CLOSURE: case T_MACRO_STAR: case T_BACRO_STAR:  case T_CLOSURE_STAR:
+    case T_MACRO: case T_BACRO: case T_CLOSURE: 
+    case T_MACRO_STAR: case T_BACRO_STAR: case T_CLOSURE_STAR:
       return(is_null(closure_args(x)));    /* this case does not match is_aritable -- it could be loosened -- arity=0 below would need fixup */
     case T_C_FUNCTION:
       return(c_function_is_aritable(x, 0));
@@ -96082,6 +96131,4 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.4  106.4
  * tbig     177.4  175.8  156.5  148.1  148.1
  * ----------------------------------------------
- *
- * file-exists? with "~" file names?
  */
