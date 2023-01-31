@@ -29181,7 +29181,7 @@ static s7_pointer open_input_file_1(s7_scheme *sc, const char *name, const char 
   if (b)
     {
       char *new_name = (char *)block_data(b);
-      fp = fopen(new_name, "r");
+      fp = fopen(new_name, mode);
       liberate(sc, b);
       if (fp)
 	return(make_input_file(sc, name, fp));

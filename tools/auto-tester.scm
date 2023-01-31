@@ -28,6 +28,8 @@
 		(random 20))))
     (random-state seed carry)))
 
+(unless (file-exists? "~/cl/tmp1.r5rs")
+  (system "touch ~/cl/tmp1.r5rs"))
 
 ;(define debugging (provided? 'debugging))
 ;(when (provided? 'profiling) (load "profile.scm"))
@@ -240,12 +242,12 @@
   (apply x (list y)))
 (define (fop6 x y)       ; apply_sa
   (apply x (cons y ())))
-(define (fop7 x) (display x) (+ x 1))
+(define (fop7 x) (integer? x) (+ x 1))
 (define (tf7 y) (fop7 y))
-(define (fop8 x y) (display x) (+ x y))
+(define (fop8 x y) (integer? x) (+ x y))
 (define (tf8 y) (fop8 y y))
 (define (fop9 x y)
-  (display x)
+  (integer? x)
   (values x y))
 (define (tf9 y)
   (let ((x 1))
@@ -407,6 +409,8 @@
 (define (_fnc5_ x) (not (pair? x)))
 ;(define (_fnc6_ x) (unless (let? x) (let-temporarily (((*s7* 'safety) 1)) (fill! x #\a))))
 ;;; (define (_fnc7_ x) (let-temporarily (((*s7* 'safety) 1)) (reverse! x)))
+
+(define (_fnc8_ arg) (map values arg))
 
 (define (fib n)
   (if (< n 2)
@@ -946,7 +950,7 @@
 			  'tree-cyclic?
                           'require
 			  'else '_mac_ '_mac*_ '_bac_ '_bac*_ '_mac1*_ '_fnc1*_
-			  '_fnc_ '_fnc*_ '_fnc1_ '_fnc2_ '_fnc3_ '_fnc4_ '_fnc5_ ;'_fnc6_
+			  '_fnc_ '_fnc*_ '_fnc1_ '_fnc2_ '_fnc3_ '_fnc4_ '_fnc5_ '_fnc8_ ;'_fnc6_
 			  '=>
 
 			  'constant?
@@ -985,6 +989,7 @@
 			  's7-default-rationalize-error 's7-equivalent-float-epsilon
 			  's7-hash-table-float-epsilon 's7-bignum-precision
 			  's7-float-format-precision
+			  's7-stacktrace-defaults
 
 			  'block 'make-block 'block? 'block-ref 'block-set!
 			  'blocks 'unsafe-blocks 'blocks1 'unsafe-blocks1 'blocks3 'unsafe-blocks3 'blocks4 'unsafe-blocks4 'blocks5
@@ -1019,7 +1024,7 @@
 			  'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref
 			  ;'linter ; infinite loop if cyclic code
-			  'ifa 'ifb
+			  'ifa 'ifb ; see fix-op below
 
 			  '_asdf_
 			  'ims 'imbv 'imv 'imiv 'imfv 'imi 'imp 'imh 'ilt
@@ -1275,8 +1280,9 @@
 		    ;"(*s7* 'most-negative-fixnum)"
 		    ;"(*s7* 'most-positive-fixnum)"
 		    "(*s7* 'rootlet-size)"
-		    ;"(*s7* 'stack)" "(*s7* 'stack-size)" ; variable
+		    ;"(*s7* 'stack)" "(*s7* 'stack-size)" ; variable, and stack can contain e.g. #<unused>
 		    "(*s7* 'version)"
+		    "(*s7* 'stacktrace-defaults)"
 
 		    "(let loop ((i 2)) (if (> i 0) (loop (- i 1)) i))"
 
@@ -1294,6 +1300,7 @@
 
 		    "my-let" "my-with-baffle" "fvset" "htset"
 		    "(catch #t (lambda () (+ 1 #(2))) (lambda (type info) 0))"
+		    "~/cl/tmp1.r5rs"
 
 		    #f #f #f ; cyclic here (see get-arg)
 		    ))
