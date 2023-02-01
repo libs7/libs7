@@ -36230,15 +36230,6 @@ static bool is_columnizing(const char *str)  /* look for ~t ~,<int>T ~<int>,<int
   return(false);
 }
 
-static s7_pointer format_to_port(s7_scheme *sc, s7_pointer port, const char *str, s7_pointer args, bool with_result, s7_int len)
-{
-  if ((with_result) ||
-      (port != sc->F))
-    return(format_to_port_1(sc, port, str, args, NULL, with_result, true /* is_columnizing(str) */, len, NULL));
-  /* is_columnizing on every call is much slower than ignoring the issue */
-  return(sc->F);
-}
-
 static s7_pointer g_format(s7_scheme *sc, s7_pointer args)
 {
   #define H_format "(format out str . args) substitutes args into str sending the result to out. Most of \
@@ -51760,6 +51751,13 @@ static void fill_error_location(s7_scheme *sc)
     }
 }
 
+static void format_to_error_port(s7_scheme *sc, const char *str, s7_pointer args, s7_int len)
+{
+  if (sc->error_port != sc->F)
+    format_to_port_1(sc, sc->error_port, str, args, NULL, false, true /* is_columnizing(str) */, len, NULL);
+  /* is_columnizing on every call is much slower than ignoring the issue */
+}
+
 static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 {
   bool reset_error_hook = false;
@@ -51877,7 +51875,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 
       if ((!is_pair(info)) ||
 	  (!is_string(car(info))))
-	format_to_port(sc, sc->error_port, "\n;~S ~S", set_plist_2(sc, type, info), false, 7);
+	format_to_error_port(sc, "\n;~S ~S", set_plist_2(sc, type, info), 7);
       else
 	{
 	  /* it's possible that the error string is just a string -- not intended for format */
@@ -51888,10 +51886,10 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	      block_t *b = mallocate(sc, len);
 	      char *errstr = (char *)block_data(b);
 	      s7_int str_len = catstrs_direct(errstr, "\n;", string_value(car(info)), (const char *)NULL);
-	      format_to_port(sc, sc->error_port, errstr, cdr(info), false, str_len);
+	      format_to_error_port(sc, errstr, cdr(info), str_len);
 	      liberate(sc, b);
 	    }
-	  else format_to_port(sc, sc->error_port, "\n;~S ~S", set_plist_2(sc, type, info), false, 7); /* 7 = ctrl str len */
+	  else format_to_error_port(sc, "\n;~S ~S", set_plist_2(sc, type, info), 7); /* 7 = ctrl str len */
 	}
       if (op < 32) sc->print_length = op;
 
@@ -51899,12 +51897,9 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       if (is_string(slot_value(sc->error_file)))
 	{
 	  s7_newline(sc, sc->error_port);
-	  format_to_port(sc, sc->error_port, ";    ~A\n",
-			 set_plist_1(sc, object_to_truncated_string(sc, cur_code, 40)),
-			 false, 8);
-	  format_to_port(sc, sc->error_port, ";    ~A, line ~D, position: ~D\n",
-			 set_plist_3(sc, slot_value(sc->error_file), slot_value(sc->error_line), slot_value(sc->error_position)),
-			 false, 31);
+	  format_to_error_port(sc, ";    ~A\n", set_plist_1(sc, object_to_truncated_string(sc, cur_code, 40)), 8);
+	  format_to_error_port(sc, ";    ~A, line ~D, position: ~D\n",
+			 set_plist_3(sc, slot_value(sc->error_file), slot_value(sc->error_line), slot_value(sc->error_position)), 31);
 	}
       else
 	{
@@ -51916,13 +51911,13 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	      int32_t line = port_line_number(current_input_port(sc));
 
 	      if (filename)
-		format_to_port(sc, sc->error_port, "\n;  ~A[~D]",
+		format_to_error_port(sc, "\n;  ~A[~D]",
 			       set_plist_2(sc, wrap_string(sc, filename, port_filename_length(current_input_port(sc))),
-					   wrap_integer(sc, line)), false, 10);
+					   wrap_integer(sc, line)), 10);
 	      else
 		if ((line > 0) &&
 		    (integer(slot_value(sc->error_line)) > 0))
-		  format_to_port(sc, sc->error_port, "\n;  line ~D", set_plist_1(sc, wrap_integer(sc, line)), false, 11);
+		  format_to_error_port(sc, "\n;  line ~D", set_plist_1(sc, wrap_integer(sc, line)), 11);
 		else
 		  if (sc->input_port_stack_loc > 0)
 		    {
@@ -51934,9 +51929,9 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 			  filename = port_filename(p);
 			  line = port_line_number(p);
 			  if (filename)
-			    format_to_port(sc, sc->error_port, "\n;  ~A[~D]",
+			    format_to_error_port(sc, "\n;  ~A[~D]",
 					   set_plist_2(sc, wrap_string(sc, filename, port_filename_length(current_input_port(sc))),
-						       wrap_integer(sc, line)), false, 10);
+						       wrap_integer(sc, line)), 10);
 			}}}
 	  else
 	    {
@@ -51946,12 +51941,11 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 		  sc->s7_call_name = NULL;
 		  if ((sc->s7_call_file) &&
 		      (sc->s7_call_line >= 0))
-		    format_to_port(sc, sc->error_port, "\n;  ~A ~A[~D]",
+		    format_to_error_port(sc, "\n;  ~A ~A[~D]",
 				   set_plist_3(sc,
 					       s7_make_string_wrapper(sc, call_name),
 					       s7_make_string_wrapper(sc, sc->s7_call_file),
-					       wrap_integer(sc, sc->s7_call_line)),
-				   false, 13);
+					       wrap_integer(sc, sc->s7_call_line)), 13);
 		}}
 	  s7_newline(sc, sc->error_port);
 	}
@@ -51967,7 +51961,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       else
 	if (is_pair(slot_value(sc->error_code)))
 	  {
-	    format_to_port(sc, sc->error_port, ";    ~S", set_plist_1(sc, slot_value(sc->error_code)), false, 7);
+	    format_to_error_port(sc, ";    ~S", set_plist_1(sc, slot_value(sc->error_code)), 7);
 	    s7_newline(sc, sc->error_port);
 	  }
       /* if (is_continuation(type))
