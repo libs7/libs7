@@ -39118,7 +39118,7 @@ static noreturn void typed_vector_type_error_nr(s7_scheme *sc, s7_pointer vec, s
 		       val, type_name_string(sc, val), wrap_string(sc, descr, safe_strlen(descr))));
 }
 
-static /* inline */ s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val) /* tstr faster without inline! */
+static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val) /* tstr faster without inline, but tbig slower */
 {
   if ((sc->safety >= NO_SAFETY) &&
       (typed_vector_typer_call(sc, vec, set_plist_1(sc, val)) == sc->F))
@@ -51548,8 +51548,8 @@ static bool catch_eval_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
 }
 
 static bool catch_barrier_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
-{
-  if (is_input_port(stack_args(sc->stack, i)))      /* (eval-string "'(1 .)") */
+{ /* can this happen?? read/eval set op_barrier */
+  if (is_input_port(stack_args(sc->stack, i)))
     {
       if (current_input_port(sc) == stack_args(sc->stack, i))
 	pop_input_port(sc);
@@ -51558,7 +51558,7 @@ static bool catch_barrier_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_
   return(false);
 }
 
-static bool catch_hook_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
+static bool catch_error_hook_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   let_set(sc, closure_let(sc->error_hook), sc->body_symbol, stack_code(sc->stack, i));
   /* apparently there was an error during *error-hook* evaluation, but Rick wants the hook re-established anyway */
@@ -51674,7 +51674,7 @@ static void init_catchers(void)
   catchers[OP_LET_TEMP_UNWIND] =    catch_let_temp_unwind_function;
   catchers[OP_LET_TEMP_S7_UNWIND] = catch_let_temp_s7_unwind_function;
   catchers[OP_LET_TEMP_S7_DIRECT_UNWIND] = catch_let_temp_s7_direct_unwind_function;
-  catchers[OP_ERROR_HOOK_QUIT] =    catch_hook_function;
+  catchers[OP_ERROR_HOOK_QUIT] =    catch_error_hook_function;
   catchers[OP_MAP_UNWIND] =         catch_map_unwind_function;
 }
 
@@ -65728,7 +65728,7 @@ static s7_pointer opt_do_ipnr(opt_info *o)
 
 static bool stop_is_safe(s7_scheme *sc, s7_pointer stop, s7_pointer body)
 {
-  /* this could be folded into the cell_optimize traveral */
+  /* this could be folded into the cell_optimize traversal */
   for (s7_pointer p = body; is_pair(p); p = cdr(p))
     if ((is_pair(car(p))) &&
 	(caar(p) == sc->set_symbol) &&
@@ -65966,7 +65966,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    {
 	      s7_pointer slot2 = opt_integer_symbol(sc, cadr(stop));
 	      if ((slot2) &&
-		  (stop_is_safe(sc, cadr(stop), cddr(car_x))))
+		  (stop_is_safe(sc, cadr(stop), cddr(car_x)))) /* b_fft in tfft.scm */
 		{
 		  set_step_end(slot2);
 		  set_do_loop_end(slot_value(slot2), lim);
@@ -96077,50 +96077,50 @@ int main(int argc, char **argv)
  * index     1026   1016    973    967    967
  * tmock     1177   1165   1057   1019   1019
  * tvect     2519   2464   1772   1669   1669
- * timp      2637   2575   1930   1694   1694
+ * timp      2637   2575   1930   1694   1690
  * texit     ----   ----   1778   1741   1741
  * s7test    1873   1831   1818   1829   1829
- * thook     ----   ----   2590   2030   2030
+ * thook     ----   ----   2590   2030   2028
  * tauto     ----   ----   2562   2048   2048
  * lt        2187   2172   2150   2185   2185
- * dup       3805   3788   2492   2239   2239
+ * dup       3805   3788   2492   2239   2236
  * tcopy     8035   5546   2539   2375   2375
- * tload     ----   ----   3046   2404   2404
+ * tload     ----   ----   3046   2404   2404  2537
  * tread     2440   2421   2419   2408   2408
  * fbench    2688   2583   2460   2430   2430
- * trclo     2735   2574   2454   2445   2445
+ * trclo     2735   2574   2454   2445   2435
  * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2578   2578
- * tb        2735   2681   2612   2604   2604
+ * tmat      3065   3042   2524   2578   2569
+ * tb        2735   2681   2612   2604   2601
  * tsort     3105   3104   2856   2804   2804
  * teq       4068   4045   3536   3486   3486
- * tobj      4016   3970   3828   3577   3577
+ * tobj      4016   3970   3828   3577   3577  3603
  * tio       3816   3752   3683   3620   3620
  * tmac      3950   3873   3033   3677   3677
  * tclo      4787   4735   4390   4384   4384
- * tcase     4960   4793   4439   4430   4430
- * tlet      7775   5640   4450   4427   4427
- * tstar     6139   5923   5519   4449   4449
- * tfft      7820   7729   4755   4476   4476
+ * tcase     4960   4793   4439   4430   4426
+ * tlet      7775   5640   4450   4427   4434
+ * tstar     6139   5923   5519   4449   4441
+ * tfft      7820   7729   4755   4476   4473
  * tmap      8869   8774   4489   4541   4541
  * tshoot    5525   5447   5183   5055   5055
  * tstr      6880   6342   5488   5162   5162
- * tform     5357   5348   5307   5316   5316
+ * tform     5357   5348   5307   5316   5321
  * tnum      6348   6013   5433   5396   5396
- * tlamb     6423   6273   5720   5560   5560
- * tmisc     8869   7612   6435   6076   6076
+ * tlamb     6423   6273   5720   5560   5552
+ * tmisc     8869   7612   6435   6076   6074
  * tlist     7896   7546   6558   6240   6240
- * tset      ----   ----   ----   6260   6260
+ * tset      ----   ----   ----   6260   6258
  * tgsl      8485   7802   6373   6282   6282
- * tari      13.0   12.7   6827   6543   6543
+ * tari      13.0   12.7   6827   6543   6541
  * trec      6936   6922   6521   6588   6588
  * tleft     10.4   10.2   7657   7479   7479
- * tgc       11.9   11.1   8177   7857   7857
+ * tgc       11.9   11.1   8177   7857   7870
  * thash     11.8   11.7   9734   9479   9479
- * cb        11.2   11.0   9658   9564   9564
- * tgen      11.2   11.4   12.0   12.1   12.1
+ * cb        11.2   11.0   9658   9564   9548
+ * tgen      11.2   11.4   12.0   12.1   12.2
  * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.5
+ * calls     36.7   37.5   37.0   37.5   37.7
  * sg        ----   ----   55.9   55.8   55.8
  * lg        ----   ----  105.2  106.4  106.4
  * tbig     177.4  175.8  156.5  148.1  148.1
