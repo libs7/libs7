@@ -37405,7 +37405,7 @@ static s7_pointer list_increment_p_pip_unchecked(opt_info *o)
   return(p2);
 }
 
-static s7_pointer list_set_p_pip(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2)
+static s7_pointer list_set_p_pip(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2)  /* this may be uncallable now -- opt'd away in every case? */
 {
   if (!is_pair(p1))
     wrong_type_error_nr(sc, sc->list_set_symbol, 1, p1, sc->type_names[T_PAIR]);
@@ -40563,7 +40563,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
   return(val);
 }
 
-static s7_pointer vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
+static s7_pointer vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p) /* this may be uncallable now -- opt'd away in every case? */
 {
   if ((!is_any_vector(v)) ||
       (vector_rank(v) > 1) ||
