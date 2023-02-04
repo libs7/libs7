@@ -1418,14 +1418,44 @@ struct s7_scheme {
 #endif
 };
 
+
+static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info);
+static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
+
+/* an experiment */
+#ifndef DISABLE_FILE_OUTPUT
+  #define DISABLE_FILE_OUTPUT 0
+#endif
+
 #if S7_DEBUGGING
   static void gdb_break(void) {};
 #endif
-#if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS
+#if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
 static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
 #endif
 
-static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info);
+#if DISABLE_FILE_OUTPUT
+static FILE *old_fopen(const char *pathname, const char *mode) {return(fopen(pathname, mode));}
+
+#define fwrite local_fwrite
+#define fopen local_fopen
+/* open only used for file_probe (O_RDONLY), creat and write not used */
+
+static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1);
+
+static size_t local_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+  error_nr(cur_sc, cur_sc->io_error_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "writing a file is not allowed in this version of s7", 51)));
+}
+
+static FILE *local_fopen(const char *pathname, const char *mode)
+{
+  if ((mode[0] == 'w') || (mode[0] == 'a'))
+    error_nr(cur_sc, cur_sc->io_error_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "opening a file is not allowed in this version of s7", 51)));
+  return(old_fopen(pathname, mode));
+}
+#endif
+
 
 #if POINTER_32
 static void *Malloc(size_t bytes)
@@ -5916,8 +5946,6 @@ static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article)
       }}
   return("messed up object");
 }
-
-static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
 
 static s7_pointer object_type_name(s7_scheme *sc, s7_pointer x)
 {
@@ -40404,7 +40432,7 @@ static s7_pointer vector_ref_p_pi(s7_scheme *sc, s7_pointer v, s7_int i)
   return(vector_element(v, i));
 }
 
-static s7_pointer vector_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer v, s7_int i)
+static s7_pointer vector_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer v, s7_int i) /* callable but just barely (tgsl.scm) */
 {
   if ((i >= 0) && (i < vector_length(v)))
     return(vector_getter(v)(sc, v, i));
@@ -95196,7 +95224,7 @@ s7_scheme *s7_init(void)
   pthread_mutex_unlock(&init_lock);
 #endif
   sc = (s7_scheme *)Calloc(1, sizeof(s7_scheme)); /* not malloc! */
-#if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS
+#if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
   cur_sc = sc;                                    /* for gdb/debugging */
 #endif
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
