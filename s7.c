@@ -40633,7 +40633,7 @@ static s7_pointer vector_set_p_piip(s7_scheme *sc, s7_pointer v, s7_int i1, s7_i
 
 static s7_pointer vector_set_p_piip_direct(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_pointer p)
 {
-  /* normal untyped vector, rank == 2 */
+  /* normal untyped vector, rank == 2, uncallable? */
   if ((i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) || (i2 >= vector_dimension(v, 1)))
     return(g_vector_set(sc, set_elist_4(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2), p)));
@@ -41639,7 +41639,7 @@ static inline s7_double float_vector_ref_d_7pii(s7_scheme *sc, s7_pointer v, s7_
 }
 
 static s7_double float_vector_ref_d_7piii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3)
-{
+{ /* uncallable? */
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
     out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
@@ -41754,7 +41754,7 @@ static s7_double float_vector_set_d_7piid(s7_scheme *sc, s7_pointer v, s7_int i1
 }
 
 static s7_double float_vector_set_d_7piiid(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3, s7_double x)
-{
+{ /* uncallable? */
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
     out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
@@ -42061,7 +42061,7 @@ static s7_int byte_vector_set_i_7pii_direct(s7_scheme *unused_sc, s7_pointer p1,
 }
 
 static s7_pointer byte_vector_set_p_pip_direct(s7_scheme *unused_sc, s7_pointer p1, s7_int i1, s7_pointer p2)
-{
+{ /* uncallable */
   byte_vector(p1, i1) = (uint8_t)s7_integer(p2); return(p2);
 }
 
