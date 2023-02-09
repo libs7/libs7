@@ -1950,17 +1950,18 @@ static s7_pointer s7__mkstemp(s7_scheme *sc, s7_pointer args)
 
 
 /* -------- system -------- */
-static s7_pointer s7__system(s7_scheme *sc, s7_pointer args)
-{
-  s7_pointer p, arg;
-  char* s7__system_0;
-  p = args;
-  arg = s7_car(p);
-  if (s7_is_string(arg))
-    s7__system_0 = (char*)s7_string(arg);
-  else return(s7_wrong_type_arg_error(sc, __func__, 0, arg, "string"));
-  return(s7_make_integer(sc, (s7_int)system(s7__system_0)));
-}
+/* obazl avoid clash with g_system defined in s7.c (WITH_SYSTEM_EXTRAS) */
+/* static s7_pointer s7__system(s7_scheme *sc, s7_pointer args) */
+/* { */
+/*   s7_pointer p, arg; */
+/*   char* s7__system_0; */
+/*   p = args; */
+/*   arg = s7_car(p); */
+/*   if (s7_is_string(arg)) */
+/*     s7__system_0 = (char*)s7_string(arg); */
+/*   else return(s7_wrong_type_arg_error(sc, __func__, 0, arg, "string")); */
+/*   return(s7_make_integer(sc, (s7_int)system(s7__system_0))); */
+/* } */
 
 
 /* -------- abs -------- */
@@ -1975,7 +1976,7 @@ static s7_pointer s7__abs(s7_scheme *sc, s7_pointer args)
   else return(s7_wrong_type_arg_error(sc, __func__, 0, arg, "integer"));
   return(s7_make_integer(sc, (s7_int)abs(s7__abs_0)));
 }
-static s7_int abs_i_i(s7_int i1) {return(llabs(i1));}
+/*obazl -Wunused-function static s7_int abs_i_i(s7_int i1) {return(llabs(i1));} */
 
 
 /* -------- labs -------- */
@@ -4875,7 +4876,7 @@ static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
 void libc_s7_init(s7_scheme *sc);
 void libc_s7_init(s7_scheme *sc)
 {
-    printf("libs7: libc_s7_init (libc_s7.c)\n");
+    printf("libsc_7.c: libc_s7_init\n");
   s7_pointer cur_env;
   s7_pointer pcl_t, pl_tx, pl_ts, pl_ti, pl_txs, pcl_x, pl_xs, pcl_xi, pl_xi, pl_xt, pcl_xs, pl_xxi, pcl_xxi, pl_xis, pl_xxxi, pl_xssx, pcl_i, pl_ix, pl_it, pcl_is, pl_is, pcl_ix, pcl_iix, pcl_isi, pl_ixi, pl_isi, pl_iix, pl_isx, pcl_ixi, pl_isxi, pl_iisi, pcl_iixi, pl_iixi, pl_issi, pl_ixxi, pcl_ixsi, pl_ixiix, pl_iixiixi, pcl_di, pl_ds, pcl_s, pl_sx, pl_st, pl_si, pl_sis, pl_ssi, pl_sssi, pl_ssix, pl_sisi;
   {
@@ -8951,7 +8952,7 @@ void libc_s7_init(s7_scheme *sc)
             s7_make_symbol(sc, "abs"),
             s7_make_typed_function(sc, "abs", s7__abs, 1, 0, false, "int abs(int)", pcl_i));
 
-  /* avoid clash with g_system defined in s7.c (WITH_SYSTEM_EXTRAS) */
+  /* obazl avoid clash with g_system defined in s7.c (WITH_SYSTEM_EXTRAS) */
   /* s7_define(sc, cur_env, */
   /*           s7_make_symbol(sc, "system"), */
   /*           s7_make_typed_function(sc, "system", s7__system, 1, 0, false, "int system(char*)", pl_is)); */

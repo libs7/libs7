@@ -37,23 +37,24 @@ char *canonical_path(char *path)
     char *dst_cursor = buf;
     char *rewind     = buf;
 
-    char *src_anchor = path;
-    char *dst_anchor = path;
-    char *start  = path;
+    /* char *src_anchor = path; */
+    /* char *dst_anchor = path; */
+    /* char *start  = path; */
 
-    char *prev_slash = NULL;
+    /* char *prev_slash = NULL; */
     /* char *prevprev_slash = NULL; */
     /* bool backup = false; */
 
-    start = src_anchor;
+    /* char *start = src_anchor; */
 
     /* int len  = strlen(src_cursor); */
     /* int mvlen  = 0; */
-    int i, buflen;
+    /* int i; */
+    /* int buflen; */
 
     /* bool editing = false; */
     int dotcount   = 0;    /* consecutive '.' */
-    int slashcount = 0;    /* consecutive '/' or "/./" */
+    /* int slashcount = 0;    /\* consecutive '/' or "/./" *\/ */
 
     /* printf("prev_slash: %s (%x)\n", prev_slash, prev_slash); */
     /* printf("slash ct: %d\n", slashcount); */

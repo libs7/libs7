@@ -1,12 +1,12 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
-exports_files(["s7.h"])
+exports_files(["s7.c", "s7.h"])
 
 ###########
 cc_library(
     name  = "s7",
-    alwayslink = True,
-    # linkstatic = True,
+    alwayslink = False,
+    linkstatic = True,
     srcs  = [
         "s7.c", "mus-config.h",
         "glob.c", "fs_api.c",
