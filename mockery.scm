@@ -30,7 +30,7 @@
     (lambda (obj)
       (cond ((mock? obj)
 	     (let-temporarily (((*s7* 'openlets) #f))
-	       (func (obj 'value))))
+	       (func (let-ref obj 'value))))
 
 	    ((not (openlet? obj))
 	     (func obj))
@@ -84,13 +84,13 @@
 						 (error 'wrong-type-arg "stray mock-vector? ~S" i))
 					     (#_vector-set! (->value obj) i val))
 		       
-		       'vector-set!        (lambda (obj i val) ((obj 'local-set!) obj i val) val)
+		       'vector-set!        (lambda (obj i val) ((let-ref obj 'local-set!) obj i val) val)
 		       
 		       'let-set-fallback   (lambda (obj i val) 
 					     (if (and (integer? i)
 						      (defined? 'value obj))
 						 (begin
-						   ((obj 'local-set!) obj i val) 
+						   ((let-ref obj 'local-set!) obj i val) 
 						   val)
 						 (error 'out-of-range "unknown field: ~S" i)))
 		       
@@ -271,7 +271,7 @@
 			  (#_hash-table-ref (obj 'value) key)))))
   
   (define (hash-table-key? obj key) 
-    ((obj 'hash-table-key?) obj key))
+    ((let-ref obj 'hash-table-key?) obj key))
   
   (define* (make-gloomy-hash-table (len 511) not-a-key)
     (let ((ht (gloomy-hash-table)))
