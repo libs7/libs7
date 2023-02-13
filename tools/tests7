@@ -6,7 +6,7 @@ cp tools/tauto.scm .
 cp ~/cl/t923.scm .
 cp ~/cl/t101.scm .
 cp tools/*.scm .
-cp ~/cl/make-repl .
+# cp ~/cl/make-repl .
 cp ~/cl/low-primes.scm .
 cp ~/cl/full-s7test.scm .
 cp ~/cl/lt.scm .

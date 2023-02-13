@@ -1422,60 +1422,65 @@ struct s7_scheme {
 static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info);
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
 
+#if S7_DEBUGGING
+  static void gdb_break(void) {};
+#endif
+
 /* an experiment */
 #ifndef DISABLE_FILE_OUTPUT
   #define DISABLE_FILE_OUTPUT 0
 #endif
 
-#if S7_DEBUGGING
-  static void gdb_break(void) {};
-#endif
 #if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
-static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used if S7_DEBUGGING unfortunately */
+  static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used elsewhere unfortunately */
 #endif
 
 #if DISABLE_FILE_OUTPUT
 static FILE *old_fopen(const char *pathname, const char *mode) {return(fopen(pathname, mode));}
 
 #define fwrite local_fwrite
-#define fopen local_fopen
-/* open only used for file_probe (O_RDONLY), creat and write not used */
+#define fopen local_fopen   /* open only used for file_probe (O_RDONLY), creat and write not used */
 
 static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1);
 
 static size_t local_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-  error_nr(cur_sc, cur_sc->io_error_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "writing a file is not allowed in this version of s7", 51)));
+  error_nr(cur_sc, cur_sc->io_error_symbol, 
+	   set_elist_1(cur_sc, wrap_string(cur_sc, "writing a file is not allowed in this version of s7", 51)));
 }
 
 static FILE *local_fopen(const char *pathname, const char *mode)
 {
   if ((mode[0] == 'w') || (mode[0] == 'a'))
-    error_nr(cur_sc, cur_sc->io_error_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "opening a file is not allowed in this version of s7", 51)));
+    error_nr(cur_sc, cur_sc->io_error_symbol, 
+	     set_elist_1(cur_sc, wrap_string(cur_sc, "opening a file is not allowed in this version of s7", 51)));
   return(old_fopen(pathname, mode));
 }
 #endif
 
 
 #if POINTER_32
+#if (!DISABLE_FILE_OUTPUT)
+  static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1);
+#endif
 static void *Malloc(size_t bytes)
 {
   void *p = malloc(bytes);
-  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, cur_sc->nil);
+  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "malloc failed", 13)));
   return(p);
 }
 
 static void *Calloc(size_t nmemb, size_t size)
 {
   void *p = calloc(nmemb, size);
-  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, cur_sc->nil);
+  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "calloc failed", 13)));
   return(p);
 }
 
 static void *Realloc(void *ptr, size_t size)
 {
   void *p = realloc(ptr, size);
-  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, cur_sc->nil);
+  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "realloc failed", 14)));
   return(p);
 }
 #else
@@ -4545,12 +4550,6 @@ static bool is_h_optimized(s7_pointer p)
 	 (optimize_op(p) > OP_GC_PROTECT));
 }
 
-static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e);
-static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int len);
-static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
-static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
-static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article);
-
 /* if this changes, remember to change lint.scm */
 typedef enum {SL_NO_FIELD=0, SL_STACK_TOP, SL_STACK_SIZE, SL_STACKTRACE_DEFAULTS, SL_HEAP_SIZE, SL_FREE_HEAP_SIZE,
               SL_GC_FREED, SL_GC_PROTECTED_OBJECTS, SL_GC_TOTAL_FREED, SL_GC_INFO, SL_FILE_NAMES, SL_FILENAMES, SL_ROOTLET_SIZE, SL_C_TYPES,
@@ -4578,6 +4577,11 @@ static const char *s7_starlet_names[SL_NUM_FIELDS] =
    "muffle-warnings?", "most-positive-fixnum", "most-negative-fixnum", "output-port-data-size", "debug", "version",
    "gc-temps-size", "gc-resize-heap-fraction", "gc-resize-heap-by-4-fraction", "openlets", "expansions?",
    "number-separator"};
+
+static s7_pointer object_to_truncated_string(s7_scheme *sc, s7_pointer p, s7_int len); /* display_80 etc */
+static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article);
+static s7_pointer cons_unchecked(s7_scheme *sc, s7_pointer a, s7_pointer b);
+static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
 
 
 /* -------------------------------- internal debugging apparatus -------------------------------- */
@@ -5909,6 +5913,8 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
   return(sc->nil);
 }
 
+static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e);
+
 static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
   s7_pointer slot;
@@ -6104,6 +6110,7 @@ static s7_pointer apply_boolean_method(s7_scheme *sc, s7_pointer obj, s7_pointer
   }
 
 static s7_pointer apply_method_closure(s7_scheme *sc, s7_pointer func, s7_pointer args);
+
 static s7_pointer find_and_apply_method(s7_scheme *sc, s7_pointer obj, s7_pointer sym, s7_pointer args) /* slower if inline */
 {
   s7_pointer func = find_method_with_let(sc, obj, sym);
@@ -6421,11 +6428,6 @@ static void (*mark_function[NUM_TYPES])(s7_pointer p);
 void s7_mark(s7_pointer p) {if (!is_marked(p)) (*mark_function[unchecked_type(p)])(p);}
 static void mark_noop(s7_pointer unused_p) {}
 
-
-static void close_output_port(s7_scheme *sc, s7_pointer p);
-static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym);
-static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table);
-
 static void process_iterator(s7_scheme *unused_sc, s7_pointer s1)
 {
   if (is_weak_hash_iterator(s1))
@@ -6508,6 +6510,8 @@ static void process_input_port(s7_scheme *sc, s7_pointer s1)
   liberate(sc, port_block(s1));
 }
 
+static void close_output_port(s7_scheme *sc, s7_pointer p);
+
 static void process_output_port(s7_scheme *sc, s7_pointer s1)
 {
   close_output_port(sc, s1); /* needed for free filename, etc */
@@ -6587,6 +6591,8 @@ static void free_big_complex(s7_scheme *sc, s7_pointer p)
 
 
 static void free_hash_table(s7_scheme *sc, s7_pointer table);
+static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym);
+static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table);
 
 static void sweep(s7_scheme *sc)
 {
@@ -7262,9 +7268,6 @@ static void unmark_semipermanent_objects(s7_scheme *sc)
   #include <sys/time.h>
 #endif
 
-static s7_pointer make_symbol(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
-#define make_symbol_with_strlen(Sc, Name) make_symbol(Sc, Name, safe_strlen(Name))
-
 #if WITH_GCC
 static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #else
@@ -7499,6 +7502,8 @@ static int64_t gc(s7_scheme *sc)
 #define GC_RESIZE_HEAP_BY_4_FRACTION 0.67
 /*   .5+.1: test -3?, dup +86, tmap +45, tsort -3, thash +305.  .85+.7: dup -5 */
 
+static s7_pointer make_symbol(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
+#define make_symbol_with_strlen(Sc, Name) make_symbol(Sc, Name, safe_strlen(Name))
 
 #if S7_DEBUGGING
 #define resize_heap_to(Sc, Size) resize_heap_to_1(Sc, Size, __func__, __LINE__)
@@ -9046,7 +9051,6 @@ static s7_int let_length(s7_scheme *sc, s7_pointer e)
   return(i);
 }
 
-
 static void slot_set_setter(s7_pointer p, s7_pointer val)
 {
   if ((type(val) == T_C_FUNCTION) &&
@@ -10437,7 +10441,6 @@ s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 /* -------------------------------- symbol->value -------------------------------- */
 #define lookup_global(Sc, Sym) ((is_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
 
-static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
 static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
 
 static s7_pointer g_symbol_to_value(s7_scheme *sc, s7_pointer args)
@@ -11655,8 +11658,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
 
 static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let);
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value);
-static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e);
-static s7_pointer eval(s7_scheme *sc, opcode_t first_op);
+static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
 
 static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 {
@@ -11877,6 +11879,7 @@ static bool op_implicit_continuation_a(s7_scheme *sc)
 
 /* -------------------------------- call-with-exit -------------------------------- */
 static void pop_input_port(s7_scheme *sc);
+static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e);
 
 static void call_with_exit(s7_scheme *sc)
 {
@@ -12798,6 +12801,7 @@ static s7_pointer string_to_either_ratio(s7_scheme *sc, const char *nstr, const 
 }
 
 static s7_double string_to_double_with_radix(const char *ur_str, int32_t radix, bool *overflow);
+
 static s7_pointer string_to_either_real(s7_scheme *sc, const char *str, int32_t radix)
 {
   bool overflow = false;
@@ -15247,6 +15251,7 @@ static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radi
 
 #if WITH_NUMBER_SEPARATOR
 static s7_pointer string_to_number(s7_scheme *sc, char *str, int32_t radix);
+
 static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t radix, bool want_symbol)
 {
   block_t *b;
@@ -27656,8 +27661,8 @@ static s7_pointer g_string_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
   return(chr);
 }
 
-#if (!WITH_PURE_S7)
 /* -------------------------------- string-fill! -------------------------------- */
+#if (!WITH_PURE_S7)
 static s7_pointer g_string_fill(s7_scheme *sc, s7_pointer args)
 {
   #define H_string_fill "(string-fill! str chr start end) fills the string str with the character chr"
@@ -30096,6 +30101,8 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
     Sc->goto_start = &new_goto_start;		\
   } while (0)
 
+static s7_pointer eval(s7_scheme *sc, opcode_t first_op);
+
 s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
 {
   if (is_input_port(port))
@@ -31789,9 +31796,6 @@ static void enlarge_shared_info(shared_info_t *ci)
     }
 }
 
-static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top, bool stop_at_print_length);
-static bool hash_keys_not_cyclic(s7_scheme *sc, s7_pointer hash);
-
 static bool check_collected(s7_pointer top, shared_info_t *ci)
 {
   s7_pointer *objs_end = (s7_pointer *)(ci->objs + ci->top);
@@ -31809,6 +31813,9 @@ static bool check_collected(s7_pointer top, shared_info_t *ci)
   set_cyclic(top);
   return(true);
 }
+
+static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top, bool stop_at_print_length);
+static bool hash_keys_not_cyclic(s7_scheme *sc, s7_pointer hash);
 
 static bool collect_vector_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top, bool stop_at_print_length)
 {
@@ -39128,8 +39135,6 @@ static const char *typed_vector_typer_name(s7_scheme *sc, s7_pointer p)
 }
 
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article);
-static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
-
 static s7_pointer type_name_string(s7_scheme *sc, s7_pointer arg);
 
 static void port_write_vector_typer(s7_scheme *sc, s7_pointer vect, s7_pointer port)
@@ -96098,7 +96103,7 @@ int main(int argc, char **argv)
 #endif
 
 /* ----------------------------------------------
- *            20.9   21.0   22.0   23.0   23.1
+ *            20.9   21.0   22.0   23.0   23.2
  * ----------------------------------------------
  * tpeak      115    114    108    105    105
  * tref       691    687    463    459    459
