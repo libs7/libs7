@@ -1582,7 +1582,7 @@ static inline void liberate(s7_scheme *sc, block_t *p)
 
 static inline void liberate_block(s7_scheme *sc, block_t *p)
 {
-  block_next(p) = (struct block_t *)sc->block_lists[BLOCK_LIST]; /* BLOCK_LIST=0 */
+  block_next(p) = (struct block_t *)sc->block_lists[BLOCK_LIST]; /* BLOCK_LIST==0 */
   sc->block_lists[BLOCK_LIST] = p;
 }
 
@@ -92332,14 +92332,31 @@ static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20
   return(x);
 }
 
-/* handling all *s7* fields via fallbacks lets us use direct field accesses in the rest of s7, and avoids
- *   using ca 100 cells for the let slots/values.  We would need the fallbacks anyway for 'files et al.
- *   Since most of the fields need special setters, it's actually less code this way.  See old/s7-let-s7.c.
- */
-
-#if (!_WIN32) /* (!MS_WINDOWS) */
-  #include <sys/resource.h>
-#endif
+static void add_symbol_table(s7_scheme *sc, s7_pointer mu_let)
+{
+  /* check the symbol table, counting gensyms etc */
+  s7_int syms = 0, gens = 0, keys = 0, mx_list = 0;
+  s7_pointer *els = vector_elements(sc->symbol_table);
+  for (s7_int i = 0; i < SYMBOL_TABLE_SIZE; i++)
+    {
+      s7_pointer x;
+      s7_int k = 0;
+      for (x = els[i]; is_not_null(x); x = cdr(x), k++)
+	{
+	  syms++;
+	  if (is_gensym(car(x))) gens++;
+	  if (is_keyword(car(x))) keys++;
+	}
+      if (k > mx_list) mx_list = k;
+    }
+  add_slot_unchecked_with_id(sc, mu_let, sc->symbol_table_symbol,
+			     s7_list(sc, 9,
+				     make_integer(sc, SYMBOL_TABLE_SIZE),
+				     make_symbol(sc, "max-bin", 7), make_integer(sc, mx_list),
+				     make_symbol(sc, "symbols", 7), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
+				     make_symbol(sc, "gensyms", 7), make_integer(sc, gens),
+				     make_symbol(sc, "keys", 4),    make_integer(sc, keys)));
+}
 
 static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
 {
@@ -92356,6 +92373,45 @@ static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
       else len = snprintf((char *)block_data(b), 128, "%.1fG", bytes / 1000000000.0);
   return(cons(sc, make_integer(sc, bytes), block_to_string(sc, b, len)));
 }
+
+static void add_gc_list_sizes(s7_scheme *sc, s7_pointer mu_let)
+{
+  /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-polar et el */
+  s7_int len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
+               sc->continuations->size + sc->c_objects->size + sc->hash_tables->size + sc->gensyms->size + sc->undefineds->size +
+               sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->opt1_funcs->size;
+
+  int32_t loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
+                sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
+                sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
+
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists", 8),
+     s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
+       s7_list(sc, 14,
+	 list_3(sc, sc->string_symbol,                    make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
+	 list_3(sc, sc->vector_symbol,                    make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
+	 list_3(sc, sc->hash_table_symbol,                make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
+	 list_3(sc, make_symbol(sc, "multivector", 11),   make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
+	 list_3(sc, make_symbol(sc, "input", 5),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
+	 list_3(sc, make_symbol(sc, "output", 6),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
+	 list_3(sc, make_symbol(sc, "input-string", 12),  make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
+	 list_3(sc, make_symbol(sc, "continuation", 12),  make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
+	 list_3(sc, make_symbol(sc, "c-object", 8),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
+	 list_3(sc, sc->gensym_symbol,                    make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
+	 list_3(sc, make_symbol(sc, "undefined", 9),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
+	 list_3(sc, make_symbol(sc, "weak-ref", 8),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
+	 list_3(sc, make_symbol(sc, "weak-hash-iter", 14),make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
+	 list_3(sc, make_symbol(sc, "opt1-func", 9),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
+}
+
+/* handling all *s7* fields via fallbacks lets us use direct field accesses in the rest of s7, and avoids
+ *   using ca 100 cells for the let slots/values.  We would need the fallbacks anyway for 'files et al.
+ *   Since most of the fields need special setters, it's actually less code this way.  See old/s7-let-s7.c.
+ */
+
+#if (!_WIN32) /* (!MS_WINDOWS) */
+  #include <sys/resource.h>
+#endif
 
 static s7_pointer memory_usage(s7_scheme *sc)
 {
@@ -92428,29 +92484,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 				  make_integer(sc, sc->protected_objects_size)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "setters", 7), make_integer(sc, sc->protected_setters_loc));
 
-  /* check the symbol table, counting gensyms etc */
-  {
-    s7_int syms = 0, gens = 0, keys = 0, mx_list = 0;
-    s7_pointer *els = vector_elements(sc->symbol_table);
-    for (i = 0; i < SYMBOL_TABLE_SIZE; i++)
-      {
-	s7_pointer x;
-	for (k = 0, x = els[i]; is_not_null(x); x = cdr(x), k++)
-	  {
-	    syms++;
-	    if (is_gensym(car(x))) gens++;
-	    if (is_keyword(car(x))) keys++;
-	  }
-	if (k > mx_list) mx_list = k;
-      }
-    add_slot_unchecked_with_id(sc, mu_let, sc->symbol_table_symbol,
-			       s7_list(sc, 9,
-				       make_integer(sc, SYMBOL_TABLE_SIZE),
-				       make_symbol(sc, "max-bin", 7), make_integer(sc, mx_list),
-				       make_symbol(sc, "symbols", 7), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
-				       make_symbol(sc, "gensyms", 7), make_integer(sc, gens),
-				       make_symbol(sc, "keys", 4),    make_integer(sc, keys)));
-  }
+  add_symbol_table(sc, mu_let);
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "stack", 5), cons(sc, make_integer(sc, current_stack_top(sc)), make_integer(sc, sc->stack_size)));
 
   len = sc->autoload_names_top * (sizeof(const char **) + sizeof(s7_int) + sizeof(bool));
@@ -92460,32 +92494,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "circle_info", 11),
 			     make_integer(sc, sc->circle_info->size * (sizeof(s7_pointer) + sizeof(int32_t) + sizeof(bool))));
 
-  /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-polar et el */
-  len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
-    sc->continuations->size + sc->c_objects->size + sc->hash_tables->size + sc->gensyms->size + sc->undefineds->size +
-    sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->opt1_funcs->size;
-  {
-    int32_t loc = sc->strings->loc + sc->vectors->loc + sc->input_ports->loc + sc->output_ports->loc + sc->input_string_ports->loc +
-                  sc->continuations->loc + sc->c_objects->loc + sc->hash_tables->loc + sc->gensyms->loc + sc->undefineds->loc +
-                  sc->multivectors->loc + sc->weak_refs->loc + sc->weak_hash_iterators->loc + sc->opt1_funcs->loc;
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-lists", 8),
-       s7_list(sc, 4, make_integer(sc, loc), make_integer(sc, len), kmg(sc, len * sizeof(s7_pointer)), /* active, total, space allocated */
-	 s7_list(sc, 14,
-	   list_3(sc, sc->string_symbol,                    make_integer(sc, sc->strings->loc),             make_integer(sc, sc->strings->size)),
-	   list_3(sc, sc->vector_symbol,                    make_integer(sc, sc->vectors->loc),             make_integer(sc, sc->vectors->size)),
-	   list_3(sc, sc->hash_table_symbol,                make_integer(sc, sc->hash_tables->loc),         make_integer(sc, sc->hash_tables->size)),
-	   list_3(sc, make_symbol(sc, "multivector", 11),   make_integer(sc, sc->multivectors->loc),        make_integer(sc, sc->multivectors->size)),
-	   list_3(sc, make_symbol(sc, "input", 5),          make_integer(sc, sc->input_ports->loc),         make_integer(sc, sc->input_ports->size)),
-	   list_3(sc, make_symbol(sc, "output", 6),         make_integer(sc, sc->output_ports->loc),        make_integer(sc, sc->output_ports->size)),
-	   list_3(sc, make_symbol(sc, "input-string", 12),  make_integer(sc, sc->input_string_ports->loc),  make_integer(sc, sc->input_string_ports->size)),
-	   list_3(sc, make_symbol(sc, "continuation", 12),  make_integer(sc, sc->continuations->loc),       make_integer(sc, sc->continuations->size)),
-	   list_3(sc, make_symbol(sc, "c-object", 8),       make_integer(sc, sc->c_objects->loc),           make_integer(sc, sc->c_objects->size)),
-	   list_3(sc, sc->gensym_symbol,                    make_integer(sc, sc->gensyms->loc),             make_integer(sc, sc->gensyms->size)),
-	   list_3(sc, make_symbol(sc, "undefined", 9),      make_integer(sc, sc->undefineds->loc),          make_integer(sc, sc->undefineds->size)),
-	   list_3(sc, make_symbol(sc, "weak-ref", 8),       make_integer(sc, sc->weak_refs->loc),           make_integer(sc, sc->weak_refs->size)),
-	   list_3(sc, make_symbol(sc, "weak-hash-iter", 14),make_integer(sc, sc->weak_hash_iterators->loc), make_integer(sc, sc->weak_hash_iterators->size)),
-	   list_3(sc, make_symbol(sc, "opt1-func", 9),      make_integer(sc, sc->opt1_funcs->loc),          make_integer(sc, sc->opt1_funcs->size)))));
-  }
+  add_gc_list_sizes(sc, mu_let);
 
   /* strings */
   gp = sc->strings;
@@ -96106,7 +96115,7 @@ int main(int argc, char **argv)
  * index     1026   1016    973    967    967
  * tmock     1177   1165   1057   1019   1019
  * tvect     2519   2464   1772   1669   1669
- * timp      2637   2575   1930   1694   1690
+ * timp      2637   2575   1930   1694   1694
  * texit     ----   ----   1778   1741   1741
  * s7test    1873   1831   1818   1829   1829
  * thook     ----   ----   2590   2030   2028
@@ -96114,26 +96123,26 @@ int main(int argc, char **argv)
  * lt        2187   2172   2150   2185   2185
  * dup       3805   3788   2492   2239   2236
  * tcopy     8035   5546   2539   2375   2375
- * tload     ----   ----   3046   2404   2404  2537
- * tread     2440   2421   2419   2408   2408
+ * tload     ----   ----   3046   2404   2537
+ * tread     2440   2421   2419   2408   2403
  * fbench    2688   2583   2460   2430   2430
- * trclo     2735   2574   2454   2445   2435
+ * trclo     2735   2574   2454   2445   2445
  * titer     2865   2842   2641   2509   2509
  * tmat      3065   3042   2524   2578   2569
  * tb        2735   2681   2612   2604   2601
  * tsort     3105   3104   2856   2804   2804
  * teq       4068   4045   3536   3486   3486
- * tobj      4016   3970   3828   3577   3577  3603
+ * tobj      4016   3970   3828   3577   3603
  * tio       3816   3752   3683   3620   3620
- * tmac      3950   3873   3033   3677   3677
+ * tmac      3950   3873   3033   3677   3682
  * tclo      4787   4735   4390   4384   4384
  * tcase     4960   4793   4439   4430   4426
- * tlet      7775   5640   4450   4427   4434
- * tstar     6139   5923   5519   4449   4441
- * tfft      7820   7729   4755   4476   4473
+ * tlet      7775   5640   4450   4427   4422
+ * tstar     6139   5923   5519   4449   4449
+ * tfft      7820   7729   4755   4476   4475
  * tmap      8869   8774   4489   4541   4541
  * tshoot    5525   5447   5183   5055   5055
- * tstr      6880   6342   5488   5162   5162
+ * tstr      6880   6342   5488   5162   5165
  * tform     5357   5348   5307   5316   5321
  * tnum      6348   6013   5433   5396   5396
  * tlamb     6423   6273   5720   5560   5552
@@ -96144,9 +96153,9 @@ int main(int argc, char **argv)
  * tari      13.0   12.7   6827   6543   6541
  * trec      6936   6922   6521   6588   6588
  * tleft     10.4   10.2   7657   7479   7479
- * tgc       11.9   11.1   8177   7857   7870
+ * tgc       11.9   11.1   8177   7857   7897
  * thash     11.8   11.7   9734   9479   9479
- * cb        11.2   11.0   9658   9564   9548
+ * cb        11.2   11.0   9658   9564   9559
  * tgen      11.2   11.4   12.0   12.1   12.2
  * tall      15.6   15.6   15.6   15.6   15.6
  * calls     36.7   37.5   37.0   37.5   37.7
