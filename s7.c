@@ -4680,7 +4680,7 @@ void s7_show_stack(s7_scheme *sc)
 #if S7_DEBUGGING
 #define UNUSED_BITS 0xfc00000000c0 /* high 6 bits of optimizer code + high 2 bits of type */
 
-static char *describe_type_bits(s7_scheme *sc, s7_pointer obj) /* used outside S7_DEBUGGING in display_fallback (for display_functions) */
+static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 {
   uint64_t full_typ = full_type(obj);
   uint8_t typ = unchecked_type(obj);
@@ -71936,8 +71936,8 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 	    if (!is_checked(car_p))
 	      {
 		opt_t res;
-		if ((is_pair(car(car_p))) && (caar(car_p) == sc->let_symbol)) /* TODO: fix this! ((let () quasiquote) (vector i x)) -> apply in a function! */
-		  res = OPT_F;                                                /*   maybe: is_syntactic_symbol through car(car_p)? */
+		if ((is_pair(car(car_p))) && (caar(car_p) == sc->let_symbol))
+		  res = OPT_F;
 		else res = optimize_expression(sc, car_p, orig_hop, e, false);
 		if (res == OPT_F)
 		  {
@@ -79624,10 +79624,6 @@ static goto_t op_set2(s7_scheme *sc)
       return(goto_eval);
     }
   sc->code = cons_unchecked(sc, sc->set_symbol, cons(sc, set_ulist_1(sc, sc->value, sc->args), sc->code)); /* (let ((x 32)) (set! ((curlet) 'x) 3) x) */
-  /* TODO: make a version of set_implicit that doesn't need all these conses! expand set_implicit and clear out pointless stuff
-   *   we have: obj=sc->value [not pair], inds=sc->args, newval=sc->code, but we need the form for errors, and newval needs to be in a list?
-   *   probably need to break out other cases: let|hash|string|c-obj, but all these pair_appends are also stupid
-   */
   return(set_implicit(sc));
 }
 
@@ -88274,6 +88270,98 @@ static void back_up_stack(s7_scheme *sc)
     pop_stack(sc);
 }
 
+static token_t read_block_comment(s7_scheme *sc, s7_pointer pt)
+{
+  /* block comments in #| ... |#
+   *   since we ignore everything until the |#, internal semicolon comments are ignored,
+   *   meaning that ;|# is as effective as |#
+   */
+  int32_t c;
+  const char *str, *orig_str, *p, *pend;
+  if (is_file_port(pt))
+    {
+      char last_char = ' ';
+      while (true)
+	{
+	  c = fgetc(port_file(pt));
+	  if (c == EOF)
+	    error_nr(sc, sc->read_error_symbol,
+		     set_elist_1(sc, wrap_string(sc, "unexpected end of input while reading #|", 40)));
+	  if ((c == '#') &&
+	      (last_char == '|'))
+	    break;
+	  last_char = c;
+	  if (c == '\n')
+	    port_line_number(pt)++;
+	}
+      return(token(sc));
+    }
+  orig_str = (const char *)(port_data(pt) + port_position(pt));
+  pend = (const char *)(port_data(pt) + port_data_size(pt));
+  str = orig_str;
+  while (true)
+    {
+      p = strchr(str, (int)'|');
+      if ((!p) || (p >= pend))
+	{
+	  port_position(pt) = port_data_size(pt);
+	  error_nr(sc, sc->read_error_symbol,
+		   set_elist_1(sc, wrap_string(sc, "unexpected end of input while reading #|", 40)));
+	}
+      if (p[1] == '#')
+	break;
+      str = (const char *)(p + 1);
+    }
+  port_position(pt) += (p - orig_str + 2);
+  /* now count newlines inside the comment */
+  str = (const char *)orig_str;
+  pend = p;
+  while (true)
+    {
+      p = strchr(str, (int)'\n');
+      if ((p) && (p < pend))
+	{
+	  port_line_number(pt)++;
+	  str = (char *)(p + 1);
+	}
+      else break;
+    }
+  return(token(sc));
+}
+
+static token_t read_bang_comment(s7_scheme *sc, s7_pointer pt)
+{
+  /* block comments in #! ... !#
+   * this is needed when an input file is treated as a script:
+       #!/home/bil/cl/snd
+       !#
+       (format #t "a test~%")
+       (exit)
+   * but very often the closing !# is omitted which is too bad
+   */
+  int32_t c;
+  char last_char = ' ';
+  /* make it possible to override #! handling */
+  for (s7_pointer reader = slot_value(sc->sharp_readers); is_pair(reader); reader = cdr(reader))
+    if (s7_character(caar(reader)) == '!')
+      {
+	sc->strbuf[0] = (unsigned char)'!';
+	return(TOKEN_SHARP_CONST); /* next stage notices any errors */
+      }
+  /* not #! as block comment (for Guile I guess) */
+  while ((c = inchar(pt)) != EOF)
+    {
+      if ((c == '#') &&
+	  (last_char == '!'))
+	break;
+      last_char = c;
+    }
+  if (c == EOF)
+    error_nr(sc, sc->read_error_symbol,
+	     set_elist_1(sc, wrap_string(sc, "unexpected end of input while reading #!", 40)));
+  return(token(sc));
+}
+
 static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 {
   int32_t c = inchar(pt); /* inchar can return EOF, so it can't be used directly as an index into the digits array */
@@ -88283,23 +88371,23 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       error_nr(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "unexpected '#' at end of input", 30)));
       break;
 
-    case '(':
+    case '(':                      /* #(...) */
       sc->w = int_one;
       return(TOKEN_VECTOR);
 
-    case 'i':
+    case 'i':                      /* #i(...) */
       if (read_sharp(sc, pt) == TOKEN_VECTOR)
 	return(TOKEN_INT_VECTOR);
       backchar('i', pt);
       break;
 
-    case 'r':
+    case 'r':                      /* #r(...) */
       if (read_sharp(sc, pt) == TOKEN_VECTOR)
 	return(TOKEN_FLOAT_VECTOR);
       backchar('r', pt);
       break;
 
-    case 'u':
+    case 'u':                      /* #u(...) or #u8(...) */
       if (s7_peek_char(sc, pt) == chars[(int32_t)('8')]) /* backwards compatibility: #u8(...) == #u(...) */
 	{
 	  int32_t bc = inchar(pt);
@@ -88382,95 +88470,12 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       sc->strbuf[0] = ':';
       return(TOKEN_ATOM);
 
-      /* block comments in #! ... !# */
-      /* this is needed when an input file is treated as a script:
-	 #!/home/bil/cl/snd
-	 !#
-	 (format #t "a test~%")
-	 (exit)
-      * but very often the closing !# is omitted which is too bad
-      */
     case '!':
-      {
-	char last_char = ' ';
-	/* make it possible to override #! handling */
-	for (s7_pointer reader = slot_value(sc->sharp_readers); is_pair(reader); reader = cdr(reader))
-	  if (s7_character(caar(reader)) == '!')
-	    {
-	      sc->strbuf[0] = (unsigned char)c;
-	      return(TOKEN_SHARP_CONST); /* next stage notices any errors */
-	    }
-	/* not #! as block comment (for Guile I guess) */
-	while ((c = inchar(pt)) != EOF)
-	  {
-	    if ((c == '#') &&
-		(last_char == '!'))
-	      break;
-	    last_char = c;
-	  }
-	if (c == EOF)
-	  error_nr(sc, sc->read_error_symbol,
-		   set_elist_1(sc, wrap_string(sc, "unexpected end of input while reading #!", 40)));
-	return(token(sc));
-      }
+      return(read_bang_comment(sc, pt));
 
-      /* block comments in #| ... |#
-       *   since we ignore everything until the |#, internal semicolon comments are ignored,
-       *   meaning that ;|# is as effective as |#
-       */
-    case '|':
-      {
-	const char *str, *orig_str, *p, *pend;
-	if (is_file_port(pt))
-	  {
-	    char last_char = ' ';
-	    while (true)
-	      {
-		c = fgetc(port_file(pt));
-		if (c == EOF)
-		  error_nr(sc, sc->read_error_symbol,
-			   set_elist_1(sc, wrap_string(sc, "unexpected end of input while reading #|", 40)));
-		if ((c == '#') &&
-		    (last_char == '|'))
-		  break;
-		last_char = c;
-		if (c == '\n')
-		  port_line_number(pt)++;
-	      }
-	    return(token(sc));
-	  }
-	orig_str = (const char *)(port_data(pt) + port_position(pt));
-	pend = (const char *)(port_data(pt) + port_data_size(pt));
-	str = orig_str;
-	while (true)
-	  {
-	    p = strchr(str, (int)'|');
-	    if ((!p) || (p >= pend))
-	      {
-		port_position(pt) = port_data_size(pt);
-		error_nr(sc, sc->read_error_symbol,
-			 set_elist_1(sc, wrap_string(sc, "unexpected end of input while reading #|", 40)));
-	      }
-	    if (p[1] == '#')
-	      break;
-	    str = (const char *)(p + 1);
-	  }
-	port_position(pt) += (p - orig_str + 2);
-	/* now count newlines inside the comment */
-	str = (const char *)orig_str;
-	pend = p;
-	while (true)
-	  {
-	    p = strchr(str, (int)'\n');
-	    if ((p) && (p < pend))
-	      {
-		port_line_number(pt)++;
-		str = (char *)(p + 1);
-	      }
-	    else break;
-	  }
-	return(token(sc));
-      }}
+    case '|': 
+      return(read_block_comment(sc, pt));
+    }
   sc->strbuf[0] = (unsigned char)c;
   return(TOKEN_SHARP_CONST); /* next stage notices any errors */
 }
@@ -89666,7 +89671,7 @@ static bool op_unknown_ns(s7_scheme *sc)
     case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
     case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
-      /* TODO: perhaps vector, but need op_implicit_vector_ns? */
+      /* PERHAPS: vector, but need op_implicit_vector_ns? */
     default:
       break;
     }
@@ -89876,7 +89881,7 @@ static bool op_unknown_na(s7_scheme *sc)
       break;
     }
   /* closure happens if wrong-number-of-args passed -- probably no need for op_s_na */
-  /* TODO: perhaps vector? */
+  /* PERHAPS: vector */
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
 
