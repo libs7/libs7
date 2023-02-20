@@ -3145,7 +3145,15 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_symbol(p)                 T_Sym((T_Slt(p))->object.slt.sym)
 #define slot_set_symbol(p, Sym)        (T_Slt(p))->object.slt.sym = T_Sym(Sym)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
+#if S7_DEBUGGING
+#define slot_set_value(slot, value) \
+  do { \
+       if (is_immutable_slot(slot)) {fprintf(stderr, "setting immutable slot\n"); if (cur_sc->stop_at_error) abort();} \
+       (T_Slt(slot))->object.slt.val = T_Nmv(value); \
+     } while (0)
+#else
 #define slot_set_value(p, Val)         (T_Slt(p))->object.slt.val = T_Nmv(Val)
+#endif
 #define slot_set_symbol_and_value(Slot, Symbol, Value) do {slot_set_symbol(Slot, Symbol); slot_set_value(Slot, Value);} while (0)
 #define slot_set_value_with_hook(Slot, Value) \
   do {if (hook_has_functions(sc->rootlet_redefinition_hook)) slot_set_value_with_hook_1(sc, Slot, T_Nmv(Value)); else slot_set_value(Slot, T_Nmv(Value));} while (0)
@@ -5291,7 +5299,11 @@ static s7_pointer check_ref18(s7_pointer p, const char *func, int32_t line)
   if (strcmp(func, "new_symbol") != 0)
     {
       if (global_value(p) != p)
-	fprintf(stderr, "%s%s[%d]: keyword %s value is not itself (type: %s)%s\n", BOLD_TEXT, func, line, display(p), s7_type_names[unchecked_type(global_value(p))], UNBOLD_TEXT);
+	{
+	  fprintf(stderr, "%s%s[%d]: keyword %s value is not itself (type: %s)%s\n", 
+		  BOLD_TEXT, func, line, display(p), s7_type_names[unchecked_type(global_value(p))], UNBOLD_TEXT);
+	  if (cur_sc->stop_at_error) abort();
+	}
       if (in_heap(keyword_symbol_unchecked(p)))
 	fprintf(stderr, "%s%s[%d]: keyword %s symbol is in the heap%s\n", BOLD_TEXT, func, line, display(p), UNBOLD_TEXT);
       if (has_odd_bits(p))
@@ -8308,6 +8320,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       slot = make_semipermanent_slot(sc, x, x);
       set_global_slot(x, slot);
       set_local_slot(x, slot);
+      if (S7_DEBUGGING) set_immutable_slot(slot);
     }
   full_type(p) = T_PAIR | T_IMMUTABLE | T_UNHEAP;  /* add x to the symbol table */
   set_car(p, x);
@@ -83617,7 +83630,7 @@ static void op_define_with_setter(s7_scheme *sc)
 		  (!s7_is_equivalent(sc, old_value, new_func)))    /* if value is unchanged, just ignore this (re)definition */
 		syntax_error_nr(sc, "define ~S, but it is immutable", 30, old_symbol);
 	    }
-	  s7_make_slot(sc, sc->curlet, code, new_func);
+	  else s7_make_slot(sc, sc->curlet, code, new_func);
 	}
       sc->value = new_func; /* 25-Jul-14 so define returns the value not the name */
     }
@@ -83633,7 +83646,7 @@ static void op_define_with_setter(s7_scheme *sc)
 		  (!s7_is_equivalent(sc, old_value, sc->value)))    /* if value is unchanged, just ignore this (re)definition */
 		syntax_error_nr(sc, "define ~S, but it is immutable", 30, old_symbol);
 	    }
-	  slot_set_value_with_hook(slot, sc->value);
+	  else slot_set_value_with_hook(slot, sc->value);
 	  symbol_increment_ctr(code);
 	}
       else s7_make_slot(sc, sc->curlet, code, sc->value);
