@@ -3181,7 +3181,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #else
 #define tis_slot(p) (p) /* used for loop through let slots which end in nil, not for general slot recognition */
 #endif
-#define slot_end(sc) NULL
+#define slot_end NULL
 #define is_slot_end(p) (!(p))
 
 #define is_syntax(p)                   (type(p) == T_SYNTAX)
@@ -8759,7 +8759,7 @@ static Inline s7_pointer inline_make_let(s7_scheme *sc, s7_pointer old_let)
   s7_pointer x;
   new_cell(sc, x, T_LET | T_SAFE_PROCEDURE);
   let_set_id(x, ++sc->let_number);
-  let_set_slots(x, slot_end(sc));
+  let_set_slots(x, slot_end);
   let_set_outlet(x, old_let);
   return(x);
 }
@@ -8776,7 +8776,7 @@ static Inline s7_pointer inline_make_let_with_slot(s7_scheme *sc, s7_pointer old
   new_cell_no_check(sc, slot, T_SLOT);
   slot_set_symbol_and_value(slot, symbol, value);
   symbol_set_local_slot(symbol, sc->let_number, slot);
-  slot_set_next(slot, slot_end(sc));
+  slot_set_next(slot, slot_end);
   let_set_slots(new_let, slot);
   return(new_let);
 }
@@ -8805,7 +8805,7 @@ static Inline s7_pointer inline_make_let_with_two_slots(s7_scheme *sc, s7_pointe
   new_cell_no_check(sc, slot2, T_SLOT);
   slot_set_symbol_and_value(slot2, symbol2, value2);
   symbol_set_local_slot(symbol2, sc->let_number, slot2);
-  slot_set_next(slot2, slot_end(sc));
+  slot_set_next(slot2, slot_end);
   slot_set_next(slot1, slot2);
   return(new_let);
 }
@@ -8881,7 +8881,7 @@ static Inline s7_pointer inline_add_slot_at_end(s7_scheme *sc, uint64_t id, s7_p
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
   slot_set_symbol_and_value(slot, symbol, value);
-  slot_set_next(slot, slot_end(sc));
+  slot_set_next(slot, slot_end);
   symbol_set_local_slot(symbol, id, slot);
   slot_set_next(last_slot, slot);
   return(slot);
@@ -8897,7 +8897,7 @@ static s7_pointer add_slot_at_end_no_local(s7_scheme *sc, s7_pointer last_slot, 
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
   slot_set_symbol_and_value(slot, symbol, value);
-  slot_set_next(slot, slot_end(sc));
+  slot_set_next(slot, slot_end);
   slot_set_next(last_slot, slot);
   return(slot);
 }
@@ -8928,13 +8928,13 @@ static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_le
   if (!in_heap(let)) {fprintf(stderr, "reusing an unheaped %s as a let?\n", s7_type_names[type(let)]); abort();}
 #endif
   set_full_type(T_Pair(let), T_LET | T_SAFE_PROCEDURE);
-  let_set_slots(let, slot_end(sc));
+  let_set_slots(let, slot_end);
   let_set_outlet(let, next_let);
   let_set_id(let, ++sc->let_number);
   return(let);
 }
 
-static s7_pointer reuse_as_slot(s7_scheme *sc, s7_pointer slot, s7_pointer symbol, s7_pointer value)
+static s7_pointer reuse_as_slot(s7_pointer slot, s7_pointer symbol, s7_pointer value)
 {
   set_full_type(T_Pair(slot), T_SLOT);
   slot_set_symbol_and_value(slot, symbol, value);
@@ -9003,7 +9003,7 @@ static s7_pointer make_semipermanent_let(s7_scheme *sc, s7_pointer vars)
       symbol_set_local_slot(caar(var), sc->let_number, slot);
       slot_set_next(last_slot, slot);
     }
-  slot_set_next(slot, slot_end(sc));
+  slot_set_next(slot, slot_end);
   add_semipermanent_let_or_slot(sc, let); /* need to mark outlet and maybe slot values */
   return(let);
 }
@@ -9749,7 +9749,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   sc->temp3 = x;
   let_set_id(x, ++sc->let_number);
   let_set_outlet(x, sc->nil);
-  let_set_slots(x, slot_end(sc));
+  let_set_slots(x, slot_end);
   add_slot_unchecked(sc, x, symbol, value, let_id(x));
   sc->temp3 = sc->unused;
   return(x);
@@ -10171,9 +10171,9 @@ static s7_pointer let_set_chooser(s7_scheme *sc, s7_pointer f, int32_t unused_ar
 }
 
 
-static s7_pointer reverse_slots(s7_scheme *sc, s7_pointer list)
+static s7_pointer reverse_slots(s7_pointer list)
 {
-  s7_pointer p = list, result = slot_end(sc);
+  s7_pointer p = list, result = slot_end;
   while (tis_slot(p))
     {
       s7_pointer q = next_slot(p);
@@ -10215,7 +10215,7 @@ static s7_pointer let_copy(s7_scheme *sc, s7_pointer let)
 	  if (y)
 	    slot_set_next(y, z);
 	  else let_set_slots(new_e, z);
-	  slot_set_next(z, slot_end(sc));              /* in case GC runs during this loop */
+	  slot_set_next(z, slot_end);              /* in case GC runs during this loop */
 	  y = z;
 	}}
   /* We can't do a (normal) loop here then reverse the slots later because the symbol's local_slot has to
@@ -10365,7 +10365,7 @@ static Inline s7_pointer inline_lookup_from(s7_scheme *sc, const s7_pointer symb
 #if WITH_GCC
   return(NULL); /* much faster than various alternatives */
 #else
-  return(unbound_variable(sc, symbol));
+  return(unbound_variable(sc, symbol)); /* only use of sc */
 #endif
 }
 
@@ -11488,7 +11488,7 @@ static s7_pointer copy_counter(s7_scheme *sc, s7_pointer obj)
   return(nobj);
 }
 
-static void copy_stack_list_set_immutable(s7_scheme *unused_sc, s7_pointer pold, s7_pointer pnew)
+static void copy_stack_list_set_immutable(s7_pointer pold, s7_pointer pnew)
 {
   for (s7_pointer p1 = pold, p2 = pnew, slow = pold; is_pair(p2); p1 = cdr(p1), p2 = cdr(p2))
     {
@@ -11528,7 +11528,7 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
 		  nv[i] = list_2_unchecked(sc, car(p), cadr(p));
 		else nv[i] = copy_any_list(sc, p);  /* args (copy is needed -- see s7test.scm) */
 	      /* if op=eval_args4 for example, this has to be a proper list, and in many cases it doesn't need to be copied */
-	      copy_stack_list_set_immutable(sc, p, nv[i]);
+	      copy_stack_list_set_immutable(p, nv[i]);
 	    }
 	  /* lst can be dotted or circular here.  The circular list only happens in a case like:
 	   *    (dynamic-wind (lambda () (eq? (let ((lst (cons 1 2))) (set-cdr! lst lst) lst) (call/cc (lambda (k) k)))) (lambda () #f) (lambda () #f))
@@ -11552,7 +11552,7 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
 	    if ((is_pair(cdr(p))) && (is_null(cddr(p))))
 	      nv[i] = list_2_unchecked(sc, car(p), cadr(p));
 	    else nv[i] = copy_any_list(sc, p);  /* args (copy is needed -- see s7test.scm) */
-	  copy_stack_list_set_immutable(sc, p, nv[i]);
+	  copy_stack_list_set_immutable(p, nv[i]);
 	}
   if (has_pairs) stack_set_has_pairs(new_v);
   s7_gc_on(sc, true);
@@ -31156,7 +31156,7 @@ static s7_pointer call_file_in(s7_scheme *sc, s7_pointer unused_args)
   return(opt2_pair(sc->code));
 }
 
-static s7_pointer call_file_out(s7_scheme *sc, s7_pointer args)
+static s7_pointer call_file_out(s7_scheme *sc, s7_pointer unused_args)
 {
   s7_pointer port = s7_open_output_file(sc, string_value(sc->value), "w");
   push_stack(sc, OP_UNWIND_OUTPUT, sc->unused, port);
@@ -39638,7 +39638,7 @@ static s7_pointer g_vector_fill(s7_scheme *sc, s7_pointer args)
 
 /* -------------------------------- vector-append -------------------------------- */
 static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_pointer caller);
-static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_pointer source, s7_pointer args);
+static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_pointer args);
 
 static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 {
@@ -39655,7 +39655,7 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 
   if ((is_null(cdr(args))) &&
       (is_any_vector(car(args))))
-    return(copy_source_no_dest(sc, sc->vector_append_symbol, car(args), args));
+    return(copy_source_no_dest(sc, car(args), args));
 
   for (int32_t i = 0; is_pair(p); p = cdr(p), i++)
     {
@@ -47459,7 +47459,7 @@ static bool byte_vector_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y)
   return(true);
 }
 
-static bool biv_meq(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
+static bool biv_meq(s7_pointer x, s7_pointer y)
 {
   s7_int len = vector_length(x);
   const uint8_t *xp = byte_vector_bytes(x);
@@ -47489,9 +47489,9 @@ static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_
   if (type(x) != type(y))
     {
       if ((is_int_vector(x)) && (is_byte_vector(y)))
-	return(biv_meq(sc, y, x, NULL));
+	return(biv_meq(y, x));
       if ((is_byte_vector(x)) && (is_int_vector(y)))
-	return(biv_meq(sc, x, y, NULL));
+	return(biv_meq(x, y));
       for (s7_int i = 0; i < len; i++)
 	if (!is_equal_1(sc, vector_getter(x)(sc, x, i), vector_getter(y)(sc, y, i), NULL)) /* this could be greatly optimized */
 	  return(false);
@@ -47565,9 +47565,9 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
        * (equivalent? (make-float-vector 3 1.0) (vector 1 1 1)) -> #t
        */
       if ((is_int_vector(x)) && (is_byte_vector(y)))
-	return(biv_meq(sc, y, x, NULL));
+	return(biv_meq(y, x));
       if ((is_byte_vector(x)) && (is_int_vector(y)))
-	return(biv_meq(sc, x, y, NULL));
+	return(biv_meq(x, y));
       for (i = 0; i < len; i++)
 	if (!is_equivalent_1(sc, vector_getter(x)(sc, x, i), vector_getter(y)(sc, y, i), NULL)) /* this could be greatly optimized */
 	  return(false);
@@ -48387,7 +48387,7 @@ static s7_pointer hash_table_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_
 }
 
 
-static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_pointer source, s7_pointer args)
+static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_pointer args)
 {
   s7_pointer dest;
   switch (type(source))
@@ -48494,7 +48494,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer caller, s7_point
   return(source);
 }
 
-static s7_pointer copy_p_p(s7_scheme *sc, s7_pointer source) {return(copy_source_no_dest(sc, sc->copy_symbol, source, set_plist_1(sc, source)));}
+static s7_pointer copy_p_p(s7_scheme *sc, s7_pointer source) {return(copy_source_no_dest(sc, source, set_plist_1(sc, source)));}
 
 static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int dest_start, s7_int dest_end, s7_int source_start)
 {
@@ -48633,7 +48633,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
   bool have_indices;
 
   if (is_null(cdr(args)))                  /* (copy obj) */
-    return(copy_source_no_dest(sc, caller, source, args));
+    return(copy_source_no_dest(sc, source, args));
 
   dest = T_Ext(cadr(args));
   if ((dest == sc->readable_keyword) && (!is_pair(source)))
@@ -55789,7 +55789,7 @@ static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
   int64_t id;
 
   new_cell(sc, new_e, T_LET | T_SAFE_PROCEDURE);
-  let_set_slots(new_e, slot_end(sc)); /* needed by add_slot_unchecked */
+  let_set_slots(new_e, slot_end); /* needed by add_slot_unchecked */
   let_set_outlet(new_e, sc->nil);
   gc_protect_via_stack(sc, new_e);
 
@@ -59255,7 +59255,7 @@ static bool opt_float_not_pair(s7_scheme *sc, s7_pointer car_x)
 /* -------- d -------- */
 static s7_double opt_d_f(opt_info *o) {return(o->v[1].d_f());}
 
-static bool d_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func)  /* (f): (mus-srate) */
+static bool d_ok(s7_scheme *unused_sc, opt_info *opc, s7_pointer s_func)  /* (f): (mus-srate) */
 {
   s7_d_t func = s7_d_function(s_func);
   if (!func)
@@ -65886,7 +65886,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       else return_false(sc, car_x);
     }
   if (tis_slot(let_slots(let)))
-    let_set_slots(let, reverse_slots(sc, let_slots(let)));
+    let_set_slots(let, reverse_slots(let_slots(let)));
 
   /* inits */
   {
@@ -69389,7 +69389,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 }
 
 static int32_t combine_ops(s7_scheme *sc, s7_pointer expr, combine_op_t cop, s7_pointer e1, s7_pointer e2) /* sc needed for debugger stuff */
-{
+{ /* sc arg is used if debugging (hidden in set_op2_con for example) */
   switch (cop)
     {
     case E_C_P:
@@ -74923,14 +74923,14 @@ static bool op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
   for (x = sc->w; is_not_null(args); x = cdr(x)) /* reuse the value cells as the new let slots */
     {
       s7_pointer sym = car(x), new_args = cdr(args);
-      reuse_as_slot(sc, args, sym, unchecked_car(args)); /* args=slot, sym=symbol, car(args)=value */
+      reuse_as_slot(args, sym, unchecked_car(args)); /* args=slot, sym=symbol, car(args)=value */
       slot_set_next(args, let_slots(sc->curlet));
       let_set_slots(sc->curlet, args);
       symbol_set_local_slot(sym, let_id(sc->curlet), args);
       args = new_args;
     }
   closure_set_let(sc->x, sc->curlet);
-  let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
+  let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   sc->x = sc->unused;
   sc->code = T_Pair(body);
   sc->w = sc->unused;
@@ -74995,7 +74995,7 @@ static bool op_let1(s7_scheme *sc)
       s7_pointer sym, args = cdr(y), sp;
       x = car(sc->code);
       sym = caar(x);
-      reuse_as_slot(sc, y, sym, unchecked_car(y));
+      reuse_as_slot(y, sym, unchecked_car(y));
       symbol_set_local_slot(sym, id, y);
       let_set_slots(e, y);
       sp = y;
@@ -75005,13 +75005,13 @@ static bool op_let1(s7_scheme *sc)
 	{
 	  sym = caar(x);
 	  args = cdr(args);
-	  reuse_as_slot(sc, y, sym, unchecked_car(y));
+	  reuse_as_slot(y, sym, unchecked_car(y));
 	  symbol_set_local_slot(sym, id, y);
 	  slot_set_next(sp, y);
 	  sp = y;
 	  y = args;
 	}
-      slot_set_next(sp, slot_end(sc));
+      slot_set_next(sp, slot_end);
     }
   sc->code = T_Pair(cdr(sc->code));
   sc->temp8 = sc->unused;
@@ -75278,7 +75278,7 @@ static Inline void inline_op_let_na_new(s7_scheme *sc) /* called once in eval, c
   s7_pointer let, sp = NULL;
   new_cell(sc, let, T_LET | T_SAFE_PROCEDURE);
   let_set_id(let, sc->let_number + 1);
-  let_set_slots(let, slot_end(sc));
+  let_set_slots(let, slot_end);
   let_set_outlet(let, sc->curlet);
   sc->args = let;
   for (s7_pointer p = cadr(sc->code); is_pair(p); p = cdr(p))
@@ -75828,7 +75828,7 @@ static bool op_letrec_star_unchecked(s7_scheme *sc)
 	  slot = add_slot_checked(sc, sc->curlet, caar(x), sc->undefined);
 	  slot_set_expression(slot, cdar(x));
 	}
-      let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
+      let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
 
       for (slot = let_slots(sc->curlet); tis_slot(slot) && (has_fx(slot_expression(slot))); slot = next_slot(slot))
 	slot_set_value(slot, fx_call(sc, slot_expression(slot)));
@@ -77085,12 +77085,12 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
   let_set_outlet(new_let, outer_let);
   closure_set_let(new_func, new_let);
   funclet_set_function(new_let, func_name); /* *function* returns at least funclet_function */
-  let_set_slots(new_let, slot_end(sc));
+  let_set_slots(new_let, slot_end);
 
   arg = closure_args(new_func);
   if (is_null(arg))
     {
-      let_set_slots(new_let, slot_end(sc));
+      let_set_slots(new_let, slot_end);
       return(new_let);
     }
 
@@ -77102,7 +77102,7 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
 	  if (is_pair(arg))
 	    {
 	      last_slot = make_slot(sc, car(arg), sc->nil);
-	      slot_set_next(last_slot, slot_end(sc));
+	      slot_set_next(last_slot, slot_end);
 	      let_set_slots(new_let, last_slot);
 	      symbol_set_local_slot(car(arg), let_id(new_let), last_slot);
 	      for (arg = cdr(arg); is_pair(arg); arg = cdr(arg))
@@ -77115,7 +77115,7 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
 	      else
 		{
 		  last_slot = make_slot(sc, arg, sc->nil);
-		  slot_set_next(last_slot, slot_end(sc));
+		  slot_set_next(last_slot, slot_end);
 		  let_set_slots(new_let, last_slot);
 		  symbol_set_local_slot(arg, let_id(new_let), last_slot);
 		}
@@ -77124,7 +77124,7 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
       else /* closure_star */
 	{
 	  s7_pointer slot, first_default = sc->nil;
-	  let_set_slots(new_let, slot_end(sc));
+	  let_set_slots(new_let, slot_end);
 	  for (; is_pair(arg); arg = cdr(arg))
 	    {
 	      s7_pointer par = car(arg);
@@ -77161,12 +77161,12 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
 	    }
 	  if (tis_slot(let_slots(new_let)))
 	    {
-	      let_set_slots(new_let, reverse_slots(sc, let_slots(new_let)));
+	      let_set_slots(new_let, reverse_slots(let_slots(new_let)));
 	      slot_set_pending_value(let_slots(new_let), first_default);
 	    }}
       set_immutable_let(new_let);
     }
-  else let_set_slots(new_let, slot_end(sc)); /* if unsafe closure, arg-holding-let will be created on each call */
+  else let_set_slots(new_let, slot_end); /* if unsafe closure, arg-holding-let will be created on each call */
   return(new_let);
 }
 
@@ -79944,7 +79944,7 @@ static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
   return(code);
 }
 
-static bool do_vector_has_definers(s7_scheme *sc, s7_pointer v)
+static bool do_vector_has_definers(s7_pointer v)
 {
   s7_int len = vector_length(v);
   s7_pointer *els = vector_elements(v);
@@ -79993,7 +79993,7 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	  }
 	else
 	  if ((is_applicable(pp)) &&
-	      (((is_normal_vector(pp)) && (do_vector_has_definers(sc, pp))) ||
+	      (((is_normal_vector(pp)) && (do_vector_has_definers(pp))) ||
 	       ((is_c_function(pp)) && (is_func_definer(pp))) ||
 	       ((is_syntax(pp)) && (is_syntax_definer(pp)))))
 	    return(true);
@@ -82070,7 +82070,7 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
       return(false);
     }
   end = do_loop_end(stepper);
-  let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
+  let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   ip = slot_value(step_slot);
 
   if (body_len == 1)
@@ -82466,7 +82466,7 @@ static bool op_do_init_1(s7_scheme *sc)
   for (s7_pointer x = car(sc->code); is_not_null(y); x = cdr(x))
     {
       s7_pointer sym = caar(x), args = cdr(y);
-      reuse_as_slot(sc, y, sym, unchecked_car(y));
+      reuse_as_slot(y, sym, unchecked_car(y));
       slot_set_next(y, let_slots(sc->curlet));
       let_set_slots(sc->curlet, y);
       symbol_set_local_slot(sym, let_id(sc->curlet), y);
@@ -82724,7 +82724,7 @@ static void apply_iterator(s7_scheme *sc)                  /* -------- iterator 
 
 static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal function (lambda), or macro --------, called once in eval */
 {             /* load up the current args into the ((args) (lambda)) layout [via the current environment] */
-  s7_pointer x, z, e = sc->curlet, slot, last_slot = slot_end(sc);
+  s7_pointer x, z, e = sc->curlet, slot, last_slot = slot_end;
   uint64_t id = let_id(sc->curlet);
 
   for (x = closure_args(sc->code), z = T_Lst(sc->args); is_pair(x); x = cdr(x), z = cdr(z)) /* closure_args can be a symbol, for example */
@@ -82742,7 +82742,7 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
 	slot_set_next(last_slot, slot);
       else let_set_slots(e, slot);
       last_slot = slot;
-      slot_set_next(slot, slot_end(sc));
+      slot_set_next(slot, slot_end);
     }
   if (is_null(x))
     {
@@ -82760,7 +82760,7 @@ static Inline void inline_apply_lambda(s7_scheme *sc)      /* -------- normal fu
       if (tis_slot(last_slot))
 	slot_set_next(last_slot, slot);
       else let_set_slots(e, slot);
-      slot_set_next(slot, slot_end(sc));
+      slot_set_next(slot, slot_end);
     }
   sc->code = closure_body(sc->code);
 }
@@ -83183,7 +83183,7 @@ static bool apply_unsafe_closure_star_1(s7_scheme *sc)
 	    }}
   if (is_symbol(z))
     set_is_rest_slot(add_slot_checked(sc, sc->curlet, z, sc->nil));     /* set up rest arg */
-  let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
+  let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   return(set_star_args(sc, top));
 }
 
@@ -83207,7 +83207,7 @@ static void apply_macro_star_1(s7_scheme *sc)
 	    }}
   if (is_symbol(p))
     set_is_rest_slot(add_slot_checked(sc, sc->curlet, p, sc->nil));
-  let_set_slots(sc->curlet, reverse_slots(sc, let_slots(sc->curlet)));
+  let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   lambda_star_set_args(sc);
   sc->code = T_Pair(closure_body(sc->code));
 }
@@ -83636,7 +83636,7 @@ static void op_define_with_setter(s7_scheme *sc)
     }
   else
     {
-      s7_pointer slot = symbol_to_local_slot(sc, code, sc->curlet); /* add the newly defined thing to the current environment */
+      s7_pointer slot = symbol_to_local_slot(sc, code, sc->curlet);
       if (is_slot(slot))
 	{
 	  if (is_immutable_slot(slot))
@@ -83646,8 +83646,11 @@ static void op_define_with_setter(s7_scheme *sc)
 		  (!s7_is_equivalent(sc, old_value, sc->value)))    /* if value is unchanged, just ignore this (re)definition */
 		syntax_error_nr(sc, "define ~S, but it is immutable", 30, old_symbol);
 	    }
-	  else slot_set_value_with_hook(slot, sc->value);
-	  symbol_increment_ctr(code);
+	  else 
+	    {
+	      slot_set_value_with_hook(slot, sc->value);
+	      symbol_increment_ctr(code);
+	    }
 	}
       else s7_make_slot(sc, sc->curlet, code, sc->value);
       if ((is_any_macro(sc->value)) && (!is_c_macro(sc->value)))
@@ -84454,7 +84457,7 @@ static void op_closure_na(s7_scheme *sc)
       new_cell(sc, slot, T_SLOT);           /* args < GC_TRIGGER checked in optimizer, but we're calling fx_call? */
       slot_set_symbol_and_value(slot, car(pars), sc->value);
       /* setting up the let might use unrelated-but-same-name symbols, so wait to set the symbol ids */
-      slot_set_next(slot, slot_end(sc));
+      slot_set_next(slot, slot_end);
       slot_set_next(last_slot, slot);
       last_slot = slot;
     }
@@ -85758,7 +85761,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 
   s7_gc_protect_via_stack(sc, inner_let);
   slot = make_slot(sc, caar(let_vars), sc->F);
-  slot_set_next(slot, slot_end(sc));
+  slot_set_next(slot, slot_end);
   let_set_slots(inner_let, slot);
   symbol_set_local_slot_unincremented(caar(let_vars), let_id(inner_let), slot);
   for (var = cdr(let_vars); is_pair(var); var = cdr(var))
@@ -87813,7 +87816,7 @@ static void op_any_closure_np_end(s7_scheme *sc)
       sc->z = e;
       id = let_id(e);
       last_slot = make_slot(sc, car(p), car(sc->args));
-      slot_set_next(last_slot, slot_end(sc));
+      slot_set_next(last_slot, slot_end);
       let_set_slots(e, last_slot);
       symbol_set_local_slot(car(p), id, last_slot);
       for (p = cdr(p), z = cdr(sc->args); is_pair(p); p = cdr(p), z = cdr(z))
@@ -92334,7 +92337,7 @@ static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20
   let_set_id(x, ++sc->let_number);
   let_set_outlet(x, sc->nil);
   symbol_set_local_slot(sc->let_set_fallback_symbol, sc->let_number, slot1);
-  slot_set_next(slot1, slot_end(sc));
+  slot_set_next(slot1, slot_end);
   symbol_set_local_slot(sc->let_ref_fallback_symbol, sc->let_number, slot2);
   slot_set_next(slot2, slot1);
   let_set_slots(x, slot2);
