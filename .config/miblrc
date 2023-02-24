@@ -1,0 +1,10 @@
+; mibl config
+
+[mibl]
+version = 0.1.0
+grammar=1.0.0-BETA  ;; version number of config grammar, not obazl program
+
+[srcs]
+
+;;include = ...
+;;exclude = ...

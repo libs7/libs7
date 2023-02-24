@@ -4,34 +4,34 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")  # buildifier: di
 
 all_content = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
 
-def cc_fetch_repos():
+def fetch_repos():
 
     maybe(
         http_archive,
         name = "bazel_skylib",
+        sha256 = "b8a1527901774180afc798aeb28c4634bdccf19c4d98e7bdd1ce79d1fe9aaad7",
         urls = [
-            "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.0.2/bazel-skylib-1.0.2.tar.gz",
-            "https://github.com/bazelbuild/bazel-skylib/releases/download/1.0.2/bazel-skylib-1.0.2.tar.gz",
+            "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.4.1/bazel-skylib-1.4.1.tar.gz",
+            "https://github.com/bazelbuild/bazel-skylib/releases/download/1.4.1/bazel-skylib-1.4.1.tar.gz",
         ],
-        sha256 = "97e70364e9249702246c0e9444bccdc4b847bed1eb03c5a3ece4f83dfe6abc44",
-    )
-
-    maybe(
-        git_repository,
-        name = "rules_cc",
-        remote = "https://github.com/bazelbuild/rules_cc",
-        commit = "b1c40e1de81913a3c40e5948f78719c28152486d",
-        shallow_since = "1605101351 -0800"
-        # branch = "master"
     )
 
     maybe(
         http_archive,
             name = "rules_foreign_cc",
-            sha256 = "6041f1374ff32ba711564374ad8e007aef77f71561a7ce784123b9b4b88614fc",
-            strip_prefix = "rules_foreign_cc-0.8.0",
-            url = "https://github.com/bazelbuild/rules_foreign_cc/archive/0.8.0.tar.gz",
+        sha256 = "2a4d07cd64b0719b39a7c12218a3e507672b82a97b98c6a89d38565894cf7c51",
+        strip_prefix = "rules_foreign_cc-0.9.0",
+        url = "https://github.com/bazelbuild/rules_foreign_cc/archive/refs/tags/0.9.0.tar.gz",
         )
+
+    # maybe(
+    #     git_repository,
+    #     name = "rules_cc",
+    #     remote = "https://github.com/bazelbuild/rules_cc",
+    #     commit = "b1c40e1de81913a3c40e5948f78719c28152486d",
+    #     shallow_since = "1605101351 -0800"
+    #     # branch = "master"
+    # )
 
     # maybe(
     #     git_repository,

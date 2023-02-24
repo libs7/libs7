@@ -1,6 +1,5 @@
-## for parser testing, data file won't be read without this. why???
-build --nobuild_runfile_links
+common --color=yes
+common:show --subcommands=pretty_print
+common:show --verbose_failures
 
-test --@sealark//src:yydebug=dicts,vectors,targets,loads
-
-try-import user.bazelrc
+try-import ./config/user.bazelrc

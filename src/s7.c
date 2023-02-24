@@ -29999,7 +29999,8 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 
 static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointer let)
 {
-    printf("%s:%d load_shared_object %s\n", __FILE__, __LINE__, fname); /* obzl */
+    /* obzl */
+    /* printf("%s:%d load_shared_object %s\n", __FILE__, __LINE__, fname); */
 
   /* if fname ends in .so, try loading it as a c shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
   s7_int fname_len;
