@@ -4872,11 +4872,11 @@ static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
                     regerror(errcode, regexp, err, len);
                     return(s7_make_string_with_length(sc, err, len - 1));
                   }
-                 
+
 void libc_s7_init(s7_scheme *sc);
 void libc_s7_init(s7_scheme *sc)
 {
-    printf("libsc_7.c: libc_s7_init\n");
+    /* obazl printf("%s%d:%s entry\n", __FILE__, __LINE__, __func__); */
   s7_pointer cur_env;
   s7_pointer pcl_t, pl_tx, pl_ts, pl_ti, pl_txs, pcl_x, pl_xs, pcl_xi, pl_xi, pl_xt, pcl_xs, pl_xxi, pcl_xxi, pl_xis, pl_xxxi, pl_xssx, pcl_i, pl_ix, pl_it, pcl_is, pl_is, pcl_ix, pcl_iix, pcl_isi, pl_ixi, pl_isi, pl_iix, pl_isx, pcl_ixi, pl_isxi, pl_iisi, pcl_iixi, pl_iixi, pl_issi, pl_ixxi, pcl_ixsi, pl_ixiix, pl_iixiixi, pcl_di, pl_ds, pcl_s, pl_sx, pl_st, pl_si, pl_sis, pl_ssi, pl_sssi, pl_ssix, pl_sisi;
   {

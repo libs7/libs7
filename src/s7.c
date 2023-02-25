@@ -29999,8 +29999,8 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 
 static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointer let)
 {
-    /* obzl */
-    /* printf("%s:%d load_shared_object %s\n", __FILE__, __LINE__, fname); */
+    /* obazl */
+    /* obazl printf("%s:%d load_shared_object %s\n", __FILE__, __LINE__, fname); */
 
   /* if fname ends in .so, try loading it as a c shared object: (load "/home/bil/cl/m_j0.so" (inlet 'init_func 'init_m_j0)) */
   s7_int fname_len;
@@ -30015,7 +30015,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
       void *library;
       char *pwd_name = NULL;
       block_t *pname = NULL;
-      printf("%s:%d loading shared lib %s\n", __FILE__, __LINE__, fname); //obazl
+      /* obazl printf("%s:%d loading shared lib %s\n", __FILE__, __LINE__, fname); //obazl */
       if ((access(fname, F_OK) == 0) || (fname[0] == '/'))
 	{
 	  pname = full_filename(sc, fname);
@@ -30046,7 +30046,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 #if S7_DEBUGGING
       if (!pname) fprintf(stderr, "pname is null\n");
 #endif
-      printf("%s:%d: dlopening %s\n", __FILE__, __LINE__, pwd_name); /* obazl */
+      /* obazl printf("%s:%d: dlopening %s\n", __FILE__, __LINE__, pwd_name); /\* obazl *\/ */
       library = dlopen((pname) ? pwd_name : fname, RTLD_NOW);
       if (!library) {
           printf("dlopen FAIL\n"); /* obazl */
@@ -94907,7 +94907,7 @@ void s7_repl(s7_scheme *sc)
                                  e);
   if (val)
     {
-        printf("repl: load libc_s7.so succeeded\n");
+        /* obazl printf("repl: load libc_s7.so succeeded\n"); */
       s7_pointer libs;
       uint64_t hash;
       hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
@@ -94952,7 +94952,7 @@ void s7_repl(s7_scheme *sc)
 /* just the libc stuff, no repl stuff */
 void s7_config_libc_s7(s7_scheme *sc) /* obazl */
 {
-    printf("%s: s7_config_libc_s7\n", __FILE__);
+    /* printf("%s:%d s7_config_libc_s7\n", __FILE__, __LINE__); */
 /* #if (!WITH_C_LOADER) */
 /*   dumb_repl(sc); */
 /* #else */
@@ -94967,8 +94967,8 @@ void s7_config_libc_s7(s7_scheme *sc) /* obazl */
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
-  printf("%s:%d: Loading libc_s7.dylib\n", __FILE__, __LINE__);
-  printf("%s:%d: cwd %s\n", __FILE__, __LINE__, getcwd(NULL, 0));
+  /* printf("%s:%d: Loading libc_s7.dylib\n", __FILE__, __LINE__); */
+  /* printf("%s:%d: cwd %s\n", __FILE__, __LINE__, getcwd(NULL, 0)); */
 
   /* OBAZL: s7 assumes libc_s7.so is in current dir. Under Bazel, when
      built as an external workspace, it is a runfile located in
@@ -94977,7 +94977,7 @@ void s7_config_libc_s7(s7_scheme *sc) /* obazl */
   /* val = s7_load_with_environment(sc, "libc_s7.so", e); */
   val = s7_load_with_environment(sc, "external/libs7/src/libc_s7.dylib", e);
   if (val) {
-      printf("load libc_s7.so succeeded\n");
+      /* obazl printf("load libc_s7.so succeeded\n"); */
       s7_pointer libs;
       uint64_t hash;
       hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /* hack around an idiotic gcc 10.2.1 warning */
