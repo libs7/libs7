@@ -109,8 +109,8 @@
  * and we use these predefined macros: __cplusplus, _MSC_VER, __GNUC__, __clang__, __ANDROID__
  *
  * if WITH_SYSTEM_EXTRAS is 1 (default is 1 unless _MSC_VER), various OS and file related functions are included.
- * if you want this file to compile into a stand-alone interpreter, define WITH_MAIN
- *   to use nrepl, also define WITH_NOTCURSES
+ * if you want this file to compile into a stand-alone interpreter, define WITH_MAIN,
+ *   to use nrepl also define WITH_NOTCURSES
  *
  * -O3 is often slower than -O2 (at least according to callgrind)
  * -march=native seems to improve tree-vectorization which is important in Snd
@@ -11065,8 +11065,7 @@ bool s7_is_defined(s7_scheme *sc, const char *name)
 {
   s7_pointer x = s7_symbol_table_find_name(sc, name);
   if (!x) return(false);
-  x = lookup_slot_from(x, sc->curlet);
-  return(is_slot(x));
+  return(is_slot(lookup_slot_from(x, sc->curlet)));
 }
 
 static bool is_defined_b_7p(s7_scheme *sc, s7_pointer p)
@@ -29463,11 +29462,10 @@ static s7_pointer g_open_input_string(s7_scheme *sc, s7_pointer args)
   #define H_open_input_string "(open-input-string str) opens an input port reading str"
   #define Q_open_input_string s7_make_signature(sc, 2, sc->is_input_port_symbol, sc->is_string_symbol)
 
-  s7_pointer input_string = car(args), port;
+  s7_pointer input_string = car(args);
   if (!is_string(input_string))
     return(sole_arg_method_or_bust(sc, input_string, sc->open_input_string_symbol, args, sc->type_names[T_STRING]));
-  port = open_and_protect_input_string(sc, input_string);
-  return(port);
+  return(open_and_protect_input_string(sc, input_string));
 }
 
 
@@ -43894,8 +43892,7 @@ static s7_int hash_map_pair(s7_scheme *sc, s7_pointer table, s7_pointer key)
 	    (!is_sequence(caar(p1))))
 	  loc += hash_loc(sc, table, caar(p1)) + 1;
     }
-  loc = (loc << 3) | len_upto_8(key);
-  return(loc);
+  return((loc << 3) | (len_upto_8(key)));
 }
 
 static hash_entry_t *hash_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -55956,8 +55953,7 @@ static s7_pointer fx_and_3a(s7_scheme *sc, s7_pointer arg)
   s7_pointer p = cdr(arg);
   if (fx_call(sc, p) == sc->F) return(sc->F);
   p = cdr(p);
-  if (fx_call(sc, p) == sc->F) return(sc->F);
-  return(fx_call(sc, cdr(p)));
+  return((fx_call(sc, p) == sc->F) ? sc->F : fx_call(sc, cdr(p)));
 }
 
 static s7_pointer fx_and_n(s7_scheme *sc, s7_pointer arg)
