@@ -66,6 +66,12 @@
 
 #include "mus-config.h"
 
+#if defined(__APPLE__)
+#define DSO_EXT ".dylib"
+#else
+#define DSO_EXT ".so"
+#endif
+
 /*
  * Your config file goes here, or just replace that #include line with the defines you need.
  * The compile-time switches involve booleans, complex numbers, and multiprecision arithmetic.
@@ -30008,7 +30014,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
   fname_len = safe_strlen(fname);
   if ((fname_len > 3) &&
       /* (local_strcmp((const char *)(fname + (fname_len - 3)), ".so")) */
-      (local_strcmp((const char *)(fname + (fname_len - 6)), ".dylib")) //obazl
+      (local_strcmp((const char *)(fname + (fname_len - 6)), DSO_EXT)) //obazl
       )
 
     {
@@ -30046,10 +30052,10 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 #if S7_DEBUGGING
       if (!pname) fprintf(stderr, "pname is null\n");
 #endif
-      /* obazl printf("%s:%d: dlopening %s\n", __FILE__, __LINE__, pwd_name); /\* obazl *\/ */
+      //obazl printf("%s:%d: dlopening %s\n", __FILE__, __LINE__, pwd_name); /* obazl */
       library = dlopen((pname) ? pwd_name : fname, RTLD_NOW);
       if (!library) {
-          printf("dlopen FAIL\n"); /* obazl */
+          printf("%s:%d: dlopen FAIL\n", __FILE__, __LINE__); /* obazl */
 	s7_warn(sc, 512, "load %s failed: %s\n", (pname) ? pwd_name : fname, dlerror());
       } else
 	if (let) /* look for 'init_func in let */
@@ -94975,7 +94981,8 @@ void s7_config_libc_s7(s7_scheme *sc) /* obazl */
      external/libs7/src. */
 
   /* val = s7_load_with_environment(sc, "libc_s7.so", e); */
-  val = s7_load_with_environment(sc, "external/libs7/src/libc_s7.dylib", e);
+  val = s7_load_with_environment(sc, "external/libs7/src/libc_s7"
+                                 DSO_EXT, e);
   if (val) {
       /* obazl printf("load libc_s7.so succeeded\n"); */
       s7_pointer libs;
