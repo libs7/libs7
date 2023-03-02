@@ -5372,9 +5372,7 @@ static void show_opt1_bits(s7_pointer p, const char *func, int32_t line, uint64_
   char *bits = show_debugger_bits(p);
   fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %" ld64,
 	  BOLD_TEXT, func, line, UNBOLD_TEXT,
-	  p, p->object.cons.opt1,
-	  opt1_role_name(role),
-	  p->debugger_bits, bits, (s7_int)role);
+	  p, p->object.cons.opt1, opt1_role_name(role), p->debugger_bits, bits, (s7_int)role);
   free(bits);
 }
 
@@ -5431,10 +5429,7 @@ static void show_opt2_bits(s7_pointer p, const char *func, int32_t line, uint64_
   char *bits = show_debugger_bits(p);
   fprintf(stderr, "%s%s[%d]%s: opt2: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %" ld64 " %s",
 	  BOLD_TEXT, func, line, UNBOLD_TEXT,
-	  p, p->object.cons.o2.opt2,
-	  opt2_role_name(role),
-	  p->debugger_bits, bits, (s7_int)role,
-	  opt2_role_name(role));
+	  p, p->object.cons.o2.opt2, opt2_role_name(role), p->debugger_bits, bits, (s7_int)role, opt2_role_name(role));
   free(bits);
 }
 
@@ -6880,15 +6875,8 @@ static inline void mark_slot(s7_pointer p)
 {
   set_mark(T_Slt(p));
   gc_mark(slot_value(p));
-#if 0
-  if (slot_has_setter(p))
-    gc_mark(slot_setter(p));
-  if (slot_has_pending_value(p))
-    gc_mark(slot_pending_value(p));
-#else
   if (slot_has_setter_or_pending_value(p))
     gc_mark(slot_pending_value_unchecked(p)); /* setter field == pending_value */
-#endif
   set_mark(slot_symbol(p));
 }
 
@@ -51188,37 +51176,35 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
   catch_set_handler(p, error_handler);
   catch_cstack(p) = sc->goto_start;
 
-  if (!sc->longjmp_ok)
-    {
-      declare_jump_info();
-      TRACK(sc);
-      store_jump_info(sc);
-      set_jump_info(sc, S7_CALL_SET_JUMP);
-      if (jump_loc != NO_JUMP)
-	{
-	  if (jump_loc != ERROR_JUMP)
-	    eval(sc, sc->cur_op);
-	  if ((jump_loc == CATCH_JUMP) &&    /* we're returning (back to eval) from an error in catch */
-	      (sc->stack_end == sc->stack_start))
-	    push_stack_op(sc, OP_ERROR_QUIT);
-	  result = sc->value;
-	}
-      else
-	{
-	  /* we've replaced our jump point, fix it in this catch too */
-	  catch_cstack(p) = &new_goto_start;
-	  push_stack(sc, OP_CATCH, error_handler, p);
-	  result = s7_call(sc, body, sc->nil);
-	  if (((opcode_t)sc->stack_end[-1]) == OP_CATCH) sc->stack_end -= 4;
-	}
-      restore_jump_info(sc);
-    }
-  else
-    {
-      push_stack(sc, OP_CATCH, error_handler, p);
-      result = s7_call(sc, body, sc->nil);
-      if (((opcode_t)sc->stack_end[-1]) == OP_CATCH) sc->stack_end -= 4;
-    }
+  {
+    declare_jump_info();
+    TRACK(sc);
+    store_jump_info(sc);
+    set_jump_info(sc, S7_CALL_SET_JUMP);
+    
+    if (SHOW_EVAL_OPS) fprintf(stderr, "jump_loc: %d\n", (int)jump_loc);
+    if (jump_loc == NO_JUMP)
+      {
+	catch_cstack(p) = &new_goto_start;
+	if (SHOW_EVAL_OPS) fprintf(stderr, "  longjmp_ok, call %s\n", display(body));
+	push_stack(sc, OP_CATCH, error_handler, p);
+	result = s7_call(sc, body, sc->nil);
+	if (((opcode_t)sc->stack_end[-1]) == OP_CATCH) sc->stack_end -= 4;
+      }
+    else /* result = sc->nil; *//* wrong: should be the error handler result I think */
+      {
+	if (SHOW_EVAL_OPS) fprintf(stderr, "jump back with %d (%d)\n", (int)jump_loc, (sc->stack_end == sc->stack_start));
+	if (jump_loc != ERROR_JUMP)
+	  eval(sc, sc->cur_op);
+	if ((jump_loc == CATCH_JUMP) &&    /* we're returning (back to eval) from an error in catch */
+	    ((sc->stack_end == sc->stack_start) ||
+	     (((sc->stack_end - 4) == sc->stack_start) && (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT))))
+	  push_stack_op(sc, OP_ERROR_QUIT);
+	result = sc->value;
+      }
+    restore_jump_info(sc);
+  }
+
   return(result);
 }
 
@@ -51374,6 +51360,7 @@ static void load_catch_cstack(s7_scheme *sc, s7_pointer c)
 static bool catch_all_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   s7_pointer catcher = T_Cat(stack_code(sc->stack, i));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   sc->value = stack_args(sc->stack, i);      /* error result, optimize_func_three_args -> op_c_catch_all etc */
   if (sc->value == sc->unused) sc->value = type;
   sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(catcher));
@@ -51389,6 +51376,7 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
    *    (let () (define-macro (m . args) (apply (car args) (cadr args))) (catch #t (lambda () (error abs -1)) m))
    */
   s7_pointer x = T_Cat(stack_code(sc->stack, i));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   if ((catch_tag(x) == sc->T) || (catch_tag(x) == type) || (type == sc->T))
     {
       sc->op_stack_now = (s7_pointer *)(sc->op_stack + catch_op_loc(x));
@@ -51407,6 +51395,7 @@ static bool catch_2_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   s7_pointer x = T_Cat(stack_code(sc->stack, i));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   if ((catch_tag(x) == sc->T) ||  /* the normal case */
       (catch_tag(x) == type) ||
       (type == sc->T))
@@ -51546,6 +51535,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 static bool catch_dynamic_wind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   s7_pointer x = T_Dyn(stack_code(sc->stack, i));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   if (dynamic_wind_state(x) == DWIND_BODY)
     {
       dynamic_wind_state(x) = DWIND_FINISH;    /* make sure an uncaught error in the exit thunk doesn't cause us to loop */
@@ -51558,6 +51548,7 @@ static bool catch_dynamic_wind_function(s7_scheme *sc, s7_int i, s7_pointer type
 static bool catch_out_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   s7_pointer x = T_Prt(stack_code(sc->stack, i));     /* "code" = port that we opened */
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   s7_close_output_port(sc, x);
   x = stack_args(sc->stack, i);                       /* "args" = port that we shadowed, if not #<unused> */
   if (x != sc->unused)
@@ -51567,6 +51558,7 @@ static bool catch_out_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poin
 
 static bool catch_in_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   s7_close_input_port(sc, stack_code(sc->stack, i));            /* "code" = port that we opened */
   if (stack_args(sc->stack, i) != sc->unused)
     set_current_input_port(sc, stack_args(sc->stack, i));       /* "args" = port that we shadowed */
@@ -51575,12 +51567,14 @@ static bool catch_in_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_point
 
 static bool catch_read_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   pop_input_port(sc);
   return(false);
 }
 
 static bool catch_eval_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   s7_close_input_port(sc, current_input_port(sc));
   pop_input_port(sc);
   return(false);
@@ -51588,6 +51582,7 @@ static bool catch_eval_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_poi
 
 static bool catch_barrier_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 { /* can this happen?? read/eval set op_barrier */
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   if (is_input_port(stack_args(sc->stack, i)))
     {
       if (current_input_port(sc) == stack_args(sc->stack, i))
@@ -51599,6 +51594,7 @@ static bool catch_barrier_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_
 
 static bool catch_error_hook_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   let_set(sc, closure_let(sc->error_hook), sc->body_symbol, stack_code(sc->stack, i));
   /* apparently there was an error during *error-hook* evaluation, but Rick wants the hook re-established anyway */
   (*reset_hook) = true;
@@ -51608,12 +51604,14 @@ static bool catch_error_hook_function(s7_scheme *sc, s7_int i, s7_pointer type, 
 
 static bool catch_goto_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   call_exit_active(stack_args(sc->stack, i)) = false;
   return(false);
 }
 
 static bool catch_map_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   sc->map_call_ctr--;
   if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
   return(false);
@@ -51624,6 +51622,7 @@ static bool op_let_temp_done1(s7_scheme *sc);
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   /* this is aimed at let-temp error-hook... error -- not yet tested much */
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   if ((!*reset_hook) &&
       (hook_has_functions(sc->error_hook)))
     {
@@ -51657,18 +51656,21 @@ static bool catch_let_temporarily_function(s7_scheme *sc, s7_int i, s7_pointer t
 
 static bool catch_let_temp_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   slot_set_value(stack_code(sc->stack, i), stack_args(sc->stack, i));
   return(false);
 }
 
 static bool catch_let_temp_s7_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
   return(false);
 }
 
 static bool catch_let_temp_s7_direct_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
   return(false);
 }
@@ -51676,6 +51678,7 @@ static bool catch_let_temp_s7_direct_unwind_function(s7_scheme *sc, s7_int i, s7
 static bool catch_dynamic_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   /* if func has an error, s7_error will call it as it unwinds the stack -- an infinite loop. So, cancel the unwind first */
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   stack_element(sc->stack, i) = (s7_pointer)OP_GC_PROTECT;
 
   /* we're in an error or throw, so there is no return value to report, but we need to decrement *debug-spaces* (if in debug)
@@ -51871,6 +51874,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   for (int64_t i = current_stack_top(sc) - 1; i >= 3; i -= 4)
     {
       catch_function_t catcher = catchers[stack_op(sc->stack, i)];
+      if ((SHOW_EVAL_OPS) && (catcher)) {fprintf(stderr, "before catch:\n"); s7_show_stack(sc);}
       if ((catcher) &&
 	  (catcher(sc, i, type, info, &reset_error_hook)))
 	{
@@ -91697,7 +91701,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 	case OP_ERROR_QUIT:
-	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_eval_done */
+	  if (sc->stack_end < sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_eval_done */
 	  return(sc->F);
 
 	case OP_ERROR_HOOK_QUIT:
@@ -91712,6 +91716,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_GC_PROTECT: case OP_BARRIER: case OP_NO_VALUES:
 	case OP_CATCH_ALL: case OP_CATCH: case OP_CATCH_1: case OP_CATCH_2:
+	  if (SHOW_EVAL_OPS) fprintf(stderr, "flush %s\n", op_names[sc->cur_op]);
 	  continue;
 
 	case OP_GET_OUTPUT_STRING:      op_get_output_string(sc); /* from call-with-output-string|with-output-to-string; return the port string directly *//* fall through */

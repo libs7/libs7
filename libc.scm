@@ -98,7 +98,8 @@
 	   (C-macro (int (__BYTE_ORDER __BIG_ENDIAN __LITTLE_ENDIAN)))
 	   
 	   
-	   (in-C "static s7_pointer g_c_pointer_to_string(s7_scheme *sc, s7_pointer args) 
+	   (in-C "
+                  static s7_pointer g_c_pointer_to_string(s7_scheme *sc, s7_pointer args) 
                   {return(s7_make_string_with_length(sc, (const char *)s7_c_pointer(s7_car(args)), s7_integer(s7_cadr(args))));}
                   static s7_pointer g_string_to_c_pointer(s7_scheme *sc, s7_pointer args)
                   {
@@ -134,7 +135,8 @@
 			  FD_CLOEXEC F_RDLCK F_WRLCK F_UNLCK POSIX_FADV_NORMAL POSIX_FADV_RANDOM POSIX_FADV_SEQUENTIAL 
 			  POSIX_FADV_WILLNEED POSIX_FADV_DONTNEED POSIX_FADV_NOREUSE)))
 	   (int fcntl (int int))
-	   (in-C "static s7_pointer g_c_open(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_c_open(s7_scheme *sc, s7_pointer args)
                   {
                     s7_pointer arg;
                     char* name;
@@ -180,7 +182,8 @@
 	   (int fesetenv (fenv_t*))
 	   (int feupdateenv (fenv_t*))
 	   ;(C-macro (fenv_t* (FE_DFL_ENV)))
-	   (in-C "static s7_pointer g_fenv_t_make(s7_scheme *sc, s7_pointer args) 
+	   (in-C "
+                  static s7_pointer g_fenv_t_make(s7_scheme *sc, s7_pointer args) 
                   {return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(fenv_t)), s7_make_symbol(sc, \"fenv_t*\"), s7_f(sc)));}")
 	   (C-function ("fenv_t.make" g_fenv_t_make "" 0))
 
@@ -326,7 +329,8 @@
 	   (int abs (int))
 	   (int labs (int))
 	   
-	   (in-C "static s7_pointer g_llabs(s7_scheme *sc, s7_pointer args) 
+	   (in-C "
+                  static s7_pointer g_llabs(s7_scheme *sc, s7_pointer args) 
                   {
                   #if  ((__GNUC__) && ((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 4))))
                     return(s7_make_integer(sc, labs(s7_integer(s7_car(args)))));
@@ -383,7 +387,8 @@
 			  ENOTBLK EBUSY EEXIST EXDEV ENODEV ENOTDIR EISDIR EINVAL ENFILE EMFILE ENOTTY ETXTBSY EFBIG
 			  ENOSPC ESPIPE EROFS EMLINK EPIPE EDOM ERANGE
 			  )))
-	   (in-C "static s7_pointer g_errno(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, errno));}
+	   (in-C "
+                  static s7_pointer g_errno(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, errno));}
                   static s7_pointer g_set_errno(s7_scheme *sc, s7_pointer args) {errno = (int)s7_integer(s7_car(args)); return(s7_car(args));}")
 	   (C-function ("errno" g_errno "" 0))
 	   (C-function ("set_errno" g_set_errno "" 1))
@@ -527,7 +532,8 @@
 	   (int truncate (char* int))
 	   (int ftruncate (int int))
 	   
-	   (in-C "extern char **environ; 
+	   (in-C "
+                  extern char **environ; 
                   static s7_pointer getenvs(s7_scheme *sc, s7_pointer args)
                   {
                     s7_pointer p;
@@ -582,7 +588,8 @@
 	   (DIR* opendir (char*))
 	   (int closedir (DIR*))
 	   (void rewinddir (DIR*))
-	   (in-C "static char *read_dir(DIR *p)
+	   (in-C "
+                  static char *read_dir(DIR *p)
                            {                            
                              struct dirent *dirp;        
                              dirp = readdir(p);          
@@ -596,7 +603,8 @@
 	   
 	   ;; -------- ftw.h --------
 	   (C-macro (int (FTW_F FTW_D FTW_DNR FTW_NS)))
-	   (in-C "static s7_scheme *internal_ftw_sc = NULL;
+	   (in-C "
+                  static s7_scheme *internal_ftw_sc = NULL;
                   static s7_pointer internal_ftw_closure = NULL, internal_ftw_arglist = NULL;
                            
                   static int internal_ftw_function(const char *fpath, const struct stat *sb, int typeflag)
@@ -624,7 +632,8 @@
 	   ;; -------- sys/stat.h --------
 	   (C-macro (int S_IFLNK))
 	   
-	   (in-C "static s7_pointer g_stat(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_stat(s7_scheme *sc, s7_pointer args)
                     {return(s7_make_integer(sc, stat(s7_string(s7_car(args)), 
                                                      (struct stat *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, \"stat*\"), __func__, 1))));}
                   static s7_pointer g_fstat(s7_scheme *sc, s7_pointer args)
@@ -643,7 +652,8 @@
 	   (int mknod (char* int int))
 	   (int mkfifo (char* int))
 	   
-	   (in-C "static s7_pointer g_isdir(s7_scheme *sc, s7_pointer args) 
+	   (in-C "
+                  static s7_pointer g_isdir(s7_scheme *sc, s7_pointer args) 
                     {return(s7_make_boolean(sc, S_ISDIR(s7_integer(s7_car(args)))));}
                   static s7_pointer g_ischr(s7_scheme *sc, s7_pointer args) 
                     {return(s7_make_boolean(sc, S_ISCHR(s7_integer(s7_car(args)))));}
@@ -722,7 +732,8 @@
 	   (char* ctime (time_t*))
 	   (tm* localtime (time_t*))
 	   
-	   (in-C "static s7_pointer g_mktime(s7_scheme *sc, s7_pointer args) 
+	   (in-C "
+                  static s7_pointer g_mktime(s7_scheme *sc, s7_pointer args) 
                   {
                     return(s7_make_integer(sc, (s7_int)mktime((struct tm *)s7_c_pointer(s7_car(args)))));
                   }
@@ -821,7 +832,8 @@
 	   
 	   
 	   ;; -------- utime.h --------
-	   (in-C "static s7_pointer g_utime(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_utime(s7_scheme *sc, s7_pointer args)
                   {
                     struct utimbuf tb;
                     tb.actime = (time_t)s7_integer(s7_cadr(args));
@@ -843,7 +855,8 @@
 	   (int tcflush (int int))
 	   (int tcflow (int int))
 	   
-	   (in-C "static s7_pointer g_cfgetospeed(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_cfgetospeed(s7_scheme *sc, s7_pointer args)
                   {
                     struct termios *p;
                     p = (struct termios *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"termios*\"), __func__, 1);
@@ -919,7 +932,8 @@
 	   
 	   
 	   ;; -------- grp.h --------
-	   (in-C "static s7_pointer g_getgrgid(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_getgrgid(s7_scheme *sc, s7_pointer args)
                   {return(s7_make_c_pointer_with_type(sc, getgrgid(s7_integer(s7_car(args))), s7_make_symbol(sc, \"group*\"), s7_f(sc)));}
                   static s7_pointer g_getgrnam(s7_scheme *sc, s7_pointer args)
                   {return(s7_make_c_pointer_with_type(sc, getgrnam(s7_string(s7_car(args))), s7_make_symbol(sc, \"group*\"), s7_f(sc)));}
@@ -974,7 +988,8 @@
 	   (passwd* getpwent (void))
 	   (passwd* getpwuid (int))
 	   (passwd* getpwnam (char*))
-	   (in-C "static s7_pointer g_passwd_pw_name(s7_scheme *sc, s7_pointer args) 
+	   (in-C "
+                  static s7_pointer g_passwd_pw_name(s7_scheme *sc, s7_pointer args) 
                     {return(s7_make_string(sc, ((struct passwd *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"passwd*\"), __func__, 1))->pw_name));}
                   static s7_pointer g_passwd_pw_passwd(s7_scheme *sc, s7_pointer args) 
                     {return(s7_make_string(sc, ((struct passwd *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"passwd*\"), __func__, 1))->pw_passwd));}
@@ -1005,7 +1020,8 @@
 					   WRDE_NOSPACE WRDE_BADCHAR WRDE_BADVAL WRDE_CMDSUB WRDE_SYNTAX))
 			 (int wordexp (char* wordexp_t* int))
 			 (void wordfree (wordexp_t*))
-			 (in-C "static s7_pointer g_wordexp_make(s7_scheme *sc, s7_pointer args)
+			 (in-C "
+                  static s7_pointer g_wordexp_make(s7_scheme *sc, s7_pointer args)
                            {return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(wordexp_t)), s7_make_symbol(sc, \"wordexp_t*\"), s7_f(sc)));}
                            static s7_pointer g_wordexp_we_wordc(s7_scheme *sc, s7_pointer args)
                            {return(s7_make_integer(sc, ((wordexp_t *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"wordexp_t*\"), __func__, 1))->we_wordc));}
@@ -1032,7 +1048,8 @@
 			  GLOB_MAGCHAR GLOB_ALTDIRFUNC GLOB_BRACE GLOB_NOMAGIC GLOB_TILDE GLOB_ONLYDIR GLOB_TILDE_CHECK 
 			  GLOB_NOSPACE GLOB_ABORTED GLOB_NOMATCH GLOB_NOSYS)))
 	   (void globfree (glob_t*))
-	   (in-C "static s7_pointer g_glob_make(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_glob_make(s7_scheme *sc, s7_pointer args)
                            {return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(glob_t)), s7_make_symbol(sc, \"glob_t*\"), s7_f(sc)));}
                            static s7_pointer g_glob_gl_pathc(s7_scheme *sc, s7_pointer args)
                            {return(s7_make_integer(sc, ((glob_t *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"glob_t*\"), __func__, 1))->gl_pathc));}
@@ -1088,7 +1105,8 @@
 	   (int getpriority (int int))
 	   (int setpriority (int int int)) 
 	   
-	   (in-C "static s7_pointer g_rlimit_make(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_rlimit_make(s7_scheme *sc, s7_pointer args)
                   {return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(struct rlimit)), s7_make_symbol(sc, \"rlimit*\"), s7_f(sc)));}
                   static s7_pointer g_rlimit_rlim_cur(s7_scheme *sc, s7_pointer args)
                   {return(s7_make_integer(sc, ((struct rlimit *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"rlimit*\"), __func__, 1))->rlim_cur));}
@@ -1477,7 +1495,8 @@
 	   (int sendmsg (int const-struct-msghdr* int))
 	   (int recvmsg (int struct-msghdr* int))
 	   
-	   (in-C "static s7_pointer g_ntohl(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, ntohl(s7_integer(s7_car(args)))));}
+	   (in-C "
+                  static s7_pointer g_ntohl(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, ntohl(s7_integer(s7_car(args)))));}
                   static s7_pointer g_ntohs(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, ntohs(s7_integer(s7_car(args)))));}
                   static s7_pointer g_htonl(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, htonl(s7_integer(s7_car(args)))));}
                   static s7_pointer g_htons(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, htons(s7_integer(s7_car(args)))));}
@@ -1747,7 +1766,8 @@
 	   (C-macro (int (REG_NOTBOL REG_NOTEOL REG_NOMATCH REG_ESPACE REG_BADBR REG_BADPAT REG_BADRPT REG_ECOLLATE REG_ECTYPE REG_EESCAPE
 			  REG_ESUBREG REG_EBRACK REG_EPAREN REG_EBRACE REG_ERANGE REG_EXTENDED REG_ICASE REG_NOSUB REG_NEWLINE)))
 
-	   (in-C "static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
+	   (in-C "
+                  static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
                   {
                     int res, flags;
                     regex_t *regexp;
