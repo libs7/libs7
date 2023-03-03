@@ -51182,21 +51182,21 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
     store_jump_info(sc);
     set_jump_info(sc, S7_CALL_SET_JUMP);
     
-    if (SHOW_EVAL_OPS) fprintf(stderr, "jump_loc: %d\n", (int)jump_loc);
+    if (SHOW_EVAL_OPS) fprintf(stderr, "jump_loc: %d\n", jump_loc);
     if (jump_loc == NO_JUMP)
       {
 	catch_cstack(p) = &new_goto_start;
-	if (SHOW_EVAL_OPS) fprintf(stderr, "  longjmp_ok, call %s\n", display(body));
+	if (SHOW_EVAL_OPS) fprintf(stderr, "  longjmp call %s\n", display(body));
 	push_stack(sc, OP_CATCH, error_handler, p);
 	result = s7_call(sc, body, sc->nil);
 	if (((opcode_t)sc->stack_end[-1]) == OP_CATCH) sc->stack_end -= 4;
       }
-    else /* result = sc->nil; *//* wrong: should be the error handler result I think */
+    else
       {
-	if (SHOW_EVAL_OPS) fprintf(stderr, "jump back with %d (%d)\n", (int)jump_loc, (sc->stack_end == sc->stack_start));
+	if (SHOW_EVAL_OPS) fprintf(stderr, "  jump back with %d (%d)\n", jump_loc, (sc->stack_end == sc->stack_start));
 	if (jump_loc != ERROR_JUMP)
 	  eval(sc, sc->cur_op);
-	if ((jump_loc == CATCH_JUMP) &&    /* we're returning (back to eval) from an error in catch */
+	if ((jump_loc == CATCH_JUMP) &&    /* we're returning from an error in catch */
 	    ((sc->stack_end == sc->stack_start) ||
 	     (((sc->stack_end - 4) == sc->stack_start) && (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT))))
 	  push_stack_op(sc, OP_ERROR_QUIT);
@@ -91701,7 +91701,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 	case OP_ERROR_QUIT:
-	  if (sc->stack_end < sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_eval_done */
+	  if (sc->stack_end <= sc->stack_start) stack_reset(sc);  /* sets stack_end to stack_start, then pushes op_eval_done, (can <= be <?) */
 	  return(sc->F);
 
 	case OP_ERROR_HOOK_QUIT:

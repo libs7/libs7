@@ -640,6 +640,7 @@ static s7_pointer g_d_vdd_func(s7_scheme *sc, s7_pointer args)
   return(s7_make_real(sc, s7_real(s7_cadr(args)) + s7_real(s7_caddr(args)) + g->data[0]));
 }
 
+/* s7_call_with_catch */
 static s7_pointer make_func, catcher1, catcher2;
 static s7_pointer ter_bad_func(s7_scheme *sc, s7_pointer args) {s7_eval_c_string(sc, "(/ 10 0)"); return(s7_t(sc));}
 static s7_pointer ter_error_handler(s7_scheme *sc, s7_pointer args) {return s7_f(sc);}
@@ -648,6 +649,40 @@ static s7_pointer ter1_error_handler(s7_scheme *sc, s7_pointer args) {return(s7_
 
 static s7_pointer ter2_bad_func(s7_scheme *sc, s7_pointer args) {return(s7_wrong_type_error(sc, s7_make_symbol(sc, "ter2"), 0, args, s7_make_string(sc, "oops")));}
 static s7_pointer ter2_error_handler(s7_scheme *sc, s7_pointer args) {return(s7_apply_function(sc, s7_name_to_value(sc, "format"), s7_cons(sc, s7_f(sc), s7_cadr(args))));}
+
+/* another s7_call_with_catch case thanks to Woody Douglass */
+static int32_t wd_val = 0;
+static s7_pointer wd_inner_test(s7_scheme *s, s7_pointer args)
+{
+  s7_error(s, s7_make_symbol(s, "test-error"), s7_list(s, 1, s7_make_string(s, "TEST ERROR")));
+  return s7_nil(s);
+}
+static s7_pointer wd_test_fn(s7_scheme *s, s7_pointer args)
+{
+  wd_val = 1;
+  s7_call_with_catch(s, s7_t(s), s7_name_to_value(s, "wd-inner-test"), s7_name_to_value(s, "wd-inner-test-handler"));
+  wd_val = 2;
+  return s7_nil(s);
+}
+static s7_pointer wd_inner_test_handler(s7_scheme *s, s7_pointer args) {return s7_nil(s);}
+
+
+static int32_t wd1_val = 0, wd2_val = 0;
+static s7_pointer wd1_test_fn(s7_scheme *s, s7_pointer args)
+{
+  wd1_val = 1;
+  s7_call_with_catch(s, s7_t(s), s7_name_to_value(s, "wd1-inner-fn"), s7_name_to_value(s, "wd-inner-test-handler"));
+  wd1_val = 2;
+  return s7_nil(s);
+}
+static s7_pointer wd1_inner_fn(s7_scheme *s, s7_pointer args)
+{
+  wd2_val = 11;
+  s7_call_with_catch(s, s7_t(s), s7_name_to_value(s, "wd-inner-test"), s7_name_to_value(s, "wd-inner-test-handler"));
+  wd2_val = 12;
+  return s7_nil(s);
+}
+
 
 
 int main(int argc, char **argv)
@@ -2559,6 +2594,23 @@ int main(int argc, char **argv)
     val = s7_call_with_catch(sc, s7_t(sc), make_func, catcher2);
     if (strcmp(s7_string(val), "ter2 argument, (), is nil but should be oops") != 0)
       fprintf(stderr, "%d: %s is unexpected\n", __LINE__, s7_string(val));
+  }
+
+  {
+    s7_define_function(sc, "wd-test-fn", wd_test_fn, 1, 0, false, "call the inner test");
+    s7_define_function(sc, "wd-inner-test", wd_inner_test, 0, 0, false, "throw");
+    s7_define_function(sc, "wd-inner-test-handler", wd_inner_test_handler, 2, 0, false, "do nothing");
+    s7_eval_c_string(sc, "(wd-test-fn #f)");
+    if (wd_val != 2) fprintf(stderr, "%d: s7_call_with_catch wd_val(1): %d\n", __LINE__, wd_val);
+    s7_eval_c_string(sc, "(catch #t wd-test-fn (lambda (t i) 'oops))");
+    if (wd_val != 2) fprintf(stderr, "%d: s7_call_with_catch wd_val(2): %d\n", __LINE__, wd_val);
+    s7_eval_c_string(sc, "(call-with-exit wd-test-fn)");
+    if (wd_val != 2) fprintf(stderr, "%d: s7_call_with_catch wd_val(3): %d\n", __LINE__, wd_val);
+    s7_define_function(sc, "wd1-test-fn", wd1_test_fn, 1, 0, false, "call the inner test");
+    s7_define_function(sc, "wd1-inner-fn", wd1_inner_fn, 1, 0, false, "call the inner test");
+    s7_eval_c_string(sc, "(wd1-test-fn #f)");
+    if (wd1_val != 2) fprintf(stderr, "%d: s7_call_with_catch wd1_val: %d\n", __LINE__, wd1_val);
+    if (wd2_val != 12) fprintf(stderr, "%d: s7_call_with_catch wd2_val: %d\n", __LINE__, wd2_val);
   }
 
   {
