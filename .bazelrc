@@ -1,3 +1,5 @@
+common --symlink_prefix=.bazel/
+
 common --color=yes
 common:show --subcommands=pretty_print
 common:show --verbose_failures

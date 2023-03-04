@@ -68,8 +68,10 @@
 
 #if defined(__APPLE__)
 #define DSO_EXT ".dylib"
+#define DSO_EXT_LEN 6
 #else
 #define DSO_EXT ".so"
+#define DSO_EXT_LEN 3
 #endif
 
 /*
@@ -30014,7 +30016,8 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
   fname_len = safe_strlen(fname);
   if ((fname_len > 3) &&
       /* (local_strcmp((const char *)(fname + (fname_len - 3)), ".so")) */
-      (local_strcmp((const char *)(fname + (fname_len - 6)), DSO_EXT)) //obazl
+      (local_strcmp((const char *)(fname + (fname_len - DSO_EXT_LEN)),
+                    DSO_EXT)) //obazl
       )
 
     {
@@ -30029,7 +30032,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 	}
       else
 	{
-            printf("NOT FOUND\n");
+            printf("%s:%d: NOT FOUND: %s\n", __FILE__, __LINE__, fname);
 	  block_t *searched;
 	  searched = search_load_path(sc, fname); /* returns NULL if *load-path* is nil, or if nothing matches */
 	  if (searched)
@@ -94956,7 +94959,7 @@ void s7_repl(s7_scheme *sc)
 
 /* obazl routine, derived from s7_repl */
 /* just the libc stuff, no repl stuff */
-void s7_config_libc_s7(s7_scheme *sc) /* obazl */
+void s7_config_libc_s7(s7_scheme *sc, char *libc_s7_path) /* obazl */
 {
     /* printf("%s:%d s7_config_libc_s7\n", __FILE__, __LINE__); */
 /* #if (!WITH_C_LOADER) */
@@ -94973,7 +94976,7 @@ void s7_config_libc_s7(s7_scheme *sc) /* obazl */
   gc_loc = s7_gc_protect(sc, e);
   old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
 
-  /* printf("%s:%d: Loading libc_s7.dylib\n", __FILE__, __LINE__); */
+  /* printf("%s:%d: Loading %s\n", __FILE__, __LINE__, libc_s7_path); */
   /* printf("%s:%d: cwd %s\n", __FILE__, __LINE__, getcwd(NULL, 0)); */
 
   /* OBAZL: s7 assumes libc_s7.so is in current dir. Under Bazel, when
@@ -94981,8 +94984,9 @@ void s7_config_libc_s7(s7_scheme *sc) /* obazl */
      external/libs7/src. */
 
   /* val = s7_load_with_environment(sc, "libc_s7.so", e); */
-  val = s7_load_with_environment(sc, "external/libs7/src/libc_s7"
-                                 DSO_EXT, e);
+  /* val = s7_load_with_environment(sc, "external/libs7/src/libc_s7" */
+  /*                                DSO_EXT, e); */
+  val = s7_load_with_environment(sc, libc_s7_path, e);
   if (val) {
       /* obazl printf("load libc_s7.so succeeded\n"); */
       s7_pointer libs;
@@ -94992,7 +94996,7 @@ void s7_config_libc_s7(s7_scheme *sc) /* obazl */
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
   } else {
-      printf("%s:%d: ERROR: load libc_s7.so failed\n", __FILE__, __LINE__);
+      /* printf("%s:%d: ERROR: load %s failed\n", __FILE__, __LINE__, libc_s7_path); */
       exit(EXIT_FAILURE);
       val = s7_load(sc, "repl.scm");
       if (val) repl_loaded = true;
