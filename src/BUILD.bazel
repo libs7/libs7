@@ -8,7 +8,7 @@ cc_library(
     alwayslink = False,
     linkstatic = True,
     srcs  = [
-        "s7.c", "mus-config.h",
+        "s7.c",
         "glob.c", "fs_api.c",
         "shell_api.c"
     ],
@@ -62,7 +62,13 @@ cc_library(
 ##########
 cc_binary(
     name  = "repl",
-    srcs  = ["s7.c", "s7.h", "mus-config.h"],
+    srcs  = [
+        "s7_repl.c",
+        "s7.c", "s7.h",
+        "glob.c", "fs_api.c",
+        "shell_api.c",
+        "utstring.h"
+    ],
     copts = select({
         # strdup is non-standard, not supported on linux in strict c11 mode
         "//bzl/host:macos": ["-std=c11"],
@@ -128,4 +134,70 @@ cc_binary(
     ],
     visibility = ["//visibility:public"]
 )
+
+################################################################
+cc_binary(
+    name  = "nrepl",
+    srcs  = [
+        "nrepl.c",
+        "notcurses_s7.c",
+        "s7.c", "s7.h",
+        "glob.c", "fs_api.c",
+        "shell_api.c",
+        "utstring.h",
+
+        ## cmake rule in rules_foriegn_cc evidently broken
+        # "//imports/notcurses:hdrs",
+        # "@notcurses//:hdrs", # for tgt //imports/notcurses
+        # "//imports/notcurses:include/notcurses/notcurses.h",
+        # '//imports/notcurses:include/notcurses/ncport.h',
+        # '//imports/notcurses:include/notcurses/nckeys.h',
+        # '//imports/notcurses:include/notcurses/ncseqs.h',
+        # '//imports/notcurses:include/notcurses/direct.h'
+    ],
+    copts = select({
+        # strdup is non-standard, not supported on linux in strict c11 mode
+        "//bzl/host:macos": ["-std=c11"],
+        "//bzl/host:linux": ["-std=gnu11", "-Wl,-export-dynamic"],
+        "//conditions:default": ["-std=c11"],
+    }) + [
+        "-Wextra",
+        "-Wno-unused-parameter",
+        # "-Ivendored/linenoise",
+        "-O2", "-g",
+
+
+        "-Isrc",
+        "-Ivendored/linenoise",
+        "-Inotcurses/include",
+        "-Inotcurses/notcurses/include",
+        "-Iimports/notcurses/include",
+        "-Iimports/notcurses/notcurses/notcurses/include",
+
+        "-Iimports/notcurses/hdrs/include",
+
+    ],
+    defines = [
+        "WITH_MAIN",
+        # "WITH_C_LOADER",
+        "WITH_SYSTEM_EXTRAS"
+    ],
+    linkopts = select({
+        "//bzl/host:macos": [],
+        "//bzl/host:linux": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }) + [
+        "-lm"
+    ],
+    data = [":c_s7",
+            "//libs7:srcs",
+            "//libs7/s7:srcs"],
+    deps = [
+        ":c_s7",
+        # "//imports/notcurses",
+        "@notcurses//:notcurses"
+    ],
+    visibility = ["//visibility:public"]
+)
+
 

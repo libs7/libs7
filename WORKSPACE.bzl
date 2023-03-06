@@ -2,7 +2,10 @@ load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")  # buildifier: disable=load
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")  # buildifier: disable=load
 
-all_content = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
+all_content = """
+filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])
+filegroup(name = "hdrs", srcs = glob(["include/**"]), visibility = ["//visibility:public"])
+"""
 
 def fetch_repos():
 
@@ -62,7 +65,7 @@ def fetch_repos():
 #         strip_prefix = "libffi-3.4.2",
 #         build_file_content = all_content,
 #         # sha256 = "72fba7922703ddfa7a028d513ac15a85c8d54c8d67f55fa5a4802885dc652056",
-#         # build_file = "@//bzl/external:libffi.BUILD",
+#         # build_file = "@//bzl/imports:libffi.BUILD",
 #         ## the zip version requires use of autogen
 #         #url = "https://github.com/libffi/libffi/archive/v3.3.zip",
 #         # type = "zip",
@@ -71,22 +74,35 @@ def fetch_repos():
 
 #### s7 nrepl (notcurses repl)
 
-    maybe(
+################################################################
+## v 2.1.6 <=  v3.0
+    maybe( ## build cmd:  bazel build @notcurses//:notcurses
         http_archive,
         name = "notcurses",
-        url  = "https://github.com/dankamongmen/notcurses/archive/refs/tags/v3.0.8.tar.gz",
-        sha256 = "56c33ffe2a2bc4d0b6e3ac14bdf620cf41e3293789135f76825057d0166974fd",
-        strip_prefix = "notcurses-3.0.8",
-        build_file = "//external/notcurses:BUILD.bazel",
+        build_file = "//imports/notcurses:BUILD.bazel",
+        # build_file_content = all_content,
+
+        # url = "https://github.com/dankamongmen/notcurses/archive/refs/tags/v2.1.8.zip",
+        # strip_prefix = "notcurses-2.1.8",
+
+        ## nope:
+        # url = "https://github.com/dankamongmen/notcurses/archive/refs/tags/v2.4.9.zip",
+        # strip_prefix = "notcurses-2.4.9",
+
+        ## nope:
+        url = "https://github.com/dankamongmen/notcurses/archive/refs/tags/v3.0.9.zip",
+        strip_prefix = "notcurses-3.0.9",
     )
     # deps: libdeflate-dev libncurses-dev libunistring-dev
 
+    ################################################################
+    # cmd:  bazel build @libdeflate//:libdeflate
     maybe(
         http_archive,
         name = "libdeflate",
         url  = "https://github.com/ebiggers/libdeflate/archive/refs/tags/v1.11.tar.gz",
         sha256 = "c72f691293f41c6aee66d44ca2dcd24092161b312a1c4c3d591d5d25f26b1faf",
         strip_prefix = "libdeflate-1.11",
-        build_file = "//external/libdeflate:BUILD.bazel",
+        build_file = "//imports/libdeflate:BUILD.bazel",
 )
 

@@ -1,0 +1,55 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["**"]))
+
+# needed by s7 nrepl
+
+filegroup(name = "all",
+          srcs = glob(["**"]))
+
+# filegroup(name = "hdrs",
+#           srcs = glob(["include/**"]))
+
+cmake(
+    name = "notcurses",
+    lib_source = ":all",
+    # lib_source = "@notcurses//:all",  ## ":all",
+    out_static_libs = [
+        "libnotcurses-core.a",
+        "libnotcurses.a"
+    ],
+    postfix_script = " ".join([
+        # "set;",
+        # "echo PWD: $PWD;",
+        "echo OLDPWD/external/notcurses/include: `ls ${OLDPWD}/external/notcurses/include`;",
+        ## $EXT_BUILD_ROOT == $OLDPWD
+        "cp -vR ${OLDPWD}/external/notcurses/include/notcurses ${INSTALLDIR}/include;",
+        "cp -v include/version.h ${INSTALLDIR}/include/notcurses;",
+    ]),
+    # 150 if [[ -L "bazel-out/darwin-fastbuild/bin/external/notcurses/notcurses/lib/libnotcurses.a" ]]; then
+    # 151   target="$(python -c "import os; print(os.path.realpath('bazel-out/darwin-fastbuild/bin/external/notcurses/notcurses/lib/libnotcurses.a'))")"
+    # 152   rm "bazel-out/darwin-fastbuild/bin/external/notcurses/notcurses/lib/libnotcurses.a" && cp -a "${target}" "bazel-out/darwin-fastbuild/bin/external/notcur    152 ses/notcurses/lib/libnotcurses.a"
+    # 153 fi
+    build_args = ["--verbose"],
+    install = True,
+    out_include_dir = "include",
+    # out_shared_libs = ["libnotcurses.dylib"],
+    cache_entries = {
+        "CMAKE_VERBOSE_MAKEFILE": "ON",
+        "DFSG_BUILD": "ON",  # exclude non-free software
+        "BUILD_TESTING": "OFF",
+        "BUILD_EXECUTABLES": "OFF",
+        "USE_CXX": "OFF",
+        "USE_MULTIMEDIA": "none",
+        "USE_DOCTEST": "OFF",
+        "USE_PANDOC": "OFF",
+        "USE_POC": "OFF",
+        "USE_DEFLATE": "OFF",
+    },
+    # env = {
+    #     "CFLAGS": "-Ilibdeflate/libdeflate/include -Ilibdeflate/include  -Iinclude"
+    # },
+    visibility = ["//visibility:public"],
+)

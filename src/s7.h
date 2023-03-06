@@ -904,6 +904,10 @@ typedef s7_double s7_Double;
 #endif
 
 
+/* obazl+ */
+void s7_config_libc_s7(s7_scheme *sc, char *libc_s7_path);
+/* obazl- */
+
 /* --------------------------------------------------------------------------------
  * 
  *        s7 changes
@@ -1069,7 +1073,7 @@ typedef s7_double s7_Double;
  *              procedure-setter is settable: removed most of procedure-with-setter.
  *            make-type replaced by open-environment.
  * 11-May:    s7 2.0: hook implementation changed completely.
- *            s7_environment_ref|set.
+[v *            s7_environment_ref|set.
  * 4-May:     *error-info* replaced by error-environment, and stacktrace has changed.
  * 22-Apr:    #_<name> = startup (built-in) value of name
  * 17-Apr:    with-baffle.
