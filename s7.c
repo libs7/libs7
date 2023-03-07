@@ -51198,7 +51198,7 @@ s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7
 	  eval(sc, sc->cur_op);
 	if ((jump_loc == CATCH_JUMP) &&    /* we're returning from an error in catch */
 	    ((sc->stack_end == sc->stack_start) ||
-	     (((sc->stack_end - 4) == sc->stack_start) && (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT))))
+	     (((sc->stack_end - 4) == sc->stack_start) && (((opcode_t)sc->stack_end[-1]) == OP_GC_PROTECT)))) /* s7_apply_function probably */
 	  push_stack_op(sc, OP_ERROR_QUIT);
 	result = sc->value;
       }
