@@ -341,3 +341,5 @@
 ;;   ;(display y) (newline)
 ;;   y)
 ;; (display "loaded libs7/alist.scm") (newline)
+
+(provide 'alist.scm)

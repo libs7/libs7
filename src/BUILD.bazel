@@ -49,9 +49,9 @@ cc_library(
         # both loaded at runtime by s7_repl()
         ":c_s7",
         ## scheme sources
-        "//libs7:srcs",
-        "//libs7/libc:srcs",
-        "//libs7/s7:srcs",
+        "//scm:srcs",
+        "//scm/libc:srcs",
+        "//scm/s7:srcs",
     ],
     deps = [
         ":c_s7"
@@ -95,8 +95,8 @@ cc_binary(
         "-lm"
     ],
     data = [":c_s7",
-            "//libs7:srcs",
-            "//libs7/s7:srcs"],
+            "//scm:srcs",
+            "//scm/s7:srcs"],
     deps = [":c_s7"],
     visibility = ["//visibility:public"]
 )
@@ -190,8 +190,8 @@ cc_binary(
         "-lm"
     ],
     data = [":c_s7",
-            "//libs7:srcs",
-            "//libs7/s7:srcs"],
+            "//scm:srcs",
+            "//scm/s7:srcs"],
     deps = [
         ":c_s7",
         # "//imports/notcurses",

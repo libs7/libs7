@@ -318,75 +318,74 @@ static void init_nlibc(s7_scheme *sc)
   #define NREPL_DEBUGGING USE_SND
 #endif
 
-/* #if (!USE_SND) */
+#if (!USE_SND)
 int main(int argc, char **argv)
 {
   s7_scheme *sc;
   sc = s7_init();
-}
 /* #else */
 /* static int nrepl(s7_scheme *sc) */
 /* { */
 /* #endif */
-/*   init_nlibc(sc); */
+  init_nlibc(sc);
 
-/*   s7_define_function(sc, "set-sigint-handler", set_sigint_handler, 0, 0, false, ""); */
-/*   s7_define_function(sc, "unset-sigint-handler", unset_sigint_handler, 1, 0, false, ""); */
+  s7_define_function(sc, "set-sigint-handler", set_sigint_handler, 0, 0, false, "");
+  s7_define_function(sc, "unset-sigint-handler", unset_sigint_handler, 1, 0, false, "");
 
-/*   notcurses_s7_init(sc); */
+  notcurses_s7_init(sc);
 
-/* #if (!USE_SND) */
-/*   if (argc >= 2) */
-/*     { */
-/*       if (strcmp(argv[1], "-e") == 0) */
-/* 	{ */
-/* 	  s7_pointer x; */
-/* 	  x = s7_eval_c_string(sc, argv[2]); */
-/* 	  fprintf(stdout, "%s\n", s7_object_to_c_string(sc, x)); */
-/* 	  return(0); */
-/* 	} */
-/*       fprintf(stderr, "load %s\n", argv[1]); */
-/*       if (!s7_load(sc, argv[1])) */
-/* 	{ */
-/* 	  fprintf(stderr, "can't load %s\n", argv[1]); */
-/* 	  return(2); */
-/* 	} */
-/*     } */
-/*   else */
-/* #endif */
-/*     { */
-/* #ifdef _MSC_VER */
-/*   while (true) */
-/*     { */
-/*       char buffer[512]; */
-/*       fprintf(stdout, "\n> "); */
-/*       if (!fgets(buffer, 512, stdin)) break;  /\* error or ctrl-D *\/ */
-/*       if (((buffer[0] != '\n') || (strlen(buffer) > 1))) */
-/* 	{ */
-/* 	  char response[1024]; */
-/* 	  snprintf(response, 1024, "(write %s)", buffer); */
-/* 	  s7_eval_c_string(sc, response); */
-/* 	} */
-/*     } */
-/*   fprintf(stdout, "\n"); */
-/*   if (ferror(stdin)) */
-/*     fprintf(stderr, "read error on stdin\n"); */
-/* #else */
-/* #ifdef S7_LOAD_PATH */
-/*       s7_add_to_load_path(sc, S7_LOAD_PATH); */
-/* #endif */
-/* #if (!NREPL_DEBUGGING) */
-/*       s7_add_to_load_path(sc, "/usr/local/share/s7"); */
-/*       #include "nrepl-bits.h" */
-/*       s7_load_c_string(sc, (const char *)nrepl_scm, nrepl_scm_len); */
-/* #else */
-/*       if (!s7_load(sc, "nrepl.scm")) */
-/* 	return(1); */
-/* #endif */
-/* #endif */
-/*     } */
-/*   return(0); */
-/* } */
+#if (!USE_SND)
+  if (argc >= 2)
+    {
+      if (strcmp(argv[1], "-e") == 0)
+	{
+	  s7_pointer x;
+	  x = s7_eval_c_string(sc, argv[2]);
+	  fprintf(stdout, "%s\n", s7_object_to_c_string(sc, x));
+	  return(0);
+	}
+      fprintf(stderr, "load %s\n", argv[1]);
+      if (!s7_load(sc, argv[1]))
+	{
+	  fprintf(stderr, "can't load %s\n", argv[1]);
+	  return(2);
+	}
+    }
+  else
+#endif
+    {
+#ifdef _MSC_VER
+  while (true)
+    {
+      char buffer[512];
+      fprintf(stdout, "\n> ");
+      if (!fgets(buffer, 512, stdin)) break;  /* error or ctrl-D */
+      if (((buffer[0] != '\n') || (strlen(buffer) > 1)))
+	{
+	  char response[1024];
+	  snprintf(response, 1024, "(write %s)", buffer);
+	  s7_eval_c_string(sc, response);
+	}
+    }
+  fprintf(stdout, "\n");
+  if (ferror(stdin))
+    fprintf(stderr, "read error on stdin\n");
+#else
+#ifdef S7_LOAD_PATH
+      s7_add_to_load_path(sc, S7_LOAD_PATH);
+#endif
+#if (!NREPL_DEBUGGING)
+      s7_add_to_load_path(sc, "/usr/local/share/s7");
+      #include "nrepl-bits.h"
+      s7_load_c_string(sc, (const char *)nrepl_scm, nrepl_scm_len);
+#else
+      if (!s7_load(sc, "nrepl.scm"))
+	return(1);
+#endif
+#endif
+    }
+  return(0);
+}
 
 /* #if 0 */
 /*
