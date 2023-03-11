@@ -52013,7 +52013,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       sc->value = type;
       sc->cur_op = OP_ERROR_QUIT;
     }
-  /* if (sc->longjmp_ok) */ LongJmp(*(sc->goto_start), ERROR_JUMP);
+  LongJmp(*(sc->goto_start), ERROR_JUMP);
 }
 
 s7_pointer s7_error(s7_scheme *sc, s7_pointer type, s7_pointer info) /* s7.h backwards compatibility */
@@ -53922,8 +53922,10 @@ static s7_pointer fx_multiply_fs(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf
 static s7_pointer fx_multiply_sf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, lookup(sc, cadr(arg)), real(opt2_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_tf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, t_lookup(sc, cadr(arg), arg), real(opt2_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_si(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, cadr(arg)), integer(opt2_con(cdr(arg))), 1));}
+static s7_pointer fx_multiply_ti(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, t_lookup(sc, cadr(arg), arg), integer(opt2_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_ui(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, u_lookup(sc, cadr(arg), arg), integer(opt2_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_is(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, opt2_sym(cdr(arg))), integer(cadr(arg)), 2));}
+static s7_pointer fx_multiply_it(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, t_lookup(sc, opt2_sym(cdr(arg)), arg), integer(cadr(arg)), 2));}
 static s7_pointer fx_multiply_tu(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, caddr(arg), arg)));}
 
 static inline s7_pointer fx_sqr_1(s7_scheme *sc, s7_pointer x)
@@ -57273,6 +57275,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_subtract_si) return(with_fx(tree, fx_subtract_ti));
 	  if (fx_proc(tree) == fx_subtract_sf) return(with_fx(tree, fx_subtract_tf));
 	  if (fx_proc(tree) == fx_multiply_sf) return(with_fx(tree, fx_multiply_tf));
+	  if (fx_proc(tree) == fx_multiply_si) return(with_fx(tree, fx_multiply_ti));
 	  if (fx_proc(tree) == fx_lt_si) /* is this ever hit? */
 	    return(with_fx(tree, (integer(caddr(p)) == 2) ? fx_lt_t2 : ((integer(caddr(p)) == 1) ? fx_lt_t1 : fx_lt_ti)));
 	  if (fx_proc(tree) == fx_num_eq_si)   return(with_fx(tree, fx_num_eq_ti));
@@ -57315,6 +57318,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       if (caddr(p) == var1)
 	{
 	  if ((car(p) == sc->cons_symbol) && (is_unchanged_global(sc->cons_symbol))) return(with_fx(tree, fx_cons_ct));
+	  if (fx_proc(tree) == fx_multiply_is) return(with_fx(tree, fx_multiply_it));
 	  if (fx_proc(tree) == fx_c_cs)
 	    {
 	      if (is_global_and_has_func(car(p), s7_p_pp_function))
@@ -96129,60 +96133,60 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ----------------------------------------------
- *            20.9   21.0   22.0   23.0   23.2
- * ----------------------------------------------
- * tpeak      115    114    108    105    105
- * tref       691    687    463    459    459
- * index     1026   1016    973    967    967
- * tmock     1177   1165   1057   1019   1019
- * tvect     2519   2464   1772   1669   1669
- * timp      2637   2575   1930   1694   1694
- * texit     ----   ----   1778   1741   1741
- * s7test    1873   1831   1818   1829   1829
- * thook     ----   ----   2590   2030   2028
- * tauto     ----   ----   2562   2048   2048
- * lt        2187   2172   2150   2185   2185
- * dup       3805   3788   2492   2239   2236
- * tcopy     8035   5546   2539   2375   2375
- * tload     ----   ----   3046   2404   2537
- * tread     2440   2421   2419   2408   2403
- * fbench    2688   2583   2460   2430   2430
- * trclo     2735   2574   2454   2445   2445
- * titer     2865   2842   2641   2509   2509
- * tmat      3065   3042   2524   2578   2569
- * tb        2735   2681   2612   2604   2601
- * tsort     3105   3104   2856   2804   2804
- * teq       4068   4045   3536   3486   3486
- * tobj      4016   3970   3828   3577   3603
- * tio       3816   3752   3683   3620   3620
- * tmac      3950   3873   3033   3677   3682
- * tclo      4787   4735   4390   4384   4384
- * tcase     4960   4793   4439   4430   4426
- * tlet      7775   5640   4450   4427   4422
- * tstar     6139   5923   5519   4449   4449
- * tfft      7820   7729   4755   4476   4475
- * tmap      8869   8774   4489   4541   4541
- * tshoot    5525   5447   5183   5055   5055
- * tstr      6880   6342   5488   5162   5165
- * tform     5357   5348   5307   5316   5321
- * tnum      6348   6013   5433   5396   5396
- * tlamb     6423   6273   5720   5560   5552
- * tmisc     8869   7612   6435   6076   6074
- * tlist     7896   7546   6558   6240   6240
- * tset      ----   ----   ----   6260   6258
- * tgsl      8485   7802   6373   6282   6282
- * tari      13.0   12.7   6827   6543   6541
- * trec      6936   6922   6521   6588   6588
- * tleft     10.4   10.2   7657   7479   7479
- * tgc       11.9   11.1   8177   7857   7897
- * thash     11.8   11.7   9734   9479   9479
- * cb        11.2   11.0   9658   9564   9559
- * tgen      11.2   11.4   12.0   12.1   12.2
- * tall      15.6   15.6   15.6   15.6   15.6
- * calls     36.7   37.5   37.0   37.5   37.7
- * sg        ----   ----   55.9   55.8   55.8
- * lg        ----   ----  105.2  106.4  106.4
- * tbig     177.4  175.8  156.5  148.1  148.1
- * ----------------------------------------------
+/* ------------------------------------------------------
+ *            20.9   21.0   22.0   23.0   23.2   23.3
+ * ------------------------------------------------------
+ * tpeak      115    114    108    105    105    104
+ * tref       691    687    463    459    459    458
+ * index     1026   1016    973    967    967    972
+ * tmock     1177   1165   1057   1019   1019   1027
+ * tvect     2519   2464   1772   1669   1669   1668
+ * timp      2637   2575   1930   1694   1694   1707
+ * texit     ----   ----   1778   1741   1741   1759
+ * s7test    1873   1831   1818   1829   1829   1860
+ * thook     ----   ----   2590   2030   2028   2047 [eval here and elsewhere]
+ * tauto     ----   ----   2562   2048   2048   2062
+ * lt        2187   2172   2150   2185   2185   2195
+ * dup       3805   3788   2492   2239   2236   2240
+ * tcopy     8035   5546   2539   2375   2375   2379
+ * tload     ----   ----   3046   2404   2537   2531
+ * tread     2440   2421   2419   2408   2403   2415
+ * fbench    2688   2583   2460   2430   2430   2452
+ * trclo     2735   2574   2454   2445   2445   2461
+ * titer     2865   2842   2641   2509   2509   2465
+ * tmat      3065   3042   2524   2578   2569   2584
+ * tb        2735   2681   2612   2604   2601   2632
+ * tsort     3105   3104   2856   2804   2804   2828
+ * teq       4068   4045   3536   3486   3486   3588 [let_equal_1]
+ * tobj      4016   3970   3828   3577   3603   3577
+ * tio       3816   3752   3683   3620   3620   3623
+ * tmac      3950   3873   3033   3677   3682   3691
+ * tclo      4787   4735   4390   4384   4384   4448
+ * tcase     4960   4793   4439   4430   4426   4445
+ * tlet      7775   5640   4450   4427   4422   4453
+ * tstar     6139   5923   5519   4449   4449   4558
+ * tfft      7820   7729   4755   4476   4475   4510
+ * tmap      8869   8774   4489   4541   4541   4618
+ * tshoot    5525   5447   5183   5055   5055   5048
+ * tstr      6880   6342   5488   5162   5165   5205
+ * tform     5357   5348   5307   5316   5321   5401
+ * tnum      6348   6013   5433   5396   5396   5409
+ * tlamb     6423   6273   5720   5560   5552   5623
+ * tmisc     8869   7612   6435   6076   6074   6224
+ * tlist     7896   7546   6558   6240   6240   6285
+ * tset      ----   ----   ----   6260   6258   6308
+ * tgsl      8485   7802   6373   6282   6282   6228
+ * tari      13.0   12.7   6827   6543   6541   6502
+ * trec      6936   6922   6521   6588   6588   6581
+ * tleft     10.4   10.2   7657   7479   7479   7612
+ * tgc       11.9   11.1   8177   7857   7897   7957
+ * thash     11.8   11.7   9734   9479   9479   9484
+ * cb        11.2   11.0   9658   9564   9559   9643
+ * tgen      11.2   11.4   12.0   12.1   12.2   12.1
+ * tall      15.6   15.6   15.6   15.6   15.6   15.1
+ * calls     36.7   37.5   37.0   37.5   37.7   37.1
+ * sg        ----   ----   55.9   55.8   55.8   55.1
+ * lg        ----   ----  105.2  106.4  106.4  107.1
+ * tbig     177.4  175.8  156.5  148.1  148.1  146.3
+ * ------------------------------------------------------
  */
