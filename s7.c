@@ -1938,7 +1938,7 @@ static void init_types(void)
 #define current_code(Sc)               car(Sc->cur_code)
 #define set_current_code(Sc, Code)     do {Sc->cur_code = cdr(Sc->cur_code); set_car(Sc->cur_code, T_Ext(Code));} while (0)
 #define replace_current_code(Sc, Code) set_car(Sc->cur_code, T_Ext(Code))
-#define mark_current_code(Sc)          do {int32_t i; s7_pointer p; for (p = Sc->cur_code, i = 0; i < Sc->history_size; i++, p = cdr(p)) gc_mark(car(p));} while (0)
+#define mark_current_code(Sc)          do {int32_t _i_; s7_pointer _p_; for (_p_ = Sc->cur_code, _i_ = 0; _i_ < Sc->history_size; _i_++, _p_ = cdr(_p_)) gc_mark(car(_p_));} while (0)
 #else
 #define current_code(Sc)               Sc->cur_code
 #define set_current_code(Sc, Code)     Sc->cur_code = T_Ext(Code)
@@ -3623,6 +3623,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #endif
 
 #if S7_DEBUGGING
+const char *display(s7_pointer obj);
 const char *display(s7_pointer obj)
 {
   const char *res;
@@ -3675,7 +3676,7 @@ static void set_number_name(s7_pointer p, const char *name, int32_t len)
     {
       set_has_number_name(p);
       number_name_length(p) = (uint8_t)len;
-      memcpy((void *)number_name(p), (void *)name, len);
+      memcpy((void *)number_name(p), (const void *)name, len);
       (number_name(p))[len] = 0;
     }
 }
@@ -3986,7 +3987,7 @@ static char *copy_string_with_length(const char *str, s7_int len)
   if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
-  memcpy((void *)newstr, (void *)str, len); /* we check len != 0 above -- 24-Jan-22 */
+  memcpy((void *)newstr, (const void *)str, len); /* we check len != 0 above -- 24-Jan-22 */
   newstr[len] = '\0';
   return(newstr);
 }
@@ -4654,6 +4655,7 @@ bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
     sc->has_openlets = old_open;   \
   } while (0)
 
+void s7_show_history(s7_scheme *sc);
 void s7_show_history(s7_scheme *sc)
 {
 #if WITH_HISTORY
@@ -4678,6 +4680,7 @@ void s7_show_history(s7_scheme *sc)
 #define stack_args(Stack, Loc)  stack_element(Stack, Loc - 1)
 #define stack_op(Stack, Loc)    ((opcode_t)(stack_element(Stack, Loc)))
 
+void s7_show_stack(s7_scheme *sc);
 void s7_show_stack(s7_scheme *sc)
 {
   fprintf(stderr, "stack:\n");
@@ -4963,6 +4966,7 @@ static bool has_odd_bits(s7_pointer obj)
   return(false);
 }
 
+void s7_show_let(s7_scheme *sc); /* debugging convenience */
 void s7_show_let(s7_scheme *sc) /* debugging convenience */
 {
   for (s7_pointer olet = sc->curlet; is_let(T_Lid(olet)); olet = let_outlet(olet))
@@ -5839,7 +5843,7 @@ static const char *make_type_name(s7_scheme *sc, const char *name, article_t art
       sc->typnam[i++] = ' ';
     }
   else i = 0;
-  memcpy((void *)(sc->typnam + i), (void *)name, slen);
+  memcpy((void *)(sc->typnam + i), (const void *)name, slen);
   sc->typnam[i + slen] = '\0';
   return(sc->typnam);
 }
@@ -8230,13 +8234,13 @@ static inline uint64_t raw_string_hash(const uint8_t *key, s7_int len)
   if (len <= 8)
     {
       uint64_t xs[1] = {0};
-      memcpy((void *)xs, (void *)key, len);
+      memcpy((void *)xs, (const void *)key, len);
       return(xs[0]);
     }
   else
     {
       uint64_t xs[2] = {0, 0};
-      memcpy((void *)xs, (void *)key, (len > 16) ? 16 : len);  /* compiler complaint here is bogus */
+      memcpy((void *)xs, (const void *)key, (len > 16) ? 16 : len);  /* compiler complaint here is bogus */
       return(xs[0] + xs[1]);
     }
 }
@@ -8273,7 +8277,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
   s7_pointer str = (s7_pointer)(base + sizeof(s7_cell));
   s7_pointer p = (s7_pointer)(base + 2 * sizeof(s7_cell));
   uint8_t *val = (uint8_t *)permalloc(sc, len + 1);
-  memcpy((void *)val, (void *)name, len);
+  memcpy((void *)val, (const void *)name, len);
   val[len] = '\0';
 
   full_type(str) = T_STRING | T_IMMUTABLE | T_UNHEAP;       /* avoid debugging confusion involving set_type (also below) */
@@ -8298,7 +8302,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       s7_pointer slot, ksym;
       set_type_bit(x, T_IMMUTABLE | T_KEYWORD | T_GLOBAL);
       set_optimize_op(str, OP_CONSTANT);
-      ksym = make_symbol(sc, (name[0] == ':') ? (char *)(name + 1) : name, len - 1);
+      ksym = make_symbol(sc, (name[0] == ':') ? (const char *)(name + 1) : name, len - 1);
       keyword_set_symbol(x, ksym);
       set_has_keyword(ksym);
       /* the keyword symbol needs to be semipermanent (not a gensym) else we have to laboriously gc-protect it */
@@ -8579,7 +8583,7 @@ static Inline s7_pointer inline_make_string_with_length(s7_scheme *sc, const cha
   new_cell(sc, x, T_STRING | T_SAFE_PROCEDURE);
   string_block(x) = inline_mallocate(sc, len + 1);
   string_value(x) = (char *)block_data(string_block(x));
-  memcpy((void *)string_value(x), (void *)str, len);
+  memcpy((void *)string_value(x), (const void *)str, len);
   string_value(x)[len] = 0;
   string_length(x) = len;
   string_hash(x) = 0;
@@ -10289,7 +10293,7 @@ s7_pointer s7_outlet(s7_scheme *sc, s7_pointer let)
   return(let_outlet(let));
 }
 
-s7_pointer outlet_p_p(s7_scheme *sc, s7_pointer let)
+static s7_pointer outlet_p_p(s7_scheme *sc, s7_pointer let)
 {
   if (!is_let(let))
     sole_arg_wrong_type_error_nr(sc, sc->outlet_symbol, let, a_let_string); /* not a method call here! */
@@ -11150,7 +11154,7 @@ s7_pointer s7_make_keyword(s7_scheme *sc, const char *key)
   block_t *b = inline_mallocate(sc, slen + 2);
   char *name = (char *)block_data(b);
   name[0] = ':';
-  memcpy((void *)(name + 1), (void *)key, slen);
+  memcpy((void *)(name + 1), (const void *)key, slen);
   name[slen + 1] = '\0';
   sym = inline_make_symbol(sc, name, slen + 1); /* keyword slot etc taken care of here (in new_symbol actually) */
   liberate(sc, b);
@@ -12080,7 +12084,7 @@ static block_t *string_to_block(s7_scheme *sc, const char *p, s7_int len)
 {
   block_t *b = inline_mallocate(sc, len + 1);
   char *bp = (char *)block_data(b);
-  memcpy((void *)bp, (void *)p, len);
+  memcpy((void *)bp, (const void *)p, len);
   bp[len] = '\0';
   return(b);
 }
@@ -12976,7 +12980,7 @@ static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
 #endif
 
 /* for g_log, we also need round. this version is from stackoverflow, see also r5rs_round below */
-double s7_round(double number) {return((number < 0.0) ? ceil(number - 0.5) : floor(number + 0.5));}
+static double s7_round(double number) {return((number < 0.0) ? ceil(number - 0.5) : floor(number + 0.5));}
 
 #if HAVE_COMPLEX_NUMBERS
 #if __cplusplus
@@ -13940,7 +13944,7 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
 	"-1728002635214590698",	"-41a792678515120368", "-10b269549075433c38", "-4340724c6c71dc7a8", "-160e2ad3246366808", "-8000000000000000"};
 
       len = safe_strlen(mnfs[radix]);
-      memcpy((void *)p, (void *)mnfs[radix], len);
+      memcpy((void *)p, (const void *)mnfs[radix], len);
       p[len] = '\0';
       return(len);
     }
@@ -14057,7 +14061,7 @@ static void insert_spaces(s7_scheme *sc, const char *src, s7_int width, s7_int l
       sc->num_to_str = (char *)Realloc(sc->num_to_str, sc->num_to_str_size);
     }
   sc->num_to_str[width] = '\0';
-  memmove((void *)(sc->num_to_str + spaces), (void *)src, len);
+  memmove((void *)(sc->num_to_str + spaces), (const void *)src, len);
   local_memset((void *)(sc->num_to_str), (int)' ', spaces);
 }
 
@@ -14581,7 +14585,7 @@ static s7_pointer make_undefined(s7_scheme *sc, const char* name)
   s7_pointer p;
   new_cell(sc, p, T_UNDEFINED | T_IMMUTABLE);
   newstr[0] = '#';
-  memcpy((void *)(newstr + 1), (void *)name, len);
+  memcpy((void *)(newstr + 1), (const void *)name, len);
   newstr[len + 1] = '\0';
   if (sc->undefined_constant_warnings) s7_warn(sc, len + 32, "%s is undefined\n", newstr);
   undefined_set_name_length(p, len + 1);
@@ -14670,9 +14674,9 @@ static s7_pointer unknown_sharp_constant(s7_scheme *sc, const char *name, s7_poi
 	      added_len = (s7_int)(p - pstart);                 /* p is one past '>' presumably */
 	      /* we can't use strbuf here -- it might be the source of the "name" argument! */
 	      buf = (char *)Malloc(len + added_len + 2);
-	      memcpy((void *)buf, (void *)name, len);
+	      memcpy((void *)buf, (const void *)name, len);
 	      buf[len] = '"';                                   /* from inchar */
-	      memcpy((void *)(buf + len + 1), (void *)pstart, added_len);
+	      memcpy((void *)(buf + len + 1), (const void *)pstart, added_len);
 	      buf[len + added_len + 1] = 0;
 	      port_position(pt) += added_len;
 	      res = make_undefined(sc, (const char *)buf);
@@ -14707,7 +14711,7 @@ static s7_pointer make_sharp_constant(s7_scheme *sc, const char *name, bool with
        *    (set! *#readers* (list (cons #\_ (lambda (str) (string->symbol (substring str 1))))))
        *    (let ((+ -)) (#_+ 1 2)): -1
        */
-      s7_pointer sym = make_symbol_with_strlen(sc, (char *)(name + 1));
+      s7_pointer sym = make_symbol_with_strlen(sc, (const char *)(name + 1));
       if ((!is_gensym(sym)) && (is_slot(initial_slot(sym))))
 	return(initial_value(sym));
       /* here we should not necessarily raise an error that *_... is undefined.  reader-cond, for example, needs to
@@ -14784,7 +14788,7 @@ static s7_pointer make_sharp_constant(s7_scheme *sc, const char *name, bool with
 	     * another problem: #\xbdca2cbec overflows so lval is -593310740 -> segfault unless caught
 	     */
 	    bool happy = true;
-	    char *tmp = (char *)(name + 2);
+	    const char *tmp = (const char *)(name + 2);
 	    int32_t lval = 0;
 
 	    while ((*tmp) && (happy) && (lval >= 0) && (lval < 256))
@@ -14809,9 +14813,9 @@ static s7_int string_to_integer(const char *str, int32_t radix, bool *overflow)
   bool negative = false;
   s7_int lval = 0;
   int32_t dig;
-  char *tmp = (char *)str;
+  const char *tmp = (const char *)str;
 #if WITH_GMP
-  char *tmp1;
+  const char *tmp1;
 #endif
   if (str[0] == '+')
     tmp++;
@@ -15265,7 +15269,7 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
   len = safe_strlen(name);
   b = mallocate(sc, len + 1);
   new_name = (char *)block_data(b);
-  memcpy((void *)new_name, (void *)name, len);
+  memcpy((void *)new_name, (const void *)name, len);
   new_name[len] = 0;
 
   for (i = 0, j = 0; i < len; i++)
@@ -15482,8 +15486,8 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		if ((plus[0] == 'n') &&
 		    (local_strncmp(plus, "nan.", 4)))
 		  {
-		    bool overflow = false;
-		    int64_t payload = string_to_integer((char *)(p + 5), 10, &overflow);
+		    bool overflow1 = false;
+		    int64_t payload = string_to_integer((char *)(p + 5), 10, &overflow1);
 		    return(nan2_or_bust(sc, nan_with_payload(payload), q, radix, want_symbol, (intptr_t)(p - q)));
 		  }
 		if ((plus[0] == 'i') &&
@@ -26463,7 +26467,7 @@ static char *make_semipermanent_c_string(s7_scheme *sc, const char *str) /* strc
 {
   s7_int len = safe_strlen(str);
   char *x = (char *)permalloc(sc, len + 1);
-  memcpy((void *)x, (void *)str, len);
+  memcpy((void *)x, (const void *)str, len);
   x[len] = 0;
   return(x);
 }
@@ -26480,7 +26484,7 @@ s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str) /* for (
   string_length(x) = len;
   string_block(x) = NULL;
   string_value(x) = (char *)permalloc(sc, len + 1);
-  memcpy((void *)string_value(x), (void *)str, len);
+  memcpy((void *)string_value(x), (const void *)str, len);
   string_value(x)[len] = 0;
   string_hash(x) = 0;
   return(x);
@@ -28636,7 +28640,7 @@ static void string_write_string_resized(s7_scheme *sc, const char *str, s7_int l
 {
   s7_int new_len = port_position(pt) + len;      /* len is known to be non-zero, str might not be 0-terminated */
   resize_port_data(sc, pt, new_len * 2);
-  memcpy((void *)(port_data(pt) + port_position(pt)), (void *)str, len);
+  memcpy((void *)(port_data(pt) + port_position(pt)), (const void *)str, len);
   port_position(pt) = new_len;
 }
 
@@ -28645,7 +28649,7 @@ static void string_write_string(s7_scheme *sc, const char *str, s7_int len, s7_p
   if ((S7_DEBUGGING) && (len == 0)) {fprintf(stderr, "string_write_string len == 0\n"); abort();}
   if (port_position(pt) + len < port_data_size(pt))
     {
-      memcpy((void *)(port_data(pt) + port_position(pt)), (void *)str, len);
+      memcpy((void *)(port_data(pt) + port_position(pt)), (const void *)str, len);
       /* memcpy is much faster than the equivalent while loop, and faster than using the 4-bytes-at-a-time shuffle */
       port_position(pt) += len;
     }
@@ -28667,11 +28671,11 @@ static void file_write_string(s7_scheme *sc, const char *str, s7_int len, s7_poi
 #endif
 	  port_position(pt) = 0;
 	}
-      fwrite((void *)str, 1, len, port_file(pt));
+      fwrite((const void *)str, 1, len, port_file(pt));
     }
   else
     {
-      memcpy((void *)(port_data(pt) + port_position(pt)), (void *)str, len);
+      memcpy((void *)(port_data(pt) + port_position(pt)), (const void *)str, len);
       port_position(pt) = new_len;
     }
 }
@@ -28999,7 +29003,7 @@ static void port_set_filename(s7_scheme *sc, s7_pointer p, const char *name, siz
   block_t *b = inline_mallocate(sc, len + 1);
   port_filename_block(p) = b;
   port_filename(p) = (char *)block_data(b);
-  memcpy((void *)block_data(b), (void *)name, len);
+  memcpy((void *)block_data(b), (const void *)name, len);
   port_filename(p)[len] = '\0';
 }
 
@@ -29185,7 +29189,7 @@ static block_t *expand_filename(s7_scheme *sc, const char *name)
 	  block_t *b = mallocate(sc, len);
 	  char *filename = (char *)block_data(b);
 	  filename[0] = '\0';
-	  catstrs(filename, len, home, (char *)(name + 1), (char *)NULL);
+	  catstrs(filename, len, home, (const char *)(name + 1), (char *)NULL);
 	  return(b);
 	}}
 #endif
@@ -30264,7 +30268,7 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
       s7_int len = safe_strlen(filename);
       block = mallocate(sc, len + 1);
       rtn = (char *)block_data(block);
-      memcpy((void *)rtn, (void *)filename, len);
+      memcpy((void *)rtn, (const void *)filename, len);
       rtn[len] = '\0';
     }
   else
@@ -30279,13 +30283,13 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 	{
 	  memcpy((void *)rtn, (void *)pwd, pwd_len);
 	  rtn[pwd_len] = '/';
-	  memcpy((void *)(rtn + pwd_len + 1), (void *)filename, filename_len);
+	  memcpy((void *)(rtn + pwd_len + 1), (const void *)filename, filename_len);
 	  rtn[pwd_len + filename_len + 1] = '\0';
           free(pwd);
 	}
       else /* isn't this an error? -- perhaps warn about getcwd, strerror(errno) */
 	{
-          memcpy((void *)rtn, (void *)filename, filename_len);
+          memcpy((void *)rtn, (const void *)filename, filename_len);
           rtn[filename_len] = '\0';
 	}}
   return(block);
@@ -32227,14 +32231,14 @@ static bool string_needs_slashification(const uint8_t *str, s7_int len)
 
 static void slashify_string_to_port(s7_scheme *sc, s7_pointer port, const char *p, s7_int len, bool quoted)
 {
-  uint8_t *pcur, *pend, *pstart = NULL;
+  const uint8_t *pcur, *pend, *pstart = NULL;
   if (len == 0)
     {
       if (quoted)
 	port_write_string(port)(sc, "\"\"", 2, port);
       return;
     }
-  pend = (uint8_t *)(p + len);
+  pend = (const uint8_t *)(p + len);
 
   /* what about the trailing nulls? Guile writes them out (as does s7 currently)
    *    but that is not ideal.  I'd like to use ~S for error messages, so that
@@ -32251,13 +32255,13 @@ static void slashify_string_to_port(s7_scheme *sc, s7_pointer port, const char *
    *    function and string_to_port below, and if set too low, disables the repl.
    */
   if (quoted) port_write_character(port)(sc, '"', port);
-  for (pcur = (uint8_t *)p; pcur < pend; pcur++)
+  for (pcur = (const uint8_t *)p; pcur < pend; pcur++)
     if (slashify_table[*pcur])
       {
-	if (pstart) pstart++; else pstart = (uint8_t *)p;
+	if (pstart) pstart++; else pstart = (const uint8_t *)p;
 	if (pstart != pcur)
 	  {
-	    port_write_string(port)(sc, (char *)pstart, pcur - pstart, port);
+	    port_write_string(port)(sc, (const char *)pstart, pcur - pstart, port);
 	    pstart = pcur;
 	  }
 	port_write_character(port)(sc, '\\', port);
@@ -32286,12 +32290,12 @@ static void slashify_string_to_port(s7_scheme *sc, s7_pointer port, const char *
 	    break;
 	  }}
   if (!pstart)
-    port_write_string(port)(sc, (char *)p, len, port);
+    port_write_string(port)(sc, (const char *)p, len, port);
   else
     {
       pstart++;
       if (pstart != pcur)
-	port_write_string(port)(sc, (char *)pstart, pcur - pstart, port);
+	port_write_string(port)(sc, (const char *)pstart, pcur - pstart, port);
     }
   if (quoted) port_write_character(port)(sc, '"', port);
 }
@@ -32410,7 +32414,7 @@ static void input_port_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, u
 
 static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
 {
-  uint8_t *pend;
+  const uint8_t *pend;
   const char *str = symbol_name(obj);
   s7_int len;
 
@@ -32420,8 +32424,8 @@ static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
     return(true);
 
   len = symbol_name_length(obj);
-  pend = (uint8_t *)(str + len);
-  for (uint8_t *p = (uint8_t *)str; p < pend; p++)
+  pend = (const uint8_t *)(str + len);
+  for (const uint8_t *p = (const uint8_t *)str; p < pend; p++)
     if (symbol_slashify_table[*p])
       return(true);
   set_clean_symbol(obj);
@@ -35167,6 +35171,7 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
 }
 
 #if S7_DEBUGGING
+const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice);
 const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice) {return(string_value(g_object_to_string(sc, list_2(sc, obj, urchoice))));}
 #endif
 
@@ -35440,32 +35445,32 @@ static void format_append_string(s7_scheme *sc, format_data_t *fdat, const char 
   sc->format_column += len;
 }
 
-static void format_append_chars(s7_scheme *sc, format_data_t *fdat, char pad, s7_int chars, s7_pointer port)
+static void format_append_chars(s7_scheme *sc, format_data_t *fdat, char pad, s7_int chrs, s7_pointer port)
 {
   if (is_string_port(port))
     {
-      if ((port_position(port) + chars) < port_data_size(port))
+      if ((port_position(port) + chrs) < port_data_size(port))
 	{
-	  local_memset((char *)port_data(port) + port_position(port), pad, chars);
-	  port_position(port) += chars;
+	  local_memset((char *)port_data(port) + port_position(port), pad, chrs);
+	  port_position(port) += chrs;
 	}
       else
 	{
-	  s7_int new_len = port_position(port) + chars;
+	  s7_int new_len = port_position(port) + chrs;
 	  resize_port_data(sc, port, new_len * 2);
-	  local_memset((char *)port_data(port) + port_position(port), pad, chars);
+	  local_memset((char *)port_data(port) + port_position(port), pad, chrs);
 	  port_position(port) = new_len;
 	}
-      fdat->loc += chars;
-      sc->format_column += chars;
+      fdat->loc += chrs;
+      sc->format_column += chrs;
     }
   else
     {
-      block_t *b = mallocate(sc, chars + 1);
+      block_t *b = mallocate(sc, chrs + 1);
       char *str = (char *)block_data(b);
-      local_memset((void *)str, pad, chars);
-      str[chars] = '\0';
-      format_append_string(sc, fdat, str, chars, port);
+      local_memset((void *)str, pad, chrs);
+      str[chrs] = '\0';
+      format_append_string(sc, fdat, str, chrs, port);
       liberate(sc, b);
     }
 }
@@ -35866,7 +35871,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			    fdat->curly_str = (char *)Malloc(curly_len);
 			  }
 			curly_str = fdat->curly_str;
-			memcpy((void *)curly_str, (void *)(str + i + 2), curly_len - 1);
+			memcpy((void *)curly_str, (const void *)(str + i + 2), curly_len - 1);
 			curly_str[curly_len - 1] = '\0';
 
 			if ((sc->format_depth < sc->num_fdats - 1) &&
@@ -35938,7 +35943,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		obj = car(fdat->args);
 		if ((use_write == P_READABLE) ||
 		    (!has_active_methods(sc, obj)) ||
-		    (!format_method(sc, (char *)(str + i), fdat, port)))
+		    (!format_method(sc, (const char *)(str + i), fdat, port)))
 		  {
 		    bool old_openlets = sc->has_openlets;
 		    /* for the column check, we need to know the length of the object->string output */
@@ -36064,7 +36069,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      obj = car(fdat->args);
 		      if (!is_character(obj))
 			{
-			  if (!format_method(sc, (char *)(str + i), fdat, port)) /* i stepped forward above */
+			  if (!format_method(sc, (const char *)(str + i), fdat, port)) /* i stepped forward above */
 			    format_error_nr(sc, "'C' directive requires a character argument", 43, str, args, fdat);
 			}
 		      else
@@ -36087,7 +36092,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      format_error_nr(sc, "~~F: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~F: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'f', pad, port);
@@ -36098,7 +36103,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      format_error_nr(sc, "~~G: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~G: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'g', pad, port);
@@ -36109,7 +36114,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      format_error_nr(sc, "~~E: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~E: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'e', pad, port);
@@ -36132,7 +36137,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			 *    current object (car(fdat->args)), and the arglist (args), and assume it will
 			 *    return a (scheme) string.
 			 */
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~D: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 10, width, precision, 'd', pad, port);
@@ -36143,7 +36148,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      format_error_nr(sc, "~~O: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~O: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 8, width, precision, 'o', pad, port);
@@ -36154,7 +36159,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      format_error_nr(sc, "~~X: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~X: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 16, width, precision, 'x', pad, port);
@@ -36165,7 +36170,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      format_error_nr(sc, "~~B: missing argument", 21, str, args, fdat);
 		    if (!(is_number(car(fdat->args))))
 		      {
-			if (!format_method(sc, (char *)(str + i), fdat, port))
+			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~B: numeric argument required", 30, str, args, fdat);
 		      }
 		    else format_number(sc, fdat, 2, width, precision, 'b', pad, port);
@@ -36190,10 +36195,10 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	  if ((port_data(port)) &&
 	      ((port_position(port) + new_len) < port_data_size(port)))
 	    {
-	      memcpy((void *)(port_data(port) + port_position(port)), (void *)(str + i), new_len);
+	      memcpy((void *)(port_data(port) + port_position(port)), (const void *)(str + i), new_len);
 	      port_position(port) += new_len;
 	    }
-	  else port_write_string(port)(sc, (char *)(str + i), new_len, port);
+	  else port_write_string(port)(sc, (const char *)(str + i), new_len, port);
 	  fdat->loc += new_len;
 	  sc->format_column += new_len;
 	  i = j - 1;
@@ -36243,7 +36248,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 
 static bool is_columnizing(const char *str)  /* look for ~t ~,<int>T ~<int>,<int>t */
 {
-  for (char *p = (char *)str; (*p);)
+  for (const char *p = (const char *)str; (*p);)
     if (*p++ == '~') /* this is faster than strchr */
       {
 	char c = *p++;
@@ -42140,14 +42145,14 @@ static bool arglist_has_rest(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- sort! -------------------------------- */
 static int32_t dbl_less(const void *f1, const void *f2)
 {
-  if ((*((s7_double *)f1)) < (*((s7_double *)f2))) return(-1);
-  return(((*((s7_double *)f1)) > (*((s7_double *)f2))) ? 1 : 0);
+  if ((*((const s7_double *)f1)) < (*((const s7_double *)f2))) return(-1);
+  return(((*((const s7_double *)f1)) > (*((const s7_double *)f2))) ? 1 : 0);
 }
 
 static int32_t int_less(const void *f1, const void *f2)
 {
-  if ((*((s7_int *)f1)) < (*((s7_int *)f2))) return(-1);
-  return(((*((s7_int *)f1)) > (*((s7_int *)f2))) ? 1 : 0);
+  if ((*((const s7_int *)f1)) < (*((const s7_int *)f2))) return(-1);
+  return(((*((const s7_int *)f1)) > (*((const s7_int *)f2))) ? 1 : 0);
 }
 
 static int32_t dbl_greater(const void *f1, const void *f2) {return(-dbl_less(f1, f2));}
@@ -42163,16 +42168,16 @@ static int32_t byte_greater(const void *f1, const void *f2) {return(-byte_less(f
 
 static int32_t dbl_less_2(const void *f1, const void *f2)
 {
-  s7_double p1 = real(*((s7_pointer *)f1));
-  s7_double p2 = real(*((s7_pointer *)f2));
+  s7_double p1 = real(*((const s7_pointer *)f1));
+  s7_double p2 = real(*((const s7_pointer *)f2));
   if (p1 < p2) return(-1);
   return((p1 > p2) ? 1 : 0);
 }
 
 static int32_t int_less_2(const void *f1, const void *f2)
 {
-  s7_int p1 = integer(*((s7_pointer *)f1));
-  s7_int p2 = integer(*((s7_pointer *)f2));
+  s7_int p1 = integer(*((const s7_pointer *)f1));
+  s7_int p2 = integer(*((const s7_pointer *)f2));
   if (p1 < p2) return(-1);
   return((p1 > p2) ? 1 : 0);
 }
@@ -42182,8 +42187,8 @@ static int32_t int_greater_2(const void *f1, const void *f2) {return(-int_less_2
 
 static int32_t str_less_2(const void *f1, const void *f2)
 {
-  s7_pointer p1 = (*((s7_pointer *)f1));
-  s7_pointer p2 = (*((s7_pointer *)f2));
+  s7_pointer p1 = (*((const s7_pointer *)f1));
+  s7_pointer p2 = (*((const s7_pointer *)f2));
   return(scheme_strcmp(p1, p2));
 }
 
@@ -42191,8 +42196,8 @@ static int32_t str_greater_2(const void *f1, const void *f2) {return(-str_less_2
 
 static int32_t chr_less_2(const void *f1, const void *f2)
 {
-  uint8_t p1 = character(*((s7_pointer *)f1));
-  uint8_t p2 = character(*((s7_pointer *)f2));
+  uint8_t p1 = character(*((const s7_pointer *)f1));
+  uint8_t p2 = character(*((const s7_pointer *)f2));
   if (p1 < p2) return(-1);
   return((p1 > p2) ? 1 : 0);
 }
@@ -42272,13 +42277,13 @@ static void local_qsort_r(void *base, size_t nmemb, size_t size, int32_t (*compa
 static int32_t vector_sort(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  return(((*(sc->sort_f))(sc, (*(s7_pointer *)v1), (*(s7_pointer *)v2))) ? -1 : 1);
+  return(((*(sc->sort_f))(sc, (*(const s7_pointer *)v1), (*(const s7_pointer *)v2))) ? -1 : 1);
 }
 
 static int32_t vector_sort_lt(const void *v1, const void *v2, void *arg) /* for qsort_r */
 {
-  s7_pointer s1 = (*(s7_pointer *)v1);
-  s7_pointer s2 = (*(s7_pointer *)v2);
+  s7_pointer s1 = (*(const s7_pointer *)v1);
+  s7_pointer s2 = (*(const s7_pointer *)v2);
   if ((is_t_integer(s1)) && (is_t_integer(s2)))
     return((integer(s1) < integer(s2)) ? -1 : 1);
   return((lt_b_7pp((s7_scheme *)arg, s1, s2)) ? -1 : 1);
@@ -42287,8 +42292,8 @@ static int32_t vector_sort_lt(const void *v1, const void *v2, void *arg) /* for 
 static int32_t vector_car_sort(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  s7_pointer a = (*(s7_pointer *)v1);
-  s7_pointer b = (*(s7_pointer *)v2);
+  s7_pointer a = (*(const s7_pointer *)v1);
+  s7_pointer b = (*(const s7_pointer *)v2);
   a = (is_pair(a)) ? car(a) : g_car(sc, set_plist_1(sc, a));
   b = (is_pair(b)) ? car(b) : g_car(sc, set_plist_1(sc, b));
   return(((*(sc->sort_f))(sc, a, b)) ? -1 : 1);
@@ -42297,8 +42302,8 @@ static int32_t vector_car_sort(const void *v1, const void *v2, void *arg)
 static int32_t vector_cdr_sort(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  s7_pointer a = (*(s7_pointer *)v1);
-  s7_pointer b = (*(s7_pointer *)v2);
+  s7_pointer a = (*(const s7_pointer *)v1);
+  s7_pointer b = (*(const s7_pointer *)v2);
   a = (is_pair(a)) ? cdr(a) : g_cdr(sc, set_plist_1(sc, a));
   b = (is_pair(b)) ? cdr(b) : g_cdr(sc, set_plist_1(sc, b));
   return(((*(sc->sort_f))(sc, a, b)) ? -1 : 1);
@@ -42307,24 +42312,24 @@ static int32_t vector_cdr_sort(const void *v1, const void *v2, void *arg)
 static int32_t opt_bool_sort(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1)); /* first slot in curlet */
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2)); /* second slot in curlet */
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1)); /* first slot in curlet */
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2)); /* second slot in curlet */
   return((sc->sort_fb(sc->sort_o)) ? -1 : 1);
 }
 
 static int32_t opt_bool_sort_0(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1)); /* first slot in curlet */
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2)); /* second slot in curlet */
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1)); /* first slot in curlet */
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2)); /* second slot in curlet */
   return((sc->sort_fb(sc->sort_o)) ? -1 : 1);
 }
 
 static int32_t opt_bool_sort_p(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1));
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2));
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1));
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2));
   return((sc->opts[0]->v[O_WRAP].fp(sc->opts[0]) == sc->F) ? 1 : -1);
 }
 
@@ -42333,8 +42338,8 @@ static inline int32_t begin_bool_sort_bp(s7_scheme *sc, const void *v1, const vo
 {
   s7_int i;
   opt_info *top = sc->opts[0], *o;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1));
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2));
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1));
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2));
   for (i = 0; i < sc->sort_body_len - 1; i++)
     {
       o = top->v[SORT_O1 + i].o1;
@@ -42353,8 +42358,8 @@ static int32_t opt_begin_bool_sort_b2(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
   opt_info *top = sc->opts[0], *o;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1));
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2));
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1));
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2));
   o = top->v[SORT_O1].o1;
   o->v[0].fp(o);
   o = top->v[SORT_O1 + 1].o1;
@@ -42364,8 +42369,8 @@ static int32_t opt_begin_bool_sort_b2(const void *v1, const void *v2, void *arg)
 static int32_t closure_sort(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1));
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2));
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1));
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2));
   push_stack(sc, OP_EVAL_DONE, sc->sort_body, sc->code);
   sc->code = sc->sort_body; /* this should be ok because we checked in advance that it is a safe closure (no sort! for example) */
   eval(sc, sc->sort_op);
@@ -42375,8 +42380,8 @@ static int32_t closure_sort(const void *v1, const void *v2, void *arg)
 static int32_t closure_sort_begin(const void *v1, const void *v2, void *arg)
 {
   s7_scheme *sc = (s7_scheme *)arg;
-  slot_set_value(sc->sort_v1, (*(s7_pointer *)v1));
-  slot_set_value(sc->sort_v2, (*(s7_pointer *)v2));
+  slot_set_value(sc->sort_v1, (*(const s7_pointer *)v1));
+  slot_set_value(sc->sort_v2, (*(const s7_pointer *)v2));
   push_stack(sc, OP_EVAL_DONE, sc->sort_body, sc->code);
   push_stack_no_args(sc, OP_BEGIN_NO_HOOK, T_Pair(sc->sort_begin));
   sc->code = sc->sort_body;
@@ -45289,7 +45294,7 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
   internal_arglist = (char *)block_data(b);
   internal_arglist[0] = '\'';
   internal_arglist[1] = '(';
-  memcpy((void *)(internal_arglist + 2), (void *)arglist, len);
+  memcpy((void *)(internal_arglist + 2), (const void *)arglist, len);
   internal_arglist[len + 2] = ')';
   internal_arglist[len + 3] = '\0';
   local_args = s7_eval_c_string(sc, internal_arglist);
@@ -45446,7 +45451,7 @@ const char *s7_documentation(s7_scheme *sc, s7_pointer x)
     }
   if ((is_any_c_function(x)) ||
       (is_c_macro(x)))
-    return((char *)c_function_documentation(x));
+    return((const char *)c_function_documentation(x));
 
   if (is_syntax(x))
     return(syntax_documentation(x));
@@ -45994,7 +45999,7 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name)
 }
 
 void s7_c_type_set_gc_free(s7_scheme *sc, s7_int tag, s7_pointer (*gc_free)(s7_scheme *sc, s7_pointer obj))      {sc->c_object_types[tag]->gc_free = gc_free;}
-void s7_c_type_set_gc_mark(s7_scheme *sc, s7_int tag, s7_pointer (*gc_mark)(s7_scheme *sc, s7_pointer obj))      {sc->c_object_types[tag]->gc_mark = gc_mark;}
+void s7_c_type_set_gc_mark(s7_scheme *sc, s7_int tag, s7_pointer (*marker)(s7_scheme *sc, s7_pointer obj))       {sc->c_object_types[tag]->gc_mark = marker;}
 void s7_c_type_set_equal(s7_scheme *sc, s7_int tag, bool (*equal)(void *value1, void *value2))                   {sc->c_object_types[tag]->eql = equal;}
 void s7_c_type_set_is_equal(s7_scheme *sc, s7_int tag, s7_pointer (*is_equal)(s7_scheme *sc, s7_pointer args))   {sc->c_object_types[tag]->equal = is_equal;}
 void s7_c_type_set_copy(s7_scheme *sc, s7_int tag, s7_pointer (*copy)(s7_scheme *sc, s7_pointer args))           {sc->c_object_types[tag]->copy = copy;}
@@ -50591,7 +50596,7 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 			      (notes) ? notes : "",
 			      "\n",
 			      (as_comment) ? "; " : "",
-			      (spaces_len >= notes_start_col) ? (char *)(spaces + spaces_len - notes_start_col) : "",
+			      (spaces_len >= notes_start_col) ? (const char *)(spaces + spaces_len - notes_start_col) : "",
 			      (as_comment) ? "" : " ; ",
 			      symbol_name(code),
 			      ": ",
@@ -50645,7 +50650,7 @@ static block_t *stacktrace_add_func(s7_scheme *sc, s7_pointer f, s7_pointer code
         errlen = catstrs_direct(newstr, "  ", errstr, (const char *)NULL);
       else
 	{
-	  memcpy((void *)newstr, (void *)errstr, errlen);
+	  memcpy((void *)newstr, (const void *)errstr, errlen);
 	  newstr[errlen] = '\0';
 	}}
   newlen = code_max + 8 + ((notes) ? strlen(notes) : 0);
@@ -52111,7 +52116,7 @@ static noreturn void read_error_1_nr(s7_scheme *sc, const char *errmsg, bool str
       error_nr(sc, sc->read_error_symbol, set_elist_1(sc, p));
     }
   error_nr(sc, (string_error) ? sc->string_read_error_symbol : sc->read_error_symbol,
-	   set_elist_1(sc, s7_make_string_wrapper(sc, (char *)errmsg)));
+	   set_elist_1(sc, s7_make_string_wrapper(sc, errmsg)));
 }
 
 static noreturn void read_error_nr(s7_scheme *sc, const char *errmsg) {read_error_1_nr(sc, errmsg, false);}
@@ -52275,7 +52280,7 @@ static noreturn void missing_close_paren_error_nr(s7_scheme *sc)
       s7_int pos = port_position(pt);
       s7_int start = pos - 40;
       char *msg = string_value(p);
-      memcpy((void *)msg, (void *)"missing close paren: ", 21);
+      memcpy((void *)msg, (const void *)"missing close paren: ", 21);
       if (start < 0) start = 0;
       memcpy((void *)(msg + 21), (void *)(port_data(pt) + start), pos - start);
       string_length(p) = 21 + pos - start;
@@ -53894,7 +53899,8 @@ static s7_pointer fx_vref_ts(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p
 static s7_pointer fx_vref_tu(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_vref_ot(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p_pp(sc, o_lookup(sc, cadr(arg), arg), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_vref_gt(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p_pp(sc, lookup_global(sc, cadr(arg)), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
-static s7_pointer fx_string_ref_ss(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_sref_ss(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_sref_su(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_pp(sc, lookup(sc, cadr(arg)), u_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_cons_ss(s7_scheme *sc, s7_pointer arg) {return(cons(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_cons_st(s7_scheme *sc, s7_pointer arg) {return(cons(sc, s_lookup(sc, cadr(arg), arg), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_cons_ts(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
@@ -55363,7 +55369,7 @@ static s7_pointer fx_not_is_pair_opsq(s7_scheme *sc, s7_pointer code)
   return(make_boolean(sc, !is_pair(fn_proc(opt3_pair(code))(sc, set_plist_1(sc, lookup(sc, opt3_sym(cdr(code))))))));
 }
 
-static s7_pointer fx_string_ref_t_last(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_plast(sc, t_lookup(sc, cadr(arg), arg), int_zero));}
+static s7_pointer fx_sref_t_last(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_plast(sc, t_lookup(sc, cadr(arg), arg), int_zero));} /* both syms are t_lookup */
 
 static s7_pointer fx_c_a(s7_scheme *sc, s7_pointer arg)
 {
@@ -56434,7 +56440,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      if (car(arg) == sc->assq_symbol) return(fx_assq_ss);
 	      if (car(arg) == sc->memq_symbol) return(fx_memq_ss);
 	      if (car(arg) == sc->vector_ref_symbol) return(fx_vref_ss);
-	      if (car(arg) == sc->string_ref_symbol) return(fx_string_ref_ss);
+	      if (car(arg) == sc->string_ref_symbol) return(fx_sref_ss);
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      return(fx_c_ss_direct);
 	    }
@@ -57413,6 +57419,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_subtract_ss) return(with_fx(tree, (caddr(p) == var1) ? fx_subtract_ut : fx_subtract_us));
 	  if (caddr(p) == var3) return(with_fx(tree, fx_c_uv));
 	}
+      if ((caddr(p) == var2) && (fx_proc(tree) == fx_sref_ss)) return(with_fx(tree, fx_sref_su));
       if (cadr(p) == var3)
 	{
 	  if (fx_proc(tree) == fx_num_eq_ss) return(with_fx(tree, fx_num_eq_vs));
@@ -57439,7 +57446,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 #else
 	      (caadr(caddr(p)) == sc->length_symbol))
 #endif
-	    return(with_fx(tree, fx_string_ref_t_last));
+	    return(with_fx(tree, fx_sref_t_last));
 	  return(with_fx(tree, fx_c_ta));
 	}
       if (cadr(p) == var2) return(with_fx(tree, (fx_proc(tree) == fx_c_sa_direct) ? fx_c_ua_direct : fx_c_ua));
@@ -57960,7 +57967,7 @@ static void s7_set_i_7ii_function(s7_scheme *sc, s7_pointer f, s7_i_7ii_t df) {a
 static s7_i_7ii_t s7_i_7ii_function(s7_pointer f) {return((s7_i_7ii_t)opt_func(f, o_i_7ii));}
 
 static void s7_set_i_iii_function(s7_scheme *sc, s7_pointer f, s7_i_iii_t df) {add_opt_func(sc, f, o_i_iii, (void *)df);}
-s7_i_iii_t s7_i_iii_function(s7_pointer f) {return((s7_i_iii_t)opt_func(f, o_i_iii));}
+static s7_i_iii_t s7_i_iii_function(s7_pointer f) {return((s7_i_iii_t)opt_func(f, o_i_iii));}
 
 static void s7_set_p_pi_function(s7_scheme *sc, s7_pointer f, s7_p_pi_t df) {add_opt_func(sc, f, o_p_pi, (void *)df);}
 static s7_p_pi_t s7_p_pi_function(s7_pointer f) {return((s7_p_pi_t)opt_func(f, o_p_pi));}
@@ -66809,7 +66816,7 @@ static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nv)
 }
 
 s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr)    {return(s7_optimize_1(sc, expr, false));}
-s7_pfunc s7_optimize_nv(s7_scheme *sc, s7_pointer expr) {return(s7_optimize_1(sc, expr, true));}
+static s7_pfunc s7_optimize_nv(s7_scheme *sc, s7_pointer expr) {return(s7_optimize_1(sc, expr, true));}
 
 static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
 {
@@ -71928,7 +71935,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  if (!is_fxable(sc, car(p)))
 		    return(OPT_F);
 		if (!is_null(p)) return(OPT_OOPS);
-		for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
+		for (p = cdr(expr); is_pair(p); p = cdr(p))
 		  set_fx_direct(p, fx_choose(sc, p, e, pair_symbol_is_safe));
 		set_safe_optimize_op(expr, ((is_pair(cddr(expr))) && (is_null(cdddr(expr)))) ? OP_BEGIN_AA : OP_BEGIN_NA);
 		return(OPT_T);
@@ -88342,7 +88349,7 @@ static token_t read_block_comment(s7_scheme *sc, s7_pointer pt)
       if ((p) && (p < pend))
 	{
 	  port_line_number(pt)++;
-	  str = (char *)(p + 1);
+	  str = (const char *)(p + 1);
 	}
       else break;
     }
@@ -88800,7 +88807,7 @@ static noreturn void read_expression_read_error_nr(s7_scheme *sc)
       s7_int pos = port_position(pt);
       s7_int start = pos - 40;
       if (start < 0) start = 0;
-      memcpy((void *)msg, (void *)"at \"...", 7);
+      memcpy((void *)msg, (const void *)"at \"...", 7);
       memcpy((void *)(msg + 7), (void *)(port_data(pt) + start), pos - start);
       memcpy((void *)(msg + 7 + pos - start), (void *)"...", 3);
       string_length(p) = 7 + pos - start + 3;
@@ -92046,6 +92053,7 @@ static void save_holder_data(s7_scheme *sc, s7_pointer p)
     }
 }
 
+void s7_heap_analyze(s7_scheme *sc);
 void s7_heap_analyze(s7_scheme *sc)
 {
   /* clear possible previous data */
@@ -92204,6 +92212,7 @@ void s7_heap_analyze(s7_scheme *sc)
 #endif
 }
 
+void s7_heap_scan(s7_scheme *sc, int32_t typ);
 void s7_heap_scan(s7_scheme *sc, int32_t typ)
 {
   bool found_one = false;
@@ -92274,6 +92283,7 @@ static s7_pointer g_show_stack(s7_scheme *sc, s7_pointer args)
   return(sc->F);
 }
 
+void s7_show_op_stack(s7_scheme *sc);
 void s7_show_op_stack(s7_scheme *sc)
 {
   fprintf(stderr, "op_stack:\n");
@@ -92917,7 +92927,7 @@ static s7_pointer set_bignum_precision(s7_scheme *sc, int32_t precision)
   mpfr_set_default_prec(bits);
   mpc_set_default_precision(bits);
   bpi = big_pi(sc);
-  s7_symbol_set_value(sc, sc->pi_symbol, bpi);
+  global_slot(sc->pi_symbol)->object.slt.val = bpi; /* don't check immutable flag here (if debugging) */
   slot_set_value(initial_slot(sc->pi_symbol), bpi); /* if #_pi occurs after precision set, make sure #_pi is still legit (not a free cell) */
   return(sc->F);
 }
@@ -93348,6 +93358,7 @@ static bool is_decodable(s7_scheme *sc, const s7_pointer p)
   return(false);
 }
 
+char *s7_decode_bt(s7_scheme *sc);
 char *s7_decode_bt(s7_scheme *sc)
 {
   FILE *fp = fopen("gdb.txt", "r");
@@ -95626,7 +95637,7 @@ s7_scheme *s7_init(void)
     gmp_randinit_default(random_gmp_state(p));
     gmp_randseed(random_gmp_state(p), sc->mpz_1);
 
-    sc->pi_symbol = s7_define_constant(sc, "pi", big_pi(sc));
+    sc->pi_symbol = s7_define_constant(sc, "pi", big_pi(sc)); /* not actually a constant because it changes with bignum-precision */
     set_initial_slot(sc->pi_symbol, make_semipermanent_slot(sc, sc->pi_symbol, big_pi(sc))); /* s7_make_slot does not handle this */
     s7_provide(sc, "gmp");
 #else
@@ -96189,4 +96200,6 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.4  106.4  107.1
  * tbig     177.4  175.8  156.5  148.1  148.1  146.3
  * ------------------------------------------------------
+ *
+ * -cast-qual make_atom const char* q fixed
  */

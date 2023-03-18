@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "10.5"
-#define S7_DATE "14-Mar-2023"
+#define S7_VERSION "10.6"
+#define S7_DATE "20-Mar-2023"
 #define S7_MAJOR_VERSION 10
-#define S7_MINOR_VERSION 5
+#define S7_MINOR_VERSION 6
 
 #include <stdint.h>           /* for int64_t */
 
@@ -880,13 +880,13 @@ typedef s7_double s7_Double;
 #endif
 
 
+bool s7_is_bignum(s7_pointer obj);
 #if WITH_GMP
   mpfr_t *s7_big_real(s7_pointer x);
   mpz_t  *s7_big_integer(s7_pointer x);
   mpq_t  *s7_big_ratio(s7_pointer x);
   mpc_t  *s7_big_complex(s7_pointer x);
 
-  bool s7_is_bignum(s7_pointer obj);
   bool s7_is_big_real(s7_pointer x);
   bool s7_is_big_integer(s7_pointer x);
   bool s7_is_big_ratio(s7_pointer x);
@@ -903,6 +903,7 @@ typedef s7_double s7_Double;
  *
  *        s7 changes
  *
+ * 17-Mar-23: moved s7_is_bignum declaration outside WITH_GMP.
  * --------
  * 9-Nov:     nan, nan-payload, +nan.<int>.
  * 19-Oct:    s7_let_field* synonyms: s7_starlet*.

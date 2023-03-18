@@ -8,10 +8,10 @@
 	  (let ((words (make-hash-table))
 		(cur-word (make-string 512))
 		(word "")
-		(cur-loc 0)
 		(cur-line 1)
 		(last-c #\null))
-	    (do ((c (read-char ip) (read-char ip)))
+	    (do ((cur-loc 0)
+		 (c (read-char ip) (read-char ip)))
 		((eof-object? c)
 		 (for-each (lambda (w)
 			     (format op "~A: ~S~%" (car w) (reverse (cdr w))))
@@ -55,6 +55,7 @@
 		      (hash-table-set! words word ; in non-code text we'd probably want string-downcase here and below
 				       (cons cur-line (or (hash-table-ref words word) ()))))
 		    (set! cur-loc 0))))))))))
+
 
 ;;; --------------------------------
 
