@@ -14928,8 +14928,8 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
   int32_t i, sign = 1, frac_len, int_len, dig, exponent = 0;
   int32_t max_len = s7_int_digits_by_radix[radix];
   int64_t int_part = 0, frac_part = 0;
-  char *str = (char *)ur_str;
-  char *ipart, *fpart;
+  const char *str = ur_str;
+  const char *ipart, *fpart;
   s7_double dval = 0.0;
 
   /* there's an ambiguity in number notation here if we allow "1e1" or "1.e1" in base 16 (or 15) -- is e a digit or an exponent marker?
@@ -15108,7 +15108,7 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
        */
       if (int_len > 0)
 	{
-	  char *iend = (char *)(str + int_len - 1);
+	  const char *iend = (const char *)(str + int_len - 1);
 	  while ((*iend == '0') && (iend != str)) {iend--; int_exponent++;}
 	  while (str <= iend)
 	    int_part = digits[(int32_t)(*str++)] + (int_part * radix);
@@ -15144,7 +15144,7 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
 	{
 	  /* splitting out base 10 case saves very little here */
 	  /* this ignores trailing zeros, so that 0.3 equals 0.300 */
-	  char *fend = (char *)(str + frac_len - 1);
+	  const char *fend = (const char *)(str + frac_len - 1);
 
 	  while ((*fend == '0') && (fend != str)) {fend--; frac_len--;} /* (= .6 0.6000) */
 	  if ((frac_len & 1) == 0)
@@ -15221,7 +15221,7 @@ static s7_pointer make_undefined_bignum(s7_scheme *sc, const char *name)
 }
 #endif
 
-static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int32_t radix, bool want_symbol, int32_t offset)
+static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, const char *p, char *q, int32_t radix, bool want_symbol, int32_t offset)
 {
   s7_int len = safe_strlen(p);
   if (p[len - 1] == 'i')       /* +nan.0[+/-]...i */
@@ -15239,12 +15239,12 @@ static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, char *p, char *q, int
   return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 }
 
-static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, char *q, int32_t radix, bool want_symbol, int64_t rl_len)
+static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, const char *q, int32_t radix, bool want_symbol, int64_t rl_len)
 {
   s7_int len = safe_strlen(q);
   if ((len > rl_len) && (len < 1024)) /* make compiler happy */
     {
-      char *ip = copy_string_with_length((const char *)q, rl_len);
+      char *ip = copy_string_with_length(q, rl_len);
       s7_pointer rl = make_atom(sc, ip, radix, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR);
       free(ip);
       if (is_real(rl))
@@ -30397,7 +30397,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 
 static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 {
-  char *local_file_name = (char *)filename;
+  char *local_file_name = (char *)filename; /* freed below so not const? */
   FILE* fp = fopen(filename, "r");
 #if WITH_GCC
   if (!fp) /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
@@ -96201,5 +96201,5 @@ int main(int argc, char **argv)
  * tbig     177.4  175.8  156.5  148.1  148.1  146.3
  * ------------------------------------------------------
  *
- * -cast-qual make_atom const char* q fixed
+ * other flags? tests7 or compsnd flags
  */
