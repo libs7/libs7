@@ -13979,7 +13979,7 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
   return(len + 1);
 }
 
-static char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /* do not free the returned string */
+static const char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /* do not free the returned string */
 {
   char *p, *op;
   bool sign;
@@ -13987,7 +13987,7 @@ static char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /* do no
   if (num == S7_INT64_MIN)
     {
       (*nlen) = 20;
-      return((char *)"-9223372036854775808");
+      return((const char *)"-9223372036854775808");
     }
   p = (char *)(sc->int_to_str1 + INT_TO_STR_SIZE - 1);
   op = p;
@@ -14012,7 +14012,7 @@ static char *integer_to_string_no_length(s7_scheme *sc, s7_int num) /* do not fr
   bool sign;
 
   if (num == S7_INT64_MIN)
-    return((char *)"-9223372036854775808");
+    return(number_name(leastfix)); /* "-9223372036854775808" but avoids a compiler complaint */
   p = (char *)(sc->int_to_str2 + INT_TO_STR_SIZE - 1);
   *p-- = '\0';
   sign = (num < 0);
@@ -14084,7 +14084,7 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
   /* bignums can't happen here */
   if (is_t_integer(obj))
     {
-      char *p;
+      const char *p;
       if (width == 0)
 	{
 	  if (has_number_name(obj))
@@ -14092,17 +14092,17 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
 	      (*nlen) = number_name_length(obj);
 	      return((char *)number_name(obj));
 	    }
-	  return(integer_to_string(sc, integer(obj), nlen));
+	  return((char *)integer_to_string(sc, integer(obj), nlen));
 	}
       p = integer_to_string(sc, integer(obj), &len);
       if (width > len)
 	{
-	  insert_spaces(sc, p, width, len);
+	  insert_spaces(sc, p, width, len); /* writes sc->num_to_str */
 	  (*nlen) = width;
 	  return(sc->num_to_str);
 	}
       (*nlen) = len;
-      return(p);
+      return((char *)p);
     }
 
   if (is_t_real(obj))
@@ -14356,7 +14356,7 @@ static s7_pointer g_number_to_string(s7_scheme *sc, s7_pointer args)
   #define Q_number_to_string s7_make_signature(sc, 3, sc->is_string_symbol, sc->is_number_symbol, sc->is_integer_symbol)
 
   s7_int nlen = 0, radix; /* ignore cppcheck complaint about radix! */
-  char *res;
+  const char *res;
   s7_pointer x = car(args);
 
   if (!is_number(x))
@@ -14391,7 +14391,7 @@ static s7_pointer g_number_to_string(s7_scheme *sc, s7_pointer args)
       if (has_number_name(x))
 	{
 	  nlen = number_name_length(x);
-	  res = (char *)number_name(x);
+	  res = (const char *)number_name(x);
 	}
       else res = integer_to_string(sc, integer(x), &nlen);
     }
@@ -14417,7 +14417,7 @@ static s7_pointer number_to_string_p_p(s7_scheme *sc, s7_pointer p)
 static s7_pointer number_to_string_p_i(s7_scheme *sc, s7_int p)
 {
   s7_int nlen = 0;
-  char *res = integer_to_string(sc, p, &nlen);
+  const char *res = integer_to_string(sc, p, &nlen);
   return(inline_make_string_with_length(sc, res, nlen));
 }
 /* not number_to_string_p_d! */
@@ -20726,6 +20726,11 @@ static s7_pointer multiply_p_pi(s7_scheme *sc, s7_pointer p1, s7_int i1) {return
 
 static s7_pointer g_mul_xf(s7_scheme *sc, s7_pointer x, s7_double y, int32_t num)
 {
+  /* it's possible to return different argument NaNs depending on the expression or how it is wrapped:
+   *   (* (bignum +nan.0) +nan.123) -> nan.123
+   *   (let () (define (func) (* (bignum +nan.0) +nan.123)) (func) (func)) -> nan.0 
+   * latter call is fx_c_aaa->fx_c_ac->g_mul_xf (if +nan.122 instead of +nan.0, we get +nan.122 so we always get one of the NaNs)
+   */
   switch (type(x))
     {
     case T_INTEGER: return(make_real(sc, integer(x) * y));
@@ -30397,7 +30402,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 
 static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 {
-  char *local_file_name = (char *)filename; /* freed below so not const? */
+  char *local_file_name = NULL;
   FILE* fp = fopen(filename, "r");
 #if WITH_GCC
   if (!fp) /* catch one special case, "~/..." since it causes 99.9% of the "can't load ..." errors */
@@ -30424,10 +30429,10 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
     {
       s7_pointer port;
       if (hook_has_functions(sc->load_hook))
-	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, s7_make_string(sc, local_file_name)));
-      port = read_file(sc, fp, local_file_name, -1, "load"); /* -1 = read entire file into string, this is currently not tweakable */
-      port_file_number(port) = remember_file_name(sc, local_file_name);
-      if (filename != local_file_name) free(local_file_name);
+	s7_apply_function(sc, sc->load_hook, set_plist_1(sc, s7_make_string(sc, (local_file_name) ? local_file_name : filename)));
+      port = read_file(sc, fp, (local_file_name) ? local_file_name : filename, -1, "load"); /* -1 = read entire file into string, this is currently not tweakable */
+      port_file_number(port) = remember_file_name(sc, (local_file_name) ? local_file_name : filename);
+      if (local_file_name) free(local_file_name);
       set_loader_port(port);
       push_input_port(sc, port);
       return(port);
@@ -32414,18 +32419,18 @@ static void input_port_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, u
 
 static bool symbol_needs_slashification(s7_scheme *sc, s7_pointer obj)
 {
-  const uint8_t *pend;
-  const char *str = symbol_name(obj);
+  uint8_t *pend;
+  char *str = symbol_name(obj);
   s7_int len;
 
   if ((str[0] == '#') || (str[0] == '\'') || (str[0] == ','))
     return(true);
-  if (is_number(make_atom(sc, (char *)str, 10, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR)))
+  if (is_number(make_atom(sc, str, 10, NO_SYMBOLS, WITHOUT_OVERFLOW_ERROR)))
     return(true);
 
   len = symbol_name_length(obj);
-  pend = (const uint8_t *)(str + len);
-  for (const uint8_t *p = (const uint8_t *)str; p < pend; p++)
+  pend = (uint8_t *)(str + len);
+  for (uint8_t *p = (uint8_t *)str; p < pend; p++)
     if (symbol_slashify_table[*p])
       return(true);
   set_clean_symbol(obj);
@@ -32836,7 +32841,7 @@ static void int_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, 
   s7_int plen;
   bool too_long;
   char buf[128];
-  char *p;
+  const char *p;
   s7_int len = print_vector_length(sc, vect, port, use_write);
   if (len < 0) return;
   too_long = (len < vector_length(vect));
@@ -32888,7 +32893,7 @@ static void int_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, 
 	      dbuf = port_data(port);
 	    }
 	  p = integer_to_string(sc, int_vector(vect, 0), &plen);
-	  memcpy((void *)(dbuf + new_len), (void *)p, plen);
+	  memcpy((void *)(dbuf + new_len), (const void *)p, plen);
 	  new_len += plen;
 	  for (s7_int i = 1; i < len; i++)
 	    {
@@ -32988,7 +32993,7 @@ static void byte_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port,
   s7_int i, plen;
   bool too_long;
   char buf[128];
-  char *p;
+  const char *p;
   s7_int len = print_vector_length(sc, vect, port, use_write);
   if (len < 0) return;
   too_long = (len < vector_length(vect));
@@ -33496,7 +33501,7 @@ static void hash_table_procedures_to_port(s7_scheme *sc, s7_pointer hash, s7_poi
   else
     {
       s7_int nlen = 0;
-      char *str = integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
+      const char *str = integer_to_string(sc, hash_table_mask(hash) + 1, &nlen);
       if (is_weak_hash_table(hash))
 	port_write_string(port)(sc, "(make-weak-hash-table ", 22, port);
       else port_write_string(port)(sc, "(make-hash-table ", 17, port);
@@ -34574,7 +34579,7 @@ static void integer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_
   else
     {
       s7_int nlen = 0;
-      char *str = integer_to_string(sc, integer(obj), &nlen);
+      const char *str = integer_to_string(sc, integer(obj), &nlen);
       set_number_name(obj, str, nlen);
       port_write_string(port)(sc, str, nlen, port);
     }
@@ -35565,7 +35570,7 @@ static void format_ordinal_number(s7_scheme *sc, format_data_t *fdat, s7_pointer
   else
     {
       s7_int nlen = 0;
-      char *tmp = integer_to_string(sc, num, &nlen);
+      const char *tmp = integer_to_string(sc, num, &nlen);
       format_append_string(sc, fdat, tmp, nlen, port);
       num = num % 100;
       if ((num >= 11) && (num <= 13))
@@ -88809,7 +88814,7 @@ static noreturn void read_expression_read_error_nr(s7_scheme *sc)
       if (start < 0) start = 0;
       memcpy((void *)msg, (const void *)"at \"...", 7);
       memcpy((void *)(msg + 7), (void *)(port_data(pt) + start), pos - start);
-      memcpy((void *)(msg + 7 + pos - start), (void *)"...", 3);
+      memcpy((void *)(msg + 7 + pos - start), (const void *)"...", 3);
       string_length(p) = 7 + pos - start + 3;
       error_nr(sc, sc->read_error_symbol, set_elist_1(sc, p));
     }
@@ -93358,8 +93363,8 @@ static bool is_decodable(s7_scheme *sc, const s7_pointer p)
   return(false);
 }
 
-char *s7_decode_bt(s7_scheme *sc);
-char *s7_decode_bt(s7_scheme *sc)
+const char *s7_decode_bt(s7_scheme *sc);
+const char *s7_decode_bt(s7_scheme *sc)
 {
   FILE *fp = fopen("gdb.txt", "r");
   if (fp)
@@ -93382,7 +93387,7 @@ char *s7_decode_bt(s7_scheme *sc)
 	{
 	  fclose(fp);
 	  liberate(sc, bt_block);
-	  return((char *)" oops ");
+	  return(" oops ");
 	}
       bt[size] = '\0';
       fclose(fp);
@@ -93440,7 +93445,7 @@ char *s7_decode_bt(s7_scheme *sc)
       liberate(sc, bt_block);
       sc->stop_at_error = old_stop;
     }
-  return((char *)"");
+  return("");
 }
 #endif
 
@@ -96200,6 +96205,4 @@ int main(int argc, char **argv)
  * lg        ----   ----  105.2  106.4  106.4  107.1
  * tbig     177.4  175.8  156.5  148.1  148.1  146.3
  * ------------------------------------------------------
- *
- * other flags? tests7 or compsnd flags
  */
