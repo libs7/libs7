@@ -4873,7 +4873,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  /* bit 37+24 */
 	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
 	  /* bit 62 */
-	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
+	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "", /* is type restricted here (T_CATCH or T_ITERATOR etc?  or T_FREE??) */
 	  /* bit 63 */
 	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
 
@@ -4888,6 +4888,37 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 }
 
 /* snprintf returns the number of bytes that would have been written: (display (c-pointer 123123123 (symbol (make-string 130 #\a)))) */
+
+static bool never_unheaped[NUM_TYPES];
+static void init_never_unheaped(void)
+{
+  for (int i = 0; i < NUM_TYPES; i++) never_unheaped[i] = false;
+  never_unheaped[T_BACRO] = true;
+  never_unheaped[T_BACRO_STAR] = true;
+  never_unheaped[T_BYTE_VECTOR] = true;
+  never_unheaped[T_CATCH] = true;
+  never_unheaped[T_CLOSURE] = true;
+  never_unheaped[T_CLOSURE_STAR] = true;
+  never_unheaped[T_COMPLEX] = true;
+  never_unheaped[T_CONTINUATION] = true;
+  never_unheaped[T_COUNTER] = true;
+  never_unheaped[T_C_OBJECT] = true;
+  never_unheaped[T_C_POINTER] = true;
+  never_unheaped[T_DYNAMIC_WIND] = true;
+  never_unheaped[T_FLOAT_VECTOR] = true;
+  never_unheaped[T_FREE] = true;
+  never_unheaped[T_GOTO] = true;
+  never_unheaped[T_HASH_TABLE] = true;
+  never_unheaped[T_INT_VECTOR] = true;
+  never_unheaped[T_ITERATOR] = true;
+  never_unheaped[T_MACRO] = true;
+  never_unheaped[T_MACRO_STAR] = true;
+  never_unheaped[T_RANDOM_STATE] = true;
+  never_unheaped[T_SLOT] = true;
+  never_unheaped[T_STACK] = true;
+  never_unheaped[T_UNUSED] = true;
+  never_unheaped[T_VECTOR] = true;
+}
 
 static bool has_odd_bits(s7_pointer obj)
 {
@@ -4961,12 +4992,17 @@ static bool has_odd_bits(s7_pointer obj)
 	return(true);
     }
   if ((signed_type(obj) == 0) && ((full_typ & T_GC_MARK) != 0)) return(true);
-  /* if ((in_heap(obj)) && ((type(obj) == T_C_FUNCTION) || (type(obj) == T_C_FUNCTION_STAR) || (type(obj) == T_C_MACRO))) return(true); */
-  /*   this is currently impossible -- s7_make_function et al use semipermanent pointers, but is that a bug? */
+
+  if (!in_heap(obj))
+    {
+      uint8_t typ = unchecked_type(obj);
+      if (never_unheaped[typ]) {fprintf(stderr, "unheap %s?\n", s7_type_names[typ]); return(true);}
+    }
+  /* all the hash_table bits seem to be compatible, symbols? (all_float/all_integer only apply to sc->divide_symbol et al at init time) */
   return(false);
 }
 
-void s7_show_let(s7_scheme *sc); /* debugging convenience */
+void s7_show_let(s7_scheme *sc);
 void s7_show_let(s7_scheme *sc) /* debugging convenience */
 {
   for (s7_pointer olet = sc->curlet; is_let(T_Lid(olet)); olet = let_outlet(olet))
@@ -95271,7 +95307,9 @@ s7_scheme *s7_init(void)
       init_s7_starlet_immutable_field();
       already_inited = true;
     }
-
+#if S7_DEBUGGING
+  init_never_unheaped();
+#endif
 #if (!MS_WINDOWS)
   pthread_mutex_unlock(&init_lock);
 #endif
