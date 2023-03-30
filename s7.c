@@ -4873,7 +4873,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  /* bit 37+24 */
 	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
 	  /* bit 62 */
-	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "", /* is type restricted here (T_CATCH or T_ITERATOR etc?  or T_FREE??) */
+	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
 	  /* bit 63 */
 	  ((full_typ & T_GC_MARK) != 0) ?        " gc-marked" : "",
 
@@ -4899,7 +4899,6 @@ static void init_never_unheaped(void)
   never_unheaped[T_CATCH] = true;
   never_unheaped[T_CLOSURE] = true;
   never_unheaped[T_CLOSURE_STAR] = true;
-  never_unheaped[T_COMPLEX] = true;
   never_unheaped[T_CONTINUATION] = true;
   never_unheaped[T_COUNTER] = true;
   never_unheaped[T_C_OBJECT] = true;
