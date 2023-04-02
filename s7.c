@@ -69248,9 +69248,9 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 	      result = s7_symbol_value(sc, sym); /* calls lookup, does not trigger unbound_variable search */
 	      if ((result == sc->undefined) && (e) && (is_let(e)))
 		{
-		  result = let_ref(sc, e, sym);  /* I think to be consistent we should add '(sym . result) to sc->curlet (was sc->nil) */
+		  result = let_ref(sc, e, sym);  /* add '(sym . result) to current_let (was sc->nil, s7_load can set sc->curlet to sc->nil) */
 		  if (result != sc->undefined)
-		    s7_define(sc, sc->curlet, sym, result);
+		    s7_define(sc, current_let, sym, result);
 		}}}
 #endif
       if (result == sc->undefined)
@@ -69265,14 +69265,14 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 	       */
 	      s7_pointer val = s7_hash_table_ref(sc, sc->autoload_table, sym);
 	      s7_pointer e = NULL;
-	      if (is_string(val))                /* val should be a filename. *load-path* is searched if necessary */
+	      if (is_string(val))       /* val should be a filename. *load-path* is searched if necessary */
 		{
 		  if (hook_has_functions(sc->autoload_hook))
 		    s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, val));
 		  e = s7_load(sc, string_value(val));
 		}
 	      else
-		if (is_closure(val))           /* val should be a function of one argument, the current (calling) environment */
+		if (is_closure(val))   /* val should be a function of one argument, the current (calling) environment */
 		  {
 		    if (hook_has_functions(sc->autoload_hook))
 		      s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, val));
@@ -69283,7 +69283,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 		{
 		  result = let_ref(sc, e, sym);
 		  if (result != sc->undefined)
-		    s7_define(sc, sc->curlet, sym, result); /* as above, was sc->nil -- excessive loads if sc->curlet? */
+		    s7_define(sc, current_let, sym, result);       /* as above, was sc->nil -- s7_load above can set sc->curlet to sc->nil */
 		}
 	    }
 #endif
