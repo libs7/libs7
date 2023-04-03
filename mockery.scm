@@ -1,3 +1,28 @@
+;;; mockery.scm
+;;;
+;;;  s7.html says that this file implements "openlets masquerading as various data
+;;;  types".  The original idea was to test the generic function support in s7 by
+;;;  creating objects that act as if they were (say) vectors or strings.  Each such
+;;;  object is a let (openlet) inheriting its methods (functions like vector-length)
+;;;  from the outer let (mock-vector-class etc), and within the object itself there
+;;;  are a 'value field and a 'mock-type field.  Each class (a let) has an associated
+;;;  make function (make-mock-vector or mock-vector etc). The class functions give
+;;;  you an object that acts everywhere in scheme like (say) a vector, but you can
+;;;  specialize it by either adding more functions, or changing the ones given, or
+;;;  adding other fields to carry around arbitrary information with the object.
+;;;  
+;;;  To make a mock-vector call (*mock-vector* 'make-mock-vector) or 
+;;;  (*mock-vector* 'mock-vector):
+;;;  
+;;;    ((*mock-vector* 'mock-vector) 1 2 3) -> #(1 2 3)
+;;;  
+;;;  This prints as #(1 2 3) but it's actually one of these mock objects:
+;;;  
+;;;    (let? ((*mock-vector* 'mock-vector) 1 2 3)) -> #t
+;;;  
+;;;  There are examples scattered around this file, and a lot more
+;;;  in s7test.scm.
+
 (provide 'mockery.scm)
 
 ;;; the exported mock data classes
