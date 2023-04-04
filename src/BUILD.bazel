@@ -13,28 +13,30 @@ cc_library(
         "shell_api.c"
     ],
     hdrs  = ["s7.h"],
-    copts = select({
-        "//bzl/host:macos": ["-std=c11", "-Wextra"],
-        "//bzl/host:linux": [
-            "-std=gnu11", "-Wextra",
-            "-Wno-implicit-fallthrough",
-            ## warning: 'old_e' may be used uninitialized in this function [-Wmaybe-uninitialized]
-            "-Wno-maybe-uninitialized"
-        ],
-        "//conditions:default": ["-std=c11"],
-    }) + [
+    copts =  [
+        "-Wall",
         "-Wextra",
         "-Wno-unused-parameter",
         # "-pedantic-errors",
         "-Isrc",
         "-Ivendored/linenoise",
-    ],
+    ] + select({
+        # "//bzl/host:macos": ["-std=c11"],
+        "//bzl/host:linux": [
+            "-std=gnu11",
+            "-Wno-implicit-fallthrough",
+            ## warning: 'old_e' may be used uninitialized in this function [-Wmaybe-uninitialized]
+            "-Wno-maybe-uninitialized"
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
     defines = select({
+        "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//conditions:default":   []
+    }) + select({
         "//bzl/host:linux": ["_XOPEN_SOURCE=500"], # strdup
         "//conditions:default":   []
     }) + [
-        # "OBAZL_RUNFILES_DIR=external/libs7/src",
-        # "OBAZL_RUNFILES_DIR=/Users/gar/.local/share/libs7",
         "WITH_C_LOADER",
         "WITH_SYSTEM_EXTRAS"
     ],

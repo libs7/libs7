@@ -66,6 +66,7 @@
 
 /* #include "mus-config.h" */
 
+/* obazl */
 #if defined(__APPLE__)
 #define DSO_EXT ".dylib"
 #define DSO_EXT_LEN 6
@@ -94893,7 +94894,7 @@ void s7_config_libc_s7(s7_scheme *sc, char *libc_s7_path) /* obazl */
       libs = global_slot(sc->libraries_symbol);
       slot_set_value(libs, cons(sc, cons(sc, make_permanent_string("libc.scm"), e), slot_value(libs)));
   } else {
-      /* printf("%s:%d: ERROR: load %s failed\n", __FILE__, __LINE__, libc_s7_path); */
+      printf("%s:%d: ERROR: load %s failed\n", __FILE__, __LINE__, libc_s7_path);
       exit(EXIT_FAILURE);
       val = s7_load(sc, "repl.scm");
       if (val) repl_loaded = true;
