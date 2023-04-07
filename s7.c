@@ -69278,7 +69278,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 		      s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, val));
 		    e = s7_call(sc, val, set_ulist_1(sc, sc->curlet, sc->nil));
 		  }
-	      result = s7_symbol_value(sc, sym); /* calls lookup, does not trigger unbound_variable search */
+	      result = s7_symbol_value(sc, sym);                   /* calls lookup, does not trigger unbound_variable search */
 	      if ((result == sc->undefined) && (e) && (is_let(e))) /* added 31-Mar-23 to match sc->autoload_names case above */
 		{
 		  result = let_ref(sc, e, sym);
