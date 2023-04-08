@@ -84335,15 +84335,16 @@ static Inline void inline_op_closure_aa_o(s7_scheme *sc) /* called once in eval,
   sc->code = car(closure_body(f));
 }
 
-static inline void op_closure_fa(s7_scheme *sc)
+static /* inline */ void op_closure_fa(s7_scheme *sc) /* "inline" matters perhaps in texit.scm */
 {
   s7_pointer new_clo, code = sc->code;
-  s7_pointer farg = opt2_pair(code);           /* cdadr(code); */
+  s7_pointer farg = opt2_pair(code);           /* cdadr(code), '((a . b) (cons a b)) for (lambda (a . b) (cons a b)) */
   s7_pointer aarg = fx_call(sc, cddr(code));
   s7_pointer func = opt1_lambda(code);         /* outer func */
   s7_pointer func_args = closure_args(func);
   sc->value = inline_make_let_with_two_slots(sc, closure_let(func), car(func_args), sc->F, cadr(func_args), aarg);
-  new_clo = make_closure_unchecked(sc, car(farg), cdr(farg), T_CLOSURE | ((is_symbol(car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
+  new_clo = make_closure_unchecked(sc, car(farg), cdr(farg), T_CLOSURE | ((!s7_is_proper_list(sc, car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
+  /* this is checking the called closure arglist (see op_lambda), maybe use arity<0 saved as in op_lambda above */
   slot_set_value(let_slots(sc->value), new_clo); /* this order allows us to use make_closure_unchecked */
   sc->curlet = sc->value;
   sc->code = car(closure_body(func));
@@ -87572,8 +87573,9 @@ static void op_cl_fa(s7_scheme *sc)
 {
   s7_pointer code = cdadr(sc->code);
   set_car(sc->t2_2, fx_call(sc, cddr(sc->code)));
-  set_car(sc->t2_1, make_closure_gc_checked(sc, car(code), cdr(code), T_CLOSURE | ((is_symbol(car(code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET));
+  set_car(sc->t2_1, make_closure_gc_checked(sc, car(code), cdr(code), T_CLOSURE | ((!s7_is_proper_list(sc, car(sc->code))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET));
   /* arg1 lambda can be any arity, but it must be applicable to one arg (the "a" above) */
+  /* was checking is_symbol(car(sc->code) i.e. is arglist a symbol, but we need T_COPY_ARGS if arglist is '(a . b) as well (can this happen here?) */
   sc->value = fn_proc(sc->code)(sc, sc->t2_1);
 }
 
@@ -88016,7 +88018,7 @@ static Inline void inline_op_apply_ss(s7_scheme *sc)  /* called once in eval, sg
   sc->args = lookup(sc, opt2_sym(sc->code));
   if (!s7_is_proper_list(sc, sc->args))
     error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "apply: improper list of arguments: ~S", 37), sc->args));
-  sc->code = lookup(sc, cadr(sc->code));      /* global search here was slower (e.g. tauto) */
+  sc->code = lookup(sc, cadr(sc->code));              /* global search here was slower (e.g. tauto) */
   if (needs_copied_args(sc->code))
     sc->args = copy_proper_list(sc, sc->args);
 }
@@ -96199,8 +96201,8 @@ int main(int argc, char **argv)
  * tmock     1177   1165   1057   1019   1019   1027
  * tvect     2519   2464   1772   1669   1669   1668
  * timp      2637   2575   1930   1694   1694   1707
- * texit     ----   ----   1778   1741   1741   1759
- * s7test    1873   1831   1818   1829   1829   1860
+ * texit     ----   ----   1778   1741   1741   1759  1765 [op_closure_fa]
+ * s7test    1873   1831   1818   1829   1829   1854
  * thook     ----   ----   2590   2030   2028   2047 [eval here and elsewhere]
  * tauto     ----   ----   2562   2048   2048   2062
  * lt        2187   2172   2150   2185   2185   2195
@@ -96231,7 +96233,7 @@ int main(int argc, char **argv)
  * tlamb     6423   6273   5720   5560   5552   5623
  * tmisc     8869   7612   6435   6076   6074   6224
  * tgsl      8485   7802   6373   6282   6282   6228
- * tlist     7896   7546   6558   6240   6240   6285
+ * tlist     7896   7546   6558   6240   6240   6281
  * tset      ----   ----   ----   6260   6258   6293
  * tari      13.0   12.7   6827   6543   6541   6502
  * trec      6936   6922   6521   6588   6588   6581
@@ -96242,7 +96244,7 @@ int main(int argc, char **argv)
  * tgen      11.2   11.4   12.0   12.1   12.2   12.1
  * tall      15.6   15.6   15.6   15.6   15.6   15.1
  * calls     36.7   37.5   37.0   37.5   37.7   37.0
- * sg        ----   ----   55.9   55.8   55.8   55.2
+ * sg        ----   ----   55.9   55.8   55.8   55.3
  * lg        ----   ----  105.2  106.4  106.4  107.1
  * tbig     177.4  175.8  156.5  148.1  148.1  145.9
  * ------------------------------------------------------
