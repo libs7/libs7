@@ -14959,7 +14959,6 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
    *   So we use our own code -- according to valgrind, this function is much faster than strtod.
    * comma as decimal point causes ambiguities: `(+ ,1 2) etc
    */
-
   int32_t i, sign = 1, frac_len, int_len, dig, exponent = 0;
   int32_t max_len = s7_int_digits_by_radix[radix];
   int64_t int_part = 0, frac_part = 0;
@@ -84341,10 +84340,10 @@ static /* inline */ void op_closure_fa(s7_scheme *sc) /* "inline" matters perhap
   s7_pointer farg = opt2_pair(code);           /* cdadr(code), '((a . b) (cons a b)) for (lambda (a . b) (cons a b)) */
   s7_pointer aarg = fx_call(sc, cddr(code));
   s7_pointer func = opt1_lambda(code);         /* outer func */
-  s7_pointer func_args = closure_args(func);
+  s7_pointer func_args = closure_args(func);   /* outer func args (not the arglist of the applied func) */
   sc->value = inline_make_let_with_two_slots(sc, closure_let(func), car(func_args), sc->F, cadr(func_args), aarg);
   new_clo = make_closure_unchecked(sc, car(farg), cdr(farg), T_CLOSURE | ((!s7_is_proper_list(sc, car(farg))) ? T_COPY_ARGS : 0), CLOSURE_ARITY_NOT_SET);
-  /* this is checking the called closure arglist (see op_lambda), maybe use arity<0 saved as in op_lambda above */
+  /* this is checking the called closure arglist (see op_lambda), arity<0 probably not usable since "f" in "fa" is a parameter */
   slot_set_value(let_slots(sc->value), new_clo); /* this order allows us to use make_closure_unchecked */
   sc->curlet = sc->value;
   sc->code = car(closure_body(func));
