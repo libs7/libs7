@@ -46613,6 +46613,51 @@ static s7_pointer b_is_proper_list_setter(s7_scheme *sc, s7_pointer args)
   return(cadr(args));
 }
 
+static s7_pointer lambda_setter(s7_scheme *sc, s7_pointer p)
+{
+  if (is_any_procedure(closure_setter(p)))                /* setter already known */
+    return(closure_setter(p));
+  if (!closure_no_setter(p))
+    {
+      s7_pointer f = funclet_entry(sc, p, sc->local_setter_symbol); /* look for +setter+, save value as closure_setter(p) */
+      if (f)
+	{
+	  if (f == sc->F)
+	    {
+	      closure_set_no_setter(p);
+	      return(sc->F);
+	    }
+	  if (!is_any_procedure(f))
+	    sole_arg_wrong_type_error_nr(sc, sc->setter_symbol, p, wrap_string(sc, "a procedure or a reasonable facsimile thereof", 45));
+	  closure_set_setter(p, f);
+	  return(f);
+	}
+      /* we used to search for setter here, but that can find the built-in setter causing an infinite loop (maybe check for that??) */
+      closure_set_no_setter(p);
+    }
+  return(sc->F);
+}
+
+static s7_pointer symbol_setter(s7_scheme *sc, s7_pointer sym, s7_pointer e)
+{
+  s7_pointer slot, setter;
+  if (is_keyword(sym))
+    return(sc->F);
+  if ((e == sc->rootlet) || (e == sc->nil))
+    slot = global_slot(sym);
+  else
+    {
+      s7_pointer old_e = sc->curlet;
+      set_curlet(sc, e);
+      slot = lookup_slot_from(sym, sc->curlet);
+      set_curlet(sc, old_e);
+    }
+  if ((!is_slot(slot)) || (!slot_has_setter(slot))) return(sc->F);
+  setter = slot_setter(slot);
+  if (is_bool_function(setter)) return(c_function_setter(setter));
+  return(setter);
+}
+
 static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 {
   if (!((is_let(e)) || (e == sc->rootlet) || (e == sc->nil)))
@@ -46623,37 +46668,14 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      if (is_any_procedure(closure_setter(p)))                /* setter already known */
-	return(closure_setter(p));
-      if (!closure_no_setter(p))
-	{
-	  s7_pointer f = funclet_entry(sc, p, sc->local_setter_symbol); /* look for +setter+, save value as closure_setter(p) */
-	  if (f)
-	    {
-	      if (f == sc->F)
-		{
-		  closure_set_no_setter(p);
-		  return(sc->F);
-		}
-	      if (!is_any_procedure(f))
-		sole_arg_wrong_type_error_nr(sc, sc->setter_symbol, p, wrap_string(sc, "a procedure or a reasonable facsimile thereof", 45));
-	      closure_set_setter(p, f);
-	      return(f);
-	    }
-	  /* we used to search for setter here, but that can find the built-in setter causing an infinite loop (maybe check for that??) */
-	  closure_set_no_setter(p);
-	}
-      return(sc->F);
+      return(lambda_setter(sc, p));
 
     case T_C_FUNCTION: case T_C_FUNCTION_STAR: case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_setter(p));
 
     case T_C_MACRO:
       return(c_macro_setter(p));
-#if 0
-    case T_GOTO: case T_CONTINUATION:
-      return(sc->F);
-#endif
+
     case T_C_OBJECT:
       check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return((c_object_set(sc, p) == fallback_set) ? sc->F : sc->c_object_set_function); /* for example ((setter obj) obj 0 1.0) if s7test block */
@@ -46676,30 +46698,10 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
     case T_SLOT:         return((slot_has_setter(p)) ? slot_setter(p) : sc->F);
 
     case T_SYMBOL:                             /* (setter symbol let) */
-      {
-	s7_pointer sym = p, slot, setter;
-	if (is_keyword(sym))
-	  return(sc->F);
-	if ((e == sc->rootlet) || (e == sc->nil))
-	  slot = global_slot(sym);
-	else
-	  {
-	    s7_pointer old_e = sc->curlet;
-	    set_curlet(sc, e);
-	    slot = lookup_slot_from(sym, sc->curlet);
-	    set_curlet(sc, old_e);
-	  }
-	if ((!is_slot(slot)) || (!slot_has_setter(slot))) return(sc->F);
-	setter = slot_setter(slot);
-       	if (is_bool_function(setter)) return(c_function_setter(setter));
-	return(setter);
-      }}
-#if 0
-  wrong_type_error_nr(sc, sc->setter_symbol, 1, p, wrap_string(sc, "something that might have a setter", 34)); /* this seems unfriendly -- why not return #f? */
-  return(NULL); /* make tcc happy */
-#else
+      return(symbol_setter(sc, p, e));
+    }
+  /* wrong_type_error_nr(sc, sc->setter_symbol, 1, p, wrap_string(sc, "something that might have a setter", 34)); */ /* this seems unfriendly */
   return(sc->F);
-#endif
 }
 
 static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
@@ -49384,6 +49386,150 @@ static s7_pointer any_list_reverse_in_place(s7_scheme *sc, s7_pointer term, s7_p
   return(result);
 }
 
+static s7_pointer string_or_byte_vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
+{
+  if (is_immutable(p))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
+  {
+    s7_int len;
+    uint8_t *bytes;
+    if (is_string(p))
+      {
+	len = string_length(p);
+	bytes = (uint8_t *)string_value(p);
+      }
+    else
+      {
+	len = byte_vector_length(p);
+	bytes = byte_vector_bytes(p);
+      }
+    if (len < 2) return(p);
+    
+#if (defined(__linux__)) && (defined(__GLIBC__)) /* need byteswp.h */
+    /* this code (from StackOverflow with changes) is much faster: */
+#include <byteswap.h>
+    if ((len & 0x7f) == 0)
+      {
+	uint32_t *dst = (uint32_t *)(bytes + len - 4);
+	uint32_t *src = (uint32_t *)bytes;
+	while (src < dst)
+	  {
+	    uint32_t a, b;
+	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	  }}
+    else
+      if ((len & 0x1f) == 0) /* 4-bytes at a time, 4 times per loop == 16 */
+	{
+	  uint32_t *dst = (uint32_t *)(bytes + len - 4);
+	  uint32_t *src = (uint32_t *)bytes;
+	  while (src < dst)
+	    {
+	      uint32_t a, b;
+	      LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	    }}
+      else
+#endif
+	{
+	  char *s1 = (char *)bytes;
+	  char *s2 = (char *)(s1 + len - 1);
+	  while (s1 < s2) {char c; c = *s1; *s1++ = *s2; *s2-- = c;}
+	}}
+  return(p);
+}
+
+static s7_pointer int_vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
+{
+  if (is_immutable_vector(p))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
+  {
+    s7_int len = vector_length(p);
+    s7_int *s1 = int_vector_ints(p), *s2;
+    if (len < 2) return(p);
+    s2 = (s7_int *)(s1 + len - 1);
+    if ((len & 0x3f) == 0) /* 63 for 2 32's */
+      while (s1 < s2)
+	{
+	  s7_int c;
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	}
+    else
+      if ((len & 0xf) == 0) /* not 0x7 -- odd multiple of 8 will leave center ints unreversed (we're moving 2 at a time) */
+	while (s1 < s2)
+	  {
+	    s7_int c;
+	    LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  }
+      else while (s1 < s2) {s7_int c; c = *s1; *s1++ = *s2; *s2-- = c;}
+  }
+  return(p);
+}
+
+static s7_pointer float_vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
+{
+  if (is_immutable_vector(p))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
+  {
+    s7_int len = vector_length(p);
+    s7_double *s1 = float_vector_floats(p), *s2;
+    if (len < 2) return(p);
+    s2 = (s7_double *)(s1 + len - 1);
+    if ((len & 0x3f) == 0) /* 63 for 2 32's */
+      while (s1 < s2)
+	{
+	  s7_double c;
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	}
+    else
+      if ((len & 0xf) == 0)
+	while (s1 < s2)
+	  {
+	    s7_double c;
+	    LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  }
+      else while (s1 < s2) {s7_double c; c = *s1; *s1++ = *s2; *s2-- = c;}
+  }
+  return(p);
+}
+
+static s7_pointer vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
+{
+  if (is_immutable_vector(p))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
+  {
+    s7_int len = vector_length(p);
+    s7_pointer *s1 = vector_elements(p), *s2;
+    if (len < 2) return(p);
+    s2 = (s7_pointer *)(s1 + len - 1);
+    if ((len & 0x3f) == 0) /* 63 for 2 32's */
+      while (s1 < s2)
+	{
+	  s7_pointer c;
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	}
+    else
+      if ((len & 0xf) == 0)
+	while (s1 < s2)
+	  {
+	    s7_pointer c;
+	    LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
+	  }
+      else while (s1 < s2) {s7_pointer c; c = *s1; *s1++ = *s2; *s2-- = c;}
+  }
+  return(p);
+}
+
 static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
 {
   #define H_reverse_in_place "(reverse! lst) reverses lst in place"
@@ -49416,140 +49562,16 @@ static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
 
     case T_BYTE_VECTOR:
     case T_STRING:
-      if (is_immutable(p))
-	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
-      {
-	s7_int len;
-	uint8_t *bytes;
-	if (is_string(p))
-	  {
-	    len = string_length(p);
-	    bytes = (uint8_t *)string_value(p);
-	  }
-	else
-	  {
-	    len = byte_vector_length(p);
-	    bytes = byte_vector_bytes(p);
-	  }
-	if (len < 2) return(p);
-
-#if (defined(__linux__)) && (defined(__GLIBC__)) /* need byteswp.h */
-	/* this code (from StackOverflow with changes) is much faster: */
-        #include <byteswap.h>
-	if ((len & 0x7f) == 0)
-	  {
-	    uint32_t *dst = (uint32_t *)(bytes + len - 4);
-	    uint32_t *src = (uint32_t *)bytes;
-	    while (src < dst)
-	      {
-		uint32_t a, b;
-		LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-		LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-		LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-		LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-	      }}
-	else
-	  if ((len & 0x1f) == 0) /* 4-bytes at a time, 4 times per loop == 16 */
-	    {
-	      uint32_t *dst = (uint32_t *)(bytes + len - 4);
-	      uint32_t *src = (uint32_t *)bytes;
-	      while (src < dst)
-		{
-		  uint32_t a, b;
-		  LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-		}}
-	  else
-#endif
-	  {
-	    char *s1 = (char *)bytes;
-	    char *s2 = (char *)(s1 + len - 1);
-	    while (s1 < s2) {char c; c = *s1; *s1++ = *s2; *s2-- = c;}
-	  }}
-      break;
+      return(string_or_byte_vector_reverse_in_place(sc, p));
 
     case T_INT_VECTOR:
-      if (is_immutable_vector(p))
-	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
-      {
-	s7_int len = vector_length(p);
-	s7_int *s1 = int_vector_ints(p), *s2;
-	if (len < 2) return(p);
-	s2 = (s7_int *)(s1 + len - 1);
-	if ((len & 0x3f) == 0) /* 63 for 2 32's */
-	  while (s1 < s2)
-	    {
-	      s7_int c;
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	    }
-	else
-	  if ((len & 0xf) == 0) /* not 0x7 -- odd multiple of 8 will leave center ints unreversed (we're moving 2 at a time) */
-	    while (s1 < s2)
-	      {
-		s7_int c;
-		LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      }
-	  else while (s1 < s2) {s7_int c; c = *s1; *s1++ = *s2; *s2-- = c;}
-      }
-      break;
+      return(int_vector_reverse_in_place(sc, p));
 
     case T_FLOAT_VECTOR:
-      if (is_immutable_vector(p))
-	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
-      {
-	s7_int len = vector_length(p);
-	s7_double *s1 = float_vector_floats(p), *s2;
-	if (len < 2) return(p);
-	s2 = (s7_double *)(s1 + len - 1);
-	if ((len & 0x3f) == 0) /* 63 for 2 32's */
-	  while (s1 < s2)
-	    {
-	      s7_double c;
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	    }
-	else
-	  if ((len & 0xf) == 0)
-	    while (s1 < s2)
-	      {
-		s7_double c;
-		LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      }
-	  else while (s1 < s2) {s7_double c; c = *s1; *s1++ = *s2; *s2-- = c;}
-      }
-      break;
+      return(float_vector_reverse_in_place(sc, p));
 
     case T_VECTOR:
-      if (is_immutable_vector(p))
-	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
-      {
-	s7_int len = vector_length(p);
-	s7_pointer *s1 = vector_elements(p), *s2;
-	if (len < 2) return(p);
-	s2 = (s7_pointer *)(s1 + len - 1);
-	if ((len & 0x3f) == 0) /* 63 for 2 32's */
-	  while (s1 < s2)
-	    {
-	      s7_pointer c;
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	    }
-	else
-	  if ((len & 0xf) == 0)
-	    while (s1 < s2)
-	      {
-		s7_pointer c;
-		LOOP_8(c = *s1; *s1++ = *s2; *s2-- = c);
-	      }
-	  else while (s1 < s2) {s7_pointer c; c = *s1; *s1++ = *s2; *s2-- = c;}
-      }
-      break;
+      return(vector_reverse_in_place(sc, p));
 
     default:
       if (is_immutable(p))
