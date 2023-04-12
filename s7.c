@@ -48527,16 +48527,41 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_point
 
 static s7_pointer copy_p_p(s7_scheme *sc, s7_pointer source) {return(copy_source_no_dest(sc, source, set_plist_1(sc, source)));}
 
+static s7_pointer copy_c_object_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int dest_start, s7_int dest_end, s7_int source_start)
+{
+  s7_pointer (*cref)(s7_scheme *sc, s7_pointer args) = c_object_ref(sc, source);
+  s7_pointer (*cset)(s7_scheme *sc, s7_pointer args) = c_object_set(sc, dest);
+  s7_pointer mi = make_mutable_integer(sc, 0);
+  s7_int gc_loc1 = gc_protect_1(sc, mi);
+  s7_pointer mj = make_mutable_integer(sc, 0);
+  s7_int gc_loc2 = gc_protect_1(sc, mj);
+  
+  for (s7_int i = source_start, j = dest_start; i < dest_end; i++, j++)
+    {
+      integer(mi) = i;
+      integer(mj) = j;
+      set_car(sc->t3_3, cref(sc, with_list_t2(source, mi)));
+      set_car(sc->t3_1, dest);
+      set_car(sc->t3_2, mj);
+      cset(sc, sc->t3_1);
+    }
+  s7_gc_unprotect_at(sc, gc_loc1);
+  s7_gc_unprotect_at(sc, gc_loc2);
+  free_cell(sc, mi);
+  free_cell(sc, mj);
+  return(dest);
+}
+
 static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int dest_start, s7_int dest_end, s7_int source_start)
 {
   /* types equal, but not a let (handled in s7_copy_1), returns NULL if not copied here */
-  s7_int i, j;
   s7_int source_len = dest_end - dest_start;
   switch (type(source))
     {
     case T_PAIR:
       {
 	s7_pointer pd, ps;
+	s7_int i;
 	for (ps = source, i = 0; i < source_start; i++)
 	  ps = cdr(ps);
 	for (pd = dest, i = 0; i < dest_start; i++)
@@ -48550,7 +48575,7 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
       if (is_typed_vector(dest))
 	{
 	  s7_pointer *els = vector_elements(source);
-	  for (i = source_start, j = dest_start; j < dest_end; i++, j++)
+	  for (s7_int i = source_start, j = dest_start; j < dest_end; i++, j++)
 	    typed_vector_setter(sc, dest, j, els[i]);                     /* types are equal, so source is a normal vector */
 	}
       else memcpy((void *)((vector_elements(dest)) + dest_start), (void *)((vector_elements(source)) + source_start), source_len * sizeof(s7_pointer));
@@ -48582,29 +48607,7 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
       return(dest);
 
     case T_C_OBJECT:
-      {
-	s7_pointer (*cref)(s7_scheme *sc, s7_pointer args) = c_object_ref(sc, source);
-	s7_pointer (*cset)(s7_scheme *sc, s7_pointer args) = c_object_set(sc, dest);
-	s7_pointer mi = make_mutable_integer(sc, 0);
-	s7_int gc_loc1 = gc_protect_1(sc, mi);
-	s7_pointer mj = make_mutable_integer(sc, 0);
-	s7_int gc_loc2 = gc_protect_1(sc, mj);
-
-	for (i = source_start, j = dest_start; i < dest_end; i++, j++)
-	  {
-	    integer(mi) = i;
-	    integer(mj) = j;
-	    set_car(sc->t3_3, cref(sc, with_list_t2(source, mi)));
-	    set_car(sc->t3_1, dest);
-	    set_car(sc->t3_2, mj);
-	    cset(sc, sc->t3_1);
-	  }
-	s7_gc_unprotect_at(sc, gc_loc1);
-	s7_gc_unprotect_at(sc, gc_loc2);
-	free_cell(sc, mi);
-	free_cell(sc, mj);
-	return(dest);
-      }
+      return(copy_c_object_to_same_type(sc, dest, source, dest_start, dest_end, source_start));
 
     case T_LET:
       return(NULL);
