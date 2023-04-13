@@ -7,6 +7,7 @@
   (if-let ((a (assoc k alist)))
           (cdr a)
           #f))
+
 ;; same as assoc-val but returns '() on miss
 (define (assoc-val* k alist)
   (if-let ((a (assoc k alist)))
@@ -59,7 +60,7 @@
 ;; returns '() on no match (assoc returns #f)
 (define assoc*
   (let ((+documentation+ "(assoc* key alist) like assoc, but returns list of all matches instead of the first.")
-        (+signature+ '(assoc-in keypath alist)))
+        (+signature+ '(assoc* keypath alist)))
     (lambda (stanza-key alist)
       (cond ((null? alist) '())
             ((equal? stanza-key (caar alist))
@@ -85,6 +86,24 @@
                                   (assoc-in (cdr key-path) (cdr in-alist)))
                           #f))
               #f)))))
+
+(define assoc*-in
+  (let ((+documentation+ "(assoc-in keypath alist) keypath: list of keys; alist: tree of alists. Returns the first assoc found by successively applying 'assoc'. Returns '() if not found.")
+        (+signature+ '(assoc-in keypath alist)))
+    (lambda (key-path alist)
+      ;; (format #t "~A: ~A :: ~A~%" (blue "assoc*-in") key-path alist)
+      (if (null? key-path)
+          '() ;; alist
+          (if (list? alist)
+              (if (null? alist)
+                  '()
+                  ;;(if (alist? alist)
+                  (if-let ((in-alist (assoc (car key-path) alist)))
+                          (if (null? (cdr key-path))
+                                  in-alist
+                                  (assoc*-in (cdr key-path) (cdr in-alist)))
+                          '()))
+              '())))))
 
 ;; assoc-in*
 ;; returns all assoc pairs for last key in keypath in a nested alist struct
@@ -128,15 +147,16 @@
       (alist-delete ks als))))
 
 (define* (alist-delete! ks alist (= equal?))
-  (format #t "alist-delete! ~A ~A\n" ks alist)
+  ;; (format #t "alist-delete! ~A ~A\n" ks alist)
   (let ((als (filter (lambda (assoc-elt)
                        (not (member (car assoc-elt) ks))
                        ;; (not (= k (car elt)))
                        )
                      alist)))
-    (format #t "filtered: ~A\n" als)
+    ;; (format #t "filtered: ~A\n" als)
     (set! alist als)
-    (format #t "updated: ~A\n" alist)))
+    ;;(format #t "updated: ~A\n" alist)
+    ))
 
 (define dissoc!
   (let ((+documentation+ "Destructively remove keys from alist.")

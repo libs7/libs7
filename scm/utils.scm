@@ -131,6 +131,7 @@ If func approves of one, find-then returns the result of applying fn to it."))
   (let ((x1 (symbol->string s1)) (x2 (symbol->string s2)))
     (string<? x1 x2)))
 
+;;FIXME: this is dune stuff that should be moved to mibl
 (define (modules<? s1 s2)
   (let ((x1 (if (symbol? s1) (symbol->string s1) s1))
         (x2 (if (symbol? s2) (symbol->string s2) s2)))

@@ -73612,6 +73612,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 {
   s7_pointer top, v, w;
   int32_t i;
+  (void)i;
   bool has_defaults;
 
   if (!is_list(args))

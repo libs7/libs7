@@ -76,9 +76,9 @@
 ;;(define (remove pred l) (filter (lambda (x) (not (pred x))) l))
 ;; see 'remove' in utils.scm
 
-(define (delete! x lis . maybe-=)
+(define* (delete! x lis (= equal?))
   ;; (let ((= (:optional maybe-= equal?)))
-  (filter! (lambda (y) (not (= x y))) lis))
+  (filter! (lambda (y) (not (equal? x y))) lis))
 
 ;; srfi 1
 (define (last-pair lis)

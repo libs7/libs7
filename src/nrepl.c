@@ -1,7 +1,7 @@
-/* nrepl, notcurses-base repl
+/* nrepl, notcurses-based repl
  *
  * gcc -o nrepl nrepl.c s7.o -Wl,-export-dynamic -lnotcurses-core -lm -I. -ldl
- *   might need either notcurses or notcurses-core or both
+ *   (s7.o: gcc -c s7.c -o s7.o -I. -O2 -g)
  */
 
 #include <stdio.h>
@@ -14,28 +14,17 @@
 
 #include "s7.h"
 
+/* obazl */
 /* #include "notcurses_s7.c" */
-#include "notcurses/notcurses.h"
-#include "notcurses/direct.h"
+#include <locale.h>
 
-/* #ifndef NOTCURSES_1 */
-/* #include <notcurses/version.h> */
-    /*   5 #define NOTCURSES_VERNUM_MAJOR 3 */
-    /*   6 #define NOTCURSES_VERNUM_MINOR 0 */
-    /*   7 #define NOTCURSES_VERNUM_PATCH 9 */
-    /*   8 #define NOTCURSES_VERNUM_TWEAK */
-    /*   9 */
-    /*  10 #define NOTCURSES_VERSION_COMPARABLE(major, minor, patch) \ */
-    /*  11   (((major) << 16u) + ((minor) << 8u) + (patch)) */
-    /*  12 */
-    /*  13 #define NOTCURSES_VERNUM_ORDERED NOTCURSES_VERSION_COMPARABLE( \ */
-    /*  14   NOTCURSES_VERNUM_MAJOR, NOTCURSES_VERNUM_MINOR, NOTCURSES_VERNUM_PATCH) */
-    /*  15 */
-    /*  16 #define NOTCURSES_VERSION_MAJOR "3" */
-    /*  17 #define NOTCURSES_VERSION_MINOR "0" */
-    /*  18 #define NOTCURSES_VERSION_PATCH "9" */
-    /*  19 #define NOTCURSES_VERSION_TWEAK "" */
-/* #endif */
+#include <notcurses/notcurses.h>
+#include <notcurses/direct.h>
+#include <notcurses/version.h>
+
+void notcurses_s7_init(s7_scheme *sc);
+
+/* /obazl */
 
 /* libc stuff used in nrepl.scm (this is extracted from libc_s7.c created by cload.scm from libc.scm) */
 
@@ -168,7 +157,8 @@ static s7_pointer g_glob(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_glob_gl_pathv(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p;
-  int i;
+  /* int i; */
+  uint i;
   glob_t *g;
   g = (glob_t *)s7_c_pointer(s7_car(args));
   p = s7_nil(sc);
@@ -323,10 +313,10 @@ int main(int argc, char **argv)
 {
   s7_scheme *sc;
   sc = s7_init();
-/* #else */
-/* static int nrepl(s7_scheme *sc) */
-/* { */
-/* #endif */
+#else
+static int nrepl(s7_scheme *sc)
+{
+#endif
   init_nlibc(sc);
 
   s7_define_function(sc, "set-sigint-handler", set_sigint_handler, 0, 0, false, "");
@@ -387,15 +377,13 @@ int main(int argc, char **argv)
   return(0);
 }
 
-/* #if 0 */
+#if 0
 /*
   gcc -c s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl
-  gcc -o nrepl nrepl.c s7.o -lnotcurses -lm -I. -ldl
+  gcc -o nrepl nrepl.c s7.o -lnotcurses-core -lm -I. -ldl
 
   To build s7 to nrepl in one line:
-    gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses
-
-  In version 2.1.6(7?) add -lnotcurses-core after -lnotcurses
+    gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCURSES -lnotcurses-core
 
   nrepl-bits.h is generated from (make-nrepl-bits.scm):
 
@@ -413,4 +401,4 @@ int main(int argc, char **argv)
 	      (format op "~%  ")))))))
 
 */
-/* #endif */
+#endif

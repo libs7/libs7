@@ -9,14 +9,13 @@ filegroup(
     srcs = glob(["**"]),
 )
 
-# build cmd:  bazel build @libdeflate//:libdeflate
-
 ## WARNING WARNING
 # MacOS 12.3 removed python, the geniuses. Now build scripts that use
 # python break. In particular
 # bazel-out/darwin-fastbuild/bin/external/libdeflate/libdeflate_foreign_cc/build_script.sh: line 154: python: command not found
 # As a temp workaround, symlink python3 to python somewhere on path
 
+# build cmd:  bazel build @libdeflate//:libdeflate
 make(
     name = "libdeflate",
     lib_source = ":all",

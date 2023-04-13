@@ -1,0 +1,58 @@
+load("@rules_foreign_cc//foreign_cc:configure.bzl",
+     "configure_make")
+
+ENV_MACSDK_13_0 = {"AR": "", "MACOSX_DEPLOYMENT_TARGET": "13.0"}
+ENV_MACSDK_13_1 = {"AR": "", "MACOSX_DEPLOYMENT_TARGET": "13.1"}
+ENV_MACSDK_13_3 = {"AR": "", "MACOSX_DEPLOYMENT_TARGET": "13.3"}
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+## build cmd: bazel build @libunistring//:libunistring --experimental_ui_max_stdouterr_bytes=-1
+configure_make(
+    name = "libunistring",
+    # out_lib_dir = "lib",
+    out_shared_libs = ["libunistring.dylib"],
+    out_static_libs = ["libunistring.a"],
+    env = select({
+        # ":macsdk_13.0": ENV_MACSDK_13_0,
+        # ":macsdk_13.1": ENV_MACSDK_13_1,
+        # ":macsdk_13.3": ENV_MACSDK_13_3,
+        "//conditions:default": {"AR": ""}
+    }),
+    # autogen = True,
+    configure_in_place = True,
+    configure_options = [
+        "--disable-dependency-tracking",
+    ] +
+    select({
+        "macos": [],
+        # ":linux_build": [
+        # ],
+        "//conditions:default": []
+    }),
+    # lib_source = "@openssl//:all",
+    lib_source = ":all",
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "macos",
+    constraint_values = ["@platforms//os:macos"])
+
+config_setting(
+    name = "macsdk_13.0",
+    values = {"macos_sdk_version": "13.0"},
+    constraint_values = ["@platforms//os:macos"])
+
+config_setting(
+    name = "macsdk_13.1",
+    values = {"macos_sdk_version": "13.1"},
+    constraint_values = ["@platforms//os:macos"])
+
+config_setting(
+    name = "macsdk_13.3",
+    values = {"macos_sdk_version": "13.3"},
+    constraint_values = ["@platforms//os:macos"])
