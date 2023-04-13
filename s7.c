@@ -2516,9 +2516,9 @@ static void init_types(void)
 #define iter_ok(p)                     has_type_bit(T_Itr(p), T_ITER_OK) /* was T_Pos 15-Apr-21 */
 #define clear_iter_ok(p)               clear_type_bit(T_Itr(p), T_ITER_OK)
 
-#define T_STEP_END_OK                  T_ITER_OK
-#define step_end_ok(p)                 has_type_bit(T_Pair(p), T_STEP_END_OK)
-#define set_step_end_ok(p)             set_type_bit(T_Pair(p), T_STEP_END_OK)
+#define T_STEP_END_POSSIBLE            T_ITER_OK
+#define step_end_possible(p)           has_type_bit(T_Pair(p), T_STEP_END_POSSIBLE)
+#define set_step_end_possible(p)       set_type_bit(T_Pair(p), T_STEP_END_POSSIBLE)
 
 #define T_IN_ROOTLET                   T_ITER_OK
 #define in_rootlet(p)                  has_type_bit(T_Slt(p), T_IN_ROOTLET)
@@ -49260,7 +49260,6 @@ s7_pointer s7_reverse(s7_scheme *sc, s7_pointer a) /* just pairs */
 
 static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 {
-  s7_pointer np = sc->nil;
   sc->temp3 = p;
   switch (type(p))
     {
@@ -49272,17 +49271,19 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 
     case T_STRING:
       {
+	s7_pointer np;
 	char *dest, *source = string_value(p);
 	s7_int len = string_length(p);
 	char *end = (char *)(source + len);
 	np = make_empty_string(sc, len, '\0');
 	dest = (char *)(string_value(np) + len);
 	while (source < end) *(--dest) = *source++;
+	return(np);
       }
-      break;
 
     case T_BYTE_VECTOR:
       {
+	s7_pointer np;
 	uint8_t *dest;
 	const uint8_t *source = byte_vector_bytes(p);
 	s7_int len = byte_vector_length(p);
@@ -49290,11 +49291,12 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 	np = make_simple_byte_vector(sc, len);
 	dest = (uint8_t *)(byte_vector_bytes(np) + len);
 	while (source < end) *(--dest) = *source++;
+	return(np);
       }
-      break;
 
     case T_INT_VECTOR:
       {
+	s7_pointer np;
 	s7_int *dest, *source = int_vector_ints(p);
 	s7_int len = vector_length(p);
 	s7_int *end = (s7_int *)(source + len);
@@ -49303,11 +49305,12 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 	else np = make_simple_int_vector(sc, len);
 	dest = (s7_int *)(int_vector_ints(np) + len);
 	while (source < end) *(--dest) = *source++;
+	return(np);
       }
-      break;
 
     case T_FLOAT_VECTOR:
       {
+	s7_pointer np;
 	s7_double *dest, *source = float_vector_floats(p);
 	s7_int len = vector_length(p);
 	s7_double *end = (s7_double *)(source + len);
@@ -49316,11 +49319,12 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 	else np = make_simple_float_vector(sc, len);
 	dest = (s7_double *)(float_vector_floats(np) + len);
 	while (source < end) *(--dest) = *source++;
+	return(np);
       }
-      break;
 
     case T_VECTOR:
       {
+	s7_pointer np;
 	s7_pointer *dest, *source = vector_elements(p);
 	s7_int len = vector_length(p);
 	s7_pointer *end = (s7_pointer *)(source + len);
@@ -49334,8 +49338,9 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
 	    set_typed_vector(np);
 	    typed_vector_set_typer(np, typed_vector_typer(p));
 	    if (has_simple_elements(p)) set_has_simple_elements(np);
-	  }}
-      break;
+	  }
+	return(np);
+      }
 
     case T_HASH_TABLE:
       return(hash_table_reverse(sc, p));
@@ -49353,7 +49358,7 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
     default:
       return(method_or_bust_p(sc, p, sc->reverse_symbol, a_sequence_string));
     }
-  return(np);
+  return(sc->nil);
 }
 
 static s7_pointer g_reverse(s7_scheme *sc, s7_pointer args)
@@ -49391,27 +49396,41 @@ static s7_pointer any_list_reverse_in_place(s7_scheme *sc, s7_pointer term, s7_p
 
 static s7_pointer string_or_byte_vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
 {
+  s7_int len;
+  uint8_t *bytes;
+
   if (is_immutable(p))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
-  {
-    s7_int len;
-    uint8_t *bytes;
-    if (is_string(p))
-      {
-	len = string_length(p);
-	bytes = (uint8_t *)string_value(p);
-      }
-    else
-      {
-	len = byte_vector_length(p);
-	bytes = byte_vector_bytes(p);
-      }
-    if (len < 2) return(p);
-    
+
+  if (is_string(p))
+    {
+      len = string_length(p);
+      bytes = (uint8_t *)string_value(p);
+    }
+  else
+    {
+      len = byte_vector_length(p);
+      bytes = byte_vector_bytes(p);
+    }
+  if (len < 2) return(p);
+  
 #if (defined(__linux__)) && (defined(__GLIBC__)) /* need byteswp.h */
-    /* this code (from StackOverflow with changes) is much faster: */
+  /* this code (from StackOverflow with changes) is much faster: */
 #include <byteswap.h>
-    if ((len & 0x7f) == 0)
+  if ((len & 0x7f) == 0)
+    {
+      uint32_t *dst = (uint32_t *)(bytes + len - 4);
+      uint32_t *src = (uint32_t *)bytes;
+      while (src < dst)
+	{
+	  uint32_t a, b;
+	  LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	  LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	  LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	  LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
+	}}
+  else
+    if ((len & 0x1f) == 0) /* 4-bytes at a time, 4 times per loop == 16 */
       {
 	uint32_t *dst = (uint32_t *)(bytes + len - 4);
 	uint32_t *src = (uint32_t *)bytes;
@@ -49419,27 +49438,14 @@ static s7_pointer string_or_byte_vector_reverse_in_place(s7_scheme *sc, s7_point
 	  {
 	    uint32_t a, b;
 	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-	    LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
 	  }}
     else
-      if ((len & 0x1f) == 0) /* 4-bytes at a time, 4 times per loop == 16 */
-	{
-	  uint32_t *dst = (uint32_t *)(bytes + len - 4);
-	  uint32_t *src = (uint32_t *)bytes;
-	  while (src < dst)
-	    {
-	      uint32_t a, b;
-	      LOOP_4(a = *src; b = *dst; *src++ = bswap_32(b); *dst-- = bswap_32(a));
-	    }}
-      else
 #endif
-	{
-	  char *s1 = (char *)bytes;
-	  char *s2 = (char *)(s1 + len - 1);
-	  while (s1 < s2) {char c; c = *s1; *s1++ = *s2; *s2-- = c;}
-	}}
+      {
+	char *s1 = (char *)bytes;
+	char *s2 = (char *)(s1 + len - 1);
+	while (s1 < s2) {char c; c = *s1; *s1++ = *s2; *s2-- = c;}
+      }
   return(p);
 }
 
@@ -49755,7 +49761,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
   pargs = list_2(sc, sc->F, new_vec); /* car set below */
   /* push_stack_no_let(sc, OP_GC_PROTECT, new_vec, pargs); */
   set_stack_protected3(sc, pargs);
-  for (i = 0, p = args; is_pair(p); p = cdr(p))    /* in-place copy by goofing with new_vec's elements pointer */
+  for (i = 0, p = args; is_pair(p); p = cdr(p))    /* in-place copy by goofing (temporarily) with new_vec's elements pointer */
     {
       s7_pointer x = car(p);
       s7_int n = sequence_length(sc, x);
@@ -62660,35 +62666,48 @@ static s7_pointer opt_p_pi_sf_sref(opt_info *o) {return(string_ref_p_pi_unchecke
 static s7_pointer opt_p_pi_sf_sref_direct(opt_info *o) {return(string_ref_p_pi_direct(o->sc, slot_value(o->v[1].p), o->v[5].fi(o->v[4].o1)));}
 static s7_pointer opt_p_pi_fc(opt_info *o) {return(o->v[3].p_pi_f(o->sc, o->v[5].fp(o->v[4].o1), o->v[2].i));}
 
-/* use a unique name for this use of denominator (need to remember that any such integer should be new (i.e. mutable, not a small int) */
-#define do_loop_end(A) denominator(T_Int(A))
-#define set_do_loop_end(A, B) denominator(T_Int(A)) = B
+/* use a unique name (in this code) for this use of denominator -- this is a kludge -- we don't have anywhere in the slot
+ *   to store the loop end, but the slot_value can be a small_int (or any unheaped integer), so we're assuming there
+ *   aren't collisions?  Each use is a single (uncomplicated) do loop, set up before each call?
+ */
+#if S7_DEBUGGING
+static s7_pointer check_do_loop_end_ref(s7_pointer p, const char *func, int32_t line)
+{
+  uint8_t typ = unchecked_type(T_Slt(p));
+  if (!is_step_end(p)) complain("%s%s[%d]: step_end not set, %s (%s)%s\n", p, func, line, typ);
+  return(T_Int(slot_value(p)));
+}
+#define do_loop_end(A) denominator(check_do_loop_end_ref(A, __func__, __LINE__))
+#else
+#define do_loop_end(A) denominator(T_Int(slot_value(A)))
+#endif
+#define set_do_loop_end(A, B) denominator(T_Int(slot_value(A))) = B
 
 static void check_unchecked(s7_scheme *sc, s7_pointer obj, s7_pointer slot, opt_info *opc, s7_pointer expr)
 {
   switch (type(obj)) /* can't use funcs here (opc->v[3].p_pi_f et al) because there are so many, and copy depends on this choice */
     {
     case T_STRING:
-      if (((!expr) || (car(expr) == sc->string_ref_symbol)) && (do_loop_end(slot_value(slot)) <= string_length(obj)))
+      if (((!expr) || (car(expr) == sc->string_ref_symbol)) && (do_loop_end(slot) <= string_length(obj)))
 	opc->v[3].p_pi_f = string_ref_p_pi_direct;
       break;
     case T_BYTE_VECTOR:
       if (((!expr) || (car(expr) == sc->byte_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
-	  (do_loop_end(slot_value(slot)) <= byte_vector_length(obj)))
+	  (do_loop_end(slot) <= byte_vector_length(obj)))
 	opc->v[3].p_pi_f = byte_vector_ref_p_pi_direct;
       break;
     case T_VECTOR:
-      if (((!expr) || (car(expr) == sc->vector_ref_symbol)) && (do_loop_end(slot_value(slot)) <= vector_length(obj)))
+      if (((!expr) || (car(expr) == sc->vector_ref_symbol)) && (do_loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = normal_vector_ref_p_pi_direct;
       break;
     case T_FLOAT_VECTOR:
       if (((!expr) || (car(expr) == sc->float_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
-	  (do_loop_end(slot_value(slot)) <= vector_length(obj)))
+	  (do_loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = float_vector_ref_p_pi_direct;
       break;
     case T_INT_VECTOR:
       if (((!expr) || (car(expr) == sc->int_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
-	  (do_loop_end(slot_value(slot)) <= vector_length(obj)))
+	  (do_loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = int_vector_ref_p_pi_direct;
       break;
     }
@@ -63234,23 +63253,23 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	    switch (type(obj))
 	      {
 	      case T_VECTOR:
-		if (do_loop_end(slot_value(slot2)) <= vector_length(obj))
+		if (do_loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = (is_typed_vector(obj)) ? typed_normal_vector_set_p_pip_direct : normal_vector_set_p_pip_direct;
 		break;
 	      case T_INT_VECTOR:
-		if (do_loop_end(slot_value(slot2)) <= vector_length(obj))
+		if (do_loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = int_vector_set_p_pip_direct;
 		break;
 	      case T_FLOAT_VECTOR:
-		if (do_loop_end(slot_value(slot2)) <= vector_length(obj))
+		if (do_loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = float_vector_set_p_pip_direct;
 		break;
 	      case T_STRING:
-		if (do_loop_end(slot_value(slot2)) <= string_length(obj))
+		if (do_loop_end(slot2) <= string_length(obj))
 		  opc->v[3].p_pip_f = string_set_p_pip_direct;
 		break;
 	      case T_BYTE_VECTOR:
-		if (do_loop_end(slot_value(slot2)) <= vector_length(obj))
+		if (do_loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = byte_vector_set_p_pip_direct;
 		break;
 	      } /* T_PAIR here would require list_length check which sort of defeats the purpose */
@@ -64504,20 +64523,20 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 		{
 		  if (is_string(obj))
 		    {
-		      if (do_loop_end(slot_value(opc->v[2].p)) <= string_length(obj))
+		      if (do_loop_end(opc->v[2].p) <= string_length(obj))
 			opc->v[3].p_pip_f = string_set_p_pip_direct;
 		    }
 		  else
 		    if (is_byte_vector(obj))
 		      {
-			if (do_loop_end(slot_value(opc->v[2].p)) <= byte_vector_length(obj))
+			if (do_loop_end(opc->v[2].p) <= byte_vector_length(obj))
 			  opc->v[3].p_pip_f = byte_vector_set_p_pip_direct;
 		      }
 		    else
 		      if (is_any_vector(obj)) /* true for all 3 vectors */
 			{
 			  if ((is_any_vector(obj)) &&
-			      (do_loop_end(slot_value(opc->v[2].p)) <= vector_length(obj)))
+			      (do_loop_end(opc->v[2].p) <= vector_length(obj)))
 			    {
 			      if ((is_normal_vector(obj)) && (is_typed_vector(obj)))
 				opc->v[3].p_pip_f = typed_normal_vector_set_p_pip_direct;
@@ -66076,7 +66095,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		    {
 		      set_step_end(slot);
 		      slot_set_value(slot, make_mutable_integer(sc, integer(slot_value(slot))));
-		      set_do_loop_end(slot_value(slot), lim);
+		      set_do_loop_end(slot, lim);
 		    }}}
 
 	  if (!set_stop)
@@ -66086,7 +66105,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		  (stop_is_safe(sc, cadr(stop), cddr(car_x)))) /* b_fft in tfft.scm */
 		{
 		  set_step_end(slot2);
-		  set_do_loop_end(slot_value(slot2), lim);
+		  set_do_loop_end(slot2, lim);
 		}}}}
 
   /* body */
@@ -66251,7 +66270,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       (cadr(end) == ind) &&
       (is_pair(ind_step)))                   /* (+ i 1) */
     {
-      /* we can't use step_end_ok here yet (not set except for op_dox?) */
+      /* we can't use step_end_possible here yet (not set except for op_dox?) */
 
       if (((car(end) == sc->num_eq_symbol) || (car(end) == sc->geq_symbol)) &&
 	  ((is_symbol(caddr(end))) || (is_t_integer(caddr(end)))) &&
@@ -69308,8 +69327,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym)
 		  result = let_ref(sc, e, sym);
 		  if (result != sc->undefined)
 		    s7_define(sc, current_let, sym, result);       /* as above, was sc->nil -- s7_load above can set sc->curlet to sc->nil */
-		}
-	    }
+		}}
 #endif
 	  /* check *unbound-variable-hook* */
 	  if ((result == sc->undefined) &&
@@ -80409,7 +80427,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		    (car(step_expr) == sc->add_symbol) &&
 		    (var1 == cadr(endp)) && (var1 == cadr(step_expr)) &&
 		    ((car(endp) != sc->num_eq_symbol) || ((caddr(step_expr) == int_one))))
-		  set_step_end_ok(end);
+		  set_step_end_possible(end);
 	      }}}
     pair_set_syntax_op(form, (got_pending) ? OP_DOX_PENDING_NO_BODY : OP_DOX);
     /* there are only a couple of cases in snd-test where a multi-statement do body is completely fx-able */
@@ -80757,14 +80775,14 @@ static goto_t op_dox(s7_scheme *sc)
   endf = fx_proc(end);
 
   /* an experiment */
-  if ((step_end_ok(end)) && (steppers == 1) &&
+  if ((step_end_possible(end)) && (steppers == 1) &&
       (is_t_integer(slot_value(stepper))))
     {
       s7_pointer stop_slot = (is_symbol(caddr(endp))) ? opt_integer_symbol(sc, caddr(endp)) : sc->nil;
       if (stop_slot) /* sc->nil -> it's an integer */
 	{
 	  set_step_end(stepper);
-	  set_do_loop_end(slot_value(stepper), (is_slot(stop_slot)) ? integer(slot_value(stop_slot)) : integer(caddr(endp)));
+	  set_do_loop_end(stepper, (is_slot(stop_slot)) ? integer(slot_value(stop_slot)) : integer(caddr(endp)));
 	}}
 
   if (is_true(sc, sc->value = endf(sc, endp)))
@@ -80817,7 +80835,7 @@ static goto_t op_dox(s7_scheme *sc)
 			{
 			  if (is_step_end(stepper))
 			    {
-			      s7_int lim = do_loop_end(slot_value(stepper));
+			      s7_int lim = do_loop_end(stepper);
 			      if ((i >= 0) && (lim < NUM_SMALL_INTS))
 				do {fp(o); slot_set_value(stepper, small_int(++i));} while (i < lim);
 			      else do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < lim);
@@ -81742,7 +81760,7 @@ static bool op_safe_dotimes_step(s7_scheme *sc)
 {
   s7_pointer arg = slot_value(sc->args);
   numerator(arg)++;
-  if (numerator(arg) == do_loop_end(arg))
+  if (numerator(arg) == do_loop_end(sc->args))
     {
       sc->value = sc->T;
       sc->code = cdadr(sc->code);
@@ -81759,7 +81777,7 @@ static bool op_safe_dotimes_step_o(s7_scheme *sc)
 {
   s7_pointer arg = slot_value(sc->args);
   numerator(arg)++;
-  if (numerator(arg) == do_loop_end(arg))
+  if (numerator(arg) == do_loop_end(sc->args))
     {
       sc->value = sc->T;
       sc->code = cdadr(sc->code);
@@ -81838,7 +81856,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	}
       if (safe_step)
 	{
-	  s7_int end = do_loop_end(slot_value(sc->args));
+	  s7_int end = do_loop_end(sc->args);
 	  s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
 	  slot_set_value(sc->args, stepper);
 	  if ((func == opt_float_any_nv) ||
@@ -82023,9 +82041,9 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	  }
 	else
 	  {
-	    s7_int end = do_loop_end(slot_value(sc->args));
 	    if (safe_step)
 	      {
+		s7_int end = do_loop_end(sc->args);
 		s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
 		slot_set_value(sc->args, stepper);
 		for (; integer(stepper) < end; integer(stepper)++)
@@ -82057,11 +82075,15 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	oo_idp_nr_fixup(start);
 	body[k] = start;
       }
+
     if (is_null(p))
       {
-	s7_int end = do_loop_end(slot_value(sc->args));
-	if (safe_step)
+#if S7_DEBUGGING
+	if ((safe_step) && (!is_step_end(sc->args))) fprintf(stderr, "%s[%d]: safe_step but not is_step_end\n", __func__, __LINE__);
+#endif
+	if ((safe_step) && (is_step_end(sc->args))) /* is_step_end is perhaps redundant (there is at least one more case of this) */
 	  {
+	    s7_int end = do_loop_end(sc->args);
 	    s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
 	    slot_set_value(sc->args, stepper);
 	    if ((body_len & 0x3) == 0)
@@ -82148,7 +82170,7 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
       set_curlet(sc, old_e);
       return(false);
     }
-  end = do_loop_end(stepper);
+  end = do_loop_end(step_slot);
   let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   ip = slot_value(step_slot);
 
@@ -82277,7 +82299,7 @@ static goto_t op_safe_dotimes(s7_scheme *sc)
 	  sc->code = cddr(code);
 	  sc->curlet = make_let(sc, sc->curlet);
 	  sc->args = add_slot_checked(sc, sc->curlet, caaar(code), make_mutable_integer(sc, s7_integer_clamped_if_gmp(sc, init_val)));
-	  set_do_loop_end(slot_value(sc->args), s7_integer_clamped_if_gmp(sc, end_val));
+	  set_do_loop_end(sc->args, s7_integer_clamped_if_gmp(sc, end_val));
 	  set_step_end(sc->args);  /* safe_dotimes step is by 1 */
 
 	  /* (define (hi) (do ((i 1 (+ 1 i))) ((= i 1) i))) -- we need the let even if the loop is not evaluated */
@@ -82397,7 +82419,7 @@ static goto_t op_safe_do(s7_scheme *sc)
     s7_pointer step_slot = let_dox_slot1(sc->curlet);
     set_step_end(step_slot);
     slot_set_value(step_slot, make_mutable_integer(sc, integer(slot_value(step_slot))));
-    set_do_loop_end(slot_value(step_slot), s7_integer_clamped_if_gmp(sc, end_val));
+    set_do_loop_end(step_slot, s7_integer_clamped_if_gmp(sc, end_val));
   }
 
   if (!is_unsafe_do(sc->code))
@@ -82489,7 +82511,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
       s7_pointer old_init = let_dox1_value(sc->curlet);
       sc->args = T_Slt(let_dox_slot1(sc->curlet));  /* used in opt_dotimes */
       slot_set_value(sc->args, make_mutable_integer(sc, integer(let_dox1_value(sc->curlet))));
-      set_do_loop_end(slot_value(sc->args), integer(let_dox2_value(sc->curlet)));
+      set_do_loop_end(sc->args, integer(let_dox2_value(sc->curlet)));
       set_step_end(sc->args);                  /* dotimes step is by 1 */
       sc->code = cdr(sc->code);
       if (dotimes(sc, code, false))
@@ -83729,8 +83751,7 @@ static void op_define_with_setter(s7_scheme *sc)
 	    {
 	      slot_set_value_with_hook(slot, sc->value);
 	      symbol_increment_ctr(code);
-	    }
-	}
+	    }}
       else s7_make_slot(sc, sc->curlet, code, sc->value);
       if ((is_any_macro(sc->value)) && (!is_c_macro(sc->value)))
 	{
@@ -96221,13 +96242,13 @@ int main(int argc, char **argv)
  * ------------------------------------------------------
  * tpeak      115    114    108    105    105    103
  * tref       691    687    463    459    459    458
- * index     1026   1016    973    967    967    971
- * tmock     1177   1165   1057   1019   1019   1027
+ * index     1026   1016    973    967    967    970
+ * tmock     1177   1165   1057   1019   1019   1026
  * tvect     2519   2464   1772   1669   1669   1668
  * timp      2637   2575   1930   1694   1694   1707
- * texit     ----   ----   1778   1741   1741   1759  1765 [op_closure_fa]
+ * texit     ----   ----   1778   1741   1741   1765
  * s7test    1873   1831   1818   1829   1829   1854
- * thook     ----   ----   2590   2030   2028   2047 [eval here and elsewhere]
+ * thook     ----   ----   2590   2030   2028   2047
  * tauto     ----   ----   2562   2048   2048   2062
  * lt        2187   2172   2150   2185   2185   2195
  * dup       3805   3788   2492   2239   2236   2240
@@ -96237,34 +96258,34 @@ int main(int argc, char **argv)
  * trclo     2735   2574   2454   2445   2445   2461
  * titer     2865   2842   2641   2509   2509   2465
  * tload     ----   ----   3046   2404   2537   2530
- * tmat      3065   3042   2524   2578   2569   2587
+ * tmat      3065   3042   2524   2578   2569   2580
  * tb        2735   2681   2612   2604   2601   2632
  * tsort     3105   3104   2856   2804   2804   2828
  * tobj      4016   3970   3828   3577   3603   3572
- * teq       4068   4045   3536   3486   3486   3588 [let_equal_1]
+ * teq       4068   4045   3536   3486   3486   3588
  * tio       3816   3752   3683   3620   3620   3623
- * tmac      3950   3873   3033   3677   3682   3691
- * tclo      4787   4735   4390   4384   4384   4445
+ * tmac      3950   3873   3033   3677   3682   3688
+ * tclo      4787   4735   4390   4384   4384   4450
  * tcase     4960   4793   4439   4430   4426   4445
- * tlet      7775   5640   4450   4427   4422   4453
+ * tlet      7775   5640   4450   4427   4422   4452
  * tfft      7820   7729   4755   4476   4475   4510
- * tstar     6139   5923   5519   4449   4449   4558
+ * tstar     6139   5923   5519   4449   4449   4556
  * tmap      8869   8774   4489   4541   4541   4618
  * tshoot    5525   5447   5183   5055   5055   5048
  * tstr      6880   6342   5488   5162   5165   5194
- * tform     5357   5348   5307   5316   5321   5401
+ * tform     5357   5348   5307   5316   5321   5398
  * tnum      6348   6013   5433   5396   5396   5409
- * tlamb     6423   6273   5720   5560   5552   5623
+ * tlamb     6423   6273   5720   5560   5552   5620
  * tmisc     8869   7612   6435   6076   6074   6224
  * tgsl      8485   7802   6373   6282   6282   6228
  * tlist     7896   7546   6558   6240   6240   6281
  * tset      ----   ----   ----   6260   6258   6293
  * tari      13.0   12.7   6827   6543   6541   6502
  * trec      6936   6922   6521   6588   6588   6581
- * tleft     10.4   10.2   7657   7479   7479   7612
+ * tleft     10.4   10.2   7657   7479   7479   7626
  * tgc       11.9   11.1   8177   7857   7897   7957
  * thash     11.8   11.7   9734   9479   9479   9484
- * cb        11.2   11.0   9658   9564   9559   9638
+ * cb        11.2   11.0   9658   9564   9559   9632
  * tgen      11.2   11.4   12.0   12.1   12.2   12.1
  * tall      15.6   15.6   15.6   15.6   15.6   15.1
  * calls     36.7   37.5   37.0   37.5   37.7   37.0
