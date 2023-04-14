@@ -2047,8 +2047,8 @@
 	    ((exact?)            (memq type2 '(real? rational? complex? number? integer? zero? negative? positive? odd? even? byte?)))
 	    ((inexact?)          (memq type2 '(real? number? complex? float? zero? negative? positive? infinite? nan?)))
 	    ((infinite? nan?)    (memq type2 '(real? number? complex? positive? negative? inexact? float?)))
-	    ((vector?)           (memq type2 '(float-vector? int-vector? sequence? subvector?)))
-	    ((float-vector? int-vector? subvector?) (memq type2 '(vector? sequence? subvector?)))
+	    ((vector?)           (memq type2 '(float-vector? int-vector? byte-vector? sequence? subvector?)))
+	    ((float-vector? int-vector? byte-vector? subvector?) (memq type2 '(vector? sequence? subvector?)))
 	    ((sequence?)         (memq type2 '(list? pair? null? proper-list? vector? float-vector? int-vector? byte-vector? tree-cyclic? openlet? subvector?
 					       string? let? hash-table? iterator? procedure? directory? file-exists?))) ; procedure? for extended iterator
 	    ((symbol?)           (memq type2 '(gensym? keyword? defined? provided?)))
@@ -2068,7 +2068,7 @@
 	    ((iterator?)         (memq type2 '(dilambda? procedure? sequence?))); iterator-at-end?)))
 	    ((let?)              (memq type2 '(defined? sequence? openlet?)))
 	    ((openlet?)          (memq type2 '(let? c-pointer? macro? procedure? sequence? defined? undefined?)))
-	    ((hash-table? byte-vector?) (eq? type2 'sequence?))
+	    ((hash-table?)       (eq? type2 'sequence?))
 	    ((char? char-whitespace? char-numeric? char-alphabetic? char-upper-case? char-lower-case?)
 	     (memq type2 '(char? char-whitespace? char-numeric? char-alphabetic? char-upper-case? char-lower-case?)))
 	    ((tree-cyclic?)      (memq type2 '(list? pair? sequence?)))
@@ -2463,7 +2463,7 @@
 	((integer? rational? real? number? complex? float? infinite? nan?) '(eqv? =))
 	((symbol? keyword? boolean? not null? procedure? syntax? macro? unspecified?) '(eq? eq?))
 	((string?) '(equal? string=?))
-	((pair? vector? float-vector? int-vector?  subvector? hash-table?) '(equal? equal?))
+	((pair? vector? float-vector? int-vector? byte-vector? subvector? hash-table?) '(equal? equal?))
 	((eof-object?) '(eq? eof-object?))
 	(else
 	 (if (and (len>1? x)
@@ -2710,9 +2710,9 @@
 		    (and (memq type2 '(number? complex? inexact?)) type1))
 
 		   ((vector?)
-		    (and (memq type2 '(float-vector? int-vector?)) type2))
+		    (and (memq type2 '(float-vector? int-vector? byte-vector?)) type2))
 
-		   ((float-vector? int-vector?)
+		   ((float-vector? int-vector? byte-vector?)
 		    (and (eq? type2 'vector?) type1))
 
 		   ((symbol?)
@@ -3195,7 +3195,7 @@
 			       ((integer? rational? exact? even? odd?) arg1)
 			       (else #f)))
 
-			    ((float-vector? int-vector?)
+			    ((float-vector? int-vector? byte-vector?)
 			     (and (memq type2 '(vector? sequence?))
 				  'contradictory))
 
@@ -3273,7 +3273,7 @@
 			     (and (memq type2 '(continuation? dilambda?))
 				  'true))
 			    ((vector?)
-			     (and (memq type2 '(float-vector? int-vector?))
+			     (and (memq type2 '(float-vector? int-vector? byte-vector?))
 				  'true))
 			    ;; next two are not currently in bools
 			    ;;((exact?) (and (memq type2 '(integer? rational?)) 'true))
@@ -12563,10 +12563,10 @@
 			   (lint-format "perhaps use equivalent? in ~A" caller (truncated-list->string call)))
 			  
 			  ((and (eq? vtype 'vector?)
-				(memq func '(float-vector-set! float-vector-ref int-vector-set! int-vector-ref)))
+				(memq func '(float-vector-set! float-vector-ref int-vector-set! int-vector-ref byte-vector-set! byte-vector-ref)))
 			   (lint-format "~A is ~A, so use ~A, not ~A" caller
 					vname (prettify-checker-unq vtype)
-					(if (memq func '(float-vector-set! int-vector-set!))
+					(if (memq func '(float-vector-set! int-vector-set! byte-vector-set!))
 					    'vector-set! 'vector-ref)
 					func)))))))))
 

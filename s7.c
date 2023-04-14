@@ -2398,10 +2398,10 @@ static void init_types(void)
 #define set_mark_seq(p)                set_type_bit(T_Itr(p), T_MARK_SEQ)
 /* used in iterators for GC mark of sequence */
 
-#define T_STEP_END                     T_MUTABLE
-#define is_step_end(p)                 has_type_bit(T_Slt(p), T_STEP_END)
-#define step_end_fits(Slot, Len)       ((is_step_end(Slot)) && (denominator(slot_value(Slot)) <= Len))
-#define set_step_end(p)                set_type_bit(T_Slt(p), T_STEP_END)
+#define T_HAS_LOOP_END                 T_MUTABLE
+#define has_loop_end(p)                has_type_bit(T_Slt(p), T_HAS_LOOP_END)
+#define loop_end_fits(Slot, Len)       ((has_loop_end(Slot)) && (denominator(slot_value(Slot)) <= Len))
+#define set_has_loop_end(p)            set_type_bit(T_Slt(p), T_HAS_LOOP_END)
 /* marks a slot that holds a do-loop's step-or-end variable, numerator=current, denominator=end */
 
 #define T_NO_CELL_OPT                  T_MUTABLE
@@ -2516,9 +2516,9 @@ static void init_types(void)
 #define iter_ok(p)                     has_type_bit(T_Itr(p), T_ITER_OK) /* was T_Pos 15-Apr-21 */
 #define clear_iter_ok(p)               clear_type_bit(T_Itr(p), T_ITER_OK)
 
-#define T_STEP_END_POSSIBLE            T_ITER_OK
-#define step_end_possible(p)           has_type_bit(T_Pair(p), T_STEP_END_POSSIBLE)
-#define set_step_end_possible(p)       set_type_bit(T_Pair(p), T_STEP_END_POSSIBLE)
+#define T_LOOP_END_POSSIBLE            T_ITER_OK
+#define loop_end_possible(p)           has_type_bit(T_Pair(p), T_LOOP_END_POSSIBLE)
+#define set_loop_end_possible(p)       set_type_bit(T_Pair(p), T_LOOP_END_POSSIBLE)
 
 #define T_IN_ROOTLET                   T_ITER_OK
 #define in_rootlet(p)                  has_type_bit(T_Slt(p), T_IN_ROOTLET)
@@ -4803,7 +4803,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						   (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" : " ?22?") : "",
 	  /* bit 31 */
 	  ((full_typ & T_ITER_OK) != 0) ?        ((is_iterator(obj)) ? " iter-ok" :
-						  ((is_pair(obj)) ? " step-end-ok" :
+						  ((is_pair(obj)) ? " loop-end-possible" :
 						   ((is_slot(obj)) ? " in-rootlet" :
 						    ((is_c_function(obj)) ? " bool-function" :
 						     ((is_symbol(obj)) ? " symbol-from-symbol" :
@@ -10373,7 +10373,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
 
 /* -------------------------------- symbol lookup -------------------------------- */
 static Inline s7_pointer inline_lookup_from(s7_scheme *sc, const s7_pointer symbol, s7_pointer e)
-{
+{ /* splitting out the no-sc WITH_GCC case made no difference in speed */
   if (let_id(e) == symbol_id(symbol))
     return(local_value(symbol));
   if (symbol_id(symbol) < let_id(e))
@@ -27703,6 +27703,7 @@ static s7_pointer g_string_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
   local_memset((void *)(string_value(x) + start), (int32_t)character(chr), end - start); /* not memclr even if chr=#\null! */
   return(chr);
 }
+
 
 /* -------------------------------- string-fill! -------------------------------- */
 #if (!WITH_PURE_S7)
@@ -58435,14 +58436,14 @@ static bool i_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	      opc->v[2].p = p;
 	      opc->v[0].fi = opt_i_7pi_ss;
 	      if ((s_func == global_value(sc->int_vector_ref_symbol)) &&
-		  (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
+		  (loop_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
 		{
 		  opc->v[0].fi = opt_7pi_ss_ivref;
 		  opc->v[3].i_7pi_f = int_vector_ref_i_7pi_direct;
 		}
 	      else
 		if ((s_func == global_value(sc->byte_vector_ref_symbol)) &&
-		    (step_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
+		    (loop_end_fits(opc->v[2].p, vector_length(slot_value(opc->v[1].p)))))
 		  {
 		    opc->v[0].fi = opt_7pi_ss_bvref;
 		    opc->v[3].i_7pi_f = byte_vector_ref_i_7pi_direct;
@@ -58859,8 +58860,8 @@ static bool opt_i_7piii_args(s7_scheme *sc, opt_info *opc, s7_pointer indexp1, s
 	      opc->v[11].fi = opc->v[10].o1->v[0].fi;
 	      opc->v[0].fi = opt_i_7piii_sssf;
 	      if ((opc->v[5].i_7piii_f == int_vector_set_i_7piii) &&
-		  (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-		  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		  (loop_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		  (loop_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
 		opc->v[0].fi = opt_i_piii_sssf_ivset_unchecked;
 	      return_true(sc, NULL);
 	    }}
@@ -58906,7 +58907,7 @@ static bool opt_int_vector_set(s7_scheme *sc, int32_t otype, opt_info *opc, s7_p
 		{
 		  int32_t start = sc->pc;
 		  opc->v[2].p = slot;
-		  if (step_end_fits(opc->v[2].p, vector_length(vect)))
+		  if (loop_end_fits(opc->v[2].p, vector_length(vect)))
 		    opc->v[3].i_7pii_f = (int_case) ? int_vector_set_i_7pii_direct : byte_vector_set_i_7pii_direct;
 		  if ((is_pair(valp)) &&
 		      (is_null(cdr(valp))) &&
@@ -58995,8 +58996,8 @@ static bool i_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 		  opc->v[4].i_7pii_f = pfunc;
 		  opc->v[0].fi = opt_i_7pii_sss;
 		  if ((pfunc == int_vector_ref_i_7pii) &&
-		      (step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		      (loop_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		      (loop_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
 		    opc->v[0].fi = opt_i_pii_sss_ivref_unchecked;
 		  return_true(sc, car_x);
 		}
@@ -59252,7 +59253,7 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	      opc->v[0].fi = opt_i_7pi_ss;
 	      opc->v[3].i_7pi_f = (int_case) ? int_vector_ref_i_7pi : byte_vector_ref_i_7pi;
 	      opc->v[2].p = slot;
-	      if (step_end_fits(opc->v[2].p, vector_length(obj)))
+	      if (loop_end_fits(opc->v[2].p, vector_length(obj)))
 		opc->v[3].i_7pi_f = (int_case) ? int_vector_ref_i_7pi_direct : byte_vector_ref_i_7pi_direct;
 		  /* not opc->v[0].fi = opt_7pi_ss_ivref -- this causes a huge slowdown in dup.scm?? */
 	      return_true(sc, car_x);
@@ -59281,8 +59282,8 @@ static bool i_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	      opc->v[3].p = slot;
 	      opc->v[0].fi = opt_i_7pii_sss;
 	      if ((int_case) &&
-		  (step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
-		  (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
+		  (loop_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+		  (loop_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
 		opc->v[0].fi = opt_i_pii_sss_ivref_unchecked;
 	      return_true(sc, car_x);
 	    }
@@ -59519,7 +59520,7 @@ static bool d_7pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 	  opc->v[2].p = p;
 	  opc->v[0].fd = opt_d_7pi_ss;
 	  if (is_target_or_its_alias(car(car_x), s_func, sc->float_vector_ref_symbol))
-	    opc->v[0].fd = (step_end_fits(opc->v[2].p, vector_length(obj))) ? opt_d_7pi_ss_fvref_direct : opt_d_7pi_ss_fvref;
+	    opc->v[0].fd = (loop_end_fits(opc->v[2].p, vector_length(obj))) ? opt_d_7pi_ss_fvref_direct : opt_d_7pi_ss_fvref;
 	  return_true(sc, car_x);
 	}
       if (int_optimize(sc, cddr(car_x)))
@@ -60833,8 +60834,8 @@ static bool d_7pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointe
 	    {
 	      opc->v[2].p = slot;
 	      opc->v[0].fd = opt_d_7pii_sss;
-	      if ((step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-		  (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+	      if ((loop_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		  (loop_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
 		opc->v[0].fd = opt_d_7pii_sss_unchecked;
 	      return_true(sc, car_x);
 	    }
@@ -60950,9 +60951,9 @@ static bool d_7piii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_point
 		  s7_pointer vect = slot_value(opc->v[1].p);
 		  opc->v[2].p = slot;
 		  opc->v[0].fd = opt_d_7piii_ssss;
-		  if ((step_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
-		      (step_end_fits(opc->v[3].p, vector_dimension(vect, 1))) &&
-		      (step_end_fits(opc->v[5].p, vector_dimension(vect, 2))))
+		  if ((loop_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
+		      (loop_end_fits(opc->v[3].p, vector_dimension(vect, 1))) &&
+		      (loop_end_fits(opc->v[5].p, vector_dimension(vect, 2))))
 		    opc->v[0].fd = opt_d_7piii_ssss_unchecked;
 		  return_true(sc, car_x);
 		}}}}
@@ -61010,7 +61011,7 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 	  if (slot)
 	    {
 	      opc->v[2].p = slot;
-	      if (step_end_fits(opc->v[2].p, vector_length(vect)))
+	      if (loop_end_fits(opc->v[2].p, vector_length(vect)))
 		opc->v[4].d_7pid_f = float_vector_set_d_7pid_direct;
 	      slot = opt_float_symbol(sc, car(valp));
 	      if (slot)
@@ -61051,7 +61052,7 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 	  (vector_rank(vect) == 2))
 	{
 	  opc->v[5].d_7piid_f = float_vector_set_d_7piid;
-	  /* could check for step_end/end-ok here for both indices, but the d_7pii* functions currently assume fv_d_7piid
+	  /* could check for loop_end/end-ok here for both indices, but the d_7pii* functions currently assume fv_d_7piid
 	   *    perhaps set a different fd? so opc->v[0].fd = fvset_unchecked_d_7piid or whatever
 	   */
 	  slot = opt_integer_symbol(sc, car(indexp2));
@@ -61083,8 +61084,8 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 		      opc->v[0].fd = opt_d_7piid_sssf;
 		      opc->v[9].fd = opc->v[8].o1->v[0].fd;
 
-		      if ((step_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
-			  (step_end_fits(opc->v[3].p, vector_dimension(vect, 1))))
+		      if ((loop_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
+			  (loop_end_fits(opc->v[3].p, vector_dimension(vect, 1))))
 			opc->v[0].fd = opt_d_7piid_sssf_unchecked;
 		      return_true(sc, NULL);
 		    }
@@ -61126,9 +61127,9 @@ static bool opt_float_vector_set(s7_scheme *sc, opt_info *opc, s7_pointer v, s7_
 			{
 			  opc->v[0].fd = opt_d_7piiid_ssssf;
 			  opc->v[11].fd = sc->opts[start]->v[0].fd;
-			  if ((step_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
-			      (step_end_fits(opc->v[3].p, vector_dimension(vect, 1))) &&
-			      (step_end_fits(opc->v[5].p, vector_dimension(vect, 2))))
+			  if ((loop_end_fits(opc->v[2].p, vector_dimension(vect, 0))) &&
+			      (loop_end_fits(opc->v[3].p, vector_dimension(vect, 1))) &&
+			      (loop_end_fits(opc->v[5].p, vector_dimension(vect, 2))))
 			    opc->v[0].fd = opt_d_7piiid_ssssf_unchecked;
 			  return_true(sc, NULL);
 			}}}}}}
@@ -61407,7 +61408,7 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	  if (slot)
 	    {
 	      opc->v[2].p = slot;
-	      if (step_end_fits(opc->v[2].p, vector_length(obj)))
+	      if (loop_end_fits(opc->v[2].p, vector_length(obj)))
 		opc->v[0].fd = opt_d_7pi_ss_fvref_direct;
 	      else opc->v[0].fd = opt_d_7pi_ss_fvref;
 	      return_true(sc, car_x);
@@ -61434,8 +61435,8 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 		{
 		  opc->v[3].p = slot;
 		  opc->v[0].fd = opt_d_7pii_sss;
-		  if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
-		      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
+		  if ((loop_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+		      (loop_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
 		    opc->v[0].fd = opt_d_7pii_sss_unchecked;
 		  return_true(sc, car_x);
 		}}
@@ -61469,9 +61470,9 @@ static bool d_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 		    {
 		      opc->v[5].p = slot;
 		      opc->v[0].fd = opt_d_7piii_ssss;
-		      if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
-			  (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))) &&
-			  (step_end_fits(opc->v[5].p, vector_dimension(obj, 2))))
+		      if ((loop_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+			  (loop_end_fits(opc->v[3].p, vector_dimension(obj, 1))) &&
+			  (loop_end_fits(opc->v[5].p, vector_dimension(obj, 2))))
 			opc->v[0].fd = opt_d_7piii_ssss_unchecked;
 		      return_true(sc, car_x);
 		    }}}}}
@@ -62671,43 +62672,43 @@ static s7_pointer opt_p_pi_fc(opt_info *o) {return(o->v[3].p_pi_f(o->sc, o->v[5]
  *   aren't collisions?  Each use is a single (uncomplicated) do loop, set up before each call?
  */
 #if S7_DEBUGGING
-static s7_pointer check_do_loop_end_ref(s7_pointer p, const char *func, int32_t line)
+static s7_pointer check_loop_end_ref(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(T_Slt(p));
-  if (!is_step_end(p)) complain("%s%s[%d]: step_end not set, %s (%s)%s\n", p, func, line, typ);
+  if (!has_loop_end(p)) complain("%s%s[%d]: loop_end not set, %s (%s)%s\n", p, func, line, typ);
   return(T_Int(slot_value(p)));
 }
-#define do_loop_end(A) denominator(check_do_loop_end_ref(A, __func__, __LINE__))
+#define loop_end(A) denominator(check_loop_end_ref(A, __func__, __LINE__))
 #else
-#define do_loop_end(A) denominator(T_Int(slot_value(A)))
+#define loop_end(A) denominator(T_Int(slot_value(A)))
 #endif
-#define set_do_loop_end(A, B) denominator(T_Int(slot_value(A))) = B
+#define set_loop_end(A, B) denominator(T_Int(slot_value(A))) = B
 
 static void check_unchecked(s7_scheme *sc, s7_pointer obj, s7_pointer slot, opt_info *opc, s7_pointer expr)
 {
   switch (type(obj)) /* can't use funcs here (opc->v[3].p_pi_f et al) because there are so many, and copy depends on this choice */
     {
     case T_STRING:
-      if (((!expr) || (car(expr) == sc->string_ref_symbol)) && (do_loop_end(slot) <= string_length(obj)))
+      if (((!expr) || (car(expr) == sc->string_ref_symbol)) && (loop_end(slot) <= string_length(obj)))
 	opc->v[3].p_pi_f = string_ref_p_pi_direct;
       break;
     case T_BYTE_VECTOR:
       if (((!expr) || (car(expr) == sc->byte_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
-	  (do_loop_end(slot) <= byte_vector_length(obj)))
+	  (loop_end(slot) <= byte_vector_length(obj)))
 	opc->v[3].p_pi_f = byte_vector_ref_p_pi_direct;
       break;
     case T_VECTOR:
-      if (((!expr) || (car(expr) == sc->vector_ref_symbol)) && (do_loop_end(slot) <= vector_length(obj)))
+      if (((!expr) || (car(expr) == sc->vector_ref_symbol)) && (loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = normal_vector_ref_p_pi_direct;
       break;
     case T_FLOAT_VECTOR:
       if (((!expr) || (car(expr) == sc->float_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
-	  (do_loop_end(slot) <= vector_length(obj)))
+	  (loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = float_vector_ref_p_pi_direct;
       break;
     case T_INT_VECTOR:
       if (((!expr) || (car(expr) == sc->int_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
-	  (do_loop_end(slot) <= vector_length(obj)))
+	  (loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = int_vector_ref_p_pi_direct;
       break;
     }
@@ -62764,7 +62765,7 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
     {
       opc->v[2].p = slot1;
       if ((obj) &&
-	  (is_step_end(slot1)))
+	  (has_loop_end(slot1)))
 	check_unchecked(sc, obj, slot1, opc, car_x);
       fixup_p_pi_ss(opc);
       return_true(sc, car_x);
@@ -63249,27 +63250,27 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
       if (slot2)
 	{
 	  opc->v[2].p = slot2;
-	  if (is_step_end(slot2))
+	  if (has_loop_end(slot2))
 	    switch (type(obj))
 	      {
 	      case T_VECTOR:
-		if (do_loop_end(slot2) <= vector_length(obj))
+		if (loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = (is_typed_vector(obj)) ? typed_normal_vector_set_p_pip_direct : normal_vector_set_p_pip_direct;
 		break;
 	      case T_INT_VECTOR:
-		if (do_loop_end(slot2) <= vector_length(obj))
+		if (loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = int_vector_set_p_pip_direct;
 		break;
 	      case T_FLOAT_VECTOR:
-		if (do_loop_end(slot2) <= vector_length(obj))
+		if (loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = float_vector_set_p_pip_direct;
 		break;
 	      case T_STRING:
-		if (do_loop_end(slot2) <= string_length(obj))
+		if (loop_end(slot2) <= string_length(obj))
 		  opc->v[3].p_pip_f = string_set_p_pip_direct;
 		break;
 	      case T_BYTE_VECTOR:
-		if (do_loop_end(slot2) <= vector_length(obj))
+		if (loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = byte_vector_set_p_pip_direct;
 		break;
 	      } /* T_PAIR here would require list_length check which sort of defeats the purpose */
@@ -63363,8 +63364,8 @@ static bool p_piip_to_sx(s7_scheme *sc, opt_info *opc, s7_pointer indexp1, s7_po
 	  opc->v[11].fp = opc->v[10].o1->v[0].fp;
 	  opc->v[0].fp = opt_p_piip_sssf;
 	  if ((is_normal_vector(obj)) &&
-	      (step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
-	      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
+	      (loop_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+	      (loop_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
 	    opc->v[0].fp = vector_set_piip_sssf_unchecked;
 	  return_true(sc, NULL);
 	}
@@ -63460,8 +63461,8 @@ static bool p_pii_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  opc->v[2].p = slot;
 		  opc->v[0].fp = opt_p_pii_sss;
 		  /* normal vector rank 2 (see above) */
-		  if ((step_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
-		      (step_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
+		  if ((loop_end_fits(opc->v[2].p, vector_dimension(slot_value(opc->v[1].p), 0))) &&
+		      (loop_end_fits(opc->v[3].p, vector_dimension(slot_value(opc->v[1].p), 1))))
 		    opc->v[0].fp = vector_ref_pii_sss_unchecked;
 		  return_true(sc, car_x);
 		}}
@@ -63925,7 +63926,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 		  if (!is_t_integer(slot_value(slot)))
 		    return_false(sc, car_x); /* I think this reflects that a non-int index is an error for list-ref et al */
 		  opc->v[0].fp = opt_p_pi_ss;
-		  if (is_step_end(opc->v[2].p))
+		  if (has_loop_end(opc->v[2].p))
 		    check_unchecked(sc, obj, opc->v[2].p, opc, NULL);
 		  fixup_p_pi_ss(opc);
 		  return_true(sc, car_x);
@@ -63974,8 +63975,8 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 		  opc->v[2].p = slot;
 		  opc->v[4].p_pii_f = vector_ref_p_pii;
 		  opc->v[0].fp = opt_p_pii_sss;
-		  if ((step_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
-		      (step_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
+		  if ((loop_end_fits(opc->v[2].p, vector_dimension(obj, 0))) &&
+		      (loop_end_fits(opc->v[3].p, vector_dimension(obj, 1))))
 		    opc->v[0].fp = vector_ref_pii_sss_unchecked;
 		  return_true(sc, car_x);
 		}}
@@ -64519,24 +64520,24 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 	    {
 	      opc->v[2].p = slot;
 	      if ((is_t_integer(slot_value(slot))) &&
-		  (is_step_end(opc->v[2].p)))
+		  (has_loop_end(opc->v[2].p)))
 		{
 		  if (is_string(obj))
 		    {
-		      if (do_loop_end(opc->v[2].p) <= string_length(obj))
+		      if (loop_end(opc->v[2].p) <= string_length(obj))
 			opc->v[3].p_pip_f = string_set_p_pip_direct;
 		    }
 		  else
 		    if (is_byte_vector(obj))
 		      {
-			if (do_loop_end(opc->v[2].p) <= byte_vector_length(obj))
+			if (loop_end(opc->v[2].p) <= byte_vector_length(obj))
 			  opc->v[3].p_pip_f = byte_vector_set_p_pip_direct;
 		      }
 		    else
 		      if (is_any_vector(obj)) /* true for all 3 vectors */
 			{
 			  if ((is_any_vector(obj)) &&
-			      (do_loop_end(opc->v[2].p) <= vector_length(obj)))
+			      (loop_end(opc->v[2].p) <= vector_length(obj)))
 			    {
 			      if ((is_normal_vector(obj)) && (is_typed_vector(obj)))
 				opc->v[3].p_pip_f = typed_normal_vector_set_p_pip_direct;
@@ -66093,9 +66094,9 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 		      ((car(stop) != sc->num_eq_symbol) || /* else > protects at least the top */
 		       ((caddr(step) == int_one) && (car(step) == sc->add_symbol))))
 		    {
-		      set_step_end(slot);
+		      set_has_loop_end(slot);
 		      slot_set_value(slot, make_mutable_integer(sc, integer(slot_value(slot))));
-		      set_do_loop_end(slot, lim);
+		      set_loop_end(slot, lim);
 		    }}}
 
 	  if (!set_stop)
@@ -66104,8 +66105,8 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	      if ((slot2) &&
 		  (stop_is_safe(sc, cadr(stop), cddr(car_x)))) /* b_fft in tfft.scm */
 		{
-		  set_step_end(slot2);
-		  set_do_loop_end(slot2, lim);
+		  set_has_loop_end(slot2);
+		  set_loop_end(slot2, lim);
 		}}}}
 
   /* body */
@@ -66270,7 +66271,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       (cadr(end) == ind) &&
       (is_pair(ind_step)))                   /* (+ i 1) */
     {
-      /* we can't use step_end_possible here yet (not set except for op_dox?) */
+      /* we can't use loop_end_possible here yet (not set except for op_dox?) */
 
       if (((car(end) == sc->num_eq_symbol) || (car(end) == sc->geq_symbol)) &&
 	  ((is_symbol(caddr(end))) || (is_t_integer(caddr(end)))) &&
@@ -80427,7 +80428,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		    (car(step_expr) == sc->add_symbol) &&
 		    (var1 == cadr(endp)) && (var1 == cadr(step_expr)) &&
 		    ((car(endp) != sc->num_eq_symbol) || ((caddr(step_expr) == int_one))))
-		  set_step_end_possible(end);
+		  set_loop_end_possible(end);
 	      }}}
     pair_set_syntax_op(form, (got_pending) ? OP_DOX_PENDING_NO_BODY : OP_DOX);
     /* there are only a couple of cases in snd-test where a multi-statement do body is completely fx-able */
@@ -80775,14 +80776,14 @@ static goto_t op_dox(s7_scheme *sc)
   endf = fx_proc(end);
 
   /* an experiment */
-  if ((step_end_possible(end)) && (steppers == 1) &&
+  if ((loop_end_possible(end)) && (steppers == 1) &&
       (is_t_integer(slot_value(stepper))))
     {
       s7_pointer stop_slot = (is_symbol(caddr(endp))) ? opt_integer_symbol(sc, caddr(endp)) : sc->nil;
       if (stop_slot) /* sc->nil -> it's an integer */
 	{
-	  set_step_end(stepper);
-	  set_do_loop_end(stepper, (is_slot(stop_slot)) ? integer(slot_value(stop_slot)) : integer(caddr(endp)));
+	  set_has_loop_end(stepper);
+	  set_loop_end(stepper, (is_slot(stop_slot)) ? integer(slot_value(stop_slot)) : integer(caddr(endp)));
 	}}
 
   if (is_true(sc, sc->value = endf(sc, endp)))
@@ -80833,9 +80834,9 @@ static goto_t op_dox(s7_scheme *sc)
 			     ((o->v[5].p_pip_f == list_set_p_pip_unchecked) && (o->v[6].p_pi_f == list_ref_p_pi_unchecked))) &&
 			    (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[3].p), i, endp, stepper))))
 			{
-			  if (is_step_end(stepper))
+			  if (has_loop_end(stepper))
 			    {
-			      s7_int lim = do_loop_end(stepper);
+			      s7_int lim = loop_end(stepper);
 			      if ((i >= 0) && (lim < NUM_SMALL_INTS))
 				do {fp(o); slot_set_value(stepper, small_int(++i));} while (i < lim);
 			      else do {fp(o); slot_set_value(stepper, make_integer(sc, ++i));} while (i < lim);
@@ -80859,7 +80860,7 @@ static goto_t op_dox(s7_scheme *sc)
 			   (((o->v[3].i_7pii_f == int_vector_set_i_7pii) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi)) ||
 			    ((o->v[3].i_7pii_f == int_vector_set_i_7pii_direct) && (o->v[4].o1->v[3].i_7pi_f == int_vector_ref_i_7pi_direct))) &&
 			   (copy_if_end_ok(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), i, endp, stepper)))))
-		      /* here the is_step_end business doesn't happen much */
+		      /* here the has_loop_end business doesn't happen much */
 		      do {
 			bodyf(sc);
 			slot_set_value(stepper, make_integer(sc, ++i));
@@ -81760,7 +81761,7 @@ static bool op_safe_dotimes_step(s7_scheme *sc)
 {
   s7_pointer arg = slot_value(sc->args);
   numerator(arg)++;
-  if (numerator(arg) == do_loop_end(sc->args))
+  if (numerator(arg) == loop_end(sc->args))
     {
       sc->value = sc->T;
       sc->code = cdadr(sc->code);
@@ -81777,7 +81778,7 @@ static bool op_safe_dotimes_step_o(s7_scheme *sc)
 {
   s7_pointer arg = slot_value(sc->args);
   numerator(arg)++;
-  if (numerator(arg) == do_loop_end(sc->args))
+  if (numerator(arg) == loop_end(sc->args))
     {
       sc->value = sc->T;
       sc->code = cdadr(sc->code);
@@ -81856,7 +81857,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	}
       if (safe_step)
 	{
-	  s7_int end = do_loop_end(sc->args);
+	  s7_int end = loop_end(sc->args);
 	  s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
 	  slot_set_value(sc->args, stepper);
 	  if ((func == opt_float_any_nv) ||
@@ -82043,7 +82044,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 	  {
 	    if (safe_step)
 	      {
-		s7_int end = do_loop_end(sc->args);
+		s7_int end = loop_end(sc->args);
 		s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
 		slot_set_value(sc->args, stepper);
 		for (; integer(stepper) < end; integer(stepper)++)
@@ -82079,11 +82080,11 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
     if (is_null(p))
       {
 #if S7_DEBUGGING
-	if ((safe_step) && (!is_step_end(sc->args))) fprintf(stderr, "%s[%d]: safe_step but not is_step_end\n", __func__, __LINE__);
+	if ((safe_step) && (!has_loop_end(sc->args))) fprintf(stderr, "%s[%d]: safe_step but not has_loop_end\n", __func__, __LINE__);
 #endif
-	if ((safe_step) && (is_step_end(sc->args))) /* is_step_end is perhaps redundant (there is at least one more case of this) */
+	if ((safe_step) && (has_loop_end(sc->args))) /* has_loop_end is perhaps redundant (there is at least one more case of this) */
 	  {
-	    s7_int end = do_loop_end(sc->args);
+	    s7_int end = loop_end(sc->args);
 	    s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
 	    slot_set_value(sc->args, stepper);
 	    if ((body_len & 0x3) == 0)
@@ -82170,7 +82171,7 @@ static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
       set_curlet(sc, old_e);
       return(false);
     }
-  end = do_loop_end(step_slot);
+  end = loop_end(step_slot);
   let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   ip = slot_value(step_slot);
 
@@ -82299,8 +82300,8 @@ static goto_t op_safe_dotimes(s7_scheme *sc)
 	  sc->code = cddr(code);
 	  sc->curlet = make_let(sc, sc->curlet);
 	  sc->args = add_slot_checked(sc, sc->curlet, caaar(code), make_mutable_integer(sc, s7_integer_clamped_if_gmp(sc, init_val)));
-	  set_do_loop_end(sc->args, s7_integer_clamped_if_gmp(sc, end_val));
-	  set_step_end(sc->args);  /* safe_dotimes step is by 1 */
+	  set_loop_end(sc->args, s7_integer_clamped_if_gmp(sc, end_val));
+	  set_has_loop_end(sc->args);  /* safe_dotimes step is by 1 */
 
 	  /* (define (hi) (do ((i 1 (+ 1 i))) ((= i 1) i))) -- we need the let even if the loop is not evaluated */
 
@@ -82417,9 +82418,9 @@ static goto_t op_safe_do(s7_scheme *sc)
 
   {
     s7_pointer step_slot = let_dox_slot1(sc->curlet);
-    set_step_end(step_slot);
+    set_has_loop_end(step_slot);
     slot_set_value(step_slot, make_mutable_integer(sc, integer(slot_value(step_slot))));
-    set_do_loop_end(step_slot, s7_integer_clamped_if_gmp(sc, end_val));
+    set_loop_end(step_slot, s7_integer_clamped_if_gmp(sc, end_val));
   }
 
   if (!is_unsafe_do(sc->code))
@@ -82511,8 +82512,8 @@ static goto_t op_dotimes_p(s7_scheme *sc)
       s7_pointer old_init = let_dox1_value(sc->curlet);
       sc->args = T_Slt(let_dox_slot1(sc->curlet));  /* used in opt_dotimes */
       slot_set_value(sc->args, make_mutable_integer(sc, integer(let_dox1_value(sc->curlet))));
-      set_do_loop_end(sc->args, integer(let_dox2_value(sc->curlet)));
-      set_step_end(sc->args);                  /* dotimes step is by 1 */
+      set_loop_end(sc->args, integer(let_dox2_value(sc->curlet)));
+      set_has_loop_end(sc->args);                  /* dotimes step is by 1 */
       sc->code = cdr(sc->code);
       if (dotimes(sc, code, false))
 	return(goto_do_end_clauses); /* not safe_do here */
@@ -88580,15 +88581,13 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       }
       break;
 
-    case ':':  /* turn #: into : -- this is for compatibility with Guile, sigh.
-		*   I just noticed that Rick is using this -- I'll just leave it alone.
-		*   but that means : readers need to handle this case specially.
-		* I don't think #! is special anymore -- maybe remove that code?
+    case ':':  /* turn #: into : -- this is for compatibility with Guile, sigh. I just noticed that Rick is using this -- 
+		* I'll just leave it alone, but that means : readers need to handle this case specially. 
 		*/
       sc->strbuf[0] = ':';
       return(TOKEN_ATOM);
 
-    case '!':
+    case '!':  /*  I don't think #! is special anymore -- maybe remove this code? */
       return(read_bang_comment(sc, pt));
 
     case '|': 
@@ -89368,6 +89367,61 @@ static bool fxify_closure_star_g(s7_scheme *sc, s7_pointer f, s7_pointer code)
   return(false);
 }
 
+static bool op_unknown_closure_s(s7_scheme *sc, s7_pointer f, s7_pointer code)
+{
+  s7_pointer body = closure_body(f);
+  bool one_form = is_null(cdr(body));
+  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
+  set_opt2_sym(code, cadr(code));
+  
+  /* code here might be (f x) where f is passed elsewhere as a function parameter,
+   *   first time through we look it up, find a safe-closure and optimize as (say) safe_closure_s_a,
+   *   next time it is something else, etc.  Rather than keep optimizing it locally, we need to
+   *   back out: safe_closure_s_* -> safe_closure_s -> closure_s -> op_s_g.  Ideally we'd know
+   *   this was a parameter or whatever.  The tricky case is local letrec(f) calling f which initially
+   *   thinks it is not safe, then later is set safe correctly, now outer func is called again,
+   *   this time f is safe, and we're ok from then on.
+   */
+  if (is_unknopt(code))
+    {
+      switch (op_no_hop(code))
+	{
+	case OP_CLOSURE_S:
+	  set_optimize_op(code, (is_safe_closure(f)) ? ((one_form) ? OP_SAFE_CLOSURE_S_O : OP_SAFE_CLOSURE_S) :  OP_S_G); break;
+	case OP_CLOSURE_S_O:
+	case OP_SAFE_CLOSURE_S:
+	  set_optimize_op(code, ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S)); break;
+	case OP_SAFE_CLOSURE_S_O:
+	case OP_SAFE_CLOSURE_S_A:
+	case OP_SAFE_CLOSURE_S_TO_S:
+	case OP_SAFE_CLOSURE_S_TO_SC:
+	  set_optimize_op(code, (is_safe_closure(f)) ?
+			  ((one_form) ? OP_SAFE_CLOSURE_S_O : OP_SAFE_CLOSURE_S) :
+			  ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
+	  break;
+	default:
+	  set_optimize_op(code, OP_S_G); break;
+	}
+      set_opt1_lambda_add(code, f);
+      return(true);
+    }
+  if (!is_safe_closure(f))
+    set_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
+  else
+    if (!is_null(cdr(body)))
+      set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S);
+    else
+      if (is_fxable(sc, car(body)))
+	fxify_closure_s(sc, f, code, sc->curlet, hop);
+      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S_O);
+  /* hop if is_constant(sc, car(code)) is not foolproof here (see t967.scm):
+   *    (define (f) (define-constant (f1) ... (f1))...) where each call on f makes a different f1
+   */
+  set_is_unknopt(code);
+  set_opt1_lambda_add(code, f);
+  return(true);
+}
+
 static bool op_unknown_s(s7_scheme *sc)
 {
   s7_pointer code = sc->code, f = sc->last_function;
@@ -89402,61 +89456,8 @@ static bool op_unknown_s(s7_scheme *sc)
       return(false);
 
     case T_CLOSURE:
-      if ((!has_methods(f)) &&
-	  (closure_arity_to_int(sc, f) == 1))
-	{
-	  s7_pointer body = closure_body(f);
-	  bool one_form = is_null(cdr(body));
-	  int32_t hop = (is_immutable_and_stable(sc, car(code))) ? 1 : 0;
-	  set_opt2_sym(code, cadr(code));
-
-	  /* code here might be (f x) where f is passed elsewhere as a function parameter,
-	   *   first time through we look it up, find a safe-closure and optimize as (say) safe_closure_s_a,
-	   *   next time it is something else, etc.  Rather than keep optimizing it locally, we need to
-	   *   back out: safe_closure_s_* -> safe_closure_s -> closure_s -> op_s_g.  Ideally we'd know
-	   *   this was a parameter or whatever.  The tricky case is local letrec(f) calling f which initially
-	   *   thinks it is not safe, then later is set safe correctly, now outer func is called again,
-	   *   this time f is safe, and we're ok from then on.
-	   */
-	  if (is_unknopt(code))
-	    {
-	      switch (op_no_hop(code))
-		{
-		case OP_CLOSURE_S:
-		  set_optimize_op(code, (is_safe_closure(f)) ? ((one_form) ? OP_SAFE_CLOSURE_S_O : OP_SAFE_CLOSURE_S) :  OP_S_G); break;
-		case OP_CLOSURE_S_O:
-		case OP_SAFE_CLOSURE_S:
-		  set_optimize_op(code, ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S)); break;
-		case OP_SAFE_CLOSURE_S_O:
-		case OP_SAFE_CLOSURE_S_A:
-		case OP_SAFE_CLOSURE_S_TO_S:
-		case OP_SAFE_CLOSURE_S_TO_SC:
-		  set_optimize_op(code, (is_safe_closure(f)) ?
-				  ((one_form) ? OP_SAFE_CLOSURE_S_O : OP_SAFE_CLOSURE_S) :
-				  ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
-		  break;
-		default:
-		  set_optimize_op(code, OP_S_G); break;
-		}
-	      set_opt1_lambda_add(code, f);
-	      return(true);
-	    }
-	  if (!is_safe_closure(f))
-	    set_optimize_op(code, hop + ((one_form) ? OP_CLOSURE_S_O : OP_CLOSURE_S));
-	  else
-	    if (!is_null(cdr(body)))
-	      set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S);
-	    else
-	      if (is_fxable(sc, car(body)))
-		fxify_closure_s(sc, f, code, sc->curlet, hop);
-	      else set_safe_optimize_op(code, hop + OP_SAFE_CLOSURE_S_O);
-	  /* hop if is_constant(sc, car(code)) is not foolproof here (see t967.scm):
-	   *    (define (f) (define-constant (f1) ... (f1))...) where each call on f makes a different f1
-	   */
-	  set_is_unknopt(code);
-	  set_opt1_lambda_add(code, f);
-	  return(true);
-	}
+      if ((!has_methods(f)) && (closure_arity_to_int(sc, f) == 1))
+	return(op_unknown_closure_s(sc, f, code));
       break;
 
     case T_CLOSURE_STAR:
@@ -96241,11 +96242,11 @@ int main(int argc, char **argv)
  *            20.9   21.0   22.0   23.0   23.2   23.3
  * ------------------------------------------------------
  * tpeak      115    114    108    105    105    103
- * tref       691    687    463    459    459    458
+ * tref       691    687    463    459    459    459
  * index     1026   1016    973    967    967    970
  * tmock     1177   1165   1057   1019   1019   1026
  * tvect     2519   2464   1772   1669   1669   1668
- * timp      2637   2575   1930   1694   1694   1707
+ * timp      2637   2575   1930   1694   1694   1709
  * texit     ----   ----   1778   1741   1741   1765
  * s7test    1873   1831   1818   1829   1829   1854
  * thook     ----   ----   2590   2030   2028   2047
