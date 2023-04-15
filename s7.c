@@ -10504,7 +10504,7 @@ symbol sym in the given let: (let ((x 32)) (symbol->value 'x)) -> 32"
 	{
 	  local_let = find_let(sc, local_let);
 	  if (!is_let(local_let))
-	    return(method_or_bust(sc, cadr(args), sc->symbol_to_value_symbol, args, a_let_string, 2));
+	    return(method_or_bust(sc, cadr(args), sc->symbol_to_value_symbol, args, a_let_string, 2)); /* not local_let */
 	}
       if (local_let == sc->s7_starlet)
 	return(s7_starlet(sc, s7_starlet_symbol(sym)));
@@ -11038,7 +11038,7 @@ Only the let is searched if ignore-globals is not #f."
 	    e = sc->rootlet;
 	  else
 	    if (!is_let(e))
-	      wrong_type_error_nr(sc, sc->is_defined_symbol, 2, cadr(args), a_let_string);
+	      wrong_type_error_nr(sc, sc->is_defined_symbol, 2, cadr(args), a_let_string); /* not e */
 	}
       if (is_keyword(sym))                       /* if no "e", is global -> #t */
 	sym = keyword_symbol(sym);               /* (defined? :print-length *s7*) */
@@ -16194,7 +16194,7 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	return(method_or_bust(sc, ex, sc->rationalize_symbol, args, sc->type_names[T_REAL], 2));
       err = real_to_double(sc, ex, "rationalize");
       if (is_NaN(err))
-	out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, cadr(args), it_is_nan_string);
+	out_of_range_error_nr(sc, sc->rationalize_symbol, int_two, ex, it_is_nan_string);
       if (err < 0.0) err = -err;
     }
 
@@ -27843,7 +27843,7 @@ static s7_pointer g_string_to_list(s7_scheme *sc, s7_pointer args)
   else
     if (end == 0) return(sc->nil);
   if ((end - start) > sc->max_list_length)
-    out_of_range_error_nr(sc, sc->string_to_list_symbol, int_one, car(args), it_is_too_large_string);
+    out_of_range_error_nr(sc, sc->string_to_list_symbol, int_one, str, it_is_too_large_string);
 
   sc->w = sc->nil;
   check_free_heap_size(sc, end - start);
@@ -29981,7 +29981,7 @@ static s7_pointer g_write_byte(s7_scheme *sc, s7_pointer args)
   s7_pointer port, b = car(args);
   s7_int val;
   if (!s7_is_integer(b))
-    return(method_or_bust(sc, car(args), sc->write_byte_symbol, args, sc->type_names[T_INTEGER], 1));
+    return(method_or_bust(sc, b, sc->write_byte_symbol, args, sc->type_names[T_INTEGER], 1));
 
   val = s7_integer_clamped_if_gmp(sc, b);
   if ((val < 0) || (val > 255)) /* need to check this before port==#f, else (write-byte most-positive-fixnum #f) is not an error */
@@ -29990,7 +29990,7 @@ static s7_pointer g_write_byte(s7_scheme *sc, s7_pointer args)
   port = (is_pair(cdr(args))) ? cadr(args) : current_output_port(sc);
   if (!is_output_port(port))
     {
-      if (port == sc->F) return(car(args));
+      if (port == sc->F) return(b);
       check_method(sc, port, sc->write_byte_symbol, args);
       wrong_type_error_nr(sc, sc->write_byte_symbol, 2, port, an_output_port_or_f_string);
     }
@@ -38349,7 +38349,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
 	  set_car(sc->t2_1, car(args));
 	  for (s7_pointer slow = x; is_pair(x); x = cdr(x), slow = cdr(slow))
 	    {
-	      if (!is_pair(car(x))) wrong_type_error_nr(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string);
+	      if (!is_pair(car(x))) wrong_type_error_nr(sc, sc->assoc_symbol, 2, cadr(args), an_association_list_string); /* not x */
 	      set_car(sc->t2_2, caar(x));
 	      if (is_true(sc, func(sc, sc->t2_1))) return(car(x));
 	      x = cdr(x);
@@ -39926,7 +39926,7 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
       if (start == end) return(sc->nil);
     }
   if ((end - start) > sc->max_list_length)
-    out_of_range_error_nr(sc, sc->vector_to_list_symbol, int_one, car(args), it_is_too_large_string);
+    out_of_range_error_nr(sc, sc->vector_to_list_symbol, int_one, vec, it_is_too_large_string);
 
   check_free_heap_size(sc, end - start);
   sc->w = sc->nil;
@@ -48418,6 +48418,45 @@ static s7_pointer hash_table_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_
   return(s7_hash_table_set(sc, e, car(val), cdr(val)));
 }
 
+static s7_pointer copy_hash_table(s7_scheme *sc, s7_pointer source)
+{
+  s7_pointer new_hash = s7_make_hash_table(sc, hash_table_mask(source) + 1);
+  s7_int gc_loc = gc_protect_1(sc, new_hash);
+  hash_table_checker(new_hash) = hash_table_checker(source);
+  if (hash_chosen(source)) hash_set_chosen(new_hash);
+  hash_table_mapper(new_hash) = hash_table_mapper(source);
+  hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, source));
+  hash_table_copy(sc, source, new_hash, 0, hash_table_entries(source));
+  if (is_typed_hash_table(source))
+    {
+      set_is_typed_hash_table(new_hash);
+      if (has_hash_key_type(source)) set_has_hash_key_type(new_hash);
+      if (has_hash_value_type(source)) set_has_hash_value_type(new_hash);
+      if (has_simple_keys(source)) set_has_simple_keys(new_hash);
+      if (has_simple_values(source)) set_has_simple_values(new_hash);
+    }
+  s7_gc_unprotect_at(sc, gc_loc);
+  return(new_hash);
+}
+
+static s7_pointer copy_vector(s7_scheme *sc, s7_pointer source)
+{
+  s7_int len = vector_length(source);
+  s7_pointer vec;
+  if (!is_typed_vector(source))
+    return(s7_vector_copy(sc, source));
+  if (len == 0)
+    return(make_simple_vector(sc, 0));
+  vec = make_vector_1(sc, len, NOT_FILLED, T_VECTOR);
+  set_typed_vector(vec);
+  typed_vector_set_typer(vec, typed_vector_typer(source));
+  if (has_simple_elements(source)) set_has_simple_elements(vec);
+  s7_vector_fill(sc, vec, vector_element(source, 0));
+  if (vector_rank(source) > 1)
+    return(make_multivector(sc, vec, g_vector_dimensions(sc, set_plist_1(sc, source)))); /* see g_subvector to avoid g_vector_dimensions */
+  add_vector(sc, vec);
+  return(vec);
+}
 
 static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_pointer args)
 {
@@ -48434,25 +48473,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_point
       return(random_state_copy(sc, args));
 
     case T_HASH_TABLE:              /* this has to copy nearly everything */
-      {
-	s7_pointer new_hash = s7_make_hash_table(sc, hash_table_mask(source) + 1);
-	s7_int gc_loc = gc_protect_1(sc, new_hash);
-	hash_table_checker(new_hash) = hash_table_checker(source);
-	if (hash_chosen(source)) hash_set_chosen(new_hash);
-	hash_table_mapper(new_hash) = hash_table_mapper(source);
-	hash_table_set_procedures(new_hash, copy_hash_table_procedures(sc, source));
-	hash_table_copy(sc, source, new_hash, 0, hash_table_entries(source));
-	if (is_typed_hash_table(source))
-	  {
-	    set_is_typed_hash_table(new_hash);
-	    if (has_hash_key_type(source)) set_has_hash_key_type(new_hash);
-	    if (has_hash_value_type(source)) set_has_hash_value_type(new_hash);
-	    if (has_simple_keys(source)) set_has_simple_keys(new_hash);
-	    if (has_simple_values(source)) set_has_simple_values(new_hash);
-	  }
-	s7_gc_unprotect_at(sc, gc_loc);
-	return(new_hash);
-      }
+      return(copy_hash_table(sc, source));
 
     case T_ITERATOR:
       return(iterator_copy(sc, source));
@@ -48471,23 +48492,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_point
       return(s7_vector_copy(sc, source)); /* "shallow" copy */
 
     case T_VECTOR:
-      {
-	s7_int len = vector_length(source);
-	s7_pointer vec;
-	if (!is_typed_vector(source))
-	  return(s7_vector_copy(sc, source));
-	if (len == 0)
-	  return(make_simple_vector(sc, 0));
-	vec = make_vector_1(sc, len, NOT_FILLED, T_VECTOR);
-	set_typed_vector(vec);
-	typed_vector_set_typer(vec, typed_vector_typer(source));
-	if (has_simple_elements(source)) set_has_simple_elements(vec);
-	s7_vector_fill(sc, vec, vector_element(source, 0));
-	if (vector_rank(source) > 1)
-	  return(make_multivector(sc, vec, g_vector_dimensions(sc, set_plist_1(sc, source)))); /* see g_subvector to avoid g_vector_dimensions */
-	add_vector(sc, vec);
-	return(vec);
-      }
+      return(copy_vector(sc, source));
 
     case T_PAIR:                    /* top level only, as in the other cases, checks for circles */
       return(copy_any_list(sc, source));
@@ -89166,7 +89171,7 @@ static bool op_load_close_and_pop_if_eof(s7_scheme *sc)
   s7_close_input_port(sc, current_input_port(sc));
   pop_input_port(sc);
   sc->current_file = NULL;
-  if (is_multiple_value(sc->value))                    /* (load "file") where "file" is (values 1 2 3) */
+  if (is_multiple_value(sc->value))                    /* (load (file)) where file returns (values "a-file" an-environment)? */
     sc->value = splice_in_values(sc, multiple_value(sc->value));
   return(false);
 }
