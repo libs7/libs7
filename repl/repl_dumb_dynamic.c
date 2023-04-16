@@ -77,7 +77,8 @@ void s7_repl(s7_scheme *sc)
   /* free(s2); */
 
   log_debug("LOADING libc_s7.so");
-  s7_pointer val = s7_load_with_environment(sc, "lib/libc_s7.so", e);
+  s7_pointer val = s7_load_with_environment(sc,
+                                            "../libs7/lib/libc_s7.so", e);
   /* log_debug("TEST 3"); */
   /* xwrde = s7_make_integer(sc, (s7_int)WRDE_SYNTAX); */
   /* fprintf(stderr, "Made int XXXXXXXXXXXXXXXX: %x\n", xwrde); */
@@ -115,7 +116,7 @@ void s7_repl(s7_scheme *sc)
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) {
           log_debug("loading repl.scm");
-          if (!s7_load(sc, "scm/repl.scm")) {
+          if (!s7_load(sc, "../libs7/scm/repl.scm")) {
               log_error("failed: load repl.scm");
           }
       }

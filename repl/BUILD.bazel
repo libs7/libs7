@@ -56,8 +56,12 @@ cc_binary(
         "-Wextra",
         # "-Werror=pedantic",
         # "-pedantic-errors",
+
         "-Isrc",
-        "-Ivendored/logc"
+        "-Iexternal/libs7/src",
+
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc"
     ] + select({
         # "//:bsd": ["-std=c11"],
         "//:macos": ["-std=c11"],
@@ -126,8 +130,10 @@ cc_binary(
         # "-Werror=pedantic",
         "-Wno-unused-parameter",
         "-Isrc",
+        "-Ivendored/logc",
+        "-Iexternal/vendored/logc",
+
         "-Iexternal/notcurses/notcurses/include/notcurses",
-        "-Ivendored/logc"
     ] + select({
         "//:macos": [
             "-Wno-format-pedantic",
