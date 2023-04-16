@@ -1,0 +1,23 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+# NB: we could use make instead of cmake, but cmake is more portable
+# (think windows).
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @utf8proc//:utf8proc
+cmake(
+    name = "utf8proc",
+    lib_source = ":all",
+    out_static_libs = ["libutf8proc.a"],
+    # out_shared_libs = [
+    #     # linux: "libutf8proc.so"
+    #     # mac: "libutf8proc.dylib"
+    #     "libutf8proc.so"
+    # ],
+    # defines = ["BUILD_SHARED_LIBS"],
+    visibility = ["//visibility:public"],
+)

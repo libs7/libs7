@@ -1,0 +1,75 @@
+## build target: s7
+
+# WITH_SYSTEM_EXTRAS
+  # is_directory_symbol, file_exists_symbol, delete_file_symbol,
+  # getenv_symbol, system_symbol,
+  # directory_to_list_symbol,
+  # file_mtime_symbol
+
+# used in s7.c only:
+# WITH_MAIN - enables main() for std repl
+
+# WITH_NOTCURSES - if also WITH_MAIN, includes nrepl.c and excludes
+# std repl code, and loads nrepl.scm in s7_repl.
+# if WITH_MAIN && WITH_NOTCURSES
+#     #include nrepl.c,
+
+##########
+exports_files(["s7.h"])
+
+###########
+cc_library(
+    name  = "s7",
+    linkstatic = True,
+    # alwayslink = 1,
+    srcs  = ["s7.c"] + select({
+        "//config/repl:static?": [
+            "//lib:libc_s7.c",
+            "//lib:libdl_s7.c",
+            "//lib:libm_s7.c"
+        ],
+        "//conditions:default":  []
+    }),
+    # deps = none
+    hdrs  = ["s7.h"],
+    # deps  = [":nrepl"],
+    copts = [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        "-Wno-unused-parameter",
+        "-Isrc",
+    ] + select({
+        "//:macos": [
+            "-Wno-format-pedantic",
+            "-Wno-gnu",
+            "-std=c11"
+        ],
+        "//:linux": [
+            "-std=gnu11",
+            "-Wno-unused-function",
+            # "--pedantic-errors",
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    data = glob(["*.scm"]) + ["s7.h"],
+    defines = [
+        "WITH_SYSTEM_EXTRAS",
+        "WITH_C_LOADER"
+        # FIXME: if --//config:notcurses
+        # "WITH_MAIN",
+        # "WITH_NOTCURSES"
+    ] + select({
+        "//config/repl:static?": [],
+        "//conditions:default":  ["WITH_C_LOADER"]
+    }) + select({
+        # "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//conditions:default":   []
+    }),
+    linkopts = select({
+        "//:macos": ["-ldl"],
+        "//:linux": ["-lm"],
+        "//conditions:default": []
+    }),
+    visibility = ["//visibility:public"]
+)

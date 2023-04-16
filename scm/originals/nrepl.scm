@@ -39,9 +39,9 @@
 
 (autoload 'pretty-print "write.scm")
 (autoload 'pp "write.scm")
-;; (autoload '*libc* "libc.scm")
-;; (autoload '*libm* "libm.scm")
-;; (autoload '*libgsl* "libgsl.scm")
+(autoload '*libc* "libc.scm")
+(autoload '*libm* "libm.scm")
+(autoload '*libgsl* "libgsl.scm")
 (autoload 'trace "debug.scm")
 (autoload 'untrace "debug.scm")
 (autoload 'break "debug.scm")
@@ -1724,12 +1724,11 @@
 		(ncplane_putstr_yx statp 1 2 (substring "rxvt doesn't support the mouse" 0 (min 30 (- nc-cols 3))))
 		(notcurses_render nc)))))
       (curlet)))
-  ;; launching the nrepl is client's responsibility
-  ;; (with-let *nrepl*
-  ;;   (start)
-  ;;   (run)
-  ;;   (stop))
-  )
+
+  (with-let *nrepl*
+    (start)
+    (run)
+    (stop)))
 
 ;; selection (both ways):
 ;;   (currently works by dragging mouse and using C-y, but text is not highlighted)

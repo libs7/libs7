@@ -1,0 +1,170 @@
+##########
+## linux: gcc -o repl repl.c s7.o -Wl,-export-dynamic -lm -I. -ldl
+cc_binary(
+    name  = "repl",
+    srcs  = ["repl.c"],
+    deps = ["//src:s7"],
+    copts =  [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        # "-pedantic-errors",
+        "-Isrc",
+    ] + select({
+        # "//:bsd": ["-std=c11"],
+        "//:macos": ["-std=c11"],
+        "//:linux": [
+            "-std=c11",
+            "-Wl,export-dynamic",
+            ],
+        # "//:linux_clang": [
+        #     "-std=c11",
+        #     "-fPIC",
+        #     "-Wl,export-dynamic",
+        #     ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    data = ["//scm:scm"],
+    linkopts = select({
+        # "//:bsd": ["-Wl,-export-dynamic"],
+        "//:macos": [],
+        "//:linux": ["-ldl", "-Wl,-export-dynamic"],
+        # "//:linux_clang": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }) + [
+        "-lm",
+    ],
+    visibility = ["//visibility:public"]
+)
+
+cc_binary(
+    name  = "repl_dumb",
+    srcs  = select({
+        "//config/repl:static?": ["repl_dumb_static.c"],
+        "//conditions:default":  ["repl_dumb_dynamic.c"]
+    }),
+    deps = ["//src:s7", "//vendored/logc"] + select({
+        "//config/repl:static?": [],
+        "//conditions:default":  [], # ":libc_s7.so"]
+    }),
+    data = ["//scm:scm"] + select({
+        "//config/repl:static?": [],
+        "//conditions:default":  ["//lib:libc_s7.so"]
+    }),
+    copts =  [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        # "-pedantic-errors",
+        "-Isrc",
+        "-Ivendored/logc"
+    ] + select({
+        # "//:bsd": ["-std=c11"],
+        "//:macos": ["-std=c11"],
+        "//:linux": [
+            "-std=c11",
+            "-Wl,export-dynamic",
+            ],
+        # "//:linux_clang": [
+        #     "-std=c11",
+        #     "-fPIC",
+        #     "-Wl,export-dynamic",
+        #     ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    linkopts = select({
+        # "//:bsd": ["-Wl,-export-dynamic"],
+        "//:macos": [],
+        "//:linux": ["-ldl", "-Wl,-export-dynamic"],
+        # "//:linux_clang": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }) + [
+        "-lm",
+    ],
+    visibility = ["//visibility:public"]
+)
+
+##########
+## nrepl depends on notcurses, which is yet another big hairy lib
+
+# deps: libdeflate-dev libncurses-dev libunistring-dev
+
+# libgpm: general purpose mouse GPL v2
+
+# multimedia support: libavformat-dev libavutil-dev libswscale-dev
+# qrcode support:  libqrcodegen-dev
+# other stuff we don't need:  install build-essential cmake doctest-dev pandoc pkg-config
+# GPL: libgpm-dev
+
+cc_binary(
+    name  = "nrepl",
+    srcs  = [
+        "nrepl.c",
+        "//src:s7.h"
+        ## conditional:
+        # "nrepl-bits.h",
+    ],
+    deps = [
+        "@notcurses//:notcurses",
+        "@libdeflate//:libdeflate",
+        "@libunistring//:libunistring",
+        "@ncurses//:libncurses",
+        "//lib:c_s7",
+        "//lib:notcurses_s7",
+        "//src:s7",
+        "//vendored/logc",
+    ],
+    data = [
+        # "external/notcurses/notcurses/lib/libnotcurses-core.a",
+        # "external/notcurses/notcurses/lib/libnotcurses.a",
+        "@notcurses//:notcurses",
+        "//scm:scm",
+    ],
+    copts = [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        "-Wno-unused-parameter",
+        "-Isrc",
+        "-Iexternal/notcurses/notcurses/include/notcurses",
+        "-Ivendored/logc"
+    ] + select({
+        "//:macos": [
+            "-Wno-format-pedantic",
+            "-Wno-gnu",
+            "-std=c11"
+        ],
+        "//:linux": [
+            "-std=gnu11",
+            "-Wno-unused-function",
+            # "--pedantic-errors",
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    defines = [
+        "WITH_MAIN",
+        "WITH_NOTCURSES",
+        "WITH_SYSTEM_EXTRAS",
+        # "WITH_C_LOADER",
+        "NREPL_DEBUGGING"
+    ] + select({
+        "//config/nrepl:debug?": ["NREPL_DEBUGGING"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//conditions:default":   []
+    }),
+    linkopts = [
+        # "-lnotcurses",
+        # "-ldeflate",
+        # "-lunistring",
+        # "-lncurses",
+    ] + select({
+        # "//:bsd": ["-Wl,-export-dynamic"],
+        "//:macos": [],
+        "//:linux": ["-ldl", "-Wl,-export-dynamic"],
+        # "//:linux_clang": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }),
+    visibility = ["//visibility:public"]
+)
