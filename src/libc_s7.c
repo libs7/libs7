@@ -4796,7 +4796,7 @@ static s7_pointer g_ntohl(s7_scheme *sc, s7_pointer args) {return(s7_make_intege
                       p = s7_cons(sc, s7_make_string(sc, *str), p);
                     return(p);
                   }
-                 
+
 static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
                   {
                     int res, flags;
@@ -4809,7 +4809,7 @@ static s7_pointer g_regcomp(s7_scheme *sc, s7_pointer args)
                     return(s7_make_integer(sc, res));
                   }
 
-                  static s7_pointer g_regexec(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_regexec(s7_scheme *sc, s7_pointer args)
                   {
                     int i, res, flags, nmatches;
                     regex_t *regexp;
