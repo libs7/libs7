@@ -1,5 +1,3 @@
-#include <wordexp.h>
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,14 +46,6 @@ void s7_repl(s7_scheme *sc)
     log_debug("load-path: %s", s);
     free(s);
 
-
-  /*   log_debug("TEST 1"); */
-  /* s7_pointer xwrde = s7_make_integer(sc, (s7_int)WRDE_SYNTAX); */
-  /* fprintf(stderr, "Made int XXXXXXXXXXXXXXXX: %x\n", xwrde); */
-  /* char *s2 = s7_object_to_c_string(sc, xwrde); */
-  /* fprintf(stderr, "WRDE: %s\n", s2); */
-  /* free(s2); */
-
   bool repl_loaded = false;
   /* s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol(sc, "init_func", 9), make_symbol(sc, "libc_s7_init", 12))); */
   s7_pointer init_sym    = s7_make_symbol(sc, "init_func");
@@ -68,24 +58,8 @@ void s7_repl(s7_scheme *sc)
 
   /* s7_pointer old_e = s7_set_curlet(sc, e);   /\* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) *\/ */
   s7_pointer old_e = s7_set_curlet(sc, e);
-
-  /* log_debug("TEST 2"); */
-  /* xwrde = s7_make_integer(sc, (s7_int)WRDE_SYNTAX); */
-  /* fprintf(stderr, "Made int XXXXXXXXXXXXXXXX: %x\n", xwrde); */
-  /* s2 = s7_object_to_c_string(sc, xwrde); */
-  /* fprintf(stderr, "WRDE: %s\n", s2); */
-  /* free(s2); */
-
   log_debug("LOADING libc_s7.so");
   s7_pointer val = s7_load_with_environment(sc,
-                                            "../libs7/lib/libc_s7.so", e);
-  /* log_debug("TEST 3"); */
-  /* xwrde = s7_make_integer(sc, (s7_int)WRDE_SYNTAX); */
-  /* fprintf(stderr, "Made int XXXXXXXXXXXXXXXX: %x\n", xwrde); */
-  /* s2 = s7_object_to_c_string(sc, xwrde); */
-  /* fprintf(stderr, "WRDE: %s\n", s2); */
-  /* free(s2); */
-
   if (val)
     {
         log_debug("loaded libc_s7.so");
@@ -155,8 +129,6 @@ int main(int argc, char **argv)
 {
   s7_scheme *sc = s7_init();
   fprintf(stderr, "s7: %s\n", S7_DATE);
-
-  s7_pointer wrde = s7_make_integer(sc, (s7_int)WRDE_SYNTAX);
 
   if (argc == 2)
     {
