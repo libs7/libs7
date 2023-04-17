@@ -21,6 +21,8 @@ cc_library(
         ],
         "//:linux": [
             "-std=gnu11",
+            "-fPIC",
+            "-Wl,--no-undefined",
             "-Wpedantic-errors",
         ],
         "//conditions:default": ["-std=c11"],
