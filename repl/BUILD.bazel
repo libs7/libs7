@@ -24,7 +24,7 @@ cc_binary(
         #     ],
         "//conditions:default": ["-std=c11"],
     }),
-    data = ["//scm:scm"],
+    data = ["//scm:srcs"],
     linkopts = select({
         # "//:bsd": ["-Wl,-export-dynamic"],
         "//:macos": [],
@@ -47,7 +47,7 @@ cc_binary(
         "//config/repl:static?": [],
         "//conditions:default":  [], # ":libc_s7.so"]
     }),
-    data = ["//scm:scm"] + select({
+    data = ["//scm:srcs"] + select({
         "//config/repl:static?": [],
         "//conditions:default":  ["//lib:libc_s7.so"]
     }),
@@ -122,7 +122,7 @@ cc_binary(
         # "external/notcurses/notcurses/lib/libnotcurses-core.a",
         # "external/notcurses/notcurses/lib/libnotcurses.a",
         "@notcurses//:notcurses",
-        "//scm:scm",
+        "//scm:srcs",
     ],
     copts = [
         "-Wall",

@@ -1,3 +1,7 @@
+/* s7 bindings for https://arblib.org
+   a C library for arbitrary-precision ball arithmetic
+*/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

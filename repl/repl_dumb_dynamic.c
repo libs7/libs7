@@ -116,7 +116,7 @@ void s7_repl(s7_scheme *sc)
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) {
           log_debug("loading repl.scm");
-          if (!s7_load(sc, "../libs7/scm/repl.scm")) {
+          if (!s7_load(sc, "../libs7/scm/s7/repl.scm")) {
               log_error("failed: load repl.scm");
           }
       }

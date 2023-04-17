@@ -95313,6 +95313,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->libraries_symbol = s7_define_variable_with_documentation(sc, "*libraries*", sc->nil, "list of currently loaded libraries (libc.scm, etc)");
   s7_set_setter(sc, sc->libraries_symbol, s7_make_safe_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
 
+  s7_autoload(sc, make_symbol(sc, "cgen.scm", 8),        s7_make_semipermanent_string(sc, "cgen.scm")); /* obazl */
   s7_autoload(sc, make_symbol(sc, "cload.scm", 9),        s7_make_semipermanent_string(sc, "cload.scm"));
   s7_autoload(sc, make_symbol(sc, "lint.scm", 8),         s7_make_semipermanent_string(sc, "lint.scm"));
   s7_autoload(sc, make_symbol(sc, "stuff.scm", 9),        s7_make_semipermanent_string(sc, "stuff.scm"));

@@ -1,4 +1,4 @@
-## build target: s7
+## build target: s7 (libs7.a)
 
 # WITH_SYSTEM_EXTRAS
   # is_directory_symbol, file_exists_symbol, delete_file_symbol,
@@ -52,7 +52,7 @@ cc_library(
         ],
         "//conditions:default": ["-std=c11"],
     }),
-    data = glob(["*.scm"]) + ["s7.h"],
+    data = ["//scm:srcs", "//scm/s7:srcs", "s7.h"],
     defines = [
         "WITH_SYSTEM_EXTRAS",
         "WITH_C_LOADER"
@@ -73,3 +73,4 @@ cc_library(
     }),
     visibility = ["//visibility:public"]
 )
+
