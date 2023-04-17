@@ -1,0 +1,66 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_test(
+    name = "test",
+    srcs = ["s7_test.c"],
+    copts = [
+        "-Wall",
+        "-Wextra",
+        "-Werror=pedantic",
+        "-Wno-unused-parameter",
+        "-Wno-format-pedantic",
+
+        "-Isrc",
+        "-Iexternal/libs7/src",
+
+        "-Ivendored/gopt",
+        "-Iexternal/libs7/vendored/gopt",
+
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+
+        "-Ivendored/unity",
+        "-Iexternal/libs7/vendored/unity",
+
+        "-Ivendored/uthash",
+        "-Iexternal/libs7/vendored/uthash",
+
+    ] + select({
+        "//:macos": [
+            "-Wno-gnu",
+            "-std=c11"
+        ],
+        "//:linux": [
+            "-std=gnu11",
+            "--pedantic-errors",
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    defines = select({
+        "//config/host:debug": ["DEBUG_TRACE"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/host:linux": [
+            "_XOPEN_SOURCE=500", # strdup
+            "_DEFAULT_SOURCE"    # dirent DT_* macros
+        ],
+        "//conditions:default":   []
+    }),
+    linkopts = select({
+        "//:macos": ["-ldl"],
+        "//:linux": ["-lm", "-ldl"],
+        "//conditions:default": []
+    }),
+    deps = [
+        "//src:s7",
+        "//lib:c_s7",
+        "//lib:dl_s7",
+        "//lib:m_s7",
+        "//vendored/gopt",
+        "//vendored/logc",
+        "//vendored/unity",
+        "//vendored/uthash",
+    ],
+    timeout = "short",
+    visibility = ["//test:__subpackages__"]
+)
