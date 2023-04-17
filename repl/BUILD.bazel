@@ -44,10 +44,14 @@ cc_binary(
         "//conditions:default":  ["repl_dumb_dynamic.c"]
     }),
     deps = ["//src:s7", "//vendored/logc"] + select({
-        "//config/repl:static?": [],
-        "//conditions:default":  [], # ":libc_s7.so"]
+        "//config/repl:static?": [
+            "//lib:c_s7",
+            "//lib:dl_s7",
+            "//lib:m_s7"
+        ],
+        "//conditions:default":  []
     }),
-    data = ["//scm:srcs"] + select({
+    data = ["//scm:srcs", "//scm/s7:srcs"] + select({
         "//config/repl:static?": [],
         "//conditions:default":  ["//lib:libc_s7.so"]
     }),

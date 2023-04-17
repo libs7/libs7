@@ -22,14 +22,15 @@ cc_library(
     name  = "s7",
     linkstatic = True,
     # alwayslink = 1,
-    srcs  = ["s7.c"] + select({
-        "//config/repl:static?": [
-            "//lib:libc_s7.c",
-            "//lib:libdl_s7.c",
-            "//lib:libm_s7.c"
-        ],
-        "//conditions:default":  []
-    }),
+    srcs  = ["s7.c"],
+    # + select({
+    #     "//config/repl:static?": [
+    #         "//lib:c_s7",
+    #         "//lib:dl_s7",
+    #         "//lib:m_s7"
+    #     ],
+    #     "//conditions:default":  []
+    # }),
     # deps = none
     hdrs  = ["s7.h"],
     # deps  = [":nrepl"],

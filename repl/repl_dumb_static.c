@@ -76,7 +76,8 @@ int main(int argc, char **argv)
 
       /* dumb_repl(sc); */
         /* log_debug("loading repl.scm"); */
-        if (!s7_load(sc, "scm/repl.scm")) {
+        if (!s7_load(sc, "../libs7/scm/s7/repl.scm")) {
+        /* if (!s7_load(sc, "scm/s7/repl.scm")) { */
             log_error("failed: load repl.scm");
         }
       s7_eval_c_string(sc, "((*repl* 'run))");
