@@ -46,6 +46,7 @@ void s7_repl(s7_scheme *sc)
     log_debug("load-path: %s", s);
     free(s);
 
+
   bool repl_loaded = false;
   /* s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol(sc, "init_func", 9), make_symbol(sc, "libc_s7_init", 12))); */
   s7_pointer init_sym    = s7_make_symbol(sc, "init_func");
@@ -58,8 +59,15 @@ void s7_repl(s7_scheme *sc)
 
   /* s7_pointer old_e = s7_set_curlet(sc, e);   /\* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) *\/ */
   s7_pointer old_e = s7_set_curlet(sc, e);
+
+  char *script = "scm/s7/repl.scm";
+  char *libc_s7_path = "lib/libc_s7.so";
+  /* char *script = "external/libs7/scm/s7/repl.scm"; */
+  /* char *libc_s7_path = "external/libs7/lib/libc_s7.so"; */
+
   log_debug("LOADING libc_s7.so");
-  s7_pointer val = s7_load_with_environment(sc,
+  s7_pointer val = s7_load_with_environment(sc, libc_s7_path, e);
+
   if (val)
     {
         log_debug("loaded libc_s7.so");
@@ -90,7 +98,7 @@ void s7_repl(s7_scheme *sc)
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) {
           log_debug("loading repl.scm");
-          if (!s7_load(sc, "../libs7/scm/s7/repl.scm")) {
+          if (!s7_load(sc, script)) {
               log_error("failed: load repl.scm");
           }
       }

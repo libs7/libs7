@@ -57,6 +57,9 @@ int main(int argc, char **argv)
 
   /* TODO: add scm libs from runfiles to *load-path* */
 
+  char *script = "scm/s7/repl.scm";
+  /* char *script = "external/libs7/scm/s7/repl.scm"; */
+
   if (argc == 2)
     {
       fprintf(stderr, "load %s\n", argv[1]);
@@ -76,9 +79,8 @@ int main(int argc, char **argv)
 
       /* dumb_repl(sc); */
         /* log_debug("loading repl.scm"); */
-        if (!s7_load(sc, "../libs7/scm/s7/repl.scm")) {
-        /* if (!s7_load(sc, "scm/s7/repl.scm")) { */
-            log_error("failed: load repl.scm");
+        if (!s7_load(sc, script)) {
+            log_error("failed: load %s", script);
         }
       s7_eval_c_string(sc, "((*repl* 'run))");
     }
