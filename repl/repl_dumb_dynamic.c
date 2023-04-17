@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "log.h"
 #include "s7.h"
@@ -60,10 +61,11 @@ void s7_repl(s7_scheme *sc)
   /* s7_pointer old_e = s7_set_curlet(sc, e);   /\* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) *\/ */
   s7_pointer old_e = s7_set_curlet(sc, e);
 
-  char *script = "scm/s7/repl.scm";
-  char *libc_s7_path = "lib/libc_s7.so";
-  /* char *script = "external/libs7/scm/s7/repl.scm"; */
-  /* char *libc_s7_path = "external/libs7/lib/libc_s7.so"; */
+  /* char *script = "scm/s7/repl.scm"; */
+  /* char *libc_s7_path = "lib/libc_s7.so"; */
+
+  char *script = "external/libs7/scm/s7/repl.scm";
+  char *libc_s7_path = "external/libs7/lib/libc_s7.so";
 
   log_debug("LOADING libc_s7.so");
   s7_pointer val = s7_load_with_environment(sc, libc_s7_path, e);
@@ -108,6 +110,7 @@ void s7_repl(s7_scheme *sc)
 
 static char *realdir(const char *filename) /* this code courtesy Lassi Kortela 4-Nov-19 */
 {
+    log_debug("realdir");
   char *path;
   char *p;
   /* s7_repl wants to load libc_s7.o (for tcsetattr et al), but if it is started in a directory other than the libc_s7.so
@@ -133,32 +136,42 @@ static char *realdir(const char *filename) /* this code courtesy Lassi Kortela 4
   return(path);
 }
 
-int main(int argc, char **argv)
+int main(int argc, char **argv, char **envp)
 {
   s7_scheme *sc = s7_init();
   fprintf(stderr, "s7: %s\n", S7_DATE);
 
-  if (argc == 2)
-    {
+  /* for (char **env = envp; *env != 0; env++) */
+  /*  { */
+  /*    char *thisEnv = *env; */
+  /*    printf("%s\n", thisEnv); */
+  /*  } */
+  char *pwd = getcwd(NULL, 0);
+  fprintf(stderr, "PWD: %s\n", pwd);
+  free(pwd);
+
+  if (argc == 2) {
       fprintf(stderr, "load %s\n", argv[1]);
       if (!s7_load(sc, argv[1]))
-	{
-	  fprintf(stderr, "can't load %s\n", argv[1]);
-	  return(2);
-	}}
-  else
-    {
+          {
+              fprintf(stderr, "can't load %s\n", argv[1]);
+              return(2);
+          }
+  } else {
+      log_debug("xxxxxxxxxxxxxxxx");
 #ifdef S7_LOAD_PATH
+      log_debug("XXXXXXXXXXXXXXXX");
       s7_add_to_load_path(sc, S7_LOAD_PATH);
 #else
-      char *dir = realdir(argv[0]);
-      if (dir)
-	{
-	  s7_add_to_load_path(sc, dir);
-	  free(dir);
-	}
+      log_debug("Axxxxxxxxxxxxxxxx");
+      /* char *dir = realdir(argv[0]); */
+      /*   log_debug("Axxxxxxxxxxxxxxxx"); */
+      /* if (dir) { */
+      /*     s7_add_to_load_path(sc, dir); */
+      /*     free(dir); */
+      /* } */
 #endif
       s7_repl(sc);
-    }
+  }
   return(0);
 }

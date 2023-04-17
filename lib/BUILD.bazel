@@ -7,23 +7,23 @@ cc_library(
     copts = [
         "-Wall",
         "-Wextra",
-        "-Werror=pedantic",
         "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        # "-I.",
 
         "-Isrc",
         "-Iexternal/libs7/src",
     ] + select({
         "//:macos": [
             "-Wno-gnu",
-            "-std=c11"
+            "-std=c11",
+            "-Werror=pedantic",
+            "-Wpedantic-errors",
+            "-Wno-format-pedantic",
         ],
         "//:linux": [
             "-std=gnu11",
             "-fPIC",
             "-Wl,--no-undefined",
-            "-Wpedantic-errors",
+            # "--pedantic-errors",
         ],
         "//conditions:default": ["-std=c11"],
     }),
@@ -52,19 +52,19 @@ cc_binary(
     copts = [
         "-Wall",
         "-Wextra",
-        "-Werror=pedantic",
         "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
         "-Isrc",
         "-Iexternal/libs7/src",
     ] + select({
         "//:macos": [
+            "-std=c11",
             "-Wno-gnu",
-            "-std=c11"
+            "-Werror=pedantic",
+            "-Wno-format-pedantic",
         ],
         "//:linux": [
             "-std=gnu11",
-            "--pedantic-errors",
+            # "--pedantic-errors",
         ],
         "//conditions:default": ["-std=c11"],
     }),
@@ -395,6 +395,13 @@ cc_binary(
         #     "-Wl,export-dynamic",
         #     ],
         "//conditions:default": ["-std=c11"],
+    }),
+    defines = [
+    ] + select({
+        "//:linux": [
+            "_POSIX_C_SOURCE=200809L" # strndup
+        ],
+        "//conditions:default": []
     }),
     linkopts = select({
         # "//:bsd": ["-Wl,-export-dynamic"],
