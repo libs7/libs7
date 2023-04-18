@@ -54,7 +54,10 @@ cc_library(
         ],
         "//conditions:default": ["-std=c11"],
     }),
-    data = ["//scm:srcs", "//scm/s7:srcs", "s7.h"],
+    data = [
+        "//repl:scm",
+        "//scm:srcs", "//scm/s7:srcs", "s7.h"
+    ],
     defines = [
         "WITH_SYSTEM_EXTRAS",
         "WITH_C_LOADER"

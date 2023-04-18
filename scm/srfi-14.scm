@@ -52,6 +52,8 @@
 ;;; - ERROR
 ;;; s7:  ?
 
+(load "records.scm")
+
 ;;; - %LATIN1->CHAR %CHAR->LATIN1
 (define %latin1->char integer->char) ;; s7
 (define %char->latin1 char->integer) ;; s7

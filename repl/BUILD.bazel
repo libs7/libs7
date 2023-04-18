@@ -1,3 +1,9 @@
+filegroup(
+    name = "scm",
+    data = glob(["*.scm"]),
+    visibility = ["//visibility:public"]
+)
+
 ##########
 ## linux: gcc -o repl repl.c s7.o -Wl,-export-dynamic -lm -I. -ldl
 cc_binary(
