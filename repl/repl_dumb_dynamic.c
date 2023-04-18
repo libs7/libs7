@@ -136,9 +136,11 @@ static char *realdir(const char *filename) /* this code courtesy Lassi Kortela 4
   return(path);
 }
 
+s7_scheme *libs7_init(void);    /* libs7.h */
+
 int main(int argc, char **argv, char **envp)
 {
-  s7_scheme *sc = s7_init();
+  s7_scheme *sc = libs7_init();
   fprintf(stderr, "s7: %s\n", S7_DATE);
 
   /* for (char **env = envp; *env != 0; env++) */

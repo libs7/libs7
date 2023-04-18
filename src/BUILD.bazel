@@ -22,7 +22,10 @@ cc_library(
     name  = "s7",
     linkstatic = True,
     # alwayslink = 1,
-    srcs  = ["s7.c"],
+    srcs  = ["s7.c",
+             "libs7_init.c",
+             "fs_api.c" # FIXME: replace with cwalk
+             ],
     # + select({
     #     "//config/repl:static?": [
     #         "//lib:c_s7",

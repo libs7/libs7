@@ -38,7 +38,7 @@ void libc_s7_init(s7_scheme *sc);
 
 int main(int argc, char **argv)
 {
-  s7_scheme *sc = s7_init();
+  s7_scheme *sc = libs7_init();
   fprintf(stderr, "s7: %s\n", S7_DATE);
 
   /* s7_pointer wrde = s7_make_integer(sc, (s7_int)WRDE_SYNTAX); */

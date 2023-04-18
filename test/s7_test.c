@@ -259,6 +259,8 @@ void _set_options(struct option options[])
     }
 }
 
+s7_scheme *libs7_init(void);    /* libs7.h */
+
 int main(int argc, char **argv)
 {
     /* log_debug("ARGV[0]: %s", argv[0]); */
@@ -269,8 +271,9 @@ int main(int argc, char **argv)
     gopt_errors (argv[0], options);
 
     _set_options(options);
-    log_debug("s7_init");
-    s7 = s7_init();
+    log_debug("libs7_init");
+    s7 = libs7_init();
+
     log_debug("libc_s7_init");
     libc_s7_init(s7);
 
