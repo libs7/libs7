@@ -1,5 +1,7 @@
 (provide 'cgen.scm)
 
+;; TODO: write header files with init prototypes
+
 ;; derived from cload.scm.  Compilation logic removed so this just emits c files.
 
 (define *cload-cflags* (if (provided? 'clang) "-fPIC" ""))
