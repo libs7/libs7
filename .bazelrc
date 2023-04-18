@@ -3,6 +3,7 @@ common --symlink_prefix=.bazel/
 common --color=yes
 common:show --subcommands=pretty_print
 common:show --verbose_failures
+common:show --test_output=all  # errors, streamed
 
 common:q --noshow_progress
 common:q --noshow_loading_progress

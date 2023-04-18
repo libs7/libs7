@@ -298,9 +298,9 @@ int main(int argc, char **argv)
     UNITY_BEGIN();
 
     RUN_TEST(test_libc);
-    /* RUN_TEST(test_math); */
-    /* RUN_TEST(test_libm); */
-    /* RUN_TEST(test_regex); */
+    RUN_TEST(test_math);
+    RUN_TEST(test_libm);
+    RUN_TEST(test_regex);
 
     /* utstring_free(sexp); */
     return UNITY_END();
