@@ -23,8 +23,8 @@ cc_library(
     linkstatic = True,
     # alwayslink = 1,
     srcs  = ["s7.c",
+             "fs_api.c", # FIXME: replace with cwalk
              "libs7_init.c",
-             "fs_api.c" # FIXME: replace with cwalk
              ],
     # + select({
     #     "//config/repl:static?": [
@@ -54,6 +54,7 @@ cc_library(
             "-Wno-unused-function",
             "-Wno-implicit-fallthrough",
             # "--pedantic-errors",
+            "-fPIC",
         ],
         "//conditions:default": ["-std=c11"],
     }),

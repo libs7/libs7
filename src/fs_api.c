@@ -199,5 +199,3 @@ void fs_api_init(s7_scheme *sc)
                                      pl_ss));
 
 }
-
-
