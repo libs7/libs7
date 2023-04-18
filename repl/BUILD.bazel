@@ -4,50 +4,11 @@ filegroup(
     visibility = ["//visibility:public"]
 )
 
-##########
-## linux: gcc -o repl repl.c s7.o -Wl,-export-dynamic -lm -I. -ldl
 cc_binary(
     name  = "repl",
-    srcs  = ["repl.c"],
-    deps = ["//src:s7"],
-    copts =  [
-        "-Wall",
-        "-Wextra",
-        # "-Werror=pedantic",
-        # "-pedantic-errors",
-        "-Isrc",
-    ] + select({
-        # "//:bsd": ["-std=c11"],
-        "//:macos": ["-std=c11"],
-        "//:linux": [
-            "-std=c11",
-            "-Wl,export-dynamic",
-            ],
-        # "//:linux_clang": [
-        #     "-std=c11",
-        #     "-fPIC",
-        #     "-Wl,export-dynamic",
-        #     ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = ["//scm:srcs"],
-    linkopts = select({
-        # "//:bsd": ["-Wl,-export-dynamic"],
-        "//:macos": [],
-        "//:linux": ["-ldl", "-Wl,-export-dynamic"],
-        # "//:linux_clang": ["-ldl", "-Wl,-export-dynamic"],
-        "//conditions:default": []
-    }) + [
-        "-lm",
-    ],
-    visibility = ["//visibility:public"]
-)
-
-cc_binary(
-    name  = "repl_dumb",
     srcs  = select({
-        "//config/repl:static?": ["repl_dumb_static.c"],
-        "//conditions:default":  ["repl_dumb_dynamic.c"]
+        "//config/repl:static?": ["repl_static.c"],
+        "//conditions:default":  ["repl_dynamic.c"]
     }),
     deps = ["//src:s7", "//vendored/logc"] + select({
         "//config/repl:static?": [
@@ -184,3 +145,46 @@ cc_binary(
     }),
     visibility = ["//visibility:public"]
 )
+
+################
+## legacy repl.c
+##########
+## linux: gcc -o repl repl.c s7.o -Wl,-export-dynamic -lm -I. -ldl
+cc_binary(
+    name  = "repl_x",
+    srcs  = ["repl.c"],
+    deps = ["//src:s7"],
+    copts =  [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        # "-pedantic-errors",
+        "-Isrc",
+    ] + select({
+        # "//:bsd": ["-std=c11"],
+        "//:macos": ["-std=c11"],
+        "//:linux": [
+            "-std=c11",
+            "-Wl,export-dynamic",
+            ],
+        # "//:linux_clang": [
+        #     "-std=c11",
+        #     "-fPIC",
+        #     "-Wl,export-dynamic",
+        #     ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    data = ["//scm:srcs"],
+    linkopts = select({
+        # "//:bsd": ["-Wl,-export-dynamic"],
+        "//:macos": [],
+        "//:linux": ["-ldl", "-Wl,-export-dynamic"],
+        # "//:linux_clang": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }) + [
+        "-lm",
+    ],
+    visibility = ["//visibility:public"]
+)
+
+
