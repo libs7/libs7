@@ -9,8 +9,6 @@
 
 #include "s7.h"
 
-static s7_pointer FILE__symbol;
-
 /*
   Remove leading ./ and any ../ for path that does not exist on fs
   Returns char* that must be freed by client.
@@ -186,26 +184,11 @@ static s7_pointer g_canonical_path(s7_scheme *sc, s7_pointer args)
 /* **************************************************************** */
 void fs_api_init(s7_scheme *sc)
 {
-    s7_pointer cur_env, pl_issi, pl_ss, pl_isi, pl_iss, pl_ssi, pl_sss, pl_is, pl_xt; //  pl_ssix,
-    /* s7_int gc_loc; */
+    s7_pointer cur_env, pl_ss;
+    s7_pointer s;
 
-    s7_pointer s,i, t, x;
-    t = s7_t(sc);
     s = s7_make_symbol(sc, "string?");
-    i = s7_make_symbol(sc, "integer?");
-    x = s7_make_symbol(sc, "c-pointer?");
-
-    pl_is = s7_make_signature(sc, 2, i, s);
     pl_ss = s7_make_signature(sc, 2, s, s);
-    pl_iss = s7_make_signature(sc, 3, i, s, s);
-    pl_isi = s7_make_signature(sc, 3, i, s, i);
-    pl_issi = s7_make_signature(sc, 4, i, s, s, i);
-    pl_ssi = s7_make_signature(sc, 3, s, s, i);
-    pl_sss = s7_make_signature(sc, 3, s, s, s);
-    pl_xt = s7_make_signature(sc, 2, x, t);
-
-    /* pl_ssix = s7_make_signature(sc, 4, s, s, i, x); */
-
     cur_env = s7_curlet(sc);
 
     s7_define(sc, cur_env,
