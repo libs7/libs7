@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #include "log.h"
-#include "s7.h"
+#include "libs7.h"
 
 // WITH_MAIN && ! WITH_NOTCURSES && ! WITH_C_LOADER
 // ! USE_SND

@@ -1,4 +1,5 @@
 #include "s7.h"
+#include "libs7.h"
 
 void fs_api_init(s7_scheme *sc);
 

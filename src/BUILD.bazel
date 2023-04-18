@@ -15,7 +15,7 @@
 #     #include nrepl.c,
 
 ##########
-exports_files(["s7.h"])
+exports_files(["s7.h"]) ## ???
 
 ###########
 cc_library(
@@ -24,7 +24,7 @@ cc_library(
     # alwayslink = 1,
     srcs  = ["s7.c",
              "fs_api.c", # FIXME: replace with cwalk
-             "libs7_init.c",
+             "libs7.c",
              ],
     # + select({
     #     "//config/repl:static?": [
@@ -35,14 +35,14 @@ cc_library(
     #     "//conditions:default":  []
     # }),
     # deps = none
-    hdrs  = ["s7.h"],
-    # deps  = [":nrepl"],
+    hdrs  = ["libs7.h", "s7.h"],
     copts = [
         "-Wall",
         "-Wextra",
         # "-Werror=pedantic",
         "-Wno-unused-parameter",
         "-Isrc",
+        "-Iexernal/libs7/src",
     ] + select({
         "//:macos": [
             "-Wno-format-pedantic",
