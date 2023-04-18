@@ -1,0 +1,13 @@
+# https://github.com/likle/cwalk
+
+load("//config:BUILD.bzl", "COPTS")
+
+cc_library(
+    name  = "cwalk",
+    linkstatic = True,
+    srcs  = ["cwalk.c"],
+    hdrs  = ["cwalk.h"],
+    copts = COPTS,
+    visibility = ["//visibility:public"]
+)
+
