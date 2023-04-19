@@ -30357,7 +30357,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
   if (((fname_len > 3) &&
        (local_strcmp((const char *)(fname + (fname_len - 3)), ".so"))) ||   /* linux */
       ((fname_len > 6) &&
-       (local_strcmp((const char *)(fname + (fname_len - 3)), ".dylib"))))  /* mac */
+       (local_strcmp((const char *)(fname + (fname_len - 6)), ".dylib"))))  /* mac */
     {
       void *library;
       char *pwd_name = NULL;
@@ -30387,15 +30387,14 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 	      pname = full_filename(sc, fname);
 	      pwd_name = (char *)block_data(pname);
 	    }}
+
       if ((S7_DEBUGGING) && (!pname)) fprintf(stderr, "pname is null\n");
       library = dlopen((pname) ? pwd_name : fname, RTLD_NOW);
-      if (!library)
-	s7_warn(sc, 512, "load %s failed: %s\n", (pname) ? pwd_name : fname, dlerror());
-      else
+      if (!library) {
+	s7_warn(sc, 1024, "load %s failed: %s\n", (pname) ? pwd_name : fname, dlerror());
+      } else
 	if (let) /* look for 'init_func in let */
 	  {
-  /* fprintf(stderr, "small_ints: %x\n", small_ints); /\* obazl *\/ */
-
 	    s7_pointer init = let_ref(sc, let, make_symbol(sc, "init_func", 9));
 	    /* init is a symbol (surely not a gensym?), so it should not need to be protected */
 	    if (!is_symbol(init))
@@ -30448,7 +30447,6 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 	  }
       if (pname) liberate(sc, pname);
     }
-  /* fprintf(stderr, "SMALL_INTS: %x\n", small_ints); /\* obazl *\/ */
   return(NULL);
 }
 #endif
@@ -30502,9 +30500,6 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   if (e == sc->s7_starlet) return(NULL);
 
 #if WITH_C_LOADER
-  /* fprintf(stderr, "WITH_C_LOADER s7_load_with_environment\n"); /\* obazl *\/ */
-  /* fprintf(stderr, "small_ints: %x\n", small_ints); /\* obazl *\/ */
-
   port = load_shared_object(sc, filename, (is_null(e)) ? sc->rootlet : e);
   if (port) return(port);
 #endif

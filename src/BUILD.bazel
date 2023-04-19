@@ -34,7 +34,7 @@ cc_library(
     #     ],
     #     "//conditions:default":  []
     # }),
-    # deps = none
+    deps  = ["//vendored/logc"],
     hdrs  = ["libs7.h", "s7.h"],
     copts = [
         "-Wall",
@@ -42,6 +42,8 @@ cc_library(
         # "-Werror=pedantic",
         "-Wno-unused-parameter",
         "-Isrc",
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
         "-Iexernal/libs7/src",
     ] + select({
         "//:macos": [
@@ -64,7 +66,7 @@ cc_library(
     ],
     defines = [
         "WITH_SYSTEM_EXTRAS",
-        "WITH_C_LOADER"
+        # "WITH_C_LOADER"
         # FIXME: if --//config:notcurses
         # "WITH_MAIN",
         # "WITH_NOTCURSES"
@@ -72,7 +74,7 @@ cc_library(
         "//config/repl:static?": [],
         "//conditions:default":  ["WITH_C_LOADER"]
     }) + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//config/s7:debug?": ["S7_DEBUGGING"],
         "//conditions:default":   []
     }),
     linkopts = select({

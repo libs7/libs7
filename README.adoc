@@ -1,0 +1,70 @@
+= libs7
+:toc: auto
+:toclevels: 3
+
+A Scheme interpreter and tools derived from
+link:https://ccrma.stanford.edu/software/snd/snd/s7.html[s7]. It is a
+component of the link:https://obazl.github.io/docs_obazl/[OBazl
+Toolsuite], which uses it in tools like
+link:https://github.com/obazl/mibl[mibl] and
+link:https://github.com/obazl/tools_obazl[tools_obazl].
+
+
+For more information sbout s7 see link:https://iainctduncan.github.io/scheme-for-max-docs/s7.html[Why S7 Scheme?].  The upstream master is on branch `s7-master`.
+
+== differences from s7
+
+`s7` is "intended as an extension language for other applications",
+but the standard distribution is pretty minimal. It contains no
+makefiles, and has a somewhat idiosyncratic build structure that
+relies on a mechanism ("cload') for dynamically compiling, linking and
+loading C libraries at runtime. It embeds bindings for several
+standard libc APIs in `s7.c` (e.g. `#include <fcntl.h>` ), and it also
+embeds some repl support in `s7.h`.
+
+This derivation is source-code-identical (except for a few lines noted
+below) with the standard distribution, but reorganizes the code:
+
+* uses Bazel for building;
+* separates the bindings for C libraries (e.g. libc, libdl, libgdbm, etc.) from the main `s7.c` file;
+* modifies the `cload` mechanism to generate the source files for those C libraries at build time;
+* supports static linking of C libraries
+* ...
+
+These changes are intended to make it easier to build s7 libraries and
+applications a la carte, without dynamic C compilation. All libraries
+are built (as either static or shared libraries) at build time.
+
+
+=== C libraries, cload, and cgen
+
+The `cload` mechanism allows the developer to easily specify `s7`
+bindings for C libraries as `s7 Scheme` source code. The
+implementation generates a C source file from a `.scm` file, compiles
+it, and loads it. So for example, `(load libc.scm)` will generate
+`libc_s7.c`, compile it to `libc_s7.so`, and then load it and call its
+initialization function.
+
+This works quite well, but dynamically compiling and running C code
+may be undesirable in some situations. The new `cgen` mechanism is
+essentially identical to the `cload` mechanism, but with the logic for
+compiling and linking C code stripped out. It is designed to be run at
+build time, and the build system is responsible for compiling and
+linking the generated C code. The application is responsible for
+calling the initialization function.
+
+* if configured to build static libs, then the app C code must call the initialization functions
+* else the generated scm initialization function must be called; it dloads the lib and calls the init fn
+
+
+== build targets
+
+* `bazel build @libs7//src:s7` - produces `libs7.lo`, `libc_s7.so`
+* `bazel build @libs7//src:c_s7` - produces `libc_s7.so`
+* `bazel run @libs7//src:repl` - launches a primitive repl (currently broken)
+
+
+'''
+link:https://cm-gitlab.stanford.edu/bil/s7.git[s7 git repository]  If you get a certificate complaint try `git config --global http.sslVerify false`.
+
+

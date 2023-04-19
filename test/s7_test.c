@@ -12,15 +12,15 @@
 #include "utarray.h"
 #include "utstring.h"
 
-#include "s7.h"
+#include "libs7.h"
 
 #include "unity.h"
 
 s7_scheme *s7;
 /* prototypes make the compiler happy */
-void libc_s7_init(s7_scheme *sc);
-void libdl_s7_init(s7_scheme *sc);
-void libm_s7_init(s7_scheme *sc);
+void libc_s7_init(s7_scheme*);
+void libdl_s7_init(s7_scheme*);
+void libm_s7_init(s7_scheme*);
 
 char *sexp_actual;
 char *sexp_expected;
@@ -43,7 +43,7 @@ void tearDown(void) {
 }
 
 void test_libc(void) {
-    sexp_actual = "(fnmatch \"*.c\" \"s7.c\" FNM_PATHNAME)";
+    sexp_actual = "((*libc* 'fnmatch) \"*.c\" \"s7.c\" (*libc* 'FNM_PATHNAME))";
     sexp_expected = "0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_actual);
@@ -63,7 +63,7 @@ void test_math(void) {
 }
 
 void test_libm(void) {
-    sexp_actual = "(pow 2 3)";
+    sexp_actual = "((*libm* 'pow) 2 3)";
     sexp_expected = "8.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_actual);
@@ -71,7 +71,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "(ceil 2.3)";
+    sexp_actual = "((*libm* 'ceil) 2.3)";
     sexp_expected = "3.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_actual);
@@ -79,7 +79,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "(floor 2.3)";
+    sexp_actual = "((*libm* 'floor) 2.3)";
     sexp_expected = "2.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_actual);
@@ -87,7 +87,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "(fmod 7 2)";
+    sexp_actual = "((*libm* 'fmod) 7 2)";
     sexp_expected = "1.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_actual);
@@ -95,7 +95,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "(fmod 7 3)";
+    sexp_actual = "((*libm* 'fmod) 7 3)";
     sexp_expected = "1.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_actual);
@@ -106,10 +106,10 @@ void test_libm(void) {
 
 void test_regex(void) {
     sexp_actual = ""
-        "(let* ((rg (regex.make)) "
-        "       (_ (regcomp rg \"a.b\" 0))) "
-        "   (let ((res (regexec rg \"acb\" 0 0))) "
-        "      (regfree rg) "
+        "(let* ((rg ((*libc* 'regex.make))) "
+        "       (_ ((*libc* 'regcomp) rg \"a.b\" 0))) "
+        "   (let ((res ((*libc* 'regexec) rg \"acb\" 0 0))) "
+        "      ((*libc* 'regfree) rg) "
         "      res))"
         ;
     sexp_expected = "0";
@@ -123,14 +123,14 @@ void test_regex(void) {
 #   define regex "\"a([0-9]+)b\""
     sexp_actual = ""
         "(let* ((s \"a123b\") "
-        "       (rg (regex.make)) "
-        "       (_ (regcomp rg " regex " REG_EXTENDED)) "
+        "       (rg ((*libc* 'regex.make))) "
+        "       (_ ((*libc* 'regcomp) rg " regex " (*libc* 'REG_EXTENDED))) "
         "       (nmatch 2)) "
-        "   (let* ((res (regexec rg s nmatch 0)) "
+        "   (let* ((res ((*libc* 'regexec) rg s nmatch 0)) "
         "          (match-so (int-vector-ref res 2)) "
         "          (match-eo (int-vector-ref res 3)) "
         "          (match (substring s match-so match-eo))) "
-        "      (regfree rg) "
+        "      ((*libc* 'regfree) rg) "
         "      match))"
         ;
     sexp_expected = "\"123\"";
@@ -159,11 +159,11 @@ void test_regex(void) {
 #   define regex2 "\"(ba(na)*s |nefer(ti)* )*\""
     sexp_actual = ""
         "(let* ((s \"bananas nefertiti\") "
-        "       (rg (regex.make)) "
-        "       (_ (regcomp rg " regex2 " REG_EXTENDED)) "
+        "       (rg ((*libc* 'regex.make))) "
+        "       (_ ((*libc* 'regcomp) rg " regex2 " (*libc* 'REG_EXTENDED))) "
         "       (nmatch 3)) "
-        "   (let ((res (regexec rg s nmatch 0))) "
-        "      (regfree rg) "
+        "   (let ((res ((*libc* 'regexec) rg s nmatch 0))) "
+        "      ((*libc* 'regfree) rg) "
         "      res))"
         ;
     sexp_expected = "#i(0 8 0 8 4 6)";
@@ -274,14 +274,15 @@ int main(int argc, char **argv)
     log_debug("libs7_init");
     s7 = libs7_init();
 
-    log_debug("libc_s7_init");
-    libc_s7_init(s7);
-
-    log_debug("libdl_s7_init");
-    libdl_s7_init(s7);
-
-    log_debug("libm_s7_init");
-    libm_s7_init(s7);
+#if defined(LINK_STATIC)
+    clib_sinit(s7, libc_s7_init, "libc", DSO_EXT);
+    clib_sinit(s7, libdl_s7_init, "libdl", DSO_EXT);
+    clib_sinit(s7, libm_s7_init, "libm", DSO_EXT);
+#else  /* LINK_DYNAMIC */
+    clib_dload(s7, "libc_s7", "libc", DSO_EXT);
+    clib_dload(s7, "libdl_s7", "libdl", DSO_EXT);
+    clib_dload(s7, "libm_s7", "libm", DSO_EXT);
+#endif  /* LINK_DYNAMIC */
 
     log_debug("INITIALIZED");
 

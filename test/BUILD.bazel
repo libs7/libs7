@@ -24,7 +24,6 @@ cc_test(
 
         "-Ivendored/uthash",
         "-Iexternal/libs7/vendored/uthash",
-
     ] + select({
         "//:macos": [
             "-Wno-gnu",
@@ -40,11 +39,16 @@ cc_test(
         "//config/host:debug": ["DEBUG_TRACE"],
         "//conditions:default":   []
     }) + select({
+        "//config/libs:static?": ["LINK_STATIC"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/host:macos": ["DSO_EXT=\\\".dylib\\\""],
         "//config/host:linux": [
+            "DSO_EXT=\\\".so\\\"",
             "_XOPEN_SOURCE=500", # strdup
             "_DEFAULT_SOURCE"    # dirent DT_* macros
         ],
-        "//conditions:default":   []
+        "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }),
     linkopts = select({
         "//:macos": ["-ldl"],
@@ -53,14 +57,22 @@ cc_test(
     }),
     deps = [
         "//src:s7",
-        "//lib:c_s7",
-        "//lib:dl_s7",
-        "//lib:m_s7",
         "//vendored/gopt",
         "//vendored/logc",
         "//vendored/unity",
         "//vendored/uthash",
-    ],
+    ] + select({
+        "//config/libs:static?": [
+            "//lib/static:c_s7",
+            "//lib/static:dl_s7",
+            "//lib/static:m_s7",
+        ],
+        "//conditions:default": [
+            "//lib/shared:c_s7",
+            "//lib/shared:dl_s7",
+            "//lib/shared:m_s7",
+        ]
+    }),
     timeout = "short",
     visibility = ["//test:__subpackages__"]
 )
