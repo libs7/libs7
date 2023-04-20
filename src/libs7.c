@@ -1,6 +1,8 @@
 #include "s7.h"
 #include "libs7.h"
 
+bool libs7_verbose;
+
 void fs_api_init(s7_scheme *sc);
 
 static char buf[512]; // max len of <libname>_init or lib/shared/<libname><ext>
@@ -17,7 +19,7 @@ void clib_dload(s7_scheme *s7,
                 char *libns,     /* e.g. libc */
                 char *dso_ext)   /* .dylib or .so */
 {
-    log_debug("clib_dload");
+    /* log_debug("clib_dload"); */
     /* int len = strlen(libname); */
     sprintf(buf, "%s_init", libname);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
@@ -44,12 +46,13 @@ void clib_dload(s7_scheme *s7,
              512, // 20 + 18 + len + strlen(dso_ext),
              fmt,
              libname, dso_ext);
-    log_debug("dso: %s", buf);
+    /* log_debug("dso: %s", buf); */
 
     s7_pointer val = s7_load_with_environment(s7, buf, e);
 
     if (val) {
-        log_debug("loaded %s", buf);
+        if (libs7_verbose)
+            log_debug("loaded %s", buf);
         s7_pointer libs = s7_slot(s7, s7_make_symbol(s7, "*libraries*"));
         snprintf(buf, strlen(libns) + 3, "*%s*", libns);
         s7_define(s7, s7_nil(s7), s7_make_symbol(s7, buf), e);

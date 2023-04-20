@@ -48,7 +48,11 @@ cc_library(
 cc_library(
     name  = "cwalk_s7",  # libcwalk_s7.a
     linkstatic = True,
-    srcs  = ["//lib:libcwalk_s7.c", "//src:s7.h"],
+    srcs  = [
+        "//lib:libcwalk_s7.c",
+        # "//lib:libcwalk_s7.h",
+        "//src:s7.h"
+    ],
     deps  = ["//vendored/cwalk"],
     copts = [
         "-Wall",
