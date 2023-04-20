@@ -263,6 +263,8 @@ s7_scheme *libs7_init(void);    /* libs7.h */
 
 int main(int argc, char **argv)
 {
+    //FIXME: throw error if run outside of libs7 repo
+    log_trace("WS: %s", getenv("TEST_WORKSPACE"));
     /* log_debug("ARGV[0]: %s", argv[0]); */
     /* log_debug("CWD: %s", getcwd(NULL, 0)); */
 

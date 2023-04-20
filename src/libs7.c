@@ -17,7 +17,8 @@ void clib_dload(s7_scheme *s7,
                 char *libns,     /* e.g. libc */
                 char *dso_ext)   /* .dylib or .so */
 {
-    int len = strlen(libname);
+    log_debug("clib_dload");
+    /* int len = strlen(libname); */
     sprintf(buf, "%s_init", libname);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
     s7_pointer init_fn_sym = s7_make_symbol(s7, buf);
@@ -26,8 +27,24 @@ void clib_dload(s7_scheme *s7,
     s7_int gc_loc = s7_gc_protect(s7, e);
     s7_pointer old_e = s7_set_curlet(s7, e);
 
-    snprintf(buf, 18 + len, "lib/shared/%s%s", libname, dso_ext);
-    /* char *clib_path = "lib/shared/libc_s7" DSO_EXT; */
+    char *ws = getenv("TEST_WORKSPACE");
+    log_debug("ws: %s", ws);
+    char *fmt;
+    if (ws) {
+        if ( (strncmp("libs7", ws, 5) == 0)
+             && strlen(ws) == 5 ) {
+            fmt = "lib/shared/%s%s";
+        } else {
+            fmt = "external/libs7/lib/shared/%s%s";
+        }
+    } else {
+        fmt = "external/libs7/lib/shared/%s%s";
+    }
+    snprintf(buf,
+             512, // 20 + 18 + len + strlen(dso_ext),
+             fmt,
+             libname, dso_ext);
+    log_debug("dso: %s", buf);
 
     s7_pointer val = s7_load_with_environment(s7, buf, e);
 
@@ -62,7 +79,7 @@ void clib_sinit(s7_scheme *s7,
 
     /* libc_s7_init(s7); */
     fnptr(s7);
-    log_debug("initiaized static lib: %s", libns);
+    log_debug("initialized static lib: %s", libns);
 
     s7_pointer libs = s7_slot(s7, s7_make_symbol(s7, "*libraries*"));
     snprintf(buf, strlen(libns) + 3, "*%s*", libns);
