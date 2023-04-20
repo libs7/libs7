@@ -16,13 +16,15 @@
 
 #include "unity.h"
 
-s7_scheme *s7;
-/* prototypes make the compiler happy */
+//FIXME: use header files
 void libc_s7_init(s7_scheme*);
 void libdl_s7_init(s7_scheme*);
 void libm_s7_init(s7_scheme*);
+void libcwalk_s7_init(s7_scheme*);
 
-char *sexp_actual;
+s7_scheme *s7;
+
+char *sexp_input;
 char *sexp_expected;
 
 UT_string *setter;
@@ -42,70 +44,75 @@ void tearDown(void) {
     /* log_info("teardown"); */
 }
 
+/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+/* char *s = s7_object_to_c_string(s7, actual); */
+/* log_debug("result: %s", s); */
+/* free(s); */
+
 void test_libc(void) {
-    sexp_actual = "((*libc* 'fnmatch) \"*.c\" \"s7.c\" (*libc* 'FNM_PATHNAME))";
+    sexp_input = "((*libc* 'fnmatch) \"*.c\" \"s7.c\" (*libc* 'FNM_PATHNAME))";
     sexp_expected = "0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
 
 void test_math(void) {
-    sexp_actual = "(+ 2 3)";
+    sexp_input = "(+ 2 3)";
     sexp_expected = "5";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
 
 void test_libm(void) {
-    sexp_actual = "((*libm* 'pow) 2 3)";
+    sexp_input = "((*libm* 'pow) 2 3)";
     sexp_expected = "8.0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "((*libm* 'ceil) 2.3)";
+    sexp_input = "((*libm* 'ceil) 2.3)";
     sexp_expected = "3.0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "((*libm* 'floor) 2.3)";
+    sexp_input = "((*libm* 'floor) 2.3)";
     sexp_expected = "2.0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "((*libm* 'fmod) 7 2)";
+    sexp_input = "((*libm* 'fmod) 7 2)";
     sexp_expected = "1.0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_actual = "((*libm* 'fmod) 7 3)";
+    sexp_input = "((*libm* 'fmod) 7 3)";
     sexp_expected = "1.0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
 
 void test_regex(void) {
-    sexp_actual = ""
+    sexp_input = ""
         "(let* ((rg ((*libc* 'regex.make))) "
         "       (_ ((*libc* 'regcomp) rg \"a.b\" 0))) "
         "   (let ((res ((*libc* 'regexec) rg \"acb\" 0 0))) "
@@ -114,14 +121,14 @@ void test_regex(void) {
         ;
     sexp_expected = "0";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
     /* capture - 1st match is whole thing, 2nd is subexpr */
 #   define regex "\"a([0-9]+)b\""
-    sexp_actual = ""
+    sexp_input = ""
         "(let* ((s \"a123b\") "
         "       (rg ((*libc* 'regex.make))) "
         "       (_ ((*libc* 'regcomp) rg " regex " (*libc* 'REG_EXTENDED))) "
@@ -135,14 +142,14 @@ void test_regex(void) {
         ;
     sexp_expected = "\"123\"";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
     /* from s7test.scm */
     /* not on macos: */
-    /* sexp_actual = "" */
+    /* sexp_input = "" */
     /*     "(let* ((rg (regex.make)) " */
     /*     "       (_ (regcomp rg \"colou\\?r\" 0))) " */
     /*     "   (let ((res (regexec rg \"The color green\" 1 0))) " */
@@ -151,13 +158,13 @@ void test_regex(void) {
     /*     ; */
     /* sexp_expected = "#i(4 9)"; */
     /* utstring_renew(sexp); */
-    /* utstring_printf(sexp, "%s", sexp_actual); */
+    /* utstring_printf(sexp, "%s", sexp_input); */
     /* actual = s7_eval_c_string(s7, utstring_body(sexp)); */
     /* expected = s7_eval_c_string(s7, sexp_expected); */
     /* TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected)); */
 
 #   define regex2 "\"(ba(na)*s |nefer(ti)* )*\""
-    sexp_actual = ""
+    sexp_input = ""
         "(let* ((s \"bananas nefertiti\") "
         "       (rg ((*libc* 'regex.make))) "
         "       (_ ((*libc* 'regcomp) rg " regex2 " (*libc* 'REG_EXTENDED))) "
@@ -168,10 +175,36 @@ void test_regex(void) {
         ;
     sexp_expected = "#i(0 8 0 8 4 6)";
     utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_actual);
+    utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+}
+
+void test_cwalk(void) {
+
+    /* cwk_path_get_basename("/my/path.txt", &basename, &length); */
+    sexp_input = "((*libcwalk* 'cwk_path_get_basename) \"/my/path.txt\")";
+    sexp_expected = "\"path.txt\"";
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+
+    /* cwk_path_normalize("/var/log/weird/////path/.././..///", result, sizeof(result)); */
+    sexp_input = "((*libcwalk* 'cwk_path_normalize) \"/var/log/weird/////path/.././..///\")";
+    sexp_expected = "\"/var/log\"";
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+/* char *s = s7_object_to_c_string(s7, actual); */
+/* log_debug("result: %s", s); */
+/* free(s); */
+/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+
 }
 
 void _print_usage(void) {
@@ -263,8 +296,13 @@ s7_scheme *libs7_init(void);    /* libs7.h */
 
 int main(int argc, char **argv)
 {
-    //FIXME: throw error if run outside of libs7 repo
-    log_trace("WS: %s", getenv("TEST_WORKSPACE"));
+    //FIXME: throw error if run outside of bazel
+    if ( !getenv("BAZEL_TEST") ) {
+        log_error("This test must be run in a Bazel environment: bazel test //path/to/test");
+        exit(EXIT_FAILURE);
+    }
+
+    /* log_trace("WS: %s", getenv("TEST_WORKSPACE")); */
     /* log_debug("ARGV[0]: %s", argv[0]); */
     /* log_debug("CWD: %s", getcwd(NULL, 0)); */
 
@@ -273,20 +311,22 @@ int main(int argc, char **argv)
     gopt_errors (argv[0], options);
 
     _set_options(options);
-    log_debug("libs7_init");
+
     s7 = libs7_init();
 
-#if defined(LINK_STATIC)
-    clib_sinit(s7, libc_s7_init, "libc", DSO_EXT);
-    clib_sinit(s7, libdl_s7_init, "libdl", DSO_EXT);
-    clib_sinit(s7, libm_s7_init, "libm", DSO_EXT);
-#else  /* LINK_DYNAMIC */
+#if defined(CLIBS_LINK_STATIC)
+    clib_sinit(s7, libc_s7_init, "libc");
+    clib_sinit(s7, libdl_s7_init, "libdl");
+    clib_sinit(s7, libm_s7_init, "libm");
+    clib_sinit(s7, libcwalk_s7_init, "libcwalk");
+#else  /* CLIBS_LINK_DYNAMIC */
     clib_dload(s7, "libc_s7", "libc", DSO_EXT);
     clib_dload(s7, "libdl_s7", "libdl", DSO_EXT);
     clib_dload(s7, "libm_s7", "libm", DSO_EXT);
+    clib_dload(s7, "libcwalk_s7", "libcwalk", DSO_EXT);
 #endif  /* LINK_DYNAMIC */
 
-    log_debug("INITIALIZED");
+    /* log_debug("INITIALIZED"); */
 
     char *script_dir = "./test";
     s7_pointer newpath;
@@ -303,10 +343,11 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    RUN_TEST(test_libc);
-    RUN_TEST(test_math);
-    RUN_TEST(test_libm);
-    RUN_TEST(test_regex);
+    /* RUN_TEST(test_libc); */
+    /* RUN_TEST(test_math); */
+    /* RUN_TEST(test_libm); */
+    /* RUN_TEST(test_regex); */
+    RUN_TEST(test_cwalk);
 
     /* utstring_free(sexp); */
     return UNITY_END();

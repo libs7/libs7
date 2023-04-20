@@ -28,7 +28,7 @@ void clib_dload(s7_scheme *s7,
     s7_pointer old_e = s7_set_curlet(s7, e);
 
     char *ws = getenv("TEST_WORKSPACE");
-    log_debug("ws: %s", ws);
+    /* log_debug("ws: %s", ws); */
     char *fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
@@ -69,8 +69,7 @@ void clib_dload(s7_scheme *s7,
 
 void clib_sinit(s7_scheme *s7,
                 void (fnptr)(s7_scheme *sc),
-                char *libns,     /* e.g. libc */
-                char *dso_ext)   /* .dylib or .so */
+                char *libns)     /* e.g. libc */
 {
 
     s7_pointer e = s7_inlet(s7, s7_nil(s7)); // empty env

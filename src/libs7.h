@@ -14,5 +14,4 @@ void clib_dload(s7_scheme *s7,
 
 void clib_sinit(s7_scheme *s7,
                 void (fnptr)(s7_scheme *sc),
-                char *libns,     /* e.g. libc */
-                char *dso_ext);  /* .dylib or .so */
+                char *libns);     /* e.g. libc */

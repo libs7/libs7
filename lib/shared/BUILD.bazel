@@ -37,6 +37,47 @@ cc_binary(
 
 ################################################################
 cc_binary(
+    name  = "cwalk_s7",  # libdl_s7.{so,dylib}
+    linkshared = True,
+    srcs  = ["//lib:libcwalk_s7.c", "//src:s7.h"],
+    copts = [
+        "-Wall",
+        "-Wextra",
+        "-Werror=pedantic",
+        "-Wno-unused-parameter",
+        "-Wno-format-pedantic",
+        "-Isrc",
+        "-Iexternal/libs7/src",
+    ] + select({
+        "//:macos": [
+            "-Wno-gnu",
+            "-std=c11"
+        ],
+        "//:linux": [
+            "-std=gnu11",
+            "--pedantic-errors",
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    data = glob(["*.scm"]),
+    defines = [
+        # "WITH_MAIN"
+        "WITH_SYSTEM_EXTRAS"
+        # "WITH_C_LOADER",
+    ] + select({
+        # "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//conditions:default":   []
+    }),
+    linkopts = select({
+        # "//:macos": ["-std=c11"],
+        "//:linux": ["-lm"],
+        "//conditions:default": []
+    }),
+    visibility = ["//visibility:public"]
+)
+
+################################################################
+cc_binary(
     name  = "dl_s7",  # libdl_s7.{so,dylib}
     linkshared = True,
     srcs  = ["//lib:libdl_s7.c", "//src:s7.h"],

@@ -1,86 +1,3 @@
-cc_library(
-    name  = "cs7", # emits libc_s7.a
-    linkstatic = 1,
-    srcs  = ["libc_s7.c", "//src:s7.h"],
-    # hdrs = ["//src:s7_header"],
-    # deps = ["//src:s7_header"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11",
-            "-Werror=pedantic",
-            "-Wno-format-pedantic",
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "-fPIC",
-            "-Wl,--no-undefined",
-            # "-Wpedantic-errors",
-            # "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]), # + ["s7.h"],
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
-)
-
-cc_binary(
-    name  = "c_s7",  # create libc_s7.{dylib,so}
-    linkshared = True,
-    srcs  = ["libc_s7.c", "//src:s7.h"],
-    # deps  = [":s7"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-std=c11",
-            "-Wno-gnu",
-            "-Werror=pedantic",
-            "-Wno-format-pedantic",
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            # "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    defines = [
-        "WITH_SYSTEM_EXTRAS"
-    ],
-    linkopts = select({
-        "//config/host:macos": [],
-        "//config/host:linux": ["-ldl", "-Wl,-export-dynamic"],
-        "//conditions:default": []
-    }) + [
-        "-lm"
-    ],
-    visibility = ["//visibility:public"]
-)
-
 genrule(
     name = "libc_s7_cgen",
     srcs = [":libc_cgen.scm", ":cgen.scm"],
@@ -93,45 +10,16 @@ genrule(
     visibility = ["//lib:__subpackages__"]
 )
 
-################################################################
-cc_library(
-    name  = "dl_s7",  # libdl_s7.a
-    linkstatic = True,
-    srcs  = ["libdl_s7.c", "//src:s7.h"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+genrule(
+    name = "libcwalk_s7_cgen",
+    srcs = [":libcwalk_cgen.scm", ":cgen.scm"],
+    outs = ["libcwalk_s7.c"],
+    tools = [":cgen"],
+    cmd  = "\n".join([
+        "$(execpath :cgen) $(location :libcwalk_cgen.scm) ;",
+        "cp libcwalk_s7.c $@ ;"
+    ]),
+    visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -146,47 +34,6 @@ genrule(
     visibility = ["//lib:__subpackages__"]
 )
 
-################################################################
-cc_library(
-    name  = "m_s7",
-    # linkstatic = 0,
-    srcs  = ["libm_s7.c", "//src:s7.h"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
-)
-
 genrule(
     name = "libm_s7_cgen",
     srcs = [":libm_cgen.scm", ":cgen.scm"],
@@ -197,48 +44,6 @@ genrule(
         "cp libm_s7.c $@ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
-)
-
-################################################################
-cc_library(
-    name  = "utf8proc_s7",
-    # linkstatic = 0,
-    srcs  = ["libutf8proc_s7.c", "//src:s7.h"],
-    deps  = ["@utf8proc//:utf8proc"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
 )
 
 genrule(
@@ -253,48 +58,6 @@ genrule(
     visibility = ["//lib:__subpackages__"]
 )
 
-################################################################
-# # FIXME: depends on libgdbm
-cc_library(
-    name  = "gdbm_s7",
-    # linkstatic = 0,
-    srcs  = ["libgdbm_s7.c", "//src:s7.h"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
-)
-
 genrule(
     name = "libgdbm_s7_cgen",
     srcs = [":libgdbm_cgen.scm", ":cgen.scm"],
@@ -305,48 +68,6 @@ genrule(
         "cp libgdbm_s7.c $@ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
-)
-
-################################################################
-cc_library(
-    name  = "gsl_s7",
-    linkstatic = True,
-    srcs  = ["libgsl_s7.c", "//src:s7.h"],
-    deps  = ["@libgsl//:libgsl"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
 )
 
 genrule(
@@ -417,38 +138,6 @@ cc_binary(
         "//conditions:default": []
     }) + [
         # "-lm",
-    ],
-    visibility = ["//visibility:public"]
-)
-
-# compiled separately instead of #included in nrepl.c
-cc_library(
-    name = "notcurses_s7",
-    srcs = [
-        "notcurses_s7.c",
-        "//src:s7.h"
-    ],
-    deps = [
-        "@libdeflate//:libdeflate",
-        "@notcurses//:notcurses"
-    ],
-    copts = select({
-        # strdup is non-standard, not supported on linux in strict c11 mode
-        "//config/host:macos": ["-std=c11"],
-        "//config/host:linux": ["-std=gnu11", "-Wl,-export-dynamic"],
-        "//conditions:default": ["-std=c11"],
-    }) + [
-        "-Wextra",
-        "-Wno-unused-parameter",
-        # "-Ivendored/linenoise",
-        "-O2", "-g",
-
-        "-I.",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-
-        # "-Ivendored/linenoise",
-        "-Iexternal/notcurses/notcurses/include",
     ],
     visibility = ["//visibility:public"]
 )

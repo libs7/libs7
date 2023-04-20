@@ -3,6 +3,26 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 cc_test(
     name = "test",
     srcs = ["s7_test.c"],
+    deps = [
+        "//src:s7",
+        "//vendored/gopt",
+        "//vendored/logc",
+        "//vendored/unity",
+        "//vendored/uthash",
+    ] + select({
+        "//config/clibs/link:static?": [
+            "//lib/static:c_s7",
+            "//lib/static:dl_s7",
+            "//lib/static:m_s7",
+            "//lib/static:cwalk_s7",
+        ],
+        "//conditions:default": [
+            "//lib/shared:c_s7",
+            "//lib/shared:dl_s7",
+            "//lib/shared:m_s7",
+            "//lib/shared:cwalk_s7",
+        ]
+    }),
     copts = [
         "-Wall",
         "-Wextra",
@@ -39,7 +59,7 @@ cc_test(
         "//config/host:debug": ["DEBUG_TRACE"],
         "//conditions:default":   []
     }) + select({
-        "//config/libs:static?": ["LINK_STATIC"],
+        "//config/clibs/link:static?": ["CLIBS_LINK_STATIC"],
         "//conditions:default":   []
     }) + select({
         "//config/host:macos": ["DSO_EXT=\\\".dylib\\\""],
@@ -54,24 +74,6 @@ cc_test(
         "//:macos": ["-ldl"],
         "//:linux": ["-lm", "-ldl"],
         "//conditions:default": []
-    }),
-    deps = [
-        "//src:s7",
-        "//vendored/gopt",
-        "//vendored/logc",
-        "//vendored/unity",
-        "//vendored/uthash",
-    ] + select({
-        "//config/libs:static?": [
-            "//lib/static:c_s7",
-            "//lib/static:dl_s7",
-            "//lib/static:m_s7",
-        ],
-        "//conditions:default": [
-            "//lib/shared:c_s7",
-            "//lib/shared:dl_s7",
-            "//lib/shared:m_s7",
-        ]
     }),
     timeout = "short",
     visibility = ["//test:__subpackages__"]
