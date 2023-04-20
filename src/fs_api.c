@@ -74,8 +74,8 @@ char *canonical_path(char *path)
             }
         }
         if (dotcount > 2) {
-            printf("ERR: too many dots\n");
-            exit(EXIT_FAILURE);
+            printf("ERR: too many dots?\n");
+            /* exit(EXIT_FAILURE); */
         }
         /* printf("src_cursor (advanced): %s\n", src_cursor); */
         /* printf("dot ct: %d\n", dotcount); */

@@ -15,10 +15,11 @@
 
 
 (if (not (defined? '*libcwalk*))
-    (define *libcwalk*
+    ;; (define *libcwalk*
       (with-let (unlet)
 	(set! *libraries* (cons (cons "libcwalk.scm" (curlet)) *libraries*))
-	(set! *cload-library-name* "*libcwalk*")
+        ;; IMPORTANT! if *cload-library-name* is defined, then cgen will
+	;; (set! *cload-library-name* "*libcwalk*")
 	(c-define
          '((size_t cwk_path_get_absolute
                    (char* ;; base
@@ -63,7 +64,7 @@
                     return(res);
                   }
                  ")
-	   (C-function ("cwk_path_get_basename" g_cwk_path_get_basename "" 1))
+	   (C-function ("cwk:path_get_basename" g_cwk_path_get_basename "" 1))
 
            ;; CWK_PUBLIC size_t cwk_path_change_basename(const char *path, const char *new_basename, char *buffer, size_t buffer_size);
 
@@ -72,6 +73,7 @@
            ;; CWK_PUBLIC bool cwk_path_get_extension(const char *path, const char **extension, size_t *length);
 
            ;; CWK_PUBLIC bool cwk_path_has_extension(const char *path);
+           (bool cwk_path_has_extension (char*))
 
            ;; CWK_PUBLIC size_t cwk_path_change_extension(const char *path, const char *new_extension, char *buffer, size_t buffer_size);
 
@@ -95,7 +97,7 @@
                     return(res);
                   }
                  ")
-	   (C-function ("cwk_path_normalize" g_cwk_path_normalize "" 1))
+	   (C-function ("cwk:path_normalize" g_cwk_path_normalize "" 1))
 
            ;; CWK_PUBLIC size_t cwk_path_get_intersection(const char *path_base, const char *path_other);
 
@@ -128,8 +130,12 @@
 
            )
 
-	 "" "cwalk.h" "" "" "libcwalk_s7")
-	(curlet))))
+	 "cwk" ;; prefix to add
+         "cwk_"    ;; strip-prefix
+         "cwalk.h" "" "" "libcwalk_s7")
+	(curlet))
+      ;; )
+)
 
-*libcwalk*
+;; *libcwalk*
 ;; the loader will return *libcwalk*

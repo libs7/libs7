@@ -50,6 +50,15 @@ void tearDown(void) {
 /* free(s); */
 
 void test_libc(void) {
+
+/*     actual = s7_eval_c_string(s7, "*libc*");
+/* char *s = s7_object_to_c_string(s7, actual); */
+/* log_debug("*libcwalk*: %s", s); */
+/* free(s); */
+/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+/*  /\* exit(0); *\/ */
+
+
     sexp_input = "((*libc* 'fnmatch) \"*.c\" \"s7.c\" (*libc* 'FNM_PATHNAME))";
     sexp_expected = "0";
     utstring_renew(sexp);
@@ -70,7 +79,7 @@ void test_math(void) {
 }
 
 void test_libm(void) {
-    sexp_input = "((*libm* 'pow) 2 3)";
+    sexp_input = "(libm:pow 2 3)";
     sexp_expected = "8.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -78,7 +87,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_input = "((*libm* 'ceil) 2.3)";
+    sexp_input = "(libm:ceil 2.3)";
     sexp_expected = "3.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -86,7 +95,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_input = "((*libm* 'floor) 2.3)";
+    sexp_input = "(libm:floor 2.3)";
     sexp_expected = "2.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -94,7 +103,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_input = "((*libm* 'fmod) 7 2)";
+    sexp_input = "(libm:fmod 7 2)";
     sexp_expected = "1.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -102,7 +111,7 @@ void test_libm(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_input = "((*libm* 'fmod) 7 3)";
+    sexp_input = "(libm:fmod 7 3)";
     sexp_expected = "1.0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -184,7 +193,8 @@ void test_regex(void) {
 void test_cwalk(void) {
 
     /* cwk_path_get_basename("/my/path.txt", &basename, &length); */
-    sexp_input = "((*libcwalk* 'cwk_path_get_basename) \"/my/path.txt\")";
+    /* sexp_input = "((*libcwalk* 'cwk_path_get_basename) \"/my/path.txt\")"; */
+    sexp_input = "(cwk:path_get_basename \"/my/path.txt\")";
     sexp_expected = "\"path.txt\"";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -193,8 +203,17 @@ void test_cwalk(void) {
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
     /* cwk_path_normalize("/var/log/weird/////path/.././..///", result, sizeof(result)); */
-    sexp_input = "((*libcwalk* 'cwk_path_normalize) \"/var/log/weird/////path/.././..///\")";
+    /* sexp_input = "((*libcwalk* 'cwk:path_normalize) \"/var/log/weird/////path/.././..///\")"; */
+    sexp_input = "(cwk:path_normalize \"/var/log/weird/////path/.././..///\")";
     sexp_expected = "\"/var/log\"";
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+
+    sexp_input = "(->canonical-path \"/var/log/weird/path/../..\")";
+    sexp_expected = "\"/var/log/weird/\"";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
@@ -204,7 +223,6 @@ void test_cwalk(void) {
 /* s7_flush_output_port(s7, s7_current_output_port(s7)); */
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
-
 }
 
 void _print_usage(void) {
@@ -320,10 +338,10 @@ int main(int argc, char **argv)
     clib_sinit(s7, libm_s7_init, "libm");
     clib_sinit(s7, libcwalk_s7_init, "libcwalk");
 #else  /* CLIBS_LINK_DYNAMIC */
-    clib_dload(s7, "libc_s7", "libc", DSO_EXT);
-    clib_dload(s7, "libdl_s7", "libdl", DSO_EXT);
-    clib_dload(s7, "libm_s7", "libm", DSO_EXT);
-    clib_dload(s7, "libcwalk_s7", "libcwalk", DSO_EXT);
+    clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
+    clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT);
+    clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT);
+    clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT);
 #endif  /* LINK_DYNAMIC */
 
     /* log_debug("INITIALIZED"); */

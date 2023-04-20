@@ -23,7 +23,7 @@
 		    (void* dlsym (void* char*))
 		    (char* dlerror (void))
 		    (C-macro (int (RTLD_LAZY RTLD_NOW RTLD_BINDING_MASK RTLD_NOLOAD RTLD_DEEPBIND RTLD_GLOBAL RTLD_LOCAL RTLD_NODELETE))))
-		  "" "dlfcn.h" "" "" "libdl_s7")
+		  "" "" "dlfcn.h" "" "" "libdl_s7")
 	(curlet))))
 
 *libdl*

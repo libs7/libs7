@@ -7,10 +7,15 @@
 
 s7_scheme *libs7_init(void);
 
-void clib_dload(s7_scheme *s7,
-                char *libname,   /* e.g. libc_s7 */
-                char *libns,     /* e.g. libc */
-                char *dso_ext);   /* .dylib or .so */
+void clib_dload_global(s7_scheme *s7,
+                       char *libname,   /* e.g. libc_s7 */
+                       char *libns,     /* e.g. libc */
+                       char *dso_ext);   /* .dylib or .so */
+
+void clib_dload_ns(s7_scheme *s7,
+                   char *libname,   /* e.g. libc_s7 */
+                   char *libns,     /* e.g. libc */
+                   char *dso_ext);   /* .dylib or .so */
 
 void clib_sinit(s7_scheme *s7,
                 void (fnptr)(s7_scheme *sc),

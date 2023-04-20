@@ -32,7 +32,7 @@
   (cons 'c-define-1 (cons '(curlet) args)))
 
 
-(define* (c-define-1 cur-env function-info (prefix "") (headers ()) (cflags "") (ldflags "") output-name)
+(define* (c-define-1 cur-env function-info (prefix "") (strip-prefix "") (headers ()) (cflags "") (ldflags "") output-name)
   ;; write a C shared library module that links in the functions in function-info
   ;;    function info is either a list: (return-type c-name arg-type) or a list thereof
   ;;    the new functions are placed in cur-env
@@ -243,10 +243,26 @@
 	  (lambda* (return-type name arg-types doc)
 	    ;; (format *stderr* "~A ~A ~A~%" return-type name arg-types): double j0 (double) for example
 	    ;; C function -> scheme
-	    (let ((func-name (symbol->string (collides? name))))
+	    (let* (;;(stripped-name (if (> (length strip-prefix) 0)
+                                      ;; ;; string_prefix? is not loaded, so...
+                                      ;; (let* ((nm-str  (format #f "~A" name))
+                                      ;;        (ss  (substring nm-str 0 (length strip-prefix))))
+                                      ;;   (if (string=? ss strip-prefix)
+                                      ;;       (symbol (substring nm-str (length strip-prefix)))
+                                      ;;       name))
+                                      ;; name))
+                   (func-name (symbol->string (collides? name))))
 	      (let ((num-args (length arg-types))
 		    (base-name (string-append (if (> (length prefix) 0) prefix "s7_") "_" func-name)) ; not "g" -- collides with glib
-		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "") func-name)))
+		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
+                                                (if (> (length strip-prefix) 0)
+                                                    ;; string_prefix? is not loaded, so...
+                                                    (let* ((nm-str  (format #f "~A" func-name))
+                                                           (ss  (substring nm-str 0 (length strip-prefix))))
+                                                      (if (string=? ss strip-prefix)
+                                                          (substring nm-str (length strip-prefix))
+                                                          func-name))
+                                                    func-name))))
 		
 		(if (and (= num-args 1) 
 			 (eq? (car arg-types) 'void))

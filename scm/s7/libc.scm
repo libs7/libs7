@@ -1873,7 +1873,7 @@
 	       (reader-cond ((not (provided? 'openbsd)) "wordexp.h"))
 	       (reader-cond ((provided? 'freebsd) "sys/socket.h" "netinet/in.h"))
 	       )
-	 "" 
+	 "" ""
 	 (if (provided? 'linux) "-lrt" 
 	     (if (provided? 'openbsd) "-pthread" ""))
 	 "libc_s7")
