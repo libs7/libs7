@@ -17,16 +17,23 @@ cc_test(
             "//lib/static:cwalk_s7",
         ],
         "//conditions:default": [
+            # "//lib/shared:c_s7",
+            # "//lib/shared:dl_s7",
+            # "//lib/shared:m_s7",
+            # "//lib/shared:cwalk_s7",
+
             # "//lib/static:c_s7_shared",
             # "//lib/static:dl_s7_shared",
             # "//lib/static:m_s7_shared",
             # "//lib/static:cwalk_s7_shared",
-            "//lib/shared:c_s7",
-            "//lib/shared:dl_s7",
-            "//lib/shared:m_s7",
-            "//lib/shared:cwalk_s7",
         ]
     }),
+    data = [
+        "//lib/shared:c_s7",
+        "//lib/shared:dl_s7",
+        "//lib/shared:m_s7",
+        "//lib/shared:cwalk_s7",
+    ],
     copts = [
         "-Wall",
         "-Wextra",
@@ -79,7 +86,7 @@ cc_test(
     }),
     linkopts = select({
         # "//:macos": ["-ldl"],
-        "//:linux": ["-lm", "-ldl"],
+        "//:linux": ["-rdynamic"],
         "//conditions:default": []
     }),
     timeout = "short",

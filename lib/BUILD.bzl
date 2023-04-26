@@ -1,8 +1,6 @@
 CLIB_COPTS = [
     "-Wall",
     "-Wextra",
-    "-Werror=pedantic",
-    "-Wno-format-pedantic",
     "-Wno-unused-parameter",
 
     "-Isrc",
@@ -10,7 +8,9 @@ CLIB_COPTS = [
 ] + select({
     "//:macos": [
         "-std=c11",
+        "-Werror=pedantic",
         "-Wno-gnu",
+        "-Wno-format-pedantic",
     ],
     "//:linux": [
         "-std=gnu11",
@@ -26,7 +26,9 @@ CLIB_COPTS = [
 
 CLIB_LINKOPTS = select({
     "//config/host:macos": [],
-    "//config/host:linux": ["-ldl", "-lm", "-Wl,-export-dynamic"],
+    #FIXME: -rdynamic only on Linux + link:dynamic?
+    "//config/host:linux": ["-rdynamic"],
+    # ["-Wl,-export-dynamic"], # "-ldl", "-lm", 
     "//conditions:default": []
 })
 
