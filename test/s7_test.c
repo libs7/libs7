@@ -13,7 +13,7 @@
 #include "utarray.h"
 #include "utstring.h"
 
-#if defined(CLIBS_LINK_STATIC)
+#if ! defined(CLIBS_LINK_RUNTIME)
 #include "libc_s7.h"
 #include "libm_s7.h"
 #include "libcwalk_s7.h"
@@ -332,17 +332,17 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-#if defined(CLIBS_LINK_STATIC)
-    clib_sinit(s7, libc_s7_init, "libc");
-    clib_sinit(s7, libdl_s7_init, "libdl");
-    clib_sinit(s7, libm_s7_init, "libm");
-    clib_sinit(s7, libcwalk_s7_init, "libcwalk");
-#else  /* CLIBS_LINK_DYNAMIC */
+#if defined(CLIBS_LINK_RUNTIME)
     clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
     clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT);
     clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT);
     clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT);
-#endif  /* LINK_DYNAMIC */
+#else  /* link:static? or link:shared? */
+    clib_sinit(s7, libc_s7_init, "libc");
+    clib_sinit(s7, libdl_s7_init, "libdl");
+    clib_sinit(s7, libm_s7_init, "libm");
+    clib_sinit(s7, libcwalk_s7_init, "libcwalk");
+#endif
 
     /* log_debug("INITIALIZED"); */
 

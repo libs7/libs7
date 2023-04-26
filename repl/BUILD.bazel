@@ -6,21 +6,47 @@ filegroup(
 
 cc_binary(
     name  = "repl",
-    srcs  = select({
-        "//config/repl:static?": ["repl_static.c"],
-        "//conditions:default":  ["repl_dynamic.c"]
+    # srcs  = select({
+    #     "//config/repl:static?": ["repl_static.c"],
+    #     "//conditions:default":  ["repl_dynamic.c"]
+    # })
+    srcs = select({
+        "//config/clibs/link:static?": ["repl_static.c"],
+        "//config/clibs/link:shared?": [
+            # "If a rule's name is in the srcs, then this rule
+            # automatically depends on that one. If the named rule's
+            # outs are C or C++ source files, they are compiled into
+            # this rule; if they are library files, they are linked
+            # in."
+            "repl_dynamic.c",
+            "//lib/shared:c_s7", "//lib:libc_s7.h",
+            "//lib/shared:dl_s7", "//lib:libdl_s7.h",
+            "//lib/shared:m_s7", "//lib:libm_s7.h",
+            "//lib/shared:cwalk_s7", "//lib:libcwalk_s7.h"
+        ],
+        "//conditions:default": ["repl_dynamic.c"]
     }),
     deps = ["//src:s7", "//vendored/logc"] + select({
-        "//config/repl:static?": [
-            "//lib:c_s7",
-            "//lib:dl_s7",
-            "//lib:m_s7"
+        "//config/clibs/link:static?": [
+            "//lib/static:c_s7",
+            "//lib/static:dl_s7",
+            "//lib/static:m_s7",
+            "//lib/static:cwalk_s7",
         ],
-        "//conditions:default":  []
+        "//conditions:default": []
     }),
-    data = ["//scm:srcs", "//scm/s7:srcs"] + select({
-        "//config/repl:static?": [],
-        "//conditions:default":  ["//lib:libc_s7.so"]
+    data = [
+        ":repl.scm",
+        "//scm:srcs",
+        "//scm/s7:srcs"
+    ] + select({
+        "//config/clibs/link:runtime?": [
+            "//lib/shared:c_s7",
+            "//lib/shared:dl_s7",
+            "//lib/shared:m_s7",
+            "//lib/shared:cwalk_s7",
+        ],
+        "//conditions:default": []
     }),
     copts =  [
         "-Wall",
@@ -30,6 +56,9 @@ cc_binary(
 
         "-Isrc",
         "-Iexternal/libs7/src",
+
+        "-I$(GENDIR)/lib",      # clib hdrs
+        "-I$(GENDIR)/external/libs7/lib",
 
         "-Ivendored/logc",
         "-Iexternal/libs7/vendored/logc"
@@ -56,6 +85,18 @@ cc_binary(
     }) + [
         "-lm",
     ],
+    defines = select({
+        "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/host:macos": ["DSO_EXT=\\\".dylib\\\""],
+        "//config/host:linux": [
+            "DSO_EXT=\\\".so\\\"",
+            "_XOPEN_SOURCE=500", # strdup
+            "_DEFAULT_SOURCE"    # dirent DT_* macros
+        ],
+        "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+    }),
     visibility = ["//visibility:public"]
 )
 

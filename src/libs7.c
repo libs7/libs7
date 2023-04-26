@@ -1,3 +1,5 @@
+#include <libgen.h>
+
 #include "s7.h"
 #include "libs7.h"
 
@@ -47,7 +49,11 @@ void clib_dload_global(s7_scheme *s7,
             fmt = "external/libs7/lib/shared/%s%s";
         }
     } else {
-        fmt = "external/libs7/lib/shared/%s%s";
+        ws = getenv("BUILD_WORKSPACE_DIRECTORY");
+        if (strncmp(basename(ws), "libs7", 5) == 0)
+            fmt = "lib/shared/%s%s";
+        else
+            fmt = "external/libs7/lib/shared/%s%s";
     }
     snprintf(buf,
              512, // 20 + 18 + len + strlen(dso_ext),
@@ -96,7 +102,7 @@ void clib_dload_ns(s7_scheme *s7,
     s7_pointer old_e = s7_set_curlet(s7, e);
 
     char *ws = getenv("TEST_WORKSPACE");
-    /* log_debug("ws: %s", ws); */
+    log_debug("ws: %s", ws);
     char *fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
@@ -106,7 +112,8 @@ void clib_dload_ns(s7_scheme *s7,
             fmt = "external/libs7/lib/shared/%s%s";
         }
     } else {
-        fmt = "external/libs7/lib/shared/%s%s";
+        fmt = "lib/shared/%s%s";
+        /* fmt = "external/libs7/lib/shared/%s%s"; */
     }
     snprintf(buf,
              512, // 20 + 18 + len + strlen(dso_ext),

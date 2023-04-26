@@ -20,7 +20,7 @@ CLIB_COPTS = [
     ],
     "//conditions:default": ["-std=c11"],
 }) + select({
-    "//config/clibs/link:dynamic?": ["-fPIC"],
+    "//config/clibs/link:shared?": ["-fPIC"],
     "//conditions:default": []
 })
 
@@ -28,7 +28,7 @@ CLIB_LINKOPTS = select({
     "//config/host:macos": [],
     #FIXME: -rdynamic only on Linux + link:dynamic?
     "//config/host:linux": ["-rdynamic"],
-    # ["-Wl,-export-dynamic"], # "-ldl", "-lm", 
+    # non-linux: ["-Wl,-export-dynamic"],
     "//conditions:default": []
 })
 

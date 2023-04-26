@@ -1,3 +1,5 @@
+package(default_visibility = ["//visibility:public"])
+
 genrule(
     name = "libc_s7_cgen",
     srcs = [":libc_cgen.scm", ":cgen.scm"],
@@ -8,7 +10,7 @@ genrule(
         "cp libc_s7.c $(RULEDIR)/ ;",
         "cp libc_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -21,7 +23,7 @@ genrule(
         "cp libcwalk_s7.c $(RULEDIR)/ ;",
         "cp libcwalk_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -34,7 +36,7 @@ genrule(
         "cp libdl_s7.c $(RULEDIR)/ ;",
         "cp libdl_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -47,7 +49,7 @@ genrule(
         "cp libm_s7.c $(RULEDIR)/ ;",
         "cp libm_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -60,7 +62,7 @@ genrule(
         "cp libutf8proc_s7.c $(RULEDIR)/ ;",
         "cp libutf8proc_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -73,7 +75,7 @@ genrule(
         "cp libgdbm_s7.c $(RULEDIR)/ ;",
         "cp libgdbm_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 genrule(
@@ -86,7 +88,7 @@ genrule(
         "cp libgsl_s7.c $(RULEDIR)/ ;",
         "cp libgsl_s7.h $(RULEDIR)/ ;"
     ]),
-    visibility = ["//lib:__subpackages__"]
+    # visibility = ["//lib:__subpackages__"]
 )
 
 ################################################################
@@ -146,5 +148,5 @@ cc_binary(
     }) + [
         # "-lm",
     ],
-    visibility = ["//visibility:public"]
+    # visibility = ["//visibility:public"]
 )

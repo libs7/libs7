@@ -2,8 +2,33 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_test(
     name = "test",
-    srcs = ["s7_test.c"],
+    srcs = ["s7_test.c" ] + select({
+        "//config/clibs/link:shared?": [
+            # "If a rule's name is in the srcs, then this rule
+            # automatically depends on that one. If the named rule's
+            # outs are C or C++ source files, they are compiled into
+            # this rule; if they are library files, they are linked
+            # in."
+            "//lib/shared:c_s7", "//lib:libc_s7.h",
+            "//lib/shared:dl_s7", "//lib:libdl_s7.h",
+            "//lib/shared:m_s7", "//lib:libm_s7.h",
+            "//lib/shared:cwalk_s7", "//lib:libcwalk_s7.h"
+        ],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/shared:c_s7",
+            "//lib/shared:dl_s7",
+            "//lib/shared:m_s7",
+            "//lib/shared:cwalk_s7",
+        ],
+        "//conditions:default": []
+    }),
     deps = [
+        ## "other libraries to be linked in to the binary target." can
+        ## be cc_library targets but cc_binary targets with
+        ## linkshared=1 won't work - put them in srcs (or data) attr.
         "//src:s7",
         "//vendored/gopt",
         "//vendored/logc",
@@ -16,25 +41,10 @@ cc_test(
             "//lib/static:m_s7",
             "//lib/static:cwalk_s7",
         ],
-        "//conditions:default": [
-            # "//lib/shared:c_s7",
-            # "//lib/shared:dl_s7",
-            # "//lib/shared:m_s7",
-            # "//lib/shared:cwalk_s7",
-
-            # "//lib/static:c_s7_shared",
-            # "//lib/static:dl_s7_shared",
-            # "//lib/static:m_s7_shared",
-            # "//lib/static:cwalk_s7_shared",
-        ]
+        "//conditions:default": []
     }),
-    data = [
-        "//lib/shared:c_s7",
-        "//lib/shared:dl_s7",
-        "//lib/shared:m_s7",
-        "//lib/shared:cwalk_s7",
-    ],
     copts = [
+        "-x", "c",
         "-Wall",
         "-Wextra",
         "-Werror=pedantic",
@@ -73,7 +83,7 @@ cc_test(
         "//config/host:debug": ["DEBUG_TRACE"],
         "//conditions:default":   []
     }) + select({
-        "//config/clibs/link:static?": ["CLIBS_LINK_STATIC"],
+        "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
         "//conditions:default":   []
     }) + select({
         "//config/host:macos": ["DSO_EXT=\\\".dylib\\\""],
@@ -85,7 +95,7 @@ cc_test(
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }),
     linkopts = select({
-        # "//:macos": ["-ldl"],
+        # "//:macos": ["-Lbazel-out/darwin-fastbuild", "-lc_s7"],
         "//:linux": ["-rdynamic"],
         "//conditions:default": []
     }),

@@ -1,7 +1,9 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 
-bool_flag(name = "static", build_setting_default = True )
-config_setting(name = "static?", flag_values = {":static": "True"})
-config_setting(name = "dynamic?", flag_values = {":static": "False"})
+string_flag(name = "link", build_setting_default = "static",
+            values = ["static", "shared", "runtime"])
+config_setting(name = "static?", flag_values = {":link": "static"})
+config_setting(name = "shared?", flag_values = {":link": "shared"})
+config_setting(name = "runtime?", flag_values = {":link": "runtime"})

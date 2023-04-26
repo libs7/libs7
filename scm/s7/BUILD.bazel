@@ -1,5 +1,5 @@
 filegroup(
     name = "srcs",
-    data = glob(["*.scm"]),
+    data = glob(["*.scm"], exclude=["repl.scm"]),
     visibility = ["//visibility:public"]
 )
