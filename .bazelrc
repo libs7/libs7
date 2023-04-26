@@ -1,4 +1,8 @@
-common --symlink_prefix=.bazel/
+# common --symlink_prefix=.bazel/
+
+# build --experimental_cc_shared_library
+# run   --experimental_cc_shared_library
+# test  --experimental_cc_shared_library
 
 common --color=yes
 common:show --subcommands=pretty_print

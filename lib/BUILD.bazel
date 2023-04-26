@@ -1,11 +1,12 @@
 genrule(
     name = "libc_s7_cgen",
     srcs = [":libc_cgen.scm", ":cgen.scm"],
-    outs = ["libc_s7.c"],
+    outs = ["libc_s7.c", "libc_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libc_cgen.scm) ;",
-        "cp libc_s7.c $@ ;"
+        "cp libc_s7.c $(RULEDIR)/ ;",
+        "cp libc_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )
@@ -13,11 +14,12 @@ genrule(
 genrule(
     name = "libcwalk_s7_cgen",
     srcs = [":libcwalk_cgen.scm", ":cgen.scm"],
-    outs = ["libcwalk_s7.c"],
+    outs = ["libcwalk_s7.c", "libcwalk_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libcwalk_cgen.scm) ;",
-        "cp libcwalk_s7.c $@ ;"
+        "cp libcwalk_s7.c $(RULEDIR)/ ;",
+        "cp libcwalk_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )
@@ -25,11 +27,12 @@ genrule(
 genrule(
     name = "libdl_s7_cgen",
     srcs = [":libdl_cgen.scm", ":cgen.scm"],
-    outs = ["libdl_s7.c"],
+    outs = ["libdl_s7.c", "libdl_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libdl_cgen.scm) ;",
-        "cp libdl_s7.c $@ ;"
+        "cp libdl_s7.c $(RULEDIR)/ ;",
+        "cp libdl_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )
@@ -37,11 +40,12 @@ genrule(
 genrule(
     name = "libm_s7_cgen",
     srcs = [":libm_cgen.scm", ":cgen.scm"],
-    outs = ["libm_s7.c"],
+    outs = ["libm_s7.c", "libm_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libm_cgen.scm) ;",
-        "cp libm_s7.c $@ ;"
+        "cp libm_s7.c $(RULEDIR)/ ;",
+        "cp libm_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )
@@ -49,11 +53,12 @@ genrule(
 genrule(
     name = "libutf8proc_s7_cgen",
     srcs = [":libutf8proc_cgen.scm", ":cgen.scm"],
-    outs = ["libutf8proc_s7.c"],
+    outs = ["libutf8proc_s7.c", "libutf8proc_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libutf8proc_cgen.scm) ;",
-        "cp libutf8proc_s7.c $@ ;"
+        "cp libutf8proc_s7.c $(RULEDIR)/ ;",
+        "cp libutf8proc_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )
@@ -61,11 +66,12 @@ genrule(
 genrule(
     name = "libgdbm_s7_cgen",
     srcs = [":libgdbm_cgen.scm", ":cgen.scm"],
-    outs = ["libgdbm_s7.c"],
+    outs = ["libgdbm_s7.c", "libgdbm_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libgdbm_cgen.scm) ;",
-        "cp libgdbm_s7.c $@ ;"
+        "cp libgdbm_s7.c $(RULEDIR)/ ;",
+        "cp libgdbm_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )
@@ -73,11 +79,12 @@ genrule(
 genrule(
     name = "libgsl_s7_cgen",
     srcs = [":libgsl_cgen.scm", ":cgen.scm"],
-    outs = ["libgsl_s7.c"],
+    outs = ["libgsl_s7.c", "libgsl_s7.h"],
     tools = [":cgen"],
     cmd  = "\n".join([
         "$(execpath :cgen) $(location :libgsl_cgen.scm) ;",
-        "cp libgsl_s7.c $@ ;"
+        "cp libgsl_s7.c $(RULEDIR)/ ;",
+        "cp libgsl_s7.h $(RULEDIR)/ ;"
     ]),
     visibility = ["//lib:__subpackages__"]
 )

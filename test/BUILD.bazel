@@ -17,6 +17,10 @@ cc_test(
             "//lib/static:cwalk_s7",
         ],
         "//conditions:default": [
+            # "//lib/static:c_s7_shared",
+            # "//lib/static:dl_s7_shared",
+            # "//lib/static:m_s7_shared",
+            # "//lib/static:cwalk_s7_shared",
             "//lib/shared:c_s7",
             "//lib/shared:dl_s7",
             "//lib/shared:m_s7",
@@ -32,6 +36,9 @@ cc_test(
 
         "-Isrc",
         "-Iexternal/libs7/src",
+
+        "-I$(GENDIR)/lib",
+        "-I$(GENDIR)/external/libs7/lib",
 
         "-Ivendored/gopt",
         "-Iexternal/libs7/vendored/gopt",
@@ -71,7 +78,7 @@ cc_test(
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }),
     linkopts = select({
-        "//:macos": ["-ldl"],
+        # "//:macos": ["-ldl"],
         "//:linux": ["-lm", "-ldl"],
         "//conditions:default": []
     }),

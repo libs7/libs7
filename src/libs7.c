@@ -137,26 +137,33 @@ void clib_dload_ns(s7_scheme *s7,
 }
 
 void clib_sinit(s7_scheme *s7,
-                void (fnptr)(s7_scheme *sc),
+                s7_pointer (fnptr)(s7_scheme *sc),
                 char *libns)     /* e.g. libc */
 {
 
     s7_pointer e = s7_inlet(s7, s7_nil(s7)); // empty env
     s7_int gc_loc = s7_gc_protect(s7, e);
     s7_pointer old_e = s7_set_curlet(s7, e);
+    s7_pointer old_shadow = s7_set_shadow_rootlet(s7, e);
 
     /* libc_s7_init(s7); */
-    fnptr(s7);
+    s7_pointer clib_let = fnptr(s7);
+
+    /* if (libs7_verbose) */
     log_debug("initialized static lib: %s", libns);
+
+    /* s7_varlet(s7, s7_rootlet(s7), clib_let); */
 
     s7_pointer libs = s7_slot(s7, s7_make_symbol(s7, "*libraries*"));
     snprintf(buf, strlen(libns) + 3, "*%s*", libns);
-    s7_define(s7, s7_nil(s7), s7_make_symbol(s7, buf), e);
+    s7_define(s7, s7_nil(s7), s7_make_symbol(s7, buf), clib_let); // e);
     snprintf(buf, strlen(libns) + 5, "%s.scm", libns);
     s7_slot_set_value(s7, libs,
                       s7_cons(s7,
-                              s7_cons(s7, s7_make_semipermanent_string(s7, buf), e),
+                              s7_cons(s7, s7_make_semipermanent_string(s7, buf), clib_let), // e),
                               s7_slot_value(libs)));
     s7_set_curlet(s7, old_e);       /* restore incoming (curlet) */
     s7_gc_unprotect_at(s7, gc_loc);
+
+    s7_set_shadow_rootlet(s7, old_shadow);
 }

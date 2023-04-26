@@ -103,7 +103,7 @@ These changes require so modifications of the sources:
 
 We also use `//vendored/logc` so we `#include log.h`.
 
-Initializing libX libs:
+Initializing libX clibs/link:
 
   // lib*_s7_init() functions obtain the current env: cur_env = s7_curlet(sc);
   // they then define stuff in that env: s7_define(s7, cur_env, ...)

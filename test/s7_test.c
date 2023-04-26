@@ -9,18 +9,18 @@
 
 #include "gopt.h"
 #include "log.h"
+#include "unity.h"
 #include "utarray.h"
 #include "utstring.h"
 
+#if defined(CLIBS_LINK_STATIC)
+#include "libc_s7.h"
+#include "libm_s7.h"
+#include "libcwalk_s7.h"
+#include "libdl_s7.h"
+#endif
+
 #include "libs7.h"
-
-#include "unity.h"
-
-//FIXME: use header files
-void libc_s7_init(s7_scheme*);
-void libdl_s7_init(s7_scheme*);
-void libm_s7_init(s7_scheme*);
-void libcwalk_s7_init(s7_scheme*);
 
 s7_scheme *s7;
 
@@ -51,15 +51,15 @@ void tearDown(void) {
 
 void test_libc(void) {
 
-/*     actual = s7_eval_c_string(s7, "*libc*");
-/* char *s = s7_object_to_c_string(s7, actual); */
-/* log_debug("*libcwalk*: %s", s); */
-/* free(s); */
-/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
-/*  /\* exit(0); *\/ */
+    /* actual = s7_eval_c_string(s7, "*libc*"); */
+    /* char *s = s7_object_to_c_string(s7, actual); */
+    /* log_debug("*libcwalk*: %s", s); */
+    /* free(s); */
+    /* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+    /* exit(0); */
 
-
-    sexp_input = "((*libc* 'fnmatch) \"*.c\" \"s7.c\" (*libc* 'FNM_PATHNAME))";
+    /* sexp_input = "((*libc* 'libc:fnmatch) \"*.c\" \"s7.c\" (*libc* 'libc:FNM_PATHNAME))"; */
+    sexp_input = "(libc:fnmatch \"*.c\" \"s7.c\" libc:FNM_PATHNAME))";
     sexp_expected = "0";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -122,10 +122,10 @@ void test_libm(void) {
 
 void test_regex(void) {
     sexp_input = ""
-        "(let* ((rg ((*libc* 'regex.make))) "
-        "       (_ ((*libc* 'regcomp) rg \"a.b\" 0))) "
-        "   (let ((res ((*libc* 'regexec) rg \"acb\" 0 0))) "
-        "      ((*libc* 'regfree) rg) "
+        "(let* ((rg (libc:regex.make)) "
+        "       (_ (libc:regcomp rg \"a.b\" 0))) "
+        "   (let ((res (libc:regexec rg \"acb\" 0 0))) "
+        "      (libc:regfree rg) "
         "      res))"
         ;
     sexp_expected = "0";
@@ -139,14 +139,14 @@ void test_regex(void) {
 #   define regex "\"a([0-9]+)b\""
     sexp_input = ""
         "(let* ((s \"a123b\") "
-        "       (rg ((*libc* 'regex.make))) "
-        "       (_ ((*libc* 'regcomp) rg " regex " (*libc* 'REG_EXTENDED))) "
+        "       (rg (libc:regex.make)) "
+        "       (_ (libc:regcomp rg " regex " libc:REG_EXTENDED)) "
         "       (nmatch 2)) "
-        "   (let* ((res ((*libc* 'regexec) rg s nmatch 0)) "
+        "   (let* ((res (libc:regexec rg s nmatch 0)) "
         "          (match-so (int-vector-ref res 2)) "
         "          (match-eo (int-vector-ref res 3)) "
         "          (match (substring s match-so match-eo))) "
-        "      ((*libc* 'regfree) rg) "
+        "      (libc:regfree rg) "
         "      match))"
         ;
     sexp_expected = "\"123\"";
@@ -175,11 +175,11 @@ void test_regex(void) {
 #   define regex2 "\"(ba(na)*s |nefer(ti)* )*\""
     sexp_input = ""
         "(let* ((s \"bananas nefertiti\") "
-        "       (rg ((*libc* 'regex.make))) "
-        "       (_ ((*libc* 'regcomp) rg " regex2 " (*libc* 'REG_EXTENDED))) "
+        "       (rg (libc:regex.make)) "
+        "       (_ (libc:regcomp rg " regex2 " libc:REG_EXTENDED)) "
         "       (nmatch 3)) "
-        "   (let ((res ((*libc* 'regexec) rg s nmatch 0))) "
-        "      ((*libc* 'regfree) rg) "
+        "   (let ((res (libc:regexec rg s nmatch 0))) "
+        "      (libc:regfree rg) "
         "      res))"
         ;
     sexp_expected = "#i(0 8 0 8 4 6)";

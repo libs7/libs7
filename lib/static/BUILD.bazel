@@ -1,179 +1,78 @@
+load("//lib:BUILD.bzl",
+     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+
+package(default_visibility = ["//visibility:public"])
+
+## cc_shared_library docs are weak.
+## https://docs.google.com/document/d/1NJiOr2vBJyrj2q1FFvl7IuoateuJyRWpjn8-6HxLWLs/edit#heading=h.5mcn15i0e1ch
+## https://bazel.googlesource.com/rules_cc/+/refs/heads/master/examples/experimental_cc_shared_library.bzl?autodive=0%2F
+
+## WARNING: cc_shared_library does not work as a dep of cc_test
+# cc_shared_library(
+#     name = "c_s7_shared",
+#     deps = [":c_s7"]
+# )
+
 cc_library(
     name  = "c_s7", # emits libc_s7.a
     linkstatic = 1,
     srcs  = ["//lib:libc_s7.c", "//src:s7.h"],
-    # hdrs = ["//src:s7_header"],
-    # deps = ["//src:s7_header"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11",
-            "-Werror=pedantic",
-            "-Wno-format-pedantic",
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "-fPIC",
-            "-Wl,--no-undefined",
-            # "-Wpedantic-errors",
-            # "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]), # + ["s7.h"],
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    hdrs  = ["//lib:libc_s7.h"],
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
 ################################################################
+# cc_shared_library(
+#     name = "cwalk_s7_shared",
+#     deps = [":cwalk_s7"]
+# )
+
 cc_library(
     name  = "cwalk_s7",  # libcwalk_s7.a
     linkstatic = True,
-    srcs  = [
-        "//lib:libcwalk_s7.c",
-        # "//lib:libcwalk_s7.h",
-        "//src:s7.h"
-    ],
+    srcs  = ["//lib:libcwalk_s7.c", "//src:s7.h"],
+    hdrs = ["//lib:libcwalk_s7.h"],
     deps  = ["//vendored/cwalk"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-
-        "-Isrc",
-        "-Iexternal/libs7/src",
-
+    copts = CLIB_COPTS + [
         "-Ivendored/cwalk",
         "-Iexternal/libs7/vendored/cwalk",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    ],
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
 ################################################################
+# cc_shared_library(
+#     name = "dl_s7_shared",
+#     deps = [":dl_s7"]
+# )
+
 cc_library(
     name  = "dl_s7",  # libdl_s7.a
     linkstatic = True,
     srcs  = ["//lib:libdl_s7.c", "//src:s7.h"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    hdrs = ["//lib:libdl_s7.h"],
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
 ################################################################
+# cc_shared_library(
+#     name = "m_s7_shared",
+#     deps = [":m_s7"]
+# )
+
 cc_library(
     name  = "m_s7",
     linkstatic = True,
     srcs  = ["//lib:libm_s7.c", "//src:s7.h"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    hdrs = ["//lib:libm_s7.h"],
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
 ################################################################
@@ -181,83 +80,23 @@ cc_library(
     name  = "utf8proc_s7",
     linkstatic = True,
     srcs  = ["//lib:libutf8proc_s7.c", "//src:s7.h"],
+    hdrs = ["//lib:libutf8proc_s7.h"],
     deps  = ["@utf8proc//:utf8proc"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
 ################################################################
-# # FIXME: depends on libgdbm
+## FIXME: depends on libgdbm
 cc_library(
     name  = "gdbm_s7",
-    # linkstatic = 0,
+    linkstatic = True,
     srcs  = ["//lib:libgdbm_s7.c", "//src:s7.h"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    hdrs  = ["//lib:libgdbm_s7.h"],
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
 ################################################################
@@ -265,43 +104,14 @@ cc_library(
     name  = "gsl_s7",
     linkstatic = True,
     srcs  = ["//lib:libgsl_s7.c", "//src:s7.h"],
+    hdrs  = ["//lib:libgsl_s7.h"],
     deps  = ["@libgsl//:libgsl"],
-    copts = [
-        "-Wall",
-        "-Wextra",
-        "-Werror=pedantic",
-        "-Wno-unused-parameter",
-        "-Wno-format-pedantic",
-        "-Isrc",
-        "-Iexternal/libs7/src",
-    ] + select({
-        "//:macos": [
-            "-Wno-gnu",
-            "-std=c11"
-        ],
-        "//:linux": [
-            "-std=gnu11",
-            "--pedantic-errors",
-        ],
-        "//conditions:default": ["-std=c11"],
-    }),
-    data = glob(["*.scm"]),
-    defines = [
-        # "WITH_MAIN"
-        "WITH_SYSTEM_EXTRAS"
-        # "WITH_C_LOADER",
-    ] + select({
-        # "//config/s7:debug?": ["S7_DEBUGGING"],
-        "//conditions:default":   []
-    }),
-    linkopts = select({
-        # "//:macos": ["-std=c11"],
-        "//:linux": ["-lm"],
-        "//conditions:default": []
-    }),
-    visibility = ["//visibility:public"]
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
 )
 
+################################################################
 cc_library(
     name = "notcurses_s7",
     srcs = [

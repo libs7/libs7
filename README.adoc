@@ -10,6 +10,8 @@ link:https://github.com/obazl/mibl[mibl] and
 link:https://github.com/obazl/tools_obazl[tools_obazl].
 
 
+"s7 exists only to serve as an extension of some other application, so it is primarily a foreign function interface."
+
 For more information sbout s7 see link:https://iainctduncan.github.io/scheme-for-max-docs/s7.html[Why S7 Scheme?].  The upstream master is on branch `s7-master`.
 
 == differences from s7

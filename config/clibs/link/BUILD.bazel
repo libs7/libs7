@@ -2,10 +2,6 @@ package(default_visibility = ["//visibility:public"])
 
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 
-bool_flag(name = "static", build_setting_default = False )
+bool_flag(name = "static", build_setting_default = True )
 config_setting(name = "static?", flag_values = {":static": "True"})
-
-# config_setting(
-#     name = "debug",
-#     values = {"compilation_mode": "dbg"},
-# )
+config_setting(name = "dynamic?", flag_values = {":static": "False"})

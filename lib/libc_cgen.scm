@@ -16,7 +16,7 @@
       (with-let (unlet)
 
 	(set! *cload-library-name* "*libc*")
-	
+
 	;; -------- stddef.h --------
 	(define NULL (c-pointer 0 'void*))
 	(define (c-null? p) (and (c-pointer? p) (zero? (car (c-pointer->list p)))))
@@ -1853,28 +1853,30 @@
                     return(result);
                   }
                  ")
-	   (C-function ("regex.make" g_regex_make "" 0))
-	   (C-function ("regex.free" g_regex_free "" 1))
-	   (C-function ("regfree" g_regfree "" 1))
-	   (C-function ("regcomp" g_regcomp "" 3))
-	   (C-function ("regexec" g_regexec "" 4)) ; (regexec regex string nmatches flags) 
-	   (C-function ("regerror" g_regerror "" 2))
+	   (C-function ("libc:regex.make" g_regex_make "" 0))
+	   (C-function ("libc:regex.free" g_regex_free "" 1))
+	   (C-function ("libc:regfree" g_regfree "" 1))
+	   (C-function ("libc:regcomp" g_regcomp "" 3))
+	   (C-function ("libc:regexec" g_regexec "" 4)) ; (regexec regex string nmatches flags) 
+	   (C-function ("libc:regerror" g_regerror "" 2))
 	   )
-	 
-	 "" ""
-	 (list "limits.h" "ctype.h" "errno.h" "float.h" "stdint.h" "locale.h" "stdlib.h" "string.h" "fcntl.h" 
+
+	 "libc" ;; prefix
+         ""     ;; strip-prefix
+	 (list "limits.h" "ctype.h" "errno.h" "float.h" "stdint.h" "locale.h" "stdlib.h" "string.h" "fcntl.h"
 	       "fenv.h" "stdio.h" "sys/utsname.h" "unistd.h" "dirent.h" "ftw.h" "sys/stat.h" "time.h" "sys/time.h"
-	       "utime.h" "termios.h" "grp.h" "pwd.h" "fnmatch.h" "glob.h" "signal.h" "sys/wait.h" "netdb.h" 
+	       "utime.h" "termios.h" "grp.h" "pwd.h" "fnmatch.h" "glob.h" "signal.h" "sys/wait.h" "netdb.h"
 	       "sys/resource.h" "regex.h"
 	       (reader-cond ((provided? 'linux) "semaphore.h"))
 	       (reader-cond ((not (provided? 'openbsd)) "wordexp.h"))
 	       (reader-cond ((provided? 'freebsd) "sys/socket.h" "netinet/in.h"))
 	       )
-	 "" 
-	 (if (provided? 'linux) "-lrt" 
-	     (if (provided? 'openbsd) "-pthread" ""))
-	 "libc_s7")
-	
+	 "" ;; cflags
+	 (if (provided? 'linux) "-lrt"
+	     (if (provided? 'openbsd) "-pthread" "")) ;; lflags
+	 "libc_s7" ;; output-name
+         )
+
 	(curlet))))
 
 *libc*

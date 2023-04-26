@@ -1,3 +1,10 @@
+#ifndef LIBS7_H
+#define LIBS7_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,5 +25,12 @@ void clib_dload_ns(s7_scheme *s7,
                    char *dso_ext);   /* .dylib or .so */
 
 void clib_sinit(s7_scheme *s7,
-                void (fnptr)(s7_scheme *sc),
+                s7_pointer (fnptr)(s7_scheme *sc),
                 char *libns);     /* e.g. libc */
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -13,6 +13,8 @@
     (set! *load-path* (cons directory *load-path*))))
 
 
+;; FIXME: dlopen, dlsym return null ptr on error, so must be implemented in-C
+
 (if (not (defined? '*libdl*))
     (define *libdl*
       (with-let (unlet)
@@ -21,9 +23,10 @@
 	(c-define '((void* dlopen (char* int))
 		    (int dlclose (void*))
 		    (void* dlsym (void* char*))
+                    (C-macro (void* (RTLD_DEFAULT RTLD_NEXT RTLD_SELF RTLD_MAIN_ONLY))) ;; dlsym handles
 		    (char* dlerror (void))
 		    (C-macro (int (RTLD_LAZY RTLD_NOW RTLD_BINDING_MASK RTLD_NOLOAD RTLD_DEEPBIND RTLD_GLOBAL RTLD_LOCAL RTLD_NODELETE))))
-		  "" "" "dlfcn.h" "" "" "libdl_s7")
+		  "libdl" "" "dlfcn.h" "" "" "libdl_s7")
 	(curlet))))
 
 *libdl*
