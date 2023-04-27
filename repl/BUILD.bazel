@@ -10,23 +10,25 @@ cc_binary(
     #     "//config/repl:static?": ["repl_static.c"],
     #     "//conditions:default":  ["repl_dynamic.c"]
     # })
-    srcs = select({
-        "//config/clibs/link:static?": ["repl_static.c"],
+    srcs = ["repl.c"] + select({
         "//config/clibs/link:shared?": [
             # "If a rule's name is in the srcs, then this rule
             # automatically depends on that one. If the named rule's
             # outs are C or C++ source files, they are compiled into
             # this rule; if they are library files, they are linked
             # in."
-            "repl_dynamic.c",
             "//lib/shared:c_s7", "//lib:libc_s7.h",
             "//lib/shared:dl_s7", "//lib:libdl_s7.h",
             "//lib/shared:m_s7", "//lib:libm_s7.h",
             "//lib/shared:cwalk_s7", "//lib:libcwalk_s7.h"
         ],
-        "//conditions:default": ["repl_dynamic.c"]
+        "//conditions:default": []
     }),
-    deps = ["//src:s7", "//vendored/logc"] + select({
+    deps = [
+        "//src:s7",
+        "//vendored/gopt",
+        "//vendored/logc"
+    ] + select({
         "//config/clibs/link:static?": [
             "//lib/static:c_s7",
             "//lib/static:dl_s7",
@@ -60,6 +62,8 @@ cc_binary(
         "-I$(GENDIR)/lib",      # clib hdrs
         "-I$(GENDIR)/external/libs7/lib",
 
+        "-Ivendored/gopt",
+        "-Iexternal/libs7/vendored/gopt",
         "-Ivendored/logc",
         "-Iexternal/libs7/vendored/logc"
     ] + select({
@@ -86,6 +90,7 @@ cc_binary(
         "-lm",
     ],
     defines = select({
+        "//config/clibs/link:static?": ["CLIBS_LINK_STATIC"],
         "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
         "//conditions:default":   []
     }) + select({
@@ -96,6 +101,9 @@ cc_binary(
             "_DEFAULT_SOURCE"    # dirent DT_* macros
         ],
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+    }) + select({
+        "//config/host:debug": ["DEBUG_TRACE"],
+        "//conditions:default":   []
     }),
     visibility = ["//visibility:public"]
 )

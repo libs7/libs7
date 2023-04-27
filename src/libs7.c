@@ -3,7 +3,9 @@
 #include "s7.h"
 #include "libs7.h"
 
-bool libs7_verbose;
+bool libs7_verbose = false;
+bool libs7_debug   = false;
+bool libs7_trace   = false;
 
 void fs_api_init(s7_scheme *sc);
 
@@ -22,7 +24,7 @@ void clib_dload_global(s7_scheme *s7,
                        char *libns,     /* e.g. libc */
                        char *dso_ext)   /* .dylib or .so */
 {
-    /* log_debug("clib_dload"); */
+    log_debug("clib_dload_global: %s", libname);
     /* int len = strlen(libname); */
     sprintf(buf, "%s_init", libname);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
@@ -39,7 +41,7 @@ void clib_dload_global(s7_scheme *s7,
     /* s7_pointer old_e = s7_set_curlet(s7, e); */
 
     char *ws = getenv("TEST_WORKSPACE");
-    /* log_debug("ws: %s", ws); */
+    /* log_debug("dload global test ws: %s", ws); */
     char *fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
@@ -50,6 +52,7 @@ void clib_dload_global(s7_scheme *s7,
         }
     } else {
         ws = getenv("BUILD_WORKSPACE_DIRECTORY");
+        /* log_debug("dload global build ws: %s", ws); */
         if (strncmp(basename(ws), "libs7", 5) == 0)
             fmt = "lib/shared/%s%s";
         else
@@ -90,7 +93,7 @@ void clib_dload_ns(s7_scheme *s7,
                 char *libns,     /* e.g. libc */
                 char *dso_ext)   /* .dylib or .so */
 {
-    /* log_debug("clib_dload"); */
+    if (libs7_trace) log_trace("clib_dload_ns: %s", libname);
     /* int len = strlen(libname); */
     sprintf(buf, "%s_init", libname);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
@@ -102,7 +105,7 @@ void clib_dload_ns(s7_scheme *s7,
     s7_pointer old_e = s7_set_curlet(s7, e);
 
     char *ws = getenv("TEST_WORKSPACE");
-    log_debug("ws: %s", ws);
+    /* log_debug("dload ns test ws: %s", ws); */
     char *fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
@@ -112,8 +115,12 @@ void clib_dload_ns(s7_scheme *s7,
             fmt = "external/libs7/lib/shared/%s%s";
         }
     } else {
-        fmt = "lib/shared/%s%s";
-        /* fmt = "external/libs7/lib/shared/%s%s"; */
+        ws = getenv("BUILD_WORKSPACE_DIRECTORY");
+        /* log_debug("dload ns build ws: %s", ws); */
+        if (strncmp(basename(ws), "libs7", 5) == 0)
+            fmt = "lib/shared/%s%s";
+        else
+            fmt = "external/libs7/lib/shared/%s%s";
     }
     snprintf(buf,
              512, // 20 + 18 + len + strlen(dso_ext),
@@ -147,6 +154,7 @@ void clib_sinit(s7_scheme *s7,
                 s7_pointer (fnptr)(s7_scheme *sc),
                 char *libns)     /* e.g. libc */
 {
+    if (libs7_trace) log_trace("clib_sinit: %s", libns);
 
     s7_pointer e = s7_inlet(s7, s7_nil(s7)); // empty env
     s7_int gc_loc = s7_gc_protect(s7, e);
@@ -155,9 +163,6 @@ void clib_sinit(s7_scheme *s7,
 
     /* libc_s7_init(s7); */
     s7_pointer clib_let = fnptr(s7);
-
-    /* if (libs7_verbose) */
-    log_debug("initialized static lib: %s", libns);
 
     /* s7_varlet(s7, s7_rootlet(s7), clib_let); */
 
