@@ -1,4 +1,4 @@
-(provide 'cgen.scm)
+(provide 'clibgen.scm)
 
 ;; TODO: write header files with init prototypes
 

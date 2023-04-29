@@ -1,10 +1,10 @@
-;;; libcwalk_cgen.scm
+;;; libcwalk_clib.scm
 ;;;
 ;;; generate libcwalk_s7.c, s7 bindings for libcwalk
 ;;; https://github.com/likle/cwalk
 
-(require cgen.scm) ;; cload.scm)
-(provide 'libcwalk_cgen.scm)
+(require clibgen.scm) ;; cload.scm)
+(provide 'libcwalk_clib.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))
@@ -18,7 +18,7 @@
     ;; (define *libcwalk*
       (with-let (unlet)
 	(set! *libraries* (cons (cons "libcwalk.scm" (curlet)) *libraries*))
-        ;; IMPORTANT! if *cload-library-name* is defined, then cgen will
+        ;; IMPORTANT! if *cload-library-name* is defined, then clibgen will
 	;; (set! *cload-library-name* "*libcwalk*")
 	(c-define
          '((size_t cwk_path_get_absolute

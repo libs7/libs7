@@ -1,9 +1,9 @@
-;;; libutf8proc_cgen.scm
+;;; libutf8proc_clib.scm
 ;;;
 ;;; generate libutf8proc_s7.c, s7 bindings for utf8proc
 
-(require cgen.scm)
-(provide 'libutf8proc_cgen.scm)
+(require clibgen.scm)
+(provide 'libutf8proc_clib.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))

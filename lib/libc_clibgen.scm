@@ -1,8 +1,8 @@
 ;;; libc.scm
 ;;;
 ;;; generate s7 bindings for std libc
-(require cgen.scm) ;; cload.scm)
-(provide 'libc_cgen.scm)
+(require clibgen.scm) ;; cload.scm)
+(provide 'libc_clibgen.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))
@@ -322,7 +322,7 @@
 ;	   (char* mktemp (char*))
 	   (int mkstemp (char*))
 	   (int system (char*))
-;	   (char* realpath (char* char*))
+;	   (char* realpath (char* char*)) ;; see below
 	   (int abs (int))
 	   (int labs (int))
 	   
@@ -372,9 +372,8 @@
 	   (C-function ("strtoll" g_strtoll "" 2))
 	   (C-function ("div" g_ldiv "" 2))
 	   (C-function ("ldiv" g_ldiv "" 2))
-	   (C-function ("realpath" g_realpath "" 2))
-	   
-	   
+	   (C-function ("libc:realpath" g_realpath "" 1)) ;; 2
+
 	   ;; -------- errno.h --------
 	   ;; pws for errno?
 	   (C-macro (int (__GLIBC__ __GLIBC_MINOR__ ; features.h from errno.h
@@ -1013,9 +1012,9 @@
 	   
 	   ;; -------- wordexp.h --------
 	   (reader-cond ((not (provided? 'openbsd))
-			 (int (WRDE_DOOFFS WRDE_APPEND WRDE_NOCMD WRDE_REUSE WRDE_SHOWERR WRDE_UNDEF 
+			 (int (WRDE_DOOFFS WRDE_APPEND WRDE_NOCMD WRDE_REUSE WRDE_SHOWERR WRDE_UNDEF
 					   WRDE_NOSPACE WRDE_BADCHAR WRDE_BADVAL WRDE_CMDSUB WRDE_SYNTAX))
-			 (int wordexp (char* wordexp_t* int))
+			 (int wordexp (char* wordexp_t* int)) ;; FIXME: add bang:  wordexp!
 			 (void wordfree (wordexp_t*))
 			 (in-C "
                   static s7_pointer g_wordexp_make(s7_scheme *sc, s7_pointer args)
@@ -1033,9 +1032,9 @@
                                p = s7_cons(sc, s7_make_string(sc, g->we_wordv[i]), p);
                              return(p);
                            }")
-			 (C-function ("wordexp.make" g_wordexp_make "" 0))
-			 (C-function ("wordexp.we_wordc" g_wordexp_we_wordc "" 1))
-			 (C-function ("wordexp.we_wordv" g_wordexp_we_wordv "" 1))))
+			 (C-function ("libc:wordexp.make" g_wordexp_make "" 0))
+			 (C-function ("libc:wordexp.we_wordc" g_wordexp_we_wordc "" 1))
+			 (C-function ("libc:wordexp.we_wordv" g_wordexp_we_wordv "" 1))))
 	   ;; (with-let (sublet *libc*) (let ((w (wordexp.make))) (wordexp "~/cl/snd-gdraw" w 0) (wordexp.we_wordv w))) -> ("/home/bil/cl/snd-gdraw")
 	   
 	   

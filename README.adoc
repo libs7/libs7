@@ -38,7 +38,7 @@ applications a la carte, without dynamic C compilation. All libraries
 are built (as either static or shared libraries) at build time.
 
 
-=== C libraries, cload, and cgen
+=== C libraries, cload, and clibgen
 
 The `cload` mechanism allows the developer to easily specify `s7`
 bindings for C libraries as `s7 Scheme` source code. The
@@ -48,7 +48,7 @@ it, and loads it. So for example, `(load libc.scm)` will generate
 initialization function.
 
 This works quite well, but dynamically compiling and running C code
-may be undesirable in some situations. The new `cgen` mechanism is
+may be undesirable in some situations. The new `clibgen` mechanism is
 essentially identical to the `cload` mechanism, but with the logic for
 compiling and linking C code stripped out. It is designed to be run at
 build time, and the build system is responsible for compiling and

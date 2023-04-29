@@ -3,9 +3,12 @@
  */
 
 #include <libgen.h>
+#include <pwd.h>
 #include <stdlib.h>             /* putenv */
 #include <unistd.h>             /* getcwd */
+#include <uuid/uuid.h>
 #include <sys/errno.h>
+#include <sys/types.h>
 
 #include "gopt.h"
 #include "log.h"
@@ -66,6 +69,31 @@ void test_libc(void) {
     actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+}
+
+void test_wordexp(void) {
+    sexp_input = ""
+        "(let ((w (libc:wordexp.make))) "
+        " (libc:wordexp \"~/foo/bar\" w libc:WRDE_NOCMD) "
+        " (car (libc:wordexp.we_wordv w)))"
+        ;
+        /* ")) #t)))" */
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+/* char *s = s7_object_to_c_string(s7, actual); */
+/* log_debug("result: %s", s); */
+/* free(s); */
+
+    struct passwd* pwd = getpwuid(getuid());
+    char *h =  pwd->pw_dir;
+    /* free(pwd); */
+    log_debug("HOME: %s", h);
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s/foo/bar", h);
+    log_debug("exp: %s", utstring_body(sexp));
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, utstring_body(sexp))));
 }
 
 void test_math(void) {
@@ -212,15 +240,42 @@ void test_cwalk(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
+    sexp_input = "(cwk:path_normalize \"~/foo/bar/../\")";
+    sexp_expected = "\"~/foo\"";
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+
+    char *test_file;
+    if (strncmp(getenv("TEST_WORKSPACE"), "libs7", 5) == 0)
+        test_file = "test/s7_test.c";
+    else
+        test_file = "external/libs7/test/s7_test.c";
+
+    /* sexp_input = "(libc:realpath \"" testfile "\")"); */
+    utstring_renew(sexp);
+    utstring_printf(sexp, "(libc:realpath \"%s\")", test_file);
+    /* log_debug("cwd: %s", getcwd(NULL,0)); */
+    /* log_debug("test file: %s", utstring_body(sexp)); */
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+/* char *s = s7_object_to_c_string(s7, actual); */
+/* log_debug("result: %s", s); */
+/* free(s); */
+
+    char *rp = realpath(test_file, NULL);
+    /* log_debug("expected: %s", rp); */
+    /* free(s); */
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, rp)));
+    free(rp);
+
     sexp_input = "(->canonical-path \"/var/log/weird/path/../..\")";
     sexp_expected = "\"/var/log/weird/\"";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
-/* char *s = s7_object_to_c_string(s7, actual); */
-/* log_debug("result: %s", s); */
-/* free(s); */
-/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
@@ -304,10 +359,54 @@ void _set_options(struct option options[])
         exit(EXIT_SUCCESS);
     }
 
+    if (options[FLAG_DEBUG].count) {
+        debug = true;
+    }
     if (options[FLAG_VERBOSE].count) {
         log_info("verbose ct: %d", options[FLAG_VERBOSE].count);
         verbose = true;
     }
+}
+
+/* to print env vars:
+ bazel run <tgt> -- -d
+ bazel test <tgt> --test_arg=-d --test_output=all (or --config=show)
+*/
+static void _print_debug_env(void)
+{
+    log_debug("getcwd: %s", getcwd(NULL, 0));
+    log_debug("getenv(PWD): %s", getenv("PWD"));
+
+    // $HOME - not reliable, use getpwuid() instead
+    log_debug("getenv(HOME): %s", getenv("HOME"));
+    struct passwd* pwd = getpwuid(getuid());
+    log_debug("pwd->pw_dir: %s", pwd->pw_dir);
+
+    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, 'libs7' when run as external repo
+    log_debug("BAZEL_CURRENT_REPOSITORY (macro): '%s'", BAZEL_CURRENT_REPOSITORY);
+
+    // TEST_WORKSPACE: always the root ws
+    log_debug("TEST_WORKSPACE: '%s'", getenv("TEST_WORKSPACE"));
+
+    // BAZEL_TEST: should always be true when this is compiled as cc_test
+    log_debug("BAZEL_TEST: '%s'", getenv("BAZEL_TEST"));
+
+    // BUILD_WORK* vars: null under 'bazel test'
+    log_debug("BUILD_WORKSPACE_DIRECTORY: %s", getenv("BUILD_WORKSPACE_DIRECTORY"));
+    log_debug("BUILD_WORKING_DIRECTORY: %s", getenv("BUILD_WORKING_DIRECTORY"));
+
+    // TEST_SRCDIR - required for cc_test
+    log_debug("TEST_SRCDIR: %s", getenv("TEST_SRCDIR"));
+    log_debug("BINDIR: %s", getenv("BINDIR"));
+
+    /* RUNFILES_MANIFEST_FILE: null on macos. */
+    log_debug("RUNFILES_MANIFEST_FILE: %s", getenv("RUNFILES_MANIFEST_FILE"));
+
+    /* RUNFILES_MANIFEST_FILE: null on macos. */
+    log_debug("RUNFILES_MANIFEST_ONLY: %s", getenv("RUNFILES_MANIFEST_ONLY"));
+
+    /* RUNFILES_DIR: set on macos for both bazel test and bazel run. */
+    log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
 }
 
 s7_scheme *libs7_init(void);    /* libs7.h */
@@ -316,7 +415,7 @@ int main(int argc, char **argv)
 {
     //FIXME: throw error if run outside of bazel
     if ( !getenv("BAZEL_TEST") ) {
-        log_error("This test must be run in a Bazel environment: bazel test //path/to/test");
+        log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" );
         exit(EXIT_FAILURE);
     }
 
@@ -329,6 +428,9 @@ int main(int argc, char **argv)
     gopt_errors (argv[0], options);
 
     _set_options(options);
+
+    if (debug)
+        _print_debug_env();
 
     s7 = libs7_init();
 
@@ -362,6 +464,7 @@ int main(int argc, char **argv)
     UNITY_BEGIN();
 
     RUN_TEST(test_libc);
+    RUN_TEST(test_wordexp);
     RUN_TEST(test_math);
     RUN_TEST(test_libm);
     RUN_TEST(test_regex);

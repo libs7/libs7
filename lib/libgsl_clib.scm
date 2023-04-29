@@ -1,10 +1,10 @@
-;;; libgsl_cgen.scm
+;;; libgsl_clib.scm
 ;;;
 ;;; generate libgsl_s7.c, bindings for
 ;;; GNU Scientific Library: https://www.gnu.org/software/gsl/
 
-(require cgen.scm)
-(provide 'libgsl_cgen.scm)
+(require clibgen.scm)
+(provide 'libgsl_clib.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))

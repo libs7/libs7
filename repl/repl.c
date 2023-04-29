@@ -54,7 +54,7 @@ void s7_repl(s7_scheme *s7)
       char *script = "repl/repl.scm";
       /* char *script = "external/libs7/repl/repl.scm"; */
 
-      s7_provide(s7, "libc.scm");
+      /* s7_provide(s7, "libc.scm"); */
       if (!repl_loaded) {
           /* log_debug("loading repl.scm"); */
           if (!s7_load(s7, script)) {
@@ -217,10 +217,6 @@ int main(int argc, char **argv) // , char **envp)
         s7_add_to_load_path(s7, options[OPT_LOAD_PATH].argument);
     }
 
-#if defined(CLIBS_LINK_STATIC)
-    clib_sinit(s7, libc_s7_init, "libc");
-#endif
-
     /* TODO: add scm libs from runfiles to *load-path* */
 
     /* log_info("argc: %d", argc); */
@@ -237,14 +233,25 @@ int main(int argc, char **argv) // , char **envp)
         /* log_debug("load-path: %s", s); */
         /* free(s); */
 
-#if defined(CLIBS_LINK_STATIC)
+#if defined(CLIBS_LINK_RUNTIME)
+        /* clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT); */
+        /* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); */
+        /* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); */
+        /* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); */
+#else  /* linkage: static or shared */
+        clib_sinit(s7, libc_s7_init, "libc");
+        clib_sinit(s7, libdl_s7_init, "libdl");
+        clib_sinit(s7, libm_s7_init, "libm");
+        clib_sinit(s7, libcwalk_s7_init, "libcwalk");
+#endif
+
         char *script = "repl/repl.scm";
         /* char *script = "external/libs7/repl/repl.scm"; */
         if (!s7_load(s7, script)) log_error("failed: load %s", script);
         s7_eval_c_string(s7, "((*repl* 'run))");
-#else
-        s7_repl(s7);
-#endif
+/* #else */
+/*         s7_repl(s7); */
+/* #endif */
     }
     return(0);
 }

@@ -1,9 +1,9 @@
-;;; libm_cgen.scm
+;;; libm_clib.scm
 ;;;
 ;;; generate s7 bindings for libm
 
-(require cgen.scm)
-(provide 'libm_cgen.scm)
+(require clibgen.scm)
+(provide 'libm_clib.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))

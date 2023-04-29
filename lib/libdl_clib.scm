@@ -1,9 +1,9 @@
-;;; libdl_cgen.scm
+;;; libdl_clib.scm
 ;;;
 ;;; generate libdl_s7.c, s7 bindings for libdl (dlopen etc.)
 
-(require cgen.scm) ;; cload.scm)
-(provide 'libdl_cgen.scm)
+(require clibgen.scm) ;; cload.scm)
+(provide 'libdl_clib.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))

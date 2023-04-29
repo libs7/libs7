@@ -16,7 +16,9 @@ cc_test(
         ],
         "//conditions:default": []
     }),
-    data = select({
+    data = [
+        "s7_test.c"             # for test_cwalk realpath test case
+    ] +select({
         "//config/clibs/link:runtime?": [
             "//lib/shared:c_s7",
             "//lib/shared:dl_s7",

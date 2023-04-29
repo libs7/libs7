@@ -11,6 +11,7 @@
 bool verbose;
 int main(int argc, char **argv)
 {
+    /* log_info("running clibgen"); */
     /* log_debug("CWD: %s", getcwd(NULL,0)); */
     /* log_debug("BUILD WS root: %s", getenv("BUILD_WORKSPACE_DIRECTORY")); */
     s7_scheme *s7 = s7_init();

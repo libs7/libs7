@@ -1,9 +1,9 @@
-;;; libgdbm_cgen.scm
+;;; libgdbm_clib.scm
 ;;;
 ;;; generate s7 bindings for libgdbm
 
-(require cgen.scm)
-(provide 'libgdbm_cgen.scm)
+(require clibgen.scm)
+(provide 'libgdbm_clib.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))

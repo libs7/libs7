@@ -7,7 +7,7 @@
 (when (= (*s7* 'print-length) 12)    ; default value
   (set! (*s7* 'print-length) 32))
 
-(when (file-exists? ".repl")         ; local (scheme) initialization file for repl
+(when (sys:file-exists? ".repl")         ; local (scheme) initialization file for repl
   (load ".repl"))
 
 (set! (*s7* 'history-enabled) #f)
@@ -39,8 +39,8 @@
 	  (top-level-let (sublet (rootlet))) ; environment in which evaluation takes place
 	  (repl-let                 ; environment for keymap functions to access all the REPL innards (cursor-position etc)
 
-      (with-let (sublet *libc*)
-
+      (with-let (unlet) ;; (sublet *libc*)
+                ;; libc syms needed: fileno, stdin, read, isatty ECHO ICANON VMIN VTIME TCSAFLUSH
 	;; -------- completion --------
 	(define (symbol-completion text)
 	  (let ((st (symbol-table))
@@ -1190,7 +1190,9 @@
 		    (emacs-repl)                            ; TODO: restore support for the pipe case
 		    (terminal-repl file))))
 
-	    (curlet))))))
+	    (curlet)))
+        )
+      ))
 
       (define* (save-repl (file "save.repl"))
 	;; ((*repl* 'save-repl))

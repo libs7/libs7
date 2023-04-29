@@ -1,12 +1,34 @@
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["libm.scm"])
+
+load("//lib:BUILD.bzl",
+     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+
+cc_library(
+    name  = "system_extras_s7",
+    linkstatic = 1,
+    srcs  = ["system_extras.c", "//src:s7.h"],
+    hdrs  = ["system_extras.h"],
+    deps  = ["//vendored/logc"],
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc", "-Iexternal/libs7/vendored/logc"],
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
+)
+
+
+
+################################################################
+## clib source generation
+################################################################
 genrule(
-    name = "libc_s7_cgen",
-    srcs = [":libc_cgen.scm", ":cgen.scm"],
+    name = "libc_s7_clib",
+    srcs = [":libc_clibgen.scm", ":clibgen.scm"],
     outs = ["libc_s7.c", "libc_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libc_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libc_clibgen.scm) ;",
         "cp libc_s7.c $(RULEDIR)/ ;",
         "cp libc_s7.h $(RULEDIR)/ ;"
     ]),
@@ -14,12 +36,12 @@ genrule(
 )
 
 genrule(
-    name = "libcwalk_s7_cgen",
-    srcs = [":libcwalk_cgen.scm", ":cgen.scm"],
+    name = "libcwalk_s7_clib",
+    srcs = [":libcwalk_clib.scm", ":clibgen.scm"],
     outs = ["libcwalk_s7.c", "libcwalk_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libcwalk_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libcwalk_clib.scm) ;",
         "cp libcwalk_s7.c $(RULEDIR)/ ;",
         "cp libcwalk_s7.h $(RULEDIR)/ ;"
     ]),
@@ -27,12 +49,12 @@ genrule(
 )
 
 genrule(
-    name = "libdl_s7_cgen",
-    srcs = [":libdl_cgen.scm", ":cgen.scm"],
+    name = "libdl_s7_clib",
+    srcs = [":libdl_clib.scm", ":clibgen.scm"],
     outs = ["libdl_s7.c", "libdl_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libdl_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libdl_clib.scm) ;",
         "cp libdl_s7.c $(RULEDIR)/ ;",
         "cp libdl_s7.h $(RULEDIR)/ ;"
     ]),
@@ -40,12 +62,12 @@ genrule(
 )
 
 genrule(
-    name = "libm_s7_cgen",
-    srcs = [":libm_cgen.scm", ":cgen.scm"],
+    name = "libm_s7_clib",
+    srcs = [":libm_clib.scm", ":clibgen.scm"],
     outs = ["libm_s7.c", "libm_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libm_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libm_clib.scm) ;",
         "cp libm_s7.c $(RULEDIR)/ ;",
         "cp libm_s7.h $(RULEDIR)/ ;"
     ]),
@@ -53,12 +75,12 @@ genrule(
 )
 
 genrule(
-    name = "libutf8proc_s7_cgen",
-    srcs = [":libutf8proc_cgen.scm", ":cgen.scm"],
+    name = "libutf8proc_s7_clib",
+    srcs = [":libutf8proc_clib.scm", ":clibgen.scm"],
     outs = ["libutf8proc_s7.c", "libutf8proc_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libutf8proc_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libutf8proc_clib.scm) ;",
         "cp libutf8proc_s7.c $(RULEDIR)/ ;",
         "cp libutf8proc_s7.h $(RULEDIR)/ ;"
     ]),
@@ -66,12 +88,12 @@ genrule(
 )
 
 genrule(
-    name = "libgdbm_s7_cgen",
-    srcs = [":libgdbm_cgen.scm", ":cgen.scm"],
+    name = "libgdbm_s7_clib",
+    srcs = [":libgdbm_clib.scm", ":clibgen.scm"],
     outs = ["libgdbm_s7.c", "libgdbm_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libgdbm_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libgdbm_clib.scm) ;",
         "cp libgdbm_s7.c $(RULEDIR)/ ;",
         "cp libgdbm_s7.h $(RULEDIR)/ ;"
     ]),
@@ -79,12 +101,12 @@ genrule(
 )
 
 genrule(
-    name = "libgsl_s7_cgen",
-    srcs = [":libgsl_cgen.scm", ":cgen.scm"],
+    name = "libgsl_s7_clib",
+    srcs = [":libgsl_clib.scm", ":clibgen.scm"],
     outs = ["libgsl_s7.c", "libgsl_s7.h"],
-    tools = [":cgen"],
+    tools = [":clibgen"],
     cmd  = "\n".join([
-        "$(execpath :cgen) $(location :libgsl_cgen.scm) ;",
+        "$(execpath :clibgen) $(location :libgsl_clib.scm) ;",
         "cp libgsl_s7.c $(RULEDIR)/ ;",
         "cp libgsl_s7.h $(RULEDIR)/ ;"
     ]),
@@ -92,17 +114,17 @@ genrule(
 )
 
 ################################################################
-## cgen - builds s7 batch processor, for processing cgen.scm to
+## clib - builds s7 batch processor, for processing clib.scm to
 ## generate c sources.
 ################################################################
 cc_binary(
-    name  = "cgen",
-    srcs  = ["cgen.c"],
+    name  = "clibgen",
+    srcs  = ["clibgen.c"],
     deps = ["//src:s7", "//vendored/logc", "//vendored/uthash"],
     data = [
         "//scm:srcs",
-        # ":libcgen.scm",
-        ":cgen.scm"
+        # ":libclib.scm",
+        ":clibgen.scm"
     ],
     copts =  [
         "-Wall",
