@@ -61,8 +61,42 @@ calling the initialization function.
 
 == build targets
 
-* `bazel build @libs7//src:s7` - produces `libs7.lo`, `libc_s7.so`
-* `bazel build @libs7//src:c_s7` - produces `libc_s7.so`
+NOTE: If using libs7 as an external repo, prefix `@libs7`, e.g. `bazel
+build @libs7//src:s7` instead of `bazel build src:s7`.
+
+* `bazel build src:s7` - produces `libs7.a`
+
+=== clibs
+
+The C libraries are automatically compiled and linked when `libs7`
+executables are built. They can be built individually as well.
+
+The clibgen batch processor: `//lib:clibgen`.
+
+C library targets are in package `//lib`. For library `libfoo`, targets are:
+
+C source and header files are produced by processing
+`libfoo_clibgen.scm` with the `clibgen` batch processor. To inspect
+the C files you can build them directly:
+
+* `//lib:libfoo.c` - generates C src file from `lib/libfoo_clibgen.scm`
+* `//lib:libfoo.h` - generates C header file from `lib/libfoo_clibgen.scm`
+
+
+
+
+Available clibs:
+
+* `libc`
+* `libm`
+* `libdl` (`dlopen` etc.)
+* `libcwalk` (link:https://github.com/likle/cwalk[cwalk] library)
+* `libarb` (link:https://arblib.org[libarb], arbitrary-precision ball arithmetic
+* `libgdbm` (link:https://www.gnu.org.ua/software/gdbm/[gdbm] database
+* `libgsl` (link:GNU Scientific Library: https://www.gnu.org/software/gsl/[GNU Scientific Library])
+
+* `bazel build lib:libc_s7.c` - produces `libc_s7.c` from `lib/libc_clibgen.scm`
+* `bazel build lib:libc_s7.c` - produces `libc_s7.h` from `lib/libc_clibgen.scm`
 * `bazel run @libs7//src:repl` - launches a primitive repl (currently broken)
 
 

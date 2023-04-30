@@ -13,15 +13,15 @@ package(default_visibility = ["//visibility:public"])
 #     deps = [":c_s7"]
 # )
 
-cc_library(
-    name  = "c_s7", # emits libc_s7.a
-    linkstatic = 1,
-    srcs  = ["//lib:libc_s7.c", "//src:s7.h"],
-    hdrs  = ["//lib:libc_s7.h"],
-    copts = CLIB_COPTS,
-    linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
-)
+# cc_library(
+#     name  = "c_s7", # emits libc_s7.a
+#     linkstatic = 1,
+#     srcs  = ["//lib:libc_s7.c", "//src:s7.h"],
+#     hdrs  = ["//lib:libc_s7.h"],
+#     copts = CLIB_COPTS,
+#     linkopts = CLIB_LINKOPTS,
+#     defines = CLIB_DEFINES,
+# )
 
 ################################################################
 # cc_shared_library(

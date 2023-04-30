@@ -1,7 +1,7 @@
 ;;; libc.scm
 ;;;
 ;;; generate s7 bindings for std libc
-(require clibgen.scm) ;; cload.scm)
+(require clibgen.scm)
 (provide 'libc_clibgen.scm)
 
 ;; if loading from a different directory, pass that info to C

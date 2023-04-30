@@ -11,6 +11,8 @@
 (unless (defined? '*cload-library-name*)
   (define *cload-library-name* #f))
 
+;; (format #t "CLOAD-DIR: ~A~%" *cload-directory*)
+
 ;; (define *cload-c-compiler* ;(if (provided? 'tcc)  ; how to get tcc to write a .so file?
 ;; 			       ;"tcc"
 ;; 			       (if (and (provided? 'gcc)
@@ -33,7 +35,7 @@
 
 
 (define* (c-define-1 cur-env function-info (prefix "") (strip-prefix "") (headers ()) (cflags "") (ldflags "") output-name)
-  ;; write a C shared library module that links in the functions in function-info
+  ;; write C src/hdr for shared library module that links in the functions in function-info
   ;;    function info is either a list: (return-type c-name arg-type) or a list thereof
   ;;    the new functions are placed in cur-env
 
@@ -122,6 +124,7 @@
 					   (not (char=? (string-ref *cload-directory* (- (length *cload-directory*) 1)) #\/)))
 				      "/" "")
 				  (or output-name (format #f "temp-s7-output-~D" c-define-output-file-counter)))))
+    (format #t "C FILENAME: ~A~%" file-name)
     (let ((c-src-file-name (string-append file-name ".c"))
           (c-hdr-file-name (string-append file-name ".h"))
 	  ;;(o-file-name (string-append file-name ".o"))

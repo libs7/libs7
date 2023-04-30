@@ -9,7 +9,7 @@ cc_test(
             # outs are C or C++ source files, they are compiled into
             # this rule; if they are library files, they are linked
             # in."
-            "//lib/shared:c_s7", "//lib:libc_s7.h",
+            "//lib/libc:c_s7", "//lib/libc:libc_s7.h",
             "//lib/shared:dl_s7", "//lib:libdl_s7.h",
             "//lib/shared:m_s7", "//lib:libm_s7.h",
             "//lib/shared:cwalk_s7", "//lib:libcwalk_s7.h"
@@ -20,7 +20,7 @@ cc_test(
         "s7_test.c"             # for test_cwalk realpath test case
     ] +select({
         "//config/clibs/link:runtime?": [
-            "//lib/shared:c_s7",
+            "//lib/libc:c_s7",
             "//lib/shared:dl_s7",
             "//lib/shared:m_s7",
             "//lib/shared:cwalk_s7",
@@ -38,7 +38,7 @@ cc_test(
         "//vendored/uthash",
     ] + select({
         "//config/clibs/link:static?": [
-            "//lib/static:c_s7",
+            "//lib/libc:c_s7_static",
             "//lib/static:dl_s7",
             "//lib/static:m_s7",
             "//lib/static:cwalk_s7",
@@ -97,7 +97,6 @@ cc_test(
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }),
     linkopts = select({
-        # "//:macos": ["-Lbazel-out/darwin-fastbuild", "-lc_s7"],
         "//:linux": ["-rdynamic"],
         "//conditions:default": []
     }),
