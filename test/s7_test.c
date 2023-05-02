@@ -94,8 +94,8 @@ void test_wordexp(void) {
 }
 
 void test_gdbm(void) {
-    s7_add_to_load_path(s7, "scm");
-    s7_load(s7, "scm/string.scm");
+    s7_add_to_load_path(s7, "../libs7/scm");
+    s7_load(s7, "string.scm");
     sexp_input = "(caddr (string-split (gdbm:version) #\\space))";
     // "GDBM version 1.23. 04/02/2022 (built Apr 30 2023 20:17:04)";
     sexp_expected = "1.23.";
@@ -493,10 +493,11 @@ int main(int argc, char **argv)
 
 #if defined(CLIBS_LINK_RUNTIME)
     clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
+    clib_dload_ns(s7, "libcwalk_s7", "libcwalk", DSO_EXT);
     clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT);
+    clib_dload_ns(s7, "libgdbm_s7", "libgdbm", DSO_EXT);
+    clib_dload_ns(s7, "libm_s7", "libm", DSO_EXT);
     clib_dload_ns(s7, "libutf8proc_s7", "libutf8proc", DSO_EXT);
-    clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT);
-    clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT);
 #else  /* link:static? or link:shared? */
     clib_sinit(s7, libc_s7_init, "libc");
     clib_sinit(s7, libcwalk_s7_init, "libcwalk");
@@ -516,7 +517,7 @@ int main(int argc, char **argv)
     /* debugging: */
     /* s7_pointer loadpath = s7_load_path(s7); */
     /* char *s = s7_object_to_c_string(s7, loadpath); */
-    /* printf("load path: %s\n", s); */
+    /* log_debug("load path: %s", s); */
     /* free(s); */
 
     utstring_new(sexp);

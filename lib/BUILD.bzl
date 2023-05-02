@@ -27,9 +27,9 @@ CLIB_COPTS = [
 })
 
 CLIB_LINKOPTS = select({
-    "//config/host:macos": [],
+    "//config/host:macos?": [],
     #FIXME: -rdynamic only on Linux + link:dynamic?
-    "//config/host:linux": ["-rdynamic"],
+    "//config/host:linux?": ["-rdynamic"],
     # non-linux: ["-Wl,-export-dynamic"],
     "//conditions:default": []
 })

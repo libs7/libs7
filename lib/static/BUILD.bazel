@@ -124,8 +124,8 @@ cc_library(
     ],
     copts = select({
         # strdup is non-standard, not supported on linux in strict c11 mode
-        "//config/host:macos": ["-std=c11"],
-        "//config/host:linux": ["-std=gnu11", "-Wl,-export-dynamic"],
+        "//config/host:macos?": ["-std=c11"],
+        "//config/host:linux?": ["-std=gnu11", "-Wl,-export-dynamic"],
         "//conditions:default": ["-std=c11"],
     }) + [
         "-Wextra",

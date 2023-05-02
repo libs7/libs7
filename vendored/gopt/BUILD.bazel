@@ -7,8 +7,8 @@ cc_library(
     srcs  = ["gopt.c", "gopt-errors.c"],
     hdrs  = ["gopt.h"],
     copts = select({
-        "//config/host:macos": ["-std=c11"],
-        "//config/host:linux": ["-std=gnu11"],
+        "//config/host:macos?": ["-std=c11"],
+        "//config/host:linux?": ["-std=gnu11"],
         "//conditions:default": ["-std=c11"],
     }) + ["-Wall", "-Wpedantic"],
     visibility = ["//visibility:public"]

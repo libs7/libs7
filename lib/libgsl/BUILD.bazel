@@ -1,5 +1,7 @@
 load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
 
+package(default_visibility = ["//visibility:public"])
+
 exports_files(["libc_clibgen.scm"])
 
 load("//lib:BUILD.bzl",
@@ -16,7 +18,6 @@ cc_library(
     copts = CLIB_COPTS + ["-I$(GENDIR)/external/gsl/libgsl/include"],
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
-    visibility = ["//visibility:public"]
 )
 
 cc_binary(
@@ -27,7 +28,6 @@ cc_binary(
     copts = CLIB_COPTS + ["-I$(GENDIR)/external/gsl/libgsl/include"],
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
-    visibility = ["//visibility:public"]
 )
 
 clibgen_runner(

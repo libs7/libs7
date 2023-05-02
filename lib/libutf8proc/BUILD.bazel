@@ -1,5 +1,7 @@
 load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
 
+package(default_visibility = ["//visibility:public"])
+
 exports_files(["libutf8proc_clibgen.scm"])
 
 load("//lib:BUILD.bzl",
@@ -17,7 +19,6 @@ cc_library(
         "-I$(GENDIR)/external/utf8proc/libutf8proc/include"],
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
-    visibility = ["//visibility:public"]
 )
 
 cc_binary(
@@ -29,7 +30,6 @@ cc_binary(
         "-I$(GENDIR)/external/utf8proc/libutf8proc/include"],
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
-    visibility = ["//visibility:public"]
 )
 
 clibgen_runner(

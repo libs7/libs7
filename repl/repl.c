@@ -1,9 +1,10 @@
-/* #include <wordexp.h> */
-
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
+/* #include <uuid/uuid.h> */
 
 #include "gopt.h"
 #include "log.h"
@@ -17,53 +18,138 @@
 #include "libdl_s7.h"
 #endif
 
+#if defined(DEBUG_TRACE)
 extern bool libs7_debug;
+extern bool libs7_debug_runfiles;
 extern bool libs7_trace;
+#endif
+
 bool verbose = false;
 bool quiet   = false;
 
-void s7_repl(s7_scheme *s7)
+/* void s7_repl(s7_scheme *s7) */
+/* { */
+/*     log_debug("s7_repl starting"); */
+
+/*     /\* s7_pointer lp = s7_load_path(s7); *\/ */
+/*     /\* char *s = s7_object_to_c_string(s7, lp); *\/ */
+/*     /\* log_debug("load-path: %s", s); *\/ */
+/*     /\* free(s); *\/ */
+
+
+/*   bool repl_loaded = false; */
+
+/* #if defined(CLIBS_LINK_RUNTIME) */
+/*     clib_dload_global(s7, "libc_s7", "libc", DSO_EXT); */
+/*     /\* clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT); *\/ */
+/*     /\* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); *\/ */
+/*     /\* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); *\/ */
+/*     /\* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); *\/ */
+/* #else  /\* link:shared? *\/ */
+/*     clib_sinit(s7, libc_s7_init, "libc"); */
+/*     /\* clib_sinit(s7, libdl_s7_init, "libdl"); *\/ */
+/*     /\* clib_sinit(s7, libm_s7_init, "libm"); *\/ */
+/*     /\* clib_sinit(s7, libcwalk_s7_init, "libcwalk"); *\/ */
+/* #endif */
+
+/* #if S7_DEBUGGING */
+/*       s7_autoload(s7, make_symbol(s7, "compare-calls", 13), s7_make_string(s7, "compare-calls.scm")); */
+/*       s7_autoload(s7, make_symbol(s7, "get-overheads", 13), s7_make_string(s7, "compare-calls.scm")); */
+/* #endif */
+
+/*       char *script = "repl/repl.scm"; */
+/*       /\* char *script = "external/libs7/repl/repl.scm"; *\/ */
+
+/*       /\* s7_provide(s7, "libc.scm"); *\/ */
+/*       if (!repl_loaded) { */
+/*           /\* log_debug("loading repl.scm"); *\/ */
+/*           if (!s7_load(s7, script)) { */
+/*               log_error("failed: load repl.scm"); */
+/*           } */
+/*       } */
+/*       s7_eval_c_string(s7, "((*repl* 'run))"); */
+/*     /\* } *\/ */
+/* } */
+
+char *scm_runfiles_dirs[] = {
+    /* this seems to work when pgm is run from libs7 repo or as external */
+    "../libs7/scm",
+    NULL /* do not remove terminating null */
+};
+char **scm_dir;
+
+void static _runfiles_init(s7_scheme *s7)
 {
-    /* log_debug("s7_repl starting"); */
-
-    /* s7_pointer lp = s7_load_path(s7); */
-    /* char *s = s7_object_to_c_string(s7, lp); */
-    /* log_debug("load-path: %s", s); */
-    /* free(s); */
-
-
-  bool repl_loaded = false;
-
-#if defined(CLIBS_LINK_RUNTIME)
-    clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
-    /* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); */
-    /* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); */
-    /* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); */
-#else  /* link:shared? */
-    clib_sinit(s7, libc_s7_init, "libc");
-    /* clib_sinit(s7, libdl_s7_init, "libdl"); */
-    /* clib_sinit(s7, libm_s7_init, "libm"); */
-    /* clib_sinit(s7, libcwalk_s7_init, "libcwalk"); */
+    /* s7_pointer tmp_load_path = s7_list(s7, 0); */
+#if defined(DEBUG_TRACE)
+#ifdef BAZEL_CURRENT_REPOSITORY
+    if (libs7_debug)
+        log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY);
 #endif
-
-#if S7_DEBUGGING
-      s7_autoload(s7, make_symbol(s7, "compare-calls", 13), s7_make_string(s7, "compare-calls.scm"));
-      s7_autoload(s7, make_symbol(s7, "get-overheads", 13), s7_make_string(s7, "compare-calls.scm"));
 #endif
-
-      char *script = "repl/repl.scm";
-      /* char *script = "external/libs7/repl/repl.scm"; */
-
-      /* s7_provide(s7, "libc.scm"); */
-      if (!repl_loaded) {
-          /* log_debug("loading repl.scm"); */
-          if (!s7_load(s7, script)) {
-              log_error("failed: load repl.scm");
-          }
-      }
-      s7_eval_c_string(s7, "((*repl* 'run))");
-    /* } */
+    scm_dir = scm_runfiles_dirs;
+    char *scmdir;
+    while (*scm_dir) {
+#if defined(DEBUG_TRACE)
+        if (libs7_debug_runfiles)
+            log_debug(" runfile: %s", *scm_dir);
+#endif
+        scmdir = realpath(*scm_dir, NULL);
+        if (scmdir == NULL) {
+            log_error("runfile not found: %s", *scm_dir);
+            exit(EXIT_FAILURE);
+        }
+#if defined(DEBUG_TRACE)
+        if (libs7_debug_runfiles)
+            log_debug("runfile realpath: %s", scmdir);
+#endif
+        s7_add_to_load_path(s7, scmdir);
+        free(scmdir);
+        (void)*scm_dir++;
+    }
+    //FIXME: uas s7_add_to_load_path!!!
+    /* s7_define_variable(s7, "*load-path*", tmp_load_path); */
 }
+
+#if defined(DEBUG_TRACE)
+static void _print_debug_env(void)
+{
+    log_debug("getcwd: %s", getcwd(NULL, 0));
+    log_debug("getenv(PWD): %s", getenv("PWD"));
+
+    // $HOME - not reliable, use getpwuid() instead
+    log_debug("getenv(HOME): %s", getenv("HOME"));
+    struct passwd* pwd = getpwuid(getuid());
+    log_debug("pwd->pw_dir: %s", pwd->pw_dir);
+
+    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, 'libs7' when run as external repo
+    log_debug("BAZEL_CURRENT_REPOSITORY (macro): '%s'", BAZEL_CURRENT_REPOSITORY);
+
+    // TEST_WORKSPACE: always the root ws
+    log_debug("TEST_WORKSPACE: '%s'", getenv("TEST_WORKSPACE"));
+
+    // BAZEL_TEST: should always be true when this is compiled as cc_test
+    log_debug("BAZEL_TEST: '%s'", getenv("BAZEL_TEST"));
+
+    // BUILD_WORK* vars: null under 'bazel test'
+    log_debug("BUILD_WORKSPACE_DIRECTORY: %s", getenv("BUILD_WORKSPACE_DIRECTORY"));
+    log_debug("BUILD_WORKING_DIRECTORY: %s", getenv("BUILD_WORKING_DIRECTORY"));
+
+    // TEST_SRCDIR - required for cc_test
+    log_debug("GENDIR: %s", getenv("GENDIR"));
+    log_debug("TEST_SRCDIR: %s", getenv("TEST_SRCDIR"));
+    log_debug("BINDIR: %s", getenv("BINDIR"));
+
+    /* RUNFILES_MANIFEST_FILE: null on macos. */
+    log_debug("RUNFILES_MANIFEST_FILE: %s", getenv("RUNFILES_MANIFEST_FILE"));
+
+    /* RUNFILES_MANIFEST_FILE: null on macos. */
+    log_debug("RUNFILES_MANIFEST_ONLY: %s", getenv("RUNFILES_MANIFEST_ONLY"));
+
+    /* RUNFILES_DIR: set on macos for both bazel test and bazel run. */
+    log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
+}
+#endif
 
 void _print_version(void) {
     printf("FIXME: version id\n");
@@ -90,6 +176,7 @@ void _print_usage(void) {
 
 enum OPTS {
     FLAG_DEBUG,
+    FLAG_DEBUG_RUNFILES,
     FLAG_DEBUG_S7,
     FLAG_HELP,
     FLAG_TRACE,
@@ -104,6 +191,8 @@ static struct option options[] = {
     /* 0 */
     [FLAG_DEBUG] = {.long_name="debug",.short_name='d',
                     .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
+    [FLAG_DEBUG_RUNFILES] = {.long_name="debug-runfiles",
+                             .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_DEBUG_S7] = {.long_name="debug-s7",
                        .flags=GOPT_ARGUMENT_FORBIDDEN},
     /* [FLAG_DEBUG_S7_ALL] = {.long_name="debug-all", */
@@ -146,6 +235,15 @@ void _set_options(struct option options[])
     if (options[FLAG_DEBUG].count) {
 #if defined(DEBUG_TRACE)
         libs7_debug = true;
+#endif
+    }
+
+    if (options[FLAG_DEBUG_RUNFILES].count) {
+#if defined(DEBUG_TRACE)
+        libs7_debug_runfiles = true;
+#else
+        log_error("--debug-runfiles requires debug build, -c dbg");
+        exit(EXIT_FAILURE);
 #endif
     }
 
@@ -195,6 +293,10 @@ int main(int argc, char **argv) // , char **envp)
 
     _set_options(options);
 
+#if defined(DEBUG_TRACE)
+    if (libs7_debug) _print_debug_env();
+#endif
+
     /* log_info("argc: %d", argc); */
     /* for (int i = 0; i < argc; i++) { */
     /*     log_debug("argv %d: %s", i, argv[i]); */
@@ -203,19 +305,44 @@ int main(int argc, char **argv) // , char **envp)
 
     s7_scheme *s7 = libs7_init();
     if (!quiet) {
-        log_info("s7: %s", S7_DATE);
+#if defined(DEBUG_TRACE)
+        log_debug("s7: %s", S7_DATE);
 #if defined(CLIBS_LINK_STATIC)
-        log_info("clib linkage: static");
+        log_debug("clib linkage: static");
 #elif defined(CLIBS_LINK_RUNTIME)
-        log_info("clib linkage: runtime");
+        log_debug("clib linkage: runtime");
 #else
-        log_info("clib linkage: shared");
+        log_debug("clib linkage: shared");
+#endif
 #endif
     }
+
+    _runfiles_init(s7);
 
     if (options[OPT_LOAD_PATH].count) {
         s7_add_to_load_path(s7, options[OPT_LOAD_PATH].argument);
     }
+
+#if defined(CLIBS_LINK_RUNTIME)
+        clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
+        /* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); */
+        /* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); */
+        /* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); */
+#else  /* linkage: static or shared */
+        clib_sinit(s7, libc_s7_init, "libc");
+        clib_sinit(s7, libdl_s7_init, "libdl");
+        clib_sinit(s7, libm_s7_init, "libm");
+        clib_sinit(s7, libcwalk_s7_init, "libcwalk");
+#endif
+
+    // deal with bazel context
+    char *script;
+    if (strlen(BAZEL_CURRENT_REPOSITORY) == 0)
+        script = "repl/repl.scm";
+    else
+        script = "external/libs7/repl/repl.scm";
+
+    /* log_debug("script: %s", script); */
 
     /* TODO: add scm libs from runfiles to *load-path* */
 
@@ -233,20 +360,6 @@ int main(int argc, char **argv) // , char **envp)
         /* log_debug("load-path: %s", s); */
         /* free(s); */
 
-#if defined(CLIBS_LINK_RUNTIME)
-        /* clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT); */
-        /* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); */
-        /* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); */
-        /* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); */
-#else  /* linkage: static or shared */
-        clib_sinit(s7, libc_s7_init, "libc");
-        clib_sinit(s7, libdl_s7_init, "libdl");
-        clib_sinit(s7, libm_s7_init, "libm");
-        clib_sinit(s7, libcwalk_s7_init, "libcwalk");
-#endif
-
-        char *script = "repl/repl.scm";
-        /* char *script = "external/libs7/repl/repl.scm"; */
         if (!s7_load(s7, script)) log_error("failed: load %s", script);
         s7_eval_c_string(s7, "((*repl* 'run))");
 /* #else */
