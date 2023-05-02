@@ -3,7 +3,7 @@
 ;;; generate libutf8proc_s7.c, s7 bindings for utf8proc
 
 (require clibgen.scm)
-(provide 'libutf8proc_clib.scm)
+(provide 'libutf8proc.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))
@@ -58,6 +58,7 @@
 	   ;;    utf8proc_bool utf8proc_grapheme_break_stateful(utf8proc_int32_t codepoint1, utf8proc_int32_t codepoint2, utf8proc_int32_t *state)
 
 	   (char* utf8proc_version (void))
+	   (char* utf8proc_unicode_version (void))
 	   (char* utf8proc_errmsg (int))
 	   (int utf8proc_tolower ((utf8proc_int32_t int)))
 	   (int utf8proc_toupper ((utf8proc_int32_t int)))
@@ -67,10 +68,10 @@
 	   (bool utf8proc_codepoint_valid ((utf8proc_int32_t int)))
 	   (bool utf8proc_grapheme_break ((utf8proc_int32_t int) (utf8proc_int32_t int)))
 
-	   (char* utf8proc_NFD (char*)) ; these return newly allocated memory -- should probably free it here
-	   (char* utf8proc_NFC (char*))
-	   (char* utf8proc_NFKD (char*))
-	   (char* utf8proc_NFKC (char*))
+	   (char* utf8proc_NFD (utf8proc_uint8_t*)) ; these return newly allocated memory -- should probably free it here
+	   (char* utf8proc_NFC (utf8proc_uint8_t*))
+	   (char* utf8proc_NFKD (utf8proc_uint8_t*))
+	   (char* utf8proc_NFKC (utf8proc_uint8_t*))
 
 	   (in-C "static s7_pointer g_utf8proc_iterate(s7_scheme *sc, s7_pointer args)
                   {
@@ -82,16 +83,17 @@
                     res = utf8proc_iterate((const utf8proc_uint8_t*)str, len, &code_ref);
                     return(s7_list(sc, 2, s7_make_integer(sc, code_ref), s7_make_integer(sc, res)));
                    }")
-	   (C-function ("utf8proc_iterate" g_utf8proc_iterate "" 1))
+	   (C-function ("utf8:iterate" g_utf8proc_iterate "" 1))
 
 	   (in-C "static s7_pointer g_utf8proc_encode_char(s7_scheme *sc, s7_pointer args)
                   {
-                    ssize_t res;
+                    utf8proc_ssize_t res;
                     utf8proc_uint8_t buf[8];
                     res = utf8proc_encode_char((utf8proc_int32_t)s7_integer(s7_car(args)), buf);
+                    /* FIXME: cannot use s7_make_string_with_length on a buffer of utf8 codepoints */
                     return(s7_list(sc, 2, s7_make_string_with_length(sc, (const char*)buf, res), s7_make_integer(sc, res)));
                    }")
-	   (C-function ("utf8proc_encode_char" g_utf8proc_encode_char "" 1))
+	   (C-function ("utf8:encode_char" g_utf8proc_encode_char "" 1))
 
 	   (in-C "static s7_pointer g_utf8proc_reencode(s7_scheme *sc, s7_pointer args)
                   {
@@ -135,7 +137,8 @@
                              s7_make_symbol(sc, \"boundclass\"),         s7_make_integer(sc, info->boundclass),
                              s7_make_symbol(sc, \"charwidth\"),          s7_make_integer(sc, info->charwidth))));
                    }")
-	   (C-function ("utf8proc_get_property" g_utf8proc_get_property "" 1))
+	   ;; (C-function ("utf8proc_get_property" g_utf8proc_get_property "" 1))
+	   (C-function ("utf8:get_property" g_utf8proc_get_property "" 1))
 
 	   (in-C "static s7_pointer g_utf8proc_decompose_char(s7_scheme *sc, s7_pointer args)
                   {
@@ -152,7 +155,7 @@
                     res = utf8proc_decompose_char((utf8proc_int32_t)s7_integer(code), dst, size, (utf8proc_option_t)s7_integer(opt), &last_boundclass);
                     return(s7_make_integer(sc, res));
                   }")
-	   (C-function ("utf8proc_decompose_char" g_utf8proc_decompose_char "" 3))
+	   (C-function ("utf8:decompose_char" g_utf8proc_decompose_char "" 3))
 
 	   (in-C "static s7_pointer g_utf8proc_map(s7_scheme *sc, s7_pointer args)
                   {
@@ -186,7 +189,9 @@
 	   (C-function ("utf8proc_decompose" g_utf8proc_decompose "" 2))
 	   )
 
-	 "" "utf8proc.h" "" "-lutf8proc" "libutf8proc_s7")
+	 "utf8"
+         "utf8proc_"
+         "utf8proc.h" "" "-lutf8proc" "libutf8proc_s7")
 	(curlet))))
 
 *libutf8proc*

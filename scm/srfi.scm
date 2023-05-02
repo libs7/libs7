@@ -1,5 +1,7 @@
 ;; (display "loading libs7/srfi.scm") (newline)
 
+(provide 'srfi.scm)
+
 ;; mostly stolen from ref implementations, e.g.
 ;;; SRFI-1 list-processing library 			-*- Scheme -*-
 ;;; Reference implementation

@@ -10,9 +10,11 @@ cc_test(
             # this rule; if they are library files, they are linked
             # in."
             "//lib/libc:c_s7", "//lib/libc:libc_s7.h",
-            "//lib/shared:dl_s7", "//lib:libdl_s7.h",
-            "//lib/shared:m_s7", "//lib:libm_s7.h",
-            "//lib/shared:cwalk_s7", "//lib:libcwalk_s7.h"
+            "//lib/libcwalk:cwalk_s7", "//lib:libcwalk_s7.h",
+            "//lib/libdl:dl_s7", "//lib:libdl_s7.h",
+            "//lib/libgdbm:gdbm_s7", "//lib:libgdbm_s7.h",
+            "//lib/libm:m_s7", "//lib:libm_s7.h",
+            "//lib/libutf8proc:libutf8proc_s7", "//lib:libutf8proc_s7.h",
         ],
         "//conditions:default": []
     }),
@@ -21,9 +23,11 @@ cc_test(
     ] +select({
         "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
-            "//lib/shared:dl_s7",
-            "//lib/shared:m_s7",
-            "//lib/shared:cwalk_s7",
+            "//lib/libcwalk:cwalk_s7",
+            "//lib/libdl:dl_s7",
+            "//lib/libgdbm:gdbm_s7",
+            "//lib/libm:m_s7",
+            "//lib/libutf8proc:libutf8proc_s7",
         ],
         "//conditions:default": []
     }),
@@ -39,9 +43,11 @@ cc_test(
     ] + select({
         "//config/clibs/link:static?": [
             "//lib/libc:c_s7_static",
-            "//lib/static:dl_s7",
-            "//lib/static:m_s7",
-            "//lib/static:cwalk_s7",
+            "//lib/libcwalk:cwalk_s7_static",
+            "//lib/libdl:dl_s7_static",
+            "//lib/libgdbm:gdbm_s7_static",
+            "//lib/libm:m_s7_static",
+            "//lib/libutf8proc:utf8proc_s7_static",
         ],
         "//conditions:default": []
     }),
@@ -56,8 +62,124 @@ cc_test(
         "-Isrc",
         "-Iexternal/libs7/src",
 
-        "-I$(GENDIR)/lib",
-        "-I$(GENDIR)/external/libs7/lib",
+        "-I$(GENDIR)/lib/libc",
+        "-I$(GENDIR)/external/libs7/lib/libc",
+
+        "-I$(GENDIR)/lib/libcwalk",
+        "-I$(GENDIR)/external/libs7/lib/libcwalk",
+
+        "-I$(GENDIR)/lib/libdl",
+        "-I$(GENDIR)/external/libs7/lib/libdl",
+
+        "-I$(GENDIR)/lib/libgdbm",
+        "-I$(GENDIR)/external/libs7/lib/libgdbm",
+
+        "-I$(GENDIR)/lib/libm",
+        "-I$(GENDIR)/external/libs7/lib/libm",
+
+        "-I$(GENDIR)/lib/libutf8proc",
+        "-I$(GENDIR)/external/libs7/lib/libutf8proc",
+
+        "-Ivendored/gopt",
+        "-Iexternal/libs7/vendored/gopt",
+
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+
+        "-Ivendored/unity",
+        "-Iexternal/libs7/vendored/unity",
+
+        "-Ivendored/uthash",
+        "-Iexternal/libs7/vendored/uthash",
+    ] + select({
+        "//:macos": [
+            "-Wno-gnu",
+            "-std=c11"
+        ],
+        "//:linux": [
+            "-std=gnu11",
+            "--pedantic-errors",
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    defines = select({
+        "//config/host:debug": ["DEBUG_TRACE"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/host:macos": ["DSO_EXT=\\\".dylib\\\""],
+        "//config/host:linux": [
+            "DSO_EXT=\\\".so\\\"",
+            "_XOPEN_SOURCE=500", # strdup
+            "_DEFAULT_SOURCE"    # dirent DT_* macros
+        ],
+        "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+    }),
+    linkopts = select({
+        "//:linux": ["-rdynamic"],
+        "//conditions:default": []
+    }),
+    timeout = "short",
+    visibility = ["//test:__subpackages__"]
+)
+
+cc_test(
+    name = "utf8proc",
+    srcs = ["libutf8proc_s7_test.c" ] + select({
+        "//config/clibs/link:shared?": [
+            # "If a rule's name is in the srcs, then this rule
+            # automatically depends on that one. If the named rule's
+            # outs are C or C++ source files, they are compiled into
+            # this rule; if they are library files, they are linked
+            # in."
+            "//lib/libc:c_s7", "//lib/libc:libc_s7.h",
+            "//lib/libutf8proc:libutf8proc_s7", "//lib:libutf8proc_s7.h",
+        ],
+        "//conditions:default": []
+    }),
+    data = [
+        "s7_test.c"             # for test_cwalk realpath test case
+    ] +select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libc:c_s7",
+            "//lib/libutf8proc:libutf8proc_s7",
+        ],
+        "//conditions:default": []
+    }),
+    deps = [
+        ## "other libraries to be linked in to the binary target." can
+        ## be cc_library targets but cc_binary targets with
+        ## linkshared=1 won't work - put them in srcs (or data) attr.
+        "//src:s7",
+        "//vendored/gopt",
+        "//vendored/logc",
+        "//vendored/unity",
+        "//vendored/uthash",
+    ] + select({
+        "//config/clibs/link:static?": [
+            "//lib/libc:c_s7_static",
+            "//lib/libutf8proc:utf8proc_s7_static",
+        ],
+        "//conditions:default": []
+    }),
+    copts = [
+        "-x", "c",
+        "-Wall",
+        "-Wextra",
+        "-Werror=pedantic",
+        "-Wno-unused-parameter",
+        "-Wno-format-pedantic",
+
+        "-Isrc",
+        "-Iexternal/libs7/src",
+
+        "-I$(GENDIR)/lib/libc",
+        "-I$(GENDIR)/external/libs7/lib/libc",
+
+        "-I$(GENDIR)/lib/libutf8proc",
+        "-I$(GENDIR)/external/libs7/lib/libutf8proc",
 
         "-Ivendored/gopt",
         "-Iexternal/libs7/vendored/gopt",

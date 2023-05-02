@@ -4,7 +4,7 @@
 ;;; GNU Scientific Library: https://www.gnu.org/software/gsl/
 
 (require clibgen.scm)
-(provide 'libgsl_clib.scm)
+(provide 'libgsl.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))
@@ -24,19 +24,20 @@
 ;; since we might be loading this locally, reader-cond (in that case) won't find gsl-version unless...
 (unless (defined? '*libgsl*)
   (with-let (rootlet)
-    (define gsl-version 0.0)		; define at top-level no matter where we are now
-    (when (and (provided? 'linux)
-	       (defined? 'system))
-      (let* ((version (#_system "pkg-config gsl --modversion" #t))
-	     (len (length version)))
-	(when (positive? len)
-	  (set! gsl-version (string->number (if (char=? (version (- len 1)) #\newline)
-						(substring version 0 (- len 1))
-						version)))
-	  (unless (number? gsl-version) ; "2.2.1" -> 2.2?
-	    (let ((i1 (char-position #\. version (+ (char-position #\. version) 1))))
-	      (if (integer? i1)
-		  (set! gsl-version (string->number (substring version 0 i1)))))))))))
+    (define gsl-version 2.7)		; define at top-level no matter where we are now
+    ;; (when (and (provided? 'linux)
+    ;;            (defined? 'system))
+    ;;   (let* ((version (#_system "pkg-config gsl --modversion" #t))
+    ;;          (len (length version)))
+    ;;     (when (positive? len)
+    ;;       (set! gsl-version (string->number (if (char=? (version (- len 1)) #\newline)
+    ;;     					(substring version 0 (- len 1))
+    ;;     					version)))
+    ;;       (unless (number? gsl-version) ; "2.2.1" -> 2.2?
+    ;;         (let ((i1 (char-position #\. version (+ (char-position #\. version) 1))))
+    ;;           (if (integer? i1)
+    ;;     	  (set! gsl-version (string->number (substring version 0 i1)))))))))
+    ))
 
 (unless (defined? '*libgsl*)
   (define *libgsl*
@@ -3161,7 +3162,9 @@
 	 ;;    (int gsl_linalg_cholesky_solve2 (gsl_matrix* gsl_vector* gsl_vector* gsl_vector*))
 	 
 	 )
-       "" (list "gsl/gsl_blas.h"
+       "gsl"
+       ""
+       (list "gsl/gsl_blas.h"
 		"gsl/gsl_blas_types.h"
 		"gsl/gsl_block.h"
 		"gsl/gsl_block_complex_double.h"

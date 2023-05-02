@@ -30,10 +30,10 @@ cc_binary(
         "//vendored/logc"
     ] + select({
         "//config/clibs/link:static?": [
-            "//lib/static:c_s7",
-            "//lib/static:dl_s7",
-            "//lib/static:m_s7",
-            "//lib/static:cwalk_s7",
+            "//lib/libc:c_s7_static",
+            "//lib/libdl:dl_s7_static",
+            "//lib/libm:m_s7_static",
+            "//lib/libcwalk:cwalk_s7_static",
         ],
         "//conditions:default": []
     }),
@@ -59,8 +59,14 @@ cc_binary(
         "-Isrc",
         "-Iexternal/libs7/src",
 
-        "-I$(GENDIR)/lib",      # clib hdrs
-        "-I$(GENDIR)/external/libs7/lib",
+        "-I$(GENDIR)/lib/libc",
+        "-I$(GENDIR)/external/libs7/lib/libc",
+        "-I$(GENDIR)/lib/libcwalk",
+        "-I$(GENDIR)/external/libs7/lib/libcwalk",
+        "-I$(GENDIR)/lib/libdl",
+        "-I$(GENDIR)/external/libs7/lib/libdl",
+        "-I$(GENDIR)/lib/libm",
+        "-I$(GENDIR)/external/libs7/lib/libm",
 
         "-Ivendored/gopt",
         "-Iexternal/libs7/vendored/gopt",

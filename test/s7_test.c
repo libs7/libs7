@@ -18,9 +18,11 @@
 
 #if ! defined(CLIBS_LINK_RUNTIME)
 #include "libc_s7.h"
-#include "libm_s7.h"
 #include "libcwalk_s7.h"
 #include "libdl_s7.h"
+#include "libgdbm_s7.h"
+#include "libm_s7.h"
+#include "libutf8proc_s7.h"
 #endif
 
 #include "libs7.h"
@@ -81,19 +83,46 @@ void test_wordexp(void) {
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
-/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
-/* char *s = s7_object_to_c_string(s7, actual); */
-/* log_debug("result: %s", s); */
-/* free(s); */
-
     struct passwd* pwd = getpwuid(getuid());
     char *h =  pwd->pw_dir;
     /* free(pwd); */
-    log_debug("HOME: %s", h);
+    /* log_debug("HOME: %s", h); */
     utstring_renew(sexp);
     utstring_printf(sexp, "%s/foo/bar", h);
-    log_debug("exp: %s", utstring_body(sexp));
+    /* log_debug("exp: %s", utstring_body(sexp)); */
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, utstring_body(sexp))));
+}
+
+void test_gdbm(void) {
+    s7_add_to_load_path(s7, "scm");
+    s7_load(s7, "scm/string.scm");
+    sexp_input = "(caddr (string-split (gdbm:version) #\\space))";
+    // "GDBM version 1.23. 04/02/2022 (built Apr 30 2023 20:17:04)";
+    sexp_expected = "1.23.";
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, sexp_expected)));
+
+    // gdbf = gdbm_open (argv[1], 0, GDBM_READER, 0, NULL);
+    // (gdbm:open filename size flags mode func)
+
+    sexp_input = ""
+        "(let ((gfile (gdbm:open \"test.gdbm\" 1024 gdbm:GDBM_NEWDB #o664 "
+        "                        (lambda (str) (format *stderr* \"str: ~S~%\" str))))) "
+        " (gdbm:store gfile \"1\" \"1234\" gdbm:GDBM_REPLACE) "
+	" (gdbm:fetch gfile \"1\") "
+        " (gdbm:close gfile)) "
+        ;
+    sexp_expected = "#<unspecified>";
+    utstring_renew(sexp);
+    utstring_printf(sexp, "%s", sexp_input);
+    actual = s7_eval_c_string(s7, utstring_body(sexp));
+    /* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+    /* char *s = s7_object_to_c_string(s7, actual); */
+    /* log_debug("result: %s", s); */
+    /* free(s); */
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_unspecified(s7)));  // make_string(s7, sexp_expected)));
 }
 
 void test_math(void) {
@@ -260,11 +289,6 @@ void test_cwalk(void) {
     /* log_debug("cwd: %s", getcwd(NULL,0)); */
     /* log_debug("test file: %s", utstring_body(sexp)); */
     actual = s7_eval_c_string(s7, utstring_body(sexp));
-/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
-/* char *s = s7_object_to_c_string(s7, actual); */
-/* log_debug("result: %s", s); */
-/* free(s); */
-
     char *rp = realpath(test_file, NULL);
     /* log_debug("expected: %s", rp); */
     /* free(s); */
@@ -276,6 +300,39 @@ void test_cwalk(void) {
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
     actual = s7_eval_c_string(s7, utstring_body(sexp));
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+}
+
+void test_utf8proc(void) {
+    actual = s7_eval_c_string(s7, "(utf8:version)");
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "2.8.0")));
+
+    actual = s7_eval_c_string(s7, "(utf8:unicode_version)");
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "15.0.0")));
+
+    actual = s7_eval_c_string(s7, "(utf8:codepoint_valid 66)");
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_t(s7)));
+
+    actual = s7_eval_c_string(s7, "(utf8:codepoint_valid (char->integer #\\A))");
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_t(s7)));
+
+    actual = s7_eval_c_string(s7, "(utf8:category_string (char->integer #\\A))");
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "Lu")));
+
+    actual = s7_eval_c_string(s7, "(utf8:codepoint_valid #x0643)"); // Arabic Kaf
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_t(s7)));
+
+    actual = s7_eval_c_string(s7, "(utf8:category_string #x0643)");
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "Lo")));
+
+    actual = s7_eval_c_string(s7, "((utf8:get_property #x0643) 'category)");
+    sexp_expected = "utf8:UTF8PROC_CATEGORY_LO";
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+
+    actual = s7_eval_c_string(s7, "((utf8:get_property #x0643) 'bidi_class)");
+    sexp_expected = "utf8:UTF8PROC_BIDI_CLASS_AL";
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
@@ -437,13 +494,16 @@ int main(int argc, char **argv)
 #if defined(CLIBS_LINK_RUNTIME)
     clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
     clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT);
+    clib_dload_ns(s7, "libutf8proc_s7", "libutf8proc", DSO_EXT);
     clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT);
     clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT);
 #else  /* link:static? or link:shared? */
     clib_sinit(s7, libc_s7_init, "libc");
-    clib_sinit(s7, libdl_s7_init, "libdl");
-    clib_sinit(s7, libm_s7_init, "libm");
     clib_sinit(s7, libcwalk_s7_init, "libcwalk");
+    clib_sinit(s7, libdl_s7_init, "libdl");
+    clib_sinit(s7, libgdbm_s7_init, "libgdbm");
+    clib_sinit(s7, libm_s7_init, "libm");
+    clib_sinit(s7, libutf8proc_s7_init, "libutf8proc");
 #endif
 
     /* log_debug("INITIALIZED"); */
@@ -465,10 +525,12 @@ int main(int argc, char **argv)
 
     RUN_TEST(test_libc);
     RUN_TEST(test_wordexp);
+    RUN_TEST(test_gdbm);
     RUN_TEST(test_math);
     RUN_TEST(test_libm);
     RUN_TEST(test_regex);
     RUN_TEST(test_cwalk);
+    RUN_TEST(test_utf8proc);
 
     /* utstring_free(sexp); */
     return UNITY_END();

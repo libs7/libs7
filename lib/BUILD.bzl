@@ -64,29 +64,23 @@ clibgen runner
 # load("//lib:dicts.bzl", "dicts")
 
 def _impl(ctx):
-    print("GENDIR: %s" % ctx.var["GENDIR"])
     tool_as_list = [ctx.attr.tool]
     tool_inputs, tool_input_mfs = ctx.resolve_tools(tools = tool_as_list)
     args = [
-        # Expand $(location) / $(locations) in args.
-        #
-        # Also for simple implementation and usage, do not Bash-tokenize the arguments. Without
-        # tokenization the user can write args=["a b"] to pass (a b) as one argument, but with
-        # tokenization they would have to write args=["'a b'"] or args=["a\\ b"]. There's no
-        # documented tokenization function anyway (as of 2019-05-21 ctx.tokenize exists but is
-        # undocumented, see https://github.com/bazelbuild/bazel/issues/8389).
         ctx.expand_location(a, tool_as_list) if "$(location" in a else a
         for a in ctx.attr.args
     ]
+    # print("Gendir: %s" % ctx.var["GENDIR"])
+    args.append("--gendir")
     args.append(ctx.var["GENDIR"])
     envs = {
         # Expand $(location) / $(locations) in the values.
         k: ctx.expand_location(v, tool_as_list) if "$(location" in v else v
         for k, v in ctx.attr.env.items()
     }
-    print("OUTPUTS: %s" % ctx.outputs.outs)
-    for o in ctx.outputs.outs:
-        print("O: %s" % o.path)
+    # print("OUTPUTS: %s" % ctx.outputs.outs)
+    # for o in ctx.outputs.outs:
+    #     print("O: %s" % o.path)
     ctx.actions.run(
         outputs = ctx.outputs.outs,
         inputs = ctx.files.srcs,

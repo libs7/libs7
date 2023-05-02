@@ -1,3 +1,6 @@
+;; (format #t "Loading clibgen.scm~%")
+;; (flush-output-port)
+
 (provide 'clibgen.scm)
 
 ;; TODO: write header files with init prototypes
@@ -124,7 +127,7 @@
 					   (not (char=? (string-ref *cload-directory* (- (length *cload-directory*) 1)) #\/)))
 				      "/" "")
 				  (or output-name (format #f "temp-s7-output-~D" c-define-output-file-counter)))))
-    (format #t "C FILENAME: ~A~%" file-name)
+    ;; (format #t "C FILENAME: ~A~%" file-name)
     (let ((c-src-file-name (string-append file-name ".c"))
           (c-hdr-file-name (string-append file-name ".h"))
 	  ;;(o-file-name (string-append file-name ".o"))
@@ -193,6 +196,7 @@
 
       (define (initialize-c-src-file)
 	;; C header stuff
+        ;; (format #t "c-src-file-name: ~A~%" c-src-file-name)
 	(set! p (open-output-file c-src-file-name))
 	(format p "#include <stdlib.h>~%")
 	(format p "#include <stdio.h>~%")
@@ -207,6 +211,8 @@
 	(format p "static s7_pointer c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
 
       (define (write-c-hdr-file)
+        ;; (format #t "cwd: ~A~%" (system "ls -l"))
+        ;; (format #t "c-hdr-file-name: ~A~%" c-hdr-file-name)
 	(set! p (open-output-file c-hdr-file-name))
 	(format p "#ifndef ~A_H~%" output-name)
         (format p "#define ~A_H~%" output-name)
@@ -680,7 +686,7 @@
 		      ((C-macro)    (apply add-one-macro (cadr func)))
 		      ((C-function) (collides? (caadr func)) (set! functions (cons (check-doc (cadr func)) functions)))
 		      (else         (apply add-one-constant func))))
-		(error 'wrong-type-arg "~S (func arg to handle-declaration in cload.scm) should be a pair" func)))))
+		(error 'wrong-type-arg "~S (func arg to handle-declaration in clibgen.scm) should be a pair" func)))))
 
       ;; c-define-1 (called in c-define macro above)
       ;; (unless (and output-name
@@ -711,3 +717,4 @@
       ;; (format *stderr* "loading ~A~%" so-file-name)
       ;; (load so-file-name cur-env)
         )))
+;; (format #t "Loaded clibgen.scm~%")

@@ -19,7 +19,7 @@ filegroup(
 make(
     name = "libdeflate",
     lib_source = ":all",
-    args = ["V=1"],
+    # args = ["V=1"],
     env = {"AR": "ar"}, # macos monterey
     out_static_libs = ["libdeflate.a"],
     out_shared_libs = ["libdeflate.dylib"],

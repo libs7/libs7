@@ -1,8 +1,8 @@
-;;; libc.scm
+;;; libc_clibgen.scm
 ;;;
 ;;; generate s7 bindings for std libc
 (require clibgen.scm)
-(provide 'libc_clibgen.scm)
+(provide 'libc.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))
@@ -14,7 +14,6 @@
 (unless (defined? '*libc*)
     (define *libc*
       (with-let (unlet)
-
 	(set! *cload-library-name* "*libc*")
 
 	;; -------- stddef.h --------
@@ -1878,4 +1877,5 @@
 
 	(curlet))))
 
+;; (format #t "LOADED libc_clibgen.scm~%")
 *libc*

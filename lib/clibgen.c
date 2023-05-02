@@ -5,13 +5,20 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
 
-#include "utstring.h"
+/* mac: getpwuuid, getpwuuid_r, which we do not use */
+/* #include <uuid/uuid.h> */
+
+#include "gopt.h"
 #include "log.h"
+#include "utstring.h"
+
 #include "s7.h"
 
-bool verbose;
+extern bool libs7_debug;
+extern bool libs7_trace;
+bool verbose = false;
+bool quiet   = false;
 
 static void _print_debug_env(void)
 {
@@ -51,17 +58,133 @@ static void _print_debug_env(void)
     log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
 }
 
+void _print_version(void) {
+    printf("FIXME: version id\n");
+}
+
+void _print_usage(void) {
+    printf("Usage:\tclibgen -s <script> -p <prefix>\n");
+
+    printf("Required options:\n");
+    printf("\t-s, --script\t\tPath of script file.\n");
+    printf("\t-p, --prefix\t\tPrefix for output path.\n");
+
+    printf("Optional flags:\n");
+    printf("\t-d, --debug\t\tEnable all debugging flags.\n");
+    printf("\t-h, --help\t\tPrint help screen.\n");
+    printf("\t-t, --trace\t\tEnable trace flags.\n");
+    printf("\t-v, --verbose\t\tEnable verbosity. Repeatable.\n");
+    printf("\t-q, --quiet\t\tSuppress msgs to stdout/stderr.\n");
+    printf("\t--version\t\tShow version Id.\n");
+    /* printf("\n"); */
+    /* printf("INI file: $XDG_CONFIG_HOME/miblrc\n"); */
+
+    printf("\n");
+}
+
+enum OPTS {
+    FLAG_DEBUG,
+    FLAG_DEBUG_S7,
+    FLAG_HELP,
+    FLAG_TRACE,
+    FLAG_VERBOSE,
+    FLAG_QUIET,
+    FLAG_VERSION,
+    OPT_GENDIR,
+    OPT_SCRIPT,
+    LAST
+};
+
+static struct option options[] = {
+    /* 0 */
+    [FLAG_DEBUG] = {.long_name="debug",.short_name='d',
+                    .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
+    [FLAG_DEBUG_S7] = {.long_name="debug-s7",
+                       .flags=GOPT_ARGUMENT_FORBIDDEN},
+    /* [FLAG_DEBUG_S7_ALL] = {.long_name="debug-all", */
+    /*                    .flags=GOPT_ARGUMENT_FORBIDDEN}, */
+    /* [FLAG_DEBUG_S7_LOADS] = {.long_name="debug-s7-loads", */
+    /*                    .flags=GOPT_ARGUMENT_FORBIDDEN}, */
+    [FLAG_HELP] = {.long_name="help",.short_name='h',
+                   .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
+    [FLAG_TRACE] = {.long_name="trace",.short_name='t',
+                    .flags=GOPT_ARGUMENT_FORBIDDEN},
+    [FLAG_VERBOSE] = {.long_name="verbose",.short_name='v',
+                      .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
+    [FLAG_QUIET] = {.long_name="quiet",.short_name='q',
+                    .flags=GOPT_ARGUMENT_FORBIDDEN},
+    [FLAG_VERSION] = {.long_name="version",
+                    .flags=GOPT_ARGUMENT_FORBIDDEN},
+    [OPT_GENDIR] = {.long_name="gendir",.short_name='g',
+                    .flags=GOPT_ARGUMENT_REQUIRED | GOPT_ARGUMENT_NO_HYPHEN},
+    [OPT_SCRIPT] = {.long_name="script",.short_name='s',
+                    .flags=GOPT_ARGUMENT_REQUIRED | GOPT_ARGUMENT_NO_HYPHEN},
+    [LAST] = {.flags = GOPT_LAST}
+};
+
+void _set_options(struct option options[])
+{
+    if (options[FLAG_HELP].count) {
+        _print_usage();
+        exit(EXIT_SUCCESS);
+    }
+
+    if (options[FLAG_VERSION].count) {
+        _print_version();
+        exit(EXIT_SUCCESS);
+    }
+
+    if ( ! options[OPT_SCRIPT].count) {
+        _print_usage();
+        exit(EXIT_FAILURE);
+    }
+
+    if ( ! options[OPT_GENDIR].count) {
+        _print_usage();
+        exit(EXIT_FAILURE);
+    }
+
+    if (options[FLAG_QUIET].count)   { quiet   = true; }
+    if (options[FLAG_VERBOSE].count) { verbose = true; }
+
+    if (options[FLAG_DEBUG].count) {
+#if defined(DEBUG_TRACE)
+        libs7_debug = true;
+#endif
+    }
+
+    if (options[FLAG_DEBUG_S7].count) {
+#if defined(DEBUG_TRACE)
+        libs7_debug = true;
+#endif
+    }
+
+    if (options[FLAG_TRACE].count) {
+#if defined(DEBUG_TRACE)
+        libs7_trace = true;
+#endif
+    }
+}
+
 int main(int argc, char **argv)
 {
     /* log_info("running clibgen"); */
     /* log_debug("CWD: %s", getcwd(NULL,0)); */
     /* log_debug("BUILD WS root: %s", getenv("BUILD_WORKSPACE_DIRECTORY")); */
-    /* if (debug) */
-    _print_debug_env();
 
-    log_debug("argv[0]: %s", argv[0]);
-    log_debug("argv[1]: %s", argv[1]); /* the libfoo_clibgen.scm file */
-    log_debug("argv[2]: %s", argv[2]); /* Bazel $GENDIR -- FIXME: use --outdir */
+    int gopt_argc = gopt(argv, options);
+    (void)gopt_argc;
+
+    gopt_errors(argv[0], options);
+
+    _set_options(options);
+
+    if (libs7_debug)
+        _print_debug_env();
+
+    /* log_debug("argv[0]: %s", argv[0]); */
+    /* log_debug("argv[1]: %s", argv[1]); /\* the libfoo_clibgen.scm file *\/ */
+    /* log_debug("argv[2]: %s", argv[2]); /\* Bazel $GENDIR -- FIXME: use --outdir *\/ */
 
     s7_scheme *s7 = s7_init();
     if (verbose)
@@ -70,41 +193,62 @@ int main(int argc, char **argv)
     if (argc > 1) {
         /* log_debug("argv[0]: %s", argv[0]); */
         /* log_debug("argv[1]: %s", argv[1]); */
-        size_t len = strlen(argv[1]);
-        char *script = strndup(argv[1], len);
-        // put clibgen.scm on *load-path*
-        if (strlen(BAZEL_CURRENT_REPOSITORY) == 0)
+        /* size_t len = strlen(argv[1]); */
+        char *script = options[OPT_SCRIPT].argument;
+        /* char *script     = argv[1]; */
+        char *script_dir = dirname(script);
+
+        // deal with bazel context
+        char *cload_dir_format;
+        if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
+            cload_dir_format = "%s/%s";
             s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
-        else
-            s7_add_to_load_path(s7, "external/libs7/lib"); //FIXME
-        /* s7_add_to_load_path(s7, dirname(argv[1])); */
-        s7_add_to_load_path(s7, "lib/libc");
+        } else {
+            cload_dir_format = "%s/external/libs7/%s";
+            s7_add_to_load_path(s7, "external/libs7");
+            s7_add_to_load_path(s7, "external/libs7/lib");
+        }
         /* log_debug("script: %s", script); */
 
-        s7_pointer lp = s7_load_path(s7);
-        char *s = s7_object_to_c_string(s7, lp);
-        log_debug("load-path: %s", s);
-        free(s);
+        /* s7_pointer lp = s7_load_path(s7); */
+        /* char *s = s7_object_to_c_string(s7, lp); */
+        /* log_debug("load-path: %s", s); */
+        /* free(s); */
 
-        UT_string *pfx;
-        utstring_new(pfx);
-        utstring_printf(pfx, "%s/lib/libc", argv[2]);
+        /* log_debug("GENDIR: %s", options[OPT_GENDIR].argument); */
 
-        s7_define_variable(s7, "*cload-directory*", s7_make_string(s7, utstring_body(pfx)));
+        UT_string *cload_dir;
+        utstring_new(cload_dir);
+        utstring_printf(cload_dir,
+                        cload_dir_format,
+                        options[OPT_GENDIR].argument,
+                        /* argv[2], */
+                        script_dir);
 
-        utstring_free(pfx);
+        s7_define_variable(s7, "*cload-directory*", s7_make_string(s7, utstring_body(cload_dir)));
+        /* log_info("*cload-directory*: %s", utstring_body(cload_dir)); */
+
+        utstring_free(cload_dir);
+
+        /* if (!s7_load(s7, "clibgen.scm")) { */
+        /*     fprintf(stderr, "can't load clibgen.scm\n"); */
+        /*     return(2); */
+        /* } */
 
         if (verbose)
             log_info("loading %s", script);
+
         if (!s7_load(s7, script)) {
-            fprintf(stderr, "can't load %s\n", argv[1]);
+            fprintf(stderr, "can't load %s\n", script);
             return(2);
         } else {
-            free(script);
-        }
+            /* log_debug("loaded script"); */
+            /* free(script); */
+            return(EXIT_SUCCESS);
+       }
     } else {
         log_error("arg required");
     }
-    return(0);
+    return(EXIT_SUCCESS);
 }
 

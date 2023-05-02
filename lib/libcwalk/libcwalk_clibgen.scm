@@ -4,7 +4,7 @@
 ;;; https://github.com/likle/cwalk
 
 (require clibgen.scm) ;; cload.scm)
-(provide 'libcwalk_clib.scm)
+(provide 'libcwalk_clibgen.scm)
 
 ;; if loading from a different directory, pass that info to C
 (let ((directory (let ((current-file (port-filename)))

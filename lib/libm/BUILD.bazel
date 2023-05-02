@@ -1,6 +1,6 @@
 load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
 
-exports_files(["libc_clibgen.scm"])
+exports_files(["libm_clibgen.scm"])
 
 load("//lib:BUILD.bzl",
      "clibgen_runner",
@@ -8,10 +8,10 @@ load("//lib:BUILD.bzl",
 
 ################################################################
 cc_library(
-    name  = "c_s7_static", # emits libc_s7_static.a
+    name  = "m_s7_static", # emits libm_s7_static.a
     linkstatic = 1,
-    srcs  = [":libc_s7.c", "//src:s7.h"],
-    hdrs  = [":libc_s7.h"],
+    srcs  = [":libm_s7.c", "//src:s7.h"],
+    hdrs  = [":libm_s7.h"],
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
@@ -19,9 +19,9 @@ cc_library(
 )
 
 cc_binary(
-    name  = "c_s7",  # create libc_s7.{dylib,so}
+    name  = "m_s7",  # create libm_s7.{dylib,so}
     linkshared = True,
-    srcs  = [":libc_s7.c", "//src:s7.h"],
+    srcs  = [":libm_s7.c", "//src:s7.h"],
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
@@ -29,13 +29,9 @@ cc_binary(
 )
 
 clibgen_runner(
-    name = "libc_s7_runbin",
+    name = "libm_s7_runbin",
     tool = "//lib:clibgen",
-    args = [
-        # "-dv",
-        "-s",
-        "lib/libc/libc_clibgen.scm"
-    ],
-    srcs = [":libc_clibgen.scm", "//lib:clibgen.scm"],
-    outs = [":libc_s7.h", ":libc_s7.c"],
+    args = ["--script", "lib/libm/libm_clibgen.scm"],
+    srcs = [":libm_clibgen.scm", "//lib:clibgen.scm"],
+    outs = [":libm_s7.h", ":libm_s7.c"],
 )

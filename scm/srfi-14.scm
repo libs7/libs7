@@ -1,5 +1,8 @@
 ;;; SRFI-14 character-sets library				-*- Scheme -*-
 ;;;
+
+(provide 'srfi-14.scm)
+
 ;;; - Ported from MIT Scheme runtime by Brian D. Carlstrom.
 ;;; - Massively rehacked & extended by Olin Shivers 6/98.
 ;;; - Massively redesigned and rehacked 5/2000 during SRFI process.
@@ -52,6 +55,7 @@
 ;;; - ERROR
 ;;; s7:  ?
 
+(require 'srfi.scm)
 (load "records.scm")
 
 ;;; - %LATIN1->CHAR %CHAR->LATIN1

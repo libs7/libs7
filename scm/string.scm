@@ -6,6 +6,7 @@
 ;; see   ~/scheme/srfi-152
 
 ;; (load "s7/r7rs.scm")
+(load "srfi.scm")
 (load "srfi-14.scm")
 
 (define CCRED (format #f "~C[0;31m" #\escape))

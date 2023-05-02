@@ -7,7 +7,7 @@
 (when (= (*s7* 'print-length) 12)    ; default value
   (set! (*s7* 'print-length) 32))
 
-(when (sys:file-exists? ".repl")         ; local (scheme) initialization file for repl
+(when (file-exists? ".repl")         ; local (scheme) initialization file for repl
   (load ".repl"))
 
 (set! (*s7* 'history-enabled) #f)

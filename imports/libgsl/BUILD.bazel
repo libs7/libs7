@@ -1,0 +1,37 @@
+load("@rules_foreign_cc//foreign_cc:configure.bzl",
+     "configure_make")
+
+# exports_files(["libgsl.h"])
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @libgsl//:libgsl
+configure_make(
+    name = "libgsl",
+    lib_source = ":all",
+    out_static_libs = ["libgsl.a"],
+    out_shared_libs = select({
+        "@bazel_tools//src/conditions:darwin": ["libgsl.dylib"],
+        "@bazel_tools//src/conditions:linux" : ["libgsl.so"],
+        "//conditions:default"               : ["libgsl.so"],
+    }),
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": ""},
+        "//conditions:default": {}
+    }),
+    configure_in_place = True,
+    configure_options = [
+        "--disable-dependency-tracking",
+        # "--without-readline",
+        # "--disable-silent-rules",
+        ## version.c depends on __DATE__ and __TIME__, which makes the
+        ## build non-hermetic. Bazel corrects this by setting both to
+        ## 'redacted', which is broken because it is not quoted.
+        ## This fixes that.
+        # "CFLAGS='-Dredacted=\"redacted\"'"
+    ],
+    visibility = ["//visibility:public"],
+)

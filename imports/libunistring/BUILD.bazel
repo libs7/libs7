@@ -1,6 +1,7 @@
 load("@rules_foreign_cc//foreign_cc:configure.bzl",
      "configure_make")
 
+# we cannot sum maps so we must specify the whole thing here
 ENV_MACSDK_13_0 = {"AR": "", "MACOSX_DEPLOYMENT_TARGET": "13.0"}
 ENV_MACSDK_13_1 = {"AR": "", "MACOSX_DEPLOYMENT_TARGET": "13.1"}
 ENV_MACSDK_13_3 = {"AR": "", "MACOSX_DEPLOYMENT_TARGET": "13.3"}
@@ -10,49 +11,34 @@ filegroup(
     srcs = glob(["**"]),
 )
 
-## build cmd: bazel build @libunistring//:libunistring --experimental_ui_max_stdouterr_bytes=-1
+## build cmd: bazel build @libunistring//:libunistring
 configure_make(
     name = "libunistring",
-    # lib_source = "@openssl//:all",
     lib_source = ":all",
     # out_lib_dir = "lib",
-    out_shared_libs = ["libunistring.dylib"],
     out_static_libs = ["libunistring.a"],
+    out_shared_libs = select({
+        "@bazel_tools//src/conditions:darwin": ["libunistring.dylib"],
+        "@bazel_tools//src/conditions:linux" : ["libunistring.so"],
+        "//conditions:default"               : ["libunistring.so"],
+    }),
     env = select({
-        # ":macsdk_13.0": ENV_MACSDK_13_0,
-        # ":macsdk_13.1": ENV_MACSDK_13_1,
-        # ":macsdk_13.3": ENV_MACSDK_13_3,
-        "//conditions:default": {"AR": ""}
+        "@bazel_tools//src/conditions:darwin": {"AR": ""},
+        # "//config/host:macsdk_13.0": ENV_MACSDK_13_0,
+        # "//config/host:macsdk_13.1": ENV_MACSDK_13_1,
+        # "//config/host:macsdk_13.3": ENV_MACSDK_13_3,
+        "//conditions:default": {}
     }),
     # autogen = True,
     configure_in_place = True,
     configure_options = [
         "--disable-dependency-tracking",
+        # "--disable-silent-rules",
     ] +
     select({
-        "macos": [],
-        # ":linux_build": [
-        # ],
+        "@bazel_tools//src/conditions:darwin": [],
+        "@bazel_tools//src/conditions:linux": [],
         "//conditions:default": []
     }),
     visibility = ["//visibility:public"],
 )
-
-config_setting(
-    name = "macos",
-    constraint_values = ["@platforms//os:macos"])
-
-config_setting(
-    name = "macsdk_13.0",
-    values = {"macos_sdk_version": "13.0"},
-    constraint_values = ["@platforms//os:macos"])
-
-config_setting(
-    name = "macsdk_13.1",
-    values = {"macos_sdk_version": "13.1"},
-    constraint_values = ["@platforms//os:macos"])
-
-config_setting(
-    name = "macsdk_13.3",
-    values = {"macos_sdk_version": "13.3"},
-    constraint_values = ["@platforms//os:macos"])
