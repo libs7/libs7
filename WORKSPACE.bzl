@@ -30,7 +30,7 @@ def fetch_repos():
     maybe( ## WARNING: takes a loong time to build
         http_archive,
         name = "libunistring",
-        build_file = "//imports/libunistring:BUILD.bazel",
+        build_file = "@libs7//imports/libunistring:BUILD.bazel",
         url = "https://ftp.gnu.org/gnu/libunistring/libunistring-1.1.tar.gz",
         strip_prefix = "libunistring-1.1",
         sha256 = "a2252beeec830ac444b9f68d6b38ad883db19919db35b52222cf827c385bdb6a"
@@ -40,7 +40,7 @@ def fetch_repos():
     maybe(
         http_archive,
         name = "utf8proc",
-        build_file = "//imports/libutf8proc:BUILD.bazel",
+        build_file = "@libs7//imports/libutf8proc:BUILD.bazel",
         url = "https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v2.8.0.zip",
         strip_prefix = "utf8proc-2.8.0",
         sha256 = "b2aec990876d1a995baf96150bb351e9724a29a936aa7b24078c531228236d3a"
@@ -50,7 +50,7 @@ def fetch_repos():
     maybe(
         http_archive,
         name = "gdbm",
-        build_file = "//imports/libgdbm:BUILD.bazel",
+        build_file = "@libs7//imports/libgdbm:BUILD.bazel",
         url = "https://ftp.gnu.org/gnu/gdbm/gdbm-1.23.tar.gz",
         strip_prefix = "gdbm-1.23",
         sha256 = "74b1081d21fff13ae4bd7c16e5d6e504a4c26f7cde1dca0d963a484174bbcacd"
@@ -60,7 +60,7 @@ def fetch_repos():
     maybe(
         http_archive,
         name = "gsl",
-        build_file = "//imports/libgsl:BUILD.bazel",
+        build_file = "@libs7//imports/libgsl:BUILD.bazel",
         # url = "https://mirrors.ocf.berkeley.edu/gnu/gsl/gsl-2.2.tar.gz",
         # strip_prefix = "gsl-2.2",
         # sha256 = "4de40a9a79ea42a127928b095d066993cb845812d657434e29e987240113d8df"
