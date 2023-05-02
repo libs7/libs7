@@ -1,23 +1,11 @@
-/*
-  test dsl:action->mibl, destructure-dsl-string, parse-pct-var
- */
-
-#include <libgen.h>
-#include <pwd.h>
-#include <stdlib.h>             /* putenv */
-#include <unistd.h>             /* getcwd */
-#include <uuid/uuid.h>
-#include <sys/errno.h>
-#include <sys/types.h>
-
 #include "gopt.h"
 #include "log.h"
 #include "unity.h"
-#include "utarray.h"
 #include "utstring.h"
 
+#include "common.h"
+
 #if ! defined(CLIBS_LINK_RUNTIME)
-#include "libc_s7.h"
 #include "libutf8proc_s7.h"
 #endif
 
@@ -25,10 +13,12 @@
 
 s7_scheme *s7;
 
+extern struct option options[];
+
 char *sexp_input;
 char *sexp_expected;
 
-UT_string *setter;
+/* UT_string *setter; */
 UT_string *sexp;
 s7_pointer actual;
 s7_pointer expected;
@@ -164,125 +154,6 @@ void test_properties(void) {
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
 
-void _print_usage(void) {
-    printf("Usage:\t$ bazel test <tgt> [flags, options]\n");
-    printf("Flags\n");
-    printf("\t-d, --debug\t\tEnable all debugging flags.\n");
-    printf("\t--debug-config\t\tEnable all config debugging flags.\n");
-    printf("\t--debug-scm\t\tEnable all scheme debugging flags.\n");
-    printf("\t-t, --trace\t\tEnable trace flags.\n");
-    printf("\t-v, --verbose\t\tEnable verbosity. Repeatable.\n");
-
-    printf("Options:\n");
-    /* printf("\t-D | -log <arg>\t\tLog <arg> (parsetree, mibl, or starlark}) to stdout.\n"); */
-
-    printf("\t-r, --root <arg>"
-           "\tStart traversal at <arg> (path relative to cwd).\n");
-    printf("\t-p, --pkg <arg>"
-           "\t\tProcess only <arg> (relative root path).\n");
-}
-
-enum OPTS {
-    OPT_ROOT = 0,
-    OPT_PKG,
-    OPT_PACKAGE,
-
-    FLAG_HELP,
-    FLAG_DEBUG,
-    FLAG_DEBUG_CONFIG,
-    FLAG_DEBUG_MIBLRC,
-    FLAG_DEBUG_MIBL_CRAWL,
-    FLAG_DEBUG_SCM,
-    FLAG_DEBUG_SCM_LOADS,
-
-    FLAG_EMIT_PARSETREE,        /* config load_project to emit PARSETREE.mibl */
-
-    FLAG_SHOW_CONFIG,
-    FLAG_TRACE,
-    FLAG_VERBOSE,
-
-    LAST
-};
-
-static struct option options[] = {
-    [FLAG_DEBUG] = {.long_name="debug",.short_name='d',
-                    .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
-    [FLAG_DEBUG_CONFIG] = {.long_name="debug-config",
-                           .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_DEBUG_MIBLRC] = {.long_name="debug-miblrc",
-                           .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_DEBUG_MIBL_CRAWL] = {.long_name="debug-mibl-crawl",
-                               .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_DEBUG_SCM] = {.long_name="debug-scm", .short_name = 'D',
-                        .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_DEBUG_SCM_LOADS] = {.long_name="debug-scm-loads",
-                              .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_EMIT_PARSETREE] = {.long_name="emit-parsetree",
-                              .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_SHOW_CONFIG] = {.long_name="show-config",
-                          .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_TRACE] = {.long_name="trace",.short_name='t',
-                    .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_VERBOSE] = {.long_name="verbose",.short_name='v',
-                      .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
-    [FLAG_HELP] = {.long_name="help",.short_name='h',
-                   .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [LAST] = {.flags = GOPT_LAST}
-};
-
-void _set_options(struct option options[])
-{
-    if (options[FLAG_HELP].count) {
-        _print_usage();
-        exit(EXIT_SUCCESS);
-    }
-
-    if (options[FLAG_DEBUG].count) {
-        debug = true;
-    }
-    if (options[FLAG_VERBOSE].count) {
-        log_info("verbose ct: %d", options[FLAG_VERBOSE].count);
-        verbose = true;
-    }
-}
-
-static void _print_debug_env(void)
-{
-    log_debug("getcwd: %s", getcwd(NULL, 0));
-    log_debug("getenv(PWD): %s", getenv("PWD"));
-
-    // $HOME - not reliable, use getpwuid() instead
-    log_debug("getenv(HOME): %s", getenv("HOME"));
-    struct passwd* pwd = getpwuid(getuid());
-    log_debug("pwd->pw_dir: %s", pwd->pw_dir);
-
-    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, 'libs7' when run as external repo
-    log_debug("BAZEL_CURRENT_REPOSITORY (macro): '%s'", BAZEL_CURRENT_REPOSITORY);
-
-    // TEST_WORKSPACE: always the root ws
-    log_debug("TEST_WORKSPACE: '%s'", getenv("TEST_WORKSPACE"));
-
-    // BAZEL_TEST: should always be true when this is compiled as cc_test
-    log_debug("BAZEL_TEST: '%s'", getenv("BAZEL_TEST"));
-
-    // BUILD_WORK* vars: null under 'bazel test'
-    log_debug("BUILD_WORKSPACE_DIRECTORY: %s", getenv("BUILD_WORKSPACE_DIRECTORY"));
-    log_debug("BUILD_WORKING_DIRECTORY: %s", getenv("BUILD_WORKING_DIRECTORY"));
-
-    // TEST_SRCDIR - required for cc_test
-    log_debug("TEST_SRCDIR: %s", getenv("TEST_SRCDIR"));
-    log_debug("BINDIR: %s", getenv("BINDIR"));
-
-    /* RUNFILES_MANIFEST_FILE: null on macos. */
-    log_debug("RUNFILES_MANIFEST_FILE: %s", getenv("RUNFILES_MANIFEST_FILE"));
-
-    /* RUNFILES_MANIFEST_FILE: null on macos. */
-    log_debug("RUNFILES_MANIFEST_ONLY: %s", getenv("RUNFILES_MANIFEST_ONLY"));
-
-    /* RUNFILES_DIR: set on macos for both bazel test and bazel run. */
-    log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
-}
-
 int main(int argc, char **argv)
 {
     //FIXME: throw error if run outside of bazel
@@ -299,18 +170,16 @@ int main(int argc, char **argv)
     (void)argc;
     gopt_errors (argv[0], options);
 
-    _set_options(options);
+    set_options("utf8proc", options);
 
     if (debug)
-        _print_debug_env();
+        print_debug_env();
 
     s7 = libs7_init();
 
 #if defined(CLIBS_LINK_RUNTIME)
-    clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
-    clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT);
+    clib_dload_ns(s7, "libutf8proc_s7", "libutf8proc", DSO_EXT);
 #else  /* link:static? or link:shared? */
-    clib_sinit(s7, libc_s7_init, "libc");
     clib_sinit(s7, libutf8proc_s7_init, "libutf8proc");
 #endif
 
@@ -340,6 +209,6 @@ int main(int argc, char **argv)
     RUN_TEST(test_normalization);
     RUN_TEST(test_properties);
 
-    /* utstring_free(sexp); */
+    utstring_free(sexp);
     return UNITY_END();
 }
