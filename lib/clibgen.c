@@ -194,9 +194,12 @@ int main(int argc, char **argv)
         /* log_debug("argv[0]: %s", argv[0]); */
         /* log_debug("argv[1]: %s", argv[1]); */
         /* size_t len = strlen(argv[1]); */
-        char *script = options[OPT_SCRIPT].argument;
+        char *script = strdup(options[OPT_SCRIPT].argument);
+        /* log_debug("script: %s", script); */
         /* char *script     = argv[1]; */
-        char *script_dir = dirname(script);
+        char *script_dir = dirname(options[OPT_SCRIPT].argument);
+        /* log_debug("script_dir: %s", script_dir); */
+
 
         // deal with bazel context
         char *cload_dir_format;
