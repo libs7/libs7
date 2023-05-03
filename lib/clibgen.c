@@ -209,12 +209,29 @@ int main(int argc, char **argv)
         /* log_debug("script_dir: %s", script_dir); */
 
         /* log_debug("CWD: %s", getcwd(NULL,0)); */
-        char *scmdir = realpath("../libs7/scm", NULL);
+        // deal with bazel context
+        char *rel_scmdir;
+        char *cload_dir_format;
+        if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
+            rel_scmdir = "../libs7/scm";
+            cload_dir_format = "%s/%s";
+            s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
+        } else {
+            rel_scmdir = "external/libs7/scm";
+            cload_dir_format = "%s/external/libs7/%s";
+            s7_add_to_load_path(s7, "external/libs7");
+            s7_add_to_load_path(s7, "external/libs7/lib");
+        }
+
+        char *scmdir = realpath(rel_scmdir, NULL);
+        /* log_debug("scmdir: %s", scmdir); */
         s7_add_to_load_path(s7, scmdir);
+
         /* s7_pointer lp = s7_load_path(s7); */
         /* char *s = s7_object_to_c_string(s7, lp); */
         /* log_debug("LOAD-PATH: %s", s); */
         /* free(s); */
+
         if (!s7_load(s7, "string.scm")) {
             fprintf(stderr, "can't load string.scm\n");
         }
@@ -223,16 +240,6 @@ int main(int argc, char **argv)
         /*     (load "string.scm") ;; FIXME: use require */
 
 
-        // deal with bazel context
-        char *cload_dir_format;
-        if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
-            cload_dir_format = "%s/%s";
-            s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
-        } else {
-            cload_dir_format = "%s/external/libs7/%s";
-            s7_add_to_load_path(s7, "external/libs7");
-            s7_add_to_load_path(s7, "external/libs7/lib");
-        }
         /* s7_pointer lp = s7_load_path(s7); */
         /* char *s = s7_object_to_c_string(s7, lp); */
         /* log_debug("LOAD-PATH: %s", s); */

@@ -14,7 +14,6 @@ cc_library(
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [":libcwalk_s7.c", "//src:s7.h"],
-    hdrs  = [":libcwalk_s7.h"],
     deps  = ["//vendored/cwalk"],
     copts = CLIB_COPTS + [
         "-Ivendored/cwalk",
@@ -42,5 +41,5 @@ clibgen_runner(
     tool = "//lib:clibgen",
     args = ["--script", "lib/libcwalk/libcwalk_clibgen.scm"],
     srcs = [":libcwalk_clibgen.scm", "//lib:clibgen.scm"],
-    outs = [":libcwalk_s7.h", ":libcwalk_s7.c"],
+    outs = [":libcwalk_s7.c"]
 )

@@ -42,10 +42,8 @@ void test_cwalk(void) {
     /* cwk_path_get_basename("/my/path.txt", &basename, &length); */
     /* sexp_input = "((*libcwalk* 'cwk_path_get_basename) \"/my/path.txt\")"; */
     sexp_input = "(cwk:path-get-basename \"/my/path.txt\")";
+    actual = s7_eval_c_string(s7, sexp_input);
     sexp_expected = "\"path.txt\"";
-    utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_input);
-    actual = s7_eval_c_string(s7, utstring_body(sexp));
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 

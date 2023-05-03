@@ -129,7 +129,7 @@
 				  (or output-name (format #f "temp-s7-output-~D" c-define-output-file-counter)))))
     ;; (format #t "C FILENAME: ~A~%" file-name)
     (let ((c-src-file-name (string-append file-name ".c"))
-          (c-hdr-file-name (string-append file-name ".h"))
+          ;; (c-hdr-file-name (string-append file-name ".h"))
 	  ;;(o-file-name (string-append file-name ".o"))
 	  ;; (so-file-name (string-append file-name ".so"))
 	  (init-name (if (string? output-name)
@@ -210,24 +210,24 @@
 	(format p "#include \"s7.h\"~%~%")
 	(format p "static s7_pointer c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
 
-      (define (write-c-hdr-file)
-        ;; (format #t "cwd: ~A~%" (system "ls -l"))
-        ;; (format #t "c-hdr-file-name: ~A~%" c-hdr-file-name)
-	(set! p (open-output-file c-hdr-file-name))
-	(format p "#ifndef ~A_H~%" output-name)
-        (format p "#define ~A_H~%" output-name)
-        (newline p)
+      ;; (define (write-c-hdr-file)
+      ;;   ;; (format #t "cwd: ~A~%" (system "ls -l"))
+      ;;   ;; (format #t "c-hdr-file-name: ~A~%" c-hdr-file-name)
+      ;;   (set! p (open-output-file c-hdr-file-name))
+      ;;   (format p "#ifndef ~A_H~%" output-name)
+      ;;   (format p "#define ~A_H~%" output-name)
+      ;;   (newline p)
 
-	(format p "#include \"s7.h\"~%")
-        (newline p)
+      ;;   (format p "#include \"s7.h\"~%")
+      ;;   (newline p)
 
-	(format p "s7_pointer ~A(s7_scheme *sc);~%" init-name)
-        (newline p)
+      ;;   (format p "s7_pointer ~A(s7_scheme *sc);~%" init-name)
+      ;;   (newline p)
 
-	(format p "#endif~%")
+      ;;   (format p "#endif~%")
 
-	(close-output-port p)
-        ) ;; // write-c-hdr-file
+      ;;   (close-output-port p)
+      ;;   ) ;; // write-c-hdr-file
 
       (define collides?
 	(let ((all-names (hash-table)))
@@ -714,7 +714,7 @@
 
 	(end-c-src-file)
 
-        (write-c-hdr-file)
+        ;; (write-c-hdr-file)
 	;; (delete-file o-file-name)
         ;; )
 

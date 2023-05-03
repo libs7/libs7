@@ -16,8 +16,10 @@ static char buf[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 /* **************************************************************** */
 static void _dload_clib(s7_scheme *s7, char *lib)
 {
+#if defined(DEBUG_TRACE)
     if (libs7_trace)
         log_trace("_dload_clib: %s", lib);
+#endif
     /* int len = strlen(libname); */
     sprintf(buf, "lib%s_s7_init", lib);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
@@ -51,7 +53,9 @@ static void _dload_clib(s7_scheme *s7, char *lib)
              fmt,
              lib,
              lib, DSO_EXT);
+#if defined(DEBUG_TRACE)
     log_debug("dso: %s", buf);
+#endif
 
     s7_pointer val = s7_load_with_environment(s7, buf, e);
 
@@ -77,27 +81,34 @@ static void _dload_clib(s7_scheme *s7, char *lib)
 
 void libs7_load_clib(s7_scheme *s7, char *lib)
 {
-    /* if (libs7_trace) */
+#if defined(DEBUG_TRACE)
+    if (libs7_trace)
         log_trace("load_clib: %s", lib);
+#endif
 
     static char init_fn_name[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
     init_fn_name[0] = '\0';
     sprintf(init_fn_name, "lib%s_s7_init", lib);
-    /* if (libs7_debug) */
+#if defined(DEBUG_TRACE)
+    if (libs7_debug)
         log_debug("init_fn_name: %s", init_fn_name);
+#endif
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
     init_fn_ptr = dlsym(RTLD_SELF, init_fn_name);
     if (init_fn_ptr == NULL) {
+#if defined(DEBUG_TRACE)
         log_debug("%s not statically linked, trying dload", init_fn_name);
+#endif
         _dload_clib(s7, lib);
         return;
     }
 
+#if defined(DEBUG_TRACE)
     if (libs7_debug)
         log_debug("dlsym init_fn_ptr: %x", init_fn_ptr);
-
+#endif
 
     s7_pointer e = s7_inlet(s7, s7_nil(s7)); // empty env
     s7_int gc_loc = s7_gc_protect(s7, e);
@@ -124,7 +135,9 @@ void libs7_load_clib(s7_scheme *s7, char *lib)
 
 static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
 {
+#if defined(DEBUG_TRACE)
     log_debug("g_libs7_load_clib");
+#endif
     s7_pointer p, arg;
     char* lib;
     p = args;

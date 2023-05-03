@@ -8,7 +8,7 @@ def fetch_repos():
     maybe(
         http_archive,
         name = "notcurses",
-        build_file = "//imports/notcurses:BUILD.bazel",
+        build_file = "//imports/libnotcurses:BUILD.bazel",
         url = "https://github.com/dankamongmen/notcurses/archive/refs/tags/v3.0.9.zip",
         strip_prefix = "notcurses-3.0.9",
         sha256 = "ef891a5f07c9709c25ff7e16c776dd8f1e511106b4cd024d4475cf3c10c5f5e4"
@@ -41,7 +41,7 @@ def fetch_repos():
         name = "ncurses",
         url  = "https://github.com/mirror/ncurses/archive/79b9071f2be20a24c7be031655a5638f6032f29f.zip",
         strip_prefix = "ncurses-79b9071f2be20a24c7be031655a5638f6032f29f",
-        build_file = "//imports/ncurses:BUILD.bazel",
+        build_file = "//imports/libncurses:BUILD.bazel",
     )
 
 

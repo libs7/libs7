@@ -18,13 +18,11 @@ cc_binary(
             # this rule; if they are library files, they are linked
             # in."
             "//lib/libc:c_s7",
-            #"//lib/libc:libc_s7.h",
             "//lib/libcwalk:cwalk_s7",
-            #"//lib/libcwalk:libcwalk_s7.h"
             "//lib/libdl:dl_s7",
-            #"//lib/libdl:libdl_s7.h",
+            "//lib/libgdbm:gdbm_s7",
+            "//lib/libgsl:gsl_s7",
             "//lib/libm:m_s7",
-            # "//lib/libm:libm_s7.h",
             "//lib/libutf8proc:utf8proc_s7",
         ],
         "//conditions:default": []
@@ -39,6 +37,7 @@ cc_binary(
             "//lib/libcwalk:cwalk_s7_archive",
             "//lib/libdl:dl_s7_archive",
             "//lib/libgdbm:gdbm_s7_archive",
+            "//lib/libgsl:gsl_s7_archive",
             "//lib/libm:m_s7_archive",
             "//lib/libutf8proc:utf8proc_s7_archive",
         ],
@@ -48,15 +47,18 @@ cc_binary(
         ":repl.scm",
         "//scm:srcs",
         "//scm/s7:srcs",
-    # ] + select({
-    #     "//config/clibs/link:runtime?": [
+    ] + select({
+        "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
-            "//lib/libdl:dl_s7",
-            "//lib/libm:m_s7",
             "//lib/libcwalk:cwalk_s7",
+            "//lib/libdl:dl_s7",
+            "//lib/libgdbm:gdbm_s7",
+            "//lib/libgsl:gsl_s7",
+            "//lib/libm:m_s7",
+            "//lib/libutf8proc:utf8proc_s7",
         ],
-    #     "//conditions:default": []
-    # }),
+        "//conditions:default": []
+    }),
     copts =  [
         "-Wall",
         "-Wextra",

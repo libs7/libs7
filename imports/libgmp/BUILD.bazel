@@ -12,7 +12,6 @@ filegroup(
 configure_make(
     name = "libgmp",
     lib_source = ":all",
-    # deps = ["@gmp//:libgmp"],
     out_static_libs = ["libgmp.a"],
     out_shared_libs = select({
         "@bazel_tools//src/conditions:darwin": ["libgmp.dylib"],
