@@ -548,7 +548,10 @@
 	   (lambda (c)
 	     (let* ((type (c 0))
 		    (c-name (c 1))
-		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "") c-name))
+		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
+                                                (string-tr c-name #\_ #\-)
+                                                ;; c-name
+                                                ))
 		    (trans (C->s7 type)))
 	       (if (eq? trans 's7_make_c_pointer_with_type)
 		   (format p "  s7_define(sc, cur_env, s7_make_symbol(sc, ~S), ~A(sc, (~A)~A, s7_make_symbol(sc, ~S), s7_f(sc)));~%"
@@ -571,7 +574,10 @@
 	   (lambda (c)
 	     (let* ((type (c 0))
 		    (c-name (c 1))
-		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "") c-name))
+		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
+                                                (string-tr c-name #\_ #\-)
+                                                ;;c-name
+                                                ))
 		    (trans (C->s7 type)))
 	       (format p "#ifdef ~A~%" c-name)
 	       (if (eq? trans 's7_make_c_pointer_with_type)
@@ -591,7 +597,7 @@
 	;; functions
 	(for-each
 	 (lambda (f)
-	   (let ((scheme-name (f 0))
+	   (let ((scheme-name (string-tr (f 0) #\_ #\-))
 		 (base-name   (f 1))
 		 (helpf       (f 2))
 		 (num-args    (f 3))

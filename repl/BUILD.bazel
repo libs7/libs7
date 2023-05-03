@@ -17,10 +17,15 @@ cc_binary(
             # outs are C or C++ source files, they are compiled into
             # this rule; if they are library files, they are linked
             # in."
-            "//lib/libc:c_s7", "//lib/libc:libc_s7.h",
-            "//lib/libdl:dl_s7", "//lib/libdl:libdl_s7.h",
-            "//lib/libm:m_s7", "//lib/libm:libm_s7.h",
-            "//lib/libcwalk:cwalk_s7", "//lib/libcwalk:libcwalk_s7.h"
+            "//lib/libc:c_s7",
+            #"//lib/libc:libc_s7.h",
+            "//lib/libcwalk:cwalk_s7",
+            #"//lib/libcwalk:libcwalk_s7.h"
+            "//lib/libdl:dl_s7",
+            #"//lib/libdl:libdl_s7.h",
+            "//lib/libm:m_s7",
+            # "//lib/libm:libm_s7.h",
+            "//lib/libutf8proc:utf8proc_s7",
         ],
         "//conditions:default": []
     }),
@@ -31,25 +36,27 @@ cc_binary(
     ] + select({
         "//config/clibs/link:archive?": [
             "//lib/libc:c_s7_archive",
-            "//lib/libdl:dl_s7_archive",
-            "//lib/libm:m_s7_archive",
             "//lib/libcwalk:cwalk_s7_archive",
+            "//lib/libdl:dl_s7_archive",
+            "//lib/libgdbm:gdbm_s7_archive",
+            "//lib/libm:m_s7_archive",
+            "//lib/libutf8proc:utf8proc_s7_archive",
         ],
         "//conditions:default": []
     }),
     data = [
         ":repl.scm",
         "//scm:srcs",
-        "//scm/s7:srcs"
-    ] + select({
-        "//config/clibs/link:runtime?": [
+        "//scm/s7:srcs",
+    # ] + select({
+    #     "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
             "//lib/libdl:dl_s7",
             "//lib/libm:m_s7",
             "//lib/libcwalk:cwalk_s7",
         ],
-        "//conditions:default": []
-    }),
+    #     "//conditions:default": []
+    # }),
     copts =  [
         "-Wall",
         "-Wextra",
@@ -96,7 +103,7 @@ cc_binary(
         "-lm",
     ],
     defines = select({
-        "//config/clibs/link:archive?": ["CLIBS_LINK_STATIC"],
+        # "//config/clibs/link:archive?": ["CLIBS_LINK_STATIC"],
         "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
         "//conditions:default":   []
     }) + select({

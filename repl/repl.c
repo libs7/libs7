@@ -4,19 +4,10 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-/* #include <uuid/uuid.h> */
 
 #include "gopt.h"
 #include "log.h"
 #include "libs7.h"
-
-
-#if ! defined(CLIBS_LINK_RUNTIME)
-#include "libc_s7.h"
-#include "libm_s7.h"
-#include "libcwalk_s7.h"
-#include "libdl_s7.h"
-#endif
 
 #if defined(DEBUG_TRACE)
 extern bool libs7_debug;
@@ -39,18 +30,6 @@ bool quiet   = false;
 
 /*   bool repl_loaded = false; */
 
-/* #if defined(CLIBS_LINK_RUNTIME) */
-/*     clib_dload_global(s7, "libc_s7", "libc", DSO_EXT); */
-/*     /\* clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT); *\/ */
-/*     /\* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); *\/ */
-/*     /\* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); *\/ */
-/*     /\* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); *\/ */
-/* #else  /\* link:shared? *\/ */
-/*     clib_sinit(s7, libc_s7_init, "libc"); */
-/*     /\* clib_sinit(s7, libdl_s7_init, "libdl"); *\/ */
-/*     /\* clib_sinit(s7, libm_s7_init, "libm"); *\/ */
-/*     /\* clib_sinit(s7, libcwalk_s7_init, "libcwalk"); *\/ */
-/* #endif */
 
 /* #if S7_DEBUGGING */
 /*       s7_autoload(s7, make_symbol(s7, "compare-calls", 13), s7_make_string(s7, "compare-calls.scm")); */
@@ -323,17 +302,7 @@ int main(int argc, char **argv) // , char **envp)
         s7_add_to_load_path(s7, options[OPT_LOAD_PATH].argument);
     }
 
-#if defined(CLIBS_LINK_RUNTIME)
-        clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT);
-        /* clib_dload_ns(s7, "libdl_s7", "libdl", DSO_EXT); */
-        /* clib_dload_global(s7, "libm_s7", "libm.scm", DSO_EXT); */
-        /* clib_dload_global(s7, "libcwalk_s7", "libcwalk.scm", DSO_EXT); */
-#else  /* linkage: static or shared */
-        clib_sinit(s7, libc_s7_init, "libc");
-        clib_sinit(s7, libdl_s7_init, "libdl");
-        clib_sinit(s7, libm_s7_init, "libm");
-        clib_sinit(s7, libcwalk_s7_init, "libcwalk");
-#endif
+    libs7_load_clib(s7, "c");
 
     // deal with bazel context
     char *script;

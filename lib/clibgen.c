@@ -190,6 +190,14 @@ int main(int argc, char **argv)
     if (verbose)
         log_info("s7: %s", S7_DATE);
 
+    /* log_debug("RUNFILES_MANIFEST_FILE: %s", getenv("RUNFILES_MANIFEST_FILE")); */
+
+    /* /\* RUNFILES_MANIFEST_FILE: null on macos. *\/ */
+    /* log_debug("RUNFILES_MANIFEST_ONLY: %s", getenv("RUNFILES_MANIFEST_ONLY")); */
+
+    /* /\* RUNFILES_DIR: set on macos for both bazel test and bazel run. *\/ */
+    /* log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR")); */
+
     if (argc > 1) {
         /* log_debug("argv[0]: %s", argv[0]); */
         /* log_debug("argv[1]: %s", argv[1]); */
@@ -199,6 +207,20 @@ int main(int argc, char **argv)
         /* char *script     = argv[1]; */
         char *script_dir = dirname(options[OPT_SCRIPT].argument);
         /* log_debug("script_dir: %s", script_dir); */
+
+        /* log_debug("CWD: %s", getcwd(NULL,0)); */
+        char *scmdir = realpath("../libs7/scm", NULL);
+        s7_add_to_load_path(s7, scmdir);
+        /* s7_pointer lp = s7_load_path(s7); */
+        /* char *s = s7_object_to_c_string(s7, lp); */
+        /* log_debug("LOAD-PATH: %s", s); */
+        /* free(s); */
+        if (!s7_load(s7, "string.scm")) {
+            fprintf(stderr, "can't load string.scm\n");
+        }
+
+        /* (format #t "lp: ~A~%" *load-path*) */
+        /*     (load "string.scm") ;; FIXME: use require */
 
 
         // deal with bazel context
@@ -211,6 +233,11 @@ int main(int argc, char **argv)
             s7_add_to_load_path(s7, "external/libs7");
             s7_add_to_load_path(s7, "external/libs7/lib");
         }
+        /* s7_pointer lp = s7_load_path(s7); */
+        /* char *s = s7_object_to_c_string(s7, lp); */
+        /* log_debug("LOAD-PATH: %s", s); */
+        /* free(s); */
+
         /* log_debug("script: %s", script); */
 
         /* s7_pointer lp = s7_load_path(s7); */

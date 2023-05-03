@@ -173,7 +173,7 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-    load_clib(s7, "utf8proc");
+    libs7_load_clib(s7, "utf8proc");
 
     char *script_dir = "./test";
     s7_pointer newpath;

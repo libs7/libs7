@@ -1147,9 +1147,9 @@
 		  (tcgetattr terminal-fd saved)
 
 		  (tcgetattr terminal-fd buf)
-		  (termios.set_c_lflag buf (logand (termios.c_lflag buf) (lognot (logior libc:ECHO libc:ICANON))))
-		  (termios.set_c_cc buf libc:VMIN 1)
-		  (termios.set_c_cc buf libc:VTIME 0)
+		  (termios.set-c-lflag buf (logand (termios.c-lflag buf) (lognot (logior libc:ECHO libc:ICANON))))
+		  (termios.set-c-cc buf libc:VMIN 1)
+		  (termios.set-c-cc buf libc:VTIME 0)
 		  (when (negative? (tcsetattr terminal-fd libc:TCSAFLUSH buf))
 		    (tty-reset))
 

@@ -89,9 +89,13 @@ def _impl(ctx):
     # print("OUTPUTS: %s" % ctx.outputs.outs)
     # for o in ctx.outputs.outs:
     #     print("O: %s" % o.path)
+
+    ## RUNFILES: the tool executable (always clibgen.exe) carries the
+    ## libs7/scm runfiles, so we need to add those as inputs to the
+    ## action.
     ctx.actions.run(
         outputs = ctx.outputs.outs,
-        inputs = ctx.files.srcs,
+        inputs = ctx.files.srcs + ctx.attr.tool[DefaultInfo].data_runfiles.files.to_list(),
         tools = tool_inputs,
         executable = ctx.executable.tool,
         arguments = args,
@@ -100,9 +104,13 @@ def _impl(ctx):
         env = dicts.add(ctx.configuration.default_shell_env, envs),
         input_manifests = tool_input_mfs,
     )
+
     return DefaultInfo(
         files = depset(ctx.outputs.outs),
-        runfiles = ctx.runfiles(files = ctx.outputs.outs),
+        runfiles = ctx.runfiles(
+            files = ctx.outputs.outs,
+            # transitive_files = ctx.attr.tool[DefaultInfo].data_runfiles.files
+        ),
     )
 
 clibgen_runner = rule(

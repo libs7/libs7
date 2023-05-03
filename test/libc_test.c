@@ -385,10 +385,10 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-    load_clib(s7, "c");
-    load_clib(s7, "dl");
-    load_clib(s7, "gdbm");
-    load_clib(s7, "m");
+    libs7_load_clib(s7, "c");
+    libs7_load_clib(s7, "dl");
+    libs7_load_clib(s7, "gdbm");
+    libs7_load_clib(s7, "m");
 
     char *script_dir = "./test";
     s7_pointer newpath;

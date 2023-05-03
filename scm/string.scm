@@ -6,8 +6,20 @@
 ;; see   ~/scheme/srfi-152
 
 ;; (load "s7/r7rs.scm")
+;; (load "s7/stuff.scm") ;; FIXME; need this for 'while'
 (load "srfi.scm")
 (load "srfi-14.scm")
+
+(define-macro (while test . body)      ; while loop with predefined break and continue.  This really wants to be define-expansion.
+  `(call-with-exit
+    (lambda (break)
+      (let loop ()
+	(call-with-exit
+	 (lambda (continue)
+	   (do ()
+	       ((not ,test) (break))
+	     ,@body)))
+	(loop)))))
 
 (define CCRED (format #f "~C[0;31m" #\escape))
 (define CCGRN (format #f "~C[0;32m" #\escape))

@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-    load_clib(s7, "gdbm");
+    libs7_load_clib(s7, "gdbm");
 
     char *script_dir = "./test";
     s7_pointer newpath;
