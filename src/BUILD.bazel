@@ -29,7 +29,7 @@ cc_library(
              "libs7.c",
              ],
     # + select({
-    #     "//config/repl:static?": [
+    #     "//config/repl:archive?": [
     #         "//lib:c_s7",
     #         "//lib:dl_s7",
     #         "//lib:m_s7"
@@ -73,8 +73,13 @@ cc_library(
         # "WITH_MAIN",
         # "WITH_NOTCURSES"
     ] + select({
-        "//config/repl:static?": [],
-        "//conditions:default":  ["WITH_C_LOADER"]
+        "//config/host:macos?": ["DSO_EXT=\\\".dylib\\\""],
+        "//config/host:linux?": [
+            "DSO_EXT=\\\".so\\\"",
+            "_XOPEN_SOURCE=500", # strdup
+            # "_DEFAULT_SOURCE"    # dirent DT_* macros
+        ],
+        "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }) + select({
         "//config/s7:debug?": ["S7_DEBUGGING"],
         "//conditions:default":   []

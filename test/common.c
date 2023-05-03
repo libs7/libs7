@@ -17,6 +17,12 @@
 
 s7_scheme *s7;
 
+/* #if defined(DEBUG_TRACE) */
+extern bool libs7_debug;
+extern bool libs7_debug_runfiles;
+extern bool libs7_trace;
+/* #endif */
+
 char *sexp_input;
 char *sexp_expected;
 
@@ -83,13 +89,16 @@ struct option options[] = {
 
 void set_options(char *test, struct option options[])
 {
+    /* log_trace("set_options"); */
     if (options[FLAG_HELP].count) {
         print_usage(test);
         exit(EXIT_SUCCESS);
     }
-
     if (options[FLAG_DEBUG].count) {
-        debug = true;
+        libs7_debug = true;
+    }
+    if (options[FLAG_TRACE].count) {
+        libs7_trace = true;
     }
     if (options[FLAG_VERBOSE].count) {
         log_info("verbose ct: %d", options[FLAG_VERBOSE].count);

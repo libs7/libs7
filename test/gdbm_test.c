@@ -12,10 +12,6 @@
 #include "utstring.h"
 
 #include "common.h"
-#if ! defined(CLIBS_LINK_RUNTIME)
-/* #include "libc_s7.h" */
-#include "libgdbm_s7.h"
-#endif
 
 #include "libs7.h"
 
@@ -104,15 +100,7 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-#if defined(CLIBS_LINK_RUNTIME)
-    /* clib_dload_ns(s7, "libc_s7", "libc", DSO_EXT); */
-    clib_dload_ns(s7, "libgdbm_s7", "libgdbm", DSO_EXT);
-#else  /* link:static? or link:shared? */
-    /* clib_sinit(s7, libc_s7_init, "libc"); */
-    clib_sinit(s7, libgdbm_s7_init, "libgdbm");
-#endif
-
-    /* log_debug("INITIALIZED"); */
+    load_clib(s7, "gdbm");
 
     char *script_dir = "./test";
     s7_pointer newpath;

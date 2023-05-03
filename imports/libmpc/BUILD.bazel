@@ -1,0 +1,36 @@
+load("@rules_foreign_cc//foreign_cc:configure.bzl",
+     "configure_make")
+
+# exports_files(["libmpc.h"])
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @gdgm//:libmpc
+configure_make(
+    name = "libmpc",
+    lib_source = ":all",
+    deps = ["@gmp//:libgmp", "@mpfr//:libmpfr"],
+    out_static_libs = ["libmpc.a"],
+    out_shared_libs = select({
+        "@bazel_tools//src/conditions:darwin": ["libmpc.dylib"],
+        "@bazel_tools//src/conditions:linux" : ["libmpc.so"],
+        "//conditions:default"               : ["libmpc.so"],
+    }),
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": ""},
+        "//conditions:default": {}
+    }),
+    args = ["V=1"],
+    configure_in_place = True,
+    configure_options = [
+        "--disable-maintainer-mode",
+        "--disable-silent-rules",
+        "--disable-dependency-tracking",
+        "--without-readline",
+    ],
+    visibility = ["//visibility:public"],
+)
+

@@ -39,6 +39,14 @@ CLIB_DEFINES = [
 ] + select({
     # "//config/s7:debug?": ["S7_DEBUGGING"],
     "//conditions:default":   []
+}) + select({
+    "//config/host:macos?": ["DSO_EXT=\\\".dylib\\\""],
+    "//config/host:linux?": [
+        "DSO_EXT=\\\".so\\\"",
+        "_XOPEN_SOURCE=500", # strdup
+        # "_DEFAULT_SOURCE"    # dirent DT_* macros
+    ],
+    "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
 })
 
 ################################################################

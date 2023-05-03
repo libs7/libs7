@@ -70,3 +70,54 @@ def fetch_repos():
         sha256 = "dcb0fbd43048832b757ff9942691a8dd70026d5da0ff85601e52687f6deeb34b"
     )
 
+    ################################################################
+    ## lib arb. deps: gmp, mpfr, flint
+    # build cmd:  bazel build @arb//:libarb
+    maybe(
+        http_archive,
+        name = "arb",
+        build_file = "@libs7//imports/libarb:BUILD.bazel",
+        url = "https://github.com/fredrik-johansson/arb/archive/refs/tags/2.23.0.zip",
+        strip_prefix = "arb-2.23.0",
+        sha256 = "330c26c89493f6d393738d85d899a45a524e874b4e1c6d0c3a922537127e82e7"
+    )
+
+    # build cmd:  bazel build @flint//:libflint
+    maybe(
+        http_archive,
+        name = "flint",
+        build_file = "@libs7//imports/libflint:BUILD.bazel",
+        url = "https://github.com/flintlib/flint2/archive/refs/tags/v2.9.0.zip",
+        strip_prefix = "flint2-2.9.0",
+        sha256 = "468ef780155a8dac081ffd09f204873299deb133e6c4baa6b1c13724ebba2ef3"
+    )
+
+    # build cmd:  bazel build @gmp//:libgmp
+    maybe(
+        http_archive,
+        name = "gmp",
+        build_file = "@libs7//imports/libgmp:BUILD.bazel",
+        url = "https://gmplib.org/download/gmp/gmp-6.2.1.tar.xz",
+        strip_prefix = "gmp-6.2.1",
+        sha256 = "fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2"
+    )
+
+    # build cmd:  bazel build @flint//:libflint
+    maybe( # depends on gmp
+        http_archive,
+        name = "mpfr",
+        build_file = "@libs7//imports/libmpfr:BUILD.bazel",
+        url = "https://www.mpfr.org/mpfr-current/mpfr-4.2.0.tar.xz",
+        strip_prefix = "mpfr-4.2.0",
+        sha256 = "06a378df13501248c1b2db5aa977a2c8126ae849a9d9b7be2546fb4a9c26d993"
+    )
+
+    # build cmd:  bazel build @mpc//:libmpc
+    maybe( # dependency of //lib/libarb:libarb_s7.c
+        http_archive,
+        name = "mpc",
+        build_file = "@libs7//imports/libmpc:BUILD.bazel",
+        url = "https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz",
+        strip_prefix = "mpc-1.3.1",
+        sha256 = "ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8"
+    )

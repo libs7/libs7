@@ -7,7 +7,7 @@ filegroup(
 cc_binary(
     name  = "repl",
     # srcs  = select({
-    #     "//config/repl:static?": ["repl_static.c"],
+    #     "//config/repl:archive?": ["repl_static.c"],
     #     "//conditions:default":  ["repl_dynamic.c"]
     # })
     srcs = ["repl.c"] + select({
@@ -29,11 +29,11 @@ cc_binary(
         "//vendored/gopt",
         "//vendored/logc"
     ] + select({
-        "//config/clibs/link:static?": [
-            "//lib/libc:c_s7_static",
-            "//lib/libdl:dl_s7_static",
-            "//lib/libm:m_s7_static",
-            "//lib/libcwalk:cwalk_s7_static",
+        "//config/clibs/link:archive?": [
+            "//lib/libc:c_s7_archive",
+            "//lib/libdl:dl_s7_archive",
+            "//lib/libm:m_s7_archive",
+            "//lib/libcwalk:cwalk_s7_archive",
         ],
         "//conditions:default": []
     }),
@@ -96,7 +96,7 @@ cc_binary(
         "-lm",
     ],
     defines = select({
-        "//config/clibs/link:static?": ["CLIBS_LINK_STATIC"],
+        "//config/clibs/link:archive?": ["CLIBS_LINK_STATIC"],
         "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
         "//conditions:default":   []
     }) + select({

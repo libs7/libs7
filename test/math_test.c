@@ -378,16 +378,13 @@ int main(int argc, char **argv)
     (void)argc;
     gopt_errors (argv[0], options);
 
-    set_options("libc", options);
+    set_options("libm", options);
 
     if (debug)
         print_debug_env();
 
     s7 = libs7_init();
 
-    load_clib(s7, "c");
-    load_clib(s7, "dl");
-    load_clib(s7, "gdbm");
     load_clib(s7, "m");
 
     char *script_dir = "./test";
@@ -405,14 +402,8 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    RUN_TEST(test_libc);
-    RUN_TEST(test_wordexp);
-    /* RUN_TEST(test_gdbm); */
     RUN_TEST(test_math);
-    RUN_TEST(test_libm);
-    RUN_TEST(test_regex);
-    /* RUN_TEST(test_utf8proc); */
 
-    /* utstring_free(sexp); */
+    utstring_free(sexp);
     return UNITY_END();
 }

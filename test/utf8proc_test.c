@@ -5,10 +5,6 @@
 
 #include "common.h"
 
-#if ! defined(CLIBS_LINK_RUNTIME)
-#include "libutf8proc_s7.h"
-#endif
-
 #include "libs7.h"
 
 s7_scheme *s7;
@@ -177,13 +173,7 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-#if defined(CLIBS_LINK_RUNTIME)
-    clib_dload_ns(s7, "libutf8proc_s7", "libutf8proc", DSO_EXT);
-#else  /* link:static? or link:shared? */
-    clib_sinit(s7, libutf8proc_s7_init, "libutf8proc");
-#endif
-
-    /* log_debug("INITIALIZED"); */
+    load_clib(s7, "utf8proc");
 
     char *script_dir = "./test";
     s7_pointer newpath;

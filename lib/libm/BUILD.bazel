@@ -10,8 +10,9 @@ load("//lib:BUILD.bzl",
 
 ################################################################
 cc_library(
-    name  = "m_s7_static", # emits libm_s7_static.a
-    linkstatic = 1,
+    name  = "m_s7_archive", # emits libm_s7_archive.a
+    linkstatic = True,
+    alwayslink = True,
     srcs  = [":libm_s7.c", "//src:s7.h"],
     hdrs  = [":libm_s7.h"],
     copts = CLIB_COPTS,

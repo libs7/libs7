@@ -5,9 +5,6 @@
 #include "utstring.h"
 
 #include "common.h"
-#if ! defined(CLIBS_LINK_RUNTIME)
-#include "libcwalk_s7.h"
-#endif
 
 #include "libs7.h"
 
@@ -99,7 +96,6 @@ void test_cwalk(void) {
 
 int main(int argc, char **argv)
 {
-    //FIXME: throw error if run outside of bazel
     if ( !getenv("BAZEL_TEST") ) {
         log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" );
         exit(EXIT_FAILURE);
@@ -120,13 +116,7 @@ int main(int argc, char **argv)
 
     s7 = libs7_init();
 
-#if defined(CLIBS_LINK_RUNTIME)
-    clib_dload_ns(s7, "libcwalk_s7", "libcwalk", DSO_EXT);
-#else  /* link = static or shared */
-    clib_sinit(s7, libcwalk_s7_init, "libcwalk");
-#endif
-
-    /* log_debug("INITIALIZED"); */
+    load_clib(s7, "cwalk"); //, libcwalk_s7_init);
 
     char *script_dir = "./test";
     s7_pointer newpath;

@@ -20,7 +20,10 @@ make(
     name = "libdeflate",
     lib_source = ":all",
     # args = ["V=1"],
-    env = {"AR": "ar"}, # macos monterey
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": "ar"},
+        "//conditions:default"               : {}
+    }),
     out_static_libs = ["libdeflate.a"],
     out_shared_libs = ["libdeflate.dylib"],
     visibility = ["//visibility:public"],

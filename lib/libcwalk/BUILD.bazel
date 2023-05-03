@@ -10,8 +10,9 @@ load("//lib:BUILD.bzl",
 
 ################################################################
 cc_library(
-    name  = "cwalk_s7_static", # emits libcwalk_s7_static.a
-    linkstatic = 1,
+    name  = "cwalk_s7_archive", # emits libcwalk_s7_archive.a
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [":libcwalk_s7.c", "//src:s7.h"],
     hdrs  = [":libcwalk_s7.h"],
     deps  = ["//vendored/cwalk"],

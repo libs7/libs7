@@ -10,8 +10,9 @@ load("//lib:BUILD.bzl",
 
 ################################################################
 cc_library(
-    name  = "dl_s7_static", # emits libdl_s7_static.a
-    linkstatic = 1,
+    name  = "dl_s7_archive", # emits libdl_s7_archive.a
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [":libdl_s7.c", "//src:s7.h"],
     hdrs  = [":libdl_s7.h"],
     copts = CLIB_COPTS,

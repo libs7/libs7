@@ -28,6 +28,9 @@ extern "C" {
                     s7_pointer (fnptr)(s7_scheme *sc),
                     char *libns);     /* e.g. libc */
 
+    void load_clib(s7_scheme *s7, char *lib);
+                   /* s7_pointer (fnptr)(s7_scheme *sc)); */
+
 
 #ifdef __cplusplus
 }
