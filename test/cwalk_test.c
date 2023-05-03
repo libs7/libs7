@@ -41,7 +41,7 @@ void test_cwalk(void) {
 
     /* cwk_path_get_basename("/my/path.txt", &basename, &length); */
     /* sexp_input = "((*libcwalk* 'cwk_path_get_basename) \"/my/path.txt\")"; */
-    sexp_input = "(cwk:path_get_basename \"/my/path.txt\")";
+    sexp_input = "(cwk:path-get-basename \"/my/path.txt\")";
     sexp_expected = "\"path.txt\"";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -51,7 +51,7 @@ void test_cwalk(void) {
 
     /* cwk_path_normalize("/var/log/weird/////path/.././..///", result, sizeof(result)); */
     /* sexp_input = "((*libcwalk* 'cwk:path_normalize) \"/var/log/weird/////path/.././..///\")"; */
-    sexp_input = "(cwk:path_normalize \"/var/log/weird/////path/.././..///\")";
+    sexp_input = "(cwk:path-normalize \"/var/log/weird/////path/.././..///\")";
     sexp_expected = "\"/var/log\"";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);
@@ -59,7 +59,7 @@ void test_cwalk(void) {
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    sexp_input = "(cwk:path_normalize \"~/foo/bar/../\")";
+    sexp_input = "(cwk:path-normalize \"~/foo/bar/../\")";
     sexp_expected = "\"~/foo\"";
     utstring_renew(sexp);
     utstring_printf(sexp, "%s", sexp_input);

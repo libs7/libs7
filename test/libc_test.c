@@ -60,7 +60,7 @@ void test_wordexp(void) {
     sexp_input = ""
         "(let ((w (libc:wordexp.make))) "
         " (libc:wordexp \"~/foo/bar\" w libc:WRDE_NOCMD) "
-        " (car (libc:wordexp.we_wordv w)))"
+        " (car (libc:wordexp.we-wordv w)))"
         ;
         /* ")) #t)))" */
     utstring_renew(sexp);

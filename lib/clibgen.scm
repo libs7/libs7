@@ -549,8 +549,8 @@
 	     (let* ((type (c 0))
 		    (c-name (c 1))
 		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
-                                                (string-tr c-name #\_ #\-)
-                                                ;; c-name
+                                                ;; (string-tr c-name #\_ #\-)
+                                                c-name
                                                 ))
 		    (trans (C->s7 type)))
 	       (if (eq? trans 's7_make_c_pointer_with_type)
@@ -575,8 +575,8 @@
 	     (let* ((type (c 0))
 		    (c-name (c 1))
 		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
-                                                (string-tr c-name #\_ #\-)
-                                                ;;c-name
+                                                ;; (string-tr c-name #\_ #\-)
+                                                c-name
                                                 ))
 		    (trans (C->s7 type)))
 	       (format p "#ifdef ~A~%" c-name)

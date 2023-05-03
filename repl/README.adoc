@@ -1,5 +1,7 @@
 = repls
 
+WARNING: Currently only repl.c/repl.scm are working (bazel run repl)
+
 == nrepl
 
 Based on link:https://github.com/dankamongmen/notcurses[notcurses]

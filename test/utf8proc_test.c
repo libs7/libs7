@@ -40,30 +40,30 @@ void test_misc(void) {
     actual = s7_eval_c_string(s7, "(utf8:version)");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "2.8.0")));
 
-    actual = s7_eval_c_string(s7, "(utf8:unicode_version)");
+    actual = s7_eval_c_string(s7, "(utf8:unicode-version)");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "15.0.0")));
 
-    actual = s7_eval_c_string(s7, "(utf8:codepoint_valid 66)");
+    actual = s7_eval_c_string(s7, "(utf8:codepoint-valid 66)");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_t(s7)));
 
-    actual = s7_eval_c_string(s7, "(utf8:codepoint_valid (char->integer #\\A))");
+    actual = s7_eval_c_string(s7, "(utf8:codepoint-valid (char->integer #\\A))");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_t(s7)));
 
-    actual = s7_eval_c_string(s7, "(utf8:category_string (char->integer #\\A))");
+    actual = s7_eval_c_string(s7, "(utf8:category-string (char->integer #\\A))");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "Lu")));
 
-    actual = s7_eval_c_string(s7, "(utf8:codepoint_valid #x0643)"); // Arabic Kaf
+    actual = s7_eval_c_string(s7, "(utf8:codepoint-valid #x0643)"); // Arabic Kaf
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_t(s7)));
 
-    actual = s7_eval_c_string(s7, "(utf8:category_string #x0643)");
+    actual = s7_eval_c_string(s7, "(utf8:category-string #x0643)");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "Lo")));
 
-    actual = s7_eval_c_string(s7, "((utf8:get_property #x0643) 'category)");
+    actual = s7_eval_c_string(s7, "((utf8:get-property #x0643) 'category)");
     sexp_expected = "utf8:UTF8PROC_CATEGORY_LO";
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    actual = s7_eval_c_string(s7, "((utf8:get_property #x0643) 'bidi_class)");
+    actual = s7_eval_c_string(s7, "((utf8:get-property #x0643) 'bidi_class)");
     sexp_expected = "utf8:UTF8PROC_BIDI_CLASS_AL";
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
@@ -87,23 +87,23 @@ void test_case(void) {
 }
 
 void test_categories(void) {
-    actual = s7_eval_c_string(s7, "(utf8:category_string (char->integer #\\A))");
+    actual = s7_eval_c_string(s7, "(utf8:category-string (char->integer #\\A))");
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "Lu")));
 }
 
 void test_composition(void) {
-    actual = s7_eval_c_string(s7, "(let* ((s \"xxx\") (r (utf8:decompose_char #x00C0 s 3))) s)"); // À
+    actual = s7_eval_c_string(s7, "(let* ((s \"xxx\") (r (utf8:decompose-char #x00C0 s 3))) s)"); // À
 }
 
 void test_encoding(void) {
     /* utf8:encode_char does not work beyond ascii */
 
     // convert 0x00C0 (À) to utf-8
-    actual = s7_eval_c_string(s7, "(utf8:encode_char (char->integer #\\A))");
+    actual = s7_eval_c_string(s7, "(utf8:encode-char (char->integer #\\A))");
     /* TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, "2.8.0"))); */
 
     // convert 0x00C0 (À) to utf-8: c3 80
-/*     actual = s7_eval_c_string(s7, "(utf8:encode_char #x00C0)"); */
+/*     actual = s7_eval_c_string(s7, "(utf8:encode-char #x00C0)"); */
 /* s7_flush_output_port(s7, s7_current_output_port(s7)); */
 /* s = s7_object_to_c_string(s7, actual); */
 /* log_debug("result: %s", s); */
@@ -139,12 +139,12 @@ void test_normalization(void) {
 }
 
 void test_properties(void) {
-    actual = s7_eval_c_string(s7, "((utf8:get_property #x0643) 'category)");
+    actual = s7_eval_c_string(s7, "((utf8:get-property #x0643) 'category)");
     sexp_expected = "utf8:UTF8PROC_CATEGORY_LO";
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 
-    actual = s7_eval_c_string(s7, "((utf8:get_property #x0643) 'bidi_class)");
+    actual = s7_eval_c_string(s7, "((utf8:get-property #x0643) 'bidi_class)");
     sexp_expected = "utf8:UTF8PROC_BIDI_CLASS_AL";
     expected = s7_eval_c_string(s7, sexp_expected);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
