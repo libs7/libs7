@@ -3160,10 +3160,9 @@
 	 ;;    (int gsl_linalg_cholesky_decomp2(gsl_matrix* gsl_vector*))
 	 ;;    (int gsl_linalg_cholesky_svx2 (gsl_matrix* gsl_vector* gsl_vector*))
 	 ;;    (int gsl_linalg_cholesky_solve2 (gsl_matrix* gsl_vector* gsl_vector* gsl_vector*))
-	 
 	 )
        "gsl"
-       ""
+       "gsl_"
        (list "gsl/gsl_blas.h"
 		"gsl/gsl_blas_types.h"
 		"gsl/gsl_block.h"
@@ -3294,7 +3293,7 @@
 		"gsl/gsl_wavelet.h"
 		"gsl/gsl_wavelet2d.h"
 		)
-       
+
        "-I/usr/local/include -g3 -DGSL_DISABLE_DEPRECATED"
        "-L/usr/local/lib -lgsl -lgslcblas"
        "libgsl_s7")

@@ -349,6 +349,31 @@ cc_test(
 
 ################################################################
 cc_test(
+    name = "gsl",
+    linkstatic = True,
+    srcs = ["gsl_test.c", "common.c", "common.h"] + select({
+        "//config/clibs/link:shared?": ["//lib/libgsl:gsl_s7"],
+        "//conditions:default": []
+    }),
+    defines = DEFINES,
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": ["//lib/libgsl:gsl_s7_archive"],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": ["//lib/libgsl:gsl_s7"],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-I$(GENDIR)/lib/libgsl",
+        "-I$(GENDIR)/external/libs7/lib/libgsl",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
     name = "cwalk",
     linkstatic = True,
     srcs = ["cwalk_test.c", "common.c", "common.h"] + select({
@@ -427,6 +452,7 @@ test_suite(
         ":gdbm_link_archive",
         ":gdbm_link_shared",
         ":gdbm_link_runtime",
+        ":gsl",
         ":cwalk",
         ":utf8proc"
     ]

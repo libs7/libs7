@@ -12,9 +12,10 @@ filegroup(
 configure_make(
     name = "libgsl",
     lib_source = ":all",
-    out_static_libs = ["libgsl.a"],
+    out_static_libs = ["libgsl.a", "libgslcblas.a"],
     out_shared_libs = select({
-        "@bazel_tools//src/conditions:darwin": ["libgsl.dylib"],
+        "@bazel_tools//src/conditions:darwin": [
+            "libgsl.dylib", "libgslcblas.dylib"],
         "@bazel_tools//src/conditions:linux" : ["libgsl.so"],
         "//conditions:default"               : ["libgsl.so"],
     }),

@@ -61,14 +61,17 @@ def fetch_repos():
         http_archive,
         name = "gsl",
         build_file = "@libs7//imports/libgsl:BUILD.bazel",
-        # url = "https://mirrors.ocf.berkeley.edu/gnu/gsl/gsl-2.2.tar.gz",
-        # strip_prefix = "gsl-2.2",
-        # sha256 = "4de40a9a79ea42a127928b095d066993cb845812d657434e29e987240113d8df"
-
         url = "https://mirror2.sandyriver.net/pub/software/gnu/gsl/gsl-2.7.1.tar.gz",
         strip_prefix = "gsl-2.7.1",
         sha256 = "dcb0fbd43048832b757ff9942691a8dd70026d5da0ff85601e52687f6deeb34b"
     )
+
+    # maybe(
+    #     http_archive,
+    #     name = "atlas",
+    #     build_file = "@libs7//imports/libatlas:BUILD.bazel",
+    #     url = "https://sourceforge.net/projects/math-atlas/files/Stable/3.10.3/atlas3.10.3.tar.bz2",
+    # )
 
     ################################################################
     ## lib arb. deps: gmp, mpfr, flint

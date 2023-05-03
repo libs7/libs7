@@ -362,7 +362,7 @@ Tests: `test/gdbm_test.c`.  Very few tests.
 
 GNU Scientific Library.
 
-Tests: none
+Tests: just one, for `gsl:version`, in `test/gsl_test.c`
 
 ==== libm
 
