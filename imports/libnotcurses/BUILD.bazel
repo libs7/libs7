@@ -1,0 +1,65 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+# needed by s7 nrepl
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @notcurses//:notcurses
+cmake(
+    name = "notcurses",
+    lib_source = ":all",
+    deps = [
+        "@libdeflate//:libdeflate",
+        "@ncurses//:libncurses"
+    ],
+    linkopts = [
+        # "-ldeflate",
+        # "-lncurses",
+        # "-lnotcurses"
+    ],
+    out_static_libs = [
+        # "libnotcurses++.a",
+        "libnotcurses-core.a",
+        "libnotcurses.a"
+    ],
+    # out_include_dir = "include",
+    postfix_script = " ".join([
+        ## we need this to get the headers output
+        # "set;",
+        # "echo PWD: $PWD;",
+        "echo OLDPWD/external/notcurses/include: `ls ${OLDPWD}/external/notcurses/include`;",
+        ## $EXT_BUILD_ROOT == $OLDPWD
+        "cp -vR ${OLDPWD}/external/notcurses/include/notcurses ${INSTALLDIR}/include;",
+        "cp -v include/version.h ${INSTALLDIR}/include/notcurses;",
+    ]),
+
+    copts = [
+        # "-I", "libdeflate/libdeflate/include",
+        # "-I", "libdeflate/include",
+        # "-I", "include",
+        # "-I", "/usr/local/opt/ncurses/include"
+    ],
+    cache_entries = {
+        "DFSG_BUILD": "ON",  # exclude non-free software
+        "BUILD_TESTING": "OFF",
+        "BUILD_EXECUTABLES": "OFF",
+        "USE_CXX": "OFF",
+        "USE_MULTIMEDIA": "none",
+        "USE_DOCTEST": "OFF",
+        "USE_PANDOC": "OFF",
+        "USE_POC": "OFF",
+        # "USE_DEFLATE": "ON",
+    },
+    env = {
+        "CFLAGS": "-Ilibdeflate/libdeflate/include -Ilibdeflate/include  -Iinclude"
+    },
+    # build_data = ["@libdeflate//:libdeflate.h"],
+    # data = ["@libdeflate//:libdeflate"],
+    # deps = ["@libdeflate//:libdeflate"],
+    # out_static_libs = ["libdeflate.a"],
+    # out_shared_libs = ["libdeflate.dylib"],
+    visibility = ["//visibility:public"],
+)

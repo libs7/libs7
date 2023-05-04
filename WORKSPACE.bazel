@@ -1,13 +1,13 @@
 workspace(name = "libs7")
 
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+# load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
-load("//:WORKSPACE.bzl", "cc_fetch_repos")
-cc_fetch_repos()
+load(":WORKSPACE.bzl", libs7_fetch_repos = "fetch_repos")
+libs7_fetch_repos()
 
 load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_dependencies")
+rules_foreign_cc_dependencies()
 
-## If build tools (make, autoconf, etc.) already installed, don't build
-rules_foreign_cc_dependencies(register_built_tools=False)
-## rules_foreign_cc_dependencies()
+load(":WORKSPACE.notcurses.bzl", "fetch_repos")
+fetch_repos()

@@ -1,0 +1,7 @@
+exports_files(glob(["*.*"]))
+
+cc_library(
+    name = "uthash",
+    hdrs = ["utarray.h", "uthash.h", "utstring.h"],
+    visibility = ["//visibility:public"]
+)

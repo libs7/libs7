@@ -1,0 +1,153 @@
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
+
+CLIB_COPTS = [
+    "-Wall",
+    "-Wextra",
+    "-Wno-unused-parameter",
+
+    "-Isrc",
+    "-Iexternal/libs7/src",
+] + select({
+    "//config/host:macos?": [
+        "-std=c11",
+        "-Werror=pedantic",
+        "-Wno-gnu",
+        "-Wno-format-pedantic",
+    ],
+    "//config/host:linux?": [
+        "-std=gnu11",
+        "-fPIC",
+        "-Wl,--no-undefined",
+        # "--pedantic-errors",
+    ],
+    "//conditions:default": ["-std=c11"],
+}) + select({
+    "//config/clibs/link:shared?": ["-fPIC"],
+    "//conditions:default": []
+})
+
+CLIB_LINKOPTS = select({
+    "//config/host:macos?": [],
+    #FIXME: -rdynamic only on Linux + link:dynamic?
+    "//config/host:linux?": ["-rdynamic"],
+    # non-linux: ["-Wl,-export-dynamic"],
+    "//conditions:default": []
+})
+
+CLIB_DEFINES = [
+    "WITH_SYSTEM_EXTRAS"
+] + select({
+    # "//config/s7:debug?": ["S7_DEBUGGING"],
+    "//conditions:default":   []
+}) + select({
+    "//config/host:macos?": ["DSO_EXT=\\\".dylib\\\""],
+    "//config/host:linux?": [
+        "DSO_EXT=\\\".so\\\"",
+        "_XOPEN_SOURCE=500", # strdup
+        # "_DEFAULT_SOURCE"    # dirent DT_* macros
+    ],
+    "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+})
+
+################################################################
+
+# Copyright 2019 The Bazel Authors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+clibgen runner
+"""
+
+# load("//lib:dicts.bzl", "dicts")
+
+def _impl(ctx):
+    tool_as_list = [ctx.attr.tool]
+    tool_inputs, tool_input_mfs = ctx.resolve_tools(tools = tool_as_list)
+    args = [
+        ctx.expand_location(a, tool_as_list) if "$(location" in a else a
+        for a in ctx.attr.args
+    ]
+    # print("Gendir: %s" % ctx.var["GENDIR"])
+    args.append("--gendir")
+    args.append(ctx.var["GENDIR"])
+    envs = {
+        # Expand $(location) / $(locations) in the values.
+        k: ctx.expand_location(v, tool_as_list) if "$(location" in v else v
+        for k, v in ctx.attr.env.items()
+    }
+    # print("OUTPUTS: %s" % ctx.outputs.outs)
+    # for o in ctx.outputs.outs:
+    #     print("O: %s" % o.path)
+
+    ## RUNFILES: the tool executable (always clibgen.exe) carries the
+    ## libs7/scm runfiles, so we need to add those as inputs to the
+    ## action.
+    ctx.actions.run(
+        outputs = ctx.outputs.outs,
+        inputs = ctx.files.srcs + ctx.attr.tool[DefaultInfo].data_runfiles.files.to_list(),
+        tools = tool_inputs,
+        executable = ctx.executable.tool,
+        arguments = args,
+        mnemonic = "RunBinary",
+        use_default_shell_env = False,
+        env = dicts.add(ctx.configuration.default_shell_env, envs),
+        input_manifests = tool_input_mfs,
+    )
+
+    return DefaultInfo(
+        files = depset(ctx.outputs.outs),
+        runfiles = ctx.runfiles(
+            files = ctx.outputs.outs,
+            # transitive_files = ctx.attr.tool[DefaultInfo].data_runfiles.files
+        ),
+    )
+
+clibgen_runner = rule(
+    implementation = _impl,
+    doc = "Runs a binary as a build action.\n\nThis rule does not require Bash (unlike" +
+          " `native.genrule`).",
+    attrs = {
+        "tool": attr.label(
+            doc = "The tool to run in the action.\n\nMust be the label of a *_binary rule," +
+                  " of a rule that generates an executable file, or of a file that can be" +
+                  " executed as a subprocess (e.g. an .exe or .bat file on Windows or a binary" +
+                  " with executable permission on Linux). This label is available for" +
+                  " `$(location)` expansion in `args` and `env`.",
+            executable = True,
+            allow_files = True,
+            mandatory = True,
+            cfg = "exec",
+        ),
+        "env": attr.string_dict(
+            doc = "Environment variables of the action.\n\nSubject to " +
+                  " [`$(location)`](https://bazel.build/reference/be/make-variables#predefined_label_variables)" +
+                  " expansion.",
+        ),
+        "srcs": attr.label_list(
+            allow_files = True,
+            doc = "Additional inputs of the action.\n\nThese labels are available for" +
+                  " `$(location)` expansion in `args` and `env`.",
+        ),
+        "outs": attr.output_list(
+            mandatory = True,
+            doc = "Output files generated by the action.\n\nThese labels are available for" +
+                  " `$(location)` expansion in `args` and `env`.",
+        ),
+        "args": attr.string_list(
+            doc = "Command line arguments of the binary.\n\nSubject to" +
+                  " [`$(location)`](https://bazel.build/reference/be/make-variables#predefined_label_variables)" +
+                  " expansion.",
+        ),
+    },
+)

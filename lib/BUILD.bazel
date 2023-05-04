@@ -1,0 +1,74 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["libm.scm"])
+
+load("//lib:BUILD.bzl",
+     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+
+################################################################
+## clibgen - builds s7 batch processor, for processing lib*_clibgen.scm to
+## generate c sources.
+################################################################
+cc_binary(
+    name  = "clibgen",
+    srcs  = ["clibgen.c"],
+    deps = [
+        "//src:s7",
+        "//vendored/gopt",
+        "//vendored/logc",
+        "//vendored/uthash"
+    ],
+    data = [
+        "//scm:srcs",
+        # ":libclib.scm",
+        ":clibgen.scm"
+    ],
+    copts =  [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        # "-pedantic-errors",
+
+        "-Isrc",
+        "-Iexternal/libs7/src",
+
+        "-Ivendored/gopt",
+        "-Iexternal/libs7/vendored/gopt",
+
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+
+        "-Ivendored/uthash",
+        "-Iexternal/libs7/vendored/uthash"
+    ] + select({
+        # "//:bsd": ["-std=c11"],
+        "//:macos": ["-std=c11"],
+        "//:linux": [
+            "-std=c11",
+            "-Wl,export-dynamic",
+            ],
+        # "//:linux_clang": [
+        #     "-std=c11",
+        #     "-fPIC",
+        #     "-Wl,export-dynamic",
+        #     ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    defines = [
+    ] + select({
+        "//:linux": [
+            "_POSIX_C_SOURCE=200809L" # strndup
+        ],
+        "//conditions:default": []
+    }),
+    linkopts = select({
+        # "//:bsd": ["-Wl,-export-dynamic"],
+        "//:macos": [],
+        "//:linux": ["-ldl", "-lm", "-Wl,-export-dynamic"],
+        # "//:linux_clang": ["-ldl", "-Wl,-export-dynamic"],
+        "//conditions:default": []
+    }) + [
+        # "-lm",
+    ],
+    # visibility = ["//visibility:public"]
+)

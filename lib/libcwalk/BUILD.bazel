@@ -1,0 +1,45 @@
+load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["libcwalk_clibgen.scm"])
+
+load("//lib:BUILD.bzl",
+     "clibgen_runner",
+     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+
+################################################################
+cc_library(
+    name  = "cwalk_s7_archive", # emits libcwalk_s7_archive.a
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = [":libcwalk_s7.c", "//src:s7.h"],
+    deps  = ["//vendored/cwalk"],
+    copts = CLIB_COPTS + [
+        "-Ivendored/cwalk",
+        "-Iexternal/libs7/vendored/cwalk",
+    ],
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
+)
+
+cc_binary(
+    name  = "cwalk_s7",  # create libcwalk_s7.{dylib,so}
+    linkshared = True,
+    srcs  = [":libcwalk_s7.c", "//src:s7.h"],
+    deps  = ["//vendored/cwalk"],
+    copts = CLIB_COPTS + [
+        "-Ivendored/cwalk",
+        "-Iexternal/libs7/vendored/cwalk",
+    ],
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
+)
+
+clibgen_runner(
+    name = "libcwalk_s7_runbin",
+    tool = "//lib:clibgen",
+    args = ["--script", "lib/libcwalk/libcwalk_clibgen.scm"],
+    srcs = [":libcwalk_clibgen.scm", "//lib:clibgen.scm"],
+    outs = [":libcwalk_s7.c"]
+)

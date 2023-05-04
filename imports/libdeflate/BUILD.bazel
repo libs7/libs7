@@ -1,0 +1,30 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "make")
+
+# needed by s7 nrepl
+
+exports_files(["libdeflate.h"])
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+## WARNING WARNING
+# MacOS 12.3 removed python, the geniuses. Now build scripts that use
+# python break. In particular
+# bazel-out/darwin-fastbuild/bin/external/libdeflate/libdeflate_foreign_cc/build_script.sh: line 154: python: command not found
+# As a temp workaround, symlink python3 to python somewhere on path
+
+# build cmd:  bazel build @libdeflate//:libdeflate
+make(
+    name = "libdeflate",
+    lib_source = ":all",
+    # args = ["V=1"],
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": "ar"},
+        "//conditions:default"               : {}
+    }),
+    out_static_libs = ["libdeflate.a"],
+    out_shared_libs = ["libdeflate.dylib"],
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,44 @@
+load("@rules_foreign_cc//foreign_cc:configure.bzl",
+     "configure_make")
+
+# exports_files(["libgdbm.h"])
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @libgdgm//:libgdbm
+configure_make(
+    name = "libgdbm",
+    lib_source = ":all",
+    out_static_libs = ["libgdbm.a"],
+    out_shared_libs = select({
+        "@bazel_tools//src/conditions:darwin": ["libgdbm.dylib"],
+        "@bazel_tools//src/conditions:linux" : ["libgdbm.so"],
+        "//conditions:default"               : ["libgdbm.so"],
+    }),
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": ""},
+        "//conditions:default": {}
+    }),
+    args = ["V=1"],
+    configure_in_place = True,
+    configure_options = [
+        "--disable-silent-rules",
+        "--disable-dependency-tracking",
+        "--without-readline",
+        ## version.c depends on __DATE__ and __TIME__, which makes the
+        ## build non-hermetic. Bazel corrects this(?) by setting both to
+        ## 'redacted', which is broken because it is not quoted.
+        ## This fixes that.
+        "CFLAGS='-Dredacted=\"redacted\"'"
+    ] + select({
+        "@bazel_tools//src/conditions:linux" : ["--with-pic"],
+        "//conditions:default"               : []
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# homebrew recipe: https://github.com/Homebrew/homebrew-core/blob/6a520bbf4f31ccccc25208b4af920cb11836fb99/Formula/gdbm.rb
+

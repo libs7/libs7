@@ -1,0 +1,65 @@
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @arb//:libarb
+configure_make(
+    name = "libarb",
+    lib_source = ":all",
+    deps = [
+        "@flint//:libflint",
+        "@mpfr//:libmpfr",
+        "@gmp//:libgmp",
+    ],
+    out_static_libs = ["libarb.a"],
+    out_shared_libs = select({
+        "@bazel_tools//src/conditions:darwin": ["libarb.dylib"],
+        "@bazel_tools//src/conditions:linux" : ["libarb.so"],
+        "//conditions:default"               : ["libarb.so"],
+    }),
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": ""},
+        "//conditions:default": {}
+    }),
+    args = ["V=1"],
+    configure_in_place = True,
+    configure_options = [
+        # EXT_BUILD_DEPS is set by bazel, find it in the build log.
+        "--with-flint=$EXT_BUILD_DEPS/libflint"
+    ],
+    visibility = ["//visibility:public"],
+)
+
+################
+# cmake(
+#     name = "libarb",
+#     lib_source = ":all",
+#     deps = [
+#         "@flint//:libflint",
+#         "@mpfr//:libmpfr",
+#         "@gmp//:libgmp",
+#     ],
+#     linkopts = [
+#     ],
+#     out_static_libs = ["libarb.a"],
+#     out_shared_libs = select({
+#         "@bazel_tools//src/conditions:darwin": ["libarb.dylib"],
+#         "@bazel_tools//src/conditions:linux" : ["libarb.so"],
+#         "//conditions:default"               : ["libarb.so"],
+#     }),
+#     copts = [
+#     ],
+#     cache_entries = {
+#         "DFSG_BUILD": "ON",  # exclude non-free software
+#         "BUILD_TESTING": "OFF",
+#         "BUILD_EXECUTABLES": "OFF",
+#         "USE_CXX": "OFF",
+#         # "USE_DEFLATE": "ON",
+#     },
+#     env = {
+#     },
+#     visibility = ["//visibility:public"],
+# )

@@ -1,3 +1,13 @@
+.bazel
+bazel-*
+private
+*.history.txt
+log.*
+*.log
+obsolete
+tmp
+trace
+
 # Prerequisites
 *.d
 

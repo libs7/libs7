@@ -1,23 +1,459 @@
-# libs7
+= libs7
+:toc: auto
+:toclevels: 3
 
-A Scheme interpreter derived from link:https://ccrma.stanford.edu/software/snd/snd/s7.html[s7].  For more information see link:https://iainctduncan.github.io/scheme-for-max-docs/s7.html[Why S7 Scheme?].
-
-This is a component of the
-link:https://obazl.github.io/docs_obazl/[OBazl Toolsuite]. It uses a
-stripped-down and modified copy of the s7 sources: only what is needed
-to build OBazl tools like link:https://github.com/obazl/mibl[mibl] and
+A Scheme interpreter and tools derived from
+link:https://ccrma.stanford.edu/software/snd/snd/s7.html[s7]. It is a
+component of the link:https://obazl.github.io/docs_obazl/[OBazl
+Toolsuite], which uses it in tools like
+link:https://github.com/obazl/mibl[mibl] and
 link:https://github.com/obazl/tools_obazl[tools_obazl].
 
 
+From the s7 docs: "s7 exists only to serve as an extension of some
+other application, so it is primarily a foreign function interface."
 
-Build targets:
+For more information sbout s7 see
+link:https://iainctduncan.github.io/scheme-for-max-docs/s7.html[Why S7
+Scheme?]. The upstream master here is on branch `s7-master`.
 
-* `bazel build @libs7//src:s7` - produces `libs7.lo`, `libc_s7.so`
-* `bazel build @libs7//src:c_s7` - produces `libc_s7.so`
-* `bazel run @libs7//src:repl` - launches a primitive repl (currently broken)
+IMPORTANT: STATUS: The `s7` kernel is production quality. The C code
+I've added seems to work pretty well but there are some rough edges;
+its been tested on MacOS 13.3.1 and Ubuntu 20.04.1. The scheme libraries (in
+`scm/`) are pretty messy. I needed some functions that are not in the
+the standard distribution, so I've hacked together some stuff from the
+standard distib and code I found online, mainly SRFI reference
+implementation code.
+
+== differences from s7
+
+`s7` is "intended as an extension language for other applications",
+but the standard distribution is pretty minimal. It contains no
+makefiles, and has a somewhat idiosyncratic build structure that
+relies on a mechanism ("cload') for dynamically compiling, linking and
+loading C libraries at runtime. It embeds bindings for several
+standard libc APIs in `s7.c` (e.g. `#include <fcntl.h>` ), and it also
+embeds some repl support in `s7.h`.
+
+This derivation is source-code-identical (except for a few lines noted
+below) with the standard distribution, but reorganizes the code. Major differences:
+
+* uses Bazel for building;
+* replaces the `cload` mechanism with a modified version that generates the source files for C libraries at build time;
+* separates the bindings for C libraries (e.g. libc, libdl, libgdbm, etc.) from the main `s7.c` file;
+* moves repl code out of `s7.c` and into package `//repl`;
+* supports three linking strategies for C libraries: build-time link/load of archive libs; build-time link and runtime load of DSO files; and runtime link and load.
+* easy loading of clibs in the repl, e.g. `(load-clib 'gdbm)` works with all three link strategies
+
+These changes are intended to make it easier to build s7 libraries and
+applications a la carte, without dynamic C compilation. All libraries
+are built (as either static or shared libraries) at build time.
 
 
-'''
-link:https://cm-gitlab.stanford.edu/bil/s7.git[s7 git repository]  If you get a certificate complaint try `git config --global http.sslVerify false`.
+== C libraries
+
+=== cload and clibgen
+
+The `cload` mechanism allows the developer to easily specify `s7`
+bindings for C libraries as `s7` Scheme source code. The
+implementation generates a C source file from a `.scm` file, compiles
+it, and loads it. So for example, `(load libc.scm)` will generate
+`libc_s7.c`, compile it to `libc_s7.so`, and then load it and call its
+initialization function.
+
+This works quite well, but dynamically compiling and running C code
+may be undesirable in some situations. `libs7` replaces the `cload`
+mechanism with a new `clibgen` mechanism. It is essentially identical
+to the `cload` mechanism, but with the logic for compiling and linking
+C code stripped out. It is designed to be run at build time, and the
+build system is responsible for compiling and linking the generated C
+code.
+
+Structure and function:
+
+==== lib/clibgen.c
+
+A minimal `s7` batch processor. This is compiled as a build tool; it
+  processes the `lib*_clibgen.scm` file for each C librarie to produce
+  the corresponding C source file. For example, from
+  `lib/libgdbm/libgdbm_clibgen.scm` it produces `libgdbm_s7.c`.
+
+==== lib/clibgen.scm
+
+Derived from `cload.scm`. Used to generate C source code from
+`lib*_clibgen.scm` files (described below). The code for running a C
+compiler is to compile the C output is removed, as is the code for
+loading and initializing compiled C libraries is removed.
+
+In addition, a `strip-prefix` parameter has been added to the `c-define`
+function that processes C function bindings. C libraries commonly use
+a prefix to implement primitive namespacing; for example, the
+`libgbdm` API uses prefix `gdbm_`, giving `gdbm_open`,
+`gdbm_close`, etc.
+
+When used in conjunction with the `prefix` parameter, `strip-prefix`
+results in more felicitous names (in my opinion). For example,
+`lib/ibgdbm/libgdbm_clibgen.scm` passes `prefix` "gdbm" and
+`strip-prefix` "gdbm_", yielding `gdbm:open` for `gdbm_open`.
+
+It also translates API names to idiomatic Scheme names, by replacing
+underscores `\_` with dashes `-`. For example, the
+`utf8proc` library contains `utf8proc_unicode_version`. Stripping
+`utf8proc_` and using prefix `utf8`, we get `utf8:unicode-version`
+rather than `utf8:unicode_version`.
+
+====  lib*_clibgen.scm files
+
+One per C library, derived from the `lib*.scm` files in the standard
+  distribution. For example `libgdbm_clibgen.scm` is derived from
+  `libgdbm.scm`. When processed by `clibgen.exe`, produces the
+  corresponding C file containing `s7` bindings.
+
+WARNING: Conversion of these files is incomplete. Passing a `prefix`
+(see above) has no effect on functions defined using the `C-function`,
+which must be manually edited (search for `utf8:iterate` in
+`lib/libutf8proc/libutf8proc_clibgen.scm` for an example). I've only
+edited a small number of such functions, since I expect to automate
+this at some point. So if you get an `unbound variable` error for
+something like `utf8:reencode`, it's probably because that edit is
+missing - check the `lib*_clibgen.scm` file.
+
+=== naming conventions
+
+The build code depends on the following conventions.  For each C library `foo`:
+
+* Binding code goes in `lib/libfoo/libfoo_clibgen.scm`
+* The generated C file will be `libfoo_s7.c`
+* The targets to build archive and DSO files are:
+  ** `lib/libfoo:foo_s7_archive`, producing `libfoo_s7_archive.a`
+  ** `lib/libfoo:foo_s7`, producing `libfoo_s7.so` (Linux) or `libfoo_s7.dylib` (MacOS)
+
+
+=== build targets
+
+The C libraries are automatically compiled and linked when `libs7`
+executables are built. They can be built individually as well.
+
+The clibgen batch processor: `//lib:clibgen`, produces `clibgen.exe`.
+This target is not intended to be run directly; it is a tool
+dependency of a custom rule, `clibgen_runner`, which is responsible
+for processing the `lib*_clibgen.scm` files to produce C files. The
+rule is defined in `lib/BUILD.bzl` and used in each `libfoo` build
+file. For example, in `lib/libc/BUILD.bazel`:
+
+[source, starlark]
+----
+clibgen_runner(
+    name = "libc_s7_runbin",
+    tool = "//lib:clibgen",
+    args = ["--script", "lib/libc/libc_clibgen.scm"],
+    srcs = [":libc_clibgen.scm", "//lib:clibgen.scm"],
+    outs = [":libc_s7.c"]
+)
+----
+
+IMPORTANT: The name attribute of `clibgen_runner` targets is not used.
+
+The targets responsible for compiling the C files depend directly on
+the file label in the `outs` attribute of `clibgen_runner`. For
+example, in `lib/libc/BUILD.bazel`:
+
+[source, starlark]
+----
+cc_library(
+    name  = "c_s7_archive", # emits libc_s7_archive.a
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = [
+        ":libc_s7.c",        <1>
+        "//src:s7.h"
+    ],
+    copts = CLIB_COPTS,
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
+)
+----
+<1> source file produced by `clibgen_runner` target
+
+This target compiles `libc_s7.c` (as listed in its `srcs` attribute),
+which is produced by the above-listed `clibgen_runner` target named
+`libc_s7_runbin`.
+
+C library targets are in package `//lib`. For library `libfoo`, the targets are:
+
+* `//lib/libfoo:libfoo_s7.c` - generates C src file from
+  `lib/libfoo/libfoo_clibgen.scm`. Note that this target corresponds
+  the a file listed in the `outs` attribute of a `clibgen_runner`
+  target.
+* `//lib/libfoo:foo_s7_archive` - produces `libfoo_s7_archive.a`
++
+CAUTION: C library archives must have `alwayslink = True`. This tells
+Bazel to link all symbols, which ensures that the initialization
+function included in each C bindings file will be included; this
+enables the use of `dlsym` at runtime to find and run the
+initialization function, even for static archives, which obviates the need
+to use a header file with the initialization function prototype.
+
+* `//lib/libfoo:foo_s7` - produces `libfoo_s7.so` or  `libfoo_s7.dylib`.
++
+TIP: Archived libraries are produce by rule `cc_library`; shared
+libraries are produced by rule `cc_binary` with `linkshared = True`.
+
+
+
+NOTE: Ordinarly you will not need to build these targets directly;
+they are direct or indirect dependencies of the primary build targets
+(like `//test` or `//repl`) so they are built automatically on demand.
+But you can build them directly, for example if you want to inspect
+the C source of library binding.
+
+=== link strategies
+
+Three link "strategies" are supported; they are globally controllable via
+config setting `--//config/clibs/link=<strategy>`, where <strategy> is one of:
+
+* `archive` - build static archive libraries and statically link at build-time
+* `shared` - build shared libraries, link at build-time, load at runtime
+* `runtime` - build shared libraries and use `dload` to load and link
+  at runtime
+
+The `BUILD.bazel` files use the `//config/clibs/link` value to
+determine which library targets to build (i.e. `:foo_s7_archive` or
+`:foo_s7`) and where to list them as dependencies. Thus the output of
+a given target configured in this way will vary depending on which
+link strategy was passed on the command line. The default is
+`--//config/clibs/link=archive`.
+
+IMPORTANT: For the `archive` strategy, clib dependencies must be
+listed in the `deps` attribute of the (`cc_binary` or `cc_test`)
+target; for the `shared` strategy, they go in the `srcs` attribute;
+and for the `runtime` strategy, they go in the `data` attribute. (See
+link:https://bazel.build/concepts/dependencies#types-of-dependencies[Types
+of dependencies] for more information, and
+link:https://bazel.build/reference/be/common-definitions#typical-attributes[Typical
+attributes defined by most build rules] for more information on the
+`data` attribute.)
+
+For example, to run test target `//test:cwalk` with runtime (dynamic) linking:
+
+    $ bazel test test:cwalk --//config/clibs/link=runtime
+
+The same effect can be obtained by hardcoding the information such
+that the target always builds using one of the link strategies; for
+examples, compare targets `libc`, `libc_link_archive`,
+`libc_link_shared`, and `libc_link_runtime` in `test/BUILD.bazel`.
+
+IMPORTANT: Support for these link strategies is entirely implemented
+by the build files; in your own projects you can do as you please with
+respect to linking. The critical point is that we have implemented
+separate C library build targets to produce both static archives and
+dynamic shared object libraries, and have customized our other build
+targets to select library targets based on a custom configuration
+setting (see `config/clibs/link/BUILD.bzl`). We've done this mainly to
+verify that all three strategies work, and for demo purposes. For a
+different project we could choose just one strategy; for example,
+build only shared libraries and only link them at runtime using
+`dload`.
+
+=== runtime initialization
+
+The generated C files contain an initialization function, named
+`libfoo_s7_init`, which must be invoked at runtime to make the
+library's `s7` API available.
+
+This is handled automatically by a `libs7` C function,
+`libs7_load_clib`, that takes the library name (as a string) as
+argument. It works for all three link strategies. For `archive` and
+`shared` strategies, it uses `dlsym` to find the initialization function,
+constructs the arguments it needs, and runs it. For `runtime` strategy, it
+derives the name of the shared library from the library name (hence
+the need to observe the naming conventions listed above), loads it
+using `dload`, uses `dlsym` to find the initialization function, and
+runs it.
+
+It follows that it is the responsibility of the application to call
+`libs7_load_clib` for each C library, and to list all needed C
+libraries as dependencies in its BUILD.bazel file. For examples, see
+the `*_test.c` files in the `test/` directory, and `repl/repl.c`.
+
+C libraries can also be initialized (and loaded if necessary) in
+Scheme code by calling `load-clib`; for example, here is a trace from
+a `repl` session:
+
+[source, scheme]
+----
+<1> (load-clib 'utf8proc)
+(utf8proc)
+<2> (utf8:version)
+"2.8.0"
+<3> (utf8:unicode-version)
+"15.0.0"
+----
+
+=== underlying libs
+
+The standard distribution assumes that the C libraries are installed
+in the local system (e.g. in some place like `/usr/local/lib`).
+
+The Bazel build is responsible for building all libraries. The import
+(`http_archive`) rules are in `WORKSPACE.bzl`; the build rules are in
+subdirectories of directory `imports`, e.g.
+`imports/libgdbm/BUILD.bazel`.
+
+WARNING: This can mean that an initial build may take a relatively
+long time, since it must build `libgdbm`, `libgsl`, etc. In particular
+`libarb` depends on four libraries, all of which take a longish time
+to build. In particular `libflint` alone may take 10-20 minutes.
+
+Each binding lib has an underlying C library; in addition some of the
+C libraries have their own C library dependencies. We build these
+libraries but we do not have `s7` bindings for them:
+
+* `libdeflate` - needed by `libnotcurses`
+* `libflint` - needed by `libarb`
+* `libgmp` - needed by `libarb`, `libflint`, `libmpc`, `'libmpfr`
+* `libflint` - needed by `libarb`
+* `libmpc` - needed by `libflint`
+* `libmpfr` - needed by `libarb`, `libflint`, `libmpc`
+
+=== status
+
+In alphabetical order:
+
+==== link:https://arblib.org[libarb]
+
+Arbitrary-precision ball arithmetic.
+
+Derived directly from the standard distribution.
+
+NOTE: there is no `libarb_clibgen.scm` file for this library; instead
+the standard distribution contains a C file, `libarb_s7.c`.
+
+Tests: none
+
+==== libc
+
+Derived directly from the standard distribution.
+
+Prefix: `libc:`, e.g. `libc:isalpha`
+
+Tests:  `test/libc_test.c`
+
+==== link:https://github.com/likle/cwalk[libcwalk]
+
+A library for manipulating paths. For example,
+
+[source,scheme]
+----
+<1> (load-clib 'cwalk)
+(cwalk)
+<2> (cwk:path-normalize "a/b/.././/c")
+"a/c"
+----
+
+Prefix: `cwd:`, e.g. `cwd:path-normalize`
+
+Tests: `test/cwalk_test.c`
+
+WARNING:  This is new, not in the standard `s7` distribution.  Bindings are incomplete.
+
+==== libdl
+
+Derived directly from the standard distribution.
+
+Tests: none
+
+
+==== link:https://www.gnu.org.ua/software/gdbm/[libgdbm]
+
+Derived directly from the standard distribution.
+
+Prefix: `gdbm:`
+
+Tests: `test/gdbm_test.c`.  Very few tests.
+
+==== link:https://www.gnu.org/software/gsl/[libgsl]
+
+GNU Scientific Library.
+
+Tests: just one, for `gsl:version`, in `test/gsl_test.c`
+
+==== libm
+
+Derived directly from the standard distribution.
+
+Tests:  `test/libm_test.c`
+
+==== link:https://github.com/dankamongmen/notcurses[libnotcurses]
+
+Derived directly from the standard distribution.
+
+Builds and runs but produces gibberish (MacOS)
+
+Tests:  none
+
+==== link:https://juliastrings.github.io/utf8proc/[libutf8proc]
+
+Derived directly from the standard distribution.
+
+Tests:  `test/utf8proc_test.c`
+
+
+== repls
+
+Currently only one repl is supported, which you can run by: `$ bazel run repl`.
+
+The `notcurses` repl builds and runs on MacOS but I could not get it
+to work correctly; it outputs mostly gibberish.
+
+The "dumb" repl needed to run a repl under emacs (for example) should
+be easy to support, I just haven't gotten around to it. The
+complicating factor is that the repls are currently designed to be run
+in a Bazel environment (using `bazel run`). I had a `deploy` target
+for an earlier version of this that installed stuff into XDG
+directories, but it needs to be revised. Maybe it would be possible to
+run `bazel run repl` from within emacs; I just haven't tried it yet.
+
+== tests
+
+The tests (in directory `test`) are incomplete, but what's there is useful.
+
+To run all tests: `$ bazel test test`. Individual tests can also be run, e.g. `$ bazel test test:cwalk` .
+
+All tests are implemented using the
+link:https://www.throwtheswitch.org/unity[Unity] testing framework.
+This is a simple test framework written in pure C. It makes it easy to
+write tests using the `s7` API. For example here are a few tests from
+`test/s7_test.c`:
+
+[source,c]
+----
+    TEST_ASSERT_TRUE(  s7_is_boolean(s7_t(s7)) );
+    TEST_ASSERT_TRUE(  s7_is_boolean(s7_f(s7)) );
+    TEST_ASSERT_FALSE( s7_boolean(s7, s7_f(s7)) );
+    TEST_ASSERT_TRUE(  s7_boolean(s7, s7_t(s7)) );
+    s7_pointer p = s7_make_boolean(s7, true);
+    TEST_ASSERT_TRUE ( (p == s7_t(s7)) );
+----
+
+and a slightly more complex test from `test/cwalk_test.c`:
+
+[source,c]
+----
+    sexp_input = "(cwk:path-get-basename \"/my/path.txt\")";
+    actual = s7_eval_c_string(s7, sexp_input);
+    sexp_expected = "\"path.txt\"";
+    expected = s7_eval_c_string(s7, sexp_expected);
+    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+----
+
+Most of the tests are for C libraries and are named accordingly:
+`cwalk_test.c`, `gdbm_test.c`, etc.
+
+In addition, `s7_test.c` contains some tests extracted from
+`test/ffitest.c` The latter is straight from the standard
+distribution, but there is no build target for it (yet). The tests in
+`s7_test.c` test `libs7` itself rather than any C library bindings.
+
 
 

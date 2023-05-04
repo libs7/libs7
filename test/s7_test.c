@@ -1,0 +1,127 @@
+/* tests extracted from ffitest.c */
+
+#include "gopt.h"
+#include "log.h"
+#include "unity.h"
+#include "utarray.h"
+#include "utstring.h"
+
+#include "common.h"
+
+#include "libs7.h"
+
+s7_scheme *s7;
+
+extern struct option options[];
+
+char *sexp_input;
+char *sexp_expected;
+
+UT_string *setter;
+UT_string *sexp;
+s7_pointer actual;
+s7_pointer expected;
+
+bool verbose;
+bool debug;
+
+/* WARNING: setUp and tearDown are run once per test. */
+void setUp(void) {
+    /* log_info("setup"); */
+}
+
+void tearDown(void) {
+    /* log_info("teardown"); */
+}
+
+/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
+/* char *s = s7_object_to_c_string(s7, actual); */
+/* log_debug("result: %s", s); */
+/* free(s); */
+
+s7_pointer p;
+s7_int i, gc_loc;
+
+void test_booleans(void) {
+    TEST_ASSERT_TRUE(  s7_is_null(s7, s7_nil(s7)) );
+    TEST_ASSERT_FALSE( s7_is_pair(s7_nil(s7)) );
+    TEST_ASSERT_TRUE(  s7_is_boolean(s7_t(s7)));
+    TEST_ASSERT_TRUE(  s7_is_boolean(s7_f(s7)));
+    TEST_ASSERT_FALSE( s7_boolean(s7, s7_f(s7)) );
+    TEST_ASSERT_TRUE(  s7_boolean(s7, s7_t(s7)) );
+
+    p = s7_make_boolean(s7, true);
+    TEST_ASSERT_TRUE ( (p == s7_t(s7)) );
+    p = s7_make_boolean(s7, false);
+    TEST_ASSERT_TRUE ( (p == s7_f(s7)) );
+}
+
+void test_equality(void) {
+
+    TEST_ASSERT_TRUE_MESSAGE(s7_is_eq(s7_f(s7), s7_f(s7)),
+                             "(eq? #f #f) -> #f?");
+
+}
+
+void test_pairs(void) {
+    p = s7_cons(s7, s7_f(s7), s7_t(s7));
+    gc_loc = s7_gc_protect(s7, p);
+    TEST_ASSERT_TRUE_MESSAGE(p == s7_gc_protected_at(s7, gc_loc),
+                     "gc protect error");
+        /* fprintf(stderr, "%d: %s is not gc protected at %" ld64 ": %s?\n", __LINE__, s1 = TO_STR(p), gc_loc, s2 = TO_STR(s7_gc_protected_at(s7, gc_loc))); free(s1); free(s2); */
+
+    TEST_ASSERT_TRUE_MESSAGE(s7_car(p) == s7_f(s7),
+                             "(car '(#f #t)) is not #f?");
+}
+
+void test_misc(void) {
+    s7_provide(s7, "ffitest");
+    TEST_ASSERT_TRUE_MESSAGE( s7_is_provided(s7, "ffitest"),
+                              "*features* doesn't provide 'ffitest?" );
+}
+
+int main(int argc, char **argv)
+{
+    //FIXME: throw error if run outside of bazel
+    if ( !getenv("BAZEL_TEST") ) {
+        log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" );
+        exit(EXIT_FAILURE);
+    }
+
+    /* log_trace("WS: %s", getenv("TEST_WORKSPACE")); */
+    /* log_debug("ARGV[0]: %s", argv[0]); */
+    /* log_debug("CWD: %s", getcwd(NULL, 0)); */
+
+    argc = gopt (argv, options);
+    (void)argc;
+    gopt_errors (argv[0], options);
+
+    set_options("cwalk", options);
+
+    if (debug)
+        print_debug_env();
+
+    s7 = libs7_init();
+
+    char *script_dir = "./test";
+    s7_pointer newpath;
+    newpath =  s7_add_to_load_path(s7, script_dir);
+    (void)newpath;
+
+    /* debugging: */
+    /* s7_pointer loadpath = s7_load_path(s7); */
+    /* char *s = s7_object_to_c_string(s7, loadpath); */
+    /* log_debug("load path: %s", s); */
+    /* free(s); */
+
+    utstring_new(sexp);
+
+    UNITY_BEGIN();
+
+    RUN_TEST(test_booleans);
+    RUN_TEST(test_equality);
+    RUN_TEST(test_misc);
+
+    utstring_free(sexp);
+    return UNITY_END();
+}

@@ -1,0 +1,16 @@
+## https://www.purposeful.co.uk/gopt/
+## https://github.com/thoni56/gopt
+
+cc_library(
+    name  = "gopt",
+    linkstatic = True,
+    srcs  = ["gopt.c", "gopt-errors.c"],
+    hdrs  = ["gopt.h"],
+    copts = select({
+        "//config/host:macos?": ["-std=c11"],
+        "//config/host:linux?": ["-std=gnu11"],
+        "//conditions:default": ["-std=c11"],
+    }) + ["-Wall", "-Wpedantic"],
+    visibility = ["//visibility:public"]
+)
+

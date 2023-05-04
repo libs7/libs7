@@ -1,0 +1,135 @@
+= repls
+
+WARNING: Currently only repl.c/repl.scm are working (bazel run repl)
+
+== nrepl
+
+Based on link:https://github.com/dankamongmen/notcurses[notcurses]
+
+=== legacy
+
+nrepl.c
+
+a. #includes notcurses_s7.c (the libnotcurses s7 API)
+
+b. embeds stuff extracted from libc_s7.c:
+   * c definitions (with s7__ or g_ prefix) for: getenv, time,
+    localtime, time_make, strftime, isatty, fileno, fgets, strlen,
+    c_pointer_to_string, calloc, glob_free, glob_make, glob,
+    glob_gl_pathv
+
+c. init_nlibc()
+  * provides s7 definitions for the above (plus constants like GLOB_MARK etc.)
+  * defines `\*nlibc*`
+
+d. main calls:
+  * sc = s7_init()
+  * init_nlibc(sc)
+  * notcurses_s7_init(sc)
+  * loads nrepl.scm, which
+     ** defines libc-let, which is used in defn of *nrepl* below
+         *** if `\*nlibc*` defined, returns it, else requires libc.scm and returns `\*libc*`
++
+  so libc-let is bound to either
+  * the subset of libc defined above (as *nlibc*)  in nrepl.c
+  * or the entire *libc* (libc_s7.so) library
++
+     ** loads `notcurses_s7.so` if `\*notcurses*` is undefined (it is defined by `notcurses_s7_init` in `notcurses_s7.c`)
+     ** autoloads a bunch of libs, e.g. `(autoload 'trace` "debug.scm")`
+       *** including `libc.scm`, `libm.scm`, `libgsl.scm`, which use cload
+     ** finally, if `\*nrepl*` is defined, returns it
+     ** if `\*nrepl*` NOT defined:
+       *** defines `\*nrepl*` (using `\*nlibc*` defined above as context for some defns)
+       *** runs nrepl: start, run, stop
+
+NOTE: the lib*.scm files use cload, so loading them will trigger
+gen/compile/load of c code.
+
+So loading `nrepl.scm` suffices to run the nrepl; we do not load it and then run it.
+
+It could be loaded by something other than `nrepl.c`.
+
+=== nrepl-bits
+
+  nrepl-bits.h is generated from (make-nrepl-bits.scm):
+
+(call-with-output-file "nrepl-bits.h"
+  (lambda (op)
+    (call-with-input-file "nrepl.scm"
+      (lambda (ip)
+	(format op "unsigned char nrepl_scm[] = {~%  ")
+	(do ((c (read-char ip) (read-char ip))
+	     (i 0 (+ i 1)))
+	    ((eof-object? c)
+	     (format op "0};~%unsigned int nrepl_scm_len = ~D;~%" i)) ; the C string length, not the array length
+	  (format op "0x~X, " (char->integer c))
+	  (if (char=? c #\newline)
+	      (format op "~%  ")))))))
+
+  xxd can create the array, but you need to tack on the trailing 0
+  Christos Vagias suggests:
+
+    xxd -i < scheme_file.scm > scheme_file.xxd; echo ", 0x00" >>  scheme_file.xxd
+    and scheme_file.xxd will look like
+aa      0x01, 0x02, 0xAA,.....
+      , 0x00
+    And then in code
+      const char main_scm[] = {
+      #include "./resources/main_scm.xxd"
+      };
+
+C23 now has #embed to handle this case
+
+
+
+=== revised
+
+* all APIs and libs compiled separately; no use of `cload.scm` to generate and compile code. In particular:
+  ** `nrepl.c` does _not_ #include `notcurses_s7.c`, which is compiled separately as `libnotcurses_s7.a`.
+  ** the sources for `\*nlibc*` are moved out of `nrepl.c` into a standalone file, `nrepl_nlibc.c`.
+* loading `nrepl.scm` just loads stuff, it does not launch the repl
+* no autoloading of libX.scm files - they're only needed when cload.scm is being used
+* client loading `nrepl.scm` is responsible for launcing the repl
+
+These changes require so modifications of the sources:
+
+* `nrepl.c`:
+  ** remove `#include "notcurses_s7.c"`
+  ** move all `\*nlibc*` code to `nrepl_nlibc.c`
+  ** add calls to initialize `\*libc*`, `\*libm*`, `\*libgsl*`
+
+* `nrepl.scm`
+  ** do not autoload libc, libm, libgsl - they're loaded and initialized by default
+  ** disable code that runs the repl
+
+
+We also use `//vendored/logc` so we `#include log.h`.
+
+Initializing libX clibs/link:
+
+  // lib*_s7_init() functions obtain the current env: cur_env = s7_curlet(sc);
+  // they then define stuff in that env: s7_define(s7, cur_env, ...)
+  // nrepl code depends on libs *libc* etc. created when libc_s7.so is dloaded.
+  // so to mimic that we need to:
+
+  // create and gc protect empty let:
+  //obazl s7_pointer newlet = s7_inlet(sc, s7_nil(sc));
+  //obazl s7_int gc_loc = s7_gc_protect(sc, newlet);
+  // set it as current env: s7_set_curlet
+  //obazl  s7_pointer old_let = s7_set_curlet(sc, newlet);
+  // invoke libc_s7_init, which will fetch the curlet and define stuff in it:
+
+  //obazl libc_s7_init(sc);
+
+  // bind var *libc* to the new let containing the libc stuff (taken directly from s7.c s7_repl() )
+  /* uint64_t hash = raw_string_hash((const uint8_t *)"*libc*", 6);  /\* hack around an idiotic gcc 10.2.1 warning *\/ */
+  // new_symbol(sc, name, len, hash, location)
+  //  new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE) => s7_make_symbol(sc, "*libc*");
+  //  sc->undefined => s7_nil(sc)
+  //obazl  s7_define(sc, s7_nil(sc), s7_make_symbol(sc, "*libc*"), newlet);
+  // add it to *libraries* (code from s7.c):
+  /* s7_pointer libs = global_slot(sc->libraries_symbol); */
+
+  //obazl s7_pointer libs = s7_slot(sc, s7_make_symbol(sc, "*libraries*"));
+  //obazl s7_slot_set_value(sc, libs, s7_cons(sc, s7_cons(sc, s7_make_semipermanent_string(sc, "libc.scm"), newlet), s7_slot_value(libs)));
+

@@ -1,6 +1,17 @@
-## for parser testing, data file won't be read without this. why???
-build --nobuild_runfile_links
+# common --symlink_prefix=.bazel/
 
-test --@sealark//src:yydebug=dicts,vectors,targets,loads
+# build --experimental_cc_shared_library
+# run   --experimental_cc_shared_library
+# test  --experimental_cc_shared_library
 
-try-import user.bazelrc
+common --color=yes
+common:show --subcommands=pretty_print
+common:show --verbose_failures
+common:show --test_output=all  # errors, streamed
+
+common:q --noshow_progress
+common:q --noshow_loading_progress
+common:q --show_result=0
+common:q --ui_event_filters=-info,-debug
+
+try-import .config/user.bazelrc

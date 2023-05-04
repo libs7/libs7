@@ -1,0 +1,36 @@
+load("@rules_foreign_cc//foreign_cc:configure.bzl",
+     "configure_make")
+
+# exports_files(["libmpfr.h"])
+
+filegroup(
+    name = "all",
+    srcs = glob(["**"]),
+)
+
+# build cmd:  bazel build @gdgm//:libmpfr
+configure_make(
+    name = "libmpfr",
+    lib_source = ":all",
+    deps = ["@gmp//:libgmp"],
+    out_static_libs = ["libmpfr.a"],
+    out_shared_libs = select({
+        "@bazel_tools//src/conditions:darwin": ["libmpfr.dylib"],
+        "@bazel_tools//src/conditions:linux" : ["libmpfr.so"],
+        "//conditions:default"               : ["libmpfr.so"],
+    }),
+    env = select({
+        "@bazel_tools//src/conditions:darwin": {"AR": ""},
+        "//conditions:default": {}
+    }),
+    args = ["V=1"],
+    configure_in_place = True,
+    configure_options = [
+        "--disable-maintainer-mode",
+        "--disable-silent-rules",
+        "--disable-dependency-tracking",
+        "--without-readline",
+    ],
+    visibility = ["//visibility:public"],
+)
+
