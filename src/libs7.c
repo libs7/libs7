@@ -17,7 +17,7 @@ void fs_api_init(s7_scheme *sc);
 static char buf[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
 /* **************************************************************** */
-static void _dload_clib(s7_scheme *s7, char *lib)
+static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
 {
 #if defined(DEBUG_TRACE)
     if (libs7_trace)
@@ -78,11 +78,12 @@ static void _dload_clib(s7_scheme *s7, char *lib)
     s7_gc_unprotect_at(s7, gc_loc);
     if (!val) {
         log_error("load fail: %s", buf);
-        /* exit(EXIT_FAILURE); */
+        return s7_values(s7, s7_nil(s7));
     }
+    return val;
 }
 
-void libs7_load_clib(s7_scheme *s7, char *lib)
+s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 {
 #if defined(DEBUG_TRACE)
     if (libs7_trace)
@@ -104,8 +105,8 @@ void libs7_load_clib(s7_scheme *s7, char *lib)
 #if defined(DEBUG_TRACE)
         log_debug("%s not statically linked, trying dload", init_fn_name);
 #endif
-        _dload_clib(s7, lib);
-        return;
+        s7_pointer res = _dload_clib(s7, lib);
+        return res;
     }
 
 #if defined(DEBUG_TRACE)
@@ -134,6 +135,7 @@ void libs7_load_clib(s7_scheme *s7, char *lib)
     s7_gc_unprotect_at(s7, gc_loc);
 
     s7_set_shadow_rootlet(s7, old_shadow);
+    return clib_let;
 }
 
 static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
@@ -153,7 +155,7 @@ static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
         }
         else return(s7_wrong_type_arg_error(s7, __func__, 0, arg, "string"));
     }
-    libs7_load_clib(s7, lib);
+    return libs7_load_clib(s7, lib);
 }
 
 s7_scheme *libs7_init(void)

@@ -57,7 +57,7 @@ char *scm_runfiles_dirs[] = {
 };
 char **scm_dir;
 
-void static _runfiles_init(s7_scheme *s7)
+static void _runfiles_init(s7_scheme *s7)
 {
     /* s7_pointer tmp_load_path = s7_list(s7, 0); */
 #if defined(DEBUG_TRACE)

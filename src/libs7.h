@@ -14,7 +14,7 @@ extern "C" {
 
     s7_scheme *libs7_init(void);
 
-    void libs7_load_clib(s7_scheme *s7, char *lib);
+    s7_pointer libs7_load_clib(s7_scheme *s7, char *lib);
 
 #ifdef __cplusplus
 }

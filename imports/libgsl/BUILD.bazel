@@ -26,13 +26,9 @@ configure_make(
     configure_in_place = True,
     configure_options = [
         "--disable-dependency-tracking",
-        # "--without-readline",
-        # "--disable-silent-rules",
-        ## version.c depends on __DATE__ and __TIME__, which makes the
-        ## build non-hermetic. Bazel corrects this by setting both to
-        ## 'redacted', which is broken because it is not quoted.
-        ## This fixes that.
-        # "CFLAGS='-Dredacted=\"redacted\"'"
-    ],
+    ] + select({
+        "@bazel_tools//src/conditions:linux" : ["--with-pic"],
+        "//conditions:default": []
+    }),
     visibility = ["//visibility:public"],
 )

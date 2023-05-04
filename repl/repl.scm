@@ -1014,7 +1014,7 @@
 
 		;; we're in libc here, so exit is libc's exit!
 		(define (tty-reset)
-		  (tcsetattr terminal-fd TCSAFLUSH saved)
+		  (tcsetattr terminal-fd libc:TCSAFLUSH saved)
 		  (if (not (equal? input-fd terminal-fd)) (close input-fd))
 		  (#_exit))
 
