@@ -8,13 +8,13 @@ CLIB_COPTS = [
     "-Isrc",
     "-Iexternal/libs7/src",
 ] + select({
-    "//:macos": [
+    "//config/host:macos?": [
         "-std=c11",
         "-Werror=pedantic",
         "-Wno-gnu",
         "-Wno-format-pedantic",
     ],
-    "//:linux": [
+    "//config/host:linux?": [
         "-std=gnu11",
         "-fPIC",
         "-Wl,--no-undefined",

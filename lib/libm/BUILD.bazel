@@ -16,7 +16,10 @@ cc_library(
     srcs  = [":libm_s7.c", "//src:s7.h"],
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    defines = CLIB_DEFINES  + select({
+        "//config/host:linux?": ["_POSIX_C_SOURCE=200112L"], # posix_fadvise
+        "//conditions:default": []
+    })
 )
 
 cc_binary(
@@ -25,7 +28,10 @@ cc_binary(
     srcs  = [":libm_s7.c", "//src:s7.h"],
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    defines = CLIB_DEFINES  + select({
+        "//config/host:linux?": ["_POSIX_C_SOURCE=200112L"], # posix_fadvise
+        "//conditions:default": []
+    })
 )
 
 clibgen_runner(

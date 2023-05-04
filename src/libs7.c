@@ -1,4 +1,7 @@
+// if linux
+#define _GNU_SOURCE
 #include <dlfcn.h>
+#undef _GNU_SOURCE
 #include <libgen.h>
 
 #include "s7.h"
@@ -96,7 +99,7 @@ void libs7_load_clib(s7_scheme *s7, char *lib)
 #endif
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
-    init_fn_ptr = dlsym(RTLD_SELF, init_fn_name);
+    init_fn_ptr = dlsym(RTLD_DEFAULT, init_fn_name); // mac: RTLD_SELF?
     if (init_fn_ptr == NULL) {
 #if defined(DEBUG_TRACE)
         log_debug("%s not statically linked, trying dload", init_fn_name);

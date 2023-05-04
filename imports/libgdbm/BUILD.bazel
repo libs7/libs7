@@ -33,7 +33,10 @@ configure_make(
         ## 'redacted', which is broken because it is not quoted.
         ## This fixes that.
         "CFLAGS='-Dredacted=\"redacted\"'"
-    ],
+    ] + select({
+        "@bazel_tools//src/conditions:linux" : ["--with-pic"],
+        "//conditions:default"               : []
+    }),
     visibility = ["//visibility:public"],
 )
 

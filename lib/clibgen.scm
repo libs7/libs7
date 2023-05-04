@@ -558,9 +558,10 @@
                                                (substring nm-str (length strip-prefix))
                                                c-name))
                                          c-name))
-                    (xscm-c-name (string-tr stripped-c-name #\_ #\-))
+                    ;;(xscm-c-name (string-tr stripped-c-name #\_ #\-))
 		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
-                                                xscm-c-name
+                                                ;;xscm-c-name
+                                                stripped-c-name
                                                 ))
 		    (trans (C->s7 type)))
 	       (if (eq? trans 's7_make_c_pointer_with_type)
@@ -584,18 +585,18 @@
 	   (lambda (c)
 	     (let* ((type (c 0))
 		    (c-name (c 1))
-                    (xscm-c-name (string-tr c-name #\_ #\-))
-		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":H:" "")
-                                                (if (> (length strip-prefix) 0)
-                                                    ;; string_prefix? is not loaded, so...
-                                                    (let* ((nm-str  (format #f "~A" xscm-c-name))
-                                                           (ss  (substring nm-str 0 (length strip-prefix))))
-                                                      (if (string=? ss strip-prefix)
-                                                          (substring nm-str (length strip-prefix))
-                                                          xscm-c-name))
-                                                    xscm-c-name)
+                    (stripped-c-name (if (> (length strip-prefix) 0)
+                                         (let* ((nm-str  (format #f "~A" c-name))
+                                                (ss  (substring nm-str 0 (length strip-prefix))))
+                                           (if (string=? ss strip-prefix)
+                                               (substring nm-str (length strip-prefix))
+                                               c-name))
+                                         c-name))
+                    ;; (xscm-c-name (string-tr c-name #\_ #\-))
+		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "")
                                                 ;; (string-tr c-name #\_ #\-)
                                                 ;;c-name
+                                                stripped-c-name
                                                 ))
 		    (trans (C->s7 type)))
 	       (format p "#ifdef ~A~%" c-name)

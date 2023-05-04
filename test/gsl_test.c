@@ -46,7 +46,7 @@ void tearDown(void) {
 
 void test_gsl(void) {
     sexp_input = "gsl:version";
-    sexp_expected = "2.7.1.";
+    sexp_expected = "2.7.1";
     actual = s7_eval_c_string(s7, sexp_input);
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, s7_make_string(s7, sexp_expected)));
 
