@@ -329,6 +329,8 @@ Derived directly from the standard distribution.
 NOTE: there is no `libarb_clibgen.scm` file for this library; instead
 the standard distribution contains a C file, `libarb_s7.c`.
 
+Prefix: none
+
 Tests: none
 
 ==== libc
@@ -361,6 +363,8 @@ WARNING:  This is new, not in the standard `s7` distribution.  Bindings are inco
 
 Derived directly from the standard distribution.
 
+Prefix:  `dl:`
+
 Tests: none
 
 
@@ -376,11 +380,15 @@ Tests: `test/gdbm_test.c`.  Very few tests.
 
 GNU Scientific Library.
 
+Prefix:  `gsl:`
+
 Tests: just one, for `gsl:version`, in `test/gsl_test.c`
 
 ==== libm
 
 Derived directly from the standard distribution.
+
+Prefix: `libm:`
 
 Tests:  `test/libm_test.c`
 
@@ -390,11 +398,15 @@ Derived directly from the standard distribution.
 
 Builds and runs but produces gibberish (MacOS)
 
+Prefix: none
+
 Tests:  none
 
 ==== link:https://juliastrings.github.io/utf8proc/[libutf8proc]
 
 Derived directly from the standard distribution.
+
+Prefix:  `utf8:`
 
 Tests:  `test/utf8proc_test.c`
 

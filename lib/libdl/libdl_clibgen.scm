@@ -26,7 +26,8 @@
                     (C-macro (void* (RTLD_DEFAULT RTLD_NEXT RTLD_SELF RTLD_MAIN_ONLY))) ;; dlsym handles
 		    (char* dlerror (void))
 		    (C-macro (int (RTLD_LAZY RTLD_NOW RTLD_BINDING_MASK RTLD_NOLOAD RTLD_DEEPBIND RTLD_GLOBAL RTLD_LOCAL RTLD_NODELETE))))
-		  "libdl" ""
+		  "dl"
+                  ""
                   "dlfcn.h"
                   "libdl_s7")
 	(curlet))))
