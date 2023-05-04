@@ -7,8 +7,6 @@
 
 ;; derived from cload.scm.  Compilation logic removed so this just emits c files.
 
-(define *cload-cflags* (if (provided? 'clang) "-fPIC" ""))
-(define *cload-ldflags* "")
 (unless (defined? '*cload-directory*)
   (define *cload-directory* ""))
 (unless (defined? '*cload-library-name*)
@@ -37,7 +35,7 @@
   (cons 'c-define-1 (cons '(curlet) args)))
 
 
-(define* (c-define-1 cur-env function-info (prefix "") (strip-prefix "") (headers ()) (cflags "") (ldflags "") output-name)
+(define* (c-define-1 cur-env function-info (prefix "") (strip-prefix "") (headers ()) output-name)
   ;; write C src/hdr for shared library module that links in the functions in function-info
   ;;    function info is either a list: (return-type c-name arg-type) or a list thereof
   ;;    the new functions are placed in cur-env
@@ -666,10 +664,6 @@
 
 	(format p "}~%")
 	(close-output-port p)
-
-	;; (unless (or (file-exists? "s7.h")
-	;; 	    (not (pair? *load-path*)))
-	;;   (set! *cload-cflags* (append *cload-cflags* (format #f " -I~A" (car *load-path*)))))
         )
 
       (define handle-declaration

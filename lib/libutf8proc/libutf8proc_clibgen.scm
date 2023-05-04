@@ -191,7 +191,9 @@
 
 	 "utf8"
          "utf8proc_"
-         "utf8proc.h" "" "-lutf8proc" "libutf8proc_s7")
+         "utf8proc.h"
+         ;; "" "-lutf8proc"
+         "libutf8proc_s7")
 	(curlet))))
 
 *libutf8proc*

@@ -143,7 +143,9 @@ static s7_pointer g_modf(s7_scheme *sc, s7_pointer args)
          (C-function ("frexp" g_frexp "(frexp x) returns a list: (fraction exponent)" 1))
          (C-function ("modf" g_modf "(modf x) returns a list: (int-part frac-part) -- this is not the same as fmod!" 1))
 	 )
-       "libm" "" "math.h" "" "" "libm_s7")
+       "libm" "" "math.h"
+       ;; "" ""
+       "libm_s7")
 
       (curlet))))
 
