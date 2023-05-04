@@ -17,7 +17,7 @@ cc_library(
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES  + select({
-        "//config/host:linux?": ["_POSIX_C_SOURCE=200112L"], # posix_fadvise
+        "//config/host:linux?": ["_POSIX_C_SOURCE=200809"],
         "//conditions:default": []
     })
 )
@@ -29,7 +29,7 @@ cc_binary(
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES  + select({
-        "//config/host:linux?": ["_POSIX_C_SOURCE=200112L"], # posix_fadvise
+        "//config/host:linux?": ["_POSIX_C_SOURCE=200809"],
         "//conditions:default": []
     })
 )
