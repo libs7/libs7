@@ -17,6 +17,14 @@ For more information sbout s7 see
 link:https://iainctduncan.github.io/scheme-for-max-docs/s7.html[Why S7
 Scheme?]. The upstream master here is on branch `s7-master`.
 
+IMPORTANT: STATUS: The `s7` kernel is production quality. The C code
+I've added seems to work pretty well but there are some rough edges;
+its been tested on MacOS 13.3.1 and Ubuntu 20.04.1. The scheme libraries (in
+`scm/`) are pretty messy. I needed some functions that are not in the
+the standard distribution, so I've hacked together some stuff from the
+standard distib and code I found online, mainly SRFI reference
+implementation code.
+
 == differences from s7
 
 `s7` is "intended as an extension language for other applications",
@@ -186,7 +194,7 @@ enables the use of `dlsym` at runtime to find and run the
 initialization function, even for static archives, which obviates the need
 to use a header file with the initialization function prototype.
 
-* `//lib/libfoo:foo_s7` - produces `libfoo_s7_archive.so` or  `libfoo_s7_archive.dylib`.
+* `//lib/libfoo:foo_s7` - produces `libfoo_s7.so` or  `libfoo_s7.dylib`.
 +
 TIP: Archived libraries are produce by rule `cc_library`; shared
 libraries are produced by rule `cc_binary` with `linkshared = True`.
@@ -327,6 +335,8 @@ Tests: none
 
 Derived directly from the standard distribution.
 
+Prefix: `libc:`, e.g. `libc:isalpha`
+
 Tests:  `test/libc_test.c`
 
 ==== link:https://github.com/likle/cwalk[libcwalk]
@@ -340,6 +350,8 @@ A library for manipulating paths. For example,
 <2> (cwk:path-normalize "a/b/.././/c")
 "a/c"
 ----
+
+Prefix: `cwd:`, e.g. `cwd:path-normalize`
 
 Tests: `test/cwalk_test.c`
 
@@ -355,6 +367,8 @@ Tests: none
 ==== link:https://www.gnu.org.ua/software/gdbm/[libgdbm]
 
 Derived directly from the standard distribution.
+
+Prefix: `gdbm:`
 
 Tests: `test/gdbm_test.c`.  Very few tests.
 

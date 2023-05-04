@@ -241,8 +241,8 @@ static s7_pointer g_gdbm_open(s7_scheme *sc, s7_pointer args)
 		  "gdbm" ;; prefix
                   "gdbm_" ;; strip-prefix
                   "gdbm.h"  ;; headers
-                  "" ;; cflags
-                  "-lgdbm" ;; lflags
+                  ;; "" ;; cflags
+                  ;; "-lgdbm" ;; lflags
                   "libgdbm_s7" ;; output-name
                   )
 	(curlet))))

@@ -3294,8 +3294,8 @@
 		"gsl/gsl_wavelet2d.h"
 		)
 
-       "-I/usr/local/include -g3 -DGSL_DISABLE_DEPRECATED"
-       "-L/usr/local/lib -lgsl -lgslcblas"
+       ;; "-I/usr/local/include -g3 -DGSL_DISABLE_DEPRECATED"
+       ;; "-L/usr/local/lib -lgsl -lgslcblas"
        "libgsl_s7")
 					; GSL_DISABLE_DEPRECATED is needed to avoid a name collision (dating from version 1.7!!)
       (curlet))))

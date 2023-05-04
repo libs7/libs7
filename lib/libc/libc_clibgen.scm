@@ -1869,9 +1869,9 @@
 	       (reader-cond ((not (provided? 'openbsd)) "wordexp.h"))
 	       (reader-cond ((provided? 'freebsd) "sys/socket.h" "netinet/in.h"))
 	       )
-	 "" ;; cflags
-	 (if (provided? 'linux) "-lrt"
-	     (if (provided? 'openbsd) "-pthread" "")) ;; lflags
+	 ;; "" ;; cflags
+	 ;; (if (provided? 'linux) "-lrt"
+	 ;;     (if (provided? 'openbsd) "-pthread" "")) ;; lflags
 	 "libc_s7" ;; output-name
          )
 

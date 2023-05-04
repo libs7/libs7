@@ -452,7 +452,7 @@ test_suite(
         ":gdbm_link_archive",
         ":gdbm_link_shared",
         ":gdbm_link_runtime",
-        ":gsl",
+        # ":gsl", ## takes too long to build for one trivial test
         ":cwalk",
         ":utf8proc"
     ]

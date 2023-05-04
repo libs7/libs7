@@ -132,7 +132,9 @@
 
 	 "cwk" ;; prefix to add
          "cwk_"    ;; strip-prefix
-         "cwalk.h" "" "" "libcwalk_s7")
+         "cwalk.h"
+         ;; "" ""
+         "libcwalk_s7")
 	(curlet))
       ;; )
 )
