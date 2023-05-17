@@ -15,7 +15,7 @@
 #     #include nrepl.c,
 
 ##########
-exports_files(["s7.h"]) ## ???
+exports_files(["s7.h", "libs7.h"]) ## ???
 
 ###########
 cc_library(
@@ -23,8 +23,6 @@ cc_library(
     linkstatic = True,
     # alwayslink = 1,
     srcs  = ["fs_api.c", # FIXME: replace with cwalk
-             # "s7_utils.c",
-             # "s7_utils.h",
              "s7.c",
              "libs7.c",
              ],
@@ -82,6 +80,12 @@ cc_library(
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }) + select({
         "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//conditions:default":   []
+    }) + select({
+        "//config:debug?": ["DEBUG_TRACE"],
+        "//conditions:default":   []
+    }) + select({
+        "//config:trace?": ["TRACE"],
         "//conditions:default":   []
     }),
     linkopts = select({

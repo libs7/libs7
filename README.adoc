@@ -78,7 +78,7 @@ below) with the standard distribution, but reorganizes the code. Major differenc
 * replaces the `cload` mechanism with a modified version that generates the source files for C libraries at build time;
 * separates the bindings for C libraries (e.g. libc, libdl, libgdbm, etc.) from the main `s7.c` file;
 * moves repl code out of `s7.c` and into package `//repl`;
-* supports three linking strategies for C libraries: build-time link/load of archive libs; build-time link and runtime load of DSO files; and runtime link and load.
+* supports three linking strategies for C libraries: build-time link/load of archive libs; build-time link and runtime load of DSO files; and runtime link and load using `dlopen`, `dlsym` etc..
 * easy loading of clibs in the repl, e.g. `(load-clib 'gdbm)` works with all three link strategies
 
 These changes are intended to make it easier to build s7 libraries and
@@ -250,7 +250,7 @@ config setting `--//config/clibs/link=<strategy>`, where <strategy> is one of:
 
 * `archive` - build static archive libraries and statically link at build-time
 * `shared` - build shared libraries, link at build-time, load at runtime
-* `runtime` - build shared libraries and use `dload` to load and link
+* `runtime` - build shared libraries and use `dlopen` to load and link
   at runtime
 
 The `BUILD.bazel` files use the `//config/clibs/link` value to
@@ -289,7 +289,7 @@ setting (see `config/clibs/link/BUILD.bzl`). We've done this mainly to
 verify that all three strategies work, and for demo purposes. For a
 different project we could choose just one strategy; for example,
 build only shared libraries and only link them at runtime using
-`dload`.
+`dlopen`.
 
 === runtime initialization
 
@@ -304,7 +304,7 @@ argument. It works for all three link strategies. For `archive` and
 constructs the arguments it needs, and runs it. For `runtime` strategy, it
 derives the name of the shared library from the library name (hence
 the need to observe the naming conventions listed above), loads it
-using `dload`, uses `dlsym` to find the initialization function, and
+using `dlopen`, uses `dlsym` to find the initialization function, and
 runs it.
 
 It follows that it is the responsibility of the application to call

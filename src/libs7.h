@@ -16,6 +16,8 @@ extern "C" {
 
     s7_pointer libs7_load_clib(s7_scheme *s7, char *lib);
 
+    bool libs7_is_alist(s7_scheme *s7, s7_pointer arg);
+
 #ifdef __cplusplus
 }
 #endif

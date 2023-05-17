@@ -58,6 +58,12 @@
 		      (values (cons a cars) (cons d cdrs)))))))
 	    (values (list cars-final) '()))))))
 
+
+(define (drop lis k)
+  (check-arg integer? k drop)
+  (let iter ((lis lis) (k k))
+    (if (zero? k) lis (iter (cdr lis) (- k 1)))))
+
 (define fold
   (let ((+documentation+ "(fold kons knil lis1 . lists)")
         (+signature+ '(fold kons knil lis1 . lists)))

@@ -85,6 +85,7 @@ static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
 
 s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 {
+        log_trace("load_clib: %s", lib);
 #if defined(DEBUG_TRACE)
     if (libs7_trace)
         log_trace("load_clib: %s", lib);
@@ -98,13 +99,14 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
     if (libs7_debug)
         log_debug("init_fn_name: %s", init_fn_name);
 #endif
+        log_debug("init_fn_name: %s", init_fn_name);
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
-    init_fn_ptr = dlsym(RTLD_DEFAULT, init_fn_name); // mac: RTLD_SELF?
+    init_fn_ptr = dlsym(RTLD_SELF, init_fn_name); // mac: RTLD_SELF?
     if (init_fn_ptr == NULL) {
-#if defined(DEBUG_TRACE)
+/* #if defined(DEBUG_TRACE) */
         log_debug("%s not statically linked, trying dload", init_fn_name);
-#endif
+/* #endif */
         s7_pointer res = _dload_clib(s7, lib);
         return res;
     }
@@ -140,8 +142,8 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 
 static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
 {
-#if defined(DEBUG_TRACE)
     log_debug("g_libs7_load_clib");
+#if defined(DEBUG_TRACE)
 #endif
     s7_pointer p, arg;
     char* lib;
@@ -158,6 +160,60 @@ static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
     return libs7_load_clib(s7, lib);
 }
 
+#define TO_STR(x) s7_object_to_c_string(s7, x)
+/* #define TO_S7_INT(x) s7_make_integer(s7, x) */
+
+bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
+{
+    if (s7_is_list(s7, arg)) {
+        if (arg == s7_nil(s7))
+            return true;
+
+        s7_pointer x;
+        s7_pointer iter = s7_make_iterator(s7, arg);
+        s7_int gc = s7_gc_protect(s7, iter);
+        if (!s7_is_iterator(iter)) {
+            log_error("s7_make_iterator failed on %s", TO_STR(arg));
+            s7_gc_unprotect_at(s7, gc);
+            return false;
+        }
+
+        if (s7_iterator_is_at_end(s7, iter)) {
+            log_error("iterator %s is prematurely done on %s", TO_STR(arg));
+            s7_gc_unprotect_at(s7, gc);
+            return false;
+        }
+
+        x = s7_iterate(s7, iter);
+        while (true) {
+            /* log_debug("iter: %s", TO_STR(x)); */
+            if ((x == s7_eof_object(s7))
+                || (s7_iterator_is_at_end(s7, iter))) {
+                s7_gc_unprotect_at(s7, gc);
+                return true;
+            }
+            if (!s7_is_pair(x)) {
+                s7_gc_unprotect_at(s7, gc);
+                return false;
+            }
+            if (s7_is_null(s7, s7_cdr(x))) {
+                s7_gc_unprotect_at(s7, gc);
+                return false;
+            }
+            x = s7_iterate(s7, iter);
+        }
+    } else
+        return false;
+}
+
+static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer arg)
+{
+    if (libs7_is_alist(s7, arg))
+        return s7_t(s7);
+    else
+        return s7_f(s7);
+}
+
 s7_scheme *libs7_init(void)
 /* WARNING: dload logic assumes file path <libns>/<libname><dso_ext> */
 {
@@ -172,6 +228,48 @@ s7_scheme *libs7_init(void)
                      "(load-clib 'libsym) initializes statically linked clib archives and dsos, "
                      "and dloads and initializes dynamically linked dsos. "
                      "libsym may be symbol or string; it should not include 'lib' prefix and '_s7' suffix.");
+
+  s7_define_function(s7, "alist?", g_is_alist,
+                     1,         /* required: 1 arg, libname */
+                     0,         /* optional: 0 */
+                     false,     /* rest args: none */
+                     "(alist? lst)");
+
+  /* #m(): proper map constructor - duplicate keys disallowed,
+     map-entry pairs implicit.
+   */
+  const char *ht_sexp = ""
+      "(set! *#readers* "
+      "      (cons (cons #\\m (lambda (str) "
+      "			(and (string=? str \"m\") "
+      "                      (let ((h (apply hash-table (read)))) "
+      "                         (if (> (*s7* 'safety) 1) (immutable! h) h))))) "
+      "	    *#readers*)) "
+      ;
+  s7_pointer ht_ctor = s7_eval_c_string(s7, ht_sexp);
+  (void)ht_ctor;
+
+  /* #M(): multimap (alist) constructor - duplicate keys allowed,
+     map-entry pairs explicit. Just a notational convenience to make the
+     contruction more conspicuous; it doesn't really do anything, just
+     produces an alist.  #M((:a 1)) == '((:a 1)).
+
+     Can we have it validate that its argument is an alist?
+   */
+  const char *mmap_sexp = ""
+      "(set! *#readers* "
+      "      (cons (cons #\\M (lambda (str) "
+      "			(and (string=? str \"M\") "
+      "                    (let ((mmap (read))) "
+      "                        `(quote ,mmap)))))"
+      "	    *#readers*)) "
+      ;
+      /* "                       (if (> (*s7* 'safety) 1) " */
+      /* "                          (immutable! m) " */
+      /* "                           (quote m)))))) " */
+
+  s7_pointer mmap_ctor = s7_eval_c_string(s7, mmap_sexp);
+  (void)mmap_ctor;
 
   return s7;
 }

@@ -25,6 +25,15 @@ def fetch_repos():
     )
 
     ################################################################
+    # build cmd:  bazel build @mustachios7//:libmustachios7
+    maybe(
+        http_archive,
+        name = "mustachios7",
+        url = "https://gitlab.com/obazl/mustachios7/-/archive/cced836dde3dde5b2189894a1bfcdedafe587635/mustachios7-cced836dde3dde5b2189894a1bfcdedafe587635.tar.gz",
+        strip_prefix = "mustachios7-cced836dde3dde5b2189894a1bfcdedafe587635"
+        # sha256 = "4635bc12f65e0cbe3f6c5b1ed5b2376b5ec94a41"
+    )
+
     # build cmd:  bazel build @libunistring//:libunistring
     maybe( ## WARNING: takes a loong time to build
         http_archive,

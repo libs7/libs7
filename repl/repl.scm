@@ -979,18 +979,18 @@
 	      ;; also this does not resend the entire expression after editing
 	      ;;   and does not notice in-place edits
 	      ;;   can <cr> get entire expr?
-	      (let ((buf (c-pointer->string (calloc 512 1) 512)))
+	      (let ((buf (c-pointer->string (libc:calloc 512 1) 512)))
 		(fformat *stderr* "> ")
-		(do ((b (fgets buf 512 libc:stdin) (fgets buf 512 stdin)))
+		(do ((b (libc:fgets buf 512 libc:stdin) (libc:fgets buf 512 libc:stdin)))
 		    ((zero? (length b))
 		     (#_exit))
-		  (let ((len (strlen buf)))
+		  (let ((len (libc:strlen buf)))
 		    (when (positive? len)
 		      (do ((i 0 (+ i 1)))
 			  ((or (not (char-whitespace? (buf i)))
 			       (= i len))
 			   (when (< i len)
-			     (let ((str (substring buf 0 (- (strlen buf) 1))))
+			     (let ((str (substring buf 0 (- (libc:strlen buf) 1))))
 			       ;(fformat *stderr* "str: ~S~%" str)
 			       (catch #t
 				 (lambda ()
@@ -1001,8 +1001,8 @@
 					 (fformat *stderr* "~S~%> " (eval-string str (*repl* 'top-level-let)))
 					 (set! str ""))
 				       (lambda (type info)
-					 (fgets buf 512 stdin)
-					 (set! str (string-append str " " (substring buf 0 (- (strlen buf) 1))))))))
+					 (libc:fgets buf 512 libc:stdin)
+					 (set! str (string-append str " " (substring buf 0 (- (libc:strlen buf) 1))))))))
 				 (lambda (type info)
 				   (set! str "")
 				   (apply format *stderr* info)

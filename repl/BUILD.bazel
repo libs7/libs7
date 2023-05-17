@@ -19,11 +19,13 @@ cc_binary(
             # in."
             "//lib/libc:c_s7",
             "//lib/libcwalk:cwalk_s7",
-            "//lib/libdl:dl_s7",
-            "//lib/libgdbm:gdbm_s7",
+            # "//lib/libdl:dl_s7",
+            # "//lib/libgdbm:gdbm_s7",
             # "//lib/libgsl:gsl_s7",
-            "//lib/libm:m_s7",
-            "//lib/libutf8proc:utf8proc_s7",
+            # "//lib/libm:m_s7",
+            # "//lib/libutf8proc:utf8proc_s7",
+            # "//lib/libmustach:mustach_s7",
+            "//lib/libmustachios7:mustachios7_s7",
         ],
         "//conditions:default": []
     }),
@@ -35,11 +37,13 @@ cc_binary(
         "//config/clibs/link:archive?": [
             "//lib/libc:c_s7_archive",
             "//lib/libcwalk:cwalk_s7_archive",
-            "//lib/libdl:dl_s7_archive",
-            "//lib/libgdbm:gdbm_s7_archive",
+            # "//lib/libdl:dl_s7_archive",
+            # "//lib/libgdbm:gdbm_s7_archive",
             # "//lib/libgsl:gsl_s7_archive",
-            "//lib/libm:m_s7_archive",
-            "//lib/libutf8proc:utf8proc_s7_archive",
+            # "//lib/libm:m_s7_archive",
+            # "//lib/libutf8proc:utf8proc_s7_archive",
+            # "//lib/libmustach:mustach_s7_archive",
+            "//lib/libmustachios7:mustachios7_s7_archive",
         ],
         "//conditions:default": []
     }),
@@ -51,11 +55,13 @@ cc_binary(
         "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
             "//lib/libcwalk:cwalk_s7",
-            "//lib/libdl:dl_s7",
-            "//lib/libgdbm:gdbm_s7",
+            # "//lib/libdl:dl_s7",
+            # "//lib/libgdbm:gdbm_s7",
             # "//lib/libgsl:gsl_s7",
-            "//lib/libm:m_s7",
-            "//lib/libutf8proc:utf8proc_s7",
+            # "//lib/libm:m_s7",
+            # "//lib/libutf8proc:utf8proc_s7",
+            # "//lib/libmustach:mustach_s7",
+            "//lib/libmustachios7:mustachios_s7",
         ],
         "//conditions:default": []
     }),
@@ -72,10 +78,10 @@ cc_binary(
         "-I$(GENDIR)/external/libs7/lib/libc",
         "-I$(GENDIR)/lib/libcwalk",
         "-I$(GENDIR)/external/libs7/lib/libcwalk",
-        "-I$(GENDIR)/lib/libdl",
-        "-I$(GENDIR)/external/libs7/lib/libdl",
-        "-I$(GENDIR)/lib/libm",
-        "-I$(GENDIR)/external/libs7/lib/libm",
+        # "-I$(GENDIR)/lib/libdl",
+        # "-I$(GENDIR)/external/libs7/lib/libdl",
+        # "-I$(GENDIR)/lib/libm",
+        # "-I$(GENDIR)/external/libs7/lib/libm",
 
         "-Ivendored/gopt",
         "-Iexternal/libs7/vendored/gopt",
@@ -119,6 +125,9 @@ cc_binary(
     }) + select({
         "//config:debug?": ["DEBUG_TRACE"],
         "//conditions:default":   []
+    }) + select({
+        "//config:trace?": ["TRACE"],
+        "//conditions:default": []
     }),
     visibility = ["//visibility:public"]
 )
