@@ -36,11 +36,11 @@ s7_pointer read_data_string(s7_scheme *s7, char *data_string)
     return data;
 }
 
-static s7_pointer read_json_handler(s7_scheme *s7, s7_pointer args)
-{
-    TRACE_ENTRY(read_json_handler);
-    return s7_nil(s7);
-}
+/* static s7_pointer read_json_handler(s7_scheme *s7, s7_pointer args) */
+/* { */
+/*     TRACE_ENTRY(read_json_handler); */
+/*     return s7_nil(s7); */
+/* } */
 
 s7_pointer read_json(s7_scheme *s7, char *json_str)
 {

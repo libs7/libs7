@@ -1,0 +1,179 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES", "DEPS")
+load("//test/lib/mustachios7:BUILD.bzl", "COPTS_TEST", "DEPS_TEST",
+     "DEFINES_TEST",
+     "TIMEOUT")
+load("//test/lib/mustachios7/scm:BUILD.bzl",
+     "SRCS",
+     "LIBS7", "LIBS7_HDRS",
+     "LIBS7_ADAPTER", "LIBS7_ADAPTER_HDRS",
+     "COPTS_S7", "DEPS_S7")
+
+################################################################
+# cc_test(
+#     name       = "alists",
+#     linkstatic = True,
+#     srcs       = ["alists_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+cc_test(
+    name       = "comments",
+    linkstatic = True,
+    srcs       = ["comments_test.c"] + SRCS,
+    defines    = DEFINES + DEFINES_TEST,
+    deps       = DEPS + DEPS_TEST + DEPS_S7,
+    copts      = COPTS + COPTS_TEST + COPTS_S7,
+    linkopts   = LINKOPTS,
+    timeout    = TIMEOUT,
+)
+
+# cc_test(
+#     name       = "delimiters",
+#     linkstatic = True,
+#     srcs       = ["delimiters_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test( ## NOT SUPPORTED
+#     name       = "dynamics",
+#     linkstatic = True,
+#     srcs       = ["dynamics_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "interpolation",
+#     linkstatic = True,
+#     srcs       = ["interpolation_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "inverted",
+#     linkstatic = True,
+#     srcs       = ["inverted_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "lists",
+#     linkstatic = True,
+#     srcs       = ["lists_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "maps",
+#     linkstatic = True,
+#     srcs       = ["maps_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "lambda",
+#     linkstatic = True,
+#     srcs       = ["lambda_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "predicates",
+#     linkstatic = True,
+#     srcs       = ["predicates_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# # test handling of "prefixes", constant text preceding tag and on same line
+# cc_test(
+#     name       = "prefixes",
+#     linkstatic = True,
+#     srcs       = ["prefix_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "partials",
+#     linkstatic = True,
+#     srcs       = ["partials_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "sections",
+#     linkstatic = True,
+#     srcs       = ["sections_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "sequences",
+#     linkstatic = True,
+#     srcs       = ["sequences_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+
+# cc_test(
+#     name       = "vectors",
+#     linkstatic = True,
+#     srcs       = ["vectors_test.c"] + SRCS,
+#     defines    = DEFINES + DEFINES_TEST,
+#     deps       = DEPS + DEPS_TEST + DEPS_S7,
+#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     linkopts   = LINKOPTS,
+#     timeout    = TIMEOUT,
+# )
+

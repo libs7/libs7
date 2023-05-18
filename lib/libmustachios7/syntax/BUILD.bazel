@@ -1,0 +1,4 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
+bool_flag(name = "alt", build_setting_default = 1)
+config_setting(name = "alt?", flag_values = {":alt": "True"})

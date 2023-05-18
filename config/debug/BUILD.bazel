@@ -5,6 +5,9 @@ load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 bool_flag(name = "debug", build_setting_default = 0)
 config_setting(name = "debug?", flag_values = {":debug": "True"})
 
+bool_flag(name = "stacktrace", build_setting_default = 0)
+config_setting(name = "stacktrace?", flag_values = {":stacktrace": "True"})
+
 bool_flag(name = "trace", build_setting_default = 0)
 config_setting(name = "trace?", flag_values = {":trace": "True"})
 
