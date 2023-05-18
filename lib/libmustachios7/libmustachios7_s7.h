@@ -15,8 +15,8 @@
  */
 
 #include "libs7.h"
-#include "mustachios7_s7.h"
-#include "mustachios7_cjson.h"
+/* #include "mustachios7_s7.h" */
+/* #include "mustachios7_cjson.h" */
 
 /* ****************************************************************
  * libs7-specific API

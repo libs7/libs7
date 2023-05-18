@@ -17,7 +17,7 @@
 #include "libs7.h"
 #include "mustachios7_scm.h"
 
-struct expl {
+struct tstack_s {
     int predicate;
     bool lambda;
     s7_pointer root;

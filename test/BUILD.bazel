@@ -1,64 +1,8 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("BUILD.bzl",
+     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
 
-## Args common to all test binarys:
-DEFINES = select({
-    "//config/host:debug": ["DEBUG_TRACE"],
-    "//conditions:default":   []
-}) + select({
-    "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
-    "//conditions:default":   []
-}) + select({
-    "//config/host:macos?": ["DSO_EXT=\\\".dylib\\\""],
-    "//config/host:linux?": [
-        "DSO_EXT=\\\".so\\\"",
-        "_XOPEN_SOURCE=500", # strdup
-        # "_DEFAULT_SOURCE"    # dirent DT_* macros
-    ],
-    "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
-})
-
-DEPS = [
-    ## "other libraries to be linked in to the binary target." can
-    ## be cc_library targets but cc_binary targets with
-    ## linkshared=1 won't work - put them in srcs (or data) attr.
-    "//src:s7",
-    "//vendored/gopt",
-    "//vendored/logc",
-    "//vendored/unity",
-    "//vendored/uthash",
-]
-
-COPTS = [
-    "-x", "c",
-    "-Wall",
-    "-Wextra",
-    "-Werror=pedantic",
-    "-Wno-unused-parameter",
-    "-Wno-format-pedantic",
-    "-Isrc", "-Iexternal/libs7/src",
-    "-Ivendored/gopt", "-Iexternal/libs7/vendored/gopt",
-    "-Ivendored/logc", "-Iexternal/libs7/vendored/logc",
-    "-Ivendored/unity", "-Iexternal/libs7/vendored/unity",
-    "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash",
-] + select({
-    "//:macos": [
-        "-Wno-gnu",
-        "-std=c11"
-    ],
-    "//:linux": [
-        "-std=gnu11",
-        "--pedantic-errors",
-    ],
-    "//conditions:default": ["-std=c11"],
-})
-
-LINKOPTS = select({
-    "//:linux": ["-rdynamic"],
-    "//conditions:default": []
-})
-
-TIMEOUT = "short"
-
+exports_files(["common.c", "common.h"])
 
 ## WARNING WARNING - if linkstatic is not True, then the runtime
 ## linker may pick up system shared libs rather than those listed as
@@ -116,10 +60,10 @@ cc_test(
             # outs are C or C++ source files, they are compiled into
             # this rule; if they are library files, they are linked
             # in."
-            "//lib/libc:c_s7", "//lib/libc:libc_s7.h",
-            "//lib/libdl:dl_s7", "//lib/libdl:libdl_s7.h",
-            "//lib/libgdbm:gdbm_s7", "//lib/libgdbm:libgdbm_s7.h",
-            "//lib/libm:m_s7", "//lib/libm:libm_s7.h",
+            "//lib/libc:libc_s7.c", "//lib/libc:libc_s7.h",
+            # "//lib/libdl:dl_s7.c", "//lib/libdl:libdl_s7.h",
+            # "//lib/libgdbm:gdbm_s7.c", "//lib/libgdbm:libgdbm_s7.h",
+            # "//lib/libm:m_s7.c", "//lib/libm:libm_s7.h",
         ],
         "//conditions:default": []
     }),
@@ -127,18 +71,18 @@ cc_test(
     deps = DEPS + select({
         "//config/clibs/link:archive?": [
             "//lib/libc:c_s7_archive",
-            "//lib/libdl:dl_s7_archive",
-            "//lib/libgdbm:gdbm_s7_archive",
-            "//lib/libm:m_s7_archive",
+            # "//lib/libdl:dl_s7_archive",
+            # "//lib/libgdbm:gdbm_s7_archive",
+            # "//lib/libm:m_s7_archive",
         ],
         "//conditions:default": []
     }),
     data = select({
         "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
-            "//lib/libdl:dl_s7",
-            "//lib/libgdbm:gdbm_s7",
-            "//lib/libm:m_s7",
+            # "//lib/libdl:dl_s7",
+            # "//lib/libgdbm:gdbm_s7",
+            # "//lib/libm:m_s7",
         ],
         "//conditions:default": []
     }),
@@ -154,9 +98,9 @@ cc_test(
     defines = DEFINES,
     deps = DEPS + [
         "//lib/libc:c_s7_archive",
-        "//lib/libdl:dl_s7_archive",
-        "//lib/libgdbm:gdbm_s7_archive",
-        "//lib/libm:m_s7_archive",
+        # "//lib/libdl:dl_s7_archive",
+        # "//lib/libgdbm:gdbm_s7_archive",
+        # "//lib/libm:m_s7_archive",
     ],
     copts = COPTS + LIBC_COPTS,
     linkopts = LINKOPTS,
@@ -165,16 +109,17 @@ cc_test(
 
 cc_test(
     name = "libc_link_shared",
-    linkstatic = True,
+    # linkstatic = True,
     srcs = [
         "libc_test.c", "common.c", "common.h",
-        "//lib/libc:c_s7", # "//lib/libc:libc_s7.h",
-        "//lib/libdl:dl_s7", # "//lib/libdl:libdl_s7.h",
-        "//lib/libgdbm:gdbm_s7", # "//lib/libgdbm:libgdbm_s7.h",
-        "//lib/libm:m_s7", # "//lib/libm:libm_s7.h",
+        # "//lib/libc:libc_s7.c",
+        # "//lib/libc:libc_s7.h",
+        # "//lib/libdl:dl_s7.c", # "//lib/libdl:libdl_s7.h",
+        # "//lib/libgdbm:gdbm_s7.c", # "//lib/libgdbm:libgdbm_s7.h",
+        # "//lib/libm:m_s7.c", # "//lib/libm:libm_s7.h",
     ],
     defines = DEFINES,
-    deps = DEPS,
+    deps = DEPS + ["//lib/libc:c_s7"],
     copts = COPTS + LIBC_COPTS,
     linkopts = LINKOPTS,
     timeout  = TIMEOUT,
@@ -188,9 +133,9 @@ cc_test(
     deps = DEPS,
     data = [
         "//lib/libc:c_s7",
-        "//lib/libdl:dl_s7",
-        "//lib/libgdbm:gdbm_s7",
-        "//lib/libm:m_s7",
+        # "//lib/libdl:dl_s7",
+        # "//lib/libgdbm:gdbm_s7",
+        # "//lib/libm:m_s7",
     ],
     copts = COPTS + LIBC_COPTS,
     linkopts = LINKOPTS,
@@ -199,11 +144,11 @@ cc_test(
 
 ################################################################
 cc_test(
-    name = "math",
+    name = "libm",
     linkstatic = True,
-    srcs = ["math_test.c", "common.c", "common.h"] + select({
+    srcs = ["libm_test.c", "common.c", "common.h"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libm:m_s7" # , "//lib/libm:libm_s7.h",
+            "//lib/libm:m_s7.c" # , "//lib/libm:libm_s7.h",
         ],
         "//conditions:default": []
     }),
@@ -227,9 +172,9 @@ cc_test(
 )
 
 cc_test(
-    name = "math_link_archive",
+    name = "libm_link_archive",
     linkstatic = True,
-    srcs = ["math_test.c", "common.c", "common.h"],
+    srcs = ["libm_test.c", "common.c", "common.h"],
     defines = DEFINES,
     deps = DEPS + ["//lib/libm:m_s7_archive"],
     copts = COPTS + [
@@ -241,11 +186,11 @@ cc_test(
 )
 
 cc_test(
-    name = "math_link_shared",
+    name = "libm_link_shared",
     linkstatic = True,
     srcs = [
-        "math_test.c", "common.c", "common.h",
-        "//lib/libm:m_s7" # , "//lib/libm:libm_s7.h",
+        "libm_test.c", "common.c", "common.h",
+        "//lib/libm:m_s7.c" # , "//lib/libm:libm_s7.h",
     ],
     defines = DEFINES,
     deps = DEPS,
@@ -258,9 +203,9 @@ cc_test(
 )
 
 cc_test(
-    name = "math_link_runtime",
+    name = "libm_link_runtime",
     linkstatic = True,
-    srcs = ["math_test.c", "common.c", "common.h"],
+    srcs = ["libm_test.c", "common.c", "common.h"],
     defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     data = ["//lib/libm:m_s7"],
@@ -278,7 +223,7 @@ cc_test(
     linkstatic = True,
     srcs = ["gdbm_test.c", "common.c", "common.h"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libgdbm:gdbm_s7"  # , "//lib/libgdbm:libgdbm_s7.h",
+            "//lib/libgdbm:gdbm_s7.c"  # , "//lib/libgdbm:libgdbm_s7.h",
         ],
         "//conditions:default": []
     }),
@@ -320,7 +265,7 @@ cc_test(
     linkstatic = True,
     srcs = [
         "gdbm_test.c", "common.c", "common.h",
-        "//lib/libgdbm:gdbm_s7" ## , "//lib/libgdbm:libgdbm_s7.h",
+        "//lib/libgdbm:gdbm_s7.c" ## , "//lib/libgdbm:libgdbm_s7.h",
     ],
     defines = DEFINES,
     deps = DEPS,
@@ -352,7 +297,7 @@ cc_test(
     name = "gsl",
     linkstatic = True,
     srcs = ["gsl_test.c", "common.c", "common.h"] + select({
-        "//config/clibs/link:shared?": ["//lib/libgsl:gsl_s7"],
+        "//config/clibs/link:shared?": ["//lib/libgsl:gsl_s7.c"],
         "//conditions:default": []
     }),
     defines = DEFINES,
@@ -378,7 +323,7 @@ cc_test(
     linkstatic = True,
     srcs = ["cjson_test.c", "common.c", "common.h"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libmustachios7:mustachios7_s7" ## , "//lib/libmustachios7:libmustachios7_s7.h",
+            "//lib/libmustachios7:mustachios7_s7.c" ## , "//lib/libmustachios7:libmustachios7_s7.h",
         ],
         "//conditions:default": []
     }),
@@ -411,7 +356,7 @@ cc_test(
     linkstatic = True,
     srcs = ["cwalk_test.c", "common.c", "common.h"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libcwalk:cwalk_s7" ## , "//lib/libcwalk:libcwalk_s7.h",
+            "//lib/libcwalk:cwalk_s7.c" ## , "//lib/libcwalk:libcwalk_s7.h",
         ],
         "//conditions:default": []
     }),
@@ -434,6 +379,28 @@ cc_test(
     timeout = TIMEOUT
 )
 
+cc_test(
+    name = "cwalk_link_archive",
+    linkstatic = True,
+    srcs = ["cwalk_test.c", "common.c", "common.h"],
+    defines = DEFINES,
+    deps = DEPS + ["//lib/libcwalk:cwalk_s7_archive"],
+    copts = COPTS + LIBC_COPTS,
+    linkopts = LINKOPTS,
+    timeout  = TIMEOUT,
+)
+
+cc_test(
+    name = "cwalk_link_shared",
+    linkstatic = True,
+    srcs = ["cwalk_test.c", "common.c", "common.h"],
+    defines = DEFINES,
+    deps = DEPS + ["//lib/libcwalk:cwalk_s7"],
+    copts = COPTS, # + LIBC_COPTS,
+    linkopts = LINKOPTS,
+    timeout  = TIMEOUT,
+)
+
 ################################################################
 cc_test(
     name = "utf8proc",
@@ -445,8 +412,8 @@ cc_test(
             # outs are C or C++ source files, they are compiled into
             # this rule; if they are library files, they are linked
             # in."
-            "//lib/libc:c_s7", ## "//lib/libc:libc_s7.h",
-            "//lib/libutf8proc:utf8proc_s7",
+            "//lib/libc:c_s7.c", ## "//lib/libc:libc_s7.h",
+            "//lib/libutf8proc:utf8proc_s7.c",
             ## "//lib/libutf8proc:libutf8proc_s7.h",
         ],
         "//conditions:default": []

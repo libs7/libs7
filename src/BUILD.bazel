@@ -19,9 +19,9 @@ exports_files(["s7.h", "libs7.h"]) ## ???
 
 ###########
 cc_library(
-    name  = "s7",
+    name  = "s7_archive",
     linkstatic = True,
-    # alwayslink = 1,
+    alwayslink = 1,
     srcs  = ["fs_api.c", # FIXME: replace with cwalk
              "s7.c",
              "libs7.c",
@@ -68,7 +68,7 @@ cc_library(
     ],
     defines = [
         "WITH_SYSTEM_EXTRAS",
-        # "WITH_C_LOADER"
+        "WITH_C_LOADER"
         # FIXME: if --//config:notcurses
         # "WITH_MAIN",
         # "WITH_NOTCURSES"
@@ -84,10 +84,91 @@ cc_library(
         "//config/s7:debug?": ["S7_DEBUGGING"],
         "//conditions:default":   []
     }) + select({
-        "//config:debug?": ["DEBUG_TRACE"],
+        "//config/debug:debug?": ["DEBUG_TRACE"],
         "//conditions:default":   []
     }) + select({
-        "//config:trace?": ["TRACE"],
+        "//config/debug:trace?": ["TRACE"],
+        "//conditions:default":   []
+    }),
+    linkopts = select({
+        "//:macos": ["-ldl"],
+        "//:linux": ["-ldl"],
+        "//conditions:default": []
+    }),
+    visibility = ["//visibility:public"]
+)
+
+cc_binary(
+    name  = "s7",
+    linkshared = True,
+    # alwayslink = 1,
+    srcs  = ["fs_api.c", # FIXME: replace with cwalk
+             "s7.c",
+             "libs7.c",
+             "libs7.h", "s7.h",
+             ],
+    # + select({
+    #     "//config/repl:archive?": [
+    #         "//lib:c_s7",
+    #         "//lib:dl_s7",
+    #         "//lib:m_s7"
+    #     ],
+    #     "//conditions:default":  []
+    # }),
+    deps  = ["//vendored/logc", "//vendored/uthash"],
+    # hdrs  = ["libs7.h", "s7.h"],
+    copts = [
+        "-Wall",
+        "-Wextra",
+        # "-Werror=pedantic",
+        "-Wno-unused-parameter",
+        "-Isrc",
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        "-Ivendored/uthash",
+        "-Iexternal/libs7/vendored/uthash",
+        "-Iexernal/libs7/src",
+    ] + select({
+        "//:macos": [
+            "-Wno-format-pedantic",
+            "-Wno-gnu",
+            "-std=c11"
+        ],
+        "//:linux": [
+            "-std=gnu11",
+            "-Wno-unused-function",
+            "-Wno-implicit-fallthrough",
+            # "--pedantic-errors",
+            "-fPIC",
+        ],
+        "//conditions:default": ["-std=c11"],
+    }),
+    data = [
+        "//repl:scm",
+        "//scm:srcs", "//scm/s7:srcs", "s7.h"
+    ],
+    defines = [
+        "WITH_SYSTEM_EXTRAS",
+        "WITH_C_LOADER"
+        # FIXME: if --//config:notcurses
+        # "WITH_MAIN",
+        # "WITH_NOTCURSES"
+    ] + select({
+        "//config/host:macos?": ["DSO_EXT=\\\".dylib\\\""],
+        "//config/host:linux?": [
+            "DSO_EXT=\\\".so\\\"",
+            "_XOPEN_SOURCE=500", # strdup
+            # "_DEFAULT_SOURCE"    # dirent DT_* macros
+        ],
+        "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+    }) + select({
+        "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/debug:debug?": ["DEBUG_TRACE"],
+        "//conditions:default":   []
+    }) + select({
+        "//config/debug:trace?": ["TRACE"],
         "//conditions:default":   []
     }),
     linkopts = select({
@@ -136,7 +217,7 @@ cc_library(
     ],
     defines = [
         # "WITH_SYSTEM_EXTRAS",
-        # "WITH_C_LOADER"
+        "WITH_C_LOADER"
         # FIXME: if --//config:notcurses
         # "WITH_MAIN",
         # "WITH_NOTCURSES"

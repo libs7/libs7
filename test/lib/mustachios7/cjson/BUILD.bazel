@@ -1,0 +1,162 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//test:BUILD.bzl",
+     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+
+## WARNING WARNING - if linkstatic is not True, then the runtime
+## linker may pick up system shared libs rather than those listed as
+## deps here. This can be true even for static deps, e.g.
+## libgbdm_s7_archive, which is statically linked to libgdbm.a - at
+## runtime the system libgbdm.so may be loaded.
+
+################################################################
+CLIB_COPTS = [
+    "-I$(GENDIR)/lib/libc",
+    "-I$(GENDIR)/external/libs7/lib/libc",
+    "-I$(GENDIR)/lib/libdl",
+    "-I$(GENDIR)/external/libs7/lib/libdl",
+    "-I$(GENDIR)/lib/libgdbm",
+    "-I$(GENDIR)/external/libs7/lib/libgdbm",
+    "-I$(GENDIR)/lib/libm",
+    "-I$(GENDIR)/external/libs7/lib/libm",
+]
+
+################################################################
+cc_test(
+    name = "cjson",
+    linkstatic = True,
+    srcs = ["cjson_test.c",
+            "//test:common.c", "//test:common.h",
+            "//test/lib/mustachios7:ansi_colors.h",
+            "//test/lib/mustachios7:trace.h",
+            "//test/lib/mustachios7:utils.c",
+            "//test/lib/mustachios7:utils.h"
+            ] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libmustachios7:libmustachios7_s7.c"],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Itest",
+        "-Itest/lib/mustachios7",
+        "-Ilib/libmustachios7",
+        "-Iexternal/libs7/lib/libmustachios7",
+    ],
+    defines = DEFINES,
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": ["//lib/libmustachios7:mustachios7_s7_archive"],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libmustachios7:mustachios7_s7"
+        ],
+        "//conditions:default": []
+    }),
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "cjson_link_archive",
+    linkstatic = True,
+    srcs = ["cjson_test.c", "//test:common.c", "//test:common.h"],
+    defines = DEFINES,
+    deps = DEPS + ["//lib/libmustachios7:mustachios7_s7_archive"],
+    copts = COPTS + [
+        "-Itest",
+        "-Iexternal/mustachios7/test",
+        "-Ilib/libmustachios7",
+        "-Iexternal/libs7/lib/libmustachios7",
+        "-Iexternal/mustachios7/lib",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "cjson_link_shared",
+    # linkstatic = True,
+    srcs = [
+        "cjson_test.c", "//test:common.c", "//test:common.h",
+        # "//lib/libmustachios7:libmustachios7_s7.c"
+        # "//lib/libmustachios7:mustachios7_s7",
+        # "//src:s7"
+    ],
+    defines = DEFINES,
+    # deps = DEPS + ["//lib/libmustachios7:mustachios7_s7"],
+    # data = ["//lib/libmustachios7:mustachios7_s7"],
+    deps = [
+        "//src:s7_archive",
+        "//lib/libmustachios7:mustachios7_s7",
+        "//vendored/gopt",
+        "//vendored/logc",
+        "//vendored/unity",
+        "//vendored/uthash",
+    ],
+    copts = COPTS + [
+        "-Itest",
+        "-Iexternal/mustachios7/test",
+        "-Ilib/libmustachios7",
+        "-Iexternal/libs7/lib/libmustachios7",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "cjson_link_runtime",
+    # linkstatic = True,
+    srcs = ["cjson_test.c", "//test:common.c", "//test:common.h",
+            "//src:libs7.h", "//src:s7.h",
+            "//lib/libmustachios7:mustachios7_s7",
+            "//src:s7"
+            ],
+    defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    deps = DEPS,
+    # data = ["//lib/libmustachios7:mustachios7_s7"],
+    copts = COPTS + [
+        "-Itest",
+        "-Ilib/libmustachios7",
+        "-Iexternal/libs7/lib/libmustachios7",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
+    name = "interpolation",
+    linkstatic = True,
+    srcs = ["interpolation_test.c",
+            "//test:common.c",
+            "//test:common.h",
+            "//test/lib/mustachios7:ansi_colors.h",
+            "//test/lib/mustachios7:trace.h",
+            "//test/lib/mustachios7:utils.c",
+            "//test/lib/mustachios7:utils.h"
+            ] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libmustachios7:libmustachios7_s7.c"],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Itest",
+        "-Itest/lib/mustachios7",
+        "-Ilib/libmustachios7",
+        "-Iexternal/libs7/lib/libmustachios7",
+    ],
+    defines = DEFINES,
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": ["//lib/libmustachios7:mustachios7_s7_archive"],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libmustachios7:mustachios7_s7"
+        ],
+        "//conditions:default": []
+    }),
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+

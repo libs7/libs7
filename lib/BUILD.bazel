@@ -13,7 +13,7 @@ cc_binary(
     name  = "clibgen",
     srcs  = ["clibgen.c"],
     deps = [
-        "//src:s7",
+        "//src:s7_archive",
         "//vendored/gopt",
         "//vendored/logc",
         "//vendored/uthash"

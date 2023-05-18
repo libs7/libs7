@@ -3,9 +3,11 @@ load("//config/cc:BUILD.bzl", "COPTS")
 cc_library(
     name = "cjson",
     linkstatic = True,
-    srcs = ["cJSON.c", "cJSON.h"],
+    srcs = ["cJSON.c"],
+    hdrs = ["cJSON.h"],
     copts = COPTS,
     visibility = ["//vendored/mustach:__pkg__",
-                  "//lib/libcjson:__pkg__"]
+                  "//lib/libcjson:__pkg__",
+                  "//lib/libmustachios7:__pkg__"]
 )
 

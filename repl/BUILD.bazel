@@ -31,7 +31,7 @@ cc_binary(
         "//conditions:default": []
     }),
     deps = [
-        "//src:s7",
+        "//src:s7_archive",
         "//vendored/gopt",
         "//vendored/logc"
     ] + select({
@@ -128,10 +128,10 @@ cc_binary(
         ],
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }) + select({
-        "//config:debug?": ["DEBUG_TRACE"],
+        "//config/debug:debug?": ["DEBUG_TRACE"],
         "//conditions:default":   []
     }) + select({
-        "//config:trace?": ["TRACE"],
+        "//config/debug:trace?": ["TRACE"],
         "//conditions:default": []
     }),
     visibility = ["//visibility:public"]
@@ -164,7 +164,7 @@ cc_binary(
         "@ncurses//:libncurses",
         "//lib:c_s7",
         "//lib:notcurses_s7",
-        "//src:s7",
+        "//src:s7_archive",
         "//vendored/logc",
     ],
     data = [
@@ -231,7 +231,7 @@ cc_binary(
 cc_binary(
     name  = "repl_x",
     srcs  = ["repl.c"],
-    deps = ["//src:s7"],
+    deps = ["//src:s7_archive"],
     copts =  [
         "-Wall",
         "-Wextra",

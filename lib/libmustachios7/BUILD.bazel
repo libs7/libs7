@@ -7,105 +7,100 @@ load("//lib:BUILD.bzl",
 
 # exports_files(["mustach-libs7.c", "mustach-libs7.h"])
 
+SRCS = [
+    "//src:libs7.h",
+    "//src:s7.h",
+    "libmustachios7_s7.c",
+    "libmustachios7_s7.h",
+    "mustachios7_s7.c",
+    "mustachios7_s7.h",
+    "mustachios7_scm.c",
+    "mustachios7_scm.h",
+
+    "mustachios7_cjson.c",
+    "mustachios7_cjson.h",
+    "mustachios7_json.c",
+    "mustachios7_json.h",
+
+    "mustachios7_wrap.c",
+    "mustachios7_wrap.h",
+] + select({
+    "//config/debug:debug?": ["debug.h", "ansi_colors.h"],
+    "//conditions:default": []
+})
+
+COPTS = CLIB_COPTS + [
+    "-Ilib",
+
+    "-Ilib/libmustachios7",
+    "-Iexternal/libs7/lib/libmustachios7",
+
+    "-Ivendored/cjson",
+    "-Iexternal/libs7/vendored/cjson",
+
+    "-Ivendored/logc",
+    "-Iexternal/libs7/vendored/logc",
+
+    "-Iexternal/libs7/src",
+    "-Iexternal/mustachios7/lib",
+    # ] + select({
+    #     "//config/debug:debug?": ["-Isrc", "-Iexternal/mustachios7/test/src"],
+    #     "//conditions:default": ["-Itest/src",
+    #                              "-Iexternal/mustachios7/test/src"]
+    # }),
+]
+
+DEPS = [
+    "@mustachios7//lib:mustach",
+    "//src:s7_archive",
+    "//vendored/cjson",
+    "//vendored/logc",
+]
+
 cc_library(
     name = "mustachios7_s7_archive",
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
-    srcs = [
-        "libmustachios7_s7.c",
-        "libmustachios7_s7.h",
-        "mustachios7_s7.c",
-        "mustachios7_s7.h",
-        "mustachios7_scm.c",
-        "mustachios7_scm.h",
-
-        "mustachios7_cjson.c",
-        "mustachios7_cjson.h",
-        "mustachios7_json.c",
-        "mustachios7_json.h",
-
-        "mustachios7_wrap.c",
-        "mustachios7_wrap.h",
-
-        # "//lib:mustach.h",
-        # "//lib:mustachios7-wrap.h",
-        # "//test/src:ansi_colors.h",
-        # "//lib:trace.h",
-    ] + select({
-        "//config:debug?": ["debug.h"],
-        "//conditions:default": []
-    }),
+    srcs = SRCS,
     hdrs = ["libmustachios7_s7.h"],
-    copts = CLIB_COPTS + [
-        "-Ilib",
-        "-Ivendored/cjson", # cjson/cJSON.h
-        "-Iexternal/mustachios7/vendored/cjson",
-        "-Ivendored/logc",
-        "-Iexternal/mustachios7/vendored/logc",
-        "-Iexternal/mustachios7/vendored/logc",
-        "-Iexternal/mustachios7/lib",
-        "-Iexternal/libs7/src"
-    ] + select({
-        "//config:debug?": ["-Itest/src", "-Iexternal/mustachios7/test/src"],
-        "//conditions:default": ["-Itest/src",
-                                 "-Iexternal/mustachios7/test/src"]
-    }),
-    deps = [
-        "@mustachios7//lib:mustach",
-        "@mustachios7//vendored/cjson",
-        "@libs7//src:s7",
-        "//vendored/logc",
-    ],
+    copts = COPTS,
+    deps = DEPS,
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES + select({
-        "//config:debug?": ["DEBUG_TRACE"],
+        "//config/debug:debug?": ["DEBUG_TRACE"],
         "//conditions:default": []
     }) + select({
-        "//config:trace?": ["TRACE"],
+        "//config/debug:trace?": ["TRACE"],
         "//conditions:default": []
     })
 )
 
 cc_binary(
-    name  = "mustachios7_s7",  # create libcwalk_s7.{dylib,so}
+    name  = "mustachios7_s7",
     linkshared = True,
-    srcs  = [
-        "libmustachios7_s7.c",
-        "libmustachios7_s7.h",
-        "mustachios7_s7.c",
-        "mustachios7_s7.h",
-        "mustachios7_scm.c",
-        "mustachios7_scm.h",
-
-        "mustachios7_cjson.c",
-        "mustachios7_cjson.h",
-        "mustachios7_json.c",
-        "mustachios7_json.h",
-
-        "mustachios7_wrap.c",
-        "mustachios7_wrap.h",
-
-             ],
+    srcs = SRCS,
+    # deps = DEPS + ["//src:s7"],
     deps = [
         "@mustachios7//lib:mustach",
-        "@mustachios7//vendored/cjson",
-        "@libs7//src:s7",
+        # "//src:s7_archive",
+        "//vendored/cjson",
         "//vendored/logc",
     ],
-    copts = CLIB_COPTS + [
-        "-Ilib",
-        "-Ivendored/cjson",
-        "-Iexternal/mustachios7/vendored/cjson",
-        "-Ivendored/logc",
-        "-Iexternal/mustachios7/vendored/logc",
-        "-Iexternal/mustachios7/vendored/logc",
-        "-Iexternal/mustachios7/lib",
-        "-Iexternal/libs7/src"
-    ] + select({
-        "//config:debug?": ["-Itest/src", "-Iexternal/mustachios7/test/src"],
-        "//conditions:default": ["-Itest/src",
-                                 "-Iexternal/mustachios7/test/src"]
-    }),
+    copts = COPTS,
+    # copts = CLIB_COPTS + [
+    #     "-Ilib",
+    #     "-Ivendored/cjson",
+    #     "-Iexternal/libs7/vendored/cjson",
+    #     "-Ivendored/logc",
+    #     "-Iexternal/mustachios7/vendored/logc",
+    #     "-Iexternal/mustachios7/vendored/logc",
+    #     "-Iexternal/mustachios7/lib",
+    #     "-Iexternal/libs7/src"
+    # ] + select({
+    #     "//config/debug:debug?": ["-Itest/src", "-Iexternal/mustachios7/test/src"],
+    #     "//conditions:default": ["-Itest/src",
+    #                              "-Iexternal/mustachios7/test/src"]
+    # }),
     linkopts = CLIB_LINKOPTS,
     defines = CLIB_DEFINES,
 )

@@ -7,7 +7,6 @@ cc_library(
     hdrs = ["log.h"],
     copts = [
         "-std=c11",
-        # "-g",
     ],
     local_defines = ["LOG_USE_COLOR"],
     linkstatic = True,

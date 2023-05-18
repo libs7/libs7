@@ -33,7 +33,6 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     /* if (libs7_trace) */
     log_trace("_dlopen_clib: %s", lib);
 #endif
-
     char *libname = strdup(lib);
 
     // have we already loaded it?
@@ -113,10 +112,9 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 #endif
 
     s7_pointer val = s7_load_with_environment(s7, buf, e);
-    log_debug("0xxxxxxxxxxxxxxxx");
 
     if (val) {
-        /* if (libs7_verbose) */
+        if (libs7_verbose)
             log_debug("loaded %s", buf);
         utarray_push_back(Xdlopened, &libname); // add to dlopened list
         s7_pointer libs = s7_slot(s7, s7_make_symbol(s7, "*libraries*"));
@@ -128,9 +126,9 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
                 s7_cons(s7, s7_make_semipermanent_string(s7, buf), e),
                             s7_slot_value(libs)));
     } else {
-        log_error("mmmmmmmmmmmmmmmm");
+        log_error("FAIL: s7_load_with_environment %s", buf);
     }
-    log_debug("1xxxxxxxxxxxxxxxx");
+
     s7_set_curlet(s7, old_e);       /* restore incoming (curlet) */
     s7_gc_unprotect_at(s7, gc_loc);
     if (!val) {
@@ -142,7 +140,6 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 
 s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 {
-        log_trace("load_clib: %s", lib);
 #if defined(DEBUG_TRACE)
     if (libs7_trace)
         log_trace("load_clib: %s", lib);
@@ -156,7 +153,6 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
     if (libs7_debug)
         log_debug("init_fn_name: %s", init_fn_name);
 #endif
-        log_debug("init_fn_name: %s", init_fn_name);
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
     init_fn_ptr = dlsym(RTLD_MAIN_ONLY, init_fn_name); // mac: RTLD_SELF?
@@ -278,7 +274,6 @@ s7_scheme *libs7_init(void)
 {
   s7_scheme *s7 = s7_init();
   fs_api_init(s7);
-
 
   utarray_new(Xdlopened, &ut_str_icd);
 

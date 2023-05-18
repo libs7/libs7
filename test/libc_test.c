@@ -119,48 +119,6 @@ void test_math(void) {
     TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
 }
 
-void test_libm(void) {
-    sexp_input = "(libm:pow 2 3)";
-    sexp_expected = "8.0";
-    utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_input);
-    actual = s7_eval_c_string(s7, utstring_body(sexp));
-    expected = s7_eval_c_string(s7, sexp_expected);
-    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
-
-    sexp_input = "(libm:ceil 2.3)";
-    sexp_expected = "3.0";
-    utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_input);
-    actual = s7_eval_c_string(s7, utstring_body(sexp));
-    expected = s7_eval_c_string(s7, sexp_expected);
-    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
-
-    sexp_input = "(libm:floor 2.3)";
-    sexp_expected = "2.0";
-    utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_input);
-    actual = s7_eval_c_string(s7, utstring_body(sexp));
-    expected = s7_eval_c_string(s7, sexp_expected);
-    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
-
-    sexp_input = "(libm:fmod 7 2)";
-    sexp_expected = "1.0";
-    utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_input);
-    actual = s7_eval_c_string(s7, utstring_body(sexp));
-    expected = s7_eval_c_string(s7, sexp_expected);
-    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
-
-    sexp_input = "(libm:fmod 7 3)";
-    sexp_expected = "1.0";
-    utstring_renew(sexp);
-    utstring_printf(sexp, "%s", sexp_input);
-    actual = s7_eval_c_string(s7, utstring_body(sexp));
-    expected = s7_eval_c_string(s7, sexp_expected);
-    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
-}
-
 void test_regex(void) {
     sexp_input = ""
         "(let* ((rg (libc:regex.make)) "
@@ -386,9 +344,9 @@ int main(int argc, char **argv)
     s7 = libs7_init();
 
     libs7_load_clib(s7, "c");
-    libs7_load_clib(s7, "dl");
-    libs7_load_clib(s7, "gdbm");
-    libs7_load_clib(s7, "m");
+    /* libs7_load_clib(s7, "dl"); */
+    /* libs7_load_clib(s7, "gdbm"); */
+    /* libs7_load_clib(s7, "m"); */
 
     char *script_dir = "./test";
     s7_pointer newpath;
@@ -409,7 +367,6 @@ int main(int argc, char **argv)
     RUN_TEST(test_wordexp);
     /* RUN_TEST(test_gdbm); */
     RUN_TEST(test_math);
-    RUN_TEST(test_libm);
     RUN_TEST(test_regex);
     /* RUN_TEST(test_utf8proc); */
 

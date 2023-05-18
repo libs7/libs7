@@ -292,7 +292,6 @@ static enum sel sel(struct wrap *w, const char *name)
             result = S_none;
 #ifdef DEBUG_TRACE
         log_debug("app sel returned: %d", result);
-        /* struct Xexpl *x = (struct Xexpl*)w->closure; */
         /* DUMP_CLOSURE(x, 0); */
 #endif
         if (result == S_ok) { /* S_ok == 1 */

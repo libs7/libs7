@@ -17,8 +17,8 @@
 /* 	exit(EXIT_FAILURE); \ */
 /* 	} */
 
-#include "ansi_colors.h"
 #ifdef DEBUG_TRACE
+#include "ansi_colors.h"
 #include "debug.h"
 #endif
 
@@ -37,7 +37,7 @@ struct workbuf_s {
 static int start(void *closure)
 {
     TRACE_ENTRY(start)
-    struct expl *e = (struct expl*)closure;
+    struct tstack_s *e = (struct tstack_s*)closure;
     e->depth = 0;
     s7_pointer x = s7_nil(s7);
     e->selection = x;
@@ -54,7 +54,7 @@ static int compare(void *closure, const char *value)
 #ifdef DEBUG_TRACE
     log_debug("compare");
 #endif
-    struct expl *e = closure;
+    struct tstack_s *e = closure;
     s7_pointer o = e->selection;
 
     if (s7_is_real(o)) {
@@ -77,7 +77,7 @@ static int compare(void *closure, const char *value)
     }
 }
 
-static s7_pointer _handle_stack_predicate(struct expl *e, s7_pointer assoc)
+static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
 {
     s7_pointer selection;
     s7_pointer assoc_val = s7_cdr(assoc);
@@ -243,7 +243,7 @@ static s7_pointer _handle_stack_predicate(struct expl *e, s7_pointer assoc)
     return selection;
 }
 
-static s7_pointer _handle_stack_match(struct expl *e, s7_pointer assoc)
+static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
 {
     TRACE_ENTRY(_handle_stack_match);
     s7_pointer selection;
@@ -351,12 +351,12 @@ static s7_pointer _handle_stack_match(struct expl *e, s7_pointer assoc)
     return selection;
 }
 
-/* called by wrap, closure is app struct expl* */
+/* called by wrap, closure is app struct tstack_s* */
 static int sel(void *closure, const char *key)
 {
     // key NULL means: select current obj (topmost in stack?)
     TRACE_ENTRY(sel);
-    struct expl *e = closure;
+    struct tstack_s *e = closure;
     e->stack[e->depth].predicate = e->predicate;
 
 #ifdef DEBUG_TRACE
@@ -697,7 +697,7 @@ static int subsel(void *closure, const char *name)
     log_debug("\tname: '%s'", name);
 
 #endif
-    struct expl *e = closure;
+    struct tstack_s *e = closure;
 #ifdef DEBUG_TRACE
     DUMP_CLOSURE(e, e->depth);
 #endif
@@ -745,7 +745,7 @@ static int enter(void *closure, int objiter)
 #ifdef DEBUG_TRACE
     log_debug("predicate: %d", ((struct closure_hdr*)closure)->predicate);
 #endif
-    struct expl *e = closure;
+    struct tstack_s *e = closure;
     s7_pointer selected;
 
 #ifdef DEBUG_TRACE
@@ -940,7 +940,7 @@ static int enter(void *closure, int objiter)
 static int next(void *closure)
 {
     TRACE_ENTRY(next)
-	struct expl *e = closure;
+	struct tstack_s *e = closure;
 	/* s7_pointer o; */
 #ifdef DEBUG_TRACE
         DUMP_CLOSURE(e, e->depth);
@@ -991,7 +991,7 @@ static int next(void *closure)
 static int leave(void *closure, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(leave)
-        struct expl *e = closure;
+        struct tstack_s *e = closure;
 #ifdef DEBUG_TRACE
     log_debug("current stackframe");
     DUMP_CLOSURE(e, e->depth);
@@ -1036,7 +1036,7 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
 static int get(void *closure, struct mustach_sbuf *sbuf, int key)
 {
     TRACE_ENTRY(get)
-    struct expl *e = closure;
+    struct tstack_s *e = closure;
     const char *s;
 
 #ifdef DEBUG_TRACE
@@ -1188,7 +1188,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
 /* **************************************************************** */
 void dump_closure(void *closure)
 {
-    struct expl *e = closure;
+    struct tstack_s *e = closure;
 
     (void)closure;
     int d = e->depth;

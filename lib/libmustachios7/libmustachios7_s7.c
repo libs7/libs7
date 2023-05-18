@@ -8,7 +8,10 @@
 
 #include "log.h"
 #include "cJSON.h"
+#include "s7.h"
 #include "libmustachios7_s7.h"
+#include "mustachios7_s7.h"
+#include "mustachios7_cjson.h"
 #include "trace.h"
 /* #include "c_stacktrace.h" */
 
@@ -18,12 +21,12 @@
 /* 	exit(EXIT_FAILURE); \ */
 /* 	} */
 
-#include "ansi_colors.h"
 #ifdef DEBUG_TRACE
+#include "ansi_colors.h"
 #include "debug.h"
 #endif
 
-s7_scheme *s7;
+/* s7_scheme *s7; */
 
 /* ****************************************************************
    API
@@ -50,18 +53,33 @@ s7_pointer mustachios7_read_json(s7_scheme *s7, s7_pointer args)
                                                "a JSON string");
         return e;
     }
+#ifdef DEBUG_TRACE
     int len = s7_string_length(json_str);
     log_debug("json (scm) strlen: %d", len);
+#endif
     const char *json_c_str = s7_string(json_str);
     int len2 = strlen(json_c_str);
+#ifdef DEBUG_TRACE
     log_debug("json (c) strlen: %d", len2);
+#endif
     cJSON *jobj = cJSON_ParseWithLength(json_c_str, len2);
-    return s7_make_c_pointer_with_type(s7, jobj,
-                                       s7_make_symbol(s7, "cJSON*"),
-                                       s7_f(s7));
+    if (jobj == NULL) {
+        const char *error_ptr = cJSON_GetErrorPtr();
+        log_error("cJSON_ParseWithLength failure at '%s'", error_ptr);
+        fflush(NULL);
+        return s7_error(s7,
+                 s7_make_symbol(s7, "cJSON_ParseWithLength error"),
+                 s7_cons(s7,
+                         s7_make_string(s7, error_ptr),
+                         s7_nil(s7)));
+    } else {
+        return s7_make_c_pointer_with_type(s7, jobj,
+                                           s7_make_symbol(s7, "cJSON*"),
+                                           s7_f(s7));
+    }
 }
 
-s7_pointer mustachios7_render(s7_scheme *s7, s7_pointer args)
+s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
 {
     TRACE_ENTRY(mustachios7_render);
     TRACE_S7_DUMP("args", args);
@@ -83,23 +101,16 @@ s7_pointer mustachios7_render(s7_scheme *s7, s7_pointer args)
 
     //**** DATA
     s7_pointer data     = s7_cadr(args);
+
+#ifdef DEBUG_TRACE
     if (s7_is_c_pointer(data)) {
         log_debug("Data is c ptr");
         s7_pointer ptyp = s7_c_pointer_type(data);
         TRACE_S7_DUMP("json ptyp", ptyp);
         // call json processor
     }
+#endif
     TRACE_S7_DUMP("d", data);
-    // data: map, vector, string, number, #t, #f, or '() (ie any JSON value)
-    /* if ((!s7_is_hash_table(data)) */
-    /*     && (!libs7_is_alist(s7, data))) { */
-    /*     s7_pointer e = s7_wrong_type_arg_error(s7, */
-    /*                                            "mustach_render", // caller */
-    /*                                            2, */
-    /*                                            data, */
-    /*                                            "a hash-table or alist"); */
-    /*     return e; */
-    /* } */
 
     //**** PORT
     /* #f - return string only (default)
@@ -164,7 +175,7 @@ s7_pointer mustachios7_render(s7_scheme *s7, s7_pointer args)
     /* **** render **** */
     size_t size;            /* render outparam */
     char *ret;              /* render outparam */
-    struct expl e;
+    struct tstack_s e;
     e.root = (s7_pointer)data;
 #ifdef DEBUG_TRACE
     DUMP("root", e.root);
@@ -209,7 +220,7 @@ s7_pointer mustachios7_render(s7_scheme *s7, s7_pointer args)
         int rc = mustach_wrap_mem(s7_string(template),
                                   0, // tlength,
                                   &mustach_wrap_itf_scm,
-                                  &e, /* closure, struct expl* */
+                                  &e, /* closure, struct tstack_s* */
                                   flags,
                                   &ret,
                                   &size);
@@ -278,7 +289,7 @@ s7_pointer mustachios7_render(s7_scheme *s7, s7_pointer args)
         log_debug("GOT FILE PORT");
 #endif
         /* (void)data_scheme;          /\* currently unused *\/ */
-        struct expl e;
+        struct tstack_s e;
         e.root = (s7_pointer)data;
         s7_flush_output_port(s7, s7_current_output_port(s7));
         int rc = mustach_wrap_file(s7_string(template), 0, // tlength,
@@ -302,11 +313,12 @@ s7_pointer mustachios7_render(s7_scheme *s7, s7_pointer args)
 }
 
 /* void libmustachios7_s7_init(s7_scheme *s7) */
-s7_pointer libmustachios7_s7_init(s7_scheme *_s7)
+s7_pointer libmustachios7_s7_init(s7_scheme *s7)
 {
     TRACE_ENTRY(libmustachios7_s7_init);
     TRACE_LOG_DEBUG("libmustachios7_s7_init");
-    s7 = _s7;
+
+    /* s7 = _s7; */
     s7_pointer curr_env;
     curr_env = s7_inlet(s7, s7_nil(s7));
     s7_pointer old_shadow = s7_set_shadow_rootlet(s7, curr_env);
@@ -316,7 +328,7 @@ s7_pointer libmustachios7_s7_init(s7_scheme *_s7)
     /*           s7_make_function_star(s7, ...)); */
 
     s7_define_function_star(s7,
-                            "mustache:render", mustachios7_render,
+                            "mustache:render", g_mustachios7_render,
                             "(template #f) (data #f) (port #f) (flags 0)",
                             "(mustach:render template data (port p)) port defaults to current output port");
 
@@ -324,11 +336,6 @@ s7_pointer libmustachios7_s7_init(s7_scheme *_s7)
                             "json:read", mustachios7_read_json,
                             "(template #f) (data #f) (port #f) (flags 0)",
                             "(json:read str) encode a string as JSON");
-
-    /* s7_define_function_star(s7, */
-    /*                         "mustache:render-json", libs7_mustach_render_json, */
-    /*                         "(template #f) (data #f) (port #f) (flags 0)", */
-    /*                         "(mustach:render template data (port p)) port defaults to current output port"); */
 
     // a few routines needed by the mustache-s7 implementation
     // TODO: validate args xs is list, k is integer

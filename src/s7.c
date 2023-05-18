@@ -45357,6 +45357,7 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
   memcpy((void *)(internal_arglist + 2), (const void *)arglist, len);
   internal_arglist[len + 2] = ')';
   internal_arglist[len + 3] = '\0';
+
   local_args = s7_eval_c_string(sc, internal_arglist);
   gc_loc = gc_protect_1(sc, local_args);
   liberate(sc, b);

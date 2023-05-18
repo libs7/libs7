@@ -6,8 +6,10 @@
 #include "utarray.h"
 #include "utstring.h"
 
+#include "utils.h"
+
 #include "libs7.h"
-#include "libmustachios7_s7.h"
+//#include "libmustachios7_s7.h"
 
 #include "common.h"
 
@@ -39,14 +41,10 @@ void tearDown(void) {
 */
 void test_encoding(void) {
     char *json_str = "{\"name\": \"Bob\"}";
-    s7_pointer json
-        = s7_call(s7, s7_name_to_value(s7, "json:read"),
-                  s7_list(s7, 1, s7_make_string(s7, json_str)));
-    log_debug("pointer? %d", s7_is_c_pointer(json));
+    s7_pointer json = read_json(s7, json_str);
     s7_pointer t = s7_make_string(s7, "Hi, {{name}}!");
     s7_pointer result = s7_call(s7, s7_name_to_value(s7, "mustache:render"),
                                 s7_list(s7, 2, t, json));
-    log_debug("xxxx");
 }
 
 /* void test_object(void) { */
@@ -109,24 +107,31 @@ void test_encoding(void) {
 
 int main(int argc, char **argv)
 {
-    if ( !getenv("BAZEL_TEST") ) {
-        log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" );
-        exit(EXIT_FAILURE);
-    }
+    fprintf(stderr, "MAIN\n");
+    s7 = initialize("cjson", argc, argv);
 
-    /* log_trace("WS: %s", getenv("TEST_WORKSPACE")); */
-    /* log_debug("ARGV[0]: %s", argv[0]); */
-    /* log_debug("CWD: %s", getcwd(NULL, 0)); */
+    /* if ( !getenv("BAZEL_TEST") ) { */
+    /*     log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" ); */
+    /*     exit(EXIT_FAILURE); */
+    /* } */
 
-    argc = gopt (argv, options);
-    (void)argc;
-    gopt_errors (argv[0], options);
+    /* /\* log_trace("WS: %s", getenv("TEST_WORKSPACE")); *\/ */
+    /* /\* log_debug("ARGV[0]: %s", argv[0]); *\/ */
+    /* /\* log_debug("CWD: %s", getcwd(NULL, 0)); *\/ */
 
-    set_options("mustachios7", options);
+    /* argc = gopt (argv, options); */
+    /* (void)argc; */
+    /* gopt_errors (argv[0], options); */
 
-    if (debug) print_debug_env();
+    /* set_options("mustachios7", options); */
 
-    s7 = libs7_init();
+    /* if (debug) print_debug_env(); */
+
+    /* fprintf(stderr, "calling libs7_init\n"); */
+
+    /* s7 = libs7_init(); */
+
+    /* s7_gc_on(s7, s7_f(s7)); */
 
     libs7_load_clib(s7, "mustachios7");
 
