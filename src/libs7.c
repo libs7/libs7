@@ -4,6 +4,7 @@
 #undef _GNU_SOURCE
 #include <libgen.h>
 
+#include "utarray.h"
 #include "s7.h"
 #include "libs7.h"
 
@@ -12,21 +13,72 @@ bool libs7_debug          = false;
 bool libs7_debug_runfiles = false;
 bool libs7_trace          = false;
 
+UT_array *Xdlopened;             /* list of libs we have loaded dynamically */
+
 void fs_api_init(s7_scheme *sc);
 
 static char buf[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
+static int _strsort(const void *_a, const void *_b)
+{
+    const char *a = *(const char* const *)_a;
+    const char *b = *(const char* const *)_b;
+    return strcmp(a,b);
+}
+
 /* **************************************************************** */
-static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
+static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 {
 #if defined(DEBUG_TRACE)
-    if (libs7_trace)
-        log_trace("_dload_clib: %s", lib);
+    /* if (libs7_trace) */
+    log_trace("_dlopen_clib: %s", lib);
 #endif
+
+    char *libname = strdup(lib);
+
+    // have we already loaded it?
+    const char **p = NULL;
+/*     while ( (p=(const char**)utarray_next(strs,p)) != NULL ) { */
+/*         s = *p; */
+/*         printf("finding %s\n",s); */
+/* #ifdef __cplusplus */
+
+    bool already_loaded = false;
+    (void)already_loaded;
+
+    log_debug("dlopened ct: %d", utarray_len(Xdlopened));
+    if (utarray_len(Xdlopened) > 0) {
+        log_debug("searching dlopened list for: %s", lib);
+        utarray_sort(Xdlopened, _strsort);
+        log_debug("sorted");
+        p = NULL;
+        const char *s;
+        int i = 0;
+        while ( (p=(const char**)utarray_next(Xdlopened,p)) != NULL ) {
+            s = *p;
+            log_debug("item %d: %s", i, s);
+            if (strncmp(s, libname, strlen(libname)) == 0) {
+                log_debug("MATCH");
+                already_loaded = true;
+                break;
+            } else {
+                log_debug("MISMATCH");
+                i++;
+            }
+            /* p = (const char**)utarray_find(dlopened, lib, strsort); */
+            /* p = utarray_find(Xdlopened, &libname, _strsort); */
+            /* log_debug("LOADED %s? %s", lib, *p); */
+            /* free(needle); */
+        }
+    }
+
+    /* if (already_loaded) */
+
     /* int len = strlen(libname); */
     sprintf(buf, "lib%s_s7_init", lib);
+    log_debug("init fn: %s", init_fn_name);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
-    s7_pointer init_fn_sym = s7_make_symbol(s7, buf);
+    s7_pointer init_fn_sym = s7_make_symbol(s7, init_fn_name); // buf);
     s7_pointer init_list = s7_list(s7, 2, init_sym, init_fn_sym);
 
     s7_pointer e = s7_inlet(s7, init_list);
@@ -34,7 +86,7 @@ static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
     s7_pointer old_e = s7_set_curlet(s7, e);
 
     char *ws = getenv("TEST_WORKSPACE");
-    /* log_debug("dload ns test ws: %s", ws); */
+    /* log_debug("dlopen ns test ws: %s", ws); */
     char *fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
@@ -45,7 +97,7 @@ static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
         }
     } else {
         ws = getenv("BUILD_WORKSPACE_DIRECTORY");
-        /* log_debug("dload ns build ws: %s", ws); */
+        /* log_debug("dlopen ns build ws: %s", ws); */
         if (strncmp(basename(ws), "libs7", 5) == 0)
             fmt = "lib/lib%s/lib%s_s7%s";
         else
@@ -61,10 +113,12 @@ static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
 #endif
 
     s7_pointer val = s7_load_with_environment(s7, buf, e);
+    log_debug("0xxxxxxxxxxxxxxxx");
 
     if (val) {
-        if (libs7_verbose)
+        /* if (libs7_verbose) */
             log_debug("loaded %s", buf);
+        utarray_push_back(Xdlopened, &libname); // add to dlopened list
         s7_pointer libs = s7_slot(s7, s7_make_symbol(s7, "*libraries*"));
         snprintf(buf, strlen(lib) + 3, "*%s*", lib);
         s7_define(s7, s7_nil(s7), s7_make_symbol(s7, buf), e);
@@ -73,7 +127,10 @@ static s7_pointer _dload_clib(s7_scheme *s7, char *lib)
               s7_cons(s7,
                 s7_cons(s7, s7_make_semipermanent_string(s7, buf), e),
                             s7_slot_value(libs)));
+    } else {
+        log_error("mmmmmmmmmmmmmmmm");
     }
+    log_debug("1xxxxxxxxxxxxxxxx");
     s7_set_curlet(s7, old_e);       /* restore incoming (curlet) */
     s7_gc_unprotect_at(s7, gc_loc);
     if (!val) {
@@ -102,12 +159,12 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
         log_debug("init_fn_name: %s", init_fn_name);
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
-    init_fn_ptr = dlsym(RTLD_SELF, init_fn_name); // mac: RTLD_SELF?
+    init_fn_ptr = dlsym(RTLD_MAIN_ONLY, init_fn_name); // mac: RTLD_SELF?
     if (init_fn_ptr == NULL) {
 /* #if defined(DEBUG_TRACE) */
-        log_debug("%s not statically linked, trying dload", init_fn_name);
+        log_debug("%s not statically linked, trying dlopen", init_fn_name);
 /* #endif */
-        s7_pointer res = _dload_clib(s7, lib);
+        s7_pointer res = _dlopen_clib(s7, lib, init_fn_name);
         return res;
     }
 
@@ -115,6 +172,8 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
     if (libs7_debug)
         log_debug("dlsym init_fn_ptr: %x", init_fn_ptr);
 #endif
+
+    // we found the init fn, so unload, then reload
 
     s7_pointer e = s7_inlet(s7, s7_nil(s7)); // empty env
     s7_int gc_loc = s7_gc_protect(s7, e);
@@ -215,10 +274,13 @@ static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer arg)
 }
 
 s7_scheme *libs7_init(void)
-/* WARNING: dload logic assumes file path <libns>/<libname><dso_ext> */
+/* WARNING: dlopen logic assumes file path <libns>/<libname><dso_ext> */
 {
   s7_scheme *s7 = s7_init();
   fs_api_init(s7);
+
+
+  utarray_new(Xdlopened, &ut_str_icd);
 
   //FIXME: add runfiles to *load-path*?
   s7_define_function(s7, "load-clib", g_libs7_load_clib,
@@ -226,7 +288,7 @@ s7_scheme *libs7_init(void)
                      0,         /* optional: 0 */
                      false,     /* rest args: none */
                      "(load-clib 'libsym) initializes statically linked clib archives and dsos, "
-                     "and dloads and initializes dynamically linked dsos. "
+                     "and dlopens and initializes dynamically linked dsos. "
                      "libsym may be symbol or string; it should not include 'lib' prefix and '_s7' suffix.");
 
   s7_define_function(s7, "alist?", g_is_alist,

@@ -374,6 +374,39 @@ cc_test(
 
 ################################################################
 cc_test(
+    name = "cjson",
+    linkstatic = True,
+    srcs = ["cjson_test.c", "common.c", "common.h"] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libmustachios7:mustachios7_s7" ## , "//lib/libmustachios7:libmustachios7_s7.h",
+        ],
+        "//conditions:default": []
+    }),
+    defines = DEFINES,
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": [
+            "//lib/libmustachios7:mustachios7_s7_archive"
+        ],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libmustachios7:mustachios7_s7"
+        ],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Ilib/libmustachios7",
+        "-Iexternal/libs7/lib/libmustachios7",
+        "-Iexternal/mustachios7/lib",
+        "-Iexternal/mustachios7/vendored/cjson",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
     name = "cwalk",
     linkstatic = True,
     srcs = ["cwalk_test.c", "common.c", "common.h"] + select({

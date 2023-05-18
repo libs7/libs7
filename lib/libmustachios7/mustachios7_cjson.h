@@ -1,9 +1,9 @@
 /*
- Author: José Bollo <jobol@nonadev.net>
-
+ Original author: José Bollo <jobol@nonadev.net>
  https://gitlab.com/jobol/mustach
-
  SPDX-License-Identifier: ISC
+
+ Modified by Gregg Reynolds
 */
 
 #ifndef _mustachios7_cjson_h_included_
@@ -14,7 +14,7 @@
  * library by providing integrated functions.
  */
 
-#include "cjson/cJSON.h"
+#include "cJSON.h"
 /* #include "mustach-json.h" */
 #include "mustachios7_json.h"
 
@@ -22,6 +22,8 @@
  * Wrap interface used internally by mustach cJSON functions.
  * Can be used for overriding behaviour.
  */
+
+extern const struct mustach_wrap_itf mustach_wrap_itf_json;
 
 /**
  * mustach_fprintf - Renders the mustache 'template' in 'file' for 'root'.
@@ -44,7 +46,7 @@ int mustach_fprintf(FILE * restrict file,
 
 /* extern int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file); */
 
-void *mustach_deserialize(char *json_str, size_t len);
+void *mustach_encode_cjson(char *json_str, size_t len);
 
 void mustach_free(void *json_c);
 
@@ -81,7 +83,7 @@ int mustach_dprintf(int fd,
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-/* extern int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flags, char **result, size_t *size); */
+extern int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flags, char **result, size_t *size);
 
 
 /**

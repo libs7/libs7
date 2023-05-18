@@ -34,7 +34,7 @@ cc_library(
     #     ],
     #     "//conditions:default":  []
     # }),
-    deps  = ["//vendored/logc"],
+    deps  = ["//vendored/logc", "//vendored/uthash"],
     hdrs  = ["libs7.h", "s7.h"],
     copts = [
         "-Wall",
@@ -44,6 +44,8 @@ cc_library(
         "-Isrc",
         "-Ivendored/logc",
         "-Iexternal/libs7/vendored/logc",
+        "-Ivendored/uthash",
+        "-Iexternal/libs7/vendored/uthash",
         "-Iexernal/libs7/src",
     ] + select({
         "//:macos": [

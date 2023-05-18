@@ -7,42 +7,42 @@ extern s7_scheme *s7;
 /* HACK: need these structs from mustach-wrap and mustach-libs7
    so we can deref void* closure in mustach.c
 */
-struct Xwrap {
-    int predicate; /* so mustach.c can signal that metatag is '?' */
-	/* original interface */
-	const struct mustach_wrap_itf *itf;
+/* struct Xwrap { */
+/*     int predicate; /\* so mustach.c can signal that metatag is '?' *\/ */
+/* 	/\* original interface *\/ */
+/* 	const struct mustach_wrap_itf *itf; */
 
-	/* original closure */
-	void *closure;
+/* 	/\* original closure *\/ */
+/* 	void *closure; */
 
-	/* flags */
-	int flags;
+/* 	/\* flags *\/ */
+/* 	int flags; */
 
-	/* emiter callback */
-	void /* mustach_emit_cb_t */ *emitcb;
+/* 	/\* emiter callback *\/ */
+/* 	void /\* mustach_emit_cb_t *\/ *emitcb; */
 
-	/* write callback */
-	void /* mustach_write_cb_t */ *writecb;
-};
+/* 	/\* write callback *\/ */
+/* 	void /\* mustach_write_cb_t *\/ *writecb; */
+/* }; */
 
-/* must match struct expl in mustach-libs7.c */
-struct Xexpl {
-    int predicate;
-    bool lambda;
-    s7_pointer root;
-    s7_pointer selection;       /* ? */
-    int depth;
-    struct {
-        s7_pointer cont;        /* context? containing object? */
-        s7_pointer obj;         /* current elt of ctx?  */
-        s7_pointer iter;
-        int is_objiter;         /* obj type has iterators */
-        size_t index, count;    /* current idx, sibling count */
-        int predicate;            /*  */
-        bool lambda;            /*  */
-        int  workbuf_idx;
-    } stack[MUSTACH_MAX_DEPTH];
-};
+/* /\* must match struct expl in mustach-libs7.c *\/ */
+/* struct Xexpl { */
+/*     int predicate; */
+/*     bool lambda; */
+/*     s7_pointer root; */
+/*     s7_pointer selection;       /\* ? *\/ */
+/*     int depth; */
+/*     struct { */
+/*         s7_pointer cont;        /\* context? containing object? *\/ */
+/*         s7_pointer obj;         /\* current elt of ctx?  *\/ */
+/*         s7_pointer iter; */
+/*         int is_objiter;         /\* obj type has iterators *\/ */
+/*         size_t index, count;    /\* current idx, sibling count *\/ */
+/*         int predicate;            /\*  *\/ */
+/*         bool lambda;            /\*  *\/ */
+/*         int  workbuf_idx; */
+/*     } stack[MUSTACH_MAX_DEPTH]; */
+/* }; */
 
 struct metastack_s {
     const char *key; /* tagkey */
@@ -55,7 +55,7 @@ struct metastack_s {
     signed int workbuf_idx; /* -1 if hashtag is not a lambda; index into workbuf_stack */
 };
 
-void dump_closure(struct Xexpl *closure);
+/* void dump_closure(struct Xexpl *closure); */
 void dump_metastack(int idx, void *ms);
 
 #define DUMP(msg, x) (({char*s=s7_object_to_c_string(s7, x);log_debug("%s: %s", msg, s);fflush(NULL);free(s);}))

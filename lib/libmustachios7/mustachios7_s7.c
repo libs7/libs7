@@ -1214,7 +1214,7 @@ void dump_closure(void *closure)
     fflush(NULL);
 }
 
-const struct mustach_wrap_itf mustach_s7_wrap_itf = {
+const struct mustach_wrap_itf mustach_wrap_itf_scm = {
 	.start = start,
 	.stop = NULL,
 	.compare = compare,

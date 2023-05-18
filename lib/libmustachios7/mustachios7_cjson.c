@@ -230,7 +230,7 @@ static void dump_closure(void *closure)
     fflush(NULL);
 }
 
-const struct mustach_wrap_itf mustach_cJSON_wrap_itf = {
+const struct mustach_wrap_itf mustach_wrap_itf_json = {
 	.start = start,
 	.stop = NULL,
 	.compare = compare,
@@ -251,11 +251,12 @@ int mustach_fprintf(FILE * restrict file,
 {
     (void)data_schema;
     struct expl e;
+
     e.root = (cJSON*)json_root;
-    return mustach_json_file(template, tlength, &mustach_cJSON_wrap_itf, &e, flags, file);
+    return mustach_json_file(template, tlength, &mustach_wrap_itf_json, &e, flags, file);
 }
 
-void *mustach_deserialize(char *json_str, size_t len)
+void *mustach_encode_cjson(char *json_str, size_t len)
 {
     cJSON *json_data = cJSON_ParseWithLength(json_str, len);
     return json_data;
@@ -266,19 +267,19 @@ void mustach_free(void *json_c)
     cJSON_Delete((cJSON*)json_c);
 }
 
-/* int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file) */
-/* { */
-/* 	struct expl e; */
-/* 	e.root = root; */
-/* 	return mustach_json_file(template, length, &mustach_cJSON_wrap_itf, &e, flags, file); */
-/* } */
+int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file)
+{
+	struct expl e;
+	e.root = root;
+	return mustach_json_file(template, length, &mustach_wrap_itf_json, &e, flags, file);
+}
 
 int mustach_cJSON_fd(const char *template, size_t tlength,
                      cJSON *root, int flags, int fd)
 {
 	struct expl e;
 	e.root = root;
-	return mustach_json_fd(template, tlength, &mustach_cJSON_wrap_itf, &e, flags, fd);
+	return mustach_json_fd(template, tlength, &mustach_wrap_itf_json, &e, flags, fd);
 }
 
 size_t mustach_asprintf(char **ret,
@@ -292,7 +293,7 @@ size_t mustach_asprintf(char **ret,
     e.root = (cJSON*)json_root;
     size_t size;
     int rc = mustach_json_mem(template, tlength,
-                              &mustach_cJSON_wrap_itf, &e,
+                              &mustach_wrap_itf_json, &e,
                               flags? flags
                               : Mustach_With_AllExtensions,
                               ret,
@@ -309,20 +310,20 @@ int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flag
 {
 	struct expl e;
 	e.root = root;
-	return mustach_json_mem(template, length, &mustach_cJSON_wrap_itf, &e, flags, result, size);
+	return mustach_json_mem(template, length, &mustach_wrap_itf_json, &e, flags, result, size);
 }
 
 int mustach_cJSON_write(const char *template, size_t length, cJSON *root, int flags, mustach_write_cb_t *writecb, void *closure)
 {
 	struct expl e;
 	e.root = root;
-	return mustach_json_write(template, length, &mustach_cJSON_wrap_itf, &e, flags, writecb, closure);
+	return mustach_json_write(template, length, &mustach_wrap_itf_json, &e, flags, writecb, closure);
 }
 
 int mustach_cJSON_emit(const char *template, size_t length, cJSON *root, int flags, mustach_emit_cb_t *emitcb, void *closure)
 {
 	struct expl e;
 	e.root = root;
-	return mustach_json_emit(template, length, &mustach_cJSON_wrap_itf, &e, flags, emitcb, closure);
+	return mustach_json_emit(template, length, &mustach_wrap_itf_json, &e, flags, emitcb, closure);
 }
 

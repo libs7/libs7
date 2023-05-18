@@ -141,7 +141,7 @@ typedef int mustach_emit_cb_t(void *closure, const char *buffer, size_t size, in
  * Mustach interface used internally by mustach wrapper functions.
  * Can be used for overriding behaviour.
  */
-static const struct mustach_itf mustach_wrap_itf;
+static const struct mustach_itf mustach_itf_json;
 
 /* /\** */
 /*  * Global hook for providing partials. When set to a not NULL value, the pointed */
@@ -196,6 +196,8 @@ static const struct mustach_itf mustach_wrap_itf;
 /*  * Returns 0 in case of success, -1 with errno set in case of system error */
 /*  * a other negative value in case of error. */
 /*  *\/ */
+int mustach_json_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size);
+
 /* static int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size); */
 
 /* /\** */
