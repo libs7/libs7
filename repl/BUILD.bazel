@@ -27,6 +27,7 @@ cc_binary(
             # "//lib/libutf8proc:utf8proc_s7",
             # "//lib/libmustach:mustach_s7",
             "//lib/libmustachios7:mustachios7_s7",
+            "//lib/libtoml:toml_s7",
         ],
         "//conditions:default": []
     }),
@@ -46,6 +47,7 @@ cc_binary(
             # "//lib/libutf8proc:utf8proc_s7_archive",
             # "//lib/libmustach:mustach_s7_archive",
             "//lib/libmustachios7:mustachios7_s7_archive",
+            "//lib/libtoml:toml_s7_archive",
         ],
         "//conditions:default": []
     }),
@@ -65,6 +67,7 @@ cc_binary(
             # "//lib/libutf8proc:utf8proc_s7",
             # "//lib/libmustach:mustach_s7",
             "//lib/libmustachios7:mustachios7_s7",
+            "//lib/libtoml:toml_s7",
         ],
         "//conditions:default": []
     }),

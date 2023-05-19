@@ -403,6 +403,87 @@ cc_test(
 
 ################################################################
 cc_test(
+    name = "toml",
+    linkstatic = True,
+    srcs = ["toml_test.c", "common.c", "common.h"] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libtoml:toml_s7.c"  # , "//lib/libtoml:libtoml_s7.h",
+        ],
+        "//conditions:default": []
+    }),
+    defines = DEFINES,
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": ["//lib/libtoml:toml_s7_archive"],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libtoml:toml_s7"
+        ],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_archive",
+    linkstatic = True,
+    srcs = ["toml_test.c",
+            "common.c", "common.h",
+            "//src:libs7.h"],
+    defines = DEFINES,
+    deps = DEPS + [
+        "//src:s7_archive",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_link_shared",
+    linkstatic = True,
+    srcs = [
+        "toml_test.c", "common.c", "common.h",
+        "//lib/libtoml:toml_s7.c" ## , "//lib/libtoml:libtoml_s7.h",
+    ],
+    defines = DEFINES,
+    deps = DEPS,
+    copts = COPTS + [
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_link_runtime",
+    linkstatic = True,
+    srcs = ["toml_test.c", "common.c", "common.h"],
+    defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    deps = DEPS,
+    data = ["//lib/libtoml:toml_s7"],
+    copts = COPTS + [
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
     name = "utf8proc",
     linkstatic = True,
     srcs = ["utf8proc_test.c", "common.c", "common.h"] + select({

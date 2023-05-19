@@ -2,6 +2,7 @@
 #define TEST_COMMON_H
 
 #include "gopt.h"
+#include "libs7.h"
 
 void print_usage(char *test);
 

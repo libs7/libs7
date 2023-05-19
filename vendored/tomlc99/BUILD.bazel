@@ -1,0 +1,7 @@
+cc_library(
+    name       = "toml",
+    linkstatic = True,
+    srcs       = ["toml.c"],
+    hdrs       = ["toml.h"],
+    visibility = ["//visibility:public"]
+)
