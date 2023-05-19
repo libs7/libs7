@@ -71,51 +71,51 @@ static s7_pointer toml_toml_array_nelem(s7_scheme *sc, s7_pointer args)
 }
 
 
-/* -------- toml_toml_vector_ref -------- */
-static s7_pointer toml_toml_vector_ref(s7_scheme *sc, s7_pointer args)
+/* -------- toml_toml_array_ref -------- */
+static s7_pointer toml_toml_array_ref(s7_scheme *sc, s7_pointer args)
 {
-    log_debug("toml_toml_vector_ref");
+    log_debug("toml_toml_array_ref");
     s7_pointer p, arg;
-    toml_array_t* vector;
+    toml_array_t* array;
     int idx;
     p = args;
     arg = s7_car(p);
 
     // extract the c pointer
-    vector = (toml_array_t*)s7_c_pointer(arg);
+    array = (toml_array_t*)s7_c_pointer(arg);
 
     p = s7_cdr(p);
     arg = s7_car(p);
     if (s7_is_integer(arg))
         idx = (int)s7_integer(arg);
-    else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "toml:vector-ref", 15), 2, arg, integer_string));
+    else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "toml:array-ref", 15), 2, arg, integer_string));
 
     toml_datum_t datum;
 
-    datum = toml_string_at(vector, idx);
+    datum = toml_string_at(array, idx);
     if (datum.ok) { return(s7_make_string(sc, datum.u.s)); }
 
-    datum = toml_bool_at(vector, idx);
+    datum = toml_bool_at(array, idx);
     if (datum.ok) { return(s7_make_boolean(sc, datum.u.b)); }
 
-    datum = toml_int_at(vector, idx);
+    datum = toml_int_at(array, idx);
     if (datum.ok) { return(s7_make_integer(sc, datum.u.i)); }
 
-    datum = toml_double_at(vector, idx);
+    datum = toml_double_at(array, idx);
     if (datum.ok) { return(s7_make_real(sc, datum.u.d)); }
 
-    datum = toml_timestamp_at(vector, idx);
+    datum = toml_timestamp_at(array, idx);
     if (datum.ok) {
         /* not yet supported */
         return(s7_f(sc));
     }
 
-    toml_array_t *array_ptr = toml_array_at(vector, idx);
+    toml_array_t *array_ptr = toml_array_at(array, idx);
     if (array_ptr) {
         return(s7_make_c_pointer_with_type(sc, (void*)array_ptr, toml_array_t__symbol, s7_f(sc)));
     }
 
-    toml_table_t *table_val = toml_table_at(vector, idx);
+    toml_table_t *table_val = toml_table_at(array, idx);
     if (table_val) {
         return(s7_make_c_pointer_with_type(sc, (void*)table_val, toml_array_t__symbol, s7_f(sc)));
     }
@@ -313,7 +313,10 @@ static s7_pointer toml_toml_table_ref(s7_scheme *sc, s7_pointer args)
     toml_datum_t datum;
 
     datum = toml_string_in(table, key);
-    if (datum.ok) { return(s7_make_string(sc, datum.u.s)); }
+    if (datum.ok) {
+        // FIXME: free(datum.u.s)???
+        return(s7_make_string(sc, datum.u.s));
+    }
 
     datum = toml_bool_in(table, key);
     if (datum.ok) { return(s7_make_boolean(sc, datum.u.b)); }
@@ -478,12 +481,12 @@ static s7_pointer toml_toml_table_in(s7_scheme *sc, s7_pointer args)
 static s7_pointer toml_toml_array_kind(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p, arg;
-  toml_array_t* vector;
+  toml_array_t* array;
   p = args;
   arg = s7_car(p);
   // toml_toml_array_kind_0 = (toml_array_t*)s7_c_pointer_with_type(sc, arg, toml_array_t__symbol, __func__, 0);
-  vector = (toml_array_t*)s7_c_pointer(arg);
-  char c = toml_array_kind(vector);
+  array = (toml_array_t*)s7_c_pointer(arg);
+  char c = toml_array_kind(array);
   return(s7_make_character(sc, c));
 }
 
@@ -492,12 +495,12 @@ static s7_pointer toml_toml_array_kind(s7_scheme *sc, s7_pointer args)
 static s7_pointer toml_toml_array_type(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p, arg;
-  toml_array_t* vector;
+  toml_array_t* array;
   p = args;
   arg = s7_car(p);
   /* toml_toml_array_type_0 = (toml_array_t*)s7_c_pointer_with_type(sc, arg, toml_array_t__symbol, __func__, 0); */
-  vector = (toml_array_t*)s7_c_pointer(arg);
-  char c = toml_array_type(vector);
+  array = (toml_array_t*)s7_c_pointer(arg);
+  char c = toml_array_type(array);
   return(s7_make_character(sc, c));
   /* return(s7_make_integer(sc, (s7_int)toml_array_type(toml_toml_array_type_0))); */
 }
@@ -560,7 +563,7 @@ static s7_pointer toml_toml_table_key(s7_scheme *sc, s7_pointer args)
   p = args;
   arg = s7_car(p);
   /* toml_toml_table_key_0 = (toml_table_t*)s7_c_pointer_with_type(sc, arg, toml_table_t__symbol, __func__, 0); */
-  table = (toml_table_t*)s7_c_pointer(sc, arg);
+  table = (toml_table_t*)s7_c_pointer(arg);
   return(s7_make_string(sc, (char*)toml_table_key(table)));
 }
 
@@ -652,109 +655,134 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:ucs-to-utf8"),
-            s7_make_typed_function(sc, "toml:ucs-to-utf8", toml_toml_ucs_to_utf8, 2, 0, false, "int toml_ucs_to_utf8(int64_t char*)", pl_iis));
+            s7_make_typed_function(sc, "toml:ucs-to-utf8", toml_toml_ucs_to_utf8, 2, 0, false,
+                                   "(toml:ucs-to-utf8 c)", pl_iis));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:utf8-to-ucs"),
-            s7_make_typed_function(sc, "toml:utf8-to-ucs", toml_toml_utf8_to_ucs, 3, 0, false, "int toml_utf8_to_ucs(char* int int64_t*)", pl_isix));
+            s7_make_typed_function(sc, "toml:utf8-to-ucs", toml_toml_utf8_to_ucs, 3, 0, false,
+                                   "(toml:utf8_to_ucs c)", pl_isix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-key"),
-            s7_make_typed_function(sc, "toml:table-key", toml_toml_table_key, 1, 0, false, "char* toml_table_key(toml_table_t*)", pl_sx));
+            s7_make_typed_function(sc, "toml:table-key", toml_toml_table_key, 1, 0, false, "(toml:table-key table key) returns the value of table at key.", pl_sx));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-ntab"),
-            s7_make_typed_function(sc, "toml:table-ntab", toml_toml_table_ntab, 1, 0, false, "int toml_table_ntab(toml_table_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:table-ntab", toml_toml_table_ntab, 1, 0, false, "(toml:table-ntab t) returns number of tables in table t.", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-subtable-count"),
-            s7_make_typed_function(sc, "toml:table-subtable-count", toml_toml_table_ntab, 1, 0, false, "int toml_table_ntab(toml_table_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:table-subtable-count", toml_toml_table_ntab, 1, 0, false, "(toml:table-subtable-count t) alias of toml:table-ntab.", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-narr"), // nbr of arrays
-            s7_make_typed_function(sc, "toml:table-narr", toml_toml_table_narr, 1, 0, false, "int toml_table_narr(toml_table_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:table-narr", toml_toml_table_narr, 1, 0, false, "(toml:table-narr t)", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-vector-count"),
-            s7_make_typed_function(sc, "toml:table-vector-count", toml_toml_table_narr, 1, 0, false, "int toml_table_narr(toml_table_t*)", pl_ix));
+            s7_make_symbol(sc, "toml:table-array-count"),
+            s7_make_typed_function(sc, "toml:table-array-count", toml_toml_table_narr, 1, 0, false, "(toml:table-array-count t) alias of toml:table-narr.", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-nkval"),
-            s7_make_typed_function(sc, "toml:table-nkval", toml_toml_table_nkval, 1, 0, false, "int toml_table_nkval(toml_table_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:table-nkval", toml_toml_table_nkval, 1, 0, false, "(toml:table-nkval t) nbr of kv pairs in t.", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-size"), // R6RS
-            s7_make_typed_function(sc, "toml:table-size", toml_toml_table_nkval, 1, 0, false, "int toml_table_nkval(toml_table_t*)", pl_ix));
+            s7_make_symbol(sc, "toml:table-entries-count"), // R6RS: table-size
+            s7_make_typed_function(sc, "toml:table-entries-count",
+                                   toml_toml_table_nkval, 1, 0, false,
+                                   "(toml:table-entries-count t) alias of toml_table-nkval", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:array-key"),
-            s7_make_typed_function(sc, "toml:array-key", toml_toml_array_key, 1, 0, false, "char* toml_array_key(toml_array_t*)", pl_sx));
+            s7_make_typed_function(sc, "toml:array-key", toml_toml_array_key, 1, 0, false,
+                                   "(toml:array-key a) returns key of array a", pl_sx));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:array-type"),
-            s7_make_typed_function(sc, "toml:array-type", toml_toml_array_type, 1, 0, false, "int toml_array_type(toml_array_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:array-type", toml_toml_array_type, 1, 0, false,
+                                   "(toml:array-type a) returns type of vals of array", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:array-kind"),
-            s7_make_typed_function(sc, "toml:array-kind", toml_toml_array_kind, 1, 0, false, "int toml_array_kind(toml_array_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:array-kind", toml_toml_array_kind, 1, 0, false,
+                                   "(toml:array-kind a) returns 'kind' or array (t, a, v or m)", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-ref"),
             s7_make_typed_function(sc, "toml:table-ref",
-                                   toml_toml_table_ref, 2, 0, false, "void* toml_table_ref(toml_table_t* char*)", pl_xxs));
+                                   toml_toml_table_ref, 2, 0, false,
+                                   "(toml:table-ref t k) returns value of table t at key k", pl_xxs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-in"),
-            s7_make_typed_function(sc, "toml:table-in", toml_toml_table_in, 2, 0, false, "toml_table_t* toml_table_in(toml_table_t* char*)", pl_xxs));
+            s7_make_typed_function(sc, "toml:table-in", toml_toml_table_in, 2, 0, false,
+                                   "(toml:table-in t k) returns value of t at k, if val is a table", pl_xxs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:array-in"),
-            s7_make_typed_function(sc, "toml:array-in", toml_toml_array_in, 2, 0, false, "toml_array_t* toml_array_in(toml_table_t* char*)", pl_xxs));
+            s7_make_typed_function(sc, "toml:array-in", toml_toml_array_in, 2, 0, false,
+                                   "(toml:array-in t k) returns value of t at k, if val is an array", pl_xxs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:timestamp-in"),
-            s7_make_typed_function(sc, "toml:timestamp-in", toml_toml_timestamp_in, 2, 0, false, "toml_datum_t toml_timestamp_in(toml_table_t* char*)", pl_txs));
+            s7_make_typed_function(sc, "toml:timestamp-in", toml_toml_timestamp_in, 2, 0, false,
+                                   "(toml:timestamp-in t k) returns value of t at k, if val is a timestamp", pl_txs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:double-in"),
-            s7_make_typed_function(sc, "toml:double-in", toml_toml_double_in, 2, 0, false, "toml_datum_t toml_double_in(toml_table_t* char*)", pl_txs));
+            s7_make_typed_function(sc, "toml:double-in", toml_toml_double_in, 2, 0, false,
+                                   "(toml:double-in t k) returns value of t at k, if val is a double", pl_txs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:int-in"),
-            s7_make_typed_function(sc, "toml:int-in", toml_toml_int_in, 2, 0, false, "toml_datum_t toml_int_in(toml_table_t* char*)", pl_txs));
+            s7_make_typed_function(sc, "toml:int-in", toml_toml_int_in, 2, 0, false,
+                                   "(toml:int-in t k) returns value of t at k, if val is an int",
+                                   pl_txs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:bool-in"),
-            s7_make_typed_function(sc, "toml:bool-in", toml_toml_bool_in, 2, 0, false, "toml_datum_t toml_bool_in(toml_table_t* char*)", pl_txs));
+            s7_make_typed_function(sc, "toml:bool-in", toml_toml_bool_in, 2, 0, false,
+                                   "(toml:bool-in t k) returns value of t at k, if val is a bool",
+                                   pl_txs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:string-in"),
-            s7_make_typed_function(sc, "toml:string-in", toml_toml_string_in, 2, 0, false, "toml_datum_t* toml_string_in(toml_table_t* char*)", pl_xxs));
+            s7_make_typed_function(sc, "toml:string-in", toml_toml_string_in, 2, 0, false,
+                                   "(toml:string-in t k) returns value of t at k, if val is a string",
+                                   pl_xxs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:key-exists?"),
-            s7_make_typed_function(sc, "toml:key-exists?", toml_toml_key_exists, 2, 0, false, "int toml_key_exists?(toml_table_t* char*)", pl_ixs));
+            s7_make_typed_function(sc, "toml:key-exists?", toml_toml_key_exists, 2, 0, false,
+                                   "(toml:key-exists? t k) is true if key k is in table t", pl_ixs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-contains?"),
-            s7_make_typed_function(sc, "toml:table-contains?", toml_toml_key_exists, 2, 0, false, "int toml_key_exists?(toml_table_t* char*)", pl_ixs));
+            s7_make_typed_function(sc, "toml:table-contains?", toml_toml_key_exists, 2, 0, false,
+                                   "(toml:table-contains? t k) alias of toml:key-exists?", pl_ixs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:key-in"),
-            s7_make_typed_function(sc, "toml:key-in", toml_toml_key_in, 2, 0, false, "char* toml_key_in(toml_table_t* int)", pl_sxi));
+            s7_make_typed_function(sc, "toml:key-in", toml_toml_key_in, 2, 0, false,
+                                   "(toml:key-in t idx) returns key at index idx of table t", pl_sxi));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:key-for-index"),
-            s7_make_typed_function(sc, "toml:key-for-index", toml_toml_key_in, 2, 0, false, "char* toml_key_in(toml_table_t* int)", pl_sxi));
+            s7_make_typed_function(sc, "toml:key-for-index", toml_toml_key_in, 2, 0, false,
+                                   "(toml:key-for-index t idx) alias of toml:key-in", pl_sxi));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:vector-ref"),
-            s7_make_typed_function(sc, "toml:vector-ref",
-                                   toml_toml_vector_ref, 2, 0, false, "void* toml_vector_ref(toml_array_t* char*)", pl_xxs));
+            s7_make_symbol(sc, "toml:array-ref"),
+            s7_make_typed_function(sc, "toml:array-ref",
+                                   toml_toml_array_ref, 2, 0, false,
+                                   "(toml:array-ref a i) value of array a at index i", pl_xxs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-at"),
-            s7_make_typed_function(sc, "toml:table-at", toml_toml_table_at, 2, 0, false, "toml_table_t* toml_table_at(toml_array_t* int)", pl_xxi));
+            s7_make_typed_function(sc, "toml:table-at", toml_toml_table_at, 2, 0, false,
+                                   "(toml:table-at a i) value of array a at index i, if val is a table",
+                                   pl_xxi));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:array-at"),
@@ -782,23 +810,29 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:array-nelem"),
-            s7_make_typed_function(sc, "toml:array-nelem", toml_toml_array_nelem, 1, 0, false, "int toml_array_nelem(toml_array_t*)", pl_ix));
+            s7_make_typed_function(sc, "toml:array-nelem", toml_toml_array_nelem, 1, 0, false,
+                                   "(toml:array-nelem a) nbr of elements in array a", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:vector-length"),
-            s7_make_typed_function(sc, "toml:vector-length", toml_toml_array_nelem, 1, 0, false, "int toml_array_nelem(toml_array_t*)", pl_ix));
+            s7_make_symbol(sc, "toml:array-length"),
+            s7_make_typed_function(sc, "toml:array-length", toml_toml_array_nelem, 1, 0, false,
+                                   "(toml:array-length a) alias of toml:array-nelem", pl_ix));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:free"),
-            s7_make_typed_function(sc, "toml:free", toml_toml_free, 1, 0, false, "void toml_free(toml_table_t*)", pl_tx));
+            s7_make_typed_function(sc, "toml:free", toml_toml_free, 1, 0, false,
+                                   "(toml:free t) free table t", pl_tx));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:parse"),
-            s7_make_typed_function(sc, "toml:parse", g_toml_parse, 1, 0, false, "toml:parse", NULL));
+            s7_make_symbol(sc, "toml:read"),
+            s7_make_typed_function(sc, "toml:read", g_toml_parse, 1, 0, false,
+                                   "(toml:read port) parse toml string from port", NULL));
 
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:parse-file"),
-            s7_make_typed_function(sc, "toml:parse-file", toml_toml_parse_file, 3, 0, false, "toml_table_t* toml_parse_file(FILE* char* int)", pl_xxsi));
+  /* s7_define(sc, cur_env, */
+  /*           s7_make_symbol(sc, "toml:parse-file"), */
+  /*           s7_make_typed_function(sc, "toml:parse-file", toml_toml_parse_file, 3, 0, false, */
+  /*                                  "(toml:parse-file port) parse string from port", pl_xxsi)); */
+
   s7_set_shadow_rootlet(sc, old_shadow);
 
 
