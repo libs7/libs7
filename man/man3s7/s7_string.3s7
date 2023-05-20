@@ -1,0 +1,123 @@
+.Dd May 20, 2023
+.Dt s7_string 3
+.Os
+.Sh NAME
+.Nm s7_is_string ,
+.Nm s7_string ,
+.Nm s7_string_length ,
+.Nm s7_make_string ,
+.Nm s7_make_string_with_length ,
+.Nm s7_make_string_wrapper ,
+.Nm s7_make_string_wrapper_with_length ,
+.Nm s7_make_permanent_string ,
+.Nm s7_make_semipermanent_string
+.Nd string functions
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft bool
+.Fn s7_is_string "s7_pointer p"
+.Ft s7_int
+.Fn s7_string_length "s7_pointer str"
+.Ft const char*
+.Fn s7_string "s7_pointer p"
+.Ft s7_pointer
+.Fn s7_make_string "s7_scheme *sc, const char *str"
+.Ft s7_pointer
+.Fn s7_make_string_with_length "s7_scheme *sc, const char *str, s7_int len"
+.Ft s7_pointer
+.Fn s7_make_string_wrapper "s7_scheme *sc, const char *str"
+.Ft s7_pointer
+.Fn s7_make_permanent_string "s7_scheme *sc, const char *str"
+.Ft s7_pointer
+.Fn s7_make_semipermanent_string "s7_scheme *sc, const char *str"
+.Ft char*
+.Fn s7_object_to_c_string "s7_scheme *sc, s7_pointer obj"
+.Sh DESCRIPTION
+
+.Fn s7_is_string
+corresponds to
+.Fa (string? s)
+
+.Fn s7_string_length
+corresponds to
+.Fa (string-length s)
+
+.Fn s7_string "s7_pointer p"
+takes a Scheme string argument and returns its value as a C string. Don't free the returned string!
+
+.Fn s7_make_string
+takes a C string, and returns its scheme equivalent. String is copied.
+
+.Fn s7_make_string_with_length
+is the same, but it is faster because you pass the new string's length (
+.Fn s7_make_string
+has to use strlen).
+
+.Fn s7_make_string_wrapper
+creates a temporary string. This saves the overhead of getting a free cell from the heap and later GC-ing it, but the string may be reused at any time. It is useful as an argument to
+.Fn s7_call
+and similar functions where you know no other strings will be needed during that call.
+
+.Fn s7_make_string_wrapper_with_length
+is the same but passes in the string length.
+
+.Fn s7_object_to_c_string
+is the same as
+.Fa (object->string o)
+but returns a C
+.Fa char*
+directly (whereas
+.Fa (object->string o)
+returns a Scheme string); the returned value must be freed by the caller.
+
+.Fn s7_make_permanent_string
+returns a scheme string that is not in the heap; it will never be GC'd or freed by s7.
+
+The
+.Fn s7_make_permanent_string
+is similar to
+.Fn s7_make_permanent_string
+but the string will be freed if you call
+.Fn s7_free
+.
+.Sh RETURN VALUES
+Upon successful completion, both
+.Fn s7_string "s7_pointer p"
+and
+.Fn s7_object_to_c_string "s7_scheme *sc, s7_pointer p"
+return a
+.Fa char*
+; it must not be freed for the former, but must be freed for the latter.
+.Sh ERRORS
+.Bl -tag -width Er
+.Sh SEE ALSO
+.Xr s7_eval_c_string 3 ,
+.Xr s7_eval_c_string_with_environment 3 ,
+.Xr s7_c_type_set_to_string 3 ,
+.Xr s7_open_input_string 3 ,
+.Xr s7_open_output_string 3 ,
+.Xr s7_get_output_string 3 ,
+.Xr s7_load_c_string 3 ,
+.Xr s7_load_c_string_with_environment 3 ,
+.Xr s7_number_to_string 3 ,
+.Xr s7_datatypes 3 ,
+.Xr s7_equality 3
+.Pp
+.Xr s7_booleans 3 ,
+.Xr s7_characters 3 ,
+.Xr s7_lists 3 ,
+.Xr s7_numbers 3 ,
+.Xr s7_pairs 3 ,
+.Xr s7_vectors 3 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support
