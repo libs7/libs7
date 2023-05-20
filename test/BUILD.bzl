@@ -1,8 +1,5 @@
 ## Args common to all test binarys:
 DEFINES = select({
-    "//config/host:debug": ["DEBUG_TRACE"],
-    "//conditions:default":   []
-}) + select({
     "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
     "//conditions:default":   []
 }) + select({
@@ -13,6 +10,12 @@ DEFINES = select({
         # "_DEFAULT_SOURCE"    # dirent DT_* macros
     ],
     "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+}) + select({
+    "//config/debug:debug?": ["DEBUG_TRACE"],
+    "//conditions:default": []
+}) + select({
+    "//config/debug:trace?": ["TRACE"],
+    "//conditions:default": []
 })
 
 DEPS = [

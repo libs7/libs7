@@ -8,7 +8,11 @@ COPTS = [
     "-Wpedantic", # same as -pedantic, strict ISO C and ISO C++ warnings
     "-pedantic-errors",
     "-Wfatal-errors", # stop on first error
+
+    "-Isrc",
+    "-Iexternal/libs7/src",
     "-Ilib", "-Iexternal/mustach/src",
+    "-Ivendored/logc"
 ] + select({
     "//config/host/build:macos?": [
         "-std=c11",
@@ -37,7 +41,14 @@ DEFINES = select({
 }) + select({
     "//lib/libmustachios7/syntax:alt?": ["ALT_SYNTAX"],
     "//conditions:default": []
+}) + select({
+    "//config/debug:debug?": ["DEBUG_TRACE"],
+    "//conditions:default": []
+}) + select({
+    "//config/debug:trace?": ["TRACE"],
+    "//conditions:default": []
 })
+
 
 DEPS = [
     "@mustachios7//lib:mustach"

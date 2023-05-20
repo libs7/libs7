@@ -1,0 +1,65 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH table-ref 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml:table-ref \- access an element of a toml table
+.
+.SH LIBRARY
+.nf
+.BR "(require 'toml)" "
+.
+.SH SYNOPSIS
+.nf
+.BI "(toml:table-ref " table " " k )
+.
+.SH DESCRIPTION
+.
+Returns the contents of element
+.I k
+of
+.IR table .
+.
+\" .SH "IMPLEMENTATION NOTES"
+.SH "RETURN VALUES"
+.
+Returns a single value; an object from the table.
+.
+.SH EXAMPLES
+.
+.EX
+(toml:table-ref (toml:read "t = { i = 1, s = \\"Hello\\" }") i)
+        => 1
+
+(toml:table-ref (toml:read "t = { i = 1, s = \\"Hello\\" }") \"i\")
+        => 1
+.EE
+.
+.SH "APPLICATION USAGE"
+.
+.
+.SH ERRORS
+.TP
+to do ...
+.TP
+.
+.SH "SEE ALSO"
+.
+.BR toml:array-in (3s7),
+.BR toml:bool-in (3s7),
+.BR toml:double-in (3s7),
+.BR toml:int-in (3s7),
+.BR toml:string-in (3s7),
+.BR toml:table-in (3s7),
+.BR toml:timestamp-in (3s7),
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .
+\" .
+\" .SH BUGS
+\" .

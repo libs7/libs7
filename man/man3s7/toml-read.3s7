@@ -1,0 +1,86 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH toml:read 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml:read \- read toml data from a string or port
+.
+.SH LIBRARY
+.nf
+.BR "(require 'toml)" "
+.
+.SH SYNOPSIS
+.nf
+.BI "(toml:read)"  "      ;; read string from current-input-port "
+.BI "(toml:read " s ") " "   ;; read literal string s "
+.BI "(toml:read " p ") " "   ;; read string from port p "
+.
+.SH DESCRIPTION
+.
+Reads a toml string from
+.I string-or-port
+and parses it into a toml table.
+.
+\" .SH "IMPLEMENTATION NOTES"
+.SH "RETURN VALUES"
+.
+Returns a single toml table.
+.
+.SH EXAMPLES
+.
+.EX
+(toml:read)   ;; read from current-input-port, usually *stdin*
+
+(toml:read "t = { i = 1, s = \\"Hello\\" }") ;; read string directly
+        => #<toml_table_t* 0x6000034e0180>
+
+(with-input-from-string
+    "t = { i = 1, s = \\"Hello\\" }"
+    toml:read) ;; read from string as current-input-port
+
+(define data "t = { i = 1, s = \\"Hello\\" }")
+(with-input-from-string data toml:read)
+
+(call-with-input-string
+    "t = { i = 1, s = \\"Hello\\" }"
+     (lambda (p)
+       (let ((toml (toml:read p))) ;; read from string input port
+         ;; ... process toml
+         )))
+
+(call-with-input-file "config.toml"
+  (lambda (p)
+    (let ((toml (toml:read p)))
+      ;; ... process toml
+      )))
+
+.EE
+.
+.SH "APPLICATION USAGE"
+.
+.
+.SH ERRORS
+.TP
+to do ...
+.TP
+.
+.SH "SEE ALSO"
+.
+.BR toml:array-in (3s7),
+.BR toml:bool-in (3s7),
+.BR toml:double-in (3s7),
+.BR toml:int-in (3s7),
+.BR toml:string-in (3s7),
+.BR toml:table-in (3s7),
+.BR toml:timestamp-in (3s7),
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .
+\" .
+\" .SH BUGS
+\" .

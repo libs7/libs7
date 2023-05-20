@@ -1,3 +1,5 @@
+#ifndef TRACE_H
+#define TRACE_H
 #include "ansi_colors.h"
 
 #ifdef TRACE
@@ -34,4 +36,6 @@
 #define TRACE_LOG_DEBUG(msg) log_debug(msg)
 #else
 #define TRACE_LOG_DEBUG(msg)
+#endif
+
 #endif

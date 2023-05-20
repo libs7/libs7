@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libtoml_clibgen.scm"])
 
+load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES")
 load("//lib:BUILD.bzl",
      "clibgen_runner",
      "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
@@ -13,15 +14,28 @@ cc_library(
     name  = "toml_s7_archive", # emits libtoml_s7_archive.a
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
-    srcs  = [":libtoml_s7.c", "//src:s7.h"],
-    deps  = ["//vendored/tomlc99:toml", "//vendored/logc"],
-    copts = CLIB_COPTS + [
+    srcs  = [
+        "//src:s7.h",
+        "libtoml_s7.c",
+        "libtoml_s7.h",
+    ],
+    deps  = ["//vendored/tomlc99:toml", "//vendored/logc",
+             ":toml_table", ":toml_array"]
+    + select({
+        "//config/profile:dev?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = COPTS + [
+        "-Ilib/libtoml",
         "-Ivendored/logc",
         "-Ivendored/tomlc99",
         "-Iexternal/libs7/vendored/tomlc99",
-    ],
-    linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    ] + select({
+        "//config/profile:dev?": ["-Idev"],
+        "//conditions:default":  []
+    }),
+    linkopts = LINKOPTS,
+    defines = DEFINES,
 )
 
 cc_binary(
@@ -44,3 +58,58 @@ cc_binary(
 #     srcs = [":libtoml_clibgen.scm", "//lib:clibgen.scm"],
 #     outs = [":libtoml_s7.c"]
 # )
+
+################################################################
+cc_library(
+    name  = "toml_table",
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = ["toml_table_s7.c", "toml_table_s7.h",
+             "toml_array_s7.h",
+             "libtoml_s7.h"],
+    deps  = [
+        "//src:s7_archive",
+        "//vendored/tomlc99:toml",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        "-Ivendored/tomlc99",
+        "-Iexternal/libs7/vendored/tomlc99",
+    ] + select({
+        "//config/profile:dev?": ["-Idev"],
+        "//conditions:default":  []
+    }),
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
+)
+
+cc_library(
+    name  = "toml_array",
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = ["toml_array_s7.c", "toml_array_s7.h"],
+    deps  = [
+        "//src:s7_archive",
+        "//vendored/tomlc99:toml",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        "-Ivendored/tomlc99",
+        "-Iexternal/libs7/vendored/tomlc99",
+    ] + select({
+        "//config/profile:dev?": ["-Idev"],
+        "//conditions:default":  []
+    }),
+    linkopts = CLIB_LINKOPTS,
+    defines = CLIB_DEFINES,
+)

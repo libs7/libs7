@@ -3,6 +3,8 @@
 #include "unity.h"
 #include "utarray.h"
 #include "utstring.h"
+#include "c_stacktrace.h"
+#include "trace.h"
 
 #include "common.h"
 
@@ -12,16 +14,27 @@ s7_scheme *s7;
 
 extern struct option options[];
 
-char *sexp_input;
-char *sexp_expected;
-
-UT_string *setter;
-UT_string *sexp;
-s7_pointer actual;
-s7_pointer expected;
+s7_pointer t, k, a, idx, res, actual, expected;
 
 bool verbose;
 bool debug;
+
+char *cmd;
+
+#define TOML_READ(s) \
+    s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \
+                      s7_list(s7, 1, s7_eval_c_string(s7, s)));
+
+#define APPLY_1(f, o) \
+ s7_apply_function(s7, s7_name_to_value(s7, f),    \
+                       s7_list(s7, 1, o))
+
+#define APPLY_2(f, o, k)                             \
+ s7_apply_function(s7, s7_name_to_value(s7, f),    \
+                   s7_list(s7, 2, o, k))
+
+    /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
+    /*                            s7_list(s7, 1, v)) */
 
 /* WARNING: setUp and tearDown are run once per test. */
 void setUp(void) {
@@ -32,64 +45,147 @@ void tearDown(void) {
     /* log_info("teardown"); */
 }
 
-/* s7_flush_output_port(s7, s7_current_output_port(s7)); */
-/* char *s = s7_object_to_c_string(s7, actual); */
-/* log_debug("result: %s", s); */
-/* free(s); */
+/* (define t (toml:read "m = { a = 0, b = \"B\", v = [1, 2, 3] }" )) */
+/* (c-pointer? t) */
+/* (define subt (toml:table-in t "m")) */
+/* (toml:table-ref subt "b") */
+/* (define vec (toml:table-ref subt "v")) */
+/* (toml:array-kind vec) */
+/* (toml:key-exists? t "a") */
 
-void test_toml(void) {
-    char *cmd = "(toml:parse \"[server] host = \\\"example.com\\\" port = [ 8080, 8181, 8282 ]\")";
+/*
+  (toml:read)
+  (toml:read "foo")
+  (toml:read "foo")
+ */
+void read_api(void) {
+    s7_pointer t = TOML_READ("\"m = { a = 0 }\"");
+    actual = APPLY_1("toml:table?", t);
+    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+
+    cmd = ""
+        "(with-input-from-string "
+        "    \"t = { i = 1, s = \\\"Hello\\\" }\""
+        "    toml:read)";
     actual = s7_eval_c_string(s7, cmd);
-    sexp_expected = "\"path.txt\"";
-    expected = s7_eval_c_string(s7, sexp_expected);
-    TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected));
+    res = APPLY_1("toml:table?", actual);
+    TEST_ASSERT_EQUAL(res, s7_t(s7));
+}
+
+/* (define tlt (toml:read "v = [0, 1, 2]")) */
+/* tlt is (a nameless) table, NOT a kv pair!  */
+void top_level_tables(void) {
+    /* t = TOML_READ("\"m = { a = 0, b = \\\"B\\\", v = [1, 2, 3] }\")"); */
+    /* actual = APPLY_1("toml:table?", t); */
+    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+
+    t = TOML_READ("\"m = [1, 2, 3]\")");
+    actual = APPLY_1("toml:table?", t);
+    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+    k = s7_make_string(s7, "m");
+    a = APPLY_2("toml:table-ref", t, k);
+    actual = APPLY_1("toml:array?", a);
+    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+}
+
+void table_refs(void) {
+    t = TOML_READ("\"m = [1, 2, 3]\")");
+    actual = APPLY_1("toml:table?", t);
+    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+
+    k = s7_make_string(s7, "m");
+    a = APPLY_2("toml:table-ref", t, k);
+    actual = APPLY_1("toml:array?", a);
+    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+
+    /* apply table to key: (t k) == (toml:table-ref t k) */
+    a = s7_apply_function(s7, t, s7_list(s7, 1, k));
+    actual = APPLY_1("toml:array?", a);
+    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+
+    // try hash-table-ref - nope, segfault
+    /* a = APPLY_2("hash-table-ref", t, k); */
+    /* actual = APPLY_1("toml:array?", a); */
+    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+}
+
+/*
+ * WARNING: tomlc99 table count ops are typed:
+ * ntab for table-valued entries, narr for array-valued entries,
+ * and nkv for "key-values", i.e. entries with 'atomic' values
+ * so toml:table-length must sum the three: ntab + narr + nkv
+ */
+void table_length_ops(void) {
+    char *toml = ""
+        "\"m = { b = true, s = \\\"B\\\", "
+        "        i = 0, f = 1.2, "
+        "        t = { t1 = 1 }, a = [0, 1, 2] }\"";
+    t = TOML_READ(toml);
+    actual = APPLY_1("toml:table?", t);
+    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+
+    k = s7_make_string(s7, "m");
+    s7_pointer m = APPLY_2("toml:table-ref", t, k);
+    actual = APPLY_1("toml:table?", m);
+    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+
+    actual = APPLY_1("toml:table-length", m);
+    TEST_ASSERT_EQUAL(6, s7_integer(actual));
+
+    actual = APPLY_1("toml:table-nkval", m);
+    TEST_ASSERT_EQUAL(4, s7_integer(actual));
+    /* aliases nkval */
+    actual = APPLY_1("toml:table-atomic-count", m);
+    TEST_ASSERT_EQUAL(4, s7_integer(actual));
+
+    actual = APPLY_1("toml:table-ntab", m);
+    TEST_ASSERT_EQUAL(1, s7_integer(actual));
+    /* aliases ntab */
+    actual = APPLY_1("toml:table-subtable-count", m);
+    TEST_ASSERT_EQUAL(1, s7_integer(actual));
+
+    actual = APPLY_1("toml:table-narr", m);
+    TEST_ASSERT_EQUAL(1, s7_integer(actual));
+    /* aliases narr */
+    actual = APPLY_1("toml:table-array-count", m);
+    TEST_ASSERT_EQUAL(1, s7_integer(actual));
+
+    /* a = s7_apply_function(s7, t, s7_list(s7, 1, k)); */
+    /* actual = APPLY_1("toml:array?", a); */
+    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+
+    // try hash-table-ref - nope, segfault
+    /* a = APPLY_2("hash-table-ref", t, k); */
+    /* actual = APPLY_1("toml:array?", a); */
+    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+}
+
+void arrays(void) {
+    char *cmd = "(toml:read \"a = [1, 2, 3]\")";
+    actual = s7_eval_c_string(s7, cmd);
+    TEST_ASSERT_TRUE(s7_is_c_pointer(actual));
+    TEST_ASSERT_TRUE(s7_c_pointer_type(actual) == s7_make_symbol(s7, "toml_array_t"));
+    /*     sexp_expected = "\"path.txt\""; */
+    /* expected = s7_eval_c_string(s7, sexp_expected); */
+    /* TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected)); */
 }
 
 int main(int argc, char **argv)
 {
+    init_exceptions(argv[0]);
+
     s7 = initialize("interpolation", argc, argv);
 
     libs7_load_clib(s7, "toml");
 
-    /* if ( !getenv("BAZEL_TEST") ) { */
-    /*     log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" ); */
-    /*     exit(EXIT_FAILURE); */
-    /* } */
-
-    /* /\* log_trace("WS: %s", getenv("TEST_WORKSPACE")); *\/ */
-    /* /\* log_debug("ARGV[0]: %s", argv[0]); *\/ */
-    /* /\* log_debug("CWD: %s", getcwd(NULL, 0)); *\/ */
-
-    /* argc = gopt (argv, options); */
-    /* (void)argc; */
-    /* gopt_errors (argv[0], options); */
-
-    /* set_options("cwalk", options); */
-
-    /* if (debug) */
-    /*     print_debug_env(); */
-
-    /* s7 = libs7_init(); */
-
-    libs7_load_clib(s7, "toml");
-
-    char *script_dir = "./test";
-    s7_pointer newpath;
-    newpath =  s7_add_to_load_path(s7, script_dir);
-    (void)newpath;
-
-    /* debugging: */
-    /* s7_pointer loadpath = s7_load_path(s7); */
-    /* char *s = s7_object_to_c_string(s7, loadpath); */
-    /* log_debug("load path: %s", s); */
-    /* free(s); */
-
-    utstring_new(sexp);
-
     UNITY_BEGIN();
 
-    RUN_TEST(test_toml);
+    /* RUN_TEST(read_api); */
+    /* RUN_TEST(top_level_tables); */
+    /* RUN_TEST(table_refs); */
+    RUN_TEST(table_length_ops);
+    /* RUN_TEST(table_ops); */
+    /* RUN_TEST(arrays); */
 
-    utstring_free(sexp);
     return UNITY_END();
 }

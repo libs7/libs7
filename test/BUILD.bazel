@@ -407,13 +407,16 @@ cc_test(
     linkstatic = True,
     srcs = ["toml_test.c", "common.c", "common.h"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libtoml:toml_s7.c"  # , "//lib/libtoml:libtoml_s7.h",
+            "//lib/libtoml:toml_s7.c"
         ],
         "//conditions:default": []
     }),
     defines = DEFINES,
     deps = DEPS + select({
-        "//config/clibs/link:archive?": ["//lib/libtoml:toml_s7_archive"],
+        "//config/clibs/link:archive?": [
+            "//src:s7_archive",
+            "//lib/libtoml:toml_s7_archive"
+        ],
         "//conditions:default": []
     }),
     data = select({
@@ -438,11 +441,13 @@ cc_test(
             "//src:libs7.h"],
     defines = DEFINES,
     deps = DEPS + [
+        "//dev",
         "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
         "-Isrc",
+        "-Idev",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
     ],
