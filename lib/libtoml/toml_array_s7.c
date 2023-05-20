@@ -105,7 +105,7 @@ void toml_array_init(s7_scheme *s7)
 {
     TRACE_ENTRY(toml_array_init);
     toml_array_type_tag = s7_make_c_type(s7, "toml_array");
-    log_debug("toml_array_type_tag: %d", toml_array_type_tag);
+    /* log_debug("toml_array_type_tag: %d", toml_array_type_tag); */
 
     s7_c_type_set_gc_free      (s7, toml_array_type_tag, free_toml_array);
     s7_c_type_set_gc_mark      (s7, toml_array_type_tag, mark_toml_array);

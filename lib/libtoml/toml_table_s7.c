@@ -47,9 +47,9 @@ static s7_pointer toml_table_is_equivalent(s7_scheme *s7, s7_pointer args)
     return s7_nil(s7);
 }
 
-static s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
+s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(toml_table_ref);
+    TRACE_ENTRY(toml_toml_table_ref);
     s7_pointer p, arg;
     toml_table_t* table;
     char* key;
@@ -62,17 +62,9 @@ static s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
 
     p = s7_cdr(p);
     arg = s7_car(p);
-    if (arg == NULL) {
-        // user passed uninitialized s7_pointer var?
-        // even with this we get a segfault
-        return s7_error(s7, s7_make_symbol(s7, "wrong-type-arg"),
-                 s7_list(s7, 3, s7_make_string(s7, "uninitialized s7_pointer?")));
-    }
-    if (s7_is_string(arg)) {
+    if (s7_is_string(arg))
         key = (char*)s7_string(arg);
-    } else {
-        return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
-    }
+    else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
 
     toml_datum_t datum;
 
@@ -100,23 +92,105 @@ static s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
 
     toml_array_t *a = toml_array_in(table, key);
     if (a) {
-        log_debug("array");
-        s7_pointer rval = s7_make_c_object(s7, toml_array_type_tag, (void*)a);
+        /* log_debug("array"); */
+        s7_pointer rval = s7_make_c_object(s7,
+                                           toml_array_type_tag,
+                                           (void*)a);
         return rval;
-        /* return(s7_make_c_pointer_with_type(s7, (void*)array_ptr, toml_array_t__symbol, s7_f(sc))); */
+        /* return(s7_make_c_pointer_with_type(s7, (void*)array_ptr, toml_array_t__symbol, s7_f(s7))); */
     } else {
-        log_debug("not array");
+        /* log_debug("not array"); */
     }
 
     toml_table_t *t = toml_table_in(table, key);
     if (t) {
-        s7_pointer rval = s7_make_c_object(s7, toml_table_type_tag, (void*)t);
+        /* log_debug("table: %p", t); */
+        s7_pointer rval = s7_make_c_object(s7,
+                                           toml_table_type_tag,
+                                           (void*)t);
+        /* void *optr = (void*)s7_c_object_value(rval); */
+        /* void *optr = (void*)s7_c_object_value_checked(rval, toml_table_type_tag); */
+        /* log_debug("rval ptr: %p", rval); */
+        /* log_debug("rval objptr: %p", optr); */
+
         return rval;
-        /* return(s7_make_c_pointer_with_type(s7, (void*)table_val, toml_array_t__symbol, s7_f(sc))); */
+    } else {
+        /* log_debug("not table"); */
     }
 
+    log_debug("returning #f");
     return(s7_f(s7));
 }
+
+/* { */
+/*     TRACE_ENTRY(toml_table_ref); */
+/*     s7_pointer p, arg; */
+/*     toml_table_t* table; */
+/*     char* key; */
+/*     p = args; */
+/*     arg = s7_car(p); */
+/*     /\* table = (toml_table_t*)s7_c_pointer_with_type(s7, arg, toml_table_t__symbol, __func__, 1); *\/ */
+/*     // extract the c pointer */
+/*     /\* table = (toml_table_t*)s7_c_pointer(arg); *\/ */
+/*     table = (toml_table_t*)s7_c_object_value(arg); */
+
+/*     p = s7_cdr(p); */
+/*     arg = s7_car(p); */
+/*     if (arg == NULL) { */
+/*         // user passed uninitialized s7_pointer var? */
+/*         // even with this we get a segfault */
+/*         return s7_error(s7, s7_make_symbol(s7, "wrong-type-arg"), */
+/*                  s7_list(s7, 3, s7_make_string(s7, "uninitialized s7_pointer?"))); */
+/*     } */
+/*     if (s7_is_string(arg)) { */
+/*         key = (char*)s7_string(arg); */
+/*     } else { */
+/*         return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string)); */
+/*     } */
+
+/*     toml_datum_t datum; */
+
+/*     datum = toml_string_in(table, key); */
+/*     if (datum.ok) { */
+/*         s7_pointer s = s7_make_string(s7, datum.u.s); */
+/*         free(datum.u.s); */
+/*         return s; */
+/*     } */
+
+/*     datum = toml_bool_in(table, key); */
+/*     if (datum.ok) { return(s7_make_boolean(s7, datum.u.b)); } */
+
+/*     datum = toml_int_in(table, key); */
+/*     if (datum.ok) { return(s7_make_integer(s7, datum.u.i)); } */
+
+/*     datum = toml_double_in(table, key); */
+/*     if (datum.ok) { return(s7_make_real(s7, datum.u.d)); } */
+
+/*     datum = toml_timestamp_in(table, key); */
+/*     if (datum.ok) { */
+/*         /\* not yet supported *\/ */
+/*         return(s7_f(s7)); */
+/*     } */
+
+/*     toml_array_t *a = toml_array_in(table, key); */
+/*     if (a) { */
+/*         log_debug("array"); */
+/*         s7_pointer rval = s7_make_c_object(s7, toml_array_type_tag, (void*)a); */
+/*         return rval; */
+/*         /\* return(s7_make_c_pointer_with_type(s7, (void*)array_ptr, toml_array_t__symbol, s7_f(s7))); *\/ */
+/*     } else { */
+/*         log_debug("not array"); */
+/*     } */
+
+/*     toml_table_t *t = toml_table_in(table, key); */
+/*     if (t) { */
+/*         s7_pointer rval = s7_make_c_object(s7, toml_table_type_tag, (void*)t); */
+/*         return rval; */
+/*         /\* return(s7_make_c_pointer_with_type(s7, (void*)table_val, toml_array_t__symbol, s7_f(s7))); *\/ */
+/*     } */
+
+/*     return(s7_f(s7)); */
+/* } */
 
 static s7_pointer toml_table_set(s7_scheme *s7, s7_pointer args)
 {
@@ -191,7 +265,7 @@ void toml_table_init(s7_scheme *s7)
 {
     TRACE_ENTRY(toml_table_init);
     toml_table_type_tag = s7_make_c_type(s7, "toml_table");
-    log_debug("toml_table_type_tag: %d", toml_table_type_tag);
+    /* log_debug("toml_table_type_tag: %d", toml_table_type_tag); */
 
     s7_c_type_set_gc_free      (s7, toml_table_type_tag, free_toml_table);
     s7_c_type_set_gc_mark      (s7, toml_table_type_tag, mark_toml_table);
