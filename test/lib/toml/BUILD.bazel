@@ -1,0 +1,159 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//test:BUILD.bzl",
+     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+
+################################################################
+LIBC_COPTS = [
+    "-I$(GENDIR)/lib/libc",
+    "-I$(GENDIR)/external/libs7/lib/libc",
+    "-I$(GENDIR)/lib/libdl",
+    "-I$(GENDIR)/external/libs7/lib/libdl",
+    "-I$(GENDIR)/lib/libgdbm",
+    "-I$(GENDIR)/external/libs7/lib/libgdbm",
+    "-I$(GENDIR)/lib/libm",
+    "-I$(GENDIR)/external/libs7/lib/libm",
+]
+
+################################################################
+cc_test(
+    name = "toml",
+    linkstatic = True,
+    srcs = [
+        "toml_test.c",
+        "//test:common.c", "//test:common.h"
+    ] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libtoml:toml_s7.c"
+        ],
+        "//conditions:default": []
+    }),
+    defines = DEFINES,
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": [
+            "//src:s7_archive",
+            "//lib/libtoml:toml_s7_archive"
+        ],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libtoml:toml_s7"
+        ],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_archive",
+    linkstatic = True,
+    srcs = ["toml_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//src:s7_archive",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_link_shared",
+    linkstatic = True,
+    srcs = [
+        "toml_test.c", "//test:common.c", "//test:common.h",
+        "//lib/libtoml:toml_s7.c" ## , "//lib/libtoml:libtoml_s7.h",
+    ],
+    defines = DEFINES,
+    deps = DEPS,
+    copts = COPTS + [
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_link_runtime",
+    linkstatic = True,
+    srcs = ["toml_test.c", "//test:common.c", "//test:common.h"],
+    defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    deps = DEPS,
+    data = ["//lib/libtoml:toml_s7"],
+    copts = COPTS + [
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
+    name = "toml_table",
+    linkstatic = True,
+    srcs = ["toml_table_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//src:s7_archive",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "toml_array",
+    linkstatic = True,
+    srcs = ["toml_array_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//src:s7_archive",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+

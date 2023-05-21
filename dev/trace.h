@@ -9,7 +9,7 @@
 #endif
 
 #ifdef TRACE
-#define TRACE_S7_DUMP(msg, x) (({char*s=s7_object_to_c_string(s7, x);log_debug("%s: %.30s", msg, s);fflush(NULL);free(s);}))
+#define TRACE_S7_DUMP(msg, x) (({char*s=s7_object_to_c_string(s7, x);log_debug("%s: '%.60s' (first 60 chars)", msg, s);fflush(NULL);free(s);}))
 #else
 #define TRACE_S7_DUMP(msg, x)
 #endif

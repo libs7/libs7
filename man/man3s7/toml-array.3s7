@@ -11,22 +11,22 @@ toml array operations
 .
 .SH SYNOPSIS
 .nf
-.BI "(toml:array? " a ") " "                 ;; true if a is a toml array"
+.BI "(toml:array? " a ") " "                ;; true if a is a toml array"
+.BI "(toml:array-length " a ") " "          ;; nbr of elements in array a"
+.\" .BI "(toml:array-nelem " a ") " "           ;; alias of toml:array-length (legacy)"
+.BI "(toml:array-ref " a " " i ") " "           ;; value of array a at index i (polymorphic)"
+
 .BI "(toml:array-key " a ) "              ;; key of array a "
 .BI "(toml:array-kind " a ") " "            ;; returns 'kind' of array a (#\\\\t, #\\\\a, #\\\\v, or #\\\\m)"
-.BI "(toml:array-type " a ") " "            ;; returns type of vals of array a"
+.BI "(toml:array-type " a ") " "            ;; returns type of vals for 'value' arrays (i.e. arrays of atomic values)."
 
-.BI "(toml:array-ref " a " " i ") " "           ;; value of array a at index i (polymorphic)"
-.BI "(toml:array-at " a " " i " ) " "           ;; value of array a at index i, if val is an array (legacy)"
-.BI "(toml:bool-at " a " " i " ) " "            ;; value of array a at index i, if val is an bool (legacy)"
-.BI "(toml:double-at " a " " i " ) " "          ;; value of array a at index i, if val is an double (legacy)"
-.BI "(toml:int-at " a " " i " ) " "             ;; value of array a at index i, if val is an int (legacy)"
-.BI "(toml:string-at " a " " i " ) " "          ;; value of array a at index i, if val is an string (legacy)"
-.BI "(toml:table-at " a " " i " ) " "           ;; value of array a at index i, if val is a table (legacy)"
-.BI "(toml:timestamp-at " a " " i " ) " "       ;; value of array a at index i, if val is a timestamp (legacy)"
-
-.BI "(toml:array-length " a ") " "          ;; nbr of elements in array a"
-.BI "(toml:array-nelem " a ") " "           ;; alias of toml:array-length (legacy)"
+.\" .BI "(toml:array-at " a " " i " ) " "           ;; value of array a at index i, if val is an array (legacy)"
+.\" .BI "(toml:bool-at " a " " i " ) " "            ;; value of array a at index i, if val is an bool (legacy)"
+.\" .BI "(toml:double-at " a " " i " ) " "          ;; value of array a at index i, if val is an double (legacy)"
+.\" .BI "(toml:int-at " a " " i " ) " "             ;; value of array a at index i, if val is an int (legacy)"
+.\" .BI "(toml:string-at " a " " i " ) " "          ;; value of array a at index i, if val is an string (legacy)"
+.\" .BI "(toml:table-at " a " " i " ) " "           ;; value of array a at index i, if val is a table (legacy)"
+.\" .BI "(toml:timestamp-at " a " " i " ) " "       ;; value of array a at index i, if val is a timestamp (legacy)"
 
 .
 .

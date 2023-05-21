@@ -450,6 +450,7 @@ cc_test(
         "-Idev",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
     ],
     linkopts = LINKOPTS,
     timeout = TIMEOUT

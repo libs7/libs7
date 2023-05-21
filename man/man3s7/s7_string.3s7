@@ -48,7 +48,7 @@ corresponds to
 takes a Scheme string argument and returns its value as a C string. Don't free the returned string!
 
 .Fn s7_make_string
-takes a C string, and returns its scheme equivalent. String is copied.
+takes a C string, and returns its scheme equivalent. String is copied. Returns empty string for NULL argument.
 
 .Fn s7_make_string_with_length
 is the same, but it is faster because you pass the new string's length (
