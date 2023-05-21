@@ -1,0 +1,52 @@
+.Dd May 20, 2023
+.Dt s7 Lifecycle API 7
+.Os
+.Sh NAME
+.Nm s7 Lifecycle API
+.Nd Functions for startup, shutdown, garbage collection, etc.
+.Sh SYNOPSIS
+.In stdio.h
+.Ft FILE *
+.Fn fopen "const char * restrict path" "const char * restrict mode"
+.Sh DESCRIPTION
+A special file mode, called the
+.Em sticky bit
+(mode S_ISVTX),
+is used to indicate special treatment
+for directories.
+It is ignored for regular files.
+See
+.Xr chmod 2
+or
+the file
+.In sys/stat.h
+for an explanation of file modes.
+.Sh STICKY DIRECTORIES
+A directory whose `sticky bit' is set
+becomes an append-only directory, or, more accurately,
+a directory in which the deletion of files is restricted.
+A file in a sticky directory may only be removed or renamed
+by a user if the user has write permission for the directory and
+the user is the owner of the file, the owner of the directory,
+or the super-user.
+This feature is usefully applied to directories such as
+.Pa /tmp
+which must be publicly writable but
+should deny users the license to arbitrarily
+delete or rename each others' files.
+.Pp
+Any user may create a sticky directory.
+See
+.Xr chmod 1
+for details about modifying file modes.
+.Sh HISTORY
+A
+.Nm
+command appeared in
+.At 32v .
+.Sh BUGS
+Neither
+.Xr open 2
+nor
+.Xr mkdir 2
+will create a file with the sticky bit set.

@@ -1,0 +1,37 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7 Scheme
+.Nd Equality
+.Sh SYNOPSIS
+.Em (eq? a b)
+ R7RS: procedure
+.Pp
+.Em (eqv? a b)
+ R7RS: procedure
+.Pp
+.Em (equal? a b)
+ R7RS: procedure
+.Pp
+.Em (equivalent? a b)
+ s7: procedure
+.Pp
+.Sh DESCRIPTION
+.Sh EXAMPLES
+.Bd -literal -offset indent
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_equality 7 ,
+.Xr s7_c_equality 3 ,
+.Xr s7_ffi_equality 3 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

@@ -1,0 +1,67 @@
+.Dd July 12, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd String API
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft bool
+.Fn s7_is_string "s7_pointer p"
+(string? p)
+.Ft const char*
+.Fn s7_string "s7_pointer p"
+Scheme string -> C string (do not free the string)
+.Ft s7_pointer
+.Fn s7_make_string "s7_scheme *sc, const char *str"
+C string -> Scheme string (str is copied)
+.Ft s7_pointer
+.Fn s7_make_string_with_length "s7_scheme *sc, const char *str, s7_int len"
+Same as s7_make_string, but provides strlen
+.Ft s7_pointer
+.Fn s7_make_string_wrapper "s7_scheme *sc, const char *str"
+.Ft s7_pointer
+.Fn s7_make_permanent_string "s7_scheme *sc, const char *str"
+Make a string that will never be GC'd
+.Ft s7_int
+.Fn s7_string_length "s7_pointer str"
+(string-length str)
+.Ft char*
+.Fn s7_object_to_c_string "s7_scheme *sc, s7_pointer obj"
+same as object->string but returns a C char* directly; the returned value should be freed by the caller
+.Sh DESCRIPTION
+.Sh EXAMPLES
+.Bd -literal -offset indent
+verbatim code here...
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_eval_c_string 3 ,
+.Xr s7_eval_c_string_with_environment 3 ,
+.Xr s7_c_type_set_to_string 3 ,
+.Xr s7_open_input_string 3 ,
+.Xr s7_open_output_string 3 ,
+.Xr s7_get_output_string 3 ,
+.Xr s7_load_c_string 3 ,
+.Xr s7_load_c_string_with_environment 3 ,
+.Xr s7_number_to_string 3 ,
+.Xr s7_datatypes 3 ,
+.Xr s7_equality 3
+.Pp
+.Xr s7_booleans 3 ,
+.Xr s7_characters 3 ,
+.Xr s7_lists 3 ,
+.Xr s7_numbers 3 ,
+.Xr s7_pairs 3 ,
+.Xr s7_vectors 3 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

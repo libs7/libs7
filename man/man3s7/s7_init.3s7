@@ -1,0 +1,39 @@
+.Dd May 20, 2023
+.Dt s7_init
+.Os
+.Sh NAME
+.Nm s7_init,
+.Nm s7_quit,
+.Nm s7_free
+.Nd s7 engine lifecycle API
+.Sh SYNOPSIS
+.Em #include
+.Qq s7.h
+
+.Ft s7_scheme *
+.Fn s7_init "void"
+.Ft void
+.Fn s7_quit "s7_scheme *sc"
+.Ft void
+.Fn s7_free "s7_scheme *sc"
+.Sh DESCRIPTION
+.Fn s7_init
+creates a scheme interpreter. The returned value is the
+.Fa s7_scheme*
+used by many of the FFI functions.
+
+.Fn s7_quit
+exits the interpreter. The memory allocated for it by
+.Fn s7_init
+is not freed unless you call
+.Fn s7_free
+.
+.Pp
+.Fn s7_free
+also frees its
+.Fa s7_scheme*
+argument.  You may need to call
+.Fn s7_quit
+before
+.Fn s7_free
+to clean up the C stack, and as in multithreaded cases, global variables may need to be reinitialized after calling s7_free.

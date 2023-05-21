@@ -1,0 +1,63 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH toml:array-kind 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml:array-kind \- kind of elements of array
+.
+.SH LIBRARY
+.nf
+.BR "(require 'toml)" "
+.
+.SH SYNOPSIS
+.nf
+.BI "(toml:array-kind " a ")
+.
+.SH DESCRIPTION
+.
+Returns the kind-code character for elements of value-array a.
+
+.
+\" .SH "IMPLEMENTATION NOTES"
+.SH "RETURN VALUES"
+.
+Returns a single character value indicating kind.
+.
+    't'able, 'a'rray, 'v'alue, 'm'ixed
+
+.SH ERRORS
+.TP
+.TP
+.
+.SH EXAMPLES
+.
+.EX
+(toml:array-kind (toml:read "a = [0, 1, 2]"))
+        => #\v
+
+(toml:array-kind (toml:read "a = [ [0, 1], [2, 3]]"))
+        => #\a
+
+(toml:array-kind (toml:read "a = [{x = 0}, {x = 1}]"))
+        => #\t
+
+.EE
+.
+.SH "APPLICATION USAGE"
+.
+.
+.SH "SEE ALSO"
+.
+.BR toml:array (3s7),
+.BR toml:array-type (3s7)
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .
+\" .
+\" .SH BUGS
+\" .

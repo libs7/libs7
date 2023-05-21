@@ -1,0 +1,176 @@
+." Process this file with
+." groff -man -Tascii test_script.1
+."
+.TH test_script(1)
+
+.Sh NAME
+.B test_script
+- user interface to perform some task
+
+.SH SYNOPSIS
+.B test_script
+.RB {| OBJECT |}
+.RB [| OPTIONS |]
+
+.SH DESCRIPTION
+.B test_script
+Write detailed description of the tool here. This script can perform all these tasks and must be executed as root user. More information on the tasks performed is explained below:
+
+.RS
+.nf
+- Performs task 1
+- Performs task 2
+- Performs task 3
+- Performs task 4
+.RE
+
+This is a test script for man page template. Place brief description here.
+
+.SH OBJECT
+.TP
+.B -^-a1|-arg1 <arg1_value>
+Provide arg1_value. Must be fIintegerfR. Provide more hint for the user related to arg1_value
+
+.TP
+.B -^-a2|-arg2 <arg2_value>
+Provide arg2_value. Must be fIintegerfR. Provide more hint for the user related to arg2_value
+
+.TP
+.B -^-a3|-arg3 "value1,value2,value3,.."
+
+.TP
+Different man page examples formats
+
+.PP
+.B
+Display in normal format with regular TAB using .RS and TAB value of 1.2i
+
+.RS 1.2i
+.PP
+.I TEAM1
+.B -
+team1_value1, team1_value2
+.PP
+.I TEAM2
+.B -
+team2_value1, team2_value2
+.RE
+
+.TP
+.B
+Display content in Table Format. Floating in Left
+.
+
+.RS 1.2i
+
+.TS
+tab(@), left, box;
+c | c
+rB | r.
+TEAM@Value
+_
+TEAM1@team1_value1, team1_value2
+TEAM2@team2_value1, team2_value2
+TEAM3@team3_value1, team3_value2
+TEAM4@team4_value1, team4_value2
+.TE
+.RE
+
+.TP
+.B
+Display content in a Tabular format
+
+.RS 1.2i
+
+.TS
+tab (@);
+l c c.
+TEAM@Value@Comment
+_
+T{
+TEAM1
+T}@team1_value1, team1_value2@Value for team1@
+T{
+TEAM2
+T}@team2_value1, team2_value2@Value for team2
+T{
+TEAM3
+T}@team3_value1, team3_value2@Value for team3
+T{
+TEAM4
+T}@team4_value1, team4_value2@Value for team4
+.TE
+
+
+.TP
+.RE
+.PP
+Multiple values can be added within inverted commas separated by comma for different teams
+
+
+.SH OPTIONS
+.IP "fB--arg4fP <arg4_value>"
+Put description for argument 4 value. The is optional argument.
+
+.IP "fB-h|--helpfP"
+Prints help
+
+.SH FILES
+.TP
+.I
+/etc/test_script.conf
+.TP
+.I
+/usr/bin/test_script
+
+.SH EXAMPLES
+.TP
+.BI test_script --arg1  my_arg1  --arg4  'team1_value1,team2_value1'
+.TP
+.PP
+Run test_script with my_arg1 value for team1 value
+.TP
+.BI test_script --arg2  my_arg2  --arg4  'team2_value1,team2_value2'
+.TP
+.PP
+Run test_script with my_arg2 value for team2 value
+
+
+.SH DIAGNOSTICS
+.PP
+The activity performed using this utility is logged in the file fB/var/log/test_scriptfR
+
+
+.SH EXIT STATUS
+.TP
+.B
+0
+Success
+
+.TP
+.B
+1
+Success but reboot required
+
+.TP
+.B
+2
+Success but no reboot required
+
+.SH SEE ALSO
+.BR test_script1 (1),
+.BR test_script2 (1),
+test_script3 (1)
+
+.SH COPYRIGHT
+.PP
+Copyright 2019 GoLinuxCloud. All rights reserved
+https://www.golinuxcloud.com
+
+.SH CREDITS
+.PP
+This man page is created only for demonstration purpose by Deepak Prasad <admin@golinuxcloud.com>
+
+.SH
+.PP
+GoLinuxCloud test_script(1)

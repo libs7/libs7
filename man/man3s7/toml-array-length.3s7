@@ -1,0 +1,54 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH toml:array-length 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml:array-length \- length of array
+.
+.SH LIBRARY
+.nf
+.BR "(require 'toml)" "
+.
+.SH SYNOPSIS
+.nf
+.BI "(toml:array-length " a ")"
+
+.BI "(length " a ")"
+.
+.SH DESCRIPTION
+.Pp
+Returns the number of elements in
+.I toml
+array
+.I a
+\&.
+The standard list
+.BI length
+function can also be used.
+
+.SH "IMPLEMENTATION NOTES"
+The underlying
+.I tomlc99
+function is
+.BI "" int " toml_array_nelem(" "const toml_array_t *arr") "
+\&.
+
+.SH "RETURN VALUES"
+.
+Returns a integer.
+.\" .SH ERRORS
+.
+.SH "SEE ALSO"
+.
+.BR toml:array (3s7),
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .
+\" .
+\" .SH BUGS
+\" .

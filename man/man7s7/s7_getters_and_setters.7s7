@@ -1,0 +1,97 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Getters and Setters
+.Sh DESCRIPTION
+Three kinds of ref (get)
+.Bl -bullet -offset indent
+.It
+Specialized ref:
+.Em (vector-ref vec i) ,
+.It
+Generic ref (SRFI 123):
+.Em (ref vec i) == (vector-ref vec i)
+.It
+Ref Dispatcher (for lack of a better term) (SRFI ?): called when obj is in fn position, dispatches on args.
+E.g. given a vector vec,
+.Em (vec i) == (vector-ref vec i) .
+But there are no restrictions. For example we could support
+a 'fullname' virtual field based on two actual fields:
+.Em (o :fullname)
+concatenates
+.Em (o :fname)
+and
+.Em (o :lname) ,
+or a "sum" field to sum a set of numeric fields.
+.El
+.Pp
+Two kinds of set!
+.Bl -bullet -offset indent
+.It
+Specialized set!
+.Em (vector-set! vec i val)
+.It
+Generic set! (SRFI 17):
+.Em (set! (vector-ref vec i) val) == (vector-set! vec i val)
+.El
+.Pp
+s7 supports these via
+.Em s7_c_type_set_ref ,
+.Em s7_c_type_set_set ,
+.Em s7_c_type_set_getter ,
+.Em s7_c_type_set_setter ,
+.Em s7_define_<...>
+.Pp
+.Sh PROCEDURE PROPERTIES
+"setter" is an example of a procedure property. It is a property of a procedure, and is bound to a procedure that is invoked in the context of generic set!.
+.Pp
+.Sy "application get"
+With s7 you can make any c-object applicable, i.e. callable when in function position, by using s7_c_type_set_ref to add a procedure property. Which essentially adds a "ref" (meta?) property to the object, such that the value of the c-object when in function position will be the ref procedure, whose job it is to look stuff up in the object.
+.Pp
+Or we can think of this kind of 'ref' as a 'method', because when s7 invokes it, it will pass the object itself as the first arg.  For example:
+.Bd -literal -offset indent
+(define x (make-foobar))
+(
+.Ed
+.Sh EXAMPLES
+.Bd -literal -offset indent
+/* define ref/set implementations */
+static s7_pointer g_block_ref(s7_scheme *sc, s7_pointer args) { ... }
+static s7_pointer g_block_set(s7_scheme *sc, s7_pointer args) { ... }
+
+void block_init(s7_scheme *sc) {
+  ...
+  // export specialized ref/set as Scheme procs block-ref and block-set!,
+  // bound to g_block_ref and g_block_set, resp.
+  s7_define_typed_function(sc, "block-ref", g_block_ref, 2, 0, false, g_block_ref_help, g_block_ref_sig);
+  s7_define_typed_function(sc, "block-set!", g_block_set, 3, 0, false, g_block_set_help, g_block_set_sig);
+
+  // register generic ref, set! impls for c type 'g_block_type'
+  s7_c_type_set_ref(sc, g_block_type, g_block_ref);
+  s7_c_type_set_set(sc, g_block_type, g_block_set);
+
+  // register specialized ref/set! as generic for c type 'g_block_type'
+  s7_c_type_set_getter(sc, g_block_type, s7_name_to_value(sc, "block-ref"));
+  s7_c_type_set_setter(sc, g_block_type, s7_name_to_value(sc, "block-set!"));
+  ...
+}
+.Ed
+.Sh SEE ALSO
+.Pp
+SRFI 17: Generalized set!
+.Pa https://srfi.schemers.org/srfi-17/srfi-17.html
+.Pp
+SRFI 123: Generic accessor and modifier operators
+.Pa https://srfi.schemers.org/srfi-123/srfi-123.html
+.Pp
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

@@ -1,0 +1,47 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 G. Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH toml 7scm 2020-07-06 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml \- s7 Scheme bindings for
+.BR tomlc99
+.SH LIBRARY
+.nf
+.BR "(require 'toml)"
+.SH DESCRIPTION
+.
+Scheme bindings for the
+.BR tomlc99
+library. (
+.UR https://github.com/cktan/tomlc99
+.UE
+)
+.
+.SS Parsing
+.
+.SS Tables
+.
+
+.SS Arrays
+.
+
+.SH IMPLEMENTATION NOTES
+.
+.TP
+
+.SH "APPLICATION USAGE"
+.
+.SH "SEE ALSO"
+.
+.BR toml-table (3s7)
+.BR toml-array (3s7)
+.
+.SH STANDARDS
+.UR https: toml etc.
+.UE
+.SH AUTHORS
+Bindings and manpages by G. Reynolds.
+
+tomlc99 author: CK Tan.
+
+

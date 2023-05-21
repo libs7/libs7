@@ -1,0 +1,34 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH toml-utf8 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml utf8 operations
+.
+.SH LIBRARY
+.nf
+.BR "(require 'toml)" "
+.
+.SH SYNOPSIS
+.nf
+.BI "(toml:ucs->utf8 " c ") " "           ;; convert ucs to utf8 "
+.BI "(toml:utf8->ucs " c ") " "           ;; convert utf8 to ucs "
+.
+.
+.SH "SEE ALSO"
+.BR toml-array (3s7)
+.BR toml-read (3s7)
+.BR toml-table (3s7)
+
+Each operation has its own manpage, with ':' replaced by '-', e.g. for
+.BI toml:table-key
+consult
+.BR toml-table-key (3s7)
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .

@@ -1,0 +1,15 @@
+.Dd May 20, 2023
+.Dt s7 Debugging
+.Os
+.Sh NAME
+.Nm s7_is_valid,
+.Nd s7 debugging API
+.Sh SYNOPSIS
+.Em #include
+.Qq s7.h
+
+.Ft s7_scheme *
+.Fn s7_is_valid "s7_scheme *sc, s7_pointer arg"
+.Sh DESCRIPTION
+.Fn s7_is_valid
+is a debugging aid; it tries to tell if an arbitrary value is pointing to an s7 object. Set the compile-time switch TRAP_SEGFAULT to 1 before using this function!
