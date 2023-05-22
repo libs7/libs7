@@ -2,6 +2,16 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 load("//test:BUILD.bzl",
      "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
 
+test_suite(
+    name  = "toml",
+    tests = [
+        "//test/lib/toml:base",
+        "//test/lib/toml:arrays",
+        "//test/lib/toml:tables",
+        "//test/lib/toml:strings",
+    ]
+)
+
 ################################################################
 LIBC_COPTS = [
     "-I$(GENDIR)/lib/libc",
@@ -16,7 +26,7 @@ LIBC_COPTS = [
 
 ################################################################
 cc_test(
-    name = "toml",
+    name = "base",
     linkstatic = True,
     srcs = [
         "toml_test.c",
@@ -28,7 +38,7 @@ cc_test(
         "//conditions:default": []
     }),
     defines = DEFINES,
-    deps = DEPS + select({
+    deps = DEPS + ["//dev"] + select({
         "//config/clibs/link:archive?": [
             "//src:s7_archive",
             "//lib/libtoml:toml_s7_archive"
@@ -42,6 +52,7 @@ cc_test(
         "//conditions:default": []
     }),
     copts = COPTS + [
+        "-Idev",
         "-Itest",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
@@ -110,7 +121,7 @@ cc_test(
 
 ################################################################
 cc_test(
-    name = "toml_table",
+    name = "tables",
     linkstatic = True,
     srcs = ["toml_table_test.c",
             "//test:common.c", "//test:common.h",
@@ -134,12 +145,37 @@ cc_test(
 )
 
 cc_test(
-    name = "toml_array",
+    name = "arrays",
     linkstatic = True,
     srcs = ["toml_array_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//src:s7_archive",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "strings",
+    linkstatic = True,
+    srcs = ["toml_strings_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    defines = DEFINES,
+    data = ["//test/lib/toml/data:strings.toml"],
     deps = DEPS + [
         "//dev",
         "//src:s7_archive",

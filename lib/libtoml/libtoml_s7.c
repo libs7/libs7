@@ -41,12 +41,16 @@ static s7_pointer g_toml_read(s7_scheme *s7, s7_pointer args)
     s7_pointer p, arg;
     char* toml_str;
     /* TRACE_S7_DUMP("args", args); */
+
     if (args == s7_nil(s7)) {
         /* log_debug("null args"); */
         char buf[2 * 4096]; //FIXME: support arbitrary s len
         int i = 0;
         /* read from current-input-port, one char at a time */
         s7_pointer cip = s7_current_input_port(s7);
+
+        //FIXME: use same code to read cip, file, and string ports
+
         s7_pointer c;
         while (true) {
             c = s7_read_char(s7, cip);
@@ -65,10 +69,30 @@ static s7_pointer g_toml_read(s7_scheme *s7, s7_pointer args)
         /* log_debug("is_output_port? %d", s7_is_output_port(s7, arg)); */
         /* s7_pointer dt = s7_type_of(s7, arg); */
         /* trace_S7_DUMP("argtyp", dt); */
-
-        if (s7_is_string(arg))
+        if (s7_is_input_port(s7, arg)) {
+            TRACE_LOG_DEBUG("read arg is input port", "");
+            char buf[2 * 4096]; //FIXME: support arbitrary s len
+            int i = 0;
+            /* read from current-input-port, one char at a time */
+            // s7_pointer cip = s7_current_input_port(s7);
+            s7_pointer c;
+            while (true) {
+                c = s7_read_char(s7, arg);
+                if (c == s7_eof_object(s7)) {
+                    buf[i] = '\0';
+                    break;
+                }
+                buf[i++] = s7_character(c);
+            }
+            TRACE_LOG_DEBUG("readed string: %s", buf);
+            toml_str = buf;
+        }
+        else if (s7_is_string(arg)) {
             toml_str = (char*)s7_string(arg);
-        else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:parse", 10), 1, arg, string_string));
+        }
+        else {
+            return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:read", 10), 1, arg, string_string));
+        }
     }
     /* log_debug("toml_parse: %s", toml_str); */
     char errbuff[200];
@@ -320,7 +344,7 @@ static s7_pointer toml_toml_ucs_to_utf8(s7_scheme *sc, s7_pointer args)
   return(s7_make_integer(sc, (s7_int)toml_ucs_to_utf8(toml_toml_ucs_to_utf8_0, toml_toml_ucs_to_utf8_1)));
 }
 
-s7_pointer pl_tx, pl_xxs,pl_sx, pl_sxi, pl_ix, pl_iis, pl_isix, pl_bxs;
+s7_pointer pl_tx, pl_xx, pl_xxs,pl_sx, pl_sxi, pl_ix, pl_iis, pl_isix, pl_bxs;
 
 s7_pointer libtoml_s7_init(s7_scheme *sc);
 s7_pointer libtoml_s7_init(s7_scheme *sc)
@@ -339,6 +363,7 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
       i = s7_make_symbol(sc, "integer?");
 
       pl_tx = s7_make_signature(sc, 2, t, x);
+      pl_xx = s7_make_signature(sc, 2, x, x);
       pl_xxs = s7_make_signature(sc, 3, x, x, s);
       /* pl_xxsi = s7_make_signature(sc, 4, x, x, s, i); */
       pl_sx = s7_make_signature(sc, 2, s, x);
@@ -510,7 +535,8 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:read"),
-            s7_make_typed_function(sc, "toml:read", g_toml_read, 0, 1, false,
+            s7_make_typed_function(sc, "toml:read",
+                                   g_toml_read, 0, 1, false,
                                    "(toml:read port) parse toml string from port", NULL));
 
 

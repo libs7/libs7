@@ -20,6 +20,9 @@ static toml_datum_t _toml_table_datum_for_key(toml_table_t *tt,
                                               char *key,
                                               int *typ);
 static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
+static s7_pointer _toml_table_to_alist(s7_scheme *s7, toml_table_t *ta);
+static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *ta);
+//char *toml_table_to_string(toml_table_t *tt);
 
 /* **************************************************************** */
 /*
@@ -81,7 +84,7 @@ s7_pointer toml_table_keys(s7_scheme *s7, s7_pointer args)
     const char* k;
     for (int i = 0; i < key_ct; i++) {
         k = toml_key_in(t, i);
-        /* log_debug("table key: %s", k); */
+        /* TRACE_LOG_DEBUG("table key: %s", k); */
         s7_list_set(s7, keys, i, s7_make_string(s7, k));
     }
     /* TRACE_S7_DUMP("keys", keys); */
@@ -108,7 +111,7 @@ s7_pointer toml_table_values(s7_scheme *s7, s7_pointer args)
     const char* k;
     for (int i = 0; i < key_ct; i++) {
         k = toml_key_in(t, i);
-        /* log_debug("table key: %s", k); */
+        /* TRACE_LOG_DEBUG("table key: %s", k); */
         //FIXME: get value for key
         s7_list_set(s7, keys, i, s7_make_string(s7, k));
     }
@@ -159,32 +162,32 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
 
     toml_array_t *a = toml_array_in(t, key);
     if (a) {
-        /* log_debug("array"); */
+        /* TRACE_LOG_DEBUG("array"); */
         s7_pointer rval = s7_make_c_object(s7,
                                            toml_array_type_tag,
                                            (void*)a);
         return rval;
     } else {
-        /* log_debug("not array"); */
+        /* TRACE_LOG_DEBUG("not array"); */
     }
 
     toml_table_t *subt = toml_table_in(t, key);
     if (t) {
-        /* log_debug("table: %p", subt); */
+        /* TRACE_LOG_DEBUG("table: %p", subt); */
         s7_pointer rval = s7_make_c_object(s7,
                                            toml_table_type_tag,
                                            (void*)subt);
         /* void *optr = (void*)s7_c_object_value(rval); */
         /* void *optr = (void*)s7_c_object_value_checked(rval, toml_table_type_tag); */
-        /* log_debug("rval ptr: %p", rval); */
-        /* log_debug("rval objptr: %p", optr); */
+        /* TRACE_LOG_DEBUG("rval ptr: %p", rval); */
+        /* TRACE_LOG_DEBUG("rval objptr: %p", optr); */
 
         return rval;
     } else {
-        /* log_debug("not table"); */
+        /* TRACE_LOG_DEBUG("not table"); */
     }
 
-    log_debug("returning #f");
+    TRACE_LOG_DEBUG("returning #f", "");
     return(s7_f(s7));
 }
 
@@ -233,6 +236,18 @@ static s7_pointer toml_table_reverse(s7_scheme *s7, s7_pointer args)
     return s7_nil(s7);
 }
 
+static s7_pointer g_toml_table_to_hash_table(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(g_toml_table_to_hash_table);
+    s7_pointer p, arg;
+    p = args;
+    arg = s7_car(p);
+    toml_table_t *tt = (toml_table_t*)s7_c_object_value_checked(arg, toml_table_type_tag);
+
+    s7_pointer ht = toml_table_to_hash_table(s7, tt);
+    return(ht);
+}
+
 static s7_pointer g_toml_table_to_alist(s7_scheme *s7, s7_pointer args)
 {
     TRACE_ENTRY(g_toml_table_to_alist);
@@ -262,7 +277,7 @@ static s7_pointer g_toml_table_to_string(s7_scheme *s7, s7_pointer args)
     toml_table_t *tt = (toml_table_t*)s7_c_object_value_checked(arg, toml_table_type_tag);
 
     char *s = toml_table_to_string(tt);
-    log_debug("returning: %s", s);
+    TRACE_LOG_DEBUG("returning: %s", s);
     return s7_make_string(s7, s);
 }
 
@@ -282,7 +297,7 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
 {
     TRACE_ENTRY(toml_table_init);
     toml_table_type_tag = s7_make_c_type(s7, "toml_table");
-    /* log_debug("toml_table_type_tag: %d", toml_table_type_tag); */
+    /* TRACE_LOG_DEBUG("toml_table_type_tag: %d", toml_table_type_tag); */
 
     s7_c_type_set_gc_free      (s7, toml_table_type_tag, free_toml_table);
     s7_c_type_set_gc_mark      (s7, toml_table_type_tag, mark_toml_table);
@@ -311,6 +326,14 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
     s7_define_function(s7, "toml:table?", is_toml_table, 1, 0, false,
                        "(toml:table? t) returns #t if its argument is a toml_table object");
 
+    s7_define(s7, cur_env,
+              s7_make_symbol(s7, "toml:table->hash-table"),
+              s7_make_typed_function(s7, "toml:table->hash-table",
+                                     g_toml_table_to_hash_table,
+                                     1, 1, false,
+              "(toml:table->hash-table t) converts toml table to s7 hash-table. Optional :clone #t",
+                                     pl_xx));
+
     string_string = s7_make_semipermanent_string(s7, "a string");
 }
 
@@ -324,40 +347,40 @@ static toml_datum_t _toml_table_datum_for_key(toml_table_t *tt, char *key, int *
 
     datum = toml_string_in(tt, key);
     if (datum.ok) {
-        log_debug("datum: s");
+        TRACE_LOG_DEBUG("datum: string", "");
         *typ = TOML_STRING;
         return datum;
     }
 
     datum = toml_bool_in(tt, key);
     if (datum.ok) {
-        log_debug("datum: b");
+        TRACE_LOG_DEBUG("datum: bool", "");
         *typ = TOML_BOOL;
         return datum;
     }
 
     datum = toml_int_in(tt, key);
     if (datum.ok) {
-        log_debug("datum: i");
+        TRACE_LOG_DEBUG("datum: int", "");
         *typ = TOML_INT;
         return datum;
     }
 
     datum = toml_double_in(tt, key);
     if (datum.ok) {
-        log_debug("datum: d");
+        TRACE_LOG_DEBUG("datum: double", "");
         *typ = TOML_DOUBLE;
         return datum;
     }
 
     datum = toml_timestamp_in(tt, key);
     if (datum.ok) {
-        log_debug("datum: ts");
+        TRACE_LOG_DEBUG("datum: ts", "");
         *typ = TOML_TIMESTAMP;
         /* not yet supported */
         return datum;
     }
-    log_debug("datum: NULL");
+    TRACE_LOG_DEBUG("datum: NULL", "");
     *typ = TOML_NONDATUM;
     return datum;
 }
@@ -368,24 +391,27 @@ static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ)
 
     toml_array_t *a = toml_array_in(tt, key);
     if (a) {
-        log_debug("array");
+        TRACE_LOG_DEBUG("array", "");
         *typ = TOML_ARRAY;
         return a;
     } else {
-        log_debug("not array");
+        TRACE_LOG_DEBUG("not array", "");
     }
 
     toml_table_t *subt = toml_table_in(tt, key);
     if (subt) {
-        log_debug("table: %p", subt);
+        TRACE_LOG_DEBUG("table: %p", subt);
         *typ = TOML_TABLE;
         return subt;
     } else {
-        log_debug("not table");
+        TRACE_LOG_DEBUG("not table", "");
     }
     return NULL;
 }
 
+/* may be called from array_to_string
+   prototype in libtoml_s7.h
+ */
 char *toml_table_to_string(toml_table_t *tt)
 {
     TRACE_ENTRY(toml_table_to_string);
@@ -399,26 +425,26 @@ char *toml_table_to_string(toml_table_t *tt)
         log_error("OOM");
         return NULL;
     } else {
-        log_debug("callocated %d chars for buffer", BUFSZ);
+        TRACE_LOG_DEBUG("callocated %d chars for buffer", BUFSZ);
     }
     size_t bufsz = BUFSZ;
-    int char_ct = 0;
+    size_t char_ct = 0;
     int ct;
 
     // print header
     {
         errno = 0;
-        log_debug("snprintfing header");
+        TRACE_LOG_DEBUG("snprintfing header", "");
         ct = snprintf(buf, 14, "%s", "<#toml-table ");
         if (errno) {
             log_error("snprintf: %s", strerror(errno));
             return NULL;
         } else {
-            log_debug("snprintf hdr ct: %d", ct);
+            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
         }
         char_ct += 13; // do not include terminating '\0'
-        log_debug("buf len: %d", strlen(buf));
-        log_debug("buf: %s", buf);
+        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+        TRACE_LOG_DEBUG("buf: %s", buf);
     }
 
     // print fields
@@ -426,7 +452,7 @@ char *toml_table_to_string(toml_table_t *tt)
     int narr = toml_table_narr(tt);
     int nkv = toml_table_nkval(tt);
     int key_ct = ntab + narr + nkv;
-    char *k, *v;
+    const char *k, *v;
     int len;
     for (int i = 0; i < key_ct; i++) {
         k = toml_key_in(tt, i);
@@ -434,7 +460,7 @@ char *toml_table_to_string(toml_table_t *tt)
             log_error("toml_key_in failure for idx: %d", i);
             return NULL;
         }
-        log_debug("table key: %s", k);
+        TRACE_LOG_DEBUG("table key: %s", k);
 
         // print comma
         if (i > 0) {
@@ -442,17 +468,17 @@ char *toml_table_to_string(toml_table_t *tt)
                 log_error("realloc for comma");
             } else {
                 errno = 0;
-                log_debug("snprintfing comma");
+                TRACE_LOG_DEBUG("snprintfing comma", "");
                 ct = snprintf(buf+char_ct, 3, "%s", ", ");
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf comma ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf comma ct: %d", ct);
                 }
                 char_ct += 2; // do not include terminating '\0'
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
             }
         }
 
@@ -465,69 +491,69 @@ char *toml_table_to_string(toml_table_t *tt)
                 // expand buf
             }
             errno = 0;
-            log_debug("snprintfing key len %d", len);
+            TRACE_LOG_DEBUG("snprintfing key len %d", len);
             ct = snprintf(buf+char_ct, len, "%s = ", k);
             if (errno) {
                 log_error("snprintf: %s", strerror(errno));
                 break;
             } else {
-                log_debug("snprintf ct: %d", ct);
+                TRACE_LOG_DEBUG("snprintf ct: %d", ct);
             }
             char_ct += len - 1; // do not include terminating '\0'
-            log_debug("buf len: %d", strlen(buf));
-            log_debug("buf: %s", buf);
+            TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+            TRACE_LOG_DEBUG("buf: %s", buf);
         }
 
         // print value
         datum = _toml_table_datum_for_key(tt, k, &typ);
         char *seq_str;
-        log_debug("datum typ: %d", typ);
+        TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
             void *seq = _toml_table_seq_for_key(tt, k, &typ);
             switch(typ) {
             case TOML_ARRAY:
-                log_debug("array seq: %p", seq);
+                TRACE_LOG_DEBUG("array seq: %p", seq);
                 seq_str = toml_array_to_string((toml_array_t*)seq);
-                log_debug("ARRAY: %s", seq_str);
+                TRACE_LOG_DEBUG("ARRAY: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {
                     log_error("exceeded bufsz: %d", char_ct + len);
                     // expand buf
                 }
                 errno = 0;
-                log_debug("snprintfing array len %d", len);
+                TRACE_LOG_DEBUG("snprintfing array len %d", len);
                 ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
                 }
                 char_ct += len - 1; // do not include terminating '\0'
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TABLE:
-                log_debug("table seq: %p", seq);
+                TRACE_LOG_DEBUG("table seq: %p", seq);
                 seq_str = toml_table_to_string((toml_table_t*)seq);
-                log_debug("TABLE: %s", seq_str);
+                TRACE_LOG_DEBUG("TABLE: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {
                     log_error("exceeded bufsz: %d", char_ct + len);
                     // expand buf
                 }
                 errno = 0;
-                log_debug("snprintfing array len %d", len);
+                TRACE_LOG_DEBUG("snprintfing array len %d", len);
                 ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
                 }
                 char_ct += len - 1; // do not include terminating '\0'
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             default:
                 log_error("Bad toml seq type: %d", typ);
@@ -535,66 +561,66 @@ char *toml_table_to_string(toml_table_t *tt)
         } else {
             switch(typ) {
             case TOML_INT:
-                log_debug("toml datum val: %d", datum.u.i);
+                TRACE_LOG_DEBUG("toml datum val: %d", datum.u.i);
                 len = snprintf(NULL, 0, "%d", datum.u.i);
                 len++; // for terminating '\0';
-                log_debug("int str sz: %d", len);
+                TRACE_LOG_DEBUG("int str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
                     log_error("exceeded bufsz: %d", char_ct + len);
                     // expand buf
                 }
                 errno = 0;
-                log_debug("snprintfing len %d", len);
+                TRACE_LOG_DEBUG("snprintfing len %d", len);
                 ct = snprintf(buf+char_ct, len, "%d", datum.u.i);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
                 }
                 char_ct += len - 1;
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_STRING:
-                log_debug("toml datum val: %s", datum.u.s);
+                TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s);
                 // add 2 for quotes
                 len = snprintf(NULL, 0, "%s", datum.u.s) + 2;
                 len++; // for terminating '\0';
-                log_debug("int str sz: %d", len);
+                TRACE_LOG_DEBUG("int str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
                     log_error("exceeded bufsz: %d", char_ct + len);
                     // expand buf
                 }
                 errno = 0;
-                log_debug("snprintfing string, len %d", len);
+                TRACE_LOG_DEBUG("snprintfing string, len %d", len);
                 ct = snprintf(buf+char_ct, len, "'%s'", datum.u.s);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
                 }
                 char_ct += len - 1;
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 free(datum.u.s);
                 break;
             case TOML_BOOL:
                 // tomlc99 bool val is int
-                log_debug("toml datum val: %d", datum.u.b);
+                TRACE_LOG_DEBUG("toml datum val: %d", datum.u.b);
                 if (datum.u.b) {
                     len = 5; // "true" + \0
                 } else {
                     len = 6; // "false" + \0
                 }
-                log_debug("bool str sz: %d", len);
+                TRACE_LOG_DEBUG("bool str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
                     log_error("exceeded bufsz: %d", char_ct + len);
                     // expand buf
                 }
                 errno = 0;
-                log_debug("snprintfing len %d", len);
+                TRACE_LOG_DEBUG("snprintfing len %d", len);
                 if (datum.u.b) {
                     ct = snprintf(buf+char_ct, len, "%s", "true");
                 } else {
@@ -604,33 +630,33 @@ char *toml_table_to_string(toml_table_t *tt)
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
                 }
                 char_ct += len - 1;
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_DOUBLE:
-                log_debug("toml datum val: %g", datum.u.d);
+                TRACE_LOG_DEBUG("toml datum val: %g", datum.u.d);
                 len = snprintf(NULL, 0, "%g", datum.u.d);
                 len++; // for terminating '\0';
-                log_debug("int str sz: %d", len);
+                TRACE_LOG_DEBUG("int str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
                     log_error("exceeded bufsz: %d", char_ct + len);
                     // expand buf
                 }
                 errno = 0;
-                log_debug("snprintfing len %d", len);
+                TRACE_LOG_DEBUG("snprintfing len %d", len);
                 ct = snprintf(buf+char_ct, len, "%g", datum.u.d);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
                 } else {
-                    log_debug("snprintf ct: %d", ct);
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
                 }
                 char_ct += len - 1;
-                log_debug("buf len: %d", strlen(buf));
-                log_debug("buf: %s", buf);
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TIMESTAMP:
                 log_error("toml timestamp (not yet)");
@@ -663,18 +689,103 @@ char *toml_table_to_string(toml_table_t *tt)
     // print footer
     {
         errno = 0;
-        log_debug("snprintfing footer");
+        TRACE_LOG_DEBUG("snprintfing footer", "");
         ct = snprintf(buf+char_ct, 2, "%s", ">");
         if (errno) {
             log_error("snprintf: %s", strerror(errno));
             return NULL;
         } else {
-            log_debug("snprintf hdr ct: %d", ct);
+            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
         }
         char_ct += 1; // do not include terminating '\0'
-        log_debug("buf len: %d", strlen(buf));
-        log_debug("buf: %s", buf);
+        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+        TRACE_LOG_DEBUG("buf: %s", buf);
     }
-    log_debug("toml_table_to_string returning: %s", buf);
+    TRACE_LOG_DEBUG("toml_table_to_string returning: %s", buf);
     return buf;
 }
+
+static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt)
+{
+    TRACE_ENTRY(toml_table_to_hash_table);
+    toml_datum_t datum;
+    int typ;
+
+    int ntab = toml_table_ntab(tt);
+    int narr = toml_table_narr(tt);
+    int nkv = toml_table_nkval(tt);
+    int key_ct = ntab + narr + nkv;
+    char *k, *v;
+    int len;
+
+    s7_pointer the_ht = s7_make_hash_table(s7, key_ct);
+
+    for (int i = 0; i < key_ct; i++) {
+        k = toml_key_in(tt, i);
+        if (!k) {
+            log_error("toml_key_in failure for key: %s", k);
+            return NULL;
+        }
+        TRACE_LOG_DEBUG("table key: %s", k);
+
+        datum = _toml_table_datum_for_key(tt, k, &typ);
+        char *seq_str;
+        TRACE_LOG_DEBUG("datum typ: %d", typ);
+        if (typ == TOML_NONDATUM) {
+            void *seq = _toml_table_seq_for_key(tt, k, &typ);
+            switch(typ) {
+            case TOML_ARRAY:
+                TRACE_LOG_DEBUG("array seq: %p", seq);
+                break;
+            case TOML_TABLE:
+                TRACE_LOG_DEBUG("table seq: %p", seq);
+                /* seq_str = toml_table_to_string((toml_table_t*)seq); */
+                break;
+            default:
+                log_error("Bad toml seq type: %d", typ);
+            }
+        } else {
+            switch(typ) {
+            case TOML_INT:
+                TRACE_LOG_DEBUG("toml datum val: %d", datum.u.i);
+                s7_hash_table_set(s7,
+                                  the_ht,
+                                  /* s7_make_keyword(s7, k), */
+                                  /* s7_make_symbol(s7, k), */
+                                  s7_make_string(s7, k),
+                                  s7_make_integer(s7, datum.u.i));
+                break;
+            case TOML_STRING:
+                TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s);
+                break;
+            case TOML_BOOL:
+                // tomlc99 bool val is int
+                TRACE_LOG_DEBUG("toml datum val: %d", datum.u.b);
+                if (datum.u.b) {
+
+                } else {
+
+                }
+                break;
+            case TOML_DOUBLE:
+                TRACE_LOG_DEBUG("toml datum val: %g", datum.u.d);
+                break;
+            case TOML_TIMESTAMP:
+                log_error("toml timestamp (not yet)");
+                break;
+            case TOML_NONDATUM:
+                // should not happen
+                log_error("Unexpected TOML_NON_DATUM");
+                //FIXME: throw error
+                return NULL;
+                break;
+            default:
+                log_error("Bad toml_datum constant: %d", typ);
+                //FIXME: throw error
+                return NULL;
+            }
+        }
+    }
+    return the_ht;
+}
+

@@ -18,7 +18,7 @@
 extern s7_pointer integer_string;
 
 /* signatures for use in s7_definition */
-extern s7_pointer pl_tx, pl_xxs,pl_sx, pl_sxi, pl_ix, pl_iis, pl_isix, pl_bxs;
+extern s7_pointer pl_tx, pl_xx, pl_xxs,pl_sx, pl_sxi, pl_ix, pl_iis, pl_isix, pl_bxs;
 
 
 /* in toml_table_s7.c */

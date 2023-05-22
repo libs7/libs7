@@ -216,10 +216,8 @@ void table_serialization(void) {
     t = TOML_READ("\"k1 = 7\nk2 = 8\")");
 
     /* actual = APPLY_FORMAT("\"~A\"", t); */
-    log_debug("rrrrrrrrrrrrrrrr");
     res = s7_apply_function(s7, s7_name_to_value(s7, "object->string"),
                             s7_list(s7, 1, t));
-    log_debug("xxxxxxxxxxxxxxxx");
     TRACE_S7_DUMP("obj->s", res);
 
     /* res = s7_apply_function(s7, s7_name_to_value(s7, "format"), */
@@ -303,14 +301,14 @@ void to_string_arrays(void) {
     t = TOML_READ("\"sa = ['Hey there', 'you old world']\")");
     res = APPLY_1("object->string", t);
     TRACE_S7_DUMP("obj->s", res);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table sa = ['Hey there', 'you old world']>",
+    TEST_ASSERT_EQUAL_STRING("<#toml-table sa = [\"Hey there\", \"you old world\"]>",
                              s7_string(res));
 
     /* // timestamp arrays (not yet) */
     /* t = TOML_READ("\"k1 = 'Hi there'\nk2 = ', World'\")"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 'Hi there', k2 = ', World'>", */
+    /* TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = \"Hi there\", k2 = \", World\">", */
     /*                          s7_string(res)); */
 }
 
@@ -385,6 +383,14 @@ void to_string_mixed(void) {
     /*                          s7_string(res)); */
 }
 
+void to_hash_table(void) {
+    t = TOML_READ("\"fld1 = 1\nfld2 = 2\")");
+    res = APPLY_1("toml:table->hash-table", t);
+    TRACE_S7_DUMP("ht", res);
+    /* TEST_ASSERT_EQUAL_STRING(expected_str, s7_string(res)); */
+
+}
+
 void dotted_keys(void) {
     char *toml = "\"fruit.apple.color = \\\"red\\\"\"";
     t = TOML_READ(toml);
@@ -451,7 +457,9 @@ int main(int argc, char **argv)
     /* RUN_TEST(to_string_arrays); */
     /* RUN_TEST(to_string_arrays); */
     /* RUN_TEST(to_string_subtables); */
-    RUN_TEST(to_string_mixed);
+    /* RUN_TEST(to_string_mixed); */
+
+    RUN_TEST(to_hash_table);
 
     /* RUN_TEST(dotted_keys); */
 

@@ -33,9 +33,9 @@
 #endif
 
 #ifdef TRACE
-#define TRACE_LOG_DEBUG(msg) log_debug(msg)
+#define TRACE_LOG_DEBUG(fmt, msg) log_debug(fmt, msg)
 #else
-#define TRACE_LOG_DEBUG(msg)
+#define TRACE_LOG_DEBUG(fmt, msg)
 #endif
 
 #endif
