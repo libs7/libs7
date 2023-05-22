@@ -729,26 +729,15 @@ s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone)
                 break;
             case TOML_TABLE:
                 TRACE_LOG_DEBUG("table seq: %p", seq);
-                // if clone flag #t, call table_to_hashtable
-                /* seq_str = toml_table_to_string((toml_table_t*)seq); */
-                /* TRACE_LOG_DEBUG("TABLE: %s", seq_str); */
-                /* len = strlen(seq_str) + 1;  // + 1 for '\0' */
-                /* if ((char_ct + len) > bufsz) { */
-                /*     log_error("exceeded bufsz: %d", char_ct + len); */
-                /*     // expand buf */
-                /* } */
-                /* errno = 0; */
-                /* TRACE_LOG_DEBUG("snprintfing array len %d", len); */
-                /* ct = snprintf(buf+char_ct, len, "%s = ", seq_str); */
-                /* if (errno) { */
-                /*     log_error("snprintf: %s", strerror(errno)); */
-                /*     break; */
-                /* } else { */
-                /*     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
-                /* } */
-                /* char_ct += len - 1; // do not include terminating '\0' */
-                /* TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
-                /* TRACE_LOG_DEBUG("buf: %s", buf); */
+                if (clone) {
+                    subtable = toml_table_to_hash_table(s7, seq, clone);
+                    s7_vector_set(s7, the_vector, i, subtable);
+                } else {
+                    s7_pointer tt = s7_make_c_object(s7,
+                                                     toml_table_type_tag,
+                                                     (void*)seq);
+                    s7_vector_set(s7, the_vector, i, tt);
+                }
                 break;
             default:
                 log_error("Bad toml seq type: %d", typ);
@@ -760,7 +749,6 @@ s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone)
                 /* the_vector = s7_cons(s7, the_vector, */
                 /*                    s7_make_integer(s7, datum.u.i)); */
                 s7_vector_set(s7, the_vector, i, s7_make_integer(s7, datum.u.i));
-                log_debug("xxxx");
                 break;
             case TOML_STRING:
                 TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s);

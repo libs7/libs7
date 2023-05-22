@@ -29,6 +29,7 @@ s7_pointer toml_table_keys(s7_scheme *s7, s7_pointer args);
 s7_pointer toml_table_values(s7_scheme *s7, s7_pointer args);
 s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args);
 char *toml_table_to_string(toml_table_t *tt);
+s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *ta, bool clone);
 void toml_table_init(s7_scheme *s7, s7_pointer cur_env);
 
 /* in toml_array_s7.c */

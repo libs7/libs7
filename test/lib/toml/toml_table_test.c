@@ -383,14 +383,6 @@ void to_string_mixed(void) {
     /*                          s7_string(res)); */
 }
 
-void to_hash_table(void) {
-    t = TOML_READ("\"fld1 = 1\nfld2 = 2\")");
-    res = APPLY_1("toml:table->hash-table", t);
-    TRACE_S7_DUMP("ht", res);
-    /* TEST_ASSERT_EQUAL_STRING(expected_str, s7_string(res)); */
-
-}
-
 void dotted_keys(void) {
     char *toml = "\"fruit.apple.color = \\\"red\\\"\"";
     t = TOML_READ(toml);
@@ -447,21 +439,19 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    /* RUN_TEST(root_tables); */
-    /* RUN_TEST(table_refs); */
-    /* RUN_TEST(table_length_ops); */
-    /* RUN_TEST(table_ops); */
-    /* RUN_TEST(table_serialization); */
+    RUN_TEST(root_tables);
+    RUN_TEST(table_refs);
+    RUN_TEST(table_length_ops);
+    RUN_TEST(table_ops);
+    RUN_TEST(table_serialization);
 
-    /* RUN_TEST(to_string_atoms); */
-    /* RUN_TEST(to_string_arrays); */
-    /* RUN_TEST(to_string_arrays); */
-    /* RUN_TEST(to_string_subtables); */
-    /* RUN_TEST(to_string_mixed); */
+    RUN_TEST(to_string_atoms);
+    RUN_TEST(to_string_arrays);
+    RUN_TEST(to_string_arrays);
+    RUN_TEST(to_string_subtables);
+    RUN_TEST(to_string_mixed);
 
-    RUN_TEST(to_hash_table);
-
-    /* RUN_TEST(dotted_keys); */
+    RUN_TEST(dotted_keys);
 
     return UNITY_END();
     s7_quit(s7);

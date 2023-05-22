@@ -21,7 +21,6 @@ static toml_datum_t _toml_table_datum_for_key(toml_table_t *tt,
                                               int *typ);
 static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
 static s7_pointer _toml_table_to_alist(s7_scheme *s7, toml_table_t *ta);
-static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *ta, bool clone);
 //char *toml_table_to_string(toml_table_t *tt);
 
 /* **************************************************************** */
@@ -260,15 +259,15 @@ static s7_pointer g_toml_table_to_alist(s7_scheme *s7, s7_pointer args)
                    s7_make_integer(s7, 99));
 }
 
-static s7_pointer toml_table_to_list(s7_scheme *s7, s7_pointer args)
-{
-    TRACE_ENTRY(toml_table_to_list);
-    return s7_f(s7);
-    return s7_list(s7, 3,
-                   s7_make_symbol(s7, "toml-table"),
-                   s7_make_keyword(s7, "fld1"),
-                   s7_make_integer(s7, 99));
-}
+/* static s7_pointer toml_table_to_list(s7_scheme *s7, s7_pointer args) */
+/* { */
+/*     TRACE_ENTRY(toml_table_to_list); */
+/*     return s7_f(s7); */
+/*     return s7_list(s7, 3, */
+/*                    s7_make_symbol(s7, "toml-table"), */
+/*                    s7_make_keyword(s7, "fld1"), */
+/*                    s7_make_integer(s7, 99)); */
+/* } */
 
 static s7_pointer g_toml_table_to_string(s7_scheme *s7, s7_pointer args)
 {
@@ -398,8 +397,8 @@ static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ)
         TRACE_LOG_DEBUG("array", "");
         *typ = TOML_ARRAY;
         return a;
-    } else {
-        TRACE_LOG_DEBUG("not array", "");
+    /* } else { */
+    /*     TRACE_LOG_DEBUG("not array", ""); */
     }
 
     toml_table_t *subt = toml_table_in(tt, key);
@@ -407,8 +406,8 @@ static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ)
         TRACE_LOG_DEBUG("table: %p", subt);
         *typ = TOML_TABLE;
         return subt;
-    } else {
-        TRACE_LOG_DEBUG("not table", "");
+    /* } else { */
+    /*     TRACE_LOG_DEBUG("not table", ""); */
     }
     return NULL;
 }
@@ -709,7 +708,7 @@ char *toml_table_to_string(toml_table_t *tt)
     return buf;
 }
 
-static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
+s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
 {
     TRACE_ENTRY(toml_table_to_hash_table);
     toml_datum_t datum;
@@ -741,7 +740,7 @@ static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("array seq: %p", seq);
                 if (clone) {
-                    s7_pointer lst = toml_array_to_list(s7,
+                    s7_pointer lst = toml_array_to_vector(s7,
                                                         (toml_array_t*)seq,
                                                         clone);
                     s7_hash_table_set(s7, the_ht,
@@ -758,7 +757,22 @@ static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool
                 break;
             case TOML_TABLE:
                 TRACE_LOG_DEBUG("table seq: %p", seq);
-                /* seq_str = toml_table_to_string((toml_table_t*)seq); */
+                if (clone) {
+                    TRACE_LOG_DEBUG(" to hash", "");
+                    s7_pointer ht = toml_table_to_hash_table(s7,
+                                                        (toml_array_t*)seq,
+                                                        clone);
+                    s7_hash_table_set(s7, the_ht,
+                                      s7_make_string(s7, k),
+                                      ht);
+                } else {
+                    s7_pointer tt = s7_make_c_object(s7,
+                                                     toml_table_type_tag,
+                                                     (void*)seq);
+                    s7_hash_table_set(s7, the_ht,
+                                      s7_make_string(s7, k),
+                                      tt);
+                }
                 break;
             default:
                 log_error("Bad toml seq type: %d", typ);
