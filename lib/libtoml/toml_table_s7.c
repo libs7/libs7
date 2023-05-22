@@ -21,7 +21,7 @@ static toml_datum_t _toml_table_datum_for_key(toml_table_t *tt,
                                               int *typ);
 static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
 static s7_pointer _toml_table_to_alist(s7_scheme *s7, toml_table_t *ta);
-static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *ta);
+static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *ta, bool clone);
 //char *toml_table_to_string(toml_table_t *tt);
 
 /* **************************************************************** */
@@ -244,7 +244,9 @@ static s7_pointer g_toml_table_to_hash_table(s7_scheme *s7, s7_pointer args)
     arg = s7_car(p);
     toml_table_t *tt = (toml_table_t*)s7_c_object_value_checked(arg, toml_table_type_tag);
 
-    s7_pointer ht = toml_table_to_hash_table(s7, tt);
+    //FIXME: get optional :clone flag
+
+    s7_pointer ht = toml_table_to_hash_table(s7, tt, true);
     return(ht);
 }
 
@@ -330,7 +332,9 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
               s7_make_symbol(s7, "toml:table->hash-table"),
               s7_make_typed_function(s7, "toml:table->hash-table",
                                      g_toml_table_to_hash_table,
-                                     1, 1, false,
+                                     1,
+                                     1, // optional :clone flag
+                                     false,
               "(toml:table->hash-table t) converts toml table to s7 hash-table. Optional :clone #t",
                                      pl_xx));
 
@@ -705,7 +709,7 @@ char *toml_table_to_string(toml_table_t *tt)
     return buf;
 }
 
-static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt)
+static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
 {
     TRACE_ENTRY(toml_table_to_hash_table);
     toml_datum_t datum;
@@ -736,6 +740,21 @@ static s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt)
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("array seq: %p", seq);
+                if (clone) {
+                    s7_pointer lst = toml_array_to_list(s7,
+                                                        (toml_array_t*)seq,
+                                                        clone);
+                    s7_hash_table_set(s7, the_ht,
+                                      s7_make_string(s7, k),
+                                      lst);
+                } else {
+                    s7_pointer ta = s7_make_c_object(s7,
+                                                     toml_array_type_tag,
+                                                     (void*)seq);
+                    s7_hash_table_set(s7, the_ht,
+                                      s7_make_string(s7, k),
+                                      ta);
+                }
                 break;
             case TOML_TABLE:
                 TRACE_LOG_DEBUG("table seq: %p", seq);

@@ -19,8 +19,6 @@ static toml_datum_t _toml_array_datum_for_idx(toml_array_t *ta,
                                               int idx,
                                               int *typ);
 static void *_toml_array_seq_for_idx(toml_array_t *ta, int idx, int *typ);
-static s7_pointer _toml_array_to_list(s7_scheme *s7, toml_array_t *ta);
-static s7_pointer _toml_array_to_vector(s7_scheme *s7, toml_array_t *ta);
 
 /* **************************************************************** */
 static s7_pointer free_toml_array(s7_scheme *s7, s7_pointer obj)
@@ -192,7 +190,9 @@ static s7_pointer g_toml_array_to_list(s7_scheme *s7, s7_pointer args)
     arg = s7_car(p);
     toml_array_t *ta = (toml_array_t*)s7_c_object_value_checked(arg, toml_array_type_tag);
 
-    s7_pointer lst = _toml_array_to_list(s7, ta);
+    bool clone = true; //FIXME: get optional :clone flag
+
+    s7_pointer lst = toml_array_to_list(s7, ta, clone);
     return lst;
 }
 
@@ -204,7 +204,8 @@ static s7_pointer g_toml_array_to_vector(s7_scheme *s7, s7_pointer args)
     arg = s7_car(p);
     toml_array_t *ta = (toml_array_t*)s7_c_object_value_checked(arg, toml_array_type_tag);
 
-    s7_pointer vec = _toml_array_to_vector(s7, ta);
+    bool clone = true; //FIXME: get from optional :clone arg
+    s7_pointer vec = toml_array_to_vector(s7, ta, clone);
     return vec;
 }
 
@@ -284,7 +285,9 @@ void toml_array_init(s7_scheme *s7, s7_pointer cur_env)
               s7_make_symbol(s7, "toml:array->vector"),
               s7_make_typed_function(s7, "toml:array->vector",
                                      g_toml_array_to_vector,
-                                     1, 0, false,
+                                     1,
+                                     1, // optional :clone flag
+                                     false,
               "(toml:array->vector a) converts toml array to s7 vector",
                                      pl_xx));
 }
@@ -622,7 +625,7 @@ char *toml_array_to_string(toml_array_t *ta)
     return buf;
 }
 
-static s7_pointer _toml_array_to_list(s7_scheme *s7, toml_array_t *ta)
+s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone)
 {
     TRACE_ENTRY(toml_array_to_list);
 
@@ -644,7 +647,7 @@ static s7_pointer _toml_array_to_list(s7_scheme *s7, toml_array_t *ta)
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("recurring subarray to list", "");
-                subarray = _toml_array_to_list(s7, seq);
+                subarray = toml_array_to_list(s7, seq, clone);
                 TRACE_S7_DUMP("recd subarray", subarray);
                 s7_list_set(s7, the_list, i, subarray);
                 break;
@@ -698,7 +701,7 @@ static s7_pointer _toml_array_to_list(s7_scheme *s7, toml_array_t *ta)
     return the_list;
 }
 
-static s7_pointer _toml_array_to_vector(s7_scheme *s7, toml_array_t *ta)
+s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone)
 {
     TRACE_ENTRY(toml_array_to_vector);
 
@@ -720,7 +723,7 @@ static s7_pointer _toml_array_to_vector(s7_scheme *s7, toml_array_t *ta)
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("recurring subarray to list", "");
-                subarray = _toml_array_to_list(s7, seq);
+                subarray = toml_array_to_vector(s7, seq, clone);
                 TRACE_S7_DUMP("recd subarray", subarray);
                 s7_vector_set(s7, the_vector, i, subarray);
                 break;
