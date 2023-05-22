@@ -4,6 +4,25 @@ load("BUILD.bzl",
 
 exports_files(["common.c", "common.h"])
 
+test_suite(
+    name  = "test",
+    tests = [
+        ":s7",
+        ":libc_link_archive",
+        ":libc_link_shared",
+        ":libc_link_runtime",
+        ":gdbm_link_archive",
+        ":gdbm_link_shared",
+        ":gdbm_link_runtime",
+        # ":gsl", ## takes too long to build for one trivial test
+        ":cwalk",
+        ":utf8proc",
+        "//test/lib/toml"
+    ]
+)
+
+################################################################
+
 ## WARNING WARNING - if linkstatic is not True, then the runtime
 ## linker may pick up system shared libs rather than those listed as
 ## deps here. This can be true even for static deps, e.g.
@@ -265,10 +284,10 @@ cc_test(
     linkstatic = True,
     srcs = [
         "gdbm_test.c", "common.c", "common.h",
-        "//lib/libgdbm:gdbm_s7.c" ## , "//lib/libgdbm:libgdbm_s7.h",
+        # "//lib/libgdbm:gdbm_s7.c" ## , "//lib/libgdbm:libgdbm_s7.h",
     ],
     defines = DEFINES,
-    deps = DEPS,
+    deps = DEPS + ["//lib/libgdbm:gdbm_s7"],
     copts = COPTS + [
         "-I$(GENDIR)/lib/libgdbm",
         "-I$(GENDIR)/external/libs7/lib/libgdbm",
@@ -414,7 +433,7 @@ cc_test(
     defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": [
-            "//src:s7_archive",
+            # "//src:s7_archive",
             "//lib/libtoml:toml_s7_archive"
         ],
         "//conditions:default": []
@@ -438,11 +457,12 @@ cc_test(
     linkstatic = True,
     srcs = ["toml_test.c",
             "common.c", "common.h",
-            "//src:libs7.h"],
+            ## "//src:libs7.h"
+            ],
     defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
+        # "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
@@ -492,15 +512,13 @@ cc_test(
 cc_test(
     name = "utf8proc",
     linkstatic = True,
-    srcs = ["utf8proc_test.c", "common.c", "common.h"] + select({
+    srcs = ["utf8proc_test.c", "common.c", "common.h",
+            # "//src:s7_archive",
+            # "//src:libs7.h"
+            ] + select({
         "//config/clibs/link:shared?": [
-            # "If a rule's name is in the srcs, then this rule
-            # automatically depends on that one. If the named rule's
-            # outs are C or C++ source files, they are compiled into
-            # this rule; if they are library files, they are linked
-            # in."
-            "//lib/libc:c_s7.c", ## "//lib/libc:libc_s7.h",
-            "//lib/libutf8proc:utf8proc_s7.c",
+            # "//lib/libc:c_s7.c", ## "//lib/libc:libc_s7.h",
+            # "//lib/libutf8proc:utf8proc_s7.c",
             ## "//lib/libutf8proc:libutf8proc_s7.h",
         ],
         "//conditions:default": []
@@ -508,14 +526,18 @@ cc_test(
     defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": [
-            "//lib/libc:c_s7_archive",
+            # "//src:s7_archive",
             "//lib/libutf8proc:utf8proc_s7_archive",
         ],
-        "//conditions:default": []
+        "//config/clibs/link:shared?": [
+            # "//src:s7_archive",
+            "//lib/libutf8proc:utf8proc_s7",
+        ],
+        "//conditions:default": [],
     }),
     data = select({
         "//config/clibs/link:runtime?": [
-            "//lib/libc:c_s7",
+            # "//lib/libc:c_s7",
             "//lib/libutf8proc:utf8proc_s7",
         ],
         "//conditions:default": []
@@ -526,22 +548,4 @@ cc_test(
     ],
     linkopts = LINKOPTS,
     timeout  = TIMEOUT,
-)
-
-################################################################
-test_suite(
-    name  = "test",
-    tests = [
-        ":s7",
-        ":libc_link_archive",
-        ":libc_link_shared",
-        ":libc_link_runtime",
-        ":gdbm_link_archive",
-        ":gdbm_link_shared",
-        ":gdbm_link_runtime",
-        # ":gsl", ## takes too long to build for one trivial test
-        ":cwalk",
-        ":utf8proc",
-        "//test/lib/toml"
-    ]
 )

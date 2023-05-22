@@ -790,6 +790,11 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                 break;
             case TOML_STRING:
                 TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s);
+                s7_hash_table_set(s7,
+                                  the_ht,
+                                  s7_make_string(s7, k),
+                                  s7_make_string(s7, datum.u.s));
+                free(datum.u.s);
                 break;
             case TOML_BOOL:
                 // tomlc99 bool val is int
@@ -819,6 +824,7 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
             }
         }
     }
+    TRACE_S7_DUMP("returning ht", the_ht);
     return the_ht;
 }
 

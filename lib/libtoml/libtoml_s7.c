@@ -388,12 +388,13 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
   toml_table_init(sc, cur_env);
   toml_array_init(sc, cur_env);
 
-
   int64_t__symbol = s7_make_symbol(sc, "int64_t*");
   toml_datum_t__symbol = s7_make_symbol(sc, "toml_datum_t*");
   toml_array_t__symbol = s7_make_symbol(sc, "toml_array_t*");
   toml_table_t__symbol = s7_make_symbol(sc, "toml_table_t*");
   FILE__symbol = s7_make_symbol(sc, "FILE*");
+
+  s7_define_constant(sc, "toml:version", s7_make_string(sc, "1.0-beta"));
 
   /* -------- table ops -------- */
 

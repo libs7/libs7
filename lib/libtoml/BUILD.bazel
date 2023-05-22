@@ -1,5 +1,3 @@
-load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
-
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["libtoml_clibgen.scm"])
@@ -26,8 +24,11 @@ cc_library(
         "//conditions:default":  []
     }),
     copts = COPTS + [
+        "-Idev",
+        "-Iexternal/libs7/dev",
         "-Ilib/libtoml",
         "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
         "-Ivendored/tomlc99",
         "-Iexternal/libs7/vendored/tomlc99",
     ] + select({
@@ -81,7 +82,7 @@ cc_library(
         "-Ivendored/tomlc99",
         "-Iexternal/libs7/vendored/tomlc99",
     ] + select({
-        "//config/profile:dev?": ["-Idev"],
+        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
         "//conditions:default":  []
     }),
     linkopts = CLIB_LINKOPTS,
@@ -108,7 +109,7 @@ cc_library(
         "-Ivendored/tomlc99",
         "-Iexternal/libs7/vendored/tomlc99",
     ] + select({
-        "//config/profile:dev?": ["-Idev"],
+        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
         "//conditions:default":  []
     }),
     linkopts = CLIB_LINKOPTS,

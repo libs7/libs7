@@ -22,7 +22,7 @@ DEPS = [
     ## "other libraries to be linked in to the binary target." can
     ## be cc_library targets but cc_binary targets with
     ## linkshared=1 won't work - put them in srcs (or data) attr.
-    # "//src:s7_archive",
+    "//src:s7_archive", # always statically link libs7 for tests
     "//vendored/gopt",
     "//vendored/logc",
     "//vendored/unity",
