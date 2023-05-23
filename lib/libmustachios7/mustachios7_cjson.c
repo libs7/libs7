@@ -11,7 +11,7 @@
 /* #include "mustach-json.h" */
 #include "mustachios7_cjson.h"
 #include "trace.h"
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 #include "ansi_colors.h"
 #endif
 
@@ -72,7 +72,7 @@ static int sel(void *closure, const char *name)
 {
     TRACE_ENTRY(sel);
     struct tstack_s *e = closure;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_trace("key: %s", name);
     log_trace("e->depth: %d", e->depth);
     log_trace("e->stack[e->depth].obj %p", e->stack[e->depth].obj);

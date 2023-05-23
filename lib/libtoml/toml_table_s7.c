@@ -345,7 +345,7 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
  */
 static toml_datum_t _toml_table_datum_for_key(toml_table_t *tt, char *key, int *typ)
 {
-    TRACE_ENTRY(_toml_table_datum_for_key);
+    TRACE_ENTRY_STR(_toml_table_datum_for_key, key);
     toml_datum_t datum;
 
     datum = toml_string_in(tt, key);

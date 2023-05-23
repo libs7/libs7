@@ -20,6 +20,7 @@ extern s7_pointer integer_string;
 /* signatures for use in s7_definition */
 extern s7_pointer pl_tx, pl_xx, pl_xxs,pl_sx, pl_sxi, pl_ix, pl_iis, pl_isix, pl_bxs;
 
+s7_pointer toml_read_file(s7_scheme *sc, char *fname);
 
 /* in toml_table_s7.c */
 extern int toml_table_type_tag;

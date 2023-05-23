@@ -9,7 +9,7 @@
 #include "libs7.h"
 
 #include "trace.h"
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 #include "debug.h"
 #endif
 

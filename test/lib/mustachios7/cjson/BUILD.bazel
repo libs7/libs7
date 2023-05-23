@@ -41,7 +41,7 @@ cc_test(
         "-Ilib/libmustachios7",
         "-Iexternal/libs7/lib/libmustachios7",
     ],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": ["//lib/libmustachios7:mustachios7_s7_archive"],
         "//conditions:default": []
@@ -60,7 +60,7 @@ cc_test(
     name = "cjson_link_archive",
     linkstatic = True,
     srcs = ["cjson_test.c", "//test:common.c", "//test:common.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + ["//lib/libmustachios7:mustachios7_s7_archive"],
     copts = COPTS + [
         "-Itest",
@@ -82,7 +82,7 @@ cc_test(
         # "//lib/libmustachios7:mustachios7_s7",
         # "//src:s7"
     ],
-    defines = DEFINES,
+    local_defines = DEFINES,
     # deps = DEPS + ["//lib/libmustachios7:mustachios7_s7"],
     # data = ["//lib/libmustachios7:mustachios7_s7"],
     deps = [
@@ -111,7 +111,7 @@ cc_test(
             "//lib/libmustachios7:mustachios7_s7",
             "//src:s7"
             ],
-    defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     # data = ["//lib/libmustachios7:mustachios7_s7"],
     copts = COPTS + [
@@ -145,7 +145,7 @@ cc_test(
         "-Ilib/libmustachios7",
         "-Iexternal/libs7/lib/libmustachios7",
     ],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": ["//lib/libmustachios7:mustachios7_s7_archive"],
         "//conditions:default": []

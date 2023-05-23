@@ -42,10 +42,10 @@ DEFINES = select({
     "//lib/libmustachios7/syntax:alt?": ["ALT_SYNTAX"],
     "//conditions:default": []
 }) + select({
-    "//config/debug:debug?": ["DEBUG_TRACE"],
+    "//config/debug:debug?": ["DEBUGGING"],
     "//conditions:default": []
 }) + select({
-    "//config/debug:trace?": ["TRACE"],
+    "//config/debug:trace?": ["TRACING"],
     "//conditions:default": []
 })
 

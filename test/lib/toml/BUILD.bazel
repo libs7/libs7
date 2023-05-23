@@ -37,7 +37,7 @@ cc_test(
         ],
         "//conditions:default": []
     }),
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + ["//dev"] + select({
         "//config/clibs/link:archive?": [
             "//src:s7_archive",
@@ -67,7 +67,7 @@ cc_test(
     srcs = ["toml_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
         "//src:s7_archive",
@@ -92,7 +92,7 @@ cc_test(
         "toml_test.c", "//test:common.c", "//test:common.h",
         "//lib/libtoml:toml_s7.c" ## , "//lib/libtoml:libtoml_s7.h",
     ],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS,
     copts = COPTS + [
         "-Itest",
@@ -107,7 +107,7 @@ cc_test(
     name = "toml_link_runtime",
     linkstatic = True,
     srcs = ["toml_test.c", "//test:common.c", "//test:common.h"],
-    defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     data = ["//lib/libtoml:toml_s7"],
     copts = COPTS + [
@@ -126,7 +126,7 @@ cc_test(
     srcs = ["toml_conversion_alist_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
         "//src:s7_archive",
@@ -150,7 +150,7 @@ cc_test(
     srcs = ["toml_conversion_ht_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
         "//src:s7_archive",
@@ -174,7 +174,7 @@ cc_test(
     srcs = ["toml_table_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
         "//src:s7_archive",
@@ -198,7 +198,7 @@ cc_test(
     srcs = ["toml_array_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
         "//src:s7_archive",
@@ -222,7 +222,7 @@ cc_test(
     srcs = ["toml_strings_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
-    defines = DEFINES,
+    local_defines = DEFINES,
     data = ["//test/lib/toml/data:strings.toml"],
     deps = DEPS + [
         "//dev",

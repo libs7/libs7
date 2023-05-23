@@ -29,7 +29,7 @@ static int _strsort(const void *_a, const void *_b)
 /* **************************************************************** */
 static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 {
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
     /* if (libs7_trace) */
     log_trace("_dlopen_clib: %s", lib);
 #endif
@@ -107,7 +107,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
              fmt,
              lib,
              lib, DSO_EXT);
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
     log_debug("dso: %s", buf);
 #endif
 
@@ -140,7 +140,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 
 s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 {
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
     if (libs7_trace)
         log_trace("load_clib: %s", lib);
 #endif
@@ -149,7 +149,7 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 
     init_fn_name[0] = '\0';
     sprintf(init_fn_name, "lib%s_s7_init", lib);
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
     if (libs7_debug)
         log_debug("init_fn_name: %s", init_fn_name);
 #endif
@@ -157,14 +157,14 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
     s7_pointer (*init_fn_ptr)(s7_scheme*);
     init_fn_ptr = dlsym(RTLD_MAIN_ONLY, init_fn_name); // mac: RTLD_SELF?
     if (init_fn_ptr == NULL) {
-/* #if defined(DEBUG_TRACE) */
+/* #if defined(DEBUGGING) */
         log_debug("%s not statically linked, trying dlopen", init_fn_name);
 /* #endif */
         s7_pointer res = _dlopen_clib(s7, lib, init_fn_name);
         return res;
     }
 
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
     if (libs7_debug)
         log_debug("dlsym init_fn_ptr: %x", init_fn_ptr);
 #endif
@@ -198,7 +198,7 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
 {
     log_debug("g_libs7_load_clib");
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
 #endif
     s7_pointer p, arg;
     char* lib;

@@ -118,7 +118,7 @@ cc_binary(
     }) + [
         "-lm",
     ],
-    defines = select({
+    local_defines = select({
         # "//config/clibs/link:archive?": ["CLIBS_LINK_STATIC"],
         "//config/clibs/link:runtime?": ["CLIBS_LINK_RUNTIME"],
         "//conditions:default":   []
@@ -131,7 +131,7 @@ cc_binary(
         ],
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }) + select({
-        "//config/debug:debug?": ["DEBUG_TRACE"],
+        "//config/debug:debug?": ["DEBUGGING"],
         "//conditions:default":   []
     }) + select({
         "//config/debug:trace?": ["TRACE"],
@@ -199,7 +199,7 @@ cc_binary(
         ],
         "//conditions:default": ["-std=c11"],
     }),
-    defines = [
+    local_defines = [
         "WITH_MAIN",
         "WITH_NOTCURSES",
         "WITH_SYSTEM_EXTRAS",

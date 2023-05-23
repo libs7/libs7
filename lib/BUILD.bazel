@@ -54,7 +54,7 @@ cc_binary(
         #     ],
         "//conditions:default": ["-std=c11"],
     }),
-    defines = [
+    local_defines = [
     ] + select({
         "//:linux": [
             "_POSIX_C_SOURCE=200809L" # strndup

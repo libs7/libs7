@@ -21,7 +21,7 @@
 /* 	exit(EXIT_FAILURE); \ */
 /* 	} */
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 #include "ansi_colors.h"
 #include "debug.h"
 #endif
@@ -53,13 +53,13 @@ s7_pointer mustachios7_read_json(s7_scheme *s7, s7_pointer args)
                                                "a JSON string");
         return e;
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     int len = s7_string_length(json_str);
     log_debug("json (scm) strlen: %d", len);
 #endif
     const char *json_c_str = s7_string(json_str);
     int len2 = strlen(json_c_str);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("json (c) strlen: %d", len2);
 #endif
     cJSON *jobj = cJSON_ParseWithLength(json_c_str, len2);
@@ -102,7 +102,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
     //**** DATA
     s7_pointer data     = s7_cadr(args);
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     if (s7_is_c_pointer(data)) {
         log_debug("Data is c ptr");
         s7_pointer ptyp = s7_c_pointer_type(data);
@@ -120,7 +120,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
      */
     s7_pointer port     = s7_caddr(args);
     bool return_string = false;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP("p", port);
 #endif
 
@@ -130,7 +130,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
         /* return_string = true; */
     }
     else if (port == s7_t(s7)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("PORT TRUE");
 #endif
         // send to current-output-port and return string
@@ -139,7 +139,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
         return_string = true;
     }
     else if (port == s7_nil(s7)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("PORT NIL");
 #endif
         // send to current-output-port and return nothing
@@ -154,7 +154,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
                                                "an output port");
         return e;
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP("p", port);
 #endif
 
@@ -164,7 +164,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
     flags &= ~Mustach_With_JsonPointer;
     //FIXME: enable flag optouts
     s7_pointer flags_optout     = s7_cadddr(args);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP("f", flags_optout);
 #endif
     (void)flags_optout;
@@ -177,7 +177,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
     char *ret;              /* render outparam */
     struct tstack_s e;
     e.root = (s7_pointer)data;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP("root", e.root);
 #endif
     if (port == s7_unspecified(s7)) {
@@ -207,7 +207,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
             log_error("mustach_wrap_mem rc: %d", rc);
             return s7_make_integer(s7,rc);
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("mustach:render wrote %s", ret);
 #endif
             return s7_make_string(s7, ret);
@@ -228,7 +228,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
             log_error("mustach_wrap_mem failure: %s", strerror(errno));
             return s7_make_integer(s7,rc);
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("mustach:render wrote %s", ret);
 #endif
             s7_pointer s = s7_make_string(s7, ret);
@@ -244,7 +244,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
     // (port? port) already verified
     const char *port_filename = s7_port_filename(s7, port);
     (void)port_filename;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("port_filename: %s", port_filename);
 #endif
     s7_pointer env = s7_inlet(s7,
@@ -256,11 +256,11 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
                                                          s7, "(port-file p)",
                                                          env);
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP("port file", pfile);
 #endif
     if (s7_c_pointer_type(pfile) == s7_f(s7)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("GOT STRING PORT");
 #endif
 
@@ -274,7 +274,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
             log_error("mustach_wrap_mem failure: %s", strerror(errno));
             return s7_make_integer(s7,rc);
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("mustach:render wrote %s", ret);
 #endif
             s7_display(s7, s7_make_string(s7, ret), port);
@@ -285,7 +285,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
         }
 
     } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("GOT FILE PORT");
 #endif
         /* (void)data_scheme;          /\* currently unused *\/ */
@@ -297,7 +297,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
                                  flags,
                                  s7_c_pointer(pfile));
         (void)rc;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("FILE port RC: %d", rc);
 #endif
         /* cop = s7_current_output_port(s7); */

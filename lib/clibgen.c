@@ -148,19 +148,19 @@ void _set_options(struct option options[])
     if (options[FLAG_VERBOSE].count) { verbose = true; }
 
     if (options[FLAG_DEBUG].count) {
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
         libs7_debug = true;
 #endif
     }
 
     if (options[FLAG_DEBUG_S7].count) {
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
         libs7_debug = true;
 #endif
     }
 
     if (options[FLAG_TRACE].count) {
-#if defined(DEBUG_TRACE)
+#if defined(DEBUGGING)
         libs7_trace = true;
 #endif
     }

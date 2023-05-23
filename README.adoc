@@ -206,7 +206,7 @@ cc_library(
     ],
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    local_defines = CLIB_DEFINES,
 )
 ----
 <1> source file produced by `clibgen_runner` target

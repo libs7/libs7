@@ -1,4 +1,4 @@
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 
 #include "libs7.h"
 

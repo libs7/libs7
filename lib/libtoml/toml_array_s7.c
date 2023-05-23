@@ -381,28 +381,28 @@ char *toml_array_to_string(toml_array_t *ta)
     }
     size_t bufsz = BUFSZ;
     size_t char_ct = 0;
-    int ct;
 
     // print header
-    {
+    /* { */
         errno = 0;
         TRACE_LOG_DEBUG("snprintfing header", "");
-        ct = snprintf(buf, 2, "%s", "[");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
+        /* ct = snprintf(buf, 2, "%s", "["); */
+        /* if (errno) { */
+        /*     log_error("snprintf: %s", strerror(errno)); */
+        /*     return NULL; */
+        /* } else { */
+        /*     TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct); */
+        /* } */
         char_ct += 1; // do not include terminating '\0'
         TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
         TRACE_LOG_DEBUG("buf: %s", buf);
-    }
+    /* } */
 
     // print elements
     int idx_ct = toml_array_nelem(ta);
     /* char *k, *v; */
-    int len;
+    int len, ct;
+    (void)ct;                   /* set-but-not-used warning */
     for (int i = 0; i < idx_ct; i++) {
         // print comma
         if (i > 0) {
@@ -411,13 +411,13 @@ char *toml_array_to_string(toml_array_t *ta)
             } else {
                 errno = 0;
                 TRACE_LOG_DEBUG("snprintfing comma", "");
-                ct = snprintf(buf+char_ct, 3, "%s", ", ");
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf comma ct: %d", ct);
-                }
+                /* ct = snprintf(buf+char_ct, 3, "%s", ", "); */
+                /* if (errno) { */
+                /*     log_error("snprintf: %s", strerror(errno)); */
+                /*     break; */
+                /* } else { */
+                /*     TRACE_LOG_DEBUG("snprintf comma ct: %d", ct); */
+                /* } */
                 char_ct += 2; // do not include terminating '\0'
                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
                 TRACE_LOG_DEBUG("buf: %s", buf);
@@ -633,14 +633,13 @@ s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone)
 
     toml_datum_t datum;
     int typ;
-    int len;
+    /* int len; */
     int idx_ct = toml_array_nelem(ta);
     s7_pointer the_list = s7_make_list(s7, idx_ct, s7_nil(s7));
     s7_pointer subarray, subtable;
     for (int i = 0; i < idx_ct; i++) {
 
         datum = _toml_array_datum_for_idx(ta, i, &typ);
-        char *seq_str;
         TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
             void *seq = _toml_array_seq_for_idx(ta, i, &typ);
@@ -653,7 +652,8 @@ s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone)
                 break;
             case TOML_TABLE:
                 TRACE_LOG_DEBUG("table seq: %p", seq);
-                /* subtable = toml_table_to_hash_table(s7, (toml_table_t*)seq); */
+                subtable = toml_table_to_hash_table(s7, (toml_table_t*)seq, clone);
+                s7_list_set(s7, the_list, i, subtable);
                 break;
             default:
                 log_error("Bad toml seq type: %d", typ);
@@ -673,9 +673,9 @@ s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone)
                 // tomlc99 bool val is int
                 TRACE_LOG_DEBUG("toml datum val: %d", datum.u.b);
                 if (datum.u.b) {
-                    len = 5; // "true" + \0
+                    /* len = 5; // "true" + \0 */
                 } else {
-                    len = 6; // "false" + \0
+                    /* len = 6; // "false" + \0 */
                 }
                 break;
             case TOML_DOUBLE:
@@ -709,14 +709,14 @@ s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone)
 
     toml_datum_t datum;
     int typ;
-    int len;
+    /* int len; */
     int idx_ct = toml_array_nelem(ta);
     s7_pointer the_vector = s7_make_vector(s7, idx_ct);
     s7_pointer subarray, subtable;
     for (int i = 0; i < idx_ct; i++) {
 
         datum = _toml_array_datum_for_idx(ta, i, &typ);
-        char *seq_str;
+        /* char *seq_str; */
         TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
             void *seq = _toml_array_seq_for_idx(ta, i, &typ);
@@ -757,9 +757,9 @@ s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone)
                 // tomlc99 bool val is int
                 TRACE_LOG_DEBUG("toml datum val: %d", datum.u.b);
                 if (datum.u.b) {
-                    len = 5; // "true" + \0
+                    /* len = 5; // "true" + \0 */
                 } else {
-                    len = 6; // "false" + \0
+                    /* len = 6; // "false" + \0 */
                 }
                 break;
             case TOML_DOUBLE:

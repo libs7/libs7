@@ -66,8 +66,8 @@ cc_library(
     copts = COPTS,
     deps = DEPS,
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES + select({
-        "//config/debug:debug?": ["DEBUG_TRACE"],
+    local_defines = CLIB_DEFINES + select({
+        "//config/debug:debug?": ["DEBUGGING"],
         "//conditions:default": []
     }) + select({
         "//config/debug:trace?": ["TRACE"],
@@ -102,6 +102,6 @@ cc_binary(
     #                              "-Iexternal/mustachios7/test/src"]
     # }),
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    local_defines = CLIB_DEFINES,
 )
 

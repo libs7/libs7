@@ -1,3 +1,5 @@
+exports_files(["toml.h", "toml.c"])
+
 cc_library(
     name       = "toml",
     linkstatic = True,

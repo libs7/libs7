@@ -11,7 +11,7 @@ DEFINES = select({
     ],
     "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
 }) + select({
-    "//config/debug:debug?": ["DEBUG_TRACE"],
+    "//config/debug:debug?": ["DEBUGGING"],
     "//conditions:default": []
 }) + select({
     "//config/debug:trace?": ["TRACE"],

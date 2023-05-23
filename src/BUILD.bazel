@@ -66,7 +66,7 @@ cc_library(
         "//repl:scm",
         "//scm:srcs", "//scm/s7:srcs", "s7.h"
     ],
-    defines = [
+    local_defines = [
         "WITH_SYSTEM_EXTRAS",
         "WITH_C_LOADER"
         # FIXME: if --//config:notcurses
@@ -84,7 +84,7 @@ cc_library(
         "//config/s7:debug?": ["S7_DEBUGGING"],
         "//conditions:default":   []
     }) + select({
-        "//config/debug:debug?": ["DEBUG_TRACE"],
+        "//config/debug:debug?": ["DEBUGGING"],
         "//conditions:default":   []
     }) + select({
         "//config/debug:trace?": ["TRACE"],
@@ -147,7 +147,7 @@ cc_binary(
         "//repl:scm",
         "//scm:srcs", "//scm/s7:srcs", "s7.h"
     ],
-    defines = [
+    local_defines = [
         "WITH_SYSTEM_EXTRAS",
         "WITH_C_LOADER"
         # FIXME: if --//config:notcurses
@@ -165,7 +165,7 @@ cc_binary(
         "//config/s7:debug?": ["S7_DEBUGGING"],
         "//conditions:default":   []
     }) + select({
-        "//config/debug:debug?": ["DEBUG_TRACE"],
+        "//config/debug:debug?": ["DEBUGGING"],
         "//conditions:default":   []
     }) + select({
         "//config/debug:trace?": ["TRACE"],

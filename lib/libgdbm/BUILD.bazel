@@ -15,7 +15,7 @@ cc_library(
     deps  = ["@gdbm//:libgdbm"],
     copts = CLIB_COPTS + ["-I$(GENDIR)/external/gdbm/libgdbm/include"],
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    local_defines = CLIB_DEFINES,
 )
 
 cc_binary(
@@ -25,7 +25,7 @@ cc_binary(
     deps  = ["@gdbm//:libgdbm"],
     copts = CLIB_COPTS + ["-I$(GENDIR)/external/gdbm/libgdbm/include"],
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    local_defines = CLIB_DEFINES,
 )
 
 clibgen_runner(

@@ -19,7 +19,7 @@
 #include "mustach.h"
 #include "mustachios7_wrap.h"
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 #include "ansi_colors.h"
 /* #include "s7.h" */
 //#include "debug.h"
@@ -112,7 +112,7 @@ void wrap_init(struct wrap *wrap, const struct mustach_wrap_itf *itf, void *clos
 
 /* int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size) */
 /* { */
-/* #ifdef DEBUG_TRACE */
+/* #ifdef DEBUGGING */
 /*     log_debug("mustach_wrap_mem"); */
 /* #endif */
 /* 	struct wrap w; */

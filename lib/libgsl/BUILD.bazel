@@ -15,7 +15,7 @@ cc_library(
     deps  = ["@gsl//:libgsl"],
     copts = CLIB_COPTS, # + ["-I$(GENDIR)/external/gsl/libgsl/include", "-g3"],
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES + ["GSL_DISABLE_DEPRECATED"]
+    local_defines = CLIB_DEFINES + ["GSL_DISABLE_DEPRECATED"]
 )
 
 cc_binary(
@@ -25,7 +25,7 @@ cc_binary(
     deps  = ["@gsl//:libgsl"],
     copts = CLIB_COPTS, # + ["-I$(GENDIR)/external/gsl/libgsl/include", "-g3"],
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES + ["GSL_DISABLE_DEPRECATED"],
+    local_defines = CLIB_DEFINES + ["GSL_DISABLE_DEPRECATED"],
 )
 
 clibgen_runner(

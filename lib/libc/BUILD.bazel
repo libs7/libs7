@@ -17,7 +17,7 @@ cc_library(
         "//config/host:linux?": ["-lrt"],
         "//conditions:default": []
     }),
-    defines = CLIB_DEFINES  + select({
+    local_defines = CLIB_DEFINES  + select({
         "//config/host:linux?": ["_POSIX_C_SOURCE=200809",
                                  "_DEFAULT_SOURCE" # strcasecmp in string.h
                                  ],
@@ -34,7 +34,7 @@ cc_binary(
         "//config/host:linux?": ["-lrt"],
         "//conditions:default": []
     }),
-    defines = CLIB_DEFINES  + select({
+    local_defines = CLIB_DEFINES  + select({
         "//config/host:linux?": ["_POSIX_C_SOURCE=200809", "_DEFAULT_SOURCE"],
         "//conditions:default": []
     })

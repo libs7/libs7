@@ -12,28 +12,73 @@ s7_pointer integer_string;
 static s7_pointer int64_t__symbol, toml_datum_t__symbol, toml_array_t__symbol, toml_table_t__symbol, FILE__symbol;
 
 
-/* /\* -------- toml_read_file -------- *\/ */
-/* static s7_pointer toml_toml_read_file(s7_scheme *sc, s7_pointer args) */
-/* { */
-/*   s7_pointer p, arg; */
-/*   FILE* toml_toml_read_file_0; */
-/*   char* toml_toml_read_file_1; */
-/*   int toml_toml_read_file_2; */
-/*   p = args; */
-/*   arg = s7_car(p); */
-/*   toml_toml_read_file_0 = (FILE*)s7_c_pointer_with_type(sc, arg, FILE__symbol, __func__, 1); */
-/*   p = s7_cdr(p); */
-/*   arg = s7_car(p); */
-/*   if (s7_is_string(arg)) */
-/*     toml_toml_read_file_1 = (char*)s7_string(arg); */
-/*   else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "toml:parse-file", 15), 2, arg, string_string)); */
-/*   p = s7_cdr(p); */
-/*   arg = s7_car(p); */
-/*   if (s7_is_integer(arg)) */
-/*     toml_toml_read_file_2 = (int)s7_integer(arg); */
-/*   else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "toml:parse-file", 15), 3, arg, integer_string)); */
-/*   return(s7_make_c_pointer_with_type(sc, (void*)toml_parse_file(toml_toml_read_file_0, toml_toml_read_file_1, toml_toml_read_file_2), toml_table_t__symbol, s7_f(sc))); */
-/* } */
+/* -------- toml_read_file -------- */
+/* s7_pointer toml_read_file(s7_scheme *sc, s7_pointer args) */
+s7_pointer toml_read_file(s7_scheme *s7, char *fname)
+{
+    TRACE_ENTRY(toml_read_file);
+    log_debug("toml file: %s", fname);
+    (void)fname;
+    /* toml_parse_file(FILE *fp, char *errbuf, int errbufsz); */
+
+    FILE *fileStream;
+    fileStream = fopen(fname, "r");
+    if (fileStream == NULL) {
+        log_error("FAIL: fopen(%s)", fname);
+        //FIXME: cleanup
+        exit(EXIT_FAILURE);
+    }
+    char errbuff[200];
+    //WARNING: this toml_table_t must be freed by client
+    toml_table_t *tt = toml_parse_file(fileStream, errbuff, sizeof(errbuff));
+    fclose(fileStream);
+    if (tt == 0) {
+        log_error("toml_parse_file failure: %s", errbuff);
+        return s7_error(s7,
+                        s7_make_symbol(s7, "toml_read_file"),
+                        s7_cons(s7, s7_make_string(s7, (char*)errbuff), s7_nil(s7)));
+    } else {
+        s7_pointer rval = s7_make_c_object(s7,
+                                           toml_table_type_tag,
+                                           (void*)tt);
+        log_debug("returning obj");
+        s7_pointer dt = s7_type_of(s7, rval);
+        (void)dt;
+        TRACE_S7_DUMP("typ", dt);
+        log_debug("toml-table? %d",
+                  s7_c_object_type(rval) == toml_table_type_tag);
+        log_debug("tag: %d", toml_table_type_tag);
+       return rval;
+    }
+
+  /* s7_pointer p, arg; */
+  /* FILE* toml_toml_read_file_0; */
+  /* char* toml_toml_read_file_1; */
+  /* int toml_toml_read_file_2; */
+  /* p = args; */
+  /* arg = s7_car(p); */
+  /* toml_toml_read_file_0 = (FILE*)s7_c_pointer_with_type(sc, arg, FILE__symbol, __func__, 1); */
+  /* p = s7_cdr(p); */
+  /* arg = s7_car(p); */
+  /* if (s7_is_string(arg)) */
+  /*   toml_toml_read_file_1 = (char*)s7_string(arg); */
+  /* else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "toml:parse-file", 15), 2, arg, string_string)); */
+  /* p = s7_cdr(p); */
+  /* arg = s7_car(p); */
+  /* if (s7_is_integer(arg)) */
+  /*   toml_toml_read_file_2 = (int)s7_integer(arg); */
+  /* else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "toml:parse-file", 15), 3, arg, integer_string)); */
+
+  /* toml_table_t *tt = toml_parse_file(toml_toml_read_file_0, toml_toml_read_file_1, toml_toml_read_file_2); */
+
+  /* return(s7_make_c_object(s7, toml_table_type_tag, tt)) */
+
+  /* return(s7_make_c_pointer_with_type(sc, */
+  /*                                    //tt, */
+  /*                                    toml_table_t__symbol, s7_f(sc))); */
+
+    return s7_nil(s7);
+}
 
 static s7_pointer g_toml_read(s7_scheme *s7, s7_pointer args)
 {

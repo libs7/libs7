@@ -18,7 +18,7 @@ cc_library(
         "-Iexternal/libs7/vendored/cwalk",
     ],
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    local_defines = CLIB_DEFINES,
 )
 
 cc_binary(
@@ -31,7 +31,7 @@ cc_binary(
         "-Iexternal/libs7/vendored/cwalk",
     ],
     linkopts = CLIB_LINKOPTS,
-    defines = CLIB_DEFINES,
+    local_defines = CLIB_DEFINES,
 )
 
 clibgen_runner(

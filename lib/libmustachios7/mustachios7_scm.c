@@ -19,7 +19,7 @@
 #include "mustach.h"
 #include "mustachios7_scm.h"
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 #include "ansi_colors.h"
 /* #include "s7.h" */
 //#include "debug.h"
@@ -31,7 +31,7 @@
 /* extensions: comparison */
 static enum comp getcomp(char *head, int sflags)
 {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     /* log_debug("getcomp, head: %s", head); */
 #endif
 	return (head[0] == '=' && (sflags & Mustach_With_Equal)) ? C_eq
@@ -50,7 +50,7 @@ static enum comp getcomp(char *head, int sflags)
 static char *keyval(char *head, int sflags, enum comp *comp)
 {
     TRACE_ENTRY(keyval);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\thead: %s", head);
 #endif
     char *w, car, escaped;
@@ -80,7 +80,7 @@ static char *keyval(char *head, int sflags, enum comp *comp)
 static char *getkey(char **head, int sflags)
 {
     TRACE_ENTRY(getkey);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\thead: %s", *head);
 #endif
 
@@ -124,7 +124,7 @@ static char *getkey(char **head, int sflags)
 static enum sel sel(struct wrap *w, const char *name)
 {
     TRACE_ENTRY(sel);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\tname: %s", name);
     log_debug("\tpred: %d", w->predicate);
 #endif
@@ -160,7 +160,7 @@ static enum sel sel(struct wrap *w, const char *name)
         k = C_no;               /* C_no means no relop (=, <, >=, <, <=) */
         value = NULL;
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("relop (none == 0): %d", k);
     if (k) {
         log_debug("rel LHS: %s", copy);
@@ -172,19 +172,19 @@ static enum sel sel(struct wrap *w, const char *name)
 
     switch(copy[0]) {
     case '.':
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     /* case of . alone if Mustach_With_SingleDot? */
         log_debug("CASE '.'");
 #endif
         if (copy[1] == '\0'
             && (sflags & Mustach_With_SingleDot)) {
             /* yes, select current */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("SINGLEDOT");
 #endif
             result = w->itf->sel(w->closure, NULL) ? S_ok : S_none;
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("DOTTEDNAME");
 #endif
             // op is '.foo' - ??
@@ -192,7 +192,7 @@ static enum sel sel(struct wrap *w, const char *name)
         }
         break;
     case PREDOP_FIRST:          /* '^' */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("CASE PREDOP_FIRST");
         log_debug("pred: %d", w->predicate);
 #endif
@@ -203,7 +203,7 @@ static enum sel sel(struct wrap *w, const char *name)
         } else {
             /* else if (copy[0] == PREDOP_FIRST) {  /\* extension *\/ */
             /*     /\* && (sflags & Mustach_With_Precates)) { *\/ */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("NAMED PREDOP_FIRST");
 #endif
             char *ptmp = copy + 1;
@@ -216,7 +216,7 @@ static enum sel sel(struct wrap *w, const char *name)
         break;
 
     case PREDOP_LAST:           /* '$' */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("CASE PREDOP_LAST");
         log_debug("pred: %d", w->predicate);
 #endif
@@ -238,7 +238,7 @@ static enum sel sel(struct wrap *w, const char *name)
         break;
 
     case PREDOP_BUTLAST:        /* '?' -> '~$' */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("CASE PREDOP_BUTLAST");
         log_debug("pred: %d", w->predicate);
 #endif
@@ -249,7 +249,7 @@ static enum sel sel(struct wrap *w, const char *name)
         } else {
             /* else if (copy[0] == PREDOP_BUTLAST) {  /\* extension *\/ */
             /* && (sflags & Mustach_With_Precates)) { */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("NAMED BUTLAST");
 #endif
             /* ((struct closure_hdr*)w->closure)->nonfinal_predicate = true; */
@@ -262,7 +262,7 @@ static enum sel sel(struct wrap *w, const char *name)
         }
         break;
     default:
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("CASE DEFAULT: no metachar ('.', '^', '$', '?')");
 #endif
         /* not the single dot, extract the first key */
@@ -270,7 +270,7 @@ static enum sel sel(struct wrap *w, const char *name)
         if (key == NULL)
             return 0;
         /* select the root item */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("key: %s", key);
         log_debug("selecting root item");
         log_debug("w: %x", w);
@@ -290,7 +290,7 @@ static enum sel sel(struct wrap *w, const char *name)
             result = S_ok_or_objiter;
         else
             result = S_none;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("app sel returned: %d", result);
         /* DUMP_CLOSURE(x, 0); */
 #endif
@@ -298,7 +298,7 @@ static enum sel sel(struct wrap *w, const char *name)
             /* iterate the selection of sub items */
             key = getkey(&copy, sflags);
             while(result == S_ok && key) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                 log_debug("SUBSELECTING subitem, key: '%s'", key);
 #endif
                 if (w->itf->subsel(w->closure, key))
@@ -318,7 +318,7 @@ static enum sel sel(struct wrap *w, const char *name)
 
     /* should it be compared? */
     if (result == S_ok && value) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("comparing? ");
 #endif
         if (!w->itf->compare)
@@ -338,7 +338,7 @@ static enum sel sel(struct wrap *w, const char *name)
                 result = S_none;
         }
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("wrap sel returning: %d", result);
 #endif
     return result;
@@ -353,7 +353,7 @@ static int start(void *closure)
 
 static void stop(void *closure, int status)
 {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("stop, status: %d", status);
 #endif
 	struct wrap *w = closure;
@@ -364,7 +364,7 @@ static void stop(void *closure, int status)
 static int _write(struct wrap *w, const char *buffer, size_t size, FILE *file)
 {
     TRACE_ENTRY(_write);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\tbuffer: %.15s", buffer);
     log_debug("\tsize: %d", size);
 #endif
@@ -374,11 +374,11 @@ static int _write(struct wrap *w, const char *buffer, size_t size, FILE *file)
     if (w->writecb)
         r = w->writecb(file, buffer, size);
     else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("fwriting");
 #endif
         r = fwrite(buffer, 1, size, file) == size ? MUSTACH_OK : MUSTACH_ERROR_SYSTEM;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("frwrite rc: %d", r);
 #endif
         /* log_debug("wrote, buf: %s", buffer); */
@@ -389,7 +389,7 @@ static int _write(struct wrap *w, const char *buffer, size_t size, FILE *file)
 static int emit(void *closure, const char *buffer, size_t size, int escape, FILE *file)
 {
     TRACE_ENTRY(emit)
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\tbuffer: '%.30s ...'", buffer);
     log_debug("\tsize:   %d", size);
     log_debug("\tescape: %d", escape);
@@ -412,7 +412,7 @@ static int emit(void *closure, const char *buffer, size_t size, int escape, FILE
 			while (i < size && (car = buffer[i]) != '<' && car != '>' && car != '&' && car != '"')
 				i++;
 			if (i != s) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                             log_debug("call write: %s", &buffer[s]);
                             log_debug("call len: %d", i - s);
 #endif
@@ -436,7 +436,7 @@ static int emit(void *closure, const char *buffer, size_t size, int escape, FILE
 static int enter(void *closure, const char *name)
 {
     TRACE_ENTRY(enter)
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("pred: %d", ((struct closure_hdr*)closure)->predicate);
 #endif
 
@@ -444,13 +444,13 @@ static int enter(void *closure, const char *name)
     // the former is the app's closure struct
     // BUT there's a struct wrap* on the call stack
     struct wrap *w = (struct wrap*)closure;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("enter calling sel");
 #endif
     // call local sel w/arg 0 struct wrap
     // local sel calls w->closure ???
     enum sel s = sel(w, name);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("sel returned %d", s);
     /* S_none = 0, */
     /* S_ok = 1, */
@@ -467,12 +467,12 @@ static int enter(void *closure, const char *name)
 
 static int next(void *closure) // returns bool: has_next
 {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("next");
 #endif
     struct wrap *w = closure;
     int rc = w->itf->next(w->closure);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("next rc: %d", rc);
 #endif
     return rc;
@@ -480,7 +480,7 @@ static int next(void *closure) // returns bool: has_next
 
 static int leave(void *closure, struct mustach_sbuf *sbuf)
 {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("leave");
 #endif
     struct wrap *w = closure;
@@ -490,11 +490,11 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
 static int getoptional(struct wrap *w, const char *name, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(getoptional);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\tname: %s", name);
 #endif
 	enum sel s = sel(w, name);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("getoptional: sel returned %d", s);
 	/* S_none = 0, */
 	/* S_ok = 1, */
@@ -503,7 +503,7 @@ static int getoptional(struct wrap *w, const char *name, struct mustach_sbuf *sb
 #endif
 	if (!(s & S_ok))
 		return 0;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("\tcalling w->itf->get");
         log_debug("\tsbuf->value: %s", sbuf->value);
         log_debug("\tsbuf->length: %d", sbuf->length);
@@ -511,7 +511,7 @@ static int getoptional(struct wrap *w, const char *name, struct mustach_sbuf *sb
         /* log_debug("sbuf->closure: %d", sbuf->closure); */
 #endif
 	int rc = w->itf->get(w->closure, sbuf, s & S_objiter);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("getoptional get rc: %d", rc);
         log_debug("getoptional get result: sbuf->value: %s", sbuf->value);
         log_debug("getoptional get result: sbuf->length: %d", sbuf->length);
@@ -523,14 +523,14 @@ static int getoptional(struct wrap *w, const char *name, struct mustach_sbuf *sb
 static int get(void *closure, const char *name, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(get);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\tname='%s'", name);
     log_debug("\tsbuf->value='%s'", name, sbuf->value);
     /* log_debug("sbuf->releasecb: %x", sbuf->releasecb); */
 #endif
     struct wrap *w = closure;
     int rc = getoptional(w, name, sbuf); /* puts str val in sbuf.value */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("getoptional rc: %d", rc);
     log_debug("sbuf->releasecb: %x", sbuf->releasecb);
 #endif
@@ -669,7 +669,7 @@ int mustach_wrap_fd(const char *template, size_t length, const struct mustach_wr
 
 int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size)
 {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("mustach_wrap_mem");
 #endif
 	struct wrap w;

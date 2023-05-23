@@ -17,7 +17,7 @@
 /* 	exit(EXIT_FAILURE); \ */
 /* 	} */
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
 #include "ansi_colors.h"
 #include "debug.h"
 #endif
@@ -51,7 +51,7 @@ static int start(void *closure)
 
 static int compare(void *closure, const char *value)
 {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("compare");
 #endif
     struct tstack_s *e = closure;
@@ -104,7 +104,7 @@ static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
                 e->stack[e->depth].lambda = false;
             }
             e->stack[e->depth].lambda = true;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("is_proc: %d", s7_is_procedure(cadr));
 #endif
             selection = s7_f(s7); /* FIXME: support lambda predicates */
@@ -113,7 +113,7 @@ static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
                 selection = s7_f(s7);
             } else {
                 s7_pointer ctx = e->stack[e->depth].cont;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                 TRACE_S7_DUMP("last in ctx?", ctx);
                 log_debug("index: %d", e->stack[e->depth].index);
 #endif
@@ -121,7 +121,7 @@ static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
                 // I'm sure there is a more efficient way to do this...
                 s7_pointer tail;
                 if (s7_is_vector(ctx)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("ctx is vector");
 #endif
                     s7_pointer ls = s7_vector_to_list(s7, ctx);
@@ -179,7 +179,7 @@ static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
                 selection = s7_f(s7);
             } else {
                 s7_pointer ctx = e->stack[e->depth].cont;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                 TRACE_S7_DUMP("last in ctx?", ctx);
                 log_debug("index: %d", e->stack[e->depth].index);
 #endif
@@ -187,7 +187,7 @@ static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
                 // I'm sure there is a more efficient way to do this...
                 s7_pointer tail;
                 if (s7_is_vector(ctx)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("ctx is vector");
 #endif
                     s7_pointer ls = s7_vector_to_list(s7, ctx);
@@ -234,7 +234,7 @@ static s7_pointer _handle_stack_predicate(struct tstack_s *e, s7_pointer assoc)
         if (e->stack[e->depth].index + 1 == e->stack[e->depth].count) {
             selection = s7_f(s7);
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("pred satisfied");
 #endif
             selection = s7_t(s7);
@@ -269,7 +269,7 @@ static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
         // in latter case, (cddr x) = '()
         // but: (:a (1 2) (3 4)) - list of lists
         // then val is ((1 2) (3 4))
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("assoc-val len: %d", s7_list_length(s7, assoc_val));
 #endif
         if (s7_list_length(s7, assoc_val) == 1) {
@@ -303,19 +303,19 @@ static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
                     selection = car;
                 }
                 else if (s7_is_vector(car)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("car is vector");
 #endif
                     selection = car;
                 } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("car is nonlambda, nonvector");
 #endif
                     selection = car;
                 }
             }
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("assoc_val len > 1");
 #endif
             selection = assoc_val;
@@ -342,7 +342,7 @@ static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
             /*                       assoc_val, */
             /*                       s7_nil(s7)); */
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("not lambda");
 #endif
             selection = assoc_val;
@@ -359,7 +359,7 @@ static int sel(void *closure, const char *key)
     struct tstack_s *e = closure;
     e->stack[e->depth].predicate = e->predicate;
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_trace("key: %s", key);
     log_trace("predicate: %d", e->predicate);
     DUMP_CLOSURE(e, e->depth);
@@ -369,7 +369,7 @@ static int sel(void *closure, const char *key)
 
 
     if (key == NULL) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("e->predicate: %d", e->predicate);
         /* log_debug("NULL; final pred: %d", e->final_predicate); */
         /* log_debug("NULL; nonfinal pred: %d", e->nonfinal_predicate); */
@@ -377,17 +377,17 @@ static int sel(void *closure, const char *key)
         if (e->predicate) {
             switch(e->predicate) {
             case FIRST_P:
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                 log_debug("case: FIRST_P");
 #endif
                 e->stack[e->depth].predicate = e->predicate;
                 if (e->stack[e->depth].index == 0) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("predicate is truthy!");
 #endif
                     selection = s7_t(s7);
                 } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("predicate is false!");
 #endif
                     selection = s7_f(s7);
@@ -395,17 +395,17 @@ static int sel(void *closure, const char *key)
                 r = 1;
                 break;
             case LAST_P:
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                 log_debug("case: LAST_P");
 #endif
                 e->stack[e->depth].predicate = e->predicate;
                 if (e->stack[e->depth].index + 1 < e->stack[e->depth].count) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("predicate is false!");
 #endif
                     selection = s7_f(s7);
                 } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("predicate is truthy!");
 #endif
                     selection = s7_t(s7);
@@ -413,7 +413,7 @@ static int sel(void *closure, const char *key)
                 r = 1;
                 break;
             case BUTLAST_P:
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                 log_debug("case: BUTLAST_P");
 #endif
                 e->stack[e->depth].predicate = e->predicate;
@@ -421,12 +421,12 @@ static int sel(void *closure, const char *key)
                 if (e->stack[e->depth].index + 1 < e->stack[e->depth].count) {
                     /* s7_pointer tmp = s7_vector_ref(s7, e->stack[e->depth].cont, e->stack[e->depth].index); */
                     /* (void)tmp; */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("predicate is truthy!");
 #endif
                     selection = s7_t(s7);
                 } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("pred {{?}} is false!");
 #endif
                     selection = s7_f(s7);
@@ -446,13 +446,13 @@ static int sel(void *closure, const char *key)
     }
     else if (strcmp(key, "?") == 0) {
         if (e->stack[e->depth].index +1 < e->stack[e->depth].count) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("ADD SMART COMMA");
 #endif
             selection = s7_t(s7);
             r = 1; // sel S_ok?
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("OMIT SMART COMMA");
 #endif
             selection = s7_f(s7);
@@ -460,13 +460,13 @@ static int sel(void *closure, const char *key)
         }
     } else if (strcmp(key, "$") == 0) {
         if (e->stack[e->depth].index +1 < e->stack[e->depth].count) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("ADD SMART COMMA");
 #endif
             selection = s7_t(s7);
             r = 1; // sel S_ok?
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("OMIT SMART COMMA");
 #endif
             selection = s7_f(s7);
@@ -497,11 +497,11 @@ static int sel(void *closure, const char *key)
         //FIXME: first search current stackframe (including context), then rest of stack
         // frames below top represent selected vals
         // search should query just that, or the ctx?
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("searching stack, height: %d", i);
 #endif
         while (i >= 0) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("i: %d", i);
             /* DUMP_CLOSURE(e, i); */
 #endif
@@ -514,11 +514,11 @@ static int sel(void *closure, const char *key)
                     log_debug("XXXXXXXXXXXXXXXX");
                 } else {
                     assoc = s7_assoc(s7, key_s7, e->stack[i].obj); // .cont?
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     TRACE_S7_DUMP("assoc result", assoc);
 #endif
                     if (assoc != s7_f(s7)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                         log_debug("HIT ASSOC at %d", i);
                         log_debug("predicate: %d", e->predicate);
 #endif
@@ -536,7 +536,7 @@ static int sel(void *closure, const char *key)
                         /* } */
                         break;
                     } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                         log_debug("MISS at %d", i);
 #endif
                         selection = s7_f(s7);
@@ -549,7 +549,7 @@ static int sel(void *closure, const char *key)
                 TRACE_S7_DUMP("e->stack[i].obj", e->stack[i].obj);
 
                 if (key_s7 == s7_car(e->stack[i].obj)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
                     log_debug("MATCH at stackframe %d", i);
 #endif
                     selection = s7_cadr(e->stack[i].obj);
@@ -595,7 +595,7 @@ static int sel(void *closure, const char *key)
             r = 0;
         }
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     TRACE_S7_DUMP("matched", selection);
     /* matched val should be alist or vector, not list? */
     TRACE_S7_DUMP("type", s7_type_of(s7, selection));
@@ -679,7 +679,7 @@ static int sel(void *closure, const char *key)
         TRACE_S7_DUMP("selection val", selection);
         e->selection = selection;
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     TRACE_S7_DUMP("e->selection", e->selection);
     log_debug("e->predicate: %d", e->predicate);
     log_debug("e->stack[%d].predicate: %d", e->depth, e->stack[e->depth].predicate);
@@ -693,12 +693,12 @@ static int sel(void *closure, const char *key)
 static int subsel(void *closure, const char *name)
 {
     TRACE_ENTRY(subsel);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("\tname: '%s'", name);
 
 #endif
     struct tstack_s *e = closure;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP_CLOSURE(e, e->depth);
 #endif
     s7_pointer o;
@@ -742,18 +742,18 @@ static int subsel(void *closure, const char *name)
 static int enter(void *closure, int objiter)
 {
     TRACE_ENTRY(enter);
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("predicate: %d", ((struct closure_hdr*)closure)->predicate);
 #endif
     struct tstack_s *e = closure;
     s7_pointer selected;
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP_CLOSURE(e, e->depth);
 #endif
 
     /* if (!e->lambda) { */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("incrementing stackframe idx from %d", e->depth);
 #endif
         e->depth++;
@@ -764,7 +764,7 @@ static int enter(void *closure, int objiter)
     e->stack[e->depth].is_objiter = 0;
     if (e->predicate) {
         e->stack[e->depth].predicate = e->predicate;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection type: PREDICATE");
         TRACE_S7_DUMP("selected", selected);
         log_debug("w->predicate: %d", e->predicate);
@@ -802,7 +802,7 @@ static int enter(void *closure, int objiter)
         /* if (selected->child == NULL) */
         if ( s7_is_null(s7, selected) )
             goto not_entering;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("OBJITER: json object (hash table)");
 #endif
         e->stack[e->depth].cont = selected;
@@ -812,7 +812,7 @@ static int enter(void *closure, int objiter)
 
     }
     else if (s7_is_procedure(selected)) { /* LAMBDA */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection type: LAMBDA");
 #endif
         e->lambda = true;
@@ -826,7 +826,7 @@ static int enter(void *closure, int objiter)
         e->stack[e->depth].index = 0;
     }
     else if (s7_is_vector(selected)) {                         /* VECTOR */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection type: VECTOR");
         DUMP("vec", selected);
 #endif
@@ -839,17 +839,17 @@ static int enter(void *closure, int objiter)
 
     }
     else if (s7_is_list(s7, selected)) { /* LIST */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection type: LIST");
         DUMP("list", selected);
 #endif
         if (s7_is_null(s7, selected)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("selection type: LIST (NULL)");
 #endif
         }
         else if (libs7_is_alist(s7, selected)) { /* ALIST */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("selection type: ALIST");
             log_debug("setting stackframe for selection type: ALIST (NON-NULL)");
 #endif
@@ -861,7 +861,7 @@ static int enter(void *closure, int objiter)
             e->stack[e->depth].index = 0;
 
         } else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("setting stackframe for selection type: LIST (NON-NULL)");
 #endif
             // treat list like vector
@@ -874,7 +874,7 @@ static int enter(void *closure, int objiter)
         }
     }
     else if (selected == s7_unspecified(s7)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection: UNSPECIFIED");
 #endif
         e->stack[e->depth].count = 1;
@@ -884,7 +884,7 @@ static int enter(void *closure, int objiter)
         goto not_entering;
     }
     else if (selected == s7_t(s7)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection: TRUE");
 #endif
         if (e->predicate) {
@@ -899,7 +899,7 @@ static int enter(void *closure, int objiter)
     }
     else if (selected != s7_f(s7) && !s7_is_null(s7, selected)) {
         // could be boolean #t, number, string, etc.
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection TRUTHY");
         DUMP("ATOM", selected);
         log_debug("e->lambda? %d", e->lambda);
@@ -911,12 +911,12 @@ static int enter(void *closure, int objiter)
         e->stack[e->depth].index = 0;
     }
     else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("selection type: OTHER");
 #endif
         goto not_entering;
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     DUMP_CLOSURE(e, e->depth);
     log_debug("returning: ENTERED");
 #endif
@@ -927,7 +927,7 @@ static int enter(void *closure, int objiter)
  not_entering:
     /* if (!e->lambda) */
     e->depth--;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("NOT ENTERED");
     log_debug("decrement stackframe idx to %d", e->depth);
     DUMP_CLOSURE(e, e->depth);
@@ -942,7 +942,7 @@ static int next(void *closure)
     TRACE_ENTRY(next)
 	struct tstack_s *e = closure;
 	/* s7_pointer o; */
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         DUMP_CLOSURE(e, e->depth);
         /* log_debug("e->depth: %d", e->depth); */
         /* log_debug("e->stack[%d].index: %d", e->depth, e->stack[e->depth].index); */
@@ -970,7 +970,7 @@ static int next(void *closure)
 
 	e->stack[e->depth].index++;
 	if (e->stack[e->depth].index >= e->stack[e->depth].count) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("incremented index to %d (end of list)", e->stack[e->depth].index);
 #endif
             return 0; // !has_next
@@ -982,7 +982,7 @@ static int next(void *closure)
             e->stack[e->depth].obj = s7_list_ref(s7, e->stack[e->depth].cont, e->stack[e->depth].index);
         }
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("incremented index to %d", e->stack[e->depth].index);
 #endif
 	return 1; // has_next
@@ -992,7 +992,7 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(leave)
         struct tstack_s *e = closure;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("current stackframe");
     DUMP_CLOSURE(e, e->depth);
     /* log_debug("decrementing stackframe index from %d", e->depth); */
@@ -1003,7 +1003,7 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
         return MUSTACH_ERROR_CLOSING;
     }
     if (e->stack[e->depth].lambda) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("workbuf tos: %d", workbufs_tos);
         log_debug("lambda workbuf idx: %d", (e->stack[e->depth].workbuf_idx));
         log_debug("lambda workbuf: %s", (workbuf_stack[e->stack[e->depth].workbuf_idx].buf));
@@ -1024,7 +1024,7 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
         sbuf->value = s;
         sbuf->freecb = free;    /* FIXME: why? */
     }
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("decrementing e->depth from %d", e->depth);
 #endif
     e->depth--;
@@ -1039,7 +1039,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
     struct tstack_s *e = closure;
     const char *s;
 
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     log_debug("key: %s", key);
     log_debug("\tsbuf->releasecb: %x", sbuf->releasecb);
     DUMP_CLOSURE(e, e->depth);
@@ -1047,7 +1047,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
     /* TRACE_S7_DUMP("selection", e->selection); */
 
     if (key) { // key is boolean?
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("objiter?: %d", key);
 #endif
         s = e->stack[e->depth].is_objiter
@@ -1091,7 +1091,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         s = s7_string(e->selection);
     }
     else if (s7_is_symbol(e->selection)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("get: selection is symbol");
 #endif
         s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
@@ -1099,13 +1099,13 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
                                   e->selection));
     }
     else if (s7_is_null(s7, e->selection)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("get: selection is null");
 #endif
         s = "";
     }
     else if (s7_is_unspecified(s7, e->selection)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("get: selection is unspecified - (values)?");
 #endif
         /* s = ""; */
@@ -1115,20 +1115,20 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         return 0;              /* ???? */
     }
     else if (s7_is_procedure(e->selection)) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("get: selection is procedure");
 #endif
         sbuf->lambda = true;
         s7_pointer arity=s7_car(s7_arity(s7, e->selection));
         s7_pointer result;
         if (s7_integer(arity) == 0) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("ARITY: 0");
 #endif
             result = s7_apply_function(s7, e->selection, s7_nil(s7));
         }
         else if (s7_integer(arity) == 1) {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
             log_debug("ARITY: 1");
 #endif
             result = s7_make_string(s7, "LAMBDA_RESULT");
@@ -1167,7 +1167,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         if (s == NULL) return MUSTACH_ERROR_SYSTEM;
         sbuf->freecb = free;
     }     else {
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
         log_debug("get: else");
         TRACE_S7_DUMP("e->selection", e->selection);
 #endif
@@ -1178,7 +1178,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         sbuf->freecb = free;    /* FIXME: why? */
     }
     sbuf->value = s;
-#ifdef DEBUG_TRACE
+#ifdef DEBUGGING
     /* log_debug("sbuf->value: %s", sbuf->value); */
     log_debug("\tsbuf->releasecb: %x", sbuf->releasecb);
 #endif
