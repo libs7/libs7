@@ -1,8 +1,13 @@
+#include <errno.h>
 // if linux
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #undef _GNU_SOURCE
+#include <fcntl.h>
 #include <libgen.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "utarray.h"
 #include "s7.h"
@@ -24,6 +29,97 @@ static int _strsort(const void *_a, const void *_b)
     const char *a = *(const char* const *)_a;
     const char *b = *(const char* const *)_b;
     return strcmp(a,b);
+}
+
+/* **************************************************************** */
+char *libs7_read_file(char *fname)
+{
+    off_t file_size;
+    char *buffer;
+    struct stat stbuf;
+    int fd;
+
+    fd = open(fname, O_RDONLY);
+    if (fd == -1) {
+        /* Handle error */
+        log_error("fd open error");
+    }
+
+    if ((fstat(fd, &stbuf) != 0) || (!S_ISREG(stbuf.st_mode))) {
+        /* Handle error */
+        log_error("fstat error");
+    }
+
+    file_size = stbuf.st_size;
+#if defined(DEBUGGING)
+    log_debug("filesize: %d", file_size);
+#endif
+
+    buffer = (char*)malloc(file_size);
+    if (buffer == NULL) {
+        /* Handle error */
+        log_error("malloc file_size fail");
+    }
+
+    /* FIXME: what about e.g. unicode in string literals? */
+    errno = 0;
+    /* FILE *instream = fopen(dunefile_name, "r"); */
+    FILE *instream = fdopen(fd, "r");
+    if (instream == NULL) {
+        /* Handle error */
+        log_debug("fdopen failure");
+        /* printf(RED "ERROR" CRESET "fdopen failure: %s\n", */
+        /*        dunefile_name); */
+        /*        /\* utstring_body(dunefile_name)); *\/ */
+        perror(NULL);
+        exit(EXIT_FAILURE);
+    } else {
+#if defined(DEBUGGING)
+        log_debug("fdopened %s", fname);
+#endif
+    }
+
+    // now read the entire file
+    size_t read_ct = fread(buffer, 1, file_size, instream);
+#if defined(DEBUGGING)
+    log_debug("read_ct: %d", read_ct);
+#endif
+    if (read_ct != (size_t)file_size) {
+        if (ferror(instream) != 0) {
+            /* printf(RED "ERROR" CRESET "fread error 2 for %s\n", */
+            /*        fname); */
+            /* utstring_body(dunefile_name)); */
+            log_error("fread error 2 for %s\n",
+                      fname);
+            /* utstring_body(dunefile_name)); */
+            exit(EXIT_FAILURE); //FIXME: exit gracefully
+        } else {
+            if (feof(instream) == 0) {
+                /* printf(RED "ERROR" CRESET "fread error 3 for %s\n", */
+                /*        dunefile_name); */
+                /* utstring_body(dunefile_name)); */
+                log_error("fread error 3 for %s\n",
+                          fname);
+                /* utstring_body(dunefile_name)); */
+                exit(EXIT_FAILURE); //FIXME: exit gracefully
+            } else {
+                log_error("WTF????????????????");
+            }
+        }
+    } else {
+        close(fd);
+        fclose(instream);
+    }
+    return buffer;
+
+ cleanup:
+    if (instream != NULL)
+    {
+        fclose(instream);
+        close(fd);
+    }
+
+    return NULL;
 }
 
 /* **************************************************************** */

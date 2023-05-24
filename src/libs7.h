@@ -12,6 +12,8 @@ extern "C" {
 #include "log.h"
 #include "s7.h"
 
+    char *libs7_read_file(char *fname);
+
     s7_scheme *libs7_init(void);
 
     s7_pointer libs7_load_clib(s7_scheme *s7, char *lib);

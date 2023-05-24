@@ -1778,7 +1778,7 @@ static int scan_string(context_t *ctx, char *p, int lineno, int dotisspecial) {
     return 0;
   }
 
-  fprintf(stderr, "ERROR ERROR: unquoted string\n");
+  // this is used to parse keys (unquoted syms)
   /* literals */
   for (; *p && *p != '\n'; p++) {
     int ch = *p;

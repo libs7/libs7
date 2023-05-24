@@ -18,7 +18,6 @@ cc_binary(
             # this rule; if they are library files, they are linked
             # in."
             "//lib/libc:c_s7",
-            "//lib/libcjson:cjson_s7",
             "//lib/libcwalk:cwalk_s7",
             # "//lib/libdl:dl_s7",
             # "//lib/libgdbm:gdbm_s7",
@@ -27,6 +26,7 @@ cc_binary(
             # "//lib/libutf8proc:utf8proc_s7",
             # "//lib/libmustach:mustach_s7",
             "//lib/libmustachios7:mustachios7_s7",
+            "//lib/libjson:json_s7",
             "//lib/libtoml:toml_s7",
         ],
         "//conditions:default": []
@@ -38,7 +38,6 @@ cc_binary(
     ] + select({
         "//config/clibs/link:archive?": [
             "//lib/libc:c_s7_archive",
-            "//lib/libcjson:cjson_s7_archive",
             "//lib/libcwalk:cwalk_s7_archive",
             # "//lib/libdl:dl_s7_archive",
             # "//lib/libgdbm:gdbm_s7_archive",
@@ -47,6 +46,7 @@ cc_binary(
             # "//lib/libutf8proc:utf8proc_s7_archive",
             # "//lib/libmustach:mustach_s7_archive",
             "//lib/libmustachios7:mustachios7_s7_archive",
+            "//lib/libjson:json_s7_archive",
             "//lib/libtoml:toml_s7_archive",
         ],
         "//conditions:default": []
@@ -58,7 +58,6 @@ cc_binary(
     ] + select({
         "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
-            "//lib/libcjson:cjson_s7",
             "//lib/libcwalk:cwalk_s7",
             # "//lib/libdl:dl_s7",
             # "//lib/libgdbm:gdbm_s7",
@@ -67,6 +66,7 @@ cc_binary(
             # "//lib/libutf8proc:utf8proc_s7",
             # "//lib/libmustach:mustach_s7",
             "//lib/libmustachios7:mustachios7_s7",
+            "//lib/libjson:json_s7",
             "//lib/libtoml:toml_s7",
         ],
         "//conditions:default": []
@@ -82,8 +82,8 @@ cc_binary(
 
         "-I$(GENDIR)/lib/libc",
         "-I$(GENDIR)/external/libs7/lib/libc",
-        "-I$(GENDIR)/lib/libcjson",
-        "-I$(GENDIR)/external/libs7/lib/libcjson",
+        "-Ilib/libjson",
+        "-Iexternal/libs7/lib/libjson",
         "-I$(GENDIR)/lib/libcwalk",
         "-I$(GENDIR)/external/libs7/lib/libcwalk",
         # "-I$(GENDIR)/lib/libdl",

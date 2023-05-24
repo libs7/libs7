@@ -304,6 +304,7 @@ int main(int argc, char **argv) // , char **envp)
 
     libs7_load_clib(s7, "c");
     libs7_load_clib(s7, "toml");
+    libs7_load_clib(s7, "json");
 
     // deal with bazel context
     char *script;

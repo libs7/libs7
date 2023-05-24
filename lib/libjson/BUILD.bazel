@@ -1,0 +1,62 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["libcjson_clibgen.scm"])
+
+load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES")
+load("//lib:BUILD.bzl",
+     "clibgen_runner",
+     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+
+################################################################
+cc_library(
+    name  = "json_s7_archive", # emits libjson_s7_archive.a
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = [
+        "//src:s7.h",
+        "//src:libs7.h",
+        "libcjson_s7.c",
+        "libjson_s7.h",
+        "cJSON.c", "cJSON.h"],
+    hdrs = ["libjson_s7.h"], # "json.h"],
+    deps  = [
+        # "//src:s7_archive",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Idev",
+        "-Iexternal/libs7/dev",
+        "-Ilib/libjson",
+        "-Iexternal/libs7/lib/libjson",
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        # "-Ivendored/cjson",
+        # "-Iexternal/libs7/vendored/cjson",
+    ],
+    linkopts = CLIB_LINKOPTS,
+    local_defines = DEFINES + CLIB_DEFINES,
+)
+
+cc_binary(
+    name  = "json_s7",  # create libjson_s7.{dylib,so}
+    linkshared = True,
+    srcs  = [":libcjson_s7.c", "//src:s7.h"],
+    deps  = ["//vendored/cjson"],
+    copts = CLIB_COPTS + [
+        "-Ivendored/cjson",
+        "-Iexternal/libs7/vendored/cjson",
+    ],
+    linkopts = CLIB_LINKOPTS,
+    local_defines = DEFINES + CLIB_DEFINES,
+)
+
+# clibgen_runner(
+#     name = "libcjson_s7_runbin",
+#     tool = "//lib:clibgen",
+#     args = ["--script", "lib/libjson/libcjson_clibgen.scm"],
+#     srcs = [":libcjson_clibgen.scm", "//lib:clibgen.scm"],
+#     outs = [":libcjson_s7.c"]
+# )

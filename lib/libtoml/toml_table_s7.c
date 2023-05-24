@@ -421,6 +421,7 @@ char *toml_table_to_string(toml_table_t *tt)
     toml_datum_t datum;
     int typ;
 
+    //FIXME: use input string length to estimate bufsize, then malloc
     const int BUFSZ = 4096;
     char *buf;          /* WARNING: malloc */
     buf = calloc(BUFSZ, sizeof(char));
