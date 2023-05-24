@@ -14,7 +14,7 @@ DEFINES = select({
     "//config/debug:debug?": ["DEBUGGING"],
     "//conditions:default": []
 }) + select({
-    "//config/debug:trace?": ["TRACE"],
+    "//config/debug:trace?": ["TRACING"],
     "//conditions:default": []
 })
 
