@@ -71,8 +71,9 @@ cc_library(
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [
-        "toml_table_s7.c", "toml_table_s7.h",
-        "toml_array_s7.h",
+        "toml_table_s7.c",
+        # "toml_table_s7.h",
+        # "toml_array_s7.h",
         "libtoml_s7.h",
         "toml.h"
     ],
@@ -102,7 +103,7 @@ cc_library(
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [
-        "toml_array_s7.c", "toml_array_s7.h",
+        "toml_array_s7.c", # "toml_array_s7.h",
         "libtoml_s7.h",
         "toml.h"
     ],

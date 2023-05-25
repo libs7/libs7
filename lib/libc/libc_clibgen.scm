@@ -155,7 +155,7 @@
                        }
                      return(s7_make_integer(sc, (s7_int)open(name, flags)));
                     }")
-	   (C-function ("open" g_c_open "" 2 1))
+	   (C-function ("libc:open" g_c_open "" 2 1))
 	   (int creat (char* (mode_t int)))
 	   (int lockf (int int int))
 	   (reader-cond ((provided? 'linux) 
@@ -181,7 +181,7 @@
 	   (in-C "
                   static s7_pointer g_fenv_t_make(s7_scheme *sc, s7_pointer args) 
                   {return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(fenv_t)), s7_make_symbol(sc, \"fenv_t*\"), s7_f(sc)));}")
-	   (C-function ("fenv_t.make" g_fenv_t_make "" 0))
+	   (C-function ("libc:fenv_t.make" g_fenv_t_make "" 0))
 
 	   
 	   
@@ -363,14 +363,14 @@
                    return(s7_list(sc, 2, s7_make_integer(sc, d.quot), s7_make_integer(sc, d.rem)));
                  }
                   ")
-	   (C-function ("llabs" g_llabs "" 1))
-	   (C-function ("free" g_free "" 1))
-	   (C-function ("strtod" g_strtod "" 1))
-	   (C-function ("strtof" g_strtof "" 1))
-	   (C-function ("strtol" g_strtol "" 2))
-	   (C-function ("strtoll" g_strtoll "" 2))
-	   (C-function ("div" g_ldiv "" 2))
-	   (C-function ("ldiv" g_ldiv "" 2))
+	   (C-function ("libc:llabs" g_llabs "" 1))
+	   (C-function ("libc:free" g_free "" 1))
+	   (C-function ("libc:strtod" g_strtod "" 1))
+	   (C-function ("libc:strtof" g_strtof "" 1))
+	   (C-function ("libc:strtol" g_strtol "" 2))
+	   (C-function ("libc:strtoll" g_strtoll "" 2))
+	   (C-function ("libc:div" g_ldiv "" 2))
+	   (C-function ("libc:ldiv" g_ldiv "" 2))
 	   (C-function ("libc:realpath" g_realpath "" 1)) ;; 2
 
 	   ;; -------- errno.h --------
@@ -385,8 +385,8 @@
 	   (in-C "
                   static s7_pointer g_errno(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, errno));}
                   static s7_pointer g_set_errno(s7_scheme *sc, s7_pointer args) {errno = (int)s7_integer(s7_car(args)); return(s7_car(args));}")
-	   (C-function ("errno" g_errno "" 0))
-	   (C-function ("set_errno" g_set_errno "" 1))
+	   (C-function ("libc:errno" g_errno "" 0))
+	   (C-function ("libc:set_errno" g_set_errno "" 1))
 	   
 	   
 	   ;; -------- locale.h --------
@@ -419,9 +419,8 @@
              		     s7_make_symbol(sc, \"p_sign_posn\"),       s7_make_integer(sc, lc->p_sign_posn),
              		     s7_make_symbol(sc, \"n_sign_posn\"),       s7_make_integer(sc, lc->n_sign_posn))));
               }")
-	   (C-function ("localeconv" g_localeconv "" 0))
-	   
-	   
+	   (C-function ("libc:localeconv" g_localeconv "" 0))
+
 	   ;; -------- sys/utsname.h --------
 	   (in-C "
              static s7_pointer g_uname(s7_scheme *sc, s7_pointer args)
@@ -434,7 +433,7 @@
              		        s7_make_string(sc, buf.version), 
              		        s7_make_string(sc, buf.release)));
              }")
-	   (C-function ("uname" g_uname "" 0))
+	   (C-function ("libc:uname" g_uname "" 0))
 	   
 	   
 	   ;; -------- unistd.h --------                  
@@ -566,8 +565,8 @@
                     return(lst);
                   }
                   ")
-	   (C-function ("getenvs" getenvs "(getenvs) returns all the environment variables in an alist" 0))
-	   (C-function ("getgroups" g_getgroups "" 1))
+	   (C-function ("libc:getenvs" getenvs "(getenvs) returns all the environment variables in an alist" 0))
+	   (C-function ("libc:getgroups" g_getgroups "" 1))
 	   
 	   ;; perhaps call these as (define* n (path ...) = args? and use execve for all?
 	   ;;   but are these useful in this context?  How is fork used here?
@@ -621,7 +620,7 @@
                     internal_ftw_closure = s7_cadr(args);
                     return(s7_make_integer(sc, ftw(s7_string(s7_car(args)), internal_ftw_function, s7_integer(s7_caddr(args)))));
                   }")
-	   (C-function ("ftw" g_ftw "" 3))
+	   (C-function ("libc:ftw" g_ftw "" 3))
 	   
 	   
 	   ;; -------- sys/stat.h --------
@@ -638,9 +637,9 @@
                     {return(s7_make_integer(sc, lstat(s7_string(s7_car(args)), 
                                                 (struct stat *)s7_c_pointer_with_type(sc, s7_cadr(args), s7_make_symbol(sc, \"stat*\"), __func__, 1))));}
                   ")
-	   (C-function ("stat" g_stat "" 2))
-	   (C-function ("fstat" g_fstat "" 2))
-	   (C-function ("lstat" g_lstat "" 2))
+	   (C-function ("libc:stat" g_stat "" 2))
+	   (C-function ("libc:fstat" g_fstat "" 2))
+	   (C-function ("libc:lstat" g_lstat "" 2))
 	   
 	   (int chmod (char* int))
 	   (int mkdir (char* int))
@@ -692,28 +691,28 @@
                     {return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(struct stat)), s7_make_symbol(sc, \"stat*\"), s7_f(sc)));}
                   ")
 	   
-	   (C-function ("S_ISDIR" g_isdir "" 1))
-	   (C-function ("S_ISCHR" g_ischr "" 1))
-	   (C-function ("S_ISBLK" g_isblk "" 1))
-	   (C-function ("S_ISREG" g_isreg "" 1))
-	   (C-function ("S_ISFIFO" g_isfifo "" 1))
-	   (C-function ("S_ISLNK" g_islnk "" 1))
-	   (C-function ("S_ISSOCK" g_issock "" 1))
+	   (C-function ("libc:S_ISDIR" g_isdir "" 1))
+	   (C-function ("libc:S_ISCHR" g_ischr "" 1))
+	   (C-function ("libc:S_ISBLK" g_isblk "" 1))
+	   (C-function ("libc:S_ISREG" g_isreg "" 1))
+	   (C-function ("libc:S_ISFIFO" g_isfifo "" 1))
+	   (C-function ("libc:S_ISLNK" g_islnk "" 1))
+	   (C-function ("libc:S_ISSOCK" g_issock "" 1))
 	   
-	   (C-function ("stat.st_dev" g_st_dev "" 1))
-	   (C-function ("stat.st_ino" g_st_ino "" 1))
-	   (C-function ("stat.st_mode" g_st_mode "" 1))
-	   (C-function ("stat.st_nlink" g_st_nlink "" 1))
-	   (C-function ("stat.st_uid" g_st_uid "" 1))
-	   (C-function ("stat.st_gid" g_st_gid "" 1))
-	   (C-function ("stat.st_rdev" g_st_rdev "" 1))
-	   (C-function ("stat.st_size" g_st_size "" 1))
-	   (C-function ("stat.st_blksize" g_st_blksize "" 1))
-	   (C-function ("stat.st_blocks" g_st_blocks "" 1))
-	   (C-function ("stat.st_atime" g_st_atime "" 1))
-	   (C-function ("stat.st_mtime" g_st_mtime "" 1))
-	   (C-function ("stat.st_ctime" g_st_ctime "" 1))
-	   (C-function ("stat.make" g_stat_make "" 0))
+	   (C-function ("libc:stat.st_dev" g_st_dev "" 1))
+	   (C-function ("libc:stat.st_ino" g_st_ino "" 1))
+	   (C-function ("libc:stat.st_mode" g_st_mode "" 1))
+	   (C-function ("libc:stat.st_nlink" g_st_nlink "" 1))
+	   (C-function ("libc:stat.st_uid" g_st_uid "" 1))
+	   (C-function ("libc:stat.st_gid" g_st_gid "" 1))
+	   (C-function ("libc:stat.st_rdev" g_st_rdev "" 1))
+	   (C-function ("libc:stat.st_size" g_st_size "" 1))
+	   (C-function ("libc:stat.st_blksize" g_st_blksize "" 1))
+	   (C-function ("libc:stat.st_blocks" g_st_blocks "" 1))
+	   (C-function ("libc:stat.st_atime" g_st_atime "" 1))
+	   (C-function ("libc:stat.st_mtime" g_st_mtime "" 1))
+	   (C-function ("libc:stat.st_ctime" g_st_ctime "" 1))
+	   (C-function ("libc:stat.make" g_stat_make "" 0))
 	   
 	   
 	   ;; -------- time.h sys/time.h --------
@@ -814,16 +813,16 @@
                     #endif
                   }
                   ")
-	   (C-function ("time.make" g_time_make "" 1))
-	   (C-function ("mktime" g_mktime "" 1))
-	   (C-function ("strftime" g_strftime "" 4))
-	   (C-function ("gettimeofday" g_gettimeofday "" 0))
-	   (C-function ("nanosleep" g_nanosleep "" 2))
-	   (C-function ("clock_getres" g_clock_getres "" 1))
-	   (C-function ("clock_gettime" g_clock_gettime "" 1)) ; these need -lrt
-	   (C-function ("clock_settime" g_clock_settime "" 3))
-	   (reader-cond ((not (provided? 'solaris)) (C-function ("clock_getcpuclockid" g_clock_getcpuclockid "" 1))))
-	   (C-function ("clock_nanosleep" g_clock_nanosleep "" 4))
+	   (C-function ("libc:time.make" g_time_make "" 1))
+	   (C-function ("libc:mktime" g_mktime "" 1))
+	   (C-function ("libc:strftime" g_strftime "" 4))
+	   (C-function ("libc:gettimeofday" g_gettimeofday "" 0))
+	   (C-function ("libc:nanosleep" g_nanosleep "" 2))
+	   (C-function ("libc:clock_getres" g_clock_getres "" 1))
+	   (C-function ("libc:clock_gettime" g_clock_gettime "" 1)) ; these need -lrt
+	   (C-function ("libc:clock_settime" g_clock_settime "" 3))
+	   (reader-cond ((not (provided? 'solaris)) (C-function ("libc:clock_getcpuclockid" g_clock_getcpuclockid "" 1))))
+	   (C-function ("libc:clock_nanosleep" g_clock_nanosleep "" 4))
 	   
 	   
 	   ;; -------- utime.h --------
@@ -835,7 +834,7 @@
                     tb.modtime = (time_t)s7_integer(s7_caddr(args));
                     return(s7_make_integer(sc, utime(s7_string(s7_car(args)), &tb)));
                   }")
-	   (C-function ("utime" g_utime "" 3))
+	   (C-function ("libc:utime" g_utime "" 3))
 	   
 	   
 	   ;; -------- termios.h --------
@@ -914,16 +913,16 @@
 	   ;; tcflag_t c_iflag, c_oflag, c_cflag; cc_t c_line;
 	   ;; cc_t c_cc[NCCS];
 	   
-	   (C-function ("cfgetospeed" g_cfgetospeed "" 1))
-	   (C-function ("cfgetispeed" g_cfgetispeed "" 1))
-	   (C-function ("cfsetospeed" g_cfsetospeed "" 2))
-	   (C-function ("cfsetispeed" g_cfsetispeed "" 2))
-	   (C-function ("tcgetattr" g_tcgetattr "" 2))
-	   (C-function ("tcsetattr" g_tcsetattr "" 3))
-	   (C-function ("termios.make" g_termios_make "" 0))
-	   (C-function ("termios.c_lflag" g_termios_c_lflag "" 1))
-	   (C-function ("termios.set_c_lflag" g_termios_set_c_lflag "" 2))
-	   (C-function ("termios.set_c_cc" g_termios_set_c_cc "" 3))
+	   (C-function ("libc:cfgetospeed" g_cfgetospeed "" 1))
+	   (C-function ("libc:cfgetispeed" g_cfgetispeed "" 1))
+	   (C-function ("libc:cfsetospeed" g_cfsetospeed "" 2))
+	   (C-function ("libc:cfsetispeed" g_cfsetispeed "" 2))
+	   (C-function ("libc:tcgetattr" g_tcgetattr "" 2))
+	   (C-function ("libc:tcsetattr" g_tcsetattr "" 3))
+	   (C-function ("libc:termios.make" g_termios_make "" 0))
+	   (C-function ("libc:termios.c_lflag" g_termios_c_lflag "" 1))
+	   (C-function ("libc:termios.set_c_lflag" g_termios_set_c_lflag "" 2))
+	   (C-function ("libc:termios.set_c_cc" g_termios_set_c_cc "" 3))
 	   
 	   
 	   ;; -------- grp.h --------
@@ -965,12 +964,12 @@
                       return(p);
                       }
                       ")
-	   (C-function ("getgrgid" g_getgrgid "" 1))
-	   (C-function ("getgrnam" g_getgrnam "" 1))
-	   (C-function ("group.gr_name" g_group_gr_name "" 1))
-	   (C-function ("group.gr_passwd" g_group_gr_passwd "" 1))
-	   (C-function ("group.gr_gid" g_group_gr_gid "" 1))
-	   (C-function ("group.gr_mem" g_group_gr_mem "" 1))
+	   (C-function ("libc:getgrgid" g_getgrgid "" 1))
+	   (C-function ("libc:getgrnam" g_getgrnam "" 1))
+	   (C-function ("libc:group.gr_name" g_group_gr_name "" 1))
+	   (C-function ("libc:group.gr_passwd" g_group_gr_passwd "" 1))
+	   (C-function ("libc:group.gr_gid" g_group_gr_gid "" 1))
+	   (C-function ("libc:group.gr_mem" g_group_gr_mem "" 1))
 	   ;; ((*libc* 'group.gr_name) ((*libc* 'getgrnam) "wheel")) -> "wheel" (if any)
 	   ;; ((*libc* 'group.gr_name) ((*libc* 'getgrgid) 0)) -> "root"
 	   ;; ((*libc* 'group.gr_gid) ((*libc* 'getgrnam) "root")) -> 0
@@ -999,13 +998,13 @@
                   static s7_pointer g_passwd_pw_shell(s7_scheme *sc, s7_pointer args) 
                     {return(s7_make_string(sc, ((struct passwd *)s7_c_pointer_with_type(sc, s7_car(args), s7_make_symbol(sc, \"passwd*\"), __func__, 1))->pw_shell));}
                   ")
-	   (C-function ("passwd.pw_name" g_passwd_pw_name "" 1))
-	   (C-function ("passwd.pw_passwd" g_passwd_pw_passwd "" 1))
-	   (C-function ("passwd.pw_uid" g_passwd_pw_uid "" 1))
-	   (C-function ("passwd.pw_gid" g_passwd_pw_gid "" 1))
-	   (C-function ("passwd.pw_gecos" g_passwd_pw_gecos "" 1))
-	   (C-function ("passwd.pw_dir" g_passwd_pw_dir "" 1))
-	   (C-function ("passwd.pw_shell" g_passwd_pw_shell "" 1))
+	   (C-function ("libc:passwd.pw_name" g_passwd_pw_name "" 1))
+	   (C-function ("libc:passwd.pw_passwd" g_passwd_pw_passwd "" 1))
+	   (C-function ("libc:passwd.pw_uid" g_passwd_pw_uid "" 1))
+	   (C-function ("libc:passwd.pw_gid" g_passwd_pw_gid "" 1))
+	   (C-function ("libc:passwd.pw_gecos" g_passwd_pw_gecos "" 1))
+	   (C-function ("libc:passwd.pw_dir" g_passwd_pw_dir "" 1))
+	   (C-function ("libc:passwd.pw_shell" g_passwd_pw_shell "" 1))
 	   ;; ((*libc* 'passwd.pw_name) ((*libc* 'getpwnam) "bil")) -> "bil"
 	   
 	   
@@ -1062,10 +1061,10 @@
                                p = s7_cons(sc, s7_make_string(sc, g->gl_pathv[i]), p);
                              return(p);
                            }")
-	   (C-function ("glob.make" g_glob_make "" 0))
-	   (C-function ("glob.gl_pathc" g_glob_gl_pathc "" 1))
-	   (C-function ("glob.gl_pathv" g_glob_gl_pathv "" 1))
-	   (C-function ("glob" g_glob "" 3))
+	   (C-function ("libc:glob.make" g_glob_make "" 0))
+	   (C-function ("libc:glob.gl_pathc" g_glob_gl_pathc "" 1))
+	   (C-function ("libc:glob.gl_pathv" g_glob_gl_pathv "" 1))
+	   (C-function ("libc:glob" g_glob "" 3))
 	   
 	   
 	   ;; -------- signal.h sys/wait.h --------
@@ -1333,51 +1332,51 @@
                 }
                   ")
 	   
-	   (C-function ("rlimit.make" g_rlimit_make "" 0))
-	   (C-function ("rlimit.rlim_cur" g_rlimit_rlim_cur "" 1))
-	   (C-function ("rlimit.rlim_max" g_rlimit_rlim_max "" 1))
+	   (C-function ("libc:rlimit.make" g_rlimit_make "" 0))
+	   (C-function ("libc:rlimit.rlim_cur" g_rlimit_rlim_cur "" 1))
+	   (C-function ("libc:rlimit.rlim_max" g_rlimit_rlim_max "" 1))
 	   
-	   (C-function ("rusage.make" g_rusage_make "" 0))
-	   (C-function ("getrusage" g_getrusage "" 2))
-	   (C-function ("rusage.ru_maxrss" g_rusage_ru_maxrss "" 1))
-	   (C-function ("rusage.ru_minflt" g_rusage_ru_minflt "" 1))
-	   (C-function ("rusage.ru_majflt" g_rusage_ru_majflt "" 1))
-	   (C-function ("rusage.ru_inblock" g_rusage_ru_inblock "" 1))
-	   (C-function ("rusage.ru_oublock" g_rusage_ru_oublock "" 1))
-	   (C-function ("rusage.ru_nvcsw" g_rusage_ru_nvcsw "" 1))
-	   (C-function ("rusage.ru_nivcsw" g_rusage_ru_nivcsw "" 1))
-	   (C-function ("rusage.ru_utime" g_rusage_ru_utime "" 1))
-	   (C-function ("rusage.ru_stime" g_rusage_ru_stime "" 1))
+	   (C-function ("libc:rusage.make" g_rusage_make "" 0))
+	   (C-function ("libc:getrusage" g_getrusage "" 2))
+	   (C-function ("libc:rusage.ru_maxrss" g_rusage_ru_maxrss "" 1))
+	   (C-function ("libc:rusage.ru_minflt" g_rusage_ru_minflt "" 1))
+	   (C-function ("libc:rusage.ru_majflt" g_rusage_ru_majflt "" 1))
+	   (C-function ("libc:rusage.ru_inblock" g_rusage_ru_inblock "" 1))
+	   (C-function ("libc:rusage.ru_oublock" g_rusage_ru_oublock "" 1))
+	   (C-function ("libc:rusage.ru_nvcsw" g_rusage_ru_nvcsw "" 1))
+	   (C-function ("libc:rusage.ru_nivcsw" g_rusage_ru_nivcsw "" 1))
+	   (C-function ("libc:rusage.ru_utime" g_rusage_ru_utime "" 1))
+	   (C-function ("libc:rusage.ru_stime" g_rusage_ru_stime "" 1))
 	   
 	   (reader-cond ((provided? 'linux) 
-			 (C-function ("siginfo.make" g_siginfo_make "" 0))
-			 (C-function ("siginfo.si_signo" g_siginfo_si_signo "" 1))
-			 (C-function ("siginfo.si_errno" g_siginfo_si_errno "" 1))
-			 (C-function ("siginfo.si_code" g_siginfo_si_code "" 1))
-			 (C-function ("siginfo.si_pid" g_siginfo_si_pid "" 1))
-			 (C-function ("siginfo.si_uid" g_siginfo_si_uid "" 1))
-			 (C-function ("siginfo.si_status" g_siginfo_si_status "" 1))
-			 (C-function ("siginfo.si_utime" g_siginfo_si_utime "" 1))
-			 (C-function ("siginfo.si_stime" g_siginfo_si_stime "" 1))
-			 (C-function ("siginfo.si_value" g_siginfo_si_value "" 1))
-			 (C-function ("siginfo.si_int" g_siginfo_si_int "" 1))
-			 (C-function ("siginfo.si_overrun" g_siginfo_si_overrun "" 1))
-			 (C-function ("siginfo.si_timerid" g_siginfo_si_timerid "" 1))
-			 (C-function ("siginfo.si_band" g_siginfo_si_band "" 1))
-			 (C-function ("siginfo.si_fd" g_siginfo_si_fd "" 1))
-			 (C-function ("siginfo.si_ptr" g_siginfo_si_ptr "" 1))
-			 (C-function ("siginfo.si_addr" g_siginfo_si_addr "" 1))))
+			 (C-function ("libc:siginfo.make" g_siginfo_make "" 0))
+			 (C-function ("libc:siginfo.si_signo" g_siginfo_si_signo "" 1))
+			 (C-function ("libc:siginfo.si_errno" g_siginfo_si_errno "" 1))
+			 (C-function ("libc:siginfo.si_code" g_siginfo_si_code "" 1))
+			 (C-function ("libc:siginfo.si_pid" g_siginfo_si_pid "" 1))
+			 (C-function ("libc:siginfo.si_uid" g_siginfo_si_uid "" 1))
+			 (C-function ("libc:siginfo.si_status" g_siginfo_si_status "" 1))
+			 (C-function ("libc:siginfo.si_utime" g_siginfo_si_utime "" 1))
+			 (C-function ("libc:siginfo.si_stime" g_siginfo_si_stime "" 1))
+			 (C-function ("libc:siginfo.si_value" g_siginfo_si_value "" 1))
+			 (C-function ("libc:siginfo.si_int" g_siginfo_si_int "" 1))
+			 (C-function ("libc:siginfo.si_overrun" g_siginfo_si_overrun "" 1))
+			 (C-function ("libc:siginfo.si_timerid" g_siginfo_si_timerid "" 1))
+			 (C-function ("libc:siginfo.si_band" g_siginfo_si_band "" 1))
+			 (C-function ("libc:siginfo.si_fd" g_siginfo_si_fd "" 1))
+			 (C-function ("libc:siginfo.si_ptr" g_siginfo_si_ptr "" 1))
+			 (C-function ("libc:siginfo.si_addr" g_siginfo_si_addr "" 1))))
 	   
-	   (C-function ("timespec.make" g_timespec_make "" 0))
-	   (C-function ("timespec.tv_sec" g_timespec_tv_sec "" 1))
-	   (C-function ("timespec.tv_nsec" g_timespec_tv_nsec "" 1))
+	   (C-function ("libc:timespec.make" g_timespec_make "" 0))
+	   (C-function ("libc:timespec.tv_sec" g_timespec_tv_sec "" 1))
+	   (C-function ("libc:timespec.tv_nsec" g_timespec_tv_nsec "" 1))
 	   
-	   (C-function ("sigaction.make" g_sigaction_make "" 0))
-	   (C-function ("sigaction.sa_handler" g_sigaction_sa_handler "" 1))
-	   (C-function ("sigaction.sa_flags" g_sigaction_sa_flags "" 1))
-	   (C-function ("sigaction.sa_mask" g_sigaction_sa_mask "" 1))
-	   (C-function ("sigaction.set_sa_handler" g_sigaction_set_sa_handler "" 2))
-	   (C-function ("sigaction.set_sa_flags" g_sigaction_set_sa_flags "" 2))
+	   (C-function ("libc:sigaction.make" g_sigaction_make "" 0))
+	   (C-function ("libc:sigaction.sa_handler" g_sigaction_sa_handler "" 1))
+	   (C-function ("libc:sigaction.sa_flags" g_sigaction_sa_flags "" 1))
+	   (C-function ("libc:sigaction.sa_mask" g_sigaction_sa_mask "" 1))
+	   (C-function ("libc:sigaction.set_sa_handler" g_sigaction_set_sa_handler "" 2))
+	   (C-function ("libc:sigaction.set_sa_flags" g_sigaction_set_sa_flags "" 2))
 #|	   
 	   (with-let (sublet *libc*)
 	     (let ((sa (sigaction.make)))
@@ -1392,22 +1391,22 @@
 		 (sleep 1))))
 |#	   
 	   (reader-cond ((provided? 'linux) 
-			 (C-function ("WEXITSTATUS" g_WEXITSTATUS "" 1))
-			 (C-function ("WTERMSIG" g_WTERMSIG "" 1))
-			 (C-function ("WSTOPSIG" g_WSTOPSIG "" 1))
-			 (C-function ("WIFEXITED" g_WIFEXITED "" 1))
-			 (C-function ("WIFSIGNALED" g_WIFSIGNALED "" 1))
-			 (C-function ("WIFSTOPPED" g_WIFSTOPPED "" 1))))
+			 (C-function ("libc:WEXITSTATUS" g_WEXITSTATUS "" 1))
+			 (C-function ("libc:WTERMSIG" g_WTERMSIG "" 1))
+			 (C-function ("libc:WSTOPSIG" g_WSTOPSIG "" 1))
+			 (C-function ("libc:WIFEXITED" g_WIFEXITED "" 1))
+			 (C-function ("libc:WIFSIGNALED" g_WIFSIGNALED "" 1))
+			 (C-function ("libc:WIFSTOPPED" g_WIFSTOPPED "" 1))))
 	   
-	   (C-function ("wait" g_wait "" 0))
-	   (C-function ("waitpid" g_waitpid "" 2))
-	   (C-function ("sigqueue" g_sigqueue "" 3))
-	   (reader-cond ((not (provided? 'solaris)) (C-function ("sigwait" g_sigwait "" 1))))
-	   (C-function ("sigaction" g_sigaction "" 3))
-	   (C-function ("sigtimedwait" g_sigtimedwait "" 3))
-	   (C-function ("sigset.make" g_sigset_make "" 0))
+	   (C-function ("libc:wait" g_wait "" 0))
+	   (C-function ("libc:waitpid" g_waitpid "" 2))
+	   (C-function ("libc:sigqueue" g_sigqueue "" 3))
+	   (reader-cond ((not (provided? 'solaris)) (C-function ("libc:sigwait" g_sigwait "" 1))))
+	   (C-function ("libc:sigaction" g_sigaction "" 3))
+	   (C-function ("libc:sigtimedwait" g_sigtimedwait "" 3))
+	   (C-function ("libc:sigset.make" g_sigset_make "" 0))
 	   
-	   (C-function ("signal" g_signal "" 2))
+	   (C-function ("libc:signal" g_signal "" 2))
 	   
 	   (int getrlimit (int struct-rlimit*))
 	   (int setrlimit (int struct-rlimit*))
@@ -1710,51 +1709,51 @@
                     return(p);
                   }
                  ")
-	   (C-function ("htonl" g_htonl "" 1))
-	   (C-function ("htons" g_htons "" 1))
-	   (C-function ("ntohl" g_ntohl "" 1))
-	   (C-function ("ntohs" g_ntohs "" 1))
+	   (C-function ("libc:htonl" g_htonl "" 1))
+	   (C-function ("libc:htons" g_htons "" 1))
+	   (C-function ("libc:ntohl" g_ntohl "" 1))
+	   (C-function ("libc:ntohs" g_ntohs "" 1))
 	   
-	   (C-function ("getaddrinfo" g_getaddrinfo "" 3))
-	   (C-function ("getnameinfo" g_getnameinfo "" 3))
-	   (C-function ("addrinfo.make" g_addrinfo_make "" 0))
-	   (C-function ("addrinfo.ai_flags" g_addrinfo_ai_flags "" 1))
-	   (C-function ("addrinfo.set_ai_flags" g_addrinfo_set_ai_flags "" 2))
-	   (C-function ("addrinfo.ai_family" g_addrinfo_ai_family "" 1))
-	   (C-function ("addrinfo.set_ai_family" g_addrinfo_set_ai_family "" 2))
-	   (C-function ("addrinfo.ai_socktype" g_addrinfo_ai_socktype "" 1))
-	   (C-function ("addrinfo.set_ai_socktype" g_addrinfo_set_ai_socktype "" 2))
-	   (C-function ("addrinfo.ai_protocol" g_addrinfo_ai_protocol "" 1))
-	   (C-function ("addrinfo.set_ai_protocol" g_addrinfo_set_ai_protocol "" 2))
-	   (C-function ("addrinfo.ai_canonname" g_addrinfo_ai_canonname "" 1))
-	   (C-function ("addrinfo.ai_next" g_addrinfo_ai_next "" 1))
+	   (C-function ("libc:getaddrinfo" g_getaddrinfo "" 3))
+	   (C-function ("libc:getnameinfo" g_getnameinfo "" 3))
+	   (C-function ("libc:addrinfo.make" g_addrinfo_make "" 0))
+	   (C-function ("libc:addrinfo.ai_flags" g_addrinfo_ai_flags "" 1))
+	   (C-function ("libc:addrinfo.set_ai_flags" g_addrinfo_set_ai_flags "" 2))
+	   (C-function ("libc:addrinfo.ai_family" g_addrinfo_ai_family "" 1))
+	   (C-function ("libc:addrinfo.set_ai_family" g_addrinfo_set_ai_family "" 2))
+	   (C-function ("libc:addrinfo.ai_socktype" g_addrinfo_ai_socktype "" 1))
+	   (C-function ("libc:addrinfo.set_ai_socktype" g_addrinfo_set_ai_socktype "" 2))
+	   (C-function ("libc:addrinfo.ai_protocol" g_addrinfo_ai_protocol "" 1))
+	   (C-function ("libc:addrinfo.set_ai_protocol" g_addrinfo_set_ai_protocol "" 2))
+	   (C-function ("libc:addrinfo.ai_canonname" g_addrinfo_ai_canonname "" 1))
+	   (C-function ("libc:addrinfo.ai_next" g_addrinfo_ai_next "" 1))
 	   
-	   (C-function ("hostent.h_name" g_hostent_h_name "" 1))
-	   (C-function ("netent.n_name" g_netent_n_name "" 1))
-	   (C-function ("servent.s_name" g_servent_s_name "" 1))
-	   (C-function ("servent.s_proto" g_servent_s_proto "" 1))
-	   (C-function ("protoent.p_name" g_protoent_p_name "" 1))
-	   (C-function ("hostent.h_addrtype" g_hostent_h_addrtype "" 1))
-	   (C-function ("hostent.h_length" g_hostent_h_length "" 1))
-	   (C-function ("netent.n_addrtype" g_netent_n_addrtype "" 1))
-	   (C-function ("netent.n_net" g_netent_n_net "" 1))
-	   (C-function ("servent.s_port" g_servent_s_port "" 1))
-	   (C-function ("protoent.p_proto" g_protoent_p_proto "" 1))
+	   (C-function ("libc:hostent.h_name" g_hostent_h_name "" 1))
+	   (C-function ("libc:netent.n_name" g_netent_n_name "" 1))
+	   (C-function ("libc:servent.s_name" g_servent_s_name "" 1))
+	   (C-function ("libc:servent.s_proto" g_servent_s_proto "" 1))
+	   (C-function ("libc:protoent.p_name" g_protoent_p_name "" 1))
+	   (C-function ("libc:hostent.h_addrtype" g_hostent_h_addrtype "" 1))
+	   (C-function ("libc:hostent.h_length" g_hostent_h_length "" 1))
+	   (C-function ("libc:netent.n_addrtype" g_netent_n_addrtype "" 1))
+	   (C-function ("libc:netent.n_net" g_netent_n_net "" 1))
+	   (C-function ("libc:servent.s_port" g_servent_s_port "" 1))
+	   (C-function ("libc:protoent.p_proto" g_protoent_p_proto "" 1))
 	   
-	   (C-function ("hostent.h_aliases" g_hostent_h_aliases "" 1))
-	   (C-function ("servent.s_aliases" g_servent_s_aliases "" 1))
-	   (C-function ("netent.n_aliases" g_netent_n_aliases "" 1))
-	   (C-function ("protoent.p_aliases" g_protoent_p_aliases "" 1))
+	   (C-function ("libc:hostent.h_aliases" g_hostent_h_aliases "" 1))
+	   (C-function ("libc:servent.s_aliases" g_servent_s_aliases "" 1))
+	   (C-function ("libc:netent.n_aliases" g_netent_n_aliases "" 1))
+	   (C-function ("libc:protoent.p_aliases" g_protoent_p_aliases "" 1))
 	   ;; (define h (gethostbyname "fatty4"))
 	   ;; ((*libc* 'hostent.h_aliases) h) -> ("localhost" "localhost.localdomain")
 	   
-	   (C-function ("socketpair" g_socketpair "" 3))
-	   (C-function ("getsockname" g_getsockname "" 3))
-	   (C-function ("getpeername" g_getpeername "" 3))
-	   (C-function ("accept" g_accept "" 3))
-	   (C-function ("getsockopt" g_getsockopt "" 5))
-	   (C-function ("setsockopt" g_setsockopt "" 5))
-	   (C-function ("recvfrom" g_recvfrom "" 6))
+	   (C-function ("libc:socketpair" g_socketpair "" 3))
+	   (C-function ("libc:getsockname" g_getsockname "" 3))
+	   (C-function ("libc:getpeername" g_getpeername "" 3))
+	   (C-function ("libc:accept" g_accept "" 3))
+	   (C-function ("libc:getsockopt" g_getsockopt "" 5))
+	   (C-function ("libc:setsockopt" g_setsockopt "" 5))
+	   (C-function ("libc:recvfrom" g_recvfrom "" 6))
 
 	   ;; -------- regex.h --------
 

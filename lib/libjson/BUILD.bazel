@@ -16,12 +16,13 @@ cc_library(
         "//src:s7.h",
         "//src:libs7.h",
         "libcjson_s7.c",
-        "libjson_s7.h",
+        # "libjson_s7.h",
         "cJSON.c", "cJSON.h"],
-    hdrs = ["libjson_s7.h"], # "json.h"],
+    hdrs = ["libjson_s7.h", "cJSON.h"],
     deps  = [
         # "//src:s7_archive",
-        "//vendored/logc"
+        "//vendored/logc",
+        ":cjson_map", "cjson_vector"
     ] + select({
         "//config/profile:dev?": ["//dev"],
         "//conditions:default":  []
@@ -60,3 +61,64 @@ cc_binary(
 #     srcs = [":libcjson_clibgen.scm", "//lib:clibgen.scm"],
 #     outs = [":libcjson_s7.c"]
 # )
+
+################################################################
+cc_library(
+    name  = "cjson_map",
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = [
+        "cjson_map_s7.c",
+        # "libjson_s7.h",
+        "libcjson_s7.h",
+        "cJSON.h"
+    ],
+    deps  = [
+        "//src:s7_archive",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        # "-Ivendored/cjsonc99",
+        # "-Iexternal/libs7/vendored/cjsonc99",
+    ] + select({
+        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//conditions:default":  []
+    }),
+    linkopts = CLIB_LINKOPTS,
+    local_defines = DEFINES + CLIB_DEFINES,
+)
+
+cc_library(
+    name  = "cjson_vector",
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = [
+        "cjson_vector_s7.c", # "cjson_vector_s7.h",
+        "libcjson_s7.h",
+        # "libjson_s7.h",
+        "cJSON.h"
+    ],
+    deps  = [
+        "//src:s7_archive",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        # "-Ivendored/cjsonc99",
+        # "-Iexternal/libs7/vendored/cjsonc99",
+    ] + select({
+        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//conditions:default":  []
+    }),
+    linkopts = CLIB_LINKOPTS,
+    local_defines = DEFINES + CLIB_DEFINES
+)

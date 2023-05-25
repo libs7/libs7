@@ -1268,7 +1268,7 @@ struct s7_scheme {
              catch_symbol, cdaaar_symbol, cdaadr_symbol, cdaar_symbol, cdadar_symbol, cdaddr_symbol, cdadr_symbol, cdar_symbol,
              cddaar_symbol, cddadr_symbol, cddar_symbol, cdddar_symbol, cddddr_symbol, cdddr_symbol, cddr_symbol, cdr_symbol,
              ceiling_symbol, char_downcase_symbol, char_eq_symbol, char_geq_symbol, char_gt_symbol, char_leq_symbol, char_lt_symbol,
-             char_position_symbol, char_to_integer_symbol, char_upcase_symbol, cload_directory_symbol, close_input_port_symbol,
+             char_position_symbol, char_to_integer_symbol, char_upcase_symbol, /* cload_directory_symbol, */ close_input_port_symbol,
              close_output_port_symbol, complex_symbol, cons_symbol, copy_symbol, cos_symbol, cosh_symbol, coverlet_symbol,
              curlet_symbol, current_error_port_symbol, current_input_port_symbol, current_output_port_symbol, cutlet_symbol, cyclic_sequences_symbol,
              denominator_symbol, dilambda_symbol, display_symbol, divide_symbol, documentation_symbol, dynamic_wind_symbol, dynamic_unwind_symbol,
@@ -30642,18 +30642,18 @@ static s7_pointer g_load_path_set(s7_scheme *sc, s7_pointer args)
 }
 
 /* -------- *cload-directory* -------- */
-static s7_pointer g_cload_directory_set(s7_scheme *sc, s7_pointer args)
-{
-  /* this sets the directory for cload.scm's output */
-  s7_pointer cl_dir = cadr(args);
-  if (!is_string(cl_dir))
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *cload-directory* to ~S", 33), cadr(args)));
-  s7_symbol_set_value(sc, sc->cload_directory_symbol, cl_dir);
-  if (string_length(cl_dir) > 0) /* was strlen(string_value)? */
-    s7_add_to_load_path(sc, (const char *)(string_value(cl_dir)));
-  /* should this remove the previous *cload-directory* name first? or not affect *load-path* at all? */
-  return(cl_dir);
-}
+/* static s7_pointer g_cload_directory_set(s7_scheme *sc, s7_pointer args) */
+/* { */
+/*   /\* this sets the directory for cload.scm's output *\/ */
+/*   s7_pointer cl_dir = cadr(args); */
+/*   if (!is_string(cl_dir)) */
+/*     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *cload-directory* to ~S", 33), cadr(args))); */
+/*   s7_symbol_set_value(sc, sc->cload_directory_symbol, cl_dir); */
+/*   if (string_length(cl_dir) > 0) /\* was strlen(string_value)? *\/ */
+/*     s7_add_to_load_path(sc, (const char *)(string_value(cl_dir))); */
+/*   /\* should this remove the previous *cload-directory* name first? or not affect *load-path* at all? *\/ */
+/*   return(cl_dir); */
+/* } */
 
 
 /* ---------------- autoload ---------------- */
@@ -58029,6 +58029,7 @@ static s7_d_7piii_t s7_d_7piii_function(s7_pointer f) {return((s7_d_7piii_t)opt_
 void s7_set_i_7p_function(s7_scheme *sc, s7_pointer f, s7_i_7p_t df) {add_opt_func(sc, f, o_i_7p, (void *)df);}
 s7_i_7p_t s7_i_7p_function(s7_pointer f) {return((s7_i_7p_t)opt_func(f, o_i_7p));}
 
+/* #if defined(CLOAD_SCM) */
 /* cload.scm */
 void s7_set_d_ddd_function(s7_scheme *sc, s7_pointer f, s7_d_ddd_t df) {add_opt_func(sc, f, o_d_ddd, (void *)df);}
 s7_d_ddd_t s7_d_ddd_function(s7_pointer f) {return((s7_d_ddd_t)opt_func(f, o_d_ddd));}
@@ -58044,6 +58045,7 @@ s7_i_ii_t s7_i_ii_function(s7_pointer f) {return((s7_i_ii_t)opt_func(f, o_i_ii))
 
 void s7_set_i_7d_function(s7_scheme *sc, s7_pointer f, s7_i_7d_t df) {add_opt_func(sc, f, o_i_7d, (void *)df);}
 s7_i_7d_t s7_i_7d_function(s7_pointer f) {return((s7_i_7d_t)opt_func(f, o_i_7d));}
+/* #endif */
 
 /* s7test.scm */
 void s7_set_p_d_function(s7_scheme *sc, s7_pointer f, s7_p_d_t df) {add_opt_func(sc, f, o_p_d, (void *)df);}
@@ -95293,14 +95295,14 @@ static void init_rootlet(s7_scheme *sc)
 			   "*load-path* is a list of directories (strings) that the load function searches if it is passed an incomplete file name");
   s7_set_setter(sc, sc->load_path_symbol, s7_make_safe_function(sc, "#<set-*load-path*>", g_load_path_set, 2, 0, false, "*load-path* setter"));
 
-#ifdef CLOAD_DIR
-  sc->cload_directory_symbol = s7_define_variable(sc, "*cload-directory*", s7_make_string(sc, (char *)CLOAD_DIR));
-  s7_add_to_load_path(sc, (const char *)CLOAD_DIR);
-#else
-  sc->cload_directory_symbol = s7_define_variable(sc, "*cload-directory*", nil_string);
-#endif
-  s7_set_setter(sc, sc->cload_directory_symbol,
-		s7_make_safe_function(sc, "#<set-*cload-directory*>", g_cload_directory_set, 2, 0, false, "*cload-directory* setter"));
+/* #ifdef CLOAD_DIR */
+/*   sc->cload_directory_symbol = s7_define_variable(sc, "*cload-directory*", s7_make_string(sc, (char *)CLOAD_DIR)); */
+/*   s7_add_to_load_path(sc, (const char *)CLOAD_DIR); */
+/* #else */
+/*   sc->cload_directory_symbol = s7_define_variable(sc, "*cload-directory*", nil_string); */
+/* #endif */
+/*   s7_set_setter(sc, sc->cload_directory_symbol, */
+/* 		s7_make_safe_function(sc, "#<set-*cload-directory*>", g_cload_directory_set, 2, 0, false, "*cload-directory* setter")); */
 
   /* -------- *autoload* -------- this pretends to be a hash-table or environment, but it's actually a function */
   sc->autoloader_symbol = s7_define_typed_function(sc, "*autoload*", g_autoloader, 1, 0, false, H_autoloader, Q_autoloader);
@@ -95310,7 +95312,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_set_setter(sc, sc->libraries_symbol, s7_make_safe_function(sc, "#<set-*libraries*>", g_libraries_set, 2, 0, false, "*libraries* setter"));
 
   s7_autoload(sc, make_symbol(sc, "clibgen.scm", 11),        s7_make_semipermanent_string(sc, "clibgen.scm")); /* obazl */
-  s7_autoload(sc, make_symbol(sc, "cload.scm", 9),        s7_make_semipermanent_string(sc, "cload.scm"));
+  /* s7_autoload(sc, make_symbol(sc, "cload.scm", 9),        s7_make_semipermanent_string(sc, "cload.scm")); */
   s7_autoload(sc, make_symbol(sc, "lint.scm", 8),         s7_make_semipermanent_string(sc, "lint.scm"));
   s7_autoload(sc, make_symbol(sc, "stuff.scm", 9),        s7_make_semipermanent_string(sc, "stuff.scm"));
   s7_autoload(sc, make_symbol(sc, "mockery.scm", 11),     s7_make_semipermanent_string(sc, "mockery.scm"));
