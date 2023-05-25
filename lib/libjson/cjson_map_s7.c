@@ -20,6 +20,27 @@ static s7_pointer string_string;
 /* ****************************************************************
  * Public Scheme API for cJSON.h map (object) operations
  *****************************************************************/
+static s7_pointer json_is_map(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(json_is_map);
+    s7_pointer p, arg;
+    p = args;
+    arg = s7_car(p);
+    /* log_debug("c obj type: %d", s7_c_object_type(arg)); */
+    /* log_debug("json_object_type_tag: %d", json_object_type_tag); */
+    if (s7_c_object_type(arg) == json_object_type_tag) {
+        cJSON* item = (cJSON*)s7_c_object_value(arg);
+        if (cJSON_IsObject(item))
+            return(s7_t(s7));
+        else
+            return(s7_f(s7));
+    /* } */
+    /* else if (s7_c_object_type(arg) == json_vector_type_tag) { */
+    /*     return(s7_f(s7)); */
+    } else
+        return s7_f(s7);
+}
+
 /* returns list */
 s7_pointer g_json_object_keys(s7_scheme *s7, s7_pointer args)
 {
@@ -746,6 +767,13 @@ void json_object_init(s7_scheme *s7, s7_pointer cur_env)
 
     /* **************************************************************** */
     // API
+
+    s7_define(s7, cur_env,
+              s7_make_symbol(s7, "json:map?"),
+              s7_make_typed_function(s7, "json:map?",
+                                     json_is_map,
+                                     1, 0, false,
+                                     "cJSON_bool cJSON_IsObject(cJSON*)", pl_tx));
 
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:map-keys"),

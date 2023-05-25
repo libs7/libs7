@@ -17,6 +17,7 @@ test_suite(
         # ":gsl", ## takes too long to build for one trivial test
         ":cwalk",
         ":utf8proc",
+        "//test/lib/json",
         "//test/lib/toml"
     ]
 )

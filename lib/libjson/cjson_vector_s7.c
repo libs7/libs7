@@ -24,36 +24,15 @@ static s7_pointer g_json_is_vector(s7_scheme *s7, s7_pointer args)
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
-    if (s7_c_object_type(arg) != json_vector_type_tag) {
-        log_error("Bad arg: expected array");
-        // FIXME: throw error
+    if (s7_c_object_type(arg) == json_vector_type_tag) {
+        cJSON *item = (cJSON*)s7_c_object_value(arg);
+        if (cJSON_IsArray(item))
+            return(s7_t(s7));
+        else
+            return(s7_f(s7));
+    } else
         return s7_f(s7);
-    }
-    cJSON *item = (cJSON*)s7_c_object_value(arg);
-    if (cJSON_IsArray(item))
-        return(s7_t(s7));
-    else
-        return(s7_f(s7));
 }
-
-
-/* -------- cJSON_GetArrayItem -------- */
-/* static s7_pointer json_cJSON_GetArrayItem(s7_scheme *sc, s7_pointer args) */
-/* { */
-/*     TRACE_ENTRY(json_cJSON_GetArrayItem); */
-/*     s7_pointer p, arg; */
-/*     cJSON* json_cJSON_GetArrayItem_0; */
-/*     int json_cJSON_GetArrayItem_1; */
-/*     p = args; */
-/*     arg = s7_car(p); */
-/*     json_cJSON_GetArrayItem_0 = (cJSON*)s7_c_pointer_with_type(sc, arg, cJSON__symbol, __func__, 1); */
-/*     p = s7_cdr(p); */
-/*     arg = s7_car(p); */
-/*     if (s7_is_integer(arg)) */
-/*         json_cJSON_GetArrayItem_1 = (int)s7_integer(arg); */
-/*     else return(s7_wrong_type_error(sc, s7_make_string_wrapper_with_length(sc, "json:GetArrayItem", 17), 2, arg, integer_string)); */
-/*     return(s7_make_c_pointer_with_type(sc, (void*)cJSON_GetArrayItem(json_cJSON_GetArrayItem_0, json_cJSON_GetArrayItem_1), cJSON__symbol, s7_f(sc))); */
-/* } */
 
 /* ****************************************************************
  *  s7 integration API
@@ -110,27 +89,22 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
 
     p = s7_cdr(p);
     arg = s7_car(p);            /* arg 1: string key */
-    char* key = NULL;
     int idx;
-    if (s7_is_string(arg)) {
-        // for map-ref or map application
-        key = (char*)s7_string(arg);
-        TRACE_LOG_DEBUG("arg 1, key: %s", key);
-    }
-    else if (s7_is_integer(arg)) {
+    if (s7_is_integer(arg)) {
         // for procedures map, for-each
         idx = s7_integer(arg);
-        TRACE_LOG_DEBUG("arg 1, idx: %s", idx);
-    }
-    else {
+        TRACE_LOG_DEBUG("arg 1, idx: %d", idx);
+    } else {
         return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "json:map-ref", 14), 2, arg, string_string));
     }
 
-    cJSON *item;
-    if (key == NULL) {
-        item = cJSON_GetArrayItem(jo, idx);
-    } else {
-        item = cJSON_GetObjectItemCaseSensitive(jo, key);
+    cJSON *item = cJSON_GetArrayItem(jo, idx);
+    if (item == NULL) {
+        log_error("vector-ref: bad index");
+        const char *e = cJSON_GetErrorPtr();
+        return s7_error(s7,
+                        s7_make_symbol(s7, "vector-ref index out of range?"),
+                        s7_cons(s7, s7_make_string(s7, e), s7_nil(s7)));
     }
 #ifdef DEBUGGING
     log_debug("item type: [%d]%s", item->type, cjson_types[item->type]);
@@ -141,75 +115,36 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
     s7_pointer tmp, result;
     switch(item->type) {
     case cJSON_String:
-        tmp = s7_make_string(s7, item->valuestring);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
+        result = s7_make_string(s7, item->valuestring);
         return(result);
         break;
     case cJSON_Number:
         // int or double?
         sprintf(buf, "%15.10g", item->valuedouble);
-        /* log_debug("formatted: %s", (char*)buf); */
         decimal = strchr(buf, '.');
         if (decimal)
-            tmp = s7_make_real(s7, item->valuedouble);
+            result = s7_make_real(s7, item->valuedouble);
         else
-            tmp = s7_make_integer(s7, item->valuedouble);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
+            result = s7_make_integer(s7, item->valuedouble);
         return(result);
         break;
     case cJSON_False:
-        tmp = s7_f(s7);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
-        return(result);
+        return(s7_f(s7));
         break;
     case cJSON_True:
-        tmp = s7_t(s7);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
-        return(result);
+        return(s7_t(s7));
         break;
     case cJSON_Array:
-        tmp = s7_make_c_object(s7, json_vector_type_tag, (void*)item);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
+        result = s7_make_c_object(s7, json_vector_type_tag, (void*)item);
         return(result);
         break;
     case cJSON_Object:
-        tmp = s7_make_c_object(s7, json_object_type_tag,
+        result = s7_make_c_object(s7, json_object_type_tag,
                                (void*)item);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
         return(result);
         break;
     case cJSON_NULL:
-        tmp = s7_nil(s7);
-        if (key) {
-            result = tmp;
-        } else {
-            result = s7_cons(s7, s7_make_string(s7, item->string), tmp);
-        }
-        return(result);
+        return(s7_nil(s7));
         break;
     case cJSON_Raw:
         log_error("Bad arg: raw");

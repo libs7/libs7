@@ -381,18 +381,20 @@ char *toml_array_to_string(toml_array_t *ta)
     }
     size_t bufsz = BUFSZ;
     size_t char_ct = 0;
+    int ct;
+    (void)ct;
 
     // print header
     /* { */
         errno = 0;
         TRACE_LOG_DEBUG("snprintfing header", "");
-        /* ct = snprintf(buf, 2, "%s", "["); */
-        /* if (errno) { */
-        /*     log_error("snprintf: %s", strerror(errno)); */
-        /*     return NULL; */
-        /* } else { */
-        /*     TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct); */
-        /* } */
+        ct = snprintf(buf, 2, "%s", "[");
+        if (errno) {
+            log_error("snprintf: %s", strerror(errno));
+            return NULL;
+        } else {
+            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
+        }
         char_ct += 1; // do not include terminating '\0'
         TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
         TRACE_LOG_DEBUG("buf: %s", buf);
@@ -401,7 +403,7 @@ char *toml_array_to_string(toml_array_t *ta)
     // print elements
     int idx_ct = toml_array_nelem(ta);
     /* char *k, *v; */
-    int len, ct;
+    int len;
     (void)ct;                   /* set-but-not-used warning */
     for (int i = 0; i < idx_ct; i++) {
         // print comma
@@ -411,13 +413,13 @@ char *toml_array_to_string(toml_array_t *ta)
             } else {
                 errno = 0;
                 TRACE_LOG_DEBUG("snprintfing comma", "");
-                /* ct = snprintf(buf+char_ct, 3, "%s", ", "); */
-                /* if (errno) { */
-                /*     log_error("snprintf: %s", strerror(errno)); */
-                /*     break; */
-                /* } else { */
-                /*     TRACE_LOG_DEBUG("snprintf comma ct: %d", ct); */
-                /* } */
+                ct = snprintf(buf+char_ct, 3, "%s", ", ");
+                if (errno) {
+                    log_error("snprintf: %s", strerror(errno));
+                    break;
+                } else {
+                    TRACE_LOG_DEBUG("snprintf comma ct: %d", ct);
+                }
                 char_ct += 2; // do not include terminating '\0'
                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
                 TRACE_LOG_DEBUG("buf: %s", buf);

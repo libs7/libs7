@@ -11,5 +11,6 @@ cc_library(
     ],
     hdrs = ["unity.h"],
     copts = ["-c"],
+    defines = ["UNITY_FLOAT_TYPE=double", "UNITY_INCLUDE_DOUBLE"],
     visibility = ["//visibility:public"]
 )

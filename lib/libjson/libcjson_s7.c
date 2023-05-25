@@ -12,6 +12,20 @@
 /* #include "libjson_s7.h" */
 /* #include "libs7.h" */
 
+#if defined(DEBUGGING)
+char *cjson_types[256] = {
+    [cJSON_Invalid] = CJSON_TYPE_NAME(cJSON_Invalid), // (0)
+    [cJSON_False]   = CJSON_TYPE_NAME(cJSON_False),   // (1 << 0)
+    [cJSON_True]    = CJSON_TYPE_NAME(cJSON_True),    // (1 << 1)
+    [cJSON_NULL]    = CJSON_TYPE_NAME(cJSON_NULL),    // (1 << 2)
+    [cJSON_Number]  = CJSON_TYPE_NAME(cJSON_Number),  // (1 << 3)
+    [cJSON_String]  = CJSON_TYPE_NAME(cJSON_String),  // (1 << 4)
+    [cJSON_Array]   = CJSON_TYPE_NAME(cJSON_Array),   // (1 << 5)
+    [cJSON_Object]  = CJSON_TYPE_NAME(cJSON_Object),  // (1 << 6)
+    [cJSON_Raw]     = CJSON_TYPE_NAME(cJSON_Raw) // (1 << 7) /* raw json */
+};
+#endif
+
 /* signature stuff */
 s7_pointer pl_tx, pl_xs, pl_bxs, pl_xi, pl_xx, pl_txs, pl_xxs, pl_xsi, pl_xxi, pl_xsxt, pl_xsixt, pl_dx, pl_st, pl_sx, pl_ix;
 
@@ -432,28 +446,6 @@ static s7_pointer json_cJSON_IsString(s7_scheme *sc, s7_pointer args)
 }
 
 
-/* -------- cJSON_IsObject -------- */
-static s7_pointer json_cJSON_IsObject(s7_scheme *s7, s7_pointer args)
-{
-    TRACE_ENTRY(json_cJSON_IsObject);
-    s7_pointer p, arg;
-    p = args;
-    arg = s7_car(p);
-    /* log_debug("c obj type: %d", s7_c_object_type(arg)); */
-    /* log_debug("json_object_type_tag: %d", json_object_type_tag); */
-    if (s7_c_object_type(arg) != json_object_type_tag) {
-        log_error("Bad arg");
-        // FIXME: throw error
-        return s7_f(s7);
-    }
-    cJSON* item = (cJSON*)s7_c_object_value(arg);
-    if (cJSON_IsObject(item))
-        return(s7_t(s7));
-    else
-        return(s7_f(s7));
-}
-
-
 /* -------- cJSON_IsRaw -------- */
 static s7_pointer json_cJSON_IsRaw(s7_scheme *sc, s7_pointer args)
 {
@@ -517,13 +509,6 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:raw?"),
               s7_make_typed_function(s7, "json:IsRaw", json_cJSON_IsRaw, 1, 0, false, "cJSON_bool cJSON_IsRaw(cJSON*)", pl_tx));
-
-    s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:map?"),
-              s7_make_typed_function(s7, "json:map?",
-                                     json_cJSON_IsObject,
-                                     1, 0, false,
-                                     "cJSON_bool cJSON_IsObject(cJSON*)", pl_tx));
 
     /* s7_define(s7, cur_env, */
     /*           s7_make_symbol(s7, "json:array?"), */

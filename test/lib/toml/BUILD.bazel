@@ -40,7 +40,6 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + ["//dev"] + select({
         "//config/clibs/link:archive?": [
-            "//src:s7_archive",
             "//lib/libtoml:toml_s7_archive"
         ],
         "//conditions:default": []
@@ -70,7 +69,6 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
@@ -129,7 +127,6 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
@@ -153,7 +150,6 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
@@ -177,7 +173,6 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
@@ -201,7 +196,6 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [
@@ -226,7 +220,6 @@ cc_test(
     data = ["//test/lib/toml/data:strings.toml"],
     deps = DEPS + [
         "//dev",
-        "//src:s7_archive",
         "//lib/libtoml:toml_s7_archive"
     ],
     copts = COPTS + [

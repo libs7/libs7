@@ -447,7 +447,6 @@ int main(int argc, char **argv)
 
     RUN_TEST(to_string_atoms);
     RUN_TEST(to_string_arrays);
-    RUN_TEST(to_string_arrays);
     RUN_TEST(to_string_subtables);
     RUN_TEST(to_string_mixed);
 

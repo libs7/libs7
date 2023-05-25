@@ -23,6 +23,6 @@ make(
         "@bazel_tools//src/conditions:linux" : ["libutf8proc.so"],
         "//conditions:default"               : ["libutf8proc.so"],
     }),
-    local_defines = ["BUILD_SHARED_LIBS"],
+    defines = ["BUILD_SHARED_LIBS"],
     visibility = ["//visibility:public"],
 )
