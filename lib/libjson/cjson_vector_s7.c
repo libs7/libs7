@@ -112,7 +112,7 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
 
     char buf[64];               /* for expanding doubles */
     char *decimal = NULL;
-    s7_pointer tmp, result;
+    s7_pointer result; //, tmp;
     switch(item->type) {
     case cJSON_String:
         result = s7_make_string(s7, item->valuestring);

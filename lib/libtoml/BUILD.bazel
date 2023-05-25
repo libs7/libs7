@@ -15,16 +15,20 @@ cc_library(
     srcs  = [
         "//src:s7.h",
         "libtoml_s7.c",
+        # "//lib:utils.c",
+        # "//lib:utils.h",
          # "//vendored/tomlc99:toml.c"
         "toml.c", "toml.h"
     ],
     hdrs = ["libtoml_s7.h", "toml.h"],
     deps  = [
+        "//lib:utils",
         # "//vendored/tomlc99:toml",
         "//vendored/logc",
-        ":toml_table", ":toml_array"
+        ":table", ":array", ":datetime"
     ] + select({
         "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
         "//conditions:default":  []
     }),
     copts = COPTS + [
@@ -37,6 +41,7 @@ cc_library(
         # "-Iexternal/libs7/vendored/tomlc99",
     ] + select({
         "//config/profile:dev?": ["-Idev"],
+        "//config/profile:test?": ["-Idev"],
         "//conditions:default":  []
     }),
     linkopts = LINKOPTS,
@@ -67,13 +72,11 @@ cc_binary(
 
 ################################################################
 cc_library(
-    name  = "toml_table",
+    name  = "table",
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [
         "toml_table_s7.c",
-        # "toml_table_s7.h",
-        # "toml_array_s7.h",
         "libtoml_s7.h",
         "toml.h"
     ],
@@ -83,6 +86,7 @@ cc_library(
         "//vendored/logc"
     ] + select({
         "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
         "//conditions:default":  []
     }),
     copts = CLIB_COPTS + [
@@ -92,6 +96,7 @@ cc_library(
         # "-Iexternal/libs7/vendored/tomlc99",
     ] + select({
         "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
         "//conditions:default":  []
     }),
     linkopts = CLIB_LINKOPTS,
@@ -99,7 +104,7 @@ cc_library(
 )
 
 cc_library(
-    name  = "toml_array",
+    name  = "array",
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [
@@ -112,6 +117,7 @@ cc_library(
         "//vendored/logc"
     ] + select({
         "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
         "//conditions:default":  []
     }),
     copts = CLIB_COPTS + [
@@ -121,6 +127,38 @@ cc_library(
         # "-Iexternal/libs7/vendored/tomlc99",
     ] + select({
         "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//conditions:default":  []
+    }),
+    linkopts = CLIB_LINKOPTS,
+    local_defines = DEFINES + CLIB_DEFINES
+)
+
+cc_library(
+    name  = "datetime",
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = [
+        "toml_datetime_s7.c",
+        "libtoml_s7.h",
+        "toml.h"
+    ],
+    deps  = [
+        "//src:s7_archive",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        # "-Ivendored/tomlc99",
+        # "-Iexternal/libs7/vendored/tomlc99",
+    ] + select({
+        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
         "//conditions:default":  []
     }),
     linkopts = CLIB_LINKOPTS,

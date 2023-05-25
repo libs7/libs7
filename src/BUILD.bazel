@@ -64,7 +64,9 @@ cc_library(
     }),
     data = [
         "//repl:scm",
-        "//scm:srcs", "//scm/s7:srcs", "s7.h"
+        "//scm:srcs",
+        "//scm/srfi:srcs",
+        "//scm/s7:srcs", "s7.h"
     ],
     local_defines = [
         "WITH_SYSTEM_EXTRAS",

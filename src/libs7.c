@@ -382,6 +382,15 @@ s7_scheme *libs7_init(void)
                      "and dlopens and initializes dynamically linked dsos. "
                      "libsym may be symbol or string; it should not include 'lib' prefix and '_s7' suffix.");
 
+  /* two macros commonly used in srfis: receive and :optional */
+
+  /* receive: https://srfi.schemers.org/srfi-8/srfi-8.html */
+/* (define-macro (receive formals expression . body) */
+/*   `(call-with-values (lambda () ,expression) */
+/*                     (lambda ,formals ,@body))) */
+
+/* (define-macro (?optional val default-value) `(if (null? ,val) ,default-value (car ,val))) */
+
   s7_define_function(s7, "alist?", g_is_alist,
                      1,         /* required: 1 arg, libname */
                      0,         /* optional: 0 */

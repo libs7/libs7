@@ -8,7 +8,7 @@
 ;; (load "s7/r7rs.scm")
 ;; (load "s7/stuff.scm") ;; FIXME; need this for 'while'
 (load "srfi.scm")
-(load "srfi-14.scm")
+(load "srfi/srfi-14.scm")
 
 (define-macro (while test . body)      ; while loop with predefined break and continue.  This really wants to be define-expansion.
   `(call-with-exit
@@ -149,7 +149,7 @@
           (split 0 0))))))
 
 (define string-join
-  (let ((+documentation+ "split str on delim string, default: space ")
+  (let ((+documentation+ "join str on delim string, default: space ")
         (+signature+ "(string-join strings (delim str))"))
     (lambda* (strings (delim " "))
              (let ((buildit (lambda (lis final)

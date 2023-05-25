@@ -15,21 +15,27 @@ cc_library(
     srcs  = [
         "//src:s7.h",
         "//src:libs7.h",
+        # "//lib:utils.h",
+        # "//lib:utils.c",
         "libcjson_s7.c",
         # "libjson_s7.h",
         "cJSON.c", "cJSON.h"],
     hdrs = ["libjson_s7.h", "cJSON.h"],
     deps  = [
+        "//lib:utils",
         # "//src:s7_archive",
         "//vendored/logc",
         ":cjson_map", "cjson_vector"
     ] + select({
         "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
         "//conditions:default":  []
     }),
     copts = CLIB_COPTS + [
         "-Idev",
         "-Iexternal/libs7/dev",
+        "-Ilib",
+        "-Iexternal/libs7/lib",
         "-Ilib/libjson",
         "-Iexternal/libs7/lib/libjson",
         "-Ivendored/logc",
@@ -44,7 +50,12 @@ cc_library(
 cc_binary(
     name  = "json_s7",  # create libjson_s7.{dylib,so}
     linkshared = True,
-    srcs  = [":libcjson_s7.c", "//src:s7.h"],
+    srcs  = [
+        ":libcjson_s7.c",
+        "//src:s7.h",
+        "//lib:utils.h",
+        "//lib:utils.c",
+    ],
     deps  = ["//vendored/cjson"],
     copts = CLIB_COPTS + [
         "-Ivendored/cjson",
@@ -78,6 +89,7 @@ cc_library(
         "//vendored/logc"
     ] + select({
         "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
         "//conditions:default":  []
     }),
     copts = CLIB_COPTS + [
@@ -87,6 +99,7 @@ cc_library(
         # "-Iexternal/libs7/vendored/cjsonc99",
     ] + select({
         "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
         "//conditions:default":  []
     }),
     linkopts = CLIB_LINKOPTS,
@@ -108,6 +121,7 @@ cc_library(
         "//vendored/logc"
     ] + select({
         "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
         "//conditions:default":  []
     }),
     copts = CLIB_COPTS + [
@@ -117,6 +131,7 @@ cc_library(
         # "-Iexternal/libs7/vendored/cjsonc99",
     ] + select({
         "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
         "//conditions:default":  []
     }),
     linkopts = CLIB_LINKOPTS,

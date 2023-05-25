@@ -54,8 +54,15 @@ cc_binary(
     data = [
         ":repl.scm",
         "//scm:srcs",
+        "//scm/srfi:srcs",
         "//scm/s7:srcs",
     ] + select({
+        "//config/profile:test?": [
+            "//test/lib/json/data:json",
+            "//test/lib/toml/data:toml",
+        ],
+        "//conditions:default": []
+    }) + select({
         "//config/clibs/link:runtime?": [
             "//lib/libc:c_s7",
             "//lib/libcwalk:cwalk_s7",

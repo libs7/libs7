@@ -1014,7 +1014,7 @@
 
 		;; we're in libc here, so exit is libc's exit!
 		(define (tty-reset)
-		  (tcsetattr terminal-fd libc:TCSAFLUSH saved)
+		  (libc:tcsetattr terminal-fd libc:TCSAFLUSH saved)
 		  (if (not (equal? input-fd terminal-fd)) (close input-fd))
 		  (#_exit))
 
@@ -1026,7 +1026,7 @@
 			      (tty-reset)))))
 
 		;; a "normal" terminal -- hopefully it accepts vt100 codes
-		(let ((buf (termios.make)))
+		(let ((buf (libc:termios.make)))
 		  (let ((read-size 128))
 		    (set! next-char                                     ; this indirection is needed if user pastes the selection into the repl
 			  (let* ((c (make-string read-size #\null))
@@ -1143,14 +1143,14 @@
 				     terminal-fd
 				     (open file O_RDONLY 0)))
 
-		  (set! saved (termios.make))
-		  (tcgetattr terminal-fd saved)
+		  (set! saved (libc:termios.make))
+		  (libc:tcgetattr terminal-fd saved)
 
-		  (tcgetattr terminal-fd buf)
-		  (termios.set-c-lflag buf (logand (termios.c-lflag buf) (lognot (logior libc:ECHO libc:ICANON))))
-		  (termios.set-c-cc buf libc:VMIN 1)
-		  (termios.set-c-cc buf libc:VTIME 0)
-		  (when (negative? (tcsetattr terminal-fd libc:TCSAFLUSH buf))
+		  (libc:tcgetattr terminal-fd buf)
+		  (libc:termios.set-c-lflag buf (logand (libc:termios.c-lflag buf) (lognot (logior libc:ECHO libc:ICANON))))
+		  (libc:termios.set-c-cc buf libc:VMIN 1)
+		  (libc:termios.set-c-cc buf libc:VTIME 0)
+		  (when (negative? (libc:tcsetattr terminal-fd libc:TCSAFLUSH buf))
 		    (tty-reset))
 
 		  (display-prompt)

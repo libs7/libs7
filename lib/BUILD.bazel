@@ -1,7 +1,8 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["libm.scm"])
+exports_files(["libm.scm", "utils.c", "utils.h"])
 
+load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES")
 load("//lib:BUILD.bzl",
      "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
 
@@ -71,4 +72,31 @@ cc_binary(
         # "-lm",
     ],
     # visibility = ["//visibility:public"]
+)
+
+################################################################
+cc_library(
+    name  = "utils",
+    linkstatic = True,
+    # alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = ["utils.c"],
+    hdrs  = ["utils.h"],
+    deps  = [
+        "//src:s7_archive",
+        "//vendored/logc"
+    ] + select({
+        "//config/profile:dev?": ["//dev"],
+        "//config/profile:test?": ["//dev"],
+        "//conditions:default":  []
+    }),
+    copts = CLIB_COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+    ] + select({
+        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
+        "//conditions:default":  []
+    }),
+    linkopts = CLIB_LINKOPTS,
+    local_defines = DEFINES + CLIB_DEFINES
 )

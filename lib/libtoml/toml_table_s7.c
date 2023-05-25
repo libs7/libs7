@@ -125,8 +125,13 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
     char* key;
     p = args;
     arg = s7_car(p);
-    toml_table_t *t = (toml_table_t*)s7_c_object_value_checked(arg, toml_table_type_tag);
-
+    toml_table_t *tt = (toml_table_t*)s7_c_object_value_checked(arg, toml_table_type_tag);
+    if (!tt) {
+        /* log_debug("Bad arg"); */
+        /* log_error("obj typ: %d", s7_c_object_type(arg)); */
+        /* log_error("expected type: %d", toml_datetime_type_tag); */
+        return s7_f(s7);
+    }
     p = s7_cdr(p);
     arg = s7_car(p);
     if (s7_is_string(arg))
@@ -135,31 +140,40 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
 
     toml_datum_t datum;
 
-    /* datum = _toml_table_value_for_key(t, key); */
-
-    datum = toml_string_in(t, key);
+    /* datum = _toml_table_value_for_key(tt, key); */
+    TRACE_LOG_DEBUG("KEY: %s", key);
+    datum = toml_string_in(tt, key);
     if (datum.ok) {
         s7_pointer s = s7_make_string(s7, datum.u.s);
         free(datum.u.s);
         return s;
     }
 
-    datum = toml_bool_in(t, key);
+    datum = toml_bool_in(tt, key);
     if (datum.ok) { return(s7_make_boolean(s7, datum.u.b)); }
 
-    datum = toml_int_in(t, key);
+    datum = toml_int_in(tt, key);
     if (datum.ok) { return(s7_make_integer(s7, datum.u.i)); }
 
-    datum = toml_double_in(t, key);
+    datum = toml_double_in(tt, key);
     if (datum.ok) { return(s7_make_real(s7, datum.u.d)); }
 
-    datum = toml_timestamp_in(t, key);
+    datum = toml_timestamp_in(tt, key);
     if (datum.ok) {
-        /* not yet supported */
-        return(s7_f(s7));
+        log_warn("Datum: timestamp");
+        toml_timestamp_t *ts = datum.u.ts;
+
+        // ts scheme api follows 3339/ISO8601 and srfi 19:
+        // toml:date-fullyear, toml:date-month, toml:date-mday
+        // toml:time-hour, toml:time-minute, toml:time-second
+        // toml:time-secfrac, toml:time-offset
+        s7_pointer rval = s7_make_c_object(s7,
+                                           toml_datetime_type_tag,
+                                           (void*)ts);
+        return rval;
     }
 
-    toml_array_t *a = toml_array_in(t, key);
+    toml_array_t *a = toml_array_in(tt, key);
     if (a) {
         /* TRACE_LOG_DEBUG("array"); */
         s7_pointer rval = s7_make_c_object(s7,
@@ -170,8 +184,8 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
         /* TRACE_LOG_DEBUG("not array"); */
     }
 
-    toml_table_t *subt = toml_table_in(t, key);
-    if (t) {
+    toml_table_t *subt = toml_table_in(tt, key);
+    if (subt) {
         /* TRACE_LOG_DEBUG("table: %p", subt); */
         s7_pointer rval = s7_make_c_object(s7,
                                            toml_table_type_tag,
@@ -185,9 +199,8 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
     } else {
         /* TRACE_LOG_DEBUG("not table"); */
     }
-
-    TRACE_LOG_DEBUG("returning #f", "");
-    return(s7_f(s7));
+    TRACE_LOG_DEBUG("not found; returning #<unspecified>", "");
+    return(s7_unspecified(s7));
 }
 
 static s7_pointer toml_table_set(s7_scheme *s7, s7_pointer args)
@@ -336,8 +349,6 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
                                      false,
               "(toml:table->hash-table t) converts toml table to s7 hash-table. Optional :clone #t",
                                      pl_xx));
-
-    string_string = s7_make_semipermanent_string(s7, "a string");
 }
 
 /* ****************************************************************
@@ -434,6 +445,7 @@ char *toml_table_to_string(toml_table_t *tt)
     size_t bufsz = BUFSZ;
     size_t char_ct = 0;
     int ct;
+    (void)ct;                   /* elim unused-but-set-variable warning */
 
     // print header
     {
@@ -456,7 +468,10 @@ char *toml_table_to_string(toml_table_t *tt)
     int narr = toml_table_narr(tt);
     int nkv = toml_table_nkval(tt);
     int key_ct = ntab + narr + nkv;
-    const char *k, *v;
+
+    TRACE_LOG_DEBUG("key ct: %d", key_ct);
+
+    const char *k; //, *v;
     int len;
     for (int i = 0; i < key_ct; i++) {
         k = toml_key_in(tt, i);
@@ -509,11 +524,11 @@ char *toml_table_to_string(toml_table_t *tt)
         }
 
         // print value
-        datum = _toml_table_datum_for_key(tt, k, &typ);
+        datum = _toml_table_datum_for_key(tt, (char*)k, &typ);
         char *seq_str;
         TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
-            void *seq = _toml_table_seq_for_key(tt, k, &typ);
+            void *seq = _toml_table_seq_for_key(tt, (char*)k, &typ);
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("array seq: %p", seq);
@@ -547,7 +562,7 @@ char *toml_table_to_string(toml_table_t *tt)
                     // expand buf
                 }
                 errno = 0;
-                TRACE_LOG_DEBUG("snprintfing array len %d", len);
+                TRACE_LOG_DEBUG("snprintfing table len %d", len);
                 ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
@@ -566,7 +581,7 @@ char *toml_table_to_string(toml_table_t *tt)
             switch(typ) {
             case TOML_INT:
                 TRACE_LOG_DEBUG("toml datum val: %d", datum.u.i);
-                len = snprintf(NULL, 0, "%d", datum.u.i);
+                len = snprintf(NULL, 0, "%lld", datum.u.i);
                 len++; // for terminating '\0';
                 TRACE_LOG_DEBUG("int str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
@@ -575,7 +590,7 @@ char *toml_table_to_string(toml_table_t *tt)
                 }
                 errno = 0;
                 TRACE_LOG_DEBUG("snprintfing len %d", len);
-                ct = snprintf(buf+char_ct, len, "%d", datum.u.i);
+                ct = snprintf(buf+char_ct, len, "%lld", datum.u.i);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
@@ -663,18 +678,26 @@ char *toml_table_to_string(toml_table_t *tt)
                 TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TIMESTAMP:
-                log_error("toml timestamp (not yet)");
-                if ((char_ct + 18) > bufsz) {
-                    // realloc
-                } else {
-                    errno = 0;
-                    snprintf(buf, 18, "%s", "<#toml-timestamp>");
-                    if (errno) {
-                        log_error("snprintf: %s", strerror(errno));
-                        break;
-                    }
-                    char_ct += 18;
+                log_warn("toml timestamp");
+                seq_str = toml_datetime_to_string((toml_timestamp_t*)datum.u.ts);
+                TRACE_LOG_DEBUG("TS: %s", seq_str);
+                len = strlen(seq_str) + 1;  // + 1 for '\0'
+                if ((char_ct + len) > bufsz) {
+                    log_error("exceeded bufsz: %d", char_ct + len);
+                    // expand buf
                 }
+                errno = 0;
+                TRACE_LOG_DEBUG("snprintfing timestamp len %d", len);
+                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
+                if (errno) {
+                    log_error("snprintf: %s", strerror(errno));
+                    break;
+                } else {
+                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
+                }
+                char_ct += len - 1; // do not include terminating '\0'
+                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
+                TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_NONDATUM:
                 // should not happen
@@ -719,8 +742,8 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
     int narr = toml_table_narr(tt);
     int nkv = toml_table_nkval(tt);
     int key_ct = ntab + narr + nkv;
-    char *k, *v;
-    int len;
+    const char *k; // , *v;
+    /* int len; */
 
     s7_pointer the_ht = s7_make_hash_table(s7, key_ct);
 
@@ -732,11 +755,11 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
         }
         TRACE_LOG_DEBUG("table key: %s", k);
 
-        datum = _toml_table_datum_for_key(tt, k, &typ);
-        char *seq_str;
+        datum = _toml_table_datum_for_key(tt, (char*)k, &typ);
+        /* char *seq_str; */
         TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
-            void *seq = _toml_table_seq_for_key(tt, k, &typ);
+            void *seq = _toml_table_seq_for_key(tt, (char*)k, &typ);
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("array seq: %p", seq);
@@ -761,7 +784,7 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                 if (clone) {
                     TRACE_LOG_DEBUG(" to hash", "");
                     s7_pointer ht = toml_table_to_hash_table(s7,
-                                                        (toml_array_t*)seq,
+                                                        (toml_table_t*)seq,
                                                         clone);
                     s7_hash_table_set(s7, the_ht,
                                       s7_make_string(s7, k),

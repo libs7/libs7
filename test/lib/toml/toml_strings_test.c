@@ -26,17 +26,17 @@ char *cmd;
 #define DQ3 "\\\"\\\"\\\""
 #define SQ3 "'''"
 
-#define TOML_READ(s) \
-    s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \
-                      s7_list(s7, 1, s7_eval_c_string(s7, s)));
+/* #define TOML_READ(s) \ */
+/*     s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \ */
+/*                       s7_list(s7, 1, s7_eval_c_string(s7, s))); */
 
-#define APPLY_1(f, o) \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                       s7_list(s7, 1, o))
+/* #define APPLY_1(f, o) \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                        s7_list(s7, 1, o)) */
 
-#define APPLY_2(f, o, k)                             \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 2, o, k))
+/* #define APPLY_2(f, o, k)                             \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                    s7_list(s7, 2, o, k)) */
 
     /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
     /*                            s7_list(s7, 1, v)) */
@@ -54,7 +54,6 @@ void file(void) {
     s7_pointer inport = s7_open_input_file(s7, "test/lib/toml/data/strings.toml", "r");
     s7_pointer is_input_port = s7_is_input_port(s7, inport);
     TEST_ASSERT_EQUAL(true, is_input_port);
-    log_debug("xxxxxxxxxxxxxxxx");
     /* t = TOML_READ(inport); */
     t = s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),
                           s7_list(s7, 1, inport));
@@ -86,8 +85,7 @@ void file(void) {
 }
 
 void double_quotes(void) {
-    char *toml = "\"a = \\\"Hello\\\"\"";
-    t = TOML_READ(toml);
+    t = TOML_READ("a = \\\"Hello\\\"");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -95,8 +93,7 @@ void double_quotes(void) {
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    toml = "\"a = \\\"Hello\tthere\\\"\"";
-    t = TOML_READ(toml);
+    t = TOML_READ("a = \\\"Hello\tthere\\\"");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -107,8 +104,7 @@ void double_quotes(void) {
 }
 
 void multiline_double_quotes(void) {
-    char *toml = "\"a = \\\"\\\"\\\"Hello\\\"\\\"\\\"\"";
-    t = TOML_READ(toml);
+    t = TOML_READ("a = \\\"\\\"\\\"Hello\\\"\\\"\\\"");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -116,8 +112,7 @@ void multiline_double_quotes(void) {
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    toml = "\"a = " DQ3 "Hello\tthere" DQ3 "\"";
-    t = TOML_READ(toml);
+    t = TOML_READ("a = " DQ3 "Hello\tthere" DQ3 "");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -128,11 +123,10 @@ void multiline_double_quotes(void) {
 
     // swallow \n after opening delim
     char *expected_str = "The quick brown fox jumps over the lazy dog.";
-    toml = ""
-        "\"a = "
+    t = TOML_READ(""
+        "a = "
         DQ3 "\nThe quick brown fox jumps over the lazy dog." DQ3
-        "\"";
-    t = TOML_READ(toml);
+                  "");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -143,12 +137,11 @@ void multiline_double_quotes(void) {
 
     //WARNING: tomlc99 does not seem to handle "line ending backslash",
     // which should collapse whitespace.
-    toml = ""
-        "\"a =" DQ3 "\nThe quick brown \\n" "\n" "\n" "fox jumps over \\n"
+    t = TOML_READ(""
+        "a =" DQ3 "\nThe quick brown \\n" "\n" "\n" "fox jumps over \\n"
         "the lazy dog."
         DQ3
-        "\"";
-    t = TOML_READ(toml);
+                  "");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -159,8 +152,7 @@ void multiline_double_quotes(void) {
 }
 
 void multiline_single_quotes(void) {
-    char *toml = "\"a = " SQ3 "Hello" SQ3 "\"";
-    t = TOML_READ(toml);
+    t = TOML_READ("a = " SQ3 "Hello" SQ3 "");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -168,8 +160,7 @@ void multiline_single_quotes(void) {
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    toml = "\"a = " SQ3 "Hello\tthere" SQ3 "\"";
-    t = TOML_READ(toml);
+    t = TOML_READ("a = " SQ3 "Hello\tthere" SQ3 "");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");

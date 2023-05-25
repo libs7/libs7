@@ -20,6 +20,10 @@ extern s7_pointer integer_string;
 /* signatures for use in s7_definition */
 extern s7_pointer pl_tx, pl_xx, pl_xxs,pl_sx, pl_sxi, pl_ix, pl_iis, pl_isix, pl_bxs;
 
+/* for error msgs */
+extern s7_pointer c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string;
+s7_pointer integer_string;
+
 s7_pointer toml_read_file(s7_scheme *sc, char *fname);
 
 /* in toml_table_s7.c */
@@ -42,6 +46,10 @@ char      *toml_array_to_string(toml_array_t *tt);
 s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone);
 s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone);
 void toml_array_init(s7_scheme *s7, s7_pointer cur_env);
-/* void toml_array_init(s7_scheme *s7); */
+
+/* in toml_datetime_s7.c */
+extern int toml_datetime_type_tag;
+char *toml_datetime_to_string(toml_timestamp_t *ts);
+void toml_datetime_init(s7_scheme *s7, s7_pointer cur_env);
 
 #endif

@@ -263,6 +263,15 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
         key = (char*)s7_string(arg);
         TRACE_LOG_DEBUG("arg 1, key: %s", key);
     }
+    else if (s7_is_keyword(arg)) {
+        s7_pointer kwsym = s7_keyword_to_symbol(s7, arg);
+        key = (char*)s7_symbol_name(kwsym);
+        TRACE_LOG_DEBUG("arg 1, key: %s", key);
+    }
+    else if (s7_is_symbol(arg)) {
+        key = (char*)s7_symbol_name(arg);
+        TRACE_LOG_DEBUG("arg 1, key: %s", key);
+    }
     else if (s7_is_integer(arg)) {
         // for procedures map, for-each
         idx = s7_integer(arg);

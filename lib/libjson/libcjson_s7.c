@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 
 #include "trace.h"
-
+#include "utils.h"
 #include "libcjson_s7.h"
 /* #include "cJSON.h" */
 /* #include "libjson_s7.h" */
@@ -38,7 +38,7 @@ static s7_pointer char___symbol, cJSON__symbol;
 /* **************************************************************** */
 
 /* -------- cJSON_Version -------- */
-s7_pointer json_cJSON_Version(s7_scheme *sc, s7_pointer args)
+s7_pointer json_cjson_version(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_string(sc, (char*)cJSON_Version()));
 }
@@ -48,18 +48,51 @@ s7_pointer json_cJSON_Version(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_json_read(s7_scheme *s7, s7_pointer args)
 {
     TRACE_ENTRY(g_json_read);
-    TRACE_S7_DUMP("args", args);
+    /* TRACE_S7_DUMP("args", args); */
     s7_pointer p, arg;
     char* json_str;
-    p = args;
-    arg = s7_car(p);
-    if (s7_is_string(arg))
-        json_str = (char*)s7_string(arg);
-    else {
-        return(s7_wrong_type_error(s7,
-                                   s7_make_string_wrapper_with_length(s7, "json:Parse", 10),
-                                   0, arg, string_string));
+
+    if (args == s7_nil(s7)) {
+        /* log_debug("null args"); */
+        char buf[2 * 4096]; //FIXME: support arbitrary s len
+        int i = 0;
+        /* read from current-input-port, one char at a time */
+        s7_pointer cip = s7_current_input_port(s7);
+
+        //FIXME: use same code to read cip, file, and string ports
+
+        s7_pointer c;
+        while (true) {
+            c = s7_read_char(s7, cip);
+            if (c == s7_eof_object(s7)) {
+                buf[i] = '\0';
+                break;
+            }
+            buf[i++] = s7_character(c);
+        }
+        /* log_debug("readed string: %s", buf); */
+        json_str = buf;
+    } else {
+        p = args;
+        arg = s7_car(p);
+        /* log_debug("is_input_port? %d", s7_is_input_port(s7, arg)); */
+        /* log_debug("is_output_port? %d", s7_is_output_port(s7, arg)); */
+        /* s7_pointer dt = s7_type_of(s7, arg); */
+        /* trace_S7_DUMP("argtyp", dt); */
+        if (s7_is_input_port(s7, arg)) {
+            TRACE_LOG_DEBUG("read arg is input port", "");
+
+            json_str = libs7_input_port_to_c_string(s7, arg);
+
+        }
+        else if (s7_is_string(arg)) {
+            json_str = (char*)s7_string(arg);
+        }
+        else {
+            return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:read", 10), 1, arg, string_string));
+        }
     }
+
     TRACE_LOG_DEBUG("parsing: %s", json_str);
     cJSON *jo = cJSON_Parse(json_str);
     if (jo == NULL) {
@@ -117,27 +150,27 @@ s7_pointer json_read_file(s7_scheme *s7, char *fname)
 
 /* -------- cJSON_Parse -------- */
 // We do not use this, use json_read instead
-static s7_pointer json_cJSON_Parse(s7_scheme *s7, s7_pointer args)
-{
-    TRACE_ENTRY(json_cJSON_Parse);
-    s7_pointer p, arg;
-    char* json_str;
-    p = args;
-    arg = s7_car(p);
-    if (s7_is_string(arg))
-        json_str = (char*)s7_string(arg);
-    else {
-        return(s7_wrong_type_error(s7,
-                                   s7_make_string_wrapper_with_length(s7, "json:Parse", 10),
-                                   0, arg, string_string));
-    }
-    log_debug("parsing: %s", json_str);
-    cJSON *jo = cJSON_Parse(json_str);
+/* static s7_pointer json_cJSON_Parse(s7_scheme *s7, s7_pointer args) */
+/* { */
+/*     TRACE_ENTRY(json_cJSON_Parse); */
+/*     s7_pointer p, arg; */
+/*     char* json_str; */
+/*     p = args; */
+/*     arg = s7_car(p); */
+/*     if (s7_is_string(arg)) */
+/*         json_str = (char*)s7_string(arg); */
+/*     else { */
+/*         return(s7_wrong_type_error(s7, */
+/*                                    s7_make_string_wrapper_with_length(s7, "json:Parse", 10), */
+/*                                    0, arg, string_string)); */
+/*     } */
+/*     log_debug("parsing: %s", json_str); */
+/*     cJSON *jo = cJSON_Parse(json_str); */
 
-    return(s7_make_c_object(s7, json_object_type_tag, (void*)jo));
+/*     return(s7_make_c_object(s7, json_object_type_tag, (void*)jo)); */
 
-    /* return(s7_make_c_pointer_with_type(s7, (void*)jo, cJSON__symbol, s7_f(s7))); */
-}
+/*     /\* return(s7_make_c_pointer_with_type(s7, (void*)jo, cJSON__symbol, s7_f(s7))); *\/ */
+/* } */
 
 /* -------- cJSON_ParseWithLength -------- */
 static s7_pointer json_cJSON_ParseWithLength(s7_scheme *s7, s7_pointer args)
@@ -244,84 +277,82 @@ static s7_pointer json_cJSON_Print(s7_scheme *sc, s7_pointer args)
   return(s7_make_string(sc, (char*)cJSON_Print(json_cJSON_Print_0)));
 }
 
+/* /\* -------- cJSON_GetObjectItem -------- *\/ */
+/* static s7_pointer json_cJSON_GetObjectItem(s7_scheme *sc, s7_pointer args) */
+/* { */
+/*     TRACE_ENTRY(json_cJSON_GetObjectItem); */
+/*     s7_pointer p, arg; */
+/*     p = args; */
+/*     arg = s7_car(p);              /\* arg 0: cJSON *object *\/ */
+/*     const cJSON *object = (const cJSON*)s7_c_pointer_with_type(sc, arg, cJSON__symbol, __func__, 1); */
+
+/*     p = s7_cdr(p);                /\* arg 1: char *key *\/ */
+/*     arg = s7_car(p); */
+/*     const char *key; */
+/*     if (s7_is_string(arg)) */
+/*         key = (char*)s7_string(arg); */
+/*     else { */
+/*         return(s7_wrong_type_error(sc, */
+/*                                    s7_make_string_wrapper_with_length(sc, "json:GetObjectItem", 18), */
+/*                                    2, arg, string_string)); */
+/*     } */
+/*     cJSON *item = cJSON_GetObjectItem(object, key); */
+/*     return(s7_make_c_pointer_with_type(sc, (void*)item, cJSON__symbol, s7_f(sc))); */
+/* } */
 
 
-/* -------- cJSON_GetObjectItem -------- */
-static s7_pointer json_cJSON_GetObjectItem(s7_scheme *sc, s7_pointer args)
-{
-    TRACE_ENTRY(json_cJSON_GetObjectItem);
-    s7_pointer p, arg;
-    p = args;
-    arg = s7_car(p);              /* arg 0: cJSON *object */
-    const cJSON *object = (const cJSON*)s7_c_pointer_with_type(sc, arg, cJSON__symbol, __func__, 1);
+/* /\* -------- cJSON_GetObjectItemCaseSensitive -------- *\/ */
+/* static s7_pointer json_cJSON_GetObjectItemCaseSensitive(s7_scheme *sc, s7_pointer args) */
+/* { */
+/*     TRACE_ENTRY(json_cJSON_GetObjectItemCaseSensitive); */
+/*     s7_pointer p, arg; */
+/*     p = args; */
+/*     arg = s7_car(p);              /\* arg 0: cJSON *object *\/ */
+/*     const cJSON *object = (const cJSON*)s7_c_pointer_with_type(sc, arg, cJSON__symbol, __func__, 1); */
 
-    p = s7_cdr(p);                /* arg 1: char *key */
-    arg = s7_car(p);
-    const char *key;
-    if (s7_is_string(arg))
-        key = (char*)s7_string(arg);
-    else {
-        return(s7_wrong_type_error(sc,
-                                   s7_make_string_wrapper_with_length(sc, "json:GetObjectItem", 18),
-                                   2, arg, string_string));
-    }
-    cJSON *item = cJSON_GetObjectItem(object, key);
-    return(s7_make_c_pointer_with_type(sc, (void*)item, cJSON__symbol, s7_f(sc)));
-}
-
-
-/* -------- cJSON_GetObjectItemCaseSensitive -------- */
-static s7_pointer json_cJSON_GetObjectItemCaseSensitive(s7_scheme *sc, s7_pointer args)
-{
-    TRACE_ENTRY(json_cJSON_GetObjectItemCaseSensitive);
-    s7_pointer p, arg;
-    p = args;
-    arg = s7_car(p);              /* arg 0: cJSON *object */
-    const cJSON *object = (const cJSON*)s7_c_pointer_with_type(sc, arg, cJSON__symbol, __func__, 1);
-
-    p = s7_cdr(p);                /* arg 1: char *key */
-    arg = s7_car(p);
-    const char *key;
-    if (s7_is_string(arg))
-        key = (char*)s7_string(arg);
-    else {
-        return(s7_wrong_type_error(sc,
-                                   s7_make_string_wrapper_with_length(sc, "json:GetObjectItem", 18),
-                                   2, arg, string_string));
-    }
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
-    return(s7_make_c_pointer_with_type(sc, (void*)item, cJSON__symbol, s7_f(sc)));
-}
+/*     p = s7_cdr(p);                /\* arg 1: char *key *\/ */
+/*     arg = s7_car(p); */
+/*     const char *key; */
+/*     if (s7_is_string(arg)) */
+/*         key = (char*)s7_string(arg); */
+/*     else { */
+/*         return(s7_wrong_type_error(sc, */
+/*                                    s7_make_string_wrapper_with_length(sc, "json:GetObjectItem", 18), */
+/*                                    2, arg, string_string)); */
+/*     } */
+/*     cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key); */
+/*     return(s7_make_c_pointer_with_type(sc, (void*)item, cJSON__symbol, s7_f(sc))); */
+/* } */
 
 
-/* -------- cJSON_HasObjectItem -------- */
-static s7_pointer json_cJSON_HasObjectItem(s7_scheme *s7, s7_pointer args)
-{
-    TRACE_ENTRY(json_cJSON_HasObjectItem);
-    s7_pointer p, arg;
-    p = args;
-    arg = s7_car(p);              /* arg 0: cJSON *object */
-    const cJSON *object = (const cJSON*)s7_c_pointer_with_type(s7, arg, cJSON__symbol, __func__, 1);
+/* /\* -------- cJSON_HasObjectItem -------- *\/ */
+/* static s7_pointer json_cJSON_HasObjectItem(s7_scheme *s7, s7_pointer args) */
+/* { */
+/*     TRACE_ENTRY(json_cJSON_HasObjectItem); */
+/*     s7_pointer p, arg; */
+/*     p = args; */
+/*     arg = s7_car(p);              /\* arg 0: cJSON *object *\/ */
+/*     const cJSON *object = (const cJSON*)s7_c_pointer_with_type(s7, arg, cJSON__symbol, __func__, 1); */
 
-    p = s7_cdr(p);                /* arg 1: char *key */
-    arg = s7_car(p);
-    const char *key;
-    if (s7_is_string(arg))
-        key = (char*)s7_string(arg);
-    else {
-        return(s7_wrong_type_error(s7,
-                                   s7_make_string_wrapper_with_length(s7, "json:GetObjectItem", 18),
-                                   2, arg, string_string));
-    }
+/*     p = s7_cdr(p);                /\* arg 1: char *key *\/ */
+/*     arg = s7_car(p); */
+/*     const char *key; */
+/*     if (s7_is_string(arg)) */
+/*         key = (char*)s7_string(arg); */
+/*     else { */
+/*         return(s7_wrong_type_error(s7, */
+/*                                    s7_make_string_wrapper_with_length(s7, "json:GetObjectItem", 18), */
+/*                                    2, arg, string_string)); */
+/*     } */
 
-    cJSON_bool flag = cJSON_HasObjectItem(object, key);
+/*     cJSON_bool flag = cJSON_HasObjectItem(object, key); */
 
-    if (flag == 1) {
-        return s7_t(s7);
-    } else {
-        return s7_f(s7);
-    }
-}
+/*     if (flag == 1) { */
+/*         return s7_t(s7); */
+/*     } else { */
+/*         return s7_f(s7); */
+/*     } */
+/* } */
 
 
 /* -------- cJSON_GetErrorPtr -------- */
@@ -562,17 +593,17 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
               s7_make_symbol(s7, "json:GetErrorPtr"),
               s7_make_typed_function(s7, "json:GetErrorPtr", json_cJSON_GetErrorPtr, 0, 0, false, "char* cJSON_GetErrorPtr(void)", pl_st));
 
-    s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:HasObjectItem"),
-              s7_make_typed_function(s7, "json:HasObjectItem", json_cJSON_HasObjectItem, 2, 0, false, "cJSON_bool cJSON_HasObjectItem(cJSON*, char*)", pl_txs));
+    /* s7_define(s7, cur_env, */
+    /*           s7_make_symbol(s7, "json:HasObjectItem"), */
+    /*           s7_make_typed_function(s7, "json:HasObjectItem", json_cJSON_HasObjectItem, 2, 0, false, "cJSON_bool cJSON_HasObjectItem(cJSON*, char*)", pl_txs)); */
 
-    s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:GetObjectItemCaseSensitive"),
-              s7_make_typed_function(s7, "json:GetObjectItemCaseSensitive", json_cJSON_GetObjectItemCaseSensitive, 2, 0, false, "cJSON* cJSON_GetObjectItemCaseSensitive(cJSON*, char*)", pl_xxs));
+    /* s7_define(s7, cur_env, */
+    /*           s7_make_symbol(s7, "json:GetObjectItemCaseSensitive"), */
+    /*           s7_make_typed_function(s7, "json:GetObjectItemCaseSensitive", json_cJSON_GetObjectItemCaseSensitive, 2, 0, false, "cJSON* cJSON_GetObjectItemCaseSensitive(cJSON*, char*)", pl_xxs)); */
 
-    s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:GetObjectItem"),
-              s7_make_typed_function(s7, "json:GetObjectItem", json_cJSON_GetObjectItem, 2, 0, false, "cJSON* cJSON_GetObjectItem(cJSON*, char*)", pl_xxs));
+    /* s7_define(s7, cur_env, */
+    /*           s7_make_symbol(s7, "json:GetObjectItem"), */
+    /*           s7_make_typed_function(s7, "json:GetObjectItem", json_cJSON_GetObjectItem, 2, 0, false, "cJSON* cJSON_GetObjectItem(cJSON*, char*)", pl_xxs)); */
 
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:Print"),
@@ -582,9 +613,9 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
               s7_make_symbol(s7, "json:read"),
               s7_make_typed_function(s7, "json:read",
                                      g_json_read,
-                                     1, 0, false,
-                                     "(json:read s) read JSON string s",
-                                     pl_xs));
+                                     0, 1, false,
+                                     "(json:read x) read JSON from string or port",
+                                     NULL));
 
     /* s7_define(s7, cur_env, */
     /*           s7_make_symbol(s7, "json:Parse"), */
@@ -606,9 +637,13 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
               s7_make_symbol(s7, "json:ParseWithLength"),
               s7_make_typed_function(s7, "json:ParseWithLength", json_cJSON_ParseWithLength, 2, 0, false, "cJSON* cJSON_ParseWithLength(char* size_t)", pl_xsi));
 
+    s7_define_constant(s7, "*json:version*",
+                       s7_make_string(s7, (char*)cJSON_Version()));
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:Version"),
-              s7_make_typed_function(s7, "json:Version", json_cJSON_Version, 0, 0, false, "char* cJSON_Version(void)", pl_st));
+              s7_make_typed_function(s7, "json:version",
+                                     json_cjson_version, 0, 0, false,
+                                     "json:version", pl_st));
     s7_set_shadow_rootlet(s7, old_shadow);
 
     return(cur_env);

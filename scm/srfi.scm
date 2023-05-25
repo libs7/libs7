@@ -6,10 +6,14 @@
 ;;; SRFI-1 list-processing library 			-*- Scheme -*-
 ;;; Reference implementation
 ;;;
-;;; Copyright (c) 1998, 1999 by Olin Shivers. You may do as you please with
+;; Copyright (c) 1998, 1999 by Olin Shivers. You may do as you please with
 ;;; this code as long as you do not remove this copyright notice or
 ;;; hold me liable for its use. Please send bug reports to shivers@ai.mit.edu.
 ;;;     -Olin
+
+;; srfi 8: receive
+;; https://srfi.schemers.org/srfi-8/srfi-8.html
+;; guile doc: "(receive formals expr body) Evaluate the expression expr, and bind the result values (zero or more) to the formal arguments in the formal argument list formals. formals must have the same syntax like the formal argument list used in lambda (see Lambda). After binding the variables, the expressions in body ... are evaluated in order."
 
 ;; srfi 8 https://srfi.schemers.org/srfi-8/srfi-8.html
 ;; (define-syntax receive
@@ -20,7 +24,18 @@
 
 (define-macro (receive formals expression . body)
   `(call-with-values (lambda () ,expression)
-     (lambda ,formals ,body)))
+                    (lambda ,formals ,@body)))
+
+;; (define-syntax :optional
+;;   (syntax-rules ()
+;;     ((_ val default-value)
+;;      (if (null? val) default-value (car val)))))
+
+;; NB: won't work: (define-macro (:optional ...)), kws are constants
+;; ditto for optional:
+(define-macro (?optional val default-value) `(if (null? ,val) ,default-value (car ,val)))
+
+
 
 ;; srfi 1
 ;;; LISTS is a (not very long) non-empty list of lists.
@@ -151,10 +166,6 @@
 				     vars)))
 	 ,@body)))
 
-
-;; srfi 8: receive
-;; https://srfi.schemers.org/srfi-71/srfi-71.html#SRFI8
-;; guile doc: "(receive formals expr body) Evaluate the expression expr, and bind the result values (zero or more) to the formal arguments in the formal argument list formals. formals must have the same syntax like the formal argument list used in lambda (see Lambda). After binding the variables, the expressions in body ... are evaluated in order."
 
 ;; srfi 11: let-values etc.
 
