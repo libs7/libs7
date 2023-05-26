@@ -118,9 +118,9 @@ s7_pointer toml_table_values(s7_scheme *s7, s7_pointer args)
     return s7_unspecified(s7);
 }
 
-s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
+s7_pointer g_toml_table_ref(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(toml_table_ref);
+    TRACE_ENTRY(g_toml_table_ref);
     s7_pointer p, arg;
     char* key;
     p = args;
@@ -134,8 +134,16 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
     }
     p = s7_cdr(p);
     arg = s7_car(p);
-    if (s7_is_string(arg))
+    if (s7_is_string(arg)) {
         key = (char*)s7_string(arg);
+    }
+    else if (s7_is_symbol(arg)) {
+        key = (char*)s7_symbol_name(arg);
+    }
+    else if (s7_is_keyword(arg)) {
+        key = (char*)s7_keyword_to_symbol(s7, arg);
+        /* key = (char*)s7_symbol_name(arg); */
+    }
     else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
 
     toml_datum_t datum;
@@ -160,13 +168,7 @@ s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args)
 
     datum = toml_timestamp_in(tt, key);
     if (datum.ok) {
-        log_warn("Datum: timestamp");
         toml_timestamp_t *ts = datum.u.ts;
-
-        // ts scheme api follows 3339/ISO8601 and srfi 19:
-        // toml:date-fullyear, toml:date-month, toml:date-mday
-        // toml:time-hour, toml:time-minute, toml:time-second
-        // toml:time-secfrac, toml:time-offset
         s7_pointer rval = s7_make_c_object(s7,
                                            toml_datetime_type_tag,
                                            (void*)ts);
@@ -317,7 +319,7 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
     s7_c_type_set_gc_mark      (s7, toml_table_type_tag, mark_toml_table);
     s7_c_type_set_is_equal     (s7, toml_table_type_tag, toml_table_is_equal);
     s7_c_type_set_is_equivalent(s7, toml_table_type_tag, toml_table_is_equivalent);
-    s7_c_type_set_ref          (s7, toml_table_type_tag, toml_table_ref);
+    s7_c_type_set_ref          (s7, toml_table_type_tag, g_toml_table_ref);
     s7_c_type_set_set          (s7, toml_table_type_tag, toml_table_set);
     s7_c_type_set_length       (s7, toml_table_type_tag, toml_table_length);
     s7_c_type_set_copy         (s7, toml_table_type_tag, toml_table_copy);
@@ -339,6 +341,12 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
 
     s7_define_function(s7, "toml:table?", is_toml_table, 1, 0, false,
                        "(toml:table? t) returns #t if its argument is a toml_table object");
+
+  s7_define(s7, cur_env,
+            s7_make_symbol(s7, "toml:table-ref"),
+            s7_make_typed_function(s7, "toml:table-ref",
+                                   g_toml_table_ref, 2, 0, false,
+                                   "(toml:table-ref t k) returns value of table t at key k", pl_xxs));
 
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "toml:table->hash-table"),
@@ -391,7 +399,6 @@ static toml_datum_t _toml_table_datum_for_key(toml_table_t *tt, char *key, int *
     if (datum.ok) {
         TRACE_LOG_DEBUG("datum: ts", "");
         *typ = TOML_TIMESTAMP;
-        /* not yet supported */
         return datum;
     }
     TRACE_LOG_DEBUG("datum: NULL", "");
@@ -678,7 +685,6 @@ char *toml_table_to_string(toml_table_t *tt)
                 TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TIMESTAMP:
-                log_warn("toml timestamp");
                 seq_str = toml_datetime_to_string((toml_timestamp_t*)datum.u.ts);
                 TRACE_LOG_DEBUG("TS: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
@@ -833,7 +839,19 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                 TRACE_LOG_DEBUG("toml datum val: %g", datum.u.d);
                 break;
             case TOML_TIMESTAMP:
-                log_error("toml timestamp (not yet)");
+                {
+                    s7_pointer ts;
+                    if (clone) {
+                        ts = toml_datetime_to_hash_table(s7, datum.u.ts);
+                    } else {
+                        ts = s7_make_c_object(s7,
+                                              toml_datetime_type_tag,
+                                              datum.u.ts);
+                    }
+                    s7_hash_table_set(s7,
+                                      the_ht,
+                                      s7_make_string(s7, k), ts);
+                }
                 break;
             case TOML_NONDATUM:
                 // should not happen

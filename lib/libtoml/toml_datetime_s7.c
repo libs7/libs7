@@ -9,7 +9,6 @@ int toml_datetime_type_tag = 0;
 
 /* helper prototypes */
 s7_pointer toml_datetime_to_alist(s7_scheme *s7, toml_timestamp_t *ts, bool clone);
-s7_pointer toml_datetime_to_hash_table(s7_scheme *s7, toml_timestamp_t *ts, bool clone);
 
 /* Timestamp types. The year, month, day, hour, minute, second, z
  * fields may be NULL if they are not relevant. e.g. In a DATE
@@ -28,21 +27,21 @@ s7_pointer toml_datetime_to_hash_table(s7_scheme *s7, toml_timestamp_t *ts, bool
 
 /* ****************************************************************
  * API:
- *    (toml:date-fullyear ts) etc.
+ *    (toml:date-year ts) etc.
  *    (toml:time-hour ts) etc.
  *    (toml:datetime-ref "year") ??
  * toml:datetime? equal?, equivalent?,
  * ****************************************************************/
-// (toml:date-fullyear ts)
-static s7_pointer toml_date_fullyear(s7_scheme *s7, s7_pointer args)
+// (toml:date-year ts)
+static s7_pointer toml_date_year(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(free_toml_date_year);
+    TRACE_ENTRY(toml_date_year);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
     toml_timestamp_t *ts = (toml_timestamp_t*)s7_c_object_value_checked(arg, toml_datetime_type_tag);
     if (!ts) {
-        log_error("Bad arg, toml_date_fullyear");
+        log_error("Bad arg, toml_date_year");
         log_error("obj typ: %d", s7_c_object_type(arg));
         log_error("expected type: %d", toml_datetime_type_tag);
         //FIXME: throw error
@@ -51,10 +50,11 @@ static s7_pointer toml_date_fullyear(s7_scheme *s7, s7_pointer args)
         return s7_make_integer(s7,  *ts->year);
     }
 }
+
 // (toml:date-month ts)
 static s7_pointer toml_date_month(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(free_toml_date_month);
+    TRACE_ENTRY(toml_date_month);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
@@ -70,43 +70,125 @@ static s7_pointer toml_date_month(s7_scheme *s7, s7_pointer args)
 // ... etc. ...
 
 /* **************************************************************** */
-static s7_pointer free_toml_datetime(s7_scheme *s7, s7_pointer obj)
+static s7_pointer g_free_toml_datetime(s7_scheme *s7, s7_pointer obj)
 {
-    TRACE_ENTRY(free_toml_datetime);
+    TRACE_ENTRY(g_free_toml_datetime);
     free(s7_c_object_value(obj));
     return(NULL);
 }
 
-static s7_pointer mark_toml_datetime(s7_scheme *s7, s7_pointer obj)
+static s7_pointer g_mark_toml_datetime(s7_scheme *s7, s7_pointer obj)
 {
+    TRACE_ENTRY(g_mark_toml_datetime);
   /* toml_datetime_t *t = (toml_datetime_t*)s7_c_object_value(obj); */
   /* s7_mark(o->data); */
   return(NULL);
 }
 
-/* static */ s7_pointer is_toml_datetime(s7_scheme *s7, s7_pointer args)
+s7_pointer g_is_toml_datetime(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(is_toml_datetime);
+    TRACE_ENTRY(g_is_toml_datetime);
     return(s7_make_boolean(s7,
                            s7_is_c_object(s7_car(args)) &&
                            s7_c_object_type(s7_car(args)) == toml_datetime_type_tag));
 }
 
-static s7_pointer toml_datetime_is_equal(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_toml_datetime_is_equal(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(toml_datetime_is_equal);
+    TRACE_ENTRY(g_toml_datetime_is_equal);
     return s7_nil(s7);
 }
 
-static s7_pointer toml_datetime_is_equivalent(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_toml_datetime_is_equivalent(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(toml_datetime_is_equivalent);
+    TRACE_ENTRY(g_toml_datetime_is_equivalent);
     return s7_nil(s7);
 }
 
-static s7_pointer toml_datetime_copy(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_toml_datetime_ref(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(toml_datetime_set);
+    TRACE_ENTRY(g_toml_datetime_ref);
+    s7_pointer p, arg;
+    p = args;
+    arg = s7_car(p);
+    toml_timestamp_t *ts = (toml_timestamp_t*)s7_c_object_value_checked(arg, toml_datetime_type_tag);
+    if (!ts) {
+        return s7_f(s7);
+    }
+    p = s7_cdr(p);
+    arg = s7_car(p);
+    char* key;
+    if (s7_is_string(arg)) {
+        key = (char*)s7_string(arg);
+    }
+    else if (s7_is_symbol(arg)) {
+        key = (char*)s7_symbol_name(arg);
+    }
+    else if (s7_is_keyword(arg)) {
+        key = (char*)s7_keyword_to_symbol(s7, arg);
+        /* key = (char*)s7_symbol_name(arg); */
+    }
+    else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
+
+    TRACE_LOG_DEBUG("ref key: %s", key);
+    if ((strncmp(key, "year", 4) == 0) && (strlen(key) == 4)) {
+        return(s7_make_integer(s7, *ts->year));
+    }
+    else if ((strncmp(key, "month", 5) == 0) && (strlen(key) == 5)) {
+        return(s7_make_integer(s7, *ts->month));
+    }
+    else if ((strncmp(key, "day", 3) == 0) && (strlen(key) == 3)) {
+        return(s7_make_integer(s7, *ts->day));
+    }
+    else if ((strncmp(key, "hour", 4) == 0) && (strlen(key) == 4)) {
+        return(s7_make_integer(s7, *ts->hour));
+    }
+    else if ((strncmp(key, "minute", 6) == 0) && (strlen(key) == 6)) {
+        return(s7_make_integer(s7, *ts->minute));
+    }
+    else if ((strncmp(key, "second", 6) == 0) && (strlen(key) == 6)) {
+        return(s7_make_integer(s7, *ts->second));
+    }
+    else if ((strncmp(key, "millisecond", 11) == 0) && (strlen(key) == 11)) {
+        return(s7_make_integer(s7, *ts->millisec));
+    }
+    else if ((strncmp(key, "offset", 6) == 0) && (strlen(key) == 6)) {
+        /* log_debug("offset len: %d", strlen(ts->z)); */
+        return(s7_make_string(s7, ts->z));
+    }
+
+    return s7_nil(s7);
+}
+
+static s7_pointer g_toml_datetime_set(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(g_toml_datetime_set);
+    return s7_nil(s7);
+}
+
+static s7_pointer g_toml_datetime_length(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(g_toml_datetime_length);
+    return s7_nil(s7);
+}
+
+static s7_pointer g_toml_datetime_copy(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(g_toml_datetime_set);
+    // UNSUPPORTED
+    return s7_nil(s7);
+}
+
+static s7_pointer g_toml_datetime_fill(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(g_toml_datetime_fill);
+    // UNSUPPORTED
+    return s7_nil(s7);
+}
+
+static s7_pointer g_toml_datetime_reverse(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(g_toml_datetime_reverse);
     // UNSUPPORTED
     return s7_nil(s7);
 }
@@ -147,19 +229,7 @@ static s7_pointer g_toml_datetime_to_hash_table(s7_scheme *s7, s7_pointer args)
     toml_timestamp_t *ts = (toml_timestamp_t*)s7_c_object_value_checked(arg, toml_datetime_type_tag);
     /* FIXME: handle error */
 
-    bool clone = true;
-    p = s7_cdr(p);
-    if (p == s7_nil(s7)) {
-        // default to :clone #t
-    } else {
-        arg = s7_car(p);
-        if (s7_is_boolean(arg)) {
-            clone = s7_boolean(s7, arg);
-        } else {
-            return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:datetime->hash-table", 14), 2, arg, boolean_string));
-        }
-    }
-    return toml_datetime_to_hash_table(s7, ts, clone);
+    return toml_datetime_to_hash_table(s7, ts);
 }
 
 static s7_pointer g_toml_datetime_to_string(s7_scheme *s7, s7_pointer args)
@@ -175,9 +245,9 @@ static s7_pointer g_toml_datetime_to_string(s7_scheme *s7, s7_pointer args)
     return s7_make_string(s7, s);
 }
 
-static s7_pointer toml_datetime_getter(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_toml_datetime_getter(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(toml_datetime_getter);
+    TRACE_ENTRY(g_toml_datetime_getter);
     return s7_nil(s7);
 }
 
@@ -193,21 +263,21 @@ void toml_datetime_init(s7_scheme *s7, s7_pointer cur_env)
     toml_datetime_type_tag = s7_make_c_type(s7, "toml_datetime");
     /* TRACE_LOG_DEBUG("toml_datetime_type_tag: %d", toml_datetime_type_tag); */
 
-    s7_c_type_set_gc_free      (s7, toml_datetime_type_tag, free_toml_datetime);
-    s7_c_type_set_gc_mark      (s7, toml_datetime_type_tag, mark_toml_datetime);
-    s7_c_type_set_is_equal     (s7, toml_datetime_type_tag, toml_datetime_is_equal);
-    s7_c_type_set_is_equivalent(s7, toml_datetime_type_tag, toml_datetime_is_equivalent);
-    /* s7_c_type_set_ref          (s7, toml_datetime_type_tag, toml_datetime_ref); */
-    /* s7_c_type_set_set          (s7, toml_datetime_type_tag, toml_datetime_set); */
-    /* s7_c_type_set_length       (s7, toml_datetime_type_tag, toml_datetime_length); */
-    s7_c_type_set_copy         (s7, toml_datetime_type_tag, toml_datetime_copy);
-    /* s7_c_type_set_fill         (s7, toml_datetime_type_tag, toml_datetime_fill); */
-    /* s7_c_type_set_reverse      (s7, toml_datetime_type_tag, toml_datetime_reverse); */
+    s7_c_type_set_gc_free      (s7, toml_datetime_type_tag, g_free_toml_datetime);
+    s7_c_type_set_gc_mark      (s7, toml_datetime_type_tag, g_mark_toml_datetime);
+    s7_c_type_set_is_equal     (s7, toml_datetime_type_tag, g_toml_datetime_is_equal);
+    s7_c_type_set_is_equivalent(s7, toml_datetime_type_tag, g_toml_datetime_is_equivalent);
+    s7_c_type_set_ref          (s7, toml_datetime_type_tag, g_toml_datetime_ref);
+    s7_c_type_set_set          (s7, toml_datetime_type_tag, g_toml_datetime_set);
+    s7_c_type_set_length       (s7, toml_datetime_type_tag, g_toml_datetime_length);
+    s7_c_type_set_copy         (s7, toml_datetime_type_tag, g_toml_datetime_copy);
+    s7_c_type_set_fill         (s7, toml_datetime_type_tag, g_toml_datetime_fill);
+    s7_c_type_set_reverse      (s7, toml_datetime_type_tag, g_toml_datetime_reverse);
     s7_c_type_set_to_list      (s7, toml_datetime_type_tag, g_toml_datetime_to_list);
     s7_c_type_set_to_string    (s7, toml_datetime_type_tag, g_toml_datetime_to_string);
 
     s7_define_function(s7, "toml:datetime-getter",
-                       toml_datetime_getter, 2, 0, false,
+                       g_toml_datetime_getter, 2, 0, false,
                        "(toml:datetime-getter t k) gets value for key k from array t");
     s7_c_type_set_getter       (s7, toml_datetime_type_tag, s7_name_to_value(s7, "toml:datetime-getter"));
 
@@ -216,11 +286,22 @@ void toml_datetime_init(s7_scheme *s7, s7_pointer cur_env)
     /*                    "(toml:datetime-setter t k) sets value for key k from array t"); */
     /* s7_c_type_set_setter       (s7, toml_datetime_type_tag, s7_name_to_value(s7, "toml:datetime-setter")); */
 
-    s7_define_function(s7, "toml:datetime?", is_toml_datetime, 1, 0, false,
+    s7_define_function(s7, "toml:datetime?",
+                       g_is_toml_datetime,
+                       1, 0, false,
                        "(toml:datetime? obj) returns #t if its argument is a toml_datetime object");
 
-    s7_define_function(s7, "toml:date-fullyear", toml_date_fullyear, 1, 0, false,
-                       "(toml:date-fullyear obj) returns the year value of a toml datetime.");
+    s7_define(s7, cur_env,
+              s7_make_symbol(s7, "toml:datetime-ref"),
+              s7_make_typed_function(s7, "toml:datetime-ref",
+                                     g_toml_datetime_ref,
+                                     2, 0, false,
+                                     "(toml:datetime-ref t k) returns value of datetime ts for field k", pl_xxs));
+
+    s7_define_function(s7, "toml:date-year",
+                       toml_date_year,
+                       1, 0, false,
+                       "(toml:date-year obj) returns the year value of a toml datetime.");
 
     s7_define_function(s7, "toml:date-month", toml_date_month, 1, 0, false,
                        "(toml:date-month obj) returns the month value of a toml datetime.");
@@ -280,39 +361,66 @@ char *toml_datetime_to_string(toml_timestamp_t *ts)
     TRACE_LOG_DEBUG("buf: %s", buf);
     /* } */
 
+    if (ts->year == NULL) {
+        // local time
+    }
+    else if (ts->hour == NULL) {
+        // local date
+    }
+    else if (ts->millisec == NULL) {
+        log_debug("NO MILLIS");
+        snprintf(buf, 20, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d%s",
+                 *ts->year, *ts->month, *ts->day,
+                 *ts->hour, *ts->minute, *ts->second,
+                 ts->z);
+    }
+    else {
+        log_debug("MILLIS");
+        snprintf(buf, 28, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d.%d%s",
+                 *ts->year, *ts->month, *ts->day,
+                 *ts->hour, *ts->minute, *ts->second,
+                 *ts->millisec,
+                 ts->z);
+    }
+    if (*ts->z == NULL) {
+        log_debug("NO Z");
+    } else {
+        log_debug("Z: %c", ts->z[0]);
+    }
+    char_ct += 19;
     // print fields
     // year
-    if ((char_ct + 14) > bufsz) {
-        log_error("realloc for year");
-    } else {
-        errno = 0;
-        TRACE_LOG_DEBUG("snprintfing year", "");
-        ct = snprintf(buf+char_ct, 14, "year = %.4d, ", *ts->year);
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-        } else {
-            TRACE_LOG_DEBUG("snprintf year ct: %d", ct);
-        }
-        char_ct += 13; // do not include terminating '\0'
-        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-        TRACE_LOG_DEBUG("buf: %s", buf);
-    }
-    // month
-    if ((char_ct + 13) > bufsz) {
-        log_error("realloc for month");
-    } else {
-        errno = 0;
-        TRACE_LOG_DEBUG("snprintfing month", "");
-        ct = snprintf(buf+char_ct, 14, "month = %.2d, ", *ts->month);
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-        } else {
-            TRACE_LOG_DEBUG("snprintf month ct: %d", ct);
-        }
-        char_ct += 12; // do not include terminating '\0'
-        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-        TRACE_LOG_DEBUG("buf: %s", buf);
-    }
+    /* if ((char_ct + 14) > bufsz) { */
+    /*     log_error("realloc for year"); */
+    /* } else { */
+    /*     errno = 0; */
+    /*     TRACE_LOG_DEBUG("snprintfing year", ""); */
+    /*     ct = snprintf(buf+char_ct, 14, "year = %.4d, ", *ts->year); */
+    /*     if (errno) { */
+    /*         log_error("snprintf: %s", strerror(errno)); */
+    /*     } else { */
+    /*         TRACE_LOG_DEBUG("snprintf year ct: %d", ct); */
+    /*     } */
+    /*     char_ct += 13; // do not include terminating '\0' */
+    /*     TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+    /*     TRACE_LOG_DEBUG("buf: %s", buf); */
+    /* } */
+    /* // month */
+    /* if ((char_ct + 13) > bufsz) { */
+    /*     log_error("realloc for month"); */
+    /* } else { */
+    /*     errno = 0; */
+    /*     TRACE_LOG_DEBUG("snprintfing month", ""); */
+    /*     ct = snprintf(buf+char_ct, 14, "month = %.2d, ", *ts->month); */
+    /*     if (errno) { */
+    /*         log_error("snprintf: %s", strerror(errno)); */
+    /*     } else { */
+    /*         TRACE_LOG_DEBUG("snprintf month ct: %d", ct); */
+    /*     } */
+    /*     char_ct += 12; // do not include terminating '\0' */
+    /*     TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+    /*     TRACE_LOG_DEBUG("buf: %s", buf); */
+    /* } */
     // _print_comma(buf, char_ct);
     // mday
     // hour
@@ -353,7 +461,7 @@ s7_pointer toml_datetime_to_alist(s7_scheme *s7, toml_timestamp_t *ts, bool clon
     return the_alist;
 }
 
-s7_pointer toml_datetime_to_hash_table(s7_scheme *s7, toml_timestamp_t *ts, bool clone)
+s7_pointer toml_datetime_to_hash_table(s7_scheme *s7, toml_timestamp_t *ts)
 {
     TRACE_ENTRY(toml_datetime_to_hash_table);
 
@@ -363,3 +471,5 @@ s7_pointer toml_datetime_to_hash_table(s7_scheme *s7, toml_timestamp_t *ts, bool
     TRACE_S7_DUMP("returning hash-table", ht);
     return ht;
 }
+
+

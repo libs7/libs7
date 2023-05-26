@@ -5,6 +5,8 @@
   (lambda (port) (let ((toml (toml:read port)))
                    toml)))
 
+(define tt (call-with-input-file "test/lib/toml/data/spec-example-1.toml" (lambda (port) (let ((toml (toml:read port))) toml))))
+
 (load "string.scm")
 
 (define root (toml:read (string-join

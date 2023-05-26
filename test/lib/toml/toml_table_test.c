@@ -118,7 +118,8 @@ void table_refs(void) {
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     /* apply table to key: (t k) == (toml:table-ref t k) */
-    a = s7_apply_function(s7, t, s7_list(s7, 1, k));
+    a = APPLY_OBJ(t, s7_list(s7, 1, k));
+    /* a = s7_apply_function(s7, t, s7_list(s7, 1, k)); */
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 

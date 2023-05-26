@@ -25,6 +25,9 @@ s7_scheme *initialize(char *test, int argc, char **argv);
                       s7_list(s7, 1,                            \
                       s7_eval_c_string(s7, "\"" s "\"")));
 
+#define APPLY_OBJ(obj, arg)                            \
+    s7_apply_function(s7, obj, s7_list(s7, 1, arg))
+
 #define APPLY_1(f, o) \
  s7_apply_function(s7, s7_name_to_value(s7, f),    \
                        s7_list(s7, 1, o))

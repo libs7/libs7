@@ -49,6 +49,7 @@ void toml_array_init(s7_scheme *s7, s7_pointer cur_env);
 
 /* in toml_datetime_s7.c */
 extern int toml_datetime_type_tag;
+s7_pointer toml_datetime_to_hash_table(s7_scheme *s7, toml_timestamp_t *ts);
 char *toml_datetime_to_string(toml_timestamp_t *ts);
 void toml_datetime_init(s7_scheme *s7, s7_pointer cur_env);
 

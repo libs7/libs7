@@ -434,7 +434,7 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
   s7_define_constant(sc, "toml:version", s7_make_string(sc, "1.0-beta"));
 
   /* -------- table ops -------- */
-
+  // TODO: move to toml_table_s7.c
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:table-key"),
             s7_make_typed_function(sc, "toml:table-key",
@@ -494,12 +494,6 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
                                    toml_table_length,
                                    1, 0, false,
                                    "(toml:table-length t) total number of entries in table, regardless of value type.", pl_ix));
-
-  s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-ref"),
-            s7_make_typed_function(sc, "toml:table-ref",
-                                   toml_table_ref, 2, 0, false,
-                                   "(toml:table-ref t k) returns value of table t at key k", pl_xxs));
 
   /* srfi-69: hash-table-exists? */
   s7_define(sc, cur_env,
