@@ -1,0 +1,149 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Hash Tables
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.Pp
+.Em (make-hash-table (size 8) eq-func typers)
+.Pp
+.Em (make-weak-hash-table (size 8) eq-func typers)
+returns a new weak hash table
+.Pp
+.Em (hash-table ...)
+.Pp
+.Em (weak-hash-table ...)
+.Pp
+.Em(hash-table? obj)
+.Pp
+.Em (weak-hash-table? obj)
+.Pp
+.Em (hash-table-ref table key)
+returns the value associated with key in the hash table
+.Pp
+.Em (hash-table-set! table key value)
+sets the value associated with key in the hash table to value
+.Pp
+.Em (hash-table-entries obj)
+returns the number of entries in the hash-table obj
+.Pp
+.Em (hash-code obj eqfunc)
+.Pp
+.Ed
+.Sh DESCRIPTION
+.Em (make-hash-table (size 8) eq-func typer)
+returns a new hash table. eq-func is the function used to check equality of keys; it usually defaults to equal?. typer sets the types of the keys and values that are allowed in the table; it is a cons, defaulting to (cons #t #t) which means any types are allowed.
+.Pp
+.Em (weak-hash-table ...)
+returns a weak-hash-table containing the symbol/value pairs passed as its arguments. That is, (weak-hash-table 'a 1 'b 2) returns a new weak-hash-table with the two key/value pairs preinstalled.
+.Pp
+
+Each hash-table keeps track of the keys it contains, optimizing the search wherever possible. Any s7 object can be the key or the key's value. If you pass a table size that is not a power of 2, make-hash-table rounds it up to the next power of 2. The table grows as needed. length returns the current size. If a key is not in the table, hash-table-ref returns #f. To remove a key, set its value to #f; to remove all keys, (fill! table #f).
+.Bd -literal -offset indent
+> (let ((ht (make-hash-table)))
+    (set! (ht "hi") 123)
+    (ht "hi"))
+123
+.Ed
+.Pp
+.Em hash-table
+(the function) parallels the functions
+.Em vector ,
+.Em list
+, and
+.Em string .
+Its arguments are the keys and values:
+.Em (hash-table 'a 1 'b 2) .
+Implicit indexing gives multilevel hashes:
+.Bd -literal -offset indent
+> (let ((h (hash-table 'a (hash-table 'b 2 'c 3)))) (h 'a 'b))
+2
+> (let ((h (hash-table 'a (hash-table 'b 2 'c 3)))) (set! (h 'a 'b) 4) (h 'a 'b))
+4
+.Ed
+.Pp
+.Em hash-code
+is like Common Lisp's sxhash. It returns an integer that can be associated with an s7 object when implementing your own hash-tables. s7test.scm has an example using vectors. The eqfunc argument is currently ignored (hash-code assumes
+.Em equal?
+is in use).
+.Pp
+Since hash-tables accept the same applicable-object syntax that vectors use, we can treat a hash-table as, for example, a sparse array:
+.Bd -literal -offset indent
+> (define make-sparse-array make-hash-table)
+make-sparse-array
+> (let ((arr (make-sparse-array)))
+   (set! (arr 1032) "1032")
+   (set! (arr -23) "-23")
+   (list (arr 1032) (arr -23)))
+("1032" "-23")
+.Ed
+.Pp
+.Em map
+and .Em for-each
+accept hash-table arguments. On each iteration, the map or for-each function is passed an entry,
+.Em '(key . value) ,
+in whatever order the entries are encountered in the table.
+.Bd -literal -offset indent
+(define (hash-table->alist table)
+  (map values table))
+.Ed
+.Em reverse
+of a hash-table returns a new table with the keys and values reversed.
+.Em fill!
+sets all the values.
+.Pp
+Two hash-tables are equal if they have the same keys with the same values. This is independent of the table sizes, or the order in which the key/value pairs were added.
+.Pp
+The second argument to make-hash-table (eq-func) is slightly complicated. If it is omitted, s7 chooses the hashing equality and mapping functions based on the keys in the hash-table. There are times when you know in advance what equality function you want. If it's one of the built-in s7 equality functions, eq?, eqv?, equal?, equivalent?, =, string=?, string-ci=?, char=?, or char-ci=?, you can pass that function as the second argument. In any other case, you need to give s7 both the equality function and the mapping function. The latter takes any object and returns the hash-table location for it (an integer). The problem here is that for the arbitrary equality function to work, objects that are equal according to that function have to be mapped to the same hash-table location. There's no way for s7 to intuit what this mapping should be except in the built-in cases. So to specify some arbitrary function, the second argument is a cons: '(equality-checker mapper).
+.Pp
+The third argument, typers, sets type checkers for the keys and values in the table, much like the third argument to make-vector. It is a cons of the type functions, (cons symbol? integer?) for example. This says that all the keys must be symbols and all the values integers.
+.Bd -literal -offset indent
+> (define (10|12? val) (memv val '(10 12)))
+10|12?
+> (define hash (make-hash-table 8 #f (cons #t 10|12?))) ; any key is ok, but all values must be 10 or 12
+(hash-table)
+> (set! (hash 'a) 10)
+10
+> hash
+(hash-table 'a 10)
+> (set! (hash 'b) 32)
+error: hash-table-set! value argument 3, 32, is an integer but should be a 10|12?
+.Ed
+.Pp
+Here's a brief example. In CLM, we have c-objects of type mus-generator (from s7's point of view), and we want to hash them using equal? (which will call the generator-specific equality function). But s7 doesn't realize that the mus-generator type covers 40 or 50 internal types, so as the mapper we pass mus-type: (make-hash-table 64 (cons equal? mus-type)).
+.Pp
+If the hash key is a float (a non-rational number), hash-table-ref uses equivalent?. Otherwise, for example, you could use NaN as a key, but then never be able to access it!
+.Pp
+To implement read-time hash-tables using #h(...):
+.Bd -literal -offset indent
+(set! *#readers*
+      (cons (cons #\h (lambda (str)
+			(and (string=? str "h") ; #h(...)
+			     (apply hash-table (read)))))
+	    *#readers*))
+
+(display #h(:a 1)) (newline)
+(display #h(:a 1 :b "str")) (newline)
+These can be made immutable by (immutable! (apply...)), or even better,
+
+(let ((h (apply hash-table (read))))
+  (if (> (*s7* 'safety) 1) (immutable! h) h))
+.Ed
+.Sh EXAMPLES
+.Bd -literal -offset indent
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_c_object_let 3 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

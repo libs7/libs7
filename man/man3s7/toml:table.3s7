@@ -1,0 +1,52 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH toml:table 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+toml table operations
+.
+.SH LIBRARY
+.nf
+.BR "(require 'toml)" "
+.
+.SH SYNOPSIS
+.nf
+.BI "(toml:table? " t ") " "                ;; true if t is a toml-table
+.BI "(toml:table-ref " t " " k ") " "           ;; value of table t at key k (polymorphic)"
+.BI "(toml:table-keys " t " " k ") " "          ;; vector of keys"
+.BI "(toml:table-contains? " t " " k ") " "     ;; true if key k is in table t"
+\." .BI "(toml:key-exists? " t " " k ") " "         ;; alias of toml:table-contains? (legacy)"
+.BI "(toml:key-for-index " t " " idx ") " "     ;; returns key at index idx of table t"
+\." .BI "(toml:key-in " t " " idx ") " "            ;; alias of toml:key-for-index (legacy)"
+.\" .BI "(toml:array-in " t " " k " ) " "           ;; value of t at k, if val is an array (legacy)"
+.\" .BI "(toml:bool-in " t " " k " ) " "            ;; value of t at k, if val is an bool (legacy)"
+.\" .BI "(toml:double-in " t " " k " ) " "          ;; value of t at k, if val is an double (legacy)"
+.\" .BI "(toml:int-in " t " " k " ) " "             ;; value of t at k, if val is an int (legacy)"
+.\" .BI "(toml:string-in " t " " k " ) " "          ;; value of t at k, if val is an string (legacy)"
+.\" .BI "(toml:table-in " t " " k " ) " "           ;; value of t at k, if val is a table (legacy)"
+.\" .BI "(toml:timestamp-in " t " " k " ) " "       ;; value of t at k, if val is a timestamp (legacy)"
+.BI "(toml:table-length " t ")" "           ;; nbr of entries in table t "
+.\" .BI "(toml:table-nkval " t ") "    "           ;; alias of toml_table-size (legacy)"
+.BI "(toml:table-subtable-count " t ") " "  ;; nbr of tables in table t"
+.\" .BI "(toml:table-ntab " t ") "       "            ;; alias of toml:table-subtable-count (legacy)"
+.BI "(toml:table-array-count " t ") " "     ;; nbr of arrays in table t"
+.\" .BI "(toml:table-narr " t ") "        "            ;; alias of toml:table-array-count (legacy)"
+.BI "(toml:table-key " t ) "              ;; key of table t "
+.
+.SH "SEE ALSO"
+.BR toml-array (3s7)
+.BR toml-read (3s7)
+.BR toml-utf8 (3s7)
+
+Each operation has its own manpage, with ':' replaced by '-', e.g. for
+.BI toml:table-ref
+consult
+.BR toml-table-ref (3s7)
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .

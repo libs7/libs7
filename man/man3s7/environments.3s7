@@ -1,0 +1,46 @@
+.\" -*- mode: nroff; coding: utf-8 -*-
+.\" Copyright © 2023 Gregg Reynolds
+.\" SPDX-License-Identifier: MIT
+.TH environments 3s7 2023-05-19 "" "s7 Scheme Programmer's Manual"
+.SH NAME
+Environments
+.
+.SH SYNOPSIS
+.nf
+.BI (rootlet) "                  ;; the top-level (global) environment
+.BI (currlet) "                  ;; the current (innermost) environment
+.BI "(funclet " proc ")" "             ;; the environment at the time when proc was defined"
+.BI "(funclet? "env ")" "             ;; #t if env is a funclet"
+.BI (owlet)                 the environment at the point of the last error
+.BI (unlet)                 a let with built-in functions with their original value
+
+.BI (let-ref env sym)       get value of sym in env, same as (env sym)
+(let-set! env sym val)  set value of sym in env to val, same as (set! (env sym) val)
+
+.BI (inlet . bindings)       make a new environment with the given bindings
+.BI (sublet env . bindings)  same as inlet, but the new environment is local to env
+.BI (varlet env . bindings)  add new bindings directly to env
+.BI (cutlet env . fields)    remove bindings from env
+
+.BI (let? obj)               #t if obj is an environment
+.BI (with-let env . body)    evaluate body in the environment env 
+.BI (outlet env)             the environment that encloses the environment env (settable)
+.BI (let->list env)          return the environment bindings as a list of (symbol . value) cons's
+.
+.SH "SEE ALSO"
+.BR toml-array (3s7)
+.BR toml-read (3s7)
+.BR toml-utf8 (3s7)
+
+Each operation has its own manpage, with ':' replaced by '-', e.g. for
+.BI toml:table-ref
+consult
+.BR toml-table-ref (3s7)
+.
+.SH AUTHORS
+More information can be found at
+.UR https://github.com/obazl/libs7/
+.UE
+and
+.UR https://github.com/cktan/tomlc99
+.UE .

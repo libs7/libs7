@@ -1,0 +1,130 @@
+.Dd July 12, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Numbers
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft bool
+.Fn s7_is_number "s7_pointer p"
+(number? p)
+.Ft char
+.Fn *s7_number_to_string "s7_scheme *sc, s7_pointer obj, s7_int radix"
+(number->string obj radix)
+.Ft s7_double
+.Fn s7_number_to_real "s7_scheme *sc, s7_pointer x"
+x can be any kind of number
+.Ft s7_double
+.Fn s7_number_to_real_with_caller "s7_scheme *sc, s7_pointer x, const char *caller"
+.Ft s7_int
+.Fn s7_number_to_integer "s7_scheme *sc, s7_pointer x"
+.Ft s7_int
+.Fn s7_number_to_integer_with_caller "s7_scheme *sc, s7_pointer x, const char *caller"
+.Ft bool
+.Fn s7_is_integer "s7_pointer p"
+(integer? p)
+.Ft s7_int
+.Fn s7_integer "s7_pointer p"
+Scheme integer -> C integer (s7_int)
+.Ft s7_pointer
+.Fn s7_make_integer "s7_scheme *sc, s7_int num"
+C s7_int -> Scheme integer
+.Ft bool
+.Fn  s7_is_real "s7_pointer p"
+(real? p)
+.Ft s7_double
+.Fn s7_real "s7_pointer p"
+Scheme real -> C double
+.Ft s7_pointer
+.Fn s7_make_real "s7_scheme *sc, s7_double num"
+C double -> Scheme real
+.Ft s7_pointer
+.Fn s7_make_mutable_real "s7_scheme *sc, s7_double n"
+.Ft bool
+.Fn  s7_is_rational "s7_pointer arg"
+(rational? arg) -- integer or ratio
+.Ft bool
+.Fn  s7_is_ratio "s7_pointer arg"
+true if arg is a ratio, not an integer
+.Ft s7_pointer
+.Fn s7_make_ratio "s7_scheme *sc, s7_int a, s7_int b"
+returns the Scheme object a/b
+.Ft s7_pointer
+.Fn s7_rationalize "s7_scheme *sc, s7_double x, s7_double error"
+(rationalize x error)
+.Ft s7_int
+.Fn s7_numerator "s7_pointer x"
+(numerator x)
+.Ft s7_int
+.Fn s7_denominator "s7_pointer x"
+(denominator x)
+.Ft s7_double
+.Fn s7_random "s7_scheme *sc, s7_pointer state"
+(random x)
+.Ft s7_pointer
+.Fn s7_random_state "s7_scheme *sc, s7_pointer seed"
+(random-state seed)
+.Ft s7_pointer
+.Fn s7_random_state_to_list "s7_scheme *sc, s7_pointer args"
+(random-state->list r)
+.Ft void
+.Fn s7_set_default_random_state "s7_scheme *sc, s7_int seed, s7_int carry"
+.Ft bool
+.Fn  s7_is_complex "s7_pointer arg"
+(complex? arg)
+.Ft s7_pointer
+.Fn s7_make_complex "s7_scheme *sc, s7_double a, s7_double b"
+returns the Scheme object a+bi
+.Ft s7_double
+.Fn s7_real_part "s7_pointer z"
+(real-part z)
+.Ft s7_double
+.Fn s7_imag_part "s7_pointer z"
+(imag-part z)
+
+If compiled with GMP:
+.Bd -literal -offset indent
+  mpfr_t *s7_big_real(s7_pointer x);
+  mpz_t  *s7_big_integer(s7_pointer x);
+  mpq_t  *s7_big_ratio(s7_pointer x);
+  mpc_t  *s7_big_complex(s7_pointer x);
+
+  bool s7_is_bignum(s7_pointer obj);
+  bool s7_is_big_real(s7_pointer x);
+  bool s7_is_big_integer(s7_pointer x);
+  bool s7_is_big_ratio(s7_pointer x);
+  bool s7_is_big_complex(s7_pointer x);
+
+  s7_pointer s7_make_big_real(s7_scheme *sc, mpfr_t *val);
+  s7_pointer s7_make_big_integer(s7_scheme *sc, mpz_t *val);
+  s7_pointer s7_make_big_ratio(s7_scheme *sc, mpq_t *val);
+  s7_pointer s7_make_big_complex(s7_scheme *sc, mpc_t *val);
+.Ed
+.Sh DESCRIPTION
+.Sh EXAMPLES
+.Bd -literal -offset indent
+verbatim code here...
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_datatypes 3 ,
+.Xr s7_equality 3
+.Pp
+.Xr s7_booleans 3 ,
+.Xr s7_characters 3 ,
+.Xr s7_lists 3 ,
+.Xr s7_pairs 3 ,
+.Xr s7_strings 3 ,
+.Xr s7_vectors 3 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

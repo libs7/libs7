@@ -1,0 +1,61 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd with-let
+.Sh SYNOPSIS
+.Pp
+.Em (with-let env . body)
+evaluates
+.Em body
+in the environment
+.Em env
+.Sh DESCRIPTION
+.Em with-let
+evaluates its body in the given environment, so
+.Em (with-let e\ . body)
+is equivalent to
+.Em (eval `(begin ,@body) e) ,
+but probably faster. Similarly,
+.Em (let bindings\ . body)
+is equivalent to
+.Em (eval `(begin ,@body) (apply inlet (flatten bindings))) ,
+ignoring the outer (enclosing) environment (the default outer environment of inlet is rootlet). Or better,
+.Bd -literal -offset indent
+(define-macro (with-environs e\ . body)
+  `(apply let (map (lambda (a) (list (car a) (cdr a))) ,e) '(,@body)))
+.Ed
+Or turning it around,
+.Bd -literal -offset indent
+(define-macro (Let vars . body)
+  `(with-let (sublet (curlet)
+	       ,@(map (lambda (var)
+			(values (symbol->keyword (car var)) (cadr var)))
+		      vars))
+     ,@body))
+
+(Let ((c 4))
+  (Let ((a 2)
+        (b (+ c 2)))
+  (+ a b c)))
+.Ed
+It is faster to use
+.Em (biglet 'a-function)
+than
+.Em (with-let biglet a-function) .
+.Sh EXAMPLES
+.Bd -literal -offset indent
+.Ed
+.Sh SEE ALSO
+.Xr s7-eval 3 ,
+.Xr s7_environments 3
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

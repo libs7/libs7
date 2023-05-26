@@ -1,0 +1,204 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Definitions
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft typedef s7_pointer
+.Fn (*s7_function) "s7_scheme *sc, s7_pointer args"
+.Ft void
+.Fn s7_define "s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value"
+.Ft bool
+.Fn s7_is_defined "s7_scheme *sc, const char *name"
+.Sh DESCRIPTION
+The
+.Em s7_define*
+functions add a symbol and its binding to either the top-level (global) environment or the
+.Em env
+passed as the second argument (to
+.Fn s7_define ,
+.Fn s7_define_constant_with_environment ,
+.Sm off
+.Fn  s7_dilambda_with_environment
+).
+.Sm on
+Use
+.Fn s7_set_shadow_rootlet
+to import the current let into rootlet.
+.Pp
+.Bd -literal -offset indent
+s7_define(s7, s7_curlet(s7), s7_make_symbol(s7, "var"), s7_make_integer(s7, 123));
+.Ed
+.Pp
+adds the variable named
+.Em var
+to the current environment with the value 123. Scheme code can then refer to
+.Em var
+just as if we had said
+.Em (define var 123)
+.Pp
+.Fn s7_define_variable
+is a wrapper for
+.Fn s7_define ;
+the code above could be:
+.Bd -literal -offset indent
+s7_define_variable(s7, "var", s7_make_integer(s7, 123)); /* (define var 123) */
+.Ed
+.Pp
+except that
+.Fn s7_define_variable
+assumes you want
+.Em var
+in
+.Em rootlet .
+.Pp
+.Fn s7_define_constant
+is another wrapper for
+.Fn s7_define ;
+it makes the variable immutable:
+.Pp
+.Bd -literal -offset indent
+s7_define_constant(sc, "var", s7_make_integer(s7, 123));  /* (define-constant var 123) */
+.Ed
+.Pp
+The rest of the functions in this section deal with integrating C functions into Scheme.
+.Pp
+.Fn s7_make_function "sc, name, fn, required_args, optional_args, rest_arg, doc"
+creates a Scheme function object from the s7_function
+.Em fn ;
+an
+.Vt s7_function
+is a C function of the form
+.Em s7_pointer
+.Sm off
+.Ic f
+(
+.Sm on
+.Em s7_scheme *sc,
+.Em s7_pointer args
+).
+The new function's name is
+.Em name ;
+it requires
+.Em required_args
+arguments, it can accept
+.Em optional_args
+other arguments, and if
+.Em rest_arg
+is true, it accepts a "rest" argument (a list of all the trailing arguments). The function's documentation string is
+.Em doc .
+.Pp
+.Fn s7_define_function
+has the same signature and semantics as
+.Fn s7_make_function ,
+but it also adds
+.Em name
+(as a symbol) to the global environment, with the function as its value. For example, the Scheme function
+.Em car
+is implemented by the following
+.Em s7_function :
+.Pp
+.Bd -literal -offset indent
+s7_pointer g_car(s7_scheme *sc, s7_pointer args) {return(s7_car(s7_car(args)));} /* args is a list of args */
+.Ed
+.Pp
+It is bound to the name "car":
+.Pp
+.Bd -literal -offset indent
+s7_define_function(sc, "car", g_car, 1, 0, false, "(car obj)");
+.Ed
+.Pp
+which says that
+.Em car
+has one required argument, no optional arguments, and no "rest" argument.
+.Pp
+.Fn s7_define_macro
+defines a Scheme macro; its arguments are not evaluated (unlike those of a function), but its returned value (assumed to be some sort of Scheme expression) is evaluated. [GAR: presumably "its" refers to the macro, not s7_define_macro, meaning "the macro defined does not evaluate its arguments, ..."]
+.Pp
+The "safe" and "unsafe" versions of these functions refer to the s7 optimizer. If it knows a function is safe, it can more thoroughly optimize the expression it is in. "Safe" here means the function does not call the evaluator itself (via
+.Fn s7_apply_function
+for example) and does not mess with s7's stack.
+Use the "unsafe" definer if the function might call the evaluator itself in some way (s7_apply_function for example), or messes with s7's stack.
+.Pp
+The "typed" versions refer to the function's signature. Since "car" is safe, and has a signature, it is defined in
+.Pa s7.c :
+.Fo s7_define_typed_function
+.Fa sc
+.Fa """car""
+.Fa "g_car, 1, 0, false, H_car, Q_car"
+.Fc .
+Here unless you use
+.Fn s7_define_unsafe_typed_function ,
+ the function is assumed to be safe. We've given it the Scheme name "car", which is to be bound to the C function g_car. g_car takes one required argument, and no optional or rest arguments. Its documentation is H_car, and its signature is Q_car. The latter is specified by:
+.Fn s7_make_signature "sc, 2, sc->T, sc->is_pair_symbol" ,
+which says that car takes a pair argument, and returns any type object.
+.Pp
+The
+.Em function_star
+functions are similar, but in this case we pass the argument list as a string, as it would appear in Scheme. s7 makes sure the arguments are ordered correctly and have the specified defaults before calling the C function.
+.Bd -literal -offset indent
+s7_define_function_star(sc, "a-func", a_func, "arg1 (arg2 32)", "an example of C define*");
+.Ed
+.Pp
+Then in Scheme,
+.Em (a-func :arg1 2)
+calls the C function
+.Em a_func
+with the arguments 2 and 32.
+.Pp
+Finally, the dilambda function [sic] define Scheme dilambda, just as the Scheme dilambda function does. The dax example above gives read/write access to its x field via:
+.Bd -literal -offset indent
+s7_define_variable(s7, "dax-x", s7_dilambda(s7, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field"));
+.Ed
+.Pp
+[GAR: the term 'dilambda' is particular to s7?]
+.Sh EXAMPLES
+.Bd -literal -offset indent
+verbatim code here...
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_define_constant 3 ,
+.Xr s7_define_constant_with_documentation 3 ,
+.Xr s7_define_constant_with_environment 3 ,
+.Xr s7_define_variable 3 ,
+.Xr s7_define_variable_with_documentation 3 ,
+.Xr s7_define_constant 3 ,
+.Xr s7_define_constant_with_documentation 3 ,
+.Xr s7_define_constant_with_environment 3 ,
+.Xr s7_function 3 ,
+.Xr s7_define_function 3 ,
+.Xr s7_define_safe_function 3 ,
+.Xr s7_define_typed_function 3 ,
+.Xr s7_define_unsafe_typed_function 3 ,
+.Xr s7_define_semisafe_typed_function 3 ,
+.Xr s7_define_function_star 3 ,
+.Xr s7_define_safe_function_star 3 ,
+.Xr s7_define_typed_function_star 3 ,
+.Xr s7_define_macro 3 ,
+.Xr s7_make_function 3 ,
+.Xr s7_make_safe_function 3 ,
+.Xr s7_make_typed_function 3 ,
+.Xr s7_make_function_star 3 ,
+.Xr s7_make_safe_function_star 3 ,
+.Xr s7_is_dilambda 3 ,
+.Xr s7_dilambda 3 ,
+.Xr s7_typed_dilambda 3 ,
+.Xr s7_dilambda_with_environment 3 ,
+.Pp
+.Xr SRFI 89 Optional positional and named parameters https://srfi.schemers.org/srfi-89/srfi-89.html
+.Pp
+.Xr Guile manual 6.7.4.1 lambda* and define*
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

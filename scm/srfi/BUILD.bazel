@@ -1,0 +1,5 @@
+filegroup(
+    name = "srcs",
+    data = glob(["*.scm"]),
+    visibility = ["//visibility:public"]
+)

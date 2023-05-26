@@ -1,0 +1,52 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Foreign-Function Interface
+.Sh DESCRIPTION
+The s7 FFI allows developers to extend s7 by integrating "foreign" libraries.  It supports export of C data and functions to the s7 Scheme environment.
+.Sh C-TYPES
+c-types may (must?) be configured by callbacks implementing the following functionalities:
+.Bl -inset -offset indent
+.It length
+.It to_string
+.It equal
+.It equivalent
+.It etc.
+.El
+.Sh C-OBJECT ENVIRONMENTS (METADATA)
+The
+.Fn s7_c_object_set_let
+and
+.Fn s7_make_c_object_with_let
+functions may be used to associate a c-object with a local environment called an
+.Em object-let.
+For example, a collection of fields and methods. Such an environment
+effectively serves as c-object metadata.
+.Pp
+.Sy Each c-object has its own
+.Em object-let ;
+c-types do not have an environment.
+.Pp
+.Fn openlet
+and
+.Fn inlet
+are used to ...
+.Sh EXAMPLES
+.Bd -literal -offset indent
+verbatim code here...
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_c_objects 3 ,
+.Xr s7_c_pointers 3 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

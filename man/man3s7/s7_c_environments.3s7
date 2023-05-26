@@ -1,0 +1,158 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Environments
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft s7_pointer
+.Fn s7_eval_c_string_with_environment "s7_scheme *sc, const char *str, s7_pointer e"
+.Ft s7_pointer
+.Fn s7_define_constant_with_environment "s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value"
+.Ft s7_pointer
+.Fo s7_dilambda_with_environment
+.Fa "s7_scheme *sc"
+.Fa "s7_pointer envir"
+.Fa "const char *name"
+.Fa "s7_pointer (*getter)(s7_scheme *sc, s7_pointer args)"
+.Fa "s7_int get_req_args"
+.Fa "s7_int get_opt_args"
+.Fa "s7_pointer (*setter)(s7_scheme *sc, s7_pointer args)"
+.Fa "s7_int set_req_args"
+.Fa "s7_int set_opt_args"
+.Fa "const char *documentation"
+.Fc
+.Ft s7_pointer
+.Fn s7_make_c_object_with_let "s7_scheme *sc, s7_int type, void *value, s7_pointer let"
+
+Symbol table access:
+.Ft s7_pointer
+.Fn s7_name_to_value "s7_scheme *sc, const char *name"
+Returns value bound to
+.Em name
+(as a symbol) in the current environment.
+.Ft s7_pointer
+.Fn s7_symbol_table_find_name "s7_scheme *sc, const char *name"
+.Ft s7_pointer
+.Fn s7_symbol_value "s7_scheme *sc, s7_pointer sym"
+.Ft s7_pointer
+.Fn s7_symbol_set_value "s7_scheme *sc, s7_pointer sym, s7_pointer val"
+.Ft s7_pointer
+.Fn s7_symbol_local_value "s7_scheme *sc, s7_pointer sym, s7_pointer local_env"
+.Ft bool
+.Fn s7_for_each_symbol_name "s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data"
+.Ft bool
+.Fn s7_for_each_symbol "s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data"
+.Sh DESCRIPTION
+Symbol tables:
+.Em s7_name_to_value,
+.Em s7_symbol_table_...
+.Pp
+These routines access the current environment and symbol table, providing a symbol's current binding.
+.Bl -inset -offset indent
+.It
+.Fn s7_name_to_value
+takes the symbol name as a char*,
+.It
+.Fn s7_symbol_value
+takes the symbol itself,
+.It
+.Fn s7_symbol_set_value
+changes the current binding, and
+.It
+.Fn s7_symbol_local_value
+uses the environment passed as its third argument.
+.El
+.Pp
+To iterate over the complete symbol table, use
+.Fn s7_for_each_symbol_name "sc, symbol_func, data",
+and
+.Fn s7_for_each_symbol "sc, symbol_func, data" .
+Both call
+.Em symbol_func
+on each symbol in the current binding, passing it the symbol or symbol name, and the uninterpreted
+.Em data
+pointer. The for-each loop stops if
+.Em symbol_func
+returns true, or at the end of the table.
+.Sh WITH-ENV
+Local environments may be estblished with various
+.Em with-x
+functions.
+.Sh EXAMPLES
+Here are a few tricky examples demonstrating environments and bindings.
+.Pp
+1. inlet creates binding of 'abs to a fn; openlet opens the new binding; 'abs is then evaluated, and is found in the opened env.
+.Bd -literal -offset indent
+> (abs (openlet (inlet 'abs (lambda (x) 47))))
+47
+.Ed
+2. This defines 'f1 as a function the applies 'abs to real args, but applies other args to its symbol ('f1').  Defined above, 'abs will return 47. But as used in example 3 below, the value of arg :a will be an environment containing symbol 'f1, so expression '((a 'f1) a) will lookup 'f1 in env a, and apply the resulting fn to a again.
+.Bd -literal -offset indent
+> (define* (f1 (a 1)) (if (real? a) (abs a) ((a 'f1) a)))
+f1
+.Ed
+3. As in 'abs example above, inlet binds symbol 'f1 to a fn, the resulting env is opened and then bound to arg :a.  Then the function f1 defined by example 2 is applied, so the env is applied to 'f1, yielding the lambda that returns 48, which is then applied a that same env, which it ignores, return in 48.  Kooky.
+.Bd -literal -offset indent
+> (f1 :a (openlet (inlet 'f1 (lambda (e) 48))))
+47
+.Ed
+.Pp
+In CLOS, we'd declare a class and a method, and call make-instance, and then discover that it wouldn't work anyway. Here we have, in effect, an anonymous instance of an anonymous class. I think this is called a "prototype system"; javascript is apparently similar. A slightly more complex example:
+.Bd -literal -offset indent
+(let* ((e1 (openlet
+	   (inlet
+	    'x 3
+	    '* (lambda args
+		 (apply * (if (number? (car args))
+		     	      (values (car args) ((cadr args) 'x) (cddr args))
+		              (values ((car args) 'x) (cdr args))))))))
+       (e2 (copy e1)))
+  (set! (e2 'x) 4)
+  (* 2 e1 e2)) ; (* 2 3 4) => 24
+.Ed
+.Pp
+Perhaps these names would be better: openlet -> with-methods and openlet? -> methods?.
+.Pp
+.Sh SEE ALSO
+.Xr s7_make_c_object_with_let 3 ,
+.Xr s7_c_load 3 ,
+.Xr s7_load_with_environment 3 ,
+.Xr s7_load_c_string_with_environment 3 ,
+.Xr s7_eval_c_string_with_environment 3 ,
+.Xr s7_define_constant_with_environment 3 ,
+.Xr s7_dilambda_with_environment 3 ,
+.Xr s7_c_lets 3,
+.Xr s7_rootlet 3 ,
+.Xr s7_shadow_rootlet 3 ,
+.Xr s7_set_shadow_rootlet 3 ,
+.Xr s7_curlet 3 ,
+.Xr s7_set_curlet 3 ,
+.Xr s7_outlet 3 ,
+.Xr s7_inlet 3 ,
+.Xr s7_sublet 3 ,
+.Xr s7_varlet 3 ,
+.Xr s7_let_to_list 3 ,
+.Xr s7_is_let 3 ,
+.Xr s7_let_ref 3 ,
+.Xr s7_let_set 3 ,
+.Xr s7_openlet 3 ,
+.Xr s7_is_openlet 3 ,
+.Xr s7_method 3 ,
+.Xr s7_let_field_ref 3 ,
+.Xr s7_let_field_set 3 ,
+.Xr s7_c_object_let 3 ,
+.Xr s7_c_object_set_let 3 ,
+.Xr s7_funclet 3
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

@@ -1,0 +1,201 @@
+.Dd July 12, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Ports (Scheme API)
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+File (network?) ports:
+.Pp
+.Em (port? obj)
+R7RS: not supported, use input-port?, output-port?
+.Pp
+.Em (port-closed? p)
+returns #t if the port p is closed.
+.Pp
+.Em (input-port? p)
+returns #t if p is an input port
+.Pp
+.Em (current-input-port)
+returns the current input port
+.Pp
+.Em (set-current-input-port port)
+sets the current-input port to port and returns the previous value of the input port
+.Pp
+.Em (current-output-port)
+returns the current output port
+.Pp
+.Em (set-current-output-port port)
+sets the current-output port to port and returns the previous value of the output port
+.Pp
+.Em (current-error-port)
+returns the current error port
+.Pp
+.Em (set-current-error-port port)
+sets the current-error port to port and returns the previous value of the error port
+.Pp
+.Em (close-input-port port)
+closes the port
+.Pp
+.Em (flush-output-port port)
+flushes the file port (that is, it writes any accumulated output to the output file)
+.Pp
+.Em (close-output-port port)
+closes the port
+.Pp
+.Em (get-output-string port clear-port)
+returns the output accumulated in port.  If the optional 'clear-port' is #t, the current string is flushed.
+.Pp
+(open-input-file name mode)
+.Pp
+.Em (char-ready? (port (current-input-port)))
+returns #t if a character is ready for input on the given port
+.Pp
+.Em (read-char (port (current-input-port)))
+returns the next character in the input port
+.Pp
+.Em (peek-char (port (current-input-port)))
+returns the next character in the input port, but does not remove it from the input stream
+.Pp
+.Em (read-byte (port (current-input-port)))
+reads a byte from the input port
+.Pp
+.Em (read (port (current-input-port)))
+returns the next object in the input port, or #<eof> at the end
+.Pp
+.Em (write-char char (port (current-output-port)))
+writes char to the output port
+.Pp
+.Em (write-byte byte (port (current-output-port)))
+writes byte to the output port
+.Pp
+.Em (write obj (port (current-output-port)))
+writes (object->string obj) to the output port
+.Pp
+.Em (display obj (port (current-output-port)))
+prints obj
+.Pp
+.Em (output-port? p)
+returns #t if p is an output port
+.Pp
+.Pp
+.Em (port-file port)
+returns the FILE* pointer associated with the port, wrapped in a c-pointer object
+.Pp
+.Em (port-filename file-port)
+returns the filename associated with port
+.Pp
+.Em (port-line-number input-file-port)
+returns the current read line number of port
+.Pp
+.Em (port-position input-port)
+returns the current location (in bytes) in the port's data where the next read will take place.
+.Pp
+.Em (with-input-from-file filename thunk)
+opens filename as the temporary current-input-port and calls thunk
+.Pp
+.Em (newline (port (current-output-port)))
+writes a carriage return to the port
+.Pp
+.Em (with-output-to-file filename thunk)
+opens filename as the temporary current-output-port and calls thunk
+.Pp
+String ports:
+.Pp
+.Em (with-input-from-string str thunk)
+opens str as the temporary current-input-port and calls thunk
+.Pp
+.Em (with-output-to-string thunk)
+opens a string as a temporary current-output-port, calls thunk, then returns the collected output
+.Pp
+.Em (call-with-output-string proc)
+; open a string port, apply proc to it, return string
+.Pp
+.Em (call-with-input-string string proc)
+; open string as current-input-port, apply proc to it
+.Pp
+.Em (open-output-string)
+; open a string output port
+.Pp
+.Em (get-output-string port clear)
+; return output accumulated in the string output port
+.Pp
+.Em (open-input-string string)
+; open a string input port reading string
+.Pp
+Function ports:
+.Pp
+.Em (open-input-function function)
+; open an input function-port
+.Pp
+.Em (open-output-function function)
+; open an output function-port
+.Sh DESCRIPTION
+Besides files, ports can also represent strings and functions.
+.Pp
+Function ports call a function rather than reading or writing the data to a string or file. See nrepl.scm and s7test.scm for examples. The
+.Em function-port
+function is accessible as
+.Em ((object->let function-port) 'function) .
+These ports are even more esoteric than their C-side cousins.
+.Pp
+An environment can be treated as an IO port, providing what Guile calls a "soft port":
+.Bd -literal -offset indent
+(define (call-with-input-vector v proc)
+  (let ((i -1))
+    (proc (openlet (inlet 'read (lambda (p) (v (set! i (+ i 1)))))))))
+.Ed
+.Pp
+Here the IO port is an open environment that redefines the "read" function so that it returns the next element of a vector. See stuff.scm for call-with-output-vector. The "proc" argument above can also be a macro, giving you a kludgey way to get around the dumb "lambda".
+.Sh EXAMPLES
+String port:
+.Bd -literal -offset indent
+> (let ((result #f)
+        (p (open-output-string)))
+    (format p "this ~A ~C test ~D" "is" #\a 3)
+    (set! result (get-output-string p))
+    (close-output-port p)
+    result)
+"this is a test 3"
+.Ed
+.Pp
+ An example that traps current-ouput-port output:
+.Bd -literal -offset indent
+(let* ((str ())
+       (stdout-wrapper (open-output-function
+			 (lambda (c)
+			   (set! str (cons c str))))))
+  (let-temporarily (((current-output-port) stdout-wrapper))
+    (write-char #\a)
+    ...))
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_datatypes 3 ,
+.Xr s7_equality 3
+.Pp
+.Xr s7_booleans 3 ,
+.Xr s7_characters 3 ,
+.Xr s7_lists 3 ,
+.Xr s7_numbers 3 ,
+.Xr s7_pairs 3 ,
+.Xr s7_strings 3 ,
+.Xr s7_vectors 3 ,
+.Pp
+.Xr s7_booleans 3 ,
+.Xr s7_characters 3 ,
+.Xr s7_lists 3 ,
+.Xr s7_numbers 3 ,
+.Xr s7_pairs 3 ,
+.Xr s7_strings 3
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

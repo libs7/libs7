@@ -1,0 +1,34 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd C API
+.Sh DESCRIPTION
+This manual documents the s7 Scheme C API.
+.Pp
+The C API is composed of:
+.Bl -bullet --offset indent
+.It
+The Core C API. This API contains the routines needed to use s7 Scheme as an extension language.  For example, a C application might invoke a user-defined Scheme procedure that returns a Scheme data structure containing configuration data.  The Core C API would be used to convert the Scheme data to C data for use in the C program.
+.Pp
+Manpages are named with prefix
+.Em s7_c_ .
+.It
+The FFI API. Th Foreign Function Interface API contains the routines needed to extend s7 Scheme by integrating "foreign" (usually C) libraries.  FFI routines would be used to export C data to the s7 Scheme environment.
+.Pp
+Manpages are prefixed with
+.Em s7_ffi_ .
+.Sh SEE ALSO
+.Xr s7_scheme 7 ,
+.Xr s7_c 7 ,
+.Xr s7_ffi 7 ,
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

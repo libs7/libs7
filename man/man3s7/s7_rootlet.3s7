@@ -1,0 +1,316 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Environments
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft s7_pointer
+.Fn s7_rootlet "s7_scheme *sc"
+.Ft s7_pointer
+.Fn s7_shadow_rootlet "s7_scheme *sc"
+.Ft s7_pointer
+.Fn s7_set_shadow_rootlet "s7_scheme *sc, s7_pointer let"
+.Ft s7_pointer
+.Fn s7_curlet "s7_scheme *sc"
+.Ft s7_pointer
+.Fn s7_set_curlet "s7_scheme *sc, s7_pointer env"
+.Ft s7_pointer
+.Fn s7_outlet "s7_scheme *sc, s7_pointer env"
+.Ft s7_pointer
+.Fn s7_inlet "s7_scheme *sc, s7_pointer bindings"
+.Ft s7_pointer
+.Fn s7_sublet "s7_scheme *sc, s7_pointer env, s7_pointer bindings"
+.Ft s7_pointer
+.Fn s7_varlet "s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value"
+.Ft s7_pointer
+.Fn s7_let_to_list "s7_scheme *sc, s7_pointer env"
+.Ft bool
+.Fn s7_is_let "s7_pointer e"
+.Ft s7_pointer
+.Fn s7_let_ref "s7_scheme *sc, s7_pointer env, s7_pointer sym"
+.Ft s7_pointer
+.Fn s7_let_set "s7_scheme *sc, s7_pointer env, s7_pointer sym, s7_pointer val"
+.Pp
+.Ft s7_pointer
+.Fn s7_openlet "s7_scheme *sc, s7_pointer e"
+.Pp
+.Ft bool
+.Fn s7_is_openlet "s7_pointer e"
+.Pp
+.Ft s7_pointer
+.Fn s7_method "s7_scheme *sc, s7_pointer obj, s7_pointer method"
+.Ft s7_pointer
+.Fn s7_let_field_ref "s7_scheme *sc, s7_pointer sym"
+.Pp
+.Ft s7_pointer
+.Fn s7_let_field_set "s7_scheme *sc, s7_pointer sym, s7_pointer new_value"
+.Pp
+.Ft s7_pointer
+.Fn s7_c_object_let "s7_pointer obj"
+.Pp
+.Ft s7_pointer
+.Fn s7_c_object_set_let "s7_scheme *sc, s7_pointer obj, s7_pointer e"
+.Ft s7_pointer
+.Fn s7_funclet "s7_scheme *sc, s7_pointer p"
+
+Symbol table access:
+.Ft s7_pointer
+.Fn s7_name_to_value "s7_scheme *sc, const char *name"
+Returns value bound to
+.Em name
+(as a symbol) in the current environment.
+.Ft s7_pointer
+.Fn s7_symbol_table_find_name "s7_scheme *sc, const char *name"
+.Ft s7_pointer
+.Fn s7_symbol_value "s7_scheme *sc, s7_pointer sym"
+.Ft s7_pointer
+.Fn s7_symbol_set_value "s7_scheme *sc, s7_pointer sym, s7_pointer val"
+.Ft s7_pointer
+.Fn s7_symbol_local_value "s7_scheme *sc, s7_pointer sym, s7_pointer local_env"
+.Ft bool
+.Fn s7_for_each_symbol_name "s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data"
+.Ft bool
+.Fn s7_for_each_symbol "s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data"
+.Sh DESCRIPTION
+.Sm on
+.Fn s7_rootlet
+returns the top-level (global) environment. Scheme:
+.Em (rootlet)
+.Pp
+.Fn s7_shadow_rootlet
+is a convenience for foreign function writers -- the C code can act as if it were loading everything into
+.Em rootlet ,
+but when actually loaded, everything can be shunted into a separate namespace (*motif* for example).
+.Pp
+.Fn s7_set_shadow_rootlet
+sets
+.Em let
+as the new shadow-rootlet and returns the previous one.
+Use this to import the current
+.Em let
+into
+.Em rootlet.
+.Pp
+.Fn s7_curlet
+returns the current (innermost) environment.  Scheme:
+.Em (curlet)
+.Pp
+.Fn s7_set_curlet
+Scheme: ?
+.Pp
+.Fn s7_outlet
+returns the environment that encloses the environment
+.Em env
+(settable)
+Scheme:
+.Em (outlet env)
+.Pp
+.Fn s7_inlet
+makes a new environment with the given bindings.
+Scheme:
+.Em (inlet bindings)
+.Pp
+.Fn s7_sublet
+same as inlet, but the new environment is local to
+.Em env .
+In Scheme,
+.Em (sublet env
+.Em . bindings)
+adds bindings (symbols with associated values) to an environment. It does not change the environment passed to it, but just prepends the new bindings, shadowing any old ones, as if you had called "let". To add the bindings directly to the environment, use varlet. Both of these functions accept nil as the 'env' argument as shorthand for (rootlet). Both also accept other environments as well as individual bindings, adding all the argument's bindings to the new environment. inlet is very similar, but normally omits the environment argument. The arguments to sublet and inlet can be passed as symbol/value pairs, as a cons, or using keywords as if in define*. inlet can also be used to copy an environment without accidentally invoking that environment's copy method.
+.Pp
+.Fn s7_varlet
+adds new
+.Em bindings
+directly to
+.Em env .
+In Scheme:
+.Em (varlet env
+.Em . bindings)
+.Pp
+.Fn s7_let_to_list
+returns the
+.Em env
+bindings as a list of
+.Em (symbol
+.Em . value)
+cons's.
+Scheme:
+.Em (let->list env)
+.Pp
+.Fn s7_is_let
+Scheme:
+.Ic (let? env)
+.Pp
+.Fn s7_let_ref
+Scheme:
+.Ic (let-ref env sym)
+.Pp
+.Fn s7_let_set
+Scheme:
+.Sm off
+.Em (
+.Ic let-set!
+.Sm on
+.Em env sym
+.Sm off
+.Em val
+)
+.Sm on
+.Pp
+.Fn s7_openlet
+marks
+.Em e
+as open. The argument
+.Em e
+may be an environment, a closure, a c-object, or a c-pointer.
+An open object is one that the built-in s7 functions handle specially. If they encounter one in their argument list, they look in the object for their own name, and call that function if it exists.
+Scheme:
+.Sm off
+.Em (
+.Ic openlet
+
+.Em e
+)
+.Sm on
+tells the built-in generic functions that the let 'e might have an over-riding method.
+.Pp
+.Fn s7_is_openlet "s7_pointer env"
+returns #T if
+.Env e
+is open.
+Scheme:
+.Sm off
+.Em (
+.Ic openlet?
+
+.Em e
+)
+.Sm on
+.Pp
+.Fn s7_method "s7_scheme *sc, s7_pointer obj, s7_pointer method"
+.Ic *s7*
+.Pp
+.Fn s7_let_field_ref
+Scheme:
+.Sm off
+.Em (
+.Ic *s7*
+
+.Em sym
+)
+.Sm on
+.Pp
+.Fn s7_let_field_set
+Scheme:
+.Sm off
+.Em (
+.Ic set!
+.Sm on
+.Em (*s7*
+.Em sym)
+.Em new_value
+)
+.Pp
+.Fn s7_funclet
+returns a function's local environment. In Scheme,
+.Em (funclet fn)
+.Pp
+.Fn s7_c_object_let
+and
+.Fn s7_c_object_set_let
+manage the c-object's local environment. These two functions need to check that they are passed the correct number of arguments. The
+.Fn c_object_let
+.Em (c-object-let)
+provides methods normally [sic].
+.Pp
+Scheme:
+.Em (object->let)
+returns an environment (more of a dictionary really) that contains details about its argument. It is intended as a debugging aid, underlying a debugger's "inspect" for example. No C counterpart?
+.Sh SYMBOL TABLES
+.Em s7_name_to_value,
+.Em s7_symbol_table_...
+.Pp
+These routines access the current environment and symbol table, providing a symbol's current binding.
+.Bl -inset -offset indent
+.It
+.Fn s7_name_to_value
+takes the symbol name as a char*,
+.It
+.Fn s7_symbol_value
+takes the symbol itself,
+.It
+.Fn s7_symbol_set_value
+changes the current binding, and
+.It
+.Fn s7_symbol_local_value
+uses the environment passed as its third argument.
+.El
+.Pp
+To iterate over the complete symbol table, use
+.Fn s7_for_each_symbol_name "sc, symbol_func, data",
+and
+.Fn s7_for_each_symbol "sc, symbol_func, data" .
+Both call
+.Em symbol_func
+on each symbol in the current binding, passing it the symbol or symbol name, and the uninterpreted
+.Em data
+pointer. The for-each loop stops if
+.Em symbol_func
+returns true, or at the end of the table.
+.Sh WITH-ENV
+Local environments may be estblished with various
+.Em with-x
+functions.
+.Sh EXAMPLES
+Here are a few tricky examples demonstrating environments and bindings.
+.Pp
+1. inlet creates binding of 'abs to a fn; openlet opens the new binding; 'abs is then evaluated, and is found in the opened env.
+.Bd -literal -offset indent
+> (abs (openlet (inlet 'abs (lambda (x) 47))))
+47
+.Ed
+2. This defines 'f1 as a function the applies 'abs to real args, but applies other args to its symbol ('f1').  Defined above, 'abs will return 47. But as used in example 3 below, the value of arg :a will be an environment containing symbol 'f1, so expression '((a 'f1) a) will lookup 'f1 in env a, and apply the resulting fn to a again.
+.Bd -literal -offset indent
+> (define* (f1 (a 1)) (if (real? a) (abs a) ((a 'f1) a)))
+f1
+.Ed
+3. As in 'abs example above, inlet binds symbol 'f1 to a fn, the resulting env is opened and then bound to arg :a.  Then the function f1 defined by example 2 is applied, so the env is applied to 'f1, yielding the lambda that returns 48, which is then applied a that same env, which it ignores, return in 48.  Kooky.
+.Bd -literal -offset indent
+> (f1 :a (openlet (inlet 'f1 (lambda (e) 48))))
+47
+.Ed
+.Pp
+In CLOS, we'd declare a class and a method, and call make-instance, and then discover that it wouldn't work anyway. Here we have, in effect, an anonymous instance of an anonymous class. I think this is called a "prototype system"; javascript is apparently similar. A slightly more complex example:
+.Bd -literal -offset indent
+(let* ((e1 (openlet
+	   (inlet
+	    'x 3
+	    '* (lambda args
+		 (apply * (if (number? (car args))
+		     	      (values (car args) ((cadr args) 'x) (cddr args))
+		              (values ((car args) 'x) (cdr args))))))))
+       (e2 (copy e1)))
+  (set! (e2 'x) 4)
+  (* 2 e1 e2)) ; (* 2 3 4) => 24
+.Ed
+.Pp
+Perhaps these names would be better: openlet -> with-methods and openlet? -> methods?.
+.Pp
+.Sh SEE ALSO
+.Xr s7_make_c_object_with_let 3 ,
+.Xr s7_environments 3,
+.Xr s7_c_object_let 3 ,
+.Xr s7_c_object_set_let 3
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

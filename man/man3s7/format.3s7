@@ -1,0 +1,55 @@
+.Dd July 12, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd format
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.Em (format dest fmt-string obj...)
+
+.Ft const char*
+.Fn s7_format "s7_scheme *sc, s7_pointer args"
+.Sh DESCRIPTION
+.Sh FORMAT DIRECTIVES
+.Bd -literal -offset indent
+~%        insert newline
+~&        insert newline if preceding char was not newline
+~~        insert tilde
+~\\n       (tilde followed by newline): trim white space
+~{        begin iteration (take arguments from a list, string, vector, or any other applicable object)
+~}        end iteration
+~^ ~|     jump out of iteration
+~*        ignore the current argument
+~C        print character (numeric argument = how many times to print it)
+~P        insert 's' if current argument is not 1 or 1.0 (use ~@P for "ies" or "y")
+~A        object->string as in display
+~S        object->string as in write
+~B        number->string in base 2
+~O        number->string in base 8
+~D        number->string in base 10
+~X        number->string in base 16
+~E        float to string, (format #f "~E" 100.1) -> "1.001000e+02", (%e in C)
+~F        float to string, (format #f "~F" 100.1) -> "100.100000",   (%f in C)
+~G        float to string, (format #f "~G" 100.1) -> "100.1",        (%g in C)
+~T        insert spaces (padding)
+~N        get numeric argument from argument list (similar to ~V in CL)
+~W        object->string with :readable (write readably: "serialization"; s7 is the intended reader)
+.Ed
+.Sh EXAMPLES
+.Em SRFI 48
+.Bd -literal -offset indent
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_datatypes 3
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support

@@ -1,0 +1,182 @@
+.Dd July 10, 2021
+.Dt S7 3
+.Sh NAME
+.Nm S7
+.Nd Functions (C API)
+.Sh LIBRARY
+libs7, -ls7
+.Sh SYNOPSIS
+.In s7.h
+.Ft bool
+.Fn s7_is_function "s7_pointer p"
+.Ft bool
+.Fn s7_is_procedure"s7_pointer x"
+(procedure? x)
+.Ft s7_pointer
+.Fn s7_define_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc"
+.Ft s7_pointer
+.Fn s7_define_safe_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc"
+.Ft s7_pointer
+.Fn s7_define_typed_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature"
+.Ft s7_pointer
+.Fn s7_define_unsafe_typed_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature"
+.Ft s7_pointer
+.Fn s7_define_semisafe_typed_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature"
+
+.Ft void
+.Fn s7_define_function_star "s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc"
+.Ft void
+.Fn s7_define_safe_function_star "s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc"
+.Ft void
+.Fn s7_define_typed_function_star "s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc, s7_pointer signature"
+
+.Ft s7_pointer
+.Fn s7_make_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc"
+.Ft s7_pointer
+.Fn s7_make_safe_function "s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc"
+.Ft s7_pointer
+.Fn s7_make_typed_function "s7_scheme *sc, const char *name, s7_function f, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc, s7_pointer signature"
+
+.Ft s7_pointer
+.Fn s7_make_function_star "s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc"
+.Ft s7_pointer
+.Fn s7_make_safe_function_star "s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc"
+.Ft s7_pointer
+.Fn s7_closure_body "s7_scheme *sc, s7_pointer p"
+.Ft s7_pointer
+.Fn s7_closure_let "s7_scheme *sc, s7_pointer p"
+.Ft s7_pointer
+.Fn s7_closure_args "s7_scheme *sc, s7_pointer p"
+.Ft s7_pointer
+.Fn s7_funclet "s7_scheme *sc, s7_pointer p"
+(funclet x)
+.Ft bool
+.Fn s7_is_aritable s7_scheme *sc, s7_pointer x, s7_int args"
+(aritable? x args)
+.Ft s7_pointer
+.Fn s7_arity "s7_scheme *sc, s7_pointer x"
+(arity x)
+.Ft s7_pointer
+.Fn s7_make_continuation "s7_scheme *sc"
+call/cc
+.Sh DESCRIPTION
+The functions in this section deal with integrating C functions into Scheme.
+.Pp
+.Fn s7_make_function "sc, name, fn, required_args, optional_args, rest_arg, doc"
+creates a Scheme function object from the s7_function
+.Em fn ;
+an
+.Vt s7_function
+is a C function of the form
+.Em s7_pointer
+.Sm off
+.Ic f
+(
+.Sm on
+.Em s7_scheme *sc,
+.Em s7_pointer args
+).
+The new function's name is
+.Em name ;
+it requires
+.Em required_args
+arguments, it can accept
+.Em optional_args
+other arguments, and if
+.Em rest_arg
+is true, it accepts a "rest" argument (a list of all the trailing arguments). The function's documentation string is
+.Em doc .
+.Pp
+.Fn s7_define_function
+has the same signature and semantics as
+.Fn s7_make_function ,
+but it also adds
+.Em name
+(as a symbol) to the global environment, with the function as its value. For example, the Scheme function
+.Em car
+is implemented by the following
+.Em s7_function :
+.Pp
+.Bd -literal -offset indent
+s7_pointer g_car(s7_scheme *sc, s7_pointer args) {return(s7_car(s7_car(args)));} /* args is a list of args */
+.Ed
+.Pp
+It is bound to the name "car":
+.Pp
+.Bd -literal -offset indent
+s7_define_function(sc, "car", g_car, 1, 0, false, "(car obj)");
+.Ed
+.Pp
+which says that
+.Em car
+has one required argument, no optional arguments, and no "rest" argument.
+.Pp
+.Sh SAFE/UNSAFE
+.Pp
+The "safe" and "unsafe" versions of these functions refer to the s7 optimizer. If it knows a function is safe, it can more thoroughly optimize the expression it is in. "Safe" here means the function does not call the evaluator itself (via
+.Fn s7_apply_function
+for example) and does not mess with s7's stack.
+Use the "unsafe" definer if the function might call the evaluator itself in some way (s7_apply_function for example), or messes with s7's stack.
+.Pp
+.Sh TYPED FUNCTIONS
+The "typed" versions refer to the function's signature. Since "car" is safe, and has a signature, it is defined in
+.Pa s7.c :
+.Fo s7_define_typed_function
+.Fa sc
+.Fa """car""
+.Fa "g_car, 1, 0, false, H_car, Q_car"
+.Fc .
+Here unless you use
+.Fn s7_define_unsafe_typed_function ,
+ the function is assumed to be safe. We've given it the Scheme name "car", which is to be bound to the C function g_car. g_car takes one required argument, and no optional or rest arguments. Its documentation is H_car, and its signature is Q_car. The latter is specified by:
+.Fn s7_make_signature "sc, 2, sc->T, sc->is_pair_symbol" ,
+which says that car takes a pair argument, and returns any type object.
+.Sh STARRED FUNCTIONS
+.Pp
+The
+.Fn s7_define_..._function_star
+and
+.Fn s7_make_..._function_star
+functions support named and optional parameters. In this case we pass the argument list as a string, as it would appear in Scheme. s7 makes sure the arguments are ordered correctly and have the specified defaults before calling the C function.
+.Bd -literal -offset indent
+s7_define_function_star(sc, "a-func", a_func, "arg1 (arg2 32)", "an example of C define*");
+.Ed
+.Pp
+Then in Scheme,
+.Em (a-func :arg1 2)
+calls the C function
+.Em a_func
+with the arguments 2 and 32.
+.Sh EXAMPLES
+.Bd -literal -offset indent
+verbatim code here...
+.Ed
+.Pp
+.Sh SEE ALSO
+.Xr s7_dilambda 3 ,
+.Xr s7_is_dilambda 3 ,
+.Xr s7_typed_dilambda 3 ,
+.Xr s7_dilambda_with_environment 3 ,
+.Xr s7_define_constant 3 ,
+.Xr s7_define_constant_with_documentation 3 ,
+.Xr s7_define_constant_with_environment 3 ,
+.Xr s7_define_variable 3 ,
+.Xr s7_define_variable_with_documentation 3 ,
+.Xr s7_define_constant 3 ,
+.Xr s7_define_constant_with_documentation 3 ,
+.Xr s7_define_constant_with_environment 3 ,
+.Xr s7_c_objects 3 ,
+.Pp
+.Xr SRFI 89 Optional positional and named parameters https://srfi.schemers.org/srfi-89/srfi-89.html
+.Pp
+.Xr Guile manual 6.7.4.1 lambda* and define*
+.Sh AUTHORS
+.An Bill Schottstaedt Aq Mt bil@ccrma.stanford.edu
+.An Mike Scholz
+provided the FreeBSD support (complex trig funcs, etc)
+.An Rick Taube, Andrew Burnson, Donny Ward, and Greg Santucci
+provided the MS Visual C++ support
+.An Kjetil Matheussen
+provided the mingw support
+.An chai xiaoxiang
+provided the msys2 support
