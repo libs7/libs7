@@ -6,7 +6,7 @@ test_suite(
     name  = "json",
     tests = [
         "//test/lib/json:reader",
-        "//test/lib/json:vectors",
+        "//test/lib/json:arrays",
         "//test/lib/json:maps",
         # "//test/lib/json:strings",
     ]
@@ -145,7 +145,7 @@ cc_test(
 cc_test(
     name = "maps",
     linkstatic = True,
-    srcs = ["json_map_test.c",
+    srcs = ["json_maps_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
@@ -166,9 +166,9 @@ cc_test(
 )
 
 cc_test(
-    name = "vectors",
+    name = "arrays",
     linkstatic = True,
-    srcs = ["json_vector_test.c",
+    srcs = ["json_arrays_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,

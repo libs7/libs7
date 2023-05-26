@@ -24,20 +24,18 @@ bool debug;
 
 char *cmd;
 
-#define DQ "\\\""
-
 #define S(s) "\\\"" #s "\\\""
 
-#define APPLY_1(f, o) \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                       s7_list(s7, 1, o))
+/* #define APPLY_1(f, o) \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                        s7_list(s7, 1, o)) */
 
-#define APPLY_OBJ(obj, arg) \
-    s7_apply_function(s7, obj, s7_list(s7, 1, arg))
+/* #define APPLY_OBJ(obj, arg) \ */
+/*     s7_apply_function(s7, obj, s7_list(s7, 1, arg)) */
 
-#define APPLY_2(f, o, k)                             \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 2, o, k))
+/* #define APPLY_2(f, o, k)                             \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                    s7_list(s7, 2, o, k)) */
 
     /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
     /*                            s7_list(s7, 1, v)) */
@@ -52,13 +50,13 @@ void tearDown(void) {
 }
 
 /*
- * vector ops: vector?, ref, length, apply
+ * array ops: array?, ref, length, apply
  */
-void int_vector_ops(void) {
-    root = JSON_READ("{" S(v) ": [10, 11, 12] }");
+void int_array_ops(void) {
+    root = JSON_READ("{\"v\": [10, 11, 12]}");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
@@ -66,14 +64,14 @@ void int_vector_ops(void) {
     /* TRACE_S7_DUMP("m", m); */
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    res = APPLY_2("json:vector-ref", vec, s7_make_integer(s7, 1));
+    res = APPLY_2("json:array-ref", vec, s7_make_integer(s7, 1));
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    // apply vector
+    // apply array
     res = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -89,33 +87,33 @@ void int_vector_ops(void) {
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL(12, s7_integer(res));
 
-    len = APPLY_1("json:vector-length", vec);
+    len = APPLY_1("json:array-length", vec);
     flag = APPLY_1("integer?", len);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL(3, s7_integer(len));
 }
 
-void float_vector_ops(void) {
-    root = JSON_READ("{" S(v) ": [1.2, 3.14, 5.999] }");
+void float_array_ops(void) {
+    root = JSON_READ("{\"v\": [1.2, 3.14, 5.999]}");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
     vec = APPLY_2("json:map-ref", root, k);
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    res = APPLY_2("json:vector-ref", vec, s7_make_integer(s7, 1));
+    res = APPLY_2("json:array-ref", vec, s7_make_integer(s7, 1));
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     flag = APPLY_1("real?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    // apply vector
+    // apply array
     res = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     flag = APPLY_1("real?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -131,33 +129,33 @@ void float_vector_ops(void) {
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL_DOUBLE(5.999, s7_real(res));
 
-    len = APPLY_1("json:vector-length", vec);
+    len = APPLY_1("json:array-length", vec);
     flag = APPLY_1("integer?", len);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL(3, s7_integer(len));
 }
 
-void string_vector_ops(void) {
-    root = JSON_READ("{" S(v) ": [" S(a) ", "S(b) ", " S(c) "] }");
+void string_array_ops(void) {
+    root = JSON_READ("{\"v\": [\"a\", \"b\", \"c\"] }");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
     vec = APPLY_2("json:map-ref", root, k);
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    res = APPLY_2("json:vector-ref", vec, s7_make_integer(s7, 0));
+    res = APPLY_2("json:array-ref", vec, s7_make_integer(s7, 0));
     TRACE_S7_DUMP("res", res);
     flag = APPLY_1("string?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL_STRING("a", s7_string(res));
 
-    // apply vector
+    // apply array
     res = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     flag = APPLY_1("string?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -173,31 +171,31 @@ void string_vector_ops(void) {
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL_STRING("c", s7_string(res));
 
-    len = APPLY_1("json:vector-length", vec);
+    len = APPLY_1("json:array-length", vec);
     flag = APPLY_1("integer?", len);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL(3, s7_integer(len));
 }
 
-void bool_vector_ops(void) {
-    root = JSON_READ("{" S(v) ": [true, false, true] }");
+void bool_array_ops(void) {
+    root = JSON_READ("{\"v\": [true, false, true] }");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
     vec = APPLY_2("json:map-ref", root, k);
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    res = APPLY_2("json:vector-ref", vec, s7_make_integer(s7, 1));
+    res = APPLY_2("json:array-ref", vec, s7_make_integer(s7, 1));
     flag = APPLY_1("boolean?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    // apply vector
+    // apply array
     res = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     flag = APPLY_1("boolean?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -209,27 +207,27 @@ void bool_vector_ops(void) {
     res = APPLY_OBJ(vec, s7_make_integer(s7, 2));
     TEST_ASSERT_EQUAL(s7_t(s7), res);
 
-    len = APPLY_1("json:vector-length", vec);
+    len = APPLY_1("json:array-length", vec);
     flag = APPLY_1("integer?", len);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL(3, s7_integer(len));
 }
 
-void mixed_vector_ops(void) {
-    root = JSON_READ("{" S(v) ": [1, 3.14, true, " S(bye) "] }");
+void mixed_array_ops(void) {
+    root = JSON_READ("{\"v\": [1, 3.14, true, \"bye\"] }");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
     vec = APPLY_2("json:map-ref", root, k);
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    // apply vector
+    // apply array
     res = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -250,30 +248,30 @@ void mixed_vector_ops(void) {
     res = APPLY_OBJ(vec, s7_make_integer(s7, 3));
     TEST_ASSERT_EQUAL_STRING("bye", s7_string(res));
 
-    len = APPLY_1("json:vector-length", vec);
+    len = APPLY_1("json:array-length", vec);
     flag = APPLY_1("integer?", len);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     TEST_ASSERT_EQUAL(4, s7_integer(len));
 }
 
-void vector_of_vectors(void) {
-    root = JSON_READ("{" S(v) ": [[1, 2], [3, 4]] }");
+void array_of_arrays(void) {
+    root = JSON_READ("{\"v\": [[1, 2], [3, 4]] }");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
     vec = APPLY_2("json:map-ref", root, k);
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    // apply vector
+    // apply array
     vec2 = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     /* TRACE_S7_DUMP("res", res); */
-    flag = APPLY_1("json:vector?", vec2);
+    flag = APPLY_1("json:array?", vec2);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     res = APPLY_OBJ(vec2, s7_make_integer(s7, 0));
@@ -284,7 +282,7 @@ void vector_of_vectors(void) {
 
     vec2 = APPLY_OBJ(vec, s7_make_integer(s7, 1));
     /* TRACE_S7_DUMP("res", res); */
-    flag = APPLY_1("json:vector?", vec2);
+    flag = APPLY_1("json:array?", vec2);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     res = APPLY_OBJ(vec2, s7_make_integer(s7, 0));
@@ -295,21 +293,21 @@ void vector_of_vectors(void) {
 
 }
 
-void vector_of_maps(void) {
-    root = JSON_READ("{" S(v) ": [{ " S(a) ": 0 }, {" S(b) ": " S(hi) " }]}");
+void array_of_maps(void) {
+    root = JSON_READ("{\"v\": [{ \"a\": 0 }, {\"b\": \"hi\" }]}");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("json:vector?", root);
+    flag = APPLY_1("json:array?", root);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
     k = s7_make_string(s7, "v");
     vec = APPLY_2("json:map-ref", root, k);
     flag = APPLY_1("json:map?", vec);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    // apply vector
+    // apply array
     m = APPLY_OBJ(vec, s7_make_integer(s7, 0));
     /* TRACE_S7_DUMP("res", res); */
     flag = APPLY_1("json:map?", m);
@@ -333,7 +331,7 @@ void vector_of_maps(void) {
 }
 
 
-/* void vector_refs(void) { */
+/* void array_refs(void) { */
 /*     jo = JSON_READ("\"m = [1, 2, 3]\")"); */
 /*     flag = APPLY_1("json:map?", jo); */
 /*     TEST_ASSERT_EQUAL(s7_t(s7), flag); */
@@ -354,7 +352,7 @@ void vector_of_maps(void) {
 /*     /\* TEST_ASSERT_EQUAL(s7_t(s7), flag); *\/ */
 /* } */
 
-/* void vector_serialization(void) { */
+/* void array_serialization(void) { */
 /*     /\* jo = JSON_READ("\"m = [1, 2, 3]\")"); *\/ */
 /*     /\* jo = JSON_READ("\"k1 = 1\nk2 = true\nk3='Hello'\")"); *\/ */
 
@@ -392,7 +390,7 @@ void vector_of_maps(void) {
 /*     /\* //FIXME: test json:map-key-for-index ('key_in') *\/ */
 /* } */
 
-/* void vector_to_string(void) { */
+/* void array_to_string(void) { */
 /*     // bool arrays */
 /*     jo = JSON_READ("\"ba = [true, false]\")"); */
 /*     res = APPLY_1("object->string", jo); */
@@ -434,13 +432,13 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    RUN_TEST(int_vector_ops);
-    RUN_TEST(float_vector_ops);
-    RUN_TEST(string_vector_ops);
-    RUN_TEST(bool_vector_ops);
-    RUN_TEST(mixed_vector_ops);
-    RUN_TEST(vector_of_vectors);
-    RUN_TEST(vector_of_maps);
+    RUN_TEST(int_array_ops);
+    RUN_TEST(float_array_ops);
+    RUN_TEST(string_array_ops);
+    RUN_TEST(bool_array_ops);
+    RUN_TEST(mixed_array_ops);
+    RUN_TEST(array_of_arrays);
+    RUN_TEST(array_of_maps);
 
     return UNITY_END();
     s7_quit(s7);

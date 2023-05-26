@@ -548,10 +548,10 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
     /*                                  "(json:array? obj)", pl_tx)); */
 
     /* s7_define(s7, cur_env, */
-    /*           s7_make_symbol(s7, "json:vector?"), */
-    /*           s7_make_typed_function(s7, "json:vector?", */
+    /*           s7_make_symbol(s7, "json:array?"), */
+    /*           s7_make_typed_function(s7, "json:array?", */
     /*                                  g_json_cJSON_IsArray, 1, 0, false, */
-    /*                                  "(json:vector? obj)", pl_tx)); */
+    /*                                  "(json:array? obj)", pl_tx)); */
 
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:IsString"),

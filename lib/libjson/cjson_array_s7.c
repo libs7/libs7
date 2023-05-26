@@ -64,7 +64,7 @@ static s7_pointer json_vector_is_equivalent(s7_scheme *s7, s7_pointer args)
 }
 
 /*
- * Called for json:vector-ref
+ * Called for json:array-ref
  * Called when a vector is applied to an index
  * Called with int args when map or for-each are applied to a vector
  */
@@ -492,17 +492,17 @@ void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
      * Public Scheme API
      * *************************************************************** */
     s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:vector?"),
-              s7_make_typed_function(s7, "json:vector?",
+              s7_make_symbol(s7, "json:array?"),
+              s7_make_typed_function(s7, "json:array?",
                                      g_json_is_vector, 1, 0, false,
-                                     "(json:vector? obj)", pl_tx));
+                                     "(json:array? obj)", pl_tx));
 
     s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:vector-length"),
-              s7_make_typed_function(s7, "json:vector-length",
+              s7_make_symbol(s7, "json:array-length"),
+              s7_make_typed_function(s7, "json:array-length",
                                      g_json_vector_length,
                                      1, 0, false,
-                                     "(json:vector-length obj)",
+                                     "(json:array-length obj)",
                                      pl_xi));
     /* s7_define(s7, cur_env, */
     /*           s7_make_symbol(s7, "json:GetArraySize"), */
@@ -510,41 +510,41 @@ void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
 
 
     s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:vector-ref"),
-              s7_make_typed_function(s7, "json:vector-ref",
+              s7_make_symbol(s7, "json:array-ref"),
+              s7_make_typed_function(s7, "json:array-ref",
                                      g_json_vector_ref,
                                      2, 0, false,
-                                     "(json:vector-ref obj key)",
+                                     "(json:array-ref obj key)",
                                      pl_xx));
     /* s7_define(s7, cur_env, */
     /*           s7_make_symbol(s7, "json:GetArrayItem"), */
     /*           s7_make_typed_function(s7, "json:GetArrayItem", json_cJSON_GetArrayItem, 2, 0, false, "cJSON* cJSON_GetArrayItem(cJSON* int)", pl_xxi)); */
 
     s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:vector->list"),
-              s7_make_typed_function(s7, "json:vector->list",
+              s7_make_symbol(s7, "json:array->list"),
+              s7_make_typed_function(s7, "json:array->list",
                                      g_json_vector_to_list,
                                      1, 0, false,
-              "(json:vector->list a) converts json array to s7 list",
+              "(json:array->list a) converts json array to s7 list",
                                      pl_xx));
 
     s7_define(s7, cur_env,
-              s7_make_symbol(s7, "json:vector->vector"),
-              s7_make_typed_function(s7, "json:vector->vector",
+              s7_make_symbol(s7, "json:array->vector"),
+              s7_make_typed_function(s7, "json:array->vector",
                                      g_json_vector_to_vector,
                                      1, 0, false,
-              "(json:vector->vector a) converts json array to s7 vector",
+              "(json:array->vector a) converts json array to s7 vector",
                                      pl_xx));
 
-    s7_define_function(s7, "json:vector-getter",
+    s7_define_function(s7, "json:array-getter",
                        json_vector_getter, 2, 0, false,
-                       "(json:vector-getter t k) gets value for key k from vector t");
-    s7_c_type_set_getter       (s7, json_vector_type_tag, s7_name_to_value(s7, "json:vector-getter"));
+                       "(json:array-getter t k) gets value for key k from vector t");
+    s7_c_type_set_getter       (s7, json_vector_type_tag, s7_name_to_value(s7, "json:array-getter"));
 
-    s7_define_function(s7, "json:vector-setter",
+    s7_define_function(s7, "json:array-setter",
                        json_vector_setter, 2, 0, false,
-                       "(json:vector-setter t k) sets value for key k from vector t");
-    s7_c_type_set_setter       (s7, json_vector_type_tag, s7_name_to_value(s7, "json:vector-setter"));
+                       "(json:array-setter t k) sets value for key k from vector t");
+    s7_c_type_set_setter       (s7, json_vector_type_tag, s7_name_to_value(s7, "json:array-setter"));
 
     //FIXME: why this here?
     string_string = s7_make_semipermanent_string(s7, "a string");

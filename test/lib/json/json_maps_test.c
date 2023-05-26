@@ -192,7 +192,7 @@ void map_ops(void) {
     vec = APPLY_MAP(m, k);
     /* vec = APPLY_2("json:map-ref", m, k); */
     TRACE_S7_DUMP("vec", vec);
-    flag = APPLY_1("json:vector?", vec);
+    flag = APPLY_1("json:array?", vec);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     //FIXME: test json:map-key-for-index ('key_in')
@@ -221,33 +221,33 @@ void map_refs(void) {
 
     k = s7_make_string(s7, "m");
     res = APPLY_2("json:map-ref", root, k);
-    flag = APPLY_1("json:vector?", res);
+    flag = APPLY_1("json:array?", res);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL_INT(123, s7_integer(res));
 
     k = s7_make_symbol(s7, "m");
     res = APPLY_2("json:map-ref", root, k);
-    flag = APPLY_1("json:vector?", res);
+    flag = APPLY_1("json:array?", res);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL_INT(123, s7_integer(res));
 
     k = s7_make_keyword(s7, "m");
     res = APPLY_2("json:map-ref", root, k);
-    flag = APPLY_1("json:vector?", res);
+    flag = APPLY_1("json:array?", res);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     flag = APPLY_1("integer?", res);
     TEST_ASSERT_EQUAL_INT(123, s7_integer(res));
 
     /* /\* apply object to key: (t k) == (json:map-ref t k) *\/ */
     /* a = s7_apply_function(s7, t, s7_list(s7, 1, k)); */
-    /* flag = APPLY_1("json:vector?", a); */
+    /* flag = APPLY_1("json:array?", a); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), flag); */
 
     // try hash-object-ref - nope, segfault
     /* a = APPLY_2("hash-object-ref", t, k); */
-    /* flag = APPLY_1("json:vector?", a); */
+    /* flag = APPLY_1("json:array?", a); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), flag); */
 }
 

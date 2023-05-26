@@ -18,7 +18,8 @@ s7_scheme *initialize(char *test, int argc, char **argv);
 #define JSON_READ(s) \
     s7_apply_function(s7, s7_name_to_value(s7, "json:read"),    \
                       s7_list(s7, 1,                            \
-                      s7_eval_c_string(s7, "\"" s "\"")));
+                      s7_make_string(s7, s)));
+                      /* s7_eval_c_string(s7, "\"" s "\""))); */
 
 #define TOML_READ(s) \
     s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \

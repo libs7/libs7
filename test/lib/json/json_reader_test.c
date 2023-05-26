@@ -28,22 +28,22 @@ char *cmd;
 
 #define K(s) "\\\"" #s "\\\""
 
-#define JSON_READ(s) \
-    s7_apply_function(s7, s7_name_to_value(s7, "json:read"),    \
-                      s7_list(s7, 1, \
-                              s7_eval_c_string(s7, "\"" s "\"")));
-                              /* s7_eval_c_string(s7, s))); */
+/* #define JSON_READ(s) \ */
+/*     s7_apply_function(s7, s7_name_to_value(s7, "json:read"),    \ */
+/*                       s7_list(s7, 1, \ */
+/*                               s7_eval_c_string(s7, "\"" s "\""))); */
+/*                               /\* s7_eval_c_string(s7, s))); *\/ */
 
-#define APPLY_1(f, o) \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                       s7_list(s7, 1, o))
+/* #define APPLY_1(f, o) \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                        s7_list(s7, 1, o)) */
 
-#define APPLY_MAP(m, o) \
-    s7_apply_function(s7, m, s7_list(s7, 1, o))
+/* #define APPLY_MAP(m, o) \ */
+/*     s7_apply_function(s7, m, s7_list(s7, 1, o)) */
 
-#define APPLY_2(f, o, k)                             \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 2, o, k))
+/* #define APPLY_2(f, o, k)                             \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                    s7_list(s7, 2, o, k)) */
 
     /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
     /*                            s7_list(s7, 1, v)) */
@@ -64,7 +64,8 @@ void tearDown(void) {
  */
 void read_api(void) {
     log_debug("read_api");
-    jo = JSON_READ("{" K(m) ": { " K(a) ": 0 }}");
+    jo = JSON_READ("{ \"m\": { \"a\": 0 }}");
+    /* jo = JSON_READ("{" K(m) ": { " K(a) ": 0 }}"); */
     /* s7_pointer jstr = s7_eval_c_string(s7, js); */
     /* TRACE_S7_DUMP("jstr", jstr); */
     /* jo = s7_apply_function(s7, s7_name_to_value(s7, "json:read"), */
