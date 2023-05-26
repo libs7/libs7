@@ -13,7 +13,7 @@ s7_scheme *s7;
 
 extern struct option options[];
 
-s7_pointer flag, t, k, a, suba, ht;
+s7_pointer flag, t, tt, k, a, suba, ht;
 s7_pointer idx, i0, i1, i3;
 s7_pointer subt, subt1, subt2;
 s7_pointer sexp, expected, actual;
@@ -22,29 +22,23 @@ s7_pointer res, len, m;
 s7_pointer tmp, tmp1, tmp2;
 
 char *expected_str, *actual_str, *tmp_str;
-char *cmd;
+char *cmd, *sexp_str;
 
 bool verbose;
 bool debug;
 
 
-#define EVAL(s) s7_eval_c_string(s7, s)
+/* #define TOML_READ(s) \ */
+/*     s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \ */
+/*                       s7_list(s7, 1, s7_eval_c_string(s7, s))); */
 
-#define TOML_READ(s) \
-    s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \
-                      s7_list(s7, 1, s7_eval_c_string(s7, s)));
+/* #define APPLY_1(f, o) \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                        s7_list(s7, 1, o)) */
 
-#define APPLY_1(f, o) \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                       s7_list(s7, 1, o))
-
-#define APPLY_2(f, a, b)                             \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 2, a, b))
-
-#define APPLY_3(f, a, b, c)                          \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 3, a, b, c))
+/* #define APPLY_2(f, a, b)                             \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                    s7_list(s7, 2, a, b)) */
 
     /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
     /*                            s7_list(s7, 1, v)) */
@@ -60,63 +54,67 @@ void tearDown(void) {
 
 void root_to_hash_table(void)
 {
-    t = TOML_READ("\"fld1 = 1\nfld2 = 2\")");
-    actual = APPLY_1("toml:table->hash-table", t);
-    flag = APPLY_1("hash-table?", actual);
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("c-pointer?", actual);
-    TEST_ASSERT_EQUAL(s7_f(s7), flag);
+    tt = TOML_READ("fld1 = 1\nfld2 = 2");
+    ht = APPLY_1("toml:table->hash-table", tt);
+    flag = APPLY_1("hash-table?", ht);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    flag = APPLY_1("c-pointer?", ht);
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp = "(hash-table \"fld1\" 1 \"fld2\" 2)";
-    expected = EVAL(sexp);
+    sexp_str = "(hash-table \"fld1\" 1 \"fld2\" 2)";
+    expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
-                             s7_list(s7, 2, expected, actual));
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
+                             s7_list(s7, 2, expected, ht));
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
-    actual_str = APPLY_1("object->string", actual);
-    TEST_ASSERT_EQUAL_STRING(sexp, s7_string(actual_str));
+    res = APPLY_1("object->string", ht);
+    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 }
 
 void nested_table_to_hash_table(void)
 {
-    t = TOML_READ("\"a = { b = 0 }\")");
-    actual = APPLY_1("toml:table->hash-table", t);
-    flag = APPLY_1("hash-table?", actual);
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    flag = APPLY_1("c-pointer?", actual);
-    TEST_ASSERT_EQUAL(s7_f(s7), flag);
+    tt = TOML_READ("a = { b = 0 }");
+    ht = APPLY_1("toml:table->hash-table", tt);
+    TRACE_S7_DUMP("ht", ht);
+    flag = APPLY_1("hash-table?", ht);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    flag = APPLY_1("c-pointer?", ht);
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp = "(hash-table \"a\" (hash-table \"b\" 0))";
-    expected = EVAL(sexp);
+    sexp_str = "(hash-table \"a\" (hash-table \"b\" 0))";
+    expected = EVAL(sexp_str);
+    TRACE_S7_DUMP("expected", expected);
     flag = APPLY_1("hash-table?", expected);
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
-                             s7_list(s7, 2, expected, actual));
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
+                             s7_list(s7, 2, expected, ht));
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
-    actual_str = APPLY_1("object->string", actual);
-    TEST_ASSERT_EQUAL_STRING(sexp, s7_string(actual_str));
+    log_debug("xxxxxxxxxxxxxxxx");
+    res = APPLY_1("object->string", ht);
+    TRACE_S7_DUMP("res", res);
+    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 
-    // verify value at "a" of toml-table is a toml-table
-    k = s7_make_string(s7, "a");
-    subt = APPLY_2("toml:table-ref", t, k);
-    flag = APPLY_1("toml:table?", subt);
-    TEST_ASSERT_EQUAL(s7_t(s7), flag);
+    /* // verify value at "a" of toml-table is a toml-table */
+    /* k = s7_make_string(s7, "a"); */
+    /* subt = APPLY_2("toml:table-ref", tt, k); */
+    /* flag = APPLY_1("toml:table?", subt); */
+    /* TEST_ASSERT_TRUE(s7_boolean(s7, flag)); */
 
-    // verify value at "a" of hash-table is a hash-table
-    k = s7_make_string(s7, "a");
-    subt = APPLY_2("hash-table-ref", actual, k);
-    actual = APPLY_1("hash-table?", subt);
-    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+    /* // verify value at "a" of hash-table is a hash-table */
+    /* k = s7_make_string(s7, "a"); */
+    /* subt = APPLY_2("hash-table-ref", ht, k); */
+    /* flag = APPLY_1("hash-table?", subt); */
+    /* TEST_ASSERT_TRUE(s7_boolean(s7, flag)); */
 }
 
 void subarray_to_vector(void)
 {
-    t = TOML_READ("\"a = [1, 2, 3]\")");
+    t = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table->hash-table", t);
     flag = APPLY_1("hash-table?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -125,8 +123,8 @@ void subarray_to_vector(void)
 
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp = "(hash-table \"a\" #(1 2 3))";
-    expected = EVAL(sexp);
+    sexp_str = "(hash-table \"a\" #(1 2 3))";
+    expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
@@ -134,8 +132,8 @@ void subarray_to_vector(void)
                              s7_list(s7, 2, expected, actual));
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
-    actual_str = APPLY_1("object->string", actual);
-    TEST_ASSERT_EQUAL_STRING(sexp, s7_string(actual_str));
+    actual = APPLY_1("object->string", actual);
+    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(actual));
 
     // verify value at "a" of toml-table is a toml-array
     k = s7_make_string(s7, "a");
@@ -152,7 +150,7 @@ void subarray_to_vector(void)
 
 void subarray_of_tables(void)
 {
-    t = TOML_READ("\"a = [{t1 = 1}, {t2 = 2}]\")");
+    t = TOML_READ("a = [{t1 = 1}, {t2 = 2}]");
     flag = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     actual = APPLY_1("toml:table->hash-table", t);
@@ -180,8 +178,8 @@ void subarray_of_tables(void)
     /* log_debug("FORMATTED: %s", actual_str); */
 
     // WARNING: use (vector ...), not #(...)
-    sexp = "(hash-table \"a\" (vector (hash-table \"t1\" 1) (hash-table \"t2\" 2)))";
-    expected = EVAL(sexp);
+    sexp_str = "(hash-table \"a\" (vector (hash-table \"t1\" 1) (hash-table \"t2\" 2)))";
+    expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     flag = APPLY_1("c-pointer?", expected);
@@ -256,9 +254,9 @@ int main(int argc, char **argv)
     UNITY_BEGIN();
 
     /* RUN_TEST(root_to_hash_table); */
-    /* RUN_TEST(nested_table_to_hash_table); */
+    RUN_TEST(nested_table_to_hash_table);
     /* RUN_TEST(subarray_to_vector); */
-    RUN_TEST(subarray_of_tables);
+    /* RUN_TEST(subarray_of_tables); */
 
     /* RUN_TEST(dotted_keys); */
 

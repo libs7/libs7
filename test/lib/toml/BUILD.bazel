@@ -7,10 +7,12 @@ test_suite(
     tests = [
         "//test/lib/toml:base",
         "//test/lib/toml:arrays",
+        "//test/lib/toml:conversion_ht",
         "//test/lib/toml:datetimes",
         "//test/lib/toml:readers",
-        "//test/lib/toml:tables",
+        "//test/lib/toml:serialization",
         "//test/lib/toml:strings",
+        "//test/lib/toml:tables",
     ]
 )
 
@@ -240,6 +242,30 @@ cc_test(
     name = "datetimes",
     linkstatic = True,
     srcs = ["toml_datetimes_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    data = ["//test/lib/toml/data:toml"],
+    deps = DEPS + [
+        "//dev",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "serialization",
+    linkstatic = True,
+    srcs = ["toml_serialization_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,

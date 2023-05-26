@@ -136,20 +136,25 @@ s7_pointer g_toml_table_ref(s7_scheme *s7, s7_pointer args)
     arg = s7_car(p);
     if (s7_is_string(arg)) {
         key = (char*)s7_string(arg);
+        TRACE_LOG_DEBUG("key type string: %s", key);
+    }
+    else if (s7_is_keyword(arg)) {
+        s7_pointer sym = s7_keyword_to_symbol(s7, arg);
+        key = (char*)s7_symbol_name(sym);
+        TRACE_LOG_DEBUG("key type keyword: %s", key);
     }
     else if (s7_is_symbol(arg)) {
         key = (char*)s7_symbol_name(arg);
+        TRACE_LOG_DEBUG("key type symbol: %s", key);
     }
-    else if (s7_is_keyword(arg)) {
-        key = (char*)s7_keyword_to_symbol(s7, arg);
-        /* key = (char*)s7_symbol_name(arg); */
+    else {
+          return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
     }
-    else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
 
     toml_datum_t datum;
 
     /* datum = _toml_table_value_for_key(tt, key); */
-    TRACE_LOG_DEBUG("KEY: %s", key);
+
     datum = toml_string_in(tt, key);
     if (datum.ok) {
         s7_pointer s = s7_make_string(s7, datum.u.s);
@@ -291,8 +296,24 @@ static s7_pointer g_toml_table_to_string(s7_scheme *s7, s7_pointer args)
     p = args;
     arg = s7_car(p);
     toml_table_t *tt = (toml_table_t*)s7_c_object_value_checked(arg, toml_table_type_tag);
+    if (!tt) {
+        log_error("Bad arg table to string");
+        //FIXME
+    }
 
-    char *s = toml_table_to_string(tt);
+    bool use_write = false;
+    p = s7_cdr(p);
+    if (p != s7_nil(s7)) {
+        arg = s7_car(p);
+        TRACE_S7_DUMP("boolarg", arg);
+        if (s7_is_boolean(arg)) {
+            use_write = s7_boolean(s7, arg);
+        } else {
+            log_error("Bad use_write arg");
+        }
+    }
+
+    char *s = toml_table_to_string(tt, use_write);
     TRACE_LOG_DEBUG("returning: %s", s);
     return s7_make_string(s7, s);
 }
@@ -433,7 +454,7 @@ static void *_toml_table_seq_for_key(toml_table_t *tt, char *key, int *typ)
 /* may be called from array_to_string
    prototype in libtoml_s7.h
  */
-char *toml_table_to_string(toml_table_t *tt)
+char *toml_table_to_string(toml_table_t *tt, bool use_write)
 {
     TRACE_ENTRY(toml_table_to_string);
     toml_datum_t datum;
@@ -539,7 +560,7 @@ char *toml_table_to_string(toml_table_t *tt)
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("array seq: %p", seq);
-                seq_str = toml_array_to_string((toml_array_t*)seq);
+                seq_str = toml_array_to_string((toml_array_t*)seq, use_write);
                 TRACE_LOG_DEBUG("ARRAY: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {
@@ -561,7 +582,7 @@ char *toml_table_to_string(toml_table_t *tt)
                 break;
             case TOML_TABLE:
                 TRACE_LOG_DEBUG("table seq: %p", seq);
-                seq_str = toml_table_to_string((toml_table_t*)seq);
+                seq_str = toml_table_to_string((toml_table_t*)seq, use_write);
                 TRACE_LOG_DEBUG("TABLE: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {
@@ -685,7 +706,7 @@ char *toml_table_to_string(toml_table_t *tt)
                 TRACE_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TIMESTAMP:
-                seq_str = toml_datetime_to_string((toml_timestamp_t*)datum.u.ts);
+                seq_str = toml_datetime_to_string((toml_timestamp_t*)datum.u.ts, use_write);
                 TRACE_LOG_DEBUG("TS: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {

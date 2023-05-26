@@ -216,8 +216,23 @@ static s7_pointer g_toml_array_to_string(s7_scheme *s7, s7_pointer args)
     p = args;
     arg = s7_car(p);
     toml_array_t *ta = (toml_array_t*)s7_c_object_value_checked(arg, toml_array_type_tag);
+    if (!ta) {
+        log_error("Bad arg array_to_string");
+    }
 
-    char *s = toml_array_to_string(ta);
+    bool use_write = false;
+    p = s7_cdr(p);
+    if (p != s7_nil(s7)) {
+        arg = s7_car(p);
+        TRACE_S7_DUMP("boolarg", arg);
+        if (s7_is_boolean(arg)) {
+            use_write = s7_boolean(s7, arg);
+        } else {
+            log_error("Bad use_write arg");
+        }
+    }
+
+    char *s = toml_array_to_string(ta, use_write);
     TRACE_LOG_DEBUG("returning: %s", s);
     return s7_make_string(s7, s);
 }
@@ -364,7 +379,7 @@ static void *_toml_array_seq_for_idx(toml_array_t *ta, int idx, int *typ)
     return NULL;
 }
 
-char *toml_array_to_string(toml_array_t *ta)
+char *toml_array_to_string(toml_array_t *ta, bool use_write)
 {
     TRACE_ENTRY(toml_array_to_string);
     toml_datum_t datum;
@@ -435,7 +450,7 @@ char *toml_array_to_string(toml_array_t *ta)
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("array seq: %p", seq);
-                seq_str = toml_array_to_string((toml_array_t*)seq);
+                seq_str = toml_array_to_string((toml_array_t*)seq, use_write);
                 TRACE_LOG_DEBUG("ARRAY str: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {
@@ -457,7 +472,7 @@ char *toml_array_to_string(toml_array_t *ta)
                 break;
             case TOML_TABLE:
                 TRACE_LOG_DEBUG("table seq: %p", seq);
-                seq_str = toml_table_to_string((toml_table_t*)seq);
+                seq_str = toml_table_to_string((toml_table_t*)seq, use_write);
                 TRACE_LOG_DEBUG("TABLE: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {

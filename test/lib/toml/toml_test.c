@@ -57,7 +57,7 @@ void read_api(void) {
 
     cmd = ""
         "(with-input-from-string "
-        "    \"t = { i = 1, s = \\\"Hello\\\" }\""
+        "    \"t = { i = 1, s = \"Hello\" }\""
         "    toml:read)";
     actual = s7_eval_c_string(s7, cmd);
     res = APPLY_1("toml:table?", actual);
@@ -91,7 +91,7 @@ void root_tables(void) {
     actual = APPLY_1("real?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    t = TOML_READ("\"m = \\\"Hello\\\"\")");
+    t = TOML_READ("\"m = \"Hello\"\")");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
@@ -145,7 +145,7 @@ void table_refs(void) {
  */
 void table_length_ops(void) {
     char *toml = ""
-        "\"m = { b = true, s = \\\"Hello!\\\", "
+        "\"m = { b = true, s = \"Hello!\", "
         "        i = 0, f = 1.2, "
         "        t = { t1 = 1 }, a = [0, 1, 2] }\"";
     t = TOML_READ(toml);
@@ -181,7 +181,7 @@ void table_length_ops(void) {
 
 void table_ops(void) {
     char *toml = ""
-        "\"m = { b = true, s = \\\"Hello!\\\", "
+        "\"m = { b = true, s = \"Hello!\", "
         "        i = 0, f = 1.2, "
         "        t = { t1 = 1 }, a = [0, 1, 2] }\"";
     t = TOML_READ(toml);

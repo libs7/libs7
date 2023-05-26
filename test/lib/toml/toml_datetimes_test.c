@@ -55,7 +55,7 @@ void fields(void) {
     /* flag = APPLY_1("integer?", year); */
     /* TEST_ASSERT_TRUE(flag); */
 
-    /* toml = "\"a = \\\"Hello\tthere\\\"\""; */
+    /* toml = "\"a = \"Hello\tthere\"\""; */
     /* t = TOML_READ(toml); */
     /* actual = APPLY_1("toml:table?", t); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
@@ -66,6 +66,11 @@ void fields(void) {
     /* TEST_ASSERT_EQUAL_STRING("Hello\tthere", s7_string(a)); */
 }
 
+/* three ways to project a component, e.g. year:
+   (toml:date-year dt)
+   (toml:datetime-ref dt "year")
+   (dt "year")
+ */
 void apply_datetime(void) {
     root = TOML_READ("dt = 1987-07-05T17:45:00Z");
     TRACE_S7_DUMP("root", root);
@@ -77,6 +82,12 @@ void apply_datetime(void) {
     flag = APPLY_1("toml:datetime?", ts);
     TRACE_S7_DUMP("flag", flag);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+
+    year = APPLY_1("toml:date-year", ts);
+    flag = APPLY_1("integer?", year);
+    TRACE_S7_DUMP("flag", flag);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    TEST_ASSERT_EQUAL_INT(1987, s7_integer(year));
 
     k = s7_make_string(s7, "year");
     year = APPLY_2("toml:datetime-ref", ts, k);
@@ -168,14 +179,14 @@ void local_date_time(void) {
     root = TOML_READ("ldt1 = 1979-05-27T07:32:00\n"
                      "ldt2 = 1979-05-27T00:32:00.999999");
     TRACE_S7_DUMP("root", root);
-    /* flag = APPLY_1("toml:table?", root); */
-    /* TEST_ASSERT_TRUE(s7_boolean(s7, flag)); */
-    /* k = s7_make_string(s7, "ldt1"); */
-    /* ts = APPLY_2("toml:table-ref", root, k); */
-    /* TRACE_S7_DUMP("ts", ts); */
-    /* flag = APPLY_1("toml:datetime?", ts); */
-    /* TRACE_S7_DUMP("flag", flag); */
-    /* TEST_ASSERT_TRUE(s7_boolean(s7, flag)); */
+    flag = APPLY_1("toml:table?", root);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    k = s7_make_string(s7, "ldt1");
+    ts = APPLY_2("toml:table-ref", root, k);
+    TRACE_S7_DUMP("ts", ts);
+    flag = APPLY_1("toml:datetime?", ts);
+    TRACE_S7_DUMP("flag", flag);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 }
 
 void local_date(void) {
@@ -210,9 +221,9 @@ int main(int argc, char **argv)
     UNITY_BEGIN();
 
     RUN_TEST(fields);
-    /* RUN_TEST(apply_datetime); */
-    /* RUN_TEST(offset_date_time); */
-    /* RUN_TEST(local_date_time); */
+    RUN_TEST(apply_datetime);
+    RUN_TEST(offset_date_time);
+    RUN_TEST(local_date_time);
     /* RUN_TEST(local_date); */
     /* RUN_TEST(local_time); */
 

@@ -19,10 +19,13 @@ value for key `+k+` in table object `+t+`, you can apply the object
 directly to the key: [nowrap]`+(t k)+` instead of [nowrap]`+(toml:map-ref t
 k)+`.
 
+
+
 === print syntax
 
 Print syntax for foreign objects is `#<obj ...>`. For example, in a
-`repl` the printed form of a `toml` table is [nowrap]`+#<toml-table k = v, ...>+`. A datetime (tomlc99 "timestamp") will print like this: [nowrap]`+#<toml-timestamp 1987-07-05T17:45:00Z>+`.
+`repl` the printed form of a `toml` table is [nowrap]`+#<toml-table
+k = v, ...>+`. Arrays will be `+#<toml-array ...>+`.
 
 Print syntax is mainly for use in a `repl`, so you can see what you're
 working with. It is _not_ round-trippable with respect to the file
@@ -33,6 +36,30 @@ you must convert them to Scheme objects, for example by using
 is that the toml type information is discarded; for example when you convert a
 toml array to a Scheme vector or list, there is nothing in the result
 to indicate that the data came from a toml array.
+
+==== formatting
+
+* `+(format #f "~A" dt)+` - should print `+"1987-07-05T17:45:00Z"+, not
+`+#<toml-timestamp 1987-07-05T17:45:00Z>+
+
+
+=== data conversion
+
+The `libtoml` API includes operators to convert from `tomlc99` structs
+to Scheme data, but in general you will not need to use them unless
+you are editing the toml data. Since `libtoml` data are immutable, you
+would need to convert to Scheme and go from there.
+
+If you only need to extract data from a toml file, you should not need
+to convert toml objects to Scheme objects (e.g. using
+`+toml:map->hash-map+` and `+toml:array->vector+`). The Scheme API
+should include all the operations you need to extract data from the
+underlying C structures without converting them to Scheme structures.
+Of course this happens automatically in a few cases; for example
+`+(toml:map-keys m)+` returns a Scheme list containing the keys of map
+`m`. Since toml table keys are strings, the list of keys will contain
+Scheme strings with no link to the underlying toml structure.
+
 
 == toml:read
 
@@ -72,7 +99,20 @@ The `s7` engine also has `with-input-from-string`, so you can do:
 For consistency with link:libjson.adoc[libjson], `+libtoml+` uses the
 term `map` where `toml` uses the term `table`.
 
-API:
+=== keys
+
+Toml table keys are strings, but `libtoml` supports table lookups by
+symbol and keyword. The following are equivalent:
+
+[source,scheme]
+----
+(toml:map-ref m "a")
+(toml:map-ref m 'a)
+(toml:map-ref m :a)
+----
+
+
+=== api
 
 * `+(toml:map? m)+` returns `+#t+` if `+m+` is a Scheme object wrapping a `+toml_table_t+` struct.
 * `+(toml:map-length m)+` returns number of entries in map `+m+`
@@ -80,6 +120,8 @@ API:
 * `+(toml:map-contains? m k)+` returns `+#t+` if map `+m+` contains an entry with key `+k+`.
 * `+(toml:map-ref m k)+` returns the value of map `+m+` for key `+k+`.
 * `+(m k)+` equivalent to [nowrap]`+(toml:map-ref m k)+`.
+
+* `+(toml:map->hash-table m (:clone #t))+` converts toml table to Scheme `hash-map`. Optional arg `:clone` defaults to `+#t+`, meaning deep copy.
 
 Low-level bindings:
 
@@ -112,7 +154,7 @@ spec] supports use of either 'T' or a space to separate date and time strings:
 The `tomlc99` library does not retain the separator character, so `libtoml` normalizes to 'T'.  That means that a datetime like '1979-05-27 07:32:00Z' will print as '1979-05-27T07:32:00Z'.
 ====
 
-=== Scheme datetime API
+API:
 
 * `+(toml:datetime? dt)+` returns `+#t+` if `+dt+` is a Scheme object wrapping a `+toml_timestamp_t+` struct.
 * `+(toml:date-year dt)+` returns year component of datetime as integer.
@@ -123,3 +165,13 @@ The `tomlc99` library does not retain the separator character, so `libtoml` norm
 * `+(toml:time-second dt)+` returns second component of datetime as integer.
 * `+(toml:time-millisecond dt)+` returns millisecond component of datetime as integer.
 
+The Scheme API also supports projection of component values using
+`+toml:datetime-ref+` and object application:
+
+    (toml:date-year dt) == (toml:datetime-ref dt "year") == (dt "year")
+
+== strings
+
+== numbers
+
+== booleans

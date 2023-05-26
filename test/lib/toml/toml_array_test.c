@@ -15,7 +15,7 @@ extern struct option options[];
 
 s7_pointer root;
 s7_pointer b, t, k, a, idx, res, actual, expected;
-s7_pointer lst, alst, vec, ht;
+s7_pointer lst, alst, vec, ht, s1, s2;
 s7_pointer len, m;
 s7_pointer tmp;
 
@@ -24,17 +24,17 @@ bool debug;
 
 char *cmd;
 
-#define TOML_READ(s) \
-    s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \
-                      s7_list(s7, 1, s7_eval_c_string(s7, s)));
+/* #define TOML_READ(s) \ */
+/*     s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \ */
+/*                       s7_list(s7, 1, s7_eval_c_string(s7, s))); */
 
-#define APPLY_1(f, o) \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                       s7_list(s7, 1, o))
+/* #define APPLY_1(f, o) \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                        s7_list(s7, 1, o)) */
 
-#define APPLY_2(f, o, k)                             \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 2, o, k))
+/* #define APPLY_2(f, o, k)                             \ */
+/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
+/*                    s7_list(s7, 2, o, k)) */
 
     /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
     /*                            s7_list(s7, 1, v)) */
@@ -49,7 +49,7 @@ void tearDown(void) {
 }
 
 void array_refs(void) {
-    root = TOML_READ("\"a = [1, 2, 3]\")");
+    root = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -78,7 +78,7 @@ void array_refs(void) {
 }
 
 void array_length_ops(void) {
-    root = TOML_READ("\"a = [1, 2, 3]\")");
+    root = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -92,11 +92,11 @@ void array_length_ops(void) {
 }
 
 void array_ops(void) {
-    char *toml = ""
-        "\"m = { b = true, s = \\\"Hello!\\\", "
-        "        i = 0, f = 1.2, "
-        "        t = { t1 = 1 }, a = [0, 1, 2] }\"";
-    root = TOML_READ(toml);
+    root = TOML_READ(""
+                     "m = { b = true, s = \"Hello!\", "
+                     "        i = 0, f = 1.2, "
+                     "        t = { t1 = 1 }, a = [0, 1, 2] }"
+                     "");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -119,49 +119,8 @@ void array_ops(void) {
 
 }
 
-void array_serialization(void) {
-    /* root = TOML_READ("\"m = [1, 2, 3]\")"); */
-    /* root = TOML_READ("\"k1 = 1\nk2 = true\nk3='Hello'\")"); */
-
-    root = TOML_READ("\"k1 = 7\nk2 = 8\")");
-
-    /* actual = APPLY_FORMAT("\"~A\"", root); */
-    log_debug("rrrrrrrrrrrrrrrr");
-    res = s7_apply_function(s7, s7_name_to_value(s7, "object->string"),
-                            s7_list(s7, 1, root));
-    log_debug("xxxxxxxxxxxxxxxx");
-    TRACE_S7_DUMP("obj->s", res);
-
-    /* res = s7_apply_function(s7, s7_name_to_value(s7, "format"), */
-    /*                         s7_list(s7, 3, */
-    /*                                 s7_t(s7), */
-    /*                                 s7_make_string(s7, "~A"), */
-    /*                                 root)); */
-    /* log_debug("xxxxxxxxxxxxxxxx"); */
-    /* TRACE_S7_DUMP("fmt", res); */
-    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
-
-    /* /\* root tables have empty key  *\/ */
-    /* actual = APPLY_1("toml:table-key", root); */
-    /* TEST_ASSERT_EQUAL_STRING("", s7_string(actual)); */
-
-    /* k = s7_make_string(s7, "m"); */
-    /* s7_pointer m = APPLY_2("toml:table-ref", root, k); */
-    /* actual = APPLY_1("toml:table?", m); */
-    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
-
-    /* actual = APPLY_1("toml:table-key", m); */
-    /* TEST_ASSERT_EQUAL_STRING("m", s7_string(actual)); */
-    /* actual = APPLY_1("toml:table-keys", m); */
-    /* s7_pointer v = APPLY_1("list?", actual); */
-    /* TEST_ASSERT_EQUAL(s7_t(s7), v); */
-
-    /* //FIXME: test toml:table-key-for-index ('key_in') */
-}
-
 void array_kind_int(void) {
-    char *toml = "\"a = [1, 2, 3]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -190,14 +149,13 @@ void array_kind_int(void) {
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
     /* TEST_ASSERT_TRUE(s7_is_c_pointer(actual)); */
     /* TEST_ASSERT_TRUE(s7_c_pointer_type(actual) == s7_make_symbol(s7, "toml_array_t")); */
-    /*     sexp_expected = "\"path.txt\""; */
+    /*     sexp_expected = "path.txt\""; */
     /* expected = s7_eval_c_string(s7, sexp_expected); */
     /* TEST_ASSERT_TRUE(s7_is_equal(s7, actual, expected)); */
 }
 
 void array_kind_string(void) {
-    char *toml = "\"colors = [\\\"red\\\", \\\"yellow\\\", \\\"green\\\"]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("colors = [\"red\", \"yellow\", \"green\"]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -220,11 +178,9 @@ void array_kind_string(void) {
 }
 
 void array_kind_string2(void) {
-    char *toml = ""
-        "\"strings = [\\\"all\\\", 'strings', "
-        "\\\"\\\"\\\"are the same\\\"\\\"\\\","
-        "'''type''']\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("strings = [\"all\", 'strings', "
+                     "\"are the same\","
+                     "'''type''']");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -253,8 +209,7 @@ void array_kind_string2(void) {
 }
 
 void array_nested_ints(void) {
-    char *toml = "\"nested_ints =  [ [ 1, 2 ], [3, 4, 5] ]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("nested_ints =  [ [ 1, 2 ], [3, 4, 5] ]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -278,9 +233,7 @@ void array_nested_ints(void) {
 }
 
 void array_nested_mixed(void) {
-    char *toml = ""
-        "\"nested_mixed_array = [ [ 1, 2 ], ['a', 'b', 'c']]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("nested_mixed_array = [ [ 1, 2 ], ['a', 'b', 'c']]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -308,9 +261,7 @@ void array_nested_mixed(void) {
 }
 
 void array_mixed_numbers(void) {
-    char *toml = ""
-        "\"numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("numbers = [ 0.1, 0.2, 0.5, 1, 2, 5 ]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -338,8 +289,7 @@ void array_mixed_numbers(void) {
 
 void array_kind_table(void) {
     /* kind: value */
-    char *toml = "\"a = [ {a = 0}, {b = 1}]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [ {a = 0}, {b = 1}]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -362,8 +312,7 @@ void array_kind_table(void) {
 }
 
 void array_to_list(void) {
-    char *toml = "\"a = [1, 2, 3]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -381,8 +330,7 @@ void array_to_list(void) {
 }
 
 void array_to_vector(void) {
-    char *toml = "\"a = [1, 2, 3]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -401,8 +349,7 @@ void array_to_vector(void) {
 
 void array_to_string(void) {
     // bools
-    char *toml = "\"a = [true, false]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [true, false]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -413,8 +360,7 @@ void array_to_string(void) {
     TEST_ASSERT_EQUAL_STRING("[true, false]", s7_string(res));
 
     // ints
-    toml = "\"a = [1, 2, 3]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [1, 2, 3]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -425,8 +371,7 @@ void array_to_string(void) {
     TEST_ASSERT_EQUAL_STRING("[1, 2, 3]", s7_string(res));
 
     // doubles
-    toml = "\"a = [1.2, 2.3, 3.4]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [1.2, 2.3, 3.4]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -437,8 +382,7 @@ void array_to_string(void) {
     TEST_ASSERT_EQUAL_STRING("[1.2, 2.3, 3.4]", s7_string(res));
 
     // strings - double quote
-    toml = "\"a = [\\\"Hi\\\", \\\"there\\\", \\\"world\\\"]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [\"Hi\", \"there\", \"world\"]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -450,8 +394,7 @@ void array_to_string(void) {
                              s7_string(res));
 
     // strings - single quote
-    toml = "\"a = ['Hi', 'there', 'world']\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = ['Hi', 'there', 'world']");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
@@ -464,8 +407,7 @@ void array_to_string(void) {
 }
 
 void nested_array_to_string(void) {
-    char *toml = "\"a = [[1, 2], [3, 4]]\"";
-    root = TOML_READ(toml);
+    root = TOML_READ("a = [[1, 2], [3, 4]]");
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
@@ -477,7 +419,7 @@ void nested_array_to_string(void) {
     res = APPLY_1("object->string", a);
     TEST_ASSERT_EQUAL_STRING("[[1, 2], [3, 4]]", s7_string(res));
 
-    toml = "\"a = [[1, 2, [3, 4]], [5, 6]]\"";
+    char *toml = "a = [[1, 2, [3, 4]], [5, 6]]";
     root = TOML_READ(toml);
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -493,12 +435,11 @@ void nested_array_to_string(void) {
 
 /* burnt sushi: tests/valid/table/array-one.toml */
 void root_array_1(void) {
-    char *toml = "\""
+    root = TOML_READ(""
         "[[people]]\n"
-        "first_name = \\\"Bruce\\\"\n"
-        "last_name = \\\"Springsteen\\\"\n"
-        "\"";
-    root = TOML_READ(toml);
+        "first_name = \"Bruce\"\n"
+        "last_name = \"Springsteen\"\n"
+                     "");
     TRACE_S7_DUMP("root", root);
     actual = APPLY_1("toml:table?", root);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -526,7 +467,7 @@ void root_array_1(void) {
     /* TEST_ASSERT_EQUAL(s7_t(s7), b); */
     TRACE_S7_DUMP("people", a);
 
-    /* toml = "\"a = [[1, 2, [3, 4]], [5, 6]]\""; */
+    /* toml = "a = [[1, 2, [3, 4]], [5, 6]]\""; */
     /* root = TOML_READ(toml); */
     /* actual = APPLY_1("toml:table?", root); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
@@ -548,24 +489,24 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    /* RUN_TEST(array_refs); */
-    /* RUN_TEST(array_length_ops); */
-    /* RUN_TEST(array_ops); */
+    RUN_TEST(array_refs);
+    RUN_TEST(array_length_ops);
+    RUN_TEST(array_ops);
 
-    /* RUN_TEST(array_kind_int); */
-    /* RUN_TEST(array_kind_string); */
-    /* RUN_TEST(array_kind_string2); */
-    /* RUN_TEST(array_nested_ints); */
-    /* RUN_TEST(array_nested_mixed); */
-    /* RUN_TEST(array_mixed_numbers); */
-    /* RUN_TEST(array_kind_table); */
+    RUN_TEST(array_kind_int);
+    RUN_TEST(array_kind_string);
+    RUN_TEST(array_kind_string2);
+    RUN_TEST(array_nested_ints);
+    RUN_TEST(array_nested_mixed);
+    RUN_TEST(array_mixed_numbers);
+    RUN_TEST(array_kind_table);
 
-    /* RUN_TEST(array_to_string); */
-    /* RUN_TEST(nested_array_to_string); */
-    /* RUN_TEST(array_to_list); */
-    /* RUN_TEST(array_to_vector); */
+    RUN_TEST(array_to_string);
+    RUN_TEST(nested_array_to_string);
+    RUN_TEST(array_to_list);
+    RUN_TEST(array_to_vector);
 
-    /* RUN_TEST(array_serialization); */
+    // burntsushi tests
 
     RUN_TEST(root_array_1);
 

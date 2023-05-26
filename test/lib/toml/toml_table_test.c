@@ -13,7 +13,8 @@ s7_scheme *s7;
 
 extern struct option options[];
 
-s7_pointer b, t, k, a, idx, res, actual, expected;
+s7_pointer b, t, k, a, idx, actual, expected;
+s7_pointer  res, res1, res2;
 s7_pointer flag, len, m;
 
 char *expected_str;
@@ -82,7 +83,7 @@ void root_tables(void) {
     actual = APPLY_1("real?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    t = TOML_READ("m = \\\"Hello\\\"");
+    t = TOML_READ("m = \"Hello\"");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
@@ -108,25 +109,63 @@ void root_tables(void) {
 }
 
 void table_refs(void) {
-    t = TOML_READ("m = [1, 2, 3]");
-    actual = APPLY_1("toml:table?", t);
-    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+    t = TOML_READ("m = \"Hello\"");
+    flag = APPLY_1("toml:table?", t);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
+    // string key
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
-    actual = APPLY_1("toml:array?", a);
-    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+    res1 = APPLY_2("toml:table-ref", t, k);
+    flag = APPLY_1("string?", res1);
+    TEST_ASSERT_TRUE(s7_boolean(s7, res1));
+    // obj application
+    res2 = APPLY_OBJ(t, k);
+    flag = APPLY_1("string?", res2);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
+                             s7_list(s7, 2, res1, res2));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "eqv?"),
+                             s7_list(s7, 2, res1, res2));
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "eq?"),
+                             s7_list(s7, 2, res1, res2));
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    /* apply table to key: (t k) == (toml:table-ref t k) */
-    a = APPLY_OBJ(t, s7_list(s7, 1, k));
-    /* a = s7_apply_function(s7, t, s7_list(s7, 1, k)); */
-    actual = APPLY_1("toml:array?", a);
-    TEST_ASSERT_EQUAL(actual, s7_t(s7));
+    // symbol key
+    k = s7_make_symbol(s7, "m");
+    res1 = APPLY_2("toml:table-ref", t, k);
+    flag = APPLY_1("string?", res1);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    // obj application
+    res2 = APPLY_OBJ(t, k);
+    flag = APPLY_1("string?", res2);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
+                             s7_list(s7, 2, res1, res2));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "eqv?"),
+                             s7_list(s7, 2, res1, res2));
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "eq?"),
+                             s7_list(s7, 2, res1, res2));
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    // try hash-table-ref - nope, segfault
-    /* a = APPLY_2("hash-table-ref", t, k); */
-    /* actual = APPLY_1("toml:array?", a); */
-    /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
+    // keyword key
+    k = s7_make_keyword(s7, "m");
+    res1 = APPLY_2("toml:table-ref", t, k);
+    flag = APPLY_1("string?", res1);
+    TEST_ASSERT_TRUE(s7_boolean(s7, res1));
+    // obj application
+    res2 = APPLY_OBJ(t, k);
+    flag = APPLY_1("string?", res2);
+    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
+                             s7_list(s7, 2, res1, res2));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "eqv?"),
+                             s7_list(s7, 2, res1, res2));
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
+    flag = s7_apply_function(s7, s7_name_to_value(s7, "eq?"),
+                             s7_list(s7, 2, res1, res2));
+    TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 }
 
 /*
@@ -137,7 +176,7 @@ void table_refs(void) {
  */
 void table_length_ops(void) {
     t = TOML_READ(""
-        "m = { b = true, s = \\\"Hello!\\\", "
+        "m = { b = true, s = \"Hello!\", "
         "        i = 0, f = 1.2, "
                   "        t = { t1 = 1 }, a = [0, 1, 2] }");
     actual = APPLY_1("toml:table?", t);
@@ -172,7 +211,7 @@ void table_length_ops(void) {
 
 void table_ops(void) {
     t = TOML_READ(""
-        "m = { b = true, s = \\\"Hello!\\\", "
+        "m = { b = true, s = \"Hello!\", "
         "        i = 0, f = 1.2, "
                   "        t = { t1 = 1 }, a = [0, 1, 2] }");
     actual = APPLY_1("toml:table?", t);
@@ -372,7 +411,7 @@ void to_string_mixed(void) {
 }
 
 void dotted_keys(void) {
-    t = TOML_READ("fruit.apple.color = \\\"red\\\"");
+    t = TOML_READ("fruit.apple.color = \"red\"");
     actual = APPLY_1("toml:table?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
