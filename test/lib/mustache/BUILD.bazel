@@ -1,0 +1,10 @@
+exports_files(["trace.h", "utils.c", "utils.h", "ansi_colors.h"])
+
+test_suite(
+    name  = "mustache",
+    tests = [
+        "//test/lib/mustache/cjson",
+        "//test/lib/mustache/cjson:interpolation",
+    ]
+)
+

@@ -1,5 +1,10 @@
+(define toml-str "m = { a = 0, b = \"Hi\" }")
+(define tt (with-input-from-string toml-str toml:read))
+
 (with-input-from-string "t = { i = 1, s = \"Hello\" }" toml:read)
 (toml:read "t = { i = 1, s = \"Hello\" }")
+
+(define tt (with-input-from-file "test/lib/toml/data/spec-example-1.toml" toml:read))
 
 (call-with-input-file "test/lib/toml/data/example.toml"
   (lambda (port) (let ((toml (toml:read port)))

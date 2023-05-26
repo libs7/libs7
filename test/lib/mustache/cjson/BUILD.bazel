@@ -1,0 +1,170 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//test:BUILD.bzl",
+     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+
+test_suite(
+    name  = "test",
+    tests = [
+        "//test/lib/mustache/cjson",
+        "//test/lib/mustache/cjson:interpolation",
+    ]
+)
+
+## WARNING WARNING - if linkstatic is not True, then the runtime
+## linker may pick up system shared libs rather than those listed as
+## deps here. This can be true even for static deps, e.g.
+## libgbdm_s7_archive, which is statically linked to libgdbm.a - at
+## runtime the system libgbdm.so may be loaded.
+
+################################################################
+CLIB_COPTS = [
+    "-I$(GENDIR)/lib/libc",
+    "-I$(GENDIR)/external/libs7/lib/libc",
+    "-I$(GENDIR)/lib/libdl",
+    "-I$(GENDIR)/external/libs7/lib/libdl",
+    "-I$(GENDIR)/lib/libgdbm",
+    "-I$(GENDIR)/external/libs7/lib/libgdbm",
+    "-I$(GENDIR)/lib/libm",
+    "-I$(GENDIR)/external/libs7/lib/libm",
+]
+
+################################################################
+cc_test(
+    name = "cjson",
+    linkstatic = True,
+    srcs = ["cjson_test.c",
+            "//test:common.c", "//test:common.h",
+            # "//test/lib/mustache:ansi_colors.h",
+            # "//test/lib/mustache:trace.h",
+            "//test/lib/mustache:utils.c",
+            "//test/lib/mustache:utils.h"
+            ] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libmustache:libmustachios7_s7.c"],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Idev",
+        "-Itest",
+        "-Itest/lib/mustache",
+        "-Ilib/libmustache",
+        "-Iexternal/libs7/lib/libmustache",
+    ],
+    local_defines = DEFINES,
+    deps = DEPS + ["//dev"] + select({
+        "//config/clibs/link:archive?": ["//lib/libmustache:mustachios7_s7_archive"],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libmustache:mustachios7_s7"
+        ],
+        "//conditions:default": []
+    }),
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "cjson_link_archive",
+    linkstatic = True,
+    srcs = ["cjson_test.c", "//test:common.c", "//test:common.h"],
+    local_defines = DEFINES,
+    deps = DEPS + ["//lib/libmustache:mustachios7_s7_archive"],
+    copts = COPTS + [
+        "-Itest",
+        "-Iexternal/mustachios7/test",
+        "-Ilib/libmustache",
+        "-Iexternal/libs7/lib/libmustache",
+        "-Iexternal/mustachios7/lib",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "cjson_link_shared",
+    # linkstatic = True,
+    srcs = [
+        "cjson_test.c", "//test:common.c", "//test:common.h",
+        # "//lib/libmustache:libmustachios7_s7.c"
+        # "//lib/libmustache:mustachios7_s7",
+        # "//src:s7"
+    ],
+    local_defines = DEFINES,
+    # deps = DEPS + ["//lib/libmustache:mustachios7_s7"],
+    # data = ["//lib/libmustache:mustachios7_s7"],
+    deps = [
+        "//src:s7_archive",
+        "//lib/libmustache:mustachios7_s7",
+        "//vendored/gopt",
+        "//vendored/logc",
+        "//vendored/unity",
+        "//vendored/uthash",
+    ],
+    copts = COPTS + [
+        "-Itest",
+        "-Iexternal/mustachios7/test",
+        "-Ilib/libmustache",
+        "-Iexternal/libs7/lib/libmustache",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "cjson_link_runtime",
+    # linkstatic = True,
+    srcs = ["cjson_test.c", "//test:common.c", "//test:common.h",
+            "//src:libs7.h", "//src:s7.h",
+            "//lib/libmustache:mustachios7_s7",
+            "//src:s7"
+            ],
+    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    deps = DEPS,
+    # data = ["//lib/libmustache:mustachios7_s7"],
+    copts = COPTS + [
+        "-Itest",
+        "-Ilib/libmustache",
+        "-Iexternal/libs7/lib/libmustache",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
+    name = "interpolation",
+    linkstatic = True,
+    srcs = ["interpolation_test.c",
+            "//test:common.c",
+            "//test:common.h",
+            "//test/lib/mustache:utils.c",
+            "//test/lib/mustache:utils.h"
+            ] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libmustache:libmustachios7_s7.c"],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Idev",
+        "-Itest",
+        "-Itest/lib/mustache",
+        "-Ilib/libmustache",
+        "-Iexternal/libs7/lib/libmustache",
+    ],
+    local_defines = DEFINES,
+    deps = DEPS + ["//dev"] + select({
+        "//config/clibs/link:archive?": ["//lib/libmustache:mustachios7_s7_archive"],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libmustache:mustachios7_s7"
+        ],
+        "//conditions:default": []
+    }),
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+

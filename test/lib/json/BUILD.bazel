@@ -1,0 +1,215 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//test:BUILD.bzl",
+     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+
+test_suite(
+    name  = "json",
+    tests = [
+        "//test/lib/json:read",
+        "//test/lib/json:vectors",
+        "//test/lib/json:maps",
+        # "//test/lib/json:strings",
+    ]
+)
+
+################################################################
+LIBC_COPTS = [
+    "-I$(GENDIR)/lib/libc",
+    "-I$(GENDIR)/external/libs7/lib/libc",
+    "-I$(GENDIR)/lib/libdl",
+    "-I$(GENDIR)/external/libs7/lib/libdl",
+    "-I$(GENDIR)/lib/libgdbm",
+    "-I$(GENDIR)/external/libs7/lib/libgdbm",
+    "-I$(GENDIR)/lib/libm",
+    "-I$(GENDIR)/external/libs7/lib/libm",
+]
+
+################################################################
+cc_test(
+    name = "base",
+    linkstatic = True,
+    srcs = [
+        "json_test.c",
+        "//test:common.c", "//test:common.h"
+    ] + select({
+        "//config/clibs/link:shared?": [
+            "//lib/libjson:json_s7.c"
+        ],
+        "//conditions:default": []
+    }),
+    local_defines = DEFINES,
+    deps = DEPS + ["//dev"] + select({
+        "//config/clibs/link:archive?": [
+            "//src:s7_archive",
+            "//lib/libjson:json_s7_archive"
+        ],
+        "//conditions:default": []
+    }),
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libjson:json_s7"
+        ],
+        "//conditions:default": []
+    }),
+    copts = COPTS + [
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "json_archive",
+    linkstatic = True,
+    srcs = ["json_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//lib/libjson:json_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "json_link_shared",
+    linkstatic = True,
+    srcs = [
+        "json_test.c", "//test:common.c", "//test:common.h",
+        "//lib/libjson:json_s7.c" ## , "//lib/libjson:libjson_s7.h",
+    ],
+    local_defines = DEFINES,
+    deps = DEPS,
+    copts = COPTS + [
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "json_link_runtime",
+    linkstatic = True,
+    srcs = ["json_test.c", "//test:common.c", "//test:common.h"],
+    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
+    deps = DEPS,
+    data = ["//lib/libjson:json_s7"],
+    copts = COPTS + [
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+################################################################
+cc_test(
+    name = "read",
+    linkstatic = True,
+    srcs = ["json_read_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//lib/libjson:json_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "maps",
+    linkstatic = True,
+    srcs = ["json_map_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//lib/libjson:json_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "vectors",
+    linkstatic = True,
+    srcs = ["json_vector_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//lib/libjson:json_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+# cc_test(
+#     name = "strings",
+#     linkstatic = True,
+#     srcs = ["json_strings_test.c",
+#             "//test:common.c", "//test:common.h",
+#             "//src:libs7.h"],
+#     local_defines = DEFINES,
+#     data = ["//test/lib/json/data:strings.json"],
+#     deps = DEPS + [
+#         "//dev",
+#         "//src:s7_archive",
+#         "//lib/libjson:json_s7_archive"
+#     ],
+#     copts = COPTS + [
+#         "-Isrc",
+#         "-Idev",
+#         "-Itest",
+#         "-I$(GENDIR)/lib/libjson",
+#         "-I$(GENDIR)/external/libs7/lib/libjson",
+#         # "-fno-pie"
+#     ],
+#     linkopts = LINKOPTS,
+#     timeout = TIMEOUT
+# )
+

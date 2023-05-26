@@ -324,7 +324,13 @@ void toml_datetime_init(s7_scheme *s7, s7_pointer cur_env)
 }
 
 /* ****************************************************************
- * Helper functions
+ * Helper functions */
+
+/*
+  WARNING: toml: the 'T' in e.g. 1979-05-27T07:32:00Z is optional, a
+  space may also be used. tomlc99 does not retain the character used,
+  so we normalize to 'T'. That means '1979-05-27 07:32:00Z' (with
+  space) will print as '1979-05-27T07:32:00Z' (with T).
  */
 char *toml_datetime_to_string(toml_timestamp_t *ts)
 {
@@ -361,6 +367,15 @@ char *toml_datetime_to_string(toml_timestamp_t *ts)
     TRACE_LOG_DEBUG("buf: %s", buf);
     /* } */
 
+    int zlen;
+    if (ts->z == NULL) {
+        zlen = 0;
+    } else {
+        zlen = strlen(ts->z);
+        log_debug("z: %s", ts->z);
+    }
+    log_debug("zlen %d", zlen);
+
     if (ts->year == NULL) {
         // local time
     }
@@ -369,65 +384,25 @@ char *toml_datetime_to_string(toml_timestamp_t *ts)
     }
     else if (ts->millisec == NULL) {
         log_debug("NO MILLIS");
-        snprintf(buf, 20, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d%s",
+        // e.g. 1979-05-27T07:32:00
+        snprintf(buf, 20 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d%s",
                  *ts->year, *ts->month, *ts->day,
                  *ts->hour, *ts->minute, *ts->second,
-                 ts->z);
+                 (zlen>0)? ts->z : "X");
+        char_ct += 20 +  zlen - 1;
     }
     else {
         log_debug("MILLIS");
-        snprintf(buf, 28, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d.%d%s",
+        // tomlc99: only 3 decimal places for millis
+        // e.g. 1979-05-27T00:32:00.999999
+        snprintf(buf, 24 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d.%d%s",
                  *ts->year, *ts->month, *ts->day,
                  *ts->hour, *ts->minute, *ts->second,
                  *ts->millisec,
-                 ts->z);
+                 (zlen>0)? ts->z : "");
+        char_ct += 24 + zlen - 1;
     }
-    if (*ts->z == NULL) {
-        log_debug("NO Z");
-    } else {
-        log_debug("Z: %c", ts->z[0]);
-    }
-    char_ct += 19;
-    // print fields
-    // year
-    /* if ((char_ct + 14) > bufsz) { */
-    /*     log_error("realloc for year"); */
-    /* } else { */
-    /*     errno = 0; */
-    /*     TRACE_LOG_DEBUG("snprintfing year", ""); */
-    /*     ct = snprintf(buf+char_ct, 14, "year = %.4d, ", *ts->year); */
-    /*     if (errno) { */
-    /*         log_error("snprintf: %s", strerror(errno)); */
-    /*     } else { */
-    /*         TRACE_LOG_DEBUG("snprintf year ct: %d", ct); */
-    /*     } */
-    /*     char_ct += 13; // do not include terminating '\0' */
-    /*     TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
-    /*     TRACE_LOG_DEBUG("buf: %s", buf); */
-    /* } */
-    /* // month */
-    /* if ((char_ct + 13) > bufsz) { */
-    /*     log_error("realloc for month"); */
-    /* } else { */
-    /*     errno = 0; */
-    /*     TRACE_LOG_DEBUG("snprintfing month", ""); */
-    /*     ct = snprintf(buf+char_ct, 14, "month = %.2d, ", *ts->month); */
-    /*     if (errno) { */
-    /*         log_error("snprintf: %s", strerror(errno)); */
-    /*     } else { */
-    /*         TRACE_LOG_DEBUG("snprintf month ct: %d", ct); */
-    /*     } */
-    /*     char_ct += 12; // do not include terminating '\0' */
-    /*     TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
-    /*     TRACE_LOG_DEBUG("buf: %s", buf); */
-    /* } */
-    // _print_comma(buf, char_ct);
-    // mday
-    // hour
-    // minute
-    // second
-    // fracsec
-    // offset
+    log_debug("buf: %s", buf);
 
     // print footer
     {
