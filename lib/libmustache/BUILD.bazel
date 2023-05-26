@@ -1,5 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
+load("//:BUILD.bzl",
+     BASE_COPTS = "COPTS",
+     BASE_LINKOPTS = "LINKOPTS",
+     BASE_DEFINES = "DEFINES")
+
 # load("//:BUILD.bzl", "COPTS")
 load("//lib:BUILD.bzl",
      # "clibgen_runner",
@@ -24,16 +29,17 @@ SRCS = [
 
     "mustachios7_wrap.c",
     "mustachios7_wrap.h",
-] + select({
-    "//config/debug:debug?": ["debug.h", "ansi_colors.h"],
-    "//conditions:default": []
-})
+]
+# + select({
+#     "//config/debug:debug?": ["debug.h", "ansi_colors.h"],
+#     "//conditions:default": []
+# })
 
-COPTS = CLIB_COPTS + [
+COPTS = BASE_COPTS + CLIB_COPTS + [
+    "-Idev",
     "-Ilib",
-
-    "-Ilib/libmustachios7",
-    "-Iexternal/libs7/lib/libmustachios7",
+    "-Ilib/libmustache",
+    "-Iexternal/libs7/lib/libmustache",
 
     "-Ivendored/cjson",
     "-Iexternal/libs7/vendored/cjson",
@@ -51,10 +57,11 @@ COPTS = CLIB_COPTS + [
 ]
 
 DEPS = [
-    "@mustachios7//lib:mustach",
+    ":mustach",
     "//src:s7_archive",
     "//vendored/cjson",
     "//vendored/logc",
+    "//dev"
 ]
 
 cc_library(
@@ -65,12 +72,12 @@ cc_library(
     hdrs = ["libmustachios7_s7.h"],
     copts = COPTS,
     deps = DEPS,
-    linkopts = CLIB_LINKOPTS,
-    local_defines = CLIB_DEFINES + select({
+    linkopts = BASE_LINKOPTS + CLIB_LINKOPTS,
+    local_defines = BASE_DEFINES + CLIB_DEFINES + select({
         "//config/debug:debug?": ["DEBUGGING"],
         "//conditions:default": []
     }) + select({
-        "//config/debug:trace?": ["TRACE"],
+        "//config/debug:trace?": ["TRACING"],
         "//conditions:default": []
     })
 )
@@ -101,7 +108,32 @@ cc_binary(
     #     "//conditions:default": ["-Itest/src",
     #                              "-Iexternal/mustachios7/test/src"]
     # }),
-    linkopts = CLIB_LINKOPTS,
-    local_defines = CLIB_DEFINES,
+    linkopts = BASE_LINKOPTS + CLIB_LINKOPTS,
+    local_defines = BASE_DEFINES + CLIB_DEFINES,
+)
+
+################################################################
+cc_library(
+    name = "mustach",
+    linkstatic = True,
+    srcs = ["mustach.c", "mustach.h"],
+    hdrs = ["mustach.h"],
+    copts = COPTS + [
+        "-Ivendored/logc",
+        "-Iexternal/libs7/vendored/logc",
+        "-Isrc",
+        "-Iexternal/libs7/src"
+    ],
+    deps  = ["//dev", "//vendored/logc"],
+    defines = select({
+        "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
+        "//conditions:default": []
+    }) + select({
+        "//config/debug:debug?": ["DEBUGGING"],
+        "//conditions:default": []
+    }) + select({
+        "//config/debug:trace?": ["TRACING"],
+        "//conditions:default": []
+    })
 )
 

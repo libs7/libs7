@@ -343,26 +343,26 @@ cc_test(
     linkstatic = True,
     srcs = ["cjson_test.c", "common.c", "common.h"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libmustachios7:mustachios7_s7.c" ## , "//lib/libmustachios7:libmustachios7_s7.h",
+            "//lib/libmustache:mustachios7_s7.c" ## , "//lib/libmustache:libmustachios7_s7.h",
         ],
         "//conditions:default": []
     }),
     local_defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": [
-            "//lib/libmustachios7:mustachios7_s7_archive"
+            "//lib/libmustache:mustachios7_s7_archive"
         ],
         "//conditions:default": []
     }),
     data = select({
         "//config/clibs/link:runtime?": [
-            "//lib/libmustachios7:mustachios7_s7"
+            "//lib/libmustache:mustachios7_s7"
         ],
         "//conditions:default": []
     }),
     copts = COPTS + [
-        "-Ilib/libmustachios7",
-        "-Iexternal/libs7/lib/libmustachios7",
+        "-Ilib/libmustache",
+        "-Iexternal/libs7/lib/libmustache",
         "-Iexternal/mustachios7/lib",
         "-Iexternal/mustachios7/vendored/cjson",
     ],

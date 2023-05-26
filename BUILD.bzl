@@ -39,7 +39,7 @@ DEFINES = select({
     ],
     "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
 }) + select({
-    "//lib/libmustachios7/syntax:alt?": ["ALT_SYNTAX"],
+    "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
     "//conditions:default": []
 }) + select({
     "//config/debug:debug?": ["DEBUGGING"],

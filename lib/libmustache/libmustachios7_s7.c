@@ -316,7 +316,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
 s7_pointer libmustachios7_s7_init(s7_scheme *s7)
 {
     TRACE_ENTRY(libmustachios7_s7_init);
-    TRACE_LOG_DEBUG("libmustachios7_s7_init");
+    TRACE_LOG_DEBUG("libmustachios7_s7_init", "");
 
     /* s7 = _s7; */
     s7_pointer curr_env;

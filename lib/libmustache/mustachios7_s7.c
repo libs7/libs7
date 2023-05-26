@@ -292,7 +292,7 @@ static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
             } else {
                 TRACE_S7_DUMP("car is NOT list", car);
                 if (s7_is_procedure(car)) {
-                    TRACE_LOG_DEBUG("car is lambda");
+                    TRACE_LOG_DEBUG("car is lambda", "");
                     if (e->stack[e->depth].index +1 < e->stack[e->depth].count) {
                         e->lambda = true;
                     } else {
@@ -329,7 +329,7 @@ static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
         TRACE_S7_DUMP("assoc-val", assoc_val);
         // assoc_val never a list
         if (s7_is_procedure(assoc_val)) {
-            TRACE_LOG_DEBUG("is lambda");
+            TRACE_LOG_DEBUG("is lambda", "");
             e->stack[e->depth].lambda = true;
             selection = assoc_val;
             /* if (s7_is_symbol(assoc_val)) { */
@@ -509,7 +509,7 @@ static int sel(void *closure, const char *key)
             TRACE_S7_DUMP("e->stack[i].cont", e->stack[i].cont);
 
             if (libs7_is_alist(s7, e->stack[i].obj)) { // .cont?
-                TRACE_LOG_DEBUG("ALIST");
+                TRACE_LOG_DEBUG("ALIST", "");
                 if (key_s7 == s7_make_keyword(s7, "^")) {
                     log_debug("XXXXXXXXXXXXXXXX");
                 } else {
@@ -545,7 +545,7 @@ static int sel(void *closure, const char *key)
             }
             // not alist
             else if (s7_is_list(s7, e->stack[i].obj)) {
-                TRACE_LOG_DEBUG("LIST (not alist)");
+                TRACE_LOG_DEBUG("LIST (not alist)", "");
                 TRACE_S7_DUMP("e->stack[i].obj", e->stack[i].obj);
 
                 if (key_s7 == s7_car(e->stack[i].obj)) {
@@ -573,7 +573,7 @@ static int sel(void *closure, const char *key)
                 }
             }
             else if (s7_is_hash_table(e->stack[i].obj)) {
-                TRACE_LOG_DEBUG("HASH-TABLE");
+                TRACE_LOG_DEBUG("HASH-TABLE", "");
                 selection = s7_hash_table_ref(s7, e->stack[i].obj, key_s7);
                 if (selection != s7_f(s7)) {
                     /* log_debug("HIT ONE at %d", i); */
@@ -1058,7 +1058,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
             : "";
     }
     else if (s7_is_vector(e->selection)) {
-        TRACE_LOG_DEBUG("get: selection is vector");
+        TRACE_LOG_DEBUG("get: selection is vector", "");
         // use s7's format fn to remove meta-notation
         // e.g. '#(1 2 3)' => '1 2 3'
         // but: #(#(1 2) #("a" "b")) - remove quotes
@@ -1073,7 +1073,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
     }
     else if (s7_is_list(s7, e->selection)) {
-        TRACE_LOG_DEBUG("get: selection is list");
+        TRACE_LOG_DEBUG("get: selection is list", "");
         // use s7's format fn to remove meta-notation
         // e.g. '(1 2 3)' => '1 2 3'
         // ~^ stops at end of sequence
@@ -1087,7 +1087,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
     }
     else if (s7_is_string(e->selection)) {
-        TRACE_LOG_DEBUG("get: selection is string");
+        TRACE_LOG_DEBUG("get: selection is string", "");
         s = s7_string(e->selection);
     }
     else if (s7_is_symbol(e->selection)) {
