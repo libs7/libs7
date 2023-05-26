@@ -5,7 +5,7 @@ load("//test:BUILD.bzl",
 test_suite(
     name  = "json",
     tests = [
-        "//test/lib/json:read",
+        "//test/lib/json:reader",
         "//test/lib/json:vectors",
         "//test/lib/json:maps",
         # "//test/lib/json:strings",
@@ -120,9 +120,9 @@ cc_test(
 
 ################################################################
 cc_test(
-    name = "read",
+    name = "reader",
     linkstatic = True,
-    srcs = ["json_read_test.c",
+    srcs = ["json_reader_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,

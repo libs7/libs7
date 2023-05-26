@@ -33,7 +33,7 @@ Environments
 .BR toml-utf8 (3s7)
 
 Each operation has its own manpage, with ':' replaced by '-', e.g. for
-.BI toml:table-ref
+.BI toml:map-ref
 consult
 .BR toml-table-ref (3s7)
 .

@@ -1,9 +1,9 @@
 (define toml-str "m = { a = 0, b = \"Hi\" }")
 (define tt (with-input-from-string toml-str toml:read))
 
-(toml:table-ref tt "m")
-(toml:table-ref tt 'm)
-(toml:table-ref tt :m)
+(toml:map-ref tt "m")
+(toml:map-ref tt 'm)
+(toml:map-ref tt :m)
 
 (with-input-from-string "t = { i = 1, s = \"Hello\" }" toml:read)
 (toml:read "t = { i = 1, s = \"Hello\" }")

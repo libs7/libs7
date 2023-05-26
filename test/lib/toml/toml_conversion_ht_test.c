@@ -55,7 +55,7 @@ void tearDown(void) {
 void root_to_hash_table(void)
 {
     tt = TOML_READ("fld1 = 1\nfld2 = 2");
-    ht = APPLY_1("toml:table->hash-table", tt);
+    ht = APPLY_1("toml:map->hash-table", tt);
     flag = APPLY_1("hash-table?", ht);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     flag = APPLY_1("c-pointer?", ht);
@@ -77,7 +77,7 @@ void root_to_hash_table(void)
 void nested_table_to_hash_table(void)
 {
     tt = TOML_READ("a = { b = 0 }");
-    ht = APPLY_1("toml:table->hash-table", tt);
+    ht = APPLY_1("toml:map->hash-table", tt);
     TRACE_S7_DUMP("ht", ht);
     flag = APPLY_1("hash-table?", ht);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -101,8 +101,8 @@ void nested_table_to_hash_table(void)
 
     /* // verify value at "a" of toml-table is a toml-table */
     /* k = s7_make_string(s7, "a"); */
-    /* subt = APPLY_2("toml:table-ref", tt, k); */
-    /* flag = APPLY_1("toml:table?", subt); */
+    /* subt = APPLY_2("toml:map-ref", tt, k); */
+    /* flag = APPLY_1("toml:map?", subt); */
     /* TEST_ASSERT_TRUE(s7_boolean(s7, flag)); */
 
     /* // verify value at "a" of hash-table is a hash-table */
@@ -115,7 +115,7 @@ void nested_table_to_hash_table(void)
 void subarray_to_vector(void)
 {
     t = TOML_READ("a = [1, 2, 3]");
-    actual = APPLY_1("toml:table->hash-table", t);
+    actual = APPLY_1("toml:map->hash-table", t);
     flag = APPLY_1("hash-table?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     flag = APPLY_1("c-pointer?", actual);
@@ -137,7 +137,7 @@ void subarray_to_vector(void)
 
     // verify value at "a" of toml-table is a toml-array
     k = s7_make_string(s7, "a");
-    subt = APPLY_2("toml:table-ref", t, k);
+    subt = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("toml:array?", subt);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
@@ -151,9 +151,9 @@ void subarray_to_vector(void)
 void subarray_of_tables(void)
 {
     t = TOML_READ("a = [{t1 = 1}, {t2 = 2}]");
-    flag = APPLY_1("toml:table?", t);
+    flag = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
-    actual = APPLY_1("toml:table->hash-table", t);
+    actual = APPLY_1("toml:map->hash-table", t);
     flag = APPLY_1("hash-table?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     flag = APPLY_1("c-pointer?", actual);
@@ -201,7 +201,7 @@ void subarray_of_tables(void)
 
     // verify value at "a" of toml-table is a toml-array
     k = s7_make_string(s7, "a");
-    subt = APPLY_2("toml:table-ref", t, k);
+    subt = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("toml:array?", subt);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 

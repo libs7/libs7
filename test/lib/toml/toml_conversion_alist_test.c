@@ -57,7 +57,7 @@ void tearDown(void) {
 void root_to_hash_table(void)
 {
     t = TOML_READ("\"fld1 = 1\nfld2 = 2\")");
-    actual = APPLY_1("toml:table->hash-table", t);
+    actual = APPLY_1("toml:map->hash-table", t);
     flag = APPLY_1("hash-table?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     flag = APPLY_1("c-pointer?", actual);
@@ -79,7 +79,7 @@ void root_to_hash_table(void)
 void nested_table_to_hash_table(void)
 {
     t = TOML_READ("\"a = { b = 0 }\")");
-    actual = APPLY_1("toml:table->hash-table", t);
+    actual = APPLY_1("toml:map->hash-table", t);
     flag = APPLY_1("hash-table?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     flag = APPLY_1("c-pointer?", actual);
@@ -99,8 +99,8 @@ void nested_table_to_hash_table(void)
 
     // verify value at "a" of toml-table is a toml-table
     k = s7_make_string(s7, "a");
-    subt = APPLY_2("toml:table-ref", t, k);
-    flag = APPLY_1("toml:table?", subt);
+    subt = APPLY_2("toml:map-ref", t, k);
+    flag = APPLY_1("toml:map?", subt);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a hash-table
@@ -113,7 +113,7 @@ void nested_table_to_hash_table(void)
 void subarray_to_vector(void)
 {
     t = TOML_READ("\"a = [1, 2, 3]\")");
-    actual = APPLY_1("toml:table->hash-table", t);
+    actual = APPLY_1("toml:map->hash-table", t);
     flag = APPLY_1("hash-table?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
     flag = APPLY_1("c-pointer?", actual);
@@ -135,8 +135,8 @@ void subarray_to_vector(void)
 
     /* // verify value at "a" of toml-table is a toml-table */
     /* k = s7_make_string(s7, "a"); */
-    /* subt = APPLY_2("toml:table-ref", t, k); */
-    /* flag = APPLY_1("toml:table?", subt); */
+    /* subt = APPLY_2("toml:map-ref", t, k); */
+    /* flag = APPLY_1("toml:map?", subt); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), flag); */
 
     /* // verify value at "a" of hash-table is a hash-table */

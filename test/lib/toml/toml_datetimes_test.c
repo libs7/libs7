@@ -42,10 +42,10 @@ void tearDown(void) {
 void fields(void) {
     root = TOML_READ("best-day-ever = 1987-07-05T17:45:00Z");
     TRACE_S7_DUMP("root", root);
-    flag = APPLY_1("toml:table?", root);
+    flag = APPLY_1("toml:map?", root);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     k = s7_make_string(s7, "best-day-ever");
-    ts = APPLY_2("toml:table-ref", root, k);
+    ts = APPLY_2("toml:map-ref", root, k);
     TRACE_S7_DUMP("ts", ts);
     flag = APPLY_1("toml:datetime?", ts);
     TRACE_S7_DUMP("flag", flag);
@@ -57,10 +57,10 @@ void fields(void) {
 
     /* toml = "\"a = \"Hello\tthere\"\""; */
     /* t = TOML_READ(toml); */
-    /* actual = APPLY_1("toml:table?", t); */
+    /* actual = APPLY_1("toml:map?", t); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
     /* k = s7_make_string(s7, "a"); */
-    /* a = APPLY_2("toml:table-ref", t, k); */
+    /* a = APPLY_2("toml:map-ref", t, k); */
     /* actual = APPLY_1("string?", a); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
     /* TEST_ASSERT_EQUAL_STRING("Hello\tthere", s7_string(a)); */
@@ -74,10 +74,10 @@ void fields(void) {
 void apply_datetime(void) {
     root = TOML_READ("dt = 1987-07-05T17:45:00Z");
     TRACE_S7_DUMP("root", root);
-    flag = APPLY_1("toml:table?", root);
+    flag = APPLY_1("toml:map?", root);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     k = s7_make_string(s7, "dt");
-    ts = APPLY_2("toml:table-ref", root, k);
+    ts = APPLY_2("toml:map-ref", root, k);
     TRACE_S7_DUMP("ts", ts);
     flag = APPLY_1("toml:datetime?", ts);
     TRACE_S7_DUMP("flag", flag);
@@ -144,7 +144,7 @@ void offset_date_time(void) {
                      "odt3 = 1979-05-27T00:32:00.999999-17:00\n"
                      "odt4 = 1979-05-27 07:32:00Z");
     TRACE_S7_DUMP("root", root);
-    /* flag = APPLY_1("toml:table?", root); */
+    /* flag = APPLY_1("toml:map?", root); */
     /* TEST_ASSERT_TRUE(s7_boolean(s7, flag)); */
 
     /* k = s7_make_string(s7, "odt1"); */
@@ -179,10 +179,10 @@ void local_date_time(void) {
     root = TOML_READ("ldt1 = 1979-05-27T07:32:00\n"
                      "ldt2 = 1979-05-27T00:32:00.999999");
     TRACE_S7_DUMP("root", root);
-    flag = APPLY_1("toml:table?", root);
+    flag = APPLY_1("toml:map?", root);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     k = s7_make_string(s7, "ldt1");
-    ts = APPLY_2("toml:table-ref", root, k);
+    ts = APPLY_2("toml:map-ref", root, k);
     TRACE_S7_DUMP("ts", ts);
     flag = APPLY_1("toml:datetime?", ts);
     TRACE_S7_DUMP("flag", flag);
@@ -202,10 +202,10 @@ void local_time(void) {
     root = TOML_READ("lt1 = 07:32:00\n"
                      "lt2 = 00:32:00.999999");
     TRACE_S7_DUMP("root", root);
-    flag = APPLY_1("toml:table?", root);
+    flag = APPLY_1("toml:map?", root);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     k = s7_make_string(s7, "ldt1");
-    ts = APPLY_2("toml:table-ref", root, k);
+    ts = APPLY_2("toml:map-ref", root, k);
     TRACE_S7_DUMP("ts", ts);
     flag = APPLY_1("toml:datetime?", ts);
     TRACE_S7_DUMP("flag", flag);

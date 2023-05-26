@@ -42,18 +42,18 @@ void line_ending_backslash_file(void) {
     /* t = TOML_READ(inport); */
     t = s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),
                           s7_list(s7, 1, inport));
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     k = s7_make_string(s7, "str1");
-    s7_pointer str1 = APPLY_2("toml:table-ref", t, k);
+    s7_pointer str1 = APPLY_2("toml:map-ref", t, k);
     b = APPLY_1("string?", str1);
     TEST_ASSERT_EQUAL(s7_t(s7), b);
     TEST_ASSERT_EQUAL_STRING("The quick brown fox jumps over the lazy dog.",
                              s7_string(str1));
 
     k = s7_make_string(s7, "str2");
-    s7_pointer str2 = APPLY_2("toml:table-ref", t, k);
+    s7_pointer str2 = APPLY_2("toml:map-ref", t, k);
     b = APPLY_1("string?", str1);
     TEST_ASSERT_EQUAL(s7_t(s7), b);
     TEST_ASSERT_EQUAL_STRING("The quick brown fox jumps over the lazy dog.",
@@ -61,7 +61,7 @@ void line_ending_backslash_file(void) {
     TEST_ASSERT_EQUAL_STRING(s7_string(str1), s7_string(str2));
 
     k = s7_make_string(s7, "str3");
-    s7_pointer str3 = APPLY_2("toml:table-ref", t, k);
+    s7_pointer str3 = APPLY_2("toml:map-ref", t, k);
     b = APPLY_1("string?", str3);
     TEST_ASSERT_EQUAL(s7_t(s7), b);
     TEST_ASSERT_EQUAL_STRING("The quick brown fox jumps over the lazy dog.",
@@ -71,18 +71,18 @@ void line_ending_backslash_file(void) {
 
 void line_ending_backslash_inline(void) {
     t = TOML_READ("str1 = \"The quick brown fox jumps over the lazy dog.\"");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     k = s7_make_string(s7, "str1");
-    s7_pointer str1 = APPLY_2("toml:table-ref", t, k);
+    s7_pointer str1 = APPLY_2("toml:map-ref", t, k);
     b = APPLY_1("string?", str1);
     TEST_ASSERT_EQUAL(s7_t(s7), b);
     TEST_ASSERT_EQUAL_STRING("The quick brown fox jumps over the lazy dog.",
                              s7_string(str1));
 
     /* k = s7_make_string(s7, "str2"); */
-    /* s7_pointer str2 = APPLY_2("toml:table-ref", t, k); */
+    /* s7_pointer str2 = APPLY_2("toml:map-ref", t, k); */
     /* b = APPLY_1("string?", str1); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), b); */
     /* TEST_ASSERT_EQUAL_STRING("The quick brown fox jumps over the lazy dog.", */
@@ -90,7 +90,7 @@ void line_ending_backslash_inline(void) {
     /* TEST_ASSERT_EQUAL_STRING(s7_string(str1), s7_string(str2)); */
 
     /* k = s7_make_string(s7, "str3"); */
-    /* s7_pointer str3 = APPLY_2("toml:table-ref", t, k); */
+    /* s7_pointer str3 = APPLY_2("toml:map-ref", t, k); */
     /* b = APPLY_1("string?", str3); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), b); */
     /* TEST_ASSERT_EQUAL_STRING("The quick brown fox jumps over the lazy dog.", */
@@ -100,18 +100,18 @@ void line_ending_backslash_inline(void) {
 
 void double_quotes(void) {
     t = TOML_READ("a = \"Hello\"");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     t = TOML_READ("a = \"Hello\tthere\"");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     TEST_ASSERT_EQUAL_STRING("Hello\tthere", s7_string(a));
@@ -119,18 +119,18 @@ void double_quotes(void) {
 
 void multiline_double_quotes(void) {
     t = TOML_READ("a = \"\"\"Hello\"\"\"");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     t = TOML_READ("a = " DQ3 "Hello\tthere" DQ3 "");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     TEST_ASSERT_EQUAL_STRING("Hello\tthere", s7_string(a));
@@ -141,10 +141,10 @@ void multiline_double_quotes(void) {
         "a = "
         DQ3 "\nThe quick brown fox jumps over the lazy dog." DQ3
                   "");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     TEST_ASSERT_EQUAL_STRING(expected_str, s7_string(a));
@@ -156,10 +156,10 @@ void multiline_double_quotes(void) {
         "the lazy dog."
         DQ3
                   "");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     /* TEST_ASSERT_EQUAL_STRING(expected_str, s7_string(a)); */
@@ -167,18 +167,18 @@ void multiline_double_quotes(void) {
 
 void multiline_single_quotes(void) {
     t = TOML_READ("a = " SQ3 "Hello" SQ3 "");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     t = TOML_READ("a = " SQ3 "Hello\tthere" SQ3 "");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "a");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     TEST_ASSERT_EQUAL_STRING("Hello\tthere", s7_string(a));

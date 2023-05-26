@@ -165,7 +165,7 @@ static s7_pointer toml_toml_free(s7_scheme *sc, s7_pointer args)
 
 /* -------- toml_key_in -------- */
 /* ... retrieve the key in table at keyidx. Return 0 if out of range. */
-/* scheme: toml:table-key-for-index */
+/* scheme: toml:map-key-for-index */
 static s7_pointer toml_toml_key_in(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer p, arg;
@@ -436,64 +436,64 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
   /* -------- table ops -------- */
   // TODO: move to toml_table_s7.c
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-key"),
-            s7_make_typed_function(sc, "toml:table-key",
+            s7_make_symbol(sc, "toml:map-key"),
+            s7_make_typed_function(sc, "toml:map-key",
                                    toml_toml_table_key, 1, 0, false,
-                                   "(toml:table-key t) returns the key of table t.", pl_sx));
+                                   "(toml:map-key t) returns the key of table t.", pl_sx));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-keys"),
-            s7_make_typed_function(sc, "toml:table-keys",
+            s7_make_symbol(sc, "toml:map-keys"),
+            s7_make_typed_function(sc, "toml:map-keys",
                                    toml_table_keys, 1, 0, false,
-                                   "(toml:table-keys t) returns Scheme list of keys of table t.",
+                                   "(toml:map-keys t) returns Scheme list of keys of table t.",
                                    pl_sx));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-values"),
-            s7_make_typed_function(sc, "toml:table-values",
+            s7_make_symbol(sc, "toml:map-values"),
+            s7_make_typed_function(sc, "toml:map-values",
                                    toml_table_values, 1, 0, false,
-                                   "(toml:table-keys t) returns Scheme list of values of table t.",
+                                   "(toml:map-keys t) returns Scheme list of values of table t.",
                                    pl_sx));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-ntab"),
-            s7_make_typed_function(sc, "toml:table-ntab", toml_toml_table_ntab, 1, 0, false, "(toml:table-ntab t) returns number of tables in table t.", pl_ix));
+            s7_make_symbol(sc, "toml:map-ntab"),
+            s7_make_typed_function(sc, "toml:map-ntab", toml_toml_table_ntab, 1, 0, false, "(toml:map-ntab t) returns number of tables in table t.", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-subtable-count"),
-            s7_make_typed_function(sc, "toml:table-subtable-count", toml_toml_table_ntab, 1, 0, false, "(toml:table-subtable-count t) alias of toml:table-ntab.", pl_ix));
+            s7_make_symbol(sc, "toml:map-subtable-count"),
+            s7_make_typed_function(sc, "toml:map-subtable-count", toml_toml_table_ntab, 1, 0, false, "(toml:map-subtable-count t) alias of toml:map-ntab.", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-narr"), // nbr of arrays
-            s7_make_typed_function(sc, "toml:table-narr", toml_toml_table_narr, 1, 0, false, "(toml:table-narr t)", pl_ix));
+            s7_make_symbol(sc, "toml:map-narr"), // nbr of arrays
+            s7_make_typed_function(sc, "toml:map-narr", toml_toml_table_narr, 1, 0, false, "(toml:map-narr t)", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-array-count"),
-            s7_make_typed_function(sc, "toml:table-array-count", toml_toml_table_narr, 1, 0, false, "(toml:table-array-count t) alias of toml:table-narr.", pl_ix));
+            s7_make_symbol(sc, "toml:map-array-count"),
+            s7_make_typed_function(sc, "toml:map-array-count", toml_toml_table_narr, 1, 0, false, "(toml:map-array-count t) alias of toml:map-narr.", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-nkval"),
-            s7_make_typed_function(sc, "toml:table-nkval",
+            s7_make_symbol(sc, "toml:map-nkval"),
+            s7_make_typed_function(sc, "toml:map-nkval",
                                    toml_toml_table_nkval,
                                    1, 0, false,
-                                   "(toml:table-nkval t) nbr of kv pairs in t.", pl_ix));
+                                   "(toml:map-nkval t) nbr of kv pairs in t.", pl_ix));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-atomic-count"),
-            s7_make_typed_function(sc, "toml:table-atomic-count",
+            s7_make_symbol(sc, "toml:map-atomic-count"),
+            s7_make_typed_function(sc, "toml:map-atomic-count",
                                    toml_toml_table_nkval,
                                    1, 0, false,
-                                   "(toml:table-atomic-count t) nbr of kv pairs in t whose values are atomic (bool, int, float, string, timestamp).", pl_ix));
+                                   "(toml:map-atomic-count t) nbr of kv pairs in t whose values are atomic (bool, int, float, string, timestamp).", pl_ix));
 
   /* not a tomlc99 api */
   /* srfi-69: hash-table-size */
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-length"), // R6RS: table-size
-            s7_make_typed_function(sc, "toml:table-length",
+            s7_make_symbol(sc, "toml:map-length"), // R6RS: table-size
+            s7_make_typed_function(sc, "toml:map-length",
                                    //toml_toml_table_length,
                                    toml_table_length,
                                    1, 0, false,
-                                   "(toml:table-length t) total number of entries in table, regardless of value type.", pl_ix));
+                                   "(toml:map-length t) total number of entries in table, regardless of value type.", pl_ix));
 
   /* srfi-69: hash-table-exists? */
   s7_define(sc, cur_env,
@@ -504,10 +504,10 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
                                    pl_bxs));
 
   s7_define(sc, cur_env,
-            s7_make_symbol(sc, "toml:table-contains?"),
-            s7_make_typed_function(sc, "toml:table-contains?",
+            s7_make_symbol(sc, "toml:map-contains?"),
+            s7_make_typed_function(sc, "toml:map-contains?",
                                    toml_toml_key_exists, 2, 0, false,
-                                   "(toml:table-contains? t k) alias of toml:key-exists?", pl_bxs));
+                                   "(toml:map-contains? t k) alias of toml:key-exists?", pl_bxs));
 
   s7_define(sc, cur_env,
             s7_make_symbol(sc, "toml:key-in"),

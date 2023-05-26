@@ -128,7 +128,7 @@ static s7_pointer g_toml_datetime_ref(s7_scheme *s7, s7_pointer args)
         key = (char*)s7_keyword_to_symbol(s7, arg);
         /* key = (char*)s7_symbol_name(arg); */
     }
-    else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
+    else return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:map-ref", 14), 2, arg, string_string));
 
     TRACE_LOG_DEBUG("ref key: %s", key);
     if ((strncmp(key, "year", 4) == 0) && (strlen(key) == 4)) {

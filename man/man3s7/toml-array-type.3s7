@@ -36,7 +36,7 @@ If array's kind is not 'v' (value array), returns #<undefined>.
 (toml:array-type (toml:read "a = [0, 1, 2]"))
         => #\i
 
-(toml:table-ref (toml:read "t = { i = 1, s = \\"Hello\\" }") \"i\")
+(toml:map-ref (toml:read "t = { i = 1, s = \\"Hello\\" }") \"i\")
         => 1
 .EE
 .

@@ -9,10 +9,10 @@ test_suite(
         "//test/lib/toml:arrays",
         "//test/lib/toml:conversion_ht",
         "//test/lib/toml:datetimes",
-        "//test/lib/toml:readers",
+        "//test/lib/toml:reader",
         "//test/lib/toml:serialization",
         "//test/lib/toml:strings",
-        "//test/lib/toml:tables",
+        "//test/lib/toml:maps",
     ]
 )
 
@@ -169,9 +169,9 @@ cc_test(
 )
 
 cc_test(
-    name = "tables",
+    name = "maps",
     linkstatic = True,
-    srcs = ["toml_table_test.c",
+    srcs = ["toml_maps_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
@@ -215,9 +215,9 @@ cc_test(
 )
 
 cc_test(
-    name = "readers",
+    name = "reader",
     linkstatic = True,
-    srcs = ["toml_readers_test.c",
+    srcs = ["toml_reader_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,

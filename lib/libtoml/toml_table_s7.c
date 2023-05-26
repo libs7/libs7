@@ -12,7 +12,7 @@ s7_pointer string_string;
 
 /*
  * TODO:
- *  srfi-69: toml:table->alist, toml:table->fold, etc.
+ *  srfi-69: toml:map->alist, toml:map->fold, etc.
  */
 
 /* **** helper function prototypes, impl at bottom of file **** */
@@ -148,7 +148,7 @@ s7_pointer g_toml_table_ref(s7_scheme *s7, s7_pointer args)
         TRACE_LOG_DEBUG("key type symbol: %s", key);
     }
     else {
-          return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:table-ref", 14), 2, arg, string_string));
+          return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:map-ref", 14), 2, arg, string_string));
     }
 
     toml_datum_t datum;
@@ -350,33 +350,33 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
     s7_c_type_set_to_list      (s7, toml_table_type_tag, g_toml_table_to_alist);
     s7_c_type_set_to_string    (s7, toml_table_type_tag, g_toml_table_to_string);
 
-    s7_define_function(s7, "toml:table-getter",
+    s7_define_function(s7, "toml:map-getter",
                        toml_table_getter, 2, 0, false,
-                       "(toml:table-getter t k) gets value for key k from table t");
-    s7_c_type_set_getter       (s7, toml_table_type_tag, s7_name_to_value(s7, "toml:table-getter"));
+                       "(toml:map-getter t k) gets value for key k from table t");
+    s7_c_type_set_getter       (s7, toml_table_type_tag, s7_name_to_value(s7, "toml:map-getter"));
 
-    s7_define_function(s7, "toml:table-setter",
+    s7_define_function(s7, "toml:map-setter",
                        toml_table_setter, 2, 0, false,
-                       "(toml:table-setter t k) sets value for key k from table t");
-    s7_c_type_set_setter       (s7, toml_table_type_tag, s7_name_to_value(s7, "toml:table-setter"));
+                       "(toml:map-setter t k) sets value for key k from table t");
+    s7_c_type_set_setter       (s7, toml_table_type_tag, s7_name_to_value(s7, "toml:map-setter"));
 
-    s7_define_function(s7, "toml:table?", is_toml_table, 1, 0, false,
-                       "(toml:table? t) returns #t if its argument is a toml_table object");
+    s7_define_function(s7, "toml:map?", is_toml_table, 1, 0, false,
+                       "(toml:map? t) returns #t if its argument is a toml_table object");
 
   s7_define(s7, cur_env,
-            s7_make_symbol(s7, "toml:table-ref"),
-            s7_make_typed_function(s7, "toml:table-ref",
+            s7_make_symbol(s7, "toml:map-ref"),
+            s7_make_typed_function(s7, "toml:map-ref",
                                    g_toml_table_ref, 2, 0, false,
-                                   "(toml:table-ref t k) returns value of table t at key k", pl_xxs));
+                                   "(toml:map-ref t k) returns value of table t at key k", pl_xxs));
 
     s7_define(s7, cur_env,
-              s7_make_symbol(s7, "toml:table->hash-table"),
-              s7_make_typed_function(s7, "toml:table->hash-table",
+              s7_make_symbol(s7, "toml:map->hash-table"),
+              s7_make_typed_function(s7, "toml:map->hash-table",
                                      g_toml_table_to_hash_table,
                                      1,
                                      1, // optional :clone flag
                                      false,
-              "(toml:table->hash-table t) converts toml table to s7 hash-table. Optional :clone #t",
+              "(toml:map->hash-table t) converts toml table to s7 hash-table. Optional :clone #t",
                                      pl_xx));
 }
 

@@ -25,7 +25,7 @@ toml array operations
 .\" .BI "(toml:double-at " a " " i " ) " "          ;; value of array a at index i, if val is an double (legacy)"
 .\" .BI "(toml:int-at " a " " i " ) " "             ;; value of array a at index i, if val is an int (legacy)"
 .\" .BI "(toml:string-at " a " " i " ) " "          ;; value of array a at index i, if val is an string (legacy)"
-.\" .BI "(toml:table-at " a " " i " ) " "           ;; value of array a at index i, if val is a table (legacy)"
+.\" .BI "(toml:map-at " a " " i " ) " "           ;; value of array a at index i, if val is a table (legacy)"
 .\" .BI "(toml:timestamp-at " a " " i " ) " "       ;; value of array a at index i, if val is a timestamp (legacy)"
 
 .

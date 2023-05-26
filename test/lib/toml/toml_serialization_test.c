@@ -65,21 +65,21 @@ void tables(void) {
     /* TEST_ASSERT_EQUAL_STRING(s7_string(s1), s7_string(s2)); */
 
     /* /\* root tables have empty key  *\/ */
-    /* actual = APPLY_1("toml:table-key", root); */
+    /* actual = APPLY_1("toml:map-key", root); */
     /* TEST_ASSERT_EQUAL_STRING("", s7_string(actual)); */
 
     /* k = s7_make_string(s7, "m"); */
-    /* s7_pointer m = APPLY_2("toml:table-ref", root, k); */
-    /* actual = APPLY_1("toml:table?", m); */
+    /* s7_pointer m = APPLY_2("toml:map-ref", root, k); */
+    /* actual = APPLY_1("toml:map?", m); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
 
-    /* actual = APPLY_1("toml:table-key", m); */
+    /* actual = APPLY_1("toml:map-key", m); */
     /* TEST_ASSERT_EQUAL_STRING("m", s7_string(actual)); */
-    /* actual = APPLY_1("toml:table-keys", m); */
+    /* actual = APPLY_1("toml:map-keys", m); */
     /* s7_pointer v = APPLY_1("list?", actual); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), v); */
 
-    /* //FIXME: test toml:table-key-for-index ('key_in') */
+    /* //FIXME: test toml:map-key-for-index ('key_in') */
 }
 
 void arrays(void) {
@@ -108,21 +108,21 @@ void arrays(void) {
     /* TEST_ASSERT_EQUAL_STRING(s7_string(s1), s7_string(s2)); */
 
     /* /\* root tables have empty key  *\/ */
-    /* actual = APPLY_1("toml:table-key", root); */
+    /* actual = APPLY_1("toml:map-key", root); */
     /* TEST_ASSERT_EQUAL_STRING("", s7_string(actual)); */
 
     /* k = s7_make_string(s7, "m"); */
-    /* s7_pointer m = APPLY_2("toml:table-ref", root, k); */
-    /* actual = APPLY_1("toml:table?", m); */
+    /* s7_pointer m = APPLY_2("toml:map-ref", root, k); */
+    /* actual = APPLY_1("toml:map?", m); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
 
-    /* actual = APPLY_1("toml:table-key", m); */
+    /* actual = APPLY_1("toml:map-key", m); */
     /* TEST_ASSERT_EQUAL_STRING("m", s7_string(actual)); */
-    /* actual = APPLY_1("toml:table-keys", m); */
+    /* actual = APPLY_1("toml:map-keys", m); */
     /* s7_pointer v = APPLY_1("list?", actual); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), v); */
 
-    /* //FIXME: test toml:table-key-for-index ('key_in') */
+    /* //FIXME: test toml:map-key-for-index ('key_in') */
 }
 
 void timestamps(void) {

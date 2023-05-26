@@ -71,7 +71,7 @@ to do ...
 .BR toml:double-in (3s7),
 .BR toml:int-in (3s7),
 .BR toml:string-in (3s7),
-.BR toml:table-in (3s7),
+.BR toml:map-in (3s7),
 .BR toml:timestamp-in (3s7),
 .
 .SH AUTHORS

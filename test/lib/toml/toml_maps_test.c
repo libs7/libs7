@@ -58,64 +58,64 @@ void tearDown(void) {
 void root_tables(void) {
     t = TOML_READ("m = true");
     TRACE_S7_DUMP("tt", t);
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     TRACE_S7_DUMP("a", a);
     flag = APPLY_1("boolean?", a);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     /* /\* TEST_ASSERT_EQUAL(actual, s7_t(s7)); *\/ */
 
     t = TOML_READ("m = 123");
-    flag = APPLY_1("toml:table?", t);
+    flag = APPLY_1("toml:map?", t);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("integer?", a);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
     t = TOML_READ("m = 1.23");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("real?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     t = TOML_READ("m = \"Hello\"");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("string?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     t = TOML_READ("m = [1, 2, 3]");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
+    a = APPLY_2("toml:map-ref", t, k);
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     t = TOML_READ("m = { a = 1, b = 2}");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     k = s7_make_string(s7, "m");
-    a = APPLY_2("toml:table-ref", t, k);
-    actual = APPLY_1("toml:table?", a);
+    a = APPLY_2("toml:map-ref", t, k);
+    actual = APPLY_1("toml:map?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 }
 
 void table_refs(void) {
     t = TOML_READ("m = \"Hello\"");
-    flag = APPLY_1("toml:table?", t);
+    flag = APPLY_1("toml:map?", t);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
     // string key
     k = s7_make_string(s7, "m");
-    res1 = APPLY_2("toml:table-ref", t, k);
+    res1 = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("string?", res1);
     TEST_ASSERT_TRUE(s7_boolean(s7, res1));
     // obj application
@@ -133,7 +133,7 @@ void table_refs(void) {
 
     // symbol key
     k = s7_make_symbol(s7, "m");
-    res1 = APPLY_2("toml:table-ref", t, k);
+    res1 = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("string?", res1);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
     // obj application
@@ -151,7 +151,7 @@ void table_refs(void) {
 
     // keyword key
     k = s7_make_keyword(s7, "m");
-    res1 = APPLY_2("toml:table-ref", t, k);
+    res1 = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("string?", res1);
     TEST_ASSERT_TRUE(s7_boolean(s7, res1));
     // obj application
@@ -172,40 +172,40 @@ void table_refs(void) {
  * WARNING: tomlc99 table count ops are typed:
  * ntab for table-valued entries, narr for array-valued entries,
  * and nkv for "key-values", i.e. entries with 'atomic' values
- * so toml:table-length must sum the three: ntab + narr + nkv
+ * so toml:map-length must sum the three: ntab + narr + nkv
  */
 void table_length_ops(void) {
     t = TOML_READ(""
         "m = { b = true, s = \"Hello!\", "
         "        i = 0, f = 1.2, "
                   "        t = { t1 = 1 }, a = [0, 1, 2] }");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
 
     k = s7_make_string(s7, "m");
-    s7_pointer m = APPLY_2("toml:table-ref", t, k);
-    actual = APPLY_1("toml:table?", m);
+    s7_pointer m = APPLY_2("toml:map-ref", t, k);
+    actual = APPLY_1("toml:map?", m);
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
 
-    actual = APPLY_1("toml:table-length", m);
+    actual = APPLY_1("toml:map-length", m);
     TEST_ASSERT_EQUAL(6, s7_integer(actual));
 
-    actual = APPLY_1("toml:table-nkval", m);
+    actual = APPLY_1("toml:map-nkval", m);
     TEST_ASSERT_EQUAL(4, s7_integer(actual));
     /* aliases nkval */
-    actual = APPLY_1("toml:table-atomic-count", m);
+    actual = APPLY_1("toml:map-atomic-count", m);
     TEST_ASSERT_EQUAL(4, s7_integer(actual));
 
-    actual = APPLY_1("toml:table-ntab", m);
+    actual = APPLY_1("toml:map-ntab", m);
     TEST_ASSERT_EQUAL(1, s7_integer(actual));
     /* aliases ntab */
-    actual = APPLY_1("toml:table-subtable-count", m);
+    actual = APPLY_1("toml:map-subtable-count", m);
     TEST_ASSERT_EQUAL(1, s7_integer(actual));
 
-    actual = APPLY_1("toml:table-narr", m);
+    actual = APPLY_1("toml:map-narr", m);
     TEST_ASSERT_EQUAL(1, s7_integer(actual));
     /* aliases narr */
-    actual = APPLY_1("toml:table-array-count", m);
+    actual = APPLY_1("toml:map-array-count", m);
     TEST_ASSERT_EQUAL(1, s7_integer(actual));
 }
 
@@ -214,25 +214,25 @@ void table_ops(void) {
         "m = { b = true, s = \"Hello!\", "
         "        i = 0, f = 1.2, "
                   "        t = { t1 = 1 }, a = [0, 1, 2] }");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     /* root tables have empty key  */
-    actual = APPLY_1("toml:table-key", t);
+    actual = APPLY_1("toml:map-key", t);
     TEST_ASSERT_EQUAL_STRING("", s7_string(actual));
 
     k = s7_make_string(s7, "m");
-    s7_pointer m = APPLY_2("toml:table-ref", t, k);
-    actual = APPLY_1("toml:table?", m);
+    s7_pointer m = APPLY_2("toml:map-ref", t, k);
+    actual = APPLY_1("toml:map?", m);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    actual = APPLY_1("toml:table-key", m);
+    actual = APPLY_1("toml:map-key", m);
     TEST_ASSERT_EQUAL_STRING("m", s7_string(actual));
-    actual = APPLY_1("toml:table-keys", m);
+    actual = APPLY_1("toml:map-keys", m);
     s7_pointer v = APPLY_1("list?", actual);
     TEST_ASSERT_EQUAL(s7_t(s7), v);
 
-    //FIXME: test toml:table-key-for-index ('key_in')
+    //FIXME: test toml:map-key-for-index ('key_in')
 
 }
 
@@ -257,21 +257,21 @@ void table_serialization(void) {
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
 
     /* /\* root tables have empty key  *\/ */
-    /* actual = APPLY_1("toml:table-key", t); */
+    /* actual = APPLY_1("toml:map-key", t); */
     /* TEST_ASSERT_EQUAL_STRING("", s7_string(actual)); */
 
     /* k = s7_make_string(s7, "m"); */
-    /* s7_pointer m = APPLY_2("toml:table-ref", t, k); */
-    /* actual = APPLY_1("toml:table?", m); */
+    /* s7_pointer m = APPLY_2("toml:map-ref", t, k); */
+    /* actual = APPLY_1("toml:map?", m); */
     /* TEST_ASSERT_EQUAL(actual, s7_t(s7)); */
 
-    /* actual = APPLY_1("toml:table-key", m); */
+    /* actual = APPLY_1("toml:map-key", m); */
     /* TEST_ASSERT_EQUAL_STRING("m", s7_string(actual)); */
-    /* actual = APPLY_1("toml:table-keys", m); */
+    /* actual = APPLY_1("toml:map-keys", m); */
     /* s7_pointer v = APPLY_1("list?", actual); */
     /* TEST_ASSERT_EQUAL(s7_t(s7), v); */
 
-    /* //FIXME: test toml:table-key-for-index ('key_in') */
+    /* //FIXME: test toml:map-key-for-index ('key_in') */
 }
 
 void to_string_atoms(void) {
@@ -412,48 +412,48 @@ void to_string_mixed(void) {
 
 void dotted_keys(void) {
     t = TOML_READ("fruit.apple.color = \"red\"");
-    actual = APPLY_1("toml:table?", t);
+    actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     k = s7_make_string(s7, "fruit");
-    s7_pointer m = APPLY_2("toml:table-ref", t, k);
-    actual = APPLY_1("toml:table?", m);
+    s7_pointer m = APPLY_2("toml:map-ref", t, k);
+    actual = APPLY_1("toml:map?", m);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
-    actual = APPLY_1("toml:table-key", m);
+    actual = APPLY_1("toml:map-key", m);
     TEST_ASSERT_EQUAL_STRING("fruit", s7_string(actual));
 
     k = s7_make_string(s7, "apple");
-    actual = APPLY_2("toml:table-ref", m, k);
-    actual = APPLY_1("toml:table?", actual);
+    actual = APPLY_2("toml:map-ref", m, k);
+    actual = APPLY_1("toml:map?", actual);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    len = APPLY_1("toml:table-length", m);
+    len = APPLY_1("toml:map-length", m);
     TEST_ASSERT_EQUAL(1, s7_integer(len));
-    len = APPLY_1("toml:table-array-count", m);
+    len = APPLY_1("toml:map-array-count", m);
     TEST_ASSERT_EQUAL(0, s7_integer(len));
-    len = APPLY_1("toml:table-subtable-count", m);
+    len = APPLY_1("toml:map-subtable-count", m);
     TEST_ASSERT_EQUAL(1, s7_integer(len));
-    len = APPLY_1("toml:table-atomic-count", m);
+    len = APPLY_1("toml:map-atomic-count", m);
     TEST_ASSERT_EQUAL(0, s7_integer(len));
 
     k = s7_make_string(s7, "apple");
     b = APPLY_2("toml:key-exists?", m, k);
     TEST_ASSERT_EQUAL(s7_t(s7), b);
     /* alias */
-    b = APPLY_2("toml:table-contains?", m, k);
+    b = APPLY_2("toml:map-contains?", m, k);
     TEST_ASSERT_EQUAL(s7_t(s7), b);
 
 
-    m = APPLY_2("toml:table-ref", m, k);
-    actual = APPLY_1("toml:table?", m);
+    m = APPLY_2("toml:map-ref", m, k);
+    actual = APPLY_1("toml:map?", m);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
     k = s7_make_string(s7, "color");
-    m = APPLY_2("toml:table-ref", m, k);
+    m = APPLY_2("toml:map-ref", m, k);
     actual = APPLY_1("string?", m);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 
-    /* actual = APPLY_1("toml:table-length", m); */
+    /* actual = APPLY_1("toml:map-length", m); */
     /* TEST_ASSERT_EQUAL_STRING(1, s7_string(actual)); */
 }
 

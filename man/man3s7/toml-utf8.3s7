@@ -21,7 +21,7 @@ toml utf8 operations
 .BR toml-table (3s7)
 
 Each operation has its own manpage, with ':' replaced by '-', e.g. for
-.BI toml:table-key
+.BI toml:map-key
 consult
 .BR toml-table-key (3s7)
 .
