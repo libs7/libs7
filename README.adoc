@@ -25,6 +25,14 @@ the standard distribution, so I've hacked together some stuff from the
 standard distib and code I found online, mainly SRFI reference
 implementation code.
 
+== NEWS
+
+New C library bindings for handling link:https://www.json.org/json-en.html[JSON] and link:https://toml.io/en/[toml] data, and rendering with link:https://mustache.github.io/[mustache] templates! See:
+
+* link:doc/libjson.adoc[doc/libjson.adoc]
+* link:doc/libtoml.adoc[doc/libtoml.adoc]
+* link:doc/libmustache.adoc[doc/libmustache.adoc]
+
 == getting started
 
 Clone this repo and then from the root directory:
@@ -420,6 +428,16 @@ Prefix:  `gsl:`
 
 Tests: just one, for `gsl:version`, in `test/gsl_test.c`
 
+==== libjson
+
+Bindings for link:https://github.com/DaveGamble/cJSON[cJSON]
+
+Prefix:  `json:`
+
+Tests: `//test/lib/json`
+
+Documentation: link:doc/libjson.adoc[doc/libjson.adoc]
+
 ==== libm
 
 Derived directly from the standard distribution.
@@ -437,6 +455,16 @@ Builds and runs but produces gibberish (MacOS)
 Prefix: none
 
 Tests:  none
+
+==== libtoml
+
+Bindings for link:https://github.com/cktan/tomlc99[tomlc99]
+
+Prefix:  `toml:`
+
+Tests: `//test/lib/toml`
+
+Documentation: link:doc/libtoml.adoc[doc/libtoml.adoc]
 
 ==== link:https://juliastrings.github.io/utf8proc/[libutf8proc]
 

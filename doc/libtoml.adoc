@@ -1,0 +1,125 @@
+= libtoml
+:toc: auto
+:toclevels: 3
+
+s7 bindings for link:https://github.com/cktan/tomlc99[tomlc99]
+
+== overview
+
+WARNING: `libtoml` (like the underlying `tomlc99` library) is
+read-only! If you need to mutate your toml data, you must convert it
+to Scheme data (using e.g. `+(toml:array->vector a)+`) and mutate the
+result.
+
+=== object applicators
+
+`s7` supports object applicators; `+libtoml+` enables this for
+`toml` tables, arrays, and timestamps. For example, to obtain the
+value for key `+k+` in table object `+t+`, you can apply the object
+directly to the key: [nowrap]`+(t k)+` instead of [nowrap]`+(toml:map-ref t
+k)+`.
+
+=== print syntax
+
+Print syntax for foreign objects is `#<obj ...>`. For example, in a
+`repl` the printed form of a `toml` table is [nowrap]`+#<toml-table k = v, ...>+`. A datetime (tomlc99 "timestamp") will print like this: [nowrap]`+#<toml-timestamp 1987-07-05T17:45:00Z>+`.
+
+Print syntax is mainly for use in a `repl`, so you can see what you're
+working with. It is _not_ round-trippable with respect to the file
+system: if you write print syntax to a file you will not be able to
+read it back in to Scheme. If you want to save and reload toml data,
+you must convert them to Scheme objects, for example by using
+`+(toml:map->hash-table m)+`, and write that to disk. The cost of this
+is that the toml type information is discarded; for example when you convert a
+toml array to a Scheme vector or list, there is nothing in the result
+to indicate that the data came from a toml array.
+
+== toml:read
+
+There is only one function for reading/parsing `toml` data, but it is
+polymorphic:
+
+* `+(toml:read s)+` - read string `s`
+* `+(toml:read p)+` - read port `p`
+* `+(toml:read)+` - read from `current-input-port`.
+
+On success, `+toml:read+` returns a Scheme object wrapping a tomlc99
+`+toml_table_t*+` and satisfying `+toml:map?+`.
+
+The last form listed above, using `+toml:read+` as a thunk (nullary function),
+allows it to be used with Scheme forms that automatically rebind the
+current input port, such as `+(with-input-from-file filename thunk)+`:
+
+.link:https://www.scheme.com/tspl3/io.html#./io:s9[The Scheme Programming Language, Chapter 7.1 Input]
+[quote,]
+`+with-input-from-file+` temporarily changes the current input port to be the result of opening the file named by filename for input during the application of thunk. If thunk returns, the port is closed and the current input port is restored to its old value.
+
+This makes it easy to read (in the Scheme sense of "read", meaning read and interpret) a toml file:
+
+    (let ((t (with-input-from-file "config.toml" toml:read)))
+       ;; now (toml:map? t) is #t
+       ... do something useful ...
+       )
+
+The `s7` engine also has `with-input-from-string`, so you can do:
+
+    (define toml-str "m = { a = 0, b = \"Hi\" }")
+    (define tt (with-input-from-string toml-str toml:read))
+    =>  <#toml-table m = <#toml-table a = 0, b = 'Hi'>>
+
+== toml:map
+
+For consistency with link:libjson.adoc[libjson], `+libtoml+` uses the
+term `map` where `toml` uses the term `table`.
+
+API:
+
+* `+(toml:map? m)+` returns `+#t+` if `+m+` is a Scheme object wrapping a `+toml_table_t+` struct.
+* `+(toml:map-length m)+` returns number of entries in map `+m+`
+* `+(toml:map-keys m)+` returns a Scheme list of the keys in table `+m+`.
+* `+(toml:map-contains? m k)+` returns `+#t+` if map `+m+` contains an entry with key `+k+`.
+* `+(toml:map-ref m k)+` returns the value of map `+m+` for key `+k+`.
+* `+(m k)+` equivalent to [nowrap]`+(toml:map-ref m k)+`.
+
+Low-level bindings:
+
+* `+(toml:map-key m)+` returns key for which `+m+ is the value.
+* `+(toml:map-nkval m)+` returns number of entries in map `+m+` having
+  "atomic" values (i.e. excluding entries whose values are tables or
+  arrays.
+* `+(toml:map-ntab m)+` returns number of entries in map `+m+` having table values.
+* `+(toml:map-narr m)+` returns number of entries in map `+m+` having array values.
+
+== toml:array
+
+== toml:datetime
+
+Dates and times in toml are based on the
+link:https://tools.ietf.org/html/rfc3339[rfc3339] format.
+
+The `+tomlc99+` library uses the term "timestamp" for date-times; the
+Scheme API uses `+datetime+`. For example, `(toml:datetime? dt)`
+returns `+#t+` if `+dt+` is a Scheme object wrapping a `+toml_timestamp_t+` struct.
+
+[CAUTION]
+====
+The link:https://toml.io/en/v1.0.0#offset-date-time[toml
+spec] supports use of either 'T' or a space to separate date and time strings:
+
+    1979-05-27T07:32:00Z
+    1979-05-27 07:32:00Z
+
+The `tomlc99` library does not retain the separator character, so `libtoml` normalizes to 'T'.  That means that a datetime like '1979-05-27 07:32:00Z' will print as '1979-05-27T07:32:00Z'.
+====
+
+=== Scheme datetime API
+
+* `+(toml:datetime? dt)+` returns `+#t+` if `+dt+` is a Scheme object wrapping a `+toml_timestamp_t+` struct.
+* `+(toml:date-year dt)+` returns year component of datetime as integer.
+* `+(toml:date-month dt)+` returns month component of datetime as integer.
+* `+(toml:date-day dt)+` returns (month) day component of datetime as integer.
+* `+(toml:time-hour dt)+` returns hour component of datetime as integer.
+* `+(toml:time-minute dt)+` returns minute component of datetime as integer.
+* `+(toml:time-second dt)+` returns second component of datetime as integer.
+* `+(toml:time-millisecond dt)+` returns millisecond component of datetime as integer.
+
