@@ -18,7 +18,8 @@ cc_library(
         # "//lib:utils.c",
         # "//lib:utils.h",
          # "//vendored/tomlc99:toml.c"
-        "toml.c", "toml.h"
+        "toml.c", "toml.h",
+        "tomlx.c", "tomlx.h"
     ],
     hdrs = ["libtoml_s7.h", "toml.h"],
     deps  = [
@@ -52,7 +53,8 @@ cc_binary(
     name  = "toml_s7",  # create libtoml_s7.{dylib,so}
     linkshared = True,
     srcs  = [":libtoml_s7.c", "//src:s7.h",
-             "toml.c", "toml.h"],
+             "toml.c", "toml.h",
+             "tomlx.c", "tomlx.h"],
     # deps  = ["//vendored/tomlc99:toml"],
     copts = CLIB_COPTS + [
         # "-Ivendored/tomlc99",
@@ -78,7 +80,8 @@ cc_library(
     srcs  = [
         "toml_table_s7.c",
         "libtoml_s7.h",
-        "toml.h"
+        "toml.h",
+        "tomlx.h"
     ],
     deps  = [
         "//src:s7_archive",
@@ -110,7 +113,8 @@ cc_library(
     srcs  = [
         "toml_array_s7.c", # "toml_array_s7.h",
         "libtoml_s7.h",
-        "toml.h"
+        "toml.h",
+        "tomlx.h"
     ],
     deps  = [
         "//src:s7_archive",
@@ -141,7 +145,8 @@ cc_library(
     srcs  = [
         "toml_datetime_s7.c",
         "libtoml_s7.h",
-        "toml.h"
+        "toml.h",
+        "tomlx.h"
     ],
     deps  = [
         "//src:s7_archive",

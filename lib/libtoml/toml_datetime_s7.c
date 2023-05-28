@@ -257,7 +257,7 @@ static s7_pointer g_toml_datetime_to_string(s7_scheme *s7, s7_pointer args)
         }
     }
 
-    char *s = toml_datetime_to_string(ts, use_write);
+    char *s = tomlx_datetime_to_string(ts, use_write);
     TRACE_LOG_DEBUG("returning: %s", s);
     return s7_make_string(s7, s);
 }
@@ -349,94 +349,94 @@ void toml_datetime_init(s7_scheme *s7, s7_pointer cur_env)
   so we normalize to 'T'. That means '1979-05-27 07:32:00Z' (with
   space) will print as '1979-05-27T07:32:00Z' (with T).
  */
-char *toml_datetime_to_string(toml_timestamp_t *ts, bool use_write)
-{
-    TRACE_ENTRY(toml_datetime_to_string);
-    TRACE_LOG_DEBUG("use_write: %d", use_write);
-    const int BUFSZ = 4096;
-    char *buf;          /* WARNING: malloc */
-    buf = calloc(BUFSZ, sizeof(char));
-    if (!buf) {
-        log_error("OOM");
-        return NULL;
-    } else {
-        TRACE_LOG_DEBUG("callocated %d chars for buffer", BUFSZ);
-    }
-    size_t bufsz = BUFSZ;
-    size_t char_ct = 0;
-    int ct;
-    (void)ct;
+/* char *tomlx_datetime_to_string(toml_timestamp_t *ts, bool use_write) */
+/* { */
+/*     TRACE_ENTRY(tomlx_datetime_to_string); */
+/*     TRACE_LOG_DEBUG("use_write: %d", use_write); */
+/*     const int BUFSZ = 4096; */
+/*     char *buf;          /\* WARNING: malloc *\/ */
+/*     buf = calloc(BUFSZ, sizeof(char)); */
+/*     if (!buf) { */
+/*         log_error("OOM"); */
+/*         return NULL; */
+/*     } else { */
+/*         TRACE_LOG_DEBUG("callocated %d chars for buffer", BUFSZ); */
+/*     } */
+/*     size_t bufsz = BUFSZ; */
+/*     size_t char_ct = 0; */
+/*     int ct; */
+/*     (void)ct; */
 
-    // print leading "
-    if (use_write) {
-        errno = 0;
-        TRACE_LOG_DEBUG("snprintfing header", "");
-        // FIXME: check buf sz
-        ct = snprintf(buf, 2, "%s", "\"");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
-        char_ct += 1; // do not include terminating '\0'
-    }
+/*     // print leading " */
+/*     if (use_write) { */
+/*         errno = 0; */
+/*         TRACE_LOG_DEBUG("snprintfing header", ""); */
+/*         // FIXME: check buf sz */
+/*         ct = snprintf(buf, 2, "%s", "\""); */
+/*         if (errno) { */
+/*             log_error("snprintf: %s", strerror(errno)); */
+/*             return NULL; */
+/*         } else { */
+/*             TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct); */
+/*         } */
+/*         char_ct += 1; // do not include terminating '\0' */
+/*     } */
 
-    int zlen;
-    if (ts->z == NULL) {
-        zlen = 0;
-    } else {
-        zlen = strlen(ts->z);
-        log_debug("z: %s", ts->z);
-    }
-    log_debug("zlen %d", zlen);
+/*     int zlen; */
+/*     if (ts->z == NULL) { */
+/*         zlen = 0; */
+/*     } else { */
+/*         zlen = strlen(ts->z); */
+/*         log_debug("z: %s", ts->z); */
+/*     } */
+/*     log_debug("zlen %d", zlen); */
 
-    if (ts->year == NULL) {
-        // local time
-    }
-    else if (ts->hour == NULL) {
-        // local date
-    }
-    else if (ts->millisec == NULL) {
-        log_debug("NO MILLIS");
-        // e.g. 1979-05-27T07:32:00
-        snprintf(buf + char_ct, 20 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d%s",
-                 *ts->year, *ts->month, *ts->day,
-                 *ts->hour, *ts->minute, *ts->second,
-                 (zlen>0)? ts->z : "X");
-        char_ct += 20 +  zlen - 1;
-    }
-    else {
-        log_debug("MILLIS");
-        // tomlc99: only 3 decimal places for millis
-        // e.g. 1979-05-27T00:32:00.999999
-        snprintf(buf + char_ct, 24 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d.%d%s",
-                 *ts->year, *ts->month, *ts->day,
-                 *ts->hour, *ts->minute, *ts->second,
-                 *ts->millisec,
-                 (zlen>0)? ts->z : "");
-        char_ct += 24 + zlen - 1;
-    }
-    log_debug("buf: %s", buf);
+/*     if (ts->year == NULL) { */
+/*         // local time */
+/*     } */
+/*     else if (ts->hour == NULL) { */
+/*         // local date */
+/*     } */
+/*     else if (ts->millisec == NULL) { */
+/*         log_debug("NO MILLIS"); */
+/*         // e.g. 1979-05-27T07:32:00 */
+/*         snprintf(buf + char_ct, 20 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d%s", */
+/*                  *ts->year, *ts->month, *ts->day, */
+/*                  *ts->hour, *ts->minute, *ts->second, */
+/*                  (zlen>0)? ts->z : "X"); */
+/*         char_ct += 20 +  zlen - 1; */
+/*     } */
+/*     else { */
+/*         log_debug("MILLIS"); */
+/*         // tomlc99: only 3 decimal places for millis */
+/*         // e.g. 1979-05-27T00:32:00.999999 */
+/*         snprintf(buf + char_ct, 24 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d.%d%s", */
+/*                  *ts->year, *ts->month, *ts->day, */
+/*                  *ts->hour, *ts->minute, *ts->second, */
+/*                  *ts->millisec, */
+/*                  (zlen>0)? ts->z : ""); */
+/*         char_ct += 24 + zlen - 1; */
+/*     } */
+/*     log_debug("buf: %s", buf); */
 
-    // print footer
-    if (use_write) {
-        errno = 0;
-        TRACE_LOG_DEBUG("snprintfing datetime footer", "");
-        ct = snprintf(buf+char_ct, 2, "%s", "\"");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TRACE_LOG_DEBUG("snprintf footer ct: %d", ct);
-        }
-        char_ct += 1; // do not include terminating '\0'
-        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-        TRACE_LOG_DEBUG("buf: %s", buf);
-    }
-    TRACE_LOG_DEBUG("toml_datetime_to_string returning: %s", buf);
-    return buf;
-}
+/*     // print footer */
+/*     if (use_write) { */
+/*         errno = 0; */
+/*         TRACE_LOG_DEBUG("snprintfing datetime footer", ""); */
+/*         ct = snprintf(buf+char_ct, 2, "%s", "\""); */
+/*         if (errno) { */
+/*             log_error("snprintf: %s", strerror(errno)); */
+/*             return NULL; */
+/*         } else { */
+/*             TRACE_LOG_DEBUG("snprintf footer ct: %d", ct); */
+/*         } */
+/*         char_ct += 1; // do not include terminating '\0' */
+/*         TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*         TRACE_LOG_DEBUG("buf: %s", buf); */
+/*     } */
+/*     TRACE_LOG_DEBUG("tomlx_datetime_to_string returning: %s", buf); */
+/*     return buf; */
+/* } */
 
 s7_pointer toml_datetime_to_alist(s7_scheme *s7, toml_timestamp_t *ts, bool clone)
 {

@@ -194,7 +194,7 @@ cc_test(
 cc_test(
     name = "arrays",
     linkstatic = True,
-    srcs = ["toml_array_test.c",
+    srcs = ["toml_arrays_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,

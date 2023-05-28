@@ -28,6 +28,12 @@
 #endif
 
 #ifdef TRACING
+#define TRACE_TOMLC99_DUMP(msg, x)
+#else
+#define TRACE_TOMLC99_DUMP(msg, x)
+#endif
+
+#ifdef TRACING
 #define DUMP_PREFIX(pfx) \
     if (pfx) {                                          \
         log_debug("\tpfx start: '%.15s'", (pfx)->start);     \

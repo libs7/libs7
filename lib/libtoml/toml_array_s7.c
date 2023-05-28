@@ -5,6 +5,8 @@
 #include "libtoml_s7.h"
 /* #include "toml_array_s7.h" */
 
+#include "tomlx.h"
+
 int toml_array_type_tag = 0;
 
 /*
@@ -13,12 +15,6 @@ int toml_array_type_tag = 0;
  *  srfi-43, 133: vector-empty? vector-map, vector-fold,
  *  vector-for-each, etc.
  */
-
-/* **** helper function prototypes, impl at bottom of file **** */
-static toml_datum_t _toml_array_datum_for_idx(toml_array_t *ta,
-                                              int idx,
-                                              int *typ);
-static void *_toml_array_seq_for_idx(toml_array_t *ta, int idx, int *typ);
 
 /* **************************************************************** */
 static s7_pointer free_toml_array(s7_scheme *s7, s7_pointer obj)
@@ -232,7 +228,7 @@ static s7_pointer g_toml_array_to_string(s7_scheme *s7, s7_pointer args)
         }
     }
 
-    char *s = toml_array_to_string(ta, use_write);
+    char *s = tomlx_array_to_string(ta, use_write);
     TRACE_LOG_DEBUG("returning: %s", s);
     return s7_make_string(s7, s);
 }
@@ -310,337 +306,337 @@ void toml_array_init(s7_scheme *s7, s7_pointer cur_env)
 /* ****************************************************************
  * Helper functions
  */
-static toml_datum_t _toml_array_datum_for_idx(toml_array_t *ta, int idx, int *typ)
-{
-    TRACE_ENTRY(_toml_array_datum_for_idx);
-    toml_datum_t datum;
+/* static toml_datum_t tomlx_array_datum_for_idx(toml_array_t *ta, int idx, int *typ) */
+/* { */
+/*     TRACE_ENTRY(tomlx_array_datum_for_idx); */
+/*     toml_datum_t datum; */
 
-    datum = toml_string_at(ta, idx);
-    if (datum.ok) {
-        TRACE_LOG_DEBUG("datum: s", "");
-        *typ = TOML_STRING;
-        return datum;
-    }
+/*     datum = toml_string_at(ta, idx); */
+/*     if (datum.ok) { */
+/*         TRACE_LOG_DEBUG("datum: s", ""); */
+/*         *typ = TOML_STRING; */
+/*         return datum; */
+/*     } */
 
-    datum = toml_bool_at(ta, idx);
-    if (datum.ok) {
-        TRACE_LOG_DEBUG("datum: b", "");
-        *typ = TOML_BOOL;
-        return datum;
-    }
+/*     datum = toml_bool_at(ta, idx); */
+/*     if (datum.ok) { */
+/*         TRACE_LOG_DEBUG("datum: b", ""); */
+/*         *typ = TOML_BOOL; */
+/*         return datum; */
+/*     } */
 
-    datum = toml_int_at(ta, idx);
-    if (datum.ok) {
-        TRACE_LOG_DEBUG("datum: i", "");
-        *typ = TOML_INT;
-        return datum;
-    }
+/*     datum = toml_int_at(ta, idx); */
+/*     if (datum.ok) { */
+/*         TRACE_LOG_DEBUG("datum: i", ""); */
+/*         *typ = TOML_INT; */
+/*         return datum; */
+/*     } */
 
-    datum = toml_double_at(ta, idx);
-    if (datum.ok) {
-        TRACE_LOG_DEBUG("datum: d", "");
-        *typ = TOML_DOUBLE;
-        return datum;
-    }
+/*     datum = toml_double_at(ta, idx); */
+/*     if (datum.ok) { */
+/*         TRACE_LOG_DEBUG("datum: d", ""); */
+/*         *typ = TOML_DOUBLE; */
+/*         return datum; */
+/*     } */
 
-    datum = toml_timestamp_at(ta, idx);
-    if (datum.ok) {
-        TRACE_LOG_DEBUG("datum: ts", "");
-        *typ = TOML_TIMESTAMP;
-        /* not yet supported */
-        return datum;
-    }
-    TRACE_LOG_DEBUG("datum: NULL", "");
-    *typ = TOML_NONDATUM;
-    return datum;
-}
+/*     datum = toml_timestamp_at(ta, idx); */
+/*     if (datum.ok) { */
+/*         TRACE_LOG_DEBUG("datum: ts", ""); */
+/*         *typ = TOML_TIMESTAMP; */
+/*         /\* not yet supported *\/ */
+/*         return datum; */
+/*     } */
+/*     TRACE_LOG_DEBUG("datum: NULL", ""); */
+/*     *typ = TOML_NONDATUM; */
+/*     return datum; */
+/* } */
 
-static void *_toml_array_seq_for_idx(toml_array_t *ta, int idx, int *typ)
-{
-    TRACE_ENTRY(_toml_array_seq_for_idx);
+/* static void *tomlx_array_seq_for_idx(toml_array_t *ta, int idx, int *typ) */
+/* { */
+/*     TRACE_ENTRY(tomlx_array_seq_for_idx); */
 
-    toml_array_t *a = toml_array_at(ta, idx);
-    if (a) {
-        TRACE_LOG_DEBUG("array", "");
-        *typ = TOML_ARRAY;
-        return a;
-    } else {
-        TRACE_LOG_DEBUG("not array", "");
-    }
+/*     toml_array_t *a = toml_array_at(ta, idx); */
+/*     if (a) { */
+/*         TRACE_LOG_DEBUG("array", ""); */
+/*         *typ = TOML_ARRAY; */
+/*         return a; */
+/*     } else { */
+/*         TRACE_LOG_DEBUG("not array", ""); */
+/*     } */
 
-    toml_table_t *subt = toml_table_at(ta, idx);
-    if (subt) {
-        TRACE_LOG_DEBUG("table: %p", subt);
-        *typ = TOML_TABLE;
-        return subt;
-    } else {
-        TRACE_LOG_DEBUG("not table", "");
-    }
-    return NULL;
-}
+/*     toml_table_t *subt = toml_table_at(ta, idx); */
+/*     if (subt) { */
+/*         TRACE_LOG_DEBUG("table: %p", subt); */
+/*         *typ = TOML_TABLE; */
+/*         return subt; */
+/*     } else { */
+/*         TRACE_LOG_DEBUG("not table", ""); */
+/*     } */
+/*     return NULL; */
+/* } */
 
-char *toml_array_to_string(toml_array_t *ta, bool use_write)
-{
-    TRACE_ENTRY(toml_array_to_string);
-    toml_datum_t datum;
-    int typ;
+/* char *tomlx_array_to_string(toml_array_t *ta, bool use_write) */
+/* { */
+/*     TRACE_ENTRY(tomlx_array_to_string); */
+/*     toml_datum_t datum; */
+/*     int typ; */
 
-    const int BUFSZ = 4096;
-    char *buf;          /* WARNING: malloc */
-    buf = calloc(BUFSZ, sizeof(char));
-    if (!buf) {
-        log_error("OOM");
-        return NULL;
-    } else {
-        TRACE_LOG_DEBUG("callocated %d chars for buffer", BUFSZ);
-    }
-    size_t bufsz = BUFSZ;
-    size_t char_ct = 0;
-    int ct;
-    (void)ct;
+/*     const int BUFSZ = 4096; */
+/*     char *buf;          /\* WARNING: malloc *\/ */
+/*     buf = calloc(BUFSZ, sizeof(char)); */
+/*     if (!buf) { */
+/*         log_error("OOM"); */
+/*         return NULL; */
+/*     } else { */
+/*         TRACE_LOG_DEBUG("callocated %d chars for buffer", BUFSZ); */
+/*     } */
+/*     size_t bufsz = BUFSZ; */
+/*     size_t char_ct = 0; */
+/*     int ct; */
+/*     (void)ct; */
 
-    // print header
-    /* { */
-        errno = 0;
-        TRACE_LOG_DEBUG("snprintfing header", "");
-        ct = snprintf(buf, 2, "%s", "[");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
-        char_ct += 1; // do not include terminating '\0'
-        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-        TRACE_LOG_DEBUG("buf: %s", buf);
-    /* } */
+/*     // print header */
+/*     /\* { *\/ */
+/*         errno = 0; */
+/*         TRACE_LOG_DEBUG("snprintfing header", ""); */
+/*         ct = snprintf(buf, 2, "%s", "["); */
+/*         if (errno) { */
+/*             log_error("snprintf: %s", strerror(errno)); */
+/*             return NULL; */
+/*         } else { */
+/*             TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct); */
+/*         } */
+/*         char_ct += 1; // do not include terminating '\0' */
+/*         TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*         TRACE_LOG_DEBUG("buf: %s", buf); */
+/*     /\* } *\/ */
 
-    // print elements
-    int idx_ct = toml_array_nelem(ta);
-    /* char *k, *v; */
-    int len;
-    (void)ct;                   /* set-but-not-used warning */
-    for (int i = 0; i < idx_ct; i++) {
-        // print comma
-        if (i > 0) {
-            if ((char_ct + 3) > bufsz) {
-                log_error("realloc for comma");
-            } else {
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing comma", "");
-                ct = snprintf(buf+char_ct, 3, "%s", ", ");
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf comma ct: %d", ct);
-                }
-                char_ct += 2; // do not include terminating '\0'
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-            }
-        }
+/*     // print elements */
+/*     int idx_ct = toml_array_nelem(ta); */
+/*     /\* char *k, *v; *\/ */
+/*     int len; */
+/*     (void)ct;                   /\* set-but-not-used warning *\/ */
+/*     for (int i = 0; i < idx_ct; i++) { */
+/*         // print comma */
+/*         if (i > 0) { */
+/*             if ((char_ct + 3) > bufsz) { */
+/*                 log_error("realloc for comma"); */
+/*             } else { */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing comma", ""); */
+/*                 ct = snprintf(buf+char_ct, 3, "%s", ", "); */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf comma ct: %d", ct); */
+/*                 } */
+/*                 char_ct += 2; // do not include terminating '\0' */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*             } */
+/*         } */
 
-        // print value
-        datum = _toml_array_datum_for_idx(ta, i, &typ);
-        char *seq_str;
-        TRACE_LOG_DEBUG("datum typ: %d", typ);
-        if (typ == TOML_NONDATUM) {
-            void *seq = _toml_array_seq_for_idx(ta, i, &typ);
-            switch(typ) {
-            case TOML_ARRAY:
-                TRACE_LOG_DEBUG("array seq: %p", seq);
-                seq_str = toml_array_to_string((toml_array_t*)seq, use_write);
-                TRACE_LOG_DEBUG("ARRAY str: %s", seq_str);
-                len = strlen(seq_str) + 1;  // + 1 for '\0'
-                if ((char_ct + len) > bufsz) {
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing array len %d", len);
-                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
-                }
-                char_ct += len - 1; // do not include terminating '\0'
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-                break;
-            case TOML_TABLE:
-                TRACE_LOG_DEBUG("table seq: %p", seq);
-                seq_str = toml_table_to_string((toml_table_t*)seq, use_write);
-                TRACE_LOG_DEBUG("TABLE: %s", seq_str);
-                len = strlen(seq_str) + 1;  // + 1 for '\0'
-                if ((char_ct + len) > bufsz) {
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing table len %d", len);
-                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
-                }
-                char_ct += len - 1; // do not include terminating '\0'
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-                break;
-            default:
-                log_error("Bad toml seq type: %d", typ);
-            }
-        } else {
-            switch(typ) {
-            case TOML_INT:
-                TRACE_LOG_DEBUG("toml datum val: %d", datum.u.i);
-                len = snprintf(NULL, 0, "%lld", datum.u.i);
-                len++; // for terminating '\0';
-                TRACE_LOG_DEBUG("int str sz: %d", len);
-                if ((char_ct + len) > bufsz) { // + 1 for '\0'
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing len %d", len);
-                ct = snprintf(buf+char_ct, len, "%lld", datum.u.i);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
-                }
-                char_ct += len - 1;
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-                break;
-            case TOML_STRING:
-                TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s);
-                // add 2 for quotes
-                len = snprintf(NULL, 0, "%s", datum.u.s) + 2;
-                len++; // for terminating '\0';
-                TRACE_LOG_DEBUG("int str sz: %d", len);
-                if ((char_ct + len) > bufsz) { // + 1 for '\0'
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing string, len %d", len);
-                ct = snprintf(buf+char_ct, len, "\"%s\"", datum.u.s);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
-                }
-                char_ct += len - 1;
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-                free(datum.u.s);
-                break;
-            case TOML_BOOL:
-                // tomlc99 bool val is int
-                TRACE_LOG_DEBUG("toml datum val: %d", datum.u.b);
-                if (datum.u.b) {
-                    len = 5; // "true" + \0
-                } else {
-                    len = 6; // "false" + \0
-                }
-                TRACE_LOG_DEBUG("bool str sz: %d", len);
-                if ((char_ct + len) > bufsz) { // + 1 for '\0'
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing len %d", len);
-                if (datum.u.b) {
-                    ct = snprintf(buf+char_ct, len, "%s", "true");
-                } else {
-                    ct = snprintf(buf+char_ct, len, "%s", "false");
-                }
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
-                }
-                char_ct += len - 1;
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-                break;
-            case TOML_DOUBLE:
-                TRACE_LOG_DEBUG("toml datum val: %g", datum.u.d);
-                len = snprintf(NULL, 0, "%g", datum.u.d);
-                len++; // for terminating '\0';
-                TRACE_LOG_DEBUG("int str sz: %d", len);
-                if ((char_ct + len) > bufsz) { // + 1 for '\0'
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TRACE_LOG_DEBUG("snprintfing len %d", len);
-                ct = snprintf(buf+char_ct, len, "%g", datum.u.d);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TRACE_LOG_DEBUG("snprintf ct: %d", ct);
-                }
-                char_ct += len - 1;
-                TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-                TRACE_LOG_DEBUG("buf: %s", buf);
-                break;
-            case TOML_TIMESTAMP:
-                log_error("toml timestamp (not yet)");
-                if ((char_ct + 18) > bufsz) {
-                    // realloc
-                } else {
-                    errno = 0;
-                    snprintf(buf, 18, "%s", "<#toml-timestamp>");
-                    if (errno) {
-                        log_error("snprintf: %s", strerror(errno));
-                        break;
-                    }
-                    char_ct += 18;
-                }
-                break;
-            case TOML_NONDATUM:
-                // should not happen
-                log_error("Unexpected TOML_NON_DATUM");
-                //FIXME: throw error
-                return NULL;
-                break;
-            default:
-                log_error("Bad toml_datum constant: %d", typ);
-                //FIXME: throw error
-                return NULL;
-            }
-        }
-    }
+/*         // print value */
+/*         datum = tomlx_array_datum_for_idx(ta, i, &typ); */
+/*         char *seq_str; */
+/*         TRACE_LOG_DEBUG("datum typ: %d", typ); */
+/*         if (typ == TOML_NONDATUM) { */
+/*             void *seq = tomlx_array_seq_for_idx(ta, i, &typ); */
+/*             switch(typ) { */
+/*             case TOML_ARRAY: */
+/*                 TRACE_LOG_DEBUG("array seq: %p", seq); */
+/*                 seq_str = tomlx_array_to_string((toml_array_t*)seq, use_write); */
+/*                 TRACE_LOG_DEBUG("ARRAY str: %s", seq_str); */
+/*                 len = strlen(seq_str) + 1;  // + 1 for '\0' */
+/*                 if ((char_ct + len) > bufsz) { */
+/*                     log_error("exceeded bufsz: %d", char_ct + len); */
+/*                     // expand buf */
+/*                 } */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing array len %d", len); */
+/*                 ct = snprintf(buf+char_ct, len, "%s = ", seq_str); */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
+/*                 } */
+/*                 char_ct += len - 1; // do not include terminating '\0' */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*                 break; */
+/*             case TOML_TABLE: */
+/*                 TRACE_LOG_DEBUG("table seq: %p", seq); */
+/*                 seq_str = toml_table_to_string((toml_table_t*)seq, use_write); */
+/*                 TRACE_LOG_DEBUG("TABLE: %s", seq_str); */
+/*                 len = strlen(seq_str) + 1;  // + 1 for '\0' */
+/*                 if ((char_ct + len) > bufsz) { */
+/*                     log_error("exceeded bufsz: %d", char_ct + len); */
+/*                     // expand buf */
+/*                 } */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing table len %d", len); */
+/*                 ct = snprintf(buf+char_ct, len, "%s = ", seq_str); */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
+/*                 } */
+/*                 char_ct += len - 1; // do not include terminating '\0' */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*                 break; */
+/*             default: */
+/*                 log_error("Bad toml seq type: %d", typ); */
+/*             } */
+/*         } else { */
+/*             switch(typ) { */
+/*             case TOML_INT: */
+/*                 TRACE_LOG_DEBUG("toml datum val: %d", datum.u.i); */
+/*                 len = snprintf(NULL, 0, "%lld", datum.u.i); */
+/*                 len++; // for terminating '\0'; */
+/*                 TRACE_LOG_DEBUG("int str sz: %d", len); */
+/*                 if ((char_ct + len) > bufsz) { // + 1 for '\0' */
+/*                     log_error("exceeded bufsz: %d", char_ct + len); */
+/*                     // expand buf */
+/*                 } */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing len %d", len); */
+/*                 ct = snprintf(buf+char_ct, len, "%lld", datum.u.i); */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
+/*                 } */
+/*                 char_ct += len - 1; */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*                 break; */
+/*             case TOML_STRING: */
+/*                 TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s); */
+/*                 // add 2 for quotes */
+/*                 len = snprintf(NULL, 0, "%s", datum.u.s) + 2; */
+/*                 len++; // for terminating '\0'; */
+/*                 TRACE_LOG_DEBUG("int str sz: %d", len); */
+/*                 if ((char_ct + len) > bufsz) { // + 1 for '\0' */
+/*                     log_error("exceeded bufsz: %d", char_ct + len); */
+/*                     // expand buf */
+/*                 } */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing string, len %d", len); */
+/*                 ct = snprintf(buf+char_ct, len, "\"%s\"", datum.u.s); */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
+/*                 } */
+/*                 char_ct += len - 1; */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*                 free(datum.u.s); */
+/*                 break; */
+/*             case TOML_BOOL: */
+/*                 // tomlc99 bool val is int */
+/*                 TRACE_LOG_DEBUG("toml datum val: %d", datum.u.b); */
+/*                 if (datum.u.b) { */
+/*                     len = 5; // "true" + \0 */
+/*                 } else { */
+/*                     len = 6; // "false" + \0 */
+/*                 } */
+/*                 TRACE_LOG_DEBUG("bool str sz: %d", len); */
+/*                 if ((char_ct + len) > bufsz) { // + 1 for '\0' */
+/*                     log_error("exceeded bufsz: %d", char_ct + len); */
+/*                     // expand buf */
+/*                 } */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing len %d", len); */
+/*                 if (datum.u.b) { */
+/*                     ct = snprintf(buf+char_ct, len, "%s", "true"); */
+/*                 } else { */
+/*                     ct = snprintf(buf+char_ct, len, "%s", "false"); */
+/*                 } */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
+/*                 } */
+/*                 char_ct += len - 1; */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*                 break; */
+/*             case TOML_DOUBLE: */
+/*                 TRACE_LOG_DEBUG("toml datum val: %g", datum.u.d); */
+/*                 len = snprintf(NULL, 0, "%g", datum.u.d); */
+/*                 len++; // for terminating '\0'; */
+/*                 TRACE_LOG_DEBUG("int str sz: %d", len); */
+/*                 if ((char_ct + len) > bufsz) { // + 1 for '\0' */
+/*                     log_error("exceeded bufsz: %d", char_ct + len); */
+/*                     // expand buf */
+/*                 } */
+/*                 errno = 0; */
+/*                 TRACE_LOG_DEBUG("snprintfing len %d", len); */
+/*                 ct = snprintf(buf+char_ct, len, "%g", datum.u.d); */
+/*                 if (errno) { */
+/*                     log_error("snprintf: %s", strerror(errno)); */
+/*                     break; */
+/*                 } else { */
+/*                     TRACE_LOG_DEBUG("snprintf ct: %d", ct); */
+/*                 } */
+/*                 char_ct += len - 1; */
+/*                 TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*                 TRACE_LOG_DEBUG("buf: %s", buf); */
+/*                 break; */
+/*             case TOML_TIMESTAMP: */
+/*                 log_error("toml timestamp (not yet)"); */
+/*                 if ((char_ct + 18) > bufsz) { */
+/*                     // realloc */
+/*                 } else { */
+/*                     errno = 0; */
+/*                     snprintf(buf, 18, "%s", "<#toml-timestamp>"); */
+/*                     if (errno) { */
+/*                         log_error("snprintf: %s", strerror(errno)); */
+/*                         break; */
+/*                     } */
+/*                     char_ct += 18; */
+/*                 } */
+/*                 break; */
+/*             case TOML_NONDATUM: */
+/*                 // should not happen */
+/*                 log_error("Unexpected TOML_NON_DATUM"); */
+/*                 //FIXME: throw error */
+/*                 return NULL; */
+/*                 break; */
+/*             default: */
+/*                 log_error("Bad toml_datum constant: %d", typ); */
+/*                 //FIXME: throw error */
+/*                 return NULL; */
+/*             } */
+/*         } */
+/*     } */
 
-    // print footer
-    {
-        errno = 0;
-        TRACE_LOG_DEBUG("snprintfing footer", "");
-        ct = snprintf(buf+char_ct, 2, "%s", "]");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
-        char_ct += 1; // do not include terminating '\0'
-        TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
-        TRACE_LOG_DEBUG("buf: %s", buf);
-    }
-    TRACE_LOG_DEBUG("toml_array_to_string returning: %s", buf);
-    return buf;
-}
+/*     // print footer */
+/*     { */
+/*         errno = 0; */
+/*         TRACE_LOG_DEBUG("snprintfing footer", ""); */
+/*         ct = snprintf(buf+char_ct, 2, "%s", "]"); */
+/*         if (errno) { */
+/*             log_error("snprintf: %s", strerror(errno)); */
+/*             return NULL; */
+/*         } else { */
+/*             TRACE_LOG_DEBUG("snprintf hdr ct: %d", ct); */
+/*         } */
+/*         char_ct += 1; // do not include terminating '\0' */
+/*         TRACE_LOG_DEBUG("buf len: %d", strlen(buf)); */
+/*         TRACE_LOG_DEBUG("buf: %s", buf); */
+/*     } */
+/*     TRACE_LOG_DEBUG("tomlx_array_to_string returning: %s", buf); */
+/*     return buf; */
+/* } */
 
 s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone)
 {
@@ -656,10 +652,10 @@ s7_pointer toml_array_to_list(s7_scheme *s7, toml_array_t *ta, bool clone)
     s7_pointer subarray, subtable;
     for (int i = 0; i < idx_ct; i++) {
 
-        datum = _toml_array_datum_for_idx(ta, i, &typ);
+        datum = tomlx_array_datum_for_idx(ta, i, &typ);
         TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
-            void *seq = _toml_array_seq_for_idx(ta, i, &typ);
+            void *seq = tomlx_array_seq_for_idx(ta, i, &typ);
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("recurring subarray to list", "");
@@ -732,11 +728,11 @@ s7_pointer toml_array_to_vector(s7_scheme *s7, toml_array_t *ta, bool clone)
     s7_pointer subarray, subtable;
     for (int i = 0; i < idx_ct; i++) {
 
-        datum = _toml_array_datum_for_idx(ta, i, &typ);
+        datum = tomlx_array_datum_for_idx(ta, i, &typ);
         /* char *seq_str; */
         TRACE_LOG_DEBUG("datum typ: %d", typ);
         if (typ == TOML_NONDATUM) {
-            void *seq = _toml_array_seq_for_idx(ta, i, &typ);
+            void *seq = tomlx_array_seq_for_idx(ta, i, &typ);
             switch(typ) {
             case TOML_ARRAY:
                 TRACE_LOG_DEBUG("recurring subarray to list", "");
