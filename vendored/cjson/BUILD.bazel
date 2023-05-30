@@ -7,7 +7,7 @@ cc_library(
     hdrs = ["cJSON.h"],
     copts = COPTS,
     visibility = ["//vendored/mustach:__pkg__",
-                  "//lib/libcjson:__pkg__",
+                  "//lib/libjson:__pkg__",
                   "//lib/libmustache:__pkg__"]
 )
 

@@ -2,9 +2,9 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libm.scm", "utils.c", "utils.h"])
 
-load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES")
-load("//lib:BUILD.bzl",
-     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+load("//:BUILD.bzl", "SRCS", "DEPS", "INCLUDE_PATHS", "COPTS", "LINKOPTS", "DEFINES")
+
+load("//lib:BUILD.bzl", "CLIB_COPTS")
 
 ################################################################
 ## clibgen - builds s7 batch processor, for processing lib*_clibgen.scm to
@@ -79,24 +79,24 @@ cc_library(
     name  = "utils",
     linkstatic = True,
     # alwayslink = True, # ensure init fn sym available for dlsym
-    srcs  = ["utils.c"],
+    srcs  = SRCS + ["utils.c"],
     hdrs  = ["utils.h"],
-    deps  = [
+    deps  = DEPS + [
         "//src:s7_archive",
-        "//vendored/logc"
-    ] + select({
-        "//config/profile:dev?": ["//dev"],
-        "//config/profile:test?": ["//dev"],
-        "//conditions:default":  []
-    }),
-    copts = CLIB_COPTS + [
-        "-Ivendored/logc",
-        "-Iexternal/libs7/vendored/logc",
-    ] + select({
-        "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
-        "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
-        "//conditions:default":  []
-    }),
-    linkopts = CLIB_LINKOPTS,
-    local_defines = DEFINES + CLIB_DEFINES
+    ],
+    # + select({
+    #     "//config/profile:dev?": ["//dev"],
+    #     "//config/profile:test?": ["//dev"],
+    #     "//conditions:default":  []
+    # }),
+    copts = COPTS + INCLUDE_PATHS + CLIB_COPTS + [
+        "-Isrc", "-Iexternal/libs7/src",
+    ],
+    # + select({
+    #     "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],
+    #     "//config/profile:test?": ["-Idev", "-Iexternal/libs7/dev"],
+    #     "//conditions:default":  []
+    # }),
+    linkopts = LINKOPTS,
+    local_defines = DEFINES
 )

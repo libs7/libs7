@@ -1,13 +1,1 @@
-# load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-
-# bool_flag(name = "debug", build_setting_default = 0)
-# config_setting(name = "debug?", flag_values = {":debug": "True"})
-
-# bool_flag(name = "trace", build_setting_default = 0)
-# config_setting(name = "trace?", flag_values = {":trace": "True"})
-
-# config_setting(
-#     name = "debug?",
-#     values = {"compilation_mode": "dbg"},
-# )
-
+exports_files(["config.h", "ansi_colors.h", "logging.h"])

@@ -1,8 +1,8 @@
 #include <stdlib.h>
 
+#include "config.h"
 #include "utils.h"
 #include "log.h"
-#include "trace.h"
 
 /* WARNING: result must be freed */
 char *libs7_input_port_to_c_string(s7_scheme *s7, s7_pointer port)

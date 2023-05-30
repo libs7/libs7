@@ -20,15 +20,18 @@ int toml_array_type_tag = 0;
 static s7_pointer free_toml_array(s7_scheme *s7, s7_pointer obj)
 {
     TRACE_ENTRY(free_toml_array);
+    (void)s7;
     free(s7_c_object_value(obj));
     return(NULL);
 }
 
 static s7_pointer mark_toml_array(s7_scheme *s7, s7_pointer obj)
 {
-  /* toml_array_t *t = (toml_array_t*)s7_c_object_value(obj); */
-  /* s7_mark(o->data); */
-  return(NULL);
+    (void)s7;
+    (void)obj;
+    /* toml_array_t *t = (toml_array_t*)s7_c_object_value(obj); */
+    /* s7_mark(o->data); */
+    return(NULL);
 }
 
 /* static */ s7_pointer is_toml_array(s7_scheme *s7, s7_pointer args)
@@ -44,12 +47,14 @@ static s7_pointer mark_toml_array(s7_scheme *s7, s7_pointer obj)
 
 static s7_pointer toml_array_is_equal(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_is_equal);
     return s7_nil(s7);
 }
 
 static s7_pointer toml_array_is_equivalent(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_is_equivalent);
     return s7_nil(s7);
 }
@@ -135,6 +140,7 @@ s7_pointer toml_array_ref(s7_scheme *s7, s7_pointer args)
 
 static s7_pointer toml_array_set(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_set);
     return s7_nil(s7);
 }
@@ -161,12 +167,14 @@ s7_pointer toml_array_length(s7_scheme *s7, s7_pointer args)
 static s7_pointer toml_array_copy(s7_scheme *s7, s7_pointer args)
 {
     TRACE_ENTRY(toml_array_set);
+    (void)args;
     // UNSUPPORTED
     return s7_nil(s7);
 }
 
 static s7_pointer toml_array_fill(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_set);
     // UNSUPPORTED
     return s7_nil(s7);
@@ -174,6 +182,7 @@ static s7_pointer toml_array_fill(s7_scheme *s7, s7_pointer args)
 
 static s7_pointer toml_array_reverse(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_set);
     return s7_nil(s7);
 }
@@ -235,12 +244,14 @@ static s7_pointer g_toml_array_to_string(s7_scheme *s7, s7_pointer args)
 
 static s7_pointer toml_array_getter(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_getter);
     return s7_nil(s7);
 }
 
 static s7_pointer toml_array_setter(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(toml_array_setter);
     return s7_nil(s7);
 }

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "trace.h"
+#include "config.h"
 
 #include "libcjson_s7.h"
 

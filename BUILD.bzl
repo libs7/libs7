@@ -1,3 +1,5 @@
+SRCS = ["//config:config.h", "//config:ansi_colors.h"]
+
 COPTS = [
     "-x", "c",
     "-Wall",
@@ -8,22 +10,31 @@ COPTS = [
     "-Wpedantic", # same as -pedantic, strict ISO C and ISO C++ warnings
     "-pedantic-errors",
     "-Wfatal-errors", # stop on first error
-
-    "-Isrc",
-    "-Iexternal/libs7/src",
-    "-Ilib", "-Iexternal/mustach/src",
-    "-Ivendored/logc"
 ] + select({
     "//config/host/build:macos?": [
         "-std=c11",
-        "-Wno-gnu-statement-expression"
+        "-Wno-gnu-statement-expression",
+        # "-Werror=pedantic",
+        # "-Wno-gnu",
+        # "-Wno-format-pedantic",
     ],
     "//config/host/build:linux?": [
         "-std=gnu11",
         "-fPIC",
+        # "-Wl,--no-undefined",
     ],
     "//conditions:default": ["-std=c11"],
 })
+
+DEPS = [
+    "//vendored/logc",
+    # "@mustachios7//lib:mustach"
+]
+
+INCLUDE_PATHS = [
+    "-Iconfig", "-Iexternal/mustachios7/config",
+    "-Ivendored/logc", "-Iexternal/libs7/Ivendored/logc"
+]
 
 LINKOPTS = select({
     "//config/host/build:linux?": ["-rdynamic"],
@@ -42,14 +53,9 @@ DEFINES = select({
     "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
     "//conditions:default": []
 }) + select({
-    "//config/debug:debug?": ["DEBUGGING"],
+    "//config/profile:dev?": ["DEVBUILD", "TRACING"],
     "//conditions:default": []
 }) + select({
     "//config/debug:trace?": ["TRACING"],
     "//conditions:default": []
 })
-
-
-DEPS = [
-    "@mustachios7//lib:mustach"
-]

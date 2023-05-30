@@ -2,19 +2,21 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libm_clibgen.scm"])
 
-load("//lib:BUILD.bzl",
-     "clibgen_runner",
-     "CLIB_COPTS", "CLIB_LINKOPTS", "CLIB_DEFINES")
+load("//:BUILD.bzl", "SRCS", "DEPS",
+     "COPTS", "INCLUDE_PATHS", "DEFINES", "LINKOPTS")
+
+load("//lib:BUILD.bzl", "clibgen_runner", "CLIB_COPTS")
 
 ################################################################
 cc_library(
     name  = "m_s7_archive", # emits libm_s7_archive.a
     linkstatic = True,
     alwayslink = True,
-    srcs  = [":libm_s7.c", "//src:s7.h"],
-    copts = CLIB_COPTS,
-    linkopts = CLIB_LINKOPTS,
-    local_defines = CLIB_DEFINES  + select({
+    srcs  = SRCS + [":libm_s7.c", "//src:s7.h"],
+    deps  = DEPS,
+    copts = COPTS + CLIB_COPTS + INCLUDE_PATHS,
+    linkopts      = LINKOPTS,
+    local_defines = DEFINES  + select({
         "//config/host:linux?": ["_POSIX_C_SOURCE=200809"],
         "//conditions:default": []
     })
@@ -23,10 +25,11 @@ cc_library(
 cc_binary(
     name  = "m_s7",  # create libm_s7.{dylib,so}
     linkshared = True,
-    srcs  = [":libm_s7.c", "//src:s7.h"],
-    copts = CLIB_COPTS,
-    linkopts = CLIB_LINKOPTS,
-    local_defines = CLIB_DEFINES  + select({
+    srcs  = SRCS + [":libm_s7.c", "//src:s7.h"],
+    deps  = DEPS,
+    copts = COPTS + CLIB_COPTS + INCLUDE_PATHS,
+    linkopts      = LINKOPTS,
+    local_defines = DEFINES  + select({
         "//config/host:linux?": ["_POSIX_C_SOURCE=200809"],
         "//conditions:default": []
     })

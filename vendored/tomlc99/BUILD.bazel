@@ -1,9 +1,13 @@
-exports_files(["toml.h", "toml.c"])
+load("//:BUILD.bzl",
+     "SRCS", "DEPS", "COPTS", "INCLUDE_PATHS", "DEFINES", "LINKOPTS")
 
 cc_library(
     name       = "tomlc99",
     linkstatic = True,
-    srcs       = ["toml.c"],
-    hdrs       = ["toml.h"],
+    srcs       = SRCS + ["toml.c", "tomlx.c"],
+    hdrs       = ["toml.h", "tomlx.h"],
+    deps       = DEPS,
+    copts      = COPTS + INCLUDE_PATHS,
+    linkopts   = LINKOPTS,
     visibility = ["//visibility:public"]
 )

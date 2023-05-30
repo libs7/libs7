@@ -1,9 +1,9 @@
 #ifndef LIBTOML_S7_H
 #define LIBTOML_S7_H
 
+#include "config.h"
 #include "log.h"
 #include "s7.h"
-#include "trace.h"
 #include "toml.h"
 #include "tomlx.h"
 
