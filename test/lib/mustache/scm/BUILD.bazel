@@ -1,9 +1,11 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES", "DEPS")
+
 load("//test/lib/mustache:BUILD.bzl", "COPTS_TEST", "DEPS_TEST",
      "DEFINES_TEST",
      "TIMEOUT")
+
 load("//test/lib/mustache/scm:BUILD.bzl",
      "SRCS",
      "LIBS7", "LIBS7_HDRS",

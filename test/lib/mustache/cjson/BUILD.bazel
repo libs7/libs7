@@ -52,7 +52,7 @@ cc_test(
     ],
     local_defines = DEFINES,
     deps = DEPS + ["//dev"] + select({
-        "//config/clibs/link:archive?": ["//lib/libmustache:mustachios7_s7_archive"],
+        "//config/clibs/link:archive?": ["//lib/libmustache:mustache_s7_archive"],
         "//conditions:default": []
     }),
     data = select({
@@ -70,7 +70,7 @@ cc_test(
     linkstatic = True,
     srcs = ["cjson_test.c", "//test:common.c", "//test:common.h"],
     local_defines = DEFINES,
-    deps = DEPS + ["//lib/libmustache:mustachios7_s7_archive"],
+    deps = DEPS + ["//lib/libmustache:mustache_s7_archive"],
     copts = COPTS + [
         "-Itest",
         "-Iexternal/mustachios7/test",
@@ -155,7 +155,7 @@ cc_test(
     ],
     local_defines = DEFINES,
     deps = DEPS + ["//dev"] + select({
-        "//config/clibs/link:archive?": ["//lib/libmustache:mustachios7_s7_archive"],
+        "//config/clibs/link:archive?": ["//lib/libmustache:mustache_s7_archive"],
         "//conditions:default": []
     }),
     data = select({

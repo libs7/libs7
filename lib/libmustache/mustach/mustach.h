@@ -90,7 +90,7 @@ struct mustach_sbuf; /* see below */
 #define BUTLAST_P 3
 
 /**
- * mustach_itf - pure abstract mustach - interface for callbacks
+ * mustach_ds_mgr_methods_s - pure abstract mustach - interface for callbacks
  *
  * The functions enter and next should return 0 or 1.
  *
@@ -110,7 +110,7 @@ struct mustach_sbuf; /* see below */
  *       As an extension (see NO_ALLOW_EMPTY_TAG), the 'name' can be
  *       the empty string. In that later case an implementation can
  *       return MUSTACH_ERROR_EMPTY_TAG to refuse empty names.
- *       If NULL and 'get' NULL the error MUSTACH_ERROR_INVALID_ITF
+ *       If NULL and 'format' NULL the error MUSTACH_ERROR_INVALID_ITF
  *       is returned.
  *
  * @enter: Enters the section of 'name' if possible.
@@ -129,25 +129,25 @@ struct mustach_sbuf; /* see below */
  *
  * @partial: If defined (can be NULL), returns in 'sbuf' the content of the
  *           partial of 'name'. @see mustach_sbuf
- *           If NULL but 'get' not NULL, 'get' is used instead of partial.
- *           If NULL and 'get' NULL and 'put' not NULL, 'put' is called with
+ *           If NULL but 'format' not NULL, 'format' is used instead of partial.
+ *           If NULL and 'format' NULL and 'put' not NULL, 'put' is called with
  *           a true FILE.
  *
  * @emit: If defined (can be NULL), writes the 'buffer' of 'size' with 'escape'.
  *        If NULL the standard function 'fwrite' is used with a true FILE.
  *        If not NULL that function is called instead of 'fwrite' to output
  *        text.
- *        It implies that if you define either 'partial' or 'get' callback,
+ *        It implies that if you define either 'partial' or 'format' callback,
  *        the meaning of 'FILE *file' is abstract for mustach's process and
  *        then you can use 'FILE*file' pass any kind of pointer (including NULL)
  *        to the function 'fmustach'. An example of a such behaviour is given by
  *        the implementation of 'mustach_json_c_write'.
  *
- * @get: If defined (can be NULL), returns in 'sbuf' the value of 'name'.
+ * @format: If defined (can be NULL), returns in 'sbuf' the value of 'name'.
  *       As an extension (see NO_ALLOW_EMPTY_TAG), the 'name' can be
  *       the empty string. In that later case an implementation can
  *       return MUSTACH_ERROR_EMPTY_TAG to refuse empty names.
- *       If 'get' is NULL and 'put' NULL the error MUSTACH_ERROR_INVALID_ITF
+ *       If 'format' is NULL and 'put' NULL the error MUSTACH_ERROR_INVALID_ITF
  *       is returned.
  *
  * @stop: If defined (can be NULL), stops the mustach processing
@@ -159,13 +159,13 @@ struct mustach_sbuf; /* see below */
  *
  *    FULLY OPTIONAL:   start partial
  *    MANDATORY:        enter next leave
- *    COMBINATORIAL:    put emit get
+ *    COMBINATORIAL:    put emit format
  *
  * Not definig a MANDATORY callback returns error MUSTACH_ERROR_INVALID_ITF.
  *
  * For COMBINATORIAL callbacks the array below summarize possible combinations:
  *
- *  combination  : put     : emit    : get     : abstract FILE
+ *  combination  : put     : emit    : format     : abstract FILE
  *  -------------+---------+---------+---------+-----------------------
  *  HISTORIC     : defined : NULL    : NULL    : NO: standard FILE
  *  MINIMAL      : NULL    : NULL    : defined : NO: standard FILE
@@ -174,26 +174,27 @@ struct mustach_sbuf; /* see below */
  *  DANGEROUS    : defined : defined : any     : YES or NO, depends on 'partial'
  *  INVALID      : NULL    : any     : NULL    : -
  *
- * The DUCK case runs on one leg. 'get' is not used if 'partial' is defined
+ * The DUCK case runs on one leg. 'format' is not used if 'partial' is defined
  * but is used for 'partial' if 'partial' is NULL. Thus for clarity, do not use
- * it that way but define 'partial' and let 'get' be NULL.
+ * it that way but define 'partial' and let 'format' be NULL.
  *
  * The DANGEROUS case is special: it allows abstract FILE if 'partial' is defined
  * but forbids abstract FILE when 'partial' is NULL.
  *
  * The INVALID case returns error MUSTACH_ERROR_INVALID_ITF.
  */
-struct mustach_itf {
+struct mustach_ds_mgr_methods_s { //TODO: rename struct mustach_ds_mgr_methods
     int (*start)(void *closure);
-    int (*put)(void *closure, const char *name, int escape, FILE *file);
-    int (*enter)(void *closure, const char *name);
+    void (*stop)(void *closure, int status);
+    int (*put)(void *closure, const char *name, const char *fmt, int escape, FILE *file);
+    int (*enter)(void *datasource, const char *name);
+    /* int (*open_section)(void *datasource, const char *name); */
     int (*next)(void *closure);
     int (*leave)(void *closure, struct mustach_sbuf *sbuf);
-    int (*partial)(void *closure, const char *name, struct mustach_sbuf *sbuf);
+    int (*partial)(void *closure, const char *name, const char *fmt, struct mustach_sbuf *sbuf);
     int (*emit)(void *closure, const char *buffer, size_t size, int escape, FILE *file);
-    int (*get)(void *closure, const char *name, struct mustach_sbuf *sbuf);
-    void (*stop)(void *closure, int status);
-    void (*dump_closure)(void *closure);
+    int (*format)(void *closure, const char *name, const char *fmt, struct mustach_sbuf *sbuf);
+    void (*dump_stack)(void *closure);
 };
 
 /*
@@ -252,7 +253,7 @@ struct mustach_sbuf {
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-extern int mustach_file(const char *template, size_t length, const struct mustach_itf *itf, void *closure, int flags, FILE *file);
+extern int mustach_file(const char *template, size_t length, const struct mustach_ds_mgr_methods_s *itf, void *closure, int flags, FILE *file);
 
 /**
  * mustach_fd - Renders the mustache 'template' in 'fd' for 'itf' and 'closure'.
@@ -266,7 +267,7 @@ extern int mustach_file(const char *template, size_t length, const struct mustac
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-extern int mustach_fd(const char *template, size_t length, const struct mustach_itf *itf, void *closure, int flags, int fd);
+extern int mustach_fd(const char *template, size_t length, const struct mustach_ds_mgr_methods_s *itf, void *closure, int flags, int fd);
 
 /**
  * mustach_mem - Renders the mustache 'template' in 'result' for 'itf' and 'closure'.
@@ -275,13 +276,17 @@ extern int mustach_fd(const char *template, size_t length, const struct mustach_
  * @length:   length of the template or zero if unknown and template null terminated
  * @itf:      the interface to the functions that mustach calls
  * @closure:  the closure to pass to functions called
- * @result:   the pointer receiving the result when 0 is returned
- * @size:     the size of the returned result
+ * @result:   the pointer receiving the result when 0 is returned. Null terminated.
+ * @size:     the size of the returned result, not including terminating null (like strlen).
  *
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-extern int mustach_mem(const char *template, size_t length, const struct mustach_itf *itf, void *closure, int flags, char **result, size_t *size);
+extern int mustach_mem(const char *template, size_t length,
+                       const struct mustach_ds_mgr_methods_s *itf,
+                       void *closure, // struct wrap*
+                       int flags,
+                       char **result, size_t *size);
 
 /***************************************************************************
 * compatibility with version before 1.0
@@ -307,7 +312,7 @@ extern int mustach_mem(const char *template, size_t length, const struct mustach
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-DEPRECATED_MUSTACH(extern int fmustach(const char *template, const struct mustach_itf *itf, void *closure, FILE *file));
+DEPRECATED_MUSTACH(extern int fmustach(const char *template, const struct mustach_ds_mgr_methods_s *itf, void *closure, FILE *file));
 
 /**
  * OBSOLETE use mustach_fd
@@ -322,7 +327,7 @@ DEPRECATED_MUSTACH(extern int fmustach(const char *template, const struct mustac
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-DEPRECATED_MUSTACH(extern int fdmustach(const char *template, const struct mustach_itf *itf, void *closure, int fd));
+DEPRECATED_MUSTACH(extern int fdmustach(const char *template, const struct mustach_ds_mgr_methods_s *itf, void *closure, int fd));
 
 /**
  * OBSOLETE use mustach_mem
@@ -338,7 +343,7 @@ DEPRECATED_MUSTACH(extern int fdmustach(const char *template, const struct musta
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-DEPRECATED_MUSTACH(extern int mustach(const char *template, const struct mustach_itf *itf, void *closure, char **result, size_t *size));
+DEPRECATED_MUSTACH(extern int mustach(const char *template, const struct mustach_ds_mgr_methods_s *itf, void *closure, char **result, size_t *size));
 
 #endif
 

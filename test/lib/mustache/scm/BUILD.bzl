@@ -9,7 +9,7 @@ SRCS = [
 
 LIBS7 = "//src:s7"
 LIBS7_HDRS = ["-Isrc", "-Iexternal/libs7/src"]
-LIBS7_ADAPTER = "//lib/libmustache:mustachios7_s7_archive"
+LIBS7_ADAPTER = "//lib/libmustache:mustache_s7_archive"
 LIBS7_ADAPTER_HDRS = ["-Ilib/libmustache",
                       "-Iexternal/libs7/lib/libmustache"]
 

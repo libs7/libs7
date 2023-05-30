@@ -73,23 +73,24 @@ typedef int mustach_emit_cb_t(void *closure, const char *buffer, size_t size, in
 #endif
 
 /* internal structure for wrapping */
-struct wrap {
+// was: struct wrap
+struct datasource_s { // rename: struct datasource_s
     int predicate; /* so mustach.c can signal a predicate metatag */
 
-	/* original interface */
-	const struct mustach_wrap_itf *itf;
+    /* original interface */
+    const struct mustach_ds_methods_s *methods; // itf;
 
-	/* original closure */
-	void *closure;
+    /* original closure */
+    void *stack; // *closure;
 
-	/* flags */
-	int flags;
+    /* flags */
+    int flags;
 
-	/* emiter callback */
-	mustach_emit_cb_t *emitcb;
+    /* emiter callback */
+    mustach_emit_cb_t *emitcb;
 
-	/* write callback */
-	mustach_write_cb_t *writecb;
+    /* write callback */
+    mustach_write_cb_t *writecb;
 };
 
 /**
@@ -109,7 +110,7 @@ struct wrap {
 #define Mustach_With_AllExtensions     1023     /* don't include ErrorUndefined */
 
 /**
- * mustach_wrap_itf - high level wrap of mustach - interface for callbacks
+ * mustach_ds_methods_s - high level wrap of mustach - interface for callbacks
  *
  * The functions sel, subsel, enter and next should return 0 or 1.
  *
@@ -165,26 +166,38 @@ struct wrap {
  *       exists, the empty string. Must return 1 if possible or
  *       0 when not possible or an error code.
  */
-struct mustach_wrap_itf {
-	int (*start)(void *closure);
-	void (*stop)(void *closure, int status);
-	int (*compare)(void *closure, const char *value);
-	int (*sel)(void *closure, const char *name);
-	int (*subsel)(void *closure, const char *name);
-	int (*enter)(void *closure, int objiter);
-	int (*next)(void *closure);
-	int (*leave)(void *closure, struct mustach_sbuf *sbuf);
-	int (*get)(void *closure, struct mustach_sbuf *sbuf, int key);
-	void (*dump_closure)(void *closure);
+
+// mustach_ds_methods_s common to all datatypes - json, toml, scheme
+// each implementation specializes it in mustach_<impl>.c,
+// e.g. mustach_tomlc99.c defines mustach_datasource_toml
+// (so it s/b 'mustach_impl_itf', or "mustach_datasource_itf")
+
+// Comparison with 'struct mustach_ds_mgr_methods_s' (in mustach.h):
+//   common flds: start, stop, enter, next, leave, get, dump_stack
+//   mustach_ds_methods_s only: compare, sel, subsel
+//   mustach_ds_mgr_methods_s only     : put, partial, emit
+
+// was: mustach_wrap_itf
+struct mustach_ds_methods_s {
+    int (*start)(void *stack);
+    void (*stop)(void *closure, int status);
+    int (*compare)(void *closure, const char *value);
+    int (*sel)(void *closure, const char *name);
+    int (*subsel)(void *closure, const char *name);
+    int (*enter)(void *closure, int objiter);
+    int (*next)(void *closure);
+    int (*leave)(void *closure, struct mustach_sbuf *sbuf);
+    int (*format)(void *closure, const char *fmt, struct mustach_sbuf *sbuf, int key);
+    void (*dump_stack)(void *closure);
 };
 
 /**
  * Mustach interface used internally by mustach wrapper functions.
  * Can be used for overriding behaviour.
  */
-static const struct mustach_itf mustach_wrap_itf;
+/* static const struct mustach_ds_mgr_methods_s mustach_ds_methods_s; */
 
-void wrap_init(struct wrap *wrap, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, mustach_write_cb_t *writecb);
+void datasource_init(struct datasource_s *wrap, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, mustach_write_cb_t *writecb);
 
 /**
  * Global hook for providing partials. When set to a not NULL value, the pointed
@@ -208,7 +221,7 @@ extern int (*mustach_wrap_get_partial)(const char *name, struct mustach_sbuf *sb
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-int mustach_wrap_file(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, FILE *file);
+int mustach_wrap_file(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, FILE *file);
 
 /**
  * mustach_wrap_fd - Renders the mustache 'template' in 'fd' for an abstract
@@ -223,7 +236,7 @@ int mustach_wrap_file(const char *template, size_t length, const struct mustach_
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-/* __attribute__((unused)) static int mustach_wrap_fd(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, int fd); */
+/* __attribute__((unused)) static int mustach_wrap_fd(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, int fd); */
 
 /**
  * mustach_wrap_mem - Renders the mustache 'template' in 'result' for an abstract
@@ -239,7 +252,7 @@ int mustach_wrap_file(const char *template, size_t length, const struct mustach_
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size);
+int mustach_wrap_mem(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, char **result, size_t *size);
 
 /**
  * mustach_wrap_write - Renders the mustache 'template' for an abstract
@@ -256,7 +269,7 @@ int mustach_wrap_mem(const char *template, size_t length, const struct mustach_w
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-__attribute__((unused)) static int mustach_wrap_write(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
+__attribute__((unused)) static int mustach_wrap_write(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
 
 /**
  * mustach_wrap_emit - Renders the mustache 'template' for an abstract
@@ -273,7 +286,7 @@ __attribute__((unused)) static int mustach_wrap_write(const char *template, size
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-__attribute__((unused)) static int mustach_wrap_emit(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
+__attribute__((unused)) static int mustach_wrap_emit(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
 
 #endif
 

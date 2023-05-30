@@ -350,7 +350,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": [
-            "//lib/libmustache:mustachios7_s7_archive"
+            "//lib/libmustache:mustache_s7_archive"
         ],
         "//conditions:default": []
     }),

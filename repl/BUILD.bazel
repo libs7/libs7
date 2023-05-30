@@ -45,7 +45,7 @@ cc_binary(
             # "//lib/libm:m_s7_archive",
             # "//lib/libutf8proc:utf8proc_s7_archive",
             # "//lib/libmustach:mustach_s7_archive",
-            "//lib/libmustache:mustachios7_s7_archive",
+            "//lib/libmustache:mustache_s7_archive",
             "//lib/libjson:json_s7_archive",
             "//lib/libtoml:toml_s7_archive",
         ],

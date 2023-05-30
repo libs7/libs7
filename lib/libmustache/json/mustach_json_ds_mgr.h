@@ -141,7 +141,8 @@ typedef int mustach_emit_cb_t(void *closure, const char *buffer, size_t size, in
  * Mustach interface used internally by mustach wrapper functions.
  * Can be used for overriding behaviour.
  */
-static const struct mustach_itf mustach_itf_json;
+/* static const struct mustach_itf mustach_itf_json; */
+static const struct mustach_ds_mgr_methods_s json_ds_mgr_methods;
 
 /* /\** */
 /*  * Global hook for providing partials. When set to a not NULL value, the pointed */
@@ -232,15 +233,25 @@ static const struct mustach_itf mustach_itf_json;
 /*  *\/ */
 /* static int mustach_wrap_emit(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure); */
 
-int mustach_json_file(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, FILE *file);
+int mustach_json_file(const char *template, size_t length,
+                      const struct mustach_ds_methods_s *methods,
+                      void *closure, int flags, FILE *file);
 
-int mustach_json_fd(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, int fd);
+int mustach_json_fd(const char *template, size_t length,
+                    const struct mustach_ds_methods_s *methods,
+                    void *closure, int flags, int fd);
 
-int mustach_json_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size);
+int mustach_json_mem(const char *template, size_t length,
+                     const struct mustach_ds_methods_s *methods,
+                     void *closure, int flags, char **result, size_t *size);
 
-int mustach_json_write(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
+int mustach_json_write(const char *template, size_t length,
+                       const struct mustach_ds_methods_s *methods,
+                       void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
 
-int mustach_json_emit(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
+int mustach_json_emit(const char *template, size_t length,
+                      const struct mustach_ds_methods_s *methods,
+                      void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
 
 #endif
 

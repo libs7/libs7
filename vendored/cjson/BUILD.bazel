@@ -8,6 +8,6 @@ cc_library(
     copts = COPTS,
     visibility = ["//vendored/mustach:__pkg__",
                   "//lib/libjson:__pkg__",
-                  "//lib/libmustache:__pkg__"]
+                  "//lib/libmustache/json:__pkg__"]
 )
 

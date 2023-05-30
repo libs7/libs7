@@ -1,0 +1,40 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:BUILD.bzl",
+     "INCLUDE_PATHS",
+     BASE_SRCS  = "SRCS",
+     BASE_DEPS  = "DEPS",
+     BASE_COPTS = "COPTS",
+     BASE_LINKOPTS = "LINKOPTS",
+     BASE_DEFINES = "DEFINES")
+
+# load("//:BUILD.bzl", "COPTS")
+load("//lib:BUILD.bzl", "CLIB_COPTS")
+
+cc_library(
+    name = "mustach",
+    linkstatic = True,
+    srcs = BASE_SRCS + ["mustach.c", "mustach.h", "memfile.h"] + select({
+        "//config/feature:open_memstream?": ["memfile_memstream.c"],
+        "//conditions:default": ["memfile_tmpfile.c"]
+    }),
+    hdrs = ["mustach.h"],
+    copts = BASE_COPTS + INCLUDE_PATHS + [
+        # "-Ivendored/logc",
+        # "-Iexternal/libs7/vendored/logc",
+        "-Isrc",
+        "-Iexternal/libs7/src"
+    ],
+    deps  = BASE_DEPS,
+    defines = select({
+        "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
+        "//conditions:default": []
+    }) + select({
+        "//config/debug:debug?": ["DEBUGGING"],
+        "//conditions:default": []
+    }) + select({
+        "//config/debug:trace?": ["TRACING"],
+        "//conditions:default": []
+    })
+)
+

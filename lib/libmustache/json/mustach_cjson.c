@@ -5,12 +5,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "config.h"
 #include "log.h"
-
 #include "mustach.h"
-/* #include "mustach-json.h" */
-#include "mustachios7_cjson.h"
-#include "trace.h"
+#include "mustach_cjson.h"
 #ifdef DEBUGGING
 #include "ansi_colors.h"
 #endif
@@ -34,16 +32,21 @@ struct tstack_s {
 	} stack[MUSTACH_MAX_DEPTH];
 };
 
-static int start(void *closure)
+char fmt_str[512];
+
+static void dump_stack(struct tstack_s *stack);
+
+static int start(struct tstack_s *stack)
 {
-	struct tstack_s *e = closure;
-	e->depth = 0;
-	memset(&e->null, 0, sizeof e->null);
-	e->null.type = cJSON_NULL;
-	e->selection = &e->null;
-	e->stack[0].cont = NULL;
-	e->stack[0].obj = e->root;
-	return MUSTACH_OK;
+    TRACE_ENTRY(start);
+    /* struct tstack_s *e = closure; */
+    stack->depth = 0;
+    memset(&stack->null, 0, sizeof stack->null);
+    stack->null.type = cJSON_NULL;
+    stack->selection = &stack->null;
+    stack->stack[0].cont = NULL;
+    stack->stack[0].obj = stack->root;
+    return MUSTACH_OK;
 }
 
 static int compare(void *closure, const char *value)
@@ -68,48 +71,49 @@ static int compare(void *closure, const char *value)
 	}
 }
 
+/* maybe copies value for key to stack->selection */
 static int sel(void *closure, const char *name)
 {
     TRACE_ENTRY(sel);
-    struct tstack_s *e = closure;
+    struct tstack_s *stack = closure;
 #ifdef DEBUGGING
     log_trace("key: %s", name);
-    log_trace("e->depth: %d", e->depth);
-    log_trace("e->stack[e->depth].obj %p", e->stack[e->depth].obj);
-    log_trace("predicate: %d", e->predicate);
-    /* DUMP_CLOSURE(e, e->depth); */
+    log_trace("stack->depth: %d", stack->depth);
+    log_trace("stack->stack[stack->depth].obj %p", stack->stack[stack->depth].obj);
+    log_trace("predicate: %d", stack->predicate);
+    /* DUMP_CLOSURE(e, stack->depth); */
 #endif
     cJSON *o;
     int i, r;
 
     if (name == NULL) {
-        o = e->stack[e->depth].obj;
+        o = stack->stack[stack->depth].obj;
         r = 1;
     } else {
-        i = e->depth;
-        while (i >= 0 && !(o = cJSON_GetObjectItemCaseSensitive(e->stack[i].obj, name)))
+        i = stack->depth;
+        while (i >= 0 && !(o = cJSON_GetObjectItemCaseSensitive(stack->stack[i].obj, name)))
             i--;
         if (i >= 0)
             r = 1;
         else {
-            o = &e->null;
+            o = &stack->null;
             r = 0;
         }
     }
-    e->selection = o;
+    stack->selection = o;
     return r;
 }
 
 static int subsel(void *closure, const char *name)
 {
-	struct tstack_s *e = closure;
+	struct tstack_s *stack = closure;
 	cJSON *o;
 	int r;
 
-	o = cJSON_GetObjectItemCaseSensitive(e->selection, name);
+	o = cJSON_GetObjectItemCaseSensitive(stack->selection, name);
 	r = o != NULL;
 	if (r)
-		e->selection = o;
+		stack->selection = o;
 	return r;
 }
 
@@ -183,85 +187,112 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
     return 0;
 }
 
-static int get(void *closure, struct mustach_sbuf *sbuf, int key)
+/* writes formatted value of stack->selection to sbuf.s */
+static int format(struct tstack_s *stack, const char *fmt,
+                  struct mustach_sbuf *sbuf, int key)
+//(void *closure, struct mustach_sbuf *sbuf, int key)
 {
-    TRACE_ENTRY(get);
-	struct tstack_s *e = closure;
-	const char *s;
+    TRACE_ENTRY(format);
+    TRACE_LOG_DEBUG("key: %d", key);
+    TRACE_LOG_DEBUG("fmt: %s", fmt);
+    const char *s;
 
-	if (key) {
-		s = e->stack[e->depth].is_objiter
-			? e->stack[e->depth].obj->string
-			: "";
-	}
-	else if (cJSON_IsString(e->selection))
-		s = e->selection->valuestring;
-	else if (cJSON_IsNull(e->selection))
-		s = "";
-	else {
-		s = cJSON_PrintUnformatted(e->selection);
-		if (s == NULL)
-			return MUSTACH_ERROR_SYSTEM;
-		sbuf->freecb = free;
-	}
-	sbuf->value = s;
-	return 1;
+    if (key) {
+        s = stack->stack[stack->depth].is_objiter
+            ? stack->stack[stack->depth].obj->string
+            : "";
+    }
+    else if (cJSON_IsString(stack->selection))
+        s = stack->selection->valuestring;
+    else if (cJSON_IsNumber(stack->selection)) {
+        if (fmt) {
+            //FIXME: format
+        } else {
+        }
+        s = cJSON_PrintUnformatted(stack->selection);
+        if (s == NULL)
+            return MUSTACH_ERROR_SYSTEM;
+        sbuf->freecb = free;
+    }
+    else if (cJSON_IsNull(stack->selection))
+        s = "";
+    else {
+        s = cJSON_PrintUnformatted(stack->selection);
+        if (s == NULL)
+            return MUSTACH_ERROR_SYSTEM;
+        sbuf->freecb = free;
+    }
+    sbuf->value = s;
+    return 1;
 }
 
 /* **************************************************************** */
-static void dump_closure(void *closure)
+static void dump_stack(struct tstack_s *stack)
 {
-    struct tstack_s *e = closure;
-
-    (void)closure;
-    int d = e->depth;
+    /* struct tstack_s *e = closure; */
+    int d = stack->depth;
     log_debug("DUMP_CLOSURE");
-    log_debug("\tpredicate: %d", e->predicate);
-    log_debug("\tlambda: %d", e->lambda);
+    log_debug("\tpredicate: %d", stack->predicate);
+    log_debug("\tlambda: %d", stack->lambda);
     log_debug("\tdepth: %d", d);
-    TRACE_CJSON_DUMP("\troot", e->root);
-    TRACE_CJSON_DUMP("\tselection", e->selection);
-    if (e->stack[d].cont)
-        TRACE_CJSON_DUMP("\te->stack[%d].cont", e->stack[d].cont);
+    TRACE_CJSON_DUMP("\troot", stack->root);
+    TRACE_CJSON_DUMP("\tselection", stack->selection);
+    if (stack->stack[d].cont)
+        TRACE_CJSON_DUMP("\tstack->stack[%d].cont", stack->stack[d].cont);
     else
         log_debug("ctx: ?");
-    if (e->stack[d].obj)
-        TRACE_CJSON_DUMP("\te->stack[%d].obj", e->stack[d].obj);
+    if (stack->stack[d].obj)
+        TRACE_CJSON_DUMP("\tstack->stack[%d].obj", stack->stack[d].obj);
     else
         log_debug("obj: ?");
-    log_debug("\te->stack[%d].count: %d", d, e->stack[d].count);
-    log_debug("\te->stack[%d].index: %d", d, e->stack[d].index);
-    log_debug("\te->stack[%d].lambda: %d", d, e->stack[d].lambda);
-    log_debug("\te->stack[%d].predicate: %d", d, e->stack[d].predicate);
+    log_debug("\tstack->stack[%d].count: %d", d, stack->stack[d].count);
+    log_debug("\tstack->stack[%d].index: %d", d, stack->stack[d].index);
+    log_debug("\tstack->stack[%d].lambda: %d", d, stack->stack[d].lambda);
+    log_debug("\tstack->stack[%d].predicate: %d", d, stack->stack[d].predicate);
     log_debug("end closure");
     fflush(NULL);
 }
 
-const struct mustach_wrap_itf mustach_wrap_itf_json = {
-	.start = start,
-	.stop = NULL,
-	.compare = compare,
-	.sel = sel,
-	.subsel = subsel,
-	.enter = enter,
-	.next = next,
-	.leave = leave,
-	.get = get,
-        .dump_closure = dump_closure
+/* const struct mustach_wrap_itf mustach_wrap_itf_json = { */
+const struct mustach_ds_methods_s cjson_methods = {
+    .start = (int (*)(void*))start,
+    .stop = NULL,
+    .compare = compare,
+    .sel = sel,
+    .subsel = subsel,
+    .enter = enter,
+    .next = next,
+    .leave = leave,
+    .format = (int (*)(void*, const char*, struct mustach_sbuf*, int))format,
+    .dump_stack = (void (*)(void*))dump_stack
 };
 
-int mustach_fprintf(FILE * restrict file,
-                    const char * restrict template, size_t tlength,
-                    void *json_root,
-                    int data_schema,
-                    int flags)
+/* ****************************************************************
+ * PUBLIC RENDER API
+ **************************************************************** */
+const char *mustache_json_render(const char *template,
+                                 size_t template_sz,
+                                 cJSON *root,
+                                 int _flags)
 {
-    (void)data_schema;
-    struct tstack_s e;
-
-    e.root = (cJSON*)json_root;
-    return mustach_json_file(template, tlength, &mustach_wrap_itf_json, &e, flags, file);
+    (void)template;
+    (void)template_sz;
+    (void)root;
+    (void)_flags;
+    return NULL;
 }
+/* int mustach_fprintf(FILE * restrict file, */
+/*                     const char * restrict template, size_t tlength, */
+/*                     void *json_root, */
+/*                     int data_schema, */
+/*                     int flags) */
+/* { */
+/*     (void)data_schema; */
+/*     struct tstack_s e; */
+
+/*     e.root = (cJSON*)json_root; */
+/*     return mustach_json_file(template, tlength, &cjson_methods, &e, flags, file); */
+/* } */
 
 void *mustach_encode_cjson(char *json_str, size_t len)
 {
@@ -278,7 +309,7 @@ int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int fla
 {
 	struct tstack_s e;
 	e.root = root;
-	return mustach_json_file(template, length, &mustach_wrap_itf_json, &e, flags, file);
+	return mustach_json_file(template, length, &cjson_methods, &e, flags, file);
 }
 
 int mustach_cJSON_fd(const char *template, size_t tlength,
@@ -286,7 +317,7 @@ int mustach_cJSON_fd(const char *template, size_t tlength,
 {
 	struct tstack_s e;
 	e.root = root;
-	return mustach_json_fd(template, tlength, &mustach_wrap_itf_json, &e, flags, fd);
+	return mustach_json_fd(template, tlength, &cjson_methods, &e, flags, fd);
 }
 
 size_t mustach_asprintf(char **ret,
@@ -300,7 +331,7 @@ size_t mustach_asprintf(char **ret,
     e.root = (cJSON*)json_root;
     size_t size;
     int rc = mustach_json_mem(template, tlength,
-                              &mustach_wrap_itf_json, &e,
+                              &cjson_methods, &e,
                               flags? flags
                               : Mustach_With_AllExtensions,
                               ret,
@@ -317,20 +348,20 @@ int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flag
 {
 	struct tstack_s e;
 	e.root = root;
-	return mustach_json_mem(template, length, &mustach_wrap_itf_json, &e, flags, result, size);
+	return mustach_json_mem(template, length, &cjson_methods, &e, flags, result, size);
 }
 
 int mustach_cJSON_write(const char *template, size_t length, cJSON *root, int flags, mustach_write_cb_t *writecb, void *closure)
 {
 	struct tstack_s e;
 	e.root = root;
-	return mustach_json_write(template, length, &mustach_wrap_itf_json, &e, flags, writecb, closure);
+	return mustach_json_write(template, length, &cjson_methods, &e, flags, writecb, closure);
 }
 
 int mustach_cJSON_emit(const char *template, size_t length, cJSON *root, int flags, mustach_emit_cb_t *emitcb, void *closure)
 {
 	struct tstack_s e;
 	e.root = root;
-	return mustach_json_emit(template, length, &mustach_wrap_itf_json, &e, flags, emitcb, closure);
+	return mustach_json_emit(template, length, &cjson_methods, &e, flags, emitcb, closure);
 }
 

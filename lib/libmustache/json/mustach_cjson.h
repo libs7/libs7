@@ -6,8 +6,8 @@
  Modified by Gregg Reynolds
 */
 
-#ifndef _mustachios7_cjson_h_included_
-#define _mustachios7_cjson_h_included_
+#ifndef _mustach_cjson_h_included_
+#define _mustach_cjson_h_included_
 
 /*
  * mustach-json-c is intended to make integration of cJSON
@@ -15,8 +15,7 @@
  */
 
 #include "cJSON.h"
-/* #include "mustach-json.h" */
-#include "mustachios7_json.h"
+#include "mustach_json_ds_mgr.h"
 
 /**
  * Wrap interface used internally by mustach cJSON functions.
