@@ -196,6 +196,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
                                    &ret,
                                    &size);
         } else {
+            // dta is a string?
             rc = mustach_wrap_mem(s7_string(template),
                                       0, // tlength,
                                       &mustach_wrap_itf_scm, &e,

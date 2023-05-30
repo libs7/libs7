@@ -667,15 +667,16 @@ int mustach_wrap_fd(const char *template, size_t length, const struct mustach_wr
 	return mustach_fd(template, length, &mustach_itf_scm, &w, flags, fd);
 }
 
-int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size)
-{
-#ifdef DEBUGGING
-    log_debug("mustach_wrap_mem");
-#endif
-	struct wrap w;
-	wrap_init(&w, itf, closure, flags, NULL, NULL);
-	return mustach_mem(template, length, &mustach_itf_scm, &w, flags, result, size);
-}
+// in mustach-wrap.c
+/* int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size) */
+/* { */
+/* #ifdef DEBUGGING */
+/*     log_debug("mustach_wrap_mem"); */
+/* #endif */
+/* 	struct wrap w; */
+/* 	wrap_init(&w, itf, closure, flags, NULL, NULL); */
+/* 	return mustach_mem(template, length, &mustach_itf_scm, &w, flags, result, size); */
+/* } */
 
 int mustach_wrap_write(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure)
 {

@@ -63,11 +63,11 @@ void mustach_free(void *json_c);
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-int mustach_dprintf(int fd,
-                     const char * restrict template, size_t tlength,
-                     void *json_root,
-                     int data_schema, // JSON or SCHEME
-                     int flags);
+/* int mustach_dprintf(int fd, */
+/*                      const char * restrict template, size_t tlength, */
+/*                      void *json_root, */
+/*                      int data_schema, // JSON or SCHEME */
+/*                      int flags); */
 
 /* extern int mustach_cJSON_fd(const char *template, size_t length, cJSON *root, int flags, int fd); */
 

@@ -54,18 +54,18 @@ typedef int mustach_emit_cb_t(void *closure, const char *buffer, size_t size, in
 /**
  * Flags specific to mustach wrap
  */
-#define Mustach_With_SingleDot            4     /* obsolete, always set */
-#define Mustach_With_Equal                8
-#define Mustach_With_Compare             16
-#define Mustach_With_JsonPointer         32
-#define Mustach_With_ObjectIter          64
-#define Mustach_With_IncPartial         128     /* obsolete, always set */
-#define Mustach_With_EscFirstCmp        256
-#define Mustach_With_PartialDataFirst   512
-#define Mustach_With_ErrorUndefined    1024
+/* #define Mustach_With_SingleDot            4     /\* obsolete, always set *\/ */
+/* #define Mustach_With_Equal                8 */
+/* #define Mustach_With_Compare             16 */
+/* #define Mustach_With_JsonPointer         32 */
+/* #define Mustach_With_ObjectIter          64 */
+/* #define Mustach_With_IncPartial         128     /\* obsolete, always set *\/ */
+/* #define Mustach_With_EscFirstCmp        256 */
+/* #define Mustach_With_PartialDataFirst   512 */
+/* #define Mustach_With_ErrorUndefined    1024 */
 
-#undef  Mustach_With_AllExtensions
-#define Mustach_With_AllExtensions     1023     /* don't include ErrorUndefined */
+/* #undef  Mustach_With_AllExtensions */
+/* #define Mustach_With_AllExtensions     1023     /\* don't include ErrorUndefined *\/ */
 
 /**
  * mustach_wrap_itf - high level wrap of mustach - interface for callbacks
@@ -196,8 +196,6 @@ static const struct mustach_itf mustach_itf_json;
 /*  * Returns 0 in case of success, -1 with errno set in case of system error */
 /*  * a other negative value in case of error. */
 /*  *\/ */
-int mustach_json_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size);
-
 /* static int mustach_wrap_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size); */
 
 /* /\** */

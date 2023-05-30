@@ -223,7 +223,7 @@ int mustach_wrap_file(const char *template, size_t length, const struct mustach_
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-__attribute__((unused)) static int mustach_wrap_fd(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, int fd);
+/* __attribute__((unused)) static int mustach_wrap_fd(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, int fd); */
 
 /**
  * mustach_wrap_mem - Renders the mustache 'template' in 'result' for an abstract

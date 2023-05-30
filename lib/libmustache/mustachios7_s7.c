@@ -60,7 +60,7 @@ static int compare(void *closure, const char *value)
     if (s7_is_real(o)) {
         s7_double d = s7_number_to_real(s7, o) - atof(value);
         return d < 0 ? -1 : d > 0 ? 1 : 0;
-    } else 	if (s7_is_integer(o)) {
+    } else if (s7_is_integer(o)) {
         s7_int i = s7_number_to_integer(s7, o) - atoll(value);
         return i < 0 ? -1 : i > 0 ? 1 : 0;
     } else if (s7_is_string(o)) {

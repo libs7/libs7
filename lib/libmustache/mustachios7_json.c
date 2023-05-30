@@ -715,7 +715,7 @@ int mustach_json_fd(const char *template, size_t length, const struct mustach_wr
 int mustach_json_mem(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, char **result, size_t *size)
 {
 #ifdef DEBUGGING
-    log_debug("mustach_wrap_mem");
+    log_debug("mustach_json_mem");
 #endif
 	struct wrap w;
 	wrap_init(&w, itf, closure, flags, NULL, NULL);

@@ -27,6 +27,11 @@ SRCS = [
     "mustachios7_json.c",
     "mustachios7_json.h",
 
+    "mustach_tomlc99.c",
+    "mustach_tomlc99.h",
+    "mustach_toml.c",
+    "mustach_toml.h",
+
     "mustachios7_wrap.c",
     "mustachios7_wrap.h",
 ]
@@ -47,6 +52,9 @@ COPTS = BASE_COPTS + CLIB_COPTS + [
     "-Ivendored/logc",
     "-Iexternal/libs7/vendored/logc",
 
+    "-Ivendored/tomlc99",
+    "-Iexternal/libs7/vendored/tomlc99",
+
     "-Iexternal/libs7/src",
     "-Iexternal/mustachios7/lib",
     # ] + select({
@@ -61,6 +69,7 @@ DEPS = [
     "//src:s7_archive",
     "//vendored/cjson",
     "//vendored/logc",
+    "//vendored/tomlc99",
     "//dev"
 ]
 

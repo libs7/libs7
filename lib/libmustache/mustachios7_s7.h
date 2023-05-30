@@ -1,7 +1,8 @@
 /*
- Author: José Bollo <jobol@nonadev.net>
-
+ Original author: José Bollo <jobol@nonadev.net>
  https://gitlab.com/jobol/mustach
+
+ Modifications: G. Reynolds
 
  SPDX-License-Identifier: ISC
 */
