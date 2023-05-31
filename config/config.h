@@ -5,6 +5,8 @@
 /* Define as 1 if you have open_memstream.  */
 #define HAVE_OPEN_MEMSTREAM 1
 
+#include "log.h"
+
 // #define TOMLX_TRACING
 #if defined(TOMLX_TRACING)
 #define TOMLX_ENTRY TRACE_ENTRY

@@ -1,0 +1,11 @@
+load("//:BUILD.bzl", "COPTS")
+
+cc_library(
+    name = "CException",
+    linkstatic = True,
+    srcs = ["CException.c"],
+    hdrs = ["CException.h"],
+    copts = COPTS,
+    visibility = ["//visibility:public"]
+)
+

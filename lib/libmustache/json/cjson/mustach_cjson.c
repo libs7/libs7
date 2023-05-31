@@ -270,11 +270,12 @@ const struct mustach_ds_methods_s cjson_methods = {
 /* ****************************************************************
  * PUBLIC RENDER API
  **************************************************************** */
-const char *mustache_json_render(const char *template,
+const char *mustache_cjson_render(const char *template,
                                  size_t template_sz,
                                  cJSON *root,
                                  int _flags)
 {
+
     (void)template;
     (void)template_sz;
     (void)root;

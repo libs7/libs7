@@ -18,6 +18,7 @@ SRCS = BASE_SRCS + [
     "//src:s7.h",
     "libmustachios7_s7.c",
     "libmustachios7_s7.h",
+
     "mustachios7_s7.c",
     "mustachios7_s7.h",
     "mustachios7_scm.c",
@@ -57,7 +58,7 @@ COPTS = BASE_COPTS + INCLUDE_PATHS + CLIB_COPTS + [
     "-Iexternal/libs7/vendored/tomlc99",
 
     "-Iexternal/libs7/src",
-    "-Iexternal/mustachios7/lib",
+    "-Iexternal/mustachios/lib",
     # ] + select({
     #     "//config/debug:debug?": ["-Isrc", "-Iexternal/mustachios7/test/src"],
     #     "//conditions:default": ["-Itest/src",
@@ -75,11 +76,11 @@ DEPS = [
 ]
 
 cc_library(
-    name = "mustache_s7_archive",
+    name = "mustachios_s7_archive",
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs = SRCS,
-    hdrs = ["libmustachios7_s7.h"],
+    hdrs = ["libmustachios_s7.h"],
     copts = COPTS,
     deps = DEPS,
     linkopts = BASE_LINKOPTS,
@@ -93,7 +94,7 @@ cc_library(
 )
 
 cc_binary(
-    name  = "mustachios7_s7",
+    name  = "mustachios_s7",
     linkshared = True,
     srcs = SRCS,
     # deps = DEPS + ["//src:s7"],

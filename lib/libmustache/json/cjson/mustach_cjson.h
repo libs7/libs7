@@ -22,7 +22,25 @@
  * Can be used for overriding behaviour.
  */
 
-extern const struct mustach_wrap_itf mustach_wrap_itf_json;
+/* extern const struct mustach_wrap_itf mustach_wrap_itf_json; */
+extern const struct mustach_ds_methods_s json_methods;
+
+/**
+ * mustache_cjson_render - Render to string.
+ *
+ * @template: the template string to instanciate
+ * @length:   length of the template or zero if unknown and template null terminated
+ * @root:     the root cJSON object to render
+ * @flags:    flags
+ *
+ * Returns pointer to rendered string, null-terminated, or NULL in
+ * case of error (errno is set). Returned string must be freed by caller.
+ */
+const char *mustache_cjson_render(const char *template,
+                                 size_t template_sz,
+                                 cJSON *root,
+                                 int flags);
+
 
 /**
  * mustach_fprintf - Renders the mustache 'template' in 'file' for 'root'.

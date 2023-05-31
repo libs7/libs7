@@ -18,7 +18,7 @@
  * Can be used for overriding behaviour.
  */
 
-// rename: mustach_datasource_itf
+// was: struct mustach_wrap_itf
 extern const struct mustach_ds_methods_s toml_methods;
 
 /* extern int mustach_tomlc99_render_to_file(const char *template, size_t length, cJSON *root, int flags, FILE *file); */

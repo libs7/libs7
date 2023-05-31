@@ -69,6 +69,7 @@
 
 /* /\** */
 /*  * mustach_wrap_itf - high level wrap of mustach - interface for callbacks */
+// renamed: struct datasource-s
 /*  * */
 /*  * The functions sel, subsel, enter and next should return 0 or 1. */
 /*  * */

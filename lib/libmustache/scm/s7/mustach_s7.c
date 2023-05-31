@@ -1,4 +1,4 @@
-/* see https://github.com/joeltg/json.scm */
+/* scheme to json util: https://github.com/joeltg/json.scm */
 /* #define _GNU_SOURCE */
 
 #include <errno.h>
@@ -6,21 +6,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "config.h"
 #include "log.h"
-#include "mustachios7_s7.h"
-#include "trace.h"
-/* #include "c_stacktrace.h" */
+#include "mustach_s7.h"
 
-/* #define CRITICAL(str) \ */
-/* 	{print_stacktrace(0); \ */
-/* 	fprintf(stderr, "%s (in %s at %s:%i)\n", str, __func__, __FILE__, __LINE__); \ */
-/* 	exit(EXIT_FAILURE); \ */
-/* 	} */
-
-#ifdef DEBUGGING
-#include "ansi_colors.h"
-#include "debug.h"
-#endif
+/* #ifdef DEBUGGING */
+/* #include "ansi_colors.h" */
+/* #include "debug.h" */
+/* #endif */
 
 s7_scheme *s7;
 
@@ -1033,9 +1026,9 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
 
 /* format e->selection it sbuf.value, for printing? */
 /* rc 0: no val? */
-static int get(void *closure, struct mustach_sbuf *sbuf, int key)
+static int format(void *closure, struct mustach_sbuf *sbuf, int key)
 {
-    TRACE_ENTRY(get)
+    TRACE_ENTRY(format)
     struct tstack_s *e = closure;
     const char *s;
 
@@ -1058,7 +1051,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
             : "";
     }
     else if (s7_is_vector(e->selection)) {
-        TRACE_LOG_DEBUG("get: selection is vector", "");
+        TRACE_LOG_DEBUG("format: selection is vector", "");
         // use s7's format fn to remove meta-notation
         // e.g. '#(1 2 3)' => '1 2 3'
         // but: #(#(1 2) #("a" "b")) - remove quotes
@@ -1073,7 +1066,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
     }
     else if (s7_is_list(s7, e->selection)) {
-        TRACE_LOG_DEBUG("get: selection is list", "");
+        TRACE_LOG_DEBUG("format: selection is list", "");
         // use s7's format fn to remove meta-notation
         // e.g. '(1 2 3)' => '1 2 3'
         // ~^ stops at end of sequence
@@ -1087,12 +1080,12 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
     }
     else if (s7_is_string(e->selection)) {
-        TRACE_LOG_DEBUG("get: selection is string", "");
+        TRACE_LOG_DEBUG("format: selection is string", "");
         s = s7_string(e->selection);
     }
     else if (s7_is_symbol(e->selection)) {
 #ifdef DEBUGGING
-        log_debug("get: selection is symbol");
+        log_debug("format: selection is symbol");
 #endif
         s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
                                   s7_make_string(s7, "~A"),
@@ -1100,13 +1093,13 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
     }
     else if (s7_is_null(s7, e->selection)) {
 #ifdef DEBUGGING
-        log_debug("get: selection is null");
+        log_debug("format: selection is null");
 #endif
         s = "";
     }
     else if (s7_is_unspecified(s7, e->selection)) {
 #ifdef DEBUGGING
-        log_debug("get: selection is unspecified - (values)?");
+        log_debug("format: selection is unspecified - (values)?");
 #endif
         /* s = ""; */
         s = NULL; // s7_object_to_c_string(s7, e->selection);
@@ -1116,7 +1109,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
     }
     else if (s7_is_procedure(e->selection)) {
 #ifdef DEBUGGING
-        log_debug("get: selection is procedure");
+        log_debug("format: selection is procedure");
 #endif
         sbuf->lambda = true;
         s7_pointer arity=s7_car(s7_arity(s7, e->selection));
@@ -1168,7 +1161,7 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
         sbuf->freecb = free;
     }     else {
 #ifdef DEBUGGING
-        log_debug("get: else");
+        log_debug("format: else");
         TRACE_S7_DUMP("e->selection", e->selection);
 #endif
         /* s = s7_PrintUnformatted(e->selection); */
@@ -1186,43 +1179,196 @@ static int get(void *closure, struct mustach_sbuf *sbuf, int key)
 }
 
 /* **************************************************************** */
-void dump_closure(void *closure)
+static void dump_stack(struct tstack_s *stack)
 {
-    struct tstack_s *e = closure;
-
-    (void)closure;
-    int d = e->depth;
+    int d = stack->depth;
     log_debug("DUMP_CLOSURE");
-    log_debug("\tpredicate: %d", e->predicate);
-    log_debug("\tlambda: %d", e->lambda);
+    log_debug("\tpredicate: %d", stack->predicate);
+    log_debug("\tlambda: %d", stack->lambda);
     log_debug("\tdepth: %d", d);
-    TRACE_S7_DUMP("\troot", e->root);
-    TRACE_S7_DUMP("\tselection", e->selection);
-    if (e->stack[d].cont)
-        TRACE_S7_DUMP("\te->stack[%d].cont", e->stack[d].cont);
+    TRACE_S7_DUMP("\troot", stack->root);
+    TRACE_S7_DUMP("\tselection", stack->selection);
+    if (stack->stack[d].cont)
+        TRACE_S7_DUMP("\tstack->stack[%d].cont", stack->stack[d].cont);
     else
         log_debug("ctx: ?");
-    if (e->stack[d].obj)
-        TRACE_S7_DUMP("\te->stack[%d].obj", e->stack[d].obj);
+    if (stack->stack[d].obj)
+        TRACE_S7_DUMP("\tstack->stack[%d].obj", stack->stack[d].obj);
     else
         log_debug("obj: ?");
-    log_debug("\te->stack[%d].count: %d", d, e->stack[d].count);
-    log_debug("\te->stack[%d].index: %d", d, e->stack[d].index);
-    log_debug("\te->stack[%d].lambda: %d", d, e->stack[d].lambda);
-    log_debug("\te->stack[%d].predicate: %d", d, e->stack[d].predicate);
-    log_debug("end closure");
+    log_debug("\tstack->stack[%d].count: %d", d, stack->stack[d].count);
+    log_debug("\tstack->stack[%d].index: %d", d, stack->stack[d].index);
+    log_debug("\tstack->stack[%d].lambda: %d", d, stack->stack[d].lambda);
+    log_debug("\tstack->stack[%d].predicate: %d", d, stack->stack[d].predicate);
+    log_debug("end stack");
     fflush(NULL);
 }
 
-const struct mustach_wrap_itf mustach_wrap_itf_scm = {
-	.start = start,
-	.stop = NULL,
-	.compare = compare,
-	.sel = sel,
-	.subsel = subsel,
-	.enter = enter,
-	.next = next,
-	.leave = leave,
-	.get = get,
-        .dump_closure = dump_closure
+// const struct mustach_wrap_itf mustach_wrap_itf_scm = {
+const struct mustach_ds_methods_s scm_methods = {
+    .start = (int (*)(void*))start,
+    .stop = NULL,
+    .compare = compare,
+    .sel = sel,
+    .subsel = subsel,
+    .enter = enter,
+    .next = next,
+    .leave = leave,
+    .format = (int (*)(void*, const char*, struct mustach_sbuf*, int))format,
+    .dump_stack = (void (*)(void*))dump_stack
 };
+
+/* ****************************************************************
+ * PUBLIC RENDER API
+ **************************************************************** */
+/* returns rendered string */
+const char *mustache_scm_render(const char *template,
+                                size_t template_sz,
+                                s7_pointer data,
+                                int _flags)
+{
+    size_t size;            /* render outparam */
+    char *ret;              /* render outparam */
+    struct tstack_s stack;
+    stack.root = (s7_pointer)data;
+#ifdef DEBUGGING
+    DUMP("root", stack.root);
+#endif
+
+    // port is unspecified, undefined, #t, #f, string port, or file port
+
+    /* if (port == s7_unspecified(s7)) { // s7_nil(s7)??? */
+        // :port #f - return string only
+        // render to buffer, then return str:
+
+        int rc;
+        rc = mustach_scm_render_to_string(template, template_sz,
+                                           &s7_methods,
+                                           &stack,
+                                           flags,
+                                           &result, &result_sz);
+        if (rc < 0) {
+            log_error("mustach_wrap_mem rc: %d", rc);
+            return s7_make_integer(s7,rc);
+        } else {
+/* #ifdef DEBUGGING */
+/*             log_debug("mustach:render wrote %s", ret); */
+/* #endif */
+/*             return s7_make_string(s7, ret); */
+        }
+    }
+
+    else if (port == s7_undefined(s7)) {
+        // :port #t - send to current-outp, return str
+        // :port () - send to current-outp, do NOT return str
+        int rc = mustach_wrap_mem(s7_string(template),
+                                  0, // tlength,
+                                  &mustach_wrap_itf_scm,
+                                  &e, /* closure, struct tstack_s* */
+                                  flags,
+                                  &ret,
+                                  &size);
+        if (rc < 0) {
+            log_error("mustach_wrap_mem failure: %s", strerror(errno));
+            return s7_make_integer(s7,rc);
+        } else {
+#ifdef DEBUGGING
+            log_debug("mustach:render wrote %s", ret);
+#endif
+            s7_pointer s = s7_make_string(s7, ret);
+            s7_display(s7, s, s7_current_output_port(s7));
+            if (return_string) {
+                return s;
+            } else {
+                return s7_unspecified(s7);
+            }
+        }
+    }
+
+    // (port? port) already verified
+    const char *port_filename = s7_port_filename(s7, port);
+    (void)port_filename;
+#ifdef DEBUGGING
+    log_debug("port_filename: %s", port_filename);
+#endif
+    s7_pointer env = s7_inlet(s7,
+                              s7_list(s7, 1,
+                                      s7_cons(s7,
+                                              s7_make_symbol(s7, "p"),
+                                              port)));
+    s7_pointer pfile = s7_eval_c_string_with_environment(
+                                                         s7, "(port-file p)",
+                                                         env);
+
+#ifdef DEBUGGING
+    DUMP("port file", pfile);
+#endif
+    if (s7_c_pointer_type(pfile) == s7_f(s7)) {
+#ifdef DEBUGGING
+        log_debug("GOT STRING PORT");
+#endif
+
+        int rc = mustach_wrap_mem(s7_string(template),
+                                  0, // tlength,
+                                  &mustach_wrap_itf_scm, &e,
+                                  flags,
+                                  &ret,
+                                  &size);
+        if (rc < 0) {
+            log_error("mustach_wrap_mem failure: %s", strerror(errno));
+            return s7_make_integer(s7,rc);
+        } else {
+#ifdef DEBUGGING
+            log_debug("mustach:render wrote %s", ret);
+#endif
+            s7_display(s7, s7_make_string(s7, ret), port);
+            /* if (return_string) // only true if port = current-output-port */
+            /*     return s7_make_string(s7, ret); */
+            /* else */
+            return s7_make_integer(s7, size);
+        }
+
+    } else {
+#ifdef DEBUGGING
+        log_debug("GOT FILE PORT");
+#endif
+        /* (void)data_scheme;          /\* currently unused *\/ */
+        struct tstack_s e;
+        e.root = (s7_pointer)data;
+        s7_flush_output_port(s7, s7_current_output_port(s7));
+        int rc = mustach_wrap_file(s7_string(template), 0, // tlength,
+                                 &mustach_wrap_itf_scm, &e,
+                                 flags,
+                                 s7_c_pointer(pfile));
+        (void)rc;
+#ifdef DEBUGGING
+        log_debug("FILE port RC: %d", rc);
+#endif
+        /* cop = s7_current_output_port(s7); */
+        /* os = s7_output_string(s7, cop); */
+        /* const char *os = s7_get_output_string(s7, cop); */
+        /* log_debug("current output str: %s", os); */
+        /* log_debug("UUxxxxxxxxxxxxxxxxx"); */
+        /* (void) os; */
+    }
+
+    return s7_make_string(s7, ret);
+}
+
+int mustache_scm_frender(FILE *f
+                         const char *template,
+                         size_t template_sz,
+                         s7_pointer data,
+                         int _flags)
+{
+    return 0;
+}
+
+int mustache_scm_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          s7_pointer data,
+                          int _flags)
+{
+    return 0;
+}

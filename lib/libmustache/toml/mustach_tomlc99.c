@@ -552,7 +552,6 @@ const struct mustach_ds_methods_s tomlc99_methods = {
  */
 
 /* called by application: */
-// FIXME: make this return the string.
 const char *mustache_toml_render(const char *template,
                                  size_t template_sz,
                                  toml_table_t *root,
@@ -560,9 +559,7 @@ const char *mustache_toml_render(const char *template,
 {
     struct tomlx_item_s *titem = tomlx_make_item(root, TOML_TABLE);
 
-    char *result; // Must be release by call to free
-    size_t result_sz;
-
+    //FIXME: client responsible for flags
     int flags = Mustach_With_AllExtensions;
     flags &= ~Mustach_With_JsonPointer;
     (void)_flags;
@@ -572,12 +569,11 @@ const char *mustache_toml_render(const char *template,
     memset(&stack, 0, sizeof(struct tstack_s));
     stack.root = titem;
     errno = 0;
-    int rc = mustach_toml_render_to_string(template, template_sz,
-                                         &tomlc99_methods,
-                                         &stack,
-                                         flags,
-                                         &result, &result_sz);
-    if (rc) {
+    char *result = mustach_toml_render_to_string(template, template_sz,
+                                                 &tomlc99_methods,
+                                                 &stack,
+                                                 flags);
+    if (!result) {
         log_error("mustach_toml_render_to_string rc: %d", rc);
         //FIXME handle error
         return NULL;
@@ -588,8 +584,10 @@ const char *mustache_toml_render(const char *template,
                  result_sz, ln);
     }
     /* log_debug("render result: %s", result); */
-    //FIXME: return result ptr (which must be freed)
-    return result;
+
+    //FIXME: toml_item_free(titem);
+
+    return result; // client must free
 }
 
 /* render to string buffer */

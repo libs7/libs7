@@ -74,7 +74,7 @@ typedef int mustach_emit_cb_t(void *closure, const char *buffer, size_t size, in
 
 /* internal structure for wrapping */
 // was: struct wrap
-struct datasource_s { // rename: struct datasource_s
+struct datasource_s { // was: struct wrap
     int predicate; /* so mustach.c can signal a predicate metatag */
 
     /* original interface */

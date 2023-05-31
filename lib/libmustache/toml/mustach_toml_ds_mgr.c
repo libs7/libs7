@@ -11,15 +11,13 @@
 #include <malloc.h>
 #endif
 
-#include "log.h"
+#include "config.h"
 #include "mustach.h"
 #include "mustach_toml_ds_mgr.h"
 
 #ifdef DEVBUILD
 #include "ansi_colors.h"
-//#include "logging.h"
 #endif
-#include "config.h"
 
 /* #if !defined(INCLUDE_PARTIAL_EXTENSION) */
 /* # define INCLUDE_PARTIAL_EXTENSION ".mustache" */
@@ -668,10 +666,9 @@ static int partial(struct datasource_s *ds,
     return MUSTACH_OK;
 }
 
-static void dump_stack(void *closure)
+static void dump_stack(struct datasource_s *ds)
 {
     TRACE_ENTRY(dump_stack);
-    struct datasource_s *ds= closure;
     ds->methods->dump_stack(ds->stack);
 }
 
@@ -709,19 +706,32 @@ int mustach_toml_render_to_string(const char *template,
                                   size_t template_sz,
                                   const struct mustach_ds_methods_s *toml_methods,
                                   void *stack, // struct tstack_s*
-                                  int flags,
-                                  char **result, size_t *result_sz)
+                                  int flags)
 {
 #ifdef DEVBUILD
     log_debug("mustach_toml_render_to_string");
 #endif
     struct datasource_s ds;
+
+    char *result; // Must be released by call to free
+    size_t result_sz;
+
     datasource_init(&ds, toml_methods, stack, flags, NULL, NULL);
-    return mustach_mem(template, template_sz,
-                       &toml_ds_mgr_methods,
-                       &ds,
-                       flags,
-                       result, result_sz);
+    int rc = mustach_mem(template, template_sz,
+                         &toml_ds_mgr_methods,
+                         &ds,
+                         flags,
+                         result, result_sz);
+    if (rc) {
+        log_error("mustach_mem rc: %d", rc);
+        return NULL;
+    }
+    size_t ln = strlen(result);
+    if (ln != result_sz) {
+        log_warn("reported result sz %d does not match strlen %d",
+                 result_sz, ln);
+    }
+    return result; // client must free
 }
 
 int mustach_toml_write(const char *template, size_t length, const struct mustach_ds_methods_s *methods, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure)

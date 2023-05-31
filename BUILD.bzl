@@ -26,13 +26,14 @@ COPTS = [
     "//conditions:default": ["-std=c11"],
 })
 
-DEPS = [
+DEPS = [ ## only vendored
+    "//vendored/CException",
     "//vendored/logc",
-    # "@mustachios7//lib:mustach"
 ]
 
 INCLUDE_PATHS = [
     "-Iconfig", "-Iexternal/mustachios7/config",
+    "-Ivendored/CException", "-Iexternal/mustachios/vendored/CException",
     "-Ivendored/logc", "-Iexternal/libs7/Ivendored/logc"
 ]
 

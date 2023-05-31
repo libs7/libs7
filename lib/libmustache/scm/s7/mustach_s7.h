@@ -7,8 +7,8 @@
  SPDX-License-Identifier: ISC
 */
 
-#ifndef _mustachios7_s7_h_included_
-#define _mustachios7_s7_h_included_
+#ifndef _mustach_s7_h_included_
+#define _mustach_s7_h_included_
 
 /*
  * mustach-s7 is intended to make integration of s7
@@ -16,7 +16,7 @@
  */
 
 #include "libs7.h"
-#include "mustachios7_scm.h"
+#include "mustach_scm_ds_mgr.h"
 
 struct tstack_s {
     int predicate;
@@ -146,6 +146,23 @@ extern const struct mustach_wrap_itf mustach_wrap_itf_scm;
 /* s7_pointer libmustachios7_mustach_render_json(s7_scheme *s7, s7_pointer args); */
 
 /* s7_pointer libmustachios7_s7_init(s7_scheme *sc); */
+
+const char *mustache_scm_render(const char *template,
+                               size_t template_sz,
+                               s7_pointer root,
+                               int _flags);
+
+int mustache_scm_frender(FILE *f,
+                         const char *template,
+                         size_t template_sz,
+                         s7_pointer data,
+                         int _flags);
+
+int mustache_scm_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          s7_pointer data,
+                          int _flags);
 
 #endif
 
