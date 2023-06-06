@@ -44,6 +44,23 @@ s7_pointer json_cjson_version(s7_scheme *sc, s7_pointer args)
     return(s7_make_string(sc, (char*)cJSON_Version()));
 }
 
+/* -------- json_is_datum -------- */
+/* JSON root item may be any json value - object, vector, string, etc.
+   this allows us to distinguish between json and other scheme types
+*/
+static s7_pointer json_is_datum(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY(json_is_datum);
+    s7_pointer p, arg;
+    p = args;
+    arg = s7_car(p);
+    /* log_debug("c obj type: %d", s7_c_object_type(arg)); */
+    /* log_debug("json_object_type_tag: %d", json_object_type_tag); */
+    if (s7_c_object_type(arg) == json_object_type_tag)
+        return(s7_t(s7));
+    else
+        return(s7_f(s7));
+}
 
 /* -------- json_read -------- */
 /*
@@ -543,6 +560,13 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
     /* cJSON_,_symbol = s7_make_symbol(s7, "cJSON*,"); */
     char___symbol = s7_make_symbol(s7, "char**");
     cJSON__symbol = s7_make_symbol(s7, "cJSON*");
+
+    s7_define(s7, cur_env,
+              s7_make_symbol(s7, "json:datum?"),
+              s7_make_typed_function(s7, "json:datum?",
+                                     json_is_datum,
+                                     1, 0, false,
+                                     "(json:datum? x) true if x is a jSON value (object, array, string, etc.)", pl_tx));
 
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:raw?"),
