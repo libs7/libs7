@@ -504,14 +504,14 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    /* RUN_TEST(int_array_to_vec); */
-    /* RUN_TEST(real_array_to_vec); */
-    /* RUN_TEST(bool_array_to_vec); */
-    /* RUN_TEST(null_array_to_vec); */
-    /* RUN_TEST(string_array_to_vec); */
-    /* RUN_TEST(mixed_array_to_vec); */
+    RUN_TEST(int_array_to_vec);
+    RUN_TEST(real_array_to_vec);
+    RUN_TEST(bool_array_to_vec);
+    RUN_TEST(null_array_to_vec);
+    RUN_TEST(string_array_to_vec);
+    RUN_TEST(mixed_array_to_vec);
 
-    /* RUN_TEST(nested_int_arrays); */
+    RUN_TEST(nested_int_arrays);
     RUN_TEST(nested_table_arrays);
 
     return UNITY_END();

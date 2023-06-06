@@ -31,8 +31,10 @@ LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
 test_suite(
     name  = "json",
     tests = [
-        "//test/lib/json:readers",
+        "//test/lib/json:array_to_scm",
         "//test/lib/json:arrays",
+        "//test/lib/json:readers",
+        "//test/lib/json:map_to_scm",
         "//test/lib/json:maps",
         # "//test/lib/json:strings",
     ]

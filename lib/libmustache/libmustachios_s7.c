@@ -19,10 +19,10 @@
 /* 	exit(EXIT_FAILURE); \ */
 /* 	} */
 
-#ifdef DEVBUILD
-#include "ansi_colors.h"
-#include "debug.h"
-#endif
+/* #ifdef DEVBUILD */
+/* #include "ansi_colors.h" */
+/* #include "debug.h" */
+/* #endif */
 
 /* s7_scheme *s7; */
 
@@ -39,13 +39,13 @@
  */
 
 /* returns a c-pointer object */
-/* s7_pointer mustachios7_read_json(s7_scheme *s7, s7_pointer args) */
+/* s7_pointer mustachios_read_json(s7_scheme *s7, s7_pointer args) */
 /* { */
-/*     TRACE_ENTRY(mustachios7_read_json); */
+/*     TRACE_ENTRY(mustachios_read_json); */
 /*     s7_pointer json_str = s7_car(args); */
 /*     if (!s7_is_string(json_str)) { */
 /*         s7_pointer e = s7_wrong_type_arg_error(s7, */
-/*                                                "mustachios7_read_json", */
+/*                                                "mustachios_read_json", */
 /*                                                1, */
 /*                                                json_str, */
 /*                                                "a JSON string"); */
@@ -248,9 +248,9 @@ void _handle_sink(s7_scheme *s7, s7_pointer port)
 /*
  * (mustache:render sink template data flags)
  */
-s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
+s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(mustachios7_render);
+    TRACE_ENTRY(g_mustachios_render);
     TRACE_S7_DUMP("args", args);
 
     /* args: template, data, port */
@@ -296,7 +296,7 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
     //FIXME: enable flag optouts
     s7_pointer flags_optout     = s7_cadddr(args);
 #ifdef DEVBUILD
-    DUMP("f", flags_optout);
+    /* DUMP("f", flags_optout); */
 #endif
     (void)flags_optout;
 
@@ -305,19 +305,25 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
     /* **** render **** */
 
     s7_pointer b;
-    b = s7_apply_function(s7, s7_name_to_value(s7, "json:map?"),
+    b = s7_apply_function(s7, s7_name_to_value(s7, "json:datum?"),
                                    s7_list(s7, 1, data));
     if (b == s7_t(s7)) {
         // call mustache_json_render
         cJSON *root = (cJSON*)s7_c_object_value(data);
         if (sink.to_file_port) {
-            mustache_json_frender(ostream, template_str, 0, root, flags);
+            /* mustache_json_frender(ostream, template_str, 0, root, flags); */
+            log_debug("RENDER json to file port");
         }
         else if (sink.to_string) {
+            /* log_debug("RENDER json to string"); */
+            const char * s = mustache_json_render(template_str, 0, root, flags);
+            return s7_make_string(s7, s);
         }
         else if (sink.to_current_output_port) {
+            log_debug("RENDER json to current-output-port");
         }
         else if (sink.to_string_port) {
+            log_debug("RENDER json to string port");
         }
         else {
         }
@@ -360,11 +366,10 @@ s7_pointer g_mustachios7_render(s7_scheme *s7, s7_pointer args)
 
 }
 
-/* void libmustachios7_s7_init(s7_scheme *s7) */
-s7_pointer libmustachios7_s7_init(s7_scheme *s7)
+s7_pointer libmustachios_s7_init(s7_scheme *s7)
 {
-    TRACE_ENTRY(libmustachios7_s7_init);
-    TRACE_LOG_DEBUG("libmustachios7_s7_init", "");
+    TRACE_ENTRY(libmustachios_s7_init);
+    TRACE_LOG_DEBUG("libmustachios_s7_init", "");
 
     /* s7 = _s7; */
     s7_pointer curr_env;
@@ -376,7 +381,7 @@ s7_pointer libmustachios7_s7_init(s7_scheme *s7)
     /*           s7_make_function_star(s7, ...)); */
 
     s7_define_function_star(s7,
-                            "mustache:render", g_mustachios7_render,
+                            "mustache:render", g_mustachios_render,
                             "(template #f) (data #f) (port #f) (flags 0)",
                             "(mustach:render template data (port p)) port defaults to current output port");
 

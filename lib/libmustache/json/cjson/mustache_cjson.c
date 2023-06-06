@@ -369,10 +369,10 @@ static void _dump_obj(char *msg, struct cJSON *item)
             log_debug("\t  string: %s", s);
         }
         else if (cJSON_IsArray(item)) {
-            log_debug("\t  array: %s", "todo...");
+            log_debug("\t  array: %s", "todo dump json array...");
         }
         else if (cJSON_IsObject(item)) {
-            log_debug("\t  object: %s", "todo...");
+            log_debug("\t  object: %s", "todo dump json obj...");
         }
         else {
             log_warn("\t UNKNOWN DATUM TYPE");
@@ -453,7 +453,7 @@ const struct mustach_ds_methods_s cjson_methods = {
 /* ****************************************************************
  * PUBLIC RENDER API
  **************************************************************** */
-const char *mustache_cjson_render(const char *template,
+const char *mustache_json_render(const char *template,
                                  size_t template_sz,
                                  cJSON *root,
                                  int _flags)
@@ -478,6 +478,22 @@ const char *mustache_cjson_render(const char *template,
         return result;
     }
 }
+
+int mustache_json_frender(FILE * restrict file,
+                          const char *template,
+                          size_t template_sz,
+                          cJSON *root,
+                          int flags)
+{
+    log_debug("mustache_json_frender");
+    (void)file;
+    (void)template;
+    (void)template_sz;
+    (void)root;
+    (void)flags;
+    return -1;
+}
+
 /* int mustach_fprintf(FILE * restrict file, */
 /*                     const char * restrict template, size_t tlength, */
 /*                     void *json_root, */

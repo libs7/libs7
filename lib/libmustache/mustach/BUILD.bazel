@@ -26,3 +26,15 @@ cc_library(
     defines = DEFINES
 )
 
+# cc_binary(
+#     name = "mustach_s7",
+#     linkshared = True,
+#     srcs = SRCS + ["mustach.c", "mustach.h", "memfile.h"] + select({
+#         "//config/feature:open_memstream?": ["memfile_memstream.c"],
+#         "//conditions:default": ["memfile_tmpfile.c"]
+#     }),
+#     copts = COPTS,
+#     deps  = DEPS,
+#     defines = DEFINES
+# )
+

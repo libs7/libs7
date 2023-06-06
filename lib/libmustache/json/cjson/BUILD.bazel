@@ -6,14 +6,6 @@ load("//:BUILD.bzl",
      "BASE_LINKOPTS",
      "BASE_DEFINES")
 
-# load("//:BUILD.bzl",
-#      BASE_SRCS          = "SRCS",
-#      BASE_COPTS         = "COPTS",
-#      BASE_DEPS          = "DEPS",
-#      BASE_INCLUDE_PATHS = "INCLUDE_PATHS",
-#      BASE_LINKOPTS      = "LINKOPTS",
-#      BASE_DEFINES       = "DEFINES")
-
 load("//lib/libmustache:BUILD.bzl",
      "MUSTACHE_INCLUDE_PATHS",
      "MUSTACHE_DEPS")
@@ -28,6 +20,7 @@ LINKOPTS= BASE_LINKOPTS
 cc_library(
     name = "mustache_json",
     linkstatic = True,
+    alwayslink = True,
     srcs = SRCS + [
         "mustache_cjson.c",
         "mustache_cjson.h",
@@ -37,8 +30,7 @@ cc_library(
     hdrs = ["mustache_cjson.h"],
     deps  = DEPS + ["//vendored/cjson"],
     copts = COPTS + [
-        "-Ivendored/cjson",
-        "-Iexternal/libs7/vendored/cjson",
+        "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
     ],
     defines = DEFINES,
     linkopts = LINKOPTS

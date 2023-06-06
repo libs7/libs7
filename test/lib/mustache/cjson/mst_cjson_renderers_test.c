@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#include "config.h"
 #include "gopt.h"
 #include "log.h"
 #include "unity.h"
@@ -7,13 +8,16 @@
 #include "utstring.h"
 
 #include "utils.h"
+#include "macros.h"
 
 #include "libs7.h"
-//#include "libmustachios7_s7.h"
 
 #include "common.h"
 
 s7_scheme *s7;
+
+s7_pointer json_read;
+s7_pointer mustache_render;
 
 extern struct option options[];
 
@@ -36,15 +40,33 @@ void tearDown(void) {
 /* log_debug("result: %s", s); */
 /* free(s); */
 
-/*
-  encoding json from string
-*/
-void test_encoding(void) {
-    char *json_str = "{\"name\": \"Bob\"}";
-    s7_pointer json = read_json(s7, json_str);
-    s7_pointer t = s7_make_string(s7, "Hi, {{name}}!");
-    s7_pointer result = s7_call(s7, s7_name_to_value(s7, "mustache:render"),
-                                s7_list(s7, 2, t, json));
+/* mustachios tests call the C api directly: */
+/* CJSON_RENDER_TEST("Hello, {{subject}}!", */
+/*                  "{\"subject\": \"world\"}", */
+/*                  "Hello, world!"); */
+/* #define CJSON_RENDER_TEST(t, d, expected)                             \ */
+/*     do { cJSON *data = cJSON_Parse(d);                                \ */
+/*         if (data == 0) {                                              \ */
+/*             TEST_FAIL_MESSAGE("cJSON_Parse error");                   \ */
+/*             cJSON_free(data);                                      \ */
+/*         } else {                                                      \ */
+/*             const char *result = mustache_json_render(t, 0, data, 0);   \ */
+/*             TEST_ASSERT_EQUAL_STRING(expected, result);         \ */
+/*             cJSON_free(data);                                      \ */
+/*             free((void*)result);                                \ */
+/*         }                                                       \ */
+/*     } while(0) */
+
+
+/* libmustachios_s7 calls the s7 api */
+/* S7_RENDER_TEST("Hello, {{subject}}!", */
+/*                "{\"subject\": \"world\"}", */
+/*                "Hello, world!"); */
+
+void to_string(void) {
+    S7_RENDER_TEST("Hello, {{subject}}!",
+                   "{\"subject\": \"world\"}",
+                   "Hello, world!");
 }
 
 /* void test_object(void) { */
@@ -107,45 +129,23 @@ void test_encoding(void) {
 
 int main(int argc, char **argv)
 {
-    fprintf(stderr, "MAIN\n");
-    s7 = initialize("cjson", argc, argv);
+    s7 = initialize("cjson_renderers_test", argc, argv);
 
-    /* if ( !getenv("BAZEL_TEST") ) { */
-    /*     log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" ); */
-    /*     exit(EXIT_FAILURE); */
-    /* } */
+    libs7_load_clib(s7, "mustachios");
+    libs7_load_clib(s7, "toml");
+    libs7_load_clib(s7, "json");
 
-    /* /\* log_trace("WS: %s", getenv("TEST_WORKSPACE")); *\/ */
-    /* /\* log_debug("ARGV[0]: %s", argv[0]); *\/ */
-    /* /\* log_debug("CWD: %s", getcwd(NULL, 0)); *\/ */
+    json_read = s7_name_to_value(s7, "json:read");
+    mustache_render = s7_name_to_value(s7, "mustache:render");
 
-    /* argc = gopt (argv, options); */
-    /* (void)argc; */
-    /* gopt_errors (argv[0], options); */
-
-    /* set_options("mustachios7", options); */
-
-    /* if (debug) print_debug_env(); */
-
-    /* fprintf(stderr, "calling libs7_init\n"); */
-
-    /* s7 = libs7_init(); */
-
-    /* s7_gc_on(s7, s7_f(s7)); */
-
-    libs7_load_clib(s7, "mustachios7");
-
-    char *script_dir = "./test";
-    s7_pointer newpath;
-    newpath =  s7_add_to_load_path(s7, script_dir);
-    (void)newpath;
+    /* char *script_dir = "./test"; */
+    /* s7_pointer newpath; */
+    /* newpath =  s7_add_to_load_path(s7, script_dir); */
+    /* (void)newpath; */
 
     UNITY_BEGIN();
 
-    RUN_TEST(test_encoding);
-    /* RUN_TEST(test_object); */
-    /* RUN_TEST(test_single_dot); */
-    /* RUN_TEST(test_inverted); */
+    RUN_TEST(to_string);
 
     return UNITY_END();
 }

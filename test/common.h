@@ -15,6 +15,7 @@ s7_scheme *initialize(char *test, int argc, char **argv);
 #define DQ3 "\\\"\\\"\\\""
 #define SQ3 "'''"
 
+//FIXME: store json:read in a var
 #define JSON_READ(s) \
     s7_apply_function(s7, s7_name_to_value(s7, "json:read"),    \
                       s7_list(s7, 1,                            \

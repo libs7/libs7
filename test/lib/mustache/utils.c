@@ -1,8 +1,9 @@
 /* #include "common.h" */
 /* #include "s7_common.h" */
-#include "libmustachios7_s7.h"
+/* #include "libmustachios7_s7.h" */
+
+#include "config.h"
 #include "libs7.h"
-#include "trace.h"
 
 s7_pointer make_render_env(s7_scheme *s7, s7_pointer template, s7_pointer data)
 {

@@ -33,19 +33,23 @@ cc_library(
         "-Ivendored/cjson",
         "-Ilib/libmustache/scm/s7",
         "-Ilib/libmustache/toml",
-        "-Ivendored/tomlc99",
+        "-Ivendored/toml",
     ],
     deps = DEPS + [
         "//src:s7_archive",
+
         "//lib/libmustache/mustach",
         "//lib/libmustache/mustach/ds_mgr:mustach_ds_mgr",
+
         "//lib/libmustache/json/cjson:mustache_json",
         "//lib/libjson:json_s7_archive",
         "//vendored/cjson",
+
         "//lib/libmustache/scm/s7:mustache_scm",
+
         "//lib/libmustache/toml:mustache_toml",
         "//lib/libtoml:toml_s7_archive",
-        "//vendored/tomlc99",
+        "//vendored/toml",
     ],
     local_defines = DEFINES,
     linkopts = LINKOPTS
