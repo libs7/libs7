@@ -507,16 +507,16 @@ int mustache_json_frender(FILE * restrict file,
 /*     return mustach_json_file(template, tlength, &cjson_methods, &e, flags, file); */
 /* } */
 
-void *mustach_encode_cjson(char *json_str, size_t len)
-{
-    cJSON *json_data = cJSON_ParseWithLength(json_str, len);
-    return json_data;
-}
+/* void *mustach_encode_cjson(char *json_str, size_t len) */
+/* { */
+/*     cJSON *json_data = cJSON_ParseWithLength(json_str, len); */
+/*     return json_data; */
+/* } */
 
-void mustach_free(void *json_c)
-{
-    cJSON_Delete((cJSON*)json_c);
-}
+/* void mustach_free(void *json_c) */
+/* { */
+/*     cJSON_Delete((cJSON*)json_c); */
+/* } */
 
 int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file)
 {
@@ -533,29 +533,29 @@ int mustach_cJSON_fd(const char *template, size_t tlength,
 	return mustach_json_fd(template, tlength, &cjson_methods, &e, flags, fd);
 }
 
-size_t mustach_asprintf(char **ret,
-                    const char *template, size_t tlength,
-                    void *json_root,
-                    int data_schema, // JSON or SCHEME
-                    int flags)
-{
-    (void)data_schema;
-    struct tstack_s e;
-    e.root = (cJSON*)json_root;
-    size_t size;
-    int rc = mustach_json_mem(template, tlength,
-                              &cjson_methods, &e,
-                              flags? flags
-                              : Mustach_With_AllExtensions,
-                              ret,
-                              &size);
-    if (rc < 0) {
-        log_error("mustach_json_mem failure: %s", strerror(errno));
-        return rc;
-    } else {
-        return size;
-    }
-}
+/* size_t mustach_asprintf(char **ret, */
+/*                     const char *template, size_t tlength, */
+/*                     void *json_root, */
+/*                     int data_schema, // JSON or SCHEME */
+/*                     int flags) */
+/* { */
+/*     (void)data_schema; */
+/*     struct tstack_s e; */
+/*     e.root = (cJSON*)json_root; */
+/*     size_t size; */
+/*     int rc = mustach_json_mem(template, tlength, */
+/*                               &cjson_methods, &e, */
+/*                               flags? flags */
+/*                               : Mustach_With_AllExtensions, */
+/*                               ret, */
+/*                               &size); */
+/*     if (rc < 0) { */
+/*         log_error("mustach_json_mem failure: %s", strerror(errno)); */
+/*         return rc; */
+/*     } else { */
+/*         return size; */
+/*     } */
+/* } */
 
 int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flags, char **result, size_t *size)
 {
@@ -564,17 +564,17 @@ int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flag
 	return mustach_json_mem(template, length, &cjson_methods, &e, flags, result, size);
 }
 
-int mustach_cJSON_write(const char *template, size_t length, cJSON *root, int flags, mustach_write_cb_t *writecb, void *closure)
-{
-	struct tstack_s e;
-	e.root = root;
-	return mustach_json_write(template, length, &cjson_methods, &e, flags, writecb, closure);
-}
+/* int mustach_cJSON_write(const char *template, size_t length, cJSON *root, int flags, mustach_write_cb_t *writecb, void *closure) */
+/* { */
+/* 	struct tstack_s e; */
+/* 	e.root = root; */
+/* 	return mustach_json_write(template, length, &cjson_methods, &e, flags, writecb, closure); */
+/* } */
 
-int mustach_cJSON_emit(const char *template, size_t length, cJSON *root, int flags, mustach_emit_cb_t *emitcb, void *closure)
-{
-	struct tstack_s e;
-	e.root = root;
-	return mustach_json_emit(template, length, &cjson_methods, &e, flags, emitcb, closure);
-}
+/* int mustach_cJSON_emit(const char *template, size_t length, cJSON *root, int flags, mustach_emit_cb_t *emitcb, void *closure) */
+/* { */
+/* 	struct tstack_s e; */
+/* 	e.root = root; */
+/* 	return mustach_json_emit(template, length, &cjson_methods, &e, flags, emitcb, closure); */
+/* } */
 

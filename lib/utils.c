@@ -16,8 +16,7 @@ char *libs7_input_port_to_c_string(s7_scheme *s7, s7_pointer port)
     void *rptr;
 
     size_t i = 0;
-    /* read from current-input-port, one char at a time */
-    // s7_pointer cip = s7_current_input_port(s7);
+    /* read from the port one char at a time */
     s7_pointer c;
     while (true) {
         c = s7_read_char(s7, port);

@@ -168,12 +168,12 @@ int main(int argc, char **argv)
 #ifdef S7_LOAD_PATH
       s7_add_to_load_path(sc, S7_LOAD_PATH);
 #endif
-#if (!NREPL_DEBUGGING)
+#if (!NREPL_DEVBUILD)
       //FIXME: hard-coded sys path
       s7_add_to_load_path(sc, "/usr/local/share/s7");
       #include "nrepl-bits.h"
       s7_load_c_string(sc, (const char *)nrepl_scm, nrepl_scm_len);
-#else  /* NREPL_DEBUGGING == USE_SND == defined, i.e. no_main */
+#else  /* NREPL_DEVBUILD == USE_SND == defined, i.e. no_main */
     if (!s7_load(sc, "scm/nrepl.scm")) {
         log_error("load failed: nrepl.scm");
 	return(1);

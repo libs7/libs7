@@ -314,8 +314,8 @@ static void init_nlibc(s7_scheme *sc)
   s7_gc_unprotect_at(sc, gc_loc);
 }
 
-#ifndef NREPL_DEBUGGING
-  #define NREPL_DEBUGGING USE_SND
+#ifndef NREPL_DEVBUILD
+  #define NREPL_DEVBUILD USE_SND
 #endif
 
 #if (!USE_SND)
@@ -374,7 +374,7 @@ int main(int argc, char **argv)
 #ifdef S7_LOAD_PATH
       s7_add_to_load_path(sc, S7_LOAD_PATH);
 #endif
-#if (!NREPL_DEBUGGING)
+#if (!NREPL_DEVBUILD)
       s7_add_to_load_path(sc, "/usr/local/share/s7");
       #include "nrepl-bits.h"
       s7_load_c_string(sc, (const char *)nrepl_scm, nrepl_scm_len);

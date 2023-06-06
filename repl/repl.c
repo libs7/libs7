@@ -11,7 +11,7 @@
 #include "log.h"
 #include "libs7.h"
 
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
 extern bool libs7_debug;
 extern bool libs7_debug_runfiles;
 extern bool libs7_trace;
@@ -33,7 +33,7 @@ bool quiet   = false;
 /*   bool repl_loaded = false; */
 
 
-/* #if S7_DEBUGGING */
+/* #if S7_DEVBUILD */
 /*       s7_autoload(s7, make_symbol(s7, "compare-calls", 13), s7_make_string(s7, "compare-calls.scm")); */
 /*       s7_autoload(s7, make_symbol(s7, "get-overheads", 13), s7_make_string(s7, "compare-calls.scm")); */
 /* #endif */
@@ -62,7 +62,7 @@ char **scm_dir;
 static void _runfiles_init(s7_scheme *s7)
 {
     /* s7_pointer tmp_load_path = s7_list(s7, 0); */
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
 #ifdef BAZEL_CURRENT_REPOSITORY
     if (libs7_debug)
         log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY);
@@ -71,7 +71,7 @@ static void _runfiles_init(s7_scheme *s7)
     scm_dir = scm_runfiles_dirs;
     char *scmdir;
     while (*scm_dir) {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         if (libs7_debug_runfiles)
             log_debug(" runfile: %s", *scm_dir);
 #endif
@@ -80,7 +80,7 @@ static void _runfiles_init(s7_scheme *s7)
             log_error("runfile not found: %s", *scm_dir);
             exit(EXIT_FAILURE);
         }
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         if (libs7_debug_runfiles)
             log_debug("runfile realpath: %s", scmdir);
 #endif
@@ -92,7 +92,7 @@ static void _runfiles_init(s7_scheme *s7)
     /* s7_define_variable(s7, "*load-path*", tmp_load_path); */
 }
 
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
 static void _print_debug_env(void)
 {
     log_debug("getcwd: %s", getcwd(NULL, 0));
@@ -214,13 +214,13 @@ void _set_options(struct option options[])
     if (options[FLAG_VERBOSE].count) { verbose = true; }
 
     if (options[FLAG_DEBUG].count) {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         libs7_debug = true;
 #endif
     }
 
     if (options[FLAG_DEBUG_RUNFILES].count) {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         libs7_debug_runfiles = true;
 #else
         log_error("--debug-runfiles requires debug build, -c dbg");
@@ -229,13 +229,13 @@ void _set_options(struct option options[])
     }
 
     if (options[FLAG_DEBUG_S7].count) {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         libs7_debug = true;
 #endif
     }
 
     if (options[FLAG_TRACE].count) {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         libs7_trace = true;
 #endif
     }
@@ -292,7 +292,7 @@ int main(int argc, char **argv) // , char **envp)
 
     _set_options(options);
 
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     if (libs7_debug) _print_debug_env();
 #endif
 
@@ -304,7 +304,7 @@ int main(int argc, char **argv) // , char **envp)
 
     s7_scheme *s7 = libs7_init();
     if (!quiet) {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         log_debug("s7: %s", S7_DATE);
 #if defined(CLIBS_LINK_STATIC)
         log_debug("clib linkage: static");

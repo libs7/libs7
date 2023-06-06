@@ -61,10 +61,10 @@ void s7_repl(s7_scheme *sc)
     dumb_repl(sc);
   else
     {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
       s7_autoload(sc, make_symbol(sc, "compare-calls", 13), s7_make_string(sc, "compare-calls.scm"));
       s7_autoload(sc, make_symbol(sc, "get-overheads", 13), s7_make_string(sc, "compare-calls.scm"));
-#endif // S7_DEBUGGING
+#endif // S7_DEVBUILD
       s7_provide(sc, "libc.scm");
       if (!repl_loaded) s7_load(sc, "repl.scm");
       s7_eval_c_string(sc, "((*repl* 'run))");

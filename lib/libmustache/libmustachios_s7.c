@@ -27,58 +27,7 @@
 /* s7_scheme *s7; */
 
 /* ****************************************************************
-   API
-
-   (mustach:render template data port)
-   (mustach:render-json template data port)
-   (mustach:make-template str)
-   (mustach:make-data hashtbl)
-
-   -- generic json api: string->json, json->string
-
- */
-
-/* returns a c-pointer object */
-/* s7_pointer mustachios_read_json(s7_scheme *s7, s7_pointer args) */
-/* { */
-/*     TRACE_ENTRY(mustachios_read_json); */
-/*     s7_pointer json_str = s7_car(args); */
-/*     if (!s7_is_string(json_str)) { */
-/*         s7_pointer e = s7_wrong_type_arg_error(s7, */
-/*                                                "mustachios_read_json", */
-/*                                                1, */
-/*                                                json_str, */
-/*                                                "a JSON string"); */
-/*         return e; */
-/*     } */
-/* #ifdef DEVBUILD */
-/*     int len = s7_string_length(json_str); */
-/*     log_debug("json (scm) strlen: %d", len); */
-/* #endif */
-/*     const char *json_c_str = s7_string(json_str); */
-/*     int len2 = strlen(json_c_str); */
-/* #ifdef DEVBUILD */
-/*     log_debug("json (c) strlen: %d", len2); */
-/* #endif */
-/*     cJSON *jobj = cJSON_ParseWithLength(json_c_str, len2); */
-/*     if (jobj == NULL) { */
-/*         const char *error_ptr = cJSON_GetErrorPtr(); */
-/*         log_error("cJSON_ParseWithLength failure at '%s'", error_ptr); */
-/*         fflush(NULL); */
-/*         return s7_error(s7, */
-/*                  s7_make_symbol(s7, "cJSON_ParseWithLength error"), */
-/*                  s7_cons(s7, */
-/*                          s7_make_string(s7, error_ptr), */
-/*                          s7_nil(s7))); */
-/*     } else { */
-/*         return s7_make_c_pointer_with_type(s7, jobj, */
-/*                                            s7_make_symbol(s7, "cJSON*"), */
-/*                                            s7_f(s7)); */
-/*     } */
-/* } */
-
-/* **************************************************************** */
-/*
+ * API
  *  (mustache:render <sink> template data flags)
  *  sink 7 rendering options:
  *    #f  - return string (default)
@@ -90,7 +39,7 @@
  *    *stderr*
  */
 
-struct sink_s {
+struct sink_flags_s {
     union {
         struct {
             uint8_t to_string : 1;
@@ -100,150 +49,56 @@ struct sink_s {
         };
         uint8_t data;
     };
-} sink;
+};
 
 FILE *ostream;
 const char *port_filename;
 
-void _handle_sink(s7_scheme *s7, s7_pointer port)
+void _handle_sink_flags(s7_scheme *s7,
+                        struct sink_flags_s *sink_flags,
+                        s7_pointer sink)
 {
-    if (port == s7_f(s7)) { // return string only, no port
-        sink.to_string = 1;
+    log_debug("_handle_sink_flags");
+    if (sink == s7_f(s7)) { // return string only, no port
+        sink_flags->to_string = 1;
         //port = s7_unspecified(s7); /* write to buffer */
         /* return_string = true; */
     }
-    else if (port == s7_t(s7)) {
+    else if (sink == s7_t(s7)) {
         // send to current-output-port and return string
         // do not write directly to cop: write to buffer then to port
         // port = s7_undefined(s7); // means "to buffer then to current op
         /* return_string = true; */
-        sink.to_string = 1;
-        sink.to_current_output_port = 1;
+        sink_flags->to_string = 1;
+        sink_flags->to_current_output_port = 1;
     }
-    else if (port == s7_nil(s7)) {
+    else if (sink == s7_nil(s7)) {
         // send to current-output-port and return nothing
         // port = s7_undefined(s7); // means "to buffer then to current op
-        sink.to_current_output_port = 1;
-    } else if (s7_is_output_port(s7, port)) {
+        sink_flags->to_current_output_port = 1;
+    } else if (s7_is_output_port(s7, sink)) {
         // file or string port
-        /* port_filename = s7_port_filename(s7, port); */
-        // no s7_port_file(); (port-file p) returns c-pointer for FILE*
-        //FIXME: what does it return for string ports?
-        s7_pointer fp = s7_apply_function(s7,
-                                          s7_name_to_value(s7, "port-file"),
-                                          s7_list(s7, 1, port));
-        if (s7_is_c_pointer(fp)) {
-            sink.to_file_port = 1;
-            ostream = s7_c_pointer(fp);
+
+        // there is no s7_is_string_port fn, so we go by port-filename
+        s7_pointer pfn = s7_apply_function(s7,
+                                           s7_name_to_value(s7, "port-filename"),
+                                          s7_list(s7, 1, sink));
+        TRACE_S7_DUMP("port-filename", pfn);
+        if (s7_string_length(pfn) == 0) {
+            sink_flags->to_string_port = 1;
         } else {
-            sink.to_string_port = 1;
+            sink_flags->to_file_port = 1;
+            s7_pointer fp = s7_apply_function(s7,
+                              s7_name_to_value(s7, "port-file"),
+                              s7_list(s7, 1, sink));
+            ostream = s7_c_pointer(fp);
         }
     } else {
         s7_error(s7, s7_make_symbol(s7, "wrong-type-arg"),
                  s7_list(s7, 3, s7_make_string(s7, "~S is a ~S, but should be #t, #f, '(), or a port."),
-                         port, s7_type_of(s7, port)));
+                         sink, s7_type_of(s7, sink)));
     }
 }
-
-/*     else if (port == s7_undefined(s7)) { */
-/*         // :port #t - send to current-outp, return str */
-/*         // :port () - send to current-outp, do NOT return str */
-/*         int rc = mustach_wrap_mem(s7_string(template), */
-/*                                   0, // tlength, */
-/*                                   &mustach_wrap_itf_scm, */
-/*                                   &e, /\* closure, struct tstack_s* *\/ */
-/*                                   flags, */
-/*                                   &ret, */
-/*                                   &size); */
-/*         if (rc < 0) { */
-/*             log_error("mustach_wrap_mem failure: %s", strerror(errno)); */
-/*             return s7_make_integer(s7,rc); */
-/*         } else { */
-/* #ifdef DEVBUILD */
-/*             log_debug("mustach:render wrote %s", ret); */
-/* #endif */
-/*             s7_pointer s = s7_make_string(s7, ret); */
-/*             s7_display(s7, s, s7_current_output_port(s7)); */
-/*             if (return_string) { */
-/*                 return s; */
-/*             } else { */
-/*                 return s7_unspecified(s7); */
-/*             } */
-/*         } */
-/*     } */
-
-/*     // (port? port) already verified */
-/*     const char *port_filename = s7_port_filename(s7, port); */
-/*     (void)port_filename; */
-/* #ifdef DEVBUILD */
-/*     log_debug("port_filename: %s", port_filename); */
-/* #endif */
-/*     s7_pointer env = s7_inlet(s7, */
-/*                               s7_list(s7, 1, */
-/*                                       s7_cons(s7, */
-/*                                               s7_make_symbol(s7, "p"), */
-/*                                               port))); */
-/*     s7_pointer pfile = s7_eval_c_string_with_environment( */
-/*                                                          s7, "(port-file p)", */
-/*                                                          env); */
-
-/* #ifdef DEVBUILD */
-/*     DUMP("port file", pfile); */
-/* #endif */
-/*     if (s7_c_pointer_type(pfile) == s7_f(s7)) { */
-/* #ifdef DEVBUILD */
-/*         log_debug("GOT STRING PORT"); */
-/* #endif */
-
-/*         int rc = mustach_wrap_mem(s7_string(template), */
-/*                                   0, // tlength, */
-/*                                   &mustach_wrap_itf_scm, &e, */
-/*                                   flags, */
-/*                                   &ret, */
-/*                                   &size); */
-/*         if (rc < 0) { */
-/*             log_error("mustach_wrap_mem failure: %s", strerror(errno)); */
-/*             return s7_make_integer(s7,rc); */
-/*         } else { */
-/* #ifdef DEVBUILD */
-/*             log_debug("mustach:render wrote %s", ret); */
-/* #endif */
-/*             s7_display(s7, s7_make_string(s7, ret), port); */
-/*             /\* if (return_string) // only true if port = current-output-port *\/ */
-/*             /\*     return s7_make_string(s7, ret); *\/ */
-/*             /\* else *\/ */
-/*             return s7_make_integer(s7, size); */
-/*         } */
-
-/*     } else { */
-/* #ifdef DEVBUILD */
-/*         log_debug("GOT FILE PORT"); */
-/* #endif */
-/*         /\* (void)data_scheme;          /\\* currently unused *\\/ *\/ */
-/*         struct tstack_s e; */
-    /* memset(&stack, '\0', sizeof(struct tstack_s)); */
-/*         e.root = (s7_pointer)data; */
-/*         s7_flush_output_port(s7, s7_current_output_port(s7)); */
-/*         int rc = mustach_wrap_file(s7_string(template), 0, // tlength, */
-/*                                  &mustach_wrap_itf_scm, &e, */
-/*                                  flags, */
-/*                                  s7_c_pointer(pfile)); */
-/*         (void)rc; */
-/* #ifdef DEVBUILD */
-/*         log_debug("FILE port RC: %d", rc); */
-/* #endif */
-/*         /\* cop = s7_current_output_port(s7); *\/ */
-/*         /\* os = s7_output_string(s7, cop); *\/ */
-/*         /\* const char *os = s7_get_output_string(s7, cop); *\/ */
-/*         /\* log_debug("current output str: %s", os); *\/ */
-/*         /\* log_debug("UUxxxxxxxxxxxxxxxxx"); *\/ */
-/*         /\* (void) os; *\/ */
-/*     } */
-
-/*     return s7_make_string(s7, ret); */
-
-/* **************************************************************** */
-
 
 /*
  * (mustache:render sink template data flags)
@@ -253,10 +108,33 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
     TRACE_ENTRY(g_mustachios_render);
     TRACE_S7_DUMP("args", args);
 
-    /* args: template, data, port */
+    /* args: sink, template, data, flags */
 
-    //**** TEMPLATE
-    s7_pointer template = s7_car(args);
+    //**** arg 0: SINK ****************
+    /* #f - return string only (default)
+       #t - returns string and also sends to current-output-port
+       () - send to current-output-port but do not return string
+       else must be file or string port
+     */
+    s7_pointer sink     = s7_car(args);
+    if ( !(s7_is_boolean(sink)
+           || s7_is_output_port(s7, sink)
+           || s7_is_null(s7, sink)) ) {
+        return(s7_wrong_type_arg_error(s7,
+                                       "mustache:render",
+                                       1, sink, "a boolean, output port, or '()"));
+    }
+
+    struct sink_flags_s sink_flags;
+    sink_flags.data = 0;
+    _handle_sink_flags(s7, &sink_flags, sink);
+
+    if (sink_flags.data == 0) {
+        log_error("Bad sink");  /* FIXME */
+    }
+
+    //**** arg 1: TEMPLATE ****************
+    s7_pointer template = s7_cadr(args);
     const char *template_str;
     TRACE_S7_DUMP("t", template);
 
@@ -271,24 +149,12 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
         return e;
     }
 
-    //**** DATA
-    s7_pointer data     = s7_cadr(args);
+    //**** arg 2: DATA ****************
+    s7_pointer data     = s7_caddr(args);
 
-    //**** PORT
-    /* #f - return string only (default)
-       #t - returns string and also sends to current-output-port
-       () - send to current-output-port but do not return string
-       else must be file or string port
-     */
-    s7_pointer port     = s7_caddr(args);
 
-    _handle_sink(s7, port);
-
-    if (sink.data == 0) {
-        log_error("Bad sink");  /* FIXME */
-    }
-
-    //**** FLAGS are opt-out
+    //**** arg 3: FLAGS ****************
+    // flags are opt-out?
     // we default to all extensions except json ptr enabled
     int flags = Mustach_With_AllExtensions;
     (void)flags;
@@ -302,28 +168,43 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
 
     //FIXME: user-passed flags should REPLACE the default
 
-    /* **** render **** */
-
+    /* ******************** render ******************** */
     s7_pointer b;
     b = s7_apply_function(s7, s7_name_to_value(s7, "json:datum?"),
                                    s7_list(s7, 1, data));
     if (b == s7_t(s7)) {
         // call mustache_json_render
         cJSON *root = (cJSON*)s7_c_object_value(data);
-        if (sink.to_file_port) {
-            /* mustache_json_frender(ostream, template_str, 0, root, flags); */
-            log_debug("RENDER json to file port");
+        if (sink_flags.to_file_port) {
+            log_debug("SINK: file port");
+            mustache_json_frender(ostream, template_str, 0, root, flags);
         }
-        else if (sink.to_string) {
-            /* log_debug("RENDER json to string"); */
+        else if (sink_flags.to_string) {
             const char * s = mustache_json_render(template_str, 0, root, flags);
-            return s7_make_string(s7, s);
+            s7_pointer str7 = s7_make_string(s7, s);
+            if (sink_flags.to_current_output_port) {
+                log_debug("SINK: #t");
+                /* s7_pointer cip = s7_current_output_port(s7); */
+                s7_display(s7, str7, s7_current_output_port(s7));
+                /* s7_format(s7, s7_list(s7, 3, */
+                /*                       s7_nil(s7), // write to cip */
+                /*                       s7_make_string(s7, "~S~%"), */
+                /*                       str7)); */
+            } else {
+                log_debug("SINK: #f");
+            }
+            return str7;
         }
-        else if (sink.to_current_output_port) {
-            log_debug("RENDER json to current-output-port");
+        else if (sink_flags.to_current_output_port) {
+            log_debug("SINK: '()");
+            const char * s = mustache_json_render(template_str, 0, root, flags);
+            s7_display(s7, s7_make_string(s7, s),
+                       s7_current_output_port(s7));
         }
-        else if (sink.to_string_port) {
-            log_debug("RENDER json to string port");
+        else if (sink_flags.to_string_port) {
+            /* log_debug("SINK: string port"); */
+            const char * s = mustache_json_render(template_str, 0, root, flags);
+            s7_display(s7, s7_make_string(s7, s), sink);
         }
         else {
         }
@@ -382,8 +263,11 @@ s7_pointer libmustachios_s7_init(s7_scheme *s7)
 
     s7_define_function_star(s7,
                             "mustache:render", g_mustachios_render,
-                            "(template #f) (data #f) (port #f) (flags 0)",
-                            "(mustach:render template data (port p)) port defaults to current output port");
+                            "(sink (error 'unset-arg \"sink parameter not set\"))"
+                            "(template (error 'unset-arg \"template parameter not set\"))"
+                            "(data  (error 'unset-arg \"data parameter not set\"))"
+                            "(flags 0)",
+                            "(mustach:render port template data flags) port defaults to current output port");
 
     // a few routines needed by the mustache-s7 implementation
     // TODO: validate args xs is list, k is integer

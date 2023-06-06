@@ -138,7 +138,7 @@ cc_binary(
         ],
         "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
     }) + select({
-        "//config/debug:debug?": ["DEBUGGING"],
+        "//config/debug:debug?": ["DEVBUILD"],
         "//conditions:default":   []
     }) + select({
         "//config/debug:trace?": ["TRACE"],
@@ -211,12 +211,12 @@ cc_binary(
         "WITH_NOTCURSES",
         "WITH_SYSTEM_EXTRAS",
         # "WITH_C_LOADER",
-        "NREPL_DEBUGGING"
+        "NREPL_DEVBUILD"
     ] + select({
-        "//config/nrepl:debug?": ["NREPL_DEBUGGING"],
+        "//config/nrepl:debug?": ["NREPL_DEVBUILD"],
         "//conditions:default":   []
     }) + select({
-        "//config/s7:debug?": ["S7_DEBUGGING"],
+        "//config/s7:debug?": ["S7_DEVBUILD"],
         "//conditions:default":   []
     }),
     linkopts = [
