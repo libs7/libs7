@@ -3,7 +3,7 @@
 #include "utarray.h"
 #include "utstring.h"
 
-#include "libmustachios7_s7.h"
+#include "mustach_s7.h"
 #include "libs7.h"
 
 #include "common.h"
@@ -11,7 +11,7 @@
 #include "utils.h"
 
 
-#ifdef DEBUGGING
+#ifdef DEVBUILD
 #include "debug.h"
 #endif
 

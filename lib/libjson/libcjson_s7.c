@@ -12,7 +12,7 @@
 /* #include "libjson_s7.h" */
 /* #include "libs7.h" */
 
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
 char *cjson_types[256] = {
     [cJSON_Invalid] = CJSON_TYPE_NAME(cJSON_Invalid), // (0)
     [cJSON_False]   = CJSON_TYPE_NAME(cJSON_False),   // (1 << 0)
@@ -40,17 +40,23 @@ static s7_pointer char___symbol, cJSON__symbol;
 /* -------- cJSON_Version -------- */
 s7_pointer json_cjson_version(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_string(sc, (char*)cJSON_Version()));
+    (void)args;
+    return(s7_make_string(sc, (char*)cJSON_Version()));
 }
 
 
 /* -------- json_read -------- */
+/*
+ * null arg: read from current-input-port
+ */
 static s7_pointer g_json_read(s7_scheme *s7, s7_pointer args)
 {
     TRACE_ENTRY(g_json_read);
     /* TRACE_S7_DUMP("args", args); */
     s7_pointer p, arg;
     char* json_str;
+
+    //FIXME: call cjsonx_read
 
     if (args == s7_nil(s7)) {
         /* log_debug("null args"); */
@@ -358,7 +364,8 @@ static s7_pointer json_cJSON_Print(s7_scheme *sc, s7_pointer args)
 /* -------- cJSON_GetErrorPtr -------- */
 static s7_pointer json_cJSON_GetErrorPtr(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_string(sc, (char*)cJSON_GetErrorPtr()));
+    (void)args;
+    return(s7_make_string(sc, (char*)cJSON_GetErrorPtr()));
 }
 
 
@@ -531,7 +538,7 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
     s7_pointer old_shadow = s7_set_shadow_rootlet(s7, cur_env);
 
     json_object_init(s7, cur_env);
-    json_vector_init(s7, cur_env);
+    json_array_init(s7, cur_env);
 
     /* cJSON_,_symbol = s7_make_symbol(s7, "cJSON*,"); */
     char___symbol = s7_make_symbol(s7, "char**");
@@ -614,7 +621,7 @@ s7_pointer libjson_s7_init(s7_scheme *s7)
               s7_make_typed_function(s7, "json:read",
                                      g_json_read,
                                      0, 1, false,
-                                     "(json:read x) read JSON from string or port",
+                                     "(json:read), (json:read p) read JSON from string or port",
                                      NULL));
 
     /* s7_define(s7, cur_env, */

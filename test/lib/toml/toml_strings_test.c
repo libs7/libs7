@@ -23,8 +23,8 @@ bool debug;
 
 char *cmd;
 
-#define DQ3 "\"\"\""
-#define SQ3 "'''"
+/* #define DQ3 "\"\"\"" */
+/* #define SQ3 "'''" */
 
 /* WARNING: setUp and tearDown are run once per test. */
 void setUp(void) {
@@ -37,7 +37,7 @@ void tearDown(void) {
 
 void line_ending_backslash_file(void) {
     s7_pointer inport = s7_open_input_file(s7, "test/lib/toml/data/strings.toml", "r");
-    s7_pointer is_input_port = s7_is_input_port(s7, inport);
+    bool is_input_port = s7_is_input_port(s7, inport);
     TEST_ASSERT_EQUAL(true, is_input_port);
     /* t = TOML_READ(inport); */
     t = s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),

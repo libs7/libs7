@@ -3,10 +3,9 @@
 #include <string.h>
 #include <sys/errno.h>
 
-#include "log.h"
+#include "config.h"
 #include "toml.h"
 #include "tomlx.h"
-#include "config.h"
 
 toml_datum_t tomlx_array_datum_for_idx(toml_array_t *ta, int idx, int *typ)
 {
@@ -1065,13 +1064,31 @@ struct tomlx_item_s *tomlx_array_ref(toml_array_t *ta,
     return NULL; //FIXME
 }
 
+/* **************************************************************** */
+/* caller frees result */
+/* toml_table_t *tomlx_read(const char *s) */
 toml_table_t *tomlx_read_string(const char *s)
 {
     TOMLX_ENTRY(tomlx_read_string);
-    /* log_debug("s: %s", s); */
+    char errbuff[200];
+    toml_table_t *tt = toml_parse((char*)s, errbuff, sizeof(errbuff));
+    if (tt == NULL) {
+        log_error("toml:read failure: %s", errbuff);
+        return NULL;
+   }
+    return tt;
+}
+
+toml_table_t *tomlx_read_fp(FILE *instream)
+/* toml_table_t *tomlx_read_stream(FILE *instream) */
+{
+    TOMLX_ENTRY(tomlx_fread);
+    /* log_debug("s: %s", fname); */
+
     char errbuff[200];
     //WARNING: this toml_table_t must be freed by client
-    toml_table_t *tt = toml_parse((char*)s, errbuff, sizeof(errbuff));
+    toml_table_t *tt = toml_parse_file(instream, errbuff, sizeof(errbuff));
+    fclose(instream);
     if (tt == NULL) {
         log_error("toml:read failure: %s", errbuff);
         return NULL;
@@ -1083,38 +1100,23 @@ toml_table_t *tomlx_read_string(const char *s)
 toml_table_t *tomlx_read_file(const char *fname)
 {
     TOMLX_ENTRY(tomlx_read_file);
-    /* log_debug("s: %s", fname); */
-
-    int fd;
-    fd = open(fname, O_RDONLY);
-    if (fd == -1) {
+    FILE *instream = fopen(fname, "r");
+    if (instream == NULL) {
         /* Handle error */
-        log_error("fd open error");
+        log_debug("fopen failure: %s", fname);
         perror(NULL);
         return NULL;
     }
 
-    errno = 0;
-    FILE *instream = fdopen(fd, "r");
-    if (instream == NULL) {
-        /* Handle error */
-        log_debug("fdopen failure");
-        /* printf(RED "ERROR" CRESET "fdopen failure: %s\n", */
-        /*        dunefile_name); */
-        /*        /\* utstring_body(dunefile_name)); *\/ */
-        perror(NULL);
+    char errbuff[200];
+
+    //WARNING: this toml_table_t must be freed by client
+    toml_table_t *tt = toml_parse_file(instream, errbuff, sizeof(errbuff));
+    fclose(instream);
+    if (tt == NULL) {
+        log_error("toml:read failure: %s", errbuff);
         return NULL;
     } else {
-        char errbuff[200];
-        //WARNING: this toml_table_t must be freed by client
-        // TOML_EXTERN toml_table_t *toml_parse_file(FILE *fp, char *errbuf, int errbufsz);
-
-        toml_table_t *tt = toml_parse_file(instream, errbuff, sizeof(errbuff));
-        if (tt == NULL) {
-            log_error("toml:read failure: %s", errbuff);
-            return NULL;
-        } else {
-            return tt;
-        }
+        return tt;
     }
 }

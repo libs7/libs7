@@ -1,96 +1,54 @@
 package(default_visibility = ["//visibility:public"])
 
-load("//:BUILD.bzl",
-     "INCLUDE_PATHS",
-     BASE_SRCS  = "SRCS",
-     BASE_DEPS  = "DEPS",
-     BASE_COPTS = "COPTS",
-     BASE_LINKOPTS = "LINKOPTS",
-     BASE_DEFINES = "DEFINES")
+load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-# load("//:BUILD.bzl", "COPTS")
-load("//lib:BUILD.bzl", "CLIB_COPTS")
+load("//lib:BUILD.bzl",
+     "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
 
-exports_files(["mustachios7_wrap.c", "mustachios7_wrap.h"])
+SRCS          = BASE_SRCS + CLIB_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
-SRCS = BASE_SRCS + [
-    "//src:libs7.h",
-    "//src:s7.h",
-    "libmustachios7_s7.c",
-    "libmustachios7_s7.h",
-
-    "mustachios7_s7.c",
-    "mustachios7_s7.h",
-    "mustachios7_scm.c",
-    "mustachios7_scm.h",
-
-    "mustachios7_cjson.c",
-    "mustachios7_cjson.h",
-    "mustachios7_json.c",
-    "mustachios7_json.h",
-
-    "mustach_tomlc99.c",
-    "mustach_tomlc99.h",
-    "mustach_toml_ds_mgr.c",
-    "mustach_toml_ds_mgr.h",
-
-    "mustachios7_wrap.c",
-    "mustachios7_wrap.h",
-]
-# + select({
-#     "//config/debug:debug?": ["debug.h", "ansi_colors.h"],
-#     "//conditions:default": []
-# })
-
-COPTS = BASE_COPTS + INCLUDE_PATHS + CLIB_COPTS + [
-    "-Idev",
-    "-Ilib",
-    "-Ilib/libmustache",
-    "-Iexternal/libs7/lib/libmustache",
-
-    "-Ivendored/cjson",
-    "-Iexternal/libs7/vendored/cjson",
-
-    # "-Ivendored/logc",
-    # "-Iexternal/libs7/vendored/logc",
-
-    "-Ivendored/tomlc99",
-    "-Iexternal/libs7/vendored/tomlc99",
-
-    "-Iexternal/libs7/src",
-    "-Iexternal/mustachios/lib",
-    # ] + select({
-    #     "//config/debug:debug?": ["-Isrc", "-Iexternal/mustachios7/test/src"],
-    #     "//conditions:default": ["-Itest/src",
-    #                              "-Iexternal/mustachios7/test/src"]
-    # }),
-]
-
-DEPS = [
-    ":mustach",
-    "//src:s7_archive",
-    "//vendored/cjson",
-    # "//vendored/logc",
-    "//vendored/tomlc99",
-    "//dev"
-]
+# exports_files(["mustachios7_wrap.c", "mustachios7_wrap.h"])
 
 cc_library(
     name = "mustachios_s7_archive",
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
-    srcs = SRCS,
+    srcs = SRCS + [
+        # "//src:libs7.h",
+        # "//src:s7.h",
+        "libmustachios_s7.c",
+        "libmustachios_s7.h",
+    ],
     hdrs = ["libmustachios_s7.h"],
-    copts = COPTS,
-    deps = DEPS,
-    linkopts = BASE_LINKOPTS,
-    local_defines = BASE_DEFINES + select({
-        "//config/debug:debug?": ["DEBUGGING"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:trace?": ["TRACING"],
-        "//conditions:default": []
-    })
+    copts = COPTS + [
+        "-Ilib/libmustache/mustach",
+        "-Ilib/libmustache/mustach/ds_mgr",
+        "-Ilib/libmustache/json/cjson",
+        "-Ivendored/cjson",
+        "-Ilib/libmustache/scm/s7",
+        "-Ilib/libmustache/toml",
+        "-Ivendored/tomlc99",
+    ],
+    deps = DEPS + [
+        "//src:s7_archive",
+        "//lib/libmustache/mustach",
+        "//lib/libmustache/mustach/ds_mgr:mustach_ds_mgr",
+        "//lib/libmustache/json/cjson:mustache_json",
+        "//lib/libjson:json_s7_archive",
+        "//vendored/cjson",
+        "//lib/libmustache/scm/s7:mustache_scm",
+        "//lib/libmustache/toml:mustache_toml",
+        "//lib/libtoml:toml_s7_archive",
+        "//vendored/tomlc99",
+    ],
+    local_defines = DEFINES,
+    linkopts = LINKOPTS
 )
 
 cc_binary(

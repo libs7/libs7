@@ -2,12 +2,25 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libtoml_clibgen.scm"])
 
-load("//:BUILD.bzl", "SRCS", "DEPS",
-     "COPTS", "INCLUDE_PATHS", "DEFINES", "LINKOPTS")
+load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//lib:BUILD.bzl",
-     "clibgen_runner",
-     "CLIB_COPTS") # , "CLIB_LINKOPTS", "CLIB_DEFINES")
+load("//lib:BUILD.bzl", "clibgen_runner",
+     "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
+
+SRCS          = BASE_SRCS + CLIB_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
+
+# load("//:BUILD.bzl", "SRCS", "DEPS",
+#      "COPTS", "INCLUDE_PATHS", "DEFINES", "LINKOPTS")
+
+# load("//lib:BUILD.bzl",
+#      "clibgen_runner",
+#      "CLIB_COPTS") # , "CLIB_LINKOPTS", "CLIB_DEFINES")
 
 ################################################################
 cc_library(
@@ -15,25 +28,24 @@ cc_library(
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = SRCS + [
-        "//src:s7.h",
         "libtoml_s7.c",
         "//lib:utils.c",
         "//lib:utils.h",
     ],
-    hdrs = ["libtoml_s7.h", "toml.h"],
+    hdrs = ["libtoml_s7.h"], # "toml.h"],
     deps  = DEPS + [
         "//lib:utils",
-        "//vendored/tomlc99",
+        "//vendored/toml",
         ":table", ":array", ":datetime"
     ],
-    copts = COPTS + INCLUDE_PATHS + [
+    copts = COPTS + [
         "-Isrc",
         "-Iexternal/libs7/src",
         "-Ilib",
         "-Iexternal/libs7/lib",
         "-Ilib/libtoml",
-        "-Ivendored/tomlc99",
-        "-Iexternal/libs7/vendored/tomlc99",
+        "-Ivendored/toml",
+        "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES
@@ -43,20 +55,20 @@ cc_binary(
     name  = "toml_s7",  # create libtoml_s7.{dylib,so}
     linkshared = True,
     srcs  = SRCS + [
-        ":libtoml_s7.c", "//src:s7.h",
-        "toml.c", "toml.h",
+        ":libtoml_s7.c",
+        # "toml.c", "toml.h",
     ],
     deps  = DEPS + [
         "//lib:utils",
-        "//vendored/tomlc99",
+        "//vendored/toml",
         ":table", ":array", ":datetime"
     ],
-    copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
+    copts = COPTS + [
         "-Isrc",
         "-Iexternal/libs7/src",
         "-Ilib/libtoml",
-        "-Ivendored/tomlc99",
-        "-Iexternal/libs7/vendored/tomlc99",
+        "-Ivendored/toml",
+        "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES,
@@ -81,11 +93,11 @@ cc_library(
     ],
     deps  = DEPS + [
         "//src:s7_archive",
-        "//vendored/tomlc99",
+        "//vendored/toml",
     ],
     copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/tomlc99", "-Iexternal/libs7/vendored/tomlc99",
+        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES
@@ -103,11 +115,11 @@ cc_library(
     ],
     deps  = DEPS + [
         "//src:s7_archive",
-        "//vendored/tomlc99",
+        "//vendored/toml",
     ],
     copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/tomlc99", "-Iexternal/libs7/vendored/tomlc99",
+        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES
@@ -123,11 +135,11 @@ cc_library(
     ],
     deps  = DEPS + [
         "//src:s7_archive",
-        "//vendored/tomlc99",
+        "//vendored/toml",
     ],
     copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/tomlc99", "-Iexternal/libs7/vendored/tomlc99",
+        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES

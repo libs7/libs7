@@ -1,6 +1,34 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+
 load("BUILD.bzl",
-     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+     "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
+     "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
+     "TIMEOUT")
+
+SRCS          = BASE_SRCS + TEST_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS
+COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS + TEST_DEPS
+DEFINES       = BASE_DEFINES + TEST_DEFINES
+LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
+
+################################################################
+LIBC_COPTS = [
+    "-I$(GENDIR)/lib/libc",
+    "-I$(GENDIR)/external/libs7/lib/libc",
+    "-I$(GENDIR)/lib/libdl",
+    "-I$(GENDIR)/external/libs7/lib/libdl",
+    "-I$(GENDIR)/lib/libgdbm",
+    "-I$(GENDIR)/external/libs7/lib/libgdbm",
+    "-I$(GENDIR)/lib/libm",
+    "-I$(GENDIR)/external/libs7/lib/libm",
+]
+
+
 
 exports_files(["common.c", "common.h"])
 
@@ -17,8 +45,7 @@ test_suite(
         # ":gsl", ## takes too long to build for one trivial test
         ":cwalk",
         ":utf8proc",
-        "//test/lib/json",
-        "//test/lib/toml"
+        "//test/lib"
     ]
 )
 
@@ -59,54 +86,32 @@ cc_test(
 
 
 ################################################################
-LIBC_COPTS = [
-    "-I$(GENDIR)/lib/libc",
-    "-I$(GENDIR)/external/libs7/lib/libc",
-    "-I$(GENDIR)/lib/libdl",
-    "-I$(GENDIR)/external/libs7/lib/libdl",
-    "-I$(GENDIR)/lib/libgdbm",
-    "-I$(GENDIR)/external/libs7/lib/libgdbm",
-    "-I$(GENDIR)/lib/libm",
-    "-I$(GENDIR)/external/libs7/lib/libm",
-]
-
 cc_test(
     name = "libc",
     linkstatic = True,
-    srcs = ["libc_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + [
+        "libc_test.c", "common.c", "common.h"
+    ] + select({
         "//config/clibs/link:shared?": [
-            # "If a rule's name is in the srcs, then this rule
-            # automatically depends on that one. If the named rule's
-            # outs are C or C++ source files, they are compiled into
-            # this rule; if they are library files, they are linked
-            # in."
-            "//lib/libc:libc_s7.c", "//lib/libc:libc_s7.h",
-            # "//lib/libdl:dl_s7.c", "//lib/libdl:libdl_s7.h",
-            # "//lib/libgdbm:gdbm_s7.c", "//lib/libgdbm:libgdbm_s7.h",
-            # "//lib/libm:m_s7.c", "//lib/libm:libm_s7.h",
+            "//lib/libc:c_s7"   # shared lib
+            # "//lib/libc:libc_s7.c", "//lib/libc:libc_s7.h",
         ],
+        "//conditions:default": []
+    }),
+    deps = DEPS + select({
+        "//config/clibs/link:archive?": ["//lib/libc:c_s7_archive"],
+        "//conditions:default": ["//lib/libc:c_s7_archive"],
+    }),
+    copts = COPTS + [
+        "-Isrc",
+        "-I$(GENDIR)/lib/libc",
+        "-I$(GENDIR)/external/libs7/lib/libc",
+    ],
+    data = select({
+        "//config/clibs/link:runtime?": ["//lib/libc:c_s7"],
         "//conditions:default": []
     }),
     local_defines = DEFINES,
-    deps = DEPS + select({
-        "//config/clibs/link:archive?": [
-            "//lib/libc:c_s7_archive",
-            # "//lib/libdl:dl_s7_archive",
-            # "//lib/libgdbm:gdbm_s7_archive",
-            # "//lib/libm:m_s7_archive",
-        ],
-        "//conditions:default": []
-    }),
-    data = select({
-        "//config/clibs/link:runtime?": [
-            "//lib/libc:c_s7",
-            # "//lib/libdl:dl_s7",
-            # "//lib/libgdbm:gdbm_s7",
-            # "//lib/libm:m_s7",
-        ],
-        "//conditions:default": []
-    }),
-    copts = COPTS + LIBC_COPTS,
     linkopts = LINKOPTS,
     timeout  = TIMEOUT,
 )

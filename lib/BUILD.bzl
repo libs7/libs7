@@ -1,10 +1,26 @@
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 
+CLIB_SRCS = ["//src:s7.h"]
+
+# each clib target decides src:s7_archive or src:s7 (dso)
+CLIB_DEPS = ["//lib:utils"]
+
 CLIB_COPTS = [
-    "-Wno-unused-parameter",
-    "-Isrc", "-Iexternal/libs7/src"
 ] + select({
     "//config/clibs/link:shared?": ["-fPIC"],
+    "//conditions:default": []
+})
+
+CLIB_INCLUDE_PATHS = [
+    "-Isrc", "-Iexternal/libs7/src",
+    "-Ilib", "-Iexternal/libs7/lib"
+]
+
+CLIB_LINKOPTS = select({
+    "//config/host/build:linux?": [
+        # "-ldl", "-lm",
+        "-Wl,-export-dynamic"
+    ],
     "//conditions:default": []
 })
 

@@ -2,17 +2,26 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libcwalk_clibgen.scm"])
 
-load("//:BUILD.bzl", "SRCS", "DEPS",
-     "COPTS", "INCLUDE_PATHS", "DEFINES", "LINKOPTS")
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//lib:BUILD.bzl", "clibgen_runner", "CLIB_COPTS")
+load("//lib:BUILD.bzl", "clibgen_runner",
+     "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
+
+SRCS          = BASE_SRCS + CLIB_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
 ################################################################
 cc_library(
     name  = "cwalk_s7_archive", # emits libcwalk_s7_archive.a
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
-    srcs  = SRCS + [":libcwalk_s7.c", "//src:s7.h"],
+    srcs  = SRCS + [":libcwalk_s7.c"],
     deps  = DEPS + ["//vendored/cwalk"],
     copts = COPTS + INCLUDE_PATHS + CLIB_COPTS + [
         "-Ivendored/cwalk",
@@ -25,7 +34,7 @@ cc_library(
 cc_binary(
     name  = "cwalk_s7",  # create libcwalk_s7.{dylib,so}
     linkshared = True,
-    srcs  = SRCS + [":libcwalk_s7.c", "//src:s7.h"],
+    srcs  = SRCS + [":libcwalk_s7.c"],
     deps  = DEPS + ["//vendored/cwalk"],
     copts = COPTS + INCLUDE_PATHS + CLIB_COPTS + [
         "-Ivendored/cwalk",

@@ -6,27 +6,17 @@
  Modified by Gregg Reynolds
 */
 
-#ifndef _mustach_cjson_h_included_
-#define _mustach_cjson_h_included_
-
-/*
- * mustach-json-c is intended to make integration of cJSON
- * library by providing integrated functions.
- */
+#ifndef _MUSTACHE_CJSON_H_
+#define _MUSTACHE_CJSON_H_
 
 #include "cJSON.h"
-#include "mustach_json_ds_mgr.h"
-
-/**
- * Wrap interface used internally by mustach cJSON functions.
- * Can be used for overriding behaviour.
- */
+#include "mustache_json_ds_mgr.h"
 
 /* extern const struct mustach_wrap_itf mustach_wrap_itf_json; */
 extern const struct mustach_ds_methods_s json_methods;
 
 /**
- * mustache_cjson_render - Render to string.
+ * mustache_json_render - Render to string.
  *
  * @template: the template string to instanciate
  * @length:   length of the template or zero if unknown and template null terminated
@@ -36,30 +26,22 @@ extern const struct mustach_ds_methods_s json_methods;
  * Returns pointer to rendered string, null-terminated, or NULL in
  * case of error (errno is set). Returned string must be freed by caller.
  */
-const char *mustache_cjson_render(const char *template,
+const char *mustache_json_render(const char *template,
                                  size_t template_sz,
                                  cJSON *root,
                                  int flags);
 
+int mustache_json_frender(FILE * restrict file,
+                          const char *template,
+                          size_t template_sz,
+                          cJSON *root,
+                          int flags);
 
-/**
- * mustach_fprintf - Renders the mustache 'template' in 'file' for 'root'.
- *
- * @file:     the file where to write the result
- * @template: the template string to instanciate
- * @tlength:   length of the template or zero if unknown and template null terminated
- * @json_root:    the root data object to render
- * @data_schema:  JSON or SCHEME
- * @flags
- *
- * Returns 0 in case of success, -1 with errno set in case of system error
- * a other negative value in case of error.
- */
-int mustach_fprintf(FILE * restrict file,
-                    const char *restrict template, size_t tlength,
-                    void *json_root, // cJSON*, json_object, s7_pointer, etc.
-                    int data_schema, // JSON or SCHEME
-                    int flags);
+int mustache_json_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          cJSON *root,
+                          int flags);
 
 /* extern int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file); */
 
@@ -115,11 +97,11 @@ extern int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, i
  *
  * Returns number of characters printed or a negative value if an error occurs.
  */
-size_t mustach_asprintf(char **ret,
-                        const char *template, size_t tlength,
-                        void *json_root,
-                        int data_schema, // JSON or SCHEME
-                        int flags);
+/* size_t mustach_asprintf(char **ret, */
+/*                         const char *template, size_t tlength, */
+/*                         void *json_root, */
+/*                         int data_schema, // JSON or SCHEME */
+/*                         int flags); */
 
 /**
  * mustach_cJSON_write - Renders the mustache 'template' for 'root' to custom writer 'writecb' with 'closure'.

@@ -1,5 +1,0 @@
-filegroup(
-    name = "json",
-    data = glob(["*.json"]),
-    visibility = ["//visibility:public"]
-)

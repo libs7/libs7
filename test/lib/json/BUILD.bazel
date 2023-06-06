@@ -1,11 +1,37 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+
 load("//test:BUILD.bzl",
-     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+     "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
+     "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
+     "TIMEOUT")
+
+SRCS          = BASE_SRCS + TEST_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS
+COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS + TEST_DEPS
+DEFINES       = BASE_DEFINES + TEST_DEFINES
+LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
+# load("//:BUILD.bzl",
+#      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+#      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+
+# load("//lib:BUILD.bzl", "CLIB_COPTS", "CLIB_LINKOPTS", "TIMEOUT")
+
+# SRCS          = BASE_SRCS
+# INCLUDE_PATHS = BASE_INCLUDE_PATHS
+# COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+# DEPS          = BASE_DEPS
+# DEFINES       = BASE_DEFINES
+# LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
 test_suite(
     name  = "json",
     tests = [
-        "//test/lib/json:reader",
+        "//test/lib/json:readers",
         "//test/lib/json:arrays",
         "//test/lib/json:maps",
         # "//test/lib/json:strings",
@@ -13,58 +39,10 @@ test_suite(
 )
 
 ################################################################
-LIBC_COPTS = [
-    "-I$(GENDIR)/lib/libc",
-    "-I$(GENDIR)/external/libs7/lib/libc",
-    "-I$(GENDIR)/lib/libdl",
-    "-I$(GENDIR)/external/libs7/lib/libdl",
-    "-I$(GENDIR)/lib/libgdbm",
-    "-I$(GENDIR)/external/libs7/lib/libgdbm",
-    "-I$(GENDIR)/lib/libm",
-    "-I$(GENDIR)/external/libs7/lib/libm",
-]
-
-################################################################
 cc_test(
-    name = "base",
+    name = "array_to_scm",
     linkstatic = True,
-    srcs = [
-        "json_test.c",
-        "//test:common.c", "//test:common.h"
-    ] + select({
-        "//config/clibs/link:shared?": [
-            "//lib/libjson:json_s7.c"
-        ],
-        "//conditions:default": []
-    }),
-    local_defines = DEFINES,
-    deps = DEPS + ["//dev"] + select({
-        "//config/clibs/link:archive?": [
-            "//src:s7_archive",
-            "//lib/libjson:json_s7_archive"
-        ],
-        "//conditions:default": []
-    }),
-    data = select({
-        "//config/clibs/link:runtime?": [
-            "//lib/libjson:json_s7"
-        ],
-        "//conditions:default": []
-    }),
-    copts = COPTS + [
-        "-Idev",
-        "-Itest",
-        "-I$(GENDIR)/lib/libjson",
-        "-I$(GENDIR)/external/libs7/lib/libjson",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "json_archive",
-    linkstatic = True,
-    srcs = ["json_test.c",
+    srcs = ["json_array_to_scm_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
@@ -85,44 +63,32 @@ cc_test(
 )
 
 cc_test(
-    name = "json_link_shared",
+    name = "arrays",
     linkstatic = True,
-    srcs = [
-        "json_test.c", "//test:common.c", "//test:common.h",
-        "//lib/libjson:json_s7.c" ## , "//lib/libjson:libjson_s7.h",
-    ],
+    srcs = ["json_arrays_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
     local_defines = DEFINES,
-    deps = DEPS,
+    deps = DEPS + [
+        "//dev",
+        "//lib/libjson:json_s7_archive"
+    ],
     copts = COPTS + [
+        "-Isrc",
+        "-Idev",
         "-Itest",
         "-I$(GENDIR)/lib/libjson",
         "-I$(GENDIR)/external/libs7/lib/libjson",
+        # "-fno-pie"
     ],
     linkopts = LINKOPTS,
     timeout = TIMEOUT
 )
 
 cc_test(
-    name = "json_link_runtime",
+    name = "map_to_scm",
     linkstatic = True,
-    srcs = ["json_test.c", "//test:common.c", "//test:common.h"],
-    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
-    deps = DEPS,
-    data = ["//lib/libjson:json_s7"],
-    copts = COPTS + [
-        "-Itest",
-        "-I$(GENDIR)/lib/libjson",
-        "-I$(GENDIR)/external/libs7/lib/libjson",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-################################################################
-cc_test(
-    name = "reader",
-    linkstatic = True,
-    srcs = ["json_reader_test.c",
+    srcs = ["json_map_to_scm_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
@@ -166,9 +132,9 @@ cc_test(
 )
 
 cc_test(
-    name = "arrays",
+    name = "readers",
     linkstatic = True,
-    srcs = ["json_arrays_test.c",
+    srcs = ["json_readers_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
@@ -176,6 +142,7 @@ cc_test(
         "//dev",
         "//lib/libjson:json_s7_archive"
     ],
+    data = ["//test/data:json"],
     copts = COPTS + [
         "-Isrc",
         "-Idev",

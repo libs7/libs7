@@ -1,49 +1,36 @@
 package(default_visibility = ["//visibility:public"])
 
 load("//:BUILD.bzl",
-     "INCLUDE_PATHS",
-     BASE_SRCS  = "SRCS",
-     BASE_DEPS  = "DEPS",
-     BASE_COPTS = "COPTS",
-     BASE_LINKOPTS = "LINKOPTS",
-     BASE_DEFINES = "DEFINES")
+     "BASE_SRCS", "BASE_COPTS", "BASE_DEPS",
+     "BASE_INCLUDE_PATHS",
+     "BASE_LINKOPTS",
+     "BASE_DEFINES")
 
-load("//lib:BUILD.bzl", "CLIB_COPTS")
+load("//lib/libmustache:BUILD.bzl",
+     "MUSTACHE_INCLUDE_PATHS",
+     "MUSTACHE_DEPS")
+
+SRCS = BASE_SRCS
+INCLUDE_PATHS= BASE_INCLUDE_PATHS + MUSTACHE_INCLUDE_PATHS
+COPTS= BASE_COPTS + INCLUDE_PATHS
+DEPS= BASE_DEPS + MUSTACHE_DEPS
+DEFINES= BASE_DEFINES
+LINKOPTS= BASE_LINKOPTS
 
 cc_library(
-    name = "mustach_toml",
+    name = "mustache_toml",
     linkstatic = True,
-    srcs = BASE_SRCS + [
-        "mustach_tomlc99.c",
-        "mustach_tomlc99.h",
-        "mustach_toml_ds_mgr.c",
-        "mustach_toml_ds_mgr.h",
-        "//lib/libmustache:mustachios7_wrap.c",
-        "//lib/libmustache:mustachios7_wrap.h",
+    srcs = SRCS + [
+        "mustache_tomlc99.c",
+        "mustache_tomlc99.h",
+        "mustache_toml_ds_mgr.c",
+        "mustache_toml_ds_mgr.h",
     ],
-    hdrs = ["mustach_tomlc99.h"],
-    deps  = BASE_DEPS + [
-        "//lib/libmustache/mustach",
-        "//vendored/tomlc99"
+    hdrs = ["mustache_tomlc99.h"],
+    deps  = DEPS + ["//vendored/toml"],
+    copts = COPTS + [
+        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
-    copts = BASE_COPTS + INCLUDE_PATHS + CLIB_COPTS + [
-        "-Isrc",
-        "-Iexternal/libs7/src",
-        "-Ilib/libmustache",
-        "-Iexternal/libs7/lib/libmustache",
-        "-Ilib/libmustache/mustach",
-        "-Iexternal/libs7/lib/libmustache/mustach",
-        "-Ivendored/tomlc99",
-        "-Iexternal/libs7/vendored/tomlc99",
-    ],
-    defines = select({
-        "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:debug?": ["DEBUGGING"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:trace?": ["TRACING"],
-        "//conditions:default": []
-    })
+    defines = DEFINES,
+    linkopts = LINKOPTS
 )

@@ -6,11 +6,11 @@
  SPDX-License-Identifier: ISC
 */
 
-#ifndef _mustach_toml_ds_mgr_h_included_
-#define _mustach_toml_ds_mgr_h_included_
+#ifndef _MUSTACHE_TOML_DS_MGR_H_
+#define _MUSTACHE_TOML_DS_MGR_H_
 
 #include "mustach.h"
-#include "mustachios7_wrap.h"
+#include "mustach_ds_mgr.h"
 
 #ifndef _mustach_output_callbacks_defined_
 #define _mustach_output_callbacks_defined_
@@ -34,10 +34,11 @@ int mustach_toml_fd(const char *template, size_t length,
                     void *closure,
                     int flags, int fd);
 
-int mustach_toml_render_to_string(const char *template, size_t length,
-                                  const struct mustach_ds_methods_s *methods,
-                                  void *closure,
-                                  int flags, char **result, size_t *size);
+char *mustach_toml_render_to_string(const char *template,
+                                  size_t template_sz,
+                                  const struct mustach_ds_methods_s *toml_methods,
+                                  void *stack, // struct tstack_s*
+                                    int flags);
 
 int mustach_toml_write(const char *template, size_t length,
                        const struct mustach_ds_methods_s *methods,

@@ -1,49 +1,64 @@
 package(default_visibility = ["//visibility:public"])
 
 load("//:BUILD.bzl",
-     "INCLUDE_PATHS",
-     BASE_SRCS  = "SRCS",
-     BASE_DEPS  = "DEPS",
-     BASE_COPTS = "COPTS",
-     BASE_LINKOPTS = "LINKOPTS",
-     BASE_DEFINES = "DEFINES")
+     "BASE_SRCS", "BASE_COPTS", "BASE_DEPS",
+     "BASE_INCLUDE_PATHS",
+     "BASE_LINKOPTS",
+     "BASE_DEFINES")
 
-load("//lib:BUILD.bzl", "CLIB_COPTS")
+load("//lib/libmustache:BUILD.bzl",
+     "MUSTACHE_INCLUDE_PATHS",
+     "MUSTACHE_DEPS")
+
+SRCS = BASE_SRCS
+INCLUDE_PATHS= BASE_INCLUDE_PATHS + MUSTACHE_INCLUDE_PATHS
+COPTS= BASE_COPTS + INCLUDE_PATHS
+DEPS= BASE_DEPS + MUSTACHE_DEPS
+DEFINES= BASE_DEFINES
+LINKOPTS= BASE_LINKOPTS
+
+# load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
+#      "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
+
+# load("//lib:BUILD.bzl", "clibgen_runner",
+#      "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
+
+# SRCS          = BASE_SRCS + CLIB_SRCS
+# INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+# COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+# DEPS          = BASE_DEPS
+# DEFINES       = BASE_DEFINES
+# LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
+
+# load("//:BUILD.bzl",
+#      BASE_INCLUDE_PATHS = "INCLUDE_PATHS",
+#      BASE_SRCS  = "SRCS",
+#      BASE_DEPS  = "DEPS",
+#      BASE_COPTS = "COPTS",
+#      BASE_LINKOPTS = "LINKOPTS",
+#      BASE_DEFINES = "DEFINES")
+
+# load("//lib:BUILD.bzl", "CLIB_COPTS")
 
 cc_library(
-    name = "mustach_scm",
+    name = "mustache_scm",
     linkstatic = True,
     srcs = BASE_SRCS + [
-        "mustach_s7.c",
-        "mustach_s7.h",
-        "mustach_scm_ds_mgr.c",
-        "mustach_scm_ds_mgr.h",
-        "//lib/libmustache:mustachios7_wrap.c",
-        "//lib/libmustache:mustachios7_wrap.h",
+        "mustache_s7.c",
+        "mustache_s7.h",
+        "mustache_scm_ds_mgr.c",
+        "mustache_scm_ds_mgr.h",
     ],
-    hdrs = ["mustach_s7.h"],
-    deps  = BASE_DEPS + [
+    hdrs = ["mustache_s7.h"],
+    deps  = DEPS + [
         "//src:s7_archive",
-        "//lib/libmustache/mustach",
+        # "//lib/libmustache/mustach",
     ],
-    copts = BASE_COPTS + INCLUDE_PATHS + CLIB_COPTS + [
-        "-Isrc",
-        "-Iexternal/libs7/src",
-        "-Ilib/libmustache",
-        "-Iexternal/libs7/lib/libmustache",
-        "-Ilib/libmustache/mustach",
-        "-Iexternal/libs7/lib/libmustache/mustach",
+    copts = COPTS + [
+        "-Isrc", "-Iexternal/libs7/src",
         "-Ivendored/tomlc99",
         "-Iexternal/libs7/vendored/tomlc99",
     ],
-    defines = select({
-        "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:debug?": ["DEBUGGING"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:trace?": ["TRACING"],
-        "//conditions:default": []
-    })
+    defines = DEFINES,
+    linkopts = LINKOPTS
 )

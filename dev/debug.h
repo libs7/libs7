@@ -1,4 +1,4 @@
-#ifdef DEBUGGING
+#ifdef DEVBUILD
 
 #include "libs7.h"
 

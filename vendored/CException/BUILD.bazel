@@ -1,11 +1,11 @@
-load("//:BUILD.bzl", "COPTS")
+load("//:BUILD.bzl", "BASE_COPTS")
 
 cc_library(
     name = "CException",
     linkstatic = True,
     srcs = ["CException.c"],
     hdrs = ["CException.h"],
-    copts = COPTS,
+    copts = BASE_COPTS,
     visibility = ["//visibility:public"]
 )
 

@@ -4,8 +4,28 @@
 /* Define as 1 if you have open_memstream.  */
 #undef HAVE_OPEN_MEMSTREAM
 
+#ifndef __STDC_LIB_EXT1__
+typedef int errno_t;
+#endif
+
+#include "CException.h"
+#include "log.h"
+
+#define MALLOC_CHUNK 2048
+
 #ifdef TRACING
 #include "ansi_colors.h"
+#endif
+
+// #define TOMLX_TRACING
+#if defined(TOMLX_TRACING)
+#define TOMLX_ENTRY TRACE_ENTRY
+#define TOMLX_ENTRY_STR TRACE_ENTRY_STR
+#define TOMLX_LOG_DEBUG TRACE_LOG_DEBUG
+#else
+#define TOMLX_ENTRY(fn)
+#define TOMLX_ENTRY_STR(fn,str)
+#define TOMLX_LOG_DEBUG(msg, arg)
 #endif
 
 #ifdef TRACING
@@ -55,6 +75,17 @@
 #define TRACE_LOG_DEBUG(fmt, msg) log_debug(fmt, msg)
 #else
 #define TRACE_LOG_DEBUG(fmt, msg)
+#endif
+
+
+#ifdef TRACING
+#define TRACE_LOG_TIMESTAMP(msg, ts)                    \
+    do {                                               \
+        char *ts = tomlx_datetime_to_string(ts, true);  \
+        log_debug(msg, ts);                             \
+     } while(0)
+#else
+#define TRACE_LOG_TIMESTAMP(msg, ts)
 #endif
 
 #endif

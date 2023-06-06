@@ -24,31 +24,9 @@ bool debug;
 
 char *cmd;
 
-#define DQ "\\\""
-
-#define S(s) "\\\"" #s "\\\""
-
-#define JSON_READ(s) \
-    s7_apply_function(s7, s7_name_to_value(s7, "json:read"),    \
-                      s7_list(s7, 1, \
-                              s7_eval_c_string(s7, "\"" s "\"")));
-                              /* s7_eval_c_string(s7, s))); */
-
-#define APPLY_1(f, o) \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                       s7_list(s7, 1, o))
-
 #define APPLY_MAP(m, o) \
     s7_apply_function(s7, m, s7_list(s7, 1, o))
 
-#define APPLY_2(f, o, k)                             \
- s7_apply_function(s7, s7_name_to_value(s7, f),    \
-                   s7_list(s7, 2, o, k))
-
-    /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
-    /*                            s7_list(s7, 1, v)) */
-
-/* WARNING: setUp and tearDown are run once per test. */
 void setUp(void) {
     /* log_info("setup"); */
 }
@@ -60,7 +38,7 @@ void tearDown(void) {
 /* (define tlt (json:read "v = [0, 1, 2]")) */
 /* tlt is (a nameless) object, NOT a kv pair!  */
 void root_object(void) {
-    jo = JSON_READ("{" S(m) ": true}");
+    jo = JSON_READ("{\"m\": true}");
     actual = APPLY_1("json:map?", jo);
     TEST_ASSERT_EQUAL(s7_t(s7), actual);
 
@@ -72,7 +50,7 @@ void root_object(void) {
 
 void atomic_types(void) {
     // integer
-    jo = JSON_READ("{" S(m) ": 123}");
+    jo = JSON_READ("{\"m\": 123}");
     actual = APPLY_1("json:map?", jo);
     TEST_ASSERT_EQUAL(s7_t(s7), actual);
     k = s7_make_string(s7, "m");
@@ -85,7 +63,7 @@ void atomic_types(void) {
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // float
-    jo = JSON_READ("{" S(m) ": 1.23}");
+    jo = JSON_READ("{\"m\": 1.23}");
     actual = APPLY_1("json:map?", jo);
     TEST_ASSERT_EQUAL(s7_t(s7), actual);
     k = s7_make_string(s7, "m");
@@ -99,10 +77,10 @@ void atomic_types(void) {
     TRACE_S7_DUMP("nbr", res);
 
     // bad string (single quotes), throws error
-    /* jo = JSON_READ("{" S(m) ": 'hello'}"); */
+    /* jo = JSON_READ("{\"m\": 'hello'}"); */
 
     // string
-    jo = JSON_READ("{" S(m) ": " DQ "hello" DQ "}");
+    jo = JSON_READ("{\"m\": \"hello\"}");
     flag = APPLY_1("json:map?", jo);
     TRACE_S7_DUMP("flag", flag);
     TEST_ASSERT_EQUAL(s7_t(s7), actual);
@@ -144,14 +122,14 @@ void atomic_types(void) {
  */
 void map_ops(void) {
     root = JSON_READ("{"
-                   S(m) ": "
+                   "\"m\": "
                    "{"
-                   S(b) ":true,"
-                   S(s) ": \\\"Hello!\\\", "
-                   S(i) ": 0,"
-                   S(f) ": 1.2, "
-                   S(subm) ": {" S(m1) ": 1 },"
-                   S(v) ": [0, 1, 2]"
+                   "\"b\":true,"
+                   "\"s\": \\\"Hello!\\\", "
+                   "\"i\": 0,"
+                   "\"f\": 1.2, "
+                   "\"subm\": {\"m1\": 1 },"
+                   "\"v\": [0, 1, 2]"
                    "}}");
     /* flag = APPLY_1("json:map?", root); */
     /* TRACE_S7_DUMP("root", root); */
@@ -199,7 +177,7 @@ void map_ops(void) {
 }
 
 void apply_map(void) {
-    jo = JSON_READ("{" S(m) ": 123}");
+    jo = JSON_READ("{\"m\": 123}");
     flag = APPLY_1("json:map?", jo);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
@@ -215,7 +193,7 @@ void apply_map(void) {
 }
 
 void map_refs(void) {
-    root = JSON_READ("{" S(m) ": 123}");
+    root = JSON_READ("{\"m\": 123}");
     flag = APPLY_1("json:map?", root);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 

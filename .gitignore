@@ -1,5 +1,7 @@
 .bazel
 bazel-*
+config/config.h
+config/feature/BUILD.bazel
 private
 *.history.txt
 log.*

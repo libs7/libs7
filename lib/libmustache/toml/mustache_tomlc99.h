@@ -6,12 +6,12 @@
  Modified by Gregg Reynolds
 */
 
-#ifndef _mustach_tomlc99_h_included_
-#define _mustach_tomlc99_h_included_
+#ifndef _MUSTACHE_TOMLC99_H_
+#define _MUSTACHE_TOMLC99_H_
 
 #include "toml.h"
 #include "tomlx.h"
-#include "mustach_toml_ds_mgr.h"
+#include "mustache_toml_ds_mgr.h"
 
 /**
  * Wrap interface used internally by mustach toml functions.

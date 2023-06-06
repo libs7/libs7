@@ -17,7 +17,7 @@
 
 s7_scheme *s7;
 
-/* #if defined(DEBUGGING) */
+/* #if defined(DEVBUILD) */
 /* extern bool libs7_debug; */
 /* extern bool libs7_debug_runfiles; */
 /* extern bool libs7_trace; */

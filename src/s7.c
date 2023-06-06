@@ -271,12 +271,12 @@
   /* int+int overflows to real, etc: this adds warnings which are expensive even though they are never called (procedure overhead) */
 #endif
 
-#ifndef S7_DEBUGGING
-  #define S7_DEBUGGING 0
+#ifndef S7_DEVBUILD
+  #define S7_DEVBUILD 0
 #endif
 
-#undef DEBUGGING
-#define DEBUGGING typo!
+#undef DEVBUILD
+#define DEVBUILD typo!
 #define HAVE_GMP typo!
 
 #define SHOW_EVAL_OPS 0
@@ -306,7 +306,7 @@
   #pragma warning(disable: 4244) /* conversion might cause loss of data warning */
 #endif
 
-#if WITH_GCC && (!S7_DEBUGGING)
+#if WITH_GCC && (!S7_DEVBUILD)
   #define Inline inline __attribute__((__always_inline__))
 #else
   #ifdef _MSC_VER
@@ -1012,7 +1012,7 @@ typedef struct s7_cell {
     } winder;
   } object;
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   int32_t alloc_line, uses, explicit_free_line, gc_line, holders;
   int64_t alloc_type, debugger_bits;
   const char *alloc_func, *gc_func, *root;
@@ -1411,7 +1411,7 @@ struct s7_scheme {
 
   s7_pointer type_names[NUM_TYPES];
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   int32_t *tc_rec_calls;
   int32_t last_gc_line;
   bool printing_gc_info;
@@ -1422,7 +1422,7 @@ struct s7_scheme {
 static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info);
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   static void gdb_break(void) {};
 #endif
 
@@ -1431,7 +1431,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
   #define DISABLE_FILE_OUTPUT 0
 #endif
 
-#if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
+#if S7_DEVBUILD || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
   static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used elsewhere unfortunately */
 #endif
 
@@ -1729,7 +1729,7 @@ static bool t_simple_p[NUM_TYPES], t_structure_p[NUM_TYPES];
 static bool t_any_macro_p[NUM_TYPES], t_any_closure_p[NUM_TYPES], t_has_closure_let[NUM_TYPES];
 static bool t_mappable_p[NUM_TYPES], t_sequence_p[NUM_TYPES], t_vector_p[NUM_TYPES];
 static bool t_procedure_p[NUM_TYPES], t_applicable_p[NUM_TYPES], t_macro_setter_p[NUM_TYPES];
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static bool t_freeze_p[NUM_TYPES]; /* free_cell sanity check */
 static bool t_ext_p[NUM_TYPES];    /* make sure internal types don't leak out */
 #endif
@@ -1753,7 +1753,7 @@ static void init_types(void)
       t_applicable_p[i] = false;
       t_procedure_p[i] = false;
       t_macro_setter_p[i] = false;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
       t_freeze_p[i] = false;
       t_ext_p[i] = false;
 #endif
@@ -1899,7 +1899,7 @@ static void init_types(void)
   t_simple_p[T_INPUT_PORT] = true;
   t_simple_p[T_OUTPUT_PORT] = true;
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   t_freeze_p[T_STRING] = true;
   t_freeze_p[T_BYTE_VECTOR] = true;
   t_freeze_p[T_VECTOR] = true;
@@ -1950,7 +1950,7 @@ static void init_types(void)
 #define typesflag(p) ((p)->tf.sflag)
 #define TYPE_MASK    0xff
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line);
   static s7_pointer check_ref(s7_pointer p, uint8_t expected_type, const char *func, int32_t line, const char *func1, const char *func2);
   static s7_pointer check_ref7(s7_pointer p, const char *func, int32_t line);
@@ -2203,7 +2203,7 @@ static void init_types(void)
 
 #define T_MULTIPLE_VALUE               (1 << (TYPE_BITS + 7))
 #define is_multiple_value(p)           has_type0_bit(T_Pos(p), T_MULTIPLE_VALUE) /* not T_Ext -- can be a slot */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define set_multiple_value(p)          do {if (!in_heap(p)) {fprintf(stderr, "%s[%d]: mv\n", __func__, __LINE__); abort();} set_type0_bit(T_Pair(p), T_MULTIPLE_VALUE);} while (0)
 #else
 #define set_multiple_value(p)          set_type0_bit(T_Pair(p), T_MULTIPLE_VALUE)
@@ -2780,7 +2780,7 @@ static void init_types(void)
 #define pair_file_number(p)            location_to_file(pair_location(p))
 #define pair_position(p)               location_to_position(pair_location(p))
 
-#if (!S7_DEBUGGING)
+#if (!S7_DEVBUILD)
 #define pair_location(p)               (p)->object.sym_cons.location
 #define pair_set_location(p, X)        (p)->object.sym_cons.location = X
 #define pair_raw_hash(p)               (p)->object.sym_cons.hash
@@ -2944,7 +2944,7 @@ static void init_types(void)
 #define opt3_direct(P)                 opt3(P,                      OPT3_DIRECT)
 #define set_opt3_direct(P, X)          set_opt3(P, (s7_pointer)(X), OPT3_DIRECT)
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define opt3_byte(p)                   opt3_byte_1(sc, T_Pair(p), OPT3_BYTE, __func__, __LINE__)
 #define set_opt3_byte(p, x)            set_opt3_byte_1(T_Pair(p), x, OPT3_BYTE, __func__, __LINE__)
 #else
@@ -3080,7 +3080,7 @@ static void init_types(void)
 #define pointer_map(p)                 (s7_int)((intptr_t)(p) >> 8)
 #define symbol_id(p)                   (T_Sym(p))->object.sym.id
 #define symbol_set_id_unchecked(p, X)  (T_Sym(p))->object.sym.id = X
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void symbol_set_id(s7_pointer p, s7_int id)
 {
   if (id < symbol_id(p))
@@ -3145,7 +3145,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_symbol(p)                 T_Sym((T_Slt(p))->object.slt.sym)
 #define slot_set_symbol(p, Sym)        (T_Slt(p))->object.slt.sym = T_Sym(Sym)
 #define slot_value(p)                  T_Nmv((T_Slt(p))->object.slt.val)
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define slot_set_value(slot, value) \
   do { \
        if (is_immutable_slot(slot)) {fprintf(stderr, "setting immutable slot\n"); if (cur_sc->stop_at_error) abort();} \
@@ -3161,7 +3161,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define slot_set_next(p, Val)          (T_Slt(p))->object.slt.nxt = T_Sln(Val)
 #define slot_set_pending_value(p, Val) do {(T_Slt(p))->object.slt.pending_value = T_Nmv(Val); slot_set_has_pending_value(p);} while (0)
 #define slot_simply_set_pending_value(p, Val) (T_Slt(p))->object.slt.pending_value = T_Nmv(Val)
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static s7_pointer slot_pending_value(s7_pointer p) \
   {if (slot_has_pending_value(p)) return(p->object.slt.pending_value); fprintf(stderr, "%s[%d]: slot: no pending value\n", __func__, __LINE__); abort(); return(NULL);}
 static s7_pointer slot_expression(s7_pointer p)    \
@@ -3176,7 +3176,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define slot_just_set_expression(p, Val) (T_Slt(p))->object.slt.expr = T_Ext(Val)
 #define slot_setter(p)                 T_Prc(T_Slt(p)->object.slt.pending_value)
 #define slot_set_setter_1(p, Val)      (T_Slt(p))->object.slt.pending_value = T_Prc(Val)
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define tis_slot(p) ((p) && (T_Slt(p)))
 #else
 #define tis_slot(p) (p) /* used for loop through let slots which end in nil, not for general slot recognition */
@@ -3204,7 +3204,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define let_slots(p)                   T_Sln((T_Let(p))->object.envr.slots)
 #define let_outlet(p)                  T_Lid((T_Let(p))->object.envr.nxt)
 #define let_set_outlet(p, ol)          (T_Let(p))->object.envr.nxt = T_Lid(ol)
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   #define let_set_slots(p, Slot)       do {if ((!in_heap(p)) && (Slot) && (in_heap(Slot))) fprintf(stderr, "%s[%d]: let+slot mismatch\n", __func__, __LINE__); \
                                            T_Let(p)->object.envr.slots = T_Sln(Slot);} while (0)
   #define C_Let(p, role)               check_let_ref(p, role, __func__, __LINE__)
@@ -3335,7 +3335,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define hash_table_set_value_typer(p, Fnc) set_opt2_any(hash_table_procedures(T_Hsh(p)), T_Prc(Fnc))
 #define weak_hash_iters(p)                 hash_table_block(p)->ln.tag
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define T_Itr_Pos(p)                   titr_pos(sc, T_Itr(p), __func__, __LINE__)
 #define T_Itr_Len(p)                   titr_len(sc, T_Itr(p), __func__, __LINE__)
 #define T_Itr_Hash(p)                  titr_hash(sc, T_Itr(p), __func__, __LINE__)
@@ -3578,7 +3578,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define counter_slots(p)               T_Sln(T_Ctr(p)->object.ctr.slots)
 #define counter_set_slots(p, Val)      (T_Ctr(p))->object.ctr.slots = T_Sln(Val)
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define init_temp(p, Val)              do {if (p != sc->unused) fprintf(stderr, "%s[%d]: temp %s\n", __func__, __LINE__, display(p)); p = T_Ext(Val);} while (0)
 #else
 #define init_temp(p, Val)              p = Val
@@ -3622,7 +3622,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define big_complex_bgc(p)             (p)->object.number.bgc
 #endif
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 const char *display(s7_pointer obj);
 const char *display(s7_pointer obj)
 {
@@ -3639,7 +3639,7 @@ const char *display(s7_pointer obj)
 #endif
 #define display_80(Obj) string_value(object_to_truncated_string(sc, Obj, 80))
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void set_type_1(s7_pointer p, uint64_t f, const char *func, int32_t line)
 {
   p->alloc_line = line;
@@ -3838,7 +3838,7 @@ static void init_small_ints(void)
   #define GC_TRIGGER_SIZE 64
 #endif
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void try_to_call_gc_1(s7_scheme *sc, const char *func, int32_t line);
 #define try_to_call_gc(Sc) try_to_call_gc_1(Sc, __func__, __LINE__)
 #else
@@ -3860,7 +3860,7 @@ static void try_to_call_gc(s7_scheme *sc);
  *   but then hit some error before setting the type, the GC sweep thinks it is a free cell already and
  *   does not return it to the free list: a memory leak.
  */
-#if (!S7_DEBUGGING)
+#if (!S7_DEVBUILD)
 #define new_cell(Sc, Obj, Type)			\
   do {						\
     if (Sc->free_heap_top <= Sc->free_heap_trigger) try_to_call_gc(Sc); \
@@ -3988,7 +3988,7 @@ static inline s7_int safe_strlen(const char *str) /* this is safer than strlen, 
 static char *copy_string_with_length(const char *str, s7_int len)
 {
   char *newstr;
-  if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
+  if ((S7_DEVBUILD) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
   memcpy((void *)newstr, (const void *)str, len); /* we check len != 0 above -- 24-Jan-22 */
@@ -4099,7 +4099,7 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
 }
 
 #if WITH_GCC
-  #if S7_DEBUGGING
+  #if S7_DEVBUILD
     static s7_pointer lookup_1(s7_scheme *sc, const s7_pointer symbol);
     #define lookup(Sc, Sym) check_null_sym(Sc, lookup_1(Sc, Sym), Sym, __LINE__, __func__)
     static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, int32_t line, const char *func);
@@ -4692,7 +4692,7 @@ void s7_show_stack(s7_scheme *sc)
     fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define UNUSED_BITS 0xfc00000000c0 /* high 6 bits of optimizer code + high 2 bits of type */
 
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
@@ -5281,7 +5281,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, int32_t line)
 		BOLD_TEXT, obj, line, s7_type_names[obj->alloc_type & 0xff], obj->alloc_type, obj->alloc_type,
 		bits, obj->alloc_func, obj->alloc_line,
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	UNBOLD_TEXT);
-	if (S7_DEBUGGING) fprintf(stderr, "%s, last gc line: %d%s", BOLD_TEXT, sc->last_gc_line, UNBOLD_TEXT);
+	if (S7_DEVBUILD) fprintf(stderr, "%s, last gc line: %d%s", BOLD_TEXT, sc->last_gc_line, UNBOLD_TEXT);
 	fprintf(stderr, "\n");
 	free(bits);
       }
@@ -5716,7 +5716,7 @@ static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, in
     }
   return(p);
 }
-#endif /* S7_DEBUGGING */
+#endif /* S7_DEVBUILD */
 /* -------------------------------- end internal debugging apparatus -------------------------------- */
 
 
@@ -6392,7 +6392,7 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
  *   case) to manage them in the sweep process by tracking lets.
  */
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static s7_int gc_protect_2(s7_scheme *sc, s7_pointer x, int32_t line)
 {
   s7_int loc = s7_gc_protect(sc, x);
@@ -6443,7 +6443,7 @@ void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc)
     {
       if (vector_element(sc->protected_objects, loc) != sc->unused)
 	sc->protected_objects_free_list[++sc->protected_objects_free_list_loc] = loc;
-      else if (S7_DEBUGGING) fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
+      else if (S7_DEVBUILD) fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
       vector_element(sc->protected_objects, loc) = sc->unused;
     }
 }
@@ -6508,7 +6508,7 @@ static void process_multivector(s7_scheme *sc, s7_pointer s1)
 
 static void process_input_string_port(s7_scheme *sc, s7_pointer s1)
 {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   /* this set of ports is a subset of the ports that respond true to is_string_port --
    *   the latter include file ports fully read into local memory; see read_file which uses add_input_port, not add_input_string_port
    */
@@ -7317,7 +7317,7 @@ static __attribute__ ((format (printf, 3, 4))) void s7_warn(s7_scheme *sc, s7_in
 static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #endif
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static int64_t gc(s7_scheme *sc, const char *func, int32_t line)
 #else
 static int64_t gc(s7_scheme *sc)
@@ -7331,7 +7331,7 @@ static int64_t gc(s7_scheme *sc)
   sc->gc_in_progress = true;
   sc->gc_start = my_clock();
   sc->gc_calls++;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   sc->last_gc_line = line;
 #endif
   sc->continuation_counter = 0;
@@ -7464,7 +7464,7 @@ static int64_t gc(s7_scheme *sc)
     s7_pointer *tp = sc->heap;
     s7_pointer *heap_top = (s7_pointer *)(sc->heap + sc->heap_size);
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   #define gc_object(Tp)							\
     p = (*Tp++);							\
     if (signed_type(p) > 0)						\
@@ -7510,7 +7510,7 @@ static int64_t gc(s7_scheme *sc)
   if (show_gc_stats(sc))
     {
 #if (!MS_WINDOWS)
-#if S7_DEBUGGING
+#if S7_DEVBUILD
       s7_warn(sc, 512, "%s[%d]: gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n", func, line,
 	      sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
 #else
@@ -7548,7 +7548,7 @@ static int64_t gc(s7_scheme *sc)
 static s7_pointer make_symbol(s7_scheme *sc, const char *name, s7_int len); /* calls new_symbol */
 #define make_symbol_with_strlen(Sc, Name) make_symbol(Sc, Name, safe_strlen(Name))
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define resize_heap_to(Sc, Size) resize_heap_to_1(Sc, Size, __func__, __LINE__)
 static void resize_heap_to_1(s7_scheme *sc, int64_t size, const char *func, int line)
 #else
@@ -7561,7 +7561,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   s7_cell **cp;
   heap_block_t *hp;
 
-#if (S7_DEBUGGING) && (!MS_WINDOWS)
+#if (S7_DEVBUILD) && (!MS_WINDOWS)
   if (show_gc_stats(sc))
     s7_warn(sc, 512, "%s from %s[%d]: old: %" ld64 " / %" ld64 ", new: %" ld64 ", fraction: %.3f -> %" ld64 "\n",
 	    __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
@@ -7642,7 +7642,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 
 #define resize_heap(Sc) resize_heap_to(Sc, 0)
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define call_gc(Sc) gc(Sc, __func__, __LINE__)
 static void try_to_call_gc_1(s7_scheme *sc, const char *func, int32_t line)
 #else
@@ -7657,7 +7657,7 @@ static void try_to_call_gc(s7_scheme *sc)
     {
       if ((sc->gc_resize_heap_fraction > 0.5) && (sc->heap_size >= 4194304))
 	  sc->gc_resize_heap_fraction = 0.5;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
       gc(sc, func, line); /* not call_gc! */
 #else
       gc(sc);
@@ -7711,7 +7711,7 @@ s7_pointer s7_gc_on(s7_scheme *sc, bool on)
   return(s7_make_boolean(sc, on));
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void check_free_heap_size_1(s7_scheme *sc, s7_int size, const char *func, int32_t line)
 #define check_free_heap_size(Sc, Size) check_free_heap_size_1(Sc, Size, __func__, __LINE__)
 #else
@@ -7721,7 +7721,7 @@ static void check_free_heap_size(s7_scheme *sc, s7_int size)
   s7_int free_cells = sc->free_heap_top - sc->free_heap;
   if (free_cells < size)
     {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
       gc(sc, func, line);
 #else
       gc(sc);
@@ -7779,7 +7779,7 @@ static void add_semipermanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
   sc->semipermanent_lets = g;
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static const char *type_name_from_type(int32_t typ, article_t article);
 
 #define free_cell(Sc, P) free_cell_1(Sc, P, __LINE__)
@@ -7788,7 +7788,7 @@ static void free_cell_1(s7_scheme *sc, s7_pointer p, int32_t line)
 static void free_cell(s7_scheme *sc, s7_pointer p)
 #endif
 {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   /* anything that needs gc_list attention should not be freed here */
   uint8_t typ = unchecked_type(p);
   gc_list_t *gp = sc->opt1_funcs;
@@ -7822,7 +7822,7 @@ static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
   return(x);
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define remove_gensym_from_heap(Sc, Gensym) remove_gensym_from_heap_1(Sc, Gensym, __func__, __LINE__)
 static void remove_gensym_from_heap_1(s7_scheme *sc, s7_pointer x, const char *func, int line)
 #else
@@ -7832,7 +7832,7 @@ static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x) /* x known to b
   int64_t loc = heap_location(sc, x);
   sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
   free_cell(sc, sc->heap[loc]);
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   x->gc_func = func;
   x->gc_line = line;
 #endif
@@ -7897,7 +7897,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
 /* -------------------------------- stacks -------------------------------- */
 #define OP_STACK_INITIAL_SIZE 64
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void push_op_stack(s7_scheme *sc, s7_pointer op)
 {
   (*sc->op_stack_now++) = T_Ext(op); /* not T_App etc -- args can be pushed */
@@ -7943,7 +7943,7 @@ static void resize_op_stack(s7_scheme *sc)
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define pop_stack(Sc) pop_stack_1(Sc, __func__, __LINE__)
 static void pop_stack_1(s7_scheme *sc, const char *func, int32_t line)
 {
@@ -8120,7 +8120,7 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
  *   sc->code and sc->args to currently free objects.
  */
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define unstack(Sc) unstack_1(Sc, __func__, __LINE__)
 static void unstack_1(s7_scheme *sc, const char *func, int32_t line)
 {
@@ -8191,7 +8191,7 @@ static uint32_t resize_stack_unchecked(s7_scheme *sc)
   return(new_size);
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define resize_stack(Sc) resize_stack_1(Sc, __func__, __LINE__)
 static void resize_stack_1(s7_scheme *sc, const char *func, int line)
 {
@@ -8243,7 +8243,7 @@ s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x)
 #define stack_protected2(Sc) Sc->stack_end[-4] /* code */
 #define stack_protected3(Sc) Sc->stack_end[-3] /* curlet */
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   #define set_stack_protected1(Sc, Val) do {if ((opcode_t)(Sc->stack_end[-1]) != OP_GC_PROTECT) fprintf(stderr, "%s[%d]: stack_protected %s\n", __func__, __LINE__, op_names[(opcode_t)(Sc->stack_end[-1])]); Sc->stack_end[-2] = Val;} while (0)
   #define set_stack_protected2(Sc, Val) do {if ((opcode_t)(Sc->stack_end[-1]) != OP_GC_PROTECT) fprintf(stderr, "%s[%d]: stack_protected %s\n", __func__, __LINE__, op_names[(opcode_t)(Sc->stack_end[-1])]); Sc->stack_end[-4] = Val;} while (0)
   #define set_stack_protected3(Sc, Val) do {if ((opcode_t)(Sc->stack_end[-1]) != OP_GC_PROTECT) fprintf(stderr, "%s[%d]: stack_protected %s\n", __func__, __LINE__, op_names[(opcode_t)(Sc->stack_end[-1])]); Sc->stack_end[-3] = Val;} while (0)
@@ -8353,7 +8353,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       slot = make_semipermanent_slot(sc, x, x);
       set_global_slot(x, slot);
       set_local_slot(x, slot);
-      if (S7_DEBUGGING) set_immutable_slot(slot);
+      if (S7_DEVBUILD) set_immutable_slot(slot);
     }
   full_type(p) = T_PAIR | T_IMMUTABLE | T_UNHEAP;  /* add x to the symbol table */
   set_car(p, x);
@@ -8557,7 +8557,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
     s7_warn(sc, nlen + 32, "%s is already in use!", name);
 
   /* make-string for symbol name */
-  if (S7_DEBUGGING) full_type(str) = 0; /* here and below, this is needed to avoid set_type check errors (mallocate above) */
+  if (S7_DEVBUILD) full_type(str) = 0; /* here and below, this is needed to avoid set_type check errors (mallocate above) */
   set_full_type(str, T_STRING | T_IMMUTABLE | T_UNHEAP);
   string_length(str) = nlen;
   string_value(str) = name;
@@ -8576,7 +8576,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   gensym_block(x) = b;
 
   /* place new symbol in symbol-table */
-  if (S7_DEBUGGING) full_type(stc) = 0;
+  if (S7_DEVBUILD) full_type(stc) = 0;
   set_full_type(stc, T_PAIR | T_IMMUTABLE | T_UNHEAP);
   set_car(stc, x);
   set_cdr(stc, vector_element(sc->symbol_table, location));
@@ -8956,7 +8956,7 @@ static inline void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_p
 static s7_pointer reuse_as_let(s7_scheme *sc, s7_pointer let, s7_pointer next_let)
 {
   /* we're reusing let here as a let -- it was probably a pair */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   let->debugger_bits = 0;
   if (!in_heap(let)) {fprintf(stderr, "reusing an unheaped %s as a let?\n", s7_type_names[type(let)]); abort();}
 #endif
@@ -9283,7 +9283,7 @@ static void init_unlet(s7_scheme *sc)
 	    /* non-c_functions that are not set! (and therefore initial_slot GC) protected by default: make-hook hook-functions
 	     *   if these initial_slot values are added to unlet, they need explicit GC protection.
 	     */
-	    if ((S7_DEBUGGING) && (k >= UNLET_ENTRIES)) fprintf(stderr, "unlet overflow\n");
+	    if ((S7_DEVBUILD) && (k >= UNLET_ENTRIES)) fprintf(stderr, "unlet overflow\n");
 	  }}
 }
 
@@ -9801,7 +9801,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
     {
       s7_pointer symbol = va_arg(ap, s7_pointer);
       s7_pointer value = va_arg(ap, s7_pointer);
-      if ((S7_DEBUGGING) && (is_keyword(symbol))) fprintf(stderr, "internal_inlet key: %s??\n", display(symbol));
+      if ((S7_DEVBUILD) && (is_keyword(symbol))) fprintf(stderr, "internal_inlet key: %s??\n", display(symbol));
       if (!sp)
 	{
 	  add_slot_unchecked(sc, new_e, symbol, value, id);
@@ -10402,7 +10402,7 @@ static Inline s7_pointer inline_lookup_from(s7_scheme *sc, const s7_pointer symb
 #endif
 }
 
-#if WITH_GCC && S7_DEBUGGING
+#if WITH_GCC && S7_DEVBUILD
 static s7_pointer lookup_1(s7_scheme *sc, const s7_pointer symbol)
 #else
 static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol) /* lookup_checked includes the unbound_variable call */
@@ -10735,7 +10735,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
     case OP_DEFINE_EXPANSION:      typ = T_MACRO | ((is_let(sc->curlet)) ? 0 : T_EXPANSION); break; /* local expansions are just normal macros */
     case OP_DEFINE_EXPANSION_STAR: typ = T_MACRO_STAR | ((is_let(sc->curlet)) ? 0 : T_EXPANSION); break;
     default:
-      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: got %s\n", __func__, __LINE__, op_names[op]);
+      if (S7_DEVBUILD) fprintf(stderr, "%s[%d]: got %s\n", __func__, __LINE__, op_names[op]);
       typ = T_MACRO;
       break;
     }
@@ -11430,7 +11430,7 @@ static s7_pointer g_is_continuation(s7_scheme *sc, s7_pointer args)
 
 static bool is_continuation_b_p(s7_pointer p) {return(is_continuation(p));}
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static s7_pointer check_wrap_return(s7_pointer lst)
 {
   for (s7_pointer fast = lst, slow = lst; is_pair(fast); slow = cdr(slow), fast = cdr(fast))
@@ -11450,7 +11450,7 @@ static s7_pointer copy_any_list(s7_scheme *sc, s7_pointer a)
   s7_pointer slow = cdr(a);
   s7_pointer fast = slow;
   s7_pointer p;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   #define wrap_return(W) do {fast = W; W = sc->unused; sc->y = sc->unused; return(check_wrap_return(fast));} while (0)
 #else
   #define wrap_return(W) do {fast = W; W = sc->unused; sc->y = sc->unused; return(fast);} while (0)
@@ -11790,7 +11790,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  break;
 
 	default:
-	  if ((S7_DEBUGGING) && (op == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
+	  if ((S7_DEVBUILD) && (op == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
 	  break;
 	}}
 
@@ -12019,7 +12019,7 @@ static void call_with_exit(s7_scheme *sc)
 	break;
 
       default:
-	if ((S7_DEBUGGING) && (stack_op(sc->stack, i) == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
+	if ((S7_DEVBUILD) && (stack_op(sc->stack, i) == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
 	break;
       }
     i -= 4;
@@ -12378,7 +12378,7 @@ static s7_pointer mpq_to_rational(s7_scheme *sc, mpq_t val)
 {
   if (mpz_cmp_ui(mpq_denref(val), 1) == 0)
     return(mpz_to_integer(sc, mpq_numref(val)));
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   mpq_canonicalize(val);
   if (mpz_cmp_ui(mpq_denref(val), 1) == 0)
     {
@@ -13256,7 +13256,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	    {
 	      (*numer) = p0;
 	      (*denom) = q0;
-	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
+	      if ((S7_DEVBUILD) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
 	    }
 	  return(true);
 	}
@@ -25335,7 +25335,7 @@ static s7_pointer random_state_copy(s7_scheme *sc, s7_pointer args)
   return(new_r);
 #endif
 }
-#if S7_DEBUGGING && (!WITH_GMP)
+#if S7_DEVBUILD && (!WITH_GMP)
   static s7_int last_carry = 0;
   /* 2083801278 */
 #endif
@@ -25381,7 +25381,7 @@ Pass this as the second argument to 'random' to get a repeatable random number s
       new_cell(sc, p, T_RANDOM_STATE);
       random_seed(p) = (uint64_t)i1;
       random_carry(p) = 1675393560;                          /* should this be dependent on the seed? */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
       last_carry = 1675393560;
 #endif
       return(p);
@@ -25397,7 +25397,7 @@ Pass this as the second argument to 'random' to get a repeatable random number s
   new_cell(sc, p, T_RANDOM_STATE);
   random_seed(p) = (uint64_t)i1;
   random_carry(p) = (uint64_t)i2;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   last_carry = i2;
 #endif
   return(p);
@@ -28298,7 +28298,7 @@ static void close_input_string(s7_scheme *sc, s7_pointer p)
 
 static void close_simple_input_string(s7_scheme *sc, s7_pointer p)
 {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   if (port_filename(p)) fprintf(stderr, "%s: port has a filename\n", __func__);
   if (port_needs_free(p)) fprintf(stderr, "%s: port needs free\n", __func__);
 #endif
@@ -28701,7 +28701,7 @@ static void string_write_string_resized(s7_scheme *sc, const char *str, s7_int l
 
 static void string_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
 {
-  if ((S7_DEBUGGING) && (len == 0)) {fprintf(stderr, "string_write_string len == 0\n"); abort();}
+  if ((S7_DEVBUILD) && (len == 0)) {fprintf(stderr, "string_write_string len == 0\n"); abort();}
   if (port_position(pt) + len < port_data_size(pt))
     {
       memcpy((void *)(port_data(pt) + port_position(pt)), (const void *)str, len);
@@ -29479,7 +29479,7 @@ static s7_pointer open_input_string(s7_scheme *sc, const char *input_string, s7_
   port_line_number(x) = 0;
   port_file(x) = NULL;
   port_needs_free(x) = false;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   if ((len > 0) && (input_string[len] != '\0'))
     {
       fprintf(stderr, "%s[%d]: read_white_space string is not terminated: len: %" ld64 ", at end: %c%c, str: %s",
@@ -30317,7 +30317,7 @@ static block_t *full_filename(s7_scheme *sc, const char *filename)
 {
   char *rtn;
   block_t *block;
-  if ((S7_DEBUGGING) && ((!filename) || (!*filename))) fprintf(stderr, "%s[%d]: filename is %s\n", __func__, __LINE__, filename);
+  if ((S7_DEVBUILD) && ((!filename) || (!*filename))) fprintf(stderr, "%s[%d]: filename is %s\n", __func__, __LINE__, filename);
   if (filename[0] == '/')
     {
       s7_int len = safe_strlen(filename);
@@ -30388,7 +30388,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 	      pwd_name = (char *)block_data(pname);
 	    }}
 
-      if ((S7_DEBUGGING) && (!pname)) fprintf(stderr, "pname is null\n");
+      if ((S7_DEVBUILD) && (!pname)) fprintf(stderr, "pname is null\n");
       library = dlopen((pname) ? pwd_name : fname, RTLD_NOW);
       if (!library) {
 	s7_warn(sc, 1024, "load %s failed: %s\n", (pname) ? pwd_name : fname, dlerror());
@@ -30441,7 +30441,7 @@ static s7_pointer load_shared_object(s7_scheme *sc, const char *fname, s7_pointe
 			fname, init_name, dlerror(), display(let));
 		dlclose(library);
 	      }
-	    if (S7_DEBUGGING) fprintf(stderr, "init_func trouble in %s, %s\n", fname, display(init));
+	    if (S7_DEVBUILD) fprintf(stderr, "init_func trouble in %s, %s\n", fname, display(init));
 	    if (pname) liberate(sc, pname);
 	    return(sc->undefined);
 	  }
@@ -30915,7 +30915,7 @@ static s7_pointer c_provide(s7_scheme *sc, s7_pointer sym)
   if (!is_symbol(sym))
     return(method_or_bust_p(sc, sym, sc->provide_symbol, sc->type_names[T_SYMBOL]));
 
-  if ((S7_DEBUGGING) && (sc->curlet == sc->rootlet)) fprintf(stderr, "%s[%d]: curlet==rootlet!\n", __func__, __LINE__);
+  if ((S7_DEVBUILD) && (sc->curlet == sc->rootlet)) fprintf(stderr, "%s[%d]: curlet==rootlet!\n", __func__, __LINE__);
   if ((sc->curlet == sc->nil) || (sc->curlet == sc->shadow_rootlet))
     p = global_slot(sc->features_symbol);
   else p = symbol_to_local_slot(sc, sc->features_symbol, sc->curlet); /* if sc->curlet is nil, this returns the global slot, else local slot */
@@ -31275,7 +31275,7 @@ static void op_call_with_output_string(s7_scheme *sc)
 
 
 /* -------------------------------- iterators -------------------------------- */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static s7_pointer titr_let(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   if (!is_let(iterator_sequence(p)))
@@ -32179,7 +32179,7 @@ static shared_info_t *make_shared_info(s7_scheme *sc, s7_pointer top, bool stop_
 	  if (no_problem) return(NULL);
 	}
 #endif
-  if ((S7_DEBUGGING) && (is_any_vector(top)) && (!is_normal_vector(top))) fprintf(stderr, "%s[%d]: got abnormal vector\n", __func__, __LINE__);
+  if ((S7_DEVBUILD) && (is_any_vector(top)) && (!is_normal_vector(top))) fprintf(stderr, "%s[%d]: got abnormal vector\n", __func__, __LINE__);
 
   {
     shared_info_t *ci = new_shared_info(sc);
@@ -34574,7 +34574,7 @@ static void random_state_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port,
 
 static void display_fallback(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
 {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   print_debugging_state(sc, obj, port);
 #else
   if (is_free(obj))
@@ -35114,7 +35114,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   object_out(sc, T_Pos(obj), strport, P_WRITE);
     /* fprintf(stderr, "3 s7_object_to_c_string: %x\n", obj); obazl */
   len = port_position(strport);
-  if ((S7_DEBUGGING) && (len == 0)) fprintf(stderr, "%s[%d]: len == 0\n", __func__, __LINE__);
+  if ((S7_DEVBUILD) && (len == 0)) fprintf(stderr, "%s[%d]: len == 0\n", __func__, __LINE__);
   /* if (len == 0) {close_format_port(sc, strport); return(NULL);} */ /* probably never happens */
   str = (char *)Malloc(len + 1);
   memcpy((void *)str, (void *)port_data(strport), len);
@@ -35230,7 +35230,7 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
   return(res);
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice);
 const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice) {return(string_value(g_object_to_string(sc, list_2(sc, obj, urchoice))));}
 #endif
@@ -36853,7 +36853,7 @@ void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t
 static inline s7_int tree_len_1(s7_scheme *sc, s7_pointer p)
 {
   s7_int sum;
-  if ((S7_DEBUGGING) && (tree_is_cyclic(sc, p))) {fprintf(stderr, "%s[%d]: tree is cyclic\n", __func__, __LINE__); abort();}
+  if ((S7_DEVBUILD) && (tree_is_cyclic(sc, p))) {fprintf(stderr, "%s[%d]: tree is cyclic\n", __func__, __LINE__); abort();}
   for (sum = 0; is_pair(p); p = cdr(p))
     {
       s7_pointer cp = car(p);
@@ -41990,7 +41990,7 @@ static s7_pointer int_vector_set_p_ppp(s7_scheme *sc, s7_pointer v, s7_pointer i
 	int_vector(v, i) = s7_integer_clamped_if_gmp(sc, val);
       }
 #else
-      if (S7_DEBUGGING) fprintf(stderr, "fell through %s[%d]\n", __func__, __LINE__);
+      if (S7_DEVBUILD) fprintf(stderr, "fell through %s[%d]\n", __func__, __LINE__);
 #endif
     }
   return(val);
@@ -45133,7 +45133,7 @@ static s7_pointer procedure_type_to_symbol(s7_scheme *sc, int32_t type)
     case T_MACRO_STAR:   return(sc->macro_star_symbol);
     case T_BACRO:        return(sc->bacro_symbol);
     case T_BACRO_STAR:   return(sc->bacro_star_symbol);
-    default: if (S7_DEBUGGING) fprintf(stderr, "%s[%d] wants %d symbol\n", __func__, __LINE__, type);
+    default: if (S7_DEVBUILD) fprintf(stderr, "%s[%d] wants %d symbol\n", __func__, __LINE__, type);
     }
   return(sc->lambda_symbol);
 }
@@ -46097,7 +46097,7 @@ void s7_c_type_set_ref(s7_scheme *sc, s7_int tag, s7_pointer (*ref)(s7_scheme *s
 
 void s7_c_type_set_getter(s7_scheme *sc, s7_int tag, s7_pointer getter)
 {
-  if ((S7_DEBUGGING) && (getter) && (!is_c_function(getter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, getter);
+  if ((S7_DEVBUILD) && (getter) && (!is_c_function(getter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, getter);
   sc->c_object_types[tag]->getter = (getter) ? getter : sc->F;
 }
 
@@ -46108,7 +46108,7 @@ void s7_c_type_set_set(s7_scheme *sc, s7_int tag, s7_pointer (*set)(s7_scheme *s
 
 void s7_c_type_set_setter(s7_scheme *sc, s7_int tag, s7_pointer setter)
 {
-  if ((S7_DEBUGGING) && (setter) && (!is_c_function(setter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, setter);
+  if ((S7_DEVBUILD) && (setter) && (!is_c_function(setter))) fprintf(stderr, "%s[%d]: %p is not a c_function\n", __func__, __LINE__, setter);
   sc->c_object_types[tag]->setter = (setter) ? setter : sc->F;
 }
 
@@ -50986,7 +50986,7 @@ static void swap_stack(s7_scheme *sc, opcode_t new_op, s7_pointer new_code, s7_p
   e = sc->stack_end[1];
   args = sc->stack_end[2];
   op = (opcode_t)(sc->stack_end[3]); /* this should be begin1 */
-  if ((S7_DEBUGGING) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK))
+  if ((S7_DEVBUILD) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK))
     fprintf(stderr, "swap %s in %s\n", op_names[op], display(s7_name_to_value(sc, "estr")));
   push_stack(sc, new_op, new_args, new_code);
   sc->stack_end[0] = code;
@@ -51190,7 +51190,7 @@ static s7_pointer make_profile_info(s7_scheme *sc)
 /* -------------------------------- dynamic-unwind -------------------------------- */
 static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e)
 {
-  if ((S7_DEBUGGING) && (is_multiple_value(sc->value)))
+  if ((S7_DEVBUILD) && (is_multiple_value(sc->value)))
     fprintf(stderr, "%s[%d]: unexpected multiple-value! %s %s %s\n", __func__, __LINE__, display(func), display(e), display(sc->value));
   return(s7_apply_function(sc, func, set_plist_2(sc, e, sc->value))); /* s7_apply_function returns sc->value */
 }
@@ -51601,7 +51601,7 @@ static bool catch_1_function(s7_scheme *sc, s7_int i, s7_pointer type, s7_pointe
 	  closure_set_arity(p, CLOSURE_ARITY_NOT_SET);
 	  closure_set_let(p, sc->temp4);
 	  sc->code = p;
-	  if ((S7_DEBUGGING) && (!s7_is_aritable(sc, sc->code, 2))) fprintf(stderr, "%s[%d]: errfunc not aritable(2)!\n", __func__, __LINE__);
+	  if ((S7_DEVBUILD) && (!s7_is_aritable(sc, sc->code, 2))) fprintf(stderr, "%s[%d]: errfunc not aritable(2)!\n", __func__, __LINE__);
 	}
       else
 	{
@@ -51710,7 +51710,7 @@ static bool catch_map_unwind_function(s7_scheme *sc, s7_int i, s7_pointer type, 
 {
   if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   sc->map_call_ctr--;
-  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
+  if ((S7_DEVBUILD) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
   return(false);
 }
 
@@ -51976,7 +51976,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	  (catcher(sc, i, type, info, &reset_error_hook)))
 	{
 	  if (SHOW_EVAL_OPS) {fprintf(stderr, "after catch: \n"); s7_show_stack(sc);}
-	  if ((S7_DEBUGGING) && (!sc->longjmp_ok)) fprintf(stderr, "s7_error jump not available?\n");
+	  if ((S7_DEVBUILD) && (!sc->longjmp_ok)) fprintf(stderr, "s7_error jump not available?\n");
 	  LongJmp(*(sc->goto_start), CATCH_JUMP);
 	}}
   /* error not caught (but catcher might have been called and returned false) */
@@ -52676,7 +52676,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* s7_call copies and this is safe? 2-Oct-22 (and below) */
       sc->value = s7_call(sc, obj, sc->temp10);
       sc->temp10 = sc->unused;
-      if ((S7_DEBUGGING) && (is_multiple_value(sc->value))) fprintf(stderr, "mv: %s %s %s\n", display(obj), display(indices), display(sc->value));
+      if ((S7_DEVBUILD) && (is_multiple_value(sc->value))) fprintf(stderr, "mv: %s %s %s\n", display(obj), display(indices), display(sc->value));
       /* if mv: sc->value = splice_in_values(sc, multiple_value(sc->value)); */
       return(sc->value);
 
@@ -53171,7 +53171,7 @@ static s7_pointer g_abort(s7_scheme *sc, s7_pointer args) {abort(); return(NULL)
  *   I think the least affected tests are able to use opt_info optimization which makes everything local?
  */
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void check_t_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
 {
   if (let_slots(e) != lookup_slot_from(var, sc->curlet))
@@ -53393,7 +53393,7 @@ fx_add_s1_any(fx_add_V1, V_lookup)
 
 static s7_pointer fx_num_eq_xi_1(s7_scheme *sc, s7_pointer args, s7_pointer val, s7_int y)
 {
-  if ((S7_DEBUGGING) && (is_t_integer(val))) fprintf(stderr, "%s[%d]: %s is an integer\n", __func__, __LINE__, display(val));
+  if ((S7_DEVBUILD) && (is_t_integer(val))) fprintf(stderr, "%s[%d]: %s is an integer\n", __func__, __LINE__, display(val));
   switch (type(val))
     {
     case T_REAL:    return(make_boolean(sc, real(val) == y));
@@ -57125,7 +57125,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
   return(NULL);
 }
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define with_fx(P, F) with_fx_1(sc, P, F)
 static bool with_fx_1(s7_scheme *sc, s7_pointer p, s7_function f) /* sc needed for set_opt2 under debugger = set_opt2_1(sc,...) */
 #else
@@ -57937,7 +57937,7 @@ static opt_funcs_t *alloc_semipermanent_opt_func(s7_scheme *sc)
 static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func)
 {
   opt_funcs_t *op;
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   static const char *o_names[] = {"o_d_v", "o_d_vd", "o_d_vdd", "o_d_vid", "o_d_id", "o_d_7pi", "o_d_7pii", "o_d_7piid", "o_d_7piii", "o_d_7piiid",
 				"o_d_ip", "o_d_pd", "o_d_7pid",	"o_d", "o_d_d", "o_d_dd", "o_d_7dd", "o_d_ddd", "o_d_dddd",
 				"o_i_i", "o_i_7i", "o_i_ii", "o_i_7ii", "o_i_iii", "o_i_7pi", "o_i_7pii", "o_i_7_piii", "o_d_p",
@@ -62694,7 +62694,7 @@ static s7_pointer opt_p_pi_fc(opt_info *o) {return(o->v[3].p_pi_f(o->sc, o->v[5]
  *   to store the loop end, but the slot_value can be a small_int (or any unheaped integer), so we're assuming there
  *   aren't collisions?  Each use is a single (uncomplicated) do loop, set up before each call?
  */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static s7_pointer check_do_loop_end_ref(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(T_Slt(p));
@@ -67865,7 +67865,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 		    }
 	  sc->map_call_ctr--;
 	  unstack_with(sc, OP_MAP_UNWIND);
-	  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
+	  if ((S7_DEVBUILD) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
 	  if (res) return(res);
 	}
       set_no_cell_opt(body);
@@ -68317,7 +68317,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
   if (SHOW_EVAL_OPS)
     safe_print(fprintf(stderr, "%s[%d]: splice %s %s\n", __func__, __LINE__,
 		       (top > 0) ? op_names[stack_op(sc->stack, top)] : "no stack!", display_80(args)));
-  if ((S7_DEBUGGING) && ((is_null(args)) || (is_null(cdr(args))))) fprintf(stderr, "%s: %s\n", __func__, display(args));
+  if ((S7_DEVBUILD) && ((is_null(args)) || (is_null(cdr(args))))) fprintf(stderr, "%s: %s\n", __func__, display(args));
 
   switch (stack_op(sc->stack, top))
     {
@@ -69412,7 +69412,7 @@ static void gx_annotate_args(s7_scheme *sc, s7_pointer args, s7_pointer e)
 
 static void fx_annotate_arg(s7_scheme *sc, s7_pointer arg, s7_pointer e)
 {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   s7_function fx;
   if (has_fx(arg)) return;
   fx = fx_choose(sc, arg, e, (is_list(e)) ? pair_symbol_is_safe : let_symbol_is_safe);
@@ -69426,7 +69426,7 @@ static void fx_annotate_arg(s7_scheme *sc, s7_pointer arg, s7_pointer e)
 static void fx_annotate_args(s7_scheme *sc, s7_pointer args, s7_pointer e)
 {
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
-#if S7_DEBUGGING
+#if S7_DEVBUILD
     fx_annotate_arg(sc, p, e); /* checks has_fx */
 #else
     if (!has_fx(p))
@@ -69910,7 +69910,7 @@ static bool is_safe_fxable(s7_scheme *sc, s7_pointer p)
 	return(true);
     }
   if (is_proper_quote(sc, p)) return(true);
-  if ((S7_DEBUGGING) && (is_optimized(p)) && (fx_function[optimize_op(p)])) fprintf(stderr, "omit %s: %s\n", op_names[optimize_op(p)], display(p));
+  if ((S7_DEVBUILD) && (is_optimized(p)) && (fx_function[optimize_op(p)])) fprintf(stderr, "omit %s: %s\n", op_names[optimize_op(p)], display(p));
   return(false);
 }
 
@@ -75078,11 +75078,11 @@ static bool op_let1(s7_scheme *sc)
 	  x = cdar(sc->code);
 	  if (has_fx(x))
 	    {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 	      s7_pointer old_args = sc->args;
 #endif
 	      sc->value = fx_call(sc, x);
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 	      if (sc->args != old_args)
 		{
 		  fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(old_args), display(sc->args));
@@ -82103,7 +82103,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool saf
 
     if (is_null(p))
       {
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 	if ((safe_step) && (!is_step_end(sc->args))) fprintf(stderr, "%s[%d]: safe_step but not is_step_end\n", __func__, __LINE__);
 #endif
 	if ((safe_step) && (is_step_end(sc->args))) /* is_step_end is perhaps redundant (there is at least one more case of this) */
@@ -83552,7 +83552,7 @@ static inline bool op_safe_closure_star_na(s7_scheme *sc, s7_pointer code) /* ca
   sc->args = arglist;
   for (s7_pointer p = arglist, old_args = cdr(code); is_pair(p); p = cdr(p), old_args = cdr(old_args))
     set_car(p, fx_call(sc, old_args));
-  if ((S7_DEBUGGING) && (sc->args != arglist)) fprintf(stderr, "%s[%d]: lost gc\n", __func__, __LINE__);
+  if ((S7_DEVBUILD) && (sc->args != arglist)) fprintf(stderr, "%s[%d]: lost gc\n", __func__, __LINE__);
   return(call_lambda_star(sc, code, arglist));   /* clears list_in_use */
 }
 
@@ -84683,7 +84683,7 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
 
 
 /* -------- */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 #define TC_REC_SIZE NUM_OPS
 #define TC_REC_LOW_OP OP_TC_AND_A_OR_A_LA
 
@@ -89187,7 +89187,7 @@ static bool op_load_close_and_pop_if_eof(s7_scheme *sc)
       sc->code = sc->value;
       return(true);             /* we read an expression, now evaluate it, and return to read the next */
     }
-  if ((S7_DEBUGGING) && (!is_loader_port(current_input_port(sc)))) fprintf(stderr, "%s not loading?\n", display(current_input_port(sc)));
+  if ((S7_DEVBUILD) && (!is_loader_port(current_input_port(sc)))) fprintf(stderr, "%s not loading?\n", display(current_input_port(sc)));
   /* if *#readers* func hits error, clear_loader_port might not be undone? */
   s7_close_input_port(sc, current_input_port(sc));
   pop_input_port(sc);
@@ -89400,7 +89400,7 @@ static bool op_unknown_s(s7_scheme *sc)
   if (!f) unbound_variable_error_nr(sc, car(sc->code));
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s %s\n", __func__, display(f));
 
-  if ((S7_DEBUGGING) && (!is_normal_symbol(cadr(code)))) fprintf(stderr, "%s[%d]: not a symbol: %s\n", __func__, __LINE__, display(code));
+  if ((S7_DEVBUILD) && (!is_normal_symbol(cadr(code)))) fprintf(stderr, "%s[%d]: not a symbol: %s\n", __func__, __LINE__, display(code));
   if ((!is_any_macro(f)) &&   /* if f is a macro, its argument can be unbound legitimately */
       (!is_slot(lookup_slot_from(cadr(code), sc->curlet))))
     return(unknown_unknown(sc, sc->code, (is_normal_symbol(cadr(sc->code))) ? OP_CLEAR_OPTS : OP_S_G));
@@ -91177,7 +91177,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SORT_VECTOR_END: sc->value = vector_into_fi_vector(sc->value, car(sc->args)); continue;
 	case OP_SORT_STRING_END: sc->value = vector_into_string(sc->value, car(sc->args)); continue;
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 	case OP_MAP_UNWIND: /* this probably can't happen -- left on stack only if opt succeeds then func called */
 	  fprintf(stderr, "%s[%d]: op_map_unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
 	  sc->map_call_ctr--;
@@ -92040,7 +92040,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case goto_eval:          goto EVAL;
 	case goto_start:         continue; /* sc->value has been set, this is OP_SYMBOL|CONSTANT on the next pass */
 	default:
-	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
+	  if (S7_DEVBUILD) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
 	  break;
 	}}
   return(sc->F); /* this never happens (make the compiler happy) */
@@ -92048,7 +92048,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 /* -------------------------------- s7_heap_scan -------------------------------- */
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 static void mark_holdee(s7_pointer holder, s7_pointer holdee, const char *root)
 {
   holdee->holders++;
@@ -93173,7 +93173,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
 {
   s7_int iv;
 
-  if ((S7_DEBUGGING) && (!is_symbol(sym)))
+  if ((S7_DEVBUILD) && (!is_symbol(sym)))
     {
       fprintf(stderr, "%s: %s\n", __func__, display(sym));
       sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
@@ -94259,7 +94259,7 @@ static void init_features(s7_scheme *sc)
 #if WITH_IMMUTABLE_UNQUOTE
   s7_provide(sc, "immutable-unquote");
 #endif
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   s7_provide(sc, "debugging");
 #endif
 #if HAVE_COMPLEX_NUMBERS
@@ -95238,7 +95238,7 @@ static void init_rootlet(s7_scheme *sc)
 #if WITH_GCC
   s7_define_function(sc, "abort", g_abort, 0, 0, false, "drop into gdb I hope");
 #endif
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   defun("heap-scan", heap_scan, 1, 0, false);
   defun("heap-analyze", heap_analyze, 0, 0, false);
   defun("heap-holder", heap_holder, 1, 0, false);
@@ -95383,14 +95383,14 @@ s7_scheme *s7_init(void)
       init_s7_starlet_immutable_field();
       already_inited = true;
     }
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   init_never_unheaped();
 #endif
 #if (!MS_WINDOWS)
   pthread_mutex_unlock(&init_lock);
 #endif
   sc = (s7_scheme *)Calloc(1, sizeof(s7_scheme)); /* not malloc! */
-#if S7_DEBUGGING || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
+#if S7_DEVBUILD || POINTER_32 || WITH_WARNINGS || DISABLE_FILE_OUTPUT
   cur_sc = sc;                                    /* for gdb/debugging */
 #endif
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
@@ -95547,14 +95547,14 @@ s7_scheme *s7_init(void)
       {
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
 #endif
 	clear_type(sc->heap[i]);
 	i++;
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
-#if S7_DEBUGGING
+#if S7_DEVBUILD
 	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
 #endif
 	clear_type(sc->heap[i]);
@@ -95778,7 +95778,7 @@ s7_scheme *s7_init(void)
   init_typers(sc);
   init_opt_functions(sc);
   s7_set_history_enabled(sc, false);
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   init_tc_rec(sc);
 #endif
 
@@ -95899,7 +95899,7 @@ s7_scheme *s7_init(void)
 
   sc->let_temp_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
 
-#if S7_DEBUGGING
+#if S7_DEVBUILD
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL);
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0)

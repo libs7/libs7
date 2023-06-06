@@ -2,10 +2,19 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libcjson_clibgen.scm"])
 
-load("//:BUILD.bzl", "SRCS", "DEPS",
-     "COPTS", "INCLUDE_PATHS", "DEFINES", "LINKOPTS")
 
-load("//lib:BUILD.bzl", "clibgen_runner", "CLIB_COPTS")
+load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
+
+load("//lib:BUILD.bzl", "clibgen_runner",
+     "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
+
+SRCS          = BASE_SRCS + CLIB_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
 ################################################################
 cc_library(
@@ -13,8 +22,8 @@ cc_library(
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = SRCS + [
-        "//src:s7.h",
-        "//src:libs7.h",
+        # "//src:s7.h",
+        # "//src:libs7.h",
         # "//lib:utils.h",
         # "//lib:utils.c",
         "libcjson_s7.c",
@@ -55,7 +64,7 @@ cc_binary(
     srcs  = SRCS + [
         ":libcjson_s7.c",
         ":libcjson_s7.h",
-        "//src:s7.h",
+        # "//src:s7.h",
         "//lib:utils.h",
         "//lib:utils.c",
     ],

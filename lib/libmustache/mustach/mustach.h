@@ -10,6 +10,7 @@
 #define _mustach_h_included_
 
 #include <stdbool.h>
+#include <stdio.h>
 
 struct mustach_sbuf; /* see below */
 

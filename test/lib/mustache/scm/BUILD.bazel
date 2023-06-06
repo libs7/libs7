@@ -1,16 +1,35 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
-load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES", "DEPS")
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//test/lib/mustache:BUILD.bzl", "COPTS_TEST", "DEPS_TEST",
-     "DEFINES_TEST",
+load("//test:BUILD.bzl",
+     "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
+     "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
      "TIMEOUT")
 
-load("//test/lib/mustache/scm:BUILD.bzl",
-     "SRCS",
-     "LIBS7", "LIBS7_HDRS",
-     "LIBS7_ADAPTER", "LIBS7_ADAPTER_HDRS",
-     "COPTS_S7", "DEPS_S7")
+SRCS          = BASE_SRCS + TEST_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS + [
+    "-Ilib/libmustache/scm/s7"
+]
+COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS + TEST_DEPS + [
+    "//lib/libmustache/scm/s7:mustach_scm"
+]
+DEFINES       = BASE_DEFINES + TEST_DEFINES
+LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
+# load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES", "DEPS")
+
+# load("//test/lib/mustache:BUILD.bzl", "COPTS_TEST", "DEPS_TEST",
+#      "DEFINES_TEST",
+#      "TIMEOUT")
+
+# load("//test/lib/mustache/scm:BUILD.bzl",
+#      "SRCS",
+#      "LIBS7", "LIBS7_HDRS",
+#      "LIBS7_ADAPTER", "LIBS7_ADAPTER_HDRS",
+#      "COPTS_S7", "DEPS_S7")
 
 test_suite(
     name  = "test",
@@ -35,10 +54,10 @@ test_suite(
 cc_test(
     name       = "comments",
     linkstatic = True,
-    srcs       = ["comments_test.c"] + SRCS,
-    defines    = DEFINES + DEFINES_TEST,
-    deps       = DEPS + DEPS_TEST + DEPS_S7,
-    copts      = COPTS + COPTS_TEST + COPTS_S7,
+    srcs       = SRCS + ["comments_test.c"],
+    defines    = DEFINES,
+    deps       = DEPS,
+    copts      = COPTS,
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
 )
@@ -46,10 +65,10 @@ cc_test(
 # cc_test(
 #     name       = "delimiters",
 #     linkstatic = True,
-#     srcs       = ["delimiters_test.c"] + SRCS,
-#     defines    = DEFINES + DEFINES_TEST,
-#     deps       = DEPS + DEPS_TEST + DEPS_S7,
-#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     srcs       = SRCS + ["delimiters_test.c"],
+#     defines    = DEFINES,
+#     deps       = DEPS,
+#     copts      = COPTS,
 #     linkopts   = LINKOPTS,
 #     timeout    = TIMEOUT,
 # )
@@ -57,10 +76,10 @@ cc_test(
 # cc_test( ## NOT SUPPORTED
 #     name       = "dynamics",
 #     linkstatic = True,
-#     srcs       = ["dynamics_test.c"] + SRCS,
-#     defines    = DEFINES + DEFINES_TEST,
-#     deps       = DEPS + DEPS_TEST + DEPS_S7,
-#     copts      = COPTS + COPTS_TEST + COPTS_S7,
+#     srcs       = SRCS+ ["dynamics_test.c"],
+#     defines    = DEFINES,
+#     deps       = DEPS,
+#     copts      = COPTS,
 #     linkopts   = LINKOPTS,
 #     timeout    = TIMEOUT,
 # )
@@ -68,10 +87,10 @@ cc_test(
 cc_test(
     name       = "interpolation",
     linkstatic = True,
-    srcs       = ["interpolation_test.c"] + SRCS,
-    defines    = DEFINES + DEFINES_TEST,
-    deps       = DEPS + DEPS_TEST + DEPS_S7,
-    copts      = COPTS + COPTS_TEST + COPTS_S7,
+    srcs       = SRCS + ["interpolation_test.c"],
+    defines    = DEFINES,
+    deps       = DEPS,
+    copts      = COPTS,
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
 )

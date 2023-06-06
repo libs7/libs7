@@ -5,7 +5,14 @@
 /* Define as 1 if you have open_memstream.  */
 #define HAVE_OPEN_MEMSTREAM 1
 
+#ifndef __STDC_LIB_EXT1__
+typedef int errno_t;
+#endif
+
+#include "CException.h"
 #include "log.h"
+
+#define MALLOC_CHUNK 2048
 
 // #define TOMLX_TRACING
 #if defined(TOMLX_TRACING)
@@ -83,6 +90,7 @@
     if (pfx) {                                          \
         log_debug("\tpfx start: '%.15s'", (pfx)->start);     \
         log_debug("\tpfx len: '%d'", (pfx)->len);     \
+        log_debug("\tpfx prefix: '%p'", (pfx)->prefix);     \
     } else {                                            \
         log_debug("prefix: NULL");                      \
     }

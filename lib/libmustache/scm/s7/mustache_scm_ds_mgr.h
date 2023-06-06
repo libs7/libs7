@@ -6,21 +6,13 @@
  SPDX-License-Identifier: ISC
 */
 
-#ifndef _mustachios7_scm_h_included_
-#define _mustachios7_scm_h_included_
+#ifndef _MUSTACHE_SCM_DS_MGR_H_
+#define _MUSTACHE_SCM_DS_MGR_H_
 
-/*
- * mustach-wrap is intended to make integration of JSON
- * libraries easier by wrapping mustach extensions in a
- * single place.
- *
- * As before, using mustach and only mustach is possible
- * (by using only mustach.h) but does not implement high
- * level features coming with extensions implemented by
- * this high level wrapper.
- */
+#include "config.h"
+
 #include "mustach.h"
-#include "mustachios7_wrap.h"
+#include "mustach_ds_mgr.h"
 /*
  * Definition of the writing callbacks for mustach functions
  * producing output to callbacks.
@@ -232,6 +224,35 @@
 /*  * a other negative value in case of error. */
 /*  *\/ */
 /* extern int mustach_wrap_emit(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure); */
+
+/* **************************************************************** */
+
+char *mustach_scm_render_to_string(const char *template,
+                                   size_t template_sz,
+                                   const struct mustach_ds_methods_s *json_methods,
+                                   void *stack,
+                                   int flags,
+                                   errno_t *err);
+
+int mustach_scm_file(const char *template, size_t length,
+                      const struct mustach_ds_methods_s *methods,
+                      void *closure, int flags, FILE *file);
+
+int mustach_scm_fd(const char *template, size_t length,
+                    const struct mustach_ds_methods_s *methods,
+                    void *closure, int flags, int fd);
+
+int mustach_scm_mem(const char *template, size_t length,
+                     const struct mustach_ds_methods_s *methods,
+                     void *closure, int flags, char **result, size_t *size);
+
+int mustach_scm_write(const char *template, size_t length,
+                       const struct mustach_ds_methods_s *methods,
+                       void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
+
+int mustach_scm_emit(const char *template, size_t length,
+                      const struct mustach_ds_methods_s *methods,
+                      void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
 
 #endif
 

@@ -1,6 +1,6 @@
-SRCS = ["//config:config.h", "//config:ansi_colors.h"]
+BASE_SRCS = ["//config:config.h", "//config:ansi_colors.h"]
 
-COPTS = [
+BASE_COPTS = [
     "-x", "c",
     "-Wall",
     "-Wextra",
@@ -26,23 +26,24 @@ COPTS = [
     "//conditions:default": ["-std=c11"],
 })
 
-DEPS = [ ## only vendored
+BASE_DEPS = [ ## only vendored
     "//vendored/CException",
     "//vendored/logc",
 ]
 
-INCLUDE_PATHS = [
-    "-Iconfig", "-Iexternal/mustachios7/config",
-    "-Ivendored/CException", "-Iexternal/mustachios/vendored/CException",
-    "-Ivendored/logc", "-Iexternal/libs7/Ivendored/logc"
+BASE_INCLUDE_PATHS = [
+    "-Iconfig", "-Iexternal/libs7/config",
+    "-Ivendored/CException", "-Iexternal/libs7/vendored/CException",
+    "-Ivendored/logc", "-Iexternal/libs7/vendored/logc"
 ]
 
-LINKOPTS = select({
-    "//config/host/build:linux?": ["-rdynamic"],
+BASE_LINKOPTS = select({
+    "//config/host/build:linux?": ["-rdynamic", "-ldl"],
+    "//config/host/build:macos?": [], ## "-ldl"],
     "//conditions:default": []
 })
 
-DEFINES = select({
+BASE_DEFINES = select({
     "//config/host/build:macos?": ["DSO_EXT=\\\".dylib\\\""],
     "//config/host/build:linux?": [
         "DSO_EXT=\\\".so\\\"",
@@ -50,6 +51,9 @@ DEFINES = select({
         # "_DEFAULT_SOURCE"    # dirent DT_* macros
     ],
     "//conditions:default":   ["DSO_EXT=\\\".so\\\""]
+}) + select({
+        "//config/s7:debug?": ["S7_DEVBUILD"],
+        "//conditions:default":   []
 }) + select({
     "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
     "//conditions:default": []

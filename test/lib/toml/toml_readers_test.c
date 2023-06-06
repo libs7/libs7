@@ -1,5 +1,6 @@
-#include "gopt.h"
-#include "log.h"
+#include "config.h"
+/* #include "gopt.h" */
+/* #include "log.h" */
 #include "unity.h"
 #include "utarray.h"
 #include "utstring.h"
@@ -14,31 +15,17 @@ s7_scheme *s7;
 extern struct option options[];
 
 s7_pointer toml_read;
+char *toml_str;
 
 s7_pointer flag, t, k, a, idx, res, actual, expected;
 s7_pointer len, m;
 
+bool flag_bool;
 bool verbose;
 bool debug;
 
 char *cmd;
 
-/* #define TOML_READ(s) \ */
-/*     s7_apply_function(s7, s7_name_to_value(s7, "toml:read"),    \ */
-/*                       s7_list(s7, 1, s7_eval_c_string(s7, s))); */
-
-/* #define APPLY_1(f, o) \ */
-/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
-/*                        s7_list(s7, 1, o)) */
-
-/* #define APPLY_2(f, o, k)                             \ */
-/*  s7_apply_function(s7, s7_name_to_value(s7, f),    \ */
-/*                    s7_list(s7, 2, o, k)) */
-
-    /* s7_apply_function_star(s7, s7_name_to_value(s7, f), \ */
-    /*                            s7_list(s7, 1, v)) */
-
-/* WARNING: setUp and tearDown are run once per test. */
 void setUp(void) {
     /* log_info("setup"); */
 }
@@ -55,9 +42,10 @@ void read_string(void) {
 
 /* (open-input-string s) */
 void read_string_port(void) {
-    s7_pointer inport = s7_open_input_string(s7, "t = { i = 1, s = \"Hello\" }");
-    flag = s7_is_input_port(s7, inport);
-    TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+    toml_str = "t = { i = 1, s = \"Hello\" }";
+    s7_pointer inport = s7_open_input_string(s7, toml_str);
+    flag_bool = s7_is_input_port(s7, inport);
+    TEST_ASSERT_TRUE(flag_bool);
 
     t = s7_apply_function(s7, toml_read, s7_list(s7, 1, inport));
     /* TRACE_S7_DUMP("read_string_port", t); */
@@ -84,9 +72,9 @@ void call_with_input_string(void) {
 }
 
 void read_file_port(void) {
-    s7_pointer inport = s7_open_input_file(s7, "test/lib/toml/data/strings.toml", "r");
-    s7_pointer is_input_port = s7_is_input_port(s7, inport);
-    TEST_ASSERT_EQUAL(true, is_input_port);
+    s7_pointer inport = s7_open_input_file(s7, "test/data/strings.toml", "r");
+    flag_bool = s7_is_input_port(s7, inport);
+    TEST_ASSERT_TRUE(flag_bool);
     t = s7_apply_function(s7, toml_read, s7_list(s7, 1, inport));
     actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -94,7 +82,7 @@ void read_file_port(void) {
 
 void with_input_from_file(void) {
     cmd = ""
-    "(with-input-from-file \"test/lib/toml/data/strings.toml\" toml:read)";
+    "(with-input-from-file \"test/data/strings.toml\" toml:read)";
     t = s7_eval_c_string(s7, cmd);
     flag = APPLY_1("toml:map?", t);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -125,7 +113,7 @@ void with_input_from_file(void) {
 
 void call_with_input_file(void) {
     cmd = ""
-    "(call-with-input-file \"test/lib/toml/data/strings.toml\" toml:read)";
+    "(call-with-input-file \"test/data/strings.toml\" toml:read)";
     t = s7_eval_c_string(s7, cmd);
     TRACE_S7_DUMP("t", t);
     /* s7_pointer is_input_port = s7_is_input_port(s7, inport); */

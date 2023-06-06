@@ -32,9 +32,9 @@
 				   GDBM_OPT_ALREADY_SET GDBM_OPT_ILLEGAL GDBM_BYTE_SWAPPED GDBM_BAD_FILE_OFFSET GDBM_BAD_OPEN_FLAGS
 				   GDBM_FILE_STAT_ERROR GDBM_FILE_EOF)))
 
-		    (in-C "static s7_pointer g_gdbm_version(s7_scheme *sc, s7_pointer args) {return(s7_make_string(sc, gdbm_version));}")
+		    (in-C "static s7_pointer g_gdbm_version(s7_scheme *sc, s7_pointer args) {(void)args; return(s7_make_string(sc, gdbm_version));}")
 		    (C-function ("gdbm:version" g_gdbm_version "(gdbm:version) returns the current gbdm version" 0))
-		    (in-C "static s7_pointer g_gdbm_errno(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, gdbm_errno));}")
+		    (in-C "static s7_pointer g_gdbm_errno(s7_scheme *sc, s7_pointer args) {(void)args; return(s7_make_integer(sc, gdbm_errno));}")
 		    (C-function ("gdbm:errno" g_gdbm_errno "(gdbm:errno) returns the current gdbm error number" 0))
 		    (char* gdbm_strerror (int))
 

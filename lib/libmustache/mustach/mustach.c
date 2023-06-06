@@ -236,10 +236,11 @@ const char *_parse_format(char *key)
 /* called by mustach_file */
 static int process(const char *template, size_t template_length, struct iwrap *iwrap, FILE *file, struct prefix_s *prefix, int escape)
 {
-    TRACE_ENTRY(process)
+    TRACE_ENTRY(process);
 #ifdef DEVBUILD
-        log_debug("\ttemplate: %.15s", template);
+    log_debug("\ttemplate: %.15s", template);
     log_debug("\ttemplate len: %d", template_length);
+    log_debug("PREFIX: %p", prefix);
     DUMP_PREFIX(prefix);
 #endif
     struct mustach_sbuf sbuf;
@@ -276,8 +277,13 @@ static int process(const char *template, size_t template_length, struct iwrap *i
     /* bool enable_smartcommas = false; */
 
     /* INITIALIZATION */
+    /* log_debug("PREFIX: %p", prefix); */
     struct prefix_s pref;
+    memset(&pref, '\0', sizeof(struct prefix_s));
+    /* log_debug("pref ptr: %p", &pref); */
+    /* log_debug("pref.PREFIX: %p", pref.prefix); */
     pref.prefix = prefix;   /* levels? */
+    /* log_debug("set pref.PREFIX: %p", pref.prefix); */
     template_curr_ptr = template;
     eotemplate = template + (template_length ? template_length : strlen(template));
     tag_open_delim[0] = tag_open_delim[1] = '{';
@@ -294,8 +300,9 @@ static int process(const char *template, size_t template_length, struct iwrap *i
         log_debug("\teotemplate - template_curr_ptr: %d", eotemplate - template_curr_ptr);
         log_debug("\tdepth: %d", depth);
         log_debug("\tkeylen: %d", keylen);
-        log_debug("\tpref.len: %d", pref.len);
-        log_debug("\tpref.start: %d", pref.start);
+        DUMP_PREFIX(&pref);
+        /* log_debug("\tpref.len: %d", pref.len); */
+        /* log_debug("\tpref.start: %d", pref.start); */
         log_debug("\tenabled: %d", enabled);
         log_debug("\tstdalone: %d", stdalone);
         /* log_debug("predicate?: %d", ((struct closure_hdr*)iwrap->closure)->predicate); */
@@ -372,6 +379,8 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                 stdalone = 0; /* why? */
             }
         }
+        /* DUMP_PREFIX(&pref); */
+
         /* now bokey should pt to start of next tag */
         /* template_curr_ptr points to end of prev tag or start of curr line(?) */
         /* so new pfx is text between curr_ptr and bokey  */
@@ -416,8 +425,10 @@ static int process(const char *template, size_t template_length, struct iwrap *i
         switch(c) { /* metachars: #, ^, /, &, {, >, !, =, and extensions :, ?, $ */
         case ':':       /* extension (JSON only?) */
             stdalone = 0;
-            /* if (iwrap->flags & Mustach_With_Colon) */
-            /*     goto exclude_first; */
+            if (iwrap->flags & Mustach_With_Colon) {
+                log_debug("metachar: COLON");
+                goto exclude_first;
+            }
             goto get_key;
         case '!':       /* comment */
         case '=':       /* delimiters */
@@ -478,8 +489,8 @@ static int process(const char *template, size_t template_length, struct iwrap *i
 #ifdef DEVBUILD
             log_debug(BLU "get_key:" CRESET " %.30s", bokey);
 #endif
+            // trim whitespace
             while (keylen && isspace(bokey[0])) { bokey++; keylen--; }
-            /* log_debug("KEYLEN a: %d", keylen); */
             while (keylen && isspace(bokey[keylen-1])) keylen--;
 #ifdef DEVBUILD
             log_debug("bokey: %.15s", bokey);
@@ -500,7 +511,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
             pct = strchr(key, '%');
             if (pct) {
                 if (*(pct+1) == '%') {
-                    log_debug("Std fmt: %s", pct);
+                    /* log_debug("Std fmt: %s", pct); */
                     // std format string, e.g. %%05.2f
                     *pct = '\0';
                     fmt = pct + 1;
@@ -508,14 +519,16 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                 } else if (strchr(pct, '$')) {
                     *pct = '\0';
                     fmt = pct + 1;
-                    log_debug("Datetime format string: %s", fmt);
+                    /* log_debug("Datetime format string: %s", fmt); */
                     keylen -= strlen(fmt) + 1;
                 } else {
-                    log_warn("key \"%s\" contains a single '%c'; if this starts a format string, it must be followed by another '%c' (standard format string) or '%c' (toml datetime format string)", key, '%', '%', '$');
+                    log_warn("key \"%s\" contains a single '%c'; it will NOT be treated as start of a format string. If it should start a format string, it must be followed by another '%c' (standard format string) or '%c' (toml datetime format string)", key, '%', '%', '$');
                 }
+#ifdef DEVBUILD
                 log_debug("k: %s", key);
                 log_debug("klen: %d", keylen);
                 log_debug("fmt: %s", fmt);
+#endif
             }
 
             break;
@@ -587,14 +600,14 @@ static int process(const char *template, size_t template_length, struct iwrap *i
             tag_close_delim_len = keylen - worklen;
             memcpy(tag_close_delim, bokey + worklen, tag_close_delim_len);
             break;
-        case PREDOP_FIRST:
+        case PREDOP_FIRST:      /* '^' */
 #ifdef DEVBUILD
             log_debug(RED "PREDOP_FIRST" );
 #endif
             ((struct closure_hdr*)iwrap->closure)->predicate = FIRST_P;
             metastack[depth].predicate = true;
 
-        case PREDOP_LAST:
+        case PREDOP_LAST:       /* '$' */
             if (c == PREDOP_LAST) {
 #ifdef DEVBUILD
                 log_debug(RED "PREDOP_LAST" );
@@ -603,7 +616,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                 metastack[depth].predicate = LAST_P;
             }
 
-        case PREDOP_BUTLAST:
+        case PREDOP_BUTLAST:    /* '?' */
             if (c == PREDOP_BUTLAST) {
 #ifdef DEVBUILD
                 log_debug(RED "PREDOP_BUTLAST" );
@@ -821,6 +834,9 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                 sbuf_reset(&sbuf);
                 rc = iwrap->partial(iwrap->closure_partial, key, fmt, &sbuf);
                 if (rc >= 0) {
+                    /* log_debug("Calling process for partial"); */
+                    /* log_debug("Prefix ptr: %p", &pref); */
+                    /* DUMP_PREFIX(&pref); */
                     rc = process(sbuf.value, sbuf_length(&sbuf), iwrap, file, &pref, 0); // escape);
                     sbuf_release(&sbuf);
                 }

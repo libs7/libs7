@@ -1,4 +1,8 @@
 /*
+ Author: José Bollo <jobol@nonadev.net>
+
+ https://gitlab.com/jobol/mustach
+
  SPDX-License-Identifier: ISC
 */
 
@@ -13,10 +17,14 @@
 
 #include "config.h"
 #include "mustach.h"
-#include "mustach_toml_ds_mgr.h"
+#include "mustache_json_ds_mgr.h"
 
 #ifdef DEVBUILD
 #include "ansi_colors.h"
+/* #include "s7.h" */
+//#include "debug.h"
+/* extern s7_scheme *s7; */
+/* s7_pointer xx; */
 #endif
 
 /* #if !defined(INCLUDE_PARTIAL_EXTENSION) */
@@ -26,11 +34,26 @@
 /* /\* global hook for partials *\/ */
 /* int (*mustach_wrap_get_partial)(const char *name, struct mustach_sbuf *sbuf) = NULL; */
 
-// struct datasource_s is shared across data types (toml, json, scheme)
-// so it is in mustachios7_wrap.h
-
 /* /\* internal structure for wrapping *\/ */
-/* struct datasource_s - see mustachios7_wrap.h{ */
+// - renamed struct datasource_s, in mustach_wrap.h
+/* struct wrap { */
+/*     int predicate; /\* so mustach.c can signal a predicate metatag *\/ */
+
+/* 	/\* original interface *\/ */
+/* 	const struct mustach_wrap_itf *itf; */
+
+/* 	/\* original closure *\/ */
+/* 	void *closure; */
+
+/* 	/\* flags *\/ */
+/* 	int flags; */
+
+/* 	/\* emiter callback *\/ */
+/* 	mustach_emit_cb_t *emitcb; */
+
+/* 	/\* write callback *\/ */
+/* 	mustach_write_cb_t *writecb; */
+/* }; */
 
 /* /\* length given by masking with 3 *\/ */
 /* enum comp {                     /\* 'comp' means relop *\/ */
@@ -141,14 +164,15 @@ static char *getkey(char **head, int sflags)
     return result;
 }
 
-/* boolean: name selected or not?  */
+/*  */
 static enum sel sel(struct datasource_s *ds, // datasource
                     const char *name)
+//(struct wrap *w, const char *name)
 {
     TRACE_ENTRY(sel);
 #ifdef DEVBUILD
     log_debug("\tname: '%s'", name);
-    log_debug("\tstrlen(name): %d", strlen(name));
+    log_debug("\tstrlen(name): '%d'", strlen(name));
     log_debug("\tpred: %d", ds->predicate);
 #endif
 
@@ -200,8 +224,8 @@ static enum sel sel(struct datasource_s *ds, // datasource
     /* case of . alone if Mustach_With_SingleDot? */
         log_debug("CASE '.'");
 #endif
-        if (copy[1] == '\0'
-            && (sflags & Mustach_With_SingleDot)) {
+        if (copy[1] == '\0') { // Mustach_With_SingleDot always enabled
+            /* && (sflags & Mustach_With_SingleDot)) { */
             /* yes, select current */
 #ifdef DEVBUILD
             log_debug("SINGLEDOT");
@@ -218,22 +242,26 @@ static enum sel sel(struct datasource_s *ds, // datasource
         log_debug("CASE PREDOP_FIRST");
         log_debug("pred: %d", ds->predicate);
 #endif
-        ((struct closure_hdr*)ds->stack)->predicate = FIRST_P;
-        result = ds->methods->sel(ds->stack, NULL) ? S_ok : S_none;
-        if (copy[1] == 0) {
-            /* && (sflags & Mustach_With_Predicates)) { */
-        } else {
-            /* else if (copy[0] == PREDOP_FIRST) {  /\* extension *\/ */
-            /*     /\* && (sflags & Mustach_With_Precates)) { *\/ */
+        if (ds->predicate) {
+            ((struct closure_hdr*)ds->stack)->predicate = FIRST_P;
+            result = ds->methods->sel(ds->stack, NULL) ? S_ok : S_none;
+            if (copy[1] == 0) {
+                /* && (sflags & Mustach_With_Predicates)) { */
+            } else {
+                /* else if (copy[0] == PREDOP_FIRST) {  /\* extension *\/ */
+                /*     /\* && (sflags & Mustach_With_Precates)) { *\/ */
 #ifdef DEVBUILD
-            log_debug("NAMED PREDOP_FIRST");
+                log_debug("NAMED PREDOP_FIRST");
 #endif
-            char *ptmp = copy + 1;
-            key = getkey(&ptmp, sflags);
-            /* log_debug("KEY: %s", key); */
-            // same as NOT SINGLEDOT below
-            int rc = ds->methods->sel(ds->stack, key);
-            if (rc) return S_ok; else return S_none;
+                char *ptmp = copy + 1;
+                key = getkey(&ptmp, sflags);
+                /* log_debug("KEY: %s", key); */
+                // same as NOT SINGLEDOT below
+                int rc = ds->methods->sel(ds->stack, key);
+                if (rc) return S_ok; else return S_none;
+            }
+        } else {
+            goto no_metachar;
         }
         break;
 
@@ -242,20 +270,24 @@ static enum sel sel(struct datasource_s *ds, // datasource
         log_debug("CASE PREDOP_LAST");
         log_debug("pred: %d", ds->predicate);
 #endif
-        ((struct closure_hdr*)ds->stack)->predicate = LAST_P;
-        result = ds->methods->sel(ds->stack, NULL) ? S_ok : S_none;
-        if (copy[1] == 0) {
-            /* && (sflags & Mustach_With_Precates)) { */
+        if (ds->predicate) {
+            ((struct closure_hdr*)ds->stack)->predicate = LAST_P;
+            result = ds->methods->sel(ds->stack, NULL) ? S_ok : S_none;
+            if (copy[1] == 0) {
+                /* && (sflags & Mustach_With_Precates)) { */
+            } else {
+                /* else if (copy[0] == PREDOP_BUTLAST) {  /\* extension *\/ */
+                /* && (sflags & Mustach_With_Precates)) { */
+                /* ((struct closure_hdr*)ds->stack)->nonfinal_predicate = true; */
+                char *ptmp = copy + 1;
+                key = getkey(&ptmp, sflags);
+                /* log_debug("KEY: %s", key); */
+                // same as NOT SINGLEDOT below
+                int rc = ds->methods->sel(ds->stack, key);
+                if (rc) return S_ok; else return S_none;
+            }
         } else {
-            /* else if (copy[0] == PREDOP_BUTLAST) {  /\* extension *\/ */
-            /* && (sflags & Mustach_With_Precates)) { */
-            /* ((struct closure_hdr*)ds->stack)->nonfinal_predicate = true; */
-            char *ptmp = copy + 1;
-            key = getkey(&ptmp, sflags);
-            /* log_debug("KEY: %s", key); */
-            // same as NOT SINGLEDOT below
-            int rc = ds->methods->sel(ds->stack, key);
-            if (rc) return S_ok; else return S_none;
+            goto no_metachar;
         }
         break;
 
@@ -264,26 +296,33 @@ static enum sel sel(struct datasource_s *ds, // datasource
         log_debug("CASE PREDOP_BUTLAST");
         log_debug("pred: %d", ds->predicate);
 #endif
-        ((struct closure_hdr*)ds->stack)->predicate = BUTLAST_P;
-        result = ds->methods->sel(ds->stack, NULL) ? S_ok : S_none;
-        if (copy[1] == 0) {
-            /* && (sflags & Mustach_With_Precates)) { */
-        } else {
-            /* else if (copy[0] == PREDOP_BUTLAST) {  /\* extension *\/ */
-            /* && (sflags & Mustach_With_Precates)) { */
+        if (ds->predicate) {
+            ((struct closure_hdr*)ds->stack)->predicate = BUTLAST_P;
+            result = ds->methods->sel(ds->stack, NULL) ? S_ok : S_none;
+            if (copy[1] == 0) {
+                /* && (sflags & Mustach_With_Precates)) { */
+            } else {
+                /* else if (copy[0] == PREDOP_BUTLAST) {  /\* extension *\/ */
+                /* && (sflags & Mustach_With_Precates)) { */
 #ifdef DEVBUILD
-            log_debug("NAMED BUTLAST");
+                log_debug("NAMED BUTLAST");
 #endif
-            /* ((struct closure_hdr*)ds->stack)->nonfinal_predicate = true; */
-            char *ptmp = copy + 1;
-            key = getkey(&ptmp, sflags);
-            /* log_debug("KEY: %s", key); */
-            // same as NOT SINGLEDOT below
-            int rc = ds->methods->sel(ds->stack, key);
-            if (rc) return S_ok; else return S_none;
+                /* ((struct closure_hdr*)ds->stack)->nonfinal_predicate = true; */
+                char *ptmp = copy + 1;
+                key = getkey(&ptmp, sflags);
+                /* log_debug("KEY: %s", key); */
+                // same as NOT SINGLEDOT below
+                int rc = ds->methods->sel(ds->stack, key);
+                if (rc) return S_ok; else return S_none;
+            }
+        } else {
+            goto no_metachar;
         }
         break;
     default:
+
+no_metachar:
+
 #ifdef DEVBUILD
         log_debug("CASE DEFAULT: no metachar ('.', '^', '$', '?')");
 #endif
@@ -295,7 +334,7 @@ static enum sel sel(struct datasource_s *ds, // datasource
 #ifdef DEVBUILD
         log_debug("key: %s", key);
         log_debug("selecting root item");
-        log_debug("ds: %x", ds);
+        /* log_debug("ds: %p", ds); */
         log_debug("ds->predicate: %d", ((struct closure_hdr*)ds)->predicate);
         /* log_debug("ds->stack: %x", ds->stack); */
         /* log_debug("ds->stack->nonfinal_predicate: %x", */
@@ -367,25 +406,26 @@ static enum sel sel(struct datasource_s *ds, // datasource
     return result;
 }
 
-/* static int start(void *closure) */
-static int start(struct datasource_s *ds)
+static int start(struct datasource_s *ds) // (void *closure)
 {
     TRACE_ENTRY(start)
-    /* struct datasource_s *ds= closure; */
+    /* struct wrap *w = closure; */
     return ds->methods->start ? ds->methods->start(ds->stack) : MUSTACH_OK;
 }
 
 static void stop(struct datasource_s *ds, int status)
+//(void *closure, int status)
 {
 #ifdef DEVBUILD
     log_debug("stop, status: %d", status);
 #endif
-	/* struct datasource_s *ds= closure; */
-	if (ds->methods->stop)
-		ds->methods->stop(ds->stack, status);
+	/* struct wrap *w = closure; */
+    if (ds->methods->stop)
+        ds->methods->stop(ds->stack, status);
 }
 
 static int _write(struct datasource_s *ds, const char *buffer, size_t size, FILE *file)
+//(struct wrap *w, const char *buffer, size_t size, FILE *file)
 {
     TRACE_ENTRY(_write);
 #ifdef DEVBUILD
@@ -413,6 +453,7 @@ static int _write(struct datasource_s *ds, const char *buffer, size_t size, FILE
 static int emit(struct datasource_s *ds,
                 const char *buffer, size_t size,
                 int escape, FILE *file)
+// (void *closure, const char *buffer, size_t size, int escape, FILE *file)
 {
     TRACE_ENTRY(emit)
 #ifdef DEVBUILD
@@ -421,7 +462,7 @@ static int emit(struct datasource_s *ds,
     log_debug("\tescape: %d", escape);
 #endif
 
-	/* struct datasource_s *ds= closure; */
+	/* struct wrap *w = closure; */
 	int r;
 	size_t s, i;
 	char car;
@@ -458,25 +499,23 @@ static int emit(struct datasource_s *ds,
 	return r;
 }
 
-/* this is called by mustache.c, with 'closure' being iwrap->closure, which has type struct datasource_s*, which contains ptr to user struct stack */
-/* static int enter(void *closure, const char *name) */
-/* static int enter(struct datasource_s *ds, const char *name) */
-// only call ds->enter if selected is true
+/* this is called by mustache.c, with 'closure' being iwrap->closure, which has type struct wrap*, which contains ptr to user struct expl */
 static int enter(struct datasource_s *ds, const char *name)
+// (void *closure, const char *name)
 {
     TRACE_ENTRY(enter)
 #ifdef DEVBUILD
     log_debug("pred: %d", ((struct closure_hdr*)ds)->predicate);
 #endif
 
-    // case iwrap->closure* to struct datasource_s*
+    // case iwrap->closure* to struct wrap*
     // the former is the app's closure struct
-    // BUT there's a struct datasource_s* on the call stack
-    /* struct datasource_s *ds= (struct datasource_s*)closure; */
+    // BUT there's a struct wrap* on the call stack
+    /* struct wrap *w = (struct wrap*)closure; */
 #ifdef DEVBUILD
     log_debug("enter calling sel");
 #endif
-    // call local sel w/arg 0 struct datasource_s
+    // call local sel w/arg 0 struct wrap
     // local sel calls ds->stack ???
     enum sel s = sel(ds, name);
 #ifdef DEVBUILD
@@ -494,13 +533,13 @@ static int enter(struct datasource_s *ds, const char *name)
     /* return s == S_none ? 0 : ds->methods->enter(ds->stack, s & S_objiter); */
 }
 
-/* static int next(void *closure) // returns bool: has_next */
 static int next(struct datasource_s *ds)
+// (void *closure) // returns bool: has_next
 {
 #ifdef DEVBUILD
     log_debug("next");
 #endif
-    /* struct datasource_s *ds= closure; */
+    /* struct wrap *w = closure; */
     int rc = ds->methods->next(ds->stack);
 #ifdef DEVBUILD
     log_debug("next rc: %d", rc);
@@ -508,66 +547,64 @@ static int next(struct datasource_s *ds)
     return rc;
 }
 
-/* static int leave(void *closure, struct mustach_sbuf *sbuf) */
 static int leave(struct datasource_s *ds, struct mustach_sbuf *sbuf)
+// (void *closure, struct mustach_sbuf *sbuf)
 {
 #ifdef DEVBUILD
     log_debug("leave");
 #endif
-    /* struct datasource_s *ds= closure; */
+    /* struct wrap *w = closure; */
     return ds->methods->leave(ds->stack, sbuf);
 }
 
-/* was: getoptional
-   formats value for 'name' if it is selected
-*/
 static int maybe_format(struct datasource_s *ds,
                         const char *name, const char *fmt,
                         struct mustach_sbuf *sbuf)
+// (struct wrap *w, const char *name, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(maybe_format);
 #ifdef DEVBUILD
     log_debug("\tname: %s", name);
 #endif
-    enum sel s = sel(ds, name);
+	enum sel s = sel(ds, name);
 #ifdef DEVBUILD
-    log_debug("maybe_format: sel returned %d", s);
-    /* S_none = 0, */
-    /* S_ok = 1, */
-    /* S_objiter = 2, */
-    /* S_ok_or_objiter = S_ok | S_objiter */
+        log_debug("maybe_format: sel returned %d", s);
+	/* S_none = 0, */
+	/* S_ok = 1, */
+	/* S_objiter = 2, */
+	/* S_ok_or_objiter = S_ok | S_objiter */
 #endif
-    if (!(s & S_ok))
-        return 0;
+	if (!(s & S_ok))
+		return 0;
 #ifdef DEVBUILD
-    log_debug("\tcalling ds->methods->format");
-    log_debug("\tsbuf->value: %s", sbuf->value);
-    log_debug("\tsbuf->length: %d", sbuf->length);
-    log_debug("\tsbuf->releasecb: %x", sbuf->releasecb);
-    /* log_debug("sbuf->closure: %d", sbuf->closure); */
+        log_debug("\tcalling ds->methods->format");
+        log_debug("\tsbuf->value: %s", sbuf->value);
+        log_debug("\tsbuf->length: %d", sbuf->length);
+        log_debug("\tsbuf->releasecb: %x", sbuf->releasecb);
+        /* log_debug("sbuf->closure: %d", sbuf->closure); */
 #endif
-    int rc = ds->methods->format(ds->stack, fmt, sbuf, s & S_objiter);
+	int rc = ds->methods->format(ds->stack, fmt, sbuf, s & S_objiter);
 #ifdef DEVBUILD
-    log_debug("maybe_format format rc: %d", rc);
-    log_debug("maybe_format format result: sbuf->value: %s", sbuf->value);
-    log_debug("maybe_format format result: sbuf->length: %d", sbuf->length);
-    log_debug("\tsbuf->releasecb: %x", sbuf->releasecb);
+        log_debug("maybe_format format rc: %d", rc);
+        log_debug("maybe_format format result: sbuf->value: %s", sbuf->value);
+        log_debug("maybe_format format result: sbuf->length: %d", sbuf->length);
+        log_debug("\tsbuf->releasecb: %x", sbuf->releasecb);
 #endif
-    return rc;
+        return rc;
 }
 
-/* calls maybe_format - why not call it directly? */
 static int format(struct datasource_s *ds,
                   const char *name, const char *fmt,
                   struct mustach_sbuf *sbuf)
+// (void *closure, const char *name, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(format);
 #ifdef DEVBUILD
-    log_debug("\tname='%s', fmt: %s", name, fmt);
+    log_debug("\tname='%s'", name);
     log_debug("\tsbuf->value='%s'", name, sbuf->value);
     /* log_debug("sbuf->releasecb: %x", sbuf->releasecb); */
 #endif
-    /* struct datasource_s *ds= closure; */
+    /* struct wrap *w = closure; */
     int rc = maybe_format(ds, name, fmt, sbuf); /* puts str val in sbuf.value */
 #ifdef DEVBUILD
     log_debug("maybe_format rc: %d", rc);
@@ -612,7 +649,6 @@ static int get_partial_from_file(const char *name, struct mustach_sbuf *sbuf)
 		return MUSTACH_ERROR_PARTIAL_NOT_FOUND;
 
 	/* compute file size */
-        //FIXME: use fstat, not fseek/ftell
 	if (fseek(file, 0, SEEK_END) >= 0
 	 && (pos = ftell(file)) >= 0
 	 && fseek(file, 0, SEEK_SET) >= 0) {
@@ -636,14 +672,13 @@ static int get_partial_from_file(const char *name, struct mustach_sbuf *sbuf)
 	return MUSTACH_ERROR_SYSTEM;
 }
 
-/* partial can be a file or a datum, in the latter case,
-   may have a format string */
 static int partial(struct datasource_s *ds,
                    const char *name, const char *fmt,
                    struct mustach_sbuf *sbuf)
+// (void *closure, const char *name, struct mustach_sbuf *sbuf)
 {
     TRACE_ENTRY(partial);
-    /* struct datasource_s *ds= closure; */
+    /* struct wrap *w = closure; */
     int rc;
     if (mustach_wrap_get_partial != NULL) {
         log_debug("1xxxxxxxxxxxxxxxx");
@@ -666,13 +701,14 @@ static int partial(struct datasource_s *ds,
     return MUSTACH_OK;
 }
 
-static void dump_stack(struct datasource_s *ds)
+static void dump_stack(void *closure)
 {
     TRACE_ENTRY(dump_stack);
+    struct datasource_s *ds= closure;
     ds->methods->dump_stack(ds->stack);
 }
 
-static const struct mustach_ds_mgr_methods_s toml_ds_mgr_methods = {
+static const struct mustach_ds_mgr_methods_s json_ds_mgr_methods = {
     .start = (int (*)(void*))start,
     .put = (int (*)(void*, const char*, const char*, int, FILE*))NULL,
     .enter = (int (*)(void*, const char*))enter,
@@ -685,43 +721,29 @@ static const struct mustach_ds_mgr_methods_s toml_ds_mgr_methods = {
     .dump_stack = (void (*)(void*))dump_stack
 };
 
-int mustach_toml_file(const char *template, size_t length,
-                      const struct mustach_ds_methods_s *methods,
-                      void *closure,
-                      int flags, FILE *file)
-{
-	struct datasource_s ds;
-	datasource_init(&ds, methods, closure, flags, NULL, NULL);
-	return mustach_file(template, length, &toml_ds_mgr_methods, &ds, flags, file);
-}
-
-int mustach_toml_fd(const char *template, size_t length, const struct mustach_ds_methods_s *methods, void *closure, int flags, int fd)
-{
-	struct datasource_s ds;
-	datasource_init(&ds, methods, closure, flags, NULL, NULL);
-	return mustach_fd(template, length, &toml_ds_mgr_methods, &ds, flags, fd);
-}
-
-int mustach_toml_render_to_string(const char *template,
+/* ****************************************************************
+ * INTERNAL RENDER API
+ **************************************************************** */
+char *mustach_json_render_to_string(const char *template,
                                   size_t template_sz,
-                                  const struct mustach_ds_methods_s *toml_methods,
+                                  const struct mustach_ds_methods_s *json_methods,
                                   void *stack, // struct tstack_s*
                                   int flags)
 {
 #ifdef DEVBUILD
-    log_debug("mustach_toml_render_to_string");
+    log_debug("mustach_json_render_to_string");
 #endif
     struct datasource_s ds;
 
     char *result; // Must be released by call to free
     size_t result_sz;
 
-    datasource_init(&ds, toml_methods, stack, flags, NULL, NULL);
+    datasource_init(&ds, json_methods, stack, flags, NULL, NULL);
     int rc = mustach_mem(template, template_sz,
-                         &toml_ds_mgr_methods,
+                         &json_ds_mgr_methods,
                          &ds,
                          flags,
-                         result, result_sz);
+                         &result, &result_sz);
     if (rc) {
         log_error("mustach_mem rc: %d", rc);
         return NULL;
@@ -734,17 +756,54 @@ int mustach_toml_render_to_string(const char *template,
     return result; // client must free
 }
 
-int mustach_toml_write(const char *template, size_t length, const struct mustach_ds_methods_s *methods, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure)
+int mustach_json_file(const char *template, size_t length,
+                      const struct mustach_ds_methods_s *methods,
+                      void *closure, int flags, FILE *file)
+{
+	/* struct wrap w; */
+	struct datasource_s ds;
+	datasource_init(&ds, methods, closure, flags, NULL, NULL);
+	return mustach_file(template, length, &json_ds_mgr_methods, &ds, flags, file);
+}
+
+int mustach_json_fd(const char *template, size_t length,
+                    const struct mustach_ds_methods_s *methods,
+                    void *closure, int flags, int fd)
+{
+	struct datasource_s ds;
+	datasource_init(&ds, methods, closure, flags, NULL, NULL);
+	return mustach_fd(template, length, &json_ds_mgr_methods, &ds, flags, fd);
+}
+
+int mustach_json_mem(const char *template, size_t length,
+                     const struct mustach_ds_methods_s *methods,
+                     void *closure, int flags, char **result, size_t *size)
+{
+#ifdef DEVBUILD
+    log_debug("mustach_json_mem");
+#endif
+	struct datasource_s ds;
+	datasource_init(&ds, methods, closure, flags, NULL, NULL);
+	return mustach_mem(template, length, &json_ds_mgr_methods, &ds, flags, result, size);
+}
+
+int mustach_json_write(const char *template, size_t length,
+                       const struct mustach_ds_methods_s *methods,
+                       void *closure, int flags,
+                       mustach_write_cb_t *writecb, void *writeclosure)
 {
 	struct datasource_s ds;
 	datasource_init(&ds, methods, closure, flags, NULL, writecb);
-	return mustach_file(template, length, &toml_ds_mgr_methods, &ds, flags, writeclosure);
+	return mustach_file(template, length, &json_ds_mgr_methods, &ds, flags, writeclosure);
 }
 
-int mustach_toml_emit(const char *template, size_t length, const struct mustach_ds_methods_s *methods, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure)
+int mustach_json_emit(const char *template, size_t length,
+                      const struct mustach_ds_methods_s *methods,
+                      void *closure, int flags,
+                      mustach_emit_cb_t *emitcb, void *emitclosure)
 {
 	struct datasource_s ds;
 	datasource_init(&ds, methods, closure, flags, emitcb, NULL);
-	return mustach_file(template, length, &toml_ds_mgr_methods, &ds, flags, emitclosure);
+	return mustach_file(template, length, &json_ds_mgr_methods, &ds, flags, emitclosure);
 }
 

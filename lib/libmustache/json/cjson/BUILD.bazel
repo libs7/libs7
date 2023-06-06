@@ -1,47 +1,45 @@
 package(default_visibility = ["//visibility:public"])
 
 load("//:BUILD.bzl",
-     "INCLUDE_PATHS",
-     BASE_SRCS  = "SRCS",
-     BASE_DEPS  = "DEPS",
-     BASE_COPTS = "COPTS",
-     BASE_LINKOPTS = "LINKOPTS",
-     BASE_DEFINES = "DEFINES")
+     "BASE_SRCS", "BASE_COPTS", "BASE_DEPS",
+     "BASE_INCLUDE_PATHS",
+     "BASE_LINKOPTS",
+     "BASE_DEFINES")
 
-# load("//:BUILD.bzl", "COPTS")
-load("//lib:BUILD.bzl", "CLIB_COPTS")
+# load("//:BUILD.bzl",
+#      BASE_SRCS          = "SRCS",
+#      BASE_COPTS         = "COPTS",
+#      BASE_DEPS          = "DEPS",
+#      BASE_INCLUDE_PATHS = "INCLUDE_PATHS",
+#      BASE_LINKOPTS      = "LINKOPTS",
+#      BASE_DEFINES       = "DEFINES")
+
+load("//lib/libmustache:BUILD.bzl",
+     "MUSTACHE_INCLUDE_PATHS",
+     "MUSTACHE_DEPS")
+
+SRCS = BASE_SRCS
+INCLUDE_PATHS= BASE_INCLUDE_PATHS + MUSTACHE_INCLUDE_PATHS
+COPTS= BASE_COPTS + INCLUDE_PATHS
+DEPS= BASE_DEPS + MUSTACHE_DEPS
+DEFINES= BASE_DEFINES
+LINKOPTS= BASE_LINKOPTS
 
 cc_library(
-    name = "mustach_json",
+    name = "mustache_json",
     linkstatic = True,
-    srcs = BASE_SRCS + [
-        "mustach_cjson.c",
-        "mustach_cjson.h",
-        "mustach_json_ds_mgr.c",
-        "mustach_json_ds_mgr.h",
-        "//lib/libmustache:mustachios7_wrap.c",
-        "//lib/libmustache:mustachios7_wrap.h",
+    srcs = SRCS + [
+        "mustache_cjson.c",
+        "mustache_cjson.h",
+        "mustache_json_ds_mgr.c",
+        "mustache_json_ds_mgr.h",
     ],
-    hdrs = ["mustach_cjson.h"],
-    deps  = BASE_DEPS + ["//lib/libmustache/mustach", "//vendored/cjson"],
-    copts = BASE_COPTS + INCLUDE_PATHS + [
-        "-Isrc",
-        "-Iexternal/libs7/src",
-        "-Ilib/libmustache",
-        "-Iexternal/libs7/lib/libmustache",
-        "-Ilib/libmustache/mustach",
-        "-Iexternal/libs7/lib/libmustache/mustach",
+    hdrs = ["mustache_cjson.h"],
+    deps  = DEPS + ["//vendored/cjson"],
+    copts = COPTS + [
         "-Ivendored/cjson",
         "-Iexternal/libs7/vendored/cjson",
     ],
-    defines = select({
-        "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:debug?": ["DEBUGGING"],
-        "//conditions:default": []
-    }) + select({
-        "//config/debug:trace?": ["TRACING"],
-        "//conditions:default": []
-    })
+    defines = DEFINES,
+    linkopts = LINKOPTS
 )

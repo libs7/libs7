@@ -1,5 +1,0 @@
-filegroup(
-    name = "toml",
-    data = glob(["*.toml"]),
-    visibility = ["//visibility:public"]
-)

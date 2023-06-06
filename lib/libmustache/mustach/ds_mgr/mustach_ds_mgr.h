@@ -6,8 +6,8 @@
  SPDX-License-Identifier: ISC
 */
 
-#ifndef _mustachios7_wrap_h_included_
-#define _mustachios7_wrap_h_included_
+#ifndef _MUSTACH_DS_MGR_H_
+#define _MUSTACH_DS_MGR_H_
 
 #if !defined(INCLUDE_PARTIAL_EXTENSION)
 # define INCLUDE_PARTIAL_EXTENSION ".mustache"
@@ -74,7 +74,7 @@ typedef int mustach_emit_cb_t(void *closure, const char *buffer, size_t size, in
 
 /* internal structure for wrapping */
 // was: struct wrap
-struct datasource_s { // was: struct wrap
+struct datasource_s { // rename: struct datasource_s
     int predicate; /* so mustach.c can signal a predicate metatag */
 
     /* original interface */
@@ -106,8 +106,14 @@ struct datasource_s { // was: struct wrap
 #define Mustach_With_PartialDataFirst   512
 #define Mustach_With_ErrorUndefined    1024
 
-#undef  Mustach_With_AllExtensions
-#define Mustach_With_AllExtensions     1023     /* don't include ErrorUndefined */
+#undef  Mustach_With_All_JSON_Extensions
+#define Mustach_With_All_JSON_Extensions     1023     /* don't include ErrorUndefined */
+
+#undef  Mustach_With_All_TOML_Extensions
+#define Mustach_With_All_TOML_Extensions 1023 & ~(32) // exclude JsonPointer
+
+#undef  Mustach_With_All_SCM_Extensions
+#define Mustach_With_All_SCM_Extensions (1023 & ~(32)) // exclude JsonPointer
 
 /**
  * mustach_ds_methods_s - high level wrap of mustach - interface for callbacks
@@ -177,7 +183,7 @@ struct datasource_s { // was: struct wrap
 //   mustach_ds_methods_s only: compare, sel, subsel
 //   mustach_ds_mgr_methods_s only     : put, partial, emit
 
-// was: mustach_wrap_itf
+// rename: mustach_datasource_itf
 struct mustach_ds_methods_s {
     int (*start)(void *stack);
     void (*stop)(void *closure, int status);
@@ -195,7 +201,7 @@ struct mustach_ds_methods_s {
  * Mustach interface used internally by mustach wrapper functions.
  * Can be used for overriding behaviour.
  */
-/* static const struct mustach_ds_mgr_methods_s mustach_ds_methods_s; */
+static const struct mustach_ds_mgr_methods_s mustach_ds_methods_s;
 
 void datasource_init(struct datasource_s *wrap, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, mustach_write_cb_t *writecb);
 

@@ -65,7 +65,6 @@ void root_tables(void) {
     TRACE_S7_DUMP("a", a);
     flag = APPLY_1("boolean?", a);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-    /* /\* TEST_ASSERT_EQUAL(actual, s7_t(s7)); *\/ */
 
     t = TOML_READ("m = 123");
     flag = APPLY_1("toml:map?", t);

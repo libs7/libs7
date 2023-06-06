@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "config.h"
 #include "utarray.h"
 #include "s7.h"
 #include "libs7.h"
@@ -51,7 +52,7 @@ char *libs7_read_file(char *fname)
     }
 
     file_size = stbuf.st_size;
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     log_debug("filesize: %d", file_size);
 #endif
 
@@ -74,14 +75,14 @@ char *libs7_read_file(char *fname)
         perror(NULL);
         exit(EXIT_FAILURE);
     } else {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         log_debug("fdopened %s", fname);
 #endif
     }
 
     // now read the entire file
     size_t read_ct = fread(buffer, 1, file_size, instream);
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     log_debug("read_ct: %d", read_ct);
 #endif
     if (read_ct != (size_t)file_size) {
@@ -112,7 +113,7 @@ char *libs7_read_file(char *fname)
     }
     return buffer;
 
- cleanup:
+    // cleanup:
     if (instream != NULL)
     {
         fclose(instream);
@@ -125,7 +126,7 @@ char *libs7_read_file(char *fname)
 /* **************************************************************** */
 static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 {
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     /* if (libs7_trace) */
     log_trace("_dlopen_clib: %s", lib);
 #endif
@@ -171,7 +172,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 
     /* int len = strlen(libname); */
     sprintf(buf, "lib%s_s7_init", lib);
-    log_debug("init fn: %s", init_fn_name);
+    TRACE_LOG_DEBUG("init fn: %s", init_fn_name);
     s7_pointer init_sym    = s7_make_symbol(s7, "init_func");
     s7_pointer init_fn_sym = s7_make_symbol(s7, init_fn_name); // buf);
     s7_pointer init_list = s7_list(s7, 2, init_sym, init_fn_sym);
@@ -181,7 +182,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     s7_pointer old_e = s7_set_curlet(s7, e);
 
     char *ws = getenv("TEST_WORKSPACE");
-    /* log_debug("dlopen ns test ws: %s", ws); */
+    log_debug("dlopen ns test ws: %s", ws);
     char *fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
@@ -203,7 +204,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
              fmt,
              lib,
              lib, DSO_EXT);
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     log_debug("dso: %s", buf);
 #endif
 
@@ -236,31 +237,31 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 
 s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 {
-#if defined(DEBUGGING)
-    if (libs7_trace)
-        log_trace("load_clib: %s", lib);
+#if defined(DEVBUILD)
+    log_trace("load_clib: %s", lib);
+    /* if (libs7_trace) */
 #endif
 
     static char init_fn_name[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
     init_fn_name[0] = '\0';
     sprintf(init_fn_name, "lib%s_s7_init", lib);
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     if (libs7_debug)
         log_debug("init_fn_name: %s", init_fn_name);
 #endif
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
-    init_fn_ptr = dlsym(RTLD_MAIN_ONLY, init_fn_name); // mac: RTLD_SELF?
+    init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(RTLD_MAIN_ONLY, init_fn_name); // mac: RTLD_SELF?
     if (init_fn_ptr == NULL) {
-/* #if defined(DEBUGGING) */
+/* #if defined(DEVBUILD) */
         log_debug("%s not statically linked, trying dlopen", init_fn_name);
 /* #endif */
         s7_pointer res = _dlopen_clib(s7, lib, init_fn_name);
         return res;
     }
 
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
     if (libs7_debug)
         log_debug("dlsym init_fn_ptr: %x", init_fn_ptr);
 #endif
@@ -294,7 +295,7 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
 {
     log_debug("g_libs7_load_clib");
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
 #endif
     s7_pointer p, arg;
     char* lib;

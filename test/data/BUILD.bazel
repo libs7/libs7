@@ -1,0 +1,11 @@
+filegroup(
+    name = "json",
+    data = glob(["*.json"]),
+    visibility = ["//visibility:public"]
+)
+
+filegroup(
+    name = "toml",
+    data = glob(["*.toml"]),
+    visibility = ["//visibility:public"]
+)

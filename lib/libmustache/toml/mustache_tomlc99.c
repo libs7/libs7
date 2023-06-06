@@ -10,7 +10,7 @@
 #include "log.h"
 
 #include "mustach.h"
-#include "mustach_tomlc99.h"
+#include "mustache_tomlc99.h"
 #ifdef DEVBUILD
 #include "ansi_colors.h"
 #endif
@@ -33,7 +33,10 @@ struct tstack_s {
     struct {
         struct tomlx_item_s *ctx;
         struct tomlx_item_s *obj;
-        /* struct tomlx_item_s *next; */
+
+        struct tomlx_item_s *key;
+        struct tomlx_item_s *val;
+
         int is_objiter;
         size_t index, count;    /* not for cjson? */
         int predicate;         /*  */
@@ -46,10 +49,9 @@ char fmt_str[512];
 
 static void dump_stack(struct tstack_s *stack);
 
-void mustach_free(void *toml)
+void mustache_toml_free(void *datum)
 {
-    (void)toml; //FIXME
-    //FIXME cJSON_Delete((cJSON*)json_c);
+    toml_free((toml_table_t*)datum);
 }
 
 static int start(struct tstack_s *stack)
@@ -120,19 +122,19 @@ static int sel(void *closure, const char *key)
     struct tomlx_item_s *selection;
     int i, r;
 
-    /* dump_stack(e); */
+    /* dump_stack(stack); */
 
     if (key == NULL) {
         /* log_debug("stack->predicate: %d", stack->predicate); */
         if (stack->predicate) {
             switch(stack->predicate) {
             case FIRST_P:
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                 log_debug("case: FIRST_P");
 #endif
                 stack->stack[stack->depth].predicate = stack->predicate;
                 if (stack->stack[stack->depth].index == 0) {
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                     log_debug("predicate is truthy!");
 #endif
                     bool b = true;
@@ -140,7 +142,7 @@ static int sel(void *closure, const char *key)
 
                     selection = titem;
                 } else {
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                     log_debug("predicate is false!");
 #endif
                     bool b = false;
@@ -151,19 +153,19 @@ static int sel(void *closure, const char *key)
                 r = 1;
                 break;
             case LAST_P:
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                 log_debug("case: LAST_P");
 #endif
                 stack->stack[stack->depth].predicate = stack->predicate;
                 if (stack->stack[stack->depth].index + 1 < stack->stack[stack->depth].count) {
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                     log_debug("predicate is false!");
 #endif
                     bool b = false;
                     struct tomlx_item_s *titem = tomlx_make_item(&b, TOML_BOOL);
                     selection = titem;
                 } else {
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                     log_debug("predicate is truthy!");
 #endif
                     bool b = true;
@@ -173,7 +175,7 @@ static int sel(void *closure, const char *key)
                 r = 1;
                 break;
             case BUTLAST_P:
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                 log_debug("case: BUTLAST_P");
 #endif
                 stack->stack[stack->depth].predicate = stack->predicate;
@@ -181,14 +183,14 @@ static int sel(void *closure, const char *key)
                 if (stack->stack[stack->depth].index + 1 < stack->stack[stack->depth].count) {
                     /* s7_pointer tmp = s7_vector_ref(s7, stack->stack[stack->depth].cont, stack->stack[stack->depth].index); */
                     /* (void)tmp; */
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                     log_debug("predicate {{?}} is truthy!");
 #endif
                     bool b = true;
                     struct tomlx_item_s *titem = tomlx_make_item(&b, TOML_BOOL);
                     selection = titem;
                 } else {
-#ifdef DEBUGGING
+#ifdef DEVBUILD
                     log_debug("pred {{?}} is false!");
 #endif
                     bool b = false;
@@ -207,6 +209,9 @@ static int sel(void *closure, const char *key)
         }
         else {
             TRACE_LOG_DEBUG("NULL key", "");
+            // if this is {{#.}}, select entire vec/map
+            // if  its {{.}} and we're in {{#.}}, select (k v)
+            // otherwise select v
             selection = stack->stack[stack->depth].obj;
             r = 1;
         }
@@ -280,7 +285,7 @@ static int enter(void *closure, int objiter)
         TRACE_LOG_DEBUG("OPENING ARRAY, sz: %d", toml_array_nelem(o->u.a));
         e->stack[e->depth].count = toml_array_nelem(o->u.a);
         if (e->stack[e->depth].count == 0) {
-            /* log_debug("EMPTY: NOT OPENING"); */
+            log_debug("EMPTY: NOT OPENING");
             goto not_entering;
         }
         e->stack[e->depth].ctx = o;
@@ -289,6 +294,9 @@ static int enter(void *closure, int objiter)
         e->stack[e->depth].obj = x;
         //NB: helper_toml_array_ref must create new toml_item_t
         e->stack[e->depth].index = 0;
+        /* e->stack[e->depth].key = tomlx_make_item(&(e->stack[e->depth].index), */
+        /*                                          TOML_INT); */
+        /* e->stack[e->depth].val = x; */
         /* log_debug("stack p: %p", e); */
         /* log_debug("stack[%d] ct: %d", e->depth, e->stack[e->depth].count); */
         /* dump_stack(e); */
@@ -301,20 +309,29 @@ static int enter(void *closure, int objiter)
         e->stack[e->depth].ctx = NULL;
         e->stack[e->depth].index = 0;
     } else if ( !((o->type == TOML_BOOL) && (o->u.b == false))) {
-        TRACE_LOG_DEBUG("OPENING NON-FALSE", "");
+        TRACE_LOG_DEBUG("OPENING NON-FALSE, depth: %d", e->depth);
         /* && ! cJSON_IsNull(o))) { */
         e->stack[e->depth].count = 1;
-        e->stack[e->depth].obj = o;
-        e->stack[e->depth].ctx = NULL;
         e->stack[e->depth].index = 0;
-    } else
+        e->stack[e->depth].obj = o;
+        /* e->stack[e->depth].key = tomlx_make_item(&(e->stack[e->depth].index), */
+        /*                                          TOML_INT); */
+        /* e->stack[e->depth].val = o; */
+        e->stack[e->depth].ctx = NULL;
+    } else {
         goto not_entering;
+    }
     /* log_debug("returniing: 1"); */
     /* log_debug("stack ct: %d", e->stack[e->depth].count); */
     return 1;
 
  not_entering:
     /* log_debug("NOT ENTERING"); */
+    /* free(e->stack[e->depth].obj); */
+    /* free(e->stack[e->depth].key); */
+    /* free(e->stack[e->depth].val); */
+    /* free(e->stack[e->depth].ctx); */
+
     e->depth--;
     return 0;
 }
@@ -470,7 +487,7 @@ static void _dump_obj(char *msg, struct tomlx_item_s *item)
         switch(item->type) {
         case TOML_BOOL:
             log_debug("\t  bool: %d", item->u.b);
-            s = item->u.b? strdup("true") : strdup("false");
+            /* s = item->u.b? strdup("true") : strdup("false"); */
             break;
         case TOML_INT:
             log_debug("\t  int: %lld", item->u.i);
@@ -479,7 +496,7 @@ static void _dump_obj(char *msg, struct tomlx_item_s *item)
             log_debug("\t  double: %lld", item->u.d);
             break;
         case TOML_STRING:
-            s = item->u.s; //FIXME: free
+            log_debug("\t  string: %s", item->u.s);
             break;
         case TOML_ARRAY:
             ; \
@@ -503,25 +520,24 @@ static void _dump_obj(char *msg, struct tomlx_item_s *item)
 static void dump_stack(struct tstack_s *stack)
 {
     /* log_debug("stack ptr: %p", stack); */
-    struct tstack_s *e = (struct tstack_s*)stack;
-
-    (void)stack;
-    int d = e->depth;
+    int d = stack->depth;
     log_debug("DUMP_STACK");
-    log_debug("\tpredicate: %d", e->predicate);
-    log_debug("\tlambda: %d", e->lambda);
+    log_debug("\tpredicate: %d", stack->predicate);
+    log_debug("\tlambda: %d", stack->lambda);
     log_debug("\tdepth: %d", d);
 
-    _dump_obj("\troot:", e->root);
-    _dump_obj("\tselection:", e->selection);
-    for (int i = 0; i <= e->depth; i++) {
+    _dump_obj("\troot:", stack->root);
+    _dump_obj("\tselection:", stack->selection);
+    for (int i = 0; i <= stack->depth; i++) {
         log_debug("stackframe: %d", i);
-        _dump_obj("\tctx:", e->stack[i].ctx);
-        _dump_obj("\tobj", e->stack[i].obj);
-        log_debug("\tstack[%d].count: %d", i, e->stack[i].count);
-        log_debug("\tstack[%d].index: %d", i, e->stack[i].index);
-        log_debug("\tstack[%d].lambda: %d", i, e->stack[i].lambda);
-        log_debug("\tstack[%d].predicate: %d", i, e->stack[i].predicate);
+        _dump_obj("\tctx:", stack->stack[i].ctx);
+        _dump_obj("\tobj", stack->stack[i].obj);
+        _dump_obj("\tkey", stack->stack[i].key);
+        _dump_obj("\tval", stack->stack[i].val);
+        log_debug("\tstack[%d].count: %d", i, stack->stack[i].count);
+        log_debug("\tstack[%d].index: %d", i, stack->stack[i].index);
+        log_debug("\tstack[%d].lambda: %d", i, stack->stack[i].lambda);
+        log_debug("\tstack[%d].predicate: %d", i, stack->stack[i].predicate);
     }
     log_debug("end stack");
     fflush(NULL);
@@ -574,15 +590,15 @@ const char *mustache_toml_render(const char *template,
                                                  &stack,
                                                  flags);
     if (!result) {
-        log_error("mustach_toml_render_to_string rc: %d", rc);
+        log_error("mustach_toml_render_to_string");
         //FIXME handle error
         return NULL;
     }
-    size_t ln = strlen(result);
-    if (ln != result_sz) {
-        log_warn("reported result sz %d does not match strlen %d",
-                 result_sz, ln);
-    }
+    /* size_t ln = strlen(result); */
+    /* if (ln != result_sz) { */
+    /*     log_warn("reported result sz %d does not match strlen %d", */
+    /*              result_sz, ln); */
+    /* } */
     /* log_debug("render result: %s", result); */
 
     //FIXME: toml_item_free(titem);

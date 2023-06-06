@@ -6,8 +6,8 @@
  SPDX-License-Identifier: ISC
 */
 
-#ifndef _mustachios7_json_h_included_
-#define _mustachios7_json_h_included_
+#ifndef _MUSTACHIOS_JSON_DS_MGR_H_
+#define _MUSTACHIOS_JSON_DS_MGR_H_
 
 /*
  * mustach-wrap is intended to make integration of JSON
@@ -20,7 +20,7 @@
  * this high level wrapper.
  */
 #include "mustach.h"
-#include "mustachios7_wrap.h"
+#include "mustach_ds_mgr.h"
 /*
  * Definition of the writing callbacks for mustach functions
  * producing output to callbacks.
@@ -232,6 +232,12 @@ static const struct mustach_ds_mgr_methods_s json_ds_mgr_methods;
 /*  * a other negative value in case of error. */
 /*  *\/ */
 /* static int mustach_wrap_emit(const char *template, size_t length, const struct mustach_wrap_itf *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure); */
+
+char *mustach_json_render_to_string(const char *template,
+                                  size_t template_sz,
+                                  const struct mustach_ds_methods_s *json_methods,
+                                  void *stack,
+                                  int flags);
 
 int mustach_json_file(const char *template, size_t length,
                       const struct mustach_ds_methods_s *methods,

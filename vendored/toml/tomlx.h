@@ -1,5 +1,5 @@
-#ifndef TOMLX_H
-#define TOMLX_H
+#ifndef _TOMLX_H_
+#define _TOMLX_H_
 
 #include <stdbool.h>
 
@@ -54,6 +54,8 @@ void *tomlx_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
 char *tomlx_table_to_string(toml_table_t *tt, bool use_write);
 
 toml_table_t *tomlx_read_string(const char *s);
+
+toml_table_t *tomlx_read_fp(FILE *f);
 
 toml_table_t *tomlx_read_file(const char *fname);
 

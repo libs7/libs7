@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@ static s7_pointer json_is_map(s7_scheme *s7, s7_pointer args)
         else
             return(s7_f(s7));
     /* } */
-    /* else if (s7_c_object_type(arg) == json_vector_type_tag) { */
+    /* else if (s7_c_object_type(arg) == json_array_type_tag) { */
     /*     return(s7_f(s7)); */
     } else
         return s7_f(s7);
@@ -63,7 +64,7 @@ s7_pointer g_json_object_keys(s7_scheme *s7, s7_pointer args)
             log_error("cJSON_GetArrayItem failure for key: %d", i);
             return NULL;
         }
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         log_debug(GRN "object item" CRESET " %d: k->string: %s, k->type: %s [%d]",
                   i, k->string, cjson_types[k->type], k->type);
 #endif
@@ -160,7 +161,7 @@ s7_pointer g_json_object_contains(s7_scheme *s7, s7_pointer args)
     TRACE_LOG_DEBUG("arg 1, key: %s", key);
 
 /*     cJSON *item = cJSON_GetObjectItemCaseSensitive(jo, key); */
-/* #ifdef DEBUGGING */
+/* #ifdef DEVBUILD */
 /*     log_debug("item type: [%d]%s", item->type, cjson_types[item->type]); */
 /* #endif */
 
@@ -206,6 +207,7 @@ s7_pointer g_json_object_contains(s7_scheme *s7, s7_pointer args)
 /* **************************************************************** */
 static s7_pointer free_json_object(s7_scheme *s7, s7_pointer obj)
 {
+    (void)s7;
     TRACE_ENTRY(free_json_object);
     free(s7_c_object_value(obj));
     return(NULL);
@@ -213,19 +215,23 @@ static s7_pointer free_json_object(s7_scheme *s7, s7_pointer obj)
 
 static s7_pointer mark_json_object(s7_scheme *s7, s7_pointer obj)
 {
-  /* json_object_t *t = (json_object_t*)s7_c_object_value(obj); */
-  /* s7_mark(o->data); */
-  return(NULL);
+    (void)s7;
+    (void)obj;
+    /* json_object_t *t = (json_object_t*)s7_c_object_value(obj); */
+    /* s7_mark(o->data); */
+    return(NULL);
 }
 
 static s7_pointer json_object_is_equal(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_is_equal);
     return s7_nil(s7);
 }
 
 static s7_pointer json_object_is_equivalent(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_is_equivalent);
     return s7_nil(s7);
 }
@@ -251,7 +257,11 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
     cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_object_type_tag);
     if (jo == NULL) {
         log_error("Bad object arg");
-        return s7_unspecified(s7);
+        return s7_error(s7,
+                        s7_make_symbol(s7, "map-ref"),
+                        s7_cons(s7, s7_make_string(s7, "arg 0: expected json object, got NULL"),
+                                s7_nil(s7)));
+        /* return s7_unspecified(s7); */
     }
 
     p = s7_cdr(p);
@@ -287,7 +297,7 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
     } else {
         item = cJSON_GetObjectItemCaseSensitive(jo, key);
     }
-#ifdef DEBUGGING
+#ifdef DEVBUILD
     log_debug("item type: [%d]%s", item->type, cjson_types[item->type]);
 #endif
 
@@ -339,7 +349,7 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
         return(result);
         break;
     case cJSON_Array:
-        tmp = s7_make_c_object(s7, json_vector_type_tag, (void*)item);
+        tmp = s7_make_c_object(s7, json_array_type_tag, (void*)item);
         if (key) {
             result = tmp;
         } else {
@@ -400,6 +410,7 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
 
 static s7_pointer json_object_set(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_set);
     return s7_nil(s7);
 }
@@ -424,18 +435,21 @@ s7_pointer g_json_object_length(s7_scheme *s7, s7_pointer args)
 
 static s7_pointer json_object_copy(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_set);
     return s7_nil(s7);
 }
 
 static s7_pointer json_object_fill(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_set);
     return s7_nil(s7);
 }
 
 static s7_pointer json_object_reverse(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_set);
     return s7_nil(s7);
 }
@@ -476,44 +490,11 @@ char *json_object_to_string(s7_scheme *s7, const cJSON *jo)
         TRACE_LOG_DEBUG("buf: %s", buf);
     }
 
-#ifdef DEBUGGING
+#ifdef DEVBUILD
     // NB: root object has no name, jo->string == NULL
     log_debug("object jo->string: %s, jo->type: %d: %s",
                     jo->string, jo->type, cjson_types[jo->type]);
 #endif
-
-    /* switch(jo->type) { */
-    /* case cJSON_String: */
-    /*     TRACE_LOG_DEBUG("jo->type: String: %s", jo->string); */
-    /*     break; */
-    /* case cJSON_Array: */
-    /*     TRACE_LOG_DEBUG("jo->type: Array: %s", jo->string); */
-    /*     break; */
-    /* case cJSON_Object: */
-    /*     TRACE_LOG_DEBUG("jo->string: %s, jo->type: Object", jo->string); */
-    /*     /\* if (jo->string == NULL) { *\/ */
-    /*     /\*     // root object has null name, go to content? *\/ */
-    /*     /\*     return json_object_to_string(s7, jo->child); *\/ */
-    /*     /\* } *\/ */
-    /*     break; */
-    /* case cJSON_Number: */
-    /*     TRACE_LOG_DEBUG("key number value: %g", jo->valuedouble); */
-    /*     break; */
-    /* case cJSON_False: */
-    /*     TRACE_LOG_DEBUG("jo->type: %s", "False"); */
-    /*     break; */
-    /* case cJSON_True: */
-    /*     TRACE_LOG_DEBUG("jo->type: %s", "True"); */
-    /*     break; */
-    /* case cJSON_NULL: */
-    /*     TRACE_LOG_DEBUG("jo->type %s", "NULL"); */
-    /*     break; */
-    /* case cJSON_Raw: */
-    /*     TRACE_LOG_DEBUG("jo->type %s", "Raw"); */
-    /*     break; */
-    /* default: */
-    /*     log_error("Bad jo->type"); */
-    /* } */
 
     int key_ct = cJSON_GetArraySize(jo);
     TRACE_LOG_DEBUG("JOBJ sz: %d", key_ct);
@@ -527,7 +508,7 @@ char *json_object_to_string(s7_scheme *s7, const cJSON *jo)
             log_error("cJSON_GetArrayItem failure for key: %d", i);
             return NULL;
         }
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         log_debug(GRN "object item" CRESET " %d: k->name:%s, k->type: [%d]%s",
                   i, k->string, k->type, cjson_types[k->type]);
 #endif
@@ -600,7 +581,7 @@ char *json_object_to_string(s7_scheme *s7, const cJSON *jo)
             break;
         case cJSON_Array:
             TRACE_LOG_DEBUG("key type: Array: %s", k->string);
-            seq_str = json_vector_to_string(s7, k);
+            seq_str = json_array_to_string(s7, k);
             TRACE_LOG_DEBUG("array str: %s", seq_str);
             len = strlen(seq_str);
             len++; // terminating '\0'
@@ -710,7 +691,7 @@ static s7_pointer g_json_object_to_string(s7_scheme *s7, s7_pointer args)
 
     char *s = json_object_to_string(s7, jo);
     /* char *s = cJSON_PrintUnformatted(jo); */
-#ifdef DEBUGGING
+#ifdef DEVBUILD
     log_debug("g_json_object_to_string returning %s", s);
 #endif
     return s7_make_string(s7, s);
@@ -718,12 +699,14 @@ static s7_pointer g_json_object_to_string(s7_scheme *s7, s7_pointer args)
 
 static s7_pointer json_object_getter(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_getter);
     return s7_nil(s7);
 }
 
 static s7_pointer json_object_setter(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(json_object_setter);
     return s7_nil(s7);
 }
@@ -734,6 +717,7 @@ static s7_pointer json_object_setter(s7_scheme *s7, s7_pointer args)
  **************************************************************** */
 static s7_pointer g_json_object_to_alist(s7_scheme *s7, s7_pointer args)
 {
+    (void)args;
     TRACE_ENTRY(g_json_object_to_alist);
     return s7_f(s7);
 }
@@ -745,12 +729,12 @@ static s7_pointer g_json_object_to_hash_table(s7_scheme *s7, s7_pointer args)
     p = args;
     arg = s7_car(p);
     (void)arg;
-    /* cJSON *tt = (cJSON*)s7_c_object_value_checked(arg, json_object_type_tag); */
-
+    cJSON *jmap = (cJSON*)s7_c_object_value_checked(arg, json_object_type_tag);
     /* //FIXME: get optional :clone flag */
-
-    /* s7_pointer ht = toml_table_to_hash_table(s7, tt, true); */
-    /* return(ht); */
+    if (jmap) {
+        s7_pointer ht = json_map_to_hash_table(s7, jmap, true);
+        return(ht);
+    }
     return s7_nil(s7);
 }
 
@@ -758,7 +742,7 @@ void json_object_init(s7_scheme *s7, s7_pointer cur_env)
 {
     TRACE_ENTRY(json_object_init);
     json_object_type_tag = s7_make_c_type(s7, "json_object");
-    TRACE_LOG_DEBUG("JSON_OBJECT_TAG: %d", json_object_type_tag);
+    /* TRACE_LOG_DEBUG("JSON_OBJECT_TAG: %d", json_object_type_tag); */
 
     s7_c_type_set_gc_free      (s7, json_object_type_tag, free_json_object);
     s7_c_type_set_gc_mark      (s7, json_object_type_tag, mark_json_object);
@@ -837,4 +821,90 @@ void json_object_init(s7_scheme *s7, s7_pointer cur_env)
                                      pl_xx));
 
     string_string = s7_make_semipermanent_string(s7, "a string");
+}
+
+/* ****************************************************************
+ * Helper functions
+ */
+
+s7_pointer json_map_to_hash_table(s7_scheme *s7, cJSON *jm, bool clone)
+{
+    TRACE_ENTRY(json_map_to_hash_table);
+    (void)clone;
+
+    int key_ct = cJSON_GetArraySize(jm);
+    /* log_debug("jm key ct: %d", key_ct); */
+    cJSON *item;
+
+    s7_pointer the_ht = s7_make_hash_table(s7, key_ct);
+
+    char *key, *val;
+    (void)val;
+    int    n;
+    double nbr;
+    cJSON_ArrayForEach(item, jm) {
+        key = item->string;
+        if (cJSON_IsNumber(item)) {
+            nbr = cJSON_GetNumberValue(item);
+            if (nbr == trunc(nbr)) {
+                n = (int)nbr;
+                /* log_debug("\tint: %s: %d", key, n); */
+                s7_hash_table_set(s7, the_ht,
+                                  s7_make_string(s7, key),
+                                  s7_make_integer(s7, n));
+            } else {
+                /* log_debug("\treal: %s: %f", key, nbr); */
+                s7_hash_table_set(s7, the_ht,
+                                  s7_make_string(s7, key),
+                                  s7_make_real(s7, nbr));
+            }
+        }
+        else if (cJSON_IsString(item)) {
+            val = cJSON_GetStringValue(item);
+            s7_hash_table_set(s7, the_ht,
+                              s7_make_string(s7, key),
+                              s7_make_string(s7, val));
+        }
+        else if (cJSON_IsBool(item)) {
+            if (cJSON_IsTrue(item)) {
+                s7_hash_table_set(s7, the_ht,
+                                  s7_make_string(s7, key),
+                                  s7_t(s7));
+            }
+            else if (cJSON_IsFalse(item)) {
+                s7_hash_table_set(s7, the_ht,
+                                  s7_make_string(s7, key),
+                                  s7_f(s7));
+            } else {
+                log_error("Bad boolean");
+            }
+        }
+        else if (cJSON_IsNull(item)) {
+            // js null means "absence of any object value"
+            // but '() means empty, not absence
+            // that will have to do, since Scheme has no
+            // way to express "absence of value" (i.e. null value)
+            // (as opposed to null? which is a predicate)
+            s7_hash_table_set(s7, the_ht,
+                              s7_make_string(s7, key),
+                              s7_nil(s7));
+        }
+        else if (cJSON_IsArray(item)) {
+            /* log_debug("NESTED ARRAY"); */
+            s7_pointer subarray =  json_array_to_vector(s7, item, clone);
+            s7_hash_table_set(s7, the_ht, s7_make_string(s7, key), subarray);
+        }
+        else if (cJSON_IsObject(item)) {
+            /* log_debug("NESTED OBJ"); */
+            s7_pointer submap =  json_map_to_hash_table(s7, item, clone);
+            s7_hash_table_set(s7, the_ht, s7_make_string(s7, key), submap);
+        }
+        else if (cJSON_IsRaw(item)) {
+        }
+        else if (cJSON_IsInvalid(item)) {
+        }
+        else {
+        }
+    }
+    return the_ht;
 }

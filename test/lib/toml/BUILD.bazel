@@ -1,18 +1,34 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
+
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+
 load("//test:BUILD.bzl",
-     "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
+     "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
+     "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
+     "TIMEOUT")
+
+SRCS          = BASE_SRCS + TEST_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS
+COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS + TEST_DEPS
+DEFINES       = BASE_DEFINES + TEST_DEFINES
+LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
+# load("//test:BUILD.bzl",
+#      "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
 
 test_suite(
     name  = "toml",
     tests = [
-        "//test/lib/toml:base",
         "//test/lib/toml:arrays",
+        # "//test/lib/toml:conversion_alist",
         "//test/lib/toml:conversion_ht",
         "//test/lib/toml:datetimes",
-        "//test/lib/toml:reader",
+        "//test/lib/toml:maps",
+        "//test/lib/toml:readers",
         "//test/lib/toml:serialization",
         "//test/lib/toml:strings",
-        "//test/lib/toml:maps",
     ]
 )
 
@@ -29,45 +45,11 @@ LIBC_COPTS = [
 ]
 
 ################################################################
+################################################################
 cc_test(
-    name = "base",
+    name = "arrays",
     linkstatic = True,
-    srcs = [
-        "toml_test.c",
-        "//test:common.c", "//test:common.h"
-    ] + select({
-        "//config/clibs/link:shared?": [
-            "//lib/libtoml:toml_s7.c"
-        ],
-        "//conditions:default": []
-    }),
-    local_defines = DEFINES,
-    deps = DEPS + ["//dev"] + select({
-        "//config/clibs/link:archive?": [
-            "//lib/libtoml:toml_s7_archive"
-        ],
-        "//conditions:default": []
-    }),
-    data = select({
-        "//config/clibs/link:runtime?": [
-            "//lib/libtoml:toml_s7"
-        ],
-        "//conditions:default": []
-    }),
-    copts = COPTS + [
-        "-Idev",
-        "-Itest",
-        "-I$(GENDIR)/lib/libtoml",
-        "-I$(GENDIR)/external/libs7/lib/libtoml",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "toml_archive",
-    linkstatic = True,
-    srcs = ["toml_test.c",
+    srcs = ["toml_arrays_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
@@ -87,41 +69,6 @@ cc_test(
     timeout = TIMEOUT
 )
 
-cc_test(
-    name = "toml_link_shared",
-    linkstatic = True,
-    srcs = [
-        "toml_test.c", "//test:common.c", "//test:common.h",
-        "//lib/libtoml:toml_s7.c" ## , "//lib/libtoml:libtoml_s7.h",
-    ],
-    local_defines = DEFINES,
-    deps = DEPS,
-    copts = COPTS + [
-        "-Itest",
-        "-I$(GENDIR)/lib/libtoml",
-        "-I$(GENDIR)/external/libs7/lib/libtoml",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "toml_link_runtime",
-    linkstatic = True,
-    srcs = ["toml_test.c", "//test:common.c", "//test:common.h"],
-    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
-    deps = DEPS,
-    data = ["//lib/libtoml:toml_s7"],
-    copts = COPTS + [
-        "-Itest",
-        "-I$(GENDIR)/lib/libtoml",
-        "-I$(GENDIR)/external/libs7/lib/libtoml",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-################################################################
 cc_test(
     name = "conversion_alist",
     linkstatic = True,
@@ -169,6 +116,30 @@ cc_test(
 )
 
 cc_test(
+    name = "datetimes",
+    linkstatic = True,
+    srcs = ["toml_datetimes_test.c",
+            "//test:common.c", "//test:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    data = ["//test/data:toml"],
+    deps = DEPS + [
+        "//dev",
+        "//lib/libtoml:toml_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest",
+        "-I$(GENDIR)/lib/libtoml",
+        "-I$(GENDIR)/external/libs7/lib/libtoml",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
     name = "maps",
     linkstatic = True,
     srcs = ["toml_maps_test.c",
@@ -192,60 +163,13 @@ cc_test(
 )
 
 cc_test(
-    name = "arrays",
+    name = "readers",
     linkstatic = True,
-    srcs = ["toml_arrays_test.c",
+    srcs = ["toml_readers_test.c",
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
-    deps = DEPS + [
-        "//dev",
-        "//lib/libtoml:toml_s7_archive"
-    ],
-    copts = COPTS + [
-        "-Isrc",
-        "-Idev",
-        "-Itest",
-        "-I$(GENDIR)/lib/libtoml",
-        "-I$(GENDIR)/external/libs7/lib/libtoml",
-        # "-fno-pie"
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "reader",
-    linkstatic = True,
-    srcs = ["toml_reader_test.c",
-            "//test:common.c", "//test:common.h",
-            "//src:libs7.h"],
-    local_defines = DEFINES,
-    data = ["//test/lib/toml/data:toml"],
-    deps = DEPS + [
-        "//dev",
-        "//lib/libtoml:toml_s7_archive"
-    ],
-    copts = COPTS + [
-        "-Isrc",
-        "-Idev",
-        "-Itest",
-        "-I$(GENDIR)/lib/libtoml",
-        "-I$(GENDIR)/external/libs7/lib/libtoml",
-        # "-fno-pie"
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "datetimes",
-    linkstatic = True,
-    srcs = ["toml_datetimes_test.c",
-            "//test:common.c", "//test:common.h",
-            "//src:libs7.h"],
-    local_defines = DEFINES,
-    data = ["//test/lib/toml/data:toml"],
+    data = ["//test/data:toml"],
     deps = DEPS + [
         "//dev",
         "//lib/libtoml:toml_s7_archive"
@@ -269,7 +193,7 @@ cc_test(
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
-    data = ["//test/lib/toml/data:toml"],
+    data = ["//test/data:toml"],
     deps = DEPS + [
         "//dev",
         "//lib/libtoml:toml_s7_archive"
@@ -293,7 +217,7 @@ cc_test(
             "//test:common.c", "//test:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
-    data = ["//test/lib/toml/data:toml"],
+    data = ["//test/data:toml"],
     deps = DEPS + [
         "//dev",
         "//lib/libtoml:toml_s7_archive"

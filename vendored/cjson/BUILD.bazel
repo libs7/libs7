@@ -1,13 +1,30 @@
 load("//config/cc:BUILD.bzl", "COPTS")
 
+load("//:BUILD.bzl",
+     SRCS ="BASE_SRCS",
+     DEPS = "BASE_DEPS",
+     INCLUDE_PATHS = "BASE_INCLUDE_PATHS",
+     COPTS = "BASE_COPTS",
+     DEFINES = "BASE_DEFINES",
+     LINKOPTS = "BASE_LINKOPTS")
+
+exports_files(["cJSON.h"])
+
 cc_library(
     name = "cjson",
     linkstatic = True,
-    srcs = ["cJSON.c"],
-    hdrs = ["cJSON.h"],
-    copts = COPTS,
-    visibility = ["//vendored/mustach:__pkg__",
-                  "//lib/libjson:__pkg__",
-                  "//lib/libmustache/json/cjson:__pkg__"]
+    srcs = SRCS + ["cJSON.c", "cJSONx.c"],
+    hdrs = ["cJSON.h", "cJSONx.h"],
+    copts = COPTS + INCLUDE_PATHS, # + ["-Isrc"],
+    deps  = DEPS, # + ["//src:mustach"],
+    linkopts = LINKOPTS,
+    visibility = ["//visibility:public"]
+    # srcs = ["cJSON.c"],
+    # hdrs = ["cJSON.h"],
+    # copts = COPTS,
+    # visibility = ["//vendored/mustach:__pkg__",
+    #               "//lib/libjson:__pkg__",
+    #               "//lib/libmustache:__pkg__",
+    #               "//lib/libmustache/json/cjson:__pkg__"]
 )
 

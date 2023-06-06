@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,22 +10,22 @@
 
 #include "libcjson_s7.h"
 
-int json_vector_type_tag = 0;
+int json_array_type_tag = 0;
 
 static s7_pointer string_string;
 /* c_pointer_string, character_string, boolean_string, real_string, complex_string, */
 
 /* ****************************************************************
- * Public Scheme API for cJSON.h vector (array) operations
+ * Public Scheme API for cJSON.h array (array) operations
  *****************************************************************/
-/* -------- cjson_is_vector -------- */
-static s7_pointer g_json_is_vector(s7_scheme *s7, s7_pointer args)
+/* -------- cjson_is_array -------- */
+static s7_pointer g_json_is_array(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(g_json_is_vector);
+    TRACE_ENTRY(g_json_is_array);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
-    if (s7_c_object_type(arg) == json_vector_type_tag) {
+    if (s7_c_object_type(arg) == json_array_type_tag) {
         cJSON *item = (cJSON*)s7_c_object_value(arg);
         if (cJSON_IsArray(item))
             return(s7_t(s7));
@@ -37,40 +38,47 @@ static s7_pointer g_json_is_vector(s7_scheme *s7, s7_pointer args)
 /* ****************************************************************
  *  s7 integration API
  * *************************************************************** */
-static s7_pointer free_json_vector(s7_scheme *s7, s7_pointer obj)
+static s7_pointer free_json_array(s7_scheme *s7, s7_pointer obj)
 {
-    TRACE_ENTRY(free_json_vector);
+    (void)s7;
+    TRACE_ENTRY(free_json_array);
     free(s7_c_object_value(obj));
     return(NULL);
 }
 
-static s7_pointer mark_json_vector(s7_scheme *s7, s7_pointer obj)
+static s7_pointer mark_json_array(s7_scheme *s7, s7_pointer obj)
 {
-  /* json_vector_t *t = (json_vector_t*)s7_c_object_value(obj); */
-  /* s7_mark(o->data); */
-  return(NULL);
+    (void)s7;
+    (void)obj;
+    /* json_array_t *t = (json_array_t*)s7_c_object_value(obj); */
+    /* s7_mark(o->data); */
+    return(NULL);
 }
 
-static s7_pointer json_vector_is_equal(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_is_equal(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_is_equal);
+    (void)s7;
+    (void)args;
+    TRACE_ENTRY(json_array_is_equal);
     return s7_nil(s7);
 }
 
-static s7_pointer json_vector_is_equivalent(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_is_equivalent(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_is_equivalent);
+    (void)s7;
+    (void)args;
+    TRACE_ENTRY(json_array_is_equivalent);
     return s7_nil(s7);
 }
 
 /*
  * Called for json:array-ref
- * Called when a vector is applied to an index
- * Called with int args when map or for-each are applied to a vector
+ * Called when a array is applied to an index
+ * Called with int args when map or for-each are applied to a array
  */
-s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
+s7_pointer g_json_array_ref(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(g_json_vector_ref);
+    TRACE_ENTRY(g_json_array_ref);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);            /* arg 0: json obj */
@@ -81,7 +89,7 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
                         s7_cons(s7, s7_make_string(s7, "arg 0: expected json object, got NULL"),
                                 s7_nil(s7)));
     }
-    cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_vector_type_tag);
+    cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_array_type_tag);
     if (jo == NULL) {
         log_error("Bad object arg");
         return s7_unspecified(s7);
@@ -100,13 +108,13 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
 
     cJSON *item = cJSON_GetArrayItem(jo, idx);
     if (item == NULL) {
-        log_error("vector-ref: bad index");
+        log_error("array-ref: bad index");
         const char *e = cJSON_GetErrorPtr();
         return s7_error(s7,
-                        s7_make_symbol(s7, "vector-ref index out of range?"),
+                        s7_make_symbol(s7, "array-ref index out of range?"),
                         s7_cons(s7, s7_make_string(s7, e), s7_nil(s7)));
     }
-#ifdef DEBUGGING
+#ifdef DEVBUILD
     log_debug("item type: [%d]%s", item->type, cjson_types[item->type]);
 #endif
 
@@ -135,7 +143,7 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
         return(s7_t(s7));
         break;
     case cJSON_Array:
-        result = s7_make_c_object(s7, json_vector_type_tag, (void*)item);
+        result = s7_make_c_object(s7, json_array_type_tag, (void*)item);
         return(result);
         break;
     case cJSON_Object:
@@ -155,21 +163,23 @@ s7_pointer g_json_vector_ref(s7_scheme *s7, s7_pointer args)
     return(s7_f(s7));
 }
 
-static s7_pointer json_vector_set(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_set(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_set);
+    (void)s7;
+    (void)args;
+    TRACE_ENTRY(json_array_set);
     return s7_nil(s7);
 }
 
-s7_pointer g_json_vector_length(s7_scheme *s7, s7_pointer args)
+s7_pointer g_json_array_length(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(g_json_vector_length);
+    TRACE_ENTRY(g_json_array_length);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
     (void)arg;
 
-    cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_vector_type_tag);
+    cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_array_type_tag);
     if (jo == NULL) {
         log_error("Bad object arg");
         return s7_unspecified(s7);
@@ -179,51 +189,53 @@ s7_pointer g_json_vector_length(s7_scheme *s7, s7_pointer args)
     return(s7_make_integer(s7, key_ct));
 }
 
-static s7_pointer json_vector_copy(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_copy(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_set);
+    (void)args;
+    TRACE_ENTRY(json_array_set);
     return s7_nil(s7);
 }
 
-static s7_pointer json_vector_fill(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_fill(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_set);
+    (void)args;
+    TRACE_ENTRY(json_array_set);
     return s7_nil(s7);
 }
 
-static s7_pointer json_vector_reverse(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_reverse(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_set);
+    (void)args;
+    TRACE_ENTRY(json_array_set);
     return s7_nil(s7);
 }
 
-static s7_pointer g_json_vector_to_vector(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_json_array_to_vector(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(g_json_vector_to_vector);
+    TRACE_ENTRY(g_json_array_to_vector);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
-    (void)arg;
-    /* cJSON *tt = (cJSON*)s7_c_object_value_checked(arg, json_vector_type_tag); */
+    cJSON *ja = (cJSON*)s7_c_object_value_checked(arg, json_array_type_tag);
 
     /* //FIXME: get optional :clone flag */
 
-    /* s7_pointer ht = toml_table_to_hash_table(s7, tt, true); */
-    /* return(ht); */
-    return s7_nil(s7);
+    s7_pointer vec = json_array_to_vector(s7, ja, true);
+    return vec;
 }
 
-static s7_pointer g_json_vector_to_list(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_json_array_to_list(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(g_json_vector_to_list);
+    (void)args;
+    TRACE_ENTRY(g_json_array_to_list);
     return s7_f(s7);
 }
 
 /* **************************************************************** */
 // to_string implementations
-char *json_vector_to_string(s7_scheme *s7, const cJSON *ja)
+char *json_array_to_string(s7_scheme *s7, const cJSON *ja)
 {
-    TRACE_ENTRY(json_vector_to_string);
+    TRACE_ENTRY(json_array_to_string);
 
     const int BUFSZ = 4096;
     char *buf;          /* WARNING: malloc */
@@ -253,7 +265,7 @@ char *json_vector_to_string(s7_scheme *s7, const cJSON *ja)
     TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
     TRACE_LOG_DEBUG("buf: %s", buf);
 
-#ifdef DEBUGGING
+#ifdef DEVBUILD
     // NB: root object has no name, jo->string == NULL
     log_debug("array ja->string: %s, ja->type: %d: %s",
                     ja->string, ja->type, cjson_types[ja->type]);
@@ -270,7 +282,7 @@ char *json_vector_to_string(s7_scheme *s7, const cJSON *ja)
             log_error("cJSON_GetArrayItem failure for key: %d", i);
             return NULL;
         }
-#if defined(DEBUGGING)
+#if defined(DEVBUILD)
         log_debug(GRN "array item" CRESET " %d type: [%d]%s",
                   i, k->type, cjson_types[k->type]);
         if (k->type == cJSON_String)
@@ -345,7 +357,7 @@ char *json_vector_to_string(s7_scheme *s7, const cJSON *ja)
             break;
         case cJSON_Array:
             TRACE_LOG_DEBUG("key type: Array: %s", k->string);
-            seq_str = json_vector_to_string(s7, k);
+            seq_str = json_array_to_string(s7, k);
             len = strlen(seq_str);
             len++; // terminating '\0'
             if ((char_ct + len) > bufsz) {
@@ -435,58 +447,60 @@ char *json_vector_to_string(s7_scheme *s7, const cJSON *ja)
         TRACE_LOG_DEBUG("buf len: %d", strlen(buf));
         TRACE_LOG_DEBUG("buf: %s", buf);
     }
-    TRACE_LOG_DEBUG("json_vector_to_string returning: %s", buf);
+    TRACE_LOG_DEBUG("json_array_to_string returning: %s", buf);
     return buf;
 }
 
 
-static s7_pointer g_json_vector_to_string(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_json_array_to_string(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(g_json_vector_to_string);
+    TRACE_ENTRY(g_json_array_to_string);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
     (void)arg;
-    const cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_vector_type_tag);
+    const cJSON *jo = (cJSON*)s7_c_object_value_checked(arg, json_array_type_tag);
 
-    char *s = json_vector_to_string(s7, jo);
+    char *s = json_array_to_string(s7, jo);
     /* char *s = cJSON_PrintUnformatted(jo); */
-#ifdef DEBUGGING
-    log_debug("g_json_vector_to_string returning %s", s);
+#ifdef DEVBUILD
+    log_debug("g_json_array_to_string returning %s", s);
 #endif
     return s7_make_string(s7, s);
 }
 
-static s7_pointer json_vector_getter(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_getter(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_getter);
+    (void)args;
+    TRACE_ENTRY(json_array_getter);
     return s7_nil(s7);
 }
 
-static s7_pointer json_vector_setter(s7_scheme *s7, s7_pointer args)
+static s7_pointer json_array_setter(s7_scheme *s7, s7_pointer args)
 {
-    TRACE_ENTRY(json_vector_setter);
+    (void)args;
+    TRACE_ENTRY(json_array_setter);
     return s7_nil(s7);
 }
 
-void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
+void json_array_init(s7_scheme *s7, s7_pointer cur_env)
 {
-    TRACE_ENTRY(json_vector_init);
-    json_vector_type_tag = s7_make_c_type(s7, "json_vector");
-    TRACE_LOG_DEBUG("JSON_VECTOR_TAG: %d", json_vector_type_tag);
+    TRACE_ENTRY(json_array_init);
+    json_array_type_tag = s7_make_c_type(s7, "json_array");
+    /* TRACE_LOG_DEBUG("JSON_ARRAY_TAG: %d", json_array_type_tag); */
 
-    s7_c_type_set_gc_free      (s7, json_vector_type_tag, free_json_vector);
-    s7_c_type_set_gc_mark      (s7, json_vector_type_tag, mark_json_vector);
-    s7_c_type_set_is_equal     (s7, json_vector_type_tag, json_vector_is_equal);
-    s7_c_type_set_is_equivalent(s7, json_vector_type_tag, json_vector_is_equivalent);
-    s7_c_type_set_ref          (s7, json_vector_type_tag, g_json_vector_ref);
-    s7_c_type_set_set          (s7, json_vector_type_tag, json_vector_set);
-    s7_c_type_set_length       (s7, json_vector_type_tag, g_json_vector_length);
-    s7_c_type_set_copy         (s7, json_vector_type_tag, json_vector_copy);
-    s7_c_type_set_fill         (s7, json_vector_type_tag, json_vector_fill);
-    s7_c_type_set_reverse      (s7, json_vector_type_tag, json_vector_reverse);
-    s7_c_type_set_to_list      (s7, json_vector_type_tag, g_json_vector_to_list);
-    s7_c_type_set_to_string    (s7, json_vector_type_tag, g_json_vector_to_string);
+    s7_c_type_set_gc_free      (s7, json_array_type_tag, free_json_array);
+    s7_c_type_set_gc_mark      (s7, json_array_type_tag, mark_json_array);
+    s7_c_type_set_is_equal     (s7, json_array_type_tag, json_array_is_equal);
+    s7_c_type_set_is_equivalent(s7, json_array_type_tag, json_array_is_equivalent);
+    s7_c_type_set_ref          (s7, json_array_type_tag, g_json_array_ref);
+    s7_c_type_set_set          (s7, json_array_type_tag, json_array_set);
+    s7_c_type_set_length       (s7, json_array_type_tag, g_json_array_length);
+    s7_c_type_set_copy         (s7, json_array_type_tag, json_array_copy);
+    s7_c_type_set_fill         (s7, json_array_type_tag, json_array_fill);
+    s7_c_type_set_reverse      (s7, json_array_type_tag, json_array_reverse);
+    s7_c_type_set_to_list      (s7, json_array_type_tag, g_json_array_to_list);
+    s7_c_type_set_to_string    (s7, json_array_type_tag, g_json_array_to_string);
 
     /* ***************************************************************
      * Public Scheme API
@@ -494,13 +508,13 @@ void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:array?"),
               s7_make_typed_function(s7, "json:array?",
-                                     g_json_is_vector, 1, 0, false,
+                                     g_json_is_array, 1, 0, false,
                                      "(json:array? obj)", pl_tx));
 
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:array-length"),
               s7_make_typed_function(s7, "json:array-length",
-                                     g_json_vector_length,
+                                     g_json_array_length,
                                      1, 0, false,
                                      "(json:array-length obj)",
                                      pl_xi));
@@ -512,7 +526,7 @@ void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:array-ref"),
               s7_make_typed_function(s7, "json:array-ref",
-                                     g_json_vector_ref,
+                                     g_json_array_ref,
                                      2, 0, false,
                                      "(json:array-ref obj key)",
                                      pl_xx));
@@ -523,7 +537,7 @@ void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:array->list"),
               s7_make_typed_function(s7, "json:array->list",
-                                     g_json_vector_to_list,
+                                     g_json_array_to_list,
                                      1, 0, false,
               "(json:array->list a) converts json array to s7 list",
                                      pl_xx));
@@ -531,21 +545,95 @@ void json_vector_init(s7_scheme *s7, s7_pointer cur_env)
     s7_define(s7, cur_env,
               s7_make_symbol(s7, "json:array->vector"),
               s7_make_typed_function(s7, "json:array->vector",
-                                     g_json_vector_to_vector,
+                                     g_json_array_to_vector,
                                      1, 0, false,
               "(json:array->vector a) converts json array to s7 vector",
                                      pl_xx));
 
     s7_define_function(s7, "json:array-getter",
-                       json_vector_getter, 2, 0, false,
-                       "(json:array-getter t k) gets value for key k from vector t");
-    s7_c_type_set_getter       (s7, json_vector_type_tag, s7_name_to_value(s7, "json:array-getter"));
+                       json_array_getter, 2, 0, false,
+                       "(json:array-getter t k) gets value for key k from array t");
+    s7_c_type_set_getter       (s7, json_array_type_tag, s7_name_to_value(s7, "json:array-getter"));
 
     s7_define_function(s7, "json:array-setter",
-                       json_vector_setter, 2, 0, false,
-                       "(json:array-setter t k) sets value for key k from vector t");
-    s7_c_type_set_setter       (s7, json_vector_type_tag, s7_name_to_value(s7, "json:array-setter"));
+                       json_array_setter, 2, 0, false,
+                       "(json:array-setter t k) sets value for key k from array t");
+    s7_c_type_set_setter       (s7, json_array_type_tag, s7_name_to_value(s7, "json:array-setter"));
 
     //FIXME: why this here?
     string_string = s7_make_semipermanent_string(s7, "a string");
+}
+
+/* ****************************************************************
+ * Helper functions
+ */
+s7_pointer json_array_to_vector(s7_scheme *s7, cJSON *ja, bool clone)
+{
+    TRACE_ENTRY(json_array_to_vector);
+    size_t idx_ct = cJSON_GetArraySize(ja);
+    s7_pointer the_vector = s7_make_vector(s7, idx_ct);
+    cJSON *item;
+    char  *str;
+    int    n;
+    double nbr;
+
+    /* log_debug("array sz: %d", idx_ct); */
+    for (size_t i = 0; i < idx_ct; i++) {
+        item = cJSON_GetArrayItem(ja, i);
+        if (cJSON_IsNumber(item)) {
+            nbr = cJSON_GetNumberValue(item);
+            if (nbr == trunc(nbr)) {
+                n = (int)nbr;
+                /* log_debug("\titem[%d] int: %d", i, n); */
+                s7_vector_set(s7, the_vector, i, s7_make_integer(s7, n));
+            } else {
+                /* log_debug("\titem[%d] real: %f", i, nbr); */
+                s7_vector_set(s7, the_vector, i, s7_make_real(s7, nbr));
+            }
+        }
+        else if (cJSON_IsString(item)) {
+            str = cJSON_GetStringValue(item);
+            s7_vector_set(s7, the_vector, i, s7_make_string(s7, str));
+        }
+        else if (cJSON_IsBool(item)) {
+            if (cJSON_IsTrue(item)) {
+                s7_vector_set(s7, the_vector, i, s7_t(s7));
+            }
+            else if (cJSON_IsFalse(item)) {
+                s7_vector_set(s7, the_vector, i, s7_f(s7));
+            } else {
+                log_error("Bad boolean");
+            }
+        }
+        else if (cJSON_IsNull(item)) {
+            // js null means "absence of any object value"
+            // but '() means empty, not absence
+            // that will have to do, since Scheme has no
+            // way to express "absence of value" (i.e. null value)
+            // (as opposed to null? which is a predicate)
+            s7_vector_set(s7, the_vector, i, s7_nil(s7));
+        }
+        else if (cJSON_IsArray(item)) {
+            log_debug("NESTED ARRAY");
+            s7_pointer subarray =  json_array_to_vector(s7, item, clone);
+            s7_vector_set(s7, the_vector, i, subarray);
+        }
+        else if (cJSON_IsObject(item)) {
+            /* log_debug("NESTED OBJ"); */
+            s7_pointer submap =  json_map_to_hash_table(s7, item, clone);
+            s7_vector_set(s7, the_vector, i, submap);
+        }
+        else if (cJSON_IsRaw(item)) {
+            log_error("Raw item");
+            s7_vector_set(s7, the_vector, i, s7_undefined(s7));
+        }
+        else if (cJSON_IsInvalid(item)) {
+            log_error("Invalid item");
+            s7_vector_set(s7, the_vector, i, s7_unspecified(s7));
+        }
+        else {
+            log_error("Bad cJSON item type");
+        }
+    }
+    return the_vector;
 }
