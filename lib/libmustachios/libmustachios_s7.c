@@ -24,7 +24,16 @@
 /* #include "debug.h" */
 /* #endif */
 
-/* s7_scheme *s7; */
+/* Global s7 var is required,since routines in the s7 mustache need
+   it, and it cannot always be passed as an arg, since the routines
+   are called by the mustach C kernel, which knows nothing about s7.
+   For example the 'start' routine in mustache_s7.c calls s7_nil(s7).
+
+   BUT: we could address this by adding a field in the stack to hold
+   the s7 var. The stack gets passed from the initial routine down to
+   the kernel and then back up.
+*/
+s7_scheme *s7;
 
 /* ****************************************************************
  * API
@@ -151,7 +160,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
 
     //**** arg 2: DATA ****************
     s7_pointer data     = s7_caddr(args);
-
+    TRACE_S7_DUMP("data", data);
 
     //**** arg 3: FLAGS ****************
     // flags are opt-out?
@@ -168,7 +177,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
 
     //FIXME: user-passed flags should REPLACE the default
 
-    /* log_debug("RENDERING"); */
+    TRACE_LOG_DEBUG("RENDERING", "");
     /* ******************** render ******************** */
     s7_pointer b;
     s7_pointer json_is_datum_fn = s7_name_to_value(s7, "json:datum?");
@@ -182,7 +191,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
     b = s7_apply_function(s7, json_is_datum_fn, s7_list(s7, 1, data));
     /* log_debug("jjjjjjjjjjjjjjjj"); */
     if (b == s7_t(s7)) {
-        // call mustache_json_render
+        TRACE_LOG_DEBUG("RENDER JSON", "");
         cJSON *root = (cJSON*)s7_c_object_value(data);
         if (sink_flags.to_file_port) {
             /* log_debug("SINK: file port"); */
@@ -226,7 +235,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
                               s7_list(s7, 1, data));
         /* log_debug("????tttttttttttttttt"); */
         if (b == s7_t(s7)) {
-            /* log_debug("TOML RENDER"); */
+            TRACE_LOG_DEBUG("TOML RENDER", "");
             toml_table_t *root = (toml_table_t*)s7_c_object_value(data);
             if (sink_flags.to_file_port) {
                 /* log_debug("SINK: file port"); */
@@ -258,7 +267,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
                 log_error("Bad SINK?");
             }
         } else {
-            /* log_debug("RENDER SCM"); */
+            TRACE_LOG_DEBUG("RENDER SCM", "");
             // must be scheme? alist, hash-table, or '()
             // but it could also be a list, vector, string, int, etc.
 
@@ -267,28 +276,33 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
             /*                       s7_list(s7, 1, data)); */
             /* if (b == s7_t(s7)) { */
                 if (sink_flags.to_file_port) {
-                    log_debug("SINK: file port");
+                    TRACE_LOG_DEBUG("SINK: file port", "");
                     mustache_scm_frender(ostream, template_str, 0, data, flags);
                 }
                 else if (sink_flags.to_string) {
+                    if (sink_flags.to_current_output_port) {
+                        TRACE_LOG_DEBUG("SINK: #t", "");
+                    } else {
+                        TRACE_LOG_DEBUG("SINK: #f", "");
+                    }
                     const char * s = mustache_scm_render(template_str, 0, data, flags);
                     s7_pointer str7 = s7_make_string(s7, s);
                     if (sink_flags.to_current_output_port) {
-                        log_debug("SINK: #t");
+                        TRACE_LOG_DEBUG("SINK: #t", "");
                         s7_display(s7, str7, s7_current_output_port(s7));
                     } else {
-                        /* log_debug("SINK: #f"); */
+                        TRACE_LOG_DEBUG("SINK: #f", "");
                     }
                     return str7;
                 }
                 else if (sink_flags.to_current_output_port) {
-                    log_debug("SINK: '()");
+                    TRACE_LOG_DEBUG("SINK: '()", "");
                     const char * s = mustache_scm_render(template_str, 0, data, flags);
                     s7_display(s7, s7_make_string(s7, s),
                                s7_current_output_port(s7));
                 }
                 else if (sink_flags.to_string_port) {
-                    log_debug("SINK: string port");
+                    TRACE_LOG_DEBUG("SINK: string port", "");
                     const char * s = mustache_scm_render(template_str, 0, data, flags);
                     s7_display(s7, s7_make_string(s7, s), sink);
                 }
@@ -367,12 +381,12 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
 
 }
 
-s7_pointer libmustachios_s7_init(s7_scheme *s7)
+s7_pointer libmustachios_s7_init(s7_scheme *_s7)
 {
     TRACE_ENTRY(libmustachios_s7_init);
     TRACE_LOG_DEBUG("libmustachios_s7_init", "");
 
-    /* s7 = _s7; */
+    s7 = _s7;
     s7_pointer curr_env;
     curr_env = s7_inlet(s7, s7_nil(s7));
     s7_pointer old_shadow = s7_set_shadow_rootlet(s7, curr_env);

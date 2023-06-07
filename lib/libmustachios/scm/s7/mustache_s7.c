@@ -16,7 +16,11 @@
 /* #include "debug.h" */
 /* #endif */
 
-s7_scheme *s7;
+/* We need a global s7, because these routines are called by the
+   mustach kernel, which knows nothing about s7.
+   The definition is in the init function of libmustachios
+*/
+extern s7_scheme *s7;
 
 static void dump_stack(struct tstack_s *stack);
 
@@ -32,7 +36,9 @@ struct workbuf_s {
 
 static int start(struct tstack_s *stack)
 {
-    TRACE_ENTRY(start)
+    TRACE_ENTRY(start);
+    /* log_debug("stack ptr: %p", stack); */
+    /* log_debug("stack root ptr: %p", stack->root); */
     stack->depth = 0;
     s7_pointer x = s7_nil(s7);
     stack->selection = x;

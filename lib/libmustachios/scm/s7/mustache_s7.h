@@ -25,6 +25,7 @@
 struct tstack_s {
     int predicate;
     bool lambda;
+    s7_scheme *s7;              /* instead of using a global var */
     s7_pointer root;
     s7_pointer selection;       /* ? */
     int depth;                  /* stack height; 1 stackframe per hashtag */
