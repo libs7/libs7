@@ -1591,56 +1591,62 @@ const struct mustach_ds_methods_s scm_methods = {
 const char *mustache_scm_render(const char *template,
                                 size_t template_sz,
                                 s7_pointer data,
-                                int _flags,
-                                errno_t* err)
+                                int _flags)
+                                /* errno_t* err) */
 {
-    /* size_t size;            /\* render outparam *\/ */
-    /* char *ret;              /\* render outparam *\/ */
-
     //FIXME: put stack on the heap? mustache_new_stack()?
     struct tstack_s stack;
     memset(&stack, '\0', sizeof(struct tstack_s));
     stack.root = (s7_pointer)data;
-#ifdef DEVBUILD
-    /* DUMP("root", stack.root); */
-#endif
-
-    // port is unspecified, undefined, #t, #f, string port, or file port
-
-    /* if (port == s7_unspecified(s7)) { // s7_nil(s7)??? */
-        // :port #f - return string only
-        // render to buffer, then return str:
 
     char *result = mustach_scm_render_to_string(template, template_sz,
                                                 &scm_methods,
                                                 &stack,
-                                                _flags,
-                                                err);
+                                                _flags);
+                                                /* err); */
                                             /* &result, &result_sz); */
-    if (*err != 0) {
-        log_error("mustach_wrap_mem failure: %d", *err);
+    /* if (*err != 0) { */
+    if (result == NULL) {
+        log_error("mustach_scm_render_to_string failure"); //: %d", *err);
         return NULL;
     } else {
         return result;
     }
 }
 
-/* int mustache_scm_frender(FILE *f */
-/*                          const char *template, */
-/*                          size_t template_sz, */
-/*                          s7_pointer data, */
-/*                          int _flags) */
-/* { */
-/*     return 0; */
-/* } */
+int mustache_scm_frender(FILE *fp,
+                         const char *template,
+                         size_t template_sz,
+                         s7_pointer data,
+                         int _flags)
+{
+    TRACE_ENTRY(mustache_scm_frender);
+    struct tstack_s stack;
+    memset(&stack, '\0', sizeof(struct tstack_s));
+    stack.root = (s7_pointer)data;
 
-/* int mustache_scm_fdrender(int fd, */
-/*                           const char *template, */
-/*                           size_t template_sz, */
-/*                           s7_pointer data, */
-/*                           int _flags) */
-/* { */
-/*     return 0; */
-/* } */
+    //FIXME: client responsible for flags
+    int flags = Mustach_With_AllExtensions;
+    flags &= ~Mustach_With_JsonPointer;
+    (void)_flags;
 
-/* ################################################################ */
+    return mustach_scm_file(template, template_sz,
+                             &scm_methods,
+                             &stack,
+                             flags,
+                             fp);
+}
+
+int mustache_scm_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          s7_pointer data,
+                          int _flags)
+{
+    (void)fd;
+    (void)template;
+    (void)template_sz;
+    (void)data;
+    (void)_flags;
+    return -1;
+}

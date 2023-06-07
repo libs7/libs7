@@ -51,8 +51,8 @@ extern const struct mustach_wrap_itf mustach_wrap_itf_scm;
 const char *mustache_scm_render(const char *template,
                                 size_t template_sz,
                                 s7_pointer data,
-                                int _flags,
-                                errno_t *status);
+                                int _flags);
+                                /* errno_t *status); */
 
 int mustache_scm_frender(FILE *f,
                          const char *template,

@@ -231,8 +231,8 @@ char *mustach_scm_render_to_string(const char *template,
                                    size_t template_sz,
                                    const struct mustach_ds_methods_s *json_methods,
                                    void *stack,
-                                   int flags,
-                                   errno_t *err);
+                                   int flags);
+                                   /* errno_t *err); */
 
 int mustach_scm_file(const char *template, size_t length,
                       const struct mustach_ds_methods_s *methods,

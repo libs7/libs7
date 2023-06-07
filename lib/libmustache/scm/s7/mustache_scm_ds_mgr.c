@@ -683,8 +683,8 @@ char *mustach_scm_render_to_string(const char *template,
                                    size_t template_sz,
                                    const struct mustach_ds_methods_s *scm_methods,
                                    void *stack, // struct tstack_s*
-                                   int flags,
-                                   errno_t *err)
+                                   int flags)
+                                   /* errno_t *err) */
 {
 #ifdef DEVBUILD
     log_debug("mustach_scm_render_to_string");
@@ -702,7 +702,7 @@ char *mustach_scm_render_to_string(const char *template,
                        &result, &result_sz);
     if (rc) {
         log_error("mustach_mem rc: %d", rc);
-        *err = rc;
+        /* *err = rc; */
         return NULL;
     }
     size_t ln = strlen(result);

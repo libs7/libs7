@@ -9,33 +9,31 @@ load("//test:BUILD.bzl",
      "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
      "TIMEOUT")
 
-SRCS          = BASE_SRCS + TEST_SRCS
+SRCS          = BASE_SRCS + TEST_SRCS + ["macros.h"]
+
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS + [
     "-Ilib/libmustache/scm/s7"
 ]
 COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS + [
-    "//lib/libmustache/scm/s7:mustach_scm"
-]
+    "//lib/libmustache/scm/s7:mustache_scm"
+] + select({
+    "//config/clibs/link:archive?": [
+        "//lib/libmustache:mustachios_s7_archive",
+    ],
+    "//conditions:default": []
+})
+
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
-# load("//:BUILD.bzl", "COPTS", "LINKOPTS", "DEFINES", "DEPS")
 
-# load("//test/lib/mustache:BUILD.bzl", "COPTS_TEST", "DEPS_TEST",
-#      "DEFINES_TEST",
-#      "TIMEOUT")
-
-# load("//test/lib/mustache/scm:BUILD.bzl",
-#      "SRCS",
-#      "LIBS7", "LIBS7_HDRS",
-#      "LIBS7_ADAPTER", "LIBS7_ADAPTER_HDRS",
-#      "COPTS_S7", "DEPS_S7")
-
+ # + COPTS_TEST + COPTS_S7,
+################################################################
 test_suite(
     name  = "test",
     tests = [
-        "//test/lib/mustache/scm",
-        "//test/lib/mustache/scm:comments",
+        # "//test/lib/mustache/scm",
+        ":comments",
     ]
 )
 
@@ -54,7 +52,7 @@ test_suite(
 cc_test(
     name       = "comments",
     linkstatic = True,
-    srcs       = SRCS + ["comments_test.c"],
+    srcs       = SRCS + ["mst_scm_comments_test.c"],
     defines    = DEFINES,
     deps       = DEPS,
     copts      = COPTS,
@@ -172,6 +170,17 @@ cc_test(
 #     linkopts   = LINKOPTS,
 #     timeout    = TIMEOUT,
 # )
+
+cc_test(
+    name       = "renderers",
+    linkstatic = True,
+    srcs       = SRCS + ["mst_scm_renderers_test.c"],
+    defines    = DEFINES,
+    deps       = DEPS,
+    copts      = COPTS,
+    linkopts   = LINKOPTS,
+    timeout    = TIMEOUT,
+)
 
 # cc_test(
 #     name       = "sections",

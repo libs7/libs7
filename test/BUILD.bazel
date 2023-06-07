@@ -76,7 +76,7 @@ test_suite(
 cc_test(
     name       = "s7",
     linkstatic = True,
-    srcs       = ["s7_test.c", "common.c", "common.h"],
+    srcs       = SRCS + ["s7_test.c"],
     defines    = DEFINES,
     deps       = DEPS,
     copts      = COPTS,
@@ -89,9 +89,7 @@ cc_test(
 cc_test(
     name = "libc",
     linkstatic = True,
-    srcs = SRCS + [
-        "libc_test.c", "common.c", "common.h"
-    ] + select({
+    srcs = SRCS + ["libc_test.c"] + select({
         "//config/clibs/link:shared?": [
             "//lib/libc:c_s7"   # shared lib
             # "//lib/libc:libc_s7.c", "//lib/libc:libc_s7.h",
@@ -119,7 +117,7 @@ cc_test(
 cc_test(
     name = "libc_link_archive",
     linkstatic = True,
-    srcs = ["libc_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["libc_test.c"],
     local_defines = DEFINES,
     deps = DEPS + [
         "//lib/libc:c_s7_archive",
@@ -135,14 +133,7 @@ cc_test(
 cc_test(
     name = "libc_link_shared",
     # linkstatic = True,
-    srcs = [
-        "libc_test.c", "common.c", "common.h",
-        # "//lib/libc:libc_s7.c",
-        # "//lib/libc:libc_s7.h",
-        # "//lib/libdl:dl_s7.c", # "//lib/libdl:libdl_s7.h",
-        # "//lib/libgdbm:gdbm_s7.c", # "//lib/libgdbm:libgdbm_s7.h",
-        # "//lib/libm:m_s7.c", # "//lib/libm:libm_s7.h",
-    ],
+    srcs = SRCS + ["libc_test.c"],
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libc:c_s7"],
     copts = COPTS + LIBC_COPTS,
@@ -153,7 +144,7 @@ cc_test(
 cc_test(
     name = "libc_link_runtime",
     linkstatic = True,
-    srcs = ["libc_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["libc_test.c"],
     local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     data = [
@@ -171,7 +162,7 @@ cc_test(
 cc_test(
     name = "libm",
     linkstatic = True,
-    srcs = ["libm_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + ["libm_test.c"] + select({
         "//config/clibs/link:shared?": [
             "//lib/libm:m_s7.c" # , "//lib/libm:libm_s7.h",
         ],
@@ -199,7 +190,7 @@ cc_test(
 cc_test(
     name = "libm_link_archive",
     linkstatic = True,
-    srcs = ["libm_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["libm_test.c"],
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libm:m_s7_archive"],
     copts = COPTS + [
@@ -213,8 +204,8 @@ cc_test(
 cc_test(
     name = "libm_link_shared",
     linkstatic = True,
-    srcs = [
-        "libm_test.c", "common.c", "common.h",
+    srcs = SRCS + [
+        "libm_test.c",
         "//lib/libm:m_s7.c" # , "//lib/libm:libm_s7.h",
     ],
     local_defines = DEFINES,
@@ -230,7 +221,7 @@ cc_test(
 cc_test(
     name = "libm_link_runtime",
     linkstatic = True,
-    srcs = ["libm_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["libm_test.c"],
     local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     data = ["//lib/libm:m_s7"],
@@ -246,7 +237,7 @@ cc_test(
 cc_test(
     name = "gdbm",
     linkstatic = True,
-    srcs = ["gdbm_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + ["gdbm_test.c"] + select({
         "//config/clibs/link:shared?": [
             "//lib/libgdbm:gdbm_s7.c"  # , "//lib/libgdbm:libgdbm_s7.h",
         ],
@@ -274,7 +265,7 @@ cc_test(
 cc_test(
     name = "gdbm_link_archive",
     linkstatic = True,
-    srcs = ["gdbm_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["gdbm_test.c"],
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libgdbm:gdbm_s7_archive"],
     copts = COPTS + [
@@ -288,8 +279,8 @@ cc_test(
 cc_test(
     name = "gdbm_link_shared",
     linkstatic = True,
-    srcs = [
-        "gdbm_test.c", "common.c", "common.h",
+    srcs = SRCS + [
+        "gdbm_test.c",
         # "//lib/libgdbm:gdbm_s7.c" ## , "//lib/libgdbm:libgdbm_s7.h",
     ],
     local_defines = DEFINES,
@@ -305,7 +296,7 @@ cc_test(
 cc_test(
     name = "gdbm_link_runtime",
     linkstatic = True,
-    srcs = ["gdbm_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["gdbm_test.c"],
     local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     data = ["//lib/libgdbm:gdbm_s7"],
@@ -321,7 +312,7 @@ cc_test(
 cc_test(
     name = "gsl",
     linkstatic = True,
-    srcs = ["gsl_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + ["gsl_test.c"] + select({
         "//config/clibs/link:shared?": ["//lib/libgsl:gsl_s7.c"],
         "//conditions:default": []
     }),
@@ -346,7 +337,7 @@ cc_test(
 cc_test(
     name = "cjson",
     linkstatic = True,
-    srcs = ["cjson_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + ["cjson_test.c"] + select({
         "//config/clibs/link:shared?": [
             "//lib/libmustache:mustachios7_s7.c" ## , "//lib/libmustache:libmustachios7_s7.h",
         ],
@@ -379,7 +370,7 @@ cc_test(
 cc_test(
     name = "cwalk",
     linkstatic = True,
-    srcs = ["cwalk_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + ["cwalk_test.c"] + select({
         "//config/clibs/link:shared?": [
             "//lib/libcwalk:cwalk_s7.c" ## , "//lib/libcwalk:libcwalk_s7.h",
         ],
@@ -407,7 +398,7 @@ cc_test(
 cc_test(
     name = "cwalk_link_archive",
     linkstatic = True,
-    srcs = ["cwalk_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["cwalk_test.c"],
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libcwalk:cwalk_s7_archive"],
     copts = COPTS + LIBC_COPTS,
@@ -418,7 +409,7 @@ cc_test(
 cc_test(
     name = "cwalk_link_shared",
     linkstatic = True,
-    srcs = ["cwalk_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["cwalk_test.c"],
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libcwalk:cwalk_s7"],
     copts = COPTS, # + LIBC_COPTS,
@@ -430,7 +421,7 @@ cc_test(
 cc_test(
     name = "toml",
     linkstatic = True,
-    srcs = ["toml_test.c", "common.c", "common.h"] + select({
+    srcs = SRCS + ["toml_test.c"] + select({
         "//config/clibs/link:shared?": [
             "//lib/libtoml:toml_s7.c"
         ],
@@ -461,8 +452,7 @@ cc_test(
 cc_test(
     name = "toml_archive",
     linkstatic = True,
-    srcs = ["toml_test.c",
-            "common.c", "common.h",
+    srcs = SRCS + ["toml_test.c",
             ## "//src:libs7.h"
             ],
     local_defines = DEFINES,
@@ -485,8 +475,8 @@ cc_test(
 cc_test(
     name = "toml_link_shared",
     linkstatic = True,
-    srcs = [
-        "toml_test.c", "common.c", "common.h",
+    srcs = SRCS + [
+        "toml_test.c",
         "//lib/libtoml:toml_s7.c" ## , "//lib/libtoml:libtoml_s7.h",
     ],
     local_defines = DEFINES,
@@ -502,7 +492,7 @@ cc_test(
 cc_test(
     name = "toml_link_runtime",
     linkstatic = True,
-    srcs = ["toml_test.c", "common.c", "common.h"],
+    srcs = SRCS + ["toml_test.c"],
     local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
     deps = DEPS,
     data = ["//lib/libtoml:toml_s7"],
@@ -518,7 +508,7 @@ cc_test(
 cc_test(
     name = "utf8proc",
     linkstatic = True,
-    srcs = ["utf8proc_test.c", "common.c", "common.h",
+    srcs = SRCS + ["utf8proc_test.c",
             # "//src:s7_archive",
             # "//src:libs7.h"
             ] + select({

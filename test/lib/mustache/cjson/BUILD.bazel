@@ -59,7 +59,6 @@ cc_test(
     linkstatic = True,
     srcs = SRCS + [
         "mst_cjson_comments_test.c",
-        "//test:common.c", "//test:common.h",
         "//test/lib/mustache:utils.c",
         "//test/lib/mustache:utils.h"
     ],
@@ -82,7 +81,6 @@ cc_test(
     linkstatic = True,
     srcs = SRCS + [
         "mst_cjson_interpolation_test.c",
-        "//test:common.c", "//test:common.h",
         "//test/lib/mustache:utils.c",
         "//test/lib/mustache:utils.h"
     ],
@@ -104,7 +102,6 @@ cc_test(
     linkstatic = True,
     srcs = SRCS + [
         "mst_cjson_renderers_test.c",
-        "//test:common.c", "//test:common.h",
         "//test/lib/mustache:utils.c",
         "//test/lib/mustache:utils.h"
     ],
@@ -120,7 +117,7 @@ cc_test(
 cc_test(
     name = "cjson_link_archive",
     linkstatic = True,
-    srcs = ["cjson_test.c", "//test:common.c", "//test:common.h"],
+    srcs = ["cjson_test.c"],
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libmustache:mustache_s7_archive"],
     copts = COPTS + [
@@ -137,12 +134,7 @@ cc_test(
 cc_test(
     name = "cjson_link_shared",
     # linkstatic = True,
-    srcs = [
-        "cjson_test.c", "//test:common.c", "//test:common.h",
-        # "//lib/libmustache:libmustachios7_s7.c"
-        # "//lib/libmustache:mustachios7_s7",
-        # "//src:s7"
-    ],
+    srcs = ["cjson_test.c"],
     local_defines = DEFINES,
     # deps = DEPS + ["//lib/libmustache:mustachios7_s7"],
     # data = ["//lib/libmustache:mustachios7_s7"],
@@ -167,7 +159,7 @@ cc_test(
 cc_test(
     name = "cjson_link_runtime",
     # linkstatic = True,
-    srcs = ["cjson_test.c", "//test:common.c", "//test:common.h",
+    srcs = ["cjson_test.c",
             "//src:libs7.h", "//src:s7.h",
             "//lib/libmustache:mustachios7_s7",
             "//src:s7"
