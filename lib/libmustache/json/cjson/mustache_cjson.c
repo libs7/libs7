@@ -369,10 +369,10 @@ static void _dump_obj(char *msg, struct cJSON *item)
             log_debug("\t  string: %s", s);
         }
         else if (cJSON_IsArray(item)) {
-            log_debug("\t  array: %s", "todo dump json array...");
+            log_debug("\t  array: %s", "todo...");
         }
         else if (cJSON_IsObject(item)) {
-            log_debug("\t  object: %s", "todo dump json obj...");
+            log_debug("\t  object: %s", "todo...");
         }
         else {
             log_warn("\t UNKNOWN DATUM TYPE");
@@ -450,6 +450,17 @@ const struct mustach_ds_methods_s cjson_methods = {
     .dump_stack = (void (*)(void*))dump_stack
 };
 
+/* void *mustach_encode_cjson(char *json_str, size_t len) */
+/* { */
+/*     cJSON *json_data = cJSON_ParseWithLength(json_str, len); */
+/*     return json_data; */
+/* } */
+
+void mustach_free(void *json_c)
+{
+    cJSON_Delete((cJSON*)json_c);
+}
+
 /* ****************************************************************
  * PUBLIC RENDER API
  **************************************************************** */
@@ -458,7 +469,7 @@ const char *mustache_json_render(const char *template,
                                  cJSON *root,
                                  int _flags)
 {
-    TRACE_ENTRY(mustache_cjson_render);
+    TRACE_ENTRY(mustache_json_render);
     //FIXME: client responsible for flags
     int flags = Mustach_With_AllExtensions;
     flags &= ~Mustach_With_JsonPointer;
@@ -483,16 +494,43 @@ int mustache_json_frender(FILE * restrict file,
                           const char *template,
                           size_t template_sz,
                           cJSON *root,
-                          int flags)
+                          int _flags)
 {
-    log_debug("mustache_json_frender");
-    (void)file;
+    TRACE_ENTRY(mustache_json_frender);
+    //FIXME: client responsible for flags
+    int flags = Mustach_With_AllExtensions;
+    flags &= ~Mustach_With_JsonPointer;
+    (void)_flags;
+
+    struct tstack_s stack;
+    stack.root = (cJSON*)root;
+    return mustach_json_file(template, template_sz,
+                             &cjson_methods,
+                             &stack,
+                             flags,
+                             file);
+}
+
+int mustache_json_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          cJSON *root,
+                          int _flags)
+{
+    TRACE_ENTRY(mustache_json_fdrender);
+    //FIXME: client responsible for flags
+    int flags = Mustach_With_AllExtensions;
+    flags &= ~Mustach_With_JsonPointer;
+    (void)_flags;
+    (void)flags;
+    struct tstack_s stack;
+    stack.root = (cJSON*)root;
+    (void)fd;
     (void)template;
     (void)template_sz;
-    (void)root;
-    (void)flags;
     return -1;
 }
+
 
 /* int mustach_fprintf(FILE * restrict file, */
 /*                     const char * restrict template, size_t tlength, */
@@ -506,18 +544,6 @@ int mustache_json_frender(FILE * restrict file,
 /*     e.root = (cJSON*)json_root; */
 /*     return mustach_json_file(template, tlength, &cjson_methods, &e, flags, file); */
 /* } */
-
-/* void *mustach_encode_cjson(char *json_str, size_t len) */
-/* { */
-/*     cJSON *json_data = cJSON_ParseWithLength(json_str, len); */
-/*     return json_data; */
-/* } */
-
-/* void mustach_free(void *json_c) */
-/* { */
-/*     cJSON_Delete((cJSON*)json_c); */
-/* } */
-
 int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file)
 {
 	struct tstack_s e;

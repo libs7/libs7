@@ -91,6 +91,7 @@ void render_to_cop_ret_NULL(void)
     const char *s = s7_get_output_string(s7, s7_current_output_port(s7));
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
     s7_set_current_output_port(s7, old_cop);
+    s7_close_output_port(s7, osp);
 }
 
 void render_to_string_port(void)
@@ -101,6 +102,7 @@ void render_to_string_port(void)
                    "{\"msg\": \"Hello\"}",
                    s7_string(s7_nil(s7))); // macro compares strings
     const char *s = s7_get_output_string(s7, osp);
+    s7_close_output_port(s7, osp);
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
 }
 
@@ -111,18 +113,17 @@ void render_to_file_port(void)
                    "{{msg}}, world!",
                    "{\"msg\": \"Hello\"}",
                    s7_string(s7_nil(s7))); // macro compares strings
-
+    s7_close_output_port(s7, ofp);
     s7_pointer ifp = s7_open_input_file(s7, "cjson_test.out", "r");
     if (!s7_is_input_port(s7, ifp)) {
         log_error("s7_open_input_file failed for %s?", "cjson_test.out");
     }
-    log_debug("0xxxxxxxxxxxxxxxx");
     s7_pointer actual = s7_call(s7, s7_name_to_value(s7, "read-string"),
                                 s7_list(s7, 2,
-                                        s7_make_integer(s7, 100),
+                                        s7_make_integer(s7, 1000),
                                         ifp));
+    s7_close_input_port(s7, ifp);
     TRACE_S7_DUMP("actual", actual);
-    log_debug("2xxxxxxxxxxxxxxxx");
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s7_string(actual));
 }
 
@@ -212,11 +213,11 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    /* RUN_TEST(render_to_string);         /\* (mustache:render #f t d) *\/ */
-    /* RUN_TEST(render_to_cop_ret_string); /\* (mustache:render #t t d) *\/ */
-    /* RUN_TEST(render_to_cop_ret_NULL);   /\* (mustache:render '() t d) *\/ */
+    RUN_TEST(render_to_string);         /* (mustache:render #f t d) */
+    RUN_TEST(render_to_cop_ret_string); /* (mustache:render #t t d) */
+    RUN_TEST(render_to_cop_ret_NULL);   /* (mustache:render '() t d) */
 
-    /* RUN_TEST(render_to_string_port); */
+    RUN_TEST(render_to_string_port);
     RUN_TEST(render_to_file_port);
 
     /* RUN_TEST(bad_sinks); */

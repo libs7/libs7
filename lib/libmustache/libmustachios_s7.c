@@ -58,7 +58,7 @@ void _handle_sink_flags(s7_scheme *s7,
                         struct sink_flags_s *sink_flags,
                         s7_pointer sink)
 {
-    log_debug("_handle_sink_flags");
+    /* log_debug("_handle_sink_flags"); */
     if (sink == s7_f(s7)) { // return string only, no port
         sink_flags->to_string = 1;
         //port = s7_unspecified(s7); /* write to buffer */
@@ -176,27 +176,22 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
         // call mustache_json_render
         cJSON *root = (cJSON*)s7_c_object_value(data);
         if (sink_flags.to_file_port) {
-            log_debug("SINK: file port");
+            /* log_debug("SINK: file port"); */
             mustache_json_frender(ostream, template_str, 0, root, flags);
         }
         else if (sink_flags.to_string) {
             const char * s = mustache_json_render(template_str, 0, root, flags);
             s7_pointer str7 = s7_make_string(s7, s);
             if (sink_flags.to_current_output_port) {
-                log_debug("SINK: #t");
-                /* s7_pointer cip = s7_current_output_port(s7); */
+                /* log_debug("SINK: #t"); */
                 s7_display(s7, str7, s7_current_output_port(s7));
-                /* s7_format(s7, s7_list(s7, 3, */
-                /*                       s7_nil(s7), // write to cip */
-                /*                       s7_make_string(s7, "~S~%"), */
-                /*                       str7)); */
             } else {
-                log_debug("SINK: #f");
+                /* log_debug("SINK: #f"); */
             }
             return str7;
         }
         else if (sink_flags.to_current_output_port) {
-            log_debug("SINK: '()");
+            /* log_debug("SINK: '()"); */
             const char * s = mustache_json_render(template_str, 0, root, flags);
             s7_display(s7, s7_make_string(s7, s),
                        s7_current_output_port(s7));
