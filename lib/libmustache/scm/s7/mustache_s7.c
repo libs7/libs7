@@ -1607,46 +1607,139 @@ const char *mustache_scm_render(const char *template,
                                             /* &result, &result_sz); */
     /* if (*err != 0) { */
     if (result == NULL) {
-        log_error("mustach_scm_render_to_string failure"); //: %d", *err);
+        log_error("mustach_scm_render_to_string failure"); // : %d", *err);
         return NULL;
     } else {
         return result;
     }
 }
 
-int mustache_scm_frender(FILE *fp,
+int mustache_scm_frender(FILE *f,
                          const char *template,
                          size_t template_sz,
                          s7_pointer data,
                          int _flags)
 {
-    TRACE_ENTRY(mustache_scm_frender);
     struct tstack_s stack;
     memset(&stack, '\0', sizeof(struct tstack_s));
     stack.root = (s7_pointer)data;
 
-    //FIXME: client responsible for flags
-    int flags = Mustach_With_AllExtensions;
-    flags &= ~Mustach_With_JsonPointer;
-    (void)_flags;
+    int rc = mustach_scm_file(template, template_sz,
+                              &scm_methods,
+                              &stack,
+                              _flags,
+                              f);
 
-    return mustach_scm_file(template, template_sz,
-                             &scm_methods,
-                             &stack,
-                             flags,
-                             fp);
+    if (rc) {
+        log_error("mustach_scm_frender failure"); // : %d", *err);
+    }
+    return rc;
 }
 
-int mustache_scm_fdrender(int fd,
-                          const char *template,
-                          size_t template_sz,
-                          s7_pointer data,
-                          int _flags)
-{
-    (void)fd;
-    (void)template;
-    (void)template_sz;
-    (void)data;
-    (void)_flags;
-    return -1;
-}
+/* int mustache_scm_fdrender(int fd, */
+/*                           const char *template, */
+/*                           size_t template_sz, */
+/*                           s7_pointer data, */
+/*                           int _flags) */
+/* { */
+/*     return 0; */
+/* } */
+
+/* ################################################################ */
+
+/*     else if (port == s7_undefined(s7)) { */
+/*         // :port #t - send to current-outp, return str */
+/*         // :port () - send to current-outp, do NOT return str */
+/*         int rc = mustach_wrap_mem(s7_string(template), */
+/*                                   0, // tlength, */
+/*                                   &mustach_wrap_itf_scm, */
+/*                                   &e, /\* closure, struct tstack_s* *\/ */
+/*                                   flags, */
+/*                                   &ret, */
+/*                                   &size); */
+/*         if (rc < 0) { */
+/*             log_error("mustach_wrap_mem failure: %s", strerror(errno)); */
+/*             return s7_make_integer(s7,rc); */
+/*         } else { */
+/* #ifdef DEVBUILD */
+/*             log_debug("mustach:render wrote %s", ret); */
+/* #endif */
+/*             s7_pointer s = s7_make_string(s7, ret); */
+/*             s7_display(s7, s, s7_current_output_port(s7)); */
+/*             if (return_string) { */
+/*                 return s; */
+/*             } else { */
+/*                 return s7_unspecified(s7); */
+/*             } */
+/*         } */
+/*     } */
+
+/*     // (port? port) already verified */
+/*     const char *port_filename = s7_port_filename(s7, port); */
+/*     (void)port_filename; */
+/* #ifdef DEVBUILD */
+/*     log_debug("port_filename: %s", port_filename); */
+/* #endif */
+/*     s7_pointer env = s7_inlet(s7, */
+/*                               s7_list(s7, 1, */
+/*                                       s7_cons(s7, */
+/*                                               s7_make_symbol(s7, "p"), */
+/*                                               port))); */
+/*     s7_pointer pfile = s7_eval_c_string_with_environment( */
+/*                                                          s7, "(port-file p)", */
+/*                                                          env); */
+
+/* #ifdef DEVBUILD */
+/*     DUMP("port file", pfile); */
+/* #endif */
+/*     if (s7_c_pointer_type(pfile) == s7_f(s7)) { */
+/* #ifdef DEVBUILD */
+/*         log_debug("GOT STRING PORT"); */
+/* #endif */
+
+/*         int rc = mustach_wrap_mem(s7_string(template), */
+/*                                   0, // tlength, */
+/*                                   &mustach_wrap_itf_scm, &e, */
+/*                                   flags, */
+/*                                   &ret, */
+/*                                   &size); */
+/*         if (rc < 0) { */
+/*             log_error("mustach_wrap_mem failure: %s", strerror(errno)); */
+/*             return s7_make_integer(s7,rc); */
+/*         } else { */
+/* #ifdef DEVBUILD */
+/*             log_debug("mustach:render wrote %s", ret); */
+/* #endif */
+/*             s7_display(s7, s7_make_string(s7, ret), port); */
+/*             /\* if (return_string) // only true if port = current-output-port *\/ */
+/*             /\*     return s7_make_string(s7, ret); *\/ */
+/*             /\* else *\/ */
+/*             return s7_make_integer(s7, size); */
+/*         } */
+
+/*     } else { */
+/* #ifdef DEVBUILD */
+/*         log_debug("GOT FILE PORT"); */
+/* #endif */
+/*         /\* (void)data_scheme;          /\\* currently unused *\\/ *\/ */
+/*         struct tstack_s e; */
+    /* memset(&stack, '\0', sizeof(struct tstack_s)); */
+/*         e.root = (s7_pointer)data; */
+/*         s7_flush_output_port(s7, s7_current_output_port(s7)); */
+/*         int rc = mustach_wrap_file(s7_string(template), 0, // tlength, */
+/*                                  &mustach_wrap_itf_scm, &e, */
+/*                                  flags, */
+/*                                  s7_c_pointer(pfile)); */
+/*         (void)rc; */
+/* #ifdef DEVBUILD */
+/*         log_debug("FILE port RC: %d", rc); */
+/* #endif */
+/*         /\* cop = s7_current_output_port(s7); *\/ */
+/*         /\* os = s7_output_string(s7, cop); *\/ */
+/*         /\* const char *os = s7_get_output_string(s7, cop); *\/ */
+/*         /\* log_debug("current output str: %s", os); *\/ */
+/*         /\* log_debug("UUxxxxxxxxxxxxxxxxx"); *\/ */
+/*         /\* (void) os; *\/ */
+/*     } */
+
+/*     return s7_make_string(s7, ret); */

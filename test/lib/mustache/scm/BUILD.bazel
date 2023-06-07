@@ -30,10 +30,11 @@ LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
  # + COPTS_TEST + COPTS_S7,
 ################################################################
 test_suite(
-    name  = "test",
+    name  = "scm",
     tests = [
-        # "//test/lib/mustache/scm",
         ":comments",
+        ":interpolation",
+        ":renderers"
     ]
 )
 
@@ -85,7 +86,7 @@ cc_test(
 cc_test(
     name       = "interpolation",
     linkstatic = True,
-    srcs       = SRCS + ["interpolation_test.c"],
+    srcs       = SRCS + ["mst_scm_interpolation_test.c"],
     defines    = DEFINES,
     deps       = DEPS,
     copts      = COPTS,

@@ -4,6 +4,7 @@ test_suite(
     name  = "mustache",
     tests = [
         "//test/lib/mustache/cjson",
+        "//test/lib/mustache/scm",
         "//test/lib/mustache/toml"
     ]
 )

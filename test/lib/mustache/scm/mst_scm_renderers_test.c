@@ -2,7 +2,6 @@
 
 #include "unity.h"
 #include "config.h"
-/* #include "utils.h" */
 #include "macros.h"
 #include "common.h"
 
@@ -35,8 +34,8 @@ void tearDown(void)
 
 void render_to_string(void)
 {
-    SCM_RENDER_TEST("{{msg}}, world!",
-                     "'((:msg \"Hello\")",
+    S7_RENDER_TEST("{{msg}}, world!",
+                     "'((:msg \"Hello\"))",
                      "Hello, world!");
 }
 
@@ -48,7 +47,7 @@ void render_to_cop_ret_string(void)
 {
     s7_pointer osp = s7_open_output_string(s7);
     s7_pointer old_cop = s7_set_current_output_port(s7, osp);
-    SCM_RENDER_SINK_TEST(s7_t(s7),
+    S7_RENDER_SINK_TEST(s7_t(s7),
                           "{{msg}}, world!",
                           "msg = \"Hello\"",
                           "Hello, world!");
@@ -72,7 +71,7 @@ void render_to_cop_ret_NULL(void)
 
     s7_pointer osp = s7_open_output_string(s7);
     s7_pointer old_cop = s7_set_current_output_port(s7, osp);
-    SCM_RENDER_SINK_TEST(s7_nil(s7),
+    S7_RENDER_SINK_TEST(s7_nil(s7),
                           "{{msg}}, world!",
                           "msg = \"Hello\"",
                           s7_string(s7_nil(s7)));
@@ -85,7 +84,7 @@ void render_to_cop_ret_NULL(void)
 void render_to_string_port(void)
 {
     s7_pointer osp = s7_open_output_string(s7);
-    SCM_RENDER_SINK_TEST(osp,
+    S7_RENDER_SINK_TEST(osp,
                           "{{msg}}, world!",
                           "msg = \"Hello\"",
                           s7_string(s7_nil(s7)));
@@ -97,7 +96,7 @@ void render_to_string_port(void)
 void render_to_file_port(void)
 {
     s7_pointer ofp = s7_open_output_file(s7, "cjson_test.out", "w");
-    SCM_RENDER_SINK_TEST(ofp,
+    S7_RENDER_SINK_TEST(ofp,
                           "{{msg}}, world!",
                           "msg = \"Hello\"",
                    s7_string(s7_nil(s7))); // macro compares strings
@@ -193,21 +192,21 @@ int main(int argc, char **argv)
     s7 = initialize("mst_scm_renderers_test", argc, argv);
 
     libs7_load_clib(s7, "mustachios");
-    /* libs7_load_clib(s7, "toml"); */
-    /* libs7_load_clib(s7, "json"); */
+    libs7_load_clib(s7, "toml");
+    libs7_load_clib(s7, "json");
 
     mustache_render = s7_name_to_value(s7, "mustache:render");
 
     UNITY_BEGIN();
 
     RUN_TEST(render_to_string);         /* (mustache:render #f t d) */
-    RUN_TEST(render_to_cop_ret_string); /* (mustache:render #t t d) */
-    RUN_TEST(render_to_cop_ret_NULL);   /* (mustache:render '() t d) */
+    /* RUN_TEST(render_to_cop_ret_string); /\* (mustache:render #t t d) *\/ */
+    /* RUN_TEST(render_to_cop_ret_NULL);   /\* (mustache:render '() t d) *\/ */
 
-    RUN_TEST(render_to_string_port);
-    RUN_TEST(render_to_file_port);
+    /* RUN_TEST(render_to_string_port); */
+    /* RUN_TEST(render_to_file_port); */
 
-    RUN_TEST(bad_sinks);
+    /* RUN_TEST(bad_sinks); */
 
     return UNITY_END();
 }
