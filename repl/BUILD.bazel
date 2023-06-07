@@ -58,8 +58,10 @@ cc_binary(
         "//scm/s7:srcs",
     ] + select({
         "//config/profile:test?": [
-            "//test/libjson/data:json",
-            "//test/libtoml/data:toml",
+            "//test/repl",
+            "//test/data:json",
+            "//test/data:scm",
+            "//test/data:toml",
         ],
         "//conditions:default": []
     }) + select({

@@ -805,7 +805,7 @@ static int sel(void *closure, const char *key)
                     /* log_debug("HIT ONE at %d", i); */
                     break;
                 } else {
-                    /* log_debug("MISS at %d", i); */
+                    log_debug("MISS at %d", i);
                 }
 
             }

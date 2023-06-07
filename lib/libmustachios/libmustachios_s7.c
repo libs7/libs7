@@ -171,8 +171,15 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
     /* log_debug("RENDERING"); */
     /* ******************** render ******************** */
     s7_pointer b;
-    b = s7_apply_function(s7, s7_name_to_value(s7, "json:datum?"),
-                                   s7_list(s7, 1, data));
+    s7_pointer json_is_datum_fn = s7_name_to_value(s7, "json:datum?");
+    if (json_is_datum_fn == s7_undefined(s7)) {
+        log_error("var json:datum? is undefined; did you forget to initialize libjson? Try 'libs7_load_clib(s7, \"json\");'");
+        s7_error(s7, s7_make_symbol(s7, "undefined symbol"),
+                 s7_list(s7, 1, s7_make_string(s7,
+                                               "var json:datum? is undefined; did you forget to initialize libjson? Try 'libs7_load_clib(s7, \"json\");'")));
+    }
+
+    b = s7_apply_function(s7, json_is_datum_fn, s7_list(s7, 1, data));
     /* log_debug("jjjjjjjjjjjjjjjj"); */
     if (b == s7_t(s7)) {
         // call mustache_json_render
@@ -207,9 +214,17 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
         }
 
     } else {
-    /* log_debug("tttttttttttttttt"); */
-        b = s7_apply_function(s7, s7_name_to_value(s7, "toml:map?"),
+        /* log_debug("tttttttttttttttt"); */
+        s7_pointer toml_is_map_fn = s7_name_to_value(s7, "toml:map?");
+        if (toml_is_map_fn == s7_undefined(s7)) {
+            log_error("var toml:map? is undefined; did you forget to initialize libtoml? Try 'libs7_load_clib(s7, \"toml\");'");
+            s7_error(s7, s7_make_symbol(s7, "undefined symbol"),
+                     s7_list(s7, 1, s7_make_string(s7,
+                                                   "var toml:map? is undefined; did you forget to initialize libtoml? Try 'libs7_load_clib(s7, \"toml\");'")));
+        }
+        b = s7_apply_function(s7, toml_is_map_fn,
                               s7_list(s7, 1, data));
+        /* log_debug("????tttttttttttttttt"); */
         if (b == s7_t(s7)) {
             /* log_debug("TOML RENDER"); */
             toml_table_t *root = (toml_table_t*)s7_c_object_value(data);
@@ -243,6 +258,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
                 log_error("Bad SINK?");
             }
         } else {
+            /* log_debug("RENDER SCM"); */
             // must be scheme? alist, hash-table, or '()
             // but it could also be a list, vector, string, int, etc.
 
@@ -250,7 +266,6 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
             /*                       s7_name_to_value(s7, "hash-table?"), */
             /*                       s7_list(s7, 1, data)); */
             /* if (b == s7_t(s7)) { */
-                /* log_debug("RENDER SCM"); */
                 if (sink_flags.to_file_port) {
                     log_debug("SINK: file port");
                     mustache_scm_frender(ostream, template_str, 0, data, flags);

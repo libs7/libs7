@@ -5,6 +5,12 @@ filegroup(
 )
 
 filegroup(
+    name = "scm",
+    data = glob(["*.scm"]),
+    visibility = ["//visibility:public"]
+)
+
+filegroup(
     name = "toml",
     data = glob(["*.toml"]),
     visibility = ["//visibility:public"]

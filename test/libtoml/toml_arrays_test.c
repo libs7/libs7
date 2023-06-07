@@ -441,7 +441,7 @@ void root_array_1(void) {
     TRACE_S7_DUMP("people", a);
 
     // and from hash-table
-    /* k = s7_make_string(s7, "people"); */
+    k = s7_make_keyword(s7, "people");
     a = APPLY_2("hash-table-ref", ht, k);
     TRACE_S7_DUMP("people", a);
     tmp = s7_type_of(s7, a);

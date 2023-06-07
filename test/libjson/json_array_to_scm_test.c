@@ -35,6 +35,8 @@ void tearDown(void) {
     /* log_info("teardown"); */
 }
 
+/* WARNING WARNING: we convert string keys to s7 keywords! */
+
 void int_array_to_vec(void)
 {
     jm = JSON_READ("{\"a\": [1, 2, 3]}");
@@ -45,7 +47,7 @@ void int_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp_str = "(hash-table \"a\" #(1 2 3))";
+    sexp_str = "(hash-table :a #(1 2 3))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -61,7 +63,7 @@ void int_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", actual, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -94,7 +96,7 @@ void real_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp_str = "(hash-table \"a\" #(1.2 3.4 5.6))";
+    sexp_str = "(hash-table :a #(1.2 3.4 5.6))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -110,7 +112,7 @@ void real_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", actual, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -146,7 +148,7 @@ void bool_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp_str = "(hash-table \"a\" #(#t #f #t))";
+    sexp_str = "(hash-table :a #(#t #f #t))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -162,7 +164,7 @@ void bool_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", actual, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -206,7 +208,7 @@ void null_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp_str = "(hash-table \"a\" #(() () ()))";
+    sexp_str = "(hash-table :a #(() () ()))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -222,7 +224,7 @@ void null_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", actual, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -259,7 +261,7 @@ void string_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp_str = "(hash-table \"a\" #(\"msga\", \"msgb\", \"msgc\"))";
+    sexp_str = "(hash-table :a #(\"msga\", \"msgb\", \"msgc\"))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -275,7 +277,7 @@ void string_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", actual, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -312,7 +314,7 @@ void mixed_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
     /* TRACE_S7_DUMP("actual", actual); */
 
-    sexp_str = "(hash-table \"a\" #(1 2.3 #t () \"msga\"))";
+    sexp_str = "(hash-table :a #(1 2.3 #t () \"msga\"))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
@@ -328,7 +330,7 @@ void mixed_array_to_vec(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", actual, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -375,7 +377,7 @@ void nested_int_arrays(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp_str = "(hash-table \"a\" #( #(1 2) #(3 4) ))";
+    sexp_str = "(hash-table :a #( #(1 2) #(3 4) ))";
     expected = EVAL(sexp_str);
     TRACE_S7_DUMP("expected", expected);
     flag = APPLY_1("hash-table?", expected);
@@ -392,7 +394,7 @@ void nested_int_arrays(void)
     TEST_ASSERT_EQUAL(s7_t(s7), flag);
 
     // verify value at "a" of hash-table is a vector
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subvec = APPLY_2("hash-table-ref", ht, k);
     actual = APPLY_1("vector?", subvec);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
@@ -422,7 +424,7 @@ void nested_table_arrays(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_EQUAL(s7_f(s7), flag);
 
-    sexp_str = "(hash-table \"a\" (vector (hash-table \"t1\" 1) (hash-table \"t2\" 2)))";
+    sexp_str = "(hash-table :a (vector (hash-table :t1 1) (hash-table :t2 2)))";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_EQUAL(s7_t(s7), flag);

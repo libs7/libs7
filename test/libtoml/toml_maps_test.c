@@ -117,6 +117,7 @@ void table_refs(void) {
     res1 = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("string?", res1);
     TEST_ASSERT_TRUE(s7_boolean(s7, res1));
+
     // obj application
     res2 = APPLY_OBJ(t, k);
     flag = APPLY_1("string?", res2);
@@ -135,6 +136,7 @@ void table_refs(void) {
     res1 = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("string?", res1);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
+
     // obj application
     res2 = APPLY_OBJ(t, k);
     flag = APPLY_1("string?", res2);
@@ -153,6 +155,7 @@ void table_refs(void) {
     res1 = APPLY_2("toml:map-ref", t, k);
     flag = APPLY_1("string?", res1);
     TEST_ASSERT_TRUE(s7_boolean(s7, res1));
+
     // obj application
     res2 = APPLY_OBJ(t, k);
     flag = APPLY_1("string?", res2);

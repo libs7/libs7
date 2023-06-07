@@ -827,6 +827,7 @@ void json_object_init(s7_scheme *s7, s7_pointer cur_env)
  * Helper functions
  */
 
+/* WARNING WARNING: we convert keys to s7 keywords */
 s7_pointer json_map_to_hash_table(s7_scheme *s7, cJSON *jm, bool clone)
 {
     TRACE_ENTRY(json_map_to_hash_table);
@@ -850,30 +851,30 @@ s7_pointer json_map_to_hash_table(s7_scheme *s7, cJSON *jm, bool clone)
                 n = (int)nbr;
                 /* log_debug("\tint: %s: %d", key, n); */
                 s7_hash_table_set(s7, the_ht,
-                                  s7_make_string(s7, key),
+                                  s7_make_keyword(s7, key),
                                   s7_make_integer(s7, n));
             } else {
                 /* log_debug("\treal: %s: %f", key, nbr); */
                 s7_hash_table_set(s7, the_ht,
-                                  s7_make_string(s7, key),
+                                  s7_make_keyword(s7, key),
                                   s7_make_real(s7, nbr));
             }
         }
         else if (cJSON_IsString(item)) {
             val = cJSON_GetStringValue(item);
             s7_hash_table_set(s7, the_ht,
-                              s7_make_string(s7, key),
+                              s7_make_keyword(s7, key),
                               s7_make_string(s7, val));
         }
         else if (cJSON_IsBool(item)) {
             if (cJSON_IsTrue(item)) {
                 s7_hash_table_set(s7, the_ht,
-                                  s7_make_string(s7, key),
+                                  s7_make_keyword(s7, key),
                                   s7_t(s7));
             }
             else if (cJSON_IsFalse(item)) {
                 s7_hash_table_set(s7, the_ht,
-                                  s7_make_string(s7, key),
+                                  s7_make_keyword(s7, key),
                                   s7_f(s7));
             } else {
                 log_error("Bad boolean");
@@ -886,18 +887,18 @@ s7_pointer json_map_to_hash_table(s7_scheme *s7, cJSON *jm, bool clone)
             // way to express "absence of value" (i.e. null value)
             // (as opposed to null? which is a predicate)
             s7_hash_table_set(s7, the_ht,
-                              s7_make_string(s7, key),
+                              s7_make_keyword(s7, key),
                               s7_nil(s7));
         }
         else if (cJSON_IsArray(item)) {
             /* log_debug("NESTED ARRAY"); */
             s7_pointer subarray =  json_array_to_vector(s7, item, clone);
-            s7_hash_table_set(s7, the_ht, s7_make_string(s7, key), subarray);
+            s7_hash_table_set(s7, the_ht, s7_make_keyword(s7, key), subarray);
         }
         else if (cJSON_IsObject(item)) {
             /* log_debug("NESTED OBJ"); */
             s7_pointer submap =  json_map_to_hash_table(s7, item, clone);
-            s7_hash_table_set(s7, the_ht, s7_make_string(s7, key), submap);
+            s7_hash_table_set(s7, the_ht, s7_make_keyword(s7, key), submap);
         }
         else if (cJSON_IsRaw(item)) {
         }

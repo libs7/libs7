@@ -398,6 +398,7 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
  * Helper functions
  */
 
+/* WARNING WARNING: we convert keys to s7 keywords */
 s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
 {
     TRACE_ENTRY(toml_table_to_hash_table);
@@ -434,14 +435,14 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                                                         (toml_array_t*)seq,
                                                         clone);
                     s7_hash_table_set(s7, the_ht,
-                                      s7_make_string(s7, k),
+                                      s7_make_keyword(s7, k),
                                       lst);
                 } else {
                     s7_pointer ta = s7_make_c_object(s7,
                                                      toml_array_type_tag,
                                                      (void*)seq);
                     s7_hash_table_set(s7, the_ht,
-                                      s7_make_string(s7, k),
+                                      s7_make_keyword(s7, k),
                                       ta);
                 }
                 break;
@@ -453,14 +454,14 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                                                         (toml_table_t*)seq,
                                                         clone);
                     s7_hash_table_set(s7, the_ht,
-                                      s7_make_string(s7, k),
+                                      s7_make_keyword(s7, k),
                                       ht);
                 } else {
                     s7_pointer tt = s7_make_c_object(s7,
                                                      toml_table_type_tag,
                                                      (void*)seq);
                     s7_hash_table_set(s7, the_ht,
-                                      s7_make_string(s7, k),
+                                      s7_make_keyword(s7, k),
                                       tt);
                 }
                 break;
@@ -475,14 +476,14 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                                   the_ht,
                                   /* s7_make_keyword(s7, k), */
                                   /* s7_make_symbol(s7, k), */
-                                  s7_make_string(s7, k),
+                                  s7_make_keyword(s7, k),
                                   s7_make_integer(s7, datum.u.i));
                 break;
             case TOML_STRING:
                 TRACE_LOG_DEBUG("toml datum val: %s", datum.u.s);
                 s7_hash_table_set(s7,
                                   the_ht,
-                                  s7_make_string(s7, k),
+                                  s7_make_keyword(s7, k),
                                   s7_make_string(s7, datum.u.s));
                 free(datum.u.s);
                 break;
@@ -510,7 +511,7 @@ s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *tt, bool clone)
                     }
                     s7_hash_table_set(s7,
                                       the_ht,
-                                      s7_make_string(s7, k), ts);
+                                      s7_make_keyword(s7, k), ts);
                 }
                 break;
             case TOML_NONDATUM:

@@ -614,7 +614,7 @@ s7_pointer json_array_to_vector(s7_scheme *s7, cJSON *ja, bool clone)
             s7_vector_set(s7, the_vector, i, s7_nil(s7));
         }
         else if (cJSON_IsArray(item)) {
-            log_debug("NESTED ARRAY");
+            /* log_debug("NESTED ARRAY"); */
             s7_pointer subarray =  json_array_to_vector(s7, item, clone);
             s7_vector_set(s7, the_vector, i, subarray);
         }

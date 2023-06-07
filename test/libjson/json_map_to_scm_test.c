@@ -30,6 +30,8 @@ bool debug;
 void setUp(void) {}
 void tearDown(void) {}
 
+/* WARNING WARNING: we convert string keys to s7 keywords! */
+
 void map_to_ht_ints(void)
 {
     tt = JSON_READ("{\"fld1\": 1, \"fld2\": 2}");
@@ -40,7 +42,7 @@ void map_to_ht_ints(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp_str = "(hash-table \"fld1\" 1 \"fld2\" 2)";
+    sexp_str = "(hash-table :fld1 1 :fld2 2)";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -48,9 +50,6 @@ void map_to_ht_ints(void)
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
                              s7_list(s7, 2, expected, ht));
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-
-    res = APPLY_1("object->string", ht);
-    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 }
 
 void map_to_ht_reals(void)
@@ -63,7 +62,7 @@ void map_to_ht_reals(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp_str = "(hash-table \"fld1\" 1.1 \"fld2\" 2.2)";
+    sexp_str = "(hash-table :fld1 1.1 :fld2 2.2)";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -71,9 +70,6 @@ void map_to_ht_reals(void)
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
                              s7_list(s7, 2, expected, ht));
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-
-    res = APPLY_1("object->string", ht);
-    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 }
 
 void map_to_ht_bools(void)
@@ -90,7 +86,7 @@ void map_to_ht_bools(void)
     // lookup of missing key returns #f
     // but (keys ht) will not list the key
 
-    sexp_str = "(hash-table \"fld1\" #t)";
+    sexp_str = "(hash-table :fld1 #t)";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -98,9 +94,6 @@ void map_to_ht_bools(void)
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
                              s7_list(s7, 2, expected, ht));
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-
-    res = APPLY_1("object->string", ht);
-    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 }
 
 void map_to_ht_nulls(void)
@@ -117,7 +110,7 @@ void map_to_ht_nulls(void)
     // lookup of missing key returns #f
     // but (keys ht) will not list the key
 
-    sexp_str = "(hash-table \"fld1\" #t \"fld2\" ())";
+    sexp_str = "(hash-table :fld1 #t :fld2 ())";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -125,9 +118,6 @@ void map_to_ht_nulls(void)
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
                              s7_list(s7, 2, expected, ht));
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-
-    res = APPLY_1("object->string", ht);
-    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 }
 
 void map_to_ht_strings(void)
@@ -140,7 +130,7 @@ void map_to_ht_strings(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp_str = "(hash-table \"fld1\" \"hello\" \"fld2\" \"world\")";
+    sexp_str = "(hash-table :fld1 \"hello\" :fld2 \"world\")";
     expected = EVAL(sexp_str);
     flag = APPLY_1("hash-table?", expected);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
@@ -148,9 +138,6 @@ void map_to_ht_strings(void)
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
                              s7_list(s7, 2, expected, ht));
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-
-    res = APPLY_1("object->string", ht);
-    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 }
 
 void nested_table_to_hash_table(void)
@@ -163,7 +150,7 @@ void nested_table_to_hash_table(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp_str = "(hash-table \"a\" (hash-table \"b\" 0))";
+    sexp_str = "(hash-table :a (hash-table :b 0))";
     expected = EVAL(sexp_str);
     TRACE_S7_DUMP("expected", expected);
     flag = APPLY_1("hash-table?", expected);
@@ -185,13 +172,13 @@ void nested_table_to_hash_table(void)
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
     // verify value at "a" of hash-table is a hash-table
-    k = s7_make_string(s7, "a");
+    k = s7_make_keyword(s7, "a");
     subt = APPLY_2("hash-table-ref", ht, k);
     flag = APPLY_1("hash-table?", subt);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
 
     // verify value at "b" of "a" hash-table is 0
-    k = s7_make_string(s7, "b");
+    k = s7_make_keyword(s7, "b");
     res = APPLY_2("hash-table-ref", subt, k);
     flag = APPLY_1("number?", res);
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));

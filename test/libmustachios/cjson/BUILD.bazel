@@ -48,6 +48,7 @@ test_suite(
     name  = "cjson",
     tests = [
         ":comments",
+        ":conversion",
         ":renderers",
         ":interpolation",
     ]
@@ -59,6 +60,27 @@ cc_test(
     linkstatic = True,
     srcs = SRCS + [
         "mst_cjson_comments_test.c",
+        "//test/libmustachios:utils.c",
+        "//test/libmustachios:utils.h"
+    ],
+    copts = COPTS,
+    local_defines = DEFINES,
+    deps = DEPS,
+    data = select({
+        "//config/clibs/link:runtime?": [
+            "//lib/libmustachios:mustachios_s7"
+        ],
+        "//conditions:default": []
+    }),
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT
+)
+
+cc_test(
+    name = "conversion",
+    linkstatic = True,
+    srcs = SRCS + [
+        "mst_cjson_conversion_test.c",
         "//test/libmustachios:utils.c",
         "//test/libmustachios:utils.h"
     ],

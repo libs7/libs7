@@ -39,9 +39,9 @@ void no_interpolation(void) {
 void basic_interpolation(void) {
     /* Unadorned tags should interpolate content into the template. */
     S7_RENDER_TEST(s7_f(s7),
-	"Hello, {{subject}}!",
-                     "{\"subject\": \"world\"}",
-                     "Hello, world!");
+                   "Hello, {{subject}}!",
+                   "{\"subject\": \"world\"}",
+                   "Hello, world!");
 
     // HTML escaping
     /* Basic interpolation should be HTML escaped. */

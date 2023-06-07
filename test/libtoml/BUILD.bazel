@@ -33,19 +33,6 @@ test_suite(
 )
 
 ################################################################
-LIBC_COPTS = [
-    "-I$(GENDIR)/lib/libc",
-    "-I$(GENDIR)/external/libs7/lib/libc",
-    "-I$(GENDIR)/lib/libdl",
-    "-I$(GENDIR)/external/libs7/lib/libdl",
-    "-I$(GENDIR)/lib/libgdbm",
-    "-I$(GENDIR)/external/libs7/lib/libgdbm",
-    "-I$(GENDIR)/lib/libm",
-    "-I$(GENDIR)/external/libs7/lib/libm",
-]
-
-################################################################
-################################################################
 cc_test(
     name = "arrays",
     linkstatic = True,

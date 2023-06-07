@@ -15,19 +15,8 @@ COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
-# load("//:BUILD.bzl",
-#      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-#      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-# load("//lib:BUILD.bzl", "CLIB_COPTS", "CLIB_LINKOPTS", "TIMEOUT")
-
-# SRCS          = BASE_SRCS
-# INCLUDE_PATHS = BASE_INCLUDE_PATHS
-# COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
-# DEPS          = BASE_DEPS
-# DEFINES       = BASE_DEFINES
-# LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
-
+################################################################
 test_suite(
     name  = "libjson",
     tests = [

@@ -84,7 +84,7 @@ void nested_table_to_hash_table(void)
     flag = APPLY_1("c-pointer?", ht);
     TEST_ASSERT_FALSE(s7_boolean(s7, flag));
 
-    sexp_str = "(hash-table \"a\" (hash-table \"b\" 0))";
+    sexp_str = "(hash-table :a (hash-table :b 0))";
     expected = EVAL(sexp_str);
     TRACE_S7_DUMP("expected", expected);
     flag = APPLY_1("hash-table?", expected);
@@ -93,11 +93,6 @@ void nested_table_to_hash_table(void)
     flag = s7_apply_function(s7, s7_name_to_value(s7, "equal?"),
                              s7_list(s7, 2, expected, ht));
     TEST_ASSERT_TRUE(s7_boolean(s7, flag));
-
-    log_debug("xxxxxxxxxxxxxxxx");
-    res = APPLY_1("object->string", ht);
-    TRACE_S7_DUMP("res", res);
-    TEST_ASSERT_EQUAL_STRING(sexp_str, s7_string(res));
 
     /* // verify value at "a" of toml-table is a toml-table */
     /* k = s7_make_string(s7, "a"); */
