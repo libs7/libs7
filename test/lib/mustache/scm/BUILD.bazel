@@ -34,7 +34,8 @@ test_suite(
     tests = [
         ":comments",
         ":interpolation",
-        ":renderers"
+        ":renderers",
+        ":sections"
     ]
 )
 
@@ -183,16 +184,16 @@ cc_test(
     timeout    = TIMEOUT,
 )
 
-# cc_test(
-#     name       = "sections",
-#     linkstatic = True,
-#     srcs       = ["sections_test.c"] + SRCS,
-#     defines    = DEFINES + DEFINES_TEST,
-#     deps       = DEPS + DEPS_TEST + DEPS_S7,
-#     copts      = COPTS + COPTS_TEST + COPTS_S7,
-#     linkopts   = LINKOPTS,
-#     timeout    = TIMEOUT,
-# )
+cc_test(
+    name       = "sections",
+    linkstatic = True,
+    srcs       = SRCS + ["mst_scm_sections_test.c"],
+    defines    = DEFINES,
+    deps       = DEPS,
+    copts      = COPTS,
+    linkopts   = LINKOPTS,
+    timeout    = TIMEOUT,
+)
 
 # cc_test(
 #     name       = "sequences",
