@@ -251,13 +251,13 @@ int mustach_json_mem(const char *template, size_t length,
                      const struct mustach_ds_methods_s *methods,
                      void *closure, int flags, char **result, size_t *size);
 
-int mustach_json_write(const char *template, size_t length,
-                       const struct mustach_ds_methods_s *methods,
-                       void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
+/* int mustach_json_write(const char *template, size_t length, */
+/*                        const struct mustach_ds_methods_s *methods, */
+/*                        void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure); */
 
-int mustach_json_emit(const char *template, size_t length,
-                      const struct mustach_ds_methods_s *methods,
-                      void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
+/* int mustach_json_emit(const char *template, size_t length, */
+/*                       const struct mustach_ds_methods_s *methods, */
+/*                       void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure); */
 
 #endif
 

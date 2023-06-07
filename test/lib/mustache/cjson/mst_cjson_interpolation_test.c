@@ -2,10 +2,9 @@
 #include "config.h"
 #include "utils.h"
 #include "macros.h"
+#include "common.h"
 
 #include "libs7.h"
-
-#include "common.h"
 
 s7_scheme *s7;
 s7_pointer json_read;
@@ -33,32 +32,34 @@ void tearDown(void) {
 
 void no_interpolation(void) {
     /* Mustache-free templates should render as-is. */
-    S7_RENDER_TEST("Hello from {Mustache}!", "{}", "Hello from {Mustache}!");
+    S7_RENDER_TEST(s7_f(s7),
+	"Hello from {Mustache}!", "{}", "Hello from {Mustache}!");
 }
 
 void basic_interpolation(void) {
     /* Unadorned tags should interpolate content into the template. */
-    S7_RENDER_TEST("Hello, {{subject}}!",
+    S7_RENDER_TEST(s7_f(s7),
+	"Hello, {{subject}}!",
                      "{\"subject\": \"world\"}",
                      "Hello, world!");
 
     // HTML escaping
     /* Basic interpolation should be HTML escaped. */
-    S7_RENDER_TEST(
+    S7_RENDER_TEST(s7_f(s7),
           "These characters should be HTML escaped: {{forbidden}}",
           "{\"forbidden\": \"& \\\" < >\"}",
           "These characters should be HTML escaped: &amp; &quot; &lt; &gt;");
 
     // Triple mustaches
     /* Triple mustaches should interpolate without HTML escaping. */
-    S7_RENDER_TEST(
+    S7_RENDER_TEST(s7_f(s7),
         "These characters should not be HTML escaped: {{{forbidden}}}",
         "{\"forbidden\":  \"& \\\" < >\"}",
         "These characters should not be HTML escaped: & \" < >");
 
     // Ampersand
     /* Ampersand should interpolate without HTML escaping. */
-    S7_RENDER_TEST(
+    S7_RENDER_TEST(s7_f(s7),
         "These characters should not be HTML escaped: {{&forbidden}}",
         "{\"forbidden\": \"& \\\" < >\"}",
         "These characters should not be HTML escaped: & \" < >");
@@ -67,17 +68,19 @@ void basic_interpolation(void) {
 void integer_interpolation(void) {
     /* Integers should interpolate seamlessly. */
     // basic
-    S7_RENDER_TEST(
-                     "{{mph}} miles an hour!",
-                     "{\"mph\": 85}",
-                     "85 miles an hour!");
+    S7_RENDER_TEST(s7_f(s7),
+                   "{{mph}} miles an hour!",
+                   "{\"mph\": 85}",
+                   "85 miles an hour!");
     // triple mustache
-    S7_RENDER_TEST("{{{mph}}} miles an hour!",
-                     "{\"mph\": 85}",
-                      "85 miles an hour!");
+    S7_RENDER_TEST(s7_f(s7),
+                   "{{{mph}}} miles an hour!",
+                   "{\"mph\": 85}",
+                   "85 miles an hour!");
 
     // ampersand
-    S7_RENDER_TEST("{{&mph}} miles an hour!",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{&mph}} miles an hour!",
                      "{\"mph\": 85}", "85 miles an hour!");
 }
 
@@ -86,51 +89,60 @@ void decimal_interpolation(void) {
 
     /* Decimals should interpolate seamlessly with proper significance. */
     // basic
-    S7_RENDER_TEST("{{power}} jiggawatts!",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{power}} jiggawatts!",
                      "{\"power\": 1.210}",
                      "1.21 jiggawatts!");
 
     // triple mustache
-    S7_RENDER_TEST("{{{power}}} jiggawatts!",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{{power}}} jiggawatts!",
                       "{\"power\": 1.210}",
                      "1.21 jiggawatts!");
 
     // ampersand
-    S7_RENDER_TEST("{{&power}} jiggawatts!",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{&power}} jiggawatts!",
                       "{\"power\": 1.210}",
                      "1.21 jiggawatts!");
 }
 
 void null_interpolation(void) {
     /* Nulls should interpolate as the empty string. */
-    S7_RENDER_TEST("I ({{cannot}}) be seen!",
+    S7_RENDER_TEST(s7_f(s7),
+	"I ({{cannot}}) be seen!",
                      "{\"cannot\": null}",
                      "I () be seen!");
 
     // triple mustache
-    S7_RENDER_TEST("I ({{{cannot}}}) be seen!",
+    S7_RENDER_TEST(s7_f(s7),
+	"I ({{{cannot}}}) be seen!",
                       "{\"cannot\": null}",
                       "I () be seen!");
 
     // ampersand
-    S7_RENDER_TEST("I ({{&cannot}}) be seen!",
+    S7_RENDER_TEST(s7_f(s7),
+	"I ({{&cannot}}) be seen!",
                       "{\"cannot\": null}",
                       "I () be seen!");
 }
 
 void context_miss_interpolation(void) {
     /* Failed context lookups should default to empty strings. */
-    S7_RENDER_TEST("I ({{cannot}}) be seen!",
+    S7_RENDER_TEST(s7_f(s7),
+	"I ({{cannot}}) be seen!",
                      "{}",
                      "I () be seen!");
 
     // triple mustache
-    S7_RENDER_TEST("I ({{{cannot}}}) be seen!",
+    S7_RENDER_TEST(s7_f(s7),
+	"I ({{{cannot}}}) be seen!",
                       "{}",
                       "I () be seen!");
 
     // ampersand
-    S7_RENDER_TEST("I ({{&cannot}}) be seen!",
+    S7_RENDER_TEST(s7_f(s7),
+	"I ({{&cannot}}) be seen!",
                       "{}",
                       "I () be seen!");
 }
@@ -138,62 +150,73 @@ void context_miss_interpolation(void) {
 void dotted_name_basic_interpolation(void) {
     /* The equals sign (used on both sides) should permit delimiter changes. */
     // basic
-    S7_RENDER_TEST("{{#person}}{{name}}{{/person}}",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{#person}}{{name}}{{/person}}",
                       "{\"person\": {\"name\": \"Joe\"}}",
                       "Joe");
 
-    S7_RENDER_TEST("{{person.name}}",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{person.name}}",
                       "{\"person\": {\"name\": \"Joe\"}}",
                      "Joe");
 
-    S7_RENDER_TEST("{{person.name}} == {{#person}}{{name}}{{/person}}",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{person.name}} == {{#person}}{{name}}{{/person}}",
                       "{\"person\": {\"name\": \"Joe\"}}",
                      "Joe == Joe");
 
     // triple mustach
-    S7_RENDER_TEST("{{{person.name}}} == {{#person}}{{name}}{{/person}}",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{{person.name}}} == {{#person}}{{name}}{{/person}}",
                       "{\"person\": {\"name\": \"Joe\"}}",
                      "Joe == Joe");
 
     // ampersand
-    S7_RENDER_TEST("{{&person.name}} == {{#person}}{{name}}{{/person}}",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{&person.name}} == {{#person}}{{name}}{{/person}}",
                       "{\"person\": {\"name\": \"Joe\"}}",
                      "Joe == Joe");
 }
 
 void long_dotted_name_interpolation(void) {
     /* Dotted names should be functional to any level of nesting. */
-    S7_RENDER_TEST("{{a.b.c.d.e.name}} == Phil",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{a.b.c.d.e.name}} == Phil",
                       "{\"a\": {\"b\": {\"c\": {\"d\": {\"e\": {\"name\": \"Phil\"}}}}}}",
                       "Phil == Phil");
 
     // broken chains
     /* Any falsey value prior to the last part of the name should yield ''. */
-    S7_RENDER_TEST("{{a.b.c}}\" == \"",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{a.b.c}}\" == \"",
                       "{\"a\": {}}",
                       "\" == \"");
 
     // w/o quotes
-    S7_RENDER_TEST("{{a.b.c}} == ",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{a.b.c}} == ",
                       "{\"a\": {}}",
                       " == ");
 
     // Broken Chain Resolution
     /* Each part of a dotted name should resolve only against its parent. */
-    S7_RENDER_TEST("{{a.b.c.name}}\" == \"",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{a.b.c.name}}\" == \"",
                       "{\"a\": {\"b\": {}},\n\"c\": {\"name\": \"Jim\"}}",
                       "\" == \"");
 
     // Initial resolution
     /* The first part of a dotted name should resolve as any other name. */
-    S7_RENDER_TEST("{{#a}}{{b.c.d.e.name}}{{/a}} == Phil",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{#a}}{{b.c.d.e.name}}{{/a}} == Phil",
                       "{\"a\": {\"b\": {\"c\": {\"d\": {\"e\": {\"name\": \"Phil\"}}}}},"
                       " \"b\": {\"c\": {\"d\": {\"e\": {\"name\": \"Wrong\"}}}}}",
                      "Phil == Phil");
 
     // Context precedence
     /* Dotted names should be resolved against former resolutions. */
-    S7_RENDER_TEST("{{#a}}{{b.c}}{{/a}}",
+    S7_RENDER_TEST(s7_f(s7),
+	"{{#a}}{{b.c}}{{/a}}",
                      "{\"a\": {\"b\": {}},"
                      " \"b\": {\"c\": \"ERROR\"}}",
                      "");
@@ -202,28 +225,33 @@ void long_dotted_name_interpolation(void) {
 void implicit_iterators(void) {
     // Basic Interpolation
     /* Unadorned tags should interpolate content into the template. */
-    S7_RENDER_TEST("Hello, {{.}}!",
+    S7_RENDER_TEST(s7_f(s7),
+	"Hello, {{.}}!",
                    "\"world\"",
                    "Hello, world!");
 
     /* // HTML escaping */
-    /* S7_RENDER_TEST("These characters should be HTML escaped: {{.}}\n", */
+    /* S7_RENDER_TEST(s7_f(s7),
+	"These characters should be HTML escaped: {{.}}\n", */
     /*                   "\"& \\\" < >\"", */
     /*                   "These characters should be HTML escaped: &amp; &quot; &lt; &gt;\n"); */
 
     /* // Triple mustache */
-    /* S7_RENDER_TEST("These characters should not be HTML escaped: {{{.}}}\n", */
+    /* S7_RENDER_TEST(s7_f(s7),
+	"These characters should not be HTML escaped: {{{.}}}\n", */
     /*                   "\"& \\\" < >\"", */
     /*                   "These characters should not be HTML escaped: & \" < >\n"); */
 
     /* // Ampersand */
-    /* S7_RENDER_TEST("These characters should not be HTML escaped: {{&.}}\n", */
+    /* S7_RENDER_TEST(s7_f(s7),
+	"These characters should not be HTML escaped: {{&.}}\n", */
     /*                   "\"& \\\" < >\"", */
     /*                   "These characters should not be HTML escaped: & \" < >\n"); */
 
     /* // Basic Integer Interpolation */
     /* // Integers should interpolate seamlessly.", */
-    /* S7_RENDER_TEST("\"{{.}} miles an hour!\"", */
+    /* S7_RENDER_TEST(s7_f(s7),
+	"\"{{.}} miles an hour!\"", */
     /*                   "85", */
     /*                   "\"85 miles an hour!\""); */
 }
@@ -231,31 +259,37 @@ void implicit_iterators(void) {
 void whitespace_sensitivity(void) {
     // Surrounding whitespace
     /* Interpolation should not alter surrounding whitespace. */
-    S7_RENDER_TEST("| {{string}} |",
+    S7_RENDER_TEST(s7_f(s7),
+	"| {{string}} |",
                       "{\"string\": \"---\"}",
                       "| --- |");
 
     // Triple mustache
-    S7_RENDER_TEST("| {{{string}}} |",
+    S7_RENDER_TEST(s7_f(s7),
+	"| {{{string}}} |",
                       "{\"string\": \"---\"}",
                       "| --- |");
 
     // Ampersand
-    S7_RENDER_TEST("| {{&string}} |",
+    S7_RENDER_TEST(s7_f(s7),
+	"| {{&string}} |",
                       "{\"string\": \"---\"}",
                       "| --- |");
 
     // Standalone
     /* Standalone interpolation should not alter surrounding whitespace. */
-    S7_RENDER_TEST("  {{string}}\n",
+    S7_RENDER_TEST(s7_f(s7),
+	"  {{string}}\n",
                       "{\"string\": \"---\"}",
                       "  ---\n");
     // Triple mustache
-    S7_RENDER_TEST("  {{{string}}}\n",
+    S7_RENDER_TEST(s7_f(s7),
+	"  {{{string}}}\n",
                       "{\"string\": \"---\"}",
                       "  ---\n");
     // Ampersand
-    S7_RENDER_TEST("  {{&string}}\n",
+    S7_RENDER_TEST(s7_f(s7),
+	"  {{&string}}\n",
                       "{\"string\": \"---\"}",
                       "  ---\n");
 }
@@ -263,30 +297,36 @@ void whitespace_sensitivity(void) {
 void whitespace_insensitivity(void) {
     // Interpolation With Padding
     /* Superfluous in-tag whitespace should be ignored. */
-    S7_RENDER_TEST("|{{ string }}|",
+    S7_RENDER_TEST(s7_f(s7),
+	"|{{ string }}|",
                       "{\"string\": \"---\"}",
                       "|---|");
 
     // Triple mustache
-    S7_RENDER_TEST("|{{{ string }}}|",
+    S7_RENDER_TEST(s7_f(s7),
+	"|{{{ string }}}|",
                       "{\"string\": \"---\"}",
                      "|---|");
     // Ampersand
-    S7_RENDER_TEST("|{{& string }}|",
+    S7_RENDER_TEST(s7_f(s7),
+	"|{{& string }}|",
                       "{\"string\": \"---\"}",
                       "|---|");
 
     // Standalone
     /* Standalone interpolation should not alter surrounding whitespace. */
-    S7_RENDER_TEST("  {{string}}\n",
+    S7_RENDER_TEST(s7_f(s7),
+	"  {{string}}\n",
                       "{\"string\": \"---\"}",
                       "  ---\n");
     // Triple mustache
-    S7_RENDER_TEST("  {{{string}}}\n",
+    S7_RENDER_TEST(s7_f(s7),
+	"  {{{string}}}\n",
                       "{\"string\": \"---\"}",
                       "  ---\n");
     // Ampersand
-    S7_RENDER_TEST("  {{&string}}\n",
+    S7_RENDER_TEST(s7_f(s7),
+	"  {{&string}}\n",
                       "{\"string\": \"---\"}",
                       "  ---\n");
 }

@@ -168,6 +168,7 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
 
     //FIXME: user-passed flags should REPLACE the default
 
+    /* log_debug("RENDERING"); */
     /* ******************** render ******************** */
     s7_pointer b;
     b = s7_apply_function(s7, s7_name_to_value(s7, "json:datum?"),
@@ -208,7 +209,37 @@ s7_pointer g_mustachios_render(s7_scheme *s7, s7_pointer args)
         b = s7_apply_function(s7, s7_name_to_value(s7, "toml:map?"),
                               s7_list(s7, 1, data));
         if (b == s7_t(s7)) {
-            // call mustache_toml_render
+            /* log_debug("TOML RENDER"); */
+            toml_table_t *root = (toml_table_t*)s7_c_object_value(data);
+            if (sink_flags.to_file_port) {
+                /* log_debug("SINK: file port"); */
+                mustache_toml_frender(ostream, template_str, 0, root, flags);
+            }
+            else if (sink_flags.to_string) {
+                const char * s = mustache_toml_render(template_str, 0, root, flags);
+                s7_pointer str7 = s7_make_string(s7, s);
+                if (sink_flags.to_current_output_port) {
+                    /* log_debug("SINK: #t"); */
+                    s7_display(s7, str7, s7_current_output_port(s7));
+                } else {
+                    /* log_debug("SINK: #f"); */
+                }
+                return str7;
+            }
+            else if (sink_flags.to_current_output_port) {
+                /* log_debug("SINK: '()"); */
+                const char * s = mustache_toml_render(template_str, 0, root, flags);
+                s7_display(s7, s7_make_string(s7, s),
+                           s7_current_output_port(s7));
+            }
+            else if (sink_flags.to_string_port) {
+                /* log_debug("SINK: string port"); */
+                const char * s = mustache_toml_render(template_str, 0, root, flags);
+                s7_display(s7, s7_make_string(s7, s), sink);
+            }
+            else {
+                log_error("Bad SINK?");
+            }
         } else {
             b = s7_apply_function(s7, s7_name_to_value(s7, "map?"),
                                   s7_list(s7, 1, data));

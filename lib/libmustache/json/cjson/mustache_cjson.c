@@ -544,20 +544,21 @@ int mustache_json_fdrender(int fd,
 /*     e.root = (cJSON*)json_root; */
 /*     return mustach_json_file(template, tlength, &cjson_methods, &e, flags, file); */
 /* } */
-int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file)
-{
-	struct tstack_s e;
-	e.root = root;
-	return mustach_json_file(template, length, &cjson_methods, &e, flags, file);
-}
 
-int mustach_cJSON_fd(const char *template, size_t tlength,
-                     cJSON *root, int flags, int fd)
-{
-	struct tstack_s e;
-	e.root = root;
-	return mustach_json_fd(template, tlength, &cjson_methods, &e, flags, fd);
-}
+/* int mustach_cJSON_file(const char *template, size_t length, cJSON *root, int flags, FILE *file) */
+/* { */
+/* 	struct tstack_s e; */
+/* 	e.root = root; */
+/* 	return mustach_json_file(template, length, &cjson_methods, &e, flags, file); */
+/* } */
+
+/* int mustach_cJSON_fd(const char *template, size_t tlength, */
+/*                      cJSON *root, int flags, int fd) */
+/* { */
+/* 	struct tstack_s e; */
+/* 	e.root = root; */
+/* 	return mustach_json_fd(template, tlength, &cjson_methods, &e, flags, fd); */
+/* } */
 
 /* size_t mustach_asprintf(char **ret, */
 /*                     const char *template, size_t tlength, */
@@ -583,12 +584,12 @@ int mustach_cJSON_fd(const char *template, size_t tlength,
 /*     } */
 /* } */
 
-int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flags, char **result, size_t *size)
-{
-	struct tstack_s e;
-	e.root = root;
-	return mustach_json_mem(template, length, &cjson_methods, &e, flags, result, size);
-}
+/* int mustach_cJSON_mem(const char *template, size_t length, cJSON *root, int flags, char **result, size_t *size) */
+/* { */
+/* 	struct tstack_s e; */
+/* 	e.root = root; */
+/* 	return mustach_json_mem(template, length, &cjson_methods, &e, flags, result, size); */
+/* } */
 
 /* int mustach_cJSON_write(const char *template, size_t length, cJSON *root, int flags, mustach_write_cb_t *writecb, void *closure) */
 /* { */

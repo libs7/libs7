@@ -20,7 +20,7 @@ SRCS          = BASE_SRCS + TEST_SRCS + [
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS + [
     "-Itest",
     "-Itest/lib/mustache",
-    "-Itest/lib/mustache/cjson",
+    "-Itest/lib/mustache/toml",
     "-Ilib/libmustache",
     "-Iexternal/libs7/lib/libmustache",
 ]
@@ -45,7 +45,7 @@ LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
 
 ################################################################
 test_suite(
-    name  = "cjson",
+    name  = "toml",
     tests = [
         ":comments",
         ":renderers",
@@ -58,7 +58,7 @@ cc_test(
     name = "comments",
     linkstatic = True,
     srcs = SRCS + [
-        "mst_cjson_comments_test.c",
+        "mst_toml_comments_test.c",
         "//test:common.c", "//test:common.h",
         "//test/lib/mustache:utils.c",
         "//test/lib/mustache:utils.h"
@@ -81,7 +81,7 @@ cc_test(
     name = "interpolation",
     linkstatic = True,
     srcs = SRCS + [
-        "mst_cjson_interpolation_test.c",
+        "mst_toml_interpolation_test.c",
         "//test:common.c", "//test:common.h",
         "//test/lib/mustache:utils.c",
         "//test/lib/mustache:utils.h"
@@ -103,7 +103,7 @@ cc_test(
     name = "renderers",
     linkstatic = True,
     srcs = SRCS + [
-        "mst_cjson_renderers_test.c",
+        "mst_toml_renderers_test.c",
         "//test:common.c", "//test:common.h",
         "//test/lib/mustache:utils.c",
         "//test/lib/mustache:utils.h"

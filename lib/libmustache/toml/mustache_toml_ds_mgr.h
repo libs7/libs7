@@ -40,17 +40,17 @@ char *mustach_toml_render_to_string(const char *template,
                                   void *stack, // struct tstack_s*
                                     int flags);
 
-int mustach_toml_write(const char *template, size_t length,
-                       const struct mustach_ds_methods_s *methods,
-                       void *closure,
-                       int flags,
-                       mustach_write_cb_t *writecb, void *writeclosure);
+/* int mustach_toml_write(const char *template, size_t length, */
+/*                        const struct mustach_ds_methods_s *methods, */
+/*                        void *closure, */
+/*                        int flags, */
+/*                        mustach_write_cb_t *writecb, void *writeclosure); */
 
-int mustach_toml_emit(const char *template, size_t length,
-                      const struct mustach_ds_methods_s *methods,
-                      void *closure,
-                      int flags,
-                      mustach_emit_cb_t *emitcb, void *emitclosure);
+/* int mustach_toml_emit(const char *template, size_t length, */
+/*                       const struct mustach_ds_methods_s *methods, */
+/*                       void *closure, */
+/*                       int flags, */
+/*                       mustach_emit_cb_t *emitcb, void *emitclosure); */
 
 #endif
 

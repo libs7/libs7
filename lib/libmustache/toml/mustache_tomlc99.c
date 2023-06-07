@@ -574,6 +574,9 @@ const char *mustache_toml_render(const char *template,
                                  int _flags)
 {
     struct tomlx_item_s *titem = tomlx_make_item(root, TOML_TABLE);
+    struct tstack_s stack;
+    memset(&stack, 0, sizeof(struct tstack_s));
+    stack.root = titem;
 
     //FIXME: client responsible for flags
     int flags = Mustach_With_AllExtensions;
@@ -581,9 +584,6 @@ const char *mustache_toml_render(const char *template,
     (void)_flags;
     //FIXME: _flags arg is for opting out of default 'all'
 
-    struct tstack_s stack;
-    memset(&stack, 0, sizeof(struct tstack_s));
-    stack.root = titem;
     errno = 0;
     char *result = mustach_toml_render_to_string(template, template_sz,
                                                  &tomlc99_methods,
@@ -604,6 +604,53 @@ const char *mustache_toml_render(const char *template,
     //FIXME: toml_item_free(titem);
 
     return result; // client must free
+}
+
+int mustache_toml_frender(FILE * restrict file,
+                          const char *template,
+                          size_t template_sz,
+                          toml_table_t *root,
+                          int _flags)
+{
+    TRACE_ENTRY(mustache_toml_frender);
+    struct tomlx_item_s *titem = tomlx_make_item(root, TOML_TABLE);
+    struct tstack_s stack;
+    memset(&stack, 0, sizeof(struct tstack_s));
+    stack.root = titem;
+
+    //FIXME: client responsible for flags
+    int flags = Mustach_With_AllExtensions;
+    flags &= ~Mustach_With_JsonPointer;
+    (void)_flags;
+
+    return mustach_toml_file(template, template_sz,
+                             &tomlc99_methods,
+                             &stack,
+                             flags,
+                             file);
+}
+
+int mustache_toml_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          toml_table_t *root,
+                          int _flags)
+{
+    TRACE_ENTRY(mustache_toml_fdrender);
+    struct tomlx_item_s *titem = tomlx_make_item(root, TOML_TABLE);
+    struct tstack_s stack;
+    memset(&stack, 0, sizeof(struct tstack_s));
+    stack.root = titem;
+
+    //FIXME: client responsible for flags
+    int flags = Mustach_With_AllExtensions;
+    flags &= ~Mustach_With_JsonPointer;
+    (void)_flags;
+    (void)flags;
+    (void)fd;
+    (void)template;
+    (void)template_sz;
+    return -1;
 }
 
 /* render to string buffer */

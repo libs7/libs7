@@ -56,42 +56,52 @@ const char *mustache_toml_render(const char *template,
                                  toml_table_t *root,
                                  int flags);
 
+int mustache_toml_frender(FILE * restrict file,
+                          const char *template,
+                          size_t template_sz,
+                          toml_table_t *root,
+                          int flags);
+
+int mustache_toml_fdrender(int fd,
+                          const char *template,
+                          size_t template_sz,
+                          toml_table_t *root,
+                          int flags);
+
+
+
 /* extern int mustache_toml_render(const char *template, */
 /*                                             size_t template_sz, */
 /*                                             toml_table_t *root, */
 /*                                             int flags, */
 /*                                             char **result, size_t *result_sz); */
 
-/**
- * mustach_toml_write - Renders the mustache 'template' for 'root' to custom writer 'writecb' with 'closure'.
- *
- * @template: the template string to instanciate
- * @length:   length of the template or zero if unknown and template null terminated
- * @root:     the root json object to render
- * @writecb:  the function that write values
- * @closure:  the closure for the write function
- *
- * Returns 0 in case of success, -1 with errno set in case of system error
- * a other negative value in case of error.
- */
+/* mustach_toml_write - Renders the mustache 'template' for 'root' to custom writer 'writecb' with 'closure'. */
+
+/* @template: the template string to instanciate */
+/* @length:   length of the template or zero if unknown and template null terminated */
+/* @root:     the root json object to render */
+/* @writecb:  the function that write values */
+/* @closure:  the closure for the write function */
+
+/* Returns 0 in case of success, -1 with errno set in case of system error */
+/* a other negative value in case of error. */
 /* extern int mustach_toml_write(const char *template, size_t length, cJSON *root, int flags, mustach_write_cb_t *writecb, void *closure); */
 
-/**
- * mustach_toml_emit - Renders the mustache 'template' for 'root' to custom emiter 'emitcb' with 'closure'.
- *
- * @template: the template string to instanciate
- * @length:   length of the template or zero if unknown and template null terminated
- * @root:     the root json object to render
- * @emitcb:   the function that emit values
- * @closure:  the closure for the write function
- *
- * Returns 0 in case of success, -1 with errno set in case of system error
- * a other negative value in case of error.
- */
+/* mustach_toml_emit - Renders the mustache 'template' for 'root' to custom emiter 'emitcb' with 'closure'. */
+
+/* @template: the template string to instanciate */
+/* @length:   length of the template or zero if unknown and template null terminated */
+/* @root:     the root json object to render */
+/* @emitcb:   the function that emit values */
+/* @closure:  the closure for the write function */
+
+/* Returns 0 in case of success, -1 with errno set in case of system error */
+/* a other negative value in case of error. */
 /* extern int mustach_toml_emit(const char *template, size_t length, cJSON *root, int flags, mustach_emit_cb_t *emitcb, void *closure); */
 
-toml_table_t *mustach_toml_read_string(char *s);
-toml_table_t *mustach_toml_read_file(char *fname);
+/* toml_table_t *mustach_toml_read_string(char *s); */
+/* toml_table_t *mustach_toml_read_file(char *fname); */
 
 #endif
 
