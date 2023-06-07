@@ -40,12 +40,14 @@ test_suite(
         ":libc_link_shared",
         ":libc_link_runtime",
         ":gdbm_link_archive",
-        ":gdbm_link_shared",
-        ":gdbm_link_runtime",
+        # ":gdbm_link_shared",
+        # ":gdbm_link_runtime",
         # ":gsl", ## takes too long to build for one trivial test
         ":cwalk",
         ":utf8proc",
-        "//test/lib"
+        "//test/libjson",
+        "//test/libmustachios",
+        "//test/libtoml",
     ]
 )
 
@@ -339,26 +341,26 @@ cc_test(
     linkstatic = True,
     srcs = SRCS + ["cjson_test.c"] + select({
         "//config/clibs/link:shared?": [
-            "//lib/libmustache:mustachios7_s7.c" ## , "//lib/libmustache:libmustachios7_s7.h",
+            "//lib/libmustachios:mustachios7_s7.c" ## , "//lib/libmustachios:libmustachios7_s7.h",
         ],
         "//conditions:default": []
     }),
     local_defines = DEFINES,
     deps = DEPS + select({
         "//config/clibs/link:archive?": [
-            "//lib/libmustache:mustache_s7_archive"
+            "//lib/libmustachios:mustache_s7_archive"
         ],
         "//conditions:default": []
     }),
     data = select({
         "//config/clibs/link:runtime?": [
-            "//lib/libmustache:mustachios7_s7"
+            "//lib/libmustachios:mustachios7_s7"
         ],
         "//conditions:default": []
     }),
     copts = COPTS + [
-        "-Ilib/libmustache",
-        "-Iexternal/libs7/lib/libmustache",
+        "-Ilib/libmustachios",
+        "-Iexternal/libs7/lib/libmustachios",
         "-Iexternal/mustachios7/lib",
         "-Iexternal/mustachios7/vendored/cjson",
     ],

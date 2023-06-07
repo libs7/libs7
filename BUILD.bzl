@@ -55,7 +55,7 @@ BASE_DEFINES = select({
         "//config/s7:debug?": ["S7_DEVBUILD"],
         "//conditions:default":   []
 }) + select({
-    "//lib/libmustache/syntax:alt?": ["ALT_SYNTAX"],
+    "//lib/libmustachios/syntax:alt?": ["ALT_SYNTAX"],
     "//conditions:default": []
 }) + select({
     "//config/profile:dev?": ["DEVBUILD", "TRACING"],

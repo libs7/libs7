@@ -24,7 +24,7 @@ cc_library(
     # copts = COPTS,
     # visibility = ["//vendored/mustach:__pkg__",
     #               "//lib/libjson:__pkg__",
-    #               "//lib/libmustache:__pkg__",
-    #               "//lib/libmustache/json/cjson:__pkg__"]
+    #               "//lib/libmustachios:__pkg__",
+    #               "//lib/libmustachios/json/cjson:__pkg__"]
 )
 

@@ -241,23 +241,23 @@ void _set_options(struct option options[])
     }
 }
 
-static void dumb_repl(s7_scheme *sc)
-{
-  while (true)
-    {
-      char buffer[512];
-      fprintf(stdout, "\n> ");
-      if (!fgets(buffer, 512, stdin)) break;  /* error or ctrl-D */
-      if (((buffer[0] != '\n') || (strlen(buffer) > 1)))
-	{
-	  char response[1024];
-	  snprintf(response, 1024, "(write %s)", buffer);
-	  s7_eval_c_string(sc, response);
-	}}
-  fprintf(stdout, "\n");
-  if (ferror(stdin))
-    fprintf(stderr, "read error on stdin\n");
-}
+/* static void dumb_repl(s7_scheme *sc) */
+/* { */
+/*   while (true) */
+/*     { */
+/*       char buffer[512]; */
+/*       fprintf(stdout, "\n> "); */
+/*       if (!fgets(buffer, 512, stdin)) break;  /\* error or ctrl-D *\/ */
+/*       if (((buffer[0] != '\n') || (strlen(buffer) > 1))) */
+/* 	{ */
+/* 	  char response[1024]; */
+/* 	  snprintf(response, 1024, "(write %s)", buffer); */
+/* 	  s7_eval_c_string(sc, response); */
+/* 	}} */
+/*   fprintf(stdout, "\n"); */
+/*   if (ferror(stdin)) */
+/*     fprintf(stderr, "read error on stdin\n"); */
+/* } */
 
 // WITH_MAIN && ! WITH_NOTCURSES && ! WITH_C_LOADER
 // ! USE_SND
@@ -323,6 +323,7 @@ int main(int argc, char **argv) // , char **envp)
     }
 
     libs7_load_clib(s7, "c");
+    libs7_load_clib(s7, "mustachios");
     libs7_load_clib(s7, "toml");
     libs7_load_clib(s7, "json");
 

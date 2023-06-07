@@ -29,12 +29,9 @@ cc_library(
         ":cjson_map", "cjson_array"
     ],
     copts = COPTS + [
-        "-Ilib",
-        "-Iexternal/libs7/lib",
-        "-Ilib/libjson",
-        "-Iexternal/libs7/lib/libjson",
-        "-Ivendored/cjson",
-        "-Iexternal/libs7/vendored/cjson",
+        "-Ilib", "-Iexternal/libs7/lib",
+        "-Ilib/libjson", "-Iexternal/libs7/lib/libjson",
+        "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
     ],
     linkopts      = LINKOPTS,
     local_defines = DEFINES
@@ -53,8 +50,8 @@ cc_binary(
     deps  = DEPS + ["//lib:utils", "//vendored/cjson"],
     copts = COPTS + [
         "-Ilib", "-Iexternal/libs7/lib",
-        "-Ivendored/cjson",
-        "-Iexternal/libs7/vendored/cjson",
+        "-Ilib/libjson", "-Iexternal/libs7/lib/libjson",
+        "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
     ],
     linkopts      = LINKOPTS,
     local_defines = DEFINES

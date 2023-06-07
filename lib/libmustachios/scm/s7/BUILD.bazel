@@ -1,0 +1,42 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_COPTS", "BASE_DEPS",
+     "BASE_INCLUDE_PATHS",
+     "BASE_LINKOPTS",
+     "BASE_DEFINES")
+
+load("//lib/libmustachios:BUILD.bzl",
+     "MUSTACHE_INCLUDE_PATHS",
+     "MUSTACHE_DEPS")
+
+SRCS = BASE_SRCS
+INCLUDE_PATHS= BASE_INCLUDE_PATHS + MUSTACHE_INCLUDE_PATHS
+COPTS= BASE_COPTS + INCLUDE_PATHS
+DEPS= BASE_DEPS + MUSTACHE_DEPS
+DEFINES= BASE_DEFINES
+LINKOPTS= BASE_LINKOPTS
+
+cc_library(
+    name = "mustache_scm",
+    linkstatic = True,
+    alwayslink = True,
+    srcs = SRCS + [
+        "mustache_s7.c",
+        "mustache_s7.h",
+        "mustache_scm_ds_mgr.c",
+        "mustache_scm_ds_mgr.h",
+    ],
+    hdrs = ["mustache_s7.h"],
+    deps  = DEPS + [
+        "//src:s7_archive",
+        # "//lib/libmustachios/mustach",
+    ],
+    copts = COPTS + [
+        "-Isrc", "-Iexternal/libs7/src",
+        "-Ivendored/tomlc99",
+        "-Iexternal/libs7/vendored/tomlc99",
+    ],
+    defines = DEFINES,
+    linkopts = LINKOPTS
+)

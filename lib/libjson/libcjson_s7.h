@@ -25,4 +25,6 @@ char *json_array_to_string(s7_scheme *s7, const cJSON *jo);
 s7_pointer json_array_to_vector(s7_scheme *s7, cJSON *ja, bool clone);
 void json_array_init(s7_scheme *s7, s7_pointer cur_env);
 
+s7_pointer json_read_file(s7_scheme *s7, char *fname);
+
 #endif

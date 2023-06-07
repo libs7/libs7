@@ -1,8 +1,6 @@
 test_suite(
     name  = "lib",
     tests = [
-        "//test/lib/json",
-        "//test/lib/mustache",
-        "//test/lib/toml"
+        "//test/libjson",
     ]
 )

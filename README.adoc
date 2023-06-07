@@ -434,7 +434,7 @@ Bindings for link:https://github.com/DaveGamble/cJSON[cJSON]
 
 Prefix:  `json:`
 
-Tests: `//test/lib/json`
+Tests: `//test/libjson`
 
 Documentation: link:doc/libjson.adoc[doc/libjson.adoc]
 
@@ -462,7 +462,7 @@ Bindings for link:https://github.com/cktan/tomlc99[tomlc99]
 
 Prefix:  `toml:`
 
-Tests: `//test/lib/toml`
+Tests: `//test/libtoml`
 
 Documentation: link:doc/libtoml.adoc[doc/libtoml.adoc]
 

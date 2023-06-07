@@ -1,23 +1,7 @@
-(with-input-from-string "t = { i = 1, s = \"Hello\" }" toml:read)
-(toml:read "t = { i = 1, s = \"Hello\" }")
-
 (with-input-from-string "{ \"t\": { \"i\": 1, \"s\": \"Hello\"}}" json:read)
 (json:read "{ \"t\": { \"i\": 1, \"s\": \"Hello\"}}")
 
-;; (call-with-input-file "config.toml"
-;;   (lambda (p)
-;;     (let f ((x (read p)))
-;;       (if (eof-object? x)
-;;           '()
-;;           (cons x (f (read p)))))))
-
-(call-with-input-file "test/libtoml/data/example.toml"
-  (lambda (port) (let ((toml (toml:read port)))
-                   toml)))
-
 (call-with-input-file "test/libjson/data/example.json" (lambda (port) (let ((json (json:read port))) json)))
-
-
 
 *json:version*
 

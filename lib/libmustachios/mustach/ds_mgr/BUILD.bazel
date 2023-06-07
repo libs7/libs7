@@ -1,0 +1,27 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_COPTS", "BASE_DEPS",
+     "BASE_INCLUDE_PATHS",
+     "BASE_LINKOPTS",
+     "BASE_DEFINES")
+
+SRCS = BASE_SRCS
+INCLUDE_PATHS= BASE_INCLUDE_PATHS + [
+    "-Ilib/libmustachios/mustach",
+    "-Iexternal/libs7/lib/libmustachios/mustach"
+]
+COPTS= BASE_COPTS + INCLUDE_PATHS
+DEPS= BASE_DEPS + ["//lib/libmustachios/mustach"] # "//vendored/cjson"]
+DEFINES= BASE_DEFINES
+LINKOPTS= BASE_LINKOPTS
+
+cc_library(
+    name = "mustach_ds_mgr",
+    linkstatic = True,
+    srcs = SRCS + ["mustach_ds_mgr.c"],
+    hdrs  = ["mustach_ds_mgr.h"],
+    deps  = DEPS,
+    copts = COPTS,
+    defines = DEFINES
+)

@@ -1,0 +1,61 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["libregex_clibgen.scm"])
+
+load("//:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+
+load("//lib:BUILD.bzl", "clibgen_runner",
+     "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
+
+SRCS          = BASE_SRCS + CLIB_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
+
+################################################################
+cc_library(
+    name  = "regex_s7_archive", # emits libregex_s7_archive.a
+    linkstatic = True,
+    alwayslink = True, # ensure init fn sym available for dlsym
+    srcs  = SRCS + [":libregex_s7.c"],
+    deps  = DEPS,
+    copts = COPTS + ["-Wno-unused-parameter"],
+    linkopts = LINKOPTS  + select({
+        "//config/host:linux?": ["-lrt"],
+        "//conditions:default": []
+    }),
+    local_defines = DEFINES  + select({
+        "//config/host:linux?": ["_POSIX_C_SOURCE=200809",
+                                 "_DEFAULT_SOURCE" # strcasecmp in string.h
+                                 ],
+        "//conditions:default": []
+    })
+)
+
+cc_binary(
+    name  = "regex_s7",  # create libregex_s7.{dylib,so}
+    linkshared = True,
+    srcs  = SRCS + [":libregex_s7.c"],
+    deps  = DEPS,
+    copts = COPTS + ["-Wno-unused-parameter"],
+    linkopts = LINKOPTS  + select({
+        "//config/host:linux?": ["-lrt"],
+        "//conditions:default": []
+    }),
+    local_defines = DEFINES  + select({
+        "//config/host:linux?": ["_POSIX_C_SOURCE=200809", "_DEFAULT_SOURCE"],
+        "//conditions:default": []
+    })
+)
+
+clibgen_runner(
+    name = "libregex_s7_runbin",
+    tool = "//lib:clibgen",
+    args = ["--script", "lib/libregex/libregex_clibgen.scm"],
+    srcs = [":libregex_clibgen.scm", "//lib:clibgen.scm"],
+    outs = [":libregex_s7.c"]
+)
