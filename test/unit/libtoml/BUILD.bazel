@@ -4,7 +4,7 @@ load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//test:BUILD.bzl",
+load("//test/unit:BUILD.bzl",
      "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
      "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
      "TIMEOUT")
@@ -15,20 +15,20 @@ COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
-# load("//test:BUILD.bzl",
+# load("//test/unit:BUILD.bzl",
 #      "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
 
 test_suite(
     name  = "libtoml",
     tests = [
-        "//test/libtoml:arrays",
-        # "//test/libtoml:conversion_alist",
-        "//test/libtoml:conversion_ht",
-        "//test/libtoml:datetimes",
-        "//test/libtoml:maps",
-        "//test/libtoml:readers",
-        "//test/libtoml:serialization",
-        "//test/libtoml:strings",
+        "//test/unit/libtoml:arrays",
+        # "//test/unit/libtoml:conversion_alist",
+        "//test/unit/libtoml:conversion_ht",
+        "//test/unit/libtoml:datetimes",
+        "//test/unit/libtoml:maps",
+        "//test/unit/libtoml:readers",
+        "//test/unit/libtoml:serialization",
+        "//test/unit/libtoml:strings",
     ]
 )
 
@@ -37,7 +37,7 @@ cc_test(
     name = "arrays",
     linkstatic = True,
     srcs = ["toml_arrays_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -47,7 +47,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -60,7 +60,7 @@ cc_test(
     name = "conversion_alist",
     linkstatic = True,
     srcs = ["toml_conversion_alist_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -70,7 +70,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -83,7 +83,7 @@ cc_test(
     name = "conversion_ht",
     linkstatic = True,
     srcs = ["toml_conversion_ht_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -93,7 +93,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -106,7 +106,7 @@ cc_test(
     name = "datetimes",
     linkstatic = True,
     srcs = ["toml_datetimes_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     data = ["//test/data:toml"],
@@ -117,7 +117,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -130,7 +130,7 @@ cc_test(
     name = "maps",
     linkstatic = True,
     srcs = ["toml_maps_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -140,7 +140,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -153,7 +153,7 @@ cc_test(
     name = "readers",
     linkstatic = True,
     srcs = ["toml_readers_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     data = ["//test/data:toml"],
@@ -164,7 +164,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -177,7 +177,7 @@ cc_test(
     name = "serialization",
     linkstatic = True,
     srcs = ["toml_serialization_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     data = ["//test/data:toml"],
@@ -188,7 +188,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"
@@ -201,7 +201,7 @@ cc_test(
     name = "strings",
     linkstatic = True,
     srcs = ["toml_strings_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     data = ["//test/data:toml"],
@@ -212,7 +212,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libtoml",
         "-I$(GENDIR)/external/libs7/lib/libtoml",
         # "-fno-pie"

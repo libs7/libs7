@@ -1,6 +1,5 @@
 #include "unity.h"
 #include "config.h"
-#include "utils.h"
 #include "macros.h"
 #include "common.h"
 

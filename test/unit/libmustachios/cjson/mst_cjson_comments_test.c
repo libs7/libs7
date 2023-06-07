@@ -1,7 +1,6 @@
 #include "unity.h"
 #include "config.h"
 #include "common.h"
-#include "utils.h"
 #include "macros.h"
 
 #include "libs7.h"

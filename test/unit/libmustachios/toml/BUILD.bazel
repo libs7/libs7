@@ -4,7 +4,7 @@ load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//test:BUILD.bzl",
+load("//test/unit:BUILD.bzl",
      "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
      "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
      "TIMEOUT")
@@ -18,7 +18,7 @@ SRCS          = BASE_SRCS + TEST_SRCS + [
 })
 
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS + [
-    "-Itest",
+    "-Itest/unit",
     "-Itest/libmustachios",
     "-Itest/libmustachios/toml",
     "-Ilib/libmustachios",
@@ -58,11 +58,7 @@ test_suite(
 cc_test(
     name = "comments",
     linkstatic = True,
-    srcs = SRCS + [
-        "mst_toml_comments_test.c",
-        "//test/libmustachios:utils.c",
-        "//test/libmustachios:utils.h"
-    ],
+    srcs = SRCS + ["mst_toml_comments_test.c"],
     copts = COPTS,
     local_defines = DEFINES,
     deps = DEPS,
@@ -79,11 +75,7 @@ cc_test(
 cc_test(
     name = "conversion",
     linkstatic = True,
-    srcs = SRCS + [
-        "mst_toml_conversion_test.c",
-        "//test/libmustachios:utils.c",
-        "//test/libmustachios:utils.h"
-    ],
+    srcs = SRCS + ["mst_toml_conversion_test.c"],
     copts = COPTS,
     local_defines = DEFINES,
     deps = DEPS,
@@ -100,11 +92,7 @@ cc_test(
 cc_test(
     name = "interpolation",
     linkstatic = True,
-    srcs = SRCS + [
-        "mst_toml_interpolation_test.c",
-        "//test/libmustachios:utils.c",
-        "//test/libmustachios:utils.h"
-    ],
+    srcs = SRCS + ["mst_toml_interpolation_test.c"],
     copts = COPTS,
     local_defines = DEFINES,
     deps = DEPS,
@@ -121,11 +109,7 @@ cc_test(
 cc_test(
     name = "renderers",
     linkstatic = True,
-    srcs = SRCS + [
-        "mst_toml_renderers_test.c",
-        "//test/libmustachios:utils.c",
-        "//test/libmustachios:utils.h"
-    ],
+    srcs = SRCS + ["mst_toml_renderers_test.c"],
     copts = COPTS,
     local_defines = DEFINES,
     deps = DEPS,
@@ -142,7 +126,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + ["//lib/libmustachios:mustache_s7_archive"],
     copts = COPTS + [
-        "-Itest",
+        "-Itest/unit",
         "-Iexternal/libs7/test",
         "-Ilib/libmustachios/mustach",
         "-Iexternal/libs7/lib/libmustachios/mustach",
@@ -173,7 +157,7 @@ cc_test(
         "//vendored/uthash",
     ],
     copts = COPTS + [
-        "-Itest",
+        "-Itest/unit",
         "-Iexternal/mustachios7/test",
         "-Ilib/libmustachios",
         "-Iexternal/libs7/lib/libmustachios",
@@ -194,7 +178,7 @@ cc_test(
     deps = DEPS,
     # data = ["//lib/libmustachios:mustachios7_s7"],
     copts = COPTS + [
-        "-Itest",
+        "-Itest/unit",
         "-Ilib/libmustachios",
         "-Iexternal/libs7/lib/libmustachios",
     ],

@@ -1,5 +1,5 @@
 COPTS_TEST = [
-    "-Itest",
+    "-Itest/unit",
     "-Iexternal/libs7/test",
     "-Itest/libmustachios",
     "-Iexternal/libs7/test/libmustachios", # common.[ch]

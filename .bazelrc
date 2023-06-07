@@ -7,12 +7,14 @@ common --symlink_prefix=.bazel/
 common --color=yes
 common:show --subcommands=pretty_print
 common:show --verbose_failures
-common:test --test_output=all
-common:test --keep_going
+test:show --test_output=all
+test:show --keep_going
 
 common:showdev --config=show
 common:showdev --//config/profile=dev
 common:showdev --compilation_mode=fastbuild
+test:showdev --test_output=all
+test:showdev --keep_going
 
 common:showdbg --config=show
 common:showdbg --//config/profile=dev

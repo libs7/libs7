@@ -1,10 +1,6 @@
 SRCS = [
-    "//test:common.c",
-    "//test:common.h",
-    "//test/libmustachios:utils.c",
-    "//test/libmustachios:utils.h",
-    # "//test/src:debug.h", # FIXME: select
-    # "//test/src:c_stacktrace.h" # FIXME: select
+    "//test/unit:common.c",
+    "//test/unit:common.h",
 ]
 
 LIBS7 = "//src:s7"

@@ -1,32 +1,19 @@
 #include <unistd.h>
 
-#include "config.h"
-#include "gopt.h"
-#include "log.h"
 #include "unity.h"
-#include "utarray.h"
-#include "utstring.h"
-
-#include "utils.h"
+#include "config.h"
 #include "macros.h"
+#include "common.h"
 
 #include "libs7.h"
 
-#include "common.h"
-
 s7_scheme *s7;
 
-s7_pointer json_read;
+s7_pointer toml_read;
 s7_pointer mustache_render;
 
 extern struct option options[];
 
-UT_string *setter;
-UT_string *sexp;
-bool verbose;
-bool debug;
-
-/* WARNING: setUp and tearDown are run once per test. */
 void setUp(void)
 {
     /* log_info("setup"); */
@@ -39,17 +26,18 @@ void tearDown(void)
 
 /* render API
  *
- * (mustache:render #f t d) -> string
+ * (mustache:render #f t d) -> return string
  * (mustache:render #t t d) -> current-output-port and string
  * (mustache:render '() t d) -> current-output-port only
- * (mustache:render port t d) -> file or string port
+ * (mustache:render sport t d) -> string port
+ * (mustache:render fport t d) -> file port
  */
+
 void render_to_string(void)
 {
-    S7_RENDER_TEST(s7_f(s7),
-                   "{{msg}}, world!",
-                   "{\"msg\": \"Hello\"}",
-                   "Hello, world!");
+    TOML_RENDER_TEST("{{msg}}, world!",
+                     "msg = \"Hello\"",
+                     "Hello, world!");
 }
 
 /*
@@ -60,10 +48,10 @@ void render_to_cop_ret_string(void)
 {
     s7_pointer osp = s7_open_output_string(s7);
     s7_pointer old_cop = s7_set_current_output_port(s7, osp);
-    S7_RENDER_TEST(s7_t(s7),
-                   "{{msg}}, world!",
-                   "{\"msg\": \"Hello\"}",
-                   "Hello, world!");
+    TOML_RENDER_SINK_TEST(s7_t(s7),
+                          "{{msg}}, world!",
+                          "msg = \"Hello\"",
+                          "Hello, world!");
     const char *s = s7_get_output_string(s7, s7_current_output_port(s7));
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
     s7_set_current_output_port(s7, old_cop);
@@ -84,10 +72,10 @@ void render_to_cop_ret_NULL(void)
 
     s7_pointer osp = s7_open_output_string(s7);
     s7_pointer old_cop = s7_set_current_output_port(s7, osp);
-    S7_RENDER_TEST(s7_nil(s7),
-                   "{{msg}}, world!",
-                   "{\"msg\": \"Hello\"}",
-                   s7_string(s7_nil(s7))); // macro compares strings
+    TOML_RENDER_SINK_TEST(s7_nil(s7),
+                          "{{msg}}, world!",
+                          "msg = \"Hello\"",
+                          s7_string(s7_nil(s7)));
     const char *s = s7_get_output_string(s7, s7_current_output_port(s7));
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
     s7_set_current_output_port(s7, old_cop);
@@ -97,10 +85,10 @@ void render_to_cop_ret_NULL(void)
 void render_to_string_port(void)
 {
     s7_pointer osp = s7_open_output_string(s7);
-    S7_RENDER_TEST(osp,
-                   "{{msg}}, world!",
-                   "{\"msg\": \"Hello\"}",
-                   s7_string(s7_nil(s7))); // macro compares strings
+    TOML_RENDER_SINK_TEST(osp,
+                          "{{msg}}, world!",
+                          "msg = \"Hello\"",
+                          s7_string(s7_nil(s7)));
     const char *s = s7_get_output_string(s7, osp);
     s7_close_output_port(s7, osp);
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
@@ -109,9 +97,9 @@ void render_to_string_port(void)
 void render_to_file_port(void)
 {
     s7_pointer ofp = s7_open_output_file(s7, "cjson_test.out", "w");
-    S7_RENDER_TEST(ofp,
-                   "{{msg}}, world!",
-                   "{\"msg\": \"Hello\"}",
+    TOML_RENDER_SINK_TEST(ofp,
+                          "{{msg}}, world!",
+                          "msg = \"Hello\"",
                    s7_string(s7_nil(s7))); // macro compares strings
     s7_close_output_port(s7, ofp);
     s7_pointer ifp = s7_open_input_file(s7, "cjson_test.out", "r");
@@ -208,7 +196,7 @@ int main(int argc, char **argv)
     libs7_load_clib(s7, "toml");
     libs7_load_clib(s7, "json");
 
-    json_read = s7_name_to_value(s7, "json:read");
+    toml_read = s7_name_to_value(s7, "toml:read");
     mustache_render = s7_name_to_value(s7, "mustache:render");
 
     UNITY_BEGIN();
@@ -220,7 +208,7 @@ int main(int argc, char **argv)
     RUN_TEST(render_to_string_port);
     RUN_TEST(render_to_file_port);
 
-    /* RUN_TEST(bad_sinks); */
+    RUN_TEST(bad_sinks);
 
     return UNITY_END();
 }

@@ -66,7 +66,7 @@ rules_foreign_cc_dependencies()
 Then:
 
 
-    $ bazel test @libs7//test
+    $ bazel test @libs7//test/unit
     $ bazel run @libs7//repl
 
 == differences from s7
@@ -247,7 +247,7 @@ libraries are produced by rule `cc_binary` with `linkshared = True`.
 
 NOTE: Ordinarly you will not need to build these targets directly;
 they are direct or indirect dependencies of the primary build targets
-(like `//test` or `//repl`) so they are built automatically on demand.
+(like `//test/unit` or `//repl`) so they are built automatically on demand.
 But you can build them directly, for example if you want to inspect
 the C source of library binding.
 
@@ -278,7 +278,7 @@ link:https://bazel.build/reference/be/common-definitions#typical-attributes[Typi
 attributes defined by most build rules] for more information on the
 `data` attribute.)
 
-For example, to run test target `//test:cwalk` with runtime (dynamic) linking:
+For example, to run test target `//test/unit:cwalk` with runtime (dynamic) linking:
 
     $ bazel test test:cwalk --//config/clibs/link=runtime
 
@@ -434,7 +434,7 @@ Bindings for link:https://github.com/DaveGamble/cJSON[cJSON]
 
 Prefix:  `json:`
 
-Tests: `//test/libjson`
+Tests: `//test/unit/libjson`
 
 Documentation: link:doc/libjson.adoc[doc/libjson.adoc]
 
@@ -462,7 +462,7 @@ Bindings for link:https://github.com/cktan/tomlc99[tomlc99]
 
 Prefix:  `toml:`
 
-Tests: `//test/libtoml`
+Tests: `//test/unit/libtoml`
 
 Documentation: link:doc/libtoml.adoc[doc/libtoml.adoc]
 

@@ -7,12 +7,8 @@
 jm
 
 (define jm (with-input-from-file "test/data/nested.json" json:read))
-jm
-
 (define t "{{#blist}}hi {{name}}{{?}}, {{/?}}{{$}}!{{/$}}{{/blist}}")
-
 (mustache:render #t t jm 0)
-
 (define ht (json:map->hash-table jm))
 (mustache:render #t t ht 0)
 

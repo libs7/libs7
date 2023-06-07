@@ -4,7 +4,7 @@ load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//test:BUILD.bzl",
+load("//test/unit:BUILD.bzl",
      "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
      "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
      "TIMEOUT")
@@ -20,12 +20,12 @@ LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
 test_suite(
     name  = "libjson",
     tests = [
-        "//test/libjson:array_to_scm",
-        "//test/libjson:arrays",
-        "//test/libjson:readers",
-        "//test/libjson:map_to_scm",
-        "//test/libjson:maps",
-        # "//test/libjson:strings",
+        "//test/unit/libjson:array_to_scm",
+        "//test/unit/libjson:arrays",
+        "//test/unit/libjson:readers",
+        "//test/unit/libjson:map_to_scm",
+        "//test/unit/libjson:maps",
+        # "//test/unit/libjson:strings",
     ]
 )
 
@@ -34,7 +34,7 @@ cc_test(
     name = "array_to_scm",
     linkstatic = True,
     srcs = ["json_array_to_scm_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -44,7 +44,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libjson",
         "-I$(GENDIR)/external/libs7/lib/libjson",
         # "-fno-pie"
@@ -57,7 +57,7 @@ cc_test(
     name = "arrays",
     linkstatic = True,
     srcs = ["json_arrays_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -67,7 +67,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libjson",
         "-I$(GENDIR)/external/libs7/lib/libjson",
         # "-fno-pie"
@@ -80,7 +80,7 @@ cc_test(
     name = "map_to_scm",
     linkstatic = True,
     srcs = ["json_map_to_scm_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -90,7 +90,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libjson",
         "-I$(GENDIR)/external/libs7/lib/libjson",
         # "-fno-pie"
@@ -103,7 +103,7 @@ cc_test(
     name = "maps",
     linkstatic = True,
     srcs = ["json_maps_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -113,7 +113,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libjson",
         "-I$(GENDIR)/external/libs7/lib/libjson",
         # "-fno-pie"
@@ -126,7 +126,7 @@ cc_test(
     name = "readers",
     linkstatic = True,
     srcs = ["json_readers_test.c",
-            "//test:common.c", "//test:common.h",
+            "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     deps = DEPS + [
@@ -137,7 +137,7 @@ cc_test(
     copts = COPTS + [
         "-Isrc",
         "-Idev",
-        "-Itest",
+        "-Itest/unit",
         "-I$(GENDIR)/lib/libjson",
         "-I$(GENDIR)/external/libs7/lib/libjson",
         # "-fno-pie"
@@ -150,10 +150,10 @@ cc_test(
 #     name = "strings",
 #     linkstatic = True,
 #     srcs = ["json_strings_test.c",
-#             "//test:common.c", "//test:common.h",
+#             "//test/unit:common.c", "//test/unit:common.h",
 #             "//src:libs7.h"],
 #     local_defines = DEFINES,
-#     data = ["//test/libjson/data:strings.json"],
+#     data = ["//test/unit/libjson/data:strings.json"],
 #     deps = DEPS + [
 #         "//dev",
 #         "//src:s7_archive",
@@ -162,7 +162,7 @@ cc_test(
 #     copts = COPTS + [
 #         "-Isrc",
 #         "-Idev",
-#         "-Itest",
+#         "-Itest/unit",
 #         "-I$(GENDIR)/lib/libjson",
 #         "-I$(GENDIR)/external/libs7/lib/libjson",
 #         # "-fno-pie"

@@ -52,13 +52,17 @@ cc_binary(
         "//conditions:default": []
     }),
     data = [
+            # "//test/unit/repl",
+            # "//test/data:json",
+            # "//test/data:scm",
+            # "//test/data:toml",
         ":repl.scm",
         "//scm:srcs",
         "//scm/srfi:srcs",
         "//scm/s7:srcs",
     ] + select({
         "//config/profile:test?": [
-            "//test/repl",
+            "//test/unit/repl",
             "//test/data:json",
             "//test/data:scm",
             "//test/data:toml",
