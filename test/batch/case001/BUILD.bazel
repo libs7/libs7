@@ -1,0 +1,17 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//test/app:BUILD.bzl", "test_mustachios")
+
+diff_test(
+    name  = "case001",
+    file1 = "colors.expected",
+    file2 = "colors.actual",
+    timeout = "short"
+)
+
+test_mustachios(
+    name     = "colors",
+    script   = "main.scm",
+    out      = "colors.actual",
+    data     = "colors.json",
+    template = "colors.mustache"
+)
