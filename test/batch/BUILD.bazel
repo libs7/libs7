@@ -1,0 +1,7 @@
+test_suite(
+    name  = "batch",
+    tests = [
+        "//test/batch/mustache"
+    ]
+)
+

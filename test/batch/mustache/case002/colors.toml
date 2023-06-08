@@ -1,0 +1,17 @@
+header = "Colors"
+empty  = false
+
+[[items]]
+name = "red"
+first = true
+url = "#Red"
+
+[[items]]
+name = "green"
+link = true
+url  = "#Green"
+
+[[items]]
+name = "blue"
+link = true
+url  = "#Blue"

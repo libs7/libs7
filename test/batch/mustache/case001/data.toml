@@ -1,0 +1,49 @@
+name = "Chris"
+value = 10000
+taxed_value = 6000
+in_ca = true
+person = false
+
+## toml 'bare' name syntax: [A-Za-z0-9_-]
+"person?" = {name =  "Jon"}
+special = "----{{extra}}----\n"
+extra = 3.14159
+sharp = "#"
+
+## toml 'bare' name syntax: [A-Za-z0-9_-]
+"!bang" = "!"
+# /slash = "/"
+"^circ"  = "^"
+"=equal" = "="
+# :colon = ":"
+# >greater = ">"
+# ~tilde = "~"
+
+
+[[repo]]
+name = "resque"
+[[repo.who]]
+commiter = "joe"
+[[repo.who]]
+reviewer = "avrel"
+[[repo.who]]
+commiter = "william"
+
+[[repo]]
+name = "hub"
+[[repo.who]]
+commiter = "jack"
+[[repo.who]]
+reviewer = "avrel"
+[[repo.who]]
+commiter = "greg"
+
+[[repo]]
+name = "rip"
+[[repo.who]]
+reviewer = "joe"
+[[repo.who]]
+reviewer = "jack"
+[[repo.who]]
+commiter = "greg"
+

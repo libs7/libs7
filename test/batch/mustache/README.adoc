@@ -1,0 +1,18 @@
+= libs7 mustache batch tests
+
+Integration tests, to verify that the various parts work together
+harmoniously: "reading" data (json, scm, or toml), possibly munging it
+using the Scheme APIs (libjson, libtoml), and rendering it by template
+with the mustache API.
+
+Each test is expressed as a little Scheme program that reads a data
+file and a template file, may do some munging of the data, and then
+runs `mustache:render`. The test runner sets the context by defining
+some vars base on the build target arguments, then loads the test
+program. Then it writes the string returned by the program to the
+outfile.
+
+
+
+Tests case001 - case006 are taken from the C mustach implementation
+from which this derives. But only case002 is currently implemented.
