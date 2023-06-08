@@ -220,9 +220,11 @@ static int sel(void *closure, const char *key)
         while (i >= 0) {
             if (stack->stack[i].obj->type == TOML_TABLE) {
                 selection = tomlx_table_ref(stack->stack[i].obj->u.t, key);
-                /* log_debug("sel typ: %d", o->type); */
-                /* if (o->type == TOML_TIMESTAMP) */
-                /*     log_debug("ts: %p", o->u.ts); */
+                /* if (selection) { */
+                /*     log_debug("sel typ: %d", selection->type); */
+                /*     if (selection->type == TOML_BOOL) */
+                /*         log_debug("bool: %d", selection->u.b); */
+                /* } */
                 if (selection) break;
             }
             i--;
@@ -408,7 +410,8 @@ static int format(struct tstack_s *stack, const char *fmt,
             break;
         case TOML_TABLE:
             TRACE_LOG_DEBUG("formatting table", "");
-            s = "o->u.t";
+            /* s = "o->u.t"; */
+            s = tomlx_table_to_string(o->u.t, false);
             break;
         case TOML_ARRAY:
             TRACE_LOG_DEBUG("formatting array", "");
@@ -417,7 +420,11 @@ static int format(struct tstack_s *stack, const char *fmt,
             /* log_debug("array: %s", s); */
             break;
         case TOML_BOOL:
-            s = "o->u.b";
+            if (o->u.b) {
+                s = "true";
+            } else {
+                s = "false";
+            }
             break;
         case TOML_INT:
             TRACE_LOG_DEBUG("formatting int: %lld", o->u.i);
