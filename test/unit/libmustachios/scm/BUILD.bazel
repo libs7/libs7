@@ -27,6 +27,7 @@ DEPS          = BASE_DEPS + TEST_DEPS + [
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
 
+TAGS = ["mustache", "scm"]
  # + COPTS_TEST + COPTS_S7,
 ################################################################
 test_suite(
@@ -60,6 +61,7 @@ cc_test(
     copts      = COPTS,
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
+    tags = TAGS + ["comments"]
 )
 
 # cc_test(
@@ -93,6 +95,7 @@ cc_test(
     copts      = COPTS,
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
+    tags = TAGS + ["interpolation"]
 )
 
 # cc_test(
@@ -182,6 +185,7 @@ cc_test(
     copts      = COPTS,
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
+    tags = TAGS + ["renderers"]
 )
 
 cc_test(
@@ -193,6 +197,7 @@ cc_test(
     copts      = COPTS,
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
+    tags = TAGS + ["sections"]
 )
 
 # cc_test(

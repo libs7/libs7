@@ -88,7 +88,7 @@ int main(int argc, char **argv)
     const char *ext;
     size_t extlen;
     cwk_path_get_extension(options[OPT_DATA].argument, &ext, &extlen);
-    log_debug("ext: %s", ext);
+    /* log_debug("ext: %s", ext); */
 
     if (extlen == 5 && (strncmp(ext, ".json", 5) ==  0)) {
         reader = s7_name_to_value(s7, "json:read");

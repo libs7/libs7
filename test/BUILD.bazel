@@ -1,1 +1,7 @@
-# do not remove
+test_suite(
+    name  = "test",
+    tests = [
+        "//test/batch",
+        "//test/unit"
+   ]
+)

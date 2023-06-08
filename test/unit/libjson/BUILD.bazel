@@ -16,6 +16,8 @@ DEPS          = BASE_DEPS + TEST_DEPS
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
 
+TAGS = ["json"]
+
 ################################################################
 test_suite(
     name  = "libjson",
@@ -50,7 +52,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["arrays", "conversion"]
 )
 
 cc_test(
@@ -73,7 +76,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["arrays"]
 )
 
 cc_test(
@@ -96,7 +100,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["maps", "conversion"]
 )
 
 cc_test(
@@ -119,7 +124,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["maps"]
 )
 
 cc_test(
@@ -143,7 +149,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["readers"]
 )
 
 # cc_test(

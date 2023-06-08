@@ -43,6 +43,8 @@ DATA = select({
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
 
+TAGS = ["mustache", "toml"]
+
 ################################################################
 test_suite(
     name  = "toml",
@@ -69,7 +71,8 @@ cc_test(
         "//conditions:default": []
     }),
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["comments"]
 )
 
 cc_test(
@@ -86,7 +89,8 @@ cc_test(
         "//conditions:default": []
     }),
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["conversion"]
 )
 
 cc_test(
@@ -103,7 +107,8 @@ cc_test(
         "//conditions:default": []
     }),
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["interpolation"]
 )
 
 cc_test(
@@ -115,7 +120,8 @@ cc_test(
     deps = DEPS,
     data = DATA,
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["renderers"]
 )
 
 ################################################################

@@ -15,9 +15,10 @@ COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
-# load("//test:BUILD.bzl",
-#      "DEFINES", "DEPS", "COPTS", "LINKOPTS", "TIMEOUT")
 
+TAGS = ["toml"]
+
+################################################################
 test_suite(
     name  = "libtoml",
     tests = [
@@ -53,7 +54,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["arrays"]
 )
 
 cc_test(
@@ -76,7 +78,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["maps", "conversion"]
 )
 
 cc_test(
@@ -99,7 +102,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["maps", "conversion"]
 )
 
 cc_test(
@@ -123,7 +127,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["datetime"]
 )
 
 cc_test(
@@ -146,7 +151,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["maps"]
 )
 
 cc_test(
@@ -171,7 +177,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["readers"]
 )
 
 cc_test(
@@ -195,7 +202,8 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["serialization"]
 )
 
 cc_test(
@@ -219,6 +227,7 @@ cc_test(
         # "-fno-pie"
     ],
     linkopts = LINKOPTS,
-    timeout = TIMEOUT
+    timeout = TIMEOUT,
+    tags = TAGS + ["strings"]
 )
 
