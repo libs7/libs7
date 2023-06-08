@@ -26,14 +26,13 @@ s7_pointer string_string;
 /* **************************************************************** */
 /*
   The toml_table_t returned by toml_parse() and toml_parser_file must
-  be freed, but the table pointers projected from those tables need
-  not be freed.
+  be freed, but nested toml_table_t need not be?
  */
 static s7_pointer free_toml_table(s7_scheme *s7, s7_pointer obj)
 {
     (void)s7;
     TRACE_ENTRY(free_toml_table);
-    free(s7_c_object_value(obj));
+    toml_free(s7_c_object_value(obj));
     return(NULL);
 }
 

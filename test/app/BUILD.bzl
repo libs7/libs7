@@ -20,6 +20,8 @@ def _test_mustachios_impl(ctx):
 
     args.add_all(["-s", ctx.file.script.path])
     args.add_all(["-o", ctx.outputs.out.path])
+    args.add_all(["-t", ctx.file.template.path])
+    args.add_all(["-d", ctx.file.data.path])
 
     # for var in ctx.var:
     #     print("VAR: {k}: {v}".format(k=var, v=ctx.var[var]))

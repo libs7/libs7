@@ -5,6 +5,7 @@
 #include "log.h"
 
 /* WARNING: result must be freed */
+// rename: read_c_string
 char *libs7_input_port_to_c_string(s7_scheme *s7, s7_pointer port)
 {
     char *buf;

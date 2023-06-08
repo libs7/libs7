@@ -156,10 +156,11 @@ cc_test(
             "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
-    data = ["//test/data:toml"],
+    data = ["//test/data:colors", "//test/data:toml"],
     deps = DEPS + [
-        "//dev",
-        "//lib/libtoml:toml_s7_archive"
+        "//lib/libtoml:toml_s7_archive",
+        "//lib/libjson:json_s7_archive",
+        "//lib/libmustachios:mustachios_s7_archive",
     ],
     copts = COPTS + [
         "-Isrc",

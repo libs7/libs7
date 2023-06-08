@@ -2,16 +2,46 @@ load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("//test/app:BUILD.bzl", "test_mustachios")
 
 diff_test(
-    name  = "case001",
+    name  = "json",
     file1 = "colors.expected",
-    file2 = "colors.actual",
+    file2 = "json.actual",
     timeout = "short"
 )
 
 test_mustachios(
-    name     = "colors",
-    script   = "main.scm",
-    out      = "colors.actual",
+    name     = "json_actual",
+    script   = "colors_main.scm",
+    out      = "json.actual",
     data     = "colors.json",
+    template = "colors.mustache"
+)
+
+diff_test(
+    name  = "scm",
+    file1 = "colors.expected",
+    file2 = "scm.actual",
+    timeout = "short"
+)
+
+test_mustachios(
+    name     = "scm_actual",
+    script   = "colors_main.scm",
+    out      = "scm.actual",
+    data     = "colors.scm",
+    template = "colors.mustache"
+)
+
+diff_test(
+    name  = "toml",
+    file1 = "colors.expected",
+    file2 = "toml.actual",
+    timeout = "short"
+)
+
+test_mustachios(
+    name     = "toml_actual",
+    script   = "colors_main.scm",
+    out      = "toml.actual",
+    data     = "colors.toml",
     template = "colors.mustache"
 )

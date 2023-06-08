@@ -12,59 +12,44 @@ s7_pointer c_pointer_string, string_string, character_string, boolean_string, re
 s7_pointer integer_string;
 static s7_pointer int64_t__symbol, toml_datum_t__symbol, toml_array_t__symbol, toml_table_t__symbol, FILE__symbol;
 
-
+/* (toml:read) - read current-input-port
+ * (toml:read str) - read string str
+ * (toml:read p) - read port p
+ */
 static s7_pointer g_toml_read(s7_scheme *s7, s7_pointer args)
 {
     TRACE_ENTRY(g_toml_read);
     s7_pointer p, arg;
-    char* toml_str;
     /* TRACE_S7_DUMP("args", args); */
 
-    if (args == s7_nil(s7)) {
-        /* log_debug("null args"); */
-        char buf[2 * 4096]; //FIXME: support arbitrary s len
-        int i = 0;
-        /* read from current-input-port, one char at a time */
-        s7_pointer cip = s7_current_input_port(s7);
+    /* s7_gc_on(s7, false); */
 
-        //FIXME: use same code to read cip, file, and string ports
+    const char* toml_str = NULL;
+    /* log_debug("toml_str ptr: %p", (void*)toml_str); */
 
-        s7_pointer c;
-        while (true) {
-            c = s7_read_char(s7, cip);
-            if (c == s7_eof_object(s7)) {
-                buf[i] = '\0';
-                break;
-            }
-            buf[i++] = s7_character(c);
-        }
-        /* log_debug("readed string: %s", buf); */
-        toml_str = buf;
+    p = args;
+    if (p == s7_nil(s7)) {
+        /* log_debug("SOURCE: current-input-port"); */
+        toml_str = libs7_input_port_to_c_string(s7, s7_current_input_port(s7));
     } else {
-        p = args;
         arg = s7_car(p);
-        /* log_debug("is_input_port? %d", s7_is_input_port(s7, arg)); */
-        /* log_debug("is_output_port? %d", s7_is_output_port(s7, arg)); */
-        /* s7_pointer dt = s7_type_of(s7, arg); */
-        /* trace_S7_DUMP("argtyp", dt); */
         if (s7_is_input_port(s7, arg)) {
-            TRACE_LOG_DEBUG("read arg is input port", "");
-
+            TRACE_LOG_DEBUG("SOURCE: input port", "");
             toml_str = libs7_input_port_to_c_string(s7, arg);
-
         }
         else if (s7_is_string(arg)) {
+            TRACE_LOG_DEBUG("SOURCE: string", "");
             toml_str = (char*)s7_string(arg);
-            TRACE_LOG_DEBUG("read arg is string: %s", toml_str);
         }
         else {
             return(s7_wrong_type_error(s7, s7_make_string_wrapper_with_length(s7, "toml:read", 10), 1, arg, string_string));
         }
     }
-    /* log_debug("toml_parse: %s", toml_str); */
     char errbuff[200];
-    //WARNING: this toml_table_t must be freed by client
-    toml_table_t *t = toml_parse(toml_str, errbuff, sizeof(errbuff));
+
+    //WARNING: this toml_table_t must be freed by client using toml_free
+    toml_table_t *t = toml_parse((char*)toml_str, (char*)errbuff, sizeof(errbuff));
+
     if (t == NULL) {
         log_error("toml:read failure: %s", errbuff);
         return s7_error(s7,
@@ -72,13 +57,14 @@ static s7_pointer g_toml_read(s7_scheme *s7, s7_pointer args)
                         s7_cons(s7, s7_make_string(s7, (char*)errbuff), s7_nil(s7)));
     } else {
         s7_pointer rval = s7_make_c_object(s7, toml_table_type_tag, (void*)t);
+        /* TRACE_S7_DUMP("tt", rval); */
         /* log_debug("returning obj"); */
         /* s7_pointer dt = s7_type_of(s7, rval); */
         /* TRACE_S7_DUMP("typ", dt); */
         /* log_debug("toml-table? %d", */
         /*           s7_c_object_type(rval) == toml_table_type_tag); */
         /* log_debug("tag: %d", toml_table_type_tag); */
-       return rval;
+        return rval;
     }
 }
 

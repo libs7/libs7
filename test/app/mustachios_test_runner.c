@@ -2,13 +2,12 @@
 
 #include "config.h"
 #include "gopt.h"
-/* #include "common.h" */
+#include "cwalk.h"
 
 #include "libs7.h"
 
 s7_scheme *s7;
-s7_pointer json_read;
-s7_pointer toml_read;
+s7_pointer reader;
 s7_pointer mustache_render;
 
 void cleanup(void)
@@ -24,6 +23,8 @@ void cleanup(void)
 enum OPTS {
     OPT_SCRIPT,
     OPT_OUTFILE,
+    OPT_TEMPLATE,
+    OPT_DATA,
     FLAG_HELP,
 
     LAST
@@ -35,6 +36,12 @@ struct option options[] = {
                     .flags=GOPT_ARGUMENT_REQUIRED},
 
     [OPT_OUTFILE] = {.long_name="out",.short_name='o',
+                     .flags=GOPT_ARGUMENT_REQUIRED},
+
+    [OPT_TEMPLATE] = {.long_name="template",.short_name='t',
+                     .flags=GOPT_ARGUMENT_REQUIRED},
+
+    [OPT_DATA] = {.long_name="data",.short_name='d',
                      .flags=GOPT_ARGUMENT_REQUIRED},
 
     [FLAG_HELP] = {.long_name="help",.short_name='h',
@@ -59,16 +66,47 @@ int main(int argc, char **argv)
         log_error("Out arg required");
         exit(EXIT_FAILURE);
     }
+    if (options[OPT_DATA].count != 1) {
+        log_error("Data arg required");
+        exit(EXIT_FAILURE);
+    }
+    if (options[OPT_TEMPLATE].count != 1) {
+        log_error("Template arg required");
+        exit(EXIT_FAILURE);
+    }
 
     s7_scheme *s7 = libs7_init();
 
     libs7_load_clib(s7, "mustachios");
-    libs7_load_clib(s7, "toml");
     libs7_load_clib(s7, "json");
+    libs7_load_clib(s7, "toml");
 
-    json_read = s7_name_to_value(s7, "json:read");
-    toml_read = s7_name_to_value(s7, "toml:read");
+    /* json_read = s7_name_to_value(s7, "json:read"); */
+    /* toml_read = s7_name_to_value(s7, "toml:read"); */
     mustache_render = s7_name_to_value(s7, "mustache:render");
+
+    const char *ext;
+    size_t extlen;
+    cwk_path_get_extension(options[OPT_DATA].argument, &ext, &extlen);
+    log_debug("ext: %s", ext);
+
+    if (extlen == 5 && (strncmp(ext, ".json", 5) ==  0)) {
+        reader = s7_name_to_value(s7, "json:read");
+    }
+    else if (extlen == 5 && (strncmp(ext, ".toml", 5) == 0)) {
+        reader = s7_name_to_value(s7, "toml:read");
+    }
+    else if (extlen == 4 && (strncmp(ext, ".scm", 4) == 0)) {
+        reader = s7_name_to_value(s7, "read");
+    } else {
+        log_error("Data file extension must be .json, .toml, or .scm");
+    }
+
+    s7_define_variable(s7, "reader", reader);
+
+    s7_define_variable(s7, "datafile", s7_make_string(s7, options[OPT_DATA].argument));
+
+    s7_define_variable(s7, "template", s7_make_string(s7, options[OPT_TEMPLATE].argument));
 
     s7_pointer res = s7_load(s7, options[OPT_SCRIPT].argument);
     s7_pointer op = s7_open_output_file(s7, options[OPT_OUTFILE].argument, "w");

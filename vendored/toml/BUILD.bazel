@@ -12,6 +12,7 @@ LINKOPTS      = BASE_LINKOPTS
 cc_library(
     name       = "toml",
     linkstatic = True,
+    alwayslink = True,
     srcs       = SRCS + ["toml.c", "tomlx.c"],
     hdrs       = ["toml.h", "tomlx.h"],
     deps       = DEPS,

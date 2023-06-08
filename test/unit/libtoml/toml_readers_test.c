@@ -1,13 +1,6 @@
 #include "config.h"
-/* #include "gopt.h" */
-/* #include "log.h" */
 #include "unity.h"
-#include "utarray.h"
-#include "utstring.h"
-#include "trace.h"
-
 #include "common.h"
-
 #include "libs7.h"
 
 s7_scheme *s7;
@@ -116,10 +109,6 @@ void call_with_input_file(void) {
     "(call-with-input-file \"test/data/strings.toml\" toml:read)";
     t = s7_eval_c_string(s7, cmd);
     TRACE_S7_DUMP("t", t);
-    /* s7_pointer is_input_port = s7_is_input_port(s7, inport); */
-    /* TEST_ASSERT_EQUAL(true, is_input_port); */
-    /* t = TOML_READ(inport); */
-    /* t = s7_apply_function(s7, toml_read, s7_list(s7, 1, inport)); */
     actual = APPLY_1("toml:map?", t);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
 

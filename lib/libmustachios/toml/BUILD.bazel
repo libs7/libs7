@@ -20,6 +20,7 @@ LINKOPTS= BASE_LINKOPTS
 cc_library(
     name = "mustache_toml",
     linkstatic = True,
+    alwayslink = True,
     srcs = SRCS + [
         "mustache_tomlc99.c",
         "mustache_tomlc99.h",
