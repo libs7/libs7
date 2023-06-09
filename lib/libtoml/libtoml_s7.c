@@ -477,7 +477,7 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
             s7_make_symbol(sc, "toml:map-length"), // R6RS: table-size
             s7_make_typed_function(sc, "toml:map-length",
                                    //toml_toml_table_length,
-                                   toml_table_length,
+                                   g_toml_table_length,
                                    1, 0, false,
                                    "(toml:map-length t) total number of entries in table, regardless of value type.", pl_ix));
 

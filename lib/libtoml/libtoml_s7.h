@@ -21,10 +21,10 @@ s7_pointer toml_read_file(s7_scheme *sc, char *fname);
 /* in toml_table_s7.c */
 extern int toml_table_type_tag;
 s7_pointer is_toml_table(s7_scheme *s7, s7_pointer args);
-s7_pointer toml_table_length(s7_scheme *s7, s7_pointer args);
+s7_pointer g_toml_table_length(s7_scheme *s7, s7_pointer args);
 s7_pointer toml_table_keys(s7_scheme *s7, s7_pointer args);
 s7_pointer toml_table_values(s7_scheme *s7, s7_pointer args);
-s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args);
+/* s7_pointer toml_table_ref(s7_scheme *s7, s7_pointer args); */
 /* char *toml_table_to_string(toml_table_t *tt, bool use_write); */
 s7_pointer toml_table_to_hash_table(s7_scheme *s7, toml_table_t *ta, bool clone);
 void toml_table_init(s7_scheme *s7, s7_pointer cur_env);

@@ -31,8 +31,16 @@ struct tomlx_item_s *tomlx_make_item(void* val, int type);
 
 bool tomlx_table_is_empty(toml_table_t *tt);
 
+size_t tomlx_table_length(toml_table_t *tt);
+
 struct tomlx_item_s *tomlx_table_ref(toml_table_t *tt,
                                      const char *key);
+
+toml_datum_t tomlx_table_datum_for_key(toml_table_t *tt, char *key, int *typ);
+
+void *tomlx_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
+
+char *tomlx_table_to_string(toml_table_t *tt, bool use_write);
 
 struct tomlx_item_s *tomlx_array_ref(toml_array_t *array,
                                      int idx);
@@ -46,12 +54,6 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write);
 char *tomlx_datetime_to_string(toml_timestamp_t *ts, bool use_write);
 
 char *tomlx_format_datetime(toml_timestamp_t* ts, const char *fmt);
-
-toml_datum_t tomlx_table_datum_for_key(toml_table_t *tt, char *key, int *typ);
-
-void *tomlx_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
-
-char *tomlx_table_to_string(toml_table_t *tt, bool use_write);
 
 toml_table_t *tomlx_read_string(const char *s);
 

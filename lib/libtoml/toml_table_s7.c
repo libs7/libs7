@@ -222,21 +222,23 @@ static s7_pointer toml_table_set(s7_scheme *s7, s7_pointer args)
     return s7_nil(s7);
 }
 
-s7_pointer toml_table_length(s7_scheme *s7, s7_pointer args)
+s7_pointer g_toml_table_length(s7_scheme *s7, s7_pointer args)
 {
     //FIXME: call tomlx_table_length(t);
-    TRACE_ENTRY(toml_table_length);
+    TRACE_ENTRY(g_toml_table_length);
     s7_pointer p, arg;
     p = args;
     arg = s7_car(p);
 
     void *t = (void*)s7_c_object_value_checked(arg, toml_table_type_tag);
     if (t) {
-        int ntab = toml_table_ntab(t);
-        int narr = toml_table_narr(t);
-        int nkv = toml_table_nkval(t);
-        s7_pointer i = s7_make_integer(s7, ntab + narr + nkv);
-        return(i);
+        size_t ttlen = tomlx_table_length(t);
+        return (s7_make_integer(s7,ttlen));
+        /* int ntab = toml_table_ntab(t); */
+        /* int narr = toml_table_narr(t); */
+        /* int nkv = toml_table_nkval(t); */
+        /* s7_pointer i = s7_make_integer(s7, ntab + narr + nkv); */
+        /* return(i); */
     } else {
         log_error("Bad arg, expected table, actual: %d", s7_c_object_type(arg));
         //FIXME: throw error
@@ -355,7 +357,7 @@ void toml_table_init(s7_scheme *s7, s7_pointer cur_env)
     s7_c_type_set_is_equivalent(s7, toml_table_type_tag, toml_table_is_equivalent);
     s7_c_type_set_ref          (s7, toml_table_type_tag, g_toml_table_ref);
     s7_c_type_set_set          (s7, toml_table_type_tag, toml_table_set);
-    s7_c_type_set_length       (s7, toml_table_type_tag, toml_table_length);
+    s7_c_type_set_length       (s7, toml_table_type_tag, g_toml_table_length);
     s7_c_type_set_copy         (s7, toml_table_type_tag, toml_table_copy);
     s7_c_type_set_fill         (s7, toml_table_type_tag, toml_table_fill);
     s7_c_type_set_reverse      (s7, toml_table_type_tag, toml_table_reverse);

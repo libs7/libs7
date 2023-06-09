@@ -348,6 +348,15 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
     return buf;
 }
 
+/* **************************************************************** */
+size_t tomlx_table_length(toml_table_t *tt)
+{
+    int ntab = toml_table_ntab(tt);
+    int narr = toml_table_narr(tt);
+    int nkv = toml_table_nkval(tt);
+    return (size_t) ntab + narr + nkv;
+}
+
 toml_datum_t tomlx_table_datum_for_key(toml_table_t *tt, char *key, int *typ)
 {
     TOMLX_ENTRY_STR(tomlx_table_datum_for_key, key);
