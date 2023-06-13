@@ -113,6 +113,7 @@ static char *getkey(char **head, int sflags)
         result = NULL;
     else {
         result = write = iter;
+        // no JsonPointer for toml
         if (sflags & Mustach_With_JsonPointer) {
             while (car && car != '/') {
                 if (car == '~')
@@ -192,7 +193,7 @@ static enum sel sel(struct datasource_s *ds, // datasource
     } else {
         log_debug("key: %s", copy);
     }
-    log_debug("sflags: %d", sflags);
+    log_debug("sflags: 0x%02x", sflags);
 #endif
 
     switch(copy[0]) {
@@ -300,6 +301,7 @@ static enum sel sel(struct datasource_s *ds, // datasource
 no_metachar:
 #ifdef DEVBUILD
         log_debug("CASE DEFAULT: no metachar ('.', '^', '$', '?')");
+        log_debug("calling getkey w %s, sflags: 0x%02x", (char*)copy, sflags);
 #endif
         /* not the single dot, extract the first key */
         key = getkey(&copy, sflags);
@@ -322,9 +324,10 @@ no_metachar:
                  && !value
                  && !*copy
                  && (ds->flags & Mustach_With_ObjectIter)
-                 && ds->methods->sel(ds->stack, NULL))
+                 && ds->methods->sel(ds->stack, NULL)) {
+            /* log_debug("setting S_ok_or_objiter"); */
             result = S_ok_or_objiter;
-        else
+        } else
             result = S_none;
 #ifdef DEVBUILD
         log_debug("app sel returned: %d", result);
@@ -338,17 +341,33 @@ no_metachar:
 #ifdef DEVBUILD
                 log_debug("SUBSELECTING subitem, key: '%s'", key);
 #endif
-                if (ds->methods->subsel(ds->stack, key))
-                    /* nothing */;
-                else if (key[0] == '*'
-                         && !key[1]
-                         && !value
-                         && !*copy
-                         && (ds->flags & Mustach_With_ObjectIter))
-                    result = S_objiter;
-                else
-                    result = S_none;
+                int subsel = ds->methods->subsel(ds->stack, key);
+                /* log_debug("subselected: %d, key: %s", subsel, key); */
+                if (subsel) /* nothing */
+                    ;
+                else {
+#ifdef DEVBUILD
+                    log_debug("subsel fail");
+                    log_debug("key[0]: %c", key[0]);
+                    log_debug("key[1]: %c", key[1]);
+                    log_debug("value: %s", value);
+                    log_debug("*copy: %s", *copy);
+                    log_debug("ds->flags: 0x%04X", ds->flags);
+#endif
+                    if (key[0] == '*'
+                        && !key[1]
+                        && !value
+                        && !*copy) {
+                        /* && (ds->flags & Mustach_With_ObjectIter)) { */
+                        TRACE_LOG_DEBUG("setting result: objiter", "");
+                        result = S_objiter;
+                    } else {
+                        TRACE_LOG_DEBUG("no objiter", "");
+                        result = S_none;
+                    }
+                }
                 key = getkey(&copy, sflags);
+                /* log_debug("getkey res: %s", key); */
             }
         }
     }
@@ -545,7 +564,7 @@ static int maybe_format(struct datasource_s *ds,
 #endif
     enum sel s = sel(ds, name);
 #ifdef DEVBUILD
-    log_debug("maybe_format: sel returned %d", s);
+    log_debug("maybe_format: sel returned 0x%02x", s);
     /* S_none = 0, */
     /* S_ok = 1, */
     /* S_objiter = 2, */
@@ -710,6 +729,7 @@ char *mustach_toml_render_to_string(const char *template,
 {
 #ifdef DEVBUILD
     log_debug("mustach_toml_render_to_string");
+    log_debug("flags: 0x%02x", flags);
 #endif
     struct datasource_s ds;
 

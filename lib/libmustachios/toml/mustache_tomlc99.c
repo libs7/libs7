@@ -32,13 +32,19 @@ struct tstack_s {
     int depth;
     struct {
         struct tomlx_item_s *ctx;
-        struct tomlx_item_s *obj;
+        struct tomlx_item_s *obj; /* bound value of selected item? */
 
-        struct tomlx_item_s *key;
+        /* map iteration: same as iterating over array, except for
+           each idx, we use use toml_key_in(tbl, idx) to obtain the
+           key, and we need to store it since tomlc99 does not provide
+           a mapitem (kv pair).
+        */
+        size_t index, count;
+        /* struct tomlx_item_s *key; */
+        const char *key;
         struct tomlx_item_s *val;
-
         int is_objiter;
-        size_t index, count;    /* not for cjson? */
+
         int predicate;         /*  */
         bool lambda;            /*  */
         int  workbuf_idx;
@@ -217,19 +223,26 @@ static int sel(void *closure, const char *key)
         }
     } else {
         i = stack->depth;
-        while (i >= 0) {
-            if (stack->stack[i].obj->type == TOML_TABLE) {
-                selection = tomlx_table_ref(stack->stack[i].obj->u.t, key);
-                /* if (selection) { */
-                /*     log_debug("sel typ: %d", selection->type); */
-                /*     if (selection->type == TOML_BOOL) */
-                /*         log_debug("bool: %d", selection->u.b); */
-                /* } */
-                if (selection) break;
+        /* log_debug("searching stack for key %s", key); */
+        /*
+          SPECIAL CASE: root table objiter: {{#^.*}}...{{/^.*}}
+         */
+        if ((strncmp(key, "^", 1) == 0) && strlen(key) == 1) {
+            selection = stack->stack[i].obj;
+        } else {
+            while (i >= 0) {
+                if (stack->stack[i].obj->type == TOML_TABLE) {
+                    selection = tomlx_table_ref(stack->stack[i].obj->u.t, key);
+                    /* if (selection) { */
+                    /*     log_debug("sel typ: %d", selection->type); */
+                    /*     if (selection->type == TOML_BOOL) */
+                    /*         log_debug("bool: %d", selection->u.b); */
+                    /* } */
+                    if (selection) break;
+                }
+                i--;
             }
-            i--;
         }
-
         if (i >= 0)
             r = 1;
         else {
@@ -250,22 +263,25 @@ static int subsel(void *closure, const char *name)
     (void)r; //FIXME
 
     /* dump_stack(e); */
-
-    o = tomlx_table_ref(stack->selection->u.t, name);
-    if (o) {
-        stack->selection = o;
-        return 1;
-    } else
+    if (stack->selection->type == TOML_TABLE) {
+        o = tomlx_table_ref(stack->selection->u.t, name);
+        if (o) {
+            TRACE_LOG_DEBUG("setting selection to val for key %s", name);
+            stack->selection = o;
+            return 1;
+        } else
+            return 0;
+    } else {
+        log_error("SUBSEL selection is not a table!");
+        log_debug("type: %d", stack->selection->type);
         return 0;
-    /* r = o != NULL; */
-    /* if (r) */
-    /* 	stack->selection = o; */
-    /* return r; */
+    }
 }
 
 static int enter(void *closure, int objiter)
 {
     TRACE_ENTRY(enter);
+    TRACE_LOG_DEBUG("objiter: %d", objiter);
     struct tstack_s *e = closure;
     struct tomlx_item_s *o;
 
@@ -275,19 +291,25 @@ static int enter(void *closure, int objiter)
     o = e->selection;
     e->stack[e->depth].is_objiter = 0;
     if (objiter) {
-        /* if (! cJSON_IsObject(o)) */
-        /* 	goto not_entering; */
-        /* if (o->child == NULL) */
-        /* 	goto not_entering; */
-        /* e->stack[e->depth].obj = o->child; */
-        /* e->stack[e->depth].next = o->child->next; */
-        /* e->stack[e->depth].ctx = o; */
-        /* e->stack[e->depth].is_objiter = 1; */
+        if (o->type != TOML_TABLE)
+            goto not_entering;
+        size_t fld_ct = tomlx_table_length(o->u.t);
+        if (fld_ct == 0)
+            goto not_entering;
+        e->stack[e->depth].count = fld_ct;
+        e->stack[e->depth].index = 0;
+        // obtain first mapitem
+        const char *key = toml_key_in(o->u.t, 0);
+        e->stack[e->depth].key = key;
+        struct tomlx_item_s *item = tomlx_table_ref(o->u.t, key);
+        e->stack[e->depth].obj = item;
+        e->stack[e->depth].ctx = o;
+        e->stack[e->depth].is_objiter = 1;
     } else if (o->type == TOML_ARRAY) {
         TRACE_LOG_DEBUG("OPENING ARRAY, sz: %d", toml_array_nelem(o->u.a));
         e->stack[e->depth].count = toml_array_nelem(o->u.a);
         if (e->stack[e->depth].count == 0) {
-            log_debug("EMPTY: NOT OPENING");
+            /* log_debug("EMPTY ARRAY: NOT OPENING"); */
             goto not_entering;
         }
         e->stack[e->depth].ctx = o;
@@ -342,21 +364,35 @@ static int next(void *closure)
 {
     TRACE_ENTRY(next);
     struct tstack_s *e = closure;
-    /* struct tomlx_item_s *o; */
+    struct tomlx_item_s *o = e->stack[e->depth].obj;
+    struct tomlx_item_s *ctx = e->stack[e->depth].ctx;
 
     if (e->depth <= 0) {
         fprintf(stderr, "ERR: next\n");
         return MUSTACH_ERROR_CLOSING;
     }
-    // tomlc99 stores kvpairs, tables and arrays separately.
-    // TODO: implement an iterator
-    /* if (e->stack[e->depth].is_objiter) { */
-    /*     e->stack[e->depth].iter = json_object_iter_next(e->stack[e->depth].cont, e->stack[e->depth].iter); */
-    /*     if (e->stack[e->depth].iter == NULL) */
-    /*         return 0; */
-    /*     e->stack[e->depth].obj = json_object_iter_value(e->stack[e->depth].iter); */
-    /*     return 1; */
-    /* } */
+
+    if (e->stack[e->depth].is_objiter) {
+        // just like array, advance index
+        if (ctx->type != TOML_TABLE) {
+            log_error("Unexpected type for objiter: %d", o->type);
+        }
+        e->stack[e->depth].index++;
+        if (e->stack[e->depth].index >= e->stack[e->depth].count)
+            return 0;
+        // set key, obj to next mapitem
+        const char *key = toml_key_in(ctx->u.t, e->stack[e->depth].index);
+        /* log_debug("Next key: %s", key); */
+        e->stack[e->depth].key = key;
+        struct tomlx_item_s *item = tomlx_table_ref(ctx->u.t, key);
+        //FIXME: free current obj?
+        e->stack[e->depth].obj = item;
+        /* e->stack[e->depth].iter = json_object_iter_next(e->stack[e->depth].cont, e->stack[e->depth].iter); */
+        /* if (e->stack[e->depth].iter == NULL) */
+        /*     return 0; */
+        /* e->stack[e->depth].obj = json_object_iter_value(e->stack[e->depth].iter); */
+        return 1;
+    }
 
     e->stack[e->depth].index++;
     if (e->stack[e->depth].index >= e->stack[e->depth].count)
@@ -398,9 +434,17 @@ static int format(struct tstack_s *stack, const char *fmt,
     int len;
 
     if (key) {
-        s = stack->stack[stack->depth].is_objiter
-            ? stack->stack[stack->depth].obj->u.s
-            : "";
+        if (stack->stack[stack->depth].is_objiter) {
+            // int key should be index of current mapitem?
+            // or any non-zero?
+            s = stack->stack[stack->depth].key;
+        } else {
+            s ="";
+        }
+        // jansson:
+        /* s = e->stack[e->depth].is_objiter */
+        /*     ? json_object_iter_key(e->stack[e->depth].iter) */
+	/* 		: ""; */
     } else {
         struct tomlx_item_s *o = stack->selection;
         switch(o->type) {
@@ -473,7 +517,7 @@ static int format(struct tstack_s *stack, const char *fmt,
             } else {
                 s = tomlx_datetime_to_string(o->u.ts, false);
             }
-            log_debug("ts: %s", s);
+            /* log_debug("ts: %s", s); */
             sbuf->freecb = free;
             break;
         default:
@@ -539,7 +583,7 @@ static void dump_stack(struct tstack_s *stack)
         log_debug("stackframe: %d", i);
         _dump_obj("\tctx:", stack->stack[i].ctx);
         _dump_obj("\tobj", stack->stack[i].obj);
-        _dump_obj("\tkey", stack->stack[i].key);
+        log_debug("\tkey: %s", stack->stack[i].key);
         _dump_obj("\tval", stack->stack[i].val);
         log_debug("\tstack[%d].count: %d", i, stack->stack[i].count);
         log_debug("\tstack[%d].index: %d", i, stack->stack[i].index);
@@ -586,10 +630,13 @@ const char *mustache_toml_render(const char *template,
     stack.root = titem;
 
     //FIXME: client responsible for flags
-    int flags = Mustach_With_AllExtensions;
-    flags &= ~Mustach_With_JsonPointer;
+    int flags = Mustach_With_All_TOML_Extensions;
+    /* flags &= ~Mustach_With_JsonPointer; */
     (void)_flags;
     //FIXME: _flags arg is for opting out of default 'all'
+
+    /* log_debug("Flags: 0x%02x", flags); */
+    /* log_debug("MWAE: 0x%02x", Mustach_With_All_TOML_Extensions); */
 
     errno = 0;
     char *result = mustach_toml_render_to_string(template, template_sz,
