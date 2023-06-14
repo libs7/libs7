@@ -280,30 +280,30 @@ void to_string_atoms(void) {
     // bools
     t = TOML_READ("k1 = true\nk2 = false");
     res = APPLY_1("object->string", t);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = true, k2 = false>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = true, k2 = false>",
                              s7_string(res));
     // doubles
     t = TOML_READ("k1 = 1.2\nk2 = 3.4");
     res = APPLY_1("object->string", t);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 1.2, k2 = 3.4>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = 1.2, k2 = 3.4>",
                              s7_string(res));
     // ints
     t = TOML_READ("k1 = 7\nk2 = 8");
     res = APPLY_1("object->string", t);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 7, k2 = 8>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = 7, k2 = 8>",
                              s7_string(res));
 
     // strings
     t = TOML_READ("k1 = 'Hi there'\nk2 = ', World'");
     res = APPLY_1("object->string", t);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 'Hi there', k2 = ', World'>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = 'Hi there', k2 = ', World'>",
                              s7_string(res));
 
     /* // timestamps (not yet) */
     /* t = TOML_READ("k1 = 'Hi there'\nk2 = ', World'"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 'Hi there', k2 = ', World'>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = 'Hi there', k2 = ', World'>", */
     /*                          s7_string(res)); */
 }
 
@@ -312,32 +312,32 @@ void to_string_arrays(void) {
     t = TOML_READ("ba = [true, false]");
     res = APPLY_1("object->string", t);
     TRACE_S7_DUMP("obj->s", res);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table ba = [true, false]>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table ba = #<toml-array true, false>>",
                              s7_string(res));
     // int arrays
     t = TOML_READ("ia = [0, 1, 2]");
     res = APPLY_1("object->string", t);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table ia = [0, 1, 2]>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table ia = #<toml-array 0, 1, 2>>",
                              s7_string(res));
     // double arrays
     t = TOML_READ("da = [1.2, 3.4]");
     res = APPLY_1("object->string", t);
     TRACE_S7_DUMP("obj->s", res);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table da = [1.2, 3.4]>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table da = #<toml-array 1.2, 3.4>>",
                              s7_string(res));
 
     // string arrays
     t = TOML_READ("sa = ['Hey there', 'you old world']");
     res = APPLY_1("object->string", t);
     TRACE_S7_DUMP("obj->s", res);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table sa = [\"Hey there\", \"you old world\"]>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table sa = #<toml-array \"Hey there\", \"you old world\">>",
                              s7_string(res));
 
     /* // timestamp arrays (not yet) */
     /* t = TOML_READ("k1 = 'Hi there'\nk2 = ', World'"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = \"Hi there\", k2 = \", World\">", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = \"Hi there\", k2 = \", World\">", */
     /*                          s7_string(res)); */
 }
 
@@ -346,32 +346,32 @@ void to_string_subtables(void) {
     t = TOML_READ("a1 = { a1b1 = true }\na2 = 9");
     res = APPLY_1("object->string", t);
     TRACE_S7_DUMP("obj->s", res);
-    TEST_ASSERT_EQUAL_STRING("<#toml-table a2 = 9, a1 = <#toml-table a1b1 = true>>",
+    TEST_ASSERT_EQUAL_STRING("#<toml-table a2 = 9, a1 = #<toml-table a1b1 = true>>",
                              s7_string(res));
     /* // int arrays */
     /* t = TOML_READ("ia = [0, 1, 2]"); */
     /* res = APPLY_1("object->string", t); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table ia = [0, 1, 2]>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table ia = [0, 1, 2]>", */
     /*                          s7_string(res)); */
     /* // double arrays */
     /* t = TOML_READ("da = [1.2, 3.4]"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table da = [1.2, 3.4]>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table da = [1.2, 3.4]>", */
     /*                          s7_string(res)); */
 
     /* // string arrays */
     /* t = TOML_READ("sa = ['Hey there', 'you old world']"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table sa = ['Hey there', 'you old world']>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table sa = ['Hey there', 'you old world']>", */
     /*                          s7_string(res)); */
 
     /* // timestamp arrays (not yet) */
     /* t = TOML_READ("k1 = 'Hi there'\nk2 = ', World'"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 'Hi there', k2 = ', World'>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = 'Hi there', k2 = ', World'>", */
     /*                          s7_string(res)); */
 }
 
@@ -379,7 +379,7 @@ void to_string_mixed(void) {
     t = TOML_READ("a1 = [ {a1b1 = [1, 2] } ]");
     res = APPLY_1("object->string", t);
     TRACE_S7_DUMP("obj->s", res);
-    expected_str = "<#toml-table a1 = [<#toml-table a1b1 = [1, 2]>]>";
+    expected_str = "#<toml-table a1 = #<toml-array #<toml-table a1b1 = #<toml-array 1, 2>>>>";
     TEST_ASSERT_EQUAL_STRING(expected_str, s7_string(res));
 
     /* t = TOML_READ("a1 = { a1b1 = [1, 2] }\na2 = [{a2b1=true},{a2b2=99}]"); */
@@ -388,27 +388,27 @@ void to_string_mixed(void) {
     /* // int arrays */
     /* t = TOML_READ("ia = [0, 1, 2]"); */
     /* res = APPLY_1("object->string", t); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table ia = [0, 1, 2]>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table ia = [0, 1, 2]>", */
     /*                          s7_string(res)); */
     /* // double arrays */
     /* t = TOML_READ("da = [1.2, 3.4]"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table da = [1.2, 3.4]>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table da = [1.2, 3.4]>", */
     /*                          s7_string(res)); */
 
     /* // string arrays */
     /* t = TOML_READ("sa = ['Hey there', 'you old world']"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table sa = ['Hey there', 'you old world']>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table sa = ['Hey there', 'you old world']>", */
     /*                          s7_string(res)); */
 
     /* // timestamp arrays (not yet) */
     /* t = TOML_READ("k1 = 'Hi there'\nk2 = ', World'"); */
     /* res = APPLY_1("object->string", t); */
     /* TRACE_S7_DUMP("obj->s", res); */
-    /* TEST_ASSERT_EQUAL_STRING("<#toml-table k1 = 'Hi there', k2 = ', World'>", */
+    /* TEST_ASSERT_EQUAL_STRING("#<toml-table k1 = 'Hi there', k2 = ', World'>", */
     /*                          s7_string(res)); */
 }
 

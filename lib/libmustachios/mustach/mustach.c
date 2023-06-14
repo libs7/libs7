@@ -261,10 +261,10 @@ static int process(const char *template, size_t template_length, struct iwrap *i
         size_t keylen;
         const char *section_content_start;  /* template ptr, set at section begin, used to control iteration in sections (was: 'again') */
         /* bitfields */
-        unsigned enabled:   1;
-        unsigned entered:   1; /* means hashtag has truthy value */
+        unsigned enabled:   1;  /* meaning? */
+        unsigned entered:   1; /* means hashtag has truthy value? */
         unsigned lambda:    1;
-        int predicate;
+        int predicate; //FIXME: rename to meta_flags
         signed int workbuf_idx; /* -1 if hashtag is not a lambda; index into workbuf_stack */
     } metastack[MUSTACH_MAX_DEPTH];
     size_t keylen = 0;             /* length of (tag)key in stackframe? */
@@ -317,10 +317,12 @@ static int process(const char *template, size_t template_length, struct iwrap *i
 
 #ifdef DEVBUILD
         log_debug("adjusting...");
+        log_debug("template_curr_ptr: %s", template_curr_ptr);
 #endif
         /* emit prefix and prev line text; set bokey to next tagkey */
         for (bokey = template_curr_ptr ; ; bokey++) {
             c = (bokey == eotemplate) ? '\n' : *bokey;
+            /* log_debug("bokey: %s", bokey); */
             if (c == '\n') {
                 /* means we've read a line of const text (no tags); now emit it */
                 worklen = (bokey != eotemplate) + (size_t)(bokey - template_curr_ptr);
@@ -350,13 +352,20 @@ static int process(const char *template, size_t template_length, struct iwrap *i
 #ifdef DEVBUILD
                     log_debug("no more template, returning depth: %d", depth);
 #endif
-                    return depth ? MUSTACH_ERROR_UNEXPECTED_END : MUSTACH_OK;
+                    if (depth > 0) {
+                        log_error("Unexpected end; stack depth > 0: %d", depth);
+                        return MUSTACH_ERROR_UNEXPECTED_END;
+                    } else {
+                        return MUSTACH_OK;
+                    }
+                    /* return depth ? MUSTACH_ERROR_UNEXPECTED_END : MUSTACH_OK; */
                 }
                 template_curr_ptr += worklen; /* advance past newline */
                 stdalone = 1; /* reset to default value */
                 pref.len = 0;
             }
             else if (!isspace(c)) {
+                /* log_debug("XXXXXXXXXXXXXXXX"); */
                 if (stdalone == 2 && enabled) {
                     /* stdalone 2 means a 'partial', where prefix is not discarded? */
                     /* see https://github.com/mustache/spec/blob/master/specs/partials.yml */
@@ -370,15 +379,22 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                     pref.len = 0;
                     stdalone = 0; /* why not 1? */
                 }
+                /* log_debug("tag_open_delim_len: %d", tag_open_delim_len); */
                 /* break if c pts to start of tag_open_delim */
                 if (c == *tag_open_delim && eotemplate - bokey >= (ssize_t)tag_open_delim_len) {
+                    /* log_debug("1 XXXXXXXXXXXXXXXX"); */
                     for (worklen = 1 ; worklen < tag_open_delim_len && bokey[worklen] == tag_open_delim[worklen] ; worklen++);
-                    if (worklen == tag_open_delim_len)
+                    if (worklen == tag_open_delim_len) {
+                        /* log_debug("1a XXXXXXXXXXXXXXXX"); */
                         break;
+                    }
                 }
+                /* log_debug("2 XXXXXXXXXXXXXXXX"); */
                 stdalone = 0; /* why? */
             }
         }
+        /* log_debug("3 XXXXXXXXXXXXXXXX"); */
+        /* log_debug("bokey: %s", bokey); */
         /* DUMP_PREFIX(&pref); */
 
         /* now bokey should pt to start of next tag */
@@ -389,15 +405,29 @@ static int process(const char *template, size_t template_length, struct iwrap *i
         pref.start = template_curr_ptr;
         pref.len = enabled ? (size_t)(bokey - template_curr_ptr) : 0;
         bokey += tag_open_delim_len;
+        /* log_debug("bokey: %s", bokey); */
+        /* log_debug("eotemplate: %s", eotemplate); */
 
         /* find botag_close and set template_curr_ptr ptr to one after eotag_close */
         for (botag_close = bokey ; ; botag_close++) {
-            if (botag_close == eotemplate)
+            /* log_debug("botag_close: %s", botag_close); */
+            if (botag_close == eotemplate) {
+                log_error("unexpected end");
                 return MUSTACH_ERROR_UNEXPECTED_END;
-            if (*botag_close == *tag_close_delim && eotemplate - botag_close >= (ssize_t)tag_close_delim_len) {
-                for (worklen = 1 ; worklen < tag_close_delim_len && botag_close[worklen] == tag_close_delim[worklen] ; worklen++);
-                if (worklen == tag_close_delim_len) {
-                    break;
+            }
+            /* if (*botag_close == *tag_close_delim) && eotemplate - botag_close >= (ssize_t)tag_close_delim_len) { */
+            if (*botag_close == *tag_close_delim) {
+                if (eotemplate - botag_close >= (ssize_t)tag_close_delim_len) {
+                    for (worklen = 1 ; worklen < tag_close_delim_len && botag_close[worklen] == tag_close_delim[worklen] ; worklen++);
+                    if (worklen == tag_close_delim_len) {
+                        break;
+                    } else {
+                        log_error("Closing tag missing final delim?");
+                        return MUSTACH_ERROR_TAG_SYNTAX;
+                    }
+                } else {
+                    log_error("Bad closing tag: missing final delim? %s", bokey);
+                    return MUSTACH_ERROR_TAG_SYNTAX;
                 }
             }
         }
@@ -426,7 +456,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
         case ':':       /* extension (JSON only?) */
             stdalone = 0;
             if (iwrap->flags & Mustach_With_Colon) {
-                log_debug("metachar: COLON");
+                TRACE_LOG_DEBUG("metachar: COLON", "");
                 goto exclude_first;
             }
             goto get_key;
@@ -639,7 +669,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
             log_debug("bokey: %.15s", bokey);
             log_debug("keylen: %d", keylen);
             log_debug("depth: %d", depth);
-            log_debug("predicate?: %d", ((struct closure_hdr*)iwrap->closure)->predicate);
+            log_debug("predicate: 0x%04X", ((struct closure_hdr*)iwrap->closure)->predicate);
 #endif
             /* w/in section OR inverted section */
             if (depth == MUSTACH_MAX_DEPTH)
@@ -682,7 +712,9 @@ static int process(const char *template, size_t template_length, struct iwrap *i
             // at this point c == '#' OR c == NEGOP OR c == PREDOP_BUTLAST
             // set enabled for next iteration (not for current metastack frame)
             // original: if ((c == '#') == (rc == 0)) enabled = 0;
-            // i.e. either # and entered, or ^ and not entered
+            // where rc == 0 means did not enter
+            // i.e. disable if either # and not entered,
+            // or ^ and entered entered
             if (c == '#') {
                 enabled = did_enter;
             }
@@ -753,7 +785,8 @@ static int process(const char *template, size_t template_length, struct iwrap *i
 #endif
                 // metastack ToS should now match current node?
                 if (keylen != metastack[depth].keylen) {
-                    log_debug("2xxxx");
+                    log_debug("keylen %d != metastach[%d].keylen %d",
+                              keylen, depth, metastack[depth].keylen);
                     return MUSTACH_ERROR_CLOSING;
                 } else if (memcmp(metastack[depth].key, key, keylen)) {
 #ifdef DEVBUILD
@@ -775,6 +808,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                 if (metastack[depth].entered) {
 #ifdef DEVBUILD
                     log_debug("section '%s' next, depth %d", key, depth);
+                    iwrap->dump_stack(iwrap->closure);
 #endif
                     has_next = iwrap->next(iwrap->closure);
                 }
@@ -810,6 +844,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                     /* depth--; */
                     struct mustach_sbuf sbuf;
                     sbuf_reset(&sbuf);
+                    // lambda only applied at close tag, sbuf will hold arg
                     iwrap->leave(iwrap->closure, &sbuf);
 #ifdef DEVBUILD
                     log_debug("iwrap->leave sbuf.value: %s", sbuf.value);
@@ -927,7 +962,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
             break;
         }
 #ifdef DEVBUILD
-        log_debug(BLU "end switch2;" CRESET " iterating");
+        log_debug(BLU "end switch2;" CRESET " looping");
 #endif
     }
 }
@@ -941,6 +976,7 @@ int mustach_file(const char *template, size_t length,
 {
 #ifdef DEVBUILD
     log_debug("mustach_file");
+    log_debug("flags: 0x%02x", flags);
 #endif
 	int rc;
 	struct iwrap iwrap; // why do we need this wrapper?

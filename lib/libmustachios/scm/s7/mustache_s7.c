@@ -18,7 +18,7 @@
 
 /* We need a global s7, because these routines are called by the
    mustach kernel, which knows nothing about s7.
-   The definition is in the init function of libmustachios
+   The definition must be set by client.
 */
 extern s7_scheme *s7;
 
@@ -36,9 +36,7 @@ struct workbuf_s {
 
 static int start(struct tstack_s *stack)
 {
-    TRACE_ENTRY(start);
-    /* log_debug("stack ptr: %p", stack); */
-    /* log_debug("stack root ptr: %p", stack->root); */
+    TRACE_ENTRY(start)
     stack->depth = 0;
     s7_pointer x = s7_nil(s7);
     stack->selection = x;
@@ -433,64 +431,73 @@ static s7_pointer _handle_stack_match(struct tstack_s *e, s7_pointer assoc)
         TRACE_S7_DUMP("assoc is " RED " proper list" CRESET, assoc);
         TRACE_S7_DUMP("assoc-val", assoc_val);
 
-        // special handling: (:a 1 2 3) v. (:a (1 2 3))
-        // cdr always a list
+        // special handling:
+        // (:a 1 2 3),  (:a (1 2 3)), (:a (:b 1)), (:a ((:b 1)))
+        // cdr always a propert list
         // (cdr (:a 1 2 3)) > (1 2 3)
         // (cdr (:a (1 2 3))) > ((1 2 3))
         // in latter case, (cddr x) = '()
-        // but: (:a (1 2) (3 4)) - list of lists
+        // but: (:a (1 2) (3 4)) - list of (a)lists
         // then val is ((1 2) (3 4))
-#ifdef DEVBUILD
-        log_debug("assoc-val len: %d", s7_list_length(s7, assoc_val));
-#endif
-        if (s7_list_length(s7, assoc_val) == 1) {
-            // case: (1)  from (:a 1)
-            s7_pointer car = s7_car(assoc_val);
-            if (s7_is_list(s7, car)) {
-                // case: ((1))
-                // case: ((1 2 3))
-                // case: ((lambda ...))
-                TRACE_S7_DUMP("car is list", car);
-                if (car == s7_nil(s7)) {
-                    selection = car;
-                }
-                else if (libs7_is_alist(s7, car)) {
-                    TRACE_S7_DUMP("car is alist", car);
-                    selection = car;
-                } else {
-                    selection = assoc_val;
-                }
-            } else {
-                TRACE_S7_DUMP("car is NOT list", car);
-                if (s7_is_procedure(car)) {
-                    TRACE_LOG_DEBUG("car is lambda", "");
-                    if (e->stack[e->depth].index +1 < e->stack[e->depth].count) {
-                        e->lambda = true;
-                    } else {
-                        e->lambda = false;
-                        e->stack[e->depth].lambda = false;
-                    }
-                    e->stack[e->depth].lambda = true;
-                    selection = car;
-                }
-                else if (s7_is_vector(car)) {
-#ifdef DEVBUILD
-                    log_debug("car is vector");
-#endif
-                    selection = car;
-                } else {
-#ifdef DEVBUILD
-                    log_debug("car is nonlambda, nonvector");
-#endif
-                    selection = car;
-                }
-            }
-        } else {
-#ifdef DEVBUILD
-            log_debug("assoc_val len > 1");
-#endif
-            selection = assoc_val;
-        }
+        // pathological: (:a (:b 1) (:c 2) 99)
+        //   val is  ((:b 1) (:c 2) 99) - not an alist
+
+        selection = assoc_val;
+
+        //OBSOLETE: unwrapping implicit lists. implicit lists are retained.
+
+/* #ifdef DEVBUILD */
+/*         log_debug("assoc-val len: %d", s7_list_length(s7, assoc_val)); */
+/* #endif */
+/*         if (s7_list_length(s7, assoc_val) == 1) { */
+/*             // unwrap singleton alist (((:a ...))) */
+/*             // case: (1)  from (:a 1) */
+/*             s7_pointer car = s7_car(assoc_val); */
+/*             if (s7_is_list(s7, car)) { */
+/*                 // case: ((1)) */
+/*                 // case: ((1 2 3)) */
+/*                 // case: ((lambda ...)) */
+/*                 TRACE_S7_DUMP("car is list", car); */
+/*                 if (car == s7_nil(s7)) { */
+/*                     selection = car; */
+/*                 } */
+/*                 else if (libs7_is_alist(s7, car)) { */
+/*                     TRACE_S7_DUMP("car is alist", car); */
+/*                     selection = car; */
+/*                 } else { */
+/*                     selection = assoc_val; */
+/*                 } */
+/*             } else { */
+/*                 TRACE_S7_DUMP("car is NOT list", car); */
+/*                 if (s7_is_procedure(car)) { */
+/*                     TRACE_LOG_DEBUG("car is lambda", ""); */
+/*                     if (e->stack[e->depth].index +1 < e->stack[e->depth].count) { */
+/*                         e->lambda = true; */
+/*                     } else { */
+/*                         e->lambda = false; */
+/*                         e->stack[e->depth].lambda = false; */
+/*                     } */
+/*                     e->stack[e->depth].lambda = true; */
+/*                     selection = car; */
+/*                 } */
+/*                 else if (s7_is_vector(car)) { */
+/* #ifdef DEVBUILD */
+/*                     log_debug("car is vector"); */
+/* #endif */
+/*                     selection = car; */
+/*                 } else { */
+/* #ifdef DEVBUILD */
+/*                     log_debug("car is nonlambda, nonvector"); */
+/* #endif */
+/*                     selection = car; */
+/*                 } */
+/*             } */
+/*         } else { */
+/* #ifdef DEVBUILD */
+/*             log_debug("assoc_val len > 1"); */
+/* #endif */
+/*             selection = assoc_val; */
+/*         } */
     }
     else {
         // improper list, cdr is never a list
@@ -718,8 +725,20 @@ static int sel(void *closure, const char *key)
             }
         }
         else {
+            // null key, no meta means '.'
             TRACE_S7_DUMP("NULL key, selecting obj", e->stack[e->depth].obj);
-            selection = e->stack[e->depth].obj;
+            TRACE_LOG_DEBUG("iterating? %d", e->stack[e->depth].iterating);
+            if (s7_is_pair(e->stack[e->depth].obj)) {
+                if (e->stack[e->depth].iterating) {
+                    // project val of kv pair
+                    selection = s7_cdr(e->stack[e->depth].obj);
+                } else {
+                    selection = e->stack[e->depth].obj;
+                }
+                /* selection = s7_cadr(e->stack[e->depth].obj); */
+            } else {
+                selection = e->stack[e->depth].obj;
+            }
             r = 1;
         }
     }
@@ -781,101 +800,109 @@ static int sel(void *closure, const char *key)
         // clostache assumes data keys are kws, which seems to work well
 
 #ifdef DEVBUILD
-        log_debug("searching stack, height: %d", i);
+        log_debug("searching stack, height: %d, for key %s", i, key);
 #endif
-        while (i >= 0) {
+        /*
+          SPECIAL CASE: root table objiter: {{#^.*}}...{{/^.*}}
+         */
+        if ((strncmp(key, "^", 1) == 0) && strlen(key) == 1) {
+            TRACE_S7_DUMP("^ selecting", e->stack[i].obj);
+            selection = e->stack[i].obj;
+        } else {
+            while (i >= 0) {
 #ifdef DEVBUILD
-            log_debug("i: %d", i);
-            /* DUMP_CLOSURE(e, i); */
+                log_debug(GRN "stackframe:" CRESET " %d", i);
+                /* DUMP_CLOSURE(e, i); */
 #endif
-            TRACE_S7_DUMP("e->stack[i].ctx", e->stack[i].ctx);
-            TRACE_S7_DUMP("e->stack[i].obj", e->stack[i].obj);
-
-            if (s7_is_hash_table(e->stack[i].obj)) {
-                TRACE_LOG_DEBUG("HASH-TABLE", "");
-                selection = s7_hash_table_ref(s7, e->stack[i].obj, key_kw);
-                if (selection != s7_f(s7)) {
-#ifdef DEVBUILD
-                    log_debug("HIT HT ENTRY at %d", i);
-                    TRACE_S7_DUMP("selected", selection);
-                    log_debug("predicate: %d", e->predicate);
-#endif
-                    /* selection = s7_cdr(selection); */
-                    /* if (e->predicate) { */
-                    /*     selection = _handle_stack_predicate_ht(e, selection); */
-                    /*     break; */
-                    /* } else { */
-                    /*     selection = _handle_stack_match_ht(e, selection); */
-                    /* } */
-
-                    /* log_debug("HIT ONE at %d", i); */
-                    break;
-                } else {
-                    log_debug("MISS at %d", i);
-                }
-
-            }
-            else if (libs7_is_alist(s7, e->stack[i].obj)) { // .ctx?
-                TRACE_LOG_DEBUG("ALIST", "");
-                if (key_kw == s7_make_keyword(s7, "^")) {
-                    log_debug("XXXXXXXXXXXXXXXX");
-                } else {
-                    assoc = s7_assoc(s7, key_kw, e->stack[i].obj); // .ctx?
-#ifdef DEVBUILD
-                    TRACE_S7_DUMP("assoc result", assoc);
-#endif
-                    if (assoc != s7_f(s7)) {
-#ifdef DEVBUILD
-                        log_debug("HIT ASSOC at %d", i);
-                        log_debug("predicate: %d", e->predicate);
-#endif
-                        TRACE_S7_DUMP("assoc", assoc);
-
-                        if (e->predicate) {
-                            selection = _handle_stack_predicate(e, assoc);
-                            break;
-                        } else {
-                            selection = _handle_stack_match(e, assoc);
-                        }
-                        break;
-                    } else {
-#ifdef DEVBUILD
-                        log_debug("MISS at %d", i);
-#endif
-                        selection = s7_f(s7);
-                    }
-                }
-            }
-            // not alist
-            else if (s7_is_list(s7, e->stack[i].obj)) {
-                TRACE_LOG_DEBUG("LIST (not alist)", "");
+                TRACE_S7_DUMP("e->stack[i].ctx", e->stack[i].ctx);
                 TRACE_S7_DUMP("e->stack[i].obj", e->stack[i].obj);
 
-                if (key_kw == s7_car(e->stack[i].obj)) {
+                if (s7_is_hash_table(e->stack[i].obj)) {
+                    TRACE_LOG_DEBUG("HASH-TABLE", "");
+                    selection = s7_hash_table_ref(s7, e->stack[i].obj, key_kw);
+                    if (selection != s7_f(s7)) {
 #ifdef DEVBUILD
-                    log_debug("MATCH at stackframe %d", i);
+                        log_debug("HIT HT ENTRY at %d", i);
+                        TRACE_S7_DUMP("selected", selection);
+                        log_debug("predicate: %d", e->predicate);
 #endif
-                    selection = s7_cadr(e->stack[i].obj);
-                    break;
-                } else {
-                    TRACE_S7_DUMP("mismatch on obj", e->stack[i].obj);
-                    assoc = s7_assoc(s7, key_kw, e->stack[i].ctx);
-                    if (assoc != s7_f(s7)) {
-                        TRACE_S7_DUMP("MATCH on ctx", assoc);
-                        if (e->predicate) {
-                            selection = _handle_stack_predicate(e, assoc);
+                        /* selection = s7_cdr(selection); */
+                        /* if (e->predicate) { */
+                        /*     selection = _handle_stack_predicate_ht(e, selection); */
+                        /*     break; */
+                        /* } else { */
+                        /*     selection = _handle_stack_match_ht(e, selection); */
+                        /* } */
+
+                        /* log_debug("HIT ONE at %d", i); */
+                        break;
+                    } else {
+                        /* log_debug("MISS at %d", i); */
+                    }
+
+                }
+                else if (libs7_is_alist(s7, e->stack[i].obj)) { // .ctx?
+                    TRACE_LOG_DEBUG("ALIST", "");
+                    if (key_kw == s7_make_keyword(s7, "^")) {
+                        log_debug("XXXXXXXXXXXXXXXX");
+                    } else {
+                        assoc = s7_assoc(s7, key_kw, e->stack[i].obj); // .ctx?
+#ifdef DEVBUILD
+                        TRACE_S7_DUMP("assoc result", assoc);
+#endif
+                        if (assoc != s7_f(s7)) {
+#ifdef DEVBUILD
+                            log_debug("HIT ASSOC at %d", i);
+                            log_debug("predicate: %d", e->predicate);
+#endif
+                            TRACE_S7_DUMP("assoc", assoc);
+
+                            if (e->predicate) {
+                                selection = _handle_stack_predicate(e, assoc);
+                                break;
+                            } else {
+                                selection = _handle_stack_match(e, assoc);
+                            }
                             break;
                         } else {
-                            selection = _handle_stack_match(e, assoc);
-                            TRACE_S7_DUMP("stack match", selection);
-                            break;
+#ifdef DEVBUILD
+                            log_debug("MISS at %d", i);
+#endif
+                            selection = s7_f(s7);
                         }
-                    } else {
-                        TRACE_S7_DUMP("MISMATCH on ctx", e->stack[i].obj);
                     }
                 }
+                // not alist
+                else if (s7_is_list(s7, e->stack[i].obj)) {
+                    TRACE_LOG_DEBUG("LIST (not alist)", "");
+                    TRACE_S7_DUMP("e->stack[i].obj", e->stack[i].obj);
+
+                    if (key_kw == s7_car(e->stack[i].obj)) {
+#ifdef DEVBUILD
+                        log_debug("MATCH at stackframe %d", i);
+#endif
+                        selection = s7_cdr(e->stack[i].obj);
+                        break;
+                    } else {
+                        TRACE_S7_DUMP("mismatch on obj", e->stack[i].obj);
+                        assoc = s7_assoc(s7, key_kw, e->stack[i].ctx);
+                        if (assoc != s7_f(s7)) {
+                            TRACE_S7_DUMP("MATCH on ctx", assoc);
+                            if (e->predicate) {
+                                selection = _handle_stack_predicate(e, assoc);
+                                break;
+                            } else {
+                                selection = _handle_stack_match(e, assoc);
+                                TRACE_S7_DUMP("stack match", selection);
+                                break;
+                            }
+                        } else {
+                            TRACE_S7_DUMP("MISMATCH on ctx", e->stack[i].obj);
+                        }
+                    }
+                }
+                i--;
             }
-            i--;
         }
         /* log_debug("BROKE at %d", i); */
         fflush(NULL);
@@ -888,7 +915,7 @@ static int sel(void *closure, const char *key)
         }
     }
 #ifdef DEVBUILD
-    TRACE_S7_DUMP("matched", selection);
+    TRACE_S7_DUMP("matched selection", selection);
     /* matched val should be alist or vector, not list? */
     TRACE_S7_DUMP("type", s7_type_of(s7, selection));
     log_debug("alist? %d", libs7_is_alist(s7, selection));
@@ -928,6 +955,7 @@ static int sel(void *closure, const char *key)
         }
         else {
             TRACE_S7_DUMP("selection is not alist", selection);
+            // convert list to vector?
             e->selection = selection;
             // e.g. (:nbrs (1 2 3)), selection == ((1 2 3))
             /* s7_pointer car = s7_car(selection); */
@@ -972,7 +1000,7 @@ static int sel(void *closure, const char *key)
         e->selection = selection;
     }
 #ifdef DEVBUILD
-    TRACE_S7_DUMP("SELECTION", e->selection);
+    TRACE_S7_DUMP("set SELECTION", e->selection);
     /* log_debug("e->predicate: %d", e->predicate); */
     /* log_debug("e->stack[%d].predicate: %d", e->depth, e->stack[e->depth].predicate); */
     /* log_debug("e->stack[%d].lambda: %d", e->depth, e->stack[e->depth].lambda); */
@@ -986,7 +1014,7 @@ static int subsel(void *closure, const char *name)
 {
     TRACE_ENTRY(subsel);
 #ifdef DEVBUILD
-    log_debug("\tname: '%s'", name);
+    log_debug("\tkey: '%s'", name);
 
 #endif
     struct tstack_s *e = closure;
@@ -1000,27 +1028,62 @@ static int subsel(void *closure, const char *name)
     /* json_object_object_get_ex */
     /* json_object_get */
     s7_pointer key = s7_make_keyword(s7, name);
-    if (s7_is_list(s7, e->selection)) {
+    if (s7_is_hash_table(e->selection)) {
+        TRACE_S7_DUMP("subsel: ht", e->selection);
+        o = s7_hash_table_ref(s7,e->selection, key);
+        if (o == s7_f(s7)) {
+            r = 0;
+        } else {
+            e->selection = o;
+            r = 1;
+        }
+    } else if (libs7_is_alist(s7, e->selection)) {
+        TRACE_S7_DUMP("subsel alist", e->selection);
+        o = s7_assoc(s7, key, e->selection);
+        if (o == s7_f(s7)) {
+            r = 0;
+        } else {
+            TRACE_S7_DUMP("subselected", o);
+            s7_pointer val = s7_cdr(o);
+            TRACE_S7_DUMP("val", val);
+            // (:msg . "hello") val =  "hello"
+            // (:msg "hello") val =  ("hello")
+            // (:xs 1 2 3) val = (1 2 3)
+            // (:b . (:msg "hello")) val = ((:msg "hello"))
+            // (:b (:msg "hello")) val = ((:msg "hello"))
+            if (s7_is_list(s7, val)) {
+                if (libs7_is_alist(s7, val)) {
+                    // val = ((:msg "hello"))
+                    e->selection = val;
+                }
+                else if (s7_list_length(s7, val) == 1) {
+                    // treat singleton list as val not list
+                    e->selection = s7_car(val);
+                } else {
+                    // (1 2 3)
+                    e->selection = val;
+                }
+            } else {
+                // (:msg . "hello")
+                e->selection = val;
+            }
+            r = 1;
+        }
+    } else if (s7_is_list(s7, e->selection)) {
+        TRACE_S7_DUMP("subsel list", e->selection);
         o = s7_assoc(s7, key, e->selection);
         if (o == s7_f(s7)) {
             e->selection = o;
             r = 0;
         } else {
-            e->selection = s7_cadr(o);
-            r = 1;
-        }
-    } else if (s7_is_hash_table(e->selection)) {
-        o = s7_hash_table_ref(s7,e->selection, key);
-        e->selection = o;
-        if (o == s7_f(s7)) {
-            r = 0;
-        } else {
+            TRACE_S7_DUMP("subselelected", o);
+            e->selection = s7_cdr(o);
             r = 1;
         }
     } else {
         o = s7_undefined(s7);
     }
-    TRACE_S7_DUMP("assoc result", o);
+    TRACE_S7_DUMP("subsel result", e->selection);
     /* r = o != s7_f(s7); */
     /* if (r) */
     return r;
@@ -1034,8 +1097,10 @@ static int subsel(void *closure, const char *name)
 static int enter(void *closure, int objiter)
 {
     TRACE_ENTRY(enter);
+    TRACE_LOG_DEBUG("objiter? %d", objiter);
 #ifdef DEVBUILD
-    log_debug("predicate: %d", ((struct closure_hdr*)closure)->predicate);
+    log_debug("predicate: 0x%04X",
+              ((struct closure_hdr*)closure)->predicate);
 #endif
     struct tstack_s *e = closure;
     s7_pointer selected;
@@ -1046,14 +1111,14 @@ static int enter(void *closure, int objiter)
 
     /* if (!e->lambda) { */
 #ifdef DEVBUILD
-        log_debug("incrementing stackframe idx from %d", e->depth);
+    log_debug("incrementing stackframe idx from %d", e->depth);
 #endif
-        e->depth++;
-        if (e->depth >= MUSTACH_MAX_DEPTH)
-            return MUSTACH_ERROR_TOO_DEEP;
+    e->depth++;
+    if (e->depth >= MUSTACH_MAX_DEPTH)
+        return MUSTACH_ERROR_TOO_DEEP;
     /* } */
     selected = e->selection;
-    e->stack[e->depth].is_objiter = 0;
+    e->stack[e->depth].iterating = 0;
     if (e->predicate) {
         e->stack[e->depth].predicate = e->predicate;
 #ifdef DEVBUILD
@@ -1071,37 +1136,58 @@ static int enter(void *closure, int objiter)
         }
     }
     else if (objiter) { // objiter is boolean?
-        if (! s7_is_hash_table(selected) )
-            goto not_entering;
-        // is ht empty?
-        s7_pointer env = s7_inlet(s7,
-                                  s7_list(s7, 1,
-                                          s7_cons(s7,
-                                                  s7_make_symbol(s7, "ht"),
-                                                  selected)));
-        char *sexp = "(hash-table-entries ht)";
-        s7_pointer ht_ct_
-            = s7_eval_c_string_with_environment(s7, sexp, env);
-        int ht_ct = s7_number_to_integer(s7, ht_ct_);
-        /* log_debug("ht ct: %d", ht_ct); */
-        if (ht_ct < 1)
-            goto not_entering;
-
-        e->stack[e->depth].iter = s7_make_iterator(s7, selected);
-
-        // if obj (alist) is empty, then exit
-        // cJSON: child is ptr to chain if items in obj?
-        /* if (selected->child == NULL) */
-        if ( s7_is_null(s7, selected) )
-            goto not_entering;
+        TRACE_LOG_DEBUG("OBJITER", "");
+        TRACE_S7_DUMP("selected", selected);
+        if (s7_is_hash_table(selected)) {
+            TRACE_LOG_DEBUG("HT", "");
+            s7_pointer env = s7_inlet(s7,
+                                      s7_list(s7, 1,
+                                              s7_cons(s7,
+                                                      s7_make_symbol(s7, "ht"),
+                                                      selected)));
+            char *sexp = "(hash-table-entries ht)";
+            s7_pointer ht_ct_
+                = s7_eval_c_string_with_environment(s7, sexp, env);
+            int ht_ct = s7_number_to_integer(s7, ht_ct_);
+            TRACE_LOG_DEBUG("ht ct: %d", ht_ct);
+            if (ht_ct < 1)
+                goto not_entering;
+            s7_pointer iter = s7_make_iterator(s7, selected);
+            if (!s7_is_iterator(iter)) {
+                log_error("s7_make_iterator failed for hash table");
+                goto not_entering;
+            }
+            s7_pointer mapentry = s7_iterate(s7, iter);
+            if (s7_iterator_is_at_end(s7, iter)) {
+                // ht is empty?
+                goto not_entering;
+            }
+            e->stack[e->depth].iter = iter;
+            //FIXME: gc_protect?
 #ifdef DEVBUILD
-        log_debug("OBJITER: json object (hash table)");
+            log_debug("iterating, stackframe %d: hash-table", e->depth);
 #endif
-        e->stack[e->depth].ctx = selected;
-        e->stack[e->depth].obj = s7_car(selected);
-        /* e->stack[e->depth].next = s7_cdr(selected); // selected->child->next; */
-        e->stack[e->depth].is_objiter = 1;
-
+            e->stack[e->depth].ctx = selected;
+            e->stack[e->depth].obj = mapentry;
+            e->stack[e->depth].iterating = 1;
+        }
+        else if (libs7_is_alist(s7, selected)) {
+            /* log_debug("ALIST"); */
+            // populate stackframe with first mapentry
+            int ct = s7_list_length(s7, selected);
+            /* log_debug("alist ct: %d", ct); */
+            if (ct < 1)
+                goto not_entering;
+            /* e->stack[e->depth].iter = s7_make_iterator(s7, selected); */
+            e->stack[e->depth].count = ct;
+            e->stack[e->depth].index = 0;
+            e->stack[e->depth].ctx = selected;
+            e->stack[e->depth].obj = s7_car(selected);
+            e->stack[e->depth].iterating = 1;
+        } else {
+            log_debug("NOT MAP");
+            goto not_entering;
+        }
     }
     else if (s7_is_procedure(selected)) { /* LAMBDA */
 #ifdef DEVBUILD
@@ -1117,7 +1203,8 @@ static int enter(void *closure, int objiter)
         e->stack[e->depth].obj = selected;
         e->stack[e->depth].index = 0;
     }
-    else if (s7_is_vector(selected)) {                         /* VECTOR */
+    // json impls only check for array, not obj/table
+    else if (s7_is_vector(selected)) {
 #ifdef DEVBUILD
         log_debug("selection type: VECTOR");
         /* DUMP("vec", selected); */
@@ -1140,29 +1227,44 @@ static int enter(void *closure, int objiter)
             log_debug("selection type: LIST (NULL)");
 #endif
         }
-        else if (libs7_is_alist(s7, selected)) { /* ALIST */
+        else if (libs7_is_kw_alist(s7, selected)) { /* ALIST */
 #ifdef DEVBUILD
+            TRACE_S7_DUMP("selected", selected);
             log_debug("selection type: ALIST");
             log_debug("setting stackframe for selection type: ALIST (NON-NULL)");
 #endif
-            e->stack[e->depth].count = 1; // single object, not a vector
-            if (e->stack[e->depth].count == 0)
-                goto not_entering;
-            e->stack[e->depth].ctx = selected;
-            e->stack[e->depth].obj = s7_car(selected);
+            /* e->stack[e->depth].count = s7_list_length(s7, selected); */
+            /* if (e->stack[e->depth].count == 0) */
+            /*     goto not_entering; */
+            // only set count to list length for non-alists
+            e->stack[e->depth].count = 1;
+            e->stack[e->depth].ctx = s7_nil(s7);
+            e->stack[e->depth].obj = selected;
+            /* e->stack[e->depth].ctx = selected; */
+            /* e->stack[e->depth].obj = s7_car(selected); */
             e->stack[e->depth].index = 0;
-
-        } else {
+        }
+        else if (s7_is_proper_list(s7, selected)) {
 #ifdef DEVBUILD
-            log_debug("setting stackframe for selection type: LIST (NON-NULL)");
+            log_debug("setting stackframe for selection type: PROPER LIST (NON-NULL)");
 #endif
-            // treat list like vector
             e->stack[e->depth].count = s7_list_length(s7, selected);
             if (e->stack[e->depth].count == 0)
                 goto not_entering;
             e->stack[e->depth].ctx = selected;
             e->stack[e->depth].obj = s7_car(selected);
             e->stack[e->depth].index = 0;
+        } else {
+            TRACE_S7_DUMP("selected", selected);
+#ifdef DEVBUILD
+            log_debug("setting stackframe for selection type: IMPROPER LIST (NON-NULL)");
+#endif
+            // improper list length: -1
+            goto not_entering;
+            /* if (e->stack[e->depth].count == 0) */
+            /* e->stack[e->depth].ctx = selected; */
+            /* e->stack[e->depth].obj = s7_car(selected); */
+            /* e->stack[e->depth].index = 0; */
         }
     }
     else if (selected == s7_unspecified(s7)) {
@@ -1190,7 +1292,7 @@ static int enter(void *closure, int objiter)
         }
     }
     else if (selected != s7_f(s7) && !s7_is_null(s7, selected)) {
-        // could be boolean #t, number, string, etc.
+        // could be map, boolean #t, number, string, etc.
 #ifdef DEVBUILD
         log_debug("selection TRUTHY");
         /* DUMP("ATOM", selected); */
@@ -1198,7 +1300,7 @@ static int enter(void *closure, int objiter)
         log_debug("e->stack[%d].lambda? %d", e->depth, e->stack[e->depth].lambda);
 #endif
         e->stack[e->depth].count = 1;
-        e->stack[e->depth].ctx = s7_nil(s7);
+        e->stack[e->depth].ctx = s7_nil(s7); // prevent ctx search?
         e->stack[e->depth].obj = selected;
         e->stack[e->depth].index = 0;
     }
@@ -1218,6 +1320,9 @@ static int enter(void *closure, int objiter)
 
  not_entering:
     /* if (!e->lambda) */
+    e->stack[e->depth].count = 0;
+    e->stack[e->depth].index = 0;
+    e->stack[e->depth].iterating = 0;
     e->depth--;
 #ifdef DEVBUILD
     log_debug("NOT ENTERED");
@@ -1229,55 +1334,70 @@ static int enter(void *closure, int objiter)
 }
 
 /* next: increment index (& set obj) of current stackframe */
-static int next(void *closure)
+static int next(struct tstack_s *e) // closure)
 {
     TRACE_ENTRY(next)
-	struct tstack_s *e = closure;
-	/* s7_pointer o; */
+	/* struct tstack_s *e = closure; */
+    /* s7_pointer o; */
 #ifdef DEVBUILD
-        /* DUMP_CLOSURE(e, e->depth); */
-        /* log_debug("e->depth: %d", e->depth); */
-        /* log_debug("e->stack[%d].index: %d", e->depth, e->stack[e->depth].index); */
-        /* log_debug("e->stack[%d].count: %d", e->depth, e->stack[e->depth].count); */
+    /* DUMP_CLOSURE(e, e->depth); */
+    log_debug("e->depth: %d", e->depth);
+    log_debug("e->stack[%d].index: %d", e->depth, e->stack[e->depth].index);
+    log_debug("e->stack[%d].count: %d", e->depth, e->stack[e->depth].count);
+    dump_stack(e);
 #endif
 
-	if (e->depth <= 0) {
-            // FIXME: why is this an error?
-            log_error("next: depth <= 0: %d", e->depth);
-            fflush(NULL);
-            /* exit(EXIT_FAILURE); */
-            return MUSTACH_ERROR_CLOSING;
-        }
-
-	/* o = e->stack[e->depth].next; */
-	/* if (o == s7_nil(s7)) */
-	/* 	return 0; */
-	if (e->stack[e->depth].is_objiter) {
-            s7_pointer tmp = s7_iterate(s7, e->stack[e->depth].iter);
+    if (e->depth <= 0) {
+        // FIXME: why is this an error?
+        log_error("next: depth <= 0: %d", e->depth);
+        fflush(NULL);
+        /* exit(EXIT_FAILURE); */
+        return MUSTACH_ERROR_CLOSING;
+    }
+    TRACE_LOG_DEBUG("stackframe: %d", e->depth);
+    TRACE_LOG_DEBUG("stackframe ct: %d", e->stack[e->depth].count);
+    /* o = e->stack[e->depth].next; */
+    /* if (o == s7_nil(s7)) */
+    /* 	return 0; */
+    if (e->stack[e->depth].iterating) {
+        if (e->stack[e->depth].iter) {
+            s7_pointer item = s7_iterate(s7, e->stack[e->depth].iter);
             if (s7_iterator_is_at_end(s7, e->stack[e->depth].iter))
                 return 0;
-            e->stack[e->depth].obj = tmp;
+            e->stack[e->depth].obj = item;
+            return 1;
+        } else {
+            e->stack[e->depth].index++;
+            if (e->stack[e->depth].index >= e->stack[e->depth].count)
+                return 0;
+            // set key, obj to next mapitem
+            s7_pointer x = s7_list_ref(s7, e->stack[e->depth].ctx,
+                                       e->stack[e->depth].index);
+            TRACE_S7_DUMP("next:", x);
+            e->stack[e->depth].obj = x;
             return 1; // has_next
-	}
+        }
+    }
 
-	e->stack[e->depth].index++;
-	if (e->stack[e->depth].index >= e->stack[e->depth].count) {
+    e->stack[e->depth].index++;
+    if (e->stack[e->depth].index >= e->stack[e->depth].count) {
 #ifdef DEVBUILD
-            log_debug("incremented index to %d (end of list)", e->stack[e->depth].index);
+        log_debug("incremented index to %d (end of list)", e->stack[e->depth].index);
 #endif
-            return 0; // !has_next
-        }
-        if (s7_is_vector(e->stack[e->depth].ctx)) {
-            e->stack[e->depth].obj = s7_vector_ref(s7, e->stack[e->depth].ctx, e->stack[e->depth].index);
-        }
-        else if (s7_is_list(s7, e->stack[e->depth].ctx)) {
-            e->stack[e->depth].obj = s7_list_ref(s7, e->stack[e->depth].ctx, e->stack[e->depth].index);
-        }
+        return 0; // !has_next
+    }
+    if (s7_is_vector(e->stack[e->depth].ctx)) {
+        e->stack[e->depth].obj = s7_vector_ref(s7, e->stack[e->depth].ctx, e->stack[e->depth].index);
+    }
+    else if (s7_is_list(s7, e->stack[e->depth].ctx)) {
+        e->stack[e->depth].obj = s7_list_ref(s7, e->stack[e->depth].ctx, e->stack[e->depth].index);
+    }
 
 #ifdef DEVBUILD
-        log_debug("incremented index to %d", e->stack[e->depth].index);
+    log_debug("incremented stackframe index to %d", e->stack[e->depth].index);
+    log_debug("stackframe ct: %d", e->stack[e->depth].count);
 #endif
-	return 1; // has_next
+    return 1; // has_next
 }
 
 static int leave(void *closure, struct mustach_sbuf *sbuf)
@@ -1320,8 +1440,124 @@ static int leave(void *closure, struct mustach_sbuf *sbuf)
 #ifdef DEVBUILD
     log_debug("decrementing e->depth from %d", e->depth);
 #endif
+    e->stack[e->depth].count = 0;
+    e->stack[e->depth].index = 0;
+    e->stack[e->depth].iterating = 0;
     e->depth--;
     return 0;
+}
+
+static bool _list_is_empty_rec(s7_scheme *s7, s7_pointer lst);
+static bool _vector_is_empty_rec(s7_scheme *s7, s7_pointer vec);
+
+static bool _hash_table_is_empty_rec(s7_scheme *s7, s7_pointer ht)
+{
+    TRACE_ENTRY("_hash_table_is_empty_rec");
+    s7_pointer ct = s7_call(s7,
+                            s7_name_to_value(s7, "hash-table-entries"),
+                            s7_list(s7, 1,  ht));
+    if (s7_integer(ct) == 0) {
+        return true;
+    }
+
+    s7_pointer mapentry;
+    s7_pointer iter = s7_make_iterator(s7, ht);
+    if (!s7_is_iterator(iter)) {
+        log_error("s7_make_iterator failed for hash table");
+    }
+    mapentry = s7_iterate(s7, iter);
+    while (!s7_iterator_is_at_end(s7, iter)) {
+        if (s7_is_list(s7, mapentry)) {
+            if (_list_is_empty_rec(s7, mapentry)) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+        else if (s7_is_vector(mapentry)) {
+            if (_vector_is_empty_rec(s7, mapentry)) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+        else if (s7_is_hash_table(mapentry)) {
+            if (_hash_table_is_empty_rec(s7, mapentry)) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+        mapentry = s7_iterate(s7, iter);
+    }
+    return true;
+}
+
+static bool _vector_is_empty_rec(s7_scheme *s7, s7_pointer vec)
+{
+    if (s7_vector_length(vec) == 0) {
+        return true;
+    } else {
+        s7_int ct = s7_vector_length(vec);
+        s7_pointer *elts = s7_vector_elements(vec);
+        for (int i = 0; i < ct; i++) {
+            TRACE_S7_DUMP("elts[i]", elts[i]);
+            if (s7_is_list(s7, elts[i])) {
+                if (s7_list_length(s7, elts[i]) == 0) {
+                    continue;
+                } else {
+                    // does non-empty list contain only empties?
+                    if (_list_is_empty_rec(s7, elts[i])) {
+                        continue;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            else if (s7_is_vector(elts[i])) {
+                if (_vector_is_empty_rec(s7, elts[i])) {
+                    continue;
+                } else {
+                    return false;
+                }
+            }
+            else if (s7_is_hash_table(elts[i])) {
+                if (_hash_table_is_empty_rec(s7, elts[i])) {
+                    continue;
+                } else {
+                    return false;
+                }
+            } else {
+                // elts[i] neither list nor vector
+                return false;
+            }
+        } // end for loop
+        return true;
+    }
+}
+
+static bool _list_is_empty_rec(s7_scheme *s7, s7_pointer lst)
+{
+    if (lst == s7_nil(s7)) {
+        return true;
+    } else {
+        s7_pointer car = s7_car(lst);
+        if (s7_is_vector(car)) {
+            if (s7_vector_length(car) == 0) {
+                return _list_is_empty_rec(s7, s7_cdr(lst));
+            } else {
+                // does non-empty vector contain only empties?
+                return (_vector_is_empty_rec(s7, car)
+                        && _list_is_empty_rec(s7, s7_cdr(lst)));
+            }
+        } else if (s7_is_list(s7, car)) {
+            return (_list_is_empty_rec(s7, car)
+                    && _list_is_empty_rec(s7, s7_cdr(lst)));
+        } else {
+            // car is neither list nor vector
+            return false;
+        }
+    }
 }
 
 /* format e->selection it sbuf.value, for printing? */
@@ -1351,51 +1587,110 @@ static int format(struct tstack_s *stack, const char *fmt,
 #ifdef DEVBUILD
         log_debug("objiter?: %d", key);
 #endif
-        s = stack->stack[stack->depth].is_objiter
-            /* ? stack->stack[stack->depth].obj->string */
-            ? s7_format(s7, s7_list(s7, 3, s7_f(s7),
-                                    s7_make_string(s7, "~A"),
-                                    stack->stack[stack->depth].obj))
-            : "";
+        if (stack->stack[stack->depth].iterating) {
+            /* log_debug("iterating"); */
+            //FIXME: is obj guaranteed to be a pair?
+            TRACE_S7_DUMP("stack obj", stack->stack[stack->depth].obj);
+            s7_pointer x = s7_car(stack->stack[stack->depth].obj);
+            s7_pointer k;
+            if (s7_is_keyword(x)) {
+                k = s7_keyword_to_symbol(s7, x);
+            } else {
+                k = x;
+            }
+            s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
+                                      s7_make_string(s7, "~A"),
+                                      k));
+            /* log_debug("FORMATTED: %s", s); */
+        } else {
+            /* log_debug("NO iterating"); */
+            s = "";
+        }
     }
     else if (s7_is_vector(stack->selection)) {
         TRACE_LOG_DEBUG("format: selection is vector", "");
-        // use s7's format fn to remove meta-notation
-        // e.g. '#(1 2 3)' => '1 2 3'
-        // but: #(#(1 2) #("a" "b")) - remove quotes
-        // ~^ stops at end of sequence
-        // ~| stops after (*s7* 'print-length) elements
-        char *fmt = "~{~S~^ ~}";
-        s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
-                                  s7_make_string(s7, fmt),
-                                  stack->selection));
-        /* s = s7_object_to_c_string(s7, stack->selection); */
-        /* if (s == NULL) return MUSTACH_ERROR_SYSTEM; */
-        /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
+        TRACE_S7_DUMP("vec", stack->selection);
+        if (_vector_is_empty_rec(s7, stack->selection)) {
+            s = "";
+        } else {
+            char *fmt = "~A"; // "~{~A~^ ~}";
+            /* char *fmt = "[~{~S~^ ~}]"; */
+            s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
+                                      s7_make_string(s7, fmt),
+                                      stack->selection));
+        }
     }
-    else if (s7_is_list(s7, stack->selection)) {
-        TRACE_LOG_DEBUG("format: selection is list", "");
-        // use s7's format fn to remove meta-notation
+    else if (s7_is_hash_table(stack->selection)) {
+        TRACE_LOG_DEBUG("format: selection is hash-table", "");
+        s7_pointer ct = s7_call(s7,
+                                s7_name_to_value(s7, "hash-table-entries"),
+                                s7_list(s7, 1, stack->selection));
+        if (s7_integer(ct) == 0) {
+            /* log_debug("EMPTY HT"); */
+            s = "";
+        } else {
+            s = s7_object_to_c_string(s7, stack->selection);
+            if (s == NULL) return MUSTACH_ERROR_SYSTEM;
+            sbuf->freecb = free;    /* FIXME: why? */
+        }
+    }
+    else if (libs7_is_alist(s7, stack->selection)) {
+        TRACE_LOG_DEBUG("format: selection is alist", "");
+        TRACE_S7_DUMP("selection", stack->selection);
+        // do NOT use s7's format fn to remove meta-notation
         // e.g. '(1 2 3)' => '1 2 3'
         // ~^ stops at end of sequence
         // ~| stops after (*s7* 'print-length) elements
-        char *fmt = "~{~A~^ ~}";
-        s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
-                                  s7_make_string(s7, fmt),
-                                  stack->selection));
-        /* s = s7_object_to_c_string(s7, stack->selection); */
-        /* if (s == NULL) return MUSTACH_ERROR_SYSTEM; */
-        /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
+
+        if (_list_is_empty_rec(s7, stack->selection)) {
+            s = "";
+        /* } else { */
+        /* if (stack->selection == s7_nil(s7)) { */
+        /*     s = ""; */
+        /* } else if (libs7_is_empty_alist(s7, stack->selection)) { */
+        /*     s = ""; */
+        } else {
+            char *fmt = "~A"; // "~{~A~^ ~}";
+            s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
+                                      s7_make_string(s7, fmt),
+                                      stack->selection));
+        }
+    }
+    else if (s7_is_list(s7, stack->selection)) {
+        TRACE_LOG_DEBUG("format: selection is list", "");
+        TRACE_S7_DUMP("selection", stack->selection);
+        if (_list_is_empty_rec(s7, stack->selection)) {
+            s = "";
+        } else {
+        /* if (stack->selection == s7_nil(s7)) { */
+        /*     s = ""; */
+        /* } else { */
+            char *fmt = "~A"; // "~{~A~^ ~}";
+            /* char *fmt = "[~{~A~^ ~}]"; */
+            s = s7_format(s7, s7_list(s7, 3, s7_f(s7),
+                                      s7_make_string(s7, fmt),
+                                      stack->selection));
+            /* s = s7_object_to_c_string(s7, stack->selection); */
+            /* if (s == NULL) return MUSTACH_ERROR_SYSTEM; */
+            /* sbuf->freecb = free;    /\* FIXME: why? *\/ */
+        }
     }
     else if (s7_is_integer(stack->selection)) {
-        TRACE_LOG_DEBUG("format: selection is integer: %s",
-                        s7_string(stack->selection));
-        if (fmt) {
-            //FIXME: apply fmt
-        } else {
-        }
-        s = s7_number_to_string(s7, stack->selection, 10);
+        TRACE_S7_DUMP("stack->selection is integer", stack->selection);
+        //FIXME: formatting
+        s = s7_object_to_c_string(s7, stack->selection);
+        if (s == NULL) return MUSTACH_ERROR_SYSTEM;
+        sbuf->freecb = free;
     }
+    /* else if (s7_is_integer(stack->selection)) { */
+    /*     TRACE_LOG_DEBUG("format: selection is integer: %s", */
+    /*                     s7_string(stack->selection)); */
+    /*     if (fmt) { */
+    /*         //FIXME: apply fmt */
+    /*     } else { */
+    /*     } */
+    /*     s = s7_number_to_string(s7, stack->selection, 10); */
+    /* } */
     else if (s7_is_real(stack->selection)) {
         TRACE_LOG_DEBUG("format: selection is real: %s",
                         s7_string(stack->selection));
@@ -1488,12 +1783,6 @@ static int format(struct tstack_s *stack, const char *fmt,
         s = s7_string(result); // do NOT free
         sbuf->value = s;
         /* sbuf->freecb = free; */
-    }
-    else if (s7_is_integer(stack->selection)) {
-        TRACE_S7_DUMP("stack->selection is integer", stack->selection);
-        s = s7_object_to_c_string(s7, stack->selection);
-        if (s == NULL) return MUSTACH_ERROR_SYSTEM;
-        sbuf->freecb = free;
     } else {
 #ifdef DEVBUILD
         log_debug("format: else");
@@ -1536,16 +1825,15 @@ static void dump_stack(struct tstack_s *stack)
     _dump_obj("\tselection:", stack->selection);
     for (int i = 0; i <= stack->depth; i++) {
         log_debug("stackframe: %d", i);
-        _dump_obj("\tctx:", stack->stack[i].ctx);
-        _dump_obj("\tobj", stack->stack[i].obj);
-        /* if (stack->stack[i].obj) { */
-        /*     _dump_obj("\obj", stack->stack[i].obj); */
-        /*     /\* log_debug("\tstack[%d].obj: %p", i, stack->stack[i].obj); *\/ */
-        /* } */
-        log_debug("\tcount: %d", i, stack->stack[i].count);
-        log_debug("\tindex: %d", i, stack->stack[i].index);
-        log_debug("\tlambda: %d", i, stack->stack[i].lambda);
-        log_debug("\tpredicate: %d", i, stack->stack[i].predicate);
+        if (stack->stack[i].ctx)
+            _dump_obj("\tctx:", stack->stack[i].ctx);
+        if (stack->stack[i].obj)
+            _dump_obj("\tobj", stack->stack[i].obj);
+        log_debug("\tstack[%d].iterating: %d", i, stack->stack[i].iterating);
+        log_debug("\tstack[%d].count: %d", i, stack->stack[i].count);
+        log_debug("\tstack[%d].index: %d", i, stack->stack[i].index);
+        log_debug("\tstack[%d].lambda: %d", i, stack->stack[i].lambda);
+        log_debug("\tstack[%d].predicate: %d", i, stack->stack[i].predicate);
     }
     log_debug("end stack");
     fflush(NULL);
@@ -1584,7 +1872,7 @@ const struct mustach_ds_methods_s scm_methods = {
     .sel = sel,
     .subsel = subsel,
     .enter = enter,
-    .next = next,
+    .next = (int (*)(void*))next,
     .leave = leave,
     .format = (int (*)(void*, const char*, struct mustach_sbuf*, int))format,
     .dump_stack = (void (*)(void*))dump_stack
@@ -1605,10 +1893,15 @@ const char *mustache_scm_render(const char *template,
     memset(&stack, '\0', sizeof(struct tstack_s));
     stack.root = (s7_pointer)data;
 
+    int flags = Mustach_With_All_SCM_Extensions;
+    /* flags &= ~Mustach_With_JsonPointer; */
+    (void)_flags;
+    //FIXME: _flags arg is for opting out of default 'all'
+
     char *result = mustach_scm_render_to_string(template, template_sz,
                                                 &scm_methods,
                                                 &stack,
-                                                _flags);
+                                                flags);
                                                 /* err); */
                                             /* &result, &result_sz); */
     /* if (*err != 0) { */

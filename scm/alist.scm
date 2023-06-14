@@ -39,12 +39,28 @@
 (define (alist? obj)
   (if (list? obj)
       (if (null? obj)
-          #t ;; ?
+          #t ;; '() is an alist
           (if (pair? (car obj))
-              ;;(and (> (length (car obj)) 1)
-                   (alist? (cdr obj)) ;;)
-              #f))
+              (alist? (cdr obj))
+              (if (null? (car obj)) ;; '() may be a member
+                  (alist? (cdr obj))
+                  #f)))
       #f))
+
+(define (empty? obj)
+  (if (list? obj)
+      (null? obj)
+      (if (vector? obj)
+          (= 0 (vector-length obj))
+          (if (hash-table? obj)
+              (= 0 (hash-table-entries obj))
+              #f))))
+
+(define (empty-alist? obj)
+  (if (empty? obj)
+      #t
+      ;; we treat a list containing only '() as an empty alist
+      (equal? obj '(()))))
 
 ;; rassoc: searches for pair with matching value
 

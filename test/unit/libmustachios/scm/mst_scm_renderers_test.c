@@ -35,7 +35,7 @@ void tearDown(void)
 void render_to_string(void)
 {
     S7_RENDER_TEST("{{msg}}, world!",
-                     "'((:msg \"Hello\"))",
+                     "'((:msg . \"Hello\"))",
                      "Hello, world!");
 }
 
@@ -49,7 +49,7 @@ void render_to_cop_ret_string(void)
     s7_pointer old_cop = s7_set_current_output_port(s7, osp);
     S7_RENDER_SINK_TEST(s7_t(s7),
                           "{{msg}}, world!",
-                          "msg = \"Hello\"",
+                          "'((:msg . \"Hello\"))",
                           "Hello, world!");
     const char *s = s7_get_output_string(s7, s7_current_output_port(s7));
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
@@ -73,7 +73,7 @@ void render_to_cop_ret_NULL(void)
     s7_pointer old_cop = s7_set_current_output_port(s7, osp);
     S7_RENDER_SINK_TEST(s7_nil(s7),
                           "{{msg}}, world!",
-                          "msg = \"Hello\"",
+                          "'((:msg . \"Hello\"))",
                           s7_string(s7_nil(s7)));
     const char *s = s7_get_output_string(s7, s7_current_output_port(s7));
     TEST_ASSERT_EQUAL_STRING("Hello, world!", s);
@@ -86,7 +86,7 @@ void render_to_string_port(void)
     s7_pointer osp = s7_open_output_string(s7);
     S7_RENDER_SINK_TEST(osp,
                           "{{msg}}, world!",
-                          "msg = \"Hello\"",
+                          "'((:msg . \"Hello\"))",
                           s7_string(s7_nil(s7)));
     const char *s = s7_get_output_string(s7, osp);
     s7_close_output_port(s7, osp);
@@ -98,7 +98,7 @@ void render_to_file_port(void)
     s7_pointer ofp = s7_open_output_file(s7, "cjson_test.out", "w");
     S7_RENDER_SINK_TEST(ofp,
                           "{{msg}}, world!",
-                          "msg = \"Hello\"",
+                          "'((:msg . \"Hello\"))",
                    s7_string(s7_nil(s7))); // macro compares strings
     s7_close_output_port(s7, ofp);
     s7_pointer ifp = s7_open_input_file(s7, "cjson_test.out", "r");
@@ -200,13 +200,13 @@ int main(int argc, char **argv)
     UNITY_BEGIN();
 
     RUN_TEST(render_to_string);         /* (mustache:render #f t d) */
-    /* RUN_TEST(render_to_cop_ret_string); /\* (mustache:render #t t d) *\/ */
-    /* RUN_TEST(render_to_cop_ret_NULL);   /\* (mustache:render '() t d) *\/ */
+    RUN_TEST(render_to_cop_ret_string); /* (mustache:render #t t d) */
+    RUN_TEST(render_to_cop_ret_NULL);   /* (mustache:render '() t d) */
 
-    /* RUN_TEST(render_to_string_port); */
-    /* RUN_TEST(render_to_file_port); */
+    RUN_TEST(render_to_string_port);
+    RUN_TEST(render_to_file_port);
 
-    /* RUN_TEST(bad_sinks); */
+    RUN_TEST(bad_sinks);
 
     return UNITY_END();
 }

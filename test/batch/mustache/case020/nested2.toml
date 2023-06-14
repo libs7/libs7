@@ -1,0 +1,7 @@
+flda = "hello"
+
+[profile.dev]
+ocaml-flags = "-w +a-4-40-41-42-44-70"
+
+[profile.release]
+ocaml-flags = "-w -a"

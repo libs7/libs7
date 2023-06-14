@@ -456,6 +456,16 @@ Prefix: none
 
 Tests:  none
 
+==== libmustachios
+
+Bindings for link:[mustachios]
+
+Prefix:  `mustache:`
+
+Tests: `//test/unit/libmustachios`
+
+Documentation: link:doc/mustachios.adoc[doc/libmustachios.adoc]
+
 ==== libtoml
 
 Bindings for link:https://github.com/cktan/tomlc99[tomlc99]

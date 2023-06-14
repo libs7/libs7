@@ -23,9 +23,9 @@
 */
 
 /* by default we render scm data */
-s7_pointer libs7_mustach_render(s7_scheme *s7, s7_pointer args);
+/* s7_pointer libs7_mustach_render(s7_scheme *s7, s7_pointer args); */
 
-s7_pointer libmustachios_mustach_render_json(s7_scheme *s7, s7_pointer args);
+/* s7_pointer libmustachios_mustach_render_json(s7_scheme *s7, s7_pointer args); */
 
 s7_pointer libmustachios_s7_init(s7_scheme *sc);
 

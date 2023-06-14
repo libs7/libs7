@@ -1,0 +1,57 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//test/app:BUILD.bzl", "test_mustachios")
+
+TAGS = [] # "batch", "mustache"]
+
+# test_suite(
+#     name  = "drom",
+#     tests = [":json", "scm", "toml"]
+# )
+
+# diff_test(
+#     name  = "json",
+#     file1 = "colors.expected",
+#     file2 = "json.actual",
+#     timeout = "short",
+#     tags  = TAGS + ["json"]
+# )
+
+test_mustachios(
+    name     = "toml_actual",
+    script   = "drom_main.scm",
+    out      = "toml.actual",
+    data     = "drom.toml",
+    template = "drom.mustache"
+)
+
+# diff_test(
+#     name  = "scm",
+#     file1 = "colors.expected",
+#     file2 = "scm.actual",
+#     timeout = "short",
+#     tags  = TAGS + ["scm"]
+# )
+
+# test_mustachios(
+#     name     = "scm_actual",
+#     script   = "colors_main.scm",
+#     out      = "scm.actual",
+#     data     = "colors.scm",
+#     template = "colors.mustache"
+# )
+
+# diff_test(
+#     name  = "toml",
+#     file1 = "colors.expected",
+#     file2 = "toml.actual",
+#     timeout = "short",
+#     tags  = TAGS + ["toml"]
+# )
+
+# test_mustachios(
+#     name     = "toml_actual",
+#     script   = "colors_main.scm",
+#     out      = "toml.actual",
+#     data     = "colors.toml",
+#     template = "colors.mustache"
+# )

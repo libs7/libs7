@@ -314,19 +314,21 @@ static s7_pointer g_toml_table_to_string(s7_scheme *s7, s7_pointer args)
         //FIXME
     }
 
-    bool use_write = false;
+    int print_syntax = PRINT_SYNTAX_SCM_DISPLAY; // false;
     p = s7_cdr(p);
     if (p != s7_nil(s7)) {
         arg = s7_car(p);
-        TRACE_S7_DUMP("boolarg", arg);
         if (s7_is_boolean(arg)) {
-            use_write = s7_boolean(s7, arg);
+            if (arg == s7_t(s7))
+                print_syntax = PRINT_SYNTAX_SCM_WRITE;
+            else
+                print_syntax = PRINT_SYNTAX_SCM_DISPLAY;
         } else {
-            log_error("Bad use_write arg");
+            log_error("Bad print_syntax arg");
         }
     }
 
-    char *s = tomlx_table_to_string(tt, use_write);
+    char *s = tomlx_table_to_string(tt, print_syntax);
     TRACE_LOG_DEBUG("returning: %s", s);
     return s7_make_string(s7, s);
 }

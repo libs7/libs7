@@ -76,7 +76,11 @@ void *tomlx_array_seq_for_idx(toml_array_t *ta, int idx, int *typ)
     return NULL;
 }
 
-char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
+/*
+  prints content, not metasyntax (delims and separator)
+  * [1, 2, 3] => 123
+ */
+char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
 {
     TOMLX_ENTRY(tomlx_array_to_string);
     toml_datum_t datum;
@@ -96,33 +100,51 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
     int ct;
     (void)ct;
 
+    // is array empty?
+    int idx_ct = toml_array_nelem(ta);
+    if (idx_ct == 0) {
+        buf[0] = '\0';
+        return buf;
+    } else {
+        // are all elements empties?
+    }
+
     // print header
-    /* { */
+    TOMLX_LOG_DEBUG("snprintfing header", "");
+    if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
+        // no header metasyntax
+    }
+    else if (print_syntax == PRINT_SYNTAX_TOML) {
         errno = 0;
-        TOMLX_LOG_DEBUG("snprintfing header", "");
         ct = snprintf(buf, 2, "%s", "[");
         if (errno) {
             log_error("snprintf: %s", strerror(errno));
             return NULL;
-        } else {
-            TOMLX_LOG_DEBUG("snprintf hdr ct: %d", ct);
         }
         char_ct += 1; // do not include terminating '\0'
-        TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-        TOMLX_LOG_DEBUG("buf: %s", buf);
-    /* } */
-
+    } else { // SCM print syntax
+        errno = 0;
+        ct = snprintf(buf, 14, "%s", "#<toml-array ");
+        if (errno) {
+            log_error("snprintf: %s", strerror(errno));
+            return NULL;
+        }
+        char_ct += 13; // do not include terminating '\0'
+    }
     // print elements
-    int idx_ct = toml_array_nelem(ta);
     /* char *k, *v; */
     int len;
-    (void)ct;                   /* set-but-not-used warning */
+    bool empty = false;
     for (int i = 0; i < idx_ct; i++) {
         // print comma
-        if (i > 0) {
+        if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
+            ; // do not print separator
+        }
+        else if (i > 0) {
             if ((char_ct + 3) > bufsz) {
                 log_error("realloc for comma");
-            } else {
+            }
+            else if (!empty) {
                 errno = 0;
                 TOMLX_LOG_DEBUG("snprintfing comma", "");
                 ct = snprintf(buf+char_ct, 3, "%s", ", ");
@@ -135,6 +157,8 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
                 char_ct += 2; // do not include terminating '\0'
                 TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
                 TOMLX_LOG_DEBUG("buf: %s", buf);
+            } else {
+                empty = false; // reset
             }
         }
 
@@ -147,47 +171,57 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
             switch(typ) {
             case TOML_ARRAY:
                 TOMLX_LOG_DEBUG("array seq: %p", seq);
-                seq_str = tomlx_array_to_string((toml_array_t*)seq, use_write);
+                seq_str = tomlx_array_to_string((toml_array_t*)seq, print_syntax);
                 TOMLX_LOG_DEBUG("ARRAY str: %s", seq_str);
-                len = strlen(seq_str) + 1;  // + 1 for '\0'
-                if ((char_ct + len) > bufsz) {
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TOMLX_LOG_DEBUG("snprintfing array len %d", len);
-                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
+                len = strlen(seq_str);
+                if (len == 0) {
+                    empty = true; // print nothing
                 } else {
-                    TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    len++;  // + 1 for '\0'
+                    if ((char_ct + len) > bufsz) {
+                        log_error("exceeded bufsz: %d", char_ct + len);
+                        // expand buf
+                    }
+                    errno = 0;
+                    TOMLX_LOG_DEBUG("snprintfing array len %d", len);
+                    ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
+                    if (errno) {
+                        log_error("snprintf: %s", strerror(errno));
+                        break;
+                    } else {
+                        TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    }
+                    char_ct += len - 1; // do not include terminating '\0'
+                    TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
+                    TOMLX_LOG_DEBUG("buf: %s", buf);
                 }
-                char_ct += len - 1; // do not include terminating '\0'
-                TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-                TOMLX_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TABLE:
                 TOMLX_LOG_DEBUG("table seq: %p", seq);
-                seq_str = tomlx_table_to_string((toml_table_t*)seq, use_write);
+                seq_str = tomlx_table_to_string((toml_table_t*)seq, print_syntax);
                 TOMLX_LOG_DEBUG("TABLE: %s", seq_str);
-                len = strlen(seq_str) + 1;  // + 1 for '\0'
-                if ((char_ct + len) > bufsz) {
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TOMLX_LOG_DEBUG("snprintfing table len %d", len);
-                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
+                len = strlen(seq_str);
+                if (len == 0) {
+                    empty = true;
                 } else {
-                    TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    len++;  // + 1 for '\0'
+                    if ((char_ct + len) > bufsz) {
+                        log_error("exceeded bufsz: %d", char_ct + len);
+                        // expand buf
+                    }
+                    errno = 0;
+                    TOMLX_LOG_DEBUG("snprintfing table len %d", len);
+                    ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
+                    if (errno) {
+                        log_error("snprintf: %s", strerror(errno));
+                        break;
+                    } else {
+                        TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    }
+                    char_ct += len - 1; // do not include terminating '\0'
+                    TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
+                    TOMLX_LOG_DEBUG("buf: %s", buf);
                 }
-                char_ct += len - 1; // do not include terminating '\0'
-                TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-                TOMLX_LOG_DEBUG("buf: %s", buf);
                 break;
             default:
                 log_error("Bad toml seq type: %d", typ);
@@ -224,7 +258,7 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
                 TOMLX_LOG_DEBUG("int str sz: %d", len);
                 errno = 0;
                 TOMLX_LOG_DEBUG("snprintfing string, len %d", len);
-                if (use_write) { // with quotes
+                if (print_syntax) { // with quotes
                     len += 2;
                     if ((char_ct + len) > bufsz) { // + 1 for '\0'
                         log_error("exceeded bufsz: %d", char_ct + len);
@@ -307,7 +341,7 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
                     // realloc
                 } else {
                     errno = 0;
-                    snprintf(buf, 18, "%s", "<#toml-timestamp>");
+                    snprintf(buf, 18, "%s", "#<toml-timestamp>");
                     if (errno) {
                         log_error("snprintf: %s", strerror(errno));
                         break;
@@ -330,20 +364,23 @@ char *tomlx_array_to_string(toml_array_t *ta, bool use_write)
     }
 
     // print footer
-    {
-        errno = 0;
-        TOMLX_LOG_DEBUG("snprintfing footer", "");
-        ct = snprintf(buf+char_ct, 2, "%s", "]");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TOMLX_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
-        char_ct += 1; // do not include terminating '\0'
-        TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-        TOMLX_LOG_DEBUG("buf: %s", buf);
+    TOMLX_LOG_DEBUG("snprintfing footer", "");
+    errno = 0;
+    ct = snprintf(buf+char_ct,
+                  (print_syntax == PRINT_SYNTAX_TOML_RAW)? 1 : 2,
+                  "%s",
+                  (print_syntax == PRINT_SYNTAX_TOML_RAW)
+                  ? ""
+                  : (print_syntax == PRINT_SYNTAX_TOML)
+                  ? "]"
+                  : ">");
+    if (errno) {
+        log_error("snprintf: %s", strerror(errno));
+        return NULL;
     }
+    char_ct += 1; // do not include terminating '\0'
+    if (strncmp(buf, "[]", 2) == 0)
+        buf[0] = '\0';
     TOMLX_LOG_DEBUG("tomlx_array_to_string returning: %s", buf);
     return buf;
 }
@@ -425,7 +462,7 @@ void *tomlx_table_seq_for_key(toml_table_t *tt, char *key, int *typ)
     return NULL;
 }
 
-char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
+char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
 {
     TOMLX_ENTRY(tomlx_table_to_string);
     toml_datum_t datum;
@@ -446,21 +483,7 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
     int ct;
     (void)ct;                   /* elim unused-but-set-variable warning */
 
-    // print header
-    {
-        errno = 0;
-        TOMLX_LOG_DEBUG("snprintfing header", "");
-        ct = snprintf(buf, 14, "%s", "<#toml-table ");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TOMLX_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
-        char_ct += 13; // do not include terminating '\0'
-        TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-        TOMLX_LOG_DEBUG("buf: %s", buf);
-    }
+    // First check for empty
 
     // print fields
     int ntab = toml_table_ntab(tt);
@@ -470,8 +493,42 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
 
     TOMLX_LOG_DEBUG("key ct: %d", key_ct);
 
+    if (key_ct == 0) {
+        //FIXME: printing '{}' good for debugging templates
+        // empty table
+        /* buf[0] = '{'; */
+        /* buf[1] = '}'; */
+        /* buf[2] = '\0'; */
+        buf[0] = '\0';
+        return buf;
+    }
+
+    // print header
+    TOMLX_LOG_DEBUG("snprintfing header", "");
+    if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
+        ; // print nothing
+    }
+    else if (print_syntax == PRINT_SYNTAX_TOML) {
+        errno = 0;
+        ct = snprintf(buf, 2, "%s", "{");
+        if (errno) {
+            log_error("snprintf: %s", strerror(errno));
+            return NULL;
+        }
+        char_ct += 1; // do not include terminating '\0'
+    } else {
+        errno = 0;
+        ct = snprintf(buf, 14, "%s", "#<toml-table ");
+        if (errno) {
+            log_error("snprintf: %s", strerror(errno));
+            return NULL;
+        }
+        char_ct += 13; // do not include terminating '\0'
+    }
+
     const char *k; //, *v;
     int len;
+    bool empty = false;
     for (int i = 0; i < key_ct; i++) {
         k = toml_key_in(tt, i);
         if (!k) {
@@ -480,11 +537,15 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
         }
         TOMLX_LOG_DEBUG("table key: %s", k);
 
-        // print comma
-        if (i > 0) {
+        // maybe print comma
+        if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
+            ; // print nothing
+        }
+        else if (i > 0) {
             if ((char_ct + 3) > bufsz) {
                 log_error("realloc for comma");
-            } else {
+            }
+            else if (!empty) {
                 errno = 0;
                 TOMLX_LOG_DEBUG("snprintfing comma", "");
                 ct = snprintf(buf+char_ct, 3, "%s", ", ");
@@ -497,12 +558,22 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
                 char_ct += 2; // do not include terminating '\0'
                 TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
                 TOMLX_LOG_DEBUG("buf: %s", buf);
+            } else {
+                empty = false; // reset
             }
         }
 
+        char *relop = "";
+        int relopsz = 0;
         // print key to buf
+        if (print_syntax != PRINT_SYNTAX_TOML_RAW) {
+            // print only key, not '='
+            relop = " = ";
+            relopsz = 3;
+        }
+
         {
-            len = strlen(k) + 3; // for " = "
+            len = strlen(k) + relopsz; // for " = "
             len++; // terminating '\0'
             if ((char_ct + len) > bufsz) { // + 1 for '\0'
                 log_error("exceeded bufsz: %d", char_ct + len);
@@ -510,7 +581,7 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
             }
             errno = 0;
             TOMLX_LOG_DEBUG("snprintfing key len %d", len);
-            ct = snprintf(buf+char_ct, len, "%s = ", k);
+            ct = snprintf(buf+char_ct, len, "%s%s", k, relop);
             if (errno) {
                 log_error("snprintf: %s", strerror(errno));
                 break;
@@ -532,47 +603,57 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
             switch(typ) {
             case TOML_ARRAY:
                 TOMLX_LOG_DEBUG("array seq: %p", seq);
-                seq_str = tomlx_array_to_string((toml_array_t*)seq, use_write);
+                seq_str = tomlx_array_to_string((toml_array_t*)seq, print_syntax);
                 TOMLX_LOG_DEBUG("ARRAY: %s", seq_str);
-                len = strlen(seq_str) + 1;  // + 1 for '\0'
-                if ((char_ct + len) > bufsz) {
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TOMLX_LOG_DEBUG("snprintfing array len %d", len);
-                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
+                len = strlen(seq_str);
+                if (len == 0) {
+                    empty =true;
                 } else {
-                    TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    len++;  // + 1 for '\0'
+                    if ((char_ct + len) > bufsz) {
+                        log_error("exceeded bufsz: %d", char_ct + len);
+                        // expand buf
+                    }
+                    errno = 0;
+                    TOMLX_LOG_DEBUG("snprintfing array len %d", len);
+                    ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
+                    if (errno) {
+                        log_error("snprintf: %s", strerror(errno));
+                        break;
+                    } else {
+                        TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    }
+                    char_ct += len - 1; // do not include terminating '\0'
+                    TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
+                    TOMLX_LOG_DEBUG("buf: %s", buf);
                 }
-                char_ct += len - 1; // do not include terminating '\0'
-                TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-                TOMLX_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TABLE:
                 TOMLX_LOG_DEBUG("table seq: %p", seq);
-                seq_str = tomlx_table_to_string((toml_table_t*)seq, use_write);
+                seq_str = tomlx_table_to_string((toml_table_t*)seq, print_syntax);
                 TOMLX_LOG_DEBUG("TABLE: %s", seq_str);
-                len = strlen(seq_str) + 1;  // + 1 for '\0'
-                if ((char_ct + len) > bufsz) {
-                    log_error("exceeded bufsz: %d", char_ct + len);
-                    // expand buf
-                }
-                errno = 0;
-                TOMLX_LOG_DEBUG("snprintfing table len %d", len);
-                ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
+                len = strlen(seq_str);
+                if (len == 0) {
+                    empty = true; // print nothing
                 } else {
-                    TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    len++;  // + 1 for '\0'
+                    if ((char_ct + len) > bufsz) {
+                        log_error("exceeded bufsz: %d", char_ct + len);
+                        // expand buf
+                    }
+                    errno = 0;
+                    TOMLX_LOG_DEBUG("snprintfing table len %d", len);
+                    ct = snprintf(buf+char_ct, len, "%s = ", seq_str);
+                    if (errno) {
+                        log_error("snprintf: %s", strerror(errno));
+                        break;
+                    } else {
+                        TOMLX_LOG_DEBUG("snprintf ct: %d", ct);
+                    }
+                    char_ct += len - 1; // do not include terminating '\0'
+                    TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
+                    TOMLX_LOG_DEBUG("buf: %s", buf);
                 }
-                char_ct += len - 1; // do not include terminating '\0'
-                TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-                TOMLX_LOG_DEBUG("buf: %s", buf);
                 break;
             default:
                 log_error("Bad toml seq type: %d", typ);
@@ -680,7 +761,7 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
                 TOMLX_LOG_DEBUG("buf: %s", buf);
                 break;
             case TOML_TIMESTAMP:
-                seq_str = tomlx_datetime_to_string((toml_timestamp_t*)datum.u.ts, use_write);
+                seq_str = tomlx_datetime_to_string((toml_timestamp_t*)datum.u.ts, print_syntax);
                 TOMLX_LOG_DEBUG("TS: %s", seq_str);
                 len = strlen(seq_str) + 1;  // + 1 for '\0'
                 if ((char_ct + len) > bufsz) {
@@ -715,20 +796,22 @@ char *tomlx_table_to_string(toml_table_t *tt, bool use_write)
     }
 
     // print footer
-    {
-        errno = 0;
-        TOMLX_LOG_DEBUG("snprintfing footer", "");
-        ct = snprintf(buf+char_ct, 2, "%s", ">");
-        if (errno) {
-            log_error("snprintf: %s", strerror(errno));
-            return NULL;
-        } else {
-            TOMLX_LOG_DEBUG("snprintf hdr ct: %d", ct);
-        }
-        char_ct += 1; // do not include terminating '\0'
-        TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-        TOMLX_LOG_DEBUG("buf: %s", buf);
+    errno = 0;
+    TOMLX_LOG_DEBUG("snprintfing footer", "");
+    ct = snprintf(buf+char_ct,
+                  (print_syntax == PRINT_SYNTAX_TOML_RAW) ? 1 : 2,
+                  "%s",
+                  (print_syntax == PRINT_SYNTAX_TOML_RAW)
+                  ? ""
+                  : (print_syntax == PRINT_SYNTAX_TOML)
+                  ? "}"
+                  : ">");
+    if (errno) {
+        log_error("snprintf: %s", strerror(errno));
+        return NULL;
     }
+    char_ct += 1; // do not include terminating '\0'
+
     TOMLX_LOG_DEBUG("tomlx_table_to_string returning: %s", buf);
     return buf;
 }
@@ -785,10 +868,10 @@ char *tomlx_format_datetime(toml_timestamp_t* ts, const char *fmt)
     return strndup(buf, strlen(buf));
 }
 
-char *tomlx_datetime_to_string(toml_timestamp_t *ts, bool use_write)
+char *tomlx_datetime_to_string(toml_timestamp_t *ts, int print_syntax)
 {
     TOMLX_ENTRY(tomlx_datetime_to_string);
-    TOMLX_LOG_DEBUG("use_write: %d", use_write);
+    TOMLX_LOG_DEBUG("print_syntax: %d", print_syntax);
     const int BUFSZ = 4096;
     char *buf;          /* WARNING: malloc */
     buf = calloc(BUFSZ, sizeof(char));
@@ -803,8 +886,8 @@ char *tomlx_datetime_to_string(toml_timestamp_t *ts, bool use_write)
     int ct;
     (void)ct;
 
-    // print leading "
-    if (use_write) {
+    if (print_syntax == PRINT_SYNTAX_SCM_WRITE) {
+        // print quotation marks
         errno = 0;
         TOMLX_LOG_DEBUG("snprintfing header", "");
         // FIXME: check buf sz
@@ -874,7 +957,7 @@ char *tomlx_datetime_to_string(toml_timestamp_t *ts, bool use_write)
     /* log_debug("buf: %s", buf); */
 
     // print footer
-    if (use_write) {
+    if (print_syntax == PRINT_SYNTAX_SCM_WRITE) {
         errno = 0;
         TOMLX_LOG_DEBUG("snprintfing datetime footer", "");
         ct = snprintf(buf+char_ct, 2, "%s", "\"");

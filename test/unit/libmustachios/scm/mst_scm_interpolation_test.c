@@ -36,14 +36,14 @@ void basic_interpolation(void) {
     /* Unadorned tags should interpolate content into the template. */
     datamap = ht
         ? "#m(:subject \"world\")"
-        : "'((:subject \"world\"))";
+        : "'((:subject . \"world\"))";
     S7_RENDER_TEST("Hello, {{subject}}!",
                    datamap, "Hello, world!");
 
     /* symbol (unquoted!) */
     datamap = ht
         ? "#m(:subject world)"
-        : "'((:subject world))";
+        : "'((:subject . world))";
     S7_RENDER_TEST("Hello, {{subject}}!",
                    datamap, "Hello, world!");
 
@@ -57,7 +57,7 @@ void basic_interpolation(void) {
     /* multimap reader macro */
     datamap = ht
         ? "#m(:subject \"world\")"
-        : "'((:subject \"world\"))";
+        : "'((:subject . \"world\"))";
     S7_RENDER_TEST("Hello, {{subject}}!",
                    datamap, "Hello, world!");
 
@@ -65,7 +65,7 @@ void basic_interpolation(void) {
     /* Basic interpolation should be HTML escaped. */
     datamap = ht
         ? "#m(:forbidden \"& \\\" < >\")"
-        : "'((:forbidden \"& \\\" < >\"))";
+        : "'((:forbidden . \"& \\\" < >\"))";
     S7_RENDER_TEST("These characters should be HTML escaped: {{forbidden}}",
                    datamap,
                    "These characters should be HTML escaped: &amp; &quot; &lt; &gt;");
@@ -74,7 +74,7 @@ void basic_interpolation(void) {
     /* Triple mustaches should interpolate without HTML escaping. */
     datamap = ht
         ? "#m(:forbidden \"& \\\" < >\")"
-        : "'((:forbidden \"& \\\" < >\"))";
+        : "'((:forbidden . \"& \\\" < >\"))";
     S7_RENDER_TEST("These characters should not be HTML escaped: {{{forbidden}}}",
                    datamap,
                    "These characters should not be HTML escaped: & \" < >");
@@ -88,9 +88,12 @@ void basic_interpolation(void) {
 
 void integer_interpolation(void) {
     /* Integers should interpolate seamlessly. */
+    datamap = "'((:mph 85))";
+    S7_RENDER_TEST("{{mph}} miles an hour!", datamap, "(85) miles an hour!");
+
     datamap = ht
         ? "#m(:mph 85)"
-        : "'((:mph 85))";
+        : "'((:mph . 85))";
     S7_RENDER_TEST("{{mph}} miles an hour!", datamap, "85 miles an hour!");
 
     // triple mustache
@@ -104,7 +107,7 @@ void decimal_interpolation(void) {
     /* Decimals should interpolate seamlessly with proper significance. */
     datamap = ht
         ? "#m(:power \"1.210\")"
-        : "'((:power \"1.210\"))";
+        : "'((:power . \"1.210\"))";
     S7_RENDER_TEST("{{power}} jiggawatts!", datamap, "1.210 jiggawatts!");
 
     // basic
@@ -140,16 +143,21 @@ void null_interpolation(void) {
     // not null (quoted inside a quoted expr)
     S7_RENDER_TEST("I ({{&cannot}}) be seen!",
                    "#m(:cannot '())",
-                   "I (quote ()) be seen!");
+                   "I ('()) be seen!");
+    S7_RENDER_TEST("I ({{&cannot}}) be seen!",
+                   "'((:cannot . '()))",
+                   "I ('()) be seen!");
     S7_RENDER_TEST("I ({{&cannot}}) be seen!",
                    "'((:cannot '()))",
-                   "I ('()) be seen!");
+                   "I (('())) be seen!");
 
      // false falsey? depends on type, alist v. ht
     S7_RENDER_TEST("I ({{&cannot}}) be seen!",
                    "#m(:cannot #f)", "I () be seen!");
     S7_RENDER_TEST("I ({{&cannot}}) be seen!",
-                   "'((:cannot #f))", "I (#f) be seen!");
+                   "'((:cannot . #f))", "I (#f) be seen!");
+    S7_RENDER_TEST("I ({{&cannot}}) be seen!",
+                   "'((:cannot #f))", "I ((#f)) be seen!");
 }
 
 void context_miss_interpolation(void) {
@@ -169,7 +177,7 @@ void dotted_name_interpolation(void) {
     // basic
     datamap = ht
         ? "#m(:person #m(:name Joe))"
-        : "'((:person ((:name Joe))))";
+        : "'((:person (:name . Joe)))";
     S7_RENDER_TEST("\"{{person.name}}\" == \"{{#person}}{{name}}{{/person}}\"",
                    datamap,
                    "\"Joe\" == \"Joe\"");
@@ -190,7 +198,7 @@ void long_dotted_name_interpolation(void) {
     // w/o quoting
     datamap = ht
         ? "#m(:a #m(:b #m(:c #m(:d #m(:e #m(:name Phil))))))"
-        : "'((:a ((:b ((:c ((:d ((:e ((:name Phil))))))))))))";
+        : "'((:a (:b (:c (:d (:e (:name . Phil))))))))))))";
     S7_RENDER_TEST("{{a.b.c.d.e.name}} == Phil",
                    datamap,
                    "Phil == Phil");
@@ -198,7 +206,7 @@ void long_dotted_name_interpolation(void) {
     // with quoting
     datamap = ht
         ? "#m(:a #m(:b #m(:c #m(:d #m(:e #m(:name \"Phil\"))))))"
-        : "'((:a ((:b ((:c ((:d ((:e ((:name \"Phil\"))))))))))))";
+        : "'((:a (:b (:c (:d (:e (:name . \"Phil\"))))))))))))";
     S7_RENDER_TEST("\"{{a.b.c.d.e.name}}\" == \"Phil\"",
                    datamap,
                    "\"Phil\" == \"Phil\"");
@@ -229,8 +237,8 @@ void long_dotted_name_interpolation(void) {
     datamap = ht
         ? "'#m(:a #m(:b #m(:c #m(:d #m(:e #m(:name Phil))))) "
         "      :b #m(:c #m(:d #m(:e #m(:name Wrong)))))"
-        : "'((:a ((:b ((:c ((:d ((:e ((:name Phil))))))))))) "
-        "  (:b ((:c ((:d ((:e ((:name Wrong))))))))))";
+        : "'((:a (:b (:c (:d (:e (:name . Phil))))))))))) "
+        "    (:b (:c (:d (:e (:name . Wrong))))))))))";
     S7_RENDER_TEST("{{#a}}{{b.c.d.e.name}}{{/a}} == Phil",
                    datamap,
                    "Phil == Phil");
@@ -279,7 +287,7 @@ void implicit_iterators(void) {
 void whitespace_sensitivity(void) {
     datamap = ht
         ? "#m(:string \"---\")"
-        : "'((:string \"---\"))";
+        : "'((:string . \"---\"))";
 
     // Surrounding whitespace
     /* Interpolation should not alter surrounding whitespace. */

@@ -5,6 +5,11 @@
 
 #include "toml.h"
 
+#define PRINT_SYNTAX_SCM_DISPLAY 0
+#define PRINT_SYNTAX_SCM_WRITE   1
+#define PRINT_SYNTAX_TOML        2
+#define PRINT_SYNTAX_TOML_RAW    3
+
 #define TOML_NONDATUM   0
 #define TOML_BOOL       1
 #define TOML_INT        2
@@ -40,7 +45,7 @@ toml_datum_t tomlx_table_datum_for_key(toml_table_t *tt, char *key, int *typ);
 
 void *tomlx_table_seq_for_key(toml_table_t *tt, char *key, int *typ);
 
-char *tomlx_table_to_string(toml_table_t *tt, bool use_write);
+char *tomlx_table_to_string(toml_table_t *tt, int print_syntax);
 
 struct tomlx_item_s *tomlx_array_ref(toml_array_t *array,
                                      int idx);
@@ -49,9 +54,9 @@ toml_datum_t tomlx_array_datum_for_idx(toml_array_t *ta, int idx, int *typ);
 
 void *tomlx_array_seq_for_idx(toml_array_t *ta, int idx, int *typ);
 
-char *tomlx_array_to_string(toml_array_t *ta, bool use_write);
+char *tomlx_array_to_string(toml_array_t *ta, int print_syntax);
 
-char *tomlx_datetime_to_string(toml_timestamp_t *ts, bool use_write);
+char *tomlx_datetime_to_string(toml_timestamp_t *ts, int print_syntax);
 
 char *tomlx_format_datetime(toml_timestamp_t* ts, const char *fmt);
 

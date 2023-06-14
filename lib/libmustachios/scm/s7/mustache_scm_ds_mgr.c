@@ -74,10 +74,10 @@ static char *keyval(char *head, int sflags, enum comp *comp)
 }
 
 /* WARNING: flag Mustach_With_JsonPointer not compatible with dotted segs??? (e.g. {{person.name}}) */
-static char *getkey(char **head, int sflags)
+static char *get_next_keyseg(char **head, int sflags)
 {
     (void)sflags;
-    TRACE_ENTRY(getkey);
+    TRACE_ENTRY(get_next_keyseg);
 #ifdef DEVBUILD
     log_debug("\thead: %s", *head);
 #endif
@@ -135,7 +135,7 @@ static enum sel sel(struct datasource_s *ds, // datasource
 
     enum sel result;
     int i, j, sflags, scmp;
-    char *key, *value;
+    char *keyseg, *value;
     enum comp k;
 
     ((struct closure_hdr*)ds->stack)->predicate = ds->predicate;
@@ -215,10 +215,10 @@ static enum sel sel(struct datasource_s *ds, // datasource
                 log_debug("NAMED PREDOP_FIRST");
 #endif
                 char *ptmp = copy + 1;
-                key = getkey(&ptmp, sflags);
-                /* log_debug("KEY: %s", key); */
+                keyseg = get_next_keyseg(&ptmp, sflags);
+                /* log_debug("KEYSEG: %s", keyseg); */
                 // same as NOT SINGLEDOT below
-                int rc = ds->methods->sel(ds->stack, key);
+                int rc = ds->methods->sel(ds->stack, keyseg);
                 if (rc) return S_ok; else return S_none;
             }
         } else {
@@ -241,10 +241,10 @@ static enum sel sel(struct datasource_s *ds, // datasource
                 /* && (sflags & Mustach_With_Precates)) { */
                 /* ((struct closure_hdr*)ds->stack)->nonfinal_predicate = true; */
                 char *ptmp = copy + 1;
-                key = getkey(&ptmp, sflags);
-                /* log_debug("KEY: %s", key); */
+                keyseg = get_next_keyseg(&ptmp, sflags);
+                /* log_debug("KEYSEG: %s", keyseg); */
                 // same as NOT SINGLEDOT below
-                int rc = ds->methods->sel(ds->stack, key);
+                int rc = ds->methods->sel(ds->stack, keyseg);
                 if (rc) return S_ok; else return S_none;
             }
         } else {
@@ -270,10 +270,10 @@ static enum sel sel(struct datasource_s *ds, // datasource
 #endif
                 /* ((struct closure_hdr*)ds->stack)->nonfinal_predicate = true; */
                 char *ptmp = copy + 1;
-                key = getkey(&ptmp, sflags);
-                /* log_debug("KEY: %s", key); */
+                keyseg = get_next_keyseg(&ptmp, sflags);
+                /* log_debug("KEYSEG: %s", keyseg); */
                 // same as NOT SINGLEDOT below
-                int rc = ds->methods->sel(ds->stack, key);
+                int rc = ds->methods->sel(ds->stack, keyseg);
                 if (rc) return S_ok; else return S_none;
             }
         } else {
@@ -285,23 +285,23 @@ no_metachar:
 #ifdef DEVBUILD
         log_debug("CASE DEFAULT: no metachar ('.', '^', '$', '?')");
 #endif
-        /* not the single dot, extract the first key */
-        key = getkey(&copy, sflags);
-        if (key == NULL)
+        /* not the single dot, extract the first keyseg */
+        keyseg = get_next_keyseg(&copy, sflags);
+        if (keyseg == NULL)
             return 0;
         /* select the root item */
 #ifdef DEVBUILD
-        log_debug("key: %s", key);
+        log_debug("keyseg: %s", keyseg);
         log_debug("selecting root item");
         log_debug("ds->predicate: %d", ((struct closure_hdr*)ds)->predicate);
         /* log_debug("ds->stack: %x", ds->stack); */
         /* log_debug("ds->stack->nonfinal_predicate: %x", */
         /*           ((struct closure_hdr*)ds->stack)->nonfinal_predicate); */
 #endif
-        if (ds->methods->sel(ds->stack, key))
+        if (ds->methods->sel(ds->stack, keyseg))
             result = S_ok;
-        else if (key[0] == '*'
-                 && !key[1]
+        else if (keyseg[0] == '*'
+                 && !keyseg[1]
                  && !value
                  && !*copy
                  && (ds->flags & Mustach_With_ObjectIter)
@@ -311,26 +311,27 @@ no_metachar:
             result = S_none;
 #ifdef DEVBUILD
         log_debug("app sel returned: %d", result);
+        // 3 = S_ok_or_objiter
         /* DUMP_CLOSURE(x, 0); */
 #endif
         if (result == S_ok) { /* S_ok == 1 */
             /* iterate the selection of sub items */
-            key = getkey(&copy, sflags);
-            while(result == S_ok && key) {
+            keyseg = get_next_keyseg(&copy, sflags);
+            while(result == S_ok && keyseg) {
 #ifdef DEVBUILD
-                log_debug("SUBSELECTING subitem, key: '%s'", key);
+                log_debug("SUBSELECTING subitem, keyseg: '%s'", keyseg);
 #endif
-                if (ds->methods->subsel(ds->stack, key))
+                if (ds->methods->subsel(ds->stack, keyseg))
                     /* nothing */;
-                else if (key[0] == '*'
-                         && !key[1]
+                else if (keyseg[0] == '*'
+                         && !keyseg[1]
                          && !value
                          && !*copy
                          && (ds->flags & Mustach_With_ObjectIter))
                     result = S_objiter;
                 else
                     result = S_none;
-                key = getkey(&copy, sflags);
+                keyseg = get_next_keyseg(&copy, sflags);
             }
         }
     }
@@ -495,6 +496,7 @@ static int next(struct datasource_s *ds)
 {
 #ifdef DEVBUILD
     log_debug("next");
+    /* dump_stack(ds); */
 #endif
     /* struct wrap *w = closure; */
     int rc = ds->methods->next(ds->stack);

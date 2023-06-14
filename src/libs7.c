@@ -315,11 +315,18 @@ static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
 #define TO_STR(x) s7_object_to_c_string(s7, x)
 /* #define TO_S7_INT(x) s7_make_integer(s7, x) */
 
+/*
+ * It is permissible to let nil be an element of an a-list in place of
+ * a pair. Such an element is not considered to be a pair but is
+ * simply passed over when the a-list is searched by assoc.
+ * (https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node153.html)
+ */
 bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
 {
     if (s7_is_list(s7, arg)) {
-        if (arg == s7_nil(s7))
+        if (arg == s7_nil(s7)) // '() is an alist
             return true;
+
 
         s7_pointer x;
         s7_pointer iter = s7_make_iterator(s7, arg);
@@ -338,17 +345,17 @@ bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
 
         x = s7_iterate(s7, iter);
         while (true) {
-            /* log_debug("iter: %s", TO_STR(x)); */
+            /* log_debug("XXXXXXXXXXXXXXXX iter: %s", TO_STR(x)); */
             if ((x == s7_eof_object(s7))
                 || (s7_iterator_is_at_end(s7, iter))) {
                 s7_gc_unprotect_at(s7, gc);
                 return true;
             }
-            if (!s7_is_pair(x)) {
-                s7_gc_unprotect_at(s7, gc);
-                return false;
+            if (s7_is_null(s7, x)) { // s7_cdr(x))) {
+                // '() not a pair, but allowed as mbr of alist
+                ;
             }
-            if (s7_is_null(s7, s7_cdr(x))) {
+            else if (!s7_is_pair(x)) {
                 s7_gc_unprotect_at(s7, gc);
                 return false;
             }
@@ -356,6 +363,77 @@ bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
         }
     } else
         return false;
+}
+
+/*
+ * WARNING: this is for mustache processing, it probably should not
+ * live here.  returns true of arg is an alist whose keys are keywords.
+ */
+bool libs7_is_kw_alist(s7_scheme *s7, s7_pointer arg)
+{
+    if (s7_is_list(s7, arg)) {
+        if (arg == s7_nil(s7)) // '() is an alist
+            return true;
+
+
+        s7_pointer x;
+        s7_pointer iter = s7_make_iterator(s7, arg);
+        s7_int gc = s7_gc_protect(s7, iter);
+        if (!s7_is_iterator(iter)) {
+            log_error("s7_make_iterator failed on %s", TO_STR(arg));
+            s7_gc_unprotect_at(s7, gc);
+            return false;
+        }
+
+        if (s7_iterator_is_at_end(s7, iter)) {
+            log_error("iterator %s is prematurely done on %s", TO_STR(arg));
+            s7_gc_unprotect_at(s7, gc);
+            return false;
+        }
+
+        x = s7_iterate(s7, iter);
+        while (true) {
+            /* log_debug("XXXXXXXXXXXXXXXX iter: %s", TO_STR(x)); */
+            if ((x == s7_eof_object(s7))
+                || (s7_iterator_is_at_end(s7, iter))) {
+                s7_gc_unprotect_at(s7, gc);
+                return true;
+            }
+            if (s7_is_null(s7, x)) { // s7_cdr(x))) {
+                // '() not a pair, but allowed as mbr of alist
+                ;
+            }
+            else if (s7_is_pair(x)) {
+                if ( !s7_is_keyword(s7_car(x)) ) {
+                    return false;
+                }
+            } else {
+                s7_gc_unprotect_at(s7, gc);
+                return false;
+            }
+            x = s7_iterate(s7, iter);
+        }
+    } else
+        return false;
+}
+
+bool libs7_is_empty_alist(s7_scheme *s7, s7_pointer arg)
+{
+    /* log_debug("libs7_is_empty_alist"); */
+    if (s7_is_list(s7, arg)) {
+        if (arg == s7_nil(s7)) // '() is an empty alist
+            return true;
+
+        // treat '(()) as empty alist
+        if ((s7_car(arg) == s7_nil(s7))
+            && (s7_cdr(arg) == s7_nil(s7)))
+            return true;
+        else
+            return false;
+    } else {
+        /* log_debug("not list"); */
+        return false;
+    }
 }
 
 static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer arg)

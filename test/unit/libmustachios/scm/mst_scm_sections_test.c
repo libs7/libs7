@@ -31,7 +31,7 @@ void truthy(void) {
     /* Truthy sections should have their contents rendered. */
     datamap = ht
         ? "#m(:flag #t)"
-        : "'((:flag #t))";
+        : "'((:flag . #t))";
     S7_RENDER_TEST("{{#flag}}This should be rendered.{{/flag}}",
                    datamap,
                    "This should be rendered.");
@@ -41,14 +41,14 @@ void falsey(void) {
     /* Falsey sections should have their contents omitted. */
     datamap = ht
         ? "#m(:flag #f)"
-        : "'((:flag #f))";
+        : "'((:flag . #f))";
     S7_RENDER_TEST("{{#flag}}This should not be rendered.{{/flag}}",
                    datamap,
                    "");
     /* Null is falsey */
     datamap = ht
         ? "#m(:null ())"
-        : "'((:null ()))";
+        : "'((:null . ()))";
     S7_RENDER_TEST("{{#null}}This should not be rendered.{{/null}}",
                    datamap,
                    "");
@@ -58,7 +58,7 @@ void contexts(void) {
     /* Objects and hashes should be pushed onto the context stack. */
     datamap = ht
         ? "#m(:context #m(:name Joe))"
-        : "'((:context ((:name Joe))))";
+        : "'((:context (:name . Joe)))";
     S7_RENDER_TEST("{{#context}}Hi {{name}}.{{/context}}",
                    datamap,
                    "Hi Joe.");
@@ -67,7 +67,7 @@ void contexts(void) {
     /* Names missing in the current context are looked up in the stack. */
     datamap = ht
         ? "#m(:a \"foo\" :b \"wrong\" :sec #m(:b \"bar\") :c #m(:d \"baz\"))"
-        : "'((:a \"foo\") (:b \"wrong\") (:sec ((:b \"bar\"))) (:c ((:d \"baz\"))))";
+        : "'((:a . \"foo\") (:b . \"wrong\") (:sec (:b . \"bar\")) (:c (:d . \"baz\")))";
     S7_RENDER_TEST("{{#sec}}{{a}}, {{b}}, {{c.d}}{{/sec}}",
                    datamap,
                    "foo, bar, baz");
@@ -78,7 +78,7 @@ void contexts(void) {
      * a simple way to display content conditionally if a variable exists. */
     datamap = ht
         ? "#m(:foo \"bar\")"
-        : "'((:foo \"bar\"))";
+        : "'((:foo . \"bar\"))";
     S7_RENDER_TEST("{{#foo}}{{.}} is {{foo}}{{/foo}}",
                    datamap,
                    "bar is bar");
@@ -93,14 +93,14 @@ void contexts(void) {
         "                              #(#m(:bname x) "
         "                                #m(:bname y)))))))"
 
-        : "'((:tops "
-        "    #(((:tname ((:upper A) (:lower a))) "
-        "       (:middles "
-        "         #(((:mname 1) "
-        "            (:bottoms "
-        "              #(((:bname x)) "
-        "                ((:bname y)))))))))))";
-
+        : "'((:tops . "
+        "    #(((:tname (:upper . A) (:lower . a)) "
+        "       (:middles . "
+        "         #(((:mname . 1) "
+        "            (:bottoms . "
+        "              #(((:bname . x)) "
+        "                ((:bname . y)))))))))))";
+    errmsg = datamap;
     S7_RENDER_TEST("{{#tops}}{{#middles}}{{tname.lower}}{{mname}}.{{#bottoms}}{{tname.upper}}{{mname}}{{bname}}.{{/bottoms}}{{/middles}}{{/tops}}",
                    datamap,
                    "a1.A1x.A1y.");
@@ -113,11 +113,11 @@ void contexts(void) {
         "     :c #m(:three 3 "
         "           :d #m(:four 4 "
         "                 :five 5)))"
-        : "'((:a ((:one 1))) "
-        "  (:b ((:two 2))) "
-        "  (:c ((:three 3) "
-        "       (:d ((:four 4) "
-        "            (:five 5)))))) ";
+        : "'((:a ((:one . 1))) "
+        "    (:b ((:two . 2))) "
+        "    (:c ((:three . 3) "
+        "       (:d ((:four . 4) "
+        "            (:five . 5)))))) ";
     S7_RENDER_TEST("{{#a}}\n{{one}}\n{{#b}}\n{{one}}{{two}}{{one}}\n{{#c}}\n{{one}}{{two}}{{three}}{{two}}{{one}}\n{{#d}}\n{{one}}{{two}}{{three}}{{four}}{{three}}{{two}}{{one}}\n{{#five}}\n{{one}}{{two}}{{three}}{{four}}{{five}}{{four}}{{three}}{{two}}{{one}}\n{{one}}{{two}}{{three}}{{four}}{{.}}6{{.}}{{four}}{{three}}{{two}}{{one}}\n{{one}}{{two}}{{three}}{{four}}{{five}}{{four}}{{three}}{{two}}{{one}}\n{{/five}}\n{{one}}{{two}}{{three}}{{four}}{{three}}{{two}}{{one}}\n{{/d}}\n{{one}}{{two}}{{three}}{{two}}{{one}}\n{{/c}}\n{{one}}{{two}}{{one}}\n{{/b}}\n{{one}}\n{{/a}}\n",
                    datamap,
                    "1\n121\n12321\n1234321\n123454321\n12345654321\n123454321\n1234321\n12321\n121\n1\n");
@@ -140,10 +140,10 @@ void lists(void) {
         "    #(#m(:item 1) "
         "      #m(:item 2) "
         "      #m(:item 3)))"
-        : "'((:list "
-        "    #(((:item 1)) "
-        "      ((:item 2)) "
-        "      ((:item 3)))))";
+        : "'((:list . "
+        "    #(((:item . 1)) "
+        "      ((:item . 2)) "
+        "      ((:item . 3)))))";
     S7_RENDER_TEST("\"{{#list}}{{item}}{{/list}}\"",
                    datamap,
                    "\"123\"");
@@ -152,7 +152,7 @@ void lists(void) {
     /* Empty lists should behave like falsey values. */
     datamap = ht
         ? "#m(:list #())"
-        : "'((:list #()))";
+        : "'((:list . #()))";
     S7_RENDER_TEST("\"{{#list}}Yay lists!{{/list}}\"",
                    datamap,
                    "\"\"");
@@ -162,7 +162,7 @@ void doubled(void) {
     /* Multiple sections per template should be permitted. */
     datamap = ht
         ? "#m(:flag #t :two \"second\")"
-        : "'((:flag #t) (:two \"second\"))";
+        : "'((:flag . #t) (:two . \"second\"))";
     S7_RENDER_TEST("{{#flag}}\n* first\n{{/flag}}\n* {{two}}\n{{#flag}}\n* third\n{{/flag}}\n",
                    datamap,
                    "* first\n* second\n* third\n");
@@ -181,8 +181,8 @@ void nested(void) {
     // Nested (Falsey)
     /* Nested falsey sections should be omitted. */
     datamap = ht
-        ? "'((:flag #f))"
-        : "'((:flag #f))";
+        ? "#m(:flag #f)"
+        : "'((:flag . #f))";
     S7_RENDER_TEST("| A {{#flag}}B {{#flag}}C{{/flag}} D{{/flag}} E |",
                    datamap,
                    "| A  E |");
@@ -193,7 +193,7 @@ void implicit_iterators(void) {
     /* Implicit iterators should directly interpolate strings. */
     datamap = ht
         ? "#m(:list #(\"a\", \"b\", \"c\", \"d\", \"e\"))"
-        : "'((:list #(\"a\", \"b\", \"c\", \"d\", \"e\")))";
+        : "'((:list . #(\"a\", \"b\", \"c\", \"d\", \"e\")))";
     S7_RENDER_TEST("\"{{#list}}({{.}}){{/list}}\"",
                    datamap,
                    "\"(a)(b)(c)(d)(e)\"");
@@ -202,7 +202,7 @@ void implicit_iterators(void) {
     /* Implicit iterators should cast integers to strings and interpolate. */
     datamap = ht
         ? "#m(:list #(1 2 3 4 5))"
-        : "'((:list #(1 2 3 4 5)))";
+        : "'((:list . #(1 2 3 4 5)))";
     S7_RENDER_TEST("\"{{#list}}({{.}}){{/list}}\"",
                    datamap,
                    "\"(1)(2)(3)(4)(5)\"");
@@ -211,7 +211,7 @@ void implicit_iterators(void) {
     /* Implicit iterators should cast decimals to strings and interpolate. */
     datamap = ht
         ? "#m(:list #(1.1 2.2 3.3 4.4 5.5))"
-        : "'((:list #(1.1 2.2 3.3 4.4 5.5)))";
+        : "'((:list . #(1.1 2.2 3.3 4.4 5.5)))";
     S7_RENDER_TEST("\"{{#list}}({{.}}){{/list}}\"",
                    datamap,
                    "\"(1.1)(2.2)(3.3)(4.4)(5.5)\"");
@@ -219,7 +219,7 @@ void implicit_iterators(void) {
     // with format string
     datamap = ht
         ? "#m(:list #(1.1 2.2 3.3 4.4 5.5))"
-        : "'((:list #(1.1 2.2 3.3 4.4 5.5)))";
+        : "'((:list . #(1.1 2.2 3.3 4.4 5.5)))";
     S7_RENDER_TEST("\"{{#list}}({{.%%05.2f}}){{/list}}\"",
                    datamap,
                    "\"(01.10)(02.20)(03.30)(04.40)(05.50)\"");
@@ -231,7 +231,7 @@ void implicit_iterators(void) {
         "    #( "
         "     #(1 2 3) "
         "     #(\"a\" \"b\" \"c\")))"
-        : "'((:list "
+        : "'((:list . "
         "    #( "
         "     #(1 2 3) "
         "     #(\"a\" \"b\" \"c\"))))";
@@ -245,7 +245,7 @@ void dotted_names(void) {
     /* Dotted names should be valid for Section tags. */
     datamap = ht
         ? "#m(:a #m(:b #m(:c #t)))"
-        : "'((:a ((:b ((:c #t))))))";
+        : "'((:a (:b (:c . #t))))";
     S7_RENDER_TEST("\"{{#a.b.c}}Here{{/a.b.c}}\" == \"Here\"",
                    datamap,
                    "\"Here\" == \"Here\"");

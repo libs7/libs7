@@ -6,8 +6,8 @@
  SPDX-License-Identifier: ISC
 */
 
-#ifndef _MUSTACH_DS_MGR_H_
-#define _MUSTACH_DS_MGR_H_
+#ifndef _MUSTACHE_DS_MGR_H_
+#define _MUSTACHE_DS_MGR_H_
 
 #if !defined(INCLUDE_PARTIAL_EXTENSION)
 # define INCLUDE_PARTIAL_EXTENSION ".mustache"
@@ -106,14 +106,16 @@ struct datasource_s { // rename: struct datasource_s
 #define Mustach_With_PartialDataFirst   512
 #define Mustach_With_ErrorUndefined    1024
 
+/* don't include ErrorUndefined  in *_ALL_*_Extensions */
+/* also do not include JsonPointer 32 */
 #undef  Mustach_With_All_JSON_Extensions
-#define Mustach_With_All_JSON_Extensions     1023     /* don't include ErrorUndefined */
+#define Mustach_With_All_JSON_Extensions (1023 & ~(32))
 
 #undef  Mustach_With_All_TOML_Extensions
-#define Mustach_With_All_TOML_Extensions 1023 & ~(32) // exclude JsonPointer
+#define Mustach_With_All_TOML_Extensions (1023 & ~(32))
 
 #undef  Mustach_With_All_SCM_Extensions
-#define Mustach_With_All_SCM_Extensions (1023 & ~(32)) // exclude JsonPointer
+#define Mustach_With_All_SCM_Extensions  (1023 & ~(32))
 
 /**
  * mustach_ds_methods_s - high level wrap of mustach - interface for callbacks
@@ -175,7 +177,7 @@ struct datasource_s { // rename: struct datasource_s
 
 // mustach_ds_methods_s common to all datatypes - json, toml, scheme
 // each implementation specializes it in mustach_<impl>.c,
-// e.g. mustach_tomlc99.c defines mustach_datasource_toml
+// e.g. mustache_tomlc99.c defines mustach_datasource_toml
 // (so it s/b 'mustach_impl_itf', or "mustach_datasource_itf")
 
 // Comparison with 'struct mustach_ds_mgr_methods_s' (in mustach.h):
@@ -192,6 +194,7 @@ struct mustach_ds_methods_s {
     int (*subsel)(void *closure, const char *name);
     int (*enter)(void *closure, int objiter);
     int (*next)(void *closure);
+    /* int (*next)(int (*)(struct tstack_s *e)); */
     int (*leave)(void *closure, struct mustach_sbuf *sbuf);
     int (*format)(void *closure, const char *fmt, struct mustach_sbuf *sbuf, int key);
     void (*dump_stack)(void *closure);

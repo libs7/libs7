@@ -341,7 +341,7 @@ void array_to_string(void) {
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[true, false]", s7_string(res));
+    TEST_ASSERT_EQUAL_STRING("#<toml-array true, false>", s7_string(res));
 
     // ints
     root = TOML_READ("a = [1, 2, 3]");
@@ -352,7 +352,7 @@ void array_to_string(void) {
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[1, 2, 3]", s7_string(res));
+    TEST_ASSERT_EQUAL_STRING("#<toml-array 1, 2, 3>", s7_string(res));
 
     // doubles
     root = TOML_READ("a = [1.2, 2.3, 3.4]");
@@ -363,7 +363,7 @@ void array_to_string(void) {
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[1.2, 2.3, 3.4]", s7_string(res));
+    TEST_ASSERT_EQUAL_STRING("#<toml-array 1.2, 2.3, 3.4>", s7_string(res));
 
     // strings - double quote
     root = TOML_READ("a = [\"Hi\", \"there\", \"world\"]");
@@ -374,7 +374,7 @@ void array_to_string(void) {
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[\"Hi\", \"there\", \"world\"]",
+    TEST_ASSERT_EQUAL_STRING("#<toml-array \"Hi\", \"there\", \"world\">",
                              s7_string(res));
 
     // strings - single quote
@@ -386,7 +386,7 @@ void array_to_string(void) {
     actual = APPLY_1("toml:array?", a);
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[\"Hi\", \"there\", \"world\"]",
+    TEST_ASSERT_EQUAL_STRING("#<toml-array \"Hi\", \"there\", \"world\">",
                              s7_string(res));
 }
 
@@ -401,7 +401,7 @@ void nested_array_to_string(void) {
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     TRACE_LOG_DEBUG("running object->string", "");
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[[1, 2], [3, 4]]", s7_string(res));
+    TEST_ASSERT_EQUAL_STRING("#<toml-array #<toml-array 1, 2>, #<toml-array 3, 4>>", s7_string(res));
 
     char *toml = "a = [[1, 2, [3, 4]], [5, 6]]";
     root = TOML_READ(toml);
@@ -414,7 +414,7 @@ void nested_array_to_string(void) {
     TEST_ASSERT_EQUAL(actual, s7_t(s7));
     TRACE_LOG_DEBUG("running object->string", "");
     res = APPLY_1("object->string", a);
-    TEST_ASSERT_EQUAL_STRING("[[1, 2, [3, 4]], [5, 6]]", s7_string(res));
+    TEST_ASSERT_EQUAL_STRING("#<toml-array #<toml-array 1, 2, #<toml-array 3, 4>>, #<toml-array 5, 6>>", s7_string(res));
 }
 
 /* burnt sushi: tests/valid/table/array-one.toml */

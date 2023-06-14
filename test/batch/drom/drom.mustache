@@ -1,0 +1,116 @@
+Project:
+{{#project}}
+  Create:        {{create-project}}
+      Alternative, omitting falsey flds (expected: blank):
+      Create: {{#create-project}}{{create-project}}{{/create-project}}
+  Drom version:  {{drom-version}}
+  Share repo:    {{share-repo}}
+  Share version: {{share-version}}
+  Authors:
+  {{#authors}}
+    {{{.}}}
+  {{/authors}}
+  CI systems:
+  {{#ci-systems}}
+    {{.}}
+  {{/ci-systems}}
+  Copyright:      {{copyright}}
+  Edition:        {{edition}}
+  Github org:     {{github-organization}}
+  License:        {{license}}
+  Min edition:    {{min-edition}}
+  Name:           {{name}}
+  Skeleltion:     {{skeleton}}
+  Version:        {{version}}
+  Synopsis:
+      {{synopsis}}
+  Description:
+      {{description}}
+  Skip:
+  {{#skip}}
+    {{.}}
+  {{/skip}}
+  Skip dirs:
+  {{#skip-dirs}}
+    {{.}}
+  {{/skip-dirs}}
+  Share dirs:
+  {{#share-dirs}}
+    {{.}}
+  {{/share-dirs}}
+{{/project}}
+
+{{!  Tools: }}
+ {{!#tools.*}}
+{{! TODO: destructure val part of tools.* mapentry }}
+     {{!*}}: {{!.}}
+{{!/tools.*}}
+
+Tools:
+{{#tools.ocamlformat}}
+    ocamlformat:
+{{#tools.ocamlformat.*}}
+        {{*}}: {{.}}
+{{/tools.ocamlformat.*}}
+{{/tools.ocamlformat}}
+
+{{#tools.odoc}}
+    odoc:
+{{#tools.odoc.*}}
+        {{*}}: {{.}}
+{{/tools.odoc.*}}
+{{/tools.odoc}}
+
+{{#tools.ppx_expect}}
+    ppx_expect:
+{{#tools.ppx_expect.*}}
+        {{*}}: {{.}}
+{{/tools.ppx_expect.*}}
+{{/tools.ppx_expect}}
+
+{{#tools.ppx_inline_test}}
+    ppx_inline_test:
+{{#tools.ppx_inline_test.*}}
+        {{*}}: {{.}}
+{{/tools.ppx_inline_test.*}}
+{{/tools.ppx_inline_test}}
+
+{{#tools.foo}}
+    foo:
+{{#tools.foo.*}}
+        {{*}}: {{.}}
+{{/tools.foo.*}}
+{{/tools.foo}}
+
+Profiles:
+
+{{#profile.dev}}
+    Dev:
+{{#profile.dev.*}}
+        {{*}}: {{.}}
+{{/profile.dev.*}}
+{{/profile.dev}}
+
+{{#profile.release}}
+    Release:
+{{#profile.release.*}}
+        {{*}}: {{.}}
+{{/profile.release.*}}
+{{/profile.release}}
+
+Packages:
+
+{{#package}}
+  {{dir}}  -  edit {{dir}}/package.toml for package-specific options
+{{/package}}
+
+Fields:
+
+{{#fields}}
+  Dune lang: {{dune-lang}}
+{{/fields}}
+
+
+README:
+
+{{fields.readme-trailer}}

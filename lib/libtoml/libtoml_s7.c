@@ -560,7 +560,8 @@ s7_pointer libtoml_s7_init(s7_scheme *sc)
                                    0,
                                    1, // string or port
                                    false,
-                                   "(toml:read x) read toml from string or port", NULL));
+                                   "(toml:read x) read toml from string or port",
+                                   NULL)); //sig
 
 
   /* s7_define(sc, cur_env, */

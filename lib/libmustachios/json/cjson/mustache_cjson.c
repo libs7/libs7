@@ -163,8 +163,25 @@ static int sel(void *closure, const char *key)
         }
     } else {
         i = stack->depth;
-        while (i >= 0 && !(selection = cJSON_GetObjectItemCaseSensitive(stack->stack[i].obj, key)))
-            i--;
+        /* log_debug("searching stack for key %s", key); */
+
+        /*
+          SPECIAL CASE: root table objiter: {{#^.*}}...{{/^.*}}
+         */
+        if ((strncmp(key, "^", 1) == 0) && strlen(key) == 1) {
+            selection = stack->stack[i].obj;
+        } else {
+            while (i >= 0) {
+                selection = cJSON_GetObjectItemCaseSensitive(stack->stack[i].obj, key);
+                if  (selection) {
+                    /* log_debug("selecting for key '%s' val: '%s'", */
+                    /*           key, cJSON_PrintUnformatted(selection)); */
+                    break;
+                } else {
+                    i--;
+                }
+            }
+        }
         if (i >= 0)
             r = 1;
         else {
@@ -178,15 +195,24 @@ static int sel(void *closure, const char *key)
 
 static int subsel(void *closure, const char *name)
 {
-	struct tstack_s *stack = closure;
-	cJSON *o;
-	int r;
+    TRACE_ENTRY(subsel);
+    TRACE_LOG_DEBUG("key: %s", name);
+    struct tstack_s *stack = closure;
+    cJSON *o;
+    /* int r; */
 
-	o = cJSON_GetObjectItemCaseSensitive(stack->selection, name);
-	r = o != NULL;
-	if (r)
-		stack->selection = o;
-	return r;
+    o = cJSON_GetObjectItemCaseSensitive(stack->selection, name);
+    if (o) {
+        TRACE_LOG_DEBUG("setting selection to val for key %s", name);
+        stack->selection = o;
+        return 1;
+    } else {
+        return 0;
+    }
+    /* r = o != NULL; */
+    /* if (r) */
+    /*     stack->selection = o; */
+    /* return r; */
 }
 
 static int enter(void *closure, int objiter)
@@ -297,7 +323,22 @@ static int format(struct tstack_s *stack, const char *fmt,
                 return MUSTACH_ERROR_SYSTEM;
             /* log_debug("string '%s'", s); */
         }
-        else if (cJSON_IsNull(stack->selection))
+        else if (cJSON_IsObject(stack->selection)) {
+            s = cJSON_PrintUnformatted(stack->selection);
+            log_debug("Formatting JSON object: %s", s);
+            if (strncmp(s, "{}", 2) == 0) {
+                free((void*)s);
+                s = "";
+            }
+        }
+        else if (cJSON_IsArray(stack->selection)) {
+            log_debug("Formatting JSON array");
+            if (cJSON_GetArraySize(stack->selection) == 0) {
+                s = "";
+            } else {
+                s = cJSON_PrintUnformatted(stack->selection);
+            }
+        } else if (cJSON_IsNull(stack->selection))
             s = "";
         else if (cJSON_IsNumber(stack->selection)) {
             if (fmt) {
@@ -346,40 +387,47 @@ static int format(struct tstack_s *stack, const char *fmt,
 }
 
 /* **************************************************************** */
-static void _dump_obj(char *msg, struct cJSON *item)
-{
-    log_debug(msg);
-    if (item) {
-        if (cJSON_IsBool(item)) {
-            if (cJSON_IsTrue(item))
-                log_debug("\t  bool: true");
-            else
-                log_debug("\t  bool: false");
-        }
-        else if (cJSON_IsNull(item)) {
-            log_debug("\t  null: null");
-        }
-        else if (cJSON_IsNumber(item)) {
-            double n = cJSON_GetNumberValue(item); //FIXME: free?
-            /* int len = snprintf(NULL, 0, "%f", n); */
-            log_debug("\t  number: %f", n);
-        }
-        else if (cJSON_IsString(item)) {
-            char *s = cJSON_GetStringValue(item); //FIXME: free?
-            log_debug("\t  string: %s", s);
-        }
-        else if (cJSON_IsArray(item)) {
-            log_debug("\t  array: %s", "todo...");
-        }
-        else if (cJSON_IsObject(item)) {
-            log_debug("\t  object: %s", "todo...");
-        }
-        else {
-            log_warn("\t UNKNOWN DATUM TYPE");
-        }
-    } else
-        log_debug("\t  NULL");
-}
+/* static void _dump_obj(char *msg, struct cJSON *item) */
+/* { */
+/*     log_debug(msg); */
+/*     if (item) { */
+/*         if (cJSON_IsBool(item)) { */
+/*             log_debug("\t  bool: %s", cJSON_PrintUnformatted(item)); */
+/*             /\* if (cJSON_IsTrue(item)) *\/ */
+/*             /\*     log_debug("\t  bool: true"); *\/ */
+/*             /\* else *\/ */
+/*             /\*     log_debug("\t  bool: false"); *\/ */
+/*         } */
+/*         else if (cJSON_IsNull(item)) { */
+/*             log_debug("\t  null: %s", cJSON_PrintUnformatted(item)); */
+/*             /\* log_debug("\t  null: null"); *\/ */
+/*         } */
+/*         else if (cJSON_IsNumber(item)) { */
+/*             /\* double n = cJSON_GetNumberValue(item); //FIXME: free? *\/ */
+/*             /\* int len = snprintf(NULL, 0, "%f", n); *\/ */
+/*             log_debug("\t  number: %s", */
+/*                       cJSON_PrintUnformatted(item)); */
+/*         } */
+/*         else if (cJSON_IsString(item)) { */
+/*             /\* char *s = cJSON_GetStringValue(item); //FIXME: free? *\/ */
+/*             log_debug("\t  string: %s", */
+/*                       cJSON_PrintUnformatted(item)); */
+/*         } */
+/*         else if (cJSON_IsArray(item)) { */
+/*             /\* log_debug("\t  array: %s", "todo..."); *\/ */
+/*             log_debug("\t  array: %s", cJSON_PrintUnformatted(item)); */
+/*         } */
+/*         else if (cJSON_IsObject(item)) { */
+/*             log_debug("\t  object: %s", cJSON_PrintUnformatted(item)); */
+/*             /\* char *s = cJSON_PrintUnformatted(item); *\/ */
+/*             /\* log_debug("\t  object: %s", s); *\/ */
+/*         } */
+/*         else { */
+/*             log_warn("\t UNKNOWN DATUM TYPE"); */
+/*         } */
+/*     } else */
+/*         log_debug("\t  NULL"); */
+/* } */
 
 static void dump_stack(struct tstack_s *stack)
 {
@@ -391,20 +439,41 @@ static void dump_stack(struct tstack_s *stack)
     log_debug("\tlambda: %d", stack->lambda);
     log_debug("\tdepth: %d", d);
 
-    _dump_obj("\troot:", stack->root);
-    _dump_obj("\tselection:", stack->selection);
+    /* _dump_obj("\troot:", stack->root); */
+    log_debug("\troot     : %s", cJSON_PrintUnformatted(stack->root));
+    log_debug("\tselection: %s", cJSON_PrintUnformatted(stack->selection));
+    /* _dump_obj("\tselection:", stack->selection); */
     for (int i = 0; i <= stack->depth; i++) {
         log_debug("stackframe: %d", i);
-        _dump_obj("\tctx:", stack->stack[i].ctx);
-        _dump_obj("\tobj", stack->stack[i].obj);
-        if (stack->stack[i].obj) {
-            log_debug("\tstack[%d].obj: %p", i, stack->stack[i].obj);
-            log_debug("\tstack[%d].obj->child: %p", i, stack->stack[i].obj->child);
+        /* _dump_obj("\tctx:", stack->stack[i].ctx); */
+        if (stack->stack[i].ctx) {
+            log_debug("\tstack[%d].ctx: %s", i,
+                      cJSON_PrintUnformatted(stack->stack[i].ctx));
+        } else {
+            log_debug("\tstack[%d].ctx: NULL", i);
         }
-        log_debug("\tstack[%d].next: %p", i, stack->stack[i].next);
+        /* _dump_obj("\tobj", stack->stack[i].obj); */
+        if (stack->stack[i].obj) {
+            log_debug("\tstack[%d].obj: %s", i,
+                      cJSON_PrintUnformatted(stack->stack[i].obj));
+        } else {
+            log_debug("\tstack[%d].obj: NULL", i);
+        }
+        if (stack->stack[i].obj->child) {
+                log_debug("\tstack[%d].obj->child: %s", i,
+                          cJSON_PrintUnformatted(stack->stack[i].obj->child));
+        } else {
+            log_debug("\tstack[%d].obj->child: NULL", i);
+        }
+        if (stack->stack[i].obj->next) {
+            log_debug("\tstack[%d].obj->next: %s", i,
+                      cJSON_PrintUnformatted(stack->stack[i].obj->next));
+        } else {
+            log_debug("\tstack[%d].obj->next: NULL", i);
+        }
         log_debug("\tstack[%d].index: %d", i, stack->stack[i].index);
         log_debug("\tstack[%d].lambda: %d", i, stack->stack[i].lambda);
-        log_debug("\tstack[%d].predicate: %d", i, stack->stack[i].predicate);
+        log_debug("\tstack[%d].predicate: 0x%04X", i, stack->stack[i].predicate);
     }
     log_debug("end stack");
     fflush(NULL);
@@ -471,12 +540,13 @@ const char *mustache_json_render(const char *template,
 {
     TRACE_ENTRY(mustache_json_render);
     //FIXME: client responsible for flags
-    int flags = Mustach_With_AllExtensions;
-    flags &= ~Mustach_With_JsonPointer;
+    int flags = Mustach_With_All_JSON_Extensions;
+    /* flags &= ~Mustach_With_JsonPointer; */
     (void)_flags;
     //FIXME: _flags arg is for opting out of default 'all'
 
     struct tstack_s stack;
+    memset(&stack, 0, sizeof(struct tstack_s));
     stack.root = (cJSON*)root;
     char *result = mustach_json_render_to_string(template, template_sz,
                                                  &cjson_methods,
