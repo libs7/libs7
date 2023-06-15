@@ -1,0 +1,30 @@
+{{#rule}}
+(rule
+  (targets {{targets}})
+  (deps    {{#deps.*}}({{*}} "{{.}}"){{/deps.*}})
+  (action  {{#action}}{{#bash}}(bash "{{&bash}}"){{/bash}}{{/action}}))
+
+{{/rule}}
+
+{{#library}}
+(library
+  (name {{name}})
+  (public_name {{public_name}})
+  (modules {{#modules}}{{.}}{{?}} {{/?}}{{/modules}})
+  (c_names {{c_names}})
+  {{#flags}}
+  (flags {{#standard}}:standard{{/standard}} {{standard.extend}})
+  {{/flags}}
+
+  {{#c_flags}}
+  (c_flags {{#standard}}(:standard{{/standard}}{{#standard.exclude}} \ {{standard.exclude}}{{/standard.exclude}}{{standard.extend}}{{#standard}}){{/standard}} {{extra}} {{#include}}(:include "{{include}}"){{/include}})
+  {{/c_flags}}
+
+  {{#c_library_flags}}
+  (c_library_flags {{#standard}}(:standard{{/standard}}{{#standard.exclude}} \ {{standard.exclude}}{{/standard.exclude}}{{standard.extend}}{{#standard}}){{/standard}} {{extra}} {{#include}}(:include "{{include}}"){{/include}})
+  {{/c_library_flags}}
+
+  (libraries {{#libraries}}{{.}}{{?}} {{/?}}{{/libraries}})
+  {{#preprocess}}
+  (preprocess {{#preprocess}}{{#pps}}{{^}}(pps {{/^}}{{.}}{{?}} {{/?}}{{$}}){{/$}}{{/pps}}{{/preprocess}}){{/preprocess}})
+{{/library}}
