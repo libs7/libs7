@@ -1,10 +1,10 @@
 /* #define _GNU_SOURCE */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sys/errno.h>
 
 #include "config.h"
 #include "log.h"
@@ -473,10 +473,20 @@ static int format(struct tstack_s *stack, const char *fmt,
         if (stack->stack[stack->depth].iterating) {
             // int key should be index of current mapitem?
             // or any non-zero?
-            s = stack->stack[stack->depth].key;
+            TRACE_LOG_DEBUG("formatting key: %s", stack->stack[stack->depth].key);
+            if (fmt) {
+                TRACE_LOG_DEBUG("fmt string: %s", fmt);
+                len = snprintf(NULL, 0, fmt, stack->stack[stack->depth].key);
+                TRACE_LOG_DEBUG("LEN: %d", len);
+                work = malloc(len+1);
+                snprintf(work, len+1, fmt, stack->stack[stack->depth].key);
+                TRACE_LOG_DEBUG("formatted key: %s", work);
+                s = strndup(work, len+1);
+            } else {
+                s = stack->stack[stack->depth].key;
+            }
         } else {
-            s = stack->stack[stack->depth].key;
-            /* s ="XFOO"; */
+            s ="XFOO";
         }
         // jansson:
         /* s = e->stack[e->depth].iterating */
@@ -487,7 +497,17 @@ static int format(struct tstack_s *stack, const char *fmt,
         switch(o->type) {
         case TOML_STRING:
             TRACE_LOG_DEBUG("formatting string: %s", o->u.s);
-            s = o->u.s; //FIXME: strdup?
+            if (fmt) {
+                TRACE_LOG_DEBUG("fmt string: %s", fmt);
+                len = snprintf(NULL, 0, fmt, o->u.i);
+                TRACE_LOG_DEBUG("LEN: %d", len);
+                work = malloc(len+1);
+                snprintf(work, len+1, fmt, o->u.i);
+                TRACE_LOG_DEBUG("formatted int: %s", work);
+                s = strndup(work, len+1);
+            } else {
+                s = o->u.s; //FIXME: strdup?
+            }
             break;
         case TOML_TABLE:
             TRACE_LOG_DEBUG("formatting table", "");
@@ -518,6 +538,7 @@ static int format(struct tstack_s *stack, const char *fmt,
         case TOML_INT:
             TRACE_LOG_DEBUG("formatting int: %lld", o->u.i);
             if (fmt) {
+                TRACE_LOG_DEBUG("fmt string: %s", fmt);
                 len = snprintf(NULL, 0, fmt, o->u.i);
                 TRACE_LOG_DEBUG("LEN: %d", len);
                 work = malloc(len+1);
