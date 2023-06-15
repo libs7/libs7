@@ -1,0 +1,96 @@
+WORKSPACE
+
+{{#workspace}}
+  Resolver:  {{resolver}}
+  Members: {{#members}}{{.}}{{?}}, {{/?}}{{/members}}
+  Exclude: {{#exclude}}{{.}}{{?}}, {{/?}}{{/exclude}}
+{{/workspace}}
+
+NB: support for ad-hoc nested destructuring is under development.
+Table values in nested kv pairs are not destructured here.
+
+  WS Dependencies:
+{{#workspace.dependencies.*}}
+    {{*%%-24s}}: {{.}}
+{{/workspace.dependencies.*}}
+
+PACKAGE
+{{#package}}
+  Name:        {{name}}
+  Version:     {{version}}
+  Authors:
+  {{#authors}}
+      {{{.}}}
+  {{/authors}}
+  Edition:     {{edition}}
+  License:     {{license}}
+  Readme:      {{readme}}
+  Homepage:    {{homepage}}
+  Repository:  {{repository}}
+  Description: """{{description}}"""
+  Categories:
+  {{#categories}}
+      {{.}}
+  {{/categories}}
+  Keywords:
+  {{#keywords}}
+      {{.}}
+  {{/keywords}}
+{{/package}}
+
+Lib:
+
+{{#lib.*}}
+  {{*}}: {{.}}
+{{/lib.*}}
+
+Dependencies:
+{{#dependencies.*}}
+{{! here we use a mustachios extension, printf format strings }}
+    {{*%%-24s}}: {{.%%8s}}
+{{/dependencies.*}}
+
+Targets:
+
+NB: until ad-hoc destructuring is implemented, the structuring must be known ahead of time and expressed in the template, as is the case here for the [target] table.
+
+target: cfg(not(windows))
+    dependencies:
+{{#target.cfg(not(windows)).dependencies}}
+        openssl: {{#openssl.*}}{{*}}: {{.}}{{?}}, {{/?}}{{/openssl.*}}
+{{/target.cfg(not(windows)).dependencies}}
+
+target: cfg(windows)
+    dependencies:
+{{#target.cfg(windows).dependencies}}
+        fwdansi: {{#fwdansi.*}}{{*}}: {{.}}{{?}}, {{/?}}{{/fwdansi.*}}
+        {{#windows-sys}}
+          workspace: {{workspace}}
+          features: {{#features}}{{.}}{{?}}, {{/?}}{{/features}}
+        {{/windows-sys}}
+{{/target.cfg(windows).dependencies}}
+
+Dev dependencies:
+
+{{#dev-dependencies.*}}
+    {{*}}: {{.}}
+{{/dev-dependencies.*}}
+
+Build dependencies:
+
+{{#build-dependencies.*}}
+    {{*}}: {{#.}}{{.}}{{?}}, {{/?}}{{/.}}
+{{/build-dependencies.*}}
+
+Binary targets:
+{{#bin}}
+    name: {{name}}
+    test: {{test}}
+    doc:  {{doc}}
+
+{{/bin}}
+
+Features:
+{{#features.*}}
+    {{*}}: {{#.}}{{.}}{{?}}, {{/?}}{{/.}}
+{{/features.*}}

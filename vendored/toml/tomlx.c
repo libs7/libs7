@@ -823,7 +823,7 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
  */
 char *tomlx_format_datetime(toml_timestamp_t* ts, const char *fmt)
 {
-    log_debug("tomlx_format_datetime: %s", fmt);
+    /* log_debug("tomlx_format_datetime: %s", fmt); */
     /* if (fmt[0] != '$') { */
     /*     log_error("Datetime format string missing initial '$': %s", fmt); */
     /* } */
@@ -840,18 +840,18 @@ char *tomlx_format_datetime(toml_timestamp_t* ts, const char *fmt)
             // date
             switch(*p) {
             case 'y':
-                log_debug("Formatting YEAR");
+                /* log_debug("Formatting YEAR"); */
                 len = snprintf(bufptr, 5, "%04d", *ts->year);
                 bufptr += len;
                 break;
             case 'm':
-                log_debug("Formatting MONTH");
+                /* log_debug("Formatting MONTH"); */
                 len = snprintf(bufptr, 3, "%02d", *ts->month);
-                log_debug("len: %d", len);
+                /* log_debug("len: %d", len); */
                 bufptr += len;
                 break;
             case 'd':
-                log_debug("Formatting DAY");
+                /* log_debug("Formatting DAY"); */
                 break;
             default:
                 log_error("Bad date formatting code: %s", p);
@@ -864,7 +864,7 @@ char *tomlx_format_datetime(toml_timestamp_t* ts, const char *fmt)
     }
     *bufptr = '\0';
     /* int len = snprintf(buf, 8, "%02d-%4d", *ts->month, *ts->year); */
-    log_debug("ts, formatted: %s", buf);
+    /* log_debug("ts, formatted: %s", buf); */
     return strndup(buf, strlen(buf));
 }
 

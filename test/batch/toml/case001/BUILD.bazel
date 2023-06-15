@@ -1,0 +1,20 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//test/app:BUILD.bzl", "test_mustachios")
+
+TAGS = ["cargo", "batch", "mustache"]
+
+diff_test(
+    name  = "case001",
+    file1 = "cargo.expected",
+    file2 = "cargo.actual",
+    timeout = "short",
+    tags  = TAGS + ["toml"]
+)
+
+test_mustachios(
+    name     = "actual",
+    script   = "cargo_main.scm",
+    out      = "cargo.actual",
+    data     = "Cargo.toml",
+    template = "cargo.mustache"
+)

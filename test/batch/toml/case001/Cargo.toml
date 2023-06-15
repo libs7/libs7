@@ -1,0 +1,29 @@
+# src: https://raw.githubusercontent.com/rhzx86/cargo-examples/main/Cargo.toml
+
+[package]
+name = "cargo-examples"
+version = "0.5.0"
+authors = ["Richard Hozák"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/zxey/cargo-examples"
+description = "Run all examples for any locally cloned crate"
+categories = [
+    "command-line-utilities",
+    "development-tools::cargo-plugins",
+]
+keywords = [
+    "cargo",
+    "cargo-subcommand",
+    "cli",
+    "examples",
+    "crates",
+]
+
+[dependencies]
+anyhow = "1.0.65"
+clap = { version = "4.0", features = ["derive", "foo"] }
+tap = "1.0.1"
+xshell = "0.2.2"
+cargo_toml = "0.14.0"
