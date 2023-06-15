@@ -28,7 +28,8 @@ char *libs7_input_port_to_c_string(s7_scheme *s7, s7_pointer port)
         buf[i++] = s7_character(c);
         if (i >= buf_sz) {
             log_info("Reallocating read buf to %d", buf_sz + chunk_sz);
-            rptr = realloc(buf, chunk_sz);
+            buf_sz += chunk_sz;
+            rptr = realloc(buf, buf_sz);
             if (rptr == NULL) {
                 //FIXME: handle error
                 log_error("realloc failure");

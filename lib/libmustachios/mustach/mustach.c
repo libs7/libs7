@@ -540,6 +540,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
 #endif
             pct = strchr(key, '%');
             if (pct) {
+                /* log_debug("FOUND PCT"); */
                 if (*(pct+1) == '%') {
                     /* log_debug("Std fmt: %s", pct); */
                     // std format string, e.g. %%05.2f
@@ -559,6 +560,8 @@ static int process(const char *template, size_t template_length, struct iwrap *i
                 log_debug("klen: %d", keylen);
                 log_debug("fmt: %s", fmt);
 #endif
+            } else {
+                fmt = NULL;
             }
 
             break;
