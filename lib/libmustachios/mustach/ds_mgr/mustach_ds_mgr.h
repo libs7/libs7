@@ -278,7 +278,7 @@ int mustach_wrap_mem(const char *template, size_t length, const struct mustach_d
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-__attribute__((unused)) static int mustach_wrap_write(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure);
+/* __attribute__((unused)) static int mustach_wrap_write(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_write_cb_t *writecb, void *writeclosure); */
 
 /**
  * mustach_wrap_emit - Renders the mustache 'template' for an abstract
@@ -295,7 +295,7 @@ __attribute__((unused)) static int mustach_wrap_write(const char *template, size
  * Returns 0 in case of success, -1 with errno set in case of system error
  * a other negative value in case of error.
  */
-__attribute__((unused)) static int mustach_wrap_emit(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure);
+/* __attribute__((unused)) static int mustach_wrap_emit(const char *template, size_t length, const struct mustach_ds_methods_s *itf, void *closure, int flags, mustach_emit_cb_t *emitcb, void *emitclosure); */
 
 #endif
 

@@ -536,7 +536,7 @@ static int format(struct tstack_s *stack, const char *fmt,
             }
             break;
         case TOML_INT:
-            TRACE_LOG_DEBUG("formatting int: %lld", o->u.i);
+            TRACE_LOG_DEBUG("formatting int: %ld", o->u.i);
             if (fmt) {
                 TRACE_LOG_DEBUG("fmt string: %s", fmt);
                 len = snprintf(NULL, 0, fmt, o->u.i);
@@ -546,9 +546,9 @@ static int format(struct tstack_s *stack, const char *fmt,
                 TRACE_LOG_DEBUG("formatted int: %s", work);
                 s = strndup(work, len+1);
             } else {
-                len = snprintf(NULL, 0, "%lld", o->u.i);
+                len = snprintf(NULL, 0, "%ld", o->u.i);
                 char *work = malloc(len+1);
-                snprintf(work, len+1, "%lld", o->u.i);
+                snprintf(work, len+1, "%ld", o->u.i);
                 s = strndup(work, len+1);
             }
             sbuf->freecb = free;
@@ -607,7 +607,7 @@ static void _dump_obj(char *msg, struct tomlx_item_s *item)
             /* s = item->u.b? strdup("true") : strdup("false"); */
             break;
         case TOML_INT:
-            log_debug("\t  int: %lld", item->u.i);
+            log_debug("\t  int: %ld", item->u.i);
             break;
         case TOML_DOUBLE:
             log_debug("\t  double: %lld", item->u.d);

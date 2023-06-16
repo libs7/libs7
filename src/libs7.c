@@ -1,8 +1,5 @@
 #include <errno.h>
-// if linux
-#define _GNU_SOURCE
 #include <dlfcn.h>
-#undef _GNU_SOURCE
 #include <fcntl.h>
 #include <libgen.h>
 #include <stdio.h>
@@ -252,7 +249,10 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 #endif
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
-    init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(RTLD_MAIN_ONLY, init_fn_name); // mac: RTLD_SELF?
+    init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(
+                                                    RTLD_DEFAULT, // linux
+                                                    // mac: RTLD_MAIN_ONLY,
+                                                    init_fn_name);
     if (init_fn_ptr == NULL) {
 /* #if defined(DEVBUILD) */
         log_debug("%s not statically linked, trying dlopen", init_fn_name);

@@ -1196,7 +1196,9 @@ static int enter(void *closure, int objiter)
         e->lambda = true;
         e->stack[e->depth].lambda = true;
         e->stack[e->depth].workbuf_idx = ++workbufs_tos;
-        strlcpy(workbuf_stack[workbufs_tos].buf, "Test", 5);
+        /* strlcpy(workbuf_stack[workbufs_tos].buf, "Test", 5); */
+        memcpy(workbuf_stack[workbufs_tos].buf, "Test", 4);
+        workbuf_stack[workbufs_tos].buf[5] = '\0';
         e->stack[e->depth].count = 1;
         // context is obj of prev. stackframe?
         e->stack[e->depth].ctx = e->stack[e->depth-1].obj;

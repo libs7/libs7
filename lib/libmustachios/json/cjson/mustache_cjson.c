@@ -595,6 +595,7 @@ int mustache_json_fdrender(int fd,
     (void)flags;
     struct tstack_s stack;
     stack.root = (cJSON*)root;
+    (void)stack;
     (void)fd;
     (void)template;
     (void)template_sz;

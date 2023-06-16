@@ -21,7 +21,7 @@ cc_library(
         "//conditions:default": ["memfile_tmpfile.c"]
     }),
     hdrs = ["mustach.h"],
-    copts = COPTS,
+    copts = COPTS + ["-Wno-implicit-fallthrough"],
     deps  = DEPS,
     defines = DEFINES
 )

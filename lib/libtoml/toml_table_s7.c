@@ -20,7 +20,7 @@ s7_pointer string_string;
 /*                                               char *key, */
 /*                                               int *typ); */
 /* static void *tomlx_table_seq_for_key(toml_table_t *tt, char *key, int *typ); */
- __attribute__((__unused__)) static s7_pointer _toml_table_to_alist(s7_scheme *s7, toml_table_t *ta);
+ /* __attribute__((__unused__)) static s7_pointer _toml_table_to_alist(s7_scheme *s7, toml_table_t *ta); */
 //char *tomlx_table_to_string(toml_table_t *tt);
 
 /* **************************************************************** */
@@ -281,7 +281,7 @@ static s7_pointer g_toml_table_to_hash_table(s7_scheme *s7, s7_pointer args)
     return(ht);
 }
 
-static s7_pointer g_toml_table_to_alist(s7_scheme *s7, s7_pointer args)
+ __attribute__((__unused__)) static s7_pointer g_toml_table_to_alist(s7_scheme *s7, s7_pointer args)
 {
     (void)args;
     TRACE_ENTRY(g_toml_table_to_alist);

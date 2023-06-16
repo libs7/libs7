@@ -230,7 +230,7 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
             switch(typ) {
             case TOML_INT:
                 TOMLX_LOG_DEBUG("toml datum val: %d", datum.u.i);
-                len = snprintf(NULL, 0, "%lld", datum.u.i);
+                len = snprintf(NULL, 0, "%ld", datum.u.i);
                 len++; // for terminating '\0';
                 TOMLX_LOG_DEBUG("int str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
@@ -239,7 +239,7 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
                 }
                 errno = 0;
                 TOMLX_LOG_DEBUG("snprintfing len %d", len);
-                ct = snprintf(buf+char_ct, len, "%lld", datum.u.i);
+                ct = snprintf(buf+char_ct, len, "%ld", datum.u.i);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
@@ -663,7 +663,7 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
             switch(typ) {
             case TOML_INT:
                 TOMLX_LOG_DEBUG("toml datum val: %d", datum.u.i);
-                len = snprintf(NULL, 0, "%lld", datum.u.i);
+                len = snprintf(NULL, 0, "%ld", datum.u.i);
                 len++; // for terminating '\0';
                 TOMLX_LOG_DEBUG("int str sz: %d", len);
                 if ((char_ct + len) > bufsz) { // + 1 for '\0'
@@ -672,7 +672,7 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
                 }
                 errno = 0;
                 TOMLX_LOG_DEBUG("snprintfing len %d", len);
-                ct = snprintf(buf+char_ct, len, "%lld", datum.u.i);
+                ct = snprintf(buf+char_ct, len, "%ld", datum.u.i);
                 if (errno) {
                     log_error("snprintf: %s", strerror(errno));
                     break;
@@ -915,14 +915,14 @@ char *tomlx_datetime_to_string(toml_timestamp_t *ts, int print_syntax)
         if (ts->millisec == NULL) {
             /* log_debug("NO MILLIS"); */
             // e.g. 00:32:00
-            snprintf(buf + char_ct, 20 + zlen, "%0.2d:%02.d:%0.2d",
+            snprintf(buf + char_ct, 20 + zlen, "%02d:%02d:%02d",
                      *ts->hour, *ts->minute, *ts->second);
             char_ct += 8 + 1;
         }
         else {
             // tomlc99: only 3 decimal places for millis
             // e.g. 00:32:00.999999
-            snprintf(buf + char_ct, 24 + zlen, "%0.2d:%02.d:%0.2d.%d",
+            snprintf(buf + char_ct, 24 + zlen, "%02d:%02d:%02d.%d",
                      *ts->hour, *ts->minute, *ts->second,
                      *ts->millisec);
             char_ct += 8 + 3;
@@ -930,14 +930,14 @@ char *tomlx_datetime_to_string(toml_timestamp_t *ts, int print_syntax)
     }
     else if (ts->hour == NULL) {
         // local date
-        snprintf(buf + char_ct, 20 + zlen, "%.4d-%0.2d-%0.2d",
+        snprintf(buf + char_ct, 20 + zlen, "%4d-%02d-%02d",
                  *ts->year, *ts->month, *ts->day);
         char_ct += 13;
     }
     else if (ts->millisec == NULL) {
         /* log_debug("NO MILLIS"); */
         // e.g. 1979-05-27T07:32:00
-        snprintf(buf + char_ct, 20 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d%s",
+        snprintf(buf + char_ct, 20 + zlen, "%4d-%02d-%02dT%02d:%02d:%02d%s",
                  *ts->year, *ts->month, *ts->day,
                  *ts->hour, *ts->minute, *ts->second,
                  (zlen>0)? ts->z : "X");
@@ -947,7 +947,7 @@ char *tomlx_datetime_to_string(toml_timestamp_t *ts, int print_syntax)
         /* log_debug("MILLIS"); */
         // tomlc99: only 3 decimal places for millis
         // e.g. 1979-05-27T00:32:00.999999
-        snprintf(buf + char_ct, 24 + zlen, "%.4d-%0.2d-%0.2dT%0.2d:%02.d:%0.2d.%d%s",
+        snprintf(buf + char_ct, 24 + zlen, "%4d-%02d-%02dT%02d:%02d:%02d.%d%s",
                  *ts->year, *ts->month, *ts->day,
                  *ts->hour, *ts->minute, *ts->second,
                  *ts->millisec,
@@ -1047,9 +1047,9 @@ struct tomlx_item_s *tomlx_table_ref(toml_table_t *tt,
     // INT
     datum = toml_int_in(tt, key);
     if (datum.ok) {
-        /* TOMLX_LOG_DEBUG("INT: %lld", datum.u.i); */
+        /* TOMLX_LOG_DEBUG("INT: %ld", datum.u.i); */
         struct tomlx_item_s *rv = tomlx_make_item(&datum.u.i, TOML_INT);
-        /* TOMLX_LOG_DEBUG("INT x: %lld", rv->u.i); */
+        /* TOMLX_LOG_DEBUG("INT x: %ld", rv->u.i); */
         return rv;
     }
     // BOOL
@@ -1113,9 +1113,9 @@ struct tomlx_item_s *tomlx_array_ref(toml_array_t *ta,
     // INT
     datum = toml_int_at(ta, idx);
     if (datum.ok) {
-        /* TOMLX_LOG_DEBUG("INT: %lld", datum.u.i); */
+        /* TOMLX_LOG_DEBUG("INT: %ld", datum.u.i); */
         struct tomlx_item_s *rv = tomlx_make_item(&datum.u.i, TOML_INT);
-        /* TOMLX_LOG_DEBUG("INT x: %lld", rv->u.i); */
+        /* TOMLX_LOG_DEBUG("INT x: %ld", rv->u.i); */
         return rv;
     }
     // BOOL

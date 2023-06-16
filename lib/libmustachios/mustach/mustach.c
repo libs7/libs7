@@ -6,7 +6,7 @@
  SPDX-License-Identifier: ISC
 */
 
-#define _GNU_SOURCE
+/* #define _GNU_SOURCE // set by build pgm*/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -273,7 +273,7 @@ static int process(const char *template, size_t template_length, struct iwrap *i
     /* stdalone tag: tag on line by itself (and maybe whitespace), that produces no output, e.g. \n{{#foo}}\n */
     /* 0 - false; 1 - start, 2 - end? */
     int stdalone;
-    int did_enter;
+    int did_enter = 0;
     /* bool enable_smartcommas = false; */
 
     /* INITIALIZATION */
