@@ -47,6 +47,7 @@ cc_library(
         "//config/host/build:macos?": [
             # allow for warnings in s7.c
             "-Wno-format-pedantic",
+            "-Wno-gnu-statement-expression"
         ],
         "//config/host/build:linux?": [
             "-Wno-implicit-fallthrough"
@@ -87,7 +88,7 @@ cc_binary(                      #  libs7.so
         "//config/host/build:macos?": [
             # allow for warnings in s7.c
             "-Wno-format-pedantic",
-            "-Wno-unused-parameter"
+            "-Wno-gnu-statement-expression"
         ],
         "//config/host/build:linux?": [
             "-Wno-implicit-fallthrough"
