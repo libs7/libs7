@@ -1,1 +1,8 @@
-exports_files(["Dune_main.scm"])
+exports_files(["Mustachios_main.scm"])
+
+filegroup(
+    name = "dune",
+    data = glob(["**/dune"]),
+    visibility = ["//visibility:public"]
+)
+

@@ -26,11 +26,11 @@ cc_library(
     deps  = DEPS,
     copts = COPTS + ["-Wno-unused-parameter"],
     linkopts = LINKOPTS  + select({
-        "//config/host:linux?": ["-lrt"],
+        "//config/host/build:linux?": ["-lrt"],
         "//conditions:default": []
     }),
     local_defines = DEFINES  + select({
-        "//config/host:linux?": ["_POSIX_C_SOURCE=200809",
+        "//config/host/build:linux?": ["_POSIX_C_SOURCE=200809",
                                  "_DEFAULT_SOURCE" # strcasecmp in string.h
                                  ],
         "//conditions:default": []
@@ -44,11 +44,11 @@ cc_binary(
     deps  = DEPS,
     copts = COPTS + ["-Wno-unused-parameter"],
     linkopts = LINKOPTS  + select({
-        "//config/host:linux?": ["-lrt"],
+        "//config/host/build:linux?": ["-lrt"],
         "//conditions:default": []
     }),
     local_defines = DEFINES  + select({
-        "//config/host:linux?": ["_POSIX_C_SOURCE=200809", "_DEFAULT_SOURCE"],
+        "//config/host/build:linux?": ["_POSIX_C_SOURCE=200809", "_DEFAULT_SOURCE"],
         "//conditions:default": []
     })
 )

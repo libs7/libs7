@@ -6,20 +6,20 @@ config_setting(
 )
 
 ################################################################
-config_setting(
-    name = "linux?",
-    constraint_values = [
-        "@platforms//os:linux",
-    ]
-)
+# config_setting(
+#     name = "linux?",
+#     constraint_values = [
+#         "@platforms//os:linux",
+#     ]
+# )
 
-config_setting(
-    name = "linux_x64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ]
-)
+# config_setting(
+#     name = "linux_x64",
+#     constraint_values = [
+#         "@platforms//os:linux",
+#         "@platforms//cpu:x86_64",
+#     ]
+# )
 
 # config_setting(
 #     name = "linux_debug",
@@ -43,10 +43,10 @@ config_setting(
 )
 
 ################################################################
-config_setting(
-    name = "macos?",
-    constraint_values = ["@platforms//os:macos"]
-)
+# config_setting(
+#     name = "macos?",
+#     constraint_values = ["@platforms//os:macos"]
+# )
 
 ## FIXME: should be based on compiler, not os, e.g. clang_debug v. gcc_debug
 ##  @local_config_cc//:cc-compiler-darwin_x86_64

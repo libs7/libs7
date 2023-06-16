@@ -17,7 +17,7 @@ cc_library(
     copts = COPTS + CLIB_COPTS + INCLUDE_PATHS,
     linkopts      = LINKOPTS,
     local_defines = DEFINES  + select({
-        "//config/host:linux?": ["_POSIX_C_SOURCE=200809"],
+        "//config/host/build:linux?": ["_POSIX_C_SOURCE=200809"],
         "//conditions:default": []
     })
 )
@@ -30,7 +30,7 @@ cc_binary(
     copts = COPTS + CLIB_COPTS + INCLUDE_PATHS,
     linkopts      = LINKOPTS,
     local_defines = DEFINES  + select({
-        "//config/host:linux?": ["_POSIX_C_SOURCE=200809"],
+        "//config/host/build:linux?": ["_POSIX_C_SOURCE=200809"],
         "//conditions:default": []
     })
 )

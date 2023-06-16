@@ -1,4 +1,17 @@
-(define m (with-input-from-file "test/data/example.scm" read))
+ ;; "test/data/example.scm"
+
+(define datafile "test/batch/dune/async_ssl/src/dune")
+
+(define m (with-input-from-file datafile read))
+m
+(let ((data (with-input-from-file
+                datafile reader))
+      (template (call-with-input-file template
+                  (lambda (p)
+                    (let ((tlen (length p)))
+                      (read-string tlen p))))))
+  (mustache:render #f template data 0))
+
 
 
 (with-input-from-string "t = { i = 1, s = \"Hello\" }" toml:read)
