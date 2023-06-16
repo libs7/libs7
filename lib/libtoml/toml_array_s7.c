@@ -506,7 +506,7 @@ void toml_array_init(s7_scheme *s7, s7_pointer cur_env)
 /*             switch(typ) { */
 /*             case TOML_INT: */
 /*                 TRACE_LOG_DEBUG("toml datum val: %d", datum.u.i); */
-/*                 len = snprintf(NULL, 0, "%lld", datum.u.i); */
+/*                 len = snprintf(NULL, 0, "%ld", datum.u.i); */
 /*                 len++; // for terminating '\0'; */
 /*                 TRACE_LOG_DEBUG("int str sz: %d", len); */
 /*                 if ((char_ct + len) > bufsz) { // + 1 for '\0' */
@@ -515,7 +515,7 @@ void toml_array_init(s7_scheme *s7, s7_pointer cur_env)
 /*                 } */
 /*                 errno = 0; */
 /*                 TRACE_LOG_DEBUG("snprintfing len %d", len); */
-/*                 ct = snprintf(buf+char_ct, len, "%lld", datum.u.i); */
+/*                 ct = snprintf(buf+char_ct, len, "%ld", datum.u.i); */
 /*                 if (errno) { */
 /*                     log_error("snprintf: %s", strerror(errno)); */
 /*                     break; */

@@ -267,7 +267,7 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
     p = s7_cdr(p);
     arg = s7_car(p);            /* arg 1: string key */
     char* key = NULL;
-    int idx;
+    int idx = 0;
     if (s7_is_string(arg)) {
         // for map-ref or map application
         key = (char*)s7_string(arg);
