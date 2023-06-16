@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -279,6 +280,7 @@ static int subsel(void *closure, const char *name)
 
     /* dump_stack(e); */
     if (stack->selection->type == TOML_TABLE) {
+        TRACE_LOG_DEBUG("SUBSEL TABLE on %s", name);
         o = tomlx_table_ref(stack->selection->u.t, name);
         if (o) {
             TRACE_LOG_DEBUG("setting selection to val for key %s", name);
@@ -536,7 +538,7 @@ static int format(struct tstack_s *stack, const char *fmt,
             }
             break;
         case TOML_INT:
-            TRACE_LOG_DEBUG("formatting int: %lld", o->u.i);
+            TRACE_LOG_DEBUG("formatting int: %" PRId64, o->u.i);
             if (fmt) {
                 TRACE_LOG_DEBUG("fmt string: %s", fmt);
                 len = snprintf(NULL, 0, fmt, o->u.i);
@@ -546,9 +548,9 @@ static int format(struct tstack_s *stack, const char *fmt,
                 TRACE_LOG_DEBUG("formatted int: %s", work);
                 s = strndup(work, len+1);
             } else {
-                len = snprintf(NULL, 0, "%lld", o->u.i);
+                len = snprintf(NULL, 0, "%" PRId64, o->u.i);
                 char *work = malloc(len+1);
-                snprintf(work, len+1, "%lld", o->u.i);
+                snprintf(work, len+1, "%"PRId64, o->u.i);
                 s = strndup(work, len+1);
             }
             sbuf->freecb = free;
@@ -607,7 +609,7 @@ static void _dump_obj(char *msg, struct tomlx_item_s *item)
             /* s = item->u.b? strdup("true") : strdup("false"); */
             break;
         case TOML_INT:
-            log_debug("\t  int: %lld", item->u.i);
+            log_debug("\t  int: %" PRId64, item->u.i);
             break;
         case TOML_DOUBLE:
             log_debug("\t  double: %lld", item->u.d);
