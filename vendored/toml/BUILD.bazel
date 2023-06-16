@@ -18,5 +18,6 @@ cc_library(
     deps       = DEPS,
     copts      = COPTS,
     linkopts   = LINKOPTS,
+    defines    = DEFINES,
     visibility = ["//visibility:public"]
 )

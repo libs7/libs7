@@ -1,3 +1,5 @@
+#define TOMLX_TRACING
+
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdlib.h>
@@ -101,21 +103,20 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
     int ct;
     (void)ct;
 
-    // is array empty?
     int idx_ct = toml_array_nelem(ta);
-    if (idx_ct == 0) {
-        buf[0] = '\0';
-        return buf;
-    } else {
-        // are all elements empties?
-    }
+    // is array empty?
+    /* if (idx_ct == 0) { */
+    /*     buf[0] = '\0'; */
+    /*     return buf; */
+    /* } else { */
+    /*     // are all elements empties? */
+    /* } */
 
     // print header
-    TOMLX_LOG_DEBUG("snprintfing header", "");
-    if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
-        // no header metasyntax
-    }
-    else if (print_syntax == PRINT_SYNTAX_TOML) {
+    TOMLX_LOG_DEBUG("snprintfing header, syntax: %d", print_syntax);
+    switch(print_syntax) {
+    case PRINT_SYNTAX_TOML_RAW:
+    case PRINT_SYNTAX_TOML:
         errno = 0;
         ct = snprintf(buf, 2, "%s", "[");
         if (errno) {
@@ -123,7 +124,8 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
             return NULL;
         }
         char_ct += 1; // do not include terminating '\0'
-    } else { // SCM print syntax
+        break;
+    default:
         errno = 0;
         ct = snprintf(buf, 14, "%s", "#<toml-array ");
         if (errno) {
@@ -132,16 +134,38 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
         }
         char_ct += 13; // do not include terminating '\0'
     }
+    /* if (print_syntax == PRINT_SYNTAX_TOML_RAW) { */
+    /*     // no header metasyntax */
+    /* } */
+    /* else if (print_syntax == PRINT_SYNTAX_TOML) { */
+    /*     errno = 0; */
+    /*     ct = snprintf(buf, 2, "%s", "["); */
+    /*     if (errno) { */
+    /*         log_error("snprintf: %s", strerror(errno)); */
+    /*         return NULL; */
+    /*     } */
+    /*     char_ct += 1; // do not include terminating '\0' */
+    /* } else { // SCM print syntax */
+    /*     errno = 0; */
+    /*     ct = snprintf(buf, 14, "%s", "#<toml-array "); */
+    /*     if (errno) { */
+    /*         log_error("snprintf: %s", strerror(errno)); */
+    /*         return NULL; */
+    /*     } */
+    /*     char_ct += 13; // do not include terminating '\0' */
+    /* } */
+
     // print elements
     /* char *k, *v; */
     int len;
     bool empty = false;
     for (int i = 0; i < idx_ct; i++) {
         // print comma
-        if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
-            ; // do not print separator
-        }
-        else if (i > 0) {
+        /* if (print_syntax == PRINT_SYNTAX_TOML_RAW) { */
+        /*     ; // do not print separator */
+        /* } */
+        /* else */
+        if (i > 0) {
             if ((char_ct + 3) > bufsz) {
                 log_error("realloc for comma");
             }
@@ -175,9 +199,9 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
                 seq_str = tomlx_array_to_string((toml_array_t*)seq, print_syntax);
                 TOMLX_LOG_DEBUG("ARRAY str: %s", seq_str);
                 len = strlen(seq_str);
-                if (len == 0) {
-                    empty = true; // print nothing
-                } else {
+                /* if (len == 0) { */
+                /*     empty = true; // print nothing */
+                /* } else { */
                     len++;  // + 1 for '\0'
                     if ((char_ct + len) > bufsz) {
                         log_error("exceeded bufsz: %d", char_ct + len);
@@ -195,7 +219,7 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
                     char_ct += len - 1; // do not include terminating '\0'
                     TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
                     TOMLX_LOG_DEBUG("buf: %s", buf);
-                }
+                /* } */
                 break;
             case TOML_TABLE:
                 TOMLX_LOG_DEBUG("table seq: %p", seq);
@@ -368,10 +392,10 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
     TOMLX_LOG_DEBUG("snprintfing footer", "");
     errno = 0;
     ct = snprintf(buf+char_ct,
-                  (print_syntax == PRINT_SYNTAX_TOML_RAW)? 1 : 2,
+                  2, // (print_syntax == PRINT_SYNTAX_TOML_RAW)? 1 : 2,
                   "%s",
                   (print_syntax == PRINT_SYNTAX_TOML_RAW)
-                  ? ""
+                  ? "]"
                   : (print_syntax == PRINT_SYNTAX_TOML)
                   ? "]"
                   : ">");
@@ -380,8 +404,8 @@ char *tomlx_array_to_string(toml_array_t *ta, int print_syntax)
         return NULL;
     }
     char_ct += 1; // do not include terminating '\0'
-    if (strncmp(buf, "[]", 2) == 0)
-        buf[0] = '\0';
+    /* if (strncmp(buf, "[]", 2) == 0) */
+    /*     buf[0] = '\0'; */
     TOMLX_LOG_DEBUG("tomlx_array_to_string returning: %s", buf);
     return buf;
 }
@@ -494,22 +518,21 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
 
     TOMLX_LOG_DEBUG("key ct: %d", key_ct);
 
-    if (key_ct == 0) {
-        //FIXME: printing '{}' good for debugging templates
-        // empty table
-        /* buf[0] = '{'; */
-        /* buf[1] = '}'; */
-        /* buf[2] = '\0'; */
-        buf[0] = '\0';
-        return buf;
-    }
+    /* if (key_ct == 0) { */
+    /*     //FIXME: printing '{}' good for debugging templates */
+    /*     // empty table */
+    /*     buf[0] = '{'; */
+    /*     buf[1] = '}'; */
+    /*     buf[2] = '\0'; */
+    /*     /\* buf[0] = '\0'; *\/ */
+    /*     return buf; */
+    /* } */
 
     // print header
     TOMLX_LOG_DEBUG("snprintfing header", "");
-    if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
-        ; // print nothing
-    }
-    else if (print_syntax == PRINT_SYNTAX_TOML) {
+    switch(print_syntax) {
+    case PRINT_SYNTAX_TOML_RAW:
+    case PRINT_SYNTAX_TOML:
         errno = 0;
         ct = snprintf(buf, 2, "%s", "{");
         if (errno) {
@@ -517,7 +540,8 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
             return NULL;
         }
         char_ct += 1; // do not include terminating '\0'
-    } else {
+        break;
+    default:
         errno = 0;
         ct = snprintf(buf, 14, "%s", "#<toml-table ");
         if (errno) {
@@ -526,6 +550,27 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
         }
         char_ct += 13; // do not include terminating '\0'
     }
+
+    /* if (print_syntax == PRINT_SYNTAX_TOML_RAW) { */
+    /*     ; // print nothing */
+    /* } */
+    /* else if (print_syntax == PRINT_SYNTAX_TOML) { */
+    /*     errno = 0; */
+    /*     ct = snprintf(buf, 2, "%s", "{"); */
+    /*     if (errno) { */
+    /*         log_error("snprintf: %s", strerror(errno)); */
+    /*         return NULL; */
+    /*     } */
+    /*     char_ct += 1; // do not include terminating '\0' */
+    /* } else { */
+    /*     errno = 0; */
+    /*     ct = snprintf(buf, 14, "%s", "#<toml-table "); */
+    /*     if (errno) { */
+    /*         log_error("snprintf: %s", strerror(errno)); */
+    /*         return NULL; */
+    /*     } */
+    /*     char_ct += 13; // do not include terminating '\0' */
+    /* } */
 
     const char *k; //, *v;
     int len;
@@ -539,39 +584,66 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
         TOMLX_LOG_DEBUG("table key: %s", k);
 
         // maybe print comma
-        if (print_syntax == PRINT_SYNTAX_TOML_RAW) {
-            ; // print nothing
-        }
-        else if (i > 0) {
-            if ((char_ct + 3) > bufsz) {
-                log_error("realloc for comma");
-            }
-            else if (!empty) {
-                errno = 0;
-                TOMLX_LOG_DEBUG("snprintfing comma", "");
-                ct = snprintf(buf+char_ct, 3, "%s", ", ");
-                if (errno) {
-                    log_error("snprintf: %s", strerror(errno));
-                    break;
-                } else {
-                    TOMLX_LOG_DEBUG("snprintf comma ct: %d", ct);
+        switch(print_syntax) {
+        case PRINT_SYNTAX_TOML_RAW:
+        case PRINT_SYNTAX_TOML:
+        default:
+            if (i > 0) {
+                if ((char_ct + 3) > bufsz) {
+                    log_error("realloc for comma");
                 }
-                char_ct += 2; // do not include terminating '\0'
-                TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
-                TOMLX_LOG_DEBUG("buf: %s", buf);
-            } else {
-                empty = false; // reset
+                else if (!empty) {
+                    errno = 0;
+                    TOMLX_LOG_DEBUG("snprintfing comma", "");
+                    ct = snprintf(buf+char_ct, 3, "%s", ", ");
+                    if (errno) {
+                        log_error("snprintf: %s", strerror(errno));
+                        break;
+                    } else {
+                        TOMLX_LOG_DEBUG("snprintf comma ct: %d", ct);
+                    }
+                    char_ct += 2; // do not include terminating '\0'
+                    TOMLX_LOG_DEBUG("buf len: %d", strlen(buf));
+                    TOMLX_LOG_DEBUG("buf: %s", buf);
+                } else {
+                    empty = false; // reset
+                }
             }
         }
+
+        /* if (print_syntax == PRINT_SYNTAX_TOML_RAW) { */
+        /*     ; // print nothing */
+        /* } */
+        /* else if (i > 0) { */
+        /*     if ((char_ct + 3) > bufsz) { */
+        /*         log_error("realloc for comma"); */
+        /*     } */
+        /*     else if (!empty) { */
+        /*         errno = 0; */
+        /*         TOMLX_LOG_DEBUG("snprintfing comma", ""); */
+        /*         ct = snprintf(buf+char_ct, 3, "%s", ", "); */
+        /*         if (errno) { */
+        /*             log_error("snprintf: %s", strerror(errno)); */
+        /*             break; */
+        /*         } else { */
+        /*             TOMLX_LOG_DEBUG("snprintf comma ct: %d", ct); */
+        /*         } */
+        /*         char_ct += 2; // do not include terminating '\0' */
+        /*         TOMLX_LOG_DEBUG("buf len: %d", strlen(buf)); */
+        /*         TOMLX_LOG_DEBUG("buf: %s", buf); */
+        /*     } else { */
+        /*         empty = false; // reset */
+        /*     } */
+        /* } */
 
         char *relop = "";
         int relopsz = 0;
         // print key to buf
-        if (print_syntax != PRINT_SYNTAX_TOML_RAW) {
+        /* if (print_syntax != PRINT_SYNTAX_TOML_RAW) { */
             // print only key, not '='
             relop = " = ";
             relopsz = 3;
-        }
+        /* } */
 
         {
             len = strlen(k) + relopsz; // for " = "
@@ -800,13 +872,21 @@ char *tomlx_table_to_string(toml_table_t *tt, int print_syntax)
     errno = 0;
     TOMLX_LOG_DEBUG("snprintfing footer", "");
     ct = snprintf(buf+char_ct,
-                  (print_syntax == PRINT_SYNTAX_TOML_RAW) ? 1 : 2,
+                  2,
                   "%s",
                   (print_syntax == PRINT_SYNTAX_TOML_RAW)
-                  ? ""
+                  ? "}"
                   : (print_syntax == PRINT_SYNTAX_TOML)
                   ? "}"
                   : ">");
+    /* ct = snprintf(buf+char_ct, */
+    /*               (print_syntax == PRINT_SYNTAX_TOML_RAW) ? 1 : 2, */
+    /*               "%s", */
+    /*               (print_syntax == PRINT_SYNTAX_TOML_RAW) */
+    /*               ? "" */
+    /*               : (print_syntax == PRINT_SYNTAX_TOML) */
+    /*               ? "}" */
+    /*               : ">"); */
     if (errno) {
         log_error("snprintf: %s", strerror(errno));
         return NULL;

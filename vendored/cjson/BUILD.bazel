@@ -18,6 +18,7 @@ cc_library(
     copts = COPTS + INCLUDE_PATHS, # + ["-Isrc"],
     deps  = DEPS, # + ["//src:mustach"],
     linkopts = LINKOPTS,
+    defines    = DEFINES,
     visibility = ["//visibility:public"]
     # srcs = ["cJSON.c"],
     # hdrs = ["cJSON.h"],
