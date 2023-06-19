@@ -1,0 +1,7 @@
+(foo "hello")
+
+(nl "line with \nembedded newline")
+
+(q "line with \"embedded\" quotes")
+
+(t "line with embedded\ttab")

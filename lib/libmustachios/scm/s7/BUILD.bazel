@@ -34,8 +34,8 @@ cc_library(
     ],
     copts = COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/tomlc99",
-        "-Iexternal/libs7/vendored/tomlc99",
+        # "-Ivendored/tomlc99",
+        # "-Iexternal/libs7/vendored/tomlc99",
     ],
     defines = DEFINES,
     linkopts = LINKOPTS

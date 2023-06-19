@@ -32,7 +32,14 @@ cc_library(
         "-Ilib", "-Iexternal/libs7/lib",
         "-Ilib/libjson", "-Iexternal/libs7/lib/libjson",
         "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
+    ] + select({
+        "//config/host/build:macos?": [
+            "-Wno-gnu-statement-expression"
+        ],
+        "//config/host/build:linux?": [
     ],
+        "//conditions:default": []
+    }),
     linkopts      = LINKOPTS,
     local_defines = DEFINES
 )

@@ -1,8 +1,15 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
+package(default_visibility = ["//visibility:public"])
+
 filegroup(
     name = "scm",
-    data = glob(["*.scm"]),
-    visibility = ["//visibility:public"]
+    data = glob(["*.scm"])
 )
+
+bool_flag(name = "test", build_setting_default = False)
+config_setting(name = "test?",
+               flag_values = {":test": "True"})
 
 cc_binary(
     name  = "repl",
@@ -48,6 +55,7 @@ cc_binary(
             "//lib/libmustachios:mustachios_s7_archive",
             "//lib/libjson:json_s7_archive",
             "//lib/libtoml:toml_s7_archive",
+            "//lib/libdune:dune_s7_archive",
         ],
         "//conditions:default": []
     }),
@@ -61,9 +69,14 @@ cc_binary(
         "//scm/srfi:srcs",
         "//scm/s7:srcs",
     ] + select({
-        "//config/profile:test?": [
+        ":test?": [
+            "//test/repl",
             "//test/batch/dune/async_ssl/src:dune",
-            "//test/unit/repl",
+            "//test/batch/dune/baddot:dune",
+            "//test/batch/dune/empty:dune",
+            "//test/batch/dune/include:dune",
+            "//test/batch/dune/strings:dune",
+            "//test/batch/dune/strings/eol:dune",
             "//test/data:json",
             "//test/data:scm",
             "//test/data:toml",

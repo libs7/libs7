@@ -16,7 +16,7 @@ bool libs7_debug          = false;
 bool libs7_debug_runfiles = false;
 bool libs7_trace          = false;
 
-UT_array *Xdlopened;             /* list of libs we have loaded dynamically */
+UT_array *dlopened;             /* list of libs we have loaded dynamically */
 
 void fs_api_init(s7_scheme *sc);
 
@@ -139,15 +139,15 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     bool already_loaded = false;
     (void)already_loaded;
 
-    log_debug("dlopened ct: %d", utarray_len(Xdlopened));
-    if (utarray_len(Xdlopened) > 0) {
+    log_debug("dlopened ct: %d", utarray_len(dlopened));
+    if (utarray_len(dlopened) > 0) {
         log_debug("searching dlopened list for: %s", lib);
-        utarray_sort(Xdlopened, _strsort);
+        utarray_sort(dlopened, _strsort);
         log_debug("sorted");
         p = NULL;
         const char *s;
         int i = 0;
-        while ( (p=(const char**)utarray_next(Xdlopened,p)) != NULL ) {
+        while ( (p=(const char**)utarray_next(dlopened,p)) != NULL ) {
             s = *p;
             log_debug("item %d: %s", i, s);
             if (strncmp(s, libname, strlen(libname)) == 0) {
@@ -159,7 +159,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
                 i++;
             }
             /* p = (const char**)utarray_find(dlopened, lib, strsort); */
-            /* p = utarray_find(Xdlopened, &libname, _strsort); */
+            /* p = utarray_find(dlopened, &libname, _strsort); */
             /* log_debug("LOADED %s? %s", lib, *p); */
             /* free(needle); */
         }
@@ -210,7 +210,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     if (val) {
         if (libs7_verbose)
             log_debug("loaded %s", buf);
-        utarray_push_back(Xdlopened, &libname); // add to dlopened list
+        utarray_push_back(dlopened, &libname); // add to dlopened list
         s7_pointer libs = s7_slot(s7, s7_make_symbol(s7, "*libraries*"));
         snprintf(buf, strlen(lib) + 3, "*%s*", lib);
         s7_define(s7, s7_nil(s7), s7_make_symbol(s7, buf), e);
@@ -323,6 +323,7 @@ static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
  */
 bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
 {
+    /* log_debug("libs7_is_alist: %s", TO_STR(arg)); */
     if (s7_is_list(s7, arg)) {
         if (arg == s7_nil(s7)) // '() is an alist
             return true;
@@ -345,7 +346,6 @@ bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
 
         x = s7_iterate(s7, iter);
         while (true) {
-            /* log_debug("XXXXXXXXXXXXXXXX iter: %s", TO_STR(x)); */
             if ((x == s7_eof_object(s7))
                 || (s7_iterator_is_at_end(s7, iter))) {
                 s7_gc_unprotect_at(s7, gc);
@@ -436,21 +436,32 @@ bool libs7_is_empty_alist(s7_scheme *s7, s7_pointer arg)
     }
 }
 
-static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer arg)
+static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
 {
-    if (libs7_is_alist(s7, arg))
+    /* log_debug("g_is_alist: %s", TO_STR(arg)); */
+    //NB: args is list of one arg
+    if (libs7_is_alist(s7, s7_car(args)))
         return s7_t(s7);
     else
         return s7_f(s7);
+}
+
+void libs7_shutdown(s7_scheme *s7)
+{
+    /* close_error_config(); */
+    s7_quit(s7);
 }
 
 s7_scheme *libs7_init(void)
 /* WARNING: dlopen logic assumes file path <libns>/<libname><dso_ext> */
 {
   s7_scheme *s7 = s7_init();
-  fs_api_init(s7);
 
-  utarray_new(Xdlopened, &ut_str_icd);
+  //FIXME: initialize error handlers
+
+  fs_api_init(s7); //FIXME: eliminate
+
+  utarray_new(dlopened, &ut_str_icd);
 
   //FIXME: add runfiles to *load-path*?
   s7_define_function(s7, "load-clib", g_libs7_load_clib,
@@ -471,7 +482,7 @@ s7_scheme *libs7_init(void)
 /* (define-macro (?optional val default-value) `(if (null? ,val) ,default-value (car ,val))) */
 
   s7_define_function(s7, "alist?", g_is_alist,
-                     1,         /* required: 1 arg, libname */
+                     1,         /* required: 1 arg */
                      0,         /* optional: 0 */
                      false,     /* rest args: none */
                      "(alist? lst)");
@@ -497,20 +508,20 @@ s7_scheme *libs7_init(void)
 
      Can we have it validate that its argument is an alist?
    */
-  const char *mmap_sexp = ""
-      "(set! *#readers* "
-      "      (cons (cons #\\M (lambda (str) "
-      "			(and (string=? str \"M\") "
-      "                    (let ((mmap (read))) "
-      "                        `(quote ,mmap)))))"
-      "	    *#readers*)) "
-      ;
-      /* "                       (if (> (*s7* 'safety) 1) " */
-      /* "                          (immutable! m) " */
-      /* "                           (quote m)))))) " */
+  /* const char *mmap_sexp = "" */
+  /*     "(set! *#readers* " */
+  /*     "      (cons (cons #\\M (lambda (str) " */
+  /*     "			(and (string=? str \"M\") " */
+  /*     "                    (let ((mmap (read))) " */
+  /*     "                        `(quote ,mmap)))))" */
+  /*     "	    *#readers*)) " */
+  /*     ; */
+  /*     /\* "                       (if (> (*s7* 'safety) 1) " *\/ */
+  /*     /\* "                          (immutable! m) " *\/ */
+  /*     /\* "                           (quote m)))))) " *\/ */
 
-  s7_pointer mmap_ctor = s7_eval_c_string(s7, mmap_sexp);
-  (void)mmap_ctor;
+  /* s7_pointer mmap_ctor = s7_eval_c_string(s7, mmap_sexp); */
+  /* (void)mmap_ctor; */
 
   return s7;
 }

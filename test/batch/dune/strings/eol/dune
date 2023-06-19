@@ -1,0 +1,12 @@
+(foo "line with embedded\nnewline")
+
+;; end-of-line strings
+(eolstring
+ "\| this is an eol string
+)
+
+(eolstring
+ "\| this is a block
+ "\| of text
+)
+

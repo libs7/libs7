@@ -36,16 +36,16 @@
                    (equal? val obj)) alist cdr))))
 
 ;;;;;;;;;;;;;;;;
-(define (alist? obj)
-  (if (list? obj)
-      (if (null? obj)
-          #t ;; '() is an alist
-          (if (pair? (car obj))
-              (alist? (cdr obj))
-              (if (null? (car obj)) ;; '() may be a member
-                  (alist? (cdr obj))
-                  #f)))
-      #f))
+;; (define (alist? obj)
+;;   (if (list? obj)
+;;       (if (null? obj)
+;;           #t ;; '() is an alist
+;;           (if (pair? (car obj))
+;;               (alist? (cdr obj))
+;;               (if (null? (car obj)) ;; '() may be a member
+;;                   (alist? (cdr obj))
+;;                   #f)))
+;;       #f))
 
 (define (empty? obj)
   (if (list? obj)

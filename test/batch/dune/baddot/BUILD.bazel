@@ -1,0 +1,32 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//test/app:BUILD.bzl", "test_mustachios")
+
+exports_files(["dune"])
+
+TAGS = ["dune", "toml", "batch", "mustache"]
+
+# diff_test(
+#     name  = "src",
+#     file1 = "cargo.expected",
+#     file2 = "cargo.actual",
+#     timeout = "short",
+#     tags  = TAGS + ["toml"]
+# )
+
+# test_mustachios(
+#     name     = "toml_dune",
+#     script   = "//test/batch/dune:Dune_main.scm",
+#     out      = "toml.dune",
+#     data     = "dune.toml",
+#     template = "toml_to_dune.mustache",
+#     tags     = TAGS
+# )
+
+# test_mustachios(
+#     name     = "actual",
+#     script   = "//test/batch/dune:Dune_main.scm",
+#     out      = "text.actual",
+#     data     = "dune.toml",
+#     template = "dune.mustache",
+#     tags     = TAGS
+# )

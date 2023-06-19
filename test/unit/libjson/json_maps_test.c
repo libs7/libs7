@@ -125,7 +125,7 @@ void map_ops(void) {
                    "\"m\": "
                    "{"
                    "\"b\":true,"
-                   "\"s\": \\\"Hello!\\\", "
+                   "\"s\": \"Hello!\", "
                    "\"i\": 0,"
                    "\"f\": 1.2, "
                    "\"subm\": {\"m1\": 1 },"
@@ -435,10 +435,10 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    /* RUN_TEST(root_object); */
-    /* RUN_TEST(atomic_types); */
-    /* RUN_TEST(map_ops); */
-    /* RUN_TEST(apply_map); */
+    RUN_TEST(root_object);
+    RUN_TEST(atomic_types);
+    RUN_TEST(map_ops);
+    RUN_TEST(apply_map);
     RUN_TEST(map_refs);
     /* RUN_TEST(object_length_ops); */
     /* RUN_TEST(object_serialization); */

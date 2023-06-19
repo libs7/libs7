@@ -153,6 +153,30 @@ cc_test(
     tags = TAGS + ["readers"]
 )
 
+cc_test(
+    name = "work",
+    linkstatic = True,
+    srcs = ["json_work_test.c",
+            "//test/unit:common.c", "//test/unit:common.h",
+            "//src:libs7.h"],
+    local_defines = DEFINES,
+    deps = DEPS + [
+        "//dev",
+        "//lib/libjson:json_s7_archive"
+    ],
+    copts = COPTS + [
+        "-Isrc",
+        "-Idev",
+        "-Itest/unit",
+        "-I$(GENDIR)/lib/libjson",
+        "-I$(GENDIR)/external/libs7/lib/libjson",
+        # "-fno-pie"
+    ],
+    linkopts = LINKOPTS,
+    timeout = TIMEOUT,
+    tags = TAGS + ["maps"]
+)
+
 # cc_test(
 #     name = "strings",
 #     linkstatic = True,

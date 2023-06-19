@@ -263,6 +263,7 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
                                 s7_nil(s7)));
         /* return s7_unspecified(s7); */
     }
+    TRACE_LOG_DEBUG("JOBJ: %s", cJSON_PrintUnformatted(jo));
 
     p = s7_cdr(p);
     arg = s7_car(p);            /* arg 1: string key */
@@ -271,16 +272,16 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
     if (s7_is_string(arg)) {
         // for map-ref or map application
         key = (char*)s7_string(arg);
-        TRACE_LOG_DEBUG("arg 1, key: %s", key);
+        TRACE_LOG_DEBUG("arg 1, string key: %s", key);
     }
     else if (s7_is_keyword(arg)) {
         s7_pointer kwsym = s7_keyword_to_symbol(s7, arg);
         key = (char*)s7_symbol_name(kwsym);
-        TRACE_LOG_DEBUG("arg 1, key: %s", key);
+        TRACE_LOG_DEBUG("arg 1, kw key: %s", key);
     }
     else if (s7_is_symbol(arg)) {
         key = (char*)s7_symbol_name(arg);
-        TRACE_LOG_DEBUG("arg 1, key: %s", key);
+        TRACE_LOG_DEBUG("arg 1, symbol key: %s", key);
     }
     else if (s7_is_integer(arg)) {
         // for procedures map, for-each
@@ -296,6 +297,9 @@ s7_pointer g_json_object_ref(s7_scheme *s7, s7_pointer args)
         item = cJSON_GetArrayItem(jo, idx);
     } else {
         item = cJSON_GetObjectItemCaseSensitive(jo, key);
+    }
+    if (item == NULL) {
+        return s7_f(s7);
     }
 #ifdef DEVBUILD
     log_debug("item type: [%d]%s", item->type, cjson_types[item->type]);

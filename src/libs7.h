@@ -1,5 +1,5 @@
-#ifndef LIBS7_H
-#define LIBS7_H
+#ifndef _LIBS7_H_
+#define _LIBS7_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,6 +14,7 @@ extern "C" {
 
     char *libs7_read_file(char *fname);
 
+    void libs7_shutdown(s7_scheme *s7);
     s7_scheme *libs7_init(void);
 
     s7_pointer libs7_load_clib(s7_scheme *s7, char *lib);

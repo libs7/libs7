@@ -117,7 +117,7 @@ cc_library(
         "//src:s7_archive",
         "//vendored/toml",
     ],
-    copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
+    copts = COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
         "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
@@ -137,7 +137,7 @@ cc_library(
         "//src:s7_archive",
         "//vendored/toml",
     ],
-    copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
+    copts = COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
         "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],

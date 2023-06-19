@@ -10,10 +10,10 @@ BASE_COPTS = [
 ] + select({
     "//config/host/build:macos?": [
         "-std=c11",
-        "-Wno-gnu-statement-expression",
         "-Werror=pedantic", # not needed with -Werror?
         "-Wpedantic", # same as -pedantic, strict ISO C and ISO C++ warnings
         "-pedantic-errors",
+        "-Wno-gnu-statement-expression",
         # "-Werror=pedantic",
         # "-Wno-gnu",
         # "-Wno-format-pedantic",
