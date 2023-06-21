@@ -1,0 +1,12 @@
+(rule
+ (target inc_target_a)
+ (action
+  (with-outputs-to %{target}
+   (with-accepted-exit-codes (or 0 124 125)
+    (run %{dep:and_exit_false.exe})))))
+
+(rule
+ (target inc_target_b)
+ (action
+  (with-outputs-to %{target}
+   (run ../../strip_randomness.exe %{dep:and_exit_false.actual}))))

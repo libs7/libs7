@@ -487,6 +487,10 @@ s7_scheme *libs7_init(void)
                      false,     /* rest args: none */
                      "(alist? lst)");
 
+  /* install #; comment reader */
+  s7_eval_c_string(s7,
+                   "(set! *#readers* (cons (cons #\\; (lambda (str) (if (string=? str \";\") (read)) (values))) *#readers*))");
+
   /* #m(): proper map constructor - duplicate keys disallowed,
      map-entry pairs implicit.
    */

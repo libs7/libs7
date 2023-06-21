@@ -326,7 +326,7 @@ int main(int argc, char **argv) // , char **envp)
     libs7_load_clib(s7, "mustachios");
     libs7_load_clib(s7, "toml");
     libs7_load_clib(s7, "json");
-    libs7_load_clib(s7, "dune");
+    libs7_load_clib(s7, "sexp");
 
     // if under emacs: dumb_repl
     // else...
