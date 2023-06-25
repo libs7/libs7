@@ -1,4 +1,4 @@
-exports_files(["Mustachios_main.scm"])
+exports_files(glob(["*.scm"]))
 
 filegroup(
     name = "dune",

@@ -165,8 +165,6 @@ cc_test(
     data = ["//test/data:colors", "//test/data:toml"],
     deps = DEPS + [
         "//lib/libtoml:toml_s7_archive",
-        "//lib/libjson:json_s7_archive",
-        "//lib/libmustachios:mustachios_s7_archive",
     ],
     copts = COPTS + [
         "-Isrc",

@@ -63,6 +63,8 @@ cc_library(
         "//lib/libmustachios/toml:mustache_toml",
         "//lib/libtoml:toml_s7_archive",
         "//vendored/toml",
+
+        "//lib/libsexp:sexp_s7_archive", # for dune files
     ],
     local_defines = DEFINES,
     linkopts = LINKOPTS

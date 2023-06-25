@@ -29,6 +29,14 @@ s7_scheme *initialize(char *test, int argc, char **argv);
 
                       /* s7_eval_c_string(s7, "\"" s "\""))); */
 
+#define SEXP_READ(s) \
+    s7_apply_function(s7, s7_name_to_value(s7, "sexp:read"),    \
+                      s7_list(s7, 1,                            \
+                      s7_make_string(s7, s)));
+
+                      /* s7_eval_c_string(s7, "\"" s "\""))); */
+
+
 #define EVAL(s) s7_eval_c_string(s7, s)
 
 #define APPLY_OBJ(obj, arg)                            \

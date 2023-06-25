@@ -1,0 +1,15 @@
+= libsexp
+
+Exports one function, `sexp:read`, that reads a file of sexps into a single alist.
+
+Dune files support and include directive, e.g. `(include <path>)`.
+libsexp will expand such includes if global flag
+`*sexp:expand-includes*` is set to `#t`, which is the default.  To disable:
+
+    (set! '*sexp:expand-includes* #f)
+
+For Dune files (OCaml), corrects the following incompatibilities:
+
+* bad dot - converts '.' to symbol './, e.g  `(run ...  .)` => `(run ... ./)`
+
+* end-of-line string literals, `+"\| ...`. Converts to single string.

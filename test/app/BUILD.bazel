@@ -34,12 +34,11 @@ DEPS          = BASE_DEPS + TEST_DEPS + select({
     ],
     "//conditions:default": []
 })
-DATA = select({
-    "//config/clibs/link:runtime?": [
-        "//lib/libmustachios:mustachios_s7"
-    ],
-    "//conditions:default": []
-})
+DATA = [
+    "//scm:srcs",
+    "//scm/srfi:srcs",
+    "//scm/s7:srcs"
+]
 
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
@@ -49,7 +48,9 @@ cc_binary(
     name = "mustachios",
     linkstatic = True,
     srcs = SRCS + ["mustachios_test_runner.c"],
-    copts = COPTS + ["-Ivendored/cwalk", "-Iexternal/libs7/vendored/cwalk"],
+    copts = COPTS + [
+        "-Ivendored/cwalk", "-Iexternal/libs7/vendored/cwalk"
+    ],
     local_defines = DEFINES,
     deps = DEPS + ["//vendored/cwalk"],
     data = DATA + select({

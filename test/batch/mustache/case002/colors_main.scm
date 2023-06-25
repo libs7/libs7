@@ -7,4 +7,7 @@
       (template (call-with-input-file template
                   (lambda (p) (read-string 1000 p)))))
   ;; (format *stderr* "data: ~A~%" data)
-  (mustache:render #f template data 0))
+  (call-with-output-file outfile
+    (lambda (p)
+      (mustache:render p template data 0))))
+

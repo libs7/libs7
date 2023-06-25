@@ -1,0 +1,55 @@
+# sexp:read produces an alist. corrects the following reader errors in
+# dune files: bad dot e.g. (run %{exe:test_clic.exe} .); end-of-line
+# string literals e.g. "\| this is a string
+
+load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
+
+load("//lib:BUILD.bzl", "clibgen_runner",
+     "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
+
+SRCS          = BASE_SRCS + CLIB_SRCS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
+DEPS          = BASE_DEPS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
+
+# filegroup(
+#     name = "mkhdrs_srcs",
+#     srcs = glob(["*.c"]),
+#     visibility = ["//visibility:public"]
+# )
+
+exports_files(glob(["*.c"]))
+
+##########
+cc_library(
+    name  = "sexp_s7_archive",
+    linkstatic = True,
+    alwayslink = True,
+    srcs = SRCS + [
+        "libsexp_s7.c",
+        "libsexp_s7.h",
+        "error_handler_sexp.c",
+        "error_handler_sexp.h"
+    ] + select({
+        "//config/host/build:linux?": [
+            # "//src/linux:strlcat.c",
+            # "//src/linux:strlcpy.c",
+            # "//src/linux:strnstr.c"
+        ],
+        "//conditions:default":   []
+    }),
+    copts = COPTS + [
+        "-Isrc", "-Iexternal/libs7/src",
+        "-Ivendored/uthash",
+        "-Iexternal/libs7/vendored/uthash",
+    ],
+    deps = DEPS + [
+        "//vendored/uthash",
+        "//src:s7_archive",
+    ],
+    defines = DEFINES,
+    visibility = ["//visibility:public"]
+)

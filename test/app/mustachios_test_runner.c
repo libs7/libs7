@@ -1,3 +1,4 @@
+#include <libgen.h>
 #include <unistd.h>
 
 #include "config.h"
@@ -80,6 +81,7 @@ int main(int argc, char **argv)
     libs7_load_clib(s7, "mustachios");
     libs7_load_clib(s7, "json");
     libs7_load_clib(s7, "toml");
+    libs7_load_clib(s7, "sexp");
 
     /* json_read = s7_name_to_value(s7, "json:read"); */
     /* toml_read = s7_name_to_value(s7, "toml:read"); */
@@ -88,7 +90,13 @@ int main(int argc, char **argv)
     const char *ext;
     size_t extlen;
     cwk_path_get_extension(options[OPT_DATA].argument, &ext, &extlen);
-    /* log_debug("ext: %s", ext); */
+    log_debug("arg: %s", options[OPT_DATA].argument);
+
+    log_debug("CWD: %s", getcwd(NULL, 0));
+
+    char *tmp = strdup(options[OPT_DATA].argument);
+    char *bname = basename(tmp);
+    free(tmp);
 
     if (extlen == 5 && (strncmp(ext, ".json", 5) ==  0)) {
         reader = s7_name_to_value(s7, "json:read");
@@ -98,6 +106,9 @@ int main(int argc, char **argv)
     }
     else if (extlen == 4 && (strncmp(ext, ".scm", 4) == 0)) {
         reader = s7_name_to_value(s7, "read");
+    }
+    else if (strncmp(bname, "dune", 4) == 0) {
+        reader = s7_name_to_value(s7, "sexp:read");
     } else {
         log_error("Data file extension must be .json, .toml, or .scm");
     }
@@ -108,8 +119,13 @@ int main(int argc, char **argv)
 
     s7_define_variable(s7, "template", s7_make_string(s7, options[OPT_TEMPLATE].argument));
 
+    s7_define_variable(s7, "outfile",
+                       s7_make_string(s7, options[OPT_OUTFILE].argument));
+
+
     s7_pointer res = s7_load(s7, options[OPT_SCRIPT].argument);
-    s7_pointer op = s7_open_output_file(s7, options[OPT_OUTFILE].argument, "w");
-    s7_display(s7, res, op);
-    s7_close_output_port(s7, op);
+    (void)res;
+    /* s7_pointer op = s7_open_output_file(s7, options[OPT_OUTFILE].argument, "w"); */
+    /* s7_display(s7, res, op); */
+    /* s7_close_output_port(s7, op); */
 }

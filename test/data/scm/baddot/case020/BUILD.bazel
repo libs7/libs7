@@ -15,11 +15,9 @@ TAGS = ["dune", "toml", "batch", "mustache"]
 
 test_mustachios(
     name     = "sexp_dune",
-    script   = "//test/batch/dune:Work_main.scm",
-    # script   = "dune_to_mibl.scm",
+    script   = "//test/batch/dune:Mustachios_main.scm",
     out      = "dune.toml",
     data     = "dune",
     template = "dune_to_toml.mustache",
     tags     = TAGS
 )
-
