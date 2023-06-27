@@ -1,0 +1,9 @@
+(rule
+ (alias pre_include)
+ (action (run %{exe:foo.exe} preinc)))
+
+(include dune.inc)
+
+(rule
+ (alias post_include)
+ (action (run %{exe:foo.exe} postinc)))
