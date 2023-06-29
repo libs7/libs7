@@ -1,10 +1,10 @@
 ((pre_include)
 
- (inclusion a level1)
+ (inclusion a level1 ./)
 
  (inclusion b level1)
 
- (inclusion c level1)
+ (inclusion c level1 ./)
 
  (inclusion d level1)
 

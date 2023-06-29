@@ -1,0 +1,6 @@
+((pre_include)
+
+ (inclusion a
+  (with-baddot ./))
+
+ (post_include))

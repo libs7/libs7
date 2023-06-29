@@ -1,0 +1,8 @@
+filegroup(
+    name = "data",
+    data = [
+        "dune",
+        "dune_a.inc", "dune_b.inc", "dune_c.inc", "dune_d.inc",
+        "sexp.expected"],
+    visibility = ["//visibility:public"]
+)

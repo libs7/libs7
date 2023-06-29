@@ -1,0 +1,12 @@
+((pre_include ./)
+
+ (inclusion a ./)
+
+ (inclusion b ./)
+
+ (inclusion c ./)
+
+ (inclusion d ./)
+
+ (post_include ./))
+

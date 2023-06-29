@@ -25,15 +25,27 @@ TAGS = ["sexp", "readers", "read-errrors"]
 cc_test(
     name = "include",
     linkstatic = True,
-    srcs = ["include_test.c",
+    srcs = ["Include_test.c",
             "//test/unit:common.c", "//test/unit:common.h",
             "//src:libs7.h"],
     local_defines = DEFINES,
     data = [
         "//test/unit/libsexp/include/case010:data",
+        "//test/unit/libsexp/include/case011:data",
+        "//test/unit/libsexp/include/case013:data",
+        "//test/unit/libsexp/include/case015:data",
+        "//test/unit/libsexp/include/case016:data",
+
         "//test/unit/libsexp/include/case020:data",
-        "//test/unit/libsexp/include/case030:data",
+        "//test/unit/libsexp/include/case022:data",
+        "//test/unit/libsexp/include/case023:data",
+        "//test/unit/libsexp/include/case024:data",
+        "//test/unit/libsexp/include/case025:data",
+        "//test/unit/libsexp/include/case026:data",
+
         "//test/unit/libsexp/include/case040:data",
+        "//test/unit/libsexp/include/case042:data",
+        "//test/unit/libsexp/include/case050:data",
     ],
     deps = DEPS + [
         "//lib/libsexp:sexp_s7_archive",

@@ -4,8 +4,8 @@
 
  (inclusion b level1)
 
+ (midinclude)
+
  (inclusion c level1)
 
- (inclusion d level1)
-
- (post_include))
+ (inclusion d level1))

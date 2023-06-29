@@ -1,0 +1,13 @@
+((pre_include
+  (with-baddot ./))
+
+ (inclusion a level1
+  (with-baddot ./))
+
+ (inclusion x level2)
+
+ (inclusion y level2)
+
+ (inclusion b level1)
+
+ (post_include))

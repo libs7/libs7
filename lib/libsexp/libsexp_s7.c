@@ -49,7 +49,9 @@ static s7_pointer int64_t__symbol, FILE__symbol;
 
 s7_pointer result;
 
-s7_pointer _inport_sym, _sexps_sym;
+s7_pointer _inport_sym;         /* -sexp-inport */
+s7_pointer _infile_sym;         /* -sexp-infile */
+s7_pointer _sexps_sym;          /* -sexp-sexps */
 
 /* needed by read thunk and catcher */
 /* const char *g_sexpfile; */
@@ -190,7 +192,8 @@ const char *sexpfile_to_string(s7_scheme *s7, const char *sexpfile_name)
     bool eol_string = false;
     while (*inptr) {
         if (*inptr == '.') {
-            if (*(inptr+1) == ')'){
+            if ((*(inptr+1) == ')')
+                && isspace(*(inptr-1))){
                 /* log_debug("FOUND DOT: %s", inptr); */
                 *outptr++ = *inptr++;
                 *outptr++ = '/';
@@ -302,6 +305,8 @@ cleanup:
 }
 
 static s7_pointer _sexp_read_input_port(s7_scheme*s7, s7_pointer port);
+static s7_pointer _sexp_read_string(s7_scheme*s7, s7_pointer s);
+
 s7_pointer fix_sexpfile(s7_scheme *s7, const char *sexpfile_name)
 {
     TRACE_ENTRY(fix_sexpfile);
@@ -324,13 +329,33 @@ s7_pointer fix_sexpfile(s7_scheme *s7, const char *sexpfile_name)
         s7_error(s7, s7_make_symbol(s7, "bad input port"),
                      s7_nil(s7));
     }
-#if defined(DEVBUILD)
-    log_debug("s7_open_input_string for error correction");
-#endif
 
-    result = _sexp_read_input_port(s7, _inport);
+    s7_pointer readlet
+        = s7_inlet(s7,
+                   s7_list(s7, 3,
+                           s7_cons(s7, _inport_sym, _inport),
+                           s7_cons(s7, _infile_sym,
+                                   s7_make_string(s7, sexpfile_name)),
+                           s7_cons(s7, _sexps_sym, s7_nil(s7))));
+
+    TRACE_LOG_DEBUG("reading corrected string from port: %s", sexpstring);
+    const char *sexp = "(catch #t -sexp-read-thunk -sexp-read-catcher)";
+    // same as (with-let (inlet ...) (catch...)) ???
+    /* log_debug("evaluating c string %s", sexp); */
+    s7_pointer result
+        = s7_eval_c_string_with_environment(s7, sexp, readlet);
+
+    /* result = _sexp_read_input_port(s7, _inport); */
+
+    /* TRACE_LOG_DEBUG("reading corrected string:  %s", sexpstring); */
+    /* result = _sexp_read_string(s7, s7_make_string(s7,sexpstring)); */
+
+    TRACE_S7_DUMP("fixed stanzas", result);
+    free((void*)sexpstring);
     return result;
 
+    /* **************************************************************** */
+    //OBSOLETE
 
     if (s7_curlet(s7) == s7_nil(s7)) {
         log_warn("curlet is '()");
@@ -353,16 +378,11 @@ s7_pointer fix_sexpfile(s7_scheme *s7, const char *sexpfile_name)
     log_debug("SEXPFILE_NAME: %s", sexpfile_name);
     s7_pointer env = s7_inlet(s7,
                               s7_list(s7, 1,
-                                      s7_cons(s7,
-                                              s7_make_symbol(s7, "-sexp-inport"),
-                                              _inport),
-                                      s7_cons(s7,
-                                              s7_make_symbol(s7, "-sexp-infile"),
+                                      s7_cons(s7, _inport_sym, _inport),
+                                      s7_cons(s7, _infile_sym,
                                               s7_make_string(s7, sexpfile_name)),
 
-                                      s7_cons(s7,
-                                              s7_make_symbol(s7, "-sexp-sexps"),
-                                              s7_nil(s7))
+                                      s7_cons(s7, _sexps_sym, s7_nil(s7))
                                       ));
     // WARNING: if the call to -g-sexp-read raises an error that gets
     // handled by the catcher, then the continuation is whatever
@@ -384,91 +404,6 @@ s7_pointer fix_sexpfile(s7_scheme *s7, const char *sexpfile_name)
     /*                                 /\* s7_name_to_value(s7, "-sexp-read-thunk-catcher") *\/ */
     /*                                 ); */
     TRACE_S7_DUMP("fixed stanzas", stanzas);
-
-    /* s7_close_input_port(s7, sport); */
-    // g_sexp_inport will be closed by caller
-    /* s7_gc_unprotect_at(s7, gc_baddot_loc); */
-    /* close_error_config(); */
-
-    /* leave error config as-is */
-    free((void*)sexpstring);
-    /* return s7_reverse(s7, stanzas); */
-    return stanzas;
-}
-
-s7_pointer x_fix_sexpfile(s7_scheme *s7, const char *sexpfile_name)
-{
-    TRACE_ENTRY(fix_sexpfile);
-    TRACE_LOG_DEBUG("sexpfile: %s", sexpfile_name);
-
-    const char *sexpstring = sexpfile_to_string(s7, sexpfile_name);
-
-    log_debug("readed string: %s", sexpstring);
-
-    /* now s7_read using string port */
-
-    /* first config err handling. clears out prev. error */
-    /* close_error_config(); */
-    /* error_config(); */
-    /* init_error_handling(); */
-
-    s7_pointer _inport = s7_open_input_string(s7, sexpstring);
-    if (s7_curlet(s7) == s7_nil(s7)) {
-        log_warn("curlet is '()");
-    }
-    TRACE_S7_DUMP("curlet", s7_curlet(s7));
-    /* } else { */
-    log_debug("varletting curlet...");
-    s7_varlet(s7, s7_curlet(s7),
-               s7_make_symbol(s7, "-sexp-inport"),
-               _inport);
-
-    s7_varlet(s7, s7_curlet(s7),
-                  s7_make_symbol(s7, "-sexp-infile"),
-                  s7_make_string(s7, sexpfile_name));
-
-    s7_varlet(s7, s7_curlet(s7),
-                  s7_make_symbol(s7, "-sexp-sexps"),
-                  s7_nil(s7));
-    /* } */
-    /* g_sexp_inport = s7_open_input_string(s7, sexpstring); */
-    /* s7_int gc_baddot_loc = s7_gc_protect(s7, g_sexp_inport); */
-
-    /* s7_pointer _inport = s7_let_ref(s7, s7_curlet(s7), */
-    /*                                 s7_make_symbol(s7, "-sexp-inport")); */
-    /* TRACE_S7_DUMP("inport", _inport); */
-
-    /* errmsg = s7_get_output_string(s7, s7_current_error_port(s7)); */
-
-    if (!s7_is_input_port(s7, _inport)) { // g_sexp_inport)) {
-        log_error("BAD INPUT PORT");
-        s7_error(s7, s7_make_symbol(s7, "bad input port"),
-                     s7_nil(s7));
-        /* errmsg = s7_get_output_string(s7, s7_current_error_port(s7)); */
-        /* if ((errmsg) && (*errmsg)) { */
-        /*     log_error("[%s\n]", errmsg); */
-        /*     /\* s7_shutdown(s7); *\/ */
-        /*     /\* exit(EXIT_FAILURE); *\/ */
-        /* } */
-    }
-#if defined(DEVBUILD)
-    log_debug("s7_open_input_string for error correction");
-#endif
-
-    //FIXME: this should use s7_eval_c_string... in case sexpstring
-    //has an error.
-
-    // (with-let (inlet ...)
-    //        (with-input-from-string sexpstring sexp:read))
-
-    s7_pointer stanzas = s7_call_with_catch(s7,
-                                    s7_t(s7),      /* tag */
-                                    // _sexp_read_thunk_s7
-                                    s7_name_to_value(s7, "-sexp-read-thunk"),
-                                    _sexp_read_catcher_s7
-                                    /* s7_name_to_value(s7, "-sexp-read-thunk-catcher") */
-                                    );
-    /* TRACE_S7_DUMP("fixed stanzas", stanzas); */
 
     /* s7_close_input_port(s7, sport); */
     // g_sexp_inport will be closed by caller
@@ -531,17 +466,17 @@ void print_c_backtrace(void) // s7_scheme *s7)
 #endif
 
 /*
- * precondition: env contains -inport, -sexps (accumulator)
+ * precondition: env contains -sexp-inport, -sexp-infile, -sexp-sexps (accumulator)
  */
 s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
 /* s7_pointer _sexp_read_port(s7_scheme *s7, s7_pointer inport) */
 {
     TRACE_ENTRY(_sexp_read_thunk);
     (void)args;
-#if defined(DEVBUILD)
-    log_trace("cwd: %s", getcwd(NULL, 0));
 
     s7_pointer _curlet = s7_curlet(s7);
+#if defined(DEVBUILD)
+    log_trace("cwd: %s", getcwd(NULL, 0));
     char *tmp = s7_object_to_c_string(s7, _curlet);
     log_debug("CURLET: %s", tmp);
     free(tmp);
@@ -550,9 +485,10 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
 
     s7_pointer _inport = s7_let_ref(s7, s7_curlet(s7), _inport_sym);
     TRACE_S7_DUMP("inport", _inport);
-
-    s7_pointer _sexps = s7_let_ref(s7, s7_curlet(s7), _sexps_sym);
-    TRACE_S7_DUMP("_sexps", _sexps);
+    if (!s7_is_input_port(s7, _inport)) {
+        log_error("Bad input port");
+        s7_error(s7, s7_make_symbol(s7, "bad-input-port"), s7_nil(s7));
+    }
 
     // PROBLEM: if we hit a read-error after expanding an include,
     // then the corrected string will be passed as a string port, and
@@ -562,31 +498,22 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
     // No way to test if _inport is a string port, so we use brute force.
     const char *sexpfile = s7_port_filename(s7, _inport); // g_sexp_inport);
     if (sexpfile == NULL) {
-        /* log_debug("no filename for inport"); */
-        /* s7_pointer sexpfile7 = s7_let_ref(s7, s7_curlet(s7), */
-        /*                        s7_make_symbol(s7, "-sexp-infile")); */
-        /* TRACE_S7_DUMP("sexpfile7", sexpfile7); */
-        /* sexpfile = s7_string(sexpfile7); */
-    }
-    /* TRACE_LOG_DEBUG("inport file: %s", sexpfile); */
-
-    if (!s7_is_input_port(s7, _inport)) { // g_sexp_inport)) {
-        errmsg = s7_get_output_string(s7, s7_current_error_port(s7));
-        if ((errmsg) && (*errmsg)) {
-            log_error("[%s\n]", errmsg);
-            //FIXME: throw error
-            libs7_shutdown(s7);
-            exit(EXIT_FAILURE);
+        log_debug("no filename for inport");
+        /* s7_pointer _curlet = s7_curlet(s7); */
+        if (_curlet != s7_nil(s7)) {
+            s7_pointer sexpfile7 = s7_let_ref(s7, s7_curlet(s7), _infile_sym);
+            TRACE_S7_DUMP("curlet -sexp-infile", sexpfile7);
+            sexpfile = s7_string(sexpfile7);
         }
-        //FIXME: throw error
     } else {
-#if defined(DEVBUILD)
-        /* s7_pointer port_filename = s7_call(s7, */
-        /*                               s7_name_to_value(s7, "port-filename"), */
-        /*                               s7_list(s7, 1, inport)); */
-        /*     log_trace("reading sexpfile from input port: %s", */
-        /*               TO_STR(port_filename)); */
-#endif
+        log_debug("inport filename: %s", sexpfile);
+    }
+    TRACE_LOG_DEBUG("inport file: %s", sexpfile);
+
+    s7_pointer _sexps = NULL;
+    if (_curlet != s7_nil(s7)) {
+        _sexps = s7_let_ref(s7, _curlet, _sexps_sym);
+        TRACE_S7_DUMP("_sexps", _sexps);
     }
 
     /* g_stanzas = s7_list(s7, 0); // s7_nil(s7)); */
@@ -840,7 +767,7 @@ static s7_pointer _sexp_read_catcher(s7_scheme *s7, s7_pointer args)
     //FIXME: what if error is in a string instead of a file?
     s7_pointer errfile7 = s7_eval_c_string(s7,  "((owlet) 'error-file)");
     const char *errfile = s7_string(errfile7);
-    /* log_debug("errfile: %s", errfile); */
+    TRACE_LOG_DEBUG("errfile: %s", errfile);
     /* free((void*)errfile); */
 
     s7_pointer errtype7 = s7_eval_c_string(s7,  "((owlet) 'error-type)");
@@ -1172,10 +1099,19 @@ static s7_pointer _sexp_read_input_port(s7_scheme*s7, s7_pointer inport)
     TRACE_ENTRY(_sexp_read_input_port);
     (void)inport;
 
-    /* s7_pointer port_filename = s7_call(s7, */
-    /*                                    s7_name_to_value(s7, "port-filename"), */
-    /*                                    s7_list(s7, 1, inport)); */
-    /* TRACE_S7_DUMP("port fname", port_filename); */
+    const char *sexpfile = s7_port_filename(s7, inport);
+    if (sexpfile == NULL) {
+        log_debug("no filename for inport");
+        s7_pointer _curlet = s7_curlet(s7);
+        char *tmp = s7_object_to_c_string(s7, _curlet);
+        log_debug("CURLET: %s", tmp);
+        s7_pointer sexpfile7 = s7_let_ref(s7, s7_curlet(s7),
+                               s7_make_symbol(s7, "-sexp-infile"));
+        TRACE_S7_DUMP("sexpfile7", sexpfile7);
+        sexpfile = s7_string(sexpfile7);
+    } else {
+        log_debug("inport filename: %s", sexpfile);
+    }
 
     s7_pointer readlet
         = s7_inlet(s7,
@@ -1195,13 +1131,14 @@ static s7_pointer _sexp_read_input_port(s7_scheme*s7, s7_pointer inport)
 }
 
 /* ********************************************************* */
-static s7_pointer _sexp_read_string(s7_scheme*s7, s7_pointer s)
+static s7_pointer _sexp_read_string(s7_scheme*s7, s7_pointer str)
 {
     TRACE_ENTRY(_sexp_read_string);
+    TRACE_S7_DUMP("string", str);
 
-    s7_pointer _inport = s7_open_input_string(s7, s7_string(s));
+    s7_pointer _inport = s7_open_input_string(s7, s7_string(str));
     if (!s7_is_input_port(s7, _inport)) { // g_sexp_inport)) {
-        log_error("BAD INPUT PORT - _sexp_read_string %s", s);
+        log_error("BAD INPUT PORT - _sexp_read_string %s", str);
         s7_error(s7, s7_make_symbol(s7, "_sexp_read_string bad input port"),
                      s7_nil(s7));
     }
@@ -1360,8 +1297,9 @@ s7_pointer libsexp_s7_init(s7_scheme *s7)
   /* sexp_table_t__symbol = s7_make_symbol(s7, "sexp_table_t*"); */
   FILE__symbol = s7_make_symbol(s7, "FILE*");
 
-  _inport_sym = s7_make_symbol(s7, "-inport");
-  _sexps_sym = s7_make_symbol(s7, "-sexps");
+  _inport_sym = s7_make_symbol(s7, "-sexp-inport");
+  _infile_sym = s7_make_symbol(s7, "-sexp-infile");
+  _sexps_sym  = s7_make_symbol(s7, "-sexp-sexps");
 
   /* s7_define_constant(s7, "sexp:version", s7_make_string(s7, "1.0-beta")); */
 

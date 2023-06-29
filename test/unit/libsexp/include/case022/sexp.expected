@@ -1,0 +1,11 @@
+((pre_include ./)
+
+ (inclusion a level1)
+
+ (inclusion x level2)
+
+ (inclusion y level2)
+
+ (inclusion b level1)
+
+ (post_include))

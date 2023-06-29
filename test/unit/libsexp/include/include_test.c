@@ -130,6 +130,44 @@ int main(int argc, char **argv)
     RUN_TEST(call_with_input_file_test);
     s7_gc_unprotect_at(s7, gc_expected);
 
+    // case011:  deep nesting
+    data_fname_str = "test/unit/libsexp/include/case011/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case011/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case013: included file has baddot
+    data_fname_str = "test/unit/libsexp/include/case013/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case013/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case015: including file has baddot
+    data_fname_str = "test/unit/libsexp/include/case015/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case015/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case015: including file has 2 baddots
+    data_fname_str = "test/unit/libsexp/include/case016/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case016/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    /* **************************************************************** */
+    /* case020: chained includes */
     data_fname_str = "test/unit/libsexp/include/case020/dune";
     include_expected = read_expected("test/unit/libsexp/include/case020/sexp.expected");
     gc_expected = s7_gc_protect(s7, include_expected);
@@ -138,16 +176,71 @@ int main(int argc, char **argv)
     RUN_TEST(call_with_input_file_test);
     s7_gc_unprotect_at(s7, gc_expected);
 
-    data_fname_str = "test/unit/libsexp/include/case030/dune";
-    include_expected = read_expected("test/unit/libsexp/include/case030/sexp.expected");
+    // case022: top including file has baddot
+    data_fname_str = "test/unit/libsexp/include/case022/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case022/sexp.expected");
     gc_expected = s7_gc_protect(s7, include_expected);
     RUN_TEST(read_file_port);
     RUN_TEST(with_input_from_file_test);
     RUN_TEST(call_with_input_file_test);
     s7_gc_unprotect_at(s7, gc_expected);
 
+    // case023: case022 + mid included file has baddot
+    data_fname_str = "test/unit/libsexp/include/case023/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case023/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case024: case022 + case023 + last included file has baddot
+    data_fname_str = "test/unit/libsexp/include/case024/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case024/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case025: baddots everywhere
+    data_fname_str = "test/unit/libsexp/include/case025/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case025/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case026: deep baddots everywhere
+    data_fname_str = "test/unit/libsexp/include/case026/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case026/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    /* **************************************************************** */
     data_fname_str = "test/unit/libsexp/include/case040/dune";
     include_expected = read_expected("test/unit/libsexp/include/case040/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    // case042: sibling includeds have baddots
+    data_fname_str = "test/unit/libsexp/include/case042/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case042/sexp.expected");
+    gc_expected = s7_gc_protect(s7, include_expected);
+    RUN_TEST(read_file_port);
+    RUN_TEST(with_input_from_file_test);
+    RUN_TEST(call_with_input_file_test);
+    s7_gc_unprotect_at(s7, gc_expected);
+
+    data_fname_str = "test/unit/libsexp/include/case050/dune";
+    include_expected = read_expected("test/unit/libsexp/include/case050/sexp.expected");
     gc_expected = s7_gc_protect(s7, include_expected);
     RUN_TEST(read_file_port);
     RUN_TEST(with_input_from_file_test);
