@@ -1,15 +1,12 @@
 /* config/config.h.  Generated from config.h.in by configure.  */
-#ifndef TRACE_H
-#define TRACE_H
-
-/* Define as 1 if you have open_memstream.  */
-#define HAVE_OPEN_MEMSTREAM 1
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
 
 #ifndef __STDC_LIB_EXT1__
 typedef int errno_t;
 #endif
 
-#include "CException.h"
+/* maybe later: #include "CException.h" */
 #include "log.h"
 
 #define MALLOC_CHUNK 2048

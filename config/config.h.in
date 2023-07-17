@@ -1,14 +1,14 @@
-#ifndef TRACE_H
-#define TRACE_H
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
 
-/* Define as 1 if you have open_memstream.  */
-#undef HAVE_OPEN_MEMSTREAM
+/* Define as 1 if you have open_memstream. For mustachios  */
+/* #undef HAVE_OPEN_MEMSTREAM */
 
 #ifndef __STDC_LIB_EXT1__
 typedef int errno_t;
 #endif
 
-#include "CException.h"
+/* maybe later: #include "CException.h" */
 #include "log.h"
 
 #define MALLOC_CHUNK 2048

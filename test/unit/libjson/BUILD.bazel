@@ -41,7 +41,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//lib/libjson:json_s7_archive"
+        "//lib/libjson:json_s7"
     ],
     copts = COPTS + [
         "-Isrc",
@@ -65,7 +65,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//lib/libjson:json_s7_archive"
+        "//lib/libjson:json_s7"
     ],
     copts = COPTS + [
         "-Isrc",
@@ -89,7 +89,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//lib/libjson:json_s7_archive"
+        "//lib/libjson:json_s7"
     ],
     copts = COPTS + [
         "-Isrc",
@@ -113,7 +113,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//lib/libjson:json_s7_archive"
+        "//lib/libjson:json_s7"
     ],
     copts = COPTS + [
         "-Isrc",
@@ -137,7 +137,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//lib/libjson:json_s7_archive"
+        "//lib/libjson:json_s7"
     ],
     data = ["//test/data:json"],
     copts = COPTS + [
@@ -162,7 +162,7 @@ cc_test(
     local_defines = DEFINES,
     deps = DEPS + [
         "//dev",
-        "//lib/libjson:json_s7_archive"
+        "//lib/libjson:json_s7"
     ],
     copts = COPTS + [
         "-Isrc",
@@ -187,8 +187,8 @@ cc_test(
 #     data = ["//test/unit/libjson/data:strings.json"],
 #     deps = DEPS + [
 #         "//dev",
-#         "//src:s7_archive",
-#         "//lib/libjson:json_s7_archive"
+#         "//src:s7",
+#         "//lib/libjson:json_s7"
 #     ],
 #     copts = COPTS + [
 #         "-Isrc",

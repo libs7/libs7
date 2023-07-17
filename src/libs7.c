@@ -446,6 +446,53 @@ static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
         return s7_f(s7);
 }
 
+static char *scm_runfiles_dirs[] = {
+    /* this seems to work when libs7 is external dep */
+    "../libs7/scm",
+    /* when run from libs7 repo itself:  */
+    /* "scm", */
+    NULL /* do not remove terminating null */
+};
+char **scm_dir;
+
+static void _runfiles_init(s7_scheme *s7)
+{
+    /* s7_pointer tmp_load_path = s7_list(s7, 0); */
+#if defined(DEVBUILD)
+#ifdef BAZEL_CURRENT_REPOSITORY
+    if (libs7_debug)
+        log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY);
+#endif
+#endif
+
+    if (getenv("BAZEL_TEST")) {
+        s7_add_to_load_path(s7, "scm");
+    } else {
+        scm_dir = scm_runfiles_dirs;
+        char *scmdir;
+        while (*scm_dir) {
+#if defined(DEVBUILD)
+            if (libs7_debug_runfiles)
+                log_debug(" runfile: %s", *scm_dir);
+#endif
+            scmdir = realpath(*scm_dir, NULL);
+            if (scmdir == NULL) {
+                log_error("Runfile not found: %s", *scm_dir);
+                exit(EXIT_FAILURE);
+            }
+#if defined(DEVBUILD)
+            if (libs7_debug_runfiles)
+                log_debug("runfile realpath: %s", scmdir);
+#endif
+            s7_add_to_load_path(s7, scmdir);
+            free(scmdir);
+            (void)*scm_dir++;
+        }
+    }
+    //FIXME: uas s7_add_to_load_path!!!
+    /* s7_define_variable(s7, "*load-path*", tmp_load_path); */
+}
+
 void libs7_shutdown(s7_scheme *s7)
 {
     /* close_error_config(); */
@@ -455,77 +502,88 @@ void libs7_shutdown(s7_scheme *s7)
 s7_scheme *libs7_init(void)
 /* WARNING: dlopen logic assumes file path <libns>/<libname><dso_ext> */
 {
-  s7_scheme *s7 = s7_init();
+    s7_scheme *s7 = s7_init();
 
-  //FIXME: initialize error handlers
+    //FIXME: initialize error handlers
 
-  fs_api_init(s7); //FIXME: eliminate
+    fs_api_init(s7); //FIXME: eliminate
 
-  utarray_new(dlopened, &ut_str_icd);
+    utarray_new(dlopened, &ut_str_icd);
 
-  //FIXME: add runfiles to *load-path*?
-  s7_define_function(s7, "load-clib", g_libs7_load_clib,
-                     1,         /* required: 1 arg, libname */
-                     0,         /* optional: 0 */
-                     false,     /* rest args: none */
-                     "(load-clib 'libsym) initializes statically linked clib archives and dsos, "
-                     "and dlopens and initializes dynamically linked dsos. "
-                     "libsym may be symbol or string; it should not include 'lib' prefix and '_s7' suffix.");
+    /* s7_pointer lp = s7_load_path(s7); */
+    /* char *s = s7_object_to_c_string(s7, lp); */
+    /* log_debug("load-path: %s", s); */
+    /* free(s); */
 
-  /* two macros commonly used in srfis: receive and :optional */
+    _runfiles_init(s7);
 
-  /* receive: https://srfi.schemers.org/srfi-8/srfi-8.html */
-/* (define-macro (receive formals expression . body) */
-/*   `(call-with-values (lambda () ,expression) */
-/*                     (lambda ,formals ,@body))) */
+    /* lp = s7_load_path(s7); */
+    /* s = s7_object_to_c_string(s7, lp); */
+    /* log_debug("load-path: %s", s); */
+    /* free(s); */
 
-/* (define-macro (?optional val default-value) `(if (null? ,val) ,default-value (car ,val))) */
+    s7_define_function(s7, "load-clib", g_libs7_load_clib,
+                       1,         /* required: 1 arg, libname */
+                       0,         /* optional: 0 */
+                       false,     /* rest args: none */
+                       "(load-clib sym) initializes statically linked clib archives and dsos, "
+                       "and dlopens and initializes dynamically linked dsos. "
+                       "libsym may be symbol or string; it should not include 'lib' prefix and '_s7' suffix.");
 
-  s7_define_function(s7, "alist?", g_is_alist,
-                     1,         /* required: 1 arg */
-                     0,         /* optional: 0 */
-                     false,     /* rest args: none */
-                     "(alist? lst)");
+    /* two macros commonly used in srfis: receive and :optional */
 
-  /* install #; comment reader */
-  s7_eval_c_string(s7,
-                   "(set! *#readers* (cons (cons #\\; (lambda (str) (if (string=? str \";\") (read)) (values))) *#readers*))");
+    /* receive: https://srfi.schemers.org/srfi-8/srfi-8.html */
+    /* (define-macro (receive formals expression . body) */
+    /*   `(call-with-values (lambda () ,expression) */
+    /*                     (lambda ,formals ,@body))) */
 
-  /* #m(): proper map constructor - duplicate keys disallowed,
-     map-entry pairs implicit.
-   */
-  const char *ht_sexp = ""
-      "(set! *#readers* "
-      "      (cons (cons #\\m (lambda (str) "
-      "			(and (string=? str \"m\") "
-      "                      (let ((h (apply hash-table (read)))) "
-      "                         (if (> (*s7* 'safety) 1) (immutable! h) h))))) "
-      "	    *#readers*)) "
-      ;
-  s7_pointer ht_ctor = s7_eval_c_string(s7, ht_sexp);
-  (void)ht_ctor;
+    /* (define-macro (?optional val default-value) `(if (null? ,val) ,default-value (car ,val))) */
 
-  /* #M(): multimap (alist) constructor - duplicate keys allowed,
-     map-entry pairs explicit. Just a notational convenience to make the
-     contruction more conspicuous; it doesn't really do anything, just
-     produces an alist.  #M((:a 1)) == '((:a 1)).
+    s7_define_function(s7, "alist?", g_is_alist,
+                       1,         /* required: 1 arg */
+                       0,         /* optional: 0 */
+                       false,     /* rest args: none */
+                       "(alist? lst)");
 
-     Can we have it validate that its argument is an alist?
-   */
-  /* const char *mmap_sexp = "" */
-  /*     "(set! *#readers* " */
-  /*     "      (cons (cons #\\M (lambda (str) " */
-  /*     "			(and (string=? str \"M\") " */
-  /*     "                    (let ((mmap (read))) " */
-  /*     "                        `(quote ,mmap)))))" */
-  /*     "	    *#readers*)) " */
-  /*     ; */
-  /*     /\* "                       (if (> (*s7* 'safety) 1) " *\/ */
-  /*     /\* "                          (immutable! m) " *\/ */
-  /*     /\* "                           (quote m)))))) " *\/ */
+    /* install #; comment reader */
+    s7_eval_c_string(s7,
+                     "(set! *#readers* (cons (cons #\\; (lambda (str) (if (string=? str \";\") (read)) (values))) *#readers*))");
 
-  /* s7_pointer mmap_ctor = s7_eval_c_string(s7, mmap_sexp); */
-  /* (void)mmap_ctor; */
+    /* #m(): proper map constructor - duplicate keys disallowed,
+       map-entry pairs implicit.
+    */
+    const char *ht_sexp = ""
+        "(set! *#readers* "
+        "      (cons (cons #\\m (lambda (str) "
+        "			(and (string=? str \"m\") "
+        "                      (let ((h (apply hash-table (read)))) "
+        "                         (if (> (*s7* 'safety) 1) (immutable! h) h))))) "
+        "	    *#readers*)) "
+        ;
+    s7_pointer ht_ctor = s7_eval_c_string(s7, ht_sexp);
+    (void)ht_ctor;
 
-  return s7;
+    /* #M(): multimap (alist) constructor - duplicate keys allowed,
+       map-entry pairs explicit. Just a notational convenience to make the
+       contruction more conspicuous; it doesn't really do anything, just
+       produces an alist.  #M((:a 1)) == '((:a 1)).
+
+       Can we have it validate that its argument is an alist?
+    */
+    /* const char *mmap_sexp = "" */
+    /*     "(set! *#readers* " */
+    /*     "      (cons (cons #\\M (lambda (str) " */
+    /*     "			(and (string=? str \"M\") " */
+    /*     "                    (let ((mmap (read))) " */
+    /*     "                        `(quote ,mmap)))))" */
+    /*     "	    *#readers*)) " */
+    /*     ; */
+    /*     /\* "                       (if (> (*s7* 'safety) 1) " *\/ */
+    /*     /\* "                          (immutable! m) " *\/ */
+    /*     /\* "                           (quote m)))))) " *\/ */
+
+    /* s7_pointer mmap_ctor = s7_eval_c_string(s7, mmap_sexp); */
+    /* (void)mmap_ctor; */
+
+    return s7;
 }

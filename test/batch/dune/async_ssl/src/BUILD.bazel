@@ -14,19 +14,19 @@ TAGS = ["dune", "toml", "batch", "mustache"]
 # )
 
 test_mustachios(
-    name     = "toml_dune",
-    script   = "//test/batch/dune:Dune_main.scm",
-    out      = "toml.dune",
-    data     = "dune.toml",
-    template = "toml_to_dune.mustache",
+    name     = "dune_to_toml",
+    script   = "//test/batch/dune:Mustachios_main.scm",
+    out      = "dune.toml",
+    data     = "dune", # .sexp",
+    template = "dune_to_toml.mustache",
     tags     = TAGS
 )
 
 test_mustachios(
-    name     = "actual",
-    script   = "//test/batch/dune:Dune_main.scm",
-    out      = "text.actual",
-    data     = "dune.toml",
+    name     = "dune_to_sexp",
+    script   = "//test/batch/dune:Dune_to_sexp.scm",
+    out      = "dune.sexp",
+    data     = "dune",
     template = "dune.mustache",
     tags     = TAGS
 )

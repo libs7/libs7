@@ -4,7 +4,7 @@
 #include "config.h"
 #include "log.h"
 #include "s7.h"
-#include "toml.h"
+
 #include "tomlx.h"
 
 extern s7_pointer integer_string;

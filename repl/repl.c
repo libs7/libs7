@@ -57,6 +57,7 @@ char *scm_runfiles_dirs[] = {
     "../libs7/scm",
     NULL /* do not remove terminating null */
 };
+
 char **scm_dir;
 
 static void _runfiles_init(s7_scheme *s7)

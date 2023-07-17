@@ -3,7 +3,8 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["libtoml_clibgen.scm"])
 
 load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
-     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "LIBTOML_CC_VERSION")
 
 load("//lib:BUILD.bzl", "clibgen_runner",
      "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
@@ -11,7 +12,7 @@ load("//lib:BUILD.bzl", "clibgen_runner",
 SRCS          = BASE_SRCS + CLIB_SRCS
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
 COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
-DEPS          = BASE_DEPS
+DEPS          = BASE_DEPS + ["@libtoml_cc//:toml"]
 DEFINES       = BASE_DEFINES
 LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
@@ -35,17 +36,21 @@ cc_library(
     hdrs = ["libtoml_s7.h"], # "toml.h"],
     deps  = DEPS + [
         "//lib:utils",
-        "//vendored/toml",
-        ":table", ":array", ":datetime"
+        # "//vendored/toml",
+        ":table", ":array", ":datetime",
+        # "@mustachios//vendored/toml",
     ],
     copts = COPTS + [
         "-Isrc",
         "-Iexternal/libs7/src",
         "-Ilib",
         "-Iexternal/libs7/lib",
-        "-Ilib/libtoml",
-        "-Ivendored/toml",
-        "-Iexternal/libs7/vendored/toml",
+
+        # "-Ilib/libtoml",
+
+        # "-Ivendored/toml",
+        # "-Iexternal/libs7/vendored/toml",
+        "-Iexternal/mustachios/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES
@@ -60,15 +65,15 @@ cc_binary(
     ],
     deps  = DEPS + [
         "//lib:utils",
-        "//vendored/toml",
+        # "//vendored/toml",
         ":table", ":array", ":datetime"
     ],
     copts = COPTS + [
         "-Isrc",
         "-Iexternal/libs7/src",
         "-Ilib/libtoml",
-        "-Ivendored/toml",
-        "-Iexternal/libs7/vendored/toml",
+        # "-Ivendored/toml",
+        # "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES,
@@ -92,12 +97,12 @@ cc_library(
         "libtoml_s7.h",
     ],
     deps  = DEPS + [
-        "//src:s7_archive",
-        "//vendored/toml",
+        "//src:s7",
+        # "//vendored/toml",
     ],
     copts = COPTS + CLIB_COPTS + INCLUDE_PATHS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
+        # "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES
@@ -114,12 +119,13 @@ cc_library(
         # "tomlx.h"
     ],
     deps  = DEPS + [
-        "//src:s7_archive",
-        "//vendored/toml",
+        "//src:s7",
+        # "//vendored/toml",
     ],
     copts = COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
+        "-Iexternal/libtoml_cc~{}".format(LIBTOML_CC_VERSION),
+        # "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES
@@ -134,12 +140,12 @@ cc_library(
         "libtoml_s7.h",
     ],
     deps  = DEPS + [
-        "//src:s7_archive",
-        "//vendored/toml",
+        "//src:s7",
+        # "//vendored/toml",
     ],
     copts = COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
+        # "-Ivendored/toml", "-Iexternal/libs7/vendored/toml",
     ],
     linkopts = LINKOPTS,
     local_defines = DEFINES

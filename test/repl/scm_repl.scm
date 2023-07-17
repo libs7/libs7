@@ -1,20 +1,40 @@
  ;; "test/data/example.scm"
 (load "alist.scm")
 
+;; *load-path*
+
+(define mwe.dune "test/unit/libsexp/readers/case010.dune")
+
 ;; NB: s7 string and file inports are indistinguishable
 ;; open-input-file returns #<input-string-port>
-(define test (open-input-file "test/batch/dune/mwe/dune"))
+;; (define test (open-input-file "test/batch/dune/mwe/dune"))
+(define test (open-input-file mwe.dune))
+(input-port? test)
 test ;; => #<input-string-port>
 (close-input-port test)
 test ;; => #<input-string-port:closed>
 
 (define test (open-input-string "foo bar"))
+(input-port? test)
 test ;; => #<input-string-port>
 (close-input-port test)
 test ;; => #<input-string-port:closed>
 
 ;; use length to get file size from port
-(define test (open-input-file "test/batch/dune/mwe/dune"))
+(input-port? test)
+test ;; => #<input-string-port>
+(close-input-port test)
+test ;; => #<input-string-port:closed>
+
+(define test (open-input-string "foo bar"))
+(input-port? test)
+test ;; => #<input-string-port>
+(close-input-port test)
+test ;; => #<input-string-port:closed>
+
+;; use length to get file size from port
+(define test (open-input-file mwe.dune))
+(input-port? test)
 (length test) ;; => 21
 (close-input-port test)
 
@@ -24,9 +44,9 @@ test ;; => #<input-string-port:closed>
 (close-input-port test)
 
 ;; then use read-string to read entire thing
-(define test (open-input-file "test/batch/dune/mwe/dune"))
-(length test) ;; => 21
-(read-string 21 test) ;; => "(alias (name \"mwe\"))
+(define test (open-input-file mwe.dune))
+(length test) ;; => 63
+(read-string 63 test) ;; => "(alias (name \"mwe\")) ...etc...
 (close-input-port test)
 
 ;; ditto for string ports
@@ -35,6 +55,7 @@ test ;; => #<input-string-port:closed>
 (read-string 13 test) ;; => "foo bar, buz!"
 (close-input-port test)
 
+;; readers
 (define datafile "test/batch/dune/async_ssl/src/dune")
 (define m (call-with-input-file datafile sexp:read))
 ;; (define m (with-input-from-file datafile sexp:read))
@@ -47,34 +68,61 @@ m
 ;; (set! *sexp:expand-includes* #t)
 ;; *sexp:expand-includes*
 
-;; include w/o baddot
-(define datafile "test/batch/dune/include/case001/dune")
+;; dune inclusions w/o baddot
+(define datafile "test/unit/libsexp/include/case010/dune")
 (define m (call-with-input-file datafile sexp:read))
 ;; (define m (with-input-from-file datafile sexp:read))
 
-;; include with baddot
-(define datafile "test/batch/dune/include/case002/dune")
+;; deep nesting
+(define datafile "test/unit/libsexp/include/case011/dune")
 (define m (call-with-input-file datafile sexp:read))
-;; (define m (with-input-from-file datafile sexp:read))
+m
 
-(define datafile "test/batch/dune/mwe/dune")
+;; dune inclusions with baddot
+(define datafile "test/unit/libsexp/include/case013/dune")
 (define m (call-with-input-file datafile sexp:read))
-;; (define m (with-input-from-file datafile sexp:read))
-
-(define datafile "test/batch/dune/empty/dune")
 (define m (with-input-from-file datafile sexp:read))
 
-(define datafile "test/batch/dune/baddot/dune")
+(define datafile "test/unit/libsexp/include/case015/dune")
+(define m (call-with-input-file datafile sexp:read))
+(define m (with-input-from-file datafile sexp:read))
+
+(define datafile "test/unit/libsexp/include/case016/dune")
+(define m (call-with-input-file datafile sexp:read))
+(define m (with-input-from-file datafile sexp:read))
+
+;; nested w/o baddot
+(define datafile "test/unit/libsexp/include/case020/dune")
+(define m (call-with-input-file datafile sexp:read))
+(define m (with-input-from-file datafile sexp:read))
+
+;; nested with baddot
+(define datafile "test/unit/libsexp/include/case022/dune")
+(define m (call-with-input-file datafile sexp:read))
+(define m (with-input-from-file datafile sexp:read))
+
+(define datafile "test/unit/libsexp/include/case023/dune")
+(define m (call-with-input-file datafile sexp:read))
+(define m (with-input-from-file datafile sexp:read))
+
+;; baddots everywhere
+(define datafile "test/unit/libsexp/include/case025/dune")
+(define m (call-with-input-file datafile sexp:read))
+(define m (with-input-from-file datafile sexp:read))
+
+(define datafile "test/unit/libsexp/include/case026/dune")
+(define m (call-with-input-file datafile sexp:read))
 (define m (with-input-from-file datafile sexp:read))
 
 ;; (let* ((datafile "test/batch/dune/baddot/dune") (m (with-input-from-file datafile sexp:read))) m)
 
 
 (define datafile "test/batch/dune/strings/eol/dune")
+(define m (call-with-input-file datafile sexp:read))
 (define m (with-input-from-file datafile sexp:read))
-
 m
-(assoc 'library m)
+(alist? m)
+(assoc 'eolstring m)
 (assoc 'rule m)
 (length m)
 alist->hash-table
@@ -156,3 +204,14 @@ m
 
 (define dune->mibl (load "mibl.scm"))
 (dune->mibl m)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define datafile "test/unit/libsexp/readers/case010.dune")
+(define m (call-with-input-file datafile sexp:read))
+
+(define t "ALIAS: {{#alias}}{{name}}{{?}}, {{/?}}{{/alias}}")
+
+m
+(load "alist.scm")
+(alist->hash-table m :kw-keys #t)
+(let ((data (alist->hash-table m))) (mustache:render #f t data 0))

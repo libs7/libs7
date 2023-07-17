@@ -4,34 +4,37 @@ exports_files(["libcjson_clibgen.scm"])
 
 
 load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
-     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "CJSON_VERSION")
 
 load("//lib:BUILD.bzl", "clibgen_runner",
      "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
 
 SRCS          = BASE_SRCS + CLIB_SRCS
-INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS + [
+    "-Iexternal/cjson~{}".format(CJSON_VERSION),
+]
 COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
-DEPS          = BASE_DEPS
+DEPS          = BASE_DEPS + ["//src:s7", "@cjson//:cjson"]
 DEFINES       = BASE_DEFINES
 LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
 ################################################################
 cc_library(
-    name  = "json_s7_archive", # emits libjson_s7_archive.a
+    name  = "json_s7", # provides libjson_s7.lo
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = SRCS + ["libcjson_s7.c"],
     hdrs = ["libcjson_s7.h"], # "cJSON.h"],
     deps  = DEPS + [
         "//lib:utils",
-        "//vendored/cjson",
+        # "//vendored/cjson",
         ":cjson_map", "cjson_array"
     ],
     copts = COPTS + [
         "-Ilib", "-Iexternal/libs7/lib",
         "-Ilib/libjson", "-Iexternal/libs7/lib/libjson",
-        "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
+        # "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
     ] + select({
         "//config/host/build:macos?": [
             "-Wno-gnu-statement-expression"
@@ -45,7 +48,7 @@ cc_library(
 )
 
 cc_binary(
-    name  = "json_s7",  # create libjson_s7.{dylib,so}
+    name  = "json_s7_shared",  # create libjson_s7.{dylib,so}
     linkshared = True,
     srcs  = SRCS + [
         ":libcjson_s7.c",
@@ -54,11 +57,11 @@ cc_binary(
         "//lib:utils.h",
         "//lib:utils.c",
     ],
-    deps  = DEPS + ["//lib:utils", "//vendored/cjson"],
+    deps  = DEPS + ["//lib:utils"], # "//vendored/cjson"],
     copts = COPTS + [
         "-Ilib", "-Iexternal/libs7/lib",
         "-Ilib/libjson", "-Iexternal/libs7/lib/libjson",
-        "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
+        # "-Ivendored/cjson", "-Iexternal/libs7/vendored/cjson",
     ],
     linkopts      = LINKOPTS,
     local_defines = DEFINES
@@ -82,12 +85,12 @@ cc_library(
         "libcjson_s7.h",
     ],
     deps  = DEPS + [
-        "//vendored/cjson",
-        "//src:s7_archive",
+        # "//vendored/cjson",
+        # "//src:s7",
     ],
     copts = COPTS + [
-        "-Ivendored/cjson",
-        "-Iexternal/libs7/vendored/cjson"
+        # "-Ivendored/cjson",
+        # "-Iexternal/libs7/vendored/cjson"
     ],
     linkopts      = LINKOPTS,
     local_defines = DEFINES
@@ -102,12 +105,12 @@ cc_library(
         "libcjson_s7.h",
     ],
     deps  = DEPS + [
-        "//vendored/cjson",
-        "//src:s7_archive",
+        # "//vendored/cjson",
+        # "//src:s7",
     ],
     copts = COPTS + [
-        "-Ivendored/cjson",
-        "-Iexternal/libs7/vendored/cjson",
+        # "-Ivendored/cjson",
+        # "-Iexternal/libs7/vendored/cjson",
     ],
     linkopts      = LINKOPTS,
     local_defines = DEFINES

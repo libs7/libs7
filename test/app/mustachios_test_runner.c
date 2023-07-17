@@ -107,10 +107,16 @@ int main(int argc, char **argv)
     else if (extlen == 4 && (strncmp(ext, ".scm", 4) == 0)) {
         reader = s7_name_to_value(s7, "read");
     }
+    else if (extlen == 4 && (strncmp(ext, ".sexp", 5) == 0)) {
+        reader = s7_name_to_value(s7, "sexp:read");
+    }
+    else if (extlen == 4 && (strncmp(ext, ".dune", 5) == 0)) {
+        reader = s7_name_to_value(s7, "sexp:read");
+    }
     else if (strncmp(bname, "dune", 4) == 0) {
         reader = s7_name_to_value(s7, "sexp:read");
     } else {
-        log_error("Data file extension must be .json, .toml, or .scm");
+        log_error("Data file extension must be .json, .toml, .dune, .sexp, or .scm");
     }
 
     s7_define_variable(s7, "reader", reader);

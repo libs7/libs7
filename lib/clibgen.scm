@@ -2,7 +2,6 @@
 ;; (flush-output-port)
 
 (provide 'clibgen.scm)
-
 ;; TODO: write header files with init prototypes
 
 ;; derived from cload.scm.  Compilation logic removed so this just emits c files.

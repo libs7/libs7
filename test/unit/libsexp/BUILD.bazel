@@ -22,7 +22,9 @@ TAGS = ["sexp", "readers"]
 test_suite(
     name  = "libsexp",
     tests = [
-        "//test/unit/libsexp:readers",
+        "//test/unit/libsexp/baddot",
+        "//test/unit/libsexp/include",
+        "//test/unit/libsexp/readers",
     ]
 )
 

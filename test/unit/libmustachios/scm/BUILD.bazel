@@ -12,11 +12,11 @@ load("//test:BUILD.bzl",
 SRCS          = BASE_SRCS + TEST_SRCS + ["macros.h"]
 
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS + [
-    "-Ilib/libmustachios/scm/s7"
+    # "-Ilib/libmustachios/scm/s7"
 ]
 COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS + [
-    "//lib/libmustachios/scm/s7:mustache_scm"
+    # "//lib/libmustachios/scm/s7:mustache_scm"
 ] + select({
     "//config/clibs/link:archive?": [
         "//lib/libmustachios:mustachios_s7_archive",

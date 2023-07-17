@@ -18,25 +18,38 @@ LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
 ################################################################
 cc_library(
-    name  = "utf8proc_s7_archive", # emits libutf8proc_s7_archive.a
+    name  = "utf8proc_s7", # provides libutf8proc_s7.a
     linkstatic = True,
     alwayslink = True,
     srcs  = SRCS + [":libutf8proc_s7.c"],
-    deps  = DEPS + ["//src:s7_archive", "@utf8proc//:libutf8proc"],
+    deps  = DEPS + ["//src:s7",
+                    "@utf8proc//:libutf8proc"
+                    ],
     copts = COPTS + ["-Wno-unused-parameter"],
     linkopts = LINKOPTS,
     local_defines = DEFINES,
 )
 
-cc_binary(
-    name  = "utf8proc_s7",  # create libutf8proc_s7.{dylib,so}
-    linkshared = True,
-    srcs  = SRCS + [":libutf8proc_s7.c"],
-    deps  = DEPS + ["//src:s7_archive", "@utf8proc//:libutf8proc"],
-    copts = COPTS + ["-Wno-unused-parameter"],
-    linkopts = LINKOPTS,
-    local_defines = DEFINES,
+cc_shared_library(
+    name = "utf8proc_s7_dso",
+    shared_lib_name = select({
+        "@platforms//os:macos": "libutf8proc_s7.dylib",
+        "@platforms//os:linux": "libutf8proc_s7.so",
+        # "@platforms//os:windows": "libutf8proc_s7.dll",
+        "//conditions:default": "libutf8proc_s7.so"
+    }),
+    deps = [":utf8proc_s7"]
 )
+
+# cc_binary(
+#     name  = "utf8proc_s7x",  # create libutf8proc_s7.{dylib,so}
+#     linkshared = True,
+#     srcs  = SRCS + [":libutf8proc_s7.c"],
+#     deps  = DEPS + ["//src:s7", "@utf8proc//:libutf8proc"],
+#     copts = COPTS + ["-Wno-unused-parameter"],
+#     linkopts = LINKOPTS,
+#     local_defines = DEFINES,
+# )
 
 clibgen_runner(
     name = "libutf8proc_s7_runbin",

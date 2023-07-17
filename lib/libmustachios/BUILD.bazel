@@ -27,44 +27,65 @@ cc_library(
     ],
     hdrs = ["libmustachios_s7.h"],
     copts = COPTS + [
-        "-Ilib/libmustachios/mustach",
-        "-Iexternal/libs7/lib/libmustachios/mustach",
+        # "-Ilib/libmustachios/mustach",
+        # "-Iexternal/libs7/lib/libmustachios/mustach",
+        "-Iexternal/mustachios/src",
 
-        "-Ilib/libmustachios/mustach/ds_mgr",
-        "-Iexternal/libs7/lib/libmustachios/mustach/ds_mgr",
+        # "-Ilib/libmustachios/mustach/ds_mgr",
+        # "-Iexternal/libs7/lib/libmustachios/mustach/ds_mgr",
+        "-Iexternal/mustachios/adapter/ds_mgr",
 
-        "-Ilib/libmustachios/json/cjson",
-        "-Iexternal/libs7/lib/libmustachios/json/cjson",
+        # "-Ilib/libmustachios/json/cjson",
+        # "-Iexternal/libs7/lib/libmustachios/json/cjson",
+        "-Iexternal/mustachios/adapter/json/cjson",
 
         "-Ivendored/cjson",
         "-Iexternal/libs7/vendored/cjson",
 
-        "-Ilib/libmustachios/scm/s7",
-        "-Iexternal/libs7/lib/libmustachios/scm/s7",
+        # "-Ilib/libmustachios/scm/s7",
+        # "-Iexternal/libs7/lib/libmustachios/scm/s7",
+        "-Iexternal/mustachios/adapter/scm/s7",
 
-        "-Ilib/libmustachios/toml",
-        "-Iexternal/libs7/lib/libmustachios/toml",
+        # "-Ilib/libmustachios/toml",
+        # "-Iexternal/libs7/lib/libmustachios/toml",
+        "-Iexternal/mustachios/adapter/toml",
 
-        "-Ivendored/toml",
-        "-Iexternal/libs7/vendored/toml",
+        # "-Ivendored/toml",
+        # "-Iexternal/libs7/vendored/toml",
+        # "-Iexternal/mustachios/vendored/toml",
     ],
     deps = DEPS + [
-        "//src:s7_archive",
+        # "//src:s7",
 
-        "//lib/libmustachios/mustach",
-        "//lib/libmustachios/mustach/ds_mgr:mustach_ds_mgr",
+        # mustachios APIs (mustache:render):
+        "@mustachios//src:mustach",
+        "@mustachios//adapter/ds_mgr",
+        "@mustachios//adapter/json/cjson:mustache_json",
+        "@mustachios//adapter/scm/s7:mustache_scm",
+        "@mustachios//adapter/toml:mustache_toml",
 
-        "//lib/libmustachios/json/cjson:mustache_json",
-        "//lib/libjson:json_s7_archive",
-        "//vendored/cjson",
-
-        "//lib/libmustachios/scm/s7:mustache_scm",
-
-        "//lib/libmustachios/toml:mustache_toml",
+        ## data APIs:
+        "//lib/libjson:json_s7",
         "//lib/libtoml:toml_s7_archive",
-        "//vendored/toml",
-
         "//lib/libsexp:sexp_s7_archive", # for dune files
+
+        ## obsolete:
+        # "//lib/libmustachios/mustach",
+        # "//lib/libmustachios/mustach/ds_mgr:mustach_ds_mgr",
+
+        # "//lib/libmustachios/json/cjson:mustache_json",
+       # "//vendored/cjson",
+        # "@cjson//:cjson",
+        # "@mustachios//vendored/cjson",
+
+        # "//lib/libmustachios/scm/s7:mustache_scm",
+
+
+        # "//lib/libmustachios/toml:mustache_toml",
+        # "//vendored/toml",
+        # "@libtoml_cc//:toml",
+        # "@mustachios//vendored/toml",
+
     ],
     local_defines = DEFINES,
     linkopts = LINKOPTS
@@ -77,7 +98,7 @@ cc_binary(
     # deps = DEPS + ["//src:s7"],
     deps = [
         "@mustachios7//lib:mustach",
-        # "//src:s7_archive",
+        # "//src:s7",
         "//vendored/cjson",
         # "//vendored/logc",
     ],

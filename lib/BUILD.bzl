@@ -2,7 +2,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 
 CLIB_SRCS = ["//src:s7.h"]
 
-# each clib target decides src:s7_archive or src:s7 (dso)
+# each clib target decides src:s7 or src:s7 (dso)
 CLIB_DEPS = ["//lib:utils"]
 
 CLIB_COPTS = [

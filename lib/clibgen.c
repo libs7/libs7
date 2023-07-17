@@ -216,24 +216,27 @@ int main(int argc, char **argv)
             rel_scmdir = "../libs7/scm";
             cload_dir_format = "%s/%s";
             s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
+            s7_add_to_load_path(s7, "scm"); //FIXME: hardcoded path
         } else {
             rel_scmdir = "external/libs7/scm";
             cload_dir_format = "%s/external/libs7/%s";
             s7_add_to_load_path(s7, "external/libs7");
-            s7_add_to_load_path(s7, "external/libs7/lib");
+            s7_add_to_load_path(s7, "external/libs7/lib"); /* FIXME */
+            s7_add_to_load_path(s7, "external/libs7/scm");
         }
 
         char *scmdir = realpath(rel_scmdir, NULL);
         /* log_debug("scmdir: %s", scmdir); */
         s7_add_to_load_path(s7, scmdir);
 
-        /* s7_pointer lp = s7_load_path(s7); */
-        /* char *s = s7_object_to_c_string(s7, lp); */
-        /* log_debug("LOAD-PATH: %s", s); */
-        /* free(s); */
+        s7_pointer lp = s7_load_path(s7);
+        char *s = s7_object_to_c_string(s7, lp);
+        log_debug("LOAD-PATH: %s", s);
+        free(s);
 
         if (!s7_load(s7, "string.scm")) {
             fprintf(stderr, "can't load string.scm\n");
+            exit(1);
         }
 
         /* (format #t "lp: ~A~%" *load-path*) */

@@ -23,9 +23,6 @@ bool debug;
 
 char *cmd;
 
-/* #define DQ3 "\"\"\"" */
-/* #define SQ3 "'''" */
-
 /* WARNING: setUp and tearDown are run once per test. */
 void setUp(void) {
     /* log_info("setup"); */
@@ -36,7 +33,7 @@ void tearDown(void) {
 }
 
 void line_ending_backslash_file(void) {
-    s7_pointer inport = s7_open_input_file(s7, "test/libtoml/data/strings.toml", "r");
+    s7_pointer inport = s7_open_input_file(s7, "test/data/strings.toml", "r");
     bool is_input_port = s7_is_input_port(s7, inport);
     TEST_ASSERT_EQUAL(true, is_input_port);
     /* t = TOML_READ(inport); */
@@ -192,11 +189,11 @@ int main(int argc, char **argv)
 
     UNITY_BEGIN();
 
-    /* RUN_TEST(line_ending_backslash_file); */
+    RUN_TEST(line_ending_backslash_file);
     RUN_TEST(line_ending_backslash_inline);
-    /* RUN_TEST(double_quotes); */
-    /* RUN_TEST(multiline_double_quotes); */
-    /* RUN_TEST(multiline_single_quotes); */
+    RUN_TEST(double_quotes);
+    RUN_TEST(multiline_double_quotes);
+    RUN_TEST(multiline_single_quotes);
 
     return UNITY_END();
     s7_quit(s7);

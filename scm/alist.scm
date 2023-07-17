@@ -358,6 +358,49 @@
                           ))))))
         the-alist))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (-make-entry item accum)
+  ;; (format #t "making ~A~%" item)
+  ;; (format #t "alist? ~A~%" (alist? item))
+  ;; (format #t "accum ~A~%" accum)
+  (if accum ;; a list
+      (if (alist? item)
+          (cons (alist->hash-table item) accum)
+          (cons (car item) accum))
+      (if (alist? item)
+          (list (alist->hash-table item))
+          (car item)))
+  )
+
+(define* (alist->hash-table kvs (kw-keys #t))
+  (let ((ht (make-hash-table (length kvs))))
+    (format #t "ht sz: ~A~%" (length ht))
+    (for-each (lambda (kv)
+                (format #t "KV: ~A~%" kv)
+                (let* ((k (if kw-keys (symbol->keyword (car kv)) (car kv)))
+                       (item (cdr kv))
+                       (accum (hash-table-ref ht k))
+                       (val (if accum ;; a list
+                                (if (alist? item)
+                                    (cons (alist->hash-table item kw-keys) accum)
+                                    (cons item accum))
+                                (if (alist? item)
+                                    (list (alist->hash-table item kw-keys))
+                                    (if (= 1 (length item))
+                                        (car item)
+                                        item)))))
+                  (format #t "K: ~A, V: ~A~%" k val)
+                  (hash-table-set! ht k val)))
+
+                  ;; (if x
+                  ;;     (hash-table-set! ht k (-make-entry (cdr kv) x))
+                  ;;                      ;; (cons (cdr kv) x))
+                  ;;     (hash-table-set! ht k (-make-entry (cdr kv) x)))
+                  ;; ))
+              (reverse kvs))
+    ht
+  ))
+
 ;;;;;;;;;;;;;;;; tests ;;;;;;;;;;;;;;;;
 ;; (define al '((:a 1) (:b 2) (:c 3) ("a" "hi") ("b" "bye")))
 

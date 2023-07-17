@@ -3,7 +3,8 @@
 # string literals e.g. "\| this is a string
 
 load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
-     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "LIBUTHASH_CC_VERSION")
 
 load("//lib:BUILD.bzl", "clibgen_runner",
      "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
@@ -31,8 +32,8 @@ cc_library(
     srcs = SRCS + [
         "libsexp_s7.c",
         "libsexp_s7.h",
-        "error_handler_sexp.c",
-        "error_handler_sexp.h"
+        # "error_handler_sexp.c",
+        # "error_handler_sexp.h"
     ] + select({
         "//config/host/build:linux?": [
             # "//src/linux:strlcat.c",
@@ -43,12 +44,14 @@ cc_library(
     }),
     copts = COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/uthash",
-        "-Iexternal/libs7/vendored/uthash",
+        "-Iexternal/uthash~{}//src".format(LIBUTHASH_CC_VERSION),
+        # "-Ivendored/uthash",
+        # "-Iexternal/libs7/vendored/uthash",
     ],
     deps = DEPS + [
-        "//vendored/uthash",
-        "//src:s7_archive",
+        "@uthash//src:uthash",
+        # "//vendored/uthash",
+        "//src:s7",
     ],
     defines = DEFINES,
     visibility = ["//visibility:public"]

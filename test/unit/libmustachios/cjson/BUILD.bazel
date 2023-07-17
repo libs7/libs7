@@ -149,7 +149,7 @@ cc_test(
     srcs = ["cjson_test.c"],
     local_defines = DEFINES,
     deps = [
-        "//src:s7_archive",
+        "//src:s7",
         "//lib/libmustachios:mustachios7_s7",
         "//vendored/gopt",
         "//vendored/logc",

@@ -1,3 +1,16 @@
+LIBLOG_CC_VERSION = "1.0.0"
+LIBGOPT_CC_VERSION = "10.0.0"
+CEXCEPTION_VERSION = "1.3.3"
+LIBUNITY_CC_VERSION = "2.5.2"
+LIBUTHASH_CC_VERSION = "2.3.0"
+
+CJSON_VERSION = "1.7.16"
+CWALK_VERSION = "1.2.7"
+LIBTOML_CC_VERSION = "0.1.0"
+
+GDBM_VERSION = "1.23.0"
+LIBUTF8PROC_CC_VERSION = "2.8.0"
+
 BASE_SRCS = ["//config:config.h", "//config:ansi_colors.h"]
 
 BASE_COPTS = [
@@ -27,14 +40,19 @@ BASE_COPTS = [
 })
 
 BASE_DEPS = [ ## only vendored
-    "//vendored/CException",
-    "//vendored/logc",
+    # "@cexception//lib:CException",
+    # "//vendored/CException",
+
+    "@liblog_cc//src:logc",
+    # "//vendored/logc",
 ]
 
 BASE_INCLUDE_PATHS = [
     "-Iconfig", "-Iexternal/libs7/config",
-    "-Ivendored/CException", "-Iexternal/libs7/vendored/CException",
-    "-Ivendored/logc", "-Iexternal/libs7/vendored/logc"
+
+    # "-Iexternal/cexception~{}/lib".format(CEXCEPTION_VERSION),
+
+    "-Iexternal/liblog_cc~{}/src".format(LIBLOG_CC_VERSION),
 ]
 
 BASE_LINKOPTS = select({
@@ -47,7 +65,8 @@ BASE_DEFINES = select({
     "//config/host/build:macos?": ["DSO_EXT=\\\".dylib\\\""],
     "//config/host/build:linux?": [
         "DSO_EXT=\\\".so\\\"",
-        "_XOPEN_SOURCE=500", # strdup
+        ## "_XOPEN_SOURCE=500", # strdup
+        "_POSIX_C_SOURCE=200809L", # strdup, strndup since glibc 2.10
         "_DEFAULT_SOURCE",    # dirent macros
         "_GNU_SOURCE"         # dlsym RTLD macros
     ],

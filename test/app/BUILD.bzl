@@ -15,7 +15,7 @@ def _test_mustachios_impl(ctx):
     # the script is responsible for loading them.
 
     args = ctx.actions.args()
-    if not ctx.file.data.extension in ["json", "toml", "scm", "dune"]:
+    if not ctx.file.data.extension in ["json", "toml", "scm", "sexp", "dune"]:
         if ctx.file.data.basename != "dune":
             fail("Data arg extension must be json, toml, or scm; or name must be 'dune': %s" % ctx.file.data)
 

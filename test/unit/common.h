@@ -12,7 +12,7 @@ void print_debug_env(void);
 
 s7_scheme *initialize(char *test, int argc, char **argv);
 
-#define DQ3 "\\\"\\\"\\\""
+#define DQ3 "\"\"\""
 #define SQ3 "'''"
 
 //FIXME: store json:read in a var

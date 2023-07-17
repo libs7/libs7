@@ -2,11 +2,14 @@ package(default_visibility = ["//visibility:public"])
 
 load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "LIBUTHASH_CC_VERSION")
 
 SRCS          = BASE_SRCS
-INCLUDE_PATHS = BASE_INCLUDE_PATHS
-DEPS          = BASE_DEPS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + [
+    "-Iexternal/uthash~{}/src".format(LIBUTHASH_CC_VERSION)
+]
+DEPS          = BASE_DEPS + ["@uthash//src:uthash"]
 COPTS         = BASE_COPTS + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
 LINKOPTS      = BASE_LINKOPTS
@@ -28,21 +31,32 @@ LINKOPTS      = BASE_LINKOPTS
 ##########
 # exports_files(["s7.h", "libs7.h"]) ## ???
 
+cc_shared_library(
+    name = "s7_shared",
+    shared_lib_name = select({
+        "@platforms//os:macos": "libs7.dylib",
+        "@platforms//os:linux": "libs7.so",
+        # "@platforms//os:windows": "libs7.dll",
+        "//conditions:default": "libs7.so"
+    }),
+    deps = [":s7"]
+)
+
 ###########
-cc_library(
-    name  = "s7_archive",
+cc_library( # delivers libs7.lo
+    name  = "s7",
     linkstatic = True,
-    alwayslink = 1,
+    alwayslink = True,
     srcs  = SRCS + [
         "fs_api.c", # FIXME: replace with cwalk
         "s7.c",
         "libs7.c",
     ],
-    deps  = DEPS + ["//vendored/uthash"],
+    deps  = DEPS,
     hdrs  = ["libs7.h", "s7.h"],
     copts = COPTS + [
         "-Wno-unused-parameter",
-        "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash"
+        # "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash"
     ] + select({
         "//config/host/build:macos?": [
             # allow for warnings in s7.c
@@ -71,7 +85,7 @@ cc_library(
 )
 
 cc_binary(                      #  libs7.so
-    name  = "s7",
+    name  = "s7x",
     linkshared = True,
     # alwayslink = 1,
     srcs  = SRCS + [
@@ -80,10 +94,10 @@ cc_binary(                      #  libs7.so
         "libs7.c",
         "libs7.h", "s7.h",
     ],
-    deps  = DEPS + ["//vendored/uthash"],
+    deps  = DEPS, # + ["//vendored/uthash"],
     copts = COPTS + [
         "-Wno-unused-parameter",
-        "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash"
+        # "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash"
     ] + select({
         "//config/host/build:macos?": [
             # allow for warnings in s7.c

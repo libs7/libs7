@@ -37,7 +37,7 @@
 #include "config.h"
 #include "utstring.h"
 #include "libsexp_s7.h"
-#include "error_handler_sexp.h"
+/* #include "error_handler_sexp.h" */
 #include "s7.h"
 
 //extern FIXME
@@ -498,7 +498,7 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
     // No way to test if _inport is a string port, so we use brute force.
     const char *sexpfile = s7_port_filename(s7, _inport); // g_sexp_inport);
     if (sexpfile == NULL) {
-        log_debug("no filename for inport");
+        /* log_debug("no filename for inport"); */
         /* s7_pointer _curlet = s7_curlet(s7); */
         if (_curlet != s7_nil(s7)) {
             s7_pointer sexpfile7 = s7_let_ref(s7, s7_curlet(s7), _infile_sym);
@@ -506,7 +506,7 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
             sexpfile = s7_string(sexpfile7);
         }
     } else {
-        log_debug("inport filename: %s", sexpfile);
+        // log_debug("inport filename: %s", sexpfile);
     }
     TRACE_LOG_DEBUG("inport file: %s", sexpfile);
 
@@ -583,7 +583,7 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
         if (s7_is_pair(stanza)) {
             if (s7_is_equal(s7, s7_car(stanza),
                             s7_make_symbol(s7, "include"))) {
-                log_debug("FOUND (include ...)");
+                TRACE_LOG_DEBUG("FOUND (include ...)", "");
                 /* we can't insert a comment, e.g. ;;(include ...)
                    instead we would have to put the included file in an
                    alist and add a :comment entry. but we needn't bother,
@@ -593,7 +593,7 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
                 s7_pointer inc_file = s7_cadr(stanza);
                 TRACE_S7_DUMP("    including", inc_file);
 
-                log_debug("sexpfile: %s", sexpfile);
+                TRACE_LOG_DEBUG("sexpfile: %s", sexpfile);
                 char *tmp = strdup(sexpfile);
                 const char *dir = dirname(tmp);
                 free((void*)tmp);
@@ -601,7 +601,7 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
                 UT_string *sexppath;
                 utstring_new(sexppath);
                 const char *tostr = s7_object_to_c_string(s7, inc_file);
-                log_debug("INCFILE: %s", tostr);
+                TRACE_LOG_DEBUG("INCFILE: %s", tostr);
                 utstring_printf(sexppath,
                                 "%s/%s",
                                 //FIXME: dirname may mutate its arg
@@ -622,14 +622,14 @@ s7_pointer _sexp_read_thunk(s7_scheme *s7, s7_pointer args)
                                       s7_make_symbol(s7, "datafile"),
                         s7_make_string(s7, utstring_body(sexppath)))));
 
-                    log_debug("expanding: %s", utstring_body(sexppath));
+                    TRACE_LOG_DEBUG("expanding: %s", utstring_body(sexppath));
                     //FIXME: use
                     // (with-let (inlet ...) (with-input-from-file ...))
                     s7_pointer expanded
                         = s7_eval_c_string_with_environment(s7,
                            "(with-input-from-file datafile sexp:read)",
                                                             env);
-                    log_debug("expansion completed");
+                    TRACE_LOG_DEBUG("expansion completed", "");
                 /* s7_pointer expanded = s7_call_with_catch(s7, */
                 /*                     s7_t(s7),      /\* tag *\/ */
                 /*                     // _sexp_read_thunk_s7 */
@@ -1109,8 +1109,8 @@ static s7_pointer _sexp_read_input_port(s7_scheme*s7, s7_pointer inport)
                                s7_make_symbol(s7, "-sexp-infile"));
         TRACE_S7_DUMP("sexpfile7", sexpfile7);
         sexpfile = s7_string(sexpfile7);
-    } else {
-        log_debug("inport filename: %s", sexpfile);
+    /* } else { */
+    /*     log_debug("inport filename: %s", sexpfile); */
     }
 
     s7_pointer readlet

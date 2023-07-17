@@ -155,7 +155,7 @@ cc_test(
     # deps = DEPS + ["//lib/libmustachios:mustachios7_s7"],
     # data = ["//lib/libmustachios:mustachios7_s7"],
     deps = [
-        "//src:s7_archive",
+        "//src:s7",
         "//lib/libmustachios:mustachios7_s7",
         "//vendored/gopt",
         "//vendored/logc",

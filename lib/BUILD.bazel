@@ -4,7 +4,8 @@ exports_files(["libm.scm", "utils.c", "utils.h"])
 
 load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "LIBUTHASH_CC_VERSION")
 
 load("//lib:BUILD.bzl", "CLIB_COPTS", "CLIB_LINKOPTS")
 
@@ -23,9 +24,11 @@ cc_binary(
     name  = "clibgen",
     srcs  = SRCS + ["clibgen.c"],
     deps = DEPS + [
-        "//src:s7_archive",
-        "//vendored/gopt",
-        "//vendored/uthash"
+        "//src:s7",
+        "@gopt//:gopt",
+        "@uthash//src:uthash",
+        # "//vendored/gopt",
+        # "//vendored/uthash"
     ],
     data = [
         "//scm:srcs",
@@ -34,8 +37,9 @@ cc_binary(
     ],
     copts =  COPTS + [
         "-Isrc", "-Iexternal/libs7/src",
-        "-Ivendored/gopt", "-Iexternal/libs7/vendored/gopt",
-        "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash",
+        "-Iexternal/uthash~{}/src".format(LIBUTHASH_CC_VERSION),
+        # "-Ivendored/gopt", "-Iexternal/libs7/vendored/gopt",
+        # "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash",
     ],
     local_defines = DEFINES + select({
         "//:linux": [
@@ -54,7 +58,7 @@ cc_library(
     srcs  = SRCS + ["utils.c"],
     hdrs  = ["utils.h"],
     deps  = DEPS + [
-        "//src:s7_archive",
+        "//src:s7",
     ],
     # + select({
     #     "//config/profile:dev?": ["//dev"],
