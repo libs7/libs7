@@ -42,6 +42,7 @@ def _test_mustachios_impl(ctx):
     ctx.actions.run(
         mnemonic = "Mustachios",
         executable = ctx.file._tool,
+        env = {"BAZEL_TEST": "1"},
         arguments = [args],
         inputs = depset(
             [ctx.file.script, ctx.file.template, ctx.file.data

@@ -90,9 +90,9 @@ int main(int argc, char **argv)
     const char *ext;
     size_t extlen;
     cwk_path_get_extension(options[OPT_DATA].argument, &ext, &extlen);
-    log_debug("arg: %s", options[OPT_DATA].argument);
+    /* log_debug("arg: %s", options[OPT_DATA].argument); */
 
-    log_debug("CWD: %s", getcwd(NULL, 0));
+    /* log_debug("CWD: %s", getcwd(NULL, 0)); */
 
     char *tmp = strdup(options[OPT_DATA].argument);
     char *bname = basename(tmp);

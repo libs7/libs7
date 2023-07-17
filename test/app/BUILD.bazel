@@ -2,7 +2,8 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "CWALK_VERSION")
 
 load("//test:BUILD.bzl",
      "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
@@ -49,10 +50,10 @@ cc_binary(
     linkstatic = True,
     srcs = SRCS + ["mustachios_test_runner.c"],
     copts = COPTS + [
-        "-Ivendored/cwalk", "-Iexternal/libs7/vendored/cwalk"
+        "-Iexternal//cwalk~{}/include".format(CWALK_VERSION)
     ],
     local_defines = DEFINES,
-    deps = DEPS + ["//vendored/cwalk"],
+    deps = DEPS + ["@cwalk//src:cwalk"],
     data = DATA + select({
         "//config/clibs/link:runtime?": [
             "//lib/libmustachios:mustachios_s7"

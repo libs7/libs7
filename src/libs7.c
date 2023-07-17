@@ -465,6 +465,7 @@ static void _runfiles_init(s7_scheme *s7)
 #endif
 #endif
 
+    /* log_debug("BAZEL_TEST:  %s", getenv("BAZEL_TEST")); */
     if (getenv("BAZEL_TEST")) {
         s7_add_to_load_path(s7, "scm");
     } else {

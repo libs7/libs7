@@ -229,10 +229,10 @@ int main(int argc, char **argv)
         /* log_debug("scmdir: %s", scmdir); */
         s7_add_to_load_path(s7, scmdir);
 
-        s7_pointer lp = s7_load_path(s7);
-        char *s = s7_object_to_c_string(s7, lp);
-        log_debug("LOAD-PATH: %s", s);
-        free(s);
+        /* s7_pointer lp = s7_load_path(s7); */
+        /* char *s = s7_object_to_c_string(s7, lp); */
+        /* log_debug("LOAD-PATH: %s", s); */
+        /* free(s); */
 
         if (!s7_load(s7, "string.scm")) {
             fprintf(stderr, "can't load string.scm\n");
