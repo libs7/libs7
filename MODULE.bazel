@@ -1,7 +1,7 @@
 module(
     name = "libs7",
     repo_name = "libs7",
-    version = "1.0.0",
+    version = "0.1.0",
     compatibility_level = 1,
 )
 
@@ -16,47 +16,49 @@ GMP_VERSION   = "6.2.1"
 GSL_VERSION   = "2.7.1"
 MPC_VERSION   = "1.3.1"
 MPFR_VERSION  = "4.2.0"
+MUSTACHIOS_VERSION = "0.1.0"
 
 LIBTOML_CC_VERSION = "0.1.0"
 
 UTF8PROC_VERSION = "2.8.0"
 LIBUNISTRING_VERSION = "1.1.0"
 
-bazel_dep(name = "bazel_skylib", version = "1.4.2", dev_dependency = True)
 bazel_dep(name = "unity",  version = "2.5.2", dev_dependency = True)
-bazel_dep(name = "uthash", version = "2.3.0", dev_dependency = True)
-bazel_dep(name = "liblog_cc",  version = LIBLOG_CC_VERSION)
 
 bazel_dep(name = "platforms", version = "0.0.6")
+bazel_dep(name = "bazel_skylib", version = "1.4.2")
+bazel_dep(name = "uthash", version = "2.3.0")
+bazel_dep(name = "liblog_cc",  version = LIBLOG_CC_VERSION)
 # bazel_dep(name = "rules_cc", version = "0.0.6")
 # bazel_dep(name = "rules_foreign_cc", version = "0.9.0")
 
 bazel_dep(name = "gopt", version = GOPT_VERSION)
 # bazel_dep(name = "cexception", version = CEXCEPTION_VERSION)
 
-## clib bindings
+# ## clib bindings
 bazel_dep(name = "cjson", version = CJSON_VERSION)
 bazel_dep(name = "cwalk", version = CWALK_VERSION)
 bazel_dep(name = "gdbm",  version = GDBM_VERSION)
-# bazel_dep(name = "gsl",   version = GSL_VERSION)
-# bazel_dep(name = "mpc",   version = MPC_VERSION)
+bazel_dep(name = "gsl",   version = GSL_VERSION)
+bazel_dep(name = "mpc",   version = MPC_VERSION)
+bazel_dep(name = "mustachios", version = MUSTACHIOS_VERSION)
 bazel_dep(name = "libtoml_cc",  version = LIBTOML_CC_VERSION)
-# bazel_dep(name = "libunistring",  version = LIBUNISTRING_VERSION)
+bazel_dep(name = "libunistring",  version = LIBUNISTRING_VERSION)
 bazel_dep(name = "utf8proc",  version = UTF8PROC_VERSION)
 
 # ## arb
-# bazel_dep(name = "arb",  version = "2.23.0") # deps: flint, mpfr, gmp
-# bazel_dep(name = "flint",  version = "2.9.0") # deps: mpfr, gmp
-# bazel_dep(name = "mpfr",   version = MPFR_VERSION) # deps: gmp
-# bazel_dep(name = "gmp",   version = GMP_VERSION)
+bazel_dep(name = "arb",  version = "2.23.0") # deps: flint, mpfr, gmp
+# # bazel_dep(name = "flint",  version = "2.9.0") # deps: mpfr, gmp
+# # bazel_dep(name = "mpfr",   version = MPFR_VERSION) # deps: gmp
+# # bazel_dep(name = "gmp",   version = GMP_VERSION)
 
 # ## notcurses ##
-# NOTCURSES_VERSION = "3.0.9"
-# NCURSES_VERSION = "6.4"
-# LIBDEFLATE_VERSION = "1.18.0"  ## uses cmake
-# # LIBDEFLATE_VERSION = "1.11.0"  ## uses make
-# bazel_dep(name = "notcurses",   version = NOTCURSES_VERSION)
+NOTCURSES_VERSION = "3.0.9"
+NCURSES_VERSION = "6.4"
+LIBDEFLATE_VERSION = "1.18.0"  ## uses cmake
+# LIBDEFLATE_VERSION = "1.11.0"  ## uses make
+bazel_dep(name = "notcurses",   version = NOTCURSES_VERSION)
 # ## notcurses deps for testing:
-# bazel_dep(name = "ncurses",     version = NCURSES_VERSION)
-# bazel_dep(name = "libdeflate",  version = LIBDEFLATE_VERSION)
-# bazel_dep(name = "qr_code_generator", version = "1.8.0")
+# # bazel_dep(name = "ncurses",     version = NCURSES_VERSION)
+# # bazel_dep(name = "libdeflate",  version = LIBDEFLATE_VERSION)
+# # bazel_dep(name = "qr_code_generator", version = "1.8.0")

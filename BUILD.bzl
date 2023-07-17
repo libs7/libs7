@@ -1,3 +1,5 @@
+LIBS7_VERSION = "0.1.0"
+
 LIBLOG_CC_VERSION = "1.0.0"
 LIBGOPT_CC_VERSION = "10.0.0"
 CEXCEPTION_VERSION = "1.3.3"
@@ -7,6 +9,7 @@ LIBUTHASH_CC_VERSION = "2.3.0"
 CJSON_VERSION = "1.7.16"
 CWALK_VERSION = "1.2.7"
 LIBTOML_CC_VERSION = "0.1.0"
+MUSTACHIOS_VERSION = "0.1.0"
 
 GDBM_VERSION = "1.23.0"
 LIBUTF8PROC_CC_VERSION = "2.8.0"
@@ -48,7 +51,9 @@ BASE_DEPS = [ ## only vendored
 ]
 
 BASE_INCLUDE_PATHS = [
-    "-Iconfig", "-Iexternal/libs7/config",
+    "-Iconfig",
+    ## "-Iexternal/libs7/config",
+    "-Iexternal/libs7~{}/config".format(LIBS7_VERSION),
 
     # "-Iexternal/cexception~{}/lib".format(CEXCEPTION_VERSION),
 
