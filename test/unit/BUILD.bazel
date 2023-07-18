@@ -100,8 +100,8 @@ cc_test(
         "//conditions:default": []
     }),
     deps = DEPS + select({
-        "//config/clibs/link:archive?": ["//lib/libc:c_s7_archive"],
-        "//conditions:default": ["//lib/libc:c_s7_archive"],
+        "//config/clibs/link:archive?": ["//lib/libc:c_s7"],
+        "//conditions:default": ["//lib/libc:c_s7"],
     }),
     copts = COPTS + [
         "-Isrc",
@@ -123,7 +123,7 @@ cc_test(
     srcs = SRCS + ["libc_test.c"],
     local_defines = DEFINES,
     deps = DEPS + [
-        "//lib/libc:c_s7_archive",
+        "//lib/libc:c_s7",
         # "//lib/libdl:dl_s7_archive",
         # "//lib/libgdbm:gdbm_s7_archive",
         # "//lib/libm:m_s7_archive",
@@ -398,8 +398,8 @@ cc_test(
         "//conditions:default": []
     }),
     copts = COPTS + [
-        "-I$(GENDIR)/lib/libcwalk",
-        "-I$(GENDIR)/external/libs7/lib/libcwalk",
+        # "-I$(GENDIR)/lib/libcwalk",
+        # "-I$(GENDIR)/external/libs7/lib/libcwalk",
     ],
     linkopts = LINKOPTS,
     timeout = TIMEOUT

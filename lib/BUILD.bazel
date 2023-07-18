@@ -5,7 +5,8 @@ exports_files(["libm.scm", "utils.c", "utils.h"])
 load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
-     "LIBUTHASH_CC_VERSION")
+     "LIBS7_VERSION",
+     "UTHASH_VERSION")
 
 load("//lib:BUILD.bzl", "CLIB_COPTS", "CLIB_LINKOPTS")
 
@@ -36,8 +37,9 @@ cc_binary(
         ":clibgen.scm"
     ],
     copts =  COPTS + [
-        "-Isrc", "-Iexternal/libs7/src",
-        "-Iexternal/uthash~{}/src".format(LIBUTHASH_CC_VERSION),
+        "-Isrc",
+        "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
+        "-Iexternal/uthash~{}/src".format(UTHASH_VERSION),
         # "-Ivendored/gopt", "-Iexternal/libs7/vendored/gopt",
         # "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash",
     ],
@@ -66,7 +68,8 @@ cc_library(
     #     "//conditions:default":  []
     # }),
     copts = COPTS + INCLUDE_PATHS + CLIB_COPTS + [
-        "-Isrc", "-Iexternal/libs7/src",
+        "-Isrc",
+        "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
     ],
     # + select({
     #     "//config/profile:dev?": ["-Idev", "-Iexternal/libs7/dev"],

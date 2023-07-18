@@ -1,4 +1,6 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("//:BUILD.bzl", "GOPT_VERSION", "LIBLOG_CC_VERSION",
+     "LIBS7_VERSION")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -40,12 +42,12 @@ cc_binary(
     }),
     deps = [
         "//src:s7",
-        "//vendored/gopt",
-        "//vendored/logc"
+        "@gopt//:gopt",
+        "@liblog_cc//src:logc"
     ] + select({
         "//config/clibs/link:archive?": [
-            "//lib/libc:c_s7_archive",
-            "//lib/libcwalk:cwalk_s7_archive",
+            "//lib/libc:c_s7",
+            "//lib/libcwalk:cwalk_s7",
             # "//lib/libdl:dl_s7_archive",
             # "//lib/libgdbm:gdbm_s7_archive",
             # "//lib/libgsl:gsl_s7_archive",
@@ -124,7 +126,8 @@ cc_binary(
         # "-pedantic-errors",
 
         "-Isrc",
-        "-Iexternal/libs7/src",
+        # "-Iexternal/libs7/src",
+        "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
 
         "-I$(GENDIR)/lib/libc",
         "-I$(GENDIR)/external/libs7/lib/libc",
@@ -137,10 +140,13 @@ cc_binary(
         # "-I$(GENDIR)/lib/libm",
         # "-I$(GENDIR)/external/libs7/lib/libm",
 
-        "-Ivendored/gopt",
-        "-Iexternal/libs7/vendored/gopt",
-        "-Ivendored/logc",
-        "-Iexternal/libs7/vendored/logc"
+        "-Iexternal/gopt~{}".format(GOPT_VERSION),
+        "-Iexternal/liblog_cc~{}/src".format(LIBLOG_CC_VERSION),
+
+        # "-Ivendored/gopt",
+        # "-Iexternal/libs7/vendored/gopt",
+        # "-Ivendored/logc",
+        # "-Iexternal/libs7/vendored/logc"
     ] + select({
         # "//:bsd": ["-std=c11"],
         "//:macos": ["-std=c11"],

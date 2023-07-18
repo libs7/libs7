@@ -2,7 +2,7 @@ module(
     name = "libs7",
     repo_name = "libs7",
     version = "0.1.0",
-    compatibility_level = 1,
+    compatibility_level = 0,
 )
 
 LIBLOG_CC_VERSION = "1.0.0"

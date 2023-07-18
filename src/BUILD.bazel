@@ -3,11 +3,15 @@ package(default_visibility = ["//visibility:public"])
 load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
-     "LIBUTHASH_CC_VERSION")
+     "UTHASH_VERSION")
+
+# print("REPO: %s" % repository_name())
+# load("@uthash//:BUILD.bzl", "UTHASH_VERSION")
 
 SRCS          = BASE_SRCS
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + [
-    "-Iexternal/uthash~{}/src".format(LIBUTHASH_CC_VERSION)
+    "-Iexternal/uthash~{}/src".format(UTHASH_VERSION)
+    # "-Iexternal/uthash~{}/src".format("@uthash//:version[BuildSettingInfo].value")
 ]
 DEPS          = BASE_DEPS + ["@uthash//src:uthash"]
 COPTS         = BASE_COPTS + INCLUDE_PATHS

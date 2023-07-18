@@ -213,16 +213,17 @@ int main(int argc, char **argv)
         char *rel_scmdir;
         char *cload_dir_format;
         if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
-            rel_scmdir = "../libs7/scm";
+            /* rel_scmdir = "../libs7/scm"; */
+            rel_scmdir = "scm";
             cload_dir_format = "%s/%s";
             s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
             s7_add_to_load_path(s7, "scm"); //FIXME: hardcoded path
         } else {
-            rel_scmdir = "external/libs7/scm";
-            cload_dir_format = "%s/external/libs7/%s";
-            s7_add_to_load_path(s7, "external/libs7");
-            s7_add_to_load_path(s7, "external/libs7/lib"); /* FIXME */
-            s7_add_to_load_path(s7, "external/libs7/scm");
+            rel_scmdir = "external/libs7~0.1.0/scm";
+            cload_dir_format = "%s/external/libs7~0.1.0/%s";
+            s7_add_to_load_path(s7, "external/libs7~0.1.0");
+            s7_add_to_load_path(s7, "external/libs7~0.1.0/lib"); /* FIXME */
+            s7_add_to_load_path(s7, "external/libs7~0.1.0/scm");
         }
 
         char *scmdir = realpath(rel_scmdir, NULL);

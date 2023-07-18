@@ -448,9 +448,9 @@ static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
 
 static char *scm_runfiles_dirs[] = {
     /* this seems to work when libs7 is external dep */
-    "../libs7/scm",
+    /* "../libs7/scm", */
     /* when run from libs7 repo itself:  */
-    /* "scm", */
+    "scm",
     NULL /* do not remove terminating null */
 };
 char **scm_dir;
@@ -465,6 +465,7 @@ static void _runfiles_init(s7_scheme *s7)
 #endif
 #endif
 
+    /* log_debug("TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE")); */
     /* log_debug("BAZEL_TEST:  %s", getenv("BAZEL_TEST")); */
     if (getenv("BAZEL_TEST")) {
         s7_add_to_load_path(s7, "scm");
@@ -479,7 +480,7 @@ static void _runfiles_init(s7_scheme *s7)
             scmdir = realpath(*scm_dir, NULL);
             if (scmdir == NULL) {
                 log_error("Runfile not found: %s", *scm_dir);
-                exit(EXIT_FAILURE);
+                /* exit(EXIT_FAILURE); */
             }
 #if defined(DEVBUILD)
             if (libs7_debug_runfiles)

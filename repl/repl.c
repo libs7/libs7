@@ -60,6 +60,7 @@ char *scm_runfiles_dirs[] = {
 
 char **scm_dir;
 
+//FIXME: libs7_init already does this
 static void _runfiles_init(s7_scheme *s7)
 {
     /* s7_pointer tmp_load_path = s7_list(s7, 0); */
@@ -79,7 +80,7 @@ static void _runfiles_init(s7_scheme *s7)
         scmdir = realpath(*scm_dir, NULL);
         if (scmdir == NULL) {
             log_error("runfile not found: %s", *scm_dir);
-            exit(EXIT_FAILURE);
+            /* exit(EXIT_FAILURE); */
         }
 #if defined(DEVBUILD)
         if (libs7_debug_runfiles)
@@ -128,7 +129,8 @@ static void _print_debug_env(void)
     /* RUNFILES_MANIFEST_FILE: null on macos. */
     log_debug("RUNFILES_MANIFEST_ONLY: %s", getenv("RUNFILES_MANIFEST_ONLY"));
 
-    /* RUNFILES_DIR: set on macos for both bazel test and bazel run. */
+    /* RUNFILES_DIR: set on macos for both bazel test and bazel run? */
+    /* macos with --enable_bzlmod: not set for bazel run */
     log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
 }
 #endif
@@ -270,7 +272,7 @@ void _set_options(struct option options[])
 
 /* void libc_s7_init(s7_scheme *sc); */
 
-int main(int argc, char **argv) // , char **envp)
+int main(int argc, char **argv) //, char **envp)
 {
     /* for (char **env = envp; *env != 0; env++) */
     /*  { */
@@ -294,7 +296,8 @@ int main(int argc, char **argv) // , char **envp)
     _set_options(options);
 
 #if defined(DEVBUILD)
-    if (libs7_debug) _print_debug_env();
+    /* if (libs7_debug) */
+        _print_debug_env();
 #endif
 
     /* log_info("argc: %d", argc); */
@@ -317,7 +320,7 @@ int main(int argc, char **argv) // , char **envp)
 #endif
     }
 
-    _runfiles_init(s7);
+    /* _runfiles_init(s7); */
 
     if (options[OPT_LOAD_PATH].count) {
         s7_add_to_load_path(s7, options[OPT_LOAD_PATH].argument);
@@ -334,16 +337,24 @@ int main(int argc, char **argv) // , char **envp)
 
     // deal with bazel context
     char *script;
+    // rules_cc rules define BAZEL_CURRENT_REPOSITORY for each src
+    // file, on the cmd line. If bzlmod enabled, root repo is ""
+    // (empty)? "the canonical repository name of the main repository
+    // is always the empty string"
+    log_debug("BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
     if (strlen(BAZEL_CURRENT_REPOSITORY) == 0)
         script = "repl/repl.scm";
     else
-        script = "external/libs7/repl/repl.scm";
+        // bzlmod: how to deal with version number?
+        // canonical name should include it?
+        script = "external/libs7~0.1.0/repl/repl.scm";
+    /* script = "repl/repl.scm"; */
 
-    /* log_debug("script: %s", script); */
+    log_debug("script: %s", script);
 
     /* TODO: add scm libs from runfiles to *load-path* */
 
-    /* log_info("argc: %d", argc); */
+    log_info("argc: %d", argc);
     if (argc > 2) { //FIXME: use name param, e.g. -s, --script
         // batch process
         fprintf(stderr, "load %s\n", argv[1]);
@@ -352,10 +363,10 @@ int main(int argc, char **argv) // , char **envp)
             return(2);
         }
     } else {
-        /* s7_pointer lp = s7_load_path(s7); */
-        /* char *s = s7_object_to_c_string(s7, lp); */
-        /* log_debug("load-path: %s", s); */
-        /* free(s); */
+        s7_pointer lp = s7_load_path(s7);
+        char *s = s7_object_to_c_string(s7, lp);
+        log_debug("load-path: %s", s);
+        free(s);
 
         if (!s7_load(s7, script)) log_error("failed: load %s", script);
         s7_eval_c_string(s7, "((*repl* 'run))");

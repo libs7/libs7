@@ -2,16 +2,20 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libcwalk_clibgen.scm"])
 
+load("@cwalk//:BUILD.bzl", CWALK_VERSION = "version")
+
 load("//:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
-     "CWALK_VERSION")
+     "CWALK_VERSION",
+     "LIBS7_VERSION")
 
 load("//lib:BUILD.bzl", "clibgen_runner",
      "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
 
 SRCS          = BASE_SRCS + CLIB_SRCS
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS + [
+    "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
     "-Iexternal/cwalk~{}/include".format(CWALK_VERSION),
 ]
 COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS

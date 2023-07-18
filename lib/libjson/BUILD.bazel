@@ -2,9 +2,9 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["libcjson_clibgen.scm"])
 
-
 load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
      "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS",
+     "LIBS7_VERSION",
      "CJSON_VERSION")
 
 load("//lib:BUILD.bzl", "clibgen_runner",
@@ -12,6 +12,8 @@ load("//lib:BUILD.bzl", "clibgen_runner",
 
 SRCS          = BASE_SRCS + CLIB_SRCS
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS + [
+    "-Iexternal/libs7~{}/lib".format(LIBS7_VERSION),
+    "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
     "-Iexternal/cjson~{}".format(CJSON_VERSION),
 ]
 COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS

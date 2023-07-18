@@ -4,13 +4,19 @@
 
 load("//:BUILD.bzl", "BASE_SRCS", "BASE_DEPS",
      "BASE_COPTS", "BASE_INCLUDE_PATHS", "BASE_DEFINES", "BASE_LINKOPTS",
-     "LIBUTHASH_CC_VERSION")
+     "LIBS7_VERSION",
+     "UTHASH_VERSION")
 
 load("//lib:BUILD.bzl", "clibgen_runner",
      "CLIB_SRCS", "CLIB_INCLUDE_PATHS", "CLIB_COPTS", "CLIB_LINKOPTS")
 
 SRCS          = BASE_SRCS + CLIB_SRCS
-INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + CLIB_INCLUDE_PATHS + [
+    "-Isrc",
+    # "-Iexternal/libs7~{}/lib".format(LIBS7_VERSION),
+    "-Iexternal/libs7~{}/src".format(LIBS7_VERSION)
+]
+
 COPTS         = BASE_COPTS + CLIB_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS
 DEFINES       = BASE_DEFINES
@@ -43,8 +49,7 @@ cc_library(
         "//conditions:default":   []
     }),
     copts = COPTS + [
-        "-Isrc", "-Iexternal/libs7/src",
-        "-Iexternal/uthash~{}//src".format(LIBUTHASH_CC_VERSION),
+        "-Iexternal/uthash~{}//src".format(UTHASH_VERSION),
         # "-Ivendored/uthash",
         # "-Iexternal/libs7/vendored/uthash",
     ],
