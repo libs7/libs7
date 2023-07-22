@@ -1,8 +1,0 @@
-= drom toml
-
-link:https://github.com/OCamlPro/drom[drom] is an OCaml application
-that uses a variant of toml as its data format. Unfortunately it is
-not actually toml; it supports stuff like repeating `[table]` entries
-that are forbidden by toml, and it adds some other stuff.
-
-These tests use the "toml" files from the drom project, converted to proper toml grammar.

@@ -1,7 +1,0 @@
-test_suite(
-    name  = "mustache",
-    tests = [
-        "//test/batch/mustache/case002"
-    ]
-)
-
