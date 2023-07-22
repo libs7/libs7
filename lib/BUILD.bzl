@@ -47,12 +47,13 @@ clibgen runner
 # load("//lib:dicts.bzl", "dicts")
 
 def _impl(ctx):
-    tool_as_list = [ctx.attr.tool]
+    tool_as_list = [ctx.attr._tool]
     tool_inputs, tool_input_mfs = ctx.resolve_tools(tools = tool_as_list)
     args = [
         ctx.expand_location(a, tool_as_list) if "$(location" in a else a
         for a in ctx.attr.args
     ]
+    # print("ARGS: %s" % args)
     # print("Gendir: %s" % ctx.var["GENDIR"])
     args.append("--gendir")
     args.append(ctx.var["GENDIR"])
@@ -61,7 +62,8 @@ def _impl(ctx):
         k: ctx.expand_location(v, tool_as_list) if "$(location" in v else v
         for k, v in ctx.attr.env.items()
     }
-    # print("OUTPUTS: %s" % ctx.outputs.outs)
+    # for out in ctx.outputs.outs:
+    #     print("Output: %s" % out.path)
     # for o in ctx.outputs.outs:
     #     print("O: %s" % o.path)
 
@@ -70,9 +72,9 @@ def _impl(ctx):
     ## action.
     ctx.actions.run(
         outputs = ctx.outputs.outs,
-        inputs = ctx.files.srcs + ctx.attr.tool[DefaultInfo].data_runfiles.files.to_list(),
+        inputs = [ctx.file._script] + ctx.files.srcs + ctx.attr._tool[DefaultInfo].data_runfiles.files.to_list(),
         tools = tool_inputs,
-        executable = ctx.executable.tool,
+        executable = ctx.executable._tool,
         arguments = args,
         mnemonic = "RunBinary",
         use_default_shell_env = False,
@@ -93,16 +95,21 @@ clibgen_runner = rule(
     doc = "Runs a binary as a build action.\n\nThis rule does not require Bash (unlike" +
           " `native.genrule`).",
     attrs = {
-        "tool": attr.label(
+        "_tool": attr.label(
             doc = "The tool to run in the action.\n\nMust be the label of a *_binary rule," +
                   " of a rule that generates an executable file, or of a file that can be" +
                   " executed as a subprocess (e.g. an .exe or .bat file on Windows or a binary" +
                   " with executable permission on Linux). This label is available for" +
                   " `$(location)` expansion in `args` and `env`.",
+            default = ":clibgen",
             executable = True,
-            allow_files = True,
-            mandatory = True,
+            allow_single_file = True,
+            mandatory = False,
             cfg = "exec",
+        ),
+        "_script": attr.label(
+            default = "clibgen.scm",
+            allow_single_file = True
         ),
         "env": attr.string_dict(
             doc = "Environment variables of the action.\n\nSubject to " +

@@ -30,7 +30,8 @@ COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS + select({
     "//config/clibs/link:archive?": [
         # "//vendored/toml",
-        "//lib/libtoml:toml_s7_archive",
+        "@toml_s7//src:toml_s7",
+        # "//lib/libtoml:toml_s7_archive",
         "//lib/libmustachios:mustachios_s7_archive",
     ],
     "//conditions:default": []

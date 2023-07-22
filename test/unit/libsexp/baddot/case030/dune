@@ -1,9 +1,0 @@
-;; bad dot last
-(rule
- (alias buildtest)
- (deps test_clic.exe)
- (action (progn)))
-
-(rule
- (alias runtest_clic_a)
- (action (run %{exe:test_clic.exe} .)))

@@ -1,5 +1,0 @@
-filegroup(
-    name = "data",
-    data = ["dune", "dune.inc", "sexp.expected"],
-    visibility = ["//visibility:public"]
-)

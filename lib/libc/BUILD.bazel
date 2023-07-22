@@ -58,8 +58,8 @@ cc_binary(
 
 clibgen_runner(
     name = "libc_s7_runbin",
-    tool = "//lib:clibgen",
+    # tool = "//lib:clibgen",
     args = ["--script", "lib/libc/libc_clibgen.scm"],
-    srcs = [":libc_clibgen.scm", "//lib:clibgen.scm"],
+    srcs = [":libc_clibgen.scm"], # "//lib:clibgen.scm"],
     outs = [":libc_s7.c"]
 )

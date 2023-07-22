@@ -1,9 +1,0 @@
-test_suite(
-    name  = "libmustachios",
-    tests = [
-        "//test/unit/libmustachios/cjson",
-        "//test/unit/libmustachios/scm",
-        "//test/unit/libmustachios/toml"
-    ]
-)
-

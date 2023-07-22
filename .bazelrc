@@ -1,19 +1,10 @@
+common --symlink_prefix=.bazel/
 common --experimental_cc_shared_library
-
 common --enable_bzlmod
 
-common --registry=file:///%workspace%/../../obazl/registry
-#common --registry=https://raw.githubusercontent.com/obazl/registry/main/
-
+try-import .config/registries.bazelrc
+common --registry=https://raw.githubusercontent.com/obazl/registry/main/
 common --registry=https://bcr.bazel.build
-
-common --symlink_prefix=.bazel/
-
-common --override_repository=mustachios~0.1.0=/Users/gar/obazl/mustachios
-
-# build --experimental_cc_shared_library
-# run   --experimental_cc_shared_library
-# test  --experimental_cc_shared_library
 
 common --color=yes
 common:show --subcommands=pretty_print

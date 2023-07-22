@@ -53,8 +53,8 @@ cc_shared_library(
 
 clibgen_runner(
     name = "libutf8proc_s7_runbin",
-    tool = "//lib:clibgen",
+    # tool = "//lib:clibgen",
     args = ["--script", "lib/libutf8proc/libutf8proc_clibgen.scm"],
-    srcs = [":libutf8proc_clibgen.scm", "//lib:clibgen.scm"],
+    srcs = [":libutf8proc_clibgen.scm"], # "//lib:clibgen.scm"],
     outs = [":libutf8proc_s7.c"]
 )

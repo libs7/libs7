@@ -50,7 +50,7 @@ If array's kind is not 'v' (value array), returns #<undefined>.
 .
 .SH AUTHORS
 More information can be found at
-.UR https://github.com/obazl/libs7/
+.UR https://github.com/libs7/libs7/
 .UE
 and
 .UR https://github.com/cktan/tomlc99

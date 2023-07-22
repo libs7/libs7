@@ -18,7 +18,7 @@ LINKOPTS      = BASE_LINKOPTS + CLIB_LINKOPTS
 
 ################################################################
 cc_library(
-    name  = "regex_s7_archive", # emits libregex_s7_archive.a
+    name  = "regex_s7", # emits libregex_s7_archive.a
     linkstatic = True,
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = SRCS + [":libregex_s7.c"],
@@ -37,7 +37,7 @@ cc_library(
 )
 
 cc_binary(
-    name  = "regex_s7",  # create libregex_s7.{dylib,so}
+    name  = "regex_s7_dso",  # create libregex_s7.{dylib,so}
     linkshared = True,
     srcs  = SRCS + [":libregex_s7.c"],
     deps  = DEPS,
@@ -54,8 +54,8 @@ cc_binary(
 
 clibgen_runner(
     name = "libregex_s7_runbin",
-    tool = "//lib:clibgen",
+    # tool = "//lib:clibgen",
     args = ["--script", "lib/libregex/libregex_clibgen.scm"],
-    srcs = [":libregex_clibgen.scm", "//lib:clibgen.scm"],
+    srcs = [":libregex_clibgen.scm"], # "//lib:clibgen.scm"],
     outs = [":libregex_s7.c"]
 )

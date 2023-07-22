@@ -124,7 +124,7 @@
 					   (not (char=? (string-ref *cload-directory* (- (length *cload-directory*) 1)) #\/)))
 				      "/" "")
 				  (or output-name (format #f "temp-s7-output-~D" c-define-output-file-counter)))))
-    ;; (format #t "C FILENAME: ~A~%" file-name)
+    (format #t "C FILENAME: ~A~%" file-name)
     (let ((c-src-file-name (string-append file-name ".c"))
           ;; (c-hdr-file-name (string-append file-name ".h"))
 	  ;;(o-file-name (string-append file-name ".o"))
@@ -193,8 +193,9 @@
 
       (define (initialize-c-src-file)
 	;; C header stuff
-        ;; (format #t "c-src-file-name: ~A~%" c-src-file-name)
+        (format #t "c-src-file-name: ~A~%" c-src-file-name)
 	(set! p (open-output-file c-src-file-name))
+        ;; (set! p (open-output-file  "bazel-out/darwin-fastbuild/bin/src/libcwalk_s7.c"))
 	(format p "#include <stdlib.h>~%")
 	(format p "#include <stdio.h>~%")
 	(format p "#include <string.h>~%")

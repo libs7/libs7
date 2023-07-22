@@ -1,3 +1,0 @@
-(rule
- (alias runtest_clic_a)
- (action (run %{exe:test_clic.exe} .)))

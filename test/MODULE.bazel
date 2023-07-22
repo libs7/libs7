@@ -1,0 +1,5 @@
+bazel_dep(name = "libs7")
+local_path_override(
+    module_name = "libs7",
+    path = "..",
+)

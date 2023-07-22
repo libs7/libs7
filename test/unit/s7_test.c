@@ -83,10 +83,10 @@ void test_misc(void) {
 int main(int argc, char **argv)
 {
     //FIXME: throw error if run outside of bazel
-    if ( !getenv("BAZEL_TEST") ) {
-        log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" );
-        exit(EXIT_FAILURE);
-    }
+    /* if ( !getenv("BAZEL_TEST") ) { */
+    /*     log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" ); */
+    /*     exit(EXIT_FAILURE); */
+    /* } */
 
     /* log_trace("WS: %s", getenv("TEST_WORKSPACE")); */
     /* log_debug("ARGV[0]: %s", argv[0]); */
@@ -108,11 +108,18 @@ int main(int argc, char **argv)
     newpath =  s7_add_to_load_path(s7, script_dir);
     (void)newpath;
 
+    log_debug("BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
+    log_debug("TEST_SRCDIR: %s",
+              getenv("TEST_SRCDIR"));
+    log_debug("RUNFILES_DIR: %s",
+              getenv("RUNFILES_DIR"));
+    log_debug("RUNFILES_REPO_MAPPING: %s",
+              getenv("RUNFILES_REPO_MAPPING"));
     /* debugging: */
-    /* s7_pointer loadpath = s7_load_path(s7); */
-    /* char *s = s7_object_to_c_string(s7, loadpath); */
-    /* log_debug("load path: %s", s); */
-    /* free(s); */
+    s7_pointer loadpath = s7_load_path(s7);
+    char *s = s7_object_to_c_string(s7, loadpath);
+    log_debug("load path: %s", s);
+    free(s);
 
     utstring_new(sexp);
 

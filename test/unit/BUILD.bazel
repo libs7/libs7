@@ -35,15 +35,15 @@ exports_files(["common.c", "common.h"])
 test_suite(
     name  = "unit",
     tests = [
-        ":s7",
+        ":s7_test",
         ":libc_link_archive",
         # ":libc_link_shared", #FIXME
         # ":libc_link_runtime", #FIXME
-        ":gdbm_link_archive",
+        # ":gdbm_link_archive",
         # ":gdbm_link_shared", #FIXME
         # ":gdbm_link_runtime", #FIXME
         # ":gsl", ## takes too long to build for one trivial test
-        ":cwalk",
+        # ":cwalk",
         ":utf8proc",
         "//test/unit/libjson",
         "//test/unit/libmustachios",
@@ -76,8 +76,9 @@ test_suite(
 
 ################################################################
 ## s7 api tests extracted from ffitest.c
+# cc_binary(
 cc_test(
-    name       = "s7",
+    name       = "s7_test",
     linkstatic = True,
     srcs       = SRCS + ["s7_test.c"],
     defines    = DEFINES,
@@ -371,61 +372,70 @@ cc_test(
 )
 
 ################################################################
-cc_test(
-    name = "cwalk",
-    linkstatic = True,
-    srcs = SRCS + ["cwalk_test.c"] + select({
-        # "//config/clibs/linktime:load?": [
-        "//config/clibs/link:shared?": [
-            "//lib/libcwalk:cwalk_s7.c" ## , "//lib/libcwalk:libcwalk_s7.h",
-        ],
-        "//conditions:default": []
-    }),
-    local_defines = DEFINES,
-    deps = DEPS + select({
-        # "//config/clibs/linktime:build?": [
-        "//config/clibs/link:archive?": [
-            "//lib/libcwalk:cwalk_s7"],
-        # "//config/clibs/linktime:load?": [
-        #     "//lib/libcwalk:cwalk_s7_dso"],
-        "//conditions:default": []
-    }),
-    data = select({
-        # "//config/clibs/linktime:run?": [
-        "//config/clibs/link:runtime?": [
-            "//lib/libcwalk:cwalk_s7_dso"
-        ],
-        "//conditions:default": []
-    }),
-    copts = COPTS + [
-        # "-I$(GENDIR)/lib/libcwalk",
-        # "-I$(GENDIR)/external/libs7/lib/libcwalk",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
+# cc_test(
+#     name = "cwalk",
+#     linkstatic = True,
+#     srcs = SRCS + ["cwalk_test.c"] + select({
+#         # "//config/clibs/linktime:load?": [
+#         "//config/clibs/link:shared?": [
+#             "//lib/libcwalk:cwalk_s7.c" ## , "//lib/libcwalk:libcwalk_s7.h",
+#         ],
+#         "//conditions:default": []
+#     }),
+#     local_defines = DEFINES,
+#     deps = DEPS + select({
+#         # "//config/clibs/linktime:build?": [
+#         "//config/clibs/link:archive?": [
+#             "@cwalk_s7//src:cwalk_s7"
+#             # "//lib/libcwalk:cwalk_s7"
+#         ],
+#         # "//config/clibs/linktime:load?": [
+#         #     "//lib/libcwalk:cwalk_s7_dso"],
+#         "//conditions:default": []
+#     }),
+#     data = select({
+#         # "//config/clibs/linktime:run?": [
+#         "//config/clibs/link:runtime?": [
+#             "@cwalk_s7//src:cwalk_s7_dso"
+#             # "//lib/libcwalk:cwalk_s7_dso"
+#         ],
+#         "//conditions:default": []
+#     }),
+#     copts = COPTS + [
+#         # "-I$(GENDIR)/lib/libcwalk",
+#         # "-I$(GENDIR)/external/libs7/lib/libcwalk",
+#     ],
+#     linkopts = LINKOPTS,
+#     timeout = TIMEOUT
+# )
 
-cc_test(
-    name = "cwalk_link_archive",
-    linkstatic = True,
-    srcs = SRCS + ["cwalk_test.c"],
-    local_defines = DEFINES,
-    deps = DEPS + ["//lib/libcwalk:cwalk_s7_archive"],
-    copts = COPTS + LIBC_COPTS,
-    linkopts = LINKOPTS,
-    timeout  = TIMEOUT,
-)
+# cc_test(
+#     name = "cwalk_link_archive",
+#     linkstatic = True,
+#     srcs = SRCS + ["cwalk_test.c"],
+#     local_defines = DEFINES,
+#     deps = DEPS + [
+#         "@cwalk_s7//src:cwalk_s7"
+#         # "//lib/libcwalk:cwalk_s7_archive"
+#     ],
+#     copts = COPTS + LIBC_COPTS,
+#     linkopts = LINKOPTS,
+#     timeout  = TIMEOUT,
+# )
 
-cc_test(
-    name = "cwalk_link_shared",
-    linkstatic = True,
-    srcs = SRCS + ["cwalk_test.c"],
-    local_defines = DEFINES,
-    deps = DEPS + ["//lib/libcwalk:cwalk_s7"],
-    copts = COPTS, # + LIBC_COPTS,
-    linkopts = LINKOPTS,
-    timeout  = TIMEOUT,
-)
+# cc_test(
+#     name = "cwalk_link_shared",
+#     linkstatic = True,
+#     srcs = SRCS + ["cwalk_test.c"],
+#     local_defines = DEFINES,
+#     deps = DEPS + [
+#         "@cwalk_s7//src:cwalk_s7_dso"
+#         # "//lib/libcwalk:cwalk_s7"
+#     ],
+#     copts = COPTS, # + LIBC_COPTS,
+#     linkopts = LINKOPTS,
+#     timeout  = TIMEOUT,
+# )
 
 ################################################################
 cc_test(

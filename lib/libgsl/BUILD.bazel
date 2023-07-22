@@ -30,8 +30,8 @@ cc_binary(
 
 clibgen_runner(
     name = "libgsl_s7_runbin",
-    tool = "//lib:clibgen",
+    # tool = "//lib:clibgen",
     args = ["--script", "lib/libgsl/libgsl_clibgen.scm"],
-    srcs = [":libgsl_clibgen.scm", "//lib:clibgen.scm"],
+    srcs = [":libgsl_clibgen.scm"], # "//lib:clibgen.scm"],
     outs = [":libgsl_s7.c"]
 )

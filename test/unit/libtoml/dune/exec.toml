@@ -1,7 +1,0 @@
-# (executable
-#  (name hello_world)
-#  (libraries lwt.unix))
-
-[executable]
-name = 'hello_world'
-libraries = [lwt.unix]

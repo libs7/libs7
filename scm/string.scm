@@ -1,4 +1,4 @@
-;; (display "loading libs7/string.scm") (newline)
+(display "loading libs7/string.scm") (newline)
 
 ;; https://srfi.schemers.org/srfi-152/srfi-152.html
 ;; String library (reduced)

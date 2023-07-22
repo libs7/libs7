@@ -69,6 +69,7 @@ cc_library(
     # }),
     copts = COPTS + INCLUDE_PATHS + CLIB_COPTS + [
         "-Isrc",
+        "-Iexternal/libs7~{}/config".format(LIBS7_VERSION),
         "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
     ],
     # + select({

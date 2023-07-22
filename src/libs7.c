@@ -178,9 +178,18 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     s7_int gc_loc = s7_gc_protect(s7, e);
     s7_pointer old_e = s7_set_curlet(s7, e);
 
+    TRACE_LOG_DEBUG("BAZEL_TEST: %s", getenv("BAZEL_TEST"));
+    // BAZEL_TEST true if tgt is cc_test (either bazel test or  run cmd)
+
+    // bazel test: The initial working directory shall be
+    // $TEST_SRCDIR/$TEST_WORKSPACE.
+
+    // TEST_SRCDIR: absolute path to the base of the runfiles tree. required
+    TRACE_LOG_DEBUG("TEST_SRCDIR: %s", getenv("TEST_SRCDIR"));
     char *ws = getenv("TEST_WORKSPACE");
-    log_debug("dlopen ns test ws: %s", ws);
+    TRACE_LOG_DEBUG("TEST_WORKSPACE: %s", ws);
     char *fmt;
+    (void)fmt;
     if (ws) {
         if ( (strncmp("libs7", ws, 5) == 0)
              && strlen(ws) == 5 ) {
@@ -196,10 +205,15 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
         else
             fmt = "external/libs7/lib/lib%s/lib%s_s7%s";
     }
+    /* snprintf(buf, */
+    /*          512, // 20 + 18 + len + strlen(dso_ext), */
+    /*          fmt, */
+    /*          lib, */
+    /*          lib, DSO_EXT); */
     snprintf(buf,
              512, // 20 + 18 + len + strlen(dso_ext),
-             fmt,
-             lib,
+             "src/lib%s_s7%s",
+             /* lib, */
              lib, DSO_EXT);
 #if defined(DEVBUILD)
     log_debug("dso: %s", buf);
@@ -220,7 +234,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
                 s7_cons(s7, s7_make_semipermanent_string(s7, buf), e),
                             s7_slot_value(libs)));
     } else {
-        log_error("FAIL: s7_load_with_environment %s", buf);
+        log_error("\nFAIL: s7_load_with_environment %s", buf);
     }
 
     s7_set_curlet(s7, old_e);       /* restore incoming (curlet) */
@@ -250,8 +264,8 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 
     s7_pointer (*init_fn_ptr)(s7_scheme*);
     init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(
-                                                    RTLD_DEFAULT, // linux
-                                                    // mac: RTLD_MAIN_ONLY,
+                                                    //RTLD_DEFAULT, // linux
+                                                    RTLD_MAIN_ONLY,
                                                     init_fn_name);
     if (init_fn_ptr == NULL) {
 /* #if defined(DEVBUILD) */
@@ -259,13 +273,12 @@ s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 /* #endif */
         s7_pointer res = _dlopen_clib(s7, lib, init_fn_name);
         return res;
-    }
-
 #if defined(DEVBUILD)
+    } else {
     if (libs7_debug)
         log_debug("dlsym init_fn_ptr: %x", init_fn_ptr);
 #endif
-
+    }
     // we found the init fn, so unload, then reload
 
     s7_pointer e = s7_inlet(s7, s7_nil(s7)); // empty env
@@ -446,14 +459,15 @@ static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
         return s7_f(s7);
 }
 
-static char *scm_runfiles_dirs[] = {
-    /* this seems to work when libs7 is external dep */
-    /* "../libs7/scm", */
-    /* when run from libs7 repo itself:  */
-    "scm",
-    NULL /* do not remove terminating null */
-};
-char **scm_dir;
+/* static char *scm_runfiles_dirs[] = { */
+/*     /\* this seems to work when libs7 is external dep *\/ */
+/*     /\* "../libs7/scm", *\/ */
+/*     /\* when run from libs7 repo itself:  *\/ */
+/*     "libs7~0.1.0/scm", */
+/*     NULL /\* do not remove terminating null *\/ */
+/* }; */
+
+/* char **scm_dir; */
 
 static void _runfiles_init(s7_scheme *s7)
 {
@@ -465,32 +479,46 @@ static void _runfiles_init(s7_scheme *s7)
 #endif
 #endif
 
-    /* log_debug("TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE")); */
-    /* log_debug("BAZEL_TEST:  %s", getenv("BAZEL_TEST")); */
-    if (getenv("BAZEL_TEST")) {
-        s7_add_to_load_path(s7, "scm");
+    log_debug("libs7 BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
+
+    log_debug("TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE"));
+    log_debug("BAZEL_TEST:  %s", getenv("BAZEL_TEST"));
+    log_debug("RUNFILES_DIR:  %s", getenv("RUNFILES_DIR"));
+
+    //TODO: is this use of BAZEL_CURRENT_REPOSITORY reliable? or do we
+    // need to read _repo_mapping file to get canonical name for libs7?
+    char *libs7_repo;
+    if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
+        libs7_repo = "_main/scm";
     } else {
-        scm_dir = scm_runfiles_dirs;
-        char *scmdir;
-        while (*scm_dir) {
-#if defined(DEVBUILD)
-            if (libs7_debug_runfiles)
-                log_debug(" runfile: %s", *scm_dir);
-#endif
-            scmdir = realpath(*scm_dir, NULL);
-            if (scmdir == NULL) {
-                log_error("Runfile not found: %s", *scm_dir);
-                /* exit(EXIT_FAILURE); */
-            }
-#if defined(DEVBUILD)
-            if (libs7_debug_runfiles)
-                log_debug("runfile realpath: %s", scmdir);
-#endif
-            s7_add_to_load_path(s7, scmdir);
-            free(scmdir);
-            (void)*scm_dir++;
-        }
+        libs7_repo = "external/" BAZEL_CURRENT_REPOSITORY "/scm";
     }
+    log_debug("libs7_repo: %s", libs7_repo);
+    s7_add_to_load_path(s7, libs7_repo);
+/*     if (getenv("BAZEL_TEST")) { */
+/*         s7_add_to_load_path(s7, libs7_repo); */
+/*     } else { */
+/*         scm_dir = scm_runfiles_dirs; */
+/*         char *scmdir; */
+/*         while (*scm_dir) { */
+/* #if defined(DEVBUILD) */
+/*             if (libs7_debug_runfiles) */
+/*                 log_debug(" runfile: %s", *scm_dir); */
+/* #endif */
+/*             scmdir = realpath(*scm_dir, NULL); */
+/*             if (scmdir == NULL) { */
+/*                 log_error("Runfile not found: %s", *scm_dir); */
+/*                 /\* exit(EXIT_FAILURE); *\/ */
+/*             } */
+/* #if defined(DEVBUILD) */
+/*             if (libs7_debug_runfiles) */
+/*                 log_debug("runfile realpath: %s", scmdir); */
+/* #endif */
+/*             s7_add_to_load_path(s7, scmdir); */
+/*             free(scmdir); */
+/*             (void)*scm_dir++; */
+/*         } */
+/*     } */
     //FIXME: uas s7_add_to_load_path!!!
     /* s7_define_variable(s7, "*load-path*", tmp_load_path); */
 }

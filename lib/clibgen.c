@@ -215,12 +215,13 @@ int main(int argc, char **argv)
         if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
             /* rel_scmdir = "../libs7/scm"; */
             rel_scmdir = "scm";
-            cload_dir_format = "%s/%s";
+            cload_dir_format = "%s/%s"; // <gendir>/<scriptdir>
             s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
             s7_add_to_load_path(s7, "scm"); //FIXME: hardcoded path
         } else {
             rel_scmdir = "external/libs7~0.1.0/scm";
-            cload_dir_format = "%s/external/libs7~0.1.0/%s";
+            /* cload_dir_format = "%s/external/libs7~0.1.0/%s"; */
+            cload_dir_format = "%s/%s"; // <gendir>/<scriptdir>
             s7_add_to_load_path(s7, "external/libs7~0.1.0");
             s7_add_to_load_path(s7, "external/libs7~0.1.0/lib"); /* FIXME */
             s7_add_to_load_path(s7, "external/libs7~0.1.0/scm");
@@ -249,7 +250,7 @@ int main(int argc, char **argv)
         /* log_debug("LOAD-PATH: %s", s); */
         /* free(s); */
 
-        /* log_debug("script: %s", script); */
+        log_debug("script: %s", script);
 
         /* s7_pointer lp = s7_load_path(s7); */
         /* char *s = s7_object_to_c_string(s7, lp); */
@@ -266,7 +267,8 @@ int main(int argc, char **argv)
                         /* argv[2], */
                         script_dir);
 
-        s7_define_variable(s7, "*cload-directory*", s7_make_string(s7, utstring_body(cload_dir)));
+        s7_define_variable(s7, "*cload-directory*",
+                           s7_make_string(s7, utstring_body(cload_dir)));
         /* log_info("*cload-directory*: %s", utstring_body(cload_dir)); */
 
         utstring_free(cload_dir);
@@ -283,7 +285,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "can't load %s\n", script);
             return(2);
         } else {
-            /* log_debug("loaded script"); */
+            log_debug("loaded script");
             /* free(script); */
             return(EXIT_SUCCESS);
        }

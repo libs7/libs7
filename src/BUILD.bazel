@@ -60,7 +60,6 @@ cc_library( # delivers libs7.lo
     hdrs  = ["libs7.h", "s7.h"],
     copts = COPTS + [
         "-Wno-unused-parameter",
-        # "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash"
     ] + select({
         "//config/host/build:macos?": [
             # allow for warnings in s7.c
@@ -73,7 +72,7 @@ cc_library( # delivers libs7.lo
         "//conditions:default": []
     }),
     data = [
-        "//repl:scm",
+        # "//repl:scm",
         "//scm:srcs",
         "//scm/srfi:srcs",
         "//scm/s7:srcs", "s7.h"
@@ -141,7 +140,7 @@ cc_binary(                      #  libs7.so
 #         "//conditions:default": ["-std=c11"],
 #     }),
     data = [
-        "//repl:scm",
+        # "//repl:scm",
         "//scm:srcs", "//scm/s7:srcs", "s7.h"
     ],
     local_defines = DEFINES + [
