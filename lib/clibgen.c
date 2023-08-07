@@ -250,7 +250,7 @@ int main(int argc, char **argv)
         /* log_debug("LOAD-PATH: %s", s); */
         /* free(s); */
 
-        log_debug("script: %s", script);
+        /* log_debug("script: %s", script); */
 
         /* s7_pointer lp = s7_load_path(s7); */
         /* char *s = s7_object_to_c_string(s7, lp); */
@@ -285,7 +285,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "can't load %s\n", script);
             return(2);
         } else {
-            log_debug("loaded script");
+            /* log_debug("loaded script"); */
             /* free(script); */
             return(EXIT_SUCCESS);
        }

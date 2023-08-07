@@ -3,10 +3,12 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["libm.scm", "utils.c", "utils.h"])
 
 load("//:BUILD.bzl",
-     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS",
      "LIBS7_VERSION",
      "UTHASH_VERSION")
+
+load("//config/cc:BUILD.bzl",
+     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
+     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
 load("//lib:BUILD.bzl", "CLIB_COPTS", "CLIB_LINKOPTS")
 

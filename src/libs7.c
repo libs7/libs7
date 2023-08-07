@@ -6,12 +6,20 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "config.h"
+/* #include "config.h" */
+
+#include "log.h"
+#include "librunfiles.h"
+
+#if INTERFACE
 #include "utarray.h"
 #include "s7.h"
-#include "libs7.h"
+#endif
+
+#include "libs7_internal.h"
 
 bool libs7_verbose        = false;
+int  libs7_verbosity      = 0;
 bool libs7_debug          = false;
 bool libs7_debug_runfiles = false;
 bool libs7_trace          = false;
@@ -246,12 +254,10 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     return val;
 }
 
-s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
+EXPORT s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
 {
-#if defined(DEVBUILD)
-    log_trace("load_clib: %s", lib);
-    /* if (libs7_trace) */
-#endif
+    if (libs7_verbose)
+        log_trace("load_clib: %s", lib);
 
     static char init_fn_name[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
@@ -471,29 +477,38 @@ static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
 
 static void _runfiles_init(s7_scheme *s7)
 {
+    TRACE_ENTRY;
     /* s7_pointer tmp_load_path = s7_list(s7, 0); */
-#if defined(DEVBUILD)
-#ifdef BAZEL_CURRENT_REPOSITORY
-    if (libs7_debug)
-        log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY);
-#endif
-#endif
+/* #if defined(DEVBUILD) */
+/* #ifdef BAZEL_CURRENT_REPOSITORY */
+/*     if (libs7_debug) */
+/*         log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY); */
+/* #endif */
+/* #endif */
 
-    log_debug("libs7 BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
+    if (libs7_verbose) {
+        log_debug("libs7 BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
 
-    log_debug("TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE"));
-    log_debug("BAZEL_TEST:  %s", getenv("BAZEL_TEST"));
-    log_debug("RUNFILES_DIR:  %s", getenv("RUNFILES_DIR"));
-
+        log_debug("TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE"));
+        log_debug("BAZEL_TEST:  %s", getenv("BAZEL_TEST"));
+        log_debug("RUNFILES_DIR:  %s", getenv("RUNFILES_DIR"));
+        log_debug("CWD:  %s", getcwd(NULL,0));
+    }
     //TODO: is this use of BAZEL_CURRENT_REPOSITORY reliable? or do we
     // need to read _repo_mapping file to get canonical name for libs7?
+    /* char linkbuf[512]; */
+
     char *libs7_repo;
     if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
-        libs7_repo = "_main/scm";
+        libs7_repo = realpath("_main/scm", NULL);
     } else {
-        libs7_repo = "external/" BAZEL_CURRENT_REPOSITORY "/scm";
+        libs7_repo = realpath("external/" BAZEL_CURRENT_REPOSITORY "/scm", NULL);
     }
-    log_debug("libs7_repo: %s", libs7_repo);
+    /* ssize_t linksz = readlink(libs7_repo, (char*)linkbuf, 512); */
+    /* linkbuf[linksz + 1] = '\0'; */
+    if (libs7_verbose)
+        log_debug("libs7_repo: %s", libs7_repo);
+    /* log_debug("readlink libs7_repo: %s", linkbuf); */
     s7_add_to_load_path(s7, libs7_repo);
 /*     if (getenv("BAZEL_TEST")) { */
 /*         s7_add_to_load_path(s7, libs7_repo); */
@@ -519,8 +534,6 @@ static void _runfiles_init(s7_scheme *s7)
 /*             (void)*scm_dir++; */
 /*         } */
 /*     } */
-    //FIXME: uas s7_add_to_load_path!!!
-    /* s7_define_variable(s7, "*load-path*", tmp_load_path); */
 }
 
 void libs7_shutdown(s7_scheme *s7)
@@ -529,7 +542,7 @@ void libs7_shutdown(s7_scheme *s7)
     s7_quit(s7);
 }
 
-s7_scheme *libs7_init(void)
+EXPORT s7_scheme *libs7_init(void)
 /* WARNING: dlopen logic assumes file path <libns>/<libname><dso_ext> */
 {
     s7_scheme *s7 = s7_init();
@@ -579,8 +592,9 @@ s7_scheme *libs7_init(void)
     s7_eval_c_string(s7,
                      "(set! *#readers* (cons (cons #\\; (lambda (str) (if (string=? str \";\") (read)) (values))) *#readers*))");
 
-    /* #m(): proper map constructor - duplicate keys disallowed,
-       map-entry pairs implicit.
+    /* #m(): proper map (hash-table) constructor
+       - duplicate keys disallowed
+       - map-entry pairs implicit
     */
     const char *ht_sexp = ""
         "(set! *#readers* "

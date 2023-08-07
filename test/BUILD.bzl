@@ -16,7 +16,7 @@ TEST_DEPS = [
 TEST_COPTS = []
 
 TEST_INCLUDE_PATHS = [
-    "-Isrc",
+    "-I$(GENDIR)/src",
     # "-Iexternal/libs7/src",
     "-Itest/unit",
     "-Iexternal/gopt~{}/src".format(GOPT_VERSION),

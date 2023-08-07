@@ -7,7 +7,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/* #include "fs_api.h" */
+
+/* #if INTERFACE */
 #include "s7.h"
+/* #endif */
 
 /*
   Remove leading ./ and any ../ for path that does not exist on fs

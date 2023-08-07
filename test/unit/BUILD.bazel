@@ -1,6 +1,8 @@
+exports_files(["common.c", "common.h"])
+
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
-load("//:BUILD.bzl",
+load("//config/cc:BUILD.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
@@ -15,22 +17,6 @@ COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
 DEPS          = BASE_DEPS + TEST_DEPS
 DEFINES       = BASE_DEFINES + TEST_DEFINES
 LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
-
-################################################################
-# LIBC_COPTS = [
-#     "-I$(GENDIR)/lib/libc",
-#     "-I$(GENDIR)/external/libs7/lib/libc",
-#     "-I$(GENDIR)/lib/libdl",
-#     "-I$(GENDIR)/external/libs7/lib/libdl",
-#     "-I$(GENDIR)/lib/libgdbm",
-#     "-I$(GENDIR)/external/libs7/lib/libgdbm",
-#     "-I$(GENDIR)/lib/libm",
-#     "-I$(GENDIR)/external/libs7/lib/libm",
-# ]
-
-
-
-exports_files(["common.c", "common.h"])
 
 test_suite(
     name  = "unit",
@@ -71,87 +57,14 @@ cc_test(
     srcs       = SRCS + ["s7_test.c"],
     defines    = DEFINES,
     deps       = DEPS,
-    copts      = COPTS,
+    copts      = COPTS + [
+    ],
     linkopts   = LINKOPTS,
     timeout    = TIMEOUT,
 )
 
 
 ################################################################
-cc_test(
-    name = "libm",
-    linkstatic = True,
-    srcs = SRCS + ["libm_test.c"] + select({
-        "//config/clibs/link:shared?": [
-            "//lib/libm:m_s7.c" # , "//lib/libm:libm_s7.h",
-        ],
-        "//conditions:default": []
-    }),
-    local_defines = DEFINES,
-    deps = DEPS + select({
-        "//config/clibs/link:archive?": ["//lib/libm:m_s7_archive"],
-        "//conditions:default": []
-    }),
-    data = select({
-        "//config/clibs/link:runtime?": [
-            "//lib/libm:m_s7"
-        ],
-        "//conditions:default": []
-    }),
-    copts = COPTS + [
-        "-I$(GENDIR)/lib/libm",
-        "-I$(GENDIR)/external/libs7/lib/libm",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "libm_link_archive",
-    linkstatic = True,
-    srcs = SRCS + ["libm_test.c"],
-    local_defines = DEFINES,
-    deps = DEPS + ["//lib/libm:m_s7_archive"],
-    copts = COPTS + [
-        "-I$(GENDIR)/lib/libm",
-        "-I$(GENDIR)/external/libs7/lib/libm",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "libm_link_shared",
-    linkstatic = True,
-    srcs = SRCS + [
-        "libm_test.c",
-        "//lib/libm:m_s7.c" # , "//lib/libm:libm_s7.h",
-    ],
-    local_defines = DEFINES,
-    deps = DEPS,
-    copts = COPTS + [
-        "-I$(GENDIR)/lib/libm",
-        "-I$(GENDIR)/external/libs7/lib/libm",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
-cc_test(
-    name = "libm_link_runtime",
-    linkstatic = True,
-    srcs = SRCS + ["libm_test.c"],
-    local_defines = DEFINES + ["CLIBS_LINK_RUNTIME"],
-    deps = DEPS,
-    data = ["//lib/libm:m_s7"],
-    copts = COPTS + [
-        "-I$(GENDIR)/lib/libm",
-        "-I$(GENDIR)/external/libs7/lib/libm",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
-)
-
 ################################################################
 cc_test(
     name = "gsl",
