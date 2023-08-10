@@ -1,41 +1,22 @@
 module(
     name = "libs7",
-    repo_name = "libs7",
-    version = "0.1.0",
-    compatibility_level = 0,
+    version = "1.0.0",
+    compatibility_level = 1,
 )
-
-RUNFILES_VERSION = "0.1.0"
-LIBLOG_CC_VERSION = "1.0.0"
-GOPT_VERSION = "10.0.0"
-CEXCEPTION_VERSION = "1.3.3"
-CJSON_S7_VERSION = "1.7.16"
-CJSON_VERSION = "1.7.16"
-CWALK_S7_VERSION = "1.2.7"
-CWALK_VERSION = "1.2.7"
-
-GDBM_VERSION  = "1.23.0"
-GMP_VERSION   = "6.2.1"
-GSL_VERSION   = "2.7.1"
-MAKEHEADERS_VERSION = "1.0.0"
-MPC_VERSION   = "1.3.1"
-MPFR_VERSION  = "4.2.0"
-MUSTACHIOS_VERSION = "0.1.0"
-
-TOML_S7_VERSION = "0.1.0"
-LIBTOML_CC_VERSION = "0.1.0"
-
-UNITY_VERSION = "2.5.2"
-UTF8PROC_VERSION = "2.8.0"
-LIBUNISTRING_VERSION = "1.1.0"
 
 bazel_dep(name = "platforms", version = "0.0.6")
 bazel_dep(name = "bazel_skylib", version = "1.4.2")
-bazel_dep(name = "makeheaders", version = MAKEHEADERS_VERSION)
-bazel_dep(name = "uthash", version = "2.3.0")
-bazel_dep(name = "liblog_cc",  version = LIBLOG_CC_VERSION)
-bazel_dep(name = "rules_cc", version = "0.0.6")
-bazel_dep(name = "runfiles", version = RUNFILES_VERSION)
 
-bazel_dep(name = "gopt",  version = GOPT_VERSION,  dev_dependency = True)
+MAKEHEADERS_VERSION = "1.0.0"
+bazel_dep(name = "makeheaders", version = MAKEHEADERS_VERSION)
+
+bazel_dep(name = "uthash", version = "2.3.0")
+
+LIBLOGC_VERSION = "1.0.0"
+bazel_dep(name = "liblogc",  version = LIBLOGC_VERSION)
+
+GOPT_VERSION = "10.0.0"
+bazel_dep(name = "gopt",  version = GOPT_VERSION, dev_dependency = True)
+
+UNITY_VERSION = "2.5.2"
 bazel_dep(name = "unity", version = UNITY_VERSION, dev_dependency = True)
