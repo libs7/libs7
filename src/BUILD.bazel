@@ -13,7 +13,9 @@ load("//config/cc:CONFIG.bzl",
 SRCS          = BASE_SRCS
 DEPS          = BASE_DEPS + ["@uthash//src:uthash"]
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + ["-I$(@uthash)/src"]
-COPTS         = BASE_COPTS + INCLUDE_PATHS
+COPTS         = BASE_COPTS + [
+    "-Wno-unused-parameter"
+] + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
 LINKOPTS      = BASE_LINKOPTS
 TOOLCHAINS    = ["//:repo_paths"]
@@ -56,7 +58,6 @@ cc_library( # delivers libs7.lo
         "//config/host/build:macos?": [
             "-Wno-format-pedantic",
             "-Wno-gnu-statement-expression",
-            "-Wno-unused-parameter"
         ],
         "//config/host/build:linux?": [
             "-Wno-implicit-fallthrough"
