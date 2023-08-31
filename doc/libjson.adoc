@@ -1,4 +1,0 @@
-= libjson
-
-s7 bindings for link:https://github.com/DaveGamble/cJSON[cJSON]
-

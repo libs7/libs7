@@ -6,9 +6,9 @@
 #include "utarray.h"
 #include "utstring.h"
 
-#include "common.h"
-
 #include "libs7.h"
+
+#include "s7plugin_test_config.h"
 
 s7_scheme *s7;
 
@@ -82,44 +82,7 @@ void test_misc(void) {
 
 int main(int argc, char **argv)
 {
-    //FIXME: throw error if run outside of bazel
-    /* if ( !getenv("BAZEL_TEST") ) { */
-    /*     log_error("This test must be run in a Bazel environment: bazel test //path/to/test (or bazel run)" ); */
-    /*     exit(EXIT_FAILURE); */
-    /* } */
-
-    /* log_trace("WS: %s", getenv("TEST_WORKSPACE")); */
-    /* log_debug("ARGV[0]: %s", argv[0]); */
-    /* log_debug("CWD: %s", getcwd(NULL, 0)); */
-
-    argc = gopt (argv, options);
-    (void)argc;
-    gopt_errors (argv[0], options);
-
-    set_options("cwalk", options);
-
-    if (debug)
-        print_debug_env();
-
-    s7 = libs7_init();
-
-    char *script_dir = "./test";
-    s7_pointer newpath;
-    newpath =  s7_add_to_load_path(s7, script_dir);
-    (void)newpath;
-
-    log_debug("BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
-    log_debug("TEST_SRCDIR: %s",
-              getenv("TEST_SRCDIR"));
-    log_debug("RUNFILES_DIR: %s",
-              getenv("RUNFILES_DIR"));
-    log_debug("RUNFILES_REPO_MAPPING: %s",
-              getenv("RUNFILES_REPO_MAPPING"));
-    /* debugging: */
-    s7_pointer loadpath = s7_load_path(s7);
-    char *s = s7_object_to_c_string(s7, loadpath);
-    log_debug("load path: %s", s);
-    free(s);
+    s7 = initialize("cwalk", argc, argv);
 
     utstring_new(sexp);
 

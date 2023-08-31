@@ -1,7 +1,8 @@
-exports_files(["config.h", "ansi_colors.h", "logging.h", "trace.h"])
+# exports_files(["config.h", "ansi_colors.h", "logging.h", "trace.h"])
 
 cc_library(
     name = "hdrs",
-    hdrs = ["config.h", "ansi_colors.h", "logging.h", "trace.h"],
+    hdrs = [# "config.h",
+            "ansi_colors.h", "logging.h", "trace.h"],
     visibility = ["//visibility:public"]
 )

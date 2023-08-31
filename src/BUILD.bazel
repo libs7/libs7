@@ -1,31 +1,22 @@
-package(default_visibility = ["//visibility:public"])
+# package(default_visibility = ["//visibility:public"])
 
 # exports_files(["s7.h", "libs7.h"])
 
 load("@makeheaders//src:RULES.bzl", "makeheaders")
 
-load("//:BUILD.bzl",
-     "LIBS7_VERSION",
-     "RUNFILES_VERSION",
-     "UTHASH_VERSION")
-
-load("//config/cc:BUILD.bzl",
+load("//config/cc:CONFIG.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+     "BASE_COPTS",
+     "BASE_DEFINES", "LOCAL_DEFINES",
+     "BASE_LINKOPTS")
 
 SRCS          = BASE_SRCS
-DEPS          = BASE_DEPS + [
-    "@runfiles//src:runfiles",
-    "@uthash//src:uthash"
-]
-INCLUDE_PATHS = BASE_INCLUDE_PATHS + [
-    "-I$(GENDIR)/external/runfiles~{}/src".format(RUNFILES_VERSION),
-    # "-Iexternal/runfiles~{}/src".format(RUNFILES_VERSION),
-    "-Iexternal/uthash~{}/src".format(UTHASH_VERSION)
-]
+DEPS          = BASE_DEPS + ["@uthash//src:uthash"]
+INCLUDE_PATHS = BASE_INCLUDE_PATHS + ["-I$(@uthash)/src"]
 COPTS         = BASE_COPTS + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
 LINKOPTS      = BASE_LINKOPTS
+TOOLCHAINS    = ["//:repo_paths"]
 
 # WITH_SYSTEM_EXTRAS
   # is_directory_symbol, file_exists_symbol, delete_file_symbol,
@@ -59,20 +50,13 @@ cc_library( # delivers libs7.lo
         "//conditions:default": []
     }),
     deps  = DEPS,
-    hdrs  = ["libs7.h", "s7.h"],
-    copts = COPTS + [
-        "-Wno-unused-parameter",
-        # s7.h
-        "-Isrc",
-        "-Iexternal/libs7~{}/src".format(LIBS7_VERSION),
-        # libs7.h, libs7.h
-        "-I$(GENDIR)/src",
-        "-I$(GENDIR)/external/libs7~{}/src".format(LIBS7_VERSION),
-    ] + select({
+    hdrs  = ["libs7.h"],
+    copts = COPTS + select({
+        # allow for warnings in s7.c
         "//config/host/build:macos?": [
-            # allow for warnings in s7.c
             "-Wno-format-pedantic",
-            "-Wno-gnu-statement-expression"
+            "-Wno-gnu-statement-expression",
+            "-Wno-unused-parameter"
         ],
         "//config/host/build:linux?": [
             "-Wno-implicit-fallthrough"
@@ -80,19 +64,22 @@ cc_library( # delivers libs7.lo
         "//conditions:default": []
     }),
     data = [
-        # "//repl:scm",
         "//scm:srcs",
         "//scm/srfi:srcs",
-        "//scm/s7:srcs", "s7.h"
+        "//scm/s7:srcs",
+        # "s7.h"
     ],
-    local_defines = DEFINES + [
+    defines = DEFINES,
+    local_defines = LOCAL_DEFINES + [
         "WITH_SYSTEM_EXTRAS",
         "WITH_C_LOADER"
         # FIXME: if --//config:notcurses
         # "WITH_MAIN",
         # "WITH_NOTCURSES"
     ],
-    linkopts = LINKOPTS
+    linkopts = LINKOPTS,
+    toolchains = TOOLCHAINS,
+    visibility = ["//visibility:public"]
 )
 
 ##################
@@ -104,7 +91,8 @@ cc_shared_library(
         # "@platforms//os:windows": "libs7.dll",
         "//conditions:default": "libs7.so"
     }),
-    deps = [":s7"]
+    deps = [":s7"],
+    visibility = ["//visibility:public"]
 )
 
 makeheaders(

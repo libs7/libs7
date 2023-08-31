@@ -1,0 +1,80 @@
+load("@makeheaders//src:RULES.bzl", "makeheaders")
+
+DEPS = [
+    "//src:s7",
+    "@gopt//src:gopt",
+    "@liblogc//src:logc",
+    "@uthash//src:uthash",
+]
+
+BASE_INCLUDE_PATHS = [
+    "-I$(GENDIR)/$(@)/src",
+
+    "-I$(@)/src",
+    "-I$(GENDIR)/$(@)/src",
+
+    "-I$(@liblogc)/src",
+    "-I$(@uthash)/src",
+    "-I$(@gopt)/src"
+]
+
+COPTS = BASE_INCLUDE_PATHS + [
+    "-x", "c",
+    "-Wall",
+    "-Wextra",
+] + select({
+    "@platforms//os:macos": [
+        "-std=c11",
+        "-Werror=pedantic", # not needed with -Werror?
+        "-Wpedantic", # same as -pedantic, strict ISO C and ISO C++ warnings
+        "-pedantic-errors",
+        "-Werror=pedantic",
+        # "-Wno-gnu-statement-expression",
+        # "-Wno-gnu",
+        # "-Wno-format-pedantic",
+    ],
+    "@platforms//os:linux": [
+        "-std=gnu11",
+        "-fPIC",
+        # GCC:
+        "-Werror", # turn all warnings into errors
+        "-Wfatal-errors", # stop on first error
+        # "-Wl,--no-undefined",
+    ],
+    "//conditions:default": ["-std=c11"],
+})
+
+TOOLCHAINS = ["//:repo_paths"]
+
+################################################################
+################################################################
+## clibgen - builds s7 batch processor, for processing
+## lib*_clibgen.scm to generate c sources.
+################################################################
+exports_files(["clibgen.scm"]) # visibility for data attrib
+cc_binary(
+    name  = "clibgen",
+    srcs  = ["clibgen.c"],
+    deps  = DEPS,
+    data = [":clibgen.scm"],
+    copts =  COPTS,
+    toolchains = TOOLCHAINS,
+    visibility = ["//visibility:public"]
+)
+
+################################################################
+cc_library(
+    name = "s7plugin_test_config",
+    linkstatic = True,
+    srcs = ["s7plugin_test_config.c", ":mkhdrs"],
+    hdrs = [":mkhdrs"],
+    deps = DEPS,
+    copts = COPTS + ["-I$(GENDIR)/$(@)/plugin"],
+    toolchains = TOOLCHAINS,
+    visibility = ["//visibility:public"]
+)
+
+makeheaders(
+    name = "mkhdrs",
+    hdrs_srcs = ["s7plugin_test_config.c"],
+)

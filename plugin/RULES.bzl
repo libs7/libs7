@@ -1,51 +1,8 @@
 load("@bazel_skylib//lib:dicts.bzl", "dicts")
 
-CLIB_SRCS = ["//src:s7.h"]
+## rules: clibgen
 
-# each clib target decides src:s7 or src:s7 (dso)
-CLIB_DEPS = ["//lib:utils"]
-
-CLIB_COPTS = [
-] + select({
-    "//config/clibs/link:shared?": ["-fPIC"],
-    "//conditions:default": []
-})
-
-CLIB_INCLUDE_PATHS = [
-    "-Isrc", "-Iexternal/libs7/src",
-    "-Ilib", "-Iexternal/libs7/lib"
-]
-
-CLIB_LINKOPTS = select({
-    "//config/host/build:linux?": [
-        # "-ldl", "-lm",
-        "-Wl,-export-dynamic"
-    ],
-    "//conditions:default": []
-})
-
-################################################################
-
-# Copyright 2019 The Bazel Authors. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""
-clibgen runner
-"""
-
-# load("//lib:dicts.bzl", "dicts")
-
+###############
 def _impl(ctx):
     tool_as_list = [ctx.attr._tool]
     tool_inputs, tool_input_mfs = ctx.resolve_tools(tools = tool_as_list)
@@ -90,7 +47,8 @@ def _impl(ctx):
         ),
     )
 
-clibgen_runner = rule(
+###############
+clibgen = rule(
     implementation = _impl,
     doc = "Runs a binary as a build action.\n\nThis rule does not require Bash (unlike" +
           " `native.genrule`).",

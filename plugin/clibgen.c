@@ -13,11 +13,12 @@
 #include "log.h"
 #include "utstring.h"
 
-#include "s7.h"
+#include "libs7.h"
 
 extern bool libs7_debug;
 extern bool libs7_trace;
-bool verbose = false;
+
+int verbosity = 0;
 bool quiet   = false;
 
 static void _print_debug_env(void)
@@ -30,7 +31,7 @@ static void _print_debug_env(void)
     struct passwd* pwd = getpwuid(getuid());
     log_debug("pwd->pw_dir: %s", pwd->pw_dir);
 
-    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, 'libs7' when run as external repo
+    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, canonical repo for externals
     log_debug("BAZEL_CURRENT_REPOSITORY (macro): '%s'", BAZEL_CURRENT_REPOSITORY);
 
     // TEST_WORKSPACE: always the root ws
@@ -145,7 +146,9 @@ void _set_options(struct option options[])
     }
 
     if (options[FLAG_QUIET].count)   { quiet   = true; }
-    if (options[FLAG_VERBOSE].count) { verbose = true; }
+    if (options[FLAG_VERBOSE].count) {
+        verbosity = options[FLAG_VERBOSE].count;
+    }
 
     if (options[FLAG_DEBUG].count) {
 #if defined(DEVBUILD)
@@ -179,15 +182,16 @@ int main(int argc, char **argv)
 
     _set_options(options);
 
-    if (libs7_debug)
+    if (verbosity > 2)
         _print_debug_env();
 
     /* log_debug("argv[0]: %s", argv[0]); */
     /* log_debug("argv[1]: %s", argv[1]); /\* the libfoo_clibgen.scm file *\/ */
     /* log_debug("argv[2]: %s", argv[2]); /\* Bazel $GENDIR -- FIXME: use --outdir *\/ */
 
-    s7_scheme *s7 = s7_init();
-    if (verbose)
+    s7_scheme *s7 = libs7_init();
+
+    if (verbosity > 0)
         log_info("s7: %s", S7_DATE);
 
     /* log_debug("RUNFILES_MANIFEST_FILE: %s", getenv("RUNFILES_MANIFEST_FILE")); */
@@ -208,33 +212,31 @@ int main(int argc, char **argv)
         char *script_dir = dirname(options[OPT_SCRIPT].argument);
         /* log_debug("script_dir: %s", script_dir); */
 
-        /* log_debug("CWD: %s", getcwd(NULL,0)); */
+        if (verbosity > 0)
+            log_debug("CWD: %s", getcwd(NULL,0));
+
         // deal with bazel context
-        char *rel_scmdir;
-        char *cload_dir_format;
+        /* char *rel_scmdir; */
+        char *cload_dir_format = "%s/%s";
         if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
             /* rel_scmdir = "../libs7/scm"; */
-            rel_scmdir = "scm";
-            cload_dir_format = "%s/%s"; // <gendir>/<scriptdir>
-            s7_add_to_load_path(s7, "lib"); //FIXME: hardcoded path
-            s7_add_to_load_path(s7, "scm"); //FIXME: hardcoded path
+            /* rel_scmdir = "s7_clibgen/src"; */
+            s7_add_to_load_path(s7, "plugin"); //FIXME: hardcoded path
         } else {
-            rel_scmdir = "external/libs7~0.1.0/scm";
-            /* cload_dir_format = "%s/external/libs7~0.1.0/%s"; */
-            cload_dir_format = "%s/%s"; // <gendir>/<scriptdir>
-            s7_add_to_load_path(s7, "external/libs7~0.1.0");
-            s7_add_to_load_path(s7, "external/libs7~0.1.0/lib"); /* FIXME */
-            s7_add_to_load_path(s7, "external/libs7~0.1.0/scm");
+            s7_add_to_load_path(s7,
+                                "external/"
+                                BAZEL_CURRENT_REPOSITORY
+                                "/plugin");
         }
 
-        char *scmdir = realpath(rel_scmdir, NULL);
-        /* log_debug("scmdir: %s", scmdir); */
-        s7_add_to_load_path(s7, scmdir);
+        /* char *scmdir = realpath(rel_scmdir, NULL); */
+        /* /\* log_debug("scmdir: %s", scmdir); *\/ */
+        /* s7_add_to_load_path(s7, scmdir); */
 
-        /* s7_pointer lp = s7_load_path(s7); */
-        /* char *s = s7_object_to_c_string(s7, lp); */
-        /* log_debug("LOAD-PATH: %s", s); */
-        /* free(s); */
+        s7_pointer lp = s7_load_path(s7);
+        char *s = s7_object_to_c_string(s7, lp);
+        if (verbosity > 0) log_debug("LOAD-PATH: %s", s);
+        free(s);
 
         if (!s7_load(s7, "string.scm")) {
             fprintf(stderr, "can't load string.scm\n");
@@ -257,7 +259,9 @@ int main(int argc, char **argv)
         /* log_debug("load-path: %s", s); */
         /* free(s); */
 
-        /* log_debug("GENDIR: %s", options[OPT_GENDIR].argument); */
+        if (verbosity > 0)
+            log_debug("GENDIR: %s",
+                      options[OPT_GENDIR].argument);
 
         UT_string *cload_dir;
         utstring_new(cload_dir);
@@ -269,16 +273,18 @@ int main(int argc, char **argv)
 
         s7_define_variable(s7, "*cload-directory*",
                            s7_make_string(s7, utstring_body(cload_dir)));
-        /* log_info("*cload-directory*: %s", utstring_body(cload_dir)); */
+        if (verbosity > 0)
+            log_info("*cload-directory*: %s",
+                     utstring_body(cload_dir));
 
         utstring_free(cload_dir);
 
-        /* if (!s7_load(s7, "clibgen.scm")) { */
-        /*     fprintf(stderr, "can't load clibgen.scm\n"); */
-        /*     return(2); */
-        /* } */
+        if (!s7_load(s7, "clibgen.scm")) {
+            fprintf(stderr, "can't load clibgen.scm\n");
+            return(2);
+        }
 
-        if (verbose)
+        if (verbosity > 0)
             log_info("loading %s", script);
 
         if (!s7_load(s7, script)) {

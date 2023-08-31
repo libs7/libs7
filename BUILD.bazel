@@ -1,3 +1,24 @@
+load("@cc_config//:MACROS.bzl", "repo_paths")
+
+PROD_REPOS = [
+    "@gopt//src:gopt",
+    "@uthash//src:uthash",
+    "@liblogc//src:logc"
+]
+
+repo_paths(
+    name = "repo_paths",
+    repos = PROD_REPOS
+)
+
+repo_paths(
+    name = "test_repo_paths",
+    repos = PROD_REPOS + [
+        "@unity//src:unity"
+    ]
+)
+
+################################################################
 exports_files(["libc_s7.so"])
 
 config_setting(

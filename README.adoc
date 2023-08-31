@@ -3,7 +3,7 @@
 :toclevels: 3
 
 A Scheme interpreter and tools derived from
-link:https://ccrma.stanford.edu/software/snd/snd/s7.html[s7]. It is a
+link:https://ccrma.stanford.edu/software/snd/snd/s7.html[s7] (link:https://cm-gitlab.stanford.edu/bil/s7[upstream git]). It is a
 component of the link:https://obazl.github.io/docs_obazl/[OBazl
 Toolsuite], which uses it in tools like
 link:https://github.com/obazl/mibl[mibl] and
@@ -34,6 +34,8 @@ New C library bindings for handling link:https://www.json.org/json-en.html[JSON]
 * link:doc/libmustache.adoc[doc/libmustache.adoc]
 
 == getting started
+
+WARNING: outdated. update in progress.
 
 Clone this repo and then from the root directory:
 

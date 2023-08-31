@@ -1,5 +1,0 @@
-= libmustache
-
-s7 bindings for link:https://gitlab.com/jobol/mustach[mustach], a C
-implementation of link:http://mustache.github.io/[mustache] templating.
-

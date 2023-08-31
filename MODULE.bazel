@@ -6,17 +6,11 @@ module(
 
 bazel_dep(name = "platforms", version = "0.0.6")
 bazel_dep(name = "bazel_skylib", version = "1.4.2")
-
-MAKEHEADERS_VERSION = "1.0.0"
-bazel_dep(name = "makeheaders", version = MAKEHEADERS_VERSION)
-
+bazel_dep(name = "cc_config",    version = "1.0.0")
+bazel_dep(name = "makeheaders", version = "1.0.0")
 bazel_dep(name = "uthash", version = "2.3.0")
+bazel_dep(name = "liblogc",  version = "1.0.0")
+bazel_dep(name = "gopt",  version = "10.0.0")
 
-LIBLOGC_VERSION = "1.0.0"
-bazel_dep(name = "liblogc",  version = LIBLOGC_VERSION)
-
-GOPT_VERSION = "10.0.0"
-bazel_dep(name = "gopt",  version = GOPT_VERSION, dev_dependency = True)
-
-UNITY_VERSION = "2.5.2"
-bazel_dep(name = "unity", version = UNITY_VERSION, dev_dependency = True)
+bazel_dep(name = "unity", version = "2.5.2",
+          dev_dependency = True)

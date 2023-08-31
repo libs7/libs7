@@ -1,22 +1,43 @@
-exports_files(["common.c", "common.h"])
-
-load("@rules_cc//cc:defs.bzl", "cc_library")
-
-load("//config/cc:BUILD.bzl",
+load("//config/cc:CONFIG.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
 
-load("//test:BUILD.bzl",
-     "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
-     "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
-     "TIMEOUT")
+SRCS          = BASE_SRCS
+DEPS          = [
+    "//src:s7",
+    "//plugin:s7plugin_test_config",
+    "@liblogc//src:logc",
+    "@gopt//src:gopt",
+    "@unity//src:unity",
+    "@uthash//src:uthash",
+]
+INCLUDE_PATHS = [
+    "-I$(@)/src",
+    "-I$(GENDIR)/$(@)/src",
+    "-I$(GENDIR)/$(@)/plugin",
+    "-I$(@liblogc)/src",
+    "-I$(@gopt)/src",
+    "-I$(@unity)/src",
+    "-I$(@uthash)/src",
+]
+COPTS         = BASE_COPTS + INCLUDE_PATHS
+DEFINES       = BASE_DEFINES
+LINKOPTS      = BASE_LINKOPTS
+TOOLCHAINS    = ["//:test_repo_paths"]
+TIMEOUT       = "short"
 
-SRCS          = BASE_SRCS + TEST_SRCS
-INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS
-COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
-DEPS          = BASE_DEPS + TEST_DEPS
-DEFINES       = BASE_DEFINES + TEST_DEFINES
-LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
+# load("//test:BUILD.bzl",
+#      "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
+#      "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
+#      "TIMEOUT")
+
+# SRCS          = BASE_SRCS + TEST_SRCS
+# INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS
+# COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
+# DEPS          = BASE_DEPS + TEST_DEPS
+# DEFINES       = BASE_DEFINES + TEST_DEFINES
+# LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
+# TOOLCHAINS    = ["//:repo_paths"]
 
 test_suite(
     name  = "unit",
@@ -57,9 +78,9 @@ cc_test(
     srcs       = SRCS + ["s7_test.c"],
     defines    = DEFINES,
     deps       = DEPS,
-    copts      = COPTS + [
-    ],
+    copts      = COPTS,
     linkopts   = LINKOPTS,
+    toolchains = TOOLCHAINS,
     timeout    = TIMEOUT,
 )
 

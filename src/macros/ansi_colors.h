@@ -1,9 +1,7 @@
-#ifndef ANSI_COLORS_H
-#define ANSI_COLORS_H
 /* ANSI color codes for printf */
 /* https://gist.github.com/RabaDabaDoba/145049536f815903c79944599c6f952a */
 
-/* #if EXPORT_INTERFACE */
+//#ifdef TRACING
 //Reset
 #define reset "\033[0m"
 #define CRESET "\033[0m"
@@ -80,4 +78,4 @@
 #define BHWHT "\033[1;97m"
 
 #define CMDCLR BHWHT
-#endif
+

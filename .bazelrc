@@ -1,22 +1,23 @@
-common --symlink_prefix=.bazel/
-common --experimental_cc_shared_library
-common --enable_bzlmod
+# common --symlink_prefix=.bazel/
+# common --experimental_cc_shared_library
+# common --enable_bzlmod
 
-try-import .config/registries.bazelrc
-common --registry=https://raw.githubusercontent.com/obazl/registry/main/
-common --registry=https://bcr.bazel.build
+# try-import .config/registries.bazelrc
+# common --registry=https://raw.githubusercontent.com/obazl/registry/main/
+# common --registry=https://bcr.bazel.build
 
-common --color=yes
-common:show --subcommands=pretty_print
-common:show --verbose_failures
-test:show --test_output=all
-test:show --keep_going
+# common --color=yes
+# common:show --subcommands=pretty_print
+# common:show --verbose_failures
+# test:show --test_output=all
+# test:show --keep_going
 
-common:showdev --config=show
 common:showdev --//config/profile=dev
-common:showdev --compilation_mode=fastbuild
-test:showdev --test_output=all
-test:showdev --keep_going
+common:showdev --@cc_config//config/profile=dev
+# common:showdev --config=show
+# common:showdev --compilation_mode=fastbuild
+# test:showdev --test_output=all
+# test:showdev --keep_going
 
 common:showdbg --config=show
 common:showdbg --//config/profile=dev

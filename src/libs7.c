@@ -6,13 +6,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* #include "config.h" */
-
 #include "log.h"
-#include "librunfiles.h"
+/* #include "librunfiles.h" */
 
-#if INTERFACE
 #include "utarray.h"
+#if INTERFACE
 #include "s7.h"
 #endif
 
@@ -38,7 +36,7 @@ static int _strsort(const void *_a, const void *_b)
 }
 
 /* **************************************************************** */
-char *libs7_read_file(char *fname)
+EXPORT char *libs7_read_file(char *fname)
 {
     off_t file_size;
     char *buffer;
@@ -206,6 +204,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
             fmt = "external/libs7/lib/lib%s/lib%s_s7%s";
         }
     } else {
+        //FIXME: use BAZEL_CURRENT_REPOSITORY for runfiles
         ws = getenv("BUILD_WORKSPACE_DIRECTORY");
         /* log_debug("dlopen ns build ws: %s", ws); */
         if (strncmp(basename(ws), "libs7", 5) == 0)
