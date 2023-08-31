@@ -17,6 +17,10 @@ BASE_COPTS         = _BASE_COPTS
 BASE_LINKOPTS      = _BASE_LINKOPTS
 BASE_DEFINES       = _BASE_DEFINES
 LOCAL_DEFINES      = select({
+    "//config/host/build:linux?": [
+        "_GNU_SOURCE",          # for dlsym RTLD handles
+        "DSO_EXT=\\\".dylib\\\""
+    ],
     "//config/host/build:macos?": ["DSO_EXT=\\\".dylib\\\""],
     # "//config/host/build:windows?": ["DSO_EXT=\\\".dll\\\""],
     "//conditions:default"      : ["DSO_EXT=\\\".so\\\""]
