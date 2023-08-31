@@ -267,10 +267,14 @@ EXPORT s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
         log_debug("init_fn_name: %s", init_fn_name);
 #endif
 
+#if defined(__APPLE__)
+#define HNDL RTLD_MAIN_ONLY
+#else
+#define HNDL RTLD_DEFAULT
+#endif
+
     s7_pointer (*init_fn_ptr)(s7_scheme*);
-    init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(
-                                                    //RTLD_DEFAULT, // linux
-                                                    RTLD_MAIN_ONLY,
+    init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(HNDL,
                                                     init_fn_name);
     if (init_fn_ptr == NULL) {
 /* #if defined(DEVBUILD) */
