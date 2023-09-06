@@ -161,7 +161,7 @@ void print_debug_env(void)
     log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
 }
 
-s7_scheme *initialize(char *test, int argc, char **argv)
+s7_scheme *s7_plugin_initialize(char *test, int argc, char **argv)
 {
     atexit(cleanup);
 

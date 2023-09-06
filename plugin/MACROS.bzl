@@ -34,12 +34,14 @@ BASE_COPTS = [
 ###################
 def s7_plugin(name,
               alwayslink = True,
+              # linkstatic = True,
               deps = [],
               copts = [],
               **kwargs):
     native.cc_library(
         name = name,
         alwayslink = alwayslink,
+        # linkstatic = linkstatic,
         deps = deps + [
             "@libs7//src:s7",
             "@liblogc//src:logc",
