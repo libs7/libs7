@@ -47,7 +47,6 @@ COPTS = BASE_INCLUDE_PATHS + [
 TOOLCHAINS = ["//:repo_paths"]
 
 ################################################################
-################################################################
 ## clibgen - builds s7 batch processor, for processing
 ## lib*_clibgen.scm to generate c sources.
 ################################################################

@@ -1,24 +1,3 @@
-# load("@cc_config//:MACROS.bzl", "repo_paths")
-
-# PROD_REPOS = [
-#     "@gopt//src:gopt",
-#     "@uthash//src:uthash",
-#     "@liblogc//src:logc"
-# ]
-
-# repo_paths(
-#     name = "repo_paths",
-#     repos = PROD_REPOS
-# )
-
-# repo_paths(
-#     name = "test_repo_paths",
-#     repos = PROD_REPOS + [
-#         "@libs7//src:s7",
-#         "@unity//src:unity"
-#     ]
-# )
-
 test_suite(
     name  = "test",
     tests = [

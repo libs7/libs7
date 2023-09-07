@@ -1,16 +1,18 @@
 module(
-    name = "libs7",
-    version = "1.0.0",
+    name = "libs7", version = "1.0.0",
     compatibility_level = 1,
 )
 
-bazel_dep(name = "platforms", version = "0.0.6")
+## bcr:
+bazel_dep(name = "platforms",    version = "0.0.7")
 bazel_dep(name = "bazel_skylib", version = "1.4.2")
-bazel_dep(name = "cc_config",    version = "1.0.0")
-bazel_dep(name = "makeheaders", version = "1.0.0")
-bazel_dep(name = "uthash", version = "2.3.0")
-bazel_dep(name = "liblogc",  version = "1.0.0")
-bazel_dep(name = "gopt",  version = "10.0.0")
+bazel_dep(name = "rules_cc",     version = "0.0.8")
 
-bazel_dep(name = "unity", version = "2.5.2",
+## obazl:
+bazel_dep(name = "cc_config",   version = "1.0.0")
+bazel_dep(name = "makeheaders", version = "1.0.1")
+bazel_dep(name = "uthash",      version = "2.3.0")
+bazel_dep(name = "liblogc",     version = "1.0.0")
+bazel_dep(name = "gopt",        version = "10.0.0")
+bazel_dep(name = "unity",       version = "2.5.2",
           dev_dependency = True)

@@ -82,7 +82,7 @@ void test_misc(void) {
 
 int main(int argc, char **argv)
 {
-    s7 = initialize("cwalk", argc, argv);
+    s7 = s7_plugin_initialize("cwalk", argc, argv);
 
     utstring_new(sexp);
 

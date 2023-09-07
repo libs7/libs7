@@ -1,112 +1,48 @@
-load("//config/cc:CONFIG.bzl",
-     "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
-     "BASE_COPTS", "BASE_DEFINES", "BASE_LINKOPTS")
+## NB: we do not use s7_plugin_test here (this is not a plugin)
 
-SRCS          = BASE_SRCS
-DEPS          = [
+load("//config/cc:CONFIG.bzl",
+     "BASE_COPTS", "BASE_LINKOPTS",
+     "BASE_DEPS", "LOCAL_DEFINES")
+
+SRCS          = []
+DEPS          = BASE_DEPS + [
     "//src:s7",
     "//plugin:s7plugin_test_config",
-    "@liblogc//src:logc",
     "@gopt//src:gopt",
     "@unity//src:unity",
     "@uthash//src:uthash",
 ]
 INCLUDE_PATHS = [
-    "-I$(@)/src",
-    "-I$(GENDIR)/$(@)/src",
     "-I$(GENDIR)/$(@)/plugin",
-    "-I$(@liblogc)/src",
     "-I$(@gopt)/src",
     "-I$(@unity)/src",
     "-I$(@uthash)/src",
 ]
 COPTS         = BASE_COPTS + INCLUDE_PATHS
-DEFINES       = BASE_DEFINES
+DEFINES       = []
 LINKOPTS      = BASE_LINKOPTS
 TOOLCHAINS    = ["//:test_repo_paths"]
 TIMEOUT       = "short"
 
-# load("//test:BUILD.bzl",
-#      "TEST_SRCS", "TEST_DEPS", "TEST_INCLUDE_PATHS",
-#      "TEST_COPTS", "TEST_DEFINES", "TEST_LINKOPTS",
-#      "TIMEOUT")
-
-# SRCS          = BASE_SRCS + TEST_SRCS
-# INCLUDE_PATHS = BASE_INCLUDE_PATHS + TEST_INCLUDE_PATHS
-# COPTS         = BASE_COPTS + TEST_COPTS + INCLUDE_PATHS
-# DEPS          = BASE_DEPS + TEST_DEPS
-# DEFINES       = BASE_DEFINES + TEST_DEFINES
-# LINKOPTS      = BASE_LINKOPTS + TEST_LINKOPTS
-# TOOLCHAINS    = ["//:repo_paths"]
-
+###########
 test_suite(
     name  = "unit",
     tests = [
         ":s7_test",
-        # ":gsl", ## takes too long to build for one trivial test
     ]
 )
 
-################################################################
-
-## WARNING WARNING - if linkstatic is not True, then the runtime
-## linker may pick up system shared libs rather than those listed as
-## deps here. This can be true even for static deps, e.g.
-## libgbdm_s7_archive, which is statically linked to libgdbm.a - at
-## runtime the system libgbdm.so may be loaded.
-
-## linkstatic=True means (for cc_test): "all user libraries are linked
-## statically (if a static version is available), but system
-## libraries (excluding C/C++ runtime libraries) are linked
-## dynamically,"
-
-## linkstatic=False means "all libraries are linked dynamically (if a
-## dynamic version is available)". Which evidently means you can build
-## against a static lib dependency, but the runtime linker may find a
-## shared system lib, effectively overriding the dep you want. (This
-## has happened with libgdbm, where we built with 1.23, but at runtime
-## the gdbm_version string reported 1.18.0, which meant it was
-## (evidently) coming from the locally installed dso
-## (/usr/lib/x86_64-linux-gnu/libgdbm.so.6)
-
-################################################################
+########################################
 ## s7 api tests extracted from ffitest.c
-# cc_binary(
 cc_test(
     name       = "s7_test",
     linkstatic = True,
     srcs       = SRCS + ["s7_test.c"],
+    local_defines = LOCAL_DEFINES,
     defines    = DEFINES,
     deps       = DEPS,
     copts      = COPTS,
     linkopts   = LINKOPTS,
     toolchains = TOOLCHAINS,
     timeout    = TIMEOUT,
-)
-
-
-################################################################
-################################################################
-cc_test(
-    name = "gsl",
-    linkstatic = True,
-    srcs = SRCS + ["gsl_test.c"] + select({
-        "//config/clibs/link:shared?": ["//lib/libgsl:gsl_s7.c"],
-        "//conditions:default": []
-    }),
-    local_defines = DEFINES,
-    deps = DEPS + select({
-        "//config/clibs/link:archive?": ["//lib/libgsl:gsl_s7_archive"],
-        "//conditions:default": []
-    }),
-    data = select({
-        "//config/clibs/link:runtime?": ["//lib/libgsl:gsl_s7"],
-        "//conditions:default": []
-    }),
-    copts = COPTS + [
-        "-I$(GENDIR)/lib/libgsl",
-        "-I$(GENDIR)/external/libs7/lib/libgsl",
-    ],
-    linkopts = LINKOPTS,
-    timeout = TIMEOUT
 )

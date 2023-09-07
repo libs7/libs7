@@ -1,2 +1,0 @@
-same tests as for mustachios, but these use the Scheme APIs instead of
-the C APIs.

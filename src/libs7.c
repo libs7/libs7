@@ -253,10 +253,10 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     return val;
 }
 
-EXPORT s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
+EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
 {
     if (libs7_verbose)
-        log_trace("load_clib: %s", lib);
+        log_trace("load_plugin: %s", lib);
 
     static char init_fn_name[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
@@ -314,9 +314,9 @@ EXPORT s7_pointer libs7_load_clib(s7_scheme *s7, char *lib)
     return clib_let;
 }
 
-static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
+static s7_pointer g_libs7_load_plugin(s7_scheme *s7, s7_pointer args)
 {
-    log_debug("g_libs7_load_clib");
+    log_debug("g_libs7_load_plugin");
 #if defined(DEVBUILD)
 #endif
     s7_pointer p, arg;
@@ -331,7 +331,7 @@ static s7_pointer g_libs7_load_clib(s7_scheme *s7, s7_pointer args)
         }
         else return(s7_wrong_type_arg_error(s7, __func__, 0, arg, "string"));
     }
-    return libs7_load_clib(s7, lib);
+    return libs7_load_plugin(s7, lib);
 }
 
 #define TO_STR(x) s7_object_to_c_string(s7, x)
@@ -568,7 +568,7 @@ EXPORT s7_scheme *libs7_init(void)
     /* log_debug("load-path: %s", s); */
     /* free(s); */
 
-    s7_define_function(s7, "load-clib", g_libs7_load_clib,
+    s7_define_function(s7, "load-plugin", g_libs7_load_plugin,
                        1,         /* required: 1 arg, libname */
                        0,         /* optional: 0 */
                        false,     /* rest args: none */

@@ -27,85 +27,64 @@ implementation code.
 
 == NEWS
 
-New C library bindings for handling link:https://www.json.org/json-en.html[JSON] and link:https://toml.io/en/[toml] data, and rendering with link:https://mustache.github.io/[mustache] templates! See:
+The build has switched to using
+link:https://bazel.build/external/module[Bazel modules]. As a result,
+it has undergone major refactoring:
 
-* link:doc/libjson.adoc[doc/libjson.adoc]
-* link:doc/libtoml.adoc[doc/libtoml.adoc]
-* link:doc/libmustache.adoc[doc/libmustache.adoc]
+* `@libs7` (this repository) is library-only. It does not contain a repl or any plugins (s7 bindings to C libraries); it is intended for use as dependency in projects that need a Scheme engine. Bazel modules make this not only feasible but (relatively) easy.
+* C library bindings have been migrated to free-standing Bazel modules; they are located in the link:https://github.com/libs7[libs7 organization] on github.
+* A repl demo is available at https://github.com/libs7/s7x[s7x] (s7 exploratory repo).
+* Several OBazl projects use `@libs7`: link:https://gitlab.com/obazl/mustachios[mustachios] (a mustache templating engine), link:https://github.com/obazl/coswitch[coswitch], link:https://github.com/obazl/mibl[mibl], link:https://github.com/obazl/tools_obazl[tools_obazl].
 
-== getting started
+== Usage
 
-WARNING: outdated. update in progress.
+Requires Bazel version 6 or greater, with _bzlmod_ enabled; see
+link:https://bazel.build/external/overview[External dependencies
+overview] for more information.
 
-Clone this repo and then from the root directory:
+To develop this repo or run its tests, clone it and then from the root directory:
 
     $ bazel test test
-    $ bazel run repl
-
-The first build may take a while, since all dependencies (e.g. libgdbm) will be built.
-
-To use libs7 in a different project, create a `WORKSPACE.bazel` file in its root directory
-with the following contents:
-
-[source,starlark]
-----
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
-git_repository(
-    name = "libs7",
-    remote = "https://github.com/libs7/libs7",
-    branch = "main"
-)
-
-load("@libs7//:WORKSPACE.bzl", libs7_fetch_repos = "fetch_repos")
-libs7_fetch_repos()
-
-load("@rules_foreign_cc//foreign_cc:repositories.bzl", # for re2c
-     "rules_foreign_cc_dependencies")
-rules_foreign_cc_dependencies()
-----
-
-Then:
 
 
-    $ bazel test @libs7//test/unit
-    $ bazel run @libs7//repl
+To use this repository as a dependency in another project:
 
-== differences from s7
+* Put the following in a bazelrc file (`.bazelrc` or a file imported by it):
 
-`s7` is "intended as an extension language for other applications",
-but the standard distribution is pretty minimal. It contains no
-makefiles, and has a somewhat idiosyncratic build structure that
-relies on a mechanism ("cload') for dynamically compiling, linking and
-loading C libraries at runtime. It embeds bindings for several
-standard libc APIs in `s7.c` (e.g. `#include <fcntl.h>` ), and it also
-embeds some repl support in `s7.h`.
+    common --registry=https://raw.githubusercontent.com/obazl/registry/main/
+    common --registry=https://bcr.bazel.build
 
-This derivation is source-code-identical (except for a few lines noted
-below) with the standard distribution, but reorganizes the code. Major differences:
+* add the following to `MODULE.bazel`:
 
-* uses Bazel for building;
-* replaces the `cload` mechanism with a modified version that generates the source files for C libraries at build time;
-* separates the bindings for C libraries (e.g. libc, libdl, libgdbm, etc.) from the main `s7.c` file;
-* moves repl code out of `s7.c` and into package `//repl`;
-* supports three linking strategies for C libraries: build-time link/load of archive libs; build-time link and runtime load of DSO files; and runtime link and load using `dlopen`, `dlsym` etc..
-* easy loading of clibs in the repl, e.g. `(load-clib 'gdbm)` works with all three link strategies
+    bazel_dep(name = "libs7", version = "1.0.0")
 
-These changes are intended to make it easier to build s7 libraries and
-applications a la carte, without dynamic C compilation. All libraries
-are built (as either static or shared libraries) at build time.
+This makes `cc_library` target `@libs7//src:s7` available as a
+dependency; it provides a static library `libs7`.
+
+To use the library first call the initialization function:
+
+    #include "libs7.h"
+    s7_scheme *s7 = libs7_init();
+
+To enable a plugin (see below), call `libs7_load_plugin`; for example to
+load the `toml_s7` plugin:
+
+        libs7_load_plugin(s7, "toml");
 
 
-== C libraries
+== Plugins
+
+A "plugin" is a module providing `s7` bindings for a C library.
 
 === cload and clibgen
 
-The `cload` mechanism allows the developer to easily specify `s7`
-bindings for C libraries as `s7` Scheme source code. The
-implementation generates a C source file from a `.scm` file, compiles
-it, and loads it. So for example, `(load libc.scm)` will generate
-`libc_s7.c`, compile it to `libc_s7.so`, and then load it and call its
-initialization function.
+The legacy `s7` distribution includes a runtime mechanism ("cload")
+that allows the developer to easily specify `s7` bindings for C
+libraries as `s7` Scheme source code. The implementation is used _at
+runtime_ to generate a C source file from a `.scm` file, compile it
+(by calling the system C compiler), and load it. So for example,
+`(load libc.scm)` will generate `libc_s7.c`, compile it to
+`libc_s7.so`, and then load it and call its initialization function.
 
 This works quite well, but dynamically compiling and running C code
 may be undesirable in some situations. `libs7` replaces the `cload`
@@ -117,19 +96,19 @@ code.
 
 Structure and function:
 
-==== lib/clibgen.c
+==== plugin/clibgen.c
 
 A minimal `s7` batch processor. This is compiled as a build tool; it
   processes the `lib*_clibgen.scm` file for each C librarie to produce
-  the corresponding C source file. For example, from
-  `lib/libgdbm/libgdbm_clibgen.scm` it produces `libgdbm_s7.c`.
+  the corresponding C source file. For example, when passed
+  `libgdbm_clibgen.scm` it produces `libgdbm_s7.c`.
 
-==== lib/clibgen.scm
+==== plugin/clibgen.scm
 
 Derived from `cload.scm`. Used to generate C source code from
 `lib*_clibgen.scm` files (described below). The code for running a C
-compiler is to compile the C output is removed, as is the code for
-loading and initializing compiled C libraries is removed.
+compiler to compile the C output is removed, as is the code for
+loading and initializing compiled C libraries.
 
 In addition, a `strip-prefix` parameter has been added to the `c-define`
 function that processes C function bindings. C libraries commonly use
@@ -150,9 +129,9 @@ rather than `utf8:unicode_version`.
 
 ====  lib*_clibgen.scm files
 
-One per C library, derived from the `lib*.scm` files in the standard
-  distribution. For example `libgdbm_clibgen.scm` is derived from
-  `libgdbm.scm`. When processed by `clibgen.exe`, produces the
+One per plugin (C library), derived from the `lib*.scm` files in the
+  standard distribution. For example `libgdbm_clibgen.scm` is derived
+  from `libgdbm.scm`. When processed by `clibgen.exe`, produces the
   corresponding C file containing `s7` bindings.
 
 WARNING: Conversion of these files is incomplete. Passing a `prefix`
@@ -168,11 +147,11 @@ missing - check the `lib*_clibgen.scm` file.
 
 The build code depends on the following conventions.  For each C library `foo`:
 
-* Binding code goes in `lib/libfoo/libfoo_clibgen.scm`
+* Binding code goes in `libfoo_clibgen.scm`
 * The generated C file will be `libfoo_s7.c`
 * The targets to build archive and DSO files are:
-  ** `lib/libfoo:foo_s7_archive`, producing `libfoo_s7_archive.a`
-  ** `lib/libfoo:foo_s7`, producing `libfoo_s7.so` (Linux) or `libfoo_s7.dylib` (MacOS)
+  ** `lib/libfoo:foo_s7`, producing `libfoo_s7.a` (or `.lo`)
+  ** `lib/libfoo:foo_s7_dso`, producing `libfoo_s7.so` (Linux) or `libfoo_s7.dylib` (MacOS)
 
 
 === build targets
@@ -308,7 +287,7 @@ The generated C files contain an initialization function, named
 library's `s7` API available.
 
 This is handled automatically by a `libs7` C function,
-`libs7_load_clib`, that takes the library name (as a string) as
+`libs7_load_plugin`, that takes the library name (as a string) as
 argument. It works for all three link strategies. For `archive` and
 `shared` strategies, it uses `dlsym` to find the initialization function,
 constructs the arguments it needs, and runs it. For `runtime` strategy, it
@@ -318,7 +297,7 @@ using `dlopen`, uses `dlsym` to find the initialization function, and
 runs it.
 
 It follows that it is the responsibility of the application to call
-`libs7_load_clib` for each C library, and to list all needed C
+`libs7_load_plugin` for each C library, and to list all needed C
 libraries as dependencies in its BUILD.bazel file. For examples, see
 the `*_test.c` files in the `test/` directory, and `repl/repl.c`.
 
@@ -544,4 +523,28 @@ distribution, but there is no build target for it (yet). The tests in
 `s7_test.c` test `libs7` itself rather than any C library bindings.
 
 
+
+== Differences from s7
+
+`s7` is "intended as an extension language for other applications",
+but the standard distribution is pretty minimal. It contains no
+makefiles, and has a somewhat idiosyncratic build structure that
+relies on a mechanism ("cload') for dynamically compiling, linking and
+loading C libraries at runtime. It embeds bindings for several
+standard libc APIs in `s7.c` (e.g. `#include <fcntl.h>` ), and it also
+embeds some repl support in `s7.h`.
+
+This derivation is source-code-identical (except for a few lines noted
+below) with the standard distribution, but reorganizes the code. Major differences:
+
+* uses Bazel for building;
+* replaces the `cload` mechanism with a modified version that generates the source files for C libraries at build time;
+* separates the bindings for C libraries (e.g. libc, libdl, libgdbm, etc.) from the main `s7.c` file;
+* moves repl code out of `s7.c` and into package `//repl`;
+* supports three linking strategies for C libraries: build-time link/load of archive libs; build-time link and runtime load of DSO files; and runtime link and load using `dlopen`, `dlsym` etc..
+* easy loading of clibs in the repl, e.g. `(load-clib 'gdbm)` works with all three link strategies
+
+These changes are intended to make it easier to build s7 libraries and
+applications a la carte, without dynamic C compilation. All libraries
+are built (as either static or shared libraries) at build time.
 

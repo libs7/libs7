@@ -1,33 +1,4 @@
-# common --symlink_prefix=.bazel/
-# common --experimental_cc_shared_library
-# common --enable_bzlmod
-
-# try-import .config/registries.bazelrc
-# common --registry=https://raw.githubusercontent.com/obazl/registry/main/
-# common --registry=https://bcr.bazel.build
-
-# common --color=yes
-# common:show --subcommands=pretty_print
-# common:show --verbose_failures
-# test:show --test_output=all
-# test:show --keep_going
-
-common:showdev --//config/profile=dev
-common:showdev --@cc_config//config/profile=dev
-# common:showdev --config=show
-# common:showdev --compilation_mode=fastbuild
-# test:showdev --test_output=all
-# test:showdev --keep_going
-
-common:showdbg --config=show
-common:showdbg --//config/profile=dev
-common:showdbg --//config/debug
-common:showdbg --//config/debug:trace
-common:showdbg --compilation_mode dbg
-
-common:q --noshow_progress
-common:q --noshow_loading_progress
-common:q --show_result=0
-common:q --ui_event_filters=-info,-debug
-
+common --enable_bzlmod
+common --registry=https://raw.githubusercontent.com/obazl/registry/main/
+common --registry=https://bcr.bazel.build
 try-import .config/user.bazelrc

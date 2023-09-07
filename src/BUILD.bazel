@@ -1,7 +1,3 @@
-# package(default_visibility = ["//visibility:public"])
-
-# exports_files(["s7.h", "libs7.h"])
-
 load("@makeheaders//src:RULES.bzl", "makeheaders")
 
 load("//config/cc:CONFIG.bzl",
@@ -41,9 +37,8 @@ cc_library( # delivers libs7.lo
     alwayslink = True,
     srcs  = SRCS + [
         "fs_api.c", # FIXME: replace with cwalk
-        "s7.c",
+        "s7.c", "s7.h", # FIXME: use makeheaders
         "libs7.c",
-        "s7.h",
         ":mkhdrs",
     ] + select({
         "//config/profile:dev?": [
@@ -85,7 +80,7 @@ cc_library( # delivers libs7.lo
 
 ##################
 cc_shared_library(
-    name = "s7_shared",
+    name = "s7_dso",
     shared_lib_name = select({
         "@platforms//os:macos": "libs7.dylib",
         "@platforms//os:linux": "libs7.so",
@@ -96,6 +91,7 @@ cc_shared_library(
     visibility = ["//visibility:public"]
 )
 
+############
 makeheaders(
     name = "mkhdrs",
     hdrs_renamed = {"libs7.c": "libs7_internal.h"},
@@ -127,80 +123,5 @@ makeheaders(
         "//conditions:default": []
     }),
     additional_srcs = ["s7.h", "fs_api.c"],
-    # + select({
-    #     "//config/profile:dev?": [
-    #         "//src/macros:trace.h",
-    #         "//src/macros:ansi_colors.h",
-    #     ],
-    #     "//conditions:default": ["//src/macros:notrace.h"]
-    # }),
     visibility = ["//visibility:public"]
 )
-
-
-##########
-# cc_binary(                      #  libs7.so
-#     name  = "s7x",
-#     linkshared = True,
-#     # alwayslink = 1,
-#     srcs  = SRCS + [
-#         "fs_api.c", # FIXME: replace with cwalk
-#         "s7.c",
-#         "libs7.c",
-#         "libs7.h", "s7.h",
-#     ],
-#     deps  = DEPS, # + ["//vendored/uthash"],
-#     copts = COPTS + [
-#         "-Wno-unused-parameter",
-#         # "-Ivendored/uthash", "-Iexternal/libs7/vendored/uthash"
-#     ] + select({
-#         "//config/host/build:macos?": [
-#             # allow for warnings in s7.c
-#             "-Wno-format-pedantic",
-#             "-Wno-gnu-statement-expression"
-#         ],
-#         "//config/host/build:linux?": [
-#             "-Wno-implicit-fallthrough"
-#         ],
-#         "//conditions:default": []
-#     }),
-# #     copts = COPTS
-# # [
-# #         "-Wall",
-# #         "-Wextra",
-# #         # "-Werror=pedantic",
-# #         "-Wno-unused-parameter",
-# #         "-Isrc",
-# #         "-Ivendored/logc",
-# #         "-Iexternal/libs7/vendored/logc",
-# #         "-Ivendored/uthash",
-# #         "-Iexternal/libs7/vendored/uthash",
-# #         "-Iexernal/libs7/src",
-# #     ] + select({
-# #         "//:macos": [
-# #             "-Wno-format-pedantic",
-# #             "-Wno-gnu",
-# #             "-std=c11"
-# #         ],
-# #         "//:linux": [
-# #             "-std=gnu11",
-# #             "-Wno-unused-function",
-# #             "-Wno-implicit-fallthrough",
-# #             # "--pedantic-errors",
-# #             "-fPIC",
-# #         ],
-# #         "//conditions:default": ["-std=c11"],
-# #     }),
-#     data = [
-#         # "//repl:scm",
-#         "//scm:srcs", "//scm/s7:srcs", "s7.h"
-#     ],
-#     local_defines = DEFINES + [
-#         "WITH_SYSTEM_EXTRAS",
-#         "WITH_C_LOADER"
-#         # FIXME: if --//config:notcurses
-#         # "WITH_MAIN",
-#         # "WITH_NOTCURSES"
-#     ],
-#     linkopts = LINKOPTS
-# )
