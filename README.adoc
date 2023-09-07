@@ -153,6 +153,11 @@ The build code depends on the following conventions.  For each C library `foo`:
   ** `lib/libfoo:foo_s7`, producing `libfoo_s7.a` (or `.lo`)
   ** `lib/libfoo:foo_s7_dso`, producing `libfoo_s7.so` (Linux) or `libfoo_s7.dylib` (MacOS)
 
+Sometimes it makes more sense to write bindings by hand (see
+link:https://github.com/libs7/toml_s7/tree/main/src[toml_s7] as an
+example). In that case the plugin target name must have the form
+`<lib>_s7`, so it produces a file named `<lib>foo.<ext>`; of course
+you can name the source files whatever you want.
 
 === build targets
 
