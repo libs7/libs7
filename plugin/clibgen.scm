@@ -200,10 +200,10 @@
 	(format p "#include <stdio.h>~%")
 	(format p "#include <string.h>~%")
 	(if (string? headers)
-	    (format p "#include <~A>~%" headers)
+	    (format p "#include \"~A\"~%" headers)
 	    (for-each
 	     (lambda (header)
-	       (format p "#include <~A>~%" header))
+	       (format p "#include \"~A\"~%" header))
 	     headers))
 	(format p "#include \"s7.h\"~%~%")
 	(format p "static s7_pointer c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
