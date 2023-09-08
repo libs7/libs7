@@ -1,13 +1,9 @@
 .bazel
 bazel-*
 *.gz
-config/feature/BUILD.bazel
 *.history.txt
 log.*
 *.log
-obsolete
-tmp
-trace
 
 .DS_Store
 
