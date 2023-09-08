@@ -4,6 +4,7 @@ bazel-*
 *.history.txt
 log.*
 *.log
+*.pdf
 
 .DS_Store
 
