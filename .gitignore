@@ -1,3 +1,5 @@
+.bazelignore
+.bazelversion
 .bazel
 bazel-*
 *.gz
