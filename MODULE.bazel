@@ -1,6 +1,7 @@
 module(
     name = "libs7", version = "1.0.0",
     compatibility_level = 1,
+    bazel_compatibility = [">=6.1.0"]
 )
 
 ## bcr:
