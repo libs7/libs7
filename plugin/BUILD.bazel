@@ -44,6 +44,8 @@ COPTS = BASE_INCLUDE_PATHS + [
     "//conditions:default": ["-std=c11"],
 })
 
+DEFINES = ["DEBUG_$(COMPILATION_MODE)"]
+
 TOOLCHAINS = ["//:repo_paths"]
 
 ################################################################
@@ -57,6 +59,7 @@ cc_binary(
     deps  = DEPS,
     data = [":clibgen.scm"],
     copts =  COPTS,
+    local_defines = DEFINES,
     toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )
@@ -69,6 +72,7 @@ cc_library(
     hdrs = [":mkhdrs"],
     deps = DEPS,
     copts = COPTS + ["-I$(GENDIR)/$(@)/plugin"],
+    local_defines = DEFINES,
     toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )

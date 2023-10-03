@@ -18,7 +18,9 @@ s7_scheme *s7;
 
 extern bool verbose;
 int  verbosity;
-extern bool debug;
+#if defined(DEBUG_fastbuild)
+int plugin_debug;
+#endif
 
 /* #if defined(DEVBUILD) */
 extern bool libs7_verbose;
@@ -27,7 +29,7 @@ extern bool libs7_debug_runfiles;
 extern bool libs7_trace;
 /* #endif */
 
-extern struct option options[];
+/* extern struct option options[]; */
 
 /* char *sexp_input; */
 /* char *sexp_expected; */
@@ -47,7 +49,7 @@ void cleanup(void)
     }
 }
 
-void print_usage(char *test) {
+static void print_usage(char *test) {
     printf("Usage:\t$ bazel test test:%s [-- flags]\n", test);
     /* printf("  Link strategies:\n"); */
     /* printf("\t--//config/clibs/link=static\tStatic link/load (static libs). Default.\n"); */
@@ -67,7 +69,9 @@ void print_usage(char *test) {
 
 enum OPTS {
     FLAG_HELP,
+#if defined(DEBUG_fastbuild)
     FLAG_DEBUG,
+#endif
     FLAG_DEBUG_CONFIG,
     FLAG_DEBUG_SCM,
     FLAG_DEBUG_SCM_LOADS,
@@ -79,10 +83,13 @@ enum OPTS {
     LAST
 };
 
-struct option options[] = {
+static struct option options[] = {
     /* 0 */
-    [FLAG_DEBUG] = {.long_name="debug",.short_name='d',
+#if defined(DEBUG_fastbuild)
+    [FLAG_DEBUG] = {.long_name="plugin-debug",
+                    /* .short_name='d', */
                     .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
+#endif
     [FLAG_DEBUG_CONFIG] = {.long_name="debug-config",
                            .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_DEBUG_SCM] = {.long_name="debug-scm", .short_name = 'D',
@@ -100,17 +107,19 @@ struct option options[] = {
     [LAST] = {.flags = GOPT_LAST}
 };
 
-void set_options(char *test, struct option options[])
+static void set_options(char *test, struct option options[])
 {
     /* log_trace("set_options"); */
     if (options[FLAG_HELP].count) {
         print_usage(test);
         exit(EXIT_SUCCESS);
     }
+#if defined(DEBUG_fastbuild)
     if (options[FLAG_DEBUG].count) {
-        debug = true;
+        plugin_debug = options[FLAG_DEBUG].count;
         /* libs7_debug = true; */
     }
+#endif
     if (options[FLAG_TRACE].count) {
         /* libs7_trace = true; */
     }
@@ -180,8 +189,9 @@ s7_scheme *s7_plugin_initialize(char *test, int argc, char **argv)
 
     set_options(test, options);
 
-    if (debug) print_debug_env();
-
+#if defined(DEBUG_fastbuild)
+    if (plugin_debug) print_debug_env();
+#endif
     s7_scheme *s7 = libs7_init();
 
     /* libmustachios7_s7_init(s7); */

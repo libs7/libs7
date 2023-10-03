@@ -55,7 +55,7 @@ EXPORT char *libs7_read_file(char *fname)
     }
 
     file_size = stbuf.st_size;
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
     log_debug("filesize: %d", file_size);
 #endif
 
@@ -78,14 +78,14 @@ EXPORT char *libs7_read_file(char *fname)
         perror(NULL);
         exit(EXIT_FAILURE);
     } else {
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
         log_debug("fdopened %s", fname);
 #endif
     }
 
     // now read the entire file
     size_t read_ct = fread(buffer, 1, file_size, instream);
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
     log_debug("read_ct: %d", read_ct);
 #endif
     if (read_ct != (size_t)file_size) {
@@ -129,7 +129,7 @@ EXPORT char *libs7_read_file(char *fname)
 /* **************************************************************** */
 static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 {
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
     /* if (libs7_trace) */
     log_trace("_dlopen_clib: %s", lib);
 #endif
@@ -222,7 +222,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
              "src/lib%s_s7%s",
              /* lib, */
              lib, DSO_EXT);
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
     log_debug("dso: %s", buf);
 #endif
 
@@ -262,7 +262,7 @@ EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
 
     init_fn_name[0] = '\0';
     sprintf(init_fn_name, "lib%s_s7_init", lib);
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
     if (libs7_debug)
         log_debug("init_fn_name: %s", init_fn_name);
 #endif
@@ -277,12 +277,12 @@ EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
     init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(HNDL,
                                                     init_fn_name);
     if (init_fn_ptr == NULL) {
-/* #if defined(DEVBUILD) */
+/* #if defined(DEBUG_fastbuild) */
         log_debug("%s not statically linked, trying dlopen", init_fn_name);
 /* #endif */
         s7_pointer res = _dlopen_clib(s7, lib, init_fn_name);
         return res;
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
     } else {
     if (libs7_debug)
         log_debug("dlsym init_fn_ptr: %x", init_fn_ptr);
@@ -317,7 +317,7 @@ EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
 static s7_pointer g_libs7_load_plugin(s7_scheme *s7, s7_pointer args)
 {
     log_debug("g_libs7_load_plugin");
-#if defined(DEVBUILD)
+#if defined(DEBUG_fastbuild)
 #endif
     s7_pointer p, arg;
     char* lib;
@@ -482,7 +482,7 @@ static void _runfiles_init(s7_scheme *s7)
 {
     TRACE_ENTRY;
     /* s7_pointer tmp_load_path = s7_list(s7, 0); */
-/* #if defined(DEVBUILD) */
+/* #if defined(DEBUG_fastbuild) */
 /* #ifdef BAZEL_CURRENT_REPOSITORY */
 /*     if (libs7_debug) */
 /*         log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY); */
@@ -519,7 +519,7 @@ static void _runfiles_init(s7_scheme *s7)
 /*         scm_dir = scm_runfiles_dirs; */
 /*         char *scmdir; */
 /*         while (*scm_dir) { */
-/* #if defined(DEVBUILD) */
+/* #if defined(DEBUG_fastbuild) */
 /*             if (libs7_debug_runfiles) */
 /*                 log_debug(" runfile: %s", *scm_dir); */
 /* #endif */
@@ -528,7 +528,7 @@ static void _runfiles_init(s7_scheme *s7)
 /*                 log_error("Runfile not found: %s", *scm_dir); */
 /*                 /\* exit(EXIT_FAILURE); *\/ */
 /*             } */
-/* #if defined(DEVBUILD) */
+/* #if defined(DEBUG_fastbuild) */
 /*             if (libs7_debug_runfiles) */
 /*                 log_debug("runfile realpath: %s", scmdir); */
 /* #endif */
