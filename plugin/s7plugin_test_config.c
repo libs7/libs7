@@ -49,7 +49,7 @@ void cleanup(void)
     }
 }
 
-static void print_usage(char *test) {
+static void print_plugin_usage(char *test) {
     printf("Usage:\t$ bazel test test:%s [-- flags]\n", test);
     /* printf("  Link strategies:\n"); */
     /* printf("\t--//config/clibs/link=static\tStatic link/load (static libs). Default.\n"); */
@@ -111,7 +111,7 @@ static void set_options(char *test, struct option options[])
 {
     /* log_trace("set_options"); */
     if (options[FLAG_HELP].count) {
-        print_usage(test);
+        print_plugin_usage(test);
         exit(EXIT_SUCCESS);
     }
 #if defined(DEBUG_fastbuild)
