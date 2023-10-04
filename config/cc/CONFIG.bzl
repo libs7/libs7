@@ -22,8 +22,8 @@ BASE_INCLUDE_PATHS = [
 ]
 BASE_COPTS         = _BASE_COPTS + BASE_INCLUDE_PATHS
 BASE_LINKOPTS      = _BASE_LINKOPTS
-BASE_DEFINES       = ["DEBUG_$(COMPILATION_MODE)"]
-LOCAL_DEFINES      = select({
+BASE_DEFINES       = []
+LOCAL_DEFINES      = ["DEBUG_$(COMPILATION_MODE)"] + select({
     "//config/host/build:linux?": [
         "_GNU_SOURCE",          # for dlsym RTLD handles
         "DSO_EXT=\\\".dylib\\\""
