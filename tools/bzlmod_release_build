@@ -1,0 +1,23 @@
+#!/bin/sh
+
+
+VERBOSE=
+TARGET="//..."
+
+while getopts "vt:" arg; do
+  case $arg in
+      v)
+          VERBOSE="--bazelrc=$HOME/.config/bazel/verbose.bazelrc"
+          ;;
+      t)
+          TARGET=${OPTARG}
+          ;;
+  esac
+done
+
+bazel --bazelrc=`pwd`/.config/release.bazelrc \
+      $VERBOSE \
+      --nosystem_rc \
+      --nohome_rc \
+      --noworkspace_rc \
+      build $TARGET

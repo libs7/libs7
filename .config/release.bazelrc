@@ -1,0 +1,12 @@
+common --announce_rc
+common --experimental_cc_shared_library
+common --nokeep_state_after_build
+
+common --symlink_prefix=.bazel/
+
+common --enable_bzlmod
+common --registry=https://raw.githubusercontent.com/obazl/registry/main/
+common --registry=https://bcr.bazel.build
+
+# disable repo cache
+common --repository_cache=
