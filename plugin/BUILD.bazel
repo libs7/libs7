@@ -22,6 +22,7 @@ COPTS = BASE_INCLUDE_PATHS + [
     "-x", "c",
     "-Wall",
     "-Wextra",
+    "'-D$(MODULE_NAME)_VERSION=\"$(MODULE_VERSION)\"'"
 ] + select({
     "@platforms//os:macos": [
         "-std=c11",

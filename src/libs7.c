@@ -16,6 +16,8 @@
 
 #include "libs7_internal.h"
 
+const char *libs7_version = LIBS7_VERSION;
+
 bool libs7_verbose        = false;
 int  libs7_verbosity      = 0;
 bool libs7_debug          = false;

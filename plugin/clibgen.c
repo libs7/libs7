@@ -15,6 +15,8 @@
 
 #include "libs7.h"
 
+const char *clibgen_version = LIBS7_VERSION;
+
 extern bool libs7_debug;
 extern bool libs7_trace;
 
@@ -57,10 +59,6 @@ static void _print_debug_env(void)
 
     /* RUNFILES_DIR: set on macos for both bazel test and bazel run. */
     log_debug("RUNFILES_DIR: %s", getenv("RUNFILES_DIR"));
-}
-
-void _print_version(void) {
-    printf("FIXME: version id\n");
 }
 
 void _print_usage(void) {
@@ -115,7 +113,7 @@ static struct option options[] = {
     [FLAG_QUIET] = {.long_name="quiet",.short_name='q',
                     .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_VERSION] = {.long_name="version",
-                    .flags=GOPT_ARGUMENT_FORBIDDEN},
+                      .flags=GOPT_ARGUMENT_FORBIDDEN},
     [OPT_GENDIR] = {.long_name="gendir",.short_name='g',
                     .flags=GOPT_ARGUMENT_REQUIRED | GOPT_ARGUMENT_NO_HYPHEN},
     [OPT_SCRIPT] = {.long_name="script",.short_name='s',
@@ -131,7 +129,7 @@ void _set_options(struct option options[])
     }
 
     if (options[FLAG_VERSION].count) {
-        _print_version();
+        fprintf(stdout, "%s\n", clibgen_version);
         exit(EXIT_SUCCESS);
     }
 

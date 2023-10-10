@@ -1,5 +1,5 @@
 module(
-    name = "libs7", version = "1.0.5",
+    name = "libs7", version = "1.0.6",
     compatibility_level = 1,
     bazel_compatibility = [">=6.1.0"]
 )
@@ -10,7 +10,7 @@ bazel_dep(name = "bazel_skylib", version = "1.4.2")
 bazel_dep(name = "rules_cc",     version = "0.0.9")
 
 ## obazl:
-bazel_dep(name = "cc_config",   version = "1.1.0")
+bazel_dep(name = "cc_config",   version = "2.0.0")
 bazel_dep(name = "makeheaders", version = "1.0.2")
 bazel_dep(name = "uthash",      version = "2.3.0")
 bazel_dep(name = "liblogc",     version = "1.0.0")
