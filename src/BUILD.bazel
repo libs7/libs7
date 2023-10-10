@@ -14,7 +14,8 @@ SRCS          = BASE_SRCS
 DEPS          = BASE_DEPS + ["@uthash//src:uthash"]
 INCLUDE_PATHS = BASE_INCLUDE_PATHS + ["-I$(@uthash)/src"]
 COPTS         = BASE_COPTS + [
-    "-Wno-unused-parameter"
+    "-Wno-unused-parameter",
+    "'-D$(MODULE_NAME)_VERSION=\"$(MODULE_VERSION)\"'"
 ] + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
 LINKOPTS      = BASE_LINKOPTS
@@ -57,7 +58,6 @@ cc_library( # delivers libs7.lo
         "//config/host/build:macos?": [
             "-Wno-format-pedantic",
             "-Wno-gnu-statement-expression",
-            "'-D$(MODULE_NAME)_VERSION=\"$(MODULE_VERSION)\"'"
         ],
         "//config/host/build:linux?": [
             "-Wno-implicit-fallthrough"
