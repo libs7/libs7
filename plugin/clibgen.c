@@ -10,7 +10,7 @@
 /* #include <uuid/uuid.h> */
 
 #include "gopt.h"
-#include "log.h"
+#include "liblogc.h"
 #include "utstring.h"
 
 #include "libs7.h"

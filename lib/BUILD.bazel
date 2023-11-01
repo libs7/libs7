@@ -2,24 +2,25 @@ load("@rules_cc//cc:defs.bzl",
      "cc_library",
      ## "cc_shared_library"
      )
-load("@makeheaders//src:RULES.bzl", "makeheaders")
+load("@makeheaders//rules:makeheaders.bzl", "makeheaders")
 
 load("//config/cc:CONFIG.bzl",
      "BASE_SRCS", "BASE_DEPS", "BASE_INCLUDE_PATHS",
      "BASE_COPTS",
      "BASE_DEFINES", "LOCAL_DEFINES",
-     "BASE_LINKOPTS")
+     "BASE_LINKOPTS",
+     "define_module_version")
 
 SRCS          = BASE_SRCS
-DEPS          = BASE_DEPS + ["@uthash//src:uthash"]
-INCLUDE_PATHS = BASE_INCLUDE_PATHS + ["-I$(@uthash)/src"]
+DEPS          = BASE_DEPS + ["@uthash//lib:uthash"]
+INCLUDE_PATHS = BASE_INCLUDE_PATHS
 COPTS         = BASE_COPTS + [
     "-Wno-unused-parameter",
-    "'-D$(MODULE_NAME)_VERSION=\"$(MODULE_VERSION)\"'"
 ] + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
+LOCAL_DEFINES = LOCAL_DEFINES + define_module_version()
 LINKOPTS      = BASE_LINKOPTS
-TOOLCHAINS    = ["//:repo_paths"]
+# TOOLCHAINS    = ["//:module_profiles"]
 
 # WITH_SYSTEM_EXTRAS
   # is_directory_symbol, file_exists_symbol, delete_file_symbol,
@@ -46,20 +47,21 @@ cc_library( # delivers libs7.lo
         "libs7.c",
         ":mkhdrs",
     ] + select({
-        "//config/profile:dev?": [
+        "@makeheaders//compilation_mode:fastbuild": [
             "debug_s7.c"
         ],
         "//conditions:default": []
     }),
-    deps  = DEPS,
+    implementation_deps  = DEPS,
     hdrs  = ["libs7.h"],
+    includes = ["."],
     copts = COPTS + select({
         # allow for warnings in s7.c
-        "//config/host/build:macos?": [
+        "@platforms//os:macos": [
             "-Wno-format-pedantic",
             "-Wno-gnu-statement-expression",
         ],
-        "//config/host/build:linux?": [
+        "@platforms//os:linux": [
             "-Wno-implicit-fallthrough"
         ],
         "//conditions:default": []
@@ -79,7 +81,7 @@ cc_library( # delivers libs7.lo
         # "WITH_NOTCURSES"
     ],
     linkopts = LINKOPTS,
-    toolchains = TOOLCHAINS,
+    # toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )
 
@@ -101,17 +103,21 @@ makeheaders(
     name = "mkhdrs",
     hdrs_renamed = {"libs7.c": "libs7_internal.h"},
     hdrs_srcs = select({
-        "//config/profile:dev?": [
+        "@makeheaders//compilation_mode:fastbuild": [
             "debug_s7.c"
         ],
         "//conditions:default": []
     }),
-    additional_srcs = ["s7.h", "fs_api.c"] + select({
-        "//config/profile:dev?": [
-            "//src/macros:trace.h",
-            "//src/macros:ansi_colors.h",
+    additional_srcs = [
+        "s7.h", "fs_api.c",
+        "@makeheaders//logging:ansi_colors.h"
+    ] + select({
+        "@makeheaders//compilation_mode:fastbuild": [
+            "@makeheaders//logging:macros_debug.h"
         ],
-        "//conditions:default": ["//src/macros:notrace.h"]
+        "//conditions:default": [
+            "@makeheaders//logging:macros_ndebug.h"
+        ]
     }),
 )
 
@@ -119,14 +125,7 @@ makeheaders(
     name = "mkhdrs_export",
     out ="libs7.h",
     export_interface = True,
-    hdrs_srcs = [
-        "libs7.c",
-    ] + select({
-        "//config/profile:dev?": [
-            "debug_s7.c"
-        ],
-        "//conditions:default": []
-    }),
+    hdrs_srcs = ["libs7.c"],
     additional_srcs = ["s7.h", "fs_api.c"],
     visibility = ["//visibility:public"]
 )

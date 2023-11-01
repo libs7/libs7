@@ -1,53 +1,20 @@
-load("@makeheaders//src:RULES.bzl", "makeheaders")
+load("@makeheaders//rules:makeheaders.bzl", "makeheaders")
+
+load("//config/cc:CONFIG.bzl",
+     "BASE_COPTS",
+     "BASE_DEFINES",
+     "LOCAL_DEFINES",
+     "BASE_LINKOPTS",
+     "define_module_version")
 
 DEPS = [
-    "//src:s7",
-    "@gopt//src:gopt",
-    "@liblogc//src:logc",
-    "@uthash//src:uthash",
+    "//lib:s7",
+    "@gopt//lib:gopt",
+    "@liblogc//lib:logc",
+    "@uthash//lib:uthash",
 ]
 
-BASE_INCLUDE_PATHS = [
-    "-I$(GENDIR)/$(@)/src",
-
-    "-I$(@)/src",
-    "-I$(GENDIR)/$(@)/src",
-
-    "-I$(@liblogc)/src",
-    "-I$(@uthash)/src",
-    "-I$(@gopt)/src"
-]
-
-COPTS = BASE_INCLUDE_PATHS + [
-    "-x", "c",
-    "-Wall",
-    "-Wextra",
-    "'-D$(MODULE_NAME)_VERSION=\"$(MODULE_VERSION)\"'"
-] + select({
-    "@platforms//os:macos": [
-        "-std=c11",
-        "-Werror=pedantic", # not needed with -Werror?
-        "-Wpedantic", # same as -pedantic, strict ISO C and ISO C++ warnings
-        "-pedantic-errors",
-        "-Werror=pedantic",
-        # "-Wno-gnu-statement-expression",
-        # "-Wno-gnu",
-        # "-Wno-format-pedantic",
-    ],
-    "@platforms//os:linux": [
-        "-std=gnu11",
-        "-fPIC",
-        # GCC:
-        "-Werror", # turn all warnings into errors
-        "-Wfatal-errors", # stop on first error
-        # "-Wl,--no-undefined",
-    ],
-    "//conditions:default": ["-std=c11"],
-})
-
-DEFINES = ["DEBUG_$(COMPILATION_MODE)"]
-
-TOOLCHAINS = ["//:repo_paths"]
+# TOOLCHAINS = ["//:module_profiles"]
 
 ################################################################
 ## clibgen - builds s7 batch processor, for processing
@@ -59,9 +26,10 @@ cc_binary(
     srcs  = ["clibgen.c"],
     deps  = DEPS,
     data = [":clibgen.scm"],
-    copts =  COPTS,
-    local_defines = DEFINES,
-    toolchains = TOOLCHAINS,
+    copts =  BASE_COPTS,
+    defines = BASE_DEFINES,
+    local_defines = LOCAL_DEFINES + define_module_version(),
+    # toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )
 
@@ -71,10 +39,12 @@ cc_library(
     linkstatic = True,
     srcs = ["s7plugin_test_config.c", ":mkhdrs"],
     hdrs = [":mkhdrs"],
-    deps = DEPS,
-    copts = COPTS + ["-I$(GENDIR)/$(@)/plugin"],
-    local_defines = DEFINES,
-    toolchains = TOOLCHAINS,
+    includes = ["."],
+    implementation_deps = DEPS,
+    copts = BASE_COPTS, # + ["-I$(GENDIR)/$(@)/plugin"],
+    defines = BASE_DEFINES,
+    local_defines = LOCAL_DEFINES + define_module_version(),
+    # toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )
 

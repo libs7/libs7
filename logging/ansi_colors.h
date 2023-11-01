@@ -1,7 +1,9 @@
 /* ANSI color codes for printf */
 /* https://gist.github.com/RabaDabaDoba/145049536f815903c79944599c6f952a */
 
-//#ifdef TRACING
+/* for use with makeheaders only! */
+
+#if EXPORT_INTERFACE
 //Reset
 #define reset "\033[0m"
 #define CRESET "\033[0m"
@@ -78,4 +80,4 @@
 #define BHWHT "\033[1;97m"
 
 #define CMDCLR BHWHT
-
+#endif

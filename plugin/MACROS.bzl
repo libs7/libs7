@@ -1,4 +1,5 @@
-load("@cc_config//:RULES.bzl", "repo_paths_rule")
+load("@obazl_tools_cc//rules:module_profiles.bzl",
+     "module_profiles")
 
 BASE_COPTS = [
     "-x", "c",
@@ -42,14 +43,14 @@ def s7_plugin(name,
         name = name,
         alwayslink = alwayslink,
         linkstatic = linkstatic,
-        deps = deps + [
-            "@libs7//src:s7",
-            "@liblogc//src:logc",
+        implementation_deps = deps + [
+            "@libs7//lib:s7",
+            "@liblogc//lib:logc",
         ],
         copts = BASE_COPTS + copts + [
-            "-I$(@libs7)/src",
-            "-I$(GENDIR)/$(@libs7)/src",
-            "-I$(@liblogc)/src",
+            # "-I$(@libs7)/src",
+            # "-I$(GENDIR)/$(@libs7)/src",
+            # "-I$(@liblogc)/src",
         ],
         **kwargs
     )
@@ -62,13 +63,13 @@ def s7_library(name,
     native.cc_library(
         name = name,
         deps = deps + [
-            "@libs7//src:s7",
-            "@liblogc//src:logc",
+            "@libs7//lib:s7",
+            "@liblogc//lib:logc",
         ],
         copts = BASE_COPTS + copts + [
-            "-I$(@libs7)/src",
-            "-I$(GENDIR)/$(@libs7)/src",
-            "-I$(@liblogc)/src",
+            # "-I$(@libs7)/src",
+            # "-I$(GENDIR)/$(@libs7)/src",
+            # "-I$(@liblogc)/src",
         ],
         **kwargs
     )
@@ -83,36 +84,36 @@ def s7_plugin_test(name,
         name = name,
         linkstatic    = linkstatic,
         deps = deps + [
-            "@libs7//src:s7",
+            "@libs7//lib:s7",
             "@libs7//plugin:s7plugin_test_config",
-            "@liblogc//src:logc",
-            "@gopt//src:gopt",
-            "@unity//src:unity",
-            "@uthash//src:uthash",
+            "@liblogc//lib:logc",
+            "@gopt//lib:gopt",
+            "@unity//lib:unity",
+            "@uthash//lib:uthash",
         ],
         copts = BASE_COPTS + copts + [
-            "-I$(@libs7)/src",
-            "-I$(GENDIR)/$(@libs7)/src",
-            "-I$(GENDIR)/$(@libs7)/plugin",
-            "-I$(@liblogc)/src",
-            "-I$(@gopt)/src",
-            "-I$(@unity)/src",
-            "-I$(@uthash)/src",
+            # "-I$(@libs7)/src",
+            # "-I$(GENDIR)/$(@libs7)/src",
+            # "-I$(GENDIR)/$(@libs7)/plugin",
+            # "-I$(@liblogc)/src",
+            # "-I$(@gopt)/src",
+            # "-I$(@unity)/src",
+            # "-I$(@uthash)/src",
         ],
         **kwargs
     )
 
 #############################################
-def s7_repo_paths(name, repos, visibility=None):
+def s7_module_profiles(name, repos, visibility=None):
     if native.repository_name() == "@":
        _this = "."
     else:
         _this = "external/{}".format(
             native.repository_name()[1:])
 
-    repos = repos + ["@liblogc//src:logc",
-                     "@libs7//src:s7"]
+    repos = repos + ["@liblogc//lib:logc",
+                     "@libs7//lib:s7"]
 
-    repo_paths_rule(name = name, repos = repos,
+    module_profiles(name = name, repos = repos,
                     this = _this,
                     visibility = ["//visibility:public"])

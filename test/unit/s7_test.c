@@ -1,7 +1,7 @@
 /* tests extracted from ffitest.c */
 
 #include "gopt.h"
-#include "log.h"
+#include "liblogc.h"
 #include "unity.h"
 #include "utarray.h"
 #include "utstring.h"

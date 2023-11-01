@@ -5,7 +5,7 @@
 #include <sys/errno.h>
 #include <sys/types.h>
 
-#include "log.h"
+#include "liblogc.h"
 
 #if EXPORT_INTERFACE
 #include "gopt.h"
@@ -16,18 +16,16 @@
 
 s7_scheme *s7;
 
-extern bool verbose;
-int  verbosity;
-#if defined(DEBUG_fastbuild)
-int plugin_debug;
-#endif
-
-/* #if defined(DEVBUILD) */
-extern bool libs7_verbose;
+#if defined(PROFILE_fastbuild)
+int  s7plugin_debug;
+bool s7plugin_trace;
 extern bool libs7_debug;
 extern bool libs7_debug_runfiles;
 extern bool libs7_trace;
-/* #endif */
+#endif
+
+extern int  s7plugin_verbosity;
+extern int  libs7_verbosity;
 
 /* extern struct option options[]; */
 
@@ -59,25 +57,28 @@ static void print_plugin_usage(char *test) {
     /* printf("\t\t--@libs7//config/clibs/link=shared\n"); */
 
     printf("  Flags (repeatable)\n");
-    printf("\t-d, --debug\t\tEnable all debugging flags.\n");
+    printf("\t-d, --debug\t\tEnable plugin debug flags.\n");
+    printf("\t    --libs7-debug\tEnable libs7 debug flags.\n");
     /* printf("\t--debug-config\t\tEnable all config debugging flags.\n"); */
     /* printf("\t--debug-scm\t\tEnable all scheme debugging flags.\n"); */
-    printf("\t-t, --trace\t\tEnable trace flags.\n");
+    printf("\t-t, --trace\t\tEnable plugin trace flags.\n");
+    printf("\t    --libs7-trace\tEnable libs7 trace flags.\n");
     printf("\t-v, --verbose\t\tEnable verbosity. Repeatable.\n");
 
 }
 
 enum OPTS {
     FLAG_HELP,
-#if defined(DEBUG_fastbuild)
+#if defined(PROFILE_fastbuild)
     FLAG_DEBUG,
-#endif
+    FLAG_DEBUG_LIBS7,
     FLAG_DEBUG_CONFIG,
     FLAG_DEBUG_SCM,
     FLAG_DEBUG_SCM_LOADS,
-
-    FLAG_SHOW_CONFIG,
     FLAG_TRACE,
+    FLAG_TRACE_LIBS7,
+#endif
+    FLAG_SHOW_CONFIG,
     FLAG_VERBOSE,
 
     LAST
@@ -85,21 +86,25 @@ enum OPTS {
 
 static struct option options[] = {
     /* 0 */
-#if defined(DEBUG_fastbuild)
-    [FLAG_DEBUG] = {.long_name="plugin-debug",
-                    /* .short_name='d', */
+#if defined(PROFILE_fastbuild)
+    [FLAG_DEBUG] = {.long_name="debug",
+                    .short_name='d',
                     .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
-#endif
+    [FLAG_DEBUG_LIBS7] = {.long_name="libs7-debug",
+                    .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
     [FLAG_DEBUG_CONFIG] = {.long_name="debug-config",
                            .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_DEBUG_SCM] = {.long_name="debug-scm", .short_name = 'D',
                         .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_DEBUG_SCM_LOADS] = {.long_name="debug-scm-loads",
                               .flags=GOPT_ARGUMENT_FORBIDDEN},
-    [FLAG_SHOW_CONFIG] = {.long_name="show-config",
-                          .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_TRACE] = {.long_name="trace",.short_name='t',
                     .flags=GOPT_ARGUMENT_FORBIDDEN},
+    [FLAG_TRACE_LIBS7] = {.long_name="libs7-trace",
+                          .flags=GOPT_ARGUMENT_FORBIDDEN},
+#endif
+    [FLAG_SHOW_CONFIG] = {.long_name="show-config",
+                          .flags=GOPT_ARGUMENT_FORBIDDEN},
     [FLAG_VERBOSE] = {.long_name="verbose",.short_name='v',
                       .flags=GOPT_ARGUMENT_FORBIDDEN | GOPT_REPEATABLE},
     [FLAG_HELP] = {.long_name="help",.short_name='h',
@@ -114,21 +119,24 @@ static void set_options(char *test, struct option options[])
         print_plugin_usage(test);
         exit(EXIT_SUCCESS);
     }
-#if defined(DEBUG_fastbuild)
+#if defined(PROFILE_fastbuild)
     if (options[FLAG_DEBUG].count) {
-        plugin_debug = options[FLAG_DEBUG].count;
-        /* libs7_debug = true; */
+        s7plugin_debug = options[FLAG_DEBUG].count;
+    }
+    if (options[FLAG_DEBUG_LIBS7].count) {
+        libs7_debug = options[FLAG_DEBUG_LIBS7].count;
+    }
+    if (options[FLAG_TRACE].count) {
+        s7plugin_trace = true;
+    }
+    if (options[FLAG_TRACE_LIBS7].count) {
+        libs7_trace = true;
     }
 #endif
-    if (options[FLAG_TRACE].count) {
-        /* libs7_trace = true; */
-    }
     if (options[FLAG_VERBOSE].count) {
-        verbosity = options[FLAG_VERBOSE].count;
-        log_info("verbosity: %d", verbosity);
-        verbose = true;
-        if (verbosity > 1) {
-            libs7_verbose = true;
+        s7plugin_verbosity = options[FLAG_VERBOSE].count;
+        if (s7plugin_verbosity > 1) {
+            libs7_verbosity = s7plugin_verbosity;
         }
     }
 }
@@ -189,8 +197,8 @@ s7_scheme *s7_plugin_initialize(char *test, int argc, char **argv)
 
     set_options(test, options);
 
-#if defined(DEBUG_fastbuild)
-    if (plugin_debug) print_debug_env();
+#if defined(PROFILE_fastbuild)
+    if (s7plugin_debug) print_debug_env();
 #endif
     s7_scheme *s7 = libs7_init();
 

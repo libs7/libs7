@@ -58,7 +58,7 @@ To use this repository as a dependency in another project:
 
     bazel_dep(name = "libs7", version = "1.0.0")
 
-This makes `cc_library` target `@libs7//src:s7` available as a
+This makes `cc_library` target `@libs7//lib:s7` available as a
 dependency; it provides a static library `libs7`.
 
 To use the library first call the initialization function:
@@ -196,7 +196,7 @@ cc_library(
     alwayslink = True, # ensure init fn sym available for dlsym
     srcs  = [
         ":libc_s7.c",        <1>
-        "//src:s7.h"
+        "//lib:s7.h"
     ],
     copts = CLIB_COPTS,
     linkopts = CLIB_LINKOPTS,

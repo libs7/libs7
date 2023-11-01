@@ -1,9 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
-
-string_flag(name = "profile", build_setting_default = "prod",
-            values = ["dev", "test", "prod"])
-config_setting(name = "dev?", flag_values = {":profile": "dev"})
-config_setting(name = "test?", flag_values = {":profile": "test"})
-config_setting(name = "prod?", flag_values = {":profile": "prod"})

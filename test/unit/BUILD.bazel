@@ -6,22 +6,22 @@ load("//config/cc:CONFIG.bzl",
 
 SRCS          = []
 DEPS          = BASE_DEPS + [
-    "//src:s7",
+    "//lib:s7",
     "//plugin:s7plugin_test_config",
-    "@gopt//src:gopt",
-    "@unity//src:unity",
-    "@uthash//src:uthash",
+    "@gopt//lib:gopt",
+    "@unity//lib:unity",
+    "@uthash//lib:uthash",
 ]
 INCLUDE_PATHS = [
-    "-I$(GENDIR)/$(@)/plugin",
-    "-I$(@gopt)/src",
-    "-I$(@unity)/src",
-    "-I$(@uthash)/src",
+    # "-I$(GENDIR)/$(@)/plugin",
+    # "-I$(@gopt)/src",
+    # "-I$(@unity)/src",
+    # "-I$(@uthash)/src",
 ]
 COPTS         = BASE_COPTS + INCLUDE_PATHS
 DEFINES       = []
 LINKOPTS      = BASE_LINKOPTS
-TOOLCHAINS    = ["//:test_repo_paths"]
+# TOOLCHAINS    = ["//:test_module_profiles"]
 TIMEOUT       = "short"
 
 ###########
@@ -43,6 +43,6 @@ cc_test(
     deps       = DEPS,
     copts      = COPTS,
     linkopts   = LINKOPTS,
-    toolchains = TOOLCHAINS,
+    # toolchains = TOOLCHAINS,
     timeout    = TIMEOUT,
 )

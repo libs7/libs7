@@ -7,7 +7,7 @@
 
 #include "libs7.h"
 
-#include "log.h"
+#include "liblogc.h"
 /* #if EXPORT */
 #include "utarray.h"
 /* #endif */
