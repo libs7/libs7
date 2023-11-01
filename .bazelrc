@@ -1,8 +1,8 @@
-common --experimental_cc_shared_library
-common --enable_bzlmod
+common --incompatible_enable_cc_toolchain_resolution
 
-try-import .config/registries.bazelrc
+common --enable_bzlmod
+try-import %workspace%/.config/registries.bazelrc
 common --registry=https://raw.githubusercontent.com/obazl/registry/main/
 common --registry=https://bcr.bazel.build
 
-try-import .config/user.bazelrc
+try-import %workspace%/.config/user.bazelrc
