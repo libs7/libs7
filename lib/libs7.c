@@ -523,8 +523,9 @@ static void _runfiles_init(s7_scheme *s7)
     }
     /* ssize_t linksz = readlink(libs7_repo, (char*)linkbuf, 512); */
     /* linkbuf[linksz + 1] = '\0'; */
-    if (libs7_verbosity > 0)
+    if (libs7_verbosity > 0) {
         LOG_INFO(0, "libs7_repo: %s", libs7_repo);
+    }
     /* log_debug("readlink libs7_repo: %s", linkbuf); */
     s7_add_to_load_path(s7, libs7_repo);
 /*     if (getenv("BAZEL_TEST")) { */
