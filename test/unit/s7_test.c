@@ -22,7 +22,8 @@ UT_string *sexp;
 s7_pointer actual;
 s7_pointer expected;
 
-bool verbose;
+int  s7plugin_verbosity = 0;
+int  libs7_verbosity = 0;
 bool debug;
 
 /* WARNING: setUp and tearDown are run once per test. */

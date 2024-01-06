@@ -43,7 +43,8 @@ def s7_plugin(name,
         name = name,
         alwayslink = alwayslink,
         linkstatic = linkstatic,
-        implementation_deps = deps + [
+        deps = deps + [
+        #deps = deps + [
             "@libs7//lib:s7",
             "@liblogc//lib:logc",
         ],

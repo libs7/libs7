@@ -28,7 +28,9 @@ cc_binary(
     data = [":clibgen.scm"],
     copts =  BASE_COPTS,
     defines = BASE_DEFINES,
-    local_defines = LOCAL_DEFINES + define_module_version(),
+    local_defines = LOCAL_DEFINES + [
+        "LOCAL_REPO=\\\"{}\\\"".format(repository_name()[1:]),
+    ] + define_module_version(),
     # toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )
@@ -43,7 +45,9 @@ cc_library(
     implementation_deps = DEPS,
     copts = BASE_COPTS, # + ["-I$(GENDIR)/$(@)/plugin"],
     defines = BASE_DEFINES,
-    local_defines = LOCAL_DEFINES + define_module_version(),
+    local_defines = LOCAL_DEFINES + [
+        "LOCAL_REPO=\\\"{}\\\"".format(repository_name()[1:]),
+    ] + define_module_version(),
     # toolchains = TOOLCHAINS,
     visibility = ["//visibility:public"]
 )

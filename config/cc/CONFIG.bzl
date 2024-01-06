@@ -25,8 +25,12 @@ BASE_INCLUDE_PATHS = [
 ]
 BASE_COPTS         = _BASE_COPTS + BASE_INCLUDE_PATHS
 BASE_LINKOPTS      = _BASE_LINKOPTS
-BASE_DEFINES       = ["PROFILE_$(COMPILATION_MODE)"]
-LOCAL_DEFINES      = DSO_EXT + select({
+BASE_DEFINES       = [
+    "PROFILE_$(COMPILATION_MODE)",
+    # "PROFILE_fastbuild"      ## special case
+]
+LOCAL_DEFINES      = DSO_EXT + [
+] + select({
     "@platforms//os:linux": [
         "_GNU_SOURCE",          # for dlsym RTLD handles
     ],

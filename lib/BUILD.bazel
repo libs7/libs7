@@ -18,7 +18,9 @@ COPTS         = BASE_COPTS + [
     "-Wno-unused-parameter",
 ] + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
-LOCAL_DEFINES = LOCAL_DEFINES + define_module_version()
+LOCAL_DEFINES = LOCAL_DEFINES + [
+    "LOCAL_REPO=\\\"{}\\\"".format(repository_name()[1:]),
+] + define_module_version()
 LINKOPTS      = BASE_LINKOPTS
 # TOOLCHAINS    = ["//:module_profiles"]
 
@@ -106,6 +108,9 @@ makeheaders(
         "@makeheaders//compilation_mode:fastbuild": [
             "debug_s7.c"
         ],
+        # "@makeheaders//compilation_mode:opt": [
+        #     "debug_s7.c"
+        # ],
         "//conditions:default": []
     }),
     additional_srcs = [
@@ -115,6 +120,10 @@ makeheaders(
         "@makeheaders//compilation_mode:fastbuild": [
             "@makeheaders//logging:macros_debug.h"
         ],
+        # special case: built as tool, transitioned to opt
+        # "@makeheaders//compilation_mode:opt": [
+        #     "@makeheaders//logging:macros_debug.h"
+        # ],
         "//conditions:default": [
             "@makeheaders//logging:macros_ndebug.h"
         ]

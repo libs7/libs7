@@ -17,14 +17,14 @@
 s7_scheme *s7;
 
 #if defined(PROFILE_fastbuild)
-int  s7plugin_debug;
 bool s7plugin_trace;
-extern bool libs7_debug;
-extern bool libs7_debug_runfiles;
+int  s7plugin_debug;
 extern bool libs7_trace;
+extern int  libs7_debug;
+extern bool libs7_debug_runfiles;
 #endif
 
-extern int  s7plugin_verbosity;
+int  s7plugin_verbosity;
 extern int  libs7_verbosity;
 
 /* extern struct option options[]; */
@@ -151,8 +151,8 @@ void print_debug_env(void)
     struct passwd* pwd = getpwuid(getuid());
     log_debug("pwd->pw_dir: %s", pwd->pw_dir);
 
-    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, 'libs7' when run as external repo
-    log_debug("BAZEL_CURRENT_REPOSITORY (macro): '%s'", BAZEL_CURRENT_REPOSITORY);
+    // LOCAL_REPO: null when run from 'home' repo, 'libs7' when run as external repo
+    log_debug("LOCAL_REPO (macro): '%s'", LOCAL_REPO);
 
     // TEST_WORKSPACE: always the root ws
     log_debug("TEST_WORKSPACE: '%s'", getenv("TEST_WORKSPACE"));

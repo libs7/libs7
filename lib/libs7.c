@@ -18,15 +18,16 @@
 
 const char *libs7_version = LIBS7_VERSION;
 
-#define TRACE_FLAG libs7_trace
-bool    TRACE_FLAG          = false;
-#define DEBUG_LEVEL libs7_debug
-int     DEBUG_LEVEL         = 0;
 #if defined(PROFILE_fastbuild)
-bool libs7_debug_runfiles = false;
+#define TRACE_FLAG     libs7_trace
+#define DEBUG_LEVEL    libs7_debug
+#define S7_DEBUG_LEVEL libs7_debug
+bool    TRACE_FLAG     = false;
+int     DEBUG_LEVEL    = 0;
+bool    libs7_debug_runfiles = false;
 #endif
 
-int  libs7_verbosity      = 0;
+int  libs7_verbosity;           /* FIXME: extern? */
 
 UT_array *dlopened; /* list of libs loaded dynamically */
 
@@ -200,29 +201,29 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     // $TEST_SRCDIR/$TEST_WORKSPACE.
 
     // TEST_SRCDIR: absolute path to the base of the runfiles tree. required
-    fprintf(stderr, "BAZEL_CURRENT_REPO: %s\n",
-              getenv("BAZEL_CURRENT_REPOSITORY"));
+    fprintf(stderr, "LOCAL_REPO: %s\n",
+              getenv("LOCAL_REPO"));
     fprintf(stderr, "TEST_SRCDIR: %s\n", getenv("TEST_SRCDIR"));
     fprintf(stderr, "TEST_WORKSPACE: %s\n", ws);
 //#endif
-    char *fmt;
-    (void)fmt;
-    if (ws) {
-        if ( (strncmp("libs7", ws, 5) == 0)
-             && strlen(ws) == 5 ) {
-            fmt = "lib/lib%s/lib%s_s7%s";
-        } else {
-            fmt = "external/libs7/lib/lib%s/lib%s_s7%s";
-        }
-    } else {
-        //FIXME: use BAZEL_CURRENT_REPOSITORY for runfiles
-        ws = getenv("BUILD_WORKSPACE_DIRECTORY");
-        /* log_debug("dlopen ns build ws: %s", ws); */
-        if (strncmp(basename(ws), "libs7", 5) == 0)
-            fmt = "lib/lib%s/lib%s_s7%s";
-        else
-            fmt = "external/libs7/lib/lib%s/lib%s_s7%s";
-    }
+    /* char *fmt; */
+    /* (void)fmt; */
+    /* if (ws) { */
+    /*     if ( (strncmp("libs7", ws, 5) == 0) */
+    /*          && strlen(ws) == 5 ) { */
+    /*         fmt = "lib/lib%s/lib%s_s7%s"; */
+    /*     } else { */
+    /*         fmt = "external/libs7/lib/lib%s/lib%s_s7%s"; */
+    /*     } */
+    /* } else { */
+    /*     //FIXME: use LOCAL_REPO for runfiles */
+    /*     ws = getenv("BUILD_WORKSPACE_DIRECTORY"); */
+    /*     /\* log_debug("dlopen ns build ws: %s", ws); *\/ */
+    /*     if (strncmp(basename(ws), "libs7", 5) == 0) */
+    /*         fmt = "lib/lib%s/lib%s_s7%s"; */
+    /*     else */
+    /*         fmt = "external/libs7/lib/lib%s/lib%s_s7%s"; */
+    /* } */
     /* snprintf(buf, */
     /*          512, // 20 + 18 + len + strlen(dso_ext), */
     /*          fmt, */
@@ -274,8 +275,7 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
 {
     TRACE_ENTRY;
-    TRACE_LOG("load_plugin: %s", lib);
-
+    LOG_DEBUG(0, "load_plugin: %s", lib);
     static char init_fn_name[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
     init_fn_name[0] = '\0';
@@ -353,7 +353,7 @@ static s7_pointer g_libs7_load_plugin(s7_scheme *s7, s7_pointer args)
  * simply passed over when the a-list is searched by assoc.
  * (https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node153.html)
  */
-bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
+EXPORT bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
 {
     /* TRACE_ENTRY; */
     if (s7_is_list(s7, arg)) {
@@ -403,7 +403,7 @@ bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
  * WARNING: this is for mustache processing, it probably should not
  * live here.  returns true of arg is an alist whose keys are keywords.
  */
-bool libs7_is_kw_alist(s7_scheme *s7, s7_pointer arg)
+EXPORT bool libs7_is_kw_alist(s7_scheme *s7, s7_pointer arg)
 {
     if (s7_is_list(s7, arg)) {
         if (arg == s7_nil(s7)) // '() is an alist
@@ -453,7 +453,7 @@ bool libs7_is_kw_alist(s7_scheme *s7, s7_pointer arg)
         return false;
 }
 
-bool libs7_is_empty_alist(s7_scheme *s7, s7_pointer arg)
+EXPORT bool libs7_is_empty_alist(s7_scheme *s7, s7_pointer arg)
 {
     /* log_debug("libs7_is_empty_alist"); */
     if (s7_is_list(s7, arg)) {
@@ -497,29 +497,29 @@ static void _runfiles_init(s7_scheme *s7)
     TRACE_ENTRY;
     /* s7_pointer tmp_load_path = s7_list(s7, 0); */
 /* #if defined(PROFILE_fastbuild) */
-/* #ifdef BAZEL_CURRENT_REPOSITORY */
+/* #ifdef LOCAL_REPO */
 /*     if (libs7_debug) */
-/*         log_debug("bazel_current_repo: " BAZEL_CURRENT_REPOSITORY); */
+/*         log_debug("bazel_current_repo: " LOCAL_REPO); */
 /* #endif */
 /* #endif */
 
     if (libs7_verbosity > 0) {
-        LOG_INFO(0, "libs7 BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
+        LOG_INFO(0, "libs7 LOCAL_REPO: %s", LOCAL_REPO);
 
         LOG_INFO(0, "TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE"));
         LOG_INFO(0, "BAZEL_TEST:  %s", getenv("BAZEL_TEST"));
         LOG_INFO(0, "RUNFILES_DIR:  %s", getenv("RUNFILES_DIR"));
         LOG_INFO(0, "CWD:  %s", getcwd(NULL,0));
     }
-    //TODO: is this use of BAZEL_CURRENT_REPOSITORY reliable? or do we
+    //TODO: is this use of LOCAL_REPO reliable? or do we
     // need to read _repo_mapping file to get canonical name for libs7?
     /* char linkbuf[512]; */
 
     char *libs7_repo;
-    if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
+    if (strlen(LOCAL_REPO) == 0) {
         libs7_repo = realpath("_main/scm", NULL);
     } else {
-        libs7_repo = realpath("external/" BAZEL_CURRENT_REPOSITORY "/scm", NULL);
+        libs7_repo = realpath("external/" LOCAL_REPO "/scm", NULL);
     }
     /* ssize_t linksz = readlink(libs7_repo, (char*)linkbuf, 512); */
     /* linkbuf[linksz + 1] = '\0'; */

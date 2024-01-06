@@ -19,7 +19,7 @@ const char *clibgen_version = LIBS7_VERSION;
 
 extern bool libs7_debug;
 extern bool libs7_trace;
-
+int  libs7_verbosity;
 int verbosity = 0;
 bool quiet   = false;
 
@@ -33,8 +33,8 @@ static void _print_debug_env(void)
     struct passwd* pwd = getpwuid(getuid());
     log_debug("pwd->pw_dir: %s", pwd->pw_dir);
 
-    // BAZEL_CURRENT_REPOSITORY: null when run from 'home' repo, canonical repo for externals
-    log_debug("BAZEL_CURRENT_REPOSITORY (macro): '%s'", BAZEL_CURRENT_REPOSITORY);
+    // LOCAL_REPO: null when run from 'home' repo, canonical repo for externals
+    log_debug("LOCAL_REPO (macro): '%s'", LOCAL_REPO);
 
     // TEST_WORKSPACE: always the root ws
     log_debug("TEST_WORKSPACE: '%s'", getenv("TEST_WORKSPACE"));
@@ -216,14 +216,14 @@ int main(int argc, char **argv)
         // deal with bazel context
         /* char *rel_scmdir; */
         char *cload_dir_format = "%s/%s";
-        if (strlen(BAZEL_CURRENT_REPOSITORY) == 0) {
+        if (strlen(LOCAL_REPO) == 0) {
             /* rel_scmdir = "../libs7/scm"; */
             /* rel_scmdir = "s7_clibgen/src"; */
             s7_add_to_load_path(s7, "plugin"); //FIXME: hardcoded path
         } else {
             s7_add_to_load_path(s7,
                                 "external/"
-                                BAZEL_CURRENT_REPOSITORY
+                                LOCAL_REPO
                                 "/plugin");
         }
 
