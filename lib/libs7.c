@@ -192,19 +192,19 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     s7_int gc_loc = s7_gc_protect(s7, e);
     s7_pointer old_e = s7_set_curlet(s7, e);
 
-    char *ws = getenv("TEST_WORKSPACE");
+    /* char *ws = getenv("TEST_WORKSPACE"); */
 //#if defined(PROFILE_opt) || defined(PROFILE_fastbuild)
-    fprintf(stdout, "BAZEL_TEST: %s\n", getenv("BAZEL_TEST"));
+    LOG_DEBUG(0, "BAZEL_TEST: %s\n", getenv("BAZEL_TEST"));
     // BAZEL_TEST true if tgt is cc_test (either bazel test or  run cmd)
 
     // bazel test: The initial working directory shall be
     // $TEST_SRCDIR/$TEST_WORKSPACE.
 
     // TEST_SRCDIR: absolute path to the base of the runfiles tree. required
-    fprintf(stderr, "LOCAL_REPO: %s\n",
+    LOG_DEBUG(0, "LOCAL_REPO: %s\n",
               getenv("LOCAL_REPO"));
-    fprintf(stderr, "TEST_SRCDIR: %s\n", getenv("TEST_SRCDIR"));
-    fprintf(stderr, "TEST_WORKSPACE: %s\n", ws);
+    LOG_DEBUG(0, "TEST_SRCDIR: %s\n", getenv("TEST_SRCDIR"));
+    LOG_DEBUG(0, "TEST_WORKSPACE: %s\n", getenv("TEST_WORKSPACE"));
 //#endif
     /* char *fmt; */
     /* (void)fmt; */

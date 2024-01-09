@@ -36,6 +36,7 @@ BASE_COPTS = [
 def s7_plugin(name,
               alwayslink = True,
               linkstatic = True,
+              linkopts = [],
               deps = [],
               copts = [],
               **kwargs):
@@ -48,6 +49,7 @@ def s7_plugin(name,
             "@libs7//lib:s7",
             "@liblogc//lib:logc",
         ],
+        linkopts = linkopts + ["-Wl,-export_dynamic"],
         copts = BASE_COPTS + copts + [
             # "-I$(@libs7)/src",
             # "-I$(GENDIR)/$(@libs7)/src",
