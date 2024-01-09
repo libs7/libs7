@@ -49,7 +49,11 @@ def s7_plugin(name,
             "@libs7//lib:s7",
             "@liblogc//lib:logc",
         ],
-        linkopts = linkopts + ["-Wl,-export_dynamic"],
+        linkopts = linkopts + select({
+            "@platforms//os:linux": ["-Wl,--export-dynamic"],
+            "@platforms//os:macos": ["-Wl,-export_dynamic"],
+            "//conditions:default": []
+        }),
         copts = BASE_COPTS + copts + [
             # "-I$(@libs7)/src",
             # "-I$(GENDIR)/$(@libs7)/src",
