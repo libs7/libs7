@@ -1,1 +1,5 @@
+#define TO_STR(x)
+#define NM_TO_STR(x)
+#define TO_BOOL(x)
+#define LOG_S7_DEBUG(msg, obj)
 #define TRACE_S7_DUMP(lvl, fmt, obj)

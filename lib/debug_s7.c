@@ -19,7 +19,7 @@ bool mibl_debug_s7_config = false;
 char *tostr1 = NULL;
 char *tostr2 = NULL;
 
-#if INTERFACE
+#if EXPORT_INTERFACE
 #define TO_STR(x) s7_object_to_c_string(s7, x)
 #define NM_TO_STR(x) s7_object_to_c_string(s7, s7_name_to_value(s7, x))
 #define TO_BOOL(x) s7_boolean(s7, s7_name_to_value(s7, x))
