@@ -1,0 +1,6 @@
+#define TO_STR(x)
+#define NM_TO_STR(x)
+#define TO_BOOL(x)
+#define LOG_S7_INFO(lvl, msg, obj)
+#define LOG_S7_DEBUG(lvl, msg, obj)
+#define LOG_S7_ERROR(lvl, msg, obj)

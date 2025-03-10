@@ -187,7 +187,7 @@ int main(int argc, char **argv)
     /* log_debug("argv[1]: %s", argv[1]); /\* the libfoo_clibgen.scm file *\/ */
     /* log_debug("argv[2]: %s", argv[2]); /\* Bazel $GENDIR -- FIXME: use --outdir *\/ */
 
-    s7_scheme *s7 = libs7_init();
+    s7_scheme *s7 = libs7_init(argv[0]);
 
     if (verbosity > 0)
         log_info("s7: %s", S7_DATE);

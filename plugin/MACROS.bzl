@@ -1,36 +1,5 @@
-load("@obazl_tools_cc//rules:module_profiles.bzl",
-     "module_profiles")
-
-BASE_COPTS = [
-    "-x", "c",
-    "-Wall",
-    "-Wextra",
-] + select({
-    "@platforms//os:macos": [
-        "-std=c11",
-        "-Werror=pedantic", # not needed with -Werror?
-        "-Wpedantic", # same as -pedantic, strict ISO C and ISO C++ warnings
-        "-pedantic-errors",
-        # "-Wno-gnu-statement-expression",
-        # "-Werror=pedantic",
-        # "-Wno-gnu",
-        # "-Wno-format-pedantic",
-    ],
-    "@platforms//os:linux": [
-        "-std=gnu11",
-        "-fPIC",
-        # GCC:
-        "-Werror", # turn all warnings into errors
-        "-Wfatal-errors", # stop on first error
-        # "-Wl,--no-undefined",
-    ],
-    "//conditions:default": ["-std=c11"],
-# }) + select({
-#     "@platforms//cpu:arm64": [
-#         # "-target", "arm64-apple-darwin22.5.0"
-#     ],
-#     "//conditions:default": [],
-})
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_shared_library", "cc_test")
+load("@obazl_config_cc//config:BASE.bzl", "BASE_COPTS")
 
 ###################
 def s7_plugin(name,
@@ -40,12 +9,13 @@ def s7_plugin(name,
               deps = [],
               copts = [],
               **kwargs):
-    native.cc_library(
+
+    cc_library(
         name = name,
         alwayslink = alwayslink,
         linkstatic = linkstatic,
+        copts = BASE_COPTS + copts,
         deps = deps + [
-        #deps = deps + [
             "@libs7//lib:s7",
             "@liblogc//lib:logc",
         ],
@@ -54,20 +24,59 @@ def s7_plugin(name,
             "@platforms//os:macos": ["-Wl,-export_dynamic"],
             "//conditions:default": []
         }),
-        copts = BASE_COPTS + copts + [
-            # "-I$(@libs7)/src",
-            # "-I$(GENDIR)/$(@libs7)/src",
-            # "-I$(@liblogc)/src",
-        ],
         **kwargs
     )
+
+####################
+def _s7_plugin_test_impl(name,
+                        libunity = False,
+                        linkstatic = True,
+                        deps = [],
+                        copts = [],
+                        visibility = ["//visibility:public"],
+                        **kwargs):
+    if libunity:
+        udep = [libunity]
+        uhdr = [
+            "-Iexternal/{}/src".format(Label("@unity").repo_name)
+        ]
+    else:
+        udep = [Label("@unity//lib:unity")]
+        uhdr = []
+
+    cc_test(
+        name       = name,
+        linkstatic = linkstatic,
+        copts      = BASE_COPTS + copts + uhdr,
+        deps       = deps + [
+            "@libs7//lib:s7",
+            "@libs7//plugin:s7plugin_test_config",
+            "@liblogc//lib:logc",
+            "@gopt//lib:gopt",
+            "@uthash//lib:uthash",
+        ] + udep,
+        visibility = visibility,
+        **kwargs
+    )
+
+s7_plugin_test = macro(
+    inherit_attrs = native.cc_test,
+    implementation = _s7_plugin_test_impl,
+    attrs = {
+        "libunity": attr.label(
+            configurable = False),
+        "linkstatic": attr.bool(
+            configurable = False,
+            default = True),
+    }
+)
 
 ####################
 def s7_library(name,
               deps = [],
               copts = [],
               **kwargs):
-    native.cc_library(
+    cc_library(
         name = name,
         deps = deps + [
             "@libs7//lib:s7",
@@ -82,45 +91,21 @@ def s7_library(name,
     )
 
 ####################
-def s7_plugin_test(name,
-                   linkstatic = True,
-                   deps = [],
-                   copts = [],
-                   **kwargs):
-    native.cc_test(
+def s7_shared_library(name,
+                      deps = [],
+                      copts = [],
+                      **kwargs):
+    cc_shared_library(
         name = name,
-        linkstatic    = linkstatic,
         deps = deps + [
             "@libs7//lib:s7",
-            "@libs7//plugin:s7plugin_test_config",
             "@liblogc//lib:logc",
-            "@gopt//lib:gopt",
-            "@unity//lib:unity",
-            "@uthash//lib:uthash",
         ],
         copts = BASE_COPTS + copts + [
             # "-I$(@libs7)/src",
             # "-I$(GENDIR)/$(@libs7)/src",
-            # "-I$(GENDIR)/$(@libs7)/plugin",
             # "-I$(@liblogc)/src",
-            # "-I$(@gopt)/src",
-            # "-I$(@unity)/src",
-            # "-I$(@uthash)/src",
         ],
         **kwargs
     )
 
-#############################################
-def s7_module_profiles(name, repos, visibility=None):
-    if native.repository_name() == "@":
-       _this = "."
-    else:
-        _this = "external/{}".format(
-            native.repository_name()[1:])
-
-    repos = repos + ["@liblogc//lib:logc",
-                     "@libs7//lib:s7"]
-
-    module_profiles(name = name, repos = repos,
-                    this = _this,
-                    visibility = ["//visibility:public"])

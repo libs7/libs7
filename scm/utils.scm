@@ -1,4 +1,4 @@
-;; (display "loading libs7/utils.scm") (newline)
+;; (format #t "loading libs7/utils.scm") (newline)
 
 ;; s7test.scm
 (define-macro (defstruct struct-name . fields)
@@ -429,7 +429,7 @@ If func approves of one, find-then returns the result of applying fn to it."))
       res)))
 
 (define (pwd)
-  (getcwd (make-string 1024) 1024))
+  (libc:getcwd (make-string 1024) 1024))
 
 (define (mkdir-recursive path flags)
   (let ((path (format #f "~A" path)))

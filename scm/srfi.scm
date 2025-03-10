@@ -97,7 +97,7 @@
 
 ;; srfi 1
 ;;(define (remove pred l) (filter (lambda (x) (not (pred x))) l))
-;; see 'remove' in utils.scm
+;; see 'remove' in s7_utils.scm
 
 (define* (delete! x lis (= equal?))
   ;; (let ((= (:optional maybe-= equal?)))
@@ -139,10 +139,10 @@
 	     (lp (cdr list))))))
 
 ;; see utils.scm for find
-(define (find pred list)
-  ;; (format #t "~A: ~A~%" (bgred "srfi find") pred)
-  (cond ((find-tail pred list) => car)
-	(else #f)))
+;; (define (find pred list)
+;;   ;; (format #t "~A: ~A~%" (bgred "srfi find") pred)
+;;   (cond ((find-tail pred list) => car)
+;; 	(else #f)))
 
 ;; r7rs.scm
 (define-macro (let-values vars . body)

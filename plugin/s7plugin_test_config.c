@@ -200,7 +200,7 @@ s7_scheme *s7_plugin_initialize(char *test, int argc, char **argv)
 #if defined(PROFILE_fastbuild)
     if (s7plugin_debug) print_debug_env();
 #endif
-    s7_scheme *s7 = libs7_init();
+    s7_scheme *s7 = libs7_init(argv[0]);
 
     /* libmustachios7_s7_init(s7); */
     return s7;

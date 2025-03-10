@@ -7,9 +7,10 @@
 #include <unistd.h>
 
 /* #include "liblogc.h" */
-/* #include "librunfiles.h" */
+#include "librunfiles.h"
 
 #include "utarray.h"
+#include "utstring.h"
 #if INTERFACE
 #include "s7.h"
 #endif
@@ -18,16 +19,18 @@
 
 const char *libs7_version = LIBS7_VERSION;
 
-#if defined(PROFILE_fastbuild)
 #define TRACE_FLAG     libs7_trace
-#define DEBUG_LEVEL    libs7_debug
-#define S7_DEBUG_LEVEL libs7_debug
 bool    TRACE_FLAG     = false;
+#define DEBUG_LEVEL    libs7_debug
 int     DEBUG_LEVEL    = 0;
+#define S7_DEBUG_LEVEL s7_debug
+int     S7_DEBUG_LEVEL = 0;
 bool    libs7_debug_runfiles = false;
-#endif
 
-int  libs7_verbosity;           /* FIXME: extern? */
+extern int  rf_debug;
+extern bool rf_trace;
+
+int  libs7_verbosity = 2;           /* FIXME: extern? */
 
 UT_array *dlopened; /* list of libs loaded dynamically */
 
@@ -64,9 +67,7 @@ EXPORT char *libs7_read_file(char *fname)
     }
 
     file_size = stbuf.st_size;
-#if defined(PROFILE_fastbuild)
     LOG_DEBUG(0, "filesize: %d", file_size);
-#endif
 
     buffer = (char*)malloc(file_size);
     if (buffer == NULL) {
@@ -193,7 +194,6 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     s7_pointer old_e = s7_set_curlet(s7, e);
 
     /* char *ws = getenv("TEST_WORKSPACE"); */
-//#if defined(PROFILE_opt) || defined(PROFILE_fastbuild)
     LOG_DEBUG(0, "BAZEL_TEST: %s\n", getenv("BAZEL_TEST"));
     // BAZEL_TEST true if tgt is cc_test (either bazel test or  run cmd)
 
@@ -201,11 +201,9 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
     // $TEST_SRCDIR/$TEST_WORKSPACE.
 
     // TEST_SRCDIR: absolute path to the base of the runfiles tree. required
-    LOG_DEBUG(0, "LOCAL_REPO: %s\n",
-              getenv("LOCAL_REPO"));
+    LOG_DEBUG(0, "LOCAL_REPO: %s\n", getenv("LOCAL_REPO"));
     LOG_DEBUG(0, "TEST_SRCDIR: %s\n", getenv("TEST_SRCDIR"));
     LOG_DEBUG(0, "TEST_WORKSPACE: %s\n", getenv("TEST_WORKSPACE"));
-//#endif
     /* char *fmt; */
     /* (void)fmt; */
     /* if (ws) { */
@@ -275,12 +273,12 @@ static s7_pointer _dlopen_clib(s7_scheme *s7, char *lib, char *init_fn_name)
 EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
 {
     TRACE_ENTRY;
-    LOG_DEBUG(0, "load_plugin: %s", lib);
+    LOG_DEBUG(1, "load_plugin: %s", lib);
     static char init_fn_name[512]; // max len of <libname>_init or lib/shared/<libname><ext>
 
     init_fn_name[0] = '\0';
     sprintf(init_fn_name, "lib%s_s7_init", lib);
-    LOG_DEBUG(0, "init_fn_name: %s", init_fn_name);
+    LOG_DEBUG(1, "init_fn_name: %s", init_fn_name);
 
 #if defined(__APPLE__)
 #define HNDL RTLD_MAIN_ONLY
@@ -292,13 +290,11 @@ EXPORT s7_pointer libs7_load_plugin(s7_scheme *s7, char *lib)
     init_fn_ptr = (s7_pointer (*)(s7_scheme*))dlsym(HNDL,
                                                     init_fn_name);
     if (init_fn_ptr == NULL) {
-/* #if defined(PROFILE_fastbuild) */
         LOG_DEBUG(0, "%s not statically linked, trying dlopen", init_fn_name);
-/* #endif */
         s7_pointer res = _dlopen_clib(s7, lib, init_fn_name);
         return res;
     } else {
-        LOG_DEBUG(0, "dlsym init_fn_ptr: %x", init_fn_ptr);
+        LOG_DEBUG(2, "dlsym init_fn_ptr: %x", init_fn_ptr);
     }
     // we found the init fn, so unload, then reload
 
@@ -344,7 +340,7 @@ static s7_pointer g_libs7_load_plugin(s7_scheme *s7, s7_pointer args)
     return libs7_load_plugin(s7, lib);
 }
 
-#define TO_STR(x) s7_object_to_c_string(s7, x)
+/* #define TO_STR(x) s7_object_to_c_string(s7, x) */
 /* #define TO_S7_INT(x) s7_make_integer(s7, x) */
 
 /*
@@ -353,6 +349,16 @@ static s7_pointer g_libs7_load_plugin(s7_scheme *s7, s7_pointer args)
  * simply passed over when the a-list is searched by assoc.
  * (https://www.cs.cmu.edu/Groups/AI/html/cltl/clm/node153.html)
  */
+static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
+{
+    /* log_debug("g_is_alist: %s", TO_STR(arg)); */
+    //NB: args is list of one arg
+    if (libs7_is_alist(s7, s7_car(args)))
+        return s7_t(s7);
+    else
+        return s7_f(s7);
+}
+
 EXPORT bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
 {
     /* TRACE_ENTRY; */
@@ -389,7 +395,13 @@ EXPORT bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
                 // '() not a pair, but allowed as mbr of alist
                 ;
             }
-            else if (!s7_is_pair(x)) {
+            else if (s7_is_pair(x)) {
+                /* e.g. (alist? '((:a))) => #f */
+                /* if (s7_nil(s7) == s7_cdr(x)) */
+                /*     return false; */
+                ;
+            }
+            else {
                 s7_gc_unprotect_at(s7, gc);
                 return false;
             }
@@ -397,6 +409,138 @@ EXPORT bool libs7_is_alist(s7_scheme *s7, s7_pointer arg)
         }
     } else
         return false;
+}
+
+/* **************** */
+/* list odds, starting at 0 */
+static s7_pointer g_odds(s7_scheme *s7, s7_pointer arg)
+{
+    /* char *s = s7_object_to_c_string(s7, arg); */
+    /* log_debug("g_odds: %s", s); */
+    /* free(s); */
+    return libs7_odds(s7, s7_car(arg));
+}
+
+EXPORT s7_pointer libs7_odds(s7_scheme *s7, s7_pointer arg)
+{
+    TRACE_ENTRY;
+    /* char *s = s7_object_to_c_string(s7, arg); */
+    /* log_debug("libs7_odds: %s", s); */
+    /* free(s); */
+
+    if (s7_is_list(s7, arg)) {
+        /* if the list is empty or the list has a single element, return '() */
+        if (s7_nil(s7) == arg) return s7_nil(s7);
+        if (s7_nil(s7) == s7_cdr(arg)) return s7_nil(s7);
+        return s7_cons(s7, s7_cadr(arg), libs7_odds(s7, s7_cddr(arg)));
+    } else {
+        return s7_unspecified(s7);
+    }
+}
+
+/* **************** */
+/* list evens, starting at 0 */
+static s7_pointer g_evens(s7_scheme *s7, s7_pointer arg)
+{
+    /* char *s = s7_object_to_c_string(s7, arg); */
+    /* log_debug("g_evens: %s", s); */
+    /* free(s); */
+    //NB: args is (pred? lst)
+    return libs7_evens(s7, s7_car(arg));
+}
+
+EXPORT s7_pointer libs7_evens(s7_scheme *s7, s7_pointer arg)
+{
+    TRACE_ENTRY;
+    /* char *s = s7_object_to_c_string(s7, arg); */
+    /* log_debug("libs7_evens: %s", s); */
+    /* free(s); */
+
+    if (s7_is_list(s7, arg)) {
+        /* if the list is empty or the list has a single element, return '() */
+        if (s7_nil(s7) == arg) return s7_nil(s7);
+        if (s7_nil(s7) == s7_cdr(arg)) return s7_nil(s7);
+        return s7_cons(s7, s7_car(arg), libs7_evens(s7, s7_cddr(arg)));
+    } else {
+        return s7_unspecified(s7);
+    }
+}
+
+/* **************** */
+static s7_pointer g_every_p(s7_scheme *s7, s7_pointer args)
+{
+    /* char *s = s7_object_to_c_string(s7, args); */
+    /* log_debug("g_every_p: %s", s); */
+    /* free(s); */
+    //NB: args is (pred? lst)
+    if (libs7_every_p(s7, args))
+        return s7_t(s7);
+    else
+        return s7_f(s7);
+}
+
+EXPORT bool libs7_every_p(s7_scheme *s7, s7_pointer args)
+{
+    TRACE_ENTRY;
+    /* char *s = s7_object_to_c_string(s7, args); */
+    /* log_debug("libs7_every_p: %s", s); */
+
+    s7_pointer pred = s7_car(args);
+    s7_pointer lst = s7_cadr(args);
+
+    /* s = s7_object_to_c_string(s7, pred); */
+    /* log_debug("pred: %s", s); */
+    /* s = s7_object_to_c_string(s7, lst); */
+    /* log_debug("lst: %s", s); */
+    /* free(s); */
+
+    s7_pointer res;
+
+    if (s7_is_list(s7, lst)) {
+        if (lst == s7_nil(s7))
+            return false;
+
+        s7_pointer item;
+        s7_pointer iter = s7_make_iterator(s7, lst);
+        s7_int gc = s7_gc_protect(s7, iter);
+        if (!s7_is_iterator(iter)) {
+            /* FIXME: fprintf */
+            LOG_ERROR(0, "s7_make_iterator failed on %s", TO_STR(args));
+            s7_gc_unprotect_at(s7, gc);
+            return false;
+        }
+
+        if (s7_iterator_is_at_end(s7, iter)) {
+            /* FIXME: fprintf */
+            LOG_ERROR(0, "iterator %s is prematurely done on %s", TO_STR(args));
+            s7_gc_unprotect_at(s7, gc);
+            return false;
+        }
+
+        item = s7_iterate(s7, iter);
+
+        while (true) {
+            if ((item == s7_eof_object(s7))
+                || (s7_iterator_is_at_end(s7, iter))) {
+                s7_gc_unprotect_at(s7, gc);
+                return true;
+            }
+            if (s7_is_null(s7, item)) {
+                s7_gc_unprotect_at(s7, gc);
+                return false;
+            }
+            else {
+                res = s7_apply_function(s7, pred, s7_list(s7, 1, item));
+                if (s7_f(s7) == res) {
+                    s7_gc_unprotect_at(s7, gc);
+                    return false;
+                }
+            }
+            item = s7_iterate(s7, iter);
+        }
+    } else {
+        return false;           /* not a list */
+    }
 }
 
 /*
@@ -472,16 +616,6 @@ EXPORT bool libs7_is_empty_alist(s7_scheme *s7, s7_pointer arg)
     }
 }
 
-static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
-{
-    /* log_debug("g_is_alist: %s", TO_STR(arg)); */
-    //NB: args is list of one arg
-    if (libs7_is_alist(s7, s7_car(args)))
-        return s7_t(s7);
-    else
-        return s7_f(s7);
-}
-
 /* static char *scm_runfiles_dirs[] = { */
 /*     /\* this seems to work when libs7 is external dep *\/ */
 /*     /\* "../libs7/scm", *\/ */
@@ -495,76 +629,42 @@ static s7_pointer g_is_alist(s7_scheme *s7, s7_pointer args)
 static void _runfiles_init(s7_scheme *s7)
 {
     TRACE_ENTRY;
-    /* s7_pointer tmp_load_path = s7_list(s7, 0); */
-/* #if defined(PROFILE_fastbuild) */
-/* #ifdef LOCAL_REPO */
-/*     if (libs7_debug) */
-/*         log_debug("bazel_current_repo: " LOCAL_REPO); */
-/* #endif */
-/* #endif */
-
-    if (libs7_verbosity > 0) {
-        LOG_INFO(0, "libs7 LOCAL_REPO: %s", LOCAL_REPO);
-
-        LOG_INFO(0, "TEST_WORKSPACE: %s", getenv("TEST_WORKSPACE"));
-        LOG_INFO(0, "BAZEL_TEST:  %s", getenv("BAZEL_TEST"));
-        LOG_INFO(0, "RUNFILES_DIR:  %s", getenv("RUNFILES_DIR"));
-        LOG_INFO(0, "CWD:  %s", getcwd(NULL,0));
-    }
-    //TODO: is this use of LOCAL_REPO reliable? or do we
-    // need to read _repo_mapping file to get canonical name for libs7?
-    /* char linkbuf[512]; */
-
-    char *libs7_repo;
-    if (strlen(LOCAL_REPO) == 0) {
-        libs7_repo = realpath("_main/scm", NULL);
+    LOG_INFO(0, "BAZEL_CURRENT_REPOSITORY: %s", BAZEL_CURRENT_REPOSITORY);
+    char *libs7_runfile = rf_rlocation(BAZEL_CURRENT_REPOSITORY "/scm");
+    if (libs7_runfile != NULL) {
+        LOG_INFO(0, "adding to loadpath: %s", libs7_runfile);
+        s7_add_to_load_path(s7, libs7_runfile);
+        /* s7_pointer lp = s7_load_path(s7); */
+        /* (void)lp; */
+        /* LOG_S7_DEBUG(0, "*load-path* 11", lp); */
     } else {
-        libs7_repo = realpath("external/" LOCAL_REPO "/scm", NULL);
+        LOG_ERROR(0, "rf_rlocation fail: %s", BAZEL_CURRENT_REPOSITORY "/scm");
     }
-    /* ssize_t linksz = readlink(libs7_repo, (char*)linkbuf, 512); */
-    /* linkbuf[linksz + 1] = '\0'; */
-    if (libs7_verbosity > 0) {
-        LOG_INFO(0, "libs7_repo: %s", libs7_repo);
-    }
-    /* log_debug("readlink libs7_repo: %s", linkbuf); */
-    s7_add_to_load_path(s7, libs7_repo);
-/*     if (getenv("BAZEL_TEST")) { */
-/*         s7_add_to_load_path(s7, libs7_repo); */
-/*     } else { */
-/*         scm_dir = scm_runfiles_dirs; */
-/*         char *scmdir; */
-/*         while (*scm_dir) { */
-/* #if defined(PROFILE_fastbuild) */
-/*             if (libs7_debug_runfiles) */
-/*                 log_debug(" runfile: %s", *scm_dir); */
-/* #endif */
-/*             scmdir = realpath(*scm_dir, NULL); */
-/*             if (scmdir == NULL) { */
-/*                 log_error("Runfile not found: %s", *scm_dir); */
-/*                 /\* exit(EXIT_FAILURE); *\/ */
-/*             } */
-/* #if defined(PROFILE_fastbuild) */
-/*             if (libs7_debug_runfiles) */
-/*                 log_debug("runfile realpath: %s", scmdir); */
-/* #endif */
-/*             s7_add_to_load_path(s7, scmdir); */
-/*             free(scmdir); */
-/*             (void)*scm_dir++; */
-/*         } */
-/*     } */
 }
 
-void libs7_shutdown(s7_scheme *s7)
-{
-    /* close_error_config(); */
-    s7_quit(s7);
-}
-
-EXPORT s7_scheme *libs7_init(void)
+EXPORT s7_scheme *libs7_init(char *exe_path)
+/* runfiles lib needs a path */
 /* WARNING: dlopen logic assumes file path <libns>/<libname><dso_ext> */
 {
+    TRACE_ENTRY;
+    if (libs7_debug_runfiles) {
+        //FIXME: mv to exe
+        rf_debug = 1;
+        rf_trace = true;
+    }
     s7_scheme *s7 = s7_init();
 
+    rf_init(exe_path);
+    _runfiles_init(s7);
+
+#if defined(PROFILE_dev)
+    s7_pointer lp = s7_load_path(s7);
+    (void)lp;
+    LOG_S7_DEBUG(0, "*load-path* 11", lp);
+    /* if (mibl_debug) { */
+    /* LOG_DEBUG(0, "mibl_runfiles_root: %s", utstring_body(mibl_runfiles_root)); */
+    /* } */
+#endif
     //FIXME: initialize error handlers
 
     fs_api_init(s7); //FIXME: eliminate
@@ -575,8 +675,6 @@ EXPORT s7_scheme *libs7_init(void)
     /* char *s = s7_object_to_c_string(s7, lp); */
     /* log_debug("load-path: %s", s); */
     /* free(s); */
-
-    _runfiles_init(s7);
 
     /* lp = s7_load_path(s7); */
     /* s = s7_object_to_c_string(s7, lp); */
@@ -605,6 +703,24 @@ EXPORT s7_scheme *libs7_init(void)
                        0,         /* optional: 0 */
                        false,     /* rest args: none */
                        "(alist? lst)");
+
+    s7_define_function(s7, "odds", g_odds,
+                       1,         /* required: 1 arg */
+                       0,         /* optional: 0 */
+                       false,     /* rest args: none */
+                       "(odds lst)");
+
+    s7_define_function(s7, "evens", g_evens,
+                       1,         /* required: 1 arg */
+                       0,         /* optional: 0 */
+                       false,     /* rest args: none */
+                       "(evens lst)");
+
+    s7_define_function(s7, "every?", g_every_p,
+                       2,         /* required: 1 arg */
+                       0,         /* optional: 0 */
+                       false,     /* rest args: none */
+                       "(every? pred? lst)");
 
     /* install #; comment reader */
     s7_eval_c_string(s7,
@@ -649,3 +765,10 @@ EXPORT s7_scheme *libs7_init(void)
 
     return s7;
 }
+
+void libs7_shutdown(s7_scheme *s7)
+{
+    /* close_error_config(); */
+    s7_quit(s7);
+}
+

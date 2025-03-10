@@ -5,7 +5,7 @@ load("@bazel_skylib//lib:dicts.bzl", "dicts")
 ###############
 def _impl(ctx):
     tool_as_list = [ctx.attr._tool]
-    tool_inputs, tool_input_mfs = ctx.resolve_tools(tools = tool_as_list)
+    # tool_inputs, tool_input_mfs = ctx.resolve_tools(tools = tool_as_list)
     args = [
         ctx.expand_location(a, tool_as_list) if "$(location" in a else a
         for a in ctx.attr.args
@@ -30,13 +30,14 @@ def _impl(ctx):
     ctx.actions.run(
         outputs = ctx.outputs.outs,
         inputs = [ctx.file._script] + ctx.files.srcs + ctx.attr._tool[DefaultInfo].data_runfiles.files.to_list(),
-        tools = tool_inputs,
+        # tools = tool_inputs,
+        tools = [ctx.attr._tool[DefaultInfo].files_to_run.executable],
+        # input_manifests = tool_input_mfs,
         executable = ctx.executable._tool,
         arguments = args,
         mnemonic = "RunBinary",
         use_default_shell_env = False,
         env = dicts.add(ctx.configuration.default_shell_env, envs),
-        input_manifests = tool_input_mfs,
     )
 
     return DefaultInfo(

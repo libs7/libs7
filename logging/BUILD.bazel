@@ -1,3 +1,0 @@
-exports_files(["ansi_colors.h",
-               "s7_macros_debug.h",
-               "s7_macros_ndebug.h"])

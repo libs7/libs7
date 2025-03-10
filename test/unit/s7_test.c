@@ -23,7 +23,7 @@ s7_pointer actual;
 s7_pointer expected;
 
 int  s7plugin_verbosity = 0;
-int  libs7_verbosity = 0;
+extern int  libs7_verbosity;
 bool debug;
 
 /* WARNING: setUp and tearDown are run once per test. */

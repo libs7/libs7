@@ -1,7 +1,4 @@
-load("@rules_cc//cc:defs.bzl",
-     "cc_library",
-     ## "cc_shared_library"
-     )
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_shared_library")
 load("@makeheaders//rules:makeheaders.bzl", "makeheaders")
 
 load("//config/cc:CONFIG.bzl",
@@ -12,14 +9,24 @@ load("//config/cc:CONFIG.bzl",
      "define_module_version")
 
 SRCS          = BASE_SRCS
-DEPS          = BASE_DEPS + ["@uthash//lib:uthash"]
+DEPS          = BASE_DEPS + [
+    "@runfiles//lib:runfiles",
+    "@uthash//lib:uthash",
+    # "@bazel_tools//tools/cpp/runfiles"
+]
 INCLUDE_PATHS = BASE_INCLUDE_PATHS
 COPTS         = BASE_COPTS + [
     "-Wno-unused-parameter",
 ] + INCLUDE_PATHS
 DEFINES       = BASE_DEFINES
 LOCAL_DEFINES = LOCAL_DEFINES + [
-    "LOCAL_REPO=\\\"{}\\\"".format(repository_name()[1:]),
+    # "LOCAL_REPO=\\\"{}\\\"".format(repository_name()[1:]),
+    # "LIBS7_REPO=\\\"{}\\\"".format(package_relative_label("@libs7").repo_name),
+    # "REPO_NAME=\\\"{}\\\"".format(repo_name()),
+    # "PKGNM=\\\"{}\\\"".format(package_name()),
+    # "PRLBL=\\\"{}\\\"".format(package_relative_label(package_name())),
+    ## package_relative_label("@libs7").repo_name
+    "BAZEL_CURRENT_REPOSITORY=\\\"{}\\\"".format(repo_name()),
 ] + define_module_version()
 LINKOPTS      = BASE_LINKOPTS
 # TOOLCHAINS    = ["//:module_profiles"]
@@ -49,7 +56,7 @@ cc_library( # delivers libs7.lo
         "libs7.c",
         ":mkhdrs",
     ] + select({
-        "@makeheaders//compilation_mode:fastbuild": [
+        "@obazl_config_cc//profile:dev?": [
             "debug_s7.c"
         ],
         "//conditions:default": []
@@ -105,27 +112,26 @@ makeheaders(
     name = "mkhdrs",
     hdrs_renamed = {"libs7.c": "libs7_internal.h"},
     hdrs_srcs = select({
-        "@makeheaders//compilation_mode:fastbuild": [
+        "@obazl_config_cc//profile:dev?": [
             "debug_s7.c"
         ],
-        # "@makeheaders//compilation_mode:opt": [
-        #     "debug_s7.c"
-        # ],
         "//conditions:default": []
     }),
     additional_srcs = [
         "s7.h", "fs_api.c",
-        "@makeheaders//logging:ansi_colors.h"
+        "@liblogc//macros:ansi_colors.h"
     ] + select({
-        "@makeheaders//compilation_mode:fastbuild": [
-            "@makeheaders//logging:macros_debug.h"
+        "@obazl_config_cc//profile:dev?": [
+            "//macros:s7_logging_debug.h",
+            "@liblogc//macros:logging_debug.h"
         ],
         # special case: built as tool, transitioned to opt
-        # "@makeheaders//compilation_mode:opt": [
-        #     "@makeheaders//logging:macros_debug.h"
+        # "@liblogc//compilation_mode:opt": [
+        #     "@liblogc//macros:logging_debug.h"
         # ],
         "//conditions:default": [
-            "@makeheaders//logging:macros_ndebug.h"
+            "//macros:s7_logging_ndebug.h",
+            "@liblogc//macros:logging_ndebug.h"
         ]
     }),
 )

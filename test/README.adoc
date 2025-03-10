@@ -1,2 +1,0 @@
-
-test cases from  link:https://github.com/BurntSushi/toml-test[burntsushi]

@@ -1,5 +1,9 @@
 ## NB: we do not use s7_plugin_test here (this is not a plugin)
 
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+# load("@unity//src:BUILD.bzl", "unity_library")
+# unity_library(name = "libunity")
+
 load("//config/cc:CONFIG.bzl",
      "BASE_COPTS", "BASE_LINKOPTS",
      "BASE_DEPS", "LOCAL_DEFINES")
@@ -11,8 +15,10 @@ DEPS          = BASE_DEPS + [
     "@gopt//lib:gopt",
     "@unity//lib:unity",
     "@uthash//lib:uthash",
+    # ":libunity"
 ]
 INCLUDE_PATHS = [
+    # "-Iexternal/{}/src".format(package_relative_label("@unity").repo_name),
     # "-I$(GENDIR)/$(@)/plugin",
     # "-I$(@gopt)/src",
     # "-I$(@unity)/src",
@@ -43,6 +49,5 @@ cc_test(
     deps       = DEPS,
     copts      = COPTS,
     linkopts   = LINKOPTS,
-    # toolchains = TOOLCHAINS,
     timeout    = TIMEOUT,
 )

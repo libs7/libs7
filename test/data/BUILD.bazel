@@ -1,10 +1,4 @@
 filegroup(
-    name = "colors",
-    data = glob(["colors*.*"]),
-    visibility = ["//visibility:public"]
-)
-
-filegroup(
     name = "json",
     data = glob(["*.json"]),
     visibility = ["//visibility:public"]
