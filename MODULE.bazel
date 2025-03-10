@@ -11,7 +11,7 @@ bazel_dep(name = "bazel_skylib",   version = "1.7.1")
 bazel_dep(name = "rules_cc",       version = "0.1.1")
 
 ## obazl:
-# bazel_dep(name = "obazl_config_cc", version = "3.0.0")
+# bazel_dep(name = "obazl_tools_cc", version = "3.0.0")
 bazel_dep(name = "obazl_tools_cc",  version = "3.0.0")
 git_override(module_name = "obazl_tools_cc",
              branch  = "3.0.0.dev",

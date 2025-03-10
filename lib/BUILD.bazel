@@ -56,7 +56,7 @@ cc_library( # delivers libs7.lo
         "libs7.c",
         ":mkhdrs",
     ] + select({
-        "@obazl_config_cc//profile:dev?": [
+        "@obazl_tools_cc//profile:dev?": [
             "debug_s7.c"
         ],
         "//conditions:default": []
@@ -112,7 +112,7 @@ makeheaders(
     name = "mkhdrs",
     hdrs_renamed = {"libs7.c": "libs7_internal.h"},
     hdrs_srcs = select({
-        "@obazl_config_cc//profile:dev?": [
+        "@obazl_tools_cc//profile:dev?": [
             "debug_s7.c"
         ],
         "//conditions:default": []
@@ -121,7 +121,7 @@ makeheaders(
         "s7.h", "fs_api.c",
         "@liblogc//macros:ansi_colors.h"
     ] + select({
-        "@obazl_config_cc//profile:dev?": [
+        "@obazl_tools_cc//profile:dev?": [
             "//macros:s7_logging_debug.h",
             "@liblogc//macros:logging_debug.h"
         ],

@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_shared_library", "cc_test")
-load("@obazl_config_cc//config:BASE.bzl", "BASE_COPTS")
+load("@obazl_tools_cc//config:BASE.bzl", "BASE_COPTS")
 
 ###################
 def s7_plugin(name,

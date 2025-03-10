@@ -1,4 +1,4 @@
-load("@obazl_config_cc//config:BASE.bzl",
+load("@obazl_tools_cc//config:BASE.bzl",
      _BASE_COPTS    = "BASE_COPTS",
      "DSO_EXT",
      _define_module_version = "define_module_version")
