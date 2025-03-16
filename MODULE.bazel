@@ -1,6 +1,6 @@
 module(
     name                = "libs7",
-    version             = "3.0.0.dev",
+    version             = "3.0.0",
     compatibility_level = 3,
     bazel_compatibility = [">=8.0.0"]
 )
@@ -11,8 +11,8 @@ bazel_dep(name = "bazel_skylib",   version = "1.7.1")
 bazel_dep(name = "rules_cc",       version = "0.1.1")
 
 ## obazl:
-bazel_dep(name = "obazl_tools_cc",  version = "3.0.0.dev")
-bazel_dep(name = "runfiles",       version = "3.0.0.dev")
+bazel_dep(name = "obazl_tools_cc", version = "3.0.0")
+bazel_dep(name = "runfiles",       version = "3.0.0")
 
 ## 3rd party
 bazel_dep(name = "gopt",           version = "10.0.0")
